@@ -31,13 +31,18 @@ import {
 import { createFleetModelLayer } from '../../data/fleetModelInstances.js';
 import { isAidToNavigation } from '../../data/vesselTypes.js';
 
-/** How often vessels move on as the world clock plays (wall ms). */
-const FOLLOW_POSITION_MS = 250;
-/** A frame is asked for this often while a placement moves live vessels. */
+/** A moving vessel's next frame is asked for once it would move this far on
+ * screen (pixels), so it glides when it moves visibly and the scene idles
+ * when it does not. */
+const VESSEL_STEP_PX = 0.5;
+/** A frame is asked for at least this often while any drawn vessel moves. */
 const PLACEMENT_FRAME_MS = 1000;
 
 /** How often the vessels near enough for a model are gathered again (wall ms). */
 const MODEL_CANDIDATES_MS = 500;
+
+/** Scratch for where a moved vessel was drawn. */
+const _movedFrom = new Cesium.Cartesian3();
 
 export function createRendering({
   vesselState,
@@ -442,62 +447,121 @@ export function createRendering({
     });
   }
 
-  // As the world clock plays, vessels between two fixes move on along them.
-  let followedAtWallMs = -Infinity;
+  // As the world clock plays, vessels between two fixes move on along them,
+  // every frame.
   let followedAtMs = null;
   function followClockPositions() {
-    const wallMs = performance.now();
-    if (wallMs - followedAtWallMs < FOLLOW_POSITION_MS) return;
-    followedAtWallMs = wallMs;
     const atMs = vesselState.worldNow();
     if (atMs === followedAtMs) return;
     followedAtMs = atMs;
+    const motion = startMotionPass();
     for (const record of state.records.all) {
       if (!record.motion) continue;
-      const visual = prepareRecordVisual(record);
+      let visual = visualRecords.get(record);
+      if (visual?.position) {
+        const { lat, lon } = vesselPositionAt(record, atMs);
+        moveDrawnVisual(visual, lat, lon, motion);
+      } else visual = prepareRecordVisual(record);
       if (visual.billboard) visual.billboard.position = visual.position;
     }
+    askMotionFrame(motion);
   }
 
   // Live with a host-supplied placement, vessels move on between refreshes:
-  // drawn where it places them at most every FOLLOW_POSITION_MS, with a frame
-  // asked for every PLACEMENT_FRAME_MS while it places any drawn vessel, so
-  // they move while the scene idles.
-  let placedAtWallMs = -Infinity;
-  let placing = false;
-  let placementFrameTimer = null;
+  // drawn where it places them every frame, with the next frame asked for
+  // as soon as a drawn vessel would move visibly, so they move while the
+  // scene idles.
   function followPlacements() {
-    const wallMs = performance.now();
-    if (wallMs - placedAtWallMs >= FOLLOW_POSITION_MS) {
-      placedAtWallMs = wallMs;
-      placing = false;
-      const nowMs = vesselState._aisRuntime.now();
-      // Drawn vessels only, as a sprite or a model: a hidden one is placed
-      // again when it is drawn.
-      for (const record of state.records.all) {
-        const visual = visualRecords.get(record);
-        if (!visual?.position) continue;
-        if (!visual.billboard?.show && !visual.modelOwnsVisual) continue;
-        const placed = services.placement.place(record.id, nowMs);
-        if (placed) placing = true;
-        const { lat, lon } = placed ?? record;
-        if (lat === visual.drawnLat && lon === visual.drawnLon) continue;
-        moveRecordVisual(visual, lat, lon);
-        if (visual.billboard) visual.billboard.position = visual.position;
-      }
+    const nowMs = vesselState._aisRuntime.now();
+    const motion = startMotionPass();
+    // Drawn vessels only, as a sprite or a model: a hidden one is placed
+    // again when it is drawn.
+    for (const record of state.records.all) {
+      const visual = visualRecords.get(record);
+      if (!visual?.position) continue;
+      if (!visual.billboard?.show && !visual.modelOwnsVisual) continue;
+      const placed = services.placement.place(record.id, nowMs);
+      if (placed) motion.moving = true;
+      const { lat, lon } = placed ?? record;
+      if (lat === visual.drawnLat && lon === visual.drawnLon) continue;
+      moveDrawnVisual(visual, lat, lon, motion);
+      if (visual.billboard) visual.billboard.position = visual.position;
     }
-    if (placing && placementFrameTimer === null)
-      placementFrameTimer = vesselState._aisRuntime.setTimeout(() => {
-        placementFrameTimer = null;
-        if (state.feed.enabled && !followsClock(vesselState))
-          governorRequestRender('ais-vessels-placement');
-      }, PLACEMENT_FRAME_MS);
+    askMotionFrame(motion);
+  }
+
+  // One pass of moving vessels: whether any drawn vessel is moving, the
+  // largest angle one moved through as seen from the camera (radians), and
+  // the wall time since the pass before.
+  let motionPassWallMs = null;
+  const motionPass = { camera: null, sinceMs: 0, moving: false, angle: 0 };
+  function startMotionPass() {
+    const wallMs = performance.now();
+    motionPass.camera = state.viewer?.camera ?? null;
+    motionPass.sinceMs =
+      motionPassWallMs === null ? 0 : wallMs - motionPassWallMs;
+    motionPass.moving = false;
+    motionPass.angle = 0;
+    motionPassWallMs = wallMs;
+    return motionPass;
+  }
+
+  /** Move a drawn visual, noting how far it moved as seen from the camera. */
+  function moveDrawnVisual(visual, lat, lon, motion) {
+    const from = Cesium.Cartesian3.clone(visual.position, _movedFrom);
+    moveRecordVisual(visual, lat, lon);
+    if (!visual.billboard?.show && !visual.modelOwnsVisual) return;
+    motion.moving = true;
+    const eye = motion.camera?.positionWC;
+    if (!eye) return;
+    const distance = Cesium.Cartesian3.distance(eye, from);
+    if (distance > 0)
+      motion.angle = Math.max(
+        motion.angle,
+        Cesium.Cartesian3.distance(from, visual.position) / distance,
+      );
+  }
+
+  // The timer for the next vessel frame while one is asked for, and when it
+  // is due (the AIS runtime's clock).
+  let placementFrameTimer = null;
+  let placementFrameDueMs = 0;
+  /**
+   * While a drawn vessel moves, ask for the next frame when the fastest one
+   * will have moved VESSEL_STEP_PX on screen at the speed this pass saw, and
+   * at most PLACEMENT_FRAME_MS away.
+   */
+  function askMotionFrame(motion) {
+    if (!motion.moving) return;
+    let waitMs = PLACEMENT_FRAME_MS;
+    const canvasHeight = state.viewer?.canvas?.clientHeight;
+    const fovy = motion.camera?.frustum?.fovy;
+    if (
+      canvasHeight > 0 &&
+      fovy > 0 &&
+      motion.angle > 0 &&
+      motion.sinceMs > 0
+    ) {
+      const movedPx = (motion.angle * canvasHeight) / (2 * Math.tan(fovy / 2));
+      waitMs = Math.min(waitMs, (VESSEL_STEP_PX * motion.sinceMs) / movedPx);
+    }
+    // A frame already asked for no later than this one stands.
+    const runtime = vesselState._aisRuntime;
+    const dueMs = runtime.now() + waitMs;
+    if (placementFrameTimer !== null) {
+      if (placementFrameDueMs <= dueMs) return;
+      runtime.clearTimeout(placementFrameTimer);
+    }
+    placementFrameDueMs = dueMs;
+    placementFrameTimer = runtime.setTimeout(() => {
+      placementFrameTimer = null;
+      if (state.feed.enabled) governorRequestRender('ais-vessels-placement');
+    }, waitMs);
   }
 
   /** Stop asking for placement frames (the layer turned off or went away). */
   function cancelPlacementFrame() {
-    placedAtWallMs = -Infinity;
-    placing = false;
+    motionPassWallMs = null;
     if (placementFrameTimer === null) return;
     vesselState._aisRuntime.clearTimeout(placementFrameTimer);
     placementFrameTimer = null;
