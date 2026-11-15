@@ -69,6 +69,7 @@ const PANEL_GROUPS = [
       'drone-airspace',
       'local-datacenters',
       'telegeography-submarine-cables',
+      'abyss',
       'local-dams',
       'sea-marks',
       'ski-pistes',
