@@ -13,6 +13,8 @@ import { initLogoGaze } from '../logoGaze.js';
 import {
   uninstallRenderGovernor,
   governorRequestRender,
+  holdContinuousRender,
+  releaseContinuousRender,
 } from '../renderGovernor.js';
 import { describeError } from './errors.js';
 import { isEmbeddedInline } from './embed.js';
@@ -73,6 +75,12 @@ export async function createApplicationScene({
     followWorldTime(viewer, worldTimeFor('sky'), {
       subscribe: worldClock.subscribe,
       requestRender: () => governorRequestRender('world-time'),
+      // A playing world time moves something every frame: draw at the
+      // display's rate meanwhile, not the parked scene's cap.
+      onPlaying: (playing) =>
+        playing
+          ? holdContinuousRender('world-time')
+          : releaseContinuousRender('world-time'),
     }),
   );
   defer(installFreeLookHeightLimit(viewer));
