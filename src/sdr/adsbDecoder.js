@@ -314,6 +314,10 @@ export function decodeAdsbMessage(bytes, { receivedAt = Date.now() } = {}) {
   return message;
 }
 
+function finiteTime(value) {
+  return Number.isFinite(value) ? value : null;
+}
+
 function recentReference(track, receivedAt) {
   if (
     !Number.isFinite(track.latitude) ||
@@ -371,6 +375,16 @@ function surfaceReference(track, message) {
  * `positionsRejected` on the optional `stats`) and not applied. From the
  * third consecutive rejection on, a globally decoded fix is accepted as the
  * new reference, so one bad accepted fix cannot freeze a track.
+ *
+ * `lastSeen` advances on every message, so it says nothing about how fresh
+ * `altitudeFt` is: a velocity or identification frame leaves the altitude
+ * from the last airborne position. Only a frame that carries a decoded
+ * altitude (TC 9–18 with Q=1) sets `lastAltitudeAt` to its receive time and
+ * increments `altitudeSequence`, an equal value included. The sequence tells
+ * apart frames of one USB block, which share a receive time. A surface frame
+ * clears the altitude and `lastAltitudeAt` and keeps the sequence, so the
+ * next airborne altitude still counts as new. `firstSeenAt` is when this
+ * track started; a pruned and re-heard aircraft starts a new track.
  * @param {Map<string, object>} tracks Tracks keyed by uppercase ICAO.
  * @param {object} message Output of `decodeAdsbMessage`.
  * @param {{latitude:number, longitude:number}|null} [receiverLocation]
@@ -396,7 +410,10 @@ export function updateAircraftTrack(
     verticalRateFpm: null,
     messages: 0,
     lastSeen: 0,
+    firstSeenAt: finiteTime(message.receivedAt),
     lastPositionAt: null,
+    lastAltitudeAt: null,
+    altitudeSequence: 0,
     onGround: false,
     cprEven: null,
     cprOdd: null,
@@ -428,7 +445,14 @@ export function updateAircraftTrack(
     if (message.onGround) {
       next.altitudeFt = null;
       next.verticalRateFpm = null;
+      next.lastAltitudeAt = null;
     }
+  }
+  // An altitude observation, not merely a message. A receive time that is not
+  // a number is unknown rather than the previous altitude's time.
+  if (Number.isFinite(message.altitudeFt) && message.onGround !== true) {
+    next.lastAltitudeAt = finiteTime(message.receivedAt);
+    next.altitudeSequence = (prior.altitudeSequence || 0) + 1;
   }
   if (message.cpr) {
     const surface = Boolean(message.cpr.surface);
