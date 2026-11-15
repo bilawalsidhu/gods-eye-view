@@ -10,25 +10,55 @@ export const EARTHQUAKE_OVERLAY_COLLISION_CAPACITY = 48;
  */
 export const EARTHQUAKE_MARK_MAGNITUDE = 6;
 
+/** The longest place a timeline mark's label carries, ellipsis and all. */
+const MARK_PLACE_LENGTH = 40;
+
+/** A magnitude as the map's labels show it: `M6.4`. */
+export const earthquakeMagnitudeTitle = (magnitude) =>
+  `M${Number(magnitude).toFixed(1)}`;
+
 /**
- * The time a world clock's timeline can show for `events` (`{mag, time}`,
- * time in ms): the span of the quakes of EARTHQUAKE_MARK_MAGNITUDE and up,
- * each one a mark, or null with none, so the layer never stretches the
+ * A strong quake's timeline label: its magnitude and, where the feed names
+ * one, its place, cut short (`M6.4 · 113 km SSE of Lata, Solomon Islands`).
+ * @param {{mag: number, place?: string | null}} event
+ * @returns {string}
+ */
+export function earthquakeMarkLabel({ mag, place }) {
+  const title = earthquakeMagnitudeTitle(mag);
+  const where =
+    typeof place === 'string' ? place.replace(/\s+/g, ' ').trim() : '';
+  if (!where) return title;
+  const short =
+    where.length > MARK_PLACE_LENGTH
+      ? `${where.slice(0, MARK_PLACE_LENGTH - 1).trimEnd()}…`
+      : where;
+  return `${title} · ${short}`;
+}
+
+/**
+ * The time a world clock's timeline can show for `events` (`{mag, time,
+ * place?, usgsId?}`, time in ms): the span of the quakes of
+ * EARTHQUAKE_MARK_MAGNITUDE and up, each one a mark labelled with its
+ * magnitude and place, or null with none, so the layer never stretches the
  * timeline past what its feed covers.
- * @returns {{start: number, end: number, marks: number[]} | null}
+ * @returns {{start: number, end: number, marks: Array<{time: number, label: string, id?: string, kind: string}>} | null}
  */
 export function earthquakeCoverage(events) {
-  const marks = [
-    ...new Set(
-      events
-        .filter(
-          ({ mag, time }) =>
-            mag >= EARTHQUAKE_MARK_MAGNITUDE && Number.isFinite(time),
-        )
-        .map(({ time }) => time),
-    ),
-  ].sort((a, b) => a - b);
-  return marks.length ? { start: marks[0], end: marks.at(-1), marks } : null;
+  const marks = events
+    .filter(
+      ({ mag, time }) =>
+        mag >= EARTHQUAKE_MARK_MAGNITUDE && Number.isFinite(time),
+    )
+    .map((event) => ({
+      time: event.time,
+      label: earthquakeMarkLabel(event),
+      ...(event.usgsId ? { id: String(event.usgsId) } : {}),
+      kind: 'earthquake',
+    }))
+    .sort((a, b) => a.time - b.time);
+  return marks.length
+    ? { start: marks[0].time, end: marks.at(-1).time, marks }
+    : null;
 }
 
 /**
@@ -65,7 +95,7 @@ export function createEarthquakeOverlayEntry({
     id: String(id),
     position,
     variant: 'label',
-    title: `M${mag.toFixed(1)}`,
+    title: earthquakeMagnitudeTitle(mag),
     accent,
     priority: Math.round(mag * 1000),
     collisionGroup: 'ambient-label',

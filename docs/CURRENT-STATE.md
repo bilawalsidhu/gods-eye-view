@@ -1785,7 +1785,10 @@ destroying the layer cancels pending work and ignores late results. While on,
 the layer registers its quakes of magnitude 6 and up
 (`EARTHQUAKE_MARK_MAGNITUDE`) with the world clock as timeline marks, spanning
 only their own times, and none while off; the map still draws every M2.5+
-quake.
+quake. Each mark is labelled with the magnitude as the map shows it and the
+feed's place, cut to 40 characters (`earthquakeMarkLabel` in
+`src/layers/earthquakes/model.js`: `M6.4 · 113 km SSE of Lata, Solomon
+Islands`, or `M6.4` with no place).
 
 ## Rendered-mesh floor readings — November 9, 2026
 
@@ -8540,7 +8543,14 @@ clock moves all enabled observation rows with the world clock; the world
 timeline is the only time control. Each product's advertised times span time on
 that timeline but are not marks on it: the timeline marks only events (launches,
 and earthquakes of magnitude 6 and up while that layer is on), so its arrow keys
-step to those, or along the track where there are none. A weather row's `step`
+step to those, or along the track where there are none. A mark may carry a
+label (a launch's mission name, cut to 27 characters in capitals as the mission
+index shows names; an earthquake's magnitude and place). The pointer within
+6 px of a tick shows its label over the track, and a tap there goes to the
+mark's time exactly; a tap elsewhere goes to the time under it and a drag
+scrubs. With the handle on a mark, its label follows the time in the handle's
+`aria-valuetext` and shows over the track while the handle has focus. The
+coverage contract is in [APPLICATION.md](./APPLICATION.md). A weather row's `step`
 param goes to the previous or next weather frame. Each product selects its
 nearest frame at or before the world time, never a future frame or an
 interpolation.

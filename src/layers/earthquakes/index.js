@@ -29,7 +29,8 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
   let _lastUpdate = null;
   let _lastError = null;
   let _enabled = false;
-  // The quakes last drawn, as the timeline reads them ({ mag, time }).
+  // The quakes last drawn, as the timeline reads them
+  // ({ mag, time, place, usgsId }).
   let _events = [];
   let _uncover = null;
   // The marks last told to the clock, so a refresh with the same strong
@@ -37,7 +38,8 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
   let _marksKey = null;
   const coverage = () => (_enabled ? earthquakeCoverage(_events) : null);
   const coverageChanged = () => {
-    const key = coverage()?.marks.join() ?? null;
+    const covered = coverage();
+    const key = covered ? JSON.stringify(covered.marks) : null;
     if (key === _marksKey) return;
     _marksKey = key;
     worldClock.coverageChanged();
@@ -113,7 +115,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
           time,
         } of rows) {
           count++;
-          nextEvents.push({ mag, time });
+          nextEvents.push({ mag, time, place, usgsId });
           const baseRadius = Math.pow(2, mag) * 1000;
           const color = depthColor(depthKm || 0);
           const isSignificant = mag >= 5.0;
