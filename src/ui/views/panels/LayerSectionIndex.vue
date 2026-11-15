@@ -32,6 +32,17 @@ function syncCurrent() {
   if (scrolls && list.scrollTop + list.clientHeight >= list.scrollHeight - 2) index = sections.value.length - 1;
   current.value = Math.max(0, index);
 }
+// The name of the tick being pointed at or focused. It is drawn on the page
+// itself, just outside the panel's edge: the panel clips what leaves it, and a
+// label inside would cover the rows.
+const tip = ref(null);
+function showTip(event, section) {
+  const box = event.currentTarget.getBoundingClientRect();
+  tip.value = { label: section.label, left: `${Math.round(box.right + 10)}px`, top: `${Math.round(box.top + box.height / 2)}px` };
+}
+const hideTip = () => {
+  tip.value = null;
+};
 function jump(i) {
   const h = headings()[i];
   if (!h || !list) return;
@@ -67,8 +78,13 @@ onBeforeUnmount(() => {
       :aria-label="t('Jump to {name}', { name: section.label })"
       :aria-current="section.i === current ? 'true' : undefined"
       @click="jump(section.i)"
-    >
-      <span class="layer-section-index__label" aria-hidden="true">{{ section.label }}</span>
-    </button>
+      @mouseenter="showTip($event, section)"
+      @mouseleave="hideTip"
+      @focus="showTip($event, section)"
+      @blur="hideTip"
+    ></button>
+    <Teleport to="body">
+      <span v-if="tip" class="layer-section-index__label" :style="{ left: tip.left, top: tip.top }" aria-hidden="true">{{ tip.label }}</span>
+    </Teleport>
   </nav>
 </template>

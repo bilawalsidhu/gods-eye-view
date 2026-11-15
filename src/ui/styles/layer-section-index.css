@@ -60,12 +60,11 @@
   outline: none;
 }
 
-/* The group's name, shown to the left (inside the panel) on hover or
-   focus. Hidden labels take no room, so nothing reaches past the panel. */
+/* The group's name, drawn on the page just outside the panel's edge while a
+   tick is pointed at or focused, so it covers none of the rows. */
 .layer-section-index__label {
-  position: absolute;
-  top: 50%;
-  right: 14px;
+  position: fixed;
+  z-index: 30;
   padding: 0.25rem 0.5rem;
   color: rgba(236, 244, 248, 0.92);
   font-family: var(--font-mono);
@@ -76,21 +75,26 @@
   background: rgba(12, 12, 20, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
-  display: none;
-  opacity: 0;
-  transform: translate(4px, -50%);
+  transform: translateY(-50%);
   pointer-events: none;
-  z-index: 3;
-  transition:
-    opacity 120ms ease,
-    transform 120ms ease;
+  animation: layer-section-index-label 120ms ease both;
 }
 
-.layer-section-index__tick:hover .layer-section-index__label,
-.layer-section-index__tick:focus-visible .layer-section-index__label {
-  display: block;
-  opacity: 1;
-  transform: translate(0, -50%);
+@keyframes layer-section-index-label {
+  from {
+    opacity: 0;
+    translate: -4px 0;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layer-section-index__label {
+    animation: none;
+  }
 }
 
 body.mobile-shell .layer-section-index {

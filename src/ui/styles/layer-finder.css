@@ -111,6 +111,19 @@
   outline: none;
 }
 
+/* Focus shows on the field's frame, as a soft ring, in place of the hard
+   keyboard outline round the bare input. */
+.layer-finder__field input:focus,
+.layer-finder__field input:focus-visible {
+  outline: none !important;
+  box-shadow: none;
+}
+
+.layer-finder__field:focus-within {
+  border-color: rgba(54, 220, 255, 0.7);
+  box-shadow: 0 0 0 3px rgba(54, 220, 255, 0.1);
+}
+
 .layer-finder__chip {
   display: inline-flex;
   flex: none;
