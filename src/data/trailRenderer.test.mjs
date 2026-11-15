@@ -287,3 +287,38 @@ test('replacing the newest point and removing points inside the trail draws exac
   for (const run of drawnRuns(viewer))
     for (let i = 1; i < run.length; i++) assert.equal(next.get(run[i - 1]), run[i]);
 });
+
+test('a stand-in is dropped after ten seconds of drawn time, whatever the frame rate', () => {
+  const viewer = fakeViewer();
+  const trail = createTrail(viewer, { color: '#ffffff' });
+  const realNow = performance.now;
+  let clock = 1_000;
+  performance.now = () => clock;
+  try {
+    trail.setPositions(line(CHUNK_POINTS + 5));
+    // 2,000 frames at 240 Hz is about 8.3 s: still waiting for the geometry.
+    for (let i = 0; i < 2_000; i++) {
+      viewer.frame();
+      clock += 1000 / 240;
+    }
+    assert.equal(trail._chunksForTest().frozen[0].standIn, true);
+    // Hidden time does not count toward the wait.
+    trail.setVisible(false);
+    clock += 60_000;
+    viewer.frame();
+    trail.setVisible(true);
+    viewer.frame();
+    assert.equal(trail._chunksForTest().frozen[0].standIn, true);
+    // A background tab draws nothing: a long gap adds at most one frame step.
+    clock += 60_000;
+    viewer.frame();
+    assert.equal(trail._chunksForTest().frozen[0].standIn, true);
+    for (let i = 0; i < 480 && trail._chunksForTest().frozen[0].standIn; i++) {
+      clock += 1000 / 240;
+      viewer.frame();
+    }
+    assert.equal(trail._chunksForTest().frozen[0].standIn, false);
+  } finally {
+    performance.now = realNow;
+  }
+});
