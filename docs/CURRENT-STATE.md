@@ -1983,7 +1983,7 @@ layer's existing lifecycle and selection guards continue to reject late work.
 ### Following the world clock
 
 A source may declare a timeline: it can answer a snapshot at a given time.
-`source.timeline` is `{ coverage(), stepMs, subscribe? }`, validated by
+`source.timeline` is `{ coverage(), stepMs, spanMs?, subscribe? }`, validated by
 `readSnapshotTimeline` (`src/sources/live/contract.js`): `coverage()` returns
 the span `{ start, end }` in epoch ms it can answer, or null while it does not
 know yet; `stepMs` is the spacing of its snapshots; the optional
@@ -2016,6 +2016,20 @@ failure, and nothing is cleared. A layer has one snapshot loading at a time:
 the older is aborted before a newer starts. Moving the view while vessels follow the clock asks for the new
 area at the same time. Back at live the contacts are cleared and the layer
 polls at once.
+
+A timeline may also declare `spanMs`: each record of a snapshot at a time then
+carries `fixes`, `{ atMs, lat, lon, altitudeM? }` in time order, its own track
+from `spanMs` before the time to `spanMs` after it
+(`src/time/timelineFixes.js`). The layer places each contact on its fixes at
+the clock's time, so a seek or a move back that stays within the fixes the
+loaded snapshots carry is no jump: nothing is cleared, play does not wait,
+and contacts move to the time smoothly. The snapshot at a step before the
+newest loaded is asked for once and then stands in for every contact: it
+brings back any that had left after it and drops those not there yet, while
+those it has keep their place, as their fixes put them. Paused, a time nearing
+the end of the fixes after the newest asks for the snapshot there. A contact is not drawn more than a minute before its first
+fix, as it was not there yet. Each contact keeps at most 240 fixes, at least
+20 seconds apart, and the loaded snapshot times span at most 20 minutes.
 
 A snapshot at `atMs` describes the world as it stood then: `observedAtMs` is
 at or before `atMs`, no record is observed later than `atMs`, freshness and
