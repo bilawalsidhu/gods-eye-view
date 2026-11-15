@@ -1,6 +1,4 @@
-/** Rainfolk historical source admission for the existing GEV well layer.
- * Newly authored Rainfolk code, MIT, copyright 2026 Joshua Koelker.
- */
+/** Admission checks for Rainfolk USGWD historical well record packs. */
 const resource = '8b02895f02c14dd1a749bcc5584a5c55';
 const landing = `https://www.hydroshare.org/resource/${resource}/`;
 const hex = (s) => typeof s === 'string' && /^[a-f0-9]{64}$/.test(s);

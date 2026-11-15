@@ -18,7 +18,7 @@ import {
 } from '../layers/usGroundwater/records.fixture.mjs';
 
 /** A small in-memory Rainfolk-shaped source: six Texas records. */
-const createBundledWellPackSource = () => ({
+const createFixtureWellSource = () => ({
   label: 'Rainfolk',
   viewport: true,
   getSnapshot: async () => ({
@@ -57,7 +57,7 @@ test('wheel motion requests current detail before moveEnd, preserves last good d
   f.viewer.camera.percentageChanged = 0.5;
   let bounds = Cesium.Rectangle.fromDegrees(-125, 24, -66, 50);
   f.viewer.camera.computeViewRectangle = () => bounds;
-  const sample = await createBundledWellPackSource().getSnapshot();
+  const sample = await createFixtureWellSource().getSnapshot();
   const requests = [];
   const layer = createUsGroundwaterLayer({
     source: {
@@ -114,7 +114,7 @@ test('wheel motion requests current detail before moveEnd, preserves last good d
 
 test('manifest catalog count survives pan, zoom and OFF while map representation changes', async () => {
   const f = fixtureViewer();
-  const detail = await createBundledWellPackSource().getSnapshot();
+  const detail = await createFixtureWellSource().getSnapshot();
   detail.catalogTotal = 1042777;
   detail.coverage.indexed = true;
   detail.records = detail.records.slice(0, 1);
@@ -175,7 +175,7 @@ test('manifest catalog count survives pan, zoom and OFF while map representation
 
 test('main layer viewport lifecycle ignores stale packs and cancels disabled loads', async () => {
   const fixture = fixtureViewer();
-  const sample = await createBundledWellPackSource().getSnapshot();
+  const sample = await createFixtureWellSource().getSnapshot();
   const requests = [];
   const source = {
     viewport: true,
@@ -267,12 +267,12 @@ function fixtureViewer() {
   };
 }
 
-test('main GEV catalog exposes the bundled well snapshot through its layer lifecycle', async (t) => {
+test('main GEV catalog exposes the well layer through its lifecycle', async (t) => {
   const lifetime = new AbortController();
   t.after(async () => lifetime.abort());
   const catalog = createApplicationCatalog({
     sources: createStandaloneLayerSources({
-      'us-groundwater': createBundledWellPackSource(),
+      'us-groundwater': createFixtureWellSource(),
     }),
     signal: lifetime.signal,
     surface: createSurfaceServices({
@@ -368,7 +368,7 @@ test('main catalog marker pick publishes well details to the actual shared card 
   });
   const catalog = createApplicationCatalog({
     sources: createStandaloneLayerSources({
-      'us-groundwater': createBundledWellPackSource(),
+      'us-groundwater': createFixtureWellSource(),
     }),
     signal: lifetime.signal,
     surface: createSurfaceServices({
@@ -462,7 +462,7 @@ test('camera movement during initial load, count/detail transitions and disposal
   f.viewer.camera.moveEnd.raiseEvent();
   await new Promise(setImmediate);
   assert.equal(requests[0].signal.aborted, true);
-  const sample = await createBundledWellPackSource().getSnapshot();
+  const sample = await createFixtureWellSource().getSnapshot();
   sample.coverage.indexed = true;
   sample.records = sample.records.slice(0, 1);
   requests[1].resolve(sample);
@@ -548,7 +548,7 @@ test('one enable operation follows repeated initial moves and settles the actual
     assert.equal(requests[i].signal.aborted, true);
     assert.equal(settled, false);
   }
-  const pack = await createBundledWellPackSource().getSnapshot();
+  const pack = await createFixtureWellSource().getSnapshot();
   requests[3].resolve(pack);
   assert.equal(await enabling, true);
   const row = manager.getAll().find((r) => r.id === 'us-groundwater');
@@ -581,7 +581,7 @@ test('disable cancels the same pending enable promptly even when transport ignor
   layer.disable();
   assert.equal(await enabling, false);
   assert.equal(requests[1].signal.aborted, true);
-  const pack = await createBundledWellPackSource().getSnapshot();
+  const pack = await createFixtureWellSource().getSnapshot();
   for (const r of requests) r.resolve(pack);
   await new Promise(setImmediate);
   assert.equal(f.viewer.dataSources.length, 0);

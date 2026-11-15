@@ -30,7 +30,7 @@ import {
 import { validateWellPack } from './pack.js';
 import { historicalWellDetails } from './historicalPack.mjs';
 
-/** A portable, injected well layer with GEV's lifecycle and LOD policy. */
+/** A portable, injected well layer using GEV's layer lifecycle. */
 export function createUsGroundwaterLayer({
   source,
   onSelect = () => {},
@@ -302,8 +302,8 @@ export function createUsGroundwaterLayer({
           record.longitude,
           record.latitude,
         ),
-        // Explicit dimensions avoid pooled PointVisualizer billboards inheriting
-        // the width of a previous aggregate symbol after a detail transition.
+        // Explicit dimensions stop a pooled billboard inheriting another
+        // symbol's size.
         billboard: {
           image: WELL_MARKER_IMAGE,
           width: 12,
@@ -469,9 +469,9 @@ export function createUsGroundwaterLayer({
     async enable() {
       if (!viewer || destroyed) throw new Error('Well layer is not available');
       enabled = true;
-      // Reuse the shared sensitivity lease used by native transport layers.
-      // This also lets Cesium split loaded screen clusters at 5% view changes,
-      // rather than its otherwise coarse 50% default when wells are alone.
+      // Reuse the shared sensitivity lease used by native transport layers:
+      // camera.changed then fires at 5% view changes (Cesium's default is 50%),
+      // so the view refreshes during motion, not only at moveEnd.
       if (!removeCameraChanged && viewer.camera.changed) {
         claimCameraSensitivity(viewer.camera, 'us-groundwater', 0.05);
         removeCameraChanged = viewer.camera.changed.addEventListener(() => {
