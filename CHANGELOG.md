@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- The timeline marks only events: launches, and earthquakes of magnitude 6
+  and up while the Earthquakes layer is on (about one every two days
+  worldwide). It no longer draws a tick for every weather frame, which came
+  every few minutes and made the track a wall of dashes; the weather frames
+  still set the time the timeline covers, and Play still waits at each next
+  frame until it loads. With no mark ahead, the arrow keys step along the
+  track. The map still draws every earthquake, and an earthquake layer never
+  widens the timeline beyond its strong quakes' own times. A weather row's
+  `step` param goes to the previous or next weather frame (samehkhamis).
 - The main timeline is the only time control. The Weather panel no longer
   has a slider, step buttons, Latest or Play of its own; it shows the frame
   time instead: the newest frame and its age while live, the timeline time
