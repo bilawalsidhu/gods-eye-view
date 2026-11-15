@@ -18,28 +18,81 @@ import { getContextStore } from './contextStore.js';
  * fields that lead a card as its big figures, in order; `name` is what an
  * item without a name of its own goes by.
  */
-const AIRCRAFT = { kind: 'aircraft', icon: 'flight', moving: true, headline: ['altitudeM', 'speedMps', 'heading'] };
+const AIRCRAFT = {
+  kind: 'aircraft',
+  icon: 'flight',
+  moving: true,
+  headline: ['altitudeM', 'speedMps', 'heading'],
+};
 const KINDS = Object.freeze({
   flights: AIRCRAFT,
   military: AIRCRAFT,
   'local-adsb': AIRCRAFT,
-  'ais-live-vessels': { kind: 'vessel', icon: 'directions_boat', moving: true, headline: ['speedKts', 'courseDeg', 'navStatus'] },
-  satellites: { kind: 'satellite', icon: 'satellite_alt', moving: true, headline: ['altitudeM', 'speedMps'] },
+  'ais-live-vessels': {
+    kind: 'vessel',
+    icon: 'directions_boat',
+    moving: true,
+    headline: ['speedKts', 'courseDeg', 'navStatus'],
+  },
+  satellites: {
+    kind: 'satellite',
+    icon: 'satellite_alt',
+    moving: true,
+    headline: ['altitudeM', 'speedMps'],
+  },
   'rocket-launches': { kind: 'launch', icon: 'rocket_launch' },
-  'local-firms': { kind: 'fire', icon: 'local_fire_department', headline: ['frp', 'confidence'], name: 'Fire detection' },
-  'fire-perimeters': { kind: 'fire perimeter', icon: 'local_fire_department', headline: ['acres', 'containedPct'] },
-  earthquakes: { kind: 'earthquake', icon: 'earthquake', headline: ['magnitude', 'depthKm'] },
-  'weather-cyclones': { kind: 'storm', icon: 'cyclone', headline: ['windKt', 'pressureHpa'] },
-  'air-quality': { kind: 'air quality station', icon: 'air', headline: ['value', 'band'] },
+  'local-firms': {
+    kind: 'fire',
+    icon: 'local_fire_department',
+    headline: ['frp', 'confidence'],
+    name: 'Fire detection',
+  },
+  'fire-perimeters': {
+    kind: 'fire perimeter',
+    icon: 'local_fire_department',
+    headline: ['acres', 'containedPct'],
+  },
+  earthquakes: {
+    kind: 'earthquake',
+    icon: 'earthquake',
+    headline: ['magnitude', 'depthKm'],
+  },
+  'weather-cyclones': {
+    kind: 'storm',
+    icon: 'cyclone',
+    headline: ['windKt', 'pressureHpa'],
+  },
+  'air-quality': {
+    kind: 'air quality station',
+    icon: 'air',
+    headline: ['value', 'band'],
+  },
   'military-installations': { kind: 'installation', icon: 'factory' },
   'local-dams': { kind: 'dam', icon: 'factory', headline: ['capacity'] },
-  'local-datacenters': { kind: 'data centre', icon: 'factory', headline: ['capacity'] },
+  'local-datacenters': {
+    kind: 'data centre',
+    icon: 'factory',
+    headline: ['capacity'],
+  },
   'osm-places': { kind: 'place', icon: 'location_on' },
-  transit: { kind: 'vehicle', icon: 'train', moving: true, headline: ['speedMps', 'courseDeg'] },
-  bikeshare: { kind: 'bike station', icon: 'pedal_bike', headline: ['bikesAvailable', 'docksAvailable'] },
+  transit: {
+    kind: 'vehicle',
+    icon: 'train',
+    moving: true,
+    headline: ['speedMps', 'courseDeg'],
+  },
+  bikeshare: {
+    kind: 'bike station',
+    icon: 'pedal_bike',
+    headline: ['bikesAvailable', 'docksAvailable'],
+  },
   'alpr-cameras': { kind: 'plate reader', icon: 'videocam' },
   cctv: { kind: 'camera', icon: 'videocam' },
-  'drone-airspace': { kind: 'airspace', icon: 'pentagon', headline: ['lowerAltitude', 'upperAltitude'] },
+  'drone-airspace': {
+    kind: 'airspace',
+    icon: 'pentagon',
+    headline: ['lowerAltitude', 'upperAltitude'],
+  },
   'wildlife-sightings': { kind: 'sighting', icon: 'pets' },
 });
 
@@ -63,7 +116,15 @@ const KEY_FIELDS = ['icao24', 'mmsi', 'noradId', 'usgsId', 'id', 'key'];
  */
 const ALL_RECORDS = 100_000;
 /** Fields searched by the omnibar, besides the key fields. */
-const SEARCH_FIELDS = ['callsign', 'name', 'registration', 'place', 'operator', 'icao24', 'mmsi'];
+const SEARCH_FIELDS = [
+  'callsign',
+  'name',
+  'registration',
+  'place',
+  'operator',
+  'icao24',
+  'mmsi',
+];
 
 /** Never shown as facts: positions and identities already on the card. */
 const HIDDEN_FACTS = new Set([
@@ -391,8 +452,13 @@ function shipTypeName(code) {
   return 'Other';
 }
 
-export function formatFact(field, value, { nowMs = Date.now(), kind = '' } = {}) {
-  if (field === 'shipType' && shipTypeName(value)) return { value: shipTypeName(value) };
+export function formatFact(
+  field,
+  value,
+  { nowMs = Date.now(), kind = '' } = {},
+) {
+  if (field === 'shipType' && shipTypeName(value))
+    return { value: shipTypeName(value) };
   if (value === true) return { value: 'Yes' };
   if (value === false || value === null || value === undefined) return null;
   const number = typeof value === 'number' ? value : null;
@@ -400,7 +466,10 @@ export function formatFact(field, value, { nowMs = Date.now(), kind = '' } = {})
   const round = (n, digits = 0) =>
     n.toLocaleString('en-US', { maximumFractionDigits: digits });
   if (number !== null) {
-    if (/AtMs$|^timeMs$|^acqTime$|^observedMs$|^updatedTime$/.test(field) && isEpochMs(number))
+    if (
+      /AtMs$|^timeMs$|^acqTime$|^observedMs$|^updatedTime$/.test(field) &&
+      isEpochMs(number)
+    )
       return { value: '', age: Math.max(0, nowMs - number) };
     // Any other moment reads as a date.
     if (/(Time|Ms|At)$/.test(field) && isEpochMs(number))
@@ -429,7 +498,8 @@ export function formatFact(field, value, { nowMs = Date.now(), kind = '' } = {})
     if (field === 'speedKts') return { value: `${round(number, 1)} kt` };
     if (field === 'verticalRateMps')
       return { value: `${round(number * 196.85)} ft/min` };
-    if (/^(heading|courseDeg)$/.test(field)) return { value: `${round(number)}°` };
+    if (/^(heading|courseDeg)$/.test(field))
+      return { value: `${round(number)}°` };
     if (field === 'depthKm') return { value: `${round(number, 1)} km` };
     if (field === 'magnitude') return { value: `M ${round(number, 1)}` };
     if (field === 'frp') return { value: `${round(number, 1)} MW` };
@@ -455,7 +525,10 @@ export function formatFact(field, value, { nowMs = Date.now(), kind = '' } = {})
  * The facts a card lists for a record: known fields first, in a fixed order,
  * then whatever else the record carries, up to a handful.
  */
-export function recordFacts(record, { nowMs = Date.now(), skip = [], kind = '' } = {}) {
+export function recordFacts(
+  record,
+  { nowMs = Date.now(), skip = [], kind = '' } = {},
+) {
   const facts = [];
   let observedAgeMs = null;
   const seen = new Set(skip);
@@ -520,11 +593,11 @@ function recordLinks(record, properties) {
     // The language part becomes the link's host, so only a language code is
     // let through.
     if (/^[a-z]{2,3}(-[a-z0-9]+)*$/.test(lang))
-    links.push({
-      kind: 'wikipedia',
-      label: 'Wikipedia',
-      href: `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(title.join(':').replace(/ /g, '_'))}`,
-    });
+      links.push({
+        kind: 'wikipedia',
+        label: 'Wikipedia',
+        href: `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(title.join(':').replace(/ /g, '_'))}`,
+      });
   }
   const wikidata = text(flat.wikidata);
   if (/^Q\d+$/.test(wikidata))
@@ -557,8 +630,9 @@ export function layerRecords(dataManager, layerId, maxCount = ALL_RECORDS) {
   let records = [];
   try {
     records =
-      dataManager?.layers?.get?.(layerId)?.module?.getAnalystRecords?.(maxCount) ||
-      [];
+      dataManager?.layers
+        ?.get?.(layerId)
+        ?.module?.getAnalystRecords?.(maxCount) || [];
   } catch {
     records = [];
   }
@@ -640,7 +714,8 @@ function storeRecord(identity) {
     let bestKm = Infinity;
     for (const record of store.entities.values()) {
       if (record?.layerId !== identity.layerId) continue;
-      if (sameText(text(record.properties?.mmsi), text(identity.id))) return record;
+      if (sameText(text(record.properties?.mmsi), text(identity.id)))
+        return record;
       if (!sameText(text(record.label), text(identity.label))) continue;
       const where = recordPosition(record);
       const km = at && where ? distanceKm(at, where) : best ? Infinity : 0;
@@ -686,7 +761,8 @@ export function recordWarnings(record) {
     found.push(kind ? `Emergency: ${kind}` : 'Emergency declared');
   const squawk = EMERGENCY_SQUAWKS[Number(record.squawk)];
   if (squawk && !found.length) found.push(squawk);
-  if (record.tsunami === true || Number(record.tsunami) === 1) found.push('Tsunami warning issued');
+  if (record.tsunami === true || Number(record.tsunami) === 1)
+    found.push('Tsunami warning issued');
   // `alert` is left out: feeds use it for a level (an earthquake's PAGER
   // colour), not a warning to read out.
   for (const field of ['warning', 'advisory']) {
@@ -726,29 +802,59 @@ export function aircraftInsights(record, { nowMs = Date.now() } = {}) {
   const out = [];
   const altitudeM = finite(record.altitudeM);
   const climbMps = finite(record.verticalRateMps);
-  const speedMps = finite(record.speedMps ?? (finite(record.speedKts) !== null ? record.speedKts * 0.514444 : null));
-  if (record.onGround === true) out.push({ label: 'Phase', value: 'On the ground' });
+  const speedMps = finite(
+    record.speedMps ??
+      (finite(record.speedKts) !== null ? record.speedKts * 0.514444 : null),
+  );
+  if (record.onGround === true)
+    out.push({ label: 'Phase', value: 'On the ground' });
   else if (climbMps !== null) {
     const fpm = climbMps * 196.85;
     out.push({
       label: 'Phase',
-      value: fpm > 300 ? `Climbing ${Math.round(fpm / 100) * 100} ft/min` : fpm < -300 ? `Descending ${Math.round(-fpm / 100) * 100} ft/min` : 'Cruising, level',
+      value:
+        fpm > 300
+          ? `Climbing ${Math.round(fpm / 100) * 100} ft/min`
+          : fpm < -300
+            ? `Descending ${Math.round(-fpm / 100) * 100} ft/min`
+            : 'Cruising, level',
     });
   }
-  if (altitudeM !== null && altitudeM > 900) out.push({ label: 'Flight level', value: `FL${String(Math.round(altitudeM * 3.28084 / 1000) * 10).padStart(3, '0')}` });
+  if (altitudeM !== null && altitudeM > 900)
+    out.push({
+      label: 'Flight level',
+      value: `FL${String(Math.round((altitudeM * 3.28084) / 1000) * 10).padStart(3, '0')}`,
+    });
   if (speedMps !== null && altitudeM !== null && speedMps > 60)
-    out.push({ label: 'Mach', value: `M ${(speedMps / speedOfSound(altitudeM)).toFixed(2)}` });
+    out.push({
+      label: 'Mach',
+      value: `M ${(speedMps / speedOfSound(altitudeM)).toFixed(2)}`,
+    });
   const squawk = Number(record.squawk);
-  if (SQUAWK_MEANINGS[squawk]) out.push({ label: `Squawk ${record.squawk}`, value: SQUAWK_MEANINGS[squawk] });
+  if (SQUAWK_MEANINGS[squawk])
+    out.push({
+      label: `Squawk ${record.squawk}`,
+      value: SQUAWK_MEANINGS[squawk],
+    });
   const seen = finite(record.lastContactAtMs ?? record.timeMs);
   if (seen !== null) {
     const seconds = Math.max(0, Math.round((nowMs - seen) / 1000));
-    out.push({ label: 'Signal', value: seconds < 90 ? `${seconds} s ago` : `${Math.round(seconds / 60)} min ago` });
+    out.push({
+      label: 'Signal',
+      value:
+        seconds < 90
+          ? `${seconds} s ago`
+          : `${Math.round(seconds / 60)} min ago`,
+    });
   }
   return out;
 }
 
-export function describeEntity(dataManager, identity, { nowMs = Date.now() } = {}) {
+export function describeEntity(
+  dataManager,
+  identity,
+  { nowMs = Date.now() } = {},
+) {
   if (!identity?.layerId) return null;
   const { layerId } = identity;
   const kind = entityKind(layerId);
@@ -758,14 +864,19 @@ export function describeEntity(dataManager, identity, { nowMs = Date.now() } = {
   const stored =
     record && kind.moving
       ? null
-      : storeRecord({ ...identity, label: identity.label || recordTitle(record) });
+      : storeRecord({
+          ...identity,
+          label: identity.label || recordTitle(record),
+        });
   if (!record && !stored && !identity.label) return null;
 
   const at =
     recordPosition(record) ||
     recordPosition(stored) ||
     recordPosition(identity);
-  const fromRecord = record ? recordFacts(record, { nowMs, kind: kind.kind }) : null;
+  const fromRecord = record
+    ? recordFacts(record, { nowMs, kind: kind.kind })
+    : null;
   const fromStore = stored ? propertyFacts(stored.properties) : null;
   const facts = [...(fromRecord?.facts || [])];
   for (const fact of fromStore?.facts || []) {
@@ -780,7 +891,9 @@ export function describeEntity(dataManager, identity, { nowMs = Date.now() } = {
   // An item with only a database number goes by what it is.
   const ownTitle = recordTitle(record);
   const title =
-    (kind.name && (!ownTitle || ownTitle === text(record?.id)) ? kind.name : ownTitle) ||
+    (kind.name && (!ownTitle || ownTitle === text(record?.id))
+      ? kind.name
+      : ownTitle) ||
     text(stored?.label) ||
     text(stored?.properties?.name) ||
     text(identity.label) ||
@@ -804,11 +917,16 @@ export function describeEntity(dataManager, identity, { nowMs = Date.now() } = {
     facts: facts.filter((fact) => fact.value !== title),
     warnings: recordWarnings(record),
     // For the aircraft card's model and route line.
-    aircraftClass: kind.kind === 'aircraft' ? text(record?.aircraftClass) || null : null,
-    insights: kind.kind === 'aircraft' ? aircraftInsights(record, { nowMs }) : [],
+    aircraftClass:
+      kind.kind === 'aircraft' ? text(record?.aircraftClass) || null : null,
+    insights:
+      kind.kind === 'aircraft' ? aircraftInsights(record, { nowMs }) : [],
     operator: text(record?.operator) || null,
     heading: finite(record?.heading ?? record?.course),
-    speedMps: finite(record?.speedMps ?? (finite(record?.speedKts) !== null ? record.speedKts * 0.514444 : null)),
+    speedMps: finite(
+      record?.speedMps ??
+        (finite(record?.speedKts) !== null ? record.speedKts * 0.514444 : null),
+    ),
     route:
       text(record?.routeOrigin) || text(record?.routeDestination)
         ? {
@@ -838,7 +956,9 @@ export function describeEntity(dataManager, identity, { nowMs = Date.now() } = {
     basis: record ? 'record' : stored ? 'store' : 'identity',
     identity: {
       layerId,
-      id: record ? recordKey(layerId, record).slice(layerId.length + 1) : text(identity.id),
+      id: record
+        ? recordKey(layerId, record).slice(layerId.length + 1)
+        : text(identity.id),
       label: title,
       lat: at?.lat ?? null,
       lon: at?.lon ?? null,
@@ -923,8 +1043,13 @@ export function nearbyByKind(
   { radiusKm = 250, limit = 4, excludeKey = '', query = '' } = {},
 ) {
   const needle = text(query).toLowerCase();
-  const groups = { flights: { count: 0, items: [] }, vessels: { count: 0, items: [] }, other: [] };
-  if (!here || !Number.isFinite(here.lat) || !Number.isFinite(here.lon)) return groups;
+  const groups = {
+    flights: { count: 0, items: [] },
+    vessels: { count: 0, items: [] },
+    other: [],
+  };
+  if (!here || !Number.isFinite(here.lat) || !Number.isFinite(here.lon))
+    return groups;
   const found = { aircraft: [], vessel: [] };
   const other = [];
   for (const layer of enabledLayers(dataManager)) {
@@ -939,7 +1064,8 @@ export function nearbyByKind(
       if (group) group.push({ layerId: layer.id, record, km });
       // A search lists every match, not only each layer's closest item.
       else if (needle) other.push({ layerId: layer.id, record, km });
-      else if (!closest || km < closest.km) closest = { layerId: layer.id, record, km };
+      else if (!closest || km < closest.km)
+        closest = { layerId: layer.id, record, km };
     }
     if (closest) other.push(closest);
   }
@@ -982,7 +1108,9 @@ function tallyBy(records, labelOf, { keep = 4 } = {}) {
     counts.set(label, (counts.get(label) || 0) + 1);
   }
   const sorted = [...counts].sort((a, b) => b[1] - a[1]);
-  const parts = sorted.slice(0, keep).map(([label, count]) => ({ label, count }));
+  const parts = sorted
+    .slice(0, keep)
+    .map(([label, count]) => ({ label, count }));
   const rest = sorted.slice(keep).reduce((sum, [, count]) => sum + count, 0);
   if (rest) {
     // A label that is itself "Other" takes the tail, so the name shows once.
@@ -1019,7 +1147,10 @@ const AIRCRAFT_CLASS_NAMES = {
  */
 export function layerBreakdown(dataManager, layerId, { rect = null } = {}) {
   const kind = entityKind(layerId).kind;
-  if (!['aircraft', 'vessel', 'satellite', 'earthquake', 'vehicle'].includes(kind)) return null;
+  if (
+    !['aircraft', 'vessel', 'satellite', 'earthquake', 'vehicle'].includes(kind)
+  )
+    return null;
   let records = layerRecords(dataManager, layerId);
   if (rect) {
     const wraps = rect.west > rect.east;
@@ -1028,7 +1159,9 @@ export function layerBreakdown(dataManager, layerId, { rect = null } = {}) {
       return (
         at.lat >= rect.south &&
         at.lat <= rect.north &&
-        (wraps ? at.lon >= rect.west || at.lon <= rect.east : at.lon >= rect.west && at.lon <= rect.east)
+        (wraps
+          ? at.lon >= rect.west || at.lon <= rect.east
+          : at.lon >= rect.west && at.lon <= rect.east)
       );
     });
   }
@@ -1036,18 +1169,34 @@ export function layerBreakdown(dataManager, layerId, { rect = null } = {}) {
   const splits = [];
   if (kind === 'aircraft') {
     const ground = records.filter((record) => record.onGround === true).length;
-    const military = records.filter((record) => record.onGround !== true && record.military === true).length;
+    const military = records.filter(
+      (record) => record.onGround !== true && record.military === true,
+    ).length;
     splits.push({
       title: 'Status',
       parts: [
-        { label: 'Civilian, in the air', count: records.length - ground - military },
+        {
+          label: 'Civilian, in the air',
+          count: records.length - ground - military,
+        },
         { label: 'Military, in the air', count: military },
         { label: 'On the ground', count: ground },
       ].filter((part) => part.count),
     });
-    splits.push({ title: 'Type', parts: tallyBy(records, (record) => AIRCRAFT_CLASS_NAMES[record.aircraftClass] || plainWord(text(record.aircraftClass))) });
+    splits.push({
+      title: 'Type',
+      parts: tallyBy(
+        records,
+        (record) =>
+          AIRCRAFT_CLASS_NAMES[record.aircraftClass] ||
+          plainWord(text(record.aircraftClass)),
+      ),
+    });
   } else if (kind === 'vessel') {
-    splits.push({ title: 'Type', parts: tallyBy(records, (record) => shipTypeName(record.shipType)) });
+    splits.push({
+      title: 'Type',
+      parts: tallyBy(records, (record) => shipTypeName(record.shipType)),
+    });
   } else if (kind === 'vehicle') {
     // What the display shows each vehicle doing, then what kind it is, who
     // runs it, the operator's own report and crowding where the feed has it.
@@ -1055,25 +1204,55 @@ export function layerBreakdown(dataManager, layerId, { rect = null } = {}) {
     // something these records can say.
     const word = (field) => (record) => CODE_WORDS[field][record[field]] || '';
     splits.push({ title: 'Motion', parts: tallyBy(records, word('motion')) });
-    splits.push({ title: 'Mode', parts: tallyBy(records, (record) => plainWord(text(record.mode))) });
+    splits.push({
+      title: 'Mode',
+      parts: tallyBy(records, (record) => plainWord(text(record.mode))),
+    });
     const operators = tallyBy(records, (record) => text(record.operator));
-    if (operators.length > 1) splits.push({ title: 'Operator', parts: operators });
-    const reported = records.filter((record) => CODE_WORDS.status[record.status]);
+    if (operators.length > 1)
+      splits.push({ title: 'Operator', parts: operators });
+    const reported = records.filter(
+      (record) => CODE_WORDS.status[record.status],
+    );
     if (reported.length)
-      splits.push({ title: 'Last reported', parts: tallyBy(reported, word('status')) });
-    const crowded = records.filter((record) => CODE_WORDS.occupancy[record.occupancy]);
+      splits.push({
+        title: 'Last reported',
+        parts: tallyBy(reported, word('status')),
+      });
+    const crowded = records.filter(
+      (record) => CODE_WORDS.occupancy[record.occupancy],
+    );
     if (crowded.length)
-      splits.push({ title: 'Crowding', parts: tallyBy(crowded, word('occupancy')) });
+      splits.push({
+        title: 'Crowding',
+        parts: tallyBy(crowded, word('occupancy')),
+      });
   } else if (kind === 'satellite') {
-    splits.push({ title: 'Class', parts: tallyBy(records, (record) => plainWord(text(record.satelliteClass || record.group))) });
+    splits.push({
+      title: 'Class',
+      parts: tallyBy(records, (record) =>
+        plainWord(text(record.satelliteClass || record.group)),
+      ),
+    });
   } else {
     const band = (record) => {
       const m = finite(record.magnitude);
-      return m === null ? '' : m >= 6 ? 'M6 and above' : m >= 5 ? 'M5 to 6' : m >= 4 ? 'M4 to 5' : 'Below M4';
+      return m === null
+        ? ''
+        : m >= 6
+          ? 'M6 and above'
+          : m >= 5
+            ? 'M5 to 6'
+            : m >= 4
+              ? 'M4 to 5'
+              : 'Below M4';
     };
     splits.push({ title: 'Magnitude', parts: tallyBy(records, band) });
   }
-  return { total: records.length, splits: splits.filter((split) => split.parts.length) };
+  return {
+    total: records.length,
+    splits: splits.filter((split) => split.parts.length),
+  };
 }
 
 /**
@@ -1088,7 +1267,8 @@ export function recordMatches(record, needle, layerLabel = '') {
   if (!needle) return true;
   if (text(layerLabel).toLowerCase().includes(needle)) return true;
   for (const value of Object.values(record || {})) {
-    if (typeof value === 'string' && value.toLowerCase().includes(needle)) return true;
+    if (typeof value === 'string' && value.toLowerCase().includes(needle))
+      return true;
   }
   return false;
 }
@@ -1103,7 +1283,11 @@ export function recordMatches(record, needle, layerLabel = '') {
  * @param {{lat: number, lon: number}|null} [options.near] Ties go to the closer item.
  * @returns {Array<object>}
  */
-export function searchEntities(dataManager, query, { limit = 4, near = null } = {}) {
+export function searchEntities(
+  dataManager,
+  query,
+  { limit = 4, near = null } = {},
+) {
   const needle = text(query).toLowerCase();
   if (needle.length < 2) return [];
   const inWord = new RegExp(
@@ -1165,7 +1349,12 @@ export function searchEntities(dataManager, query, { limit = 4, near = null } = 
  * @param {number} [options.perLayer] Closest items to list for each layer.
  * @returns {Array<{layerId: string, layerName: string, icon: string, count: number, items: Array<object>}>}
  */
-export function viewSummary(dataManager, rect, center, { perLayer = 3, query = '' } = {}) {
+export function viewSummary(
+  dataManager,
+  rect,
+  center,
+  { perLayer = 3, query = '' } = {},
+) {
   if (!rect || !center) return [];
   const needle = text(query).toLowerCase();
   const wraps = rect.west > rect.east;
@@ -1173,7 +1362,9 @@ export function viewSummary(dataManager, rect, center, { perLayer = 3, query = '
     at &&
     at.lat >= rect.south &&
     at.lat <= rect.north &&
-    (wraps ? at.lon >= rect.west || at.lon <= rect.east : at.lon >= rect.west && at.lon <= rect.east);
+    (wraps
+      ? at.lon >= rect.west || at.lon <= rect.east
+      : at.lon >= rect.west && at.lon <= rect.east);
   const groups = [];
   for (const layer of enabledLayers(dataManager)) {
     const found = [];
@@ -1221,14 +1412,20 @@ export function viewSummary(dataManager, rect, center, { perLayer = 3, query = '
  * @param {number} [area.limit]
  * @returns {{count: number, items: Array<object>}}
  */
-export function layerMatches(dataManager, layerId, { center, rect = null, radiusKm = 60, test = () => true, limit = 8 }) {
+export function layerMatches(
+  dataManager,
+  layerId,
+  { center, rect = null, radiusKm = 60, test = () => true, limit = 8 },
+) {
   const found = [];
   const wraps = rect && rect.west > rect.east;
   for (const record of layerRecords(dataManager, layerId)) {
     const at = recordPosition(record);
     if (!at) continue;
     if (rect) {
-      const inLon = wraps ? at.lon >= rect.west || at.lon <= rect.east : at.lon >= rect.west && at.lon <= rect.east;
+      const inLon = wraps
+        ? at.lon >= rect.west || at.lon <= rect.east
+        : at.lon >= rect.west && at.lon <= rect.east;
       if (!inLon || at.lat < rect.south || at.lat > rect.north) continue;
     }
     const km = distanceKm(center, at);
@@ -1260,8 +1457,13 @@ export function layerMatches(dataManager, layerId, { center, rect = null, radius
  * emergency, a quake with a tsunami flag, an advisory), nearest first. These
  * are what each feed broadcasts, not confirmed incidents.
  */
-export function alertsNear(dataManager, here, { radiusKm = 400, limit = 4 } = {}) {
-  if (!here || !Number.isFinite(here.lat) || !Number.isFinite(here.lon)) return [];
+export function alertsNear(
+  dataManager,
+  here,
+  { radiusKm = 400, limit = 4 } = {},
+) {
+  if (!here || !Number.isFinite(here.lat) || !Number.isFinite(here.lon))
+    return [];
   const found = [];
   for (const layer of enabledLayers(dataManager)) {
     for (const record of layerRecords(dataManager, layer.id)) {

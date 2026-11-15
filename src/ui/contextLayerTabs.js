@@ -40,8 +40,18 @@ export const TAB_AFFECTS = {
 
 export const LAYER_TABS = [
   // Labels and cards the world overlay draws for the label layers.
-  { id: 'labels', label: 'Labels', icon: 'label', when: (on) => TAB_AFFECTS.labels(on).length > 0 },
-  { id: 'aircraft', label: '3D aircraft', icon: 'flight', when: (on) => TAB_AFFECTS.aircraft(on).length > 0 },
+  {
+    id: 'labels',
+    label: 'Labels',
+    icon: 'label',
+    when: (on) => TAB_AFFECTS.labels(on).length > 0,
+  },
+  {
+    id: 'aircraft',
+    label: '3D aircraft',
+    icon: 'flight',
+    when: (on) => TAB_AFFECTS.aircraft(on).length > 0,
+  },
 ];
 
 /** Ids of the layers that are on; Context refreshes it. */
@@ -59,7 +69,9 @@ export const contextReady = ref(false);
 
 /** The tabs available now. */
 export const availableTabs = computed(() =>
-  contextReady.value ? LAYER_TABS.filter((tab) => tab.when(enabledLayerIds.value)) : [],
+  contextReady.value
+    ? LAYER_TABS.filter((tab) => tab.when(enabledLayerIds.value))
+    : [],
 );
 
 export const hasTab = (id) => availableTabs.value.some((tab) => tab.id === id);

@@ -62,7 +62,10 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     const dm = shell.value?.dataManager?.();
     const layer = dm?.getAll?.().find((row) => row.id === current.layerId);
     const stats = layer?.stats || {};
-    const raw = stats.sourceVerbatim === true && stats.source ? stats.source : sourceLabel(stats.source || layer?.source);
+    const raw =
+      stats.sourceVerbatim === true && stats.source
+        ? stats.source
+        : sourceLabel(stats.source || layer?.source);
     return raw || '';
   }
   const canCockpit = () => Boolean(shell.value?.canCockpit?.(card.value));
@@ -101,7 +104,9 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   function askAboutView(summary) {
     const where = view.value;
     if (!where) return;
-    const counts = summary.map((group) => `${group.count} ${group.layerName}`).join(', ');
+    const counts = summary
+      .map((group) => `${group.count} ${group.layerName}`)
+      .join(', ');
     shell.value?.askText?.(
       `What am I looking at? The view is centred on ${where.center.lat.toFixed(4)}, ${where.center.lon.toFixed(4)} from about ${Math.round(where.heightM)} m up${counts ? `, showing ${counts}` : ''}. What is here and what stands out?`,
     );
@@ -170,7 +175,13 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
    * @returns {boolean} Whether a card could be made.
    */
   /** Things that move are followed as soon as they are picked. */
-  const AUTO_FOLLOW = new Set(['flights', 'military', 'local-adsb', 'satellites', 'ais-live-vessels']);
+  const AUTO_FOLLOW = new Set([
+    'flights',
+    'military',
+    'local-adsb',
+    'satellites',
+    'ais-live-vessels',
+  ]);
   /** The key of the item the camera is following, if any. */
   const following = ref(null);
 
@@ -185,7 +196,10 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     timer = setInterval(refresh, REFRESH_MS);
     shell.value?.openPanel?.();
     const current = card.value;
-    const followNow = autoFollow && AUTO_FOLLOW.has(current?.layerId) && shell.value?.canFollow?.(current);
+    const followNow =
+      autoFollow &&
+      AUTO_FOLLOW.has(current?.layerId) &&
+      shell.value?.canFollow?.(current);
     if (followNow) {
       // Tracking can announce the craft again; following what is already
       // followed would loop, so it only starts once per item.
@@ -194,7 +208,8 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
         shell.value?.follow?.(current);
       }
     } else {
-      if (following.value && following.value !== current?.key) following.value = null;
+      if (following.value && following.value !== current?.key)
+        following.value = null;
       if (fly) shell.value?.flyTo?.(current);
     }
     requestRoute(current?.identity);
@@ -215,7 +230,8 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     following.value = card.value.key;
     shell.value?.follow?.(card.value);
   };
-  const isFollowing = () => Boolean(card.value && following.value === card.value.key);
+  const isFollowing = () =>
+    Boolean(card.value && following.value === card.value.key);
   const ask = () => card.value && shell.value?.ask?.(card.value);
   const canFollow = () => Boolean(shell.value?.canFollow?.(card.value));
   /** Loaded items whose name or id matches typed text, for the omnibar. */

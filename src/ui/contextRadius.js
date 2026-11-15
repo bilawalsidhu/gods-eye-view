@@ -7,7 +7,9 @@ import { ref } from 'vue';
 const KEY = 'gev.contextRadiusKm';
 
 /** The distances the control steps through, in km. */
-export const CONTEXT_RADIUS_STEPS = Object.freeze([25, 50, 100, 250, 500, 1000, 2500]);
+export const CONTEXT_RADIUS_STEPS = Object.freeze([
+  25, 50, 100, 250, 500, 1000, 2500,
+]);
 export const DEFAULT_CONTEXT_RADIUS_KM = 250;
 
 /** The step closest to a distance; the default for anything unusable. */

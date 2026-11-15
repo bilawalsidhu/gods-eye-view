@@ -339,10 +339,8 @@ export function createVoiceCommands({
   // The omnibar runs the same actions directly, without a model.
   const omnibar = useOmnibarStore(applicationPinia());
   omnibar.connectRunner((name, args) => runner(name, args));
-  session.signal.addEventListener(
-    'abort',
-    () => omnibar.connectRunner(null),
-    { once: true },
-  );
+  session.signal.addEventListener('abort', () => omnibar.connectRunner(null), {
+    once: true,
+  });
   return controls;
 }

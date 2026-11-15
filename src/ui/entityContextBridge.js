@@ -1,5 +1,4 @@
 import * as Cesium from 'cesium';
-import { pickWorldFromScreen } from '../annotations/annotationResolver.js';
 import { resolvePickedContext } from '../data/pickedContext.js';
 import { isPointerFree } from '../data/inputOwnership.js';
 import { useCockpitStore } from './stores/cockpit.js';
@@ -19,7 +18,12 @@ const FRAME_RANGE = Object.freeze({
 });
 const DEFAULT_RANGE = 8_000;
 /** Items the voice runtime can keep the camera on. */
-const FOLLOWABLE = new Set(['flights', 'military', 'ais-live-vessels', 'satellites']);
+const FOLLOWABLE = new Set([
+  'flights',
+  'military',
+  'ais-live-vessels',
+  'satellites',
+]);
 
 /**
  * Connects the Context panel's entity card to the globe: a click on anything a
@@ -30,9 +34,17 @@ const FOLLOWABLE = new Set(['flights', 'military', 'ais-live-vessels', 'satellit
  * @param {object} options.viewer Cesium viewer.
  * @param {() => object} options.getDataManager Layer lifecycle.
  * @param {object} options.pinia
+ * @param {(viewer: object, x: number, y: number) => ({lat: number, lon: number}|null)} [options.pickWorld]
+ *   The ground under a normalized screen point; the view's centre falls back
+ *   to the point under the camera without it.
  * @returns {() => void} disconnects
  */
-export function installEntityContext({ viewer, getDataManager, pinia }) {
+export function installEntityContext({
+  viewer,
+  getDataManager,
+  pinia,
+  pickWorld,
+}) {
   const store = useEntityCardStore(pinia);
   const omnibar = useOmnibarStore(pinia);
   const voice = useVoiceStore(pinia);
@@ -43,7 +55,8 @@ export function installEntityContext({ viewer, getDataManager, pinia }) {
     const button = doc?.querySelector(
       '.ui-rail--right .ui-rail__item[data-rail-item="global-context-panel"]',
     );
-    if (button && button.getAttribute('aria-pressed') !== 'true') button.click();
+    if (button && button.getAttribute('aria-pressed') !== 'true')
+      button.click();
   }
 
   function flyTo(card) {
@@ -77,11 +90,19 @@ export function installEntityContext({ viewer, getDataManager, pinia }) {
 
   // Aircraft can be flown from, and a satellite ridden in the orbital view:
   // track the craft, then enter Cockpit on it.
-  const COCKPIT_LAYERS = new Set(['flights', 'military', 'local-adsb', 'satellites']);
+  const COCKPIT_LAYERS = new Set([
+    'flights',
+    'military',
+    'local-adsb',
+    'satellites',
+  ]);
   async function cockpit(card) {
     const run = omnibar.runner;
     if (!run || !COCKPIT_LAYERS.has(card.layerId)) return;
-    await run('track_entity', { query: card.identity.id || card.title, layerId: card.layerId });
+    await run('track_entity', {
+      query: card.identity.id || card.title,
+      layerId: card.layerId,
+    });
     if (card.layerId !== 'satellites') {
       await run('control_cockpit', { action: 'enter' });
       return;
@@ -124,7 +145,8 @@ export function installEntityContext({ viewer, getDataManager, pinia }) {
     ask,
     askText,
     cockpit,
-    canCockpit: (card) => Boolean(omnibar.runner) && COCKPIT_LAYERS.has(card?.layerId),
+    canCockpit: (card) =>
+      Boolean(omnibar.runner) && COCKPIT_LAYERS.has(card?.layerId),
     canFollow: (card) => FOLLOWABLE.has(card?.layerId),
     // Where the camera is, so a search prefers what is close by.
     here: () => {
@@ -144,7 +166,7 @@ export function installEntityContext({ viewer, getDataManager, pinia }) {
   const readView = () => {
     const camera = viewer.camera;
     const height = camera.positionCartographic?.height ?? 0;
-    const middle = pickWorldFromScreen(viewer, 0.5, 0.5);
+    const middle = pickWorld?.(viewer, 0.5, 0.5);
     const center = middle
       ? { lat: middle.lat, lon: middle.lon }
       : {
@@ -175,7 +197,12 @@ export function installEntityContext({ viewer, getDataManager, pinia }) {
   setTimeout(readView, 0);
 
   /** Layers whose own map click already follows what was clicked. */
-  const CLICK_FOLLOWS = new Set(['flights', 'military', 'satellites', 'ais-live-vessels']);
+  const CLICK_FOLLOWS = new Set([
+    'flights',
+    'military',
+    'satellites',
+    'ais-live-vessels',
+  ]);
 
   // Keep the card's "following" in step with the camera. When the camera
   // stops following (Escape, another tool, the craft gone) the card stops
@@ -184,13 +211,16 @@ export function installEntityContext({ viewer, getDataManager, pinia }) {
   // A layer switching what it follows lets go for a moment and takes hold
   // again in the same turn, so this is checked once that settles.
   let trackCheck = 0;
-  const removeTrackedChanged = viewer.trackedEntityChanged.addEventListener(() => {
-    clearTimeout(trackCheck);
-    trackCheck = setTimeout(() => {
-      if (!viewer.trackedEntity) store.following = null;
-      else if (CLICK_FOLLOWS.has(store.card?.layerId)) store.following = store.card.key;
-    }, 250);
-  });
+  const removeTrackedChanged = viewer.trackedEntityChanged.addEventListener(
+    () => {
+      clearTimeout(trackCheck);
+      trackCheck = setTimeout(() => {
+        if (!viewer.trackedEntity) store.following = null;
+        else if (CLICK_FOLLOWS.has(store.card?.layerId))
+          store.following = store.card.key;
+      }, 250);
+    },
+  );
 
   const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
   // What is under the pointer is read when the button goes down: by the time
@@ -206,14 +236,17 @@ export function installEntityContext({ viewer, getDataManager, pinia }) {
   };
   let pressed = null;
   handler.setInputAction(({ position }) => {
-    pressed = isPointerFree() ? { picked: pickAt(position), x: position.x, y: position.y } : null;
+    pressed = isPointerFree()
+      ? { picked: pickAt(position), x: position.x, y: position.y }
+      : null;
   }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
   handler.setInputAction(({ position }) => {
     // A tool that owns the pointer (draw, measure) keeps its clicks.
     const press = pressed;
     pressed = null;
     if (!isPointerFree()) return;
-    const samePlace = press && Math.hypot(press.x - position.x, press.y - position.y) < 6;
+    const samePlace =
+      press && Math.hypot(press.x - position.x, press.y - position.y) < 6;
     const picked = samePlace ? press.picked : pickAt(position);
     const identity = resolvePickedContext(picked, {
       dataManager: getDataManager(),
@@ -229,7 +262,8 @@ export function installEntityContext({ viewer, getDataManager, pinia }) {
     // photorealistic ground is a tileset, so a click on it counts as ground.
     // A click on something else Context cannot describe (a label, a trail)
     // leaves the card as it is.
-    if (!picked || picked.primitive instanceof Cesium.Cesium3DTileset) store.clear();
+    if (!picked || picked.primitive instanceof Cesium.Cesium3DTileset)
+      store.clear();
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
   // Layers that select through the context store (GeoJSON sites, fires,

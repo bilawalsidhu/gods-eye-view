@@ -37,9 +37,12 @@ function snapshot(name, load) {
   feeds.set(name, { at: Date.now(), promise });
   return promise;
 }
-const quakes = () => snapshot('quakes', () => createUsgsEarthquakeSource().getSnapshot());
-const storms = () => snapshot('storms', () => createCycloneSource().getSnapshot());
-const perimeters = () => snapshot('perimeters', () => createWfigsPerimeterSource().getSnapshot());
+const quakes = () =>
+  snapshot('quakes', () => createUsgsEarthquakeSource().getSnapshot());
+const storms = () =>
+  snapshot('storms', () => createCycloneSource().getSnapshot());
+const perimeters = () =>
+  snapshot('perimeters', () => createWfigsPerimeterSource().getSnapshot());
 const fires = () => snapshot('fires', () => createFirmsSource().getSnapshot());
 
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
@@ -49,7 +52,9 @@ export function compassPoint(from, to) {
   const y = Math.sin((to.lon - from.lon) * rad) * Math.cos(to.lat * rad);
   const x =
     Math.cos(from.lat * rad) * Math.sin(to.lat * rad) -
-    Math.sin(from.lat * rad) * Math.cos(to.lat * rad) * Math.cos((to.lon - from.lon) * rad);
+    Math.sin(from.lat * rad) *
+      Math.cos(to.lat * rad) *
+      Math.cos((to.lon - from.lon) * rad);
   const deg = (Math.atan2(y, x) / rad + 360) % 360;
   return compassName(deg);
 }
@@ -98,14 +103,19 @@ export async function hazardsNear(lat, lon, radiusKm = 250) {
     add({
       kind: 'quake',
       icon: 'earthquake',
-      title: Number.isFinite(Number.parseFloat(quake.mag)) ? `M${Number(quake.mag).toFixed(1)} earthquake` : 'Earthquake',
+      title: Number.isFinite(Number.parseFloat(quake.mag))
+        ? `M${Number(quake.mag).toFixed(1)} earthquake`
+        : 'Earthquake',
       detail: quake.place || '',
       time: quake.time,
       at,
     });
   }
   for (const storm of stormSnap?.storms || []) {
-    const at = { lat: storm.position?.latitude, lon: storm.position?.longitude };
+    const at = {
+      lat: storm.position?.latitude,
+      lon: storm.position?.longitude,
+    };
     if (!(distanceKm(here, at) <= radiusKm)) continue;
     add({
       kind: 'storm',
@@ -125,8 +135,12 @@ export async function hazardsNear(lat, lon, radiusKm = 250) {
       icon: 'local_fire_department',
       title: fire.name || 'Wildfire',
       detail: [
-        Number.isFinite(acres) ? `${Math.round(acres).toLocaleString()} acres` : '',
-        Number.isFinite(fire.containedPct) ? `${fire.containedPct}% contained` : '',
+        Number.isFinite(acres)
+          ? `${Math.round(acres).toLocaleString()} acres`
+          : '',
+        Number.isFinite(fire.containedPct)
+          ? `${fire.containedPct}% contained`
+          : '',
         fire.category === 'RX' ? 'prescribed burn' : '',
       ]
         .filter(Boolean)
@@ -137,10 +151,15 @@ export async function hazardsNear(lat, lon, radiusKm = 250) {
   }
   // Satellite fire hits are many small points: count the close ones.
   const hits = (Array.isArray(fireSnap?.fires) ? fireSnap.fires : [])
-    .map((fire) => ({ lat: Number(fire.lat ?? fire.latitude), lon: Number(fire.lon ?? fire.longitude) }))
+    .map((fire) => ({
+      lat: Number(fire.lat ?? fire.latitude),
+      lon: Number(fire.lon ?? fire.longitude),
+    }))
     .filter((at) => distanceKm(here, at) <= radiusKm);
   if (hits.length) {
-    const nearest = hits.reduce((a, b) => (distanceKm(here, a) <= distanceKm(here, b) ? a : b));
+    const nearest = hits.reduce((a, b) =>
+      distanceKm(here, a) <= distanceKm(here, b) ? a : b,
+    );
     add({
       kind: 'hotspots',
       icon: 'local_fire_department',
@@ -151,22 +170,28 @@ export async function hazardsNear(lat, lon, radiusKm = 250) {
     });
   }
   const order = { storm: 0, wildfire: 1, hotspots: 2, quake: 3 };
-  return found.sort((a, b) => order[a.kind] - order[b.kind] || a.distanceKm - b.distanceKm);
+  return found.sort(
+    (a, b) => order[a.kind] - order[b.kind] || a.distanceKm - b.distanceKm,
+  );
 }
 
 /** Title-case copy for a WMO weather code, and the icon that goes with it. */
 export function weatherLook(code) {
   const value = Number(code);
-  if (!Number.isFinite(value)) return { label: 'Conditions unknown', icon: 'partly_cloudy_day' };
+  if (!Number.isFinite(value))
+    return { label: 'Conditions unknown', icon: 'partly_cloudy_day' };
   if (value === 0) return { label: 'Clear', icon: 'sunny' };
   if (value <= 2) return { label: 'Partly cloudy', icon: 'partly_cloudy_day' };
   if (value === 3) return { label: 'Overcast', icon: 'cloud' };
   if (value === 45 || value === 48) return { label: 'Fog', icon: 'foggy' };
   if (value >= 51 && value <= 57) return { label: 'Drizzle', icon: 'rainy' };
   if (value >= 61 && value <= 67) return { label: 'Rain', icon: 'rainy' };
-  if (value >= 71 && value <= 77) return { label: 'Snow', icon: 'weather_snowy' };
-  if (value >= 80 && value <= 82) return { label: 'Rain showers', icon: 'rainy' };
-  if (value >= 85 && value <= 86) return { label: 'Snow showers', icon: 'weather_snowy' };
+  if (value >= 71 && value <= 77)
+    return { label: 'Snow', icon: 'weather_snowy' };
+  if (value >= 80 && value <= 82)
+    return { label: 'Rain showers', icon: 'rainy' };
+  if (value >= 85 && value <= 86)
+    return { label: 'Snow showers', icon: 'weather_snowy' };
   if (value >= 95) return { label: 'Thunderstorm', icon: 'thunderstorm' };
   return { label: 'Mixed conditions', icon: 'partly_cloudy_day' };
 }

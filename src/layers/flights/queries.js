@@ -314,7 +314,10 @@ export function createQueries({
       // unverified, everything else still treats the flight as routeless.
       routeScheduled:
         !routeOk && info?.route?.origin?.code && info?.route?.destination?.code
-          ? { from: text(info.route.origin.code), to: text(info.route.destination.code) }
+          ? {
+              from: text(info.route.origin.code),
+              to: text(info.route.destination.code),
+            }
           : null,
     };
   }
@@ -777,7 +780,10 @@ export function createQueries({
      * @param {string} icao24
      */
     requestRoute(icao24) {
-      if (icao24) parts.enrichment._requestRouteEnrichment(String(icao24).trim().toLowerCase());
+      if (icao24)
+        parts.enrichment._requestRouteEnrichment(
+          String(icao24).trim().toLowerCase(),
+        );
     },
 
     /**
