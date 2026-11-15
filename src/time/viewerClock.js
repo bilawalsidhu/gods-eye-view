@@ -11,29 +11,16 @@ import * as Cesium from 'cesium';
  * The clock's `currentTime` follows too, for anything that samples it.
  * @param {Cesium.Viewer} viewer
  * @param {() => number} readTime Epoch ms the sky is drawn at.
- * @param {{subscribe?: Function, requestRender?: () => void,
- *   onPlaying?: (playing: boolean) => void}} [options]
+ * @param {{subscribe?: Function, requestRender?: () => void}} [options]
  *   A world clock to hear moves from, so a resting scene repaints when the
- *   world time jumps. `onPlaying` hears when the world clock starts and stops
- *   playing away from live (not stepped by a driver and not waiting for a
- *   layer's data), so the scene can draw every frame meanwhile.
+ *   world time jumps.
  * @returns {() => void} Stop following.
  */
 export function followWorldTime(
   viewer,
   readTime,
-  {
-    subscribe,
-    requestRender = () => viewer.scene.requestRender(),
-    onPlaying = () => {},
-  } = {},
+  { subscribe, requestRender = () => viewer.scene.requestRender() } = {},
 ) {
-  let playing = false;
-  const setPlaying = (next) => {
-    if (next === playing) return;
-    playing = next;
-    onPlaying(next);
-  };
   const date = new Date();
   const removePreUpdate = viewer.scene.preUpdate.addEventListener(
     (_scene, time) => {
@@ -46,12 +33,7 @@ export function followWorldTime(
   );
   let last = readTime();
   const unsubscribe =
-    subscribe?.((state) => {
-      setPlaying(
-        Boolean(
-          state?.playing && !state.live && !state.stepping && !state.buffering,
-        ),
-      );
+    subscribe?.(() => {
       const next = readTime();
       if (next === last) return;
       last = next;
@@ -60,6 +42,5 @@ export function followWorldTime(
   return () => {
     removePreUpdate();
     unsubscribe();
-    setPlaying(false);
   };
 }
