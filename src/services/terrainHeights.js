@@ -87,6 +87,89 @@ export function createTerrainHeights({
   const cache = new Map();
 
   /**
+   * The same entries under a numeric key, for the synchronous reads. Those run
+   * for every aircraft on every fleet pass (about 94,000 a second with 7,500
+   * aircraft in view), nearly all of them misses, and building the string key
+   * (two `toFixed` calls and a concatenation) was most of what a read cost.
+   * Kept in step with `cache` by `cacheStore`, eviction and the abort handler.
+   * `at` is the value of `moves` when the entry last became the newest.
+   * @type {Map<number, {key: string, entry: object, at: number}>}
+   */
+  const cells = new Map();
+  /** Counts every move to the newest end of `cache`: stores and promotions. */
+  let moves = 0;
+  /**
+   * A read promotes its entry only once this many moves have passed since it
+   * was last the newest. An entry cannot reach the cold end in fewer than
+   * CACHE_MAX_ENTRIES - 1 moves, so one read at least this often is never
+   * evicted, without rewriting the Map on every read.
+   */
+  const PROMOTE_AFTER_MOVES = Math.floor(CACHE_MAX_ENTRIES / 2);
+
+  /**
+   * `value.toFixed(5)` as an integer count of 1e-5 steps, or null when the
+   * fast arithmetic cannot be trusted to match it. `toFixed` rounds the exact
+   * decimal value; `value * 1e5` is within 2e-8 of it for |value| < 1000, so
+   * the two can only round differently this close to a half. A negative value
+   * that rounds to zero is left to the string too: it formats as "-0.00000",
+   * a different key from "0.00000".
+   * @param {number} value
+   * @returns {number|null}
+   */
+  function fixed5Index(value) {
+    if (!(Math.abs(value) < 1000)) return null;
+    const scaled = value * 1e5;
+    if (Math.abs(scaled - Math.floor(scaled) - 0.5) < 1e-6) return null;
+    const index = Math.round(scaled);
+    return Object.is(index, -0) ? null : index;
+  }
+
+  /** Indices at or past this (500 degrees) do not pack into one integer. */
+  const CELL_INDEX_LIMIT = 5e7;
+
+  /**
+   * The numeric key for a coordinate: its two 5-decimal indices packed into
+   * one integer (below 2^53), or null when the coordinate has to go through
+   * its string key instead.
+   * @param {number} lat
+   * @param {number} lon
+   * @returns {number|null}
+   */
+  function cellKey(lat, lon) {
+    const latIndex = fixed5Index(lat);
+    const lonIndex = fixed5Index(lon);
+    if (
+      latIndex === null ||
+      lonIndex === null ||
+      Math.abs(latIndex) >= CELL_INDEX_LIMIT ||
+      Math.abs(lonIndex) >= CELL_INDEX_LIMIT
+    )
+      return null;
+    return latIndex * 1e8 + lonIndex;
+  }
+
+  /**
+   * The numeric key of a stored string key. The text is the rounded
+   * coordinate itself, so this is exact. Null for a key `cellKey` never
+   * produces; such a key is only ever read through its string.
+   * @param {string} key
+   * @returns {number|null}
+   */
+  function cellKeyOf(key) {
+    const comma = key.indexOf(',');
+    const latIndex = Math.round(Number(key.slice(0, comma)) * 1e5);
+    const lonIndex = Math.round(Number(key.slice(comma + 1)) * 1e5);
+    if (
+      !(Math.abs(latIndex) < CELL_INDEX_LIMIT) ||
+      !(Math.abs(lonIndex) < CELL_INDEX_LIMIT) ||
+      Object.is(latIndex, -0) ||
+      Object.is(lonIndex, -0)
+    )
+      return null;
+    return latIndex * 1e8 + lonIndex;
+  }
+
+  /**
    * Store an entry and drop the coldest ones once past the cap. `Map` iterates
    * in insertion order, so deleting the first key evicts the least recently
    * used provided every write and every consumer read re-inserts its key.
@@ -101,10 +184,15 @@ export function createTerrainHeights({
   function cacheStore(key, entry) {
     cache.delete(key);
     cache.set(key, entry);
+    moves += 1;
+    const cell = cellKeyOf(key);
+    if (cell !== null) cells.set(cell, { key, entry, at: moves });
     while (cache.size > CACHE_MAX_ENTRIES) {
       const coldest = cache.keys().next().value;
       if (coldest === undefined) break;
       cache.delete(coldest);
+      const coldestCell = cellKeyOf(coldest);
+      if (coldestCell !== null) cells.delete(coldestCell);
     }
   }
 
@@ -119,7 +207,34 @@ export function createTerrainHeights({
     if (entry === undefined) return undefined;
     cache.delete(key);
     cache.set(key, entry);
+    moves += 1;
+    const cell = cellKeyOf(key);
+    const held = cell === null ? undefined : cells.get(cell);
+    if (held) held.at = moves;
     return entry;
+  }
+
+  /**
+   * The synchronous read: the entry for a coordinate, or undefined on a miss.
+   * Same answer as `cacheTouch(cacheKey(lat, lon))`, without building the
+   * string, and promoting only an entry that has drifted towards the cold end
+   * (see PROMOTE_AFTER_MOVES).
+   * @param {number} lat
+   * @param {number} lon
+   * @returns {{ellipsoid: number, source: 'reearth'|'geoid-fallback', retryAt?: number}|undefined}
+   */
+  function cacheRead(lat, lon) {
+    const cell = cellKey(lat, lon);
+    if (cell === null) return cacheTouch(cacheKey(lat, lon));
+    const held = cells.get(cell);
+    if (held === undefined) return undefined;
+    if (moves - held.at > PROMOTE_AFTER_MOVES) {
+      cache.delete(held.key);
+      cache.set(held.key, held.entry);
+      moves += 1;
+      held.at = moves;
+    }
+    return held.entry;
   }
 
   /**
@@ -142,7 +257,7 @@ export function createTerrainHeights({
    * @returns {number|null}
    */
   function cachedEllipsoidalGround(lat, lon) {
-    const entry = cacheTouch(cacheKey(lat, lon));
+    const entry = cacheRead(lat, lon);
     return entry ? entry.ellipsoid : null;
   }
 
@@ -159,7 +274,7 @@ export function createTerrainHeights({
    * @returns {number|null}
    */
   function cachedRealEllipsoidalGround(lat, lon) {
-    const entry = cacheTouch(cacheKey(lat, lon));
+    const entry = cacheRead(lat, lon);
     return entry && entry.source === 'reearth' ? entry.ellipsoid : null;
   }
 
@@ -370,7 +485,14 @@ export function createTerrainHeights({
     });
   }
 
-  signal?.addEventListener('abort', () => cache.clear(), { once: true });
+  signal?.addEventListener(
+    'abort',
+    () => {
+      cache.clear();
+      cells.clear();
+    },
+    { once: true },
+  );
   return {
     cachedEllipsoidalGround,
     cachedRealEllipsoidalGround,

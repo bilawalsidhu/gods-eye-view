@@ -46,6 +46,39 @@ export function createGroundFloor({ terrain, signal }) {
   }
 
   /**
+   * One coordinate's coarse cell as an integer: `Number(deg.toFixed(3))` in
+   * thousandths of a degree, without the trip through a string. The floor is
+   * read for every aircraft on every fleet pass, and `coarseFloorCoord`'s two
+   * `toFixed` calls and the string keys built from them were most of the cost.
+   * `toFixed` rounds the exact decimal value; `deg * 1000` is within 1e-10 of
+   * it for |deg| < 1000, so the two can only round differently right at a
+   * half, and there the string decides.
+   * @param {number} deg
+   * @returns {number}
+   */
+  function coarseCellIndex(deg) {
+    const scaled = deg * 1000;
+    if (
+      !(Math.abs(deg) < 1000) ||
+      Math.abs(scaled - Math.floor(scaled) - 0.5) < 1e-6
+    )
+      return Math.round(Number(deg.toFixed(3)) * 1000);
+    return Math.round(scaled);
+  }
+
+  /**
+   * Key of a coarse cell in `_meshCells`: the two indices packed into one
+   * number, or the text form for a longitude too far out of range to pack.
+   * @param {number} latIndex @param {number} lonIndex
+   * @returns {number|string}
+   */
+  function meshCellKey(latIndex, lonIndex) {
+    return Math.abs(lonIndex) < 500_000 && Math.abs(latIndex) < 1e9
+      ? latIndex * 1_000_000 + lonIndex
+      : `${latIndex},${lonIndex}`;
+  }
+
+  /**
    * Pure floor clamp.
    *  - finite alt + finite ground → max(alt, ground + lift)
    *  - finite alt + unknown ground → alt (no data, no clamp)
@@ -424,8 +457,8 @@ export function createGroundFloor({ terrain, signal }) {
   // reported here by meshFloorSampler.js. Design principle (owner): NEVER
   // below the visible surface; slightly above is always fine. The DEM stays
   // the instant global prior/fallback and the sanity gate for samples.
-  /** @type {Map<string, Array<{lat: number, lon: number, h: number}>>}
-   *  coarse cell key -> rendered-surface readings (m, ellipsoidal), each kept
+  /** @type {Map<number|string, Array<{lat: number, lon: number, h: number}>>}
+   *  coarse cell key (`meshCellKey`) -> rendered-surface readings (m, ellipsoidal), each kept
    *  at the point it was probed. A read answers from the reading nearest the
    *  asked point, so a viaduct and the street beside it in one cell keep their
    *  own heights. */
@@ -468,8 +501,7 @@ export function createGroundFloor({ terrain, signal }) {
       !Number.isFinite(heightM)
     )
       return;
-    const c = coarseFloorCoord(lat, lon);
-    const key = `${c.lat},${c.lon}`;
+    const key = meshCellKey(coarseCellIndex(lat), coarseCellIndex(lon));
     if (!_meshCells.has(key)) _meshCells.set(key, [{ lat, lon, h: heightM }]);
   }
 
@@ -497,7 +529,7 @@ export function createGroundFloor({ terrain, signal }) {
     const cell = coarseFloorCoord(lat, lon);
     const prior = cachedRealEllipsoidalGround(cell.lat, cell.lon);
     if (!meshFloorSampleWithinPrior(heightM, prior)) return false;
-    const key = `${cell.lat},${cell.lon}`;
+    const key = meshCellKey(coarseCellIndex(lat), coarseCellIndex(lon));
     const readings = _meshCells.get(key);
     if (!readings) {
       _meshCells.set(key, [{ lat, lon, h: heightM }]);
@@ -538,8 +570,16 @@ export function createGroundFloor({ terrain, signal }) {
   function cachedMeshFloor(lat, lon) {
     if (!_meshPreferred) return null;
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-    const c = coarseFloorCoord(lat, lon);
-    const readings = _meshCells.get(`${c.lat},${c.lon}`);
+    return meshFloorInCell(
+      lat,
+      lon,
+      meshCellKey(coarseCellIndex(lat), coarseCellIndex(lon)),
+    );
+  }
+
+  /** `cachedMeshFloor` for a caller that already has the point's cell key. */
+  function meshFloorInCell(lat, lon, key) {
+    const readings = _meshCells.get(key);
     if (!readings) return null;
     if (readings.length === 1) return readings[0].h;
     const k = Math.cos((lat * Math.PI) / 180) ** 2;
@@ -572,10 +612,14 @@ export function createGroundFloor({ terrain, signal }) {
    */
   function cachedGroundFloor(lat, lon) {
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-    const mesh = cachedMeshFloor(lat, lon);
-    if (mesh != null) return mesh;
-    const c = coarseFloorCoord(lat, lon);
-    return cachedRealEllipsoidalGround(c.lat, c.lon);
+    // The cell is worked out once, as integers, for both reads.
+    const latIndex = coarseCellIndex(lat);
+    const lonIndex = coarseCellIndex(lon);
+    if (_meshPreferred) {
+      const mesh = meshFloorInCell(lat, lon, meshCellKey(latIndex, lonIndex));
+      if (mesh != null) return mesh;
+    }
+    return cachedRealEllipsoidalGround(latIndex / 1000, lonIndex / 1000);
   }
 
   /**
