@@ -166,8 +166,8 @@ test('UiPanel without collapsible has no button, and glow is optional', (t) => {
   });
   const panel = document.getElementById('plain-panel');
   assert.equal(panel.tagName, 'SECTION');
-  assert.equal(panel.querySelector('.panel-glow'), null);
-  assert.equal(panel.querySelector('.panel-collapse-btn'), null);
+  assert.equal(panel.querySelector('.panel-glow') === null, true);
+  assert.equal(panel.querySelector('.panel-collapse-btn') === null, true);
 });
 
 test('RailPanel follows the store, forwards clicks, and never restores a class its owner removed', async (t) => {

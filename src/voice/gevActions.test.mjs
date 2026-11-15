@@ -1980,7 +1980,11 @@ test('showing a layer opens the panel that holds its row: Directions lives in Ut
     dataset: {
       layerName: panelId === 'utilities-panel' ? 'Directions' : 'Live Flights',
     },
-    classList: { add: (name) => focused.push(name), remove() {} },
+    classList: {
+      add: (name) => focused.push(name),
+      remove() {},
+      contains: () => false,
+    },
     scrollIntoView() {},
     closest: (selector) =>
       selector === '[data-panel-id]' ? { id: panelId } : null,

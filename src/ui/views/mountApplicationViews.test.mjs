@@ -25,7 +25,7 @@ test('omitted views lose their hosts and the rest render', () => {
   page(['welcome', 'provider-settings']);
   mountApplicationViews(document, { omit: ['provider-settings'] });
   assert.deepEqual(hostNames(), ['welcome']);
-  assert.equal(document.getElementById('key-setup-chip'), null);
+  assert.equal(document.getElementById('key-setup-chip') === null, true);
   assert.ok(
     document.querySelector('[data-gev-view="welcome"]').children.length,
   );
@@ -37,7 +37,7 @@ test('a view an earlier call rendered is unmounted when a later call omits it', 
   assert.ok(document.getElementById('key-setup-chip'));
   mountApplicationViews(document, { omit: ['provider-settings'] });
   assert.deepEqual(hostNames(), ['welcome']);
-  assert.equal(document.getElementById('key-setup-chip'), null);
+  assert.equal(document.getElementById('key-setup-chip') === null, true);
 });
 
 test('unknown view names are refused, in the page or in the omit list', () => {

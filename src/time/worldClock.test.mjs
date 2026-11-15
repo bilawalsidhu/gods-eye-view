@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createWorldClock, WORLD_CLOCK_TICK_MS } from './worldClock.js';
+import {
+  createWorldClock,
+  WORLD_CLOCK_MARK_LABEL_LENGTH,
+  WORLD_CLOCK_TICK_MS,
+} from './worldClock.js';
 
 function fakeTime() {
   const t = {
@@ -253,9 +257,60 @@ test('coverage is the union of the registered sources', () => {
     start: 50,
     end: 200,
     marks: [100, 150, 200],
+    markDetails: [{ time: 100 }, { time: 150 }, { time: 200 }],
   });
   off();
-  assert.deepEqual(clock.coverage(), { start: 50, end: 180, marks: [] });
+  assert.deepEqual(clock.coverage(), {
+    start: 50,
+    end: 180,
+    marks: [],
+    markDetails: [],
+  });
+});
+
+test('marks may carry a label, an id and a kind, and merge in one order', () => {
+  const clock = createWorldClock(fakeTime().options);
+  clock.register({
+    id: 'launches',
+    coverage: () => ({
+      start: 100,
+      end: 300,
+      marks: [
+        { time: 300, label: ' ARTEMIS II ', id: 'a2', kind: 'launch' },
+        100,
+        { time: 200, label: 'M6.4 · Fiji', kind: 'earthquake', extra: 1 },
+      ],
+    }),
+  });
+  clock.register({
+    id: 'others',
+    coverage: () => ({
+      start: 100,
+      end: 300,
+      marks: [
+        200,
+        { time: 200, label: 'M6.4 · Fiji', kind: 'earthquake' },
+        { time: 200, label: 'ALPHA', kind: 'launch' },
+        { time: 250, label: '', id: 7, kind: null },
+        { time: Number.NaN, label: 'never' },
+        Number.POSITIVE_INFINITY,
+        null,
+        'soon',
+      ],
+    }),
+  });
+  const covered = clock.coverage();
+  assert.deepEqual(covered.marks, [100, 200, 250, 300], 'the times, once each');
+  assert.deepEqual(covered.markDetails, [
+    { time: 100 },
+    // A bare 200 says nothing a labelled mark there does not; alike marks
+    // from two sources are one.
+    { time: 200, label: 'M6.4 · Fiji', kind: 'earthquake' },
+    { time: 200, label: 'ALPHA', kind: 'launch' },
+    { time: 250 },
+    { time: 300, label: 'ARTEMIS II', id: 'a2', kind: 'launch' },
+  ]);
+  assert.ok(covered.markDetails.every(Object.isFrozen));
 });
 
 test('seek refuses anything but epoch ms and rate must be positive', () => {
@@ -306,7 +361,7 @@ test('a coverage that throws counts as none', (t) => {
   assert.equal(clock.coverage(), null);
 });
 
-test('continuous play runs past every driver, and live resets the rate', () => {
+test('continuous play runs past every driver, and live keeps the rate chosen', () => {
   const t = fakeTime();
   const clock = createWorldClock(t.options);
   const calls = [];
@@ -317,7 +372,13 @@ test('continuous play runs past every driver, and live resets the rate', () => {
   t.advance(1_000);
   assert.equal(clock.now(), t.wall - 61_000 + 30_000);
   clock.goLive();
-  assert.equal(clock.getRate(), 1);
+  assert.equal(clock.getRate(), 30);
+  assert.equal(clock.now(), t.wall, 'live is the wall clock, whatever the rate');
+  // Play with no rate given runs at the one chosen.
+  clock.seek(t.wall - 60_000);
+  clock.play({ continuous: true });
+  t.advance(1_000);
+  assert.equal(clock.now(), t.wall - 61_000 + 30_000);
 });
 
 test('continuous play holds while a layer waits, and goes on from there', () => {
@@ -407,4 +468,69 @@ test('a seek or a return to live counts as a jump; play does not', () => {
   assert.equal(clock.getState().jumps, 2);
   clock.goLive();
   assert.equal(clock.getState().jumps, 2, 'already live is no jump');
+});
+
+test('a mark label longer than the timeline shows is cut, ending in an ellipsis', () => {
+  const clock = createWorldClock(fakeTime().options);
+  const long = `${'A'.repeat(58)}  BEYOND THE CUT`;
+  clock.register({
+    id: 'long',
+    coverage: () => ({
+      start: 1,
+      end: 2,
+      marks: [
+        { time: 1, label: long },
+        { time: 2, label: 'B'.repeat(WORLD_CLOCK_MARK_LABEL_LENGTH) },
+      ],
+    }),
+  });
+  const [cut, whole] = clock.coverage().markDetails;
+  assert.equal(cut.label, `${'A'.repeat(58)}…`);
+  assert.ok(cut.label.length <= WORLD_CLOCK_MARK_LABEL_LENGTH);
+  assert.equal(whole.label, 'B'.repeat(WORLD_CLOCK_MARK_LABEL_LENGTH));
+});
+
+test('a cut label never splits an emoji, and counts it as one character', () => {
+  const clock = createWorldClock(fakeTime().options);
+  const a = 'A'.repeat(58);
+  clock.register({
+    id: 'emoji',
+    coverage: () => ({
+      start: 1,
+      end: 3,
+      marks: [
+        { time: 1, label: `${a}🚀 LIFTOFF` },
+        { time: 2, label: `${a}👩‍🚀 CREW` },
+        // Sixty characters, though more UTF-16 units: whole.
+        { time: 3, label: `${'A'.repeat(59)}🚀` },
+      ],
+    }),
+  });
+  const [rocket, crew, whole] = clock.coverage().markDetails;
+  assert.equal(rocket.label, `${a}🚀…`);
+  assert.equal(crew.label, `${a}👩‍🚀…`);
+  assert.equal(whole.label, `${'A'.repeat(59)}🚀`);
+  for (const { label } of [rocket, crew, whole])
+    assert.equal(label.isWellFormed(), true, 'no lone surrogate');
+});
+
+test('marks merge on their whole label, so labels alike up to the cut stay two', () => {
+  const clock = createWorldClock(fakeTime().options);
+  const stem = 'C'.repeat(WORLD_CLOCK_MARK_LABEL_LENGTH - 1);
+  for (const id of ['one', 'two'])
+    clock.register({
+      id,
+      coverage: () => ({
+        start: 5,
+        end: 5,
+        marks: [{ time: 5, label: `${stem}${id === 'one' ? ' FIRST' : ' SECOND'}` }],
+      }),
+    });
+  const covered = clock.coverage();
+  assert.deepEqual(covered.marks, [5]);
+  assert.equal(covered.markDetails.length, 2);
+  for (const mark of covered.markDetails) {
+    assert.equal(mark.label, `${stem}…`);
+    assert.equal(Object.isFrozen(mark), true);
+  }
 });

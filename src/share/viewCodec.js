@@ -393,6 +393,7 @@ export const SHARE_VIEW_FIELDS = freezeAll([
   // Data Library entries switched on, as their two-character ledger tokens
   // concatenated (src/library/ledger.json). Absent means none.
   { number: 29, key: 'library', type: 'bytes', default: null },
+  { number: 30, key: 'scopeOpacityPct', type: 'uint', default: 100 },
 ]);
 const FIELD_BY_KEY = new Map(SHARE_VIEW_FIELDS.map((f) => [f.key, f]));
 const fieldNumber = (key) => FIELD_BY_KEY.get(key).number;
@@ -780,6 +781,12 @@ export function normalizeShareViewState(input = {}) {
   state.scopeFeatherPct = finite(source.scopeFeatherPct)
     ? clampScopeFeatherPct(Number(source.scopeFeatherPct))
     : d.scopeFeatherPct;
+  state.scopeOpacityPct = intOr(
+    source.scopeOpacityPct,
+    d.scopeOpacityPct,
+    0,
+    100,
+  );
   state.scopeTerminusPct = intOr(
     source.scopeTerminusPct,
     null,

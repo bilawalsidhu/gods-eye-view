@@ -302,7 +302,28 @@ instances. Configure sources with `application/sources` before registration or
 state restoration, and release them after the consumers stop. The catalog
 constructor (`application/layers`) also requires `wind`, `weather` and
 `cyclones` sources with `getSnapshot` for the Weather layers, and owns the
-observed-history clock those layers share for the catalog's lifetime.
+observed-history clock those layers share for the catalog's lifetime. That
+clock, the catalog's `weatherClock`, follows the world clock (`gods-eye-view/time`)
+and has no time controls of its own: move time with the world clock's `seek`,
+`play`, `pause` and `goLive` (`weatherClock.world` is the one it follows).
+
+A layer gives the world clock's timeline the time it can show with
+`worldClock.register({ id, coverage })` (`gods-eye-view/time`), which returns
+the unregister; call `worldClock.coverageChanged()` when that time changes.
+`coverage()` returns null while the layer has none, or
+`{ start, end, marks? }` in epoch ms. `marks` are the moments worth going to,
+drawn as ticks the timeline's arrow keys step to and a tap on or within 6 px of
+snaps to. Each mark is a number, or `{ time, label?, id?, kind? }`: `label` is
+short text (cut to 60 characters, ending in `…`) shown when the pointer is on
+the tick and told with the time while the handle is on the mark, `id` the layer's own key for the event and `kind`
+what sort of event it is (`'launch'`, `'earthquake'`). The two forms may be
+mixed; a mark without a finite time, and a `label`, `id` or `kind` that is not
+a non-empty string, are ignored. `worldClock.coverage()` returns the union of
+the registered layers, `{ start, end, marks, markDetails }`, or null: `marks`
+is every mark's time once, in order, as numbers, and `markDetails` the marks in
+time order, each a frozen `{ time, label?, id?, kind? }` holding only the
+fields given, with marks given alike by several layers once and a bare time
+left out where a mark with more to say shares it.
 A `weather` source may also supply decoded frames: an optional
 `getFrameImage({ product, time, size, bbox, signal })` returns a whole-extent or
 detail image and an optional `getFrameTile({ product, time, z, x, y, size,
@@ -310,6 +331,12 @@ signal })` returns one tile or null for a transparent tile, each as an
 `ImageBitmap`, `ImageData`, canvas or `VideoFrame` of exactly the requested
 size, which the layer draws once and closes. Without them the layers read the
 image and tile routes (`WeatherFrameFeed` in `src/layers/weather/source.js`).
+It may also name its source with an optional `sourceName(kind)`, `kind` being
+`'radar'`, `'lightning'` or `'satellite'`: the layer's row shows that name until
+a manifest names its own, and NOAA nowCOAST when the source names none. The
+name is read once, when the layer is built, and held to the same rule as a
+manifest's `display.source`. The map credit still comes from each manifest's
+`display.credit`, so a source that is not nowCOAST sets that too.
 
 `application/services` accepts boundary, terrain, regional-context, weather and
 summary services; its weather service supplies cockpit local conditions, not the

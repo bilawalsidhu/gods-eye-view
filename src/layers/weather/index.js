@@ -2,14 +2,16 @@ import { createWeatherRendering } from './rendering.js';
 import { createWeatherShell, globeImageryHost } from './shellRendering.js';
 import { weatherFrameSource } from './source.js';
 import { imageryHostStatus } from './imageryHost.js';
-import { weatherDisplay, insideExtent } from './display.js';
+import { weatherDisplay, weatherSourceName, insideExtent } from './display.js';
 import {
   RADAR_MAX_GAP_MS,
   REGIONAL_INFRARED_MAX_GAP_MS,
   GLOBAL_INFRARED_MAX_GAP_MS,
   LIGHTNING_MAX_GAP_MS,
   atLeastFrameSpacing,
+  createWeatherClock,
 } from './clock.js';
+import { worldClock } from '../../time/worldClock.js';
 import { formatUtcDayMonth, t, msg } from '../../i18n/index.js';
 import { formatScaleLabel } from '../../ui/unitLabels.js';
 import { toLonLatH } from '../../geo/ellipsoid.js';
@@ -60,12 +62,68 @@ const utc = (value) =>
     ? `${formatUtcDayMonth(value)} ${value.slice(11, 16)} UTC`
     : t('Unavailable');
 
+/**
+ * Move `world`, the world clock, as its timeline does: `play` toggles play at
+ * the world clock's rate (the speed the timeline chose), from the start of the
+ * covered time when live or at its end, unless `canPlay` is false or there
+ * is no covered time (no timeline to play); `latest` goes live. `step` (-1 or 1) goes to the previous or next of `frames`, the
+ * weather frames; the timeline does not mark them, so this is the row's own
+ * way to step through them.
+ */
+function moveWorldTime(world, frames, { play, latest, step }, canPlay) {
+  if (!world) return;
+  if (play === true) {
+    const state = world.getState();
+    if (state.playing) world.pause();
+    else {
+      // With no time to show there is no timeline, and nothing to play.
+      const covered = canPlay && state.supported ? world.coverage() : null;
+      if (covered) {
+        // The covered time reaches to now, as the timeline's track does.
+        const end = Math.max(covered.end, world.wallNow());
+        if (state.live || state.timeMs >= end)
+          world.seek(Math.min(covered.start, state.timeMs));
+        world.play({ continuous: true });
+      }
+    }
+  }
+  if (latest === true) world.goLive();
+  if (step === -1 || step === 1) {
+    const at = world.getState().timeMs;
+    const times = frames
+      .map((time) => Date.parse(time))
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b);
+    const to =
+      step < 0
+        ? times.findLast((frame) => frame < at)
+        : times.find((frame) => frame > at);
+    if (to === undefined) return;
+    world.pause();
+    world.seek(to);
+  }
+}
+
+// What a layer that has not built its own clock yet reads: live, no frames.
+const IDLE_CLOCK = Object.freeze({
+  mode: 'latest',
+  target: null,
+  advancing: false,
+  timeline: [],
+  products: [],
+});
+
 /** A per-application observation layer, using the existing layer lifecycle and
  * row controls. Its time is the world clock's, so a link made away from live
- * opens its imagery at that time; one made live opens the latest. */
+ * opens its imagery at that time; one made live opens the latest. Its frames
+ * follow `clock`, a weather clock several layers share; without one the layer
+ * builds its own on the page's world clock when first enabled and keeps it
+ * for its lifetime; that clock never sends the world live. The feed may also
+ * name its source with `sourceName(kind)`, `kind` being 'radar', 'lightning'
+ * or 'satellite'; NOAA nowCOAST is named otherwise. */
 export function createWeatherLayer({
   feed,
-  clock,
+  clock: sharedClock,
   id = 'weather-radar',
   createRendering = createWeatherRendering,
   documentRef = globalThis.document,
@@ -74,10 +132,28 @@ export function createWeatherLayer({
 } = {}) {
   if (typeof feed?.getSnapshot !== 'function')
     throw new TypeError('Weather requires a snapshot source');
+  // Without a shared clock the layer builds its own when first enabled, so a
+  // layer never turned on leaves the world clock alone.
+  let ownClock = null;
+  let clock = sharedClock ?? null;
   // A feed may also supply decoded frames; see weatherFrameSource.
   const radar = id === 'weather-radar';
   const lightning = id === 'weather-lightning';
   const satellite = !radar && !lightning;
+  // A feed may name the source behind each product ('radar', 'lightning' or
+  // 'satellite'); its row then says so before a manifest names it. A name
+  // that fails, like a manifest's, leaves the built-in one.
+  let sourceName = null;
+  try {
+    sourceName =
+      weatherSourceName(
+        feed.sourceName?.(
+          radar ? 'radar' : lightning ? 'lightning' : 'satellite',
+        ),
+      ) ?? null;
+  } catch (cause) {
+    console.warn('[weather] source name unavailable:', cause);
+  }
   let product = radar ? 'radar' : lightning ? 'lightning' : 'clouds-regional';
   let opacity = 'strong';
   let infrared = 100;
@@ -86,12 +162,10 @@ export function createWeatherLayer({
     manifest = null,
     request = null,
     listener = null;
+  let destroyed = false;
   let enabled = false,
-    loading = false,
-    playing = false,
-    followLatest = true;
+    loading = false;
   let generation = 0,
-    timer = null,
     error = null,
     removeCamera = null;
   let motion = null;
@@ -131,39 +205,38 @@ export function createWeatherLayer({
     return spaced;
   };
   const maxGap = () => spacedTimes().gap;
-  const isLatest = () =>
-    clock ? clock.getState().mode === 'latest' : followLatest;
+  const clockState = () => clock?.getState() ?? IDLE_CLOCK;
+  const isLatest = () => clockState().mode === 'latest';
   const getHost = () => imageryHost?.() ?? globeImageryHost(viewer);
   const notify = () => listener?.();
   const shownTime = () => (noFrame ? null : rendering?.getDiagnostics().time);
-  const unsubscribeClock = clock?.subscribe(() => {
+  const onClock = () => {
     if (!clock.getState().advancing || suspended())
       rendering?.cancelPrefetch?.();
     notify();
-  });
+  };
+  let unsubscribeClock = clock?.subscribe(onClock) ?? null;
+  const ensureClock = () => {
+    if (clock) return;
+    ownClock = createWeatherClock({ world: worldClock, shared: false });
+    clock = ownClock;
+    unsubscribeClock = clock.subscribe(onClock);
+  };
   // Ages and delays are measured from the time the layer shows: the world
   // clock's time at a past time, the wall clock while live.
   const worldNow = () => {
-    const shared = clock?.getState();
-    return shared?.mode === 'history' && shared.target
+    const shared = clockState();
+    return shared.mode === 'history' && shared.target
       ? Date.parse(shared.target)
       : Date.now();
   };
   const observationDelayed = () =>
     manifest?.latest &&
     worldNow() - Date.parse(manifest.latest) > spacedTimes().delay;
-  const stop = () => {
-    if (clock) return;
-    playing = false;
-    rendering?.cancelPrefetch?.();
-    clearTimeout(timer);
-    timer = null;
-  };
   const suspended = () => hostHidden || documentRef?.hidden || motion?.matches;
   const onVisibility = () => {
     if (suspended()) rendering?.cancelPrefetch?.();
-    if (clock) void clock.refresh();
-    else if (suspended()) stop();
+    void clock?.refresh();
     notify();
   };
 
@@ -178,46 +251,15 @@ export function createWeatherLayer({
     if (!changed || !rendering) return;
     ++generation;
     rendering.rehome?.();
-    clearTimeout(timer);
-    timer = null;
     loading = Boolean(request && !request.signal.aborted);
-    if (clock && enabled) {
-      if (resume) {
-        void clock.refresh();
-        if (!hostHidden && manifest && isLatest()) void show(manifest.latest);
-      }
-      notify();
-      return;
-    }
-    if (resume && enabled && !hostHidden && manifest) {
-      const time =
-        followLatest || !manifest.times.includes(shownTime())
-          ? manifest.latest
-          : shownTime();
-      if (
-        time !== shownTime() ||
-        (satellite && rendering.getDiagnostics().infrared !== infrared)
-      )
-        void show(time);
-      else schedule();
+    if (enabled && resume) {
+      void clock.refresh();
+      if (!hostHidden && manifest && isLatest()) void show(manifest.latest);
     }
     notify();
   }
   const onMapStackChanged = () => checkHost();
 
-  function schedule() {
-    if (clock) return;
-    clearTimeout(timer);
-    timer = null;
-    if (!enabled || !playing || suspended()) return;
-    timer = setTimeout(() => {
-      timer = null;
-      const times = manifest?.times || [];
-      const next = (times.indexOf(shownTime()) + 1) % times.length;
-      if (times[next]) void show(times[next]);
-      else stop();
-    }, 2000);
-  }
   async function applyClockTime(time, { signal }) {
     if (!enabled || signal.aborted) return false;
     if (time !== null) return show(time, signal);
@@ -231,7 +273,7 @@ export function createWeatherLayer({
     return true;
   }
   function registerClock() {
-    if (!clock || unregisterClock || !rendering || !enabled) return;
+    if (unregisterClock || !rendering || !enabled || !clock) return;
     unregisterClock = clock.register({
       id,
       get maxGapMs() {
@@ -244,15 +286,11 @@ export function createWeatherLayer({
     });
   }
   async function warmNext(time) {
-    if (
-      !enabled ||
-      suspended() ||
-      !(clock ? clock.getState().advancing : playing)
-    )
-      return;
+    if (!enabled || suspended() || !clockState().advancing) return;
+    // The world plays on past the newest frame, never round to the first.
     const times = manifest?.times ?? [];
-    const next = times[(times.indexOf(time) + 1) % times.length];
-    if (!next || next === time) return;
+    const next = times[times.indexOf(time) + 1];
+    if (!next) return;
     try {
       await rendering.prefetch?.(manifest, next, { infrared });
     } catch {
@@ -287,13 +325,10 @@ export function createWeatherLayer({
       error = ok
         ? null
         : msg('Frame unavailable; previous observation retained');
-      if (!ok) stop();
       return ok;
     } catch {
-      if (owner === generation && !controller.signal.aborted) {
+      if (owner === generation && !controller.signal.aborted)
         error = msg('Weather imagery unavailable');
-        stop();
-      }
       return false;
     } finally {
       signal?.removeEventListener('abort', abort);
@@ -301,8 +336,7 @@ export function createWeatherLayer({
       if (owner === generation) {
         loading = Boolean(request && !request.signal.aborted);
         notify();
-        if (clock && isLatest()) void clock.refresh();
-        schedule();
+        if (isLatest()) void clock?.refresh();
       }
     }
   }
@@ -314,7 +348,7 @@ export function createWeatherLayer({
         ? 'Lightning density'
         : 'Satellite clouds',
     icon: radar ? '◉' : lightning ? 'ϟ' : '☁',
-    source: 'NOAA nowCOAST · OBSERVED',
+    source: sourceName ?? 'NOAA nowCOAST · OBSERVED',
     updateInterval: lightning ? 600_000 : 120_000,
     init(nextViewer) {
       viewer = nextViewer;
@@ -349,7 +383,10 @@ export function createWeatherLayer({
       notify();
     },
     enable() {
+      // Destroyed, the layer stays off: no clock is built for it again.
+      if (destroyed) return;
       enabled = true;
+      ensureClock();
       if (!removeCamera) {
         removeCamera =
           findCamera(viewer)?.on('moveEnd', () => {
@@ -371,26 +408,20 @@ export function createWeatherLayer({
       noFrame = false;
       request?.abort();
       request = null;
-      stop();
+      rendering?.cancelPrefetch?.();
       rendering?.clear();
       manifest = null;
       loading = false;
       error = null;
-      followLatest = true;
     },
     async update(_viewer, { signal } = {}) {
       if (!enabled) return false;
       checkHost(false);
-      clearTimeout(timer);
-      timer = null;
       request?.abort();
       const controller = new AbortController();
       if (signal?.aborted) controller.abort(signal.reason);
       request = controller;
-      const abort = () => {
-        controller.abort(signal.reason);
-        stop();
-      };
+      const abort = () => controller.abort(signal.reason);
       signal?.addEventListener('abort', abort, { once: true });
       loading = true;
       notify();
@@ -406,36 +437,15 @@ export function createWeatherLayer({
           error = msg(
             'Weather source unavailable; previous observation retained',
           );
-          stop();
           return true;
         }
         manifest = snapshot;
         error = null;
         // The shown frame may stay; its credit follows the refreshed manifest.
         rendering?.updateSnapshot?.(snapshot);
-        if (clock) {
-          await clock.refresh();
-          if (
-            isLatest() &&
-            request === controller &&
-            !controller.signal.aborted
-          )
-            await show(snapshot.latest, controller.signal);
-          return (
-            enabled &&
-            !signal?.aborted &&
-            (!controller.signal.aborted || request !== controller)
-          );
-        }
-        const time =
-          followLatest || !snapshot.times.includes(shownTime())
-            ? snapshot.latest
-            : shownTime();
-        if (
-          shownTime() !== time ||
-          (satellite && rendering.getDiagnostics().infrared !== infrared)
-        )
-          await show(time, controller.signal);
+        await clock.refresh();
+        if (isLatest() && request === controller && !controller.signal.aborted)
+          await show(snapshot.latest, controller.signal);
         return (
           enabled &&
           !signal?.aborted &&
@@ -445,7 +455,6 @@ export function createWeatherLayer({
         if (controller.signal.aborted || request !== controller)
           return enabled && !signal?.aborted && request !== controller;
         error = cause?.message || msg('Weather unavailable');
-        stop();
         return true;
       } finally {
         signal?.removeEventListener('abort', abort);
@@ -453,7 +462,6 @@ export function createWeatherLayer({
           request = null;
           loading = Boolean(rendering?.getDiagnostics().loading);
           notify();
-          schedule();
         }
       }
     },
@@ -488,19 +496,16 @@ export function createWeatherLayer({
         noFrame = false;
         request?.abort();
         request = null;
-        stop();
+        rendering?.cancelPrefetch?.();
         manifest = null;
         error = null;
         loading = false;
-        followLatest = true;
         rendering?.clear();
-        if (clock) void clock.refresh();
+        void clock?.refresh();
         if (enabled) void layer.update(viewer);
       }
       if (infraredChanged && enabled && manifest) {
-        clearTimeout(timer);
-        timer = null;
-        if (clock && !isLatest()) void clock.refresh();
+        if (!isLatest()) void clock.refresh();
         else void show(shownTime() || manifest.latest);
       }
       if (
@@ -528,38 +533,19 @@ export function createWeatherLayer({
           );
         });
       }
-      if (clock && enabled) {
-        if (params.play === true) void clock.togglePlay();
-        if (params.latest === true) void clock.latest();
-        if ([-1, 1].includes(params.step)) void clock.step(params.step);
-      }
-      if (
-        !clock &&
-        params.play === true &&
-        enabled &&
-        manifest?.times?.length > 1 &&
-        !suspended()
-      ) {
-        playing = !playing;
-        followLatest = false;
-        if (playing) schedule();
-        else stop();
-      }
-      if (!clock && params.latest === true && manifest) {
-        stop();
-        followLatest = true;
-        void show(manifest.latest);
-      }
-      if (!clock && [-1, 1].includes(params.step) && manifest && !loading) {
-        stop();
-        followLatest = false;
-        const at = manifest.times.indexOf(shownTime());
-        const next = Math.max(
-          0,
-          Math.min(manifest.times.length - 1, at + params.step),
+      // Time is the world's: these move the world clock as its timeline
+      // does, and every layer that follows it moves along. A step goes
+      // through every shown observation's frames, and this row's own even
+      // while it is suspended.
+      // Play does nothing while every observation it would show is suspended
+      // (reduced motion, a hidden page, no imagery host), as the row says.
+      if (enabled)
+        moveWorldTime(
+          clock.world,
+          [...clock.getTimeline(), ...(manifest?.times ?? [])],
+          params,
+          clock.getState().products.some(({ suspended }) => !suspended),
         );
-        void show(manifest.times[next]);
-      }
       notify();
     },
     getParams() {
@@ -570,13 +556,13 @@ export function createWeatherLayer({
           : { product, opacity };
     },
     getRowControls() {
-      const shared = clock?.getState();
+      const shared = clockState();
       const followLatest = isLatest();
       // Source-described text is data: shown as is, never translated.
       const display = weatherDisplay(manifest);
       const missing =
         noFrame &&
-        shared?.mode === 'history' &&
+        shared.mode === 'history' &&
         shared.products.find((entry) => entry.id === id)?.selected === null
           ? maxGap() / 60_000 < 60
             ? t('No frame within {gap} min of {time}', {
@@ -697,9 +683,7 @@ export function createWeatherLayer({
       const stops =
         display.legend ?? (radar ? STOPS : lightning ? LIGHTNING_STOPS : []);
       const infoMotion = motion?.matches
-        ? clock
-          ? t('Reduced motion · history playback unavailable')
-          : t('Reduced motion · manual history available')
+        ? t('Reduced motion · history playback unavailable')
         : '';
       const controls = {
         readout: true,
@@ -881,35 +865,34 @@ export function createWeatherLayer({
         loading,
         error: error || rendering?.getDiagnostics().error || null,
         stale: Boolean(manifest?.stale || observationDelayed()),
-        ...(source === undefined
+        ...(source === undefined && sourceName === null
           ? { source: 'NOAA nowCOAST' }
           : // Source text is data: the panel shows it untranslated.
-            { source, sourceVerbatim: true }),
+            { source: source ?? sourceName, sourceVerbatim: true }),
         observedAt: shownTime(),
       };
     },
     getDiagnostics() {
-      const shared = clock?.getState();
+      const shared = clockState();
       return {
         ...rendering?.getDiagnostics(),
-        playing: shared ? shared.playing : playing && !hostHidden,
+        playing: shared.advancing,
         followLatest: isLatest(),
-        ...(shared
-          ? {
-              clock: {
-                mode: shared.mode,
-                target: shared.target,
-                playing: shared.playing,
-              },
-            }
-          : {}),
+        clock: {
+          mode: shared.mode,
+          target: shared.target,
+          playing: shared.advancing,
+        },
         historyFrames: manifest?.times?.length || 0,
-        timerActive: timer !== null,
       };
     },
     destroy() {
+      destroyed = true;
       layer.disable();
       unsubscribeClock?.();
+      unsubscribeClock = null;
+      ownClock?.destroy();
+      if (ownClock) clock = ownClock = null;
       removeCamera?.();
       removeCamera = null;
       motion?.removeEventListener?.('change', onVisibility);

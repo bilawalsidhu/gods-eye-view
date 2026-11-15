@@ -232,6 +232,7 @@ export class StyleManager extends ShellFacade {
         getDetectionTuning: services.getDetectionTuning,
         getKeyholeFadeTuning: services.getKeyholeFadeTuning,
         getScopeMaskFeather: services.getScopeMaskFeather,
+        getScopeMaskOpacity: services.getScopeMaskOpacity,
         getScopeTerminusOverride: services.getScopeTerminusOverride,
         governorRequestRender: services.governorRequestRender,
         holdContinuousRender: services.holdContinuousRender,
@@ -245,6 +246,7 @@ export class StyleManager extends ShellFacade {
         setKeyholeFadeTuning: services.setKeyholeFadeTuning,
         setScopeMaskEnabled: services.setScopeMaskEnabled,
         setScopeMaskFeather: services.setScopeMaskFeather,
+        setScopeMaskOpacity: services.setScopeMaskOpacity,
       },
       elements: {
         _ppToggles: this._ppToggles,
@@ -609,6 +611,10 @@ export class StyleManager extends ShellFacade {
           this._setDetectionAllocation(...args),
         _setDetectionFade: (...args) => this._setDetectionFade(...args),
         _setScope: (...args) => this._visualSettings._setScope(...args),
+        _applyGlobalPostDefaults: (...args) =>
+          this._applyGlobalPostDefaults(...args),
+        _adoptDetectionAsRestore: () =>
+          this._visualSettings.adoptDetectionAsRestore(),
         setCelestialRingEnabled: (...args) =>
           this.setCelestialRingEnabled(...args),
         _setModels3dEnabled: (...args) => this._setModels3dEnabled(...args),

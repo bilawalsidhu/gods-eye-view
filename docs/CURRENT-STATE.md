@@ -651,6 +651,53 @@ panel that holds its row, and `set_panel_open` reaches it as
 `utilities-panel` or by "utilities", "draw", "drawing" or "import". On a phone
 it sits collapsed in the Layers sheet under Data Layers.
 
+## The Visual panel — November 14, 2026
+
+Visual (`#pp-toggles`, `src/ui/views/panels/DisplayPanel.vue`) is headed
+VISUAL, has the edge switch in its header like the other side panels, and is
+grouped from the top: Look, the six style presets with their 1–6 keys, and
+Map source, the map source chips (`VisualPresets.vue`); Overlay, the HUD,
+detection, style parameters, 3D aircraft, Scope and Clean UI; Effects,
+Celestial, Bloom and Sharpen; and Reset to default at the foot. Each control
+is a card (`src/ui/styles/visual-panel.css`) whose header row ends in an
+on/off pill worded in the current language (Clean UI, an action, has none;
+the buttons carry their state as `aria-pressed`). Under the Cyber HUD the
+cards keep Cyber's own red skin. The presets and chips call the
+same Display store actions as the dock's Visual Presets tray, which stays on
+desktop and phone as before, along with Location; voice `Visual Presets`
+still opens that tray. On a phone the More sheet shows that tray right above
+Visual, so Visual leaves out its own presets and chips there. In Cockpit,
+the groups that Cockpit's Display popover takes leave the panel as before and
+keep their own styling there.
+
+Scope has an Opacity slider (`#scope-opacity-slider`, 50–100%, default 100%;
+`SCOPE_OPACITY_MIN_PCT` in `src/ui/visualSettings.js`, since a fainter mask
+reads as Scope off while labels still fade outside the keyhole)
+that fades the whole mask (`setScopeMaskOpacity` in `src/scopeMask.js`, the
+canvas's CSS opacity) without repainting it or changing the altitude
+terminus; it is disabled while Scope is off and keeps its value. Share links
+carry it as `sco` in the long form and field 30 in the compact form, written
+only below 100%, so links made before it keep their codes and open at full
+opacity, and a link without it sets the opacity back to 100%; a link asking
+for less than 50% opens at 50%. Scenes do not
+save it: a scene shot leaves the opacity as it is.
+
+Reset to default (`resetVisual` in `src/ui/displayBindings.js`) brings back
+the out-of-the-box look: the Normal style, the first-run post defaults
+(bloom off, sharpen on at 49%, the HUD shown, Dense detection at 75%
+with its fade and outside opacity, the celestial ring off), Elastic
+allocation, Scope on at 100% feather and 100% opacity, and 3D aircraft on in
+Proximity. The HUD layout follows the Normal style, as choosing it does: the
+Tactical HUD, except that the Cyber HUD stays Cyber. Inside Contacts, which
+lends detection for the session, the reset's detection becomes what leaving
+Contacts puts back and what a share link carries. It leaves the map source, the pinned scope terminus, Sonar's
+settings, other styles' parameters, the layers and the panels alone.
+
+With Scope off the side rails, open panels and the dock's trays carry a soft
+drop shadow and the rails' labels and icons a text shadow
+(`src/ui/styles/scope-off-shadows.css`), so their edges hold against bright
+imagery.
+
 ## Side rails and the screen edge — November 14, 2026
 
 Visual (`#pp-toggles`, the display settings, rail item `palette`) is the last
@@ -680,6 +727,62 @@ world timeline in the strip keep their own wheel. The strip is off on phones
 and touch screens, while the rails are hidden (clean view, recording), and it
 follows the rails' sides in a right-to-left language. On a phone, Visual is in
 the More sheet with the dock's Visual Presets, as before.
+
+## Wikidata cities pack — November 15, 2026
+
+`src/data/local_data/wikidata_cities/cities.json` bundles 31,827 settlements of
+15,000 people or more from Wikidata (CC0, 1.6 MB): name, position, population,
+country and Wikidata id. `src/data/wikidataCities.js` reads it on the first
+lookup and answers `nearestCity` (the largest city within 12 km, else the
+nearest within 60 km), `citiesAround`, `findPlace` ("Paris, France", or the
+nearest namesake within 150 km of the view, else the largest) and
+`countryName`. Names match without case or accents ("lodz" finds Łódź). The
+app never calls Wikidata; `scripts/build-wikidata-cities.mjs` rebuilds the
+pack and fails if well-known cities are missing or a known grouping such as
+the New York metropolitan area gets in. Nothing shows names from it yet; the
+Context panel is its first reader. Sources and licence: `DATA_SOURCES.md`.
+
+## Data Layers finder and section index — November 15, 2026
+
+The Data Layers header has a search button and a filter button
+(`src/ui/views/panels/LayerFinder.vue`). Search opens a field under the
+header that matches each layer's name on screen and its English name; Escape
+closes it and leaves the panel open. The filter is a small popover with two
+groups, Status (All layers, On, Off: whether the layer is enabled) and
+Category (the list's groups, kept by their key, so a language change keeps
+the choice). The arrows, Home and End move through it and Escape closes it.
+Rows and groups that are left out hide; chips under the header show the
+active filters and clear them, and "No layers match" says when nothing is
+left. Neither the search nor the filter is saved or put in share links. A
+voice request that points at a hidden layer clears the finder first
+(`gev:layer-finder-clear`).
+
+A column of ticks down the list's inline end
+(`src/ui/views/panels/LayerSectionIndex.vue`) has one tick per group still
+shown; hovering or focusing a tick names its group beside it, on whichever
+side has room, and clicking scrolls the list there. The tick for the group in
+view is lit. Phones do not show it.
+
+## Cockpit side panels — November 14, 2026
+
+On the desktop, the cockpit's side panels match the main page's
+(`src/ui/styles/cockpit-panels.css`). The left rail shows Data Layers only:
+Authoring, Utilities and Visual, with their panels, are hidden, since the
+cockpit's own Display panel stands in for Visual. Display and Radio
+(`CockpitUtilityControls.vue`) become a right rail of two icons with their
+names beside them, and each opens one panel at a time beside the rail, with a
+header and a "−" to close it. The rail's buttons are disclosures
+(`aria-expanded`, `aria-controls`) and go through the `toggleCockpitUtility`
+action (`src/ui/radioBindings.js`); closing a panel gives focus back to the
+rail. Both rails start at the same height: the left one in CSS, and Display
+and Radio through the cockpit layout pass, whose floor
+(`COCKPIT_UTILITY_MIN_TOP_PX` / `_RATIO` in `src/ui/cockpitPresentation.js`)
+matches it, so an open panel still stops short of the briefing. Contact and
+Live Signals are shorter, in the same glass, with the briefing's rows and
+weather tiles tightened; Regional News stays a briefing page. In a right-to-left language, the rail keeps its
+physical side as the cockpit's other windows do. The Cyber HUD and the phone
+keep their own cockpit layouts, with the Display and Radio launchers as
+before, and edge mode does not apply in the cockpit.
 
 ## God's Eye View in conversations — October 2, 2026
 
@@ -773,6 +876,8 @@ Display's native Scope checkbox defaults ON with feather at 100%, adjustable
 from 0–200%. OFF disables the slider while retaining its value. HUD layout
 changes preserve both settings; share links and scenes restore them. The
 historical missing-`scf` fallback remains 35%; explicit 0% keeps the hard edge.
+Its Opacity slider (0–100%, default 100%) fades the mask; share links
+restore it (`sco`), scenes do not (see The Visual panel).
 
 With Scope OFF, Tactical and Minimal add text-sized black backplates
 at 70% opacity behind telemetry, vertical metadata and scene chrome. Original
@@ -1704,7 +1809,14 @@ it a Cesium viewer, with no renderer bound, loads the
 `./render/cesium/unbound` export once first. `depthColor` returns a renderer
 colour `[r, g, b, a]` and `depthAccent` its CSS. The standalone adapter keeps the existing USGS daily feed,
 M2.5+ filtering, static discs, magnitude labels and analyst records. Disabling or
-destroying the layer cancels pending work and ignores late results.
+destroying the layer cancels pending work and ignores late results. While on,
+the layer registers its quakes of magnitude 6 and up
+(`EARTHQUAKE_MARK_MAGNITUDE`) with the world clock as timeline marks, spanning
+only their own times, and none while off; the map still draws every M2.5+
+quake. Each mark is labelled with the magnitude as the map shows it and the
+feed's place, cut to 40 characters (`earthquakeMarkLabel` in
+`src/layers/earthquakes/model.js`: `M6.4 · 113 km SSE of Lata, Solomon
+Islands`, or `M6.4` with no place).
 
 Air quality (`./layers/air-quality`) draws its station discs as one renderer
 draw set of ground-clamped fills and reads the view through the camera port; it
@@ -8623,9 +8735,25 @@ Wind supports selectable GFS/IFS models with persisted model choice. Each fetch 
 Weather combines the GFS/ECMWF surface forecast with three observation layers:
 NOAA Rain radar (CONUS), Satellite clouds (regional GOES or slower global infrared),
 and 15-minute lightning density (Americas and Pacific). One transient observed
-clock drives all enabled observation rows. Earlier/Later use the sorted union of
-non-suspended products' advertised times; each product selects its nearest frame
-at or before the requested UTC time, never a future frame or an interpolation.
+clock moves all enabled observation rows with the world clock; the world
+timeline is the only time control. Each product's advertised times span time on
+that timeline but are not marks on it: the timeline marks only events (launches,
+and earthquakes of magnitude 6 and up while that layer is on), so its arrow keys
+step to those, or along the track where there are none. A mark may carry a
+label (a launch's mission name, cut to 27 characters in capitals as the mission
+index shows names; an earthquake's magnitude and place). Marks merge on their
+whole label; one longer than 60 characters (graphemes, so an emoji is never
+split) then shows cut, ending in `…`, and a label is never wider than the
+track. A zoom or
+a pan clears a hovered label. The pointer within
+6 px of a tick shows its label over the track, and a tap there goes to the
+mark's time exactly; a tap elsewhere goes to the time under it and a drag
+scrubs. With the handle on a mark, its label follows the time in the handle's
+`aria-valuetext` and shows over the track while the handle has focus. The
+coverage contract is in [APPLICATION.md](./APPLICATION.md). A weather row's `step`
+param goes to the previous or next weather frame. Each product selects its
+nearest frame at or before the world time, never a future frame or an
+interpolation.
 The maximum gap is 30 minutes for radar, regional infrared and lightning, and
 3 hours for hourly global infrared, but never less than one and a half of the
 feed's median frame spacing over its latest frames, so a regional feed whose
@@ -8635,10 +8763,11 @@ lightning, 4 hours for global infrared). A missing eligible frame hides that pro
 and reports the gap; rows show actual displayed UTC time with synced/nearest labels.
 Manifest rollover preserves the requested history time, even when frames expire.
 
-Latest follows each product's own newest frame, so its timestamps can differ.
-Playback advances two seconds after all products settle, wraps, and stops with
-fewer than two union times or when all products are suspended. Hidden documents,
-reduced motion and unavailable imagery hosts suspend products. Re-enabling or
+Live follows each product's own newest frame, so its timestamps can differ.
+The timeline's Play runs the world clock at the chosen speed and stops at each
+product's next frame until that frame loads (for at most eight seconds), so
+every frame shows. Hidden documents, reduced motion and unavailable imagery
+hosts suspend products. Re-enabling or
 restoring a host joins the retained history target. The wind row explicitly says
 “Forecast · does not follow history” while the observed clock is in history mode,
 unless a host follows the world clock for `wind` (`weatherClock.follows('wind')`):
@@ -8646,10 +8775,28 @@ its source then follows the timeline and the row says nothing of it. In history
 mode, frame ages and the “Source observations delayed” status are measured from
 the timeline time rather than the wall clock, and the timeline readout shows the
 time alone; live, they count from now as before.
-The catalog exposes `weatherClock` and destroys it with its lifetime signal.
+The Weather panel's frame time shows the newest frame and its age while live
+(each product's newest, suspended products included), and the timeline time
+alone at a past time.
+The catalog exposes `weatherClock` and destroys it with its lifetime signal. It
+has no time controls of its own: `weatherClock.world` is the world clock it
+follows, where time moves. A weather row's `play`, `latest` and `step` params
+move that world clock as the timeline does: `play` runs at the speed chosen on
+the timeline (the world clock keeps its rate while paused and live, and the
+timeline's speed selector shows the clock's rate, or the nearest offered speed
+for a rate a host set), from the start of the covered time when live or at its
+end, and does nothing while every product the row shows is suspended or while
+there is no covered time. A weather layer built without a
+shared clock builds one of its own on the page's world clock when first
+enabled (`createWeatherClock({ shared: false })`) and keeps it for its
+lifetime; destroying it leaves the world's time where it is, and enabling it
+after that does nothing, and only the last
+shared weather clock destroyed sends the world live. Neither has a frame replay
+of its own.
 
-Source, opacity, coverage navigation and transport controls live in the WEATHER
-panel's cards and timeline, not in the rows. The viewer clock is untouched.
+Source, opacity and coverage navigation live in the WEATHER panel's cards, not
+in the rows; the panel shows the frame time and has no time controls. The
+viewer clock is untouched.
 Observation layers are off by default; share/persist includes appearance and product, while history
 is transient and shared links open latest. Rendering retains the previous frame
 when an incoming frame fails; no eligible historical frame instead hides imagery.

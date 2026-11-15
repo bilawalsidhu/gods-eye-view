@@ -119,6 +119,7 @@ test('at the live edge a layer with a timeline only follows and registers', asyn
     start: WALL - 3_600_000,
     end: WALL,
     marks: [],
+    markDetails: [],
   });
   assert.equal(h.follower.active(), false);
   assert.deepEqual(h.calls, []);
