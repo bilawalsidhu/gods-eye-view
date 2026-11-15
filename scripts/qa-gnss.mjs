@@ -11,15 +11,17 @@
  *   (i)   LIVE — over Poland and the southern Baltic the layer settles with no error,
  *         one geometry per cell and legend band counts that sum to the cell
  *         count; cells are required only when the returned rows, binned
- *         with the layer's own rules, reach the per-cell minimum (live
- *         traffic varies by hour). Requires a non-stale response no older than 60 s.
+ *         into H3 cells with the layer's own rules, give at least one cell
+ *         (live traffic varies by hour). Requires a non-stale response no older than 60 s.
  *   (ii)  BANDS (synthetic) — a 10-aircraft cell with 5 degraded is high,
  *         a 30-aircraft cell with 2 degraded is medium, a 3-aircraft cell
  *         with 1 degraded is low (first bad discounted), a clean cell at sea
- *         is low, a 2-aircraft cell is withheld; `stale: true` reaches
+ *         is low, a 2-aircraft cell with 2 degraded is shown high (no
+ *         minimum aircraft count, as on gpsjam.org); `stale: true` reaches
  *         getStats. Every band is drawn and low is shown over land and sea.
  *         The row reads as low navigation accuracy, and stats carry the
- *         machine-readable provenance (GEV classifier, gpsjam bands, window).
+ *         machine-readable provenance (GEV classifier, gpsjam bands and H3
+ *         grid, window).
  *         PICK verifies actual perimeter and empty-ground clicks under GNSS.
  *         CAMERA/GLOBE verify automatic sampling and the screen-centre anchor.
  *   (iii) FAILURE — the route stubbed to 502: stats.error is set and the
@@ -195,7 +197,7 @@ function cellStates(id) {
   return [ds.get(0).ready ? 0 : 1];
 }
 
-/** Wait until every GNSS cell's ground rectangle has finished building. */
+/** Wait until every GNSS cell's ground polygon has finished building. */
 async function waitForBuiltCells(page, timeoutMs = 60000) {
   const built = await page
     .waitForFunction(
@@ -223,22 +225,23 @@ const fixtureRow = (hex, lat, lon, degraded) => ({
 });
 
 /**
- * Synthetic 0.5° cells: high at sea (5/10 bad), medium on land (2/30 bad),
- * low on land (1/3 bad), low at sea (0/4 bad), withheld (2 aircraft).
+ * Synthetic H3 res-4 cells, each group inside one hexagon: high at sea
+ * (5/10 bad), medium on land (2/30 bad), low on land (1/3 bad), low at sea
+ * (0/4 bad), and high from only 2 aircraft (2/2 bad; no minimum count).
  */
 function fixturePayload() {
   const rows = [];
   const hex = (prefix, i) => `${prefix}${i.toString(16).padStart(2, '0')}`;
   for (let i = 0; i < 10; i++)
-    rows.push(fixtureRow(hex('a000', i), 55.1 + i * 0.01, 19.1, i < 5));
+    rows.push(fixtureRow(hex('a000', i), 55.1 + i * 0.001, 19.1, i < 5));
   for (let i = 0; i < 30; i++)
-    rows.push(fixtureRow(hex('d000', i), 54.1 + i * 0.01, 19.6, i < 2));
+    rows.push(fixtureRow(hex('d000', i), 54.1 + i * 0.001, 19.6, i < 2));
   for (let i = 0; i < 3; i++)
-    rows.push(fixtureRow(hex('b000', i), 54.1 + i * 0.01, 18.1, i === 0));
+    rows.push(fixtureRow(hex('b000', i), 54.1 + i * 0.001, 18.1, i === 0));
   for (let i = 0; i < 4; i++)
-    rows.push(fixtureRow(hex('e000', i), 55.1 + i * 0.01, 18.1, false));
+    rows.push(fixtureRow(hex('e000', i), 55.1 + i * 0.001, 18.1, false));
   for (let i = 0; i < 2; i++)
-    rows.push(fixtureRow(hex('c000', i), 53.1 + i * 0.01, 17.1, true));
+    rows.push(fixtureRow(hex('c000', i), 53.1 + i * 0.001, 17.1, true));
   return {
     fetchedAt: Date.now(),
     anchor: { lat: 55, lon: 19 },
@@ -385,8 +388,8 @@ async function main() {
     const l = await enableAndSettle(live);
     const legendTotal = l.legend.reduce((sum, { count }) => sum + count, 0);
     // Bin what adsb.lol actually returned with the layer's own rules: live
-    // traffic varies by hour, so cells are required only when some cell
-    // really reached the minimum aircraft count.
+    // traffic varies by hour, so cells are required only when the rows
+    // really bin into some cell.
     const liveSnapshots = (await Promise.allSettled(liveBodies))
       .filter((r) => r.status === 'fulfilled')
       .map((r) => r.value);
@@ -429,7 +432,7 @@ async function main() {
       );
     } else {
       console.log(
-        `  [info] ${liveRows} live rows, no cell reaches the minimum — cell count not asserted`,
+        `  [info] ${liveRows} live rows bin into no cell — cell count not asserted`,
       );
     }
     record(
@@ -439,7 +442,7 @@ async function main() {
     );
     const liveBuilt = await waitForBuiltCells(live);
     record(
-      'LIVE: every cell rectangle is built on a parked camera',
+      'LIVE: every cell polygon is built on a parked camera',
       liveBuilt.built,
       liveBuilt.detail,
     );
@@ -454,7 +457,7 @@ async function main() {
     await page.setViewport({ width: 1440, height: 900 });
     page.on('pageerror', (e) => errors.push(e.message));
     // Stub the route in-page rather than with request interception: an
-    // intercepted page stalls Cesium's geometry workers, so ground rectangles
+    // intercepted page stalls Cesium's geometry workers, so ground polygons
     // never finish building and the screenshot would not show real behaviour.
     await stubRoute(page);
     await boot(page, { lon: 18.6, lat: 54.6, height: 450_000 });
@@ -462,25 +465,27 @@ async function main() {
     const band = (prefix) =>
       f.legend.find(({ label }) => label.startsWith(prefix))?.count;
     record(
-      'BANDS: 4 cells shown, the 2-aircraft cell withheld',
-      f.stats.count === 4 && f.entities === 4,
+      'BANDS: 5 cells shown, the 2-aircraft cell included',
+      f.stats.count === 5 && f.entities === 5,
       `cells=${f.stats.count} entities=${f.entities}`,
     );
     record(
-      'BANDS: 5/10 is high, 2/30 is medium, 1/3 and 0/4 are low',
-      band('Low-accuracy score >') === 1 &&
+      'BANDS: 5/10 and 2/2 are high, 2/30 is medium, 1/3 and 0/4 are low',
+      band('Low-accuracy score >') === 2 &&
         band('Low-accuracy score 2') === 1 &&
         band('Low-accuracy score <') === 2,
       JSON.stringify(f.legend),
     );
     const prov = f.stats.provenance;
     record(
-      'PROVENANCE: GEV classifier, gpsjam bands and visited-view window are machine-readable',
+      'PROVENANCE: GEV classifier, gpsjam bands and H3 grid, and visited-view window are machine-readable',
       prov?.classifier?.id === 'gev-nic-nacp-v2' &&
         prov.classifier.definedBy === 'GEV' &&
         prov.classifier.validated === false &&
         prov.aggregation?.source === 'https://gpsjam.org/faq' &&
         JSON.stringify(prov.aggregation.bands) === '[2,10]' &&
+        prov.aggregation.grid === 'h3' &&
+        prov.aggregation.h3Resolution === 4 &&
         prov.window?.minutes === 30 &&
         prov.window.scope === 'visited-view' &&
         prov.interpretation?.validated === false,
@@ -503,7 +508,7 @@ async function main() {
     );
     const bandsBuilt = await waitForBuiltCells(page);
     record(
-      'BANDS: every cell rectangle is built on a parked camera',
+      'BANDS: every cell polygon is built on a parked camera',
       bandsBuilt.built,
       bandsBuilt.detail,
     );
@@ -769,7 +774,7 @@ async function main() {
     const e = await enableAndSettle(page, { refresh: true });
     record(
       'FAILURE: error surfaced, cells kept',
-      Boolean(e.stats.error) && e.stats.count === 4 && e.entities === 4,
+      Boolean(e.stats.error) && e.stats.count === 5 && e.entities === 5,
       `error=${JSON.stringify(e.stats.error)} cells=${e.stats.count}`,
     );
     await shoot(page, 'failure');
@@ -797,7 +802,7 @@ async function main() {
       'KEYBOARD: Enter on the focused toggle enables the layer and keeps focus',
       on.enabled &&
         on.focused &&
-        on.count === 4 &&
+        on.count === 5 &&
         /^GNSS Integrity: /.test(on.label) &&
         !/OFF$/.test(on.label),
       JSON.stringify(on),
@@ -906,7 +911,7 @@ async function main() {
         return (
           layer.enabled &&
           layer.module.getStats().error === null &&
-          layer.module.getStats().count === 4
+          layer.module.getStats().count === 5
         );
       },
       { timeout: 20000 },
@@ -957,7 +962,7 @@ async function main() {
     const recent = await enableAndSettle(aged, { refresh: true });
     record(
       'AGE: the same snapshot observed 29 min ago is still inside the window',
-      recent.stats.count === 4 && recent.entities === 4,
+      recent.stats.count === 5 && recent.entities === 5,
       `cells=${recent.stats.count} entities=${recent.entities}`,
     );
     await aged.close();

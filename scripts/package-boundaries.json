@@ -3849,6 +3849,7 @@
       "@jtarrio/webrtlsdr",
       "hyparquet",
       "fzstd",
+      "h3-js",
       "vue",
       "pinia",
       "vue-i18n"
@@ -4570,6 +4571,7 @@
       "mgrs",
       "mapillary-js",
       "@jtarrio/webrtlsdr",
+      "h3-js",
       "vue",
       "pinia",
       "vue-i18n"
@@ -5532,7 +5534,7 @@
       "src/ui/statusText.js",
       "src/ui/layerNames.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "h3-js"]
   },
   "gnss-source": {
     "exports": ["./layers/gnss/source"],

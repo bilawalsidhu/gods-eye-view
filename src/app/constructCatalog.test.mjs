@@ -234,9 +234,8 @@ test('a GNSS integrity source can set the layer evidence window', (t) => {
   };
   const shows = (layer, minutes) => {
     assert.equal(layer.provenance.window.minutes, minutes);
-    const { info, legend } = layer.getRowControls();
+    const { info } = layer.getRowControls();
     assert.match(info, new RegExp(`visited views over ${minutes} min`));
-    assert.match(legend[0].blurb, new RegExp(`over ${minutes} minutes`));
   };
   shows(gnssLayer({ windowMs: 65 * 60_000 }), 65);
   shows(gnssLayer({}), 30);
