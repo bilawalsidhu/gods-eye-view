@@ -253,9 +253,60 @@ test('coverage is the union of the registered sources', () => {
     start: 50,
     end: 200,
     marks: [100, 150, 200],
+    markDetails: [{ time: 100 }, { time: 150 }, { time: 200 }],
   });
   off();
-  assert.deepEqual(clock.coverage(), { start: 50, end: 180, marks: [] });
+  assert.deepEqual(clock.coverage(), {
+    start: 50,
+    end: 180,
+    marks: [],
+    markDetails: [],
+  });
+});
+
+test('marks may carry a label, an id and a kind, and merge in one order', () => {
+  const clock = createWorldClock(fakeTime().options);
+  clock.register({
+    id: 'launches',
+    coverage: () => ({
+      start: 100,
+      end: 300,
+      marks: [
+        { time: 300, label: ' ARTEMIS II ', id: 'a2', kind: 'launch' },
+        100,
+        { time: 200, label: 'M6.4 · Fiji', kind: 'earthquake', extra: 1 },
+      ],
+    }),
+  });
+  clock.register({
+    id: 'others',
+    coverage: () => ({
+      start: 100,
+      end: 300,
+      marks: [
+        200,
+        { time: 200, label: 'M6.4 · Fiji', kind: 'earthquake' },
+        { time: 200, label: 'ALPHA', kind: 'launch' },
+        { time: 250, label: '', id: 7, kind: null },
+        { time: Number.NaN, label: 'never' },
+        Number.POSITIVE_INFINITY,
+        null,
+        'soon',
+      ],
+    }),
+  });
+  const covered = clock.coverage();
+  assert.deepEqual(covered.marks, [100, 200, 250, 300], 'the times, once each');
+  assert.deepEqual(covered.markDetails, [
+    { time: 100 },
+    // A bare 200 says nothing a labelled mark there does not; alike marks
+    // from two sources are one.
+    { time: 200, label: 'M6.4 · Fiji', kind: 'earthquake' },
+    { time: 200, label: 'ALPHA', kind: 'launch' },
+    { time: 250 },
+    { time: 300, label: 'ARTEMIS II', id: 'a2', kind: 'launch' },
+  ]);
+  assert.ok(covered.markDetails.every(Object.isFrozen));
 });
 
 test('seek refuses anything but epoch ms and rate must be positive', () => {

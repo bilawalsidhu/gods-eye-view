@@ -378,6 +378,7 @@ test('each product’s frames span world clock coverage, with no marks, and supp
     start: Date.parse(time(0)),
     end: Date.parse(time(10)),
     marks: [],
+    markDetails: [],
   });
   assert.equal(world.getState().supported, true);
   unregister();
@@ -385,6 +386,7 @@ test('each product’s frames span world clock coverage, with no marks, and supp
     start: Date.parse(time(5)),
     end: Date.parse(time(5)),
     marks: [],
+    markDetails: [],
   });
   clock.destroy();
   assert.equal(world.coverage(), null);
@@ -402,6 +404,7 @@ test('a suspended product keeps its coverage, so the way back to live stays', (t
     start: Date.parse(time(0)),
     end: Date.parse(time(10)),
     marks: [],
+    markDetails: [],
   });
 });
 

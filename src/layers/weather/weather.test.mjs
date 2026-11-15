@@ -683,6 +683,7 @@ test('without a clock the layer keeps one of its own on the world clock and lets
     start: Date.parse(times[0]),
     end: Date.parse(times.at(-1)),
     marks: [],
+    markDetails: [],
   });
   h.layer.setParams({ play: true });
   assert.equal(worldClock.isPlaying(), true);

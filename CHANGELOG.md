@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- Timeline marks have labels. Hovering a tick shows its label (a launch's
+  mission name, or an earthquake's magnitude and place, such as
+  `M6.4 · 113 km SSE of Lata, Solomon Islands`), and a tap on or within 6 px
+  of a tick goes exactly to its mark rather than to the point tapped; a tap
+  elsewhere and a drag work as before. The arrow keys still step from mark to
+  mark, and the handle then tells the mark's label with the time to screen
+  readers and shows it over the track while focused. A layer's world clock
+  coverage may give each mark as `{ time, label, id, kind }` as well as a
+  bare time; `worldClock.coverage()` keeps `marks` as the sorted times and
+  adds `markDetails`, the merged marks themselves (samehkhamis).
 - The timeline marks only events: launches, and earthquakes of magnitude 6
   and up while the Earthquakes layer is on (about one every two days
   worldwide). It no longer draws a tick for every weather frame, which came

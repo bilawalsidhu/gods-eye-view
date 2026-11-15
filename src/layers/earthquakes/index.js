@@ -53,7 +53,8 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
   let _marksKey = null;
   const coverage = () => (_enabled ? earthquakeCoverage(_events) : null);
   const coverageChanged = () => {
-    const key = coverage()?.marks.join() ?? null;
+    const covered = coverage();
+    const key = covered ? JSON.stringify(covered.marks) : null;
     if (key === _marksKey) return;
     _marksKey = key;
     worldClock.coverageChanged();

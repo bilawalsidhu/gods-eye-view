@@ -194,6 +194,26 @@ body.cockpit-mode #world-timeline {
   pointer-events: none;
 }
 
+/* A tick's label, shown over the time's bubble while the pointer is on the
+   tick (or the handle rests on its mark). It slides across itself as the
+   bubble does, so it stays within the track. */
+#world-timeline .world-timeline-mark-label {
+  position: absolute;
+  bottom: calc(100% + 30px);
+  left: calc(100% * var(--at));
+  z-index: 1;
+  padding: 2px 8px;
+  border: 1px solid rgba(0, 212, 255, 0.4);
+  border-radius: 6px;
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre;
+  transform: translateX(calc(var(--at) * -100%));
+  pointer-events: none;
+}
+
 /* Zoomed, the track drags along. */
 #world-timeline .world-timeline-track.is-zoomed {
   cursor: grab;
