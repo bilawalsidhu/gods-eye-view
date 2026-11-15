@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { roadSurfaceChunks } from './surface.js';
+import { floorCellReader, roadSurfaceChunks } from './surface.js';
 import { TRAFFIC_TIMING_ENABLED, DOT_HEIGHT_OFFSET } from './policy.js';
 
 export function createTiming({ state: layerState, services, parts, source }) {
@@ -190,7 +190,7 @@ export function createTiming({ state: layerState, services, parts, source }) {
    * waypoint-materialization time independently.
    */
 
-  function parseRoadsTimed(roadData, trace) {
+  function parseRoadsTimed(roadData, trace, parsedBySource) {
     /* TRACE_ONLY_BEGIN */
     const _trafficTimingState = trafficTimingPass(
       trace,
@@ -231,11 +231,19 @@ export function createTiming({ state: layerState, services, parts, source }) {
     }
 
     const roads = [];
+    const floorAt = floorCellReader(services.ground);
     /* TRACE_ONLY_BEGIN */
     let _trafficTimingWaypointMaterializationMs = 0;
     /* TRACE_ONLY_END */
     for (const road of roadData.roads) {
       if (!road.coordinates || road.coordinates.length < 2) continue;
+      // A replacing snapshot repeats records this load already parsed.
+      const known = parsedBySource?.get(road);
+      if (known) {
+        for (const parsed of known) roads.push(parsed);
+        continue;
+      }
+      const first = roads.length;
 
       for (const coords of roadSurfaceChunks(road.coordinates)) {
         const type = road.type;
@@ -245,7 +253,7 @@ export function createTiming({ state: layerState, services, parts, source }) {
         const _trafficTimingMaterializeStart = performance.now();
         /* TRACE_ONLY_END */
         const waypoints = coords.map(([lng, lat]) => {
-          const floor = services.ground?.cachedGroundFloor?.(lat, lng);
+          const floor = floorAt(lat, lng);
           const h =
             (Number.isFinite(floor) && Math.abs(floor) <= 9000
               ? floor
@@ -279,6 +287,7 @@ export function createTiming({ state: layerState, services, parts, source }) {
             flow: road.flow || null,
           });
       }
+      parsedBySource?.set(road, roads.slice(first));
     }
     /* TRACE_ONLY_BEGIN */
     const _trafficTimingMetrics = {

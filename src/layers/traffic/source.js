@@ -33,23 +33,108 @@ export function trafficDetailBounds(box) {
   return detail;
 }
 
-/** Keep coarse roads only outside the detailed tile cores. */
-export function outsideDetailTiles(roads, tiles) {
+/** Longitude/latitude extent of one line; NaN coordinates leave it unusable. */
+function lineExtent(coordinates) {
+  let west = Infinity,
+    east = -Infinity,
+    south = Infinity,
+    north = -Infinity;
+  for (const [lon, lat] of coordinates) {
+    if (!(lon >= west)) west = lon;
+    if (!(lon <= east)) east = lon;
+    if (!(lat >= south)) south = lat;
+    if (!(lat <= north)) north = lat;
+  }
+  return { coordinates, west, east, south, north, settled: false };
+}
+
+/**
+ * What `clipTileLine` returns for a line lying wholly inside the clip region:
+ * the same line with each vertex recomputed from the one before it. Returns
+ * null for a line under the 12 m floor `clipTileLine` drops.
+ */
+function unclippedLine(coordinates) {
+  if (coordinates.length < 2) return null;
+  const out = [];
+  let metres = 0;
+  for (let i = 1; i < coordinates.length; i++) {
+    const a = coordinates[i - 1],
+      b = coordinates[i];
+    const dx = b[0] - a[0],
+      dy = b[1] - a[1];
+    if (i === 1) out.push([a[0] + 0 * dx, a[1] + 0 * dy]);
+    out.push([a[0] + dx, a[1] + dy]);
+    metres +=
+      Math.hypot(
+        (out[i][0] - out[i - 1][0]) * Math.cos((out[i][1] * Math.PI) / 180),
+        out[i][1] - out[i - 1][1],
+      ) * 111320;
+  }
+  return metres >= 12 ? out : null;
+}
+
+const sameLine = (a, b) =>
+  a.every(
+    (point, i) => Object.is(point[0], b[i][0]) && Object.is(point[1], b[i][1]),
+  );
+
+/**
+ * Keep coarse roads only outside the detailed tile cores.
+ *
+ * Each tile splits a line into the four regions around its core. Nearly every
+ * coarse road lies wholly inside one of those regions for nearly every tile,
+ * where the clip hands the line back unchanged, so that case is answered from
+ * the line's extent and only a line that reaches a tile's core or edge is
+ * clipped. Clipping every road against every tile froze the page for hundreds
+ * of milliseconds per road load at street level.
+ *
+ * `clip` is injectable for tests.
+ */
+export function outsideDetailTiles(roads, tiles, clip = clipTileLine) {
+  const boxes = tiles.map((tile) => tileToBBox(tile.z, tile.x, tile.y));
   return roads.flatMap((road) => {
-    let lines = [road.coordinates];
-    for (const tile of tiles) {
-      const box = tileToBBox(tile.z, tile.x, tile.y);
-      const regions = [
-        { west: -180, east: box.west, south: -85, north: 85 },
-        { west: box.east, east: 180, south: -85, north: 85 },
-        { west: box.west, east: box.east, south: -85, north: box.south },
-        { west: box.west, east: box.east, south: box.north, north: 85 },
-      ];
-      lines = lines.flatMap((line) =>
-        regions.flatMap((region) => clipTileLine(line, region)),
-      );
+    let lines = [lineExtent(road.coordinates)];
+    for (const box of boxes) {
+      const next = [];
+      for (const line of lines) {
+        // Strictly inside one region, and inside the bounds every region
+        // shares: the other three regions return nothing.
+        const clear =
+          line.west > -180 &&
+          line.east < 180 &&
+          line.south > -85 &&
+          line.north < 85 &&
+          (line.east < box.west ||
+            line.west > box.east ||
+            (line.west > box.west &&
+              line.east < box.east &&
+              (line.north < box.south || line.south > box.north)));
+        if (!clear) {
+          const regions = [
+            { west: -180, east: box.west, south: -85, north: 85 },
+            { west: box.east, east: 180, south: -85, north: 85 },
+            { west: box.west, east: box.east, south: -85, north: box.south },
+            { west: box.west, east: box.east, south: box.north, north: 85 },
+          ];
+          for (const region of regions)
+            for (const coordinates of clip(line.coordinates, region))
+              next.push(lineExtent(coordinates));
+        } else if (line.settled) {
+          next.push(line);
+        } else {
+          // The first unclipped pass can still move a vertex by a rounding
+          // step (a road crossing longitude or latitude 0); once a pass
+          // changes nothing, no later one will.
+          const coordinates = unclippedLine(line.coordinates);
+          if (!coordinates) continue;
+          const kept = lineExtent(coordinates);
+          kept.settled = sameLine(coordinates, line.coordinates);
+          next.push(kept);
+        }
+      }
+      lines = next;
     }
-    return lines.map((coordinates) => ({ ...road, coordinates }));
+    return lines.map(({ coordinates }) => ({ ...road, coordinates }));
   });
 }
 

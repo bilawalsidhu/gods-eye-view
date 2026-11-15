@@ -1,6 +1,7 @@
 import { roadIdentity } from './retention.js';
 import * as Cesium from 'cesium';
 import {
+  floorCellReader,
   prepareRoadSurfaces,
   roadHeightStations,
   trafficSurfaceReady,
@@ -301,6 +302,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
       }
     }
     if (depthHeight !== undefined) layerState._viewHeightEstimate = depthHeight;
+    const floorAt = floorCellReader(services.ground);
     for (const road of roads) {
       road.key ||= roadIdentity(road);
       const prepared = !refining && preparedRoads.get(road.key);
@@ -319,7 +321,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
         );
         for (let i = 0; i < road.coords.length; i++) {
           const [lon, lat] = road.coords[i];
-          const floor = services.ground?.cachedGroundFloor?.(lat, lon);
+          const floor = floorAt(lat, lon);
           const height =
             Number.isFinite(floor) && Math.abs(floor) <= 9000
               ? Math.max(floor, layerState._viewHeightEstimate)
