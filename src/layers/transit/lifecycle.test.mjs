@@ -4402,7 +4402,12 @@ test('the prompt names the altitude the gate opens at, not 3,000 km', async (t) 
   const app = harness(t, { altitude: 2_900_000 });
   app.layer.enable(app.viewer);
   await app.layer.update();
-  assert.deepEqual(app.requested, [], 'nothing loads over Boston');
+  // The static station catalogue loads with the layer; the live fleet does not.
+  assert.deepEqual(
+    app.requested.filter((url) => !url.includes('/api/sncf/')),
+    [],
+    'nothing loads over Boston',
+  );
   assert.equal(
     app.layer.getStats().statusMessage,
     'Fly below 2,850 km to a covered region',
