@@ -3717,5 +3717,15 @@
   "Scope opacity": "Opacidad de la mirilla",
   "How dark the scope shades the view outside the keyhole": "Cuánto oscurece la mirilla la vista fuera del ojo de cerradura",
   "Reset to default": "Restablecer valores predeterminados",
-  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "Restablecer Visual a sus valores predeterminados: aspecto Normal, HUD, mirilla, etiquetas y efectos"
+  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "Restablecer Visual a sus valores predeterminados: aspecto Normal, HUD, mirilla, etiquetas y efectos",
+  "All layers": "Todas las capas",
+  "On": "Activadas",
+  "Off": "Desactivadas",
+  "Search layers": "Buscar capas",
+  "Filter layers": "Filtrar capas",
+  "Status": "Estado",
+  "Search layers…": "Buscar capas…",
+  "Layer groups": "Grupos de capas",
+  "Jump to {name}": "Ir a {name}",
+  "No layers match": "Ninguna capa coincide"
 }

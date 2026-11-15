@@ -3716,5 +3716,15 @@
   "Scope opacity": "אטימות הסקופ",
   "How dark the scope shades the view outside the keyhole": "עד כמה הסקופ מכהה את התצוגה מחוץ לחור המנעול",
   "Reset to default": "איפוס לברירת המחדל",
-  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "איפוס החזותי לברירות המחדל: מראה רגיל, HUD, סקופ, תוויות ואפקטים"
+  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "איפוס החזותי לברירות המחדל: מראה רגיל, HUD, סקופ, תוויות ואפקטים",
+  "All layers": "כל השכבות",
+  "On": "פעילות",
+  "Off": "כבויות",
+  "Search layers": "חיפוש שכבות",
+  "Filter layers": "סינון שכבות",
+  "Status": "מצב",
+  "Search layers…": "חיפוש שכבות…",
+  "Layer groups": "קבוצות שכבות",
+  "Jump to {name}": "מעבר אל {name}",
+  "No layers match": "אין שכבות תואמות"
 }

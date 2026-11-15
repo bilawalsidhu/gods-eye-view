@@ -732,6 +732,27 @@ and touch screens, while the rails are hidden (clean view, recording), and it
 follows the rails' sides in a right-to-left language. On a phone, Visual is in
 the More sheet with the dock's Visual Presets, as before.
 
+## Data Layers finder and section index — November 15, 2026
+
+The Data Layers header has a search button and a filter button
+(`src/ui/views/panels/LayerFinder.vue`). Search opens a field under the
+header that matches each layer's name on screen and its English name; Escape
+closes it and leaves the panel open. The filter is a small popover with two
+groups, Status (All layers, On, Off: whether the layer is enabled) and
+Category (the list's groups, kept by their key, so a language change keeps
+the choice). The arrows, Home and End move through it and Escape closes it.
+Rows and groups that are left out hide; chips under the header show the
+active filters and clear them, and "No layers match" says when nothing is
+left. Neither the search nor the filter is saved or put in share links. A
+voice request that points at a hidden layer clears the finder first
+(`gev:layer-finder-clear`).
+
+A column of ticks down the list's inline end
+(`src/ui/views/panels/LayerSectionIndex.vue`) has one tick per group still
+shown; hovering or focusing a tick names its group beside it, on whichever
+side has room, and clicking scrolls the list there. The tick for the group in
+view is lit. Phones do not show it.
+
 ## Cockpit side panels — November 14, 2026
 
 On the desktop, the cockpit's side panels match the main page's
