@@ -1,10 +1,14 @@
 # God's Eye View Current State
 
-An aircraft faces its reported ground track, else its true heading (readsb
-`true_heading`). With neither, it faces the way it moved since its last fix
-when that is at least 30 m (`courseFromFixes`, `src/layers/flights/records.js`);
-nearer fixes are position noise and keep its last course, and an aircraft with
-no course at all faces north.
+An aircraft (civil or military) faces its reported ground track, else its
+true heading (readsb `true_heading`). With neither, it faces the way its own
+fixes went (`courseFromFixes`, `src/data/courseFromFixes.js`): the course runs
+from an anchor fix to the newest once they are 30 m apart, and the anchor then
+moves on, so frequent fixes of a slow aircraft add up while position noise on
+a parked one never makes a course. A fix that is not a second newer (a repeat,
+or an older position from another feed) and one reported slower than 2 m/s
+give no course and keep the last; an aircraft with no course at all faces
+north.
 
 Docker Compose mounts the checkout with the shared SELinux `:z` label so
 containers can read it on enforcing SELinux hosts. The separate image-owned

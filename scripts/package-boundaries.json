@@ -1592,7 +1592,8 @@
       "src/time/worldClock.js",
       "src/time/julian.js",
       "src/data/planespottersPhoto.js",
-      "src/layers/flights/placed.js"
+      "src/layers/flights/placed.js",
+      "src/data/courseFromFixes.js"
     ],
     "external": ["cesium"]
   },
@@ -1668,7 +1669,9 @@
       "src/ui/unitLabels.js",
       "src/time/worldClock.js",
       "src/time/julian.js",
-      "src/layers/flights/placed.js"
+      "src/layers/flights/placed.js",
+      "src/data/courseFromFixes.js",
+      "src/data/approxDistance.js"
     ],
     "external": ["cesium"]
   },
@@ -3839,7 +3842,8 @@
       "src/data/openVesselPhoto.js",
       "src/layers/vessels/photos.js",
       "src/layers/flights/placed.js",
-      "src/data/placementProvider.js"
+      "src/data/placementProvider.js",
+      "src/data/courseFromFixes.js"
     ],
     "external": [
       "hls.js",
@@ -4565,7 +4569,8 @@
       "src/layers/vessels/photos.js",
       "src/data/openVesselPhoto.js",
       "src/layers/flights/placed.js",
-      "src/data/placementProvider.js"
+      "src/data/placementProvider.js",
+      "src/data/courseFromFixes.js"
     ],
     "external": [
       "hls.js",
@@ -4851,7 +4856,8 @@
       "src/data/aircraftEmergency.js",
       "src/data/fleetModels.js",
       "src/data/vesselTypes.js",
-      "src/data/fleetTrailAnchors.js"
+      "src/data/fleetTrailAnchors.js",
+      "src/data/courseFromFixes.js"
     ],
     "external": []
   },
@@ -4873,7 +4879,9 @@
       "src/data/aircraftMeta.js",
       "src/data/renderAltitude.js",
       "src/data/aircraftClass.js",
-      "src/data/aircraftEmergency.js"
+      "src/data/aircraftEmergency.js",
+      "src/data/courseFromFixes.js",
+      "src/data/approxDistance.js"
     ],
     "external": []
   },

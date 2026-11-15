@@ -1,4 +1,5 @@
 import { stickyNumber, stickyText } from '../../data/aircraftMeta.js';
+import { courseFromFixes } from '../../data/courseFromFixes.js';
 import {
   geoidSurfaceLastResortM,
   pickRenderAltitudeM,
@@ -20,30 +21,6 @@ import {
 } from './recordPolicy.js';
 
 /** Source-independent aircraft metadata and bounded missing-poll retention. */
-/** Metres a contact must move between fixes before its course is read from them. */
-const COURSE_FROM_FIXES_MIN_M = 30;
-
-/**
- * The course from one fix to the next, in degrees from true north, or null
- * when either is missing or they are less than COURSE_FROM_FIXES_MIN_M apart
- * (position noise on a parked aircraft is not a course).
- */
-export function courseFromFixes(fromLat, fromLon, toLat, toLon) {
-  if (![fromLat, fromLon, toLat, toLon].every(Number.isFinite)) return null;
-  if (
-    approxDistanceKm(fromLat, fromLon, toLat, toLon) * 1000 <
-    COURSE_FROM_FIXES_MIN_M
-  )
-    return null;
-  const φ1 = (fromLat * Math.PI) / 180;
-  const φ2 = (toLat * Math.PI) / 180;
-  const Δλ = ((toLon - fromLon) * Math.PI) / 180;
-  const y = Math.sin(Δλ) * Math.cos(φ2);
-  const x =
-    Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
-  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
-}
-
 export class FlightRecords {
   constructor({
     geoidHeight,
@@ -315,6 +292,12 @@ export class FlightRecords {
       observation.positionTimeMs > 0
         ? observation.positionTimeMs
         : this.now();
+    const course = courseFromFixes(prevMeta?.courseAnchor, {
+      lat,
+      lon,
+      ms: fixEpochMs,
+      speedMps: velocity,
+    });
     const meta = {
       sourceReference: observation.reference,
       observedReceiptMs: this.now(),
@@ -334,13 +317,13 @@ export class FlightRecords {
       wasAirborne: prevMeta?.wasAirborne === true || !onGround,
       velocity: stickyNumber(velocity, prevMeta?.velocity, 0),
       // With no reported track or true heading, a moving contact faces the
-      // way it moved since its last fix; a still one keeps its last course.
+      // way its fixes went (src/data/courseFromFixes.js); else the last one.
       true_track: stickyNumber(
         true_track,
-        courseFromFixes(prevMeta?.rawLat, prevMeta?.rawLon, lat, lon) ??
-          prevMeta?.true_track,
+        course.courseDeg ?? prevMeta?.true_track,
         0,
       ),
+      courseAnchor: course.anchor,
       category: cat,
       // An adsbdb-enriched type code outranks the coarse OpenSky category.
       klass: classifyAircraft({
