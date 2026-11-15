@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { contextNeedle, contextSearchText, matchesContextSearch } from '../../contextSearch.js';
-import { t } from '../../../i18n/index.js';
+import { t, tn } from '../../../i18n/index.js';
 import { citiesAround, countryName, nearestCity } from '../../../data/wikidataCities.js';
 import { useEntityCardStore } from '../../stores/entityCard.js';
 import { useOmnibarStore } from '../../stores/omnibar.js';
@@ -45,8 +45,8 @@ const groups = computed(() => {
 const shownTowns = computed(() => towns.value.filter((town) => matchesContextSearch(town.name)));
 const total = computed(() => groups.value.reduce((sum, group) => sum + group.count, 0));
 const totalLine = computed(() => {
-  const things = total.value === 1 ? t('1 thing') : t('{n} things', { n: total.value });
-  const layers = groups.value.length === 1 ? t('1 layer') : t('{n} layers', { n: groups.value.length });
+  const things = tn(total.value, '{count} thing', '{count} things');
+  const layers = tn(groups.value.length, '{count} layer', '{count} layers');
   return t('{things} in view from {layers}', { things, layers });
 });
 

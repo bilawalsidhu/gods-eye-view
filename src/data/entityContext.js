@@ -1,4 +1,5 @@
 import { getContextStore } from './contextStore.js';
+import { msg } from '../i18n/marker.js';
 
 /**
  * One way to read any thing on the map, whichever layer holds it.
@@ -390,9 +391,9 @@ const CODE_WORDS = Object.freeze({
   },
   // GTFS-RT vehicle states, as the operator last reported them.
   status: {
-    IN_TRANSIT_TO: 'Heading to next stop',
-    INCOMING_AT: 'Arriving at a stop',
-    STOPPED_AT: 'Stopped at a stop',
+    IN_TRANSIT_TO: msg('Heading to next stop'),
+    INCOMING_AT: msg('Arriving at a stop'),
+    STOPPED_AT: msg('Stopped at a stop'),
   },
   occupancy: {
     EMPTY: 'Empty',
@@ -595,7 +596,7 @@ function recordLinks(record, properties) {
     if (/^[a-z]{2,3}(-[a-z0-9]+)*$/.test(lang))
       links.push({
         kind: 'wikipedia',
-        label: 'Wikipedia',
+        label: msg('Wikipedia'),
         href: `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(title.join(':').replace(/ /g, '_'))}`,
       });
   }
@@ -603,12 +604,12 @@ function recordLinks(record, properties) {
   if (/^Q\d+$/.test(wikidata))
     links.push({
       kind: 'wikidata',
-      label: 'Wikidata',
+      label: msg('Wikidata'),
       href: `https://www.wikidata.org/wiki/${wikidata}`,
     });
   const website = text(flat.website);
   if (/^https?:\/\//.test(website))
-    links.push({ kind: 'website', label: 'Website', href: website });
+    links.push({ kind: 'website', label: msg('Website'), href: website });
   return links;
 }
 
@@ -795,7 +796,8 @@ function speedOfSound(heightM) {
  * than repeat the facts listed below them.
  * @param {?object} record
  * @param {{nowMs?: number}} [options]
- * @returns {Array<{label: string, value: string}>}
+ * @returns {Array<{label: string, labelValues?: object, value: string}>}
+ *   `label` is English for t(), with `labelValues` filling its placeholders.
  */
 export function aircraftInsights(record, { nowMs = Date.now() } = {}) {
   if (!record) return [];
@@ -807,11 +809,11 @@ export function aircraftInsights(record, { nowMs = Date.now() } = {}) {
       (finite(record.speedKts) !== null ? record.speedKts * 0.514444 : null),
   );
   if (record.onGround === true)
-    out.push({ label: 'Phase', value: 'On the ground' });
+    out.push({ label: msg('Phase'), value: 'On the ground' });
   else if (climbMps !== null) {
     const fpm = climbMps * 196.85;
     out.push({
-      label: 'Phase',
+      label: msg('Phase'),
       value:
         fpm > 300
           ? `Climbing ${Math.round(fpm / 100) * 100} ft/min`
@@ -822,25 +824,26 @@ export function aircraftInsights(record, { nowMs = Date.now() } = {}) {
   }
   if (altitudeM !== null && altitudeM > 900)
     out.push({
-      label: 'Flight level',
+      label: msg('Flight level'),
       value: `FL${String(Math.round((altitudeM * 3.28084) / 1000) * 10).padStart(3, '0')}`,
     });
   if (speedMps !== null && altitudeM !== null && speedMps > 60)
     out.push({
-      label: 'Mach',
+      label: msg('Mach'),
       value: `M ${(speedMps / speedOfSound(altitudeM)).toFixed(2)}`,
     });
   const squawk = Number(record.squawk);
   if (SQUAWK_MEANINGS[squawk])
     out.push({
-      label: `Squawk ${record.squawk}`,
+      label: msg('Squawk {code}'),
+      labelValues: { code: String(record.squawk) },
       value: SQUAWK_MEANINGS[squawk],
     });
   const seen = finite(record.lastContactAtMs ?? record.timeMs);
   if (seen !== null) {
     const seconds = Math.max(0, Math.round((nowMs - seen) / 1000));
     out.push({
-      label: 'Signal',
+      label: msg('Signal'),
       value:
         seconds < 90
           ? `${seconds} s ago`
@@ -1116,7 +1119,7 @@ function tallyBy(records, labelOf, { keep = 4 } = {}) {
     // A label that is itself "Other" takes the tail, so the name shows once.
     const other = parts.find((part) => part.label === 'Other');
     if (other) other.count += rest;
-    else parts.push({ label: 'Other', count: rest });
+    else parts.push({ label: msg('Other'), count: rest });
   }
   return parts.sort((a, b) => b.count - a.count);
 }
@@ -1173,18 +1176,18 @@ export function layerBreakdown(dataManager, layerId, { rect = null } = {}) {
       (record) => record.onGround !== true && record.military === true,
     ).length;
     splits.push({
-      title: 'Status',
+      title: msg('Status'),
       parts: [
         {
-          label: 'Civilian, in the air',
+          label: msg('Civilian, in the air'),
           count: records.length - ground - military,
         },
-        { label: 'Military, in the air', count: military },
-        { label: 'On the ground', count: ground },
+        { label: msg('Military, in the air'), count: military },
+        { label: msg('On the ground'), count: ground },
       ].filter((part) => part.count),
     });
     splits.push({
-      title: 'Type',
+      title: msg('Type'),
       parts: tallyBy(
         records,
         (record) =>
@@ -1194,7 +1197,7 @@ export function layerBreakdown(dataManager, layerId, { rect = null } = {}) {
     });
   } else if (kind === 'vessel') {
     splits.push({
-      title: 'Type',
+      title: msg('Type'),
       parts: tallyBy(records, (record) => shipTypeName(record.shipType)),
     });
   } else if (kind === 'vehicle') {
@@ -1203,20 +1206,23 @@ export function layerBreakdown(dataManager, layerId, { rect = null } = {}) {
     // Feeds of vehicle positions carry no timetable, so early or late is not
     // something these records can say.
     const word = (field) => (record) => CODE_WORDS[field][record[field]] || '';
-    splits.push({ title: 'Motion', parts: tallyBy(records, word('motion')) });
     splits.push({
-      title: 'Mode',
+      title: msg('Motion'),
+      parts: tallyBy(records, word('motion')),
+    });
+    splits.push({
+      title: msg('Mode'),
       parts: tallyBy(records, (record) => plainWord(text(record.mode))),
     });
     const operators = tallyBy(records, (record) => text(record.operator));
     if (operators.length > 1)
-      splits.push({ title: 'Operator', parts: operators });
+      splits.push({ title: msg('Operator'), parts: operators });
     const reported = records.filter(
       (record) => CODE_WORDS.status[record.status],
     );
     if (reported.length)
       splits.push({
-        title: 'Last reported',
+        title: msg('Last reported'),
         parts: tallyBy(reported, word('status')),
       });
     const crowded = records.filter(
@@ -1224,12 +1230,12 @@ export function layerBreakdown(dataManager, layerId, { rect = null } = {}) {
     );
     if (crowded.length)
       splits.push({
-        title: 'Crowding',
+        title: msg('Crowding'),
         parts: tallyBy(crowded, word('occupancy')),
       });
   } else if (kind === 'satellite') {
     splits.push({
-      title: 'Class',
+      title: msg('Class'),
       parts: tallyBy(records, (record) =>
         plainWord(text(record.satelliteClass || record.group)),
       ),
@@ -1247,7 +1253,7 @@ export function layerBreakdown(dataManager, layerId, { rect = null } = {}) {
               ? 'M4 to 5'
               : 'Below M4';
     };
-    splits.push({ title: 'Magnitude', parts: tallyBy(records, band) });
+    splits.push({ title: msg('Magnitude'), parts: tallyBy(records, band) });
   }
   return {
     total: records.length,

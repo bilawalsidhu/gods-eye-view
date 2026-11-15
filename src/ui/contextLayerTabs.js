@@ -1,4 +1,5 @@
 import { computed, ref } from 'vue';
+import { msg } from '../i18n/index.js';
 
 // Context's layer tabs: when a layer that has its own settings is on, those
 // settings move out of the panel they normally live in (Visual) into a tab
@@ -42,13 +43,13 @@ export const LAYER_TABS = [
   // Labels and cards the world overlay draws for the label layers.
   {
     id: 'labels',
-    label: 'Labels',
+    label: msg('Labels'),
     icon: 'label',
     when: (on) => TAB_AFFECTS.labels(on).length > 0,
   },
   {
     id: 'aircraft',
-    label: '3D aircraft',
+    label: msg('3D aircraft'),
     icon: 'flight',
     when: (on) => TAB_AFFECTS.aircraft(on).length > 0,
   },

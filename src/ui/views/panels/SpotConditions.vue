@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { t } from '../../../i18n/index.js';
+import { onLocaleChange, t } from '../../../i18n/index.js';
 import { compassName, hazardsNear, regionalBrief, weatherLook } from '../../spotConditions.js';
 import { distanceKm } from '../../../data/entityContext.js';
 import { CONTEXT_RADIUS_STEPS, contextRadiusKm, setContextRadiusKm } from '../../contextRadius.js';
@@ -73,13 +73,16 @@ watch(
   { immediate: true },
 );
 // A new radius only re-filters the hazard feeds, which are already cached.
-watch(radiusKm, async (km) => {
+async function rereadHazards(km) {
   const at = readAt || { lat: props.lat, lon: props.lon };
   const mine = ++readingHazards;
   const next = await hazardsNear(at.lat, at.lon, km).catch(() => []);
   if (readingHazards !== mine) return;
   hazards.value = next;
-});
+}
+watch(radiusKm, (km) => void rereadHazards(km));
+// Hazard rows are worded as they are read, so a new language reads them again.
+const stopLocale = onLocaleChange(() => void rereadHazards(radiusKm.value));
 
 // Warnings from the loaded layers move with their records; read them often.
 const tick = ref(0);
@@ -90,6 +93,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   clearInterval(timer);
   clearTimeout(settle);
+  stopLocale();
 });
 // The Context search narrows every list below to what holds its text.
 const searching = computed(() => Boolean(contextNeedle.value));

@@ -1,4 +1,5 @@
 import { distanceKm } from '../data/entityContext.js';
+import { msg, t, tn } from '../i18n/index.js';
 import { createUsgsEarthquakeSource } from '../layers/earthquakes/source.js';
 import { createCycloneSource } from '../layers/cyclones/source.js';
 import { createWfigsPerimeterSource } from '../layers/perimeters/source.js';
@@ -104,8 +105,8 @@ export async function hazardsNear(lat, lon, radiusKm = 250) {
       kind: 'quake',
       icon: 'earthquake',
       title: Number.isFinite(Number.parseFloat(quake.mag))
-        ? `M${Number(quake.mag).toFixed(1)} earthquake`
-        : 'Earthquake',
+        ? t('M{mag} earthquake', { mag: Number(quake.mag).toFixed(1) })
+        : t('Earthquake'),
       detail: quake.place || '',
       time: quake.time,
       at,
@@ -121,7 +122,7 @@ export async function hazardsNear(lat, lon, radiusKm = 250) {
       kind: 'storm',
       icon: 'cyclone',
       title: [storm.classification, storm.name].filter(Boolean).join(' '),
-      detail: storm.windKt ? `${storm.windKt} kt winds` : '',
+      detail: storm.windKt ? t('{n} kt winds', { n: storm.windKt }) : '',
       time: Date.parse(storm.positionAt) || null,
       at,
     });
@@ -133,15 +134,15 @@ export async function hazardsNear(lat, lon, radiusKm = 250) {
     add({
       kind: 'wildfire',
       icon: 'local_fire_department',
-      title: fire.name || 'Wildfire',
+      title: fire.name || t('Wildfire'),
       detail: [
         Number.isFinite(acres)
-          ? `${Math.round(acres).toLocaleString()} acres`
+          ? t('{n} acres', { n: Math.round(acres).toLocaleString() })
           : '',
         Number.isFinite(fire.containedPct)
-          ? `${fire.containedPct}% contained`
+          ? t('{n}% contained', { n: fire.containedPct })
           : '',
-        fire.category === 'RX' ? 'prescribed burn' : '',
+        fire.category === 'RX' ? t('prescribed burn') : '',
       ]
         .filter(Boolean)
         .join(' · '),
@@ -163,8 +164,12 @@ export async function hazardsNear(lat, lon, radiusKm = 250) {
     add({
       kind: 'hotspots',
       icon: 'local_fire_department',
-      title: `${hits.length} satellite fire ${hits.length === 1 ? 'hit' : 'hits'}`,
-      detail: 'last day',
+      title: tn(
+        hits.length,
+        '{count} satellite fire hit',
+        '{count} satellite fire hits',
+      ),
+      detail: t('last day'),
       time: null,
       at: nearest,
     });
@@ -179,19 +184,21 @@ export async function hazardsNear(lat, lon, radiusKm = 250) {
 export function weatherLook(code) {
   const value = Number(code);
   if (!Number.isFinite(value))
-    return { label: 'Conditions unknown', icon: 'partly_cloudy_day' };
-  if (value === 0) return { label: 'Clear', icon: 'sunny' };
-  if (value <= 2) return { label: 'Partly cloudy', icon: 'partly_cloudy_day' };
-  if (value === 3) return { label: 'Overcast', icon: 'cloud' };
-  if (value === 45 || value === 48) return { label: 'Fog', icon: 'foggy' };
-  if (value >= 51 && value <= 57) return { label: 'Drizzle', icon: 'rainy' };
-  if (value >= 61 && value <= 67) return { label: 'Rain', icon: 'rainy' };
+    return { label: msg('Conditions unknown'), icon: 'partly_cloudy_day' };
+  if (value === 0) return { label: msg('Clear'), icon: 'sunny' };
+  if (value <= 2)
+    return { label: msg('Partly cloudy'), icon: 'partly_cloudy_day' };
+  if (value === 3) return { label: msg('Overcast'), icon: 'cloud' };
+  if (value === 45 || value === 48) return { label: msg('Fog'), icon: 'foggy' };
+  if (value >= 51 && value <= 57)
+    return { label: msg('Drizzle'), icon: 'rainy' };
+  if (value >= 61 && value <= 67) return { label: msg('Rain'), icon: 'rainy' };
   if (value >= 71 && value <= 77)
-    return { label: 'Snow', icon: 'weather_snowy' };
+    return { label: msg('Snow'), icon: 'weather_snowy' };
   if (value >= 80 && value <= 82)
-    return { label: 'Rain showers', icon: 'rainy' };
+    return { label: msg('Rain showers'), icon: 'rainy' };
   if (value >= 85 && value <= 86)
-    return { label: 'Snow showers', icon: 'weather_snowy' };
-  if (value >= 95) return { label: 'Thunderstorm', icon: 'thunderstorm' };
-  return { label: 'Mixed conditions', icon: 'partly_cloudy_day' };
+    return { label: msg('Snow showers'), icon: 'weather_snowy' };
+  if (value >= 95) return { label: msg('Thunderstorm'), icon: 'thunderstorm' };
+  return { label: msg('Mixed conditions'), icon: 'partly_cloudy_day' };
 }

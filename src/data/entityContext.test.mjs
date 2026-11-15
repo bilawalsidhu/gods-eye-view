@@ -191,7 +191,8 @@ test('flight insights work out phase, flight level, Mach, squawk meaning and sig
   assert.equal(value('Phase'), 'Cruising, level');
   assert.equal(value('Flight level'), 'FL350');
   assert.equal(value('Mach'), 'M 0.78');
-  assert.equal(value('Squawk 7000'), 'VFR conspicuity');
+  assert.equal(value('Squawk {code}'), 'VFR conspicuity');
+  assert.deepEqual(insights.find((item) => item.label === 'Squawk {code}').labelValues, { code: '7000' });
   assert.equal(value('Signal'), '12 s ago');
   assert.equal(aircraftInsights({ onGround: true })[0].value, 'On the ground');
   assert.match(aircraftInsights({ verticalRateMps: -8 })[0].value, /^Descending 1600 ft\/min$/);
