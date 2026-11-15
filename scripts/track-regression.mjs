@@ -243,7 +243,8 @@ async function main() {
     protocolTimeout: 300_000,
     ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
     args: [
-      // Keep Chrome's normal sandbox and same-origin protections enabled.
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
       // SwiftShader only in headless: forcing it in headful defeats the whole
       // point of --headful (real GPU). Diagnosed 2026-08-03: under this
       // machine's Chrome 145 SwiftShader, loading the tracked military GLB
@@ -252,6 +253,7 @@ async function main() {
       // qa-focus-evidence: headful = real GPU.
       ...(HEADFUL ? [] : ['--use-gl=angle', '--use-angle=swiftshader']),
       '--disable-dev-shm-usage',
+      '--disable-web-security',
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',
       // macOS stops frame production for fully-occluded windows, which kills

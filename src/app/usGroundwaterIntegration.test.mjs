@@ -12,7 +12,30 @@ import {
 } from '../data/trackedReadout.js';
 import { getSelectedEntityContext } from '../data/contextStore.js';
 import { claimPointer, releasePointer } from '../data/inputOwnership.js';
-import { createBundledWellPackSource } from '../layers/usGroundwater/bundledSource.js';
+import {
+  usgwdPack,
+  usgwdRecord,
+} from '../layers/usGroundwater/records.fixture.mjs';
+
+/** A small in-memory Rainfolk-shaped source: six Texas records. */
+const createBundledWellPackSource = () => ({
+  label: 'Rainfolk',
+  viewport: true,
+  getSnapshot: async () => ({
+    ...usgwdPack(
+      Array.from({ length: 6 }, (_, i) =>
+        usgwdRecord(i + 1, {
+          lon: -97.74 + i * 0.01,
+          lat: 30.27,
+          depthFt: 21 + i,
+        }),
+      ),
+      { description: 'Partial Rainfolk source records' },
+    ),
+    catalogTotal: 6,
+  }),
+});
+const recordId = (n) => `USGWD-${'a'.repeat(64)}-SYN_${n}`;
 import { createUsGroundwaterLayer } from '../layers/usGroundwater/index.js';
 
 test('standalone wells use the viewport source without fetching on construction', () => {
@@ -143,7 +166,6 @@ test('manifest catalog count survives pan, zoom and OFF while map representation
     layer.disable();
     assert.equal(layer.getStats().count, 1042777);
     assert.equal(layer.getStats().representedLocationCount, 0);
-    assert.equal(layer.getStats().screenGroups, 0);
     assert.equal(await layer.enable(), true);
     assert.equal(layer.getStats().count, 1042777);
   } finally {
@@ -176,6 +198,7 @@ test('main layer viewport lifecycle ignores stale packs and cancels disabled loa
     assert.equal(requests[1].signal.aborted, true);
     const small = structuredClone(sample);
     small.records = small.records.slice(0, 1);
+    delete small.catalogTotal;
     requests[2].resolve(small);
     await new Promise(setImmediate);
     requests[1].resolve(sample);
@@ -184,7 +207,7 @@ test('main layer viewport lifecycle ignores stale packs and cancels disabled loa
     assert.equal(
       layer.getStats().catalogCount,
       null,
-      'legacy viewport packs do not establish a catalog total',
+      'a pack without a catalog total reports none',
     );
     fixture.viewer.camera.moveEnd.raiseEvent();
     layer.disable();
@@ -195,45 +218,6 @@ test('main layer viewport lifecycle ignores stale packs and cancels disabled loa
     assert.equal(fixture.viewer.dataSources.length, 0);
   } finally {
     layer.destroy();
-  }
-});
-
-test('native well overlay hit selects the actual entity and an empty click dismisses it', async () => {
-  const previousDocument = globalThis.document;
-  globalThis.document = { querySelector: () => null };
-  const f = fixtureViewer();
-  let hit, selected;
-  const layer = createUsGroundwaterLayer({
-    source: createBundledWellPackSource(),
-    overlays: {
-      clearOverlaySource() {},
-      hitTestWorldOverlay: (_x, _y, options) => {
-        assert.equal(options.sourceId, 'us-groundwater-counts');
-        const value = hit;
-        hit = null; // Shared host can clear its hit rectangles before mouse-up.
-        return value;
-      },
-    },
-    onSelect: (value) => {
-      selected = value;
-    },
-  });
-  f.viewer.scene.pick = () => undefined;
-  layer.init(f.viewer);
-  try {
-    await layer.enable();
-    const entity = f.dataSources.get(0).entities.values[0];
-    hit = { entryId: entity.id };
-    f.click();
-    assert.equal(f.viewer.selectedEntity, entity);
-    assert.ok(selected);
-    hit = null;
-    f.click();
-    assert.equal(f.viewer.selectedEntity, undefined);
-    assert.equal(selected, null);
-  } finally {
-    layer.destroy();
-    globalThis.document = previousDocument;
   }
 });
 
@@ -273,7 +257,7 @@ function fixtureViewer() {
       camera: {
         computeViewRectangle: () =>
           Cesium.Rectangle.fromDegrees(-125, 24, -66, 50),
-        // Keep the dispersed six-site fixture above the horizon; height separately drives the detail gate.
+        // Keep the fixture records above the horizon; height separately drives the detail gate.
         positionWC: Cesium.Cartesian3.fromDegrees(-96, 38, 9500000),
         positionCartographic: { height: 25000 },
         moveEnd,
@@ -319,8 +303,9 @@ test('main GEV catalog exposes the bundled well snapshot through its layer lifec
   assert.equal(row.enabled, true);
   assert.equal(row.stats.count, 6);
   assert.equal(row.stats.visible, 6);
-  assert.equal(row.stats.partial, true);
-  assert.match(row.stats.coverage, /not nationwide/);
+  assert.equal(row.stats.coverageComplete, false);
+  assert.equal(row.stats.countLabel, '6');
+  assert.match(row.stats.coverage, /Partial Rainfolk/);
   assert.equal(viewer.dataSources.length, 1);
   assert.ok(
     renderRequests > 0,
@@ -343,14 +328,7 @@ test('main GEV catalog exposes the bundled well snapshot through its layer lifec
   assert.equal(renderRequests, beforeReady + 1);
   assert.deepEqual(
     layer.getRecords().map(({ id }) => id),
-    [
-      'USGS-330548081391102',
-      'USGS-380743102240300',
-      'USGS-414834102302001',
-      'USGS-422702079005101',
-      'USGS-451822093413201',
-      'USGS-453816087590101',
-    ],
+    [1, 2, 3, 4, 5, 6].map(recordId),
   );
 
   assert.equal(await manager.setEnabled('us-groundwater', false), true);
@@ -417,7 +395,7 @@ test('main catalog marker pick publishes well details to the actual shared card 
   assert.equal(await layer.enable(), true);
   const ny = owned.dataSources
     .get(0)
-    .entities.getById('us-groundwater:USGS-422702079005101');
+    .entities.getById(`us-groundwater:${recordId(4)}`);
   assert.ok(ny, 'the source record participates in this fixture view');
   viewer.scene.pick = () => ({ id: ny, primitive: {} });
 
@@ -434,7 +412,7 @@ test('main catalog marker pick publishes well details to the actual shared card 
   const published = writes.at(-1);
   assert.equal(published.id, 'tracked');
   const card = published.entries[0];
-  assert.equal(card.title, 'USGS-422702079005101');
+  assert.equal(card.title, 'Water well record');
   assert.equal(card.paintLane, 'tracked');
   assert.equal(card.protected, true);
   assert.ok(
@@ -442,13 +420,9 @@ test('main catalog marker pick publishes well details to the actual shared card 
     'well card lines stay within the native monospace card width',
   );
   assert.ok(visible.some(({ id, show }) => id === 'tracked' && show));
-  assert.match(card.details.join('\n'), /Ct-2498/);
-  assert.match(card.details.join('\n'), /32.01 ft/);
-  assert.match(card.details.join('\n'), /Depth below land surface/);
-  assert.match(card.details.join('\n'), /Observed:.*precision/);
-  assert.match(card.details.join('\n'), /Retrieved:.*2026/);
-  assert.match(card.details.join('\n'), /Approval: Provisional/);
-  assert.match(card.details.join('\n'), /https:\/\/waterdata.usgs.gov/);
+  assert.match(card.details.join('\n'), /Well depth: 24 ft/);
+  assert.match(card.details.join('\n'), /not current performance/);
+  assert.match(card.details.join('\n'), /Source: USGWD SYN_4/);
   const visual = Cesium.Cartographic.fromCartesian(card.position());
   assert.ok(Math.abs(visual.height - 430) < 0.001);
 
@@ -462,7 +436,13 @@ test('main catalog marker pick publishes well details to the actual shared card 
   assert.ok(clears.length > beforeClear, 'disable clears the card host');
   assert.equal(owned.listeners.size, 0);
 });
-test('camera movement during initial load, count/detail transitions and disposal never commit stale data', async () => {
+test('camera movement during initial load, count/detail transitions and disposal never commit stale data', async (t) => {
+  // Cesium's mouse handler reads `document`; do not depend on test order.
+  const previousDocument = globalThis.document;
+  globalThis.document ??= { querySelector: () => null };
+  t.after(() => {
+    globalThis.document = previousDocument;
+  });
   const f = fixtureViewer();
   f.viewer.scene.groundPrimitives = new Cesium.PrimitiveCollection();
   const requests = [];

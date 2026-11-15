@@ -1,5 +1,6 @@
 import {
   intersects,
+  within,
   countView,
   validateCountOverview,
   validateCountChunk,
@@ -165,6 +166,13 @@ export function createPartitionedCountLoader() {
         );
         const levelBytes = matching.reduce((n, c) => n + c.bytes, 0),
           levelCells = matching.reduce((n, c) => n + c.cellCount, 0);
+        // Cells in chunks wholly inside the view are all visible, so their sum
+        // is a lower bound on what this level would show. Over the renderer's
+        // budget, the level could never be displayed: do not download it.
+        const visibleAtLeast = matching
+          .filter((c) => bounds && within(c.bounds, bounds))
+          .reduce((n, c) => n + c.cellCount, 0);
+        if (visibleAtLeast > budget) break;
         if (
           requested + matching.length > COUNT_FETCH_LIMITS.requests ||
           requestedBytes + levelBytes > COUNT_FETCH_LIMITS.bytes ||

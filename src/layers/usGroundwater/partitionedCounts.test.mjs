@@ -1,13 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import sample from '../../../fixtures/us-groundwater/v1/expected-pack.json' with { type: 'json' };
+import { USGWD_ACQUISITION } from './records.fixture.mjs';
 import { GRID_SIZES, countView } from './countGrids.js';
 import {
   createPartitionedCountLoader,
   COUNT_FETCH_LIMITS,
 } from './partitionedCounts.js';
 import { createSpatialWellSource } from './spatialSource.js';
+// Stand-in records: these tests cover count accounting, not USGWD admission.
+const loose = (pack) => pack;
 
 function fixture(points) {
   const files = new Map();
@@ -167,6 +169,27 @@ test('national overview reads one file; complete regional subtrees conserve boun
   );
 });
 
+test('a finer level that cannot fit the view budget is never downloaded', async () => {
+  // 16 points in 16 distinct 0.5° and 0.125° cells inside one 2° chunk.
+  const points = [];
+  for (const x of [0.1, 0.6, 1.1, 1.6])
+    for (const y of [0.1, 0.6, 1.1, 1.6]) points.push([x, y]);
+  const f = fixture(points),
+    reads = [];
+  const value = await createPartitionedCountLoader().load(
+    f.reference,
+    points.length,
+    [-1, -1, 3, 3],
+    4,
+    async (ref) => {
+      reads.push(ref.url);
+      return f.read(ref);
+    },
+  );
+  assert.deepEqual(reads, [f.reference.overview.url], 'overview only');
+  assert.equal(countView(value.grids, [-1, -1, 3, 3], '', 4).degrees, 2);
+});
+
 test('manifest/chunk tampering refuses incomplete or overlapping populations', async () => {
   for (const mutate of [
     (r) => r.levels[0].chunks.pop(),
@@ -255,7 +278,7 @@ test('parent totals alone cannot conceal inconsistent intermediate geography', a
 });
 
 function sourceFixture() {
-  const points = sample.records.map((_, i) => [i * 10 + 0.01, 0.01]),
+  const points = Array.from({ length: 6 }, (_, i) => [i * 10 + 0.01, 0.01]),
     f = fixture(points),
     calls = [];
   const index = {
@@ -263,12 +286,18 @@ function sourceFixture() {
     kind: 'gev-well-spatial-index',
     indexedRecords: 6,
     aggregates: f.reference,
-    fallbackAcquisition: sample.acquisitions[0],
+    fallbackAcquisition: { ...USGWD_ACQUISITION },
     regions: [],
   };
   for (const [i, [lon, lat]] of points.entries()) {
-    const pack = structuredClone(sample);
-    pack.records = [pack.records[i]];
+    const pack = {
+      schemaVersion: 1,
+      kind: 'gev-us-groundwater-wells',
+      mode: 'snapshot',
+      coverage: { country: 'US', complete: false, indexed: true },
+      acquisitions: [{ ...USGWD_ACQUISITION }],
+      records: [{ id: `T-${i}` }],
+    };
     pack.records[0].longitude = lon;
     pack.records[0].latitude = lat;
     index.regions.push({
@@ -288,9 +317,12 @@ function sourceFixture() {
   return { ...f, index, calls, fetchImpl };
 }
 
-test('source verifies new chunk hashes/lengths, null view skips counts, legacy remains supported elsewhere', async () => {
+test('source verifies new chunk hashes/lengths and a null view skips counts', async () => {
   const f = sourceFixture(),
-    source = createSpatialWellSource({ fetchImpl: f.fetchImpl });
+    source = createSpatialWellSource({
+      fetchImpl: f.fetchImpl,
+      validatePack: loose,
+    });
   const none = await source.getSnapshot({ bounds: null });
   assert.equal(none.cells.length, 0);
   assert.deepEqual(f.calls, ['index.json']);
@@ -302,7 +334,10 @@ test('source verifies new chunk hashes/lengths, null view skips counts, legacy r
   const original = bad.files.get(ref.url);
   bad.files.set(ref.url, original.replace('"count":1', '"count":9'));
   await assert.rejects(
-    createSpatialWellSource({ fetchImpl: bad.fetchImpl }).getSnapshot({
+    createSpatialWellSource({
+      fetchImpl: bad.fetchImpl,
+      validatePack: loose,
+    }).getSnapshot({
       bounds: [0, 0, 0.02, 0.02],
     }),
     /hash/,
@@ -310,7 +345,10 @@ test('source verifies new chunk hashes/lengths, null view skips counts, legacy r
   const short = sourceFixture();
   short.reference.overview.bytes--;
   await assert.rejects(
-    createSpatialWellSource({ fetchImpl: short.fetchImpl }).getSnapshot({
+    createSpatialWellSource({
+      fetchImpl: short.fetchImpl,
+      validatePack: loose,
+    }).getSnapshot({
       bounds: [0, 0, 0.02, 0.02],
     }),
   );
@@ -322,6 +360,7 @@ test('a stale fine request cannot commit after a newer viewport; verified partia
   let release, started;
   const ready = new Promise((r) => (started = r));
   const source = createSpatialWellSource({
+    validatePack: loose,
     fetchImpl: async (url, opts) => {
       if (new URL(url).pathname.endsWith(blocked)) {
         started();
@@ -336,5 +375,5 @@ test('a stale fine request cannot commit after a newer viewport; verified partia
   const current = await source.getSnapshot({ bounds: [10, 0, 10.02, 0.02] });
   release();
   await rejected;
-  assert.equal(current.records[0].id, sample.records[1].id);
+  assert.equal(current.records[0].id, 'T-1');
 });

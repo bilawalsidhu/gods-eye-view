@@ -1,4 +1,3 @@
-import { validateWellPack } from './pack.js';
 /** Distinct count-grid contract. Counts describe source locations, never water. */
 export const GRID_SIZES = [32, 8, 2, 0.5, 0.125, 0.03125];
 // Aggregate input budget, independent from the 2,000-record detail contract.
@@ -7,6 +6,11 @@ export const intersects = (a, b) =>
   a[1] < b[3] &&
   a[3] > b[1] &&
   (b[0] <= b[2] ? a[0] < b[2] && a[2] > b[0] : a[2] > b[0] || a[0] < b[2]);
+/** True when box `a` lies wholly inside view `b` (which may cross 180°). */
+export const within = (a, b) =>
+  a[1] >= b[1] &&
+  a[3] <= b[3] &&
+  (b[0] <= b[2] ? a[0] >= b[0] && a[2] <= b[2] : a[0] >= b[0] || a[2] <= b[2]);
 const validCenter = (c, required) => {
   if (!c.center) return !required;
   return (
@@ -19,9 +23,6 @@ const validCenter = (c, required) => {
     c.center[1] <= c.bounds[3] + 1e-9
   );
 };
-export function validateCountGrids(value, total) {
-  return validateLevels(value, total, GRID_SIZES);
-}
 export function validateCountOverview(value, total) {
   if (value?.centerMethod !== 'record-mean')
     throw new TypeError('Weighted count overview required');
@@ -210,21 +211,6 @@ export function validateCountView(view) {
     seen.add(JSON.stringify(b));
     sum += c.count;
   }
-  if (view.detailPack) {
-    validateWellPack(view.detailPack);
-    for (const r of view.detailPack.records) {
-      if (view.cells.some((c) => containsLocation(c.bounds, r)))
-        throw new TypeError('Detail overlaps an unreplaced aggregate');
-    }
-    sum += view.detailPack.records.length;
-  }
   if (sum > view.total) throw new TypeError('Invalid count view total');
   return view;
 }
-
-// Half-open cells assign a boundary location to exactly one aggregate.
-export const containsLocation = (b, r) =>
-  r.longitude >= b[0] &&
-  (r.longitude < b[2] || (b[2] === 180 && r.longitude === 180)) &&
-  r.latitude >= b[1] &&
-  (r.latitude < b[3] || (b[3] === 90 && r.latitude === 90));

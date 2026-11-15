@@ -1,21 +1,18 @@
 import { createRecordPicker, recordsAtPixel } from './recordPicker.js';
 import * as Cesium from 'cesium';
 import { msg } from '../../i18n/marker.js';
-import { selectInfraLod } from '../../data/localGeojsonLod.js';
 import { validateCountView } from './countGrids.js';
 import {
-  createCountRenderer,
-  wellMarkerImage,
+  createVisibleRecords,
+  WELL_MARKER_IMAGE,
   WELL_DETAIL_HEIGHT,
-} from './countRenderer.js';
+} from './visibleRecords.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
-import { getKeyholeGeometry } from '../../celestialRing.js';
 import {
   wrapWellCardLine,
   wellCardColumns,
   wellRecordLabel,
   wellDisplayName,
-  visibleWellWarnings,
   historicalWellCardLines,
 } from './wellCard.js';
 import { coversViewport } from './viewportCoverage.js';
@@ -30,9 +27,8 @@ import {
   removeEntityContextsForLayer,
   selectEntityContext,
 } from '../../data/contextStore.js';
-import { validateWellPack, wellDetails } from './pack.js';
-export { createWellPackSource } from './source.js';
-export { validateWellPack, wellDetails, WELL_LIMITS } from './pack.js';
+import { validateWellPack } from './pack.js';
+import { historicalWellDetails } from './historicalPack.mjs';
 
 /** A portable, injected well layer with GEV's lifecycle and LOD policy. */
 export function createUsGroundwaterLayer({
@@ -41,15 +37,17 @@ export function createUsGroundwaterLayer({
   onStatus = () => {},
   recordUi = {},
   requestRender,
-  overlays,
+  picking,
+  // Host number formatting (locale-aware in the app); the layer stays i18n-free.
+  formatCount = (n) => String(n),
   validatePack = validateWellPack,
-  describeWell = wellDetails,
-  sourceLabel = source?.label ?? 'U.S. Geological Survey',
+  describeWell = historicalWellDetails,
+  sourceLabel = source?.label ?? 'Rainfolk',
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('A well pack source is required');
   let viewer;
-  let countRenderer;
+  let visibleRecords;
   const validateView = (value) =>
     value?.kind === 'gev-well-count-view'
       ? validateCountView(value)
@@ -77,49 +75,9 @@ export function createUsGroundwaterLayer({
   let cardColumns = 68;
   let error = null;
   let visible = 0;
-  let selectedGroupCount = null;
-  let incumbents = new Set();
   let viewController;
   let viewGeneration = 0;
-  const countBudget = () => 4096;
-  const detailPriority = (cell) => {
-    const canvas = viewer.scene.canvas;
-    const center = cell.center ?? [
-      (cell.bounds[0] + cell.bounds[2]) / 2,
-      (cell.bounds[1] + cell.bounds[3]) / 2,
-    ];
-    const point = viewer.scene.cartesianToCanvasCoordinates?.(
-      Cesium.Cartesian3.fromDegrees(...center),
-    );
-    if (
-      !canvas?.clientWidth ||
-      !canvas?.clientHeight ||
-      typeof viewer.scene.cartesianToCanvasCoordinates !== 'function'
-    )
-      return 0;
-    if (
-      !point ||
-      point.x < 0 ||
-      point.y < 0 ||
-      point.x > canvas.clientWidth ||
-      point.y > canvas.clientHeight
-    )
-      return Infinity;
-    // Actual positions may coincide; visual spacing is not a data-admission veto.
-    // Keep the outer display gate and let transport budgets bound local hydration.
-    if (
-      (viewer.camera.positionCartographic?.height ?? Infinity) >
-      WELL_DETAIL_HEIGHT
-    )
-      return Infinity;
-    const keyhole = getKeyholeGeometry(canvas.clientWidth, canvas.clientHeight);
-    // The scope is visual, not a claim that data outside it does not exist.
-    // Prioritize exact detail at its center; retain complete counts elsewhere.
-    return (
-      Math.hypot(point.x - keyhole.centerX, point.y - keyhole.centerY) /
-      keyhole.radius
-    );
-  };
+  const COUNT_BUDGET = 4096;
   const viewBounds = () => {
     const r = viewer.camera.computeViewRectangle();
     return r
@@ -127,10 +85,6 @@ export function createUsGroundwaterLayer({
       : null;
   };
   async function refreshViewport() {
-    if (!source.viewport) {
-      draw();
-      return;
-    }
     if (!enabled || destroyed) return;
     const generation = ++viewGeneration;
     viewController?.abort();
@@ -143,8 +97,7 @@ export function createUsGroundwaterLayer({
         await source.getSnapshot({
           signal: active.signal,
           bounds,
-          countBudget: countBudget(),
-          detailPriority,
+          countBudget: COUNT_BUDGET,
         }),
       );
       if (
@@ -195,7 +148,6 @@ export function createUsGroundwaterLayer({
         WELL_DETAIL_HEIGHT
     )
       return false;
-    selectedGroupCount = null;
     entity.gevUpdateWellAnchor();
     viewer.selectedEntity = entity;
     if (hasContextHost()) selectEntityContext(entity);
@@ -206,58 +158,44 @@ export function createUsGroundwaterLayer({
   }
   const recordPicker = createRecordPicker(selectWell, recordUi.publishChoices);
   const hasContextHost = () => typeof window !== 'undefined';
+  const counted = () => pack?.kind === 'gev-well-count-view';
   const representedCount = () =>
-    pack?.kind === 'gev-well-count-view'
-      ? pack.cells.reduce((n, c) => n + c.count, 0) +
-        (pack.detailPack?.records.length ?? 0)
+    counted()
+      ? pack.cells.reduce((n, c) => n + c.count, 0)
       : (pack?.records.length ?? 0);
   const catalogCount = () =>
-    pack?.kind === 'gev-well-count-view'
+    counted()
       ? pack.total
       : Number.isSafeInteger(pack?.catalogTotal) && pack.catalogTotal >= 0
         ? pack.catalogTotal
-        : !source.viewport && pack
-          ? pack.records.length
-          : null;
+        : null;
   const stats = () => ({
     count: catalogCount() ?? 0,
     catalogCount: catalogCount(),
+    countLabel: Number.isSafeInteger(catalogCount())
+      ? formatCount(catalogCount())
+      : undefined,
     // Intersecting whole cells are not an exact viewport count. OFF represents none.
     representedLocationCount: enabled && attached ? representedCount() : 0,
     visible,
     error,
-    partial: true,
-    coverage:
-      pack?.kind === 'gev-well-count-view'
-        ? 'Loaded source record positions plus remaining whole-cell counts; partial source coverage; empty areas unknown'
-        : pack?.coverage.indexed
-          ? pack.coverage.description
-          : 'Bounded sample; not nationwide monitoring coverage',
+    // Incomplete coverage is a property of the data, not a failing feed.
+    coverage: counted()
+      ? 'Whole-cell record counts; partial source coverage; empty areas unknown'
+      : (pack?.coverage.description ?? null),
     mode: 'snapshot',
     coverageComplete: false,
-    acquisitions: pack?.acquisitions ?? pack?.detailPack?.acquisitions ?? [],
-    selectedGroupCount,
-    screenGroups: countRenderer?.getStats().groups ?? 0,
+    acquisitions: pack?.acquisitions ?? [],
     lastCheckedAt,
+    lastUpdate: lastCheckedAt,
     referenceRetrievedAt:
       pack?.referenceRetrievedAt ??
       pack?.acquisitions?.[0]?.retrievedAt ??
       null,
-    displayMode:
-      pack?.kind === 'gev-well-count-view'
-        ? pack.detailPack?.records.length
-          ? 'mixed'
-          : 'limited-detail'
-        : 'records',
-    status:
-      pack?.kind === 'gev-well-count-view' && pack.cells.length
-        ? 'zoom-in'
-        : undefined,
+    displayMode: counted() ? 'limited-detail' : 'records',
+    status: counted() && pack.cells.length ? 'zoom-in' : undefined,
     statusMessage:
-      enabled &&
-      attached &&
-      pack?.kind === 'gev-well-count-view' &&
-      pack.cells.length
+      enabled && attached && counted() && pack.cells.length
         ? msg('Detail limited; some records not shown')
         : undefined,
     loading: Boolean(pending || viewController || viewportTimer),
@@ -267,9 +205,9 @@ export function createUsGroundwaterLayer({
     recordPicker.close();
     if (recordsByEntity.has(viewer?.selectedEntity?.id))
       viewer.selectedEntity = undefined;
-    countRenderer?.clear();
-    selectedGroupCount = null;
+    visibleRecords?.clear();
     attached = false;
+    picking?.unregisterPickOwner?.('us-groundwater');
     removeReadyFrame?.();
     removeReadyFrame = undefined;
     removePresentationFrame?.();
@@ -287,7 +225,6 @@ export function createUsGroundwaterLayer({
     dataSource = undefined;
     if (owned) viewer.dataSources.remove(owned, true);
     recordsByEntity.clear();
-    incumbents.clear();
     visible = 0;
     if (hasContextHost()) {
       removeEntityContextsForLayer('us-groundwater');
@@ -316,66 +253,48 @@ export function createUsGroundwaterLayer({
       viewer.selectedEntity = undefined;
       onSelect(null);
     }
-    const counted = pack.kind === 'gev-well-count-view';
-    const detail = counted ? pack.detailPack : pack;
-    if (counted && !detail?.records.length) {
+    if (counted()) {
+      // Too many records for this view: show none; the panel carries counts.
       clearWellSelection();
+      visibleRecords.clear();
+      dataSource.entities.removeAll();
       recordsByEntity.clear();
-      incumbents.clear();
       if (hasContextHost()) removeEntityContextsForLayer('us-groundwater');
-      countRenderer.draw(pack, dataSource);
       visible = 0;
       status();
       requestFrame('well-counts');
       return;
     }
-    // Indexed views redraw immediately; retain and invalidate the group
-    // selector so a keyboard user's focus survives the intermediate reset.
-    countRenderer.clear(true);
-    if (detail.coverage.indexed)
-      countRenderer.describeDetails(detail.records.length);
+    // Keep the record list on screen (disabled) so keyboard focus survives the
+    // rebuild; it is republished below.
+    visibleRecords.clear(true);
     const rectangle = viewer.camera.computeViewRectangle();
-    const position = viewer.camera.positionWC;
     const occluder = new Cesium.EllipsoidalOccluder(
       Cesium.Ellipsoid.WGS84,
-      position,
+      viewer.camera.positionWC,
     );
-    const candidates = detail.records.map((record) => {
+    const inView = (record) => {
       const carto = Cesium.Cartographic.fromDegrees(
         record.longitude,
         record.latitude,
       );
-      const world = Cesium.Cartesian3.fromRadians(
-        carto.longitude,
-        carto.latitude,
-      );
-      return {
-        id: record.id,
-        priority: 0,
-        inView: Boolean(
-          rectangle &&
-          Cesium.Rectangle.contains(rectangle, carto) &&
-          occluder.isPointVisible(world),
+      return Boolean(
+        rectangle &&
+        Cesium.Rectangle.contains(rectangle, carto) &&
+        occluder.isPointVisible(
+          Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude),
         ),
-        distanceM: Cesium.Cartesian3.distance(position, world),
-      };
-    });
-    const lod = detail.coverage.indexed
-      ? { activeIds: candidates.filter((c) => c.inView).map((c) => c.id) }
-      : selectInfraLod(candidates, {
-          cameraHeightM: viewer.camera.positionCartographic.height,
-          incumbentIds: incumbents,
-        });
-    incumbents = new Set(lod.activeIds);
+      );
+    };
+    const shown = pack.records.filter(inView);
     if (hasContextHost()) {
       removeEntityContextsForLayer('us-groundwater', {
-        retainIds: new Set([...incumbents].map((id) => `us-groundwater:${id}`)),
+        retainIds: new Set(shown.map((r) => `us-groundwater:${r.id}`)),
       });
     }
     dataSource.entities.removeAll();
     recordsByEntity.clear();
-    for (const record of detail.records) {
-      if (!incumbents.has(record.id)) continue;
+    for (const record of shown) {
       const entity = dataSource.entities.add({
         id: `us-groundwater:${record.id}`,
         name: wellDisplayName(record),
@@ -386,10 +305,7 @@ export function createUsGroundwaterLayer({
         // Explicit dimensions avoid pooled PointVisualizer billboards inheriting
         // the width of a previous aggregate symbol after a detail transition.
         billboard: {
-          image: wellMarkerImage(
-            record.readings.length > 0,
-            record.source === 'USGWD',
-          ),
+          image: WELL_MARKER_IMAGE,
           width: 12,
           height: 12,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
@@ -418,36 +334,11 @@ export function createUsGroundwaterLayer({
           Number.isFinite(height) ? height : 0,
         );
       };
-      const details = describeWell(record);
       entity.gevLabelModel = {
-        title: record.source === 'USGWD' ? msg('Water well record') : record.id,
-        details: (record.source === 'USGWD'
-          ? historicalWellCardLines(record)
-          : [
-              ...(record.source === 'USGWD' ? [] : [entity.name]),
-              sourceLabel,
-              ...visibleWellWarnings(record, details),
-              msg('Historical snapshot; incomplete coverage'),
-              msg('Source records; physical-well identity is unresolved.'),
-              msg('Empty areas are unknown; no water availability inference.'),
-              ...(detail.coverage.stateCode === '22'
-                ? [detail.coverage.description]
-                : []),
-              `${msg('Horizontal accuracy')}: ${record.metadata.horizontal_positional_accuracy ?? msg('Unknown')}`,
-              ...(details.readings?.length
-                ? details.readings.flatMap((reading) => [
-                    `${reading.label}: ${reading.value}`,
-                    reading.reference,
-                    `${msg('Observed')}: ${reading.observed}`,
-                    `${msg('Retrieved')}: ${reading.retrieved}`,
-                    `${msg('Approval')}: ${reading.approval}`,
-                    `${msg('Qualifiers')}: ${reading.qualifiers}`,
-                  ])
-                : [msg('No water-level observations supplied')]),
-              `${msg('Metadata retrieved')}: ${details.metadataRetrievedAt ?? msg('Unknown')}`,
-              record.sourceUrl,
-            ]
-        ).flatMap((line) => wrapWellCardLine(line, cardColumns)),
+        title: msg('Water well record'),
+        details: historicalWellCardLines(record).flatMap((line) =>
+          wrapWellCardLine(line, cardColumns),
+        ),
         accent: '#00ffff',
         cardStyle: 'tactical',
         selected: true,
@@ -479,23 +370,7 @@ export function createUsGroundwaterLayer({
         onSelect(null);
       }
     }
-    {
-      countRenderer.draw(
-        counted
-          ? pack
-          : {
-              schemaVersion: 1,
-              kind: 'gev-well-count-view',
-              coverageComplete: false,
-              cells: [],
-              degrees: 0.03125,
-              total: catalogCount() ?? detail.records.length,
-              detailPack: detail,
-            },
-        dataSource,
-        true,
-      );
-    }
+    visibleRecords.track(dataSource);
     visible = dataSource.entities.values.length;
     status();
     // Cesium's entity visualizer may populate primitives during the first
@@ -536,40 +411,14 @@ export function createUsGroundwaterLayer({
           draw();
       });
 
+      // Claim clicks on well markers so layers that treat an unowned pick as
+      // empty space (e.g. a tracked flight) leave the selection alone.
+      picking?.registerPickOwner?.('us-groundwater', (id) =>
+        recordsByEntity.has(id),
+      );
       clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-      let pressedFlag;
       clickHandler.setInputAction((event) => {
-        pressedFlag =
-          enabled && isPointerFree()
-            ? overlays?.hitTestWorldOverlay?.(
-                event.position.x,
-                event.position.y,
-                { sourceId: 'us-groundwater-counts' },
-              )
-            : null;
-      }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
-      clickHandler.setInputAction((event) => {
-        const downFlag = pressedFlag;
-        pressedFlag = null;
         if (!enabled || !isPointerFree()) return;
-        const flag = overlays?.hitTestWorldOverlay?.(
-          event.position.x,
-          event.position.y,
-          { sourceId: 'us-groundwater-counts' },
-        );
-        // The shared overlay can fade while the pointer is held. Preserve the
-        // original flag hit only for Cesium's click (not a drag) gesture.
-        const clickedFlag = flag ?? downFlag;
-        if (
-          clickedFlag?.entryId?.startsWith('well-group:') &&
-          clickedFlag.entry?.activate?.() === true
-        )
-          return;
-        if (
-          clickedFlag &&
-          selectWell(dataSource.entities.getById(clickedFlag.entryId))
-        )
-          return;
         const picked = viewer.scene.pick(event.position);
         const entity = picked?.id;
         const detailVisible =
@@ -612,22 +461,7 @@ export function createUsGroundwaterLayer({
       if (viewer || destroyed)
         throw new Error('Well layer already initialized or destroyed');
       viewer = nextViewer;
-      countRenderer = createCountRenderer(viewer, {
-        overlays,
-        onError: (failure) => {
-          error = failure?.message ?? null;
-          status();
-        },
-        onSelectGroup: (count) => {
-          if (hasContextHost())
-            clearSelectedEntityContextForLayer('us-groundwater');
-          if (recordsByEntity.has(viewer.selectedEntity?.id))
-            viewer.selectedEntity = undefined;
-          onSelect(null);
-          requestFrame('well-cluster-zoom');
-          selectedGroupCount = count;
-          status();
-        },
+      visibleRecords = createVisibleRecords(viewer, {
         onSelectRecord: selectWell,
         publishRecords: recordUi.publishRecords,
       });
@@ -638,7 +472,7 @@ export function createUsGroundwaterLayer({
       // Reuse the shared sensitivity lease used by native transport layers.
       // This also lets Cesium split loaded screen clusters at 5% view changes,
       // rather than its otherwise coarse 50% default when wells are alone.
-      if (source.viewport && !removeCameraChanged && viewer.camera.changed) {
+      if (!removeCameraChanged && viewer.camera.changed) {
         claimCameraSensitivity(viewer.camera, 'us-groundwater', 0.05);
         removeCameraChanged = viewer.camera.changed.addEventListener(() => {
           if (pending || viewportTimer) return;
@@ -694,15 +528,11 @@ export function createUsGroundwaterLayer({
                 Promise.resolve()
                   .then(() => {
                     signal.throwIfAborted();
-                    return (
-                      (!source.viewport && pack) ||
-                      source.getSnapshot({
-                        signal,
-                        bounds: initialBounds,
-                        countBudget: countBudget(),
-                        detailPriority,
-                      })
-                    );
+                    return source.getSnapshot({
+                      signal,
+                      bounds: initialBounds,
+                      countBudget: COUNT_BUDGET,
+                    });
                   })
                   .then(resolve, reject)
                   .finally(() => signal.removeEventListener('abort', abort));
@@ -720,9 +550,8 @@ export function createUsGroundwaterLayer({
             )
               return false;
             if (
-              source.viewport &&
-              (revision !== initialRevision ||
-                JSON.stringify(initialBounds) !== JSON.stringify(viewBounds()))
+              revision !== initialRevision ||
+              JSON.stringify(initialBounds) !== JSON.stringify(viewBounds())
             )
               continue;
             pack = validateView(candidate);
@@ -769,8 +598,8 @@ export function createUsGroundwaterLayer({
       release();
       status();
     },
+    // enable() and camera events already draw; update only reports readiness.
     update() {
-      draw();
       return Boolean(enabled && pack && dataSource && attached);
     },
     destroy() {
@@ -781,7 +610,7 @@ export function createUsGroundwaterLayer({
     },
     getStats: stats,
     getRecords() {
-      return structuredClone(pack?.records ?? pack?.detailPack?.records ?? []);
+      return structuredClone(pack?.records ?? []);
     },
   };
   return layer;

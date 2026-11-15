@@ -115,8 +115,8 @@ function sourceArtifact(a) {
   );
 }
 
-/** Every source has its own closed validator; mixed packs never bypass USGS admission. */
-export function validateHistoricalWellPack(pack, validateUsgs) {
+/** Closed validator for Rainfolk USGWD packs; anything else is refused. */
+export function validateHistoricalWellPack(pack) {
   if (
     pack?.schemaVersion !== 1 ||
     pack.kind !== 'gev-us-groundwater-wells' ||
@@ -130,14 +130,10 @@ export function validateHistoricalWellPack(pack, validateUsgs) {
     pack.acquisitions.length > (pack.coverage.indexed ? 256 : 12)
   )
     refuse();
-  const source = [],
-    legacy = [];
+  const source = [];
   for (const a of pack.acquisitions) {
-    if (a?.collection !== 'usgwd-historical-baseline') {
-      legacy.push(a);
-      continue;
-    }
     if (
+      a?.collection !== 'usgwd-historical-baseline' ||
       typeof a.url !== 'string' ||
       !sourceArtifact(a) ||
       !zoned(a.retrievedAt) ||
@@ -153,15 +149,10 @@ export function validateHistoricalWellPack(pack, validateUsgs) {
     source.push(a);
   }
   if (!source.length) refuse();
-  const seen = new Set(),
-    oldRecords = [];
+  const seen = new Set();
   for (const site of pack.records) {
     if (typeof site?.id !== 'string' || seen.has(site.id)) refuse();
     seen.add(site.id);
-    if (site.id.startsWith('USGS-')) {
-      oldRecords.push(site);
-      continue;
-    }
     const m = site.metadata,
       coords = m?.sourceCoordinates,
       operation = m?.coordinateOperation;
@@ -286,10 +277,6 @@ export function validateHistoricalWellPack(pack, validateUsgs) {
     }
     if (m.quantityErrors.some((e) => !Object.hasOwn(m.quantities, e.field)))
       refuse();
-  }
-  if (legacy.length || oldRecords.length) {
-    if (typeof validateUsgs !== 'function') refuse();
-    validateUsgs({ ...pack, acquisitions: legacy, records: oldRecords });
   }
   return pack;
 }

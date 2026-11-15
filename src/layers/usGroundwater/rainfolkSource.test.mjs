@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import sample from '../../../fixtures/us-groundwater/v1/expected-pack.json' with { type: 'json' };
+import { USGWD_ACQUISITION } from './records.fixture.mjs';
 import {
   createRainfolkWellSource,
   RAINFOLK_WELL_RELEASE,
@@ -60,25 +60,31 @@ test('release changes stay on the provider origin and malformed configuration fa
   );
 });
 
-test('the configured release verifies root bytes on every check, before catalog publication', async () => {
+test('the pinned root is verified before publication, then reused without refetching', async () => {
   const body = JSON.stringify({
     schemaVersion: 1,
     kind: 'gev-well-spatial-index',
     regions: [],
-    fallbackAcquisition: sample.acquisitions[0],
+    fallbackAcquisition: { ...USGWD_ACQUISITION },
   });
   const release = createHash('sha256').update(body).digest('hex');
-  let served = body;
-  let published = 0;
+  let published = 0,
+    fetches = 0;
   const source = createRainfolkWellSource({
     release,
-    fetchImpl: async () => new Response(served),
+    fetchImpl: async () => (fetches++, new Response(body)),
     onCatalog: () => published++,
   });
   assert.equal((await source.getSnapshot()).records.length, 0);
-  assert.equal(published, 1);
+  assert.equal((await source.getSnapshot()).records.length, 0);
+  assert.equal(fetches, 1, 'content-addressed root is fetched once');
+  assert.equal(published, 2);
   // Even an equivalent JSON document has different bytes under this pinned root.
-  served += ' ';
-  await assert.rejects(source.getSnapshot(), /hash mismatch/);
-  assert.equal(published, 1);
+  const tampered = createRainfolkWellSource({
+    release,
+    fetchImpl: async () => new Response(body + ' '),
+    onCatalog: () => published++,
+  });
+  await assert.rejects(tampered.getSnapshot(), /hash mismatch/);
+  assert.equal(published, 2);
 });

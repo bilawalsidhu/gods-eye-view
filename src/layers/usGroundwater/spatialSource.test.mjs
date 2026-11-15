@@ -1,20 +1,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import sample from '../../../fixtures/us-groundwater/v1/expected-pack.json' with { type: 'json' };
+import { USGWD_ACQUISITION } from './records.fixture.mjs';
 import { createSpatialWellSource } from './spatialSource.js';
+// These tests cover tiling, hashing and accounting, which do not depend on the
+// record format: stand-in records skip USGWD admission (tested elsewhere).
+const loose = (pack) => pack;
+const standIn = (i) => ({ id: `T-${i}`, name: `Record ${i}` });
+const packOf = (record) => ({
+  schemaVersion: 1,
+  kind: 'gev-us-groundwater-wells',
+  mode: 'snapshot',
+  coverage: { country: 'US', complete: false, indexed: true },
+  acquisitions: [{ ...USGWD_ACQUISITION }],
+  records: [record],
+});
 function harness(duplicate = false) {
   let index = {
     schemaVersion: 1,
     kind: 'gev-well-spatial-index',
-    fallbackAcquisition: sample.acquisitions[0],
+    fallbackAcquisition: { ...USGWD_ACQUISITION },
     regions: [],
   };
   const bodies = new Map();
   const calls = [];
   for (let i = 0; i < 6; i++) {
-    const pack = structuredClone(sample);
-    pack.records = [structuredClone(sample.records[duplicate ? 0 : i])];
+    const pack = packOf(standIn(duplicate ? 0 : i));
     pack.records[0].longitude = duplicate ? 1 : i * 10 + 1;
     pack.records[0].latitude = 1;
     const body = JSON.stringify(pack);
@@ -36,7 +47,7 @@ function harness(duplicate = false) {
     );
   };
   return {
-    source: createSpatialWellSource({ fetchImpl }),
+    source: createSpatialWellSource({ fetchImpl, validatePack: loose }),
     calls,
     index,
     bodies,
@@ -90,6 +101,7 @@ test('newer viewport aborts old fetch and stale completion never returns a pack'
   let count = 0;
   const h = harness();
   const source = createSpatialWellSource({
+    validatePack: loose,
     fetchImpl: async (path, options) => {
       if (++count === 1) {
         oldSignal = options.signal;
@@ -108,7 +120,7 @@ test('newer viewport aborts old fetch and stale completion never returns a pack'
   await rejection;
   source.cancel();
 });
-import { GRID_SIZES, validateCountGrids, countView } from './countGrids.js';
+import { GRID_SIZES, countView } from './countGrids.js';
 function grids(points) {
   return {
     schemaVersion: 1,
@@ -147,16 +159,6 @@ function grids(points) {
     }),
   };
 }
-function addCounts(h, points) {
-  const value = grids(points),
-    body = JSON.stringify(value),
-    sha = createHash('sha256').update(body).digest('hex');
-  h.index.indexedRecords = points.length;
-  h.index.aggregates = { url: `${sha}.counts.json`, sha256: sha };
-  h.bodies.set(`/well-index-v1/${sha}.counts.json`, body);
-  return value;
-}
-
 test('revisited tiles reuse verified bytes without sharing mutable records or concealing changed index hashes', async () => {
   const h = harness();
   const bounds = [0, 0, 5, 5];
@@ -185,7 +187,7 @@ test('hierarchical twelve separates into two sixes without inventing coincident 
     ...Array(6).fill([1.001, 1.001]),
     ...Array(6).fill([1.1, 1.1]),
   ];
-  const value = validateCountGrids(grids(points), 12);
+  const value = grids(points);
   const wide = countView(value, [0, 0, 2, 2], 'test', 1);
   assert.deepEqual(
     wide.cells.map((c) => c.count),
@@ -205,24 +207,7 @@ test('hierarchical twelve separates into two sixes without inventing coincident 
   );
 });
 
-test('reconciled manifest total accompanies narrow detail and complete count views', async () => {
-  const h = harness();
-  addCounts(
-    h,
-    Array.from({ length: 6 }, (_, i) => [i * 10 + 1, 1]),
-  );
-  const detail = await h.source.getSnapshot({ bounds: [0, 0, 1.5, 1.5] });
-  assert.equal(detail.records.length, 1);
-  assert.equal(detail.catalogTotal, h.index.indexedRecords);
-  const other = await h.source.getSnapshot({ bounds: [20, 0, 21.5, 1.5] });
-  assert.equal(other.records.length, 1);
-  assert.equal(other.catalogTotal, 6);
-  const overview = await h.source.getSnapshot();
-  assert.equal(overview.catalogTotal, 6);
-  h.index.indexedRecords = 7;
-  await assert.rejects(h.source.getSnapshot(), /accounting/);
-});
-test('count grids conserve totals, align, nest, and reject overlaps or tampering', () => {
+test('count views conserve totals across the dateline and empty views', () => {
   const points = [
       [-179.9, 1],
       [179.9, 1],
@@ -230,7 +215,6 @@ test('count grids conserve totals, align, nest, and reject overlaps or tampering
       [1.01, 1],
     ],
     value = grids(points);
-  assert.equal(validateCountGrids(value, 4), value);
   for (const l of value.levels)
     assert.equal(
       l.cells.reduce((n, c) => n + c.count, 0),
@@ -243,185 +227,9 @@ test('count grids conserve totals, align, nest, and reject overlaps or tampering
     ),
     2,
   );
-  for (const mutate of [
-    (v) => v.levels.reverse(),
-    (v) => v.levels[0].cells.push(v.levels[0].cells[0]),
-    (v) => v.levels[1].cells[0].count++,
-    (v) => (v.levels[2].cells[0].bounds[0] += 0.1),
-  ]) {
-    const bad = structuredClone(value);
-    mutate(bad);
-    assert.throws(() => validateCountGrids(bad, 4));
-  }
   assert.equal(countView(value, [60, -5, 61, 5], 'test').cells.length, 0);
   assert.equal(countView(value, null, 'No visible ellipsoid').cells.length, 0);
 });
-test('overview covers all source rows, detail loads every sparse fragmented pack, dense detail falls back to complete counts', async () => {
-  const h = harness();
-  addCounts(
-    h,
-    Array.from({ length: 6 }, (_, i) => [i * 10 + 1, 1]),
-  );
-  const wide = await h.source.getSnapshot();
-  assert.equal(wide.kind, 'gev-us-groundwater-wells');
-  assert.equal(
-    wide.records.length,
-    6,
-    'wide sparse views need no arbitrary span cutoff',
-  );
-  assert.equal(h.calls.length, 8);
-  const near = await h.source.getSnapshot({ bounds: [0, 0, 2, 2] });
-  assert.equal(near.records.length, 1);
-  // Six acquisition fragments in one cell, fewer than the actual record budget.
-  for (const t of h.index.regions) {
-    const p = JSON.parse(h.bodies.get('/well-index-v1/' + t.url));
-    p.records[0].longitude = 0.1;
-    p.records[0].latitude = 0.1;
-    const body = JSON.stringify(p),
-      hash = createHash('sha256').update(body).digest('hex');
-    t.url = hash + '.json';
-    t.sha256 = hash;
-    t.bounds = [0, 0, 0.5, 0.5];
-    h.bodies.set('/well-index-v1/' + t.url, body);
-  }
-  addCounts(
-    h,
-    Array.from({ length: 6 }, () => [0.1, 0.1]),
-  );
-  const sparse = await h.source.getSnapshot({ bounds: [0, 0, 0.25, 0.25] });
-  assert.equal(sparse.kind, 'gev-us-groundwater-wells');
-  assert.match(sparse.coverage.description, /all 6/);
-  assert.equal(sparse.records.length, 6);
-  for (const t of h.index.regions) t.count = 500;
-  addCounts(
-    h,
-    Array.from({ length: 3000 }, () => [0.1, 0.1]),
-  );
-  const dense = await h.source.getSnapshot({ bounds: [0, 0, 0.25, 0.25] });
-  assert.equal(dense.kind, 'gev-well-count-view');
-  assert.match(dense.reason, /budget/);
-  const none = await h.source.getSnapshot({ bounds: null });
-  assert.equal(none.cells.length, 0);
-});
-
-test('weighted cluster centers follow records, hierarchy tampering fails, and verified count bytes are cached', async () => {
-  const h = harness();
-  const g = addCounts(h, [
-    [1, 1],
-    [1.01, 1],
-    [1.02, 1],
-    [1.03, 1],
-    [1.04, 1],
-    [1.05, 1],
-  ]);
-  const mean = (1 + 1.01 + 1.02 + 1.03 + 1.04 + 1.05) / 6;
-  assert.ok(Math.abs(g.levels[0].cells[0].center[0] - mean) < 1e-12);
-  validateCountGrids(g, 6);
-  const bad = structuredClone(g);
-  bad.levels[0].cells[0].center[0] += 0.01;
-  assert.throws(() => validateCountGrids(bad, 6), /hierarchy/);
-  const outside = structuredClone(g);
-  outside.levels[0].cells[0].center = [999, 0];
-  assert.throws(() => validateCountGrids(outside, 6), /center/);
-  h.calls.length = 0;
-  await h.source.getSnapshot({ bounds: null });
-  assert.equal(h.calls.length, 1);
-  h.calls.length = 0;
-  await h.source.getSnapshot();
-  assert.equal(h.calls.filter((x) => x.endsWith('.counts.json')).length, 1);
-  h.calls.length = 0;
-  await h.source.getSnapshot();
-  assert.equal(
-    h.calls.length,
-    1,
-    'both counts and immutable detail bytes cached; mutable index revalidated',
-  );
-  h.calls.length = 0;
-  await h.source.getSnapshot({ bounds: null });
-  assert.equal(h.calls.length, 1);
-});
-
-test('dense and sparse neighbors share weighted counts and exact source records without double counting', async () => {
-  const h = harness();
-  // Dense metadata is deliberately never fetched; sparse fixtures carry exact IDs/readings.
-  for (const t of h.index.regions) {
-    t.count = 500;
-    t.bounds = [0, 0, 0.5, 0.5];
-    t.bytes = 100000;
-  }
-  const denseUrls = h.index.regions.map((t) => t.url);
-  const sparse = [1.01, 1.04].map((lon, i) => {
-    const p = structuredClone(sample);
-    p.records = [structuredClone(sample.records[i])];
-    p.records[0].longitude = lon;
-    p.records[0].latitude = 1.01;
-    const body = JSON.stringify(p),
-      sha = createHash('sha256').update(body).digest('hex');
-    const tile = {
-      url: sha + '.json',
-      sha256: sha,
-      count: 1,
-      bytes: body.length,
-      bounds: [lon - 0.001, 1, lon + 0.001, 1.02],
-    };
-    h.index.regions.push(tile);
-    h.bodies.set('/well-index-v1/' + tile.url, body);
-    return p.records[0];
-  });
-  addCounts(h, [
-    ...Array.from({ length: 3000 }, () => [0.1, 0.1]),
-    ...sparse.map((r) => [r.longitude, r.latitude]),
-  ]);
-  const wide = await h.source.getSnapshot({ bounds: [0, 0, 2, 2] });
-  assert.equal(wide.total, 3002);
-  assert.equal(
-    wide.cells.reduce((n, c) => n + c.count, 0),
-    3000,
-  );
-  assert.deepEqual(wide.detailPack.records, sparse);
-  assert.equal(
-    h.calls.some((url) => denseUrls.some((name) => url.endsWith(name))),
-    false,
-  );
-  assert.equal(h.calls.length, 4);
-  h.calls.length = 0;
-  const unresolved = await h.source.getSnapshot({
-    bounds: [0, 0, 2, 2],
-    detailPriority: () => Infinity,
-  });
-  assert.equal(
-    unresolved.detailPack,
-    undefined,
-    'unresolvable wide-view cells never expose an arbitrary detail island',
-  );
-  assert.equal(
-    unresolved.cells.reduce((n, c) => n + c.count, 0),
-    3002,
-  );
-  assert.equal(
-    h.calls.length,
-    1,
-    'only index refresh; no ineligible detail reads',
-  );
-  const near = await h.source.getSnapshot({ bounds: [1, 1, 1.1, 1.1] });
-  assert.equal(near.catalogTotal, 3002);
-  assert.deepEqual(near.records, sparse);
-  const again = await h.source.getSnapshot({ bounds: [0, 0, 2, 2] });
-  assert.equal(
-    again.cells.reduce((n, c) => n + c.count, 0) +
-      again.detailPack.records.length,
-    3002,
-  );
-  const bad = structuredClone(again);
-  bad.cells.push({
-    bounds: [1, 1, 1.03125, 1.03125],
-    center: [1.01, 1.01],
-    count: 1,
-  });
-  const { validateCountView } = await import('./countGrids.js');
-  assert.throws(() => validateCountView(bad), /overlaps/);
-});
-
 test('catalog publication waits for admitted snapshot and failed refresh keeps last-good summary', async () => {
   const h = harness();
   let index = {
@@ -432,6 +240,7 @@ test('catalog publication waits for admitted snapshot and failed refresh keeps l
   };
   const published = [];
   const source = createSpatialWellSource({
+    validatePack: loose,
     onCatalog: (s) => published.push(s),
     fetchImpl: async (url) => {
       const p = new URL(url).pathname;
@@ -468,6 +277,7 @@ test('allowlisted HTTPS data origin loads root and hashed detail inside version 
     calls = [];
   const base = 'https://data.example.test/wells/releases/synthetic-001/';
   const source = createSpatialWellSource({
+    validatePack: loose,
     base,
     allowedDataOrigins: ['https://data.example.test'],
     fetchImpl: async (url, options) => {
@@ -494,6 +304,7 @@ test('remote hash tampering and manifest URL escape still fail closed', async ()
     calls = [];
   const base = 'https://data.example.test/wells/';
   const source = createSpatialWellSource({
+    validatePack: loose,
     base,
     allowedDataOrigins: ['https://data.example.test'],
     fetchImpl: async (url) => {
@@ -542,6 +353,7 @@ test('a cached child must still match the current reference length and cap', asy
   };
   const calls = [];
   const source = createSpatialWellSource({
+    validatePack: loose,
     fetchImpl: async (url) => {
       const path = new URL(url).pathname.replace('/well-index-v1/', '');
       calls.push(path);
@@ -572,4 +384,34 @@ test('a cached child must still match the current reference length and cap', asy
       'the cached child is checked again',
     );
   }
+});
+
+test('real USGWD records pass the default admission end to end; tampering refuses', async () => {
+  const { usgwdPack, usgwdRecord } = await import('./records.fixture.mjs');
+  const serve = (pack) => {
+    const body = JSON.stringify(pack),
+      sha256 = createHash('sha256').update(body).digest('hex');
+    const index = {
+      schemaVersion: 1,
+      kind: 'gev-well-spatial-index',
+      fallbackAcquisition: { ...USGWD_ACQUISITION },
+      regions: [
+        { url: `${sha256}.json`, sha256, count: 1, bounds: [-98, 30, -97, 31] },
+      ],
+    };
+    return createSpatialWellSource({
+      fetchImpl: async (url) =>
+        new Response(url.endsWith('index.json') ? JSON.stringify(index) : body),
+    });
+  };
+  const bounds = [-98, 30, -97, 31];
+  const pack = await serve(usgwdPack([usgwdRecord(7)])).getSnapshot({ bounds });
+  assert.equal(pack.records.length, 1);
+  assert.equal(pack.records[0].metadata.sourceRecordId, 'SYN_7');
+  const bad = usgwdPack([usgwdRecord(7)]);
+  bad.records[0].latitude += 0.001;
+  await assert.rejects(
+    serve(bad).getSnapshot({ bounds }),
+    /Invalid historical/,
+  );
 });

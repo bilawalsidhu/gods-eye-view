@@ -1,23 +1,19 @@
 import { createWellDataUrlResolver } from './dataBase.mjs';
 import { readResponseBytesCapped } from '../../sources/httpBody.js';
 import { validateWellPack, WELL_LIMITS } from './pack.js';
-import { refineCountView } from './mixedDetail.js';
 import { readTiles } from './tileReads.js';
 import { createPartitionedCountLoader } from './partitionedCounts.js';
-import {
-  intersects,
-  validateCountGrids,
-  countView,
-  validateCountView,
-} from './countGrids.js';
+import { intersects, countView, validateCountView } from './countGrids.js';
 /** One replaceable data index; bounded records and bytes per viewport; complete count grids otherwise. */
 export function createSpatialWellSource({
   fetchImpl = globalThis.fetch,
   base = '/well-index-v1/',
   allowedDataOrigins = [],
   expectedIndexSha256,
-  label = 'USGS',
+  label = 'Rainfolk',
   onCatalog = () => {},
+  // Record-format admission; the spatial accounting below is format-neutral.
+  validatePack = validateWellPack,
 } = {}) {
   if (
     expectedIndexSha256 !== undefined &&
@@ -28,9 +24,11 @@ export function createSpatialWellSource({
   const dataUrl = createWellDataUrlResolver(base, allowedDataOrigins);
   let generation = 0;
   let active;
-  let cachedCounts;
+  // The pinned index is content-addressed: once its hash verifies it cannot
+  // change, so it is fetched once per source instead of on every refresh.
+  let pinnedIndex;
   const partitionedLoader = createPartitionedCountLoader();
-  // Immutable, hash-verified bytes only. Keep the mutable index revalidated.
+  // Immutable, hash-verified bytes only. An unpinned index is revalidated.
   const tileCache = new Map();
   let cacheBytes = 0;
   const cacheLimit = 16 * 1024 * 1024;
@@ -41,7 +39,6 @@ export function createSpatialWellSource({
       signal,
       bounds = [-180, -90, 180, 90],
       countBudget = 4096,
-      detailPriority,
     } = {}) {
       const current = ++generation;
       active?.abort();
@@ -97,12 +94,7 @@ export function createSpatialWellSource({
         combined.throwIfAborted();
         if (current !== generation)
           throw new DOMException('Stale viewport', 'AbortError');
-        if (
-          hash &&
-          path !== 'index.json' &&
-          !path.endsWith('.counts.json') &&
-          bytes.length <= cacheLimit
-        ) {
+        if (hash && path !== 'index.json' && bytes.length <= cacheLimit) {
           if (tileCache.has(hash)) {
             cacheBytes -= tileCache.get(hash).length;
             tileCache.delete(hash);
@@ -131,7 +123,9 @@ export function createSpatialWellSource({
           bounds[1] >= bounds[3])
       )
         throw new TypeError('Invalid viewport');
-      let index = await read('index.json', expectedIndexSha256);
+      let index =
+        pinnedIndex ?? (await read('index.json', expectedIndexSha256));
+      if (expectedIndexSha256) pinnedIndex = index;
       const federated = Array.isArray(index.children);
       const publishCatalog = (value) => {
         combined.throwIfAborted();
@@ -161,7 +155,7 @@ export function createSpatialWellSource({
       if (federated) {
         if (
           index.sourceKind !== 'USGWD' ||
-          index.children.length > 50 ||
+          index.children.length > 64 ||
           index.regions?.length !== 0 ||
           index.children.reduce((n, c) => n + c.count, 0) !==
             index.indexedRecords ||
@@ -269,8 +263,7 @@ export function createSpatialWellSource({
         (tile) => bounds && intersects(tile.bounds, bounds),
       );
       let grids;
-      let partitioned = false,
-        countCapped = false;
+      let countCapped = false;
       if (index.aggregates) {
         if (
           new Set(index.regions.map((t) => t.url)).size !==
@@ -281,65 +274,29 @@ export function createSpatialWellSource({
         )
           throw new TypeError('Index accounting mismatch');
         const ref = index.aggregates;
-        if (ref.schemaVersion === 2) {
-          partitioned = true;
-          cachedCounts = undefined;
-          if (!bounds)
-            return publishCatalog(
-              validateCountView({
-                schemaVersion: 1,
-                kind: 'gev-well-count-view',
-                cells: [],
-                degrees: 32,
-                total: index.indexedRecords,
-                reason: 'No visible ellipsoid',
-                coverageComplete: false,
-              }),
-            );
-          const loaded = await partitionedLoader.load(
-            ref,
-            index.indexedRecords,
-            bounds,
-            countBudget,
-            (part) => read(part.url, part.sha256, part.bytes, part.bytes),
-          );
-          grids = loaded.grids;
-          countCapped = loaded.capped;
-        } else {
-          if (
-            !/^[a-f0-9]{64}\.counts\.json$/.test(ref.url) ||
-            ref.url !== `${ref.sha256}.counts.json`
-          )
-            throw new TypeError('Invalid count reference');
-          if (!bounds)
-            return publishCatalog(
-              validateCountView({
-                schemaVersion: 1,
-                kind: 'gev-well-count-view',
-                cells: [],
-                degrees: 32,
-                total: index.indexedRecords,
-                reason: 'No visible ellipsoid',
-                coverageComplete: false,
-              }),
-            );
-          if (
-            cachedCounts?.sha === ref.sha256 &&
-            cachedCounts.total === index.indexedRecords
-          )
-            grids = cachedCounts.grids;
-          else {
-            grids = validateCountGrids(
-              await read(ref.url, ref.sha256, 32 * 1024 * 1024),
-              index.indexedRecords,
-            );
-            cachedCounts = {
-              sha: ref.sha256,
+        if (ref.schemaVersion !== 2)
+          throw new TypeError('Unsupported count reference');
+        if (!bounds)
+          return publishCatalog(
+            validateCountView({
+              schemaVersion: 1,
+              kind: 'gev-well-count-view',
+              cells: [],
+              degrees: 32,
               total: index.indexedRecords,
-              grids,
-            };
-          }
-        }
+              reason: 'No visible ellipsoid',
+              coverageComplete: false,
+            }),
+          );
+        const loaded = await partitionedLoader.load(
+          ref,
+          index.indexedRecords,
+          bounds,
+          countBudget,
+          (part) => read(part.url, part.sha256, part.bytes, part.bytes),
+        );
+        grids = loaded.grids;
+        countCapped = loaded.capped;
       }
       const rows = matching.reduce((n, t) => n + t.count, 0);
       const bytes = matching.reduce(
@@ -368,25 +325,7 @@ export function createSpatialWellSource({
         if (countCapped)
           view.reason +=
             '; fine summary budget reached, complete coarser counts retained';
-        // A source-only caller has no screen resolution evidence. Do not eagerly
-        // hydrate arbitrary detail islands at national zoom. The app supplies its
-        // existing screen-aware eligibility callback for mixed views.
-        if (federated || (partitioned && !detailPriority))
-          return publishCatalog(view);
-        const startBytes = totalBytes;
-        const mixed = await refineCountView(
-          view,
-          index,
-          async (tile) => {
-            const pack = await read(tile.url, tile.sha256);
-            if (totalBytes - startBytes > 16 * 1024 * 1024)
-              throw new TypeError('Detail byte budget');
-            return pack;
-          },
-          detailPriority,
-        );
-        combined.throwIfAborted();
-        return publishCatalog(mixed);
+        return publishCatalog(view);
       }
       if (over)
         throw new TypeError('Detail budget exceeded; count index required');
@@ -399,7 +338,7 @@ export function createSpatialWellSource({
         read(tile.url, tile.sha256),
       );
       for (const [i, tile] of selected.entries()) {
-        const pack = validateWellPack(packs[i]);
+        const pack = validatePack(packs[i]);
         if (totalBytes - detailStartBytes > 16 * 1024 * 1024)
           throw new TypeError('Detail byte budget');
         if (pack.records.length !== tile.count)
@@ -457,7 +396,7 @@ export function createSpatialWellSource({
         records: [...records.values()].filter(inBounds),
       };
       combined.throwIfAborted();
-      return publishCatalog(validateWellPack(pack));
+      return publishCatalog(validatePack(pack));
     },
     cancel() {
       generation++;

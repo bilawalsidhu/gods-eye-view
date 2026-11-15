@@ -24,28 +24,13 @@ export function wellCardColumns(canvasWidth) {
     : 68;
 }
 
-/** Legacy USGS packs omit per-record source; never invent an agency label. */
+/** Short list/label text: the source dataset and its own record id. */
 export function wellRecordLabel(record) {
-  return [record.source, record.metadata?.sourceRecordId || record.id]
-    .filter(Boolean)
-    .join(' ');
+  return `${record.source} ${record.metadata?.sourceRecordId || record.id}`;
 }
 
-/** Display-only identity; frozen source names and quality flags remain evidence. */
 export function wellDisplayName(record) {
-  return record.source === 'USGWD'
-    ? `USGWD ${record.metadata?.sourceRecordId || record.id}`
-    : typeof record.name === 'string'
-      ? record.name
-      : record.id;
-}
-export function visibleWellWarnings(record, details) {
-  const warnings = details.warnings ?? [];
-  return record.source === 'USGWD'
-    ? warnings.filter(
-        (line) => !String(line).startsWith('Location unverified;'),
-      )
-    : warnings;
+  return `USGWD ${record.metadata?.sourceRecordId || record.id}`;
 }
 
 /** Citizen-facing facts from admitted fields only; source quantities are historical reports. */

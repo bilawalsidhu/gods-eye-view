@@ -152,21 +152,13 @@ test('wrong CRS, unsupported flags, operation tampering and invented precise poi
     assert.throws(() => validateHistoricalWellPack(p));
   }
 });
-test('historical dispatch cannot exempt a USGS subset from the original validator', () => {
-  const pack = fixture();
-  pack.records.push({ id: 'USGS-1234' });
-  pack.acquisitions.push({ collection: 'monitoring-locations' });
-  let calls = 0;
-  assert.throws(() =>
-    validateHistoricalWellPack(pack, (subset) => {
-      calls++;
-      assert.deepEqual(subset.records, [{ id: 'USGS-1234' }]);
-      assert.equal(subset.acquisitions.length, 1);
-      throw new TypeError('strict USGS refusal');
-    }),
-  );
-  assert.equal(calls, 1);
-  assert.throws(() => validateHistoricalWellPack(pack));
+test('records or acquisitions from any other source are refused', () => {
+  const withRecord = fixture();
+  withRecord.records.push({ id: 'USGS-1234' });
+  assert.throws(() => validateHistoricalWellPack(withRecord));
+  const withAcquisition = fixture();
+  withAcquisition.acquisitions.push({ collection: 'monitoring-locations' });
+  assert.throws(() => validateHistoricalWellPack(withAcquisition));
 });
 
 test('numeric native ID refuses before renderer string operations', () => {

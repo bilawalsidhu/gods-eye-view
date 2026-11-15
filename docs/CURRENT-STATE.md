@@ -1,16 +1,5 @@
 # God's Eye View Current State
 
-The optional Infrastructure **Water Wells** layer loads the published Rainfolk
-50-state historical USGWD release on demand. It shows true source-location points
-below 50 km and uses the native inspector for available depth, reported capacity,
-construction years and source identity. Count grids remain internal; there are no
-numeric cluster badges, group cards or automatic drilldown flights. Coincident
-records retain their coordinates and can be selected individually. The sidebar
-credits Rainfolk and shows consumer check age, not source-observation freshness.
-No national dataset, collector or credentials are bundled. The original USGWD
-citation/licence and Rainfolk adaptations are in DATA_SOURCES.md. See
-[consumer configuration and limits](US_GROUNDWATER_CONSUMER.md).
-
 Docker Compose mounts the checkout with the shared SELinux `:z` label so
 containers can read it on enforcing SELinux hosts. The separate image-owned
 `node_modules` volume and loopback-only port publishing remain unchanged.
@@ -220,6 +209,20 @@ finds, protected status and source.
 Clicking the card opens the Wikipedia article (else the Wikidata item), the
 wreck's own web page when EMODnet lists one, else EMODnet's portal. Voice does
 not toggle this layer yet (prompt budget, as for the airspace layer).
+
+## Water Wells — Rainfolk USGWD
+
+The Infrastructure group includes **Water Wells** (`us-groundwater`, share-link
+token `03`), off by default. It loads Rainfolk's pinned, hash-verified 50-state
+USGWD release (`VITE_RAINFOLK_WELLS_RELEASE` overrides it; a change needs a
+rebuild) for the area in view. Below 50 km camera height it shows each source
+record as a hollow marker; clicking one opens the tracked card with available
+depth, reported capacity, construction years and source identity, and
+overlapping records open a small chooser. A view with more than 2,000 records
+shows none and reports "Detail limited"; counts are never drawn as clusters.
+Every index, tile and count file is checked against its SHA-256 before use.
+Credits and per-state notices are in
+[US_GROUNDWATER_SOURCES.md](US_GROUNDWATER_SOURCES.md).
 
 ## Wildlife Sightings — iNaturalist and Acartia
 

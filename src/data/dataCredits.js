@@ -195,13 +195,6 @@ export const DATA_CREDITS = [
       '<a href="https://www.hydroshare.org/resource/8b02895f02c14dd1a749bcc5584a5c55/data/contents/Metadata/Table_S2-Summary_table_of_when_the_data_was_collected_the_person_and_organization_that_primarily_assisted_with_the_data_collection_disclaimers_and_representation_estimations_for_each_state.xlsx" target="_blank" rel="noopener">State credits and supplied notices</a>',
   },
   {
-    key: 'usgs-groundwater',
-    html:
-      'Groundwater wells and sampled water levels: ' +
-      '<a href="https://waterdata.usgs.gov/" target="_blank" rel="noopener">U.S. Geological Survey</a> ' +
-      '(bounded historical sample; provisional observations may be revised)',
-  },
-  {
     key: 'openseamap',
     html:
       'Sea marks overlay: ' +

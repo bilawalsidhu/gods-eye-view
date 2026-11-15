@@ -10,27 +10,12 @@ test('phone card lines fit a bounded native card without changing source text', 
   const width = wellCardColumns(390);
   assert.ok(width <= 49);
   const url =
-    'https://waterdata.usgs.gov/monitoring-location/USGS-330548081391102/';
+    'https://www.hydroshare.org/resource/8b02895f02c14dd1a749bcc5584a5c55/';
   const lines = wrapWellCardLine(url, width);
   assert.ok(lines.every((line) => line.length <= width));
   assert.equal(lines.join(''), url);
   assert.equal(wellCardColumns(1440), 68);
   assert.equal(wellCardColumns(undefined), 68);
-});
-
-test('valid legacy record identity omits absent source instead of showing undefined', () => {
-  assert.equal(
-    wellRecordLabel({ id: 'USGS-330548081391102', metadata: {} }),
-    'USGS-330548081391102',
-  );
-  assert.equal(
-    wellRecordLabel({
-      id: 'internal-id',
-      source: 'USGWD',
-      metadata: { sourceRecordId: 'NY001' },
-    }),
-    'USGWD NY001',
-  );
 });
 
 test('native well card wraps coverage and source URLs without losing content', () => {
@@ -40,37 +25,21 @@ test('native well card wraps coverage and source URLs without losing content', (
   assert.ok(lines.every((line) => line.length <= 68));
   assert.equal(lines.join(' '), coverage);
   const url =
-    'https://waterdata.usgs.gov/monitoring-location/USGS-294708095300801/';
+    'https://www.hydroshare.org/resource/8b02895f02c14dd1a749bcc5584a5c55/data/contents/';
   assert.equal(wrapWellCardLine(url, 45).join(''), url);
 });
 
-import { wellDisplayName, visibleWellWarnings } from './wellCard.js';
-test('historical display uses neutral source identity without changing original evidence', () => {
+import { wellDisplayName } from './wellCard.js';
+test('display names use the neutral source identity without changing the record', () => {
   const record = {
     source: 'USGWD',
     id: 'original-id',
-    name: 'Historical USGWD record NY0131510; location unverified',
-    metadata: {
-      sourceRecordId: 'NY0131510',
-      locationFlags: { 'Location Verified': 'Yes' },
-    },
+    metadata: { sourceRecordId: 'NY0131510' },
   };
-  const details = {
-    warnings: [
-      'Historical source record; physical-well identity unresolved.',
-      'Location unverified; original NAD83 retained.',
-      'EPSG:1188: approximate datum conversion; source accuracy unknown.',
-    ],
-  };
-  const before = JSON.stringify({ record, details });
+  const before = JSON.stringify(record);
   assert.equal(wellDisplayName(record), 'USGWD NY0131510');
-  const visible = visibleWellWarnings(record, details);
-  assert.doesNotMatch(visible.join(' '), /Location unverified/);
-  assert.match(visible.join(' '), /approximate datum conversion/);
-  assert.equal(JSON.stringify({ record, details }), before);
-  const usgs = { source: 'USGS', id: 'USGS-1', name: 'Original station name' };
-  assert.equal(wellDisplayName(usgs), 'Original station name');
-  assert.equal(visibleWellWarnings(usgs, details), details.warnings);
+  assert.equal(wellRecordLabel(record), 'USGWD NY0131510');
+  assert.equal(JSON.stringify(record), before);
 });
 
 import { historicalWellCardLines } from './wellCard.js';

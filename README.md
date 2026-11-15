@@ -464,8 +464,6 @@ Twenty-three layers and map sources. **Twenty-one have a keyless path.** Some of
 
 In the app, **Data Layers** groups them as Movement, Cameras, Infrastructure, Events, Weather and Audio; Directions and OSM Places sit in the separate **Utilities** panel with Draw and Import.
 
-**Water Wells, keyless.** Enable **Data Layers → Infrastructure → Water Wells**, zoom below 50 km (closer in dense areas), and click a point for available depth, reported capacity or construction details. Rainfolk streams **12,452,285 mapped historical source records across all 50 states** from [USGWD](https://doi.org/10.4211/hs.8b02895f02c14dd1a749bcc5584a5c55). Within-state coverage is incomplete. These are source records, not verified distinct wells or current water conditions. No data key is needed. See [usage and limits](docs/US_GROUNDWATER_CONSUMER.md) and [source credits and CC BY 4.0 notices](docs/US_GROUNDWATER_SOURCES.md).
-
 **The basemap ladder — what each tier buys you:**
 
 | You have                   | The globe you get                                                                                                                                                            |

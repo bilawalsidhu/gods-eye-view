@@ -1,40 +1,5 @@
 # Data Sources & Attribution
 
-## Water Wells: USGWD via Rainfolk
-
-Water Wells fetches the published immutable Rainfolk release at runtime:
-`https://data.rainfolk.org/usgwd/e6dc61db1500b491671cf094602e2257814c5507e99618d717fbb4f6082d8291/index.json`.
-It contains 12,452,285 mapped historical source records across all 50 states.
-Within-state coverage is incomplete. This is not a count of distinct physical
-wells or current operating wells.
-
-Original dataset: USGWD, compiled by Chung-Yi Lin, Alexandra Miller, Musab Waqar and Landon T. Marston,
-[A Database of Groundwater Wells in the United States (USGWD)](https://doi.org/10.4211/hs.8b02895f02c14dd1a749bcc5584a5c55),
-HydroShare, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-USGWD compiles state and federal agency records, including USGS. Rainfolk prepares, validates
-and hosts the map artifacts; it does not claim original survey or data ownership.
-Adaptations include field normalization, approximate datum conversion and bounded
-spatial packaging. Original source IDs, acquisition hashes, dates and flags are
-retained. The layer does not infer present water level, potability or performance.
-No key is required. No private submissions or confidential Rainfolk records are
-included. Public well records do not establish public ownership of the wells.
-
-The separate six-site USGS fixture supports offline tests and explicit embedded
-source injection. Its source queries and hashes remain in
-[`fixtures/us-groundwater/v1`](fixtures/us-groundwater/v1/README.md).
-It is not added to the published Rainfolk catalog. USGS-authored public data is
-in the U.S. public domain; third-party material retains separate rights.
-
-See [the consumer configuration](docs/US_GROUNDWATER_CONSUMER.md) for release
-updates, CORS requirements, limits and interpretation.
-The [supplied state notices](docs/US_GROUNDWATER_SOURCE_NOTICES.md) preserve the
-publisher's state-specific attribution, disclaimers and representation estimates.
-Read those historical agency statements alongside the publisher's permission
-and redaction account in [the bounded reuse review](docs/US_GROUNDWATER_REUSE_REVIEW.md).
-They should not all be treated as new permission requests for each downstream
-user. The review distinguishes attribution, original-compilation conditions and
-remaining uncertainty; it is not a legal guarantee or an anonymity claim.
-
 God's Eye View's **code** is [MIT](LICENSE)-licensed. **The MIT grant covers the source code only — it does NOT extend to third-party data or visual assets.** Every third-party source keeps its own license and terms. This file documents the live and bundled data sources. The bundled 3D models are the project's own procedural fleet models, MIT-licensed with the code ([`public/models/README.md`](public/models/README.md)).
 
 How to read this:
@@ -82,6 +47,7 @@ How to read this:
 | **World News API** (`api.worldnewsapi.com/search-news`, `WORLDNEWSAPI_KEY`, optional; used only without a news server) | News layer, Local: the last 24 h of news by the source country at the view centre (country from the bundled Natural Earth admin-0 pack; none in a disputed area), read server-side once per country every 30 minutes, about 1.5 points a read, kept in memory for at most 1 hour and then deleted (a read that fails is served from that copy only within the hour); at most `WORLDNEWSAPI_DAILY_READS` reads a day (default 30), after which Local says the daily limit is reached. Each story keeps World News API's own category (politics, business, else other) with no severity of its own; sport, entertainment, lifestyle and travel left out | [World News API terms](https://worldnewsapi.com/terms/) of the operator's own plan. The terms allow caching only with World News API's prior written permission, and then for at most 1 hour: getting that permission before setting the key is the operator's responsibility. Titles and links only; article text and summaries are not kept or shown; pictures are hotlinked from the publisher | The "World News API" link to worldnewsapi.com, always in the Data attribution popover (a credit; the terms require a backlink only of invited free plans); "via World News API", the publisher's domain and the article link on every card |
 | **EMODnet Human Activities — Ship wrecks** (`ows.emodnet-humanactivities.eu/wfs`, layer `emodnet:heritageshipwrecks`) | Shipwrecks layer: about 7,000 wrecks in European waters (name, sinking year and text, vessel type, least depth and its quality, position accuracy, period, cargo, protected status). Keyless WFS GeoJSON, fetched by `/api/shipwrecks` once a day; rows sourced from wrecksite.eu are skipped, and free text that refers to a person by a title or role is dropped by a keyword filter (a bare name can still pass) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) (EMODnet catalogue record `e965088b-a265-4517-84df-c49b156af8a7`; data originator AND-International, compiled from SHOM, National Monuments Service, Historic England and the Oxford Roman Economy Project); fetched at runtime, not stored in this repository | "Shipwrecks (Europe): EMODnet Human Activities (data originator AND-International, …), CC BY 4.0" — shown in-app |
 | **Wikidata — shipwrecks** (`query.wikidata.org/sparql`) | Shipwrecks layer: shipwreck items (Q852190) with a coordinate and at least one Wikipedia article, plus sinking events (Q906512, where the death toll lives): name, ship type, sinking date with its precision, deaths and survivors (counts only), description and article link. Keyless, fetched by `/api/shipwrecks` once a day | [CC0](https://creativecommons.org/publicdomain/zero/1.0/); fetched at runtime | "Shipwrecks (worldwide): Wikidata (CC0)" — shown in-app |
+| **Rainfolk — USGWD historical wells** (`data.rainfolk.org/usgwd/<release>/`, pinned release `e6dc61db…`) | Water Wells layer: 12,452,285 mapped historical well records across all 50 states from the US Groundwater Well Database, loaded near the camera. Within-state coverage is incomplete; these are source records, not verified current wells or water conditions. Keyless | Data: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) ([USGWD](https://doi.org/10.4211/hs.8b02895f02c14dd1a749bcc5584a5c55), Lin, Miller, Waqar and Marston). Rainfolk normalizes fields, converts NAD83 to WGS84 and packages the records. State credits and notices: [`docs/US_GROUNDWATER_SOURCES.md`](docs/US_GROUNDWATER_SOURCES.md) | "Water Wells: Rainfolk preparation and hosting; USGWD — Lin, Miller, Waqar and Marston, CC BY 4.0", with a link to the state credits — shown in-app |
 | **InciWeb** (inciweb.wildfire.gov)                                    | Per-incident "InciWeb ↗" card links to official incident pages (narratives, evacuation/closure notices) | U.S. government public incident information. Links are matched best-effort by incident name and state, with incident page origin and update times checked on selection. Same-origin `/api/fire-perimeters/inciweb` routes cache the catalog for 1 hour and publication metadata for 30 minutes; linked pages remain InciWeb content | "Incident information: InciWeb (inciweb.wildfire.gov)" |
 | **FAA Special Use Airspace** (`services6.arcgis.com` FeatureServer `Special_Use_Airspace`) | Prohibited & Restricted Airspace layer: US prohibited (P) and restricted (R) special-use airspace polygons (not the UAS Facility Map or UAS flight restrictions), altitude limits from the `*_VAL`/`*_UOM`/`*_CODE` fields, times of use, and controlling agency | U.S. public domain (FAA aeronautical data published through the [FAA AIS Open Data portal](https://adds-faa.opendata.arcgis.com/)); fetched keyless through `/api/drone-airspace` (1-hour server cache). Informational only — not a substitute for official UAS flight-planning tools | "Prohibited & restricted airspace: FAA Special Use Airspace" |
 | **iNaturalist API** (`api.inaturalist.org/v2/observations`, `/v1/grid/{z}/{x}/{y}.grid.json`) | Wildlife Sightings layer: verifiable wildlife observed within the last 48 h (whales 7 d), by observation time, in the current view, with taxon, observation time, quality grade and eligible photo | Per-record licences; observations default CC BY-NC. Photos CC0/BY/BY-SA/BY-NC/BY-NC-SA shown; ND and all-rights-reserved photos link-only. Keyless via `/api/inaturalist/observations` (5-min cache; global sample 10 min; stale ≤ 1 h; 60 requests/min and 8,000/day upstream caps). **NonCommercial content:** commercial redistributors must filter to CC0/BY/BY-SA or remove the layer. No AI training on this content | "Wildlife sightings: iNaturalist contributors (licences per record; photos credited on each card)" |
@@ -724,5 +690,3 @@ NOAA density imagery with the raw GLM product.
 ## In-app attribution
 
 The required Google Maps / Cesium credit renders on the on-globe credit line (`#cesium-credits`, bottom-left) and must stay visible — including in clean-view and recording modes (the whole line, logo + "Google Maps" + the "Data attribution" link, stays on screen; only the GEV panels/HUD fade). The layer-specific credits (adsb.lol, adsbdb, Planespotters.net, Open Vessel Photos, TeleGeography, OSM datacenters/dams/roads, NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic, GBFS, Radio Browser, OpenSky, AISStream) are registered into the expandable **"Data attribution"** popover on that credit line via `viewer.creditDisplay.addStaticCredit(new Cesium.Credit(html, /* showOnScreen */ false))` — see `src/data/dataCredits.js`. When you add a new data source, add its license and attribution to this file **and** append an entry to `DATA_CREDITS` in `src/data/dataCredits.js` so it surfaces in the app.
-
-The [public-release source list](docs/US_GROUNDWATER_SOURCES.md) records all 48 catalog partitions and their contributing organizations from publisher Table S1.

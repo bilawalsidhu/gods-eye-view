@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import * as Cesium from 'cesium';
 import { createUsGroundwaterLayer } from './index.js';
 import {
@@ -8,14 +7,12 @@ import {
   selectEntityContext,
   selectTrackedSubjectContext,
 } from '../../data/contextStore.js';
-const fixture = JSON.parse(
-  fs.readFileSync(
-    new URL(
-      '../../../fixtures/us-groundwater/v1/expected-pack.json',
-      import.meta.url,
-    ),
-  ),
-);
+import { usgwdPack, usgwdRecord } from './records.fixture.mjs';
+const fixture = usgwdPack([
+  usgwdRecord(1, { lon: -97.74, lat: 30.27, depthFt: 21 }),
+  usgwdRecord(2, { lon: -97.5, lat: 30.4 }),
+  usgwdRecord(3, { lon: -98.2, lat: 29.9 }),
+]);
 
 test('hollow marker center uses the bounded record hit area without stealing foreign picks or hidden records', async () => {
   const owned = ownedViewer(() => false);
@@ -129,10 +126,7 @@ test('canvas resize reflows a selected card without refetching or changing recor
   layer.init(owned.viewer);
   await layer.enable();
   const first = owned.collection.get(0).entities.values[0];
-  assert.equal(
-    first.gevWellRecordLabel,
-    first.id.slice('us-groundwater:'.length),
-  );
+  assert.equal(first.gevWellRecordLabel, 'USGWD SYN_1');
   owned.viewer.selectedEntity = first;
   owned.viewer.scene.canvas.clientWidth = 390;
   owned.viewer.scene.preRender.raiseEvent();
@@ -308,7 +302,7 @@ test('every rejected cached attachment stays failed with no visible or retained 
     assert.equal(owned.listeners.size, 0);
     assert.equal(owned.viewer.camera.moveEnd.numberOfListeners, 0);
   }
-  assert.equal(reads, 1);
+  assert.equal(reads, 3, 'each retry requests the current view');
   layer.destroy();
 });
 
@@ -327,17 +321,17 @@ test('successful attachment retry clears the error and owns exactly one real Ces
   assert.equal(await layer.enable(), false);
   assert.match(layer.getStats().error, /Owned attach failure/);
   assert.equal(await layer.enable(), true);
-  assert.equal(reads, 1);
+  assert.equal(reads, 2, 'the retry requests the current view');
   assert.equal(owned.attempts.length, 2);
   assert.notEqual(owned.attempts[0], owned.attempts[1]);
   assert.equal(layer.getStats().error, null);
-  assert.equal(layer.getStats().visible, 6);
+  assert.equal(layer.getStats().visible, 3);
   assert.equal(owned.collection.length, 1);
   assert(owned.listeners.size > 0);
   assert.equal(
     owned.viewer.camera.moveEnd.numberOfListeners,
-    2,
-    'one viewport watcher and one record visibility watcher',
+    1,
+    'one viewport watcher',
   );
   layer.destroy();
   assert.equal(owned.collection.length, 0);
@@ -455,5 +449,26 @@ test('a synchronously throwing source reports failure instead of a pending promi
   assert.equal(await layer.enable(), false);
   assert.equal(await layer.enable(), false);
   assert.equal(calls, 2);
+  layer.destroy();
+});
+
+test('wells claim their own marker picks while enabled so other layers keep their selection', async () => {
+  const owned = ownedViewer(() => false);
+  owned.viewer.camera.positionCartographic.height = 25000;
+  const owners = new Map();
+  const layer = createUsGroundwaterLayer({
+    source: { getSnapshot: async () => fixture },
+    picking: {
+      registerPickOwner: (id, predicate) => owners.set(id, predicate),
+      unregisterPickOwner: (id) => owners.delete(id),
+    },
+  });
+  layer.init(owned.viewer);
+  await layer.enable();
+  const owns = owners.get('us-groundwater');
+  assert.equal(owns(`us-groundwater:${fixture.records[0].id}`), true);
+  assert.equal(owns('flight:abc123'), false);
+  layer.disable();
+  assert.equal(owners.has('us-groundwater'), false);
   layer.destroy();
 });
