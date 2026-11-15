@@ -186,13 +186,26 @@ export function installEntityContext({
   };
   const removeMoveEnd = viewer.camera.moveEnd.addEventListener(readView);
   // A camera that keeps moving (following an aircraft, a long fly-to) never
-  // settles, so also read it on large changes, at most once a second.
+  // settles, and a jump (a share link, a restored view) raises no moveEnd,
+  // so also read it on large changes: at most once a second, and once more
+  // after the last change, so the view it stops at is the one described.
   let lastRead = 0;
+  let trailing = null;
   const removeChanged = viewer.camera.changed.addEventListener(() => {
+    clearTimeout(trailing);
     const now = performance.now();
-    if (now - lastRead < 1000) return;
-    lastRead = now;
-    readView();
+    if (now - lastRead >= 1000) {
+      lastRead = now;
+      readView();
+      return;
+    }
+    trailing = setTimeout(
+      () => {
+        lastRead = performance.now();
+        readView();
+      },
+      1000 - (now - lastRead),
+    );
   });
   setTimeout(readView, 0);
 
@@ -284,6 +297,7 @@ export function installEntityContext({
     handler.destroy();
     removeMoveEnd();
     removeChanged();
+    clearTimeout(trailing);
     removeTrackedChanged();
     clearTimeout(trackCheck);
     globalThis.removeEventListener?.('gev:entity-selected', onSelected);
