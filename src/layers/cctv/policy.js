@@ -123,6 +123,11 @@ export const CCTV_CALIBRATION_STORAGE_KEY_V2 =
 
 export const PROJECTION_TEXTURE_SWAP_MS = 1000;
 
+// A still-image projection changes only when a new still is swapped onto the
+// plane, so the scene renders for this long after a swap (Cesium binds the new
+// image over the next frames) and is otherwise left idle.
+export const PROJECTION_SWAP_RENDER_MS = 500;
+
 // V2 frustum geometry (design §2a/§6): the far-cap center + corners never sink
 // below groundAlt + this clearance, so a fabricated pitch (-24°) cannot bury
 // the monitor plane in the 3D tiles. Exported for the unit suite.

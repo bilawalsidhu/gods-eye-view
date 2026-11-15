@@ -61,8 +61,8 @@ export function createRendering({
       !layerState._viewer ||
       !focusPassIsNeeded(target, layerState._activeFocusStyleCount)
     )
-      return;
-    if (nowMs - layerState._lastFocusStyleAt < 80) return;
+      return false;
+    if (nowMs - layerState._lastFocusStyleAt < 80) return false;
     layerState._lastFocusStyleAt = nowMs;
     const scene = layerState._viewer.scene;
     const camera = layerState._viewer.camera;
@@ -82,6 +82,8 @@ export function createRendering({
       baseColorFor: cameraColorFor,
     });
     layerState._activeFocusStyleCount = result.activeCount;
+    // Whether an icon was restyled, so the caller can ask for a frame.
+    return result.writes > 0;
   }
 
   /**

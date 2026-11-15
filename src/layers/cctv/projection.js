@@ -6,6 +6,7 @@ import {
   PLANE_OUTLINE_COLOR,
   PROJECTION_CANVAS_WIDTH,
   PROJECTION_CANVAS_HEIGHT,
+  PROJECTION_SWAP_RENDER_MS,
 } from './policy.js';
 
 export function createProjection({
@@ -14,7 +15,15 @@ export function createProjection({
   parts,
   source,
 }) {
-  const { holdContinuousRender, releaseContinuousRender } = services.render;
+  const {
+    holdContinuousRender,
+    releaseContinuousRender,
+    governorRequestRender = () => {},
+  } = services.render;
+  // Until this time (performance.now) the projection loop asks for a frame on
+  // every tick: after a still is swapped onto the plane, and after an edge
+  // that re-arms the loop (activation, projection shown).
+  let renderUntil = 0;
 
   /**
    * Build the protected label associated with one active monitor plane.
@@ -352,12 +361,9 @@ export function createProjection({
   }
 
   function startProjectionLoop() {
+    renderUntil = performance.now() + PROJECTION_SWAP_RENDER_MS;
     if (layerState._projectionRaf) return;
     if (!parts.model.projectionLoopIsNeeded()) return;
-    // The armed projection loop uploads video textures / runs focus fades per
-    // frame — the scene must render continuously while it runs. Released when
-    // the tick self-stops. (perf wave 2)
-    holdContinuousRender('cctv-projection');
 
     const tick = () => {
       if (!layerState._viewer || !parts.model.projectionLoopIsNeeded()) {
@@ -366,15 +372,30 @@ export function createProjection({
         return;
       }
 
-      parts.rendering.refreshCctvFocusStyles(performance.now());
+      const now = performance.now();
+      const restyled = parts.rendering.refreshCctvFocusStyles(now);
 
       const active = parts.selection.getActiveRecord();
+      let video = false;
       if (layerState._enabled && layerState._showProjection && active) {
         ensureProjectionRuntime(active);
         if (active.projection && !active.projection.video) {
           parts.frames.drawProjectionFrame(active);
-          parts.frames.refreshProjectionTextures(active);
-        }
+          if (parts.frames.refreshProjectionTextures(active))
+            renderUntil = now + PROJECTION_SWAP_RENDER_MS;
+        } else video = Boolean(active.projection?.video);
+      }
+
+      // Only a video feed changes the scene on every frame, so only video
+      // holds the continuous loop. A still lands about every ten seconds and
+      // a focus fade restyles icons every 80 ms; each asks for the frames it
+      // needs. Holding for stills rendered the scene 60 times a second for as
+      // long as a camera was active. (perf wave 2 held for both.)
+      if (video) holdContinuousRender('cctv-projection');
+      else {
+        releaseContinuousRender('cctv-projection');
+        if (restyled || now < renderUntil)
+          governorRequestRender('cctv-projection');
       }
 
       layerState._projectionRaf = requestAnimationFrame(tick);

@@ -144,33 +144,35 @@ export function createFrames({ state: layerState, services, parts, source }) {
    * the double-buffer canvas reference, throttled to PROJECTION_TEXTURE_SWAP_MS.
    *
    * @param {Object} record - Camera record with an initialized projection runtime.
+   * @returns {boolean} Whether a new image was put on the plane.
    */
 
   function refreshProjectionTextures(record) {
     const runtime = record?.projection;
-    if (!runtime || runtime.mode === 'video') return;
+    if (!runtime || runtime.mode === 'video') return false;
     const now = Date.now();
     if (
       now - parts.model.safeNumber(runtime.lastTextureSwapAt, 0) <
       PROJECTION_TEXTURE_SWAP_MS
     )
-      return;
+      return false;
 
     const planeShowing = !!(runtime.planeEntity?.show && runtime.planeMaterial);
-    if (!planeShowing) return;
+    if (!planeShowing) return false;
 
     // Only swap when the canvas content actually changed since the last swap.
     // Frames land every ~10 s but this runs at 1 Hz — swapping an UNCHANGED
     // canvas re-uploads the texture for nothing, and each material image
     // reassignment is a flash opportunity on the live plane (owner field test
     // 2026-07-04: intermittent white flashes on the monitor plane).
-    if (runtime.canvasStamp === runtime.lastSwappedCanvasStamp) return;
+    if (runtime.canvasStamp === runtime.lastSwappedCanvasStamp) return false;
 
     const buffer = paintNextProjectionBuffer(runtime);
-    if (!buffer) return;
+    if (!buffer) return false;
     runtime.lastTextureSwapAt = now;
     runtime.lastSwappedCanvasStamp = runtime.canvasStamp;
     runtime.planeMaterial.image = buffer;
+    return true;
   }
 
   /**
