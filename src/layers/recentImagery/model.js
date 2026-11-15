@@ -1,3 +1,5 @@
+import { gibsTileTemplate } from '../../maps/gibs.js';
+
 // Marks text for i18n extraction; the UI translates it with t(). Kept local
 // because AI tool services import this module outside the browser.
 const msg = (text) => text;
@@ -580,7 +582,13 @@ export function formatCandidateReadout(candidate, now = new Date(), words) {
 export function gibsTemplate(product, day) {
   const spec = PRODUCTS[product];
   if (!spec) throw new TypeError(`Unknown imagery product: ${product}`);
-  return `https://gibs-{s}.earthdata.nasa.gov/wmts/epsg3857/best/${spec.gibsLayer}/default/${day}/GoogleMapsCompatible_Level${spec.maxLevel}/{z}/{y}/{x}.${spec.format}`;
+  return gibsTileTemplate({
+    layer: spec.gibsLayer,
+    date: day,
+    maxLevel: spec.maxLevel,
+    format: spec.format,
+    sharded: true,
+  });
 }
 
 /**
