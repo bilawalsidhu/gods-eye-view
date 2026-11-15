@@ -69,6 +69,7 @@
     "cesium": "^1.124.0",
     "egm96-universal": "^1.1.1",
     "fzstd": "0.1.1",
+    "h3-js": "^4.4.0",
     "hls.js": "^1.7.3",
     "hyparquet": "1.31.2",
     "mapillary-js": "^4.1.2",
