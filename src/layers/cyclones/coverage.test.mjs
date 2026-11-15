@@ -5,7 +5,7 @@ import { setLocale, t } from '../../i18n/index.js';
 
 // The exact string the server sends (COVERAGE in server/providers/cyclones.js).
 const SERVER_COVERAGE =
-  'Atlantic and eastern/central North Pacific; not worldwide cyclone coverage.';
+  'NOAA NHC/CPHC: North Atlantic and eastern/central North Pacific; Taiwan CWA: western North Pacific and South China Sea when configured. North Indian, Southern Hemisphere and Australian-region forecasts are not covered.';
 const time = '2026-09-16T03:00:00.000Z';
 const storm = {
   id: 'ep152026',
@@ -116,6 +116,7 @@ test('es: unavailable without reason -> fallback status not the English literal'
 });
 
 test('en: coverage and fallback status read as before', async () => {
+  assert.ok(SERVER_COVERAGE.length <= 240);
   const layer = harness({ getSnapshot: async () => snapshot([]) });
   layer.enable();
   await layer.update();
