@@ -60,6 +60,37 @@ const utc = (value) =>
     ? `${formatUtcDayMonth(value)} ${value.slice(11, 16)} UTC`
     : t('Unavailable');
 
+/**
+ * Move `world`, the world clock, as its timeline does: `play` toggles play
+ * (from the start of the covered time when live), `latest` goes live, and
+ * `step` (-1 or 1) goes to the previous or next mark, a weather frame among
+ * them, as the timeline's arrow keys do.
+ */
+function moveWorldTime(world, { play, latest, step }) {
+  if (!world) return;
+  if (play === true) {
+    const state = world.getState();
+    if (state.playing) world.pause();
+    else {
+      const covered = world.coverage();
+      if (state.live && covered) world.seek(covered.start);
+      world.play({ continuous: true });
+    }
+  }
+  if (latest === true) world.goLive();
+  if (step === -1 || step === 1) {
+    const at = world.getState().timeMs;
+    const marks = world.coverage()?.marks ?? [];
+    const to =
+      step < 0
+        ? marks.findLast((mark) => mark < at)
+        : marks.find((mark) => mark > at);
+    if (to === undefined) return;
+    world.pause();
+    world.seek(to);
+  }
+}
+
 /** A per-application observation layer, using the existing layer lifecycle and
  * row controls. Its time is the world clock's, so a link made away from live
  * opens its imagery at that time; one made live opens the latest. */
@@ -251,7 +282,10 @@ export function createWeatherLayer({
     )
       return;
     const times = manifest?.times ?? [];
-    const next = times[(times.indexOf(time) + 1) % times.length];
+    // The world plays on past the newest frame; this layer's own replay
+    // (without a clock) goes round to the first.
+    const after = times.indexOf(time) + 1;
+    const next = clock ? times[after] : times[after % times.length];
     if (!next || next === time) return;
     try {
       await rendering.prefetch?.(manifest, next, { infrared });
@@ -528,11 +562,9 @@ export function createWeatherLayer({
           );
         });
       }
-      if (clock && enabled) {
-        if (params.play === true) void clock.togglePlay();
-        if (params.latest === true) void clock.latest();
-        if ([-1, 1].includes(params.step)) void clock.step(params.step);
-      }
+      // With a clock, time is the world's: these move the world clock as its
+      // timeline does, and every layer that follows it moves along.
+      if (clock && enabled) moveWorldTime(clock.world, params);
       if (
         !clock &&
         params.play === true &&
@@ -892,14 +924,14 @@ export function createWeatherLayer({
       const shared = clock?.getState();
       return {
         ...rendering?.getDiagnostics(),
-        playing: shared ? shared.playing : playing && !hostHidden,
+        playing: shared ? shared.advancing : playing && !hostHidden,
         followLatest: isLatest(),
         ...(shared
           ? {
               clock: {
                 mode: shared.mode,
                 target: shared.target,
-                playing: shared.playing,
+                playing: shared.advancing,
               },
             }
           : {}),

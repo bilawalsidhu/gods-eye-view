@@ -125,8 +125,8 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
     /**
      * Play runs the track at the speed chosen, from the start when it is at
      * its end (at live, say), as a video plays again from the top. It runs
-     * the clock itself, past weather's own replay: weather follows the time
-     * frame by frame like every other layer the track covers.
+     * the clock itself: weather follows the time frame by frame like every
+     * other layer the track covers.
      */
     togglePlay() {
       const { playing, live, timeMs, span } = time.value;
@@ -138,9 +138,9 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
     },
     speed,
     /**
-     * Choose how fast play runs; playing, it changes at once. Weather's own
-     * replay steps at its own pace, so a speed chosen while it plays takes
-     * playback over from where it is.
+     * Choose how fast play runs; playing, it changes at once. A driver steps
+     * at its own pace, so a speed chosen while one plays takes playback over
+     * from where it is.
      */
     setSpeed(next) {
       if (!Object.hasOwn(WORLD_TIME_SPEEDS, next)) return;
