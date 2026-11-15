@@ -489,3 +489,48 @@ test('a mark label longer than the timeline shows is cut, ending in an ellipsis'
   assert.ok(cut.label.length <= WORLD_CLOCK_MARK_LABEL_LENGTH);
   assert.equal(whole.label, 'B'.repeat(WORLD_CLOCK_MARK_LABEL_LENGTH));
 });
+
+test('a cut label never splits an emoji, and counts it as one character', () => {
+  const clock = createWorldClock(fakeTime().options);
+  const a = 'A'.repeat(58);
+  clock.register({
+    id: 'emoji',
+    coverage: () => ({
+      start: 1,
+      end: 3,
+      marks: [
+        { time: 1, label: `${a}🚀 LIFTOFF` },
+        { time: 2, label: `${a}👩‍🚀 CREW` },
+        // Sixty characters, though more UTF-16 units: whole.
+        { time: 3, label: `${'A'.repeat(59)}🚀` },
+      ],
+    }),
+  });
+  const [rocket, crew, whole] = clock.coverage().markDetails;
+  assert.equal(rocket.label, `${a}🚀…`);
+  assert.equal(crew.label, `${a}👩‍🚀…`);
+  assert.equal(whole.label, `${'A'.repeat(59)}🚀`);
+  for (const { label } of [rocket, crew, whole])
+    assert.equal(label.isWellFormed(), true, 'no lone surrogate');
+});
+
+test('marks merge on their whole label, so labels alike up to the cut stay two', () => {
+  const clock = createWorldClock(fakeTime().options);
+  const stem = 'C'.repeat(WORLD_CLOCK_MARK_LABEL_LENGTH - 1);
+  for (const id of ['one', 'two'])
+    clock.register({
+      id,
+      coverage: () => ({
+        start: 5,
+        end: 5,
+        marks: [{ time: 5, label: `${stem}${id === 'one' ? ' FIRST' : ' SECOND'}` }],
+      }),
+    });
+  const covered = clock.coverage();
+  assert.deepEqual(covered.marks, [5]);
+  assert.equal(covered.markDetails.length, 2);
+  for (const mark of covered.markDetails) {
+    assert.equal(mark.label, `${stem}…`);
+    assert.equal(Object.isFrozen(mark), true);
+  }
+});

@@ -660,6 +660,31 @@ test('a layer without a clock leaves the world clock alone until enabled, and ne
   assert.equal(worldClock.now(), past);
 });
 
+test('destroyed, a layer without a clock stays off: enabling it builds no clock', (t) => {
+  const subscribe = t.mock.method(worldClock, 'subscribe');
+  const h = layerHarness();
+  assert.equal(subscribe.mock.callCount(), 1, 'its clock, built on enable');
+  h.layer.destroy();
+  harnessed.delete(h.layer);
+  h.layer.enable();
+  assert.equal(subscribe.mock.callCount(), 1, 'no clock built after destroy');
+  assert.equal(worldClock.follows('weather-radar'), false);
+  h.layer.setParams({ play: true });
+  assert.equal(worldClock.isPlaying(), false);
+});
+
+test('with no frames yet there is no timeline, and a row plays nothing', () => {
+  worldClock.setRate(604_800);
+  const h = layerHarness({
+    feed: { getSnapshot: () => new Promise(() => {}) },
+  });
+  void h.layer.update();
+  assert.equal(worldClock.coverage(), null);
+  h.layer.setParams({ play: true });
+  assert.equal(worldClock.isLive(), true);
+  assert.equal(worldClock.isPlaying(), false);
+});
+
 test('a row plays at the speed the world clock keeps, from the start at the end of the covered time', async () => {
   const h = layerHarness();
   const update = h.layer.update();

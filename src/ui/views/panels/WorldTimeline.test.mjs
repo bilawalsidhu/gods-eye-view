@@ -19,6 +19,8 @@ function mount(t) {
     // The store outlives the view; dispose it with its clock subscription.
     useWorldTimeStore(pinia).$dispose();
     worldClock.goLive();
+    // The clock keeps its rate; the next test starts at real time.
+    worldClock.setRate(1);
   });
   return () => document.getElementById('world-timeline');
 }
@@ -79,16 +81,16 @@ test('the timeline hides while no layer with time to show is on', async (t) => {
   const bar = mount(t);
   const at = Date.UTC(2026, 9, 30, 6, 15, 42);
   await nextTick();
-  assert.equal(bar(), null, 'live, nothing to play');
+  assert.equal(bar() === null, true, 'live, nothing to play');
   worldClock.seek(at);
   await nextTick();
-  assert.equal(bar(), null, 'away from live, but nothing to play');
+  assert.equal(bar() === null, true, 'away from live, but nothing to play');
   const remove = supportingLayer(t, at);
   await nextTick();
   assert.ok(bar());
   remove();
   await nextTick();
-  assert.equal(bar(), null, 'the layer went off');
+  assert.equal(bar() === null, true, 'the layer went off');
 });
 
 test('the track runs over the time the layers show, to now, and scrubs', async (t) => {
@@ -465,7 +467,7 @@ test('play held for a layer to load shows a spinner once the hold lasts', async 
   // A clock tick (a quarter second) tells of the hold; the spinner waits on.
   await new Promise((resolve) => setTimeout(resolve, 250));
   await nextTick();
-  assert.equal(bubble().querySelector('.world-timeline-spinner'), null, 'not for a quick frame');
+  assert.equal(bubble().querySelector('.world-timeline-spinner') === null, true, 'not for a quick frame');
   // The clock tells of the hold on its next tick, and the bar shows it after.
   const until = async (shown) => {
     for (let waited = 0; waited < 3_000; waited += 50) {
@@ -615,7 +617,7 @@ test('a tick shows its label on hover, and a tap by it goes to its mark', async 
     track.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX, pointerId }));
   const tip = () => bar().querySelector('.world-timeline-mark-label');
   assert.equal(bar().querySelectorAll('.world-timeline-tick').length, 3, 'ticks stay ticks');
-  assert.equal(tip(), null);
+  assert.equal(tip()?.textContent ?? null, null);
 
   // Hovering within 6 px of a tick shows its label, in place of the track's hint.
   press('pointermove', 205);
@@ -628,15 +630,15 @@ test('a tick shows its label on hover, and a tap by it goes to its mark', async 
   // Further off, or on a tick with no label, nothing shows.
   press('pointermove', 690);
   await nextTick();
-  assert.equal(tip(), null);
+  assert.equal(tip()?.textContent ?? null, null);
   assert.equal(track.hasAttribute('title'), true);
   press('pointermove', 2);
   await nextTick();
-  assert.equal(tip(), null, 'an unlabelled mark has no label');
+  assert.equal(tip()?.textContent ?? null, null, 'an unlabelled mark has no label');
   press('pointermove', 205);
   track.dispatchEvent(new PointerEvent('pointerleave', { clientX: 1_100, pointerId: 1 }));
   await nextTick();
-  assert.equal(tip(), null, 'leaving the track hides it');
+  assert.equal(tip()?.textContent ?? null, null, 'leaving the track hides it');
 
   // A tap by a tick goes to its mark exactly; elsewhere, to the time there.
   press('pointerdown', 704);
@@ -667,7 +669,7 @@ test('a tick shows its label on hover, and a tap by it goes to its mark', async 
   assert.equal(tip()?.textContent, 'GAUNTLET PAYLOAD');
   input.dispatchEvent(new Event('blur'));
   await nextTick();
-  assert.equal(tip(), null);
+  assert.equal(tip()?.textContent ?? null, null);
 });
 
 test('the pointer shows the nearer of two ticks within 6 px, and a zoom or a pan clears it', async (t) => {
@@ -717,7 +719,7 @@ test('the pointer shows the nearer of two ticks within 6 px, and a zoom or a pan
   track.dispatchEvent(new WheelEvent('wheel', { deltaY: -200, cancelable: true }));
   await nextTick();
   assert.equal(track.classList.contains('is-zoomed'), true);
-  assert.equal(tip(), null, 'a zoom clears the label');
+  assert.equal(tip()?.textContent ?? null, null, 'a zoom clears the label');
   // So does a pan, by wheel or by drag.
   pointer('pointermove', firstAt());
   await nextTick();
@@ -726,7 +728,7 @@ test('the pointer shows the nearer of two ticks within 6 px, and a zoom or a pan
     new WheelEvent('wheel', { deltaY: 40, shiftKey: true, cancelable: true }),
   );
   await nextTick();
-  assert.equal(tip(), null, 'a pan clears the label');
+  assert.equal(tip()?.textContent ?? null, null, 'a pan clears the label');
 
   // A tap between them goes to the nearer mark.
   track.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
@@ -736,4 +738,39 @@ test('the pointer shows the nearer of two ticks within 6 px, and a zoom or a pan
   pointer('pointerup', 205);
   await nextTick();
   assert.equal(worldClock.now(), second, 'a tap goes to the nearer mark');
+});
+
+test('the speed shown follows the world clock, and Play runs at its rate', async (t) => {
+  const bar = mount(t);
+  const now = Date.now();
+  const release = worldClock.hold('test-launches');
+  const unregister = worldClock.register({
+    id: 'test-launches',
+    coverage: () => ({ start: now - 10 * 86_400_000, end: now - 86_400_000 }),
+  });
+  t.after(() => {
+    unregister();
+    release();
+  });
+  await nextTick();
+  const select = () => bar().querySelector('select.world-timeline-speed');
+  assert.equal(select().value, 'real');
+  // A host sets the rate: the selector shows it.
+  worldClock.setRate(86_400);
+  await nextTick();
+  assert.equal(select().value, 'day');
+  // A rate not offered shows as the nearest offered speed, and Play keeps it.
+  worldClock.setRate(5_000);
+  await nextTick();
+  assert.equal(select().value, 'hour');
+  bar().querySelector('.world-timeline-play').click();
+  assert.equal(worldClock.isPlaying(), true);
+  assert.equal(worldClock.getRate(), 5_000, 'Play runs at the clock\'s own rate');
+  worldClock.pause();
+  // Chosen on the selector while paused, the clock takes it at once.
+  select().value = 'week';
+  select().dispatchEvent(new Event('change'));
+  await nextTick();
+  assert.equal(worldClock.getRate(), 604_800);
+  assert.equal(select().value, 'week');
 });

@@ -216,7 +216,7 @@ test('outline upgrade preserves the existing SVG group identity', async (t) => {
   assert.ok(after === before, 'the rendered group is mutated, not replaced');
   assert.deepEqual(sampledAnchors.at(-1), [-97.5, 31.2], 'the existing group projects from the re-seated anchor');
   assert.equal(groups().length, 1);
-  assert.equal(after.querySelector('.gev-anno-ring'), null, 'reticle rings are removed in place');
+  assert.equal(after.querySelector('.gev-anno-ring') === null, true, 'reticle rings are removed in place');
   assert.ok(after.querySelector('.gev-anno-callout') === callout, 'the original callout remains in the group');
   assert.ok(after.querySelector('.gev-anno-dot') === dot, 'the anchor dot remains in the group');
   assert.ok(svg());
@@ -330,7 +330,7 @@ test('a removed mark fades out, then leaves the board', async (t) => {
   assert.equal(group.isConnected, false);
   renderer.destroy();
   await settle();
-  assert.equal(document.querySelector('.gev-screen-whiteboard'), null);
+  assert.equal(document.querySelector('.gev-screen-whiteboard') === null, true);
 });
 
 // ── Partial-add unwind (review round 2) ───────────────────────────────────────

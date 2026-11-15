@@ -8545,8 +8545,10 @@ that timeline but are not marks on it: the timeline marks only events (launches,
 and earthquakes of magnitude 6 and up while that layer is on), so its arrow keys
 step to those, or along the track where there are none. A mark may carry a
 label (a launch's mission name, cut to 27 characters in capitals as the mission
-index shows names; an earthquake's magnitude and place) of up to 60 characters;
-a longer one ends in `…`, and a label is never wider than the track. A zoom or
+index shows names; an earthquake's magnitude and place). Marks merge on their
+whole label; one longer than 60 characters (graphemes, so an emoji is never
+split) then shows cut, ending in `…`, and a label is never wider than the
+track. A zoom or
 a pan clears a hovered label. The pointer within
 6 px of a tick shows its label over the track, and a tap there goes to the
 mark's time exactly; a tap elsewhere goes to the time under it and a drag
@@ -8579,12 +8581,15 @@ The catalog exposes `weatherClock` and destroys it with its lifetime signal. It
 has no time controls of its own: `weatherClock.world` is the world clock it
 follows, where time moves. A weather row's `play`, `latest` and `step` params
 move that world clock as the timeline does: `play` runs at the speed chosen on
-the timeline (the world clock keeps its rate while paused and live), from the
-start of the covered time when live or at its end, and does nothing while
-every product the row shows is suspended. A weather layer built without a
+the timeline (the world clock keeps its rate while paused and live, and the
+timeline's speed selector shows the clock's rate, or the nearest offered speed
+for a rate a host set), from the start of the covered time when live or at its
+end, and does nothing while every product the row shows is suspended or while
+there is no covered time. A weather layer built without a
 shared clock builds one of its own on the page's world clock when first
 enabled (`createWeatherClock({ shared: false })`) and keeps it for its
-lifetime; destroying it leaves the world's time where it is, and only the last
+lifetime; destroying it leaves the world's time where it is, and enabling it
+after that does nothing, and only the last
 shared weather clock destroyed sends the world live. Neither has a frame replay
 of its own.
 

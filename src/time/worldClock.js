@@ -33,8 +33,36 @@
  */
 
 const MARK_TEXT = ['label', 'id', 'kind'];
-/** The longest label a mark carries, ellipsis and all. */
+/**
+ * The longest label a mark carries, ellipsis and all, in characters as a
+ * reader sees them (graphemes where the runtime can tell them, otherwise code
+ * points), so an emoji or an accented letter is never split.
+ */
 export const WORLD_CLOCK_MARK_LABEL_LENGTH = 60;
+
+const graphemes =
+  typeof Intl?.Segmenter === 'function'
+    ? (() => {
+        const segmenter = new Intl.Segmenter(undefined, {
+          granularity: 'grapheme',
+        });
+        return (text) =>
+          Array.from(segmenter.segment(text), ({ segment }) => segment);
+      })()
+    : (text) => Array.from(text);
+
+/** `mark` with its label cut to WORLD_CLOCK_MARK_LABEL_LENGTH, ending in `…`. */
+function shownMark(mark) {
+  if (!mark.label || mark.label.length <= WORLD_CLOCK_MARK_LABEL_LENGTH)
+    return mark;
+  const parts = graphemes(mark.label);
+  if (parts.length <= WORLD_CLOCK_MARK_LABEL_LENGTH) return mark;
+  const label = `${parts
+    .slice(0, WORLD_CLOCK_MARK_LABEL_LENGTH - 1)
+    .join('')
+    .trimEnd()}…`;
+  return Object.freeze({ ...mark, label });
+}
 
 /**
  * A mark (a number, or `{time, label?, id?, kind?}`) in its one shape, or
@@ -53,10 +81,6 @@ function readMark(input) {
     const value = input[key];
     if (typeof value === 'string' && value.trim()) mark[key] = value.trim();
   }
-  if (mark.label?.length > WORLD_CLOCK_MARK_LABEL_LENGTH)
-    mark.label = `${mark.label
-      .slice(0, WORLD_CLOCK_MARK_LABEL_LENGTH - 1)
-      .trimEnd()}…`;
   return Object.freeze(mark);
 }
 
@@ -484,9 +508,12 @@ export function createWorldClock({
       const told = new Set();
       for (const mark of details.values())
         if (Object.keys(mark).length > 1) told.add(mark.time);
+      // Marks merge on their whole label, and are cut for showing after, so
+      // two whose labels only differ past the cut stay two.
       const markDetails = [...details.values()]
         .filter((mark) => Object.keys(mark).length > 1 || !told.has(mark.time))
-        .sort(byMark);
+        .sort(byMark)
+        .map(shownMark);
       const marks = [...new Set(markDetails.map((mark) => mark.time))];
       return { start, end, marks, markDetails };
     },

@@ -6,11 +6,12 @@
   mark, and the handle then tells the mark's label with the time to screen
   readers and shows it over the track while focused. A layer's world clock
   coverage may give each mark as `{ time, label, id, kind }` as well as a
-  bare time (a label over 60 characters, `WORLD_CLOCK_MARK_LABEL_LENGTH`, is
-  cut, ending in `…`); `worldClock.coverage()` keeps `marks` as the sorted
-  times and adds `markDetails`, the merged marks themselves. A zoom or a pan clears the
-  hovered label, and a label is never wider than the track (samehkhamis,
-  #1745).
+  bare time. `worldClock.coverage()` keeps `marks` as the sorted times and
+  adds `markDetails`, the merged marks themselves, merged on their whole
+  label; a label longer than `WORLD_CLOCK_MARK_LABEL_LENGTH` (60 characters,
+  exported from `gods-eye-view/time`) is then cut, ending in `…`, never
+  splitting an emoji. A zoom or a pan clears the hovered label, and a label
+  is never wider than the track (samehkhamis, #1745).
 - The timeline marks only events: launches, and earthquakes of magnitude 6
   and up while the Earthquakes layer is on (about one every two days
   worldwide). It no longer draws a tick for every weather frame, which came
@@ -36,11 +37,13 @@
   first. A weather row's `play` and `latest` params move the world clock as
   the timeline does: `play` runs at the timeline's chosen speed, from the
   start when live or at the end, and does nothing while every product the
-  row shows is suspended. The world clock keeps a chosen rate while paused
-  and live (`goLive()` no longer sets it back to 1), so any play runs at it.
-  A weather layer made without a weather clock builds its own when first
-  enabled, and destroying it leaves the world clock's time where it is
-  (`createWeatherClock({ shared: false })`). **Breaking:** the catalog's
+  row shows is suspended or while there is no time to show. The world clock
+  keeps a chosen rate while paused and live (`goLive()` no longer sets it
+  back to 1), so any play runs at it, and the timeline's speed shows the
+  clock's rate whoever set it (the nearest offered speed for another rate).
+  A weather layer made without a weather clock leaves the world clock alone
+  until it is first enabled, does nothing once destroyed, and destroying it
+  leaves the world clock's time where it is. **Breaking:** the catalog's
   `weatherClock` (`gods-eye-view/application/layers`) no longer has
   `setTarget`, `step`, `latest`, `play`, `pause` or `togglePlay`, its state
   no longer has `playing`, and it no longer attaches itself to the world

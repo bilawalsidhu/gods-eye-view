@@ -96,13 +96,20 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
       span: spanOf(state),
     });
   const time = shallowRef(read());
-  // The speed the world clock keeps, where it is one of those offered.
-  const speed = shallowRef(
-    Object.keys(WORLD_TIME_SPEEDS).find(
-      (key) => WORLD_TIME_SPEEDS[key] === worldClock.getRate(),
-    ) ?? 'real',
-  );
-  const rate = () => WORLD_TIME_SPEEDS[speed.value];
+  // The speed shown follows the world clock's rate, whoever set it: a rate
+  // not among those offered shows as the nearest that is (by ratio), while
+  // play still runs at the clock's own rate.
+  const speedFor = (clockRate) => {
+    let best = 'real';
+    for (const key of Object.keys(WORLD_TIME_SPEEDS))
+      if (
+        Math.abs(Math.log(WORLD_TIME_SPEEDS[key] / clockRate)) <
+        Math.abs(Math.log(WORLD_TIME_SPEEDS[best] / clockRate))
+      )
+        best = key;
+    return best;
+  };
+  const speed = shallowRef(speedFor(worldClock.getRate()));
   let ticker = null;
   const syncTicker = () => {
     // Playing, the clock tells of the time itself.
@@ -117,6 +124,8 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
     }
   };
   const unsubscribe = worldClock.subscribe((state) => {
+    if (speed.value !== speedFor(state.rate))
+      speed.value = speedFor(state.rate);
     if (stopAtEnd(state)) return;
     time.value = read(state);
     syncTicker();
@@ -131,7 +140,8 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
   return {
     time,
     /**
-     * Play runs the track at the speed chosen, from the start when it is at
+     * Play runs the track at the world clock's rate (the speed chosen, which
+     * sets it), from the start when it is at
      * its end (at live, say), as a video plays again from the top. It runs
      * the clock itself: weather follows the time frame by frame like every
      * other layer the track covers.
@@ -142,7 +152,8 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
       const covered = reach();
       if (span && covered && (live || timeMs >= covered.end))
         worldClock.seek(span.start);
-      worldClock.play({ rate: rate(), continuous: true });
+      // At the clock's rate: the speed chosen, or a host's own.
+      worldClock.play({ continuous: true });
     },
     speed,
     /**
@@ -154,10 +165,12 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
     setSpeed(next) {
       if (!Object.hasOwn(WORLD_TIME_SPEEDS, next)) return;
       speed.value = next;
+      // The clock's rate first: the speed shown follows it from here on.
+      worldClock.setRate(WORLD_TIME_SPEEDS[next]);
       const { playing, stepping } = worldClock.getState();
-      if (!playing || !stepping) return worldClock.setRate(rate());
+      if (!playing || !stepping) return;
       worldClock.pause();
-      worldClock.play({ rate: rate(), continuous: true });
+      worldClock.play({ continuous: true });
     },
     goLive: () => worldClock.goLive(),
     /**

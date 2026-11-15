@@ -58,8 +58,8 @@ const utc = (value) =>
 /**
  * Move `world`, the world clock, as its timeline does: `play` toggles play at
  * the world clock's rate (the speed the timeline chose), from the start of the
- * covered time when live or at its end, unless `canPlay` is false; `latest`
- * goes live. `step` (-1 or 1) goes to the previous or next of `frames`, the
+ * covered time when live or at its end, unless `canPlay` is false or there
+ * is no covered time (no timeline to play); `latest` goes live. `step` (-1 or 1) goes to the previous or next of `frames`, the
  * weather frames; the timeline does not mark them, so this is the row's own
  * way to step through them.
  */
@@ -68,13 +68,16 @@ function moveWorldTime(world, frames, { play, latest, step }, canPlay) {
   if (play === true) {
     const state = world.getState();
     if (state.playing) world.pause();
-    else if (canPlay) {
-      const covered = world.coverage();
-      // The covered time reaches to now, as the timeline's track does.
-      const end = covered && Math.max(covered.end, world.wallNow());
-      if (covered && (state.live || state.timeMs >= end))
-        world.seek(Math.min(covered.start, state.timeMs));
-      world.play({ continuous: true });
+    else {
+      // With no time to show there is no timeline, and nothing to play.
+      const covered = canPlay && state.supported ? world.coverage() : null;
+      if (covered) {
+        // The covered time reaches to now, as the timeline's track does.
+        const end = Math.max(covered.end, world.wallNow());
+        if (state.live || state.timeMs >= end)
+          world.seek(Math.min(covered.start, state.timeMs));
+        world.play({ continuous: true });
+      }
     }
   }
   if (latest === true) world.goLive();
@@ -153,6 +156,7 @@ export function createWeatherLayer({
     manifest = null,
     request = null,
     listener = null;
+  let destroyed = false;
   let enabled = false,
     loading = false;
   let generation = 0,
@@ -366,6 +370,8 @@ export function createWeatherLayer({
       notify();
     },
     enable() {
+      // Destroyed, the layer stays off: no clock is built for it again.
+      if (destroyed) return;
       enabled = true;
       ensureClock();
       if (!removeCamera) {
@@ -870,6 +876,7 @@ export function createWeatherLayer({
       };
     },
     destroy() {
+      destroyed = true;
       layer.disable();
       unsubscribeClock?.();
       unsubscribeClock = null;
