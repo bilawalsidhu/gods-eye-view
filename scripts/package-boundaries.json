@@ -1565,6 +1565,8 @@
       "src/layers/flights/records.js",
       "src/layers/flights/clockFollow.js",
       "src/time/snapshotTimeline.js",
+      "src/data/timelineHistory.js",
+      "src/time/timelineFixes.js",
       "src/sources/live/contract.js",
       "src/layers/flights/recordPolicy.js",
       "src/layers/flights/snapshotRenderer.js",
@@ -1631,6 +1633,8 @@
       "src/layers/military/ingestion.js",
       "src/layers/military/clockFollow.js",
       "src/time/snapshotTimeline.js",
+      "src/data/timelineHistory.js",
+      "src/time/timelineFixes.js",
       "src/sources/live/contract.js",
       "src/layers/military/lifecycle.js",
       "src/layers/military/motion.js",
@@ -1717,6 +1721,7 @@
       "src/layers/vessels/ingestion.js",
       "src/layers/vessels/motion.js",
       "src/time/snapshotTimeline.js",
+      "src/time/timelineFixes.js",
       "src/time/worldClock.js",
       "src/sources/live/contract.js",
       "src/layers/vessels/cameraArea.js",
@@ -2894,6 +2899,8 @@
       "src/layers/flights/index.js",
       "src/layers/flights/clockFollow.js",
       "src/time/snapshotTimeline.js",
+      "src/data/timelineHistory.js",
+      "src/time/timelineFixes.js",
       "src/layers/flights/ingestion.js",
       "src/layers/flights/lifecycle.js",
       "src/layers/flights/motion.js",
@@ -4083,6 +4090,8 @@
       "src/layers/flights/index.js",
       "src/layers/flights/clockFollow.js",
       "src/time/snapshotTimeline.js",
+      "src/data/timelineHistory.js",
+      "src/time/timelineFixes.js",
       "src/sources/live/contract.js",
       "src/layers/flights/ingestion.js",
       "src/layers/flights/lifecycle.js",
@@ -4878,7 +4887,8 @@
     "exports": ["./layers/vessels/records"],
     "modules": [
       "src/layers/vessels/records.js",
-      "src/layers/vessels/recordPolicy.js"
+      "src/layers/vessels/recordPolicy.js",
+      "src/time/timelineFixes.js"
     ],
     "external": []
   },

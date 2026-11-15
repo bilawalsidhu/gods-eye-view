@@ -321,6 +321,11 @@ export function createFlightState({ source, services }) {
 
   flightState._drExtrapolating = false;
 
+  /** Set by `_deadReckon`: following the clock, the time drawn is well
+   *  before the contact's first fix, so the fleet pass does not draw it. */
+
+  flightState._drUnseen = false;
+
   /** Frame-cached course for the tracked aircraft (sibling of _cachedDRPosition). */
 
   flightState._cachedDRCourse = null;

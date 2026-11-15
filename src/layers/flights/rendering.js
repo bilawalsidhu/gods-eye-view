@@ -1032,6 +1032,7 @@ export function createRendering({
         flightState._scratchFleetPos,
         renderTime,
       );
+      const unseen = flightState._drUnseen;
       // The dead-reckoned point drifts away from the fix whose cell supplied the
       // height, so a grounded contact's sprite ends up under the mesh it taxied
       // (or coasted) over. Re-floor at the DISPLAYED coordinate — read-only, and
@@ -1057,9 +1058,12 @@ export function createRendering({
       // sub-ellipsoid point near the limb "beyond the horizon" and the fleet
       // pass would hide a plane that is really just low over high-N terrain
       // waiting for its floor to warm (ATL grounded contacts at geoid −31 m).
-      const beyondHorizon = !occluder.isPointVisible(
-        flightState._cullPositions.get(icao24) || bb.position,
-      );
+      // A contact not there yet at the time drawn is hidden as one beyond it.
+      const beyondHorizon =
+        unseen ||
+        !occluder.isPointVisible(
+          flightState._cullPositions.get(icao24) || bb.position,
+        );
       // A billboard flipping INTO view (horizon reveal while the camera idles)
       // gets its rotation refreshed THIS tick even without a pose change —
       // otherwise it reappears wearing its stale (often creation-north) nose for
