@@ -223,19 +223,23 @@ The optional Local ADS-B layer and the broadcast-FM receiver use radio you recei
      The numerical minima come from US 14 CFR 91.227(c), not a published jamming
      classifier. Readsb's [JSON contract](https://github.com/wiedehopf/readsb/blob/dev/README-json.md)
      describes the quality field origins and GPS-loss flag.
-  2. **GPSJAM aggregation:** score = `100 × max(0, bad − 1) / total`, with percent
-     bands < 2, 2–10, > 10. One bad aircraft is discounted. This is not the raw
-     share of bad aircraft. See the [GPSJAM FAQ](https://gpsjam.org/faq).
-  3. **GEV window:** 30 minutes over visited views, at least three aircraft per
-     0.5° cell. These bands were developed for daily totals; with fewer than ten
-     observations a cell can skip the middle band. Source timestamps date evidence
-     even through cache replays, and degraded evidence expires independently.
+  2. **GPSJAM aggregation:** aircraft are binned into H3 resolution-4 hexagons
+     (about 1,770 km² each), and score = `100 × max(0, bad − 1) / total`, with
+     percent bands < 2, 2–10, > 10. One bad aircraft is discounted. This is not
+     the raw share of bad aircraft. As on GPSJAM there is no minimum aircraft
+     count: every hexagon with an aircraft is shown, and the discount is the only
+     small-sample guard. See the [GPSJAM FAQ](https://gpsjam.org/faq).
+  3. **GEV window:** 30 minutes over visited views. These bands were developed
+     for daily totals; with fewer than ten observations a cell can skip the
+     middle band. Source timestamps date evidence even through cache replays,
+     and degraded evidence expires independently.
 
   Medium/high cells report navigation-integrity anomalies. Interference is one
   possible explanation, not a detected or located emitter. Avionics faults and
   manoeuvring military trainers can also lower reported accuracy. Blank areas
-  can be outside coverage or lack enough observations. Attribution: adsb.lol
-  contributors, ODbL 1.0; GPSJAM for aggregation only.
+  are outside coverage or had no qualifying aircraft in the window.
+  Attribution: adsb.lol contributors, ODbL 1.0; GPSJAM for the grid and
+  aggregation only.
 
 
 - **adsbdb enrichment.** `/api/adsbdb` resolves an ICAO hex to aircraft type, model name and registration, and the tracked flight's callsign to an airline and an origin/destination pair. Fan-out is deliberately small because adsbdb is a free community API that publishes no quota: at most 4 requests in flight, dispatches dripped to roughly 5/s, and each key asked for at most once per session (for the flights layer's enrichment, a lookup that failed temporarily, such as an outage, a timeout, a rate limit or an authorization refusal that may clear, may be asked again after a 60-second cool-down; an answer, found or not, and a permanent refusal such as a 404 are final; Local ADS-B lookups are asked once), with route lookups reserved for the tracked aircraft. The dev-server proxy caches each key for 24 hours in `.gev-cache/adsbdb.json`, negative answers included, so fresh entries survive server restarts. That gitignored cache remains local to the deployment and is not bundled with this repo. adsbdb publishes no general service license; its README says the route data may not be copied, published, or incorporated into other databases without the explicit permission of David J Taylor, Edinburgh. Deployers are responsible for obtaining any permission their use requires. Enrichment is best-effort and fail-silent — a flight that gets no answer keeps what the flight feed already gave it.
