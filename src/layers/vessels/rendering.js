@@ -38,12 +38,25 @@ import { isAidToNavigation } from '../../data/vesselTypes.js';
 const VESSEL_STEP_PX = 0.5;
 /** A frame is asked for at least this often while any drawn vessel moves. */
 const PLACEMENT_FRAME_MS = 1000;
-/** How often vessels not drawn move on as the world clock plays (wall ms),
- * so one that comes into view is judged where it is. */
+/** How often each vessel not drawn moves on as the world clock plays (wall
+ * ms), so one that comes into view is judged where it is. */
 const HIDDEN_FOLLOW_MS = 250;
 
 /** How often the vessels near enough for a model are gathered again (wall ms). */
 const MODEL_CANDIDATES_MS = 500;
+
+/** How far the camera may move or change height, as a share of its height,
+ * before vessels following the world clock move again however little they
+ * moved. */
+const CAMERA_STEP = 0.1;
+/** The least height that share is taken of (metres), so a camera just above
+ * the sea, or below the ellipsoid, still lets vessels rest between steps. */
+const CAMERA_STEP_FLOOR_M = 100;
+
+const DEG_TO_RAD = Math.PI / 180;
+
+/** Scratch for the camera's position. */
+const _cameraCartographic = new Cesium.Cartographic();
 
 /** Scratch for where a moved vessel was drawn. */
 const _movedFrom = new Cesium.Cartesian3();
@@ -75,60 +88,54 @@ export function createRendering({
       ? vesselPositionAt(record, vesselState.worldNow())
       : (services.placement?.place(record.id, vesselState._aisRuntime.now()) ??
         record);
-    const heightM = components.queries.vesselDatumHeightM(
-      components.tracking.currentGeoidN(lat, lon),
-      VESSEL_LIFT_M,
-    );
-    visual.position = Cesium.Cartesian3.fromDegrees(lon, lat, heightM);
-    // A ship model's origin is its waterline: the sea surface, unlifted.
-    visual.waterline = Cesium.Cartesian3.fromDegrees(
-      lon,
-      lat,
-      heightM - VESSEL_LIFT_M,
-    );
-    visual.surfacePosition = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
-    visual.normal = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(
-      visual.position,
-      new Cesium.Cartesian3(),
-    );
-    visual.drawnLat = lat;
-    visual.drawnLon = lon;
+    visual.position = new Cesium.Cartesian3();
+    visual.waterline = new Cesium.Cartesian3();
+    visual.surfacePosition = new Cesium.Cartesian3();
+    writeVesselPositions(visual, lat, lon);
+    // The world time it is drawn at, while it follows the clock.
+    visual.drawnAtMs = followsClock(vesselState)
+      ? vesselState.worldNow()
+      : Number.NaN;
     return visual;
   }
 
   /**
-   * Move a prepared vessel visual to `lat`/`lon`, writing into its own
-   * positions rather than allocating new ones: the placement pass runs for
-   * every drawn vessel several times a second.
+   * Write where a vessel visual is drawn at `lat`/`lon` into its own
+   * positions: lifted VESSEL_LIFT_M above the sea surface, its waterline on
+   * it, and the surface point under it. The placement pass runs for every
+   * drawn vessel as it moves, so the surface point and its normal are worked
+   * out once (as Cesium.Cartesian3.fromDegrees does) and the other two are
+   * along the normal from it.
    */
-  function moveRecordVisual(visual, lat, lon) {
+  function writeVesselPositions(visual, lat, lon) {
     const heightM = components.queries.vesselDatumHeightM(
       components.tracking.currentGeoidN(lat, lon),
       VESSEL_LIFT_M,
     );
-    const ellipsoid = Cesium.Ellipsoid.WGS84;
-    Cesium.Cartesian3.fromDegrees(
-      lon,
-      lat,
-      heightM,
-      ellipsoid,
-      visual.position,
-    );
-    Cesium.Cartesian3.fromDegrees(
-      lon,
-      lat,
-      heightM - VESSEL_LIFT_M,
-      ellipsoid,
-      visual.waterline,
-    );
-    Cesium.Cartesian3.fromDegrees(
-      lon,
-      lat,
-      0,
-      ellipsoid,
-      visual.surfacePosition,
-    );
-    ellipsoid.geodeticSurfaceNormal(visual.position, visual.normal);
+    const phi = lat * DEG_TO_RAD;
+    const lambda = lon * DEG_TO_RAD;
+    const cosPhi = Math.cos(phi);
+    const nx = cosPhi * Math.cos(lambda);
+    const ny = cosPhi * Math.sin(lambda);
+    const nz = Math.sin(phi);
+    const radiiSquared = Cesium.Ellipsoid.WGS84.radiiSquared;
+    const kx = radiiSquared.x * nx;
+    const ky = radiiSquared.y * ny;
+    const kz = radiiSquared.z * nz;
+    const gamma = Math.sqrt(nx * kx + ny * ky + nz * kz);
+    const surface = visual.surfacePosition;
+    surface.x = kx / gamma;
+    surface.y = ky / gamma;
+    surface.z = kz / gamma;
+    const position = visual.position;
+    position.x = surface.x + nx * heightM;
+    position.y = surface.y + ny * heightM;
+    position.z = surface.z + nz * heightM;
+    const waterlineM = heightM - VESSEL_LIFT_M;
+    const waterline = visual.waterline;
+    waterline.x = surface.x + nx * waterlineM;
+    waterline.y = surface.y + ny * waterlineM;
+    waterline.z = surface.z + nz * waterlineM;
     visual.drawnLat = lat;
     visual.drawnLon = lon;
   }
@@ -433,12 +440,14 @@ export function createRendering({
 
   // The layer does not hold the continuous render loop. Its passes run in
   // preRender, which idle mode fires only for rendered frames: moving vessels
-  // ask for the frame that next moves them visibly (askMotionFrame), a forced
-  // pass (new data, selection) requests its frame, a frame that moved the
-  // camera but fell inside the 800 ms cadence leaves a trailing frame so the view the camera stopped on is always
-  // evaluated, and the continuous hold is kept only while focus emphasis is
-  // animating. The trailing frame is keyed to camera motion alone: the pass's
-  // own label publication requests a frame, and scheduling on that would loop.
+  // ask for the frame that next moves them visibly (askMotionFrame; while the
+  // world clock plays, the scene draws every frame anyway), a forced pass
+  // (new data, selection) requests its frame, a frame that moved the camera
+  // but fell inside the 800 ms cadence leaves a trailing frame so the view
+  // the camera stopped on is always evaluated, and the continuous hold is
+  // kept only while focus emphasis is animating. The trailing frame is keyed
+  // to camera motion alone: the pass's own label publication requests a
+  // frame, and scheduling on that would loop.
   function installRuntime(viewer) {
     if (state.preRenderRemover || !viewer) return;
     state.preRenderRemover = viewer.scene.preRender.addEventListener(() => {
@@ -451,34 +460,183 @@ export function createRendering({
     });
   }
 
-  // As the world clock plays, vessels between two fixes move on along them:
-  // drawn ones every frame, each once per world time, hidden ones (which may
-  // come into view) every HIDDEN_FOLLOW_MS.
-  let hiddenFollowedAtWallMs = -Infinity;
+  // As the world clock plays, vessels between two fixes move on along them.
+  // Drawn ones move each world time once the fastest would have moved
+  // VESSEL_STEP_PX on screen, at least once a second, and at once when the
+  // camera moves or zooms (underClockStep). Hidden ones (which may come into
+  // view) move a share of them each pass, so each moves at least every
+  // HIDDEN_FOLLOW_MS without one frame moving them all. The scene renders as
+  // fast as the display while the clock plays, and moving thousands of
+  // vessels a fraction of a pixel each frame would take most of every frame.
+  let hiddenFollowedAtWallMs = null;
+  let hiddenCursor = 0;
+  let clockPassAtMs = null;
+  // Whether the last pass left drawn vessels short of its world time.
+  let drawnBehind = false;
   function followClockPositions() {
     const atMs = vesselState.worldNow();
-    const motion = startMotionPass();
-    const moveHidden =
-      motion.wallMs - hiddenFollowedAtWallMs >= HIDDEN_FOLLOW_MS;
-    if (moveHidden) hiddenFollowedAtWallMs = motion.wallMs;
-    for (const record of state.records.all) {
-      if (!record.motion && !fixesMove(record.fixes)) continue;
-      let visual = visualRecords.get(record);
-      if (!visual?.position) {
-        visual = prepareRecordVisual(record);
-        visual.followedAtMs = atMs;
-      } else {
-        const drawn = visual.billboard?.show || visual.modelOwnsVisual;
-        if (visual.followedAtMs === atMs || (!drawn && !moveHidden)) continue;
-        visual.followedAtMs = atMs;
-        const { lat, lon } = vesselPositionAt(record, atMs);
-        // At either end of its fixes a vessel holds still.
-        if (lat === visual.drawnLat && lon === visual.drawnLon) continue;
-        moveDrawnVisual(visual, lat, lon, motion);
-      }
-      if (visual.billboard) visual.billboard.position = visual.position;
+    const wallMs = performance.now();
+    const all = state.records.all;
+    // Each vessel moves once per world time; drawn ones a pass left short
+    // move to it on the next, so a paused clock shows them where they are.
+    const sameTime = atMs === clockPassAtMs;
+    const moveDrawn = sameTime ? drawnBehind : !underClockStep(atMs, wallMs);
+    clockPassAtMs = atMs;
+    if (moveDrawn) drawnBehind = false;
+    else if (!sameTime) {
+      drawnBehind = true;
+      askFrameIn(PLACEMENT_FRAME_MS);
     }
+    const motion = moveDrawn ? startMotionPass() : null;
+    if (moveDrawn)
+      for (const record of all) followRecord(record, atMs, true, motion);
+    // As much of the list as the wall time since the last pass is of
+    // HIDDEN_FOLLOW_MS, going round it.
+    const sinceMs =
+      hiddenFollowedAtWallMs === null
+        ? HIDDEN_FOLLOW_MS
+        : wallMs - hiddenFollowedAtWallMs;
+    const share = Math.min(
+      all.length,
+      Math.ceil((all.length * Math.max(0, sinceMs)) / HIDDEN_FOLLOW_MS),
+    );
+    if (share > 0) hiddenFollowedAtWallMs = wallMs;
+    for (let k = 0; k < share; k += 1) {
+      if (hiddenCursor >= all.length) hiddenCursor = 0;
+      followRecord(all[hiddenCursor], atMs, false, motionPass);
+      hiddenCursor += 1;
+    }
+    if (!moveDrawn) return;
     askMotionFrame(motion);
+    noteClockStep(atMs, motion);
+  }
+
+  /**
+   * Draw a vessel where it is at world time `atMs` if the clock passes have
+   * not yet; true when it moved.
+   */
+  function catchUpVisual(record, atMs) {
+    const visual = visualRecords.get(record);
+    if (!visual?.position || visual.followedAtMs === atMs) return false;
+    if (!record.motion && !fixesMove(record.fixes)) return false;
+    visual.followedAtMs = atMs;
+    visual.drawnAtMs = atMs;
+    const { lat, lon } = vesselPositionAt(record, atMs);
+    if (lat === visual.drawnLat && lon === visual.drawnLon) return false;
+    writeVesselPositions(visual, lat, lon);
+    if (visual.billboard) visual.billboard.position = visual.position;
+    return true;
+  }
+
+  /**
+   * Move a vessel to where it is at world time `atMs`, if it is drawn
+   * (`drawn`) or hidden (not `drawn`) as asked; one with no visual yet is
+   * prepared either way. A hidden vessel's move notes nothing in `motion`.
+   */
+  function followRecord(record, atMs, drawn, motion) {
+    if (!record.motion && !fixesMove(record.fixes)) return;
+    let visual = visualRecords.get(record);
+    if (!visual?.position) {
+      visual = prepareRecordVisual(record);
+      visual.followedAtMs = atMs;
+    } else {
+      const shown = Boolean(visual.billboard?.show || visual.modelOwnsVisual);
+      if (shown !== drawn || visual.followedAtMs === atMs) return;
+      visual.followedAtMs = atMs;
+      const { lat, lon } = vesselPositionAt(record, atMs);
+      const elapsedMs = Math.abs(atMs - visual.drawnAtMs);
+      visual.drawnAtMs = atMs;
+      // At either end of its fixes a vessel holds still.
+      if (lat === visual.drawnLat && lon === visual.drawnLon) return;
+      moveDrawnVisual(visual, lat, lon, motion, elapsedMs);
+    }
+    if (visual.billboard) visual.billboard.position = visual.position;
+  }
+
+  // The clock pass that last moved drawn vessels: its world time and wall
+  // time, how fast the fastest drawn vessel moved on screen (pixels per world
+  // ms), and the camera then: where it was, its height and its view's size.
+  const clockStep = {
+    atMs: null,
+    wallMs: 0,
+    pxPerMs: Infinity,
+    heightM: 0,
+    eye: new Cesium.Cartesian3(),
+    fovy: Number.NaN,
+    width: Number.NaN,
+  };
+
+  /** Measure, after a pass that moved drawn vessels, how fast the fastest
+   * moved on screen: each over the world time since it was last drawn. */
+  function noteClockStep(atMs, motion) {
+    const camera = motion.camera;
+    if (!motion.moving || motion.unmeasured || !camera?.positionWC) {
+      clockStep.atMs = null;
+      return;
+    }
+    const pxPerMs = movedPixels({
+      camera,
+      angle: motion.angleRate,
+      metres: motion.metresRate,
+    });
+    clockStep.pxPerMs = pxPerMs > 0 ? pxPerMs : Infinity;
+    clockStep.atMs = atMs;
+    clockStep.wallMs = motion.wallMs;
+    clockStep.heightM = cameraHeightM();
+    Cesium.Cartesian3.clone(camera.positionWC, clockStep.eye);
+    clockStep.fovy = camera.frustum?.fovy;
+    clockStep.width = viewWidth(camera.frustum);
+  }
+
+  /** Forget how fast vessels moved, so the next clock pass moves the drawn
+   * ones however little they moved (they were drawn somewhere else). */
+  function forgetClockStep() {
+    clockStep.atMs = null;
+    clockPassAtMs = null;
+  }
+
+  const viewWidth = (frustum) =>
+    frustum ? frustum.right - frustum.left : Number.NaN;
+  const sameNumber = (a, b) => a === b || (Number.isNaN(a) && Number.isNaN(b));
+
+  /**
+   * Whether the fastest drawn vessel would have moved less than
+   * VESSEL_STEP_PX on screen since the clock pass that last moved them, at
+   * the speed it moved then: drawn vessels are left where they are. They
+   * move anyway once PLACEMENT_FRAME_MS has gone by, or once the camera has
+   * moved or changed height by more than CAMERA_STEP of its height, or its
+   * view has changed size (a pixel then covers another distance).
+   */
+  function underClockStep(atMs, wallMs) {
+    if (clockStep.atMs === null || !(clockStep.pxPerMs < Infinity))
+      return false;
+    if (wallMs - clockStep.wallMs >= PLACEMENT_FRAME_MS) return false;
+    const camera = state.viewer?.camera;
+    if (!camera?.positionWC) return false;
+    const limitM =
+      CAMERA_STEP * Math.max(clockStep.heightM, CAMERA_STEP_FLOOR_M);
+    if (!(Math.abs(cameraHeightM() - clockStep.heightM) <= limitM))
+      return false;
+    if (
+      !(Cesium.Cartesian3.distance(camera.positionWC, clockStep.eye) <= limitM)
+    )
+      return false;
+    if (
+      !sameNumber(camera.frustum?.fovy, clockStep.fovy) ||
+      !sameNumber(viewWidth(camera.frustum), clockStep.width)
+    )
+      return false;
+    return Math.abs(atMs - clockStep.atMs) * clockStep.pxPerMs < VESSEL_STEP_PX;
+  }
+
+  /** The camera's height above the ellipsoid (metres), NaN without one. */
+  function cameraHeightM() {
+    const eye = state.viewer?.camera?.positionWC;
+    if (!eye) return Number.NaN;
+    return (
+      Cesium.Ellipsoid.WGS84.cartesianToCartographic(eye, _cameraCartographic)
+        ?.height ?? Number.NaN
+    );
   }
 
   // Live with a host-supplied placement, vessels move on between refreshes:
@@ -515,6 +673,9 @@ export function createRendering({
     moving: false,
     angle: 0,
     metres: 0,
+    angleRate: 0,
+    metresRate: 0,
+    unmeasured: false,
   };
   function startMotionPass() {
     const wallMs = performance.now();
@@ -525,22 +686,37 @@ export function createRendering({
     motionPass.moving = false;
     motionPass.angle = 0;
     motionPass.metres = 0;
+    motionPass.angleRate = 0;
+    motionPass.metresRate = 0;
+    motionPass.unmeasured = false;
     motionPassWallMs = wallMs;
     return motionPass;
   }
 
-  /** Move a drawn visual, noting how far it moved as seen from the camera. */
-  function moveDrawnVisual(visual, lat, lon, motion) {
+  /** Move a drawn visual, noting how far it moved as seen from the camera,
+   * and, given the world time since it was last drawn (`elapsedMs`), how
+   * fast. */
+  function moveDrawnVisual(visual, lat, lon, motion, elapsedMs) {
     const from = Cesium.Cartesian3.clone(visual.position, _movedFrom);
-    moveRecordVisual(visual, lat, lon);
+    writeVesselPositions(visual, lat, lon);
     if (!visual.billboard?.show && !visual.modelOwnsVisual) return;
     motion.moving = true;
     const metres = Cesium.Cartesian3.distance(from, visual.position);
     motion.metres = Math.max(motion.metres, metres);
+    const timed = elapsedMs > 0;
+    if (elapsedMs !== undefined && !timed) motion.unmeasured = true;
+    if (timed)
+      motion.metresRate = Math.max(motion.metresRate, metres / elapsedMs);
     const eye = motion.camera?.positionWC;
     if (!eye) return;
     const distance = Cesium.Cartesian3.distance(eye, from);
-    if (distance > 0) motion.angle = Math.max(motion.angle, metres / distance);
+    if (!(distance > 0)) return;
+    motion.angle = Math.max(motion.angle, metres / distance);
+    if (timed)
+      motion.angleRate = Math.max(
+        motion.angleRate,
+        metres / distance / elapsedMs,
+      );
   }
 
   /** How far the fastest drawn vessel moved on screen in a pass (pixels):
@@ -574,7 +750,12 @@ export function createRendering({
     const movedPx = movedPixels(motion);
     if (movedPx > 0 && motion.sinceMs > 0)
       waitMs = Math.min(waitMs, (VESSEL_STEP_PX * motion.sinceMs) / movedPx);
-    // A frame already asked for no later than this one stands.
+    askFrameIn(waitMs);
+  }
+
+  /** Ask for a vessel frame `waitMs` from now; one already asked for no
+   * later stands. */
+  function askFrameIn(waitMs) {
     const runtime = vesselState._aisRuntime;
     const dueMs = runtime.now() + waitMs;
     if (placementFrameTimer !== null) {
@@ -591,6 +772,9 @@ export function createRendering({
   /** Stop asking for placement frames (the layer turned off or went away). */
   function cancelPlacementFrame() {
     motionPassWallMs = null;
+    forgetClockStep();
+    drawnBehind = false;
+    hiddenFollowedAtWallMs = null;
     if (placementFrameTimer === null) return;
     vesselState._aisRuntime.clearTimeout(placementFrameTimer);
     placementFrameTimer = null;
@@ -670,9 +854,21 @@ export function createRendering({
       if (doRotations) vesselState._lastCamPoseSig = poseSig;
       const occluder = makeOccluder();
       const labelCandidates = [];
+      // The time the clock pass drew (a playing clock's time moves on within
+      // the frame), so only vessels it did not reach are moved.
+      const catchUpAtMs = worldMs === null ? null : (clockPassAtMs ?? worldMs);
       for (const record of state.records.all) {
         const visual = getVisual(record);
-        const visible = isVisible(visual.surfacePosition, occluder, record);
+        let visible = isVisible(visual.surfacePosition, occluder, record);
+        // One in view that the clock passes have not moved to the time yet
+        // (a seek while paused shows it before its turn) is moved there and
+        // judged again: no later pass would move it while the clock rests.
+        if (
+          visible &&
+          catchUpAtMs !== null &&
+          catchUpVisual(record, catchUpAtMs)
+        )
+          visible = isVisible(visual.surfacePosition, occluder, record);
         if (visual.billboard) {
           // The bridge camera sits on this sprite; showing it would fill the view.
           // The same rule as billboardShown, its horizon test already made.
@@ -978,6 +1174,7 @@ export function createRendering({
   }
   return {
     getVisual,
+    forgetClockStep,
     prepareRecordVisual,
     resetRecordVisuals,
     renderRowLimit,
