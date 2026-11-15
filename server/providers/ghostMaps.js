@@ -12,6 +12,7 @@ import {
   readResponseJsonCapped,
   readResponseTextCapped,
 } from './common/http.js';
+import { envFlag } from './common/flags.js';
 
 // S2 Underground GhostMaps (public GitHub repository of KMZ intel products).
 // The repository is not ours, so there is no webhook: the watcher reads the
@@ -33,6 +34,18 @@ const MAX_TREE_BYTES = 16 * 1024 * 1024;
 const MAX_COMMIT_BYTES = 2 * 1024 * 1024;
 const USER_AGENT = 'gods-eye-view-ghostmaps/1.0';
 const REPO_PATH = `${GHOSTMAPS_REPO.owner}/${GHOSTMAPS_REPO.name}`;
+
+/**
+ * S2 GhostMaps is CC BY-NC-SA (non-commercial), so it is off unless
+ * GEV_ENABLE_GHOSTMAPS is 1/true/yes/on. Off means no GitHub traffic and no
+ * cache writes: the routes answer 503 before the watcher is touched.
+ */
+export function ghostMapsEnabled(env = process.env) {
+  return envFlag('GEV_ENABLE_GHOSTMAPS', env);
+}
+
+export const GHOSTMAPS_DISABLED_MESSAGE =
+  'S2 GhostMaps is off by default (CC BY-NC-SA). Set GEV_ENABLE_GHOSTMAPS=1 to enable.';
 
 /** Poll interval from GHOSTMAPS_POLL_SECONDS, bounded below at 5 s. */
 export function ghostMapsPollMs(raw = process.env.GHOSTMAPS_POLL_SECONDS) {
@@ -355,7 +368,10 @@ export function createGhostMapsWatcher({
 }
 
 /** Same-origin GhostMaps routes for dev and preview. */
-export function ghostMapsProxy({ watcher = createGhostMapsWatcher() } = {}) {
+export function ghostMapsProxy({
+  watcher = createGhostMapsWatcher(),
+  enabled = () => ghostMapsEnabled(),
+} = {}) {
   const json = (res, status, value) => {
     if (res.destroyed) return;
     res.writeHead(status, {
@@ -397,6 +413,14 @@ export function ghostMapsProxy({ watcher = createGhostMapsWatcher() } = {}) {
     const match = /^\/file\/([a-z0-9-]{1,40})$/.exec(url.pathname);
     if (!['/catalog', '/events'].includes(url.pathname) && !match)
       return json(res, 404, { error: 'unknown_route' });
+    if (!enabled()) {
+      // Turned off while running: stop polling too.
+      watcher.stop();
+      return json(res, 503, {
+        error: 'ghostmaps_disabled',
+        message: GHOSTMAPS_DISABLED_MESSAGE,
+      });
+    }
     // Watching starts with the first request, so an install that never turns
     // the layer on never contacts GitHub.
     const first = watcher.start();

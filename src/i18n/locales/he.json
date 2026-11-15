@@ -3708,5 +3708,7 @@
   "Funicular": "פוניקולר",
   "Gondola": "רכבל",
   "Move panels back beside the rail": "החזרת הלוחות לצד הסרגל",
-  "Move panels over the rail, to the edge": "הזזת הלוחות מעל הסרגל, אל הקצה"
+  "Move panels over the rail, to the edge": "הזזת הלוחות מעל הסרגל, אל הקצה",
+  "Google 3D through Cesium ion is off by default — set {flag} to use your Cesium ion token, or add {envVars} in Provider Settings": "Google 3D דרך Cesium ion כבוי כברירת מחדל — הגדר {flag} כדי להשתמש באסימון Cesium ion, או הוסף {envVars} בהגדרות הספקים",
+  "TeleGeography cable data is non-commercial and off by default — set {flag} to enable it": "נתוני הכבלים של TeleGeography אינם מסחריים וכבויים כברירת מחדל — הגדר {flag} כדי להפעיל אותם"
 }

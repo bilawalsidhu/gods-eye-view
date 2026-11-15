@@ -11,13 +11,19 @@ import {
   hasRequiredDependencies,
   isConfiguredValue,
   npmProcessSpec,
+  OPT_IN_SOURCES,
   readDoctorDotenvValue,
   resolveOpenSkyAuthMode,
   resolveOpenSkyCredentialsFile,
   resolveCredential,
+  resolveOptInFlag,
 } from '../scripts/setup-doctor.mjs';
 
 const credential = (name) => CREDENTIALS.find((spec) => spec.name === name);
+// Existing capability wording is pinned with every opt-in source enabled.
+const OPT_IN_ALL = Object.fromEntries(
+  OPT_IN_SOURCES.map(({ name }) => [name, true]),
+);
 
 test('doctor distinguishes supported, usable EOL, and unsupported Node versions', () => {
   assert.equal(classifyNodeVersion('24.14.0').level, 'ok');
@@ -222,7 +228,7 @@ test('doctor reports keyless anonymous OpenSky access for explicit anon mode', (
     OPENSKY_CLIENT_SECRET: { configured: true },
   };
   assert.equal(
-    buildCapabilitySummary(credentials, { openSkyAuthMode: 'anon' }).flights,
+    buildCapabilitySummary(credentials, { optIn: OPT_IN_ALL, openSkyAuthMode: 'anon' }).flights,
     'OpenSky keyless anonymous access (rate-limited)',
   );
 });
@@ -233,7 +239,7 @@ test('doctor retains OAuth capability wording for a complete client pair', () =>
     OPENSKY_CLIENT_SECRET: { configured: true },
   };
   assert.equal(
-    buildCapabilitySummary(credentials, { openSkyAuthMode: 'oauth' }).flights,
+    buildCapabilitySummary(credentials, { optIn: OPT_IN_ALL, openSkyAuthMode: 'oauth' }).flights,
     'OpenSky OAuth credentials present (runtime mode and validity not verified)',
   );
 });
@@ -245,7 +251,7 @@ test('doctor reports retired Basic mode as anonymous, whatever OAuth credentials
   };
   for (const credentials of [{}, oauthCredentials]) {
     assert.equal(
-      buildCapabilitySummary(credentials, { openSkyAuthMode: 'basic' }).flights,
+      buildCapabilitySummary(credentials, { optIn: OPT_IN_ALL, openSkyAuthMode: 'basic' }).flights,
       'OpenSky Basic mode selected: OpenSky retired username/password sign-in, so flights load anonymously (rate-limited)',
     );
   }
@@ -258,7 +264,7 @@ test('doctor reports auto mode without assuming its eventual credential choice',
   };
   for (const credentials of [{}, oauthCredentials]) {
     assert.equal(
-      buildCapabilitySummary(credentials, { openSkyAuthMode: 'auto' }).flights,
+      buildCapabilitySummary(credentials, { optIn: OPT_IN_ALL, openSkyAuthMode: 'auto' }).flights,
       'OpenSky auto mode selected (runtime credential choice and validity not verified)',
     );
   }
@@ -278,7 +284,7 @@ test('doctor describes the credential ladder without exposing values', () => {
     LL2_API_TOKEN: { configured: true, source: 'environment' },
     MAPILLARY_CLIENT_TOKEN: { configured: false },
   };
-  const capabilities = buildCapabilitySummary(credentials);
+  const capabilities = buildCapabilitySummary(credentials, { optIn: OPT_IN_ALL });
   assert.match(
     capabilities.map,
     /Google Photorealistic 3D Tiles through Cesium ion/,
@@ -350,7 +356,7 @@ test('doctor sends Keychain-backed reports to dev-fresh and describes OpenSky as
     configured: true,
     source: 'environment',
   };
-  const capabilities = buildCapabilitySummary(credentials);
+  const capabilities = buildCapabilitySummary(credentials, { optIn: OPT_IN_ALL });
   const output = formatSetupReport({
     ready: true,
     node: { level: 'ok', version: '24.14.0', summary: 'supported' },
@@ -387,7 +393,7 @@ test('doctor never calls a dependency-missing setup ready', () => {
     node: { level: 'ok', version: '24.14.0', summary: 'supported' },
     npm: { available: true, version: '11.0.0' },
     dependenciesInstalled: false,
-    capabilities: buildCapabilitySummary(credentials),
+    capabilities: buildCapabilitySummary(credentials, { optIn: OPT_IN_ALL }),
     credentials,
   });
   assert.match(output, /dependencies missing; run npm install/);
@@ -397,11 +403,11 @@ test('doctor never calls a dependency-missing setup ready', () => {
 
 test('doctor counts OPENSKY_CREDENTIALS_FILE as OAuth credentials, from the environment or .env', () => {
   assert.equal(
-    buildCapabilitySummary({}, { openSkyCredentialsFile: true }).flights,
+    buildCapabilitySummary({}, { optIn: OPT_IN_ALL, openSkyCredentialsFile: true }).flights,
     'OpenSky OAuth credentials file set (OPENSKY_CREDENTIALS_FILE; file contents and validity not verified)',
   );
   assert.equal(
-    buildCapabilitySummary({}, { openSkyCredentialsFile: false }).flights,
+    buildCapabilitySummary({}, { optIn: OPT_IN_ALL, openSkyCredentialsFile: false }).flights,
     'OpenSky keyless anonymous access (rate-limited)',
   );
   const root = mkdtempSync(path.join(tmpdir(), 'gev-doctor-opensky-file-'));
@@ -424,6 +430,57 @@ test('doctor counts OPENSKY_CREDENTIALS_FILE as OAuth credentials, from the envi
         environment: { OPENSKY_CREDENTIALS_FILE: '' },
         rootDir: root,
       }),
+      false,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('doctor reports non-commercial sources off by default', () => {
+  const credentials = Object.fromEntries(
+    CREDENTIALS.map(({ name }) => [name, { configured: false }]),
+  );
+  credentials.CESIUM_ION_TOKEN = { configured: true, source: 'environment' };
+  const capabilities = buildCapabilitySummary(credentials);
+  assert.match(capabilities.flights, /^adsb\.lol regional snapshot/);
+  assert.match(capabilities.flights, /GEV_ENABLE_OPENSKY=1/);
+  assert.doesNotMatch(capabilities.map, /through Cesium ion;/);
+  assert.match(capabilities.map, /GEV_ENABLE_CESIUM_ION_3D=1/);
+  assert.ok(Object.values(capabilities.optIn).every((on) => on === false));
+  const report = formatSetupReport({
+    ready: true,
+    node: { version: '26.1.0', level: 'ok', summary: 'supported' },
+    npm: { available: true, version: '11.0.0' },
+    dependenciesInstalled: true,
+    credentials,
+    capabilities,
+  });
+  for (const { name } of OPT_IN_SOURCES)
+    assert.ok(report.includes(`(${name})`), `${name} listed as off`);
+
+  const on = buildCapabilitySummary(credentials, { optIn: OPT_IN_ALL });
+  assert.match(on.map, /through Cesium ion/);
+  assert.match(on.flights, /^OpenSky/);
+});
+
+test('doctor reads opt-in flags from the environment and .env', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'gev-doctor-optin-'));
+  try {
+    const flag = (name, environment, extra) =>
+      resolveOptInFlag(name, { environment, rootDir: root, ...extra });
+    assert.equal(flag('GEV_ENABLE_OPENSKY', {}), false);
+    for (const value of ['1', 'true', 'YES', 'on'])
+      assert.equal(flag('GEV_ENABLE_OPENSKY', { GEV_ENABLE_OPENSKY: value }), true);
+    assert.equal(flag('GEV_ENABLE_OPENSKY', { GEV_ENABLE_OPENSKY: '0' }), false);
+    writeFileSync(path.join(root, '.env'), 'GEV_ENABLE_GHOSTMAPS=1\n');
+    assert.equal(flag('GEV_ENABLE_GHOSTMAPS', {}), true);
+    assert.equal(
+      flag(
+        'GEV_ENABLE_GHOSTMAPS',
+        { GEV_ENABLE_GHOSTMAPS: '' },
+        { authoritativeEnvironment: true },
+      ),
       false,
     );
   } finally {

@@ -15,10 +15,14 @@ export function createDefaultMapSources({
   googleTileset = null,
   cesiumToken = '',
   googleApiKey = '',
+  allowIonPhotoreal = false,
 } = {}) {
   const ionToken = String(cesiumToken || '').trim();
   const hasIon = Boolean(ionToken);
   const hasGoogle = Boolean(String(googleApiKey || '').trim());
+  // An ion token still drives terrain and ion imagery; only the ion-hosted
+  // Google 3D asset is opt-in.
+  const ionPhotoreal = hasIon && allowIonPhotoreal === true;
   const terrain = {
     id: hasIon ? 'world' : 'keyless',
     create: hasIon
@@ -47,7 +51,9 @@ export function createDefaultMapSources({
           ...common,
           available: Boolean(googleTileset),
           unavailableReason: () =>
-            photorealUnavailableReason(hasIon || hasGoogle),
+            photorealUnavailableReason(ionPhotoreal || hasGoogle, {
+              ionPhotorealOff: hasIon && !ionPhotoreal,
+            }),
           tileset: googleTileset,
         };
       const imagery =

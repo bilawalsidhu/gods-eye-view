@@ -11,7 +11,10 @@ import createViteConfig, {
   validMilitaryInstallationBox,
   validRegionalPoint,
 } from '../../vite.config.js';
-import { fetchRegionalNews } from '../../server/providers/regional/news.js';
+import {
+  fetchRegionalNews,
+  googleNewsEnabled,
+} from '../../server/providers/regional/news.js';
 
 test('missing Google place context is a quiet keyless capability, not a 503', () => {
   assert.deepEqual(keylessGooglePlacesResponse(undefined), {
@@ -117,7 +120,13 @@ test('regional brief treats an all-source outage as total failure', () => {
 
 test('local regional news asks for the last day, drops old and undated items, newest first', async (t) => {
   const realFetch = globalThis.fetch;
-  t.after(() => { globalThis.fetch = realFetch; });
+  const realFlag = process.env.GEV_ENABLE_GOOGLE_NEWS;
+  process.env.GEV_ENABLE_GOOGLE_NEWS = '1';
+  t.after(() => {
+    globalThis.fetch = realFetch;
+    if (realFlag === undefined) delete process.env.GEV_ENABLE_GOOGLE_NEWS;
+    else process.env.GEV_ENABLE_GOOGLE_NEWS = realFlag;
+  });
   const urls = [];
   let rss;
   let gdelt;
@@ -160,4 +169,59 @@ test('local regional news asks for the last day, drops old and undated items, ne
   assert.equal(failed.status, 'unavailable');
   assert.deepEqual(failed.articles, []);
   assert.equal((await fetchRegionalNews(null)).status, 'unavailable');
+});
+
+test('Google News RSS is off unless GEV_ENABLE_GOOGLE_NEWS is set', () => {
+  assert.equal(googleNewsEnabled({}), false);
+  assert.equal(googleNewsEnabled({ GEV_ENABLE_GOOGLE_NEWS: 'no' }), false);
+  for (const value of ['1', 'TRUE', 'yes', 'on'])
+    assert.equal(googleNewsEnabled({ GEV_ENABLE_GOOGLE_NEWS: value }), true);
+});
+
+test('with Google News off (the default) headlines come only from GDELT', async (t) => {
+  const realFetch = globalThis.fetch;
+  const realFlag = process.env.GEV_ENABLE_GOOGLE_NEWS;
+  delete process.env.GEV_ENABLE_GOOGLE_NEWS;
+  t.after(() => {
+    globalThis.fetch = realFetch;
+    if (realFlag === undefined) delete process.env.GEV_ENABLE_GOOGLE_NEWS;
+    else process.env.GEV_ENABLE_GOOGLE_NEWS = realFlag;
+  });
+  const hosts = [];
+  let gdelt;
+  globalThis.fetch = async (url) => {
+    hosts.push(new URL(String(url)).hostname);
+    return typeof gdelt === 'function' ? gdelt() : gdelt.clone();
+  };
+  const place = { locality: 'Austin' };
+  gdelt = Response.json({
+    articles: [
+      {
+        title: 'recent',
+        url: 'https://news.example/recent',
+        domain: 'news.example',
+        seendate: new Date(Date.now() - 3_600_000)
+          .toISOString()
+          .replace(/[-:]/g, '')
+          .replace(/.d{3}/, ''),
+      },
+    ],
+  });
+  const ready = await fetchRegionalNews(place);
+  assert.equal(ready.source, 'GDELT');
+  assert.ok(!hosts.includes('news.google.com'));
+
+  gdelt = Response.json({ articles: [] });
+  assert.deepEqual(await fetchRegionalNews(place), {
+    status: 'empty',
+    query: 'Austin',
+    articles: [],
+    source: 'GDELT',
+  });
+
+  gdelt = () => Promise.reject(new TypeError('network'));
+  const failed = await fetchRegionalNews(place);
+  assert.equal(failed.status, 'unavailable');
+  assert.equal(failed.source, null);
+  assert.ok(hosts.every((host) => host === 'api.gdeltproject.org'));
 });

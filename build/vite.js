@@ -163,6 +163,12 @@ export function apiResponseHeadersPlugin() {
   };
 }
 
+/** Read an opt-in environment flag: 1/true/yes/on (any case) enable it. */
+export function envFlag(value) {
+  if (value === true) return true;
+  return /^(1|true|yes|on)$/i.test(String(value ?? '').trim());
+}
+
 /** Build browser assets with explicit inputs; never load environment or providers. */
 export function createBrowserViteConfig({
   plugins = [],
@@ -171,6 +177,8 @@ export function createBrowserViteConfig({
   cesiumToken,
   photonUrl,
   mapillaryToken,
+  enableTelegeography,
+  enableCesiumIon3d,
   host = 'localhost',
   port = 4173,
   allowedHosts = DEFAULT_ALLOWED_HOSTS,
@@ -256,6 +264,14 @@ export function createBrowserViteConfig({
       // Mapillary client tokens are public by design (see SECURITY.md).
       'import.meta.env.MAPILLARY_CLIENT_TOKEN': JSON.stringify(
         mapillaryToken ?? '',
+      ),
+      // Non-commercial / separately licensed sources stay off unless opted in
+      // (DATA_SOURCES.md). Booleans; client code reads them with `=== true`.
+      'import.meta.env.GEV_ENABLE_TELEGEOGRAPHY': JSON.stringify(
+        envFlag(enableTelegeography),
+      ),
+      'import.meta.env.GEV_ENABLE_CESIUM_ION_3D': JSON.stringify(
+        envFlag(enableCesiumIon3d),
       ),
     },
     build: { chunkSizeWarningLimit: 1500 },

@@ -92,7 +92,7 @@ test('standalone falls back to ion when the server token route is unavailable', 
   const requests = [];
   const result = await standaloneStartup(
     Cesium,
-    { cesiumToken: 'ion-fixture' },
+    { cesiumToken: 'ion-fixture', allowIonPhotoreal: true },
     async (url) => {
       requests.push(url);
       return { ok: false };
@@ -139,7 +139,12 @@ test('map startup route reflects the best configured provider', () => {
     selectMapStartupRoute({ googleApiKey: 'google', cesiumToken: 'ion' }),
     'google-direct',
   );
-  assert.equal(selectMapStartupRoute({ cesiumToken: 'ion' }), 'google-ion');
+  assert.equal(
+    selectMapStartupRoute({ cesiumToken: 'ion', allowIonPhotoreal: true }),
+    'google-ion',
+  );
+  // The ion-hosted Google asset is opt-in: a token alone does not pick it.
+  assert.equal(selectMapStartupRoute({ cesiumToken: 'ion' }), 'osm');
   assert.equal(selectMapStartupRoute(), 'osm');
 });
 
@@ -172,11 +177,28 @@ test('a direct Google key is preferred', async () => {
   assert.equal(tokenRequests, 0);
 });
 
-test('an ion-only setup loads the hosted Google 3D asset', async () => {
+test('an ion token alone does not load the ion-hosted Google 3D asset', async () => {
+  const Cesium = fakeCesium([{ id: 'ion' }]);
+  const result = await loadPhotorealisticTileset(Cesium, {
+    cesiumToken: 'ion-secret',
+  });
+  assert.equal(result.tileset, null);
+  assert.equal(result.route, 'osm');
+  assert.equal(Cesium.calls.length, 0);
+  const fallback = await loadPhotorealisticTileset(
+    fakeCesium([new Error('direct denied'), { id: 'ion' }]),
+    { googleApiKey: 'google-secret', cesiumToken: 'ion-secret' },
+  );
+  assert.equal(fallback.route, 'osm', 'no ion recovery unless opted in');
+  assert.equal(fallback.errors.length, 1);
+});
+
+test('an opted-in ion-only setup loads the hosted Google 3D asset', async () => {
   const tileset = { id: 'ion' };
   const Cesium = fakeCesium([tileset]);
   const result = await loadPhotorealisticTileset(Cesium, {
     cesiumToken: 'ion-secret',
+    allowIonPhotoreal: true,
   });
   assert.equal(result.tileset, tileset);
   assert.equal(result.route, 'google-ion');
@@ -194,6 +216,7 @@ test('a failed direct request retries through ion before falling back', async ()
   const result = await loadPhotorealisticTileset(Cesium, {
     googleApiKey: 'google-secret',
     cesiumToken: 'ion-secret',
+    allowIonPhotoreal: true,
   });
   assert.equal(result.tileset, tileset);
   assert.equal(result.route, 'google-ion');
@@ -224,6 +247,7 @@ test('failed direct and ion requests preserve the keyless OSM fallback', async (
   const result = await loadPhotorealisticTileset(Cesium, {
     googleApiKey: 'google-secret',
     cesiumToken: 'ion-secret',
+    allowIonPhotoreal: true,
   });
   assert.equal(result.tileset, null);
   assert.equal(result.route, 'osm');
@@ -238,7 +262,10 @@ test('independent source configurations never mutate shared SDK credentials', as
   Cesium.GoogleMaps.defaultApiKey = 'untouched-google';
   await Promise.all([
     loadPhotorealisticTileset(Cesium, { googleApiKey: 'source-a' }),
-    loadPhotorealisticTileset(Cesium, { cesiumToken: 'source-b' }),
+    loadPhotorealisticTileset(Cesium, {
+      cesiumToken: 'source-b',
+      allowIonPhotoreal: true,
+    }),
   ]);
   assert.equal(Cesium.calls[0].googleKey, 'source-a');
   assert.equal(Cesium.calls[1].ionToken, 'source-b');
@@ -306,6 +333,7 @@ test('a server without tokens falls back to ion', async () => {
   const result = await loadPhotorealisticTileset(Cesium, {
     googleTokens: tokenSource(),
     cesiumToken: 'ion-secret',
+    allowIonPhotoreal: true,
   });
   assert.equal(result.route, 'google-ion');
   assert.equal(result.errors.length, 1);

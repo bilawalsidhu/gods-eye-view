@@ -20,13 +20,15 @@ export class MapStackController extends MapSourceController {
     });
     this.googleTileset = options.googleTileset || null;
     this.cesiumToken = String(options.cesiumToken || '').trim();
+    this.allowIonPhotoreal = options.allowIonPhotoreal === true;
   }
   _hasPhotorealCredentials() {
     const googleKey =
       typeof window !== 'undefined' ? window.__GOOGLE_MAPS_API_KEY__ : '';
     return (
       Boolean(String(googleKey || '').trim()) ||
-      Boolean(String(this.cesiumToken || '').trim())
+      (this.allowIonPhotoreal === true &&
+        Boolean(String(this.cesiumToken || '').trim()))
     );
   }
 }

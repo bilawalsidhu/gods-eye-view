@@ -74,6 +74,77 @@ function environment(t, values) {
   }
 }
 
+// OpenSky is off by default; these suites exercise the opted-in proxy. The
+// disabled path has its own tests, which clear the flag for themselves.
+const originalOpenSkyFlag = process.env.GEV_ENABLE_OPENSKY;
+test.before(() => {
+  process.env.GEV_ENABLE_OPENSKY = '1';
+});
+test.after(() => {
+  if (originalOpenSkyFlag === undefined) delete process.env.GEV_ENABLE_OPENSKY;
+  else process.env.GEV_ENABLE_OPENSKY = originalOpenSkyFlag;
+});
+
+test('openSkyEnabled opts in only on an explicit truthy flag', async () => {
+  const { openSkyEnabled } =
+    await import('../../server/providers/aircraft/opensky.js');
+  for (const value of ['1', 'true', 'TRUE', 'yes', 'on', ' On '])
+    assert.equal(openSkyEnabled({ GEV_ENABLE_OPENSKY: value }), true, value);
+  for (const value of [undefined, '', '0', 'false', 'off', 'no', 'enabled'])
+    assert.equal(openSkyEnabled({ GEV_ENABLE_OPENSKY: value }), false, value);
+  assert.equal(openSkyEnabled({}), false);
+});
+
+test('with OpenSky off, flights come from adsb.lol and OpenSky is never called', async (t) => {
+  environment(t, {
+    GEV_ENABLE_OPENSKY: undefined,
+    OPENSKY_CLIENT_ID: 'fixture-client',
+    OPENSKY_CLIENT_SECRET: 'fixture-secret',
+    OPENSKY_AUTH_MODE: 'oauth',
+  });
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    calls.push(String(url));
+    if (String(url).includes('api.adsb.lol/v2/lat/'))
+      return Response.json({
+        now: Date.now() / 1000,
+        ac: [{ hex: 'abc123', lat: 30, lon: -97, alt_baro: 10000 }],
+      });
+    throw Error(`Unexpected URL: ${url}`);
+  });
+  const fresh = await import(
+    `../../server/providers/aircraft/opensky.js?disabled=${Math.random()}`
+  );
+  const flights = install(fresh.openSkyProxy());
+  const regional = await flights('/api/flights', '?lat=30&lon=-97');
+  assert.equal(regional.statusCode, 200);
+  assert.equal(regional.headers['x-flight-source'], 'adsb.lol');
+  assert.equal(regional.headers['x-feed-source'], 'adsb.lol');
+  assert.equal(
+    regional.headers['x-opensky-auth-reason'],
+    'opensky_disabled_adsblol',
+  );
+  assert.equal(JSON.parse(regional.body).states[0][0], 'abc123');
+
+  // No view anchor: adsb.lol cannot answer, and OpenSky is not tried.
+  const unanchored = await flights('/api/flights');
+  assert.equal(unanchored.statusCode, 503);
+  assert.equal(unanchored.headers['x-flight-source'], 'adsb.lol');
+  const error = JSON.parse(unanchored.body);
+  assert.equal(error.code, 'adsblol_unavailable');
+  assert.match(error.error, /GEV_ENABLE_OPENSKY=1/);
+
+  const tracks = install(providers.trackBackfillProxies(), true);
+  const track = await tracks('/api/flights/track', '?icao24=abc123');
+  assert.equal(track.statusCode, 404);
+  assert.equal(JSON.parse(track.body).code, 'opensky_disabled');
+
+  assert.ok(
+    calls.every((url) => !url.includes('opensky-network.org')),
+    calls.join('\n'),
+  );
+});
+
 test('live entry resolves in Node and aircraft normalization stays independently portable', async () => {
   const entry = await import('gods-eye-view/server/providers/live');
   assert.equal(entry.openSkyProxy, providers.openSkyProxy);

@@ -26,6 +26,7 @@ export function createStandaloneApplication({
   sources = {},
   streetLevelProviders,
   allowQaRegistration = false,
+  allowIonPhotoreal = false,
 }) {
   if (constructed)
     throw new Error('The standalone application already owns this page');
@@ -63,6 +64,7 @@ export function createStandaloneApplication({
         // app's server when it offers them.
         googleTokens: googleApiKey ? null : createGoogleTokenSource(),
         cesiumToken,
+        allowIonPhotoreal,
         loaderStatus,
       });
       catalog = createStandaloneCatalog({

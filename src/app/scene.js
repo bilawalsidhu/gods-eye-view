@@ -27,6 +27,8 @@ export async function createApplicationScene({
   googleApiKey,
   googleTokens = null,
   cesiumToken,
+  // Google 3D through Cesium ion's hosted asset is opt-in.
+  allowIonPhotoreal = false,
   credits,
   MapController = MapStackController,
   mapOptions = {},
@@ -80,13 +82,14 @@ export async function createApplicationScene({
   configureCreditKeyboardAccess(document);
   defer(onLocaleChange(() => configureCreditKeyboardAccess(document)));
   loaderStatus.textContent =
-    googleApiKey || googleTokens || cesiumToken
+    googleApiKey || googleTokens || (allowIonPhotoreal && cesiumToken)
       ? t('Loading Google 3D Tiles...')
       : t('Loading the keyless globe...');
   const photoreal = await loadPhotorealisticTileset(Cesium, {
     googleApiKey,
     googleTokens,
     cesiumToken,
+    allowIonPhotoreal,
   });
   const tileset = photoreal.tileset;
   // A provider can finish after cancellation; retain ownership of its result.
@@ -127,6 +130,7 @@ export async function createApplicationScene({
     ...mapOptions,
     googleTileset: tileset,
     cesiumToken,
+    allowIonPhotoreal,
     initialStack: tileset ? 'photoreal' : 'esri-imagery',
     // Task 5 (height-datum fix): rebroadcast stack changes as a window
     // CustomEvent so data layers (CCTV per-regime ground resolution) can

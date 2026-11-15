@@ -3708,5 +3708,7 @@
   "Funicular": "Funicolare",
   "Gondola": "Cabinovia",
   "Move panels back beside the rail": "Riporta i pannelli accanto alla barra",
-  "Move panels over the rail, to the edge": "Sposta i pannelli sopra la barra, fino al bordo"
+  "Move panels over the rail, to the edge": "Sposta i pannelli sopra la barra, fino al bordo",
+  "Google 3D through Cesium ion is off by default — set {flag} to use your Cesium ion token, or add {envVars} in Provider Settings": "Google 3D tramite Cesium ion è disattivato per impostazione predefinita: imposta {flag} per usare il tuo token Cesium ion, oppure aggiungi {envVars} in Impostazioni provider",
+  "TeleGeography cable data is non-commercial and off by default — set {flag} to enable it": "I dati dei cavi TeleGeography sono non commerciali e disattivati per impostazione predefinita: imposta {flag} per attivarli"
 }

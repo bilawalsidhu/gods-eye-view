@@ -11,6 +11,33 @@ const ROOT = projectRoot(import.meta.url);
 const OPENSKY_AUTH_MODE_DEFAULT = 'oauth';
 const OPENSKY_AUTH_MODES = new Set(['basic', 'oauth', 'auto', 'anon']);
 
+/**
+ * Sources whose terms restrict commercial use. Each is off unless its flag is
+ * set to 1/true/yes/on (see DATA_SOURCES.md, "Commercial-safe defaults").
+ */
+export const OPT_IN_SOURCES = Object.freeze([
+  { name: 'GEV_ENABLE_OPENSKY', label: 'OpenSky flights (otherwise adsb.lol)' },
+  { name: 'GEV_ENABLE_TELEGEOGRAPHY', label: 'TeleGeography submarine cables' },
+  { name: 'GEV_ENABLE_GHOSTMAPS', label: 'S2 GhostMaps' },
+  { name: 'GEV_ENABLE_GOOGLE_NEWS', label: 'Google News RSS (otherwise GDELT)' },
+  { name: 'GEV_ENABLE_CESIUM_ION_3D', label: 'Google 3D through Cesium ion' },
+]);
+
+const TRUTHY_FLAG = /^(1|true|yes|on)$/i;
+
+/** Whether an opt-in flag is on, with the same environment and dotenv precedence as the launcher. */
+export function resolveOptInFlag(name, {
+  authoritativeEnvironment = false,
+  environment = process.env,
+  rootDir = ROOT,
+} = {}) {
+  const environmentDefines = Object.prototype.hasOwnProperty.call(environment, name);
+  const value = authoritativeEnvironment && environmentDefines
+    ? String(environment[name] || '')
+    : String(environment[name] || '') || readDoctorDotenvValue(name, rootDir);
+  return TRUTHY_FLAG.test(value.trim());
+}
+
 export const CREDENTIALS = Object.freeze([
   { name: 'GOOGLE_MAPS_API_KEY', label: 'Google Maps', keychain: [['google-maps-api', 'api-key'], ['google-maps-api', 'default'], ['google-maps-api', 'key']] },
   { name: 'GOOGLE_MAPS_SERVER_API_KEY', label: 'Google Places / Street View server', keychain: [] },
@@ -166,16 +193,19 @@ export function resolveCredential(spec, {
 
 export function buildCapabilitySummary(
   credentials,
-  { openSkyAuthMode = OPENSKY_AUTH_MODE_DEFAULT, openSkyCredentialsFile = false } = {},
+  { openSkyAuthMode = OPENSKY_AUTH_MODE_DEFAULT, openSkyCredentialsFile = false, optIn = {} } = {},
 ) {
   const configured = (name) => credentials[name]?.configured === true;
+  const enabled = (name) => optIn[name] === true;
   const hasClientPair = configured('OPENSKY_CLIENT_ID') && configured('OPENSKY_CLIENT_SECRET');
   const hasOAuthCredentials = hasClientPair || openSkyCredentialsFile === true;
   const requestedOpenSkyMode = String(openSkyAuthMode || '').trim().toLowerCase();
   const openSkyMode = OPENSKY_AUTH_MODES.has(requestedOpenSkyMode)
     ? requestedOpenSkyMode
     : OPENSKY_AUTH_MODE_DEFAULT;
-  const flights = openSkyMode === 'anon'
+  const flights = !enabled('GEV_ENABLE_OPENSKY')
+    ? 'adsb.lol regional snapshot around the view (OpenSky off; set GEV_ENABLE_OPENSKY=1 to use it)'
+    : openSkyMode === 'anon'
     ? 'OpenSky keyless anonymous access (rate-limited)'
     : openSkyMode === 'basic'
       ? 'OpenSky Basic mode selected: OpenSky retired username/password sign-in, so flights load anonymously (rate-limited)'
@@ -186,17 +216,24 @@ export function buildCapabilitySummary(
           : hasOAuthCredentials
             ? 'OpenSky OAuth credentials file set (OPENSKY_CREDENTIALS_FILE; file contents and validity not verified)'
           : 'OpenSky keyless anonymous access (rate-limited)';
+  const hasIon = configured('CESIUM_ION_TOKEN');
+  const ionPhotoreal = enabled('GEV_ENABLE_CESIUM_ION_3D');
   const route = selectMapStartupRoute({
     googleApiKey: configured('GOOGLE_MAPS_API_KEY') ? 'configured' : '',
-    cesiumToken: configured('CESIUM_ION_TOKEN') ? 'configured' : '',
+    cesiumToken: hasIon ? 'configured' : '',
+    // Google 3D through ion is opt-in; the token alone no longer selects it.
+    allowIonPhotoreal: ionPhotoreal,
   });
   return {
     map: route === 'google-direct'
       ? 'Google Photorealistic 3D Tiles (direct)'
       : route === 'google-ion'
         ? 'Google Photorealistic 3D Tiles through Cesium ion; Bing and world-terrain stacks available'
-        : 'Esri World Imagery (keyless satellite basemap) with keyless terrain',
+        : hasIon
+          ? 'Esri World Imagery; Bing and world-terrain stacks available (Google 3D through Cesium ion off; set GEV_ENABLE_CESIUM_ION_3D=1)'
+          : 'Esri World Imagery (keyless satellite basemap) with keyless terrain',
     flights,
+    optIn: Object.fromEntries(OPT_IN_SOURCES.map(({ name }) => [name, enabled(name)])),
     voice: configured('OPENAI_API_KEY')
       ? 'available'
       : 'off until an OpenAI key is added, or a Codex ChatGPT sign-in is selected in Provider Settings (experimental)',
@@ -232,6 +269,10 @@ export function inspectSetup({ includeKeychain = true, authoritativeEnvironment 
     capabilities: buildCapabilitySummary(credentials, {
       openSkyAuthMode: resolveOpenSkyAuthMode({ authoritativeEnvironment, rootDir }),
       openSkyCredentialsFile: resolveOpenSkyCredentialsFile({ authoritativeEnvironment, rootDir }),
+      optIn: Object.fromEntries(OPT_IN_SOURCES.map(({ name }) => [
+        name,
+        resolveOptInFlag(name, { authoritativeEnvironment, rootDir }),
+      ])),
     }),
   };
 }
@@ -262,6 +303,13 @@ export function formatSetupReport(report, { readyMessage } = {}) {
     `Fires:   ${report.capabilities.fires}`,
     `Traffic: ${report.capabilities.traffic}`,
     `Missions: ${report.capabilities.missions}`,
+    '',
+    'Non-commercial sources (off unless enabled):',
+    ...OPT_IN_SOURCES.map(({ name, label }) => (
+      report.capabilities.optIn?.[name] === true
+        ? `  [ON] ${label} (${name}=1)`
+        : `  [--] ${label} (${name})`
+    )),
     '',
     'Configured providers:',
     ...CREDENTIALS.map((spec) => {

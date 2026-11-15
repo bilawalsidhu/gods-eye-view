@@ -3534,5 +3534,7 @@
   "Funicular": "ケーブルカー",
   "Gondola": "ゴンドラ",
   "Move panels back beside the rail": "パネルをレールの横に戻す",
-  "Move panels over the rail, to the edge": "パネルをレールの上、画面端へ移動"
+  "Move panels over the rail, to the edge": "パネルをレールの上、画面端へ移動",
+  "Google 3D through Cesium ion is off by default — set {flag} to use your Cesium ion token, or add {envVars} in Provider Settings": "Cesium ion経由のGoogle 3Dは既定でオフです。Cesium ionトークンを使うには{flag}を設定するか、プロバイダー設定で{envVars}を追加してください",
+  "TeleGeography cable data is non-commercial and off by default — set {flag} to enable it": "TeleGeographyのケーブルデータは非商用のため既定でオフです。有効にするには{flag}を設定してください"
 }

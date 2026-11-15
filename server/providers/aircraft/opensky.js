@@ -8,6 +8,19 @@ import {
   readResponseTextCapped,
 } from '../common/http.js';
 import { requiredFiniteQueryNumber } from '../common/query.js';
+
+/**
+ * OpenSky is off unless GEV_ENABLE_OPENSKY opts in: its license is
+ * non-commercial (DATA_SOURCES.md), so by default flights come from adsb.lol
+ * (ODbL) and no OpenSky token or snapshot is ever requested. Read per request.
+ * @param {Record<string, string|undefined>} [env]
+ * @returns {boolean}
+ */
+export function openSkyEnabled(env = process.env) {
+  return /^(1|true|yes|on)$/i.test(
+    String(env?.GEV_ENABLE_OPENSKY ?? '').trim(),
+  );
+}
 // ---------------------------------------------------------------------------
 // OpenSky OAuth2 token + response cache state
 // ---------------------------------------------------------------------------
@@ -503,6 +516,32 @@ export function openSkyProxy() {
             Allow: 'GET',
           });
           res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+          return;
+        }
+        if (!openSkyEnabled()) {
+          res.setHeader('X-Feed-Source', 'adsb.lol');
+          if (
+            await serveAdsbLolPointFallback(
+              req,
+              res,
+              'disabled',
+              'opensky_disabled_adsblol',
+            )
+          )
+            return;
+          res.writeHead(503, {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+            'X-Flight-Source': 'adsb.lol',
+            'Retry-After': '30',
+          });
+          res.end(
+            JSON.stringify({
+              error:
+                'Flights come from adsb.lol, which needs a lat/lon view anchor and returned no snapshot. OpenSky is off unless GEV_ENABLE_OPENSKY=1.',
+              code: 'adsblol_unavailable',
+            }),
+          );
           return;
         }
         res.setHeader('X-Feed-Source', 'OpenSky Network');

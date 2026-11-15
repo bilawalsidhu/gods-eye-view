@@ -3621,5 +3621,7 @@
   "Funicular": "Bergbana",
   "Gondola": "Kabinbana",
   "Move panels back beside the rail": "Flytta tillbaka panelerna bredvid listen",
-  "Move panels over the rail, to the edge": "Flytta panelerna över listen, till kanten"
+  "Move panels over the rail, to the edge": "Flytta panelerna över listen, till kanten",
+  "Google 3D through Cesium ion is off by default — set {flag} to use your Cesium ion token, or add {envVars} in Provider Settings": "Google 3D via Cesium ion är avstängt som standard – ange {flag} för att använda din Cesium ion-token, eller lägg till {envVars} under Leverantörsinställningar",
+  "TeleGeography cable data is non-commercial and off by default — set {flag} to enable it": "TeleGeographys kabeldata är icke-kommersiella och avstängda som standard – ange {flag} för att aktivera dem"
 }

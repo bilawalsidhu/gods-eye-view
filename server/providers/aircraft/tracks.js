@@ -1,4 +1,4 @@
-import { getOpenSkyToken } from './opensky.js';
+import { getOpenSkyToken, openSkyEnabled } from './opensky.js';
 import { readCappedResponseText } from '../common/http.js';
 /**
  * Vite plugin: aircraft track-history backfill proxies (PRD WS-F F1/F2).
@@ -6,7 +6,8 @@ import { readCappedResponseText } from '../common/http.js';
  * /api/flights/track?icao24=<hex6> — OpenSky GET /tracks/all (experimental;
  *   own credit bucket, 4 credits per call on the free tier). OAuth via the
  *   shared coalesced token. 60s per-icao cache; 404/429 forwarded so the
- *   client can fall back to its accumulated trail silently.
+ *   client can fall back to its accumulated trail silently. Answers 404
+ *   without calling OpenSky unless GEV_ENABLE_OPENSKY opts in.
  * /api/military/track?hex=<hex> — compatibility refusal for the retired,
  *   undocumented ADSB.lol trace route. The standalone military source uses
  *   locally accumulated trails; provider-supplied history remains optional.
@@ -75,6 +76,21 @@ export function trackBackfillProxies() {
           res.setHeader('Content-Type', 'application/json');
           res.end(
             JSON.stringify({ error: 'icao24 must be a 6-char hex string' }),
+          );
+          return;
+        }
+        // Track history is off with OpenSky itself; 404 is the answer the
+        // client already treats as "no backfill", keeping its local trail.
+        if (!openSkyEnabled()) {
+          res.statusCode = 404;
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Cache-Control', 'no-store');
+          res.end(
+            JSON.stringify({
+              error:
+                'Track history unavailable: OpenSky is off unless GEV_ENABLE_OPENSKY=1',
+              code: 'opensky_disabled',
+            }),
           );
           return;
         }

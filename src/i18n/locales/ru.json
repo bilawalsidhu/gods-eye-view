@@ -3795,5 +3795,7 @@
   "Funicular": "Фуникулёр",
   "Gondola": "Канатная дорога",
   "Move panels back beside the rail": "Вернуть панели к боковой панели",
-  "Move panels over the rail, to the edge": "Переместить панели поверх боковой панели к краю"
+  "Move panels over the rail, to the edge": "Переместить панели поверх боковой панели к краю",
+  "Google 3D through Cesium ion is off by default — set {flag} to use your Cesium ion token, or add {envVars} in Provider Settings": "Google 3D через Cesium ion по умолчанию выключен — задайте {flag}, чтобы использовать токен Cesium ion, или добавьте {envVars} в «Настройках провайдеров»",
+  "TeleGeography cable data is non-commercial and off by default — set {flag} to enable it": "Данные о кабелях TeleGeography некоммерческие и по умолчанию выключены — задайте {flag}, чтобы включить их"
 }

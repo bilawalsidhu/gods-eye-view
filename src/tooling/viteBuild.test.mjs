@@ -75,7 +75,25 @@ test('explicit build inputs preserve browser-only defines, plugin order and loop
     'import.meta.env.GOOGLE_MAPS_API_KEY': '"browser-fixture"',
     'import.meta.env.CESIUM_ION_TOKEN': '"ion-fixture"',
     'import.meta.env.MAPILLARY_CLIENT_TOKEN': '""',
+    'import.meta.env.GEV_ENABLE_TELEGEOGRAPHY': 'false',
+    'import.meta.env.GEV_ENABLE_CESIUM_ION_3D': 'false',
   });
+  for (const [value, expected] of [
+    ['1', 'true'],
+    ['TRUE', 'true'],
+    [' on ', 'true'],
+    ['yes', 'true'],
+    ['0', 'false'],
+    ['off', 'false'],
+    ['', 'false'],
+  ]) {
+    const flags = createBrowserViteConfig({
+      enableTelegeography: value,
+      enableCesiumIon3d: value,
+    }).define;
+    assert.equal(flags['import.meta.env.GEV_ENABLE_TELEGEOGRAPHY'], expected);
+    assert.equal(flags['import.meta.env.GEV_ENABLE_CESIUM_ION_3D'], expected);
+  }
   assert.equal(
     createBrowserViteConfig({ photonUrl: '' }).define[
       'import.meta.env.PHOTON_URL'

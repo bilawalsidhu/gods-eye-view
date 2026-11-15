@@ -1,4 +1,5 @@
 import { fetchRegionalText, fetchRegionalJson } from './http.js';
+import { envFlag } from '../common/flags.js';
 import {
   REGIONAL_NEWS_WINDOW_HOURS,
   googleNewsWindowOperator,
@@ -25,6 +26,15 @@ function rssTag(block, tag) {
       block,
     )?.[1] || '',
   );
+}
+
+/**
+ * Google News terms allow personal, non-commercial use only, so RSS is off
+ * unless GEV_ENABLE_GOOGLE_NEWS is 1/true/yes/on; GDELT (commercial use with
+ * citation) is then the only headline source.
+ */
+function googleNewsEnabled(env = process.env) {
+  return envFlag('GEV_ENABLE_GOOGLE_NEWS', env);
 }
 
 // Feed items read before the window filter; Google returns about 100.
@@ -67,13 +77,17 @@ function normalizeRssArticles(xml, limit = RSS_ITEM_CAP) {
 
 /**
  * Headlines for a place from the last REGIONAL_NEWS_WINDOW_HOURS, newest
- * first: Google News RSS, then GDELT when RSS fails or has nothing recent.
+ * first: Google News RSS (when GEV_ENABLE_GOOGLE_NEWS is on), then GDELT when
+ * RSS is off, fails or has nothing recent.
  * `empty` means a source answered with nothing in the window; `unavailable`
  * means there was no place or no source answered.
  * @param {{locality?: string, region?: string, country?: string}|null} place
- * @param {{now?: () => number}} [options]
+ * @param {{now?: () => number, googleNews?: boolean}} [options]
  */
-async function fetchRegionalNews(place, { now = Date.now } = {}) {
+async function fetchRegionalNews(
+  place,
+  { now = Date.now, googleNews = googleNewsEnabled() } = {},
+) {
   const query = place?.locality || place?.region || place?.country;
   if (!query)
     return { status: 'unavailable', query: null, articles: [], source: null };
@@ -90,21 +104,22 @@ async function fetchRegionalNews(place, { now = Date.now } = {}) {
     gl: 'US',
     ceid: 'US:en',
   });
-  try {
-    const xml = await fetchRegionalText(
-      `https://news.google.com/rss/search?${rssParams}`,
-      {
-        headers: { 'User-Agent': 'GodsEyeView/0.1' },
-        timeoutMs: 12_000,
-      },
-    );
-    answered = true;
-    const articles = recent(normalizeRssArticles(xml));
-    if (articles.length)
-      return { status: 'ready', query, articles, source: 'Google News RSS' };
-  } catch {
-    /* fall through to the existing free index */
-  }
+  if (googleNews)
+    try {
+      const xml = await fetchRegionalText(
+        `https://news.google.com/rss/search?${rssParams}`,
+        {
+          headers: { 'User-Agent': 'GodsEyeView/0.1' },
+          timeoutMs: 12_000,
+        },
+      );
+      answered = true;
+      const articles = recent(normalizeRssArticles(xml));
+      if (articles.length)
+        return { status: 'ready', query, articles, source: 'Google News RSS' };
+    } catch {
+      /* fall through to the existing free index */
+    }
   const params = new URLSearchParams({
     query: `"${String(query).replace(/["\\]/g, ' ').trim()}"`,
     mode: 'artlist',
@@ -126,7 +141,7 @@ async function fetchRegionalNews(place, { now = Date.now } = {}) {
       status: articles.length ? 'ready' : 'empty',
       query,
       articles,
-      source: 'GDELT fallback',
+      source: googleNews ? 'GDELT fallback' : 'GDELT',
     };
   } catch {
     // An RSS answer with nothing recent is still a true empty result.
@@ -136,4 +151,4 @@ async function fetchRegionalNews(place, { now = Date.now } = {}) {
   }
 }
 
-export { fetchRegionalNews };
+export { fetchRegionalNews, googleNewsEnabled };

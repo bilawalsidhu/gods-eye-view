@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   createGhostMapsWatcher,
+  GHOSTMAPS_DISABLED_MESSAGE,
+  ghostMapsEnabled,
   ghostMapsPollMs,
   ghostMapsProxy,
 } from './ghostMaps.js';
@@ -265,7 +267,7 @@ test('routes: unknown paths and methods are refused without contacting GitHub', 
     subscribers: () => 0,
   };
   let handler;
-  ghostMapsProxy({ watcher }).configureServer({
+  ghostMapsProxy({ watcher, enabled: () => true }).configureServer({
     middlewares: { use: (_route, fn) => (handler = fn) },
   });
   const call = async (method, url) => {
@@ -291,4 +293,67 @@ test('routes: unknown paths and methods are refused without contacting GitHub', 
   assert.equal(catalog.status, 200);
   assert.equal(JSON.parse(catalog.body).commit, sha('1'));
   assert.equal(started, 2);
+});
+
+test('GEV_ENABLE_GHOSTMAPS is off unless set to 1/true/yes/on', () => {
+  assert.equal(ghostMapsEnabled({}), false);
+  assert.equal(ghostMapsEnabled({ GEV_ENABLE_GHOSTMAPS: '' }), false);
+  assert.equal(ghostMapsEnabled({ GEV_ENABLE_GHOSTMAPS: '0' }), false);
+  assert.equal(ghostMapsEnabled({ GEV_ENABLE_GHOSTMAPS: 'off' }), false);
+  for (const value of ['1', 'true', 'YES', ' On '])
+    assert.equal(ghostMapsEnabled({ GEV_ENABLE_GHOSTMAPS: value }), true);
+});
+
+test('routes: with GhostMaps off (the default) nothing contacts GitHub', async () => {
+  const saved = process.env.GEV_ENABLE_GHOSTMAPS;
+  delete process.env.GEV_ENABLE_GHOSTMAPS;
+  try {
+    let started = 0;
+    let stopped = 0;
+    const watcher = {
+      start: () => {
+        started += 1;
+        return Promise.resolve(false);
+      },
+      stop: () => {
+        stopped += 1;
+      },
+      catalog: () => ({ commit: sha('1'), products: [] }),
+      file: async () => {
+        throw new Error('must not download');
+      },
+      subscribe: () => () => {},
+      subscribers: () => 0,
+    };
+    let handler;
+    ghostMapsProxy({ watcher }).configureServer({
+      middlewares: { use: (_route, fn) => (handler = fn) },
+    });
+    const call = async (url) => {
+      const res = {
+        destroyed: false,
+        writeHead(status) {
+          this.status = status;
+        },
+        end(body) {
+          this.body = String(body ?? '');
+        },
+      };
+      await handler({ method: 'GET', url }, res);
+      return res;
+    };
+    for (const url of ['/catalog', '/events', '/file/cip']) {
+      const res = await call(url);
+      assert.equal(res.status, 503, url);
+      assert.deepEqual(JSON.parse(res.body), {
+        error: 'ghostmaps_disabled',
+        message: GHOSTMAPS_DISABLED_MESSAGE,
+      });
+    }
+    assert.equal(started, 0);
+    assert.equal(stopped, 3);
+  } finally {
+    if (saved === undefined) delete process.env.GEV_ENABLE_GHOSTMAPS;
+    else process.env.GEV_ENABLE_GHOSTMAPS = saved;
+  }
 });

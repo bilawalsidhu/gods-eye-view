@@ -54,6 +54,8 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
     GOOGLE_MAPS_SERVER_API_KEY: '',
     MAPILLARY_CLIENT_TOKEN: '',
     OPENAI_API_KEY: '',
+    // The opted-in OpenSky route; it is off by default (adsb.lol instead).
+    GEV_ENABLE_OPENSKY: '1',
     OPENSKY_AUTH_MODE: 'anon',
     OPENSKY_CLIENT_ID: '',
     OPENSKY_CLIENT_SECRET: '',

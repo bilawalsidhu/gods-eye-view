@@ -23,6 +23,10 @@ import {
   updateCableReferenceStem,
 } from './telegeographySubmarineCables.js';
 
+// These suites exercise the dataset itself; the default-off path is covered
+// by 'the cable layer loads nothing while TeleGeography is off' below.
+process.env.GEV_ENABLE_TELEGEOGRAPHY = '1';
+
 test('cable reference winners remain nearest-first and hard-capped', () => {
   const records = Array.from({ length: 300 }, (_, index) => ({
     entity: { id: `reference-${index}` },
@@ -2001,5 +2005,31 @@ test('every bundled cable segment is associated with its source feature', async 
     assert.equal(env.dataSources[2].entities.values.length, features.length);
   } finally {
     env.layer.destroy(env.viewer);
+  }
+});
+
+test('the cable layer loads nothing while TeleGeography is off', async () => {
+  const previous = process.env.GEV_ENABLE_TELEGEOGRAPHY;
+  delete process.env.GEV_ENABLE_TELEGEOGRAPHY;
+  const env = createDeferredCableLayerHarness();
+  try {
+    env.layer.enable(env.viewer);
+    await env.settle();
+    assert.equal(env.pendingFetches.length, 0, 'no dataset request is made');
+    assert.equal(env.dataSources.length, 0);
+    const stats = env.layer.getStats();
+    assert.equal(stats.loading, false);
+    assert.equal(stats.count, 0);
+    assert.match(stats.error, /GEV_ENABLE_TELEGEOGRAPHY=1/);
+    // The layer stays toggleable.
+    env.layer.disable();
+    env.layer.enable(env.viewer);
+    await env.settle();
+    assert.equal(env.pendingFetches.length, 0);
+  } finally {
+    env.layer.destroy(env.viewer);
+    env.cleanup();
+    if (previous === undefined) delete process.env.GEV_ENABLE_TELEGEOGRAPHY;
+    else process.env.GEV_ENABLE_TELEGEOGRAPHY = previous;
   }
 });

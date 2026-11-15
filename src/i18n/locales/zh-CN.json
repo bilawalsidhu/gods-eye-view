@@ -3534,5 +3534,7 @@
   "Funicular": "缆索铁路",
   "Gondola": "缆车",
   "Move panels back beside the rail": "将面板移回侧栏旁",
-  "Move panels over the rail, to the edge": "将面板移到侧栏上方，贴靠边缘"
+  "Move panels over the rail, to the edge": "将面板移到侧栏上方，贴靠边缘",
+  "Google 3D through Cesium ion is off by default — set {flag} to use your Cesium ion token, or add {envVars} in Provider Settings": "通过 Cesium ion 加载 Google 3D 默认关闭——设置 {flag} 以使用你的 Cesium ion 令牌，或在服务商设置中添加 {envVars}",
+  "TeleGeography cable data is non-commercial and off by default — set {flag} to enable it": "TeleGeography 海缆数据仅限非商业用途，默认关闭——设置 {flag} 以启用"
 }

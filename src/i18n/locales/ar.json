@@ -3969,5 +3969,7 @@
   "Funicular": "قطار جبلي مائل",
   "Gondola": "تلفريك",
   "Move panels back beside the rail": "إعادة اللوحات إلى جانب الشريط",
-  "Move panels over the rail, to the edge": "نقل اللوحات فوق الشريط إلى الحافة"
+  "Move panels over the rail, to the edge": "نقل اللوحات فوق الشريط إلى الحافة",
+  "Google 3D through Cesium ion is off by default — set {flag} to use your Cesium ion token, or add {envVars} in Provider Settings": "Google 3D عبر Cesium ion متوقف افتراضيًا — اضبط {flag} لاستخدام رمز Cesium ion، أو أضف {envVars} في «إعدادات المزوّدين»",
+  "TeleGeography cable data is non-commercial and off by default — set {flag} to enable it": "بيانات كابلات TeleGeography غير تجارية ومتوقفة افتراضيًا — اضبط {flag} لتفعيلها"
 }

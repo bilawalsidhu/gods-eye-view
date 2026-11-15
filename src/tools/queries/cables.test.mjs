@@ -142,6 +142,28 @@ test('a cable split into several features is listed once', async () => {
   assert.deepEqual(west.data.rows, [{ id: '2africa', name: '2Africa' }]);
 });
 
+test('cables answer unavailable while TeleGeography is switched off', async () => {
+  let fetched = 0;
+  const off = {
+    available: false,
+    async fetch() {
+      fetched++;
+      return cables.fetch();
+    },
+  };
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { cables: off },
+  });
+  await assert.rejects(
+    catalog.call('find_submarine_cables', { name: 'uni' }),
+    (error) =>
+      error.code === 'unavailable' &&
+      /GEV_ENABLE_TELEGEOGRAPHY=1/.test(error.message),
+  );
+  assert.equal(fetched, 0);
+});
+
 test('the local fetch serves bundled data files and nothing outside them', async () => {
   const fetchImpl = createApiFetch({
     apiBase: 'http://127.0.0.1:1',
@@ -149,6 +171,7 @@ test('the local fetch serves bundled data files and nothing outside them', async
   });
   const { cables: collection, landingPoints } = await createBundledCableSource({
     fetchImpl,
+    enabled: true,
   }).fetch();
   assert.ok(collection.features.length > 500);
   assert.ok(landingPoints.features.length > 1000);

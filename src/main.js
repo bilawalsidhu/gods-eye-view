@@ -11,6 +11,8 @@ const application = createStandaloneApplication({
   geospatial:
     photonSetting === undefined ? {} : { endpoints: { photon: photonSetting } },
   allowQaRegistration: import.meta.env.DEV,
+  // Opt-in sources (DATA_SOURCES.md): Google 3D through Cesium ion.
+  allowIonPhotoreal: import.meta.env?.GEV_ENABLE_CESIUM_ION_3D === true,
 });
 
 application.start().catch((error) => {

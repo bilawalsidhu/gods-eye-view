@@ -39,6 +39,12 @@ export const findSubmarineCables = defineTool({
   async run(args, { services, signal }) {
     if (!args.area && !args.name)
       throw new ToolError('invalid_arguments', 'Give an area, a name or both');
+    // The bundled TeleGeography data is non-commercial and opt-in.
+    if (services.cables.available === false)
+      throw new ToolError(
+        'unavailable',
+        'Submarine cable data is off; set GEV_ENABLE_TELEGEOGRAPHY=1 to enable the non-commercial TeleGeography dataset',
+      );
     const area = args.area
       ? await resolveArea(args.area, { services, signal })
       : null;

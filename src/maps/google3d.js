@@ -2,32 +2,41 @@ const clean = (value) => String(value || '').trim();
 
 /**
  * Decide which map provider can deliver the best startup experience.
- * @param {{googleApiKey?: string, cesiumToken?: string}} credentials
+ * The ion-hosted Google asset is opt-in (GEV_ENABLE_CESIUM_ION_3D), so an
+ * ion token alone does not select it unless `allowIonPhotoreal` is true.
+ * @param {{googleApiKey?: string, cesiumToken?: string, allowIonPhotoreal?: boolean}} credentials
  * @returns {'google-direct'|'google-ion'|'osm'}
  */
 export function selectMapStartupRoute({
   googleApiKey = '',
   cesiumToken = '',
+  allowIonPhotoreal = false,
 } = {}) {
   if (clean(googleApiKey)) return 'google-direct';
-  if (clean(cesiumToken)) return 'google-ion';
+  if (allowIonPhotoreal === true && clean(cesiumToken)) return 'google-ion';
   return 'osm';
 }
 
 /**
  * Load Google Photorealistic 3D Tiles through direct Google access when
- * configured, otherwise through Cesium ion's hosted Google asset. Direct
+ * configured, otherwise through Cesium ion's hosted Google asset when
+ * `allowIonPhotoreal` is true (off by default: GEV_ENABLE_CESIUM_ION_3D). Direct
  * access uses a browser key, or else short-lived tokens from the app's
  * server (see googleTokens.js). If direct access fails and an ion token is
  * available, ion is the recovery path.
  *
  * @param {object} Cesium
- * @param {{googleApiKey?: string, cesiumToken?: string, googleTokens?: {token: Function}|null}} credentials
+ * @param {{googleApiKey?: string, cesiumToken?: string, googleTokens?: {token: Function}|null, allowIonPhotoreal?: boolean}} credentials
  * @returns {Promise<{tileset: object|null, route: 'google-direct'|'google-token'|'google-ion'|'osm', errors: Error[]}>}
  */
 export async function loadPhotorealisticTileset(
   Cesium,
-  { googleApiKey = '', cesiumToken = '', googleTokens = null } = {},
+  {
+    googleApiKey = '',
+    cesiumToken = '',
+    googleTokens = null,
+    allowIonPhotoreal = false,
+  } = {},
 ) {
   const googleKey = clean(googleApiKey);
   const ionToken = clean(cesiumToken);
@@ -44,7 +53,7 @@ export async function loadPhotorealisticTileset(
       route: 'google-token',
       create: () => createGoogleTokenTileset(Cesium, googleTokens),
     });
-  if (ionToken)
+  if (ionToken && allowIonPhotoreal === true)
     attempts.push({
       route: 'google-ion',
       create: () => createGoogleIonTileset(Cesium, ionToken),

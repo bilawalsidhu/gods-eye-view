@@ -19,10 +19,20 @@ export function createGhostMapsSource({
   return {
     async getCatalog({ signal } = {}) {
       const response = await fetchImpl('/api/ghostmaps/catalog', { signal });
-      if (!response.ok)
+      if (!response.ok) {
+        // A server with the source switched off says so; show its reason.
+        const body =
+          response.status === 503
+            ? await readResponseJsonCapped(response, 4096, signal).catch(
+                () => null,
+              )
+            : null;
+        if (body?.error === 'ghostmaps_disabled' && body.message)
+          throw new Error(String(body.message));
         throw new Error(
           `GhostMaps catalog unavailable (HTTP ${response.status})`,
         );
+      }
       const catalog = await readResponseJsonCapped(
         response,
         1024 * 1024,

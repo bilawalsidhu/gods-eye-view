@@ -216,12 +216,20 @@ export function createIngestion({ state, parts, source }) {
       // A stale or aborted load reports nothing: its failure belongs to a
       // lifecycle the user already left.
       if (owns() && error?.name !== 'AbortError') {
-        state._error = error?.message || msg('TeleGeography load failed');
-        console.warn(
-          '[Data:telegeography-submarine-cables]',
-          state._error,
-          error,
-        );
+        state._error =
+          error?.code === 'disabled'
+            ? t(
+                'TeleGeography cable data is non-commercial and off by default — set {flag} to enable it',
+                { flag: 'GEV_ENABLE_TELEGEOGRAPHY=1' },
+              )
+            : error?.message || msg('TeleGeography load failed');
+        // A switched-off dataset is a setting, not a failure.
+        if (error?.code !== 'disabled')
+          console.warn(
+            '[Data:telegeography-submarine-cables]',
+            state._error,
+            error,
+          );
       }
     } finally {
       // Only the OWNING load may clear the shared lifecycle. A stale load
