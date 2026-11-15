@@ -700,6 +700,15 @@ export const NATURAL_EARTH_CREDIT = {
     '<a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a> (public domain)',
 };
 
+/** Registered when a name from the bundled Wikidata places packs is first
+ * shown (CC0 — no attribution required; credited as a courtesy). */
+export const WIKIDATA_PLACES_CREDIT = {
+  key: 'wikidata-places',
+  html:
+    'City, town and village names from ' +
+    '<a href="https://www.wikidata.org" target="_blank" rel="noopener">Wikidata</a> (CC0)',
+};
+
 /** Registered when the first bundled US county or place outline resolves
  * (public domain — credited as a courtesy). */
 export const US_CENSUS_CREDIT = {

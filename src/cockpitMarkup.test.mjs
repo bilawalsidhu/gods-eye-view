@@ -26,10 +26,7 @@ import {
   setSignalCollapsed,
 } from './ui/cockpitLayout.js';
 import { createBriefState } from './ui/cockpitBriefPages.js';
-import {
-  publishBriefView,
-  setBriefAutoRotate,
-} from './ui/cockpitBriefing.js';
+import { publishBriefView, setBriefAutoRotate } from './ui/cockpitBriefing.js';
 import { CockpitDisplayPortal } from './ui/cockpitDisplayPortal.js';
 import { _handleContextLayerChange } from './ui/contextLayerChanges.js';
 import { clearSelectedLayers } from './ui/contextActions.js';
@@ -438,13 +435,10 @@ test('Cockpit owns a focused shared Display portal and compact Radio controls', 
     /data-cockpit-launcher="radio"[\s\S]*?id="cockpit-radio-toggle-btn"/,
   );
   const cockpitRadio = html.match(
-    /id="cockpit-radio-panel"[\s\S]*?<\/div>\s*<\/div>\s*<\/aside>/,
+    /id="cockpit-radio-panel"[\s\S]*?<\/div>\s*<\/div>\s*<div class="cockpit-utility-rail/,
   );
   assert.ok(cockpitRadio, 'Cockpit compact Radio controls are missing');
-  assert.doesNotMatch(
-    cockpitRadio[0],
-    /radio-filter|radio-tuner/,
-  );
+  assert.doesNotMatch(cockpitRadio[0], /radio-filter|radio-tuner/);
   assert.match(
     css,
     /\.cockpit-utility-controls[\s\S]*?top:\s*var\(\s*--cockpit-utility-top/,
@@ -530,12 +524,12 @@ test('Cockpit owns a focused shared Display portal and compact Radio controls', 
   );
 });
 
-test('Display orders 3D above Celestial, Clean UI below it, and Parameters below Detection', () => {
+test('Visual orders Parameters below Detection, 3D below them, and Clean UI above the Effects', () => {
   const display = html.match(/id="pp-toggles"[\s\S]*?id="clean-view-exit"/);
   assert.ok(display, 'Display markup is missing');
   assert.match(
     display[0],
-    /id="detection-toggle"[\s\S]*?id="param-slider-panel"[\s\S]*?id="models3d-toggle"[\s\S]*?id="celestial-toggle"[\s\S]*?id="clean-view-toggle"/,
+    /id="detection-toggle"[\s\S]*?id="param-slider-panel"[\s\S]*?id="models3d-toggle"[\s\S]*?id="scope-toggle"[\s\S]*?id="clean-view-toggle"[\s\S]*?class="pp-section-heading">Effects<[\s\S]*?id="celestial-toggle"/,
   );
   assert.equal(
     (html.match(/id="param-slider-panel"/g) || []).length,
@@ -811,18 +805,27 @@ test('Reset releases Contact camera ownership through its selection-preserving r
   );
   assert.match(ui, /onReset: \(\) => this\.resetToGlobeView\(\)/);
   assert.match(ui, /this\._connectGlobeReset\?\.\(this\._locationControls\)/);
-  assert.match(controls, /reset\(\) \{\s*if \(!this\.destroyed\) return this\.onReset\(\);/);
+  assert.match(
+    controls,
+    /reset\(\) \{\s*if \(!this\.destroyed\) return this\.onReset\(\);/,
+  );
   // Both reset buttons ask the one reset owner.
   const globeActions = fs.readFileSync(
     path.join(ROOT, 'src', 'ui', 'views', 'panels', 'GlobeActions.vue'),
     'utf8',
   );
-  assert.match(globeActions, /id="reset-globe-view"[^>]*@click="act\('reset'\)"/);
+  assert.match(
+    globeActions,
+    /id="reset-globe-view"[^>]*@click="act\('reset'\)"/,
+  );
   const cockpitView = readRadioSource(
     new URL('./ui/views/CockpitView.vue', import.meta.url),
     'utf8',
   );
-  assert.match(cockpitView, /id="cockpit-reset-globe"[^>]*@click="globe\.act\('reset'\)"/);
+  assert.match(
+    cockpitView,
+    /id="cockpit-reset-globe"[^>]*@click="globe\.act\('reset'\)"/,
+  );
   assert.match(
     cockpitEnter.toString(),
     /Object\.assign\(this\.presence, \{\s*active: true,/,
@@ -1193,7 +1196,10 @@ test('cockpit summary presents the focused item as Contact', () => {
   const match = html.match(/<aside id="cockpit-context"[\s\S]*?<\/aside>/);
   assert.ok(match, 'cockpit Contact summary is missing');
   assert.match(match[0], /aria-label="Contact cockpit summary"/);
-  assert.match(match[0], /class="cockpit-card-kicker cockpit-context-kicker">CONTACT</);
+  assert.match(
+    match[0],
+    /class="cockpit-card-kicker cockpit-context-kicker">CONTACT</,
+  );
   assert.match(match[0], /aria-label="Contact navigation"/);
   assert.match(
     match[0],
@@ -1408,15 +1414,30 @@ test('Contact folded for one Cockpit left panel comes back only once neither is 
   const previous = globalThis.document;
   const panels = {};
   globalThis.document = { getElementById: (id) => panels[id] ?? null };
-  const panel = (...classes) => ({ classList: { contains: (name) => classes.includes(name) } });
+  const panel = (...classes) => ({
+    classList: { contains: (name) => classes.includes(name) },
+  });
   try {
-    const otherOpen = (id) => PanelChrome.prototype._otherCockpitLeftPanelOpen(id);
+    const otherOpen = (id) =>
+      PanelChrome.prototype._otherCockpitLeftPanelOpen(id);
     panels['data-panel'] = panel('collapsed');
-    assert.equal(otherOpen('utilities-panel'), false, 'Data Layers closed: restore');
+    assert.equal(
+      otherOpen('utilities-panel'),
+      false,
+      'Data Layers closed: restore',
+    );
     panels['data-panel'] = panel('collapsed', 'layout-auto-collapsed');
-    assert.equal(otherOpen('utilities-panel'), true, 'Data Layers comes back: keep Contact folded');
+    assert.equal(
+      otherOpen('utilities-panel'),
+      true,
+      'Data Layers comes back: keep Contact folded',
+    );
     panels['data-panel'] = panel();
-    assert.equal(otherOpen('utilities-panel'), true, 'Data Layers open: keep it folded');
+    assert.equal(
+      otherOpen('utilities-panel'),
+      true,
+      'Data Layers open: keep it folded',
+    );
   } finally {
     globalThis.document = previous;
   }

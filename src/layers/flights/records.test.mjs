@@ -1,13 +1,28 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { FlightRecords } from './records.js';
 
-function records() {
+const FLEET = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../../public/models/fleet',
+);
+const fleetSet = {
+  catalog: JSON.parse(
+    fs.readFileSync(path.join(FLEET, 'catalog.json'), 'utf8'),
+  ),
+  types: JSON.parse(fs.readFileSync(path.join(FLEET, 'types.json'), 'utf8')),
+};
+
+function records(fleetModels = () => null) {
   return new FlightRecords({
     geoidHeight: () => 40,
     cachedGroundFloor: () => null,
     floorAltitudeM: (altitude) => altitude,
     approxDistanceKm: () => 0,
+    fleetModels,
   });
 }
 const view = () => ({
@@ -259,4 +274,48 @@ test('a repeated fix time marks the contact as not updated; removal is unchanged
   store.receive(observation({ positionTimeMs: fixMs + 10_000 }), view());
   store.forget('abc123');
   assert.equal(store.fixRepeated.has('abc123'), false);
+});
+
+test('a ground vehicle or station with no altitude stands on the ground; an aircraft does not', () => {
+  const store = records(() => fleetSet);
+  const noAltitude = { baroAltitudeM: null, ellipsoidAltitudeM: null };
+  const vehicle = store.receive(
+    observation({
+      id: 'v1',
+      typeCode: 'ZVEH',
+      callsign: 'FIRE 2',
+      ...noAltitude,
+    }),
+    view(),
+  ).meta;
+  assert.equal(vehicle.onGround, true);
+  assert.equal(vehicle.typeCode, 'ZVEH');
+  assert.equal(vehicle.altitude, 0);
+  const mast = store.receive(
+    observation({ id: 'm1', typeCode: 'GRND', callsign: 'RX5', ...noAltitude }),
+    view(),
+  ).meta;
+  assert.equal(mast.onGround, true);
+  assert.equal(mast.typeCode, 'GRND');
+  // An airliner with no altitude keeps the airborne default, and its feed
+  // type still waits for the airframe lookup.
+  const plane = store.receive(
+    observation({ id: 'p1', typeCode: 'A320', ...noAltitude }),
+    view(),
+  ).meta;
+  assert.equal(plane.onGround, false);
+  assert.equal(plane.altitude, 10000);
+  assert.equal(plane.typeCode, null);
+  // A vehicle reporting an altitude is placed by it.
+  const reported = store.receive(
+    observation({ id: 'v2', typeCode: 'ZVEH', baroAltitudeM: 12 }),
+    view(),
+  ).meta;
+  assert.equal(reported.onGround, false);
+  // Before the model set loads nothing is grounded by its model.
+  const unloaded = records().receive(
+    observation({ id: 'v3', typeCode: 'ZVEH', ...noAltitude }),
+    view(),
+  ).meta;
+  assert.equal(unloaded.onGround, false);
 });

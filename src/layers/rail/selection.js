@@ -19,10 +19,15 @@ import { t } from '../../i18n/index.js';
 export function createSelection({ state, services, parts }) {
   const { governorRequestRender } = services.render;
 
-  /** The card's anchor: the marker's current position, read on every paint. */
+  /**
+   * The card's anchor: the marker's current position, read on every paint,
+   * whether the train is drawn as its marker or as its 3D model.
+   */
   function anchorFor(entry) {
     return () => {
-      const p = entry.marker?.show !== false ? entry.marker?.position : null;
+      const drawn =
+        entry.marker?.show !== false || entry.modelOwnsVisual === true;
+      const p = drawn ? entry.marker?.position : null;
       return p && Number.isFinite(p.x) && Number.isFinite(p.y) ? p : null;
     };
   }
@@ -30,6 +35,16 @@ export function createSelection({ state, services, parts }) {
   function refreshSelectedCard(force) {
     const entry = state._trains.get(state._selectedKey);
     if (!entry) return;
+    // A train a first-person view rides shows no card.
+    if (entry.key === state._cockpitSubjectKey) {
+      state._selectedCardText = null;
+      state._overlayHost.setEntries(
+        RAIL_SELECTED_OVERLAY_SOURCE_ID,
+        [],
+        RAIL_SELECTED_OVERLAY_SOURCE_OPTIONS,
+      );
+      return;
+    }
     const now = Date.now();
     if (!force && now - state._selectedCardAt < SELECTED_CARD_REFRESH_MS)
       return;
@@ -98,6 +113,8 @@ export function createSelection({ state, services, parts }) {
    */
   function selectAndFocusTrain(key) {
     if (!state._trains.has(key)) return;
+    // A selection by the user, even of the selected train (cockpitSubject.js).
+    state._selectedAtMs = Date.now();
     const following = parts.follow.isFollowing(key);
     // Another train's follow lets go first, so this is never taken for a
     // move between two copies of one train.
@@ -115,6 +132,7 @@ export function createSelection({ state, services, parts }) {
     const hadSelection = state._selectedKey !== null;
     parts.follow.release({ untrack });
     state._selectedKey = null;
+    state._selectedAtMs = null;
     state._selectedCardText = null;
     if (hadSelection) {
       parts.rendering.paintAll();
@@ -131,6 +149,8 @@ export function createSelection({ state, services, parts }) {
   }
 
   function onKeyDown(event) {
+    // While a first-person view rides the train, Escape is the view's.
+    if (state._cockpitSubjectKey) return;
     if (event.key === 'Escape' && state._selectedKey) clearSelection();
   }
 
@@ -141,6 +161,8 @@ export function createSelection({ state, services, parts }) {
     );
     state._clickHandler.setInputAction((click) => {
       if (!state._enabled || !isPointerFree()) return;
+      // A held train keeps the selection until its view lets it go.
+      if (state._cockpitSubjectKey) return;
       const picked = viewer.scene.pick(click.position);
       const id = typeof picked?.id === 'string' ? picked.id : null;
       if (id && state._trains.has(id)) selectAndFocusTrain(id);

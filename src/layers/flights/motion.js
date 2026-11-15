@@ -16,6 +16,7 @@ import {
   COAST_MAX_SPEED_MPS,
 } from '../../data/motionModel.js';
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
+import { placeLiveAircraft } from './placed.js';
 import {
   modelVisualAnchor,
   modelAnchorWorld,
@@ -173,6 +174,19 @@ export function createMotion({
     }
 
     const out = result || new Cesium.Cartesian3();
+    // A host-supplied placement decides where a live contact is drawn; with
+    // none, or no answer for this contact, the layer's own motion below does.
+    if (
+      placeLiveAircraft(
+        flightState,
+        services.placement,
+        icao24,
+        info,
+        history,
+        out,
+      )
+    )
+      return out;
     // Render one poll interval behind real time so we interpolate between
     // two KNOWN fixes whenever possible (see RENDER_DELAY_SEC rationale).
     const renderTime =
@@ -431,7 +445,7 @@ export function createMotion({
     const rangeM = Cesium.Cartesian3.distance(camera.positionWC, position);
     if (parts.rendering._modelOwnsVisual(icao24)) {
       const spec = parts.rendering._modelSpec(
-        flightState.records.data.get(icao24)?.klass,
+        flightState.records.data.get(icao24),
       );
       const scale = trackedModelScaleForPixelCap({
         baseScale: spec.scale,
@@ -614,7 +628,7 @@ export function createMotion({
       parts.rendering._modelOwnsVisual(flightState._trackedIcao)
     ) {
       const spec = parts.rendering._modelSpec(
-        flightState.records.data.get(flightState._trackedIcao)?.klass,
+        flightState.records.data.get(flightState._trackedIcao),
       );
       return modelVisualAnchor(
         flightState._trackedModel.modelMatrix,
@@ -659,7 +673,7 @@ export function createMotion({
     )
       return 0;
     const spec = parts.rendering._modelSpec(
-      flightState.records.data.get(flightState._trackedIcao)?.klass,
+      flightState.records.data.get(flightState._trackedIcao),
     );
     const scale = Number.isFinite(flightState._trackedModel.computedScale)
       ? flightState._trackedModel.computedScale
@@ -673,7 +687,7 @@ export function createMotion({
       parts.rendering._modelOwnsVisual(flightState._trackedIcao)
     ) {
       const spec = parts.rendering._modelSpec(
-        flightState.records.data.get(flightState._trackedIcao)?.klass,
+        flightState.records.data.get(flightState._trackedIcao),
       );
       // Through the model's OWN render chain (modelVisualAnchor's hand-rolled
       // half-correction put this offset on the lateral axis — see

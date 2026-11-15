@@ -135,8 +135,8 @@ test('the chip counts what is missing and the rows render from the status', asyn
   );
   assert.equal(field.type, 'password');
   assert.equal(field.placeholder, 'paste GOOGLE_MAPS_API_KEY');
-  assert.equal(google.querySelector('.key-setup-remove'), null);
-  assert.equal(google.querySelector('.key-setup-cloud-auth'), null);
+  assert.equal(google.querySelector('.key-setup-remove') === null, true);
+  assert.equal(google.querySelector('.key-setup-cloud-auth') === null, true);
 
   const openai = $('[data-key-id="openai"]');
   assert.equal(openai.dataset.managed, 'file');
@@ -159,7 +159,7 @@ test('the chip counts what is missing and the rows render from the status', asyn
     firms.querySelector('.key-setup-external').textContent,
     'configured externally',
   );
-  assert.equal(firms.querySelector('.key-setup-fields'), null);
+  assert.equal(firms.querySelector('.key-setup-fields') === null, true);
 });
 
 test('the chip opens the dialog onto its first field; closing fades it and restores the status line', async (t) => {
@@ -337,12 +337,12 @@ test('Cyber moves the chip into the top toolbar and other themes return it to th
   await wait();
   await nextTick();
   assert.equal(toolbar.lastElementChild?.id, 'key-setup-chip');
-  assert.equal(corner.querySelector('#key-setup-chip'), null);
+  assert.equal(corner.querySelector('#key-setup-chip') === null, true);
   document.documentElement.dataset.uiTheme = 'tactical';
   await wait();
   await nextTick();
   assert.equal(corner.firstElementChild?.id, 'key-setup-chip');
-  assert.equal(toolbar.querySelector('#key-setup-chip'), null);
+  assert.equal(toolbar.querySelector('#key-setup-chip') === null, true);
   delete document.documentElement.dataset.uiTheme;
 });
 

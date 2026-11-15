@@ -15,10 +15,12 @@ import {
   TRACKED_ICON_COLOR,
   followsClock,
 } from './policy.js';
+import { observeLiveAircraft } from '../flights/placed.js';
 
 /** Apply military record changes to Cesium resources and existing follow operations. */
 export function createMilitarySnapshotRenderer({
   flightState,
+  placement = null,
   records,
   groundFloor,
   meshFloor,
@@ -72,6 +74,17 @@ export function createMilitarySnapshotRenderer({
           : null,
       );
       const isTracked = icao24 === flightState._trackedIcao;
+
+      // A host-supplied placement, if any, is told every fix as taken.
+      observeLiveAircraft(
+        flightState,
+        placement,
+        icao24,
+        fixEpochMs,
+        meta,
+        meta.speedMps,
+        meta.track,
+      );
 
       // Append to position history stamped with the FEED's fix epoch.
       // adsb.lol's seen_pos is the AGE in seconds of the last position
@@ -164,10 +177,15 @@ export function createMilitarySnapshotRenderer({
         ) {
           rendering._applyFleetBillboardPresentation(icao24, bb);
         }
-        // Per-class GLBs: a class change can mean a different asset OR scale —
-        // resync the live model, any in-flight load, and the tracked
-        // standalone (mirror of flights.js).
-        if (prevMeta?.klass !== meta.klass) rendering._syncModelToClass(icao24);
+        // Per-type fleet models: a type or category change can mean a
+        // different model OR scale — resync the live model, any in-flight
+        // load, and the tracked standalone (mirror of flights.js).
+        if (
+          prevMeta?.klass !== meta.klass ||
+          prevMeta?.type !== meta.type ||
+          prevMeta?.category !== meta.category
+        )
+          rendering._syncModelToClass(icao24);
         // Round 5: depth policy is uniform (always depth-test-free, see
         // _groundDepthDistance) — nothing to flip on landing/takeoff.
       } else {
@@ -319,6 +337,7 @@ export function createMilitarySnapshotRenderer({
       flightState._billboards.delete(icao24);
       rendering._releaseModel(icao24); // aged-out aircraft: drop its 3D model (no orphan / cap leak)
       records.forget(icao24);
+      placement?.forget(icao24);
       flightState._cullPositions.delete(icao24);
       flightState._positionHistory.delete(icao24);
       flightState._displayCourse.delete(icao24);

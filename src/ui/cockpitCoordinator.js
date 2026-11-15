@@ -5,7 +5,9 @@ import {
   bridgeEntryAllowed,
   cockpitEntryAllowed,
   orbitEntryAllowed,
+  subjectEntryAllowed,
 } from '../contextModePolicy.js';
+import { cockpitSubjectProviders } from '../cockpitSubjectProviders.js';
 import { formatAwarenessLabel } from '../data/militaryAwarenessEngine.js';
 import { enterCockpitWithTracking } from '../cockpitTracking.js';
 import { cockpitVisionModeForStyle } from '../cockpitVisionPolicy.js';
@@ -60,8 +62,11 @@ export class CockpitCoordinator {
       regionalDistanceM,
       weatherCodeLabel,
       acquireOrbitImagery,
+      cockpitSubjects,
     } = services;
     this._cockpitDisplayPortal = null;
+    // The application's own subjects (services.cockpitSubjects), checked once.
+    const subjectProviders = cockpitSubjectProviders(cockpitSubjects ?? []);
     this.cockpitView = new CockpitViewController(viewer, {
       services: {
         flightsLayer,
@@ -107,6 +112,21 @@ export class CockpitCoordinator {
         bridgeEntryAllowed({
           vesselsEnabled: !!this._dataManager?.isEnabled('ais-live-vessels'),
           contextModeChanging: this._contextModeChanging,
+        }),
+      subjectProviders,
+      // A provider's subject needs its own layer on, no Context change in
+      // flight, and the provider's own say.
+      isSubjectEntryAllowed: (provider, candidate) =>
+        subjectEntryAllowed({
+          layerEnabled: this._isLayerEnabled(provider.layerId),
+          contextModeChanging: this._contextModeChanging,
+          providerAllows:
+            this.cockpitView?.callSubject(
+              provider,
+              'isEntryAllowed',
+              [candidate],
+              false,
+            ) === true,
         }),
       isOrbitEntryAllowed: () =>
         orbitEntryAllowed({
@@ -197,6 +217,9 @@ export class CockpitCoordinator {
       this.cockpitView.subjectKind === 'satellite'
     )
       return 'Cockpit is in an orbital view — exit it first, then track an aircraft to enter Cockpit';
+    // And in an application's own first-person view.
+    if (this.cockpitView?.active && this.cockpitView.subjectProvider)
+      return 'Cockpit is in another first-person view — exit it first, then track an aircraft to enter Cockpit';
     if (!this._aircraftLayerEnabled)
       return 'No aircraft layer is on — turn on Flights or Military Flights and track an aircraft to enter Cockpit';
     return null;
@@ -215,6 +238,17 @@ export class CockpitCoordinator {
     const satellite =
       active && this.cockpitView?.subjectKind === 'satellite'
         ? this.cockpitView.readSatelliteInfo?.()
+        : null;
+    // And a provider's subject in use.
+    const provided =
+      active && this.cockpitView?.subjectProvider
+        ? {
+            kind: this.cockpitView.subjectProvider.kind,
+            id: this.cockpitView.subjectId,
+            layerId: this.cockpitView.subjectProvider.layerId,
+            callsign: null,
+            name: this.cockpitView.lastSubjectFrame?.name ?? null,
+          }
         : null;
     const gateOpen = Boolean(this.cockpitView?.isEntryAllowed?.());
     // "Could Cockpit be ENTERED right now" — so it is false while already
@@ -244,30 +278,32 @@ export class CockpitCoordinator {
               ? 'subject-layer-off'
               : 'no-tracked-aircraft',
       visionMode: this.cockpitView?.visionMode || null,
-      subject: satellite
-        ? {
-            kind: 'satellite',
-            id: satellite.id,
-            layerId: satellite.layerId,
-            callsign: null,
-            name: satellite.name,
-          }
-        : vessel
+      subject: provided
+        ? provided
+        : satellite
           ? {
-              kind: 'vessel',
-              id: vessel.id,
-              layerId: vessel.layerId,
+              kind: 'satellite',
+              id: satellite.id,
+              layerId: satellite.layerId,
               callsign: null,
-              name: vessel.name,
+              name: satellite.name,
             }
-          : info
+          : vessel
             ? {
-                kind: 'aircraft',
-                id: info.icao24 || info.id || null,
-                layerId: info.layerId || null,
-                callsign: info.callsign || null,
+                kind: 'vessel',
+                id: vessel.id,
+                layerId: vessel.layerId,
+                callsign: null,
+                name: vessel.name,
               }
-            : null,
+            : info
+              ? {
+                  kind: 'aircraft',
+                  id: info.icao24 || info.id || null,
+                  layerId: info.layerId || null,
+                  callsign: info.callsign || null,
+                }
+              : null,
       navigation: snapshot
         ? {
             canPrevious: Boolean(snapshot.navigation?.canPrevious),

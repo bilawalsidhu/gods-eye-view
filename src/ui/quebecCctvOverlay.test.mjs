@@ -188,5 +188,5 @@ test('the refresh timer reloads with a cache-buster, skips hidden tabs, and stop
   ui.overlay.dispose();
   assert.equal(ui.intervals.size, 0);
   assert.equal(ui.renderListeners.size, 0);
-  assert.equal(ui.window.document.querySelector('.qci-panel'), null);
+  assert.equal(ui.window.document.querySelector('.qci-panel') === null, true);
 });

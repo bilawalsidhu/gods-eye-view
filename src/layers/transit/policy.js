@@ -189,9 +189,14 @@ export const SELECTED_CARD_REFRESH_MS = 250;
 /** Mode palette: distinct at a glance, none reused by flights (white/cyan), military (amber), or vessels. */
 export const TRANSIT_MODE_COLORS = Object.freeze({
   bus: '#5EF08A',
+  trolleybus: '#B6F04A',
   tram: '#FFC24A',
+  cable_tram: '#FF8F4A',
   subway: '#FF4538',
+  monorail: '#FF6FB8',
   rail: '#D9A6FF',
+  funicular: '#E8C98A',
+  aerial_lift: '#7FA8FF',
   ferry: '#5FD6FF',
   unknown: '#D8DDE5',
 });
@@ -526,9 +531,14 @@ const UNDERGROUND_MODES = new Set(['subway']);
 /** The mode in plain words, for a card a person reads rather than scans. */
 const TRANSIT_MODE_WORD = Object.freeze({
   bus: msg('Bus'),
+  trolleybus: msg('Trolleybus'),
   tram: msg('Tram'),
+  cable_tram: msg('Cable car'),
   subway: msg('Subway'),
+  monorail: msg('Monorail'),
   rail: msg('Train'),
+  funicular: msg('Funicular'),
+  aerial_lift: msg('Gondola'),
   ferry: msg('Ferry'),
   unknown: msg('Transit vehicle'),
 });
@@ -536,9 +546,14 @@ const TRANSIT_MODE_WORD = Object.freeze({
 /** Short, fixed-width mode word for the detection card's class field. */
 const TRANSIT_MODE_ABBR = Object.freeze({
   bus: 'BUS',
+  trolleybus: 'TROLLEY',
   tram: 'TRAM',
+  cable_tram: 'CABLE',
   subway: 'METRO',
+  monorail: 'MONO',
   rail: 'RAIL',
+  funicular: 'FUNI',
+  aerial_lift: 'GONDOLA',
   ferry: 'FERRY',
   unknown: 'TRANSIT',
 });

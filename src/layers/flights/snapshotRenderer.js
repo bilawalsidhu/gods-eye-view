@@ -9,10 +9,12 @@ import {
 import { aircraftIcon } from '../../data/aircraftIcons.js';
 import { POSITION_HISTORY_LIMIT } from './recordPolicy.js';
 import { followsClock } from './policy.js';
+import { observeLiveAircraft } from './placed.js';
 
 /** Apply reconciled aircraft records to Cesium resources and follow state. */
 export function createFlightSnapshotRenderer({
   flightState,
+  placement = null,
   records,
   militaryRegistry,
   groundFloor,
@@ -65,6 +67,7 @@ export function createFlightSnapshotRenderer({
           flightState._billboards.delete(icao24);
           rendering._releaseModel(icao24); // military-suppression: drop any 3D model too
           records.forget(icao24);
+          placement?.forget(icao24);
           flightState._cullPositions.delete(icao24);
           flightState._positionHistory.delete(icao24);
           flightState._displayCourse.delete(icao24);
@@ -97,6 +100,17 @@ export function createFlightSnapshotRenderer({
           : null,
       );
       const isTracked = icao24 === flightState._trackedIcao;
+
+      // A host-supplied placement, if any, is told every fix as taken.
+      observeLiveAircraft(
+        flightState,
+        placement,
+        icao24,
+        fixEpochMs,
+        meta,
+        meta.velocity,
+        meta.true_track,
+      );
 
       // Append to position history stamped with the FEED's fix epoch
       // (time_position), not client receipt time — OpenSky positions arrive
@@ -198,9 +212,14 @@ export function createFlightSnapshotRenderer({
         ) {
           rendering._applyFleetBillboardPresentation(icao24, bb);
         }
-        // Poll-path class change (category updates): same model resync rule
-        // as the enrichment path — the class's GLB/scale may have changed.
-        if (prevMeta?.klass !== meta.klass) rendering._syncModelToClass(icao24);
+        // Poll-path type or category change: same model resync rule as the
+        // enrichment path — the fleet model or its scale may have changed.
+        if (
+          prevMeta?.klass !== meta.klass ||
+          prevMeta?.category !== meta.category ||
+          prevMeta?.typeCode !== meta.typeCode
+        )
+          rendering._syncModelToClass(icao24);
       } else {
         // Start where the fleet pass will draw it: the fleet renders behind
         // real time, so a fresh contact's displayed position is its fix
@@ -306,6 +325,7 @@ export function createFlightSnapshotRenderer({
       flightState._billboards.delete(icao24);
       rendering._releaseModel(icao24); // aged-out aircraft: drop its 3D model (no orphan / cap leak)
       records.forget(icao24);
+      placement?.forget(icao24);
       flightState._cullPositions.delete(icao24);
       flightState._positionHistory.delete(icao24);
       flightState._displayCourse.delete(icao24);

@@ -64,6 +64,10 @@ export function createState({ services }) {
 
   state._lastPropagation = 0;
 
+  // The world time of the last frame that reckoned the points (motion.js),
+  // NaN before the first.
+  state._lastReckonMs = NaN;
+
   state._lastRingRotation = 0;
 
   state._lastFocusUpdate = 0;

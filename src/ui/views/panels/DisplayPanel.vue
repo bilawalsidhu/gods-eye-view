@@ -5,12 +5,14 @@ import { t } from '../../../i18n/index.js';
 import { vPanelState } from '../../rail/panelState.js';
 import { vClassToggle } from '../../rail/classToggle.js';
 import PanelCollapseButton from '../../rail/PanelCollapseButton.vue';
+import UiPanelEdge from '../../kit/UiPanelEdge.vue';
 import UiSegmented from '../../kit/UiSegmented.vue';
 import UiSlider from '../../kit/UiSlider.js';
 import { useDisplayStore } from '../../stores/display.js';
 import UiButton from '../../kit/UiButton.vue';
 import UiSelect from '../../kit/UiSelect.js';
 import { StyleParameterRows } from '../../styleParameters.js';
+import VisualPresets from './VisualPresets.vue';
 
 // The Display panel. VisualSettings presents the HUD, Sonar, Scope,
 // Celestial, detection, bloom and sharpen and AircraftDisplay the 3D group,
@@ -21,6 +23,12 @@ const { view, models3d, parameters, cockpitPortal } = storeToRefs(display);
 // A control's change goes to its owner (DisplayBindings).
 const act = (name, ...args) => display.act(name, ...args);
 const pct = (value) => `${value}%`;
+// The words of the on/off pill each card header draws (visual-panel.css), as
+// CSS strings.
+const pillWords = computed(() => ({
+  '--pp-pill-on': JSON.stringify(t('ON')),
+  '--pp-pill-off': JSON.stringify(t('OFF')),
+}));
 const hud = computed(() => view.value?.hud ?? null);
 const sonar = computed(() => view.value?.sonar ?? null);
 const sonarOn = computed(() => sonar.value?.enabled ?? true);
@@ -29,6 +37,7 @@ const detectButton = computed(() => detection.value?.button ?? null);
 const allocation = computed(() => detection.value?.allocation ?? 'ELASTIC');
 const scopeOn = computed(() => view.value?.scope.enabled ?? true);
 const scopeFeather = computed(() => view.value?.scope.featherPct ?? 100);
+const scopeOpacity = computed(() => view.value?.scope.opacityPct ?? 100);
 const celestial = computed(() => view.value?.celestial ?? null);
 const celestialTitle = computed(() =>
   celestial.value && !celestial.value.supported
@@ -51,15 +60,18 @@ const allocationOptions = computed(() => [
 <!-- Post-processing toggles (top-right) -->
 <div id="pp-toggles" v-panel-state="'pp-toggles'" class="panel-collapsible collapsed ui-scroll" data-panel-id="pp-toggles">
   <div class="compact pp-header-row">
-    <span class="pp-header-label">{{ t('DISPLAY') }}</span>
+    <span class="pp-header-label">{{ t('VISUAL', { context: 'panel' }) }}</span>
     <span class="panel-divider" aria-hidden="true"></span>
-    <PanelCollapseButton class="pp-collapse-btn" target="pp-toggles" :name="t('DISPLAY')" sideways start-collapsed />
+    <UiPanelEdge />
+    <PanelCollapseButton class="pp-collapse-btn" target="pp-toggles" :name="t('VISUAL', { context: 'panel' })" sideways start-collapsed />
   </div>
-  <div class="pp-panel-body ui-scroll" data-rail-scroller>
+  <div class="pp-panel-body ui-scroll" data-rail-scroller :style="pillWords">
+  <VisualPresets />
   <!-- Cockpit shows these four groups in its Display popover: each teleports to the slot the Cockpit display portal publishes. While disabled a Teleport stays in place; its 'body' target only keeps server rendering from dropping it. -->
+  <p class="pp-section-heading">{{ t('Overlay') }}</p>
   <Teleport :to="cockpitPortal?.hud ?? 'body'" :disabled="!cockpitPortal?.hud">
   <div class="pp-toggle-group">
-    <button class="pp-toggle-btn" :class="{ active: hud?.visible }" id="hud-toggle" @click="act('toggleHud')" :title="t('Intelligence HUD (H)')">
+    <button class="pp-toggle-btn" :class="{ active: hud?.visible }" :aria-pressed="String(Boolean(hud?.visible))" id="hud-toggle" @click="act('toggleHud')" :title="t('Intelligence HUD (H)')">
       <span class="pp-icon">&#x25CE;</span>
       <span class="pp-label" translate="no">HUD</span>
     </button>
@@ -168,19 +180,25 @@ const allocationOptions = computed(() => [
       <UiSlider class="pp-slider" id="scope-feather-slider" @update:model-value="act('setScopeFeather', $event)" min="0" max="200" :model-value="scopeFeather" :disabled="!scopeOn" :aria-label="t('Scope edge feather')" :title="t('Scope edge feather as a percentage of the keyhole radius')" />
       <span class="pp-slider-value" id="scope-feather-value">{{ pct(scopeFeather) }}</span>
     </div>
+    <div class="pp-slider-row visible" id="scope-opacity-row">
+      <span class="pp-slider-mini-label">{{ t('Opacity') }}</span>
+      <UiSlider class="pp-slider" id="scope-opacity-slider" @update:model-value="act('setScopeOpacity', $event)" min="50" max="100" :model-value="scopeOpacity" :disabled="!scopeOn" :aria-label="t('Scope opacity')" :title="t('How dark the scope shades the view outside the keyhole')" />
+      <span class="pp-slider-value" id="scope-opacity-value">{{ pct(scopeOpacity) }}</span>
+    </div>
   </div>
+  <button class="pp-toggle-btn" id="clean-view-toggle" @click="act('toggleCleanView')" :title="t('Hide UI chrome')">
+    <span class="pp-icon">&#x25A1;</span>
+    <span class="pp-label">{{ t('Clean UI') }}</span>
+  </button>
+  <p class="pp-section-heading">{{ t('Effects') }}</p>
   <div class="pp-toggle-group">
     <UiButton class="pp-toggle-btn" :pressed="celestial?.active ?? false" pressed-class="active" id="celestial-toggle" @click="act('toggleCelestial')" :title="celestialTitle" :disabled="celestial ? !celestial.supported : undefined" :aria-disabled="celestial ? String(!celestial.supported) : undefined">
       <span class="pp-icon material-symbols-outlined" aria-hidden="true">flare</span>
       <span class="pp-label">{{ t('Celestial') }}</span>
     </UiButton>
   </div>
-  <button class="pp-toggle-btn" id="clean-view-toggle" @click="act('toggleCleanView')" :title="t('Hide UI chrome')">
-    <span class="pp-icon">&#x25A1;</span>
-    <span class="pp-label">{{ t('Clean UI') }}</span>
-  </button>
   <div class="pp-toggle-group">
-    <button class="pp-toggle-btn" :class="{ active: view?.bloom.active }" id="bloom-toggle" @click="act('toggleBloom')" :title="t('Bloom / Glow')">
+    <button class="pp-toggle-btn" :class="{ active: view?.bloom.active }" :aria-pressed="String(Boolean(view?.bloom.active))" id="bloom-toggle" @click="act('toggleBloom')" :title="t('Bloom / Glow')">
       <span class="pp-icon">&#x2728;</span>
       <span class="pp-label">{{ t('Bloom') }}</span>
     </button>
@@ -190,7 +208,7 @@ const allocationOptions = computed(() => [
     </div>
   </div>
   <div class="pp-toggle-group">
-    <button class="pp-toggle-btn" :class="{ active: view?.sharpen.active }" id="sharpen-toggle" @click="act('toggleSharpen')" :title="t('Sharpening')">
+    <button class="pp-toggle-btn" :class="{ active: view?.sharpen.active }" :aria-pressed="String(Boolean(view?.sharpen.active))" id="sharpen-toggle" @click="act('toggleSharpen')" :title="t('Sharpening')">
       <span class="pp-icon">&#x1F50D;</span>
       <span class="pp-label">{{ t('Sharpen') }}</span>
     </button>
@@ -199,6 +217,9 @@ const allocationOptions = computed(() => [
       <span class="pp-slider-value" id="sharpen-intensity-value">{{ pct(view?.sharpen.intensity ?? 49) }}</span>
     </div>
   </div>
+  <button type="button" class="pp-reset-btn" :title="t('Reset Visual to its defaults: Normal look, HUD, scope, labels and effects')" @click="act('resetVisual')">
+    <span class="material-symbols-outlined" aria-hidden="true">restart_alt</span>{{ t('Reset to default') }}
+  </button>
 </div>
 </div>
 </template>

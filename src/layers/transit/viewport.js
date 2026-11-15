@@ -101,6 +101,10 @@ export function createViewport({ state, services, parts }) {
         if (state._activeFeeds.has(feed.id)) desired.set(feed.id, feed);
       }
     }
+    // A vehicle a first-person view rides keeps its feed polled.
+    const held = state._vehicles.get(state._cockpitSubjectKey);
+    if (held && state._activeFeeds.has(held.feedId))
+      desired.set(held.feedId, state._activeFeeds.get(held.feedId));
     for (const feedId of [...state._activeFeeds.keys()]) {
       if (!desired.has(feedId)) {
         state._inFlight.get(feedId)?.controller.abort();
