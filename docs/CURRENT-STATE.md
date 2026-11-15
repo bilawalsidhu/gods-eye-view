@@ -380,9 +380,10 @@ in view while their placed position changes; one it holds still lets the
 render loop idle and is asked again each second, moving on once its placement
 does. A placed transit vehicle is drawn at its placed point, and a placed
 train where it is placed rather than on its bound railway line. Live vessels
-a provider places move on between refreshes: redrawn in place at most every
-250 ms, with a frame asked for each second while the provider places any
-drawn vessel, and none once the layer is off.
+a provider places move on between refreshes: redrawn in place every frame,
+with the next frame asked for as soon as the fastest drawn vessel will have
+moved half a pixel on screen, at least once a second while the provider places
+any drawn vessel, and none once the layer is off.
 
 Application catalog composition accepts an optional `streetLevelProviders` list.
 An explicit list replaces the default Mapillary provider; an empty list removes
@@ -1999,7 +2000,8 @@ Playing, the layer stays a snapshot ahead of the time, and play does not pass a
 snapshot still loading for more than 8 seconds. Those snapshots apply as polls
 do, so contacts move on smoothly: aircraft are drawn at the clock's time
 rather than behind it, and vessels between two fixes move along the great
-circle, never past the newer one. Records, absences and the Layers panel's age
+circle, never past the newer one, redrawn every frame with frames asked for
+as for placed live vessels (vessels out of view move on every 250 ms). Records, absences and the Layers panel's age
 are judged at the clock's time. Outside the coverage the layer shows no
 contacts and loads nothing; while the coverage is unknown it loads nothing and
 clears nothing. A snapshot that fails clears the time and is asked again after
