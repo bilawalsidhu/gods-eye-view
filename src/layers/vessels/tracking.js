@@ -73,6 +73,11 @@ export function createTracking({
         heightM,
       );
       if (visual.billboard) visual.billboard.position = visual.position;
+      // A placed vessel is drawn again at its placement on the next pass.
+      if (services.placement) {
+        visual.drawnLat = NaN;
+        visual.drawnLon = NaN;
+      }
     }
   }
 

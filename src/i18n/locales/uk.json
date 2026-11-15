@@ -3806,5 +3806,13 @@
   "Funicular": "Фунікулер",
   "Gondola": "Канатна дорога",
   "Move panels back beside the rail": "Повернути панелі до бічної смуги",
-  "Move panels over the rail, to the edge": "Перемістити панелі поверх бічної смуги до краю"
+  "Move panels over the rail, to the edge": "Перемістити панелі поверх бічної смуги до краю",
+  "panel|VISUAL": "ВІЗУАЛ",
+  "Look": "Вигляд",
+  "Overlay": "Накладка",
+  "Effects": "Ефекти",
+  "Scope opacity": "Непрозорість прицілу",
+  "How dark the scope shades the view outside the keyhole": "Наскільки приціл затемнює вигляд за межами прицілу",
+  "Reset to default": "Скинути до типових",
+  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "Скинути «Візуал» до типових налаштувань: звичайний вигляд, HUD, приціл, підписи та ефекти"
 }

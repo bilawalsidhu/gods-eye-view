@@ -8,6 +8,11 @@ const LIVE_TICK_MS = 1000;
 const LIVE_EDGE = 0.005;
 /** The least that counts as at now, past the readout's own second. */
 const LIVE_EDGE_MS = 5000;
+/**
+ * The most that counts as at now, however long the track: on a track that
+ * runs over years, a share of it would take whole days back to live.
+ */
+const LIVE_EDGE_MAX_MS = 2 * 60_000;
 /** The speeds play offers, in world ms per real ms. */
 export const WORLD_TIME_SPEEDS = Object.freeze({
   real: 1,
@@ -51,7 +56,7 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
   };
   const nearNow = (ms, length) =>
     Math.abs(ms - worldClock.wallNow()) <=
-    Math.max(LIVE_EDGE_MS, length * LIVE_EDGE);
+    Math.max(LIVE_EDGE_MS, Math.min(LIVE_EDGE_MAX_MS, length * LIVE_EDGE));
   // Whether the track ends at now (and moves on with it), not past it.
   const endsAtNow = (covered) =>
     covered.end - worldClock.wallNow() <= LIVE_EDGE_MS;

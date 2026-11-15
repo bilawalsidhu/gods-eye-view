@@ -198,6 +198,24 @@ export function createTrails({ state, services, parts, source }) {
     nearGround = parts.height.nearGround(),
   ) {
     pruneMarkerPaths(entry, sample);
+    // Placed by a host-supplied placement, it is drawn at the placed point,
+    // at the height its own playback has reached; far above the ground, where
+    // no floor is asked for, on the ellipsoid as an unplaced vehicle is.
+    if (entry.placed === true) {
+      const heightM = Number.isFinite(sample.heightM)
+        ? sample.heightM
+        : nearGround
+          ? NaN
+          : 0;
+      if (!Number.isFinite(heightM)) return null;
+      return Cesium.Cartesian3.fromDegrees(
+        sample.lon,
+        sample.lat,
+        heightM,
+        undefined,
+        out,
+      );
+    }
     if (!nearGround) {
       const a = entry.fromCart,
         b = entry.toCart,

@@ -121,6 +121,29 @@ test('scope feather above 100% survives share parsing and serialization', () => 
   clearTimeout(manager._debounceTimer);
 });
 
+test('scope opacity rides as sco only below full, and through the compact link', () => {
+  // Links without `sco`, every link made before it, open at full opacity.
+  assert.equal(makeManager('#v=2&lat=10&lon=20&scf=35').parseInitialHash().scopeOpacityPct, 100);
+  assert.equal(makeManager('#v=2&lat=10&lon=20&sco=40').parseInitialHash().scopeOpacityPct, 40);
+  assert.equal(makeManager('#v=2&lat=10&lon=20&sco=250').parseInitialHash().scopeOpacityPct, 100);
+  assert.equal(makeManager('#v=2&lat=10&lon=20&sco=-3').parseInitialHash().scopeOpacityPct, 0);
+  assert.equal(makeManager('#v=2&lat=10&lon=20&sco=x').parseInitialHash().scopeOpacityPct, 100);
+
+  const manager = makeManager();
+  manager.onToggleChange(false, true, {});
+  const before = manager._buildHashParams().toString();
+  assert.equal(manager._buildHashParams().has('sco'), false, 'full opacity writes nothing');
+  manager.onToggleChange(false, true, { scopeOpacityPct: 100 });
+  assert.equal(manager._buildHashParams().toString(), before);
+  manager.onToggleChange(false, true, { scopeOpacityPct: 45.4 });
+  assert.equal(manager._buildHashParams().get('sco'), '45');
+  assert.equal(sharedState(manager.buildLink()).scopeOpacityPct, 45);
+  manager.onToggleChange(false, true, { scopeOpacityPct: 100 });
+  assert.equal(manager._buildHashParams().has('sco'), false);
+  assert.equal(sharedState(manager.buildLink()).scopeOpacityPct, 100);
+  clearTimeout(manager._debounceTimer);
+});
+
 test('share-link serialization emits the current celestial state', () => {
   const manager = makeManager();
   manager.onToggleChange(false, false, { celestialRingEnabled: false });

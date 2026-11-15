@@ -19,6 +19,8 @@ import {
   SCOPE_TERMINUS_MAX_PCT,
   SCOPE_FEATHER_RATIO_DEFAULT,
   getScopeMaskFeather,
+  setScopeMaskOpacity,
+  getScopeMaskOpacity,
   SCOPE_OUTSIDE_ALPHA,
   SCOPE_TERMINUS_ALPHA_NEAR,
   SCOPE_TERMINUS_FAR_M,
@@ -199,6 +201,37 @@ test('scope appearance follows direct state changes and install/destroy lifecycl
     setScopeMaskEnabled(false);
     _resetScopeMaskForTest();
     assert.equal(dom.documentElement.dataset.scopeMask, undefined, 'test reset clears the marker');
+  } finally {
+    destroyScopeMask();
+    dom.restore();
+  }
+});
+
+test('scope opacity fades the painted mask without repainting it', () => {
+  const dom = stubScopeMaskDom();
+  try {
+    assert.equal(getScopeMaskOpacity(), 1, 'full by default');
+    setScopeMaskOpacity(0.4);
+    installScopeMask({ container: dom.container });
+    assert.equal(dom.canvas.style.opacity, '0.4', 'a choice made before install applies');
+    const paints = { ...dom.ops };
+    const terminus = getScopeTerminusAlpha();
+    setScopeMaskOpacity(0.25);
+    assert.equal(dom.canvas.style.opacity, '0.25');
+    assert.deepEqual(dom.ops, paints, 'the mask is not repainted');
+    assert.equal(getScopeTerminusAlpha(), terminus, 'the terminus is its own setting');
+    setScopeMaskOpacity(3);
+    assert.equal(getScopeMaskOpacity(), 1);
+    setScopeMaskOpacity(-1);
+    assert.equal(getScopeMaskOpacity(), 0);
+    setScopeMaskOpacity('soft');
+    assert.equal(getScopeMaskOpacity(), 1, 'not a number is full');
+    setScopeMaskOpacity(0.5);
+    destroyScopeMask();
+    installScopeMask({ container: dom.container });
+    assert.equal(dom.canvas.style.opacity, '0.5', 'reinstall keeps it');
+    _resetScopeMaskForTest();
+    assert.equal(getScopeMaskOpacity(), 1, 'test reset restores full');
   } finally {
     destroyScopeMask();
     dom.restore();

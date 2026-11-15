@@ -3806,5 +3806,13 @@
   "Funicular": "Фуникулёр",
   "Gondola": "Канатная дорога",
   "Move panels back beside the rail": "Вернуть панели к боковой панели",
-  "Move panels over the rail, to the edge": "Переместить панели поверх боковой панели к краю"
+  "Move panels over the rail, to the edge": "Переместить панели поверх боковой панели к краю",
+  "panel|VISUAL": "ВИЗУАЛ",
+  "Look": "Вид",
+  "Overlay": "Наложение",
+  "Effects": "Эффекты",
+  "Scope opacity": "Непрозрачность прицела",
+  "How dark the scope shades the view outside the keyhole": "Насколько прицел затемняет вид за пределами маски",
+  "Reset to default": "Сбросить по умолчанию",
+  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "Сбросить «Визуал» к настройкам по умолчанию: обычный вид, HUD, прицел, подписи и эффекты"
 }

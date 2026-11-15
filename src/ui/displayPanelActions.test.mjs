@@ -8,6 +8,7 @@ import { createApp, h, nextTick } from 'vue';
 import { createPinia } from 'pinia';
 import { useDisplayStore } from './stores/display.js';
 import { DisplayBindings } from './displayBindings.js';
+import { VisualSettings } from './visualSettings.js';
 import CommandDockView from './views/CommandDockView.vue';
 import DisplayControlsView from './views/DisplayControlsView.vue';
 import DrawControls from './views/panels/DrawControls.vue';
@@ -230,4 +231,126 @@ test('several owners answer their own actions, the newest first', (t) => {
     ['draw', 'toggleDraw'],
     ['display', 'toggleBloom'],
   ]);
+});
+
+test('the Visual panel’s scope opacity, reset and presets call their actions', async (t) => {
+  const store = mount(t);
+  const { calls } = recorder(store);
+  const selected = [];
+  store.connectMapSource({ select: async (id) => selected.push(id) });
+  store.publishMapSource({
+    status: { text: 'OSM', warn: false },
+    chips: [
+      { id: 'photoreal', label: 'Google 3D', available: false },
+      { id: 'osm', label: 'OSM', available: true, active: true },
+    ],
+  });
+  await nextTick();
+  input($('scope-opacity-slider'), 60);
+  document.querySelector('#pp-toggles .pp-reset-btn').click();
+  const presets = document.querySelector('#pp-toggles .visual-presets');
+  presets.querySelector('[data-style="noir"]').click();
+  const chips = presets.querySelectorAll('.visual-presets__chip');
+  chips[0].click();
+  chips[1].click();
+  assert.deepEqual(calls, [
+    ['setScopeOpacity', 60],
+    ['resetVisual'],
+    ['setStyle', 'noir'],
+  ]);
+  assert.deepEqual(selected, ['osm'], 'an unavailable source is not selected');
+  // The presets follow the published style, as the dock's do.
+  assert.equal(
+    presets.querySelector('[data-style="normal"]').getAttribute('aria-pressed'),
+    'true',
+  );
+  store.publishStyle({ name: 'noir', label: 'NOIR' });
+  await nextTick();
+  assert.equal(
+    presets.querySelector('[data-style="noir"]').getAttribute('aria-pressed'),
+    'true',
+  );
+  assert.equal(
+    presets.querySelector('[data-style="normal"]').getAttribute('aria-pressed'),
+    'false',
+  );
+  // The dock keeps its own presets and map source beside them.
+  assert.ok(
+    document.querySelector('#control-panel .style-btn[data-style="noir"]'),
+  );
+  assert.ok($('map-stack-chips'));
+});
+
+test('DisplayBindings sets the scope opacity and resets Visual to its defaults', (t) => {
+  const store = mount(t);
+  const calls = [];
+  const bindings = new DisplayBindings({
+    viewer: null,
+    services: { isScopeMaskEnabled: () => true, cycleDetectionMode: () => {} },
+    elements: { _locationSearch: document.createElement('input') },
+    operations: {
+      setStyle: (style, options) => calls.push(['style', style, options]),
+      _applyGlobalPostDefaults: (options) =>
+        calls.push(['postDefaults', options]),
+      _setDetectionAllocation: (value) => calls.push(['allocation', value]),
+      _setScope: (scope) => calls.push(['scope', scope]),
+      _setModels3dEnabled: (on) => calls.push(['models3d', on]),
+      _setModels3dMode: (mode) => calls.push(['models3dMode', mode]),
+      _syncModels3dModeRow: () => calls.push(['models3dRow']),
+      _syncShareState: () => calls.push(['share']),
+      _adoptDetectionAsRestore: () => calls.push(['adoptDetection']),
+    },
+    readState: () => ({
+      shareLinkManager: {
+        claimRestoreLane: (lane) => calls.push(['claim', lane]),
+      },
+    }),
+    claimDetection: () => calls.push(['claimDetection']),
+    displayStore: store,
+  });
+  bindings._initUI();
+  t.after(() => bindings.destroy());
+  calls.length = 0;
+  input($('scope-opacity-slider'), 65);
+  assert.deepEqual(calls, [
+    ['claim', 'visual'],
+    ['scope', { opacityPct: 65 }],
+    ['share'],
+  ]);
+  calls.length = 0;
+  document.querySelector('#pp-toggles .pp-reset-btn').click();
+  assert.deepEqual(calls, [
+    ['claim', 'visual'],
+    ['style', 'normal', { userInitiated: true }],
+    ['postDefaults', { keepHudVariant: true }],
+    ['allocation', 'ELASTIC'],
+    ['scope', { enabled: true, featherPct: 100, opacityPct: 100 }],
+    ['models3d', true],
+    ['models3dMode', 'proximity'],
+    ['models3dRow'],
+    ['claimDetection'],
+    ['adoptDetection'],
+    ['share'],
+  ]);
+});
+
+test('a reset inside Contacts makes the shown detection what leaving puts back', () => {
+  const adopt = VisualSettings.prototype.adoptDetectionAsRestore;
+  const live = { detectionMode: 'DENSE', densityPct: 75 };
+  const inContacts = {
+    _contactsDetectionRestore: { mode: 'OFF', densityPct: 50 },
+    getDetectionState: () => live,
+  };
+  adopt.call(inContacts);
+  assert.deepEqual(inContacts._contactsDetectionRestore, {
+    mode: 'DENSE',
+    densityPct: 75,
+  });
+  // Outside Contacts there is no saved state to change.
+  const outside = {
+    _contactsDetectionRestore: null,
+    getDetectionState: () => live,
+  };
+  adopt.call(outside);
+  assert.equal(outside._contactsDetectionRestore, null);
 });

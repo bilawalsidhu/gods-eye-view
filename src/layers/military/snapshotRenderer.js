@@ -15,10 +15,12 @@ import {
   TRACKED_ICON_COLOR,
   followsClock,
 } from './policy.js';
+import { observeLiveAircraft } from '../flights/placed.js';
 
 /** Apply military record changes to Cesium resources and existing follow operations. */
 export function createMilitarySnapshotRenderer({
   flightState,
+  placement = null,
   records,
   groundFloor,
   meshFloor,
@@ -72,6 +74,17 @@ export function createMilitarySnapshotRenderer({
           : null,
       );
       const isTracked = icao24 === flightState._trackedIcao;
+
+      // A host-supplied placement, if any, is told every fix as taken.
+      observeLiveAircraft(
+        flightState,
+        placement,
+        icao24,
+        fixEpochMs,
+        meta,
+        meta.speedMps,
+        meta.track,
+      );
 
       // Append to position history stamped with the FEED's fix epoch.
       // adsb.lol's seen_pos is the AGE in seconds of the last position
@@ -324,6 +337,7 @@ export function createMilitarySnapshotRenderer({
       flightState._billboards.delete(icao24);
       rendering._releaseModel(icao24); // aged-out aircraft: drop its 3D model (no orphan / cap leak)
       records.forget(icao24);
+      placement?.forget(icao24);
       flightState._cullPositions.delete(icao24);
       flightState._positionHistory.delete(icao24);
       flightState._displayCourse.delete(icao24);

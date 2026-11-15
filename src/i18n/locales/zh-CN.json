@@ -3545,5 +3545,13 @@
   "Funicular": "缆索铁路",
   "Gondola": "缆车",
   "Move panels back beside the rail": "将面板移回侧栏旁",
-  "Move panels over the rail, to the edge": "将面板移到侧栏上方，贴靠边缘"
+  "Move panels over the rail, to the edge": "将面板移到侧栏上方，贴靠边缘",
+  "panel|VISUAL": "视觉",
+  "Look": "外观",
+  "Overlay": "叠加层",
+  "Effects": "效果",
+  "Scope opacity": "视域不透明度",
+  "How dark the scope shades the view outside the keyhole": "视域遮罩使视域之外的画面变暗的程度",
+  "Reset to default": "恢复默认",
+  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "将视觉恢复为默认设置：常规外观、HUD、视域、标签和效果"
 }

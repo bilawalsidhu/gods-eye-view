@@ -3980,5 +3980,13 @@
   "Funicular": "قطار جبلي مائل",
   "Gondola": "تلفريك",
   "Move panels back beside the rail": "إعادة اللوحات إلى جانب الشريط",
-  "Move panels over the rail, to the edge": "نقل اللوحات فوق الشريط إلى الحافة"
+  "Move panels over the rail, to the edge": "نقل اللوحات فوق الشريط إلى الحافة",
+  "panel|VISUAL": "المرئيات",
+  "Look": "المظهر",
+  "Overlay": "التراكب",
+  "Effects": "المؤثرات",
+  "Scope opacity": "عتامة المنظار",
+  "How dark the scope shades the view outside the keyhole": "مدى تعتيم المنظار للعرض خارج الفتحة",
+  "Reset to default": "إعادة التعيين إلى الافتراضي",
+  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "إعادة المرئيات إلى إعداداتها الافتراضية: المظهر العادي وHUD والمنظار والتسميات والمؤثرات"
 }
