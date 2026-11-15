@@ -1,4 +1,9 @@
 import * as Cesium from 'cesium';
+import {
+  historyBracketIndex,
+  historyUnseenAt,
+  liftGroundedHistory,
+} from '../../data/timelineHistory.js';
 import { julianAt } from '../../time/julian.js';
 import {
   COURSE_HOLD_SPEED_MPS,
@@ -120,6 +125,7 @@ export function createMotion({
         info.renderAltitudeM >= floor - 1
       )
         continue;
+      const drawnM = info.renderAltitudeM;
       info.renderAltitudeM = lifted;
       flightState._cullPositions.delete(icao24); // above the ellipsoid now (or floors say otherwise next poll)
       const position = Cesium.Cartesian3.fromDegrees(
@@ -127,10 +133,12 @@ export function createMotion({
         info.rawLat,
         lifted,
       );
-      const history = flightState._positionHistory.get(icao24);
-      const newest = history?.[history.length - 1];
-      if (newest)
-        newest.position = Cesium.Cartesian3.clone(position, newest.position);
+      liftGroundedHistory(
+        flightState._positionHistory.get(icao24),
+        position,
+        drawnM,
+        lifted,
+      );
       const bb = flightState._billboards.get(icao24);
       if (bb) bb.position = position;
     }
@@ -153,6 +161,7 @@ export function createMotion({
 
   function _deadReckon(icao24, result, sampledRenderTime) {
     const info = flightState.records.data.get(icao24);
+    flightState._drUnseen = false;
     if (FOCUS_EVIDENCE_DEV && flightState._focusEvidenceIds.has(icao24)) {
       const position = flightState._billboards.get(icao24)?.position;
       flightState._drCourseDeg = info?.true_track || 0;
@@ -198,7 +207,15 @@ export function createMotion({
       );
 
     // Bracketing pair: interpolate — no extrapolation error, no snap-back.
-    for (let i = history.length - 1; i >= 1; i--) {
+    // The pair around the render time (and the one before it, for a fix at
+    // exactly that time), found by halving: a contact following the clock
+    // keeps a long history.
+    for (
+      let i = historyBracketIndex(history, renderTime),
+        stop = Math.max(1, i - 1);
+      i >= stop;
+      i--
+    ) {
       const a = history[i - 1];
       const b = history[i];
       if (
@@ -254,6 +271,9 @@ export function createMotion({
       // the oldest fix froze the icon; extrapolating the NEWEST fix to wall-clock now made
       // the icon jump back ~one poll interval the instant interpolation took over.)
       const oldest = history[0];
+      // Following the clock, a time well before its first fix is before it
+      // was there: the fleet pass hides it.
+      flightState._drUnseen = historyUnseenAt(history, renderTime);
       const lookbackSec = Cesium.JulianDate.secondsDifference(
         oldest.time,
         renderTime,

@@ -181,3 +181,15 @@ test('an AIS row with no id is keyed by its MMSI; one with neither is unkeyed', 
   assert.equal(probe.store.byId.size, 0);
   assert.equal(probe.store.unkeyed.length, 2);
 });
+
+const fixes = (...pairs) =>
+  pairs.map(([atMs, lat]) => ({ atMs, lat, lon: 4.05, altitudeM: null }));
+
+test('following the clock, a vessel whose next record carries no fixes is placed by the record', () => {
+  const probe = setup();
+  probe.reconcile([row('111', { fixes: fixes([0, 1], [60_000, 2]) })], {
+    replace: true,
+  });
+  probe.reconcile([row('111', { lat: 3 })], { follow: true });
+  assert.equal(probe.store.byId.get('111').fixes, null);
+});

@@ -22,7 +22,8 @@ import {
   CARD_MIN_SEP_PX,
   followsClock,
 } from './policy.js';
-import { vesselPositionAt } from './motion.js';
+import { fixesMove, vesselPositionAt } from './motion.js';
+import { TIMELINE_UNSEEN_MS } from '../../time/timelineFixes.js';
 import {
   fleetModelSet,
   loadFleetModelSet,
@@ -190,7 +191,7 @@ export function createRendering({
   function addRecordPrimitives(record, occluder) {
     const visible =
       state.feed.enabled &&
-      isVisible(getVisual(record).surfacePosition, occluder);
+      isVisible(getVisual(record).surfacePosition, occluder, record);
     getVisual(record).billboard = state.billboardCollection.add({
       position: getVisual(record).position,
       show: visible,
@@ -319,7 +320,7 @@ export function createRendering({
   function billboardShown(record, occluder) {
     const visual = getVisual(record);
     return (
-      isVisible(visual.surfacePosition, occluder) &&
+      isVisible(visual.surfacePosition, occluder, record) &&
       record.id !== state.cockpitSubjectId &&
       !visual.modelOwnsVisual
     );
@@ -343,7 +344,7 @@ export function createRendering({
     item.position = getVisual(record).waterline;
     // An aid to navigation is a fixed mark: it does not turn to a heading.
     item.headingDeg = item.spec?.fixed ? 0 : vesselCourseDeg(record);
-    item.show = record.id !== state.cockpitSubjectId;
+    item.show = record.id !== state.cockpitSubjectId && seenYet(record);
     return item;
   }
 
@@ -461,7 +462,7 @@ export function createRendering({
       motion.wallMs - hiddenFollowedAtWallMs >= HIDDEN_FOLLOW_MS;
     if (moveHidden) hiddenFollowedAtWallMs = motion.wallMs;
     for (const record of state.records.all) {
-      if (!record.motion) continue;
+      if (!record.motion && !fixesMove(record.fixes)) continue;
       let visual = visualRecords.get(record);
       if (!visual?.position) {
         visual = prepareRecordVisual(record);
@@ -623,14 +624,23 @@ export function createRendering({
     const focusPass =
       focusPassIsNeeded(focusTarget, state.activeFocusCount) &&
       (force || now - state.lastFocusUpdate >= FOCUS_UPDATE_MS);
+    // Following the clock, the time drawn decides which vessels are there
+    // yet: a time that moved since the last pass (a seek while paused) gets
+    // its pass too.
+    const worldMs = followsClock(vesselState) ? vesselState.worldNow() : null;
     if (
       !regularPass &&
-      state.viewer?.camera &&
-      cameraPoseSignature(state.viewer.camera) !== vesselState._lastCamPoseSig
+      ((state.viewer?.camera &&
+        cameraPoseSignature(state.viewer.camera) !==
+          vesselState._lastCamPoseSig) ||
+        worldMs !== state.visibilityWorldMs)
     )
       scheduleTrailingVisibilityPass(now);
     if (!regularPass && !focusPass) return;
-    if (regularPass) state.lastVisibilityUpdate = now;
+    if (regularPass) {
+      state.lastVisibilityUpdate = now;
+      state.visibilityWorldMs = worldMs;
+    }
     if (focusPass) state.lastFocusUpdate = now;
     if (!state.records.all.length) {
       // No records — flush any lingering card entries (vanished-feed case).
@@ -662,7 +672,7 @@ export function createRendering({
       const labelCandidates = [];
       for (const record of state.records.all) {
         const visual = getVisual(record);
-        const visible = isVisible(visual.surfacePosition, occluder);
+        const visible = isVisible(visual.surfacePosition, occluder, record);
         if (visual.billboard) {
           // The bridge camera sits on this sprite; showing it would fill the view.
           // The same rule as billboardShown, its horizon test already made.
@@ -786,9 +796,21 @@ export function createRendering({
     );
   }
 
-  function isVisible(surfacePosition, occluder) {
+  function isVisible(surfacePosition, occluder, record) {
+    if (record && !seenYet(record)) return false;
     if (!surfacePosition || !occluder) return true;
     return occluder.isPointVisible(surfacePosition);
+  }
+
+  /** Whether a vessel is there at the time drawn: following the clock, not
+   * more than TIMELINE_UNSEEN_MS before its first fix. */
+  function seenYet(record) {
+    const first = record.fixes?.[0];
+    return (
+      !first ||
+      !followsClock(vesselState) ||
+      vesselState.worldNow() >= first.atMs - TIMELINE_UNSEEN_MS
+    );
   }
 
   /**

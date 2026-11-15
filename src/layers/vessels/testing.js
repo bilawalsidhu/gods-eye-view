@@ -181,6 +181,13 @@ export function createTesting({
     components.rendering.followClockPositions();
   }
 
+  /** Follow the world clock, standing at world time `atMs`. Test-only seam. */
+
+  function _followClockForTest(atMs) {
+    vesselState.timeline = { active: () => true };
+    vesselState.worldNow = () => atMs;
+  }
+
   /** True while a trailing visibility frame is scheduled. Test-only seam. */
 
   function _hasTrailingVisibilityPassForTest() {
@@ -203,6 +210,7 @@ export function createTesting({
   return {
     _bindVesselInteractionForTest,
     _setVesselStateForTest,
+    _followClockForTest,
     _setVesselOverlayHostForTest,
     _updateVesselCardsForTest,
     _reconcileVesselsForTest,

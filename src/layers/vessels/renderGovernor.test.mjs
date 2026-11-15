@@ -124,6 +124,26 @@ test('a camera that stops inside the cadence gets exactly one trailing frame', (
   assert.equal(timers.size, 0);
 });
 
+test('following the clock, a time moved inside the cadence gets one trailing frame', () => {
+  const { layer, requests, timers, advance, frame } = setup();
+  layer.testing._followClockForTest(1_000_000);
+  frame();
+  advance(100);
+  // A seek while paused: the camera is still, the time drawn is not.
+  layer.testing._followClockForTest(940_000);
+  frame();
+  assert.equal(timers.size, 1);
+  advance(VISIBILITY_UPDATE_MS);
+  assert.deepEqual(requests, ['ais-vessels-visibility']);
+  frame();
+  for (let i = 0; i < 20; i += 1) {
+    advance(100);
+    frame();
+  }
+  assert.deepEqual(requests, ['ais-vessels-visibility']);
+  assert.equal(timers.size, 0);
+});
+
 test('a forced pass requests its own frame', () => {
   const { layer, requests } = setup();
   layer.testing._runVisibilityPassForTest(true);

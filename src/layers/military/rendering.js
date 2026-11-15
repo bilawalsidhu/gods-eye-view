@@ -917,6 +917,7 @@ export function createRendering({
       if (icao24 === flightState._trackedIcao) continue; // tracked entity owns its own motion
 
       const dr = parts.motion._deadReckon(icao24, flightState._scratchFleetPos);
+      const unseen = flightState._drUnseen;
       // Gate the write — assigning Billboard.position dirties the whole
       // collection's vertex buffer, so skip sub-meter moves.
       if (dr && Cesium.Cartesian3.distanceSquared(dr, bb.position) > 1.0) {
@@ -926,9 +927,12 @@ export function createRendering({
       // Round 6: occlusion-test a LIFTED point for contacts at/below the
       // ellipsoid (mirror of flights.js — sub-ellipsoid points near the limb
       // read "beyond the horizon" and would hide low contacts awaiting floors).
-      const beyondHorizon = !occluder.isPointVisible(
-        flightState.records.data.get(icao24)?.cullPosition || bb.position,
-      );
+      // A contact not there yet at the time drawn is hidden as one beyond it.
+      const beyondHorizon =
+        unseen ||
+        !occluder.isPointVisible(
+          flightState.records.data.get(icao24)?.cullPosition || bb.position,
+        );
       // A billboard flipping INTO view (horizon reveal while the camera idles)
       // gets its rotation refreshed THIS tick even without a pose change —
       // otherwise it reappears wearing its stale (often creation-north) nose for
