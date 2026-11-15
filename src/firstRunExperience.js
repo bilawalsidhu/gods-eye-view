@@ -23,35 +23,23 @@ import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
 
 import { t, msg } from './i18n/index.js';
 import { EXCLUSIVE_SURFACE_CLASSES } from './exclusiveSurfaces.js';
+import { FIRST_RUN_TIP, environmentalLabel } from './firstRunCopy.js';
+import { useFirstRunStore } from './ui/stores/firstRun.js';
+import { applicationPinia } from './ui/vueRuntime.js';
+
+export {
+  ENVIRONMENTAL_LABEL_CHOICE,
+  FIRST_RUN_TIP,
+  environmentalLabel,
+} from './firstRunCopy.js';
+
+/** Launchers already wired, so a second call is a no-op. */
+const initializedLaunchers = new WeakSet();
 
 /** Durable suppression. Written ONLY by the "Don't show this again" checkbox. */
 export const FIRST_RUN_STORAGE_KEY = 'gev:first-run-mission:v1';
 /** Per-session dismissal. Written by every close path; scoped to sessionStorage. */
 export const FIRST_RUN_SESSION_KEY = 'gev:first-run-mission-session:v1';
-
-/**
- * Owner-selectable name for the fires/quakes mission. Flip this ONE constant to
- * re-label the tile; the alternates are pre-written so the choice is a taste
- * call at review time, not an edit.
- * @type {'ENVIRONMENTAL'|'EARTH_WATCH'|'ACTIVE_EVENTS'}
- */
-export const ENVIRONMENTAL_LABEL_CHOICE = 'ENVIRONMENTAL';
-
-const ENVIRONMENTAL_LABEL_KEYS = Object.freeze({
-  ENVIRONMENTAL: msg('ENVIRONMENTAL'),
-  EARTH_WATCH: msg('EARTH WATCH'),
-  ACTIVE_EVENTS: msg('ACTIVE EVENTS'),
-});
-
-/**
- * @param {string} [choice]
- * @returns {{title: string}} The label set the constant above selects.
- */
-export function environmentalLabel(choice = ENVIRONMENTAL_LABEL_CHOICE) {
-  const key =
-    ENVIRONMENTAL_LABEL_KEYS[choice] || ENVIRONMENTAL_LABEL_KEYS.ENVIRONMENTAL;
-  return { title: t(key) };
-}
 
 /*
  * MISSION → APP STATE, AND WHAT IT IS ALLOWED TO PERSIST
@@ -328,6 +316,7 @@ export function exclusiveSurfaceActive(documentRef = globalThis.document) {
  * @param {Storage} [input.storage]
  * @param {Storage} [input.sessionStorageRef]
  * @param {Location} [input.location]
+ * @param {object} [input.store] The welcome view's `gev-first-run` store.
  * @returns {null|{dismiss: Function}}
  */
 export function initFirstRunExperience({
@@ -337,10 +326,42 @@ export function initFirstRunExperience({
   storage,
   sessionStorageRef,
   location = globalThis.location,
+  store = useFirstRunStore(applicationPinia()),
 } = {}) {
+  // The welcome view renders the card; it is read here for its geometry, the
+  // keyboard and focus.
   const root = documentRef?.getElementById?.('first-run-launcher');
-  if (!root || root.dataset.initialized === 'true') return null;
-  root.dataset.initialized = 'true';
+  if (!root || initializedLaunchers.has(root)) return null;
+  initializedLaunchers.add(root);
+
+  const view = {
+    removed: false,
+    shown: false,
+    visible: false,
+    closing: false,
+    state: null,
+    busy: null,
+    status: t(FIRST_RUN_TIP),
+    // The tile name is owner-switchable from one constant, so paint it from
+    // the module rather than trusting the markup to match.
+    environmentalTitle: environmentalLabel().title,
+    environmentalSub: t(
+      'Live earthquakes and active fires, from USGS and NASA',
+    ),
+    description: t(
+      'It feels like a forbidden cockpit—then you realize the sources are public and the data is real.',
+    ),
+    scrollable: null,
+  };
+  let signature = '';
+  const present = (patch) => {
+    Object.assign(view, patch);
+    // A resize that changes nothing re-renders nothing.
+    const next = JSON.stringify(view);
+    if (next === signature) return;
+    signature = next;
+    store.publish({ ...view });
+  };
 
   if (
     !shouldShowFirstRun({
@@ -350,35 +371,14 @@ export function initFirstRunExperience({
       location,
     })
   ) {
-    root.remove();
+    present({ removed: true });
     return null;
   }
+  present({});
 
-  // The tile name is owner-switchable from one constant, so paint it from the
-  // module rather than trusting the markup to match. The description and the
-  // tile subcopy are data-i18n-runtime in welcome.html and translated here.
-  const environmentalTitle = root.querySelector(
-    '[data-first-run-environmental-title]',
-  );
-  if (environmentalTitle)
-    environmentalTitle.textContent = environmentalLabel().title;
-  const environmentalSub = root.querySelector(
-    '[data-first-run-environmental-title] + small',
-  );
-  if (environmentalSub)
-    environmentalSub.textContent = t(
-      'Live earthquakes and active fires, from USGS and NASA',
-    );
-  const description = root.querySelector('#first-run-description');
-  if (description)
-    description.textContent = t(
-      'It feels like a forbidden cockpit—then you realize the sources are public and the data is real.',
-    );
-
-  const status = root.querySelector('[data-first-run-status]');
-  const suppressBox = root.querySelector('[data-first-run-suppress]');
-  const buttons = [...root.querySelectorAll('[data-first-run-choice]')];
-  const defaultStatus = status?.textContent || '';
+  const defaultStatus = view.status;
+  // An error or refused save stays on the status line until the next choice.
+  let stickyStatus = false;
   let busy = false;
   let closing = false;
 
@@ -424,7 +424,7 @@ export function initFirstRunExperience({
    */
   const isTopmost = () =>
     root.isConnected &&
-    root.classList.contains('visible') &&
+    view.visible &&
     root.getClientRects().length > 0 &&
     !coveredByOverlay();
 
@@ -432,11 +432,13 @@ export function initFirstRunExperience({
     if (closing) return;
     closing = true;
     rememberFirstRunSessionDismissed(sessionStorageRef);
-    root.classList.remove('visible');
-    root.setAttribute('aria-hidden', 'true');
+    present({ visible: false, closing: true });
     globalThis.removeEventListener?.('resize', onViewportResize);
     surfaceObserver?.disconnect();
-    const remove = () => root.remove();
+    const remove = () => {
+      store.connect(null);
+      present({ removed: true });
+    };
     root.addEventListener('transitionend', remove, { once: true });
     // `transitionend` never fires under prefers-reduced-motion (no transition),
     // so a bounded fallback is what actually removes the node there.
@@ -448,26 +450,20 @@ export function initFirstRunExperience({
 
   const setBusy = (next, choice = '') => {
     busy = next;
-    root.dataset.state = next ? 'loading' : 'ready';
-    root.setAttribute('aria-busy', String(next));
-    // aria-disabled, not `disabled`: disabling the focused button drops focus to
-    // <body> mid-flight and strands a keyboard visitor outside the launcher.
-    for (const button of buttons)
-      button.setAttribute('aria-disabled', String(next));
-    if (!status) return;
+    // `busy` is also aria-disabled on the choices, not `disabled`: disabling
+    // the focused button drops focus to <body> mid-flight and strands a
+    // keyboard visitor outside the launcher.
+    const patch = { state: next ? 'loading' : 'ready', busy: String(next) };
     if (next)
-      status.textContent = t(
-        FIRST_RUN_MISSIONS[choice]?.busyKey || msg('Working…'),
-      );
-    else if (status.dataset.sticky !== 'true')
-      status.textContent = defaultStatus;
+      patch.status = t(FIRST_RUN_MISSIONS[choice]?.busyKey || msg('Working…'));
+    else if (!stickyStatus) patch.status = defaultStatus;
+    present(patch);
   };
 
-  const onChoice = async (event) => {
+  const onChoice = async (choice) => {
     if (busy || closing) return;
-    const choice = event.currentTarget?.dataset?.firstRunChoice;
     if (!FIRST_RUN_MISSIONS[choice]) return;
-    if (status) delete status.dataset.sticky;
+    stickyStatus = false;
     setBusy(true, choice);
     let outcome = null;
     try {
@@ -506,30 +502,31 @@ export function initFirstRunExperience({
       : outcome?.result?.failedLayerIds;
     const detail =
       Array.isArray(failed) && failed.length ? ` (${failed.join(', ')})` : '';
-    if (status) {
-      status.dataset.sticky = 'true';
-      status.textContent = t(
+    stickyStatus = true;
+    present({
+      status: t(
         'Could not open that mission{detail}. Retry or explore manually.',
         { detail },
-      );
-    }
+      ),
+    });
     setBusy(false);
   };
 
-  const onSuppressChange = (event) => {
-    const box = event.currentTarget;
-    const wanted = Boolean(box?.checked);
-    if (setFirstRunSuppressed(wanted, storage)) return;
+  /** @returns {boolean} Whether the tick may stay as the visitor set it. */
+  const onSuppressChange = (wanted) => {
+    if (setFirstRunSuppressed(Boolean(wanted), storage)) return true;
     // The write is best-effort; the TICK is not. A box left checked after a
     // refused write tells the visitor "never again" about a launcher that is
-    // already guaranteed to come back next session. Put the box back where the
-    // truth is, and say why rather than leaving a control that undoes itself.
-    if (box) box.checked = !wanted;
-    if (!status) return;
-    status.dataset.sticky = 'true';
-    status.textContent = t(
-      'This browser is blocking storage, so that could not be saved.',
-    );
+    // already guaranteed to come back next session. The view puts the box back
+    // where the truth is; say why rather than leaving a control that undoes
+    // itself.
+    stickyStatus = true;
+    present({
+      status: t(
+        'This browser is blocking storage, so that could not be saved.',
+      ),
+    });
+    return false;
   };
 
   const keyboard = createSurfaceKeyboard({
@@ -542,12 +539,12 @@ export function initFirstRunExperience({
     fallbackFocus: () => documentRef.body,
   });
 
-  for (const button of buttons) button.addEventListener('click', onChoice);
-  // The same dismissal as ESC, for screens without a keyboard.
-  root
-    .querySelector('[data-first-run-dismiss]')
-    ?.addEventListener('click', () => dismiss());
-  suppressBox?.addEventListener('change', onSuppressChange);
+  store.connect({
+    choose: (choice) => void onChoice(choice),
+    // The same dismissal as ESC, for screens without a keyboard.
+    dismiss: () => dismiss(),
+    suppress: onSuppressChange,
+  });
   // Capture phase: the app binds its own global hotkeys (including bare letters
   // that cycle detection and styles), and the launcher owns the keyboard first.
   keyboard.activate();
@@ -559,19 +556,21 @@ export function initFirstRunExperience({
   const syncScrollAffordance = () => {
     if (!choiceList) return;
     const overflows = choiceList.scrollHeight > choiceList.clientHeight + 1;
-    choiceList.dataset.scrollable = String(overflows);
+    present({ scrollable: String(overflows) });
   };
 
   let revealed = false;
   const reveal = () => {
     if (revealed || closing) return;
     revealed = true;
-    root.hidden = false;
+    present({ shown: true });
     globalThis.requestAnimationFrame?.(() => {
       if (closing) return;
-      root.classList.add('visible');
+      present({ visible: true });
       syncScrollAffordance();
-      buttons[0]?.focus?.({ preventScroll: true });
+      root
+        .querySelector('[data-first-run-choice]')
+        ?.focus?.({ preventScroll: true });
     });
   };
 
@@ -659,7 +658,8 @@ export function initFirstRunExperience({
     keyboard.destroy();
     globalThis.removeEventListener?.('resize', onViewportResize);
     surfaceObserver?.disconnect();
-    root.remove();
+    store.connect(null);
+    present({ visible: false, removed: true });
   };
   return { dismiss, isTopmost, destroy };
 }

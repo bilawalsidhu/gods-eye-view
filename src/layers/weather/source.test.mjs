@@ -5,6 +5,10 @@ import {
   validateWeatherSnapshot,
   weatherImageUrl,
   weatherTileUrl,
+  weatherFrameSource,
+  weatherPixelSize,
+  drawWeatherPixels,
+  closeWeatherPixels,
   WEATHER_DETAIL_SIZE,
   WEATHER_IMAGE_SIZES,
 } from './source.js';
@@ -198,4 +202,104 @@ test('image frames are read through the bounded image route', async () => {
     failing.getImage({ product: 'radar', time }),
     /Weather image HTTP 409/,
   );
+});
+
+test('a feed without frame methods is no frame source', () => {
+  assert.equal(weatherFrameSource(undefined), null);
+  assert.equal(weatherFrameSource({ getSnapshot: async () => ({}) }), null);
+  assert.equal(weatherFrameSource({ getFrameImage: 'no' }), null);
+});
+
+test('a frame source forwards exactly the documented requests to its feed', async () => {
+  const calls = [];
+  const signal = new AbortController().signal;
+  const feed = {
+    getFrameImage: async (request) => {
+      calls.push(['image', request]);
+      return 'image';
+    },
+    getFrameTile: async (request) => {
+      calls.push(['tile', request]);
+      return null;
+    },
+  };
+  const source = weatherFrameSource(feed);
+  const size = { width: 4096, height: 2048 };
+  assert.equal(
+    await source.getImage({ product: 'radar', time: 't', size, signal }),
+    'image',
+  );
+  const bbox = { west: -102, south: 34, east: -96, north: 37 };
+  await source.getImage({ product: 'radar', time: 't', size, bbox, signal });
+  assert.equal(
+    await source.getTile({
+      product: 'lightning',
+      time: 't',
+      z: 1,
+      x: 2,
+      y: 0,
+      size: 256,
+      signal,
+      extra: true,
+    }),
+    null,
+  );
+  assert.deepEqual(calls, [
+    ['image', { product: 'radar', time: 't', size, bbox: null, signal }],
+    ['image', { product: 'radar', time: 't', size, bbox, signal }],
+    [
+      'tile',
+      { product: 'lightning', time: 't', z: 1, x: 2, y: 0, size: 256, signal },
+    ],
+  ]);
+  const imagesOnly = weatherFrameSource({ getFrameImage: feed.getFrameImage });
+  assert.equal(typeof imagesOnly.getImage, 'function');
+  assert.equal(imagesOnly.getTile, undefined, 'tiles keep the tile route');
+  const tilesOnly = weatherFrameSource({ getFrameTile: feed.getFrameTile });
+  assert.equal(tilesOnly.getImage, undefined, 'images keep the image route');
+});
+
+test('supplied pixels report their drawn size, draw at the origin and close once', (t) => {
+  assert.deepEqual(weatherPixelSize({ width: 4, height: 2 }), {
+    width: 4,
+    height: 2,
+  });
+  assert.deepEqual(
+    weatherPixelSize({
+      codedWidth: 8,
+      codedHeight: 8,
+      displayWidth: 4,
+      displayHeight: 2,
+    }),
+    { width: 4, height: 2 },
+    'a VideoFrame draws at its display size',
+  );
+  const had = Object.hasOwn(globalThis, 'ImageData');
+  const previous = globalThis.ImageData;
+  globalThis.ImageData = class ImageData {
+    width = 1;
+    height = 1;
+  };
+  t.after(() => {
+    if (had) globalThis.ImageData = previous;
+    else delete globalThis.ImageData;
+  });
+  const calls = [];
+  const context = {
+    drawImage: (...args) => calls.push(['drawImage', ...args]),
+    putImageData: (...args) => calls.push(['putImageData', ...args]),
+  };
+  const bitmap = { width: 1, height: 1 };
+  const data = new globalThis.ImageData();
+  drawWeatherPixels(context, bitmap);
+  drawWeatherPixels(context, data);
+  assert.deepEqual(calls, [
+    ['drawImage', bitmap, 0, 0],
+    ['putImageData', data, 0, 0],
+  ]);
+  let closes = 0;
+  closeWeatherPixels({ close: () => closes++ });
+  closeWeatherPixels(data);
+  closeWeatherPixels(null);
+  assert.equal(closes, 1);
 });

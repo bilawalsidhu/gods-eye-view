@@ -69,9 +69,10 @@ try {
     await page.evaluate(() => {
       const manager = window.__godsEyeView.styleManager;
       return (
-        manager._mapStackChips.querySelector('[aria-pressed="true"]')?.dataset
-          .stackId === 'osm' &&
-        manager._mapStackStatus.textContent ===
+        document
+          .getElementById('map-stack-chips')
+          .querySelector('[aria-pressed="true"]')?.dataset.stackId === 'osm' &&
+        document.getElementById('map-stack-status').textContent ===
           manager.mapStackController.getState().activeStack.shortLabel
       );
     }),
@@ -81,32 +82,38 @@ try {
     await page.evaluate(async () => {
       const manager = window.__godsEyeView.styleManager;
       const result = await manager.setMapStack('esri-imagery');
+      // The dock renders the published row on Vue's next flush.
+      await new Promise((resolve) => setTimeout(resolve, 0));
       const active = manager.mapStackController.getActiveId();
       return (
         window.__qaMapSelections.at(-1) === 'esri-imagery' &&
-        manager._mapStackChips.querySelector('[aria-pressed="true"]')?.dataset
-          .stackId === active &&
+        document
+          .getElementById('map-stack-chips')
+          .querySelector('[aria-pressed="true"]')?.dataset.stackId === active &&
         (result.ok || !!manager.mapStackController.getState().lastError)
       );
     }),
   );
   check(
-    'refresh revokes retained old chips',
-    await page.evaluate(() => {
+    'refresh re-presents the chips without duplicating them',
+    await page.evaluate(async () => {
       const manager = window.__godsEyeView.styleManager;
-      const old = manager._mapStackChips.querySelector('[data-stack-id="osm"]');
       manager._mapSourceControls.refresh();
-      const before = window.__qaMapSelections.length;
-      old.click();
-      return window.__qaMapSelections.length === before;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      return (
+        document.querySelectorAll('#map-stack-chips [data-stack-id="osm"]')
+          .length === 1
+      );
     }),
   );
   check(
     'refreshed chips still select once',
     await page.evaluate(async () => {
-      const manager = window.__godsEyeView.styleManager;
       const before = window.__qaMapSelections.length;
-      manager._mapStackChips.querySelector('[data-stack-id="osm"]').click();
+      document
+        .getElementById('map-stack-chips')
+        .querySelector('[data-stack-id="osm"]')
+        .click();
       await Promise.resolve();
       return window.__qaMapSelections.length === before + 1;
     }),
@@ -188,7 +195,10 @@ try {
       const manager = window.__godsEyeView.styleManager;
       const before = window.__qaMapSelections.length;
       manager._mapSourceControls.destroy();
-      manager._mapStackChips.querySelector('[data-stack-id="osm"]').click();
+      document
+        .getElementById('map-stack-chips')
+        .querySelector('[data-stack-id="osm"]')
+        .click();
       const result = await manager._mapSourceControls.select('esri-imagery');
       return result === null && window.__qaMapSelections.length === before;
     }),

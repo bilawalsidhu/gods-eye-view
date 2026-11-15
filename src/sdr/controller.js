@@ -17,7 +17,13 @@ import {
   selectAuthorizedSdrDevice,
 } from './usbDevices.js';
 import { summarizeLocalAdsb } from '../sources/adsbRecords.js';
-import { formatNumber, msg, t, translateKnown } from '../i18n/index.js';
+import {
+  formatNumber,
+  msg,
+  onLocaleChange,
+  t,
+  translateKnown,
+} from '../i18n/index.js';
 
 export { createRememberingWebUsb } from './usbDevices.js';
 
@@ -302,20 +308,29 @@ function describeConnectionError(error) {
   return message || msg('RTL-SDR connection failed');
 }
 
+/** State fields `_setState` keeps as functions to word again (see _reword). */
+const WORDED_FIELDS = ['message', 'seekMessage'];
+
 /**
  * State fields for a receiver error: `message` in the UI language for the
  * Radio card, `errorText` as English data for the Local ADS-B layer's stats.
  * A new connection, a mode switch and stop() clear `errorText` again.
  * @param {string} text English error text (ours or the browser's).
  */
+
 function errorState(text) {
-  return { status: 'error', message: translateKnown(text), errorText: text };
+  return {
+    status: 'error',
+    message: () => translateKnown(text),
+    errorText: text,
+  };
 }
 
 function streamingMessage(mode) {
-  return mode === 'adsb'
-    ? t('Receiving 1090 MHz ADS-B')
-    : t('Receiving broadcast FM');
+  return () =>
+    mode === 'adsb'
+      ? t('Receiving 1090 MHz ADS-B')
+      : t('Receiving broadcast FM');
 }
 
 /**
@@ -351,9 +366,7 @@ export class SdrController {
       webUsbSupported,
       connected: false,
       status: webUsbSupported ? 'idle' : 'unsupported',
-      message: webUsbSupported
-        ? t('Connect an RTL-SDR to begin.')
-        : t('WebUSB is unavailable in this browser'),
+      message: '',
       mode: 'fm',
       frequencyHz: FM_DEFAULT_HZ,
       sampleRate: FM_SAMPLE_RATE,
@@ -378,6 +391,14 @@ export class SdrController {
       iqLevelDbfs: null,
       audioLevelDbfs: null,
     };
+    this._wording = {
+      message: webUsbSupported
+        ? () => t('Connect an RTL-SDR to begin.')
+        : () => t('WebUSB is unavailable in this browser'),
+      seekMessage: null,
+    };
+    this.state.message = this._wording.message();
+    this._offLocale = null;
     this._listeners = new Set();
     this._provider = null;
     this._device = null;
@@ -473,12 +494,33 @@ export class SdrController {
 
   subscribe(listener) {
     if (typeof listener !== 'function') return () => {};
+    // Messages are worded again in a new locale while anyone listens; a
+    // first listener after a change gets them in the current one.
+    if (!this._offLocale) {
+      this._wordState();
+      this._offLocale = onLocaleChange(() => this._reword());
+    }
     this._listeners.add(listener);
     listener(this.getState());
-    return () => this._listeners.delete(listener);
+    return () => {
+      this._listeners.delete(listener);
+      if (this._listeners.size) return;
+      this._offLocale?.();
+      this._offLocale = null;
+    };
   }
 
+  /**
+   * Apply `patch` and tell the listeners. A message given as a function is
+   * kept, so a locale change can word it again; a string stays as it is.
+   */
   _setState(patch) {
+    for (const field of WORDED_FIELDS) {
+      if (!Object.hasOwn(patch, field)) continue;
+      const value = patch[field];
+      this._wording[field] = typeof value === 'function' ? value : null;
+      if (this._wording[field]) patch = { ...patch, [field]: value() };
+    }
     Object.assign(this.state, patch);
     const snapshot = this.getState();
     for (const listener of this._listeners) {
@@ -488,6 +530,18 @@ export class SdrController {
         console.warn('[SDR] State listener failed:', error);
       }
     }
+  }
+
+  /** Word the kept messages again in the current locale, without telling. */
+  _wordState() {
+    for (const field of WORDED_FIELDS)
+      if (this._wording[field]) this.state[field] = this._wording[field]();
+  }
+
+  /** Word the kept messages again and tell the listeners. */
+  _reword() {
+    this._wordState();
+    this._setState({});
   }
 
   _queueUsb(operation) {
@@ -1074,7 +1128,7 @@ export class SdrController {
     if (!this.state.webUsbSupported) {
       this._setState({
         status: 'unsupported',
-        message: t('WebUSB requires desktop Chrome or Edge'),
+        message: () => t('WebUSB requires desktop Chrome or Edge'),
       });
       return false;
     }
@@ -1083,7 +1137,7 @@ export class SdrController {
     const superseded = () => this._destroyed || token !== this._sessionToken;
     this._setState({
       status: 'connecting',
-      message: t('Waiting for an RTL-SDR device…'),
+      message: () => t('Waiting for an RTL-SDR device…'),
       errorText: null,
     });
     let acquisition = null;
@@ -1554,9 +1608,10 @@ export class SdrController {
       status: 'tuning',
       mode: nextMode,
       gain: this._gainByMode[nextMode],
-      message: t('Switching to {mode}…', {
-        mode: nextMode === 'adsb' ? 'ADS-B' : 'FM',
-      }),
+      message: () =>
+        t('Switching to {mode}…', {
+          mode: nextMode === 'adsb' ? 'ADS-B' : 'FM',
+        }),
       errorText: null,
     });
     try {
@@ -1675,9 +1730,10 @@ export class SdrController {
         ...(quiet
           ? {}
           : {
-              message: t('Tuned to {mhz} MHz FM', {
-                mhz: formatMhz(frequency),
-              }),
+              message: () =>
+                t('Tuned to {mhz} MHz FM', {
+                  mhz: formatMhz(frequency),
+                }),
             }),
       });
       return true;
@@ -1709,7 +1765,8 @@ export class SdrController {
     const token = ++this._seekToken;
     this._setState({
       seeking: true,
-      seekMessage: seekDirection > 0 ? t('Seeking up…') : t('Seeking down…'),
+      seekMessage: () =>
+        seekDirection > 0 ? t('Seeking up…') : t('Seeking down…'),
     });
     this._audioNode?.port.postMessage({ type: 'volume', value: 0 });
     try {
@@ -1726,12 +1783,16 @@ export class SdrController {
         // tuneFm reports the failure; no spectrum is valid for this frame.
         if (!(await this.tuneFm(center, { quiet: true }))) {
           if (token === this._seekToken)
-            this._setState({ seeking: false, seekMessage: t('Seek stopped') });
+            this._setState({
+              seeking: false,
+              seekMessage: () => t('Seek stopped'),
+            });
           return null;
         }
         const sequence = this._spectrumSequence;
         this._setState({
-          seekMessage: t('Scanning {mhz} MHz…', { mhz: formatMhz(center) }),
+          seekMessage: () =>
+            t('Scanning {mhz} MHz…', { mhz: formatMhz(center) }),
         });
         if (
           !(await this._waitForSpectrum(sequence)) ||
@@ -1752,13 +1813,15 @@ export class SdrController {
         await this.tuneFm(peak.frequency, { quiet: true });
         this._setState({
           seeking: false,
-          seekMessage: t('Found {mhz} MHz · {snr} dB', {
-            mhz: formatMhz(peak.frequency),
-            snr: formatOneDecimal(peak.snr),
-          }),
-          message: t('FM signal found at {mhz} MHz', {
-            mhz: formatMhz(peak.frequency),
-          }),
+          seekMessage: () =>
+            t('Found {mhz} MHz · {snr} dB', {
+              mhz: formatMhz(peak.frequency),
+              snr: formatOneDecimal(peak.snr),
+            }),
+          message: () =>
+            t('FM signal found at {mhz} MHz', {
+              mhz: formatMhz(peak.frequency),
+            }),
         });
         return peak;
       }
@@ -1766,7 +1829,7 @@ export class SdrController {
         await this.tuneFm(origin, { quiet: true });
         this._setState({
           seeking: false,
-          seekMessage: t('No FM signal found'),
+          seekMessage: () => t('No FM signal found'),
         });
       }
       return null;
@@ -1783,7 +1846,7 @@ export class SdrController {
   cancelSeek() {
     this._seekToken += 1;
     if (!this.state.seeking) return false;
-    this._setState({ seeking: false, seekMessage: t('Seek stopped') });
+    this._setState({ seeking: false, seekMessage: () => t('Seek stopped') });
     this._audioNode?.port.postMessage({
       type: 'volume',
       value: this.state.volume,
@@ -1803,7 +1866,7 @@ export class SdrController {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       this._setState({
         locationStatus: 'unavailable',
-        message: t('Browser location is unavailable'),
+        message: () => t('Browser location is unavailable'),
       });
       return false;
     }
@@ -1830,7 +1893,7 @@ export class SdrController {
       console.warn('[SDR] Receiver location failed:', error);
       this._setState({
         locationStatus: 'denied',
-        message: t('Receiver location was not granted'),
+        message: () => t('Receiver location was not granted'),
       });
       return false;
     }
@@ -1873,7 +1936,10 @@ export class SdrController {
       status: preserveMessage ? this.state.status : idleStatus,
       ...(preserveMessage
         ? {}
-        : { message: message || t('RTL-SDR disconnected'), errorText: null }),
+        : {
+            message: message || (() => t('RTL-SDR disconnected')),
+            errorText: null,
+          }),
       snr: null,
       samplesPerSecond: 0,
       workerBlocks: 0,
@@ -1893,6 +1959,8 @@ export class SdrController {
     this._audioNode = null;
     this.state.audioState = 'closed';
     this._listeners.clear();
+    this._offLocale?.();
+    this._offLocale = null;
   }
 }
 

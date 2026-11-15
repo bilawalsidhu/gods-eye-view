@@ -209,3 +209,38 @@ test('stopped Cockpit cannot rearm briefing rotation or request a fresh region',
     env.restore();
   }
 });
+
+test('the weather toggle flips from its own state, however fast it is pressed', () => {
+  const env = environment();
+  try {
+    const toggle = new EventTarget();
+    document.getElementById = (id) =>
+      id === 'cockpit-weather-toggle' ? toggle : null;
+    const requested = [];
+    window.addEventListener('gev:cockpit-weather-toggle', (event) =>
+      requested.push(event.detail.enabled),
+    );
+    const published = [];
+    const owner = new CockpitViewController(env.viewer, {
+      services: {},
+      publish: { context: (view) => published.push(view.weather) },
+    });
+    // Two presses before any view renders still alternate.
+    toggle.dispatchEvent(new Event('click'));
+    toggle.dispatchEvent(new Event('click'));
+    assert.deepEqual(requested, [true, false]);
+    assert.deepEqual(published, [true, false]);
+    // The effects owner reports its state; the next press flips that.
+    window.dispatchEvent(
+      new CustomEvent('gev:cockpit-weather-state', {
+        detail: { enabled: true },
+      }),
+    );
+    toggle.dispatchEvent(new Event('click'));
+    assert.deepEqual(requested, [true, false, false]);
+    assert.deepEqual(published, [true, false, true, false]);
+    owner.dispose();
+  } finally {
+    env.restore();
+  }
+});

@@ -30,45 +30,45 @@ function input() {
   };
 }
 
-function settle(searchInput, options) {
-  const owner = { _activeLocationSearchGeneration: 4, searchInput };
+function settle(options) {
+  const asked = [];
+  const owner = {
+    _activeLocationSearchGeneration: 4,
+    settleSearch: (settled) => asked.push(settled),
+  };
   NavigationController.prototype._settleLocationSearchUi.call(
     owner,
     4,
     options,
   );
-  return owner;
+  return { owner, asked };
 }
 
-test('a search that found nothing keeps its query, the open field and focus', () => {
-  const field = input();
-  const owner = settle(field, { keepQuery: true });
+// The location controls keep or clear the field (src/ui/locationControls.test.mjs).
+test('a search that found nothing asks the field to keep its query', () => {
+  const { owner, asked } = settle({ keepQuery: true });
   assert.equal(owner._activeLocationSearchGeneration, null);
-  assert.equal(field.value, 'Pariss');
-  assert.equal(field.classList.contains('expanded'), true);
-  assert.equal(field.classList.contains('searching'), false);
-  assert.equal(field.focused, true);
-  assert.equal(field.selected, true);
+  assert.deepEqual(asked, [{ keepQuery: true }]);
 });
 
-test('a search that arrived still clears and closes the field', () => {
-  const field = input();
-  field.focused = true;
-  settle(field);
-  assert.equal(field.value, '');
-  assert.equal(field.classList.contains('expanded'), false);
-  assert.equal(field.focused, false);
+test('a search that arrived asks the field to clear, once', () => {
+  const { owner, asked } = settle();
+  assert.deepEqual(asked, [{ keepQuery: false }]);
+  NavigationController.prototype._settleLocationSearchUi.call(owner, 4);
+  assert.deepEqual(asked, [{ keepQuery: false }]);
 });
 
 function navigation() {
   const field = input();
-  const error = { id: 'location-search-error', textContent: '' };
+  // The tray renders the error and the field's aria-invalid from the
+  // controls' published view (src/ui/commandDock.test.mjs).
+  const errors = [];
   const settled = [];
   const toasts = [];
   const owner = {
     _disposed: false,
     _locationSearch: field,
-    _locationSearchError: error,
+    _locationControls: { setSearchError: (message) => errors.push(message) },
     _activeLocationSearchGeneration: null,
     _settleLocationSearchUi: (generation, options) =>
       settled.push([generation, options]),
@@ -82,7 +82,7 @@ function navigation() {
       { status, query: field.value },
       { type, generation: 7 },
     );
-  return { owner, field, error, settled, toasts, handle };
+  return { owner, field, errors, settled, toasts, handle };
 }
 
 for (const [status, text] of [
@@ -94,17 +94,28 @@ for (const [status, text] of [
     n.handle('searching', 'started');
     n.handle(status, status);
     n.handle(status, 'settled');
-    assert.match(n.error.textContent, new RegExp(`^${text}\\. `));
-    assert.equal(n.field.getAttribute('aria-invalid'), 'true');
-    assert.equal(
-      n.field.getAttribute('aria-describedby'),
-      'location-search-error',
-    );
+    assert.match(n.errors.at(-1), new RegExp(`^${text}\\. `));
     assert.deepEqual(n.settled, [[7, { keepQuery: true }]]);
     assert.deepEqual(n.toasts, []);
     n.handle('searching', 'started');
-    assert.equal(n.error.textContent, '');
-    assert.equal(n.field.getAttribute('aria-invalid'), null);
-    assert.equal(n.field.getAttribute('aria-describedby'), null);
+    assert.equal(n.errors.at(-1), null);
   });
 }
+
+test('Escape closes the search field only while it is open; panel collapse always', () => {
+  let closed = 0;
+  const owner = {
+    _locationControls: {
+      searchExpanded: false,
+      closeSearch: () => (closed += 1),
+    },
+  };
+  LocationNavigation.prototype.closeSearch.call(owner, { ifOpen: true });
+  assert.equal(closed, 0);
+  owner._locationControls.searchExpanded = true;
+  LocationNavigation.prototype.closeSearch.call(owner, { ifOpen: true });
+  assert.equal(closed, 1);
+  owner._locationControls.searchExpanded = false;
+  LocationNavigation.prototype.closeSearch.call(owner);
+  assert.equal(closed, 2);
+});

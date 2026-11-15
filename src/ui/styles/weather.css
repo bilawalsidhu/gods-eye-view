@@ -42,8 +42,6 @@
   max-height: calc(var(--right-stack-max-height, 50svh) - 64px);
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 212, 255, 0.46) transparent;
 }
 #weather-panel.collapsed #weather-panel-body,
 #weather-panel[hidden],

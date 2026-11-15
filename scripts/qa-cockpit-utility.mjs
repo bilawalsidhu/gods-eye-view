@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
+import { stubPlanespotters } from './qa-photo-stub.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const shotsDir = path.join(repoRoot, 'qa-shots', 'cockpit-utility');
@@ -29,6 +30,7 @@ const browser = await puppeteer.launch({
   ],
 });
 const page = await browser.newPage();
+await stubPlanespotters(page);
 const failures = [];
 const consoleErrors = [];
 const localHttpErrors = [];
@@ -825,6 +827,7 @@ try {
   // a legitimate retained snapshot cannot satisfy or invalidate a FIRST-fetch
   // assertion when camera motion supersedes the manager's initial update.
   const readinessPage = await browser.newPage();
+  await stubPlanespotters(readinessPage);
   let deferredInstallationReadiness;
   try {
     await readinessPage.setViewport({ width: 1440, height: 900 });
@@ -1720,6 +1723,9 @@ try {
     const priorSignalMaxHeight = signal.style.maxHeight;
     signal.style.maxHeight = '150px';
     manager._setCockpitDisclosure(kind, true);
+    // Let Vue render the disclosure, but not the scheduled layout frame: the
+    // first syncSignalLayout below must be the first pass.
+    await Promise.resolve();
     // One pass must be enough. Record the result of the FIRST layout call, then
     // confirm a second changes nothing, so a convergence regression cannot hide
     // behind a repeated call.
@@ -1796,7 +1802,7 @@ try {
     manager._setCockpitDisplayPortalActive(false);
     document.body.classList.remove('cockpit-mode');
     await waitFrames();
-    standard.classList.remove('collapsed');
+    manager._presentPanel(standard, { collapsed: false });
     standard.style.height = '120px';
     standard.style.maxHeight = '120px';
     standard.style.overflowY = 'auto';
@@ -1831,7 +1837,7 @@ try {
     cockpit.style.height = priorCockpitHeight;
     cockpit.style.maxHeight = priorCockpitMaxHeight;
     cockpit.style.overflowY = priorCockpitOverflow;
-    standard.classList.toggle('collapsed', standardWasCollapsed);
+    manager._presentPanel(standard, { collapsed: standardWasCollapsed });
     return {
       standardBefore,
       standardAfter,
@@ -1851,7 +1857,7 @@ try {
     JSON.stringify(portalScroll),
   );
 
-  const boundary = await page.evaluate(() => {
+  const boundary = await page.evaluate(async () => {
     const manager = window.__godsEyeView.styleManager;
     const hud = document.getElementById('cockpit-hud');
     const signal = document.getElementById('cockpit-signal-stream');
@@ -1866,6 +1872,7 @@ try {
     signal.hidden = false;
     manager._setCockpitDisclosure('radio', false);
     manager._setCockpitDisclosure('display', true);
+    await new Promise(requestAnimationFrame);
     const priorSignalMaxHeight = signal.style.maxHeight;
     const priorSignalHeight = signal.style.height;
     // The strip is pinned to the viewport ceiling once the briefing card grows
@@ -2083,7 +2090,7 @@ try {
   }
   await page.evaluate(() => window.__godsEyeView.styleManager._setHudVariant('tactical'));
 
-  const signalTransition = await page.evaluate(() => {
+  const signalTransition = await page.evaluate(async () => {
     const manager = window.__godsEyeView.styleManager;
     const cockpit = manager.cockpitView;
     const signalToggle = document.getElementById('cockpit-signal-toggle');
@@ -2110,6 +2117,8 @@ try {
       manager._setCockpitDisclosure('radio', true);
       manager._setCockpitDisclosure('radio', false);
       const manualCollapseRetained = cockpit.signalCollapsed && cockpit.signalUserCollapsed;
+      // The toggle renders the published collapse on Vue's next flush.
+      await new Promise((resolve) => requestAnimationFrame(resolve));
       return {
         afterExpansion,
         afterRepeatedExpansion,
@@ -2136,7 +2145,7 @@ try {
       && signalTransition.signalAriaExpanded === 'false',
     JSON.stringify(signalTransition),
   );
-  const contextTransition = await page.evaluate(() => {
+  const contextTransition = await page.evaluate(async () => {
     const cockpit = window.__godsEyeView.styleManager.cockpitView;
     const priorCollapsed = cockpit.contextCollapsed;
     const contextToggle = document.getElementById('cockpit-context-toggle');
@@ -2148,6 +2157,8 @@ try {
       cockpit.setContextCollapsed(false);
       const afterExpansion = expandedEvents;
       cockpit.setContextCollapsed(false);
+      // The toggle renders the published collapse on Vue's next flush.
+      await new Promise((resolve) => requestAnimationFrame(resolve));
       return {
         afterExpansion,
         afterRepeatedExpansion: expandedEvents,
@@ -2168,33 +2179,34 @@ try {
     JSON.stringify(contextTransition),
   );
   // Use the real connected DOM to catch focus loss caused by moving live rows.
-  const signalFocus = await page.evaluate(() => {
+  const signalFocus = await page.evaluate(async () => {
     const cockpit = window.__godsEyeView.styleManager.cockpitView;
+    // The rows render on Vue's next update; a frame is past it.
+    const show = async (items) => {
+      cockpit.signalItems = items;
+      cockpit.publishCockpitSignals();
+      await new Promise(requestAnimationFrame);
+    };
     const originalItems = cockpit.signalItems;
     const wasCollapsed = cockpit.signalCollapsed;
     cockpit.setSignalCollapsed(false);
     const item = (id) => ({ key: `qa-${id}`, tone: 'info', timestamp: Date.now(),
       title: `QA ${id}`, detail: 'Keyboard refresh fixture', target: { layerId: 'flights', id } });
     try {
-      cockpit.signalItems = [item('focus-a'), item('focus-b')];
-      cockpit.renderCockpitSignals();
+      await show([item('focus-a'), item('focus-b')]);
       const button = cockpit.signalList.querySelector('[data-signal-id="focus-a"]');
       button.focus();
       const acquired = document.activeElement === button;
-      cockpit.signalItems = [item('focus-c'), item('focus-b'), item('focus-a')];
-      cockpit.renderCockpitSignals();
+      await show([item('focus-c'), item('focus-b'), item('focus-a')]);
       const retained = document.activeElement === button && button.isConnected;
       const order = [...cockpit.signalList.querySelectorAll('[data-signal-id]')].map((node) => node.dataset.signalId);
-      cockpit.signalItems = [item('focus-b')];
-      cockpit.renderCockpitSignals();
+      await show([item('focus-b')]);
       const continuation = cockpit.briefTabs[cockpit.briefPageIndex] || cockpit.signalToggle;
       const continued = document.activeElement === continuation;
-      cockpit.signalItems = [item('focus-a'), item('focus-b')];
-      cockpit.renderCockpitSignals();
+      await show([item('focus-a'), item('focus-b')]);
       return { acquired, retained, order, continued, notReclaimed: document.activeElement === continuation };
     } finally {
-      cockpit.signalItems = originalItems;
-      cockpit.renderCockpitSignals();
+      await show(originalItems);
       cockpit.setSignalCollapsed(wasCollapsed);
     }
   });
@@ -2260,12 +2272,14 @@ try {
     signal.hidden = false;
     manager._setCockpitDisclosure('display', false);
     manager._setCockpitDisclosure('radio', false);
+    await new Promise(requestAnimationFrame);
     manager.cockpitView.syncSignalLayout();
     const collapsed = {
       display: displayControl.getBoundingClientRect().toJSON(),
       radio: radioControl.getBoundingClientRect().toJSON(),
     };
     display.click();
+    await new Promise(requestAnimationFrame);
     manager.cockpitView.syncSignalLayout();
     return {
       collapsed,

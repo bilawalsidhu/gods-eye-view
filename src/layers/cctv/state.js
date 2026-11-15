@@ -29,12 +29,22 @@ export function createState({ services }) {
 
   layerState._activeCameraId = null;
 
+  // Advances when a user reselects the already-active camera. The geometry
+  // activation remains a no-op, but browser-only camera UI can retry playback.
+  layerState._activeCameraReselection = 0;
+
   layerState._coverageMode = 'on';
   // 'off' | 'on' (wireframes) | 'viewshed' (color-coded volumes)
 
   layerState._showProjection = true;
 
   layerState._autoHop = false;
+
+  // True while the active camera is the one enable() opened on and nobody has
+  // chosen a camera since: each settled move then re-picks the one nearest
+  // the view, so a share flight that lands after enable still opens nearby.
+
+  layerState._openingCameraProvisional = false;
 
   // An explicit empty-space deselect keeps AUTO HOP configured but prevents its
   // timer from silently choosing a replacement. A later explicit activation or

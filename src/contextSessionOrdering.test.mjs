@@ -168,7 +168,7 @@ test('every user-facing Context exit route settles through the failure surface',
 test('the Radio chip catches lifecycle rejection and semantic false through the toast wrapper', () => {
   const radioControls = radioBindings.slice(
     radioBindings.indexOf('const toggleRadio = async (trigger) => {'),
-    radioBindings.indexOf("this.listen(this._radioFilter, 'change'"),
+    radioBindings.indexOf('this._storeToken = this.store?.connect?.('),
   );
   assert.match(radioControls, /await this\.actions\.runUserAction\(/);
   assert.match(radioControls, /Radio could not \$\{enabling \? 'start' : 'stop'\} cleanly/);
@@ -178,7 +178,7 @@ test('the Radio chip catches lifecycle rejection and semantic false through the 
 test('only the expanded Radio Enable gesture requests the contained post-enable reveal', () => {
   const radioControls = radioBindings.slice(
     radioBindings.indexOf('const toggleRadio = async (trigger) => {'),
-    radioBindings.indexOf("this.listen(this._radioFilter, 'change'"),
+    radioBindings.indexOf('this._storeToken = this.store?.connect?.('),
   );
   assert.match(radioControls, /revealAfterEnable = enabling && trigger === this\._radioEnableBtn/);
   assert.match(radioControls, /if \(revealAfterEnable\)\s*await this\._revealRadioControlsAfterExplicitEnable\(trigger\)/);

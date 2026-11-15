@@ -5,19 +5,15 @@ import { createFrameRateMonitor } from './frameRateMonitor.js';
 function fixture(t) {
   const keys = new Set();
   const frames = new Set();
-  let readout;
+  const store = {
+    fps: undefined,
+    publishFps(next) {
+      this.fps = next;
+    },
+  };
   const documentRef = {
     hidden: false,
-    getElementById: () => ({
-      appendChild: (node) => {
-        readout = node;
-      },
-    }),
-    createElement: () => ({
-      remove() {
-        this.removed = true;
-      },
-    }),
+    getElementById: (id) => (id === 'title-bar' ? {} : null),
     addEventListener: (name, handler) => keys.add(handler),
     removeEventListener: (name, handler) => keys.delete(handler),
   };
@@ -31,14 +27,14 @@ function fixture(t) {
       },
     },
   };
-  const monitor = createFrameRateMonitor({ viewer, documentRef });
+  const monitor = createFrameRateMonitor({ viewer, documentRef, store });
   t.after(() => monitor.destroy());
   return {
     monitor,
     documentRef,
     frames,
     keys,
-    readout: () => readout,
+    readout: () => store.fps,
     press(options = {}) {
       const event = {
         key: '`',
@@ -58,7 +54,7 @@ test('FPS measures rendered frames only while shown and releases its resources',
   let now = 0;
   t.mock.method(performance, 'now', () => now);
   const f = fixture(t);
-  assert.equal(f.readout().hidden, true);
+  assert.equal(f.readout().visible, false);
   assert.equal(f.frames.size, 0);
   assert.equal(f.press().defaultPrevented, true);
   assert.equal(f.frames.size, 1);
@@ -66,26 +62,26 @@ test('FPS measures rendered frames only while shown and releases its resources',
     for (const render of f.frames) render();
   now = 1000;
   t.mock.timers.tick(1000);
-  assert.equal(f.readout().textContent, 'FPS 30');
+  assert.equal(f.readout().text, 'FPS 30');
   now = 2000;
   t.mock.timers.tick(1000);
   assert.equal(
-    f.readout().textContent,
+    f.readout().text,
     'FPS 0',
     'idle rendering is not reported as display refresh rate',
   );
   f.press();
-  assert.equal(f.readout().hidden, true);
+  assert.equal(f.readout().visible, false);
   assert.equal(f.frames.size, 0);
   now = 3000;
   t.mock.timers.tick(1000);
   f.press();
-  assert.equal(f.readout().textContent, 'FPS —');
+  assert.equal(f.readout().text, 'FPS —');
   f.monitor.destroy();
   f.monitor.destroy();
   assert.equal(f.frames.size, 0);
   assert.equal(f.keys.size, 0);
-  assert.equal(f.readout().removed, true);
+  assert.equal(f.readout(), null, 'destroy withdraws the readout');
 });
 
 test('typing, modified keys, composition and repeated presses do not toggle FPS', (t) => {
@@ -103,7 +99,45 @@ test('typing, modified keys, composition and repeated presses do not toggle FPS'
     { key: 'a' },
   ]) {
     f.press(options);
-    assert.equal(f.readout().hidden, true);
+    assert.equal(f.readout().visible, false);
     assert.equal(f.frames.size, 0);
   }
+});
+
+test('a page without the title bar gets no readout and keeps the key', () => {
+  let listened = false;
+  const store = { publishFps: () => assert.fail('nothing to show it in') };
+  const monitor = createFrameRateMonitor({
+    viewer: { scene: { postRender: { addEventListener: () => () => {} } } },
+    documentRef: {
+      getElementById: () => null,
+      addEventListener: () => (listened = true),
+    },
+    store,
+  });
+  monitor.destroy();
+  assert.equal(listened, false);
+});
+
+test("destroying an earlier monitor leaves a newer one's readout", () => {
+  const store = {
+    publishFps(next) {
+      this.fps = next;
+    },
+  };
+  const documentRef = {
+    getElementById: () => ({}),
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  const viewer = {
+    scene: { postRender: { addEventListener: () => () => {} } },
+  };
+  const first = createFrameRateMonitor({ viewer, documentRef, store });
+  const second = createFrameRateMonitor({ viewer, documentRef, store });
+  const shown = store.fps;
+  first.destroy();
+  assert.ok(store.fps === shown);
+  second.destroy();
+  assert.equal(store.fps, null);
 });

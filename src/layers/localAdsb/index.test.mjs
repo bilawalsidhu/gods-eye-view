@@ -12,6 +12,15 @@ import {
   localAdsbReceiverLine,
   localAdsbStatus,
 } from './index.js';
+import { loadFleetModelSet } from '../../data/fleetModels.js';
+import { aircraftLayerModelSpec } from '../flights/modelSpec.js';
+import { fetchPublicFile } from '../../testSupport/fleetGlb.mjs';
+
+// The layer draws models only once the fleet model set has loaded; load it from disk.
+const realInfo = console.info;
+console.info = () => {};
+await loadFleetModelSet({ fetchImpl: fetchPublicFile });
+console.info = realInfo;
 
 function fakeReceiver(initial = {}) {
   const state = {
@@ -494,7 +503,7 @@ test('adsbdb type, operator and route reach the card for the selected aircraft o
   assert.equal(queries.length, 2, 'each key is asked for once');
 });
 
-test('the DISPLAY 3D toggle gives local aircraft magenta class models', async (t) => {
+test('the DISPLAY 3D toggle gives local aircraft their fleet models in their mesh colours', async (t) => {
   const receiver = fakeReceiver({ mode: 'adsb', connected: true });
   const clock = { now: 100_000 };
   const loads = [];
@@ -529,21 +538,20 @@ test('the DISPLAY 3D toggle gives local aircraft magenta class models', async (t
   await layer.update();
   assert.equal(loads.length, 1);
   const [model] = loads;
+  const spec = aircraftLayerModelSpec({ category: 'A7' });
   assert.equal(
-    model.url,
-    '/models/bell206.glb',
-    'the Flights helicopter model',
+    model.basePath,
+    '/models/fleet/helicopters/generic_heli.glb',
+    'the Flights rotorcraft model',
   );
-  assert.equal(model.scale, 1);
+  assert.ok(model.gltf instanceof Uint8Array, 'built from the loaded set');
+  assert.equal(model.scale, spec.scale, 'drawn life size');
   assert.equal(model.id, 'local-adsb:a0b702');
   assert.ok(
-    Cesium.Color.equals(
-      model.color,
-      Cesium.Color.fromCssColorString('#ff4fd8'),
-    ),
+    Cesium.Color.equals(model.color, Cesium.Color.WHITE),
+    'the mesh draws its own colours',
   );
-  assert.equal(model.colorBlendMode, Cesium.ColorBlendMode.MIX);
-  assert.equal(model.colorBlendAmount, 0.94);
+  assert.equal(model.colorBlendMode, Cesium.ColorBlendMode.HIGHLIGHT);
   assert.equal(model.show, true);
   const heli = sources[0].entities.getById('local-adsb:a0b702');
   assert.equal(

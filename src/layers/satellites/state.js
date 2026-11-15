@@ -1,4 +1,6 @@
 import * as Cesium from 'cesium';
+import { DEFAULT_SATELLITE_CLASSES } from './classes.js';
+import { worldClock, worldTimeFor } from '../../time/worldClock.js';
 
 export function createState({ services }) {
   const { setOverlayEntries, setOverlaySourceVisible, clearOverlaySource } =
@@ -13,7 +15,9 @@ export function createState({ services }) {
 
   state._overlayHost = state.DEFAULT_OVERLAY_HOST;
 
-  // Satellite catalog: { noradId → { name, satrec, group } }
+  // Satellite catalog: { noradId → { name, satrec, group, line1, line2,
+  // satelliteClass, ucs, satcat } } — class, UCS and SATCAT records from
+  // src/layers/satellites/classes.js and the sources the update read.
 
   state._catalog = new Map();
 
@@ -42,6 +46,12 @@ export function createState({ services }) {
 
   // Cache provenance belongs to admitted core and dense records separately.
   state._coreStale = false;
+  // How current the SATCAT records behind the classes are: null before any
+  // read, then 'current' | 'stale' | 'unavailable' (see ingestion.js).
+  state._satcatState = null;
+  // When _satcatState was last set (Date.now()); a current read is kept
+  // SATCAT_KEEP_MS (src/layers/satellites/ingestion.js).
+  state._satcatReadAtMs = Number.NEGATIVE_INFINITY;
   state._denseStale = false;
 
   state._activeUpdateControllers = new Set();
@@ -92,8 +102,24 @@ export function createState({ services }) {
 
   // Runtime params (DataLayerManager.setLayerParams path)
 
-  state._params = { catalog: 'core', showPoints: true, showOrbits: true };
+  state._params = {
+    catalog: 'core',
+    showPoints: true,
+    showOrbits: true,
+    // Which satellite classes show (src/layers/satellites/classes.js). Starlink
+    // follows `catalog`: its points exist only in dense mode.
+    classes: { ...DEFAULT_SATELLITE_CLASSES },
+  };
   // 'core' | 'dense'
+
+  /** SATCAT records (object type, status, owner) by NORAD id, last update. */
+  state._satcat = new Map();
+
+  /** The UCS pack by NORAD id, once loaded; null until then or if it failed. */
+  state._ucs = null;
+
+  /** The imaging-sensor index, once loaded; null until then or if it failed. */
+  state._sensors = null;
 
   state._denseIds = [];
   // norad ids of dense extras, round-robin order
@@ -150,6 +176,25 @@ export function createState({ services }) {
   /** Optional deterministic clock used only by the production-frame test seam. */
 
   state._trackedFrameNowForTest = null;
+
+  // Cockpit orbital-view hold (cockpitSubject.js): the NORAD id the Cockpit
+  // camera rides, and what the hold hid so release restores exactly that.
+
+  state._cockpitSubjectNorad = null;
+
+  state._cockpitHiddenPoints = new Set();
+
+  state._cockpitHiddenPath = null;
+
+  state._cockpitHiddenDot = false;
+
+  /** The time satellites are propagated to, in epoch ms. */
+
+  state.now = worldTimeFor('satellites');
+
+  /** The catalog changed, so the time satellites can be shown at may have. */
+
+  state.coverageChanged = () => worldClock.coverageChanged();
 
   // Scratch variables
 

@@ -5,6 +5,7 @@ import {
   DIRECTION_CONE_HALF_ANGLE_DEG,
   MARKER_SCALE_BY_DISTANCE,
 } from './policy.js';
+import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 /**
  * Badge scale at a camera distance, matching Cesium's NearFarScalar for the
@@ -50,7 +51,7 @@ export function alprLabelDetails(record, source) {
     sourceName === 'OpenStreetMap' ? 'OSM MAPPED' : `Source: ${sourceName}`,
   ];
   if (Number.isFinite(record.directionDeg))
-    details.push(`DIRECTION ${Math.round(record.directionDeg)}°`);
+    details.push(`DIRECTION ${roundHeadingDegrees(record.directionDeg)}°`);
   const equipment = [
     ...new Set(
       [record.manufacturer, record.operator, record.cameraType]
