@@ -3244,8 +3244,16 @@
   "approximate": "aproximada",
   "{pct}% cloud": "{pct}% de nubes",
   "Over {area}": "Zona: {area}",
-  "{count} of {total} acquisitions match": {"many": "Adquisiciones coincidentes: {count} de {total}", "one": "Adquisiciones coincidentes: {count} de {total}", "other": "Adquisiciones coincidentes: {count} de {total}"},
-  "{n} acquisitions searched": {"many": "Adquisiciones revisadas: {n}", "one": "Adquisiciones revisadas: {n}", "other": "Adquisiciones revisadas: {n}"},
+  "{count} of {total} acquisitions match": {
+    "many": "Adquisiciones coincidentes: {count} de {total}",
+    "one": "Adquisiciones coincidentes: {count} de {total}",
+    "other": "Adquisiciones coincidentes: {count} de {total}"
+  },
+  "{n} acquisitions searched": {
+    "many": "Adquisiciones revisadas: {n}",
+    "one": "Adquisiciones revisadas: {n}",
+    "other": "Adquisiciones revisadas: {n}"
+  },
   "No matching imagery": "No hay imágenes que coincidan",
   "Unknown number of {kind}": "{kind}: número desconocido",
   "About {count} {kind}": "{kind}: aproximadamente {count}",
@@ -3273,9 +3281,21 @@
   "the catalog covers the last 30 days": "el catálogo cubre los últimos 30 días",
   "there are more": "hay más",
   "{radius} m around the landmark": "{radius} m alrededor del punto de interés",
-  "{count} parts": {"many": "Partes: {count}", "one": "Partes: {count}", "other": "Partes: {count}"},
-  "{drawn} of {total} parts drawn": {"many": "Partes dibujadas: {drawn} de {total}", "one": "Partes dibujadas: {drawn} de {total}", "other": "Partes dibujadas: {drawn} de {total}"},
-  "{count} duplicate mappings merged": {"many": "Duplicados fusionados: {count}", "one": "Duplicados fusionados: {count}", "other": "Duplicados fusionados: {count}"},
+  "{count} parts": {
+    "many": "Partes: {count}",
+    "one": "Partes: {count}",
+    "other": "Partes: {count}"
+  },
+  "{drawn} of {total} parts drawn": {
+    "many": "Partes dibujadas: {drawn} de {total}",
+    "one": "Partes dibujadas: {drawn} de {total}",
+    "other": "Partes dibujadas: {drawn} de {total}"
+  },
+  "{count} duplicate mappings merged": {
+    "many": "Duplicados fusionados: {count}",
+    "one": "Duplicados fusionados: {count}",
+    "other": "Duplicados fusionados: {count}"
+  },
   "listed the first {limit}": "se listaron los primeros {limit}",
   "counted over the bounding box of {area}, not its outline": "se contó en el rectángulo que abarca {area}, no dentro de su contorno",
   "Search cancelled": "Búsqueda cancelada",
@@ -3390,7 +3410,11 @@
   "EMODnet unavailable; showing Wikidata only": "EMODnet no disponible; solo se muestra Wikidata",
   "Shipwrecks unavailable": "Naufragios no disponibles",
   "EMODnet (European waters) · Wikidata (worldwide)": "EMODnet (aguas europeas) · Wikidata (todo el mundo)",
-  "{count} wrecks": {"one": "{count} naufragio", "many": "{count} de naufragios", "other": "{count} naufragios"},
+  "{count} wrecks": {
+    "one": "{count} naufragio",
+    "many": "{count} de naufragios",
+    "other": "{count} naufragios"
+  },
   "1900–1945": "1900–1945",
   "Shipwreck": "Naufragio",
   "Fatalities: {count}": "Fallecidos: {count}",
@@ -3606,7 +3630,11 @@
   "Zoom to layer": "Acercar a la capa",
   "ZOOM": "ACERCAR",
   "Zoom to {name}": "Acercar a {name}",
-  "CONFIRM · REMOVE ALL {count}": {"one": "CONFIRMAR · QUITAR {count}", "many": "CONFIRMAR · QUITAR LAS {count}", "other": "CONFIRMAR · QUITAR LAS {count}"},
+  "CONFIRM · REMOVE ALL {count}": {
+    "one": "CONFIRMAR · QUITAR {count}",
+    "many": "CONFIRMAR · QUITAR LAS {count}",
+    "other": "CONFIRMAR · QUITAR LAS {count}"
+  },
   "REMOVE ALL": "QUITAR TODO",
   "Confirm: remove every added entry from Data Layers": "Confirmar: quitar de Capas de datos todas las entradas añadidas",
   "Remove every added entry from Data Layers": "Quitar de Capas de datos todas las entradas añadidas",
@@ -3615,13 +3643,33 @@
   "Remove from Data Layers": "Quitar de Capas de datos",
   "Remove from Data Layers · add it again from the library": "Quitar de Capas de datos · vuelve a añadirla desde la biblioteca",
   "{datasets} · {tiles} · {packs}": "{datasets} · {tiles} · {packs}",
-  "{count} datasets": {"one": "{count} conjunto de datos", "many": "{count} de conjuntos de datos", "other": "{count} conjuntos de datos"},
-  "{count} tile layers": {"one": "{count} capa de teselas", "many": "{count} de capas de teselas", "other": "{count} capas de teselas"},
-  "{count} packs": {"one": "{count} paquete", "many": "{count} de paquetes", "other": "{count} paquetes"},
+  "{count} datasets": {
+    "one": "{count} conjunto de datos",
+    "many": "{count} de conjuntos de datos",
+    "other": "{count} conjuntos de datos"
+  },
+  "{count} tile layers": {
+    "one": "{count} capa de teselas",
+    "many": "{count} de capas de teselas",
+    "other": "{count} capas de teselas"
+  },
+  "{count} packs": {
+    "one": "{count} paquete",
+    "many": "{count} de paquetes",
+    "other": "{count} paquetes"
+  },
   "Added": "Añadidas",
-  "{count} on the map": {"one": "{count} en el mapa", "many": "{count} en el mapa", "other": "{count} en el mapa"},
+  "{count} on the map": {
+    "one": "{count} en el mapa",
+    "many": "{count} en el mapa",
+    "other": "{count} en el mapa"
+  },
   "none yet": "ninguna todavía",
-  "from {count} datasets": {"one": "de {count} conjunto de datos", "many": "de {count} de conjuntos de datos", "other": "de {count} conjuntos de datos"},
+  "from {count} datasets": {
+    "one": "de {count} conjunto de datos",
+    "many": "de {count} de conjuntos de datos",
+    "other": "de {count} conjuntos de datos"
+  },
   "switch on a dataset to load features": "activa un conjunto de datos para cargar elementos",
   "Data Library at a glance": "La biblioteca de datos de un vistazo",
   "Map features": "Elementos del mapa",

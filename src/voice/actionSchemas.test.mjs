@@ -60,7 +60,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // absolute with its -45 default, with steps sent as a direction.
     // show_street_level (map, source, photo) adds one tool.
     // Surface temperature extends the manifest.
-    'c9c1c616d0ad2724f59a722458abdf2680c13cfad592a8561f65df2abe9b5fe2',
+    'dc7bdc2f0ef5308bea87cbe478e601279fcc49ad3f0eda7d0a165d2f7d2fab32',
   );
 });
 

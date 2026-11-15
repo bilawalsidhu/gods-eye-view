@@ -297,9 +297,12 @@ const layers = [
   {
     id: 'surface-temperature',
     // Not bare "temperature": the wind layer's 2 m air temperature overlay is
-    // a different quantity, and the alias must not pick one silently.
+    // a different quantity, and the alias must not pick one silently. The
+    // first two are spelled by the id, so the model-facing hint (which reads
+    // the first two) leaves this layer out; the runner accepts all four.
     aliases: [
       'surface temperature',
+      'surface',
       'land surface temperature',
       'ground temperature',
     ],

@@ -1051,10 +1051,10 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // adds the analyst area scopes and the osm-places layer.
   // control_cockpit states the own-layer entry rule (Contacts not required).
   // Surface temperature extends the manifest.
-  assert.equal(block.length, 31461, 'serialized tool schema length drifted');
+  assert.equal(block.length, 31416, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    'c92dcfc1d894cc1aa4956b1b46cfdaccb587a2e75a49caff1cd6c1f0d5c1f674',
+    '39f3c5422193e587f9b0dcc855a663e87aef5b8b48c96c0aff593ba46c299349',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(
