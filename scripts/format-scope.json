@@ -1462,5 +1462,7 @@
   "src/layers/vessels/placement.test.mjs",
   "src/ui/styles/visual-panel.css",
   "src/ui/styles/scope-off-shadows.css",
-  "src/ui/styles/cockpit-panels.css"
+  "src/ui/styles/cockpit-panels.css",
+  "src/ui/styles/layer-section-index.css",
+  "src/ui/styles/layer-finder.css"
 ]
