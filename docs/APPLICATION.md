@@ -195,6 +195,12 @@ signal })` returns one tile or null for a transparent tile, each as an
 `ImageBitmap`, `ImageData`, canvas or `VideoFrame` of exactly the requested
 size, which the layer draws once and closes. Without them the layers read the
 image and tile routes (`WeatherFrameFeed` in `src/layers/weather/source.js`).
+It may also name its source with an optional `sourceName(kind)`, `kind` being
+`'radar'`, `'lightning'` or `'satellite'`: the layer's row shows that name until
+a manifest names its own, and NOAA nowCOAST when the source names none. The
+name is read once, when the layer is built, and held to the same rule as a
+manifest's `display.source`. The map credit still comes from each manifest's
+`display.credit`, so a source that is not nowCOAST sets that too.
 
 `application/services` accepts boundary, terrain, regional-context, weather and
 summary services; its weather service supplies cockpit local conditions, not the

@@ -2,7 +2,7 @@ import * as Cesium from 'cesium';
 import { createWeatherRendering } from './rendering.js';
 import { weatherFrameSource } from './source.js';
 import { imageryHostStatus } from './imageryHost.js';
-import { weatherDisplay, insideExtent } from './display.js';
+import { weatherDisplay, weatherSourceName, insideExtent } from './display.js';
 import {
   RADAR_MAX_GAP_MS,
   REGIONAL_INFRARED_MAX_GAP_MS,
@@ -55,7 +55,9 @@ const utc = (value) =>
 
 /** A per-application observation layer, using the existing layer lifecycle and
  * row controls. Its time is the world clock's, so a link made away from live
- * opens its imagery at that time; one made live opens the latest. */
+ * opens its imagery at that time; one made live opens the latest. The feed
+ * may also name its source with `sourceName(kind)`, `kind` being 'radar',
+ * 'lightning' or 'satellite'; NOAA nowCOAST is named otherwise. */
 export function createWeatherLayer({
   feed,
   clock,
@@ -72,6 +74,20 @@ export function createWeatherLayer({
   const radar = id === 'weather-radar';
   const lightning = id === 'weather-lightning';
   const satellite = !radar && !lightning;
+  // A feed may name the source behind each product ('radar', 'lightning' or
+  // 'satellite'); its row then says so before a manifest names it. A name
+  // that fails, like a manifest's, leaves the built-in one.
+  let sourceName = null;
+  try {
+    sourceName =
+      weatherSourceName(
+        feed.sourceName?.(
+          radar ? 'radar' : lightning ? 'lightning' : 'satellite',
+        ),
+      ) ?? null;
+  } catch (cause) {
+    console.warn('[weather] source name unavailable:', cause);
+  }
   let product = radar ? 'radar' : lightning ? 'lightning' : 'clouds-regional';
   let opacity = 'strong';
   let infrared = 100;
@@ -301,7 +317,7 @@ export function createWeatherLayer({
         ? 'Lightning density'
         : 'Satellite clouds',
     icon: radar ? '◉' : lightning ? 'ϟ' : '☁',
-    source: 'NOAA nowCOAST · OBSERVED',
+    source: sourceName ?? 'NOAA nowCOAST · OBSERVED',
     updateInterval: lightning ? 600_000 : 120_000,
     init(nextViewer) {
       viewer = nextViewer;
@@ -870,10 +886,10 @@ export function createWeatherLayer({
         loading,
         error: error || rendering?.getDiagnostics().error || null,
         stale: Boolean(manifest?.stale || observationDelayed()),
-        ...(source === undefined
+        ...(source === undefined && sourceName === null
           ? { source: 'NOAA nowCOAST' }
           : // Source text is data: the panel shows it untranslated.
-            { source, sourceVerbatim: true }),
+            { source: source ?? sourceName, sourceVerbatim: true }),
         observedAt: shownTime(),
       };
     },

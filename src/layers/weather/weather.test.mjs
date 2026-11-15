@@ -2694,3 +2694,40 @@ test('the layer hands rendering a frame source only when its feed is one', () =>
   assert.equal(typeof seen[1].getTile, 'function');
   assert.equal(seen[1].getImage, undefined);
 });
+
+test('a feed names the source behind each product, before any manifest does', (t) => {
+  t.mock.method(console, 'warn', () => {});
+  const quiet = {
+    documentRef: target({ hidden: false }),
+    eventTarget: target(),
+    matchMedia: () => target({ matches: false }),
+  };
+  const asked = [];
+  const feed = {
+    getSnapshot: async () => snapshot,
+    sourceName(kind) {
+      asked.push(kind);
+      if (kind === 'satellite') throw new Error('no name');
+      return kind === 'radar' ? ' NOAA MRMS ' : 'NOAA\u200b GLM';
+    },
+  };
+  const radar = createWeatherLayer({ ...quiet, feed, id: 'weather-radar' });
+  assert.equal(radar.source, 'NOAA MRMS');
+  const stats = radar.getStats();
+  assert.equal(stats.source, 'NOAA MRMS');
+  assert.equal(stats.sourceVerbatim, true);
+  // A name a manifest could not carry, or a failing call, leaves nowCOAST, as
+  // does a feed with no names.
+  for (const id of ['weather-lightning', 'weather-satellite']) {
+    const layer = createWeatherLayer({ ...quiet, feed, id });
+    assert.equal(layer.source, 'NOAA nowCOAST · OBSERVED', id);
+    assert.equal(layer.getStats().source, 'NOAA nowCOAST', id);
+    assert.equal(layer.getStats().sourceVerbatim, undefined, id);
+  }
+  assert.deepEqual(asked, ['radar', 'lightning', 'satellite']);
+  const unnamed = createWeatherLayer({
+    ...quiet,
+    feed: { getSnapshot: async () => snapshot },
+  });
+  assert.equal(unnamed.source, 'NOAA nowCOAST · OBSERVED');
+});
