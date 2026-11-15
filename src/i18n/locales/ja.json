@@ -626,6 +626,8 @@
   },
   "Position as of {time}": "{time}時点の位置",
   "Maximum sustained wind: {wind} · Pressure: {pressure}": "最大持続風速：{wind} · 気圧：{pressure}",
+  "Maximum sustained wind: {wind}": "最大持続風速：{wind}",
+  "Pressure: {pressure}": "気圧：{pressure}",
   "{name} · {classification} · Advisory {number} · issued {time}": "{name} · {classification} · 第{number}報 · {time}発表",
   "No active NHC/CPHC systems": "NHC/CPHCが監視中のサイクロンはありません",
   "Advisories unavailable": "サイクロン情報を取得できません",

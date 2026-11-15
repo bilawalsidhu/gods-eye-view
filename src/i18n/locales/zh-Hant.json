@@ -624,6 +624,8 @@
   },
   "Position as of {time}": "位置（截至 {time}）",
   "Maximum sustained wind: {wind} · Pressure: {pressure}": "最大持續風速：{wind} · 氣壓：{pressure}",
+  "Maximum sustained wind: {wind}": "最大持續風速：{wind}",
+  "Pressure: {pressure}": "氣壓：{pressure}",
   "{name} · {classification} · Advisory {number} · issued {time}": "{name} · {classification} · 第 {number} 號公告 · 發布於 {time}",
   "No active NHC/CPHC systems": "當前沒有活躍的 NHC/CPHC 氣旋",
   "Advisories unavailable": "公告不可用",

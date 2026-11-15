@@ -659,6 +659,8 @@
   },
   "Position as of {time}": "Положення на {time}",
   "Maximum sustained wind: {wind} · Pressure: {pressure}": "Макс. середня швидкість вітру: {wind} · Тиск: {pressure}",
+  "Maximum sustained wind: {wind}": "Макс. середня швидкість вітру: {wind}",
+  "Pressure: {pressure}": "Тиск: {pressure}",
   "{name} · {classification} · Advisory {number} · issued {time}": "{name} · {classification} · Зведення № {number} · випущено {time}",
   "No active NHC/CPHC systems": "Немає активних систем NHC/CPHC",
   "Advisories unavailable": "Зведення недоступні",

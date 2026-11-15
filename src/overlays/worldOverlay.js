@@ -1307,11 +1307,11 @@ function ensureOverlayDom() {
   // ignored.
   if (!_actions)
     presentActions({ owner: {}, items: [], status: '', announced: 0 });
-  _ctx = _canvas.getContext('2d', { alpha: true, desynchronized: true });
-  _detectionCtx = _detectionSurface.getContext('2d', {
-    alpha: true,
-    desynchronized: true,
-  });
+  // Synchronized contexts: on a desynchronized one Chrome can present an
+  // earlier buffer after a frame that only clears, so cards that left stay
+  // on screen until something paints over them.
+  _ctx = _canvas.getContext('2d', { alpha: true });
+  _detectionCtx = _detectionSurface.getContext('2d', { alpha: true });
 }
 
 function sizeCanvasSurface(canvas, ctx, width, height, dpr) {

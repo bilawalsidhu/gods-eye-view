@@ -110,6 +110,7 @@ function installMockEnvironment({
 } = {}) {
   const byId = new Map();
   const paintTrace = [];
+  const contextRequests = [];
   const ctx = mockContext('shared', paintTrace);
   const detectionCtx = mockContext('detection', paintTrace);
   const layoutReads = { canvasWidth: 0, canvasHeight: 0, boundingClientRect: 0 };
@@ -184,8 +185,9 @@ function installMockEnvironment({
       return this._rect;
     }
 
-    getContext() {
+    getContext(type, options) {
       if (this.tagName !== 'CANVAS') return null;
+      contextRequests.push({ id: this.id, type, options });
       return this.id === 'world-overlay-detection-surface' ? detectionCtx : ctx;
     }
 
@@ -400,6 +402,7 @@ function installMockEnvironment({
     ctx,
     detectionCtx,
     paintTrace,
+    contextRequests,
     document,
     window,
     postRender,
@@ -2620,6 +2623,27 @@ test('the queued-card index stays bounded while card identities churn', () => {
     );
   } finally {
     Map.prototype.set = originalSet;
+    env.cleanup();
+  }
+});
+
+test('both overlay surfaces draw on synchronized 2D contexts', () => {
+  // A desynchronized context can show an earlier buffer after a frame that
+  // only clears: a card removed from its source stayed on screen until
+  // something painted over it.
+  const env = installMockEnvironment();
+  try {
+    initWorldOverlay(env.viewer);
+    const ids = env.contextRequests.map((request) => request.id).sort();
+    assert.deepEqual(ids, [
+      'world-overlay-canvas',
+      'world-overlay-detection-surface',
+    ]);
+    for (const request of env.contextRequests) {
+      assert.equal(request.type, '2d');
+      assert.notEqual(request.options?.desynchronized, true, request.id);
+    }
+  } finally {
     env.cleanup();
   }
 });

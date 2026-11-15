@@ -59,8 +59,22 @@ const classificationName = (code) =>
   Object.hasOwn(CLASSIFICATION_NAMES, code)
     ? t(CLASSIFICATION_NAMES[code])
     : code;
-const number = (value, unit) =>
-  value === null ? t('Unavailable') : formatQuantity(value, unit);
+// A value the advisory leaves out (null) is left out of the line too.
+const intensityText = (storm) => {
+  const has = (value) => value !== null && value !== undefined;
+  const wind = has(storm.windKt) ? formatQuantity(storm.windKt, 'kt') : null;
+  const pressure = has(storm.pressureHpa)
+    ? formatQuantity(storm.pressureHpa, 'hPa')
+    : null;
+  if (wind && pressure)
+    return t('Maximum sustained wind: {wind} · Pressure: {pressure}', {
+      wind,
+      pressure,
+    });
+  if (wind) return t('Maximum sustained wind: {wind}', { wind });
+  if (pressure) return t('Pressure: {pressure}', { pressure });
+  return '';
+};
 
 /** Advisory status and coherent forecast geometry; selected through the shared row list. */
 export function createCyclonesLayer({
@@ -424,12 +438,7 @@ export function createCyclonesLayer({
       const position = storm
         ? t('Position as of {time}', { time: utc(storm.positionAt) })
         : '';
-      const intensity = storm
-        ? t('Maximum sustained wind: {wind} · Pressure: {pressure}', {
-            wind: number(storm.windKt, 'kt'),
-            pressure: number(storm.pressureHpa, 'hPa'),
-          })
-        : '';
+      const intensity = storm ? intensityText(storm) : '';
       const detail = storm
         ? t('{name} · {classification} · Advisory {number} · issued {time}', {
             name: storm.name,
@@ -479,7 +488,7 @@ export function createCyclonesLayer({
                   text: intensity,
                 },
                 { id: 'geometry', text: geometry, muted: true },
-              ]
+              ].filter((line) => line.text)
             : [],
           detail,
           status,
@@ -511,7 +520,7 @@ export function createCyclonesLayer({
             ]
           : [],
         info: storm
-          ? `${detail}\n${position}\n${intensity}\n${geometry}${status && status !== geometry ? '\n' + status : ''}\n${coverageText(snapshot.coverage)}`
+          ? `${detail}\n${position}\n${intensity ? intensity + '\n' : ''}${geometry}${status && status !== geometry ? '\n' + status : ''}\n${coverageText(snapshot.coverage)}`
           : `${detail}${status ? '\n' + status : ''}\n${coverageText(snapshot?.coverage)}`,
         infoTitle: t(
           'Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisory context. The cone describes forecast center-track uncertainty, not storm size or the full hazard area. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory.',

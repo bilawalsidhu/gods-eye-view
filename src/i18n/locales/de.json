@@ -1432,6 +1432,8 @@
   },
   "Position as of {time}": "Position, Stand {time}",
   "Maximum sustained wind: {wind} · Pressure: {pressure}": "Maximaler Dauerwind: {wind} · Luftdruck: {pressure}",
+  "Maximum sustained wind: {wind}": "Maximaler Dauerwind: {wind}",
+  "Pressure: {pressure}": "Luftdruck: {pressure}",
   "{name} · {classification} · Advisory {number} · issued {time}": "{name} · {classification} · Lagebericht {number} · ausgegeben {time}",
   "No active NHC/CPHC systems": "Keine aktiven NHC/CPHC-Systeme",
   "Advisories unavailable": "Lageberichte nicht verfügbar",

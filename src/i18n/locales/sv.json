@@ -1354,6 +1354,8 @@
   },
   "Position as of {time}": "Position per {time}",
   "Maximum sustained wind: {wind} · Pressure: {pressure}": "Högsta medelvind: {wind} · Lufttryck: {pressure}",
+  "Maximum sustained wind: {wind}": "Högsta medelvind: {wind}",
+  "Pressure: {pressure}": "Lufttryck: {pressure}",
   "{name} · {classification} · Advisory {number} · issued {time}": "{name} · {classification} · Bulletin {number} · utfärdad {time}",
   "No active NHC/CPHC systems": "Inga aktiva NHC/CPHC-system",
   "Advisories unavailable": "Bulletiner otillgängliga",

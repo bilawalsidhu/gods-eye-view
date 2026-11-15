@@ -553,6 +553,8 @@
   },
   "Position as of {time}": "מיקום נכון ל-{time}",
   "Maximum sustained wind: {wind} · Pressure: {pressure}": "רוח מתמשכת מרבית: {wind} · לחץ: {pressure}",
+  "Maximum sustained wind: {wind}": "רוח מתמשכת מרבית: {wind}",
+  "Pressure: {pressure}": "לחץ: {pressure}",
   "{name} · {classification} · Advisory {number} · issued {time}": "{name} · {classification} · עדכון {number} · פורסם {time}",
   "No active NHC/CPHC systems": "אין מערכות NHC/CPHC פעילות",
   "Advisories unavailable": "עדכונים אינם זמינים",

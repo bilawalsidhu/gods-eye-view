@@ -1355,6 +1355,8 @@
   },
   "Position as of {time}": "Положение на {time}",
   "Maximum sustained wind: {wind} · Pressure: {pressure}": "Макс. устойчивый ветер: {wind} · Давление: {pressure}",
+  "Maximum sustained wind: {wind}": "Макс. устойчивый ветер: {wind}",
+  "Pressure: {pressure}": "Давление: {pressure}",
   "{name} · {classification} · Advisory {number} · issued {time}": "{name} · {classification} · Сводка № {number} · выпущена {time}",
   "No active NHC/CPHC systems": "Нет активных систем NHC/CPHC",
   "Advisories unavailable": "Сводки недоступны",

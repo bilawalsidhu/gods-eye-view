@@ -824,6 +824,59 @@ test('classification display expands known codes without altering the source or 
     }
   }
 });
+// Quantities join number and unit with a no-break space.
+const plain = (text) => text?.replace(/\u00a0/g, ' ') ?? null;
+test('an advisory without pressure, movement or link leaves those values out', async () => {
+  const record = {
+    ...storm(),
+    windKt: 85,
+    pressureHpa: null,
+    movement: { directionDegrees: null, speedKt: null },
+    advisoryUrl: null,
+  };
+  const h = harness({ getSnapshot: async () => snapshot([record]) });
+  try {
+    h.layer.enable();
+    await h.layer.update();
+    const { summary, info } = h.layer.getRowControls();
+    const intensity = summary.lines.find((line) => line.id === 'intensity');
+    assert.equal(plain(intensity.text), 'Maximum sustained wind: 85 kt');
+    assert.deepEqual(
+      summary.lines.map((line) => line.id),
+      ['position', 'intensity', 'geometry'],
+    );
+    assert.deepEqual(summary.actions, [], 'no advisory link to open');
+    assert.ok(plain(info).includes('Maximum sustained wind: 85 kt\n'));
+    for (const text of [info, ...summary.lines.map((line) => line.text)])
+      assert.doesNotMatch(text, /Unavailable|Pressure/);
+  } finally {
+    h.layer.destroy();
+  }
+});
+test('an advisory with only one of wind and pressure shows that one alone', async () => {
+  for (const [values, expected] of [
+    [{ windKt: null, pressureHpa: 990 }, 'Pressure: 990 hPa'],
+    [
+      { windKt: 60, pressureHpa: 990 },
+      'Maximum sustained wind: 60 kt · Pressure: 990 hPa',
+    ],
+    [{ windKt: null, pressureHpa: null }, null],
+  ]) {
+    const h = harness({
+      getSnapshot: async () => snapshot([{ ...storm(), ...values }]),
+    });
+    try {
+      h.layer.enable();
+      await h.layer.update();
+      const { summary, info } = h.layer.getRowControls();
+      const intensity = summary.lines.find((line) => line.id === 'intensity');
+      assert.equal(plain(intensity?.text), expected);
+      assert.doesNotMatch(info, /Unavailable|\n\n/);
+    } finally {
+      h.layer.destroy();
+    }
+  }
+});
 test('advisory selection uses accessible row descriptors and shared camera handoff', async () => {
   const h = harness(
     { getSnapshot: async () => snapshot([storm(), storm('ep162026')]) },

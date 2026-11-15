@@ -1496,6 +1496,8 @@
   },
   "Position as of {time}": "الموضع عند {time}",
   "Maximum sustained wind: {wind} · Pressure: {pressure}": "أقصى سرعة للرياح المستمرة: {wind} · الضغط: {pressure}",
+  "Maximum sustained wind: {wind}": "أقصى سرعة للرياح المستمرة: {wind}",
+  "Pressure: {pressure}": "الضغط: {pressure}",
   "{name} · {classification} · Advisory {number} · issued {time}": "{name} · {classification} · النشرة رقم {number} · صدرت {time}",
   "No active NHC/CPHC systems": "لا توجد أنظمة مدارية نشطة لدى NHC/CPHC",
   "Advisories unavailable": "النشرات غير متاحة",

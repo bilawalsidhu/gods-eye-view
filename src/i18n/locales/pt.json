@@ -648,6 +648,8 @@
   },
   "Position as of {time}": "Posição em {time}",
   "Maximum sustained wind: {wind} · Pressure: {pressure}": "Vento máximo sustentado: {wind} · Pressão: {pressure}",
+  "Maximum sustained wind: {wind}": "Vento máximo sustentado: {wind}",
+  "Pressure: {pressure}": "Pressão: {pressure}",
   "{name} · {classification} · Advisory {number} · issued {time}": "{name} · {classification} · Boletim {number} · emitido em {time}",
   "No active NHC/CPHC systems": "Nenhum sistema ativo do NHC/CPHC",
   "Advisories unavailable": "Boletins indisponíveis",
