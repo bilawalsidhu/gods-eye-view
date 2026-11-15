@@ -1465,5 +1465,8 @@
   "src/ui/styles/cockpit-panels.css",
   "src/ui/styles/layer-section-index.css",
   "src/ui/styles/layer-finder.css",
-  "src/ui/layerFinder.test.mjs"
+  "src/ui/layerFinder.test.mjs",
+  "src/data/wikidataCities.js",
+  "src/data/wikidataCities.test.mjs",
+  "scripts/build-wikidata-cities.mjs"
 ]
