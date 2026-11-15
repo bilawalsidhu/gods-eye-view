@@ -365,6 +365,25 @@ The source factories are exported at `layers/directions/source` and
 `layers/recent-imagery/source`. Configuration is applied at construction time;
 this does not introduce live source replacement.
 
+Application catalog composition also accepts an optional `placement`, a
+host-supplied placement provider (`src/data/placementProvider.js`): an object
+whose `layer(kind)` returns, for `aircraft`, `military`, `vessels`, `transit`
+or `rail`, either null or `{ place(id, wallMs), observe?(id, fix),
+forget?(id) }`. While live, each of those layers tells it every fix it accepts
+(time, position, the height it draws the fix at, reported speed, course and
+ground state) and draws a contact where `place` puts it: position, height
+(the layer's own when none is given), course and speed. A null answer, a
+provider that throws, a kind it leaves out, or no provider at all keeps the
+layer's own motion, unchanged; following the world clock, the layers never
+ask it. Transit and rail vehicles a provider places are advanced every frame
+in view while their placed position changes; one it holds still lets the
+render loop idle and is asked again each second, moving on once its placement
+does. A placed transit vehicle is drawn at its placed point, and a placed
+train where it is placed rather than on its bound railway line. Live vessels
+a provider places move on between refreshes: redrawn in place at most every
+250 ms, with a frame asked for each second while the provider places any
+drawn vessel, and none once the layer is off.
+
 Application catalog composition accepts an optional `streetLevelProviders` list.
 An explicit list replaces the default Mapillary provider; an empty list removes
 all imagery providers. Without that option, Mapillary is registered only when
@@ -627,6 +646,53 @@ panel that holds its row, and `set_panel_open` reaches it as
 `utilities-panel` or by "utilities", "draw", "drawing" or "import". On a phone
 it sits collapsed in the Layers sheet under Data Layers.
 
+## The Visual panel — November 14, 2026
+
+Visual (`#pp-toggles`, `src/ui/views/panels/DisplayPanel.vue`) is headed
+VISUAL, has the edge switch in its header like the other side panels, and is
+grouped from the top: Look, the six style presets with their 1–6 keys, and
+Map source, the map source chips (`VisualPresets.vue`); Overlay, the HUD,
+detection, style parameters, 3D aircraft, Scope and Clean UI; Effects,
+Celestial, Bloom and Sharpen; and Reset to default at the foot. Each control
+is a card (`src/ui/styles/visual-panel.css`) whose header row ends in an
+on/off pill worded in the current language (Clean UI, an action, has none;
+the buttons carry their state as `aria-pressed`). Under the Cyber HUD the
+cards keep Cyber's own red skin. The presets and chips call the
+same Display store actions as the dock's Visual Presets tray, which stays on
+desktop and phone as before, along with Location; voice `Visual Presets`
+still opens that tray. On a phone the More sheet shows that tray right above
+Visual, so Visual leaves out its own presets and chips there. In Cockpit,
+the groups that Cockpit's Display popover takes leave the panel as before and
+keep their own styling there.
+
+Scope has an Opacity slider (`#scope-opacity-slider`, 50–100%, default 100%;
+`SCOPE_OPACITY_MIN_PCT` in `src/ui/visualSettings.js`, since a fainter mask
+reads as Scope off while labels still fade outside the keyhole)
+that fades the whole mask (`setScopeMaskOpacity` in `src/scopeMask.js`, the
+canvas's CSS opacity) without repainting it or changing the altitude
+terminus; it is disabled while Scope is off and keeps its value. Share links
+carry it as `sco` in the long form and field 30 in the compact form, written
+only below 100%, so links made before it keep their codes and open at full
+opacity, and a link without it sets the opacity back to 100%; a link asking
+for less than 50% opens at 50%. Scenes do not
+save it: a scene shot leaves the opacity as it is.
+
+Reset to default (`resetVisual` in `src/ui/displayBindings.js`) brings back
+the out-of-the-box look: the Normal style, the first-run post defaults
+(bloom off, sharpen on at 49%, the HUD shown, Dense detection at 75%
+with its fade and outside opacity, the celestial ring off), Elastic
+allocation, Scope on at 100% feather and 100% opacity, and 3D aircraft on in
+Proximity. The HUD layout follows the Normal style, as choosing it does: the
+Tactical HUD, except that the Cyber HUD stays Cyber. Inside Contacts, which
+lends detection for the session, the reset's detection becomes what leaving
+Contacts puts back and what a share link carries. It leaves the map source, the pinned scope terminus, Sonar's
+settings, other styles' parameters, the layers and the panels alone.
+
+With Scope off the side rails, open panels and the dock's trays carry a soft
+drop shadow and the rails' labels and icons a text shadow
+(`src/ui/styles/scope-off-shadows.css`), so their edges hold against bright
+imagery.
+
 ## Side rails and the screen edge — November 14, 2026
 
 Visual (`#pp-toggles`, the display settings, rail item `palette`) is the last
@@ -656,6 +722,27 @@ world timeline in the strip keep their own wheel. The strip is off on phones
 and touch screens, while the rails are hidden (clean view, recording), and it
 follows the rails' sides in a right-to-left language. On a phone, Visual is in
 the More sheet with the dock's Visual Presets, as before.
+
+## Cockpit side panels — November 14, 2026
+
+On the desktop, the cockpit's side panels match the main page's
+(`src/ui/styles/cockpit-panels.css`). The left rail shows Data Layers only:
+Authoring, Utilities and Visual, with their panels, are hidden, since the
+cockpit's own Display panel stands in for Visual. Display and Radio
+(`CockpitUtilityControls.vue`) become a right rail of two icons with their
+names beside them, and each opens one panel at a time beside the rail, with a
+header and a "−" to close it. The rail's buttons are disclosures
+(`aria-expanded`, `aria-controls`) and go through the `toggleCockpitUtility`
+action (`src/ui/radioBindings.js`); closing a panel gives focus back to the
+rail. Both rails start at the same height: the left one in CSS, and Display
+and Radio through the cockpit layout pass, whose floor
+(`COCKPIT_UTILITY_MIN_TOP_PX` / `_RATIO` in `src/ui/cockpitPresentation.js`)
+matches it, so an open panel still stops short of the briefing. Contact and
+Live Signals are shorter, in the same glass, with the briefing's rows and
+weather tiles tightened; Regional News stays a briefing page. In a right-to-left language, the rail keeps its
+physical side as the cockpit's other windows do. The Cyber HUD and the phone
+keep their own cockpit layouts, with the Display and Radio launchers as
+before, and edge mode does not apply in the cockpit.
 
 ## God's Eye View in conversations — October 2, 2026
 
@@ -749,6 +836,8 @@ Display's native Scope checkbox defaults ON with feather at 100%, adjustable
 from 0–200%. OFF disables the slider while retaining its value. HUD layout
 changes preserve both settings; share links and scenes restore them. The
 historical missing-`scf` fallback remains 35%; explicit 0% keeps the hard edge.
+Its Opacity slider (0–100%, default 100%) fades the mask; share links
+restore it (`sco`), scenes do not (see The Visual panel).
 
 With Scope OFF, Tactical and Minimal add text-sized black backplates
 at 70% opacity behind telemetry, vertical metadata and scene chrome. Original
@@ -3461,7 +3550,8 @@ reads `NASA FIRMS · LIVE · updated …`. A source may instead answer the 24 ho
 to a set time, naming its end as `at` (epoch ms): the row then reads
 `NASA FIRMS · 24 h to MM-DD HH:MM UTC`, `getStats()` reports `at`, and
 `get_active_fires` says "in the 24 hours to" that time and reports it as
-`window_end`. The dev proxy never sets `at`.
+`window_end`, and card and detail ages count back from that time instead of
+now. The dev proxy never sets `at`.
 
 The FIRMS CSV parser rejects impossible acquisition calendar dates before the proxy filters records to the trailing 24 hours, while retaining valid UTC acquisition times.
 FIRMS ages round to whole hours before choosing a unit, so a 47.6-hour age reads "2d", not "48h"; with detections filtered to 24 hours, this shows mostly in the `STALE · cached {age}` stats line.
@@ -8417,7 +8507,11 @@ clock drives all enabled observation rows. Earlier/Later use the sorted union of
 non-suspended products' advertised times; each product selects its nearest frame
 at or before the requested UTC time, never a future frame or an interpolation.
 The maximum gap is 30 minutes for radar, regional infrared and lightning, and
-3 hours for hourly global infrared. A missing eligible frame hides that product
+3 hours for hourly global infrared, but never less than one and a half of the
+feed's median frame spacing over its latest frames, so a regional feed whose
+frames come an hour apart holds each for 90 minutes; the latest frame reads late
+after the same floor (20 minutes for radar and regional infrared, 45 for
+lightning, 4 hours for global infrared). A missing eligible frame hides that product
 and reports the gap; rows show actual displayed UTC time with synced/nearest labels.
 Manifest rollover preserves the requested history time, even when frames expire.
 

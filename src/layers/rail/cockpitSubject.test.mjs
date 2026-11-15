@@ -19,6 +19,7 @@ import { RAIL_SELECTED_OVERLAY_SOURCE_ID } from './policy.js';
 import { publicRailCatalog } from '../../data/railFeeds.js';
 import { pointAtS } from '../../data/railPaths.js';
 import { fleetModelFakes } from '../../testSupport/fleetModelFakes.mjs';
+import { PLACED_WAKE_MS } from '../transit/movement.js';
 
 const M_PER_DEG = 111_320;
 const LAT = 42.36;
@@ -501,4 +502,32 @@ test('turning the layer off ends the hold', async (t) => {
   assert.equal(app.state()._cockpitSubjectKey, null);
   assert.equal(app.state()._cockpitLostFeedId, null);
   assert.equal(app.layer.getCockpitSubject(), null);
+});
+
+test('a train a placement holds still stops animating, and moves on when the placement does', async (t) => {
+  let spot = { lat: LAT, lon: LON0 + 3000 / KX };
+  const app = await onTheLine(t, {
+    placement: {
+      layer: () => ({
+        place: (id) => (id === T1 ? { ...spot, speedMps: 0 } : null),
+      }),
+    },
+  });
+  app.run(1_000);
+  const entry = app.entry(T1);
+  assert.equal(entry.placed, true);
+  assert.equal(app.state()._moving.has(entry), false, 'parked: not animating');
+  assert.notEqual(entry.wakeTimer, null, 'a wake asks the placement again');
+  assert.ok(app.state()._moving.has(app.entry(T2)), 'its own motion runs on');
+
+  spot = { lat: LAT, lon: spot.lon + 10 / KX };
+  t.mock.timers.tick(PLACED_WAKE_MS);
+  assert.ok(app.state()._moving.has(entry), 'moving again');
+  for (let i = 0; i < 3; i += 1) {
+    spot = { lat: LAT, lon: spot.lon + 1 / KX };
+    app.run(250);
+    assert.ok(app.state()._moving.has(entry), 'while it moves');
+  }
+  app.run(250);
+  assert.equal(app.state()._moving.has(entry), false, 'stopped again');
 });

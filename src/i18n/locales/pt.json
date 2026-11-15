@@ -3708,5 +3708,13 @@
   "Funicular": "Funicular",
   "Gondola": "Teleférico",
   "Move panels back beside the rail": "Voltar os painéis para junto da barra",
-  "Move panels over the rail, to the edge": "Mover os painéis sobre a barra, até a borda"
+  "Move panels over the rail, to the edge": "Mover os painéis sobre a barra, até a borda",
+  "panel|VISUAL": "VISUAL",
+  "Look": "Aparência",
+  "Overlay": "Sobreposição",
+  "Effects": "Efeitos",
+  "Scope opacity": "Opacidade da mira",
+  "How dark the scope shades the view outside the keyhole": "Quanto a mira escurece a vista fora do visor",
+  "Reset to default": "Redefinir para o padrão",
+  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "Redefinir o Visual para o padrão: aparência Normal, HUD, mira, rótulos e efeitos"
 }

@@ -3621,5 +3621,13 @@
   "Funicular": "Bergbana",
   "Gondola": "Kabinbana",
   "Move panels back beside the rail": "Flytta tillbaka panelerna bredvid listen",
-  "Move panels over the rail, to the edge": "Flytta panelerna över listen, till kanten"
+  "Move panels over the rail, to the edge": "Flytta panelerna över listen, till kanten",
+  "panel|VISUAL": "VISUELLT",
+  "Look": "Utseende",
+  "Overlay": "Överlägg",
+  "Effects": "Effekter",
+  "Scope opacity": "Scope-opacitet",
+  "How dark the scope shades the view outside the keyhole": "Hur mycket scopet mörkar vyn utanför nyckelhålet",
+  "Reset to default": "Återställ till standard",
+  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "Återställ Visuellt till standard: Normal stil, HUD, scope, etiketter och effekter"
 }

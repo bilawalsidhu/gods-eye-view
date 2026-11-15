@@ -3708,5 +3708,13 @@
   "Funicular": "Funicolare",
   "Gondola": "Cabinovia",
   "Move panels back beside the rail": "Riporta i pannelli accanto alla barra",
-  "Move panels over the rail, to the edge": "Sposta i pannelli sopra la barra, fino al bordo"
+  "Move panels over the rail, to the edge": "Sposta i pannelli sopra la barra, fino al bordo",
+  "panel|VISUAL": "VISUALE",
+  "Look": "Aspetto",
+  "Overlay": "Overlay",
+  "Effects": "Effetti",
+  "Scope opacity": "Opacità dello scope",
+  "How dark the scope shades the view outside the keyhole": "Quanto lo scope scurisce la vista fuori dal foro",
+  "Reset to default": "Ripristina predefiniti",
+  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "Ripristina Visuale ai valori predefiniti: aspetto Normale, HUD, scope, etichette ed effetti"
 }

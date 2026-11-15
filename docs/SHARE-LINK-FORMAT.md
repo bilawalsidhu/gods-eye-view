@@ -148,6 +148,7 @@ probability of about 255 in 256 (many of them already fail as base64url).
 | 27  | `styleParams`                | LEN   | style       | packed `(token, value × 100)` pairs                                   |
 | 28  | `worldTime`                  | epoch | none (live) | zigzag seconds since 2026-01-01T00:00:00Z                             |
 | 29  | `library`                    | LEN   | none        | Data Library ledger tokens, two base-36 characters each, concatenated |
+| 30  | `scopeOpacityPct`            | uint  | 100         | 0–100, how strongly the scope mask shows                              |
 
 Field 1 absent means `thing` when field 13 is present and `place` otherwise,
 so v1 never writes it; a later view kind writes its code.
@@ -169,6 +170,10 @@ Field 29 lists the Data Library entries switched on, by their permanent
 tokens in `src/library/ledger.json` (the long form's `lib=ab.cd`). A share
 without it switches no library entry on; the recipient's added entries stay
 in their panel, off. Tokens this build does not know are skipped.
+
+Field 30 is how strongly the scope mask shows, from the Visual panel's
+Opacity slider (the long form's `sco`). It is written only below 100, so a
+link made before it, which opens at full opacity, keeps its code.
 
 Flag bits (field 9): 0 `bloom`, 1 `sharpen`, 2 `hudVisible`, 3
 `celestialRing` (each defaulting by style), 4 `scopeEnabled` (default on).

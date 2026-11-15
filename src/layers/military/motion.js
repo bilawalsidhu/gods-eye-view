@@ -15,6 +15,7 @@ import {
   COAST_MAX_SPEED_MPS,
 } from '../../data/motionModel.js';
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
+import { placeLiveAircraft } from '../flights/placed.js';
 import {
   modelVisualAnchor,
   modelAnchorWorld,
@@ -70,6 +71,19 @@ export function createMotion({
     }
 
     const out = result || new Cesium.Cartesian3();
+    // A host-supplied placement decides where a live contact is drawn; with
+    // none, or no answer for this contact, the layer's own motion below does.
+    if (
+      placeLiveAircraft(
+        flightState,
+        services.placement,
+        icao24,
+        info,
+        history,
+        out,
+      )
+    )
+      return out;
     // Render one poll interval behind real time so we interpolate between
     // two KNOWN fixes whenever possible (see RENDER_DELAY_SEC rationale).
     const renderTime = Cesium.JulianDate.addSeconds(
