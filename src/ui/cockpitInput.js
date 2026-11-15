@@ -248,6 +248,9 @@ export function onKeyDown(event) {
     if (event.target?.closest?.('.cesium-credit-lightbox')) return;
     // An open Display or Radio popover takes Escape itself.
     if (this.isUtilityDisclosureOpen?.()) return;
+    // So do the Data Layers search field and filter menu.
+    if (event.target?.closest?.('.layer-finder__field, .layer-finder__menu'))
+      return;
     if (this.context?.contains(event.target) && !this.contextCollapsed) {
       event.preventDefault();
       event.stopImmediatePropagation();

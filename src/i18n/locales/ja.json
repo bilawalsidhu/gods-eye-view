@@ -3542,5 +3542,15 @@
   "Scope opacity": "スコープの不透明度",
   "How dark the scope shades the view outside the keyhole": "キーホール外のビューをスコープがどれだけ暗くするか",
   "Reset to default": "既定に戻す",
-  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "ビジュアルを既定に戻す：標準の見た目、HUD、スコープ、ラベル、エフェクト"
+  "Reset Visual to its defaults: Normal look, HUD, scope, labels and effects": "ビジュアルを既定に戻す：標準の見た目、HUD、スコープ、ラベル、エフェクト",
+  "All layers": "すべてのレイヤー",
+  "On": "オン",
+  "Off": "オフ",
+  "Search layers": "レイヤーを検索",
+  "Filter layers": "レイヤーを絞り込む",
+  "Status": "状態",
+  "Search layers…": "レイヤーを検索…",
+  "Layer groups": "レイヤーのグループ",
+  "Jump to {name}": "{name} へ移動",
+  "No layers match": "一致するレイヤーはありません"
 }

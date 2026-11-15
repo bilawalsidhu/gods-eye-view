@@ -113,6 +113,8 @@
       "src/ui/views/panels/DataLibraryCard.vue",
       "src/ui/views/panels/DataLibraryDialog.vue",
       "src/ui/views/panels/DataLibraryBrowse.vue",
+      "src/ui/views/panels/LayerFinder.vue",
+      "src/ui/views/panels/LayerSectionIndex.vue",
       "src/ui/libraryBrowser.js",
       "src/ui/localSdrPresentation.js",
       "src/ui/unitLabels.js",
