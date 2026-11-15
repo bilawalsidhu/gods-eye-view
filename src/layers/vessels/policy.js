@@ -53,6 +53,11 @@ export const TRAIL_MAX_POINTS = 400;
 
 export const TRAIL_MIN_MOVE_M = 25;
 
+/** Whether the layer shows the world clock's time instead of the live feed:
+ *  its source declares a timeline and the clock is away from live. */
+export const followsClock = (vesselState) =>
+  vesselState.timeline?.active() === true;
+
 export const DEFAULT_AIS_RUNTIME = Object.freeze({
   now: () => Date.now(),
   setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),

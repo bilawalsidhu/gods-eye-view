@@ -42,8 +42,9 @@
  *                           and a real mouse click on the tracked plane is a
  *                           NO-OP (no deselect, no camera spike).
  *   M3. AGE-OUT RELEASE   — when the tracked plane's fixes stop arriving
- *                           (3 missed polls via the shim), tracking clears and
- *                           the camera is RELEASED IN PLACE: viewer.trackedEntity
+ *                           it stays tracked (STALE, then SIGNAL LOST) until
+ *                           10 min after its newest fix; then tracking clears
+ *                           and the camera is RELEASED IN PLACE: viewer.trackedEntity
  *                           undefined, NO jump (owner decision 2026-07-02 —
  *                           the old ~80 km overview flyTo is gone).
  *
@@ -94,9 +95,16 @@
 
 import fs from 'node:fs';
 import puppeteer from 'puppeteer';
+import { respondToPlanespotters } from './qa-photo-stub.mjs';
 import { arrivalAngleViolated, arrivalRotationPassed } from '../src/tooling/trackArrivalObservation.mjs';
-import { classifyAircraft, CLASS_SCALE_3D, CLASS_MODEL_REAL } from '../src/data/aircraftClass.js';
+import { aircraftModelSpec } from '../src/data/fleetModels.js';
 import { ensureGeoidReady, geoidHeight } from '../src/data/geoid.js';
+
+/** The fleet model set the aircraft layers draw from, read from disk. */
+const FLEET_SET = Object.freeze({
+  catalog: JSON.parse(fs.readFileSync(new URL('../public/models/fleet/catalog.json', import.meta.url), 'utf8')),
+  types: JSON.parse(fs.readFileSync(new URL('../public/models/fleet/types.json', import.meta.url), 'utf8')),
+});
 
 // ---------------------------------------------------------------------------
 // Args
@@ -287,6 +295,8 @@ async function main() {
         });
         return;
       }
+      // Aircraft photo lookups never reach the third party: no photos.
+      if (respondToPlanespotters(request)) return;
       if (url.origin === APP_ORIGIN && url.pathname === '/api/openai/hud-summary') {
         request.respond({
           status: 200,
@@ -359,7 +369,12 @@ async function main() {
             'Synthetica',      // 2 origin_country
             Math.floor(Date.now() / 1000), // 3 time_position
             Math.floor(Date.now() / 1000), // 4 last_contact
-            f.lon,             // 5 longitude
+            // A plane given `moveFromMs` flies east at its reported speed
+            // (the trail-head check needs a moving icon); others hold still.
+            Number.isFinite(f.moveFromMs)
+              ? f.lon + (f.vel * (Date.now() - f.moveFromMs)) / 1000
+                / (111320 * Math.cos((f.lat * Math.PI) / 180))
+              : f.lon,         // 5 longitude
             f.lat,             // 6 latitude
             f.alt,             // 7 baro_altitude (m)
             f.onGround === true, // 8 on_ground (ground-traffic phase flips this live)
@@ -408,6 +423,15 @@ async function main() {
             retrievedAt: new Date().toISOString(),
             status: 'ready',
           }));
+        }
+        // CelesTrak SATCAT, which the satellite classes read beside the TLEs.
+        // An empty CSV (header only) keeps the run hermetic: the classes fall
+        // back to names and groups, as they do when SATCAT is unavailable.
+        if (isAppRequest && url.pathname.startsWith('/api/celestrak-satcat/')) {
+          return Promise.resolve(new Response(
+            'OBJECT_NAME,OBJECT_ID,NORAD_CAT_ID,OBJECT_TYPE,OPS_STATUS_CODE,LAUNCH_DATE\n',
+            { status: 200, headers: { 'Content-Type': 'text/csv' } },
+          ));
         }
         // CelesTrak TLE groups. Served from a fixed two-satellite catalog so
         // the satellite assertions are deterministic and the run never depends
@@ -529,13 +553,13 @@ async function main() {
 
     // Independent GLB capability control. Product model absence cannot prove
     // that the browser backend is incapable: that is the condition this
-    // harness is meant to catch. Load the already-approved airplane asset
+    // harness is meant to catch. Load one of the shipped fleet models
     // directly through Cesium, outside the Flights/Military model pipelines,
     // then remove the control before exercising product behavior.
     const glbControlStarted = await evalPage(async () => {
       window.__qaGlbControl = null;
       window.__qaGlbControlError = null;
-      const asset = await fetch('/models/airplane.glb');
+      const asset = await fetch('/models/fleet/aircraft/a320.glb');
       const assetBytes = asset.ok ? (await asset.arrayBuffer()).byteLength : 0;
       if (!asset.ok || assetBytes === 0) {
         throw new Error(`GLB control asset unavailable: HTTP ${asset.status}`);
@@ -546,7 +570,7 @@ async function main() {
         Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 9000),
       );
       void Cesium.Model.fromGltfAsync({
-        url: '/models/airplane.glb',
+        url: '/models/fleet/aircraft/a320.glb',
         modelMatrix,
         scale: 1,
       }).then((model) => {
@@ -1436,8 +1460,8 @@ async function main() {
       }, trackedIcao);
       console.log('  (3D model did not render under SwiftShader; testing the shared display-position contract directly)');
     } else {
-      // Full check: independently transform airplane.glb's measured AABB centre
-      // through the actual 3D model matrix, then compare it with detection.
+      // Full check: independently transform the fleet model's visual centre
+      // (its origin) through the actual 3D model matrix, then compare it with detection.
       // glTF [x,y,z] → Cesium-local [x,-z,y]. The effective rendered
       // computedScale is separate from modelMatrix and includes any
       // minimumPixelSize enlargement, so include it just as the renderer does.
@@ -1451,7 +1475,7 @@ async function main() {
         const scale = Number.isFinite(model.computedScale)
           ? model.computedScale
           : (Number.isFinite(model.scale) ? model.scale : 1);
-        // airplane.glb is now bounding-box centred with transforms applied.
+        // Fleet models are drawn about their origin, transforms applied.
         const x = 0 * scale;
         const y = 0 * scale;
         const z = 0 * scale;
@@ -1484,6 +1508,110 @@ async function main() {
       const maxDelta = Math.max(...samples);
       record('jitter: max|visual centre − detectable| ≈ 0 over frames', maxDelta <= JITTER_TOL_M,
         `max=${maxDelta.toFixed(3)} m over ${samples.length} frames (tol ${JITTER_TOL_M} m, mode=${modelUp ? 'model-matrix' : 'display-contract'})`);
+    }
+
+    // ============================================================
+    // TRAIL HEAD ENDS AT THE DRAWN ICON, every rendered frame.
+    //   The head's last vertex is where the tracked plane is drawn (the
+    //   display position, or the model's tail anchor while the model is the
+    //   visual). getTrackedInfo reports the dead-reckoned position without
+    //   the brief post-report easing; its gap is logged, not asserted.
+    // ============================================================
+    console.log('\nTrail head — ends at the drawn icon on every frame');
+    // The fixture planes repeat one position, so the icon holds and draws no
+    // head. Fly the tracked one east for this check; the display runs 30 s
+    // behind, so give it time to reach the moving reports.
+    await evalPage((icao) => {
+      const f = window.__SYNTH.flights.find((p) => p.icao === icao);
+      f.moveFromMs = Date.now();
+    }, trackedIcao);
+    await sleep(55_000);
+    const headSamples = await sampleFrames(page, 40, (icao) => {
+      const viewer = window.__godsEyeView.viewer;
+      const fl = window.__godsEyeView.dataManager.layers.get('flights').module;
+      const ent = viewer.trackedEntity;
+      const time = viewer.clock.currentTime;
+      const head = viewer.entities.values.find((e) => String(e.id).startsWith('gev-trail:fl-head-'));
+      const line = head?.polyline?.positions?.getValue(time);
+      const drawn = ent?.position?.getValue(time);
+      if (!line?.length || !drawn) return null;
+      const end = line[line.length - 1];
+      const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+      const ti = fl.getTrackedInfo();
+      let infoGap = null;
+      if (ti && ti.icao24 === icao) {
+        // WGS84 lat/lon → ECEF on the ellipsoid; the angle at the centre to
+        // the drawn position, times the mean radius, is the ground gap.
+        const a = 6378137, e2 = 6.69437999014e-3;
+        const lat = (ti.latitude * Math.PI) / 180, lon = (ti.longitude * Math.PI) / 180;
+        const n = a / Math.sqrt(1 - e2 * Math.sin(lat) ** 2);
+        const p = {
+          x: n * Math.cos(lat) * Math.cos(lon),
+          y: n * Math.cos(lat) * Math.sin(lon),
+          z: n * (1 - e2) * Math.sin(lat),
+        };
+        const dot = p.x * drawn.x + p.y * drawn.y + p.z * drawn.z;
+        const cos = dot / (Math.hypot(p.x, p.y, p.z) * Math.hypot(drawn.x, drawn.y, drawn.z));
+        infoGap = 6371008.8 * Math.acos(Math.min(1, cos));
+      }
+      // While the 3D model is the visual the head ends at the model's tail
+      // anchor, which sits on the drawn (pixel-size-enlarged) model.
+      const model = window.__findTrackedModel ? window.__findTrackedModel() : null;
+      const sphere = model && model.ready && model.show ? model.boundingSphere : null;
+      // boundingSphere leaves out the minimum-pixel-size enlargement that
+      // computedScale carries; the drawn model is that much larger.
+      const enlarge = sphere && Number.isFinite(model.computedScale) && model.scale > 0
+        ? Math.max(1, model.computedScale / model.scale)
+        : 1;
+      const radius = sphere ? sphere.radius * enlarge : null;
+      return {
+        end: dist(end, drawn),
+        onModel: sphere ? dist(end, sphere.center) <= radius + 50 : false,
+        modelRadius: radius,
+        infoGap,
+        vertices: line.length,
+      };
+    }, trackedIcao);
+    // The same reading between frames, the way a page script polls it: the
+    // head holds the last rendered frame while getTrackedInfo dead-reckons
+    // the current instant. Logged only, to tell the two apart.
+    const betweenFrames = [];
+    for (let i = 0; i < 8; i++) {
+      await sleep(600);
+      betweenFrames.push(await evalPage((icao) => {
+        const viewer = window.__godsEyeView.viewer;
+        const head = viewer.entities.values.find((e) => String(e.id).startsWith('gev-trail:fl-head-'));
+        const line = head?.polyline?.positions?.getValue(viewer.clock.currentTime);
+        const drawn = viewer.trackedEntity?.position?.getValue(viewer.clock.currentTime);
+        if (!line?.length || !drawn) return null;
+        const end = line[line.length - 1];
+        return Math.hypot(end.x - drawn.x, end.y - drawn.y, end.z - drawn.z);
+      }, trackedIcao));
+    }
+    console.log(`  (between frames: head end vs entity position, m: ${
+      betweenFrames.map((v) => (v == null ? '-' : v.toFixed(1))).join(' ')})`);
+    // Freeze the plane where it got to, so later checks see a still contact.
+    await evalPage((icao) => {
+      const f = window.__SYNTH.flights.find((p) => p.icao === icao);
+      f.lon += (f.vel * (Date.now() - f.moveFromMs)) / 1000
+        / (111320 * Math.cos((f.lat * Math.PI) / 180));
+      delete f.moveFromMs;
+    }, trackedIcao);
+    const headUsable = headSamples.values.filter((v) => v != null);
+    if (headUsable.length < 10) {
+      skip('trail head: ends at the drawn icon on every frame',
+        `only ${headUsable.length} frames with a drawn head (timedOut=${headSamples.timedOut})`);
+    } else {
+      const worst = Math.max(...headUsable.map((v) => v.end));
+      const off = headUsable.filter((v) => !(v.end <= 50 || v.onModel));
+      const onModel = headUsable.filter((v) => v.end > 50 && v.onModel).length;
+      const radii = headUsable.map((v) => v.modelRadius).filter((v) => v != null);
+      const gaps = headUsable.map((v) => v.infoGap).filter((v) => v != null);
+      record('trail head: last vertex on the drawn icon (within 50 m, or on the drawn 3D model) on every frame',
+        off.length === 0,
+        `${off.length} of ${headUsable.length} frames off; max end-to-centre=${worst.toFixed(1)} m, ${onModel} frames ending on the model's tail (model radius ${
+          radii.length ? Math.max(...radii).toFixed(0) : 'n/a'} m); getTrackedInfo vs drawn icon max=${
+          gaps.length ? Math.max(...gaps).toFixed(1) : 'n/a'} m (logged only)`);
     }
 
     // ============================================================
@@ -1732,7 +1860,8 @@ async function main() {
 
     // ============================================================
     // REGRESSION M3 (rewritten 2026-07-02 — deliberate behavior change):
-    // when the TRACKED plane ages out (3 missed polls), tracking must clear
+    // when the TRACKED plane ages out (10 min after its newest fix, past the
+    // 3 missed polls that remove an untracked plane), tracking must clear
     // and the camera must be RELEASED IN PLACE — viewer.trackedEntity
     // undefined and NO jump (the old contract flew an ~80 km overview; the
     // owner field-ruled that wrong: "it randomly zooms way up and loses my
@@ -1753,27 +1882,48 @@ async function main() {
       const beforeTracking = !!fl.getTrackedInfo();
       // Simulate the age-out via the shim: the plane stops arriving.
       window.__SYNTH.flights = window.__SYNTH.flights.filter((f) => f.icao !== icao);
-      // MISSING_POLL_LIMIT = 3 consecutive absent polls → removal + clear.
-      // Capture the camera pose right BEFORE the removing poll — the follow
-      // camera drifts with the coasting plane until the instant of release,
-      // so this is the "where the user was looking" reference.
+      // The tracked plane outlives MISSING_POLL_LIMIT (3 absent polls): it is
+      // kept until 10 min after its newest fix, so the camera keeps its target.
       await fl.update(v);
       await fl.update(v);
-      const c0 = v.camera.positionCartographic;
-      const atAgeOut = {
-        lonDeg: (c0.longitude * 180) / Math.PI,
-        latDeg: (c0.latitude * 180) / Math.PI,
-        height: c0.height,
-      };
-      await fl.update(v); // third miss → removal + clear + in-place release
-      return {
-        beforeTracking,
-        atAgeOut,
-        stillTrackedAfter: !!fl.getTrackedInfo(),
-        viewerStillTracking: !!v.trackedEntity,
-      };
+      await fl.update(v);
+      const trackedThroughMisses = !!fl.getTrackedInfo();
+      // Jump the page clock past the 10 min retention instead of waiting.
+      const realNow = Date.now;
+      Date.now = () => realNow() + 11 * 60 * 1000;
+      try {
+        // Let the follow camera settle on the stopped plane, then capture the
+        // pose right BEFORE the removing poll: the "where the user was
+        // looking" reference.
+        await new Promise((res) => {
+          const stop = v.scene.postRender.addEventListener(() => {
+            stop();
+            res();
+          });
+          v.scene.requestRender();
+        });
+        const c0 = v.camera.positionCartographic;
+        const atAgeOut = {
+          lonDeg: (c0.longitude * 180) / Math.PI,
+          latDeg: (c0.latitude * 180) / Math.PI,
+          height: c0.height,
+        };
+        await fl.update(v); // past retention → removal + clear + in-place release
+        return {
+          beforeTracking,
+          trackedThroughMisses,
+          atAgeOut,
+          stillTrackedAfter: !!fl.getTrackedInfo(),
+          viewerStillTracking: !!v.trackedEntity,
+        };
+      } finally {
+        Date.now = realNow;
+      }
     }, m3Icao);
 
+    record('M3: the tracked plane stays tracked through 3 missed polls (kept 10 min after its newest fix)',
+      m3.trackedThroughMisses,
+      `trackedThroughMisses=${m3.trackedThroughMisses}`);
     record('M3: tracking cleared after the tracked plane ages out (getTrackedInfo null)',
       m3.beforeTracking && !m3.stillTrackedAfter,
       `before=${m3.beforeTracking} trackedAfter=${m3.stillTrackedAfter}`);
@@ -2085,18 +2235,12 @@ async function main() {
     // ============================================================
     console.log('\nGround 3D — grounded planes are model-eligible + snapped to the sampled skin');
     const GROUND3D_STUB_H = 187.5; // stubbed tile-skin height (m, ellipsoid)
-    // Expected belly offsets (m): native origin-above-lowest-vertex × MODEL_SCALE
-    // × CLASS_SCALE_3D[klass] — constants match the layers' MODEL_BELLY_OFFSET_NATIVE
-    // / MODEL_SCALE pairs, which modelScale.test.mjs locks against the GLBs.
-    // Class is computed with the REAL classifier on the synthetic feed fields.
-    const g3dFlKlass = classifyAircraft({ typeCode: null, category: null });
-    const g3dMilKlass = classifyAircraft({ typeCode: 'C130', category: undefined });
-    const g3dFlOffset = 6.719 * 1 * (CLASS_SCALE_3D[g3dFlKlass] || 1); // airplane.glb, flights
-    // Hangar fleet (2026-08-16): military C130 → turboprop → the real atr72.glb,
-    // whose belly offset is the registry's measured bellyM (meters, scale 1) —
-    // NOT the jet.glb 5.631 × class formula. Pinned by modelScale.test.mjs.
-    const g3dMilOffset = CLASS_MODEL_REAL[g3dMilKlass]?.bellyM
-      ?? 5.631 * 1 * (CLASS_SCALE_3D[g3dMilKlass] || 1); // jet.glb fallback classes
+    // Expected belly offsets (m): the fleet model's wheel clearance at its
+    // life-size scale, the model chosen as the layers choose it
+    // (aircraftModelSpec) from the synthetic feed's fields: no type for the
+    // flights contact (the default airliner), a C130 for the military one.
+    const g3dFlOffset = aircraftModelSpec(FLEET_SET, { typeCode: null }).clearanceM;
+    const g3dMilOffset = aircraftModelSpec(FLEET_SET, { typeCode: 'C130' }).clearanceM;
     // Height-datum fix (Task 6): the flights-layer billboard for a grounded synthetic
     // (no geo_altitude in this stub feed, no warm terrain-height cache in a headless
     // run) now renders at baroM + geoidHeight(lat, lon) rather than the raw baro
@@ -2365,10 +2509,10 @@ async function main() {
         const flDelta = g3dState.flModelRadius - g3dIngest.flBBRadius;
         const milDelta = g3dState.milModelRadius - g3dIngest.milBBRadius;
         const HEIGHT_TOL_M = 1.0;
-        record(`ground-3d: flights model height = sampled skin + belly offset (${g3dFlKlass})`,
+        record(`ground-3d: flights model height = sampled skin + belly offset (default airliner)`,
           Math.abs(flDelta - flWantDelta) <= HEIGHT_TOL_M,
           `Δradial=${flDelta.toFixed(2)} m want=${flWantDelta.toFixed(2)} m (stub ${GROUND3D_STUB_H} + offset ${g3dFlOffset.toFixed(2)} − alt ${(150 + g3dFlGeoidN).toFixed(2)} [150 baro + ${g3dFlGeoidN.toFixed(2)} geoidN])`);
-        record(`ground-3d: military model height = sampled skin + belly offset (${g3dMilKlass})`,
+        record(`ground-3d: military model height = sampled skin + belly offset (C130)`,
           Math.abs(milDelta - milWantDelta) <= HEIGHT_TOL_M,
           `Δradial=${milDelta.toFixed(2)} m want=${milWantDelta.toFixed(2)} m (stub ${GROUND3D_STUB_H} + offset ${g3dMilOffset.toFixed(2)} − alt 0)`);
         record('ground-3d: billboard→model handoff holds on the ground (icons hidden once models render)',
@@ -2568,7 +2712,7 @@ async function main() {
             const scale = Number.isFinite(m.computedScale)
               ? m.computedScale
               : (Number.isFinite(m.scale) ? m.scale : 1);
-            // airplane.glb is now bounding-box centred with transforms applied.
+            // Fleet models are drawn about their origin, transforms applied.
             const x = 0 * scale;
             const y = 0 * scale;
             const z = 0 * scale;
@@ -3578,8 +3722,8 @@ async function main() {
 
       // WARM ground, camera IN: the placement. The model is not merely visible,
       // it is standing ON the floor — within one class belly offset above it,
-      // never under it. MAX_BELLY_M clears the largest offset any class adds
-      // (widebody b789, 7.81 m in CLASS_MODEL_REAL); the floor itself is the
+      // never under it. MAX_BELLY_M clears the largest wheel clearance any
+      // fleet aircraft stands on at life size; the floor itself is the
       // hard lower bound, and a model placed at the raw feed altitude is ~240 m
       // under it.
       const MAX_BELLY_M = 12;

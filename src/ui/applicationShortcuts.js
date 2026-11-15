@@ -10,7 +10,8 @@ const STYLE_KEYS = Object.freeze({
 /**
  * Bind the application's existing bubbling keyboard shortcuts.
  * Capture-phase surfaces keep first refusal. The caller owns each action and
- * persistence; form controls keep native typing except for Escape.
+ * persistence; form controls keep native typing except for Escape, and a key
+ * held with Cmd, Ctrl or Alt is left to the browser.
  * @param {object} options
  * @param {Document} options.documentRef Keyboard event target.
  * @param {HTMLElement} options.searchInput Additional editing target.
@@ -27,6 +28,13 @@ export function bindApplicationShortcuts({
       event.target?.matches?.('select, input, textarea') ||
       event.target === searchInput;
     if (isFormControl && event.key !== 'Escape') return;
+    // Cmd+C, Ctrl+F, Cmd+1 and the like belong to the browser and the system.
+    // Shift is not a chord here: Shift+C is still C.
+    if (
+      (event.metaKey || event.ctrlKey || event.altKey) &&
+      event.key !== 'Escape'
+    )
+      return;
 
     if (STYLE_KEYS[event.key]) actions.setStyle(STYLE_KEYS[event.key]);
     if (event.key === 'Escape') actions.dismissSearch();

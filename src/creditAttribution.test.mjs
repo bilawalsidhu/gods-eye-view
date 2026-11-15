@@ -229,13 +229,30 @@ const GUARDED_PROPS = new Set([
 
 // Custom properties allowed inside a modelled offset. Each is a pinned-tray
 // stack height, proven non-negative below, so evaluating them at 0 is a
-// conservative floor rather than a guess.
+// conservative floor rather than a guess. The world timeline's lift raises
+// the dock, its trays and the credit together, so it moves no gap either.
 const VETTED_VARS = new Set([
   '--dock-pinned-stack-height',
   '--dock-lower-pinned-height',
   '--dock-location-pinned-height',
   '--dock-presets-pinned-height',
+  '--world-timeline-lift',
 ]);
+// Custom properties CSS sets to a fixed length besides their 0 default. The
+// clearance checks run at each length CSS gives them, not only at 0.
+const FIXED_LENGTH_VARS = new Set(['--world-timeline-lift']);
+const LIFTS_PX = [0, 66, 80];
+let liftPx = 0;
+function eachLift(check) {
+  for (const lift of LIFTS_PX) {
+    liftPx = lift;
+    try {
+      check(lift);
+    } finally {
+      liftPx = 0;
+    }
+  }
+}
 
 /** Rules whose final compound targets a modelled element (pseudo-elements aside). */
 function ownBoxEntries() {
@@ -315,6 +332,7 @@ function toPx(value, viewportHeight, where) {
     if (term.startsWith('var(')) {
       const name = term.slice(4, term.lastIndexOf(')')).split(',')[0].trim();
       assert.ok(VETTED_VARS.has(name), `unvetted custom property ${name} in ${where}: "${value}"`);
+      if (name === '--world-timeline-lift') total += liftPx;
       continue; // proven non-negative; 0 is the conservative floor
     }
     assert.match(term, /^-?[\d.]+(px|rem|vh)$/, `unmodelled length term "${term}" in ${where}: "${value}"`);
@@ -444,7 +462,8 @@ test('custom properties inside modelled offsets are provably non-negative', () =
   assert.ok(declared.length >= VETTED_VARS.size, 'every vetted custom property needs a CSS default');
   for (const decl of declared) {
     assert.doesNotMatch(decl.value, /-\s*\d/, `${decl.prop} has a negative CSS default: ${decl.value}`);
-    assert.match(decl.value, /^(0|0px)$/, `${decl.prop} default is not a vetted shape: ${decl.value}`);
+    const shape = FIXED_LENGTH_VARS.has(decl.prop) ? /^(0|\d+px)$/ : /^(0|0px)$/;
+    assert.match(decl.value, shape, `${decl.prop} default is not a vetted shape: ${decl.value}`);
   }
   const layout = fs.readFileSync(new URL('./ui/panelLayoutController.js', import.meta.url), 'utf8');
   const start = layout.indexOf('_updateCommandDockTrayStack() {');
@@ -517,16 +536,18 @@ test('every open dock tray clears the required credit at every modelled viewport
   // number: the dock is anchored at 2vh down to 721px and re-anchors to a flat
   // 8px at 720px, while the credit keeps its 2vh base throughout.
   const failures = [];
-  for (const scenario of TRAY_SCENARIOS) {
-    for (const width of WIDTHS.filter((w) => w <= 900)) {
-      for (const height of HEIGHTS) {
-        const clearance = trayBottomPx(scenario, width, height) - creditTopPx(width, height);
-        if (clearance < MIN_CLEARANCE_PX) {
-          failures.push(`${scenario.name} @ ${width}x${height}: ${clearance.toFixed(1)}px`);
+  eachLift((lift) => {
+    for (const scenario of TRAY_SCENARIOS) {
+      for (const width of WIDTHS.filter((w) => w <= 900)) {
+        for (const height of HEIGHTS) {
+          const clearance = trayBottomPx(scenario, width, height) - creditTopPx(width, height);
+          if (clearance < MIN_CLEARANCE_PX) {
+            failures.push(`${scenario.name} @ ${width}x${height} lift ${lift}: ${clearance.toFixed(1)}px`);
+          }
         }
       }
     }
-  }
+  });
   assert.deepEqual(failures, [], `a dock tray re-enters the credit band:\n  ${failures.join('\n  ')}\n`);
 });
 
@@ -566,21 +587,24 @@ test('the full-width context rail clears the required credit at every modelled v
       'none',
       `at ${width}px the rail is height-capped, so its bottom anchor no longer decides its floor`,
     );
-    for (const height of HEIGHTS) {
-      const rail = resolve(['#right-context-rail'], 'bottom', width, 'context rail');
-      const clearance = toPx(rail.decl.value, height, 'rail bottom') - creditTopPx(width, height);
-      if (clearance < MIN_CLEARANCE_PX) failures.push(`${width}x${height}: ${clearance.toFixed(1)}px`);
-    }
+    eachLift((lift) => {
+      for (const height of HEIGHTS) {
+        const rail = resolve(['#right-context-rail'], 'bottom', width, 'context rail');
+        const clearance = toPx(rail.decl.value, height, 'rail bottom') - creditTopPx(width, height);
+        if (clearance < MIN_CLEARANCE_PX) failures.push(`${width}x${height} lift ${lift}: ${clearance.toFixed(1)}px`);
+      }
+    });
   }
   assert.deepEqual(failures, [], `context rail re-enters the credit band at ${failures.join(', ')}`);
 });
 
 test('the dock anchor changes at 720px — the 2vh cancellation is band-limited', () => {
-  assert.equal(resolve(['#command-dock'], 'bottom', 800, 'dock').decl.value, '2vh');
-  assert.equal(resolve(['#command-dock'], 'bottom', 720, 'dock').decl.value, '8px');
+  const lift = 'var(--world-timeline-lift, 0px)';
+  assert.equal(resolve(['#command-dock'], 'bottom', 800, 'dock').decl.value, `calc(2vh + ${lift})`);
+  assert.equal(resolve(['#command-dock'], 'bottom', 720, 'dock').decl.value, `calc(8px + ${lift})`);
   assert.equal(
     resolve(CREDIT_SELECTORS, 'bottom', 720, 'credit').decl.value,
-    'calc(2vh + 5rem)',
+    `calc(2vh + 5rem + ${lift})`,
     'the credit keeps its 2vh base below 720px — that asymmetry is the whole hazard',
   );
 });

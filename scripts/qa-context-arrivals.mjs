@@ -28,6 +28,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { stubPlanespotters } from './qa-photo-stub.mjs';
 import { createScreencast, moveCamera } from './qa-journey-recorder.mjs';
 
 const argv = process.argv.slice(2);
@@ -77,6 +78,7 @@ const browser = await puppeteer.launch({
 
 async function openPage({ aircraft = false } = {}) {
   const page = await browser.newPage();
+  await stubPlanespotters(page);
   await page.setViewport({ width: 1440, height: 900 });
   page.on('console', (message) => {
     if (message.type() === 'error') result.consoleErrors.push(message.text());

@@ -53,6 +53,10 @@ jobs:
         if: github.event_name == 'pull_request'
         run: npm run layer-token:check -- --base-ref origin/main
 
+      - name: Check Data Library manifests and share tokens
+        if: github.event_name == 'pull_request'
+        run: npm run library:check -- --base-ref origin/main
+
       - name: Run unit tests
         run: npm test
 

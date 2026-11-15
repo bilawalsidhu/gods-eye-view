@@ -143,6 +143,7 @@ for (const [locale, summary] of [
   ['ja', '東京上空のLive Flights'],
   ['zh-CN', '北京航班stale数据'],
   ['ru', 'Остин Live-Flights частично'],
+  ['he', 'תל אביב stale טיסות'],
 ]) {
   test(`English flush against other text is an echo: ${summary}`, () => {
     assert.ok(hudSummaryHasEnglish(summary, locale, ['stale', 'Live Flights']));

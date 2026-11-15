@@ -45,6 +45,18 @@ import militaryFlightsLayer, {
 } from './militaryFlights.js';
 import { clearTr3bRegistry, setTr3b } from './tr3bRegistry.js';
 import { reportMeshFloorCell, _clearMeshFloorCellsForTest } from './groundFloor.js';
+import { loadFleetModelSet } from './fleetModels.js';
+import { aircraftLayerModelSpec } from '../layers/flights/modelSpec.js';
+import { fetchPublicFile } from '../testSupport/fleetGlb.mjs';
+
+// The layers draw only once the fleet model set has loaded; load it from disk.
+// Model creation itself is stubbed per test through Cesium.Model.fromGltfAsync.
+const _silentInfo = console.info;
+console.info = () => {};
+await loadFleetModelSet({ fetchImpl: fetchPublicFile });
+console.info = _silentInfo;
+const FLIGHTS_META = Object.freeze({ typeCode: 'A320', klass: 'airliner' });
+const MILITARY_META = Object.freeze({ typeCode: 'F16', klass: 'fastjet' });
 
 // Sample altitudes are expressed RELATIVE to the band rather than as absolute
 // offsets. The thresholds have already been retuned once (1_000_000 → 150_000
@@ -201,7 +213,8 @@ const LAYERS = [
     driveFleetModel: flightsDriveFleetModel,
     ensureFleetModel: flightsEnsureFleetModel,
     trackedBillboardColor: flightsTrackedBillboardColor,
-    bellyM: 6.719,
+    /** How far a grounded A320 stands its origin above the ground (scaled wheel clearance). */
+    bellyM: aircraftLayerModelSpec(FLIGHTS_META).bellyM,
     seed({ viewer, tracked = true, icao24 = ICAO, modelCollection = null, onGround = false, models = [] }) {
       const billboard = contactBillboard();
       _setTrackedFlightRefreshStateForTest({
@@ -213,7 +226,7 @@ const LAYERS = [
         tracked,
         models,
         modelCollection,
-        meta: { callsign: 'TEST123 ', altitude: 10_668, klass: 'airliner', onGround },
+        meta: { callsign: 'TEST123 ', altitude: 10_668, ...FLIGHTS_META, onGround },
       });
       return billboard;
     },
@@ -226,7 +239,7 @@ const LAYERS = [
     driveFleetModel: militaryDriveFleetModel,
     ensureFleetModel: militaryEnsureFleetModel,
     trackedBillboardColor: militaryTrackedBillboardColor,
-    bellyM: 5.631 * 0.8,
+    bellyM: aircraftLayerModelSpec(MILITARY_META).bellyM,
     seed({ viewer, tracked = true, icao24 = ICAO, modelCollection = null, onGround = false, models = [] }) {
       const billboard = contactBillboard();
       _setTrackedMilitaryRefreshStateForTest({
@@ -238,7 +251,7 @@ const LAYERS = [
         tracked,
         models,
         modelCollection,
-        meta: { callsign: 'TEST123 ', altitudeFt: 35_000, klass: 'fastjet', onGround },
+        meta: { callsign: 'TEST123 ', altitudeFt: 35_000, ...MILITARY_META, onGround },
       });
       return billboard;
     },
@@ -841,8 +854,8 @@ for (const fixture of LAYERS) {
     Date.now = () => now;
     let attempts = 0;
     const requested = [];
-    Cesium.Model.fromGltfAsync = ({ url }) => {
-      attempts++; requested.push(url);
+    Cesium.Model.fromGltfAsync = ({ basePath }) => {
+      attempts++; requested.push(basePath);
       return Promise.reject(new Error('simulated missing GLB'));
     };
     // The give-up path warns once by design; keep the run's output clean.

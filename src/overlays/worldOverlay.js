@@ -212,6 +212,10 @@ const _paintQueue = [];
 const _paintItemPool = [];
 const _paintRectPool = [];
 const _paintRectByKey = new Map();
+/** @type {Map<string, Map<string, object>>} This frame's paint items by source and entry id. */
+const _queuedItemBySource = new Map();
+/** Index rows that stop painting are dropped this many frames apart. */
+const QUEUED_ITEM_PRUNE_FRAMES = 600;
 const _hitRects = [];
 const _paintedBySource = Object.create(null);
 const _paintedSourceKeys = [];
@@ -1040,6 +1044,32 @@ export function getOverlayPaintRect(sourceId, entryId) {
   // Pooled rectangles outlive their key, so identity and the publishing frame
   // are both re-checked instead of clearing the index every frame.
   return rect && rect.key === key && rect.stamp === _frameStamp ? rect : null;
+}
+
+/**
+ * Opacity an entry paints with this frame, or 0 when it is not queued or the
+ * yield-collision pass hid it. Custom lanes may call it before later lanes
+ * publish paint rects. Leaves out the Cyber sonar fade.
+ * @param {string} sourceId
+ * @param {string} entryId
+ * @returns {number}
+ */
+export function getQueuedOverlayEntryAlpha(sourceId, entryId) {
+  if (_destroyed) return 0;
+  const item = _queuedItemBySource.get(sourceId)?.get(entryId);
+  // Pooled items are reassigned every frame: check the frame and the entry.
+  if (!item || item.stamp !== _frameStamp) return 0;
+  // Declutter has already run when custom lanes call this.
+  if (item.collisionHidden) return 0;
+  const record = item.record;
+  if (record.entry.id !== entryId || record.entry.source !== sourceId) return 0;
+  return (
+    record.sourceAlpha *
+    item.temporalAlpha *
+    record.distanceAlpha *
+    record.altitudeAlpha *
+    (_keyhole ? entryKeyholeAlpha(record.entry, item.placement, _keyhole) : 1)
+  );
 }
 
 /**
@@ -2223,7 +2253,34 @@ function addPaintItem(record, placement, temporalAlpha, selected) {
   item.zIndex = record.entry.zIndex;
   item.key = record.key;
   item.collisionHidden = false;
+  item.stamp = _frameStamp;
   _paintQueue[_paintCount++] = item;
+  // Keyed by source and id, not `record.key`, so a lookup builds no string.
+  // Also holds cards fading out after they left `_records`.
+  let bySource = _queuedItemBySource.get(record.entry.source);
+  if (!bySource) {
+    bySource = new Map();
+    _queuedItemBySource.set(record.entry.source, bySource);
+  }
+  bySource.set(record.entry.id, item);
+}
+
+/** Drop index rows for entries that stopped painting (bounded, not per frame). */
+function pruneQueuedItemIndex() {
+  for (const [sourceId, bySource] of _queuedItemBySource) {
+    for (const [entryId, item] of bySource) {
+      // A pooled item that now paints another entry keeps a fresh stamp.
+      const entry = item.record.entry;
+      if (
+        item.stamp !== _frameStamp ||
+        entry.id !== entryId ||
+        entry.source !== sourceId
+      ) {
+        bySource.delete(entryId);
+      }
+    }
+    if (bySource.size === 0) _queuedItemBySource.delete(sourceId);
+  }
 }
 
 function sourceCanPaint(sourceId) {
@@ -2295,6 +2352,7 @@ function solveDomains(timestamp) {
     solveRevision += domain.arbiter.solveRevision;
   }
   _paintQueue.length = _paintCount;
+  if (_frameStamp % QUEUED_ITEM_PRUNE_FRAMES === 0) pruneQueuedItemIndex();
   _solveDirty = false;
   _diagnostics.solveMs = solveMs;
   _diagnostics.selectedCount = selectedCount;
@@ -2423,24 +2481,26 @@ function paintCustomLane(lane) {
   }
 }
 
+/** Keyhole edge fade of one placed entry (1 for entries that do not fade). */
+function entryKeyholeAlpha(entry, placement, keyhole) {
+  if (entry.edgeFade !== 'keyhole') return 1;
+  const keyholeX = placement.centerX - keyhole.centerX;
+  const keyholeY = placement.centerY - keyhole.centerY;
+  return keyholeX * keyholeX + keyholeY * keyholeY <=
+    keyhole.radius * keyhole.radius
+    ? 1
+    : keyholeLabelAlphaFromGeometry(
+        placement.centerX,
+        placement.centerY,
+        keyhole,
+      );
+}
+
 function paintEntryItem(item, keyhole, sonar) {
   if (item.collisionHidden) return;
   const { record, placement } = item;
   const entry = record.entry;
-  let keyholeAlpha = 1;
-  if (entry.edgeFade === 'keyhole') {
-    const keyholeX = placement.centerX - keyhole.centerX;
-    const keyholeY = placement.centerY - keyhole.centerY;
-    keyholeAlpha =
-      keyholeX * keyholeX + keyholeY * keyholeY <=
-      keyhole.radius * keyhole.radius
-        ? 1
-        : keyholeLabelAlphaFromGeometry(
-            placement.centerX,
-            placement.centerY,
-            keyhole,
-          );
-  }
+  const keyholeAlpha = entryKeyholeAlpha(entry, placement, keyhole);
   // All five channels are normalized at their source. Keep the multiply on
   // the hot paint path so its intermediate doubles remain unboxed; the pure
   // `combinedOverlayAlpha` export still specifies/tests the same binding.
@@ -2829,6 +2889,7 @@ export function destroyWorldOverlay() {
   _accessibleActivatorByKey.clear();
   _accessibilitySignature = '';
   _paintRectByKey.clear();
+  _queuedItemBySource.clear();
   _paintCount = 0;
   _paintRectCount = 0;
   _hitRectCount = 0;

@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { stubPlanespotters } from './qa-photo-stub.mjs';
 
 const argv = process.argv.slice(2);
 const getOpt = (name, fallback = null) => {
@@ -651,6 +652,7 @@ async function main() {
     ],
   });
   const page = await browser.newPage();
+  await stubPlanespotters(page);
   await page.setViewport(VIEWPORT);
   const consoleMessages = [];
   page.on('console', (message) => {

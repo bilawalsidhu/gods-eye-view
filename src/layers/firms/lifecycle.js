@@ -127,6 +127,7 @@ export function createLifecycle({
       layerState._rowControlsListener = null;
       layerState._cellCount = 0;
       layerState._lastUpdate = null;
+      layerState._at = null;
       layerState._keyRequired = false;
       layerState._stale = false;
       layerState._error = null;

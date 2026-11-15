@@ -7,6 +7,48 @@ import {
   isFreeGlobeCamera,
 } from '../globeInView.js';
 
+/**
+ * At the farthest a hand can zoom out, the globe is this share of the
+ * screen's height across. Cesium sets no limit, so zooming on left the globe
+ * a speck among the stars.
+ */
+const MIN_GLOBE_SHARE = 0.3;
+
+/**
+ * The farthest a hand can zoom out, in metres above the ellipsoid, for a
+ * vertical field of view. It follows the screen's shape, as the app's own
+ * whole-globe view does, so that view always lies within it.
+ * @param {number} fovy Vertical field of view, radians.
+ */
+export function zoomOutLimit(fovy) {
+  const radius = Cesium.Ellipsoid.WGS84.maximumRadius;
+  const angular = Math.atan(MIN_GLOBE_SHARE * Math.tan(fovy / 2));
+  return radius / Math.sin(angular) - radius;
+}
+
+/**
+ * Hold a hand's zoom out to `zoomOutLimit` on the globe, each frame, since the
+ * field of view follows the screen's shape. The limit never sits below the
+ * camera: one already past it (a flight, a screen turned) stops there rather
+ * than jumping in at the next zoom. Flat maps keep Cesium's own, unlimited.
+ * @returns {() => void} Stop limiting.
+ */
+export function limitZoomOut(viewer) {
+  const { scene, camera } = viewer;
+  return scene.preRender.addEventListener(() => {
+    const controller = scene.screenSpaceCameraController;
+    const fovy = camera.frustum.fovy;
+    if (scene.mode !== Cesium.SceneMode.SCENE3D || !Number.isFinite(fovy)) {
+      controller.maximumZoomDistance = Number.POSITIVE_INFINITY;
+      return;
+    }
+    controller.maximumZoomDistance = Math.max(
+      zoomOutLimit(fovy),
+      camera.positionCartographic?.height ?? 0,
+    );
+  });
+}
+
 const PINCH_ZOOM_MULTIPLIER = 8;
 const MAX_PINCH_PIXEL_DELTA = 120;
 
@@ -333,8 +375,15 @@ export function installGlobeInViewRecovery(
   };
 }
 
-/** Cesium.Viewer options of the standard globe viewer. */
-export function applicationViewerOptions(creditContainer) {
+/**
+ * Cesium.Viewer options of the standard globe viewer. `showRenderLoopErrors`
+ * false leaves render errors to the caller's own notice instead of Cesium's
+ * panel.
+ */
+export function applicationViewerOptions(
+  creditContainer,
+  { showRenderLoopErrors = true } = {},
+) {
   return {
     timeline: false,
     animation: false,
@@ -354,16 +403,21 @@ export function applicationViewerOptions(creditContainer) {
     creditContainer,
     msaaSamples: 4,
     contextOptions: { webgl: { preserveDrawingBuffer: true } },
+    showRenderLoopErrors,
   };
 }
 
 /** Create the standard globe viewer in caller-owned, visible containers. */
-export function createApplicationViewer({ container, creditContainer }) {
+export function createApplicationViewer({
+  container,
+  creditContainer,
+  showRenderLoopErrors,
+}) {
   if (!container || !creditContainer)
     throw new TypeError('Viewer and credit containers are required');
   const viewer = new Cesium.Viewer(
     container,
-    applicationViewerOptions(creditContainer),
+    applicationViewerOptions(creditContainer, { showRenderLoopErrors }),
   );
   try {
     viewer.targetFrameRate = 60;
@@ -372,6 +426,7 @@ export function createApplicationViewer({ container, creditContainer }) {
     // required on touch-first screens. Mouse/trackpad sensitivity stays native.
     if (globalThis.matchMedia?.('(pointer: coarse)').matches)
       viewer.scene.screenSpaceCameraController.zoomFactor *= 3;
+    limitZoomOut(viewer);
     // Before any tile builds a draw command: Cesium's per-vertex model
     // atmosphere fails to LINK on Apple's Metal backend and kills the
     // render loop. See app/atmosphereCompat.js.

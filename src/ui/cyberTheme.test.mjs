@@ -1,4 +1,11 @@
-import { getScopeMaskFeather, isScopeMaskEnabled, setScopeMaskEnabled, setScopeMaskFeather } from '../scopeMask.js';
+import {
+  getScopeMaskFeather,
+  getScopeMaskOpacity,
+  isScopeMaskEnabled,
+  setScopeMaskEnabled,
+  setScopeMaskFeather,
+  setScopeMaskOpacity,
+} from '../scopeMask.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -282,7 +289,7 @@ test('scope choice and expanded feather survive every HUD layout and both restor
   let shown = null;
   owner.store = { publish: (view) => (shown = view.scope) };
   await owner.restoreShareState({ scopeEnabled: false, scopeFeatherPct: 200 });
-  assert.deepEqual(shown, { enabled: false, featherPct: 200 });
+  assert.deepEqual(shown, { enabled: false, featherPct: 200, opacityPct: 100 });
   for (const layout of ['minimal', 'cyber', 'tactical']) {
     owner._setHudVariant(layout, { applyVisualDefaults: true });
     assert.equal(isScopeMaskEnabled(), false, layout);
@@ -292,10 +299,44 @@ test('scope choice and expanded feather survive every HUD layout and both restor
   await owner.applyVisualState({ scope: { enabled: true, featherPct: 175 } });
   assert.equal(isScopeMaskEnabled(), true);
   assert.equal(getScopeMaskFeather(), 1.75);
-  assert.deepEqual(shown, { enabled: true, featherPct: 175 });
+  assert.deepEqual(shown, { enabled: true, featherPct: 175, opacityPct: 100 });
   await owner.applyVisualState({ scope: { featherPct: 500 } });
   assert.equal(getScopeMaskFeather(), 2);
-  assert.deepEqual(shown, { enabled: true, featherPct: 200 });
+  assert.deepEqual(shown, { enabled: true, featherPct: 200, opacityPct: 100 });
+});
+
+test('a shared scope opacity is restored and rides in the next share state', async (t) => {
+  const { owner } = styleOwner(t, 'tactical');
+  const previous = getScopeMaskOpacity();
+  t.after(() => setScopeMaskOpacity(previous));
+  Object.assign(owner.services, {
+    setScopeMaskEnabled() {},
+    setScopeMaskFeather() {},
+    setScopeMaskOpacity,
+  });
+  let shown = null;
+  owner.store = { publish: (view) => (shown = view.scope) };
+  await owner.restoreShareState({ scopeOpacityPct: 60 });
+  assert.equal(getScopeMaskOpacity(), 0.6);
+  assert.equal(shown.opacityPct, 60);
+  // A state without it leaves the opacity alone.
+  await owner.restoreShareState({ scopeFeatherPct: 80 });
+  assert.equal(getScopeMaskOpacity(), 0.6);
+  assert.equal(shown.opacityPct, 60);
+  Object.assign(owner.services, {
+    getDetectionTuning: () => ({ allocationStrategy: 'ELASTIC' }),
+    getDetectionMode: () => 'OFF',
+    isScopeMaskEnabled: () => true,
+    getScopeMaskFeather: () => 0.8,
+    getScopeMaskOpacity,
+    getScopeTerminusOverride: () => null,
+  });
+  owner.readCelestialRing = () => null;
+  assert.equal(owner._readShareState().options.scopeOpacityPct, 60);
+  // A link asking for less than the floor opens at the floor, and says so.
+  await owner.restoreShareState({ scopeOpacityPct: 20 });
+  assert.equal(getScopeMaskOpacity(), 0.5);
+  assert.equal(owner._readShareState().options.scopeOpacityPct, 50);
 });
 
 test('a scene shot saved with the retired Snow style plays on Normal', async (t) => {
@@ -434,12 +475,12 @@ test('Cyber lower-left telemetry tracks the credit anchor with clearance for its
     cyberStyles,
     /#intel-hud\[data-variant='cyber'\] \.hud-bottom-left/,
   );
-  const offset = telemetry.match(/bottom:\s*calc\(2vh \+ ([\d.]+)rem\);/);
+  const offset = telemetry.match(/bottom:\s*calc\(2vh \+ ([\d.]+)rem \+ var\(--world-timeline-lift, 0px\)\);/);
   assert.ok(offset, 'telemetry must retain the attribution viewport anchor');
   const credits = read('./styles/command-dock-trays.css');
   const creditOffsets = [
     ...credits.matchAll(
-      /#cesium-credits\s*\{[^}]*bottom:\s*calc\(2vh \+ ([\d.]+)rem\);/g,
+      /#cesium-credits\s*\{[^}]*bottom:\s*calc\(2vh \+ ([\d.]+)rem \+ var\(--world-timeline-lift, 0px\)\);/g,
     ),
   ];
   assert.ok(creditOffsets.length > 0);
@@ -738,7 +779,7 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   );
   assert.match(
     cyberStyles,
-    /#left-panel-stack \{[\s\S]*?top: var\(--cyber-left-rail-top\) !important;[\s\S]*?bottom: calc\(2vh \+ 13rem\);/,
+    /#left-panel-stack \{[\s\S]*?top: var\(--cyber-left-rail-top\) !important;[\s\S]*?bottom: calc\(2vh \+ 13rem \+ var\(--world-timeline-lift, 0px\)\);/,
   );
   assert.match(
     cyberStyles,
@@ -793,7 +834,7 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
     cyberStyles,
     /#right-context-rail:has\(> \[data-panel-id\]:not\(\.collapsed, \[hidden\]\)\) \{\s*border-inline-end-color:/,
   );
-  assert.match(cyberStyles, /bottom: calc\(2vh \+ 13rem\);/);
+  assert.match(cyberStyles, /bottom: calc\(2vh \+ 13rem \+ var\(--world-timeline-lift, 0px\)\);/);
   assert.doesNotMatch(cyberStyles, /NAV 01  \/\/  COMMAND BUS  \/\/  VIS 03/);
   assert.match(cyberStyles, /data-layer-id='satellites'/);
   assert.match(cyberStyles, /#search-toggle::before/);

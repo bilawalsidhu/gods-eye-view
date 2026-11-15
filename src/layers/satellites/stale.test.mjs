@@ -24,7 +24,15 @@ const GROUPS = [
   'galileo',
   'geo',
   'starlink',
+  // Added after Starlink so the fixture ids above keep their numbers.
+  'resource',
+  'weather',
+  'planet',
+  'sar',
+  'science',
 ];
+/** The core catalog's groups, one owned satellite each. */
+const CORE = GROUPS.filter((group) => group !== 'starlink');
 
 function tle(id, invalid = false) {
   // Owned synthetic catalog IDs over one valid element set; never live requests.
@@ -143,10 +151,10 @@ test('stale core records surface through actual HTTP, ingestion and feed state, 
   const f = await fixture(t);
   await f.update();
   assert.equal(f.feed(), 'nominal');
-  assert.equal(f.stats().count, 6);
-  f.policy.stale = new Set(GROUPS.slice(0, 6));
+  assert.equal(f.stats().count, CORE.length);
+  f.policy.stale = new Set(CORE);
   await f.update();
-  assert.equal(f.stats().count, 6);
+  assert.equal(f.stats().count, CORE.length);
   assert.equal(f.stats().stale, true);
   assert.equal(f.feed(), 'stale');
   f.policy.stale = new Set(['visual']);
@@ -163,13 +171,13 @@ test('a stale duplicate cannot taint its earlier fresh winning record', async (t
   f.policy.stale.add('visual');
   f.policy.ids.visual = 25545;
   await f.update();
-  assert.equal(f.stats().count, 5);
+  assert.equal(f.stats().count, CORE.length - 1);
   assert.equal(f.state._catalog.get(25545).group, 'stations');
   assert.equal(f.stats().stale, false);
   assert.equal(f.feed(), 'nominal');
   f.policy.stale = new Set(['stations']);
   await f.update();
-  assert.equal(f.stats().count, 5);
+  assert.equal(f.stats().count, CORE.length - 1);
   assert.equal(
     f.stats().stale,
     true,
@@ -182,7 +190,7 @@ test('invalid stale orbital elements are not admitted as provenance', async (t) 
   f.policy.stale.add('visual');
   f.policy.invalid.add('visual');
   await f.update();
-  assert.equal(f.stats().count, 5);
+  assert.equal(f.stats().count, CORE.length - 1);
   assert.equal(f.state._catalog.has(25546), false);
   assert.equal(f.stats().stale, false);
 });
@@ -194,17 +202,17 @@ test('failed and aborted core refreshes keep provenance of retained records', as
   const priorTime = f.stats().lastUpdate;
   f.policy.status = 503;
   await f.update();
-  assert.equal(f.stats().count, 6);
+  assert.equal(f.stats().count, CORE.length);
   assert.equal(f.stats().stale, true);
   assert.equal(f.stats().status, 'unavailable');
   assert.equal(f.stats().lastUpdate, priorTime);
   f.policy.hold = true;
   const controller = new AbortController();
   const work = f.update({ signal: controller.signal });
-  await f.waitHeld(6);
+  await f.waitHeld(CORE.length);
   controller.abort();
   await assert.rejects(work, { name: 'AbortError' });
-  assert.equal(f.stats().count, 6);
+  assert.equal(f.stats().count, CORE.length);
   assert.equal(f.stats().stale, true);
   assert.equal(f.stats().lastUpdate, priorTime);
   assert.equal(f.state._activeUpdateControllers.size, 0);
@@ -216,11 +224,11 @@ test('dense provenance belongs to its admitted records and clears on removal', a
   f.policy.stale.add('starlink');
   f.state._params.catalog = 'dense';
   assert.equal((await f.parts.catalog._loadDenseCatalog()).status, 'ready');
-  assert.equal(f.stats().count, 7);
+  assert.equal(f.stats().count, CORE.length + 1);
   assert.equal(f.feed(), 'stale');
   f.state._params.catalog = 'core';
   f.parts.catalog._removeDenseCatalog();
-  assert.equal(f.stats().count, 6);
+  assert.equal(f.stats().count, CORE.length);
   assert.equal(f.feed(), 'nominal');
   f.policy.stale = new Set(['stations']);
   await f.update();
@@ -261,13 +269,13 @@ test('cancelling dense replacement preserves admitted stale extras until rebuild
   await f.waitHeld(1);
   controller.abort();
   assert.equal((await work).status, 'cancelled');
-  assert.equal(f.stats().count, 7);
+  assert.equal(f.stats().count, CORE.length + 1);
   assert.equal(f.feed(), 'stale');
   f.policy.hold = false;
   f.policy.stale.clear();
   f.state._params.catalog = 'core';
   await f.update();
-  assert.equal(f.stats().count, 6);
+  assert.equal(f.stats().count, CORE.length);
   assert.equal(f.feed(), 'nominal');
 });
 
@@ -277,7 +285,7 @@ test('destroy aborts an in-flight response and initialization starts with new ow
   await f.update();
   f.policy.hold = true;
   const work = f.update();
-  await f.waitHeld(6);
+  await f.waitHeld(CORE.length);
   const rejected = assert.rejects(work, { name: 'AbortError' });
   f.parts.lifecycle.methods.destroy(f.viewer);
   assert.equal(f.stats().count, 0);
@@ -288,6 +296,6 @@ test('destroy aborts an in-flight response and initialization starts with new ow
   f.policy.hold = false;
   f.policy.stale.clear();
   await f.update();
-  assert.equal(f.stats().count, 6);
+  assert.equal(f.stats().count, CORE.length);
   assert.equal(f.feed(), 'nominal');
 });

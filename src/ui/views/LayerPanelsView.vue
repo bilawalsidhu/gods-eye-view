@@ -14,6 +14,9 @@ import StreetLevelPanel from './panels/StreetLevelPanel.vue';
 import DrawControls from './panels/DrawControls.vue';
 import GeoImport from './panels/GeoImport.vue';
 import UiSelect from '../kit/UiSelect.js';
+import LayerSectionIndex from './panels/LayerSectionIndex.vue';
+import LayerFinder from './panels/LayerFinder.vue';
+import DataLibraryBrowse from './panels/DataLibraryBrowse.vue';
 
 // Scene sharing (src/scenes/sharing.js) offers its authoring bar and presents
 // its dialog through this store; without this view, neither is drawn.
@@ -42,7 +45,12 @@ async function importChosen(event) {
   <div id="left-panel-stack" class="ui-scroll">
   <!-- Data Layer Toggle Panel -->
   <RailPanel id="data-panel" start-collapsed class="active" :title="t('DATA LAYERS')">
+    <template #actions><LayerFinder part="buttons" /></template>
+    <LayerFinder part="bar" />
     <div id="data-toggles" class="data-toggle-list ui-scroll"></div>
+    <LayerSectionIndex />
+    <!-- Data Library: Browse and its dialog (src/ui/libraryBrowser.js). -->
+    <DataLibraryBrowse />
   </RailPanel>
 
   <!-- Utilities: Directions (LayerPanel renders its row here), Draw, Import -->

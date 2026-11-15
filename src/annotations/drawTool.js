@@ -50,9 +50,28 @@ import {
   removeLastVertex,
 } from './drawMode.js';
 
-import { DRAW_COLORS, DRAW_COLOR_CSS, presentDrawMarks } from './drawMarks.js';
+import {
+  DRAW_COLORS,
+  DRAW_COLOR_CSS,
+  drawMarkActions,
+  drawMarkActionsFor,
+  drawMarkFallbackName,
+  presentDrawMarks,
+} from './drawMarks.js';
 
 import { onLocaleChange, t, translateKnown } from '../i18n/index.js';
+/** The longest note a row action leaves under its row, in characters. */
+const NOTE_MAX = 200;
+/** An action's answer as a row note: trimmed, and cut at a word with an ellipsis. */
+function noteText(text) {
+  if (typeof text !== 'string') return '';
+  const trimmed = text.trim();
+  if (trimmed.length <= NOTE_MAX) return trimmed;
+  const cut = trimmed.slice(0, NOTE_MAX - 1);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > NOTE_MAX / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
+
 /** The id this tool claims the pointer under. */
 const DRAW_POINTER_OWNER = 'draw';
 const PREVIEW_DATA_SOURCE_NAME = 'gev-draw-preview';
@@ -67,7 +86,10 @@ const PREVIEW = DRAW_COLOR_CSS;
  * through the actions it gives `connect`, which returns their disconnect.
  * A row's fly-to is an immediate navigation through `navigation`, like
  * Import's, so Cockpit can refuse it and a running orbit or follow lets go.
- * @param {{viewer: Cesium.Viewer, annotations: {annotate: Function, clear: Function}, navigation?: object, publish?: Function, connect?: Function}} deps
+ * `markActions` are the application's own buttons on an area's or a line's
+ * row (drawMarks.js `drawMarkActions`); a press runs the action with the
+ * shape's id, kind, name and geometry (drawMarks.js `drawMarkGeometry`).
+ * @param {{viewer: Cesium.Viewer, annotations: {annotate: Function, clear: Function}, navigation?: object, publish?: Function, connect?: Function, markActions?: object[]}} deps
  * @returns {{destroy: Function}|null}
  */
 export function initDrawTool({
@@ -76,7 +98,12 @@ export function initDrawTool({
   navigation = null,
   publish = () => {},
   connect = () => () => {},
+  markActions = [],
 }) {
+  const rowActions = drawMarkActions(markActions);
+  // What a row action said last on each drawn shape: `{ run, busy, text }`.
+  const notes = new Map();
+  let noteRun = 0;
   // A page without the Draw controls (the Display controls view omitted) has
   // no draw tool.
   if (!viewer || !annotations || !document.getElementById('draw-toggle'))
@@ -115,14 +142,19 @@ export function initDrawTool({
     () => null,
   );
 
-  const present = () =>
+  const present = () => {
+    const marks = annotations.list?.() || [];
+    // A note goes with its shape.
+    for (const id of notes.keys())
+      if (!marks.some((mark) => mark.id === id)) notes.delete(id);
     publish({
       active,
       shape,
       color,
       hint,
-      marks: presentDrawMarks(annotations.list?.() || []),
+      marks: presentDrawMarks(marks, rowActions, notes),
     });
+  };
   // The hint is kept as the call that words it, so a language switch can
   // word it again.
   let hintText = () => '';
@@ -450,6 +482,56 @@ export function initDrawTool({
     return annotations.frame?.(id) ?? false;
   }
 
+  /**
+   * Run the application's row action `actionId` on drawn shape `id`, if the
+   * shape is still on the board and still offered it. Returns whether it ran.
+   * What the action returns, or resolves to, is the row's note (a measurement,
+   * "saved"): the row is busy until it settles, a newer press or the shape's
+   * removal makes a late answer moot, and a failure clears the note, so an
+   * action words its own refusals and resolves with them.
+   */
+  function runMarkAction(id, actionId) {
+    const mark = (annotations.list?.() || []).find(
+      (entry) => entry.id === id && entry.manual === true,
+    );
+    const offer = drawMarkActionsFor(mark, rowActions);
+    const action = offer.actions.find((entry) => entry.id === actionId);
+    if (!action || notes.get(mark.id)?.busy) return false;
+    const run = ++noteRun;
+    const settle = (text) => {
+      if (destroyed || notes.get(mark.id)?.run !== run) return;
+      notes.set(mark.id, {
+        run,
+        busy: false,
+        text: noteText(text),
+      });
+      present();
+    };
+    const fail = (error) => {
+      console.warn(`[draw] ${actionId} failed`, error);
+      settle('');
+    };
+    notes.set(mark.id, { run, busy: true, text: '' });
+    let answer;
+    try {
+      answer = action.run({
+        id: mark.id,
+        shape: offer.shape,
+        name: mark.name || '',
+        title: mark.name || drawMarkFallbackName(mark),
+        geometry: offer.geometry,
+      });
+    } catch (error) {
+      fail(error);
+      return false;
+    }
+    if (typeof answer?.then === 'function') {
+      present();
+      Promise.resolve(answer).then(settle, fail);
+    } else settle(answer);
+    return true;
+  }
+
   /** Draw `next` from now on; an open shape starts over in it. */
   function chooseShape(next) {
     shape = normalizeShape(next);
@@ -478,6 +560,7 @@ export function initDrawTool({
     },
     flyToDrawMark: flyToMark,
     removeDrawMark: (id) => annotations.remove?.(id),
+    runDrawMarkAction: runMarkAction,
   });
   // The rows follow the board: a shape drawn, renamed, hidden or removed
   // here, by voice or by a clear.
@@ -500,13 +583,15 @@ export function initDrawTool({
     setActive,
     setShape: chooseShape,
     /** The hand-drawn marks the list shows, as its rows. */
-    marks: () => presentDrawMarks(annotations.list?.() || []),
+    marks: () =>
+      presentDrawMarks(annotations.list?.() || [], rowActions, notes),
     setColor(next) {
       color = DRAW_COLORS.includes(next) ? next : 'primary';
       present();
       syncPreview();
     },
     flyToMark,
+    runMarkAction,
     /** Test seam: add a vertex from lon/lat as if it had been clicked. */
     addVertex(lon, lat, height = 0) {
       if (!session) return false;

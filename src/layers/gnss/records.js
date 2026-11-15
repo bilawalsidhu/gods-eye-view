@@ -1,5 +1,5 @@
 /**
- * Low navigation accuracy reported by ADS-B aircraft, binned into cells.
+ * Low navigation accuracy reported by ADS-B aircraft, binned into H3 cells.
  *
  * Aircraft broadcasting DO-260 version 1/2 ADS-B report how much they trust
  * their own position: NIC (integrity containment radius) and NACp (position
@@ -16,9 +16,12 @@
  *   from the US 14 CFR 91.227(c) ADS-B Out performance minima, which are not
  *   a published interference classifier) or the readsb/tar1090 `gpsOkBefore`
  *   flag. gpsjam.org does not publish its per-aircraft threshold.
- * - Cell aggregation: gpsjam.org's published formula and 2% / 10% bands.
+ * - Cell aggregation: gpsjam.org's published formula, 2% / 10% bands and
+ *   hex grid (H3 resolution 4). Every cell with an aircraft is shown, as on
+ *   gpsjam.org; the one-aircraft discount is the only small-sample guard.
  * - Window: a GEV-defined rolling 30 minutes over the views the user visits.
  */
+import { cellToBoundary, cellToLatLng, latLngToCell } from 'h3-js';
 
 /** Position source can switch to MLAT after GPS loss; quality must remain aircraft-reported. */
 const QUALIFYING_TYPES = new Set(['adsb_icao', 'mlat']);
@@ -30,10 +33,8 @@ export const GNSS_NIC_THRESHOLD = 7;
 export const GNSS_NACP_THRESHOLD = 8;
 /** Positions older than this are not current evidence of the local sky. */
 const MAX_POSITION_AGE_S = 60;
-/** Cell edge in degrees: roughly 55 km north-south, similar in area to an H3 res-4 cell. */
-export const GNSS_CELL_DEG = 0.5;
-/** Hide sparse one- and two-aircraft cells; the aggregation separately discounts one bad report. */
-export const GNSS_MIN_AIRCRAFT = 3;
+/** H3 resolution of the cells, gpsjam.org's grid: hexagons of about 1,770 km² (22.6 km edge). */
+export const GNSS_H3_RESOLUTION = 4;
 /** Rolling window over which aircraft seen in a cell are counted. */
 export const GNSS_WINDOW_MS = 30 * 60_000;
 /** gpsjam.org band edges, in percent of aircraft (after discounting one). */
@@ -68,14 +69,14 @@ export function gnssProvenance({ windowMs = GNSS_WINDOW_MS } = {}) {
       id: 'gpsjam-cell-bands',
       formula: '100 * max(0, bad - 1) / total',
       bands: Object.freeze([GNSS_MEDIUM_PERCENT, GNSS_HIGH_PERCENT]),
+      grid: 'h3',
+      h3Resolution: GNSS_H3_RESOLUTION,
       source: 'https://gpsjam.org/faq',
       definedBy: 'gpsjam.org',
     }),
     window: Object.freeze({
       minutes: windowMs / 60_000,
       scope: 'visited-view',
-      cellDeg: GNSS_CELL_DEG,
-      minAircraft: GNSS_MIN_AIRCRAFT,
       definedBy: 'GEV',
     }),
     state: Object.freeze({
@@ -161,11 +162,30 @@ export function normalizeGnssAircraft(payload) {
   return rows;
 }
 
-/** Stable key of the cell containing a position. */
-export function gnssCellKey(lat, lon, cellDeg = GNSS_CELL_DEG) {
-  const row = Math.floor((Math.min(lat, 89.999999) + 90) / cellDeg);
-  const col = Math.floor((Math.min(lon, 179.999999) + 180) / cellDeg);
-  return `${row}:${col}`;
+/** Stable key of the cell containing a position: its H3 index. */
+export function gnssCellKey(lat, lon, resolution = GNSS_H3_RESOLUTION) {
+  return latLngToCell(lat, lon, resolution);
+}
+
+/**
+ * The ring to draw for a cell, as flat `[lon, lat, lon, lat, ...]` degrees.
+ * Longitudes are unwrapped to within 180° of the cell centre, so a cell
+ * across the antimeridian stays one narrow polygon (some longitudes then lie
+ * just outside ±180°) instead of spanning the globe. A cell around a pole
+ * keeps its full turn of longitudes; drawn on the globe it is still small.
+ *
+ * @param {{lat: number, lon: number, boundary: {lat: number, lon: number}[]}} cell
+ * @returns {number[]}
+ */
+export function gnssCellRing(cell) {
+  const ring = [];
+  for (const { lat, lon } of cell.boundary) {
+    let unwrapped = lon;
+    while (unwrapped - cell.lon > 180) unwrapped -= 360;
+    while (unwrapped - cell.lon < -180) unwrapped += 360;
+    ring.push(unwrapped, lat);
+  }
+  return ring;
 }
 
 /**
@@ -183,7 +203,7 @@ export function gnssCellKey(lat, lon, cellDeg = GNSS_CELL_DEG) {
  * @param {Map<string, {cell: string, seenAt: number, degradedAt: number|null}>} store
  * @param {ReturnType<typeof normalizeGnssAircraft>} rows
  * @param {number} nowMs
- * @param {{windowMs?: number, cellDeg?: number, observedAt?: number}} [options]
+ * @param {{windowMs?: number, resolution?: number, observedAt?: number}} [options]
  *   `observedAt` is the snapshot's observation time (defaults to `nowMs`;
  *   a future time is clamped to `nowMs`, a non-finite one adds nothing).
  * @returns {Map} The same store, pruned to the window.
@@ -194,7 +214,7 @@ export function accumulateGnssObservations(
   nowMs,
   {
     windowMs = GNSS_WINDOW_MS,
-    cellDeg = GNSS_CELL_DEG,
+    resolution = GNSS_H3_RESOLUTION,
     observedAt = nowMs,
   } = {},
 ) {
@@ -202,7 +222,7 @@ export function accumulateGnssObservations(
   if (Number.isFinite(at) && nowMs - at <= windowMs) {
     for (const row of rows || []) {
       if (!Number.isFinite(row?.lat) || !Number.isFinite(row?.lon)) continue;
-      const cell = gnssCellKey(row.lat, row.lon, cellDeg);
+      const cell = gnssCellKey(row.lat, row.lon, resolution);
       const key = `${row.hex}|${cell}`;
       const previous = store.get(key);
       const previousDegradedAt = previous?.degradedAt ?? null;
@@ -264,16 +284,16 @@ export function gnssIntegrityLevel(total, degraded) {
 }
 
 /**
- * Aggregate the observation store into displayable cells. Expects a store
- * already pruned to the window by `accumulateGnssObservations` or
- * `pruneGnssObservations`.
+ * Aggregate the observation store into displayable cells, one per H3 cell
+ * with at least one aircraft (gpsjam.org has no minimum count). Expects a
+ * store already pruned to the window by `accumulateGnssObservations` or
+ * `pruneGnssObservations`. `lat`/`lon` is the cell centre and `boundary` its
+ * vertices in order (six for a hexagon, five for a pentagon), with
+ * longitudes in -180..180; `gnssCellRing` gives the ring to draw.
  *
- * @returns {{id: string, south: number, west: number, north: number, east: number, lat: number, lon: number, aircraft: number, degraded: number, percentDegraded: number, level: 'low'|'medium'|'high', state: string, interpretation: string|null}[]}
+ * @returns {{id: string, lat: number, lon: number, boundary: {lat: number, lon: number}[], aircraft: number, degraded: number, percentDegraded: number, level: 'low'|'medium'|'high', state: string, interpretation: string|null}[]}
  */
-export function binGnssCells(
-  store,
-  { cellDeg = GNSS_CELL_DEG, minAircraft = GNSS_MIN_AIRCRAFT } = {},
-) {
+export function binGnssCells(store) {
   const tallies = new Map();
   for (const { cell, degradedAt } of store.values()) {
     const tally = tallies.get(cell) || { aircraft: 0, degraded: 0 };
@@ -283,22 +303,16 @@ export function binGnssCells(
   }
   const cells = [];
   for (const [id, { aircraft, degraded }] of tallies) {
-    if (aircraft < minAircraft) continue;
-    const [row, col] = id.split(':').map(Number);
-    const south = row * cellDeg - 90;
-    const west = col * cellDeg - 180;
+    const [lat, lon] = cellToLatLng(id);
     const { percent, level, state, interpretation } = gnssIntegrityLevel(
       aircraft,
       degraded,
     );
     cells.push({
       id,
-      south,
-      west,
-      north: south + cellDeg,
-      east: west + cellDeg,
-      lat: south + cellDeg / 2,
-      lon: west + cellDeg / 2,
+      lat,
+      lon,
+      boundary: cellToBoundary(id).map(([lat, lon]) => ({ lat, lon })),
       aircraft,
       degraded,
       percentDegraded: Math.round(percent * 10) / 10,

@@ -1590,7 +1590,7 @@
 }
 
 #intel-hud[data-variant='cyber'] .hud-bottom-bar {
-  bottom: calc(2vh + 9.8rem);
+  bottom: calc(2vh + 9.8rem + var(--world-timeline-lift, 0px));
   width: min(48vw, 680px);
 }
 
@@ -1601,13 +1601,13 @@
 
 #intel-hud[data-variant='cyber'] .hud-bottom-left,
 #intel-hud[data-variant='cyber'] .hud-bottom-right {
-  bottom: calc(2vh + 6.5rem);
+  bottom: calc(2vh + 6.5rem + var(--world-timeline-lift, 0px));
 }
 
 /* Attribution's logo row extends above its text baseline. Reserve the whole
    row plus a gap above the dock-relative 2vh + 5rem credit position. */
 #intel-hud[data-variant='cyber'] .hud-bottom-left {
-  bottom: calc(2vh + 7.75rem);
+  bottom: calc(2vh + 7.75rem + var(--world-timeline-lift, 0px));
 }
 
 #intel-hud[data-variant='cyber'] .hud-corner {
@@ -1652,7 +1652,7 @@
      below its 650px threshold. Keep the left rail inside the same telemetry
      and attribution-safe floor while its panel bodies take over scrolling. */
   :root[data-ui-theme='cyber'] #left-panel-stack {
-    bottom: calc(2vh + 13rem);
+    bottom: calc(2vh + 13rem + var(--world-timeline-lift, 0px));
   }
 }
 
@@ -1675,7 +1675,7 @@
     /* The stack holds still, so its rail needs no offset (leftPanelRail.js). */
     --panel-stack-top-pinned: 1;
     top: var(--cyber-left-rail-top) !important;
-    bottom: calc(2vh + 13rem);
+    bottom: calc(2vh + 13rem + var(--world-timeline-lift, 0px));
     inset-inline-start: calc(54px + var(--panel-rail-clearance));
     width: 300px;
     padding-inline-start: 10px;
