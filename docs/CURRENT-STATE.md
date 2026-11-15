@@ -1,5 +1,15 @@
 # God's Eye View Current State
 
+An aircraft (civil or military) faces its reported ground track, else its
+true heading (readsb `true_heading`). With neither, it faces the way its own
+fixes went (`courseFromFixes`, `src/data/courseFromFixes.js`): the course runs
+from an anchor fix to the newest once they are 30 m apart, and the anchor then
+moves on, so frequent fixes of a slow aircraft add up while position noise on
+a parked one never makes a course. A fix that is not a second newer (a repeat,
+or an older position from another feed) and one reported slower than 2 m/s
+give no course and keep the last; an aircraft with no course at all faces
+north.
+
 While anything moves (a layer in motion, the camera, a followed contact), the
 globe draws at the display's own refresh rate; there is no fixed 60 FPS cap.
 The idle render governor (`src/renderGovernor.js`) caps a parked scene at
