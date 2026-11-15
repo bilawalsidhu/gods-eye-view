@@ -35,6 +35,7 @@ import {
   limitCourseStep,
 } from '../../data/motionModel.js';
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
+import { placeLiveAircraft } from '../flights/placed.js';
 import {
   modelVisualAnchor,
   modelAnchorWorld,
@@ -133,6 +134,19 @@ export function createMotion({
     }
 
     const out = result || vec();
+    // A host-supplied placement decides where a live contact is drawn; with
+    // none, or no answer for this contact, the layer's own motion below does.
+    if (
+      placeLiveAircraft(
+        flightState,
+        services.placement,
+        icao24,
+        info,
+        history,
+        out,
+      )
+    )
+      return out;
     // Render behind real time, as late as the feed is (displayDelayMs), so we
     // interpolate between two KNOWN fixes whenever possible.
     const renderTime =

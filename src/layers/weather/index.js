@@ -8,6 +8,7 @@ import {
   REGIONAL_INFRARED_MAX_GAP_MS,
   GLOBAL_INFRARED_MAX_GAP_MS,
   LIGHTNING_MAX_GAP_MS,
+  atLeastFrameSpacing,
 } from './clock.js';
 import { formatUtcDayMonth, t, msg } from '../../i18n/index.js';
 import { formatScaleLabel } from '../../ui/unitLabels.js';
@@ -102,7 +103,10 @@ export function createWeatherLayer({
   let unregisterClock = null;
   let frameRequest = null;
   let noFrame = false;
-  const maxGap = () =>
+  // A product's own gap, and the delay after which its latest frame reads
+  // late. A feed whose frames come further apart holds each frame, and waits
+  // for the next, as long as its frames are apart (see atLeastFrameSpacing).
+  const productGap = () =>
     radar
       ? RADAR_MAX_GAP_MS
       : lightning
@@ -110,6 +114,23 @@ export function createWeatherLayer({
         : product === 'clouds'
           ? GLOBAL_INFRARED_MAX_GAP_MS
           : REGIONAL_INFRARED_MAX_GAP_MS;
+  const productDelay = () =>
+    (product === 'clouds' ? 240 : lightning ? 45 : 20) * 60_000;
+  // Read for every frame a selection weighs, so worked out once per product
+  // and frame list.
+  let spaced = null;
+  const spacedTimes = () => {
+    const times = manifest?.times ?? [];
+    if (spaced?.times !== times || spaced?.product !== product)
+      spaced = {
+        times,
+        product,
+        gap: atLeastFrameSpacing(productGap(), times),
+        delay: atLeastFrameSpacing(productDelay(), times),
+      };
+    return spaced;
+  };
+  const maxGap = () => spacedTimes().gap;
   const isLatest = () =>
     clock ? clock.getState().mode === 'latest' : followLatest;
   const getHost = () => imageryHost?.() ?? globeImageryHost(viewer);
@@ -130,8 +151,7 @@ export function createWeatherLayer({
   };
   const observationDelayed = () =>
     manifest?.latest &&
-    worldNow() - Date.parse(manifest.latest) >
-      (product === 'clouds' ? 240 : lightning ? 45 : 20) * 60_000;
+    worldNow() - Date.parse(manifest.latest) > spacedTimes().delay;
   const stop = () => {
     if (clock) return;
     playing = false;
@@ -560,11 +580,11 @@ export function createWeatherLayer({
         shared.products.find((entry) => entry.id === id)?.selected === null
           ? maxGap() / 60_000 < 60
             ? t('No frame within {gap} min of {time}', {
-                gap: maxGap() / 60_000,
+                gap: Math.round(maxGap() / 60_000),
                 time: utc(shared.target),
               })
             : t('No frame within {gap} h of {time}', {
-                gap: maxGap() / 3600_000,
+                gap: Math.round(maxGap() / 360_000) / 10,
                 time: utc(shared.target),
               })
           : null;
@@ -699,7 +719,7 @@ export function createWeatherLayer({
                   ? t('Global · 60°S–60°N')
                   : t('North America')),
           shownTime: time,
-          maxGapMinutes: maxGap() / 60_000,
+          maxGapMinutes: Math.round(maxGap() / 60_000),
           detail,
           status:
             missing ||

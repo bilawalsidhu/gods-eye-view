@@ -115,6 +115,8 @@ export function createLifecycle({
     state.feed.firstConnectTimer = null;
     state.feed.abort = null;
     state.icons = null;
+    if (services.placement)
+      for (const id of state.records.byId.keys()) services.placement.forget(id);
     state.records.all = [];
     state.records.byId = new Map();
     state.records.unkeyed = [];
@@ -207,6 +209,7 @@ export function createLifecycle({
       invalidateAisSession();
       releaseContinuousRender('ais-vessels');
       components.rendering.cancelTrailingVisibilityPass();
+      components.rendering.cancelPlacementFrame();
       unregisterPickOwner('ais-live-vessels');
       components.rendering.setVisible(false);
       vesselState._vesselOverlayHost.clearSource(VESSEL_OVERLAY_SOURCE_ID);
@@ -228,6 +231,7 @@ export function createLifecycle({
       invalidateAisSession();
       releaseContinuousRender('ais-vessels'); // direct-destroy path (perf wave 2 fix)
       components.rendering.cancelTrailingVisibilityPass();
+      components.rendering.cancelPlacementFrame();
       if (state.feed.abort) state.feed.abort.abort();
       unregisterPickOwner('ais-live-vessels');
       components.selection.clearVesselInspection();

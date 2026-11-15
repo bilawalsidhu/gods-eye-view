@@ -164,6 +164,18 @@ export function createTesting({
     components.rendering.updateVisibility(force);
   }
 
+  /** Draw a record's visual where it stands now. Test-only seam. */
+
+  function _prepareVesselVisualForTest(record) {
+    return components.rendering.prepareRecordVisual(record);
+  }
+
+  /** Run one live placement pass (a host-supplied placement). Test-only seam. */
+
+  function _runPlacementPassForTest() {
+    components.rendering.followPlacements();
+  }
+
   /** True while a trailing visibility frame is scheduled. Test-only seam. */
 
   function _hasTrailingVisibilityPassForTest() {
@@ -183,6 +195,12 @@ export function createTesting({
       vesselCount: state.records.byId.size,
     };
   }
+
+  /** The layer's record for a vessel id, or null. Test-only seam. */
+
+  function _vesselRecordForTest(id) {
+    return state.records.byId.get(id) ?? null;
+  }
   return {
     _bindVesselInteractionForTest,
     _setVesselStateForTest,
@@ -195,7 +213,10 @@ export function createTesting({
     _setAisRuntimeForTest,
     _getVesselFeedStateForTest,
     _getVesselStateForTest,
+    _vesselRecordForTest,
     _runVisibilityPassForTest,
+    _prepareVesselVisualForTest,
+    _runPlacementPassForTest,
     _hasTrailingVisibilityPassForTest,
   };
 }

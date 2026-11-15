@@ -8,6 +8,7 @@ import {
 import { POSITION_HISTORY_LIMIT } from './recordPolicy.js';
 import { followsClock } from './policy.js';
 import { newestReport, pushReport } from '../../data/aircraftMotionRegime.js';
+import { observeLiveAircraft } from '../flights/placed.js';
 
 /**
  * Note how late each report in a live snapshot is, and aim the display delay
@@ -35,6 +36,7 @@ function noteDelivery(flightState, snapshot) {
 /** Apply military record changes to the layer's drawing and existing follow operations. */
 export function createMilitarySnapshotRenderer({
   flightState,
+  placement = null,
   records,
   groundFloor,
   militaryRegistry,
@@ -85,6 +87,17 @@ export function createMilitarySnapshotRenderer({
       );
       if (groundFlipped) flightState._groundSnap.forget(icao24);
       const isTracked = icao24 === flightState._trackedIcao;
+
+      // A host-supplied placement, if any, is told every fix as taken.
+      observeLiveAircraft(
+        flightState,
+        placement,
+        icao24,
+        fixEpochMs,
+        meta,
+        meta.speedMps,
+        meta.track,
+      );
 
       // Append to position history stamped with the FEED's fix epoch.
       // adsb.lol's seen_pos is the AGE in seconds of the last position

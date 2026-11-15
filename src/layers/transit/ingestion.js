@@ -16,6 +16,7 @@ import {
 import {
   transitModeFor,
   transitModeResolved,
+  transitModelRouteType,
 } from '../../data/transitFeeds.js';
 import {
   attachFloorToPlace,
@@ -85,6 +86,7 @@ export function createIngestion({ state, services, parts, source }) {
     state._heightDirty.delete(entry);
     parts.rendering.cancelWake(entry);
     destroyTrack(entry.track);
+    entry.placement?.forget(key);
     state._vehicles.delete(key);
     state._detectRevision += 1;
   }
@@ -222,12 +224,19 @@ export function createIngestion({ state, services, parts, source }) {
     for (const record of records) {
       if (isStaleVehicleFix(record, now, fetchedAt)) continue;
       const key = transitVehicleKey(feed.id, record.id);
-      const mode = transitModeFor(feed, record.routeId, record.id);
+      const mode = transitModeFor(
+        feed,
+        record.routeId,
+        record.id,
+        record.routeType,
+      );
       const modeInferred = !transitModeResolved(
         feed,
         record.routeId,
         record.id,
+        record.routeType,
       );
+      const routeType = transitModelRouteType(mode, record.routeType);
       // A stamp ahead of the fetch is a clock fault; the fetch time bounds it.
       const stamped = vehicleReportTimeMs(record, fetchedAt);
       const reportAt =
@@ -267,6 +276,7 @@ export function createIngestion({ state, services, parts, source }) {
           continue;
         }
         if (entry.mode !== mode) parts.rendering.paintMode(entry, mode);
+        entry.routeType = routeType;
         entry.modeInferred = modeInferred;
         updatePlayback(entry, now, monoNow);
         parts.rendering.schedulePlayback(entry);
@@ -318,8 +328,12 @@ export function createIngestion({ state, services, parts, source }) {
         entry = {
           key,
           feedId: feed.id,
+          // A host-supplied placement, if any, draws it while live.
+          placement: services.placement ?? null,
           marker: null,
           mode,
+          // The GTFS route type its model is chosen by, when it has one.
+          routeType,
           modeInferred,
           heightM: prior === null ? 0 : prior,
           heightCell: height.cell,

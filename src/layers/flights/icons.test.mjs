@@ -4,6 +4,7 @@ import * as Cesium from 'cesium';
 import { createFlightState } from './state.js';
 import { createIcons } from './icons.js';
 import { createContactIcons } from '../../data/aircraftIconLayer.js';
+import { layerPlacement } from '../../data/placementProvider.js';
 
 function services(focus = {}) {
   return {
@@ -17,8 +18,11 @@ function services(focus = {}) {
   };
 }
 
-function setup({ focus, motion = {}, rendering = {} } = {}) {
-  const svc = services(focus);
+function setup({ focus, motion = {}, rendering = {}, placement = null } = {}) {
+  const svc = {
+    ...services(focus),
+    ...(placement ? { placement: layerPlacement(placement, 'aircraft') } : {}),
+  };
   const flightState = createFlightState({ services: svc });
   flightState._icons = createContactIcons();
   const parts = {
@@ -213,4 +217,86 @@ test('a hidden contact shown again is where dead reckoning puts it now', (t) => 
     Cesium.Cartesian3.distance(hiddenAt, shown) > 8_000,
     'not where it was hidden',
   );
+});
+
+test('a live contact a placement places is drawn along where it places it', (t) => {
+  const t0 = Date.UTC(2026, 10, 9, 12);
+  t.mock.timers.enable({ apis: ['Date'], now: t0 });
+  const asked = [];
+  let places = true;
+  const regimes = [];
+  const { flightState, icons, set } = setup({
+    placement: {
+      layer: () => ({
+        place(id, wallMs) {
+          asked.push(wallMs);
+          if (!places) return null;
+          // A degree of longitude every 10 s, at its own height and course.
+          return {
+            lat: 30,
+            lon: (wallMs - t0) / 10_000,
+            altitudeM: 2000,
+            courseDeg: 90 + (wallMs - t0) / 1000,
+            speedMps: 200,
+          };
+        },
+      }),
+    },
+    motion: {
+      _motionRegime: () => {
+        regimes.push(1);
+        return {
+          kind: 'fix',
+          fix: { position: at(5), time: null },
+          speed: 0,
+          heading: 10,
+        };
+      },
+      _fixEpochMs: () => t0,
+    },
+  });
+  hold(set, 'p', at(0), 0, true);
+  flightState._positionHistory.set('p', [{ position: at(0) }]);
+  flightState.records.data.set('p', { renderAltitudeM: 1000 });
+  const now = icons._displayMs();
+  const leadMs = Date.now() - now;
+  icons._planIcon('p');
+  // Asked for the wall times the segment's ends stand for.
+  assert.deepEqual(asked, [now + leadMs, now + 1000 + leadMs]);
+  assert.equal(regimes.length, 0, 'its own motion is not planned');
+  const item = set.item('p');
+  assert.equal(item.motion.kind, 'lerp');
+  assert.ok(
+    Cesium.Cartesian3.distance(
+      item.motion.from,
+      Cesium.Cartesian3.fromDegrees((now + leadMs - t0) / 10_000, 30, 2000),
+    ) < 1e-6,
+  );
+  assert.ok(
+    Cesium.Cartesian3.distance(
+      item.motion.to,
+      Cesium.Cartesian3.fromDegrees(
+        (now + 1000 + leadMs - t0) / 10_000,
+        30,
+        2000,
+      ),
+    ) < 1e-6,
+  );
+  assert.equal(item.motion.t0, now);
+  assert.equal(item.motion.t1, now + 1000);
+  assert.ok(Math.abs(item.motion.courseSlopeDeg - 1) < 1e-9);
+  assert.equal(set.expires('p'), now + 1000);
+
+  // No answer: the layer's own motion plans it.
+  places = false;
+  icons._planIcon('p');
+  assert.equal(regimes.length, 1);
+  assert.equal(set.item('p').motion.kind, 'hold');
+
+  // Following the world clock, the placement is not asked.
+  places = true;
+  asked.length = 0;
+  flightState.timeline = { active: () => true };
+  icons._planIcon('p');
+  assert.deepEqual(asked, []);
 });

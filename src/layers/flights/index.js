@@ -37,6 +37,7 @@ export function createCivilFlightLayer({
   parts.clockFollow = createClockFollow(context);
   const applySnapshot = createFlightSnapshotRenderer({
     flightState,
+    placement: services.placement ?? null,
     records: flightState.records,
     militaryRegistry: services.militaryRegistry,
     groundFloor: services.groundFloor,

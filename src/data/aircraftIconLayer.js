@@ -357,6 +357,9 @@ let instances = 0;
 /** A plan that ran out longer ago than this (ms) is not eased away from. */
 const RECOVER_STALE_PLAN_MS = 1_000;
 
+/** How far ahead (ms) a placed contact's segment runs before it is asked again. */
+const PLACED_PLAN_MS = 1000;
+
 /** A display delay that never changes (ms). */
 function fixedDelay(ms) {
   return { currentMs: ms, step: () => ms };
@@ -399,6 +402,12 @@ function fixedDelay(ms) {
  * @param {(icao24: string) => void} [options.afterSettle] Runs after it.
  * @param {(icao24: string) => void} [options.onForget] Drops the layer's own
  *   per-contact state when a contact goes.
+ * @param {((icao24: string, wallMs: number, info: object|undefined,
+ *   history: object[], out: {x: number, y: number, z: number}) =>
+ *   {courseDeg: number, speedMps: number}|null)|null} [options.placeAt]
+ *   Where a host-supplied placement draws a live contact at a wall time,
+ *   written into `out` (`placeAircraftAt`), or null when it does not place
+ *   it; none without a placement.
  */
 export function createAircraftIcons({
   state,
@@ -415,6 +424,7 @@ export function createAircraftIcons({
   beforeSettle = () => {},
   afterSettle = () => {},
   onForget = () => {},
+  placeAt = null,
 }) {
   const { focusPassIsNeeded } = services.focus;
   // The near-image switch the rows were last written with (CSS px).
@@ -560,6 +570,10 @@ export function createAircraftIcons({
       fromCourseDeg ??
       (icons.expires(icao24) === -Infinity ? null : icons.course(icao24, t));
 
+    // A host-supplied placement decides where a live contact is drawn; with
+    // none, or no answer for this contact, the layer's own motion below does.
+    if (_planPlaced(icao24, info, history, t)) return;
+
     const regime = parts.motion._motionRegime(history, info, renderTime);
     let speed;
     let motion;
@@ -689,6 +703,44 @@ export function createAircraftIcons({
             };
     }
     icons.update(icao24, { pos, course, motion, courseGlide }, { expiresAt });
+  }
+
+  /**
+   * Plan a live contact a host-supplied placement places: from where it
+   * places it at `t` (display ms, the live clock's delayed time) to where it
+   * places it PLACED_PLAN_MS on, asked again when that runs out. Display
+   * time is wall time less the display delay, so the placement is asked at
+   * the wall times the segment's ends stand for.
+   * @returns {boolean} False when there is no placement, the layer follows
+   *   the world clock, or it has no answer for this contact.
+   */
+  function _planPlaced(icao24, info, history, t) {
+    if (!placeAt || followsClock()) return false;
+    const leadMs = displayDelay.currentMs;
+    const from = vec();
+    const start = placeAt(icao24, t + leadMs, info, history, from);
+    if (!start) return false;
+    const { courseDeg: course } = start;
+    const t1 = t + PLACED_PLAN_MS;
+    const to = vec();
+    const end = placeAt(icao24, t1 + leadMs, info, history, to);
+    const motion = end
+      ? {
+          kind: 'lerp',
+          from,
+          to,
+          t0: t,
+          t1,
+          course0Deg: course,
+          courseSlopeDeg: norm180(end.courseDeg - course),
+        }
+      : { kind: 'hold', courseDeg: course };
+    state._icons.update(
+      icao24,
+      { pos: clone(from), course, motion, courseGlide: undefined },
+      { expiresAt: t1 },
+    );
+    return true;
   }
 
   /** Re-plan every row whose regime ended by `t` (epoch ms). */
@@ -839,6 +891,8 @@ export function createAircraftIcons({
     state._icons?.remove(icao24);
     parts.rendering._releaseModel(icao24);
     state.records.forget(icao24);
+    // The host-supplied placement, if any, forgets it as well.
+    services.placement?.forget(icao24);
     state._positionHistory.delete(icao24);
     state._displayCourse.delete(icao24);
     state._groundSnap.forget(icao24);

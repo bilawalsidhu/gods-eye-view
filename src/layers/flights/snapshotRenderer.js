@@ -8,6 +8,7 @@ import {
 import { POSITION_HISTORY_LIMIT } from './recordPolicy.js';
 import { followsClock } from './policy.js';
 import { newestReport, pushReport } from '../../data/aircraftMotionRegime.js';
+import { observeLiveAircraft } from './placed.js';
 
 /**
  * Note how late each report in a live snapshot is, and aim the display delay
@@ -35,6 +36,7 @@ function noteDelivery(flightState, snapshot) {
 /** Apply reconciled aircraft records to the layer's drawing and follow state. */
 export function createFlightSnapshotRenderer({
   flightState,
+  placement = null,
   records,
   militaryRegistry,
   groundFloor,
@@ -111,6 +113,17 @@ export function createFlightSnapshotRenderer({
         motion._retireDisplayFloorState(icao24, Date.now());
       }
       const isTracked = icao24 === flightState._trackedIcao;
+
+      // A host-supplied placement, if any, is told every fix as taken.
+      observeLiveAircraft(
+        flightState,
+        placement,
+        icao24,
+        fixEpochMs,
+        meta,
+        meta.velocity,
+        meta.true_track,
+      );
 
       // Append to position history stamped with the FEED's fix epoch
       // (time_position), not client receipt time — OpenSky positions arrive

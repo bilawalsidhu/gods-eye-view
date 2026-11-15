@@ -775,6 +775,8 @@
   "TANKER": "ناقلة",
   "OTHER": "أخرى",
   "VESSEL": "سفينة",
+  "AID TO NAVIGATION": "مساعدة ملاحية",
+  "VIRTUAL": "افتراضي",
   "POS: LIVE": "الموضع: مباشر",
   "POS: {time}Z": "الموضع: {time}Z",
   "AIS: --": "AIS: --",
@@ -3971,5 +3973,12 @@
   "Reset view reloads the app without the view restored from the address bar.": "تعيد «إعادة ضبط العرض» تحميل التطبيق دون العرض المستعاد من شريط العنوان.",
   "Reload": "إعادة التحميل",
   "Retry": "إعادة المحاولة",
-  "Reset view": "إعادة ضبط العرض"
+  "Reset view": "إعادة ضبط العرض",
+  "Trolleybus": "ترولي باص",
+  "Cable car": "ترام كابلي",
+  "Monorail": "قطار أحادي السكة",
+  "Funicular": "قطار جبلي مائل",
+  "Gondola": "تلفريك",
+  "Move panels back beside the rail": "إعادة اللوحات إلى جانب الشريط",
+  "Move panels over the rail, to the edge": "نقل اللوحات فوق الشريط إلى الحافة"
 }

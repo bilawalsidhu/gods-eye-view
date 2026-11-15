@@ -9,6 +9,7 @@ import { eastNorthUp } from '../geo/frames.js';
 import { scale } from '../geo/vector.js';
 import { bindRenderer } from '../render/rendererOf.js';
 import { fakeDrawPort } from './fakeDrawPort.mjs';
+import { layerPlacement } from '../data/placementProvider.js';
 import { CAMERA_DEBOUNCE_MS } from '../layers/rail/policy.js';
 import { WORLD_FOCUS_FRAMING } from '../worldFocus.js';
 import { publicRailCatalog } from '../data/railFeeds.js';
@@ -69,7 +70,8 @@ const headersOf = (values = {}) => ({
  *   catalog?: object[]|Promise<object[]>|Function|false,
  *   ground?: object,
  *   stops?: object|null, scheduleStops?: boolean,
- *   paths?: Record<string, object>|null, fleet?: object|null}} [options]
+ *   paths?: Record<string, object>|null, fleet?: object|null,
+ *   placement?: object|null}} [options]
  *   `ground`: a floor service in place of the always-cold stub; `catalog`:
  *   the server's feed catalog (it may list fewer feeds than are bundled; a
  *   promise answers when it settles, a function is called per request and
@@ -81,7 +83,8 @@ const headersOf = (values = {}) => ({
  *   failure status it answers with (404 for any other feed; without it the
  *   source has no path route at all); `fleet`: the fleet-model services
  *   (testSupport/fleetModelFakes.mjs), with a camera that looks straight
- *   down for them (none by default: trains stay icons).
+ *   down for them (none by default: trains stay icons); `placement`: a
+ *   host-supplied placement provider (../data/placementProvider.js).
  */
 /** The frame of an eye over `view`'s place looking straight down. */
 function lookingDown(view) {
@@ -100,6 +103,7 @@ export function railLayerHarness(
     scheduleStops = false,
     paths = null,
     fleet = null,
+    placement = null,
   } = {},
 ) {
   const T0 = RAIL_HARNESS_T0;
@@ -386,6 +390,7 @@ export function railLayerHarness(
         warmGroundFloor() {},
       },
       ...(fleet ? { fleet } : {}),
+      ...(placement ? { placement: layerPlacement(placement, 'rail') } : {}),
       camera: {
         framing: WORLD_FOCUS_FRAMING.train,
         requestWorldFocus(detail) {

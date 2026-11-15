@@ -1,5 +1,6 @@
 import { courseSlewCapDps } from '../../data/motionModel.js';
 import { createAircraftIcons } from '../../data/aircraftIconLayer.js';
+import { placeAircraftAt } from './placed.js';
 import { motionCourse } from '../../render/motion/iconMotion.js';
 import { distanceSquared, norm180 } from '../../geo/vector.js';
 import {
@@ -31,6 +32,18 @@ export function createIcons({ flightState, services, parts }) {
     staleAlpha: STALE_ALPHA,
     courseMaxDps: COURSE_MAX_DPS,
     cockpitContactSizePx: COCKPIT_CONTACT_SIZE_PX,
+    // A host-supplied placement, if any, draws a live contact where it places it.
+    placeAt: services.placement
+      ? (icao24, wallMs, info, history, out) =>
+          placeAircraftAt(
+            services.placement,
+            icao24,
+            wallMs,
+            info,
+            history,
+            out,
+          )
+      : null,
     holdsPlan: (icao24) =>
       flightState._focusEvidenceIds.has(icao24) ||
       flightState._floorPinned.has(icao24),

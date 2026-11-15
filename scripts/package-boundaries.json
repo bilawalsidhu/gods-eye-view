@@ -209,6 +209,8 @@
       "src/ui/kit/UiSegmented.vue",
       "src/ui/rail/RailPanel.vue",
       "src/ui/kit/UiPanel.vue",
+      "src/ui/kit/UiPanelEdge.vue",
+      "src/ui/panelEdge.js",
       "src/ui/kit/UiPanelToggle.vue",
       "src/ui/stores/panelChrome.js",
       "src/ui/rail/PanelCollapseButton.vue",
@@ -310,6 +312,7 @@
       "src/data/adsbLolFallback.js",
       "src/data/aisStreamAdapter.js",
       "src/data/aisWatchdog.js",
+      "src/data/vesselTypes.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
       "server/providers/acartia.js",
@@ -1292,6 +1295,7 @@
       "src/render/camera/followTransition.js",
       "src/render/cesium/internals.js",
       "src/render/cesium/common.js",
+      "src/ui/railEdgeScroll.js",
       "src/ui/localePicker.js",
       "src/ui/cyberSonarControls.js",
       "src/ui/locationNavigation.js",
@@ -1769,6 +1773,7 @@
     "exports": ["./layers/flights"],
     "modules": [
       "src/data/fleetModels.js",
+      "src/data/vesselTypes.js",
       "src/data/fleetTrailAnchors.js",
       "src/data/fleetModelInstances.js",
       "src/data/headingDegrees.js",
@@ -1901,7 +1906,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/layers/flights/placed.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -1911,6 +1917,7 @@
       "src/layers/flights/modelSpec.js",
       "src/layers/flights/policy.js",
       "src/data/fleetModels.js",
+      "src/data/vesselTypes.js",
       "src/data/fleetTrailAnchors.js",
       "src/data/fleetModelInstances.js",
       "src/data/headingDegrees.js",
@@ -2035,7 +2042,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/layers/flights/placed.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -4503,6 +4511,7 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
+      "src/ui/railEdgeScroll.js",
       "src/ui/mobileShell.js",
       "src/ui/localePicker.js",
       "src/ui/cyberSonarControls.js",
@@ -5288,7 +5297,9 @@
       "src/layers/vessels/photos.js",
       "src/viewSky.js",
       "src/viewWeather.js",
-      "src/render/weather.js"
+      "src/render/weather.js",
+      "src/layers/flights/placed.js",
+      "src/data/placementProvider.js"
     ],
     "external": [
       "hls.js",
@@ -6106,7 +6117,9 @@
       "src/render/vectorBase/paint.js",
       "src/render/vectorBase/expressions.js",
       "src/layers/vessels/photos.js",
-      "src/data/openVesselPhoto.js"
+      "src/data/openVesselPhoto.js",
+      "src/layers/flights/placed.js",
+      "src/data/placementProvider.js"
     ],
     "external": [
       "hls.js",
@@ -6519,6 +6532,7 @@
       "src/data/aircraftClass.js",
       "src/data/aircraftEmergency.js",
       "src/data/fleetModels.js",
+      "src/data/vesselTypes.js",
       "src/data/fleetTrailAnchors.js"
     ],
     "external": []
@@ -6931,6 +6945,7 @@
     "exports": ["./layers/transit/standalone"],
     "modules": [
       "src/data/fleetModels.js",
+      "src/data/vesselTypes.js",
       "src/data/aircraftClass.js",
       "src/i18n/marker.js",
       "src/data/fleetModelInstances.js",
@@ -7082,6 +7097,7 @@
     "modules": [
       "src/i18n/marker.js",
       "src/data/fleetModels.js",
+      "src/data/vesselTypes.js",
       "src/data/fleetModelInstances.js",
       "src/data/aircraftClass.js",
       "src/data/aircraftModelLighting.js",

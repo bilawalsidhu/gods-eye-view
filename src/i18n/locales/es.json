@@ -649,6 +649,8 @@
   "TANKER": "PETROLERO",
   "OTHER": "OTRO",
   "VESSEL": "BUQUE",
+  "AID TO NAVIGATION": "AYUDA A LA NAVEGACIÓN",
+  "VIRTUAL": "VIRTUAL",
   "POS: LIVE": "POS: EN VIVO",
   "POS: {time}Z": "POS: {time}Z",
   "AIS: --": "AIS: --",
@@ -3710,5 +3712,12 @@
   "Reset view reloads the app without the view restored from the address bar.": "Restablecer la vista recarga la app sin la vista restaurada desde la barra de direcciones.",
   "Reload": "Recargar",
   "Retry": "Reintentar",
-  "Reset view": "Restablecer la vista"
+  "Reset view": "Restablecer la vista",
+  "Trolleybus": "Trolebús",
+  "Cable car": "Tranvía de cable",
+  "Monorail": "Monorraíl",
+  "Funicular": "Funicular",
+  "Gondola": "Góndola",
+  "Move panels back beside the rail": "Devolver los paneles junto a la barra",
+  "Move panels over the rail, to the edge": "Mover los paneles sobre la barra, hasta el borde"
 }

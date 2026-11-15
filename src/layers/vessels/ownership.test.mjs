@@ -556,3 +556,48 @@ test('AIS feed rows stay keyed by their MMSI', async () => {
     ['235000001', '235000001'],
   );
 });
+
+test('an aid to navigation is drawn as a disc, a vessel as its chevron', async () => {
+  const aid = {
+    ...observation('993672001'),
+    mmsi: '993672001',
+    type: 'Port Hand Mark',
+    speedMps: 0,
+  };
+  const ship = { ...observation('366999002'), type: 'Cargo' };
+  const { layer, icons } = setup({
+    async getSnapshot() {
+      return snapshot([aid, ship]);
+    },
+  });
+  await layer.update();
+  const svgOf = (id) => {
+    assert.ok(icons.has(id), id);
+    return atob(icons.item(id).image.split(',')[1]);
+  };
+  assert.match(svgOf('993672001'), /<circle/);
+  // The source's virtual flag reaches the layer's record.
+  const recordOf = (id) => layer.testing._vesselRecordForTest(id);
+  assert.equal(recordOf('993672001').virtual, false);
+  assert.equal(recordOf('366999002').virtual, false);
+  assert.doesNotMatch(svgOf('993672001'), /<path/);
+  assert.match(svgOf('366999002'), /<path/);
+});
+
+test('a virtual aid to navigation keeps its disc and its virtual flag', async () => {
+  const aid = {
+    ...observation('993672009'),
+    mmsi: '993672009',
+    type: 'Isolated danger',
+    virtual: true,
+  };
+  const { layer, icons } = setup({
+    async getSnapshot() {
+      return snapshot([aid]);
+    },
+  });
+  await layer.update();
+  assert.ok(icons.has('993672009'));
+  assert.equal(layer.testing._vesselRecordForTest('993672009').virtual, true);
+  assert.match(atob(icons.item('993672009').image.split(',')[1]), /<circle/);
+});

@@ -1290,6 +1290,8 @@
   "AIS: {name}": "AIS : {name}",
   "{type}  SPD: {speed}  HDG: {heading}": "{type}  SPD : {speed}  HDG : {heading}",
   "VESSEL": "NAVIRE",
+  "AID TO NAVIGATION": "AIDE À LA NAVIGATION",
+  "VIRTUAL": "VIRTUEL",
   "{speed}KT": "{speed} ND",
   "{heading}DEG": "{heading}°",
   "POS: LIVE": "POS : DIRECT",
@@ -3710,5 +3712,12 @@
   "Reset view reloads the app without the view restored from the address bar.": "Réinitialiser la vue recharge l’app sans la vue restaurée depuis la barre d’adresse.",
   "Reload": "Recharger",
   "Retry": "Réessayer",
-  "Reset view": "Réinitialiser la vue"
+  "Reset view": "Réinitialiser la vue",
+  "Trolleybus": "Trolleybus",
+  "Cable car": "Tramway à câble",
+  "Monorail": "Monorail",
+  "Funicular": "Funiculaire",
+  "Gondola": "Télécabine",
+  "Move panels back beside the rail": "Remettre les panneaux à côté de la barre",
+  "Move panels over the rail, to the edge": "Déplacer les panneaux par-dessus la barre, jusqu’au bord"
 }

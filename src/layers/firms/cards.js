@@ -32,7 +32,8 @@ export function createCards({
     if (!layerState._viewer) return;
     const { query } = components.rendering.scenePorts();
     const project = (position) => query?.project(position) ?? null;
-    const now = Date.now();
+    // Ages count back from the time shown: the window's end, or now when live.
+    const now = components.model.ageReferenceMs();
     const entries = [];
     /** @type {Array<{x: number, y: number}>} Screen positions of accepted labels. */
     const accepted = [];

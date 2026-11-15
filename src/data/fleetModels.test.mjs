@@ -4,7 +4,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  DEFAULT_AID_MODEL,
   FLEET_MODEL_BASE,
+  aidToNavigationModel,
   aircraftModelSpec,
   aisShipTypeCode,
   emitterCategory,
@@ -23,6 +25,7 @@ import {
   vesselModelSpec,
 } from './fleetModels.js';
 import { FLEET_TRAIL_ANCHORS } from './fleetTrailAnchors.js';
+import { TRANSIT_MODES } from './transitFeeds.js';
 import {
   centrelineSegments,
   distanceToSurface,
@@ -379,6 +382,99 @@ test('vessel specs read AIS codes and text families, stretched to the reported b
   const unknown = vesselModelSpec(set, {});
   assert.equal(unknown.model, types.default_vessel);
   assert.equal(unknown.scale, 1);
+});
+
+test('aids to navigation are the buoy of the mark their type names', () => {
+  const cases = [
+    ['Cardinal Mark N', 'buoy_cardinal_north'],
+    ['Beacon, Cardinal E', 'buoy_cardinal_east'],
+    ['Cardinal Mark S', 'buoy_cardinal_south'],
+    ['Beacon, Cardinal W', 'buoy_cardinal_west'],
+    ['Port Hand Mark', 'buoy_lateral_port'],
+    ['Beacon, Port hand', 'buoy_lateral_port'],
+    ['Starboard Hand Mark', 'buoy_lateral_starboard'],
+    ['Preferred Channel Starboard hand', 'buoy_lateral_starboard'],
+    ['Safe Water', 'buoy_safe_water'],
+    ['Isolated danger', 'buoy_isolated_danger'],
+    ['Beacon, Special Mark', 'buoy_special'],
+    ['Special Mark', 'buoy_special'],
+    ['Light Vessel / LANBY / Rigs', 'buoy_special'],
+    ['RACON', 'buoy_special'],
+    ['Light, with Sectors', 'buoy_special'],
+    ['Reference point', 'buoy_special'],
+    ['Navigation aid', 'buoy_special'],
+  ];
+  for (const [type, model] of cases) {
+    assert.equal(aidToNavigationModel(type), model, type);
+    assert.ok(catalog[model], model);
+    const spec = vesselModelSpec(set, { type, mmsi: '993672001' });
+    assert.equal(spec.model, model, type);
+    assert.equal(spec.category, 'buoys', type);
+    assert.equal(spec.fixed, true, type);
+    // A buoy is drawn as built, whatever length the report gives.
+    assert.equal(spec.scale, 1, type);
+  }
+  assert.equal(
+    vesselModelSpec(set, { type: 'Safe Water', length: 120, beam: 30 }).scale,
+    1,
+  );
+  // An aid of no stated kind, known only by its MMSI, is the default can.
+  assert.ok(catalog[DEFAULT_AID_MODEL]);
+  const unnamed = vesselModelSpec(set, { type: '', mmsi: '993660123' });
+  assert.equal(unnamed.model, DEFAULT_AID_MODEL);
+  assert.equal(unnamed.fixed, true);
+  assert.equal(aidToNavigationModel('Fixed structure off shore'), undefined);
+  // A virtual aid is broadcast where nothing stands: it keeps its disc.
+  assert.equal(
+    vesselModelSpec(set, {
+      type: 'Cardinal Mark N',
+      mmsi: '993672001',
+      virtual: true,
+    }),
+    null,
+  );
+  // Vessels, including those that work on buoys, keep their hulls.
+  for (const vessel of [
+    { type: 'Buoy Tender', mmsi: '366999001', length: 60 },
+    { type: '70', mmsi: '366999002' },
+    { type: 'Tug', mmsi: '' },
+  ]) {
+    const spec = vesselModelSpec(set, vessel);
+    assert.notEqual(spec.category, 'buoys', vessel.type);
+    assert.equal(spec.fixed, undefined, vessel.type);
+  }
+});
+
+test('every transit mode but unknown draws its own model, and a route type a finer one', () => {
+  for (const mode of TRANSIT_MODES.filter((m) => m !== 'unknown')) {
+    assert.ok(types.transit.modes[mode], `${mode} has a model`);
+    assert.equal(
+      resolveTransit(types, { mode }).model,
+      types.transit.modes[mode][0],
+    );
+  }
+  for (const [mode, model] of [
+    ['trolleybus', 'trolleybus'],
+    ['cable_tram', 'cable_tram'],
+    ['aerial_lift', 'gondola'],
+    ['funicular', 'funicular'],
+    ['monorail', 'monorail'],
+  ])
+    assert.equal(resolveTransit(types, { mode }).model, model, mode);
+  // A route type outranks the mode: a coach and a high-speed set are still
+  // the bus and rail modes.
+  for (const [routeType, mode, model] of [
+    [200, 'bus', 'coach'],
+    [101, 'rail', 'high_speed'],
+    [106, 'rail', 'regional_dmu'],
+    [710, 'bus', 'double_decker'],
+  ])
+    assert.equal(resolveTransit(types, { routeType, mode }).model, model);
+  // A type the table lacks falls back to the mode.
+  assert.equal(
+    resolveTransit(types, { routeType: 300, mode: 'rail' }).model,
+    'commuter_emu',
+  );
 });
 
 test('transit specs: rail category and mode, then route type, then mode, then the default', () => {

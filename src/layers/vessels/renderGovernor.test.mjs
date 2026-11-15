@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createVesselLayer } from './index.js';
 import { VISIBILITY_UPDATE_MS } from './policy.js';
 import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';
+import { layerPlacement } from '../../data/placementProvider.js';
 
 // Vessels move only when a poll lands, so the layer must let the scene idle:
 // it asks for frames for forced passes and one trailing frame after the camera
@@ -10,7 +11,7 @@ import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';
 
 const noop = () => {};
 
-function setup({ focusPassIsNeeded = () => false } = {}) {
+function setup({ focusPassIsNeeded = () => false, placement = null } = {}) {
   let clock = 10_000;
   const requests = [];
   const holds = new Set();
@@ -47,6 +48,7 @@ function setup({ focusPassIsNeeded = () => false } = {}) {
         releaseContinuousRender: (id) => holds.delete(id),
         governorRequestRender: (reason) => requests.push(reason),
       },
+      ...(placement ? { placement: layerPlacement(placement, 'vessels') } : {}),
     },
   });
   const camera = {
@@ -183,4 +185,57 @@ test('a focus pass reads the camera pose even with a trailing frame waiting', ()
   advance(100);
   frame();
   assert.ok(reads > 0, 'the focus pass needs the eye');
+});
+
+test('a placement that places nothing asks for no frames; one that places a drawn vessel moves it in place', (t) => {
+  let mono = 0;
+  t.mock.method(performance, 'now', () => mono);
+  const originalDocument = globalThis.document;
+  globalThis.document = { getElementById: () => null };
+  t.after(() => {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  });
+  let spot = null;
+  const { layer, camera, requests, timers, advance } = setup({
+    placement: { layer: () => ({ place: () => spot }) },
+  });
+  const record = { mmsi: '111', lat: 51.93, lon: 4.05 };
+  const viewer = { camera, scene: {} };
+  bindFakeCesiumScene(viewer);
+  layer.testing._setVesselStateForTest({ viewer, records: [record] });
+  const visual = layer.testing._prepareVesselVisualForTest(record);
+  // Drawn: on the camera's side of the horizon.
+  visual.visible = true;
+  const position = visual.position;
+  const before = { ...position };
+
+  // Nothing placed: no frame is asked for, and the vessel stays put.
+  for (let i = 0; i < 8; i += 1) {
+    mono += 250;
+    layer.testing._runPlacementPassForTest();
+    advance(250);
+  }
+  assert.equal(timers.size, 0);
+  assert.deepEqual(requests, []);
+  assert.deepEqual({ ...visual.position }, before);
+
+  // Placed: moved in place, no new positions, and a frame asked for.
+  spot = { lat: 51.94, lon: 4.05 };
+  mono += 250;
+  layer.testing._runPlacementPassForTest();
+  assert.equal(visual.position, position, 'written in place');
+  assert.notDeepEqual({ ...visual.position }, before);
+  assert.equal(timers.size, 1);
+  advance(1_000);
+  assert.deepEqual(requests, ['ais-vessels-placement']);
+
+  // Turning the layer off drops the pending frame.
+  mono += 250;
+  layer.testing._runPlacementPassForTest();
+  assert.equal(timers.size, 1);
+  layer.destroy();
+  assert.equal(timers.size, 0);
+  advance(1_000);
+  assert.deepEqual(requests, ['ais-vessels-placement']);
 });

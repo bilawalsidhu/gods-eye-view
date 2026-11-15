@@ -149,6 +149,41 @@ test('the track runs over the time the layers show, to now, and scrubs', async (
   assert.equal(worldClock.now(), ahead);
 });
 
+test('on a track that runs over years, only the last minutes are near now', async (t) => {
+  const bar = mount(t);
+  const now = Date.now();
+  // A layer whose source covers fourteen years, up to now.
+  const start = now - 14 * 365 * 86_400_000;
+  const release = worldClock.hold('test-years');
+  const unregister = worldClock.register({
+    id: 'test-years',
+    coverage: () => ({ start, end: now }),
+  });
+  t.after(() => {
+    unregister();
+    release();
+  });
+  await nextTick();
+  const input = bar().querySelector('input[type=range]');
+
+  // A day back is a day back, though it is well within a share of the track.
+  input.value = String(now - 86_400_000);
+  input.dispatchEvent(new Event('input'));
+  await nextTick();
+  assert.equal(worldClock.isLive(), false, 'a day back stays off live');
+  assert.equal(worldClock.now(), now - 86_400_000);
+
+  input.value = String(now - 10 * 60_000);
+  input.dispatchEvent(new Event('input'));
+  await nextTick();
+  assert.equal(worldClock.isLive(), false, 'ten minutes back stays off live');
+
+  input.value = String(Date.now() - 60_000);
+  input.dispatchEvent(new Event('input'));
+  await nextTick();
+  assert.equal(worldClock.isLive(), true, 'a minute back goes live');
+});
+
 test('play runs in real time, from the start of the track when at live', async (t) => {
   const bar = mount(t);
   const now = Date.now();

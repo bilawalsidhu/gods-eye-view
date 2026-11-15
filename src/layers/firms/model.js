@@ -310,7 +310,7 @@ export function createModel({
    * (on top) and never distance-faded by the overlay.
    * Exported for unit tests.
    * @param {Object} fire - Detection record.
-   * @param {number} nowMs - Current epoch milliseconds.
+   * @param {number} nowMs - Epoch milliseconds ages count back from.
    * @returns {Object} firmsLabels entry.
    */
 
@@ -351,9 +351,10 @@ export function createModel({
    * Card model for an ambient fire detection, e.g. title "▲ 47 MW", detail
    * "high · 14h · N20". Ages are computed against each detection's acquisition
    * time — with the live feed everything reads under 24 h (and a stale cache
-   * reads truthfully old). Exported for unit tests.
+   * reads truthfully old); `nowMs` is the time ages count back from, the end
+   * of the window shown (see {@link ageReferenceMs}). Exported for unit tests.
    * @param {{fire: Object, position: {x: number, y: number, z: number}}} candidate - Label candidate.
-   * @param {number} nowMs - Current epoch milliseconds.
+   * @param {number} nowMs - Epoch milliseconds ages count back from.
    * @returns {Object} firmsLabels entry.
    */
 
@@ -385,7 +386,7 @@ export function createModel({
    * "max 210 MW · new 3h". Accent comes from the candidate (renderHeat sets
    * it with {@link cellCardAccent}). Exported for unit tests.
    * @param {{cell: Object, position: {x: number, y: number, z: number}, accent: string}} candidate
-   * @param {number} nowMs - Current epoch milliseconds.
+   * @param {number} nowMs - Epoch milliseconds ages count back from.
    * @returns {Object} firmsLabels entry.
    */
 
@@ -516,6 +517,19 @@ export function createModel({
     return { unit: 'd', count: Math.round(hours / 24) };
   }
 
+  /**
+   * The time a card's ages count back from: the end of the 24 hours shown
+   * when the snapshot ends at a set time, now while it runs to now. A window
+   * that ended months ago then reads its fires as hours old, as they were.
+   * @param {number} [nowMs] - Current epoch milliseconds.
+   * @returns {number}
+   */
+
+  function ageReferenceMs(nowMs = Date.now()) {
+    const at = layerState?._at;
+    return Number.isFinite(at) ? at : nowMs;
+  }
+
   /** Millisecond delta → "<1h" / "Xh" / "Xd", or '' for invalid input. */
 
   function formatAge(deltaMs) {
@@ -590,6 +604,7 @@ export function createModel({
     cellCardAccent,
     formatLatLon,
     formatFrp,
+    ageReferenceMs,
     formatAge,
     formatAgeLabel,
     formatAgoMinutes,

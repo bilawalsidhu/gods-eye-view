@@ -7,6 +7,8 @@ import {
   GLOBAL_INFRARED_MAX_GAP_MS,
   LIGHTNING_MAX_GAP_MS,
   PLAY_WAIT_MS,
+  frameSpacingMs,
+  atLeastFrameSpacing,
 } from './clock.js';
 import { createWorldClock } from '../../time/worldClock.js';
 
@@ -92,6 +94,68 @@ test('union excludes suspended products; nearest selection never uses future or 
   assert.equal(clock.selectFor('missing', time(10)), null);
   assert.equal(REGIONAL_INFRARED_MAX_GAP_MS, 30 * 60_000);
   assert.equal(LIGHTNING_MAX_GAP_MS, 30 * 60_000);
+});
+
+test('a feed’s frame spacing is the median of its latest frames', () => {
+  assert.equal(frameSpacingMs([]), null);
+  assert.equal(frameSpacingMs([time(0)]), null);
+  assert.equal(frameSpacingMs([0, 10, 20, 30].map(time)), 10 * 60_000);
+  // Out of order, repeated, unparseable, and one late frame among many.
+  assert.equal(
+    frameSpacingMs([
+      time(60),
+      time(0),
+      'never',
+      time(0),
+      time(10),
+      time(20),
+      time(30),
+    ]),
+    10 * 60_000,
+  );
+  assert.equal(frameSpacingMs([0, 60, 120].map(time)), 60 * 60_000);
+  assert.equal(frameSpacingMs([0, 10, 70, 130]), 60);
+  // Only the latest frames count: an hourly start gives way to ten minutes.
+  const times = [
+    ...[-600, -540, -480, -420, -360, -300, -240, -180, -120, -60],
+    ...[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120],
+  ].map(time);
+  assert.equal(frameSpacingMs(times), 10 * 60_000);
+});
+
+test('a product’s gap is at least one and a half of its feed’s frame spacings', (t) => {
+  const tenMinutes = [0, 10, 20, 30].map(time);
+  const hourly = [0, 60, 120].map(time);
+  assert.equal(
+    atLeastFrameSpacing(REGIONAL_INFRARED_MAX_GAP_MS, tenMinutes),
+    REGIONAL_INFRARED_MAX_GAP_MS,
+    'frames minutes apart keep the product’s own gap',
+  );
+  assert.equal(
+    atLeastFrameSpacing(REGIONAL_INFRARED_MAX_GAP_MS, hourly),
+    90 * 60_000,
+  );
+  assert.equal(
+    atLeastFrameSpacing(REGIONAL_INFRARED_MAX_GAP_MS, [time(0)]),
+    REGIONAL_INFRARED_MAX_GAP_MS,
+  );
+  assert.equal(
+    atLeastFrameSpacing(GLOBAL_INFRARED_MAX_GAP_MS, hourly),
+    GLOBAL_INFRARED_MAX_GAP_MS,
+  );
+
+  // Selected against it, an hourly feed has a frame all through each hour.
+  const { clock } = harness(t);
+  const clouds = product(
+    'clouds',
+    [0, 60, 120],
+    atLeastFrameSpacing(REGIONAL_INFRARED_MAX_GAP_MS, hourly),
+  );
+  clock.register(clouds);
+  assert.equal(clock.selectFor('clouds', time(45)), time(0));
+  assert.equal(clock.selectFor('clouds', time(119)), time(60));
+  assert.equal(clock.selectFor('clouds', time(210)), time(120));
+  assert.equal(clock.selectFor('clouds', time(211)), null);
 });
 
 test('history applies per-product selections, including null; latest restores unequal newest times', async (t) => {

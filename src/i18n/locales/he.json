@@ -1148,6 +1148,8 @@
   "AIS: {name}": "AIS: {name}",
   "{type}  SPD: {speed}  HDG: {heading}": "{type}  SPD: {speed}  HDG: {heading}",
   "VESSEL": "אונייה",
+  "AID TO NAVIGATION": "עזר ניווט",
+  "VIRTUAL": "וירטואלי",
   "{speed}KT": "{speed} קשר",
   "{heading}DEG": "{heading}°",
   "POS: LIVE": "POS: חי",
@@ -3710,5 +3712,12 @@
   "Reset view reloads the app without the view restored from the address bar.": "\"איפוס תצוגה\" טוען מחדש את האפליקציה בלי התצוגה ששוחזרה משורת הכתובת.",
   "Reload": "טען מחדש",
   "Retry": "נסה שוב",
-  "Reset view": "איפוס תצוגה"
+  "Reset view": "איפוס תצוגה",
+  "Trolleybus": "טרוליבוס",
+  "Cable car": "חשמלית כבלים",
+  "Monorail": "מונורייל",
+  "Funicular": "פוניקולר",
+  "Gondola": "רכבל",
+  "Move panels back beside the rail": "החזרת הלוחות לצד הסרגל",
+  "Move panels over the rail, to the edge": "הזזת הלוחות מעל הסרגל, אל הקצה"
 }

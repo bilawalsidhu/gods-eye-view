@@ -1,12 +1,13 @@
 import { t } from '../../i18n/index.js';
 import {
+  AID_TO_NAVIGATION_STYLE,
   vesselTypeCss,
   vesselOverlayCohortLimit,
   VESSEL_OVERLAY_SOURCE_ID,
   applyVesselOverlayPolicy,
   VESSEL_CARD_FADE_DISTANCE_M,
 } from '../../data/vesselLabels.js';
-import { fromDegrees } from '../../geo/ellipsoid.js';
+import { fromDegrees, fromDegreesInto } from '../../geo/ellipsoid.js';
 import { horizonFrom, liftedForHorizon } from '../../geo/horizon.js';
 import { distance, distanceSquared } from '../../geo/vector.js';
 import {
@@ -35,9 +36,12 @@ import {
   vesselModelSpec,
 } from '../../data/fleetModels.js';
 import { createFleetModelLayer } from '../../data/fleetModelInstances.js';
+import { isAidToNavigation } from '../../data/vesselTypes.js';
 
 /** How often vessels move on as the world clock plays (wall ms). */
 const FOLLOW_POSITION_MS = 250;
+/** A frame is asked for this often while a placement moves live vessels. */
+const PLACEMENT_FRAME_MS = 1000;
 
 /** The ship artwork's own raster size (px). */
 const SHIP_ICON_PX = 32;
@@ -79,31 +83,77 @@ export function createRendering({
       };
       visualRecords.set(record, visual);
     }
-    visual.position = anchorPosition(record);
+    const { lat, lon } = drawnAt(record);
+    visual.position = anchorAt(lat, lon);
     // A ship model's origin is its waterline: the sea surface, unlifted.
-    visual.waterline = anchorPosition(record, 0);
+    visual.waterline = anchorAt(lat, lon, 0);
+    if (services.placement) {
+      visual.drawnLat = lat;
+      visual.drawnLon = lon;
+    }
     return visual;
   }
 
   /**
-   * Where a record's icon is anchored: VESSEL_LIFT_M above the sea surface
-   * (the geoid, once its grid has loaded). Following the world clock, a
-   * vessel is drawn where it was at the time.
+   * Where a record is drawn now: following the world clock, where it was at
+   * the time; live, where a host-supplied placement draws it, if one does.
    * @param {Object} record - Vessel record with a finite lat/lon.
+   * @returns {{lat: number, lon: number}} A fresh pair (the placement's
+   *   answer is reused by its next call).
+   */
+  function drawnAt(record) {
+    const { lat, lon } = followsClock(vesselState)
+      ? vesselPositionAt(record, vesselState.worldNow())
+      : (services.placement?.place(record.id, vesselState._aisRuntime.now()) ??
+        record);
+    return { lat, lon };
+  }
+
+  /**
+   * Where an icon at `lat`/`lon` is anchored: VESSEL_LIFT_M above the sea
+   * surface (the geoid, once its grid has loaded).
+   * @param {number} lat
+   * @param {number} lon
    * @param {number} [liftM] Height above the sea surface (the icon's lift by
    *   default; 0 for a ship model's waterline).
    * @returns {{x: number, y: number, z: number}} ECEF metres: icon items,
    *   focus and the layer's queries take it as it is.
    */
-  function anchorPosition(record, liftM = VESSEL_LIFT_M) {
-    const { lat, lon } = followsClock(vesselState)
-      ? vesselPositionAt(record, vesselState.worldNow())
-      : record;
+  function anchorAt(lat, lon, liftM = VESSEL_LIFT_M) {
     const heightM = components.queries.vesselDatumHeightM(
       components.tracking.currentGeoidN(lat, lon),
       liftM,
     );
     return fromDegrees(lon, lat, heightM);
+  }
+
+  /**
+   * Where a record's icon is anchored (see drawnAt and anchorAt).
+   * @param {Object} record - Vessel record with a finite lat/lon.
+   * @param {number} [liftM] Height above the sea surface.
+   * @returns {{x: number, y: number, z: number}} ECEF metres.
+   */
+  function anchorPosition(record, liftM = VESSEL_LIFT_M) {
+    const { lat, lon } = drawnAt(record);
+    return anchorAt(lat, lon, liftM);
+  }
+
+  /**
+   * Move a prepared vessel visual to `lat`/`lon` (a host-supplied placement
+   * moved it), writing into its own positions rather than allocating new
+   * ones: the placement pass runs for every drawn vessel several times a
+   * second. Its icon is drawn there again.
+   */
+  function moveRecordVisual(record, visual, lat, lon) {
+    const heightM = components.queries.vesselDatumHeightM(
+      components.tracking.currentGeoidN(lat, lon),
+      VESSEL_LIFT_M,
+    );
+    fromDegreesInto(lon, lat, heightM, visual.position);
+    fromDegreesInto(lon, lat, heightM - VESSEL_LIFT_M, visual.waterline);
+    visual.drawnLat = lat;
+    visual.drawnLon = lon;
+    syncRecordIcon(record);
   }
 
   // Reused projection buffers for the card pass, grown to the candidates.
@@ -281,12 +331,14 @@ export function createRendering({
   /**
    * Best available real-world direction of travel for a vessel, degrees
    * clockwise from north (true heading preferred, course-over-ground fallback).
-   * The renderer turns this into its screen rotation each frame.
+   * The renderer turns this into its screen rotation each frame. An aid to
+   * navigation is fixed, so it has none.
    * @param {Object} record - Vessel record.
    * @returns {number} Course in degrees (0 when unknown).
    */
 
   function vesselCourseDeg(record) {
+    if (isAidToNavigation(record)) return 0;
     const direction = record.heading ?? record.course;
     return Number.isFinite(direction) ? direction : 0;
   }
@@ -294,6 +346,7 @@ export function createRendering({
   /**
    * Build (and cache) a chevron/delta-wing SVG data URL tinted for the vessel.
    * The shape points north (up) so the row's course maps directly to heading.
+   * An aid to navigation, which has no heading, is a ringed disc instead.
    * One icon is generated per color+variant and shares one atlas slot.
    * @param {Object} record - Vessel record (drives per-type tint).
    * @param {boolean} selected - True for the white/brighter selected variant.
@@ -301,16 +354,25 @@ export function createRendering({
    */
 
   function shipIcon(record, selected) {
-    const cssColor = selected ? '#ffffff' : vesselTypeCss(record.type);
-    const key = `${cssColor}:${selected ? 'selected' : 'normal'}`;
+    const aid = isAidToNavigation(record);
+    const cssColor = selected
+      ? '#ffffff'
+      : aid
+        ? AID_TO_NAVIGATION_STYLE.css
+        : vesselTypeCss(record.type);
+    const key = `${cssColor}:${selected ? 'selected' : 'normal'}:${aid ? 'aid' : 'ship'}`;
     if (vesselState.shipIconCache.has(key))
       return vesselState.shipIconCache.get(key);
 
     const stroke = selected ? 'rgba(6,26,32,0.95)' : 'rgba(4,18,24,0.9)';
     const strokeWidth = selected ? 1.1 : 0.7;
+    const shape = aid
+      ? `<circle r="8" fill="${cssColor}" stroke="${stroke}" stroke-width="${strokeWidth * 2}"/>
+      <circle r="3" fill="${stroke}"/>`
+      : `<path d="M0,-14 L11,10 L4,7 L0,14 L-4,7 L-11,10 Z" fill="${cssColor}" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linejoin="round"/>`;
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
     <g transform="translate(16,16)">
-      <path d="M0,-14 L11,10 L4,7 L0,14 L-4,7 L-11,10 Z" fill="${cssColor}" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linejoin="round"/>
+      ${shape}
     </g>
   </svg>`;
     const icon = 'data:image/svg+xml;base64,' + btoa(svg);
@@ -344,8 +406,13 @@ export function createRendering({
     });
   }
 
-  /** The model item for `record`, its spec rebuilt only when its type or size changes. */
+  /**
+   * The model item for `record`, its spec rebuilt only when its type or size
+   * changes; null for a virtual aid to navigation, which keeps its disc: no
+   * buoy stands there (vesselModelSpec).
+   */
   function modelItem(record, set) {
+    if (record.virtual === true) return null;
     let item = modelItems.get(record.id);
     if (!item || item.record !== record)
       item = {
@@ -354,13 +421,14 @@ export function createRendering({
         tint: null,
         modelOwnsVisual: false,
       };
-    const specKey = `${record.type}|${record.length}|${record.beam}|${record.name}`;
+    const specKey = `${record.type}|${record.mmsi}|${record.length}|${record.beam}|${record.name}`;
     if (item.specKey !== specKey) {
       item.specKey = specKey;
       item.spec = vesselModelSpec(set, record);
     }
     item.position = getVisual(record).waterline;
-    item.headingDeg = vesselCourseDeg(record);
+    // An aid to navigation is a fixed mark: it does not turn to a heading.
+    item.headingDeg = item.spec?.fixed ? 0 : vesselCourseDeg(record);
     item.show = record.id !== state.cockpitSubjectId;
     return item;
   }
@@ -381,7 +449,8 @@ export function createRendering({
       const waterline = getVisual(record).waterline;
       if (!waterline) continue;
       if (distanceSquared(eye, waterline) > limitSq) continue;
-      into.set(record.id, modelItem(record, set));
+      const item = modelItem(record, set);
+      if (item) into.set(record.id, item);
     }
   }
 
@@ -412,8 +481,10 @@ export function createRendering({
       gatherModelItems(set, next);
     } else {
       for (const [id, item] of modelItems)
-        if (state.records.byId.get(id) === item.record)
-          next.set(id, modelItem(item.record, set));
+        if (state.records.byId.get(id) === item.record) {
+          const kept = modelItem(item.record, set);
+          if (kept) next.set(id, kept);
+        }
     }
     for (const [id, item] of modelItems)
       if (next.get(id) !== item) handBackVisual(item.record);
@@ -453,6 +524,7 @@ export function createRendering({
     state.preRenderRemover =
       findFrame(viewer)?.on('preRender', () => {
         if (followsClock(vesselState)) followClockPositions();
+        else if (services.placement && state.feed.enabled) followPlacements();
         updateVisibility();
         if (state.feed.enabled) updateModels();
       }) ?? null;
@@ -473,6 +545,52 @@ export function createRendering({
       prepareRecordVisual(record);
       syncRecordIcon(record);
     }
+  }
+
+  // Live with a host-supplied placement, vessels move on between refreshes:
+  // drawn where it places them at most every FOLLOW_POSITION_MS, with a frame
+  // asked for every PLACEMENT_FRAME_MS while it places any drawn vessel, so
+  // they move while the scene idles.
+  let placedAtWallMs = -Infinity;
+  let placing = false;
+  let placementFrameTimer = null;
+  function followPlacements() {
+    const wallMs = performance.now();
+    if (wallMs - placedAtWallMs >= FOLLOW_POSITION_MS) {
+      placedAtWallMs = wallMs;
+      placing = false;
+      const nowMs = vesselState._aisRuntime.now();
+      // Drawn vessels only, as a sprite or a model: a hidden one is placed
+      // again when it is drawn.
+      for (const record of state.records.all) {
+        const visual = visualRecords.get(record);
+        if (!visual?.position) continue;
+        const drawn =
+          (visual.visible && !isCockpitSubject(record)) ||
+          visual.modelOwnsVisual;
+        if (!drawn) continue;
+        const placed = services.placement.place(record.id, nowMs);
+        if (placed) placing = true;
+        const { lat, lon } = placed ?? record;
+        if (lat === visual.drawnLat && lon === visual.drawnLon) continue;
+        moveRecordVisual(record, visual, lat, lon);
+      }
+    }
+    if (placing && placementFrameTimer === null)
+      placementFrameTimer = vesselState._aisRuntime.setTimeout(() => {
+        placementFrameTimer = null;
+        if (state.feed.enabled && !followsClock(vesselState))
+          governorRequestRender('ais-vessels-placement');
+      }, PLACEMENT_FRAME_MS);
+  }
+
+  /** Stop asking for placement frames (the layer turned off or went away). */
+  function cancelPlacementFrame() {
+    placedAtWallMs = -Infinity;
+    placing = false;
+    if (placementFrameTimer === null) return;
+    vesselState._aisRuntime.clearTimeout(placementFrameTimer);
+    placementFrameTimer = null;
   }
 
   function scheduleTrailingVisibilityPass(now) {
@@ -837,6 +955,8 @@ export function createRendering({
     installRuntime,
     updateVisibility,
     cancelTrailingVisibilityPass,
+    cancelPlacementFrame,
+    followPlacements,
     applyVesselFocusDeemphasis,
     makeOccluder,
     isVisible,

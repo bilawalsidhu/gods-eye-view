@@ -1986,6 +1986,69 @@ test('satellite global selection uses the three-hour gap and preserves the share
   assert.equal(params.target, undefined);
 });
 
+test('satellite clouds from an hourly feed draw all through each hour and read late only past it', async (t) => {
+  const clock = createWeatherClock();
+  const now = Date.now();
+  const hour = 3_600_000;
+  const top = Math.floor(now / hour) * hour;
+  // Frames an hour apart, the latest forty minutes old.
+  const hourly = [3, 2, 1].map((back) =>
+    new Date(top - back * hour + 20 * 60_000).toISOString(),
+  );
+  const latest = hourly.at(-1);
+  const h = layerHarness({
+    clock,
+    id: 'weather-satellite',
+    feed: {
+      getSnapshot: async ({ product }) => ({
+        ...snapshot,
+        product,
+        times: hourly,
+        latest,
+      }),
+    },
+  });
+  t.after(() => {
+    h.layer.destroy();
+    clock.destroy();
+  });
+  t.mock.method(Date, 'now', () => Date.parse(latest) + 40 * 60_000);
+  const update = h.layer.update();
+  await flush();
+  h.stages.at(-1).finish();
+  await update;
+  assert.equal(h.layer.getParams().product, 'clouds-regional');
+  assert.equal(h.layer.getRowControls().summary.maxGapMinutes, 90);
+  assert.equal(
+    h.layer.getStats().stale,
+    false,
+    'forty minutes is within the hour',
+  );
+
+  // Forty-five minutes past a frame, between it and the next, it still shows.
+  const between = clock.setTarget(
+    new Date(Date.parse(hourly[0]) + 45 * 60_000).toISOString(),
+  );
+  await flush();
+  h.stages.at(-1).finish();
+  await between;
+  assert.equal(h.layer.getDiagnostics().hidden, false);
+  assert.equal(h.stages.at(-1).time, hourly[0]);
+
+  // Live again (a past time judges delay from the timeline's time), past
+  // one and a half hours it reads late.
+  const live = clock.latest();
+  await flush();
+  h.stages.at(-1).finish();
+  await live;
+  t.mock.method(Date, 'now', () => Date.parse(latest) + 100 * 60_000);
+  assert.equal(
+    h.layer.getStats().stale,
+    true,
+    'past one and a half hours, late',
+  );
+});
+
 test('switching to history cancels a still-loading latest refresh and a later target cancels the first history load', async (t) => {
   const clock = createWeatherClock();
   const h = layerHarness({ clock });
