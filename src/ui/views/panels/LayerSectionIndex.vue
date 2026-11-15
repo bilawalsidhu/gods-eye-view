@@ -17,8 +17,32 @@ function headings() {
   return list ? [...list.querySelectorAll('.data-layer-group-heading:not(.is-filtered)')] : [];
 }
 function readSections() {
-  sections.value = headings().map((h, i) => ({ i, label: h.textContent.trim() }));
+  const next = headings().map((h, i) => ({ i, label: h.textContent.trim() }));
+  // Live counts repaint the rows all the time; keep the ticks unless the
+  // groups themselves changed.
+  const same =
+    next.length === sections.value.length &&
+    next.every((s, i) => s.label === sections.value[i].label);
+  if (!same) sections.value = next;
   syncCurrent();
+}
+// Only headings matter: a heading added, removed, renamed (a language change)
+// or filtered out. Rows' counts and states change many times a second.
+const isHeading = (node) =>
+  node?.classList?.contains('data-layer-group-heading') ||
+  node?.parentElement?.classList?.contains('data-layer-group-heading');
+let frame = 0;
+function onMutations(mutations) {
+  if (frame) return;
+  const relevant = mutations.some(
+    (m) =>
+      (m.type === 'childList' && m.target === list) || isHeading(m.target),
+  );
+  if (!relevant) return;
+  frame = requestAnimationFrame(() => {
+    frame = 0;
+    readSections();
+  });
 }
 function syncCurrent() {
   if (!list) return;
@@ -38,7 +62,15 @@ function syncCurrent() {
 const tip = ref(null);
 function showTip(event, section) {
   const box = event.currentTarget.getBoundingClientRect();
-  tip.value = { label: section.label, left: `${Math.round(box.right + 10)}px`, top: `${Math.round(box.top + box.height / 2)}px` };
+  // Beside the tick on whichever side has room: the stack sits on the right
+  // in a right-to-left language.
+  const before = window.innerWidth - box.right < 180;
+  tip.value = {
+    label: section.label,
+    before,
+    left: `${Math.round(before ? box.left - 10 : box.right + 10)}px`,
+    top: `${Math.round(box.top + box.height / 2)}px`,
+  };
 }
 const hideTip = () => {
   tip.value = null;
@@ -52,7 +84,7 @@ function jump(i) {
 onMounted(() => {
   list = document.getElementById('data-toggles');
   if (!list) return;
-  observer = new MutationObserver(readSections);
+  observer = new MutationObserver(onMutations);
   observer.observe(list, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class'] });
   list.addEventListener('scroll', syncCurrent, { passive: true });
   // The list is hidden while the panel is shut; read again when it opens.
@@ -63,6 +95,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   observer?.disconnect();
   resize?.disconnect();
+  cancelAnimationFrame(frame);
   list?.removeEventListener('scroll', syncCurrent);
 });
 </script>
@@ -84,7 +117,8 @@ onBeforeUnmount(() => {
       @blur="hideTip"
     ></button>
     <Teleport to="body">
-      <span v-if="tip" class="layer-section-index__label" :style="{ left: tip.left, top: tip.top }" aria-hidden="true">{{ tip.label }}</span>
+      <span v-if="tip" class="layer-section-index__label"
+        :class="{ 'layer-section-index__label--before': tip.before }" :style="{ left: tip.left, top: tip.top }" aria-hidden="true">{{ tip.label }}</span>
     </Teleport>
   </nav>
 </template>

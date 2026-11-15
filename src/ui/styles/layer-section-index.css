@@ -6,7 +6,7 @@
 .layer-section-index {
   position: absolute;
   top: 64px;
-  right: 2px;
+  inset-inline-end: 2px;
   bottom: 24px;
   z-index: 2;
   display: flex;
@@ -78,6 +78,11 @@
   transform: translateY(-50%);
   pointer-events: none;
   animation: layer-section-index-label 120ms ease both;
+}
+
+/* Drawn before the tick when there is no room after it. */
+.layer-section-index__label--before {
+  transform: translate(-100%, -50%);
 }
 
 @keyframes layer-section-index-label {
