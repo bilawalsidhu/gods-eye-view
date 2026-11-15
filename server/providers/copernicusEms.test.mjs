@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  EMS_MAX_PAGE_BYTES,
   createCopernicusEmsService,
   emsCategoryColor,
   emsPhaseLabel,
@@ -30,7 +31,9 @@ const ACTIVATION = {
 };
 
 test('a WKT centroid is read longitude-first, as the upstream writes it', () => {
-  const position = parseEmCentroid('POINT (0.022993090259437 38.81628901353977)');
+  const position = parseEmCentroid(
+    'POINT (0.022993090259437 38.81628901353977)',
+  );
   assert.equal(position.lon, 0.022993090259437);
   assert.equal(position.lat, 38.81628901353977);
 });
@@ -94,5 +97,46 @@ test('the service answers the active activations from the upstream', async () =>
     'the upstream is the Copernicus activation API',
   );
   assert.ok(seen[0].includes('closed=false'));
+  service.close();
+});
+
+test('an oversized page is refused while it streams, not buffered', async () => {
+  const padding = 'x'.repeat(EMS_MAX_PAGE_BYTES);
+  let read = 0;
+  const service = createCopernicusEmsService({
+    fetchImpl: async () => {
+      // A valid page that carries one huge extra field, and no
+      // Content-Length: only the streaming cap can catch it.
+      const body = JSON.stringify({
+        count: 1,
+        next: null,
+        results: [ACTIVATION],
+        padding,
+      });
+      const bytes = new TextEncoder().encode(body);
+      const stream = new ReadableStream({
+        pull(controller) {
+          if (read >= bytes.length) return controller.close();
+          const end = Math.min(read + 65_536, bytes.length);
+          controller.enqueue(bytes.slice(read, end));
+          read = end;
+        },
+      });
+      return new Response(stream, {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+  });
+  const response = await service.handle({
+    url: 'http://localhost/api/copernicus-ems/active',
+    method: 'GET',
+  });
+  assert.equal(response.status, 502);
+  assert.equal((await response.json()).code, 'RESPONSE_TOO_LARGE');
+  assert.ok(
+    read < EMS_MAX_PAGE_BYTES + 200_000,
+    'the body was cancelled shortly after the cap, not read to the end',
+  );
   service.close();
 });

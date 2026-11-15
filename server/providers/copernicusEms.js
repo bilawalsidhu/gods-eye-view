@@ -22,6 +22,7 @@
 
 import { admitSameSiteKeyless } from './common/same-site.js';
 import { createOpenDataService } from '../../src/sources/openDataProxy.js';
+import { readResponseJsonCapped } from '../../src/sources/httpBody.js';
 
 /** The activation catalogue endpoint. */
 export const EMS_ACTIVATIONS_ENDPOINT =
@@ -32,6 +33,13 @@ export const EMS_PAGE_SIZE = 100;
 
 /** Activations change on the order of hours; a cached hour is fine. */
 export const EMS_TTL_MS = 30 * 60_000;
+
+/**
+ * Hard cap on one upstream page, enforced WHILE it streams in. A page is
+ * parsed only after it is under the cap, so an oversized or endless body is
+ * refused instead of buffered.
+ */
+export const EMS_MAX_PAGE_BYTES = 4_000_000;
 
 /** Cap on how many activations one snapshot keeps. */
 export const EMS_MAX_ACTIVATIONS = 500;
@@ -226,7 +234,11 @@ export async function loadEmActivations(fetchImpl, signal, closed = false) {
       error.upstreamStatus = response.status;
       throw error;
     }
-    const payload = await response.json();
+    const payload = await readResponseJsonCapped(
+      response,
+      EMS_MAX_PAGE_BYTES,
+      signal,
+    );
     const page = normalizeEmActivationsPage(payload);
     for (const row of page.rows) {
       if (seen.has(row.id)) continue;
@@ -273,7 +285,17 @@ export function createCopernicusEmsService({ fetchImpl = fetch } = {}) {
       throw new Error(`unknown route ${route}`);
     },
     ttlMs: EMS_TTL_MS,
-    maxBytes: 4_000_000,
+    maxBytes: EMS_MAX_PAGE_BYTES,
+    onError: (error) =>
+      error?.code === 'RESPONSE_TOO_LARGE'
+        ? {
+            status: 502,
+            payload: {
+              error: 'Upstream response too large',
+              code: 'RESPONSE_TOO_LARGE',
+            },
+          }
+        : null,
     maxPerWindow: 4,
     globalMaxPerWindow: 12,
     timeoutMs: 30_000,
