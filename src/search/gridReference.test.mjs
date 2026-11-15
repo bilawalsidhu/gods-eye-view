@@ -226,7 +226,7 @@ test('MGRS and UTM references read to within a metre in every latitude band', ()
   }
 });
 
-test('MGRS reads spaced, unspaced and at every precision', () => {
+test('MGRS reads spaced and unspaced, to 100 m or finer', () => {
   const times = { lat: 40.74882, lon: -73.98543 };
   for (const text of [
     '18TWL8565011369',
@@ -237,10 +237,35 @@ test('MGRS reads spaced, unspaced and at every precision', () => {
     assert.ok(metres(parseGridReference(text), times) < 1, text);
   // Coarser references name the centre of their square.
   assert.ok(metres(parseGridReference('18TWL856113'), times) < 71, '100 m');
-  assert.ok(metres(parseGridReference('18TWL8511'), times) < 710, '1 km');
-  assert.ok(metres(parseGridReference('18TWL81'), times) < 7100, '10 km');
-  // A square with no digits is not enough to go on.
-  assert.equal(parseGridReference('18TWL'), null);
+  assert.ok(metres(parseGridReference('18T WL 856 113'), times) < 71, '100 m');
+  assert.ok(metres(parseGridReference('18TWL85651136'), times) < 8, '10 m');
+  // 1 km and 10 km squares, and a square alone, read too much ordinary text.
+  for (const text of ['18TWL8511', '18T WL 85 11', '18TWL81', '18TWL'])
+    assert.equal(parseGridReference(text), null, text);
+});
+
+test('MGRS squares across a zone edge, Norway and Svalbard', () => {
+  // Paris, the Eiffel Tower.
+  assert.ok(
+    metres(parseGridReference('31U DQ 48251 11932'), {
+      lat: 48.85819,
+      lon: 2.29449,
+    }) < 1,
+  );
+  // 32V is widened to 3°E–12°E, 33X to 9°E–21°E.
+  assert.ok(parseGridReference('32V NM 12345 54321'));
+  assert.ok(parseGridReference('33X VG 12345 67890'));
+  // A square that lands outside its zone's longitudes.
+  assert.equal(parseGridReference('18T SL 50000 50000'), null);
+});
+
+test('a UTM N is the northern hemisphere where band N does not fit', () => {
+  const point = parseGridReference('33N 500000 4500000');
+  assert.ok(
+    Math.abs(point.lon - 15) < 1e-9 && point.lat > 40 && point.lat < 41,
+  );
+  // Within 0°–8°N it is band N, the same projection.
+  assert.ok(parseGridReference('33N 500000 500000').lat < 5);
 });
 
 test('a UTM S is the 32°N–40°N band where it fits, else the southern hemisphere', () => {
@@ -278,6 +303,18 @@ test('malformed grid references are refused', () => {
     '1the12',
     '60 jun 202311',
     '18t wl 85650 11369',
+    // The same text in capitals, as dates and units are often written.
+    '1 JAN 2023',
+    '01 JAN 2023',
+    '1JAN2023',
+    '31 DEC 1999',
+    '25 DEC 2025',
+    '1 JAN 2023 1200',
+    '15 SEP 2024 0630',
+    '3 USA 12',
+    '4 GAS 12',
+    '33 UTC 12',
+    '20 KPH 1000',
     // Zones Svalbard does not use.
     '32X 500000 8700000',
     '34X NG 12 34',

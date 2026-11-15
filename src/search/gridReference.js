@@ -3,14 +3,17 @@
  *
  * Strict, like the decimal parser: a reference either reads exactly or is
  * declined. UTM is `18T 585628 4511322` (zone, latitude band, easting,
- * northing); MGRS is `18T WL 85650 11369`, spaced or not, with 1 to 5 digits
- * each for easting and northing. MGRS letters are capitals, as references are
- * printed, unless written unspaced to 100 m or finer (`18twl856113`):
- * lower-case `1 jan 2023` or `3 usa 12` is ordinary text, not a grid square. The polar UPS bands (A, B,
- * Y, Z) and the zones Svalbard does not use (32X, 34X, 36X) decline. A UTM `S`
- * is the 32°N–40°N band when its northing falls in that band, and otherwise
- * the southern hemisphere, as UTM is also written; a southern reference
- * between about 50°S and 58°S written that way reads as band S.
+ * northing); MGRS is `18T WL 85650 11369`, spaced or not, with 3 to 5 digits
+ * each for easting and northing (100 m to 1 m). Coarser MGRS (`18T WL 8511`)
+ * declines: written that way, `1 JAN 2023`, `3 USA 12` or `20 KPH 1000` would
+ * read as grid squares. MGRS letters are capitals, as references are printed,
+ * unless written unspaced (`18twl856113`), and the square must lie in its
+ * zone. Letters that spell a month (`1 JAN 2023 1200`) decline: a date is far
+ * likelier than one of those few squares. The polar UPS bands (A, B, Y, Z) and the zones Svalbard does not use
+ * (32X, 34X, 36X) decline. A UTM `N` or `S` is the latitude band when its
+ * northing falls in that band, and otherwise the hemisphere, as UTM is also
+ * written (`33N 500000 4500000`); a southern reference between about 50°S and
+ * 58°S written with `S` reads as band S.
  */
 
 /** WGS84. */
@@ -112,6 +115,21 @@ function zoneExists(zone, band) {
   return !(band === 'X' && (zone === 32 || zone === 34 || zone === 36));
 }
 
+/** Svalbard's widened zones in band X, as [west, east] longitudes. */
+const SVALBARD_ZONES = { 31: [0, 9], 33: [9, 21], 35: [21, 33], 37: [33, 42] };
+
+/**
+ * The longitudes a zone covers in a band: 6° each, except southwest Norway
+ * (31V is 0°–3°E, 32V is 3°E–12°E) and Svalbard (band X).
+ */
+function zoneLongitudes(zone, band) {
+  if (band === 'V' && zone === 31) return [0, 3];
+  if (band === 'V' && zone === 32) return [3, 12];
+  if (band === 'X' && SVALBARD_ZONES[zone]) return SVALBARD_ZONES[zone];
+  const west = (zone - 1) * 6 - 180;
+  return [west, west + 6];
+}
+
 /** UTM `18T 585628 4511322` (or `18 T 585628 4511322`), or null. */
 function parseUtm(text) {
   const match =
@@ -136,9 +154,13 @@ function parseUtm(text) {
   const asBand = utmToLatLon(zone, easting, northing, range.south < 0);
   const bandFits = inBand(asBand.lat, range);
   if (bandFits) return asBand;
-  // `S` is also how UTM is written for the southern hemisphere. Where both
+  // `N` and `S` are also how UTM is written for the hemispheres. Where both
   // fit, the 32°N–40°N band (Tokyo, Los Angeles, the Mediterranean) is far
   // likelier than 50°S–58°S, so the band wins above.
+  if (letter === 'N') {
+    const north = utmToLatLon(zone, easting, northing, false);
+    if (north.lat >= 0 && north.lat <= 84) return north;
+  }
   if (letter === 'S') {
     const south = utmToLatLon(zone, easting, northing, true);
     if (south.lat < 0 && south.lat >= -80) return south;
@@ -173,13 +195,26 @@ const BAND_MIN_NORTHING = {
   X: 7900000,
 };
 
+/** Month abbreviations a band and square could spell (`JAN`, `SEP`, …). */
+const MONTHS = new Set([
+  'JAN',
+  'FEB',
+  'MAR',
+  'MAY',
+  'JUN',
+  'JUL',
+  'SEP',
+  'NOV',
+  'DEC',
+]);
+
 /**
  * MGRS as `18TWL8565011369`, `18T WL 8565011369` or `18T WL 85650 11369`
  * (easting and northing the same length), or null.
  */
 function parseMgrs(text) {
   const match =
-    /^(\d{1,2})\s*([C-HJ-NP-X])\s*([A-HJ-NP-Z])([A-HJ-NP-V])(?:\s*(\d{2,10})|\s*(\d{1,5})\s+(\d{1,5}))$/i.exec(
+    /^(\d{1,2})\s*([C-HJ-NP-X])\s*([A-HJ-NP-Z])([A-HJ-NP-V])(?:\s*(\d{6,10})|\s*(\d{3,5})\s+(\d{3,5}))$/i.exec(
       text,
     );
   if (!match) return null;
@@ -187,8 +222,8 @@ function parseMgrs(text) {
   const band = match[2].toUpperCase();
   const column = match[3].toUpperCase();
   const row = match[4].toUpperCase();
-  let east = '';
-  let north = '';
+  let east;
+  let north;
   if (match[5]) {
     if (match[5].length % 2) return null;
     east = match[5].slice(0, match[5].length / 2);
@@ -200,8 +235,8 @@ function parseMgrs(text) {
   if (zone < 1 || zone > 60 || !zoneExists(zone, band)) return null;
   const precision = east.length;
   const letters = text.replace(/[\d\s]/g, '');
-  if (letters !== letters.toUpperCase() && (precision < 3 || /\s/.test(text)))
-    return null;
+  if (MONTHS.has(letters.toUpperCase())) return null;
+  if (letters !== letters.toUpperCase() && /\s/.test(text)) return null;
   const columnIndex = COLUMN_SETS[(zone - 1) % 3].indexOf(column);
   if (columnIndex < 0) return null;
   // Rows start at A in odd zones and at F in even ones.
@@ -210,13 +245,21 @@ function parseMgrs(text) {
   const scale = 10 ** (5 - precision);
   // The centre of the square the digits name; a 1 m reference is its corner.
   const half = precision < 5 ? scale / 2 : 0;
-  const easting = (columnIndex + 1) * 100000 + Number(east || 0) * scale + half;
-  let northing = rowIndex * 100000 + Number(north || 0) * scale + half;
+  const easting = (columnIndex + 1) * 100000 + Number(east) * scale + half;
+  let northing = rowIndex * 100000 + Number(north) * scale + half;
   while (northing < BAND_MIN_NORTHING[band]) northing += 2000000;
   const range = bandRange(band);
   const point = utmToLatLon(zone, easting, northing, range.south < 0);
-  // Slack of the square's size in degrees of latitude.
-  return inBand(point.lat, range, scale / 111000) ? point : null;
+  // Slack of the square's size in degrees of latitude, and in longitude at
+  // that latitude.
+  const slack = scale / 111000;
+  if (!inBand(point.lat, range, slack)) return null;
+  const [zoneWest, zoneEast] = zoneLongitudes(zone, band);
+  const lonSlack =
+    slack / Math.max(Math.cos((point.lat * Math.PI) / 180), 0.01);
+  return point.lon >= zoneWest - lonSlack && point.lon <= zoneEast + lonSlack
+    ? point
+    : null;
 }
 
 /**
