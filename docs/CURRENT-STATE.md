@@ -2001,7 +2001,7 @@ snapshot still loading for more than 8 seconds. Those snapshots apply as polls
 do, so contacts move on smoothly: aircraft are drawn at the clock's time
 rather than behind it, and vessels between two fixes move along the great
 circle, never past the newer one, redrawn every frame with frames asked for
-as for placed live vessels. Records, absences and the Layers panel's age
+as for placed live vessels (vessels out of view move on every 250 ms). Records, absences and the Layers panel's age
 are judged at the clock's time. Outside the coverage the layer shows no
 contacts and loads nothing; while the coverage is unknown it loads nothing and
 clears nothing. A snapshot that fails clears the time and is asked again after

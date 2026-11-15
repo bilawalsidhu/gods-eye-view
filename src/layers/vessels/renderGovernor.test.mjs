@@ -5,9 +5,9 @@ import { VISIBILITY_UPDATE_MS } from './policy.js';
 import { layerPlacement } from '../../data/placementProvider.js';
 import * as Cesium from 'cesium';
 
-// Vessels move only when a poll lands, so the layer must let the scene idle:
-// it asks for frames for forced passes and one trailing frame after the camera
-// stops, and never schedules a frame from a pass the camera did not cause.
+// The layer must let the scene idle: it asks for frames for forced passes,
+// for vessels that move, and one trailing frame after the camera stops, and
+// never schedules a frame from a pass nothing caused.
 
 const noop = () => {};
 
@@ -252,4 +252,106 @@ test('a vessel moving visibly asks for its next frame as soon as it moves half a
   assert.ok(waitAfterStep(0.0001) <= 16);
   // About 1 cm in a frame: half a pixel takes seconds, so once a second.
   assert.equal(waitAfterStep(0.0000001), 1000);
+  // A 2D view 40 km across in 1,000 px: 11 m is over a quarter pixel, so the
+  // next frame comes within two frames.
+  camera.frustum = { left: -20_000, right: 20_000 };
+  layer.testing._setVesselStateForTest({
+    viewer: { camera, scene: {}, canvas: { clientWidth: 1000 } },
+    records: [record],
+  });
+  layer.testing._prepareVesselVisualForTest(record);
+  assert.ok(waitAfterStep(0.0001) <= 32);
+});
+
+test('following the clock moves drawn vessels in place each world time, prepares missing ones and leaves hidden ones be', (t) => {
+  let mono = 0;
+  t.mock.method(performance, 'now', () => mono);
+  const originalDocument = globalThis.document;
+  globalThis.document = { getElementById: () => null };
+  t.after(() => {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  });
+  const { layer, camera, timers, advance } = setup();
+  camera.positionWC = Cesium.Cartesian3.fromDegrees(4.05, 51.93, 20_000);
+  camera.frustum = { fovy: 1 };
+  const motion = {
+    fromLat: 51.93,
+    fromLon: 4.05,
+    fromMs: 0,
+    toLat: 51.94,
+    toLon: 4.05,
+    toMs: 60_000,
+  };
+  const vessel = (mmsi, show) => ({
+    mmsi,
+    lat: 51.94,
+    lon: 4.05,
+    motion: { ...motion },
+    billboard: { show, position: null },
+  });
+  const drawn = vessel('111', true);
+  const hidden = vessel('222', false);
+  const owned = vessel('333', false);
+  const missing = vessel('444', true);
+  layer.testing._setVesselStateForTest({
+    viewer: { camera, scene: {}, canvas: { clientHeight: 1000 } },
+    records: [drawn, hidden, owned, missing],
+  });
+  const visuals = [drawn, hidden, owned].map((record) =>
+    layer.testing._prepareVesselVisualForTest(record),
+  );
+  visuals[2].modelOwnsVisual = true;
+  const before = visuals.map((visual) => ({ ...visual.position }));
+  const positions = visuals.map((visual) => visual.position);
+
+  // The first pass also moves hidden vessels, so the next stays within
+  // HIDDEN_FOLLOW_MS of it.
+  layer.testing._runClockPassForTest(10_000);
+  mono += 16;
+  layer.testing._runClockPassForTest(20_000);
+  assert.equal(visuals[0].position, positions[0], 'written in place');
+  assert.notDeepEqual({ ...visuals[0].position }, before[0]);
+  assert.notDeepEqual({ ...visuals[2].position }, before[2], 'model moves');
+  const hiddenAt = { ...visuals[1].position };
+  assert.ok(missing.billboard.position, 'a missing visual is prepared');
+  assert.equal(timers.size, 1, 'moving vessels ask for a frame');
+
+  // The hidden vessel waits for HIDDEN_FOLLOW_MS.
+  mono += 16;
+  layer.testing._runClockPassForTest(30_000);
+  assert.deepEqual({ ...visuals[1].position }, hiddenAt);
+  mono += 250;
+  layer.testing._runClockPassForTest(40_000);
+  assert.notDeepEqual({ ...visuals[1].position }, hiddenAt);
+
+  // The same world time again moves nothing and asks for no frame.
+  advance(1_000);
+  assert.equal(timers.size, 0);
+  const still = { ...visuals[0].position };
+  mono += 16;
+  layer.testing._runClockPassForTest(40_000);
+  assert.deepEqual({ ...visuals[0].position }, still);
+  assert.equal(timers.size, 0);
+
+  // Scrubbed back, a vessel moves back.
+  mono += 16;
+  layer.testing._runClockPassForTest(20_000);
+  assert.notDeepEqual({ ...visuals[0].position }, still);
+
+  // Each vessel moves once per world time: new fixes at the same world time
+  // are drawn when the snapshot that brings them prepares the visual.
+  const backAt = { ...visuals[0].position };
+  drawn.motion = { ...motion, toLat: 52 };
+  mono += 16;
+  layer.testing._runClockPassForTest(20_000);
+  assert.deepEqual({ ...visuals[0].position }, backAt);
+
+  // Past the newest fix, vessels hold still and ask for nothing.
+  mono += 16;
+  layer.testing._runClockPassForTest(70_000);
+  advance(1_000);
+  mono += 16;
+  layer.testing._runClockPassForTest(80_000);
+  assert.equal(timers.size, 0);
 });
