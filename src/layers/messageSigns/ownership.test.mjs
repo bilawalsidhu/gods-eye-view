@@ -535,6 +535,12 @@ test('a selected sign past the budget keeps its face at the height and distance 
   // Still ranked past the budget, just inside the distance limit.
   const kmPerDegree = approxDistanceKm(far.lat, 0, far.lat, 1);
   const edgeLon = far.lon - (FACE_MAX_DISTANCE_KM - 0.5) / kmPerDegree;
+  // Guards the edge itself: moveCamera's latitude must stay the sign's.
+  const km = approxDistanceKm(44.95, edgeLon, far.lat, far.lon);
+  assert.ok(
+    km < FACE_MAX_DISTANCE_KM && km > FACE_MAX_DISTANCE_KM - 1,
+    `${km}`,
+  );
   await moveCamera(h, edgeLon, 1500);
   assert.ok(hasFace(), 'just inside the distance limit');
   assert.equal(h.faces().length, FACE_BUDGET + 1);
