@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { toCartographicRadians } from '../../geo/ellipsoid.js';
 import {
   getRegisteredTransitFeed,
   transitRouteLabel,
@@ -78,7 +78,6 @@ export function createTransitCockpitSubject({ state, parts, services }) {
     return reuse(previous, next);
   }
 
-  const scratchCartographic = new Cesium.Cartographic();
   /**
    * The floor under the vehicle where playback draws it, without the shared
    * lift: the drawn marker's height while the frame pass places it (in view,
@@ -97,11 +96,7 @@ export function createTransitCockpitSubject({ state, parts, services }) {
       entry.marker?.position &&
       (state._visible.has(entry) || entry.key === state._cockpitSubjectKey);
     if (placed) {
-      const drawn = Cesium.Cartographic.fromCartesian(
-        entry.marker.position,
-        undefined,
-        scratchCartographic,
-      );
+      const drawn = toCartographicRadians(entry.marker.position);
       if (drawn) return drawn.height - liftM;
     }
     const from = segment.from?.h;

@@ -2,6 +2,8 @@
 // These helpers are DOM/WebRTC-free so they pin the screenshot down-scaling and
 // payload-byte estimation that keep an oversized dc.send from stranding a turn.
 import { test } from 'node:test';
+import { bindRenderer } from '../render/rendererOf.js';
+import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';
 import assert from 'node:assert/strict';
 import { DataLayerManager } from '../data/manager.js';
 import { controlRadio as runControlRadio, createGevActionRunner as createActionRunner } from './gevActions.js';
@@ -36,6 +38,14 @@ import {
 import { createVoiceCostTracker } from './voiceCost.js';
 import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
 import { setLocale, t } from '../i18n/index.js';
+
+
+/** A viewer over `scene` whose renderer's frame port is the scene's own loop. */
+function framed(scene) {
+  const viewer = { scene };
+  bindRenderer(viewer, { frame: fakeSceneFrame(viewer) });
+  return viewer;
+}
 
 test('push-to-talk recognizes Space by code or key', () => {
   assert.equal(PUSH_TO_TALK_HOLD_DELAY_MS, 500);
@@ -1343,6 +1353,7 @@ test('generic same-response Radio visibility disable supersedes delayed Select',
   });
   const viewer = {
     clock: { onTick: { addEventListener: () => () => {} } },
+    canvas: { addEventListener() {}, removeEventListener() {} },
     scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
     camera: { moveEnd: { addEventListener() {} } },
   };
@@ -1595,6 +1606,7 @@ test('Pause and Stop preserve independent dedicated and generic Radio ON across 
               });
               const viewer = {
                 clock: { onTick: { addEventListener: () => () => {} } },
+                canvas: { addEventListener() {}, removeEventListener() {} },
                 scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
                 camera: { moveEnd: { addEventListener() {} } },
               };
@@ -2846,7 +2858,7 @@ test('hidden document yields no fresh frame — capture must not label a stale c
   };
   try {
     globalThis.document = { hidden: true };
-    const fresh = await renderFreshCesiumFrame({ scene });
+    const fresh = await renderFreshCesiumFrame(framed(scene));
     assert.equal(fresh, false, 'hidden capture reports non-fresh');
     assert.equal(requested, 0, 'no secret render restart while hidden');
   } finally {
@@ -2863,7 +2875,7 @@ test('visible document with a rendering scene reports a fresh frame', async () =
       postRender: { addEventListener(listener) { fire = listener; return () => { fire = null; }; } },
       requestRender() { queueMicrotask(() => fire?.()); },
     };
-    const fresh = await renderFreshCesiumFrame({ scene });
+    const fresh = await renderFreshCesiumFrame(framed(scene));
     assert.equal(fresh, true);
   } finally {
     globalThis.document = originalDocument;
@@ -2880,7 +2892,7 @@ test('a tab switch during the bounded render wait invalidates freshness', async 
       postRender: { addEventListener(listener) { fire = listener; return () => { fire = null; }; } },
       requestRender() { doc.hidden = true; queueMicrotask(() => fire?.()); },
     };
-    const fresh = await renderFreshCesiumFrame({ scene });
+    const fresh = await renderFreshCesiumFrame(framed(scene));
     assert.equal(fresh, false, 'freshness rechecked after the await');
   } finally {
     globalThis.document = originalDocument;

@@ -3,6 +3,7 @@ import { createStandalonePlaceSearch } from '../standalone/placeSearch.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+import { fromDegrees } from '../geo/index.js';
 import { CCTV_FOCUS_RESULT } from '../data/cctv.js';
 import {
   getContextStore,
@@ -33,6 +34,11 @@ import { MAP_STACKS } from '../mapStackController.js';
 import { KEY_REJECTED_MESSAGE } from '../layers/streetLevel/providers/google/policy.js';
 import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
 import { presentResult } from './resultDisplay.js';
+import { withEntityRecord } from '../data/entityRecords.js';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import { fakeSceneQuery } from '../testSupport/fakeCesiumScene.mjs';
+import { bindRenderer, cameraOf } from '../render/rendererOf.js';
+import { entityFollowTarget } from '../data/followed.js';
 
 test('every live basemap is reachable by its own id — no enum value without a voice alias', () => {
   // B1 regression: a stack added to MAP_STACKS (and the set_map_stack enum)
@@ -183,6 +189,7 @@ function createVoiceNavigationHarness({ cockpitActive = false } = {}) {
       lookAtTransform() {},
     },
   };
+  bindFakeCesiumCamera(viewer);
   const styleManager = {
     runImmediateNavigation(noun, navigate, releaseOptions = undefined) {
       return runExplicitNavigation({
@@ -1500,7 +1507,6 @@ test('voice Stop Tracking reports exact layers whose active or durable clear fai
     getAll: () => [],
   };
   const viewer = {
-    trackedEntity: { gevTrackedId: 'flights:active' },
     scene: {
       canvas: { addEventListener() {}, removeEventListener() {} },
       preRender: { addEventListener() {} },
@@ -1508,6 +1514,18 @@ test('voice Stop Tracking reports exact layers whose active or durable clear fai
     camera: { moveEnd: { addEventListener() {} } },
     clock: { onTick: { addEventListener() {} } },
   };
+  // The camera follows the active aircraft through its port.
+  const camera = {
+    followed: entityFollowTarget(
+      withEntityRecord({}, { trackedId: 'flights:active' }),
+      {},
+    ),
+    follow(target) {
+      camera.followed = target;
+    },
+    on: () => () => {},
+  };
+  bindRenderer(viewer, { camera, canvas: viewer.scene.canvas });
   const runner = createGevActionRunner({
     viewer,
     styleManager: {},
@@ -1522,8 +1540,8 @@ test('voice Stop Tracking reports exact layers whose active or durable clear fai
     error: 'Tracking could not be cleared for: flights, military',
   });
   assert.equal(
-    viewer.trackedEntity,
-    undefined,
+    camera.followed,
+    null,
     'camera ownership still releases after partial failure',
   );
 });
@@ -1648,7 +1666,9 @@ test('a chained orbit preserves its current destination flight while still stamp
   };
   const { order, viewer, styleManager } = createVoiceNavigationHarness();
   viewer.trackedEntity = undefined;
-  viewer.scene.tweens.push({ id: 'destination-flight' });
+  // The destination flight, still in progress.
+  cameraOf(viewer).flyToBounds({ center: { x: 0, y: 0, z: 0 }, radius: 10 });
+  order.length = 0;
   const runner = createGevActionRunner({
     viewer,
     styleManager,
@@ -1661,7 +1681,7 @@ test('a chained orbit preserves its current destination flight while still stamp
   assert.equal(result.ok, true);
   assert.equal(result.armed, 'waiting-for-arrival');
   assert.deepEqual(order, ['stamp:camera', 'release']);
-  assert.equal(viewer.scene.tweens.length, 1);
+  assert.equal(cameraOf(viewer).flying, true);
   interruptCameraMotion('test-cleanup');
 });
 
@@ -1949,27 +1969,38 @@ test('Data Layers voice inventory hides the Context coordinator while current-vi
 });
 
 test('showing a layer opens the panel that holds its row: Directions lives in Utilities', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const previous = { document: globalThis.document, CSS: globalThis.CSS };
   const focused = [];
   const rowIn = (panelId) => ({
-    dataset: { layerName: panelId === 'utilities-panel' ? 'Directions' : 'Live Flights' },
+    dataset: {
+      layerName: panelId === 'utilities-panel' ? 'Directions' : 'Live Flights',
+    },
     classList: {
       add: (name) => focused.push(name),
       remove() {},
       contains: () => false,
     },
     scrollIntoView() {},
-    closest: (selector) => (selector === '[data-panel-id]' ? { id: panelId } : null),
+    closest: (selector) =>
+      selector === '[data-panel-id]' ? { id: panelId } : null,
   });
-  const rows = { directions: rowIn('utilities-panel'), flights: rowIn('data-panel') };
+  const rows = {
+    directions: rowIn('utilities-panel'),
+    flights: rowIn('data-panel'),
+  };
   // Each row is found only inside the list that really holds it.
   const lists = { directions: '#utilities-toggles', flights: '#data-toggles' };
   globalThis.CSS = { escape: (value) => value };
   globalThis.document = {
     querySelector: (selector) => {
       for (const part of selector.split(',')) {
-        const [, list, id] = /^\s*(#[\w-]+) \[data-layer-id="([^"]+)"\]\s*$/.exec(part) || [];
+        const [, list, id] =
+          /^\s*(#[\w-]+) \[data-layer-id="([^"]+)"\]\s*$/.exec(part) || [];
         if (id && lists[id] === list) return rows[id];
       }
       return null;
@@ -1978,15 +2009,28 @@ test('showing a layer opens the panel that holds its row: Directions lives in Ut
   try {
     const opened = [];
     const layers = [
-      { id: 'flights', name: 'Live Flights', enabled: false, showInTogglePanel: true, stats: {} },
-      { id: 'directions', name: 'Directions', enabled: false, showInTogglePanel: true, stats: {} },
+      {
+        id: 'flights',
+        name: 'Live Flights',
+        enabled: false,
+        showInTogglePanel: true,
+        stats: {},
+      },
+      {
+        id: 'directions',
+        name: 'Directions',
+        enabled: false,
+        showInTogglePanel: true,
+        stats: {},
+      },
     ];
     const dataManager = {
       layers: new Map(layers.map((layer) => [layer.id, { module: {} }])),
       getAll: () => layers,
     };
     const styleManager = {
-      setPanelCollapsed: (panelId, collapsed) => opened.push([panelId, collapsed]),
+      setPanelCollapsed: (panelId, collapsed) =>
+        opened.push([panelId, collapsed]),
     };
     const viewer = {
       clock: { onTick: { addEventListener: () => () => {} } },
@@ -1994,12 +2038,22 @@ test('showing a layer opens the panel that holds its row: Directions lives in Ut
       camera: { moveEnd: { addEventListener() {} } },
     };
     const runner = createGevActionRunner({ viewer, styleManager, dataManager });
-    const directions = await runner('show_data_layers_menu', { layerId: 'directions' });
+    const directions = await runner('show_data_layers_menu', {
+      layerId: 'directions',
+    });
     assert.equal(directions.panelId, 'utilities-panel');
-    assert.deepEqual(directions.focusedLayer, { id: 'directions', name: 'Directions' });
-    const flights = await runner('show_data_layers_menu', { layerId: 'flights' });
+    assert.deepEqual(directions.focusedLayer, {
+      id: 'directions',
+      name: 'Directions',
+    });
+    const flights = await runner('show_data_layers_menu', {
+      layerId: 'flights',
+    });
     assert.equal(flights.panelId, 'data-panel');
-    assert.deepEqual(opened, [['utilities-panel', false], ['data-panel', false]]);
+    assert.deepEqual(opened, [
+      ['utilities-panel', false],
+      ['data-panel', false],
+    ]);
     assert.deepEqual(focused, ['gev-voice-focus', 'gev-voice-focus']);
   } finally {
     globalThis.document = previous.document;
@@ -2728,7 +2782,7 @@ test('control_cockpit delegates selected-flight adoption to the canonical cockpi
     scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
     camera: { moveEnd: { addEventListener() {} } },
   };
-  const recordCarrier = { __gevContextId: 'selected-flight-for-cockpit-enter' };
+  const recordCarrier = {};
   const record = registerEntityContext(recordCarrier, {
     id: 'abc123',
     layerId: 'flights',
@@ -2919,7 +2973,7 @@ test('control_cockpit adopts the newest selection after Contacts settles', async
   };
   const contextStore = getContextStore();
   const first = registerEntityContext(
-    { __gevContextId: 'cockpit-selection-first' },
+    {},
     {
       id: 'first',
       layerId: 'flights',
@@ -2927,7 +2981,7 @@ test('control_cockpit adopts the newest selection after Contacts settles', async
     },
   );
   const second = registerEntityContext(
-    { __gevContextId: 'cockpit-selection-second' },
+    {},
     {
       id: 'second',
       layerId: 'flights',
@@ -3266,7 +3320,7 @@ test('control_cockpit enter skips selected non-flight context', async () => {
     scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
     camera: { moveEnd: { addEventListener() {} } },
   };
-  const recordCarrier = { __gevContextId: 'selected-non-flight-cockpit-enter' };
+  const recordCarrier = {};
   const record = registerEntityContext(recordCarrier, {
     id: 'poi-001',
     layerId: 'local-datacenters',
@@ -4414,6 +4468,7 @@ function createPrewarmHarness({ pickPosition, positionCartographic } = {}) {
       },
     },
   };
+  bindFakeCesiumCamera(viewer, { query: fakeSceneQuery(viewer) });
   return {
     viewer,
     calls,
@@ -4728,7 +4783,7 @@ test('a nested Cockpit rollback result is translated too', async () => {
  * analyst's 2 000-record last-fix slice). These pin the unified engine.
  */
 function awarenessSubjectHarness({ subject, flights = [], military = [] }) {
-  const position = subject ? { __subject: true } : null;
+  const position = subject ? fromDegrees(-97.9, 29.9, 9000) : null;
   const snapshotFlights = flights.slice(0, 20_000);
   const snapshotMilitary = military.slice(0, 20_000);
   return {
@@ -4779,7 +4834,6 @@ async function withAwareness(harness, run) {
     aircraftSnapshot: awareness.getAircraftQuerySnapshot,
     flightsNearby: flightsLayer.getNearby,
     militaryNearby: militaryLayer.getNearby,
-    cartoFrom: Cesium.Cartographic.fromCartesian,
   };
   awareness.getContextSnapshot = () => harness.snapshot;
   awareness.getAircraftQuerySnapshot = () => {
@@ -4812,14 +4866,6 @@ async function withAwareness(harness, run) {
   };
   flightsLayer.getNearby = () => harness.flights.slice();
   militaryLayer.getNearby = () => harness.military.slice();
-  Cesium.Cartographic.fromCartesian = (value) =>
-    value?.__subject
-      ? {
-          latitude: Cesium.Math.toRadians(29.9),
-          longitude: Cesium.Math.toRadians(-97.9),
-          height: 9000,
-        }
-      : originals.cartoFrom(value);
   try {
     return await run(awareness);
   } finally {
@@ -4827,7 +4873,6 @@ async function withAwareness(harness, run) {
     awareness.getAircraftQuerySnapshot = originals.aircraftSnapshot;
     flightsLayer.getNearby = originals.flightsNearby;
     militaryLayer.getNearby = originals.militaryNearby;
-    Cesium.Cartographic.fromCartesian = originals.cartoFrom;
   }
 }
 
@@ -5184,7 +5229,10 @@ test('voice Radio: a key that geocodes to nothing still places the station, keyl
   installKeyedFetch(t, async (url) => {
     requests.push(String(url));
     if (String(url).startsWith('/api/google/geocode')) {
-      return { ok: true, json: async () => ({ status: 'ZERO_RESULTS', results: [] }) };
+      return {
+        ok: true,
+        json: async () => ({ status: 'ZERO_RESULTS', results: [] }),
+      };
     }
     assert.match(String(url), /^https:\/\/photon\.komoot\.io\/api\/\?/);
     return {
@@ -5215,8 +5263,14 @@ test('voice Radio: a key that geocodes to nothing still places the station, keyl
   assert.ok(Math.abs(calls[0].criteria.anchor.lat - 20.9101) < 1e-9);
   assert.ok(Math.abs(calls[0].criteria.anchor.lon - 107.1839) < 1e-9);
   // Google is asked first and exactly once; Photon answers unbiased, in one call.
-  assert.equal(requests.filter((url) => url.includes('/api/google/geocode')).length, 1);
-  assert.equal(requests.filter((url) => url.includes('photon.komoot.io')).length, 1);
+  assert.equal(
+    requests.filter((url) => url.includes('/api/google/geocode')).length,
+    1,
+  );
+  assert.equal(
+    requests.filter((url) => url.includes('photon.komoot.io')).length,
+    1,
+  );
   assert.match(requests.at(-1), /[?&]q=H%E1%BA%A1\+Long\+Bay/);
   assert.doesNotMatch(
     requests.at(-1),
@@ -5232,14 +5286,26 @@ test('voice Radio: the keyless path applies no country filter the keyed path wou
   // "No Radio station matched" for exactly the places it just resolved, while a
   // keyed install placed a station. The label may carry it; the filter may not.
   const { calls, dataManager } = radioSelectionHarness();
-  installKeyedFetch(t, async (url) => (String(url).startsWith('/api/google/geocode')
-    ? { ok: true, json: async () => ({ status: 'ZERO_RESULTS', results: [] }) }
-    : {
-      ok: true,
-      json: async () => ({
-        features: [photonFeature({ name: 'Kraków', lat: 50.0614, lon: 19.9366, country: 'Polska' })],
-      }),
-    }));
+  installKeyedFetch(t, async (url) =>
+    String(url).startsWith('/api/google/geocode')
+      ? {
+          ok: true,
+          json: async () => ({ status: 'ZERO_RESULTS', results: [] }),
+        }
+      : {
+          ok: true,
+          json: async () => ({
+            features: [
+              photonFeature({
+                name: 'Kraków',
+                lat: 50.0614,
+                lon: 19.9366,
+                country: 'Polska',
+              }),
+            ],
+          }),
+        },
+  );
 
   const result = await controlRadio({}, dataManager, {
     action: 'select',
@@ -5268,8 +5334,15 @@ const testPlaceSearch = () =>
   createStandalonePlaceSearch({
     resolveApiKey: () => globalThis.window?.__GOOGLE_MAPS_API_KEY__,
   });
+/** Fake viewers with a fake Cesium camera reach the renderer's camera port too. */
+const withCameraPort = (viewer) =>
+  viewer?.camera ? bindFakeCesiumCamera(viewer) : viewer;
 function createGevActionRunner(options) {
-  return createActionRunner({ placeSearch: testPlaceSearch(), ...options });
+  return createActionRunner({
+    placeSearch: testPlaceSearch(),
+    ...options,
+    viewer: withCameraPort(options?.viewer),
+  });
 }
 function controlRadio(viewer, manager, args, options) {
   return runControlRadio(viewer, manager, args, {
@@ -5328,22 +5401,48 @@ test('ALPR common names toggle only the registered camera layer through the norm
 });
 
 test('GNSS integrity and interference common names toggle only the GNSS layer through the normal voice action', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
-  const viewer = { clock: { onTick: { addEventListener: () => () => {} } },
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const viewer = {
+    clock: { onTick: { addEventListener: () => () => {} } },
     scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } } };
+    camera: { moveEnd: { addEventListener() {} } },
+  };
   const calls = [];
   let enabled = false;
   const dataManager = {
     layers: new Map([['gnss-integrity', { module: {} }]]),
     getAll: () => [{ id: 'gnss-integrity', name: 'GNSS Integrity' }],
     isEnabled: () => enabled,
-    setEnabled: async (id, value) => { calls.push([id, value]); enabled = value; return true; },
+    setEnabled: async (id, value) => {
+      calls.push([id, value]);
+      enabled = value;
+      return true;
+    },
   };
-  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager });
-  for (const alias of ['gnss-integrity', 'gnss integrity', 'navigation integrity', 'low navigation accuracy', 'gnss interference', 'gps interference', 'gps jamming', 'gnss']) {
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager: {},
+    dataManager,
+  });
+  for (const alias of [
+    'gnss-integrity',
+    'gnss integrity',
+    'navigation integrity',
+    'low navigation accuracy',
+    'gnss interference',
+    'gps interference',
+    'gps jamming',
+    'gnss',
+  ]) {
     for (const value of [true, false]) {
-      const result = await runner('set_layer_visibility', { layerId: alias, enabled: value });
+      const result = await runner('set_layer_visibility', {
+        layerId: alias,
+        enabled: value,
+      });
       assert.equal(result.ok, true);
       assert.equal(result.layerId, 'gnss-integrity');
       assert.deepEqual(calls.at(-1), ['gnss-integrity', value]);
@@ -5707,7 +5806,11 @@ test('analyst_query refusals carry their code and the allowed values', async () 
 });
 
 test('analyst_query keeps its answer when one record has an out-of-range time', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const now = Date.now();
   const earthquakes = {
     getStats: () => ({ count: 2, lastUpdate: now }),
@@ -5716,8 +5819,14 @@ test('analyst_query keeps its answer when one record has an out-of-range time', 
       { id: 'r', lat: 1, lon: 1, magnitude: 4, timeMs: 8.64e15 + 1 },
     ],
   };
-  const { runner } = manifestRunner({ earthquakes }, { enabled: ['earthquakes'] });
-  const result = await runner('analyst_query', { layers: ['earthquakes'], scope: { kind: 'anywhere' } });
+  const { runner } = manifestRunner(
+    { earthquakes },
+    { enabled: ['earthquakes'] },
+  );
+  const result = await runner('analyst_query', {
+    layers: ['earthquakes'],
+    scope: { kind: 'anywhere' },
+  });
   assert.equal(result.ok, true);
   const q = result.items.find((item) => item.id === 'q');
   assert.match(q.time, /^\d{4}-\d\d-\d\dT/);
@@ -6160,14 +6269,30 @@ test('an analyst follow-up on OSM places keeps the area they were found in', asy
       ok: true,
       truncated: false,
       features: [
-        { id: 'node/1', lat: 0.5, lon: 0.5, tags: { name: 'North Hospital', emergency: 'yes' } },
-        { id: 'node/2', lat: 0.4, lon: 0.6, tags: { name: 'South Hospital', emergency: 'no' } },
+        {
+          id: 'node/1',
+          lat: 0.5,
+          lon: 0.5,
+          tags: { name: 'North Hospital', emergency: 'yes' },
+        },
+        {
+          id: 'node/2',
+          lat: 0.4,
+          lon: 0.6,
+          tags: { name: 'South Hospital', emergency: 'no' },
+        },
       ],
     }),
   });
-  const area = await runner('resolve_area', { query: 'Test Province', level: 'admin1' });
+  const area = await runner('resolve_area', {
+    query: 'Test Province',
+    level: 'admin1',
+  });
   assert.equal(area.ok, true);
-  const found = await runner('osm_query', { what: 'hospitals', areaId: area.areaId });
+  const found = await runner('osm_query', {
+    what: 'hospitals',
+    areaId: area.areaId,
+  });
   assert.equal(found.ok, true, found.error);
   assert.equal(found.count, 2);
   const followUp = await runner('analyst_query', {
@@ -6490,37 +6615,59 @@ test('point-and-ask: only accepted, current results become the referent list', a
   assert.equal(tracked, 1);
 });
 
-
 test('numbered analyst records navigate using the current layer accessor', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const { viewer, styleManager } = createVoiceNavigationHarness();
   const referents = createReferentRegistry();
   let enabled = true;
-  let records = [{ id: 'congress', name: 'Congress station', lat: 30.27, lon: -97.74 }];
+  let records = [
+    { id: 'congress', name: 'Congress station', lat: 30.27, lon: -97.74 },
+  ];
   const runner = createActionRunner({
-    viewer, styleManager,
+    viewer,
+    styleManager,
     dataManager: {
-      layers: new Map([['bikeshare', { module: { getAnalystRecords: () => records } }]]),
+      layers: new Map([
+        ['bikeshare', { module: { getAnalystRecords: () => records } }],
+      ]),
       isEnabled: () => enabled,
       getAll: () => [],
     },
     deixis: { referents },
   });
-  referents.recordResult('analyst_query', { ok: true, items: [{ ...records[0], layerKey: 'bikeshare' }] });
+  referents.recordResult('analyst_query', {
+    ok: true,
+    items: [{ ...records[0], layerKey: 'bikeshare' }],
+  });
   const result = await runner('fly_to_location', { referent: 1 });
   assert.equal(result.ok, true);
   assert.equal(result.latitude, 30.27);
   assert.equal(result.longitude, -97.74);
   enabled = false;
-  assert.equal((await runner('fly_to_location', { referent: 1 })).ok, false, 'disabled records cannot be revisited');
+  assert.equal(
+    (await runner('fly_to_location', { referent: 1 })).ok,
+    false,
+    'disabled records cannot be revisited',
+  );
   enabled = true;
   records = [];
-  assert.equal((await runner('fly_to_location', { referent: 1 })).ok, false, 'removed records are not resurrected');
+  assert.equal(
+    (await runner('fly_to_location', { referent: 1 })).ok,
+    false,
+    'removed records are not resurrected',
+  );
 });
 
-
 test('analyst-only lookup distinguishes duplicate names and uses canonical aircraft IDs', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const { viewer, styleManager } = createVoiceNavigationHarness();
   const referents = createReferentRegistry();
   const stations = [
@@ -6529,28 +6676,44 @@ test('analyst-only lookup distinguishes duplicate names and uses canonical aircr
   ];
   const aircraft = [{ id: 'UAL1', icao24: 'abc123', lat: 35, lon: -100 }];
   const runner = createActionRunner({
-    viewer, styleManager,
+    viewer,
+    styleManager,
     dataManager: {
       layers: new Map([
         ['bikeshare', { module: { getAnalystRecords: () => stations } }],
         ['local-adsb', { module: { getAnalystRecords: () => aircraft } }],
       ]),
-      isEnabled: () => true, getAll: () => [],
+      isEnabled: () => true,
+      getAll: () => [],
     },
     deixis: { referents },
   });
-  referents.recordResult('analyst_query', { ok: true, items: stations.map(row => ({ ...row, layerKey: 'bikeshare' })) });
+  referents.recordResult('analyst_query', {
+    ok: true,
+    items: stations.map((row) => ({ ...row, layerKey: 'bikeshare' })),
+  });
   const station = await runner('fly_to_location', { referent: 2 });
   assert.equal(station.ok, true);
   assert.equal(station.latitude, 40);
   assert.equal(station.longitude, -74);
   stations.pop();
-  assert.equal((await runner('fly_to_location', { referent: 2 })).ok, false, 'a removed station must not resolve to its remaining namesake');
-  referents.recordResult('analyst_query', { ok: true, items: aircraft.map(row => ({ ...row, layerKey: 'local-adsb' })) });
+  assert.equal(
+    (await runner('fly_to_location', { referent: 2 })).ok,
+    false,
+    'a removed station must not resolve to its remaining namesake',
+  );
+  referents.recordResult('analyst_query', {
+    ok: true,
+    items: aircraft.map((row) => ({ ...row, layerKey: 'local-adsb' })),
+  });
   aircraft[0].lat = 36;
   const plane = await runner('fly_to_location', { referent: 1 });
   assert.equal(plane.ok, true);
-  assert.equal(plane.latitude, 36, 'canonical ID resolves the current position, not old coordinates');
+  assert.equal(
+    plane.latitude,
+    36,
+    'canonical ID resolves the current position, not old coordinates',
+  );
 });
 
 /** A Street Level layer stub, a map stack and a data manager for show_street_level. */
@@ -7207,10 +7370,17 @@ test('set_panel_open accepts the Authoring name for the scene panel', async () =
     styleManager: {
       setPanelCollapsed: (...args) => calls.push(args),
     },
-    dataManager: { layers: new Map(), isEnabled: () => false, getAll: () => [] },
+    dataManager: {
+      layers: new Map(),
+      isEnabled: () => false,
+      getAll: () => [],
+    },
   });
   for (const panel of ['authoring', 'Authoring', 'scenes']) {
-    const result = await runner('set_panel_open', { panelId: panel, open: true });
+    const result = await runner('set_panel_open', {
+      panelId: panel,
+      open: true,
+    });
     assert.equal(result.panelId, 'scene-panel');
   }
   assert.deepEqual(calls.at(-1), ['scene-panel', false, { explicit: true }]);
@@ -7230,13 +7400,24 @@ test('set_panel_open reaches the Utilities panel by its name, Draw or Import', a
     styleManager: {
       setPanelCollapsed: (...args) => calls.push(args),
     },
-    dataManager: { layers: new Map(), isEnabled: () => false, getAll: () => [] },
+    dataManager: {
+      layers: new Map(),
+      isEnabled: () => false,
+      getAll: () => [],
+    },
   });
   for (const panel of ['utilities-panel', 'utilities', 'drawing', 'import']) {
-    const result = await runner('set_panel_open', { panelId: panel, open: true });
+    const result = await runner('set_panel_open', {
+      panelId: panel,
+      open: true,
+    });
     assert.equal(result.panelId, 'utilities-panel', panel);
   }
-  assert.deepEqual(calls.at(-1), ['utilities-panel', false, { explicit: true }]);
+  assert.deepEqual(calls.at(-1), [
+    'utilities-panel',
+    false,
+    { explicit: true },
+  ]);
 });
 
 test('a partial analyst card shows one partial chip', () => {

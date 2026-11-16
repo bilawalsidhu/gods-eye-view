@@ -1,6 +1,9 @@
+import { cameraOf, findFrame } from '../../render/rendererOf.js';
+import { followedOf } from '../../data/followed.js';
 import { approxDistanceKm as _approxDistanceKm } from './recordPolicy.js';
 import { displayedKinematics } from '../../data/motionModel.js';
-import * as Cesium from 'cesium';
+import { toLonLatH } from '../../geo/ellipsoid.js';
+import { clone, distance as distanceBetween, vec } from '../../geo/vector.js';
 import { isExplicitLayerStateOrigin } from '../../data/layerState.js';
 import { modelVisualAnchor } from '../../data/modelVisualAnchor.js';
 import {
@@ -14,6 +17,7 @@ import {
   LANDED_SPEED_MAX_MPS,
   FOCUS_EVIDENCE_DEV,
   FLEET_DR_INTERVAL_MS,
+  POLL_INTERVAL_MS,
   followsClock,
 } from './policy.js';
 import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
@@ -29,7 +33,6 @@ export function createQueries({
     services.aircraftPresentation;
   const { formatFlightLevel } = services.labels;
   const { isMilitaryIcao } = services.militaryRegistry;
-  const { applyTrackedCameraFrame } = services.camera;
   const {
     setFocusDeemphasisParams,
     getFocusDeemphasisParams,
@@ -99,7 +102,7 @@ export function createQueries({
    * airframe itself and cannot go stale the way a leg can.
    *
    * This is a DISPLAY string only. Identity everywhere in this layer is `icao24`
-   * (the `_billboards`/`_flightData` key, the `sourceId` detection declutter hashes,
+   * (the `_icons`/`_flightData` key, the `sourceId` detection declutter hashes,
    * the `id` that trackById/Context cohorts resolve) — never the label.
    * @param {string} icao24 - ICAO 24-bit transponder address (the identity key).
    * @param {Object|null|undefined} info - `_flightData` record for this aircraft.
@@ -116,7 +119,7 @@ export function createQueries({
    * Build a public descriptor for one aircraft using its best current position
    * (dead-reckoned when history exists, billboard position otherwise).
    * @param {string} icao24 - ICAO 24-bit transponder address.
-   * @returns {{icao24: string, callsign: string|null, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null, verticalRateMps: number|null}|null}
+   * @returns {{icao24: string, callsign: string|null, position: {x: number, y: number, z: number}, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null, verticalRateMps: number|null}|null}
    *   Descriptor with a cloned position, or null if the aircraft is unknown.
    */
 
@@ -134,9 +137,9 @@ export function createQueries({
     // every visual consumer reads the floored per-frame cache instead (see
     // `_trackedDisplayPosition`). If that ever changes, floor this path too.
     const info = flightState.records.data.get(icao24);
-    const bb = flightState._billboards.get(icao24);
     const basePos =
-      parts.motion._deadReckon(icao24) || (bb ? bb.position : null);
+      parts.motion._deadReckon(icao24) ||
+      parts.icons._iconPosition(icao24, vec());
     if (!basePos) return null;
     const displayed = displayedKinematics({
       derivedSpeedMps: flightState._drSpeedMps,
@@ -144,18 +147,14 @@ export function createQueries({
       reportedSpeedMps: info?.velocity,
       reportedTrackDeg: info?.true_track,
     });
-    const carto = Cesium.Cartographic.fromCartesian(
-      basePos,
-      Cesium.Ellipsoid.WGS84,
-      flightState._scratchCarto,
-    );
+    const carto = toLonLatH(basePos);
     if (!carto) return null;
     return {
       icao24,
       callsign: String(info?.callsign || '').trim() || null,
-      position: Cesium.Cartesian3.clone(basePos),
-      latitude: Cesium.Math.toDegrees(carto.latitude),
-      longitude: Cesium.Math.toDegrees(carto.longitude),
+      position: clone(basePos),
+      latitude: carto.lat,
+      longitude: carto.lon,
       // The cockpit instrument reports aviation altitude, not the Cesium
       // ellipsoid height of the camera/ground-clamped render position. The
       // latter can be slightly negative over terrain near the surface.
@@ -313,14 +312,14 @@ export function createQueries({
       parts.testing._clearDisplayFloorStateForTest,
 
     /** @type {number} Polling interval (ms) between update() calls */
-    updateInterval: 30000,
+    updateInterval: POLL_INTERVAL_MS,
 
     /**
      * Live layer params.
      * `models3d` toggles 3D glTF model rendering for the FLEET (altitude-gated): when on,
      * surrounding aircraft become 3D models once the camera is zoomed in past MODEL_ALT_CEIL_M.
-     * The TRACKED contact is NOT gated by this — it takes its 3D model by camera distance
-     * regardless (see `_trackedModelRegimeActive` / trackedModelRegime.js).
+     * The TRACKED contact follows the same rule (`_trackedModelRegimeActive`), so selecting
+     * a contact never turns its icon into a model or its model into an icon.
      * `models3dMode` is 'proximity' (nearest MODEL_MAX in view) or 'all' (every in-view plane).
      * @param {{models3d?: boolean, models3dMode?: 'proximity'|'all', selectedFlightsTrackingId?: string|null}} params
      */
@@ -339,13 +338,8 @@ export function createQueries({
         if (!flightState._models3dEnabled) {
           parts.rendering._releaseModels();
           parts.tracking._syncTracked2dRotation();
-          // Restore fleet billboards (the horizon-cull pass re-asserts next tick), but NEVER the
-          // tracked plane's own fleet billboard — its tracked entity is the visual, so re-showing it
-          // here would double-image the tracked plane when 3D is turned off mid-track.
-          if (flightState._billboardCollection)
-            for (const [icao, bb] of flightState._billboards) {
-              if (icao !== flightState._trackedIcao) bb.show = true;
-            }
+          // (Releasing the models handed each fleet contact back to its icon, never
+          // the tracked plane's own — its tracked entity is the visual.)
         }
       }
       if (
@@ -425,75 +419,86 @@ export function createQueries({
      * @param {object}  [options]
      * @param {number}  [options.maxCount] - Maximum number of objects to return.
      * @param {number}  [options.seed]     - Deterministic offset into the stride pattern.
-     * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean}>}
+     * @returns {Array<{position: {x: number, y: number, z: number}, id: string, type: string, skipLabel: boolean}>}
      */
     getDetectableObjects(options = {}) {
-      if (
-        !flightState._billboardCollection ||
-        !flightState._billboardCollection.show
-      )
-        return [];
-      // Compute a stride that evenly samples the billboard map.
+      const icons = flightState._icons;
+      if (!icons || !icons.show) return [];
+      // Compute a stride that evenly samples the icon rows.
       // seed shifts the starting offset so successive calls can sample
-      // different aircraft without shuffling the underlying Map order.
+      // different aircraft without reordering the rows.
       const maxCount = Number.isFinite(options.maxCount)
         ? Math.max(1, Math.floor(options.maxCount))
-        : flightState._billboards.size;
+        : icons.count;
       const seed = Number.isFinite(options.seed) ? Math.floor(options.seed) : 0;
-      const stride = Math.max(
-        1,
-        Math.ceil(flightState._billboards.size / maxCount),
-      );
+      const stride = Math.max(1, Math.ceil(icons.count / maxCount));
       const start = seed % stride;
+      const occluder = parts.icons._occluder();
+      const t = parts.icons._displayMs();
 
       const result = [];
-      let idx = 0;
-      for (const [icao24, bb] of flightState._billboards) {
-        const shouldTake = (idx - start) % stride === 0;
-        idx++;
-        if (!shouldTake) continue;
+      const ids = icons.ids();
+      /** One camera and viewport for every model's drawn scale. */
+      let view = null;
+      for (let i = start; i < ids.length; i += stride) {
+        const icao24 = ids[i];
         if (
           flightState._cockpitContactMode &&
           icao24.toLowerCase() === flightState._cockpitSubjectId
         )
           continue;
         const isTracked = icao24 === flightState._trackedIcao;
-        // Keep planes rendered as a 3D model (billboard hidden) so the detection box
-        // doesn't vanish on the 2D→3D handoff; bb.position stays current while hidden.
-        const model = flightState._models.get(icao24) ?? null;
-        const modelOwnsVisual = parts.rendering._modelOwnsVisual(icao24, model);
-        if (!isTracked && !bb.show && !modelOwnsVisual) continue;
+        // Keep planes rendered as a 3D model (icon hidden) so the detection box
+        // doesn't vanish on the 2D→3D handoff.
+        const record = flightState._models.get(icao24) ?? null;
+        const modelOwnsVisual = parts.rendering._modelOwnsVisual(
+          icao24,
+          record,
+        );
+        if (!isTracked && !icons.shown(icao24) && !modelOwnsVisual) continue;
         const info = flightState.records.data.get(icao24);
         let object = flightState._detectionObjects.get(icao24);
         if (!object) {
           object = {
             sourceId: icao24,
             type: 'AIR',
-            _weldPos: new Cesium.Cartesian3(),
+            _weldPos: vec(),
+            _iconPos: vec(),
           };
           flightState._detectionObjects.set(icao24, object);
         }
+
         // WELD: anchor to whatever actually owns the visual. A model-owned contact is
         // read straight off the translation the fleet tick already wrote into its
         // modelMatrix, so bracket and label sit on the aircraft you can see instead of
-        // on the buried billboard position, which for a grounded plane is ~100 m below
+        // on the buried icon position, which for a grounded plane is ~100 m below
         // and rises only as the coarse ground-floor cell warms. Zero extra sampling and
-        // no `_modelDisplayPosition` call from postRender. Sprite-owned contacts keep
-        // `bb.position` — sprite and bracket are co-located there, so association holds.
+        // no `_modelDisplayPosition` call from postRender. Icon-owned contacts keep
+        // the drawn icon position — icon and bracket are co-located there.
         const spec = modelOwnsVisual ? parts.rendering._modelSpec(info) : null;
         const pos = isTracked
-          ? parts.motion._trackedVisualCached() || bb.position
+          ? parts.motion._trackedVisualCached() ||
+            icons.position(icao24, t, object._iconPos)
           : modelOwnsVisual
             ? modelVisualAnchor(
-                model.modelMatrix,
+                record.matrix,
                 spec.visualCenterNative,
-                Number.isFinite(model.computedScale)
-                  ? model.computedScale
-                  : spec.scale,
-                object._weldPos || (object._weldPos = new Cesium.Cartesian3()),
+                parts.rendering._modelDrawnScale(
+                  record,
+                  spec,
+                  (view ??= parts.rendering._drawnScaleView()),
+                ),
+                object._weldPos || (object._weldPos = vec()),
               )
-            : bb.position;
-        if (!pos) continue;
+            : icons.position(icao24, t, object._iconPos);
+        // An icon past the horizon is not drawn, so it is not detectable.
+        if (
+          !pos ||
+          (!isTracked &&
+            !modelOwnsVisual &&
+            !parts.icons._aboveHorizon(pos, occluder))
+        )
+          continue;
         object.position = pos;
         object.skipLabel = isTracked;
         // Card text only — declutter/cohort identity is `object.sourceId` (icao24).
@@ -518,13 +523,9 @@ export function createQueries({
         result.push(object);
         if (result.length >= maxCount) break;
       }
-      if (
-        flightState._detectionObjects.size >
-        flightState._billboards.size + 512
-      ) {
+      if (flightState._detectionObjects.size > icons.count + 512) {
         for (const icao24 of flightState._detectionObjects.keys()) {
-          if (!flightState._billboards.has(icao24))
-            flightState._detectionObjects.delete(icao24);
+          if (!icons.has(icao24)) flightState._detectionObjects.delete(icao24);
         }
       }
       return result;
@@ -535,7 +536,7 @@ export function createQueries({
      * Match priority: exact icao24 hex, exact callsign, callsign prefix,
      * then callsign substring (all case-insensitive, trimmed).
      * @param {string} query - ICAO24 hex or full/partial callsign.
-     * @returns {{icao24: string, callsign: string|null, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null}|null}
+     * @returns {{icao24: string, callsign: string|null, position: {x: number, y: number, z: number}, latitude: number, longitude: number, altitudeM: number, velocityMps: number|null, track: number|null}|null}
      *   Best match with a cloned, dead-reckoned position, or null if none.
      */
     findByQuery(query) {
@@ -576,20 +577,19 @@ export function createQueries({
     /**
      * Find aircraft near a given ECEF position, sorted ascending by distance.
      * Return shape mirrors militaryFlightsLayer.getNearby (id/icao24/position/distance).
-     * @param {Cesium.Cartesian3} center - Reference position in ECEF coordinates.
+     * @param {{x: number, y: number, z: number}} center - Reference position in ECEF coordinates.
      * @param {number} range - Maximum distance in meters (Infinity if not finite).
      * @param {number} [maxCount=50] - Maximum number of results to return.
      * @param {object} [options] Query membership options.
      * @param {boolean} [options.includeHidden=false] Include loaded horizon-hidden aircraft.
-     * @returns {Array<{id: string, icao24: string, callsign: string|null, position: Cesium.Cartesian3, distance: number, aircraftClass: string|null, altitudeM: number|null, velocityMps: number|null, track: number|null}>}
+     * @returns {Array<{id: string, icao24: string, callsign: string|null, position: {x: number, y: number, z: number}, distance: number, aircraftClass: string|null, altitudeM: number|null, velocityMps: number|null, track: number|null}>}
      */
     getNearby(center, range, maxCount = 50, { includeHidden = false } = {}) {
-      if (
-        !center ||
-        !flightState._billboardCollection ||
-        !flightState._billboardCollection.show
-      )
-        return [];
+      const icons = flightState._icons;
+      if (!center || !icons || !icons.show) return [];
+      const occluder = parts.icons._occluder();
+      const t = parts.icons._displayMs();
+      const scratch = flightState._scratchNearbyPos;
 
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
@@ -599,28 +599,28 @@ export function createQueries({
 
       const nearby = [];
 
-      for (const [icao24, bb] of flightState._billboards) {
+      for (const icao24 of icons.ids()) {
         const isTracked = icao24 === flightState._trackedIcao;
-        // Keep planes rendered as a 3D model (billboard hidden) so proximity counts
-        // don't drop to zero on the 2D→3D handoff; bb.position stays current while hidden.
+        const trackedPos = isTracked
+          ? parts.motion._trackedDisplayCached()
+          : null; // cached, no recompute (anti-jitter)
+        const drawn = trackedPos || icons.position(icao24, t, scratch);
+        // Keep planes rendered as a 3D model (icon hidden) so proximity counts
+        // don't drop to zero on the 2D→3D handoff.
         if (
           !aircraftIncludedInNearby({
             isTracked,
-            billboardShown: bb.show,
+            billboardShown:
+              icons.shown(icao24) && parts.icons._aboveHorizon(drawn, occluder),
             modelRendering: parts.rendering._modelOwnsVisual(icao24),
             includeHidden,
           })
         )
           continue;
 
-        const trackedPos = isTracked
-          ? parts.motion._trackedDisplayCached()
-          : null; // cached, no recompute (anti-jitter)
-        const pos = trackedPos || bb.position;
-        if (!pos) continue;
-
-        const distance = Cesium.Cartesian3.distance(center, pos);
+        const distance = distanceBetween(center, drawn);
         if (distance > maxRange) continue;
+        const pos = trackedPos || clone(drawn);
 
         const info = flightState.records.data.get(icao24);
         const callsign = info?.callsign?.trim() || null;
@@ -652,10 +652,10 @@ export function createQueries({
 
     /**
      * Return id/label/position for up to maxCount currently rendered aircraft.
-     * Cheap snapshot for voice-tool framing — billboard positions only, no
-     * dead reckoning and no cloning.
+     * Cheap snapshot for voice-tool framing — drawn icon positions, no
+     * extra dead reckoning.
      * @param {number} [maxCount=500] - Maximum number of entries to return.
-     * @returns {Array<{id: string, label: string, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number}>}
+     * @returns {Array<{id: string, label: string, position: {x: number, y: number, z: number}, latitude: number, longitude: number, altitudeM: number}>}
      */
     /**
      * Whether this layer still carries a contact, in O(1).
@@ -672,47 +672,33 @@ export function createQueries({
      *   holds no data and therefore cannot answer.
      */
     hasContact(icao24) {
-      if (
-        !flightState._billboardCollection ||
-        !flightState._billboardCollection.show ||
-        flightState._billboards.size === 0
-      )
-        return null;
+      const icons = flightState._icons;
+      if (!icons || !icons.show || icons.count === 0) return null;
       if (!icao24) return false;
       const id = String(icao24).trim();
-      return (
-        flightState._billboards.has(id) ||
-        flightState._billboards.has(id.toLowerCase())
-      );
+      return icons.has(id) || icons.has(id.toLowerCase());
     },
 
     getAllPositions(maxCount = 500) {
-      if (
-        !flightState._billboardCollection ||
-        flightState._billboards.size === 0
-      )
-        return [];
+      const icons = flightState._icons;
+      if (!icons || icons.count === 0) return [];
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
         : 500;
+      const t = parts.icons._displayMs();
 
       const result = [];
-      for (const [icao24, bb] of flightState._billboards) {
-        const pos = bb.position;
-        if (!pos) continue;
-        const carto = Cesium.Cartographic.fromCartesian(
-          pos,
-          Cesium.Ellipsoid.WGS84,
-          flightState._scratchCarto,
-        );
+      for (const icao24 of icons.ids()) {
+        const pos = icons.position(icao24, t, vec());
+        const carto = toLonLatH(pos);
         if (!carto) continue;
         const info = flightState.records.data.get(icao24);
         result.push({
           id: icao24, // identity (trackById resolves this)
           label: _contactLabel(icao24, info),
           position: pos,
-          latitude: Cesium.Math.toDegrees(carto.latitude),
-          longitude: Cesium.Math.toDegrees(carto.longitude),
+          latitude: carto.lat,
+          longitude: carto.lon,
           altitudeM: carto.height,
           airline: info?.airline ?? null,
           typeName: info?.typeName ?? null,
@@ -742,11 +728,7 @@ export function createQueries({
      * @returns {Array<Object>} See mapAnalystRecord for the record shape.
      */
     getAnalystRecords(maxCount = 2000) {
-      if (
-        !flightState._billboardCollection ||
-        !flightState._billboardCollection.show ||
-        flightState.records.data.size === 0
-      )
+      if (!flightState._icons?.show || flightState.records.data.size === 0)
         return [];
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
@@ -774,8 +756,8 @@ export function createQueries({
     trackById(icao24, { origin = 'programmatic' } = {}) {
       if (!icao24) return false;
       let id = String(icao24).trim();
-      if (!flightState._billboards.has(id)) id = id.toLowerCase();
-      if (!flightState._billboards.has(id)) return false;
+      if (!flightState._icons?.has(id)) id = id.toLowerCase();
+      if (!flightState._icons?.has(id)) return false;
       if (parts.tracking._isExplicitTrackingOrigin(origin))
         parts.tracking._cancelPendingTrackingRestore();
       if (flightState._trackedIcao === id)
@@ -845,22 +827,16 @@ export function createQueries({
       )
         return false;
       let id = String(icao24).trim();
-      if (!flightState._billboards.has(id)) id = id.toLowerCase();
+      if (!flightState._icons?.has(id)) id = id.toLowerCase();
       if (
         id !== flightState._trackedIcao ||
-        !flightState._viewer.entities?.contains?.(flightState._trackedEntity) ||
-        flightState._viewer.trackedEntity !== flightState._trackedEntity
+        followedOf(flightState._viewer) !== flightState._followTarget
       )
         return false;
-      flightState._trackedCameraFrameStop?.();
-      flightState._viewer.camera.cancelFlight();
-      flightState._viewer.trackedEntity = flightState._trackedEntity;
-      flightState._trackedCameraFrameStop =
-        applyTrackedCameraFrame(
-          flightState._viewer,
-          flightState._trackedEntity,
-          flightState._trackedEntity.viewFrom,
-        ) || null;
+      // Following the same target again frames it afresh.
+      const camera = cameraOf(flightState._viewer);
+      camera.cancelFlight();
+      camera.follow(flightState._followTarget);
       parts.tracking._publishTrackedSelection(id, origin);
       return true;
     },
@@ -896,7 +872,7 @@ export function createQueries({
     /**
      * Return the current aircraft as a Context subject without changing
      * tracking or camera ownership.
-     * @returns {{layerId: string, id: string, label: string, position: Cesium.Cartesian3}|null}
+     * @returns {{layerId: string, id: string, label: string, position: {x: number, y: number, z: number}}|null}
      *   Detached subject descriptor, or null when no aircraft is tracked.
      */
     getTrackedSubject() {
@@ -912,7 +888,7 @@ export function createQueries({
           described.callsign ||
           _toCleanText(described.registration) ||
           described.icao24,
-        position: Cesium.Cartesian3.clone(described.position),
+        position: clone(described.position),
         // The airframe's photo for the Context panel, or null.
         photo: described.photo,
       };
@@ -939,18 +915,14 @@ export function createQueries({
             takeFrameClock(startMs = 1_000_000_000) {
               if (!flightState._viewer || !Number.isFinite(startMs))
                 return { ok: false, nowMs: null };
-              flightState._viewer.useDefaultRenderLoop = false;
+              // The loop stops ticking; evidence frames are drawn by hand.
+              findFrame(flightState._viewer)?.suspend(true);
               setFocusEvidenceNowMs(startMs);
               flightState._lastFleetTickMs = startMs - FLEET_DR_INTERVAL_MS;
-              // Cross a browser task boundary, then close Cesium's pending-loop
-              // latch. Any already-queued callback still observes the false gate,
-              // while manual evidence renders can begin without waiting on VSYNC.
+              // Cross a browser task boundary, so a loop callback already
+              // queued has seen the stopped loop before manual renders begin.
               return new Promise((resolve) =>
-                setTimeout(() => {
-                  if (flightState._viewer?._cesiumWidget)
-                    flightState._viewer._cesiumWidget._renderLoopRunning = false;
-                  resolve({ ok: true, nowMs: startMs });
-                }, 0),
+                setTimeout(() => resolve({ ok: true, nowMs: startMs }), 0),
               );
             },
             advanceFrameClock(deltaMs = FLEET_DR_INTERVAL_MS) {
@@ -959,7 +931,7 @@ export function createQueries({
             releaseFrameClock() {
               setFocusEvidenceNowMs(null);
               if (flightState._viewer)
-                flightState._viewer.useDefaultRenderLoop = true;
+                findFrame(flightState._viewer)?.suspend(false);
             },
           }),
         }

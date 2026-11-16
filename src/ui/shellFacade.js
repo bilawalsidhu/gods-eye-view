@@ -501,14 +501,6 @@ export class ShellFacade {
     return this._visualSettings.sharpenEnabled;
   }
 
-  get _bloomStage() {
-    return this._visualEffects.bloomStage;
-  }
-
-  get _sharpenStage() {
-    return this._visualEffects.sharpenStage;
-  }
-
   /** Settle only the search generation that still owns the shared input UI. */
   _settleLocationSearchUi(generation, options) {
     return this._navigation._settleLocationSearchUi(...arguments);

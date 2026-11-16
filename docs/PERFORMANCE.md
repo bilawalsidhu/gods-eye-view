@@ -34,7 +34,8 @@ hardware-rendered overlay scenes.
 
 These frame rates were measured when the globe was capped at 60 FPS. It now
 draws at the display's refresh rate while anything moves and ticks at most 60
-times a second when parked (`src/renderGovernor.js`).
+times a second when parked (the Cesium frame port's idle rate,
+`IDLE_FRAME_RATE` in `src/renderGovernor.js`).
 
 The initial-settle measurement is the more useful launch reference because it
 includes the first visual and data settling window. All three samples reached

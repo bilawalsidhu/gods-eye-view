@@ -1,29 +1,45 @@
 /** Tracking identity, entry, exit and contact navigation for the Cockpit controller. */
 import { t } from '../i18n/index.js';
+import { cameraOf } from '../render/rendererOf.js';
 import {
   formatHeadingReadout,
   normalizeHeading,
   resolveTrackedAircraftInfo,
 } from '../cockpitMath.js';
 import {
+  followedOf,
+  resumeFollowing,
+  stopFollowing,
+} from '../data/followed.js';
+import { inputFor } from '../input/dispatcher.js';
+import {
   cockpitSubjectCandidate,
   cockpitSubjectFrame,
 } from '../cockpitSubjectProviders.js';
 
-/** The camera's own heading in degrees, or 0 when it has none. */
-function cameraHeadingDeg(camera) {
-  const heading = camera?.heading;
+/**
+ * Whether the aircraft entity Cockpit holds still draws, as its services
+ * say; true when they cannot say.
+ */
+export function trackedEntityDrawn(entity) {
+  const drawn = this.services.trackedEntityDrawn;
+  return typeof drawn === 'function' ? drawn(entity) !== false : true;
+}
+
+/** A camera pose's heading in degrees, or 0 when it has none. */
+function cameraHeadingDeg(pose) {
+  const heading = pose?.heading;
   return Number.isFinite(heading) ? (heading * 180) / Math.PI : 0;
 }
 
 export function readAircraftInfo() {
-  // In cockpit mode the controller takes the entity off `viewer.trackedEntity`
-  // (see update()), so the cockpit's own handle is the tracked identity there.
-  const trackedEntity = this.viewer?.trackedEntity || this.trackedEntity;
+  // In cockpit mode the controller stops the camera following (see enter()),
+  // so the cockpit's own handle is the tracked identity there.
+  const followed = followedOf(this.viewer) || this.trackedFollow;
   return resolveTrackedAircraftInfo({
     civilian: this.services.flightsLayer.getTrackedInfo?.() || null,
     military: this.services.militaryFlightsLayer.getTrackedInfo?.() || null,
-    trackedId: trackedEntity?.gevTrackedId || '',
+    trackedId: followed?.key || '',
   });
 }
 
@@ -139,15 +155,11 @@ export function entryCandidates(nowMs = performance.now()) {
     list.push({ kind, id, seenAtMs: seen.get(kind).atMs, ...entry });
   };
   const aircraft = this.readAircraftInfo();
-  if (aircraft && this.viewer.trackedEntity?.position)
+  const followed = aircraft ? followedOf(this.viewer) : null;
+  if (aircraft && followed?.entity?.position)
     note(
       'aircraft',
-      String(
-        this.viewer.trackedEntity.gevTrackedId ||
-          aircraft.icao24 ||
-          aircraft.id ||
-          'aircraft',
-      ),
+      String(followed.key || aircraft.icao24 || aircraft.id || 'aircraft'),
       {
         order: BUILT_IN_ENTRY_ORDER.aircraft,
         allowed: () => this.isEntryAllowed(),
@@ -211,8 +223,8 @@ export function resolveEntry(nowMs = performance.now()) {
 /**
  * The layer the active view rides: Live AIS Vessels on a bridge, Satellites
  * in orbit, a provider's own layer, else the aircraft's own layer. It is read
- * from the tracked entity's id once the layer has dropped its tracking, so a
- * layer turned off still names itself.
+ * from the followed aircraft's key once the layer has dropped its tracking,
+ * so a layer turned off still names itself.
  * @returns {string|null}
  */
 export function readSubjectLayerId() {
@@ -222,13 +234,13 @@ export function readSubjectLayerId() {
   if (this.subjectKind === 'satellite') return 'satellites';
   const layerId = this.readAircraftInfo()?.layerId;
   if (layerId) return layerId;
-  const [prefix] = String(this.trackedEntity?.gevTrackedId || '').split(':');
+  const [prefix] = String(this.trackedFollow?.key || '').split(':');
   return ['flights', 'military'].includes(prefix) ? prefix : null;
 }
 
 /**
  * The kind entry would take, the first in entry order's (resolveEntry): a
- * Cesium-tracked aircraft, the tracked satellite, the selected vessel or a
+ * followed aircraft, the tracked satellite, the selected vessel or a
  * provider's candidate.
  * @returns {string|null}
  */
@@ -377,8 +389,8 @@ export function navigateContext(direction, options = {}) {
 }
 
 export function _adoptTrackedEntity(nowMs, suppliedInfo = null) {
-  // An aircraft tracked from the bridge, from orbit or from a provider's view
-  // ends that view (see the camera updates); it is never adopted as its
+  // An aircraft followed from the bridge, from orbit or from a provider's
+  // view ends that view (see the camera updates); it is never adopted as its
   // subject.
   if (
     this.subjectKind === 'vessel' ||
@@ -386,7 +398,8 @@ export function _adoptTrackedEntity(nowMs, suppliedInfo = null) {
     this.subjectProvider
   )
     return false;
-  const nextEntity = this.viewer.trackedEntity;
+  const nextFollowed = followedOf(this.viewer);
+  const nextEntity = nextFollowed?.entity;
   if (
     !this.active ||
     !nextEntity?.position ||
@@ -395,13 +408,14 @@ export function _adoptTrackedEntity(nowMs, suppliedInfo = null) {
     return false;
   const info = suppliedInfo || this.readAircraftInfo();
   if (!info) return false;
-  if (this.trackedEntity && this.viewer.entities.contains(this.trackedEntity)) {
+  if (this.trackedEntity && trackedEntityDrawn.call(this, this.trackedEntity)) {
     this.trackedEntity.show = this.trackedEntityWasShown;
   }
   this.trackedEntity = nextEntity;
+  this.trackedFollow = nextFollowed;
   this.trackedEntityWasShown = nextEntity.show;
   nextEntity.show = false;
-  this.viewer.trackedEntity = undefined;
+  stopFollowing(this.viewer);
   this.cockpitAnchorValid = false;
   this.heading = normalizeHeading(info.track ?? 0);
   this.lastFrameMs = nowMs;
@@ -479,7 +493,7 @@ function enterSubject(provider) {
       ? document.activeElement
       : null;
   this.onCameraTakeover?.();
-  this.viewer.camera.cancelFlight();
+  cameraOf(this.viewer).cancelFlight();
   this.subjectKind = provider.kind;
   this.subjectProvider = provider;
   this.subjectId = candidate.id;
@@ -490,7 +504,7 @@ function enterSubject(provider) {
   this.vesselFix = null;
   this.trackedEntity = null;
   this.heading = normalizeHeading(
-    frame.headingDeg ?? cameraHeadingDeg(this.viewer.camera),
+    frame.headingDeg ?? cameraHeadingDeg(cameraOf(this.viewer).pose()),
   );
   this.lastFrameMs = performance.now();
   this.lastCameraUpdateMs = 0;
@@ -507,8 +521,9 @@ function enterSubject(provider) {
   this.resetLook({ immediate: true });
   this.active = true;
   this.services.holdContinuousRender('cockpit');
-  this.viewer.trackedEntity = undefined;
-  this.viewer.scene.screenSpaceCameraController.enableInputs = false;
+  stopFollowing(this.viewer);
+  this.releaseCameraInput?.();
+  this.releaseCameraInput = inputFor(this.viewer).suspendCamera('cockpit');
   document.body.classList.add('cockpit-mode', 'cockpit-subject');
   this._tr3bSignature = null;
   Object.assign(this.presence, {
@@ -575,8 +590,9 @@ export function enter({ kind = null } = {}) {
     : satellite
       ? this.readSatelliteInfo()
       : this.readAircraftInfo();
-  // Only an aircraft is ridden through its Cesium entity.
-  const entity = vessel || satellite ? null : this.viewer.trackedEntity;
+  // Only an aircraft is ridden through the followed entity.
+  const followed = vessel || satellite ? null : followedOf(this.viewer);
+  const entity = followed?.entity ?? null;
   if (!info || (!vessel && !satellite && !entity?.position)) return false;
   this.entryFocusOrigin =
     document.activeElement instanceof HTMLElement
@@ -584,13 +600,14 @@ export function enter({ kind = null } = {}) {
       : null;
   // Retire deferred navigation before cancelFlight can run its callbacks.
   this.onCameraTakeover?.();
-  this.viewer.camera.cancelFlight();
+  cameraOf(this.viewer).cancelFlight();
   this.subjectKind = subjectKind;
   // Each session reads its own water: never a height left from the last.
   this.vesselWaterline = null;
   this.vesselFix = null;
   this.subjectId = vessel ? info.id : satellite ? info.noradId : null;
   this.trackedEntity = entity;
+  this.trackedFollow = followed;
   if (entity) {
     this.trackedEntityWasShown = entity.show;
     entity.show = false;
@@ -607,7 +624,7 @@ export function enter({ kind = null } = {}) {
     Number.isFinite(info.track)
       ? info.track
       : vessel
-        ? cameraHeadingDeg(this.viewer.camera)
+        ? cameraHeadingDeg(cameraOf(this.viewer).pose())
         : 0,
   );
   this.lastFrameMs = performance.now();
@@ -628,8 +645,9 @@ export function enter({ kind = null } = {}) {
   // runs on rendered frames, so idle mode would freeze the cockpit solid.
   // (perf wave 2)
   this.services.holdContinuousRender('cockpit');
-  this.viewer.trackedEntity = undefined;
-  this.viewer.scene.screenSpaceCameraController.enableInputs = false;
+  stopFollowing(this.viewer);
+  this.releaseCameraInput?.();
+  this.releaseCameraInput = inputFor(this.viewer).suspendCamera('cockpit');
   document.body.classList.add('cockpit-mode');
   // Bridge styling reaches surfaces outside the HUD (exit row, side panels).
   if (vessel) document.body.classList.add('cockpit-bridge');
@@ -710,6 +728,7 @@ export function enter({ kind = null } = {}) {
 export function exit({ restoreTracking = true } = {}) {
   if (!this.active) return false;
   const entity = this.trackedEntity;
+  const followed = this.trackedFollow;
   const provider = this.subjectProvider;
   const providerSubject = provider ? this.subjectId : null;
   const vesselSubject = this.subjectKind === 'vessel' ? this.subjectId : null;
@@ -726,6 +745,7 @@ export function exit({ restoreTracking = true } = {}) {
   this.subjectId = null;
   this.services.releaseContinuousRender('cockpit');
   this.trackedEntity = null;
+  this.trackedFollow = null;
   this.heading = null;
   this.resetLook({ immediate: true });
   this.cockpitAnchorValid = false;
@@ -760,9 +780,11 @@ export function exit({ restoreTracking = true } = {}) {
   this.clearPredictiveRoute();
   this.publishRadar(null);
   this.setVisionMode('optical');
-  this.viewer.scene.screenSpaceCameraController.enableInputs = true;
-  if (entity && this.viewer.entities.contains(entity))
-    entity.show = this.trackedEntityWasShown;
+  this.releaseCameraInput?.();
+  this.releaseCameraInput = null;
+  const present = () =>
+    Boolean(entity) && trackedEntityDrawn.call(this, entity);
+  if (present()) entity.show = this.trackedEntityWasShown;
   this.trackedEntityWasShown = true;
   if (vesselSubject)
     this.services.aisLiveVesselsLayer?.setCockpitSubject?.(null);
@@ -776,8 +798,8 @@ export function exit({ restoreTracking = true } = {}) {
       { restore: restoreTracking === true },
     ]);
   this.dispatchCockpitModeChanged(false);
-  if (restoreTracking && entity && this.viewer.entities.contains(entity)) {
-    this.viewer.trackedEntity = entity;
+  if (restoreTracking && present()) {
+    resumeFollowing(this.viewer, followed);
     this.restoreTrackingFrame(entity);
   } else if (restoreTracking && vesselSubject) {
     // Back to the selected vessel's map view, through the layer's own focus.

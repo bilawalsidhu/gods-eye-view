@@ -35,7 +35,7 @@ export const ACTIVATION_ENTER_ALTITUDE_M = ACTIVATION_ALTITUDE_M - 150_000;
 export const ACTIVATION_EXIT_ALTITUDE_M = ACTIVATION_ALTITUDE_M + 150_000;
 /** Debounce (ms) for camera-change proximity checks. */
 export const CAMERA_DEBOUNCE_MS = 340;
-/** Camera sensitivity this layer asks for while it is enabled. */
+/** The `changed` threshold this layer's camera listener asks for. */
 export const CAMERA_PERCENTAGE_CHANGED = 0.05;
 /** Extra coverage radius (km) granted to a feed that is already active, so it does not flap at the edge. */
 export const RANGE_SLACK_KM = 40;
@@ -81,7 +81,6 @@ export const FLOOR_REREAD_ATTEMPTS = 6;
 // --- Rendering ---
 /** On-screen glyph size in CSS px at the near end of the distance ramp. */
 export const MARKER_PIXEL_SIZE = 20;
-export const SELECTED_PIXEL_SIZE = 30;
 /**
  * How often the fleet's screen-space rotations may be recomputed. Projecting a
  * course into screen space depends on the camera, so a moving camera would

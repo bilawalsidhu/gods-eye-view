@@ -9,6 +9,8 @@ import { createVoiceAreas, spokenArea } from './areaActions.js';
 import { pointInPreparedArea } from '../data/areaGeometry.js';
 import { presentResult } from './resultDisplay.js';
 import { findAdminCandidates as findBundledAdminCandidates } from '../data/adminBoundaries.js';
+import { bindRenderer } from '../render/rendererOf.js';
+import { fakeCameraPort } from '../testSupport/fakeCameraPort.mjs';
 
 const square = (w, s, e, n) => [
   [w, s],
@@ -312,6 +314,41 @@ test('an ambiguous name returns candidates for the model to ask about', async ()
   assert.equal(picked.ok, true);
   assert.equal(picked.country, 'Pakistan');
   assert.equal(picked.display.source, 'Natural Earth');
+});
+
+test('an ambiguous name is settled by the view: the ground at mid-screen, else where the camera stands', async () => {
+  // Nothing under mid-screen (open sky, no pick): the camera's own position
+  // over the Indian Punjab chooses it.
+  const viewer = {};
+  const camera = fakeCameraPort({ pose: { lon: 75.5, lat: 31 } });
+  bindRenderer(viewer, { camera: camera.port });
+  const { areas } = makeAreas({ viewer });
+  const byCamera = await areas.resolveAreaAction({ query: 'Punjab' });
+  assert.equal(byCamera.ok, true);
+  assert.equal(byCamera.country, 'India');
+
+  // A camera that cannot say where it is settles nothing: the model asks.
+  camera.setPose({ lon: NaN, lat: NaN });
+  const unknown = await areas.resolveAreaAction({ query: 'Punjab' });
+  assert.equal(unknown.needsClarification, true);
+
+  // The ground at mid-screen wins over the camera's position.
+  const pakistan = PUNJABS[1].polygons[0][0];
+  const lon = (pakistan[0][0] + pakistan[1][0]) / 2;
+  const lat = (pakistan[0][1] + pakistan[2][1]) / 2;
+  camera.setPose({ lon: 75.5, lat: 31 });
+  const ladder = fakeLadder();
+  const { areas: picking } = makeAreas({
+    viewer,
+    annotationResolver: {
+      ...ladder,
+      pickWorldFromScreen: (v, x, y) =>
+        v === viewer && x === 0.5 && y === 0.5 ? { lat, lon } : null,
+    },
+  });
+  const byGround = await picking.resolveAreaAction({ query: 'Punjab' });
+  assert.equal(byGround.ok, true);
+  assert.equal(byGround.country, 'Pakistan');
 });
 
 test('names reach the annotation outline ladder with the level as entity kind', async () => {

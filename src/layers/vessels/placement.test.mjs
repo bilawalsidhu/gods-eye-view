@@ -32,6 +32,7 @@ function harness({ placement = null, following = false } = {}) {
     removeRecordPrimitives() {},
     shipIcon: () => 'icon',
     shipScale: () => 1,
+    syncRecordIcon() {},
     updateVisibility() {},
   };
   const renderer = createVesselSnapshotRenderer({
