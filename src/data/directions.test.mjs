@@ -28,6 +28,8 @@ import {
   createApplicationDirectionsLayer,
 } from './directions.js';
 import { GROUND_FLOOR_LIFT_M } from './groundFloor.js';
+import { isActedOnByOtherLayer, isOwnedByOtherLayer } from './pickRegistry.js';
+import { fakeInput } from '../input/testDoubles.mjs';
 import { instructionFor } from './routeSteps.js';
 import { setLocale } from '../i18n/index.js';
 import {
@@ -464,6 +466,45 @@ function ownershipFixture(t) {
     resetPointerOwnership();
   });
 }
+
+// Directions acts only on its maneuver steps. The route line and the A/B
+// markers are passive picks: still not empty space to other layers, but a
+// card painted over them (a quake card) keeps its click.
+test('enabled, directions owns its picks and acts only on its steps', (t) => {
+  ownershipFixture(t);
+  const viewer = {
+    scene: {
+      pick: () => null,
+      canvas: { clientWidth: 100, clientHeight: 100 },
+    },
+  };
+  const input = fakeInput(viewer);
+  t.after(() => input.destroy());
+  directionsLayer.enable(viewer);
+  try {
+    for (const id of [
+      'directions:route',
+      'directions:marker:a',
+      'directions:step:3',
+    ])
+      assert.equal(isOwnedByOtherLayer('earthquakes', id), true, id);
+    assert.equal(
+      isActedOnByOtherLayer('earthquakes', 'directions:route'),
+      false,
+    );
+    assert.equal(
+      isActedOnByOtherLayer('earthquakes', 'directions:marker:a'),
+      false,
+    );
+    assert.equal(
+      isActedOnByOtherLayer('earthquakes', 'directions:step:3'),
+      true,
+    );
+  } finally {
+    directionsLayer.disable(viewer);
+  }
+  assert.equal(isOwnedByOtherLayer('earthquakes', 'directions:route'), false);
+});
 
 test('placing an endpoint takes the pointer, and every exit path gives it back', (t) => {
   ownershipFixture(t);

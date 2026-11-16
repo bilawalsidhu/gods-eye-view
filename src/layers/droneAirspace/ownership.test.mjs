@@ -17,6 +17,7 @@ const liveSet = (draw, suffix) =>
 function harness(source, { pick = () => null, cardHit = () => null } = {}) {
   const overlay = { entries: new Map(), visible: null };
   const owners = new Map();
+  const backgrounds = new Map();
   const viewer = { scene: { pick } };
   const { draw } = bindFakeDraw(viewer);
   const input = fakeInput(viewer);
@@ -47,6 +48,9 @@ function harness(source, { pick = () => null, cardHit = () => null } = {}) {
         String(pickedId).startsWith('other-layer:'),
       registerPickOwner: (layerId, predicate) => owners.set(layerId, predicate),
       unregisterPickOwner: (layerId) => owners.delete(layerId),
+      registerCardBackground: (layerId, predicate) =>
+        backgrounds.set(layerId, predicate),
+      unregisterCardBackground: (layerId) => backgrounds.delete(layerId),
     },
   });
   layer.init(viewer);
@@ -61,6 +65,7 @@ function harness(source, { pick = () => null, cardHit = () => null } = {}) {
     overlay,
     clicks,
     owners,
+    backgrounds,
   };
 }
 
@@ -153,6 +158,8 @@ test("another layer's overlay on top keeps a click off the area", async () => {
     {
       pick: () => pickResult,
       // Unfiltered: the topmost entry of any source.
+      // As the host does: drone-airspace cards are not interactive, so only
+      // another layer's card painted on top is ever hit.
       cardHit: (_x, _y, options) =>
         foreignOnTop && !options?.sourceId
           ? { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' }
@@ -171,12 +178,19 @@ test("another layer's overlay on top keeps a click off the area", async () => {
     h.overlay.entries.get('drone-airspace')[0].id,
     'drone-airspace-card:310',
   );
-  // An overlay on top never clears an existing selection either.
+  // An overlay on top covers the selected area's card.
   foreignOnTop = true;
   h.clicks.handler({ position: { x: 10, y: 10 } });
   assert.equal(
     h.overlay.entries.get('drone-airspace')[0].id,
     'drone-airspace-card:310',
+  );
+  pickResult = null;
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(
+    h.overlay.entries.get('drone-airspace')[0].id,
+    'drone-airspace-card:310',
+    'the foreground overlay preserves selection over bare map too',
   );
 });
 
@@ -269,4 +283,22 @@ test('a boundary change alone redraws the zone; identical geometry does not', as
   assert.notEqual(redrawn, first, 'moved boundary must redraw');
   assert.notDeepEqual(redrawn.positions, first.positions);
   assert.ok(h.layer.getAnalystRecords()[0].lon > -76.6);
+});
+
+// A card painted over the area may act there (a live CCTV card): the layer
+// names its own drawn shapes, and only while it takes clicks.
+test('enabled, the zone shapes register as card background', async () => {
+  const h = harness({ getSnapshot: async () => [row] });
+  await h.layer.update(h.viewer);
+  const isBackground = h.backgrounds.get('drone-airspace');
+  const own = {
+    set: h.fills().spec.id,
+    id: 'drone-airspace:310:0',
+    surface: false,
+  };
+  assert.equal(isBackground(own), true);
+  assert.equal(isBackground({ ...own, set: 'other:1:fills' }), false);
+  assert.equal(isBackground({ ...own, id: 'other-layer:x' }), false);
+  h.layer.disable(h.viewer);
+  assert.equal(h.backgrounds.has('drone-airspace'), false);
 });

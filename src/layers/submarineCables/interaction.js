@@ -1,15 +1,40 @@
 import { toRadians } from '../../geo/vector.js';
 import { cameraOf } from '../../render/rendererOf.js';
 
-export function createInteraction({ state, parts, inputFor }) {
+const CARD_BACKGROUND_ID = 'submarine-cables';
+
+export function createInteraction({
+  state,
+  parts,
+  inputFor,
+  overlayHost,
+  picking,
+}) {
   function beginInteraction(viewer) {
     if (state._clickSubscription) return;
-    state._clickSubscription = inputFor(viewer).onClick((event) => {
+    // Our cables stand aside for a card painted over them (below), so that
+    // card's layer may act on the click; without a hit-test they cannot.
+    if (overlayHost?.hitTest)
+      picking?.registerCardBackground?.(
+        CARD_BACKGROUND_ID,
+        (hit) => state._enabled && Boolean(resolvePickRecord(hit)?.reference),
+      );
+    const unsubscribe = inputFor(viewer).onClick((event) => {
       if (!state._enabled) return;
+      // Cable labels are not interactive, so any overlay entry hit here is
+      // another layer's card or label painted over the cable: its click.
+      if (
+        overlayHost?.hitTest?.(event.screenPosition?.x, event.screenPosition?.y)
+      )
+        return;
       const record = resolvePickRecord(event.drawHit);
       if (!record?.reference) return;
       flyToReference(viewer, record.reference);
     });
+    state._clickSubscription = () => {
+      unsubscribe();
+      picking?.unregisterCardBackground?.(CARD_BACKGROUND_ID);
+    };
   }
 
   /**

@@ -23,8 +23,13 @@ export function createLifecycle({
   source,
 }) {
   const { activateCctvCameraFromWorldClick } = services.activation;
-  const { resolvePickId, registerPickOwner, unregisterPickOwner } =
-    services.picking;
+  const {
+    resolvePickId,
+    registerPickOwner,
+    unregisterPickOwner,
+    isOwnedByOtherLayer,
+    isCardBackground,
+  } = services.picking;
   const { onFocusTargetAppear } = services.focus;
   const { releaseContinuousRender } = services.render;
 
@@ -401,23 +406,32 @@ export function createLifecycle({
             );
             return;
           }
-          // Any identified scene object owns this click even if its layer does not
-          // register a shared pick predicate. This keeps selectable siblings ahead
-          // of an overlapping CCTV card while ID-less globe/terrain/tile surfaces
-          // remain eligible for true empty-space deselection.
-          const pickedId = resolvePickId(picked);
-          if (pickedId !== null) return;
-          // Item A (owner round 2): the scene pick found no camera — try the
-          // painted ambient cards. The cards canvas is pointer-events:none (this
-          // handler owns the events), so a click landing on a card's rect selects
-          // its camera exactly like a click on the icon. Click positions
-          // and the recorded rects are both CSS px — direct comparison.
-          const cardId = layerState._cctvOverlayHost.hitTest(
+          // Cards use the last-painted top hit, never an obscured card from
+          // our own source. Actual camera icons above keep their normal route.
+          const cardHit = layerState._cctvOverlayHost.hitTest(
             event.screenPosition.x,
             event.screenPosition.y,
-            { sourceId: CCTV_OVERLAY_SOURCE_ID },
-          )?.entryId;
-          if (cardId && layerState._recordById.has(cardId)) {
+            {},
+          );
+          const cardId =
+            cardHit?.sourceId === CCTV_OVERLAY_SOURCE_ID &&
+            layerState._recordById.has(cardHit.entryId)
+              ? cardHit.entryId
+              : null;
+          const pickedId = resolvePickId(picked);
+          const hit = event.drawHit;
+          // A live top CCTV card acts over shapes whose layers stand aside
+          // for a painted card (drone zones, fire perimeters, quake discs,
+          // cables, launch markers), as each registers them. Unknown
+          // identified objects and registered owners remain barriers.
+          const cardBackground =
+            cardId &&
+            typeof pickedId === 'string' &&
+            !isOwnedByOtherLayer?.('cctv', pickedId) &&
+            Boolean(isCardBackground?.(hit));
+          if (pickedId !== null && !cardBackground) return;
+          if (cardHit && cardHit.sourceId !== CCTV_OVERLAY_SOURCE_ID) return;
+          if (cardId) {
             activateCctvCameraFromWorldClick(
               cardId,
               parts.selection.setActiveCamera,

@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createLifecycle } from './lifecycle.js';
+import { createSelection } from './selection.js';
+import { CCTV_OVERLAY_SOURCE_ID } from '../../data/cctvCards.js';
+import { fakeInput } from '../../input/testDoubles.mjs';
+import * as picking from '../../data/pickRegistry.js';
 import { bindRenderer } from '../../render/rendererOf.js';
 import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
 
@@ -71,4 +75,131 @@ test('the view listeners follow the camera port and let go on teardown', () => {
   lifecycle.detachViewListeners();
   assert.deepEqual(counts(second.camera), [0, 0]);
   assert.equal(state._viewListenerCamera, null);
+});
+
+test('world clicks respect the painted top card and registered card backgrounds', async (t) => {
+  const noop = () => {};
+  const { viewer } = viewerWithCamera();
+  let picked = null;
+  viewer.scene = {
+    canvas: {},
+    pick: () => (picked ? { id: picked } : undefined),
+  };
+  const input = fakeInput(viewer);
+  const ownCard = { sourceId: CCTV_OVERLAY_SOURCE_ID, entryId: 'cam-1' };
+  const foreignCard = {
+    sourceId: 'earthquake-card',
+    entryId: 'earthquake-card:qa',
+  };
+  let painted = [];
+  const actions = [];
+  const state = {
+    _cctvOverlayHost: {
+      hitTest: (_x, _y, options = {}) =>
+        painted.find(
+          (hit) => !options.sourceId || hit.sourceId === options.sourceId,
+        ) ?? null,
+    },
+  };
+  const parts = {
+    calibration: { loadCalibrationStore: () => new Map() },
+    catalog: {
+      loadCameraSources: async () => [],
+      buildCatalogFromSources: () => [],
+      seedCatalog: () => [],
+    },
+    ground: {
+      resolveGroundPriors: async () => [],
+      currentSurfaceRegime: () => 'terrain-globe',
+    },
+    cards: { teardownAmbientCards: noop },
+    projection: { clearProjectionOverlay: noop },
+    geometryQueue: { stopGeometryLoadQueue: noop },
+    rendering: {
+      createCameraIcons: noop,
+      refreshHorizonCulling: () => false,
+      refreshCoverageStyles: noop,
+      extractPickedCameraId: (hit) =>
+        hit?.set === 'cctv:fixture' ? hit.id : null,
+    },
+    hover: { handleHoverMove: noop },
+    health: { syncHealthState: async () => {} },
+    presentation: { notifyListeners: noop },
+  };
+  const services = {
+    sprites: {},
+    focus: {},
+    render: {},
+    picking,
+    activation: { activateCctvCameraFromWorldClick: (id) => actions.push(id) },
+  };
+  parts.selection = createSelection({ state, services, parts });
+  parts.selection.deactivateActiveCamera = () => actions.push('clear');
+  const lifecycle = createLifecycle({ state, services, parts });
+  t.after(() => {
+    state._clickSubscription?.();
+    lifecycle.detachViewListeners();
+    input.destroy();
+    picking.unregisterPickOwner('area-control');
+    picking.unregisterCardBackground('area-fixture');
+  });
+  await lifecycle.methods.init(viewer);
+  state._enabled = true;
+  state._activeCameraId = 'cam-1';
+  state._recordById.set('cam-1', { camera: { id: 'cam-1' } });
+  const click = (hit, cards, expected) => {
+    picked = hit;
+    painted = cards;
+    actions.length = 0;
+    input.tap();
+    assert.deepEqual(actions, expected, JSON.stringify({ hit, cards }));
+  };
+  const drone = {
+    set: 'drone-airspace:1:fills',
+    id: 'drone-airspace:zone:0',
+    surface: false,
+  };
+  const perimeter = {
+    set: 'fire-perimeters:1:lines',
+    id: 'fire-perimeter:incident:0',
+    surface: false,
+  };
+  const quake = { set: 'earthquakes:1', id: 'earthquake:q1', surface: false };
+  const cable = { set: 'submarine-cables:1:lines', id: 'c:0', surface: false };
+  const launch = {
+    set: 'launches:1:markers',
+    id: 'rocket-x:1',
+    surface: false,
+  };
+  const backgrounds = [drone, perimeter, quake, cable, launch];
+  // Each of those layers registers its own shapes this way (their tests
+  // check the real predicates); CCTV only asks the registry.
+  picking.registerCardBackground('area-fixture', (hit) =>
+    backgrounds.some((b) => b.set === hit.set && b.id === hit.id),
+  );
+  for (const area of backgrounds) {
+    click(area, [ownCard], ['cam-1']);
+    click(area, [], []);
+    click(area, [foreignCard, ownCard], []);
+  }
+  for (const hit of [
+    { set: 'flights:1', id: 'aircraft', surface: false },
+    { set: '', id: 'unregistered-local-entity', surface: false },
+    { set: '', id: '', surface: false },
+    { ...drone, set: 'unrelated:1:fills' },
+    { ...drone, id: 'unregistered-local-entity' },
+  ])
+    click(hit, [ownCard], []);
+  picking.registerPickOwner('area-control', (id) => id === drone.id);
+  click(drone, [ownCard], []);
+  picking.unregisterPickOwner('area-control');
+  click(null, [foreignCard, ownCard], []);
+  click(null, [ownCard], ['cam-1']);
+  click(null, [], ['clear']);
+  click(drone, [{ ...ownCard, entryId: 'stale-camera' }], []);
+  click(
+    { set: 'cctv:fixture', id: 'cam-1' },
+    [foreignCard, ownCard],
+    ['cam-1'],
+  );
 });

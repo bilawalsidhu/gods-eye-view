@@ -129,25 +129,26 @@ export function createDroneAirspaceLayer({
     // so claiming these large ground polygons would make FIRMS/vessel/CCTV
     // cards inert anywhere over a zone. Unowned, our picks read as
     // "empty space" to siblings — the same contract as fire perimeters.
+    // Our shapes stand aside for a card painted over them (below), so that
+    // card's layer may act on the click; without a hit-test they cannot.
+    if (overlayHost?.hitTest)
+      picking?.registerCardBackground?.(
+        layer.id,
+        (hit) => pickedZoneId(hit) !== null,
+      );
     _clickSubscription = inputFor(_viewer).onClick((event) => {
       const cardHit = overlayHost.hitTest?.(
         event.screenPosition?.x,
         event.screenPosition?.y,
-        { sourceId: DRONE_AIRSPACE_OVERLAY_SOURCE_ID },
       );
+      // Only the top painted card owns the click; this area's shapes are
+      // background when another layer has painted a card or label over them.
+      if (cardHit && cardHit.sourceId !== DRONE_AIRSPACE_OVERLAY_SOURCE_ID)
+        return;
       if (cardHit && cardHit.entryId === _selectedCardId) return;
       const picked = event.topHit;
       const zoneId = picked ? pickedZoneId(event.drawHit) : null;
       if (zoneId) {
-        // Another layer's card or label painted over the zone (a quake's
-        // card or magnitude label, a fire card) is that layer's click: under
-        // it the zone is background, as it is to siblings, so it stays as is.
-        const top = overlayHost.hitTest?.(
-          event.screenPosition?.x,
-          event.screenPosition?.y,
-          {},
-        );
-        if (top && top.sourceId !== DRONE_AIRSPACE_OVERLAY_SOURCE_ID) return;
         _selectedId = zoneId;
         publishSelectedCard();
         return;
@@ -166,6 +167,7 @@ export function createDroneAirspaceLayer({
   function removeClickHandler() {
     _clickSubscription?.();
     _clickSubscription = null;
+    picking?.unregisterCardBackground?.(layer.id);
   }
 
   function clearSelection() {

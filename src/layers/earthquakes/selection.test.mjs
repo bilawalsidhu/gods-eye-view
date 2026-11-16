@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import * as picking from '../../data/pickRegistry.js';
+// Registers the shared `gev-trail:` owner as passive, as the app does.
+import '../../data/trailRenderer.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
 import { createDroneAirspaceLayer } from '../droneAirspace/index.js';
 import {
@@ -250,12 +252,17 @@ test('a refresh keeps the selected quake while it is in the feed', async () => {
   h.layer.destroy();
 });
 
-test('disable removes the click handler and the card', async () => {
+test('disable removes the click handler, card background and the card', async () => {
   const h = harness([quake('ak1')]);
   h.layer.enable(h.viewer);
   await h.layer.update(h.viewer);
   h.clickDisc('ak1');
+  // A drawn disc is background to a card painted over it (a CCTV card).
+  const disc = { set: h.discs().spec.id, id: 'earthquake:ak1' };
+  assert.equal(picking.isCardBackground(disc), true);
+  assert.equal(picking.isCardBackground({ ...disc, set: 'other:1' }), false);
   h.layer.disable(h.viewer);
+  assert.equal(picking.isCardBackground(disc), false);
   assert.deepEqual(h.lastCard(), []);
   assert.equal(
     h.handlers.every((handler) => handler.destroyed),
@@ -875,6 +882,52 @@ test('quake card and label work over pickable items no layer acts on', async () 
     h.clickOverlayWith(EARTHQUAKE_OVERLAY_SOURCE_ID, 'ak2', decorative[1]);
     assert.equal(h.focused.at(-1)?.id, 'earthquake:ak2', 'the label flies');
   } finally {
+    h.layer.destroy();
+  }
+});
+
+// Flight trails and a directions route line are registered owners that act
+// on no click. Under the quake card or a magnitude label they must not make
+// the click dead; a layer that acts (an aircraft) still takes it.
+test('quake card and label act over a flight trail and a directions route', async () => {
+  const h = harness([quake('ak1'), quake('ak2', { mag: 4 })]);
+  picking.registerPickOwner(
+    'test-directions',
+    (id) => String(id).startsWith('directions:'),
+    { passive: (id) => !id.startsWith('directions:step:') },
+  );
+  picking.registerPickOwner('test-plane', (id) => id === 'plane-9');
+  try {
+    h.layer.enable(h.viewer);
+    await h.layer.update(h.viewer);
+    h.clickDisc('ak1');
+    const trail = { set: 'trail:1:lines', id: 'gev-trail:fl-a1b2c3:head' };
+    const route = { set: 'directions:1:route', id: 'directions:route' };
+    assert.equal(picking.findPickOwner(trail.id), 'trails');
+    h.clickOverlayWith(EARTHQUAKE_CARD_SOURCE_ID, 'earthquake-card:ak1', trail);
+    h.clickOverlayWith(EARTHQUAKE_CARD_SOURCE_ID, 'earthquake-card:ak1', route);
+    assert.equal(h.opened.length, 2, 'the card opens USGS over both');
+    h.clickOverlayWith(EARTHQUAKE_OVERLAY_SOURCE_ID, 'ak2', trail);
+    assert.equal(h.focused.at(-1)?.id, 'earthquake:ak2', 'the label flies');
+    // A route step acts for directions: it takes the click.
+    const focusedBefore = h.focused.length;
+    h.clickOverlayWith(EARTHQUAKE_OVERLAY_SOURCE_ID, 'ak1', {
+      set: 'directions:1:steps',
+      id: 'directions:step:2',
+    });
+    assert.equal(h.focused.length, focusedBefore, 'a step takes the click');
+    // So does an aircraft under the card.
+    h.clickOverlayWith(EARTHQUAKE_CARD_SOURCE_ID, 'earthquake-card:ak2', {
+      set: 'flights:1',
+      id: 'plane-9',
+    });
+    assert.equal(h.opened.length, 2);
+    // A plain click on a trail is still not empty space: the card stays.
+    h.click(trail);
+    assert.equal(h.lastCard()[0].id, 'earthquake-card:ak2');
+  } finally {
+    picking.unregisterPickOwner('test-directions');
+    picking.unregisterPickOwner('test-plane');
     h.layer.destroy();
   }
 });

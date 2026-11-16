@@ -26,6 +26,19 @@ const isSurface = (hit) => !hit || hit.surface === true;
 
 /** @type {Map<string, (pickedId: string) => boolean>} layerId -> ownership predicate */
 const _owners = new Map();
+/**
+ * Owners that claim picks but never act on a click on them (flight trails, a
+ * directions route line): `true` for all of an owner's picks, or a predicate
+ * naming which. Their picks are still not empty space to other layers.
+ * @type {Map<string, true | ((pickedId: string) => boolean)>}
+ */
+const _passive = new Map();
+/**
+ * Layers whose shapes are background to any card painted over them: their
+ * click handlers stand aside under a card, so the card's layer may act there.
+ * @type {Map<string, (hit: import('../render/contract/query').Hit) => boolean>}
+ */
+const _cardBackgrounds = new Map();
 
 /**
  * A hit's canonical pick id, for the ownership scan: its item's id. Layers'
@@ -47,11 +60,17 @@ export function resolvePickId(hit) {
  * @param {string} layerId - Owning layer id (e.g. 'flights').
  * @param {(pickedId: string) => boolean} predicate - Returns true when the
  *   picked primitive/entity id belongs to this layer.
+ * @param {{passive?: boolean | ((pickedId: string) => boolean)}} [options]
+ *   `passive`: the layer never acts on a click on these picks (all of them,
+ *   or those the predicate names). See {@link isActedOnByOtherLayer}.
  * @returns {void}
  */
-export function registerPickOwner(layerId, predicate) {
+export function registerPickOwner(layerId, predicate, { passive } = {}) {
   if (!layerId || typeof predicate !== 'function') return;
   _owners.set(layerId, predicate);
+  if (passive === true || typeof passive === 'function')
+    _passive.set(layerId, passive);
+  else _passive.delete(layerId);
 }
 
 /**
@@ -61,6 +80,7 @@ export function registerPickOwner(layerId, predicate) {
  */
 export function unregisterPickOwner(layerId) {
   _owners.delete(layerId);
+  _passive.delete(layerId);
 }
 
 /**
@@ -92,6 +112,31 @@ export function isOwnedByOtherLayer(layerId, pickedId) {
     if (ownerId === layerId) continue;
     try {
       if (predicate(pickedId)) return true;
+    } catch {
+      // a broken predicate must never break click handling
+    }
+  }
+  return false;
+}
+
+/**
+ * True when some OTHER registered layer owns the picked id and acts on a
+ * click on it: {@link isOwnedByOtherLayer} without passive owners. A card
+ * painted over a passive pick (a flight trail) is still the card's click.
+ * @param {string} layerId - The asking layer's id (excluded from the scan).
+ * @param {string} pickedId - Picked primitive/entity id.
+ * @returns {boolean}
+ */
+export function isActedOnByOtherLayer(layerId, pickedId) {
+  if (!pickedId) return false;
+  for (const [ownerId, predicate] of _owners) {
+    if (ownerId === layerId) continue;
+    try {
+      if (!predicate(pickedId)) continue;
+      const passive = _passive.get(ownerId);
+      if (passive === true) continue;
+      if (typeof passive === 'function' && passive(pickedId)) continue;
+      return true;
     } catch {
       // a broken predicate must never break click handling
     }
@@ -144,4 +189,44 @@ export function pickContact(query, position, options = {}) {
     if (!isSurface(hit)) break;
   }
   return picked;
+}
+
+/**
+ * Registers a layer's unowned shapes that stand aside for a card painted over
+ * them (its click handler returns when a world-overlay entry is on top).
+ * @param {string} layerId - Registering layer id.
+ * @param {(hit: import('../render/contract/query').Hit) => boolean} predicate
+ *   True when a click's draw hit is one of this layer's shapes.
+ * @returns {void}
+ */
+export function registerCardBackground(layerId, predicate) {
+  if (!layerId || typeof predicate !== 'function') return;
+  _cardBackgrounds.set(layerId, predicate);
+}
+
+/**
+ * Removes a layer's card-background predicate (call when its clicks stop).
+ * @param {string} layerId - Registering layer id.
+ * @returns {void}
+ */
+export function unregisterCardBackground(layerId) {
+  _cardBackgrounds.delete(layerId);
+}
+
+/**
+ * True when a click's draw hit is a shape whose layer stands aside for a card
+ * painted over it, so that card may act on the click.
+ * @param {import('../render/contract/query').Hit|null|undefined} hit
+ * @returns {boolean}
+ */
+export function isCardBackground(hit) {
+  if (isSurface(hit)) return false;
+  for (const predicate of _cardBackgrounds.values()) {
+    try {
+      if (predicate(hit)) return true;
+    } catch {
+      // a broken predicate must never break click handling
+    }
+  }
+  return false;
 }

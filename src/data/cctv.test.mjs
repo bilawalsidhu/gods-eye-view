@@ -1024,10 +1024,6 @@ test('CCTV repeated in-world clicks dispatch focus only for the one real activat
   );
   assert.match(
     componentFunctionSource(cctvLayer.init),
-    /sourceId: CCTV_OVERLAY_SOURCE_ID/,
-  );
-  assert.match(
-    componentFunctionSource(cctvLayer.init),
     /activateCctvCameraFromWorldClick\(cameraId, setActiveCamera\)/,
   );
   assert.match(
@@ -1157,11 +1153,8 @@ test('CCTV empty-click gate excludes every identified scene object, ADJUST, and 
   );
 
   const initSource = componentFunctionSource(cctvLayer.init);
-  assert.ok(
-    initSource.indexOf('if (pickedId !== null) return') <
-      initSource.indexOf('_cctvOverlayHost.hitTest'),
-    'every identified sibling must win before an overlapping CCTV card hit test',
-  );
+  // The real init-bound click route, including identified-object barriers,
+  // is exercised in layers/cctv/lifecycle.test.mjs.
   assert.match(initSource, /activeCameraId: _activeCameraId/);
   assert.match(initSource, /calibrationMode: _calibrationMode/);
 });

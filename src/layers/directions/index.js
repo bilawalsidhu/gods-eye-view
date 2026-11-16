@@ -1672,10 +1672,13 @@ export function createDirectionsLayer({ services, source }) {
       _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, true);
       _overlayHost.setVisible(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID, true);
       _installClickHandler(viewer);
+      // Only the maneuver steps act on a click; the route line and the A/B
+      // markers are passive, so a card painted over them keeps its click.
       services.picking.registerPickOwner(
         'directions',
         (pickedId) =>
           typeof pickedId === 'string' && pickedId.startsWith('directions:'),
+        { passive: (pickedId) => !pickedId.startsWith('directions:step:') },
       );
       syncRenderHold();
     },

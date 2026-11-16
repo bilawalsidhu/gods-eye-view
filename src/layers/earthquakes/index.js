@@ -60,7 +60,11 @@ let instances = 0;
  *   the card be clicked).
  * @param {(viewer: object) => {onClick: Function}} [options.input] The
  *   viewer's click dispatcher.
- * @param {{resolvePickId: Function, isOwnedByOtherLayer: Function}} [options.picking]
+ * @param {{resolvePickId: Function, isOwnedByOtherLayer: Function,
+ *   isActedOnByOtherLayer?: Function, registerCardBackground?: Function,
+ *   unregisterCardBackground?: Function}} [options.picking] The pick
+ *   registry; with the card-background pair, a card painted over a disc
+ *   (a CCTV card) may act on the click.
  * @param {{registerEntityContext: Function, selectEntityContext: Function,
  *   clearSelectedEntityContextForLayer: Function,
  *   getContextStore: Function}} [options.context] Shared selection store.
@@ -319,6 +323,14 @@ export function createEarthquakesLayer({
       clicks = null;
     }
     if (!clicks) return;
+    // Our discs stand aside for another layer's card painted over them
+    // (below), so that card's layer may act on the click; without a
+    // hit-test they cannot.
+    if (overlayHost?.hitTest)
+      picking.registerCardBackground?.(
+        EARTHQUAKES_LAYER_ID,
+        (hit) => pickedEvent(hit) !== null,
+      );
     _clickHandler = clicks.onClick((click) => {
       if (!_enabled || (pointer && !pointer.isPointerFree())) return;
       const at = click.screenPosition;
@@ -331,14 +343,16 @@ export function createEarthquakesLayer({
         topEntry.sourceId !== EARTHQUAKE_OVERLAY_SOURCE_ID
       )
         return;
-      // Another layer's pick (an aircraft, a camera) is not this layer's,
-      // even under this layer's card or a magnitude label: that layer acts
-      // on the click itself, and this card stays. Checked before the card
-      // and the labels, as the fire layer does.
+      // Another layer's pick that it acts on (an aircraft, a camera) is not
+      // this layer's, even under this layer's card or a magnitude label:
+      // that layer takes the click, and this card stays. A passive owner's
+      // pick (a flight trail, a directions route) acts for nobody, so the
+      // card or label over it keeps the click.
       const hit = click.hit;
       const pickId = picking.resolvePickId(hit);
-      if (pickId && picking.isOwnedByOtherLayer(EARTHQUAKES_LAYER_ID, pickId))
-        return;
+      const actedOn =
+        picking.isActedOnByOtherLayer ?? picking.isOwnedByOtherLayer;
+      if (pickId && actedOn(EARTHQUAKES_LAYER_ID, pickId)) return;
       const cardHit = overlayHost.hitTest?.(at?.x, at?.y, {
         sourceId: EARTHQUAKE_CARD_SOURCE_ID,
       });
@@ -355,6 +369,10 @@ export function createEarthquakesLayer({
         selectAndFocus(labelHit.entryId);
         return;
       }
+      // A passive owner's pick with nothing of ours over it is still not
+      // empty space: leave the selection alone, as every layer does.
+      if (pickId && picking.isOwnedByOtherLayer(EARTHQUAKES_LAYER_ID, pickId))
+        return;
       const event = pickedEvent(hit);
       if (event) {
         _selectedId = event.stableId;
@@ -383,6 +401,7 @@ export function createEarthquakesLayer({
   function removeClickHandler() {
     _clickHandler?.();
     _clickHandler = null;
+    picking?.unregisterCardBackground?.(EARTHQUAKES_LAYER_ID);
   }
 
   const layer = {

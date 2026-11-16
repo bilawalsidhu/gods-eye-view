@@ -1874,11 +1874,33 @@ layer's card or label is the topmost overlay entry, so a quake card or
 magnitude label over one of them acts once, as the quake's. Items of layers
 that never act on clicks (air-quality stations, traffic lines, OSM places) do
 not block the quake card or labels. A bare area click with nothing painted on
-top still selects the area and clears the quake selection. These rules hold in any
-listener order because world-overlay hit rectangles are what is painted on
+top still selects the area and clears the quake selection. These rules hold in
+any listener order because world-overlay hit rectangles are what is painted on
 screen until the next paint: an overlay change (a click subscriber publishing
 its selection card) no longer clears them mid-click, and a paint that draws
 nothing clears them (`src/overlays/worldOverlay.js`).
+Card consumers resolve the unfiltered top painted entry before acting, so a
+covered vessel, fire, wildlife, news, CCTV, perimeter, ghost-map or shipwreck
+card does not act alongside the card above it; drone-airspace shapes use the
+same top-entry check (their cards are not interactive). A top news or wildlife
+card still acts over another layer's scene item, as before, so a card over a
+flight trail (registered as a no-op for every layer) or a directions route is
+never a dead click. A click on another layer's card does not activate a covered
+card of these layers or clear their selection; a marker of theirs under that
+card is still theirs to select. Flight trails and the directions route line and
+markers are passive pick owners (`registerPickOwner(…, { passive })`): still
+not empty space (`isOwnedByOtherLayer`), but `isActedOnByOtherLayer` leaves
+them out, so the quake card and magnitude labels act over them. Directions
+selects only its maneuver steps, though any other click still clears a selected
+step. Fire, vessel and CCTV cards over a trail or the route stay as they were
+(no action). Submarine cables and rocket launches, whose own overlays are not
+interactive, stand aside when any overlay entry is under the click, so a card
+or label over a cable or a launch marker acts once. Layers whose shapes stand
+aside like this (drone airspace, fire perimeters, quake discs, cables,
+launches) register them with `registerCardBackground`, and a live top CCTV card
+acts over any shape `isCardBackground` names; unknown identified objects and
+registered foreign owners still block it. An empty-map click keeps its existing
+deselection behavior.
 
 Air quality (`./layers/air-quality`) draws its station discs as one renderer
 draw set of ground-clamped fills and reads the view through the camera port; it

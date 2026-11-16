@@ -27,6 +27,7 @@ function harness(
 ) {
   const overlay = { entries: new Map(), visible: null };
   const owners = new Map();
+  const backgrounds = new Map();
   const opened = [];
   const viewer = { scene: { pick } };
   const { draw } = bindFakeDraw(viewer);
@@ -58,6 +59,9 @@ function harness(
         String(pickedId).startsWith('other-layer:'),
       registerPickOwner: (layerId, predicate) => owners.set(layerId, predicate),
       unregisterPickOwner: (layerId) => owners.delete(layerId),
+      registerCardBackground: (layerId, predicate) =>
+        backgrounds.set(layerId, predicate),
+      unregisterCardBackground: (layerId) => backgrounds.delete(layerId),
     },
     inciwebSource: inciwebIndex
       ? { getIndex: async () => inciwebIndex }
@@ -77,6 +81,7 @@ function harness(
     overlay,
     clicks,
     owners,
+    backgrounds,
     opened,
   };
 }
@@ -316,12 +321,16 @@ test('a matched incident card carries the InciWeb line and click-through', async
     },
   ];
   let cardHitResult = null;
+  let foreignOnTop = false;
   const h = harness(
     { getSnapshot: async () => [{ ...row, name: 'Fixture' }] },
     {
       pick: () => null,
       inciwebIndex,
-      cardHit: () => cardHitResult,
+      cardHit: (_x, _y, options) =>
+        foreignOnTop && !options?.sourceId
+          ? { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' }
+          : cardHitResult,
     },
   );
   await h.layer.update(h.viewer);
@@ -336,9 +345,15 @@ test('a matched incident card carries the InciWeb line and click-through', async
   const entries = h.overlay.entries.get('fire-perimeters');
   assert.equal(entries[0].details.at(-1), 'InciWeb ↗ · click card to open');
 
-  // Clicking the card itself opens the InciWeb page.
-  cardHitResult = { entryId: entries[0].id };
+  // A selected card covered by a quake card cannot open its hidden link.
+  cardHitResult = { sourceId: 'fire-perimeters', entryId: entries[0].id };
   h.viewer.scene.pick = () => null;
+  foreignOnTop = true;
+  h.clicks.handler({ position: { x: 12, y: 12 } });
+  assert.deepEqual(h.opened, []);
+  assert.equal(h.overlay.entries.get('fire-perimeters')[0].id, entries[0].id);
+  // Removing the foreground card makes the incident card actionable again.
+  foreignOnTop = false;
   h.clicks.handler({ position: { x: 12, y: 12 } });
   assert.deepEqual(h.opened, ['https://inciweb.wildfire.gov/node/329300']);
   assert.equal(
@@ -365,7 +380,7 @@ test('an unmatched incident renders no InciWeb line and card clicks stay inert',
     entries[0].details.some((line) => line.includes('InciWeb')),
     false,
   );
-  cardHitResult = { entryId: entries[0].id };
+  cardHitResult = { sourceId: 'fire-perimeters', entryId: entries[0].id };
   h.viewer.scene.pick = () => null;
   h.clicks.handler({ position: { x: 12, y: 12 } });
   assert.deepEqual(h.opened, []);
@@ -678,4 +693,22 @@ test('a failed refresh after a stale snapshot reads as the failure, not stale', 
   await h.layer.update(h.viewer);
   assert.equal(h.layer.getStats().stale, false);
   assert.equal(h.layer.getStats().error, 'WFIGS HTTP 502');
+});
+
+// A card painted over the area may act there (a live CCTV card): the layer
+// names its own drawn shapes, and only while it takes clicks.
+test('enabled, the perimeter shapes register as card background', async () => {
+  const h = harness({ getSnapshot: async () => [row] });
+  await h.layer.update(h.viewer);
+  const isBackground = h.backgrounds.get('fire-perimeters');
+  const own = {
+    set: h.fills().spec.id,
+    id: 'fire-perimeter:2026-NMGNF-000123:0',
+    surface: false,
+  };
+  assert.equal(isBackground(own), true);
+  assert.equal(isBackground({ ...own, set: 'other:1:fills' }), false);
+  assert.equal(isBackground({ ...own, id: 'other-layer:x' }), false);
+  h.layer.disable(h.viewer);
+  assert.equal(h.backgrounds.has('fire-perimeters'), false);
 });
