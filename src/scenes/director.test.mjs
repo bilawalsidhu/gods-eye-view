@@ -22,7 +22,11 @@ import { LayerLifecycle } from '../data/lifecycle.js';
 import { SceneDirector } from './director.js';
 import { stringifySceneDocument } from '../director/document.js';
 import { SCENE_TRACKING_PARAM_KEYS } from './scenePolicy.js';
-import { SCENE_RECIPES, getSceneAppendRecipeById } from './recipes.js';
+import {
+  SCENE_APPEND_RECIPES,
+  SCENE_RECIPES,
+  getSceneAppendRecipeById,
+} from './recipes.js';
 import { STORY_TAGS } from './storyTags.js';
 
 const NEPAL_ORIGINAL_SHOT_TITLES = [
@@ -2534,6 +2538,25 @@ test('an import keeps the current scene, else picks a non-built-in scene, else t
       SCENE_RECIPES[0].id,
       'a built-in scene only when there is nothing else',
     );
+    // An appended pack's scene is built in too, as Stories' drafts count it.
+    const [pack] = SCENE_APPEND_RECIPES;
+    const withPack = JSON.stringify({
+      version: 6,
+      scenes: [
+        { ...structuredClone(PROJECT_FIXTURE.scenes[0]), id: pack.id },
+        { ...structuredClone(PROJECT_FIXTURE.scenes[0]), id: 'mine' },
+      ],
+    });
+    director._selectedSceneId = null;
+    assert.equal(
+      await director.importProjectFile({
+        name: 'c.json',
+        text: async () => withPack,
+      }),
+      true,
+    );
+    assert.equal(director._selectedSceneId, 'mine');
+    assert.deepEqual(director.draftScenes().map(({ id }) => id), ['mine']);
   } finally {
     restore();
   }

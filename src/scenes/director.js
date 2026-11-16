@@ -80,6 +80,11 @@ import { sceneSaveFailureReason } from './sceneSaveError.js';
 import { STORY_TAG_LIMIT, STORY_TAGS } from './storyTags.js';
 import { captureStoryThumb } from './storyThumb.js';
 
+/** Scenes GEV ships (recipes and appended packs), as opposed to a person's own. */
+const BUILT_IN_SCENE_IDS = new Set(
+  [...SCENE_RECIPES, ...SCENE_APPEND_RECIPES].map(({ id }) => id),
+);
+
 /** @constant {string} localStorage key for the serialized project */
 const STORAGE_KEY = 'godsEyeView.sceneProject.v2';
 const STORAGE_CHECKPOINT_KEY = 'godsEyeView.sceneProject.checkpoint.v1';
@@ -2078,15 +2083,12 @@ export class SceneDirector {
    * @returns {Array<{id: string, title: string, camera: object, shotCount: number, thumb: string, tags: string[]}>}
    */
   draftScenes() {
-    const builtIn = new Set(
-      [...SCENE_RECIPES, ...SCENE_APPEND_RECIPES].map(({ id }) => id),
-    );
     return this._project.scenes
       .filter(
         (scene) =>
           scene.stories !== true &&
           scene.shots.length > 0 &&
-          !builtIn.has(scene.id),
+          !BUILT_IN_SCENE_IDS.has(scene.id),
       )
       .map((scene) => ({
         id: scene.id,
@@ -2535,11 +2537,10 @@ export class SceneDirector {
       this._storageReadError = null;
       // Keep authoring on the named or current scene, else the first scene
       // that is not a built-in one, else the first scene.
-      const builtIn = new Set(SCENE_RECIPES.map(({ id }) => id));
       const selected =
         project.scenes.find(({ id }) => id === selection?.sceneId) ||
         project.scenes.find(({ id }) => id === this._selectedSceneId) ||
-        project.scenes.find(({ id }) => !builtIn.has(id)) ||
+        project.scenes.find(({ id }) => !BUILT_IN_SCENE_IDS.has(id)) ||
         project.scenes[0] ||
         null;
       this._selectedSceneId = selected?.id ?? null;
