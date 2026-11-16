@@ -1847,12 +1847,17 @@ test('vessel interaction wire: a vessel with an id and no MMSI is selected by cl
  * only publishes rects for `interactive` entries, so a stub returning a hit is
  * the same contract a painted, actionable card presents.
  */
-function hostWithCardHit(entryId) {
+function hostWithCardHit(entryId, topHit) {
   return {
     setEntries() {},
     setVisible() {},
     clearSource() {},
-    hitTest: () => (entryId ? { sourceId: 'ais-live-vessels', entryId } : null),
+    hitTest: (_x, _y, { sourceId } = {}) =>
+      !sourceId && topHit
+        ? topHit
+        : entryId
+          ? { sourceId: 'ais-live-vessels', entryId }
+          : null,
   };
 }
 
@@ -1911,6 +1916,29 @@ test('vessel interaction wire: clicking the selected vessel card refocuses exact
   } finally {
     _setVesselOverlayHostForTest(null);
     harness.cleanup();
+  }
+});
+
+test('vessel interaction wire: a covered card yields while a real vessel pick still focuses', () => {
+  for (const ownPick of [false, true]) {
+    const harness = installWireHarness(ownPick ? { id: makeRecord().mmsi } : null);
+    const requests = [];
+    harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
+      requests.push(event.detail),
+    );
+    _setVesselOverlayHostForTest(
+      hostWithCardHit(`vessel:${harness.record.mmsi}`, {
+        sourceId: 'earthquakes', entryId: 'quake:cover',
+      }),
+    );
+    try {
+      harness.handler.click({ position: { x: 10, y: 20 } });
+      assert.equal(requests.length, ownPick ? 1 : 0);
+      assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
+    } finally {
+      _setVesselOverlayHostForTest(null);
+      harness.cleanup();
+    }
   }
 });
 

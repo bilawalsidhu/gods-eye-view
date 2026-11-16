@@ -21,6 +21,7 @@ function fixture(sighting = row, extraServices = {}) {
   const seen = [];
   const painted = new Set();
   let hit = null;
+  let coveringHit = null;
   let projections = 0;
   let click;
   const state = {
@@ -49,8 +50,12 @@ function fixture(sighting = row, extraServices = {}) {
         setEntries: (id, value) => entries.set(id, value),
         clearSource: (id) => entries.delete(id),
         setVisible() {},
-        hitTest: (_x, _y, { sourceId }) =>
-          hit?.sourceId === sourceId ? hit : null,
+        hitTest: (_x, _y, { sourceId } = {}) =>
+          sourceId
+            ? hit?.sourceId === sourceId
+              ? hit
+              : null
+            : coveringHit || hit,
       },
       now: () => row.observedAt + 60_000,
       project: (_scene, anchor) => {
@@ -93,6 +98,9 @@ function fixture(sighting = row, extraServices = {}) {
         .get(sourceId)
         ?.find((entry) => entry.id === entryId);
       hit = entry ? { sourceId, entryId, entry } : null;
+    },
+    cover(value) {
+      coveringHit = value;
     },
     paint(ids) {
       painted.clear();
@@ -177,6 +185,37 @@ test('selected photo and name cards use the selected lane, select on click and n
       assert.deepEqual(ambient.details, ['© Synthetic Photographer']);
     }
   }
+});
+
+test('a covered sighting label yields; the top label acts over trails and other scene items', () => {
+  const f = fixture(row, {
+    // Registered owners, as the app has them: an aircraft, and the flight
+    // trails every layer reads as a no-op (src/data/trailRenderer.js).
+    picking: {
+      isOwnedByOtherLayer: (_layer, id) =>
+        id === 'other:aircraft' || String(id).startsWith('gev-trail:'),
+    },
+  });
+  f.selection.install();
+  f.selection.refreshAmbient();
+  f.hit('wildlife-sightings-labels', 'wildlife-sightings-label:inat:123');
+  f.click(null);
+  assert.equal(f.flights.length, 1);
+  f.cover({ sourceId: 'earthquakes', entryId: 'quake:cover' });
+  f.click(null);
+  assert.equal(f.flights.length, 1);
+  assert.equal(f.state.selectedRow, row);
+  f.click();
+  assert.equal(f.flights.length, 2, 'an actual sighting remains selectable');
+  f.cover(null);
+  // The top label acts over a flight trail: never a dead click.
+  f.click('gev-trail:fl-a1b2c3:head');
+  assert.equal(f.flights.length, 3, 'the label acts over a flight trail');
+  // And over another layer's scene item, as on main.
+  f.click('other:aircraft');
+  assert.equal(f.flights.length, 4, 'the top label acts');
+  assert.equal(f.state.selectedRow, row);
+  f.selection.remove();
 });
 
 test('nearby duplicate display names yield to painted cards and higher-ranked labels using cached screens', () => {

@@ -1348,10 +1348,10 @@ export function createNewsLayer({
     clickOff = inputFor(viewer).onClick((event) => {
       const at = event?.screenPosition;
       if (!enabled || destroyed || !isPointerFree() || !at) return;
-      const card = hitTestOverlay(at.x, at.y, {
-        sourceId: NEWS_OVERLAY_SOURCE_ID,
-      });
-      if (card?.entry?.activate) {
+      // The topmost painted entry decides: our own card acts; one covered by
+      // another layer's card does not.
+      const card = hitTestOverlay(at.x, at.y);
+      if (card?.sourceId === NEWS_OVERLAY_SOURCE_ID && card.entry?.activate) {
         card.entry.activate();
         return;
       }
@@ -1408,6 +1408,8 @@ export function createNewsLayer({
         return;
       }
       if (id && isOwnedByOtherLayer(NEWS_LAYER_ID, id)) return;
+      // Another layer's card on top is that layer's click, not empty map.
+      if (card) return;
       if (selectedId && !picked?.id) layer.setParams({ clear: true });
     });
   }

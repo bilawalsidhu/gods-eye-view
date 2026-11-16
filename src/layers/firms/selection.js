@@ -49,11 +49,9 @@ export function createSelection({
       const cardHit = overlayHost.hitTest?.(
         event.screenPosition?.x,
         event.screenPosition?.y,
-        {
-          sourceId: FIRMS_OVERLAY_SOURCE_ID,
-        },
       );
       if (cardHit) {
+        if (cardHit.sourceId !== FIRMS_OVERLAY_SOURCE_ID) return;
         const carded = layerState._fireByCardId.get(cardHit.entryId);
         if (carded) selectAndFocusFire(carded);
         return;

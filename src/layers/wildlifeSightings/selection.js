@@ -483,17 +483,10 @@ export function createSelection({ state, services, parts }) {
       if (!state.enabled || services.pointer?.isPointerFree?.() === false)
         return;
       const at = click.screenPosition;
-      const hit =
-        overlay?.hitTest?.(at?.x, at?.y, {
-          sourceId: WILDLIFE_SELECTED_SOURCE_ID,
-        }) ||
-        overlay?.hitTest?.(at?.x, at?.y, {
-          sourceId: WILDLIFE_OVERLAY_SOURCE_ID,
-        }) ||
-        overlay?.hitTest?.(at?.x, at?.y, {
-          sourceId: WILDLIFE_LABEL_SOURCE_ID,
-        });
-      if (hit) {
+      // The topmost painted entry decides: our own card or label acts; one
+      // covered by another layer's card does not.
+      const hit = overlay?.hitTest?.(at?.x, at?.y);
+      if (hit && sourceIds.includes(hit.sourceId)) {
         hit.entry?.activate?.();
         return;
       }
@@ -516,6 +509,8 @@ export function createSelection({ state, services, parts }) {
         services.picking?.isOwnedByOtherLayer?.('wildlife-sightings', id)
       )
         return;
+      // Another layer's card on top is that layer's click, not empty map.
+      if (hit) return;
       clearAndRebuild();
     });
   }

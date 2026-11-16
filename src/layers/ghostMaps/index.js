@@ -710,9 +710,11 @@ export function createGhostMapsLayer({
       const cardHit = overlayHost.hitTest?.(
         event.screenPosition?.x,
         event.screenPosition?.y,
-        { sourceId: GHOSTMAPS_OVERLAY_SOURCE_ID },
       );
-      if (cardHit && cardHit.entryId === _selectedCardId) {
+      if (
+        cardHit?.sourceId === GHOSTMAPS_OVERLAY_SOURCE_ID &&
+        cardHit.entryId === _selectedCardId
+      ) {
         if (_selectedLink && openExternal) openExternal(_selectedLink);
         return;
       }
@@ -729,6 +731,10 @@ export function createGhostMapsLayer({
         if (pickId && picking.isOwnedByOtherLayer(GHOSTMAPS_LAYER_ID, pickId))
           return;
       }
+      // A covered card must neither open its source nor clear the selection.
+      // A marker of ours under that card was already selected by the pick
+      // check before this one.
+      if (cardHit) return;
       if (_selectedKey) {
         clearSelection();
         render();

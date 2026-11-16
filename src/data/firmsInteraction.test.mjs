@@ -58,6 +58,7 @@ function harness({
   fires = [makeFire()],
   picked = null,
   cardHit = null,
+  topCard = null,
   cameraPosition = null,
   withDataSource = false,
   withGlobe = false,
@@ -85,7 +86,12 @@ function harness({
       setEntries: (sourceId, entries) => published.push(...entries),
       setVisible() {},
       clearSource() {},
-      hitTest: () => (cardHit ? { sourceId: 'firms', entryId: cardHit } : null),
+      hitTest: (_x, _y, { sourceId } = {}) =>
+        !sourceId && topCard
+          ? topCard
+          : cardHit
+            ? { sourceId: 'firms', entryId: cardHit }
+            : null,
     },
   });
 
@@ -153,6 +159,9 @@ function harness({
         (record) => record.kind === 'icons' && !record.disposed,
       ),
     click: () => input.click({ x: 400, y: 300 }),
+    cover: (hit) => {
+      topCard = hit;
+    },
     cleanup() {
       Cesium.SceneTransforms.worldToWindowCoordinates = priorProjection;
       if (hadWindow) globalThis.window = priorWindow;
@@ -308,7 +317,11 @@ test('far-side detections cannot consume the bounded ambient-card cohort', () =>
 
 test('clicking a fire sprite selects it and requests the camera transfer', () => {
   const fire = makeFire();
-  const h = harness({ fires: [fire], picked: glowPick('firms-7') });
+  const h = harness({
+    fires: [fire],
+    picked: glowPick('firms-7'),
+    topCard: { sourceId: 'earthquakes', entryId: 'quake:cover' },
+  });
   try {
     h.click();
     assert.equal(h.requests.length, 1);
@@ -350,6 +363,34 @@ test('clicking a fire CARD behaves exactly like clicking its sprite', () => {
     assert.equal(h.requests.length, 1);
     assert.equal(h.requests[0].kind, 'fire');
     assert.equal(h.requests[0].id, fireDetectionKey(fire));
+  } finally {
+    h.cleanup();
+  }
+});
+
+test('a covered fire card does not act, and keeps an existing selection', () => {
+  const fire = makeFire();
+  const h = harness({
+    fires: [fire],
+    cardHit: `fire:${fireDetectionKey(fire)}`,
+  });
+  try {
+    // Covered by another layer's card from the start: nothing selects or flies.
+    h.cover({ sourceId: 'earthquakes', entryId: 'quake:cover' });
+    h.click();
+    assert.equal(h.requests.length, 0);
+    assert.equal(h.layer.getSelectedInfo(), null);
+    // Uncovered, the card selects; covered again, the click is the other
+    // layer's and leaves that selection alone.
+    h.cover(null);
+    h.click();
+    assert.equal(h.requests.length, 1);
+    const selected = h.layer.getSelectedInfo();
+    assert.ok(selected);
+    h.cover({ sourceId: 'earthquakes', entryId: 'quake:cover' });
+    h.click();
+    assert.equal(h.requests.length, 1);
+    assert.deepEqual(h.layer.getSelectedInfo(), selected);
   } finally {
     h.cleanup();
   }

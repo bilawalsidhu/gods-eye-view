@@ -5,6 +5,13 @@ import { fromDegrees } from '../../geo/ellipsoid.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
 import { NEWS_KEY_PROVIDERS, createNewsLayer } from './index.js';
+import {
+  findPickOwner,
+  registerPickOwner,
+  unregisterPickOwner,
+} from '../../data/pickRegistry.js';
+// Registers the shared `gev-trail:` no-op owner, as the app does.
+import '../../data/trailRenderer.js';
 import { getSelectedEntityContext } from '../../data/contextStore.js';
 
 const NOW = Date.parse('2026-10-28T10:00:00Z');
@@ -51,6 +58,7 @@ function fixture(
     now = () => NOW,
     quality,
     pictureCards,
+    hitTestOverlay = () => null,
   } = {},
 ) {
   const calls = { feed: [], hotspots: 0, outline: 0 };
@@ -141,7 +149,7 @@ function fixture(
     source,
     overlayHost,
     inputFor: () => input,
-    hitTestOverlay: () => null,
+    hitTestOverlay,
     now,
     matchMedia: () => ({ matches: reduced }),
     getViewCentre: () => centre(),
@@ -1283,6 +1291,57 @@ test('a click on a marker selects its report, on a beacon chooses its hotspot, o
   });
   layer.disable();
   assert.equal(clickHandlers.size, 0);
+});
+
+test('a covered news card yields; the top news card acts over a flight trail', async (t) => {
+  let hits = [];
+  const { layer, items, entries, click, flights } = fixture(t, {
+    height: 500_000,
+    hitTestOverlay: (_x, _y, { sourceId } = {}) =>
+      hits.find((hit) => !sourceId || hit.sourceId === sourceId) || null,
+  });
+  layer.enable();
+  await layer.update();
+  await flush();
+  const marker = [...items('points'), ...items('icons')].find((item) =>
+    String(item.id).startsWith('news:report:major~'),
+  );
+  click({ set: 'news:1:points', id: marker.id, surface: false });
+  const card = entries.flat().find((entry) => entry.activate);
+  assert.ok(card, 'an actionable news card was published');
+  let activations = 0;
+  const activate = card.activate;
+  card.activate = () => {
+    activations++;
+    return activate();
+  };
+  hits = [
+    { sourceId: 'earthquakes', entryId: 'quake:cover' },
+    { sourceId: 'news', entry: card },
+  ];
+  const before = layer.getRowControls().feed;
+  const flightCount = flights.length;
+  click(null);
+  assert.equal(activations, 0, 'a covered news card does not activate');
+  assert.equal(layer.getRowControls().feed.selected.id, 'major');
+  assert.deepEqual(layer.getRowControls().feed.filters, before.filters);
+  assert.equal(flights.length, flightCount);
+  layer.setParams({ clear: true });
+  click({ set: 'news:1:points', id: marker.id, surface: false });
+  assert.equal(layer.getRowControls().feed.selected.id, 'major');
+  hits.shift();
+  click(null);
+  assert.equal(activations, 1, 'the unobscured news card acts once');
+  // A flight trail is registered so every layer reads a click on it as a
+  // no-op (src/data/trailRenderer.js). Under the top news card it must not
+  // make the card dead.
+  assert.equal(findPickOwner('gev-trail:fl-a1b2c3:head'), 'trails');
+  click({
+    set: 'trail:1:lines',
+    id: 'gev-trail:fl-a1b2c3:head',
+    surface: false,
+  });
+  assert.equal(activations, 2, 'the news card acts over a flight trail');
 });
 
 test('zoomed out, a hotspot is one beacon; off, nothing draws; destroyed, the sets go', async (t) => {

@@ -68,14 +68,12 @@ export function createSelection({
         ? vesselState._vesselOverlayHost.hitTest?.(
             event.screenPosition?.x,
             event.screenPosition?.y,
-            {
-              ...(cycloneBackground
-                ? {}
-                : { sourceId: VESSEL_OVERLAY_SOURCE_ID }),
-            },
           )
         : null;
-      if (cycloneBackground && cardHit?.sourceId !== VESSEL_OVERLAY_SOURCE_ID)
+      if (
+        (cardHit && cardHit.sourceId !== VESSEL_OVERLAY_SOURCE_ID) ||
+        (cycloneBackground && !cardHit)
+      )
         return;
       if (!record && cardHit) {
         const id = String(cardHit.entryId || '').startsWith('vessel:')

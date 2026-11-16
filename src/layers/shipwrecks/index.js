@@ -278,10 +278,11 @@ export function createShipwrecksLayer({
     _clickHandler = clicks.onClick((click) => {
       if (pointer && !pointer.isPointerFree()) return;
       const at = click.screenPosition;
-      const cardHit = overlayHost.hitTest?.(at?.x, at?.y, {
-        sourceId: SHIPWRECKS_OVERLAY_SOURCE_ID,
-      });
-      if (cardHit && cardHit.entryId === _selectedCardId) {
+      const cardHit = overlayHost.hitTest?.(at?.x, at?.y);
+      if (
+        cardHit?.sourceId === SHIPWRECKS_OVERLAY_SOURCE_ID &&
+        cardHit.entryId === _selectedCardId
+      ) {
         if (_selectedLink) openExternal(_selectedLink);
         return;
       }
@@ -299,6 +300,10 @@ export function createShipwrecksLayer({
       }
       if (pickId && picking.isOwnedByOtherLayer(SHIPWRECKS_LAYER_ID, pickId))
         return;
+      // A covered card must neither open its source nor clear the selection.
+      // A marker of ours under that card was already selected by the pick
+      // check before this one.
+      if (cardHit) return;
       if (_selectedId) {
         clearSelection();
         render();

@@ -196,8 +196,9 @@ function harness(
       },
       setVisible: (id, value) => overlay.visible.set(id, value),
       clearSource: (id) => overlay.entries.delete(id),
-      hitTest: (_x, _y, { sourceId }) =>
-        cardHit?.sourceId === sourceId ? cardHit : null,
+      // As the host does: unfiltered, the topmost entry.
+      hitTest: (_x, _y, { sourceId } = {}) =>
+        !sourceId || cardHit?.sourceId === sourceId ? cardHit : null,
     },
     input: () => ({
       onClick(fn) {

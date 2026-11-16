@@ -36,7 +36,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-function harness({ snapshots, now = () => 1 } = {}) {
+function harness({ snapshots, now = () => 1, cardHit = () => null } = {}) {
   const cards = [];
   const handlers = [];
   const opened = [];
@@ -59,7 +59,7 @@ function harness({ snapshots, now = () => 1 } = {}) {
     overlayHost: {
       setEntries: (_source, entries) => cards.push(entries),
       setVisible() {},
-      hitTest: () => null,
+      hitTest: cardHit,
     },
     // The globe's clicks: one listener per click handler installed.
     input: () => ({
@@ -392,4 +392,46 @@ test('the page deadline subtracts the newest available source age from the limit
     'an unavailable source does not count',
   );
   assert.equal(snapshotDeadline({ sources: both }, 0), 7 * DAY, 'defaults');
+});
+
+test('a covered selected card yields while genuine wreck markers still select', async () => {
+  let painted = [];
+  const h = harness({
+    snapshots: [
+      snapshot([
+        wreck('a', { url: 'https://example.com/a' }),
+        wreck('b', { url: 'https://example.com/b' }),
+      ]),
+    ],
+    cardHit: (_x, _y, { sourceId } = {}) =>
+      painted.find((hit) => !sourceId || hit.sourceId === sourceId) ?? null,
+  });
+  try {
+    h.layer.enable();
+    await h.layer.update();
+    const click = () => h.handlers[0].click({ screenPosition: { x: 1, y: 1 } });
+    h.pick('a');
+    click();
+    const first = h.lastCard()[0];
+    painted = [
+      { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' },
+      { sourceId: 'shipwrecks', entryId: first.id },
+    ];
+    h.pick(null);
+    click();
+    assert.deepEqual(h.opened, []);
+    assert.equal(h.lastCard()[0].id, first.id);
+    h.pick('b');
+    click();
+    assert.equal(h.lastCard()[0].id, 'shipwreck-card:b');
+    painted = [{ sourceId: 'shipwrecks', entryId: 'shipwreck-card:b' }];
+    h.pick(null);
+    click();
+    assert.deepEqual(h.opened, ['https://example.com/b']);
+    painted = [];
+    click();
+    assert.deepEqual(h.lastCard(), [], 'bare map still clears the selection');
+  } finally {
+    h.layer.destroy();
+  }
 });
