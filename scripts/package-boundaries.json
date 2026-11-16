@@ -250,7 +250,33 @@
       "src/ui/stores/worldTime.js",
       "src/ui/views/panels/WorldTimeline.vue",
       "src/ui/surfaceKeyboard.js",
-      "src/scenes/storyTags.js"
+      "src/scenes/storyTags.js",
+      "src/ui/contextLayerTabs.js",
+      "src/ui/contextSearch.js",
+      "src/ui/layerNames.js",
+      "src/ui/views/panels/AltitudeGraph.vue",
+      "src/ui/stores/omnibar.js",
+      "src/ui/views/panels/SunDial.vue",
+      "src/ui/views/panels/CctvPreview.vue",
+      "src/data/contextStore.js",
+      "src/data/entityContext.js",
+      "src/ui/stores/entityCard.js",
+      "src/ui/contextRadius.js",
+      "src/layers/firms/source.js",
+      "src/layers/earthquakes/records.js",
+      "src/ui/views/panels/ViewContext.vue",
+      "src/layers/earthquakes/source.js",
+      "src/layers/cyclones/source.js",
+      "src/i18n/marker.js",
+      "src/sources/httpBody.js",
+      "src/layers/perimeters/source.js",
+      "src/ui/spotConditions.js",
+      "src/ui/views/panels/SpotConditions.vue",
+      "src/data/wikidataCities.js",
+      "src/ui/views/panels/EntityCard.vue",
+      "src/data/aircraftEmergency.js",
+      "src/data/aircraftClass.js",
+      "src/data/entityRecords.js"
     ],
     "external": ["vue", "pinia", "vue-i18n"]
   },
@@ -1521,7 +1547,6 @@
       "src/ui/stores/cockpit.js",
       "src/ui/stores/locale.js",
       "src/ui/stores/providerSettings.js",
-      "src/ui/stores/sceneSharing.js",
       "src/ui/stores/voice.js",
       "src/ui/stores/location.js",
       "src/ui/stores/display.js",
@@ -1601,7 +1626,17 @@
       "src/render/vectorBase/style.js",
       "src/render/vectorBase/paint.js",
       "src/render/vectorBase/expressions.js",
-      "src/time/frameWait.js"
+      "src/time/frameWait.js",
+      "src/ui/stores/omnibar.js",
+      "src/data/contextStore.js",
+      "src/data/pickedContext.js",
+      "src/data/entityContext.js",
+      "src/data/aircraftClass.js",
+      "src/data/aircraftEmergency.js",
+      "src/ui/stores/entityCard.js",
+      "src/ui/entityContextBridge.js",
+      "src/data/trackingClickGesture.js",
+      "src/ui/stores/sceneSharing.js"
     ],
     "external": [
       "cesium",
@@ -3989,7 +4024,8 @@
       "src/ui/stores/voice.js",
       "src/ui/vueRuntime.js",
       "src/ui/stores/pointerReticle.js",
-      "src/ui/i18n.js"
+      "src/ui/i18n.js",
+      "src/ui/stores/omnibar.js"
     ],
     "external": ["vue", "pinia", "vue-i18n"]
   },
@@ -5404,7 +5440,11 @@
       "src/data/courseFromFixes.js",
       "src/time/frameWait.js",
       "src/scenes/storyTags.js",
-      "src/scenes/storyThumb.js"
+      "src/scenes/storyThumb.js",
+      "src/ui/stores/omnibar.js",
+      "src/data/entityContext.js",
+      "src/ui/stores/entityCard.js",
+      "src/ui/entityContextBridge.js"
     ],
     "external": [
       "hls.js",
@@ -6849,7 +6889,8 @@
       "src/ui/vueRuntime.js",
       "src/ui/stores/voice.js",
       "src/ui/stores/pointerReticle.js",
-      "src/ui/i18n.js"
+      "src/ui/i18n.js",
+      "src/ui/stores/omnibar.js"
     ],
     "external": ["vue", "pinia", "vue-i18n"]
   },
