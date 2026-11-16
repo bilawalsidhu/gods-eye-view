@@ -1968,9 +1968,25 @@ function snapshotAndProject(entry, source, viewProjection, keyhole) {
         : 0
       : distanceFade(distance, record.distanceOptions);
   const cameraAltitude = _eyeHeight;
-  record.paintScale = entry.distanceScale
-    ? distanceScale(distance, entry.distanceScale)
-    : 1;
+  // The distance curve is local for the same reason as the altitude curve
+  // below: through a helper the engine may not inline, its result is boxed.
+  // `entry.distanceScale` was normalized when the entry was registered.
+  const scaleCurve = entry.distanceScale;
+  if (!scaleCurve || !Number.isFinite(distance)) {
+    record.paintScale = 1;
+  } else if (
+    distance <= scaleCurve.near ||
+    scaleCurve.far === scaleCurve.near
+  ) {
+    record.paintScale = scaleCurve.nearValue;
+  } else if (distance >= scaleCurve.far) {
+    record.paintScale = scaleCurve.farValue;
+  } else {
+    record.paintScale =
+      scaleCurve.nearValue +
+      (scaleCurve.farValue - scaleCurve.nearValue) *
+        ((distance - scaleCurve.near) / (scaleCurve.far - scaleCurve.near));
+  }
   // Keep the source-configurable piecewise curve local to the projection hot
   // path. Passing its five doubles through a non-inlined helper boxed them for
   // every thumbnail candidate and broke the shared 154 B/candidate gate.
