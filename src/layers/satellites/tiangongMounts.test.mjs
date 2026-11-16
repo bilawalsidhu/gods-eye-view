@@ -95,16 +95,21 @@ test('the spec’s mount gives the view asked for in the world, else the first',
   };
   const first = tiangongCockpitMount({ ...input, key: null });
   assert.equal(first.key, 'tianhe');
+  // The modules are 4.2 m across: no eye inside Tianhe (2.1 m of its axis).
+  assert.ok(
+    Math.hypot(TIANGONG_MOUNTS.tianhe.eye[0], TIANGONG_MOUNTS.tianhe.eye[1]) >
+      2.1,
+  );
   assert.equal(first.noradId, TIANGONG_NORAD);
   assert.deepEqual(
     first.views.map((view) => view.key),
     ['tianhe', 'wentian', 'mengtian', 'docked'],
   );
-  // Tianhe's eye is 3 m to port: +y in the world, 0.6 m up (+x), 1.5 m aft (−z).
-  assert.ok(Math.abs(first.position.y - 3.0) < 1e-9);
-  assert.ok(Math.abs(first.position.x - (6_780_000 + 0.6)) < 1e-9);
-  assert.ok(Math.abs(first.position.z + 1.5) < 1e-9);
-  assert.ok(first.direction.y > 0.8, 'looks out to port');
+  // Tianhe's eye is 3 m above the hull (+x in the world), 3 m aft (−z).
+  assert.ok(Math.abs(first.position.y) < 1e-9);
+  assert.ok(Math.abs(first.position.x - (6_780_000 + 3.0)) < 1e-9);
+  assert.ok(Math.abs(first.position.z + 3) < 1e-9);
+  assert.ok(first.direction.z > 0.9, 'looks ahead along the station');
   assert.ok(first.direction.x < 0, 'and down');
   const docked = tiangongCockpitMount({ ...input, key: 'docked' });
   assert.equal(docked.key, 'docked');

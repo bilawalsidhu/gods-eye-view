@@ -30,10 +30,12 @@ const mount = (eye, forward, up) =>
 
 export const TIANGONG_MOUNTS = Object.freeze({
   /**
-   * Tianhe lies along the station's long axis: from its port side amidships,
-   * looking out across the track to port and down, the Earth below.
+   * Tianhe lies along the station's long axis, its wings at the aft end:
+   * from the top of the hull just forward of the wing roots, looking ahead
+   * along the station to the node and the two labs across it, the Earth
+   * below.
    */
-  tianhe: mount([3.0, 0.6, -1.5], [0.87, -0.5, 0], [0, 1, 0]),
+  tianhe: mount([0, 3.0, -3], [0, -0.4, 0.92], [0, 1, 0]),
   /**
    * Wentian reaches out from the node on the model's starboard side: from
    * the top of its outer end, looking out past its wings and down, the
