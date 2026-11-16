@@ -17,9 +17,11 @@ export async function checkInstallationPan(page, dir) {
       'military-installations',
     ).module;
     const centerIds = [];
+    // The app registers each local feature's context as `<layer id>:<feature id>`.
     for (let i = 0; i < g.viewer.dataSources.length; i++)
       for (const e of g.viewer.dataSources.get(i).entities.values)
-        if (e.__localLayerId === 'local-datacenters') centerIds.push(e.id);
+        if (g.entityRecords.read(e)?.contextId?.startsWith('local-datacenters:'))
+          centerIds.push(e.id);
     window.__polishPanFrames = [];
     window.__stopPolishPan = g.viewer.scene.postRender.addEventListener(() => {
       const sites = [],
@@ -175,18 +177,13 @@ export async function checkInstallationSelection(
           await import('/src/data/contextStore.js');
         const { getOverlayPaintRect, getWorldOverlayDiagnostics } =
           await import('/src/overlays/worldOverlay.js');
-        const knownFills = new Set();
-        const fillEntities = () => {
-          const list = [];
-          for (let i = 0; i < g.viewer.dataSources.length; i++)
-            for (const e of g.viewer.dataSources.get(i).entities.values)
-              if (e.id.startsWith(`${record.id}:selected-fill:`)) list.push(e);
-          for (const e of list) knownFills.add(e);
-          return list;
-        };
-        // Geometry-instance ids prove the ground primitive actually built, not just an entity declaration.
-        const primitives = () => {
-          let count = 0;
+        // The selected site's fill parts, as the ground primitives built for
+        // the layer's fill set hold them: each instance's id is the
+        // draw port's pick id `{set, id}`. Only built, shown instances count,
+        // so this proves the ground primitive actually built, not just an
+        // item declaration.
+        const fillParts = () => {
+          const parts = [];
           const walk = (collection) => {
             if (collection?._collectionsArray) {
               for (const child of collection._collectionsArray) walk(child);
@@ -194,31 +191,44 @@ export async function checkInstallationSelection(
             }
             for (let i = 0; i < (collection?.length || 0); i++) {
               const p = collection.get(i);
-              if (
-                p.ready &&
-                typeof p.getGeometryInstanceAttributes === 'function'
-              ) {
-                for (const e of knownFills) {
+              const ids = p?._primitive?._primitive?._instanceIds;
+              if (p?.ready && Array.isArray(ids))
+                for (const id of ids) {
+                  if (
+                    !/^military-installations:\d+:fills$/.test(id?.set) ||
+                    !String(id.id).startsWith(`${record.id}:selected-fill:`)
+                  )
+                    continue;
                   try {
-                    const a = p.getGeometryInstanceAttributes(e);
-                    if (a && (!a.show || a.show[0])) count++;
+                    const a = p.getGeometryInstanceAttributes(id);
+                    if (a && (!a.show || a.show[0]))
+                      parts.push({
+                        id: id.id,
+                        classification: p.classificationType,
+                      });
                   } catch {}
                 }
-              }
-              if (typeof p.get === 'function' || p._collectionsArray) walk(p);
+              if (typeof p?.get === 'function' || p?._collectionsArray)
+                walk(p);
             }
           };
+          // The draw port adds its ground primitives under the scene's
+          // primitives, in its set's collection.
           walk(g.viewer.scene.groundPrimitives);
-          return count;
+          walk(g.viewer.scene.primitives);
+          return parts;
         };
-        window.__polishFillProbe = () => ({
-          entities: fillEntities().length,
-          primitives: primitives(),
-          classification: fillEntities().map((e) =>
-            e.polygon.classificationType.getValue(),
-          ),
-          selected: getSelectedEntityContext()?.id || null,
-        });
+        window.__polishFillProbe = () => {
+          const parts = fillParts();
+          return {
+            // Distinct fill parts drawn, and the built instances drawing them
+            // (a ground swap can draw a part twice while it lasts).
+            entities: new Set(parts.map((part) => part.id)).size,
+            primitives: parts.length,
+            classification: parts.map((part) => part.classification),
+            selected: getSelectedEntityContext()?.id || null,
+          };
+        };
         window.__stopPolishSelection =
           g.viewer.scene.postRender.addEventListener(() => {
             window.__polishSelectionFrames.push({
@@ -333,7 +343,8 @@ export async function checkInstallationSelection(
         for (let y = 250; y < 650; y += 75)
           for (let x = 400; x < 850; x += 75) {
             const pick = g.viewer.scene.pick({ x, y });
-            if (!pick?.id?.installationId && !pick?.id?.gevTrackedId)
+            // Nothing picked: no installation marker, outline or tracked contact.
+            if (!pick?.id)
               return { x, y };
           }
         throw new Error('No empty map point');

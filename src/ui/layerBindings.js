@@ -1,3 +1,4 @@
+import { onFollowChanged } from '../data/followed.js';
 import { isExplicitLayerStateOrigin } from '../data/layerState.js';
 import {
   registerCctvFocusRequestListener,
@@ -80,11 +81,13 @@ export class LayerBindings {
       window,
       this._worldRequestFocusHandler,
     );
-    this._navigationOwnerChangedRemover =
-      this.viewer.trackedEntityChanged.addEventListener((entity) => {
-        if (entity && !this._disposed)
+    this._navigationOwnerChangedRemover = onFollowChanged(
+      this.viewer,
+      (followed) => {
+        if (followed && !this._disposed)
           this._stampNavigation({ cancelPendingSelection: false });
-      });
+      },
+    );
     // Vessel/installation focus flies without ever assigning a tracked entity,
     // so it cannot reach the listener above. It announces instead.
     this._removeNavigationAuthorityListener =
@@ -116,7 +119,6 @@ export class LayerBindings {
         this.runImmediateNavigation('route', navigate),
       floorFn: (lat, lon) => this.services.cachedGroundFloor(lat, lon),
       warmFn: (cells) => this.services.warmGroundFloor(cells),
-      showToast: (message) => this._showToast(message),
     });
   }
 

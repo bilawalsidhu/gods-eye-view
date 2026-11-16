@@ -1,4 +1,7 @@
-import * as Cesium from 'cesium';
+import { drawOf } from '../../render/rendererOf.js';
+import { cssColor } from '../../render/color.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { distance } from '../../geo/vector.js';
 import { classifyTrain, getRegisteredRailFeed } from '../../data/railFeeds.js';
 import {
   FEED_RELEASE_AFTER_MS,
@@ -31,41 +34,26 @@ const NETWORK_SLICE_MS = 6;
 const FADE_STEP = 0.05;
 /** A split that moved less than this share of the line is not redrawn. */
 const SPLIT_EPSILON = 1e-5;
+/** The selected line's dark rim, which keeps it legible over bright
+ *  imagery: the outer 28% of its width at 22% of its colour. */
+const ROUTE_RIM = Object.freeze({ shade: 0.22, widthFraction: 0.28 });
 /** Arc a route-bound train must cover before its direction is trusted (m). */
 const DIRECTION_EVIDENCE_M = 60;
 const STOP_DOT_PX = 5;
 const STOP_LABELLED_DOT_PX = 8;
-const STOP_DOT_OUTLINE = Cesium.Color.fromCssColorString(
-  'rgba(10, 14, 20, 0.9)',
-);
+const STOP_DOT_OUTLINE = Object.freeze(cssColor('rgba(10, 14, 20, 0.9)'));
+/** Two drawn vertices closer than this are one (m), as the line drops repeats. */
+const REPEAT_M = 1e-3;
 
-/**
- * The selected line's material: solid ahead of the train, dimmer behind.
- */
-function createSplitMaterial() {
-  return new Cesium.Material({
-    fabric: {
-      type: 'RailRouteSplit',
-      uniforms: {
-        aheadColor: new Cesium.Color(1, 1, 1, 1),
-        travelledColor: new Cesium.Color(1, 1, 1, ROUTE_TRAVELLED_ALPHA),
-        splitAt: -1,
-        direction: 1,
-      },
-      source: `czm_material czm_getMaterial(czm_materialInput materialInput) {
-        czm_material m = czm_getDefaultMaterial(materialInput);
-        float s = materialInput.st.s;
-        bool travelled = direction > 0.0 ? s < splitAt : s > splitAt;
-        vec4 c = travelled ? travelledColor : aheadColor;
-        // A dark rim keeps the line legible over bright imagery.
-        bool rim = abs(materialInput.st.t - 0.5) > 0.36;
-        m.diffuse = czm_gammaCorrect(rim ? c.rgb * 0.22 : c.rgb);
-        m.alpha = c.a;
-        return m;
-      }`,
-    },
-    translucent: true,
-  });
+/** Layers built so far, so each one's draw sets have ids of their own. */
+let instances = 0;
+
+/** A category's colour (0..1 channels) at `alpha`. */
+function categoryColor(category, alpha) {
+  const rgba =
+    cssColor(RAIL_CATEGORY_COLORS[category] || RAIL_CATEGORY_COLORS.local) ||
+    cssColor(RAIL_CATEGORY_COLORS.local);
+  return [rgba[0], rgba[1], rgba[2], alpha];
 }
 
 /**
@@ -73,9 +61,14 @@ function createSplitMaterial() {
  * (built once per path pack), the selected train's line split where the train
  * is, and the selected trip's stops as dots and labels.
  *
- * Nothing here runs per frame. The network's opacity follows the camera on
- * camera events; the split and the stops follow the train on a timer that
- * only runs while a train is selected.
+ * Every line is draped on the surface through the draw port: each feed's
+ * network a set per category, the selected line one set whose segments are
+ * coloured travelled or ahead, and the stops a set of dots.
+ *
+ * Nothing here runs per frame but the far-side test of the stops. The
+ * network's opacity follows the camera on camera events; the split and the
+ * stops follow the train on a timer that only runs while a train is
+ * selected.
  *
  * @param {object} context
  * @returns {object}
@@ -88,102 +81,42 @@ export function createRouteDisplay({
   timetable,
 }) {
   const { governorRequestRender } = services.render;
-  let groundSupported = null;
+  const instance = (instances += 1);
   /** feedId → when the feed was last seen in use (ms). */
   const feedSeenAt = new Map();
   /** Releases idle feeds while the layer is off. */
   let releaseTimer = null;
-  let stopPoints = null;
+  /** The selected line's set and the stop dots' set, made on first use. */
+  let routeSet = null;
+  /** Route sets made, for ids of their own. */
+  let routeBuilds = 0;
+  let stopSet = null;
+  /** The stop dots drawn now, as pushed to their set. */
+  let stopItems = [];
   let timer = null;
   let ticks = 0;
 
-  function scene() {
-    return state._viewer?.scene || null;
+  /** The draw port, or null while the layer has no viewer. */
+  function draw() {
+    const viewer = state._viewer;
+    return viewer && !viewer.isDestroyed?.() ? drawOf(viewer) : null;
   }
 
-  function useGround() {
-    const s = scene();
-    if (!s) return false;
-    if (groundSupported === null)
-      groundSupported =
-        !!s.frameState?.context &&
-        Cesium.GroundPolylinePrimitive.isSupported(s);
-    return groundSupported;
-  }
-
-  /** Positions for a flat `[lat, lon, ...]` run, with consecutive repeats dropped. */
+  /** ECEF positions on the ellipsoid for a flat `[lat, lon, ...]` run, repeats dropped. */
   function positionsOf(coords) {
     const out = [];
     for (let i = 0; i + 1 < coords.length; i += 2) {
-      const point = Cesium.Cartesian3.fromDegrees(coords[i + 1], coords[i], 0);
-      if (
-        out.length &&
-        Cesium.Cartesian3.equalsEpsilon(
-          out[out.length - 1],
-          point,
-          Cesium.Math.EPSILON7,
-        )
-      )
+      const point = fromDegrees(coords[i + 1], coords[i], 0);
+      if (out.length && distance(out[out.length - 1], point) < REPEAT_M)
         continue;
       out.push(point);
     }
     return out;
   }
 
-  /** One batched primitive of polylines, ground-clamped where the GPU allows. */
-  function linePrimitive(runs, width, material) {
-    const ground = useGround();
-    const instances = [];
-    for (const positions of runs) {
-      if (positions.length < 2) continue;
-      instances.push(
-        new Cesium.GeometryInstance({
-          geometry: ground
-            ? new Cesium.GroundPolylineGeometry({ positions, width })
-            : new Cesium.PolylineGeometry({
-                positions,
-                width,
-                arcType: Cesium.ArcType.NONE,
-                vertexFormat: Cesium.PolylineMaterialAppearance.VERTEX_FORMAT,
-              }),
-        }),
-      );
-    }
-    if (!instances.length) return null;
-    const appearance = new Cesium.PolylineMaterialAppearance({
-      material,
-      translucent: true,
-    });
-    const primitive = ground
-      ? new Cesium.GroundPolylinePrimitive({
-          geometryInstances: instances,
-          appearance,
-          classificationType: Cesium.ClassificationType.BOTH,
-          allowPicking: false,
-          asynchronous: true,
-        })
-      : new Cesium.Primitive({
-          geometryInstances: instances,
-          appearance,
-          // Off the terrain, a line under a hill still shows through it.
-          depthFailAppearance: new Cesium.PolylineMaterialAppearance({
-            material,
-            translucent: true,
-          }),
-          allowPicking: false,
-          asynchronous: false,
-        });
-    return {
-      primitive,
-      collection: ground ? scene().groundPrimitives : scene().primitives,
-      ground,
-    };
-  }
-
-  function removePrimitive(slot) {
-    if (!slot?.primitive) return;
-    slot.collection?.remove(slot.primitive);
-    slot.primitive = null;
+  /** A set of draped lines, never picked. */
+  function lineSet(id) {
+    return draw()?.lines({ id, pickable: false, show: false }) ?? null;
   }
 
   // ---------------------------------------------------------------------------
@@ -236,29 +169,33 @@ export function createRouteDisplay({
       lines: result.lines.length,
       points: result.pointsOut,
     };
-    if (!scene()) return;
+    if (!draw()) return;
     const byCategory = new Map();
     for (const line of result.lines) {
       if (!byCategory.has(line.category)) byCategory.set(line.category, []);
       byCategory.get(line.category).push(positionsOf(line.coords));
     }
     for (const [category, runs] of byCategory) {
-      const color = Cesium.Color.fromCssColorString(
-        RAIL_CATEGORY_COLORS[category] || RAIL_CATEGORY_COLORS.local,
+      const style = { kind: 'solid', color: categoryColor(category, 0) };
+      const items = [];
+      for (const positions of runs) {
+        if (positions.length < 2) continue;
+        items.push({
+          id: String(items.length),
+          positions,
+          widthPx: NETWORK_WIDTH_PX,
+          mode: 'draped',
+          style,
+          pickable: false,
+        });
+      }
+      if (!items.length) continue;
+      const set = lineSet(
+        `rail:${instance}:network:${network.feedId}:${category}`,
       );
-      const material = Cesium.Material.fromType('Color', {
-        color: color.withAlpha(0),
-      });
-      const slot = linePrimitive(runs, NETWORK_WIDTH_PX, material);
-      if (!slot) continue;
-      slot.primitive.show = false;
-      slot.collection.add(slot.primitive);
-      network.layers.set(category, {
-        ...slot,
-        material,
-        base: color,
-        alpha: -1,
-      });
+      if (!set) continue;
+      set.set(items);
+      network.layers.set(category, { set, items, category, alpha: -1 });
     }
     applyNetwork();
   }
@@ -269,7 +206,7 @@ export function createRouteDisplay({
     clearTimeout(network.timer);
     network.timer = null;
     network.steps = null;
-    for (const layer of network.layers.values()) removePrimitive(layer);
+    for (const layer of network.layers.values()) layer.set.dispose();
     network.layers.clear();
     state._networks.delete(feedId);
   }
@@ -294,12 +231,17 @@ export function createRouteDisplay({
             ? NETWORK_ALPHA * fade * (selected ? NETWORK_SELECTED_DIM : 1)
             : 0;
         const show = alpha > 0.001;
-        if (layer.primitive.show !== show) {
-          layer.primitive.show = show;
+        if (layer.set.show !== show) {
+          layer.set.show = show;
           changed = true;
         }
         if (show && Math.abs(layer.alpha - alpha) > 0.001) {
-          layer.material.uniforms.color = layer.base.withAlpha(alpha);
+          const style = {
+            kind: 'solid',
+            color: categoryColor(layer.category, alpha),
+          };
+          for (const item of layer.items) item.style = style;
+          layer.set.upsert(layer.items);
           layer.alpha = alpha;
           changed = true;
         }
@@ -349,20 +291,24 @@ export function createRouteDisplay({
   }
 
   function dropRoute() {
-    const route = state._route;
-    if (!route) return;
-    removePrimitive(route);
+    if (!state._route) return;
+    // Let the set go: the next route's is made anew, on top of every line
+    // drawn before it (a feed's network loaded since), as each route's
+    // primitive was added when it was drawn.
+    routeSet?.dispose();
+    routeSet = null;
     state._route = null;
   }
 
   /**
    * Draw (or keep) the selected train's line. Rebuilt only when the train
-   * moves to another shape; the split is a material uniform.
+   * moves to another shape; the split recolours its segments.
    */
   function syncRoute() {
     const entry = state._trains.get(state._selectedKey);
     const shape = entry && state._enabled ? routeShapeFor(entry) : null;
-    if (!shape || !scene()) {
+    const port = shape ? draw() : null;
+    if (!shape || !port) {
       if (state._route) {
         dropRoute();
         governorRequestRender('rail-route');
@@ -374,42 +320,47 @@ export function createRouteDisplay({
       dropRoute();
       const { path } = shape;
       const positions = [];
-      // Cumulative drawn length per path vertex. A ground line's texture
-      // coordinate runs by length along these chords; a plain polyline's runs
-      // by vertex, so there it counts the vertices Cesium keeps.
-      const ground = useGround();
+      // The cumulative drawn length per path vertex, which the split's
+      // fraction is measured on: metres on the ground, as a draped line's
+      // texture runs; one per vertex where the scene draws it over the
+      // surface instead, as a polyline's does.
+      const ground = port.clampState?.() !== 'overlay';
       const chordAt = new Float64Array(path.n);
       for (let i = 0; i < path.n; i++) {
-        const point = Cesium.Cartesian3.fromDegrees(
-          path.lon[i],
-          path.lat[i],
-          0,
-        );
+        const point = fromDegrees(path.lon[i], path.lat[i], 0);
         const last = positions[positions.length - 1];
-        const repeat =
-          last &&
-          Cesium.Cartesian3.equalsEpsilon(last, point, Cesium.Math.EPSILON7);
+        const step = last ? distance(last, point) : 0;
+        const repeat = last && step < REPEAT_M;
         if (i > 0)
-          chordAt[i] =
-            chordAt[i - 1] +
-            (repeat ? 0 : ground ? Cesium.Cartesian3.distance(last, point) : 1);
+          chordAt[i] = chordAt[i - 1] + (repeat ? 0 : ground ? step : 1);
         if (!repeat) positions.push(point);
       }
-      const material = createSplitMaterial();
-      const color = Cesium.Color.fromCssColorString(
-        RAIL_CATEGORY_COLORS[entry.category] || RAIL_CATEGORY_COLORS.local,
-      );
-      material.uniforms.aheadColor = color.withAlpha(1);
-      material.uniforms.travelledColor = color.withAlpha(ROUTE_TRAVELLED_ALPHA);
-      const slot = linePrimitive([positions], ROUTE_AHEAD_WIDTH_PX, material);
-      if (!slot) return;
-      slot.collection.add(slot.primitive);
+      if (positions.length < 2) return;
+      routeSet ||= lineSet(`rail:${instance}:route:${++routeBuilds}`);
+      if (!routeSet) return;
+      routeSet.show = true;
+      // Solid ahead of the train, dimmer behind, split where it is.
+      const item = {
+        id: 'route',
+        positions,
+        widthPx: ROUTE_AHEAD_WIDTH_PX,
+        mode: 'draped',
+        style: {
+          kind: 'split',
+          color: categoryColor(entry.category, 1),
+          behind: categoryColor(entry.category, ROUTE_TRAVELLED_ALPHA),
+          at: -1,
+          rim: ROUTE_RIM,
+        },
+        pickable: false,
+      };
+      routeSet.set([item]);
       state._route = {
-        ...slot,
         id,
-        material,
+        item,
         path,
         chordAt,
+        ground,
         binding: shape.binding,
         // A trip's own shape runs the way the trip does; a route's shape may
         // be drawn either way, so its direction is learnt from the train.
@@ -427,10 +378,28 @@ export function createRouteDisplay({
     updateSplit();
   }
 
+  /**
+   * Show the selected line unless a first-person view rides its train
+   * (cockpitSubject.js): from inside the train it would run up the middle of
+   * the view and under the eye.
+   */
+  function applyHold() {
+    if (!state._route || !routeSet) return;
+    const shown = !(
+      state._cockpitSubjectKey !== null &&
+      state._cockpitSubjectKey === state._selectedKey
+    );
+    if (routeSet.show !== shown) {
+      routeSet.show = shown;
+      governorRequestRender('rail-route');
+    }
+  }
+
   /** Move the travelled/ahead split to where the train is drawn now. */
   function updateSplit() {
     const route = state._route;
-    if (!route?.primitive) return;
+    if (!route) return;
+    applyHold();
     const binding = route.binding;
     const s = binding ? binding.drawS : NaN;
     if (route.direction === 0 && Number.isFinite(s)) {
@@ -442,44 +411,46 @@ export function createRouteDisplay({
       route.direction !== 0 && Number.isFinite(s)
         ? splitFraction(route.path, route.chordAt, s)
         : NaN;
-    const uniforms = route.material.uniforms;
+    const style = route.item.style;
     if (!Number.isFinite(fraction)) {
       // No position on the line yet: draw it all as ahead.
-      if (uniforms.splitAt !== -1 || uniforms.direction !== 1) {
-        uniforms.splitAt = -1;
-        uniforms.direction = 1;
-        governorRequestRender('rail-route-split');
-      }
       route.fraction = NaN;
-      return;
+      if (style.at === -1 && !style.reverse) return;
+    } else {
+      const reverse = route.direction < 0;
+      if (
+        Number.isFinite(route.fraction) &&
+        Math.abs(fraction - route.fraction) < SPLIT_EPSILON &&
+        Boolean(style.reverse) === reverse
+      )
+        return;
+      route.fraction = fraction;
     }
-    if (
-      Number.isFinite(route.fraction) &&
-      Math.abs(fraction - route.fraction) < SPLIT_EPSILON &&
-      uniforms.direction === route.direction
-    )
-      return;
-    route.fraction = fraction;
-    uniforms.splitAt = fraction;
-    uniforms.direction = route.direction;
+    const at = Number.isFinite(fraction) ? fraction : -1;
+    route.item = {
+      ...route.item,
+      style: { ...style, at, reverse: at >= 0 && route.direction < 0 },
+    };
+    routeSet?.upsert([route.item]);
     governorRequestRender('rail-route-split');
   }
 
   // ---------------------------------------------------------------------------
   // Stops
 
-  function stopPointsCollection() {
-    if (!stopPoints && scene()) {
-      stopPoints = new Cesium.PointPrimitiveCollection({
-        blendOption: Cesium.BlendOption.TRANSLUCENT,
-      });
-      scene().primitives.add(stopPoints);
-    }
-    return stopPoints;
+  function stopDots() {
+    stopSet ||=
+      draw()?.points({
+        id: `rail:${instance}:stops`,
+        blend: 'translucent',
+        pickable: false,
+      }) ?? null;
+    return stopSet;
   }
 
   function clearStops() {
-    stopPoints?.removeAll();
+    stopItems = [];
+    stopSet?.clear();
     state._trip = null;
     state._stopsSignature = '';
     state._stopLabelsSignature = '';
@@ -501,7 +472,7 @@ export function createRouteDisplay({
         lon: stop.lon,
         h,
         q,
-        position: Cesium.Cartesian3.fromDegrees(stop.lon, stop.lat, h),
+        position: fromDegrees(stop.lon, stop.lat, h),
       };
       state._stopAnchors.set(key, anchor);
     }
@@ -523,11 +494,7 @@ export function createRouteDisplay({
         continue;
       anchor.h = h;
       anchor.q = q;
-      anchor.position = Cesium.Cartesian3.fromDegrees(
-        anchor.lon,
-        anchor.lat,
-        h,
-      );
+      anchor.position = fromDegrees(anchor.lon, anchor.lat, h);
       moved = true;
     }
     if (moved) {
@@ -543,12 +510,15 @@ export function createRouteDisplay({
    * @param {(position: object) => boolean} facesCamera
    */
   function cullStops(facesCamera) {
-    if (!stopPoints) return;
-    for (let i = 0; i < stopPoints.length; i++) {
-      const point = stopPoints.get(i);
-      const shown = facesCamera(point.position);
-      if (point.show !== shown) point.show = shown;
+    if (!stopSet || !stopItems.length) return;
+    let changed = null;
+    for (const item of stopItems) {
+      const shown = facesCamera(item.pos);
+      if (item.show === shown) continue;
+      item.show = shown;
+      (changed ||= []).push(item);
     }
+    if (changed) stopSet.upsert(changed);
   }
 
   /** Ask the provider for the selected trip's stops and redraw what changed. */
@@ -576,30 +546,33 @@ export function createRouteDisplay({
     state._trip = list.length || trip?.headsign ? trip : null;
     settleAnchors();
     const { labels, dots } = selectStopLabels(list);
-    const color = Cesium.Color.fromCssColorString(
-      RAIL_CATEGORY_COLORS[entry.category] || RAIL_CATEGORY_COLORS.local,
-    );
+    const color = categoryColor(entry.category, 1);
+    const passedColor = categoryColor(entry.category, 0.45);
 
     const signature = `${entry.key}|${labels.map((l) => l.index).join(',')}|${dots
       .map((d) => `${d.index}${d.passed ? 'p' : ''}`)
       .join(',')}`;
     if (signature !== state._stopsSignature) {
       state._stopsSignature = signature;
-      const points = stopPointsCollection();
+      const points = stopDots();
       if (points) {
-        points.removeAll();
+        const items = [];
         const add = (stop, passed, size) =>
-          points.add({
-            position: anchorFor(stop),
+          items.push({
+            id: String(items.length),
+            pos: anchorFor(stop),
             pixelSize: size,
-            color: passed ? color.withAlpha(0.45) : color,
+            color: passed ? passedColor : color,
             outlineColor: STOP_DOT_OUTLINE,
             outlineWidth: 1.5,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            disableDepthTest: Infinity,
+            show: true,
           });
         for (const dot of dots) add(dot.stop, dot.passed, STOP_DOT_PX);
         for (const label of labels)
           add(label.stop, label.stop.state === 'passed', STOP_LABELLED_DOT_PX);
+        stopItems = items;
+        points.set(items);
       }
       governorRequestRender('rail-stops');
     }
@@ -733,10 +706,11 @@ export function createRouteDisplay({
     releaseTimer = null;
     feedSeenAt.clear();
     for (const feedId of [...state._networks.keys()]) dropNetwork(feedId);
-    if (stopPoints) {
-      scene()?.primitives?.remove(stopPoints);
-      stopPoints = null;
-    }
+    routeSet?.dispose();
+    routeSet = null;
+    stopSet?.dispose();
+    stopSet = null;
+    stopItems = [];
     state._overlayHost.clearSource(RAIL_STOP_OVERLAY_SOURCE_ID);
   }
 
@@ -747,8 +721,7 @@ export function createRouteDisplay({
       feeds[feedId] = {
         status: network.status,
         primitives: network.layers.size,
-        shown: [...network.layers.values()].filter((l) => l.primitive.show)
-          .length,
+        shown: [...network.layers.values()].filter((l) => l.set.show).length,
         ...(network.stats || {}),
       };
     }
@@ -765,7 +738,7 @@ export function createRouteDisplay({
           }
         : null,
       stops: {
-        points: stopPoints?.length || 0,
+        points: stopItems.length,
         trip: state._trip ? state._trip.stops?.length || 0 : 0,
       },
     };
@@ -777,6 +750,7 @@ export function createRouteDisplay({
     applyNetwork,
     onCamera,
     syncRoute,
+    applyHold,
     refreshStops,
     cullStops,
     onSelectionChanged,

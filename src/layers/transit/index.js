@@ -10,6 +10,7 @@ import { createQueries } from './queries.js';
 import { createControls } from './controls.js';
 import { createLifecycle } from './lifecycle.js';
 import { createTesting } from './testing.js';
+import { createTransitCockpitSubject } from './cockpitSubject.js';
 import { TRANSIT_POLL_MS } from './policy.js';
 
 /**
@@ -19,7 +20,7 @@ import { TRANSIT_POLL_MS } from './policy.js';
  * and height maps, the in-flight requests, the manager handle and the overlay
  * host all live on the instance this returns, and `destroy()` releases every
  * shared registration it took (sprite collection, pick owner, render hold,
- * camera sensitivity).
+ * camera listener).
  *
  * @param {{services: object}} options
  * @returns {object} The data-layer module the manager registers.
@@ -54,12 +55,14 @@ export function createTransitLayer({
   parts.controls = createControls(context);
   parts.lifecycle = createLifecycle(context);
   parts.testing = createTesting(context);
+  parts.cockpit = createTransitCockpitSubject(context);
 
   return Object.assign(
     { updateInterval: TRANSIT_POLL_MS },
     parts.lifecycle.methods,
     parts.queries.methods,
     parts.controls.methods,
+    parts.cockpit.methods,
     parts.testing,
   );
 }

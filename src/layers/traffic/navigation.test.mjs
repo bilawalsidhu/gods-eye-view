@@ -2,6 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createTrafficLayer } from './index.js';
+import { findCamera } from '../../render/rendererOf.js';
+import {
+  bindFakeCesiumCamera,
+  fakeCameraPort,
+} from '../../testSupport/fakeCameraPort.mjs';
+import { bindRenderer } from '../../render/rendererOf.js';
+import { createLifecycle } from './lifecycle.js';
+import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
+import { sceneSurfacePorts } from '../../testSupport/fakeSceneSurface.mjs';
 
 function deferred() {
   let resolve;
@@ -11,7 +20,12 @@ function deferred() {
   return { promise, resolve };
 }
 
-function setup(t, requestRoads, getStatus = async () => ({ hasKey: false })) {
+function setup(
+  t,
+  requestRoads,
+  getStatus = async () => ({ hasKey: false }),
+  ports = {},
+) {
   t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
   const camera = {
     positionCartographic: Cesium.Cartographic.fromDegrees(
@@ -49,6 +63,16 @@ function setup(t, requestRoads, getStatus = async () => ({ hasKey: false })) {
       primitives: { add: (value) => value, remove: () => true },
     },
   };
+  // The layer reads the camera through its port.
+  bindFakeCesiumCamera(viewer, {
+    ...sceneSurfacePorts(viewer),
+    draw: fakeDrawPort(),
+    ...ports,
+  });
+  // The fake camera has view matrices only where a test gives it some.
+  const cameraPort = findCamera(viewer);
+  const matrices = cameraPort.matrices.bind(cameraPort);
+  cameraPort.matrices = () => (camera.viewMatrix ? matrices() : undefined);
   const layer = createTrafficLayer({
     services: {
       credits: {},
@@ -184,7 +208,14 @@ test('arrival below the camera change threshold loads the final city and unsubsc
     seen.push(bounds);
     return roads(bounds);
   });
+  // The camera port listens for itself; the layer's own listeners go.
+  const ported = {
+    moveEnd: viewer.camera.moveEnd.numberOfListeners,
+    changed: viewer.camera.changed.numberOfListeners,
+  };
   layer.enable(viewer);
+  assert.ok(viewer.camera.moveEnd.numberOfListeners > ported.moveEnd);
+  assert.ok(viewer.camera.changed.numberOfListeners > ported.changed);
   await tick(400);
   viewer.camera.positionCartographic = Cesium.Cartographic.fromDegrees(
     -0.1276,
@@ -195,8 +226,77 @@ test('arrival below the camera change threshold loads the final city and unsubsc
   await tick(400);
   assert.ok(seen.some((bounds) => bounds.south > 50));
   layer.disable(viewer);
-  assert.equal(viewer.camera.moveEnd.numberOfListeners, 0);
-  assert.equal(viewer.camera.changed.numberOfListeners, 0);
+  assert.equal(viewer.camera.moveEnd.numberOfListeners, ported.moveEnd);
+  assert.equal(viewer.camera.changed.numberOfListeners, ported.changed);
+});
+
+test('the layer animates on the frame port and leaves the shared camera threshold alone', async (t) => {
+  const frames = [];
+  const frame = {
+    on(phase, cb) {
+      const entry = { phase, cb };
+      frames.push(entry);
+      return () => frames.splice(frames.indexOf(entry), 1);
+    },
+    requestRender() {},
+  };
+  const { layer, viewer, tick } = setup(
+    t,
+    async (bounds) => roads(bounds),
+    undefined,
+    { frame },
+  );
+  layer.enable(viewer);
+  assert.deepEqual(
+    frames.map((f) => f.phase),
+    ['preRender'],
+  );
+  assert.equal(
+    viewer.camera.percentageChanged,
+    0.5,
+    'the shared threshold is left alone',
+  );
+  await tick(400);
+  layer.disable(viewer);
+  assert.equal(frames.length, 0);
+});
+
+test('the camera tells the layer once the view has moved 5%', (t) => {
+  const noop = () => {};
+  const calls = [];
+  const lifecycle = createLifecycle({
+    state: { _loadGeneration: 0 },
+    services: {},
+    source: {},
+    parts: {
+      animation: { animate: noop, clearDots: noop, syncRenderDemand: noop },
+      viewport: { onCameraChanged: (options) => calls.push(options) },
+      ingestion: { cancelActiveFetch: noop },
+    },
+  }).methods;
+  const camera = fakeCameraPort({ pose: { height: 1000 } });
+  const viewer = {};
+  t.after(
+    bindRenderer(viewer, {
+      camera: camera.port,
+      frame: { on: () => noop, requestRender: noop },
+    }),
+  );
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  lifecycle.enable(viewer);
+  calls.length = 0;
+  camera.stepChanged();
+  camera.setPose({ position: { x: 30, y: 0, z: 0 } });
+  camera.stepChanged();
+  assert.equal(calls.length, 0, '3% is not enough');
+  camera.setPose({ position: { x: 70, y: 0, z: 0 } });
+  camera.stepChanged();
+  assert.deepEqual(calls, [undefined], '7% is, debounced as a camera move');
+  camera.emit('moveEnd');
+  assert.deepEqual(calls[1], { immediate: true }, 'arrival is immediate');
+  lifecycle.disable(viewer);
+  assert.equal(camera.listenerCount('changed'), 0);
+  assert.equal(camera.listenerCount('moveEnd'), 0);
 });
 
 test('parked failures back off and disabling cancels the scheduled retry', async (t) => {
@@ -365,17 +465,24 @@ test('coverage changes at the same center reload and disabling invalidates cover
 
 test('a settled footprint loads new tiles even when the camera centre stays put', async (t) => {
   const seen = [];
+  // The footprint asks the query port where the reticle meets the ground.
+  const query = {
+    pickEllipsoid: (x, y) =>
+      viewer.camera.pickEllipsoid({ x, y }, Cesium.Ellipsoid.WGS84),
+    pickRay: () => null,
+  };
   const { layer, viewer, tick } = setup(
     t,
     async (bounds, { majorOnly, coverage }) => {
       if (!majorOnly) seen.push({ ...bounds, coverage });
       return roads(bounds);
     },
+    undefined,
+    { query },
   );
   layer.setParams({ roadMode: 'osm' });
   let reach = 0.005;
   const camera = viewer.camera;
-  camera.getPickRay = () => null;
   camera.heading = 0;
   camera.pitch = -Math.PI / 2;
   camera.pickEllipsoid = (pixel, ellipsoid, result) =>
@@ -429,4 +536,89 @@ test('partial coverage retries while coarse roads render, then stops after three
   }
   assert.equal(calls, initial * 4, 'initial load plus three bounded retries');
   assert.ok(layer.getStats().count > 0);
+});
+
+test('an unready surface waits for drawn frames through the frame port, then refines once', async (t) => {
+  const listeners = new Set();
+  // The drawn frames; the animation runs on preRender.
+  const frame = {
+    on(phase, cb) {
+      if (phase === 'preRender') return () => {};
+      assert.equal(phase, 'postRender');
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+    requestRender() {},
+  };
+  const { layer, viewer, tick } = setup(
+    t,
+    async (bounds) => roads(bounds),
+    undefined,
+    { frame },
+  );
+  // The rendered-frame observer records on the frame port too, from the
+  // camera's matrices.
+  viewer.camera.viewMatrix = Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY);
+  viewer.camera.frustum = {
+    projectionMatrix: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
+  };
+  const drawn = (n) => {
+    for (const cb of [...listeners]) cb({ frame: n });
+  };
+  let samples = 0;
+  viewer.scene.globe.getHeight = () => (samples++, 0);
+  viewer.scene.globe.tilesLoaded = false;
+  layer.enable(viewer);
+  // The observer, while the layer is enabled.
+  const observer = listeners.size;
+  assert.equal(observer, 1);
+  const waiting = () => listeners.size - observer;
+  await tick(400);
+  await tick(400);
+  assert.equal(waiting(), 1, 'a drawn frame is awaited');
+  drawn(1);
+  await tick(400);
+  assert.equal(waiting(), 1, 'still loading: keep waiting');
+  // The frame that finishes loading refines.
+  viewer.scene.globe.tilesLoaded = true;
+  const before = samples;
+  drawn(2);
+  assert.equal(waiting(), 0, 'a ready frame starts the refinement');
+  await tick(400);
+  await tick(400);
+  assert.ok(samples > before, 'the refinement samples the surface again');
+  const after = samples;
+  await tick(5000);
+  assert.equal(waiting(), 0, 'and refines only once');
+  assert.equal(samples, after);
+  layer.disable(viewer);
+  await tick(5000);
+  assert.equal(listeners.size, 0, 'late work cannot resubscribe');
+});
+
+test('disabling while a refinement waits drops its frame listener', async (t) => {
+  const listeners = new Set();
+  const frame = {
+    on(phase, cb) {
+      if (phase === 'preRender') return () => {};
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+    requestRender() {},
+  };
+  const { layer, viewer, tick } = setup(
+    t,
+    async (bounds) => roads(bounds),
+    undefined,
+    { frame },
+  );
+  viewer.scene.globe.tilesLoaded = false;
+  layer.enable(viewer);
+  await tick(400);
+  await tick(400);
+  assert.equal(listeners.size, 1);
+  layer.disable(viewer);
+  assert.equal(listeners.size, 0);
+  await tick(5000);
+  assert.equal(listeners.size, 0, 'late work cannot resubscribe');
 });

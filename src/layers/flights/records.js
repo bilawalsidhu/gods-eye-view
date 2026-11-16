@@ -1,10 +1,16 @@
 import { stickyNumber, stickyText } from '../../data/aircraftMeta.js';
+import { courseFromFixes } from '../../data/courseFromFixes.js';
 import {
   geoidSurfaceLastResortM,
   pickRenderAltitudeM,
 } from '../../data/renderAltitude.js';
 import { classifyAircraft } from '../../data/aircraftClass.js';
 import { aircraftEmergency } from '../../data/aircraftEmergency.js';
+import {
+  aircraftCallsignRule,
+  aircraftModelSpec,
+  fleetModelSet,
+} from '../../data/fleetModels.js';
 import {
   approxDistanceKm,
   GROUND_FLOOR_CLAMP_RADIUS_KM,
@@ -21,6 +27,7 @@ export class FlightRecords {
     cachedGroundFloor,
     floorAltitudeM,
     now = () => Date.now(),
+    fleetModels = fleetModelSet,
   }) {
     this.services = {
       geoidHeight,
@@ -29,6 +36,8 @@ export class FlightRecords {
     };
     /** The time records are judged at: the layer's clock. */
     this.now = now;
+    /** The loaded fleet model set, or null before it loads. */
+    this.fleetModels = fleetModels;
     this.data = new Map();
     // Facts about an airframe, not a moment, kept across a reset.
     this.airframes = new Map();
@@ -92,7 +101,6 @@ export class FlightRecords {
       verticalRateMps: vertical_rate,
     } = observation;
 
-    const onGround = on_ground === true;
     this.missingPolls.delete(icao24);
     // Sticky merge: OpenSky intermittently drops callsign/velocity/track for
     // aircraft it still positions — hold last-known-good instead of
@@ -102,6 +110,27 @@ export class FlightRecords {
     // The airframe's facts: this record's, or those kept across a reset.
     const airframe = prevMeta ?? this.airframes.get(icao24);
     this.airframes.delete(icao24);
+    // A ground vehicle or ground station (a feed's ZVEH or GRND: a model
+    // built standing, catalog category `other`) takes the feed's own type,
+    // which no airframe lookup knows; every other aircraft keeps waiting for
+    // its looked-up type. With no altitude at all it stands on the ground,
+    // where it is, instead of at the airborne default.
+    const groundModel = (typeCode) =>
+      drawnAsGroundModel(
+        this.fleetModels(),
+        typeCode,
+        category,
+        stickyText(callsign, prevMeta?.callsign),
+      );
+    const feedType = observation.typeCode || null;
+    const typeCode =
+      airframe?.typeCode ??
+      (feedType && groundModel(feedType) ? feedType : null);
+    const onGround =
+      on_ground === true ||
+      (!Number.isFinite(baro_alt) &&
+        !Number.isFinite(geo_alt) &&
+        groundModel(typeCode));
     // Grounded planes with no baro reading sit at 0 m, not the 10 km
     // airborne default (a parked plane must never float).
     // NOTE (height-datum fix): `alt` stays the AVIATION field — the sticky
@@ -263,6 +292,12 @@ export class FlightRecords {
       observation.positionTimeMs > 0
         ? observation.positionTimeMs
         : this.now();
+    const course = courseFromFixes(prevMeta?.courseAnchor, {
+      lat,
+      lon,
+      ms: fixEpochMs,
+      speedMps: velocity,
+    });
     const meta = {
       sourceReference: observation.reference,
       observedReceiptMs: this.now(),
@@ -281,7 +316,14 @@ export class FlightRecords {
       // applies to contacts that actually flew this session.
       wasAirborne: prevMeta?.wasAirborne === true || !onGround,
       velocity: stickyNumber(velocity, prevMeta?.velocity, 0),
-      true_track: stickyNumber(true_track, prevMeta?.true_track, 0),
+      // With no reported track or true heading, a moving contact faces the
+      // way its fixes went (src/data/courseFromFixes.js); else the last one.
+      true_track: stickyNumber(
+        true_track,
+        course.courseDeg ?? prevMeta?.true_track,
+        0,
+      ),
+      courseAnchor: course.anchor,
       category: cat,
       // An adsbdb-enriched type code outranks the coarse OpenSky category.
       klass: classifyAircraft({
@@ -319,8 +361,9 @@ export class FlightRecords {
         prevMeta?.lastContactEpochMs,
         null,
       ),
-      // adsbdb enrichment — written by the enrichment callbacks, carried across polls:
-      typeCode: airframe?.typeCode ?? null,
+      // adsbdb enrichment — written by the enrichment callbacks, carried
+      // across polls; a ground vehicle's or station's from the feed:
+      typeCode,
       typeName: airframe?.typeName ?? null,
       registration: airframe?.registration ?? null,
       // ANAC RAB build year, seats and operation for Brazilian registrations.
@@ -410,4 +453,34 @@ export class FlightRecords {
     this.fixRepeated.delete(id);
     this.geoidNCache.delete(id);
   }
+}
+
+/** Per loaded fleet model set: whether a type, category and callsign rule draw a ground model. */
+const groundModelCaches = new WeakMap();
+
+/**
+ * Whether an aircraft of this type, emitter category and callsign is drawn
+ * with a model built standing on the ground (catalog category `other`: an
+ * airport vehicle, a ground station's mast). False before the set loads.
+ * Answered once per type, category and callsign rule matched.
+ * @param {object|null} set The loaded fleet model set.
+ * @param {string|null} typeCode
+ * @param {string|number|null} category
+ * @param {string|null} callsign
+ * @returns {boolean}
+ */
+function drawnAsGroundModel(set, typeCode, category, callsign) {
+  if (!set || !typeCode) return false;
+  let cache = groundModelCaches.get(set);
+  if (!cache) groundModelCaches.set(set, (cache = new Map()));
+  const rule = aircraftCallsignRule(set.types, typeCode, callsign);
+  const key = `${typeCode}|${category ?? ''}|${rule}`;
+  let ground = cache.get(key);
+  if (ground === undefined) {
+    ground =
+      aircraftModelSpec(set, { typeCode, category, callsign }).category ===
+      'other';
+    cache.set(key, ground);
+  }
+  return ground;
 }

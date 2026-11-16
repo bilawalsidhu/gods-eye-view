@@ -11,6 +11,9 @@ export const STREET_LEVEL_LAYER_ID = 'street-level';
  */
 export const CLICK_PICK_WINDOW_PX = 9;
 
+/** Draw-set ids of Street Level's lines, cones and marker start with this. */
+export const STREET_LEVEL_SET_PREFIX = 'street-level:';
+
 /** Pick id of the viewer position marker; the core owns it, not a provider. */
 export const POSITION_PICK_ID = 'sl:pos';
 

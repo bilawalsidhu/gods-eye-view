@@ -1,4 +1,13 @@
-import * as Cesium from 'cesium';
+import { createIconBook } from '../../render/motion/iconBook.js';
+
+/** A draw set that draws nothing, for the icon book the tests read. */
+const testIconSet = () => ({
+  id: 'cctv:test:icons',
+  show: true,
+  upsert() {},
+  remove() {},
+  dispose() {},
+});
 
 export function createTesting({ state: layerState, services, parts, source }) {
   /** Test seam: republishes host entries through the real push path, so tests
@@ -19,7 +28,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
 
   /**
    * Create the production monitor-plane/host-label pair without media setup.
-   * @param {Object} viewer Cesium viewer seam.
+   * @param {Object} viewer Viewer whose renderer draws the plane.
    * @param {Object} record CCTV runtime record.
    * @returns {Object} Projection runtime.
    */
@@ -34,15 +43,16 @@ export function createTesting({ state: layerState, services, parts, source }) {
         record.probeClampRangeM,
       );
     const positions =
-      record.frustumPositions || parts.geometry.frustumCartesians(geometry);
+      record.frustumPositions || parts.rendering.frustumCartesians(geometry);
     record.frustumGeometry = geometry;
     record.frustumPositions = positions;
     const runtime = {
       cameraId: String(record.camera.id),
-      planeEntity: null,
-      labelPosition: new Cesium.Cartesian3(),
+      plane: null,
+      // createProjectionPlane gives it its label position.
+      labelPosition: null,
       overlayEntry: null,
-      planeMaterial: new Cesium.ColorMaterialProperty(Cesium.Color.WHITE),
+      planeSource: parts.projection.plainPlaneSource(),
     };
     parts.projection.createProjectionPlane(
       record,
@@ -102,7 +112,6 @@ export function createTesting({ state: layerState, services, parts, source }) {
     );
     layerState._coverageEntities = [];
     layerState._projectionEntities = [];
-    layerState._billboards = null;
     layerState._activeCameraId = activeCameraId;
     layerState._autoHopSuspended = false;
     layerState._openingCameraProvisional = !!openingCameraProvisional;
@@ -117,6 +126,42 @@ export function createTesting({ state: layerState, services, parts, source }) {
     layerState._cameraIndexCache = null;
     layerState._coverageVisibleIds = new Set();
     layerState._neighborCountCache = null;
+    // A real book (over a set that draws nothing): every record gets its
+    // icon as init adds it.
+    layerState._icons = createIconBook(testIconSet());
+    for (const record of layerState._records)
+      if (record?.camera?.id) parts.rendering.addCameraIcon(record);
+  }
+
+  /**
+   * What the layer draws now, for the QA harness: the gizmo's parts, the
+   * coverage lines and monitor planes by item id, the viewshed volumes'
+   * ids, and how many volumes were ever written.
+   */
+
+  function _cctvDrawnForTest() {
+    const coverage = {};
+    for (const record of layerState._records)
+      for (const line of record.coverageEntities || [])
+        if (line?.id) coverage[line.id] = line;
+    const planes = {};
+    for (const runtime of layerState._projectionEntities)
+      if (runtime?.plane) planes[runtime.plane.id] = runtime.plane;
+    return {
+      gizmo: layerState._gizmo?.partsForTest() ?? {},
+      coverage,
+      planes,
+      viewsheds: layerState._records
+        .map((record) => record.viewshedVolume)
+        .filter(Boolean),
+      viewshedWrites: parts.drawSets.volumeWritesForTest(),
+    };
+  }
+
+  /** The layer's icon book, for tests that read what the icons draw. */
+
+  function _cctvIconsForTest() {
+    return layerState._icons;
   }
   return {
     _pushAmbientCardEntriesForTest,
@@ -125,5 +170,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
     _updateCctvProjectionPlaneForTest,
     _extractPickedCameraIdForTest,
     _setCctvCoverageStateForTest,
+    _cctvIconsForTest,
+    _cctvDrawnForTest,
   };
 }

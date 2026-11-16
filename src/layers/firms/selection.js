@@ -2,8 +2,7 @@ import {
   FIRMS_OVERLAY_SOURCE_ID,
   fireDetectionKey,
 } from '../../data/firmsLabels.js';
-import * as Cesium from 'cesium';
-import { isPointerFree } from '../../data/inputOwnership.js';
+import { inputFor } from '../../input/dispatcher.js';
 import { CONTEXT_TOP_N } from './policy.js';
 import { t } from '../../i18n/index.js';
 
@@ -22,7 +21,7 @@ export function createSelection({
     getContextStore,
     registerEntityContext,
   } = services.context;
-  const { id, name, overlayHost, screenSpaceEventHandlerFactory } = config;
+  const { id, name, overlayHost } = config;
 
   /**
    * Install the LEFT_CLICK handler for fire selection (enable-time only,
@@ -32,15 +31,11 @@ export function createSelection({
    */
 
   function installClickHandler() {
-    if (layerState._clickHandler || !layerState._viewer) return;
-    layerState._clickHandler = screenSpaceEventHandlerFactory(
-      layerState._viewer,
-    );
-    layerState._clickHandler.setInputAction((click) => {
-      // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
-      if (!isPointerFree()) return;
-      const picked = layerState._viewer.scene.pick(click.position);
-      const fire = pickedFire(picked);
+    if (layerState._clickSubscription || !layerState._viewer) return;
+    const input = inputFor(layerState._viewer);
+    layerState._clickSubscription = input.onClick((event) => {
+      const picked = event.topHit;
+      const fire = pickedFire(event.drawHit);
       if (fire) {
         selectAndFocusFire(fire);
         return;
@@ -52,8 +47,8 @@ export function createSelection({
         if (pickedId && isOwnedByOtherLayer(id, pickedId)) return;
       }
       const cardHit = overlayHost.hitTest?.(
-        click.position?.x,
-        click.position?.y,
+        event.screenPosition?.x,
+        event.screenPosition?.y,
         {
           sourceId: FIRMS_OVERLAY_SOURCE_ID,
         },
@@ -64,14 +59,12 @@ export function createSelection({
         return;
       }
       clearFireSelection();
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
   }
 
   function removeClickHandler() {
-    if (layerState._clickHandler) {
-      layerState._clickHandler.destroy();
-      layerState._clickHandler = null;
-    }
+    layerState._clickSubscription?.();
+    layerState._clickSubscription = null;
   }
 
   /** Select one stable detection and request one UI-owned camera transfer. */
@@ -87,29 +80,17 @@ export function createSelection({
   }
 
   /**
-   * Resolve a scene pick to one of this layer's fire records, or null.
-   * BillboardCollection picks surface our id either on picked.primitive.id
-   * or directly on picked.id depending on the CesiumJS pick path.
-   * @param {*} picked - Result of scene.pick().
+   * Resolve a pick to one of this layer's fire records, or null: a hit (a
+   * draw-port `Hit`, `event.drawHit`) on a glow of the layer's own icon set
+   * whose id is a fire it draws now.
+   * @param {?{set: string, id: string}} hit - The renderer's hit.
    * @returns {?Object} Fire record.
    */
 
-  function pickedFire(picked) {
-    if (!picked) return null;
-    const primitiveId = picked.primitive?.id;
-    if (
-      typeof primitiveId === 'string' &&
-      layerState._pickIndexById.has(primitiveId)
-    ) {
-      return layerState._pickIndexById.get(primitiveId);
-    }
-    if (
-      typeof picked.id === 'string' &&
-      layerState._pickIndexById.has(picked.id)
-    ) {
-      return layerState._pickIndexById.get(picked.id);
-    }
-    return null;
+  function pickedFire(hit) {
+    if (!hit || !layerState._icons || hit.set !== layerState._icons.id)
+      return null;
+    return layerState._pickIndexById.get(hit.id) ?? null;
   }
 
   /**
@@ -185,14 +166,14 @@ export function createSelection({
     // Refreshed every registration: the anchor re-grounds onto the DEM when
     // its floor cell warms, and voice targeting must project the same point
     // the sprite renders at.
-    fire.contextEntity.__localBaseCartesian =
-      components.model.firePosition(fire);
     registerEntityContext(fire.contextEntity, {
+      targetPosition: components.model.firePosition(fire),
       id: recordId,
       layerId: id,
       layerName: name,
       source: 'NASA FIRMS',
-      dataSource: layerState._dataSource,
+      // Hidden with the layer: the context store reads its `show`.
+      dataSource: layerState._cells,
       // i18n-ignore: English entity label; the voice card translates it (shownEntityLabel)
       label: `Fire · FRP ${components.model.formatFrp(fire.frp)} MW`,
       latitude: fire.lat,
@@ -202,7 +183,9 @@ export function createSelection({
         confidence: components.model.confidenceBucket(fire.confidence),
         age:
           fire.acqMs > 0
-            ? components.model.formatAge(Date.now() - fire.acqMs)
+            ? components.model.formatAge(
+                components.model.ageReferenceMs() - fire.acqMs,
+              )
             : 'unknown',
         sensor: fire.sensor || 'unknown',
       },

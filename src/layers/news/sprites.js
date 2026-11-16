@@ -1,6 +1,6 @@
 // Marker sprites for news reports: a dark disc with the category's icon and
 // a rim in the severity colour, the rim's form telling attestation. Drawn once per look
-// on a canvas and handed to Cesium as a data URL, so its texture atlas keeps
+// on a canvas and handed to the renderer as a data URL, so its texture atlas keeps
 // one copy per look however often the layer re-renders.
 
 import { NEWS_CATEGORIES, NEWS_SEVERITY } from './model.js';

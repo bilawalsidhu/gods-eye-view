@@ -479,7 +479,8 @@ function readMarkup(file) {
 
 // Text that never reaches the page as UI: tool results and descriptions for
 // AI clients (MCP and the voice model).
-const NOT_UI = [/^src\/tools\//];
+// The conformance suite's check titles are developer output, not UI.
+const NOT_UI = [/^src\/tools\//, /^src\/render\/conformance\//];
 
 function sourceFiles() {
   return trackedFiles(

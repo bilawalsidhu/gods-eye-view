@@ -1,11 +1,12 @@
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { distance, dot } from '../../geo/vector.js';
+import { canvasOf, findCamera } from '../../render/rendererOf.js';
 import { viewshedColors, cameraHue } from '../../data/cctvViewshed.js';
 import { CCTV_OVERLAY_SOURCE_ID } from '../../data/cctvCards.js';
 import { GIZMO_ID_PREFIX } from '../../data/cctvGizmo.js';
+import { inputFor } from '../../input/dispatcher.js';
 import {
   GROUND_PRIOR_INIT_WAIT_MS,
-  CAMERA_ICON,
-  IDLE_CAMERA_COLOR,
   CALIBRATION_RANGE_FLOOR_M,
   VIEW_MOTION_REFRESH_MS,
   VIEW_MOTION_MIN_MOVE_FRACTION,
@@ -21,7 +22,6 @@ export function createLifecycle({
   parts,
   source,
 }) {
-  const { registerSpriteCollection, restoreSpriteOrder } = services.sprites;
   const { activateCctvCameraFromWorldClick } = services.activation;
   const { resolvePickId, registerPickOwner, unregisterPickOwner } =
     services.picking;
@@ -46,12 +46,11 @@ export function createLifecycle({
 
   /** Records the camera pose the last view pass ran at. */
   function noteViewPose() {
-    const camera = layerState._viewer?.camera;
-    if (!camera?.positionWC) return;
+    const pose = findCamera(layerState._viewer)?.pose();
+    if (!pose) return;
     layerState._viewPose = {
-      position: Cesium.Cartesian3.clone(camera.positionWC),
-      direction:
-        camera.directionWC && Cesium.Cartesian3.clone(camera.directionWC),
+      position: pose.position,
+      direction: pose.direction,
     };
   }
 
@@ -61,16 +60,14 @@ export function createLifecycle({
    * would otherwise rerun the full pass on every tick.
    */
   function viewPoseChanged() {
-    const camera = layerState._viewer?.camera;
+    const now = findCamera(layerState._viewer)?.pose();
     const pose = layerState._viewPose;
-    if (!pose || !camera?.positionWC) return true;
-    const height = Math.max(1, camera.positionCartographic?.height ?? 0);
-    const moved = Cesium.Cartesian3.distance(camera.positionWC, pose.position);
+    if (!pose || !now) return true;
+    // An eye with no geographic position (the earth's centre) has no height.
+    const height = Math.max(1, Number.isFinite(now.height) ? now.height : 0);
+    const moved = distance(now.position, pose.position);
     if (moved > height * VIEW_MOTION_MIN_MOVE_FRACTION) return true;
-    if (!pose.direction || !camera.directionWC) return false;
-    return (
-      Cesium.Cartesian3.dot(camera.directionWC, pose.direction) < MIN_TURN_COS
-    );
+    return dot(now.direction, pose.direction) < MIN_TURN_COS;
   }
 
   function viewMotionTick() {
@@ -99,6 +96,59 @@ export function createLifecycle({
     layerState._viewMotionTimer = 0;
   }
 
+  /**
+   * Listen for the camera's moves on the viewer's camera port: hover picking
+   * pauses while it moves, and the view pass reruns on an interval until the
+   * move ends, then once more. A re-init against a new viewer moves the
+   * listeners to its camera; one against the same viewer keeps them.
+   */
+  function attachViewListeners() {
+    const viewCamera = findCamera(layerState._viewer);
+    if (
+      layerState._viewListenerCamera &&
+      layerState._viewListenerCamera !== viewCamera
+    ) {
+      layerState._horizonCullListener?.();
+      layerState._moveStartListener?.();
+      layerState._horizonCullListener = null;
+      layerState._moveStartListener = null;
+      layerState._cameraMoving = false;
+    }
+    layerState._viewListenerCamera = viewCamera;
+    if (!layerState._horizonCullListener && viewCamera) {
+      // Ambient cards piggyback the same settle event: moveEnd-driven
+      // reselection only, never per frame (refreshAmbientCards no-ops while
+      // the layer is disabled).
+      layerState._horizonCullListener = viewCamera.on('moveEnd', () => {
+        layerState._cameraMoving = false;
+        stopViewMotionTimer();
+        parts.navigation.reopenNearestCamera();
+        settleView();
+      });
+    }
+    if (!layerState._moveStartListener && viewCamera) {
+      // Item B: hover picking pauses while the camera is in motion. A long
+      // move (cockpit flight, a drag) never settles, so the view pass also
+      // reruns on an interval until it does.
+      layerState._moveStartListener = viewCamera.on('moveStart', () => {
+        layerState._cameraMoving = true;
+        // enable() starts it for a move already under way.
+        if (layerState._enabled) startViewMotionTimer();
+      });
+    }
+  }
+
+  /** Drop the move listeners; nothing reports the end of a move after it. */
+  function detachViewListeners() {
+    layerState._horizonCullListener?.();
+    layerState._horizonCullListener = null;
+    layerState._moveStartListener?.();
+    layerState._moveStartListener = null;
+    layerState._cameraMoving = false;
+    layerState._viewListenerCamera = null;
+    stopViewMotionTimer();
+  }
+
   /** Resets all module-scoped runtime state to initial values. */
 
   function clearRuntimeState() {
@@ -107,6 +157,9 @@ export function createLifecycle({
     // Idempotent — also covers a re-init without a prior destroy().
     parts.cards.teardownAmbientCards();
     parts.projection.clearProjectionOverlay();
+    // An activation probe still to answer lands on none of these records.
+    for (const record of layerState._records || [])
+      if (record) record.probeToken = (record.probeToken || 0) + 1;
     layerState._records = [];
     layerState._recordById = new Map();
     layerState._viewRecords = [];
@@ -123,9 +176,6 @@ export function createLifecycle({
     layerState._lastError = null;
     layerState._lastFocusStyleAt = 0;
     layerState._activeFocusStyleCount = 0;
-    // FIX ①/③: the discovered tileset handle is scene-scoped — drop it so a fresh
-    // init re-discovers against the current scene primitives.
-    layerState._activeTileset = null;
     // Task 5: the applied-regime tracker is record-set-scoped — a fresh init
     // recomputes it against the then-current scene.
     layerState._lastAppliedRegime = null;
@@ -133,9 +183,9 @@ export function createLifecycle({
   const methods = {
     /**
      * Initializes the CCTV layer: loads camera sources, builds the catalog,
-     * restores calibration from localStorage, creates billboards, sets up click
+     * restores calibration from localStorage, creates camera icons, sets up click
      * handling, and performs initial health sync. Coverage entities stay lazy.
-     * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
+     * @param {object} viewer - The viewer.
      */
     async init(viewer) {
       layerState._sourceAbort?.abort();
@@ -156,16 +206,7 @@ export function createLifecycle({
       layerState._lastViewContext = '';
       layerState._calibrationById = parts.calibration.loadCalibrationStore();
 
-      layerState._billboards = new Cesium.BillboardCollection();
-      // Cesium switches a property's buffer-usage hint whenever it starts or
-      // stops changing from one frame to the next, and every switch rewrites
-      // the vertex data of every billboard. The view pass toggles `show` on a
-      // few icons of a large catalog at a time, so on a 33K catalog each pass
-      // cost two full rewrites. With the hint fixed, Cesium uploads only the
-      // icons that changed.
-      layerState._billboards.computeNewBuffersUsage = () => false;
-      layerState._viewer.scene.primitives.add(layerState._billboards);
-      registerSpriteCollection('cctv', layerState._billboards);
+      parts.rendering.createCameraIcons(layerState._viewer);
 
       const sources = await parts.catalog.loadCameraSources();
       const catalogFromSources = parts.catalog.buildCatalogFromSources(sources);
@@ -233,32 +274,14 @@ export function createLifecycle({
           ? groundPrior.ellipsoid
           : Number(camera.groundElevationM) || 0;
         camera.absoluteHeightM = priorGround + camera.mountHeightM;
-        const position = Cesium.Cartesian3.fromDegrees(
+        const position = fromDegrees(
           camera.lon,
           camera.lat,
           camera.absoluteHeightM,
         );
-        const billboard = layerState._billboards.add({
-          id: camera.id,
-          image: CAMERA_ICON,
-          position,
-          color: IDLE_CAMERA_COLOR,
-          width: 24,
-          height: 24,
-          // Field-test fix (2026-07-06): always-on-top. The old finite value
-          // (1800 m) re-engaged the depth test at far zoom, where the COARSE
-          // far-LOD Google-3D mesh sits above the true ground and swallowed
-          // ground-anchored icons ("submerged" pills over SF). Far-side-of-globe
-          // icons are handled by refreshHorizonCulling() (the flights-layer
-          // EllipsoidalOccluder pattern), not by the depth test.
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          scaleByDistance: new Cesium.NearFarScalar(350, 1.25, 4_000_000, 0.42),
-        });
-
         const record = {
           camera,
           position,
-          billboard,
           coverageEntities: [],
           projection: null,
           // Task 5 (height-datum fix): regime-aware ground resolution state.
@@ -292,11 +315,12 @@ export function createLifecycle({
           viewshedColors: viewshedColors(
             cameraHue(hueIndexById.get(camera.id) ?? 0),
           ),
-          viewshedPrimitive: null,
+          viewshedVolume: null,
           viewshedActiveTint: false,
         };
         layerState._records.push(record);
         layerState._recordById.set(camera.id, record);
+        parts.rendering.addCameraIcon(record);
       }
 
       layerState._count = layerState._records.length;
@@ -331,57 +355,12 @@ export function createLifecycle({
       }
 
       // Field-test fix (2026-07-06): horizon-cull on camera settle (pairs with
-      // the billboards' always-on-top depth setting) + one initial pass so the
+      // the icons' always-on-top drawing) + one initial pass so the
       // first paint is already culled.
-      // A re-init against a new viewer moves the move listeners to its camera.
-      if (
-        layerState._viewListenerCamera &&
-        layerState._viewListenerCamera !== layerState._viewer.camera
-      ) {
-        const previous = layerState._viewListenerCamera;
-        if (layerState._horizonCullListener)
-          previous.moveEnd?.removeEventListener(
-            layerState._horizonCullListener,
-          );
-        if (layerState._moveStartListener)
-          previous.moveStart?.removeEventListener(
-            layerState._moveStartListener,
-          );
-        layerState._horizonCullListener = null;
-        layerState._moveStartListener = null;
-        layerState._cameraMoving = false;
-      }
-      layerState._viewListenerCamera = layerState._viewer.camera;
-      if (!layerState._horizonCullListener) {
-        // Ambient cards piggyback the same settle event: moveEnd-driven
-        // reselection only, never per frame (refreshAmbientCards no-ops while
-        // the layer is disabled).
-        layerState._horizonCullListener = () => {
-          layerState._cameraMoving = false;
-          stopViewMotionTimer();
-          parts.navigation.reopenNearestCamera();
-          settleView();
-        };
-        layerState._viewer.camera.moveEnd.addEventListener(
-          layerState._horizonCullListener,
-        );
-      }
-      if (!layerState._moveStartListener) {
-        // Item B: hover picking pauses while the camera is in motion. A long
-        // move (cockpit flight, a drag) never settles, so the view pass also
-        // reruns on an interval until it does.
-        layerState._moveStartListener = () => {
-          layerState._cameraMoving = true;
-          // enable() starts it for a move already under way.
-          if (layerState._enabled) startViewMotionTimer();
-        };
-        layerState._viewer.camera.moveStart.addEventListener(
-          layerState._moveStartListener,
-        );
-      }
+      attachViewListeners();
       // A resize or rotation changes what is on screen without moving the
       // camera.
-      const canvas = layerState._viewer.scene?.canvas;
+      const canvas = canvasOf(layerState._viewer);
       if (layerState._viewResizeCanvas !== canvas) {
         // A re-init against a new viewer observes its canvas instead.
         layerState._viewResizeObserver?.disconnect();
@@ -406,15 +385,15 @@ export function createLifecycle({
       }
       parts.rendering.refreshHorizonCulling();
 
-      layerState._clickHandler = new Cesium.ScreenSpaceEventHandler(
-        layerState._viewer.scene.canvas,
-      );
-      parts.selection.bindCctvWorldClickGesture(
-        layerState._clickHandler,
-        (click) => {
+      const input = inputFor(layerState._viewer);
+      const unsubscribeClick = parts.selection.bindCctvWorldClickGesture(
+        input,
+        (event) => {
           if (!layerState._enabled) return;
-          const picked = layerState._viewer.scene.pick(click.position);
-          const cameraId = parts.selection.extractPickedCameraId(picked);
+          const picked = event.topHit;
+          const cameraId = parts.selection.extractPickedCameraId(
+            event.drawHit ?? null,
+          );
           if (cameraId) {
             activateCctvCameraFromWorldClick(
               cameraId,
@@ -431,11 +410,11 @@ export function createLifecycle({
           // Item A (owner round 2): the scene pick found no camera — try the
           // painted ambient cards. The cards canvas is pointer-events:none (this
           // handler owns the events), so a click landing on a card's rect selects
-          // its camera exactly like a click on the icon. Cesium click positions
+          // its camera exactly like a click on the icon. Click positions
           // and the recorded rects are both CSS px — direct comparison.
           const cardId = layerState._cctvOverlayHost.hitTest(
-            click.position.x,
-            click.position.y,
+            event.screenPosition.x,
+            event.screenPosition.y,
             { sourceId: CCTV_OVERLAY_SOURCE_ID },
           )?.entryId;
           if (cardId && layerState._recordById.has(cardId)) {
@@ -454,14 +433,15 @@ export function createLifecycle({
             parts.selection.deactivateActiveCamera();
           }
         },
-        {
-          // Item B: hover summons a card on a cardless camera icon. The gesture
-          // classifier owns MOUSE_MOVE too, so chain hover work through its seam
-          // instead of replacing the travel accumulator's handler.
-          onMouseMove: (movement) =>
-            parts.hover.handleHoverMove(movement?.endPosition),
-        },
       );
+      // Item B: hover summons a card on a cardless camera icon.
+      const unsubscribeHover = input.onPointer('move', (movement) =>
+        parts.hover.handleHoverMove(movement?.endPosition),
+      );
+      layerState._clickSubscription = () => {
+        unsubscribeClick();
+        unsubscribeHover();
+      };
 
       await parts.health.syncHealthState(true);
       // Health ranks crowded cells: thin again now that it has arrived (a
@@ -472,7 +452,6 @@ export function createLifecycle({
       }
       parts.rendering.refreshCoverageStyles();
       parts.presentation.notifyListeners();
-      restoreSpriteOrder(layerState._viewer);
       console.log('[Data:CCTV] Initialized with', layerState._count, 'cameras');
     },
 
@@ -491,7 +470,7 @@ export function createLifecycle({
       )
         services.credits?.showOsmCredit?.(layerState._viewer, 'cctv');
       layerState._lastUpdate = Date.now();
-      // Pick-ownership (H2): camera billboards use the camera id directly;
+      // Pick-ownership (H2): camera icons use the camera id directly;
       // coverage polyline entities use `cctv-<cameraId>-<role>` entity ids.
       registerPickOwner('cctv', (pickedId) => {
         if (layerState._recordById.has(pickedId)) return true;
@@ -535,7 +514,6 @@ export function createLifecycle({
       parts.cards.startCardFrameLoop();
       parts.cards.refreshAmbientCards();
       parts.presentation.notifyListeners();
-      restoreSpriteOrder(layerState._viewer);
     },
 
     /** Disables the layer: hides entities, stops the projection loop and load queue. */
@@ -564,10 +542,10 @@ export function createLifecycle({
 
     /**
      * Tears down the layer: destroys click handler, projection loop, coverage
-     * entities, billboards, and clears all runtime state and subscribers.
-     * @param {Cesium.Viewer} [viewer] - Viewer instance (falls back to stored ref).
+     * entities, icons, and clears all runtime state and subscribers. It
+     * releases what init attached, whichever viewer it is handed.
      */
-    destroy(viewer) {
+    destroy() {
       services.credits?.hideOsmCredit?.(layerState._viewer, 'cctv');
       layerState._sourceAbort?.abort();
       if (typeof document !== 'undefined')
@@ -583,23 +561,7 @@ export function createLifecycle({
         );
         layerState._mapStackListener = null;
       }
-      const teardownViewer = viewer || layerState._viewer;
-      if (layerState._horizonCullListener && teardownViewer?.camera?.moveEnd) {
-        teardownViewer.camera.moveEnd.removeEventListener(
-          layerState._horizonCullListener,
-        );
-        layerState._horizonCullListener = null;
-      }
-      if (layerState._moveStartListener && teardownViewer?.camera?.moveStart) {
-        teardownViewer.camera.moveStart.removeEventListener(
-          layerState._moveStartListener,
-        );
-        layerState._moveStartListener = null;
-      }
-      // The move listeners are gone; nothing will report the end of a move.
-      layerState._cameraMoving = false;
-      layerState._viewListenerCamera = null;
-      stopViewMotionTimer();
+      detachViewListeners();
       layerState._viewResizeObserver?.disconnect();
       layerState._viewResizeObserver = null;
       layerState._viewResizeCanvas = null;
@@ -609,21 +571,14 @@ export function createLifecycle({
       }
       layerState._calibrationMode = false;
       releaseContinuousRender('cctv-adjust');
-      if (layerState._clickHandler) {
-        layerState._clickHandler.destroy();
-        layerState._clickHandler = null;
-      }
-      if (teardownViewer?.scene?.screenSpaceCameraController) {
-        teardownViewer.scene.screenSpaceCameraController.enableInputs = true;
-      }
+      layerState._clickSubscription?.();
+      layerState._clickSubscription = null;
       parts.projection.stopProjectionLoop();
       parts.geometryQueue.stopGeometryLoadQueue();
       parts.cards.teardownAmbientCards();
       parts.geometry.destroyCoverageEntities();
-      if (layerState._billboards && teardownViewer) {
-        teardownViewer.scene.primitives.remove(layerState._billboards);
-        layerState._billboards = null;
-      }
+      parts.rendering.destroyCameraIcons();
+      parts.drawSets.dispose();
       clearRuntimeState();
       layerState._viewer = null;
       layerState._enabled = false;
@@ -636,5 +591,10 @@ export function createLifecycle({
     },
   };
 
-  return { clearRuntimeState, methods };
+  return {
+    clearRuntimeState,
+    attachViewListeners,
+    detachViewListeners,
+    methods,
+  };
 }
