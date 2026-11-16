@@ -202,7 +202,7 @@ body.ui-clean-view #gev-stories .gs-pop {
   z-index: 1201;
   left: auto;
 }
-#gev-stories .gs-hosted-toast {
+#gev-stories .gs-opened-toast {
   position: fixed;
   z-index: 1201;
   bottom: 110px;
@@ -230,7 +230,7 @@ body.ui-clean-view #gev-stories .gs-pop {
    software WebGL): the closed-state pieces use a near-opaque fill instead. */
 #gev-stories .gs-entry,
 #gev-stories .gs-pop,
-#gev-stories .gs-hosted-toast {
+#gev-stories .gs-opened-toast {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
@@ -238,7 +238,7 @@ body.ui-clean-view #gev-stories .gs-pop {
   background: rgba(6, 24, 34, 0.92);
 }
 #gev-stories .gs-pop,
-#gev-stories .gs-hosted-toast {
+#gev-stories .gs-opened-toast {
   background: rgba(12, 12, 20, 0.95);
 }
 

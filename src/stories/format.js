@@ -32,8 +32,8 @@ export function creditPlacement({ map, feed, width, height }) {
 
 /**
  * Where the Stories button sits: just left of the leftmost visible control
- * in GEV's top-right corner — the ACTIVE STYLE readout in GEV, the account
- * avatar (with or beside the readout) in GEV Hosted — top-aligned with it.
+ * in GEV's top-right corner — the ACTIVE STYLE readout, or an element placed
+ * in that corner (with or beside the readout) — top-aligned with it.
  * Where none of those shows (GEV's phone layout, whose top row of icon
  * buttons spans the corner), it goes icon-only just under the right-hand
  * column of corner actions, aligned with its right edge.

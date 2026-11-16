@@ -134,19 +134,19 @@ test('the Stories button sits left of whatever is in the top-right corner', () =
     top: 24,
     right: 270,
   });
-  // GEV Hosted: the account avatar beside the readout; the leftmost wins.
+  // An element placed beside the readout; the leftmost wins.
   assert.deepEqual(
     entryPlacement([box(1650, 24, 220, 60), box(1898, 22, 38, 38)], 1960),
     { top: 24, right: 320 },
   );
-  // Hosted with the readout hidden: the avatar alone.
+  // The readout hidden: that element alone.
   assert.deepEqual(
     entryPlacement([box(0, 0, 0, 0), box(1898, 22, 38, 38)], 1960),
     { top: 22, right: 72 },
   );
   // Nothing there yet.
   assert.deepEqual(entryPlacement([null, null], 1960), { top: 14, right: 14 });
-  // GEV's phone layout: no readout or avatar; icon-only under the corner
+  // GEV's phone layout: nothing in the corner; icon-only under the corner
   // actions column, aligned with its right edge.
   assert.deepEqual(
     entryPlacement([box(0, 0, 0, 0), null], 639, box(594, 60, 33, 70)),

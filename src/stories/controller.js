@@ -918,7 +918,7 @@ export function createStoriesController({
     director.styleManager?.setPanelCollapsed?.('scene-panel', false, {
       explicit: true,
     });
-    store.hostedToast = {
+    store.openedToast = {
       id: story.id,
       title: story.title,
       atMs,

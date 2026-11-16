@@ -258,7 +258,7 @@ test('reopening while a scene tears down keeps the view from before Stories', as
   controller.open();
   controller.openStory('gev:bhote-koshi-nepal-scene');
   director.running = true;
-  const toast = store.hostedToast;
+  const toast = store.openedToast;
   const closing = controller.openInGev();
   // The scene has moved the camera; the person opens Stories again at once.
   camera.position = { x: 9, y: 9, z: 9 };
@@ -267,7 +267,7 @@ test('reopening while a scene tears down keeps the view from before Stories', as
   await closing;
   assert.deepEqual(director.selected, []);
   assert.deepEqual(director.styleManager.panels, []);
-  assert.equal(store.hostedToast, toast);
+  assert.equal(store.openedToast, toast);
   assert.equal(camera.views.length, 0, 'no restore under the reopened Stories');
   await controller.close();
   const { x, y, z } = camera.views.at(-1).destination;

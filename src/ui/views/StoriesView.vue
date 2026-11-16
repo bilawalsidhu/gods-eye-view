@@ -30,14 +30,14 @@ const StoryScreen = defineAsyncComponent(
  * Story page. Both show GEV's own Cesium globe through their map areas.
  */
 const store = useStoriesStore();
-const { mode, storyId, toast, hostedToast } = storeToRefs(store);
+const { mode, storyId, toast, openedToast } = storeToRefs(store);
 const story = computed(() => (storyId.value ? store.byId(storyId.value) : null));
 const reduceMotion = () =>
   globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 // ── Entry: in GEV's top-right row, left of what sits in the corner ──
-// GEV has its ACTIVE STYLE readout there; GEV Hosted adds the account
-// avatar, which can come after Stories mounts (sign-in).
+// GEV has its ACTIVE STYLE readout there; an element placed in that corner
+// (#account-control, with or beside the readout) can come after Stories mounts.
 const CORNER = ['style-indicator', 'account-control'];
 // GEV's phone layout shows neither; the button then sits under this column.
 const COLUMN = 'corner-actions';
@@ -53,8 +53,8 @@ let entryTries = 0;
 let entryTimer = 0;
 let cornerObserver = null;
 const observed = new Set();
-// GEV Hosted moves the corner by body class (signed in, guest) without
-// resizing it, which a ResizeObserver does not see.
+// A body class can move the corner without resizing it, which a
+// ResizeObserver does not see.
 let bodyObserver = null;
 function watchCorner() {
   placeEntry();
@@ -151,17 +151,17 @@ function openExplore() {
 }
 
 // ── Opened in GEV: a toast that leads back to the story ──
-let hostedTimer = 0;
-watch(hostedToast, (v) => {
-  clearTimeout(hostedTimer);
-  if (v) hostedTimer = setTimeout(() => (hostedToast.value = null), 6000);
+let openedTimer = 0;
+watch(openedToast, (v) => {
+  clearTimeout(openedTimer);
+  if (v) openedTimer = setTimeout(() => (openedToast.value = null), 6000);
 });
 function backToStory() {
-  const v = hostedToast.value;
-  hostedToast.value = null;
+  const v = openedToast.value;
+  openedToast.value = null;
   if (v) store.controller.openStory(v.id, { atMs: v.atMs });
 }
-const hostedWhen = computed(() => hostedToast.value?.when ?? '');
+const openedWhen = computed(() => openedToast.value?.when ?? '');
 
 // ── Card-to-map morph: Play grows the card into the story; Back folds it home ──
 const appEl = ref(null);
@@ -272,7 +272,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   clearTimeout(entryTimer);
-  clearTimeout(hostedTimer);
+  clearTimeout(openedTimer);
   cancelAnimationFrame(creditFrame);
   cornerObserver?.disconnect();
   bodyObserver?.disconnect();
@@ -340,9 +340,9 @@ watch([mode, storyId], () => nextTick(watchCredit));
           <button class="tbtn" type="button" @click="markPopSeen">{{ t('Not now') }}</button>
         </div>
       </div>
-      <div v-if="hostedToast" id="hToast" class="h-toast glass gs-hosted-toast" role="status">
+      <div v-if="openedToast" id="hToast" class="h-toast glass gs-opened-toast" role="status">
         <b>{{ t('Opened in GEV') }}</b>
-        <span>{{ hostedToast.title }} · {{ hostedWhen }}</span>
+        <span>{{ openedToast.title }} · {{ openedWhen }}</span>
         <button class="tbtn" type="button" @click="backToStory">{{ t('Back to story') }}</button>
       </div>
     </template>

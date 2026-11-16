@@ -171,7 +171,7 @@ test('a failed load is reported and the next open tries again', async () => {
 
 test('a Stories link that cannot load is reported too', async () => {
   setActivePinia(createPinia());
-  history.replaceState(null, '', '/?story=worldfx%3Afire-tracker');
+  history.replaceState(null, '', '/?story=other%3Afire-tracker');
   const store = useStoriesStore();
   let failures = 0;
   bootStories({

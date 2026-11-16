@@ -41,7 +41,7 @@ export const useStoriesStore = defineStore('stories', {
     /** Hints and toasts */
     hint: '',
     toast: '',
-    hostedToast: null,
+    openedToast: null,
     popSeen: false,
     hintSeen: false,
     sheetHintSeen: false,
