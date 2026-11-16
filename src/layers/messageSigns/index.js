@@ -535,7 +535,10 @@ export function createMessageSignsLayer({
     );
     _announcedKey = null;
     announce('');
-    if (had) publishFaces();
+    if (!had) return;
+    // Re-choose, not just republish: a face only the selection granted goes now.
+    if (_enabled) refreshFaces();
+    else publishFaces();
   }
 
   function toggleSelection(id) {

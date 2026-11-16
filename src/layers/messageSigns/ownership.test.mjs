@@ -603,6 +603,28 @@ test('a selected sign culled above the bounds is fully released on deselect or d
   }
 });
 
+test('deselecting a sign lifted past the budget releases its face at once', async () => {
+  for (const finish of ['empty click', 'Escape']) {
+    const { h, far, hasFace } = await pastBudgetSelection();
+    assert.ok(hasFace(), finish);
+    if (finish === 'Escape') h.listeners.get('keydown')({ key: 'Escape' });
+    else h.click({ x: 1, y: 1 }); // empty globe
+    await settle();
+    assert.equal(h.cards().length, 0, finish);
+    assert.ok(!hasFace(), finish);
+    assert.equal(h.faces().length, FACE_BUDGET, finish);
+    assert.equal(h.pendingTimers.size, 0, finish);
+    assert.deepEqual(
+      h.decoders
+        .filter((decoder) => decoder.message === far.message)
+        .map((decoder) => decoder.closed),
+      [true],
+      finish,
+    );
+    h.layer.destroy();
+  }
+});
+
 test('signs on cold ground floors appear once a floor resolve warms them', async () => {
   const snapshot = {
     signs: [sign('V1', 'msg_00000001')],
