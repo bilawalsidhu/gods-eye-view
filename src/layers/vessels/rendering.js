@@ -31,6 +31,12 @@ import {
 } from '../../data/fleetModels.js';
 import { createFleetModelLayer } from '../../data/fleetModelInstances.js';
 import { isAidToNavigation } from '../../data/vesselTypes.js';
+import { createWindowProjector } from '../../data/windowProjection.js';
+
+// Label grid cells are keyed by column * LABEL_CELL_ROW + row, unique while
+// rows stay within half of it either side; a cell further off screen is keyed
+// by its text.
+const LABEL_CELL_ROW = 1 << 20;
 
 /** A moving vessel's next frame is asked for once it would move this far on
  * screen (pixels), so it glides when it moves visibly and the scene idles
@@ -70,6 +76,7 @@ export function createRendering({
 }) {
   const { state } = vesselState;
   let visualRecords = new WeakMap();
+  const labelScreenScratch = new Cesium.Cartesian2();
 
   // The fallback preserves helper calls with externally supplied render records.
   function getVisual(record) {
@@ -1038,25 +1045,30 @@ export function createRendering({
       return;
     }
 
+    // Every vessel in view is projected, so the camera is read once and each
+    // is a few multiplications (see windowProjection.js) into one screen
+    // point; a cell gets a candidate only for the vessel that leads it.
+    const project = createWindowProjector(scene);
     const cells = new Map();
     for (const record of records) {
-      const visual = getVisual(record);
       if (record === selected) continue;
-      const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-        scene,
-        visual.position,
-      );
+      const screen = project(getVisual(record).position, labelScreenScratch);
       if (!screen) continue;
-      const key = `${Math.floor(screen.x / LABEL_GRID_PX)}:${Math.floor(screen.y / LABEL_GRID_PX)}`;
-      const candidate = {
-        record,
-        score: labelPriority(record, selected),
-        x: screen.x,
-        y: screen.y,
-      };
+      const column = Math.floor(screen.x / LABEL_GRID_PX);
+      const row = Math.floor(screen.y / LABEL_GRID_PX);
+      const key =
+        Math.abs(row) < LABEL_CELL_ROW / 2 && Math.abs(column) < LABEL_CELL_ROW
+          ? column * LABEL_CELL_ROW + row
+          : `${column}:${row}`;
+      const score = labelPriority(record, selected);
       const existing = cells.get(key);
-      if (!existing || candidate.score > existing.score) {
-        cells.set(key, candidate);
+      if (!existing) {
+        cells.set(key, { record, score, x: screen.x, y: screen.y });
+      } else if (score > existing.score) {
+        existing.record = record;
+        existing.score = score;
+        existing.x = screen.x;
+        existing.y = screen.y;
       }
     }
 
@@ -1148,7 +1160,30 @@ export function createRendering({
     return score;
   }
 
+  // Whether a vessel's name is worth a card, kept per vessel until what it
+  // is judged from changes: the label pass asks for every vessel in view.
+  const usefulNames = new WeakMap();
+
   function hasUsefulName(record) {
+    const known = usefulNames.get(record);
+    if (
+      known &&
+      known.name === record.name &&
+      known.mmsi === record.mmsi &&
+      known.id === record.id
+    )
+      return known.useful;
+    const useful = nameIsUseful(record);
+    usefulNames.set(record, {
+      name: record.name,
+      mmsi: record.mmsi,
+      id: record.id,
+      useful,
+    });
+    return useful;
+  }
+
+  function nameIsUseful(record) {
     const text = String(record.name || '').trim();
     return Boolean(
       text &&

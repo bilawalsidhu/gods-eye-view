@@ -58,6 +58,9 @@ function stampFix(record, receivedAtMs, feedLatestEpoch) {
   record.fixFeedEpoch = feedLatestEpoch;
 }
 
+/** A fix's time, as the fixes are merged (one function for every vessel). */
+const fixTime = (fix) => fix.atMs;
+
 function positiveNumber(value) {
   const number = finiteNumber(value);
   return number !== null && number > 0 ? number : null;
@@ -164,7 +167,7 @@ export class VesselRecords {
             ? mergeTimelineRuns(
                 record.fixes ?? [],
                 next.fixes,
-                (fix) => fix.atMs,
+                fixTime,
                 (next.lastPositionEpoch ?? 0) * 1000,
               )
             : null;

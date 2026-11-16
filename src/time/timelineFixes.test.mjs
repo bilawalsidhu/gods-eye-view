@@ -96,3 +96,96 @@ test('past the limit only the fixes nearest the centre are kept', () => {
     [0, 1, 2, 3],
   );
 });
+
+/** The merge as first written, a reference the faster one must match. */
+function referenceMerge(older, newer, timeOf, centreMs, limit = 240) {
+  const SPACING = 20_000;
+  const first = newer.length ? timeOf(newer[0]) : Infinity;
+  const last = newer.length ? timeOf(newer[newer.length - 1]) : -Infinity;
+  const newest = newer[newer.length - 1];
+  const merged = [];
+  const take = (entry) => {
+    const k = merged.length - 1;
+    if (k < 0 || timeOf(entry) - timeOf(merged[k]) >= SPACING)
+      merged.push(entry);
+    else if (entry === newest) merged[k] = entry;
+  };
+  let i = 0;
+  let j = 0;
+  while (i < older.length || j < newer.length) {
+    if (i < older.length) {
+      const t = timeOf(older[i]);
+      if (t >= first && t <= last) {
+        i++;
+        continue;
+      }
+      if (j >= newer.length || t < timeOf(newer[j])) {
+        take(older[i++]);
+        continue;
+      }
+    }
+    take(newer[j++]);
+  }
+  if (merged.length <= limit) return merged;
+  let start = 0;
+  while (
+    start + limit < merged.length &&
+    Math.abs(timeOf(merged[start + limit]) - centreMs) <
+      Math.abs(timeOf(merged[start]) - centreMs)
+  )
+    start++;
+  return merged.slice(start, start + limit);
+}
+
+test('the merge keeps exactly what it always kept, for runs of every shape', () => {
+  let seed = 3;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const run = (n, from, stepMs, sorted) => {
+    const out = Array.from({ length: n }, (_, k) => ({
+      atMs:
+        rnd() < 0.05
+          ? Number.NaN
+          : from +
+            Math.round((sorted ? k : rnd() * n) * stepMs * (0.5 + rnd())),
+    }));
+    if (sorted) out.sort((a, b) => a.atMs - b.atMs);
+    return out;
+  };
+  for (let round = 0; round < 3000; round++) {
+    const sorted = round % 5 !== 0;
+    const older = run(
+      Math.floor(rnd() * 300),
+      Math.floor(rnd() * 4e6),
+      15_000 + rnd() * 50_000,
+      sorted,
+    );
+    const newer = run(
+      Math.floor(rnd() * 30),
+      Math.floor(rnd() * 6e6),
+      5_000 + rnd() * 70_000,
+      sorted,
+    );
+    // The newest of the newer run is sometimes an entry of the older one.
+    if (newer.length && older.length && rnd() < 0.1)
+      newer[newer.length - 1] = older[older.length - 1];
+    const centreMs = rnd() * 7e6;
+    const limit = rnd() < 0.5 ? 240 : 1 + Math.floor(rnd() * 40);
+    const expected = referenceMerge(
+      older,
+      newer,
+      (f) => f.atMs,
+      centreMs,
+      limit,
+    );
+    const actual = mergeTimelineRuns(
+      older,
+      newer,
+      (f) => f.atMs,
+      centreMs,
+      limit,
+    );
+    assert.equal(actual.length, expected.length, `round ${round}`);
+    for (let k = 0; k < expected.length; k++)
+      assert.equal(actual[k], expected[k], `round ${round} entry ${k}`);
+  }
+});
