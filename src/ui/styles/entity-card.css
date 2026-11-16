@@ -325,13 +325,13 @@
   }
 }
 
-/* Radio can move between Context's two body hosts. Keep its visibility
-   tied to the Inspector and layer state in either location. */
+/* The Properties tab shows only the layers' settings. The idle hint gives
+   way to the view summary, and Contacts' Cockpit entry to the card's own
+   while the card offers one. */
 #global-context-panel[data-context-tab='props']
   :is(.global-context-modes, .context-mode-view, #radio-panel),
-#global-context-panel #radio-panel:not(.radio-enabled),
 #global-context-panel #context-mode-standby,
-#global-context-panel #cockpit-entry {
+#global-context-panel:has([data-entity-cockpit-entry]) #cockpit-entry {
   display: none !important;
 }
 

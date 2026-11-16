@@ -2,10 +2,15 @@ import { resolvePickedContext } from '../data/pickedContext.js';
 import { followedOf, onFollowChanged } from '../data/followed.js';
 import { fromDegreesInto } from '../geo/ellipsoid.js';
 import { inputFor } from '../input/dispatcher.js';
+import {
+  isTrackingClickGesture,
+  isTrackingSelectionGesture,
+} from '../data/trackingClickGesture.js';
 import { findCamera } from '../render/rendererOf.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useEntityCardStore } from './stores/entityCard.js';
 import { useOmnibarStore } from './stores/omnibar.js';
+import { usePanelChromeStore } from './stores/panelChrome.js';
 import { useVoiceStore } from './stores/voice.js';
 
 /** Camera distance (m) that frames an item of each kind. */
@@ -19,13 +24,11 @@ const FRAME_RANGE = Object.freeze({
   'fire perimeter': 40_000,
 });
 const DEFAULT_RANGE = 8_000;
-/** Items the voice runtime can keep the camera on. */
-const FOLLOWABLE = new Set([
-  'flights',
-  'military',
-  'ais-live-vessels',
-  'satellites',
-]);
+/**
+ * Items the camera can follow: their layers follow through the camera port
+ * with a key naming the item (src/data/followed.js). A vessel is flown to.
+ */
+const FOLLOWABLE = new Set(['flights', 'military', 'satellites']);
 
 /**
  * Connects the Context panel's entity card to the globe: a click on anything a
@@ -41,6 +44,8 @@ const FOLLOWABLE = new Set([
  *   to the point under the camera without it.
  * @param {(lat: number, lon: number) => Promise<object>} [options.regionalBrief]
  *   The app's regional brief service, for the weather and news Context shows.
+ * @param {(x: number, y: number) => object|null} [options.overlayHit]
+ *   The overlay card under a screen point, if any (a vessel's, a fire's).
  * @returns {() => void} disconnects
  */
 export function installEntityContext({
@@ -49,11 +54,16 @@ export function installEntityContext({
   pinia,
   pickWorld,
   regionalBrief,
+  overlayHit,
 }) {
   const store = useEntityCardStore(pinia);
   const omnibar = useOmnibarStore(pinia);
   const voice = useVoiceStore(pinia);
   const cockpitStore = useCockpitStore(pinia);
+  const chrome = usePanelChromeStore(pinia);
+  /** Whether Context is open; a closed panel reads nothing. */
+  const isOpen = () =>
+    chrome.panels['global-context-panel']?.collapsed === false;
   const doc = globalThis.document;
   let disposed = false;
   // The renderer's camera; looked up on use, as a renderer can be bound
@@ -116,9 +126,15 @@ export function installEntityContext({
   // Closing the card lets go of the camera, when the camera follows the
   // card's own item and nothing else took it over since.
   function letGo(card) {
-    const run = omnibar.runner;
-    if (!run || !followsCard(card)) return;
-    Promise.resolve(run('stop_tracking', {})).catch(() => {});
+    if (!followsCard(card)) return;
+    // Only the card's own layer lets go, as the person's own action; other
+    // layers' selections stay as they are.
+    const layer = getDataManager()?.layers?.get?.(card.layerId);
+    try {
+      layer?.module?.stopTracking?.({ origin: 'user' });
+    } catch {
+      // A layer going away meanwhile has nothing left to let go of.
+    }
   }
 
   // Aircraft can be flown from, and a satellite ridden in the orbital view:
@@ -182,6 +198,7 @@ export function installEntityContext({
     flyTo,
     follow,
     letGo,
+    isOpen,
     regionalBrief,
     ask,
     askText,
@@ -203,7 +220,7 @@ export function installEntityContext({
   // the height. Read when the camera settles, not every frame.
   const readView = () => {
     const port = camera();
-    if (!port) return;
+    if (!port || !isOpen()) return;
     const pose = port.pose();
     if (![pose.lat, pose.lon, pose.height].every(Number.isFinite)) return;
     const middle = pickWorld?.(viewer, 0.5, 0.5);
@@ -252,14 +269,16 @@ export function installEntityContext({
     listen();
     readView();
   }, 0);
+  // Opening the panel describes the view as it is now.
+  let wasOpen = isOpen();
+  const offChrome = chrome.$subscribe(() => {
+    const open = isOpen();
+    if (open && !wasOpen) readView();
+    wasOpen = open;
+  });
 
   /** Layers whose own map click already follows what was clicked. */
-  const CLICK_FOLLOWS = new Set([
-    'flights',
-    'military',
-    'satellites',
-    'ais-live-vessels',
-  ]);
+  const CLICK_FOLLOWS = new Set(['flights', 'military', 'satellites']);
 
   // Keep the card's "following" in step with the camera: it says Following
   // while the camera follows the card's own item (the follow's key names
@@ -269,9 +288,16 @@ export function installEntityContext({
   let followCheck = 0;
   const offFollow = onFollowChanged(viewer, () => {
     clearTimeout(followCheck);
+    const card = store.card;
+    // Taking hold of the card's item shows at once; letting go waits a
+    // moment, in case the layer is only switching follows.
+    if (followsCard(card)) {
+      store.following = card.key;
+      return;
+    }
     followCheck = setTimeout(() => {
-      const card = store.card;
-      store.following = followsCard(card) ? card.key : null;
+      const now = store.card;
+      store.following = followsCard(now) ? now.key : null;
     }, 250);
   });
 
@@ -279,8 +305,9 @@ export function installEntityContext({
   // dispatcher hands every subscriber the same click, picked once before
   // any layer acts on it, and only while no tool holds the pointer.
   const offClick = inputFor(viewer).onClick((event) => {
-    // Cockpit has its own picks, and Context is hidden while it runs.
-    if (inCockpit()) return;
+    // Cockpit has its own picks, and Context is hidden while it runs. A
+    // camera drag never selects, even if it ends over something.
+    if (inCockpit() || !isTrackingSelectionGesture(event.gesture)) return;
     const identity = resolvePickedContext(event.hit, {
       dataManager: getDataManager(),
     });
@@ -294,7 +321,14 @@ export function installEntityContext({
     // A click on open ground, sea or sky lets go of what was selected. A
     // click on something else Context cannot describe (a label, a trail)
     // leaves the card as it is.
-    if (event.surface) store.clear();
+    // Only a clean click lets go, as the layers' own clicks do; a card
+    // painted on the overlay (a vessel's, a fire's) is not open map.
+    if (
+      event.surface &&
+      isTrackingClickGesture(event.gesture) &&
+      !overlayHit?.(event.screenPosition?.x, event.screenPosition?.y)
+    )
+      store.clear();
   });
 
   // Layers that select through the context store (GeoJSON sites, fires,
@@ -318,6 +352,7 @@ export function installEntityContext({
     for (const off of cameraOff) off?.();
     clearTimeout(trailing);
     offFollow();
+    offChrome();
     clearTimeout(followCheck);
     globalThis.removeEventListener?.('gev:entity-selected', onSelected);
     store.connect(null);

@@ -156,7 +156,7 @@ function setDocked(next) {
   }
 }
 // Only an open panel reads what is picked and in view; closed, it does no work.
-const contextOpen = computed(() => chromePanels.value['global-context-panel']?.collapsed !== true);
+const contextOpen = computed(() => chromePanels.value['global-context-panel']?.collapsed === false);
 watch(
   () => chromePanels.value['global-context-panel']?.collapsed,
   (collapsed) => {
@@ -232,7 +232,7 @@ watch(
         </div>
         <section id="context-flights-view" class="context-mode-view" role="tabpanel" aria-labelledby="global-context-flights-btn" :hidden="!ctx?.flightsActive">
           <div class="global-context-actions" :aria-label="t('Contact Context actions')">
-            <button id="cockpit-entry" type="button" :hidden="!cockpit?.entryAvailable" aria-hidden="true" tabindex="-1">
+            <button id="cockpit-entry" type="button" :hidden="!cockpit?.entryAvailable">
               <span class="material-symbols-outlined" aria-hidden="true">{{ entry.icon }}</span>
               <span>{{ entry.label }}</span>
             </button>

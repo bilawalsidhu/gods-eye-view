@@ -23,37 +23,45 @@ const briefs = new Map();
  * @param {number} lat
  * @param {number} lon
  * @param {(lat: number, lon: number) => Promise<object>} load
+ * @param {{force?: boolean}} [options] `force` reads again whatever is kept.
  */
-export function regionalBrief(lat, lon, load) {
+export function regionalBrief(lat, lon, load, { force = false } = {}) {
   const key = `${lat.toFixed(2)},${lon.toFixed(2)}`;
   const kept = briefs.get(key);
-  if (kept && Date.now() - kept.at < BRIEF_TTL_MS) return kept.promise;
+  if (!force && kept && Date.now() - kept.at < BRIEF_TTL_MS)
+    return kept.promise;
+  const forget = () => {
+    if (briefs.get(key)?.promise === promise) briefs.delete(key);
+    return null;
+  };
   const promise = Promise.resolve()
     .then(() => load(lat, lon))
-    .catch(() => {
-      if (briefs.get(key)?.promise === promise) briefs.delete(key);
-      return null;
-    });
+    .then((brief) => brief ?? forget(), forget);
   briefs.set(key, { at: Date.now(), promise });
   if (briefs.size > 40) briefs.delete(briefs.keys().next().value);
   return promise;
 }
 
 const feeds = new Map();
-function snapshot(name, load) {
+function snapshot(name, load, force) {
   const kept = feeds.get(name);
-  if (kept && Date.now() - kept.at < FEED_TTL_MS) return kept.promise;
+  if (!force && kept && Date.now() - kept.at < FEED_TTL_MS) return kept.promise;
   const promise = load().catch(() => null);
   feeds.set(name, { at: Date.now(), promise });
   return promise;
 }
-const quakes = () =>
-  snapshot('quakes', () => createUsgsEarthquakeSource().getSnapshot());
-const storms = () =>
-  snapshot('storms', () => createCycloneSource().getSnapshot());
-const perimeters = () =>
-  snapshot('perimeters', () => createWfigsPerimeterSource().getSnapshot());
-const fires = () => snapshot('fires', () => createFirmsSource().getSnapshot());
+const quakes = (force) =>
+  snapshot('quakes', () => createUsgsEarthquakeSource().getSnapshot(), force);
+const storms = (force) =>
+  snapshot('storms', () => createCycloneSource().getSnapshot(), force);
+const perimeters = (force) =>
+  snapshot(
+    'perimeters',
+    () => createWfigsPerimeterSource().getSnapshot(),
+    force,
+  );
+const fires = (force) =>
+  snapshot('fires', () => createFirmsSource().getSnapshot(), force);
 
 // English compass points, which the UI shows through t().
 const COMPASS = [
@@ -118,14 +126,14 @@ export async function hazardsNear(
   lat,
   lon,
   radiusKm = 250,
-  { fires: withFires = false } = {},
+  { fires: withFires = false, force = false } = {},
 ) {
   const here = { lat, lon };
   const [quakeRows, stormSnap, perimeterRows, fireSnap] = await Promise.all([
-    quakes(),
-    storms(),
-    perimeters(),
-    withFires ? fires() : null,
+    quakes(force),
+    storms(force),
+    perimeters(force),
+    withFires ? fires(force) : null,
   ]);
   const found = [];
   const add = (row) => {

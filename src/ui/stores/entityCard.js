@@ -218,6 +218,8 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     // A card does not outlive its layer: turning the layer off (or clearing
     // all layers) closes it and lets go of the camera.
     if (layerOff(current.layerId)) return clear();
+    // A closed panel shows nothing, so it reads nothing until it opens.
+    if (shell.value?.isOpen && !shell.value.isOpen()) return;
     const next = describeEntity(dataManager(), current.identity);
     // Keep showing the last reading when the item drops out of its feed.
     if (!next || next.key !== current.key || next.basis !== 'record') {
@@ -238,15 +240,14 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
    * @returns {boolean} Whether a card could be made.
    */
   /** Things that move are followed as soon as they are picked. */
-  const AUTO_FOLLOW = new Set([
-    'flights',
-    'military',
-    'local-adsb',
-    'satellites',
-    'ais-live-vessels',
-  ]);
-  /** The key of the item the camera is following, if any. */
+  const AUTO_FOLLOW = new Set(['flights', 'military', 'satellites']);
+  /**
+   * The key of the item the camera follows, if any. The shell sets it from
+   * the camera's own follow, so it is never claimed before the camera does.
+   */
   const following = ref(null);
+  /** The item a follow was last asked for, so it is asked once per item. */
+  let asked = null;
 
   /**
    * @param {object} identity
@@ -266,13 +267,12 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     if (followNow) {
       // Tracking can announce the craft again; following what is already
       // followed would loop, so it only starts once per item.
-      if (following.value !== current.key) {
-        following.value = current.key;
+      if (following.value !== current.key && asked !== current.key) {
+        asked = current.key;
         shell.value?.follow?.(current);
       }
     } else {
-      if (following.value && following.value !== current?.key)
-        following.value = null;
+      asked = null;
       if (fly) shell.value?.flyTo?.(current);
     }
     requestRoute(current?.identity);
@@ -282,6 +282,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   function clear() {
     if (following.value) shell.value?.letGo?.(card.value);
     following.value = null;
+    asked = null;
     clearInterval(timer);
     timer = null;
     card.value = null;
@@ -291,7 +292,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   const flyTo = () => card.value && shell.value?.flyTo?.(card.value);
   const follow = () => {
     if (!card.value) return;
-    following.value = card.value.key;
+    asked = card.value.key;
     shell.value?.follow?.(card.value);
   };
   const isFollowing = () =>

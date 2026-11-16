@@ -53,18 +53,19 @@ const pickRadius = (index) => setContextRadiusKm(CONTEXT_RADIUS_STEPS[index]);
 const firesOn = () =>
   Boolean((omnibar.controls?.layers() || []).find((layer) => layer.id === HAZARD_LAYER.hotspots)?.enabled);
 
-async function read(lat, lon) {
-  if (readAt && distanceKm(readAt, { lat, lon }) <= props.settleKm) return;
+async function read(lat, lon, { force = false } = {}) {
+  if (!force && readAt && distanceKm(readAt, { lat, lon }) <= props.settleKm) return;
   readAt = { lat, lon };
   const mine = ++reading;
   const mineHazards = ++readingHazards;
-  loading.value = true;
+  // A forced re-read keeps what is shown until the new reading lands.
+  if (!force) loading.value = true;
   const [nextBrief, nextHazards] = await Promise.all([
-    regionalBrief(lat, lon, store.readBrief),
-    hazardsNear(lat, lon, radiusKm.value, { fires: firesOn() }).catch(() => []),
+    regionalBrief(lat, lon, store.readBrief, { force }),
+    hazardsNear(lat, lon, radiusKm.value, { fires: firesOn(), force }).catch(() => []),
   ]);
   if (reading !== mine) return;
-  brief.value = nextBrief;
+  if (nextBrief || !force) brief.value = nextBrief;
   // A radius change meanwhile has its own, newer hazard read.
   if (readingHazards === mineHazards) hazards.value = nextHazards;
   loading.value = false;
@@ -91,10 +92,7 @@ watch(radiusKm, (km) => void rereadHazards(km));
 const REREAD_MS = 5 * 60_000;
 let rereadTimer = 0;
 onMounted(() => {
-  rereadTimer = setInterval(() => {
-    readAt = null;
-    void read(props.lat, props.lon);
-  }, REREAD_MS);
+  rereadTimer = setInterval(() => void read(props.lat, props.lon, { force: true }), REREAD_MS);
 });
 onBeforeUnmount(() => clearInterval(rereadTimer));
 // Hazard rows are worded as they are read, so a new language reads them again.

@@ -202,8 +202,32 @@ body.mobile-shell .context-dock-btn {
   display: none;
 }
 
+/* With the minimal HUD the credits sit at the bottom right, where the
+   column is: they move out to its left. */
+body.context-docked:not(.ui-clean-view):not(.recording-mode):has(
+    #intel-hud[data-variant='minimal'].active
+  )
+  :is(#cesium-credits, #gev-credits) {
+  right: calc(36px + var(--context-dock-width));
+}
+
 /* Right to left, the rail sits on the left edge (rtl.css), and so does the
-   expanded column. */
+   expanded column; the credits start past it. */
+html[dir='rtl']
+  body.context-docked:not(.ui-clean-view):not(.recording-mode)
+  :is(#cesium-credits, #gev-credits) {
+  left: calc(36px + var(--context-dock-width));
+}
+
+html[dir='rtl']
+  body.context-docked:not(.ui-clean-view):not(.recording-mode):has(
+    #intel-hud[data-variant='minimal'].active
+  )
+  :is(#cesium-credits, #gev-credits) {
+  right: 36px;
+  left: auto;
+}
+
 html[dir='rtl'] body.context-docked #right-context-rail {
   right: auto !important;
   left: 0 !important;
