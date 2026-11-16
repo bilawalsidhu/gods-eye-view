@@ -1858,6 +1858,43 @@ export function createBhoteKoshiEventLayer({
       return true;
     }
 
+    // The settled-camera reveal waits out the shot's clip and its exit
+    // (unless the path runs during the clip), then runs for its duration.
+    const mediaDurationSec =
+      _sceneControls.evidenceMediaAutoplay === true
+        ? Math.max(
+            SCENE_MEDIA_MIN_PLAYBACK_SECONDS,
+            Number(_sceneControls.mediaPlaybackHoldSec) || 0,
+          )
+        : 0;
+    const exitDurationSec =
+      _sceneControls.evidenceMediaAutoplay === true
+        ? Math.max(
+            SCENE_MEDIA_EXIT_SECONDS,
+            Number(_sceneControls.mediaExitDurationSec) || 0,
+          )
+        : 0;
+    const settledDurationSec = Math.max(
+      0.25,
+      Number(
+        sceneUsesSourcePath()
+          ? _sceneControls.evidencePathDurationSec
+          : sceneEvidenceSequenceAnimates()
+            ? _sceneControls.evidenceSequenceDurationSec
+            : _sceneControls.evidenceRevealDurationSec,
+      ) || 0.9,
+    );
+    const settledStartSec = Math.max(
+      0,
+      Number(_sceneControls.evidencePathStartDelaySec) || 0,
+      _sceneControls.evidencePathDuringMedia === true
+        ? 0
+        : mediaDurationSec + exitDurationSec,
+    );
+    const settledLinear = clampUnit(
+      (holdElapsedSec - settledStartSec) / settledDurationSec,
+    );
+
     if (scenePathMovesDuringCamera()) {
       const authoredDurationSec = Number(
         _sceneControls.evidencePathTravelDurationSec,
@@ -1883,41 +1920,24 @@ export function createBhoteKoshiEventLayer({
                   Number(_sceneControls.evidenceRevealDurationSec) || 0.9,
                 ),
             );
+      // In the hold, an animated evidence sequence runs on its own clock
+      // after the camera's path; it stands where that clock has it.
+      const sequenceWindow =
+        cameraProgress >= 1 && sceneEvidenceSequenceAnimates()
+          ? evidenceSequenceWindow(_sceneBeatId, _evidenceTimeline)
+          : null;
+      if (sequenceWindow) {
+        _sceneSeekRevealLinear = settledLinear;
+        _sceneRevealProgress = smoothstep(0, 1, settledLinear);
+        _progress =
+          sequenceWindow.startProgress +
+          (sequenceWindow.targetProgress - sequenceWindow.startProgress) *
+            _sceneRevealProgress;
+      }
       return true;
     }
 
-    const mediaDurationSec =
-      _sceneControls.evidenceMediaAutoplay === true
-        ? Math.max(
-            SCENE_MEDIA_MIN_PLAYBACK_SECONDS,
-            Number(_sceneControls.mediaPlaybackHoldSec) || 0,
-          )
-        : 0;
-    const exitDurationSec =
-      _sceneControls.evidenceMediaAutoplay === true
-        ? Math.max(
-            SCENE_MEDIA_EXIT_SECONDS,
-            Number(_sceneControls.mediaExitDurationSec) || 0,
-          )
-        : 0;
-    const pathDurationSec = Math.max(
-      0.25,
-      Number(
-        sceneUsesSourcePath()
-          ? _sceneControls.evidencePathDurationSec
-          : sceneEvidenceSequenceAnimates()
-            ? _sceneControls.evidenceSequenceDurationSec
-            : _sceneControls.evidenceRevealDurationSec,
-      ) || 0.9,
-    );
-    const pathStartSec = Math.max(
-      0,
-      Number(_sceneControls.evidencePathStartDelaySec) || 0,
-      _sceneControls.evidencePathDuringMedia === true
-        ? 0
-        : mediaDurationSec + exitDurationSec,
-    );
-    const linear = clampUnit((holdElapsedSec - pathStartSec) / pathDurationSec);
+    const linear = settledLinear;
     _sceneSeekRevealLinear = linear;
     _sceneRevealProgress = smoothstep(0, 1, linear);
     _scenePathRevealProgress =

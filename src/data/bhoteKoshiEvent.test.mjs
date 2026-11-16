@@ -34,7 +34,7 @@ import {
   usesProviderEmbeddedEvidence,
   visibleSegmentCount,
 } from './bhoteKoshiEvent.js';
-import { SCENE_RECIPES } from '../scenes/recipes.js';
+import { SCENE_RECIPES, getSceneAppendRecipeById } from '../scenes/recipes.js';
 import { LayerLifecycle } from './lifecycle.js';
 import { createBhoteKoshiEmbeddedMedia } from './bhoteKoshiEmbeddedMedia.js';
 import { SceneDirector } from '../scenes/director.js';
@@ -464,6 +464,68 @@ test('scene media plays again when a run goes on from a seek inside its hold, un
     layer.setParams(params(controls), { origin: 'scene' });
     assert.equal(plays, before, 'the clip already played');
     assert.equal(layer.getSceneShotMediaHold('mailung-bazzar').pending, false);
+  } finally { await layer.destroy(); Object.assign(globalThis, previous); }
+});
+
+test('a run going on from a seek in Timure’s hold resumes its evidence sequence from that point', async () => {
+  const keys = ['document', 'window', 'performance', 'requestAnimationFrame', 'cancelAnimationFrame'];
+  const previous = Object.fromEntries(keys.map((key) => [key, globalThis[key]]));
+  installEventDom();
+  let now = 1000;
+  let nextFrame = 0;
+  const frames = new Map();
+  globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
+  globalThis.performance = { now: () => now };
+  globalThis.requestAnimationFrame = (callback) => { frames.set(++nextFrame, callback); return nextFrame; };
+  globalThis.cancelAnimationFrame = (id) => frames.delete(id);
+  const frame = (ms) => {
+    now += ms;
+    const callback = frames.get(nextFrame);
+    frames.delete(nextFrame);
+    callback?.(now);
+  };
+  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
+  const layer = createBhoteKoshiEventLayer({
+    eventLoader: async () => event,
+    imagerySpecFactory: async (url) => ({ url }),
+    terrainSampler: async () => null,
+    mediaLoader: async () => { throw Object.assign(new Error('fixture'), { name: 'AbortError' }); },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+    renderHost: { request() {}, hold() {}, release() {} },
+    embeddedMediaFactory: () => ({ warm: () => true, show: () => true, play() {}, pause() {},
+      getPlaybackState: () => ({ phase: 'completed' }), hide() {}, destroy() {} }),
+  });
+  const recipe = getSceneAppendRecipeById('bhote-koshi-nepal-evidence-pack');
+  const controls = { ...recipe.runtimeControlsByBeat['timure-cluster'], cameraSettled: true };
+  assert.equal(controls.evidenceSequence, true);
+  assert.equal(controls.evidencePathDuringCamera, true);
+  const params = (sceneControls) => ({ presentation: 'scene-beat', sceneSurface: 'evidence-beat',
+    beatId: 'timure-cluster', sceneControls });
+  // The sequence waits out the 6 s clip and its 0.65 s exit, then runs 12 s:
+  // 8 s into the hold it is 1.35 s along.
+  const seek = { ...controls,
+    timelineSeek: { cameraProgress: 1, holdElapsedSec: 8, holdDurationSec: 12, flightDurationSec: 2 } };
+  const at = (holdElapsedSec) => {
+    layer.setParams(params({ ...seek, timelineSeek: { ...seek.timelineSeek, holdElapsedSec } }),
+      { origin: 'scene' });
+    return layer.getPlaybackState().progress;
+  };
+  try {
+    const viewer = eventViewer();
+    await layer.init(viewer);
+    layer.setParams(params(seek), { origin: 'scene' });
+    await layer.enable(viewer, { origin: 'scene' });
+    // Where the sequence starts and ends, and where the seek puts it.
+    const start = at(0);
+    const end = at(30);
+    const atSeek = at(8);
+    assert.ok(start < atSeek && atSeek < end, `the seek shows the sequence partway (${start} < ${atSeek} < ${end})`);
+    // The run goes on: the sequence carries on from that point, not 0 or its end.
+    layer.setParams(params(controls), { origin: 'scene' });
+    assert.ok(Math.abs(layer.getPlaybackState().progress - atSeek) < 1e-9, 'it starts where the seek stood');
+    frame(1000);
+    const later = layer.getPlaybackState().progress;
+    assert.ok(atSeek < later && later < end, `and moves on from there (${atSeek} < ${later} < ${end})`);
   } finally { await layer.destroy(); Object.assign(globalThis, previous); }
 });
 
