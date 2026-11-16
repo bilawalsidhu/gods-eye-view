@@ -123,3 +123,126 @@ test('holds registered before install apply at install time', () => {
   releaseContinuousRender('flights');
   assert.equal(scene.requestRenderMode, true);
 });
+
+/** A camera port double: `moveStart`/`moveEnd` listeners and a pose. */
+function makeCamera({ position = null, direction = null } = {}) {
+  const listeners = { moveStart: new Set(), moveEnd: new Set() };
+  const camera = {
+    position,
+    direction,
+    on(event, cb) {
+      listeners[event]?.add(cb);
+      return () => listeners[event]?.delete(cb);
+    },
+    pose: () =>
+      camera.position
+        ? { position: camera.position, direction: camera.direction }
+        : null,
+    raise(event) {
+      for (const cb of [...listeners[event]]) cb();
+    },
+    size: (event) => listeners[event].size,
+  };
+  return camera;
+}
+
+// The frame rate each mode draws at is the frame port's (ports.test.mjs:
+// 'with an idle rate, …'); the governor only holds and releases.
+
+test('a camera move holds continuous render from moveStart to moveEnd', () => {
+  const { viewer, scene } = makeViewer();
+  const frame = framePortFor(viewer.scene);
+  const camera = makeCamera();
+  installRenderGovernor(frame, { camera });
+  camera.raise('moveStart');
+  assert.equal(scene.requestRenderMode, false);
+  assert.deepEqual(getRenderGovernorDiagnostics().holds, ['camera']);
+  camera.raise('moveEnd');
+  assert.equal(scene.requestRenderMode, true);
+  // Installing again does not double the listeners; uninstall removes them.
+  installRenderGovernor(frame, { camera });
+  assert.equal(camera.size('moveStart'), 1);
+  uninstallRenderGovernor(frame);
+  assert.equal(camera.size('moveStart'), 0);
+  assert.equal(camera.size('moveEnd'), 0);
+});
+
+function fakeTimers() {
+  const queue = new Map();
+  let next = 1;
+  return {
+    setTimeout: (fn) => {
+      queue.set(next, fn);
+      return next++;
+    },
+    clearTimeout: (id) => queue.delete(id),
+    run() {
+      const due = [...queue.entries()];
+      queue.clear();
+      for (const [, fn] of due) fn();
+    },
+    get pending() {
+      return queue.size;
+    },
+  };
+}
+
+test('a camera that drifts by rounding errors and never raises moveEnd still releases its hold', () => {
+  const { viewer, scene } = makeViewer();
+  const timers = fakeTimers();
+  const camera = makeCamera({
+    position: { x: 6_400_000, y: 0, z: 0 },
+    direction: { x: -1, y: 0, z: 0 },
+  });
+  installRenderGovernor(framePortFor(viewer.scene), { camera, ...timers });
+  camera.raise('moveStart');
+  assert.equal(scene.requestRenderMode, false);
+  // Still moving: the hold stays.
+  camera.position = { x: 6_399_000, y: 0, z: 0 };
+  timers.run();
+  assert.equal(scene.requestRenderMode, false);
+  // Drifting by far less than a millimetre: half a second of this is at rest.
+  camera.position = { x: 6_399_000 + 1e-7, y: 0, z: 0 };
+  timers.run();
+  timers.run();
+  assert.equal(scene.requestRenderMode, true);
+  // A later move with no new moveStart takes the hold again.
+  camera.position = { x: 6_000_000, y: 0, z: 0 };
+  timers.run();
+  assert.equal(scene.requestRenderMode, false);
+  // moveEnd stops the sampling and releases.
+  camera.raise('moveEnd');
+  assert.equal(scene.requestRenderMode, true);
+  assert.equal(timers.pending, 0);
+});
+
+test('sampling keeps running until moveEnd, so a move after a long drift still takes the hold', () => {
+  const { viewer, scene } = makeViewer();
+  const timers = fakeTimers();
+  const camera = makeCamera({
+    position: { x: 1, y: 0, z: 0 },
+    direction: { x: -1, y: 0, z: 0 },
+  });
+  installRenderGovernor(framePortFor(viewer.scene), { camera, ...timers });
+  camera.raise('moveStart');
+  // Ten minutes at rest (2,400 samples): released, still sampling.
+  for (let i = 0; i < 2_400; i++) timers.run();
+  assert.equal(scene.requestRenderMode, true);
+  assert.equal(timers.pending, 1);
+  camera.position = { x: 1_000, y: 0, z: 0 };
+  timers.run();
+  assert.equal(scene.requestRenderMode, false);
+});
+
+test('installing again drops a camera hold the old listeners can no longer release', () => {
+  const { viewer, scene } = makeViewer();
+  const timers = fakeTimers();
+  const frame = framePortFor(viewer.scene);
+  const camera = makeCamera();
+  installRenderGovernor(frame, { camera, ...timers });
+  camera.raise('moveStart');
+  assert.equal(scene.requestRenderMode, false);
+  installRenderGovernor(frame, { camera, ...timers });
+  assert.equal(scene.requestRenderMode, true);
+  assert.equal(timers.pending, 0);
+});

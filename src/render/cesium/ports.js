@@ -111,11 +111,17 @@ export function cesiumCapabilities(scene, only) {
 /**
  * @param {object} widget A Cesium `CesiumWidget` or `Viewer`.
  * @param {{capabilities: ReadonlySet<string>, credentials?: object,
- *   cameraController?: Function, now?: () => number}} options
+ *   cameraController?: Function, now?: () => number,
+ *   idleFps?: number}} options
  *   The renderer's capabilities, which gate the members that need them, and
  *   the credentials its globe loads photoreal tiles and world data with
  *   (`googleApiKey`, `googleTokens`, `worldDataToken`). `now` is the clock
  *   each tick reads (`performance.now` by default; a test's virtual one).
+ *   With `idleFps`, the loop ticks at most that often while no hold is out
+ *   (Cesium ticks its clock and every update listener each animation frame
+ *   even when it draws nothing), and at the display's rate while one is;
+ *   `setTargetFps` then caps both, and the loop starts with no cap of its
+ *   own. Without it, the widget's own rate is the cap.
  *   With
  *   `cameraController`, the camera port is that controller's over Cesium's
  *   camera (`controlledCamera.js`); the ports then have `attachInput` and
@@ -128,6 +134,7 @@ export function createCesiumPorts(
     credentials = {},
     cameraController,
     now: clockNow = () => performance.now(),
+    idleFps = 0,
   },
 ) {
   const scene = widget.scene;
@@ -262,15 +269,25 @@ export function createCesiumPorts(
   const holds = new Map();
   function applyHolds() {
     const continuous = holds.size > 0;
+    if (idleFps > 0) applyRate();
     if (scene.requestRenderMode === !continuous) return;
     scene.requestRenderMode = !continuous;
+  }
+  /** The loop's rate: the cap, and at most `idleFps` while nothing holds. */
+  function applyRate() {
+    const idle = holds.size === 0 && idleFps > 0;
+    const rate =
+      idle && !(targetFps > 0 && targetFps < idleFps) ? idleFps : targetFps;
+    widget.targetFrameRate = rate || undefined;
   }
   // On demand means drawn when asked, held or the view changed: never
   // because scene time moved on by itself. With no holds yet, it starts so.
   scene.maximumRenderTimeChange = Infinity;
   scene.requestRenderMode = true;
   let suspended = false;
-  let targetFps = widget.targetFrameRate > 0 ? widget.targetFrameRate : 0;
+  let targetFps =
+    idleFps <= 0 && widget.targetFrameRate > 0 ? widget.targetFrameRate : 0;
+  if (idleFps > 0) applyRate();
 
   // Pending one-shot renders; disposal settles them rather than leave them
   // attached to a scene that will not render again.
@@ -352,7 +369,7 @@ export function createCesiumPorts(
     renderOnce: (options) => nextPostRender(options),
     setTargetFps(fps) {
       targetFps = fps > 0 ? fps : 0;
-      widget.targetFrameRate = targetFps || undefined;
+      applyRate();
     },
     /**
      * Moves the clock to `ms` and draws it; in `preUpdate`, the frame under

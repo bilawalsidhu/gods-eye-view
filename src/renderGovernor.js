@@ -29,14 +29,27 @@
  * short stable strings ('flights', 'traffic', 'style-anim', …) so the
  * diagnostics read like a story.
  *
+ * Frame rate: in continuous mode the loop draws at the display's own
+ * refresh rate. In idle mode the renderer's frame port ticks it at most at
+ * IDLE_FRAME_RATE, because Cesium still ticks the clock, data sources and
+ * every pre/post-update listener once per animation frame even when it skips
+ * the draw. Camera movement takes a 'camera' hold from `moveStart` to
+ * `moveEnd`, so drags and flights run at the full rate too.
+ *
  * The governor is O(1) passive: no per-frame work of its own, ever.
  */
 
 /** @typedef {import('./render/contract/frame').FramePort} FramePort */
+/** @typedef {import('./render/contract/camera').CameraPort} CameraPort */
+
+/** Frames a second the loop ticks while nothing moves. */
+export const IDLE_FRAME_RATE = 60;
 
 let _frame = null;
 /** Owners holding, each with the frame port's release once installed. */
 const _holds = new Map();
+/** Removes the camera move listeners added at install. */
+let _removeCameraListeners = null;
 
 /** Debug trail of the most recent one-shot render requests (idle mode only). */
 const _recentRequests = [];
@@ -47,23 +60,120 @@ function holdOnFrame(ownerId) {
     _holds.set(ownerId, _frame.holdContinuous(ownerId));
 }
 
+/** Pose sampling while the camera moves (see watchCameraMotion). */
+const CAMERA_SAMPLE_MS = 250;
+const CAMERA_POSITION_TOLERANCE_M = 1e-3;
+const CAMERA_DIRECTION_TOLERANCE = 1e-9;
+
+function near(a, b, tolerance) {
+  return (
+    Math.abs(a.x - b.x) <= tolerance &&
+    Math.abs(a.y - b.y) <= tolerance &&
+    Math.abs(a.z - b.z) <= tolerance
+  );
+}
+
+/**
+ * Hold continuous render while the camera moves. The camera port's
+ * `moveStart` takes the hold and `moveEnd` releases it. Cesium compares the
+ * pose with the last frame's to the last rounding error, and at some poses
+ * the camera drifts by a rounding error every frame, so `moveEnd` never
+ * comes (see `installGlobeInViewRecovery` in app/globeInViewRecovery.js). So from `moveStart` until
+ * `moveEnd` the pose is also sampled every 250 ms with a tolerance for that
+ * drift: half a second at rest releases the hold and a later move takes it
+ * again (Cesium raises no new `moveStart` under that drift). Sampling runs
+ * until `moveEnd`, however long that takes; it costs four checks a second.
+ * @returns {(() => void)|null} Removes the listeners and the sampling.
+ */
+function watchCameraMotion(camera, { schedule, unschedule }) {
+  if (typeof camera?.on !== 'function') return null;
+  const pose = () => camera.pose?.() ?? null;
+  const last = { position: null, direction: null };
+  let timer = null;
+  let restingSamples = 0;
+  const copy = (v) => (v ? { x: v.x, y: v.y, z: v.z } : null);
+  const remember = () => {
+    const now = pose();
+    last.position = copy(now?.position);
+    last.direction = copy(now?.direction);
+  };
+  const stopSampling = () => {
+    if (timer !== null) unschedule(timer);
+    timer = null;
+  };
+  const sample = () => {
+    timer = null;
+    const now = pose();
+    const position = now?.position;
+    const direction = now?.direction;
+    const atRest =
+      !position ||
+      !direction ||
+      !last.position ||
+      (near(position, last.position, CAMERA_POSITION_TOLERANCE_M) &&
+        near(direction, last.direction, CAMERA_DIRECTION_TOLERANCE));
+    if (atRest) {
+      restingSamples += 1;
+      if (restingSamples >= 2) releaseContinuousRender('camera');
+    } else {
+      restingSamples = 0;
+      holdContinuousRender('camera');
+    }
+    remember();
+    timer = schedule(sample, CAMERA_SAMPLE_MS);
+  };
+  const removeStart = camera.on('moveStart', () => {
+    holdContinuousRender('camera');
+    stopSampling();
+    restingSamples = 0;
+    remember();
+    timer = schedule(sample, CAMERA_SAMPLE_MS);
+  });
+  const removeEnd = camera.on('moveEnd', () => {
+    stopSampling();
+    releaseContinuousRender('camera');
+  });
+  return () => {
+    stopSampling();
+    removeStart();
+    removeEnd();
+  };
+}
+
 /**
  * Install the governor on the renderer's frame port, which keeps the loop
  * drawing every frame while any owner holds and on demand otherwise (and
  * draws one settling frame when the last hold goes). Idempotent. Before
  * install, hold/release still record into the holds (and apply at install
  * time); requests are safe no-ops — so modules can call all three
- * unconditionally in tests without a renderer.
+ * unconditionally in tests without a renderer. With `camera`, a camera move
+ * holds the loop drawing every frame (see watchCameraMotion); installing
+ * again watches the camera given then.
  * @param {FramePort} frame
+ * @param {{camera?: CameraPort|null, setTimeout?: Function,
+ *   clearTimeout?: Function}} [options] The renderer's camera port, and
+ *   injectable timers for tests.
  * @returns {void}
  */
-export function installRenderGovernor(frame) {
+export function installRenderGovernor(
+  frame,
+  {
+    camera = null,
+    setTimeout: schedule = globalThis.setTimeout,
+    clearTimeout: unschedule = globalThis.clearTimeout,
+  } = {},
+) {
   if (typeof frame?.holdContinuous !== 'function')
     throw new TypeError('installRenderGovernor requires a frame port');
-  if (_frame === frame) return;
-  if (_frame) releaseFrameHolds();
-  _frame = frame;
-  for (const ownerId of _holds.keys()) holdOnFrame(ownerId);
+  _removeCameraListeners?.();
+  _removeCameraListeners = null;
+  releaseContinuousRender('camera');
+  if (_frame !== frame) {
+    if (_frame) releaseFrameHolds();
+    _frame = frame;
+    for (const ownerId of _holds.keys()) holdOnFrame(ownerId);
+  }
+  _removeCameraListeners = watchCameraMotion(camera, { schedule, unschedule });
 }
 
 function releaseFrameHolds() {
@@ -134,6 +244,8 @@ export function getRenderGovernorDiagnostics() {
 /** Release the installed frame port after its animation owners have stopped. */
 export function uninstallRenderGovernor(frame) {
   if (!_frame || _frame !== frame) return;
+  _removeCameraListeners?.();
+  _removeCameraListeners = null;
   releaseFrameHolds();
   _frame = null;
   _holds.clear();
@@ -142,6 +254,8 @@ export function uninstallRenderGovernor(frame) {
 
 /** Test seam: reset module state between unit tests. */
 export function _resetRenderGovernorForTest() {
+  _removeCameraListeners?.();
+  _removeCameraListeners = null;
   _frame = null;
   _holds.clear();
   _recentRequests.length = 0;

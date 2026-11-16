@@ -10,6 +10,7 @@ import {
   installRenderGovernor,
   uninstallRenderGovernor,
   governorRequestRender,
+  releaseContinuousRender,
 } from '../renderGovernor.js';
 import { describeError } from './errors.js';
 import { isEmbeddedInline } from './embed.js';
@@ -104,8 +105,9 @@ export async function createApplicationScene({
   const viewer = scene.host;
   // The governor keeps its holds on the renderer's frame port. The loop
   // draws every frame until the application's tools are up (they release
-  // 'boot'), as it did before anything could hold it.
-  installRenderGovernor(renderer.frame);
+  // 'boot'), as it did before anything could hold it. A camera move holds
+  // it drawing every frame too.
+  installRenderGovernor(renderer.frame, { camera: renderer.camera });
   holdContinuousRender('boot');
   defer(() => {
     try {
@@ -159,6 +161,12 @@ export async function createApplicationScene({
     followWorldTime(viewer, worldTimeFor('sky'), {
       subscribe: worldClock.subscribe,
       requestRender: () => governorRequestRender('world-time'),
+      // A playing world time moves something every frame: draw at the
+      // display's rate meanwhile, not the parked scene's cap.
+      onPlaying: (playing) =>
+        playing
+          ? holdContinuousRender('world-time')
+          : releaseContinuousRender('world-time'),
     }),
   );
   registerDataCredits(viewer, credits);

@@ -21,6 +21,7 @@ import {
   sub,
   vec,
 } from '../geo/vector.js';
+import { createFrameWait } from '../time/frameWait.js';
 import {
   SHARE_VIEW_ENTITY_KINDS,
   SHARE_VIEW_FOLLOW_RANGE_MAX_M,
@@ -38,7 +39,8 @@ import {
 const KIND_BY_LAYER = new Map(
   SHARE_VIEW_ENTITY_KINDS.map((entry) => [entry.layerId, entry.kind]),
 );
-const MAX_FRAMES = 120;
+/** Drawn time (ms) to wait for the follow to frame the entity. */
+const MAX_FRAMING_WAIT_MS = 2_000;
 const EPSILON10 = 1e-10;
 
 /** Where `followed` is shown now, as an ECEF position, or null. */
@@ -225,6 +227,7 @@ export function applyShareFollowOffset(viewer, followed, offset) {
   if (!frames || !followed || !(offset?.range > 0)) return () => {};
   const local = followOffsetToEnu(offset);
   let count = 0;
+  const framingWait = createFrameWait(MAX_FRAMING_WAIT_MS);
   let remove = null;
   const stop = () => {
     remove?.();
@@ -245,7 +248,7 @@ export function applyShareFollowOffset(viewer, followed, offset) {
       (ported ? camera.followFramed : frame !== null && !isIdentity(frame));
     const target = framed && frame ? shownAt(viewer, followed) : null;
     if (!target) {
-      if (count >= MAX_FRAMES) stop();
+      if (framingWait.tick()) stop();
       return;
     }
     // The offset is east/north/up at the entity; the follow's own frame may

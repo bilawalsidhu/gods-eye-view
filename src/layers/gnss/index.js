@@ -7,10 +7,10 @@ import { formatNumber, msg, t } from '../../i18n/index.js';
 import { translateFeedError } from '../../ui/statusText.js';
 import {
   GNSS_LEVEL_COLORS,
-  GNSS_MIN_AIRCRAFT,
   GNSS_WINDOW_MS,
   accumulateGnssObservations,
   binGnssCells,
+  gnssCellRing,
   gnssProvenance,
   pruneGnssObservations,
 } from './records.js';
@@ -74,7 +74,7 @@ export function defaultGnssViewAnchor(viewer) {
 
 /**
  * Own one GNSS navigation-integrity display: rolling integrity observations
- * around the views the user visits, binned into cells coloured by the
+ * around the views the user visits, binned into H3 hexagons coloured by the
  * gpsjam low-accuracy score. Share links retain token 3.
  */
 export function createGnssIntegrityLayer({
@@ -190,20 +190,19 @@ export function createGnssIntegrityLayer({
     if (signature === _signature) return;
     _signature = signature;
     _fills.set(
-      _cells.map((cell) => ({
-        id: `${layer.id}:${cell.id}`,
-        geometry: {
-          kind: 'rectangle',
-          rect: {
-            west: cell.west,
-            south: cell.south,
-            east: cell.east,
-            north: cell.north,
-          },
-        },
-        fill: hexColor(GNSS_LEVEL_COLORS[cell.level], FILL_ALPHA[cell.level]),
-        height: 'clampGround',
-      })),
+      _cells.map((cell) => {
+        const ring = gnssCellRing(cell);
+        const positions = [];
+        for (let i = 0; i < ring.length; i += 2)
+          positions.push({ lon: ring[i], lat: ring[i + 1] });
+        return {
+          id: `${layer.id}:${cell.id}`,
+          // H3 edges are great-circle arcs, as a polygon's edges are drawn.
+          geometry: { kind: 'polygon', rings: [positions] },
+          fill: hexColor(GNSS_LEVEL_COLORS[cell.level], FILL_ALPHA[cell.level]),
+          height: 'clampGround',
+        };
+      }),
     );
   }
 
@@ -386,7 +385,7 @@ export function createGnssIntegrityLayer({
               }`
             : ''),
         infoTitle: t(
-          'Updates automatically after pan or zoom and once a minute. The public feed covers a 250-nautical-mile circle around the view centre; zooming out does not make it a worldwide snapshot. Blank cells are outside sampled coverage or have insufficient observations.',
+          'Updates automatically after pan or zoom and once a minute. The public feed covers a 250-nautical-mile circle around the view centre; zooming out does not make it a worldwide snapshot. Blank areas had no aircraft reporting navigation accuracy in the window.',
         ),
         legend: ['high', 'medium', 'low'].map((level, index) => ({
           label: t(LEVEL_LABELS[level]),
@@ -395,11 +394,7 @@ export function createGnssIntegrityLayer({
           ...(index === 0
             ? {
                 blurb: t(
-                  'Low-accuracy score = 100 × max(0, bad − 1) / total: one aircraft is discounted, so this is not the raw share. Cells need {aircraft} aircraft over {minutes} minutes. Navigation-integrity anomalies are not a detection of jamming or spoofing.',
-                  {
-                    aircraft: formatNumber(GNSS_MIN_AIRCRAFT),
-                    minutes: formatNumber(provenance.window.minutes),
-                  },
+                  'Low-accuracy score = 100 × max(0, bad − 1) / total: one aircraft is discounted, so this is not the raw share. Navigation-integrity anomalies are not a detection of jamming or spoofing.',
                 ),
               }
             : {}),

@@ -2365,8 +2365,9 @@ test('the GNSS layer draws its cells as ground fills that stay out of the pick p
   assert.equal(fill.allowPicking, false);
   assert.equal(fill.classificationType, Cesium.ClassificationType.BOTH);
   const [instance] = fill.geometryInstances;
-  assert.ok(instance.geometry instanceof Cesium.RectangleGeometry);
-  assert.equal(instance.id.id, 'gnss-integrity:280:420');
+  // An H3 hexagon, drawn as a polygon.
+  assert.ok(instance.geometry instanceof Cesium.PolygonGeometry);
+  assert.equal(instance.id.id, 'gnss-integrity:841e631ffffffff');
   // A ground primitive draws its stencil in the pick pass even unpickable,
   // erasing picks of ground geometry under it; these skip that pass.
   let updates = 0;

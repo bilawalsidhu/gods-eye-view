@@ -3,6 +3,7 @@ import test from 'node:test';
 import * as Cesium from 'cesium';
 import { CONTRACT_VERSION, checkRendererShape } from '../contract/index.js';
 import { rendererOf } from '../rendererOf.js';
+import { IDLE_FRAME_RATE } from '../../renderGovernor.js';
 import { cesiumMapEngine } from './mapEngine.js';
 import {
   ReadonlySet,
@@ -166,6 +167,30 @@ test('the plugin wraps the viewer it is given, behind the accessor only', async 
   assert.deepEqual(doc.children, [], 'credits leave with the renderer');
   renderer.destroy();
   assert.deepEqual(log, ['resize', 'destroy'], 'destroying twice is safe');
+});
+
+test('the application’s loop ticks at the idle rate while nothing moves, and at the display’s while anything does', async (t) => {
+  withDocument(t, fakeDocument());
+  let viewer;
+  const plugin = createCesiumRendererPlugin({
+    createViewer() {
+      viewer = fakeViewer([]);
+      // The viewer starts at the idle rate (createApplicationViewer).
+      viewer.targetFrameRate = IDLE_FRAME_RATE;
+      return viewer;
+    },
+  });
+  const renderer = await plugin.create({
+    container: {},
+    signal: new AbortController().signal,
+  });
+  assert.equal(viewer.targetFrameRate, IDLE_FRAME_RATE);
+  assert.equal(renderer.frame.diagnostics().targetFps, 0, 'no cap');
+  const release = renderer.frame.holdContinuous('flights');
+  assert.equal(viewer.targetFrameRate, undefined);
+  release();
+  assert.equal(viewer.targetFrameRate, IDLE_FRAME_RATE);
+  renderer.destroy();
 });
 
 test('work pending at destroy settles and lets go of the scene', async (t) => {

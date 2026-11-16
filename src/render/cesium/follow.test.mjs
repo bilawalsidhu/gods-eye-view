@@ -11,7 +11,7 @@ import { headlessCamera } from './cameraGoldens.js';
 import { createCesiumCamera } from './camera.js';
 import { holdFollowZoom, pickThroughFollowHelper } from './follow.js';
 
-function trackingHost() {
+function trackingHost({ now } = {}) {
   const { scene, camera } = headlessCamera();
   for (const name of ['preUpdate', 'postUpdate', 'preRender', 'postRender'])
     scene[name] = new Cesium.Event();
@@ -52,6 +52,7 @@ function trackingHost() {
     report: (error) => {
       throw error;
     },
+    ...(now ? { now } : {}),
   });
   return { widget, scene, camera, port: part.port, dispose: part.dispose };
 }
@@ -207,12 +208,28 @@ test('targets are asked for their position at sub-millisecond scene time', () =>
   h.dispose();
 });
 
-test('a target without a position gives up framing after 120 frames', () => {
-  const h = trackingHost();
+test('a target without a position gives up framing after two seconds of drawn frames', () => {
+  let at = 0;
+  const h = trackingHost({ now: () => at });
   const controller = h.scene.screenSpaceCameraController;
   h.port.follow(target('a', { position: () => null, minRange: 150 }));
-  for (let i = 0; i < 119; i++) h.scene.preUpdate.raiseEvent(h.scene);
+  // 240 frames a second: a second of them is 240 frames, past the 120 a
+  // fixed frame count would wait, and not yet the wait.
+  for (let i = 0; i < 240; i++) {
+    h.scene.preUpdate.raiseEvent(h.scene);
+    at += 1000 / 240;
+  }
   assert.equal(controller.inertiaZoom, 0, 'still waiting');
+  // A parked scene's gap counts at most one step, so it does not end it.
+  at += 60_000;
+  h.scene.preUpdate.raiseEvent(h.scene);
+  assert.equal(controller.inertiaZoom, 0, 'still waiting after a gap');
+  for (let i = 0; i < 200; i++) {
+    at += 1000 / 240;
+    h.scene.preUpdate.raiseEvent(h.scene);
+  }
+  assert.equal(controller.inertiaZoom, 0, 'still waiting');
+  at += 100;
   h.scene.preUpdate.raiseEvent(h.scene);
   assert.equal(h.port.followFramed, false);
   assert.equal(controller.inertiaZoom, 0.8, 'the zoom hold let go');

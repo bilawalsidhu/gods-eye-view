@@ -507,6 +507,29 @@ test('suspend stops the loop at once and resumes it; target fps caps it', () => 
   ports.dispose();
 });
 
+test('with an idle rate, idle ticks at it and anything held draws at the display rate', () => {
+  const { widget } = tickingWidget();
+  widget.targetFrameRate = 60;
+  const ports = createCesiumPorts(widget, { capabilities: all, idleFps: 60 });
+  assert.equal(widget.targetFrameRate, 60, 'idle: the idle rate');
+  assert.equal(ports.frame.diagnostics().targetFps, 0, 'no cap of its own');
+  const release = ports.frame.holdContinuous('flights');
+  assert.equal(widget.targetFrameRate, undefined, 'held: the display rate');
+  release();
+  assert.equal(widget.targetFrameRate, 60);
+  // A cap holds while held, and idle ticks at the lower of the two.
+  ports.frame.setTargetFps(30);
+  assert.equal(widget.targetFrameRate, 30);
+  const again = ports.frame.holdContinuous('flights');
+  assert.equal(widget.targetFrameRate, 30);
+  ports.frame.setTargetFps(120);
+  assert.equal(widget.targetFrameRate, 120);
+  again();
+  assert.equal(widget.targetFrameRate, 60);
+  assert.equal(ports.frame.diagnostics().targetFps, 120);
+  ports.dispose();
+});
+
 test('rendering holds the tick’s answer once the tick is over', () => {
   const { widget, scene, raise } = tickingWidget();
   const ports = createCesiumPorts(widget, { capabilities: all });

@@ -16,6 +16,7 @@
  * so an autodetect `viewFrom` is renderer-specific.
  */
 import * as Cesium from 'cesium';
+import { createFrameWait } from '../../time/frameWait.js';
 import { toCartesian } from './common.js';
 import { trackedEntityViewEntity } from './internals.js';
 import {
@@ -24,7 +25,8 @@ import {
 } from '../camera/followTransition.js';
 
 /** Frames to wait for a target's first position before giving up framing. */
-const MAX_FRAME_ATTEMPTS = 120;
+/** Drawn time (ms) to wait for the followed target's first position. */
+const MAX_POSITION_WAIT_MS = 2_000;
 const TRANSPARENT = new Cesium.Color(0, 0, 0, 0);
 const ZOOM_STATES = new WeakMap();
 /** Each helper entity's FollowTarget. */
@@ -220,7 +222,8 @@ export function createCesiumFollow({
     target.position(msOf(time));
 
   /** @type {null | {target: object, helper: object, framed: boolean,
-   *   attempts: number, previous: Cesium.Cartesian3, releaseZoom: () => void}} */
+   *   positionWait: {tick: () => boolean}, previous: Cesium.Cartesian3,
+   *   releaseZoom: () => void}} */
   let current = null;
   let removePreUpdate = null;
   /** What `followChanged` last announced: it fires only when that changes. */
@@ -312,7 +315,6 @@ export function createCesiumFollow({
    */
   function frame(entry) {
     const { target } = entry;
-    entry.attempts += 1;
     const time = widget.clock.currentTime;
     const at = positionOf(target, time);
     if (target.frame !== 'enu') {
@@ -373,11 +375,12 @@ export function createCesiumFollow({
   }
 
   /**
-   * With no position to frame for MAX_FRAME_ATTEMPTS frames, the follow
-   * leaves the camera to Cesium: no framing, no zoom hold, no clamp.
+   * With no position to frame for MAX_POSITION_WAIT_MS of drawn frames (the
+   * same at any refresh rate), the follow leaves the camera to Cesium: no
+   * framing, no zoom hold, no clamp.
    */
   function giveUpAfterWaiting(entry) {
-    if (entry.attempts >= MAX_FRAME_ATTEMPTS) giveUp(entry);
+    if (entry.positionWait.tick()) giveUp(entry);
   }
   function giveUp(entry) {
     entry.gaveUp = true;
@@ -399,7 +402,7 @@ export function createCesiumFollow({
         helper: helperFor(target),
         framed: false,
         gaveUp: false,
-        attempts: 0,
+        positionWait: createFrameWait(MAX_POSITION_WAIT_MS, now),
         previous: new Cesium.Cartesian3(),
         releaseZoom: () => {},
       };

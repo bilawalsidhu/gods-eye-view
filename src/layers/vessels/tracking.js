@@ -70,7 +70,9 @@ export function createTracking({
       visual.drawnLat = NaN;
       visual.drawnLon = NaN;
       visual.followedAtMs = undefined;
+      visual.drawnAtMs = Number.NaN;
     }
+    components.rendering.forgetClockStep();
     // The rows moved with no poll behind them: draw the frame that shows it.
     governorRequestRender('ais-vessels-refloor');
   }

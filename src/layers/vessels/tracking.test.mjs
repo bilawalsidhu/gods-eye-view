@@ -36,6 +36,7 @@ function setup({ geoidN = 40, track = null } = {}) {
       getVisual: (record) => visuals.get(record) ?? record,
       anchorPosition: (record) => ({ anchoredAt: [record.lon, record.lat] }),
       syncRecordIcon: (record) => synced.push(record),
+      forgetClockStep: () => synced.push('forgetClockStep'),
     },
   };
   const renders = [];
@@ -135,7 +136,9 @@ test('refloor re-anchors every fixed record through the rendering part', () => {
   visuals.set(fixed, visual);
   tracking.refloorVesselRecords();
   assert.deepEqual(visual.position, { anchoredAt: [4.05, 51.9] });
-  assert.deepEqual(synced, [fixed]);
+  // Drawn somewhere else, the vessels move on the next clock pass however
+  // little they would.
+  assert.deepEqual(synced, [fixed, 'forgetClockStep']);
   assert.deepEqual(renders, ['ais-vessels-refloor']);
 });
 
