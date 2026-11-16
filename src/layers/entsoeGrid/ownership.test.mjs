@@ -1,20 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import { createEntsoeGridLayer } from './index.js';
 
 function harness(source) {
-  const sources = [];
   const events = [];
-  const viewer = {
-    dataSources: {
-      add(value) {
-        sources.push(value);
-      },
-      remove(value) {
-        sources.splice(sources.indexOf(value), 1);
-      },
-    },
-  };
+  const viewer = {};
+  const { draw } = bindFakeDraw(viewer);
   const layer = createEntsoeGridLayer({
     source,
     overlayHost: {
@@ -27,7 +19,7 @@ function harness(source) {
   });
   layer.init(viewer);
   layer.enable(viewer);
-  return { layer, viewer, sources, events };
+  return { layer, viewer, draw, events };
 }
 
 test('a layer requires its source and an overlay host', () => {
@@ -54,7 +46,7 @@ test('a disabled layer does not fetch', async () => {
     },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
-  layer.init({ dataSources: { add() {}, remove() {} } });
+  layer.init(viewerWithDraw());
   assert.equal(await layer.update(), false);
   assert.equal(calls, 0);
 });

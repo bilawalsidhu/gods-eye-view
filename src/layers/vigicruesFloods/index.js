@@ -1,6 +1,8 @@
-import * as Cesium from 'cesium';
 import { msg, t } from '../../i18n/index.js';
 import { translateFeedError } from '../../ui/statusText.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { hexColor } from '../../render/color.js';
+import { drawOf } from '../../render/rendererOf.js';
 import { createEntityCard } from '../entityCard.js';
 import {
   VIGICRUES_DESCRIPTION,
@@ -23,6 +25,8 @@ import {
 export * from './model.js';
 export { createVigicruesSource } from './source.js';
 
+let layerSeq = 0;
+
 /** Sensor markers are a point anchor, not an extent. */
 const SENSOR_MARKER_RADIUS_M = 4_000;
 
@@ -34,6 +38,7 @@ export function createVigicruesFloodsLayer({
   source,
   overlayHost,
   interaction,
+  inputFor,
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Vigicrues floods require a snapshot source');
@@ -41,7 +46,7 @@ export function createVigicruesFloodsLayer({
     throw new TypeError('Vigicrues floods require an overlay host');
   let _viewer = null;
   let _request = null;
-  let _dataSource = null;
+  let _sets = null;
   let _stations = [];
   let _zones = [];
   let _total = 0;
@@ -57,6 +62,7 @@ export function createVigicruesFloodsLayer({
     overlayHost,
     sourceId: cardSourceId,
     interaction,
+    ...(inputFor ? { inputFor } : {}),
     owns: (id) => vigicruesPick(id) !== null,
     resolve(id, click) {
       const pick = vigicruesPick(id);
@@ -67,7 +73,7 @@ export function createVigicruesFloodsLayer({
         return {
           ...buildVigicruesStationCopy(station, t),
           accent: station.color,
-          position: Cesium.Cartesian3.fromDegrees(station.lon, station.lat),
+          position: fromDegrees(station.lon, station.lat, 0),
         };
       }
       const zone = _zones.find((entry) => entry.id === pick.id);
@@ -77,6 +83,11 @@ export function createVigicruesFloodsLayer({
   });
 
   const notify = () => rowControlsListener?.();
+  const setShown = (show) => {
+    if (!_sets) return;
+    _sets.zones.show = show;
+    _sets.stations.show = show;
+  };
 
   const layer = {
     id: 'vigicrues-floods',
@@ -90,9 +101,19 @@ export function createVigicruesFloodsLayer({
     init(viewer) {
       if (_viewer) throw new Error('Vigicrues layer is already initialized');
       _viewer = viewer;
-      _dataSource = new Cesium.CustomDataSource('vigicrues-floods');
-      _dataSource.show = false;
-      viewer.dataSources.add(_dataSource);
+      // A viewer with no renderer bound draws nothing; the layer still runs.
+      try {
+        const draw = drawOf(viewer);
+        const base = `vigicrues-floods:${++layerSeq}`;
+        _sets = {
+          zones: draw.lines({ id: `${base}:zones`, clampTo: 'both' }),
+          stations: draw.shapes({ id: `${base}:stations`, clampTo: 'both' }),
+        };
+        _sets.zones.show = false;
+        _sets.stations.show = false;
+      } catch {
+        _sets = null;
+      }
       _stations = [];
       _zones = [];
       _total = 0;
@@ -105,7 +126,7 @@ export function createVigicruesFloodsLayer({
 
     enable() {
       _enabled = true;
-      if (_dataSource) _dataSource.show = true;
+      setShown(true);
       overlayHost.setVisible(VIGICRUES_OVERLAY_SOURCE_ID, true);
       card.install(_viewer);
       notify();
@@ -116,7 +137,7 @@ export function createVigicruesFloodsLayer({
       _request?.abort();
       _request = null;
       _enabled = false;
-      if (_dataSource) _dataSource.show = false;
+      setShown(false);
       overlayHost.clearSource(VIGICRUES_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(VIGICRUES_OVERLAY_SOURCE_ID, false);
       card.remove();
@@ -124,7 +145,7 @@ export function createVigicruesFloodsLayer({
     },
 
     async update() {
-      if (!_enabled || !_dataSource) return false;
+      if (!_enabled || !_sets) return false;
       _request?.abort();
       const request = new AbortController();
       _request = request;
@@ -160,41 +181,35 @@ export function createVigicruesFloodsLayer({
      * is not re-tessellated every frame.
      */
     _render() {
-      if (!_dataSource) return;
-      _dataSource.entities.removeAll();
+      if (!_sets) return;
       card.clear();
       const overlayEntries = [];
+      const shapes = [];
       for (const station of _stations) {
-        const position = Cesium.Cartesian3.fromDegrees(
-          station.lon,
-          station.lat,
-        );
-        const color = Cesium.Color.fromCssColorString(station.color);
-        _dataSource.entities.add(
-          new Cesium.Entity({
-            id: `${VIGICRUES_STATION_PICK_PREFIX}${station.id}`,
-            position,
-            ellipse: {
-              // Static axes: a per-frame axis re-tessellates the clamped
-              // ground primitive every frame.
-              semiMajorAxis: SENSOR_MARKER_RADIUS_M,
-              semiMinorAxis: SENSOR_MARKER_RADIUS_M,
-              material: new Cesium.ColorMaterialProperty(color.withAlpha(0.35)),
-              outline: true,
-              outlineColor: color.withAlpha(0.9),
-              outlineWidth: 2,
-              heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-            },
-            properties: {
-              name: station.name,
-              river: station.river,
-              commune: station.commune,
-              hasBulletin: station.hasBulletin,
-              lat: station.lat,
-              lon: station.lon,
-            },
-          }),
-        );
+        const position = fromDegrees(station.lon, station.lat, 0);
+        shapes.push({
+          // The pick id the card's `owns`/`resolve` read.
+          id: `${VIGICRUES_STATION_PICK_PREFIX}${station.id}`,
+          geometry: {
+            kind: 'ellipse',
+            center: position,
+            // Static axes: the marker is a point anchor, not an extent.
+            semiMajor: SENSOR_MARKER_RADIUS_M,
+            semiMinor: SENSOR_MARKER_RADIUS_M,
+          },
+          fill: hexColor(station.color, 0.35),
+          outline: hexColor(station.color, 0.9),
+          outlineWidth: 2,
+          clampTo: 'both',
+          meta: {
+            name: station.name,
+            river: station.river,
+            commune: station.commune,
+            hasBulletin: station.hasBulletin,
+            lat: station.lat,
+            lon: station.lon,
+          },
+        });
         overlayEntries.push(
           createVigicruesOverlayEntry({
             id: station.id,
@@ -204,6 +219,7 @@ export function createVigicruesFloodsLayer({
           }),
         );
       }
+      _sets.stations.set(shapes);
       this._renderZones();
       if (_enabled) {
         overlayHost.setEntries(
@@ -220,47 +236,44 @@ export function createVigicruesFloodsLayer({
 
     /** Build the warning-zone ground geometry as static polylines. */
     _renderZones() {
-      if (!_dataSource) return;
+      if (!_sets) return;
+      const lines = [];
       for (const zone of _zones) {
-        const color = Cesium.Color.fromCssColorString(zone.color).withAlpha(
-          0.85,
-        );
+        const color = hexColor(zone.color, 0.85);
         let index = 0;
         for (const line of zoneLines(zone.geometry)) {
           if (line.length < 2) continue;
-          _dataSource.entities.add(
-            new Cesium.Entity({
-              id: `${VIGICRUES_ZONE_PICK_PREFIX}${zone.id}:${index}`,
-              polyline: {
-                // Static positions: a CallbackProperty here re-tessellates the
-                // clamped ground primitive every frame.
-                positions: line,
-                width: 2,
-                material: color,
-                clampToGround: true,
-              },
-              properties: {
-                name: zone.label,
-                territory: zone.territory,
-                level: zone.level,
-              },
-            }),
-          );
+          lines.push({
+            id: `${VIGICRUES_ZONE_PICK_PREFIX}${zone.id}:${index}`,
+            positions: line.map((point) =>
+              fromDegrees(point.lon, point.lat, 0),
+            ),
+            widthPx: 2,
+            mode: 'draped',
+            style: { kind: 'solid', color },
+            meta: {
+              name: zone.label,
+              territory: zone.territory,
+              level: zone.level,
+            },
+          });
           index += 1;
         }
       }
+      _sets.zones.set(lines);
     },
 
-    destroy(viewer = _viewer) {
+    destroy() {
       _request?.abort();
       _request = null;
       _enabled = false;
       overlayHost.clearSource(VIGICRUES_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(VIGICRUES_OVERLAY_SOURCE_ID, false);
       card.remove();
-      if (_dataSource) {
-        viewer?.dataSources?.remove(_dataSource, true);
-        _dataSource = null;
+      if (_sets) {
+        _sets.zones.dispose();
+        _sets.stations.dispose();
+        _sets = null;
       }
       _viewer = null;
       _stations = [];

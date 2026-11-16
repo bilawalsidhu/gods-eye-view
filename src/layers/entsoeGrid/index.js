@@ -1,6 +1,8 @@
-import * as Cesium from 'cesium';
 import { msg, t } from '../../i18n/index.js';
 import { translateFeedError } from '../../ui/statusText.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { hexColor } from '../../render/color.js';
+import { drawOf } from '../../render/rendererOf.js';
 import { createEntityCard } from '../entityCard.js';
 import {
   ENTSOE_DEFAULT_FOCUS,
@@ -21,6 +23,9 @@ import {
 export * from './model.js';
 export { createEntsoeSource } from './source.js';
 
+/** Each layer's draw set has an id of its own. */
+let instances = 0;
+
 /** Pin size in pixels: a static size, so no per-frame callback is needed. */
 const ZONE_PIN_SIZE_PX = 12;
 
@@ -37,6 +42,7 @@ export function createEntsoeGridLayer({
   source,
   overlayHost,
   interaction,
+  inputFor,
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('ENTSO-E grid requires a snapshot source');
@@ -44,7 +50,8 @@ export function createEntsoeGridLayer({
     throw new TypeError('ENTSO-E grid requires an overlay host');
   let _viewer = null;
   let _request = null;
-  let _dataSource = null;
+  let _pins = null;
+  const setId = `entsoe-grid:${++instances}`;
   let _zones = [];
   let _focus = ENTSOE_DEFAULT_FOCUS;
   let _unit = null;
@@ -71,6 +78,7 @@ export function createEntsoeGridLayer({
     overlayHost,
     sourceId: `${ENTSOE_OVERLAY_SOURCE_ID}-selected`,
     interaction,
+    inputFor,
     owns: (id) => entsoeZoneFromPick(id) !== null,
     resolve(id) {
       const zone = _zones.find(
@@ -79,7 +87,7 @@ export function createEntsoeGridLayer({
       if (!zone) return null;
       return {
         ...buildEntsoeZoneCopy(zone, t),
-        position: Cesium.Cartesian3.fromDegrees(zone.lon, zone.lat),
+        position: fromDegrees(zone.lon, zone.lat),
       };
     },
     // Choosing a pin also points the row's hour rail at that country.
@@ -108,9 +116,11 @@ export function createEntsoeGridLayer({
     init(viewer) {
       if (_viewer) throw new Error('ENTSO-E layer is already initialized');
       _viewer = viewer;
-      _dataSource = new Cesium.CustomDataSource('entsoe-grid');
-      _dataSource.show = false;
-      viewer.dataSources.add(_dataSource);
+      _pins = drawOf(viewer).points({
+        id: setId,
+        clampTo: 'both',
+        show: false,
+      });
       _zones = [];
       _unit = null;
       _day = null;
@@ -124,7 +134,7 @@ export function createEntsoeGridLayer({
 
     enable() {
       _enabled = true;
-      if (_dataSource) _dataSource.show = true;
+      if (_pins) _pins.show = true;
       overlayHost.setVisible(ENTSOE_OVERLAY_SOURCE_ID, true);
       card.install(_viewer);
       notify();
@@ -135,7 +145,7 @@ export function createEntsoeGridLayer({
       _request?.abort();
       _request = null;
       _enabled = false;
-      if (_dataSource) _dataSource.show = false;
+      if (_pins) _pins.show = false;
       overlayHost.clearSource(ENTSOE_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(ENTSOE_OVERLAY_SOURCE_ID, false);
       card.remove();
@@ -143,7 +153,7 @@ export function createEntsoeGridLayer({
     },
 
     async update() {
-      if (!_enabled || !_dataSource) return false;
+      if (!_enabled || !_pins) return false;
       _request?.abort();
       const request = new AbortController();
       _request = request;
@@ -177,47 +187,33 @@ export function createEntsoeGridLayer({
 
     /** Rebuild the zone pins from the current snapshot. */
     _render() {
-      if (!_dataSource) return;
-      _dataSource.entities.removeAll();
+      if (!_pins) return;
       card.clear();
       const now = Date.now();
-      for (const zone of _zones) {
-        const current = entsoeCurrentPoint(zone, now);
-        const color = Cesium.Color.fromCssColorString(
-          entsoeBandColor(current?.band),
-        );
-        _dataSource.entities.add(
-          new Cesium.Entity({
+      _pins.set(
+        _zones.map((zone) => {
+          const current = entsoeCurrentPoint(zone, now);
+          return {
             id: `${ENTSOE_ZONE_PICK_PREFIX}${zone.code}`,
-            position: Cesium.Cartesian3.fromDegrees(zone.lon, zone.lat),
-            point: {
-              pixelSize: ZONE_PIN_SIZE_PX,
-              color: color.withAlpha(0.95),
-              outlineColor: Cesium.Color.WHITE.withAlpha(0.85),
-              outlineWidth: 1,
-            },
-            properties: {
-              zone: zone.code,
-              value: current?.value ?? null,
-              unit: zone.unit,
-              band: current?.band ?? null,
-            },
-          }),
-        );
-      }
+            pos: fromDegrees(zone.lon, zone.lat),
+            pixelSize: ZONE_PIN_SIZE_PX,
+            color: hexColor(entsoeBandColor(current?.band), 0.95),
+            outlineColor: hexColor('#ffffff', 0.85),
+            outlineWidth: 1,
+          };
+        }),
+      );
     },
 
-    destroy(viewer = _viewer) {
+    destroy() {
       _request?.abort();
       _request = null;
       _enabled = false;
       overlayHost.clearSource(ENTSOE_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(ENTSOE_OVERLAY_SOURCE_ID, false);
       card.remove();
-      if (_dataSource) {
-        viewer?.dataSources?.remove(_dataSource, true);
-        _dataSource = null;
-      }
+      _pins?.dispose();
+      _pins = null;
       _viewer = null;
       _zones = [];
       _unit = null;

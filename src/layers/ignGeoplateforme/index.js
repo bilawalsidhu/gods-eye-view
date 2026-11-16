@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { findGlobe } from '../../render/rendererOf.js';
 import { msg, t } from '../../i18n/index.js';
 import { translateFeedError } from '../../ui/statusText.js';
 import { IGN_DESCRIPTION, IGN_RASTER_LAYERS } from './model.js';
@@ -68,7 +68,7 @@ export function createIgnGeoplateformeLayer({ source } = {}) {
      * its raster layer in the URL, so a different layer is a different
      * template and not a different setting on the same one.
      *
-     * @param {Cesium.Viewer} viewer The globe.
+     * @param {object} viewer The scene the globe port is found from.
      */
     _applyImagery(viewer) {
       const descriptor = source.getDescriptor(_rasterLayer);
@@ -76,17 +76,19 @@ export function createIgnGeoplateformeLayer({ source } = {}) {
         _imagery.show = true;
         return;
       }
+      const globe = findGlobe(viewer);
+      if (!globe) throw new Error('IGN imagery needs a globe');
       if (_imagery) {
-        viewer.imageryLayers.remove(_imagery);
+        _imagery.remove();
         _imagery = null;
       }
-      _imagery = new Cesium.UrlTemplateImageryProvider({
+      _imagery = globe.imagery.add({
+        kind: 'xyz',
         url: descriptor.url,
-        maximumLevel: descriptor.maximumLevel ?? 19,
-        credit: descriptor.credit ?? msg('IGN Géoplateforme'),
+        maxLevel: descriptor.maximumLevel ?? 19,
+        credit: { text: descriptor.credit ?? msg('IGN Géoplateforme') },
       });
       _imageryLayer = _rasterLayer;
-      viewer.imageryLayers.addImageryProvider(_imagery);
       _imagery.show = true;
     },
 
@@ -105,9 +107,9 @@ export function createIgnGeoplateformeLayer({ source } = {}) {
 
     destroy(viewer = _viewer) {
       _enabled = false;
-      if (_imagery && viewer) {
+      if (_imagery) {
         try {
-          viewer.imageryLayers.remove(_imagery);
+          _imagery.remove();
         } catch {
           // The layer may already be gone with the viewer.
         }

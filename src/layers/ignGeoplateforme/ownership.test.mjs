@@ -1,21 +1,30 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { bindRenderer } from '../../render/rendererOf.js';
 import { createIgnGeoplateformeLayer } from './index.js';
 
 function harness(descriptor) {
   const added = [];
-  const viewer = {
-    imageryLayers: {
-      addImageryProvider(provider) {
-        added.push(provider);
-        return { show: true, provider };
-      },
-      remove(provider) {
-        const index = added.indexOf(provider);
-        if (index >= 0) added.splice(index, 1);
+  // The renderer's globe port, reduced to its imagery, bound to the viewer.
+  const viewer = {};
+  const globe = {
+    imagery: {
+      add(spec) {
+        const layer = {
+          ...spec,
+          show: true,
+          alpha: 1,
+          remove() {
+            const index = added.indexOf(layer);
+            if (index >= 0) added.splice(index, 1);
+          },
+        };
+        added.push(layer);
+        return layer;
       },
     },
   };
+  bindRenderer(viewer, { globe });
   const layer = createIgnGeoplateformeLayer({
     source: {
       getDescriptor: (requested) =>
@@ -23,7 +32,10 @@ function harness(descriptor) {
           ? {
               ...descriptor,
               layer: requested,
-              url: '/api/ign-geoplateforme/tiles/' + requested + '/{z}/{x}/{y}.png',
+              url:
+                '/api/ign-geoplateforme/tiles/' +
+                requested +
+                '/{z}/{x}/{y}.png',
             }
           : descriptor,
     },
@@ -53,7 +65,9 @@ test('enabling adds the imagery layer through the local proxy template', () => {
   const { layer, viewer, added } = harness(descriptor());
   layer.enable(viewer);
   assert.equal(added.length, 1);
-  // The provider exposes the template through its public `url` accessor.
+  assert.equal(added[0].kind, 'xyz');
+  assert.equal(added[0].maxLevel, 19);
+  assert.ok(added[0].credit.text);
   assert.ok(
     added[0].url.startsWith('/api/ign-geoplateforme/tiles/'),
     'the browser must not name an upstream URL',

@@ -1,6 +1,8 @@
-import * as Cesium from 'cesium';
 import { msg, t, tn } from '../../i18n/index.js';
 import { translateFeedError } from '../../ui/statusText.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { hexColor } from '../../render/color.js';
+import { drawOf } from '../../render/rendererOf.js';
 import { createEntityCard } from '../entityCard.js';
 import {
   COPERNICUS_DESCRIPTION,
@@ -23,6 +25,9 @@ import {
 export * from './model.js';
 export { createCopernicusEmsSource } from './source.js';
 
+/** Each layer's draw set has an id of its own. */
+let instances = 0;
+
 /** Activation markers are a point anchor, not an extent. */
 const ACTIVATION_MARKER_RADIUS_M = 12_000;
 
@@ -34,6 +39,7 @@ export function createCopernicusEmsLayer({
   source,
   overlayHost,
   interaction,
+  inputFor,
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Copernicus EMS requires a snapshot source');
@@ -41,7 +47,8 @@ export function createCopernicusEmsLayer({
     throw new TypeError('Copernicus EMS requires an overlay host');
   let _viewer = null;
   let _request = null;
-  let _dataSource = null;
+  let _discs = null;
+  const setId = `copernicus-ems:${++instances}`;
   let _activations = [];
   let _total = 0;
   let _count = 0;
@@ -55,6 +62,7 @@ export function createCopernicusEmsLayer({
     overlayHost,
     sourceId: `${COPERNICUS_OVERLAY_SOURCE_ID}-selected`,
     interaction,
+    inputFor,
     owns: (id) => copernicusActivationIdFromPick(id) !== null,
     resolve(id) {
       const key = copernicusActivationIdFromPick(id);
@@ -63,7 +71,7 @@ export function createCopernicusEmsLayer({
       return {
         ...buildCopernicusActivationCopy(activation, t),
         accent: activation.color,
-        position: Cesium.Cartesian3.fromDegrees(activation.lon, activation.lat),
+        position: fromDegrees(activation.lon, activation.lat),
       };
     },
   });
@@ -81,9 +89,11 @@ export function createCopernicusEmsLayer({
       if (_viewer)
         throw new Error('Copernicus EMS layer is already initialized');
       _viewer = viewer;
-      _dataSource = new Cesium.CustomDataSource('copernicus-ems');
-      _dataSource.show = false;
-      viewer.dataSources.add(_dataSource);
+      _discs = drawOf(viewer).shapes({
+        id: setId,
+        clampTo: 'both',
+        show: false,
+      });
       _activations = [];
       _total = 0;
       _count = 0;
@@ -95,7 +105,7 @@ export function createCopernicusEmsLayer({
 
     enable() {
       _enabled = true;
-      if (_dataSource) _dataSource.show = true;
+      if (_discs) _discs.show = true;
       overlayHost.setVisible(COPERNICUS_OVERLAY_SOURCE_ID, true);
       card.install(_viewer);
       notify();
@@ -106,7 +116,7 @@ export function createCopernicusEmsLayer({
       _request?.abort();
       _request = null;
       _enabled = false;
-      if (_dataSource) _dataSource.show = false;
+      if (_discs) _discs.show = false;
       overlayHost.clearSource(COPERNICUS_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(COPERNICUS_OVERLAY_SOURCE_ID, false);
       card.remove();
@@ -114,7 +124,7 @@ export function createCopernicusEmsLayer({
     },
 
     async update() {
-      if (!_enabled || !_dataSource) return false;
+      if (!_enabled || !_discs) return false;
       _request?.abort();
       const request = new AbortController();
       _request = request;
@@ -143,44 +153,28 @@ export function createCopernicusEmsLayer({
 
     /** Rebuild entities and overlay labels from the current activations. */
     _render() {
-      if (!_dataSource) return;
-      _dataSource.entities.removeAll();
+      if (!_discs) return;
       card.clear();
       const overlayEntries = [];
+      const items = [];
       for (const activation of _activations) {
-        const position = Cesium.Cartesian3.fromDegrees(
-          activation.lon,
-          activation.lat,
-        );
-        const color = Cesium.Color.fromCssColorString(activation.color);
-        _dataSource.entities.add(
-          new Cesium.Entity({
-            id: `${COPERNICUS_PICK_PREFIX}${activation.id}`,
-            position,
-            ellipse: {
-              // Static axes, as in the earthquake layer: a per-frame axis
-              // re-tessellates the clamped ground primitive every frame.
-              semiMajorAxis: ACTIVATION_MARKER_RADIUS_M,
-              semiMinorAxis: ACTIVATION_MARKER_RADIUS_M,
-              material: new Cesium.ColorMaterialProperty(color.withAlpha(0.35)),
-              outline: true,
-              outlineColor: color.withAlpha(0.9),
-              outlineWidth: 2,
-              heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-            },
-            properties: {
-              name: activation.name,
-              code: activation.code,
-              category: activation.category,
-              categoryLabel: activation.categoryLabel,
-              phase: activation.phase,
-              phaseLabel: activation.phaseLabel,
-              country: activation.country,
-              lat: activation.lat,
-              lon: activation.lon,
-            },
-          }),
-        );
+        const position = fromDegrees(activation.lon, activation.lat);
+        items.push({
+          id: `${COPERNICUS_PICK_PREFIX}${activation.id}`,
+          geometry: {
+            kind: 'ellipse',
+            center: { lon: activation.lon, lat: activation.lat },
+            // Static axes, as in the earthquake layer: a per-frame axis
+            // re-tessellates the clamped ground primitive every frame.
+            semiMajor: ACTIVATION_MARKER_RADIUS_M,
+            semiMinor: ACTIVATION_MARKER_RADIUS_M,
+          },
+          fill: hexColor(activation.color, 0.35),
+          outline: hexColor(activation.color, 0.9),
+          outlineWidth: 2,
+          height: 'clampGround',
+          clampTo: 'both',
+        });
         overlayEntries.push(
           createCopernicusOverlayEntry({
             id: activation.id,
@@ -190,6 +184,7 @@ export function createCopernicusEmsLayer({
           }),
         );
       }
+      _discs.set(items);
       if (_enabled) {
         overlayHost.setEntries(
           COPERNICUS_OVERLAY_SOURCE_ID,
@@ -203,17 +198,15 @@ export function createCopernicusEmsLayer({
       }
     },
 
-    destroy(viewer = _viewer) {
+    destroy() {
       _request?.abort();
       _request = null;
       _enabled = false;
       overlayHost.clearSource(COPERNICUS_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(COPERNICUS_OVERLAY_SOURCE_ID, false);
       card.remove();
-      if (_dataSource) {
-        viewer?.dataSources?.remove(_dataSource, true);
-        _dataSource = null;
-      }
+      _discs?.dispose();
+      _discs = null;
       _viewer = null;
       _activations = [];
       _total = 0;
