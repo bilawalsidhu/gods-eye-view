@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { gstime, twoline2satrec } from 'satellite.js';
 import { noradIdFromSatnum, tleLineLaunchYear } from '../../sources/tle.js';
 import { reckonEarthFixed, sampleOrbit } from './motion.js';
@@ -67,7 +66,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
    */
 
   async function _loadDenseCatalog({ signal = null } = {}) {
-    if (!layerState._viewer || !layerState._pointCollection)
+    if (!layerState._viewer || !parts.rendering._hasPointCollection())
       return { status: 'source-unavailable', reason: 'layer-unavailable' };
     layerState._denseLoadController?.abort();
     const resourceController = new AbortController();
@@ -114,7 +113,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
         if (
           token !== layerState._denseLoadToken ||
           layerState._params.catalog !== 'dense' ||
-          !layerState._pointCollection
+          !parts.rendering._hasPointCollection()
         ) {
           return { status: 'superseded', reason: 'dense-load-superseded' };
         }
@@ -143,21 +142,11 @@ export function createCatalog({ state: layerState, services, parts, source }) {
             sensor: null,
             orbitSample,
           });
-          const point = layerState._pointCollection.add({
-            position: reckonEarthFixed(
-              orbitSample,
-              nowMs,
-              gmst,
-              new Cesium.Cartesian3(),
-            ),
-            pixelSize: style.pixelSize,
-            color: style.color,
-            outlineColor: style.outlineColor,
-            outlineWidth: style.outlineWidth,
-            scaleByDistance: new Cesium.NearFarScalar(1e6, 1.5, 2e7, 0.6),
-            id: noradId,
-          });
-          layerState._points.set(noradId, point);
+          parts.rendering._addPoint(
+            noradId,
+            reckonEarthFixed(orbitSample, nowMs, gmst, { x: 0, y: 0, z: 0 }),
+            style,
+          );
           layerState._denseIds.push(noradId);
           layerState._denseStale ||= Boolean(res.stale);
           added++;
@@ -249,10 +238,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
       parts.tracking._clearTracking();
     }
     for (const noradId of layerState._denseIds) {
-      const point = layerState._points.get(noradId);
-      if (point && layerState._pointCollection)
-        layerState._pointCollection.remove(point);
-      layerState._points.delete(noradId);
+      parts.rendering._removePoint(noradId);
       layerState._catalog.delete(noradId);
     }
     layerState._denseIds = [];

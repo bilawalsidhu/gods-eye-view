@@ -1,5 +1,25 @@
 /** Camera placement, ground acquisition and motion correction for the Cockpit controller. */
-import * as Cesium from 'cesium';
+import { cameraOf, findFrame, findQuery } from '../render/rendererOf.js';
+import { heightsOf } from '../queries/heights.js';
+import { followedPosition, isFollowing } from '../data/followed.js';
+import { readEntityRecord } from '../data/entityRecords.js';
+import { trackedEntityDrawn } from './cockpitTrackingController.js';
+import {
+  add,
+  clone,
+  eastNorthUp,
+  frameVector,
+  fromDegrees,
+  fromRadians,
+  magnitude,
+  normalize,
+  scale,
+  sub,
+  toCartographicRadians,
+  toDegrees,
+  toRadians,
+  vec,
+} from '../geo/index.js';
 import {
   cockpitAnchorCorrectionStep,
   cockpitGroundSafeHeight,
@@ -30,6 +50,17 @@ import {
   COCKPIT_GROUND_PROBE_MS,
   COCKPIT_GROUND_WAIT_TIMEOUT_MS,
 } from './cockpitPresentation.js';
+
+/**
+ * Where the aircraft Cockpit flies is now: its follow target's position at
+ * scene time (what the drawn entity's position reads), or, for a target
+ * with none, where it is shown.
+ */
+export function trackedPositionNow(viewer, followed) {
+  if (typeof followed?.position === 'function')
+    return followed.position(findFrame(viewer)?.time() ?? Date.now());
+  return followedPosition(viewer, followed);
+}
 
 /** The aircraft eye: just ahead of and above the reported position. */
 const AIRCRAFT_CAMERA_PROFILE = Object.freeze({
@@ -77,7 +108,7 @@ export function update() {
   if (
     !info ||
     !this.trackedEntity ||
-    !this.viewer.entities.contains(this.trackedEntity)
+    !trackedEntityDrawn.call(this, this.trackedEntity)
   ) {
     if (nowMs < this.contextNavigationDeadlineMs) return;
     this.exit({ restoreTracking: false });
@@ -93,10 +124,7 @@ export function update() {
     return;
   this.lastCameraUpdateMs = nowMs;
 
-  const target = this.trackedEntity.position.getValue(
-    this.viewer.clock.currentTime,
-    this.scratchTarget,
-  );
+  const target = trackedPositionNow(this.viewer, this.trackedFollow);
   if (!target) return;
   const dtSec = Math.min(0.1, Math.max(0, (nowMs - this.lastFrameMs) / 1000));
   this.lastFrameMs = nowMs;
@@ -133,20 +161,20 @@ function vesselSurfaceM(info, nowMs, at = info) {
   const seaM = Number.isFinite(info.seaSurfaceHeightM)
     ? info.seaSurfaceHeightM
     : 0;
-  const scene = this.viewer.scene;
+  const query = findQuery(this.viewer) ? heightsOf(this.viewer) : null;
   let read =
     this.vesselWaterline?.vesselId === info.id ? this.vesselWaterline : null;
   if (
-    typeof scene?.sampleHeightMostDetailed === 'function' &&
+    query &&
     (!read || nowMs - read.sampledMs >= VESSEL_WATERLINE_REFRESH_MS)
   ) {
     const probes = waterlineProbePoints(at.latitude, at.longitude).map(
-      ({ lat, lon }) => Cesium.Cartographic.fromDegrees(lon, lat),
+      ({ lat, lon }) => ({ lon, lat }),
     );
     if (!read) {
       read = {
         vesselId: info.id,
-        heightM: loadedWaterlineM(scene, probes, seaM),
+        heightM: loadedWaterlineM(query, probes, seaM),
         sampledMs: nowMs,
         // Whether a full-detail read has answered for this ship.
         landed: false,
@@ -156,7 +184,7 @@ function vesselSurfaceM(info, nowMs, at = info) {
     } else {
       read.sampledMs = nowMs;
       if (read.inFlight && !read.landed) {
-        const loadedM = loadedWaterlineM(scene, probes, seaM);
+        const loadedM = loadedWaterlineM(query, probes, seaM);
         // Taking a river back to the sea is the full-detail read's to say.
         const lowers =
           Number.isFinite(read.heightM) &&
@@ -165,7 +193,7 @@ function vesselSurfaceM(info, nowMs, at = info) {
         if (Number.isFinite(loadedM) && !lowers) read.heightM = loadedM;
       }
     }
-    if (!read.inFlight) readWaterline.call(this, read, scene, probes, seaM);
+    if (!read.inFlight) readWaterline.call(this, read, query, probes, seaM);
   }
   return read && Number.isFinite(read.heightM)
     ? Math.max(seaM, read.heightM)
@@ -173,25 +201,26 @@ function vesselSurfaceM(info, nowMs, at = info) {
 }
 
 /** Start one full-detail water read for `read`; its answer lands on it. */
-function readWaterline(read, scene, probes, seaM) {
+function readWaterline(read, query, probes, seaM) {
   read.inFlight = true;
-  Promise.resolve()
-    .then(() => scene.sampleHeightMostDetailed(probes))
-    .then(
-      (samples) => {
-        if (this.vesselWaterline !== read) return;
-        read.inFlight = false;
-        // However late it lands, it applies; one that sampled nothing (tiles
-        // not loaded yet) is no answer and keeps the height already read.
-        const heights = (samples || []).map((sample) => sample?.height);
-        if (!heights.some(Number.isFinite)) return;
-        read.landed = true;
-        read.heightM = vesselWaterlineM(seaM, heights);
-      },
-      () => {
-        if (this.vesselWaterline === read) read.inFlight = false;
-      },
-    );
+  // An async read: a failure arrives as a rejection, never a throw here.
+  // The drawn surface, globe included, as the scene's own sample read it:
+  // a lake on a globe map stands on its terrain.
+  query.batch(probes).then(
+    (samples) => {
+      if (this.vesselWaterline !== read) return;
+      read.inFlight = false;
+      // However late it lands, it applies; one that sampled nothing (tiles
+      // not loaded yet) is no answer and keeps the height already read.
+      const heights = samples || [];
+      if (!heights.some(Number.isFinite)) return;
+      read.landed = true;
+      read.heightM = vesselWaterlineM(seaM, heights);
+    },
+    () => {
+      if (this.vesselWaterline === read) read.inFlight = false;
+    },
+  );
 }
 
 /**
@@ -200,11 +229,9 @@ function readWaterline(read, scene, probes, seaM) {
  * probe met loaded geometry: nothing sampled is no answer, not the sea, so it
  * never undoes a river height a full read set.
  */
-function loadedWaterlineM(scene, probes, seaM) {
-  if (typeof scene.sampleHeight !== 'function') return null;
-  if (scene.sampleHeightSupported === false) return null;
+function loadedWaterlineM(query, probes, seaM) {
   try {
-    const heights = probes.map((probe) => scene.sampleHeight(probe));
+    const heights = probes.map((probe) => query.now(probe));
     if (!heights.some(Number.isFinite)) return null;
     return vesselWaterlineM(seaM, heights);
   } catch {
@@ -219,9 +246,10 @@ function loadedWaterlineM(scene, probes, seaM) {
  * correction each new fix brings.
  */
 function updateVessel(nowMs) {
-  // Tracking an aircraft from the bridge clears the vessel selection; end the
-  // bridge and leave Cesium tracking with that aircraft.
-  if (this.viewer.trackedEntity?.position) {
+  // Tracking anything from the bridge (an aircraft, a satellite, a site)
+  // takes the camera: entry stopped every follow, so any follow now is
+  // another's. End the bridge and leave the camera following it.
+  if (isFollowing(this.viewer)) {
     this.exit({ restoreTracking: false });
     return;
   }
@@ -254,13 +282,11 @@ function updateVessel(nowMs) {
   );
   // The radar centres here too, so it agrees with the view out the window.
   this.vesselFix = fix;
-  const target = Cesium.Cartesian3.fromDegrees(
+  const target = fromDegrees(
     fix.longitude,
     fix.latitude,
     // Read the water where the ship is now, not at its last report.
     vesselSurfaceM.call(this, info, nowMs, fix),
-    Cesium.Ellipsoid.WGS84,
-    this.scratchTarget,
   );
   // The target advances in wall-clock time, so the anchor must too: the
   // aircraft path's 0.1 s step cap would leave a slow-frame or hitching bridge
@@ -314,7 +340,7 @@ function updateVessel(nowMs) {
  */
 function updateSubject(nowMs) {
   const provider = this.subjectProvider;
-  if (this.viewer.trackedEntity?.position) {
+  if (isFollowing(this.viewer)) {
     this.exit({ restoreTracking: false });
     return;
   }
@@ -374,13 +400,7 @@ function updateSubject(nowMs) {
   this.surfaceWaitStartedMs = 0;
   this.surfaceAcquiring = false;
   this.subjectHeightM = heightM;
-  const target = Cesium.Cartesian3.fromDegrees(
-    frame.longitude,
-    frame.latitude,
-    heightM,
-    Cesium.Ellipsoid.WGS84,
-    this.scratchTarget,
-  );
+  const target = fromDegrees(frame.longitude, frame.latitude, heightM);
   const dtSec = cockpitSubjectStepSec(nowMs - this.lastFrameMs, intervalMs);
   this.lastFrameMs = nowMs;
   if (frame.headingDeg !== null) {
@@ -426,7 +446,7 @@ function updateSubject(nowMs) {
  * A subject with `anchor: 'exact'` keeps the anchor on its target (its layer
  * already moves it smoothly), and one with `groundClamp: false` (inside a
  * structure, say) is never pushed up to the floor: a lift it had eases out.
- * @param {Cesium.Cartesian3} target Authoritative subject position.
+ * @param {{x: number, y: number, z: number}} target Authoritative subject position.
  * @param {object} info Subject info; `motionCourse` (when present) is the
  *   direction the subject moves, otherwise it moves where it faces.
  * @param {number} nowMs Frame time.
@@ -440,7 +460,7 @@ function updateSubject(nowMs) {
  */
 function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
   if (!this.cockpitAnchorValid) {
-    Cesium.Cartesian3.clone(target, this.cockpitAnchor);
+    this.cockpitAnchor = clone(target);
     this.cockpitAnchorValid = true;
     this.subjectLiftM = null;
   }
@@ -452,15 +472,13 @@ function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
   // display position at a bounded rate. This preserves the layer's required
   // 15/30-second interpolation and per-frame cache without exposing its
   // sample-boundary corrections to the camera.
-  const headingRad = Cesium.Math.toRadians(this.heading ?? 0);
+  const headingRad = toRadians(this.heading ?? 0);
   const courseRad = Number.isFinite(info.motionCourse)
-    ? Cesium.Math.toRadians(info.motionCourse)
+    ? toRadians(info.motionCourse)
     : headingRad;
-  const pitchRad = Cesium.Math.toRadians(
-    look ? look.pitchDeg : profile.pitchDeg,
-  );
+  const pitchRad = toRadians(look ? look.pitchDeg : profile.pitchDeg);
   const viewHeadingRad = look
-    ? Cesium.Math.toRadians((this.heading ?? 0) + look.yawDeg)
+    ? toRadians((this.heading ?? 0) + look.yawDeg)
     : headingRad;
   const speedMps = Number.isFinite(info.velocityMps)
     ? Math.max(0, info.velocityMps)
@@ -471,40 +489,20 @@ function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
     // A feed backoff has no authoritative velocity epoch to advance from.
     // Hold the cockpit on the exact layer-rendered position so the camera
     // cannot coast away while the icon correctly remains fixed.
-    Cesium.Cartesian3.clone(target, this.cockpitAnchor);
+    this.cockpitAnchor = clone(target);
   } else {
-    Cesium.Transforms.eastNorthUpToFixedFrame(
+    const horizontal = normalize(
+      frameVector(
+        eastNorthUp(this.cockpitAnchor),
+        vec(Math.sin(courseRad), Math.cos(courseRad), 0),
+      ),
+    );
+    this.cockpitAnchor = add(
       this.cockpitAnchor,
-      Cesium.Ellipsoid.WGS84,
-      this.scratchEnu,
+      scale(horizontal, speedMps * dtSec),
     );
-    this.scratchLocal.x = Math.sin(courseRad);
-    this.scratchLocal.y = Math.cos(courseRad);
-    this.scratchLocal.z = 0;
-    Cesium.Matrix4.multiplyByPointAsVector(
-      this.scratchEnu,
-      this.scratchLocal,
-      this.scratchHorizontal,
-    );
-    Cesium.Cartesian3.normalize(this.scratchHorizontal, this.scratchHorizontal);
-    Cesium.Cartesian3.multiplyByScalar(
-      this.scratchHorizontal,
-      speedMps * dtSec,
-      this.scratchAdvance,
-    );
-    Cesium.Cartesian3.add(
-      this.cockpitAnchor,
-      this.scratchAdvance,
-      this.cockpitAnchor,
-    );
-    Cesium.Cartesian3.subtract(
-      target,
-      this.cockpitAnchor,
-      this.scratchCorrection,
-    );
-    const correctionDistanceM = Cesium.Cartesian3.magnitude(
-      this.scratchCorrection,
-    );
+    const correction = sub(target, this.cockpitAnchor);
+    const correctionDistanceM = magnitude(correction);
     // An application subject's step is already bounded by its own update
     // interval (cockpitSubjectStepSec); the built-in views keep the 0.1 s.
     const correctionStepM = cockpitAnchorCorrectionStep(
@@ -514,15 +512,9 @@ function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
       info.generic === true ? dtSec : undefined,
     );
     if (correctionStepM > 0 && correctionDistanceM > 0) {
-      Cesium.Cartesian3.multiplyByScalar(
-        this.scratchCorrection,
-        correctionStepM / correctionDistanceM,
-        this.scratchCorrection,
-      );
-      Cesium.Cartesian3.add(
+      this.cockpitAnchor = add(
         this.cockpitAnchor,
-        this.scratchCorrection,
-        this.cockpitAnchor,
+        scale(correction, correctionStepM / correctionDistanceM),
       );
     }
   }
@@ -532,23 +524,15 @@ function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
   // between fixes. Clamp it against the same mesh-first shared floor used by
   // aircraft rendering. For a slow contact whose floor cell is still cold,
   // its already-clamped render position is a conservative temporary floor.
-  const anchorCartographic = Cesium.Cartographic.fromCartesian(
-    this.cockpitAnchor,
-    Cesium.Ellipsoid.WGS84,
-    this.scratchAnchorCartographic,
-  );
-  const targetCartographic = Cesium.Cartographic.fromCartesian(
-    target,
-    Cesium.Ellipsoid.WGS84,
-    this.scratchTargetCartographic,
-  );
+  const anchorCartographic = toCartographicRadians(this.cockpitAnchor);
+  const targetCartographic = toCartographicRadians(target);
   // A bridge's target is its fix dead-reckoned up to minutes ahead: read
   // the floor where the ship is now, as its water is.
   const floorAt =
-    info.kind === 'vessel'
+    info.kind === 'vessel' && targetCartographic
       ? {
-          latitude: Cesium.Math.toDegrees(targetCartographic.latitude),
-          longitude: Cesium.Math.toDegrees(targetCartographic.longitude),
+          latitude: toDegrees(targetCartographic.lat),
+          longitude: toDegrees(targetCartographic.lon),
         }
       : info;
   let cockpitFloorM = this.services.cachedGroundFloor(
@@ -571,11 +555,11 @@ function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
         )
       ) {
         this.lastGroundProbeMs = nowMs;
-        const viewerCartographic = this.viewer.camera.positionCartographic;
-        this.services.sampleMeshFloorCells(this.viewer.scene, groundPoint, {
-          excludeObjects: [this.trackedEntity],
-          viewerLat: Cesium.Math.toDegrees(viewerCartographic.latitude),
-          viewerLon: Cesium.Math.toDegrees(viewerCartographic.longitude),
+        const eye = cameraOf(this.viewer).pose();
+        this.services.sampleMeshFloorCells(this.viewer, groundPoint, {
+          sets: readEntityRecord(this.trackedEntity)?.groundSets?.() ?? [],
+          viewerLat: eye.lat,
+          viewerLon: eye.lon,
         });
       }
       cockpitFloorM = this.services.cachedMeshFloor(
@@ -643,83 +627,50 @@ function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
       profile.minClearanceM - profile.upM,
     );
     if (minimumAnchorHeightM !== anchorCartographic.height) {
-      anchorCartographic.height = minimumAnchorHeightM;
-      Cesium.Ellipsoid.WGS84.cartographicToCartesian(
-        anchorCartographic,
-        this.cockpitAnchor,
+      this.cockpitAnchor = fromRadians(
+        anchorCartographic.lon,
+        anchorCartographic.lat,
+        minimumAnchorHeightM,
       );
     }
   }
 
   // Rebuild the local frame at the stabilized anchor after advancing it.
-  Cesium.Transforms.eastNorthUpToFixedFrame(
-    this.cockpitAnchor,
-    Cesium.Ellipsoid.WGS84,
-    this.scratchEnu,
+  const enu = eastNorthUp(this.cockpitAnchor);
+  const horizontal = normalize(
+    frameVector(enu, vec(Math.sin(headingRad), Math.cos(headingRad), 0)),
   );
-  this.scratchLocal.x = Math.sin(headingRad);
-  this.scratchLocal.y = Math.cos(headingRad);
-  this.scratchLocal.z = 0;
-  Cesium.Matrix4.multiplyByPointAsVector(
-    this.scratchEnu,
-    this.scratchLocal,
-    this.scratchHorizontal,
+  const forward = normalize(
+    frameVector(
+      enu,
+      vec(
+        Math.sin(viewHeadingRad) * Math.cos(pitchRad),
+        Math.cos(viewHeadingRad) * Math.cos(pitchRad),
+        Math.sin(pitchRad),
+      ),
+    ),
   );
-  Cesium.Cartesian3.normalize(this.scratchHorizontal, this.scratchHorizontal);
-
-  this.scratchLocal.x = Math.sin(viewHeadingRad) * Math.cos(pitchRad);
-  this.scratchLocal.y = Math.cos(viewHeadingRad) * Math.cos(pitchRad);
-  this.scratchLocal.z = Math.sin(pitchRad);
-  Cesium.Matrix4.multiplyByPointAsVector(
-    this.scratchEnu,
-    this.scratchLocal,
-    this.scratchForward,
+  const up = normalize(
+    frameVector(
+      enu,
+      vec(
+        -Math.sin(viewHeadingRad) * Math.sin(pitchRad),
+        -Math.cos(viewHeadingRad) * Math.sin(pitchRad),
+        Math.cos(pitchRad),
+      ),
+    ),
   );
-  Cesium.Cartesian3.normalize(this.scratchForward, this.scratchForward);
-
-  this.scratchLocal.x = -Math.sin(viewHeadingRad) * Math.sin(pitchRad);
-  this.scratchLocal.y = -Math.cos(viewHeadingRad) * Math.sin(pitchRad);
-  this.scratchLocal.z = Math.cos(pitchRad);
-  Cesium.Matrix4.multiplyByPointAsVector(
-    this.scratchEnu,
-    this.scratchLocal,
-    this.scratchUp,
-  );
-  Cesium.Cartesian3.normalize(this.scratchUp, this.scratchUp);
-
-  Cesium.Cartesian3.multiplyByScalar(
-    this.scratchHorizontal,
-    profile.forwardM,
-    this.scratchCamera,
-  );
-  Cesium.Cartesian3.add(
-    this.cockpitAnchor,
-    this.scratchCamera,
-    this.scratchCamera,
-  );
-  Cesium.Matrix4.getTranslation(this.scratchEnu, this.scratchTarget);
-  Cesium.Cartesian3.normalize(this.scratchTarget, this.scratchTarget);
-  Cesium.Cartesian3.multiplyByScalar(
-    this.scratchTarget,
-    profile.upM,
-    this.scratchTarget,
-  );
-  Cesium.Cartesian3.add(
-    this.scratchCamera,
-    this.scratchTarget,
-    this.scratchCamera,
+  let eye = add(
+    add(this.cockpitAnchor, scale(horizontal, profile.forwardM)),
+    scale(normalize(enu.origin), profile.upM),
   );
 
   // Recheck at the final forward-offset camera coordinate because a taxiing
   // aircraft can cross into an adjacent coarse floor cell between updates.
-  const cameraCartographic = Cesium.Cartographic.fromCartesian(
-    this.scratchCamera,
-    Cesium.Ellipsoid.WGS84,
-    this.scratchCameraCartographic,
-  );
+  const cameraCartographic = toCartographicRadians(eye);
   if (groundClamp && cameraCartographic) {
-    const cameraLat = Cesium.Math.toDegrees(cameraCartographic.latitude);
-    const cameraLon = Cesium.Math.toDegrees(cameraCartographic.longitude);
+    const cameraLat = toDegrees(cameraCartographic.lat);
+    const cameraLon = toDegrees(cameraCartographic.lon);
     const cameraFloorM = this.services.cachedGroundFloor(cameraLat, cameraLon);
     if (Number.isFinite(cameraFloorM)) {
       cockpitFloorM = Math.max(
@@ -748,28 +699,27 @@ function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
       safeHeightM = cameraCartographic.height + this.subjectLiftM;
     }
     if (safeHeightM !== cameraCartographic.height) {
-      cameraCartographic.height = safeHeightM;
-      Cesium.Ellipsoid.WGS84.cartographicToCartesian(
-        cameraCartographic,
-        this.scratchCamera,
+      eye = fromRadians(
+        cameraCartographic.lon,
+        cameraCartographic.lat,
+        safeHeightM,
       );
     }
   } else if (info.generic === true) {
     // Inside a structure the floor holds the eye up no more: the lift it gave
     // goes at the rate it came (easeCockpitLift), never at once.
     this.subjectLiftM = easeCockpitLift(this.subjectLiftM, 0, 0, dtSec);
-    if (cameraCartographic && this.subjectLiftM > 0) {
-      cameraCartographic.height += this.subjectLiftM;
-      Cesium.Ellipsoid.WGS84.cartographicToCartesian(
-        cameraCartographic,
-        this.scratchCamera,
+    if (cameraCartographic && this.subjectLiftM > 0)
+      eye = fromRadians(
+        cameraCartographic.lon,
+        cameraCartographic.lat,
+        cameraCartographic.height + this.subjectLiftM,
       );
-    }
   }
 
-  this.viewer.camera.setView({
-    destination: this.scratchCamera,
-    orientation: { direction: this.scratchForward, up: this.scratchUp },
+  cameraOf(this.viewer).setView({
+    destination: eye,
+    orientation: { direction: forward, up },
   });
   if (cockpitUiUpdateDue(nowMs, this.lastHudUpdateMs, COCKPIT_HUD_UPDATE_MS)) {
     this.lastHudUpdateMs = nowMs;

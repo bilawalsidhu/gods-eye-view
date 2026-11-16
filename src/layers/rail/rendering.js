@@ -1,4 +1,16 @@
-import * as Cesium from 'cesium';
+import {
+  drawOf,
+  findCamera,
+  findFrame,
+  findGlobe,
+} from '../../render/rendererOf.js';
+import { heightsOf } from '../../queries/heights.js';
+import {
+  fromDegreesInto,
+  scaleToGeodeticSurface,
+} from '../../geo/ellipsoid.js';
+import { horizonFrom } from '../../geo/horizon.js';
+import { distanceSquared } from '../../geo/vector.js';
 import {
   PLACED_WAKE_MS,
   applyDisplayCourse,
@@ -27,7 +39,6 @@ import {
   FLOOR_WARM_MAX_DIST_KM,
   MARKER_PIXEL_SIZE,
   RAIL_CATEGORY_COLORS,
-  SELECTED_PIXEL_SIZE,
   UNSELECTED_TRAIN_ALPHA,
 } from './policy.js';
 import { placeOnPath } from './pathBinding.js';
@@ -40,18 +51,16 @@ import { createFleetModelLayer } from '../../data/fleetModelInstances.js';
 
 /** How often the trains near enough for a model are gathered again (wall ms). */
 const MODEL_CANDIDATES_MS = 500;
-/** Each category's colour, painted where a train model marks it. */
-const CATEGORY_TINTS = Object.fromEntries(
-  Object.entries(RAIL_CATEGORY_COLORS).map(([category, css]) => [
-    category,
-    Cesium.Color.fromCssColorString(css),
-  ]),
-);
+/** Each category's colour (CSS), painted where a train model marks it. */
+const CATEGORY_TINTS = RAIL_CATEGORY_COLORS;
 
 const SPRITE_PX = 64;
-/** Billboard tints; the setter copies, so sharing one instance is safe. */
-const FULL_TINT = Cesium.Color.WHITE;
-const DIM_TINT = new Cesium.Color(1, 1, 1, UNSELECTED_TRAIN_ALPHA);
+/** Icon tints (0..1 channels); frozen, so sharing one is safe. */
+const FULL_TINT = Object.freeze([1, 1, 1, 1]);
+const DIM_TINT = Object.freeze([1, 1, 1, UNSELECTED_TRAIN_ALPHA]);
+
+/** Layers built so far, so each one's draw set has an id of its own. */
+let instances = 0;
 
 /**
  * Draw one category/mode sprite: a filled disc in the category colour with a
@@ -123,31 +132,187 @@ export function createRendering({ state, services, parts }) {
     coarseFloorCoord = null,
   } = services.ground;
   const sprites = new Map();
-  const terrainPoint = new Cesium.Cartographic();
-  const scratchPosition = new Cesium.Cartesian3();
+  const terrainPoint = { lon: 0, lat: 0 };
   /** Scratch for the on-line position; place() runs every frame. */
   const pathPoint = { lat: NaN, lon: NaN, bearingDeg: NaN };
+  const instance = (instances += 1);
 
+  /** The icon a category and mode draw: one canvas per pair, reused. */
   function spriteFor(category, mode) {
-    const id = `${category}:${mode}`;
-    if (!sprites.has(id)) sprites.set(id, drawSprite(category, mode));
-    return sprites.get(id);
+    const key = `rail:${category}:${mode}`;
+    if (!sprites.has(key))
+      sprites.set(key, { canvas: drawSprite(category, mode), key });
+    return sprites.get(key);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Markers: one icon set. Each train's marker is a plain record (its
+  // position, whether it shows, its image, size and tint) pushed to the set
+  // with the one item object the train keeps, once per frame or task for the
+  // markers that changed.
+
+  /** Markers changed since they were last pushed to the set. */
+  const dirty = new Set();
+  /** Keys of markers to take out of the set at the next push. */
+  const removals = [];
+  const upserts = [];
+  let flushQueued = false;
+
+  /**
+   * The train icon set, hidden, at the layer's place in the shared sprite
+   * order.
+   * @param {object} viewer
+   */
+  function createMarkers(viewer) {
+    destroyMarkers();
+    state._icons = drawOf(viewer).icons({
+      id: `rail:${instance}`,
+      blend: 'translucent',
+      show: false,
+      drawOrder: services.sprites?.spriteDrawOrder?.('rail') ?? 0,
+    });
+    state._icons.set([]);
+  }
+
+  /** Show or hide the train icons (the layer on or off). */
+  function showMarkers(show) {
+    if (state._icons) state._icons.show = show;
+  }
+
+  /** Drop every marker from the set. */
+  function clearMarkers() {
+    dirty.clear();
+    removals.length = 0;
+    state._icons?.clear();
+  }
+
+  /** Let the set go. */
+  function destroyMarkers() {
+    dirty.clear();
+    removals.length = 0;
+    state._icons?.dispose();
+    state._icons = null;
+  }
+
+  /** The icon item a marker draws as, brought up to date. */
+  function itemOf(entry) {
+    const marker = entry.marker;
+    const item = (entry.iconItem ||= {
+      id: entry.key,
+      pos: marker.position,
+      image: marker.image,
+      size: [0, 0],
+      color: marker.color,
+      show: false,
+      disableDepthTest: Infinity,
+      meta: { layer: 'rail', key: entry.key },
+    });
+    item.pos = marker.position;
+    item.image = marker.image;
+    item.size[0] = marker.width;
+    item.size[1] = marker.height;
+    item.color = marker.color;
+    item.show = marker.show;
+    return item;
+  }
+
+  /** Push the markers changed since the last push to the set. */
+  function flushMarkers() {
+    const icons = state._icons;
+    if (!icons) {
+      dirty.clear();
+      removals.length = 0;
+      return;
+    }
+    if (!dirty.size && !removals.length) return;
+    for (const entry of dirty) if (entry.marker) upserts.push(itemOf(entry));
+    dirty.clear();
+    if (removals.length) icons.remove(removals);
+    if (upserts.length) icons.upsert(upserts);
+    removals.length = 0;
+    upserts.length = 0;
+  }
+
+  /** Note a marker changed; it is pushed this frame, or once this task ends. */
+  function touch(entry) {
+    if (!entry.marker) return;
+    dirty.add(entry);
+    if (flushQueued) return;
+    flushQueued = true;
+    queueMicrotask(() => {
+      flushQueued = false;
+      flushMarkers();
+    });
+  }
+
+  /** Show or hide a marker. */
+  function setShown(entry, shown) {
+    if (!entry.marker || entry.marker.show === shown) return;
+    entry.marker.show = shown;
+    touch(entry);
+  }
+
+  /** Take a train's marker out of the set. */
+  function removeMarker(entry) {
+    dirty.delete(entry);
+    entry.iconItem = null;
+    if (!entry.marker) return;
+    removals.push(entry.key);
+    if (flushQueued) return;
+    flushQueued = true;
+    queueMicrotask(() => {
+      flushQueued = false;
+      flushMarkers();
+    });
+  }
+
+  // The camera's pose and the globe's visibility, read once in a task: a
+  // frame asks for them per train. Forgotten when the task ends, and at the
+  // start of every frame.
+  let viewMemo = null;
+  let viewMemoQueued = false;
+  function viewOf() {
+    if (viewMemo) return viewMemo;
+    viewMemo = { pose: undefined, globeShown: undefined };
+    if (!viewMemoQueued) {
+      viewMemoQueued = true;
+      queueMicrotask(() => {
+        viewMemoQueued = false;
+        viewMemo = null;
+      });
+    }
+    return viewMemo;
+  }
+
+  /** The camera port's pose, or null without a camera. */
+  function cameraPose() {
+    const view = viewOf();
+    if (view.pose === undefined)
+      view.pose = findCamera(state._viewer)?.pose() ?? null;
+    return view.pose;
+  }
+
+  /** Whether the globe surface is drawn (not under the photoreal tiles). */
+  function globeShown() {
+    const view = viewOf();
+    if (view.globeShown === undefined)
+      view.globeShown = findGlobe(state._viewer)?.isGlobeVisible?.() === true;
+    return view.globeShown;
   }
 
   /** Whether ground matters at this camera (Transit's gate, shared). */
   function nearGround() {
-    const height = state._viewer?.camera?.positionCartographic?.height;
+    const height = cameraPose()?.height;
     return !Number.isFinite(height) || height <= HEIGHT_SAMPLE_MAX_ALTITUDE_M;
   }
 
   /** Kilometres from the camera's subpoint, or Infinity without a camera. */
   function cameraKm(lat, lon) {
-    const carto = state._viewer?.camera?.positionCartographic;
-    if (!carto) return Infinity;
-    const camLat = Cesium.Math.toDegrees(carto.latitude);
-    const camLon = Cesium.Math.toDegrees(carto.longitude);
-    const kLon = Math.cos((camLat * Math.PI) / 180);
-    return Math.hypot(lat - camLat, (lon - camLon) * kLon) * 111.32;
+    const pose = cameraPose();
+    if (!pose || !Number.isFinite(pose.lat) || !Number.isFinite(pose.lon))
+      return Infinity;
+    const kLon = Math.cos((pose.lat * Math.PI) / 180);
+    return Math.hypot(lat - pose.lat, (lon - pose.lon) * kLon) * 111.32;
   }
 
   /**
@@ -201,25 +366,22 @@ export function createRendering({ state, services, parts }) {
   const trackSamples = new Map();
   const trackQueue = new Map();
   const trackAsked = new Map();
-  const trackProbe = new Cesium.Cartographic();
-  function cameraCartographic() {
-    return state._viewer?.camera?.positionCartographic ?? null;
-  }
+  const trackProbe = { lon: 0, lat: 0 };
   /**
-   * Whether the photorealistic tiles have finished streaming for this view:
-   * there is a shown tileset, and every shown one reports its tiles loaded.
+   * Whether the photorealistic tiles are drawn alone and have finished
+   * streaming for this view: the globe is hidden, and the surface it leaves
+   * (the tiles) reports what is in view loaded.
    */
-  function tilesLoaded(scene) {
-    const primitives = scene.primitives;
-    let found = false;
-    for (let i = 0; i < (primitives?.length || 0); i++) {
-      const primitive = primitives.get(i);
-      if (!primitive?.show || typeof primitive.tilesLoaded !== 'boolean')
-        continue;
-      if (!primitive.tilesLoaded) return false;
-      found = true;
+  function tilesLoaded() {
+    try {
+      const globe = findGlobe(state._viewer);
+      return (
+        globe?.isGlobeVisible?.() === false &&
+        globe.isSettled('surface') === true
+      );
+    } catch {
+      return false; // mid-teardown
     }
-    return found;
   }
   function queueTrackSample(lat, lon, key, priority) {
     const now = Date.now();
@@ -229,7 +391,7 @@ export function createRendering({ state, services, parts }) {
     // floor yet, wait (the cold-cell queue is warming it). From higher up,
     // the tiles near the camera are coarse.
     const prior = cachedGroundFloor(lat, lon);
-    const height = cameraCartographic()?.height;
+    const height = cameraPose()?.height;
     if (
       !Number.isFinite(prior) ||
       !Number.isFinite(height) ||
@@ -242,21 +404,26 @@ export function createRendering({ state, services, parts }) {
     coldTimer ??= setTimeout(flushColdCells, COLD_CELL_FLUSH_MS);
   }
   function flushTrackSamples() {
-    const scene = state._viewer?.scene;
-    const carto = cameraCartographic();
+    const viewer = state._viewer;
+    const heights =
+      viewer && !viewer.isDestroyed?.() ? heightsOf(viewer) : null;
+    const pose = cameraPose();
     if (
       !trackQueue.size ||
-      typeof scene?.sampleHeight !== 'function' ||
-      !Number.isFinite(carto?.height) ||
-      !tilesLoaded(scene)
+      !heights?.supported().surface ||
+      !Number.isFinite(pose?.height) ||
+      !Number.isFinite(pose.lat) ||
+      !Number.isFinite(pose.lon) ||
+      !tilesLoaded()
     ) {
       trackQueue.clear();
       return;
     }
-    const camLat = Cesium.Math.toDegrees(carto.latitude);
-    const camLon = Cesium.Math.toDegrees(carto.longitude);
+    const camLat = pose.lat;
+    const camLon = pose.lon;
     const kLon = Math.cos((camLat * Math.PI) / 180);
-    const excludeObjects = state._markers ? [state._markers] : [];
+    // The layer's own sets are not ground: heights see through them.
+    const exclude = state._icons ? [state._icons.id] : undefined;
     const now = performance.now();
     // The selected train first, then the rest in the order they asked.
     const items = [...trackQueue].sort(
@@ -271,13 +438,14 @@ export function createRendering({ state, services, parts }) {
       if (dKm > TRACK_SAMPLE_MAX_DIST_KM) continue;
       const prior = cachedGroundFloor(point.lat, point.lon);
       if (!Number.isFinite(prior)) continue;
-      const camM = carto.height - prior;
+      const camM = pose.height - prior;
       if (camM > TRACK_SAMPLE_MAX_CAMERA_M) continue;
       let height;
       try {
         sampled += 1;
-        Cesium.Cartographic.fromDegrees(point.lon, point.lat, 0, trackProbe);
-        height = scene.sampleHeight(trackProbe, excludeObjects);
+        trackProbe.lon = point.lon;
+        trackProbe.lat = point.lat;
+        height = heights.now(trackProbe, { exclude });
       } catch {
         continue;
       }
@@ -398,10 +566,13 @@ export function createRendering({ state, services, parts }) {
   }
 
   function floorHeight(lat, lon, entry = null, stop = false) {
-    const globe = state._viewer?.scene?.globe;
-    if (globe?.show === true) {
-      Cesium.Cartographic.fromDegrees(lon, lat, 0, terrainPoint);
-      const rendered = globe.getHeight?.(terrainPoint);
+    if (globeShown()) {
+      // The loaded terrain under the point: cache work, no request.
+      terrainPoint.lon = lon;
+      terrainPoint.lat = lat;
+      const rendered = heightsOf(state._viewer).now(terrainPoint, {
+        against: 'terrain',
+      });
       if (Number.isFinite(rendered))
         return answer(rendered + GROUND_FLOOR_LIFT_M, 3);
     }
@@ -458,11 +629,10 @@ export function createRendering({ state, services, parts }) {
    * @returns {number}
    */
   function displayHeightFor(entry, lat, lon) {
-    const globe = state._viewer?.scene?.globe;
     const now = performance.now();
     let targetH = NaN;
     let targetQ = 0;
-    if (globe?.show !== true && nearGround()) {
+    if (!globeShown() && nearGround()) {
       const key = cellKey(lat, lon, TRACK_SAMPLE_GRID);
       const sampled = trackSamples.get(key);
       if (sampled) {
@@ -571,17 +741,13 @@ export function createRendering({ state, services, parts }) {
       : Number.isFinite(sample?.lon)
         ? sample.lon
         : entry.record.lon;
-    // Write into scratch, never into `marker.position`: the getter returns the
-    // billboard's own vector, so filling it in place makes the setter see an
-    // unchanged position and skip the update that actually moves the sprite.
-    entry.marker.position = Cesium.Cartesian3.fromDegrees(
-      lon,
-      lat,
-      displayHeightFor(entry, lat, lon),
-      undefined,
-      scratchPosition,
-    );
-    entry.marker.show = markerShown(entry);
+    const p = entry.marker.position;
+    const x = p.x;
+    const y = p.y;
+    const z = p.z;
+    fromDegreesInto(lon, lat, displayHeightFor(entry, lat, lon), p);
+    if (p.x !== x || p.y !== y || p.z !== z) touch(entry);
+    setShown(entry, markerShown(entry));
   }
 
   /** While a train is selected, every other train is drawn see-through. */
@@ -593,13 +759,13 @@ export function createRendering({ state, services, parts }) {
 
   function paint(entry) {
     if (!entry.marker) return;
-    const selected = entry.key === state._selectedKey;
-    const size = selected ? SELECTED_PIXEL_SIZE : MARKER_PIXEL_SIZE;
+    // Selection dims the other trains; the selected one keeps its size.
     entry.marker.image = spriteFor(entry.category, entry.railMode);
-    entry.marker.width = size;
-    entry.marker.height = size;
+    entry.marker.width = MARKER_PIXEL_SIZE;
+    entry.marker.height = MARKER_PIXEL_SIZE;
     entry.marker.color = tintFor(entry);
     entry.marker.show = markerShown(entry);
+    touch(entry);
   }
 
   /** Re-tint every train after the selection appeared, moved or cleared. */
@@ -608,17 +774,18 @@ export function createRendering({ state, services, parts }) {
   }
 
   function addMarker(entry) {
-    const marker = state._markers.add({
-      id: entry.key,
-      position: Cesium.Cartesian3.ZERO,
+    const marker = {
+      position: { x: 0, y: 0, z: 0 },
+      show: false,
       image: spriteFor(entry.category, entry.railMode),
       width: MARKER_PIXEL_SIZE,
       height: MARKER_PIXEL_SIZE,
       color: tintFor(entry),
-      disableDepthTestDistance: Number.POSITIVE_INFINITY,
-    });
+    };
     entry.marker = marker;
+    entry.iconItem = null;
     place(entry);
+    touch(entry);
     return marker;
   }
 
@@ -684,26 +851,20 @@ export function createRendering({ state, services, parts }) {
     }
   }
 
-  const horizon = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84);
-  const surfaceScratch = new Cesium.Cartesian3();
-
-  /** Whether a point on the Earth is on the camera's side of it. */
-  function facesCamera(position) {
-    const viewer = state._viewer;
-    const cameraPosition = viewer?.camera?.positionWC;
-    if (
-      !position ||
-      !cameraPosition ||
-      viewer.scene?.mode !== Cesium.SceneMode.SCENE3D
-    )
-      return true;
-    const surface = Cesium.Ellipsoid.WGS84.scaleToGeodeticSurface(
-      position,
-      surfaceScratch,
-    );
-    if (!surface) return true;
-    horizon.cameraPosition = cameraPosition;
-    return horizon.isPointVisible(surface);
+  /**
+   * A test of whether a point on the Earth is on the camera's side of it,
+   * from where the camera is now; every point passes without a camera.
+   * @returns {(position: {x: number, y: number, z: number}) => boolean}
+   */
+  function horizonTest() {
+    const eye = cameraPose()?.position;
+    if (!eye) return () => true;
+    const horizon = horizonFrom(eye);
+    return (position) => {
+      if (!position) return true;
+      const surface = scaleToGeodeticSurface(position);
+      return !surface || horizon.isPointVisible(surface);
+    };
   }
 
   /**
@@ -714,15 +875,30 @@ export function createRendering({ state, services, parts }) {
   function cullSelected() {
     const entry = state._trains.get(state._selectedKey);
     if (!entry?.marker) return;
-    const shown = markerShown(entry) && facesCamera(entry.marker.position);
-    if (entry.marker.show !== shown) entry.marker.show = shown;
+    const facesCamera = horizonTest();
+    setShown(entry, markerShown(entry) && facesCamera(entry.marker.position));
     parts.routes.cullStops(facesCamera);
   }
 
   function onPreRender() {
+    viewMemo = null;
     advanceMoving();
     if (state._enabled && state._selectedKey !== null) cullSelected();
     if (state._enabled) updateModels();
+    flushMarkers();
+  }
+
+  /** Run the per-frame pass before each render, once. */
+  function startFrames(viewer) {
+    if (!state._preRenderRemove)
+      state._preRenderRemove =
+        findFrame(viewer)?.on('preRender', onPreRender) ?? null;
+  }
+
+  /** Stop the per-frame pass. */
+  function stopFrames() {
+    state._preRenderRemove?.();
+    state._preRenderRemove = null;
   }
 
   // Under the DISPLAY rail's 3D toggle, trains near the camera are drawn as
@@ -755,7 +931,7 @@ export function createRendering({ state, services, parts }) {
   function handBack(entry) {
     if (!entry.modelOwnsVisual) return;
     entry.modelOwnsVisual = false;
-    if (entry.marker) entry.marker.show = markerShown(entry);
+    setShown(entry, markerShown(entry));
   }
 
   function modelItem(entry, set) {
@@ -801,23 +977,17 @@ export function createRendering({ state, services, parts }) {
     next.clear();
     if (now - modelCandidatesAtMs >= MODEL_CANDIDATES_MS) {
       modelCandidatesAtMs = now;
-      const camera = state._viewer?.camera;
+      const eye = cameraPose()?.position;
       const policy = services.fleet.policy;
       const keepM =
         services.fleet.display?.()?.models3dMode === 'all'
           ? policy.keepAllM
           : policy.keepM;
       const limitSq = keepM * keepM * 1.44;
-      if (camera?.positionWC)
+      if (eye)
         for (const entry of state._trains.values()) {
           if (!entry.marker || !categoryShown(entry)) continue;
-          if (
-            Cesium.Cartesian3.distanceSquared(
-              camera.positionWC,
-              entry.marker.position,
-            ) > limitSq
-          )
-            continue;
+          if (distanceSquared(eye, entry.marker.position) > limitSq) continue;
           next.set(entry.key, modelItem(entry, set));
         }
     } else {
@@ -834,7 +1004,7 @@ export function createRendering({ state, services, parts }) {
       const entry = item.entry;
       if (item.modelOwnsVisual) {
         entry.modelOwnsVisual = true;
-        entry.marker.show = false;
+        setShown(entry, false);
       } else handBack(entry);
     }
     if (fleetModels.settling) governorRequestRender('rail-models');
@@ -882,7 +1052,7 @@ export function createRendering({ state, services, parts }) {
   function applyCategoryVisibility() {
     for (const entry of state._trains.values()) {
       if (!entry.marker) continue;
-      entry.marker.show = markerShown(entry);
+      setShown(entry, markerShown(entry));
       schedulePlayback(entry);
     }
     syncRenderHold();
@@ -891,6 +1061,16 @@ export function createRendering({ state, services, parts }) {
   }
 
   return {
+    createMarkers,
+    showMarkers,
+    clearMarkers,
+    destroyMarkers,
+    flushMarkers,
+    removeMarker,
+    markerShown,
+    startFrames,
+    stopFrames,
+    cameraPose,
     addMarker,
     paint,
     paintAll,

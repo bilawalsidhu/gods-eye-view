@@ -407,11 +407,31 @@ body.mobile-shell:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view)
   scale: 0.8;
 }
 
+body.mobile-shell:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view)
+  #gev-credits {
+  right: auto;
+  bottom: calc(var(--mobile-tab-space) + 106px + var(--world-timeline-lift, 0px)) !important;
+  left: 10px;
+  width: calc((100vw - 20px) / 0.8) !important;
+  max-width: none !important;
+  white-space: normal;
+  transform-origin: left bottom;
+  scale: 0.8;
+}
+
 /* An open sheet lifts the required attribution above everything it covers. */
 body.mobile-shell[data-mobile-sheet]:not(.recording-mode):not(
     .cockpit-mode
   ):not(.ui-clean-view)
   #cesium-credits {
+  bottom: calc(var(--mobile-sheet-cover, 0px) + 6px) !important;
+  z-index: 166;
+}
+
+body.mobile-shell[data-mobile-sheet]:not(.recording-mode):not(
+    .cockpit-mode
+  ):not(.ui-clean-view)
+  #gev-credits {
   bottom: calc(var(--mobile-sheet-cover, 0px) + 6px) !important;
   z-index: 166;
 }

@@ -75,7 +75,7 @@ export function createIngestion({ state, services, parts, source }) {
     // A first-person view on it loses its subject (cockpitSubject.js).
     if (state._cockpitSubjectKey === key) state._cockpitSubjectKey = null;
     if (state._selectedKey === key) parts.selection.clearSelection();
-    if (entry.marker) entry.markerCollection?.remove(entry.marker);
+    parts.rendering.removeMarker(entry);
     entry.marker = null;
     entry.detectContact = null;
     state._visible.delete(entry);
@@ -436,6 +436,8 @@ export function createIngestion({ state, services, parts, source }) {
     // trip and must never sit on the render path.
     parts.height.anchorFloors();
     state._detectRevision++;
+    // New markers are drawn now, hidden until the visibility sweep shows them.
+    parts.rendering.flushMarkers();
     parts.rendering.requestVisibility();
     parts.rendering.syncRenderHold();
     governorRequestRender('transit-poll');

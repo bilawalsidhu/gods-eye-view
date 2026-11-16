@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { LocationNavigation } from './locationNavigation.js';
 import { LayerBindings } from './layerBindings.js';
+import { bindRenderer } from '../render/rendererOf.js';
 
 function replaceWindow(t, value) {
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
@@ -128,12 +129,16 @@ test('camera-entry listeners are removed before any asynchronous layer cleanup',
   const { owner } = bindings(t);
   let changes = 0;
   let trackedCallback;
-  owner.viewer = { trackedEntityChanged: {
-    addEventListener(callback) {
+  // What the camera follows changes through its port's followChanged.
+  owner.viewer = {};
+  bindRenderer(owner.viewer, { camera: {
+    followed: null,
+    on(event, callback) {
+      if (event !== 'followChanged') return () => {};
       trackedCallback = callback;
       return () => { changes += 1; };
     },
-  } };
+  } });
   owner._stampNavigation = () => { changes += 100; };
   owner.observeCamera();
   owner.stop();

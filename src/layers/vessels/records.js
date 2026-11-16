@@ -58,9 +58,6 @@ function stampFix(record, receivedAtMs, feedLatestEpoch) {
   record.fixFeedEpoch = feedLatestEpoch;
 }
 
-/** A fix's time, as the fixes are merged (one function for every vessel). */
-const fixTime = (fix) => fix.atMs;
-
 function positiveNumber(value) {
   const number = finiteNumber(value);
   return number !== null && number > 0 ? number : null;
@@ -149,7 +146,6 @@ export class VesselRecords {
       seen.add(next.id);
       const record = this.byId.get(next.id);
       if (record) {
-        const before = effects.beforeUpdate(record);
         // A feed re-serving a cached row repeats its fix: the fix keeps the
         // time it was first received, so it goes on ageing.
         if (next.lastPositionEpoch !== record.lastPositionEpoch) {
@@ -167,7 +163,7 @@ export class VesselRecords {
             ? mergeTimelineRuns(
                 record.fixes ?? [],
                 next.fixes,
-                fixTime,
+                (fix) => fix.atMs,
                 (next.lastPositionEpoch ?? 0) * 1000,
               )
             : null;
@@ -191,7 +187,7 @@ export class VesselRecords {
         record.lastPositionEpoch = next.lastPositionEpoch;
         record.missedRefreshes = 0;
 
-        effects.updated(record, before);
+        effects.updated(record);
       } else {
         effects.add(next);
         this.byId.set(next.id, next);

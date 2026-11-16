@@ -1,9 +1,12 @@
-import * as Cesium from 'cesium';
+import { isFollowing } from '../../data/followed.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { dot, magnitude } from '../../geo/vector.js';
 import {
   HORIZON_CAMERA_MOVE_EPSILON_M,
   GLOBAL_RADIO_ALTITUDE_M,
   RADIO_GLOBE_RECENTER_MAX_HEIGHT_M,
 } from './policy.js';
+import { cameraOf, canvasOf, findCamera } from '../../render/rendererOf.js';
 
 export function createNavigation({
   state: layerState,
@@ -135,29 +138,31 @@ export function createNavigation({
       : currentHeight;
   }
 
-  function radioCameraState(camera = layerState._viewer?.camera) {
-    if (!camera) return null;
+  function radioCameraState() {
+    const pose = findCamera(layerState._viewer)?.pose();
+    if (!pose) return null;
     return {
-      height: camera.positionCartographic?.height,
-      heading: camera.heading,
-      pitch: camera.pitch,
-      roll: camera.roll,
+      height: pose.height,
+      heading: pose.heading,
+      pitch: pose.pitch,
+      roll: pose.roll,
     };
   }
 
   /** Radio may move the globe only while no tracked entity owns the follow camera. */
 
   function radioCameraNavigationAllowed(viewer = layerState._viewer) {
-    return Boolean(viewer?.camera) && !viewer.trackedEntity;
+    return Boolean(findCamera(viewer)) && !isFollowing(viewer);
   }
 
   function radioGlobeRecenterPlan(viewer = layerState._viewer) {
-    const camera = viewer?.camera;
-    const canvas = viewer?.scene?.canvas;
+    const pose = findCamera(viewer)?.pose() ?? null;
+    const canvas = canvasOf(viewer);
     const width = canvas?.clientWidth || canvas?.width;
     const height = canvas?.clientHeight || canvas?.height;
-    const cartographic = camera?.positionCartographic;
-    if (!camera || !cartographic || !(width > 0) || !(height > 0)) return null;
+    // The eye at the earth's centre has no geodetic position.
+    if (!pose || !Number.isFinite(pose.height) || !(width > 0) || !(height > 0))
+      return null;
     const geometry = projectEarthDiscToViewport(
       viewer,
       width,
@@ -178,36 +183,29 @@ export function createNavigation({
       );
     } else {
       const earthRadius = earthDiscScreenRadius(
-        Cesium.Cartesian3.magnitude(camera.positionWC),
+        magnitude(pose.position),
         height,
-        camera.frustum?.fovy,
+        pose.fovy,
       );
       const facingEarthCenter =
-        Cesium.Cartesian3.dot(
-          camera.directionWC,
-          layerState._radioEarthToCenter,
-        ) > 0;
+        dot(pose.direction, layerState._radioEarthToCenter) > 0;
       if (!earthRadius || facingEarthCenter) return null;
       const keyhole = getKeyholeGeometry(width, height);
       fullGlobeCapable =
         earthRadius + GLOBE_ENTER_CLEARANCE_PX <= keyhole.radius;
     }
     const recenterHeight = radioGlobeRecenterHeight(
-      cartographic.height,
+      pose.height,
       fullGlobeCapable,
     );
     if (recenterHeight == null) return null;
     return {
-      destination: Cesium.Cartesian3.fromRadians(
-        cartographic.longitude,
-        cartographic.latitude,
-        recenterHeight,
-      ),
+      destination: fromDegrees(pose.lon, pose.lat, recenterHeight),
       cameraState: {
-        ...radioCameraState(camera),
+        ...radioCameraState(),
         height: recenterHeight,
         heading: 0,
-        pitch: -Cesium.Math.PI_OVER_TWO,
+        pitch: -Math.PI / 2,
         roll: 0,
       },
     };
@@ -229,7 +227,7 @@ export function createNavigation({
     )
       return;
     layerState._activeRadioCameraFlight = null;
-    layerState._viewer.camera.cancelFlight();
+    cameraOf(layerState._viewer).cancelFlight();
   }
 
   function invalidateRadioCameraNavigation() {
@@ -247,7 +245,7 @@ export function createNavigation({
     );
   }
 
-  function startRadioCameraFlight(navigation, options, onComplete) {
+  function startRadioCameraFlight(navigation, flight, onComplete) {
     if (!radioCameraNavigationIsCurrent(navigation)) return false;
     const token = ++layerState._radioCameraFlightSequence;
     layerState._activeRadioCameraFlight = {
@@ -260,10 +258,10 @@ export function createNavigation({
       if (completed && radioCameraNavigationIsCurrent(navigation))
         onComplete?.();
     };
-    layerState._viewer.camera.flyTo({
-      ...options,
-      complete: () => finish(true),
-      cancel: () => finish(false),
+    cameraOf(layerState._viewer).flyTo(flight.destination, {
+      ...flight.options,
+      onComplete: () => finish(true),
+      onCancel: () => finish(false),
     });
     return true;
   }
@@ -280,17 +278,15 @@ export function createNavigation({
     return startRadioCameraFlight(
       navigation,
       {
-        destination: Cesium.Cartesian3.fromDegrees(
-          plan.lon,
-          plan.lat,
-          plan.height,
-        ),
-        orientation: {
-          heading: plan.heading,
-          pitch: plan.pitch,
-          roll: plan.roll,
+        destination: { lon: plan.lon, lat: plan.lat, height: plan.height },
+        options: {
+          orientation: {
+            heading: plan.heading,
+            pitch: plan.pitch,
+            roll: plan.roll,
+          },
+          durationS: navigation.duration,
         },
-        duration: navigation.duration,
       },
       () => {
         navigation.phase = 'settled';
@@ -340,13 +336,15 @@ export function createNavigation({
         activeNavigation,
         {
           destination: activeNavigation.recenterPlan.destination,
-          orientation: {
-            heading: activeNavigation.cameraState.heading,
-            pitch: activeNavigation.cameraState.pitch,
-            roll: activeNavigation.cameraState.roll,
+          options: {
+            orientation: {
+              heading: activeNavigation.cameraState.heading,
+              pitch: activeNavigation.cameraState.pitch,
+              roll: activeNavigation.cameraState.roll,
+            },
+            durationS: recenterDuration,
+            easing: 'cubicInOut',
           },
-          duration: recenterDuration,
-          easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
         },
         () => {
           activeNavigation.recentered = true;
@@ -363,14 +361,10 @@ export function createNavigation({
     if (!station || !radioCameraNavigationAllowed(layerState._viewer))
       return false;
     cancelActiveRadioCameraFlight();
-    layerState._viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(
-        station.lon,
-        station.lat,
-        85_000,
-      ),
-      duration: 1.1,
-    });
+    cameraOf(layerState._viewer).flyTo(
+      { lon: station.lon, lat: station.lat, height: 85_000 },
+      { durationS: 1.1 },
+    );
     return true;
   }
   return {

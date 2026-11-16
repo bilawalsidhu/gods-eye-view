@@ -88,6 +88,45 @@ test('80 ms fleet scheduling passes after more than four fast rendered frames', 
   assert.equal(f.resources.moveEnds, 1);
 });
 
+test('a reveal is measured from the frame that drew the contact hidden', async () => {
+  const f = fixture();
+  f.frame(8, { shown: true, rotationError: 0 });
+  // The hidden frame waits behind a slow swap; the probe then shows it again.
+  f.frame(300, { shown: false, revealStartsNow: true });
+  f.frame(390, { shown: true, rotationError: 0, revealStartsNow: false });
+  const result = await f.observation;
+  assert.equal(result.flipFrame, 2);
+  assert.equal(result.moveEndMs, 8);
+  assert.equal(result.hiddenMs, 292);
+  assert.equal(result.revealMs, 90);
+  assert.equal(result.elapsedMs, 390);
+  assert.equal(arrivalRotationPassed(result), true);
+  assert.equal(f.resources.timers, 0);
+});
+
+test('the reveal deadline restarts at the frame that drew the contact hidden', async () => {
+  const f = fixture();
+  f.frame(8, { shown: true, rotationError: 0 });
+  f.frame(400, { shown: false, revealStartsNow: true });
+  // 500 ms after the settle frame, but only 200 ms into the reveal.
+  f.expire(600);
+  f.frame(850, { shown: true, rotationError: 0, revealStartsNow: false });
+  const result = await f.observation;
+  assert.equal(result.error, undefined);
+  assert.equal(result.revealMs, 450);
+  assert.equal(arrivalRotationPassed(result), true);
+});
+
+test('a reveal without a hidden-frame mark is measured from the settle frame', async () => {
+  const f = fixture();
+  f.frame(8, { shown: true, rotationError: 0 });
+  f.frame(16, { shown: false });
+  f.frame(96, { shown: true, rotationError: 0 });
+  const result = await f.observation;
+  assert.equal(result.revealMs, 88);
+  assert.equal(result.hiddenMs, 0);
+});
+
 test('a wrong first visible angle fails even if the next frame corrects it', async () => {
   const f = fixture();
   f.frame(8, { shown: true, rotationError: 0 });

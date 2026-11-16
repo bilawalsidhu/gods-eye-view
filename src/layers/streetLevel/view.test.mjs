@@ -10,12 +10,14 @@ import {
   visibleBbox,
 } from './view.js';
 import { latToTileY, lonToTileX, tilesForBbox } from './tileMath.js';
-import { rayCamera } from '../../testSupport/streetLevelFakes.mjs';
+import { rayCamera, streetPorts } from '../../testSupport/streetLevelFakes.mjs';
+import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
+import { bindRenderer } from '../../render/rendererOf.js';
 
 const RAD = Math.PI / 180;
 /** A viewer 300 m above a street 1,600 m up (Denver-like). */
 function viewer({ globeShown, globeHeight }) {
-  return {
+  const view = {
     camera: {
       positionCartographic: {
         longitude: -104.99 * RAD,
@@ -25,6 +27,7 @@ function viewer({ globeShown, globeHeight }) {
     },
     scene: { globe: { show: globeShown, getHeight: () => globeHeight } },
   };
+  return bindFakeCesiumCamera(view, streetPorts(view));
 }
 
 test('a shown globe answers the ground under the camera', () => {
@@ -34,22 +37,23 @@ test('a shown globe answers the ground under the camera', () => {
   );
 });
 
-test('a hidden globe (Google 3D) or a missing sample gives no ground', () => {
-  // A hidden globe's getHeight is ignored even when it returns a number.
+test('without 3D tiles under the camera the terrain answers; a missing sample gives no ground', () => {
+  // No tiles drawn there: the terrain answers, globe shown or hidden.
   assert.equal(
     groundUnderCamera(viewer({ globeShown: false, globeHeight: 0 })),
-    null,
+    0,
   );
   assert.equal(
     groundUnderCamera(viewer({ globeShown: true, globeHeight: undefined })),
     null,
   );
   assert.equal(groundUnderCamera({}), null);
+  assert.equal(groundUnderCamera(null), null);
 });
 
 /** The Denver viewer with Google 3D: no globe, a sampleable rendered surface. */
 function google3d(sample) {
-  const view = viewer({ globeShown: false, globeHeight: 0 });
+  const view = viewer({ globeShown: false, globeHeight: undefined });
   view.scene.sampleHeightSupported = true;
   view.scene.sampleHeight = () => sample;
   return view;
@@ -57,6 +61,22 @@ function google3d(sample) {
 
 test('on Google 3D the rendered surface answers the ground under the camera', () => {
   assert.equal(groundUnderCamera(google3d(1612)), 1612);
+});
+
+test('where the 3D tiles answer, they decide, whatever the terrain says', () => {
+  const view = google3d(1612);
+  // A hidden globe's terrain can be stale (or the bare ellipsoid's 0).
+  view.scene.globe.getHeight = () => 0;
+  assert.equal(groundUnderCamera(view), 1612);
+  // A roof above the camera is not the ground, and tiles still loading
+  // (kilometres underground) are not either: unknown, so measured again.
+  view.scene.sampleHeight = () => 1950;
+  assert.equal(groundUnderCamera(view), null);
+  view.scene.sampleHeight = () => -14_886;
+  assert.equal(groundUnderCamera(view), null);
+  // No tiles there at all: the terrain answers.
+  view.scene.sampleHeight = () => undefined;
+  assert.equal(groundUnderCamera(view), 0);
 });
 
 test('an implausible or above-camera surface sample gives no ground', () => {
@@ -70,17 +90,29 @@ test('an implausible or above-camera surface sample gives no ground', () => {
 /** A camera whose screen rays land on a grid of lon/lat points. */
 function gridViewer(lons, lats) {
   const points = [];
-  for (const lat of lats)
-    for (const lon of lons)
-      points.push(Cesium.Cartesian3.fromDegrees(lon, lat));
+  for (const lat of lats) for (const lon of lons) points.push([lon, lat]);
   let next = 0;
-  return {
-    scene: { canvas: { clientWidth: 100, clientHeight: 100 }, globe: {} },
+  const viewer = {};
+  bindRenderer(viewer, {
+    canvas: { clientWidth: 100, clientHeight: 100 },
     camera: {
-      pickEllipsoid: () => points[next++ % points.length],
-      positionCartographic: { longitude: 0, latitude: 0, height: 1000 },
+      pose: () => ({ lon: 0, lat: 0, height: 1000 }),
     },
-  };
+    query: {
+      // Straight down onto the next grid point, from 1 km above it.
+      pickRay() {
+        const [lon, lat] = points[next++ % points.length];
+        const origin = Cesium.Cartesian3.fromDegrees(lon, lat, 1000);
+        const ground = Cesium.Cartesian3.fromDegrees(lon, lat);
+        const direction = Cesium.Cartesian3.normalize(
+          Cesium.Cartesian3.subtract(ground, origin, new Cesium.Cartesian3()),
+          new Cesium.Cartesian3(),
+        );
+        return { origin, direction };
+      },
+    },
+  });
+  return viewer;
 }
 
 test('a view across the date line is a narrow box with west > east', () => {
@@ -97,7 +129,7 @@ test('an ordinary view keeps west < east', () => {
 
 /** A pinhole viewer `agl` m above ground `ground` m up, looking north. */
 function pinhole({ lon, lat, ground, agl, pitch, w = 1600, h = 900 }) {
-  return {
+  const view = {
     scene: {
       canvas: { clientWidth: w, clientHeight: h },
       globe: { show: false, ellipsoid: Cesium.Ellipsoid.WGS84 },
@@ -111,6 +143,7 @@ function pinhole({ lon, lat, ground, agl, pitch, w = 1600, h = 900 }) {
       height: h,
     }),
   };
+  return bindFakeCesiumCamera(view, streetPorts(view));
 }
 
 test('a tilted street view over high ground boxes the streets it looks at, not the horizon', () => {
@@ -236,49 +269,49 @@ test('metresBetween measures the short way round the date line', () => {
 
 /**
  * A horizon cull over `items` for a camera the test moves, with the frame's
- * pre-render listeners and a count of the points tested against the horizon.
+ * pre-render listeners and a count of the camera poses read.
  */
 function cullHarness(t, items) {
-  const visible = t.mock.method(
-    Cesium.EllipsoidalOccluder.prototype,
-    'isPointVisible',
-  );
   const preRender = new Set();
-  const camera = { positionWC: Cesium.Cartesian3.fromDegrees(0, 0, 1e7) };
-  const viewer = {
-    camera,
-    scene: {
-      preRender: {
-        addEventListener(listener) {
-          preRender.add(listener);
-          return () => preRender.delete(listener);
-        },
+  let eye = Cesium.Cartesian3.fromDegrees(0, 0, 1e7);
+  let poses = 0;
+  const viewer = {};
+  bindRenderer(viewer, {
+    camera: {
+      pose: () => {
+        poses++;
+        return { lon: 0, lat: 0, height: 1e7, position: { ...eye } };
       },
     },
-  };
+    frame: {
+      on(phase, listener) {
+        assert.equal(phase, 'preRender');
+        preRender.add(listener);
+        return () => preRender.delete(listener);
+      },
+    },
+  });
+  // Items handed to a cull pass: what a still camera must not test again.
+  const tested = { count: 0 };
   let changes = 0;
   const cull = createHorizonCull({
     getViewer: () => viewer,
-    items: () => items,
+    items: () => {
+      tested.count += items.length;
+      return items;
+    },
     onChange: () => changes++,
   });
   return {
     cull,
     preRender,
-    tested: () => visible.mock.callCount(),
+    poses: () => poses,
+    tested: () => tested.count,
     changes: () => changes,
     frame: () => {
       for (const listener of [...preRender]) listener();
     },
-    // Moved in place, as Cesium updates positionWC.
-    moveTo: (lon, lat) =>
-      Cesium.Cartesian3.fromDegrees(
-        lon,
-        lat,
-        1e7,
-        undefined,
-        camera.positionWC,
-      ),
+    moveTo: (lon, lat) => (eye = Cesium.Cartesian3.fromDegrees(lon, lat, 1e7)),
   };
 }
 
@@ -337,11 +370,20 @@ function cullFrom(camera, points) {
     position: Cesium.Cartesian3.fromDegrees(lon, lat, height),
     show: true,
   }));
+  const viewer = {};
+  bindRenderer(viewer, {
+    camera: {
+      pose: () => ({
+        lon: camera[0],
+        lat: camera[1],
+        height: camera[2],
+        position: Cesium.Cartesian3.fromDegrees(...camera),
+      }),
+    },
+    frame: { on: () => () => {} },
+  });
   const horizon = createHorizonCull({
-    getViewer: () => ({
-      camera: { positionWC: Cesium.Cartesian3.fromDegrees(...camera) },
-      scene: { preRender: { addEventListener: () => () => {} } },
-    }),
+    getViewer: () => viewer,
     items: () => items,
   });
   horizon.update();

@@ -1,8 +1,19 @@
-import * as Cesium from 'cesium';
 import { TRACKED_ICON_COLOR } from '../layers/military/policy.js';
+import { TRACKED_CYAN } from '../layers/flights/policy.js';
 import { createRendering as civilRendering } from '../layers/flights/rendering.js';
 import { createRendering as militaryRendering } from '../layers/military/rendering.js';
 import { createMilitarySnapshotRenderer } from '../layers/military/snapshotRenderer.js';
+import { createIcons as createMilitaryIcons } from '../layers/military/icons.js';
+import { createContactIcons } from './aircraftIconLayer.js';
+import {
+  aircraftMotionRegime,
+  createMotionRegime,
+  fixEpochMs,
+  fixPosition,
+  copyPosition,
+  historyFix,
+  julianAt,
+} from './aircraftMotionRegime.js';
 import { aircraftEmergency } from './aircraftEmergency.js';
 // Source-to-voice provenance, status retention/clearing, contact-time contracts,
 // and civil/military billboard, Cockpit and model tint regressions.
@@ -138,6 +149,7 @@ test('changed status without contact time retains general contact, including voi
   const runner = createGevActionRunner({
     viewer: {
       clock: { onTick: { addEventListener: () => () => {} } },
+      canvas: { addEventListener() {}, removeEventListener() {} },
       scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
       camera: {
         moveEnd: { addEventListener() {} },
@@ -444,7 +456,7 @@ test('tint priorities cover normal, priority, emergency, tracking and Cockpit do
     const red = rendering._fleetBillboardColor('civil', {
       emergency: aircraftEmergency({ squawk: '7700' }),
     });
-    assert.ok(red.red > 0.9 && red.green < 0.5);
+    assert.ok(red[0] > 0.9 && red[1] < 0.5);
     flightState.records.data.set('civil', {
       emergency: aircraftEmergency({ squawk: '7700' }),
     });
@@ -454,27 +466,25 @@ test('tint priorities cover normal, priority, emergency, tracking and Cockpit do
     flightState._trackedIcao = 'civil';
     assert.equal(
       rendering._modelColor('civil'),
-      factory === civilRendering ? Cesium.Color.CYAN : TRACKED_ICON_COLOR,
+      factory === civilRendering ? TRACKED_CYAN : TRACKED_ICON_COLOR,
     );
     flightState._trackedIcao = null;
     flightState.records.data.set('civil', { emergency: null });
     // An ordinary model draws its mesh's own colours, whatever the billboard's.
-    assert.equal(rendering._modelColor('civil'), Cesium.Color.WHITE);
+    assert.deepEqual([...rendering._modelColor('civil')], [1, 1, 1, 1]);
   }
 });
 
-test('GERMAN: an existing untracked military billboard repaints each poll without alpha loss', () => {
+test('GERMAN: an existing untracked military icon repaints each poll without losing its fade', () => {
   const { flightState, rendering } = renderHarness(militaryRendering);
-  const bb = {
-    color: rendering._fleetBillboardColor('abc123').withAlpha(0.65),
-  };
   Object.assign(flightState, {
-    _billboards: new Map([['abc123', bb]]),
+    _icons: createContactIcons(),
     _models: new Map(),
     _positionHistory: new Map(),
-    _cullPositions: new Map(),
+    _displayCourse: new Map(),
     _groundSnap: { forget() {} },
     _cockpitContactMode: false,
+    _cockpitNearContacts: new Set(),
   });
   const records = new MilitaryFlightRecords({
     geoidHeight: () => 0,
@@ -482,18 +492,51 @@ test('GERMAN: an existing untracked military billboard repaints each poll withou
     floorAltitudeM: (value) => value,
   });
   flightState.records = records;
+  const parts = {
+    rendering: {
+      ...rendering,
+      _iconKind: () => 'jet',
+      _syncModelToClass() {},
+    },
+    motion: {
+      _motionRegime: (history, info, renderTime) =>
+        aircraftMotionRegime(
+          history,
+          info,
+          renderTime,
+          { speed: 'speedMps', track: 'track' },
+          createMotionRegime(),
+        ),
+      _displayTimeAt: julianAt,
+      _fixEpochMs: fixEpochMs,
+      _fixPosition: fixPosition,
+      _copyPosition: copyPosition,
+      _historyFix: historyFix,
+      _refloorStaleGroundedContacts() {},
+      _sampleMeshFloor() {},
+    },
+  };
+  const icons = createMilitaryIcons({
+    flightState,
+    services: { focus: { focusPassIsNeeded: () => false } },
+    parts,
+  });
+  const row = 'abc123';
+  flightState._icons.put({
+    id: row,
+    pos: { x: 0, y: 0, z: 0 },
+    meta: { layer: 'military', id: row },
+  });
+  // The focus fade the fleet tick composes lives in its own field.
+  flightState._icons.setFocus(row, 0.65);
   const apply = createMilitarySnapshotRenderer({
     flightState,
     records,
-    groundFloor: { warmGroundFloor() {}, cachedGroundFloor: () => null },
-    meshFloor: { sampleMeshFloorCells() {} },
+    groundFloor: { warmGroundFloor() {} },
     militaryRegistry: { registerMilitaryIcaos() {} },
-    rendering: {
-      ...rendering,
-      _syncModelToClass() {},
-      _applyFleetBillboardPresentation() {},
-    },
-    motion: {},
+    rendering: parts.rendering,
+    motion: parts.motion,
+    icons,
     tracking: {},
     queries: {},
   });
@@ -519,7 +562,7 @@ test('GERMAN: an existing untracked military billboard repaints each poll withou
       { observedAtMs: NOW_MS },
     );
     apply(snapshot, {});
-    assert.equal(bb.color.green < 0.5, red);
-    assert.equal(bb.color.alpha, 0.65);
+    assert.equal(flightState._icons.item(row).color[1] < 0.5, red);
+    assert.ok(Math.abs(flightState._icons.focus(row) - 0.65) < 1e-6);
   }
 });

@@ -1,7 +1,6 @@
 // Fleet models for a layer test (fleetModelInstances.js): the project's model
-// set loaded from public/, a DISPLAY 3D toggle that is on, and Cesium's glTF
-// loader replaced by one that answers at once with a ready model, recorded.
-import * as Cesium from 'cesium';
+// set loaded from public/, a DISPLAY 3D toggle that is on, and the layer's
+// draw port (testSupport/fakeDrawPort.mjs) answering each model's load.
 import { loadFleetModelSet } from '../data/fleetModels.js';
 import { fetchPublicFile } from './fleetGlb.mjs';
 
@@ -19,14 +18,16 @@ export const FLEET_TEST_POLICY = Object.freeze({
 });
 
 /**
- * Load the fleet set (once a process, as the app does) and fake the loader
- * for this test. Call it before the layer's harness, which replaces `fetch`.
- * @param {import('node:test').TestContext} t
- * @returns {Promise<{fleet: object, created: object[],
- *   drawn: (id: string) => object[]}>} `fleet` for the layer's services;
- *   `drawn(id)` the models drawn for the vehicle `id` now.
+ * Load the fleet set (once a process, as the app does). Call it before the
+ * layer's harness, which replaces `fetch`; then `watch` the harness's draw
+ * port.
+ * @returns {Promise<{fleet: object, watch: (draw: object) => void,
+ *   load: () => void, drawn: (id: string) => object[]}>} `fleet` for the
+ *   layer's services; `load()` finishes the load of every model the layer
+ *   has asked for, as the renderer does off the frame; `drawn(id)` the
+ *   models drawn for the vehicle `id` now.
  */
-export async function fleetModelFakes(t) {
+export async function fleetModelFakes() {
   const info = console.info;
   console.info = () => {};
   try {
@@ -34,35 +35,33 @@ export async function fleetModelFakes(t) {
   } finally {
     console.info = info;
   }
-  const created = [];
-  t.mock.method(Cesium.Model, 'fromGltfAsync', async (options) => {
-    const model = {
-      ...options,
-      ready: true,
-      show: false,
-      modelMatrix: new Cesium.Matrix4(),
-      destroyed: false,
-      destroy() {
-        this.destroyed = true;
-      },
-      isDestroyed() {
-        return this.destroyed;
-      },
-      update() {},
-    };
-    created.push(model);
-    return model;
-  });
+  let draw = null;
+  const sets = () =>
+    draw
+      ? [...draw.sets.values()].filter(
+          (set) =>
+            !set.disposed &&
+            set.kind === 'models' &&
+            set.spec.id.startsWith('fleet-models:'),
+        )
+      : [];
   return {
     fleet: {
       policy: FLEET_TEST_POLICY,
       display: () => ({ models3d: true, models3dMode: 'proximity' }),
       resolveAsset: (url) => url,
     },
-    created,
+    watch(port) {
+      draw = port;
+    },
+    load() {
+      for (const set of sets())
+        for (const id of [...set.items.keys()]) draw.ready(set.spec.id, id);
+    },
     drawn: (id) =>
-      created.filter(
-        (model) => model.id === id && !model.destroyed && model.show,
-      ),
+      sets().flatMap((set) => {
+        const item = set.items.get(id);
+        return item && item.show !== false && set.show ? [item] : [];
+      }),
   };
 }

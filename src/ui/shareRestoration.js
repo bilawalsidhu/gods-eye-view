@@ -4,6 +4,8 @@ import { canPresentDeferredStatusNotice } from '../loadingFeedback.js';
 import { t, msg, formatDate } from '../i18n/index.js';
 import { SHARE_VIEW_ENTITY_KINDS } from '../share/follow.js';
 import { UiLifetime } from './uiLifetime.js';
+import { followedOf } from '../data/followed.js';
+import { canvasOf } from '../render/rendererOf.js';
 import { isWorldTime, worldClock } from '../time/worldClock.js';
 
 // A link made away from live opens at its world time, paused. One without a
@@ -259,14 +261,14 @@ export class ShareRestoration {
         this.navigation._stampNavigation(options),
       );
     };
-    this.viewer?.canvas?.addEventListener(
+    canvasOf(this.viewer)?.addEventListener(
       'pointerdown',
       this._initialShareGestureHandler,
       {
         passive: true,
       },
     );
-    this.viewer?.canvas?.addEventListener(
+    canvasOf(this.viewer)?.addEventListener(
       'wheel',
       this._initialShareGestureHandler,
       {
@@ -487,17 +489,16 @@ export class ShareRestoration {
   /** Frame a shared entity the camera now follows from the shared offset. */
   _applySharedFollowOffset(result) {
     const view = this._sharedThingFor(result);
-    const entity = this.viewer?.trackedEntity;
+    const followed = followedOf(this.viewer);
     // Only a link made while following carries a real offset (with the fix);
     // a long link's follow keeps the app's own framing.
     if (
       !view?.lastKnown ||
-      String(entity?.gevTrackedId || '') !==
-        `${result.layerId}:${result.targetId}`
+      String(followed?.key || '') !== `${result.layerId}:${result.targetId}`
     )
       return;
     this._stopFollowOffset?.();
-    this._stopFollowOffset = this.applyFollowOffset?.(entity, view.offset);
+    this._stopFollowOffset = this.applyFollowOffset?.(followed, view.offset);
   }
 
   cancelSelection() {
@@ -661,11 +662,11 @@ export class ShareRestoration {
       share: null,
       layers: [],
     });
-    this.viewer?.canvas?.removeEventListener(
+    canvasOf(this.viewer)?.removeEventListener(
       'pointerdown',
       this._initialShareGestureHandler,
     );
-    this.viewer?.canvas?.removeEventListener(
+    canvasOf(this.viewer)?.removeEventListener(
       'wheel',
       this._initialShareGestureHandler,
     );

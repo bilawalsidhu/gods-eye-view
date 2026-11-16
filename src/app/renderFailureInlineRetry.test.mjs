@@ -1,11 +1,13 @@
 // Retry in an inline panel whose host stops animation frames, so the panel
 // draws from keepPanelRendering's timer. Drives Cesium's real startRenderLoop
-// and useDefaultRenderLoop setter (CesiumWidget.prototype).
+// and useDefaultRenderLoop setter (CesiumWidget.prototype), through the
+// Cesium frame port.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { keepPanelRendering } from './embed.js';
-import { renderLoopFixture } from '../ui/renderLoopFixture.mjs';
+import { keepPanelRendering } from './panelRendering.js';
+import { renderLoopFixture } from '../render/cesium/renderLoopFixture.mjs';
+import { createSceneFrame } from '../render/cesium/frame.js';
 
 function setup() {
   let tick = null;
@@ -23,6 +25,7 @@ function setup() {
   const scene = {
     renderError: new Cesium.Event(),
     preUpdate: new Cesium.Event(),
+    preRender: new Cesium.Event(),
     postRender: new Cesium.Event(),
     requestRender() {},
     initializeFrame() {},
@@ -46,7 +49,16 @@ function setup() {
       },
       notice: { allowReload: false },
     });
-  const stop = keepPanelRendering(viewer, { windowRef, now: () => clock });
+  const frame = createSceneFrame(viewer);
+  const renderer = { resize: () => viewer.resize(), frame: frame.port };
+  const stopPanel = keepPanelRendering(renderer, {
+    windowRef,
+    now: () => clock,
+  });
+  const stop = () => {
+    stopPanel();
+    frame.dispose();
+  };
   viewer.useDefaultRenderLoop = true;
   const timerFrame = () => {
     clock += 400;

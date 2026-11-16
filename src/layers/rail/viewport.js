@@ -1,8 +1,11 @@
-import * as Cesium from 'cesium';
+import { rectangleCenter } from '../../geo/rectangle.js';
+import { toDegrees, toRadians } from '../../geo/vector.js';
+import { findCamera, findFrame } from '../../render/rendererOf.js';
 import {
   ACTIVATION_ENTER_ALTITUDE_M,
   ACTIVATION_EXIT_ALTITUDE_M,
   CAMERA_DEBOUNCE_MS,
+  CAMERA_PERCENTAGE_CHANGED,
   RANGE_SLACK_KM,
   isLiveRailPositionSource,
   railCatalogRetryDelayMs,
@@ -24,23 +27,27 @@ export function createViewport({ state, services, parts, source }) {
   const { governorRequestRender } = services.render;
 
   function cameraAltitude() {
-    const carto = state._viewer?.camera?.positionCartographic;
-    return carto && Number.isFinite(carto.height) ? carto.height : Infinity;
+    const height = findCamera(state._viewer)?.pose().height;
+    return Number.isFinite(height) ? height : Infinity;
   }
 
+  /** Where the camera looks: its view rectangle's middle, else under the eye. */
   function cameraCenter() {
-    const viewer = state._viewer;
-    const rect = viewer?.camera?.computeViewRectangle?.(
-      viewer.scene.globe?.ellipsoid,
-    );
-    const point = rect
-      ? Cesium.Rectangle.center(rect)
-      : viewer?.camera?.positionCartographic;
-    if (!point) return null;
-    return {
-      lat: Cesium.Math.toDegrees(point.latitude),
-      lon: Cesium.Math.toDegrees(point.longitude),
-    };
+    const camera = findCamera(state._viewer);
+    const rect = camera?.viewRectangle();
+    if (rect) {
+      const center = rectangleCenter({
+        west: toRadians(rect.west),
+        south: toRadians(rect.south),
+        east: toRadians(rect.east),
+        north: toRadians(rect.north),
+      });
+      return { lat: toDegrees(center.lat), lon: toDegrees(center.lon) };
+    }
+    const pose = camera?.pose();
+    if (pose && Number.isFinite(pose.lat) && Number.isFinite(pose.lon))
+      return { lat: pose.lat, lon: pose.lon };
+    return null;
   }
 
   /**
@@ -206,6 +213,41 @@ export function createViewport({ state, services, parts, source }) {
   }
 
   /**
+   * Listen for the camera moving, at this layer's own threshold.
+   *
+   * The camera port measures `changed` per listener, so this layer's finer
+   * trigger (it needs to notice it has entered a feed's coverage) is its own
+   * and leaves every other listener's untouched.
+   * @param {object} viewer
+   */
+  function watchCamera(viewer) {
+    unwatchCamera();
+    state._cameraChangedOff =
+      findCamera(viewer)?.on('changed', onCameraChanged, {
+        threshold: CAMERA_PERCENTAGE_CHANGED,
+      }) ?? null;
+    // A new listener measures from the view at the next tick, so a move made
+    // before that tick never reaches it: look again once that tick is past.
+    if (!state._cameraChangedOff) return;
+    let ticks = 0;
+    state._cameraFirstTickOff =
+      findFrame(viewer)?.on('preUpdate', () => {
+        if (++ticks < 2) return;
+        state._cameraFirstTickOff?.();
+        state._cameraFirstTickOff = null;
+        onCameraChanged();
+      }) ?? null;
+  }
+
+  /** Stop listening for the camera moving. */
+  function unwatchCamera() {
+    state._cameraChangedOff?.();
+    state._cameraChangedOff = null;
+    state._cameraFirstTickOff?.();
+    state._cameraFirstTickOff = null;
+  }
+
+  /**
    * Re-run the check off the caller's stack: a selection changed, so the
    * feed it holds may change too.
    */
@@ -222,6 +264,8 @@ export function createViewport({ state, services, parts, source }) {
     runProximityCheck,
     onCameraChanged,
     requestProximityCheck,
+    watchCamera,
+    unwatchCamera,
     cameraAltitude,
     loadCatalog,
     cancelCatalog,

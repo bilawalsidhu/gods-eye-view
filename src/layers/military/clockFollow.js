@@ -31,12 +31,9 @@ export function createClockFollow({ flightState, services, parts }) {
     if (flightState._trackedIcao)
       parts.tracking._clearTracking(false, { evicted: true });
     resetMotion();
-    for (const [icao24, billboard] of flightState._billboards) {
-      flightState._billboardCollection?.remove(billboard);
-      parts.rendering._releaseModel(icao24);
-    }
-    flightState._billboards.clear();
-    flightState._cullPositions.clear();
+    // Each contact's icon row and 3D model go with it.
+    for (const icao24 of [...(flightState._icons?.ids() ?? [])])
+      parts.icons._forgetContact(icao24);
     flightState._detectionObjects.clear();
     flightState.feed._count = 0;
     flightState.feed._lastUpdate = null;

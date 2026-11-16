@@ -68,11 +68,12 @@ test('flight state owns distinct mutable records, scratch objects and floor samp
   for (const key of [
     'records',
     'feed',
-    '_billboards',
+    '_grounded',
+    '_floorPinned',
     '_positionHistory',
     '_displayFloorState',
     '_groundSnap',
-    '_scratchCarto',
+    '_scratchNearbyPos',
     '_models',
     'lifetime',
   ]) {
@@ -162,6 +163,117 @@ test('voice context reads a track that rounds to north as 0°, not 360°', () =>
     tracking._contextSubjectMetadata('abc123').properties.heading,
     '0°',
   );
+});
+
+test('a flight layer without an icon set declines contact refreshes', () => {
+  // Before init and after destroy there are no icon rows: a TR-3B refresh
+  // reports that the layer owns no such contact instead of throwing.
+  const layer = createCivilFlightLayer({
+    source: { label: 'Fixture aircraft', getSnapshot() {} },
+    services: {
+      ...services(),
+      aircraftPresentation: { isTr3b: () => true, tr3bConvertedIds: () => [] },
+    },
+  });
+  assert.equal(layer.refreshTr3b('abc123'), false);
+  assert.equal(layer.trackById('abc123'), false);
+});
+
+test('the tracked trail head is drawn each frame while tracked and stops with the trail', async () => {
+  const Cesium = await import('cesium');
+  const { bindFakeDraw } = await import('../../testSupport/fakeDrawPort.mjs');
+  const trails = await import('../../data/trailRenderer.js');
+  const listeners = new Set();
+  const frame = {
+    on(phase, cb) {
+      const entry = { phase, cb };
+      listeners.add(entry);
+      return () => listeners.delete(entry);
+    },
+  };
+  const tick = () => {
+    for (const { phase, cb } of [...listeners]) if (phase === 'preRender') cb();
+  };
+  const viewer = { isDestroyed: () => false };
+  const { draw, unbind } = bindFakeDraw(viewer, { frame });
+  const at = (lon) => Cesium.Cartesian3.fromDegrees(lon, 0, 1000);
+  // Three reports ten seconds apart, ten minutes ago.
+  const reportAt = (i) => {
+    const epochMs = Date.now() - 600_000 + i * 10_000;
+    return { epochMs, time: Cesium.JulianDate.fromDate(new Date(epochMs)) };
+  };
+  let headLon = 0.03;
+  const flightState = {
+    now: Date.now,
+    _viewer: viewer,
+    _trackedIcao: 'abc123',
+    _trail: null,
+    _trailFixes: [],
+    _trailBackfillToken: 0,
+    _trailHeadOff: null,
+    _cockpitContactMode: false,
+    _positionHistory: new Map([
+      [
+        'abc123',
+        [0, 0.01, 0.02].map((lon, i) => ({
+          ...reportAt(i),
+          position: at(lon),
+        })),
+      ],
+    ]),
+    _scratchWarmupTime: new Cesium.JulianDate(),
+    _scratchTrailHead: new Cesium.Cartesian3(),
+    feed: { _source: {} },
+    records: { data: new Map() },
+    lifetime: new AbortController(),
+  };
+  const supplied = services();
+  supplied.trails = trails;
+  const tracking = createTracking({
+    flightState,
+    services: supplied,
+    parts: {
+      motion: {
+        _isTrackWarmingUp: () => false,
+        _trackedTrailCached: () => at(headLon),
+        _trackedDisplayPosition: () => null,
+        _trackedModelCenterWorld: () => null,
+        _trackedModelEnvelopeM: () => 0,
+      },
+    },
+    layer: {},
+  });
+  try {
+    tracking._startTrail('abc123');
+    assert.equal(listeners.size, 1, 'one frame listener');
+    tick();
+    const set = draw.find('trail:');
+    const head = () => set.items.get(`${[...set.items.keys()][0]}:head`);
+    assert.ok(
+      Cesium.Cartesian3.equals(
+        new Cesium.Cartesian3(...Object.values(head().positions[1])),
+        at(0.03),
+      ),
+    );
+    headLon = 0.04;
+    tick();
+    assert.ok(
+      Cesium.Cartesian3.equalsEpsilon(
+        new Cesium.Cartesian3(...Object.values(head().positions[1])),
+        at(0.04),
+        1e-6,
+      ),
+    );
+    // Tracked again: still one listener.
+    tracking._clearTrail();
+    assert.equal(listeners.size, 0, 'cleared with the trail');
+    tracking._startTrail('abc123');
+    assert.equal(listeners.size, 1);
+    tracking._destroyTrail();
+    assert.equal(listeners.size, 0, 'gone with the trail');
+  } finally {
+    unbind();
+  }
 });
 
 test('the tracked plane’s photo is asked once per hex and lands on its record', async () => {
