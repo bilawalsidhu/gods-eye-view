@@ -3633,5 +3633,18 @@
   "Search layers…": "Sök lager…",
   "Layer groups": "Lagergrupper",
   "Jump to {name}": "Gå till {name}",
-  "No layers match": "Inga lager matchar"
+  "No layers match": "Inga lager matchar",
+  "Highway message signs": "Variabla meddelandeskyltar",
+  "MnDOT · Minnesota only": "MnDOT · endast Minnesota",
+  "MnDOT network error": "MnDOT: nätverksfel",
+  "{count} signs lit": {
+    "one": "{count} skylt tänd",
+    "other": "{count} skyltar tända"
+  },
+  "Message sign, {location}": "Meddelandeskylt, {location}",
+  "SIGN · {location}": "SKYLT · {location}",
+  "MnDOT data {age}": "MnDOT-data {age}",
+  "STALE · MnDOT data {age}": "INAKTUELL · MnDOT-data {age}",
+  "Page {n} of {total}": "Sida {n} av {total}",
+  "Graphic only": "Endast grafik"
 }

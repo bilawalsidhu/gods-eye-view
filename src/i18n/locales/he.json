@@ -3720,5 +3720,19 @@
   "Search layers…": "חיפוש שכבות…",
   "Layer groups": "קבוצות שכבות",
   "Jump to {name}": "מעבר אל {name}",
-  "No layers match": "אין שכבות תואמות"
+  "No layers match": "אין שכבות תואמות",
+  "Highway message signs": "שלטי הודעות בכבישים מהירים",
+  "MnDOT · Minnesota only": "MnDOT · מינסוטה בלבד",
+  "MnDOT network error": "שגיאת רשת ב-MnDOT",
+  "{count} signs lit": {
+    "one": "{count} שלט דולק",
+    "two": "{count} שלטים דולקים",
+    "other": "{count} שלטים דולקים"
+  },
+  "Message sign, {location}": "שלט הודעות, {location}",
+  "SIGN · {location}": "שלט · {location}",
+  "MnDOT data {age}": "נתוני MnDOT {age}",
+  "STALE · MnDOT data {age}": "מיושן · נתוני MnDOT {age}",
+  "Page {n} of {total}": "עמוד {n} מתוך {total}",
+  "Graphic only": "גרפיקה בלבד"
 }

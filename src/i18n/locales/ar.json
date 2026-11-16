@@ -3981,5 +3981,22 @@
   "Search layers…": "ابحث في الطبقات…",
   "Layer groups": "مجموعات الطبقات",
   "Jump to {name}": "الانتقال إلى {name}",
-  "No layers match": "لا توجد طبقات مطابقة"
+  "No layers match": "لا توجد طبقات مطابقة",
+  "Highway message signs": "لوحات الرسائل على الطرق السريعة",
+  "MnDOT · Minnesota only": "MnDOT · مينيسوتا فقط",
+  "MnDOT network error": "MnDOT: خطأ في الشبكة",
+  "{count} signs lit": {
+    "zero": "لا لوحات مضاءة ({count})",
+    "one": "لوحة واحدة مضاءة ({count})",
+    "two": "لوحتان مضاءتان ({count})",
+    "few": "{count} لوحات مضاءة",
+    "many": "{count} لوحة مضاءة",
+    "other": "{count} لوحة مضاءة"
+  },
+  "Message sign, {location}": "لوحة رسائل، {location}",
+  "SIGN · {location}": "لوحة · {location}",
+  "MnDOT data {age}": "بيانات MnDOT {age}",
+  "STALE · MnDOT data {age}": "متقادم · بيانات MnDOT {age}",
+  "Page {n} of {total}": "الصفحة {n} من {total}",
+  "Graphic only": "رسم فقط"
 }
