@@ -734,13 +734,13 @@ export function exit({ restoreTracking = true } = {}) {
   const vesselSubject = this.subjectKind === 'vessel' ? this.subjectId : null;
   const satelliteSubject =
     this.subjectKind === 'satellite' ? this.subjectId : null;
-  // Leaving a view from the station selects Nauka, whichever view or entry
-  // it ended on: the station's first view, and the one it opens on.
+  // Leaving a view from a station selects the station's home entry (the
+  // ISS's Nauka, Tiangong's Tianhe), whichever view or entry it ended on:
+  // the station's first view, and the one it opens on.
   const station = this.orbital;
   const stationHome =
     satelliteSubject !== null && station && station.mount != null
-      ? (station.mountViews?.find((view) => view.key === 'nauka')?.noradId ??
-        null)
+      ? (station.mountViews?.[0]?.noradId ?? null)
       : null;
   this.active = false;
   this.subjectKind = null;
@@ -814,7 +814,7 @@ export function exit({ restoreTracking = true } = {}) {
     this.services.aisLiveVesselsLayer?.focusSelectedVessel?.();
   } else if (restoreTracking && satelliteSubject !== null) {
     // Back to the satellite's follow camera, through the layer's own refocus;
-    // from the station, on Nauka.
+    // from a station, on its home entry.
     const layer = this.services.satellitesLayer;
     let subject = satelliteSubject;
     if (stationHome !== null && String(stationHome) !== String(subject)) {

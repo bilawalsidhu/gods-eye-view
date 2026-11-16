@@ -44,7 +44,8 @@
   illustration (computed values; China publishes no telemetry). Selecting
   Tianhe, a lab or a docked ship gives the STATION section for Tiangong (Sun
   positions, each wing on its own slider, the two arms by joint); the model stands in for the docked
-  entries' dots and is hidden while the Cockpit rides the station
+  entries' dots, and the Cockpit rides the station from views on the model
+  (Tianhe, Wentian, Mengtian, the docked vehicle)
   (Denis Groshev, @ZloyS, #1690).
 - Let a click on a mapped installation's label box count as a click on the
   site: it focuses the site in the orbital Cockpit view and selects it on the

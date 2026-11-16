@@ -12,6 +12,7 @@ import {
 } from './policy.js';
 import { createStationModel } from './stationModel.js';
 import { createTiangongArticulation } from './tiangongArticulation.js';
+import { tiangongCockpitMount } from './tiangongMounts.js';
 
 /**
  * Whether a catalog entry at Tiangong is one of the station's own modules
@@ -33,10 +34,9 @@ export function tiangongIsModule(noradId, entry) {
  * (scale 1) and in the ISS file's frame, so it takes the ISS's local-axes
  * mapping: the station is assumed to fly like the ISS, Tianhe along the
  * velocity with the node (forward port) forward, the labs across the orbit,
- * nadir to the Earth. Its joints are computed only; there is no telemetry,
- * no Cockpit views on the model (so the model is hidden while the Cockpit
- * rides the station), and its ring follows the layer's orbit toggle like any
- * tracked satellite's.
+ * nadir to the Earth. Its joints are computed only; there is no telemetry.
+ * The Cockpit rides it from views on the model (`tiangongMounts.js`), and
+ * its ring follows the layer's orbit toggle like any tracked satellite's.
  * @returns {import('./stationModel.js').StationModelSpec}
  */
 export function tiangongModelSpec() {
@@ -57,8 +57,10 @@ export function tiangongModelSpec() {
     isModule: tiangongIsModule,
     createArticulation: createTiangongArticulation,
     createTelemetry: null,
-    cockpitMount: null,
-    hideInCockpit: true,
+    cockpitMount: tiangongCockpitMount,
+    // The Cockpit rides the station from a mount on the model, so the model
+    // stays while it does.
+    hideInCockpit: false,
     syncOrbit: null,
   };
 }

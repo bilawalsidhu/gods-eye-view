@@ -1997,11 +1997,14 @@ the Sun positions and the fast orbit, every wing on a slider of its own
 (Tianhe's two; the labs' four, alpha and beta each: a wing set by hand holds
 its angle, reached at the joint rate, while the rest keep following the Sun,
 and "Follow the Sun" frees them), and the Tianhe and Wentian arms by joint;
-**Zoom to Tiangong** uses the ISS's zoom range. Tiangong has no Cockpit
-views on its model, so the Cockpit keeps the nadir picture and the model is
-hidden while the Cockpit rides the station or a docked entry (its camera would
-sit inside the hull). The visiting ships are always drawn; they are not yet
-toggled by what the catalog shows docked.
+**Zoom to Tiangong** uses the ISS's zoom range. In the Cockpit, Tiangong is
+ridden from views on its model (`tiangongMounts.js`), as the ISS is: from
+Tianhe (the one it opens on; its port side, out across the track), from the
+outer end of Wentian and of Mengtian (out past their wings, which turn through
+the view as they follow the Sun) and from the docked vehicle (standing in on
+the aft port, looking behind the station); each rides its own catalog entry,
+so no cards are needed, and leaving selects Tianhe. The visiting ships are
+always drawn; they are not yet toggled by what the catalog shows docked.
 The mission factory separates paths, replay, camera, panel, overlays and placement.
 Its markers, lines, live rings and pad zone are renderer draw sets, and it
 follows a mission through the camera port, so a caller handing it a Cesium

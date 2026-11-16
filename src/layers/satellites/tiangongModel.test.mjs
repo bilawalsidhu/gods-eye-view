@@ -20,10 +20,11 @@ test("Tiangong is CSS (TIANHE) by NORAD number, drawn at the file's meters", () 
   assert.equal(spec.modelUrl, TIANGONG_MODEL_URL);
   // The same frame as the ISS file, so the same flight-axes mapping.
   assert.equal(spec.localAxes, ISS_MODEL_LOCAL_AXES);
-  // No telemetry, no Cockpit views, so the model goes while the Cockpit rides.
+  // No telemetry; Cockpit views on the model, so the model stays while the
+  // Cockpit rides it.
   assert.equal(spec.createTelemetry, null);
-  assert.equal(spec.cockpitMount, null);
-  assert.equal(spec.hideInCockpit, true);
+  assert.equal(typeof spec.cockpitMount, 'function');
+  assert.equal(spec.hideInCockpit, false);
   assert.equal(spec.syncOrbit, null);
   assert.equal(typeof spec.createArticulation().update, 'function');
 });
