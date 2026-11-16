@@ -2074,6 +2074,40 @@ test('a revoked scene release turns no further layer off', async () => {
   } finally { await director.destroy(); restore(); }
 });
 
+test('a revocation also covers the release a stopped run reaches later', async () => {
+  const project = structuredClone(PROJECT_FIXTURE);
+  project.scenes[0].releaseLayerIds = ['flights'];
+  const { director, styleManager, dataManager, restore } = makeDirector({ project });
+  try {
+    // The run's visual phase hangs and ignores Stop, as a stuck teardown does.
+    let settlePhase;
+    styleManager.applyVisualState = () =>
+      new Promise((resolve) => {
+        settlePhase = resolve;
+      });
+    const run = director.startScene('scene-1', { single: true, preview: true });
+    await settle();
+    assert.ok(settlePhase, 'the run is waiting in its phase');
+    director.stopScene();
+    director.revokeSceneRelease();
+    const after = dataManager.setEnabledCalls.length;
+    settlePhase(true);
+    await run;
+    const late = dataManager.setEnabledCalls
+      .slice(after)
+      .filter(({ enabled, signal }) => !enabled && !signal?.aborted);
+    assert.deepEqual(late, [], 'no layer is turned off after the revoke');
+    // A run started afterwards releases its layers again.
+    styleManager.applyVisualState = async () => true;
+    await director.startScene('scene-1', { single: true, preview: true });
+    assert.ok(
+      dataManager.setEnabledCalls.some(
+        ({ id, enabled, signal }) => id === 'flights' && !enabled && !signal?.aborted,
+      ),
+    );
+  } finally { await director.destroy(); restore(); }
+});
+
 /** Drive frame-by-frame camera motion headlessly for one test. */
 function installAnimationFrames() {
   const original = globalThis.requestAnimationFrame;

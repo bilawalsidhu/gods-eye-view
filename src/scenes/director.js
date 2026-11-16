@@ -1281,6 +1281,7 @@ export class SceneDirector {
     const { scene, shot } = this._getShot(sceneId, shotId);
     if (!scene || !shot) return { started: false, reason: 'shot-not-found' };
     flyDuration ??= shot.move ? shot.durationSec : 2.2;
+    const releaseAuthority = this._releaseAuthority();
     const previousScene =
       this._project.scenes.find((item) => item.id === this._loadedSceneId) ||
       null;
@@ -1305,7 +1306,11 @@ export class SceneDirector {
     this._setProgress(0);
 
     if (previousScene && previousScene.id !== scene.id) {
-      const released = await this._releaseSceneLayers(previousScene, token);
+      const released = await this._releaseSceneLayers(
+        previousScene,
+        token,
+        releaseAuthority,
+      );
       if (!released || token.cancelled) {
         if (!token.cancelled)
           this._updateStatus(() =>
@@ -2238,6 +2243,9 @@ export class SceneDirector {
 
     this._usesAuthoredCamera = queue.some(({ shot }) => !!shot.move);
 
+    // Every release this run reaches, however late, answers to the
+    // authority it starts under (revokeSceneRelease).
+    const releaseAuthority = this._releaseAuthority();
     // Transition to running state
     this._running = true;
     this._previewRun = preview;
@@ -2290,7 +2298,9 @@ export class SceneDirector {
     try {
       await playSceneQueue(queue, {
         token,
-        adapter: createScenePlaybackAdapter(this, DEFAULT_SHOT_DURATION_SEC),
+        adapter: createScenePlaybackAdapter(this, DEFAULT_SHOT_DURATION_SEC, {
+          releaseAuthority,
+        }),
         previousScene: this._project.scenes.find(
           (scene) => scene.id === this._loadedSceneId,
         ),
@@ -2690,15 +2700,18 @@ export class SceneDirector {
    * @param {{ cancelled?: boolean, signal?: AbortSignal }} [token] - Optional LOAD/run token
    * @returns {Promise<boolean>} True only when every owned layer is released
    */
-  async _releaseSceneLayers(scene, token = null) {
+  async _releaseSceneLayers(
+    scene,
+    token = null,
+    authority = this._releaseAuthority(),
+  ) {
     this._interactions?.clear();
     this._dataPacks?.clear();
     const layerIds = Array.isArray(scene?.releaseLayerIds)
       ? scene.releaseLayerIds
       : [];
     // revokeSceneRelease() ends this release's authority over layers.
-    this._releaseAbort ??= new AbortController();
-    const revoked = this._releaseAbort.signal;
+    const revoked = authority;
     const signal = token?.signal
       ? AbortSignal.any([token.signal, revoked])
       : revoked;
@@ -2745,6 +2758,17 @@ export class SceneDirector {
   revokeSceneRelease() {
     this._releaseAbort?.abort();
     this._releaseAbort = null;
+  }
+
+  /**
+   * The current authority to turn scene layers off, as an abort signal. A run
+   * or LOAD takes it when it starts, so a revocation also covers the cleanup
+   * it reaches later (a release at a scene change or at the run's end).
+   * @returns {AbortSignal}
+   */
+  _releaseAuthority() {
+    this._releaseAbort ??= new AbortController();
+    return this._releaseAbort.signal;
   }
 
   /**

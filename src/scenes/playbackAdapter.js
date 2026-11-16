@@ -10,12 +10,20 @@ import { displaySceneTitle, displayShotTitle } from './recipes.js';
  */
 const inHold = (resume) => resume?.holdElapsedSec > 0;
 
-export function createScenePlaybackAdapter(director, defaultShotDurationSec) {
+export function createScenePlaybackAdapter(
+  director,
+  defaultShotDurationSec,
+  { releaseAuthority } = {},
+) {
   let timing;
   let travel;
   return {
     async releaseScene(scene, token) {
-      const released = await director._releaseSceneLayers(scene, token);
+      const released = await director._releaseSceneLayers(
+        scene,
+        token,
+        releaseAuthority,
+      );
       if (!token || released) director._loadedSceneId = null;
       return released;
     },
