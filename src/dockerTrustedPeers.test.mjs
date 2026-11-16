@@ -150,7 +150,12 @@ test('Compose resolves shell and project dotenv policy before the launcher start
     );
     assert.ifError(child.error);
     assert.equal(child.status, 0, child.stderr);
-    return JSON.parse(child.stdout).services['gods-eye-view'].environment || {};
+    const environment =
+      JSON.parse(child.stdout).services['gods-eye-view'].environment || {};
+    // The data platform's database URL is passed through unset; it is not part
+    // of the dotenv policy under test.
+    delete environment.GEV_DATABASE_URL;
+    return environment;
   }
   const unset = config();
   assert.ok(unset.GEV_KEY_SETUP_TRUSTED_PEERS == null);

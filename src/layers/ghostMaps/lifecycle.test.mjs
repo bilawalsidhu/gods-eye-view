@@ -1,5 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import {
+  GHOST_DOT_SIZE_PX,
+  GHOST_MARKER_DISPLAY_SCALE,
+  GHOST_MARKER_SIZE,
+  GHOST_SYMBOL_MAX_DISTANCE_M,
+} from './markers.js';
 import { createGhostMapsLayer } from './index.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import { GHOSTMAPS_PRODUCTS, GHOSTMAPS_LATEST_DROP } from './catalog.js';
@@ -133,11 +139,12 @@ function fixture(
     query: { pick: () => picked },
   });
   t.after(unbind);
-  // Every live item, by id, with the id of the set drawing it.
+  // Every live item, by id, with the id of the set drawing it. The far-away
+  // dots are each symbol's companion, and are counted apart.
   const items = () =>
     new Map(
       [...draw.sets.values()]
-        .filter((set) => !set.disposed)
+        .filter((set) => !set.disposed && set.kind !== 'points')
         .flatMap((set) => [...set.items.keys()].map((id) => [id, set.spec.id])),
     );
   const liveSets = () => [...draw.sets.values()].filter((set) => !set.disposed);
@@ -204,59 +211,67 @@ test('cancelling a file read does not allocate packed-image URLs', async (t) => 
   assert.equal(mounted.size, 0);
 });
 
-test('cancellation during parsing releases every packed-image URL', async (t) => {
-  const { layer, viewer, mounted, created, revoked } = fixture(t, {
-    onCreateUrl: (layer) => layer.disable(),
-  });
+test('a load allocates no image URLs: the symbols are drawn, not unpacked', async (t) => {
+  const { layer, viewer, mounted, created, revoked } = fixture(t);
   await layer.update(viewer);
-  assert.equal(created.length, 1);
-  assert.deepEqual(revoked, created);
-  assert.equal(mounted.size, 0);
+  assert.equal(created.length, 0);
+  assert.equal(revoked.length, 0);
+  assert.equal(mounted.size, 1);
 });
 
-test('a draw failure releases parsed image URLs', async (t) => {
-  const { layer, viewer, draw, mounted, created, revoked } = fixture(t);
+test('a draw failure mounts nothing and reports the error', async (t) => {
+  const { layer, viewer, draw, mounted } = fixture(t);
   t.mock.method(draw, 'icons', () => {
     throw new Error('fixture entity failure');
   });
   await layer.update(viewer);
-  assert.equal(created.length, 1);
-  assert.deepEqual(revoked, created);
   assert.equal(mounted.size, 0);
   assert.equal(layer.getStats().error, 'fixture entity failure');
 });
 
-test('a viewer with no renderer bound releases parsed image URLs', async (t) => {
-  const { layer, viewer, unbind, mounted, created, revoked } = fixture(t);
+test('a viewer with no renderer bound draws nothing and reports an error', async (t) => {
+  const { layer, viewer, unbind, mounted } = fixture(t);
   unbind();
   await layer.update(viewer);
-  assert.equal(created.length, 1);
-  assert.deepEqual(revoked, created);
   assert.equal(mounted.size, 0);
   assert.ok(layer.getStats().error);
 });
 
-test('successful load keeps icons until the product is disabled', async (t) => {
-  const { layer, viewer, draw, mounted, created, revoked } = fixture(t);
+test('a placemark is a shared cyan symbol up close, never tinted', async (t) => {
+  const { layer, viewer, draw } = fixture(t);
   await layer.update(viewer);
-  assert.equal(created.length, 1);
-  assert.equal(revoked.length, 0);
-  assert.equal(mounted.size, 1);
-  assert.equal(layer.getStats().count, 1);
-  const pins = [...draw.sets.values()].find(
-    (set) => !set.disposed && set.kind === 'icons',
+  const set = [...draw.sets.values()].find(
+    (s) => !s.disposed && s.kind === 'icons',
   );
-  const [pin] = pins.items.values();
+  const [pin] = set.items.values();
   assert.equal(pin.id, 'ghostmaps:cip:0:0');
-  assert.equal(pin.image, 'blob:local-0');
-  assert.equal(pin.height, 'clampGround');
-  assert.equal(pins.spec.clampTo, 'both');
-  assert.equal(pin.disableDepthTest, Infinity);
-  assert.equal(pin.scale, 0.7);
-  assert.deepEqual(pin.size, [20, 20], 'unread in Node: the marker size');
-  layer.disable();
-  assert.deepEqual(revoked, created);
-  assert.equal(mounted.size, 0);
+  assert.equal(pin.color, undefined, 'the symbol carries its own colour');
+  assert.equal(pin.scale, GHOST_MARKER_DISPLAY_SCALE);
+  assert.deepEqual(pin.size, [GHOST_MARKER_SIZE, GHOST_MARKER_SIZE]);
+  assert.equal(set.spec.clampTo, 'both');
+});
+
+test('a placemark is a symbol up close and a dot far away, never both', async (t) => {
+  const { layer, viewer, draw } = fixture(t);
+  await layer.update(viewer);
+  const live = [...draw.sets.values()].filter((s) => !s.disposed);
+  const [icon] = live.find((s) => s.kind === 'icons').items.values();
+  const [dot] = live.find((s) => s.kind === 'points').items.values();
+  assert.deepEqual(icon.displayRange, [0, GHOST_SYMBOL_MAX_DISTANCE_M]);
+  assert.deepEqual(dot.displayRange, [
+    GHOST_SYMBOL_MAX_DISTANCE_M,
+    Number.POSITIVE_INFINITY,
+  ]);
+  assert.equal(dot.pixelSize, GHOST_DOT_SIZE_PX);
+});
+
+test('markers are not ground-clamped, so zooming cannot hide them', async (t) => {
+  const { layer, viewer, draw } = fixture(t);
+  await layer.update(viewer);
+  for (const set of [...draw.sets.values()].filter((s) => !s.disposed))
+    if (set.kind === 'icons' || set.kind === 'points')
+      for (const item of set.items.values())
+        assert.equal(item.height, undefined);
 });
 
 const dated = (name, value, label = 'Date') => ({
@@ -374,11 +389,6 @@ test('a filter changed during a pending load never installs the superseded filte
   assert.equal(layer.getStats().count, 1);
   assert.equal(layer.getStats().ageDays, null);
   assert.equal(mounted.size, 1);
-  assert.equal(
-    revoked.length,
-    created.length - 1,
-    'discarded load releases icons',
-  );
 });
 
 test('age filtering and All markers apply to every conflict-map product, including optional maps', async (t) => {

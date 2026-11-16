@@ -1,7 +1,8 @@
 // Read the drawable content of a parsed GhostMaps KML document: placemarks
 // with their folder, geometry, resolved style and raw description. Network
-// links, overlays, models and remote icons are never followed; an icon is
-// either an image packed in the same KMZ or the layer's own marker.
+// links, overlays, models and remote icons are never followed; the icon of a
+// style only names the shape of the layer's own marker, and the image the KMZ
+// packs beside it is never decoded.
 import { kmlColor } from './records.js';
 
 export const MAX_GHOSTMAPS_FEATURES = 20_000;
@@ -40,12 +41,14 @@ export function parseKmlCoordinates(value) {
   return out;
 }
 
-function readStyle(styleEl, resolveImage) {
+function readStyle(styleEl) {
   const style = {};
   const icon = firstChild(styleEl, 'IconStyle');
   if (icon) {
     const href = text(firstChild(firstChild(icon, 'Icon'), 'href'));
-    style.icon = href ? resolveImage(href) : null;
+    // The icon's name picks the marker SHAPE (see markers.js); the packed
+    // image itself is never decoded, so its URL is not resolved.
+    style.iconHref = href || null;
     style.iconScale = number(firstChild(icon, 'scale'), 1);
     style.iconColor = kmlColor(text(firstChild(icon, 'color')));
   }
@@ -64,11 +67,11 @@ function readStyle(styleEl, resolveImage) {
 }
 
 /** Shared styles by id; a StyleMap resolves to its `normal` pair. */
-function collectStyles(doc, resolveImage) {
+function collectStyles(doc) {
   const styles = new Map();
   for (const el of descendants(doc, 'Style')) {
     const id = el.getAttribute('id');
-    if (id) styles.set(id, readStyle(el, resolveImage));
+    if (id) styles.set(id, readStyle(el));
   }
   const maps = new Map();
   for (const el of descendants(doc, 'StyleMap')) {
@@ -81,9 +84,7 @@ function collectStyles(doc, resolveImage) {
     const inline = firstChild(normal, 'Style');
     maps.set(
       id,
-      inline
-        ? readStyle(inline, resolveImage)
-        : text(firstChild(normal, 'styleUrl')),
+      inline ? readStyle(inline) : text(firstChild(normal, 'styleUrl')),
     );
   }
   const resolve = (url, depth = 0) => {
@@ -158,13 +159,12 @@ function folderName(el) {
 
 /**
  * @param {Document} doc Parsed KML.
- * @param {(href: string) => ?string} resolveImage URL for a KMZ-packed image.
  * @returns {{features: Array<{name: string, folder: string,
  *   description: string, style: object, geometries: Array<object>}>,
  *   positions: number, over: boolean}}
  */
-export function readGhostMapsKml(doc, resolveImage = () => null) {
-  const styleFor = collectStyles(doc, resolveImage);
+export function readGhostMapsKml(doc) {
+  const styleFor = collectStyles(doc);
   const features = [];
   const budget = { positions: 0 };
   let over = false;
@@ -189,7 +189,7 @@ export function readGhostMapsKml(doc, resolveImage = () => null) {
       description: text(firstChild(placemark, 'description')),
       style: {
         ...styleFor(text(firstChild(placemark, 'styleUrl'))),
-        ...(inline ? readStyle(inline, resolveImage) : {}),
+        ...(inline ? readStyle(inline) : {}),
       },
       geometries,
     });

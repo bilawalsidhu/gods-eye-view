@@ -1,10 +1,8 @@
 import {
   decodeXml,
-  kmzImageResolver,
   kmzMainDocument,
   parseXml,
   readZipEntries,
-  resolveKmzPath,
 } from '../../data/geoFileImport.js';
 import {
   formatNumber,
@@ -18,6 +16,16 @@ import { fromDegrees } from '../../geo/ellipsoid.js';
 import { hexColor } from '../../render/color.js';
 import { drawOf, findFrame } from '../../render/rendererOf.js';
 import { readGhostMapsKml } from './kml.js';
+import {
+  GHOST_DOT_COLOR,
+  GHOST_DOT_SIZE_PX,
+  GHOST_MARKER_DISPLAY_SCALE,
+  GHOST_MARKER_SIZE,
+  GHOST_SYMBOL_MAX_DISTANCE_M,
+  ghostEventKind,
+  ghostMarkerImage,
+  ghostMarkerTint,
+} from './markers.js';
 import {
   fieldLabel,
   GHOSTMAPS_AGE_OPTIONS,
@@ -39,7 +47,6 @@ const PICK_PREFIX = 'ghostmaps:';
 const STORAGE_KEY = 'gev.ghostmaps.products';
 const AGE_STORAGE_KEY = 'gev.ghostmaps.ageDays';
 const ACCENT = '#c8ff00';
-const MAX_ICON_BYTES = 512 * 1024;
 const CARD_HOST_OPTIONS = Object.freeze({
   cohortLimit: 1,
   collisionCapacity: 1,
@@ -107,55 +114,15 @@ function readStoredAge(storage) {
   return GHOSTMAPS_DEFAULT_AGE_DAYS;
 }
 
-/** A round marker for placemarks whose icon is missing or remote. */
-const markerCache = new Map();
-function markerImage(color) {
-  if (markerCache.has(color)) return markerCache.get(color);
-  let url = null;
-  try {
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = 20;
-    const ctx = canvas.getContext('2d');
-    ctx.beginPath();
-    ctx.arc(10, 10, 7, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-    ctx.stroke();
-    url = canvas.toDataURL();
-  } catch {
-    url = null;
-  }
-  markerCache.set(color, url);
-  return url;
-}
-
 const drawColor = (rgba, fallback, alpha) =>
   rgba
     ? [rgba[0], rgba[1], rgba[2], alpha ?? rgba[3]]
     : hexColor(fallback, alpha ?? 1);
 
-/** The size a marker image draws at, before its scale: the product marker. */
-const MARKER_SIZE = [20, 20];
-
-/**
- * An image's own size in pixels, as an icon drew it unsized; null when it
- * cannot be read here (no DOM, or the image does not decode).
- */
-async function imageSizeOf(url) {
-  if (typeof globalThis.Image !== 'function' || !url) return null;
-  try {
-    const image = new globalThis.Image();
-    image.src = url;
-    await image.decode();
-    return image.naturalWidth > 0 && image.naturalHeight > 0
-      ? [image.naturalWidth, image.naturalHeight]
-      : null;
-  } catch {
-    return null;
-  }
-}
+const productRgb = (css) => {
+  const [r, g, b] = hexColor(css, 1);
+  return { r, g, b };
+};
 
 /** Each layer's draw sets have ids of their own. */
 let instances = 0;
@@ -205,7 +172,7 @@ export function createGhostMapsLayer({
   let _selection = readStoredSelection(storage);
   let _ageDays = readStoredAge(storage);
   let _expiryTimer = null;
-  /** productId → {version, ageDays, sets, urls, features: Map<index, record>, pins} */
+  /** productId → {version, ageDays, sets, features: Map<index, record>, pins} */
   const _loaded = new Map();
   /** productId → in-flight version */
   const _loading = new Map();
@@ -228,9 +195,13 @@ export function createGhostMapsLayer({
     // Pins the cull turned are written to their editions' icon sets.
     onChange: (changed) => {
       const bySet = new Map();
+      const add = (set, item) => {
+        if (!bySet.has(set)) bySet.set(set, []);
+        bySet.get(set).push(item);
+      };
       for (const pin of changed) {
-        if (!bySet.has(pin.set)) bySet.set(pin.set, []);
-        bySet.get(pin.set).push(pin.item);
+        add(pin.set, pin.item);
+        add(pin.dotSet, pin.dotItem);
       }
       for (const [set, items] of bySet) set?.upsert(items);
       render();
@@ -251,7 +222,6 @@ export function createGhostMapsLayer({
     if (!item) return;
     _loaded.delete(id);
     disposeSets(item.sets);
-    item.urls.forEach((url) => URL.revokeObjectURL(url));
     if (!keepSelection && _selectedKey?.startsWith(`${id}:`)) clearSelection();
   }
 
@@ -297,15 +267,19 @@ export function createGhostMapsLayer({
       sets.shapes = draw.shapes({ id: `${base}:shapes`, clampTo: 'both' });
       sets.lines = draw.lines({ id: `${base}:lines`, clampTo: 'both' });
       sets.icons = draw.icons({ id: `${base}:icons`, clampTo: 'both' });
+      sets.dots = draw.points({ id: `${base}:dots`, clampTo: 'both' });
       sets.shapes.set(next.items.shapes);
       sets.lines.set(next.items.lines);
       sets.icons.set(next.items.icons);
+      sets.dots.set(next.items.dots);
     } catch (error) {
       disposeSets(sets);
-      next.urls.forEach((url) => URL.revokeObjectURL(url));
       throw error;
     }
-    for (const pin of next.pins) pin.set = sets.icons;
+    for (const pin of next.pins) {
+      pin.set = sets.icons;
+      pin.dotSet = sets.dots;
+    }
     next.sets = sets;
   }
 
@@ -336,46 +310,19 @@ export function createGhostMapsLayer({
     signal.throwIfAborted();
     const main = kmzMainDocument(entries);
     if (!main) throw new Error(msg('That KMZ holds no KML document.'));
-    const urls = [];
-    const resolvePacked = kmzImageResolver(entries, main, (url) =>
-      urls.push(url),
-    );
-    // Icons only: ArcGIS exports also pack multi-megabyte photo attachments,
-    // which fall back to the product marker instead of being decoded.
-    const resolveImage = (href) => {
-      const path = resolveKmzPath(href, main, entries);
-      return path && entries.get(path).length <= MAX_ICON_BYTES
-        ? resolvePacked(href)
-        : null;
-    };
     try {
       const parsed = readGhostMapsKml(
         parseXml(decodeXml(entries.get(main)), 'KML'),
-        resolveImage,
       );
-      entries.clear();
       signal.throwIfAborted();
       const color = PRODUCT_COLORS[product.id] || ACCENT;
       const icons = [];
+      const dots = [];
       const lines = [];
       const shapes = [];
       const features = new Map();
       const pins = [];
       const at = now();
-      // Each distinct icon's own size, read once: icons draw at it, scaled.
-      const sizes = new Map();
-      const marker = markerImage(color);
-      for (const feature of parsed.features)
-        for (const geometry of feature.geometries)
-          if (geometry.type === 'point') {
-            const image = feature.style.icon || marker;
-            if (image && !sizes.has(image))
-              sizes.set(
-                image,
-                image === marker ? MARKER_SIZE : imageSizeOf(image),
-              );
-          }
-      for (const [image, size] of sizes) sizes.set(image, await size);
       signal.throwIfAborted();
       parsed.features.forEach((feature, index) => {
         const dateMs = ghostMapsEventDate(feature.description);
@@ -383,48 +330,82 @@ export function createGhostMapsLayer({
         const key = `${product.id}:${index}`;
         const { style } = feature;
         // The items each placemark draws, by set, for expiry to take off.
-        const itemIds = { icons: [], lines: [], shapes: [] };
+        const itemIds = { icons: [], dots: [], lines: [], shapes: [] };
         feature.geometries.forEach((geometry, part) => {
           const id = `${PICK_PREFIX}${key}:${part}`;
           if (geometry.type === 'point') {
             const position = fromDegrees(...geometry.position);
-            const image = style.icon || marker;
+            // The event's own cyber-cyan symbol, not the icon the export
+            // packs: those are a mix of emoji, black placeholders and photos.
+            // The symbol carries its colour, so no tint is applied; the tint
+            // only colours the plain disc that stands in when it cannot be
+            // drawn at all.
+            const image = ghostMarkerImage(
+              ghostEventKind({
+                folder: feature.folder,
+                name: feature.name,
+                iconHref: style.iconHref,
+                description: feature.description,
+              }),
+              ghostMarkerTint(style.iconColor, productRgb(color)),
+            );
             // An image that cannot be drawn shows nothing, as before.
             if (!image) return;
+            // Not ground-clamped: a marker is re-placed from terrain and
+            // 3D-tile height queries as you zoom, and a clamped marker with a
+            // distance range was not drawn at all in the Cesium renderer.
+            // On the ellipsoid and over the depth buffer it stays put; the
+            // horizon cull hides the far side instead (see `_horizon`).
             const item = {
               id,
               pos: position,
               image,
-              size: sizes.get(image) ?? MARKER_SIZE,
-              scale: Math.min(
-                1.5,
-                Math.max(0.35, (style.iconScale ?? 1) * 0.7),
-              ),
-              ...(style.icon && style.iconColor
-                ? { color: style.iconColor }
-                : {}),
-              height: 'clampGround',
+              size: [GHOST_MARKER_SIZE, GHOST_MARKER_SIZE],
+              scale:
+                Math.min(1.5, Math.max(0.6, style.iconScale ?? 1)) *
+                GHOST_MARKER_DISPLAY_SCALE,
               anchor: 'center',
-              // Ground-clamped icons would sink into terrain and 3D tiles; the
-              // horizon cull hides the far side instead (see `_horizon`).
               disableDepthTest: Number.POSITIVE_INFINITY,
+              // Close up: the symbol. Far away it hands over to the dot
+              // below, so a dense region does not smear into one blob.
+              displayRange: [0, GHOST_SYMBOL_MAX_DISTANCE_M],
+            };
+            const dot = {
+              id: `${id}:dot`,
+              pos: position,
+              pixelSize: GHOST_DOT_SIZE_PX,
+              color: hexColor(GHOST_DOT_COLOR, 0.9),
+              outlineColor: hexColor('#041016', 0.9),
+              outlineWidth: 1,
+              disableDepthTest: Number.POSITIVE_INFINITY,
+              displayRange: [
+                GHOST_SYMBOL_MAX_DISTANCE_M,
+                Number.POSITIVE_INFINITY,
+              ],
             };
             const slot = icons.push(item) - 1;
+            dots.push(dot);
             itemIds.icons.push(id);
-            // What the horizon cull turns: the icon as it draws now, in its
-            // edition's icon set once mounted.
+            itemIds.dots.push(`${id}:dot`);
+            // What the horizon cull turns: the symbol and its dot together, as
+            // they draw now, in their edition's sets once mounted.
             pins.push({
               index,
               position,
               set: null,
+              dotSet: null,
               get item() {
                 return icons[slot];
+              },
+              get dotItem() {
+                return dots[slot];
               },
               get show() {
                 return icons[slot].show !== false;
               },
               set show(value) {
                 icons[slot] = { ...icons[slot], show: value };
+                dots[slot] = { ...dots[slot], show: value };
               },
             });
           } else if (geometry.type === 'line') {
@@ -489,15 +470,13 @@ export function createGhostMapsLayer({
       return {
         version: product.version,
         ageDays,
-        items: { icons, lines, shapes },
+        items: { icons, dots, lines, shapes },
         sets: null,
-        urls,
         features,
         pins,
       };
-    } catch (error) {
-      urls.forEach((url) => URL.revokeObjectURL(url));
-      throw error;
+    } finally {
+      entries.clear();
     }
   }
 
@@ -523,7 +502,6 @@ export function createGhostMapsLayer({
         try {
           const next = await load(product, signal);
           if (signal.aborted || !_enabled || next.ageDays !== _ageDays) {
-            next.urls.forEach((url) => URL.revokeObjectURL(url));
             return;
           }
           // Cull before the first frame so far-side pins never flash.

@@ -8,6 +8,7 @@ import {
 import { getRegisteredTransitFeed } from '../../data/transitFeeds.js';
 import { inputFor } from '../../input/dispatcher.js';
 import { t } from '../../i18n/index.js';
+import { transitStationIdFromPick } from './stationModel.js';
 
 /**
  * Click-to-select one vehicle and a card that follows it.
@@ -113,6 +114,8 @@ export function createSelection({ state, services, parts }) {
    * selects without it.
    */
   function selectVehicle(key, { byUser = false } = {}) {
+    // A vehicle card and a station card share one slot.
+    parts.stations?.clearStationSelection();
     clearSelection();
     const entry = state._vehicles.get(key);
     if (!entry?.marker) return;
@@ -128,7 +131,9 @@ export function createSelection({ state, services, parts }) {
   function onKeyDown(event) {
     // While a first-person view rides the vehicle, Escape is the view's.
     if (state._cockpitSubjectKey) return;
-    if (event.key === 'Escape' && state._selectedKey) clearSelection();
+    if (event.key !== 'Escape') return;
+    if (state._selectedKey) clearSelection();
+    parts.stations?.clearStationSelection();
   }
 
   function installClickHandler(viewer) {
@@ -155,7 +160,14 @@ export function createSelection({ state, services, parts }) {
         selectVehicle(key, { byUser: true });
         return;
       }
+      // A station pin is an item of the station set, by its pick id.
+      const stationId =
+        hit?.set && hit.set === state._stationPoints?.id
+          ? transitStationIdFromPick(hit.id)
+          : null;
+      if (stationId && parts.stations.selectStation(stationId)) return;
       if (state._selectedKey) clearSelection();
+      parts.stations.clearStationSelection();
     });
     document.addEventListener('keydown', onKeyDown);
   }

@@ -4,6 +4,7 @@ import { deflateRawSync } from 'node:zlib';
 import { spawnSync } from 'node:child_process';
 import {
   GeoImportError,
+  applyKmlIconTint,
   repairKmlRootNamespaces,
   loadGeoFile,
   MAX_IMPORT_POSITIONS,
@@ -595,6 +596,49 @@ const serializeStyle = (el) =>
     children: el.childNodes.map(serializeStyle),
   });
 
+// The import feature parses and shares a document with the browser's own
+// XML tools, which Node does not have. A test that runs the whole import
+// gives it a document of its own, and the tools to read it.
+//
+// The document the harness builds answers `getElementsByTagName` with the
+// whole tree whatever the name is, so the parser's own check for a
+// `parsererror` would find one. The wrapper answers a name as the tree it
+// really is, and nothing for any other name.
+function withXmlTools(t, document) {
+  const previous = {
+    parser: Object.getOwnPropertyDescriptor(globalThis, 'DOMParser'),
+    serializer: Object.getOwnPropertyDescriptor(globalThis, 'XMLSerializer'),
+  };
+  const wrapped = {
+    documentElement: document.documentElement,
+    createElementNS: document.createElementNS,
+    getElementsByTagName(name) {
+      return name === '*'
+        ? document.getElementsByTagName('*')
+        : document
+            .getElementsByTagName('*')
+            .filter((el) => el.localName === name);
+    },
+  };
+  globalThis.DOMParser = class {
+    parseFromString() {
+      return wrapped;
+    }
+  };
+  globalThis.XMLSerializer = class {
+    serializeToString(el) {
+      return serializeStyle(el);
+    }
+  };
+  t.after(() => {
+    for (const [name, descriptor] of Object.entries(previous)) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else delete globalThis[name];
+    }
+  });
+  return wrapped;
+}
+
 test('repeated inline styles are shared without replacing their inherited styleUrl', () => {
   const style = () =>
     xmlEl('Style', {}, [xmlEl('IconStyle', {}, [xmlEl('scale', {}, '0.6')])]);
@@ -1175,6 +1219,109 @@ test('KML namespace repair skips doctype comments and processing instructions wh
   }
   const unterminated = '<!DOCTYPE kml [<!-- open <kml xmlns:gx="a">';
   assert.equal(repairKmlRootNamespaces(unterminated), unterminated);
+});
+
+// The tint an imported icon is drawn with. An ArcGIS export writes the
+// placeholder `ff000000` into its `<IconStyle>`, and Cesium's own KML loader
+// tints the icon with it: a KMZ that packs its own coloured PNG is then drawn
+// black, and on a dark globe it cannot be seen.
+test('an imported icon whose style carries the ArcGIS placeholder is not tinted black', () => {
+  const color = xmlEl('color', {}, 'ff000000');
+  const iconStyle = xmlEl('IconStyle', {}, [
+    color,
+    xmlEl('Icon', {}, [xmlEl('href', {}, 'files/marker.png')]),
+  ]);
+  const doc = xmlDoc(xmlEl('kml', {}, [iconStyle]));
+  const result = applyKmlIconTint(doc);
+  // The placeholder is taken out of the document, so the loader tints the
+  // icon with nothing at all and the packed artwork shows as it was drawn.
+  assert.equal(result.untinted, 1);
+  assert.equal(result.tinted, 0);
+  assert.equal(
+    iconStyle.childNodes.some((node) => node.localName === 'color'),
+    false,
+  );
+});
+
+test('the transparent placeholder is a placeholder too, and hides nothing', () => {
+  const iconStyle = xmlEl('IconStyle', {}, [
+    xmlEl('color', {}, '00000000'),
+    xmlEl('Icon', {}, [xmlEl('href', {}, 'files/marker.png')]),
+  ]);
+  const doc = xmlDoc(xmlEl('kml', {}, [iconStyle]));
+  assert.equal(applyKmlIconTint(doc).untinted, 1);
+  assert.equal(
+    iconStyle.childNodes.some((node) => node.localName === 'color'),
+    false,
+  );
+});
+
+test('a genuine colour still tints the icon as the file asks', () => {
+  const color = xmlEl('color', {}, 'ff0000ff');
+  const iconStyle = xmlEl('IconStyle', {}, [
+    color,
+    xmlEl('Icon', {}, [xmlEl('href', {}, 'files/marker.png')]),
+  ]);
+  const doc = xmlDoc(xmlEl('kml', {}, [iconStyle]));
+  const result = applyKmlIconTint(doc);
+  assert.equal(result.tinted, 1);
+  assert.equal(result.untinted, 0);
+  // The colour is kept: a red icon is still a red icon.
+  assert.equal(color.textContent, 'ff0000ff');
+});
+
+test('a colour too faint to see cannot hide an imported marker', () => {
+  // A quarter opaque is lifted to the floor of 0.35.
+  const faint = xmlEl('color', {}, '400000ff');
+  const invisible = xmlEl('color', {}, '000000ff');
+  const doc = xmlDoc(
+    xmlEl('kml', {}, [
+      xmlEl('IconStyle', {}, [faint]),
+      xmlEl('IconStyle', {}, [invisible]),
+    ]),
+  );
+  const result = applyKmlIconTint(doc);
+  assert.equal(result.tinted, 2);
+  // 0x59 is 89/255, which is the floor of 0.35.
+  assert.equal(faint.textContent, '590000ff');
+  assert.equal(invisible.textContent, '590000ff');
+});
+
+test('a style with no icon of its own keeps the colour the loader gives it', () => {
+  // No `<Icon>`: the loader draws its own pin, which a black tint would
+  // turn black. The placeholder is taken out of the document, so the pin
+  // keeps the colour the loader gives it.
+  const iconStyle = xmlEl('IconStyle', {}, [xmlEl('color', {}, 'ff000000')]);
+  const doc = xmlDoc(xmlEl('kml', {}, [iconStyle]));
+  assert.equal(applyKmlIconTint(doc).untinted, 1);
+  assert.equal(
+    iconStyle.childNodes.some((node) => node.localName === 'color'),
+    false,
+  );
+});
+
+test('a random colour mode keeps its seed, and only its alpha is floored', () => {
+  const color = xmlEl('color', {}, '000000ff');
+  const iconStyle = xmlEl('IconStyle', {}, [
+    xmlEl('colorMode', {}, 'random'),
+    color,
+  ]);
+  const doc = xmlDoc(xmlEl('kml', {}, [iconStyle]));
+  assert.equal(applyKmlIconTint(doc).tinted, 1);
+  // The seed keeps its hue; only the alpha it would draw with is lifted.
+  assert.equal(color.textContent, '590000ff');
+});
+
+test('the colours of a label and a line are left alone', () => {
+  // Only an `<IconStyle>` tints an icon. A label and a line have their own
+  // colours, and a placeholder in them is not this fix's business.
+  const label = xmlEl('LabelStyle', {}, [xmlEl('color', {}, 'ff000000')]);
+  const line = xmlEl('LineStyle', {}, [xmlEl('color', {}, 'ff000000')]);
+  const doc = xmlDoc(xmlEl('kml', {}, [label, line]));
+  assert.equal(applyKmlIconTint(doc).tinted, 0);
+  assert.equal(applyKmlIconTint(doc).untinted, 0);
+  assert.equal(label.childNodes[0].textContent, 'ff000000');
+  assert.equal(line.childNodes[0].textContent, 'ff000000');
 });
 
 test('KML namespace repair ignores declaration text inside quoted attribute values', () => {

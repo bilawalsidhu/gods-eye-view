@@ -667,6 +667,31 @@
   content: '∞';
 }
 :root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='s2-ghostmaps']
+  .data-icon::before {
+  content: '◬';
+}
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='vigicrues-floods']
+  .data-icon::before {
+  content: '∿';
+}
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='ign-geoplateforme']
+  .data-icon::before {
+  content: '⊞';
+}
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='entsoe-grid']
+  .data-icon::before {
+  content: '⌁';
+}
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='copernicus-ems']
+  .data-icon::before {
+  content: '⊕';
+}
+:root[data-ui-theme='cyber']
   .data-toggle-row[data-layer-id='cctv']
   .data-icon::before {
   content: '◉';

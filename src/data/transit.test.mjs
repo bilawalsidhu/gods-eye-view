@@ -220,6 +220,8 @@ test('the layer accepts a manager handle for out-of-tick panel repaints', () => 
 test('stats before enable are an honest zero, not a fake feed state', () => {
   const stats = transitLayer.getStats();
   assert.equal(stats.count, 0);
-  assert.equal(stats.source, 'GTFS-RT');
+  // The Transit row covers the live fleet AND the French passenger-
+  // station network, so it names both in its source line.
+  assert.equal(stats.source, 'GTFS-RT · SNCF');
   assert.equal(stats.error, null);
 });

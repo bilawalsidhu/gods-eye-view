@@ -578,6 +578,24 @@ const RAW_GBFS_CITY_REGISTRY = [
       'https://api.cyclocity.fr/contracts/lillestrom/gbfs/station_status.json',
     provider: 'Bysykkel Lillestrøm',
   },
+  // Vélib' Métropole covers Paris and the surrounding communes (the inner and
+  // outer suburbs), so the centre sits on Paris proper and the radius reaches
+  // the whole conurbation rather than the city boundary. 40 km matches the
+  // metropolitan European entries above (Lillestrøm, Bicing, AMBici) and still
+  // covers the furthest Vélib' communes (Versailles, Saint-Germain-en-Laye,
+  // Marne-la-Vallée) from the centre.
+  {
+    id: 'paris-velib',
+    city: 'Paris, France',
+    centerLat: 48.8566,
+    centerLon: 2.3522,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://velib-metropole-opendata.smovengo.cloud/opendata/Velib_Metropole/station_information.json',
+    stationStatusUrl:
+      'https://velib-metropole-opendata.smovengo.cloud/opendata/Velib_Metropole/station_status.json',
+    provider: "Vélib' Métropole",
+  },
   {
     id: 'barcelona-bicing',
     city: 'Barcelona, Spain',

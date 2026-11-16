@@ -16,6 +16,11 @@ import { radioBrowserProxy } from './radio.js';
 import { gbfsProxy } from './gbfs.js';
 import { localReceiversProxy } from './local-receivers.js';
 import { transitProxy } from './transit.js';
+import { sncfProxy } from './sncf.js';
+import { vigicruesProxy } from './vigicrues.js';
+import { ignGeoplateformeProxy } from './ignGeoplateforme.js';
+import { entsoeProxy } from './entsoe.js';
+import { copernicusEmsProxy } from './copernicusEms.js';
 import { railProxy } from './rail.js';
 import { adsbLolProxy } from './aircraft/adsb-lol.js';
 import { aisLiveProxy } from './vessels/ais-live.js';
@@ -36,6 +41,7 @@ import { inaturalistProxy } from './inaturalist/observations.js';
 import { acartiaProxy } from './acartia.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
+import { platformProxy } from '../platform/health.js';
 import { libraryProxy } from './library.js';
 
 /**
@@ -73,6 +79,11 @@ function localProviderPlugins({
     gbfsProxy(),
     localReceiversProxy(),
     transitProxy(),
+    sncfProxy(),
+    vigicruesProxy(),
+    ignGeoplateformeProxy(),
+    entsoeProxy(),
+    copernicusEmsProxy(),
     railProxy(),
     adsbLolProxy(),
     aisLiveProxy(),
@@ -88,6 +99,7 @@ function localProviderPlugins({
     gnssIntegrityProxy(),
     libraryProxy(),
     ghostMapsProxy(),
+    platformProxy(),
     shipwrecksProxy(),
     droneAirspaceProxy(),
     newsProxy(),

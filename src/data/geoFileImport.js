@@ -1,5 +1,11 @@
 /** Session-local geodata loading with bounded geometry and local-only file references. */
 import { createImportImageBudget } from './geoImportImages.js';
+import {
+  formatKmlColor,
+  kmlColor,
+  kmlTintColor,
+  markerTintAlpha,
+} from './kmlTint.js';
 import { readGeoJsonFeatures, readKmlFeatures } from './geoImportFeatures.js';
 import { settleImportedDrawing } from './geoImportPins.js';
 import {
@@ -635,6 +641,73 @@ const childText = (el, localName) =>
   (childrenNamed(el, localName)[0]?.textContent || '').trim();
 
 /**
+ * The tint an imported placemark's icon is drawn with, decided from the
+ * `<color>` its KML style carries.
+ *
+ * WHY THIS IS NEEDED: Cesium's own KML loader tints a placemark's icon with
+ * whatever colour the `<IconStyle>` carries (`KmlDataSource.js`, `billboard.color
+ * = color`). An ArcGIS export writes `ff000000` into its `<IconStyle>` — a
+ * PLACEHOLDER that means "use the product's own colour", not a request for a
+ * black marker. The loader cannot tell the difference, so it tints the icon
+ * black. A KMZ that packs its own coloured PNG is then drawn as a black
+ * smudge, and on a dark globe it cannot be seen at all.
+ *
+ * THE THREE RULES, all of them from `kmlTint.js` (the Ghost Maps layer obeys
+ * the same ones):
+ *
+ *   1. a placeholder colour (near-black, near-white) tints NOTHING: the
+ *      artwork a file packs shows as it was drawn, and a marker with no
+ *      artwork of its own keeps the colour the loader gives it;
+ *   2. a colour that says something still tints, as the file asks;
+ *   3. no tint is ever fainter than the floor, so a colour too faint to see
+ *      cannot hide a marker.
+ *
+ * The tint is decided here, on the document, so the loader applies it and
+ * every consumer of the loaded data source sees the same marker.
+ *
+ * @param {Document} doc A sanitized KML document.
+ * @returns {{tinted: number, untinted: number}} How many icon styles keep a
+ *   tint, and how many were left with none.
+ */
+export function applyKmlIconTint(doc) {
+  let tinted = 0;
+  let untinted = 0;
+  for (const iconStyle of elementsNamed(doc, 'IconStyle')) {
+    const color = childrenNamed(iconStyle, 'color')[0];
+    if (!color) continue;
+    const value = (color.textContent || '').trim();
+    if (!value) continue;
+    // A random colour mode is an explicit choice: the colour is a seed the
+    // loader randomizes, so it is kept. Only its alpha is floored, because
+    // the seed's alpha IS the alpha the loader draws with.
+    const random =
+      childrenNamed(iconStyle, 'colorMode')[0]?.textContent.trim() === 'random';
+    if (random) {
+      const seed = kmlColor(value);
+      if (!seed) continue;
+      const alpha = markerTintAlpha(seed[3]);
+      if (alpha === seed[3]) continue;
+      color.textContent = formatKmlColor([seed[0], seed[1], seed[2], alpha]);
+      tinted += 1;
+      continue;
+    }
+    const tint = kmlTintColor(value);
+    if (!tint) {
+      // The colour is a placeholder: the icon is drawn untinted.
+      color.parentNode?.removeChild(color);
+      untinted += 1;
+      continue;
+    }
+    // The colour says something: the icon keeps a tint. It is written back
+    // only when the alpha had to be lifted.
+    if (tint !== value.replace(/^#/, '').toLowerCase())
+      color.textContent = tint;
+    tinted += 1;
+  }
+  return { tinted, untinted };
+}
+
+/**
  * Share identical styles before the features are read. Inline
  * overrides stay inline StyleMaps, so an existing styleUrl still supplies
  * properties the override leaves unset. Named references are redirected.
@@ -1173,6 +1246,10 @@ export async function loadGeoFile(
       checkLocalImages(doc, entries, main);
       removed = sanitizeKmlDocument(doc, resolveLocal).removed;
       entries?.clear();
+      // The tint an icon is drawn with is settled on the document, before the
+      // loader reads it: a placeholder colour must not blacken an icon that
+      // carries its own artwork.
+      applyKmlIconTint(doc);
       deduplicateKmlStyles(doc);
       const normalizedSize = countKmlGeometry(doc);
       if (normalizedSize.over) throw overLimitError(normalizedSize);

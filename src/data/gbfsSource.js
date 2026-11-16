@@ -12,6 +12,9 @@ const GBFS_ALLOWED_HOSTS = new Set([
   'gbfs.urbansharing.com',
   'api.entur.io',
   'api.cyclocity.fr',
+  // Vélib' Métropole (Paris docked bike share): the operator's own GBFS 2.x
+  // feed, published under Licence Ouverte and reachable without a key.
+  'velib-metropole-opendata.smovengo.cloud',
 ]);
 
 /**

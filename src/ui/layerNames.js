@@ -49,6 +49,10 @@ export const LAYER_NAME_KEYS = Object.freeze({
   'air-quality': msg('Air quality'),
   directions: msg('Directions'),
   'alpr-cameras': msg('ALPR Cameras'),
+  'vigicrues-floods': msg('Flood Warnings'),
+  'ign-geoplateforme': msg('IGN Plan IGN'),
+  'entsoe-grid': msg('European Grid'),
+  'copernicus-ems': msg('Copernicus EMS'),
   'sea-marks': msg('Sea Marks'),
   'ski-pistes': msg('Ski Pistes'),
 });

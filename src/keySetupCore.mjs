@@ -146,6 +146,16 @@ export const KEY_SETUP_KEYS = Object.freeze([
     clientExposed: true,
   }),
   Object.freeze({
+    id: 'entsoe',
+    title: 'ENTSO-E', // i18n-ignore: provider product name
+    unlocks: msg(
+      'European electricity load and day-ahead prices (Transparency Platform)',
+    ),
+    getUrl: 'https://transparency.entsoe.eu/profile',
+    envVars: Object.freeze(['ENTSOE_TOKEN']),
+    tier: 'free',
+  }),
+  Object.freeze({
     id: 'launch-library',
     title: 'LAUNCH LIBRARY', // i18n-ignore: provider product name
     unlocks: msg(
@@ -154,6 +164,36 @@ export const KEY_SETUP_KEYS = Object.freeze([
     getUrl: 'https://thespacedevs.com/supportus',
     envVars: Object.freeze(['LL2_API_TOKEN']),
     tier: 'paid',
+  }),
+  Object.freeze({
+    id: 'gtfs',
+    title: 'GTFS / GTFS-REALTIME', // i18n-ignore: provider product name
+    unlocks: msg(
+      'Scheduled timetables and live vehicle positions from the global GTFS catalog. The key is required.',
+    ),
+    getUrl: 'https://mobilitydatabase.org/sign-up',
+    envVars: Object.freeze(['GTFS_API_KEY']),
+    tier: 'free',
+  }),
+  Object.freeze({
+    id: 'idfm-prim',
+    title: 'ÎLE-DE-FRANCE MOBILITÉS PRIM', // i18n-ignore: provider product name
+    unlocks: msg(
+      'Paris-region next departures, traffic messages and itinerary data from the PRIM API catalog. The key is required.',
+    ),
+    getUrl: 'https://prim.iledefrance-mobilites.fr/en/apis',
+    envVars: Object.freeze(['IDFM_PRIM_API_KEY']),
+    tier: 'free',
+  }),
+  Object.freeze({
+    id: 'platform-database',
+    title: 'DATA PLATFORM', // i18n-ignore: product name
+    unlocks: msg(
+      'Keeps events, places and their history in your own PostGIS database. Paste the password you gave the platform database and its connection URL (postgres://gev:<password>@postgres:5432/gev inside Docker, 127.0.0.1 instead of postgres from the host). Use letters and digits in the password.',
+    ),
+    getUrl: 'https://hub.docker.com/r/postgis/postgis',
+    envVars: Object.freeze(['GEV_DB_PASSWORD', 'GEV_DATABASE_URL']),
+    tier: 'free',
   }),
 ]);
 
@@ -188,8 +228,44 @@ function isTrustedPeerAddress(remoteAddress, env) {
     .some((entry) => entry.trim() !== '' && normalize(entry) === address);
 }
 
-/** Parse an exact local request authority from a Host header. */
-function localAuthority(hostHeader, protocol) {
+/**
+ * Whether a hostname is one the operator has explicitly declared this machine
+ * may answer Provider Settings under, through GEV_KEY_SETUP_TRUSTED_HOSTS:
+ * a comma-separated list of EXACT hostnames, never wildcards, prefixes or
+ * host:port pairs. Unset trusts nothing beyond the built-in loopback names.
+ *
+ * The built-in names stay accepted whatever this says — this only ADDS
+ * hostnames, it never removes one. The shipped use is a fork-local dev
+ * instance reached over a private network under a real hostname: a browser on
+ * another machine sends that hostname in its Host header, and the hard-coded
+ * loopback list would refuse it even though the socket check already
+ * admitted the peer. Admitting a hostname relaxes nothing else: the sharing,
+ * socket, Origin, Content-Type and proxy-header checks all still apply.
+ *
+ * The list holds HOSTNAMES only, never ports: the authority is compared as an
+ * origin (scheme, host and port together), so a port here could never match.
+ */
+function isTrustedHostname(hostname, env) {
+  const name = String(hostname || '')
+    .trim()
+    .toLowerCase();
+  if (!name) return false;
+  return String(env?.GEV_KEY_SETUP_TRUSTED_HOSTS || '')
+    .split(',')
+    .some(
+      (entry) => entry.trim() !== '' && entry.trim().toLowerCase() === name,
+    );
+}
+
+/**
+ * Parse an exact local request authority from a Host header.
+ *
+ * The hostname must be one of the built-in loopback names or one the
+ * operator declared in GEV_KEY_SETUP_TRUSTED_HOSTS. The port is NOT part of
+ * the decision — it is carried in the returned origin, which the caller then
+ * compares exactly against the request's Origin.
+ */
+function localAuthority(hostHeader, protocol, env) {
   const raw = String(hostHeader || '')
     .trim()
     .toLowerCase();
@@ -198,7 +274,8 @@ function localAuthority(hostHeader, protocol) {
     return null;
   try {
     const parsed = new URL(`${scheme}//${raw}`);
-    return LOCAL_HOSTNAMES.has(parsed.hostname.toLowerCase())
+    const hostname = parsed.hostname.toLowerCase();
+    return LOCAL_HOSTNAMES.has(hostname) || isTrustedHostname(hostname, env)
       ? parsed.origin
       : null;
   } catch {
@@ -290,7 +367,9 @@ export function isSharingEnabled(env = {}) {
  *    only exception is an exact address listed in
  *    GEV_KEY_SETUP_TRUSTED_PEERS, and every check below still applies to it;
  *  - local Host header: tunnel and DNS-rebinding traffic carries a foreign
- *    Host even when the socket says loopback;
+ *    Host even when the socket says loopback. The only exception is an exact
+ *    hostname listed in GEV_KEY_SETUP_TRUSTED_HOSTS, and every check below
+ *    still applies to it;
  *  - exact same Origin on POST: a hostile web page can make a browser POST to
  *    localhost, and a non-browser caller must not bypass that boundary merely
  *    by omitting the header;
@@ -353,7 +432,7 @@ export function admitKeySetupRequest({
       code: 'not-loopback',
     };
   }
-  const authority = localAuthority(hostHeader, protocol);
+  const authority = localAuthority(hostHeader, protocol, env);
   if (!authority) {
     return {
       ok: false,

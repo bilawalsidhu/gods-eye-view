@@ -16,6 +16,7 @@ output/
 .gev-cache/
 # Local build output, e.g. rail path packs (scripts/build-rail-paths.mjs).
 .cache/
+.gev-backups/
 # Browser QA gate evidence (screenshots, console and network dumps).
 qa-artifacts/
 # Playwright MCP session logs: browser consoles can carry tokens in URLs.

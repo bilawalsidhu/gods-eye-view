@@ -61,7 +61,10 @@
     "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs",
     "qa:transit": "node scripts/qa-transit.mjs",
     "qa:data-library": "node scripts/qa-data-library.mjs",
-    "mcp": "node server/mcp/stdio.js"
+    "mcp": "node server/mcp/stdio.js",
+    "platform:migrate": "node scripts/platform-migrate.mjs",
+    "platform:backup": "bash scripts/platform-backup.sh",
+    "platform:restore-test": "bash scripts/platform-restore-test.sh"
   },
   "dependencies": {
     "@jtarrio/signals": "^0.10.0",
@@ -78,6 +81,7 @@
     "mapillary-js": "^4.1.2",
     "mgrs": "^2.1.0",
     "pbf": "^5.1.2",
+    "pg": "^8.23.1",
     "pinia": "^2.3.1",
     "satellite.js": "^6.0.2",
     "vue": "^3.5.44",

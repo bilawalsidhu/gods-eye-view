@@ -203,8 +203,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 39);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 39);
+  assert.equal(REGISTERED_LAYER_IDS.length, 43);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 43);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.deepEqual(LEGACY_LAYER_STATE_TOKENS, {
@@ -243,14 +243,21 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   for (const [id, token] of Object.entries(LEGACY_LAYER_STATE_TOKENS)) {
     assert.equal(LAYER_STATE_TOKEN_RESERVATIONS[id], token);
   }
-  // News holds 00, Shipwrecks 01 and Rail 02, the first pairs: the next token
-  // is 03.
-  assert.equal(nextLayerStateToken(), '03');
+  // News holds 00, Shipwrecks 01, Rail 02 and the four French public-data
+  // layers 03-06, the first pairs: the next token is 07.
+  assert.equal(nextLayerStateToken(), '07');
   // The allocation rules below read the ledger before any of them took a pair.
   const beforeNews = { ...LAYER_STATE_TOKEN_RESERVATIONS };
   delete beforeNews.news;
   delete beforeNews.shipwrecks;
   delete beforeNews.rail;
+  for (const id of [
+    'vigicrues-floods',
+    'entsoe-grid',
+    'copernicus-ems',
+    'ign-geoplateforme',
+  ])
+    delete beforeNews[id];
   assert.equal(nextLayerStateToken(beforeNews), '00');
   assert.equal(
     nextLayerStateToken({

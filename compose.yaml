@@ -10,6 +10,10 @@ services:
     environment:
       - GEV_KEY_SETUP_TRUSTED_PEERS
       - GEV_ALLOWED_HOSTS
+      # Optional data platform (docs/platform). Unset keeps the app exactly as
+      # it was. With the `platform` profile up, use:
+      #   postgres://gev:<GEV_DB_PASSWORD>@postgres:5432/gev
+      - GEV_DATABASE_URL
     ports:
       # Publish to loopback only. Docker's default ("4173:4173") would bind
       # every host interface, which quietly turns the LAN warning in the README
@@ -27,3 +31,30 @@ services:
       # reports the launcher as "Cannot find module". Elsewhere it is ignored.
       - .:/app:z
       - /app/node_modules
+
+  # The data platform's database. Off unless you ask for it:
+  #   docker compose --profile platform up -d postgres
+  # Set GEV_DB_PASSWORD in .env first. It is deliberately not defaulted: an
+  # empty password makes the image refuse to initialise, which is the failure
+  # we want. Published to loopback only; the app reaches it over the compose
+  # network as `postgres:5432`.
+  postgres:
+    profiles: ["platform"]
+    image: postgis/postgis:16-3.5
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gev
+      POSTGRES_DB: gev
+      POSTGRES_PASSWORD: ${GEV_DB_PASSWORD:-}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - gev-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gev -d gev"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+volumes:
+  gev-pgdata:

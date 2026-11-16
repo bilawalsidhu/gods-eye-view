@@ -15,8 +15,10 @@ test('Chinese HUD and cockpit units keep their case without spacing coordinates'
     assert.equal(hudQuantity(0, 'km'), '0 km');
     assert.equal(hudQuantity(2069, 'km', 1), '2069.0 km');
     assert.equal(formatCockpitDistance(14000), '14\u00a0km');
-    assert.equal(LOCALIZED_LOCALITY.sector({ latDeg: 21.33, lonDeg: -77.5 }),
-      '扇区 21.33N 77.50W');
+    assert.equal(
+      LOCALIZED_LOCALITY.sector({ latDeg: 21.33, lonDeg: -77.5 }),
+      '扇区 21.33N 77.50W',
+    );
     setLocale('ja');
     assert.equal(hudQuantity(13, 'km'), '13 km');
     assert.equal(hudQuantity(1.5, 'km', 1), '1.5 km');
@@ -37,7 +39,11 @@ test('FIRMS stale cache age uses localized durations while English stays compact
   };
   const { methods } = createQueries({ layerState, components, config: {} });
   try {
-    for (const [hours, zh, en] of [[0.5, '不到 1 小时', '<1h'], [2, '2 小时', '2h'], [72, '3 天', '3d']]) {
+    for (const [hours, zh, en] of [
+      [0.5, '不到 1 小时', '<1h'],
+      [2, '2 小时', '2h'],
+      [72, '3 天', '3d'],
+    ]) {
       layerState._lastUpdate = now - hours * 3600000;
       setLocale('zh-CN');
       const expected = t('STALE · cached {age}', { age: zh });
@@ -67,7 +73,12 @@ test('Recent Imagery spaces numeric Chinese ages and retains natural relative da
 
 test('CCTV translates the healthy status and preserves unknown provider codes', () => {
   try {
-    for (const [locale, expected] of [['zh-CN', '正常'], ['ru', 'НОРМА'], ['es', 'OK'], ['en', 'OK']]) {
+    for (const [locale, expected] of [
+      ['zh-CN', '正常'],
+      ['ru', 'НОРМА'],
+      ['es', 'OK'],
+      ['en', 'OK'],
+    ]) {
       setLocale(locale);
       assert.equal(cctvSourceStatusLabel('ok'), expected);
       assert.equal(cctvSourceStatusLabel('CUSTOM'), 'CUSTOM');
@@ -80,14 +91,23 @@ test('CCTV translates the healthy status and preserves unknown provider codes', 
 test('radio option text and accessible name use the same localized parentheses', () => {
   const originalDocument = globalThis.document;
   const element = () => ({
-    style: {}, dataset: {}, attributes: {},
+    style: {},
+    dataset: {},
+    attributes: {},
     classList: { contains: () => true, toggle() {} },
-    setAttribute(name, value) { this.attributes[name] = value; },
-    replaceChildren(...children) { this.children = children; },
+    setAttribute(name, value) {
+      this.attributes[name] = value;
+    },
+    replaceChildren(...children) {
+      this.children = children;
+    },
   });
   globalThis.document = { createElement: element, getElementById: () => null };
   try {
-    for (const [locale, label, expected] of [['zh-CN', '全部', '全部（750）'], ['en', 'All', 'All (750)']]) {
+    for (const [locale, label, expected] of [
+      ['zh-CN', '全部', '全部（750）'],
+      ['en', 'All', 'All (750)'],
+    ]) {
       setLocale(locale);
       let shown = null;
       const host = {
@@ -96,8 +116,12 @@ test('radio option text and accessible name use the same localized parentheses',
         actions: { getLifecycle: () => null, scheduleLayout() {} },
       };
       renderRadioState.call(host, {
-        enabled: true, categories: [{ id: 'all', label, count: 750, color: '' }],
-        filter: 'all', filteredCount: 750, stationCount: 750, volume: 1,
+        enabled: true,
+        categories: [{ id: 'all', label, count: 750, color: '' }],
+        filter: 'all',
+        filteredCount: 750,
+        stationCount: 750,
+        volume: 1,
       });
       // The Radio panel shows it as `● label` and names the option `label`.
       assert.equal(shown.filter.options[0].label, expected);

@@ -1,5 +1,9 @@
 import { destroyTrack } from '../../data/contactPlayback.js';
 import { TRANSIT_SELECTED_OVERLAY_SOURCE_ID } from './policy.js';
+import {
+  TRANSIT_STATIONS_OVERLAY_SOURCE_ID,
+  transitStationIdFromPick,
+} from './stationModel.js';
 import { TRANSIT_ENABLED_FEEDS } from '../../data/transitFeeds.js';
 
 /**
@@ -81,7 +85,10 @@ export function createLifecycle({ state, services, parts }) {
     id: 'transit',
     name: 'Transit',
     icon: '🚌',
-    source: 'GTFS-RT',
+    // The row covers BOTH the live GTFS-RT fleet and the French rail
+    // network's passenger stations. The meta line is narrow, so the source
+    // stays two short tokens joined by a separator, with no parenthetical.
+    source: 'GTFS-RT · SNCF',
 
     /**
      * Create the point collection. Called once at bootstrap.
@@ -90,6 +97,12 @@ export function createLifecycle({ state, services, parts }) {
     init(viewer) {
       state._viewer = viewer;
       parts.rendering.createMarkers(viewer);
+      // The station network is a SECOND display the Transit row owns: the
+      // live fleet's icon sets and the French rail network's station pins,
+      // side by side on one row.
+      parts.stations.createPins(viewer);
+      state._stationUpdatedAt = null;
+      state._overlayHost.setVisible(TRANSIT_STATIONS_OVERLAY_SOURCE_ID, false);
       state._enabled = false;
       state._activeFeeds.clear();
       state._feedStatus.clear();
@@ -129,13 +142,26 @@ export function createLifecycle({ state, services, parts }) {
       state._generation += 1;
       state._error = null;
       parts.rendering.showMarkers();
+      // The row's chips own which half of the merged row is drawn, so an
+      // enable honours the mode the operator last chose.
+      parts.stations.syncDisplay();
+      // The station catalogue is STATIC: it is read once per enable and
+      // never re-polled, so it does not follow the fleet's camera-driven
+      // proximity gate (a French rail network that only appeared below the
+      // fleet's altitude gate would look broken from a global view).
+      void parts.stations.loadStations();
       state._maintenanceTimer = setInterval(
         parts.rendering.maintainPresentation,
         250,
       );
       state._overlayHost.setVisible(TRANSIT_SELECTED_OVERLAY_SOURCE_ID, true);
       parts.selection.installClickHandler(viewer);
-      registerPickOwner('transit', (pickedId) => state._vehicles.has(pickedId));
+      registerPickOwner(
+        'transit',
+        (pickedId) =>
+          state._vehicles.has(pickedId) ||
+          transitStationIdFromPick(pickedId) !== null,
+      );
       if (!state._cameraChangedAttached) {
         parts.rendering.watchCamera(viewer, parts.viewport.onCameraChanged);
         // Attached only with a camera to listen to, so a later enable retries.
@@ -167,6 +193,9 @@ export function createLifecycle({ state, services, parts }) {
       state._cameraDebounceTimer = null;
       parts.selection.clearSelection();
       state._overlayHost.setVisible(TRANSIT_SELECTED_OVERLAY_SOURCE_ID, false);
+      // A disabled row draws and counts nothing; the next enable reads the
+      // (cached) catalogue again.
+      parts.stations.clearStations();
       parts.selection.removeClickHandler();
       unregisterPickOwner('transit');
       // Unconditional: whatever watching started, none of it outlives this.
@@ -224,6 +253,10 @@ export function createLifecycle({ state, services, parts }) {
       parts.rendering.stopModels(true);
       parts.rendering.destroyMarkers(viewer);
       state._overlayHost.clearSource(TRANSIT_SELECTED_OVERLAY_SOURCE_ID);
+      state._overlayHost.clearSource(TRANSIT_STATIONS_OVERLAY_SOURCE_ID);
+      state._overlayHost.setVisible(TRANSIT_STATIONS_OVERLAY_SOURCE_ID, false);
+      parts.stations.destroyPins();
+      state._stationUpdatedAt = null;
       parts.height.clear();
       unbindStyleEvents();
       state._dataManager = null;

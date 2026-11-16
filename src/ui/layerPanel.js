@@ -70,6 +70,7 @@ const PANEL_GROUPS = [
       'local-datacenters',
       'telegeography-submarine-cables',
       'local-dams',
+      'entsoe-grid',
       'sea-marks',
       'ski-pistes',
     ],
@@ -83,6 +84,7 @@ const PANEL_GROUPS = [
       'fire-perimeters',
       'gnss-integrity',
       's2-ghostmaps',
+      'copernicus-ems',
       'shipwrecks',
       'news',
     ],
@@ -100,6 +102,7 @@ const PANEL_GROUPS = [
       'weather-satellite',
       'weather-lightning',
       'weather-cyclones',
+      'vigicrues-floods',
     ],
   },
   // Directions renders in the Utilities panel, beside Draw and Import, and
@@ -112,6 +115,10 @@ const PANEL_GROUPS = [
   {
     label: msg('Audio'),
     ids: ['radio'],
+  },
+  {
+    label: msg('Reference Maps'),
+    ids: ['ign-geoplateforme'],
   },
 ];
 const PANEL_ORDER = PANEL_GROUPS.flatMap(({ label, ids, containerId }) =>
@@ -663,26 +670,39 @@ export class LayerPanel {
     this._refreshTogglePanel();
   }
 
+  /**
+   * Hand the rail its cards.
+   *
+   * The rail is the ONE host for the readout pattern: every layer whose
+   * descriptor asks for a readout hands its card here, whether it is a
+   * weather product or not. The rail decides the order and the grouping.
+   *
+   * @returns {void}
+   */
   _refreshWeatherPanel() {
     this._weatherPanel?.update(
       this.getAll()
         .filter(
           (layer) =>
-            layer.enabled &&
-            [
-              'wind',
-              'weather-radar',
-              'weather-satellite',
-              'weather-lightning',
-              'weather-cyclones',
-              'air-quality',
-            ].includes(layer.id),
+            layer.enabled && Boolean(this._rowControlsFor(layer.id)?.summary),
         )
-        .map((layer) => ({
-          id: layer.id,
-          icon: layer.icon,
-          ...this._rowControlsFor(layer.id),
-        })),
+        .map((layer) => {
+          const controls = this._rowControlsFor(layer.id);
+          const summary = { ...controls.summary };
+          // A layer that needs a provider key names the key it needs; the
+          // SENTENCE is built here, where the key registry wording lives.
+          // The layer itself never imports a UI helper.
+          if (summary.keyRequirementId) {
+            summary.detail = keyRequirementText(summary.keyRequirementId);
+            delete summary.keyRequirementId;
+          }
+          return {
+            id: layer.id,
+            icon: layer.icon,
+            ...controls,
+            summary,
+          };
+        }),
     );
   }
 
@@ -765,7 +785,13 @@ export class LayerPanel {
         typeof stats.loadingLabel === 'string' && stats.loadingLabel.trim()
           ? translateStatusLine(stats.loadingLabel.trim())
           : t('loading...');
-      return t('{source} · {loadingLabel}', { source, loadingLabel });
+      // A row that is still loading says so in the STATE slot, not in a
+      // fourth segment: the nominal shape stays three short segments.
+      return t('{state} · {source} · {loadingLabel}', {
+        state: stateLabel,
+        source,
+        loadingLabel,
+      });
     }
     if (feedState === 'fallback') {
       const detail =
@@ -819,12 +845,17 @@ export class LayerPanel {
       });
     }
     if (typeof stats.loadingLabel === 'string' && stats.loadingLabel.trim()) {
-      return t('{source} · {loadingLabel}', {
+      return t('{state} · {source} · {loadingLabel}', {
+        state: stateLabel,
         source,
         loadingLabel: translateStatusLine(stats.loadingLabel.trim()),
       });
     }
-    return t('{source} · {ago}', { source, ago });
+    // The nominal row is three short segments: STATE · SOURCE · AGO. The
+    // DETAIL slot is reserved for a feed that is degraded, partial, stale or
+    // erroring, so an operator reads a problem when there is one and never
+    // carries a detail segment they have to learn to ignore.
+    return t('{state} · {source} · {ago}', { state: stateLabel, source, ago });
   }
 
   /** How long before `nowMs` (the layer's world time, else the wall clock). */

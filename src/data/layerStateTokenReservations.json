@@ -37,5 +37,9 @@
   ["weather-radar", "v"],
   ["weather-satellite", "o"],
   ["wildlife-sightings", "9"],
-  ["wind", "k"]
+  ["wind", "k"],
+  ["vigicrues-floods", "03"],
+  ["entsoe-grid", "04"],
+  ["copernicus-ems", "05"],
+  ["ign-geoplateforme", "06"]
 ]
