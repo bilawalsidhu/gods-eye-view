@@ -4,14 +4,15 @@
  * the same tiles, from the same host, that GEV's Esri map draws (and credits
  * on screen); no other host is asked.
  */
+import { ESRI_TILES } from '../maps/globeEngine.js';
+
 const WIDTH = 320;
 const HEIGHT = 180;
 const TILE_SIZE = 256;
 const TILE_TRIES = 3;
 
-/** Esri World Imagery's tiles: Web Mercator, as GEV's Esri map draws them. */
-export const ESRI_TILE_URL =
-  'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+/** Esri World Imagery's tiles: Web Mercator, the ones GEV's Esri map draws. */
+export const ESRI_TILE_URL = ESRI_TILES;
 const ESRI_MAX_LEVEL = 19;
 
 /** A zoom level that frames `range` metres of view, within the imagery's. */

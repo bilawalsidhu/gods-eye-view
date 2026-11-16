@@ -18,7 +18,12 @@ function deferredDirector({ running = false } = {}) {
     running,
     calls,
     listShots: () => [{ id: 'a' }, { id: 'b' }],
-    subscribeSceneClock: () => () => {},
+    // The scene clock's listener, so a test can publish as the director
+    // does after a seek or at a run's end.
+    subscribeSceneClock: (fn) => {
+      director.publish = (snap) => fn({ sceneId: 'scene-1', ...snap });
+      return () => {};
+    },
     stopScene: () => calls.push('stop'),
     whenIdle() {
       return new Promise((resolve) => {
@@ -114,7 +119,11 @@ test('Play from a paused link in the final quarter-second stays in the final sho
   player.seek(59800); // 200 ms before the end of a two-shot scene
   const playing = player.play();
   await turns();
-  assert.equal(player.state.wallMs, 59800, 'the link is not treated as complete');
+  assert.equal(
+    player.state.wallMs,
+    59800,
+    'the link is not treated as complete',
+  );
   assert.equal(director.startAfterShotId, 'a', 'resume in the final shot');
   director.finishRun();
   await playing;
@@ -140,4 +149,43 @@ test('Destroy cancels a waiting Play', async () => {
   director.running = false;
   await playing;
   assert.equal(director.calls.includes('start'), false);
+});
+
+test('in the director’s order, a paused link near the end resumes in its final shot', async () => {
+  const director = deferredDirector();
+  const player = createGevPlayer(director, story);
+  player.seek(59800);
+  // The director reports a seek as seeking, even once it has settled.
+  director.publish({
+    sceneDurationSec: 60,
+    sceneElapsedSec: 59.8,
+    shotIndex: 1,
+    running: false,
+    seeking: true,
+  });
+  assert.equal(player.state.wallMs, 59800, 'not rounded to the end');
+  const playing = player.play();
+  await turns();
+  assert.equal(director.startAfterShotId, 'a', 'resume in the final shot');
+  director.finishRun();
+  await playing;
+});
+
+test('a run that ends on its own is rounded to the end, and Play then starts over', async () => {
+  const director = deferredDirector();
+  const player = createGevPlayer(director, story);
+  // The director reports a run's natural end as stopped, not seeking.
+  director.publish({
+    sceneDurationSec: 60,
+    sceneElapsedSec: 59.9,
+    shotIndex: 1,
+    running: false,
+  });
+  assert.equal(player.state.wallMs, 60000, 'rounded to the end');
+  const playing = player.play();
+  await turns();
+  assert.equal(player.state.wallMs, 0);
+  assert.equal(director.startAfterShotId, null, 'from the first shot');
+  director.finishRun();
+  await playing;
 });

@@ -146,4 +146,15 @@ test('the Stories button sits left of whatever is in the top-right corner', () =
   );
   // Nothing there yet.
   assert.deepEqual(entryPlacement([null, null], 1960), { top: 14, right: 14 });
+  // GEV's phone layout: no readout or avatar; icon-only under the corner
+  // actions column, aligned with its right edge.
+  assert.deepEqual(
+    entryPlacement([box(0, 0, 0, 0), null], 639, box(594, 60, 33, 70)),
+    { top: 138, right: 12, compact: true },
+  );
+  // A visible readout still wins over the column.
+  assert.deepEqual(
+    entryPlacement([box(400, 24, 200, 40), null], 639, box(594, 60, 33, 70)),
+    { top: 24, right: 249 },
+  );
 });

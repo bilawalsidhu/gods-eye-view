@@ -379,7 +379,7 @@
     padding: 0;
     justify-content: center;
   }
-  #gev-stories .scr-story .s-head .h-right .tbtn span {
+  #gev-stories .scr-story .s-head .h-right .tbtn span:not(.share-icon) {
     display: none;
   }
 }
@@ -3562,7 +3562,12 @@
     border-radius: 50%;
     border-color: var(--glass-border-hover);
   }
-  #gev-stories #scrExplore .s-head .h-right .tbtn.hide-m:not(.accent) span {
+  #gev-stories
+    #scrExplore
+    .s-head
+    .h-right
+    .tbtn.hide-m:not(.accent)
+    span:not(.share-icon) {
     display: none;
   }
   #gev-stories #scrExplore .s-head .h-right .tbtn.hide-m:not(.accent) svg {
@@ -3805,10 +3810,13 @@ body.stories-mode:not(#gs-a):not(#gs-b) #gev-credits {
   bottom: var(--gs-credit-bottom, 36px) !important;
   left: var(--gs-credit-left, 36px) !important;
 }
-/* The application's credit list opens just above its line, wherever that is. */
-body.stories-mode:not(#gs-a):not(#gs-b) .gev-credits-panel {
-  bottom: calc(var(--gs-credit-bottom, 36px) + 24px);
-  left: var(--gs-credit-left, 36px);
+/* The application's credit list opens just above its line, wherever that is;
+   on a phone it keeps the application's full-screen list. */
+@media (min-width: 576px) {
+  body.stories-mode:not(#gs-a):not(#gs-b) .gev-credits-panel {
+    bottom: calc(var(--gs-credit-bottom, 36px) + 24px);
+    left: var(--gs-credit-left, 36px);
+  }
 }
 /* On a phone the line wraps and shrinks to stay on screen, as the phone
    shell does outside recording mode. */

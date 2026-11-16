@@ -690,8 +690,11 @@ picked for it in AUTHORING; the topic chips use AUTHORING's tag names and
 order. Explore opens at country level
 (2,500 km) over the first story and, while idle, flies on to the next story
 every few seconds, for a minute after the last touch (never with a story
-picked or with reduced motion). A picked story's place is framed in the
-middle of the view at an angle (−60°). Stories reaches the globe only
+picked or with reduced motion). The start view and a picked story's place
+(at an angle, −60°) are framed in the middle of the map Explore leaves
+visible (`.ex-map`: beside the feed on a wide screen, above the sheet on a
+phone), not of the whole canvas; a flight that lands after that area has
+moved makes one short correction. Stories reaches the globe only
 through the renderer's ports (`src/render/rendererOf.js`): its flights,
 pose and Close's restore go through the camera port, and after each landing
 a continuous-render hold keeps the globe drawing only until the globe port
@@ -746,7 +749,8 @@ Close dismisses the Stories screens and keeps the keyboard and microphone
 guards until the previous view is back. The director is waited
 on until idle (`SceneDirector.whenIdle`: no run and no pending LOAD, seek or
 interaction; at most 15 s). The camera and world clock are put back (a clock
-still where it should be is left alone), unless a
+nothing moved while Stories was open, with no jump and the same mode and
+rate, is left alone), unless a
 camera owner took over during the wait (a drag on the globe, a layer's
 focus). History steps back over Stories' entries; once that lands (or after
 2 s if it never does), the saved share state is re-applied directly
@@ -765,7 +769,9 @@ Inside an inline embed Stories is not offered: the URL and history are the
 host's.
 
 The Stories button sits left of whatever holds GEV's top-right corner: the
-ACTIVE STYLE readout, or GEV Hosted's account avatar. The first-visit popup
+ACTIVE STYLE readout, or GEV Hosted's account avatar. On GEV's phone layout,
+where neither shows, it is icon-only under the corner-actions column
+(`#corner-actions`), aligned with its right edge. The first-visit popup
 is a labelled region that does not take focus. The story page's rail offers
 Open in GEV and Share only. Share on Explore reopens the list with the same
 shipped story selected. A story link opens paused at the shared

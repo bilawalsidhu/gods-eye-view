@@ -1,4 +1,4 @@
-import { markRaw, toRaw } from 'vue';
+import { markRaw, nextTick, toRaw } from 'vue';
 import { t } from '../i18n/index.js';
 import {
   governorRequestRender,
@@ -275,6 +275,7 @@ export function createStoriesController({
         playing: world.playing,
         rate: world.rate,
         stepping: world.stepping,
+        jumps: world.jumps,
       },
       openedAt: Date.now(),
       // Story history entries have no hash. Capture the live globe state.
@@ -306,13 +307,25 @@ export function createStoriesController({
 
   /**
    * The world clock as the person left it: live stays live, and a playing
-   * clock carries on as if Stories had never paused it. A clock still where
-   * it should be is left alone, so its layers see no jump.
+   * clock carries on as if Stories had never paused it. A clock nothing
+   * moved while Stories was open (no jump, same mode and rate) is left
+   * alone, so its layers see no jump.
    */
   function restoreClock(saved) {
     const was = saved?.clock;
     if (!was) return;
     const now = clock.getState();
+    // Nothing moved it while Stories was open (no jump, same mode and
+    // rate): a clock playing at its own pace, held by buffering or stepped
+    // by a driver, is left as it is.
+    if (
+      Number.isFinite(was.jumps) &&
+      now.jumps === was.jumps &&
+      now.live === was.live &&
+      now.playing === was.playing &&
+      now.rate === was.rate
+    )
+      return;
     if (was.live) {
       if (!now.live) clock.goLive();
       return;
@@ -502,18 +515,68 @@ export function createStoriesController({
     holdContinuousRender('stories-tiles');
     tilesTimer = setTimeout(stopSettling, 10000);
   }
-  function flyTo({ lat, lon, alt }, duration = 1.6) {
+  /**
+   * Where the map shows between Explore's own panels (the feed beside it on
+   * a wide screen, its sheet below it on a phone): how far, in pixels, that
+   * area's centre is from the canvas's, and the canvas height.
+   */
+  function visibleOffset() {
+    const map = document
+      .querySelector('#gev-stories .ex-map')
+      ?.getBoundingClientRect();
+    const view = canvas?.getBoundingClientRect?.();
+    if (!map?.width || !map?.height || !view?.height) return null;
+    return {
+      right: map.left + map.width / 2 - (view.left + view.width / 2),
+      up: view.top + view.height / 2 - (map.top + map.height / 2),
+      height: view.height,
+    };
+  }
+  /**
+   * The point to aim at so that (lat, lon) lands in the middle of the visible
+   * map rather than of the whole canvas, for a camera `distance` metres away
+   * looking down at `pitch` (radians) with heading north.
+   */
+  function aimFor(lat, lon, distance, pitch, off = visibleOffset()) {
+    if (!off || (!off.right && !off.up)) return { lat, lon };
+    const fovy = camera()?.pose()?.fovy || Math.PI / 3;
+    const perPx = (2 * distance * Math.tan(fovy / 2)) / off.height;
+    const metresNorth = (off.up * perPx) / Math.max(0.2, Math.sin(-pitch));
+    const metresEast = off.right * perPx;
+    const cosLat = Math.max(0.05, Math.cos((lat * Math.PI) / 180));
+    return {
+      lat: Math.max(-89, Math.min(89, lat - metresNorth / 111320)),
+      lon: lon - metresEast / (111320 * cosLat),
+    };
+  }
+  // The visible map can still be settling while a flight runs (the phone
+  // sheet takes its height just after Explore opens): a flight that lands
+  // with the map moved by more than a few pixels makes one short correction.
+  const moved = (a, b) =>
+    !a !== !b ||
+    (a && (Math.abs(a.up - b.up) > 8 || Math.abs(a.right - b.right) > 8));
+  function flyTo(place, duration = 1.6, corrected = false) {
+    const { lat: lat0, lon: lon0, alt } = place;
     // The whole globe straight down; a story's place at an angle, framed in
-    // the middle of the view rather than under the camera.
+    // the middle of the visible map rather than under the camera.
     const port = camera();
     if (!port) return;
-    if (alt > 2e6) {
+    const top = alt > 2e6;
+    const pitch = top ? -Math.PI / 2 : (-60 * Math.PI) / 180;
+    const off = visibleOffset();
+    const { lat, lon } = aimFor(lat0, lon0, alt, pitch, off);
+    const onComplete = () => {
+      if (!corrected && store.mode === 'explore' && moved(off, visibleOffset()))
+        return flyTo(place, 0.5, true);
+      settleTiles();
+    };
+    if (top) {
       port.flyTo(
         { lon, lat, height: alt },
         {
-          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+          orientation: { heading: 0, pitch, roll: 0 },
           durationS: duration,
-          onComplete: settleTiles,
+          onComplete,
         },
       );
       return;
@@ -521,9 +584,9 @@ export function createStoriesController({
     port.flyToBounds(
       { center: fromDegrees(lon, lat), radius: 0 },
       {
-        offset: { heading: 0, pitch: (-60 * Math.PI) / 180, range: alt },
+        offset: { heading: 0, pitch, range: alt },
         durationS: duration,
-        onComplete: settleTiles,
+        onComplete,
       },
     );
   }
@@ -743,7 +806,16 @@ export function createStoriesController({
       // is back.
       drawThumbs();
     };
-    if (!saved?.ranScene) return frame();
+    // The aim centres the story in Explore's visible map, which is measured
+    // once Explore has rendered.
+    const root = document.getElementById('gev-stories');
+    const whenLaidOut = (run) =>
+      root && !root.querySelector('.ex-map')
+        ? nextTick(() => {
+            if (entry === exploreEntry && store.mode === 'explore') run();
+          })
+        : run();
+    if (!saved?.ranScene) return whenLaidOut(frame);
     // Back from a scene: once it has torn down, the person's own layers,
     // style and clock come back before Explore frames the globe, as on
     // Close. The address keeps naming only Stories' place.

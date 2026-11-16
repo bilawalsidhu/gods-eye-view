@@ -39,11 +39,14 @@ const reduceMotion = () =>
 // GEV has its ACTIVE STYLE readout there; GEV Hosted adds the account
 // avatar, which can come after Stories mounts (sign-in).
 const CORNER = ['style-indicator', 'account-control'];
+// GEV's phone layout shows neither; the button then sits under this column.
+const COLUMN = 'corner-actions';
 const entry = ref({ top: 14, right: 14 });
 function placeEntry() {
   entry.value = entryPlacement(
     CORNER.map((id) => document.getElementById(id)?.getBoundingClientRect()),
     innerWidth,
+    document.getElementById(COLUMN)?.getBoundingClientRect() ?? null,
   );
 }
 let entryTries = 0;
@@ -63,7 +66,7 @@ function watchCorner() {
     });
   }
   if (globalThis.ResizeObserver) cornerObserver ??= new ResizeObserver(placeEntry);
-  for (const id of CORNER) {
+  for (const id of [...CORNER, COLUMN]) {
     const el = document.getElementById(id);
     if (el && cornerObserver && !observed.has(el)) {
       cornerObserver.observe(el);
@@ -71,7 +74,7 @@ function watchCorner() {
     }
   }
   // Keep looking for a while for a control that mounts late.
-  if (observed.size < CORNER.length && ++entryTries < 20)
+  if (observed.size < CORNER.length + 1 && ++entryTries < 20)
     entryTimer = setTimeout(watchCorner, 1000);
 }
 
@@ -298,7 +301,9 @@ watch([mode, storyId], () => nextTick(watchCredit));
       <button
         id="hStories"
         class="tbtn accent gs-entry"
+        :class="{ 'gs-entry-compact': entry.compact }"
         type="button"
+        :aria-label="entry.compact ? t('Stories') : undefined"
         :style="{ top: `${entry.top}px`, right: `${entry.right}px` }"
         @click="openExplore"
       >

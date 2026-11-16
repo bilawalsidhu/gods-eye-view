@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 import { createPinia, setActivePinia } from 'pinia';
 import { createStateChannel } from '../app/stateChannel.js';
 import { bindRenderer } from '../render/rendererOf.js';
+import { getRenderGovernorDiagnostics } from '../renderGovernor.js';
+const holds = () => getRenderGovernorDiagnostics().holds;
 
 registerHooks({
   load(url, context, next) {
@@ -110,16 +112,19 @@ function fakeClock(state = {}) {
       playing: false,
       rate: 1,
       stepping: false,
+      jumps: 0,
       ...state,
     },
     getState: () => ({ ...clock.state }),
     goLive() {
       calls.push(['goLive']);
       Object.assign(clock.state, { live: true, playing: false });
+      clock.state.jumps += 1;
     },
     seek(ms) {
       calls.push(['seek', ms]);
       Object.assign(clock.state, { live: false, timeMs: ms });
+      clock.state.jumps += 1;
     },
     pause() {
       calls.push(['pause']);
@@ -1107,13 +1112,20 @@ test('Explore frames country level straight down, a picked story at −60°, and
   globe.settled = true;
   frame.draw();
   assert.equal(frame.listeners.size, 1, 'settled: only the pins listen');
+  assert.ok(!holds().includes('stories-tiles'), 'settled: the hold is let go');
   // ...and for 10 s at most.
   globe.settled = false;
   picked.onComplete();
   assert.equal(frame.listeners.size, 2);
+  assert.ok(holds().includes('stories-tiles'), 'frames held while settling');
   t.mock.timers.tick(10000);
   assert.equal(frame.listeners.size, 1, 'given up after 10 s');
+  assert.ok(!holds().includes('stories-tiles'), 'given up: the hold is let go');
+  // Close lets go of a hold still waiting.
+  picked.onComplete();
+  assert.ok(holds().includes('stories-tiles'));
   controller.destroy();
+  assert.ok(!holds().includes('stories-tiles'), 'closed: the hold is let go');
 });
 
 test('Close puts back the world clock the person had, and the camera readout follows a story', async () => {
@@ -1128,7 +1140,7 @@ test('Close puts back the world clock the person had, and the camera readout fol
   frame.draw();
   assert.deepEqual(store.camera, { lat: 28.65, lon: 11.46, altKm: 2000 });
   // A scene moved the world clock.
-  clock.state = { ...clock.state, live: true };
+  clock.state = { ...clock.state, live: true, jumps: clock.state.jumps + 1 };
   await controller.close();
   assert.equal(camera.views.length, 1);
   assert.deepEqual(clock.calls, [['pause'], ['seek', Date.UTC(2025, 5, 1)]]);
@@ -1137,5 +1149,126 @@ test('Close puts back the world clock the person had, and the camera readout fol
   controller.open();
   await controller.close();
   assert.deepEqual(clock.calls, []);
+  controller.destroy();
+});
+
+test('Close puts a live clock back live, and a playing clock plays on from where it would be', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1_000_000 });
+  // Live: a scene seeked the clock; Close goes live again.
+  const live = fakeClock({ live: true });
+  const a = setup({ clock: live });
+  a.controller.open();
+  live.seek(Date.UTC(2020, 0, 1));
+  live.calls.length = 0;
+  const closingA = a.controller.close({ fromHistory: true });
+  t.mock.timers.tick(100);
+  await closingA;
+  assert.deepEqual(live.calls, [['goLive']]);
+  a.controller.destroy();
+  // Playing at 2×: paused by a scene; Close seeks to where it would be
+  // after the time Stories was open, and plays on at its rate.
+  const playing = fakeClock({
+    live: false,
+    playing: true,
+    rate: 2,
+    timeMs: Date.UTC(2025, 0, 1),
+  });
+  const b = setup({ clock: playing });
+  b.controller.open();
+  playing.pause();
+  playing.seek(Date.UTC(2019, 0, 1));
+  playing.calls.length = 0;
+  t.mock.timers.tick(5000);
+  const closingB = b.controller.close({ fromHistory: true });
+  t.mock.timers.tick(100);
+  await closingB;
+  const seek = playing.calls.find(([name]) => name === 'seek');
+  assert.ok(
+    Math.abs(seek[1] - (Date.UTC(2025, 0, 1) + 5100 * 2)) <= 200,
+    'extrapolated by the time away at its rate',
+  );
+  assert.deepEqual(playing.calls.at(-1), [
+    'play',
+    { rate: 2, continuous: true },
+  ]);
+  b.controller.destroy();
+});
+
+test('a playing clock nothing moved is left alone on Close, even if it fell behind', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1_000_000 });
+  const clock = fakeClock({
+    live: false,
+    playing: true,
+    rate: 1,
+    timeMs: Date.UTC(2025, 0, 1),
+  });
+  const { controller } = setup({ clock });
+  controller.open();
+  // Held by buffering: no jump, same mode and rate, but behind the wall.
+  t.mock.timers.tick(30000);
+  const closing = controller.close({ fromHistory: true });
+  t.mock.timers.tick(100);
+  await closing;
+  assert.deepEqual(clock.calls, []);
+  controller.destroy();
+});
+
+test('the clock comes back after the share state on Close, so a shared paused time does not stop a playing clock', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1_000_000 });
+  const clock = fakeClock({
+    live: false,
+    playing: true,
+    rate: 1,
+    timeMs: Date.UTC(2025, 0, 1),
+  });
+  const { controller, director } = setup({ clock });
+  // The share state arrives with its world time paused.
+  director.styleManager.shareLinkManager.restore = () => {
+    clock.pause();
+    clock.seek(Date.UTC(2025, 0, 1));
+    return true;
+  };
+  controller.open();
+  controller.openStory('gev:bhote-koshi-nepal-scene');
+  clock.pause();
+  const closing = controller.close({ fromHistory: true });
+  t.mock.timers.tick(100);
+  await closing;
+  assert.equal(clock.state.playing, true, 'playing again after the share');
+  controller.destroy();
+});
+
+test('Explore aims a story at the middle of the visible map, not of the canvas', () => {
+  const { controller, store, camera, canvas } = setup();
+  canvas.getBoundingClientRect = () => ({
+    left: 0,
+    top: 0,
+    width: 400,
+    height: 800,
+  });
+  // Explore's map is the top half of an 800 px canvas (a phone's sheet
+  // below it).
+  const root = document.createElement('div');
+  root.id = 'gev-stories';
+  const map = document.createElement('div');
+  map.className = 'ex-map';
+  root.append(map);
+  document.body.append(root);
+  map.getBoundingClientRect = () => ({
+    left: 0,
+    top: 0,
+    width: 400,
+    height: 400,
+  });
+  controller.open();
+  const story = store.stories[0];
+  controller.pick(null);
+  const flight = camera.flights.at(-1);
+  const { lat } = story.area ?? story.cover;
+  assert.ok(
+    flight.destination.lat < lat,
+    'aims south, so the story shows above the sheet',
+  );
+  root.remove();
   controller.destroy();
 });

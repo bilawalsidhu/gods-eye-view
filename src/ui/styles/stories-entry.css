@@ -241,3 +241,13 @@ body.ui-clean-view #gev-stories .gs-pop {
 #gev-stories .gs-hosted-toast {
   background: rgba(12, 12, 20, 0.95);
 }
+
+/* GEV's phone layout: icon-only, the size of the icon buttons beside it. */
+#gev-stories .gs-entry.gs-entry-compact {
+  width: 36px;
+  padding: 0;
+  justify-content: center;
+}
+#gev-stories .gs-entry.gs-entry-compact span {
+  display: none;
+}
