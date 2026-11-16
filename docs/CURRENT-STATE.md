@@ -1953,7 +1953,9 @@ closes it after two minutes without one, retries on a 5 s to 5 min ladder and
 recycles a socket that is silent for 30 s. The body is
 `{ configured, status, generatedAt, items }`: `status` is `live` only while the
 station clock ticked with signal in the last 20 s, and each item is
-`[value, epoch ms it was true at]`. Unset, the route answers
+`[value, epoch ms it was true at]`. On a socket loss the relay discards that
+connection's joint samples and station-clock credit, so fresh signal after
+reconnection cannot present old angles as live telemetry. Unset, the route answers
 `{ configured: false }` without contacting the feed, and the browser asks once.
 `issTelemetry.js` in the satellites layer polls it every 5 s while the model is
 drawn and, in Automatic, replaces the computed targets with the feed's: each

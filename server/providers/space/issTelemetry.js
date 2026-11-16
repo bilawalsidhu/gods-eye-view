@@ -179,6 +179,11 @@ export function createIssTelemetryRelay({ createSocket, now = Date.now }) {
     const old = socket;
     socket = null;
     fields.clear();
+    // A replacement session must rebuild both its joint snapshot and signal
+    // credit; a new clock tick cannot make the old session's angles live.
+    values.clear();
+    signalAt = null;
+    signalClass = null;
     try {
       old?.terminate?.();
     } catch {

@@ -219,6 +219,49 @@ test('a lost or silent connection is retried on a ladder, and stale events are i
   assert.equal(third.terminated, true);
 });
 
+test('a reconnect cannot mark the previous socket\'s joint samples live', () => {
+  const { relay, sockets, clock } = relayAt(NOV_13);
+  relay.demand();
+  const first = sockets[0];
+  first.emit('open');
+  first.emit('message', 'CONOK,S1,50000,5000,*');
+  const stamp = stampOf(clock.ms);
+  first.emit(
+    'message',
+    `U,1,${index('S0000004')},${stamp}|17|24\r\n` +
+      `U,1,${index('TIME_000001')},${stamp}|1|24`,
+  );
+  assert.equal(relay.snapshot().status, 'live');
+  assert.deepEqual(relay.snapshot().items.S0000004, [17, clock.ms]);
+
+  first.emit('close');
+  assert.equal(relay.snapshot().status, 'reconnecting');
+  clock.ms += 5_000;
+  relay.demand();
+  assert.equal(sockets.length, 2);
+  assert.equal(relay.snapshot().status, 'connecting');
+  assert.deepEqual(relay.snapshot().items, {});
+
+  const second = sockets[1];
+  second.emit('open');
+  second.emit('message', 'CONOK,S2,50000,5000,*');
+  // The clock can return before any new joint snapshot is delivered.
+  second.emit(
+    'message',
+    `U,1,${index('TIME_000001')},${stampOf(clock.ms)}|1|24`,
+  );
+  assert.equal(relay.snapshot().status, 'live');
+  assert.deepEqual(
+    relay.snapshot().items,
+    {},
+    'the new clock must not revive old joint angles',
+  );
+  second.emit(
+    'message',
+    `U,1,${index('S0000004')},${stampOf(clock.ms)}|23|24`,
+  );
+  assert.deepEqual(relay.snapshot().items.S0000004, [23, clock.ms]);
+});
 test('a refused or ended session starts over', () => {
   for (const line of ['CONERR,2,x', 'END,31,x', 'LOOP,0', 'REQERR,1,17,x']) {
     const { relay, sockets } = relayAt(NOV_13);
