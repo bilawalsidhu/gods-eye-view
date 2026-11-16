@@ -12,14 +12,17 @@
  * State is persisted to localStorage and can be exported/imported as JSON.
  */
 
+import { isFollowing } from '../data/followed.js';
 import { cancelCameraArrival } from '../data/cameraArrival.js';
 import { resolveCameraPose, resolveCameraMove } from '../director/camera.js';
 import { createCameraMotion } from './cameraMotion.js';
 import { createStateChannel } from '../app/stateChannel.js';
 import { SceneControls } from '../ui/scenes.js';
+import { createToast } from '../ui/toast.js';
 import { buildPlaybackQueue, playSceneQueue } from '../director/playback.js';
 import { createScenePlaybackAdapter } from './playbackAdapter.js';
-import * as Cesium from 'cesium';
+import { toRadians } from '../geo/vector.js';
+import { cameraOf, canvasOf, findCamera } from '../render/rendererOf.js';
 import {
   SCENE_APPEND_RECIPES,
   SCENE_RECIPES,
@@ -28,7 +31,7 @@ import {
   getSceneAppendRecipeById,
 } from './recipes.js';
 import { sceneLayerPlan, sceneRequiresContextModeExit } from './scenePolicy.js';
-import { t, tn, msg } from '../i18n/index.js';
+import { t, tn, msg, onLocaleChange } from '../i18n/index.js';
 import { createSceneDataPacks } from './dataPacks/controller.js';
 import { createSceneInteractions } from './interactions.js';
 import { createSceneSharing } from './sharing.js';
@@ -72,13 +75,16 @@ const STORAGE_CHECKPOINT_KEY = 'godsEyeView.sceneProject.checkpoint.v1';
  * Orchestrates deterministic cinematic scene playback.
  *
  * The director owns a mutable project (persisted in localStorage) containing
- * scenes and shots. It drives camera flights via Cesium, applies visual/style
- * state through the styleManager, toggles data layers via the dataManager, and
- * records timestamped telemetry events during each run for later export.
+ * scenes and shots. It drives camera flights via the renderer, applies
+ * visual/style state through the styleManager, toggles data layers via the
+ * dataManager, and records timestamped telemetry events during each run for
+ * later export.
  */
 export class SceneDirector {
   /**
-   * @param {Cesium.Viewer} viewer - The Cesium viewer instance
+   * @param {object} viewer - The scene's viewer (its renderer's host). Given
+   *   a viewer with no renderer bound, the caller loads
+   *   the package's `./render/cesium/unbound` export first.
    * @param {Object} styleManager - Controls visual state (bloom, sharpen, HUD, detection, style presets)
    * @param {Object} dataManager - Manages data layer enable/disable and per-layer params
    */
@@ -111,7 +117,7 @@ export class SceneDirector {
     this._interactionTransitions = 0;
     this._interactions = createSceneInteractions(viewer, {
       available: () =>
-        !this._destroyed && !this._running && !this.viewer.trackedEntity,
+        !this._destroyed && !this._running && !isFollowing(this.viewer),
       execute: (action, signal) =>
         this._trackWork(this._executeInteraction(action, signal)),
     });
@@ -130,7 +136,8 @@ export class SceneDirector {
     };
     this._cameraHandoffUnsubscribe =
       styleManager.subscribeCameraHandoff?.(yieldCamera);
-    const canvas = viewer.scene?.canvas;
+    // A viewer of the caller's own, with no renderer bound, has its canvas.
+    const canvas = canvasOf(viewer);
     for (const event of ['pointerdown', 'wheel'])
       canvas?.addEventListener(event, yieldCamera, { passive: true });
     this._removeCameraInput = () => {
@@ -153,6 +160,8 @@ export class SceneDirector {
     this._runAbort = null;
     /** @type {AbortController|null} Aborts the in-flight LOAD's layer transitions */
     this._loadAbort = null;
+    /** @type {AbortController|null} Aborts a same-shot seek's layer reconcile */
+    this._seekAbort = null;
     this._clock = createPlaybackClock({
       isRunning: () => this._running,
       timingForShot: (scene, shot) => this._sceneTimingForShot(scene, shot),
@@ -173,17 +182,21 @@ export class SceneDirector {
     /** @type {string|null} Scene whose layer state most recently landed. */
     this._loadedSceneId = null;
 
+    const readError = this._storageReadError;
     this._presentation = {
-      status: this._storageReadError
-        ? t(
-            'Saved project could not be read; storage preserved. Import a valid file to resume saving.',
-          )
-        : t('Ready'),
+      status: '',
       progress: 0,
       runtime: '',
       playbackActive: false,
       keyboardEnabled: false,
     };
+    this._setStatus(() =>
+      readError
+        ? t(
+            'Saved project could not be read; storage preserved. Import a valid file to resume saving.',
+          )
+        : t('Ready'),
+    );
     this._state = createStateChannel(() => ({
       ...this.getPlaybackStatus(),
       ...this._presentation,
@@ -209,6 +222,12 @@ export class SceneDirector {
       }
     }
     this._initUI();
+    // A status the director wrote itself follows the language; one it was
+    // handed (an error message) stays as it is.
+    this._offLocale = onLocaleChange(() => {
+      if (typeof this._statusText === 'function')
+        this._updateStatus(this._statusText);
+    });
     this._visibilityUnsubscribe =
       this.dataManager.subscribeVisibilityRequests?.((change) => {
         if (
@@ -234,7 +253,7 @@ export class SceneDirector {
   destroy() {
     if (this._destroyPromise) return this._destroyPromise;
     this._destroyed = true;
-    this._sceneSeekGeneration++;
+    this._bumpSceneSeekGeneration();
     this._visibilityUnsubscribe?.();
     this._cameraHandoffUnsubscribe?.();
     this._removeCameraInput?.();
@@ -244,13 +263,15 @@ export class SceneDirector {
     this._interactions?.destroy();
     this._dataPacks?.destroy();
     this._controls?.destroy();
+    this._offLocale?.();
     this._state.destroy();
     this._destroyPromise = Promise.resolve().then(async () => {
       this.stopScene(msg('Stopped'));
       this._loadAbort?.abort();
       this._loadGeneration++;
-      this.viewer.camera.cancelFlight();
-      clearTimeout(this._storageToastTimer);
+      // The viewer may be gone by now: then there is no flight to stop.
+      findCamera(this.viewer)?.cancelFlight();
+      this._storageToast?.cancel();
       await Promise.allSettled(this._pendingWork || []);
       this._clock.destroy();
       this._cancelActiveSceneTravel();
@@ -321,7 +342,7 @@ export class SceneDirector {
   /** Persist the current project state to localStorage with an updated timestamp. */
   _saveProject() {
     if (this._storageReadError) {
-      this._toastStorageError(
+      this._toastStorageError(() =>
         t(
           'Scene not saved — existing saved project could not be read. Export edits or import a valid file.',
         ),
@@ -349,33 +370,26 @@ export class SceneDirector {
       );
       this._toastStorageError(
         invalid
-          ? t('Scene not saved — {reason}', {
-              reason: sceneSaveFailureReason(e),
-            })
+          ? () =>
+              t('Scene not saved — {reason}', {
+                reason: sceneSaveFailureReason(e),
+              })
           : undefined,
       );
       return false;
     }
   }
 
-  /** Surface a "scene not saved" notice via the global toast + scene status line. */
+  /**
+   * Surface a "scene not saved" notice via the global toast + scene status
+   * line. `message` words it, so the status line follows the locale.
+   */
   _toastStorageError(
-    message = t('Scene not saved — browser storage unavailable'),
+    message = () => t('Scene not saved — browser storage unavailable'),
   ) {
     this._updateStatus(message);
-    try {
-      const toast = document.getElementById('toast');
-      if (toast) {
-        toast.textContent = message;
-        toast.classList.add('visible');
-        clearTimeout(this._storageToastTimer);
-        this._storageToastTimer = setTimeout(() => {
-          toast.classList.remove('visible');
-        }, 2600);
-      }
-    } catch {
-      /* toast is best-effort */
-    }
+    this._storageToast ??= createToast({ durationMs: 2600 });
+    this._storageToast.show(message());
   }
 
   /** Immutable playback snapshots and completed editing actions. */
@@ -389,10 +403,12 @@ export class SceneDirector {
 
   _shotOutcome(type, scene, shot, index = scene.shots.indexOf(shot)) {
     if (type === 'shot-loaded')
-      this._presentation.status = t('Loaded: {scene} / {shot}', {
-        scene: displaySceneTitle(scene),
-        shot: displayShotTitle(shot.title, shot, scene),
-      });
+      this._setStatus(() =>
+        t('Loaded: {scene} / {shot}', {
+          scene: displaySceneTitle(scene),
+          shot: displayShotTitle(shot.title, shot, scene),
+        }),
+      );
     this._publish({
       type,
       sceneId: scene.id,
@@ -403,8 +419,8 @@ export class SceneDirector {
   }
 
   /**
-   * Wire up all scene-panel DOM event listeners and render the initial UI state.
-   * Exits silently if the scene-select element is missing (headless/test mode).
+   * Present the Scene panel through SceneControls, which publishes it to the
+   * store the panel views render; a page without them simply draws nothing.
    */
   _initUI() {
     this._sharing?.mount();
@@ -794,7 +810,7 @@ export class SceneDirector {
               (shot, index) => shot.title === requiredShotTitles[index],
             ));
       if (!inventoryMatches) {
-        this._updateStatus(
+        this._updateStatus(() =>
           t('Cannot update {scene}: shot inventory changed', {
             scene: t(recipe.title),
           }),
@@ -827,7 +843,7 @@ export class SceneDirector {
           (beatId, index) => beatId === requiredSourcePackBeatIds[index],
         );
       if (!sourcePackMatches) {
-        this._updateStatus(
+        this._updateStatus(() =>
           t('Cannot update {scene}: evidence beats changed', {
             scene: t(recipe.title),
           }),
@@ -852,7 +868,7 @@ export class SceneDirector {
       shot: resolvePatchedShot(patch),
     }));
     if (resolvedPatches.some(({ shot }) => !shot)) {
-      this._updateStatus(
+      this._updateStatus(() =>
         t('Cannot update {scene}: shot bindings are incomplete', {
           scene: t(recipe.title),
         }),
@@ -933,7 +949,7 @@ export class SceneDirector {
       this._renderShotList();
     }
     if (announce && saved) {
-      this._updateStatus(
+      this._updateStatus(() =>
         marker
           ? tn(
               patchedShotCount,
@@ -968,7 +984,7 @@ export class SceneDirector {
 
     const camera = this.styleManager.getCameraState();
     if (!camera) {
-      this._updateStatus(t('Cannot capture shot: camera not ready'));
+      this._updateStatus(() => t('Cannot capture shot: camera not ready'));
       return;
     }
 
@@ -991,7 +1007,7 @@ export class SceneDirector {
     const saved = this._saveProject();
     this._shotOutcome('shot-captured', scene, shot);
     if (saved) {
-      this._updateStatus(
+      this._updateStatus(() =>
         t('Captured: {scene} / {shot}', {
           scene: displaySceneTitle(scene),
           shot: displayShotTitle(shot.title, shot, scene),
@@ -1010,7 +1026,7 @@ export class SceneDirector {
 
     const shot = scene.shots.find((item) => item.id === this._selectedShotId);
     if (!shot) {
-      this._updateStatus(t('Select a shot first'));
+      this._updateStatus(() => t('Select a shot first'));
       return;
     }
 
@@ -1026,7 +1042,7 @@ export class SceneDirector {
     const saved = this._saveProject();
     this._shotOutcome('shot-updated', scene, shot);
     if (saved) {
-      this._updateStatus(
+      this._updateStatus(() =>
         t('Updated: {scene} / {shot}', {
           scene: displaySceneTitle(scene),
           shot: displayShotTitle(shot.title, shot, scene),
@@ -1071,7 +1087,7 @@ export class SceneDirector {
   loadShot(sceneId, shotId, options) {
     if (this._destroyed)
       return Promise.resolve({ started: false, reason: 'destroyed' });
-    this._sceneSeekGeneration++;
+    this._bumpSceneSeekGeneration();
     this._interactionTransitions = 0;
     const previousGeneration = this._loadGeneration;
     const work = this._loadShot(sceneId, shotId, options);
@@ -1138,7 +1154,7 @@ export class SceneDirector {
       const released = await this._releaseSceneLayers(previousScene, token);
       if (!released || token.cancelled) {
         if (!token.cancelled)
-          this._updateStatus(
+          this._updateStatus(() =>
             t('Could not leave scene: {scene}', {
               scene: displaySceneTitle(previousScene),
             }),
@@ -1192,7 +1208,7 @@ export class SceneDirector {
         seeking: true,
       });
       if (this._loadAbort === controller) this._loadAbort = null;
-      this._updateStatus(
+      this._updateStatus(() =>
         t('Seeked: {scene} / {shot}', {
           scene: displaySceneTitle(scene),
           shot: displayShotTitle(shot.title, shot, scene),
@@ -1352,7 +1368,7 @@ export class SceneDirector {
     return travel;
   }
 
-  /** Publish a travel phase only after Cesium has accepted the camera flight. */
+  /** Publish a travel phase only after the renderer has accepted the camera flight. */
   _publishShotTravel(scene, shot, cameraTravel) {
     const states = this._layerStatesForShot(scene, shot, { cameraTravel });
     for (const [layerId, state] of Object.entries(states)) {
@@ -1516,9 +1532,30 @@ export class SceneDirector {
     return new Promise((resolve) => this._runIdleResolvers.add(resolve));
   }
 
-  /** Apply a new time inside the already-loaded shot without rebuilding its stack. */
-  _seekLoadedShot(scene, seekState) {
-    if (this._destroyed) return false;
+  /**
+   * Supersede any pending seek. Only a seek's own layer reconcile is aborted:
+   * a request that is later rejected must not cancel an in-flight LOAD.
+   */
+  _bumpSceneSeekGeneration() {
+    if (this._seekAbort) {
+      this._seekAbort.abort();
+      if (this._loadAbort === this._seekAbort) this._loadAbort = null;
+      this._seekAbort = null;
+    }
+    return ++this._sceneSeekGeneration;
+  }
+
+  /**
+   * Apply a new time inside the already-loaded shot without rebuilding its stack.
+   * @returns {Promise<boolean|null>} Null when the shortcut does not apply and
+   *   LOAD must rebuild the shot; otherwise whether the seek settled.
+   */
+  async _seekLoadedShot(
+    scene,
+    seekState,
+    seekGeneration = this._sceneSeekGeneration,
+  ) {
+    if (this._destroyed) return null;
     const shot = seekState?.shot;
     if (
       !scene ||
@@ -1528,17 +1565,77 @@ export class SceneDirector {
       this._loadedSceneId !== scene.id ||
       this._selectedShotId !== shot.id
     )
+      return null;
+    if (this._destroyed || seekGeneration !== this._sceneSeekGeneration)
       return false;
     if (!this._claimCameraOwnership()) return false;
     this._cancelActiveSceneTravel();
     this._loadAbort?.abort();
     this._loadAbort = null;
-    this._loadGeneration += 1;
+    const generation = ++this._loadGeneration;
     this._clock.stopShot();
     const states = this._layerStatesForShot(scene, shot, {
       cameraSettled: seekState.cameraProgress >= 1,
       sceneSeek: seekState,
     });
+    // A manual toggle, or a superseded LOAD transition whose rollback is still
+    // settling, leaves declared layers off the shot's stack. Reconcile only
+    // those through the cancellable admission path.
+    const staleStates = Object.fromEntries(
+      Object.entries(states)
+        .filter(([id, state]) => {
+          const wantEnabled = !!state?.enabled;
+          const lifecycle = this.dataManager.getLayerLifecycleState(id);
+          return (
+            lifecycle &&
+            (lifecycle.enabled !== wantEnabled ||
+              lifecycle.lifecycleState === 'enabling' ||
+              lifecycle.lifecycleState === 'disabling' ||
+              lifecycle.uncertain ||
+              this.dataManager.isEffectivelyEnabled(id) !== wantEnabled)
+          );
+        })
+        .map(([id, state]) => [id, { enabled: !!state?.enabled }]),
+    );
+    if (Object.keys(staleStates).length) {
+      const previousEnabled = new Map(
+        Object.keys(staleStates).map((id) => [
+          id,
+          this.dataManager.isEffectivelyEnabled(id),
+        ]),
+      );
+      const controller = new AbortController();
+      this._loadAbort = controller;
+      this._seekAbort = controller;
+      const layerResult = await this._applyLayerStates(
+        staleStates,
+        this._loadToken(generation, controller.signal, seekGeneration),
+        { stopOnRefusal: true, exitContextMode: false },
+      );
+      if (this._loadAbort === controller) this._loadAbort = null;
+      if (this._seekAbort === controller) this._seekAbort = null;
+      const superseded = () =>
+        this._destroyed ||
+        this._loadAbort ||
+        this._running ||
+        seekGeneration !== this._sceneSeekGeneration;
+      if (layerResult.cancelled || superseded()) return false;
+      if (layerResult.refused.length) {
+        // Only a refusal rolls back. A cancelled reconcile leaves layer state
+        // to whatever superseded it, as a cancelled LOAD does.
+        for (const id of [...layerResult.applied].reverse()) {
+          if (superseded()) break;
+          await this.dataManager.setEnabled(
+            id,
+            previousEnabled.get(id) ?? false,
+            { origin: 'scene' },
+          );
+        }
+        return false;
+      }
+    }
+    if (this._destroyed || seekGeneration !== this._sceneSeekGeneration)
+      return false;
     let applied = true;
     for (const [layerId, state] of Object.entries(states)) {
       if (!state?.enabled || !state.params) continue;
@@ -1550,7 +1647,9 @@ export class SceneDirector {
         applied = false;
       }
     }
-    if (!applied) return false;
+    if (!applied) return null;
+    if (this._destroyed || seekGeneration !== this._sceneSeekGeneration)
+      return false;
     this._setCameraView(
       seekState.camera || resolveCameraPose(scene, shot.camera),
     );
@@ -1559,7 +1658,7 @@ export class SceneDirector {
       running: false,
       seeking: true,
     });
-    this._updateStatus(
+    this._updateStatus(() =>
       t('Seeked: {scene} / {shot}', {
         scene: displaySceneTitle(scene),
         shot: displayShotTitle(shot.title, shot, scene),
@@ -1572,7 +1671,7 @@ export class SceneDirector {
   seekScene(sceneId, progress) {
     if (this._destroyed) return Promise.resolve(false);
     this.stopScene(msg('Seeking scene clock'));
-    const generation = ++this._sceneSeekGeneration;
+    const generation = this._bumpSceneSeekGeneration();
     return this._trackWork(this._seekScene(sceneId, progress, generation));
   }
 
@@ -1586,7 +1685,10 @@ export class SceneDirector {
       return false;
     const seekState = this._sceneSeekState(scene, progress);
     if (!seekState) return false;
-    if (this._seekLoadedShot(scene, seekState)) return true;
+    const seeked = await this._seekLoadedShot(scene, seekState, generation);
+    if (this._destroyed || generation !== this._sceneSeekGeneration)
+      return false;
+    if (seeked !== null) return seeked;
     const result = await this._loadShot(scene.id, seekState.shot.id, {
       sceneSeek: seekState,
     });
@@ -1606,15 +1708,17 @@ export class SceneDirector {
    * @param {AbortSignal} [signal] - Abort signal for this LOAD's manager calls
    * @returns {{ cancelled: boolean, signal: AbortSignal|undefined }}
    */
-  _loadToken(generation, signal = undefined) {
+  _loadToken(generation, signal = undefined, seekGeneration = null) {
     const director = this;
     return {
       signal,
       get cancelled() {
         return (
           director._destroyed ||
-          signal?.aborted ||
-          director._loadGeneration !== generation
+          Boolean(signal?.aborted) ||
+          director._loadGeneration !== generation ||
+          (seekGeneration !== null &&
+            director._sceneSeekGeneration !== seekGeneration)
         );
       },
     };
@@ -1641,7 +1745,7 @@ export class SceneDirector {
       this._claimingCamera = false;
     }
     if (claimed === false) {
-      this._updateStatus(t('Camera unavailable — exit cockpit first'));
+      this._updateStatus(() => t('Camera unavailable — exit cockpit first'));
       return false;
     }
     return true;
@@ -1649,20 +1753,20 @@ export class SceneDirector {
 
   /** Place the camera at an authored replay start pose without an intermediate flight. */
   _setCameraView(cameraState) {
-    if (!cameraState || typeof this.viewer?.camera?.setView !== 'function')
-      return false;
+    const camera = findCamera(this.viewer);
+    if (!cameraState || !camera) return false;
     this.styleManager?.clearSearchedLocation?.();
-    this.viewer.camera.cancelFlight?.();
-    this.viewer.camera.setView({
-      destination: Cesium.Cartesian3.fromDegrees(
-        cameraState.lon,
-        cameraState.lat,
-        cameraState.alt,
-      ),
+    camera.cancelFlight();
+    camera.setView({
+      destination: {
+        lon: cameraState.lon,
+        lat: cameraState.lat,
+        height: cameraState.alt,
+      },
       orientation: {
-        heading: Cesium.Math.toRadians(cameraState.heading || 0),
-        pitch: Cesium.Math.toRadians(cameraState.pitch ?? -35),
-        roll: Cesium.Math.toRadians(cameraState.roll || 0),
+        heading: toRadians(cameraState.heading || 0),
+        pitch: toRadians(cameraState.pitch ?? -35),
+        roll: toRadians(cameraState.roll || 0),
       },
     });
     return true;
@@ -1753,7 +1857,7 @@ export class SceneDirector {
   startScene(sceneId, options) {
     if (this._destroyed)
       return Promise.resolve({ started: false, reason: 'destroyed' });
-    this._sceneSeekGeneration++;
+    this._bumpSceneSeekGeneration();
     return this._trackWork(this._startScene(sceneId, options));
   }
 
@@ -1776,7 +1880,7 @@ export class SceneDirector {
       if (!queue.length) return { started: false, reason: 'scene-complete' };
     }
     if (!queue.length) {
-      this._updateStatus(t('No shots to run'));
+      this._updateStatus(() => t('No shots to run'));
       return { started: false, reason: 'no-shots' };
     }
 
@@ -1861,7 +1965,7 @@ export class SceneDirector {
         releaseOnFinish: preview,
       });
     } catch (error) {
-      this._updateStatus(
+      this._updateStatus(() =>
         t('Error: {message}', {
           message: error.message || 'run failed',
         }),
@@ -1902,7 +2006,7 @@ export class SceneDirector {
 
   /**
    * Cancel the active scene run. Sets the cancellation token, aborts the
-   * run's in-flight layer transitions and Cesium camera flight, and logs a
+   * run's in-flight layer transitions and camera flight, and logs a
    * stop event.
    *
    * The abort is the part that stops work already under way: a layer
@@ -1919,18 +2023,19 @@ export class SceneDirector {
     this._setSceneMediaPlayback();
     this._interactions?.clear();
     this._dataPacks?.clear();
-    this._sceneSeekGeneration++;
+    this._bumpSceneSeekGeneration();
     this._loadAbort?.abort();
     this._loadAbort = null;
     this._loadGeneration++;
     this._clock.stopShot();
     this._cancelActiveSceneTravel();
-    this.viewer.camera.cancelFlight();
+    // Stop runs in teardown too, after the viewer may be gone.
+    findCamera(this.viewer)?.cancelFlight();
     this._clock.stop();
     if (!this._running || !this._runToken) return;
     this._runToken.cancelled = true;
     this._runAbort?.abort();
-    this._updateStatus(t(reason));
+    this._updateStatus(() => t(reason));
     this._logEvent('scene_stopped', { reason });
   }
 
@@ -1986,7 +2091,7 @@ export class SceneDirector {
     }
     if (action.type === 'shot') {
       if (this._interactionTransitions >= 64) {
-        this._updateStatus(
+        this._updateStatus(() =>
           t('Scene transition limit reached — load a shot to reset'),
         );
         return false;
@@ -2030,7 +2135,9 @@ export class SceneDirector {
     try {
       payload = stringifySceneDocument(this._project);
     } catch (error) {
-      this._updateStatus(t('Export failed: {error}', { error: error.message }));
+      this._updateStatus(() =>
+        t('Export failed: {error}', { error: error.message }),
+      );
       return;
     }
     // Trigger a browser download via a temporary anchor element
@@ -2043,7 +2150,7 @@ export class SceneDirector {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    this._presentation.status = t('Project exported');
+    this._setStatus(() => t('Project exported'));
     this._publish({ type: 'project-exported', project: this._project });
   }
 
@@ -2103,7 +2210,8 @@ export class SceneDirector {
       this._loadedSceneId = null;
       const saved = this._saveProject();
       this._publish({ type: 'project-imported', project });
-      if (saved) this._updateStatus(t('Imported {file}', { file: file.name }));
+      if (saved)
+        this._updateStatus(() => t('Imported {file}', { file: file.name }));
       return true;
     } catch (error) {
       if (
@@ -2112,7 +2220,7 @@ export class SceneDirector {
         generation !== this._importGeneration
       )
         return false;
-      this._updateStatus(
+      this._updateStatus(() =>
         error instanceof SceneDocumentError
           ? t('Import failed: {error}', { error: error.message })
           : t('Import failed (could not read JSON file)'),
@@ -2165,7 +2273,11 @@ export class SceneDirector {
    *   the transition in flight.
    * @returns {Promise<{ applied: string[], refused: string[], cancelled: boolean }>}
    */
-  async _applyLayerStates(targetStates, token = null) {
+  async _applyLayerStates(
+    targetStates,
+    token = null,
+    { stopOnRefusal = false, exitContextMode = true } = {},
+  ) {
     const applied = [];
     const refused = [];
     const abort = () => ({ applied, refused, cancelled: true });
@@ -2175,8 +2287,10 @@ export class SceneDirector {
     // the operator's pre-mode state, which is exactly where a stopped scene
     // should come to rest. Tearing that transaction in half would strand
     // Context, so it completes and cancellation is honoured immediately after.
-    await this._exitIsolatingContextMode();
-    if (token?.cancelled) return abort();
+    if (exitContextMode) {
+      await this._exitIsolatingContextMode();
+      if (token?.cancelled) return abort();
+    }
 
     const signal = token?.signal;
     const registered = new Set(
@@ -2206,6 +2320,7 @@ export class SceneDirector {
         console.warn(
           `[Scenes] Layer refused: ${id} → ${enabled ? 'on' : 'off'}`,
         );
+        if (stopOnRefusal) break;
         continue;
       }
       if (params && typeof this.dataManager.restoreLayerState !== 'function') {
@@ -2215,7 +2330,7 @@ export class SceneDirector {
     }
 
     if (refused.length) {
-      this._updateStatus(
+      this._updateStatus(() =>
         t('Layers refused: {layers}', { layers: refused.join(', ') }),
       );
       this._logEvent('shot_layers_refused', { layerIds: [...refused] });
@@ -2307,7 +2422,7 @@ export class SceneDirector {
         `[Scenes] Could not exit ${mode}:`,
         result.error || 'unknown reason',
       );
-      this._updateStatus(
+      this._updateStatus(() =>
         t('Could not exit {mode} — scene layers may be refused', { mode }),
       );
       this._logEvent('context_mode_exit_failed', {
@@ -2338,7 +2453,7 @@ export class SceneDirector {
   }
 
   /**
-   * Fly the Cesium camera to the given position over the specified duration
+   * Fly the camera to the given position over the specified duration
    * using cubic ease-in-out. Resolves when the flight completes, is cancelled,
    * or a safety timeout fires (duration + 0.6s).
    * @param {Object} cameraState - Target { lat, lon, alt, heading, pitch, roll }
@@ -2357,11 +2472,11 @@ export class SceneDirector {
       0.2,
       Number(durationSec) || DEFAULT_SHOT_DURATION_SEC,
     );
-    const destination = Cesium.Cartesian3.fromDegrees(
-      cameraState.lon,
-      cameraState.lat,
-      cameraState.alt,
-    );
+    const destination = {
+      lon: cameraState.lon,
+      lat: cameraState.lat,
+      height: cameraState.alt,
+    };
 
     await new Promise((resolve) => {
       // Guard against double-resolve from both callback and timeout
@@ -2374,20 +2489,19 @@ export class SceneDirector {
         resolve();
       };
 
-      this.viewer.camera.flyTo({
-        destination,
+      cameraOf(this.viewer).flyTo(destination, {
         orientation: {
-          heading: Cesium.Math.toRadians(cameraState.heading || 0),
-          pitch: Cesium.Math.toRadians(cameraState.pitch ?? -35),
-          roll: Cesium.Math.toRadians(cameraState.roll || 0),
+          heading: toRadians(cameraState.heading || 0),
+          pitch: toRadians(cameraState.pitch ?? -35),
+          roll: toRadians(cameraState.roll || 0),
         },
-        duration,
-        easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-        complete: finish,
-        cancel: finish,
+        durationS: duration,
+        easing: 'cubicInOut',
+        onComplete: finish,
+        onCancel: finish,
       });
 
-      // Safety timeout in case Cesium callbacks fail to fire
+      // Safety timeout in case the flight's callbacks fail to fire
       if (!done) timer = setTimeout(finish, (duration + 0.6) * 1000);
     });
   }
@@ -2540,8 +2654,18 @@ export class SceneDirector {
    * @param {string} text
    */
   _updateStatus(text) {
-    this._presentation.status = text;
+    this._setStatus(text);
     this._publish({ type: 'status-changed' });
+  }
+
+  /**
+   * Set the status line without publishing. A function is called again when
+   * the locale changes, so its text follows the language.
+   * @param {string|(() => string)} text
+   */
+  _setStatus(text) {
+    this._statusText = text;
+    this._presentation.status = typeof text === 'function' ? text() : text;
   }
 
   /**

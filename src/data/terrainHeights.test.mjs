@@ -19,6 +19,7 @@ import assert from 'node:assert/strict';
 import {
   resolveEllipsoidalGround,
   cachedEllipsoidalGround,
+  cachedRealEllipsoidalGround,
 } from './terrainHeights.js';
 
 const AUSTIN = { lat: 30.2672, lon: -97.7431 };
@@ -361,4 +362,48 @@ test('resolveEllipsoidalGround: null and string heights cannot become real zeroe
       }
     );
   }
+});
+
+test('resolveEllipsoidalGround: a 502 keeps the real heights it carries and falls back only for the rest', async () => {
+  const coords = [
+    { lat: 62.001, lon: -150.001, sourceOrthometricM: 10 },
+    { lat: 62.002, lon: -150.002, sourceOrthometricM: 10 },
+    { lat: 62.003, lon: -150.003, sourceOrthometricM: 10 },
+  ];
+  await withFakeFetch(
+    async () => ({
+      ok: false,
+      status: 502,
+      json: async () => ({
+        error: 'terrain heights fetch failed and no cache available for every point',
+        partial: [{ ellipsoid: 412.5 }, null, { ellipsoid: 'x' }],
+      }),
+    }),
+    async () => {
+      const out = await resolveEllipsoidalGround(coords);
+      assert.deepEqual(out[0], { ellipsoid: 412.5, source: 'reearth' });
+      assert.equal(out[1].source, 'geoid-fallback');
+      assert.equal(out[2].source, 'geoid-fallback', 'a non-numeric height is not real');
+    }
+  );
+  assert.equal(cachedRealEllipsoidalGround(62.001, -150.001), 412.5);
+  assert.equal(cachedRealEllipsoidalGround(62.002, -150.002), null);
+});
+
+test('resolveEllipsoidalGround: a partial list of the wrong length is ignored', async () => {
+  const coords = [
+    { lat: 63.001, lon: -151.001 },
+    { lat: 63.002, lon: -151.002 },
+  ];
+  await withFakeFetch(
+    async () => ({
+      ok: false,
+      status: 502,
+      json: async () => ({ error: 'x', partial: [{ ellipsoid: 7 }] }),
+    }),
+    async () => {
+      const out = await resolveEllipsoidalGround(coords);
+      assert.deepEqual(out.map((r) => r.source), ['geoid-fallback', 'geoid-fallback']);
+    }
+  );
 });

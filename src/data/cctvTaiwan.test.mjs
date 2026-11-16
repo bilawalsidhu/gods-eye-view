@@ -182,6 +182,86 @@ test('loader deduplicates cameras that share a camera number', async (t) => {
   ]);
 });
 
+test('falls back to Highway Bureau MJPEG cameras when the Freeway catalog fails', async (t) => {
+  const highwayUrl = 'https://cctv-maintain.thb.gov.tw/opendataCCTVs.xml';
+  const requests = [];
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'warn', () => {});
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    const href = String(url);
+    requests.push(href);
+    assert.equal(options.redirect, 'manual');
+    if (href === TAIWAN_FREEWAY_CCTV_URL)
+      return new Response('', { status: 503 });
+    if (href === highwayUrl) {
+      return new Response(
+        cctvXml(
+          block({
+            id: 'CCTV-14-0620-009-002',
+            stream: 'https://cctv-ss02.thb.gov.tw:443/T62-9K+020',
+            lat: '24.9967',
+            lon: '121.4521',
+          }),
+        ),
+        { headers: { 'content-type': 'application/xml' } },
+      );
+    }
+    throw new Error('Unexpected Taiwan feed URL: ' + href);
+  });
+
+  const sources = await loadTaiwanSources();
+
+  assert.deepEqual(requests, [TAIWAN_FREEWAY_CCTV_URL, highwayUrl]);
+  assert.equal(sources.length, 1);
+  assert.equal(sources[0].id, 'tw-thb-cctv-14-0620-009-002');
+  assert.equal(sources[0].cityId, 'taiwan');
+  assert.equal(sources[0].provider, 'Highway Bureau, MOTC');
+  assert.equal(sources[0].feedType, 'mjpeg');
+  assert.equal(sources[0].sourceKind, 'taiwan-highway-motc');
+  assert.equal(new URL(sources[0].url).hostname, 'cctv-ss02.thb.gov.tw');
+  assert.equal(new URL(sources[0].url).pathname, '/T62-9K+020');
+});
+
+test('the Highway Bureau fallback registers only approved HTTPS camera servers', async (t) => {
+  const highwayUrl = 'https://cctv-maintain.thb.gov.tw/opendataCCTVs.xml';
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'warn', () => {});
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    if (String(url) === TAIWAN_FREEWAY_CCTV_URL)
+      return new Response('', { status: 503 });
+    if (String(url) === highwayUrl) {
+      return new Response(
+        cctvXml(
+          block({
+            id: 'CCTV-14-0620-009-001',
+            stream: 'https://cctv-ss09.thb.gov.tw/T62-9K+019',
+          }),
+          block({
+            id: 'CCTV-14-0620-009-003',
+            stream: 'http://cctv-ss02.thb.gov.tw/T62-9K+021',
+          }),
+          block({
+            id: 'CCTV-14-0620-009-004',
+            stream: 'https://cctv-ss02.thb.gov.tw:8443/T62-9K+022',
+          }),
+          block({
+            id: 'CCTV-14-0620-009-002',
+            stream: 'https://cctv-ss02.thb.gov.tw:443/T62-9K+020',
+          }),
+        ),
+        { headers: { 'content-type': 'application/xml' } },
+      );
+    }
+    throw new Error('Unexpected Taiwan feed URL: ' + String(url));
+  });
+
+  const sources = await loadTaiwanSources();
+
+  assert.deepEqual(
+    sources.map((source) => source.id),
+    ['tw-thb-cctv-14-0620-009-002'],
+  );
+});
 test('a redirected or failed catalog contributes an empty pack', async (t) => {
   t.mock.method(console, 'warn', () => {});
   for (const status of [302, 503]) {
@@ -214,11 +294,15 @@ test('the Taiwan pack is in the catalog by default', async (t) => {
   );
 });
 
-test('CCTV_TAIWAN_ENABLED=0 makes no Freeway Bureau request', async (t) => {
+test('CCTV_TAIWAN_ENABLED=0 makes no Taiwan catalog request', async (t) => {
   const { requested, sources } = await runCatalogWithTaiwanFlag(t, '0');
   assert.ok(requested.length > 0, 'the other packs still refreshed');
   assert.equal(
     requested.some((href) => href.includes('freeway.gov.tw')),
+    false,
+  );
+  assert.equal(
+    requested.some((href) => href.includes('cctv-maintain.thb.gov.tw')),
     false,
   );
   assert.ok(!sources.some((c) => c.cityId === 'taiwan'));
@@ -250,12 +334,12 @@ test('a failed download is not retried until the backoff ends', async (t) => {
   t.mock.method(Date, 'now', () => 1_000_000);
   assert.deepEqual(await loadTaiwanSources(), []);
   assert.deepEqual(await loadTaiwanSources(), []);
-  assert.equal(calls, 1, 'the second refresh made no request');
+  assert.equal(calls, 2, 'the second refresh made no request');
   Date.now.mock.mockImplementation(
     () => 1_000_000 + TAIWAN_RETRY_AFTER_FAILURE_MS + 1,
   );
   await loadTaiwanSources();
-  assert.equal(calls, 2, 'the backoff ends after an hour');
+  assert.equal(calls, 4, 'the backoff ends after an hour');
 });
 
 test('a failed download serves the last good table', async (t) => {

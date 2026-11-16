@@ -171,3 +171,32 @@ test('a subscriber can Stop or replace the initial clock without the old start a
   });
   assert.equal(f.timers.size, 0);
 });
+
+test('a subscriber throwing on immediate snapshot does not crash subscribe and receives unsubscribe handle', () => {
+  const f = fixture();
+  f.clock.publish(scene, shot, 1);
+  let calls = 0;
+  const warnings = [];
+  const origWarn = console.warn;
+  console.warn = (...args) => warnings.push(args);
+  try {
+    const unsubscribe = f.clock.subscribe(() => {
+      calls++;
+      throw new Error('listener failure');
+    });
+    assert.equal(typeof unsubscribe, 'function');
+    assert.equal(calls, 1);
+    assert.equal(warnings.length, 1);
+    assert.equal(warnings[0][0], '[Scenes] Scene clock listener failed:');
+    f.clock.publish(scene, shot, 2);
+    assert.equal(calls, 2);
+    assert.equal(warnings.length, 2);
+    unsubscribe();
+    f.clock.publish(scene, shot, 3);
+    assert.equal(calls, 2);
+    assert.equal(warnings.length, 2);
+    f.clock.destroy();
+  } finally {
+    console.warn = origWarn;
+  }
+});

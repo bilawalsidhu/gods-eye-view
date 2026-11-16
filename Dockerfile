@@ -4,7 +4,7 @@
 # proxies (ADS-B, AIS, Overpass, OpenAI Realtime, ...) as middleware, so there
 # is nothing else to containerise. See compose.yaml for the usual entry point.
 # Same Node as CI (package.json engines, .github/workflows), pinned by digest.
-FROM node:24.14.0-slim@sha256:d8e448a56fc63242f70026718378bd4b00f8c82e78d20eefb199224a4d8e33d8
+FROM node:24.22.2-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c
 
 # Puppeteer is only used by the QA scripts; skip its ~150MB Chromium download.
 ENV PUPPETEER_SKIP_DOWNLOAD=1
@@ -39,6 +39,11 @@ COPY --chown=node:node . .
 ENV HOST=0.0.0.0
 ENV PORT=4173
 EXPOSE 4173
+# node:slim has no curl, so probe with Node's built-in fetch. 127.0.0.1 is
+# always on the Host allowlist, and the generous start period covers Vite's
+# first-run dependency optimisation.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:'+(Number.parseInt(process.env.PORT,10)||4173)+'/').then((r)=>process.exit(r.ok?0:1),()=>process.exit(1))"]
 # The launcher is `npm run dev` plus one step: it trusts the container's
 # gateway address for Provider Settings, because that is where Docker delivers
 # the host's own browser from (never 127.0.0.1). See scripts/docker-start.mjs.

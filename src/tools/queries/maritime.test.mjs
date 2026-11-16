@@ -5,8 +5,10 @@ import { LiveSourceError } from '../../sources/live/contract.js';
 import { createVesselSource } from '../../sources/live/standalone.js';
 import { AISSTREAM_CACHE_MAX } from '../../../server/providers/vessels/ais-store.js';
 
+// An AIS source's vessel: keyed by its MMSI, which it also reports.
 const vessel = (id, latitude, longitude, extra = {}) => ({
   id,
+  mmsi: id,
   reference: id,
   latitude,
   longitude,
@@ -79,6 +81,7 @@ test('vessels in an area are nearest first and filterable by type', async () => 
     ['366999712', '538001234'],
   );
   assert.deepEqual(all.data.rows[0], {
+    id: '366999712',
     mmsi: '366999712',
     name: 'GOLDEN BEAR',
     imo: '9123456',
@@ -161,6 +164,53 @@ test('vessel tracks are ordered and drop untimed positions', async () => {
   assert.equal(
     (await catalog.call('get_vessel_track', { mmsi: '235000001' })).summary,
     'No recent track is available for 235000001.',
+  );
+});
+
+test('vessels sharing an MMSI are found as two, each by its own id', async () => {
+  const shared = [
+    vessel('hull-a', 37.81, -122.41, { mmsi: '366999712', name: 'A' }),
+    vessel('hull-b', 37.79, -122.42, {
+      mmsi: '366999712',
+      name: 'B',
+      reference: 'track:hull-b',
+    }),
+    vessel('hull-c', 37.8, -122.4, { mmsi: undefined, name: 'C' }),
+  ];
+  const tracks = [];
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      vessels: {
+        getSnapshot: async () => ({ records: shared, freshness: 'current' }),
+        getTrack: async (reference) => {
+          tracks.push(reference);
+          return { records: [] };
+        },
+      },
+    },
+  });
+  const found = await catalog.call('find_vessel', { mmsi: '366999712' });
+  assert.deepEqual(
+    found.data.rows.map((row) => [row.id, row.mmsi]),
+    [
+      ['hull-a', '366999712'],
+      ['hull-b', '366999712'],
+    ],
+  );
+  const area = await catalog.call('vessels_in_area', { area: bay });
+  assert.deepEqual(
+    area.data.rows.find((row) => row.id === 'hull-c').mmsi,
+    null,
+    'a vessel with no MMSI says so',
+  );
+  const track = await catalog.call('get_vessel_track', { id: 'hull-b' });
+  assert.deepEqual(tracks, ['track:hull-b'], "asked by the vessel's reference");
+  assert.equal(track.data.id, 'hull-b');
+  assert.equal(track.summary, 'No recent track is available for hull-b.');
+  await assert.rejects(
+    catalog.call('get_vessel_track', { id: 'hull-b', mmsi: '366999712' }),
+    /exactly one/,
   );
 });
 
@@ -351,6 +401,25 @@ test('find_vessel answers carry normalized types and destinations', async () => 
   );
 });
 
+test('a vessel course or heading that rounds to 360 reads as 0', async () => {
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      vessels: vessels({
+        records: [
+          vessel('366000003', 37.78, -122.4, {
+            courseDeg: 359.7,
+            headingDeg: 359.6,
+          }),
+        ],
+      }),
+    },
+  });
+  const [row] = (await catalog.call('find_vessel', { mmsi: '366000003' })).data
+    .rows;
+  assert.deepEqual([row.course_deg, row.heading_deg], [0, 0]);
+});
+
 test('a destination with no letters counts as unknown', async () => {
   const catalog = composeCatalog({
     tools: coreTools,
@@ -397,4 +466,45 @@ test('vessels in an area can be counted by destination with a speed summary', as
   assert.deepEqual(result.data.stats, {
     speed_mps: { count: 2, min: 6.2, median: 6.2, mean: 6.2, max: 6.2 },
   });
+});
+
+test('vessels in an area leave out buoys and beacons', async () => {
+  const withAids = {
+    ...vessels(),
+    async getSnapshot() {
+      return {
+        records: [
+          ...records,
+          vessel('993672001', 37.8, -122.42, {
+            name: 'SF APPROACH N',
+            type: 'Cardinal Mark N',
+            speedMps: 0,
+            headingDeg: 135,
+          }),
+          vessel('993672002', 37.79, -122.43, { type: '' }),
+        ],
+        source: 'AISStream',
+        observedAtMs: Date.UTC(2026, 0, 1),
+        freshness: 'current',
+      };
+    },
+  };
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { vessels: withAids },
+  });
+  const all = await catalog.call('vessels_in_area', {
+    area: bay,
+    group_by: 'type',
+  });
+  assert.equal(all.data.total, 2);
+  assert.equal(all.summary.split(' in ')[0], '2 vessels');
+  assert.deepEqual(all.data.rows.map((row) => row.mmsi).sort(), [
+    '366999712',
+    '538001234',
+  ]);
+  assert.equal(all.data.breakdown.unknown_count, 0);
+  assert.ok(
+    !all.data.breakdown.groups.some((group) => /mark/i.test(group.value)),
+  );
 });

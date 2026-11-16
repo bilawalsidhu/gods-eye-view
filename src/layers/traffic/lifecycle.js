@@ -1,10 +1,10 @@
 import { observeTrafficSurface } from './surface.js';
-import * as Cesium from 'cesium';
-import { TRAFFIC_TIMING_ENABLED } from './policy.js';
-import {
-  claimCameraSensitivity,
-  releaseCameraSensitivity,
-} from '../../data/cameraSensitivity.js';
+import { CAMERA_CHANGED_THRESHOLD, TRAFFIC_TIMING_ENABLED } from './policy.js';
+import { resolveRoadMode } from './roadModes.js';
+import { cameraOf, drawOf, frameOf } from '../../render/rendererOf.js';
+
+/** Numbers each layer instance's draw sets apart. */
+let instances = 0;
 
 export function createLifecycle({
   state: layerState,
@@ -12,25 +12,42 @@ export function createLifecycle({
   parts,
   source,
 }) {
-  const { holdContinuousRender, releaseContinuousRender } = services.render;
   const { resetFlowTileCache } = source;
 
   const methods = {
     /**
-     * One-time initialisation. Creates the PointPrimitiveCollection and adds it
-     * to the scene (hidden). The collection is never removed and re-added — only
-     * toggled via `.show` to avoid destroy-on-remove errors.
+     * One-time initialisation. Makes the dots' draw set (hidden; it is
+     * shown and hidden with the layer) and the heat-lines' (emptied when
+     * the layer is disabled); both are let go on destroy.
      *
      * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
      */
     init(viewer) {
       layerState._viewer = viewer;
-      layerState._pointCollection = new Cesium.PointPrimitiveCollection({
-        blendOption: Cesium.BlendOption.TRANSLUCENT,
+      layerState._dotSet?.dispose();
+      layerState._heatSet?.dispose();
+      layerState._heatOverSet?.dispose();
+      const instance = ++instances;
+      const draw = drawOf(viewer);
+      layerState._dotSet = draw.points({
+        id: `traffic:${instance}:dots`,
+        blend: 'translucent',
+        show: false,
       });
-      // Add permanently — toggle with .show to avoid destroy-on-remove errors
-      viewer.scene.primitives.add(layerState._pointCollection);
-      layerState._pointCollection.show = false;
+      // Heat-lines drape on the 3D tiles only, as the dots' roads are
+      // sampled there; flow lines ask for terrain too, item by item.
+      layerState._heatSet = draw.lines({
+        id: `traffic:${instance}:heat`,
+        clampTo: 'tiles',
+      });
+      // The slow heat-lines, made after the jam ones' set so they draw over
+      // them, as their primitive was added after the jam lines'.
+      layerState._heatOverSet = draw.lines({
+        id: `traffic:${instance}:heat-over`,
+        clampTo: 'tiles',
+      });
+      layerState._heatJam = [];
+      layerState._heatLineCount = 0;
       layerState._dots = [];
       layerState._roads = [];
       layerState._count = 0;
@@ -43,6 +60,8 @@ export function createLifecycle({
       layerState._lastViewCenter = null;
       layerState._flowRoads = null;
       layerState._flowError = null;
+      layerState._flowStale = false;
+      layerState._flowOldestTileAt = null;
       if (TRAFFIC_TIMING_ENABLED) {
         layerState._trafficTimingCurrentAnchor = null;
         layerState._trafficTimingSequence = 0;
@@ -70,42 +89,53 @@ export function createLifecycle({
     },
 
     /**
-     * Enable the traffic layer. Shows the point collection, subscribes to the
-     * preRender animation loop and camera-change events, and kicks off an
-     * initial viewport check.
+     * Enable the traffic layer. Shows the dots, subscribes to the frame
+     * port's preRender for the animation and to the camera port's events,
+     * and kicks off an initial viewport check.
      *
      * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
      */
     enable(viewer) {
       if (layerState._enabled) return;
       layerState._enabled = true;
-      layerState._surfaceFrameRemover = observeTrafficSurface(viewer.scene);
-      if (layerState._roadMode !== 'tomtom') source.prefetch?.();
-      holdContinuousRender('traffic'); // per-frame animator (perf wave 2)
+      layerState._surfaceFrameRemover = observeTrafficSurface(viewer);
+      // OpenFreeMap metadata, unless only TomTom roads can be drawn.
+      if (
+        resolveRoadMode(layerState._roadMode, true, layerState._roadModes) !==
+        'tomtom'
+      )
+        source.prefetch?.();
+      parts.animation.syncRenderDemand();
       layerState._lastAnimTime = 0;
-      layerState._pointCollection.show = true;
+      if (layerState._dotSet) layerState._dotSet.show = layerState._showDots;
 
-      layerState._preRenderRemover = viewer.scene.preRender.addEventListener(
+      const camera = cameraOf(viewer);
+      layerState._preRenderRemover = frameOf(viewer).on(
+        'preRender',
         parts.animation.animate,
       );
       if (TRAFFIC_TIMING_ENABLED) {
         parts.timing.clearTrafficTimingEntries();
         layerState._trafficTimingCurrentAnchor = null;
         layerState._trafficTimingPostRenderRemovers = new Set();
-        layerState._trafficTimingMoveEndRemover =
-          viewer.camera.moveEnd.addEventListener(
-            parts.timing.markTrafficTimingMoveEnd,
-          );
+        layerState._trafficTimingMoveEndRemover = camera.on(
+          'moveEnd',
+          parts.timing.markTrafficTimingMoveEnd,
+        );
       }
 
-      // Share the 5% movement threshold with other camera-driven layers.
-      viewer.camera.changed.addEventListener(parts.viewport.onCameraChanged);
+      // Its own 5% movement threshold: the camera measures it for this
+      // listener alone.
+      layerState._cameraRemover = camera.on(
+        'changed',
+        () => parts.viewport.onCameraChanged(),
+        { threshold: CAMERA_CHANGED_THRESHOLD },
+      );
       // Always inspect the final view, even when the last flight step is below
-      // camera.changed's movement threshold.
-      layerState._arrivalRemover = viewer.camera.moveEnd.addEventListener(() =>
+      // the changed threshold.
+      layerState._arrivalRemover = camera.on('moveEnd', () =>
         parts.viewport.onCameraChanged({ immediate: true }),
       );
-      claimCameraSensitivity(viewer.camera, 'traffic', 0.05);
 
       // Enabling is explicit intent, not a camera gesture that needs settling.
       parts.viewport.onCameraChanged({ immediate: true });
@@ -142,7 +172,7 @@ export function createLifecycle({
     disable(viewer) {
       layerState._enabled = false;
       services.credits?.hideOsmCredit?.(layerState._viewer, 'traffic');
-      releaseContinuousRender('traffic');
+      parts.animation.syncRenderDemand();
       clearTimeout(layerState._fetchTimeout);
       clearInterval(layerState._enableKickTimer);
       layerState._enableKickTimer = null;
@@ -160,6 +190,8 @@ export function createLifecycle({
       // A stale outage from the last session would misreport a fresh enable —
       // the next load re-derives feed health from real evidence.
       layerState._flowError = null;
+      layerState._flowStale = false;
+      layerState._flowOldestTileAt = null;
 
       layerState._surfaceFrameRemover?.();
       layerState._surfaceFrameRemover = null;
@@ -176,26 +208,28 @@ export function createLifecycle({
         layerState._trafficTimingCurrentAnchor = null;
       }
 
-      viewer.camera.changed.removeEventListener(parts.viewport.onCameraChanged);
+      layerState._cameraRemover?.();
+      layerState._cameraRemover = null;
       layerState._arrivalRemover?.();
       layerState._arrivalRemover = null;
-      releaseCameraSensitivity(viewer.camera, 'traffic');
-      if (layerState._pointCollection) layerState._pointCollection.show = false;
+      if (layerState._dotSet) layerState._dotSet.show = false;
     },
 
     /**
-     * Permanently tear down the layer. Disables it, removes the point collection
-     * from the scene, and clears the tile cache.
+     * Permanently tear down the layer. Disables it, lets the dots' and
+     * heat-lines' draw sets go, and clears the tile cache.
      *
      * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
      */
     destroy(viewer) {
       this.disable(viewer);
-      if (layerState._pointCollection) {
-        viewer.scene.primitives.remove(layerState._pointCollection);
-        layerState._pointCollection = null;
-      }
       parts.rendering.removeHeatLines();
+      layerState._dotSet?.dispose();
+      layerState._dotSet = null;
+      layerState._heatSet?.dispose();
+      layerState._heatSet = null;
+      layerState._heatOverSet?.dispose();
+      layerState._heatOverSet = null;
       layerState._tileCache.clear();
       resetFlowTileCache();
       layerState._count = 0;

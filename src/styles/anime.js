@@ -1,4 +1,4 @@
-import { msg } from '../i18n/index.js';
+import { msg } from '../i18n/marker.js';
 
 /**
  * Anime / Studio Ghibli Style — Cel-shading + Saturation boost

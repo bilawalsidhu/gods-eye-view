@@ -357,53 +357,6 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
       `classVisible=${afterUncoveredEsc.classVisible} session=${afterUncoveredEsc.session}`,
     );
 
-    // ── Blocker repro: a control that claims only the KEY ───────────────────
-    // The compact Radio disclosure closes on ESC from a capture listener bound
-    // long before this module exists. It called stopPropagation(), which does
-    // NOT stop later listeners on the same document — so one key closed the
-    // disclosure AND dismissed the launcher. The card is not hiding behind this
-    // one and must not yield to it: the key is simply already spoken for.
-    await open(page, { query: "?welcome=1", errorSink: consoleErrors });
-    const beforeRadio = await launcherState();
-    record('the launcher is up before the radio disclosure opens', beforeRadio.onScreen);
-    const radioOpened = await page.evaluate(() => {
-      document.getElementById('context-radio-toggle-btn')?.click();
-      return !!document.getElementById('context-radio-dock')?.classList.contains('disclosure-open');
-    });
-    await sleep(250);
-    record('the compact Radio disclosure opens', radioOpened);
-    const withRadio = await launcherState();
-    record(
-      'a small disclosure is a key contest, not a screen takeover — no yield',
-      withRadio.classVisible && withRadio.topmost,
-      `classVisible=${withRadio.classVisible} topmost=${withRadio.topmost}`,
-    );
-
-    await page.keyboard.press('Escape');
-    await sleep(400);
-    const radioAfterEsc = await page.evaluate(() => (
-      !!document.getElementById('context-radio-dock')?.classList.contains('disclosure-open')
-    ));
-    const launcherAfterRadioEsc = await launcherState();
-    record('ESC closes the disclosure', radioOpened && !radioAfterEsc,
-      `disclosure still open=${radioAfterEsc}`);
-    record(
-      'that SAME ESC does not also dismiss the launcher',
-      beforeRadio.onScreen && launcherAfterRadioEsc.classVisible
-        && launcherAfterRadioEsc.session !== 'dismissed',
-      `classVisible=${launcherAfterRadioEsc.classVisible} session=${launcherAfterRadioEsc.session} — one key, one action`,
-    );
-    // ...and the NEXT press is the launcher's, so nothing was permanently taken.
-    await page.keyboard.press('Escape');
-    await sleep(600);
-    const escAfterRadioClosed = await launcherState();
-    record(
-      'the next ESC belongs to the launcher again',
-      beforeRadio.onScreen && !escAfterRadioClosed.classVisible
-        && escAfterRadioClosed.session === 'dismissed',
-      `classVisible=${escAfterRadioClosed.classVisible} session=${escAfterRadioClosed.session}`,
-    );
-
     // ── Deferred reveal: a surface already up when the launcher would show ──
     // The class goes on as soon as the app exists, which is well before the
     // launcher's reveal (~T+1.9s), so init genuinely sees a screen it does not

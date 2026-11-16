@@ -1,5 +1,4 @@
 import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
-import { StyleManager } from './ui/applicationShell.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,16 +20,17 @@ function locationSearchHandler() {
 
 test('the ACTIVE STYLE indicator is written from the style name and nothing else', () => {
   // A free-text location search used to write the searched CITY into the
-  // top-right style slot, so the corner read "ACTIVE STYLE / TOKYO".
-  const writes = [...ui.matchAll(/this\._styleIndicator\.textContent\s*=/g)];
+  // top-right style slot, so the corner read "ACTIVE STYLE / TOKYO". The
+  // corner renders the style VisualSettings publishes, from one writer.
+  const writes = [...ui.matchAll(/\.publishStyle\(/g)];
   assert.equal(writes.length, 1, 'the style indicator must have exactly one writer');
   assert.match(
-    ui.slice(writes[0].index, writes[0].index + 160),
-    /this\._styleIndicator\.textContent = STYLE_STATUS_LABELS\[styleName\]\s*\?\s*t\(STYLE_STATUS_LABELS\[styleName\]\)\s*:\s*styleName\.toUpperCase\(\);/,
+    ui.slice(writes[0].index, writes[0].index + 200),
+    /\.publishStyle\(\{\s*name,\s*label: STYLE_STATUS_LABELS\[name\]\s*\?\s*t\(STYLE_STATUS_LABELS\[name\]\)\s*:\s*name\.toUpperCase\(\),/,
   );
 
   const handler = locationSearchHandler();
-  assert.doesNotMatch(handler, /_styleIndicator/, 'location search must not touch the style indicator');
+  assert.doesNotMatch(handler, /publishStyle|_publishActiveStyle/, 'location search must not touch the style indicator');
   assert.doesNotMatch(handler, /active-style-name/, 'location search must not touch the style indicator');
 });
 
@@ -95,11 +95,13 @@ test('a deferred lookup that never flies leaves the readout standing', () => {
     /stamp: \(\) =>\s*this\._stampNavigation\(\{\s*cancelPendingSelection,\s*clearSearchedLocation: false,?\s*\}\)/,
   );
 
-  const reassert = ui.indexOf('  _reassertNavigationHandoff(generation) {');
+  const reassert = ui.indexOf(
+    "  _reassertNavigationHandoff(generation, { trackingOrigin = 'tool' } = {}) {",
+  );
   assert.ok(reassert > 0, '_reassertNavigationHandoff is missing');
   assert.match(
     ui.slice(reassert, reassert + 900),
-    /release: \(\) => \{[\s\S]{0,320}?this\.clearLocation\(\);[\s\S]{0,200}?this\._releaseFollowCamera\(\)/,
+    /release: \(\) => \{[\s\S]{0,320}?this\.clearLocation\(\);[\s\S]{0,200}?this\._releaseFollowCamera\(\{ trackingOrigin \}\)/,
   );
 
   // …and the policy only reaches `release` after its authority checks pass.

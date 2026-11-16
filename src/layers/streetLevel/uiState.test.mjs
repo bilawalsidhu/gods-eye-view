@@ -67,7 +67,7 @@ test('the filter controls show only for a lit provider that honours them', () =>
   );
 });
 
-test('a lit provider that dates by upload puts a note under SINCE', () => {
+test('a lit provider that dates by upload notes it beside the SINCE value', () => {
   const kartaView = provider({
     id: 'kartaview',
     name: 'KartaView',
@@ -75,7 +75,7 @@ test('a lit provider that dates by upload puts a note under SINCE', () => {
   });
   const note = (providers) => composeUIState({ ...base, providers }).sinceNote;
   assert.equal(note([provider()]), null, 'Mapillary: capture date');
-  assert.equal(note([kartaView]), 'KartaView: by upload date');
+  assert.equal(note([kartaView]), '(by upload date)');
   assert.equal(note([{ ...kartaView, on: false }]), null, 'only while lit');
 });
 

@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import {
   EMPTY_ACCEPTED_CATALOG_SNAPSHOT,
   DEFAULT_RADIO_FILTER,
@@ -8,13 +7,12 @@ import {
 export function createState({ services }) {
   const layerState = {};
 
-  layerState._radioEarthScreenCenter = new Cesium.Cartesian2();
+  // Scratch results the Earth-disc projection writes into.
+  layerState._radioEarthScreenCenter = { x: 0, y: 0 };
 
-  layerState._radioEarthToCenter = new Cesium.Cartesian3();
+  layerState._radioEarthToCenter = { x: 0, y: 0, z: 0 };
 
   layerState._viewer = null;
-
-  layerState._dataSource = null;
 
   layerState._enabled = false;
 
@@ -25,6 +23,7 @@ export function createState({ services }) {
   layerState._stale = false;
 
   layerState._degraded = false;
+  layerState._rejectedStationCount = 0;
 
   layerState._error = null;
 
@@ -37,14 +36,13 @@ export function createState({ services }) {
   layerState._stationById = new Map();
 
   layerState._categories = [];
+  layerState._categoriesLocale = null;
 
   layerState._renderById = new Map();
 
   layerState._filter = DEFAULT_RADIO_FILTER;
 
   layerState._selectedId = null;
-
-  layerState._selectedEntity = null;
 
   layerState._selectionGeneration = 0;
 
@@ -75,6 +73,8 @@ export function createState({ services }) {
   layerState._tuningPreviewId = null;
 
   layerState._tuningStartStationId = null;
+
+  layerState._tuningResumesPlayback = false;
 
   layerState._tuningResolutionSnapshot = EMPTY_ACCEPTED_CATALOG_SNAPSHOT;
 
@@ -118,7 +118,7 @@ export function createState({ services }) {
 
   layerState._playFallbackAttemptId = null;
 
-  layerState._clickHandler = null;
+  layerState._clickSubscription = null;
 
   layerState._horizonTimer = null;
 
@@ -131,8 +131,6 @@ export function createState({ services }) {
   layerState._requestGeneration = 0;
 
   layerState._sessionGeneration = 0;
-
-  layerState._removeClusterListener = null;
 
   layerState._overlayPublishTimer = null;
 

@@ -37,6 +37,150 @@ function tileJsonOrigin(tileJsonUrl) {
   }
 }
 
+const DECODER_IDS = new WeakMap();
+let nextDecoderId = 1;
+
+/** Give the page a turn; shared completion must not run every consumer's selection in one task. */
+export const nextTask = () =>
+  globalThis.scheduler?.yield
+    ? globalThis.scheduler.yield()
+    : new Promise((resolve) => setTimeout(resolve, 0));
+
+function sharedDecoderKey(decode) {
+  let id = DECODER_IDS.get(decode);
+  if (!id) {
+    id = nextDecoderId++;
+    DECODER_IDS.set(decode, id);
+  }
+  return id;
+}
+
+/**
+ * Bounded decoded ownership shared by compatible vector-tile consumers.
+ * Entries are keyed by decoder identity, immutable tile template and XYZ;
+ * callers still keep their own consumer-shaped caches and request lifetimes.
+ */
+export function createSharedDecodedTileCache({
+  maxEntries = 192,
+  maxCacheBytes = 64 * 1024 * 1024,
+} = {}) {
+  const cache = new Map();
+  const flights = new Map();
+  let cacheBytes = 0;
+  let generation = 0;
+
+  const release = (entry) => {
+    if (!entry || entry.released) return;
+    entry.released = true;
+    entry.value?.releaseSharedCacheEntry?.();
+  };
+  const remove = (key, expected = null) => {
+    const entry = cache.get(key);
+    if (!entry || (expected && entry !== expected)) return false;
+    cache.delete(key);
+    cacheBytes -= entry.size;
+    release(entry);
+    return true;
+  };
+  const evict = () => {
+    while (cache.size > maxEntries || cacheBytes > maxCacheBytes) {
+      remove(cache.keys().next().value);
+    }
+  };
+  const resize = (key, value, entry, size) => {
+    if (!Number.isFinite(size) || size < 0) return;
+    const previousSize = entry.size;
+    entry.size = size;
+    if (cache.get(key) !== entry || entry.value !== value) return;
+    cacheBytes += size - previousSize;
+    evict();
+  };
+  const store = (key, value, size) => {
+    const entry = { value, size, released: false };
+    if (!Number.isFinite(size) || size < 0 || size > maxCacheBytes)
+      return entry;
+    remove(key);
+    cache.set(key, entry);
+    cacheBytes += size;
+    try {
+      value?.bindSharedCacheEntry?.(
+        (nextSize) => resize(key, value, entry, nextSize),
+        size,
+      );
+    } catch (error) {
+      remove(key, entry);
+      throw error;
+    }
+    evict();
+    return entry;
+  };
+  const subscribe = (flight, signal, key) => {
+    signal?.throwIfAborted();
+    flight.users += 1;
+    return new Promise((resolve, reject) => {
+      const abort = () => reject(signal.reason);
+      signal?.addEventListener('abort', abort, { once: true });
+      flight.promise
+        .then(resolve, reject)
+        .finally(() => signal?.removeEventListener('abort', abort));
+    }).finally(() => {
+      flight.users -= 1;
+      if (!flight.users && flights.get(key) === flight) {
+        flights.delete(key);
+        flight.controller.abort();
+      }
+    });
+  };
+
+  return {
+    get(key) {
+      const hit = cache.get(key);
+      if (!hit) return null;
+      cache.delete(key);
+      cache.set(key, hit);
+      return hit;
+    },
+    set(key, value, size) {
+      return store(key, value, size);
+    },
+    load(key, signal, loader) {
+      const hit = this.get(key);
+      if (hit) return Promise.resolve(hit);
+      let flight = flights.get(key);
+      if (!flight) {
+        flight = {
+          controller: new AbortController(),
+          users: 0,
+          promise: null,
+          generation,
+        };
+        flights.set(key, flight);
+        flight.promise = Promise.resolve()
+          .then(() => loader(flight.controller.signal))
+          .then(({ value, size }) => {
+            flight.controller.signal.throwIfAborted();
+            if (flight.generation !== generation)
+              throw new DOMException('Shared tile cache cleared', 'AbortError');
+            return store(key, value, size);
+          })
+          .finally(() => {
+            if (flights.get(key) === flight) flights.delete(key);
+          });
+      }
+      return subscribe(flight, signal, key);
+    },
+    clear() {
+      generation += 1;
+      for (const flight of flights.values()) flight.controller.abort();
+      flights.clear();
+      for (const entry of cache.values()) release(entry);
+      cache.clear();
+      cacheBytes = 0;
+    },
+    stats: () => ({ entries: cache.size, bytes: cacheBytes }),
+  };
+}
+
 /** A decoded XYZ cache with bounded workers, reads, retained bytes and request lifetimes. */
 export function createVectorTileSource({
   tileJsonUrl,
@@ -52,6 +196,9 @@ export function createVectorTileSource({
   maxResponseBytes = 4 * 1024 * 1024,
   metadataCooldownMs = 5000,
   now = Date.now,
+  sharedDecodedCache = null,
+  selectDecoded = (value) => value,
+  selectedSize = null,
 }) {
   const cache = new Map();
   const active = new Set();
@@ -66,12 +213,12 @@ export function createVectorTileSource({
   let activeWorkers = 0;
   const waiters = [];
 
-  async function request(url, parentSignal, read) {
+  async function request(url, parentSignal, read, trackAsSource = true) {
     const controller = new AbortController();
     const abort = () => controller.abort(parentSignal?.reason);
     parentSignal?.throwIfAborted();
     parentSignal?.addEventListener('abort', abort, { once: true });
-    active.add(controller);
+    if (trackAsSource) active.add(controller);
     const timer = setTimeout(
       () =>
         controller.abort(
@@ -113,7 +260,7 @@ export function createVectorTileSource({
     } finally {
       clearTimeout(timer);
       parentSignal?.removeEventListener('abort', abort);
-      active.delete(controller);
+      if (trackAsSource) active.delete(controller);
     }
   }
 
@@ -271,59 +418,109 @@ export function createVectorTileSource({
 
   async function getTile(tile, meta, signal, epoch) {
     signal?.throwIfAborted();
+    if (epoch !== generation)
+      throw new DOMException('Source cleared', 'AbortError');
     const key = `${meta.template}:${tile.z}/${tile.x}/${tile.y}`;
+    const sharedKey = `${sharedDecoderKey(decode)}:${key}`;
     const hit = cache.get(key);
     if (hit && now() - hit.at < ttlMs) {
       cache.delete(key);
       cache.set(key, hit);
       return hit.value;
     }
+    if (hit) {
+      cache.delete(key);
+      cacheBytes -= hit.size;
+    }
+    const loadDecoded = async (ownedSignal, sharedOwnership = false) => {
+      await acquire(ownedSignal);
+      try {
+        ownedSignal.throwIfAborted();
+        fetched++;
+        const url = meta.template
+          .replace('{z}', tile.z)
+          .replace('{x}', tile.x)
+          .replace('{y}', tile.y);
+        const fetchStart = performance.now();
+        const bytes = await request(
+          url,
+          ownedSignal,
+          async (res, requestSignal) => {
+            const bodyStart = performance.now();
+            const value = await readResponseBytesCapped(
+              res,
+              maxResponseBytes,
+              requestSignal,
+            );
+            phaseTiming('tile-body-read', bodyStart, {
+              source: allowedOrigin,
+              key,
+              bytes: value.byteLength,
+            });
+            return value;
+          },
+          !sharedOwnership,
+        );
+        phaseTiming('tile-fetch', fetchStart, {
+          source: allowedOrigin,
+          key,
+          bytes: bytes.byteLength,
+        });
+        const decodeStart = performance.now();
+        const decoded = decode(bytes, tile.z, tile.x, tile.y);
+        phaseTiming('decode', decodeStart, { source: allowedOrigin, key });
+        ownedSignal.throwIfAborted();
+        // Body-based decoded-storage estimate; projections may increase it.
+        return { value: decoded, size: bytes.byteLength * 4 };
+      } finally {
+        release();
+      }
+    };
     let flight = flights.get(key);
     if (!flight) {
       flight = { controller: new AbortController(), users: 0 };
       const ownedSignal = flight.controller.signal;
       flights.set(key, flight);
       flight.promise = (async () => {
-        await acquire(ownedSignal);
-        try {
+        const decodedEntry = sharedDecodedCache
+          ? await sharedDecodedCache.load(
+              sharedKey,
+              ownedSignal,
+              (sharedSignal) => loadDecoded(sharedSignal, true),
+            )
+          : await loadDecoded(ownedSignal);
+        ownedSignal.throwIfAborted();
+        if (sharedDecodedCache) {
+          await nextTask();
           ownedSignal.throwIfAborted();
           if (epoch !== generation)
             throw new DOMException('Source cleared', 'AbortError');
-          fetched++;
-          const url = meta.template
-            .replace('{z}', tile.z)
-            .replace('{x}', tile.x)
-            .replace('{y}', tile.y);
-          const fetchStart = performance.now();
-          const bytes = await request(url, ownedSignal, (res, requestSignal) =>
-            readResponseBytesCapped(res, maxResponseBytes, requestSignal),
-          );
-          phaseTiming('tile-fetch', fetchStart, {
-            source: allowedOrigin,
-            key,
-            bytes: bytes.byteLength,
-          });
-          const decodeStart = performance.now();
-          const value = decode(bytes, tile.z, tile.x, tile.y);
-          phaseTiming('decode', decodeStart, { source: allowedOrigin, key });
-          ownedSignal.throwIfAborted();
-          // Body-based decoded-storage estimate; never stringify geometry on the load path.
-          const size = bytes.byteLength * 4;
-          if (epoch === generation && size <= maxCacheBytes) {
-            if (cache.has(key)) cacheBytes -= cache.get(key).size;
-            cache.delete(key);
-            cache.set(key, { at: now(), value, size });
-            cacheBytes += size;
-            while (cache.size > maxEntries || cacheBytes > maxCacheBytes) {
-              const oldest = cache.keys().next().value;
-              cacheBytes -= cache.get(oldest).size;
-              cache.delete(oldest);
-            }
-          }
-          return value;
-        } finally {
-          release();
         }
+        const selected = selectDecoded(decodedEntry.value, tile);
+        // Shared entries stay authoritative; consumers own their nested arrays.
+        const value = sharedDecodedCache ? structuredClone(selected) : selected;
+        // A consumer of a shared tile retains only its own slice; charge that,
+        // not the whole decoded tile, which the shared cache already counts.
+        let size = decodedEntry.size;
+        if (sharedDecodedCache && selectedSize) {
+          try {
+            size = selectedSize(value);
+          } catch {
+            size = decodedEntry.size;
+          }
+        }
+        if (epoch === generation && size <= maxCacheBytes) {
+          if (cache.has(key)) cacheBytes -= cache.get(key).size;
+          cache.delete(key);
+          cache.set(key, { at: now(), value, size });
+          cacheBytes += size;
+          while (cache.size > maxEntries || cacheBytes > maxCacheBytes) {
+            const oldest = cache.keys().next().value;
+            cacheBytes -= cache.get(oldest).size;
+            cache.delete(oldest);
+          }
+        }
+        return value;
       })().finally(() => {
         if (flights.get(key) === flight) flights.delete(key);
       });

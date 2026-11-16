@@ -5,7 +5,7 @@
  * Pure selection policy for the bundled local-infrastructure layers
  * (`local-datacenters`, `local-dams`, and any future `createLocalGeoJsonLayer`
  * dataset). Cesium-specific projection, occlusion, and stem geometry stay in
- * `localGeojson.js`; this module turns the resulting in-view records into a
+ * `localGeojsonCore.js`; this module turns the resulting in-view records into a
  * bounded "active" set — the only records that layer should spend per-frame
  * stem-geometry and ground-sample work on.
  *
@@ -80,7 +80,7 @@ export const INFRA_LOD_INCUMBENT_BONUS = 250;
 
 /**
  * Distance at or beyond which the proximity penalty is fully applied (m).
- * Matches LOCAL_OVERLAY_MAX_DISTANCE_M's order of magnitude in localGeojson.js.
+ * Matches LOCAL_OVERLAY_MAX_DISTANCE_M's order of magnitude in infrastructureOverlayEntry.js.
  */
 export const INFRA_LOD_FAR_M = 12_000_000;
 
@@ -97,7 +97,7 @@ export const INFRA_LOD_MAX_DISTANCE_PENALTY = 200;
  * (callers only compare it), but every input is normalized so the output is
  * always a finite number.
  *
- * @param {number} priority Existing label-priority score (localGeojson.js).
+ * @param {number} priority Existing label-priority score (localGeojsonCore.js).
  * @param {number} distanceM Camera→feature distance in metres.
  * @param {boolean} isIncumbent Record currently holds an active stem.
  * @param {object} [options]
@@ -297,7 +297,7 @@ export function applyInfraEvictionGrace({
  * ------------------------------------------------------------------ */
 
 /**
- * Probe window for the motion fallback. `localGeojson.js` marks its selection
+ * Probe window for the motion fallback. `localGeojsonCore.js` marks its selection
  * dirty on `moveEnd`, which covers drags, one-shot `setView`, and voice
  * `flyTo` — but a tracked-entity follow camera, a Cockpit view, a route
  * flight, or a continuous orbit never emits one. Without a fallback the

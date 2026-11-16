@@ -21,10 +21,11 @@ import {
   GLOBE_VIEW,
   searchAndFlyTo,
 } from './locations.js';
+import { bindFakeCesiumCamera } from './testSupport/fakeCameraPort.mjs';
 
 function stubViewer() {
   const flights = [];
-  return {
+  return bindFakeCesiumCamera({
     flights,
     scene: { globe: null, canvas: { clientWidth: 0, clientHeight: 0 } },
     camera: {
@@ -39,7 +40,7 @@ function stubViewer() {
       lookAt() {},
       lookAtTransform() {},
     },
-  };
+  });
 }
 
 const AUSTIN_RESULT = {
@@ -604,29 +605,22 @@ test('GLOBE_VIEW preset height sits in the global view band', () => {
   assert.equal(GLOBE_VIEW.pitchDeg, -90);
 });
 
-// The globe flight's callbacks are what resolves Reset Globe / zoom_to_globe.
-// They were published under this module's OWN option names (`onComplete` /
-// `onCancel`), which Cesium's Camera.flyTo ignores — so neither ever fired and
-// every caller resolved off its ~4.2 s watchdog timeout instead of the flight.
-test('the globe flight publishes its callbacks under Cesium\'s own option names', () => {
+// The globe flight's callbacks are what resolves Reset Globe / zoom_to_globe:
+// each must reach the caller when the flight ends that way.
+test('the globe flight ends through its own callbacks', () => {
   const viewer = stubViewer();
   const fired = [];
-  flyToGlobeView(viewer, {
+  const hooks = {
     onComplete: () => fired.push('complete'),
     onCancel: () => fired.push('cancel'),
-  });
-
-  const flight = viewer.flights[0];
-  assert.equal(typeof flight.complete, 'function', 'Cesium resolves arrival through `complete`');
-  assert.equal(typeof flight.cancel, 'function', 'Cesium reports supersession through `cancel`');
-  // Not merely present under both spellings: the ignored names must be gone,
-  // or a later reader can "fix" the wrong one back.
-  assert.equal('onComplete' in flight, false, 'Cesium ignores onComplete — do not publish it');
-  assert.equal('onCancel' in flight, false, 'Cesium ignores onCancel — do not publish it');
-
-  flight.complete();
-  flight.cancel();
+  };
+  flyToGlobeView(viewer, hooks);
+  flyToGlobeView(viewer, hooks);
+  viewer.flights[0].complete();
+  viewer.flights[1].cancel();
   assert.deepEqual(fired, ['complete', 'cancel'], 'each hook reaches the caller it belongs to');
+  viewer.flights[0].cancel();
+  assert.deepEqual(fired, ['complete', 'cancel'], 'a flight ends once');
 });
 
 test('a globe flight without callbacks still flies (both hooks are optional)', () => {
@@ -634,8 +628,7 @@ test('a globe flight without callbacks still flies (both hooks are optional)', (
   const target = flyToGlobeView(viewer);
   assert.equal(viewer.flights.length, 1);
   assert.equal(target.heightM, GLOBE_VIEW.heightM);
-  assert.equal(viewer.flights[0].complete, undefined);
-  assert.equal(viewer.flights[0].cancel, undefined);
+  viewer.flights[0].complete();
 });
 
 test('geocoded Location branches forward the resolved-navigation ownership hook', () => {
@@ -674,8 +667,13 @@ test('city and landmark flights expose completion and cancellation hooks', () =>
     onComplete: () => overviewEvents.push('complete'),
     onCancel: () => overviewEvents.push('cancel'),
   });
+  flyToPresetLocation(overviewViewer, 'austin', {
+    viewMode: 'overview',
+    onComplete: () => overviewEvents.push('complete'),
+    onCancel: () => overviewEvents.push('cancel'),
+  });
   overviewViewer.flights[0].complete();
-  overviewViewer.flights[0].cancel();
+  overviewViewer.flights[1].cancel();
   assert.deepEqual(overviewEvents, ['complete', 'cancel']);
 
   const landmarkViewer = stubViewer();
@@ -684,8 +682,12 @@ test('city and landmark flights expose completion and cancellation hooks', () =>
     onComplete: () => landmarkEvents.push('complete'),
     onCancel: () => landmarkEvents.push('cancel'),
   });
+  flyToPresetLocation(landmarkViewer, 'austin', {
+    onComplete: () => landmarkEvents.push('complete'),
+    onCancel: () => landmarkEvents.push('cancel'),
+  });
   landmarkViewer.flights[0].complete();
-  landmarkViewer.flights[0].cancel();
+  landmarkViewer.flights[1].cancel();
   assert.deepEqual(landmarkEvents, ['complete', 'cancel']);
 });
 
@@ -777,4 +779,36 @@ test('a precise search without an outline frames against the resolved ground, no
   assert.ok(Math.abs(target.height - (171 + 30)) < 0.5, `target ${target.height}`);
   const eye = target.height + flight.offset.range * Math.sin(-flight.offset.pitch);
   assert.ok(eye > 171 + 100, `eye ${eye} must clear the 171 m surface`);
+});
+
+test('searchAndFlyTo reports the place it flew to, whichever framing it chose', async () => {
+  // A city frames its viewport.
+  const city = await runSearch(stubViewer(), {});
+  assert.equal(city.latitude, 30.2672);
+  assert.equal(city.longitude, -97.7431);
+  // A precise place flies to a landmark.
+  const place = await runSearch(stubViewer(), {}, {
+    query: 'Texas State Capitol',
+    result: {
+      formatted_address: '1100 Congress Ave, Austin, TX',
+      types: ['establishment', 'point_of_interest'],
+      geometry: { location: { lat: 30.2747, lng: -97.7403 } },
+    },
+  });
+  assert.equal(place.latitude, 30.2747);
+  assert.equal(place.longitude, -97.7403);
+  // A natural region frames a swath.
+  const region = await runSearch(stubViewer(), {}, {
+    query: 'Rocky Mountains',
+    result: {
+      formatted_address: 'Rocky Mountains',
+      types: ['natural_feature', 'establishment'],
+      geometry: {
+        location: { lat: 43.7, lng: -110.7 },
+        viewport: { southwest: { lat: 35, lng: -118 }, northeast: { lat: 52, lng: -104 } },
+      },
+    },
+  });
+  assert.equal(region.latitude, 43.7);
+  assert.equal(region.longitude, -110.7);
 });

@@ -40,7 +40,7 @@ body:
     attributes:
       label: OS, Node version, browser
       description: Include the versions you can find. Write "unknown" for anything unavailable.
-      placeholder: "Windows 11, Node 24.14.0, Chrome 151"
+      placeholder: "Windows 11, Node 24.22.2, Chrome 151"
     validations:
       required: true
   - type: input

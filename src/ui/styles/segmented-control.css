@@ -1,0 +1,51 @@
+/* Shared one-of-many control. Feature classes retain surrounding placement. */
+.gev-segmented {
+  display: inline-flex;
+  min-width: 0;
+  border: 1px solid var(--glass-border-hover);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.gev-segmented[hidden] {
+  display: none;
+}
+.gev-segment {
+  flex: 1;
+  min-width: min-content;
+  min-height: 24px;
+  margin: 0;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font: 9px/1.25 var(--font-mono);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  overflow-wrap: normal;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+.gev-segment + .gev-segment {
+  border-left: 1px solid var(--glass-border);
+}
+.gev-segment:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+.gev-segment[aria-checked='true'] {
+  background: var(--accent);
+  color: #000;
+}
+.gev-segment:focus-visible {
+  position: relative;
+  outline: 2px solid var(--text-primary);
+  outline-offset: -3px;
+  box-shadow: inset 0 0 0 4px #061014;
+}
+.gev-segment:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}

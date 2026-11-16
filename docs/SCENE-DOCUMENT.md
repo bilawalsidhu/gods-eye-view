@@ -1,6 +1,6 @@
 # Scene document format
 
-Scenes exports a UTF-8 JSON project. Version 5 adds [data packs](DIRECTOR-DATA-PACKS.md)
+Authoring exports a UTF-8 JSON project. Version 5 adds [data packs](DIRECTOR-DATA-PACKS.md)
 and is the write format. Versions 1, 2, 3, 4 and unversioned legacy files migrate on
 import without converting their existing shots into authored moves. Unknown versions or unsupported fields are rejected with
 a field path before the current project, selection or saved bytes change.

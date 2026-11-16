@@ -15,6 +15,7 @@ body.recording-mode #cctv-panel,
 body.recording-mode #radio-panel,
 body.recording-mode #global-context-panel,
 body.recording-mode #gev-voice-control,
+body.recording-mode #utilities-panel,
 body.recording-mode #scene-panel {
   opacity: 0 !important;
   visibility: hidden !important;

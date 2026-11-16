@@ -7,6 +7,7 @@ import {
   BLOOM_SCALE_VERSION,
   decodeBloomIntensity,
 } from '../bloom.js';
+import { RETIRED_STYLES } from '../visualStylePolicy.js';
 
 /** @constant {number} Current schema version for project migration */
 export const PROJECT_VERSION = SCENE_DOCUMENT_VERSION;
@@ -262,7 +263,9 @@ export function normalizeShot(
     ...(rawShot?.dataPackIds ? { dataPackIds: [...rawShot.dataPackIds] } : {}),
     ...(rawShot?.move ? { move: deepClone(rawShot.move) } : {}),
     visual: {
-      style: visual.style || 'normal',
+      style: RETIRED_STYLES.includes(visual.style)
+        ? 'normal'
+        : visual.style || 'normal',
       bloom: normalizeBloomState(bloom, {
         projectVersion,
         fallbackIntensity: 50,

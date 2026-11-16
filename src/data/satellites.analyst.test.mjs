@@ -96,7 +96,7 @@ test('satellite getAnalystRecords: disabled or empty catalog returns []', () => 
 test('satellite getAnalystRecords: core rows beat dense extras under the cap', () => {
   const satrec = twoline2satrec(ISS_L1, ISS_L2);
   const point = {
-    position: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 420_000),
+    pos: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 420_000),
   };
   _setTrackedSatelliteRefreshStateForTest({
     noradId: ISS_NORAD,
@@ -112,7 +112,7 @@ test('satellite getAnalystRecords: core rows beat dense extras under the cap', (
         name: 'STARLINK-TEST',
         satrec,
         group: 'dense',
-        point: { position: Cesium.Cartesian3.fromDegrees(-90, 20, 550_000) },
+        point: { pos: Cesium.Cartesian3.fromDegrees(-90, 20, 550_000) },
       },
       {
         noradId: 24876,
@@ -120,7 +120,7 @@ test('satellite getAnalystRecords: core rows beat dense extras under the cap', (
         satrec,
         group: 'gps-ops',
         point: {
-          position: Cesium.Cartesian3.fromDegrees(-100, 10, 20_200_000),
+          pos: Cesium.Cartesian3.fromDegrees(-100, 10, 20_200_000),
         },
       },
     ],
@@ -148,6 +148,55 @@ test('satellite getAnalystRecords: core rows beat dense extras under the cap', (
       );
       assert.deepEqual(JSON.parse(JSON.stringify(row)), row);
     }
+  } finally {
+    _clearDenseCatalogStateForTest();
+  }
+});
+
+test('satellite getAnalystRecords: a hidden class stays out, the tracked one stays in', () => {
+  const satrec = twoline2satrec(ISS_L1, ISS_L2);
+  const at = (lon, alt) => ({
+    position: Cesium.Cartesian3.fromDegrees(lon, 10, alt),
+  });
+  _setTrackedSatelliteRefreshStateForTest({
+    noradId: ISS_NORAD,
+    name: 'ISS (ZARYA)',
+    satrec,
+    entity: {},
+    point: at(-97, 420_000),
+    viewer: {},
+    now: () => Date.now(),
+    satelliteClass: 'stations',
+    classes: {
+      stations: false,
+      imaging: true,
+      telecom: false,
+      starlink: false,
+      probes: true,
+      debris: true,
+    },
+    neighbours: [
+      {
+        noradId: 24876,
+        name: 'GPS BIIR-2',
+        group: 'gps-ops',
+        satelliteClass: 'telecom',
+        point: at(-100, 20_200_000),
+      },
+      {
+        noradId: 90001,
+        name: 'TEST IMAGER',
+        group: 'resource',
+        satelliteClass: 'imaging',
+        point: at(-80, 700_000),
+      },
+    ],
+  });
+  try {
+    assert.deepEqual(
+      satellitesLayer.getAnalystRecords(10).map((r) => r.noradId),
+      ['25544', '90001'],
+    );
   } finally {
     _clearDenseCatalogStateForTest();
   }
