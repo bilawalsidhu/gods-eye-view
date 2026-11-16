@@ -17,8 +17,8 @@
     "fovDeg": 87,
     "rangeM": 220,
     "mountHeightM": 10,
-    "credit": "WebcamRomania — webcamromania.ro",
-    "license": "Public webcam; publisher terms apply. https://webcamromania.ro/webcam-orase/webcam-piata-romana-bucuresti/"
+    "credit": "BIN Radu Felix / WebcamRomania — webcamromania.ro",
+    "license": "No licence. Operator page allows reuse only with the consent of BIN Radu Felix and WebcamRomania: https://www.notar-radufelix.ro/live-webcam ; directory terms: https://webcamromania.ro/termeni-si-conditii/"
   },
   {
     "id": "bucharest-cocor",
@@ -39,7 +39,7 @@
     "rangeM": 180,
     "mountHeightM": 22,
     "credit": "WebcamRomania — webcamromania.ro",
-    "license": "Public webcam; publisher terms apply. https://webcamromania.ro/webcam-orase/webcam-magazinul-cocor/"
+    "license": "No licence. Operator not named by the directory; video rights remain with the camera operator under the directory terms: https://webcamromania.ro/termeni-si-conditii/"
   },
   {
     "id": "bucharest-elitte-inn",
@@ -59,6 +59,6 @@
     "rangeM": 700,
     "mountHeightM": 24,
     "credit": "Elitte Inn & Suites / WebcamRomania — webcamromania.ro",
-    "license": "Public webcam; publisher terms apply. https://webcamromania.ro/webcam-orase/webcam-bucuresti-elitte-inn/"
+    "license": "No licence. Video rights remain with the camera operator (Elitte Inn & Suites) under the directory terms: https://webcamromania.ro/termeni-si-conditii/"
   }
 ]

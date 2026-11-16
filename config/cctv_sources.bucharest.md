@@ -103,8 +103,20 @@ This is a bounded audit of known public sources, not an exhaustive camera invent
 
 ## Attribution and use
 
-Streams and reference frames are published by [WebcamRomania](https://webcamromania.ro/).
-Per-camera credit and publisher page links are retained in the source records.
+[WebcamRomania](https://webcamromania.ro/) (IPCCTV S.R.L.) is a directory, not
+the rights holder. Its [terms](https://webcamromania.ro/termeni-si-conditii/) state that
+it holds no rights to third-party camera streams, that they belong to the camera
+operators, and that some are relayed through its own streaming servers. Those
+terms grant no licence for third-party use.
+
+| Camera            | Operator                                               | Stated reuse terms                                                                 |
+| ----------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| Piața Romană      | [Biroul Individual Notarial Radu Felix](https://www.notar-radufelix.ro/live-webcam)            | Operator page: reuse of the images only with its and webcamromania.ro's consent    |
+| Magazinul Cocor   | Not named on the directory page                        | None published                                                                     |
+| Elitte Inn Skybar | [Elitte Inn & Suites](https://elitte-inn.ro/)          | None found; named as the host on the directory page                                |
+
+No operator permission is held or asserted by this pack. It is off by default:
+enable it only if you hold the operators' consent or your own use does not need
+it. Per-camera credit and rights notes are retained in the source records.
 Reference images are linked, not bundled. Public accessibility is not a
-redistribution licence. Publisher terms apply; this pack asserts no redistribution
-permission.
+redistribution licence.

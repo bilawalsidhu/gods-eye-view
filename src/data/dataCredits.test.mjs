@@ -185,6 +185,21 @@ test("the Houston camera credit names TranStar's terms and the permission they r
   assert.match(credit.html, /TxDOT's written permission/);
 });
 
+test('the Bucharest webcam credit is conditional and names the rights holders', () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'bucharest-cctv');
+  assert.ok(credit, 'Bucharest webcam streams must be credited');
+  assert.match(credit.html, /\(Bucharest area, when enabled\)/);
+  assert.ok(
+    credit.html.includes(
+      'href="https://webcamromania.ro/termeni-si-conditii/"',
+    ),
+  );
+  assert.ok(
+    credit.html.includes('href="https://www.notar-radufelix.ro/live-webcam"'),
+  );
+  assert.match(credit.html, /rights remain with the camera operators/);
+});
+
 test('every Street Level imagery source is in the attribution lightbox', () => {
   for (const key of [
     'mapillary',

@@ -2614,9 +2614,10 @@ the repository contains no webcam frames or recordings.
 
 Romană and Cocor mount positions, facing, pitch, field of view and height are
 visually calibrated estimates, not surveyed camera specifications. Elitte's pose
-is uncalibrated. Publisher attribution and source
-pages accompany the catalog; provider terms still apply. See `DATA_SOURCES.md`
-for provenance and usage details.
+is uncalibrated. WebcamRomania is a directory; video rights stay with the
+camera operators, and no operator permission is held or asserted. The data
+credit is labelled "when enabled". See `DATA_SOURCES.md` for provenance,
+operators and usage details.
 The stations, their clusters and the selected marker draw through the
 renderer's draw port, and the layer no longer reaches Cesium. Stations drawn
 too close together on screen stand behind one cluster dot, grouped as the

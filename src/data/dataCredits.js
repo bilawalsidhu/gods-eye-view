@@ -659,9 +659,17 @@ export const DATA_CREDITS = [
   {
     key: 'bucharest-cctv',
     html:
-      'Public webcams (Bucharest area): ' +
+      // Opt-in: WebcamRomania is a directory, not the rights holder. Its terms
+      // leave video rights with each camera operator, and the Piața Romană
+      // host allows reuse only with consent.
+      'Public webcams (Bucharest area, when enabled): listed by ' +
       '<a href="https://webcamromania.ro/" target="_blank" rel="noopener">WebcamRomania</a> ' +
-      '— Piața Romană, Magazinul Cocor and Elitte Inn &amp; Suites; publisher terms apply.',
+      '— Piața Romană (operator ' +
+      '<a href="https://www.notar-radufelix.ro/live-webcam" target="_blank" rel="noopener">BIN Radu Felix</a>, ' +
+      'whose page allows reuse only with its and WebcamRomania’s consent), ' +
+      'Magazinul Cocor (operator not named by the directory) and Elitte Inn &amp; Suites. ' +
+      'Video rights remain with the camera operators; ' +
+      '<a href="https://webcamromania.ro/termeni-si-conditii/" target="_blank" rel="noopener">directory terms</a> apply.',
   },
   {
     key: 'nsw-cctv',
