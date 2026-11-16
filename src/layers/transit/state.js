@@ -1,4 +1,5 @@
 import { createHistoryBudget } from '../../data/contactPlayback.js';
+import { Vec3 } from '../../geo/vector.js';
 import { worldTimeFor } from '../../time/worldClock.js';
 
 /**
@@ -134,8 +135,8 @@ export function createState({ services }) {
   state._limitWarned = false;
 
   // Where `samplePosition` writes a marker's position, each frame, before
-  // it is copied into the marker.
-  state._scratchCartesian = { x: 0, y: 0, z: 0 };
+  // it is copied into the marker: a `Vec3`, so the write allocates nothing.
+  state._scratchCartesian = new Vec3();
 
   return state;
 }

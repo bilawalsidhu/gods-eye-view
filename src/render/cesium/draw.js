@@ -1724,6 +1724,11 @@ export function createCesiumDraw({
     billboard.show = shownNow(record, placed);
   }
 
+  // What `patchDrawnIcons` looks up for each item, kept between upserts so
+  // a set whose icons move every frame makes no lists for the move.
+  const patchedEntries = [];
+  const patchedImages = [];
+
   /**
    * `upsert`'s quick case for an icon set on billboards: every item is
    * drawn, every one of `list` keeps the image it is drawn with, and
@@ -1749,26 +1754,37 @@ export function createCesiumDraw({
       drawn.size !== record.items.size
     )
       return false;
-    const entries = new Array(list.length);
-    const images = new Array(list.length);
-    for (let i = 0; i < list.length; i++) {
+    const n = list.length;
+    const entries = patchedEntries;
+    const images = patchedImages;
+    let ok = true;
+    for (let i = 0; i < n; i++) {
       const entry = drawn.get(list[i].id);
-      if (!entry) return false;
+      if (!entry) {
+        ok = false;
+        break;
+      }
       const image = iconImage(record, list[i].image);
       if (
         image === undefined ||
         imageKeyOf(image) !== entry.image ||
         (isKeyed(image) && image.canvas !== entry.canvas)
-      )
-        return false;
+      ) {
+        ok = false;
+        break;
+      }
       entries[i] = entry;
       images[i] = image;
     }
-    for (let i = 0; i < list.length; i++) {
-      record.items.set(list[i].id, list[i]);
-      patchIcon(record, entries[i], list[i], images[i]);
-    }
-    return true;
+    if (ok)
+      for (let i = 0; i < n; i++) {
+        record.items.set(list[i].id, list[i]);
+        patchIcon(record, entries[i], list[i], images[i]);
+      }
+    // Held only for this pass: what it looked up is let go.
+    entries.fill(undefined, 0, n);
+    images.fill(undefined, 0, n);
+    return ok;
   }
 
   /**

@@ -9,6 +9,21 @@ export const PI_OVER_TWO = Math.PI / 2;
 export const EPSILON14 = 1e-14;
 
 export const vec = (x = 0, y = 0, z = 0) => ({ x, y, z });
+/**
+ * A three-vector of a shape its own, for a position rewritten every frame.
+ * Every `{x, y, z}` literal in the page shares one hidden shape, and once
+ * any code stores a non-number in one (libraries the page loads do) each
+ * number written to any of them is allocated. An instance of this class
+ * shares its shape with no other code, so writing a new position into it
+ * allocates nothing. Read as a plain `{x, y, z}` everywhere.
+ */
+export class Vec3 {
+  constructor(x = 0, y = 0, z = 0) {
+    this.x = x;
+    this.y = y;
+    this.z = z;
+  }
+}
 export const clone = (a) => ({ x: a.x, y: a.y, z: a.z });
 export const add = (a, b) => vec(a.x + b.x, a.y + b.y, a.z + b.z);
 export const sub = (a, b) => vec(a.x - b.x, a.y - b.y, a.z - b.z);

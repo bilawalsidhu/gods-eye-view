@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+import inspector from 'node:inspector/promises';
 import { createTransitLayer } from './index.js';
 import { spriteDrawOrder } from '../../data/spriteOrder.js';
 import {
@@ -3725,6 +3726,79 @@ test('intercepted scripted reports resolve their explicit floor and wake without
   assert.ok(Cesium.Cartesian3.distance(before, entry.marker.position) > 1);
   app.layer.disable(app.viewer);
   assert.equal(app.state()._qaFixtureFloors.size, 0);
+});
+
+/** Source files whose allocations are the layer's own, as the fleet QA reads them. */
+const LAYER_SOURCE =
+  /\/layers\/transit\/|\/data\/(?:contactPlayback|contactTrailRenderer|transit[^/]*)\.js/;
+
+/**
+ * Bytes per frame the layer's own code allocates over `frames` frames: what
+ * its functions allocate, and what the engine's built-ins (a set or array
+ * growing) allocate for them. Sampled, collected objects included.
+ */
+async function layerFrameBytes(h, frames) {
+  const session = new inspector.Session();
+  session.connect();
+  try {
+    await session.post('HeapProfiler.startSampling', {
+      samplingInterval: 32,
+      includeObjectsCollectedByMajorGC: true,
+      includeObjectsCollectedByMinorGC: true,
+    });
+    for (let i = 0; i < frames; i++) {
+      h.advance(16);
+      h.frame();
+    }
+    const { profile } = await session.post('HeapProfiler.stopSampling');
+    let bytes = 0;
+    const sites = new Map();
+    const layer = (url) => LAYER_SOURCE.test(url) && !url.includes('.test.');
+    (function visit(node, parentUrl) {
+      const { url, functionName, lineNumber } = node.callFrame;
+      const own = layer(url) || (!url && layer(parentUrl));
+      if (own && node.selfSize) {
+        bytes += node.selfSize;
+        const site = `${functionName || '(anonymous)'} ${url || parentUrl}:${lineNumber + 1}`;
+        sites.set(site, (sites.get(site) || 0) + node.selfSize);
+      }
+      for (const child of node.children) visit(child, url || parentUrl);
+    })(profile.head, '');
+    return { perFrame: bytes / frames, sites: [...sites] };
+  } finally {
+    session.disconnect();
+  }
+}
+
+test('a moving fleet frame allocates next to nothing in the layer', async (t) => {
+  // The fleet QA's size: the engine optimises a frame of it as it would in
+  // the app (a smaller fleet's frame can stay in a tier that allocates).
+  const FLEET = 3000;
+  const h = harness(t, { altitude: 600 });
+  await h.layer.enable(h.viewer);
+  h.layer._loadTransitFleetForTest(FLEET, BOSTON, 120);
+  // Warm: the engine optimises the frame path before it is measured.
+  for (let i = 0; i < 300; i++) {
+    h.advance(16);
+    h.frame();
+  }
+  assert.equal(h.state()._moving.size, FLEET);
+  // What the draw port does with the markers is its own (draw.test.mjs):
+  // here each push is only counted, so none of its work is counted as the
+  // layer's where the engine runs the two as one.
+  let pushed = 0;
+  for (const set of [h.state()._stillIcons, h.state()._movingIcons])
+    set.upsert = (list) => {
+      pushed += list.length;
+    };
+  const frames = 120;
+  const { perFrame, sites } = await layerFrameBytes(h, frames);
+  assert.equal(h.state()._moving.size, FLEET);
+  assert.equal(pushed, FLEET * frames, 'every marker moved every frame');
+  // Every vehicle moves every frame; what the layer allocates must not
+  // grow with them: the fleet QA's gate, 8 KiB a frame (a position boxed
+  // per vehicle would be ~100 KiB).
+  assert.ok(perFrame <= 8192, JSON.stringify({ perFrame, sites }));
 });
 
 test('hot path reuses sample outputs and reads camera altitude once per frame', async (t) => {

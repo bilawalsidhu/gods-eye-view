@@ -1,4 +1,5 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
+import { canvasOf, findFrame } from '../../render/rendererOf.js';
 import { recordFix, updatePlayback, attachFloorToPlace } from './movement.js';
 import { seek, setRate, mergeHistory } from '../../data/contactPlayback.js';
 import { getRegisteredTransitFeed } from '../../data/transitFeeds.js';
@@ -11,12 +12,121 @@ import { getRegisteredTransitFeed } from '../../data/transitFeeds.js';
 import { transitIconCacheSize } from '../../data/transitIcons.js';
 
 export function createTesting({ state, parts }) {
+  let stopProbe = null;
+  /** Stop a running frame probe, resolving it with what it has. */
+  function stopFrameProbe() {
+    stopProbe?.();
+  }
+
+  /**
+   * Measure inside the renderer's frames with fixed typed storage; no sample
+   * objects per frame. `uploads`, when given, counts the bytes the
+   * renderer uploads for this layer's sets each frame (the Cesium one's is
+   * `src/render/cesium/uploadProbe.js`, which QA hands in): `reset()` at
+   * each frame's start, `bytes()` at its end, `stop()` when done.
+   * @param {number} [durationMs]
+   * @param {{reset: () => void, bytes: () => number, stop: () => void}|null} [uploads]
+   */
+  function measureFrames(durationMs = 12000, uploads = null) {
+    stopProbe?.();
+    const frame = findFrame(state._viewer);
+    const canvas = canvasOf(state._viewer);
+    const capacity = 20000,
+      stride = 12,
+      data = new Float64Array(capacity * stride);
+    const previousPositions = new Float64Array(state._vehicles.size * 3);
+    let cpu = 0,
+      count = 0,
+      previous = 0;
+    const wasRunning = state._preRenderRemove !== null;
+    parts.rendering.stopFrames();
+    const removePre = frame.on('preRender', () => {
+      uploads?.reset();
+      const start = performance.now();
+      parts.rendering.onPreRender();
+      cpu = performance.now() - start;
+    });
+    let removePost, timer;
+    return new Promise((resolve) => {
+      const finish = () => {
+        clearTimeout(timer);
+        removePre();
+        removePost?.();
+        uploads?.stop();
+        if (wasRunning && state._enabled)
+          parts.rendering.startFrames(state._viewer);
+        stopProbe = null;
+        const rows = [];
+        for (let i = 1; i < count; i++) {
+          const k = i * stride;
+          rows.push({
+            intervalMs: data[k],
+            cpuMs: data[k + 1],
+            uploadBytes: data[k + 2],
+            moving: data[k + 3],
+            x: data[k + 4],
+            y: data[k + 5],
+            z: data[k + 6],
+            displayT: data[k + 7],
+            expectedMps: data[k + 8],
+            segment: data[k + 9],
+          });
+        }
+        resolve({
+          rows,
+          dpr: devicePixelRatio,
+          width: canvas?.clientWidth,
+          height: canvas?.clientHeight,
+        });
+      };
+      stopProbe = finish;
+      removePost = frame.on('postRender', () => {
+        const now = performance.now();
+        if (count >= capacity) return;
+        const k = count++ * stride;
+        const entry = state._vehicles.get('mbta:qa-0');
+        data[k] = previous ? now - previous : 0;
+        previous = now;
+        data[k + 1] = cpu;
+        data[k + 2] = uploads ? uploads.bytes() : 0;
+        let actuallyMoved = 0;
+        for (const vehicle of state._visible) {
+          const p = vehicle.marker.position,
+            index = vehicle.qaIndex * 3;
+          if (
+            count > 1 &&
+            Math.hypot(
+              p.x - previousPositions[index],
+              p.y - previousPositions[index + 1],
+              p.z - previousPositions[index + 2],
+            ) > 0.00001
+          )
+            actuallyMoved++;
+          previousPositions[index] = p.x;
+          previousPositions[index + 1] = p.y;
+          previousPositions[index + 2] = p.z;
+        }
+        data[k + 3] = actuallyMoved;
+        if (entry?.marker) {
+          const p = entry.marker.position;
+          data[k + 4] = p.x;
+          data[k + 5] = p.y;
+          data[k + 6] = p.z;
+          data[k + 7] = entry.sample.displayT;
+          data[k + 8] = entry.sample.segmentSpeedMps;
+          data[k + 9] = entry.sample.fromSeq;
+        }
+      });
+      timer = setTimeout(finish, durationMs);
+    });
+  }
+
   return {
     _setTransitFixtureFloorsForTest(keys, heightM) {
       state._qaFixtureFloors = new Map(keys.map((key) => [key, heightM]));
     },
     _stopTransitProbeForTest() {
-      parts.rendering.stopFrameProbe();
+      stopFrameProbe();
     },
     /** Deterministic observed-position fixtures, independent of upstream availability. */
     _loadTransitFleetForTest(count, origin, spacingM = 6, routes = ['741']) {
@@ -157,7 +267,7 @@ export function createTesting({ state, parts }) {
      * (`src/render/cesium/uploadProbe.js` on the default renderer).
      */
     _measureTransitFramesForTest(durationMs = 12000, uploads = null) {
-      return parts.rendering.measureFrames(durationMs, uploads);
+      return measureFrames(durationMs, uploads);
     },
     /** The ids of the markers' two draw sets: still, then moving. */
     _transitSetIdsForTest() {

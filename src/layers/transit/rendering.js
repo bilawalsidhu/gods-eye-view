@@ -1,5 +1,4 @@
 import {
-  canvasOf,
   drawOf,
   findCamera,
   findFrame,
@@ -9,6 +8,7 @@ import {
 import { poseSignature } from '../../render/camera/poseSignature.js';
 import { heightsOf } from '../../queries/heights.js';
 import { fromDegreesInto } from '../../geo/ellipsoid.js';
+import { Vec3 } from '../../geo/vector.js';
 import { frustumPlanes } from '../../geo/frustum.js';
 import { perspectiveCourseRotation } from '../../data/screenRotation.js';
 import {
@@ -74,9 +74,32 @@ export function createRendering({ state, services, parts }) {
   const sampleMeshFloorCells = services.mesh?.sampleMeshFloorCells || null;
   const instance = (instances += 1);
 
-  /** Markers changed since they were last pushed to their sets. */
-  const dirty = new Set();
-  // Kept between pushes, so a push allocates no lists.
+  // Markers changed since they were last pushed to their sets, in the order
+  // first changed: a list kept between pushes (a set emptied and filled
+  // again every frame allocates its table again), each entry holding its
+  // place in it (`markerDirtyAt`; -1, or none, when not listed).
+  const dirtyList = [];
+  let dirtyCount = 0;
+  const dirty = {
+    add(entry) {
+      if (entry.markerDirtyAt >= 0) return;
+      entry.markerDirtyAt = dirtyCount;
+      dirtyList[dirtyCount++] = entry;
+    },
+    delete(entry) {
+      entry.markerDirtyAt = -1;
+    },
+    clear() {
+      for (let i = 0; i < dirtyCount; i++) {
+        const entry = dirtyList[i];
+        if (entry.markerDirtyAt === i) entry.markerDirtyAt = -1;
+        dirtyList[i] = undefined;
+      }
+      dirtyCount = 0;
+    },
+  };
+  // Kept between pushes, at the length the last push gave them, so a push
+  // of as many markers as the last allocates no lists.
   const stillUpserts = [];
   const movingUpserts = [];
   const stillRemovals = [];
@@ -231,26 +254,34 @@ export function createRendering({ state, services, parts }) {
     const still = state._stillIcons;
     const moving = state._movingIcons;
     if (!still || !moving) return;
-    if (!dirty.size && !stillRemovals.length && !movingRemovals.length) return;
-    for (const entry of dirty) {
-      if (!entry.marker) continue;
+    if (!dirtyCount && !stillRemovals.length && !movingRemovals.length) return;
+    let stillCount = 0,
+      movingCount = 0;
+    for (let i = 0; i < dirtyCount; i++) {
+      const entry = dirtyList[i];
+      // Taken out of the list (or listed again later) since it was put here.
+      if (entry.markerDirtyAt !== i || !entry.marker) continue;
       const target = entry.animated ? moving : still;
       if (entry.drawnIn && entry.drawnIn !== target)
         (entry.drawnIn === still ? stillRemovals : movingRemovals).push(
           entry.key,
         );
       entry.drawnIn = target;
-      (target === still ? stillUpserts : movingUpserts).push(itemOf(entry));
+      if (target === still) stillUpserts[stillCount++] = itemOf(entry);
+      else movingUpserts[movingCount++] = itemOf(entry);
     }
     dirty.clear();
+    // Emptied and filled again, a list allocates its storage again: each
+    // is cut only to what this push has.
+    if (stillUpserts.length !== stillCount) stillUpserts.length = stillCount;
+    if (movingUpserts.length !== movingCount)
+      movingUpserts.length = movingCount;
     if (stillRemovals.length) still.remove(stillRemovals);
     if (movingRemovals.length) moving.remove(movingRemovals);
-    if (stillUpserts.length) still.upsert(stillUpserts);
-    if (movingUpserts.length) moving.upsert(movingUpserts);
+    if (stillCount) still.upsert(stillUpserts);
+    if (movingCount) moving.upsert(movingUpserts);
     stillRemovals.length = 0;
     movingRemovals.length = 0;
-    stillUpserts.length = 0;
-    movingUpserts.length = 0;
   }
 
   /**
@@ -664,7 +695,8 @@ export function createRendering({ state, services, parts }) {
   function addMarker(key, entry) {
     const at = entry.toCart;
     const marker = {
-      position: { x: at?.x ?? 0, y: at?.y ?? 0, z: at?.z ?? 0 },
+      // Moved every frame in place: a `Vec3`, so a move allocates nothing.
+      position: new Vec3(at?.x ?? 0, at?.y ?? 0, at?.z ?? 0),
       show: false,
       image: transitIcon(entry.mode),
       width: MARKER_PIXEL_SIZE,
@@ -1183,114 +1215,6 @@ export function createRendering({ state, services, parts }) {
     flushMarkers();
   }
 
-  let stopProbe = null;
-  /** Stop a running frame probe, resolving it with what it has. */
-  function stopFrameProbe() {
-    stopProbe?.();
-  }
-
-  /**
-   * Measure inside the renderer's frames with fixed typed storage; no sample
-   * objects per frame. `uploads`, when given, counts the bytes the
-   * renderer uploads for this layer's sets each frame (the Cesium one's is
-   * `src/render/cesium/uploadProbe.js`, which QA hands in): `reset()` at
-   * each frame's start, `bytes()` at its end, `stop()` when done.
-   * @param {number} [durationMs]
-   * @param {{reset: () => void, bytes: () => number, stop: () => void}|null} [uploads]
-   */
-  function measureFrames(durationMs = 12000, uploads = null) {
-    stopProbe?.();
-    const frame = findFrame(state._viewer);
-    const canvas = canvasOf(state._viewer);
-    const capacity = 20000,
-      stride = 12,
-      data = new Float64Array(capacity * stride);
-    const previousPositions = new Float64Array(state._vehicles.size * 3);
-    let cpu = 0,
-      count = 0,
-      previous = 0;
-    const wasRunning = state._preRenderRemove !== null;
-    stopFrames();
-    const removePre = frame.on('preRender', () => {
-      uploads?.reset();
-      const start = performance.now();
-      onPreRender();
-      cpu = performance.now() - start;
-    });
-    let removePost, timer;
-    return new Promise((resolve) => {
-      const finish = () => {
-        clearTimeout(timer);
-        removePre();
-        removePost?.();
-        uploads?.stop();
-        if (wasRunning && state._enabled) startFrames(state._viewer);
-        stopProbe = null;
-        const rows = [];
-        for (let i = 1; i < count; i++) {
-          const k = i * stride;
-          rows.push({
-            intervalMs: data[k],
-            cpuMs: data[k + 1],
-            uploadBytes: data[k + 2],
-            moving: data[k + 3],
-            x: data[k + 4],
-            y: data[k + 5],
-            z: data[k + 6],
-            displayT: data[k + 7],
-            expectedMps: data[k + 8],
-            segment: data[k + 9],
-          });
-        }
-        resolve({
-          rows,
-          dpr: devicePixelRatio,
-          width: canvas?.clientWidth,
-          height: canvas?.clientHeight,
-        });
-      };
-      stopProbe = finish;
-      removePost = frame.on('postRender', () => {
-        const now = performance.now();
-        if (count >= capacity) return;
-        const k = count++ * stride;
-        const entry = state._vehicles.get('mbta:qa-0');
-        data[k] = previous ? now - previous : 0;
-        previous = now;
-        data[k + 1] = cpu;
-        data[k + 2] = uploads ? uploads.bytes() : 0;
-        let actuallyMoved = 0;
-        for (const vehicle of state._visible) {
-          const p = vehicle.marker.position,
-            index = vehicle.qaIndex * 3;
-          if (
-            count > 1 &&
-            Math.hypot(
-              p.x - previousPositions[index],
-              p.y - previousPositions[index + 1],
-              p.z - previousPositions[index + 2],
-            ) > 0.00001
-          )
-            actuallyMoved++;
-          previousPositions[index] = p.x;
-          previousPositions[index + 1] = p.y;
-          previousPositions[index + 2] = p.z;
-        }
-        data[k + 3] = actuallyMoved;
-        if (entry?.marker) {
-          const p = entry.marker.position;
-          data[k + 4] = p.x;
-          data[k + 5] = p.y;
-          data[k + 6] = p.z;
-          data[k + 7] = entry.sample.displayT;
-          data[k + 8] = entry.sample.segmentSpeedMps;
-          data[k + 9] = entry.sample.fromSeq;
-        }
-      });
-      timer = setTimeout(finish, durationMs);
-    });
-  }
-
   return {
     createMarkers,
     showMarkers,
@@ -1310,8 +1234,6 @@ export function createRendering({ state, services, parts }) {
     cameraHeightM,
     globeSurface,
     sampleMeshFloors,
-    measureFrames,
-    stopFrameProbe,
     resumePlayback,
     maintainPresentation,
     requestVisibility,
