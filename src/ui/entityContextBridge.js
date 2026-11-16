@@ -223,14 +223,30 @@ export function installEntityContext({
   // the layers above starts following from its own click, the card says so.
   // A layer switching what it follows lets go for a moment and takes hold
   // again in the same turn, so this is checked once that settles.
+  // The entity the camera follows for the card: taken when the card's own
+  // pick starts the tracking, so tracking something else (another control,
+  // another craft) is not mistaken for following the card.
   let trackCheck = 0;
+  let cardTracked = null;
+  let pickedAt = -Infinity;
   const removeTrackedChanged = viewer.trackedEntityChanged.addEventListener(
     () => {
       clearTimeout(trackCheck);
       trackCheck = setTimeout(() => {
-        if (!viewer.trackedEntity) store.following = null;
-        else if (CLICK_FOLLOWS.has(store.card?.layerId))
-          store.following = store.card.key;
+        const tracked = viewer.trackedEntity;
+        if (!tracked) {
+          cardTracked = null;
+          store.following = null;
+          return;
+        }
+        const card = store.card;
+        const fromPick = performance.now() - pickedAt < 1500;
+        if (fromPick && card && (store.following === card.key || CLICK_FOLLOWS.has(card.layerId))) {
+          cardTracked = tracked;
+          store.following = card.key;
+        } else if (tracked !== cardTracked) {
+          store.following = null;
+        }
       }, 250);
     },
   );
@@ -268,6 +284,7 @@ export function installEntityContext({
       // These layers start following on their own click; following again
       // from here would fight them (the flights layer reads a second track
       // of the same plane as a click on empty map and lets go).
+      pickedAt = performance.now();
       store.select(identity, { follow: !CLICK_FOLLOWS.has(identity.layerId) });
       return;
     }
