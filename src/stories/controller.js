@@ -268,13 +268,18 @@ export function createStoriesController({
         ? controller.open({ fromHistory: true })
         : controller.backToExplore({ fromHistory: true, returningToExplore });
     else if (store.mode !== 'closed') controller.close({ fromHistory: true });
-    else if (pendingView) {
-      // Another browser navigation landed while the scene was stopping.
-      // The destination owns the globe now, so discard the earlier restore.
-      pendingView = null;
-      closeGeneration += 1;
-      document.body.classList.remove('stories-mode');
-      shareLink()?.holdWrites?.(false);
+    else {
+      // An entry for a story that is gone (deleted since) opens nothing;
+      // its ?story= must not stay in the address for the next share link.
+      if (id) clearStoriesUrl();
+      if (pendingView) {
+        // Another browser navigation landed while the scene was stopping.
+        // The destination owns the globe now, so discard the earlier restore.
+        pendingView = null;
+        closeGeneration += 1;
+        document.body.classList.remove('stories-mode');
+        shareLink()?.holdWrites?.(false);
+      }
     }
   }
   addEventListener('popstate', onPopState);
