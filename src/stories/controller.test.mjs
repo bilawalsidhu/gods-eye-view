@@ -782,6 +782,32 @@ test('a story opened while the scene tears down is not undone by the late restor
   controller.destroy();
 });
 
+test('a tap pauses a story whose camera move stopped on the press', async () => {
+  const { controller, store, director, canvas } = setup();
+  controller.openStory('gev:flights-radar');
+  await tick(20);
+  let starts = 0;
+  director.startScene = async () => {
+    starts += 1;
+    return { started: true };
+  };
+  store.playback = { ...store.playback, playing: true };
+  canvas.dispatchEvent(new Event('pointerdown'));
+  // A camera move the scene drives frame by frame stops on the press, so the
+  // story already reads as stopped when the tap ends.
+  store.playback = { ...store.playback, playing: false };
+  canvas.dispatchEvent(new Event('pointerup'));
+  await tick(20);
+  assert.equal(starts, 0, 'the tap does not play it again');
+  assert.equal(store.bigPlay, true, 'it pauses');
+  // A tap on a paused story plays it.
+  canvas.dispatchEvent(new Event('pointerdown'));
+  canvas.dispatchEvent(new Event('pointerup'));
+  await tick(20);
+  assert.equal(starts, 1);
+  controller.destroy();
+});
+
 test('Explore tours from story to story once idle, stops on a pick or a touch, and on Close', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
   const { controller, store, camera, canvas } = setup();

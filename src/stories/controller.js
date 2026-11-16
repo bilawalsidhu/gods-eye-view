@@ -743,8 +743,13 @@ export function createStoriesController({
   // the picked story; on a phone, touching the map drops the context sheet
   // back to its peek.
   let downAt = null;
+  // Whether the story was playing when the tap began: a camera move the
+  // scene drives frame by frame stops on the press itself, before the tap
+  // ends, and that tap still means pause.
+  let playingAtDown = false;
   const onDown = (e) => {
     downAt = [e.clientX, e.clientY];
+    playingAtDown = store.playback.playing;
     if (store.mode === 'story' && innerWidth <= 720 && store.sheet !== 'peek')
       store.sheet = 'peek';
   };
@@ -758,7 +763,7 @@ export function createStoriesController({
       return;
     }
     if (store.mode !== 'story' || !player) return;
-    if (store.playback.playing) {
+    if (playingAtDown || store.playback.playing) {
       player.pause();
       store.bigPlay = true;
     } else player.play();
