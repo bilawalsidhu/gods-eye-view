@@ -1,24 +1,4 @@
 import { t } from '../../i18n/index.js';
-import { ISS_NORAD, issTrackedOnStation } from './policy.js';
-
-/**
- * Whether the command panel shows: the ISS selected (tracked), or an object
- * docked to it, the layer on and the Cockpit not riding it.
- * @param {{enabled: boolean, trackedNorad: number|null, cockpitHeld: boolean,
- *   docked?: boolean}} input `docked`: the tracked satellite is docked to the
- *   ISS (issTrackedOnStation).
- * @returns {boolean}
- */
-export function issCommandShouldShow({
-  enabled,
-  trackedNorad,
-  cockpitHeld,
-  docked = false,
-}) {
-  const onStation =
-    trackedNorad === ISS_NORAD || (Boolean(docked) && trackedNorad !== null);
-  return Boolean(enabled) && onStation && !cockpitHeld;
-}
 
 const unit = (v) => {
   const n = Math.hypot(...v);
@@ -53,21 +33,6 @@ export const ISS_COMMAND_ZOOM_RANGE_M = 260;
 export function issCommandStatusText(sunlit) {
   if (sunlit === null) return '';
   return sunlit ? t('Now: in sunlight') : t("Now: in the Earth's shadow");
-}
-
-/**
- * The Automatic mode's note: what moves the joints right now.
- * @param {boolean} live Whether the joints are on NASA's telemetry.
- * @returns {string}
- */
-export function issCommandNoteText(live) {
-  return live
-    ? t(
-        "Arrays, radiators and one dish follow NASA's live telemetry. The other dish holds still and the arms sway for illustration.",
-      )
-    : t(
-        'Arrays and radiators follow the Sun, the dishes aim at relay satellites and the arms sway for illustration. Computed, not live telemetry.',
-      );
 }
 
 /** Beyond this the camera counts as far, and the zoom button is offered. */

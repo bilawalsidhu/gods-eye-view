@@ -244,6 +244,8 @@ export function createStationModel(
   const dockedByOrbit = new Set();
   /** @type {Set<number>} Docked objects whose dots the model stands in for. */
   const handedCompanions = new Set();
+  /** Whether the model draws and the docked dots are left to it. */
+  let handingOver = false;
   let lastCompanionScanMs = Number.NEGATIVE_INFINITY;
   /** Whether the station's orbit ring is hidden for the close-up. */
   let orbitHidden = false;
@@ -605,14 +607,16 @@ export function createStationModel(
   function _updateStationModel() {
     visualValid = false;
     // The docked set first: whether the model may show (the Cockpit riding
-    // the station) is read from it, so it is kept current before that.
-    if (item) _scanCompanions(Date.now(), false);
+    // the station) is read from it, so it is kept current before that. Once
+    // a second; the dots are handed over or given back with the scan.
+    if (item) _scanCompanions(Date.now(), handingOver);
     const show = _shouldShow();
     if (!show) {
       _hide();
       // The dots draw at every distance while the model may not.
       _releaseDots();
       if (handedCompanions.size) _releaseCompanions();
+      handingOver = false;
       _syncOrbitCloseUp(false);
       return;
     }
@@ -635,9 +639,13 @@ export function createStationModel(
         _load(dotPosition);
       return;
     }
-    // The docked dots are the model's within its range.
-    lastCompanionScanMs = Number.NEGATIVE_INFINITY;
-    _scanCompanions(Date.now(), true);
+    // The docked dots are the model's within its range: handed over at
+    // once when the model starts drawing, then with each scan.
+    if (!handingOver) {
+      handingOver = true;
+      lastCompanionScanMs = Number.NEGATIVE_INFINITY;
+      _scanCompanions(Date.now(), true);
+    }
     _handOverDots();
     _syncOrbitCloseUp(cameraDistance < spec.orbitHideM);
     // Out of range the model would not draw anyway: skip the SGP4 sample.
@@ -709,6 +717,7 @@ export function createStationModel(
     telemetry?.destroy();
     _releaseDots();
     _releaseCompanions();
+    handingOver = false;
     dockedByOrbit.clear();
     lastCompanionScanMs = Number.NEGATIVE_INFINITY;
     _syncOrbitCloseUp(false);

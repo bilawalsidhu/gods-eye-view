@@ -62,7 +62,7 @@ export function createSelection({
         parts.rendering.ownsSet(hit?.set)
           ? hit.meta?.installationId
           : null) ??
-        parts.controls?.findAt?.(event.position)?.id ??
+        parts.controls?.methods?.findAt?.(event.position)?.id ??
         null;
       if (id && layerState.recordById.has(id) && id !== layerState.selectedId) {
         selectRecord(id);

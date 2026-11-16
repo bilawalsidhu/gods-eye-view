@@ -728,6 +728,7 @@ export function createIssArticulation() {
     if (node) node.matrix = issAxisMatrix(pivot, axis, angle, scratchMatrix);
   }
 
+  /** Forget the model and every manual choice: the next update starts clean. */
   function reset() {
     boundModel = null;
     nodes = null;
@@ -735,6 +736,10 @@ export function createIssArticulation() {
     dishes = null;
     armNodes = null;
     targets = { alpha: 0, gamma: 0 };
+    override = null;
+    dishOverride = null;
+    telemetryAllowed = true;
+    armManual = false;
   }
 
   /**

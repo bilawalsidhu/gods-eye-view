@@ -406,12 +406,15 @@ export function createTiangongArticulation() {
     if (node) node.matrix = issAxisMatrix(pivot, axis, angle, scratchMatrix);
   }
 
+  /** Forget the model and every manual choice: the next update starts clean. */
   function reset() {
     boundModel = null;
     nodes = null;
     angles = null;
     targets = null;
     dish = null;
+    override = null;
+    wingManual.clear();
   }
 
   /**

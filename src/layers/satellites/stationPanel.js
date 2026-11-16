@@ -64,6 +64,11 @@ export function createStationPanel({
   let sliders = new Map();
   let ticker = null;
   let zoomTimer = null;
+  /** The frame pump while a joint glides, and when it stops. */
+  let pump = null;
+  let pumpUntil = 0;
+  /** The last view published, as text: an unchanged view is not republished. */
+  let publishedKey = null;
 
   function _stationShown() {
     if (!layerState._enabled) return null;
@@ -88,6 +93,7 @@ export function createStationPanel({
     if (!station) {
       if (view !== null) {
         view = null;
+        publishedKey = null;
         for (const listener of listeners) listener(null);
       }
       return;
@@ -98,7 +104,7 @@ export function createStationPanel({
       ? (findCamera(layerState._viewer)?.pose?.()?.position ?? null)
       : null;
     const range = position && eye ? distance(eye, position) : null;
-    view = {
+    const next = {
       key: station.key,
       title: station.title,
       subject: station.subjectName(),
@@ -143,6 +149,12 @@ export function createStationPanel({
         label: station.zoomLabel,
       },
     };
+    // Called every frame from the tick: the section re-renders only on a
+    // change (the age line moves once a second, the rest on an action).
+    const key = JSON.stringify(next);
+    if (key === publishedKey) return;
+    publishedKey = key;
+    view = next;
     for (const listener of listeners) listener(view);
   }
 
@@ -165,15 +177,25 @@ export function createStationPanel({
     findFrame(layerState._viewer)?.requestRender('station-panel');
   }
 
-  /** Keep frames coming while a joint glides to a new pose. */
+  /**
+   * Keep frames coming while a joint glides to a new pose: one pump, run
+   * until the latest ask (a slider drag asks many times a second).
+   */
   function _renderFor(ms) {
     if (!findFrame(layerState._viewer)) return;
-    const until = now() + ms;
-    const pump = setInterval(() => {
+    pumpUntil = Math.max(pumpUntil, now() + ms);
+    if (pump) return;
+    pump = setInterval(() => {
       _requestRender();
-      if (now() > until) clearInterval(pump);
+      if (now() > pumpUntil) _stopPump();
     }, 33);
     pump.unref?.();
+  }
+
+  function _stopPump() {
+    if (pump) clearInterval(pump);
+    pump = null;
+    pumpUntil = 0;
   }
 
   function _stopZoom() {
@@ -307,7 +329,13 @@ export function createStationPanel({
   }
 
   function _destroyStationPanel() {
+    // The joints go back to Automatic with the panel, as on leaving a station.
+    if (current && mode === 'manual') {
+      const articulation = current.articulation();
+      if (articulation) current.automatic(articulation);
+    }
     _stopZoom();
+    _stopPump();
     if (ticker) clearInterval(ticker);
     ticker = null;
     current = null;

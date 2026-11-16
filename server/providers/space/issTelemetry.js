@@ -228,7 +228,13 @@ export function createIssTelemetryRelay({ createSocket, now = Date.now }) {
     }
     const value = raw === null || raw === '' ? Number.NaN : Number(raw);
     if (!Number.isFinite(value)) return;
-    values.set(name, { value, at: issTelemetryTimeMs(Number(stamp), at) });
+    values.set(name, {
+      value,
+      at:
+        stamp === null || stamp === ''
+          ? null
+          : issTelemetryTimeMs(Number(stamp), at),
+    });
   }
 
   function connect() {

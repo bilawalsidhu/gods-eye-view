@@ -6,19 +6,9 @@ import {
   issCommandZoomRange,
   ISS_COMMAND_ZOOM_RANGE_M,
   issCommandFastOrbit,
-  issCommandShouldShow,
   issCommandZoomStep,
 } from './issCommand.js';
 import { ISS_NORAD } from './policy.js';
-
-test('the panel shows only while the ISS is selected, layer on, Cockpit off', () => {
-  const base = { enabled: true, trackedNorad: ISS_NORAD, cockpitHeld: false };
-  assert.equal(issCommandShouldShow(base), true);
-  assert.equal(issCommandShouldShow({ ...base, enabled: false }), false);
-  assert.equal(issCommandShouldShow({ ...base, trackedNorad: 20580 }), false);
-  assert.equal(issCommandShouldShow({ ...base, trackedNorad: null }), false);
-  assert.equal(issCommandShouldShow({ ...base, cockpitHeld: true }), false);
-});
 
 test('the zoom eases in to its range and stops there, never past it', () => {
   let distance = 726_000;
@@ -63,13 +53,6 @@ test('the status line says lit or in shadow, and nothing before the model is pla
   assert.ok(issCommandStatusText(false).length > 0);
 });
 
-test('the note says whether the joints are computed or on live telemetry', async () => {
-  const { issCommandNoteText } = await import('./issCommand.js');
-  assert.match(issCommandNoteText(false), /Computed, not live telemetry/);
-  assert.match(issCommandNoteText(true), /NASA's live telemetry/);
-  assert.doesNotMatch(issCommandNoteText(true), /not live telemetry/);
-});
-
 test('an object docked to the ISS is the station too', async () => {
   const { issTrackedOnStation } = await import('./policy.js');
   const NAUKA = 49044;
@@ -82,19 +65,6 @@ test('an object docked to the ISS is the station too', async () => {
   assert.equal(issTrackedOnStation(20580, new Set([20581])), false);
   assert.equal(issTrackedOnStation(null, new Set([ISS_NORAD])), false);
   assert.equal(issTrackedOnStation(undefined, undefined), false);
-
-  // The panels show for a docked object as for the ISS, on the same terms.
-  const command = { enabled: true, trackedNorad: NAUKA, cockpitHeld: false };
-  assert.equal(issCommandShouldShow(command), false);
-  assert.equal(issCommandShouldShow({ ...command, docked: true }), true);
-  assert.equal(
-    issCommandShouldShow({ ...command, docked: true, cockpitHeld: true }),
-    false,
-  );
-  assert.equal(
-    issCommandShouldShow({ ...command, docked: true, trackedNorad: null }),
-    false,
-  );
 });
 
 test('the zoom range only ever shortens, settles at the target range and never runs away', () => {
