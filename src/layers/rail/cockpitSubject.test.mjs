@@ -65,6 +65,13 @@ async function onTheLine(t, options = {}) {
   return app;
 }
 
+/** Whether the selected train's route line is drawn: its live set's `show`. */
+const routeShown = (app) =>
+  [...app.draw.sets.values()].find(
+    (set) =>
+      !set.disposed && set.kind === 'lines' && /:route:\d+$/.test(set.spec.id),
+  )?.show;
+
 const T1 = railTrainKey('mbta-rail', 'T1');
 const T2 = railTrainKey('mbta-rail', 'T2');
 
@@ -200,7 +207,7 @@ test('a held train hides its marker and card and keeps the selection', async (t)
   assert.equal(app.entry(T1).marker.show, false);
   assert.equal(app.entry(T2).marker.show, true);
   // From inside the train its selected line would run under the eye.
-  assert.equal(app.state()._route.primitive.show, false, 'no line');
+  assert.equal(routeShown(app), false, 'no line');
   assert.deepEqual(
     app.overlayEntries.get(RAIL_SELECTED_OVERLAY_SOURCE_ID) ?? [],
     [],
@@ -222,7 +229,7 @@ test('a held train hides its marker and card and keeps the selection', async (t)
   assert.equal(app.layer.getCockpitSubject(), null);
   app.run(1000);
   assert.equal(app.entry(T1).marker.show, true);
-  assert.equal(app.state()._route.primitive.show, true, 'the line is back');
+  assert.equal(routeShown(app), true, 'the line is back');
   assert.equal(
     (app.overlayEntries.get(RAIL_SELECTED_OVERLAY_SOURCE_ID) ?? []).length,
     1,
@@ -231,11 +238,13 @@ test('a held train hides its marker and card and keeps the selection', async (t)
 });
 
 test('a held train draws no 3D model either; let go, its model draws again', async (t) => {
-  const models = await fleetModelFakes(t);
+  const models = await fleetModelFakes();
   const app = await onTheLine(t, { fleet: models.fleet, altitude: 1_000 });
+  models.watch(app.draw);
   // A model's load answers off the frame; the next frames place it.
   const frames = async () => {
     app.run(500);
+    models.load();
     await app.settle();
     app.run(500);
   };
@@ -354,7 +363,7 @@ test('a held train keeps the selection and moves, hidden, when its category is t
   assert.equal(app.layer.getCockpitSubject()?.key, T1);
   assert.equal(app.entry(T1).marker.show, false);
   assert.equal(app.entry(T2).marker.show, false, 'its category is hidden');
-  assert.equal(app.state()._route.primitive.show, false, 'no line');
+  assert.equal(routeShown(app), false, 'no line');
   assert.deepEqual(
     app.overlayEntries.get(RAIL_SELECTED_OVERLAY_SOURCE_ID) ?? [],
     [],

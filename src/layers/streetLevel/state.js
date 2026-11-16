@@ -59,7 +59,8 @@ export function createState({ services }) {
     /** Whether the camera is low enough for a ground click to open an image. */
     groundClickReady: false,
 
-    marker: { collection: null, billboard: null, look: null },
-    clickHandler: null,
+    /** The open image's marker: its draw set and drawn icon. */
+    marker: { set: null, placed: null, look: null },
+    clickSubscription: null,
   };
 }

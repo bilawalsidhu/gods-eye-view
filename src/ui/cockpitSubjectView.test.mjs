@@ -18,6 +18,11 @@ import { getLocale, setLocale } from '../i18n/index.js';
 import { COCKPIT_GROUND_WAIT_TIMEOUT_MS } from './cockpitPresentation.js';
 import { COCKPIT_SUBJECT_LIFT_MPS } from '../cockpitMath.js';
 import { vesselCockpitInfo } from '../layers/vessels/cockpitSubject.js';
+import {
+  bindFakeCesiumCamera,
+  followEntity,
+} from '../testSupport/fakeCameraPort.mjs';
+import { fakeScenePorts } from '../testSupport/fakeCesiumScene.mjs';
 
 const LAT = 47;
 const LON = 8;
@@ -139,7 +144,6 @@ function fixture(t, { providers = [], vessel = null, layerOn = true } = {}) {
     gevTrackedId: 'flights:abc123',
   };
   const viewer = {
-    trackedEntity: undefined,
     clock: { currentTime: null },
     camera: {
       heading: 0,
@@ -158,6 +162,10 @@ function fixture(t, { providers = [], vessel = null, layerOn = true } = {}) {
     },
     trackedEntityChanged: listeners(),
   };
+  // The Cockpit drives the camera, follows and reads frames through ports:
+  // the Cesium camera port over the fake camera, the scene's fake frame and
+  // query ports.
+  bindFakeCesiumCamera(viewer, fakeScenePorts(viewer));
   let vesselSelected = vessel;
   let trackedAircraftInfo = null;
   let floorM = FLOOR_M;
@@ -240,7 +248,7 @@ function fixture(t, { providers = [], vessel = null, layerOn = true } = {}) {
     /** Track the fixture's aircraft as Live Flights does, or untrack it. */
     trackAircraft(info) {
       trackedAircraftInfo = info;
-      viewer.trackedEntity = info ? aircraft : undefined;
+      followEntity(viewer, info ? aircraft : null);
     },
     setFloor(value) {
       floorM = value;
@@ -980,7 +988,7 @@ test('an aircraft tracked during the view ends it, never adopted', async (t) => 
   const { cockpit, viewer, aircraft } = fixture(t, { providers: [ride] });
   cockpit.syncEntry();
   cockpit.enter();
-  viewer.trackedEntity = aircraft;
+  followEntity(viewer, aircraft);
   assert.equal(cockpit._adoptTrackedEntity(performance.now()), false);
   clock.advance(16);
   cockpit.update();

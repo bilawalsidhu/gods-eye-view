@@ -10,6 +10,8 @@ import {
   EARTHQUAKE_OVERLAY_COLLISION_CAPACITY,
   createEarthquakeOverlayEntry,
   createEarthquakesLayer,
+  depthAccent,
+  depthColor,
   mapAnalystRecord,
   selectEarthquakeOverlayCohort,
 } from './earthquakes.js';
@@ -19,6 +21,11 @@ import {
   installRenderGovernor,
   _resetRenderGovernorForTest,
 } from '../renderGovernor.js';
+import { framePortFor } from '../testSupport/fakeFramePort.mjs';
+import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
+
+/** The layer's disc set, as the fake draw port holds it. */
+const discsOf = (draw) => draw.find('earthquakes:');
 
 const FULL_RAW = {
   id: 'us7000abcd',
@@ -92,25 +99,16 @@ test('earthquake overlay copy keeps source-side magnitude formatting and bounded
   assert.equal(cohort.at(-1).id, 'quake-020');
 });
 
-test('real earthquake lifecycle publishes host labels while runtime entities carry no label graphic', async () => {
+test('real earthquake lifecycle publishes host labels while the drawn discs carry no label graphic', async () => {
   const originalFetch = globalThis.fetch;
   const hostCalls = [];
-  const dataSources = [];
   const overlayHost = {
     setEntries: (...args) => hostCalls.push(['entries', ...args]),
     setVisible: (...args) => hostCalls.push(['visible', ...args]),
     clearSource: (...args) => hostCalls.push(['clear', ...args]),
   };
-  const viewer = {
-    dataSources: {
-      add(dataSource) { dataSources.push(dataSource); return dataSource; },
-      remove(dataSource) {
-        const index = dataSources.indexOf(dataSource);
-        if (index >= 0) dataSources.splice(index, 1);
-        return index >= 0;
-      },
-    },
-  };
+  const viewer = {};
+  const { draw } = bindFakeDraw(viewer);
   globalThis.fetch = async () => ({
     ok: true,
     json: async () => ({
@@ -134,9 +132,9 @@ test('real earthquake lifecycle publishes host labels while runtime entities car
     layer.enable(viewer);
     await layer.update(viewer);
 
-    const entities = dataSources[0].entities.values;
-    assert.equal(entities.length, 2, 'runtime guard requires populated real source entities');
-    assert.ok(entities.every((entity) => entity.label === undefined));
+    const discs = [...discsOf(draw).items.values()];
+    assert.equal(discs.length, 2, 'runtime guard requires populated real discs');
+    assert.ok(discs.every((disc) => disc.geometry.kind === 'ellipse'), 'discs, no label graphic');
     const publication = hostCalls.find(([type]) => type === 'entries');
     assert.ok(publication, 'real update path must publish the overlay source');
     assert.deepEqual(publication[2].map(({ title }) => title), ['M5.2', 'M3.0']);
@@ -147,13 +145,13 @@ test('real earthquake lifecycle publishes host labels while runtime entities car
     });
 
     layer.disable(viewer);
-    assert.equal(dataSources[0].show, false);
+    assert.equal(discsOf(draw).show, false);
     assert.deepEqual(hostCalls.slice(-2), [
       ['clear', 'earthquakes'],
       ['visible', 'earthquakes', false],
     ]);
     layer.destroy(viewer);
-    assert.equal(dataSources.length, 0);
+    assert.equal(discsOf(draw), undefined, 'the set is disposed');
     assert.deepEqual(hostCalls.slice(-2), [
       ['clear', 'earthquakes'],
       ['visible', 'earthquakes', false],
@@ -164,20 +162,16 @@ test('real earthquake lifecycle publishes host labels while runtime entities car
 });
 
 // ── Perf pin: the 2026-08-20 earthquakes frame-rate cliff ────────────────────
-// Every disc is a CLAMP_TO_GROUND ellipse. When its axes were a
+// Every disc is a ground-clamped ellipse. When its axes were a Cesium
 // `CallbackProperty`, Cesium re-tessellated all 58 ground primitives on EVERY
 // frame: 32.4 ms/frame and 30 fps for 58 contacts, against 1.4 ms/60 fps with
-// the layer off. Static axes restored 60 fps. Both halves of the fix are
-// pinned — the runtime property shape, and the source-level guards.
+// the layer off. Static axes restored 60 fps. The discs are plain draw items
+// now, written once per poll; both the item shape and the source-level guards
+// are pinned.
 test('quake disc axes are STATIC — a per-frame callback re-tessellates ground geometry', async () => {
   const originalFetch = globalThis.fetch;
-  const dataSources = [];
-  const viewer = {
-    dataSources: {
-      add(dataSource) { dataSources.push(dataSource); return dataSource; },
-      remove() { return true; },
-    },
-  };
+  const viewer = {};
+  const { draw } = bindFakeDraw(viewer);
   const layer = createEarthquakesLayer({
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
@@ -196,19 +190,21 @@ test('quake disc axes are STATIC — a per-frame callback re-tessellates ground 
     layer.enable(viewer);
     await layer.update(viewer);
 
-    const [entity] = dataSources[0].entities.values;
-    assert.ok(entity.ellipse, 'the disc is an ellipse graphic');
-    for (const axis of ['semiMajorAxis', 'semiMinorAxis']) {
-      const property = entity.ellipse[axis];
-      assert.equal(
-        property instanceof Cesium.CallbackProperty,
-        false,
-        `${axis} must not be a CallbackProperty — it rebuilds the ground primitive every frame`,
-      );
-      assert.equal(property.isConstant, true, `${axis} must be a constant property`);
-      // Magnitude 5.5 → 2^5.5 * 1000 m, unchanged by the dropped pulse.
-      assert.equal(property.getValue(Cesium.JulianDate.now()), Math.pow(2, 5.5) * 1000);
-    }
+    const [disc] = discsOf(draw).items.values();
+    // Magnitude 5.5 → 2^5.5 * 1000 m: plain numbers, drawn once per poll.
+    assert.deepEqual(disc, {
+      id: 'earthquake:us-static-1',
+      geometry: {
+        kind: 'ellipse',
+        center: { lon: -122.4, lat: 37.79 },
+        semiMajor: Math.pow(2, 5.5) * 1000,
+        semiMinor: Math.pow(2, 5.5) * 1000,
+      },
+      // Shallow (8.2 km): red; significant (M5+): 0.4 fill.
+      fill: [1, 0, 0, 0.4],
+      height: 'clampGround',
+      clampTo: 'both',
+    });
   } finally {
     globalThis.fetch = originalFetch;
     layer.destroy(viewer);
@@ -223,14 +219,10 @@ test('quake disc axes are STATIC — a per-frame callback re-tessellates ground 
 test('a quake poll still reaches the screen with the render loop idle', async () => {
   const originalFetch = globalThis.fetch;
   const renderRequests = [];
-  const dataSources = [];
   const viewer = {
     scene: { requestRenderMode: false, requestRender: () => renderRequests.push(Date.now()) },
-    dataSources: {
-      add(dataSource) { dataSources.push(dataSource); return dataSource; },
-      remove() { return true; },
-    },
   };
+  const { draw } = bindFakeDraw(viewer);
   const layer = createEarthquakesLayer({
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
@@ -246,7 +238,7 @@ test('a quake poll still reaches the screen with the render loop idle', async ()
   });
 
   _resetRenderGovernorForTest();
-  installRenderGovernor(viewer);
+  installRenderGovernor(framePortFor(viewer.scene));
   // Installing the governor enters idle mode, which itself paints one settling
   // frame. Drop that from the baseline or the enable assertion below can pass on
   // the install alone, without the manager ever requesting anything.
@@ -264,7 +256,7 @@ test('a quake poll still reaches the screen with the render loop idle', async ()
 
     // ...and the poll that populated the discs must still have asked for a frame,
     // because in idle mode nothing repaints on its own.
-    assert.ok(dataSources[0].entities.values.length > 0, 'the enable poll produced discs');
+    assert.ok(discsOf(draw).items.size > 0, 'the enable poll produced discs');
     assert.ok(renderRequests.length > 0, 'enabling the layer must request a render in idle mode');
     // Named, not merely counted: the frame has to come from the manager's
     // visibility request, not from some incidental repaint.
@@ -298,7 +290,7 @@ test('the earthquakes layer installs no per-frame callback and no continuous-ren
     readFileSync(new URL(`../layers/earthquakes/${name}.js`, import.meta.url), 'utf8')).join('\n');
   assert.doesNotMatch(
     source,
-    /new Cesium\.CallbackProperty/,
+    /CallbackProperty/,
     'reverting the discs to a per-frame axis callback must fail this pin',
   );
   assert.doesNotMatch(
@@ -310,13 +302,8 @@ test('the earthquakes layer installs no per-frame callback and no continuous-ren
 
 test('earthquake refresh reports failure and clears it only after a successful response', async () => {
   const originalFetch = globalThis.fetch;
-  const dataSources = [];
-  const viewer = {
-    dataSources: {
-      add(dataSource) { dataSources.push(dataSource); return dataSource; },
-      remove() { return true; },
-    },
-  };
+  const viewer = {};
+  bindFakeDraw(viewer);
   const layer = createEarthquakesLayer({
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
@@ -340,13 +327,11 @@ test('earthquake refresh reports failure and clears it only after a successful r
   }
 });
 
-test('malformed earthquake refresh preserves entities, overlays, count and timestamp', async () => {
+test('malformed earthquake refresh preserves discs, overlays, count and timestamp', async () => {
   const originalFetch = globalThis.fetch;
-  const dataSources = [];
   const publications = [];
-  const viewer = { dataSources: {
-    add(source) { dataSources.push(source); }, remove() { return true; },
-  } };
+  const viewer = {};
+  const { draw } = bindFakeDraw(viewer);
   const layer = createEarthquakesLayer({ overlayHost: {
     setEntries(...args) { publications.push(args); }, setVisible() {}, clearSource() {},
   } });
@@ -358,15 +343,15 @@ test('malformed earthquake refresh preserves entities, overlays, count and times
     layer.enable(viewer);
     respond([good]);
     assert.equal(await layer.update(viewer), true);
-    const entity = dataSources[0].entities.values[0];
+    const writes = discsOf(draw).writes;
     const stats = layer.getStats();
     for (const properties of ['invalid', 123, [], true]) {
       const bad = { ...good, id: 'bad-properties', properties };
       for (const features of [[bad], [good, bad]]) {
         respond(features);
         assert.equal(await layer.update(viewer), false);
-        assert.equal(dataSources[0].entities.values.length, 1);
-        assert.equal(dataSources[0].entities.values[0], entity);
+        assert.equal(discsOf(draw).items.size, 1);
+        assert.equal(discsOf(draw).writes, writes, 'not redrawn');
         assert.equal(layer.getStats().count, stats.count);
         assert.equal(layer.getStats().lastUpdate, stats.lastUpdate);
         assert.equal(layer.getStats().error, 'Malformed USGS response');
@@ -382,8 +367,8 @@ test('malformed earthquake refresh preserves entities, overlays, count and times
       { ...good, properties: { mag: Infinity } }, good]) {
       respond([good, bad]);
       assert.equal(await layer.update(viewer), false);
-      assert.equal(dataSources[0].entities.values.length, 1);
-      assert.equal(dataSources[0].entities.values[0], entity);
+      assert.equal(discsOf(draw).items.size, 1);
+      assert.equal(discsOf(draw).writes, writes, 'not redrawn');
       assert.equal(layer.getStats().count, stats.count);
       assert.equal(layer.getStats().lastUpdate, stats.lastUpdate);
       assert.equal(layer.getStats().error, 'Malformed USGS response');
@@ -391,14 +376,21 @@ test('malformed earthquake refresh preserves entities, overlays, count and times
     }
     respond([{ ...good, properties: { mag: null } }]);
     assert.equal(await layer.update(viewer), true);
-    assert.equal(dataSources[0].entities.values.length, 0);
+    assert.equal(discsOf(draw).items.size, 0);
     assert.equal(layer.getStats().error, null);
     assert.equal(publications.at(-1)[1].length, 0);
     respond([good]);
     assert.equal(await layer.update(viewer), true);
-    assert.equal(dataSources[0].entities.values.length, 1);
+    assert.equal(discsOf(draw).items.size, 1);
   } finally {
     globalThis.fetch = originalFetch;
     layer.destroy(viewer);
+  }
+});
+
+test('depth bands keep the renderer colours and label accents they had as Cesium colours', () => {
+  for (const [depthKm, color] of [[10, Cesium.Color.RED], [100, Cesium.Color.ORANGE], [400, Cesium.Color.YELLOW]]) {
+    assert.deepEqual(depthColor(depthKm), [color.red, color.green, color.blue, color.alpha]);
+    assert.equal(depthAccent(depthKm), color.toCssColorString());
   }
 });

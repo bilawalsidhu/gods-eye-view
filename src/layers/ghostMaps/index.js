@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import {
   decodeXml,
   kmzMainDocument,
@@ -13,11 +12,15 @@ import {
   tn,
 } from '../../i18n/index.js';
 import { createHorizonCull } from '../streetLevel/view.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { hexColor } from '../../render/color.js';
+import { drawOf, findFrame } from '../../render/rendererOf.js';
 import { readGhostMapsKml } from './kml.js';
 import {
   GHOST_DOT_COLOR,
   GHOST_DOT_SIZE_PX,
   GHOST_MARKER_DISPLAY_SCALE,
+  GHOST_MARKER_SIZE,
   GHOST_SYMBOL_MAX_DISTANCE_M,
   ghostEventKind,
   ghostMarkerImage,
@@ -32,6 +35,7 @@ import {
   parseDescriptionFields,
   wrapCardText,
 } from './records.js';
+import { inputFor as defaultInputFor } from '../../input/dispatcher.js';
 export * from './catalog.js';
 export * from './records.js';
 export { readGhostMapsKml } from './kml.js';
@@ -97,11 +101,6 @@ function writeStoredSelection(storage, selected) {
   }
 }
 
-const productRgb = (css) => {
-  const parsed = Cesium.Color.fromCssColorString(css);
-  return { r: parsed.red, g: parsed.green, b: parsed.blue };
-};
-
 function readStoredAge(storage) {
   try {
     const raw = storage?.getItem(AGE_STORAGE_KEY);
@@ -115,10 +114,18 @@ function readStoredAge(storage) {
   return GHOSTMAPS_DEFAULT_AGE_DAYS;
 }
 
-const cesiumColor = (rgba, fallback, alpha) =>
+const drawColor = (rgba, fallback, alpha) =>
   rgba
-    ? new Cesium.Color(rgba[0], rgba[1], rgba[2], alpha ?? rgba[3])
-    : Cesium.Color.fromCssColorString(fallback).withAlpha(alpha ?? 1);
+    ? [rgba[0], rgba[1], rgba[2], alpha ?? rgba[3]]
+    : hexColor(fallback, alpha ?? 1);
+
+const productRgb = (css) => {
+  const [r, g, b] = hexColor(css, 1);
+  return { r, g, b };
+};
+
+/** Each layer's draw sets have ids of their own. */
+let instances = 0;
 
 function anchorOf(geometry) {
   if (geometry.type === 'point') return geometry.position;
@@ -141,9 +148,8 @@ function anchorOf(geometry) {
 export function createGhostMapsLayer({
   source,
   overlayHost = null,
-  screenSpaceEventHandlerFactory = null,
+  inputFor = defaultInputFor,
   picking = null,
-  pointer = null,
   openExternal = null,
   storage = defaultStorage(),
   now = () => Date.now(),
@@ -157,7 +163,7 @@ export function createGhostMapsLayer({
   let _unsubscribe = null;
   let _stream = 'closed';
   let _queue = Promise.resolve();
-  let _clickHandler = null;
+  let _clickSubscription = null;
   let _rowListener = null;
   let _selectedKey = null;
   let _selectedCardId = null;
@@ -166,7 +172,7 @@ export function createGhostMapsLayer({
   let _selection = readStoredSelection(storage);
   let _ageDays = readStoredAge(storage);
   let _expiryTimer = null;
-  /** productId → {version, ageDays, dataSource, features, pins} */
+  /** productId → {version, ageDays, sets, features: Map<index, record>, pins} */
   const _loaded = new Map();
   /** productId → in-flight version */
   const _loading = new Map();
@@ -174,7 +180,11 @@ export function createGhostMapsLayer({
   const _failed = new Map();
 
   const notifyRow = () => _rowListener?.();
-  const render = () => _viewer?.scene?.requestRender?.();
+  const render = () =>
+    _viewer && findFrame(_viewer)?.requestRender?.('ghostmaps');
+  /** This layer's draw sets' ids start with this; one set per edition. */
+  const setBase = `${GHOSTMAPS_LAYER_ID}:${++instances}`;
+  let editions = 0;
   // Pins skip the depth test, and with Google 3D tiles the globe is hidden,
   // so nothing else stops far-side pins drawing through the planet.
   const _horizon = createHorizonCull({
@@ -182,10 +192,22 @@ export function createGhostMapsLayer({
     items: function* () {
       for (const item of _loaded.values()) yield* item.pins;
     },
-    onChange: render,
+    // Pins the cull turned are written to their editions' icon sets.
+    onChange: (changed) => {
+      const bySet = new Map();
+      const add = (set, item) => {
+        if (!bySet.has(set)) bySet.set(set, []);
+        bySet.get(set).push(item);
+      };
+      for (const pin of changed) {
+        add(pin.set, pin.item);
+        add(pin.dotSet, pin.dotItem);
+      }
+      for (const [set, items] of bySet) set?.upsert(items);
+      render();
+    },
   });
-  const canSelect = () =>
-    overlayHost && screenSpaceEventHandlerFactory && picking;
+  const canSelect = () => overlayHost && inputFor && picking;
 
   function wanted(product) {
     return _selection ? _selection.has(product.id) : product.defaultOn;
@@ -199,20 +221,21 @@ export function createGhostMapsLayer({
     const item = _loaded.get(id);
     if (!item) return;
     _loaded.delete(id);
-    _viewer?.dataSources?.remove(item.dataSource, true);
+    disposeSets(item.sets);
     if (!keepSelection && _selectedKey?.startsWith(`${id}:`)) clearSelection();
   }
 
-  // Remove expired entities, rather than hiding them: horizon culling must
-  // never make an old pin visible again. Map keys keep surviving picks stable.
+  // Remove expired placemarks' items, rather than hiding them: horizon
+  // culling must never make an old pin visible again. Map keys keep
+  // surviving picks stable.
   function expireEvents() {
     const at = now();
     let changed = false;
     for (const [productId, item] of _loaded) {
       for (const [index, feature] of item.features) {
         if (!isGhostMapsEventExpired(feature.dateMs, at, _ageDays)) continue;
-        for (const entity of feature.entities)
-          item.dataSource.entities.remove(entity);
+        for (const [kind, ids] of Object.entries(feature.itemIds))
+          if (ids.length) item.sets?.[kind]?.remove(ids);
         item.features.delete(index);
         if (_selectedKey === `${productId}:${index}`) clearSelection();
         changed = true;
@@ -225,7 +248,60 @@ export function createGhostMapsLayer({
     }
   }
 
-  /** Build one product's data source off-scene, then swap it in. */
+  function disposeSets(sets) {
+    if (!sets) return;
+    for (const set of Object.values(sets)) set.dispose();
+  }
+
+  /**
+   * Draw a loaded edition in sets of its own, beside any edition drawing
+   * now. One that cannot be drawn draws nothing and lets its images go.
+   */
+  function mount(next) {
+    const base = `${setBase}:${++editions}`;
+    const sets = {};
+    try {
+      // Inside the try: a viewer with no renderer bound draws nothing and
+      // still lets the edition's images go.
+      const draw = drawOf(_viewer);
+      sets.shapes = draw.shapes({ id: `${base}:shapes`, clampTo: 'both' });
+      sets.lines = draw.lines({ id: `${base}:lines`, clampTo: 'both' });
+      sets.icons = draw.icons({ id: `${base}:icons`, clampTo: 'both' });
+      sets.dots = draw.points({ id: `${base}:dots`, clampTo: 'both' });
+      sets.shapes.set(next.items.shapes);
+      sets.lines.set(next.items.lines);
+      sets.icons.set(next.items.icons);
+      sets.dots.set(next.items.dots);
+    } catch (error) {
+      disposeSets(sets);
+      throw error;
+    }
+    for (const pin of next.pins) {
+      pin.set = sets.icons;
+      pin.dotSet = sets.dots;
+    }
+    next.sets = sets;
+  }
+
+  /** The placemark a hit on one of this layer's items is, or null. */
+  function hitKey(hit) {
+    if (
+      !hit?.set?.startsWith(`${setBase}:`) ||
+      !hit.id?.startsWith(PICK_PREFIX)
+    )
+      return null;
+    const [productId, index] = hit.id.slice(PICK_PREFIX.length).split(':');
+    const loaded = _loaded.get(productId);
+    // Only the drawing edition's sets: a retiring one may still pick.
+    const current = loaded?.sets
+      ? Object.values(loaded.sets).some((set) => set?.id === hit.set)
+      : false;
+    return current && loaded.features.has(Number(index))
+      ? `${productId}:${index}`
+      : null;
+  }
+
+  /** Build one product's draw items off-scene, then swap them in. */
   async function load(product, signal) {
     const ageDays = _ageDays;
     const bytes = await source.getFile(product.id, product.version, { signal });
@@ -238,144 +314,148 @@ export function createGhostMapsLayer({
       const parsed = readGhostMapsKml(
         parseXml(decodeXml(entries.get(main)), 'KML'),
       );
-      entries.clear();
       signal.throwIfAborted();
       const color = PRODUCT_COLORS[product.id] || ACCENT;
-      const dataSource = new Cesium.CustomDataSource(
-        `${GHOSTMAPS_LAYER_ID}:${product.id}`,
-      );
+      const icons = [];
+      const dots = [];
+      const lines = [];
+      const shapes = [];
       const features = new Map();
       const pins = [];
       const at = now();
-      dataSource.entities.suspendEvents();
+      signal.throwIfAborted();
       parsed.features.forEach((feature, index) => {
         const dateMs = ghostMapsEventDate(feature.description);
         if (isGhostMapsEventExpired(dateMs, at, ageDays)) return;
         const key = `${product.id}:${index}`;
         const { style } = feature;
-        const entities = [];
+        // The items each placemark draws, by set, for expiry to take off.
+        const itemIds = { icons: [], dots: [], lines: [], shapes: [] };
         feature.geometries.forEach((geometry, part) => {
           const id = `${PICK_PREFIX}${key}:${part}`;
           if (geometry.type === 'point') {
-            const position = Cesium.Cartesian3.fromDegrees(
-              ...geometry.position,
+            const position = fromDegrees(...geometry.position);
+            // The event's own cyber-cyan symbol, not the icon the export
+            // packs: those are a mix of emoji, black placeholders and photos.
+            // The symbol carries its colour, so no tint is applied; the tint
+            // only colours the plain disc that stands in when it cannot be
+            // drawn at all.
+            const image = ghostMarkerImage(
+              ghostEventKind({
+                folder: feature.folder,
+                name: feature.name,
+                iconHref: style.iconHref,
+                description: feature.description,
+              }),
+              ghostMarkerTint(style.iconColor, productRgb(color)),
             );
-            const entity = dataSource.entities.add({
+            // An image that cannot be drawn shows nothing, as before.
+            if (!image) return;
+            // Not ground-clamped: a marker is re-placed from terrain and
+            // 3D-tile height queries as you zoom, and a clamped marker with a
+            // distance range was not drawn at all in the Cesium renderer.
+            // On the ellipsoid and over the depth buffer it stays put; the
+            // horizon cull hides the far side instead (see `_horizon`).
+            const item = {
               id,
-              position,
-              billboard: {
-                // One shared sprite per kind of event (see markers.js). The
-                // symbol carries its own colour, so nothing tints it: a
-                // marker cannot be made invisible by the colour a KML happens
-                // to carry. The tint is only used for the plain disc that
-                // stands in when the symbol cannot be drawn at all.
-                image: ghostMarkerImage(
-                  ghostEventKind({
-                    folder: feature.folder,
-                    name: feature.name,
-                    iconHref: style.iconHref,
-                    description: feature.description,
-                  }),
-                  ghostMarkerTint(style.iconColor, productRgb(color)),
-                ),
-                scale:
-                  Math.min(1.5, Math.max(0.6, style.iconScale ?? 1)) *
-                  GHOST_MARKER_DISPLAY_SCALE,
-                verticalOrigin: Cesium.VerticalOrigin.CENTER,
-                // Not ground-clamped. A clamped billboard with a distance
-                // display condition is not drawn AT ALL in Cesium (measured in
-                // a browser: zero symbol pixels at every zoom below the
-                // hand-over distance, with or without terrain), and a clamped
-                // marker is re-placed from terrain and 3D-tile height queries
-                // as you zoom. Placed on the ellipsoid and drawn over the depth
-                // buffer it stays put; the horizon cull hides the far side
-                // instead (see `_horizon`).
-                disableDepthTestDistance: Number.POSITIVE_INFINITY,
-                // Close up: the symbol. Far away it hands over to the dot
-                // below, so a dense region does not smear into one blob.
-                distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
-                  0,
-                  GHOST_SYMBOL_MAX_DISTANCE_M,
-                ),
-              },
-              point: {
-                pixelSize: GHOST_DOT_SIZE_PX,
-                color:
-                  Cesium.Color.fromCssColorString(GHOST_DOT_COLOR).withAlpha(
-                    0.9,
-                  ),
-                outlineColor:
-                  Cesium.Color.fromCssColorString('#041016').withAlpha(0.9),
-                outlineWidth: 1,
-                disableDepthTestDistance: Number.POSITIVE_INFINITY,
-                distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
-                  GHOST_SYMBOL_MAX_DISTANCE_M,
-                  Number.POSITIVE_INFINITY,
-                ),
-              },
-            });
-            entities.push(entity);
+              pos: position,
+              image,
+              size: [GHOST_MARKER_SIZE, GHOST_MARKER_SIZE],
+              scale:
+                Math.min(1.5, Math.max(0.6, style.iconScale ?? 1)) *
+                GHOST_MARKER_DISPLAY_SCALE,
+              anchor: 'center',
+              disableDepthTest: Number.POSITIVE_INFINITY,
+              // Close up: the symbol. Far away it hands over to the dot
+              // below, so a dense region does not smear into one blob.
+              displayRange: [0, GHOST_SYMBOL_MAX_DISTANCE_M],
+            };
+            const dot = {
+              id: `${id}:dot`,
+              pos: position,
+              pixelSize: GHOST_DOT_SIZE_PX,
+              color: hexColor(GHOST_DOT_COLOR, 0.9),
+              outlineColor: hexColor('#041016', 0.9),
+              outlineWidth: 1,
+              disableDepthTest: Number.POSITIVE_INFINITY,
+              displayRange: [
+                GHOST_SYMBOL_MAX_DISTANCE_M,
+                Number.POSITIVE_INFINITY,
+              ],
+            };
+            const slot = icons.push(item) - 1;
+            dots.push(dot);
+            itemIds.icons.push(id);
+            itemIds.dots.push(`${id}:dot`);
+            // What the horizon cull turns: the symbol and its dot together, as
+            // they draw now, in their edition's sets once mounted.
             pins.push({
               index,
               position,
+              set: null,
+              dotSet: null,
+              get item() {
+                return icons[slot];
+              },
+              get dotItem() {
+                return dots[slot];
+              },
               get show() {
-                return entity.show;
+                return icons[slot].show !== false;
               },
               set show(value) {
-                entity.show = value;
+                icons[slot] = { ...icons[slot], show: value };
+                dots[slot] = { ...dots[slot], show: value };
               },
             });
           } else if (geometry.type === 'line') {
-            entities.push(
-              dataSource.entities.add({
-                id,
-                polyline: {
-                  positions: Cesium.Cartesian3.fromDegreesArray(
-                    geometry.positions.flat(),
-                  ),
-                  width: Math.min(8, Math.max(1.5, style.lineWidth ?? 2)),
-                  material: cesiumColor(style.lineColor, color),
-                  clampToGround: true,
-                },
-              }),
-            );
+            itemIds.lines.push(id);
+            lines.push({
+              id,
+              positions: geometry.positions.map(([lon, lat]) =>
+                fromDegrees(lon, lat),
+              ),
+              widthPx: Math.min(8, Math.max(1.5, style.lineWidth ?? 2)),
+              mode: 'draped',
+              style: {
+                kind: 'solid',
+                color: drawColor(style.lineColor, color),
+              },
+            });
           } else {
-            const ring = (points) =>
-              Cesium.Cartesian3.fromDegreesArray(points.flat());
-            entities.push(
-              dataSource.entities.add({
-                id,
-                polygon: {
-                  hierarchy: new Cesium.PolygonHierarchy(
-                    ring(geometry.outer),
-                    geometry.holes.map(
-                      (hole) => new Cesium.PolygonHierarchy(ring(hole)),
+            const ring = (points) => points.map(([lon, lat]) => ({ lon, lat }));
+            itemIds.shapes.push(id);
+            shapes.push({
+              id,
+              geometry: {
+                kind: 'polygon',
+                rings: [ring(geometry.outer), ...geometry.holes.map(ring)],
+              },
+              // An unfilled polygon is still there to click, as before.
+              fill:
+                style.fill === false
+                  ? [0, 0, 0, 0]
+                  : drawColor(
+                      style.polyColor,
+                      color,
+                      style.polyColor ? undefined : 0.25,
                     ),
-                  ),
-                  material:
-                    style.fill === false
-                      ? Cesium.Color.TRANSPARENT
-                      : cesiumColor(
-                          style.polyColor,
-                          color,
-                          style.polyColor ? undefined : 0.25,
-                        ),
-                  classificationType: Cesium.ClassificationType.BOTH,
-                },
-              }),
-            );
+              height: 'clampGround',
+            });
+            if (style.outline !== false) itemIds.lines.push(`${id}:outline`);
             if (style.outline !== false)
-              entities.push(
-                dataSource.entities.add({
-                  id: `${id}:outline`,
-                  polyline: {
-                    positions: ring([...geometry.outer, geometry.outer[0]]),
-                    width: Math.min(6, Math.max(1.5, style.lineWidth ?? 2)),
-                    material: cesiumColor(style.lineColor, color),
-                    clampToGround: true,
-                  },
-                }),
-              );
+              lines.push({
+                id: `${id}:outline`,
+                positions: [...geometry.outer, geometry.outer[0]].map(
+                  ([lon, lat]) => fromDegrees(lon, lat),
+                ),
+                widthPx: Math.min(6, Math.max(1.5, style.lineWidth ?? 2)),
+                mode: 'draped',
+                style: {
+                  kind: 'solid',
+                  color: drawColor(style.lineColor, color),
+                },
+              });
           }
         });
         features.set(index, {
@@ -383,21 +463,19 @@ export function createGhostMapsLayer({
           folder: feature.folder,
           description: feature.description,
           dateMs,
-          entities,
+          itemIds,
           anchor: anchorOf(feature.geometries[0]),
         });
       });
-      dataSource.entities.resumeEvents();
       return {
         version: product.version,
         ageDays,
-        dataSource,
+        items: { icons, dots, lines, shapes },
+        sets: null,
         features,
         pins,
       };
     } finally {
-      // The archive's bytes are not needed once the features are built, or
-      // when building them failed.
       entries.clear();
     }
   }
@@ -427,8 +505,8 @@ export function createGhostMapsLayer({
             return;
           }
           // Cull before the first frame so far-side pins never flash.
-          _horizon.update(next.pins);
-          await _viewer.dataSources.add(next.dataSource);
+          _horizon.update(next.pins, { quiet: true });
+          mount(next);
           // The new edition is on the globe before the old one leaves. The card
           // stays only if its index still holds the same report: the server
           // may answer a pinned version with newer bytes.
@@ -571,7 +649,7 @@ export function createGhostMapsLayer({
       // when its marker turns behind the planet.
       stateless: true,
       horizonCull: true,
-      position: Cesium.Cartesian3.fromDegrees(...feature.anchor),
+      position: fromDegrees(...feature.anchor),
     };
     if (card.interactive) {
       const link = _selectedLink;
@@ -599,37 +677,25 @@ export function createGhostMapsLayer({
     overlayHost?.setEntries(GHOSTMAPS_OVERLAY_SOURCE_ID, [], CARD_HOST_OPTIONS);
   }
 
-  function pickedKey(picked) {
-    const pickId = picking.resolvePickId(picked);
-    if (typeof pickId !== 'string' || !pickId.startsWith(PICK_PREFIX))
-      return null;
-    const [productId, index] = pickId.slice(PICK_PREFIX.length).split(':');
-    return _loaded.get(productId)?.features.has(Number(index))
-      ? `${productId}:${index}`
-      : null;
-  }
-
   function installClickHandler() {
-    if (!canSelect() || _clickHandler || !_viewer) return;
+    if (!canSelect() || _clickSubscription || !_viewer) return;
     picking.registerPickOwner?.(
       GHOSTMAPS_LAYER_ID,
       (pickedId) =>
         typeof pickedId === 'string' && pickedId.startsWith(PICK_PREFIX),
     );
-    _clickHandler = screenSpaceEventHandlerFactory(_viewer);
-    _clickHandler.setInputAction((click) => {
-      if (pointer && !pointer.isPointerFree()) return;
+    _clickSubscription = inputFor(_viewer).onClick((event) => {
       const cardHit = overlayHost.hitTest?.(
-        click.position?.x,
-        click.position?.y,
+        event.screenPosition?.x,
+        event.screenPosition?.y,
         { sourceId: GHOSTMAPS_OVERLAY_SOURCE_ID },
       );
       if (cardHit && cardHit.entryId === _selectedCardId) {
         if (_selectedLink && openExternal) openExternal(_selectedLink);
         return;
       }
-      const picked = _viewer.scene.pick(click.position);
-      const key = picked ? pickedKey(picked) : null;
+      const picked = event.topHit;
+      const key = picked ? hitKey(event.drawHit) : null;
       if (key) {
         _selectedKey = key;
         publishCard();
@@ -645,12 +711,12 @@ export function createGhostMapsLayer({
         clearSelection();
         render();
       }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
   }
 
   function removeClickHandler() {
-    _clickHandler?.destroy();
-    _clickHandler = null;
+    _clickSubscription?.();
+    _clickSubscription = null;
     picking?.unregisterPickOwner?.(GHOSTMAPS_LAYER_ID);
   }
 
@@ -663,7 +729,7 @@ export function createGhostMapsLayer({
   const layer = {
     id: GHOSTMAPS_LAYER_ID,
     name: 'S2 GhostMaps',
-    icon: '◬',
+    icon: '👻',
     source: 'S2 Underground',
     // Pushes arrive within seconds over the event stream; this interval is
     // the backstop if the stream is down.
@@ -679,7 +745,8 @@ export function createGhostMapsLayer({
       _lifetime = new AbortController();
       if (_expiryTimer === null)
         _expiryTimer = setInterval(expireEvents, 60_000);
-      for (const item of _loaded.values()) item.dataSource.show = true;
+      for (const item of _loaded.values())
+        for (const set of Object.values(item.sets ?? {})) set.show = true;
       installClickHandler();
       if (!_unsubscribe && typeof source.subscribe === 'function')
         _unsubscribe = source.subscribe(

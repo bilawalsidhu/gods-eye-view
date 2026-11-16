@@ -1,11 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 import {
   DEFAULT_DIRECTIONS_MODE,
   DIRECTIONS_MODES,
   DIRECTIONS_POINTER_OWNER,
   DIRECTIONS_ROUTE_COLOR,
+  DIRECTIONS_MARKER_OVERLAY_SOURCE_ID,
+  createDirectionsMarkerOverlayEntry,
   createDirectionsStepOverlayEntry,
   directionsRequestUrl,
   directionsRowControls,
@@ -18,8 +21,6 @@ import {
   stepIndexAtDistance,
   stepMarkerHeightM,
   stepMarkerIndices,
-  pointerBlockedMessage,
-  POINTER_TOOL_EXITS,
   STEP_ANCHOR_DEADLINE_MS,
   STEP_ANCHOR_RETRY_MS,
   STEP_ANCHOR_SLOW_RETRY_MS,
@@ -437,12 +438,6 @@ test('the FLY chip reports a flight in progress', () => {
   assert.equal(flying.active, true);
 });
 
-test('a blocked pointer is reported instead of silently doing nothing', () => {
-  const blocked = directionsStats({ ...idle, pointerBlocked: true });
-  assert.match(blocked.error, /Another map tool is using clicks/);
-  assert.equal(blocked.count, 0);
-});
-
 test('a step selection can be requested and cleared through params', () => {
   assert.deepEqual(normalizeDirectionsParams({ step: 3 }), { step: 3 });
   assert.deepEqual(normalizeDirectionsParams({ step: 0 }), { step: 0 });
@@ -514,37 +509,40 @@ test('placing an endpoint takes the pointer, and every exit path gives it back',
   assert.equal(isPointerFree(), true, 'destroy releases');
 });
 
-test('arming is refused, and said so, while another tool holds the pointer', (t) => {
+test('arming takes the pointer from another tool, which is told', (t) => {
   ownershipFixture(t);
-
-  const releaseDraw = claimAs('draw');
-  assert.equal(
-    directionsLayer.setParams({ arm: 'a' }),
-    true,
-    'the write is accepted',
-  );
-  assert.equal(
-    pointerOwner(),
-    'draw',
-    "the other tool's claim is never stolen",
-  );
+  let lost = 0;
+  claimPointer('draw', { onLost: () => (lost += 1) });
+  assert.equal(directionsLayer.setParams({ arm: 'a' }), true);
+  assert.equal(pointerOwner(), DIRECTIONS_POINTER_OWNER, 'the newest wins');
+  assert.equal(lost, 1, 'the other tool is told once');
   const chips = directionsLayer.getRowControls().chips;
-  assert.equal(
-    chips.find((chip) => chip.id === 'set-a').active,
-    false,
-    'nothing is armed',
-  );
-  assert.match(
-    directionsLayer.getStats().error,
-    /Another map tool is using clicks/,
-    'the row says why the click did nothing',
-  );
+  assert.equal(chips.find((chip) => chip.id === 'set-a').active, true);
+  assert.equal(directionsLayer.getStats().error, null);
+});
 
-  // Once the other tool lets go, arming works and the complaint clears.
+test('a newer tool taking the pointer disarms, as Escape would', (t) => {
+  ownershipFixture(t);
+  let told = 0;
+  directionsLayer.setRowControlsListener(() => (told += 1));
+  t.after(() => directionsLayer.setRowControlsListener(null));
+  directionsLayer.setParams({ arm: 'b' });
+  told = 0;
+  const releaseDraw = claimAs('draw');
+  const chips = directionsLayer.getRowControls().chips;
+  assert.equal(chips.find((chip) => chip.id === 'set-b').active, false);
+  assert.ok(told > 0, 'the row hears it');
+  assert.equal(
+    directionsLayer.getStats().error,
+    null,
+    'nothing to complain of',
+  );
+  // Its own later release frees nothing of the newer tool's.
+  directionsLayer.setParams({ arm: null });
+  assert.equal(pointerOwner(), 'draw');
   assert.equal(releaseDraw(), true);
   directionsLayer.setParams({ arm: 'a' });
-  assert.equal(pointerOwner(), DIRECTIONS_POINTER_OWNER);
-  assert.equal(directionsLayer.getStats().error, null);
+  assert.equal(pointerOwner(), DIRECTIONS_POINTER_OWNER, 'it arms again');
 });
 
 test('a release names this layer, so it cannot free a successor tool claim', (t) => {
@@ -564,11 +562,10 @@ test('a release names this layer, so it cannot free a successor tool claim', (t)
 
 test('the pointer claim outlives the click that consumed it', async (t) => {
   ownershipFixture(t);
-  // Every layer binds its own handler to the same canvas and they all run
-  // inside ONE browser event. Releasing the claim the moment the endpoint is
-  // placed hands the rest of that same click to every ambient handler
-  // registered after this one — which is how placing A on top of a bikeshare
-  // station also deselected the station.
+  // The renderer's click comes from the pointer's up, and the browser's own
+  // `click` on the canvas follows inside ONE input event; DOM listeners there
+  // ask `isPointerFree()` then. Releasing the claim the moment the endpoint is
+  // placed hands the rest of that same click to them.
   directionsLayer.setParams({ arm: 'a' });
   assert.equal(pointerOwner(), DIRECTIONS_POINTER_OWNER);
 
@@ -722,68 +719,6 @@ test('a stale lease cannot free the claim a later arming holds', async (t) => {
     DIRECTIONS_POINTER_OWNER,
     'the pending release must not disarm the new arming',
   );
-});
-
-test('a refused arming names the tool holding the pointer and how to leave it', () => {
-  // Owner field test: he pressed SET A while Draw was open, nothing happened,
-  // and he concluded Directions was broken. Silence was the bug.
-  assert.equal(
-    pointerBlockedMessage('draw', 'a'),
-    'Draw is active — press Escape twice to leave Draw, then set A',
-  );
-  assert.equal(
-    pointerBlockedMessage('draw', 'b'),
-    'Draw is active — press Escape twice to leave Draw, then set B',
-  );
-  // A tool nobody has written an exit for still gets a usable sentence.
-  assert.equal(
-    pointerBlockedMessage('measure', 'a'),
-    'measure is active — turn measure off, then set A',
-  );
-  // A registered owner without an exit is named by its tool, not its id.
-  assert.equal(
-    pointerBlockedMessage('recent-imagery-box', 'a'),
-    'Recent imagery is active — turn Recent imagery off, then set A',
-  );
-  // Nothing to say when nothing is in the way, or when we are the holder.
-  assert.equal(pointerBlockedMessage(null, 'a'), null);
-  assert.equal(pointerBlockedMessage('', 'a'), null);
-  assert.equal(pointerBlockedMessage('   ', 'a'), null);
-  assert.equal(pointerBlockedMessage(DIRECTIONS_POINTER_OWNER, 'a'), null);
-  // Every exit the table knows names its tool and says how to leave it.
-  for (const [id, exit] of Object.entries(POINTER_TOOL_EXITS)) {
-    assert.match(
-      pointerBlockedMessage(id, 'a'),
-      new RegExp(`^${exit.name} is active — `),
-    );
-    assert.match(pointerBlockedMessage(id, 'a'), /, then set A$/);
-  }
-});
-
-test('the refusal reaches the app toast, and a successful arming says nothing', (t) => {
-  ownershipFixture(t);
-  const toasts = [];
-  directionsLayer.attachShellServices({
-    showToast: (text) => toasts.push(text),
-  });
-  t.after(() => directionsLayer.attachShellServices(null));
-
-  const releaseDraw = claimAs('draw');
-  directionsLayer.setParams({ arm: 'a' });
-  assert.deepEqual(toasts, [
-    'Draw is active — press Escape twice to leave Draw, then set A',
-  ]);
-  // The row status the operator can also read is still set.
-  assert.match(
-    directionsLayer.getStats().error,
-    /Another map tool is using clicks/,
-  );
-
-  // Once Draw lets go, arming works and says nothing at all.
-  releaseDraw();
-  directionsLayer.setParams({ arm: 'a' });
-  assert.equal(toasts.length, 1, 'a successful arming is silent');
-  assert.equal(pointerOwner(), DIRECTIONS_POINTER_OWNER);
 });
 
 test('maneuvers are phrased on the page, in English word for word as the proxy does', () => {
@@ -949,4 +884,76 @@ test('the reroute tooltip keeps German mode nouns capitalized', (t) => {
     title('mode-bike'),
     'Fahrrad – Route im Modus „Fahrrad“ neu berechnen',
   );
+});
+
+test('the A and B letters are protected overlay labels in the marker colour', () => {
+  const position = Cesium.Cartesian3.fromDegrees(-122.39, 37.79);
+  const entry = createDirectionsMarkerOverlayEntry('B', position, '#ff6b6b');
+  assert.equal(entry.id, 'directions-marker-b');
+  assert.equal(entry.title, 'B');
+  assert.equal(entry.variant, 'label');
+  assert.equal(entry.accent, '#ff6b6b');
+  assert.equal(entry.protected, true);
+  assert.equal(entry.position, position);
+  assert.equal(entry.placement, 'above');
+});
+
+test('a placed endpoint draws its letter through the overlay, not as entity text', async (t) => {
+  const published = [];
+  const cleared = [];
+  const visibility = [];
+  const markerVisibility = () =>
+    visibility
+      .filter(([source]) => source === DIRECTIONS_MARKER_OVERLAY_SOURCE_ID)
+      .at(-1)?.[1];
+  directionsLayer = createApplicationDirectionsLayer();
+  directionsLayer._setOverlayHostForTest({
+    setEntries: (source, entries) => published.push([source, entries]),
+    setVisible: (source, visible) => visibility.push([source, visible]),
+    clearSource: (source) => cleared.push(source),
+  });
+  resetPointerOwnership();
+  const viewer = {
+    isDestroyed: () => false,
+    scene: { requestRender() {} },
+  };
+  const { draw, unbind } = bindFakeDraw(viewer);
+  t.after(() => {
+    unbind();
+    directionsLayer.destroy(viewer);
+    directionsLayer._setOverlayHostForTest(null);
+    resetPointerOwnership();
+  });
+  directionsLayer.init(viewer);
+  assert.equal(markerVisibility(), false, 'hidden until enabled');
+  directionsLayer.placeEndpoint('a', { lat: 37.7955, lon: -122.3937 });
+
+  const markers = [...draw.sets.values()].find(
+    (set) => !set.disposed && set.spec.id.endsWith(':markers'),
+  );
+  assert.deepEqual([...markers.items.keys()], ['directions:marker:A']);
+  const marker = markers.items.get('directions:marker:A');
+  assert.equal(marker.label, undefined, 'no renderer label on the marker');
+  assert.equal(marker.height, 'clampGround', 'a dot on the ground');
+  const [source, entries] = published.at(-1);
+  assert.equal(source, DIRECTIONS_MARKER_OVERLAY_SOURCE_ID);
+  assert.deepEqual(
+    entries.map((entry) => entry.title),
+    ['A'],
+  );
+  // Hidden until the floor cell settles, then anchored (the ellipsoid here,
+  // where the test resolver finds no height).
+  assert.equal(entries[0].position(), null);
+  const started = Date.now();
+  while (!entries[0].position() && Date.now() - started < 5000)
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  const anchor = Cesium.Cartographic.fromCartesian(entries[0].position());
+  assert.ok(Math.abs(Cesium.Math.toDegrees(anchor.latitude) - 37.7955) < 1e-9);
+
+  directionsLayer.setParams({ clear: true });
+  assert.equal(markers.items.size, 0, 'CLEAR takes the markers');
+  assert.ok(cleared.includes(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID));
+  cleared.length = 0;
+  directionsLayer.destroy(viewer);
+  assert.ok(cleared.includes(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID));
 });

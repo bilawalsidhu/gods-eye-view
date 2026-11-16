@@ -6,6 +6,7 @@ import { setLocale } from '../i18n/index.js';
 import { createWeatherPanel } from './weatherPanel.js';
 import { railDocumentFixture as railFixture } from './railTestFixture.mjs';
 import { createAirQualityLayer } from '../layers/airQuality/index.js';
+import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 const ticks = ['2026-09-22T01:00:00Z', '2026-09-22T01:05:00Z'];
 const wind = {
   id: 'wind',
@@ -517,9 +518,10 @@ test('compact lines show observation age, forecast validity, storm selection or 
     'Forecast · valid 09-22 01:00 UTC',
   );
   f.state({ mode: 'history', target: ticks[1] });
+  // At a past time a frame's age counts from the timeline time.
   assert.equal(
     compact(radar.id).textContent,
-    '09-22 01:05 UTC · 8m ago · synced',
+    '09-22 01:05 UTC · 0m ago · synced',
   );
   assert.equal(
     compact(wind.id).textContent,
@@ -534,7 +536,7 @@ test('compact lines show observation age, forecast validity, storm selection or 
   });
   assert.equal(
     compact(radar.id).textContent,
-    '09-22 01:00 UTC · 13m ago · nearest',
+    '09-22 01:00 UTC · 5m ago · nearest',
   );
   clickHeader(f, wind.id);
   assert.equal(
@@ -732,7 +734,9 @@ test('air-quality readout renders its band legend, Canada coverage and worst-fir
     },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
-  layer.init({ dataSources: { add() {}, remove() {} } });
+  const viewer = {};
+  bindFakeDraw(viewer);
+  layer.init(viewer);
   layer.enable();
   await layer.update();
   const f = fixture();
@@ -790,4 +794,44 @@ test('source-supplied legend units are shown as given; catalog units are transla
   } finally {
     setLocale('en');
   }
+});
+
+test('at a past time, frame ages count from the timeline time, not now, and the frame time is that time', (t) => {
+  t.mock.timers.enable({
+    apis: ['Date'],
+    now: Date.parse('2032-01-01T00:00:00Z'),
+  });
+  const f = fixture();
+  const view = createWeatherPanel(f);
+  view.update([radar]);
+  f.state({
+    mode: 'history',
+    target: '2026-09-22T01:20:00Z',
+    products: [{ id: radar.id, shown: ticks[1], selected: ticks[1] }],
+  });
+  assert.equal(
+    line(f, radar.id, 'time').textContent,
+    '09-22 01:05 UTC · 15m ago · nearest',
+  );
+  // The panel's frame time is the timeline time alone, with no age.
+  assert.equal(frameTime(f).textContent, '01:20 UTC');
+  view.destroy();
+});
+
+test('the wind card notes it stays live only while its source does not follow the timeline', () => {
+  const f = fixture();
+  const following = new Set();
+  f.clock.follows = (id) => following.has(id);
+  const view = createWeatherPanel(f);
+  view.update([wind, radar]);
+  f.state({ mode: 'history', target: ticks[1] });
+  assert.match(line(f, 'wind', 'time').textContent, /Does not follow history/);
+  following.add('wind');
+  f.state({ target: ticks[0] });
+  assert.match(line(f, 'wind', 'time').textContent, /^Forecast · valid /);
+  assert.doesNotMatch(
+    line(f, 'wind', 'time').textContent,
+    /Does not follow history/,
+  );
+  view.destroy();
 });

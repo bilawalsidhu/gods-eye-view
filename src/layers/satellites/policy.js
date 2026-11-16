@@ -1,5 +1,5 @@
-import * as Cesium from 'cesium';
 import { satelliteClassColor } from '../../data/satelliteClass.js';
+import { cssColor, hexColor } from '../../render/color.js';
 import { SATELLITE_CLASS_DISPLAY, SATELLITE_CLASS_IDS } from './classes.js';
 
 /**
@@ -11,7 +11,7 @@ import { SATELLITE_CLASS_DISPLAY, SATELLITE_CLASS_IDS } from './classes.js';
  * (src/layers/satellites/classes.js) whose visibility the layer row toggles; dense mode
  * (setParams catalog:'dense', the STARLINK toggle) adds the Starlink shell as
  * points-only extras.
- * Renders positions via PointPrimitiveCollection, orbital paths as polylines.
+ * Renders positions as points, orbital paths as polylines.
  * Click any satellite to track it with camera follow + orbital path.
  *
  * ISS gets special treatment: larger point, persistent host label, path shown by default.
@@ -107,11 +107,14 @@ export const DENSE_CREATE_CHUNK = 1500;
  * High orbits (MEO nav / GEO belt) scale this up so the ring stays in frame.
  */
 
-export const TRACK_VIEW_FROM_LEO = new Cesium.Cartesian3(
-  -450000,
-  -450000,
-  350000,
-);
+export const TRACK_VIEW_FROM_LEO = Object.freeze({
+  x: -450000,
+  y: -450000,
+  z: 350000,
+});
+
+/** The tracked satellite's orbit ring. */
+export const TRACKED_ORBIT_COLOR = Object.freeze([1, 1, 0, 1]);
 
 export const HIGH_ORBIT_ALTITUDE_M = 2000000;
 
@@ -126,14 +129,16 @@ export const TRACK_VIEW_FROM_HIGH_SCALE = 4;
  * Colors come from `satelliteClass.js` so the dot, the class label on the
  * card, and the legend swatch on the layer row can never disagree. Only
  * pixelSize/outline live here — those encode per-group prominence, not class.
- * Converted once at module load; per-point color is a plain primitive
- * attribute, so classification costs nothing per frame.
+ * Colours are the render contract's `[r, g, b, a]` (0..1); the rendering
+ * part turns each style into the renderer's own colours once.
  */
 
-const POINT_OUTLINE = Cesium.Color.WHITE.withAlpha(0.3);
+const POINT_OUTLINE = Object.freeze([1, 1, 1, 0.3]);
 
-const _classColor = (group) =>
-  Cesium.Color.fromCssColorString(satelliteClassColor(group));
+const rgba = (hex, alpha = 1) => Object.freeze(hexColor(hex, alpha));
+
+const _classColor = (group, alpha = 1) =>
+  rgba(satelliteClassColor(group), alpha);
 
 export const POINT_STYLES = {
   // The ISS keeps its own long-standing red hero styling rather than the
@@ -142,7 +147,7 @@ export const POINT_STYLES = {
   // Its card still reads "STATION · ISS", so the class stays legible.
   iss: {
     pixelSize: 12,
-    color: Cesium.Color.fromCssColorString('#ff4444'),
+    color: rgba('#ff4444'),
     outlineColor: POINT_OUTLINE,
     outlineWidth: 2,
   },
@@ -187,7 +192,7 @@ export const POINT_STYLES = {
   // Dense-mode extras (Starlink): dim, small, points-only.
   dense: {
     pixelSize: 3,
-    color: _classColor('dense').withAlpha(0.9),
+    color: _classColor('dense', 0.9),
     outlineColor: POINT_OUTLINE,
     outlineWidth: 0,
   },
@@ -196,7 +201,7 @@ export const POINT_STYLES = {
 const CLASS_COLORS = Object.fromEntries(
   SATELLITE_CLASS_IDS.map((id) => [
     id,
-    Cesium.Color.fromCssColorString(SATELLITE_CLASS_DISPLAY[id].color),
+    Object.freeze(cssColor(SATELLITE_CLASS_DISPLAY[id].color)),
   ]),
 );
 const _classStyles = new Map();
@@ -217,7 +222,10 @@ export function classPointStyle(group, satelliteClass) {
   if (!style) {
     style = Object.freeze({
       ...base,
-      color: group === 'dense' ? color.withAlpha(0.9) : color,
+      color:
+        group === 'dense'
+          ? Object.freeze([color[0], color[1], color[2], 0.9])
+          : color,
     });
     _classStyles.set(key, style);
   }

@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+import { bindFakeCesiumCamera } from './testSupport/fakeCameraPort.mjs';
 import {
   WORLD_CLICK_FOCUS_DURATION_SEC,
   WORLD_FOCUS_FRAMING,
@@ -165,10 +166,11 @@ test('an unflyable request never reaches the release policy', () => {
 test('the transfer flight supersedes any flight in progress and keeps the operator heading', () => {
   const camera = stubCamera();
   assert.equal(
-    flyToWorldTarget(
-      { camera },
-      { kind: 'vessel', id: '123', position: POSITION },
-    ),
+    flyToWorldTarget(bindFakeCesiumCamera({ camera }), {
+      kind: 'vessel',
+      id: '123',
+      position: POSITION,
+    }),
     true,
   );
   assert.equal(
@@ -188,10 +190,11 @@ test('the transfer flight supersedes any flight in progress and keeps the operat
 
 test('fires frame wider than vessels — a fire is read by its surroundings', () => {
   const camera = stubCamera();
-  flyToWorldTarget(
-    { camera },
-    { kind: 'fire', id: 'fire-1', position: POSITION },
-  );
+  flyToWorldTarget(bindFakeCesiumCamera({ camera }), {
+    kind: 'fire',
+    id: 'fire-1',
+    position: POSITION,
+  });
   const { sphere, options } = camera.calls.flights[0];
   assert.equal(sphere.radius, WORLD_FOCUS_FRAMING.fire.radiusM);
   assert.equal(options.offset.range, WORLD_FOCUS_FRAMING.fire.rangeM);
@@ -262,10 +265,16 @@ test('every framing is a real oblique standoff, not a nadir or an inside-out sph
 test('unknown kinds and missing viewers issue no flight', () => {
   const camera = stubCamera();
   assert.equal(
-    flyToWorldTarget({ camera }, { kind: 'plane', position: POSITION }),
+    flyToWorldTarget(bindFakeCesiumCamera({ camera }), {
+      kind: 'plane',
+      position: POSITION,
+    }),
     false,
   );
-  assert.equal(flyToWorldTarget({ camera }, { kind: 'vessel' }), false);
+  assert.equal(
+    flyToWorldTarget(bindFakeCesiumCamera({ camera }), { kind: 'vessel' }),
+    false,
+  );
   assert.equal(
     flyToWorldTarget(null, { kind: 'vessel', position: POSITION }),
     false,

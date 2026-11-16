@@ -1,5 +1,6 @@
 import { applicationServices } from './services/application.js';
-import * as Cesium from 'cesium';
+import { toRadians } from './geo/vector.js';
+import { findCamera } from './render/rendererOf.js';
 import { greatCircleMeters } from './geoDistance.js';
 import {
   deriveWeatherEffectProfile,
@@ -341,15 +342,14 @@ class CockpitCloudEffectsController {
   }
 
   cameraPoint() {
-    const cartographic = this.viewer?.camera?.positionCartographic;
-    if (!cartographic) return null;
-    const latitude = Cesium.Math.toDegrees(cartographic.latitude);
-    const longitude = Cesium.Math.toDegrees(cartographic.longitude);
+    const pose = this.viewer ? findCamera(this.viewer)?.pose() : null;
+    if (!pose) return null;
+    const { lat: latitude, lon: longitude } = pose;
     if (![latitude, longitude].every(Number.isFinite)) return null;
     return {
       latitude,
       longitude,
-      altitudeM: Math.max(0, Number(cartographic.height) || 0),
+      altitudeM: Math.max(0, Number(pose.height) || 0),
     };
   }
 
@@ -543,7 +543,7 @@ class CockpitCloudEffectsController {
   render(timeSec) {
     const gl = this.gl;
     if (!gl || !this.program || !this.locations) return;
-    const windRadians = Cesium.Math.toRadians(this.windDirectionDeg);
+    const windRadians = toRadians(this.windDirectionDeg);
     const windScale = 0.008 + this.windStrength * 0.022;
     gl.useProgram(this.program);
     gl.uniform2f(

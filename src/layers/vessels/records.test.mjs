@@ -15,8 +15,7 @@ function setup() {
   const events = [];
   const effects = {
     add: (record) => events.push(['add', record]),
-    beforeUpdate: (record) => record.type,
-    updated: (record, before) => events.push(['update', record, before]),
+    updated: (record) => events.push(['update', record]),
     remove: (record, evicted) =>
       events.push(['remove', record, evicted, store.byId.has(record.id)]),
     removed: (id) => events.push(['removed', id, store.byId.has(id)]),
@@ -46,9 +45,16 @@ test('vessel reconciliation preserves record identity and first duplicate while 
   probe.reconcile([row('111', { lat: 51.94, type: 'Tanker' })]);
   assert.equal(probe.store.byId.get('111'), record);
   assert.equal(record.lat, 51.94);
-  assert.equal(probe.events.find((event) => event[0] === 'update')[2], 'Cargo');
+  assert.equal(probe.events.find((event) => event[0] === 'update')[1], record);
+  assert.equal(record.type, 'Tanker');
   assert.equal(probe.store.byId.has('222'), false);
-  for (const field of ['position', 'surfacePosition', 'normal', 'billboard'])
+  for (const field of [
+    'position',
+    'surfacePosition',
+    'normal',
+    'billboard',
+    'iconId',
+  ])
     assert.equal(Object.hasOwn(record, field), false);
   assert.deepEqual(structuredClone(record), record);
 });
@@ -180,4 +186,16 @@ test('an AIS row with no id is keyed by its MMSI; one with neither is unkeyed', 
   probe.reconcile([row(''), row('', { id: '' })]);
   assert.equal(probe.store.byId.size, 0);
   assert.equal(probe.store.unkeyed.length, 2);
+});
+
+const fixes = (...pairs) =>
+  pairs.map(([atMs, lat]) => ({ atMs, lat, lon: 4.05, altitudeM: null }));
+
+test('following the clock, a vessel whose next record carries no fixes is placed by the record', () => {
+  const probe = setup();
+  probe.reconcile([row('111', { fixes: fixes([0, 1], [60_000, 2]) })], {
+    replace: true,
+  });
+  probe.reconcile([row('111', { lat: 3 })], { follow: true });
+  assert.equal(probe.store.byId.get('111').fixes, null);
 });

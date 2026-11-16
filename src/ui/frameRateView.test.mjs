@@ -8,6 +8,8 @@ import { createPinia } from 'pinia';
 import { useStatusStore } from './stores/status.js';
 import { createFrameRateMonitor } from './frameRateMonitor.js';
 import SceneChromeView from './views/SceneChromeView.vue';
+import { bindRenderer } from '../render/rendererOf.js';
+import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';
 
 test('the FPS readout sits in the title bar, hidden until the backquote key', async (t) => {
   document.body.replaceChildren();
@@ -18,8 +20,12 @@ test('the FPS readout sits in the title bar, hidden until the backquote key', as
   const readout = () =>
     document.querySelector('#title-bar .frame-rate-readout');
   assert.equal(readout(), null, 'no readout without a monitor');
+  const viewer = {
+    scene: { postRender: { addEventListener: () => () => {} } },
+  };
+  bindRenderer(viewer, { frame: fakeSceneFrame(viewer) });
   const monitor = createFrameRateMonitor({
-    viewer: { scene: { postRender: { addEventListener: () => () => {} } } },
+    viewer,
     store: useStatusStore(pinia),
   });
   t.after(() => monitor.destroy());

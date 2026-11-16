@@ -250,6 +250,12 @@ export function createWeatherClock({
     getTimeline,
     selectFor,
     /**
+     * Whether layer `id` follows the world clock (see the world clock's
+     * `follows`): a host that follows it for a layer of its own, such as
+     * wind, gives that layer the timeline time rather than the live edge.
+     */
+    follows: (id) => world.follows(id),
+    /**
      * The world clock this clock follows. Time moves there, through the same
      * seek, play and live the world's timeline uses, never through this clock.
      */

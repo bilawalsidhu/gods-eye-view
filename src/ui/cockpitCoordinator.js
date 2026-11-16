@@ -1,3 +1,4 @@
+import { followedOf } from '../data/followed.js';
 import { nextTick } from 'vue';
 import { CockpitViewController, CockpitDisplayPortal } from './cockpit.js';
 import {
@@ -11,6 +12,7 @@ import { cockpitSubjectProviders } from '../cockpitSubjectProviders.js';
 import { formatAwarenessLabel } from '../data/militaryAwarenessEngine.js';
 import { enterCockpitWithTracking } from '../cockpitTracking.js';
 import { cockpitVisionModeForStyle } from '../cockpitVisionPolicy.js';
+import { readEntityRecord } from '../data/entityRecords.js';
 
 /** Own Cockpit entry/rollback, readouts and the single Display portal. */
 export class CockpitCoordinator {
@@ -56,6 +58,7 @@ export class CockpitCoordinator {
       meshFloorPreferred,
       warmGroundFloor,
       sampleMeshFloorCells,
+      trackedEntityDrawn,
       holdContinuousRender,
       releaseContinuousRender,
       fetchRegionalBrief,
@@ -84,6 +87,7 @@ export class CockpitCoordinator {
         meshFloorPreferred,
         warmGroundFloor,
         sampleMeshFloorCells,
+        trackedEntityDrawn,
         holdContinuousRender,
         releaseContinuousRender,
         fetchRegionalBrief,
@@ -142,9 +146,9 @@ export class CockpitCoordinator {
       onExited: () => this.exitPanels(),
       onRide: (layerId) => this._adoptRiddenLayer(layerId),
       restoreTrackingFrame: (entity) => {
-        const [layerId, ...idParts] = String(entity?.gevTrackedId || '').split(
-          ':',
-        );
+        const [layerId, ...idParts] = String(
+          readEntityRecord(entity)?.trackedId || '',
+        ).split(':');
         const trackedId = idParts.join(':');
         if (!trackedId) return false;
         if (layerId === 'flights')
@@ -253,12 +257,12 @@ export class CockpitCoordinator {
     const gateOpen = Boolean(this.cockpitView?.isEntryAllowed?.());
     // "Could Cockpit be ENTERED right now" — so it is false while already
     // inside, unconditionally. Cockpit takes the entity off
-    // `viewer.trackedEntity` on entry and NEXT puts one back, which made this
+    // the camera's follow on entry and NEXT puts one back, which made this
     // flip true/false between calls while `active` stayed true; readers
     // (including the voice model) read that as a broken half-entered state.
     const entryAllowed =
       !active &&
-      Boolean(gateOpen && info && this.viewer?.trackedEntity?.position);
+      Boolean(gateOpen && info && followedOf(this.viewer)?.entity?.position);
     // Entry needs only the ridden aircraft's own layer: with one tracked,
     // that layer; with none, any aircraft layer to track one from.
     const subjectLayerOff = info

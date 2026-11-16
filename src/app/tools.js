@@ -1,3 +1,4 @@
+import { onFollowChanged } from '../data/followed.js';
 import { SceneDirector } from '../scenes/director.js';
 import { initAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
@@ -24,17 +25,22 @@ import {
   isScopeMaskEnabled,
 } from '../scopeMask.js';
 import { KEYHOLE_OUTER_RADIUS } from '../celestialRing.js';
-import { installGlobeInViewRecovery } from './viewer.js';
+import { installGlobeInViewRecovery } from './globeInViewRecovery.js';
 import { installLayerReleaseTrim } from '../sceneCommandRelease.js';
 import {
-  installRenderGovernor,
   getRenderGovernorDiagnostics,
   governorRequestRender,
   holdContinuousRender,
   releaseContinuousRender,
 } from '../renderGovernor.js';
+import { entityRecord, readEntityRecord } from '../data/entityRecords.js';
+import { overlayHost } from './layers/overlayHost.js';
 
-/** Attach scene tools, rendering listeners and the application debug handle. */
+/**
+ * Attach scene tools, rendering listeners and the application debug handle.
+ * `scene` is what `createApplicationScene` returns; its `trimStaleCommands`
+ * runs after each layer disable (a scene without one keeps that memory).
+ */
 export function createApplicationTools({
   scene,
   controls,
@@ -49,11 +55,11 @@ export function createApplicationTools({
   signal,
   defer,
 }) {
-  const { viewer, tileset, mapStackController, operations } = scene;
+  const { viewer, renderer, tileset, mapStackController, operations } = scene;
   const { styleManager, weatherEffects, cockpitCloudEffects } = controls;
   const { dataManager } = data;
   const sceneDirector = new SceneDirector(viewer, styleManager, dataManager, {
-    dataPacks: sceneDataPacks,
+    dataPacks: { overlayHost, ...sceneDataPacks },
     isMapStackAvailable: (id) =>
       mapStackController?.isStackAvailable(id) === true,
   });
@@ -198,19 +204,21 @@ export function createApplicationTools({
   }
   if (startChrome)
     defer(startChrome({ loadingScreen, styleManager, dataManager, signal }));
-  // Idle render governor: flips the scene into requestRenderMode whenever
-  // nothing animates per frame. Installed AFTER every module above has had
-  // its chance to register pre-install holds. (perf wave 2)
-  installRenderGovernor(viewer);
-  // Cesium keeps a turned-off layer's draw commands (and so all its entities)
-  // alive in reused per-pass arrays; trim them after each disable.
-  defer(
-    installLayerReleaseTrim({
-      scene: viewer.scene,
-      dataManager,
-      requestRender: governorRequestRender,
-    }),
-  );
+  // Idle render governor: the loop draws on demand whenever nothing animates
+  // per frame. It goes idle only now, after every module above has had its
+  // chance to hold. (perf wave 2)
+  releaseContinuousRender('boot');
+  // The renderer may keep a turned-off layer's draw commands (and so all its
+  // entities) alive; trim them after each disable.
+  if (scene.trimStaleCommands)
+    defer(
+      installLayerReleaseTrim({
+        frame: renderer.frame,
+        dataManager,
+        requestRender: governorRequestRender,
+        trim: scene.trimStaleCommands,
+      }),
+    );
 
   // Install the explicit scope mask used by the DISPLAY controls.
   installScopeMask(viewer);
@@ -218,12 +226,10 @@ export function createApplicationTools({
 
   // The follow camera recomputes the tracked target's dead-reckon position
   // every frame — tracking anything is a per-frame animation. (perf wave 2)
-  const removeTrackingListener = viewer.trackedEntityChanged.addEventListener(
-    () => {
-      if (viewer.trackedEntity) holdContinuousRender('tracked-entity');
-      else releaseContinuousRender('tracked-entity');
-    },
-  );
+  const removeTrackingListener = onFollowChanged(viewer, (followed) => {
+    if (followed) holdContinuousRender('tracked-entity');
+    else releaseContinuousRender('tracked-entity');
+  });
 
   // Hidden-state suspension (perf wave 2): when the window/tab is hidden,
   // stop the default render loop outright — a hidden canvas repaints for
@@ -232,9 +238,9 @@ export function createApplicationTools({
   // the loop, refresh the one DOM surface we gated, render a frame.
   const syncVisibilitySuspension = () => {
     // A panel's host may report it hidden while it is on screen; the panel
-    // keeps drawing itself (see keepPanelRendering in embed.js).
+    // keeps drawing itself (see keepPanelRendering in app/panelRendering.js).
     const hidden = document.hidden && !isEmbeddedInline();
-    viewer.useDefaultRenderLoop = !hidden;
+    renderer.frame.suspend(hidden);
     cockpitCloudEffects?.setSuspended?.(hidden);
     if (!hidden) {
       data.presentation.flushVisible();
@@ -267,6 +273,10 @@ export function createApplicationTools({
     getRenderGovernorDiagnostics,
     surfaceServices: operations.surface,
     requestRender: governorRequestRender,
+    entityRecords: { read: readEntityRecord, write: entityRecord },
+    // What the renderer's plugin lets QA scripts read (the Cesium viewer,
+    // for the default renderer), in place of the scene object above.
+    ...scene.qaHandles,
   };
   const debug = window.__godsEyeView;
   defer(() => {
@@ -299,11 +309,13 @@ export function createApplicationTools({
       run: (name, args, options = {}) =>
         voiceCommands.runner(name, args, { ...options, signal }),
       signal,
+      keepRendering: scene.keepPanelRendering,
       terrain: operations.requests.terrain,
     }),
   );
-  // An application's own tool takes the pointer as Draw does, and its own
-  // click handlers yield while a tool holds it, as the layers' do
+  // Any other tool takes the pointer as Draw does (the newest
+  // claim takes over; `claim(owner, {onLost})` tells the tool it replaces),
+  // and its own click handlers yield while a tool holds it, as the layers' do
   // (data/inputOwnership.js).
   return {
     sceneDirector,

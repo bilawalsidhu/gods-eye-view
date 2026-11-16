@@ -4,11 +4,6 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { parsers } from 'prettier/plugins/babel.mjs';
 
-// Existing entity graphics only. Remove entries as these callers migrate.
-const legacyFiles = new Set([
-  'src/scenes/dataPacks/presentation.js',
-  'src/layers/directions/index.js',
-]);
 const root = fileURLToPath(new URL('../', import.meta.url));
 const propertyName = (node) => node?.name ?? node?.value;
 const memberName = (node) =>
@@ -110,7 +105,6 @@ function cesiumLabels(source) {
 
 test('runtime world text uses the world-overlay host, never new Cesium labels', () => {
   const violations = [];
-  const legacySeen = new Set();
   function scan(directory) {
     for (const entry of readdirSync(root + directory, {
       withFileTypes: true,
@@ -123,9 +117,7 @@ test('runtime world text uses the world-overlay host, never new Cesium labels', 
         !/\.(?:test|spec)\.js$/.test(entry.name)
       ) {
         const hits = cesiumLabels(readFileSync(root + file, 'utf8'));
-        if (!hits.length) continue;
-        if (legacyFiles.has(file)) legacySeen.add(file);
-        else violations.push(...hits.map((hit) => `${file}:${hit}`));
+        violations.push(...hits.map((hit) => `${file}:${hit}`));
       }
     }
   }
@@ -134,11 +126,6 @@ test('runtime world text uses the world-overlay host, never new Cesium labels', 
     violations,
     [],
     `Cesium text labels are forbidden; use the world-overlay host.\n${violations.join('\n')}`,
-  );
-  assert.deepEqual(
-    legacySeen,
-    legacyFiles,
-    'Remove stale or false-positive Cesium-label exceptions',
   );
 });
 

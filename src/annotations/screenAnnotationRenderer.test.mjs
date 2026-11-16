@@ -6,7 +6,19 @@ import { createApp, nextTick } from 'vue';
 import { createPinia } from 'pinia';
 import { useScreenAnnotationsStore } from '../ui/stores/screenAnnotations.js';
 import ScreenAnnotations from '../ui/views/panels/ScreenAnnotations.vue';
-import { createScreenAnnotationRenderer } from './screenAnnotationRenderer.js';
+import { createScreenAnnotationRenderer as createRenderer } from './screenAnnotationRenderer.js';
+import { bindFakeCesiumScene } from '../testSupport/fakeCesiumScene.mjs';
+import { rendererOf } from '../render/rendererOf.js';
+
+/**
+ * The renderer over a viewer double with the camera, query and frame ports
+ * bound over it (once per double), and the scene's canvas as the viewer's.
+ */
+function createScreenAnnotationRenderer(viewer, options) {
+  if (!rendererOf(viewer)) bindFakeCesiumScene(viewer);
+  viewer.canvas ??= viewer.scene?.canvas;
+  return createRenderer(viewer, options);
+}
 
 // happy-dom does not lay out SVG; every element measures as a 40 x 16 box.
 for (const type of [globalThis.SVGElement, globalThis.SVGGraphicsElement]) {
@@ -53,7 +65,7 @@ function sceneFor(camera, extra = {}) {
   return {
     camera,
     canvas: { clientWidth: 800, clientHeight: 600, width: 800, height: 600 },
-    clampToHeightSupported: false,
+    sampleHeightSupported: false,
     postRender: { addEventListener() {}, removeEventListener() {} },
     ...extra,
   };
@@ -173,14 +185,13 @@ test('outline upgrade preserves the existing SVG group identity', async (t) => {
   const sampledAnchors = [];
   const scene = sceneFor(camera, {
     canvas: { clientWidth: 1280, clientHeight: 720, width: 1280, height: 720 },
-    clampToHeightSupported: true,
-    clampToHeight(world) {
-      const cartographic = Cesium.Cartographic.fromCartesian(world);
+    sampleHeightSupported: true,
+    sampleHeight(cartographic) {
       sampledAnchors.push([
         Number(Cesium.Math.toDegrees(cartographic.longitude).toFixed(4)),
         Number(Cesium.Math.toDegrees(cartographic.latitude).toFixed(4)),
       ]);
-      return world;
+      return 0;
     },
   });
   const renderer = createScreenAnnotationRenderer(

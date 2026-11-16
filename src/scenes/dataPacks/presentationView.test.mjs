@@ -9,6 +9,9 @@ import { createPinia } from 'pinia';
 import { useDataPacksStore } from '../../ui/stores/dataPacks.js';
 import DataPacks from '../../ui/views/panels/DataPacks.vue';
 import { createPackPresentations } from './presentation.js';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
+
+const overlayHost = { setEntries() {}, clearSource() {} };
 
 const ANCHOR = { id: 'here', lat: 30, lon: -97, alt: 10 };
 const pack = (id, url) => ({
@@ -23,14 +26,17 @@ function fixture(t) {
   const pinia = createPinia();
   const app = createApp(DataPacks).use(pinia);
   app.mount(document.body.appendChild(document.createElement('div')));
-  const viewer = {
-    container,
-    scene: { requestRender() {} },
-    entities: { add: (spec) => spec, remove() {} },
-  };
+  const viewer = { container };
+  const { unbind } = bindFakeDraw(viewer);
   const store = useDataPacksStore(pinia);
-  const presentations = createPackPresentations(viewer, new Map(), { store });
-  t.after(() => app.unmount());
+  const presentations = createPackPresentations(viewer, new Map(), {
+    store,
+    overlayHost,
+  });
+  t.after(() => {
+    app.unmount();
+    unbind();
+  });
   const settle = async () => {
     for (let flush = 0; flush < 4; flush += 1) await nextTick();
   };
@@ -122,7 +128,10 @@ test('each set of presentations keeps its own panel', async (t) => {
   const { presentations, viewer, store, settle, $$ } = fixture(t);
   const one = await media(presentations, 'one');
   await media(presentations, 'two');
-  const later = createPackPresentations(viewer, new Map(), { store });
+  const later = createPackPresentations(viewer, new Map(), {
+    store,
+    overlayHost,
+  });
   const three = await media(later, 'three');
   await settle();
   const cards = () =>

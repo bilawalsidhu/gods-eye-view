@@ -1,5 +1,8 @@
-import * as Cesium from 'cesium';
+import { cameraOf } from '../../render/rendererOf.js';
+import { entityFollowTarget, stopFollowing } from '../../data/followed.js';
 import { satelliteClassText } from '../../data/satelliteClass.js';
+import { fromDegreesInto } from '../../geo/ellipsoid.js';
+import { clone, scale } from '../../geo/vector.js';
 import { t } from '../../i18n/index.js';
 import { formatQuantity, unitLabel } from '../../ui/unitLabels.js';
 import {
@@ -8,11 +11,12 @@ import {
   HIGH_ORBIT_ALTITUDE_M,
   TRACK_VIEW_FROM_HIGH_SCALE,
   TRACK_VIEW_FROM_LEO,
+  TRACKED_ORBIT_COLOR,
 } from './policy.js';
+import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
 
 export function createTracking({ state: layerState, services, parts, source }) {
-  const { clearFocusTarget, publishFocusTargetFromCachedPosition } =
-    services.focus;
+  const { clearFocusTarget } = services.focus;
   const {
     clearTrackedSubjectContext,
     getContextStore,
@@ -86,36 +90,31 @@ export function createTracking({ state: layerState, services, parts, source }) {
     const clearedNorad = layerState._trackedNorad;
     clearFocusTarget('satellites', layerState._trackedNorad);
 
-    const lastPos = layerState._points.get(layerState._trackedNorad);
-
-    // Re-show the primitive (hidden while the tracked entity rendered the dot)
-    // and restore the original group palette from the shared style table (WS-D3)
-    if (lastPos) {
-      const style = parts.controls._pointStyleFor(
+    // Re-show the dot (hidden while the tracked dot drew it) and
+    // restore the original group palette from the shared style table (WS-D3)
+    parts.rendering._restorePoint(
+      layerState._trackedNorad,
+      parts.controls._pointStyleFor(
         layerState._trackedNorad,
         layerState._catalog.get(layerState._trackedNorad)?.group,
-      );
+      ),
       // Back to its class's visibility: a hidden class stays hidden.
-      lastPos.show = parts.controls._classVisible(layerState._trackedNorad);
-      lastPos.pixelSize = style.pixelSize;
-      lastPos.color = style.color;
-      lastPos.outlineColor = style.outlineColor;
-      lastPos.outlineWidth = style.outlineWidth;
-      lastPos.disableDepthTestDistance = 0;
-    }
+      parts.controls._classVisible(layerState._trackedNorad),
+    );
 
     // Invalidate the per-frame tracked-position cache (WS-D2)
     layerState._trackedFrameNumber = -1;
     layerState._trackedFrameGeo = null;
 
-    // Remove tracked entity and orbit path (unless ISS — keep its path)
+    // Remove the tracked dot and orbit path (unless ISS — keep its path)
     if (layerState._trackedNorad !== ISS_NORAD) {
       parts.rendering._hideOrbitPath(layerState._trackedNorad);
     }
     if (layerState._viewer && !skipViewerUntrack)
-      layerState._viewer.trackedEntity = undefined;
+      stopFollowing(layerState._viewer);
+    layerState._followTarget = null;
     if (layerState._trackedEntity) {
-      layerState._viewer.entities.remove(layerState._trackedEntity);
+      parts.rendering._removeTrackedEntity(layerState._trackedEntity);
       layerState._trackedEntity = null;
     }
     layerState._trackedNorad = null;
@@ -135,8 +134,8 @@ export function createTracking({ state: layerState, services, parts, source }) {
 
   /**
    * Get the tracked satellite's geodetic position, propagated at most once per
-   * rendered frame (WS-D2). All tracked-satellite consumers (entity position
-   * callback → camera, host model, point primitive, getTrackedInfo) share this
+   * rendered frame (WS-D2). All tracked-satellite consumers (the tracked dot
+   * and follow camera, host model, the hidden dot, getTrackedInfo) share this
    * single `new Date()` epoch per frame, so they can never diverge by the old
    * 200ms throttle. The matching ECEF position is left in
    * `_trackedFrameCartesian`. SGP4 for one satellite per frame is cheap.
@@ -148,8 +147,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
     const sat = layerState._catalog.get(layerState._trackedNorad);
     if (!sat) return null;
 
-    const frameNumber =
-      layerState._viewer?.scene?.frameState?.frameNumber ?? -1;
+    const frameNumber = parts.rendering._drawnFrameNumber();
     if (
       frameNumber === -1 ||
       frameNumber !== layerState._trackedFrameNumber ||
@@ -163,11 +161,10 @@ export function createTracking({ state: layerState, services, parts, source }) {
       // The time the sample is at: the world clock's, not the wall clock's.
       pos.atMs = atMs;
       layerState._trackedFrameGeo = pos;
-      Cesium.Cartesian3.fromDegrees(
+      fromDegreesInto(
         pos.longitude,
         pos.latitude,
         pos.altitude,
-        undefined,
         layerState._trackedFrameCartesian,
       );
       layerState._trackedFrameNumber = frameNumber;
@@ -191,11 +188,9 @@ export function createTracking({ state: layerState, services, parts, source }) {
       const trackedPointDiameterPx = 14 + 4; // point plus its 2 px outline on both sides
       // Exact SGP4 frame cache only: dot, host readout, camera, and focus rectangle all
       // share one epoch, avoiding a second propagation phase and its old jitter.
-      publishFocusTargetFromCachedPosition({
+      parts.rendering._publishTrackedFocus({
         ownerLayer: 'satellites',
         id: layerState._trackedNorad,
-        scene: layerState._viewer?.scene,
-        camera: layerState._viewer?.camera,
         displayPosition: layerState._trackedFrameCartesian,
         widthPx: Math.max(trackedPointDiameterPx, Math.min(260, labelWidthPx)),
         // Union of the 14 px point and the two-line label shifted 18 px upward.
@@ -389,7 +384,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
           : t('DOCKED · {name}', { name: companions[0] }),
       );
     }
-    const current = layerState._trackedEntity.gevLabelModel;
+    const current = readEntityRecord(layerState._trackedEntity)?.labelModel;
     // Compare the WHOLE detail array: comparing only `details[0]` swallowed any
     // change confined to the companions line, so the card would never republish.
     const unchanged =
@@ -397,7 +392,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
       current?.details?.length === details.length &&
       details.every((line, index) => current.details[index] === line);
     if (unchanged) return;
-    layerState._trackedEntity.gevLabelModel = {
+    entityRecord(layerState._trackedEntity).labelModel = {
       title,
       details,
       accent: '#ffd84d',
@@ -408,32 +403,30 @@ export function createTracking({ state: layerState, services, parts, source }) {
   function _trackSatellite(noradId, { origin = 'programmatic' } = {}) {
     _clearTracking(false, { origin });
 
-    const point = layerState._points.get(noradId);
     const sat = layerState._catalog.get(noradId);
-    if (!point || !sat) return;
+    if (!layerState._points.has(noradId) || !sat) return;
 
     layerState._trackedNorad = noradId;
     layerState._trackedFrameNumber = -1;
     layerState._trackedFrameGeo = null;
     parts.labels._syncIssOverlay();
 
-    // Hide the primitive — the tracked ENTITY renders the dot below. The
-    // entity must own a point graphic so the Viewer's tracking camera can
-    // resolve a bounding sphere and engage viewFrom (a label-only entity
-    // left the camera stranded; this mirrors the proven flights pattern).
-    point.show = false;
+    // Hide the dot — the tracked dot draws it, larger and over everything.
+    parts.rendering._hidePoint(noradId);
 
     // Show orbital path
-    parts.rendering._showOrbitPath(noradId, Cesium.Color.YELLOW);
+    parts.rendering._showOrbitPath(noradId, TRACKED_ORBIT_COLOR);
     if (noradId === ISS_NORAD) parts.controls._syncIssOrbit?.();
 
-    // Tracked entity position propagates per evaluation through the per-frame
+    // The tracked position propagates per evaluation through the per-frame
     // cache (WS-D2) — dot, host readout, and camera share one SGP4 epoch per frame.
-    // Falls back to the point primitive's reckoned position if SGP4 fails.
-    const positionProperty = new Cesium.CallbackProperty(() => {
+    // Falls back to the dot's reckoned position if SGP4 fails.
+    const trackedPosition = () => {
       const pos = _getTrackedFramePosition();
-      return pos ? layerState._trackedFrameCartesian : point.position;
-    }, false);
+      return pos
+        ? layerState._trackedFrameCartesian
+        : parts.rendering._pointPosition(noradId);
+    };
 
     const name = sat.name.trim();
 
@@ -448,39 +441,38 @@ export function createTracking({ state: layerState, services, parts, source }) {
       initialPos && initialPos.altitude > HIGH_ORBIT_ALTITUDE_M
         ? TRACK_VIEW_FROM_HIGH_SCALE
         : 1;
-    const viewFrom = Cesium.Cartesian3.multiplyByScalar(
-      TRACK_VIEW_FROM_LEO,
-      viewScale,
-      new Cesium.Cartesian3(),
-    );
+    const viewFrom = scale(TRACK_VIEW_FROM_LEO, viewScale);
 
-    layerState._trackedEntity = layerState._viewer.entities.add({
-      position: positionProperty,
+    layerState._trackedEntity = parts.rendering._addTrackedEntity({
+      position: trackedPosition,
       viewFrom,
-      point: {
-        pixelSize: 14,
-        color: Cesium.Color.YELLOW,
-        outlineColor: Cesium.Color.WHITE,
-        outlineWidth: 2,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
     });
-    layerState._trackedEntity.gevSelectionOrigin = origin;
-    layerState._trackedEntity.gevTrackedId = `satellites:${noradId}`;
-    layerState._trackedEntity.gevDisplayPosition = _trackedDisplayCached;
+    entityRecord(layerState._trackedEntity).selectionOrigin = origin;
+    entityRecord(layerState._trackedEntity).trackedId = `satellites:${noradId}`;
+    entityRecord(layerState._trackedEntity).displayPosition =
+      _trackedDisplayCached;
     _updateTrackedSatelliteLabelModel(initialPos?.altitude ?? null);
 
+    const dotPosition = parts.rendering._pointPosition(noradId);
     _emitAwarenessEvent('gev:awareness-subject-selected', {
       layerId: 'satellites',
       id: noradId,
       label: name,
-      position: Cesium.Cartesian3.clone(point.position),
+      position: dotPosition ? clone(dotPosition) : undefined,
       origin,
     });
     selectTrackedSubjectContext(_contextSubjectMetadata(noradId, initialPos));
     layerState._contextRefreshedAtMs = Date.now();
 
-    layerState._viewer.trackedEntity = layerState._trackedEntity;
+    // The renderer's own frame for a fast mover (autodetect), as the tracked
+    // entity had; no close-range rules at orbital distances. The carrier is
+    // what the tracked card reads (its entity record).
+    layerState._followTarget = entityFollowTarget(layerState._trackedEntity, {
+      position: trackedPosition,
+      frame: 'autodetect',
+      viewFrom,
+    });
+    cameraOf(layerState._viewer).follow(layerState._followTarget);
     console.log(`[Data:Satellites] Tracking ${name} (NORAD ${noradId})`);
   }
   return {

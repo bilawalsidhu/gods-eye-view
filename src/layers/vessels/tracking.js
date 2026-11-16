@@ -1,7 +1,7 @@
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { distance } from '../../geo/vector.js';
 import {
   TRAIL_HEIGHT_M,
-  VESSEL_LIFT_M,
   TRAIL_COLOR,
   TRAIL_MAX_POINTS,
   TRAIL_MIN_MOVE_M,
@@ -18,6 +18,7 @@ export function createTracking({
   const { state } = vesselState;
   const { geoidHeight } = services.geoid;
   const { createTrail } = services.trails;
+  const { governorRequestRender } = services.render;
 
   /**
    * Geoid undulation N at (lat, lon), or null until the grid has loaded.
@@ -35,7 +36,7 @@ export function createTracking({
    * TRAIL_HEIGHT_M above the sea surface (geoid, same datum as the anchor)
    * to avoid z-fighting.
    * @param {Object} record - Vessel record with lat/lon.
-   * @returns {Cesium.Cartesian3|null} Lifted position, or null without a fix.
+   * @returns {{x: number, y: number, z: number}|null} Lifted ECEF position, or null without a fix.
    */
 
   function vesselTrailPosition(record) {
@@ -45,7 +46,7 @@ export function createTracking({
       currentGeoidN(record.lat, record.lon),
       TRAIL_HEIGHT_M,
     );
-    return Cesium.Cartesian3.fromDegrees(record.lon, record.lat, heightM);
+    return fromDegrees(record.lon, record.lat, heightM);
   }
 
   /**
@@ -63,21 +64,17 @@ export function createTracking({
       const visual = components.rendering.getVisual(record);
       if (!Number.isFinite(record.lat) || !Number.isFinite(record.lon))
         continue;
-      const heightM = components.queries.vesselDatumHeightM(
-        currentGeoidN(record.lat, record.lon),
-        VESSEL_LIFT_M,
-      );
-      visual.position = Cesium.Cartesian3.fromDegrees(
-        record.lon,
-        record.lat,
-        heightM,
-      );
-      if (visual.billboard) visual.billboard.position = visual.position;
+      visual.position = components.rendering.anchorPosition(record);
+      components.rendering.syncRecordIcon(record);
       // A moving vessel is drawn again where it is on the next pass.
       visual.drawnLat = NaN;
       visual.drawnLon = NaN;
       visual.followedAtMs = undefined;
+      visual.drawnAtMs = Number.NaN;
     }
+    components.rendering.forgetClockStep();
+    // The rows moved with no poll behind them: draw the frame that shows it.
+    governorRequestRender('ais-vessels-refloor');
   }
 
   /**
@@ -158,7 +155,7 @@ export function createTracking({
         currentGeoidN(lat, lon),
         TRAIL_HEIGHT_M,
       );
-      older.push(Cesium.Cartesian3.fromDegrees(lon, lat, heightM));
+      older.push(fromDegrees(lon, lat, heightM));
     }
     if (!older.length) return;
 
@@ -182,8 +179,7 @@ export function createTracking({
     const next = vesselTrailPosition(record);
     if (!next) return;
     const last = state.trailPositions[state.trailPositions.length - 1];
-    if (last && Cesium.Cartesian3.distance(last, next) <= TRAIL_MIN_MOVE_M)
-      return;
+    if (last && distance(last, next) <= TRAIL_MIN_MOVE_M) return;
     state.trailPositions.push(next);
     if (state.trailPositions.length > TRAIL_MAX_POINTS)
       state.trailPositions.shift();

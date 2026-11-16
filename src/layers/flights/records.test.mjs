@@ -319,3 +319,49 @@ test('a ground vehicle or station with no altitude stands on the ground; an airc
   ).meta;
   assert.equal(unloaded.onGround, false);
 });
+
+test('a contact reported with no course faces the way its newer fixes went', () => {
+  const store = records();
+  const T = 1700000000000;
+  const taxi = (latitude, seconds, fields = {}) =>
+    store.receive(
+      observation({
+        latitude,
+        longitude: -97.6588,
+        courseDeg: null,
+        onGround: true,
+        speedMps: 8,
+        positionTimeMs: T + seconds * 1000,
+        ...fields,
+      }),
+      view(),
+    );
+  const course = () => store.data.get('abc123').true_track;
+  taxi(30.1908, 0);
+  assert.equal(course(), 0, 'nothing known yet');
+  // Fixes a second apart, 8 m each: they add up until 30 m are covered.
+  taxi(30.19073, 1);
+  taxi(30.19066, 2);
+  assert.equal(course(), 0, 'under 30 m: still nothing');
+  taxi(30.19059, 3);
+  taxi(30.19052, 4);
+  assert.ok(Math.abs(course() - 180) < 0.1, 'southbound');
+  // An older fix from another feed, behind it: never turns it around.
+  taxi(30.1912, 2);
+  assert.ok(Math.abs(course() - 180) < 0.1, 'an older fix gives no course');
+  taxi(30.1901, 8);
+  assert.ok(Math.abs(course() - 180) < 0.1);
+  // Standing (reported under 2 m/s) with 40 m of position noise: kept.
+  taxi(30.18974, 12, { speedMps: 0.5, longitude: -97.6584 });
+  assert.ok(
+    Math.abs(course() - 180) < 0.1,
+    'a standing contact keeps its course',
+  );
+  // A reported course always wins.
+  taxi(30.189, 16, { courseDeg: 175 });
+  assert.equal(course(), 175);
+  // A reset forgets where it was: it starts again from north.
+  store.reset();
+  taxi(30.188, 20);
+  assert.equal(course(), 0);
+});

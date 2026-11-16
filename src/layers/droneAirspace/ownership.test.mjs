@@ -2,21 +2,28 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createDroneAirspaceLayer } from './index.js';
 import { layerFeedState } from '../../data/feedState.js';
+import { fakeInput } from '../../input/testDoubles.mjs';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
+
+// The fills set of the layer the last harness made: zone picks name it.
+let fillsSetId = null;
+/** A Cesium pick of a zone's fill, as the draw port makes it. */
+const zonePick = (id) => ({ id: { set: fillsSetId, id } });
+const liveSet = (draw, suffix) =>
+  [...draw.sets.values()].find(
+    (record) => !record.disposed && record.spec.id.endsWith(suffix),
+  );
 
 function harness(source, { pick = () => null, cardHit = () => null } = {}) {
-  const sources = [];
   const overlay = { entries: new Map(), visible: null };
-  const clicks = { handler: null, destroyed: 0 };
   const owners = new Map();
-  const viewer = {
-    scene: { pick },
-    dataSources: {
-      add(value) {
-        sources.push(value);
-      },
-      remove(value) {
-        sources.splice(sources.indexOf(value), 1);
-      },
+  const viewer = { scene: { pick } };
+  const { draw } = bindFakeDraw(viewer);
+  const input = fakeInput(viewer);
+  const clicks = {
+    handler: (click) => input.click(click.position),
+    get destroyed() {
+      return input.input.subscriberCount() === 0 ? 1 : 0;
     },
   };
   const layer = createDroneAirspaceLayer({
@@ -33,27 +40,28 @@ function harness(source, { pick = () => null, cardHit = () => null } = {}) {
       },
       hitTest: (x, y, options) => cardHit(x, y, options),
     },
-    screenSpaceEventHandlerFactory: () => ({
-      setInputAction(callback) {
-        clicks.handler = callback;
-      },
-      destroy() {
-        clicks.destroyed += 1;
-        clicks.handler = null;
-      },
-    }),
+    inputFor: () => input.input,
     picking: {
-      resolvePickId: (picked) => picked?.id ?? null,
+      resolvePickId: (picked) => picked?.id?.id ?? picked?.id ?? null,
       isOwnedByOtherLayer: (layerId, pickedId) =>
         String(pickedId).startsWith('other-layer:'),
       registerPickOwner: (layerId, predicate) => owners.set(layerId, predicate),
       unregisterPickOwner: (layerId) => owners.delete(layerId),
     },
-    pointer: { isPointerFree: () => true },
   });
   layer.init(viewer);
   layer.enable(viewer);
-  return { layer, viewer, sources, overlay, clicks, owners };
+  fillsSetId = liveSet(draw, ':fills').spec.id;
+  return {
+    layer,
+    viewer,
+    draw,
+    fills: () => liveSet(draw, ':fills'),
+    lines: () => liveSet(draw, ':lines'),
+    overlay,
+    clicks,
+    owners,
+  };
 }
 
 const ring = [
@@ -76,7 +84,7 @@ const row = {
   polygons: [[ring]],
 };
 
-test('each zone polygon renders as one filled entity with its outline', async () => {
+test('each zone polygon draws as one clamped fill with its draped boundary', async () => {
   const h = harness({
     getSnapshot: async () => [
       row,
@@ -84,11 +92,23 @@ test('each zone polygon renders as one filled entity with its outline', async ()
     ],
   });
   assert.equal(await h.layer.update(h.viewer), true);
-  const entities = h.sources[0].entities.values;
-  assert.equal(entities.length, 3);
-  assert.equal(entities[0].id, 'drone-airspace:310:0');
-  assert.ok(entities[0].polygon, 'zone fill missing');
-  assert.ok(entities[0].polyline, 'zone outline missing');
+  const ids = [
+    'drone-airspace:310:0',
+    'drone-airspace:400:0',
+    'drone-airspace:400:1',
+  ];
+  assert.deepEqual([...h.fills().items.keys()], ids, 'zone fill missing');
+  assert.deepEqual([...h.lines().items.keys()], ids, 'zone outline missing');
+  assert.equal(h.fills().show, true);
+  const fill = h.fills().items.get(ids[0]);
+  assert.equal(fill.height, 'clampGround');
+  assert.equal(fill.geometry.kind, 'polygon');
+  assert.equal(fill.fill[3], 0.25);
+  const line = h.lines().items.get(ids[0]);
+  assert.equal(line.mode, 'draped');
+  assert.equal(line.widthPx, 2);
+  assert.equal(line.style.color[3], 0.9);
+  assert.equal(line.positions.length, ring.length, 'the exterior ring only');
   assert.equal(h.layer.getStats().count, 2);
 });
 
@@ -99,10 +119,10 @@ test('clicking a zone publishes its card; empty space clears it', async () => {
     { pick: () => pickResult },
   );
   await h.layer.update(h.viewer);
-  assert.equal(typeof h.clicks.handler, 'function', 'click handler missing');
+  assert.equal(h.clicks.destroyed, 0, 'click handler missing');
   assert.equal(h.owners.size, 0);
 
-  pickResult = { id: 'drone-airspace:310:0' };
+  pickResult = zonePick('drone-airspace:310:0');
   h.clicks.handler({ position: { x: 10, y: 10 } });
   const entries = h.overlay.entries.get('drone-airspace');
   assert.equal(entries.length, 1);
@@ -202,17 +222,14 @@ test('a boundary change alone redraws the zone; identical geometry does not', as
   let rows = [row];
   const h = harness({ getSnapshot: async () => rows });
   await h.layer.update(h.viewer);
-  const [first] = h.sources[0].entities.values;
+  const [first] = h.lines().items.values();
   rows = [{ ...row, polygons: [[ring.map((point) => [...point])]] }];
   await h.layer.update(h.viewer);
-  assert.equal(h.sources[0].entities.values[0], first, 'same geometry kept');
+  assert.equal([...h.lines().items.values()][0], first, 'same geometry kept');
   rows = [{ ...row, polygons: [[moved]] }];
   await h.layer.update(h.viewer);
-  const [redrawn] = h.sources[0].entities.values;
+  const [redrawn] = h.lines().items.values();
   assert.notEqual(redrawn, first, 'moved boundary must redraw');
-  assert.notDeepEqual(
-    redrawn.polyline.positions.getValue(),
-    first.polyline.positions.getValue(),
-  );
+  assert.notDeepEqual(redrawn.positions, first.positions);
   assert.ok(h.layer.getAnalystRecords()[0].lon > -76.6);
 });

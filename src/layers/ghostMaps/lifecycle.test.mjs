@@ -1,15 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
 import {
+  GHOST_DOT_SIZE_PX,
   GHOST_MARKER_DISPLAY_SCALE,
+  GHOST_MARKER_SIZE,
   GHOST_SYMBOL_MAX_DISTANCE_M,
-  GHOST_MARKER_TINT_FLOOR,
-  clearGhostMarkerCache,
-  ghostMarkerTint,
-  isNeutralTint,
 } from './markers.js';
 import { createGhostMapsLayer } from './index.js';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import { GHOSTMAPS_PRODUCTS, GHOSTMAPS_LATEST_DROP } from './catalog.js';
 
 function element(localName, children = [], value = '', attributes = {}) {
@@ -126,17 +124,48 @@ function fixture(
   });
   t.mock.method(URL, 'revokeObjectURL', (url) => revoked.push(url));
   t.mock.method(console, 'warn', () => {});
-  const mounted = new Set();
-  const viewer = {
-    scene: { requestRender() {} },
-    dataSources: {
-      async add(dataSource) {
-        mounted.add(dataSource);
-        return dataSource;
+  const viewer = {};
+  // An input port and a query port: a click picks what `click(id)` names.
+  const listeners = new Set();
+  let picked = null;
+  const { draw, unbind } = bindFakeDraw(viewer, {
+    input: {
+      on(type, cb) {
+        if (type !== 'click') return () => {};
+        listeners.add(cb);
+        return () => listeners.delete(cb);
       },
-      remove(dataSource) {
-        return mounted.delete(dataSource);
-      },
+    },
+    query: { pick: () => picked },
+  });
+  t.after(unbind);
+  // Every live item, by id, with the id of the set drawing it. The far-away
+  // dots are each symbol's companion, and are counted apart.
+  const items = () =>
+    new Map(
+      [...draw.sets.values()]
+        .filter((set) => !set.disposed && set.kind !== 'points')
+        .flatMap((set) => [...set.items.keys()].map((id) => [id, set.spec.id])),
+    );
+  const liveSets = () => [...draw.sets.values()].filter((set) => !set.disposed);
+  const click = (id) => {
+    const set = items().get(id);
+    picked = set ? { set, id } : null;
+    for (const cb of [...listeners])
+      cb({
+        position: { x: 0, y: 0 },
+        button: 0,
+        modifiers: { shift: false, ctrl: false, alt: false },
+      });
+  };
+  // The editions drawn: each draws in sets of its own.
+  const mounted = {
+    get size() {
+      return new Set(
+        [...draw.sets.values()]
+          .filter((set) => !set.disposed)
+          .map((set) => set.spec.id.split(':').slice(0, 3).join(':')),
+      ).size;
     },
   };
   const layer = createGhostMapsLayer({
@@ -158,10 +187,21 @@ function fixture(
   layer.init(viewer);
   layer.enable();
   t.after(() => layer.destroy());
-  return { layer, viewer, mounted, created, revoked };
+  return {
+    layer,
+    viewer,
+    draw,
+    unbind,
+    mounted,
+    created,
+    revoked,
+    items,
+    liveSets,
+    click,
+  };
 }
 
-test('cancelling a file read mounts nothing and allocates no URLs', async (t) => {
+test('cancelling a file read does not allocate packed-image URLs', async (t) => {
   const { layer, viewer, mounted, created, revoked } = fixture(t, {
     beforeFileReturns: (layer) => queueMicrotask(() => layer.disable()),
   });
@@ -171,107 +211,67 @@ test('cancelling a file read mounts nothing and allocates no URLs', async (t) =>
   assert.equal(mounted.size, 0);
 });
 
-test('a load never decodes the packed icons: no object URL is created, kept or revoked', async (t) => {
+test('a load allocates no image URLs: the symbols are drawn, not unpacked', async (t) => {
   const { layer, viewer, mounted, created, revoked } = fixture(t);
   await layer.update(viewer);
   assert.equal(created.length, 0);
-  assert.equal(mounted.size, 1);
-  assert.equal(layer.getStats().count, 1);
-  layer.disable();
-  assert.equal(created.length, 0);
   assert.equal(revoked.length, 0);
-  assert.equal(mounted.size, 0);
+  assert.equal(mounted.size, 1);
 });
 
-test('a placemark is drawn as a shared symbol at the display scale, with no tint', async (t) => {
-  const { layer, viewer, mounted } = fixture(t);
-  await layer.update(viewer);
-  const [dataSource] = [...mounted];
-  const [entity] = dataSource.entities.values;
-  // The symbol carries its own colour: nothing may tint it.
-  assert.equal(entity.billboard.color, undefined);
-  assert.equal(entity.billboard.scale.getValue(), GHOST_MARKER_DISPLAY_SCALE);
-});
-
-test('a placemark is a symbol up close and a dot far away, never both', async (t) => {
-  const { layer, viewer, mounted } = fixture(t);
-  await layer.update(viewer);
-  const [dataSource] = [...mounted];
-  const [entity] = dataSource.entities.values;
-  const near = entity.billboard.distanceDisplayCondition.getValue();
-  const far = entity.point.distanceDisplayCondition.getValue();
-  assert.equal(near.near, 0);
-  assert.equal(near.far, GHOST_SYMBOL_MAX_DISTANCE_M);
-  assert.equal(far.near, GHOST_SYMBOL_MAX_DISTANCE_M);
-  assert.equal(far.far, Number.POSITIVE_INFINITY);
-});
-
-test('markers are not ground-clamped, so zooming cannot hide them', async (t) => {
-  const { layer, viewer, mounted } = fixture(t);
-  await layer.update(viewer);
-  const [dataSource] = [...mounted];
-  const [entity] = dataSource.entities.values;
-  assert.equal(entity.billboard.heightReference, undefined);
-  assert.equal(entity.point.heightReference, undefined);
-});
-
-test('entity construction failure leaves nothing mounted and reports the error', async (t) => {
-  const { layer, viewer, mounted, created } = fixture(t);
-  t.mock.method(Cesium.EntityCollection.prototype, 'add', () => {
+test('a draw failure mounts nothing and reports the error', async (t) => {
+  const { layer, viewer, draw, mounted } = fixture(t);
+  t.mock.method(draw, 'icons', () => {
     throw new Error('fixture entity failure');
   });
   await layer.update(viewer);
-  assert.equal(created.length, 0);
   assert.equal(mounted.size, 0);
   assert.equal(layer.getStats().error, 'fixture entity failure');
 });
 
-test('a placemark always has an image, and it is never tinted out of sight', async (t) => {
-  clearGhostMarkerCache();
-  const { layer, viewer, mounted } = fixture(t);
+test('a viewer with no renderer bound draws nothing and reports an error', async (t) => {
+  const { layer, viewer, unbind, mounted } = fixture(t);
+  unbind();
   await layer.update(viewer);
-  const [dataSource] = [...mounted];
-  const [entity] = dataSource.entities.values;
-  // The marker must have an image: a null image is a placemark drawn as
-  // nothing at all, which is what the user sees when the sprites are missing.
-  const image = entity.billboard.image?.getValue
-    ? entity.billboard.image.getValue()
-    : entity.billboard.image;
-  assert.ok(image, 'the billboard has an image');
-  assert.equal(typeof image, 'string');
-  assert.match(image, /^data:image\//);
-  // And it must not be tinted: a tint is multiplied into the texture, so a
-  // black or transparent tint erases the symbol on a dark globe.
-  assert.equal(entity.billboard.color, undefined);
-  clearGhostMarkerCache();
+  assert.equal(mounted.size, 0);
+  assert.ok(layer.getStats().error);
 });
 
-test('the ArcGIS icon colour, which is always black, does not tint the marker black', () => {
-  // The black an ArcGIS export writes into its styles (ff000000) is a
-  // placeholder that means "use the product colour": a marker tinted with it
-  // would be black, and a black marker on a dark globe cannot be seen.
-  const product = { r: 200 / 255, g: 1, b: 0 };
-  const tint = ghostMarkerTint([0, 0, 0, 1], product);
-  assert.equal(isNeutralTint([0, 0, 0, 1]), true);
-  assert.deepEqual(tint, { r: product.r, g: product.g, b: product.b, a: 1 });
-  assert.ok(
-    tint.r + tint.g + tint.b > 0,
-    'the marker is not black on a dark globe',
+test('a placemark is a shared cyan symbol up close, never tinted', async (t) => {
+  const { layer, viewer, draw } = fixture(t);
+  await layer.update(viewer);
+  const set = [...draw.sets.values()].find(
+    (s) => !s.disposed && s.kind === 'icons',
   );
+  const [pin] = set.items.values();
+  assert.equal(pin.id, 'ghostmaps:cip:0:0');
+  assert.equal(pin.color, undefined, 'the symbol carries its own colour');
+  assert.equal(pin.scale, GHOST_MARKER_DISPLAY_SCALE);
+  assert.deepEqual(pin.size, [GHOST_MARKER_SIZE, GHOST_MARKER_SIZE]);
+  assert.equal(set.spec.clampTo, 'both');
 });
 
-test('a faint KML colour still leaves the marker visible', () => {
-  // 40xxxxxx is a quarter opaque. Multiplied into the texture it would fade
-  // the symbol away, so the alpha has a floor.
-  const product = { r: 0, g: 0, b: 1 };
-  const tint = ghostMarkerTint([0, 0, 1, 0.25], product);
-  assert.equal(tint.a, GHOST_MARKER_TINT_FLOOR);
-  assert.ok(tint.a >= 0.35, 'the marker is not faded away');
-  // A fully transparent colour would erase it outright.
-  assert.equal(
-    ghostMarkerTint([0, 0, 1, 0], product).a,
-    GHOST_MARKER_TINT_FLOOR,
-  );
+test('a placemark is a symbol up close and a dot far away, never both', async (t) => {
+  const { layer, viewer, draw } = fixture(t);
+  await layer.update(viewer);
+  const live = [...draw.sets.values()].filter((s) => !s.disposed);
+  const [icon] = live.find((s) => s.kind === 'icons').items.values();
+  const [dot] = live.find((s) => s.kind === 'points').items.values();
+  assert.deepEqual(icon.displayRange, [0, GHOST_SYMBOL_MAX_DISTANCE_M]);
+  assert.deepEqual(dot.displayRange, [
+    GHOST_SYMBOL_MAX_DISTANCE_M,
+    Number.POSITIVE_INFINITY,
+  ]);
+  assert.equal(dot.pixelSize, GHOST_DOT_SIZE_PX);
+});
+
+test('markers are not ground-clamped, so zooming cannot hide them', async (t) => {
+  const { layer, viewer, draw } = fixture(t);
+  await layer.update(viewer);
+  for (const set of [...draw.sets.values()].filter((s) => !s.disposed))
+    if (set.kind === 'icons' || set.kind === 'points')
+      for (const item of set.items.values())
+        assert.equal(item.height, undefined);
 });
 
 const dated = (name, value, label = 'Date') => ({
@@ -389,11 +389,6 @@ test('a filter changed during a pending load never installs the superseded filte
   assert.equal(layer.getStats().count, 1);
   assert.equal(layer.getStats().ageDays, null);
   assert.equal(mounted.size, 1);
-  assert.equal(
-    revoked.length,
-    created.length - 1,
-    'discarded load releases icons',
-  );
 });
 
 test('age filtering and All markers apply to every conflict-map product, including optional maps', async (t) => {
@@ -440,7 +435,7 @@ test('age filtering and All markers apply to every conflict-map product, includi
 });
 
 test('default products filter old event dates while keeping recent, future and undated markers', async (t) => {
-  const { layer, viewer, mounted } = fixture(t, {
+  const { layer, viewer, items } = fixture(t, {
     now: () => Date.UTC(2026, 10, 3, 12),
     reports: [
       dated('Old event', '10/20/2026'),
@@ -474,21 +469,17 @@ test('default products filter old event dates while keeping recent, future and u
     ],
   );
   assert.equal(layer.getStats().count, 7);
-  assert.equal([...mounted][0].entities.values.length, 7);
+  assert.equal(items().size, 7);
   // Filtering cannot shift pick ids onto a different report.
-  assert.ok([...mounted][0].entities.getById('ghostmaps:cip:1:0'));
-  assert.equal(
-    [...mounted][0].entities.getById('ghostmaps:cip:0:0'),
-    undefined,
-  );
+  assert.ok(items().has('ghostmaps:cip:1:0'));
+  assert.equal(items().has('ghostmaps:cip:0:0'), false);
 });
 
 test('unchanged cached products age out on the timer, clear selected cards and keep surviving picks', async (t) => {
   t.mock.timers.enable({ apis: ['setInterval'] });
   let at = Date.UTC(2026, 10, 3, 12);
-  let click;
   const cards = [];
-  const { layer, viewer, mounted } = fixture(t, {
+  const { layer, viewer, mounted, items, liveSets, click } = fixture(t, {
     now: () => at,
     reports: [
       dated('Expiring', '10/27/2026 12:00:00 PM'),
@@ -496,31 +487,23 @@ test('unchanged cached products age out on the timer, clear selected cards and k
     ],
     controls: {
       overlayHost: { setEntries: (_id, entries) => cards.push(entries) },
-      screenSpaceEventHandlerFactory: () => ({
-        setInputAction: (fn) => {
-          click = fn;
-        },
-        destroy() {},
-      }),
       picking: { resolvePickId: (picked) => picked },
     },
   });
   await layer.update(viewer);
-  const ds = [...mounted][0];
-  viewer.scene.pick = () => 'ghostmaps:cip:0:0';
-  click({ position: { x: 0, y: 0 } });
+  const sets = liveSets();
+  click('ghostmaps:cip:0:0');
   assert.equal(cards.at(-1).length, 1);
   at += 60_000;
   t.mock.timers.tick(60_000);
   assert.equal(layer.getStats().count, 1);
-  assert.equal(ds.entities.values.length, 1);
-  assert.equal(ds.entities.getById('ghostmaps:cip:0:0'), undefined);
-  assert.ok(ds.entities.getById('ghostmaps:cip:1:0'));
+  assert.equal(items().size, 1);
+  assert.equal(items().has('ghostmaps:cip:0:0'), false);
+  assert.ok(items().has('ghostmaps:cip:1:0'));
   assert.deepEqual(cards.at(-1), []);
   await layer.update(viewer);
-  assert.equal([...mounted][0], ds, 'same-version KMZ is not reloaded');
-  viewer.scene.pick = () => 'ghostmaps:cip:1:0';
-  click({ position: { x: 0, y: 0 } });
+  assert.deepEqual(liveSets(), sets, 'same-version KMZ is not reloaded');
+  click('ghostmaps:cip:1:0');
   assert.match(cards.at(-1)[0].title, /Surviving/);
   layer.disable();
   at += 14 * 86400_000;
@@ -542,7 +525,7 @@ test('expiry removes every geometry and polygon outline belonging to an old repo
       ]),
     ]),
   ]);
-  const { layer, viewer, mounted } = fixture(t, {
+  const { layer, viewer, items } = fixture(t, {
     now: () => at,
     reports: [
       {
@@ -556,11 +539,10 @@ test('expiry removes every geometry and polygon outline belonging to an old repo
     ],
   });
   await layer.update(viewer);
-  const ds = [...mounted][0];
-  assert.equal(ds.entities.values.length, 4);
+  assert.equal(items().size, 4);
   at += 60_000;
   t.mock.timers.tick(60_000);
-  assert.equal(ds.entities.values.length, 0);
+  assert.equal(items().size, 0);
   assert.equal(layer.getStats().count, 0);
 });
 
@@ -595,27 +577,19 @@ test('two quick clicks, 1d then 7d, restore the report', async (t) => {
 });
 
 test('narrowing the window keeps the open card of a surviving marker', async (t) => {
-  let click;
   const cards = [];
-  const { layer, viewer } = fixture(t, {
+  const { layer, viewer, click } = fixture(t, {
     now: () => Date.UTC(2026, 10, 3, 12),
     reports: [dated('Recent', '11/2/2026'), dated('Older', '10/20/2026')],
     controls: {
       overlayHost: { setEntries: (_id, entries) => cards.push(entries) },
-      screenSpaceEventHandlerFactory: () => ({
-        setInputAction: (fn) => {
-          click = fn;
-        },
-        destroy() {},
-      }),
       picking: { resolvePickId: (picked) => picked },
     },
   });
   await layer.update(viewer);
   await ageChip(layer, 30).onClick();
   assert.equal(layer.getStats().count, 2);
-  viewer.scene.pick = () => 'ghostmaps:cip:0:0';
-  click({ position: { x: 0, y: 0 } });
+  click('ghostmaps:cip:0:0');
   assert.equal(cards.at(-1).length, 1);
   await ageChip(layer, 3).onClick();
   assert.equal(layer.getStats().count, 1);
@@ -637,26 +611,18 @@ test('a report dated yesterday is shown by 1d one hour into today (UTC)', async 
 });
 
 test('a widened reload that returns a different report at the selected index closes its card', async (t) => {
-  let click;
   const cards = [];
   const reports = [dated('Recent', '11/2/2026'), dated('Older', '10/20/2026')];
-  const { layer, viewer } = fixture(t, {
+  const { layer, viewer, click } = fixture(t, {
     now: () => Date.UTC(2026, 10, 3, 12),
     reports,
     controls: {
       overlayHost: { setEntries: (_id, entries) => cards.push(entries) },
-      screenSpaceEventHandlerFactory: () => ({
-        setInputAction: (fn) => {
-          click = fn;
-        },
-        destroy() {},
-      }),
       picking: { resolvePickId: (picked) => picked },
     },
   });
   await layer.update(viewer);
-  viewer.scene.pick = () => 'ghostmaps:cip:0:0';
-  click({ position: { x: 0, y: 0 } });
+  click('ghostmaps:cip:0:0');
   assert.equal(cards.at(-1).length, 1);
   // The server answers the pinned version with a newer edition's bytes.
   reports[0] = dated('Replacement', '11/2/2026');

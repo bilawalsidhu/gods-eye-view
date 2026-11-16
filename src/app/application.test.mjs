@@ -2,20 +2,74 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createApplication } from './application.js';
+import { installTrackpadPinchRelay } from '../render/cesium/ctrlWheelZoom.js';
 import { KEYHOLE_OUTER_RADIUS } from '../celestialRing.js';
 import * as Cesium from 'cesium';
-import {
-  installFreeLookHeightLimit,
-  installGlobeInViewRecovery,
-  installTrackpadPinchZoom,
-} from './viewer.js';
-import {
-  FREE_LOOK_MAX_HEIGHT_METERS,
-  globeFrameShare,
-  globeOutOfFrame,
-  lookAngleWithinFrame,
-  lookStepLosesGlobe,
-} from '../globeInView.js';
+import { installFreeLookHeightLimit } from '../render/cesium/freeLookLimit.js';
+import { installGlobeInViewRecovery } from './globeInViewRecovery.js';
+import { FREE_LOOK_MAX_HEIGHT_METERS } from '../globeInView.js';
+import * as globeInView from '../globeInView.js';
+import { createCesiumCamera } from '../render/cesium/camera.js';
+import { bindRenderer } from '../render/rendererOf.js';
+import { entityFollowTarget } from '../data/followed.js';
+
+/** The camera port bound over each real Cesium camera a test makes. */
+const cameraPorts = new WeakMap();
+
+/**
+ * Bind `viewer` the Cesium renderer's own camera port over its real camera,
+ * with the camera's own `moveStart` and `moveEnd` so a test raises them, and
+ * a frame port that counts render requests on the scene.
+ */
+function bindCameraPorts(viewer) {
+  const { camera, scene } = viewer;
+  const noEvent = { addEventListener: () => () => {} };
+  const real = createCesiumCamera({
+    scene: {
+      postUpdate: noEvent,
+      preUpdate: noEvent,
+      get screenSpaceCameraController() {
+        return scene.screenSpaceCameraController;
+      },
+      requestRender: () => scene.requestRender?.(),
+    },
+    camera,
+    report: (error) => {
+      throw error;
+    },
+  }).port;
+  const port = Object.create(real, {
+    on: { value: (event, cb) => camera[event].addEventListener(cb) },
+  });
+  cameraPorts.set(camera, port);
+  bindRenderer(viewer, {
+    camera: port,
+    get canvas() {
+      return scene.canvas;
+    },
+    frame: {
+      on: () => () => {},
+      requestRender: () => scene.requestRender?.(),
+    },
+  });
+}
+
+// The frame measures take a camera pose; these take the test's camera.
+const poseOf = (camera) => cameraPorts.get(camera).pose();
+const LOOKS = {
+  lookUp: 'up',
+  lookDown: 'down',
+  lookLeft: 'left',
+  lookRight: 'right',
+};
+const globeFrameShare = (camera, options) =>
+  globeInView.globeFrameShare(poseOf(camera), options);
+const globeOutOfFrame = (camera, options) =>
+  globeInView.globeOutOfFrame(poseOf(camera), options);
+const lookAngleWithinFrame = (camera, look, angle, options) =>
+  globeInView.lookAngleWithinFrame(poseOf(camera), LOOKS[look], angle, options);
+const lookStepLosesGlobe = (camera, look, angle, options) =>
+  globeInView.lookStepLosesGlobe(poseOf(camera), LOOKS[look], angle, options);
 
 const phases = ['Scene', 'Controls', 'Data', 'Tools'];
 function fixture(overrides = {}) {
@@ -235,8 +289,9 @@ test('the separate viewer export imports without constructing a browser viewer',
 });
 
 test('the viewer gets the starry sky as an option, which keeps the Sun and Moon', async () => {
-  const { applicationViewerOptions } = await import('./viewer.js');
-  const { StarrySky } = await import('../sky/starrySky.js');
+  const { applicationViewerOptions } =
+    await import('../render/cesium/applicationViewer.js');
+  const { StarrySky } = await import('../render/cesium/starrySky.js');
   const creditContainer = {};
   const options = applicationViewerOptions(creditContainer);
   // CesiumWidget skips scene.sun and scene.moon when skyBox is false.
@@ -300,14 +355,13 @@ function pinchFixture({ zoomEventTypes } = {}) {
   return { viewer, controller, container, handlers, relayed, createEvent };
 }
 
-test('trackpad pinch adds the Ctrl+wheel binding without replacing Cesium inputs', () => {
+test('the trackpad pinch relay leaves the zoom bindings and plain or line-mode wheels alone', () => {
   const original = [1, 2, 3];
   const f = pinchFixture({ zoomEventTypes: original });
-  const dispose = installTrackpadPinchZoom(f.viewer, {
+  const dispose = installTrackpadPinchRelay(f.viewer, {
     createWheelEvent: (_type, init) => f.createEvent(init),
   });
-  assert.deepEqual(f.controller.zoomEventTypes.slice(0, 3), original);
-  assert.equal(f.controller.zoomEventTypes.length, 4);
+  assert.equal(f.controller.zoomEventTypes, original);
 
   const plain = f.createEvent({ deltaY: 2 });
   f.container.emit(plain);
@@ -325,7 +379,7 @@ test('trackpad pinch adds the Ctrl+wheel binding without replacing Cesium inputs
 
 test('trackpad pinch relays pixel deltas once with bounded amplification', () => {
   const f = pinchFixture({ zoomEventTypes: [1, 2, 3] });
-  installTrackpadPinchZoom(f.viewer, {
+  installTrackpadPinchRelay(f.viewer, {
     createWheelEvent: (_type, init) => f.createEvent(init),
   });
 
@@ -345,7 +399,7 @@ test('trackpad pinch relays pixel deltas once with bounded amplification', () =>
 
 test('trackpad pinch falls back to the original event when relay construction fails', () => {
   const f = pinchFixture({ zoomEventTypes: [1, 2, 3] });
-  installTrackpadPinchZoom(f.viewer, {
+  installTrackpadPinchRelay(f.viewer, {
     createWheelEvent() {
       throw new Error('unsupported');
     },
@@ -382,7 +436,10 @@ function freeLookFixture({ enableLook = true, height = 0 } = {}) {
 
 test('free look follows camera height and is restored on dispose', () => {
   const f = freeLookFixture({ height: 500 });
-  const dispose = installFreeLookHeightLimit(f.viewer);
+  const dispose = installFreeLookHeightLimit(
+    f.viewer,
+    FREE_LOOK_MAX_HEIGHT_METERS,
+  );
   assert.equal(f.controller.enableLook, true);
 
   f.frame(FREE_LOOK_MAX_HEIGHT_METERS + 1);
@@ -402,7 +459,10 @@ test('free look follows camera height and is restored on dispose', () => {
 test('drags that start on the stars orbit above the free-look height', () => {
   // Below Cesium's trackball height such a drag turns the camera in place.
   const f = freeLookFixture({ height: 500 });
-  const dispose = installFreeLookHeightLimit(f.viewer);
+  const dispose = installFreeLookHeightLimit(
+    f.viewer,
+    FREE_LOOK_MAX_HEIGHT_METERS,
+  );
   assert.equal(
     f.controller.minimumTrackBallHeight,
     FREE_LOOK_MAX_HEIGHT_METERS,
@@ -412,7 +472,10 @@ test('drags that start on the stars orbit above the free-look height', () => {
 
   const lower = freeLookFixture({ height: 500 });
   lower.controller.minimumTrackBallHeight = 500_000;
-  const disposeLower = installFreeLookHeightLimit(lower.viewer);
+  const disposeLower = installFreeLookHeightLimit(
+    lower.viewer,
+    FREE_LOOK_MAX_HEIGHT_METERS,
+  );
   assert.equal(
     lower.controller.minimumTrackBallHeight,
     500_000,
@@ -422,7 +485,10 @@ test('drags that start on the stars orbit above the free-look height', () => {
   assert.equal(lower.controller.minimumTrackBallHeight, 500_000);
 
   const later = freeLookFixture({ height: 500 });
-  const disposeLater = installFreeLookHeightLimit(later.viewer);
+  const disposeLater = installFreeLookHeightLimit(
+    later.viewer,
+    FREE_LOOK_MAX_HEIGHT_METERS,
+  );
   later.controller.minimumTrackBallHeight = 2_000_000;
   disposeLater();
   assert.equal(
@@ -434,7 +500,10 @@ test('drags that start on the stars orbit above the free-look height', () => {
 
 test('free look keeps a setting other code makes after it is installed', () => {
   const f = freeLookFixture({ height: 500 });
-  const dispose = installFreeLookHeightLimit(f.viewer);
+  const dispose = installFreeLookHeightLimit(
+    f.viewer,
+    FREE_LOOK_MAX_HEIGHT_METERS,
+  );
   f.controller.enableLook = false;
   f.frame(10);
   assert.equal(f.controller.enableLook, false, 'turned off stays off');
@@ -454,7 +523,7 @@ test('free look keeps a setting other code makes after it is installed', () => {
 
 test('free look stays off when the viewer had it disabled', () => {
   const f = freeLookFixture({ enableLook: false, height: 500 });
-  installFreeLookHeightLimit(f.viewer);
+  installFreeLookHeightLimit(f.viewer, FREE_LOOK_MAX_HEIGHT_METERS);
   f.frame(10);
   assert.equal(f.controller.enableLook, false);
 });
@@ -479,7 +548,9 @@ function realCamera({ width = 1600, height = 900, mode } = {}) {
   };
   const camera = new Cesium.Camera(scene);
   camera.frustum.aspectRatio = width / height;
-  return { camera, scene, viewer: { camera, scene } };
+  const viewer = { camera, scene };
+  bindCameraPorts(viewer);
+  return { camera, scene, viewer };
 }
 
 function aim(
@@ -573,7 +644,8 @@ test('a move that ends with the globe out of frame turns back to nadir', () => {
     Cesium.Cartesian3.equalsEpsilon(camera.positionWC, position, 0, 1e-3),
   );
   assert.equal(globeOutOfFrame(camera), false);
-  assert.equal(scene.renders, 1);
+  // One render for the new view, one the recovery asks for itself.
+  assert.equal(scene.renders, 2, 'the turned view is drawn');
 
   // Looking up near the ground, then zoomed out past the limit.
   aim(camera, { alt: 3_834_000, pitch: 10 });
@@ -602,7 +674,7 @@ function moveEndKeepsView(camera) {
   return Cesium.Cartesian3.equalsEpsilon(camera.directionWC, direction, 1e-9);
 }
 
-test('globe recovery leaves partial, low, locked and 2D views alone', () => {
+test('globe recovery leaves partial, low, locked and following views alone', () => {
   for (const view of partialGlobeViews) {
     const { camera, viewer } = realCamera();
     installGlobeInViewRecovery(viewer);
@@ -626,19 +698,18 @@ test('globe recovery leaves partial, low, locked and 2D views alone', () => {
   assert.equal(globeOutOfFrame(locked.camera), true);
   assert.ok(moveEndKeepsView(locked.camera), 'locked camera');
 
-  // Tracking an entity that has no position yet keeps an identity transform.
+  // Following an entity that has no position yet keeps an identity transform.
   const tracked = realCamera();
-  tracked.viewer.trackedEntity = { id: 'pending-fix' };
+  const pending = entityFollowTarget(
+    { id: 'pending-fix' },
+    { position: () => null },
+  );
+  Object.defineProperty(cameraPorts.get(tracked.camera), 'followed', {
+    get: () => pending,
+  });
   installGlobeInViewRecovery(tracked.viewer);
   aim(tracked.camera, reportedStuckView);
   assert.ok(moveEndKeepsView(tracked.camera), 'tracked camera');
-
-  const flat = realCamera({ mode: Cesium.SceneMode.COLUMBUS_VIEW });
-  installGlobeInViewRecovery(flat.viewer);
-  flat.scene.mode = Cesium.SceneMode.SCENE3D;
-  aim(flat.camera, reportedStuckView);
-  flat.scene.mode = Cesium.SceneMode.COLUMBUS_VIEW;
-  assert.ok(moveEndKeepsView(flat.camera), 'Columbus view');
 });
 
 test('the look limit from orbit tolerates grid noise and never reaches zero', () => {

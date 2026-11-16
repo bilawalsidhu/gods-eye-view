@@ -1,5 +1,5 @@
-import * as Cesium from 'cesium';
 import { createHistoryBudget } from '../../data/contactPlayback.js';
+import { Vec3 } from '../../geo/vector.js';
 import { worldTimeFor } from '../../time/worldClock.js';
 
 /**
@@ -25,37 +25,13 @@ export function createState({ services }) {
   });
   state._overlayHost = state.DEFAULT_OVERLAY_HOST;
 
-  /** @type {Cesium.Viewer|null} */
+  /** The viewer the layer draws on, or null. */
   state._viewer = null;
-  /** @type {Cesium.BillboardCollection|null} */
-  state._markers = null;
-  state._animatedMarkers = null;
-
-  /**
-   * The French passenger-station network this layer also draws, as point
-   * pins in a scene-level collection.
-   *
-   * @type {Cesium.PointPrimitiveCollection|null}
-   */
-  state._stationPoints = null;
-  /** The station rows currently drawn. @type {Array<object>} */
-  state._stations = [];
-  /** How many stations the catalogue published. @type {number} */
-  state._stationTotal = 0;
-  /** When the station catalogue was last read. @type {number|null} */
-  state._stationUpdatedAt = null;
-  /** The station catalogue's own failure, if any. @type {string|null} */
-  state._stationError = null;
-  /** Station rows and their pins by station id, for picking. */
-  state._stationById = new Map();
-  state._stationPointById = new Map();
-  /** The selected station's id, or null. */
-  state._stationSelectedId = null;
-  /** Consecutive failed catalogue reads, and the queued retry. */
-  state._stationFailures = 0;
-  state._stationRetryTimer = null;
-  /** The in-flight station request, so disable() can abort it. */
-  state._stationRequest = null;
+  /** The still markers' icon draw set, and the moving ones', or null. */
+  state._stillIcons = null;
+  state._movingIcons = null;
+  /** Whether the markers are shown (the layer is on). */
+  state._markersShown = false;
   state._visible = new Set();
   state._visibilityTimer = null;
   state._maintenanceTimer = null;
@@ -66,27 +42,18 @@ export function createState({ services }) {
   state._generation = 0;
 
   state._cameraChangedAttached = false;
-
-  /**
-   * Which half of the merged row the map draws: 'both' (the default), the
-   * live GTFS-RT fleet, or the static SNCF station network. The row's chips
-   * set it; the layer draws what it says.
-   *
-   * @type {'both'|'vehicles'|'stations'}
-   */
-  state._display = 'both';
+  /** Removes the camera port listener; null when not listening. */
+  state._cameraChangedOff = null;
+  /** Removes the one-shot look after the camera listener's first tick. */
+  state._cameraFirstTickOff = null;
   state._cameraDebounceTimer = null;
   state._altitudeGateOpen = false;
-  /** Camera sensitivity as we found it, so disable() can hand it back. */
-  state._priorPercentageChanged = null;
-  /** The value this layer actually wrote, for an identity-guarded restore. */
-  state._appliedPercentageChanged = null;
 
   /** @type {(() => void)|null} */
   state._preRenderRemove = null;
   state._renderHeld = false;
-  /** @type {Cesium.ScreenSpaceEventHandler|null} */
-  state._clickHandler = null;
+  /** @type {(() => void)|null} Unsubscribes the vehicle-selection click. */
+  state._clickSubscription = null;
   /**
    * The vehicles currently mid-glide. The per-frame pass walks THIS, not the
    * whole fleet, and the render hold is derived from it together with the
@@ -167,7 +134,9 @@ export function createState({ services }) {
   state._error = null;
   state._limitWarned = false;
 
-  state._scratchCartesian = new Cesium.Cartesian3();
+  // Where `samplePosition` writes a marker's position, each frame, before
+  // it is copied into the marker: a `Vec3`, so the write allocates nothing.
+  state._scratchCartesian = new Vec3();
 
   return state;
 }

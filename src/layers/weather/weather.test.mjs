@@ -7,7 +7,13 @@ import { worldClock } from '../../time/worldClock.js';
 import * as Cesium from 'cesium';
 import { Color, ImageryLayerCollection, GeographicTilingScheme } from 'cesium';
 import { NO_IMAGERY_HOST } from './imageryHost.js';
-import { orderWeatherImagery } from './imageryOrder.js';
+import { createWeatherShell } from './shellRendering.js';
+import { createCesiumFields } from '../../render/cesium/drawFields.js';
+import { WEATHER_IMAGERY_Z } from './imageryOrder.js';
+import { fakeGlobePort } from '../../testSupport/fakeGlobePort.mjs';
+import { fakeSceneFrame } from '../../testSupport/fakeCesiumScene.mjs';
+import { createCesiumGlobe } from '../../render/cesium/globe.js';
+import { bindRenderer } from '../../render/rendererOf.js';
 import {
   createShellCesium,
   createShellScene,
@@ -83,8 +89,16 @@ function target(extra = {}) {
     },
   };
 }
+// What a canvas double encoded, by its bytes' text: a fetched tile's bytes
+// are "decoded" back to the canvas that made them.
+const encodedCanvases = new Map();
 function mockCanvas() {
   const canvas = { width: 0, height: 0 };
+  canvas.convertToBlob = async () => {
+    const id = `canvas:${encodedCanvases.size}`;
+    encodedCanvases.set(id, canvas);
+    return new Blob([id]);
+  };
   canvas.getContext = () => ({
     setTransform(...matrix) {
       canvas.transforms = [...(canvas.transforms ?? []), matrix];
@@ -106,64 +120,109 @@ const mockResponse = () => ({
   headers: new Headers(),
   arrayBuffer: async () => new ArrayBuffer(1),
 });
+/** A camera port over a fake viewer's Cesium-shaped camera. */
+const cameraOver = (viewer) =>
+  viewer.camera && {
+    on: (event, cb) =>
+      event === 'moveEnd'
+        ? viewer.camera.moveEnd?.addEventListener(cb)
+        : () => {},
+    viewRectangle() {
+      const rect = viewer.camera.computeViewRectangle?.();
+      if (!rect) return null;
+      const deg = Cesium.Math.toDegrees;
+      return {
+        west: deg(rect.west),
+        south: deg(rect.south),
+        east: deg(rect.east),
+        north: deg(rect.north),
+      };
+    },
+  };
+
+/** A credits port recording what is owed now. */
+function fakeCredits() {
+  const owed = [];
+  return {
+    owed,
+    addStatic(credit) {
+      const entry = { ...credit };
+      owed.push(entry);
+      return () => {
+        const i = owed.indexOf(entry);
+        if (i >= 0) owed.splice(i, 1);
+      };
+    },
+    list: () => owed.slice(),
+    on: () => () => {},
+  };
+}
+
+/**
+ * Each layer added through the globe port, as a test drives it: `spec`,
+ * the tile it answers with (`response`), `requestImage` through the
+ * layer's hooks, and tile errors through `errorEvent.emit`.
+ */
+function layerDriver(layer, createCanvas) {
+  const box = { response: null, requestArgs: undefined };
+  return {
+    layer,
+    spec: layer.spec,
+    box,
+    get response() {
+      return box.response;
+    },
+    set response(value) {
+      box.response = value;
+    },
+    get requestArgs() {
+      return box.requestArgs;
+    },
+    requestImage(x, y, level, request) {
+      const tile = { x, y, level };
+      return layer.request(tile, () => {
+        box.requestArgs = [x, y, level, request];
+        if (layer.spec.kind === 'canvas') {
+          const canvas = createCanvas();
+          canvas.width = canvas.height = layer.spec.tileSize;
+          layer.spec.drawTile(tile, canvas);
+          return Promise.resolve(canvas);
+        }
+        if (layer.spec.fetchTile) {
+          // The renderer fetches through the hook, then decodes the bytes.
+          const controller = new AbortController();
+          box.abort = (reason) => controller.abort(reason);
+          return layer.spec
+            .fetchTile({ tile, url: layer.spec.url, signal: controller.signal })
+            .then((answer) =>
+              encodedCanvases.get(new TextDecoder().decode(answer.bytes)),
+            );
+        }
+        return box.response?.promise;
+      });
+    },
+    errorEvent: {
+      get size() {
+        return layer.listenerCount('tileError');
+      },
+      emit(error) {
+        const status = error?.error?.statusCode;
+        layer.fail({
+          tile: { x: error.x, y: error.y, level: error.level },
+          ...(Number.isFinite(status) ? { status } : {}),
+        });
+      },
+    },
+  };
+}
+
 function renderingHarness(options = {}) {
-  const layers = [];
   const providers = [];
   const postRender = event();
   let renderRequests = 0;
-  class Provider {
-    constructor(options) {
-      this.options = options;
-      this.tilingScheme = new GeographicTilingScheme();
-      this.errorEvent = event();
-      this.response = null;
-      providers.push(this);
-    }
-    requestImage(...args) {
-      this.requestArgs = args;
-      return this.response?.promise;
-    }
-  }
-  const collection = {
-    add(layer) {
-      layers.push(layer);
-      return layer;
-    },
-    addImageryProvider(provider) {
-      if (!providers.includes(provider)) providers.push(provider);
-      const layer = { imageryProvider: provider, alpha: 1, show: true };
-      layers.push(layer);
-      return layer;
-    },
-    contains(layer) {
-      return layers.includes(layer);
-    },
-    remove(layer, destroy) {
-      const index = layers.indexOf(layer);
-      if (index < 0) return false;
-      layers.splice(index, 1);
-      layer.destroyed = destroy;
-      return true;
-    },
-    get length() {
-      return layers.length;
-    },
-    get(index) {
-      return layers[index];
-    },
-    lower(layer) {
-      const i = layers.indexOf(layer);
-      if (i > 0) [layers[i - 1], layers[i]] = [layers[i], layers[i - 1]];
-    },
-    raiseToTop(layer) {
-      const i = layers.indexOf(layer);
-      if (i >= 0) layers.push(...layers.splice(i, 1));
-    },
-    isDestroyed: () => false,
-  };
   const viewer = {
     clock: { untouched: true },
-    imageryLayers: collection,
+    imageryLayers: { isDestroyed: () => false },
     scene: {
       postRender,
       primitives: createShellScene().primitives,
@@ -173,21 +232,46 @@ function renderingHarness(options = {}) {
       },
     },
   };
+  const frame = fakeSceneFrame(viewer);
+  const globe = fakeGlobePort({
+    settled: () => viewer.scene.globe.tilesLoaded,
+  });
+  const createCanvas = options.createCanvas ?? mockCanvas;
+  const add = globe.imagery.add;
+  globe.imagery.add = (spec, index) => {
+    const layer = add(spec, index);
+    providers.push(layerDriver(layer, createCanvas));
+    return layer;
+  };
+  const credits = fakeCredits();
   const cesium = {
     ...createShellCesium(),
     Color,
-    UrlTemplateImageryProvider: Provider,
     GeographicTilingScheme,
     Event: Cesium.Event,
     Credit: Cesium.Credit,
     Rectangle: Cesium.Rectangle,
   };
+  // The Cesium draw port's raster shells, over the doubles.
+  const fields = createCesiumFields({ scene: viewer.scene, cesium });
+  const draw = { field: (spec) => fields.field(spec) };
   const rendering = createWeatherRendering({
     viewer,
-    cesium,
+    globeOf: () => globe,
+    cameraOf: cameraOver,
+    creditsOf: () => credits,
+    frameOf: () => frame,
+    toBitmap: (canvas) => canvas,
+    createShell: (shellOptions) =>
+      createWeatherShell({
+        ...shellOptions,
+        drawOf: () => draw,
+        cameraOf: cameraOver,
+        frameOf: () => frame,
+      }),
     fetchImpl: async () => mockResponse(),
     decodeImage: async () => ({ width: 2048, height: 1024, close() {} }),
-    createCanvas: mockCanvas,
+    createCanvas,
     ...options,
   });
   const settle = () => {
@@ -198,8 +282,10 @@ function renderingHarness(options = {}) {
     rendering,
     viewer,
     cesium,
+    globe,
+    credits,
     providers,
-    layers,
+    layers: globe.layers,
     postRender,
     settle,
     shells: () => viewer.scene.primitives.items,
@@ -413,10 +499,10 @@ test('weather stages invisibly, waits for pending tiles and render readiness, an
     0.7,
     'new layer is visible before retirement',
   );
-  assert.equal(layer.destroyed, undefined);
+  assert.equal(layer.removed, false);
   h.postRender.emit();
   assert.equal(h.layers.length, 1);
-  assert.equal(layer.destroyed, true);
+  assert.equal(layer.removed, true);
   assert.equal(h.providers[0].errorEvent.size, 0);
   assert.equal(h.rendering.getDiagnostics().time, times[1]);
   assert.deepEqual(h.viewer.clock, { untouched: true });
@@ -430,15 +516,14 @@ test('superseded stages cancel requests and cannot resurrect after a late tile r
   const tile = deferred();
   const oldProvider = h.providers[0];
   oldProvider.response = tile;
-  let cancellations = 0;
-  const requested = oldProvider.requestImage(0, 0, 0, {
-    cancel() {
-      cancellations++;
-    },
-  });
+  const requested = oldProvider.requestImage(0, 0, 0, {});
   const second = h.rendering.setFrame(snapshot, times[1]);
   assert.equal(await first, false);
-  assert.equal(cancellations, 1);
+  assert.equal(
+    oldProvider.layer.removed,
+    true,
+    'removing the layer cancels its requests in flight',
+  );
   assert.equal(h.layers.length, 1);
   assert.equal(oldProvider.errorEvent.size, 0);
   tile.resolve({});
@@ -562,6 +647,7 @@ function layerHarness({
     }),
   };
   const viewer = { camera: { moveEnd } };
+  bindRenderer(viewer, { camera: cameraOver(viewer) });
   const layer = createWeatherLayer({
     clock,
     id,
@@ -811,16 +897,15 @@ test('external abort cancels a staged renderer request and releases its observer
   });
   const tile = deferred();
   h.providers[0].response = tile;
-  let cancellations = 0;
-  const requested = h.providers[0].requestImage(0, 0, 0, {
-    cancel() {
-      cancellations++;
-    },
-  });
+  const requested = h.providers[0].requestImage(0, 0, 0, {});
   const before = h.renders();
   controller.abort();
   assert.equal(await stage, false);
-  assert.equal(cancellations, 1);
+  assert.equal(
+    h.providers[0].layer.removed,
+    true,
+    'removing the layer cancels its requests in flight',
+  );
   assert.equal(h.layers.length, 0);
   assert.equal(h.postRender.size, 0);
   assert.equal(h.providers[0].errorEvent.size, 0);
@@ -917,12 +1002,12 @@ test('global infrared is acquired before staging and cropped from one processed 
   });
   decode.resolve({ width: 2048, height: 1024 });
   await flush();
-  const provider = h.layers[0].imageryProvider;
-  assert.equal(provider.maximumLevel, 3);
-  assert.equal(provider.tileWidth, 256);
-  assert.equal(provider.tileHeight, 256);
-  assert.equal(provider.tilingScheme.getNumberOfXTilesAtLevel(0), 2);
-  assert.deepEqual(provider.tilingScheme.rectangle, provider.rectangle);
+  const provider = h.providers[0];
+  assert.equal(provider.spec.kind, 'canvas');
+  assert.equal(provider.spec.maxLevel, 3);
+  assert.equal(provider.spec.tileSize, 256);
+  assert.equal(provider.spec.tiling, 'geographic');
+  assert.deepEqual(provider.spec.rectangle, snapshot.bounds);
   const first = await provider.requestImage(0, 0, 0);
   const next = await provider.requestImage(1, 0, 0);
   assert.equal(first.source, next.source);
@@ -1038,7 +1123,7 @@ test('history loading updates an existing info line and preserves summary status
   h.layer.destroy();
 });
 
-test('no host cancels a globe stage, detaches the layer and restores it in weather order', async () => {
+test('no host cancels a globe stage and hides the frame; weather keeps its order', async () => {
   let host;
   const h = renderingHarness({ getHost: () => host });
   host = { collection: h.viewer.imageryLayers, kind: 'globe' };
@@ -1046,25 +1131,34 @@ test('no host cancels a globe stage, detaches the layer and restores it in weath
   h.settle();
   assert.equal(await stage, true);
   const radar = h.layers[0];
-  const cloud = h.viewer.imageryLayers.add({ name: 'cloud' });
-  const lightning = h.viewer.imageryLayers.add({ name: 'lightning' });
-  orderWeatherImagery(h.viewer.imageryLayers, lightning, 3);
-  orderWeatherImagery(h.viewer.imageryLayers, cloud, 1);
+  const other = (zOrder) =>
+    h.globe.imagery.add({ kind: 'xyz', url: 'https://o.invalid', zOrder });
+  const cloud = other(WEATHER_IMAGERY_Z.clouds);
+  const lightning = other(WEATHER_IMAGERY_Z.lightning);
+  const overlay = other(undefined);
+  assert.equal(radar.drapeOn, 'surface');
+  assert.deepEqual(h.layers, [overlay, cloud, radar, lightning]);
+  assert.deepEqual(h.credits.owed, [{ text: 'NOAA nowCOAST · NWS/OAR MRMS' }]);
   const incoming = h.rendering.setFrame(snapshot, times[1]);
   host = { collection: null, kind: 'none' };
   assert.equal(h.rendering.rehome(), true);
   assert.equal(await incoming, false);
-  assert.deepEqual(h.layers, [cloud, lightning]);
+  assert.deepEqual(h.layers, [overlay, cloud, radar, lightning]);
+  assert.equal(radar.show, false, 'nothing draws without a host');
+  assert.deepEqual(h.credits.owed, [], 'nor is its credit owed');
   assert.equal(await h.rendering.setFrame(snapshot, times[2]), false);
   assert.equal(h.rendering.getDiagnostics().error, NO_IMAGERY_HOST);
   assert.equal(h.rendering.getDiagnostics().time, times[0]);
   host = { collection: h.viewer.imageryLayers, kind: 'globe' };
   h.rendering.rehome();
-  assert.deepEqual(h.layers, [cloud, radar, lightning]);
+  assert.equal(radar.show, true);
+  assert.equal(h.credits.owed.length, 1);
+  assert.deepEqual(h.layers, [overlay, cloud, radar, lightning]);
   assert.equal(h.rendering.getDiagnostics().error, null);
   h.rendering.clear();
-  assert.deepEqual(h.layers, [cloud, lightning]);
-  assert.equal(radar.destroyed, true);
+  assert.deepEqual(h.layers, [overlay, cloud, lightning]);
+  assert.equal(radar.removed, true);
+  assert.deepEqual(h.credits.owed, []);
 });
 
 const shellDecode = async () => ({ width: 4096, height: 2048, close() {} });
@@ -1183,7 +1277,7 @@ test('host switches tear one renderer down and restage the retained frame on the
   host = { collection: tiles, kind: 'tileset' };
   assert.equal(h.rendering.rehome(), true);
   assert.equal(h.layers.length, 0);
-  assert.equal(layer.destroyed, true);
+  assert.equal(layer.removed, true);
   assert.equal(tiles.length, 0);
   assert.equal(
     h.rendering.getDiagnostics().time,
@@ -1218,7 +1312,7 @@ test('host switches tear one renderer down and restage the retained frame on the
   assert.equal(diagnostics.time, times[1]);
   assert.equal(diagnostics.infrared, 'full');
   assert.equal(h.layers[0].alpha, 0.4);
-  assert.equal(h.layers[0].imageryProvider.tileWidth, 256);
+  assert.equal(h.layers[0].spec.tileSize, 256);
   h.rendering.clear();
   assert.equal(h.layers.length, 0);
   assert.equal(h.postRender.size, 0);
@@ -1305,14 +1399,10 @@ test('a stage without a current frame is cancelled on host change and detached f
   h.settle();
   await ready;
   const layer = h.layers[0];
-  let destroyed = false;
-  layer.destroy = () => {
-    destroyed = true;
-  };
   host = { collection: null, kind: 'none' };
   h.rendering.rehome();
   h.rendering.clear();
-  assert.equal(destroyed, true);
+  assert.equal(layer.removed, true);
 });
 
 for (const product of ['clouds', 'clouds-regional', 'radar', 'lightning']) {
@@ -1323,56 +1413,33 @@ for (const product of ['clouds', 'clouds-regional', 'radar', 'lightning']) {
     });
     const stage = h.rendering.setFrame({ ...snapshot, product }, times[0]);
     await flush();
-    const layer = collection.get(0);
-    assert.equal(layer.colorToAlpha, undefined);
+    const layer = h.layers[0];
+    assert.equal(layer.spec.colorToAlpha, undefined);
     assert.equal(layer.alpha, 0);
     h.rendering.clear();
     assert.equal(await stage, false);
   });
 }
 
-for (const statusCode of [429, 503]) {
-  test(`${statusCode} retries up to three times without failing a healthy frame`, async () => {
-    let now = 0;
-    const h = renderingHarness({ now: () => now });
-    h.viewer.scene.globe.tilesLoaded = false;
-    const stage = h.rendering.setFrame(snapshot, times[0]);
-    h.providers[0].response = deferred();
-    const rejected = h.providers[0].requestImage(0, 0, 0, {});
-    h.providers[0].response.reject(new Error('throttled'));
-    await assert.rejects(rejected, /throttled/);
-    for (let timesRetried = 0; timesRetried < 3; timesRetried++) {
-      const error = {
-        error: { statusCode },
-        x: 0,
-        y: 0,
-        level: 0,
-        timesRetried,
-        retry: false,
-      };
-      h.providers[0].errorEvent.emit(error);
-      assert.equal(error.retry, true);
-      assert.equal(h.rendering.getDiagnostics().error, null);
-    }
-    h.settle();
-    assert.equal(h.rendering.getDiagnostics().loading, true);
-    h.providers[0].response = deferred();
-    const retried = h.providers[0].requestImage(0, 0, 0, {});
-    h.providers[0].response.resolve({});
-    await retried;
-    now = 250;
-    h.settle();
-    assert.equal(await stage, true);
-    const exhausted = h.rendering.setFrame(snapshot, times[1]);
-    const error = { error: { statusCode }, timesRetried: 3, retry: false };
-    for (let i = 0; i < 4; i++) h.providers[1].errorEvent.emit(error);
-    h.settle();
-    assert.equal(error.retry, false);
-    assert.equal(await exhausted, false);
-    assert.equal(h.rendering.getDiagnostics().time, times[0]);
-    h.rendering.clear();
-  });
-}
+test('throttled tiles are fetched again by the renderer; a tile that still fails fails the frame', async () => {
+  let now = 0;
+  const h = renderingHarness({ now: () => now });
+  const stage = h.rendering.setFrame(snapshot, times[0]);
+  assert.deepEqual(h.providers[0].spec.retryStatuses, [429, 503]);
+  h.providers[0].response = deferred();
+  const loaded = h.providers[0].requestImage(0, 0, 0, {});
+  h.providers[0].response.resolve({});
+  await loaded;
+  now = 250;
+  h.settle();
+  assert.equal(await stage, true);
+  const exhausted = h.rendering.setFrame(snapshot, times[1]);
+  h.providers[1].errorEvent.emit({ error: { statusCode: 429 }, x: 0, y: 0 });
+  h.settle();
+  assert.equal(await exhausted, false);
+  assert.equal(h.rendering.getDiagnostics().time, times[0]);
+  h.rendering.clear();
+});
 
 test('404 fails a frame without retry', async () => {
   const h = renderingHarness();
@@ -1438,12 +1505,20 @@ test('host restore through update stages latest after a no-host start', async ()
   h.layer.destroy();
 });
 
-test('real Cesium global infrared provider supports the globe host', async () => {
-  const collection = new Cesium.ImageryLayerCollection();
-  const h = renderingHarness({
-    cesium: Cesium,
-    getHost: () => ({ collection, kind: 'globe' }),
-  });
+test('the global infrared mosaic draws through the real Cesium globe port', async () => {
+  const scene = {
+    imageryLayers: new Cesium.ImageryLayerCollection(),
+    globe: { show: true, tilesLoaded: true },
+    primitives: { length: 0, get: () => undefined },
+  };
+  const { port } = createCesiumGlobe(
+    { scene },
+    {
+      capabilities: new Set(['imageHooks', 'imageryOnTiles']),
+      requestRender: () => {},
+    },
+  );
+  const h = renderingHarness({ globeOf: () => port });
   const stage = h.rendering.setFrame(
     {
       ...snapshot,
@@ -1453,7 +1528,7 @@ test('real Cesium global infrared provider supports the globe host', async () =>
     times[0],
   );
   await flush();
-  const layer = collection.get(0);
+  const layer = scene.imageryLayers.get(0);
   const provider = layer.imageryProvider;
   assert.ok(provider.tilingScheme instanceof Cesium.GeographicTilingScheme);
   assert.equal(provider.maximumLevel, 3);
@@ -1468,43 +1543,11 @@ test('real Cesium global infrared provider supports the globe host', async () =>
     ),
   );
   assert.equal(layer.colorToAlpha, undefined);
-  assert.ok(provider.requestImage(0, 0, 0) instanceof Promise);
+  assert.equal(layer.alpha, 0, 'staged transparent');
   h.rendering.clear();
+  assert.equal(scene.imageryLayers.length, 0);
   assert.equal(await stage, false);
 });
-
-for (const statusCode of [429, 503]) {
-  test(`${statusCode} retries belong to tiles, regardless of the layer-wide counter`, async () => {
-    const h = renderingHarness();
-    const stage = h.rendering.setFrame(snapshot, times[0]);
-    const provider = h.providers[0];
-    const fail = (x, timesRetried = 0) => {
-      const error = { x, y: 0, level: 2, timesRetried, error: { statusCode } };
-      provider.errorEvent.emit(error);
-      return error.retry;
-    };
-    // A shared counter may exceed three even though these are first failures.
-    for (let x = 0; x < 4; x++) assert.equal(fail(x, x + 4), true);
-    provider.response = { promise: Promise.resolve({}) };
-    await provider.requestImage(0, 0, 2);
-    for (let i = 0; i < 3; i++)
-      assert.equal(fail(0), true, 'own success reset the count');
-    for (let i = 0; i < 2; i++) {
-      await provider.requestImage(2, 0, 2);
-      assert.equal(fail(1), true);
-    }
-    await provider.requestImage(3, 0, 2);
-    assert.equal(
-      fail(1),
-      false,
-      'four failures exhaust this tile despite other successes',
-    );
-    h.settle();
-    assert.equal(await stage, false);
-    assert.equal(provider.errorEvent.size, 0);
-    h.rendering.clear();
-  });
-}
 
 for (const [id, product] of [
   ['weather-radar', 'radar'],
@@ -1530,6 +1573,7 @@ for (const [id, product] of [
       positionCartographic: { height: 1200 },
     };
     h.viewer.camera = camera;
+    bindRenderer(h.viewer, { camera: cameraOver(h.viewer) });
     const events = target();
     const layer = createWeatherLayer({
       id,
@@ -1633,10 +1677,9 @@ for (const outcome of [
     if (outcome === 'supersede')
       assert.equal(await h.rendering.setFrame(snapshot, times[0]), true);
     if (outcome === 'rehome') {
-      host = {
-        collection: renderingHarness().viewer.imageryLayers,
-        kind: 'globe',
-      };
+      host = { collection: null, kind: 'none' };
+      h.rendering.rehome();
+      host = { collection: h.viewer.imageryLayers, kind: 'globe' };
       h.rendering.rehome();
     }
     assert.equal(await pending, false);
@@ -1654,7 +1697,7 @@ for (const outcome of [
       await flush();
       if (outcome !== 'fetch failure') assert.equal(closed, 1);
     }
-    assert.equal(host.collection.length, 1);
+    assert.equal(h.layers.length, 1);
     h.rendering.clear();
     assert.equal(h.postRender.size, 0);
   });
@@ -1667,12 +1710,7 @@ test('regional transfer preserves deferrals, original Request, rejection and can
     times[0],
   );
   const provider = h.providers[0];
-  let cancelled = 0;
-  const request = {
-    cancel() {
-      cancelled++;
-    },
-  };
+  const request = {};
   assert.equal(provider.requestImage(1, 2, 3, request), undefined);
   assert.deepEqual(provider.requestArgs, [1, 2, 3, request]);
   const image = { width: 256, height: 256 };
@@ -1689,13 +1727,13 @@ test('regional transfer preserves deferrals, original Request, rejection and can
   provider.response = deferred();
   const late = provider.requestImage(0, 0, 0, request);
   h.rendering.clear();
-  assert.equal(cancelled, 1);
+  assert.equal(provider.layer.removed, true, 'its requests are cancelled');
   provider.response.resolve(image);
   assert.equal(await late, image, 'closed frames do not process late images');
   assert.equal(await stage, false);
 });
 
-test('regional tiles decoded as flipped ImageBitmaps are drawn back upright', async () => {
+test('regional tiles are processed upright, as the renderer hands them over', async () => {
   const hadBitmap = Object.hasOwn(globalThis, 'ImageBitmap');
   const previous = globalThis.ImageBitmap;
   globalThis.ImageBitmap = class ImageBitmap {
@@ -1709,11 +1747,10 @@ test('regional tiles decoded as flipped ImageBitmaps are drawn back upright', as
       times[0],
     );
     const provider = h.providers[0];
-    // Cesium decodes with imageOrientation 'flipY'; the canvas upload flips again.
+    // `tileTransform` is given the tile upright, whatever it was decoded as.
     provider.response = { promise: Promise.resolve(new ImageBitmap()) };
     const bitmapTile = await provider.requestImage(0, 0, 0, {});
-    assert.deepEqual(bitmapTile.drawnWith, [1, 0, 0, -1, 0, 256]);
-    // An HTMLImageElement fallback is not pre-flipped.
+    assert.equal(bitmapTile.drawnWith, null);
     provider.response = {
       promise: Promise.resolve({ width: 256, height: 256 }),
     };
@@ -1751,11 +1788,11 @@ for (const kind of ['globe']) {
     assert.equal(await full, true);
     assert.equal(h.layers.length, 2);
     assert.equal(h.layers[1].alpha, 0.7);
-    assert.equal(previous.destroyed, undefined);
+    assert.equal(previous.removed, false);
     assert.equal(h.rendering.getDiagnostics().infrared, 'full');
     h.postRender.emit();
     assert.equal(h.layers.length, 1);
-    assert.equal(previous.destroyed, true);
+    assert.equal(previous.removed, true);
     h.rendering.clear();
     assert.equal(h.postRender.size, 0);
   });
@@ -1885,7 +1922,7 @@ test('a delayed installation failure retains the replacement and does not throw 
     assert.equal(await stage, true);
   }
   const third = h.rendering.setFrame(snapshot, times[2]);
-  h.viewer.imageryLayers.addImageryProvider = () => {
+  h.globe.imagery.add = () => {
     throw new Error('upload unavailable');
   };
   assert.doesNotThrow(() => h.postRender.emit());
@@ -2165,6 +2202,12 @@ test('satellite clouds from an hourly feed draw all through each hour and read l
   assert.equal(h.layer.getDiagnostics().hidden, false);
   assert.equal(h.stages.at(-1).time, hourly[0]);
 
+  // Live again (a past time judges delay from the timeline's time), past
+  // one and a half hours it reads late.
+  const live = goLive(clock);
+  await flush();
+  h.stages.at(-1).finish();
+  await live;
   t.mock.method(Date, 'now', () => Date.parse(latest) + 100 * 60_000);
   assert.equal(
     h.layer.getStats().stale,
@@ -2570,12 +2613,13 @@ for (const product of ['radar', 'clouds-regional', 'lightning']) {
       positionCartographic: { height: 60_000 },
     };
     const pending = h.rendering.setFrame({ ...snapshot, product }, times[0]);
-    const options = h.providers[0].options;
-    assert.equal(options.tileWidth, 256);
-    assert.equal(options.tileHeight, 256);
-    assert.equal(options.maximumLevel, 6);
+    const { spec } = h.layers[0];
+    assert.equal(spec.kind, 'xyz');
+    assert.equal(spec.tileSize, 256);
+    assert.equal(spec.maxLevel, 6);
+    assert.equal(spec.tiling, 'geographic');
     assert.equal(
-      new URL(options.url, 'https://example.test').searchParams.get('size'),
+      new URL(spec.url, 'https://example.test').searchParams.get('size'),
       '256',
     );
     assert.equal(h.rendering.getDiagnostics().host, 'globe');
@@ -2655,8 +2699,9 @@ test('a frame source supplies regional tiles in place of the tile route, through
   const loaded = h.rendering.setFrame(snapshot, times[0]);
   assert.equal(h.providers.length, 1);
   const [provider] = h.providers;
-  assert.equal(provider.options, undefined, 'no URL template provider');
-  assert.equal(provider.maximumLevel, 6);
+  assert.equal(typeof provider.spec.fetchTile, 'function', 'not the route');
+  assert.equal(provider.spec.maxLevel, 6);
+  assert.equal(provider.spec.maxConcurrentRequests, 6);
   const tile = await provider.requestImage(1, 0, 1, {});
   assert.equal(tile.width, 256);
   assert.equal(tile.source, supplied[0]);
@@ -2694,7 +2739,100 @@ test('a frame source supplies regional tiles in place of the tile route, through
   h.rendering.clear();
 });
 
-test('a failed supplied tile fails the staged frame through errorEvent', async () => {
+test('a frame source that names its tile detail draws global clouds from its tiles to that level', async () => {
+  let now = 0;
+  const requests = [];
+  const h = renderingHarness({
+    now: () => now,
+    fetchImpl: () => assert.fail('supplied clouds are not fetched'),
+    frameSource: {
+      getImage: () => assert.fail('no mosaic when the feed tiles clouds'),
+      getTile: async (request) => {
+        requests.push(request);
+        return suppliedTile();
+      },
+      maximumLevel: (product) => (product === 'clouds' ? 6 : 8),
+    },
+  });
+  h.viewer.scene.globe.tilesLoaded = false;
+  const loaded = h.rendering.setFrame(globalSnapshot, times[0]);
+  assert.equal(h.providers.length, 1);
+  const [provider] = h.providers;
+  assert.equal(typeof provider.spec.fetchTile, 'function', 'not the route');
+  assert.equal(provider.spec.maxLevel, 6);
+  await provider.requestImage(5, 3, 4, {});
+  assert.deepEqual(
+    [requests[0].product, requests[0].z, requests[0].x, requests[0].y],
+    ['clouds', 4, 5, 3],
+  );
+  now = 500;
+  h.settle();
+  assert.equal(await loaded, true);
+  h.rendering.clear();
+
+  // Radar takes the level the feed names for it.
+  const radar = renderingHarness({
+    frameSource: {
+      getTile: async () => suppliedTile(),
+      maximumLevel: () => 8,
+    },
+  });
+  radar.rendering.setFrame(snapshot, times[0]);
+  assert.equal(radar.providers[0].spec.maxLevel, 8);
+  radar.rendering.clear();
+});
+
+test("a frame source naming no usable level keeps the layer's own detail", async () => {
+  for (const maximumLevel of [
+    () => null,
+    () => 13,
+    () => 2.5,
+    () => 'deep',
+    () => {
+      throw new Error('no level');
+    },
+  ]) {
+    const h = renderingHarness({
+      frameSource: { getTile: async () => suppliedTile(), maximumLevel },
+    });
+    h.rendering.setFrame(snapshot, times[0]);
+    assert.equal(h.providers[0].spec.maxLevel, 6);
+    h.rendering.clear();
+    // Global clouds stay on the one image, cut to level 3.
+    let mosaics = 0;
+    const clouds = renderingHarness({
+      frameSource: {
+        getImage: async () => {
+          mosaics++;
+          return { width: 2048, height: 1024, close() {} };
+        },
+        getTile: () => assert.fail('clouds are not tiled without a level'),
+        maximumLevel,
+      },
+    });
+    await showMosaic(clouds, times[0]);
+    assert.equal(mosaics, 1);
+    assert.equal(clouds.providers[0].spec.maxLevel, 3);
+    clouds.rendering.clear();
+  }
+  // A level without tiles leaves global clouds on the mosaic.
+  let images = 0;
+  const h = renderingHarness({
+    frameSource: {
+      getImage: async () => {
+        images++;
+        return suppliedTile();
+      },
+      maximumLevel: () => 6,
+    },
+  });
+  h.rendering.setFrame(globalSnapshot, times[0]);
+  await flush();
+  assert.equal(images, 1);
+  h.rendering.clear();
+});
+
+test('a failed supplied tile fails the staged frame through the tile error', async () => {
   const h = renderingHarness({
     frameSource: {
       getTile: async () => {
@@ -2705,14 +2843,14 @@ test('a failed supplied tile fails the staged frame through errorEvent', async (
   const staged = h.rendering.setFrame(snapshot, times[0]);
   const [provider] = h.providers;
   await assert.rejects(provider.requestImage(0, 0, 0, {}));
-  provider.errorEvent.raiseEvent({ x: 0, y: 0, level: 0, error: {} });
+  provider.errorEvent.emit({ x: 0, y: 0, level: 0, error: {} });
   h.settle();
   assert.equal(await staged, false);
   assert.match(h.rendering.getDiagnostics().error, /Weather tiles unavailable/);
   h.rendering.clear();
 });
 
-test('supplied regional infrared tiles are canvases, so they get the transfer without a flip', async () => {
+test("supplied regional infrared tiles get the transfer upright, as the route's do", async () => {
   const hadBitmap = Object.hasOwn(globalThis, 'ImageBitmap');
   const previous = globalThis.ImageBitmap;
   globalThis.ImageBitmap = class ImageBitmap {
@@ -2728,7 +2866,12 @@ test('supplied regional infrared tiles are canvases, so they get the transfer wi
       { ...snapshot, product: 'clouds-regional' },
       times[0],
     );
-    const tile = await h.providers[0].requestImage(0, 0, 0, {});
+    const [provider] = h.providers;
+    const decoded = await provider.requestImage(0, 0, 0, {});
+    const tile = await provider.spec.tileTransform(
+      { x: 0, y: 0, level: 0 },
+      decoded,
+    );
     assert.equal(tile.drawnWith, null, 'drawn upright, not flipped');
     assert.ok(tile.pixels, 'the infrared transfer ran');
     const empty = renderingHarness({
@@ -2739,9 +2882,60 @@ test('supplied regional infrared tiles are canvases, so they get the transfer wi
       times[0],
     );
     const transparent = await empty.providers[0].requestImage(0, 0, 0, {});
-    assert.equal(transparent.width, 256, 'a null tile is still a canvas');
+    assert.equal(transparent.width, 256, 'a null tile is still a drawn tile');
     h.rendering.clear();
     empty.rendering.clear();
+  } finally {
+    if (hadBitmap) globalThis.ImageBitmap = previous;
+    else delete globalThis.ImageBitmap;
+  }
+});
+
+test('global clouds tiles get the infrared transfer, and prefetch asks for tiles, not the image', async () => {
+  const hadBitmap = Object.hasOwn(globalThis, 'ImageBitmap');
+  const previous = globalThis.ImageBitmap;
+  globalThis.ImageBitmap = class ImageBitmap {
+    width = 256;
+    height = 256;
+    close() {}
+  };
+  try {
+    const requests = [];
+    const h = renderingHarness({
+      frameSource: {
+        getImage: () => assert.fail('no image when the feed tiles clouds'),
+        getTile: async (request) => {
+          requests.push(request);
+          return new globalThis.ImageBitmap();
+        },
+        maximumLevel: () => 6,
+      },
+    });
+    void h.rendering.setFrame(globalSnapshot, times[0]);
+    const [provider] = h.providers;
+    const decoded = await provider.requestImage(5, 3, 4, {});
+    const tile = await provider.spec.tileTransform(
+      { x: 5, y: 3, level: 4 },
+      decoded,
+    );
+    assert.equal(tile.drawnWith, null, 'drawn upright, not flipped');
+    assert.ok(tile.pixels, 'the infrared transfer ran');
+    h.rendering.clear();
+    requests.length = 0;
+    const warm = renderingHarness({
+      frameSource: {
+        getImage: () => assert.fail('no image when the feed tiles clouds'),
+        getTile: async (request) => {
+          requests.push(request);
+          return new globalThis.ImageBitmap();
+        },
+        maximumLevel: () => 6,
+      },
+    });
+    assert.equal(await warm.rendering.prefetch(globalSnapshot, times[1]), true);
+    assert.ok(requests.length > 0, 'prefetch asked for tiles');
+    assert.ok(requests.every((request) => request.product === 'clouds'));
+    warm.rendering.clear();
   } finally {
     if (hadBitmap) globalThis.ImageBitmap = previous;
     else delete globalThis.ImageBitmap;
@@ -2861,6 +3055,47 @@ test('the layer hands rendering a frame source only when its feed is one', () =>
   assert.equal(seen[0], null);
   assert.equal(typeof seen[1].getTile, 'function');
   assert.equal(seen[1].getImage, undefined);
+});
+
+test('at a past time a frame is aged and its source judged delayed from the timeline time', async (t) => {
+  // Live at twenty minutes past the newest frame: the source is late.
+  t.mock.method(Date, 'now', () => Date.parse(times[2]) + 25 * 60_000);
+  const clock = createWeatherClock();
+  const h = layerHarness({ clock });
+  t.after(() => {
+    h.layer.destroy();
+    clock.destroy();
+  });
+  const update = h.layer.update();
+  await flush();
+  h.stages.at(-1).finish();
+  await update;
+  await flush();
+  assert.equal(
+    h.layer.getRowControls().summary.status,
+    'Source observations delayed',
+  );
+  assert.match(h.layer.getRowControls().summary.detail, /25m ago/);
+
+  // Years later, the world clock is moved back to the newest frame.
+  Date.now.mock.mockImplementation(() => Date.parse('2032-01-01T00:00:00Z'));
+  void seekTo(clock, times[2]);
+  await flush();
+  h.stages.at(-1)?.finish();
+  await flush();
+  assert.equal(clock.getState().mode, 'history');
+  const controls = h.layer.getRowControls();
+  assert.equal(controls.summary.status, null);
+  assert.match(controls.summary.detail, /History · 09-15 20:10 UTC · 0m ago/);
+  assert.equal(h.layer.getStats().stale, false);
+
+  // Ten minutes after the newest frame, the frame is ten minutes old.
+  void seekTo(clock, '2026-09-15T20:20:00.000Z');
+  await flush();
+  h.stages.at(-1)?.finish();
+  await flush();
+  assert.match(h.layer.getRowControls().summary.detail, /10m ago · nearest/);
+  assert.equal(h.layer.getRowControls().summary.status, null);
 });
 
 test('a feed names the source behind each product, before any manifest does', (t) => {

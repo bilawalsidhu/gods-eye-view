@@ -39,8 +39,9 @@ export function createIngestion({
    * @returns {Promise<boolean>}
    */
   async function loadAt(atMs, { signal = null, replace = false } = {}) {
-    // Whatever polls or loads for another time no longer applies.
-    if (replace && feed.loading) {
+    // Whatever polls or loads for another time no longer applies: the
+    // timeline asks for one time at a time.
+    if (feed.loading) {
       feed.abort?.abort();
       feed.loading = false;
       feed.abort = null;
@@ -209,6 +210,7 @@ export function createIngestion({
       reference: record.reference,
       lat: record.latitude,
       lon: record.longitude,
+      fixes: record.fixes,
       name: record.name,
       imo: record.imo,
       type: record.type,

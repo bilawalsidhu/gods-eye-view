@@ -1,59 +1,17 @@
 import { destroyTrack } from '../../data/contactPlayback.js';
-import * as Cesium from 'cesium';
-import {
-  claimCameraSensitivity,
-  releaseCameraSensitivity,
-} from '../../data/cameraSensitivity.js';
-import {
-  CAMERA_PERCENTAGE_CHANGED,
-  TRANSIT_SELECTED_OVERLAY_SOURCE_ID,
-} from './policy.js';
-import {
-  TRANSIT_STATIONS_OVERLAY_SOURCE_ID,
-  transitStationIdFromPick,
-} from './stations.js';
+import { TRANSIT_SELECTED_OVERLAY_SOURCE_ID } from './policy.js';
 import { TRANSIT_ENABLED_FEEDS } from '../../data/transitFeeds.js';
 
 /**
  * Init / enable / disable / update / destroy for one Transit layer instance.
- * Everything acquired here is released here — primitives, listeners, the sprite
- * registration, the pick owner, the render hold, and the camera sensitivity
- * this layer borrowed.
+ * Everything acquired here is released here — primitives, listeners, the
+ * pick owner, the render hold, and the camera listener.
  * @param {object} context
  * @returns {object}
  */
 export function createLifecycle({ state, services, parts }) {
-  const {
-    registerSpriteCollection,
-    unregisterSpriteCollection,
-    restoreSpriteOrder,
-  } = services.sprites;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
   const { releaseContinuousRender } = services.render;
-
-  /**
-   * Borrow the camera's change sensitivity through the shared claim ledger.
-   *
-   * `camera.changed` fires on a percentage of the view moving, and this layer
-   * needs a finer trigger than the default to notice it has entered a feed's
-   * coverage. It is a single shared number, so the claim is registered by name
-   * rather than written directly: comparing the VALUE on the way out could not
-   * tell this layer's 0.05 from anybody else's, and handing back the coarse
-   * default while Bikeshare was still relying on a fine one was exactly the
-   * bug that produced.
-   */
-  function borrowCameraSensitivity(viewer) {
-    claimCameraSensitivity(
-      viewer?.camera,
-      'transit',
-      CAMERA_PERCENTAGE_CHANGED,
-    );
-  }
-
-  /** Give the claim up. The camera keeps whatever anyone else still asks for. */
-  function returnCameraSensitivity(viewer) {
-    releaseCameraSensitivity(viewer?.camera, 'transit');
-  }
 
   /**
    * Follow the active post-FX style so the sprites can be restyled for it.
@@ -130,36 +88,11 @@ export function createLifecycle({ state, services, parts }) {
 
     /**
      * Create the point collection. Called once at bootstrap.
-     * @param {Cesium.Viewer} viewer
+     * @param {object} viewer
      */
     init(viewer) {
       state._viewer = viewer;
-      state._markers = new Cesium.BillboardCollection({
-        blendOption: Cesium.BlendOption.TRANSLUCENT,
-      });
-      viewer.scene.primitives.add(state._markers);
-      registerSpriteCollection('transit', state._markers);
-      state._animatedMarkers = new Cesium.BillboardCollection({
-        blendOption: Cesium.BlendOption.TRANSLUCENT,
-      });
-      viewer.scene.primitives.add(state._animatedMarkers);
-      registerSpriteCollection('transit-motion', state._animatedMarkers);
-      state._animatedMarkers.show = false;
-      state._markers.show = false;
-      // The station network is a SECOND display the Transit row owns: the
-      // live fleet's billboards and the French rail network's station pins,
-      // side by side on one row. The pins live in a PointPrimitiveCollection,
-      // the same pattern the Bike Share and satellite layers use.
-      if (!state._stationPoints) {
-        state._stationPoints = new Cesium.PointPrimitiveCollection();
-        state._stationPoints.show = false;
-        viewer.scene.primitives.add(state._stationPoints);
-      }
-      state._stations = [];
-      state._stationTotal = 0;
-      state._stationUpdatedAt = null;
-      state._stationError = null;
-      state._overlayHost.setVisible(TRANSIT_STATIONS_OVERLAY_SOURCE_ID, false);
+      parts.rendering.createMarkers(viewer);
       state._enabled = false;
       state._activeFeeds.clear();
       state._feedStatus.clear();
@@ -183,7 +116,6 @@ export function createLifecycle({ state, services, parts }) {
       state._rotationPose = null;
       state._rotationDirty = false;
       state._overlayHost.setVisible(TRANSIT_SELECTED_OVERLAY_SOURCE_ID, false);
-      restoreSpriteOrder(viewer);
       bindStyleEvents();
       console.log(
         `[Data:Transit] Initialized with ${TRANSIT_ENABLED_FEEDS.length} GTFS-RT feeds`,
@@ -192,30 +124,14 @@ export function createLifecycle({ state, services, parts }) {
 
     /**
      * Show vehicles, watch the camera, and poll every feed in range.
-     * @param {Cesium.Viewer} viewer
+     * @param {object} viewer
      */
     enable(viewer) {
       state._enabled = true;
       bindVisibility();
       state._generation += 1;
       state._error = null;
-      // The row's chips own which half of the merged row is drawn, so an
-      // enable honours the mode the operator last chose.
-      const showVehicles = state._display !== 'stations';
-      const showStations = state._display !== 'vehicles';
-      state._markers.show = showVehicles;
-      state._animatedMarkers.show = showVehicles;
-      if (state._stationPoints) state._stationPoints.show = showStations;
-      state._overlayHost.setVisible(
-        TRANSIT_STATIONS_OVERLAY_SOURCE_ID,
-        showStations,
-      );
-      // The station catalogue is STATIC: it is read once per enable and
-      // never re-polled, so it does not follow the fleet's camera-driven
-      // proximity gate. A French rail network that only appeared when the
-      // camera dropped below the fleet's altitude gate would look broken
-      // from a global view, and the catalogue is one small cached read.
-      void parts.stations.loadStations();
+      parts.rendering.showMarkers();
       state._maintenanceTimer = setInterval(
         parts.rendering.maintainPresentation,
         250,
@@ -229,23 +145,18 @@ export function createLifecycle({ state, services, parts }) {
           transitStationIdFromPick(pickedId) !== null,
       );
       if (!state._cameraChangedAttached) {
-        viewer.camera.changed.addEventListener(parts.viewport.onCameraChanged);
-        borrowCameraSensitivity(viewer);
-        state._cameraChangedAttached = true;
+        parts.rendering.watchCamera(viewer, parts.viewport.onCameraChanged);
+        // Attached only with a camera to listen to, so a later enable retries.
+        state._cameraChangedAttached = state._cameraChangedOff !== null;
       }
-      if (!state._preRenderRemove) {
-        state._preRenderRemove = viewer.scene.preRender.addEventListener(
-          parts.rendering.onPreRender,
-        );
-      }
+      parts.rendering.startFrames(viewer);
       parts.rendering.startModels();
       parts.viewport.runProximityCheck();
-      restoreSpriteOrder(viewer);
     },
 
     /**
      * Hide everything, stop polling, drop all vehicles.
-     * @param {Cesium.Viewer} viewer
+     * @param {object} viewer
      */
     disable(viewer) {
       state._enabled = false;
@@ -282,17 +193,10 @@ export function createLifecycle({ state, services, parts }) {
       state._stationFailures = 0;
       parts.selection.removeClickHandler();
       unregisterPickOwner('transit');
-      if (state._cameraChangedAttached) {
-        viewer.camera.changed.removeEventListener(
-          parts.viewport.onCameraChanged,
-        );
-        returnCameraSensitivity(viewer);
-        state._cameraChangedAttached = false;
-      }
-      if (state._preRenderRemove) {
-        state._preRenderRemove();
-        state._preRenderRemove = null;
-      }
+      // Unconditional: whatever watching started, none of it outlives this.
+      parts.rendering.unwatchCamera();
+      state._cameraChangedAttached = false;
+      parts.rendering.stopFrames();
       parts.ingestion.abortAllInFlight();
       state._activeFeeds.clear();
       state._feedStatus.clear();
@@ -305,10 +209,7 @@ export function createLifecycle({ state, services, parts }) {
       state._vehicles.clear();
       parts.rendering.stopModels();
       parts.height.clear();
-      state._markers?.removeAll();
-      state._animatedMarkers?.removeAll();
-      if (state._animatedMarkers) state._animatedMarkers.show = false;
-      if (state._markers) state._markers.show = false;
+      parts.rendering.clearMarkers();
       state._altitudeGateOpen = false;
       state._moving.clear();
       state._heightDirty.clear();
@@ -340,21 +241,12 @@ export function createLifecycle({ state, services, parts }) {
 
     /**
      * Tear down the collection entirely and release every shared registration.
-     * @param {Cesium.Viewer} viewer
+     * @param {object} viewer
      */
     destroy(viewer) {
       this.disable(viewer);
       parts.rendering.stopModels(true);
-      if (state._markers) {
-        unregisterSpriteCollection('transit', state._markers);
-        viewer?.scene?.primitives?.remove(state._markers);
-        state._markers = null;
-      }
-      if (state._animatedMarkers) {
-        unregisterSpriteCollection('transit-motion', state._animatedMarkers);
-        viewer?.scene?.primitives?.remove(state._animatedMarkers);
-        state._animatedMarkers = null;
-      }
+      parts.rendering.destroyMarkers(viewer);
       state._overlayHost.clearSource(TRANSIT_SELECTED_OVERLAY_SOURCE_ID);
       state._overlayHost.clearSource(TRANSIT_STATIONS_OVERLAY_SOURCE_ID);
       state._overlayHost.setVisible(TRANSIT_STATIONS_OVERLAY_SOURCE_ID, false);
