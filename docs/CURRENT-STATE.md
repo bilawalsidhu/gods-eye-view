@@ -18,7 +18,9 @@ data sources and update listeners on every animation frame even when it skips
 the draw; the viewer starts at that cap until the governor is installed. The
 camera holds continuous render from `moveStart` to `moveEnd`, and samples its
 pose every 250 ms in between, so a camera drifting by rounding errors (no
-`moveEnd`) is released after half a second at rest and held again if it moves. Waits that used to count frames (a followed contact's first
+`moveEnd`) is released after half a second at rest and held again if it moves. The world clock holds continuous render while
+it plays away from the live edge (not while it steps or waits for data), so
+playback draws at the display's rate too. Waits that used to count frames (a followed contact's first
 position, a shared follow view, a trail's temporary copy) count drawn time
 through `src/time/frameWait.js`, at most 100 ms a frame, so they last the same
 at any refresh rate and a background tab does not use them up.
@@ -2029,8 +2031,12 @@ Playing, the layer stays a snapshot ahead of the time, and play does not pass a
 snapshot still loading for more than 8 seconds. Those snapshots apply as polls
 do, so contacts move on smoothly: aircraft are drawn at the clock's time
 rather than behind it, and vessels between two fixes move along the great
-circle, never past the newer one, redrawn every frame with frames asked for
-as for placed live vessels (vessels out of view move on every 250 ms). Records, absences and the Layers panel's age
+circle, never past the newer one. Drawn vessels move again once the fastest
+of them would have moved half a pixel on screen at the speed it last moved,
+at least once a second, and at once when the camera moves or changes height
+by a tenth of its height or the view zooms, with frames asked for as for
+placed live vessels; vessels out of view move on a share of them each frame,
+each within 250 ms, and one that comes into view is moved to the time first. Records, absences and the Layers panel's age
 are judged at the clock's time. Outside the coverage the layer shows no
 contacts and loads nothing; while the coverage is unknown it loads nothing and
 clears nothing. A snapshot that fails clears the time and is asked again after

@@ -82,43 +82,66 @@ export function mergeTimelineRuns(
   centreMs,
   limit = TIMELINE_FIXES_LIMIT,
 ) {
-  const first = newer.length ? timeOf(newer[0]) : Infinity;
-  const last = newer.length ? timeOf(newer[newer.length - 1]) : -Infinity;
+  // Each entry's time is read once: a layer merges a run for every contact
+  // in a snapshot, each holding up to `limit` entries.
+  const olderTimes = new Array(older.length);
+  for (let k = 0; k < older.length; k++) olderTimes[k] = timeOf(older[k]);
+  const newerTimes = new Array(newer.length);
+  for (let k = 0; k < newer.length; k++) newerTimes[k] = timeOf(newer[k]);
+  const first = newer.length ? newerTimes[0] : Infinity;
+  const last = newer.length ? newerTimes[newer.length - 1] : -Infinity;
   const newest = newer[newer.length - 1];
+  // The older entries before the newer run that the loop below would keep
+  // one by one, each far enough from the one before, are taken at once: a
+  // contact's kept entries mostly stand before each snapshot's run.
+  let lead = 0;
+  while (
+    lead < older.length &&
+    !(olderTimes[lead] >= first && olderTimes[lead] <= last) &&
+    (newer.length === 0 || olderTimes[lead] < first) &&
+    (lead === 0 ||
+      olderTimes[lead] - olderTimes[lead - 1] >= TIMELINE_FIX_SPACING_MS)
+  )
+    lead++;
   // Both runs in order, the older entries within the newer run's time left
   // out, thinned to the spacing.
-  const merged = [];
-  const take = (entry) => {
+  const merged = older.slice(0, lead);
+  const times = olderTimes.slice(0, lead);
+  const take = (entry, t) => {
     const k = merged.length - 1;
-    if (k < 0 || timeOf(entry) - timeOf(merged[k]) >= TIMELINE_FIX_SPACING_MS) {
+    if (k < 0 || t - times[k] >= TIMELINE_FIX_SPACING_MS) {
       merged.push(entry);
+      times.push(t);
     } else if (entry === newest) {
       merged[k] = entry;
+      times[k] = t;
     }
   };
-  let i = 0;
+  let i = lead;
   let j = 0;
   while (i < older.length || j < newer.length) {
     if (i < older.length) {
-      const t = timeOf(older[i]);
+      const t = olderTimes[i];
       if (t >= first && t <= last) {
         i++;
         continue;
       }
-      if (j >= newer.length || t < timeOf(newer[j])) {
-        take(older[i++]);
+      if (j >= newer.length || t < newerTimes[j]) {
+        take(older[i], t);
+        i++;
         continue;
       }
     }
-    take(newer[j++]);
+    take(newer[j], newerTimes[j]);
+    j++;
   }
   if (merged.length <= limit) return merged;
   // The window of `limit` entries nearest the centre.
   let start = 0;
   while (
     start + limit < merged.length &&
-    Math.abs(timeOf(merged[start + limit]) - centreMs) <
-      Math.abs(timeOf(merged[start]) - centreMs)
+    Math.abs(times[start + limit] - centreMs) <
+      Math.abs(times[start] - centreMs)
   )
     start++;
   return merged.slice(start, start + limit);
