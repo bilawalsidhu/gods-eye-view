@@ -1,6 +1,8 @@
-import * as Cesium from 'cesium';
 import { resolvePickedContext } from '../data/pickedContext.js';
-import { isPointerFree } from '../data/inputOwnership.js';
+import { followedOf, onFollowChanged } from '../data/followed.js';
+import { fromDegreesInto } from '../geo/ellipsoid.js';
+import { inputFor } from '../input/dispatcher.js';
+import { findCamera } from '../render/rendererOf.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useEntityCardStore } from './stores/entityCard.js';
 import { useOmnibarStore } from './stores/omnibar.js';
@@ -54,11 +56,15 @@ export function installEntityContext({
   const cockpitStore = useCockpitStore(pinia);
   const doc = globalThis.document;
   let disposed = false;
-  // When the card last asked the camera to follow its item: the tracking
-  // that starts right after is the card's own (see trackedEntityChanged).
-  let pickedAt = -Infinity;
-  /** The entity the camera follows for the card, once its tracking starts. */
-  let cardTracked = null;
+  // The renderer's camera; looked up on use, as a renderer can be bound
+  // after Context is installed.
+  const camera = () => findCamera(viewer);
+  /** Whether the camera follows this card's item (the follow's key). */
+  const followsCard = (card, followed = followedOf(viewer)) => {
+    const key = followed?.key;
+    if (!key || !card) return false;
+    return key === card.key || key === `${card.layerId}:${card.identity?.id}`;
+  };
   const inCockpit = () =>
     Boolean(doc?.body?.classList.contains('cockpit-mode'));
 
@@ -71,21 +77,27 @@ export function installEntityContext({
   }
 
   function flyTo(card) {
-    if (!Number.isFinite(card?.lat) || !Number.isFinite(card?.lon)) return;
+    const port = camera();
+    if (!port || !Number.isFinite(card?.lat) || !Number.isFinite(card?.lon))
+      return;
     const height = Number.isFinite(card.altitudeM) ? card.altitudeM : 0;
     const range = FRAME_RANGE[card.kind] ?? DEFAULT_RANGE;
-    viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(
-        Cesium.Cartesian3.fromDegrees(card.lon, card.lat, Math.max(0, height)),
-        1,
-      ),
+    port.flyToBounds(
       {
-        offset: new Cesium.HeadingPitchRange(
-          viewer.camera.heading,
-          Cesium.Math.toRadians(card.kind === 'satellite' ? -90 : -45),
+        center: fromDegreesInto(card.lon, card.lat, Math.max(0, height), {
+          x: 0,
+          y: 0,
+          z: 0,
+        }),
+        radius: 1,
+      },
+      {
+        offset: {
+          heading: port.pose().heading,
+          pitch: ((card.kind === 'satellite' ? -90 : -45) * Math.PI) / 180,
           range,
-        ),
-        duration: 2,
+        },
+        durationS: 2,
       },
     );
   }
@@ -93,7 +105,6 @@ export function installEntityContext({
   function follow(card) {
     const run = omnibar.runner;
     if (!run || !FOLLOWABLE.has(card.layerId)) return flyTo(card);
-    pickedAt = performance.now();
     Promise.resolve(
       run('track_entity', {
         query: card.identity.id || card.title,
@@ -104,10 +115,9 @@ export function installEntityContext({
 
   // Closing the card lets go of the camera, when the camera follows the
   // card's own item and nothing else took it over since.
-  function letGo() {
+  function letGo(card) {
     const run = omnibar.runner;
-    if (!run || !cardTracked || viewer.trackedEntity !== cardTracked) return;
-    cardTracked = null;
+    if (!run || !followsCard(card)) return;
     Promise.resolve(run('stop_tracking', {})).catch(() => {});
   }
 
@@ -125,7 +135,6 @@ export function installEntityContext({
   async function enterCockpit(card) {
     const run = omnibar.runner;
     if (!run || !COCKPIT_LAYERS.has(card.layerId)) return;
-    pickedAt = performance.now();
     await run('track_entity', {
       query: card.identity.id || card.title,
       layerId: card.layerId,
@@ -182,12 +191,9 @@ export function installEntityContext({
     canFollow: (card) => FOLLOWABLE.has(card?.layerId),
     // Where the camera is, so a search prefers what is close by.
     here: () => {
-      const at = viewer.camera.positionCartographic;
-      return at
-        ? {
-            lat: Cesium.Math.toDegrees(at.latitude),
-            lon: Cesium.Math.toDegrees(at.longitude),
-          }
+      const pose = camera()?.pose();
+      return pose && Number.isFinite(pose.lat) && Number.isFinite(pose.lon)
+        ? { lat: pose.lat, lon: pose.lon }
         : null;
     },
   });
@@ -196,34 +202,30 @@ export function installEntityContext({
   // picked: the ground under the middle of the screen, the view's bounds and
   // the height. Read when the camera settles, not every frame.
   const readView = () => {
-    const camera = viewer.camera;
-    const height = camera.positionCartographic?.height ?? 0;
+    const port = camera();
+    if (!port) return;
+    const pose = port.pose();
+    if (![pose.lat, pose.lon, pose.height].every(Number.isFinite)) return;
     const middle = pickWorld?.(viewer, 0.5, 0.5);
     const center = middle
       ? { lat: middle.lat, lon: middle.lon }
-      : {
-          lat: Cesium.Math.toDegrees(camera.positionCartographic.latitude),
-          lon: Cesium.Math.toDegrees(camera.positionCartographic.longitude),
-        };
-    const r = camera.computeViewRectangle?.(viewer.scene.globe.ellipsoid);
-    const rect = r
-      ? {
-          west: Cesium.Math.toDegrees(r.west),
-          south: Cesium.Math.toDegrees(r.south),
-          east: Cesium.Math.toDegrees(r.east),
-          north: Cesium.Math.toDegrees(r.north),
-        }
-      : { west: -180, south: -90, east: 180, north: 90 };
-    store.setView({ center, rect, heightM: height });
+      : { lat: pose.lat, lon: pose.lon };
+    const rect = port.viewRectangle() ?? {
+      west: -180,
+      south: -90,
+      east: 180,
+      north: 90,
+    };
+    store.setView({ center, rect, heightM: pose.height });
   };
-  const removeMoveEnd = viewer.camera.moveEnd.addEventListener(readView);
-  // A camera that keeps moving (following an aircraft, a long fly-to) never
-  // settles, and a jump (a share link, a restored view) raises no moveEnd,
-  // so also read it on large changes: at most once a second, and once more
-  // after the last change, so the view it stops at is the one described.
+  // Read when the camera settles. A camera that keeps moving (following an
+  // aircraft, a long fly-to) never settles, and a jump (a share link, a
+  // restored view) raises no moveEnd, so also read it on large changes: at
+  // most once a second, and once more after the last change, so the view it
+  // stops at is the one described.
   let lastRead = 0;
   let trailing = null;
-  const removeChanged = viewer.camera.changed.addEventListener(() => {
+  const onChanged = () => {
     clearTimeout(trailing);
     const now = performance.now();
     if (now - lastRead >= 1000) {
@@ -238,8 +240,18 @@ export function installEntityContext({
       },
       1000 - (now - lastRead),
     );
-  });
-  const firstRead = setTimeout(readView, 0);
+  };
+  let cameraOff = [];
+  const listen = () => {
+    const port = camera();
+    if (!port || cameraOff.length) return;
+    cameraOff = [port.on('moveEnd', readView), port.on('changed', onChanged)];
+  };
+  listen();
+  const firstRead = setTimeout(() => {
+    listen();
+    readView();
+  }, 0);
 
   /** Layers whose own map click already follows what was clicked. */
   const CLICK_FOLLOWS = new Set([
@@ -249,87 +261,41 @@ export function installEntityContext({
     'ais-live-vessels',
   ]);
 
-  // Keep the card's "following" in step with the camera. When the camera
-  // stops following (Escape, another tool, the craft gone) the card stops
-  // saying so, and picking the same item again follows it again; when one of
-  // the layers above starts following from its own click, the card says so.
-  // A layer switching what it follows lets go for a moment and takes hold
-  // again in the same turn, so this is checked once that settles.
-  // The entity the camera follows for the card: taken when the card's own
-  // pick starts the tracking, so tracking something else (another control,
-  // another craft) is not mistaken for following the card.
-  let trackCheck = 0;
-  const removeTrackedChanged = viewer.trackedEntityChanged.addEventListener(
-    () => {
-      clearTimeout(trackCheck);
-      trackCheck = setTimeout(() => {
-        const tracked = viewer.trackedEntity;
-        if (!tracked) {
-          cardTracked = null;
-          store.following = null;
-          return;
-        }
-        const card = store.card;
-        const fromPick = performance.now() - pickedAt < 1500;
-        if (
-          fromPick &&
-          card &&
-          (store.following === card.key || CLICK_FOLLOWS.has(card.layerId))
-        ) {
-          cardTracked = tracked;
-          store.following = card.key;
-        } else if (tracked !== cardTracked) {
-          store.following = null;
-        }
-      }, 250);
-    },
-  );
+  // Keep the card's "following" in step with the camera: it says Following
+  // while the camera follows the card's own item (the follow's key names
+  // it) and not otherwise, whoever started or ended the follow. A layer
+  // switching what it follows lets go for a moment and takes hold again in
+  // the same turn, so this is checked once that settles.
+  let followCheck = 0;
+  const offFollow = onFollowChanged(viewer, () => {
+    clearTimeout(followCheck);
+    followCheck = setTimeout(() => {
+      const card = store.card;
+      store.following = followsCard(card) ? card.key : null;
+    }, 250);
+  });
 
-  const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-  // What is under the pointer is read when the button goes down: by the time
-  // the click arrives, a layer may already have acted on it (the flights
-  // layer swaps a clicked plane's icon for its model), and a pick then would
-  // find whatever was behind it.
-  const pickAt = (position) => {
-    try {
-      return viewer.scene.pick(position) ?? null;
-    } catch {
-      return null;
-    }
-  };
-  let pressed = null;
-  handler.setInputAction(({ position }) => {
-    pressed = isPointerFree()
-      ? { picked: pickAt(position), x: position.x, y: position.y }
-      : null;
-  }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
-  handler.setInputAction(({ position }) => {
-    // A tool that owns the pointer (draw, measure) keeps its clicks.
-    const press = pressed;
-    pressed = null;
+  // A click on anything a layer can identify opens its card. The input
+  // dispatcher hands every subscriber the same click, picked once before
+  // any layer acts on it, and only while no tool holds the pointer.
+  const offClick = inputFor(viewer).onClick((event) => {
     // Cockpit has its own picks, and Context is hidden while it runs.
-    if (!isPointerFree() || inCockpit()) return;
-    const samePlace =
-      press && Math.hypot(press.x - position.x, press.y - position.y) < 6;
-    const picked = samePlace ? press.picked : pickAt(position);
-    const identity = resolvePickedContext(picked, {
+    if (inCockpit()) return;
+    const identity = resolvePickedContext(event.hit, {
       dataManager: getDataManager(),
     });
     if (identity) {
       // These layers start following on their own click; following again
       // from here would fight them (the flights layer reads a second track
       // of the same plane as a click on empty map and lets go).
-      pickedAt = performance.now();
       store.select(identity, { follow: !CLICK_FOLLOWS.has(identity.layerId) });
       return;
     }
-    // A click on open ground, sea or sky lets go of what was selected; the
-    // photorealistic ground is a tileset, so a click on it counts as ground.
-    // A click on something else Context cannot describe (a label, a trail)
+    // A click on open ground, sea or sky lets go of what was selected. A
+    // click on something else Context cannot describe (a label, a trail)
     // leaves the card as it is.
-    if (!picked || picked.primitive instanceof Cesium.Cesium3DTileset)
-      store.clear();
-  }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    if (event.surface) store.clear();
+  });
 
   // Layers that select through the context store (GeoJSON sites, fires,
   // installations) announce it; their selection opens the card too.
@@ -348,12 +314,11 @@ export function installEntityContext({
   return () => {
     disposed = true;
     clearTimeout(firstRead);
-    handler.destroy();
-    removeMoveEnd();
-    removeChanged();
+    offClick();
+    for (const off of cameraOff) off?.();
     clearTimeout(trailing);
-    removeTrackedChanged();
-    clearTimeout(trackCheck);
+    offFollow();
+    clearTimeout(followCheck);
     globalThis.removeEventListener?.('gev:entity-selected', onSelected);
     store.connect(null);
   };

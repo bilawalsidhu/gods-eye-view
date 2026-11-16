@@ -280,7 +280,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   }
 
   function clear() {
-    if (following.value) shell.value?.letGo?.();
+    if (following.value) shell.value?.letGo?.(card.value);
     following.value = null;
     clearInterval(timer);
     timer = null;
