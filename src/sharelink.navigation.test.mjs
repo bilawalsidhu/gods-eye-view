@@ -143,7 +143,7 @@ test("the app's own hash writes never trigger a restore", (t) => {
 
 test('restore applies a hash even when the address already shows it', (t) => {
   installTab(t, SHARE_A);
-  const manager = new ShareLinkManager(fakeViewer());
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
   manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
   const restored = [];
   manager.watchNavigation((state) => restored.push(state));
@@ -158,7 +158,7 @@ test('restore applies a hash even when the address already shows it', (t) => {
 test('holding writes first writes a view change still waiting for its debounce', (t) => {
   installTab(t, SHARE_A);
   const timers = installManualTimers(t);
-  const manager = new ShareLinkManager(fakeViewer());
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
   manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
   const before = window.location.hash;
   manager._buildHashParams = () => new URLSearchParams('v=2&lat=5');
@@ -187,7 +187,7 @@ test('a hash write keeps the state another owner stored on the entry', (t) => {
     written.push(state);
     replace(state, title, next);
   };
-  const manager = new ShareLinkManager(fakeViewer());
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
   manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
   manager._updateHash();
   assert.deepEqual(written, [{ gevStories: { stories: 'explore', depth: 1 } }]);

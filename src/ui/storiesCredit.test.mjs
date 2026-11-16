@@ -12,13 +12,23 @@ const view = readFileSync(
   'utf8',
 );
 
-/** Every declaration block in stories.css whose selector names the credit line. */
+/**
+ * Every declaration block in stories.css whose selector names the credit
+ * line: the renderer's own display (`#cesium-credits`) or the application's
+ * line (`#gev-credits`, src/ui/creditsView.js), with its selectors one each.
+ */
 function creditBlocks() {
   const blocks = [];
   const re = /([^{}]+)\{([^{}]*)\}/g;
   for (let m; (m = re.exec(css));) {
-    if (m[1].includes('#cesium-credits'))
-      blocks.push({ selector: m[1].trim(), body: m[2] });
+    if (/#(cesium|gev)-credits/.test(m[1]))
+      blocks.push({
+        selector: m[1].trim(),
+        selectors: m[1]
+          .split(/,(?![^(]*\))/)
+          .map((part) => part.replace(/\s+/g, ' ').trim()),
+        body: m[2],
+      });
   }
   return blocks;
 }
@@ -33,21 +43,24 @@ test('Stories never hides GEV’s required credit line', () => {
       selector,
     );
   }
-  // The rule that hides GEV's chrome while Stories is open exempts the credit.
-  assert.match(
-    css,
-    /body\.stories-mode\s*>\s*:not\([^)]*\[id='cesium-credits'\]/,
-  );
+  // The rule that hides GEV's chrome while Stories is open exempts the
+  // credit, whichever display shows it, and the application's credit list.
+  for (const id of ['cesium-credits', 'gev-credits', 'gev-credits-panel'])
+    assert.match(
+      css,
+      new RegExp(`body\\.stories-mode\\s*>\\s*:not\\([^)]*\\[id='${id}'\\]`),
+      id,
+    );
 });
 
 test('a playing scene’s recording mode cannot move the credit under the timeline', () => {
   const placement = creditBlocks().find(
-    ({ selector, body }) =>
-      /^body\.stories-mode:not\(#gs-a\):not\(#gs-b\)\s+#cesium-credits$/.test(
-        selector,
+    ({ selectors, body }) =>
+      ['cesium-credits', 'gev-credits'].every((id) =>
+        selectors.includes(`body.stories-mode:not(#gs-a):not(#gs-b) #${id}`),
       ) && /bottom\s*:/.test(body),
   );
-  assert.ok(placement, 'Stories pins the credit line');
+  assert.ok(placement, 'Stories pins the credit line, either display');
   // Two ids outrank body.recording-mode #cesium-credits and the phone shell's
   // !important rule (one id each), so the measured place holds while playing.
   assert.match(

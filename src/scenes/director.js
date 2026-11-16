@@ -22,7 +22,12 @@ import { createToast } from '../ui/toast.js';
 import { buildPlaybackQueue, playSceneQueue } from '../director/playback.js';
 import { createScenePlaybackAdapter } from './playbackAdapter.js';
 import { toRadians } from '../geo/vector.js';
-import { cameraOf, canvasOf, findCamera } from '../render/rendererOf.js';
+import {
+  cameraOf,
+  canvasOf,
+  findCamera,
+  findFrame,
+} from '../render/rendererOf.js';
 import {
   SCENE_APPEND_RECIPES,
   SCENE_RECIPES,
@@ -634,9 +639,10 @@ export class SceneDirector {
     if (!scene || this._destroyed) return false;
     let thumb;
     try {
-      thumb = await captureStoryThumb(this.viewer, {
-        createCanvas: () => document.createElement('canvas'),
-      });
+      thumb = await captureStoryThumb(
+        { frame: findFrame(this.viewer), canvas: canvasOf(this.viewer) },
+        { createCanvas: () => document.createElement('canvas') },
+      );
     } catch (error) {
       console.warn('[Scenes] Could not capture the thumbnail:', error);
       if (!this._destroyed)

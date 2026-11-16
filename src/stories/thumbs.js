@@ -1,30 +1,62 @@
-import * as Cesium from 'cesium';
-
 /**
- * Story card images, drawn from the imagery GEV is already showing: the
- * base layer's tiles around a story's place, cropped to the card. No other
- * host is asked, and the imagery is the one GEV credits on screen.
+ * Story card images, drawn from the imagery GEV is already showing: the Esri
+ * World Imagery tiles around a story's place, cropped to the card. They are
+ * the same tiles, from the same host, that GEV's Esri map draws (and credits
+ * on screen); no other host is asked.
  */
 const WIDTH = 320;
 const HEIGHT = 180;
-const TILE_TRIES = 4;
+const TILE_SIZE = 256;
+const TILE_TRIES = 3;
 
-/** A zoom level that frames `range` metres of view, within the provider's. */
-export function thumbLevel(range, provider) {
+/** Esri World Imagery's tiles: Web Mercator, as GEV's Esri map draws them. */
+export const ESRI_TILE_URL =
+  'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+const ESRI_MAX_LEVEL = 19;
+
+/** A zoom level that frames `range` metres of view, within the imagery's. */
+export function thumbLevel(
+  range,
+  { minLevel = 0, maxLevel = ESRI_MAX_LEVEL } = {},
+) {
   const level = Math.round(Math.log2(4e7 / Math.max(range || 1.6e7, 1)));
-  const max = Number.isFinite(provider?.maximumLevel)
-    ? provider.maximumLevel
-    : 18;
-  const min = Number.isFinite(provider?.minimumLevel)
-    ? provider.minimumLevel
-    : 0;
-  return Math.max(min, Math.min(max, Math.max(1, level)));
+  return Math.max(minLevel, Math.min(maxLevel, Math.max(1, level)));
 }
 
-async function tile(provider, x, y, level) {
+/**
+ * Where a place sits in the Web Mercator tile grid at `level`, in tiles from
+ * the top left (the whole part names the tile, the rest is inside it).
+ * @returns {{x: number, y: number}}
+ */
+export function tilePosition(lon, lat, level) {
+  const n = 2 ** level;
+  const clamped = Math.max(-85.05112878, Math.min(85.05112878, lat));
+  const phi = (clamped * Math.PI) / 180;
+  const x = ((((lon + 180) / 360) % 1) + 1) % 1;
+  const y = (1 - Math.log(Math.tan(phi) + 1 / Math.cos(phi)) / Math.PI) / 2;
+  return { x: x * n, y: Math.min(Math.max(y, 0), 1 - 1e-12) * n };
+}
+
+const tileUrl = (x, y, level) =>
+  ESRI_TILE_URL.replace('{z}', String(level))
+    .replace('{y}', String(y))
+    .replace('{x}', String(x));
+
+/** One tile as an image the canvas may read back, or null. */
+function loadImage(url) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.crossOrigin = 'anonymous';
+    image.decoding = 'async';
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    image.src = url;
+  });
+}
+
+async function tile(loadTile, x, y, level) {
   for (let i = 0; i < TILE_TRIES; i++) {
-    // undefined: the request was throttled; ask again shortly.
-    const image = await provider.requestImage(x, y, level);
+    const image = await loadTile(tileUrl(x, y, level), { x, y, level });
     if (image) return image;
     await new Promise((resolve) => setTimeout(resolve, 250 * (i + 1)));
   }
@@ -32,31 +64,28 @@ async function tile(provider, x, y, level) {
 }
 
 /**
- * A card image for a place, or '' when the imagery cannot be read (a provider
- * without tiles, a failed request, imagery the browser will not let a page
- * copy).
- * @param {object} provider A Cesium ImageryProvider.
+ * A card image for a place, or '' when the imagery cannot be read (a failed
+ * request, imagery the browser will not let a page copy).
  * @param {{lat: number, lon: number, range?: number}} cover
+ * @param {{loadTile?: (url: string, tile: {x: number, y: number, level: number}) =>
+ *   Promise<CanvasImageSource | null>}} [options] `loadTile` fetches one tile
+ *   (tests replace it).
  * @returns {Promise<string>}
  */
-export async function drawThumb(provider, cover) {
+export async function drawThumb(cover, { loadTile = loadImage } = {}) {
   try {
-    const scheme = provider?.tilingScheme;
-    if (!scheme || typeof provider.requestImage !== 'function') return '';
-    const level = thumbLevel(cover.range, provider);
-    const where = Cesium.Cartographic.fromDegrees(cover.lon, cover.lat);
-    const at = scheme.positionToTileXY(where, level);
-    if (!at) return '';
-    const rect = scheme.tileXYToRectangle(at.x, at.y, level);
+    if (!Number.isFinite(cover?.lat) || !Number.isFinite(cover?.lon)) return '';
+    const level = thumbLevel(cover.range);
+    const at = tilePosition(cover.lon, cover.lat, level);
+    const tx = Math.floor(at.x);
+    const ty = Math.floor(at.y);
     // Where the place sits inside its tile, 0..1 from the top left.
-    const u = (where.longitude - rect.west) / rect.width;
-    const v = (rect.north - where.latitude) / rect.height;
+    const u = at.x - tx;
+    const v = at.y - ty;
     // A 2 × 2 block of tiles with the place in its middle tile quarter.
-    const x0 = u < 0.5 ? at.x - 1 : at.x;
-    const y0 = v < 0.5 ? at.y - 1 : at.y;
-    const nx = scheme.getNumberOfXTilesAtLevel(level);
-    const ny = scheme.getNumberOfYTilesAtLevel(level);
-    const size = 256;
+    const x0 = u < 0.5 ? tx - 1 : tx;
+    const y0 = v < 0.5 ? ty - 1 : ty;
+    const n = 2 ** level;
     const canvas = document.createElement('canvas');
     canvas.width = WIDTH;
     canvas.height = HEIGHT;
@@ -65,30 +94,24 @@ export async function drawThumb(provider, cover) {
     ctx.fillStyle = '#0b1620';
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
     // The place's pixel in the block, kept at the card's centre.
-    const px = (at.x - x0 + u) * size;
-    const py = (at.y - y0 + v) * size;
-    const ox = WIDTH / 2 - px;
-    const oy = HEIGHT / 2 - py;
+    const ox = WIDTH / 2 - (tx - x0 + u) * TILE_SIZE;
+    const oy = HEIGHT / 2 - (ty - y0 + v) * TILE_SIZE;
     let drawn = 0;
     await Promise.all(
       [0, 1].flatMap((dy) =>
         [0, 1].map(async (dx) => {
-          const ty = y0 + dy;
-          if (ty < 0 || ty >= ny) return;
-          const tx = (((x0 + dx) % nx) + nx) % nx;
-          const image = await tile(provider, tx, ty, level);
+          const y = y0 + dy;
+          if (y < 0 || y >= n) return;
+          const x = (((x0 + dx) % n) + n) % n;
+          const image = await tile(loadTile, x, y, level);
           if (!image) return;
-          // Cesium hands bitmaps over flipped for the GPU; turn them back.
-          const flipped =
-            typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap;
-          const top = oy + dy * size;
-          if (flipped) {
-            ctx.save();
-            ctx.translate(0, top + size);
-            ctx.scale(1, -1);
-            ctx.drawImage(image, ox + dx * size, 0, size + 1, size + 1);
-            ctx.restore();
-          } else ctx.drawImage(image, ox + dx * size, top, size + 1, size + 1);
+          ctx.drawImage(
+            image,
+            ox + dx * TILE_SIZE,
+            oy + dy * TILE_SIZE,
+            TILE_SIZE + 1,
+            TILE_SIZE + 1,
+          );
           drawn += 1;
         }),
       ),

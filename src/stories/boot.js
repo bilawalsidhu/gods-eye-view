@@ -11,7 +11,7 @@ const wantsStories = () => {
  * steps into Stories with Back or Forward. Until then the store holds this
  * shell, whose calls load the controller and then run.
  *
- * @param {{viewer: import('cesium').Viewer,
+ * @param {{viewer: object,
  *   director: import('../scenes/director.js').SceneDirector,
  *   store: ReturnType<typeof import('../ui/stores/stories.js').useStoriesStore>,
  *   onEnter?: () => void,

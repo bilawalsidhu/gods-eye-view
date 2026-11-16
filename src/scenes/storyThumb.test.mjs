@@ -100,48 +100,55 @@ test('encodeStoryThumb lowers the quality until the image fits, then gives up', 
   );
 });
 
-/** A Cesium scene double: postRender listeners run on requestRender. */
-function fakeViewer({ draws = true } = {}) {
+/**
+ * The renderer's frame port double, running postRender listeners on
+ * requestRender, and the canvas it draws in.
+ */
+function fakeGlobe({ draws = true } = {}) {
   const listeners = new Set();
-  const scene = {
-    canvas: { width: 640, height: 360 },
+  const frame = {
     renders: 0,
-    postRender: {
-      addEventListener(listener) {
-        listeners.add(listener);
-        return () => listeners.delete(listener);
-      },
+    reasons: [],
+    on(phase, listener) {
+      assert.equal(phase, 'postRender');
+      listeners.add(listener);
+      return () => listeners.delete(listener);
     },
-    requestRender() {
-      scene.renders++;
-      if (draws) for (const listener of [...listeners]) listener();
+    requestRender(reason) {
+      frame.renders++;
+      frame.reasons.push(reason);
+      if (draws) for (const listener of [...listeners]) listener({});
     },
     listeners,
   };
-  return { scene };
+  return { globe: { frame, canvas: { width: 640, height: 360 } }, frame };
 }
 
 test('captureStoryThumb reads the canvas inside the postRender it requested', async () => {
-  const viewer = fakeViewer();
+  const { globe, frame } = fakeGlobe();
   const { create } = fakeCanvases();
-  const url = await captureStoryThumb(viewer, { createCanvas: create });
+  const url = await captureStoryThumb(globe, { createCanvas: create });
   assert.equal(url, 'data:image/jpeg;base64,AAAA');
-  assert.equal(viewer.scene.renders, 1);
-  assert.equal(viewer.scene.listeners.size, 0, 'the listener is removed');
+  assert.equal(frame.renders, 1);
+  assert.deepEqual(frame.reasons, ['story-thumb']);
+  assert.equal(frame.listeners.size, 0, 'the listener is removed');
 });
 
 test('captureStoryThumb gives up when no frame is drawn or there is no globe', async () => {
-  const viewer = fakeViewer({ draws: false });
+  const { globe, frame } = fakeGlobe({ draws: false });
   await assert.rejects(
-    captureStoryThumb(viewer, {
+    captureStoryThumb(globe, {
       createCanvas: fakeCanvases().create,
       timeoutMs: 1,
     }),
     /No frame was drawn/,
   );
-  assert.equal(viewer.scene.listeners.size, 0);
+  assert.equal(frame.listeners.size, 0);
   await assert.rejects(
-    captureStoryThumb({}, { createCanvas: fakeCanvases().create }),
+    captureStoryThumb(
+      { frame: null, canvas: null },
+      { createCanvas: fakeCanvases().create },
+    ),
     /Globe not ready/,
   );
 });

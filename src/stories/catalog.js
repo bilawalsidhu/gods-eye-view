@@ -1,7 +1,7 @@
 import { SCENE_RECIPES } from '../scenes/recipes.js';
 import { msg } from '../i18n/index.js';
 /**
- * Stories are GEV scenes, played on GEV's own Cesium globe: the scenes GEV
+ * Stories are GEV scenes, played on GEV's own globe: the scenes GEV
  * ships (recipes with a camera path) and the scenes the person authored and
  * saved to Stories from the AUTHORING panel.
  *
@@ -262,25 +262,25 @@ const describe = (scene) =>
  * A scene the person saved to Stories (SceneDirector.storyScenes()). Its
  * chapters and length come from the director's shots when it opens.
  */
-function savedStory(scene) {
+function savedStory(entry) {
   return {
-    id: `gev:${scene.id}`,
-    sceneId: scene.id,
+    id: `gev:${entry.id}`,
+    sceneId: entry.id,
     kind: 'gev',
     live: false,
     mine: true,
     // Not saved with SAVE TO STORIES yet.
-    draft: !!scene.draft,
-    title: scene.title,
-    description: describe(scene),
+    draft: !!entry.draft,
+    title: entry.title,
+    description: describe(entry),
     creator: msg('You'),
     // Topics the person picked in AUTHORING, and the card image they
     // captured there (drawn from the imagery when there is none).
-    topics: [...(scene.tags ?? [])],
-    tags: [...(scene.tags ?? [])],
-    thumb: scene.thumb ?? '',
+    topics: [...(entry.tags ?? [])],
+    tags: [...(entry.tags ?? [])],
+    thumb: entry.thumb ?? '',
     durationMs: 0,
-    cover: coverOf(scene.camera),
+    cover: coverOf(entry.camera),
     chapters: [],
     events: [],
     sources: [],
@@ -319,17 +319,17 @@ export function listStories() {
   // One object per saved scene, kept across calls: the controller fills its
   // chapters in place when it opens, and the screens read the same object.
   const own = (savedScenes() ?? [])
-    .filter((scene) => !shippedIds.has(scene.id))
-    .map((scene) => {
-      const story = saved.get(scene.id) ?? savedStory(scene);
-      story.title = scene.title;
-      story.draft = !!scene.draft;
-      story.description = describe(scene);
-      story.cover = coverOf(scene.camera);
-      story.topics = [...(scene.tags ?? [])];
-      story.tags = [...(scene.tags ?? [])];
-      story.thumb = scene.thumb ?? '';
-      saved.set(scene.id, story);
+    .filter((entry) => !shippedIds.has(entry.id))
+    .map((entry) => {
+      const story = saved.get(entry.id) ?? savedStory(entry);
+      story.title = entry.title;
+      story.draft = !!entry.draft;
+      story.description = describe(entry);
+      story.cover = coverOf(entry.camera);
+      story.topics = [...(entry.tags ?? [])];
+      story.tags = [...(entry.tags ?? [])];
+      story.thumb = entry.thumb ?? '';
+      saved.set(entry.id, story);
       return story;
     });
   return [...own, ...shipped.filter((s) => installed(s.sceneId))];

@@ -3726,17 +3726,28 @@
 /* ── Bridge: the prototype's layout over GEV's own Cesium globe ── */
 
 /* GEV's own chrome steps aside while Stories is open; the globe and its
-   credits stay. */
+   credits stay: the renderer's own credit display, or the application's
+   credit line and its list (src/ui/creditsView.js) where it has none. */
 body.stories-mode
   > :not(
     #gev-stories-host,
     .gev-view,
     [id='cesium-credits'],
+    [id='gev-credits'],
+    [id='gev-credits-panel'],
     script,
     style,
     link
   ),
-body.stories-mode > :not(#gev-stories-host, .gev-view, [id='cesium-credits']) *,
+body.stories-mode
+  > :not(
+    #gev-stories-host,
+    .gev-view,
+    [id='cesium-credits'],
+    [id='gev-credits'],
+    [id='gev-credits-panel']
+  )
+  *,
 body.stories-mode .gev-view > :not(#cesiumContainer):not(#gev-stories),
 body.stories-mode .gev-view > :not(#cesiumContainer):not(#gev-stories) *,
 body.stories-mode #cesiumContainer > :not(.cesium-viewer),
@@ -3788,22 +3799,30 @@ body.stories-mode #cesiumContainer > :not(.cesium-viewer) * {
    measures it, in every GEV mode: a playing scene's recording mode and the
    phone shell both move it, the phone shell with !important. The :not(#…)
    parts outrank those rules. */
-body.stories-mode:not(#gs-a):not(#gs-b) #cesium-credits {
+body.stories-mode:not(#gs-a):not(#gs-b) #cesium-credits,
+body.stories-mode:not(#gs-a):not(#gs-b) #gev-credits {
   right: auto !important;
   bottom: var(--gs-credit-bottom, 36px) !important;
   left: var(--gs-credit-left, 36px) !important;
 }
+/* The application's credit list opens just above its line, wherever that is. */
+body.stories-mode:not(#gs-a):not(#gs-b) .gev-credits-panel {
+  bottom: calc(var(--gs-credit-bottom, 36px) + 24px);
+  left: var(--gs-credit-left, 36px);
+}
 /* On a phone the line wraps and shrinks to stay on screen, as the phone
    shell does outside recording mode. */
 @media (max-width: 700px) {
-  body.stories-mode:not(#gs-a):not(#gs-b) #cesium-credits {
+  body.stories-mode:not(#gs-a):not(#gs-b) #cesium-credits,
+  body.stories-mode:not(#gs-a):not(#gs-b) #gev-credits {
     width: calc((100vw - 20px) / 0.8) !important;
     max-width: none !important;
     white-space: normal;
     transform-origin: left bottom;
     scale: 0.8;
   }
-  body.stories-mode:not(#gs-a):not(#gs-b) #cesium-credits a {
+  body.stories-mode:not(#gs-a):not(#gs-b) #cesium-credits a,
+  body.stories-mode:not(#gs-a):not(#gs-b) #gev-credits a {
     white-space: nowrap;
   }
 }

@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { markRaw, toRaw } from 'vue';
 import { t } from '../i18n/index.js';
 import {
@@ -16,6 +15,16 @@ import {
 } from './catalog.js';
 import { anchorStamp } from './storyMeta.js';
 import { registerNavigationAuthorityListener } from '../navigationPolicy.js';
+import {
+  canvasOf,
+  findCamera,
+  findFrame,
+  findGlobe,
+  findQuery,
+} from '../render/rendererOf.js';
+import { fromDegrees } from '../geo/ellipsoid.js';
+import { stopFollowing } from '../data/followed.js';
+import { worldClock } from '../time/worldClock.js';
 
 const PARAM_STORIES = 'stories';
 const PARAM_STORY = 'story';
@@ -35,23 +44,33 @@ function storyTime(params) {
 }
 
 /**
- * Stories: Explore (the story list over the person's own Cesium globe, with
+ * Stories: Explore (the story list over the person's own globe, with
  * a pin per story) and the Story player. Every story is a GEV scene played
  * through SceneDirector: the scenes GEV ships and the ones the person saved
  * to Stories from the AUTHORING panel.
- * Leaving Stories puts back the globe, camera and clock the person had.
+ * Leaving Stories puts back the globe, camera and world clock the person had.
+ * The globe is reached only through the renderer's ports (`rendererOf.js`).
  *
  * The share state owns the URL hash, so Stories keeps its place in the query
  * (`?stories=explore`, `?story=<id>`) and pushes one history entry per
  * screen, so Back steps Story → Explore → GEV. Closing steps back over those
  * entries, so Back after Close does not reopen Stories.
  *
- * @param {{viewer: Cesium.Viewer,
+ * @param {{viewer: object,
  *   director: import('../scenes/director.js').SceneDirector,
  *   store: ReturnType<typeof import('../ui/stores/stories.js').useStoriesStore>,
- *   onEnter?: () => void}} options
+ *   onEnter?: () => void,
+ *   clock?: typeof worldClock}} options `viewer` is the scene object the
+ *   renderer is bound to; `clock` is the page's world clock (tests replace
+ *   it).
  */
-export function createStoriesController({ viewer, director, store, onEnter }) {
+export function createStoriesController({
+  viewer,
+  director,
+  store,
+  onEnter,
+  clock = worldClock,
+}) {
   let player = null;
   let saved = null;
   // The view a Close is about to restore, once a stopping scene has settled.
@@ -75,7 +94,10 @@ export function createStoriesController({ viewer, director, store, onEnter }) {
   // one entry too far).
   let afterTraversal = null;
   const traversing = () => steppingBack || closingHistory;
-  const canvas = viewer.scene.canvas;
+  const canvas = canvasOf(viewer);
+  // The renderer's ports, asked for as they are used.
+  const camera = () => findCamera(viewer);
+  const frame = () => findFrame(viewer);
 
   // The scenes the person saved to Stories (AUTHORING panel) join the list,
   // and a save or removal shows at once.
@@ -240,14 +262,20 @@ export function createStoriesController({ viewer, director, store, onEnter }) {
 
   // ── The person's own view, kept for when Stories closes ──
   function saveView() {
-    const c = viewer.camera;
+    const pose = camera()?.pose();
+    const world = clock.getState();
     saved = {
-      position: c.positionWC.clone(),
-      heading: c.heading,
-      pitch: c.pitch,
-      roll: c.roll,
-      time: viewer.clock.currentTime.clone(),
-      animate: viewer.clock.shouldAnimate,
+      position: pose ? { ...pose.position } : null,
+      heading: pose?.heading ?? 0,
+      pitch: pose?.pitch ?? -Math.PI / 2,
+      roll: pose?.roll ?? 0,
+      clock: {
+        live: world.live,
+        timeMs: world.timeMs,
+        playing: world.playing,
+        rate: world.rate,
+        stepping: world.stepping,
+      },
       openedAt: Date.now(),
       // Story history entries have no hash. Capture the live globe state.
       hash: shareLink()?.snapshotHash?.() ?? location.hash,
@@ -262,8 +290,8 @@ export function createStoriesController({ viewer, director, store, onEnter }) {
 
   function restoreView(saved, { keepCamera = false } = {}) {
     if (!saved) return;
-    if (!keepCamera)
-      viewer.camera.setView({
+    if (!keepCamera && saved.position)
+      camera()?.setView({
         destination: saved.position,
         orientation: {
           heading: saved.heading,
@@ -276,16 +304,32 @@ export function createStoriesController({ viewer, director, store, onEnter }) {
     restoreClock(saved);
   }
 
-  /** A running clock carries on as if Stories had never paused it. */
+  /**
+   * The world clock as the person left it: live stays live, and a playing
+   * clock carries on as if Stories had never paused it. A clock still where
+   * it should be is left alone, so its layers see no jump.
+   */
   function restoreClock(saved) {
-    viewer.clock.currentTime = saved.animate
-      ? Cesium.JulianDate.addSeconds(
-          saved.time,
-          (Date.now() - saved.openedAt) / 1000,
-          new Cesium.JulianDate(),
-        )
-      : saved.time;
-    viewer.clock.shouldAnimate = saved.animate;
+    const was = saved?.clock;
+    if (!was) return;
+    const now = clock.getState();
+    if (was.live) {
+      if (!now.live) clock.goLive();
+      return;
+    }
+    const at = was.playing
+      ? was.timeMs + (Date.now() - saved.openedAt) * was.rate
+      : was.timeMs;
+    if (
+      !now.live &&
+      now.playing === was.playing &&
+      Math.abs(now.timeMs - at) < 1000
+    )
+      return;
+    if (!was.playing) clock.pause();
+    clock.seek(at);
+    if (was.playing && !now.playing)
+      clock.play({ rate: was.rate, continuous: !was.stepping });
   }
 
   // A GEV scene turns on its own layers and look. Put the person's back by
@@ -313,17 +357,12 @@ export function createStoriesController({ viewer, director, store, onEnter }) {
   // show goes through the store (Vue renders them); a move alone is written
   // straight to each pin's transform, so a flight does not re-render Explore.
   function placePins() {
-    const occluder = new Cesium.EllipsoidalOccluder(
-      viewer.scene.globe.ellipsoid,
-      viewer.camera.positionWC,
-    );
+    const query = findQuery(viewer);
+    if (!query) return;
     const rect = canvas.getBoundingClientRect();
     const pins = places.map(({ id, at }) => {
-      const win = Cesium.SceneTransforms.worldToWindowCoordinates(
-        viewer.scene,
-        at,
-      );
-      const visible = !!win && occluder.isPointVisible(at);
+      const win = query.project(at);
+      const visible = !!win && !query.isOccluded(at);
       return {
         id,
         x: rect.left + (win?.x ?? -9999),
@@ -357,9 +396,9 @@ export function createStoriesController({ viewer, director, store, onEnter }) {
     stopPins();
     places = listStories().map((s) => {
       const { lat, lon } = areaOf(s);
-      return { id: s.id, at: Cesium.Cartesian3.fromDegrees(lon, lat) };
+      return { id: s.id, at: fromDegrees(lon, lat) };
     });
-    removePins = viewer.scene.postRender.addEventListener(placePins);
+    removePins = frame()?.on('postRender', placePins) ?? (() => {});
     governorRequestRender('stories-pins');
   }
   // ── Explore's idle tour: the globe turns from one story to the next ──
@@ -441,7 +480,7 @@ export function createStoriesController({ viewer, director, store, onEnter }) {
     const at = first ? areaOf(first) : WORLD_CENTRE;
     return { lat: at.lat, lon: at.lon, alt: START_ALT };
   }
-  // Cesium draws on request, so the finer tiles for a view that has just
+  // The globe draws on request, so the finer tiles for a view that has just
   // landed would wait for the next change: keep frames coming until they
   // have loaded, for at most 10 s.
   let tilesTimer = 0;
@@ -456,34 +495,35 @@ export function createStoriesController({ viewer, director, store, onEnter }) {
   function settleTiles() {
     stopSettling();
     if (destroyed || viewer.isDestroyed?.()) return;
-    removeTiles = viewer.scene.postRender.addEventListener(() => {
-      if (viewer.scene.globe?.tilesLoaded) stopSettling();
-    });
+    removeTiles =
+      frame()?.on('postRender', () => {
+        if (findGlobe(viewer)?.isSettled('base') === true) stopSettling();
+      }) ?? null;
     holdContinuousRender('stories-tiles');
     tilesTimer = setTimeout(stopSettling, 10000);
   }
   function flyTo({ lat, lon, alt }, duration = 1.6) {
     // The whole globe straight down; a story's place at an angle, framed in
     // the middle of the view rather than under the camera.
+    const port = camera();
+    if (!port) return;
     if (alt > 2e6) {
-      viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(lon, lat, alt),
-        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-        duration,
-        complete: settleTiles,
-      });
+      port.flyTo(
+        { lon, lat, height: alt },
+        {
+          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+          durationS: duration,
+          onComplete: settleTiles,
+        },
+      );
       return;
     }
-    viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(Cesium.Cartesian3.fromDegrees(lon, lat), 0),
+    port.flyToBounds(
+      { center: fromDegrees(lon, lat), radius: 0 },
       {
-        offset: new Cesium.HeadingPitchRange(
-          0,
-          Cesium.Math.toRadians(-60),
-          alt,
-        ),
-        duration,
-        complete: settleTiles,
+        offset: { heading: 0, pitch: (-60 * Math.PI) / 180, range: alt },
+        durationS: duration,
+        onComplete: settleTiles,
       },
     );
   }
@@ -497,23 +537,25 @@ export function createStoriesController({ viewer, director, store, onEnter }) {
     };
   };
 
-  // ── GEV scenes: the camera readout comes from Cesium ──
+  // ── GEV scenes: the camera readout comes from the renderer's camera ──
   let lastReadout = 0;
-  function startCesiumReadout() {
-    stopCesiumReadout();
-    removeReadout = viewer.scene.postRender.addEventListener(() => {
-      const now = performance.now();
-      if (now - lastReadout < 120) return;
-      lastReadout = now;
-      const c = viewer.camera.positionCartographic;
-      store.camera = {
-        lat: Cesium.Math.toDegrees(c.latitude),
-        lon: Cesium.Math.toDegrees(c.longitude),
-        altKm: Math.round(c.height / 1000),
-      };
-    });
+  function startCameraReadout() {
+    stopCameraReadout();
+    removeReadout =
+      frame()?.on('postRender', () => {
+        const now = performance.now();
+        if (now - lastReadout < 120) return;
+        lastReadout = now;
+        const pose = camera()?.pose();
+        if (!pose) return;
+        store.camera = {
+          lat: pose.lat,
+          lon: pose.lon,
+          altKm: Math.round(pose.height / 1000),
+        };
+      }) ?? null;
   }
-  function stopCesiumReadout() {
+  function stopCameraReadout() {
     removeReadout?.();
     removeReadout = null;
   }
@@ -553,7 +595,7 @@ export function createStoriesController({ viewer, director, store, onEnter }) {
 
   function dropPlayer() {
     document.body.classList.remove('stories-scene');
-    stopCesiumReadout();
+    stopCameraReadout();
     player?.destroy();
     player = null;
   }
@@ -606,7 +648,7 @@ export function createStoriesController({ viewer, director, store, onEnter }) {
     if (nav?.runImmediateNavigation?.('stories', () => true) === false)
       return false;
     if (director.running) director.stopScene();
-    viewer.trackedEntity = undefined;
+    stopFollowing(viewer);
     // Reopened while a scene from the last visit is still tearing down: the
     // person's view from before that visit is still the one to come back to.
     // The address keeps no share hash while Stories is open. Holding writes
@@ -631,8 +673,7 @@ export function createStoriesController({ viewer, director, store, onEnter }) {
   }
 
   // ── Card images: drawn once per story place from the base imagery ──
-  const ESRI_IMAGERY =
-    /arcgisonline\.com\/arcgis\/rest\/services\/world_imagery/i;
+  const ESRI_STACK = 'esri-imagery';
   const thumbKeys = new Map();
   let drawingThumbs = false;
   let thumbsAgain = false;
@@ -647,9 +688,10 @@ export function createStoriesController({ viewer, director, store, onEnter }) {
         // Drawn only from the keyless Esri World Imagery, whose terms allow
         // showing it with its credit; any other imagery leaves the
         // placeholder unless the scene has its own image.
-        const base = viewer.imageryLayers?.get?.(0)?.imageryProvider;
-        const provider = ESRI_IMAGERY.test(base?.url ?? '') ? base : null;
-        if (!provider && !story.thumb) {
+        const esri =
+          director.styleManager?.mapStackController?.getActiveId?.() ===
+          ESRI_STACK;
+        if (!esri && !story.thumb) {
           // A card drawn from Esri earlier goes: its credit is not on
           // screen under another imagery.
           if (store.thumbs?.[story.id]) {
@@ -668,7 +710,7 @@ export function createStoriesController({ viewer, director, store, onEnter }) {
         if (thumbKeys.get(story.id) === key && store.thumbs?.[story.id])
           continue;
         // A card image the person captured in AUTHORING wins.
-        const url = story.thumb || (await drawThumb(provider, c));
+        const url = story.thumb || (await drawThumb(c));
         if (!url || destroyed) continue;
         thumbKeys.set(story.id, key);
         store.thumbs = { ...store.thumbs, [story.id]: url };
@@ -745,7 +787,7 @@ export function createStoriesController({ viewer, director, store, onEnter }) {
       const generation = ++closeGeneration;
       dropPlayer();
       stopPins();
-      viewer.camera.cancelFlight();
+      camera()?.cancelFlight();
       // Close the Stories screens now and keep their input guard until the
       // scene and share view have finished restoring.
       document.body.classList.remove('stories-scene');
@@ -791,7 +833,12 @@ export function createStoriesController({ viewer, director, store, onEnter }) {
         const afterLanding = () => {
           // Open in GEV keeps this place and look: the live view is written
           // over the earlier entry instead.
-          if (!keepCamera && !navigated) restoreShareState(was);
+          if (!keepCamera && !navigated) {
+            restoreShareState(was);
+            // A shared world time arrives paused: a clock that was playing
+            // plays on, as on Back to Explore.
+            restoreClock(was);
+          }
           shareLink()?.holdWrites?.(false);
           document.body.classList.remove('stories-mode');
         };
@@ -824,7 +871,7 @@ export function createStoriesController({ viewer, director, store, onEnter }) {
       if (store.mode === 'closed' && !enterStories()) return;
       dropPlayer();
       stopPins();
-      viewer.camera.cancelFlight();
+      camera()?.cancelFlight();
       store.storyId = id;
       store.picked = id;
       store.mode = 'story';
@@ -851,7 +898,7 @@ export function createStoriesController({ viewer, director, store, onEnter }) {
       player = createGevPlayer(director, story, { onTick });
       // Related stories show their card images too, after a link.
       drawThumbs();
-      startCesiumReadout();
+      startCameraReadout();
       // Opened paused, a scene frames its first shot (or the moment asked).
       if (atMs || !autoplay) player.seek(atMs);
       if (autoplay) player.play();
@@ -974,7 +1021,7 @@ export function createStoriesController({ viewer, director, store, onEnter }) {
       afterTraversal = landed = null;
       dropPlayer();
       stopPins();
-      viewer.camera.cancelFlight();
+      camera()?.cancelFlight();
       store.mode = 'closed';
       store.storyId = null;
       store.picked = null;

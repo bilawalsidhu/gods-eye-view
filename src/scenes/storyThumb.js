@@ -1,7 +1,8 @@
 /**
  * A scene's Stories card thumbnail: captured from the globe, stored as a data
  * URL. The scene document validates with this module, so it reaches no
- * browser globals; callers hand it the viewer and a canvas factory.
+ * browser globals and no renderer; callers hand it the renderer's frame port,
+ * its canvas and a canvas factory.
  */
 
 export const STORY_THUMB_WIDTH = 320;
@@ -107,25 +108,29 @@ export function encodeStoryThumb(source, createCanvas) {
 
 /**
  * Capture the globe as it is drawn now. The WebGL canvas has no
- * preserveDrawingBuffer, so it is read inside the next postRender, while the
- * frame is still in the drawing buffer; a render is requested for it.
- * @param {object} viewer Cesium viewer (its `scene`).
+ * preserveDrawingBuffer, so it is read inside the next postRender of the
+ * renderer's frame port, while the frame is still in the drawing buffer; a
+ * render is requested for it.
+ * @param {{frame?: import('../render/contract/frame').FramePort | null,
+ *   canvas?: HTMLCanvasElement | null}} globe The renderer's frame port and
+ *   the canvas it draws in, as the caller found them for its scene.
  * @param {object} options
  * @param {() => HTMLCanvasElement} options.createCanvas Makes an empty canvas.
  * @param {number} [options.timeoutMs] Give up when no frame is drawn.
  * @returns {Promise<string>} JPEG data URL.
  */
-export function captureStoryThumb(viewer, { createCanvas, timeoutMs = 3000 }) {
-  const scene = viewer?.scene;
-  if (!scene?.postRender || !scene.canvas)
-    return Promise.reject(new Error('Globe not ready'));
+export function captureStoryThumb(
+  { frame, canvas } = {},
+  { createCanvas, timeoutMs = 3000 },
+) {
+  if (!frame || !canvas) return Promise.reject(new Error('Globe not ready'));
   return new Promise((resolve, reject) => {
     let timer = null;
-    const remove = scene.postRender.addEventListener(() => {
+    const remove = frame.on('postRender', () => {
       remove();
       clearTimeout(timer);
       try {
-        resolve(encodeStoryThumb(scene.canvas, createCanvas));
+        resolve(encodeStoryThumb(canvas, createCanvas));
       } catch (error) {
         reject(error);
       }
@@ -134,6 +139,6 @@ export function captureStoryThumb(viewer, { createCanvas, timeoutMs = 3000 }) {
       remove();
       reject(new Error('No frame was drawn'));
     }, timeoutMs);
-    scene.requestRender?.();
+    frame.requestRender('story-thumb');
   });
 }

@@ -1,4 +1,5 @@
 import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import { rendererOf } from '../render/rendererOf.js';
 import { readShellSource } from '../testSupport/readShellSource.mjs';
 import { useStatusStore } from '../ui/stores/status.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
@@ -2564,16 +2565,17 @@ test('THUMBNAIL stores the frame read in postRender on the selected scene', asyn
       'no scene, no capture',
     );
     director.selectShot('scene-1');
+    // The renderer's frame port: postRender runs on the frame it is asked for.
     const listeners = new Set();
-    viewer.scene = {
-      canvas: { width: 640, height: 360 },
-      postRender: {
-        addEventListener(listener) {
-          listeners.add(listener);
-          return () => listeners.delete(listener);
-        },
+    const renderer = rendererOf(viewer);
+    viewer.canvas = { width: 640, height: 360 };
+    renderer.frame = {
+      on(phase, listener) {
+        assert.equal(phase, 'postRender');
+        listeners.add(listener);
+        return () => listeners.delete(listener);
       },
-      requestRender: () => [...listeners].forEach((listener) => listener()),
+      requestRender: () => [...listeners].forEach((listener) => listener({})),
     };
     document.createElement = () => ({
       getContext: () => ({ drawImage() {} }),
@@ -2583,7 +2585,7 @@ test('THUMBNAIL stores the frame read in postRender on the selected scene', asyn
     assert.equal(director._project.scenes[0].storyThumb, THUMB);
     assert.equal(director._presentation.status, 'Thumbnail captured');
 
-    viewer.scene = null;
+    delete renderer.frame;
     assert.equal(await director.captureSceneThumb(), false);
     assert.equal(
       director._presentation.status,

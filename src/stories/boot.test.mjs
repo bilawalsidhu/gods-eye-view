@@ -3,7 +3,6 @@ import '../testSupport/registerDom.mjs';
 import { registerHooks } from 'node:module';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
 import { createPinia, setActivePinia } from 'pinia';
 
 // Every module Node loads, to see when the Stories chunk arrives.
@@ -38,24 +37,35 @@ globalThis.cancelAnimationFrame = () => {};
 const { bootStories } = await import('./boot.js');
 const { useStoriesStore } = await import('../ui/stores/stories.js');
 
-const viewer = {
-  scene: {
-    canvas: document.createElement('canvas'),
-    postRender: { addEventListener: () => () => {} },
-  },
+const { bindRenderer } = await import('../render/rendererOf.js');
+
+// The scene object, bound to a renderer double with the ports Stories uses.
+const viewer = { isDestroyed: () => false };
+bindRenderer(viewer, {
+  canvas: document.createElement('canvas'),
   camera: {
-    positionWC: new Cesium.Cartesian3(1, 2, 3),
-    positionCartographic: { latitude: 0, longitude: 0, height: 2e6 },
-    heading: 0,
-    pitch: -1,
-    roll: 0,
+    pose: () => ({
+      position: { x: 1, y: 2, z: 3 },
+      heading: 0,
+      pitch: -1,
+      roll: 0,
+      lon: 0,
+      lat: 0,
+      height: 2e6,
+    }),
     setView() {},
     flyTo() {},
-    flyToBoundingSphere() {},
+    flyToBounds() {},
     cancelFlight() {},
   },
-  clock: { currentTime: Cesium.JulianDate.now(), shouldAnimate: false },
-};
+  frame: {
+    on: () => () => {},
+    requestRender() {},
+    holdContinuous: () => () => {},
+  },
+  query: { project: () => null, isOccluded: () => true },
+  globe: { isSettled: () => true },
+});
 const director = {
   running: false,
   stopScene() {},

@@ -4,9 +4,9 @@ import '../testSupport/registerDom.mjs';
 import { registerHooks } from 'node:module';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
 import { createPinia, setActivePinia } from 'pinia';
 import { createStateChannel } from '../app/stateChannel.js';
+import { bindRenderer } from '../render/rendererOf.js';
 
 registerHooks({
   load(url, context, next) {
@@ -33,44 +33,104 @@ const { COCKPIT_REFUSAL_NOUNS } = await import('../navigationPolicy.js');
 const { useStoriesStore } = await import('../ui/stores/stories.js');
 const { listStories } = await import('./catalog.js');
 
-function fakeViewer() {
-  const position = new Cesium.Cartesian3(1, 2, 3);
-  return {
-    scene: {
-      canvas: document.createElement('canvas'),
-      postRender: { addEventListener: () => () => {} },
-      preRender: {
-        listeners: new Set(),
-        addEventListener(fn) {
-          this.listeners.add(fn);
-          return () => this.listeners.delete(fn);
-        },
-      },
+/**
+ * The scene object Stories is handed, bound to a renderer double with the
+ * ports Stories uses: the camera, the frame loop (postRender listeners run
+ * on `draw()`), screen projection with the horizon test, and the globe's
+ * settling. The doubles are returned beside it for the tests to drive.
+ */
+function fakeScene() {
+  const canvas = document.createElement('canvas');
+  const camera = {
+    position: { x: 1, y: 2, z: 3 },
+    views: [],
+    flights: [],
+    cancels: 0,
+    pose() {
+      return {
+        position: { ...this.position },
+        heading: 0,
+        pitch: -1,
+        roll: 0,
+        lon: 11.46,
+        lat: 28.65,
+        height: 2e6,
+      };
     },
-    camera: {
-      positionWC: position,
-      positionCartographic: { latitude: 0.5, longitude: 0.2, height: 2e6 },
-      heading: 0,
-      pitch: -1,
-      roll: 0,
-      views: [],
-      setView(v) {
-        this.views.push(v);
-      },
-      cancelFlight() {},
-      flyTo() {},
-      flyToBoundingSphere() {},
-      rotations: 0,
-      rotate() {
-        this.rotations += 1;
-      },
+    setView(v) {
+      this.views.push(v);
     },
-    clock: {
-      currentTime: Cesium.JulianDate.fromDate(new Date(Date.UTC(2026, 0, 1))),
-      shouldAnimate: false,
+    cancelFlight() {
+      this.cancels += 1;
     },
-    trackedEntity: undefined,
+    flyTo(destination, options) {
+      this.flights.push({ destination, ...options });
+    },
+    flyToBounds(sphere, options) {
+      this.flights.push({ sphere, ...options });
+    },
   };
+  const frame = {
+    listeners: new Set(),
+    requests: [],
+    on(phase, fn) {
+      assert.equal(phase, 'postRender');
+      this.listeners.add(fn);
+      return () => this.listeners.delete(fn);
+    },
+    draw() {
+      for (const fn of [...this.listeners]) fn({});
+    },
+    requestRender(reason) {
+      this.requests.push(reason);
+    },
+    holdContinuous: () => () => {},
+  };
+  const query = {
+    hidden: new Set(),
+    project: ({ x, y }) => ({ x: x / 1e5, y: y / 1e5 }),
+    isOccluded(at) {
+      return this.hidden.has(at);
+    },
+  };
+  const globe = { settled: false, isSettled: () => globe.settled };
+  const viewer = { isDestroyed: () => false };
+  bindRenderer(viewer, { canvas, camera, frame, query, globe });
+  return { viewer, camera, frame, query, globe, canvas };
+}
+
+/** A world clock double: its state, and the calls made on it. */
+function fakeClock(state = {}) {
+  const calls = [];
+  const clock = {
+    calls,
+    state: {
+      live: true,
+      timeMs: Date.UTC(2026, 0, 1),
+      playing: false,
+      rate: 1,
+      stepping: false,
+      ...state,
+    },
+    getState: () => ({ ...clock.state }),
+    goLive() {
+      calls.push(['goLive']);
+      Object.assign(clock.state, { live: true, playing: false });
+    },
+    seek(ms) {
+      calls.push(['seek', ms]);
+      Object.assign(clock.state, { live: false, timeMs: ms });
+    },
+    pause() {
+      calls.push(['pause']);
+      clock.state.playing = false;
+    },
+    play(options) {
+      calls.push(['play', options]);
+      clock.state.playing = true;
+    },
+  };
+  return clock;
 }
 
 function fakeDirector({ refuse = false } = {}) {
@@ -122,16 +182,18 @@ function setup(options = {}) {
   setActivePinia(createPinia());
   history.replaceState(null, '', '/?x=1#v=2&lat=1');
   const store = useStoriesStore();
-  const viewer = fakeViewer();
+  const scene = fakeScene();
+  const clock = options.clock ?? fakeClock();
   const director = fakeDirector(options);
   const controller = createStoriesController({
-    viewer,
+    viewer: scene.viewer,
     director,
     store,
     onEnter: options.onEnter,
+    clock,
   });
   store.connect(controller, listStories());
-  return { store, viewer, director, controller };
+  return { ...scene, clock, store, director, controller };
 }
 
 test('Close steps back over every entry Stories pushed', async () => {
@@ -185,42 +247,38 @@ test('Cockpit keeps the camera: Stories does not open', () => {
 });
 
 test('reopening while a scene tears down keeps the view from before Stories', async () => {
-  const { controller, viewer, director, store } = setup();
-  const before = viewer.camera.positionWC;
+  const { controller, director, store, camera } = setup();
+  const before = { ...camera.position };
   controller.open();
   controller.openStory('gev:bhote-koshi-nepal-scene');
   director.running = true;
   const toast = store.hostedToast;
   const closing = controller.openInGev();
   // The scene has moved the camera; the person opens Stories again at once.
-  viewer.camera.positionWC = new Cesium.Cartesian3(9, 9, 9);
+  camera.position = { x: 9, y: 9, z: 9 };
   controller.open();
   director.running = false;
   await closing;
   assert.deepEqual(director.selected, []);
   assert.deepEqual(director.styleManager.panels, []);
   assert.equal(store.hostedToast, toast);
-  assert.equal(
-    viewer.camera.views.length,
-    0,
-    'no restore under the reopened Stories',
-  );
+  assert.equal(camera.views.length, 0, 'no restore under the reopened Stories');
   await controller.close();
-  const { x, y, z } = viewer.camera.views.at(-1).destination;
+  const { x, y, z } = camera.views.at(-1).destination;
   assert.deepEqual({ x, y, z }, { x: before.x, y: before.y, z: before.z });
   controller.destroy();
 });
 
 test('after a GEV scene, the person’s view comes back once the scene has torn down', async () => {
-  const { controller, viewer, director } = setup();
+  const { controller, director, camera } = setup();
   controller.open();
   controller.openStory('gev:bhote-koshi-nepal-scene');
   director.running = true;
   const closing = controller.close();
-  assert.equal(viewer.camera.views.length, 0, 'not under the stopping scene');
+  assert.equal(camera.views.length, 0, 'not under the stopping scene');
   setTimeout(() => (director.running = false), 120);
   await closing;
-  assert.equal(viewer.camera.views.length, 1);
+  assert.equal(camera.views.length, 1);
   controller.destroy();
 });
 
@@ -294,7 +352,7 @@ test('Back to Explore after a related story steps past both stories', (t) => {
 });
 
 test('a second Close after a quick reopen still waits for the scene to tear down', async () => {
-  const { controller, viewer, director } = setup();
+  const { controller, director, camera } = setup();
   controller.open();
   controller.openStory('gev:bhote-koshi-nepal-scene');
   director.running = true;
@@ -302,10 +360,10 @@ test('a second Close after a quick reopen still waits for the scene to tear down
   controller.open(); // reopened while the scene is still stopping
   const closing = controller.close(); // Explore: no GEV story on screen
   assert.ok(closing, 'this Close waits too');
-  assert.equal(viewer.camera.views.length, 0, 'nothing restored yet');
+  assert.equal(camera.views.length, 0, 'nothing restored yet');
   setTimeout(() => (director.running = false), 120);
   await Promise.all([first, closing]);
-  assert.equal(viewer.camera.views.length, 1);
+  assert.equal(camera.views.length, 1);
   controller.destroy();
 });
 
@@ -319,7 +377,7 @@ test('a reload of a Stories entry keeps its history; Close steps all of it back'
   const steps = recordGo(t);
   const store = useStoriesStore();
   const controller = createStoriesController({
-    viewer: fakeViewer(),
+    viewer: fakeScene().viewer,
     director: fakeDirector(),
     store,
   });
@@ -340,7 +398,7 @@ test('a new story link puts Explore under the story', async (t) => {
   const steps = recordGo(t);
   const store = useStoriesStore();
   const controller = createStoriesController({
-    viewer: fakeViewer(),
+    viewer: fakeScene().viewer,
     director: fakeDirector(),
     store,
   });
@@ -361,7 +419,7 @@ test('a new story link puts Explore under the story', async (t) => {
 });
 
 test('Open in GEV hands a GEV scene to the Scenes panel at its current shot', async () => {
-  const { controller, store, director, viewer } = setup();
+  const { controller, store, director, camera } = setup();
   controller.open();
   controller.openStory('gev:bhote-koshi-nepal-scene');
   store.playback = { ...store.playback, chapterIndex: 0 };
@@ -369,11 +427,7 @@ test('Open in GEV hands a GEV scene to the Scenes panel at its current shot', as
     store.byId('gev:bhote-koshi-nepal-scene').chapters[0]?.id ?? null;
   await controller.openInGev();
   assert.equal(store.mode, 'closed');
-  assert.equal(
-    viewer.camera.views.length,
-    0,
-    'the globe stays where the story was',
-  );
+  assert.equal(camera.views.length, 0, 'the globe stays where the story was');
   assert.deepEqual(director.selected, [['bhote-koshi-nepal-scene', shotId]]);
   assert.deepEqual(director.styleManager.panels, [['scene-panel', false]]);
   controller.destroy();
@@ -435,7 +489,7 @@ function land(hash = '#v=2&lat=1') {
 }
 
 test('a second browser Back during scene teardown supersedes the Stories restore', async () => {
-  const { controller, director, store, viewer } = setup();
+  const { controller, director, store, camera } = setup();
   const share = director.styleManager.shareLinkManager;
   const holds = [];
   share.holdWrites = (held) => holds.push(held);
@@ -449,7 +503,7 @@ test('a second browser Back during scene teardown supersedes the Stories restore
   director.running = false;
   await tick(0);
   assert.equal(location.hash, '#v=2&lat=2');
-  assert.equal(viewer.camera.views.length, 0);
+  assert.equal(camera.views.length, 0);
   assert.deepEqual(share.restored, []);
   assert.deepEqual(director.selected, []);
   assert.deepEqual(holds, [true, false]);
@@ -474,7 +528,7 @@ test('Close after a GEV scene puts the share state back once the step back lands
 });
 
 test('Open in GEV steps back over Stories without putting the old view back', async (t) => {
-  const { controller, director, viewer } = setup();
+  const { controller, director, camera } = setup();
   const steps = recordGo(t);
   controller.open();
   controller.openStory('gev:bhote-koshi-nepal-scene');
@@ -482,20 +536,20 @@ test('Open in GEV steps back over Stories without putting the old view back', as
   assert.deepEqual(steps, [-2], 'Back never reopens Stories');
   land();
   assert.deepEqual(director.styleManager.shareLinkManager.restored, []);
-  assert.equal(viewer.camera.views.length, 0);
+  assert.equal(camera.views.length, 0);
   controller.destroy();
 });
 
 test('a drag on the globe while a scene tears down keeps the camera where it went', async () => {
-  const { controller, viewer, director } = setup();
+  const { controller, director, camera, canvas } = setup();
   controller.open();
   controller.openStory('gev:bhote-koshi-nepal-scene');
   director.running = true;
   const closing = controller.close();
-  viewer.scene.canvas.dispatchEvent(new Event('pointerdown'));
+  canvas.dispatchEvent(new Event('pointerdown'));
   director.running = false;
   await closing;
-  assert.equal(viewer.camera.views.length, 0, 'no snap back');
+  assert.equal(camera.views.length, 0, 'no snap back');
   controller.destroy();
 });
 
@@ -521,7 +575,7 @@ test('a reloaded Stories entry drops the share hash GEV wrote on boot', async ()
   );
   const store = useStoriesStore();
   const controller = createStoriesController({
-    viewer: fakeViewer(),
+    viewer: fakeScene().viewer,
     director: fakeDirector(),
     store,
   });
@@ -558,7 +612,7 @@ test('a scene saved to Stories from AUTHORING joins the list at once', () => {
   };
   director.storyScenes = () => mine;
   const controller = createStoriesController({
-    viewer: fakeViewer(),
+    viewer: fakeScene().viewer,
     director,
     store,
   });
@@ -585,11 +639,11 @@ test('a scene saved to Stories from AUTHORING joins the list at once', () => {
 });
 
 test('Back to Explore after a scene puts the look back once the scene has torn down, then frames Explore', async () => {
-  const { controller, viewer, director } = setup();
+  const { controller, director, camera } = setup();
   history.replaceState(null, '', '/');
   const flights = [];
-  viewer.camera.flyTo = (f) => flights.push(f);
-  viewer.camera.flyToBoundingSphere = (f) => flights.push(f);
+  camera.flyTo = (f) => flights.push(f);
+  camera.flyToBounds = (f) => flights.push(f);
   const share = director.styleManager.shareLinkManager;
   const original = 'v=2&lat=1&style=normal';
   share.snapshotHash = () => original;
@@ -641,10 +695,10 @@ test('a story opened while the scene tears down is not undone by the late restor
 
 test('Explore tours from story to story once idle, stops on a pick or a touch, and on Close', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
-  const { controller, viewer, store } = setup();
+  const { controller, store, camera, canvas } = setup();
   const flights = [];
-  viewer.camera.flyTo = (f) => flights.push(f);
-  viewer.camera.flyToBoundingSphere = (f) => flights.push(f);
+  camera.flyTo = (f) => flights.push(f);
+  camera.flyToBounds = (f) => flights.push(f);
   controller.open();
   assert.equal(flights.length, 1, 'the fly-in to the first story');
   t.mock.timers.tick(7000);
@@ -655,10 +709,10 @@ test('Explore tours from story to story once idle, stops on a pick or a touch, a
   assert.equal(flights.length, 3, 'and the next');
   // A press holds the tour however long the drag lasts; letting go starts
   // the wait again.
-  viewer.scene.canvas.dispatchEvent(new Event('pointerdown'));
+  canvas.dispatchEvent(new Event('pointerdown'));
   t.mock.timers.tick(20000);
   assert.equal(flights.length, 3, 'nothing flies under a drag');
-  viewer.scene.canvas.dispatchEvent(new Event('pointerup'));
+  canvas.dispatchEvent(new Event('pointerup'));
   t.mock.timers.tick(5000);
   assert.equal(flights.length, 3);
   t.mock.timers.tick(1500);
@@ -696,7 +750,7 @@ test('a new Explore link keeps the address free of the share hash GEV writes as 
     if (held) history.replaceState(history.state, '', `${location.search}#v=2`);
   };
   const controller = createStoriesController({
-    viewer: fakeViewer(),
+    viewer: fakeScene().viewer,
     director,
     store,
   });
@@ -732,7 +786,7 @@ test('a saved scene’s topics become Explore chips, and its captured card image
     },
   ];
   const controller = createStoriesController({
-    viewer: fakeViewer(),
+    viewer: fakeScene().viewer,
     director,
     store,
   });
@@ -779,7 +833,7 @@ test('a built-in scene no longer in the project does not list; an unknown story 
   const toasts = [];
   store.flashToast = (text) => toasts.push(text);
   const controller = createStoriesController({
-    viewer: fakeViewer(),
+    viewer: fakeScene().viewer,
     director,
     store,
   });
@@ -824,7 +878,7 @@ test('unsaved scenes appear as local drafts and disappear when deleted', () => {
   director.subscribe = channel.subscribe;
   director.draftScenes = () => drafts;
   const controller = createStoriesController({
-    viewer: fakeViewer(),
+    viewer: fakeScene().viewer,
     director,
     store,
   });
@@ -840,12 +894,8 @@ test('unsaved scenes appear as local drafts and disappear when deleted', () => {
 });
 
 test('under imagery other than Esri, a card drawn from Esri earlier is dropped', async () => {
-  const { controller, viewer, store } = setup();
-  viewer.imageryLayers = {
-    get: () => ({
-      imageryProvider: { url: 'https://tile.openstreetmap.org/' },
-    }),
-  };
+  const { controller, director, store } = setup();
+  director.styleManager.mapStackController = { getActiveId: () => 'osm' };
   store.thumbs = { 'gev:flights-radar': 'data:image/jpeg;base64,ESRI' };
   controller.open();
   await tick(20);
@@ -855,18 +905,17 @@ test('under imagery other than Esri, a card drawn from Esri earlier is dropped',
 
 test('the tour waits again after a wheel turn or a cancelled press, and a list change during a drag does not restart it', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
-  const { controller, viewer, director } = setup();
+  const { controller, viewer, director, camera, canvas } = setup();
   let listener = null;
   director.subscribe = (fn) => ((listener = fn), () => {});
   const flights = [];
-  viewer.camera.flyTo = (f) => flights.push(f);
-  viewer.camera.flyToBoundingSphere = (f) => flights.push(f);
+  camera.flyTo = (f) => flights.push(f);
+  camera.flyToBounds = (f) => flights.push(f);
   controller.destroy();
   const store = useStoriesStore();
   const again = createStoriesController({ viewer, director, store });
   store.connect(again, listStories());
   again.open();
-  const canvas = viewer.scene.canvas;
   for (const type of ['wheel', 'pointercancel']) {
     const before = flights.length;
     canvas.dispatchEvent(new Event(type));
@@ -885,12 +934,12 @@ test('the tour waits again after a wheel turn or a cancelled press, and a list c
 
 test('teardown mid-close releases share writes and cancels a queued reopen', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const { controller, director, store, viewer } = setup();
+  const { controller, director, store, camera } = setup();
   recordGo(t);
   const held = [];
   director.styleManager.shareLinkManager.holdWrites = (on) => held.push(on);
   let flights = 0;
-  viewer.camera.flyTo = () => flights++;
+  camera.flyTo = () => flights++;
   controller.open();
   await controller.close();
   controller.open(); // queued until the Close traversal lands
@@ -925,7 +974,7 @@ test('new navigation cancels a delayed initial story link', async (t) => {
     history.replaceState(null, '', '/?story=gev%3Aflights-radar');
     const store = useStoriesStore();
     const controller = createStoriesController({
-      viewer: fakeViewer(),
+      viewer: fakeScene().viewer,
       director: fakeDirector(),
       store,
     });
@@ -989,4 +1038,104 @@ test('an earlier Back timeout cannot release a later traversal', async (t) => {
   } finally {
     controller.destroy();
   }
+});
+
+test('Explore’s pins follow the camera on every frame drawn, moved in place', () => {
+  const { controller, store, frame, query } = setup();
+  controller.open();
+  assert.equal(frame.listeners.size, 1, 'one postRender listener');
+  frame.draw();
+  const pins = store.pins;
+  assert.equal(pins.length, store.stories.length);
+  assert.ok(pins.every((pin) => pin.visible));
+  // Vue renders the pins once; a move alone writes each pin's transform.
+  const layer = document.createElement('div');
+  layer.id = 'pins';
+  for (const pin of pins) {
+    const el = document.createElement('div');
+    el.className = 'pin';
+    el.dataset.id = pin.id;
+    layer.append(el);
+  }
+  document.body.append(layer);
+  try {
+    query.project = ({ x, y }) => ({ x: x / 1e5 + 40, y: y / 1e5 + 10 });
+    frame.draw();
+    assert.equal(store.pins, pins, 'the same pins: no Vue render');
+    const first = layer.querySelector(`.pin[data-id="${pins[0].id}"]`);
+    assert.match(first.style.transform, /^translate\(/);
+    // A pin going behind the horizon changes the set: Vue renders it.
+    let once = true;
+    query.isOccluded = () => {
+      const behind = once;
+      once = false;
+      return behind;
+    };
+    frame.draw();
+    assert.notEqual(store.pins, pins);
+    assert.equal(store.pins[0].visible, false);
+  } finally {
+    layer.remove();
+    controller.close();
+  }
+  assert.equal(frame.listeners.size, 0, 'no frame work once Stories closes');
+  controller.destroy();
+});
+
+test('Explore frames country level straight down, a picked story at −60°, and tiles settle for at most 10 s', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const { controller, store, camera, frame, globe } = setup();
+  controller.open();
+  const open = camera.flights.at(-1);
+  assert.equal(open.destination.height, 2.5e6);
+  assert.deepEqual(open.orientation, {
+    heading: 0,
+    pitch: -Math.PI / 2,
+    roll: 0,
+  });
+  controller.pick(store.stories[0].id);
+  const picked = camera.flights.at(-1);
+  assert.equal(picked.sphere.radius, 0);
+  assert.equal(picked.offset.heading, 0);
+  assert.ok(Math.abs(picked.offset.pitch + Math.PI / 3) < 1e-12);
+  assert.ok(picked.offset.range >= 60000 && picked.offset.range <= 4e6);
+  // Landing keeps frames coming until the globe has settled...
+  picked.onComplete();
+  assert.equal(frame.listeners.size, 2, 'pins and settling');
+  frame.draw();
+  assert.equal(frame.listeners.size, 2, 'not settled yet');
+  globe.settled = true;
+  frame.draw();
+  assert.equal(frame.listeners.size, 1, 'settled: only the pins listen');
+  // ...and for 10 s at most.
+  globe.settled = false;
+  picked.onComplete();
+  assert.equal(frame.listeners.size, 2);
+  t.mock.timers.tick(10000);
+  assert.equal(frame.listeners.size, 1, 'given up after 10 s');
+  controller.destroy();
+});
+
+test('Close puts back the world clock the person had, and the camera readout follows a story', async () => {
+  const clock = fakeClock({
+    live: false,
+    playing: false,
+    timeMs: Date.UTC(2025, 5, 1),
+  });
+  const { controller, store, frame, camera } = setup({ clock });
+  controller.open();
+  controller.openStory('gev:bhote-koshi-nepal-scene');
+  frame.draw();
+  assert.deepEqual(store.camera, { lat: 28.65, lon: 11.46, altKm: 2000 });
+  // A scene moved the world clock.
+  clock.state = { ...clock.state, live: true };
+  await controller.close();
+  assert.equal(camera.views.length, 1);
+  assert.deepEqual(clock.calls, [['pause'], ['seek', Date.UTC(2025, 5, 1)]]);
+  // A clock left where it was is not touched.
+  clock.calls.length = 0;
+  controller.open();
+  await controller.close();
+  assert.deepEqual(clock.calls, []);
+  controller.destroy();
 });

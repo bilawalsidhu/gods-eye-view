@@ -661,7 +661,7 @@ open/close and focus moves are imperative.
 ## Stories — November 13, 2026
 
 A Stories button (top right, `#hStories`) opens Explore: a feed of stories
-over GEV's own Cesium globe with their pins, then a Story screen with a
+over GEV's own globe with their pins, then a Story screen with a
 timeline, chapters and context. Every GEV page loads only what the
 closed state needs: the boot shell (`src/stories/boot.js`), the store,
 `StoriesView.vue` with the Stories button, first-visit popup and
@@ -677,7 +677,7 @@ and share links carry only the Stories place (`stories` / `story`), not the
 sender's camera, layers or other settings. GEV's share link keeps
 `history.state` when it rewrites the hash, so Stories' entries survive.
 
-Every story is a GEV scene, played on the person's own Cesium globe through
+Every story is a GEV scene, played on the person's own globe through
 `SceneDirector`, with its labels, embedded media, A/B imagery split (marked
 `data-globe-overlay`) and data-pack cards kept while the rest of GEV is
 hidden. Explore lists the scenes the person saved to Stories from AUTHORING
@@ -691,15 +691,21 @@ order. Explore opens at country level
 (2,500 km) over the first story and, while idle, flies on to the next story
 every few seconds, for a minute after the last touch (never with a story
 picked or with reduced motion). A picked story's place is framed in the
-middle of the view at an angle. After each landing the globe keeps drawing
-only until its tiles have loaded (at most 10 s). Each story's pin, in the
+middle of the view at an angle (−60°). Stories reaches the globe only
+through the renderer's ports (`src/render/rendererOf.js`): its flights,
+pose and Close's restore go through the camera port, and after each landing
+a continuous-render hold keeps the globe drawing only until the globe port
+reports the base settled (at most 10 s). Each story's pin, in the
 world overlay's label style (`src/overlays/worldOverlayTokens.js`), is placed
-from Cesium's own projection on every drawn frame, written straight to the
-pin's transform, and hidden behind the globe; the pins ask for no frames of
-their own. Card images are drawn from the keyless Esri World Imagery tiles
-around the story's place (`src/stories/thumbs.js`) unless the scene has its
-own; with any other base imagery the card shows its placeholder, and a card
-drawn from Esri earlier is dropped. A shot
+from the query port's projection in the frame port's `postRender`, on every
+drawn frame, written straight to the pin's transform, and hidden behind the
+globe (`query.isOccluded`); the pins ask for no frames of their own. Card
+images are drawn from the keyless Esri World Imagery tiles around the
+story's place (`src/stories/thumbs.js`: the same Web Mercator tiles, from
+the same host, that GEV's Esri map draws, read as images) unless the scene
+has its own; with any other map stack than Esri Satellite
+(`mapStackController.getActiveId()`) the card shows its placeholder, and a
+card drawn from Esri earlier is dropped. A shot
 tied to an anchor rather than a place pins the whole-globe view.
 
 A shipped story's context comes from what GEV knows about it
@@ -715,8 +721,9 @@ Open in GEV leaves the story's scene selected there.
 Opening Stories claims the camera through the shared navigation policy, so
 orbit, a tracked contact or a flight end, and Cockpit refuses with the
 policy's own toast ("Exit cockpit to open Stories"). Those owners are not
-started again on Close: the camera and clock come back, a follow or orbit
-does not. While Stories is open it owns the keyboard (`src/stories/keyboard.js`):
+started again on Close: the camera and the world clock (`src/time/worldClock.js`:
+live, or the time it showed, playing on as if never paused) come back, a
+follow or orbit does not. While Stories is open it owns the keyboard (`src/stories/keyboard.js`):
 a key pressed in Stories stops at its root, and a key pressed anywhere else
 stops at the window, so none of GEV's document-level shortcuts act behind it,
 except on a playing GEV scene's own on-globe controls (`data-globe-overlay`);
@@ -734,7 +741,8 @@ globe, including when it opens from a story link without a hash.
 Close dismisses the Stories screens and keeps the keyboard and microphone
 guards until the previous view is back. The director is waited
 on until idle (`SceneDirector.whenIdle`: no run and no pending LOAD, seek or
-interaction; at most 15 s). The camera and clock are put back, unless a
+interaction; at most 15 s). The camera and world clock are put back (a clock
+still where it should be is left alone), unless a
 camera owner took over during the wait (a drag on the globe, a layer's
 focus). History steps back over Stories' entries; once that lands (or after
 2 s if it never does), the saved share state is re-applied directly
@@ -762,7 +770,10 @@ shows as theirs ("You") and has no Share: the project lives on this device,
 so a link to it would open nothing elsewhere; a link to a story that is not
 here opens Explore and says so. GEV's own credit line stays on screen throughout, inside the
 Stories map while a scene plays (`creditPlacement` in
-`src/stories/format.js`).
+`src/stories/format.js`): `stories.css` places the renderer's own credit
+display (`#cesium-credits`) and the application's credit line
+(`#gev-credits`, `src/ui/creditsView.js`, with its list opening above it)
+alike, and exempts both from the rule that hides GEV's chrome.
 
 ## Utilities panel — October 29, 2026
 
@@ -2294,8 +2305,10 @@ marked scene's thumbnail or tags changed, an import) publishes
 `stories-changed`.
 Deleting a marked scene's last shot clears its mark.
 THUMBNAIL keeps the globe as it is drawn now as the scene's Stories
-card image: it requests a render and reads the Cesium canvas inside that
-frame's `postRender` (the WebGL canvas does not preserve its drawing buffer),
+card image: it asks the renderer's frame port for a render and reads the
+renderer's canvas inside that frame's `postRender` (the WebGL canvas does
+not preserve its drawing buffer; `captureStoryThumb` is handed the frame
+port and canvas, so the scene document's module stays renderer-free),
 centre-crops it to 16:9, scales it to 320 × 180 and stores a JPEG data URL
 (quality 0.82, lowered only if the image would pass the limit) as the scene's
 `storyThumb`, shown as a 64 × 36 preview beside the button; the status line
