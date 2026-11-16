@@ -540,7 +540,12 @@ test('a site row turns the camera onto it, holds it, and reads its off-nadir ang
   setLocale('es');
   await refreshRows(scene);
   const heldEs = rows(scene).find((row) => row.target?.id === SITES.alpha.id);
-  assert.match(heldEs.detail, /^ENFOCADO · /);
+  assert.match(heldEs.detail, /^ENFOQUE · /);
+  assert.match(
+    $('#cockpit-orbital-focus').textContent,
+    /^ENFOQUE · /,
+    'the card names the held site with the same word',
+  );
   assert.equal(translate('FOCUS'), 'ENFOCAR', 'the command keeps its verb');
 });
 

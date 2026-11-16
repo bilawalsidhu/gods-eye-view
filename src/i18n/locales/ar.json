@@ -3902,7 +3902,6 @@
   "{source} imagery could not be opened": "تعذّر فتح صور {source}",
   "{place} has no position to look for imagery at": "{place}: لا موضع للبحث عن الصور فيه",
   "No {source} imagery near {place}": "لا توجد صور {source} قرب {place}",
-  "No {source} imagery near the view centre": "لا توجد صور {source} قرب مركز العرض",
   "{reason} (filters on: {filters})": "{reason} (المرشحات المفعّلة: {filters})",
   "tiles unavailable": "البلاطات غير متاحة",
   "zoom in to load this layer": "قرّب لتحميل هذه الطبقة",

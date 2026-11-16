@@ -45,6 +45,8 @@ The `many` form is the `other` text with «de» after the number: «{count} de c
 | aircraft, plane / flight / military flights   | aeronave / vuelo / vuelos militares                               |
 | vessel, ship                                  | buque                                                             |
 | satellite / shell (Starlink) / DENSE          | satélite / capa / DENSO                                           |
+| FOCUS (the held object; the button)           | ENFOQUE / ENFOCAR                                                 |
+| CONFIRMED (sightings chip; a landing)         | CONFIRMADOS / CONFIRMADA                                          |
 | launch (rocket) / launch site / space mission | lanzamiento / lugar de lanzamiento / misión espacial              |
 | ascent / replay / payload / stage             | ascenso / repetición / carga útil / etapa                         |
 | contact / tracking                            | contacto / rastreo                                                |

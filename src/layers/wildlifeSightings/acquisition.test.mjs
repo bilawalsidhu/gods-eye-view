@@ -583,7 +583,7 @@ test('the CONFIRMED chip names the sightings, apart from a confirmed launch land
   setLocale('sv');
   assert.equal(h.chip('quality-confirmed').label, 'BEKRÄFTADE');
   setLocale('es');
-  assert.equal(h.chip('quality-confirmed').label, 'CONFIRMADAS');
+  assert.equal(h.chip('quality-confirmed').label, 'CONFIRMADOS');
 });
 
 test('a stale fallback with a failed-refresh deadline remains DEGRADED, retryable and dated to the cached data', async () => {

@@ -5,7 +5,11 @@ import {
   feedProvenanceEnvelope,
 } from '../data/layerSnapshot.js';
 import { readLayerLifecycleSummary } from './layerSummary.js';
-import { SPEECH_BUILDERS, attachVoiceResult } from './speech.js';
+import {
+  SPEECH_BUILDERS,
+  VIEW_CENTRE_LABEL,
+  attachVoiceResult,
+} from './speech.js';
 import { resolveDeicticArgs } from './deixis.js';
 export { readLayerLifecycleSummary } from './layerSummary.js';
 import { defaultGeospatial } from '../search/defaults.js';
@@ -3917,13 +3921,11 @@ async function requestStreetLevel(
   };
 
   // Then the place: a name that geocodes to nothing changes nothing else.
-  // "the view centre" is English for the model; the card (speech.js) gives
-  // it messages of its own, since it is a phrase and not a place name.
   label =
     query ||
     (entity ? String(entity.label || entity.id) : '') ||
     (hasCoordinates ? `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` : '') ||
-    'the view centre';
+    VIEW_CENTRE_LABEL;
   atViewCentre = !query && !hasCoordinates && !entity;
   let point = null;
   let location = null;

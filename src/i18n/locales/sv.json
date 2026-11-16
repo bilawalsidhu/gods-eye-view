@@ -3534,7 +3534,6 @@
   "{source} imagery could not be opened": "Bilder från {source} kunde inte öppnas",
   "{place} has no position to look for imagery at": "{place} har ingen position att söka efter bilder vid",
   "No {source} imagery near {place}": "Inga bilder från {source} nära {place}",
-  "No {source} imagery near the view centre": "Inga bilder från {source} nära vyns mitt",
   "{reason} (filters on: {filters})": "{reason} (aktiva filter: {filters})",
   "1 h/s": "1 h/s",
   "1 d/s": "1 d/s",

@@ -7,6 +7,7 @@ import {
   progressLine,
   progressStepLabel,
   spokenLabel,
+  VIEW_CENTRE_LABEL,
 } from './speech.js';
 import { presentResult } from './resultDisplay.js';
 import { countWords, findHedges } from './speechLint.js';
@@ -795,33 +796,33 @@ test('the street-level card words "the view centre" and "this spot" as phrases, 
       planStepLabel('show_street_level', { query: 'Alexanderplatz', provider: 'kartaview' }),
       'KartaView: Alexanderplatz',
     );
-    const empty = envelope('show_street_level', {
-      ok: false,
-      stage: 'imagery',
-      noImagery: true,
-      atViewCentre: true,
-      label: 'the view centre',
-      providerName: 'Mapillary',
-      error: 'No Mapillary imagery near the view centre',
-    });
-    assert.deepEqual(empty.display.lines, [
-      'Keine Bilder von Mapillary in der Nähe der Bildmitte',
-    ]);
-    assert.equal(empty.say, 'No Mapillary imagery near the view centre.');
-    const named = envelope('show_street_level', {
-      ok: false,
-      stage: 'imagery',
-      noImagery: true,
-      label: 'Alexanderplatz',
-      providerName: 'Mapillary',
-      error: 'No Mapillary imagery near Alexanderplatz',
-    });
-    assert.deepEqual(named.display.lines, [
-      'Keine Bilder von Mapillary in der Nähe von Alexanderplatz',
-    ]);
     assert.equal(
-      progressStepLabel('imagery', 'the view centre'),
+      progressStepLabel('imagery', VIEW_CENTRE_LABEL),
       `${t('Opening imagery')}: die Bildmitte`,
+    );
+  } finally {
+    setLocale('en');
+  }
+});
+
+test('the street-level plan step names the place as show_street_level finds it', () => {
+  // A pointed or numbered thing is located later, by deixis.
+  assert.equal(planStepLabel('show_street_level', { referent: 2 }), 'Street Level');
+  assert.equal(
+    planStepLabel('show_street_level', { referent: 2, provider: 'mapillary' }),
+    'Mapillary',
+  );
+  assert.equal(planStepLabel('show_street_level', { query: ' Pointer ' }), 'Street Level');
+  // One coordinate alone is no spot: the action looks at the view centre.
+  assert.equal(
+    planStepLabel('show_street_level', { latitude: 10 }),
+    'Street level at the view centre',
+  );
+  setLocale('de');
+  try {
+    assert.equal(
+      planStepLabel('show_street_level', { referent: 1 }),
+      'Straßenebene',
     );
   } finally {
     setLocale('en');

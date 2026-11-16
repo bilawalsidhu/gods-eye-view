@@ -332,16 +332,6 @@ const ERROR_PATTERNS = [
         place: localizePlaceName(place),
       }),
   ],
-  // show_street_level names no place when it looks at the view centre. The
-  // phrase is not a name: it has a message of its own, so each language
-  // words it in the case its preposition asks for.
-  [
-    /^No (.+) imagery near the view centre$/,
-    ([, source]) =>
-      t('No {source} imagery near the view centre', {
-        source: translateKnown(source),
-      }),
-  ],
   [
     /^No (.+) imagery near (.+)$/,
     ([, source, place]) =>
@@ -1122,15 +1112,20 @@ export function planStepLabel(name, args = {}) {
     }
     case 'show_street_level': {
       const source = STREET_LEVEL_SOURCE_NAMES[args.provider];
+      const query = String(args.query || '').trim();
+      // A pointed or numbered thing is found later (deixis): no place yet.
+      if (query.toLowerCase() === 'pointer' || args.referent != null)
+        return source || t('Street Level');
       // "This spot" and "the view centre" are phrases, not place names:
       // each is a message of its own, worded in the grammar of the language.
-      if (args.query) {
-        const place = shownPlace(args.query, 32);
+      if (query) {
+        const place = shownPlace(query, 32);
         return source
           ? t('{source} at {place}', { source, place })
           : t('Street level at {place}', { place });
       }
-      if (args.latitude != null)
+      // Coordinates count only as a pair, as show_street_level reads them.
+      if (args.latitude != null && args.longitude != null)
         return source
           ? t('{source} at this spot', { source })
           : t('Street level at this spot');
@@ -1212,8 +1207,8 @@ export function narrationLabel(name, args = {}) {
   }
 }
 
-/** The place show_street_level reports when it names none (gevActions). */
-const VIEW_CENTRE_LABEL = 'the view centre';
+/** The place show_street_level reports when it names none. */
+export const VIEW_CENTRE_LABEL = 'the view centre';
 
 /** On-screen labels for progress steps. */
 const STEP_LABELS = Object.freeze({

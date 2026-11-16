@@ -45,6 +45,7 @@ A `tn()` entry needs four forms. `Intl.PluralRules('uk')` picks:
 | aircraft / flight / military flights            | літак (short HUD: борт) / рейс / військові рейси                 |
 | vessel, ship / vessels                          | судно / судна (gen. pl. суден)                                   |
 | satellite                                       | супутник                                                         |
+| CURRENTLY OVER (orbit, before a place name)     | ПРОЛІТ                                                           |
 | launch (rocket) / space mission                 | запуск / космічна місія                                          |
 | ascent (rocket) / booster FLIGHT {n}            | виведення / ПОЛІТ {n} (not рейс)                                 |
 | contact / tracking                              | контакт / стеження                                               |

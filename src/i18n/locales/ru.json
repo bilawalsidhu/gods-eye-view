@@ -3722,7 +3722,6 @@
   "{source} imagery could not be opened": "Не удалось открыть снимки {source}",
   "{place} has no position to look for imagery at": "У места «{place}» нет координат для поиска снимков",
   "No {source} imagery near {place}": "Нет снимков {source} рядом с местом «{place}»",
-  "No {source} imagery near the view centre": "Нет снимков {source} рядом с центром вида",
   "{reason} (filters on: {filters})": "{reason} (включены фильтры: {filters})",
   "tiles unavailable": "тайлы недоступны",
   "Environment": "Окружающая среда",
