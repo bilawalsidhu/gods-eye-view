@@ -19,10 +19,15 @@ body.context-docked #right-context-rail {
 /* The map credits stay readable beside the column: their row ends short of
    it. creditAttribution.test.mjs pins this. */
 body.context-docked:not(.ui-clean-view):not(.recording-mode) #cesium-credits,
+body.context-docked:not(.ui-clean-view):not(.recording-mode) #gev-credits,
 body.context-docked:not(.ui-clean-view):not(.recording-mode):has(
     #intel-hud[data-variant='minimal'].active
   )
-  #cesium-credits {
+  #cesium-credits,
+body.context-docked:not(.ui-clean-view):not(.recording-mode):has(
+    #intel-hud[data-variant='minimal'].active
+  )
+  #gev-credits {
   max-width: calc(100vw - 3rem - var(--context-dock-width));
 }
 
@@ -204,7 +209,10 @@ html[dir='rtl'] body.context-docked #right-context-rail {
   left: 0 !important;
 }
 
-html[dir='rtl'] body.context-docked #global-context-panel .global-context-panel-inner {
+html[dir='rtl']
+  body.context-docked
+  #global-context-panel
+  .global-context-panel-inner {
   border-left: 0;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 18px 0 40px rgba(0, 0, 0, 0.35);
