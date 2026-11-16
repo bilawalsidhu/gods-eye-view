@@ -87,7 +87,9 @@ export function createGevPlayer(director, story, hooks = {}) {
       const mine = ++request;
       await idle();
       if (destroyed || mine !== request || director.running) return;
-      if (wallMs >= durationMs - 250) {
+      // Natural completion is rounded up by the clock subscriber; a
+      // paused shared time inside the last 250 ms is not completion.
+      if (wallMs >= durationMs) {
         wallMs = 0;
         shotIndex = 0;
       }

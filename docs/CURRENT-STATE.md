@@ -716,7 +716,11 @@ facts and sources (Vantor imagery and the GeoPera reconstruction, CC BY-NC
 4.0), and its key moments are the chapters that show them. Topic chips and
 region choices are the ones the listed stories carry. Closing Stories after
 a story played puts AUTHORING's own selection back (usually none);
-Open in GEV leaves the story's scene selected there.
+Open in GEV leaves the story's scene selected there. A paused link in the
+final quarter-second retains its final shot on Play instead of restarting
+at the first shot. A scene that has actually ended still replays from the
+beginning; SceneDirector resumes from the shot boundary, not a fractional
+position inside a shot.
 
 Opening Stories claims the camera through the shared navigation policy, so
 orbit, a tracked contact or a flight end, and Cockpit refuses with the

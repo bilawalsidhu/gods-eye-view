@@ -28,7 +28,8 @@ function deferredDirector({ running = false } = {}) {
     },
 
     seekScene: (id, f) => calls.push(`seek ${f}`),
-    startScene: () => {
+    startScene: (_id, options) => {
+      director.startAfterShotId = options.afterShotId;
       calls.push('start');
       director.running = true;
       return new Promise((resolve) => {
@@ -105,6 +106,30 @@ test('a paused seek keeps its exact position near the end of a story', () => {
   });
   assert.equal(player.state.wallMs, 59800);
   assert.equal(player.state.playing, false);
+});
+
+test('Play from a paused link in the final quarter-second stays in the final shot', async () => {
+  const director = deferredDirector();
+  const player = createGevPlayer(director, story);
+  player.seek(59800); // 200 ms before the end of a two-shot scene
+  const playing = player.play();
+  await turns();
+  assert.equal(player.state.wallMs, 59800, 'the link is not treated as complete');
+  assert.equal(director.startAfterShotId, 'a', 'resume in the final shot');
+  director.finishRun();
+  await playing;
+});
+
+test('Play after the actual end still starts the scene from shot one', async () => {
+  const director = deferredDirector();
+  const player = createGevPlayer(director, story);
+  player.seek(60000);
+  const playing = player.play();
+  await turns();
+  assert.equal(player.state.wallMs, 0);
+  assert.equal(director.startAfterShotId, null);
+  director.finishRun();
+  await playing;
 });
 
 test('Destroy cancels a waiting Play', async () => {
