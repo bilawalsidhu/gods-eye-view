@@ -90,9 +90,9 @@ export function createVesselSnapshotRenderer({
         },
       },
     );
-    // The selected vessel at the new time: its trail starts there.
+    // The selected vessel at the new time: its trail is drawn to it.
     if (replace && state.selectedRecord && state.trailId)
-      tracking.startSelectedVesselTrail(state.selectedRecord);
+      tracking.retimeSelectedVesselTrail(state.selectedRecord);
     state.lastVisibilityUpdate = 0;
     rendering.updateVisibility(true);
   }
