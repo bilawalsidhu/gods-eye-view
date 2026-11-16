@@ -368,6 +368,28 @@ export function createStationNetwork({ state, services, parts, source }) {
   }
 
   /**
+   * Put the two halves of the row on screen as the display mode says: the
+   * fleet's icon sets, the station pins and their labels. An enable calls it
+   * too, so it honours the mode the operator last chose.
+   */
+  function syncDisplay() {
+    const showVehicles = state._display !== 'stations';
+    const showStations = state._display !== 'vehicles';
+    if (state._stillIcons) state._stillIcons.show = showVehicles;
+    if (state._movingIcons) state._movingIcons.show = showVehicles;
+    if (state._stationPoints) state._stationPoints.show = showStations;
+    state._overlayHost.setVisible(
+      TRANSIT_STATIONS_OVERLAY_SOURCE_ID,
+      showStations,
+    );
+    // A card for a pin that is no longer drawn must not linger.
+    if (!showStations) clearStationSelection();
+    // The selected-vehicle card is about a live vehicle, so it goes with
+    // the fleet rather than lingering over a stations-only view.
+    if (!showVehicles) parts.selection.clearSelection();
+  }
+
+  /**
    * Show or hide the two halves of the merged row, as the row's chips ask.
    *
    * The Transit row draws two different things: the live GTFS-RT fleet and
@@ -383,22 +405,7 @@ export function createStationNetwork({ state, services, parts, source }) {
     if (state._display === mode) return false;
     state._display = mode;
     if (!state._enabled) return true;
-    const showVehicles = mode !== 'stations';
-    const showStations = mode !== 'vehicles';
-    if (state._stillIcons) state._stillIcons.show = showVehicles;
-    if (state._movingIcons) state._movingIcons.show = showVehicles;
-    if (state._stationPoints) state._stationPoints.show = showStations;
-    state._overlayHost.setVisible(
-      TRANSIT_STATIONS_OVERLAY_SOURCE_ID,
-      showStations,
-    );
-    // A card for a pin that is no longer drawn must not linger.
-    if (!showStations) clearStationSelection();
-    if (!showVehicles) {
-      // The selected-vehicle card is about a live vehicle, so it goes with
-      // the fleet rather than lingering over a stations-only view.
-      parts.selection.clearSelection();
-    }
+    syncDisplay();
     governorRequestRender('transit-display-mode');
     return true;
   }
@@ -435,5 +442,6 @@ export function createStationNetwork({ state, services, parts, source }) {
     loadStations,
     abortStations,
     applyDisplayMode,
+    syncDisplay,
   };
 }

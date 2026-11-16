@@ -10,7 +10,8 @@ import {
   transitCountLabel,
 } from '../layers/transit/queries.js';
 import { transitStationSegments } from '../layers/transit/stationModel.js';
-import { LayerPanel } from './layerPanel.js';
+import { LayerPanel, presentLayerCount } from './layerPanel.js';
+import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 
 /**
  * The GUI coherence pass: the French public-data layers present themselves in
@@ -26,10 +27,16 @@ import { LayerPanel } from './layerPanel.js';
  * packages and the panel agree on one grammar. No layer owns it alone.
  */
 
-const viewerStub = () => ({
-  dataSources: { add() {}, remove() {} },
-  imageryLayers: { addImageryProvider() {}, remove() {} },
-});
+// A scene with a draw port and an input port that never fires: the layers draw
+// and listen through the renderer's ports, and nothing here clicks.
+const viewerStub = () => {
+  const viewer = {};
+  bindFakeDraw(viewer, {
+    input: { on: () => () => {} },
+    query: { pick: () => null },
+  });
+  return viewer;
+};
 
 const overlayStub = () => ({
   setEntries() {},
@@ -68,11 +75,7 @@ function assertChipShape(chips, label) {
     assert.ok(chip.id, label + ': every chip has an id');
     assert.equal(ids.has(chip.id), false, label + ': chip ids are unique');
     ids.add(chip.id);
-    assert.equal(
-      typeof chip.label,
-      'string',
-      label + ': every chip is named',
-    );
+    assert.equal(typeof chip.label, 'string', label + ': every chip is named');
     assert.ok(chip.label, label + ': every chip has a label');
     assert.ok(
       typeof chip.onClick === 'function' ||
@@ -110,9 +113,51 @@ test('the VIGICRUES row is a legend of vigilance bands with live counts', async 
       getSnapshot: async () => ({
         stations: [],
         zones: [
-          { id: 'z1', name: 'Z1', label: 'Z1', territory: 'X', level: 1, color: '#ffd43b', geometry: { type: 'LineString', coordinates: [[0, 0], [1, 1]] } },
-          { id: 'z2', name: 'Z2', label: 'Z2', territory: 'X', level: 3, color: '#e5383b', geometry: { type: 'LineString', coordinates: [[0, 0], [1, 1]] } },
-          { id: 'z3', name: 'Z3', label: 'Z3', territory: 'X', level: 1, color: '#ffd43b', geometry: { type: 'LineString', coordinates: [[0, 0], [1, 1]] } },
+          {
+            id: 'z1',
+            name: 'Z1',
+            label: 'Z1',
+            territory: 'X',
+            level: 1,
+            color: '#ffd43b',
+            geometry: {
+              type: 'LineString',
+              coordinates: [
+                [0, 0],
+                [1, 1],
+              ],
+            },
+          },
+          {
+            id: 'z2',
+            name: 'Z2',
+            label: 'Z2',
+            territory: 'X',
+            level: 3,
+            color: '#e5383b',
+            geometry: {
+              type: 'LineString',
+              coordinates: [
+                [0, 0],
+                [1, 1],
+              ],
+            },
+          },
+          {
+            id: 'z3',
+            name: 'Z3',
+            label: 'Z3',
+            territory: 'X',
+            level: 1,
+            color: '#ffd43b',
+            geometry: {
+              type: 'LineString',
+              coordinates: [
+                [0, 0],
+                [1, 1],
+              ],
+            },
+          },
         ],
         total: 3,
         observedAt: null,
@@ -280,7 +325,10 @@ test('the ENTSO-E row is a readout with an hourly valid-time rail and a mode chi
   assert.equal(controls.list.items[1].lead, '01:00');
   // The forecast/observed toggle rides the card as a setting group.
   const settings = controls.summary.settings;
-  assert.ok(Array.isArray(settings) && settings.length, 'the card has settings');
+  assert.ok(
+    Array.isArray(settings) && settings.length,
+    'the card has settings',
+  );
   assertChipShape(settings[0].chips, 'ENTSO-E');
   assert.deepEqual(
     settings[0].chips.map((chip) => chip.id),
@@ -321,7 +369,10 @@ test('the IGN row stays a layer row and offers the raster layers as chips', () =
   const layer = createIgnGeoplateformeLayer({
     source: {
       getDescriptor: (requested) => ({
-        url: '/api/ign-geoplateforme/tiles/' + (requested || 'PLANIGNV2') + '/{z}/{x}/{y}.png',
+        url:
+          '/api/ign-geoplateforme/tiles/' +
+          (requested || 'PLANIGNV2') +
+          '/{z}/{x}/{y}.png',
         maximumLevel: 19,
         credit: 'IGN',
       }),
@@ -562,14 +613,14 @@ test('the panel resolves the key sentence a layer only names', () => {
 });
 
 test('the source token names the dataset only, never the operator', async () => {
-  const { createVigicruesFloodsLayer: vigicrues } = await import(
-    '../layers/vigicruesFloods/index.js'
-  );
-  const { createIgnGeoplateformeLayer: ign } = await import(
-    '../layers/ignGeoplateforme/index.js'
-  );
+  const { createVigicruesFloodsLayer: vigicrues } =
+    await import('../layers/vigicruesFloods/index.js');
+  const { createIgnGeoplateformeLayer: ign } =
+    await import('../layers/ignGeoplateforme/index.js');
   const flood = vigicrues({
-    source: { getSnapshot: async () => ({ stations: [], zones: [], total: 0 }) },
+    source: {
+      getSnapshot: async () => ({ stations: [], zones: [], total: 0 }),
+    },
     overlayHost: overlayStub(),
   });
   assert.equal(flood.source, 'VIGICRUES');
@@ -580,7 +631,11 @@ test('the source token names the dataset only, never the operator', async () => 
 });
 
 /** The Transit row's own descriptor, built from a bare state. */
-function transitRowControls({ stations = [], vehicles = 0, display = 'both' } = {}) {
+function transitRowControls({
+  stations = [],
+  vehicles = 0,
+  display = 'both',
+} = {}) {
   const state = {
     _stations: stations,
     _vehicles: new Map(
@@ -634,10 +689,7 @@ test('the Transit row also carries the station legend beside its chips', () => {
   // rail segment. The old legend listed the segment letters alone, which
   // could not show the rank the pins now encode.
   const controls = transitRowControls({
-    stations: [
-      { segment: 'A' },
-      { segment: 'B', shortCode: 'BC' },
-    ],
+    stations: [{ segment: 'A' }, { segment: 'B', shortCode: 'BC' }],
   }).getRowControls();
   assertLegendShape(controls.legend, 'Transit');
   const counts = Object.fromEntries(
@@ -648,7 +700,6 @@ test('the Transit row also carries the station legend beside its chips', () => {
 });
 
 test('the panel renders the split Transit count in all three states', () => {
-  const panel = new LayerPanel({ getLayers: () => [] });
   const states = [
     [12, 2792, '12 vehicles · 2792 stations'],
     [0, 2792, '2792 stations'],
@@ -656,11 +707,11 @@ test('the panel renders the split Transit count in all three states', () => {
   ];
   for (const [vehicles, stations, text] of states) {
     assert.equal(
-      panel._layerCountText({
+      presentLayerCount({
         count: vehicles + stations,
         countLabel: transitCountLabel(vehicles, stations),
         lastUpdate: Date.now(),
-      }),
+      }).text,
       text,
       'the split label is what the row shows',
     );
@@ -668,16 +719,14 @@ test('the panel renders the split Transit count in all three states', () => {
 });
 
 test('a Transit row with nothing loaded keeps the empty dash', () => {
-  const panel = new LayerPanel({ getLayers: () => [] });
   assert.equal(
-    panel._layerCountText({ count: 0 }),
+    presentLayerCount({ count: 0 }).text,
     '—',
     'nothing loaded means the row shows the dash, as before',
   );
   assert.equal(
-    panel._layerCountText({ count: 0, countLabel: '' }),
+    presentLayerCount({ count: 0, countLabel: '' }).text,
     '—',
     'an empty split label does not become an empty cell',
   );
 });
-

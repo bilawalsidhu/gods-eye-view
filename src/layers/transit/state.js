@@ -30,6 +30,36 @@ export function createState({ services }) {
   /** The still markers' icon draw set, and the moving ones', or null. */
   state._stillIcons = null;
   state._movingIcons = null;
+  /**
+   * The French passenger-station network this layer also draws: one
+   * draw-port points set of ground-clamped pins, or null.
+   */
+  state._stationPoints = null;
+  /** The station rows currently drawn. @type {Array<object>} */
+  state._stations = [];
+  /** How many stations the catalogue published. @type {number} */
+  state._stationTotal = 0;
+  /** When the station catalogue was last read. @type {number|null} */
+  state._stationUpdatedAt = null;
+  /** The station catalogue's own failure, if any. @type {string|null} */
+  state._stationError = null;
+  /** Station rows and their pin items by station id, for picking. */
+  state._stationById = new Map();
+  state._stationPointById = new Map();
+  /** The selected station's id, or null. */
+  state._stationSelectedId = null;
+  /** Consecutive failed catalogue reads, and the queued retry. */
+  state._stationFailures = 0;
+  state._stationRetryTimer = null;
+  /** The in-flight station request, so disable() can abort it. */
+  state._stationRequest = null;
+  /**
+   * Which half of the merged row the map draws: 'both' (the default), the
+   * live GTFS-RT fleet, or the static SNCF station network. The row's chips
+   * set it; the layer draws what it says.
+   * @type {'both'|'vehicles'|'stations'}
+   */
+  state._display = 'both';
   /** Whether the markers are shown (the layer is on). */
   state._markersShown = false;
   state._visible = new Set();

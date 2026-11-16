@@ -160,7 +160,14 @@ export function createSelection({ state, services, parts }) {
         selectVehicle(key, { byUser: true });
         return;
       }
+      // A station pin is an item of the station set, by its pick id.
+      const stationId =
+        hit?.set && hit.set === state._stationPoints?.id
+          ? transitStationIdFromPick(hit.id)
+          : null;
+      if (stationId && parts.stations.selectStation(stationId)) return;
       if (state._selectedKey) clearSelection();
+      parts.stations.clearStationSelection();
     });
     document.addEventListener('keydown', onKeyDown);
   }
