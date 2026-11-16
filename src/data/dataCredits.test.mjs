@@ -292,11 +292,12 @@ test('data credits go through the renderer to the attribution list', async () =>
   assert.ok(shown.every((credit) => !credit.showOnScreen));
   const odbl = shown.find((credit) => credit.html.includes('opendatacommons'));
   assert.match(odbl.html, /href="https:\/\/opendatacommons.org/);
-  assert.match(odbl.html, />\(ODbL\)</);
+  // As the source wrote it: only the licence's name is the link.
+  assert.match(odbl.html, /\(<a [^>]*>ODbL<\/a>\)/);
   assert.equal(registerDynamicCredit(viewer, TOMTOM_CREDIT), true);
   assert.equal(registerDynamicCredit(viewer, TOMTOM_CREDIT), true);
   assert.equal(shown.length, 4, 'a dynamic credit is added once');
-  assert.match(shown[3].html, /Traffic flow data © TomTom/);
+  assert.match(shown[3].html, /Traffic flow data © <a [^>]*>TomTom<\/a>/);
   assert.equal(registerDynamicCredit({}, { key: 'none', html: 'x' }), false);
 });
 

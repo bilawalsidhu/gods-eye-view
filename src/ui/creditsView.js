@@ -9,7 +9,12 @@
  * or logo is kept only for a safe scheme.
  */
 import { findCredits } from '../render/rendererOf.js';
-import { LINK_SCHEMES, LOGO_SCHEMES, safeUrl } from '../render/creditMarkup.js';
+import {
+  LINK_SCHEMES,
+  LOGO_SCHEMES,
+  safeUrl,
+  splitLink,
+} from '../render/creditMarkup.js';
 import { onLocaleChange, t } from '../i18n/index.js';
 
 const PANEL_ID = 'gev-credits-panel';
@@ -28,6 +33,20 @@ function distinct(list) {
 /** One credit as DOM: its logo or its text, linked when it has a link. */
 function creditElement(doc, credit) {
   const href = credit.href ? safeUrl(credit.href, LINK_SCHEMES) : null;
+  const logoUrl = credit.logoUrl ? safeUrl(credit.logoUrl, LOGO_SCHEMES) : null;
+  // Only the credit's linked words are the link, as the source wrote it.
+  if (href && !logoUrl && credit.linkText) {
+    const [before, words, after] = splitLink(credit);
+    const element = doc.createElement('span');
+    element.className = 'gev-credit';
+    const link = doc.createElement('a');
+    link.href = href;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = words;
+    element.append(before, link, after);
+    return element;
+  }
   const element = doc.createElement(href ? 'a' : 'span');
   element.className = 'gev-credit';
   if (href) {

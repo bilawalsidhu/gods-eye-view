@@ -94,6 +94,7 @@ test('Cesium’s own credits are listed as plain data, the logo first', () => {
     {
       text: 'Data © Example & others',
       href: 'https://example.com/a',
+      linkText: 'Example',
       inline: false,
     },
   ]);
@@ -421,4 +422,14 @@ test('a Cesium viewer with no renderer gets a credits port over its display', ()
   assert.equal(renders, 1);
   assert.equal(listeners.size, 1);
   assert.equal(findCredits({ creditDisplay: display }), null, 'no scene');
+});
+
+test('only the linked words are the link in the credit markup', () => {
+  const html = creditMarkup({
+    text: 'Street Level: imagery © Mapillary contributors, CC BY-SA 4.0',
+    href: 'https://www.mapillary.com/',
+    linkText: 'Mapillary',
+  });
+  assert.ok(html.includes('© <a href="https://www.mapillary.com/"'), html);
+  assert.ok(html.includes('>Mapillary</a> contributors, CC BY-SA 4.0'), html);
 });

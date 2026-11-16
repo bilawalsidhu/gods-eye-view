@@ -132,3 +132,23 @@ test('focus in the list stays in it as it redraws, and goes to the line as it em
   );
   off();
 });
+
+test('a credit with linked words links only those words', () => {
+  const { viewer, renderer } = scene();
+  renderer.credits.addStatic({
+    text: 'Street Level: imagery © Mapillary contributors, CC BY-SA 4.0',
+    href: 'https://www.mapillary.com/',
+    linkText: 'Mapillary',
+    inline: true,
+  });
+  const off = mountCreditsView(viewer);
+  const credit = document.querySelector('#gev-credits .gev-credit');
+  const link = credit.querySelector('a');
+  assert.equal(link.textContent, 'Mapillary');
+  assert.equal(link.href, 'https://www.mapillary.com/');
+  assert.equal(
+    credit.textContent,
+    'Street Level: imagery © Mapillary contributors, CC BY-SA 4.0',
+  );
+  off();
+});

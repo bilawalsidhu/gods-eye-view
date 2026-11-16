@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { creditFromMarkup } from './creditMarkup.js';
+import { creditFromMarkup, splitLink } from './creditMarkup.js';
 
 test('text, the first link and the first logo are read from markup', () => {
   assert.deepEqual(
@@ -10,6 +10,7 @@ test('text, the first link and the first logo are read from markup', () => {
     {
       text: 'Map data © OpenStreetMap (ODbL)',
       href: 'https://www.openstreetmap.org/copyright',
+      linkText: '© OpenStreetMap',
     },
   );
   assert.deepEqual(
@@ -52,4 +53,26 @@ test('character references decode; tags, comments and scripts drop', () => {
   });
   assert.deepEqual(creditFromMarkup(''), { text: '' });
   assert.deepEqual(creditFromMarkup(undefined), { text: '' });
+});
+
+test('a link around some of the words keeps those words as the linked ones', () => {
+  const credit = creditFromMarkup(
+    'Street Level: imagery © <a href="https://www.mapillary.com" target="_blank" rel="noopener">Mapillary</a> contributors, CC BY-SA 4.0',
+  );
+  assert.equal(
+    credit.text,
+    'Street Level: imagery © Mapillary contributors, CC BY-SA 4.0',
+  );
+  assert.equal(credit.linkText, 'Mapillary');
+  assert.deepEqual(splitLink(credit), [
+    'Street Level: imagery © ',
+    'Mapillary',
+    ' contributors, CC BY-SA 4.0',
+  ]);
+});
+
+test('a link around all of the words needs no linked words', () => {
+  const credit = creditFromMarkup('<a href="https://example.com/">Example</a>');
+  assert.equal(credit.linkText, undefined);
+  assert.deepEqual(splitLink(credit), ['', 'Example', '']);
 });

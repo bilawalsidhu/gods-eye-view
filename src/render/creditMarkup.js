@@ -74,9 +74,36 @@ function attribute(tag, name) {
   return match ? decode(match[1] ?? match[2] ?? match[3]) : undefined;
 }
 
+/** The first link's own words, as plain text, or ''. */
+function linkWords(markup) {
+  const inside = new RegExp(`<a\\b${TAG_BODY}>([\\s\\S]*?)</a\\s*>`, 'i').exec(
+    markup,
+  )?.[1];
+  if (!inside) return '';
+  return decode(inside.replace(ANY_TAG, '')).replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Where `credit`'s link sits in its text: the words before it, the linked
+ * words and the words after. The whole text is linked without `linkText`.
+ * @param {{text: string, linkText?: string}} credit
+ * @returns {[string, string, string]}
+ */
+export function splitLink(credit) {
+  const words = credit.linkText;
+  const at = words ? credit.text.indexOf(words) : -1;
+  if (at < 0) return ['', credit.text, ''];
+  return [
+    credit.text.slice(0, at),
+    words,
+    credit.text.slice(at + words.length),
+  ];
+}
+
 /**
  * @param {string} html
- * @returns {{text: string, href?: string, logoUrl?: string}} A logo with no
+ * @returns {{text: string, href?: string, linkText?: string,
+ *   logoUrl?: string}} A logo with no
  *   text around it is named by its title or alt text.
  */
 export function creditFromMarkup(html) {
@@ -95,7 +122,12 @@ export function creditFromMarkup(html) {
     text = attribute(image, 'title') ?? attribute(image, 'alt') ?? '';
   const credit = { text };
   const href = anchor && attribute(anchor, 'href');
-  if (href && safeUrl(href, LINK_SCHEMES)) credit.href = href;
+  if (href && safeUrl(href, LINK_SCHEMES)) {
+    credit.href = href;
+    const words = linkWords(markup);
+    if (words && words !== text && text.includes(words))
+      credit.linkText = words;
+  }
   const logoUrl = image && attribute(image, 'src');
   if (logoUrl && safeUrl(logoUrl, LOGO_SCHEMES)) credit.logoUrl = logoUrl;
   return credit;

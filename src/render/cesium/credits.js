@@ -23,12 +23,13 @@ import {
   LOGO_SCHEMES,
   creditFromMarkup,
   safeUrl,
+  splitLink,
 } from '../creditMarkup.js';
 import { provideUnboundCredits } from '../rendererOf.js';
 import { listenerList, uncaught } from './common.js';
 import { creditDisplayContents } from './internals.js';
 
-const CREDIT_KEYS = new Set(['text', 'href', 'logoUrl', 'inline']);
+const CREDIT_KEYS = new Set(['text', 'href', 'linkText', 'logoUrl', 'inline']);
 /** Readings kept per Cesium credit id; past this many, the cache restarts. */
 const READINGS_KEPT = 512;
 
@@ -61,6 +62,10 @@ export function creditMarkup(credit) {
     .filter(Boolean)
     .join(' ');
   const href = credit.href && safeUrl(credit.href, LINK_SCHEMES);
+  if (href && !logo && credit.linkText) {
+    const [before, words, after] = splitLink(credit);
+    return `<span>${escape(before)}<a href="${escape(href)}" target="_blank" rel="noopener">${escape(words)}</a>${escape(after)}</span>`;
+  }
   return href
     ? `<a href="${escape(href)}" target="_blank" rel="noopener">${body}</a>`
     : `<span>${body}</span>`;
