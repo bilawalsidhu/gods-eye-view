@@ -14,7 +14,7 @@ export const FACE_SCALE_FULL_M = 3_000;
 export const FACE_FADE_START_M = 4_000;
 export const FACE_FADE_END_M = 5_000;
 /** Signs further than this from the camera never get a face. */
-const FACE_MAX_DISTANCE_KM = 40;
+export const FACE_MAX_DISTANCE_KM = 40;
 const DEFAULT_FRAME_MS = 3_000;
 const MIN_FRAME_MS = 500;
 const MAX_FRAME_MS = 10_000;

@@ -3,7 +3,8 @@ import test from 'node:test';
 import * as Cesium from 'cesium';
 import { layerFeedState } from '../../data/feedState.js';
 import { createMessageSignsLayer } from './index.js';
-import { FACE_BUDGET } from './faces.js';
+import { approxDistanceKm } from '../../data/approxDistance.js';
+import { FACE_BUDGET, FACE_FADE_END_M, FACE_MAX_DISTANCE_KM } from './faces.js';
 
 const FLOOR_M = 250;
 const STALE_DIM = 'rgba(0, 0, 0, 0.5)';
@@ -476,6 +477,133 @@ test('selected sign keeps its card but no face outside the face bounds', async (
   assert.equal(h.requests.faces.length, calls);
   assert.equal(h.cards().length, 1);
   h.layer.destroy();
+});
+
+/**
+ * 41 lit signs in a line east of the camera. The farthest, animated, ranks
+ * just past the face budget yet sits inside the height and distance bounds,
+ * and is selected by its marker: only selection can give it a face.
+ */
+async function pastBudgetSelection() {
+  const signs = Array.from({ length: FACE_BUDGET + 1 }, (_, i) =>
+    sign(
+      `V${String(i).padStart(2, '0')}`,
+      `msg_${String(i).padStart(8, '0')}`,
+      { lat: 44.95, lon: -93.2 + i * 0.01 },
+    ),
+  );
+  const far = signs.at(-1);
+  const h = harness({
+    snapshot: { signs, ageMs: 0, stale: false },
+    frames: { [far.message]: 2 },
+  });
+  await h.layer.update(h.viewer);
+  await settle();
+  const hasFace = () => h.faces().some((face) => face.id === far.id);
+  assert.equal(h.faces().length, FACE_BUDGET);
+  assert.ok(!hasFace());
+  h.click({ x: 1, y: 1 }, { id: `message-sign:${far.id}` });
+  await settle();
+  assert.equal(h.cards().length, 1);
+  const moveTo = async (lon, heightM) => {
+    h.viewer.camera.positionCartographic = Cesium.Cartographic.fromDegrees(
+      lon,
+      44.95,
+      heightM,
+    );
+    for (const fn of h.moveEnd) fn();
+    await settle();
+  };
+  const farDecoders = () =>
+    h.decoders.filter((decoder) => decoder.message === far.message);
+  return { h, far, hasFace, moveTo, farDecoders };
+}
+
+test('selection lifts a sign past the face budget', async () => {
+  const { h, hasFace } = await pastBudgetSelection();
+  assert.ok(hasFace());
+  assert.equal(h.faces().length, FACE_BUDGET + 1);
+  assert.equal(h.pendingTimers.size, 1);
+  h.layer.destroy();
+});
+
+test('a selected sign past the budget keeps its face at the height and distance limits', async () => {
+  const { h, far, hasFace, moveTo } = await pastBudgetSelection();
+  await moveTo(-93.2, FACE_FADE_END_M);
+  assert.ok(hasFace(), 'at the height limit');
+
+  // Still ranked past the budget, just inside the distance limit.
+  const kmPerDegree = 111.32 * Math.cos((44.95 * Math.PI) / 180);
+  const edgeLon = far.lon - (FACE_MAX_DISTANCE_KM - 0.5) / kmPerDegree;
+  const km = approxDistanceKm(44.95, edgeLon, far.lat, far.lon);
+  assert.ok(km < FACE_MAX_DISTANCE_KM && km > FACE_MAX_DISTANCE_KM - 1);
+  await moveTo(edgeLon, 1500);
+  assert.ok(hasFace(), 'just inside the distance limit');
+  assert.equal(h.faces().length, FACE_BUDGET + 1);
+  h.layer.destroy();
+});
+
+test('a culled selected face closes its decoder, then returns and flips inside the bounds', async () => {
+  const { h, far, hasFace, moveTo, farDecoders } = await pastBudgetSelection();
+  await moveTo(-93.2, FACE_FADE_END_M + 1);
+  assert.ok(!hasFace());
+  assert.ok(farDecoders().every((decoder) => decoder.closed));
+  assert.equal(h.pendingTimers.size, 0);
+  assert.equal(h.cards().length, 1);
+
+  const fetches = () =>
+    h.requests.faces.filter((message) => message === far.message).length;
+  const before = fetches();
+  await moveTo(-93.2, 1500);
+  assert.ok(hasFace(), 'back inside the bounds');
+  assert.equal(fetches(), before + 1);
+  assert.equal(h.pendingTimers.size, 1);
+  await h.advance(1000);
+  const farFrames = h.drawn.filter(
+    ({ image }) => image.message === far.message,
+  );
+  assert.equal(farFrames.at(-1).image.frameIndex, 1);
+  assert.equal(farDecoders().length, 2);
+  assert.ok(farDecoders()[0].closed && !farDecoders()[1].closed);
+  h.layer.destroy();
+});
+
+test('a selected sign culled above the bounds is fully released on deselect or disable', async () => {
+  for (const finish of ['deselect', 'disable']) {
+    const h = harness({
+      snapshot: {
+        signs: [sign('V1', 'msg_000000F2')],
+        ageMs: 0,
+        stale: false,
+      },
+      frames: { msg_000000F2: 2 },
+    });
+    await h.layer.update(h.viewer);
+    await settle();
+    h.faces()[0].activate();
+    h.viewer.camera.positionCartographic = Cesium.Cartographic.fromDegrees(
+      -93.2,
+      44.95,
+      FACE_FADE_END_M + 1,
+    );
+    for (const fn of h.moveEnd) fn();
+    await settle();
+    assert.equal(h.faces().length, 0, finish);
+    assert.equal(h.cards().length, 1, finish);
+
+    if (finish === 'deselect')
+      h.click({ x: 1, y: 1 }); // empty globe
+    else h.layer.disable();
+    await settle();
+    assert.equal(h.cards().length, 0, finish);
+    assert.equal(h.faces().length, 0, finish);
+    assert.equal(h.pendingTimers.size, 0, finish);
+    assert.ok(
+      h.decoders.every((decoder) => decoder.closed),
+      finish,
+    );
+    h.layer.destroy();
+  }
 });
 
 test('signs on cold ground floors appear once a floor resolve warms them', async () => {
