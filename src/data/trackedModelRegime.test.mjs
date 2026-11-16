@@ -373,16 +373,12 @@ for (const fixture of LAYERS) {
       assert.ok(model.show || billboard.show, 'the contact never has both visuals hidden');
       assert.equal(sampleCalls, 0, 'cold tiles do not force sampleHeight');
 
-      now += 1000;
+      // Streaming tiles are not a miss, so they earn no retry backoff: the
+      // first frame after the tiles settle samples and hands over.
+      now += 100;
       viewer.tileset.tilesLoaded = true;
       ownsVisual = fixture.driveFleetModel({ icao24, position, course: 92 });
-      assert.equal(ownsVisual, false, 'the miss backoff remains in force before two seconds');
-      assert.equal(sampleCalls, 0, 'backoff prevents an early synchronous sample');
-      assert.ok(model.show || billboard.show, 'backoff still leaves a visible owner');
-
-      now += 1500;
-      ownsVisual = fixture.driveFleetModel({ icao24, position, course: 92 });
-      assert.equal(ownsVisual, true, 'the model takes over after a valid terrain sample');
+      assert.equal(ownsVisual, true, 'the model takes over on the first settled frame');
       assert.equal(sampleCalls, 1, 'the settled terrain is sampled exactly once');
       assert.equal(model.show, true);
       assert.equal(billboard.show, false);
@@ -403,13 +399,13 @@ for (const fixture of LAYERS) {
       // Taxi past the 50 m resample threshold while the tiles are gone. The old
       // snap stops being the direct answer, but it is still a MEASUREMENT of
       // ground this contact was standing on ~96 m ago, so it is held: hiding the
-      // model here would pop a taxiing aircraft from 3D to 2D for a whole retry
-      // backoff (2–30 s), which is the one thing the gate must not introduce.
+      // model here would pop a taxiing aircraft from 3D to 2D until the tiles
+      // return, which is the one thing the gate must not introduce.
       const taxied = Cesium.Cartesian3.fromDegrees(-97.709, 30.21, -500);
       ownsVisual = fixture.driveFleetModel({ icao24, position: taxied, course: 92 });
       assert.equal(ownsVisual, true,
         'a taxi-invalidated snap is HELD through the resample outage, not dropped');
-      assert.equal(model.show, true, 'no 3D→2D pop while the resample is backing off');
+      assert.equal(model.show, true, 'no 3D→2D pop while the resample waits for tiles');
       assert.equal(billboard.show, false);
       assert.equal(sampleCalls, 1, 'and the hold costs no extra synchronous sample');
       const held = Cesium.Matrix4.getTranslation(model.modelMatrix, new Cesium.Cartesian3());
@@ -646,16 +642,10 @@ for (const fixture of LAYERS) {
         1e-6,
       ), 'a hidden tracked model cannot steal the proximity position');
 
-      now += 1000;
+      // Streaming tiles earned no backoff, so the first settled turn samples.
+      now += 100;
       viewer.tileset.tilesLoaded = true;
       sampledHeight = 187.5;
-      fixture.driveTrackedModel();
-      assert.equal(sampleCalls, 0, 'the tracked path honors the same retry backoff before sampling');
-      assert.equal(model.show, false, 'retry backoff keeps the unplaced primitive hidden');
-      assert.equal(fixture.trackedBillboardColor().alpha, 1,
-        'retry backoff leaves the tracked billboard opaque');
-
-      now += 1500;
       fixture.driveTrackedModel();
       assert.equal(sampleCalls, 1, 'the first settled turn samples once');
       assert.equal(model.show, false, 'terrain alone does not reveal an unready model');
@@ -683,7 +673,7 @@ for (const fixture of LAYERS) {
 
       // Taxi past the resample threshold with the tiles gone: the tracked model
       // holds its last measured floor rather than handing the operator's own
-      // selection back to a 2D glyph for a retry backoff.
+      // selection back to a 2D glyph until the tiles return.
       billboard.position = Cesium.Cartesian3.fromDegrees(-97.709, 30.21, -500);
       fixture.driveTrackedModel();
       assert.equal(model.show, true,
