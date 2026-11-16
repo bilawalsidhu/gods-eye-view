@@ -11,6 +11,10 @@ import { setLocale } from '../i18n/index.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import CockpitView from './views/CockpitView.vue';
 import ContextView from './views/ContextView.vue';
+import {
+  bindFakeCesiumCamera,
+  followEntity,
+} from '../testSupport/fakeCameraPort.mjs';
 
 const INFO = Object.freeze({
   icao24: 'abc123',
@@ -43,7 +47,6 @@ function fixture(t) {
   const listeners = () => ({ addEventListener: () => () => {} });
   const entity = { position: {}, show: true };
   const viewer = {
-    trackedEntity: entity,
     camera: { cancelFlight() {} },
     entities: { contains: (candidate) => candidate === entity },
     scene: {
@@ -52,6 +55,8 @@ function fixture(t) {
     },
     trackedEntityChanged: listeners(),
   };
+  bindFakeCesiumCamera(viewer, { frame: { on: () => () => {} } });
+  followEntity(viewer, entity);
   const cockpit = new CockpitViewController(viewer, {
     services: {
       flightsLayer: { getTrackedInfo: () => INFO, refreshTr3b() {} },

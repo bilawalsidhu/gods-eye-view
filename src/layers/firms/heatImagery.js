@@ -1,15 +1,25 @@
 /**
  * Drapes the Active Fires heat raster over the globe as one full-extent
- * imagery tile on the active imagery host (globe or 3D-tiles), like the wind
- * layer's scalar field. Owns the canvas and the imagery layer; nothing else
- * in the fires layer touches imagery.
+ * image on the renderer's imagery (`globe.imagery`, the globe port), like
+ * the wind layer's scalar field. It drapes on whatever the map stack draws
+ * (the globe's surface, or the 3D tiles). Owns the canvas and the imagery
+ * layer; nothing else in the fires layer touches imagery.
  *
  * `show` is only for the layer being on or off. The zoom hand-off fades
- * `alpha` instead: Cesium unmaps a hidden imagery layer from the globe
- * tiles and re-maps it when shown, so a show toggle at the band edge left
+ * `alpha` instead: a renderer may unmap a hidden imagery layer from the
+ * surface and re-map it when shown, so a show toggle at the band edge left
  * a beat with neither markers nor heat. At alpha 0 the layer stays mapped
  * and costs no draw.
  */
+
+const WORLD = Object.freeze({ west: -180, south: -90, east: 180, north: 90 });
+
+/**
+ * Drawn over the port's other imagery (zOrder 0) and under the weather
+ * layers (`WEATHER_IMAGERY_Z` starts at 1), so weather turned on after the
+ * heat stacks above it, as each weather frame went on top of the stack.
+ */
+export const HEAT_IMAGERY_Z = 0.5;
 
 const defaultCanvas = (width, height) => {
   const canvas = document.createElement('canvas');
@@ -18,44 +28,57 @@ const defaultCanvas = (width, height) => {
   return canvas;
 };
 
-export function createHeatImagery({
-  cesium,
-  getHost,
-  createCanvas = defaultCanvas,
-}) {
+/**
+ * @param {object} options
+ * @param {() => {globe: object|null, kind: string}|null} options.getHost
+ *   Where draped imagery goes now: the renderer's globe port, and the kind
+ *   of surface the active map stack drapes on (`'none'`: nothing to drape
+ *   on, so nothing is draped).
+ * @param {(width: number, height: number) => object} [options.createCanvas]
+ */
+export function createHeatImagery({ getHost, createCanvas = defaultCanvas }) {
   let raster = null;
   let layer = null;
-  let collection = null;
+  /** The host the layer is draped on: its globe port and kind. */
+  let globe = null;
+  let kind = 'none';
   let show = true;
   let opacity = 1;
 
+  const hostNow = () => {
+    const host = getHost?.();
+    return host?.globe && host.kind !== 'none'
+      ? host
+      : { globe: null, kind: 'none' };
+  };
+
   function detach() {
-    if (layer && collection) collection.remove(layer, true);
+    layer?.remove();
     layer = null;
-    collection = null;
+    globe = null;
+    kind = 'none';
   }
 
   function attach() {
     detach();
     if (!raster) return;
-    const host = getHost?.() ?? { collection: null, kind: 'none' };
-    if (!host.collection) return;
+    const host = hostNow();
+    if (!host.globe) return;
     const canvas = createCanvas(raster.width, raster.height);
     const ctx = canvas.getContext('2d');
     const image = ctx.createImageData(raster.width, raster.height);
     image.data.set(raster.rgba);
     ctx.putImageData(image, 0, 0);
-    const provider = new cesium.SingleTileImageryProvider({
+    layer = host.globe.imagery.add({
+      kind: 'single-image',
       url: canvas.toDataURL('image/png'),
-      tileWidth: raster.width,
-      tileHeight: raster.height,
-      rectangle: cesium.Rectangle.MAX_VALUE,
+      rectangle: WORLD,
+      zOrder: HEAT_IMAGERY_Z,
     });
-    collection = host.collection;
-    layer = collection.addImageryProvider(provider);
+    globe = host.globe;
+    kind = host.kind;
     layer.show = show;
     layer.alpha = opacity;
-    collection.raiseToTop?.(layer);
   }
 
   return {
@@ -76,9 +99,10 @@ export function createHeatImagery({
       opacity = Math.min(1, Math.max(0, Number(value) || 0));
       if (layer) layer.alpha = opacity;
     },
+    /** Drape again when the map stack's surface has changed. */
     rehome() {
-      const host = getHost?.();
-      if ((host?.collection ?? null) !== collection) attach();
+      const host = hostNow();
+      if (host.globe !== globe || host.kind !== kind) attach();
     },
     destroy() {
       detach();

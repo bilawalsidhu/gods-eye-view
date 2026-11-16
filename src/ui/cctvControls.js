@@ -54,6 +54,7 @@ export class CctvControls {
     this._cctvSummaryTypingTimer = null;
     this._lastCctvSummaryText = '';
     this._lastSeenCctvActiveId = null;
+    this._wasCctvEnabled = false;
     this._cctvChipHideTimer = null;
     this._cctvChipWasBusy = false;
     // The camera grid chip as last published; its label stays while hidden.

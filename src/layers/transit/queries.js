@@ -89,7 +89,7 @@ export function createQueries({ state, parts }) {
    * @returns {Array<object>}
    */
   function collectDetectableVehicles(options = defaults) {
-    if (!state._enabled || !state._markers?.show) return empty;
+    if (!state._enabled || !state._markersShown) return empty;
     if (state._vehicles.size === 0) return empty;
     const maxCount = Number.isFinite(options.maxCount)
       ? Math.max(1, Math.floor(options.maxCount))
@@ -129,7 +129,9 @@ export function createQueries({ state, parts }) {
     const visible = [];
     for (const entry of state._visible) {
       const marker = entry.marker;
-      if (!marker?.position || marker.show === false) continue;
+      // A vehicle drawn as its 3D model is present though its marker is hidden.
+      if (!marker?.position) continue;
+      if (marker.show === false && entry.modelOwnsVisual !== true) continue;
       visible.push(entry);
     }
     let chosen = visible;

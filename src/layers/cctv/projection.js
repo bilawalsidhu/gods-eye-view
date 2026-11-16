@@ -1,5 +1,4 @@
 import { attachCctvVideo } from './videoPlayback.js';
-import * as Cesium from 'cesium';
 import {
   CCTV_PROJECTION_OVERLAY_SOURCE_ID,
   CCTV_PROJECTION_OVERLAY_SOURCE_OPTIONS,
@@ -7,6 +6,25 @@ import {
   PROJECTION_CANVAS_WIDTH,
   PROJECTION_CANVAS_HEIGHT,
 } from './policy.js';
+
+/** The monitor plane's alpha over its frame, as its image material had it. */
+const PLANE_ALPHA = 0.95;
+
+/** A plain white image, for a plane with no media (tests). */
+const WHITE_IMAGE =
+  'data:image/svg+xml,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1">' +
+      '<rect width="1" height="1" fill="#fff"/></svg>',
+  );
+
+/** Copy a position's coordinates into `out`. */
+function copyPosition(from, out) {
+  out.x = from.x;
+  out.y = from.y;
+  out.z = from.z;
+  return out;
+}
 
 export function createProjection({
   state: layerState,
@@ -18,7 +36,7 @@ export function createProjection({
 
   /**
    * Build the protected label associated with one active monitor plane.
-   * @param {{cameraId: string, name: string, position: Cesium.Cartesian3|Function}} input
+   * @param {{cameraId: string, name: string, position: object|Function}} input
    * @returns {Object} Shared-host presentation entry.
    */
 
@@ -46,7 +64,7 @@ export function createProjection({
   }
 
   /**
-   * Re-derives the monitor plane entity's placement (position, orientation,
+   * Re-derives the monitor plane's placement (position, orientation,
    * dimensions) + label from the record's current frustum geometry, so the plane
    * always caps the wireframe exactly (corner rays terminate on its corners).
    * No-op when the record has no plane runtime (idle neighbors have no plane).
@@ -55,7 +73,8 @@ export function createProjection({
 
   function updatePlanePlacement(record) {
     const runtime = record?.projection;
-    if (!runtime?.planeEntity) return;
+    const plane = runtime?.plane;
+    if (!plane) return;
     const geometry =
       record.frustumGeometry ||
       parts.geometry.computeFrustumGeometry(
@@ -64,21 +83,33 @@ export function createProjection({
         record.probeClampRangeM,
       );
     const positions =
-      record.frustumPositions || parts.geometry.frustumCartesians(geometry);
-    runtime.planeEntity.position = positions.capCenter;
-    runtime.planeEntity.orientation = parts.model.planeOrientationFor(
-      record.camera,
+      record.frustumPositions || parts.rendering.frustumCartesians(geometry);
+    placePlane(plane, record.camera, geometry, positions);
+    if (runtime.labelPosition)
+      copyPosition(positions.label, runtime.labelPosition);
+    parts.drawSets.writePlane(plane);
+  }
+
+  /** Pose a plane handle on the frustum's far cap. */
+  function placePlane(plane, camera, geometry, positions) {
+    plane.center = positions.capCenter;
+    plane.orientation = parts.model.planeOrientationFor(
+      camera,
       positions.capCenter,
     );
-    if (runtime.planeEntity.plane) {
-      runtime.planeEntity.plane.dimensions = new Cesium.Cartesian2(
-        geometry.halfW * 2,
-        geometry.halfH * 2,
-      );
-    }
-    if (runtime.labelPosition) {
-      Cesium.Cartesian3.clone(positions.label, runtime.labelPosition);
-    }
+    plane.size = [geometry.halfW * 2, geometry.halfH * 2];
+  }
+
+  /**
+   * Give the monitor plane another image: a canvas, or the video element.
+   * @param {Object} runtime - Projection runtime.
+   * @param {{canvas: HTMLCanvasElement}|{video: HTMLVideoElement}} source
+   */
+  function setPlaneSource(runtime, source) {
+    runtime.planeSource = source;
+    if (!runtime.plane) return;
+    runtime.plane.source = source;
+    parts.drawSets.writePlane(runtime.plane);
   }
 
   /**
@@ -102,7 +133,10 @@ export function createProjection({
 
   function setPlaneVisible(runtime, visible) {
     if (!runtime) return;
-    if (runtime.planeEntity) runtime.planeEntity.show = !!visible;
+    if (runtime.plane && runtime.plane.show !== !!visible) {
+      runtime.plane.show = !!visible;
+      parts.drawSets.writePlane(runtime.plane);
+    }
     if (visible && runtime.overlayEntry && runtime.cameraId) {
       if (layerState._projectionOverlayOwnerId !== runtime.cameraId) {
         layerState._cctvOverlayHost.setEntries(
@@ -121,38 +155,34 @@ export function createProjection({
     }
   }
 
-  /** Create the native monitor plane plus its cached host-label presentation. */
+  /** A plain white plane image, for a plane with no media (tests). */
+  function plainPlaneSource() {
+    return { image: WHITE_IMAGE };
+  }
+
+  /** Create the monitor plane plus its cached host-label presentation. */
 
   function createProjectionPlane(record, runtime, geometry, positions) {
-    runtime.labelPosition ||= new Cesium.Cartesian3();
-    Cesium.Cartesian3.clone(positions.label, runtime.labelPosition);
+    runtime.labelPosition ||= { x: 0, y: 0, z: 0 };
+    copyPosition(positions.label, runtime.labelPosition);
     runtime.cameraId = String(record.camera.id);
     runtime.overlayEntry = createCctvProjectionOverlayEntry({
       cameraId: runtime.cameraId,
       name: record.camera.name,
       position: () => runtime.labelPosition,
     });
-    runtime.planeEntity = layerState._viewer.entities.add({
+    const plane = {
       id: `cctv-${record.camera.id}-plane`,
-      properties: { cctvCameraId: record.camera.id },
+      cameraId: record.camera.id,
+      source: runtime.planeSource || plainPlaneSource(),
+      alpha: PLANE_ALPHA,
+      outline: { color: PLANE_OUTLINE_COLOR, widthPx: 1 },
       show: false,
-      position: positions.capCenter,
-      orientation: parts.model.planeOrientationFor(
-        record.camera,
-        positions.capCenter,
-      ),
-      plane: {
-        plane: new Cesium.Plane(Cesium.Cartesian3.UNIT_Z, 0.0),
-        dimensions: new Cesium.Cartesian2(
-          geometry.halfW * 2,
-          geometry.halfH * 2,
-        ),
-        material: runtime.planeMaterial,
-        outline: true,
-        outlineColor: PLANE_OUTLINE_COLOR,
-      },
-    });
-    return runtime.planeEntity;
+    };
+    placePlane(plane, record.camera, geometry, positions);
+    runtime.plane = plane;
+    parts.drawSets.writePlane(plane);
+    return plane;
   }
 
   /**
@@ -187,11 +217,11 @@ export function createProjection({
       ctx,
       image: null,
       video: null,
-      planeEntity: null,
+      plane: null,
       cameraId: String(record.camera.id),
-      labelPosition: new Cesium.Cartesian3(),
+      labelPosition: { x: 0, y: 0, z: 0 },
       overlayEntry: null,
-      planeMaterial: null,
+      planeSource: { canvas },
       buffers: null,
       bufferIndex: 0,
       lastTextureSwapAt: 0,
@@ -222,16 +252,17 @@ export function createProjection({
       video.playsInline = true;
       video.crossOrigin = 'anonymous';
       video.preload = 'auto';
-      // Cesium sizes the video texture from the element's width/height
-      // attributes at first upload. Set them from the real stream dimensions
-      // and rebind on any resolution change (camera switch, adaptive source).
+      // The plane shows the video once it knows its size (the element's
+      // width/height follow the real stream dimensions); the renderer reads
+      // it at a new size on any later resolution change (camera switch,
+      // adaptive source).
       const bindVideoTexture = () => {
-        if (runtime.video !== video || !runtime.planeMaterial) return;
+        if (runtime.video !== video || runtime.disposed) return;
         if (!(video.videoWidth > 0 && video.videoHeight > 0)) return;
         video.width = video.videoWidth;
         video.height = video.videoHeight;
-        runtime.planeMaterial.image = runtime.canvas;
-        runtime.planeMaterial.image = video;
+        if (runtime.planeSource?.video !== video)
+          setPlaneSource(runtime, { video });
       };
       video.addEventListener('loadedmetadata', bindVideoTexture);
       video.addEventListener('resize', bindVideoTexture);
@@ -256,7 +287,7 @@ export function createProjection({
               runtime.imageLoading = false;
               runtime.imageReady = false;
             };
-            runtime.planeMaterial.image = runtime.canvas;
+            setPlaneSource(runtime, { canvas: runtime.canvas });
             parts.frames.refreshProjectionImage(record, true);
             parts.presentation.notifyListeners();
           },
@@ -279,9 +310,8 @@ export function createProjection({
     }
 
     // Monitor plane = the frustum's far cap: video feeds bind the video element
-    // directly (Cesium updates video-backed entity materials per frame); image
-    // feeds start on the placeholder canvas and switch to double-buffer swaps
-    // at <=1Hz.
+    // directly (the renderer reads it every frame); image feeds start on the
+    // placeholder canvas and switch to double-buffer swaps at <=1Hz.
     const geometry =
       record.frustumGeometry ||
       parts.geometry.computeFrustumGeometry(
@@ -290,12 +320,7 @@ export function createProjection({
         record.probeClampRangeM,
       );
     const positions =
-      record.frustumPositions || parts.geometry.frustumCartesians(geometry);
-    runtime.planeMaterial = new Cesium.ImageMaterialProperty({
-      image: canvas,
-      transparent: true,
-      color: Cesium.Color.WHITE.withAlpha(0.95),
-    });
+      record.frustumPositions || parts.rendering.frustumCartesians(geometry);
     createProjectionPlane(record, runtime, geometry, positions);
 
     return runtime;
@@ -340,15 +365,15 @@ export function createProjection({
       runtime.video.removeAttribute('src');
       runtime.video.load();
     }
-    if (runtime.planeEntity && layerState._viewer) {
-      layerState._viewer.entities.remove(runtime.planeEntity);
-      runtime.planeEntity = null;
+    if (runtime.plane) {
+      parts.drawSets.removePlane(runtime.plane);
+      runtime.plane = null;
     }
     if (layerState._projectionOverlayOwnerId === runtime.cameraId)
       clearProjectionOverlay();
     runtime.overlayEntry = null;
     runtime.labelPosition = null;
-    runtime.planeMaterial = null;
+    runtime.planeSource = null;
   }
 
   function startProjectionLoop() {
@@ -430,6 +455,8 @@ export function createProjection({
     updatePlanePlacement,
     clearProjectionOverlay,
     setPlaneVisible,
+    setPlaneSource,
+    plainPlaneSource,
     createProjectionPlane,
     createProjectionRuntime,
     ensureProjectionRuntime,

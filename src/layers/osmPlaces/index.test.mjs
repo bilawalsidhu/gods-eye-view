@@ -5,6 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createOsmPlacesLayer } from './index.js';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
 function fakeOverlayHost() {
   const calls = [];
@@ -77,19 +78,9 @@ test('destroy and re-init expose a fresh empty session', () => {
   });
   assert.ok(layer.getStats().lastUpdate);
   layer.destroy();
-  const dataSources = {
-    added: [],
-    removed: [],
-    add(source) {
-      this.added.push(source);
-      return source;
-    },
-    remove(source, destroy) {
-      this.removed.push([source, destroy]);
-      return true;
-    },
-  };
-  layer.init({ dataSources });
+  const viewer = {};
+  const { draw } = bindFakeDraw(viewer);
+  layer.init(viewer);
   layer.enable();
   assert.equal(layer.getResultsMeta(), null);
   assert.deepEqual(layer.getAnalystRecords(), []);
@@ -99,11 +90,17 @@ test('destroy and re-init expose a fresh empty session', () => {
     error: null,
     statusMessage: 'Voice place search (needs an Overpass server)',
   });
+  const [points] = draw.sets.values();
+  assert.equal(points.items.size, 0, 'a fresh session draws nothing');
+  layer.setResults(RECORDS, {});
+  assert.equal(points.items.size, 2);
+  layer.destroy();
+  assert.equal(points.disposed, true, 'destroy lets the points go');
 });
 
 test('without an operator Overpass the layer shows as unavailable', async () => {
-  const added = [];
-  const viewer = { dataSources: { add: (ds) => added.push(ds), remove() {} } };
+  const viewer = {};
+  bindFakeDraw(viewer);
   const off = createOsmPlacesLayer({
     overlayHost: fakeOverlayHost(),
     overpassConfigured: async () => false,
@@ -130,8 +127,8 @@ test('without an operator Overpass the layer shows as unavailable', async () => 
 });
 
 test('places are depth-tested past close range, so they never show through the globe', () => {
-  const added = [];
-  const viewer = { dataSources: { add: (ds) => added.push(ds), remove() {} } };
+  const viewer = {};
+  const { draw } = bindFakeDraw(viewer);
   const layer = createOsmPlacesLayer({
     overlayHost: fakeOverlayHost(),
     overpassConfigured: async () => true,
@@ -143,8 +140,11 @@ test('places are depth-tested past close range, so they never show through the g
     label: 'hospitals',
     area: 'Kathmandu',
   });
-  const point = added[0].entities.values[0].point;
-  const distance = point.disableDepthTestDistance.getValue();
+  const [points] = draw.sets.values();
+  assert.equal(points.show, true, 'shown while the layer is on');
+  const [point] = points.items.values();
+  assert.equal(point.height, 'clampGround');
+  const distance = point.disableDepthTest;
   assert.ok(
     Number.isFinite(distance) && distance <= 5000,
     `depth test off only within ${distance} m`,

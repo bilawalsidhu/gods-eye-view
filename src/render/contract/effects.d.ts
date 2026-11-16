@@ -1,0 +1,103 @@
+/**
+ * Full-screen effects: visual styles, bloom, sharpen and screen modulation.
+ * Each style is a plain full-screen pass over the frame's colour. The
+ * application owns the styles and defines them on the renderer
+ * (`defineStyle`); the renderer's own styles are extra ones.
+ */
+import type { Off } from './common';
+
+export interface StyleDescriptor {
+  id: string;
+  /** Parameters and their ranges. */
+  params: Array<{ key: string; min: number; max: number; default: number }>;
+  /** Animates, so it needs frames while on. */
+  animated: boolean;
+}
+
+/**
+ * A style's shader. `glsl` is a GLSL ES 3.00 fragment shader with its
+ * `main()`, as GEV's styles are written, without `#version`, `precision`
+ * or an `out` declaration: the renderer declares `out_FragColor`, which it
+ * writes. It declares what it reads of `uniform sampler2D colorTexture`,
+ * `uniform vec2 colorTextureDimensions` (pixels),
+ * `in vec2 v_textureCoordinates`, `uniform float intensity` (0..1),
+ * `uniform float time` (seconds, for an animated style) and one
+ * `uniform float` per parameter under its key. Parameter keys are GLSL
+ * identifiers and never one of those names.
+ * `wgsl` is the same pass in WGSL: a fragment entry
+ * `fs_main` taking `@location(0) uv: vec2f` and returning the colour at
+ * `@location(0)`. Group 0 binds `colorTexture` (`texture_2d<f32>`) at 0,
+ * `colorSampler` at 1 and, at 2, a uniform struct the shader declares as
+ * `params`: `intensity: f32`, `time: f32`, `dimensions: vec2f`, then one
+ * `f32` per parameter in the order `params` lists them.
+ */
+export interface StyleShader {
+  glsl: string;
+  wgsl?: string;
+}
+
+export interface StyleDefinition extends StyleDescriptor {
+  shader: StyleShader;
+}
+
+/**
+ * `screenModulation`: a sweeping band over the drawn markers (a sonar).
+ * Icons, points and models are dimmed toward `floor` and brought back to
+ * full inside the band, each by where its anchor is on screen; the map,
+ * lines and shapes draw as they are, and picks are unchanged. A radius of 0
+ * dims every marker to `floor` (the theme on, the sweep off). Setting a
+ * sector, or clearing it, asks for one frame; the application moves it about every
+ * 80 ms while it sweeps.
+ * `diagnostics().passes` lists `'screenModulation'` while it draws, so a
+ * sector set but not listed is unsupported.
+ */
+export interface ModulationSector {
+  /** Centre of the sweep, CSS pixels. */
+  center: { x: number; y: number };
+  /** Current angle, radians clockwise from up. */
+  angle: number;
+  /** Width of the band, radians. */
+  width: number;
+  /** Reach of the band from `center`, CSS pixels. */
+  radius: number;
+  /** Alpha factor outside the band, 0..1. */
+  floor: number;
+  /** 0..1: how far a marker's colour is pulled toward `color`. */
+  strength: number;
+  color: string;
+}
+
+export interface EffectsDiagnostics {
+  style: string | null;
+  /** The passes that draw: `style:<id>` for each style, `bloom`, ... */
+  passes: string[];
+}
+
+export interface EffectsPort {
+  /** `styles`: every style, defined by the application or the renderer's own. */
+  styles(): StyleDescriptor[];
+  /**
+   * `styles`: add a style, replacing one with the same id. Null without
+   * the capability, or when the renderer runs none of the shader's
+   * languages; the Off removes it (turning it off when it is the style).
+   */
+  defineStyle(definition: StyleDefinition): Off | null;
+  /**
+   * Make `id` the style, or none. The style it replaces, if its intensity
+   * is above 0, keeps drawing with the new one until its intensity is set
+   * to 0, so the application crossfades by fading one out as it fades the other in.
+   * Styles draw in the order they were defined.
+   */
+  setStyle(id: string | null, params?: Record<string, number>): void;
+  /** A style's intensity, 0..1; kept while it is not the style. 1 at first. */
+  setStyleIntensity(id: string, intensity: number): void;
+  setStyleParams(id: string, params: Record<string, number>): void;
+  /** `bloom`. `strength`, 0..1, is kept while bloom is off. */
+  bloom(settings: { enabled: boolean; strength?: number }): void;
+  /** `sharpen`. `amount`, 0..1, is kept while sharpen is off. */
+  sharpen(settings: { enabled: boolean; amount?: number }): void;
+  /** `screenModulation`. */
+  screenModulation?(sector: ModulationSector | null): void;
+  diagnostics(): EffectsDiagnostics;
+  on(event: 'change', cb: (diagnostics: EffectsDiagnostics) => void): Off;
+}

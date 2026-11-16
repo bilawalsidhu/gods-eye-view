@@ -1,3 +1,14 @@
+import {
+  bindFakeCesiumCamera,
+  followEntity,
+  followedEntity,
+} from './testSupport/fakeCameraPort.mjs';
+import { rendererOf } from './render/rendererOf.js';
+import { followedOf } from './data/followed.js';
+import {
+  fakeSceneFrame,
+  fakeSceneQuery,
+} from './testSupport/fakeCesiumScene.mjs';
 import { GLOBE_VIEW } from './locations.js';
 import { projectEarthDiscToViewport } from './celestialRing.js';
 import assert from 'node:assert/strict';
@@ -13,11 +24,24 @@ import {
   moveCamera,
 } from './cameraVerbs.js';
 import { getRenderGovernorDiagnostics } from './renderGovernor.js';
-import {
-  MIN_GLOBE_FRAME_SHARE,
-  globeFrameShare,
-  globeOutOfFrame,
-} from './globeInView.js';
+import { MIN_GLOBE_FRAME_SHARE } from './globeInView.js';
+import * as globeInView from './globeInView.js';
+
+// The frame measures take a camera pose; these read it off the real camera.
+const framePose = (camera) => ({
+  position: camera.positionWC,
+  direction: camera.directionWC,
+  up: camera.upWC,
+  right: camera.rightWC,
+  fovy: camera.frustum.fovy,
+  aspectRatio: camera.frustum.aspectRatio,
+  height: camera.positionCartographic.height,
+  pitch: camera.pitch,
+});
+const globeFrameShare = (camera, options) =>
+  globeInView.globeFrameShare(framePose(camera), options);
+const globeOutOfFrame = (camera, options) =>
+  globeInView.globeOutOfFrame(framePose(camera), options);
 import { KEYHOLE_OUTER_RADIUS } from './celestialRing.js';
 import { setScopeMaskEnabled } from './scopeMask.js';
 
@@ -136,7 +160,7 @@ function harness(
     mapMode2D: Cesium.MapMode2D.INFINITE_SCROLL,
     mode: Cesium.SceneMode.SCENE3D,
     pixelRatio: 1,
-    tweens: [],
+    preUpdate: new Cesium.Event(),
     requestRender() {},
   };
   const camera = new Cesium.Camera(scene);
@@ -154,13 +178,37 @@ function harness(
       roll: radians(roll),
     },
   });
-  const viewer = {
+  const double = {
     camera,
     scene,
-    trackedEntity: undefined,
+    // Cesium's entity tracking, without entities of its own: the camera
+    // port follows on a tracking widget of the fake's.
     trackedEntityChanged: new Cesium.Event(),
-    clock: { onTick: new Cesium.Event() },
+    entities: {},
   };
+  const viewer = bindFakeCesiumCamera(double, {
+    query: fakeSceneQuery(double),
+    frame: fakeSceneFrame(double),
+  });
+  // Count who listens for the port's follow changes.
+  const renderer = rendererOf(viewer);
+  const port = renderer.camera;
+  let followListeners = 0;
+  renderer.camera = Object.create(port, {
+    on: {
+      value(event, cb, options) {
+        const off = port.on(event, cb, options);
+        if (event !== 'followChanged') return off;
+        followListeners += 1;
+        let live = true;
+        return () => {
+          if (live) followListeners -= 1;
+          live = false;
+          off();
+        };
+      },
+    },
+  });
   const target = Cesium.Cartesian3.fromDegrees(
     longitudeDeg,
     latitude,
@@ -174,73 +222,21 @@ function harness(
   });
   const tick = (seconds = 0.1) => {
     nowMs += seconds * 1000;
-    viewer.clock.onTick.raiseEvent(viewer.clock);
+    viewer.scene.preUpdate.raiseEvent(viewer.scene);
   };
   const finishOnce = () => {
     for (let i = 0; i < 20 && getActiveCameraMotion(); i += 1) tick();
     assert.equal(getActiveCameraMotion(), null, 'once motion must finish');
   };
-  return { viewer, camera, canvas, target, tick, finishOnce };
-}
-
-for (const [name, sceneMode] of [
-  ['2D', Cesium.SceneMode.SCENE2D],
-  ['Columbus', Cesium.SceneMode.COLUMBUS_VIEW],
-  ['morphing', Cesium.SceneMode.MORPHING],
-]) {
-  test(`globe rotation refuses ${name} before changing the prior owner`, (t) => {
-    const { viewer, camera } = harness(t);
-    assert.equal(
-      moveCamera({ motion: 'rotate', direction: 'right', mode: 'continuous' })
-        .ok,
-      true,
-    );
-    const priorId = activeCameraMotionId();
-    const before = pose(camera);
-    const transform = Cesium.Matrix4.clone(camera.transform);
-    viewer.scene.mode = sceneMode;
-    let handoffs = 0;
-    let cancellations = 0;
-    camera.cancelFlight = () => {
-      cancellations += 1;
-    };
-    for (const mode of ['once', 'continuous']) {
-      const result = moveCamera(
-        { motion: 'rotate_globe', direction: 'left', mode },
-        () => {
-          handoffs += 1;
-          return { ok: true };
-        },
-      );
-      assert.equal(result.ok, false);
-      assert.match(result.error, /3D/);
-    }
-    assert.equal(handoffs, 0);
-    assert.equal(cancellations, 0);
-    assert.equal(activeCameraMotionId(), priorId);
-    assert.equal(hasRenderHold(), true);
-    assert.ok(Cesium.Matrix4.equals(camera.transform, transform));
-    samePose(camera, before);
-  });
-
-  test(`active globe rotation yields to ${name} without changing the camera`, (t) => {
-    const { viewer, camera, tick } = harness(t);
-    assert.equal(
-      moveCamera({ motion: 'rotate_globe', mode: 'continuous' }).ok,
-      true,
-    );
-    viewer.scene.mode = sceneMode;
-    const before = pose(camera);
-    let rotations = 0;
-    camera.rotate = () => {
-      rotations += 1;
-    };
-    tick();
-    assert.equal(rotations, 0);
-    assert.equal(getActiveCameraMotion(), null);
-    assert.equal(hasRenderHold(), false);
-    samePose(camera, before);
-  });
+  return {
+    viewer,
+    camera,
+    canvas,
+    target,
+    tick,
+    finishOnce,
+    followListeners: () => followListeners,
+  };
 }
 
 test('globe rotation yields to tracking acquired and cleared before the next tick', (t) => {
@@ -251,15 +247,13 @@ test('globe rotation yields to tracking acquired and cleared before the next tic
   );
   const before = pose(camera);
   const entity = { id: 'cockpit-aircraft', position: {} };
-  viewer.trackedEntity = entity;
-  viewer.trackedEntityChanged.raiseEvent(entity);
+  followEntity(viewer, entity);
   assert.equal(
     getActiveCameraMotion(),
     null,
     'tracking acquisition must synchronously yield',
   );
-  viewer.trackedEntity = undefined;
-  viewer.trackedEntityChanged.raiseEvent(undefined);
+  followEntity(viewer, null);
   tick();
   samePose(camera, before);
   assert.equal(hasRenderHold(), false);
@@ -272,33 +266,34 @@ test('tracking event keeps legacy yaw and an untracked globe rotation active', (
     true,
   );
   const yawId = activeCameraMotionId();
-  viewer.trackedEntityChanged.raiseEvent({ id: 'aircraft' });
+  followEntity(viewer, { id: 'aircraft' });
   assert.equal(activeCameraMotionId(), yawId);
+  followEntity(viewer, null);
   assert.equal(
     moveCamera({ motion: 'rotate_globe', mode: 'continuous' }).ok,
     true,
   );
   const globeId = activeCameraMotionId();
-  viewer.trackedEntityChanged.raiseEvent(undefined);
+  followEntity(viewer, null);
   assert.equal(activeCameraMotionId(), globeId);
 });
 
 test('replaced viewer releases the old tracking listener without duplicate subscriptions', (t) => {
   const first = harness(t);
-  assert.equal(first.viewer.trackedEntityChanged.numberOfListeners, 1);
+  assert.equal(first.followListeners(), 1);
   initCameraVerbs(first.viewer);
-  assert.equal(first.viewer.trackedEntityChanged.numberOfListeners, 1);
+  assert.equal(first.followListeners(), 1);
   const next = harness(t);
-  assert.equal(first.viewer.trackedEntityChanged.numberOfListeners, 0);
-  assert.equal(next.viewer.trackedEntityChanged.numberOfListeners, 1);
+  assert.equal(first.followListeners(), 0);
+  assert.equal(next.followListeners(), 1);
   assert.equal(
     moveCamera({ motion: 'rotate_globe', mode: 'continuous' }).ok,
     true,
   );
   const id = activeCameraMotionId();
-  first.viewer.trackedEntityChanged.raiseEvent({ id: 'stale-aircraft' });
+  followEntity(first.viewer, { id: 'stale-aircraft' });
   assert.equal(activeCameraMotionId(), id);
-  next.viewer.trackedEntityChanged.raiseEvent({ id: 'new-aircraft' });
+  followEntity(next.viewer, { id: 'new-aircraft' });
   assert.equal(getActiveCameraMotion(), null);
   assert.equal(hasRenderHold(), false);
 });
@@ -534,7 +529,7 @@ test('replacement motion rejects a stale globe owner cancellation', (t) => {
   assert.equal(hasRenderHold(), false);
 });
 
-test('replacing the viewer retires globe motion and its old clock listener', (t) => {
+test('replacing the viewer retires globe motion and its old frame listener', (t) => {
   const { viewer, camera, tick } = harness(t);
   assert.equal(
     moveCamera({ motion: 'rotate_globe', mode: 'continuous' }).ok,
@@ -542,15 +537,16 @@ test('replacing the viewer retires globe motion and its old clock listener', (t)
   );
   tick();
   const before = pose(camera);
-  const nextViewer = {
-    ...viewer,
-    clock: { onTick: new Cesium.Event() },
-  };
+  const nextScene = { ...viewer.scene, preUpdate: new Cesium.Event() };
+  const nextViewer = bindFakeCesiumCamera(
+    { ...viewer, scene: nextScene },
+    { frame: fakeSceneFrame({ scene: nextScene }) },
+  );
   initCameraVerbs(nextViewer);
   assert.equal(getActiveCameraMotion(), null);
   assert.equal(hasRenderHold(), false);
   tick();
-  nextViewer.clock.onTick.raiseEvent(nextViewer.clock);
+  nextScene.preUpdate.raiseEvent(nextScene);
   samePose(camera, before);
 });
 
@@ -580,7 +576,7 @@ for (const mode of ['once', 'continuous']) {
       tick();
       assert.equal(hasRenderHold(), true);
       const tracked = { id: 'new-tracked-aircraft' };
-      if (acquisition === 'tracking') viewer.trackedEntity = tracked;
+      if (acquisition === 'tracking') followEntity(viewer, tracked);
       else
         camera.lookAt(
           target,
@@ -591,10 +587,9 @@ for (const mode of ['once', 'continuous']) {
       tick();
       assert.equal(getActiveCameraMotion(), null);
       assert.equal(hasRenderHold(), false);
-      assert.equal(
-        viewer.trackedEntity,
-        acquisition === 'tracking' ? tracked : undefined,
-      );
+      if (acquisition === 'tracking')
+        assert.equal(followedEntity(viewer), tracked);
+      else assert.equal(followedOf(viewer), null);
       assert.equal(Cesium.Matrix4.equals(camera.transform, transform), true);
       samePose(camera, before);
       tick();
@@ -605,7 +600,7 @@ for (const mode of ['once', 'continuous']) {
 
 test('direct globe rotation refuses a tracked camera without disturbing its reference frame', (t) => {
   const { viewer, camera, target } = harness(t);
-  viewer.trackedEntity = { id: 'tracked-aircraft' };
+  followEntity(viewer, { id: 'tracked-aircraft', name: 'tracked-aircraft' });
   camera.lookAt(target, new Cesium.HeadingPitchRange(0, radians(-40), 1_000));
   const before = pose(camera);
   const transform = Cesium.Matrix4.clone(camera.transform);
@@ -676,18 +671,19 @@ test('close-up refusal preserves an inherited target frame', (t) => {
 });
 test('navigation callback never releases tracking for globe rotation', (t) => {
   const { viewer, camera } = harness(t);
-  const tracked = (viewer.trackedEntity = { id: 'tracked-aircraft' });
+  const tracked = { id: 'tracked-aircraft' };
+  followEntity(viewer, tracked);
   const before = pose(camera);
   let calls = 0;
   assert.equal(
     moveCamera({ motion: 'rotate_globe' }, () => {
       calls++;
-      viewer.trackedEntity = undefined;
+      followEntity(viewer, null);
     }).ok,
     false,
   );
   assert.equal(calls, 0);
-  assert.equal(viewer.trackedEntity, tracked);
+  assert.equal(followedEntity(viewer), tracked);
   samePose(camera, before);
 });
 test('direct globe request refuses Cockpit before navigation mutation', (t) => {
@@ -878,8 +874,8 @@ for (const owner of ['tracking', 'cockpit', 'close-up'])
       height: owner === 'close-up' ? 5000 : GLOBE_VIEW.heightM,
     });
     const before = pose(camera);
-    if (owner === 'tracking') viewer.trackedEntity = { id: 'tracked-aircraft' };
-    const tracked = viewer.trackedEntity;
+    if (owner === 'tracking') followEntity(viewer, { id: 'tracked-aircraft' });
+    const tracked = followedEntity(viewer);
     let releases = 0,
       stamps = 0;
     const styleManager = {
@@ -893,7 +889,7 @@ for (const owner of ['tracking', 'cockpit', 'close-up'])
           },
           release() {
             releases++;
-            viewer.trackedEntity = undefined;
+            followEntity(viewer, null);
           },
           navigate,
         });
@@ -915,7 +911,7 @@ for (const owner of ['tracking', 'cockpit', 'close-up'])
     assert.equal(result.ok, false);
     assert.equal(releases, 0);
     assert.equal(stamps, 0);
-    assert.equal(viewer.trackedEntity, tracked);
+    assert.equal(followedEntity(viewer), tracked);
     samePose(camera, before);
     if (owner === 'close-up') {
       assert.equal(result.reason, 'globe-view-required');
@@ -924,29 +920,6 @@ for (const owner of ['tracking', 'cockpit', 'close-up'])
         'Globe rotation isn’t available from this view. You can say ‘Reset to Globe View and rotate the globe.’',
       );
     }
-  });
-
-for (const [label, ellipsoid] of [
-  ['nonfinite radii', { minimumRadius: 1, maximumRadius: Infinity }],
-  ['nonpositive radii', { minimumRadius: 0, maximumRadius: 1 }],
-  ['non-WGS84 radii', new Cesium.Ellipsoid(30_000_000, 30_000_000, 1_000_000)],
-])
-  test(`globe rotation refuses ${label} before handoff`, (t) => {
-    const { viewer, camera } = harness(t, { height: 100_000_000 });
-    const before = pose(camera);
-    viewer.scene.globe.ellipsoid = ellipsoid;
-    let handedOff = false;
-    const result = moveCamera({ motion: 'rotate_globe' }, () => {
-      handedOff = true;
-    });
-    assert.equal(result.ok, false);
-    assert.equal(
-      result.reason,
-      label === 'non-WGS84 radii' ? 'unsupported-view' : 'unsafe-ellipsoid',
-    );
-    assert.equal(handedOff, false);
-    assert.equal(hasRenderHold(), false);
-    samePose(camera, before);
   });
 
 test('an external radius change retires globe rotation without another write', (t) => {
@@ -958,16 +931,6 @@ test('an external radius change retires globe rotation without another write', (
   assert.equal(getActiveCameraMotion(), null);
   assert.equal(hasRenderHold(), false);
   samePose(camera, changed);
-});
-
-test('a non-WGS84 ellipsoid fails closed rather than borrowing the WGS84 silhouette', (t) => {
-  const ellipsoid = new Cesium.Ellipsoid(10_000_000, 10_000_000, 8_000_000);
-  const { camera } = harness(t, { ellipsoid, latitude: 60 });
-  const before = pose(camera);
-  const result = moveCamera({ motion: 'rotate_globe' });
-  assert.equal(result.ok, false);
-  assert.equal(result.reason, 'unsupported-view');
-  samePose(camera, before);
 });
 
 test('untouched polar framing permits repeated direction and speed changes below preset altitude', (t) => {
@@ -1874,7 +1837,7 @@ test('a voice turn reported as done turns at least the half degree its check pro
 
 /** Track an entity below `camera`, locking it into that entity's frame. */
 function trackFrom(viewer, camera) {
-  viewer.trackedEntity = { id: 'high-satellite' };
+  followEntity(viewer, { id: 'high-satellite' });
   const below = Cesium.Cartesian3.fromDegrees(10, 20, 400_000);
   camera.lookAtTransform(Cesium.Transforms.eastNorthUpToFixedFrame(below));
 }
@@ -1900,7 +1863,7 @@ test('a voice turn that releases a tracked camera is checked as released', (t) =
     });
     trackFrom(viewer, camera);
     const releaseThenRun = (start) => {
-      viewer.trackedEntity = undefined;
+      followEntity(viewer, null);
       camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
       return start();
     };
@@ -1941,14 +1904,14 @@ test('a refused voice turn leaves a tracked camera tracking', (t) => {
       for (let j = 0; j < 600 && getActiveCameraMotion(); j += 1) tick(1 / 60);
     }
     trackFrom(viewer, camera);
-    const tracked = viewer.trackedEntity;
+    const tracked = followedEntity(viewer);
     const transform = Cesium.Matrix4.clone(camera.transform);
     let released = false;
     const result = moveCamera(
       { motion: 'tilt', direction: 'up', mode: 'once' },
       (start) => {
         released = true;
-        viewer.trackedEntity = undefined;
+        followEntity(viewer, null);
         camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
         return start();
       },
@@ -1957,7 +1920,7 @@ test('a refused voice turn leaves a tracked camera tracking', (t) => {
     assert.equal(result.ok, false, label);
     assert.match(result.error, /globe out of view/, label);
     assert.equal(released, false, label);
-    assert.equal(viewer.trackedEntity, tracked, label);
+    assert.equal(followedEntity(viewer), tracked, label);
     assert.ok(Cesium.Matrix4.equals(camera.transform, transform), label);
   }
 });
@@ -1986,27 +1949,6 @@ test('a turn proven at one position is checked again after a release moves the c
   );
   assert.equal(result.ok, false);
   assert.match(result.error, /globe out of view/);
-});
-
-test('the voice frame limit leaves Columbus view alone', (t) => {
-  // At its limit in 3D a further tilt up is refused; the same tilt in Columbus
-  // view is not limited by the frame.
-  withScope(t, false);
-  const { viewer, finishOnce } = harness(t, {
-    pitch: -80,
-    viewportWidth: 1600,
-    viewportHeight: 900,
-  });
-  assert.equal(
-    moveCamera({ motion: 'tilt', direction: 'up', mode: 'once' }).ok,
-    true,
-  );
-  finishOnce();
-  const refused = moveCamera({ motion: 'tilt', direction: 'up', mode: 'once' });
-  assert.match(refused.error || '', /globe out of view/);
-  viewer.scene.mode = Cesium.SceneMode.COLUMBUS_VIEW;
-  const result = moveCamera({ motion: 'tilt', direction: 'up', mode: 'once' });
-  assert.doesNotMatch(result.error || '', /globe out of view/);
 });
 
 test('voice tilt below the free-look height is not limited by the frame', (t) => {

@@ -43,7 +43,11 @@ test('passive Contacts releases its installation anchor and subject refresh cann
   const subject = createSubject({ state, services, parts });
   subject.refreshSelectedSubject();
   assert.equal(anchors.length, 1);
-  assert.ok(anchors[0] instanceof Cesium.Cartesian3);
+  assert.deepEqual(
+    { ...anchors[0] },
+    { x: position.x, y: position.y, z: position.z },
+  );
+  assert.notEqual(anchors[0], position, 'a copy, not the subject’s own');
   controls.setParams({ passive: true });
   assert.equal(anchors.at(-1), null);
   const released = anchors.length;
@@ -57,5 +61,8 @@ test('passive Contacts releases its installation anchor and subject refresh cann
   controls.setParams({ passive: false });
   assert.equal(activations, 1);
   subject.refreshSelectedSubject();
-  assert.ok(anchors.at(-1) instanceof Cesium.Cartesian3);
+  assert.deepEqual(
+    { ...anchors.at(-1) },
+    { x: position.x, y: position.y, z: position.z },
+  );
 });

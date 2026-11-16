@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { worldClock, worldTimeFor } from '../../time/worldClock.js';
 
 export function createState({ services }) {
@@ -12,7 +11,8 @@ export function createState({ services }) {
     clearSource: clearOverlaySource,
   });
 
-  state._dataSource = null;
+  // The layer's draw sets by name, while it is initialised.
+  state._missionSets = null;
 
   state._count = 0;
 
@@ -33,9 +33,7 @@ export function createState({ services }) {
 
   state._orbitMatches = 0;
 
-  state._clickHandler = null;
-
-  state._moveHandler = null;
+  state._inputSubscription = null;
 
   state._viewer = null;
 
@@ -140,22 +138,13 @@ export function createState({ services }) {
 
   state._missionZoomAnchorId = null;
 
-  state._launchPadZonePrimitive = null;
+  state._launchPadZoneItem = null;
 
   state._launchPadZoneRemover = null;
 
   state._launchPadZoneLaunchId = null;
 
   state._missionOrbitPrimitives = new Map();
-
-  state._declutterTime = new Cesium.JulianDate();
-
-  state._declutterOccluder = new Cesium.EllipsoidalOccluder(
-    Cesium.Ellipsoid.WGS84,
-    new Cesium.Cartesian3(),
-  );
-
-  state._missionRingDate = new Date(0);
 
   /** The time the launch window ends at, in epoch ms. */
 
@@ -188,8 +177,6 @@ export function createState({ services }) {
   /** The launches hidden at the last frame, by id, to spot a change. */
 
   state._pendingLaunchIds = new Set();
-
-  state._missionOrbitPatternRegistered = false;
 
   state._pathDistanceCache = new WeakMap();
   state._sourceController = new AbortController();

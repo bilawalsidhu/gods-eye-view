@@ -1,98 +1,63 @@
-// View-directed display lighting over existing terrain normals. This does not
-// represent the Sun, change terrain geometry, or supply missing elevation data.
-function reliefSource(terrainNormals) {
-  const normal = terrainNormals
-    ? 'vec3 normal = normalize(materialInput.normalEC);'
-    : `vec3 worldPosition = (czm_inverseView * vec4(-materialInput.positionToEyeEC, 1.0)).xyz;
-    vec3 geodeticNormal = normalize(worldPosition * czm_ellipsoidInverseRadii * czm_ellipsoidInverseRadii);
-    vec3 normal = normalize(czm_viewRotation * geodeticNormal);`;
-  return `
-czm_material czm_getMaterial(czm_materialInput materialInput)
-{
-    czm_material material = czm_getDefaultMaterial(materialInput);
-    ${normal}
-    vec3 displayLight = normalize(vec3(-0.45, 0.55, 0.8));
-    float shade = clamp((1.0 - dot(normal, displayLight)) * 0.32, 0.0, 0.28);
-    material.diffuse = vec3(0.0);
-    material.alpha = shade;
-    return material;
-}
-`;
-}
+import { findGlobe } from '../../render/rendererOf.js';
 
-/** Optional, exclusive globe-material owner; no animation or source acquisition. */
-export function createWindRelief({ cesium, getViewer } = {}) {
+/** The darkest the relief shading gets, as an opacity. */
+export const WIND_RELIEF_STRENGTH = 0.28;
+
+/**
+ * View-directed display shading of the globe's relief while the wind layer
+ * shows: the globe port's `hillshade` surface shading (capability
+ * `surfaceShading`), over the terrain's own normals or, without them, the
+ * ellipsoid's curvature. It stands for no sun, changes no geometry and asks
+ * for no data. The renderer owns the material: it never takes one someone
+ * else holds, and gives it back when cleared. No animation or source
+ * acquisition.
+ */
+export function createWindRelief({ getViewer, globeOf = findGlobe } = {}) {
+  // The globe port shading for this layer, and the viewer it belongs to.
   let globe = null;
-  let scene = null;
-  let owned = null;
-  let previous = undefined;
+  let viewer = null;
   let destroyed = false;
   let reason = 'Not attached';
-  let mode = null;
   const alive = (value) => value && !value.isDestroyed?.();
-  const active = () =>
-    Boolean(owned && alive(globe) && globe.material === owned);
 
   function clear() {
-    const changed = active();
-    if (changed) globe.material = previous;
-    if (owned && !owned.isDestroyed?.()) owned.destroy?.();
-    if (changed && alive(scene)) scene.requestRender?.();
-    owned = null;
-    mode = null;
+    if (globe && alive(viewer)) globe.setSurfaceShading(null);
     globe = null;
-    scene = null;
-    previous = undefined;
+    viewer = null;
     reason = destroyed ? 'Destroyed' : 'Not attached';
   }
 
   return {
     attach() {
       if (destroyed) return false;
-      const viewer = getViewer?.();
-      const nextScene = alive(viewer) ? viewer.scene : null;
-      const nextGlobe = nextScene?.globe;
-      const nextMode =
-        nextGlobe?.terrainProvider?.hasVertexNormals === true
-          ? 'terrain relief'
-          : 'globe curvature';
-      if (active() && globe === nextGlobe && mode === nextMode) return true;
+      const next = getViewer?.();
+      const port = alive(next) ? globeOf(next) : null;
+      if (globe && globe === port) return true;
       clear();
-      if (!alive(nextGlobe) || typeof cesium?.Material !== 'function') {
+      if (typeof port?.setSurfaceShading !== 'function') {
         reason = 'Globe material unavailable';
         return false;
       }
-      if (nextGlobe.material != null) {
-        reason = 'Globe material already owned';
-        return false;
-      }
-      // Cesium excludes normal-dependent materials without terrain normals.
-      // The fallback uses existing position/ellipsoid uniforms: curvature only,
-      // never an invented terrain normal or an additional provider request.
       try {
-        owned = new cesium.Material({
-          fabric: {
-            type:
-              nextMode === 'terrain relief'
-                ? 'GEVWindTerrainRelief'
-                : 'GEVWindGlobeCurvature',
-            source: reliefSource(nextMode === 'terrain relief'),
-          },
-          translucent: true,
+        port.setSurfaceShading({
+          kind: 'hillshade',
+          strength: WIND_RELIEF_STRENGTH,
         });
-        mode = nextMode;
-        globe = nextGlobe;
-        scene = nextScene;
-        previous = globe.material;
-        globe.material = owned;
-        scene.requestRender?.();
-        reason = null;
-        return true;
       } catch {
-        clear();
+        // The port may hold the request even though it could not draw it;
+        // take it back so it never shows up later, after Wind is off.
+        try {
+          port.setSurfaceShading(null);
+        } catch {
+          // Nothing was kept.
+        }
         reason = 'Relief material unavailable';
         return false;
       }
+      globe = port;
+      viewer = next;
+      reason = null;
+      return true;
     },
     clear,
     destroy() {
@@ -102,11 +67,11 @@ export function createWindRelief({ cesium, getViewer } = {}) {
     },
     getDiagnostics() {
       return {
-        active: active(),
-        reason: owned && !active() ? 'Globe material replaced' : reason,
+        active: globe !== null,
+        reason,
         lighting: 'View-directed display shading',
-        mode: active() ? mode : null,
-        maxOpacity: 0.28,
+        mode: globe ? 'hillshade' : null,
+        maxOpacity: WIND_RELIEF_STRENGTH,
       };
     },
   };

@@ -46,6 +46,13 @@ import {
   presentAwarenessDistance,
 } from '../layers/awareness/panel.js';
 import { NAVIGATION_AUTHORITY_EVENT } from '../navigationPolicy.js';
+import { withEntityRecord } from './entityRecords.js';
+import { framePortFor } from '../testSupport/fakeFramePort.mjs';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';
+import { bindRenderer, rendererOf } from '../render/rendererOf.js';
+import { entityFollowTarget, followedOf } from './followed.js';
+import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
 
 const militaryAwarenessSource = readLayerSource(
   new URL('./militaryAwareness.js', import.meta.url),
@@ -84,6 +91,45 @@ test('Contacts moves a distance that rounds to 1,000 m into kilometres', () => {
   assert.equal(presentAwarenessDistance(9960), '10\u00a0km');
 });
 
+/**
+ * Give `viewer`'s bound camera port a follow of its own, as the renderer's
+ * is: `follow(target)` sets `followed` and raises `followChanged`.
+ */
+function followable(viewer) {
+  const renderer = rendererOf(viewer);
+  const port = renderer.camera;
+  const listeners = new Set();
+  let followed = null;
+  renderer.camera = Object.create(port, {
+    followed: { get: () => followed },
+    follow: {
+      value(target) {
+        followed = target;
+        for (const cb of [...listeners]) cb();
+      },
+    },
+    on: {
+      value(event, cb, options) {
+        if (event !== 'followChanged') return port.on(event, cb, options);
+        listeners.add(cb);
+        return () => listeners.delete(cb);
+      },
+    },
+  });
+}
+
+/**
+ * Follow `entity` (an entity holder) through `viewer`'s camera port, as a
+ * layer does; null stops following.
+ */
+function followIn(viewer, entity) {
+  rendererOf(viewer).camera.follow(
+    entity ? entityFollowTarget(entity, {}) : null,
+  );
+}
+
+/** The entity holder `viewer`'s camera follows, if any. */
+const followedEntity = (viewer) => followedOf(viewer)?.entity;
 function installAwarenessRuntime({
   isEnabled = () => true,
   isEffectivelyEnabled = isEnabled,
@@ -104,7 +150,9 @@ function installAwarenessRuntime({
   const originalDocument = globalThis.document;
   const listeners = new Map();
   let nextTimer = 1;
-  let preRenderListener = null;
+  // Every preRender listener, as a scene keeps them: the lifecycle's and
+  // the range ring's pulses both listen.
+  const preRenderListeners = new Set();
 
   class FakeElement {
     constructor() {
@@ -167,9 +215,9 @@ function installAwarenessRuntime({
       },
       preRender: {
         addEventListener(listener) {
-          preRenderListener = listener;
+          preRenderListeners.add(listener);
           return () => {
-            preRenderListener = null;
+            preRenderListeners.delete(listener);
           };
         },
       },
@@ -182,6 +230,11 @@ function installAwarenessRuntime({
     },
     container: new FakeElement(),
   };
+  bindFakeCesiumCamera(viewer, {
+    draw: fakeDrawPort(),
+    frame: fakeSceneFrame(viewer),
+  });
+  followable(viewer);
   const layers = new Map(
     AWARENESS_DEPENDENCIES.map((layerId) => [
       layerId,
@@ -229,7 +282,7 @@ function installAwarenessRuntime({
   return {
     dispatch: fakeWindow.dispatch.bind(fakeWindow),
     tick() {
-      preRenderListener?.();
+      for (const listener of [...preRenderListeners]) listener();
     },
     viewer,
     renderRequests,
@@ -873,10 +926,11 @@ for (const fixture of [
     let retrackCalls = 0;
 
     try {
-      const trackedEntity = {
-        gevTrackedId: `${subject.layerId}:${subject.id}`,
-      };
-      runtime.viewer.trackedEntity = trackedEntity;
+      const trackedEntity = withEntityRecord(
+        {},
+        { trackedId: `${subject.layerId}:${subject.id}` },
+      );
+      followIn(runtime.viewer, trackedEntity);
       replaceMethod(
         fixture.layer,
         'getTrackedSubject',
@@ -917,7 +971,7 @@ for (const fixture of [
         'adoption must not recreate the existing track',
       );
       assert.equal(
-        runtime.viewer.trackedEntity,
+        followedEntity(runtime.viewer),
         trackedEntity,
         'adoption must not replace the source-owned tracked entity',
       );
@@ -940,8 +994,8 @@ test('Contacts activation adopts the production military tracked-subject descrip
     _setTrackedMilitaryRefreshStateForTest({
       icao24: id,
       entity: null,
-      billboard: { position, show: true },
-      billboardCollection: { show: true, remove() {} },
+      icon: { position, show: true },
+      iconLayer: { show: true, remove() {} },
       viewer: sourceViewer,
       meta: {
         callsign: 'RCH451 ',
@@ -977,7 +1031,10 @@ test('Contacts activation adopts the production military tracked-subject descrip
       ),
       'mutating one accessor result must not alter the tracked source position',
     );
-    runtime.viewer.trackedEntity = { gevTrackedId: `military:${id}` };
+    followIn(
+      runtime.viewer,
+      withEntityRecord({}, { trackedId: `military:${id}` }),
+    );
     replaceMethod(flightsLayer, 'getTrackedSubject', () => null, restores);
     replaceMethod(
       flightsLayer,
@@ -1022,8 +1079,8 @@ test('Contacts activation adopts the production military tracked-subject descrip
     _setTrackedMilitaryRefreshStateForTest({
       icao24: id,
       entity: null,
-      billboard: { position, show: true },
-      billboardCollection: { show: true, remove() {} },
+      icon: { position, show: true },
+      iconLayer: { show: true, remove() {} },
       viewer: sourceViewer,
       meta: {},
       tracked: false,
@@ -1049,8 +1106,8 @@ test('production military tracked-subject label falls back to registration befor
     _setTrackedMilitaryRefreshStateForTest({
       icao24: id,
       entity: null,
-      billboard: { position, show: true },
-      billboardCollection: { show: true, remove() {} },
+      icon: { position, show: true },
+      iconLayer: { show: true, remove() {} },
       viewer: sourceViewer,
       meta: {
         callsign: '   ',
@@ -1082,7 +1139,10 @@ test('production military tracked-subject label falls back to registration befor
       'getAllPositions id stays the identity hex',
     );
 
-    runtime.viewer.trackedEntity = { gevTrackedId: `military:${id}` };
+    followIn(
+      runtime.viewer,
+      withEntityRecord({}, { trackedId: `military:${id}` }),
+    );
     replaceMethod(flightsLayer, 'getTrackedSubject', () => null, restores);
     replaceMethod(flightsLayer, 'trackById', () => true, restores);
     replaceMethod(militaryFlightsLayer, 'trackById', () => true, restores);
@@ -1102,8 +1162,8 @@ test('production military tracked-subject label falls back to registration befor
     _setTrackedMilitaryRefreshStateForTest({
       icao24: id,
       entity: null,
-      billboard: { position, show: true },
-      billboardCollection: { show: true, remove() {} },
+      icon: { position, show: true },
+      iconLayer: { show: true, remove() {} },
       viewer: sourceViewer,
       meta: {},
       tracked: false,
@@ -1121,7 +1181,7 @@ test('production military tracked-subject label falls back to registration befor
 test('the tracked airliner’s photo reaches the Contacts panel when it lands after selection', async () => {
   const id = 'a1f2c3';
   const position = Cesium.Cartesian3.fromDegrees(-97.71, 30.21, 10_668);
-  const sourceViewer = { camera: { positionCartographic: null }, scene: {} };
+  const sourceViewer = { scene: { primitives: { remove() {} } } };
   const runtime = installAwarenessRuntime();
   const restores = [];
   const meta = {
@@ -1143,12 +1203,15 @@ test('the tracked airliner’s photo reaches the Contacts panel when it lands af
     _setTrackedFlightRefreshStateForTest({
       icao24: id,
       entity: null,
-      billboard: { position, color: Cesium.Color.WHITE, show: true },
-      billboardCollection: { show: true, remove() {} },
+      icon: { position, show: true },
+      iconLayer: { show: true, remove() {} },
       viewer: sourceViewer,
       meta,
     });
-    runtime.viewer.trackedEntity = { gevTrackedId: `flights:${id}` };
+    followIn(
+      runtime.viewer,
+      withEntityRecord({}, { trackedId: `flights:${id}` }),
+    );
     replaceMethod(
       militaryFlightsLayer,
       'getTrackedSubject',
@@ -1194,8 +1257,8 @@ test('the tracked airliner’s photo reaches the Contacts panel when it lands af
     _setTrackedFlightRefreshStateForTest({
       icao24: id,
       entity: null,
-      billboard: { position, show: true },
-      billboardCollection: { show: false, remove() {} },
+      icon: { position, show: true },
+      iconLayer: { show: false, remove() {} },
       viewer: sourceViewer,
       meta: {},
       tracked: false,
@@ -1234,13 +1297,16 @@ test('a cached Context subject re-reads its label when enrichment lands after se
     _setTrackedFlightRefreshStateForTest({
       icao24: id,
       entity: null,
-      billboard: { position, color: Cesium.Color.WHITE, show: true },
-      billboardCollection: { show: true, remove() {} },
+      icon: { position, color: Cesium.Color.WHITE, show: true },
+      iconLayer: { show: true, remove() {} },
       viewer: sourceViewer,
       meta,
     });
 
-    runtime.viewer.trackedEntity = { gevTrackedId: `flights:${id}` };
+    followIn(
+      runtime.viewer,
+      withEntityRecord({}, { trackedId: `flights:${id}` }),
+    );
     replaceMethod(
       militaryFlightsLayer,
       'getTrackedSubject',
@@ -1322,8 +1388,8 @@ test('a cached Context subject re-reads its label when enrichment lands after se
     _setTrackedFlightRefreshStateForTest({
       icao24: id,
       entity: null,
-      billboard: { position, show: true },
-      billboardCollection: { show: false, remove() {} },
+      icon: { position, show: true },
+      iconLayer: { show: false, remove() {} },
       viewer: sourceViewer,
       meta: {},
       tracked: false,
@@ -1344,8 +1410,8 @@ test('Contacts activation adopts the production civilian tracked-subject descrip
     _setTrackedFlightRefreshStateForTest({
       icao24: id,
       entity: null,
-      billboard: { position, show: true },
-      billboardCollection: { show: true, remove() {} },
+      icon: { position, show: true },
+      iconLayer: { show: true, remove() {} },
       viewer: sourceViewer,
       meta: {
         callsign: 'DAL123 ',
@@ -1383,7 +1449,10 @@ test('Contacts activation adopts the production civilian tracked-subject descrip
       ),
       'mutating one accessor result must not alter the tracked source position',
     );
-    runtime.viewer.trackedEntity = { gevTrackedId: `flights:${id}` };
+    followIn(
+      runtime.viewer,
+      withEntityRecord({}, { trackedId: `flights:${id}` }),
+    );
     replaceMethod(
       militaryFlightsLayer,
       'getTrackedSubject',
@@ -1433,8 +1502,8 @@ test('Contacts activation adopts the production civilian tracked-subject descrip
     _setTrackedFlightRefreshStateForTest({
       icao24: id,
       entity: null,
-      billboard: { position, show: true },
-      billboardCollection: { show: true, remove() {} },
+      icon: { position, show: true },
+      iconLayer: { show: true, remove() {} },
       viewer: sourceViewer,
       meta: {},
       tracked: false,
@@ -1470,7 +1539,10 @@ test('Contacts activation reconciles to a newer cross-layer tracked flight after
   const restores = [];
 
   try {
-    runtime.viewer.trackedEntity = { gevTrackedId: 'flights:first' };
+    followIn(
+      runtime.viewer,
+      withEntityRecord({}, { trackedId: 'flights:first' }),
+    );
     replaceMethod(
       flightsLayer,
       'getTrackedSubject',
@@ -1493,7 +1565,10 @@ test('Contacts activation reconciles to a newer cross-layer tracked flight after
 
     civilianTracked = null;
     militaryTracked = awarenessSubject('military', 'latest', positions.latest);
-    runtime.viewer.trackedEntity = { gevTrackedId: 'military:latest' };
+    followIn(
+      runtime.viewer,
+      withEntityRecord({}, { trackedId: 'military:latest' }),
+    );
     releaseDependencies();
     await nextTurn();
     await nextTurn();
@@ -1537,7 +1612,10 @@ test('tracked flight cleared during Contacts activation suppresses fallback auto
   const focused = [];
 
   try {
-    runtime.viewer.trackedEntity = { gevTrackedId: 'flights:selected' };
+    followIn(
+      runtime.viewer,
+      withEntityRecord({}, { trackedId: 'flights:selected' }),
+    );
     replaceMethod(flightsLayer, 'getTrackedSubject', () => tracked, restores);
     replaceMethod(
       militaryFlightsLayer,
@@ -1560,7 +1638,7 @@ test('tracked flight cleared during Contacts activation suppresses fallback auto
     );
 
     tracked = null;
-    runtime.viewer.trackedEntity = undefined;
+    followIn(runtime.viewer, null);
     // Deliberately untagged: this is the DESELECT case, and an untagged clear
     // must default to deliberate. An eviction (`reason: 'evicted'`) instead
     // keeps the subject as CONTACT LOST — see the eviction tests below — but
@@ -1797,12 +1875,12 @@ test('hasContact declines while a layer is disabled, whatever its maps still hol
     [
       'flights',
       readLayerSource(new URL('./flights.js', import.meta.url)),
-      /hasContact\(\s*icao24,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!(?:flightState\.)?_billboardCollection\s*\|\|\s*!(?:flightState\.)?_billboardCollection\.show\s*\|\|\s*(?:flightState\.)?_billboards\.size\s*===\s*0,?\s*\)\s*return\s*null;/,
+      /hasContact\(\s*icao24,?\s*\)\s*\{\s*\n\s*const icons = flightState\._icons;\s*\n\s*if\s*\(\s*!icons\s*\|\|\s*!icons\.show\s*\|\|\s*icons\.count\s*===\s*0,?\s*\)\s*return\s*null;/,
     ],
     [
       'militaryFlights',
       readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
-      /hasContact\(\s*icao24,?\s*\)\s*\{\s*\n\s*if\s*\(\s*!(?:flightState\.)?_billboardCollection\s*\|\|\s*!(?:flightState\.)?_billboardCollection\.show\s*\|\|\s*(?:flightState\.)?_billboards\.size\s*===\s*0,?\s*\)\s*return\s*null;/,
+      /hasContact\(\s*icao24,?\s*\)\s*\{\s*\n\s*const icons = flightState\._icons;\s*\n\s*if\s*\(\s*!icons\s*\|\|\s*!icons\.show\s*\|\|\s*icons\.count\s*===\s*0,?\s*\)\s*return\s*null;/,
     ],
     [
       'aisLiveVessels',
@@ -2135,7 +2213,7 @@ test('vessel entry and selection framing both use the 3 km focus radius', () => 
   );
   const focusRadiusUses =
     militaryAwarenessSource.match(
-      /new\s*Cesium\.BoundingSphere\(\s*vessel\.position,\s*VESSEL_FOCUS_RADIUS_M,?\s*\)/g,
+      /\{\s*center:\s*vessel\.position,\s*radius:\s*VESSEL_FOCUS_RADIUS_M\s*\}/g,
     ) || [];
   assert.equal(focusRadiusUses.length, 2);
 });
@@ -2275,7 +2353,7 @@ test('Context entry tracks a nearer civilian aircraft over a farther military ai
   const focused = [];
 
   try {
-    runtime.viewer.camera = { positionWC: camera };
+    runtime.viewer.camera.positionWC = camera;
     replaceMethod(
       flightsLayer,
       'trackById',
@@ -2312,7 +2390,7 @@ test('Context entry prefers military aircraft on an exact nearest-distance tie',
   const focused = [];
 
   try {
-    runtime.viewer.camera = { positionWC: camera };
+    runtime.viewer.camera.positionWC = camera;
     replaceMethod(
       flightsLayer,
       'trackById',
@@ -2347,7 +2425,7 @@ test('Context entry retries once on the next refresh after initially empty feeds
   const focused = [];
 
   try {
-    runtime.viewer.camera = { positionWC: camera };
+    runtime.viewer.camera.positionWC = camera;
     replaceMethod(
       flightsLayer,
       'trackById',
@@ -2384,7 +2462,7 @@ test('user deselect cancels a pending Context entry auto-focus retry', async () 
   const focused = [];
 
   try {
-    runtime.viewer.camera = { positionWC: camera };
+    runtime.viewer.camera.positionWC = camera;
     replaceMethod(
       flightsLayer,
       'trackById',
@@ -3828,6 +3906,7 @@ test('runtime listeners exist only while the awareness layer is enabled', () => 
     entities: { remove() {} },
     container: new FakeElement(),
   };
+  bindRenderer(viewer, { frame: fakeSceneFrame(viewer) });
 
   globalThis.window = fakeWindow;
   globalThis.document = {
@@ -3997,13 +4076,13 @@ test('parked Contacts takes no continuous-render hold and requests at most the p
 
   try {
     Date.now = () => clockMs;
-    installRenderGovernor(runtime.viewer);
-    runtime.viewer.camera = {
+    installRenderGovernor(framePortFor(runtime.viewer.scene));
+    Object.assign(runtime.viewer.camera, {
       positionWC: new Cesium.Cartesian3(1_000_000, 200_000, 300_000),
       heading: 0,
       pitch: -0.4,
       roll: 0,
-    };
+    });
 
     // 1. Enabled, nothing selected, camera parked — Contacts must not be a
     //    reason the whole scene keeps repainting.
@@ -4133,13 +4212,13 @@ test('a moving view over failed feeds takes no continuous-render hold', () => {
 
   try {
     Date.now = () => clockMs;
-    installRenderGovernor(runtime.viewer);
-    runtime.viewer.camera = {
+    installRenderGovernor(framePortFor(runtime.viewer.scene));
+    Object.assign(runtime.viewer.camera, {
       positionWC: new Cesium.Cartesian3(1_000_000, 200_000, 300_000),
       heading: 0,
       pitch: -0.4,
       roll: 0,
-    };
+    });
     runtime.dispatch(
       'gev:awareness-subject-selected',
       awarenessSubject('flights', 'subject-flight', position),
@@ -4182,12 +4261,12 @@ test('a moving camera refreshes Contacts more than once inside one parked interv
 
   try {
     Date.now = () => clockMs;
-    runtime.viewer.camera = {
+    Object.assign(runtime.viewer.camera, {
       positionWC: new Cesium.Cartesian3(1_000_000, 200_000, 300_000),
       heading: 0,
       pitch: -0.4,
       roll: 0,
-    };
+    });
     replaceMethod(
       flightsLayer,
       'getAllPositions',

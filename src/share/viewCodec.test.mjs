@@ -119,6 +119,7 @@ function randomState(random) {
     detectionFadePct: maybe(0.5, int(0, 40)),
     detectionOutsideOpacityPct: maybe(0.5, int(0, 100)),
     scopeFeatherPct: maybe(0.5, int(0, 200)),
+    scopeOpacityPct: maybe(0.5, int(0, 100)),
     scopeTerminusPct: maybe(
       0.3,
       int(SCOPE_TERMINUS_MIN_PCT, SCOPE_TERMINUS_MAX_PCT),
@@ -210,6 +211,7 @@ test('each setting costs bytes only when it differs from its default', () => {
     detectionFadePct: 8,
     detectionOutsideOpacityPct: 2,
     scopeFeatherPct: 99,
+    scopeOpacityPct: 40,
     scopeTerminusPct: 95,
   };
   const defaults = createDefaultShareViewState();
@@ -355,6 +357,7 @@ test('every registered field round-trips at once', () => {
     celestialRing: true,
     scopeEnabled: false,
     scopeFeatherPct: 35,
+    scopeOpacityPct: 60,
     scopeTerminusPct: 97,
     mapStack: 'esri-imagery',
     layerState,
@@ -509,6 +512,7 @@ test('the field registry is well formed and permanent', () => {
       [27, 'styleParams', BY_STYLE],
       [28, 'worldTime', null],
       [29, 'library', null],
+      [30, 'scopeOpacityPct', 100],
     ],
   );
   assert.deepEqual(
@@ -1585,4 +1589,51 @@ test('Data Library tokens round-trip and malformed ones are skipped', () => {
   assert.deepEqual(normalizeLibraryTokens('01.!!.01.zz'), ['01', 'zz']);
   assert.equal(normalizeLibraryTokens(null), null);
   assert.deepEqual(normalizeLibraryTokens('x'.repeat(500)), []);
+});
+
+test('scope opacity is field 30; a link made before it opens at full opacity', () => {
+  // Made before field 30 existed: thermal, Cyber, Scope off at 35% feather
+  // and a pinned terminus.
+  const before = 'ARD-7j4YuxMguBcoUEgQcAOAAQPIASPQAWGa';
+  const old = decodeOk(before).state;
+  assert.equal(old.scopeOpacityPct, 100);
+  assert.equal(old.scopeFeatherPct, 35);
+  assert.equal(encodeShareView(old), before, 'it still encodes to itself');
+  const state = {
+    lat: 51.5007,
+    lon: -0.1246,
+    alt: 1500,
+    heading: 40,
+    style: 'thermal',
+    scopeEnabled: false,
+    scopeFeatherPct: 35,
+    scopeTerminusPct: 97,
+    hudVariant: 'cyber',
+  };
+  assert.equal(encodeShareView(state), before);
+  assert.equal(encodeShareView({ ...state, scopeOpacityPct: 100 }), before);
+  const faded = assertRoundTrip({ ...state, scopeOpacityPct: 45 });
+  assert.notEqual(faded, before);
+  assert.equal(decodeOk(faded).state.scopeOpacityPct, 45);
+  assert.equal(
+    decodeOk(assertRoundTrip({ scopeOpacityPct: 0 })).state.scopeOpacityPct,
+    0,
+  );
+  // Out of range is clamped; anything not a number is the default.
+  assert.equal(
+    normalizeShareViewState({ scopeOpacityPct: 150 }).scopeOpacityPct,
+    100,
+  );
+  assert.equal(
+    normalizeShareViewState({ scopeOpacityPct: -5 }).scopeOpacityPct,
+    0,
+  );
+  assert.equal(
+    normalizeShareViewState({ scopeOpacityPct: 33.6 }).scopeOpacityPct,
+    34,
+  );
+  assert.equal(
+    normalizeShareViewState({ scopeOpacityPct: 'x' }).scopeOpacityPct,
+    100,
+  );
 });
