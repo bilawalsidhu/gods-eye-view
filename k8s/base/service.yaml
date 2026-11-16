@@ -1,0 +1,16 @@
+# ClusterIP only. The Istio VirtualService in the overlay is the single way in.
+# Do not switch to a LoadBalancer: this server brokers your provider API keys.
+apiVersion: v1
+kind: Service
+metadata:
+  name: gods-eye-view
+  labels:
+    app.kubernetes.io/name: gods-eye-view
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: gods-eye-view
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
