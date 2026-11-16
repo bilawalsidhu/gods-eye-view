@@ -966,6 +966,48 @@ test('Back into the entry of a deleted story, with Stories closed, clears ?story
   controller.destroy();
 });
 
+for (const [from, enter] of [
+  ['Explore', (controller) => controller.open()],
+  ['an open story', (controller) => controller.openStory('gev:flights-radar')],
+]) {
+  test(`Back into the entry of a deleted story, from ${from}, clears ?story=`, () => {
+    const { controller, store } = setup();
+    enter(controller);
+    assert.notEqual(store.mode, 'closed');
+    history.replaceState(
+      { gevStories: { story: 'gev:gone', depth: 2, explore: 1 } },
+      '',
+      '/?story=gev%3Agone&storyTime=12#lat=1',
+    );
+    dispatchEvent(new PopStateEvent('popstate'));
+    const url = new URL(location.href);
+    assert.equal(url.searchParams.has('story'), false);
+    assert.equal(url.searchParams.has('storyTime'), false);
+    assert.equal(url.hash, '#lat=1', 'the globe state stays');
+    assert.equal(history.state?.gevStories?.story, undefined);
+    controller.destroy();
+  });
+}
+
+test('Back into an Explore entry naming a deleted story keeps Explore', () => {
+  const { controller, store } = setup();
+  controller.openStory('gev:flights-radar');
+  history.replaceState(
+    { gevStories: { story: 'gev:gone', depth: 1, explore: 1 } },
+    '',
+    '/?stories=explore&story=gev%3Agone#lat=1',
+  );
+  dispatchEvent(new PopStateEvent('popstate'));
+  const url = new URL(location.href);
+  assert.equal(url.searchParams.get('stories'), 'explore');
+  assert.equal(url.searchParams.has('story'), false);
+  assert.equal(url.hash, '#lat=1');
+  assert.equal(history.state?.gevStories?.depth, 1);
+  assert.equal(history.state?.gevStories?.story, undefined);
+  assert.equal(store.mode, 'explore');
+  controller.destroy();
+});
+
 test('unsaved scenes appear as local drafts and disappear when deleted', () => {
   setActivePinia(createPinia());
   history.replaceState(null, '', '/');

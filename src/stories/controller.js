@@ -183,6 +183,22 @@ export function createStoriesController({
     delete state.gevStories;
     history.replaceState(state, '', urlFor({}));
   }
+  // Without the story of an entry whose story is gone.
+  function dropMissingStory(params) {
+    if (!params.has(PARAM_STORIES)) {
+      clearStoriesUrl();
+      return;
+    }
+    const url = new URL(location.href);
+    url.searchParams.delete(PARAM_STORY);
+    url.searchParams.delete(PARAM_STORY_TIME);
+    const state = { ...(history.state ?? {}) };
+    if (state.gevStories) {
+      state.gevStories = { ...state.gevStories };
+      delete state.gevStories.story;
+    }
+    history.replaceState(state, '', url);
+  }
   // Steps back over Stories' entries; `landed` runs once the page Stories
   // opened from is current (or at once when Stories pushed nothing). A
   // traversal that never lands (cross-document, blocked) gives up after 2 s.
@@ -258,6 +274,10 @@ export function createStoriesController({
     }
     const params = new URLSearchParams(location.search);
     const id = params.get(PARAM_STORY);
+    // An entry for a story that is gone (deleted since) opens nothing, in
+    // any mode; its ?story= must not stay in the address for the next share
+    // link. The entry's own Explore and the globe hash stay.
+    if (id && !storyById(id)) dropMissingStory(params);
     if (id && storyById(id))
       controller.openStory(id, {
         fromHistory: true,
@@ -269,9 +289,6 @@ export function createStoriesController({
         : controller.backToExplore({ fromHistory: true, returningToExplore });
     else if (store.mode !== 'closed') controller.close({ fromHistory: true });
     else {
-      // An entry for a story that is gone (deleted since) opens nothing;
-      // its ?story= must not stay in the address for the next share link.
-      if (id) clearStoriesUrl();
       if (pendingView) {
         // Another browser navigation landed while the scene was stopping.
         // The destination owns the globe now, so discard the earlier restore.
