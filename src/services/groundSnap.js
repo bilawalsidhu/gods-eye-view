@@ -11,11 +11,16 @@
  * Discipline (CCTV-B9b style): scene.sampleHeight forces a synchronous offscreen
  * pick render, so it is NEVER called per frame. Each grounded modeled plane gets
  * ONE successful sample, cached per icao; the cache stops answering directly when
- * the plane moves >MOVE_INVALIDATE_M from the sampled spot (taxiing). Misses (tiles
- * still streaming, OSM fallback with no tileset skin, sample outside loaded
- * geometry) are a retry-later signal with per-icao exponential backoff. A
- * per-window budget stops a freshly modeled airport cluster from firing dozens of
- * pick renders in one fleet tick.
+ * the plane moves >MOVE_INVALIDATE_M from the sampled spot (taxiing). A sample
+ * that misses (OSM fallback with no tileset skin, sample outside loaded
+ * geometry) is a retry-later signal with per-icao exponential backoff. Tiles
+ * still streaming is not a miss: no sample was taken, so it earns no backoff
+ * and the plane asks again on the next tick, sampling as soon as the tiles
+ * settle. Counting it as a miss had every grounded plane in view back off to
+ * RETRY_MAX_MS while the camera moved, then wait out that backoff after the
+ * tiles had loaded, so models replaced icons late and in batches. A per-window
+ * budget stops a freshly modeled airport cluster from firing dozens of pick
+ * renders in one fleet tick.
  *
  * What a caller gets while a sample is outstanding depends on whether this
  * contact has ever HAD one, and the difference is the difference between two
@@ -124,7 +129,7 @@ const HELD_SNAP_MAX_DRIFT_M = 250;
  *     alternative because it errs UPWARD and stays visible, where a buried model
  *     errs into the terrain and cannot be seen at all. */
 const HELD_SNAP_CONTRADICTION_M = 5;
-/** First retry delay after a miss / tiles-not-ready (ms); doubles per consecutive miss. */
+/** First retry delay after a sample finds no ground (ms); doubles per consecutive miss. */
 const RETRY_BASE_MS = 2000;
 /** Backoff cap (ms) — on the OSM fallback (no tile skin) sampleHeight misses forever. */
 const RETRY_MAX_MS = 30000;
@@ -327,7 +332,10 @@ export function createGroundSnap({ groundFloor }) {
       entries.set(icao, next);
       return heldSnapM(next, surfacePos);
     };
-    if (!_tilesReady(viewer)) return miss();
+    // Tiles still streaming: no sample is taken, so no backoff is earned (as
+    // with the budget above). The next tick asks again, and the first one after
+    // the tiles settle samples.
+    if (!_tilesReady(viewer)) return heldSnapM(entry, surfacePos);
     windowCount += 1;
     const at = toLonLatH(pos);
     const exclude = Array.isArray(exclusions?.sets)
