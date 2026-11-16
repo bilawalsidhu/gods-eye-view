@@ -9,14 +9,16 @@ You need `kubectl` pointed at your cluster, and a container image of the app.
 
 The repository has a GitHub Actions workflow
 (`.github/workflows/docker-publish.yml`). It builds the app and publishes it to
-GitHub Container Registry under your account:
+GitHub Container Registry under your account, each time a GitHub release is
+published:
 
 1. Fork the repository on GitHub.
-2. Go to the **Actions** tab of your fork and run **Docker image** (or push a
-   commit to `main`).
-3. Your image is then at `ghcr.io/<your-github-name>/gods-eye-view`. Make the
-   package public under the repository's **Packages** settings, or give the
-   cluster a pull secret.
+2. On your fork, go to **Releases** → **Draft a new release**, create a tag
+   such as `v1.0.0`, and publish the release.
+3. The **Docker image** workflow runs on the **Actions** tab. When it finishes,
+   the image is at `ghcr.io/<your-github-name>/gods-eye-view` with the tags
+   `v1.0.0`, `1.0`, `latest` and `sha-<commit>`. Make the package public under
+   the repository's **Packages** settings, or give the cluster a pull secret.
 
 ## 2. Edit the file
 
