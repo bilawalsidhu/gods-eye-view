@@ -95,11 +95,9 @@ export function validateSceneDocument(project) {
       'releaseLayerIds',
       'appliedShotPacks',
       'shots',
-      'stories',
-      'storyThumb',
-      'storyTags',
       ...(version >= 4 ? ['anchors'] : []),
       ...(version >= 5 ? ['dataPacks'] : []),
+      ...(version >= 7 ? ['stories', 'storyThumb', 'storyTags'] : []),
     ]);
     uniqueId(scene, path, sceneIds);
     optional(scene, 'title', path, (v, p) => string(v, p, 4096));

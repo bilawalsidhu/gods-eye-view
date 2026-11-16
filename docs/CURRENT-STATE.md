@@ -1639,7 +1639,7 @@ rules own presentation overrides and Nepal map fallback without changing saved
 shots or content. Scene-document validation and legacy migration now have separate
 owners. Invalid imports preserve the current project; unreadable saved projects
 are protected from fallback writes. Version 7 adds Scenes' optional Stories
-metadata and reads prior project files, including version 6 drafts, with
+metadata (accepted only in version 7 documents) and reads prior project files with
 zero pitch, low camera heights, scope and detection edits preserved. See [the document contract](SCENE-DOCUMENT.md);
 see [Director](DIRECTOR.md) for camera, pack, action and sharing support.
 

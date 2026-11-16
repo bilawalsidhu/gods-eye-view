@@ -20,7 +20,10 @@ import test from 'node:test';
 
 import { LayerLifecycle } from '../data/lifecycle.js';
 import { SceneDirector } from './director.js';
-import { stringifySceneDocument } from '../director/document.js';
+import {
+  stringifySceneDocument,
+  validateSceneDocument,
+} from '../director/document.js';
 import { SCENE_TRACKING_PARAM_KEYS } from './scenePolicy.js';
 import {
   SCENE_APPEND_RECIPES,
@@ -2383,7 +2386,7 @@ test('projects saved before the Stories flag still load, and a malformed flag is
   const { director, restore } = makeDirector();
   try {
     assert.equal(Object.hasOwn(director._project.scenes[0], 'stories'), false);
-    const project = structuredClone(PROJECT_FIXTURE);
+    const project = { ...structuredClone(PROJECT_FIXTURE), version: 7 };
     project.scenes[0].stories = 'yes';
     const before = director._project;
     await director.importProjectFile({
@@ -2690,8 +2693,7 @@ test('story thumbnail and tags survive a reload and an export/import round trip'
   try {
     first.director.setSceneStoryThumb('scene-1', THUMB);
     first.director.setSceneStoryTags('scene-1', ['Storms']);
-    // Draft builds wrote the same optional Stories fields in version 6.
-    saved = JSON.stringify({ ...savedProject(), version: 6 });
+    saved = JSON.stringify(savedProject());
   } finally {
     first.restore();
   }
@@ -2721,6 +2723,23 @@ test('story thumbnail and tags survive a reload and an export/import round trip'
   }
 });
 
+test('Stories fields are refused before document version 7, like other new fields', () => {
+  for (const [field, value] of [
+    ['stories', true],
+    ['storyThumb', THUMB],
+    ['storyTags', ['Storms']],
+  ]) {
+    const project = { ...structuredClone(PROJECT_FIXTURE), version: 6 };
+    project.scenes[0][field] = value;
+    assert.throws(
+      () => validateSceneDocument(project),
+      new RegExp(`scenes\\[0\\]\\.${field}`),
+      field,
+    );
+    validateSceneDocument({ ...project, version: 7 });
+  }
+});
+
 test('imports with a malformed thumbnail or tags are refused', async () => {
   const { director, restore } = makeDirector();
   try {
@@ -2744,7 +2763,7 @@ test('imports with a malformed thumbnail or tags are refused', async () => {
       ['storyTags', ['Volcanoes'], /storyTags/],
       ['storyTags', STORY_TAGS.slice(0, 6), /storyTags/],
     ]) {
-      const project = structuredClone(PROJECT_FIXTURE);
+      const project = { ...structuredClone(PROJECT_FIXTURE), version: 7 };
       project.scenes[0][field] = value;
       await director.importProjectFile({
         name: 'bad.json',
