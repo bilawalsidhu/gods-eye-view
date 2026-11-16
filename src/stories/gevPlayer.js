@@ -43,6 +43,7 @@ export function createGevPlayer(director, story, hooks = {}) {
   let playing = false;
   let shotIndex = 0;
   let destroyed = false;
+  let pendingSeek = null;
   // Each Play, Pause, Seek and Destroy takes a new number; a Play that waited
   // for a teardown or a run to finish acts only if nothing came after it.
   let request = 0;
@@ -59,8 +60,7 @@ export function createGevPlayer(director, story, hooks = {}) {
     if (!destroyed) hooks.onTick?.(state());
   };
 
-  const unsubscribe = director.subscribeSceneClock((snap) => {
-    if (destroyed || !snap || snap.sceneId !== sceneId) return;
+  function applyClock(snap) {
     if (snap.sceneDurationSec) durationMs = snap.sceneDurationSec * 1000;
     wallMs = (snap.sceneElapsedSec ?? 0) * 1000;
     shotIndex = snap.shotIndex ?? shotIndex;
@@ -68,7 +68,37 @@ export function createGevPlayer(director, story, hooks = {}) {
     if (!playing && !snap.seeking && wallMs >= durationMs - 250)
       wallMs = durationMs;
     tick();
+  }
+
+  const unsubscribe = director.subscribeSceneClock((snap) => {
+    if (destroyed || !snap || snap.sceneId !== sceneId) return;
+    if (pendingSeek) {
+      if (snap.seeking) pendingSeek.snapshot = snap;
+      return;
+    }
+    applyClock(snap);
   });
+
+  function seekToCurrentTime(options) {
+    playing = false;
+    const seek = { snapshot: null };
+    // seekScene stops the old run synchronously. Keep its last clock
+    // snapshots from overwriting this position while the seek settles.
+    pendingSeek = seek;
+    const settle = (applied) => {
+      if (pendingSeek !== seek) return;
+      pendingSeek = null;
+      if (applied === true && seek.snapshot) applyClock(seek.snapshot);
+    };
+    Promise.resolve(
+      director.seekScene(
+        sceneId,
+        durationMs ? wallMs / durationMs : 0,
+        options,
+      ),
+    ).then(settle, () => settle(false));
+    tick();
+  }
 
   // A run from the previous story may still be releasing the camera.
   async function idle() {
@@ -87,6 +117,7 @@ export function createGevPlayer(director, story, hooks = {}) {
       const mine = ++request;
       await idle();
       if (destroyed || mine !== request || director.running) return;
+      pendingSeek = null;
       // Natural completion is rounded up by the clock subscriber; a
       // paused shared time inside the last 250 ms is not completion.
       if (wallMs >= durationMs) {
@@ -113,17 +144,13 @@ export function createGevPlayer(director, story, hooks = {}) {
     },
     pause() {
       request += 1;
-      playing = false;
-      director.seekScene(sceneId, durationMs ? wallMs / durationMs : 0);
-      tick();
+      seekToCurrentTime();
     },
-    seek(ms) {
+    seek(ms, options) {
       request += 1;
       wallMs = Math.max(0, Math.min(durationMs, ms));
       shotIndex = chapterAt(story, wallMs);
-      playing = false;
-      director.seekScene(sceneId, durationMs ? wallMs / durationMs : 0);
-      tick();
+      seekToCurrentTime(options);
     },
     resume() {
       return this.play();
@@ -135,6 +162,7 @@ export function createGevPlayer(director, story, hooks = {}) {
     destroy() {
       request += 1;
       destroyed = true;
+      pendingSeek = null;
       unsubscribe?.();
       director.stopScene();
     },

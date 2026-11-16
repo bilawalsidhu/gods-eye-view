@@ -84,10 +84,40 @@ test('a stopped run’s completion does not repeat a newer seek', async () => {
   await turns();
   assert.deepEqual(director.calls, ['start']);
   assert.equal(director.running, true);
+  const oldClock = {
+    sceneElapsedSec: 0,
+    running: false,
+  };
+  const recordSeek = director.seekScene;
+  let settleSeek;
+  director.seekScene = (id, progress) => {
+    recordSeek(id, progress);
+    director.publish({ ...oldClock, stopped: true });
+    return new Promise((resolve) => {
+      if (progress === 0.5) settleSeek = resolve;
+      else resolve(false);
+    });
+  };
   player.pause();
   player.seek(30000);
+  assert.equal(
+    player.state.wallMs,
+    30000,
+    'Share can read the new time immediately',
+  );
+  await turns();
+  director.publish(oldClock);
+  director.publish({ ...oldClock, seeking: true });
+  assert.equal(
+    player.state.wallMs,
+    30000,
+    'old teardown cannot move the timeline',
+  );
   director.finishRun();
   await playing;
+  director.publish({ running: false, seeking: true, sceneElapsedSec: 30 });
+  settleSeek(true);
+  await turns();
   assert.deepEqual(director.calls, ['start', 'seek 0', 'seek 0.5']);
   assert.equal(player.state.playing, false);
   assert.equal(player.state.wallMs, 30000);

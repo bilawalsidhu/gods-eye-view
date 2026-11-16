@@ -673,8 +673,10 @@ controller are separate chunks fetched together on first open, on a
 fetch is reported and the next attempt tries again. Stories keeps its place
 in the query, not the share-state hash, with one history entry per screen;
 Close steps back over those entries, so Back afterwards does not reopen it,
-and share links carry only the Stories place (`stories` / `story`), not the
-sender's camera, layers or other settings. GEV's share link keeps
+and share links carry the Stories screen and place. Explore links use
+`stories=explore` and optionally `selectedStory`. Player links use `story`
+and optionally `storyTime` in milliseconds, opening paused at that time.
+GEV's share link keeps
 `history.state` when it rewrites the hash, so Stories' entries survive.
 
 Every story is a GEV scene, played on the person's own globe through

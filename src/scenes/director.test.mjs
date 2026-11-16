@@ -505,10 +505,13 @@ test('refused same-shot seek rollback keeps a manual toggle still in flight', as
   }
 });
 
-test('same-shot seeking keeps the shortcut when declared visibility is unchanged', async () => {
-  const { director, dataManager, styleManager, restore } = makeDirector();
+test('reopening the same shot reapplies its look while ordinary seeks reuse it', async () => {
+  const project = structuredClone(PROJECT_FIXTURE);
+  project.scenes[0].shots[0].visual.style = 'retro';
+  const { director, dataManager, styleManager, restore } = makeDirector({ project });
   try {
     await director.loadShot('scene-1', 'shot-a', { flyDuration: 0 });
+    await styleManager.applyVisualState({ style: 'normal' });
     await dataManager.setEnabled('satellites', true);
     dataManager.setEnabledCalls.length = 0;
     const visualCalls = styleManager.visualCalls.length;
@@ -517,6 +520,13 @@ test('same-shot seeking keeps the shortcut when declared visibility is unchanged
     assert.deepEqual(dataManager.setEnabledCalls, []);
     assert.equal(styleManager.visualCalls.length, visualCalls);
     assert.equal(director.getPlaybackTimingState().snapshot.sceneProgress, 0.25);
+
+    assert.equal(await director.seekScene('scene-1', 0.25, { reloadShot: true }), true);
+    assert.equal(styleManager.visualCalls.length, visualCalls + 1);
+    assert.equal(styleManager.visualStates.at(-1).style, 'retro');
+    const { sceneProgress, seeking } = director.getPlaybackTimingState().snapshot;
+    assert.equal(sceneProgress, 0.25);
+    assert.equal(seeking, true);
   } finally {
     await director.destroy();
     restore();

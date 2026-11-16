@@ -1813,15 +1813,17 @@ export class SceneDirector {
     return true;
   }
 
-  /** Seek the complete authored scene state to an exact clock position. */
-  seekScene(sceneId, progress) {
+  /** Seek to an exact position. Reopening a scene can reload its authored look. */
+  seekScene(sceneId, progress, { reloadShot = false } = {}) {
     if (this._destroyed) return Promise.resolve(false);
     this.stopScene(msg('Seeking scene clock'));
     const generation = this._bumpSceneSeekGeneration();
-    return this._trackWork(this._seekScene(sceneId, progress, generation));
+    return this._trackWork(
+      this._seekScene(sceneId, progress, generation, reloadShot),
+    );
   }
 
-  async _seekScene(sceneId, progress, generation) {
+  async _seekScene(sceneId, progress, generation, reloadShot) {
     const scene = this._project.scenes.find(({ id }) => id === sceneId);
     if (!scene?.shots?.length) return false;
     if (this._running) {
@@ -1831,10 +1833,12 @@ export class SceneDirector {
       return false;
     const seekState = this._sceneSeekState(scene, progress);
     if (!seekState) return false;
-    const seeked = await this._seekLoadedShot(scene, seekState, generation);
-    if (this._destroyed || generation !== this._sceneSeekGeneration)
-      return false;
-    if (seeked !== null) return seeked;
+    if (!reloadShot) {
+      const seeked = await this._seekLoadedShot(scene, seekState, generation);
+      if (this._destroyed || generation !== this._sceneSeekGeneration)
+        return false;
+      if (seeked !== null) return seeked;
+    }
     const result = await this._loadShot(scene.id, seekState.shot.id, {
       sceneSeek: seekState,
     });

@@ -8,6 +8,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { createStateChannel } from '../app/stateChannel.js';
 import { bindRenderer } from '../render/rendererOf.js';
 import { getRenderGovernorDiagnostics } from '../renderGovernor.js';
+import { ShareLinkManager } from '../sharelink.js';
 const holds = () => getRenderGovernorDiagnostics().holds;
 
 registerHooks({
@@ -533,16 +534,36 @@ test('Close after a GEV scene puts the share state back once the step back lands
 });
 
 test('Open in GEV steps back over Stories without putting the old view back', async (t) => {
+  const share = new ShareLinkManager(
+    {},
+    {
+      camera: {
+        on: () => () => {},
+        pose: () => ({ lat: 7, lon: 8, height: 1000 }),
+      },
+    },
+  );
+  t.after(() => share.destroy());
+  const restored = [];
+  // The share listener starts before Stories lazy-loads.
+  share.watchNavigation((state) => restored.push(state.lat));
   const { controller, director, camera } = setup();
+  t.after(() => controller.destroy());
+  director.styleManager.shareLinkManager = share;
   const steps = recordGo(t);
   controller.open();
   controller.openStory('gev:bhote-koshi-nepal-scene');
+  // Forward into a Stories entry has already let the share listener see
+  // its empty hash.
+  dispatchEvent(new HashChangeEvent('hashchange'));
   await controller.openInGev();
   assert.deepEqual(steps, [-2], 'Back never reopens Stories');
-  land();
-  assert.deepEqual(director.styleManager.shareLinkManager.restored, []);
+  land('#v=2&lat=1&lon=2');
+  dispatchEvent(new HashChangeEvent('hashchange'));
+  assert.deepEqual(restored, []);
   assert.equal(camera.views.length, 0);
-  controller.destroy();
+  land('#v=2&lat=3&lon=4');
+  assert.deepEqual(restored, [3], 'ordinary navigation still restores');
 });
 
 test('a drag on the globe while a scene tears down keeps the camera where it went', async () => {

@@ -81,6 +81,7 @@ export function createStoriesController({
   let destroyed = false;
   // Close steps back over Stories' own entries; the landing popstate is ours.
   let closingHistory = false;
+  let keepLandingView = false;
   // A Back to Explore traversal is on its way.
   let steppingBack = false;
   let backTimer = 0;
@@ -189,14 +190,16 @@ export function createStoriesController({
   let landingTimer = 0;
   function finishLanding() {
     clearTimeout(landingTimer);
+    keepLandingView = false;
     const then = landed;
     landed = null;
     then?.();
   }
-  function leaveHistory(then = null) {
+  function leaveHistory(then, keepView) {
     const steps = depth();
     if (steps > 0) {
       closingHistory = true;
+      keepLandingView = keepView;
       landed = then;
       clearTimeout(landingTimer);
       landingTimer = setTimeout(() => {
@@ -213,6 +216,20 @@ export function createStoriesController({
       then?.();
     }
   }
+  // Open in GEV deliberately keeps the scene view. Clear the earlier
+  // entry's hash before the share manager sees popstate or hashchange;
+  // releasing its write hold will put the current view at this address.
+  const onLandingCapture = () => {
+    if (!closingHistory || !keepLandingView || !location.hash) return;
+    const url = new URL(location.href);
+    if (
+      url.searchParams.has(PARAM_STORY) ||
+      url.searchParams.has(PARAM_STORIES)
+    )
+      return;
+    url.hash = '';
+    history.replaceState(history.state, '', url);
+  };
   const onPopState = () => {
     if (destroyed) return;
     cancelInitialLink();
@@ -259,6 +276,7 @@ export function createStoriesController({
     }
   }
   addEventListener('popstate', onPopState);
+  addEventListener('popstate', onLandingCapture, true);
 
   // ── The person's own view, kept for when Stories closes ──
   function saveView() {
@@ -915,7 +933,7 @@ export function createStoriesController({
           document.body.classList.remove('stories-mode');
         };
         if (fromHistory) afterLanding();
-        else leaveHistory(afterLanding);
+        else leaveHistory(afterLanding, keepCamera || navigated);
       };
       return directorSettled(director).then(finish);
     },
@@ -971,8 +989,9 @@ export function createStoriesController({
       // Related stories show their card images too, after a link.
       drawThumbs();
       startCameraReadout();
-      // Opened paused, a scene frames its first shot (or the moment asked).
-      if (atMs || !autoplay) player.seek(atMs);
+      // Explore may have restored a different look while the director still
+      // has this shot selected. Reopening restores the authored look too.
+      if (atMs || !autoplay) player.seek(atMs, { reloadShot: true });
       if (autoplay) player.play();
       if (!fromHistory)
         navigate(
@@ -1090,6 +1109,7 @@ export function createStoriesController({
       clearTimeout(backTimer);
       clearTimeout(landingTimer);
       steppingBack = closingHistory = false;
+      keepLandingView = false;
       afterTraversal = landed = null;
       dropPlayer();
       stopPins();
@@ -1106,6 +1126,7 @@ export function createStoriesController({
       useSavedScenes(null);
       useInstalledScenes(null);
       removeEventListener('popstate', onPopState);
+      removeEventListener('popstate', onLandingCapture, true);
       canvas.removeEventListener('pointerdown', onDown);
       canvas.removeEventListener('pointerdown', onExploreInput);
       canvas.removeEventListener('pointerup', onExploreInput);
