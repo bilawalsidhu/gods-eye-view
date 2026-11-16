@@ -261,6 +261,7 @@ test('Display and voice HUD routes preserve explicit Cyber entry and exit author
   const viewer = {
     camera: { moveEnd: { addEventListener() {} } },
     clock: { onTick: { addEventListener: () => () => {} } },
+    canvas: eventSource,
     scene: { canvas: eventSource },
   };
   const runVoiceAction = createGevActionRunner({
@@ -691,8 +692,7 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   const hud = read('../hud.js');
   const hudView = read('./views/IntelHudView.vue');
   const detection = read('../data/detection.js');
-  const civilRendering = read('../layers/flights/rendering.js');
-  const militaryRendering = read('../layers/military/rendering.js');
+  const aircraftModels = read('../data/aircraftModelLayer.js');
   const setHud = GEV_ACTION_SCHEMAS.find((schema) => schema.name === 'set_hud');
 
   assert.match(display, /<option value="cyber">\{\{ t\('Cyber'\) \}\}<\/option>/);
@@ -742,12 +742,8 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   );
   assert.doesNotMatch(detection, /sonarActive \? 1 : 0/);
   assert.match(
-    civilRendering,
-    /alpha: flightState\._irBoost \? 1 : treatment\.alpha/,
-  );
-  assert.match(
-    militaryRendering,
-    /baseAlpha:[\s\S]*?alpha: flightState\._irBoost \? 1 : treatment\.alpha/,
+    aircraftModels,
+    /alpha: state\._irBoost\s*\?\s*1\s*:\s*aircraftTreatmentAlpha\(/,
   );
   assert.match(
     cyberStyles,

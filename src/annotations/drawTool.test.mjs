@@ -205,11 +205,8 @@ test('draped marks classify onto terrain as well as 3D tiles', () => {
   // rendered proof is in scripts/qa-draw-tool.mjs, which counts stroke pixels
   // against a keyless server; this stops the constant being narrowed again.
   const renderer = read('src/annotations/worldAnnotationRenderer.js');
-  assert.match(renderer, /const CLASSIFY = Cesium\.ClassificationType\.BOTH;/);
-  assert.doesNotMatch(
-    renderer,
-    /classificationType: Cesium\.ClassificationType\.CESIUM_3D_TILE/,
-  );
+  assert.match(renderer, /const CLAMP_TO = 'both';/);
+  assert.doesNotMatch(renderer, /clampTo: '(tiles|terrain)'/);
 });
 
 test('the draw modules are registered for formatting and boundary checks', () => {

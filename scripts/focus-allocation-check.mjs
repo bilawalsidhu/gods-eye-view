@@ -1,11 +1,8 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import {
-  advanceSpriteFocus,
-} from '../src/data/focusDeemphasis.js';
-import {
-  applyAircraftBillboardTreatment,
-} from '../src/data/aircraftRecession.js';
+import { advanceSpriteFocus } from '../src/data/focusDeemphasis.js';
+import { aircraftTreatmentAlpha } from '../src/data/aircraftRecession.js';
+import { createIconSet } from '../src/data/iconSet.js';
 
 if (typeof global.gc !== 'function') {
   throw new Error('focus-allocation-check.mjs requires node --expose-gc');
@@ -66,17 +63,14 @@ const focusInput = {
   target,
 };
 
-const baseColor = { withAlpha: (alpha) => ({ alpha }) };
-const billboard = { scale: 1, color: { alpha: 1 } };
 const aircraftInput = {
-  billboard,
-  baseScale: 1,
   baseAlpha: 1,
-  baseColor,
   focusFactor: 1,
   cameraDistanceM: 100,
   cameraHeightM: 1000,
 };
+const icons = createIconSet({ capacity: 4 });
+const row = icons.add('sprite', {});
 
 const baseline = bytesPerCall(() => focusInput.nowMs);
 const focus = netOfLoopBaseline(
@@ -84,30 +78,22 @@ const focus = netOfLoopBaseline(
   baseline,
 );
 const aircraft = netOfLoopBaseline(
-  bytesPerCall(() => applyAircraftBillboardTreatment(aircraftInput).alpha),
+  bytesPerCall(() => aircraftTreatmentAlpha(aircraftInput)),
   baseline,
 );
 const productionSpriteTick = netOfLoopBaseline(
   bytesPerCall(() => {
-    // Match the hot civilian/military sprite path: the caller constructs fresh
-    // option literals, consumes the shared focus result immediately, and then
-    // constructs the composed aircraft-treatment options for the same sprite.
+    // Match the hot icon-set focus pass: the caller constructs a fresh option
+    // literal, consumes the shared focus result immediately and writes it to
+    // the row's focus column (the shader composes it with limb recession).
     const focusResult = advanceSpriteFocus(sprite, {
       screenPosition: focusInput.screenPosition,
       cameraDistance: focusInput.cameraDistance,
       nowMs: focusInput.nowMs,
       target,
     });
-    const treatment = applyAircraftBillboardTreatment({
-      billboard,
-      baseScale: aircraftInput.baseScale,
-      baseAlpha: aircraftInput.baseAlpha,
-      baseColor,
-      focusFactor: focusResult.factor,
-      cameraDistanceM: aircraftInput.cameraDistanceM,
-      cameraHeightM: aircraftInput.cameraHeightM,
-    });
-    return focusResult.factor + treatment.alpha;
+    icons.setFocus(row, focusResult.factor);
+    return focusResult.factor;
   }),
   baseline,
 );
@@ -118,22 +104,24 @@ assert.ok(
 );
 assert.ok(
   aircraft.roundedMedian <= PURE_CALL_BUDGET,
-  `applyAircraftBillboardTreatment allocated ${aircraft.rawMedian.toFixed(3)} B/call median`,
+  `aircraftTreatmentAlpha allocated ${aircraft.rawMedian.toFixed(3)} B/call median`,
 );
 assert.ok(
   productionSpriteTick.roundedMedian <= PRODUCTION_SPRITE_TICK_BUDGET,
   `production sprite tick allocated ${productionSpriteTick.rawMedian.toFixed(3)} B/call median`,
 );
 
-console.log(JSON.stringify({
-  callsPerTrial: CALLS,
-  trials: TRIALS,
-  budgets: {
-    pureCall: PURE_CALL_BUDGET,
-    productionSpriteTick: PRODUCTION_SPRITE_TICK_BUDGET,
-  },
-  loopBaseline: baseline,
-  advanceSpriteFocus: focus,
-  applyAircraftBillboardTreatment: aircraft,
-  productionSpriteTick,
-}));
+console.log(
+  JSON.stringify({
+    callsPerTrial: CALLS,
+    trials: TRIALS,
+    budgets: {
+      pureCall: PURE_CALL_BUDGET,
+      productionSpriteTick: PRODUCTION_SPRITE_TICK_BUDGET,
+    },
+    loopBaseline: baseline,
+    advanceSpriteFocus: focus,
+    aircraftTreatmentAlpha: aircraft,
+    productionSpriteTick,
+  }),
+);

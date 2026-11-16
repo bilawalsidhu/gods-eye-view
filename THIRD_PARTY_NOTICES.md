@@ -62,6 +62,14 @@ layer's hexagon grid; the complete resolved dependency inventory remains in
 - Source: <https://github.com/101arrowz/fzstd>
 - License: MIT
 
+## kdbush
+
+- Package: `kdbush` 4.0.2 (the screen index that groups points drawn too
+  close together into clusters)
+- Author: Copyright (c) 2018, Vladimir Agafonkin
+- Source: <https://github.com/mourner/kdbush>
+- License: ISC
+
 ## H3 (h3-js)
 
 - Package: `h3-js` 4.4.0 (the GNSS Integrity layer's H3 hexagon cells)

@@ -1,4 +1,4 @@
-import { cameraPoseSignature } from '../../data/iconOrientation.js';
+import { canvasOf, findCamera, findFrame } from '../../render/rendererOf.js';
 import { AWARENESS_RANGE_PULSE } from './policy.js';
 
 export function createLifecycle({
@@ -11,13 +11,13 @@ export function createLifecycle({
 
   /**
    * Note the user handling the map's camera (pointer, wheel or touch on the
-   * Cesium canvas, where its camera controller listens), so a camera move the
-   * user made can wake the range pulses and one the app made (tracking,
-   * cockpit, orbit, a fly-to) does not. Keys are left out: Cesium's camera
-   * controller reads none, and typing elsewhere must not count. Nor does
-   * input while the camera controller's inputs are off: the cockpit (or a
-   * gizmo drag, or a drawing tool) owns the camera then, and the user's
-   * gesture moves nothing.
+   * renderer's canvas, where its camera controls listen), so a camera move
+   * the user made can wake the range pulses and one the app made (tracking,
+   * cockpit, orbit, a fly-to) does not. Keys are left out: the camera
+   * controls read none, and typing elsewhere must not count. Nor does input
+   * while the camera controls are suspended: the cockpit (or a gizmo drag,
+   * or a drawing tool) owns the camera then, and the user's gesture moves
+   * nothing.
    */
   function noteCameraInput(event) {
     if (event?.type === 'pointermove' && !event.buttons) return;
@@ -28,8 +28,9 @@ export function createLifecycle({
       followGesture(true);
   }
 
-  // A drag can leave the canvas, and Cesium follows it at document level
-  // (in Firefox, and wherever there are no pointer events). So does this,
+  // A drag can leave the canvas, and the camera controls follow it at
+  // document level (in Firefox, and wherever there are no pointer events).
+  // So does this,
   // from a gesture's start on the canvas to its end, so a long gesture keeps
   // the input window open the whole way.
   const GESTURE_MOVE_EVENTS = ['pointermove', 'touchmove'];
@@ -56,7 +57,7 @@ export function createLifecycle({
   }
 
   // A gesture ends with its last contact: lifting one finger of a pinch
-  // leaves Cesium a one-finger drag.
+  // leaves the camera controls a one-finger drag.
   function endGesture(event) {
     noteCameraInput(event);
     activePointers.delete(event?.pointerId);
@@ -77,8 +78,7 @@ export function createLifecycle({
   }
 
   function cameraInputsEnabled() {
-    const controller = layerState.viewer?.scene?.screenSpaceCameraController;
-    return controller?.enableInputs !== false;
+    return findCamera(layerState.viewer)?.controls?.enabled !== false;
   }
 
   const CAMERA_INPUT_EVENTS = [
@@ -90,16 +90,22 @@ export function createLifecycle({
   ];
 
   /**
-   * Quantized camera-pose signature, or '' when the camera cannot report a full
-   * pose yet. An unknown pose reads as PARKED, so a camera that is still coming
-   * up can never be mistaken for continuous movement.
-   * @param {Cesium.Camera|null|undefined} camera
+   * Quantized camera-pose signature (position to ~10 m, angles to ~0.06
+   * degrees), or '' when the camera cannot report a full pose yet. An unknown
+   * pose reads as PARKED, so a camera that is still coming up can never be
+   * mistaken for continuous movement.
+   * @param {object|null|undefined} viewer
    * @returns {string}
    */
 
-  function cameraMotionSignature(camera) {
-    if (!camera?.positionWC || !Number.isFinite(camera.heading)) return '';
-    return cameraPoseSignature(camera);
+  function cameraMotionSignature(viewer) {
+    const pose = findCamera(viewer)?.pose();
+    const p = pose?.position;
+    if (!p || !Number.isFinite(pose.heading)) return '';
+    return (
+      `${Math.round(p.x / 10)}:${Math.round(p.y / 10)}:${Math.round(p.z / 10)}:` +
+      `${pose.heading.toFixed(3)}:${pose.pitch.toFixed(3)}:${pose.roll.toFixed(3)}`
+    );
   }
 
   /**
@@ -131,23 +137,23 @@ export function createLifecycle({
       'gev:awareness-subject-cleared',
       layerState.subjectClearListener,
     );
-    const input = layerState.viewer.canvas ?? layerState.viewer.scene?.canvas;
+    const input = canvasOf(layerState.viewer);
     for (const type of CAMERA_INPUT_EVENTS)
       input?.addEventListener?.(type, noteCameraInput, { passive: true });
     layerState.cameraInputTarget = input ?? null;
-    layerState.preRenderRemover =
-      layerState.viewer.scene.preRender.addEventListener(() => {
+    layerState.preRenderRemover = findFrame(layerState.viewer)?.on(
+      'preRender',
+      () => {
         if (!layerState.enabled) return;
         const now = Date.now();
         // Another owner took the camera: a gesture begun before it did must
         // not wake the pulses on that owner's first move.
         if (!cameraInputsEnabled())
           layerState.lastCameraInputMs = Number.NEGATIVE_INFINITY;
-        // "Did the camera move" uses the SAME quantized pose signature the fleet
-        // rotation pass gates on (iconOrientation.cameraPoseSignature) rather than
-        // camera.changed, whose granularity is globally degraded by other layers
-        // mutating camera.percentageChanged.
-        const poseSig = cameraMotionSignature(layerState.viewer.camera);
+        // "Did the camera move" uses the same quantization as the fleet
+        // rotation pass's cameraPoseSignature (render/cesium/iconOrientation;
+        // keep the two in step), read from the camera port's pose.
+        const poseSig = cameraMotionSignature(layerState.viewer);
         if (poseSig !== layerState.lastCameraPoseSig) {
           layerState.lastCameraPoseSig = poseSig;
           layerState.lastCameraPoseChangeMs = now;
@@ -183,7 +189,8 @@ export function createLifecycle({
         } else {
           parts.rendering.scheduleDirectionOverlayUpdate();
         }
-      });
+      },
+    );
     layerState.runtimeListenersAttached = true;
   }
 
@@ -335,6 +342,7 @@ export function createLifecycle({
       detachRuntimeListeners();
       parts.panel.clearPanel();
       parts.rendering.removeDirectionOverlay();
+      parts.rendering.disposeVisual();
       layerState.subjectListener = null;
       layerState.contextListener = null;
       layerState.clearListener = null;

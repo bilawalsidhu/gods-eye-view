@@ -1,5 +1,6 @@
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
 import { msg, t } from '../../i18n/index.js';
+import { findCamera } from '../../render/rendererOf.js';
 import { AIS_FIRST_CONNECT_GRACE_MS, AIS_HEALTHY_STATUSES } from './policy.js';
 
 export function createLifecycle({
@@ -10,7 +11,6 @@ export function createLifecycle({
   options,
 }) {
   const { state } = vesselState;
-  const { restoreSpriteOrder, restoreSpriteOrderOnEnable } = services.sprites;
   const { releaseContinuousRender } = services.render;
   const { ensureGeoidReady } = services.geoid;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
@@ -114,17 +114,16 @@ export function createLifecycle({
     state.feed.firstConnectDeadline = null;
     state.feed.firstConnectTimer = null;
     state.feed.abort = null;
-    state.billboardCollection = null;
+    state.icons = null;
     if (services.placement)
       for (const id of state.records.byId.keys()) services.placement.forget(id);
     state.records.all = [];
     state.records.byId = new Map();
     state.records.unkeyed = [];
-    state.clickHandler = null;
+    state.clickSubscription = null;
     state.keyTarget = null;
     state.keydownHandler = null;
     state.trackedEntityRemover = null;
-    state.interactionHandlerFactory = null;
     state.interactionKeyTarget = null;
     state.preRenderRemover = null;
     components.rendering.cancelTrailingVisibilityPass();
@@ -160,7 +159,6 @@ export function createLifecycle({
       );
       components.selection.installInteraction(viewer);
       components.rendering.installRuntime(viewer);
-      restoreSpriteOrder(viewer);
     },
 
     enable(viewer) {
@@ -189,17 +187,15 @@ export function createLifecycle({
             /* grid failed to load — anchors stay at ellipsoid 0 */
           });
       }
-      // Pick-ownership (H2): vessel picks carry the record OBJECT as their id;
-      // the registry resolver reduces it to the record's id (a string key).
+      // Pick-ownership (H2): a vessel icon's pick id is its row id, the record's id.
       registerPickOwner('ais-live-vessels', (pickedId) =>
         state.records.byId.has(pickedId),
       );
-      restoreSpriteOrderOnEnable('ais', activeViewer);
       // Vessels are asked for by view, so ask again when the view moves away.
       removeViewListener();
-      const moveEnd = activeViewer?.camera?.moveEnd;
-      if (typeof moveEnd?.addEventListener === 'function')
-        state.feed.removeViewListener = moveEnd.addEventListener(() => {
+      const camera = findCamera(activeViewer);
+      if (camera)
+        state.feed.removeViewListener = camera.on('moveEnd', () => {
           components.ingestion.refreshIfMoved(activeViewer);
         });
       vesselState.timeline?.start();
@@ -240,9 +236,7 @@ export function createLifecycle({
       unregisterPickOwner('ais-live-vessels');
       components.selection.clearVesselInspection();
       components.tracking.destroySelectedVesselTrail();
-      if (state.billboardCollection && activeViewer?.scene?.primitives) {
-        activeViewer.scene.primitives.remove(state.billboardCollection);
-      }
+      components.rendering.disposeCollections();
       vesselState._vesselOverlayHost.clearSource(VESSEL_OVERLAY_SOURCE_ID);
       vesselState._vesselOverlayHost.setVisible(
         VESSEL_OVERLAY_SOURCE_ID,

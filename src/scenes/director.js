@@ -12,6 +12,7 @@
  * State is persisted to localStorage and can be exported/imported as JSON.
  */
 
+import { isFollowing } from '../data/followed.js';
 import { cancelCameraArrival } from '../data/cameraArrival.js';
 import { resolveCameraPose, resolveCameraMove } from '../director/camera.js';
 import { createCameraMotion } from './cameraMotion.js';
@@ -20,7 +21,8 @@ import { SceneControls } from '../ui/scenes.js';
 import { createToast } from '../ui/toast.js';
 import { buildPlaybackQueue, playSceneQueue } from '../director/playback.js';
 import { createScenePlaybackAdapter } from './playbackAdapter.js';
-import * as Cesium from 'cesium';
+import { toRadians } from '../geo/vector.js';
+import { cameraOf, canvasOf, findCamera } from '../render/rendererOf.js';
 import {
   SCENE_APPEND_RECIPES,
   SCENE_RECIPES,
@@ -73,13 +75,16 @@ const STORAGE_CHECKPOINT_KEY = 'godsEyeView.sceneProject.checkpoint.v1';
  * Orchestrates deterministic cinematic scene playback.
  *
  * The director owns a mutable project (persisted in localStorage) containing
- * scenes and shots. It drives camera flights via Cesium, applies visual/style
- * state through the styleManager, toggles data layers via the dataManager, and
- * records timestamped telemetry events during each run for later export.
+ * scenes and shots. It drives camera flights via the renderer, applies
+ * visual/style state through the styleManager, toggles data layers via the
+ * dataManager, and records timestamped telemetry events during each run for
+ * later export.
  */
 export class SceneDirector {
   /**
-   * @param {Cesium.Viewer} viewer - The Cesium viewer instance
+   * @param {object} viewer - The scene's viewer (its renderer's host). Given
+   *   a viewer with no renderer bound, the caller loads
+   *   the package's `./render/cesium/unbound` export first.
    * @param {Object} styleManager - Controls visual state (bloom, sharpen, HUD, detection, style presets)
    * @param {Object} dataManager - Manages data layer enable/disable and per-layer params
    */
@@ -112,7 +117,7 @@ export class SceneDirector {
     this._interactionTransitions = 0;
     this._interactions = createSceneInteractions(viewer, {
       available: () =>
-        !this._destroyed && !this._running && !this.viewer.trackedEntity,
+        !this._destroyed && !this._running && !isFollowing(this.viewer),
       execute: (action, signal) =>
         this._trackWork(this._executeInteraction(action, signal)),
     });
@@ -131,7 +136,8 @@ export class SceneDirector {
     };
     this._cameraHandoffUnsubscribe =
       styleManager.subscribeCameraHandoff?.(yieldCamera);
-    const canvas = viewer.scene?.canvas;
+    // A viewer of the caller's own, with no renderer bound, has its canvas.
+    const canvas = canvasOf(viewer);
     for (const event of ['pointerdown', 'wheel'])
       canvas?.addEventListener(event, yieldCamera, { passive: true });
     this._removeCameraInput = () => {
@@ -263,7 +269,8 @@ export class SceneDirector {
       this.stopScene(msg('Stopped'));
       this._loadAbort?.abort();
       this._loadGeneration++;
-      this.viewer.camera.cancelFlight();
+      // The viewer may be gone by now: then there is no flight to stop.
+      findCamera(this.viewer)?.cancelFlight();
       this._storageToast?.cancel();
       await Promise.allSettled(this._pendingWork || []);
       this._clock.destroy();
@@ -1361,7 +1368,7 @@ export class SceneDirector {
     return travel;
   }
 
-  /** Publish a travel phase only after Cesium has accepted the camera flight. */
+  /** Publish a travel phase only after the renderer has accepted the camera flight. */
   _publishShotTravel(scene, shot, cameraTravel) {
     const states = this._layerStatesForShot(scene, shot, { cameraTravel });
     for (const [layerId, state] of Object.entries(states)) {
@@ -1746,20 +1753,20 @@ export class SceneDirector {
 
   /** Place the camera at an authored replay start pose without an intermediate flight. */
   _setCameraView(cameraState) {
-    if (!cameraState || typeof this.viewer?.camera?.setView !== 'function')
-      return false;
+    const camera = findCamera(this.viewer);
+    if (!cameraState || !camera) return false;
     this.styleManager?.clearSearchedLocation?.();
-    this.viewer.camera.cancelFlight?.();
-    this.viewer.camera.setView({
-      destination: Cesium.Cartesian3.fromDegrees(
-        cameraState.lon,
-        cameraState.lat,
-        cameraState.alt,
-      ),
+    camera.cancelFlight();
+    camera.setView({
+      destination: {
+        lon: cameraState.lon,
+        lat: cameraState.lat,
+        height: cameraState.alt,
+      },
       orientation: {
-        heading: Cesium.Math.toRadians(cameraState.heading || 0),
-        pitch: Cesium.Math.toRadians(cameraState.pitch ?? -35),
-        roll: Cesium.Math.toRadians(cameraState.roll || 0),
+        heading: toRadians(cameraState.heading || 0),
+        pitch: toRadians(cameraState.pitch ?? -35),
+        roll: toRadians(cameraState.roll || 0),
       },
     });
     return true;
@@ -1999,7 +2006,7 @@ export class SceneDirector {
 
   /**
    * Cancel the active scene run. Sets the cancellation token, aborts the
-   * run's in-flight layer transitions and Cesium camera flight, and logs a
+   * run's in-flight layer transitions and camera flight, and logs a
    * stop event.
    *
    * The abort is the part that stops work already under way: a layer
@@ -2022,7 +2029,8 @@ export class SceneDirector {
     this._loadGeneration++;
     this._clock.stopShot();
     this._cancelActiveSceneTravel();
-    this.viewer.camera.cancelFlight();
+    // Stop runs in teardown too, after the viewer may be gone.
+    findCamera(this.viewer)?.cancelFlight();
     this._clock.stop();
     if (!this._running || !this._runToken) return;
     this._runToken.cancelled = true;
@@ -2445,7 +2453,7 @@ export class SceneDirector {
   }
 
   /**
-   * Fly the Cesium camera to the given position over the specified duration
+   * Fly the camera to the given position over the specified duration
    * using cubic ease-in-out. Resolves when the flight completes, is cancelled,
    * or a safety timeout fires (duration + 0.6s).
    * @param {Object} cameraState - Target { lat, lon, alt, heading, pitch, roll }
@@ -2464,11 +2472,11 @@ export class SceneDirector {
       0.2,
       Number(durationSec) || DEFAULT_SHOT_DURATION_SEC,
     );
-    const destination = Cesium.Cartesian3.fromDegrees(
-      cameraState.lon,
-      cameraState.lat,
-      cameraState.alt,
-    );
+    const destination = {
+      lon: cameraState.lon,
+      lat: cameraState.lat,
+      height: cameraState.alt,
+    };
 
     await new Promise((resolve) => {
       // Guard against double-resolve from both callback and timeout
@@ -2481,20 +2489,19 @@ export class SceneDirector {
         resolve();
       };
 
-      this.viewer.camera.flyTo({
-        destination,
+      cameraOf(this.viewer).flyTo(destination, {
         orientation: {
-          heading: Cesium.Math.toRadians(cameraState.heading || 0),
-          pitch: Cesium.Math.toRadians(cameraState.pitch ?? -35),
-          roll: Cesium.Math.toRadians(cameraState.roll || 0),
+          heading: toRadians(cameraState.heading || 0),
+          pitch: toRadians(cameraState.pitch ?? -35),
+          roll: toRadians(cameraState.roll || 0),
         },
-        duration,
-        easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-        complete: finish,
-        cancel: finish,
+        durationS: duration,
+        easing: 'cubicInOut',
+        onComplete: finish,
+        onCancel: finish,
       });
 
-      // Safety timeout in case Cesium callbacks fail to fire
+      // Safety timeout in case the flight's callbacks fail to fire
       if (!done) timer = setTimeout(finish, (duration + 0.6) * 1000);
     });
   }

@@ -113,12 +113,10 @@ function trackedHarness({ liveFixes = [], trace = null, nowMs, floor, head }) {
     },
     layer: {},
   });
-  const headPositions = () =>
-    added
-      .find((definition) =>
-        String(definition.id).startsWith('gev-trail:mil-head-'),
-      )
-      .polyline.positions.getValue();
+  // The live head the trail would draw now.
+  const headPositions = () => {
+    return tracking._trailHeadPositions();
+  };
   return { trail, tracking, flightState, headPositions };
 }
 

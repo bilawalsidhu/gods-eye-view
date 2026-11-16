@@ -77,7 +77,7 @@ export function createIngestion({ state, services, parts, source }) {
       state._cockpitLostFeedId = entry.feedId;
     }
     if (state._selectedKey === key) parts.selection.clearSelection();
-    if (entry.marker) state._markers?.remove(entry.marker);
+    parts.rendering.removeMarker(entry);
     entry.marker = null;
     state._moving.delete(entry);
     parts.rendering.cancelWake(entry);

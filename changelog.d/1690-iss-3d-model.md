@@ -3,4 +3,6 @@
   radiators by the Sun, Ku-band dishes toward the relay satellites, robotic
   arms as an illustrative sway. Selecting the ISS opens NASA's official live
   video and a command panel with a zoom to the station, an Automatic mode and
-  Manual controls for each moving part (Itallo Brandão, @IMBrandao, #1690).
+  Manual controls for each moving part. The model draws through the renderer
+  contract, whose model items gain `nodes` for a model's moving joints
+  (Itallo Brandão, @IMBrandao, #1690).

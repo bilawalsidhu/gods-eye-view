@@ -1,4 +1,5 @@
 import { h, nextTick, shallowRef } from 'vue';
+import { canvasOf, findCamera, findFrame } from '../render/rendererOf.js';
 import WildlifeSightingCard from './views/panels/WildlifeSightingCard.vue';
 import {
   panWildlifeSighting,
@@ -66,9 +67,7 @@ export function createWildlifeSightingCard({
 
   function observeLayout(elements) {
     const next = new Set(
-      [host.firstElementChild, viewer?.scene?.canvas, ...elements].filter(
-        Boolean,
-      ),
+      [host.firstElementChild, canvasOf(viewer), ...elements].filter(Boolean),
     );
     let changed = false;
     for (const element of observed) {
@@ -211,7 +210,7 @@ export function createWildlifeSightingCard({
   const outside = (event) => {
     if (!selected.value || host.contains(event.target)) return;
     // The layer selects on pointer-up; its following click must keep the card open.
-    const canvas = viewer?.scene?.canvas;
+    const canvas = canvasOf(viewer);
     if (canvas && (event.target === canvas || canvas.contains?.(event.target)))
       return;
     layer.clearSightingSelection();
@@ -221,29 +220,27 @@ export function createWildlifeSightingCard({
   const onResize = () => position();
   windowRef?.addEventListener('resize', onResize);
 
-  function listen(event, callback) {
-    const remove = event?.addEventListener?.(callback);
+  function listen(camera, event, callback) {
+    const remove = camera?.on(event, callback);
     if (typeof remove === 'function') removers.push(remove);
-    else if (event?.removeEventListener)
-      removers.push(() => event.removeEventListener(callback));
   }
   function startFrameUpdates() {
     if (!selected.value || removeFrame) return;
     // Installed only for camera motion; an idle card has zero per-frame work.
-    removeFrame =
-      viewer?.scene?.preRender?.addEventListener?.(() => position()) || null;
+    removeFrame = findFrame(viewer)?.on('preRender', () => position()) || null;
   }
-  listen(viewer?.camera?.moveStart, () => {
+  const camera = viewer ? findCamera(viewer) : null;
+  listen(camera, 'moveStart', () => {
     moving = true;
     startFrameUpdates();
   });
-  listen(viewer?.camera?.moveEnd, () => {
+  listen(camera, 'moveEnd', () => {
     moving = false;
     removeFrame?.();
     removeFrame = null;
     position();
   });
-  listen(viewer?.camera?.changed, () => {
+  listen(camera, 'changed', () => {
     if (!moving) position();
   });
 

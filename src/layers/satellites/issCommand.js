@@ -1,7 +1,8 @@
 import { onLocaleChange, t } from '../../i18n/index.js';
 import { ISS_ARM_JOINTS } from './issArticulation.js';
 import { makePanelDraggable } from './issLive.js';
-import * as Cesium from 'cesium';
+import { distance } from '../../geo/vector.js';
+import { findCamera, findFrame } from '../../render/rendererOf.js';
 import { ISS_NORAD } from './policy.js';
 
 /**
@@ -111,9 +112,29 @@ export function createIssCommand({ state: layerState, parts }) {
     renderUntil = Math.max(renderUntil, Date.now() + ms);
     if (renderTimer) return;
     renderTimer = setInterval(() => {
-      layerState._viewer?.scene?.requestRender?.();
+      _requestFrame();
       if (Date.now() > renderUntil) _stopRendering();
     }, 33);
+  }
+
+  /** Ask the renderer for a frame, so the layer's tick poses the joints. */
+  function _requestFrame() {
+    findFrame(layerState._viewer)?.requestRender('satellites:iss-command');
+  }
+
+  /** The eye's ECEF position, or null. */
+  function _eye() {
+    return findCamera(layerState._viewer)?.pose?.()?.position ?? null;
+  }
+
+  /** Where the station is drawn now, or null. */
+  function _stationPosition() {
+    return (
+      parts.issModel?._issVisualPosition?.() ??
+      layerState._trackedFrameCartesian ??
+      layerState._points.get(ISS_NORAD)?.pos ??
+      null
+    );
   }
 
   function _stopRendering() {
@@ -141,13 +162,10 @@ export function createIssCommand({ state: layerState, parts }) {
 
   /** Meters from the camera to the station, or null when unknown. */
   function _stationDistance() {
-    const viewer = layerState._viewer;
-    const target =
-      parts.issModel?._issVisualPosition?.() ??
-      layerState._trackedFrameCartesian ??
-      layerState._points.get(ISS_NORAD)?.position;
-    if (!viewer || !target) return null;
-    return Cesium.Cartesian3.distance(viewer.camera.positionWC, target);
+    const eye = _eye();
+    const target = _stationPosition();
+    if (!eye || !target) return null;
+    return distance(eye, target);
   }
 
   function _syncZoomButton() {
@@ -164,36 +182,40 @@ export function createIssCommand({ state: layerState, parts }) {
 
   /**
    * Bring the follow camera in to the station. The camera already tracks the
-   * ISS, so this only shortens its range, a step per frame.
+   * ISS, so this only shortens its offset from the station, a step per
+   * frame.
    */
   function _zoomToStation() {
     _stopZoom();
     let steps = 0;
     zoomTimer = setInterval(() => {
-      const viewer = layerState._viewer;
-      const target =
-        parts.issModel?._issVisualPosition?.() ??
-        layerState._trackedFrameCartesian ??
-        layerState._points.get(ISS_NORAD)?.position;
+      const camera = findCamera(layerState._viewer);
+      const range = _stationDistance();
+      const offset = camera?.followOffset.get();
       steps += 1;
       if (
-        !viewer ||
-        !target ||
+        !camera ||
+        range === null ||
+        !offset ||
         layerState._trackedNorad !== ISS_NORAD ||
         steps > 400
       ) {
         _stopZoom();
         return;
       }
-      const step = issCommandZoomStep(
-        Cesium.Cartesian3.distance(viewer.camera.positionWC, target),
-      );
-      if (!step) {
+      const step = issCommandZoomStep(range);
+      const length = Math.hypot(offset.x, offset.y, offset.z);
+      if (!step || !(length > step)) {
         _stopZoom();
         return;
       }
-      viewer.camera.zoomIn(step);
-      viewer.scene.requestRender?.();
+      const k = (length - step) / length;
+      camera.followOffset.set({
+        x: offset.x * k,
+        y: offset.y * k,
+        z: offset.z * k,
+      });
+      _requestFrame();
     }, 16);
   }
 

@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { distance } from '../../geo/vector.js';
 import { t, msg } from '../../i18n/index.js';
 import { vesselCockpitInfo } from './cockpitSubject.js';
 import { vesselTypeCss } from '../../data/vesselLabels.js';
@@ -196,7 +196,7 @@ export function createQueries({
 
   /**
    * Map one internal vessel record to a plain JSON-safe analyst record
-   * (analyst query engine seam). Pure — no Cesium types. Missing/unknown
+   * (analyst query engine seam). Pure — no renderer types. Missing/unknown
    * fields are null, never NaN/undefined. navStatus is always null: the
    * /api/vessels proxy does not surface AIS NavigationalStatus, so it
    * cannot be derived client-side.
@@ -308,7 +308,7 @@ export function createQueries({
      * Find a vessel by its exact id, exact MMSI or case-insensitive name
      * substring. Vessels can share an MMSI; the first that has it is found.
      * @param {string|number} query Vessel id, MMSI or partial vessel name.
-     * @returns {{ id: string, mmsi: string, name: string, position: Cesium.Cartesian3, latitude: number, longitude: number, speedKt: number|null, course: number|null, type: string }|null}
+     * @returns {{ id: string, mmsi: string, name: string, position: {x: number, y: number, z: number}, latitude: number, longitude: number, speedKt: number|null, course: number|null, type: string }|null}
      */
     findByQuery(query) {
       if (query === null || query === undefined) return null;
@@ -332,9 +332,7 @@ export function createQueries({
       }
       if (!record) return null;
 
-      const position =
-        components.rendering.getVisual(record).billboard?.position ||
-        components.rendering.getVisual(record).position;
+      const position = components.rendering.iconPosition(record);
       if (!position) return null;
       return {
         id: record.id,
@@ -351,10 +349,10 @@ export function createQueries({
 
     /**
      * Get vessels within a range of a point, sorted nearest-first.
-     * @param {Cesium.Cartesian3} centerCartesian Center of the search.
+     * @param {{x: number, y: number, z: number}} centerCartesian ECEF centre of the search.
      * @param {number} rangeM Max distance in meters (non-finite = unbounded).
      * @param {number} [maxCount=25] Maximum entries to return.
-     * @returns {Array<{ id: string, mmsi: string, name: string, position: Cesium.Cartesian3, distanceM: number }>}
+     * @returns {Array<{ id: string, mmsi: string, name: string, position: {x: number, y: number, z: number}, distanceM: number }>}
      */
     getNearby(centerCartesian, rangeM, maxCount = 25) {
       const records = state.records.all;
@@ -366,12 +364,11 @@ export function createQueries({
 
       const entries = [];
       for (const record of records) {
-        const visual = components.rendering.getVisual(record);
         if (!Number.isFinite(record.lat) || !Number.isFinite(record.lon))
           continue;
-        const position = visual.billboard?.position || visual.position;
+        const position = components.rendering.iconPosition(record);
         if (!position) continue;
-        const distanceM = Cesium.Cartesian3.distance(centerCartesian, position);
+        const distanceM = distance(centerCartesian, position);
         if (!Number.isFinite(distanceM) || distanceM > range) continue;
         entries.push({
           id: record.id,
@@ -441,7 +438,7 @@ export function createQueries({
     /**
      * Get positions of all currently loaded vessels.
      * @param {number} [maxCount=800] Maximum entries to return.
-     * @returns {Array<{ id: string, label: string, position: Cesium.Cartesian3, latitude: number, longitude: number }>}
+     * @returns {Array<{ id: string, label: string, position: {x: number, y: number, z: number}, latitude: number, longitude: number }>}
      */
     /**
      * Whether this layer still carries a vessel, in O(1).
@@ -473,9 +470,8 @@ export function createQueries({
         Number.isFinite(maxCount) && maxCount > 0 ? Math.floor(maxCount) : 800;
 
       for (const record of records) {
-        const visual = components.rendering.getVisual(record);
         if (result.length >= cap) break;
-        const position = visual.billboard?.position || visual.position;
+        const position = components.rendering.iconPosition(record);
         if (!position) continue;
         result.push({
           id: record.id,
@@ -559,15 +555,14 @@ export function createQueries({
      * Where the selected vessel is drawn now, for a share link that names it:
      * its id, its drawn position and the time that position stands for (the
      * world time while the layer follows the clock, else its fix's time).
-     * @returns {{ id: string, position: Cesium.Cartesian3, observedAtMs: number|null }|null}
+     * @returns {{ id: string, position: {x: number, y: number, z: number}, observedAtMs: number|null }|null}
      *   Null when the layer is off, nothing is selected or it is not drawn.
      */
     getSelectedFix() {
       if (!state.feed.enabled) return null;
       const record = state.selectedRecord;
       if (!record?.id) return null;
-      const visual = components.rendering.getVisual(record);
-      const position = visual?.billboard?.position || visual?.position;
+      const position = components.rendering.iconPosition(record);
       if (!position) return null;
       const fixEpoch = record.lastPositionEpoch;
       const observedAtMs = followsClock(vesselState)
@@ -638,15 +633,10 @@ export function createQueries({
      * @param {Object} [options={}] - Options from the detection system.
      * @param {number} [options.maxCount] - Maximum objects to return (defaults to all).
      * @param {number} [options.seed] - Seed offset for stride sampling.
-     * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean, cardSourceId: string, cardEntryId: string}>}
+     * @returns {Array<{position: {x: number, y: number, z: number}, id: string, type: string, skipLabel: boolean, cardSourceId: string, cardEntryId: string}>}
      */
     getDetectableObjects(options = {}) {
-      if (
-        !state.feed.enabled ||
-        !state.billboardCollection ||
-        !state.billboardCollection.show
-      )
-        return [];
+      if (!state.feed.enabled || !state.icons?.show) return [];
       const records = state.records.all;
       if (!Array.isArray(records) || !records.length) return [];
 
@@ -664,14 +654,17 @@ export function createQueries({
         if ((idx - start) % stride !== 0) continue;
         const record = records[idx];
         const visual = components.rendering.getVisual(record);
-        // A vessel drawn as its model is present though its chevron is hidden.
+        // Horizon visibility: a vessel drawn as its model still counts.
+        if (!visual.visible) continue;
+        // The ship the bridge camera rides, its icon hidden, is no object in
+        // view (drawn as its model, it still counts).
         if (
-          visual.billboard &&
-          !visual.billboard.show &&
+          state.cockpitSubjectId &&
+          record.id === state.cockpitSubjectId &&
           !visual.modelOwnsVisual
         )
           continue;
-        const position = visual.billboard?.position || visual.position;
+        const position = visual.position;
         if (!position) continue;
         result.push({
           position,

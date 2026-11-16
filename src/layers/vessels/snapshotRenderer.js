@@ -20,8 +20,10 @@ function placementFix(record) {
   };
 }
 
-/** Connect portable vessel reconciliation to scene and selection operations.
- * `placement`, a host-supplied placement, is told each live fix. */
+/**
+ * Connect portable vessel reconciliation to scene and selection operations.
+ * `placement`, a host-supplied placement, is told each live fix.
+ */
 export function createVesselSnapshotRenderer({
   state,
   placement = null,
@@ -63,20 +65,11 @@ export function createVesselSnapshotRenderer({
           rendering.prepareRecordVisual(record);
           rendering.addRecordPrimitives(record, occluder);
         },
-        beforeUpdate(record) {
-          return rendering.shipIcon(record, record === state.selectedRecord);
-        },
-        updated(record, prevIcon) {
+        updated(record) {
           observe(record);
           const selected = record === state.selectedRecord;
-          const visual = rendering.prepareRecordVisual(record);
-          if (visual.billboard) {
-            visual.billboard.position = visual.position;
-            visual.billboard.scale =
-              rendering.shipScale(record) * (selected ? 1.2 : 1);
-            const nextIcon = rendering.shipIcon(record, selected);
-            if (nextIcon !== prevIcon) visual.billboard.image = nextIcon;
-          }
+          rendering.prepareRecordVisual(record);
+          rendering.syncRecordIcon(record);
           if (record.id === state.trailId)
             tracking.appendSelectedVesselTrailFix(record);
           if (selected) {

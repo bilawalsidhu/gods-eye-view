@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { sunPositionFixed } from '../../geo/celestial.js';
 
 /**
  * The ISS model's moving parts. NASA's file names its joints; the build keeps
@@ -189,8 +189,8 @@ export function issStepAngle(current, target, maxStep) {
  * @param {'x'|'z'} axis
  * @param {number[]} pivot
  * @param {number} angle Radians.
- * @param {Cesium.Matrix4} result
- * @returns {Cesium.Matrix4}
+ * @param {number[]} [result] 16 numbers to write, else a new array.
+ * @returns {number[]} Column-major.
  */
 export function issJointMatrix(axis, pivot, angle, result) {
   const c = Math.cos(angle);
@@ -236,8 +236,13 @@ export function issJointMatrix(axis, pivot, angle, result) {
   ]);
 }
 
+/** Row-major numbers written column-major into `result` (or a new array). */
 function set(result, rowMajor) {
-  return Cesium.Matrix4.fromRowMajorArray(rowMajor, result);
+  const out = result ?? new Array(16);
+  for (let row = 0; row < 4; row++)
+    for (let column = 0; column < 4; column++)
+      out[column * 4 + row] = rowMajor[row * 4 + column];
+  return out;
 }
 
 /**
@@ -416,8 +421,8 @@ export function issStepDirection(current, target, maxStep) {
  * @param {number[]} pivot
  * @param {number[]} axis Unit vector.
  * @param {number} angle Radians.
- * @param {Cesium.Matrix4} result
- * @returns {Cesium.Matrix4}
+ * @param {number[]} [result] 16 numbers to write, else a new array.
+ * @returns {number[]} Column-major.
  */
 export function issAxisMatrix(pivot, axis, angle, result) {
   const [x, y, z] = axis;
@@ -440,8 +445,8 @@ export function issAxisMatrix(pivot, axis, angle, result) {
  * A dish node's matrix that turns its rest boresight (+Y) onto `direction`.
  * @param {number[]} pivot
  * @param {number[]} direction Unit vector on the model's axes.
- * @param {Cesium.Matrix4} result
- * @returns {Cesium.Matrix4}
+ * @param {number[]} [result] 16 numbers to write, else a new array.
+ * @returns {number[]} Column-major.
  */
 export function issAimMatrix(pivot, direction, result) {
   // Y × direction
@@ -460,12 +465,14 @@ export function issAimMatrix(pivot, direction, result) {
 }
 
 /**
- * Drives the loaded model's joints. Stateless about the model: `update` looks
- * the nodes up once per model and only writes a node whose angle moved.
+ * Poses the model's joints: `update` works out each joint's transform and
+ * `poses()` hands them over by node name, for the model item's `nodes`
+ * (render contract). A joint's matrix is changed where it is, and only when
+ * its angle moved.
  */
 export function createIssArticulation() {
-  let boundModel = null;
-  let nodes = null;
+  /** Node name → its column-major matrix, as last posed. */
+  let poses = {};
   let angles = null;
   let targets = { alpha: 0, gamma: 0 };
   let lastMs = 0;
@@ -475,7 +482,6 @@ export function createIssArticulation() {
   let lastSunlit = null;
   /** Command panel state: the arm is being posed by hand, so the sway is off. */
   let armManual = false;
-  let armNodes = null;
   /** Command panel state: how far the arrays are rolled out, 0.05 to 1. */
   let deploy = 1;
   let deployTarget = 1;
@@ -493,55 +499,26 @@ export function createIssArticulation() {
   const SMALL_RADIATOR_ROOT_Y = -1.6;
   /** Where each dish looks now, on the model's axes. */
   let dishes = null;
-  const scratchJulian = new Cesium.JulianDate();
-  const scratchSun = new Cesium.Cartesian3();
-  const scratchToFixed = new Cesium.Matrix3();
-  const scratchMatrix = new Cesium.Matrix4();
-
-  function bind(model) {
-    boundModel = model;
-    const get = (joint) => model.getNode(joint.node) ?? null;
-    nodes = {
-      alpha: ISS_ALPHA_JOINTS.map(get),
-      beta: ISS_BETA_JOINTS.map(get),
-      gamma: ISS_RADIATOR_JOINTS.map(get),
-      dish: ISS_DISH_JOINTS.map(get),
-    };
-    angles = null;
-    dishes = null;
-    armNodes = null;
-  }
-
   function sunEcef(date) {
-    const julian = Cesium.JulianDate.fromDate(date, scratchJulian);
-    const inertial =
-      Cesium.Simon1994PlanetaryPositions.computeSunPositionInEarthInertialFrame(
-        julian,
-        scratchSun,
-      );
-    const toFixed =
-      Cesium.Transforms.computeIcrfToFixedMatrix(julian, scratchToFixed) ??
-      Cesium.Transforms.computeTemeToPseudoFixedMatrix(julian, scratchToFixed);
-    Cesium.Matrix3.multiplyByVector(toFixed, inertial, scratchSun);
-    Cesium.Cartesian3.normalize(scratchSun, scratchSun);
-    return [scratchSun.x, scratchSun.y, scratchSun.z];
+    const sun = sunPositionFixed(date.getTime());
+    const length = Math.hypot(sun.x, sun.y, sun.z);
+    return [sun.x / length, sun.y / length, sun.z / length];
   }
 
-  function write(node, axis, pivot, angle) {
-    if (!node) return;
-    node.matrix = issJointMatrix(axis, pivot, angle, scratchMatrix);
+  /** The node's matrix, kept per node so each is changed where it is. */
+  const matrixOf = (name) => (poses[name] ??= new Array(16));
+
+  function write(name, axis, pivot, angle) {
+    issJointMatrix(axis, pivot, angle, matrixOf(name));
   }
 
   /**
-   * @param {Cesium.Model} model A ready model.
    * @param {Date} date The instant the model is placed at.
-   * @param {Cesium.Cartesian3} position Earth-fixed station position.
+   * @param {{x:number,y:number,z:number}} position Earth-fixed station position.
    * @param {{x:number[], y:number[], z:number[]}} axes Its flight axes.
    * @param {number} [nowMs] Wall clock, for the turn rate.
    */
-  function update(model, date, position, axes, nowMs = Date.now()) {
-    if (!model.ready) return;
-    if (model !== boundModel) bind(model);
+  function update(date, position, axes, nowMs = Date.now()) {
     const forced = override?.(nowMs) ?? null;
     if (forced) {
       lastSunlit = Boolean(forced.sunlit);
@@ -568,7 +545,7 @@ export function createIssArticulation() {
     };
     if (!angles || next.alpha !== angles.alpha)
       ISS_ALPHA_JOINTS.forEach((joint, i) =>
-        write(nodes.alpha[i], 'x', joint.pivot, next.alpha),
+        write(joint.node, 'x', joint.pivot, next.alpha),
       );
     // Command panel: squash the arrays along their masts (see setDeploy).
     const deployStep = Number.isFinite(maxStep) ? elapsed / 8 : 1;
@@ -583,12 +560,14 @@ export function createIssArticulation() {
         nextDeploy !== deploy ||
         nextDeploy !== 1
       ) {
-        const node = nodes.beta[i];
-        if (!node) return;
-        const m = issJointMatrix('z', joint.pivot, next.beta[i], scratchMatrix);
+        const m = issJointMatrix(
+          'z',
+          joint.pivot,
+          next.beta[i],
+          matrixOf(joint.node),
+        );
         m[10] = nextDeploy;
         m[14] = joint.pivot[2] * (1 - nextDeploy);
-        node.matrix = m;
       }
     });
     deploy = nextDeploy;
@@ -603,39 +582,36 @@ export function createIssArticulation() {
       nextRadiator !== radiatorDeploy
     )
       ISS_RADIATOR_JOINTS.forEach((joint, i) => {
-        const node = nodes.gamma[i];
-        if (!node) return;
-        const m = issJointMatrix('z', joint.pivot, next.gamma, scratchMatrix);
+        const m = issJointMatrix(
+          'z',
+          joint.pivot,
+          next.gamma,
+          matrixOf(joint.node),
+        );
         m[10] = nextRadiator;
         m[14] = RADIATOR_ROOT_Z * (1 - nextRadiator);
-        node.matrix = m;
       });
     // The four small radiators fold up to the truss, along Y.
     if (nextRadiator !== radiatorDeploy)
       for (const name of SMALL_RADIATOR_NODES) {
-        const node = model.getNode(name);
-        if (!node) continue;
-        node.matrix = Cesium.Matrix4.fromRowMajorArray(
-          [
-            1,
-            0,
-            0,
-            0,
-            0,
-            nextRadiator,
-            0,
-            SMALL_RADIATOR_ROOT_Y * (1 - nextRadiator),
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            0,
-            1,
-          ],
-          scratchMatrix,
-        );
+        set(matrixOf(name), [
+          1,
+          0,
+          0,
+          0,
+          0,
+          nextRadiator,
+          0,
+          SMALL_RADIATOR_ROOT_Y * (1 - nextRadiator),
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+        ]);
       }
     radiatorDeploy = nextRadiator;
     angles = next;
@@ -652,13 +628,7 @@ export function createIssArticulation() {
       const stepped = issStepDirection(current, target, maxStep);
       const moved =
         !dishes || stepped.some((c, k) => Math.abs(c - current[k]) > 1e-9);
-      if (moved)
-        if (nodes.dish[i])
-          nodes.dish[i].matrix = issAimMatrix(
-            joint.pivot,
-            stepped,
-            scratchMatrix,
-          );
+      if (moved) issAimMatrix(joint.pivot, stepped, matrixOf(joint.node));
       return stepped;
     });
     dishes = nextDishes;
@@ -668,16 +638,7 @@ export function createIssArticulation() {
       const arm = issArmAngles(nowMs / 1000, ISS_SWAY_JOINTS);
       ISS_SWAY_JOINTS.forEach((joint, i) => {
         if (!joint.sway) return;
-        const node = (armNodes ??= ISS_SWAY_JOINTS.map(
-          (entry) => model.getNode(entry.node) ?? null,
-        ))[i];
-        if (node)
-          node.matrix = issAxisMatrix(
-            joint.pivot,
-            joint.axis,
-            arm[i],
-            scratchMatrix,
-          );
+        issAxisMatrix(joint.pivot, joint.axis, arm[i], matrixOf(joint.node));
       });
     }
   }
@@ -691,16 +652,13 @@ export function createIssArticulation() {
    */
   function setJoint(name, pivot, axis, angle) {
     armManual = true;
-    const node = boundModel?.getNode(name);
-    if (node) node.matrix = issAxisMatrix(pivot, axis, angle, scratchMatrix);
+    issAxisMatrix(pivot, axis, angle, matrixOf(name));
   }
 
   function reset() {
-    boundModel = null;
-    nodes = null;
+    poses = {};
     angles = null;
     dishes = null;
-    armNodes = null;
     targets = { alpha: 0, gamma: 0 };
   }
 
@@ -749,6 +707,8 @@ export function createIssArticulation() {
 
   return {
     update,
+    /** The joints' matrices by node name, for the model item's `nodes`. */
+    poses: () => poses,
     reset,
     setOverride,
     setDishOverride,

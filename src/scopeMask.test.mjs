@@ -29,6 +29,7 @@ import {
   _resetScopeMaskForTest,
 } from './scopeMask.js';
 import { KEYHOLE_OUTER_RADIUS } from './celestialRing.js';
+import { bindFakeCesiumScene } from './testSupport/fakeCesiumScene.mjs';
 import { SCOPE_FEATHER_RATIO_MAX, clampScopeFeatherPct } from './scopeMaskPolicy.js';
 
 beforeEach(() => _resetScopeMaskForTest());
@@ -445,7 +446,10 @@ test('one quantum is the smallest step that can repaint', () => {
 // ~8 Hz through the altitude band and draw() performed the full backing-store
 // resize + clear BEFORE checking whether the scope was even enabled.
 
-/** A viewer stub with the two camera signals the terminus sampler listens on. */
+/**
+ * A viewer stub with the two camera signals the terminus sampler listens on,
+ * read through the renderer's frame and camera ports as the app's are.
+ */
 function stubScopeViewer(container, heightM) {
   const preRenderListeners = new Set();
   const moveEndListeners = new Set();
@@ -454,12 +458,14 @@ function stubScopeViewer(container, heightM) {
     set.add(listener);
     return () => set.delete(listener);
   };
+  const viewer = {
+    container,
+    scene: { preRender: { addEventListener: addTo(preRenderListeners) } },
+    camera: { positionCartographic, moveEnd: { addEventListener: addTo(moveEndListeners) } },
+  };
+  bindFakeCesiumScene(viewer);
   return {
-    viewer: {
-      container,
-      scene: { preRender: { addEventListener: addTo(preRenderListeners) } },
-      camera: { positionCartographic, moveEnd: { addEventListener: addTo(moveEndListeners) } },
-    },
+    viewer,
     setHeight(next) { positionCartographic.height = next; },
     raisePreRender(times = 1) {
       for (let i = 0; i < times; i += 1) for (const fn of [...preRenderListeners]) fn();
