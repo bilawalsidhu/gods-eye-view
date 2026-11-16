@@ -839,7 +839,7 @@ test('arrows do nothing new in an aircraft cockpit', async (t) => {
   near(after.pitchDeg, before.pitchDeg, 'the aircraft pitch', 1e-6);
   assert.deepEqual(cockpit.lookTarget, { yawDeg: 0, pitchDeg: -2 });
   assert.equal(store.instruments.look.offset, false);
-  assert.equal(document.querySelector('.cockpit-look'), null);
+  assert.equal(document.querySelector('.cockpit-look') === null, true);
   // The tape stays on the aircraft's heading, with no bow or stern marks.
   const centre = store.instruments.compass.find(
     (division) => division.slot === 0,
@@ -849,7 +849,7 @@ test('arrows do nothing new in an aircraft cockpit', async (t) => {
     prograde: null,
     retrograde: null,
   });
-  assert.equal(document.querySelector('.cockpit-compass-marker'), null);
+  assert.equal(document.querySelector('.cockpit-compass-marker') === null, true);
   assert.doesNotMatch(
     document.querySelector('.cockpit-help').textContent,
     /ARROWS LOOK/,
@@ -1248,7 +1248,7 @@ test('a ship with neither heading nor course makes up no direction', async (t) =
     prograde: null,
     retrograde: null,
   });
-  assert.equal(document.querySelector('.cockpit-compass-marker'), null);
+  assert.equal(document.querySelector('.cockpit-compass-marker') === null, true);
   assert.match(
     $('.cockpit-visor-status-right').textContent,
     /NO HEADING · AIS/,

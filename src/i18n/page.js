@@ -5,7 +5,9 @@
  * page) instead of the globe picker. It starts the language the standalone
  * application starts, keeps `<html lang>`/`<html dir>` and the page's
  * `data-i18n` markup in step, and switches in place, stored for the next
- * visit, exactly as the picker does. Guide: docs/I18N.md.
+ * visit, exactly as the picker does. It also exports the translator itself,
+ * and lets the application show its own text for Core's messages
+ * (`setMessageOverrides`). Guide: docs/I18N.md.
  */
 import {
   DEFAULT_LOCALE,
@@ -33,6 +35,18 @@ export {
   isRtlLocale,
   onLocaleChange,
 };
+// The translator Core's own text goes through, for an application's text and
+// for showing its own wording of Core's messages (setMessageOverrides).
+export {
+  formatDate,
+  formatNumber,
+  formatRelativeTime,
+  msg,
+  setMessageOverrides,
+  t,
+  tn,
+  translateKnown,
+} from './index.js';
 
 /**
  * Start the page in its language: `?lang=`, then the stored choice, then the

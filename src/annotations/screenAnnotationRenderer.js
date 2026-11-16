@@ -399,7 +399,12 @@ export function createScreenAnnotationRenderer(
   // from the host's ACTUAL painted rectangle after final layout; the billboard extent
   // is unioned for aircraft/satellites that also own a native tracked graphic.
   const TRACKED_BBOX_MARGIN = 8; // px buffer added around the footprint
-  const TRACKED_FADE_EASE = 0.22; // per-frame ease toward hidden(0) / visible(1)
+  // Ease toward hidden(0) / visible(1): this share of the gap closes in one
+  // 60 Hz frame (about 200 ms to settle), scaled by elapsed time so the fade
+  // takes as long at any refresh rate.
+  const TRACKED_FADE_EASE = 0.22;
+  const TRACKED_FADE_FRAME_MS = 1000 / 60;
+  let trackedFadeAtMs = -Infinity;
   const TRACKED_HYSTERESIS_PX = 18; // dead-band so the overlap test can't flip-flop
   const _scratchTrackedWin = new Cesium.Cartesian2();
 
@@ -677,6 +682,14 @@ export function createScreenAnnotationRenderer(
   // safe and not jarring.
   function fadeTracked(trackedRect) {
     if (!shown()) return;
+    const nowMs = performance.now();
+    // A gap longer than a slow frame means the fade was not running (nothing
+    // followed): it starts again as from one 60 Hz frame.
+    const gapMs = nowMs - trackedFadeAtMs;
+    const stepMs = gapMs >= 0 && gapMs <= 100 ? gapMs : TRACKED_FADE_FRAME_MS;
+    trackedFadeAtMs = nowMs;
+    const ease =
+      1 - Math.pow(1 - TRACKED_FADE_EASE, stepMs / TRACKED_FADE_FRAME_MS);
     let changed = false;
     for (const rec of records.values()) {
       const { anno, group } = rec;
@@ -705,10 +718,10 @@ export function createScreenAnnotationRenderer(
         }
       }
       const target = overlapping ? 0 : 1;
-      const next = cur + (target - cur) * TRACKED_FADE_EASE;
+      const next = cur + (target - cur) * ease;
       rec._trackedFade = Math.abs(next - target) < 0.02 ? target : next;
       // The base alpha applies unless faded. (The CSS `transition: opacity` was
-      // removed from .gev-anno so this per-frame JS ease is the ONLY easing —
+      // removed from .gev-anno so this JS ease is the ONLY easing —
       // previously the two fought and produced an opacity oscillation.)
       const opacity = String(
         (anno.alpha ?? 1) * (rec._trackedFade !== 1 ? rec._trackedFade : 1),

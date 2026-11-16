@@ -309,7 +309,7 @@ test('dot, icon and ambient photo clicks open one contained medium-photo card at
         true,
         'the loaded medium photo is painted inside the card',
       );
-      assert.equal(card.querySelector('[role=status]'), null);
+      assert.equal(card.querySelector('[role=status]') === null, true);
       const style = readFileSync(
         new URL('./views/panels/WildlifeSightingCard.vue', import.meta.url),
         'utf8',
@@ -343,11 +343,11 @@ test('missing, restricted, obscured and Acartia photos all use the same compact 
       const f = fixture(context, { ...row, ...extra });
       await f.click();
       const card = f.cardElement();
-      assert.equal(card.querySelector('img'), null);
-      assert.equal(card.querySelector('[role=status]'), null);
+      assert.equal(card.querySelector('img') === null, true);
+      assert.equal(card.querySelector('[role=status]') === null, true);
       assert.equal(card.querySelector('h2').textContent, row.commonName);
       assert.equal(card.querySelector('i').textContent, row.scientificName);
-      assert.equal(document.querySelector('dialog'), null);
+      assert.equal(document.querySelector('dialog') === null, true);
       if (extra.obscured) {
         assert.doesNotMatch(card.textContent, /ago|Photographer/);
         assert.ok(
@@ -676,7 +676,7 @@ test('date-only and unsafe-link rows remain readable, and no sighting rail or li
     link: 'javascript:alert(1)',
   });
   await f.click();
-  assert.equal(f.cardElement().querySelector('a'), null);
+  assert.equal(f.cardElement().querySelector('a') === null, true);
   assert.equal(
     f.cardElement().querySelector('time').getAttribute('datetime'),
     row.observedOn,

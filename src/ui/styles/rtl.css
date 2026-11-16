@@ -242,3 +242,47 @@ html[dir='rtl'] select.gev-field--compact {
 html[dir='rtl'] .rail-card-scale {
   direction: ltr;
 }
+
+/* ── Side rails, mirrored ──────────────────────────────────────────────
+   The left stack sits on the right edge, so the left rail's name panel
+   opens to its left and the right rail's to its right, each toward the
+   middle of the screen, as they do in left-to-right. */
+html[dir='rtl'] .gev-panel-rail--left .ui-rail--expanded::after {
+  right: calc(100% + 6px);
+  left: auto;
+}
+html[dir='rtl'] .gev-panel-rail--left .ui-rail--expanded .ui-rail__label {
+  right: calc(100% + 24px);
+  left: auto;
+}
+html[dir='rtl'] .gev-panel-rail--right .ui-rail--expanded::after {
+  right: auto;
+  left: calc(100% + 6px);
+}
+html[dir='rtl'] .gev-panel-rail--right .ui-rail--expanded .ui-rail__label {
+  right: auto;
+  left: calc(100% + 24px);
+}
+
+/* Panels moved to the screen edge slide over their rail toward that edge. */
+html[dir='rtl']
+  body.panels-edge-left:not(.mobile-shell):not(.cockpit-mode)
+  #left-panel-stack
+  > :not(.gev-panel-rail) {
+  transform: translateX(var(--panel-rail-clearance, 48px));
+}
+html[dir='rtl']
+  body.panels-edge-left:not(.mobile-shell):not(.cockpit-mode)
+  #left-panel-stack
+  > :not(.gev-panel-rail):not(.collapsed) {
+  transform: translate(var(--panel-rail-clearance, 48px), var(--edge-rail-row));
+}
+html[dir='rtl']
+  body.panels-edge-right:not(.mobile-shell):not(.cockpit-mode)
+  #right-context-rail
+  > :not(.gev-panel-rail) {
+  transform: translate(
+    calc(-1 * var(--panel-rail-clearance, 48px)),
+    var(--edge-rail-row)
+  );
+}

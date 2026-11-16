@@ -7,6 +7,8 @@ import {
   GLOBAL_INFRARED_MAX_GAP_MS,
   LIGHTNING_MAX_GAP_MS,
   PLAY_WAIT_MS,
+  frameSpacingMs,
+  atLeastFrameSpacing,
 } from './clock.js';
 import { createWorldClock } from '../../time/worldClock.js';
 
@@ -94,13 +96,78 @@ test('union excludes suspended products; nearest selection never uses future or 
   assert.equal(LIGHTNING_MAX_GAP_MS, 30 * 60_000);
 });
 
-test('history applies per-product selections, including null; latest restores unequal newest times', async (t) => {
+test('a feed’s frame spacing is the median of its latest frames', () => {
+  assert.equal(frameSpacingMs([]), null);
+  assert.equal(frameSpacingMs([time(0)]), null);
+  assert.equal(frameSpacingMs([0, 10, 20, 30].map(time)), 10 * 60_000);
+  // Out of order, repeated, unparseable, and one late frame among many.
+  assert.equal(
+    frameSpacingMs([
+      time(60),
+      time(0),
+      'never',
+      time(0),
+      time(10),
+      time(20),
+      time(30),
+    ]),
+    10 * 60_000,
+  );
+  assert.equal(frameSpacingMs([0, 60, 120].map(time)), 60 * 60_000);
+  assert.equal(frameSpacingMs([0, 10, 70, 130]), 60);
+  // Only the latest frames count: an hourly start gives way to ten minutes.
+  const times = [
+    ...[-600, -540, -480, -420, -360, -300, -240, -180, -120, -60],
+    ...[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120],
+  ].map(time);
+  assert.equal(frameSpacingMs(times), 10 * 60_000);
+});
+
+test('a product’s gap is at least one and a half of its feed’s frame spacings', (t) => {
+  const tenMinutes = [0, 10, 20, 30].map(time);
+  const hourly = [0, 60, 120].map(time);
+  assert.equal(
+    atLeastFrameSpacing(REGIONAL_INFRARED_MAX_GAP_MS, tenMinutes),
+    REGIONAL_INFRARED_MAX_GAP_MS,
+    'frames minutes apart keep the product’s own gap',
+  );
+  assert.equal(
+    atLeastFrameSpacing(REGIONAL_INFRARED_MAX_GAP_MS, hourly),
+    90 * 60_000,
+  );
+  assert.equal(
+    atLeastFrameSpacing(REGIONAL_INFRARED_MAX_GAP_MS, [time(0)]),
+    REGIONAL_INFRARED_MAX_GAP_MS,
+  );
+  assert.equal(
+    atLeastFrameSpacing(GLOBAL_INFRARED_MAX_GAP_MS, hourly),
+    GLOBAL_INFRARED_MAX_GAP_MS,
+  );
+
+  // Selected against it, an hourly feed has a frame all through each hour.
   const { clock } = harness(t);
+  const clouds = product(
+    'clouds',
+    [0, 60, 120],
+    atLeastFrameSpacing(REGIONAL_INFRARED_MAX_GAP_MS, hourly),
+  );
+  clock.register(clouds);
+  assert.equal(clock.selectFor('clouds', time(45)), time(0));
+  assert.equal(clock.selectFor('clouds', time(119)), time(60));
+  assert.equal(clock.selectFor('clouds', time(210)), time(120));
+  assert.equal(clock.selectFor('clouds', time(211)), null);
+});
+
+const at = (minutes) => Date.parse(time(minutes));
+
+test('history applies per-product selections, including null; live restores unequal newest times', async (t) => {
+  const { clock, world } = harness(t);
   const radar = product('radar', [0, 10, 20]);
   const satellite = product('satellite', [5, 15]);
   const lightning = product('lightning', [15]);
   for (const p of [radar, satellite, lightning]) clock.register(p);
-  await clock.setTarget(time(10));
+  world.seek(at(10));
+  await flush();
   assert.deepEqual(
     [radar.shown, satellite.shown, lightning.shown],
     [time(10), time(5), null],
@@ -109,18 +176,19 @@ test('history applies per-product selections, including null; latest restores un
     clock.getState().products.map(({ selected }) => selected),
     [time(10), time(5), null],
   );
-  await clock.latest();
+  world.goLive();
+  await flush();
   assert.deepEqual(
     [radar.shown, satellite.shown, lightning.shown],
     [time(20), time(15), time(15)],
   );
   assert.equal(clock.getState().mode, 'latest');
   assert.equal(clock.getState().target, null);
-  assert.equal(clock.getState().playing, false);
+  assert.equal(clock.getState().advancing, false);
 });
 
-test('superseded completions cannot commit, notify or schedule a new playback advance', async (t) => {
-  const { clock, timers } = harness(t);
+test('superseded completions cannot commit or notify', async (t) => {
+  const { clock, world, timers } = harness(t);
   const p = product('radar', [0, 10, 20]);
   const loads = [];
   p.apply = (selected, { signal }) =>
@@ -137,113 +205,44 @@ test('superseded completions cannot commit, notify or schedule a new playback ad
   clock.register(p);
   let notifications = 0;
   clock.subscribe(() => notifications++);
-  const old = clock.setTarget(time(0));
+  world.seek(at(0));
   await flush();
-  const current = clock.setTarget(time(10));
+  world.seek(at(10));
   await flush();
   assert.equal(loads[0].signal.aborted, true);
   loads[1].finish();
-  assert.equal(await current, true);
+  await flush();
   const count = notifications;
   loads[0].finish();
-  assert.equal(await old, false);
+  await flush();
   assert.equal(notifications, count);
   assert.equal(p.shown, time(10));
   assert.equal(clock.getState().target, time(10));
   assert.equal(timers.size, 0);
 });
 
-test('steps use strict union neighbours from arbitrary targets and clamp at endpoints', async (t) => {
-  const { clock } = harness(t);
-  clock.register(product('radar', [0, 10, 20]));
-  clock.register(product('satellite', [5, 15]));
-  await clock.step(-1);
-  assert.equal(clock.getState().target, time(15));
-  await clock.setTarget(time(12));
-  await clock.step(-1);
-  assert.equal(clock.getState().target, time(10));
-  await clock.setTarget(time(12));
-  await clock.step(1);
-  assert.equal(clock.getState().target, time(15));
-  await clock.setTarget(time(0));
-  await clock.step(-1);
-  assert.equal(clock.getState().target, time(0));
-  await clock.setTarget(time(20));
-  await clock.step(1);
-  assert.equal(clock.getState().target, time(20));
-});
-
-test('playback waits for every product to settle, including rejection, then waits 2000 ms and wraps', async (t) => {
-  const { clock, tick, timers } = harness(t);
-  const a = product('radar', [0, 10]);
-  const b = product('satellite', [5]);
-  const loads = [];
-  b.apply = () =>
-    new Promise((resolve, reject) => loads.push({ resolve, reject }));
-  clock.register(a);
-  clock.register(b);
-  const start = clock.play();
-  await flush();
-  assert.equal(clock.getState().target, time(10));
-  tick(10_000);
-  assert.equal(timers.size, 0);
-  assert.equal(a.calls.length, 1);
-  loads[0].reject(new Error('unavailable'));
-  await start;
-  assert.equal(timers.size, 1);
-  tick(1999);
-  assert.equal(clock.getState().target, time(10));
-  tick(1);
-  await flush();
-  assert.equal(clock.getState().target, time(0));
-  assert.equal(timers.size, 0);
-  tick(10_000);
-  assert.equal(clock.getState().target, time(0));
-  loads[1].resolve(true);
-  await flush();
-  tick(2000);
-  await flush();
-  assert.equal(clock.getState().target, time(5));
-  clock.pause();
-  loads[2].resolve(false);
-  await flush();
-  assert.equal(timers.size, 0, 'pausing during a load prevents rescheduling');
-});
-
-test('pause cancels a pending advance; playback stops with one time or all products suspended', async (t) => {
-  const { clock, tick, timers } = harness(t);
-  const p = product('radar', [0, 10]);
-  clock.register(p);
-  await clock.play();
-  await clock.play();
-  assert.equal(timers.size, 1);
-  clock.pause();
-  tick(2000);
-  assert.equal(clock.getState().target, time(10));
-  assert.equal(timers.size, 0);
-  await clock.togglePlay();
-  p.times = [time(0)];
-  await clock.refresh();
-  assert.equal(clock.getState().playing, false);
-  await clock.play();
-  assert.equal(clock.getState().playing, false);
-  p.times = [time(0), time(10)];
-  await clock.refresh();
-  await clock.play();
-  p.suspended = true;
-  await clock.refresh();
-  assert.equal(clock.getState().playing, false);
-  assert.deepEqual(clock.getTimeline(), []);
-  assert.equal(timers.size, 0);
+test('the clock has no time controls of its own; the world clock moves time', (t) => {
+  const { clock, world } = harness(t);
+  for (const name of [
+    'setTarget',
+    'step',
+    'latest',
+    'play',
+    'pause',
+    'togglePlay',
+  ])
+    assert.equal(clock[name], undefined, name);
+  assert.equal(clock.world, world);
 });
 
 test('refresh does not apply in latest; history retains its target as expired frames disappear', async (t) => {
-  const { clock } = harness(t);
+  const { clock, world } = harness(t);
   const p = product('radar', [0, 10]);
   clock.register(p);
   await clock.refresh();
   assert.equal(p.calls.length, 0);
-  await clock.setTarget(time(10));
+  world.seek(at(10));
+  await flush();
   p.times = [time(0), time(20)];
   await clock.refresh();
   assert.equal(p.shown, time(0));
@@ -254,15 +253,16 @@ test('refresh does not apply in latest; history retains its target as expired fr
 });
 
 test('registration joins history; unregister and destroy abort work and release subscriptions/timers', async (t) => {
-  const { clock, timers, tick } = harness(t);
+  const { clock, world, timers } = harness(t);
   const p = product('radar', [0, 10]);
   const unregister = clock.register(p);
-  await clock.setTarget(time(0));
+  world.seek(at(0));
+  await flush();
   const b = product('satellite', [0, 5]);
   clock.register(b);
   await flush();
   assert.equal(b.shown, time(0));
-  await clock.play();
+  world.seek(at(5));
   unregister();
   unregister();
   await flush();
@@ -273,31 +273,27 @@ test('registration joins history; unregister and destroy abort work and release 
   );
   let notifications = 0;
   const off = clock.subscribe(() => notifications++);
-  clock.pause();
   off();
-  const before = notifications;
-  await clock.play();
-  assert.equal(notifications, before);
+  world.seek(at(0));
+  await flush();
+  assert.equal(notifications, 0);
+  world.seek(at(5));
   clock.destroy();
   clock.destroy();
-  tick(2000);
+  await flush();
   assert.equal(timers.size, 0);
   assert.equal(b.calls.at(-1).signal.aborted, true);
-  assert.equal(clock.getState().playing, false);
   assert.deepEqual(clock.getTimeline(), []);
-  assert.equal(await clock.setTarget(time(5)), false);
 });
 
-test('the weather time is the world time, both ways', async (t) => {
+test('the weather time is the world time', async (t) => {
   const { clock, world } = harness(t);
   const radar = product('radar', [0, 10, 20]);
   clock.register(radar);
   assert.equal(world.follows('radar'), true);
-  await clock.setTarget(time(10));
-  assert.equal(world.isLive(), false);
-  assert.equal(world.now(), Date.parse(time(10)));
-  world.seek(Date.parse(time(3)));
+  world.seek(at(3));
   await flush();
+  assert.equal(clock.getState().mode, 'history');
   assert.equal(clock.getState().target, time(3));
   assert.equal(radar.shown, time(0));
   world.goLive();
@@ -306,30 +302,22 @@ test('the weather time is the world time, both ways', async (t) => {
   assert.equal(radar.shown, time(20));
 });
 
-test('world play and pause drive the weather replay', async (t) => {
+test('world play runs the world on its own at its rate; weather does not drive it', async (t) => {
   const { clock, world, tick } = harness(t);
   const radar = product('radar', [0, 10, 20]);
   clock.register(radar);
-  world.seek(Date.parse(time(0)));
+  world.seek(at(0));
   await flush();
-  world.play();
-  assert.equal(clock.getState().playing, true);
-  assert.equal(world.isPlaying(), true);
-  tick(2000);
+  world.play({ rate: 60 });
+  assert.equal(world.getState().stepping, false);
+  assert.equal(clock.getState().advancing, true);
+  tick(5_000);
+  assert.equal(world.now(), at(5), 'five minutes on at a minute a second');
+  tick(10_000);
   await flush();
-  assert.equal(radar.shown, time(10));
-  assert.equal(world.now(), Date.parse(time(10)));
+  assert.equal(world.now(), at(10), 'held at the next frame');
   world.pause();
-  assert.equal(clock.getState().playing, false);
-  clock.play();
-  assert.equal(world.isPlaying(), true);
-  clock.pause();
-  assert.equal(world.isPlaying(), false);
-  clock.play();
-  world.goLive();
-  await flush();
-  assert.equal(clock.getState().playing, false);
-  assert.equal(clock.getState().mode, 'latest');
+  assert.equal(clock.getState().advancing, false);
 });
 
 test('a moving world re-applies frames only when a product changes frame', async (t) => {
@@ -352,15 +340,6 @@ test('a moving world re-applies frames only when a product changes frame', async
   assert.equal(radar.shown, time(10));
 });
 
-test('a world without frames to step plays on its own', async (t) => {
-  const { clock, world, tick } = harness(t);
-  world.seek(Date.parse(time(0)));
-  world.play();
-  assert.equal(clock.getState().playing, false);
-  tick(1000);
-  assert.equal(world.now(), Date.parse(time(0)) + 1000);
-});
-
 function worldAt(at) {
   return createWorldClock({
     now: () => at,
@@ -370,74 +349,25 @@ function worldAt(at) {
   });
 }
 
-test('weather clocks sharing a world hand play over, and the last leaves it live', async () => {
+test('weather clocks sharing a world: the last one destroyed leaves it live', () => {
   const world = worldAt(Date.parse(time(20)));
   const a = createWeatherClock({ world, now: () => Date.parse(time(20)) });
   const b = createWeatherClock({ world, now: () => Date.parse(time(20)) });
-  const radarA = product('radar', [0, 10, 20]);
-  const radarB = product('radar', [0, 10, 20]);
-  a.register(radarA);
-  b.register(radarB);
-  await a.play();
-  assert.equal(world.isPlaying(), true);
-  world.pause();
-  assert.equal(a.getState().playing, false);
-  assert.equal(world.isPlaying(), false);
-  await a.play();
-  world.goLive();
-  assert.equal(a.getState().playing, false);
-  b.destroy();
-  assert.equal(world.follows('radar'), true);
+  a.register(product('radar', [0, 10, 20]));
+  b.register(product('radar', [0, 10, 20]));
   world.seek(Date.parse(time(0)));
   world.play();
-  assert.equal(a.getState().playing, true);
+  b.destroy();
+  assert.equal(world.follows('radar'), true);
+  assert.equal(world.isLive(), false);
+  assert.equal(world.isPlaying(), true);
   a.destroy();
   assert.equal(world.follows('radar'), false);
   assert.equal(world.isLive(), true);
   assert.equal(world.isPlaying(), false);
 });
 
-test('pausing from inside the first playing notice stops the world too', async (t) => {
-  const { clock, world } = harness(t);
-  clock.register(product('radar', [0, 10, 20]));
-  const off = clock.subscribe((state) => {
-    if (state.playing) {
-      off();
-      clock.pause();
-    }
-  });
-  await clock.play();
-  assert.equal(clock.getState().playing, false);
-  assert.equal(world.isPlaying(), false);
-});
-
-test('a step holds a world that was playing on its own', async (t) => {
-  const { clock, world } = harness(t);
-  world.seek(Date.parse(time(0)));
-  world.play();
-  clock.register(product('radar', [0, 10, 20]));
-  await clock.step(1);
-  assert.equal(world.isPlaying(), false);
-  assert.equal(world.now(), Date.parse(time(10)));
-});
-
-test('a target superseded from a listener resolves false', async (t) => {
-  const { clock } = harness(t);
-  const radar = product('radar', [0, 10, 20]);
-  clock.register(radar);
-  await flush();
-  let redirected = false;
-  clock.subscribe((state) => {
-    if (state.target === time(0) && !redirected) {
-      redirected = true;
-      void clock.setTarget(time(10));
-    }
-  });
-  assert.equal(await clock.setTarget(time(0)), false);
-  assert.equal(radar.shown, time(10));
-});
-
-test('each product’s frames are world clock coverage, and support the timeline while shown', (t) => {
+test('each product’s frames span world clock coverage, with no marks, and support the timeline while shown', (t) => {
   const { clock, world } = harness(t);
   assert.equal(world.coverage(), null);
   assert.equal(world.getState().supported, false);
@@ -447,11 +377,17 @@ test('each product’s frames are world clock coverage, and support the timeline
   assert.deepEqual(world.coverage(), {
     start: Date.parse(time(0)),
     end: Date.parse(time(10)),
-    marks: [0, 5, 10].map((m) => Date.parse(time(m))),
+    marks: [],
+    markDetails: [],
   });
   assert.equal(world.getState().supported, true);
   unregister();
-  assert.deepEqual(world.coverage().marks, [Date.parse(time(5))]);
+  assert.deepEqual(world.coverage(), {
+    start: Date.parse(time(5)),
+    end: Date.parse(time(5)),
+    marks: [],
+    markDetails: [],
+  });
   clock.destroy();
   assert.equal(world.coverage(), null);
   assert.equal(world.getState().supported, false);
@@ -464,10 +400,12 @@ test('a suspended product keeps its coverage, so the way back to live stays', (t
   radar.suspended = true;
   void clock.refresh();
   assert.equal(world.getState().supported, true);
-  assert.deepEqual(
-    world.coverage().marks,
-    [0, 10].map((m) => Date.parse(time(m))),
-  );
+  assert.deepEqual(world.coverage(), {
+    start: Date.parse(time(0)),
+    end: Date.parse(time(10)),
+    marks: [],
+    markDetails: [],
+  });
 });
 
 test('new frames reach the world clock through refresh', (t) => {

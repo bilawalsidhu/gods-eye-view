@@ -81,6 +81,8 @@ export function createVesselState({ source, services }) {
     /** Pending timer that renders one frame after a cadence-skipped pass. */
     trailingVisibilityTimer: null,
     lastVisibilityUpdate: 0,
+    /** Following the clock, the world time the last visibility pass drew. */
+    visibilityWorldMs: null,
     lastFocusUpdate: 0,
     /** Sprites whose animated emphasis remains outside the 1.0 deadband. */
     activeFocusCount: 0,

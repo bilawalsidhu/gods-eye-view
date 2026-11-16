@@ -1,5 +1,6 @@
 import { pickRenderAltitudeM } from '../../data/renderAltitude.js';
 import { stickyText, stickyNumber } from '../../data/aircraftMeta.js';
+import { courseFromFixes } from '../../data/courseFromFixes.js';
 import { classifyAircraft } from '../../data/aircraftClass.js';
 import { aircraftEmergency } from '../../data/aircraftEmergency.js';
 import {
@@ -175,6 +176,12 @@ export class MilitaryFlightRecords {
     // last-known-good (bounded by the layer's eviction, which deletes the entry).
     const stickyType = stickyText(type, prevMeta?.type);
     const fixEpochMs = aircraft.positionTimeMs ?? observedAtMs;
+    const course = courseFromFixes(prevMeta?.courseAnchor, {
+      lat,
+      lon,
+      ms: fixEpochMs,
+      speedMps: aircraft.speedMps,
+    });
     const meta = {
       sourceReference: aircraft.reference,
       observedReceiptMs: this.now(),
@@ -206,7 +213,14 @@ export class MilitaryFlightRecords {
         onGround ? 0 : prevMeta?.speedMps,
         0,
       ),
-      track: stickyNumber(aircraft.courseDeg, prevMeta?.track, 0),
+      // With no reported track or true heading, a moving contact faces the
+      // way its fixes went (src/data/courseFromFixes.js); else the last one.
+      track: stickyNumber(
+        aircraft.courseDeg,
+        course.courseDeg ?? prevMeta?.track,
+        0,
+      ),
+      courseAnchor: course.anchor,
       // Analyst seam (additive): sticky like the other kinematics.
       verticalRateMps: stickyNumber(
         verticalRateMps,
