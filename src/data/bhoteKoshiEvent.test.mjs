@@ -529,6 +529,66 @@ test('a run going on from a seek in Timure’s hold resumes its evidence sequenc
   } finally { await layer.destroy(); Object.assign(globalThis, previous); }
 });
 
+test('a run going on from a seek in Gyirong’s hold plays its restarted clip out before the next shot', async () => {
+  const previous = { document: globalThis.document, window: globalThis.window,
+    requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame };
+  installEventDom();
+  globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
+  globalThis.requestAnimationFrame = () => 1;
+  globalThis.cancelAnimationFrame = () => {};
+  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
+  let plays = 0;
+  const layer = createBhoteKoshiEventLayer({
+    eventLoader: async () => event,
+    imagerySpecFactory: async (url) => ({ url }),
+    terrainSampler: async (_viewer, observations) => observations.map(() => ({ height: 800 })),
+    mediaLoader: async () => { throw Object.assign(new Error('No bundled clip'), { name: 'AbortError' }); },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+    renderHost: { request() {}, hold() {}, release() {} },
+    embeddedMediaFactory: () => ({ warm: () => true, show: () => true, play() { plays++; }, pause() {},
+      getPlaybackState: () => ({ phase: 'playing' }), hide() {}, destroy() {} }),
+  });
+  const recipe = getSceneAppendRecipeById('bhote-koshi-nepal-evidence-pack');
+  const controls = { ...recipe.runtimeControlsByBeat['gyirong-border-gate'], cameraSettled: true };
+  const params = (sceneControls) => ({ presentation: 'scene-beat', sceneSurface: 'evidence-beat',
+    beatId: 'gyirong-border-gate', sceneContext: { sceneId: 'scene', shotId: 'shot', holdSec: 9.15 }, sceneControls });
+  const token = { cancelled: false, signal: new AbortController().signal };
+  const hold = async (resume) => {
+    const waits = [];
+    await SceneDirector.prototype._holdShot.call({
+      _layerStatesForShot: () => ({ [layer.id]: { enabled: true, params: params(controls) } }),
+      dataManager: { layers: new Map([[layer.id, { module: layer }]]) },
+      _effectiveShotHoldSec: () => 9.15,
+      _sleep: async (ms) => waits.push(ms),
+      stopScene: () => assert.fail('no timeout'),
+    }, { id: 'scene' }, { id: 'shot' }, token, resume);
+    return waits;
+  };
+  try {
+    const viewer = eventViewer();
+    await layer.init(viewer);
+    layer.setSceneMediaPlayback({ sceneId: 'scene', shotId: 'shot', token });
+    // 5 s into the 9.15 s hold, inside the 6 s clip, which has no media gate.
+    const resume = { holdElapsedSec: 5, holdDurationSec: 9.15 };
+    layer.setParams(params({ ...controls, timelineSeek: { cameraProgress: 1, ...resume, flightDurationSec: 2 } }),
+      { origin: 'scene' });
+    await layer.enable(viewer, { origin: 'scene' });
+    assert.equal(layer.getSceneShotMediaHold('gyirong-border-gate'), null, 'the clip is not trimmed');
+    layer.setParams(params(controls), { origin: 'scene' });
+    assert.ok(plays > 0, 'the clip starts again');
+    assert.equal(layer.sceneShotRestartsMedia('gyirong-border-gate'), true);
+    assert.deepEqual(await hold(resume), [9150], 'the hold plays out as from its start, not 4.15 s');
+    // A seek after the clip: only the rest of the hold.
+    const late = { holdElapsedSec: 8, holdDurationSec: 9.15 };
+    layer.setParams(params({ ...controls, timelineSeek: { cameraProgress: 1, ...late, flightDurationSec: 2 } }),
+      { origin: 'scene' });
+    layer.setParams(params(controls), { origin: 'scene' });
+    assert.equal(layer.sceneShotRestartsMedia('gyirong-border-gate'), false);
+    const [rest] = await hold(late);
+    assert.ok(Math.abs(rest - 1150) < 1e-6, String(rest));
+  } finally { await layer.destroy(); Object.assign(globalThis, previous); }
+});
+
 test('Pinokio source-card fallback selects authored Director dwell, not an impossible player hold', async () => {
   const previous = { document: globalThis.document, window: globalThis.window };
   installEventDom();

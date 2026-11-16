@@ -1090,6 +1090,8 @@ export function createBhoteKoshiEventLayer({
   let _sceneRevealProgress = 1;
   // How far a timeline seek's settled-camera reveal had come (0..1, linear).
   let _sceneSeekRevealLinear = 1;
+  // The beat whose clip a run going on from a seek in its hold started again.
+  let _sceneMediaRestartBeatId = null;
   let _cinematicKeyframes = [];
   let _cinematicActive = false;
   let _cinematicReplayArmed = false;
@@ -1549,6 +1551,19 @@ export function createBhoteKoshiEventLayer({
     return (
       Number(media?.embedEndAtSec) > Number(media?.embedStartAtSec || 0) &&
       resolveEmbeddedMediaSource(media?.sourceUrl)?.provider === 'youtube'
+    );
+  }
+
+  /**
+   * Whether a run going on from a seek in this beat's hold started its clip
+   * again, so the hold has to play out as from its start.
+   */
+  function sceneShotRestartsMedia(beatId) {
+    return (
+      _enabled &&
+      _sceneBeatId === beatId &&
+      _sceneMediaRestartBeatId === beatId &&
+      sceneEvidenceMediaAutoplays()
     );
   }
 
@@ -3896,6 +3911,14 @@ export function createBhoteKoshiEventLayer({
       nowDeferred;
     if (resumesSeek && sceneSeekPassedMedia(previousSeek))
       _sceneMediaPlaybackCompletedBeatId = _sceneBeatId;
+    if (
+      resumesSeek &&
+      sceneEvidenceMediaAutoplays() &&
+      !sceneSeekPassedMedia(previousSeek)
+    )
+      _sceneMediaRestartBeatId = _sceneBeatId;
+    else if (beatChanged || sceneTimelineSeek())
+      _sceneMediaRestartBeatId = null;
     if (!nowDeferred) {
       stopSceneEvidenceReveal();
       _sceneRevealProgress = 1;
@@ -4010,6 +4033,7 @@ export function createBhoteKoshiEventLayer({
     setParams,
     getParams,
     getSceneShotMediaHold,
+    sceneShotRestartsMedia,
     setSceneMediaPlayback,
     getStats() {
       return {

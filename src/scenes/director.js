@@ -2957,11 +2957,20 @@ export class SceneDirector {
           ]
         : [];
     });
-    // Resumed inside the hold, its layers play on from that moment: a clip
-    // they started again is waited for as in any hold; otherwise only the
-    // rest of the hold is left to wait.
-    const resumed = resume?.holdElapsedSec > 0;
-    if (resumed && !readers.some(({ read }) => read()?.pending === true)) {
+    // Resumed inside the hold, its layers play on from that moment. A clip
+    // they started again plays the hold out as from its start (its media
+    // gate, or the shot's whole hold for a clip without one); otherwise only
+    // the rest of the hold is left to wait.
+    const restartedClip =
+      resume?.holdElapsedSec > 0 &&
+      Object.entries(this._layerStatesForShot(scene, shot)).some(
+        ([id, state]) =>
+          state.enabled &&
+          this.dataManager?.layers
+            ?.get(id)
+            ?.module?.sceneShotRestartsMedia?.(state.params?.beatId) === true,
+      );
+    if (resume?.holdElapsedSec > 0 && !restartedClip) {
       await this._sleep(
         Math.max(0, resume.holdDurationSec - resume.holdElapsedSec) * 1000,
         token,
