@@ -601,3 +601,21 @@ test('a virtual aid to navigation keeps its disc and its virtual flag', async ()
   assert.equal(layer.testing._vesselRecordForTest('993672009').virtual, true);
   assert.match(atob(icons.item('993672009').image.split(',')[1]), /<circle/);
 });
+
+test('a feed with no AISStream key reports its key as required, and a live one does not', async () => {
+  let current = snapshot([], {
+    transportStatus: 'missing-key',
+    complete: false,
+  });
+  const { layer } = setup({
+    async getSnapshot() {
+      return current;
+    },
+  });
+  assert.equal(layer.requiresKeyId, 'aisstream');
+  await layer.update();
+  assert.equal(layer.getStats().keyRequired, true);
+  current = snapshot([observation('111')]);
+  await layer.update();
+  assert.equal(layer.getStats().keyRequired, false);
+});

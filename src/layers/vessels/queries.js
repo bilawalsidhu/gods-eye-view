@@ -299,6 +299,8 @@ export function createQueries({
     icon: '◭',
 
     source: 'AISStream',
+    // Without an AISStream key the feed cannot start; the panel names the key.
+    requiresKeyId: 'aisstream',
 
     updateInterval: REFRESH_MS,
 
@@ -713,6 +715,7 @@ export function createQueries({
             ? 'unavailable'
             : undefined,
         transportStatus: state.feed.transportStatus,
+        keyRequired: state.feed.transportStatus === 'missing-key',
         lastMessageAt: state.feed.lastMessageAt,
         rawRowCount: state.feed.rawRowCount,
         acceptedRowCount: state.feed.acceptedRowCount,

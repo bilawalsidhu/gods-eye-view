@@ -106,8 +106,9 @@ export function createApplicationViewer({
     }),
   );
   try {
-    // Until the frame port takes over (appRenderer.js), tick at the idle
-    // rate so the startup load does not compete with drawing at 240 fps.
+    // Until the render governor takes over (src/renderGovernor.js, installed
+    // by src/app/scene.js), tick at the idle rate so the startup load does
+    // not compete with drawing at 240 fps.
     viewer.targetFrameRate = IDLE_FRAME_RATE;
     // No double-click follow or zoom: the Viewer's own (it tracked or
     // zoomed to the entity picked) is off. Following is a layer's click.

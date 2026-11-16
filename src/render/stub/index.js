@@ -187,6 +187,16 @@ export function createStubRenderer(options = {}) {
   const pendingReasons = [];
   const continuous = new Map();
   let holdSeq = 0;
+  // Told when the first hold is taken and the last released.
+  const heldListeners = new Set();
+  function tellHeld(held) {
+    for (const entry of [...heldListeners])
+      try {
+        entry.cb(held);
+      } catch (error) {
+        report(error);
+      }
+  }
   const phaseListeners = { preUpdate: [], preRender: [], postRender: [] };
   // The frame under way while its `preUpdate` listeners run.
   let updating = null;
@@ -345,7 +355,16 @@ export function createStubRenderer(options = {}) {
     holdContinuous(reason) {
       const key = ++holdSeq;
       continuous.set(key, String(reason));
-      return () => continuous.delete(key);
+      if (continuous.size === 1) tellHeld(true);
+      return () => {
+        if (!continuous.delete(key)) return;
+        if (continuous.size === 0) tellHeld(false);
+      };
+    },
+    onHeldChange(cb) {
+      const entry = { cb };
+      heldListeners.add(entry);
+      return () => heldListeners.delete(entry);
     },
     mode: () => 'demand',
     diagnostics: () => ({
