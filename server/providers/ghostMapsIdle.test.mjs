@@ -5,7 +5,11 @@ import { createServer } from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { createGhostMapsWatcher, ghostMapsIdleMs, ghostMapsProxy } from './ghostMaps.js';
+import {
+  createGhostMapsWatcher,
+  ghostMapsIdleMs,
+  ghostMapsProxy,
+} from './ghostMaps.js';
 
 const HEAD = '1'.repeat(40);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -138,6 +142,10 @@ test('a completed SSE GET keeps its viewer until the response closes', () =>
       req.once('close', () => {
         requestComplete = true;
       });
+      // Node only closes the request once its body is read; drain it the way
+      // a body-reading middleware would, so the GET completes while the
+      // event stream stays open.
+      req.resume();
       handler(req, res);
     });
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
