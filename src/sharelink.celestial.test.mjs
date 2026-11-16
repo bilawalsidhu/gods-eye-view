@@ -10,6 +10,7 @@ import { ShareLinkManager, decodeShareCreatedAtMs } from './sharelink.js';
 import { createDefaultLayerState } from './data/layerState.js';
 import { parseSharePath } from './share/shareLinkPath.js';
 import { decodeShareView } from './share/viewCodec.js';
+import { bindFakeCesiumCamera } from './testSupport/fakeCameraPort.mjs';
 
 /** The decoded view of a copied `/share/<code>` link. */
 const sharedState = (href) =>
@@ -51,7 +52,7 @@ function makeManager(hash = '') {
       roll: 0,
     },
   };
-  return new ShareLinkManager(viewer);
+  return new ShareLinkManager(bindFakeCesiumCamera(viewer));
 }
 
 function installClipboard(writeText) {
@@ -118,6 +119,29 @@ test('scope feather above 100% survives share parsing and serialization', () => 
   assert.equal(params.get('scf'), '200');
   manager.onToggleChange(false, true, { scopeFeatherPct: 999 });
   assert.equal(manager._buildHashParams().get('scf'), '200');
+  clearTimeout(manager._debounceTimer);
+});
+
+test('scope opacity rides as sco only below full, and through the compact link', () => {
+  // Links without `sco`, every link made before it, open at full opacity.
+  assert.equal(makeManager('#v=2&lat=10&lon=20&scf=35').parseInitialHash().scopeOpacityPct, 100);
+  assert.equal(makeManager('#v=2&lat=10&lon=20&sco=40').parseInitialHash().scopeOpacityPct, 40);
+  assert.equal(makeManager('#v=2&lat=10&lon=20&sco=250').parseInitialHash().scopeOpacityPct, 100);
+  assert.equal(makeManager('#v=2&lat=10&lon=20&sco=-3').parseInitialHash().scopeOpacityPct, 0);
+  assert.equal(makeManager('#v=2&lat=10&lon=20&sco=x').parseInitialHash().scopeOpacityPct, 100);
+
+  const manager = makeManager();
+  manager.onToggleChange(false, true, {});
+  const before = manager._buildHashParams().toString();
+  assert.equal(manager._buildHashParams().has('sco'), false, 'full opacity writes nothing');
+  manager.onToggleChange(false, true, { scopeOpacityPct: 100 });
+  assert.equal(manager._buildHashParams().toString(), before);
+  manager.onToggleChange(false, true, { scopeOpacityPct: 45.4 });
+  assert.equal(manager._buildHashParams().get('sco'), '45');
+  assert.equal(sharedState(manager.buildLink()).scopeOpacityPct, 45);
+  manager.onToggleChange(false, true, { scopeOpacityPct: 100 });
+  assert.equal(manager._buildHashParams().has('sco'), false);
+  assert.equal(sharedState(manager.buildLink()).scopeOpacityPct, 100);
   clearTimeout(manager._debounceTimer);
 });
 
@@ -443,7 +467,7 @@ test('share-link restore forces a final stationary render for Google 3D Tiles', 
     },
     scene: { requestRender() { calls.renders += 1; } },
   };
-  const manager = new ShareLinkManager(viewer);
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(viewer));
   manager.applyState({
     lat: 40.7669,
     lon: -73.9909,
@@ -455,12 +479,13 @@ test('share-link restore forces a final stationary render for Google 3D Tiles', 
 
   assert.ok(calls.flyTo, 'restore must start a camera flight');
   assert.equal(typeof calls.flyTo.complete, 'function');
+  const rendersInFlight = calls.renders;
   calls.flyTo.complete();
   assert.deepEqual(calls.setView, {
     destination: calls.flyTo.destination,
     orientation: calls.flyTo.orientation,
   });
-  assert.equal(calls.renders, 1);
+  assert.equal(calls.renders, rendersInFlight + 1, 'one render at rest');
 });
 
 test('newer navigation suppresses delayed share camera while non-camera state still restores', async () => {
@@ -472,7 +497,7 @@ test('newer navigation suppresses delayed share camera while non-camera state st
       flyTo() { flights += 1; },
     },
   };
-  const manager = new ShareLinkManager(viewer, {
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(viewer), {
     onRestore: (state) => { restored = state; },
     isNavigationCurrent: () => false,
   });
@@ -702,7 +727,7 @@ test('share apply completion waits for both callback work and camera settlement'
     },
     scene: { requestRender() {} },
   };
-  const manager = new ShareLinkManager(viewer, { onRestore: () => restoreGate });
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(viewer), { onRestore: () => restoreGate });
   let settled = false;
   const applying = manager.applyState({
     lat: 40, lon: -74, alt: 500, heading: 0, pitch: -30, roll: 0,
@@ -731,7 +756,7 @@ test('a later navigation prevents share completion from resetting the final pose
     },
     scene: { requestRender() {} },
   };
-  const manager = new ShareLinkManager(viewer, {
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(viewer), {
     isNavigationCurrent: (token) => token === generation,
   });
   manager.applyState({
@@ -755,7 +780,7 @@ test('destroy cancels only a still-owned share flight and ignores delayed comple
     },
     scene: { requestRender() {} },
   };
-  const manager = new ShareLinkManager(viewer, {
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(viewer), {
     isNavigationCurrent: (token) => token === generation,
     cancelOwnedNavigation: () => { cancellations += 1; flight?.cancel?.(); },
   });
@@ -767,7 +792,7 @@ test('destroy cancels only a still-owned share flight and ignores delayed comple
   assert.equal(cancellations, 1);
   assert.equal(setViews, 0);
 
-  const newerManager = new ShareLinkManager(viewer, {
+  const newerManager = new ShareLinkManager(bindFakeCesiumCamera(viewer), {
     isNavigationCurrent: (token) => token === generation,
     cancelOwnedNavigation: () => { cancellations += 1; },
   });

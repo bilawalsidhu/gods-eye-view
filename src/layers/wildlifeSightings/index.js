@@ -1,5 +1,6 @@
-import * as Cesium from 'cesium';
-import { horizonOccluder } from '../../data/iconOrientation.js';
+import { horizonFrom } from '../../geo/horizon.js';
+import { inputFor } from '../../input/dispatcher.js';
+import { findQuery } from '../../render/rendererOf.js';
 import { createPhotoSlots } from './photos.js';
 import { createRendering } from './rendering.js';
 import { createSelection } from './selection.js';
@@ -10,7 +11,7 @@ import { createLifecycle } from './lifecycle.js';
 export function createWildlifeSightingsLayer({
   source,
   overlayHost = null,
-  screenSpaceEventHandlerFactory = null,
+  input = (viewer) => inputFor(viewer),
   picking = null,
   pointer = null,
   sprites = null,
@@ -26,10 +27,8 @@ export function createWildlifeSightingsLayer({
   cancelIdleCallback,
   imageFactory,
   eventTarget = globalThis.window,
-  cesium = Cesium,
-  project = (scene, position) =>
-    Cesium.SceneTransforms.worldToWindowCoordinates(scene, position),
-  occluderFactory = horizonOccluder,
+  project = (viewer, position) => findQuery(viewer)?.project(position) ?? null,
+  occluderFactory = horizonFrom,
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Wildlife sightings require a snapshot source');
@@ -51,7 +50,7 @@ export function createWildlifeSightingsLayer({
     pointById: new Map(),
     positions: new Map(),
     cells: [],
-    staging: null,
+    cellSets: null,
     selectedId: null,
     selectedRow: null,
     carriers: new Map(),
@@ -84,7 +83,7 @@ export function createWildlifeSightingsLayer({
   const services = {
     source,
     overlayHost,
-    screenSpaceEventHandlerFactory,
+    input,
     picking,
     pointer,
     sprites,
@@ -99,7 +98,6 @@ export function createWildlifeSightingsLayer({
     requestIdleCallback,
     cancelIdleCallback,
     eventTarget,
-    cesium,
     project,
     occluderFactory,
   };

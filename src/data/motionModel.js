@@ -6,54 +6,41 @@
  * Turn-rate estimation + constant-rate-turn arc integration are adapted from
  * skylight (https://github.com/cpaczek/skylight, MIT) shared/src/aim.ts.
  */
-import * as Cesium from 'cesium';
+import { fromRadians, toCartographicRadians } from '../geo/ellipsoid.js';
+import { eastNorthUp, framePoint } from '../geo/frames.js';
+import {
+  julianFromEpochMs,
+  julianToEpochMs,
+  secondsDifference,
+} from '../geo/julian.js';
+import { copyInto, norm180, norm360, toDegrees, vec } from '../geo/vector.js';
 
 const DEG = Math.PI / 180;
-const _mmCarto = new Cesium.Cartographic();
-const _mmCandidateCarto = new Cesium.Cartographic();
-
-export function norm360(deg) {
-  return ((deg % 360) + 360) % 360;
-}
 
 /**
  * Lift a repeated grounded fix to a newly resolved render floor without
  * manufacturing a new source timestamp or changing its reported lat/lon.
  * Airborne fixes and downward candidates are deliberately left untouched.
  *
- * @param {{position: Cesium.Cartesian3}|null} newest
- * @param {Cesium.Cartesian3|null} candidatePosition
+ * @param {{position: {x: number, y: number, z: number}}|null} newest
+ * @param {{x: number, y: number, z: number}|null} candidatePosition ECEF.
  * @param {boolean} onGround
  * @returns {boolean} True when the stored position was lifted.
  */
 export function liftRepeatedGroundFix(newest, candidatePosition, onGround) {
   if (!onGround || !newest?.position || !candidatePosition) return false;
-  const stored = Cesium.Cartographic.fromCartesian(
-    newest.position,
-    Cesium.Ellipsoid.WGS84,
-    _mmCarto,
-  );
-  const candidate = Cesium.Cartographic.fromCartesian(
-    candidatePosition,
-    Cesium.Ellipsoid.WGS84,
-    _mmCandidateCarto,
-  );
+  const stored = toCartographicRadians(newest.position);
+  const candidate = toCartographicRadians(candidatePosition);
   if (!stored || !candidate || candidate.height <= stored.height) return false;
-  Cesium.Cartesian3.fromRadians(
-    stored.longitude,
-    stored.latitude,
-    candidate.height,
-    Cesium.Ellipsoid.WGS84,
+  copyInto(
+    fromRadians(stored.lon, stored.lat, candidate.height),
     newest.position,
   );
   return true;
 }
 
-/** Normalize to (−180, 180]. */
-export function norm180(deg) {
-  const n = norm360(deg);
-  return n > 180 ? n - 360 : n;
-}
+/** Degrees in [0, 360) and (−180, 180]. */
+export { norm180, norm360 };
 
 /**
  * Course over ground (deg from north, clockwise) of the chord from → to,
@@ -66,16 +53,12 @@ export function courseBetweenCartesians(from, to, minChordM = 25) {
   const dy = to.y - from.y;
   const dz = to.z - from.z;
   if (dx * dx + dy * dy + dz * dz < minChordM * minChordM) return null;
-  const carto = Cesium.Cartographic.fromCartesian(
-    from,
-    Cesium.Ellipsoid.WGS84,
-    _mmCarto,
-  );
+  const carto = toCartographicRadians(from);
   if (!carto) return null;
-  const sLat = Math.sin(carto.latitude);
-  const cLat = Math.cos(carto.latitude);
-  const sLon = Math.sin(carto.longitude);
-  const cLon = Math.cos(carto.longitude);
+  const sLat = Math.sin(carto.lat);
+  const cLat = Math.cos(carto.lat);
+  const sLon = Math.sin(carto.lon);
+  const cLon = Math.cos(carto.lon);
   const e = -sLon * dx + cLon * dy;
   const n = -sLat * cLon * dx - sLat * sLon * dy + cLat * dz;
   if (e * e + n * n < 1) return null; // < 1 m horizontal — vertical-only motion
@@ -236,7 +219,7 @@ export function staleHoldsAtLastReport({ onGround, heightM, groundM } = {}) {
  * The hold-or-coast decision for a report, made once and kept on the report,
  * so a ground floor that resolves while the contact coasts cannot flip it and
  * snap the icon back. Height and position come from the report itself.
- * @param {{position: Cesium.Cartesian3, staleHolds?: boolean}} fix - History
+ * @param {{position: {x: number, y: number, z: number}, staleHolds?: boolean}} fix - History
  *   fix; `staleHolds` is stored on it.
  * @param {object} args
  * @param {boolean} [args.onGround] - The contact's ground flag.
@@ -245,17 +228,10 @@ export function staleHoldsAtLastReport({ onGround, heightM, groundM } = {}) {
  */
 export function staleHoldsForFix(fix, { onGround, cachedGroundFloor } = {}) {
   if (typeof fix.staleHolds === 'boolean') return fix.staleHolds;
-  const carto = Cesium.Cartographic.fromCartesian(
-    fix.position,
-    Cesium.Ellipsoid.WGS84,
-    _holdCarto,
-  );
+  const carto = toCartographicRadians(fix.position);
   const groundM =
     carto && typeof cachedGroundFloor === 'function'
-      ? cachedGroundFloor(
-          Cesium.Math.toDegrees(carto.latitude),
-          Cesium.Math.toDegrees(carto.longitude),
-        )
+      ? cachedGroundFloor(toDegrees(carto.lat), toDegrees(carto.lon))
       : null;
   fix.staleHolds = staleHoldsAtLastReport({
     onGround,
@@ -264,8 +240,6 @@ export function staleHoldsForFix(fix, { onGround, cachedGroundFloor } = {}) {
   });
   return fix.staleHolds;
 }
-
-const _holdCarto = new Cesium.Cartographic();
 
 /**
  * Seconds a contact coasts past `newest` at a display time `elapsedSec`
@@ -305,34 +279,22 @@ export const COAST_FLOOR_LIFT_M = 1.5;
  * Lift a coasted position to COAST_FLOOR_LIFT_M above the ground where the
  * ground is known; a coast runs level from the report and terrain may rise
  * under it.
- * @param {Cesium.Cartesian3} position - Mutated in place.
+ * @param {{x: number, y: number, z: number}} position - Mutated in place.
  * @param {(latDeg: number, lonDeg: number) => number|null} [cachedGroundFloor]
- * @returns {Cesium.Cartesian3}
+ * @returns {{x: number, y: number, z: number}}
  */
 export function floorCoastedPosition(position, cachedGroundFloor) {
   if (typeof cachedGroundFloor !== 'function') return position;
-  const carto = Cesium.Cartographic.fromCartesian(
-    position,
-    Cesium.Ellipsoid.WGS84,
-    _coastCarto,
-  );
+  const carto = toCartographicRadians(position);
   if (!carto) return position;
-  const ground = cachedGroundFloor(
-    Cesium.Math.toDegrees(carto.latitude),
-    Cesium.Math.toDegrees(carto.longitude),
-  );
+  const ground = cachedGroundFloor(toDegrees(carto.lat), toDegrees(carto.lon));
   if (!Number.isFinite(ground) || carto.height >= ground + COAST_FLOOR_LIFT_M)
     return position;
-  return Cesium.Cartesian3.fromRadians(
-    carto.longitude,
-    carto.latitude,
-    ground + COAST_FLOOR_LIFT_M,
-    Cesium.Ellipsoid.WGS84,
+  return copyInto(
+    fromRadians(carto.lon, carto.lat, ground + COAST_FLOOR_LIFT_M),
     position,
   );
 }
-
-const _coastCarto = new Cesium.Cartographic();
 
 /**
  * Seconds to coast past the last report: the elapsed time, bounded by the
@@ -417,7 +379,7 @@ export function turnRateFromFixHistory(history) {
   for (const s of history) {
     if (!Number.isFinite(s.track)) continue;
     samples.push({
-      tSec: Cesium.JulianDate.secondsDifference(s.time, t0),
+      tSec: secondsDifference(s.time, t0),
       trackDeg: s.track,
       speedMps: s.velocity,
     });
@@ -587,8 +549,6 @@ export function arcOffsetEnu(speedMps, trackDeg, turnRateDps, dtSec, result) {
 }
 
 const _forwardFixArc = { east: 0, north: 0, endCourseDeg: 0 };
-const _forwardFixEnu = new Cesium.Matrix4();
-const _forwardFixOffset = new Cesium.Cartesian3();
 
 /**
  * Create a forward-only synthetic fix when a repeated position epoch carries
@@ -603,13 +563,13 @@ const _forwardFixOffset = new Cesium.Cartesian3();
  * (`reportEpochMs` carries it along a chain), and never below known ground.
  * The result is a motion fix only, never a report for the trail.
  *
- * @param {{time: Cesium.JulianDate, epochMs?: number, position: Cesium.Cartesian3,
+ * @param {{time: object, epochMs?: number, position: {x: number, y: number, z: number},
  *   velocity?: number, track?: number, staleHolds?: boolean, reportEpochMs?: number}} newest
  *   Existing immutable history fix.
  * @param {{epochMs: number, velocity: number, track: number, turnRateDps?: number,
  *   cachedGroundFloor?: Function}} next
  *   New kinematics and the wall/source epoch at which they become authoritative.
- * @returns {{time: Cesium.JulianDate, epochMs: number, position: Cesium.Cartesian3,
+ * @returns {{time: object, epochMs: number, position: {x: number, y: number, z: number},
  *   velocity: number, track: number, staleHolds?: boolean, reportEpochMs: number}|null}
  *   Forward synthetic fix, or null.
  */
@@ -618,7 +578,7 @@ export function synthesizeForwardKinematicsFix(newest, next = {}) {
     return null;
   const startEpochMs = Number.isFinite(newest.epochMs)
     ? newest.epochMs
-    : Cesium.JulianDate.toDate(newest.time).getTime();
+    : julianToEpochMs(newest.time);
   if (!Number.isFinite(startEpochMs) || next.epochMs <= startEpochMs)
     return null;
   if (newest.staleHolds === true) return null;
@@ -640,27 +600,15 @@ export function synthesizeForwardKinematicsFix(newest, next = {}) {
     dtSec,
     _forwardFixArc,
   );
-  Cesium.Cartesian3.fromElements(
-    _forwardFixArc.east,
-    _forwardFixArc.north,
-    0,
-    _forwardFixOffset,
-  );
-  const enu = Cesium.Transforms.eastNorthUpToFixedFrame(
-    newest.position,
-    Cesium.Ellipsoid.WGS84,
-    _forwardFixEnu,
-  );
   const position = floorCoastedPosition(
-    Cesium.Matrix4.multiplyByPoint(
-      enu,
-      _forwardFixOffset,
-      new Cesium.Cartesian3(),
+    framePoint(
+      eastNorthUp(newest.position),
+      vec(_forwardFixArc.east, _forwardFixArc.north, 0),
     ),
     next.cachedGroundFloor,
   );
   return {
-    time: Cesium.JulianDate.fromDate(new Date(next.epochMs)),
+    time: julianFromEpochMs(next.epochMs),
     epochMs: next.epochMs,
     reportEpochMs: Number.isFinite(newest.reportEpochMs)
       ? newest.reportEpochMs
@@ -672,4 +620,32 @@ export function synthesizeForwardKinematicsFix(newest, next = {}) {
       : previousVelocity,
     track: Number.isFinite(next.track) ? next.track : previousTrack,
   };
+}
+
+/** @constant {number} The shortest ease (ms) from where a contact was drawn onto where a new report puts it. */
+export const RECOVER_MIN_MS = 3_000;
+/** @constant {number} An ease never moves a contact faster than its speed by more than this share... */
+export const RECOVER_MAX_EXTRA_SPEED = 0.3;
+/** @constant {number} ...unless that would take longer than this (ms). */
+export const RECOVER_MAX_MS = 20_000;
+/** @constant {number} Farther than this (m) from where a new report puts it, a contact jumps there. */
+export const RECOVER_SNAP_M = 5_000;
+/** @constant {number} Closer than this (m), it is simply drawn there. */
+export const RECOVER_MIN_M = 5;
+
+/**
+ * How long (ms) a contact drawn `errorM` off where a new report puts it eases
+ * onto that place: at least RECOVER_MIN_MS, and long enough that the ease
+ * adds at most RECOVER_MAX_EXTRA_SPEED of its speed, so it never looks like
+ * a jump, up to RECOVER_MAX_MS.
+ * @param {number} errorM
+ * @param {number} speedMps
+ * @returns {number}
+ */
+export function recoveryMs(errorM, speedMps) {
+  const extraMps = RECOVER_MAX_EXTRA_SPEED * Math.max(speedMps || 0, 10);
+  return Math.min(
+    RECOVER_MAX_MS,
+    Math.max(RECOVER_MIN_MS, (errorM / extraMps) * 1000),
+  );
 }

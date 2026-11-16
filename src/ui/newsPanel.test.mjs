@@ -156,7 +156,7 @@ test('the panel shows the last 24 h as event cards and opens once', () => {
   assert.equal(img.getAttribute('referrerpolicy'), 'no-referrer');
   assert.equal(first.querySelector('.news-card__credit').textContent, 'A');
   // A lone report has no picture.
-  assert.equal(second.querySelector('.news-card__thumb'), null);
+  assert.equal(second.querySelector('.news-card__thumb') === null, true);
   // A later update does not reopen a panel the reader collapsed.
   panel.classList.add('collapsed');
   news.update(view());
@@ -192,8 +192,8 @@ test('a card click flies there; open, it links the source and closes', () => {
 test('filters, the Local section and empty or failed reads', () => {
   const { news, panel, calls } = fixture();
   news.update(view());
-  assert.equal(panel.querySelector('[aria-label="Local"]'), null);
-  assert.equal(panel.querySelector('.news-toggle'), null);
+  assert.equal(panel.querySelector('[aria-label="Local"]') === null, true);
+  assert.equal(panel.querySelector('.news-toggle') === null, true);
   const severity = panel.querySelector('select[aria-label="Severity"]');
   assert.equal(severity.value, '2');
   severity.value = '3';
@@ -214,7 +214,7 @@ test('filters, the Local section and empty or failed reads', () => {
     panel.textContent,
     /No news matches these filters in the last 24 h/,
   );
-  assert.equal(panel.querySelector('.news-readout__footer button'), null);
+  assert.equal(panel.querySelector('.news-readout__footer button') === null, true);
 
   // Local: no hotspot chips or severity floor, and its own empty states.
   const localView = (inView) =>
@@ -225,9 +225,9 @@ test('filters, the Local section and empty or failed reads', () => {
   news.update(localView({ active: false }));
   const section = panel.querySelector('[aria-label="Local"]');
   assert.match(section.textContent, /Zoom in to see local news/);
-  assert.equal(panel.querySelector('[data-chip-id="ua-ru-war"]'), null);
-  assert.equal(panel.querySelector('select[aria-label="Severity"]'), null);
-  assert.equal(panel.querySelector('[aria-label="Latest news"]'), null);
+  assert.equal(panel.querySelector('[data-chip-id="ua-ru-war"]') === null, true);
+  assert.equal(panel.querySelector('select[aria-label="Severity"]') === null, true);
+  assert.equal(panel.querySelector('[aria-label="Latest news"]') === null, true);
   assert.equal(document.getElementById('news-panel-count').textContent, '0');
   news.update(
     localView({ active: true, items: [feedCardView(report('near'), NOW)] }),
@@ -320,7 +320,7 @@ test('a card credits the service its report came through', () => {
     credited.querySelector('.news-card__via').textContent,
     'via GDELT Project',
   );
-  assert.equal(own.querySelector('.news-card__via'), null);
+  assert.equal(own.querySelector('.news-card__via') === null, true);
   news.destroy();
 });
 
@@ -370,7 +370,7 @@ test('scrolling to the end asks once per page, again after a filter change or a 
 test('the window choice offers shorter windows; the longest is the server window', () => {
   const { news, panel, calls } = fixture();
   news.update(view({ windowHours: 12, windowChoices: [12, 6, 3, 1] }));
-  assert.equal(panel.querySelector('.news-readout__window'), null);
+  assert.equal(panel.querySelector('.news-readout__window') === null, true);
   const choice = panel.querySelector('select[aria-label="Time window"]');
   assert.deepEqual(
     [...choice.options].map((option) => option.textContent),
@@ -410,7 +410,7 @@ test('a clip waits behind its picture and plays, on request, in the open card', 
   news.update(view({ items: [feedCardView(clipped, NOW)] }));
   const card = panel.querySelector('.news-card');
   assert.equal(card.querySelector('.news-card__play').textContent, '▶');
-  assert.equal(card.querySelector('video'), null);
+  assert.equal(card.querySelector('video') === null, true);
   news.update(
     view({
       items: [feedCardView(clipped, NOW)],
@@ -436,6 +436,6 @@ test('a clip waits behind its picture and plays, on request, in the open card', 
       selected: feedCardView(clipped, NOW),
     }),
   );
-  assert.equal(panel.querySelector('.news-card.is-open video'), null);
+  assert.equal(panel.querySelector('.news-card.is-open video') === null, true);
   news.destroy();
 });

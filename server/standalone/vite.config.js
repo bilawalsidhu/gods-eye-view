@@ -6,6 +6,7 @@ import { localProviderPlugins } from '../providers/local.js';
 import { localMcpPlugin } from '../mcp/plugin.js';
 import { recorderPlugin } from '../recorder/plugin.js';
 import { apiNotFoundPlugin } from './api-not-found.js';
+import { conformanceReferencesPlugin } from './conformance-references.js';
 import { googleTokenUnavailablePlugin } from './google-token-unavailable.js';
 import { standaloneVoiceTools } from './voiceTools.js';
 import { unwatchedRuntimeDirsPlugin } from './unwatched-cache.js';
@@ -32,6 +33,7 @@ export function standaloneConfig(
       }),
       localMcpPlugin(),
       googleTokenUnavailablePlugin(),
+      conformanceReferencesPlugin(),
       apiNotFoundPlugin(),
       unwatchedRuntimeDirsPlugin(),
     ],

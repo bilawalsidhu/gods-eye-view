@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import * as Cesium from 'cesium';
 import { createInfrastructureLayers } from 'gods-eye-view/infrastructure';
 import { createLocalGeoJsonLayer } from 'gods-eye-view/infrastructure/geojson';
+import { fakeInput } from '../input/testDoubles.mjs';
+import { bindFakeGroundRenderer } from '../testSupport/fakeGroundRenderer.mjs';
 
 function services() {
   const records = new Map();
@@ -118,8 +119,6 @@ test('two viewers use their supplied contexts and dispose independently', async 
   }));
   const hosts = [services(), services()];
   const instances = hosts.map((host) => {
-    const sources = new Cesium.DataSourceCollection();
-    let click;
     const layer = createLocalGeoJsonLayer(
       {
         id: 'local-dams',
@@ -127,27 +126,25 @@ test('two viewers use their supplied contexts and dispose independently', async 
         osmDerived: true,
         color: '#0088ff',
         url: '/dams.geojsonl',
-        screenSpaceEventHandlerFactory: () => ({
-          setInputAction(fn) {
-            click = fn;
-          },
-          destroy() {},
-        }),
       },
       host,
     );
+    // A click picks the feature's stem, as the renderer's pick names it.
     const viewer = {
-      dataSources: sources,
-      scene: {
-        canvas: {},
-        preRender: new Cesium.Event(),
-        requestRender() {},
-        screenSpaceCameraController: { enableInputs: true },
-        pick: () => ({ id: sources.get(0).entities.values[0] }),
-      },
-      camera: { moveEnd: new Cesium.Event(), flyTo() {} },
+      scene: { screenSpaceCameraController: { enableInputs: true } },
     };
-    return { layer, viewer, click: () => click({ position: {} }) };
+    const fake = bindFakeGroundRenderer(viewer);
+    fake.setPick(() => {
+      const [stem] = fake.set('stems').items.values();
+      return {
+        set: fake.set('stems').spec.id,
+        id: stem.id,
+        meta: stem.meta,
+        surface: false,
+      };
+    });
+    const input = fakeInput(viewer);
+    return { layer, viewer, fake, click: () => input.click({ x: 0, y: 0 }) };
   });
   t.after(() =>
     instances.forEach(({ layer, viewer }) => layer.destroy(viewer)),
@@ -162,10 +159,16 @@ test('two viewers use their supplied contexts and dispose independently', async 
   instances[0].click();
   assert.ok(hosts[0].selection());
   assert.equal(hosts[1].selection(), undefined);
+  assert.deepEqual(
+    instances[0].fake.flights.map(({ destination }) => destination.height),
+    [5000],
+    'the click flies to the feature',
+  );
   instances[0].layer.destroy(instances[0].viewer);
   assert.equal(hosts[0].records.size, 0);
   assert.equal(hosts[1].records.size, 1);
-  assert.equal(instances[1].viewer.dataSources.length, 1);
+  assert.equal(instances[0].fake.liveSets().length, 0);
+  assert.equal(instances[1].fake.liveSets().length, 6);
 });
 
 test('consumer build includes only infrastructure code and resolves assets under a non-root base', async () => {
@@ -190,18 +193,33 @@ test('consumer build includes only infrastructure code and resolves assets under
   const output = result.output;
   const entry = output.find((item) => item.type === 'chunk' && item.isEntry);
   const sources = Object.keys(entry.modules).filter((id) => id.endsWith('.js'));
+  // It draws and takes clicks through the renderer's ports: a viewer with no
+  // renderer bound draws once the caller has loaded
+  // `./render/cesium/unbound`.
   assert.deepEqual(sources.map((id) => id.split('/').at(-1)).sort(), [
+    'color.js',
+    'dispatcher.js',
+    'ellipsoid.js',
+    'frustum.js',
+    'geojsonPins.js',
+    'heights.js',
+    'horizon.js',
     'infrastructure.js',
     'infrastructureData.js',
     'infrastructureOverlayEntry.js',
+    'inputOwnership.js',
     'localGeojsonCore.js',
     'localGeojsonLod.js',
+    'pickRegistry.js',
+    'rendererOf.js',
+    'rhumb.js',
+    'scenePick.js',
+    'sensorPick.js',
+    'sphere.js',
+    'styleStages.js',
+    'vector.js',
   ]);
-  assert.deepEqual(
-    entry.imports,
-    ['cesium'],
-    'the viewer supplies the same Cesium dependency',
-  );
+  assert.deepEqual(entry.imports, [], 'it reaches no Cesium of its own');
   for (const name of ['datacenters', 'dams']) {
     const asset = output.find(
       (item) => item.type === 'asset' && item.fileName.includes(name),

@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import { findCamera } from '../render/rendererOf.js';
+import { stopFollowing } from '../data/followed.js';
 import { t } from '../i18n/index.js';
 import { createStateChannel } from '../app/stateChannel.js';
 import { LocationControls } from './location.js';
@@ -367,9 +368,10 @@ export class LocationNavigation {
     } catch {
       /* best-effort release */
     }
-    this.viewer.trackedEntity = undefined;
-    this.viewer.camera.cancelFlight();
-    this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+    stopFollowing(this.viewer);
+    const camera = findCamera(this.viewer);
+    camera?.cancelFlight();
+    camera?.release();
     this._beginWorldJumpTransition();
 
     let resolveReset;
@@ -384,15 +386,19 @@ export class LocationNavigation {
       settled = true;
       clearTimeout(timer);
       this._endWorldJumpTransition();
-      const carto = this.viewer.camera.positionCartographic;
+      const pose = findCamera(this.viewer)?.pose();
       const result = {
         ok: !cancelled,
         action: 'zoom_to_globe',
         cancelled,
         heightKm: Math.round(GLOBE_VIEW.heightM / 1000),
         centeredOn: {
-          latitude: Number(Cesium.Math.toDegrees(carto.latitude).toFixed(2)),
-          longitude: Number(Cesium.Math.toDegrees(carto.longitude).toFixed(2)),
+          latitude: Number.isFinite(pose?.lat)
+            ? Number(pose.lat.toFixed(2))
+            : null,
+          longitude: Number.isFinite(pose?.lon)
+            ? Number(pose.lon.toFixed(2))
+            : null,
         },
       };
       this._publishGlobeResetting?.(false);
@@ -402,7 +408,7 @@ export class LocationNavigation {
     };
     this._cancelGlobeReset = () => finish(true);
     timer = window.setTimeout(() => {
-      const height = this.viewer.camera.positionCartographic?.height;
+      const height = findCamera(this.viewer)?.pose().height;
       finish(
         !Number.isFinite(height) ||
           Math.abs(height - GLOBE_VIEW.heightM) > 1000,

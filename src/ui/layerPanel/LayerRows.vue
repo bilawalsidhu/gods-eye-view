@@ -22,9 +22,11 @@ defineProps({
 
 <template>
   <template v-for="item in items" :key="item.key"
-    ><h3 v-if="item.heading" class="data-layer-group-heading">{{
-      item.heading
-    }}</h3
+    ><h3
+      v-if="item.heading"
+      class="data-layer-group-heading"
+      :data-group="item.key"
+      >{{ item.heading }}</h3
     ><div
       v-else
       class="data-toggle-row"
@@ -33,6 +35,7 @@ defineProps({
       }"
       :data-layer-id="item.id"
       :data-layer-name="item.englishName"
+      :data-library-entry="item.libraryEntry || undefined"
       ><div class="data-toggle-top"
         ><div class="data-toggle-left"
           ><span class="data-icon" aria-hidden="true">{{ item.icon }}</span

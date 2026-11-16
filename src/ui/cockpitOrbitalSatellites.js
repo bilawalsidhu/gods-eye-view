@@ -7,7 +7,7 @@
  * focus ends, and the camera hops along the great circle to the new
  * satellite. Bound to the Cockpit controller like the orbital view itself.
  */
-import * as Cesium from 'cesium';
+import { stopFollowing } from '../data/followed.js';
 import { t } from '../i18n/index.js';
 import { zoomTransitionProgress } from '../cockpitOrbital.js';
 import {
@@ -122,8 +122,8 @@ export function switchOrbitalSatellite(noradId) {
   } catch {
     tracked = false;
   }
-  // Tracking hands the camera to Cesium's follow; the orbital view keeps it.
-  this.viewer.trackedEntity = undefined;
+  // Tracking hands the camera to the follow; the orbital view keeps it.
+  stopFollowing(this.viewer);
   const info = tracked ? this.readSatelliteInfo() : null;
   if (!info || String(info.noradId) !== String(noradId)) {
     // Nothing changed hands, or the layer could not take it: the view ends
@@ -149,7 +149,6 @@ export function switchOrbitalSatellite(noradId) {
   state.verticalFov = null;
   state.place = undefined;
   state.placeTracker?.reset?.();
-  state.prefetched?.clear?.();
   this.lastHudUpdateMs = 0;
   this.lastContextUpdateMs = 0;
   this.dispatchCockpitModeChanged(true, info);
@@ -171,9 +170,10 @@ export function switchOrbitalSatellite(noradId) {
  * Where the camera is this frame: on the satellite, or part-way along a hop
  * to it, eased like a zoom step. The hop ends when it lands.
  * @param {object} state The orbital session.
- * @param {Cesium.Cartesian3} position The ridden satellite this frame.
+ * @param {{x: number, y: number, z: number}} position The ridden
+ *   satellite this frame (ECEF).
  * @param {number} nowMs
- * @returns {Cesium.Cartesian3}
+ * @returns {{x: number, y: number, z: number}}
  */
 export function orbitalEyePosition(state, position, nowMs) {
   const hop = state.hop;
@@ -190,5 +190,5 @@ export function orbitalEyePosition(state, position, nowMs) {
     state.hop = null;
     return position;
   }
-  return new Cesium.Cartesian3(eye.x, eye.y, eye.z);
+  return { x: eye.x, y: eye.y, z: eye.z };
 }

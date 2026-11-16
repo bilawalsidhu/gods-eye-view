@@ -12,6 +12,39 @@ import {
   toggleCameraTilt,
 } from './cameraOrientationControls.js';
 import { NavigationController } from './navigationController.js';
+import { bindRenderer } from '../render/rendererOf.js';
+import {
+  createCesiumQuery,
+  queryCapabilities,
+} from '../render/cesium/query.js';
+import {
+  bindFakeCesiumCamera,
+  followEntity,
+  followedEntity,
+} from '../testSupport/fakeCameraPort.mjs';
+import { entityFollowTarget } from '../data/followed.js';
+import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';
+import { entityRecord } from '../data/entityRecords.js';
+
+/**
+ * Bind the camera, query and frame ports over a viewer double, as the
+ * renderer does: the Cesium query port over its scene, and the frame
+ * phases from the scene's own events.
+ */
+function withPorts(viewer, { frames = true } = {}) {
+  return bindFakeCesiumCamera(viewer, {
+    query: createCesiumQuery({
+      scene: viewer.scene,
+      camera: viewer.camera,
+      draw: { sets: new Map(), version: () => 0 },
+      capabilities: new Set(queryCapabilities(viewer.scene)),
+    }),
+    ...(frames ? { frame: fakeSceneFrame(viewer) } : {}),
+  });
+}
+
+/** Coordinates only, as the query port answers. */
+const plain = (p) => ({ x: p.x, y: p.y, z: p.z });
 
 function createViewer({ cameraPosition, target, pickPosition = null } = {}) {
   const calls = [];
@@ -25,7 +58,7 @@ function createViewer({ cameraPosition, target, pickPosition = null } = {}) {
     heading: Cesium.Math.toRadians(90),
     changed,
     pickEllipsoid: () => surface,
-    getPickRay: () => ({}),
+    getPickRay: () => new Cesium.Ray(),
     lookAt(targetValue, offset) {
       calls.push({ type: 'lookAt', target: targetValue, offset });
     },
@@ -46,7 +79,7 @@ function createViewer({ cameraPosition, target, pickPosition = null } = {}) {
       requestRender: () => calls.push({ type: 'requestRender' }),
     },
   };
-  return { viewer, calls, target: surface };
+  return { viewer: withPorts(viewer), calls, target: surface };
 }
 
 /**
@@ -96,8 +129,12 @@ function createRealCamera() {
   return { camera, scene };
 }
 
-/** A viewer whose center pick is a fixed ground point and whose camera is real. */
-function createRealViewer(target) {
+/**
+ * A viewer whose center pick is a fixed ground point and whose camera is
+ * real. Without `frames` it has no frame loop, so orientation changes land
+ * at once rather than easing.
+ */
+function createRealViewer(target, { frames = true } = {}) {
   const { camera, scene } = createRealCamera();
   scene.pickPositionSupported = false;
   scene.pickPosition = () => null;
@@ -106,8 +143,16 @@ function createRealViewer(target) {
   // The binding drives the needle from the scene's per-frame signal, not from
   // `camera.changed`, so the fixture has to carry one.
   scene.preRender = new Cesium.Event();
-  camera.getPickRay = () => ({});
-  return { viewer: { camera, scene }, target };
+  camera.getPickRay = () => new Cesium.Ray();
+  // Cesium's entity tracking, without entities of its own: the camera port
+  // follows on a tracking widget of the fake's.
+  const viewer = {
+    camera,
+    scene,
+    trackedEntityChanged: new Cesium.Event(),
+    entities: {},
+  };
+  return { viewer: withPorts(viewer, { frames }), target };
 }
 
 /** Place a real camera in an orbit around `target` and release the frame. */
@@ -277,7 +322,7 @@ test('tilt alternates at globe range, not only at map range', () => {
 
 test('the button shows the state the next click will produce, at every range', () => {
   for (const range of [3_000, 18_000_000]) {
-    const { viewer } = createRealViewer(AUSTIN_GROUND);
+    const { viewer } = createRealViewer(AUSTIN_GROUND, { frames: false });
     orbit(viewer, AUSTIN_GROUND, 0, STRAIGHT_DOWN_PITCH, range);
     const bar = recorder();
     const controls = bindCameraOrientationControls({
@@ -408,9 +453,13 @@ test('a sky-facing camera yields no frame and both actions decline', () => {
   scene.pickPosition = () => null;
   scene.globe.pick = () => undefined;
   scene.requestRender = () => {};
-  camera.getPickRay = () => ({});
-  camera.pickEllipsoid = () => undefined;
-  const viewer = { camera, scene };
+  // 1000 km up, looking above the horizon: no ray from the centre meets
+  // the ellipsoid.
+  camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(-97.74, 30.27, 1_000_000),
+    orientation: { heading: 0, pitch: Cesium.Math.toRadians(30), roll: 0 },
+  });
+  const viewer = withPorts({ camera, scene });
 
   assert.equal(readCameraTargetFrame(viewer), null);
   assert.equal(toggleCameraTilt(viewer), false);
@@ -424,16 +473,16 @@ test('center picking prefers terrain over the ellipsoid and falls through an inv
   const { viewer } = createViewer({ pickPosition: () => invalid });
   viewer.scene.globe.pick = () => terrain;
   viewer.camera.pickEllipsoid = () => sea;
-  assert.equal(
+  assert.deepEqual(
     pickViewTarget(viewer),
-    terrain,
+    plain(terrain),
     'the rendered ground wins over sea level',
   );
 
   viewer.scene.globe.pick = () => null;
-  assert.equal(
+  assert.deepEqual(
     pickViewTarget(viewer),
-    sea,
+    plain(sea),
     'the ellipsoid still answers when nothing is under the cursor',
   );
 });
@@ -453,7 +502,7 @@ test('tilt preserves the picked target and range while choosing oblique pitch', 
   const result = toggleCameraTilt(viewer);
   const lookAt = calls.find((call) => call.type === 'lookAt');
   assert.deepEqual(result, { tilted: true, pitch: OBLIQUE_PITCH });
-  assert.equal(lookAt.target, target);
+  assert.ok(Cesium.Cartesian3.equals(lookAt.target, target));
   assert.equal(lookAt.offset.range, before.range);
   assert.equal(lookAt.offset.pitch, OBLIQUE_PITCH);
   assert.ok(calls.some((call) => call.type === 'lookAtTransform'));
@@ -523,8 +572,8 @@ for (const [label, altitude, range] of [
       position: new Cesium.CallbackPositionProperty(() => target, false),
       trackingReferenceFrame: Cesium.TrackingReferenceFrame.ENU,
     });
-    entity.gevDisplayPosition = () => target;
-    viewer.trackedEntity = entity;
+    entityRecord(entity).displayPosition = () => target;
+    followEntity(viewer, entity);
     const follow = new Cesium.EntityView(entity, viewer.scene);
     follow.update(viewer.clock.currentTime);
     viewer.camera.lookAt(
@@ -553,7 +602,7 @@ for (const [label, altitude, range] of [
         follow.update(viewer.clock.currentTime);
         const transform = Cesium.Matrix4.clone(viewer.camera.transform);
         viewer.scene.preUpdate.raiseEvent();
-        assert.equal(viewer.trackedEntity, entity);
+        assert.equal(followedEntity(viewer), entity);
         assert.ok(
           Cesium.Matrix4.equalsEpsilon(
             viewer.camera.transform,
@@ -573,7 +622,7 @@ for (const [label, altitude, range] of [
     }
     target = Cesium.Cartesian3.fromDegrees(-96, 31, altitude);
     follow.update(viewer.clock.currentTime);
-    assert.equal(viewer.trackedEntity, entity);
+    assert.equal(followedEntity(viewer), entity);
     assert.ok(Math.abs(readCameraTargetFrame(viewer).range - range) < 1e-5);
   });
 }
@@ -587,10 +636,10 @@ test('orientation animation cancels on replacement and explicit cancellation', (
   animator.animate(frame, { heading: 0, pitch: STRAIGHT_DOWN_PITCH });
   animator.animate(frame, { heading: 0, pitch: OBLIQUE_PITCH });
   assert.equal(viewer.scene.preUpdate.numberOfListeners, 1);
-  viewer.trackedEntity = {};
+  followEntity(viewer, {});
   viewer.scene.preUpdate.raiseEvent();
   assert.equal(viewer.scene.preUpdate.numberOfListeners, 0);
-  viewer.trackedEntity = undefined;
+  followEntity(viewer, null);
   animator.animate(frame, { heading: 0, pitch: STRAIGHT_DOWN_PITCH });
   animator.cancel();
   assert.equal(viewer.scene.preUpdate.numberOfListeners, 0);
@@ -599,10 +648,18 @@ test('orientation animation cancels on replacement and explicit cancellation', (
 test('orientation navigation preserves follow and selection; new navigation cancels animation', () => {
   const calls = [];
   const entity = {};
-  const viewer = {
-    trackedEntity: entity,
-    camera: { cancelFlight: () => calls.push('cancel-flight') },
-  };
+  const viewer = {};
+  bindRenderer(viewer, {
+    camera: {
+      cancelFlight: () => calls.push('cancel-flight'),
+      // The camera follows `entity`.
+      followed: entityFollowTarget(entity, {}),
+      follow(target) {
+        this.followed = target;
+      },
+      on: () => () => {},
+    },
+  });
   let cockpit = false;
   const navigation = new NavigationController({
     viewer,
@@ -619,7 +676,7 @@ test('orientation navigation preserves follow and selection; new navigation canc
     navigation.runOrientation('camera', () => 'animated'),
     'animated',
   );
-  assert.equal(viewer.trackedEntity, entity);
+  assert.equal(followedEntity(viewer), entity);
   assert.deepEqual(calls, [
     'cancel-orientation',
     'interrupt-motion',

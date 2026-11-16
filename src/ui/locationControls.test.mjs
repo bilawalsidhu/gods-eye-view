@@ -191,6 +191,16 @@ test('location and POI keys route once while form controls retain typing', () =>
   f.controls.reset();
   assert.deepEqual(f.calls, [['poi', 'a', 1], ['reset']]);
 });
+test('POI keys held with Cmd, Ctrl or Alt run no POI; Shift still does', () => {
+  const f = fixture();
+  const target = { matches: () => false };
+  for (const modifier of ['metaKey', 'ctrlKey', 'altKey'])
+    for (const key of ['q', 'w', 'r', 'R'])
+      f.doc.fire('keydown', { key, target, [modifier]: true });
+  assert.deepEqual(f.calls, []);
+  f.doc.fire('keydown', { key: 'W', target, shiftKey: true });
+  assert.deepEqual(f.calls, [['poi', 'a', 1]]);
+});
 test('typing clears a failed search error and closing the emptied field drops it too', () => {
   const f = fixture();
   f.elements.search.value = 'Pariss';

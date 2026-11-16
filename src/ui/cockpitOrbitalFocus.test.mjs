@@ -12,6 +12,17 @@ import assert from 'node:assert/strict';
 import { createPinia } from 'pinia';
 import { createApp, defineComponent, h, nextTick } from 'vue';
 import * as Cesium from 'cesium';
+import {
+  bindFakeCesiumCamera,
+  followEntity,
+} from '../testSupport/fakeCameraPort.mjs';
+import { followedOf } from '../data/followed.js';
+import { fakeScenePorts } from '../testSupport/fakeCesiumScene.mjs';
+import {
+  FAKE_EVENT_TYPES,
+  FakeScreenSpaceEventHandler,
+  fakeInput,
+} from '../input/testDoubles.mjs';
 import { CockpitViewController } from './cockpitController.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useHudStore } from './stores/hud.js';
@@ -117,10 +128,9 @@ function installationsLayer() {
       const record = layer.records.find((r) => r.id === String(id));
       return record ? layer.withPosition(record) : null;
     },
-    findByPick(picked) {
-      const id =
-        picked?.id?.installationId ||
-        (typeof picked?.id?.id === 'string' ? picked.id.id : null);
+    // A query hit on a named marker carries its installation id.
+    findByPick(hit) {
+      const id = hit?.meta?.installationId ?? null;
       return id ? layer.getById(id) : null;
     },
   };
@@ -204,7 +214,7 @@ function satellitesLayer(viewer) {
       if (!positions.has(id)) return false;
       layer.calls.push(['track', id]);
       layer.tracked = id;
-      viewer.trackedEntity = { position: { getValue: () => layer.position(id) } };
+      followEntity(viewer, { position: { getValue: () => layer.position(id) } });
       return true;
     },
     setCockpitSubject(noradId) {
@@ -237,7 +247,6 @@ function fixture(t, { reducedMotion = false } = {}) {
   const shots = [];
   const picks = new Map();
   const viewer = {
-    trackedEntity: undefined,
     clock: { currentTime: null },
     camera: {
       frustum: { fov: 1, aspectRatio: ASPECT },
@@ -254,41 +263,46 @@ function fixture(t, { reducedMotion = false } = {}) {
     scene: {
       preUpdate: listeners(),
       screenSpaceCameraController: { enableInputs: true },
-      pick: (position) => picks.get(`${position.x},${position.y}`),
     },
     trackedEntityChanged: listeners(),
   };
-  // The Viewer's own input handler: its single click picks into
-  // selectedEntity; its double-click tracks what it picks, which would end
-  // the orbital view.
-  const actions = new Map();
+  // The renderer's own click and double-click: its click picks into its
+  // selection; its double-click follows what it picks, which would end the
+  // orbital view. Counted when the scene's input lets them run.
   const handler = {
     stockClicks: 0,
     stockDoubleClicks: 0,
-    getInputAction: (type) => actions.get(type),
-    setInputAction: (action, type) => actions.set(type, action),
-    removeInputAction: (type) => actions.delete(type),
-    isDestroyed: () => false,
-  };
-  handler.stock = () => {
-    handler.stockClicks += 1;
   };
   handler.stockDouble = ({ position }) => {
     handler.stockDoubleClicks += 1;
-    const picked = viewer.scene.pick(position);
-    viewer.trackedEntity = picked
-      ? { position: { getValue: () => null } }
-      : undefined;
+    const picked = picks.get(`${position.x},${position.y}`);
+    followEntity(viewer, picked ? { position: { getValue: () => null } } : null);
   };
-  actions.set(Cesium.ScreenSpaceEventType.LEFT_CLICK, handler.stock);
-  actions.set(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK, handler.stockDouble);
-  viewer.screenSpaceEventHandler = handler;
+  // The viewer's stock handler holds them, so the scene's input has them to
+  // hold off.
+  const stock = new FakeScreenSpaceEventHandler();
+  stock.setInputAction(() => {}, FAKE_EVENT_TYPES.LEFT_CLICK);
+  stock.setInputAction(handler.stockDouble, FAKE_EVENT_TYPES.LEFT_DOUBLE_CLICK);
+  viewer.screenSpaceEventHandler = stock;
 
   const sites = installationsLayer();
   const satellites = satellitesLayer(viewer);
   const modeEvents = [];
   const onMode = (event) => modeEvents.push(event.detail);
   window.addEventListener('gev:cockpit-mode-changed', onMode);
+  // The Cockpit drives the camera, reads frames and picks through ports: the
+  // Cesium camera port over the fake camera, and a pick that answers from
+  // the named markers the test draws.
+  const ports = fakeScenePorts(viewer);
+  bindFakeCesiumCamera(viewer, {
+    ...ports,
+    query: {
+      ...ports.query,
+      pick: (x, y) =>
+        picks.get(`${x},${y}`) ?? { set: '', id: '', surface: true },
+    },
+  });
+  const input = fakeInput(viewer);
   const cockpit = new CockpitViewController(viewer, {
     services: {
       flightsLayer: { getTrackedInfo: () => null },
@@ -317,6 +331,15 @@ function fixture(t, { reducedMotion = false } = {}) {
       signals: (rows) => store.publishSignals(rows),
     },
   });
+  let stockHolds = 0;
+  cockpit.holdStockFollow = () => {
+    stockHolds += 1;
+    let held = true;
+    return () => {
+      if (held) stockHolds -= 1;
+      held = false;
+    };
+  };
   Object.assign(cockpit, {
     setVisionMode() {},
     showBriefPage() {},
@@ -328,11 +351,13 @@ function fixture(t, { reducedMotion = false } = {}) {
     updateContext() {},
     updateRoute() {},
   });
-  // Named markers pick as `{ installationId }`, as the layer draws them.
+  // Named markers pick as items carrying `{ installationId }`, as the layer
+  // draws them.
   for (const site of Object.values(SITES))
     picks.set(`${site.at.x},${site.at.y}`, {
-      id: { installationId: site.id },
-      primitive: {},
+      set: 'installations:named',
+      id: site.id,
+      meta: { installationId: site.id },
     });
 
   const originalNow = performance.now;
@@ -344,6 +369,7 @@ function fixture(t, { reducedMotion = false } = {}) {
   t.after(() => {
     window.removeEventListener('gev:cockpit-mode-changed', onMode);
     cockpit.stop();
+    input.destroy();
     app.unmount();
     globalThis.matchMedia = previousMatchMedia;
     performance.now = originalNow;
@@ -356,7 +382,11 @@ function fixture(t, { reducedMotion = false } = {}) {
     cockpit.update();
     return shots.at(-1);
   };
-  const fire = (type, position) => actions.get(type)?.({ position });
+  /** A click, with the renderer's own click when the input lets it run. */
+  const click = (position) => {
+    if (input.stockEnabled('select')) handler.stockClicks += 1;
+    input.tap(position);
+  };
   return {
     $: (selector) => document.querySelector(selector),
     cockpit,
@@ -368,12 +398,20 @@ function fixture(t, { reducedMotion = false } = {}) {
     satellites,
     modeEvents,
     frame,
-    click: (position) => fire(Cesium.ScreenSpaceEventType.LEFT_CLICK, position),
-    /** A double-click as Cesium fires it: two clicks, then the double. */
+    input,
+    click,
+    /**
+     * A double-click as the scene's input sees it: a click, a second press
+     * and the double. The renderer's own follow runs unless the second
+     * press held it off.
+     */
     doubleClick(position) {
-      fire(Cesium.ScreenSpaceEventType.LEFT_CLICK, position);
-      fire(Cesium.ScreenSpaceEventType.LEFT_CLICK, position);
-      fire(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK, position);
+      click(position);
+      input.down(position);
+      input.up(position);
+      if (stockHolds === 0 && input.stockEnabled('dblclickFollow'))
+        handler.stockDouble({ position });
+      input.dblclick(position);
     },
     /** Rebuild the Context card on the next frame, past its clock. */
     refreshCard() {
@@ -602,7 +640,7 @@ test('a double-click on a site focuses it and keeps the orbital view', async (t)
   const { cockpit, viewer, handler } = scene;
   scene.doubleClick(SITES.alpha.at);
   assert.equal(handler.stockDoubleClicks, 0, 'Cesium does not track the site');
-  assert.equal(viewer.trackedEntity, undefined);
+  assert.equal(followedOf(viewer), null);
   scene.frame();
   assert.equal(cockpit.active, true, 'still in orbit');
   assert.equal(cockpit.orbital.focus.key, SITES.alpha.id);
@@ -688,7 +726,7 @@ test('a satellite row rides it, staying in orbit; RETURN goes back', async (t) =
   assert.equal(newTrack.length, 1);
   assert.ok(newTrack[0].timestamp > firstTrack.timestamp, 'the new ride’s own time');
   assert.deepEqual(satellites.calls.slice(-2), [['track', 49260], ['subject', 49260]]);
-  assert.equal(viewer.trackedEntity, undefined, 'the Cockpit keeps the camera');
+  assert.equal(followedOf(viewer), null, 'the Cockpit keeps the camera');
   assert.equal(cockpit.subjectId, 49260);
   assert.equal(cockpit.orbital.focus, null, 'the focus is reset');
   assert.equal(modeEvents.at(-1)?.active, true);
@@ -878,14 +916,14 @@ test('reduced motion cuts onto the site, back, and between satellites', async (t
   assert.ok(Cesium.Cartesian3.distance(shot.destination, scene.satellites.position(49260)) < 1);
 });
 
-test('stopping the Cockpit hands both clicks back to Cesium', async (t) => {
-  const scene = fixture(t);
-  const click = Cesium.ScreenSpaceEventType.LEFT_CLICK;
-  const double = Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK;
-  assert.notEqual(scene.handler.getInputAction(click), scene.handler.stock);
+test('stopping the Cockpit leaves both clicks to the renderer', async (t) => {
+  const scene = await inOrbit(t);
   scene.cockpit.stop();
-  assert.equal(scene.handler.getInputAction(click), scene.handler.stock);
-  assert.equal(scene.handler.getInputAction(double), scene.handler.stockDouble);
+  scene.doubleClick(SITES.alpha.at);
+  assert.equal(scene.handler.stockClicks, 1, 'its own click runs');
+  assert.equal(scene.handler.stockDoubleClicks, 1, 'and its own follow');
+  assert.equal(scene.input.stockEnabled('select'), true);
+  assert.equal(scene.input.stockEnabled('dblclickFollow'), true);
 });
 
 test('the focused site keeps its row after nearer sites push it down', async (t) => {
