@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { createAirAccidentsLayer } from '../../layers/airAccidents/index.js';
 import * as picking from '../../data/pickRegistry.js';
 import * as overlays from '../../overlays/worldOverlay.js';
@@ -14,8 +13,6 @@ export function createApplicationAirAccidents(options) {
       hitTest: overlays.hitTestWorldOverlay,
     },
     openExternal: (url) => window.open(url, '_blank', 'noopener,noreferrer'),
-    screenSpaceEventHandlerFactory: (viewer) =>
-      new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas),
     picking,
     pointer: { isPointerFree },
     ...options,

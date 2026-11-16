@@ -1421,6 +1421,7 @@
   "src/layers/airAccidents/cards.test.mjs",
   "src/data/airAccidentsProxy.test.mjs",
   "src/layers/airAccidents/period.test.mjs",
+  "src/layers/airAccidents/index.test.mjs",
   "src/data/aircraftIconLayer.test.mjs",
   "src/app/sourceComposition.js",
   "src/app/sourceComposition.test.mjs",

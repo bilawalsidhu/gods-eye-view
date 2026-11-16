@@ -1,5 +1,8 @@
-import * as Cesium from 'cesium';
 import { msg, t } from '../../i18n/index.js';
+import { spriteDrawOrder } from '../../data/spriteOrder.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { drawOf, findFrame } from '../../render/rendererOf.js';
+import { inputFor } from '../../input/dispatcher.js';
 import { createHorizonCull } from '../streetLevel/view.js';
 import { ACCIDENT_COLOR, describeAirAccident } from './cards.js';
 import {
@@ -57,18 +60,18 @@ export function accidentMarkerImage(color) {
 export function createAirAccidentsLayer({
   source,
   overlayHost = null,
-  screenSpaceEventHandlerFactory = null,
   picking = null,
   pointer = null,
   openExternal = null,
+  // The clicks on the globe: the application's input dispatcher.
+  input = (viewer) => inputFor(viewer),
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Air accidents require a snapshot source');
   let _viewer = null;
   let _enabled = false;
-  // One billboard collection: tens of thousands of entities would be far
-  // heavier to update every frame.
-  let _points = null;
+  // One icon set for every marker (tens of thousands of them).
+  let _markers = null;
   const _image = accidentMarkerImage(ACCIDENT_COLOR);
   let _request = null;
   let _records = new Map();
@@ -84,10 +87,14 @@ export function createAirAccidentsLayer({
   let _extent = null;
   let _range = null;
 
-  const render = () => _viewer?.scene?.requestRender?.();
+  const render = () => {
+    flushPins();
+    if (_viewer) findFrame(_viewer)?.requestRender(AIR_ACCIDENTS_LAYER_ID);
+  };
   const notifyRow = () => _rowListener?.();
-  const canSelect = () =>
-    overlayHost && screenSpaceEventHandlerFactory && picking;
+  const canSelect = () => overlayHost && picking;
+  /** Pins whose marker changed since the set was last written. */
+  const changedPins = new Set();
   // Markers skip the depth test so terrain does not swallow them; the
   // horizon cull hides the far side of the planet instead.
   const _horizon = createHorizonCull({
@@ -102,7 +109,18 @@ export function createAirAccidentsLayer({
   }
 
   function applyPin(pin) {
-    pin.marker.show = pin.inFront && visible(pin.record);
+    const show = pin.inFront && visible(pin.record);
+    if (pin.item.show === show) return;
+    pin.item = { ...pin.item, show };
+    changedPins.add(pin);
+  }
+
+  /** Send the markers that changed to the set. */
+  function flushPins() {
+    if (!changedPins.size) return;
+    const items = [...changedPins].map((pin) => pin.item);
+    changedPins.clear();
+    _markers?.upsert(items);
   }
 
   /** Re-apply the period to every marker and the open card. */
@@ -118,29 +136,28 @@ export function createAirAccidentsLayer({
     _extent = yearExtent(records);
     _range = periodRange(_period, _extent);
     _pins = [];
-    if (!_points) return;
-    _points.removeAll();
-    for (const record of records) {
+    changedPins.clear();
+    if (!_markers) return;
+    // Within one set later markers draw on top: add by rising death toll so
+    // a bigger toll covers smaller neighbours.
+    const ordered = [...records].sort(
+      (a, b) => (a.fatalities || 0) - (b.fatalities || 0),
+    );
+    for (const record of ordered) {
       // On the ellipsoid, drawn over terrain (no depth test): clamping each
       // marker to terrain would cost a terrain query per marker.
-      const position = Cesium.Cartesian3.fromDegrees(record.lon, record.lat);
+      const position = fromDegrees(record.lon, record.lat);
       const size = markerPixelSize(record.fatalities);
-      const marker = _points.add({
-        id: `${PICK_PREFIX}${record.id}`,
-        position,
-        image: _image,
-        width: size,
-        height: size,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        // Bigger toll, drawn on top of smaller neighbours.
-        eyeOffset: new Cesium.Cartesian3(
-          0,
-          0,
-          -Math.min(record.fatalities || 0, 5000),
-        ),
-      });
       const pin = {
-        marker,
+        // The marker as the set draws it.
+        item: {
+          id: `${PICK_PREFIX}${record.id}`,
+          pos: position,
+          image: _image,
+          size: [size, size],
+          disableDepthTest: Number.POSITIVE_INFINITY,
+          show: true,
+        },
         record,
         position,
         inFront: true,
@@ -155,6 +172,8 @@ export function createAirAccidentsLayer({
       applyPin(pin);
       _pins.push(pin);
     }
+    changedPins.clear();
+    _markers.set(_pins.map((pin) => pin.item));
     _horizon.update();
     if (_selectedId && !_records.has(_selectedId)) clearSelection();
     else if (_selectedId) publishCard();
@@ -184,7 +203,7 @@ export function createAirAccidentsLayer({
       placement: 'above',
       stateless: true,
       horizonCull: true,
-      position: Cesium.Cartesian3.fromDegrees(record.lon, record.lat),
+      position: fromDegrees(record.lon, record.lat),
     };
     if (card.interactive) {
       const target = _selectedLink;
@@ -214,8 +233,7 @@ export function createAirAccidentsLayer({
     );
   }
 
-  function pickedRecordId(picked) {
-    const pickId = picking.resolvePickId(picked);
+  function pickedRecordId(pickId) {
     if (typeof pickId !== 'string' || !pickId.startsWith(PICK_PREFIX))
       return null;
     const id = pickId.slice(PICK_PREFIX.length);
@@ -229,43 +247,47 @@ export function createAirAccidentsLayer({
       (pickedId) =>
         typeof pickedId === 'string' && pickedId.startsWith(PICK_PREFIX),
     );
-    _clickHandler = screenSpaceEventHandlerFactory(_viewer);
-    _clickHandler.setInputAction((click) => {
+    // A viewer with no renderer input bound takes no clicks.
+    let clicks = null;
+    try {
+      clicks = input(_viewer) ?? null;
+    } catch {
+      clicks = null;
+    }
+    if (!clicks) return;
+    _clickHandler = clicks.onClick((click) => {
       if (pointer && !pointer.isPointerFree()) return;
-      const cardHit = overlayHost.hitTest?.(
-        click.position?.x,
-        click.position?.y,
-        { sourceId: AIR_ACCIDENTS_OVERLAY_SOURCE_ID },
-      );
+      const at = click.screenPosition;
+      const cardHit = overlayHost.hitTest?.(at?.x, at?.y, {
+        sourceId: AIR_ACCIDENTS_OVERLAY_SOURCE_ID,
+      });
       if (cardHit && cardHit.entryId === _selectedCardId) {
         if (_selectedLink) openExternal(_selectedLink);
         return;
       }
-      const picked = _viewer.scene.pick(click.position);
-      const id = picked ? pickedRecordId(picked) : null;
+      // A marker's item id is its pick id, `air-accident:<id>`. Read from what
+      // is exactly under the click: a touch's wider contact search would pick
+      // an accident the tap missed, or a contact near one.
+      const picked = click.topHit;
+      const pickId = picked ? (picking.resolvePickId(picked) ?? null) : null;
+      const id = pickedRecordId(pickId);
       if (id) {
         _selectedId = id;
         publishCard();
         render();
         return;
       }
-      if (picked) {
-        const pickId = picking.resolvePickId(picked);
-        if (
-          pickId &&
-          picking.isOwnedByOtherLayer(AIR_ACCIDENTS_LAYER_ID, pickId)
-        )
-          return;
-      }
+      if (pickId && picking.isOwnedByOtherLayer(AIR_ACCIDENTS_LAYER_ID, pickId))
+        return;
       if (_selectedId) {
         clearSelection();
         render();
       }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
   }
 
   function removeClickHandler() {
-    _clickHandler?.destroy();
+    _clickHandler?.();
     _clickHandler = null;
     picking?.unregisterPickOwner?.(AIR_ACCIDENTS_LAYER_ID);
   }
@@ -315,24 +337,28 @@ export function createAirAccidentsLayer({
       if (_viewer)
         throw new Error('Air accidents layer is already initialized');
       _viewer = viewer;
-      _points = viewer.scene.primitives.add(
-        new Cesium.BillboardCollection({ scene: viewer.scene }),
-      );
-      _points.show = false;
+      // One set for every accident marker, under the other sprite layers
+      // (`SPRITE_LAYER_ORDER`).
+      _markers = drawOf(viewer).icons({
+        id: 'air-accidents:markers',
+        drawOrder: spriteDrawOrder(AIR_ACCIDENTS_LAYER_ID),
+        show: false,
+      });
     },
 
     enable() {
       _enabled = true;
-      if (_points) _points.show = true;
+      if (_markers) _markers.show = true;
       installClickHandler();
       if (_pins.length) _horizon.update();
+      render();
     },
 
     disable() {
       _enabled = false;
       _request?.abort();
       _request = null;
-      if (_points) _points.show = false;
+      if (_markers) _markers.show = false;
       removeClickHandler();
       clearSelection();
       _horizon.stop();
@@ -340,7 +366,7 @@ export function createAirAccidentsLayer({
     },
 
     async update() {
-      if (!_enabled || !_points) return false;
+      if (!_enabled || !_markers) return false;
       _request?.abort();
       const request = new AbortController();
       _request = request;
@@ -367,12 +393,11 @@ export function createAirAccidentsLayer({
       }
     },
 
-    destroy(viewer = _viewer) {
+    destroy() {
       layer.disable();
-      if (_points) {
-        // Removing a primitive from the scene also destroys it.
-        viewer?.scene?.primitives?.remove(_points);
-        _points = null;
+      if (_markers) {
+        _markers.dispose();
+        _markers = null;
       }
       _records = new Map();
       _pins = [];

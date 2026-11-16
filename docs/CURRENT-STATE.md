@@ -263,8 +263,10 @@ and about 390 at sea; about 25 a year since 1990. National agency databases
 (such as CENIPA in Brazil and the NTSB in the US) are regional and belong in
 the Data Library instead.
 
-The globe draws one billboard collection (markers on the ellipsoid, depth test
-off) with the horizon cull GhostMaps uses. Each marker follows the shipwrecks
+The globe draws one icon set from the renderer's draw port (markers on the
+ellipsoid, depth test off, just above Shipwrecks in the sprite order, bigger
+tolls drawn last) with the horizon cull GhostMaps uses; clicks come from the
+input dispatcher. Each marker follows the shipwrecks
 layer pattern: a red disc with a white rim and a dark aircraft seen from above,
 16 to 36 px by fatalities (the shipwrecks scale). Accidents that share one
 coordinate (several placed at the same airport or region) are laid on a small
