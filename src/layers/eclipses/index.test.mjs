@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
+import { bindRenderer } from '../../render/rendererOf.js';
 import { createWorldClock } from '../../time/worldClock.js';
 import {
   ECLIPSE_PATHS_LAYER_ID,
@@ -17,6 +18,44 @@ const source = createEclipseElementsSource();
 const catalog = await source.getCatalog();
 const lunarCatalog = await source.getLunarCatalog();
 
+/** A draw set that keeps what it was given. */
+function fakeSet(spec, sets) {
+  const items = new Map();
+  const set = {
+    id: spec.id,
+    show: spec.show !== false,
+    disposed: false,
+    items,
+    set(list) {
+      items.clear();
+      for (const item of list) items.set(item.id, item);
+    },
+    upsert(list) {
+      for (const item of list) items.set(item.id, item);
+    },
+    remove(ids) {
+      for (const id of ids) items.delete(id);
+    },
+    clear() {
+      items.clear();
+    },
+    setOptions() {},
+    size: () => items.size,
+    on: () => () => {},
+    dispose() {
+      set.disposed = true;
+    },
+  };
+  sets.set(spec.id, set);
+  return set;
+}
+
+/** Degrees, to a tenth, of a position the layer handed the renderer. */
+const degrees = (position) => {
+  const { lat, lon } = 'lon' in position ? position : toLonLatH(position);
+  return [Math.round(lat * 10) / 10, Math.round(lon * 10) / 10];
+};
+
 function harness({ at = Date.UTC(2026, 10, 11), ...layerOptions } = {}) {
   let wall = at;
   const clock = createWorldClock({
@@ -27,10 +66,15 @@ function harness({ at = Date.UTC(2026, 10, 11), ...layerOptions } = {}) {
     setInterval: () => 1,
     clearInterval: () => {},
   });
-  const entities = new Map();
-  const dataSource = { show: true };
+  const sets = new Map();
   const overlays = { entries: [], visible: null };
-  const shadow = { frame: null, sky: null, shown: false, destroyed: false };
+  const shadow = {
+    solar: null,
+    lunar: null,
+    shown: false,
+    show: true,
+    disposed: false,
+  };
   const sky = { shown: null, destroyed: false };
   const flights = [];
   const views = [];
@@ -39,51 +83,70 @@ function harness({ at = Date.UTC(2026, 10, 11), ...layerOptions } = {}) {
   const preUpdate = new Set();
   const timers = new Set();
   let renders = 0;
-  const viewer = {
-    camera: {
-      positionCartographic: Cesium.Cartographic.fromDegrees(32.6, 25.7, 100),
-      // Where a click on the globe lands.
-      pickEllipsoid: () => clicks.at,
-      positionWC: Cesium.Cartesian3.fromDegrees(10, 30, 9_500_000),
-      directionWC: new Cesium.Cartesian3(0, 0, -1),
-      upWC: new Cesium.Cartesian3(0, 1, 0),
-      frustum: { fov: 1, fovy: 1 },
-      setView: (options) => views.push(options),
-      // A flight lands at once.
-      flyTo: (options) => {
-        flights.push(options);
-        options.complete?.();
-      },
-    },
-    dataSources: {
-      add(created) {
-        Object.assign(dataSource, {
+  // The camera stands near Luxor, low.
+  const eye = {
+    lon: 32.6,
+    lat: 25.7,
+    height: 100,
+    heading: 0,
+    pitch: -Math.PI / 2,
+    roll: 0,
+  };
+  const viewer = { container: null };
+  bindRenderer(viewer, {
+    draw: {
+      shapes: (spec) => fakeSet(spec, sets),
+      lines: (spec) => fakeSet(spec, sets),
+      icons: (spec) => fakeSet(spec, sets),
+      points: (spec) => fakeSet(spec, sets),
+      field(spec) {
+        assert.equal(spec.kind, 'eclipseShadow');
+        const take = (patch) => {
+          if ('solar' in patch) shadow.solar = patch.solar ?? null;
+          if ('lunar' in patch) shadow.lunar = patch.lunar ?? null;
+          shadow.shown = Boolean(shadow.solar || shadow.lunar);
+        };
+        take(spec);
+        shadow.show = spec.show !== false;
+        return {
+          id: spec.id,
           get show() {
-            return created.show;
+            return shadow.show;
           },
-          entities: created.entities,
-        });
-        dataSource.created = created;
-      },
-      remove() {
-        dataSource.removed = true;
+          set show(value) {
+            shadow.show = value;
+          },
+          update: take,
+          on: () => () => {},
+          dispose() {
+            shadow.disposed = true;
+          },
+        };
       },
     },
-    scene: {
-      sun: { show: true },
-      moon: { show: true },
-      canvas: { clientWidth: 800, clientHeight: 600 },
+    camera: {
+      pose: () => ({ ...eye }),
+      setView: (view) => views.push(view),
+      // A flight lands at once.
+      flyTo: (destination, options) => {
+        flights.push({ destination, ...options });
+        options?.onComplete?.();
+        return { cancel() {} };
+      },
+    },
+    frame: {
       requestRender() {
         renders += 1;
       },
-      preUpdate: {
-        addEventListener(listener) {
-          preUpdate.add(listener);
-          return () => preUpdate.delete(listener);
-        },
+      on(phase, listener) {
+        assert.equal(phase, 'preUpdate');
+        preUpdate.add(listener);
+        return () => preUpdate.delete(listener);
       },
     },
-  };
+    // Where a click on the globe lands.
+    query: { pickEllipsoid: () => clicks.at },
+  });
   const layer = createEclipsePathsLayer({
     source,
     clock,
@@ -99,26 +162,6 @@ function harness({ at = Date.UTC(2026, 10, 11), ...layerOptions } = {}) {
         overlays.entries = [];
       },
     },
-    createShadow: () => ({
-      showLunar(shown) {
-        shadow.lunar = shown;
-        shadow.shown = true;
-      },
-      show(frame, sky, facingSun) {
-        shadow.lunar = null;
-        shadow.frame = frame;
-        shadow.sky = sky;
-        shadow.facingSun = facingSun;
-        shadow.shown = true;
-      },
-      hide() {
-        shadow.shown = false;
-      },
-      isShown: () => shadow.shown,
-      destroy() {
-        shadow.destroyed = true;
-      },
-    }),
     createSky: (_viewer, options) => ({
       close: (sky.close = options?.onClose),
       show(shown) {
@@ -138,12 +181,12 @@ function harness({ at = Date.UTC(2026, 10, 11), ...layerOptions } = {}) {
     },
     clearInterval: (callback) => timers.delete(callback),
     reducedMotion: () => true,
-    screenSpaceEventHandlerFactory: () => ({
-      setInputAction(action) {
+    inputFor: () => ({
+      onClick(action) {
         clicks.action = action;
-      },
-      destroy() {
-        clicks.action = null;
+        return () => {
+          clicks.action = null;
+        };
       },
     }),
     pointer: { isPointerFree: () => clicks.free },
@@ -151,10 +194,14 @@ function harness({ at = Date.UTC(2026, 10, 11), ...layerOptions } = {}) {
     defer: (work) => deferred.push(work),
   });
   layer.init(viewer);
+  const drawn = () =>
+    [...sets.values()].flatMap((set) => [...set.items.values()]);
   return {
     layer,
     clock,
     viewer,
+    eye,
+    sets,
     overlays,
     shadow,
     sky,
@@ -162,17 +209,15 @@ function harness({ at = Date.UTC(2026, 10, 11), ...layerOptions } = {}) {
     views,
     clicks,
     /** Click the globe at a place, as the viewer would. */
-    click: (lat, lon) => {
-      clicks.at = Cesium.Cartesian3.fromDegrees(lon, lat);
-      clicks.action?.({ position: new Cesium.Cartesian2(1, 1) });
+    click: (lat, lon, topHit = null) => {
+      clicks.at = fromDegrees(lon, lat);
+      clicks.action?.({ screenPosition: { x: 1, y: 1 }, topHit });
     },
     // Run what the layer put off, as the page would a moment later.
     settle: () => {
       for (const work of deferred.splice(0)) work();
     },
     timers,
-    entities,
-    dataSource,
     renders: () => renders,
     frame: () => {
       for (const listener of preUpdate) listener();
@@ -180,8 +225,9 @@ function harness({ at = Date.UTC(2026, 10, 11), ...layerOptions } = {}) {
     setWall: (ms) => {
       wall = ms;
     },
-    entityIds: () =>
-      dataSource.created.entities.values.map((entity) => entity.id),
+    drawn,
+    entityIds: () => drawn().map((item) => item.id),
+    item: (id) => drawn().find((entry) => entry.id === id) ?? null,
   };
 }
 
@@ -245,9 +291,10 @@ test('the shadow shows while the world time is inside an eclipse, and that eclip
   assert.equal(h.layer.getParams().eclipse, '2027-08-02');
   assert.equal(h.layer.getDiagnostics().inProgress, '2027-08-02');
   // The umbra reaches the ground: a negative radius on the plane.
-  assert.ok(h.shadow.frame.l2 < 0);
+  assert.ok(h.shadow.solar.cones[1] < 0);
   // The camera stands near Luxor, in totality: the sky is dark.
-  assert.ok(h.shadow.sky > 0.9);
+  assert.ok(h.shadow.solar.skyShade > 0.9);
+  assert.equal(h.shadow.lunar, null);
   // Live keeps pace by a timer only while the shadow is on the Earth.
   assert.equal(h.timers.size, 1);
   h.clock.seek(Date.UTC(2027, 7, 3));
@@ -261,9 +308,10 @@ test('stepping moves along the catalogue and flies to the eclipse when asked', a
   h.layer.setParams({ step: 1, focus: true });
   assert.equal(h.layer.getParams().eclipse, '2027-08-02');
   assert.equal(h.flights.length, 1);
-  const where = Cesium.Cartographic.fromCartesian(h.flights[0].destination);
-  assert.ok(Math.abs(Cesium.Math.toDegrees(where.latitude) - 25.5) < 0.1);
-  assert.ok(Math.abs(Cesium.Math.toDegrees(where.longitude) - 33.2) < 0.1);
+  const where = h.flights[0].destination;
+  assert.ok(Math.abs(where.lat - 25.5) < 0.1);
+  assert.ok(Math.abs(where.lon - 33.2) < 0.1);
+  assert.equal(h.flights[0].durationS, 0);
   h.layer.setParams({ step: -1 });
   assert.equal(h.layer.getParams().eclipse, '2027-02-06');
   // A year chooses its first eclipse; past the catalogue, the last one.
@@ -362,15 +410,8 @@ test('the sky view looks up from its flag: where the eclipse peaks, until a clic
   h.layer.setParams({ eclipse: '2027-08-02' });
   const eclipse = catalog.find(({ id }) => id === '2027-08-02');
   const flag = () => {
-    const entity = h.dataSource.created.entities.getById('eclipse-sky:flag');
-    if (!entity) return null;
-    const where = Cesium.Cartographic.fromCartesian(
-      entity.position.getValue(Cesium.JulianDate.now()),
-    );
-    return [
-      Math.round(Cesium.Math.toDegrees(where.latitude) * 10) / 10,
-      Math.round(Cesium.Math.toDegrees(where.longitude) * 10) / 10,
-    ];
+    const item = h.item('eclipse-sky:flag');
+    return item ? degrees(item.pos) : null;
   };
   // The flag stands where the eclipse peaks even before it begins.
   assert.deepEqual(flag(), [25.5, 33.2]);
@@ -387,6 +428,9 @@ test('the sky view looks up from its flag: where the eclipse peaks, until a clic
   assert.equal(h.sky.shown.view.phase, 'partial');
   assert.equal(h.sky.shown.lines[0], 'Seen from 41.9°, 12.5°');
   assert.match(h.sky.shown.lines[1], /^\d+% of the Sun covered$/);
+  // A click on another layer's item is that layer's.
+  h.click(0, 0, { set: 'ships', id: 'ship:1', surface: false });
+  assert.deepEqual(flag(), [41.9, 12.5]);
   // While another tool holds the pointer, a click is not the layer's.
   h.clicks.free = false;
   h.click(0, 0);
@@ -433,87 +477,6 @@ test('the sky view closes from its own cross, as from its chip, and the chips co
   assert.ok(!h.entityIds().includes('eclipse-sky:flag'));
 });
 
-test('facing the Sun is off: a solar eclipse has no such chip and the camera stays', async () => {
-  const h = await enabled();
-  h.layer.setParams({ eclipse: '2027-08-02' });
-  const flights = h.flights.length;
-  h.layer.setParams({ look: true });
-  assert.equal(h.layer.getParams().look, false);
-  assert.equal(h.flights.length, flights);
-  assert.equal(h.viewer.scene.sun.show, true);
-  assert.ok(!h.layer.getRowControls().chips.some(({ id }) => id === 'look'));
-});
-
-test("turned on, looking at the Sun turns the camera round at the chosen eclipse's peak, and looking back returns it", async () => {
-  const h = await enabled({ sunView: true });
-  h.layer.setParams({ eclipse: '2027-08-02' });
-  const eclipse = catalog.find(({ id }) => id === '2027-08-02');
-  const camera = h.viewer.camera;
-  const scene = h.viewer.scene;
-  // No eclipse today: the clock goes to the chosen one's peak first.
-  h.layer.setParams({ look: true });
-  const state = h.clock.getState();
-  assert.equal(state.playing, false);
-  assert.equal(state.timeMs, eclipse.greatestMs);
-  assert.equal(h.layer.getParams().look, true);
-  // The camera goes down to where the eclipse peaks and faces the Sun.
-  const flight = h.flights.at(-1);
-  const where = Cesium.Cartographic.fromCartesian(flight.destination);
-  assert.ok(Math.abs(Cesium.Math.toDegrees(where.latitude) - 25.5) < 0.01);
-  assert.ok(Math.abs(Cesium.Math.toDegrees(where.longitude) - 33.2) < 0.01);
-  assert.ok(Math.abs(where.height - 12_000) < 1);
-  const up = Cesium.Cartesian3.normalize(
-    flight.destination,
-    new Cesium.Cartesian3(),
-  );
-  // The Sun stands 82° high there: the camera looks almost straight up.
-  assert.ok(Cesium.Cartesian3.dot(flight.orientation.direction, up) > 0.98);
-  // The scene's own Sun and Moon step aside, and the path labels with them.
-  assert.equal(scene.sun.show, false);
-  assert.equal(scene.moon.show, false);
-  assert.equal(h.overlays.visible, false);
-  // Each frame the lens narrows, the layer draws the Sun, fully covered.
-  h.frame();
-  assert.ok(camera.frustum.fov < 1);
-  assert.equal(h.shadow.facingSun.covered, 1);
-  assert.equal(h.sky.shown.view.phase, 'total');
-  const chip = () =>
-    h.layer.getRowControls().chips.find(({ id }) => id === 'look');
-  assert.equal(chip().active, true);
-  assert.equal(chip().label, 'Look at the Earth');
-  // As the clock moves the camera keeps the Sun centred.
-  h.clock.seek(Date.UTC(2027, 7, 2, 9, 30));
-  h.frame();
-  assert.ok(h.views.length > 0);
-  assert.ok(h.shadow.facingSun.covered < 1);
-  // Looking back: the lens, the Sun and Moon and the camera all return.
-  h.layer.setParams({ look: false });
-  assert.equal(h.layer.getParams().look, false);
-  assert.equal(camera.frustum.fov, 1);
-  assert.equal(scene.sun.show, true);
-  assert.equal(scene.moon.show, true);
-  assert.equal(h.overlays.visible, true);
-  assert.ok(
-    Cesium.Cartesian3.equals(h.flights.at(-1).destination, camera.positionWC),
-  );
-  h.frame();
-  assert.equal(h.shadow.facingSun, null);
-  assert.equal(chip().label, 'Look at the Sun');
-  // When the clock leaves the eclipse, the camera turns back by itself.
-  h.clock.seek(eclipse.greatestMs);
-  h.layer.setParams({ look: true });
-  h.clock.seek(Date.UTC(2027, 7, 3));
-  h.frame();
-  assert.equal(h.layer.getParams().look, false);
-  // Turned off while facing the Sun, the layer leaves the camera's lens right.
-  h.clock.seek(eclipse.greatestMs);
-  h.layer.setParams({ look: true });
-  h.frame();
-  h.layer.disable();
-  assert.equal(camera.frustum.fov, 1);
-  assert.equal(scene.sun.show, true);
-});
-
 test('the limit of the partial eclipse is drawn a beat after the path, for the eclipse still chosen', async () => {
   const h = await enabled();
   h.layer.setParams({ eclipse: '2027-08-02' });
@@ -548,11 +511,7 @@ test('returning to an eclipse before its deferred limit runs draws it only once'
 test('following keeps the camera over the shadow while the eclipse plays', async () => {
   const h = await enabled();
   h.layer.setParams({ eclipse: '2027-08-02' });
-  const camera = h.viewer.camera;
-  camera.positionCartographic = Cesium.Cartographic.fromDegrees(0, 0, 9e6);
-  camera.heading = 0;
-  camera.pitch = -Math.PI / 2;
-  camera.roll = 0;
+  Object.assign(h.eye, { lon: 0, lat: 0, height: 9e6 });
   // Following is on from the start.
   assert.equal(h.layer.getParams().follow, true);
   const flightsBefore = h.flights.length;
@@ -563,10 +522,15 @@ test('following keeps the camera over the shadow while the eclipse plays', async
   h.clock.seek(Date.UTC(2027, 7, 2, 10, 6, 34));
   h.clock.play({ rate: 480, continuous: true });
   h.frame();
-  const where = Cesium.Cartographic.fromCartesian(h.views.at(-1).destination);
-  assert.ok(Math.abs(Cesium.Math.toDegrees(where.latitude) - 25.5) < 0.1);
-  assert.ok(Math.abs(Cesium.Math.toDegrees(where.longitude) - 33.2) < 0.1);
-  assert.ok(Math.abs(where.height - 9e6) < 1);
+  const where = h.views.at(-1).destination;
+  assert.ok(Math.abs(where.lat - 25.5) < 0.1);
+  assert.ok(Math.abs(where.lon - 33.2) < 0.1);
+  assert.equal(where.height, 9e6);
+  assert.deepEqual(h.views.at(-1).orientation, {
+    heading: 0,
+    pitch: -Math.PI / 2,
+    roll: 0,
+  });
   // Paused, the camera is the viewer's again.
   h.clock.pause();
   const views = h.views.length;
@@ -577,11 +541,8 @@ test('following keeps the camera over the shadow while the eclipse plays', async
   const eclipse = catalog.find(({ id }) => id === '2027-08-02');
   const path = centralPath(eclipse);
   const at = () => {
-    const spot = Cesium.Cartographic.fromCartesian(h.views.at(-1).destination);
-    return [
-      Cesium.Math.toDegrees(spot.latitude),
-      Cesium.Math.toDegrees(spot.longitude),
-    ];
+    const spot = h.views.at(-1).destination;
+    return [spot.lat, spot.lon];
   };
   const near = ([lat, lon], point) =>
     Math.abs(lat - point.lat) < 0.01 && Math.abs(lon - point.lon) < 0.01;
@@ -624,10 +585,13 @@ test('disabled, the layer hides the shadow, clears its labels and lets the clock
   assert.equal(h.overlays.visible, false);
   assert.equal(h.timers.size, 0);
   assert.deepEqual(h.layer.getAnalystRecords(), []);
+  // Hidden, not torn down: the sets and the shadow stay until destroy.
+  assert.ok([...h.sets.values()].every((set) => set.show === false));
+  assert.equal(h.shadow.show, false);
   h.layer.destroy();
-  assert.equal(h.shadow.destroyed, true);
+  assert.equal(h.shadow.disposed, true);
   assert.equal(h.sky.destroyed, true);
-  assert.equal(h.dataSource.removed, true);
+  assert.ok([...h.sets.values()].every((set) => set.disposed));
 });
 
 test('the sky darkens only where the Sun is up and the Moon covers it', () => {
@@ -691,10 +655,8 @@ test('a lunar eclipse draws the lines where the Moon sits on the horizon as it b
   const controls = h.layer.getRowControls();
   assert.match(controls.info, /Total lunar eclipse/);
   assert.match(controls.info, /Totality: 1 h 22 min/);
-  // Turning the camera to the Moon is off, as it is for the Sun.
+  // There is no turning the camera to the Moon.
   assert.ok(!controls.chips.some(({ id }) => id === 'look'));
-  h.layer.setParams({ look: true });
-  assert.equal(h.layer.getParams().look, false);
   // The timeline covers it from the first touch of the penumbra to the last.
   const eclipse = lunarCatalog.find(({ id }) => id === '2025-09-07');
   const coverage = h.clock.coverage();
@@ -702,8 +664,8 @@ test('a lunar eclipse draws the lines where the Moon sits on the horizon as it b
   assert.equal(coverage.end, eclipse.endMs);
 });
 
-test('during a lunar eclipse the layer tints the half of the Earth with the Moon in its sky and shows the Moon', async () => {
-  const h = await enabled({ bodies: 'all', sunView: true });
+test('during a lunar eclipse the layer tints the half of the Earth with the Moon in its sky', async () => {
+  const h = await enabled({ bodies: 'all' });
   const eclipse = lunarCatalog.find(({ id }) => id === '2025-09-07');
   h.clock.seek(eclipse.greatestMs);
   h.frame();
@@ -716,8 +678,7 @@ test('during a lunar eclipse the layer tints the half of the Earth with the Moon
   assert.ok(Math.abs((Math.atan2(y, x) * 180) / Math.PI - 87) < 0.01);
   assert.ok(Math.abs(radius - 0.2725076) < 1e-9);
   assert.equal(shown.depth, 1);
-  assert.equal(shown.facing, false);
-  assert.ok(shown.shadow[2] > 0.6 && shown.shadow[3] > shown.shadow[2]);
+  assert.equal(h.shadow.solar, null);
   // Luxor has the Moon up: the sky view shows it in totality.
   assert.equal(h.sky.shown.view.lunar, true);
   assert.equal(h.sky.shown.view.phase, 'total');
@@ -731,18 +692,6 @@ test('during a lunar eclipse the layer tints the half of the Earth with the Moon
   h.frame();
   assert.equal(h.sky.shown.view.phase, 'penumbral');
   assert.equal(h.shadow.lunar.depth, 0);
-  // Turned on, looking at the Moon turns the camera toward it.
-  h.clock.seek(eclipse.greatestMs);
-  h.layer.setParams({ look: true });
-  h.frame();
-  assert.equal(h.shadow.lunar.facing, true);
-  const flight = h.flights.at(-1);
-  const moon = Cesium.Cartesian3.normalize(
-    new Cesium.Cartesian3(x, y, z),
-    new Cesium.Cartesian3(),
-  );
-  assert.ok(Cesium.Cartesian3.dot(flight.orientation.direction, moon) > 0.999);
-  h.layer.setParams({ look: false });
   // After the last contact nothing is drawn.
   h.clock.seek(eclipse.endMs + 60_000);
   h.frame();

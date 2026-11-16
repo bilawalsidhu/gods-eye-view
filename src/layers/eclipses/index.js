@@ -1,5 +1,13 @@
-import * as Cesium from 'cesium';
+import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
 import { formatNumber, msg, t } from '../../i18n/index.js';
+import { inputFor as defaultInputFor } from '../../input/dispatcher.js';
+import { hexColor } from '../../render/color.js';
+import {
+  findCamera,
+  findDraw,
+  findFrame,
+  findQuery,
+} from '../../render/rendererOf.js';
 import {
   centralPath,
   centralPoint,
@@ -29,10 +37,8 @@ import {
   moonAltitude,
   moonDirection,
   moonHorizon,
-  moonInShadow,
   sublunarPoint,
 } from './lunar.js';
-import { createEclipseShadow } from './shadow.js';
 import { createSkyPanel } from './skyPanel.js';
 import { skyViewAt } from './skyView.js';
 import { visibilityLimit } from './visibility.js';
@@ -53,11 +59,13 @@ export const ECLIPSE_PATHS_LAYER_ID = 'eclipse-paths';
 export const ECLIPSE_PATHS_OVERLAY_SOURCE_ID = 'eclipse-paths';
 /** World seconds per real second while the layer plays an eclipse. */
 export const ECLIPSE_PLAY_RATE = 480;
-/** Facing the Sun: the camera's height over the ground, and its field of view. */
-const SUN_VIEW_HEIGHT_M = 12_000;
-const SUN_VIEW_FOV = Cesium.Math.toRadians(4);
-/** Above this the app turns a camera that looks away back to the globe. */
-const SUN_VIEW_CEILING_M = 900_000;
+/** The draw sets and the shadow field the layer owns, by id. */
+const SET_IDS = Object.freeze({
+  band: 'eclipse-paths:band',
+  lines: 'eclipse-paths:lines',
+  marks: 'eclipse-paths:marks',
+  shadow: 'eclipse-paths:shadow',
+});
 /**
  * A line draped on the ground breaks into dots seen from far off, so above
  * this camera height each line is drawn just over the ground instead, where
@@ -107,6 +115,16 @@ export function skyFlagImage(color = '#8fd3ff') {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
+/** A palette colour mixed `amount` of the way to white, at `alpha`. */
+function towardWhite(hex, amount, alpha) {
+  const [r, g, b] = hexColor(hex);
+  const mix = (value) => value + (1 - value) * amount;
+  return [mix(r), mix(g), mix(b), alpha];
+}
+
+/** An `[x, y, z]` as a contract vector. */
+const vector = ([x, y, z]) => ({ x, y, z });
+
 /**
  * How dark the sky is for someone on the ground at Earth-fixed `point`, 0 to
  * 1, in step with the shader's shading of the ground itself.
@@ -127,7 +145,6 @@ export function createEclipsePathsLayer({
   source,
   clock,
   overlayHost = null,
-  createShadow = createEclipseShadow,
   // The sky view needs a page to stand in; without one the layer goes without.
   createSky = (viewer, options) =>
     viewer?.container && typeof document !== 'undefined'
@@ -138,10 +155,8 @@ export function createEclipsePathsLayer({
   defer = (work) => globalThis.setTimeout(work, 150),
   // A click on the globe moves the sky view's flag; without these the flag
   // stays where the eclipse peaks.
-  screenSpaceEventHandlerFactory = null,
+  inputFor = defaultInputFor,
   pointer = null,
-  // Turning the camera to face the Sun is off; facing the Moon stays.
-  sunView = false,
   setInterval = globalThis.setInterval,
   clearInterval = globalThis.clearInterval,
   reducedMotion = () =>
@@ -163,17 +178,22 @@ export function createEclipsePathsLayer({
   let _loadedAt = null;
   let _lastError = null;
   let _index = -1;
-  let _dataSource = null;
+  // What the layer draws: the band, its lines, the marks and flag, and the
+  // shadow at the world time.
+  let _band = null;
+  let _lines = null;
+  let _marks = null;
   let _shadow = null;
+  let _shadowShown = false;
+  // The path's lines as worked out; each is drawn draped or lifted.
+  let _lineDefs = [];
+  let _markItems = [];
   let _sky = null;
   let _skyWanted = true;
   // Where the sky view looks up from when the viewer has moved its flag;
   // null for where the chosen eclipse peaks.
   let _skySpot = null;
-  let _clickHandler = null;
-  // Set while the camera has turned round to face the Sun: where it stood
-  // before, so it can go back, and the ground point it looks up from.
-  let _look = null;
+  let _clickOff = null;
   // The eclipse whose central line the camera has followed to its end.
   let _followedTo = null;
   // While the layer plays an eclipse, keep the camera over the shadow.
@@ -195,7 +215,9 @@ export function createEclipsePathsLayer({
   let _playingTo = null;
   const _geometry = new Map();
 
-  const render = () => _viewer?.scene?.requestRender?.();
+  const render = () =>
+    _viewer && findFrame(_viewer)?.requestRender?.(ECLIPSE_PATHS_LAYER_ID);
+  const pose = () => (_viewer && findCamera(_viewer)?.pose?.()) || null;
   const notifyRow = () => _rowListener?.();
   const selected = () => _catalog?.[_index] ?? null;
 
@@ -223,54 +245,47 @@ export function createEclipsePathsLayer({
     return ms >= span.startMs && ms <= span.endMs ? eclipse : null;
   }
 
-  const cartesians = (points) =>
-    Cesium.Cartesian3.fromDegreesArray(
-      points.flatMap(({ lon, lat }) => [lon, lat]),
-    );
-
   // ---- the chosen eclipse's path ----------------------------------------
   /**
-   * One line as two entities: draped on the ground for a near camera, lifted
-   * just over it for a far one (see LINE_FAR_M). `material` makes each its
-   * own material.
+   * One line, kept as worked out: drawn draped on the ground for a near
+   * camera, lifted just over it for a far one (see LINE_FAR_M).
    */
-  function addLine(id, points, width, material) {
-    const far = _linesFar === true;
-    _dataSource.entities.add({
-      id,
-      show: !far,
-      polyline: {
-        positions: cartesians(points),
-        width,
-        material: material(),
-        clampToGround: true,
-      },
-    });
-    _dataSource.entities.add({
-      id: `${id}:far`,
-      show: far,
-      polyline: {
-        positions: Cesium.Cartesian3.fromDegreesArrayHeights(
-          points.flatMap(({ lon, lat }) => [lon, lat, LINE_LIFT_M]),
-        ),
-        width,
-        material: material(),
-        arcType: Cesium.ArcType.GEODESIC,
-      },
-    });
+  function addLine(id, points, widthPx, style) {
+    _lineDefs.push({ id, points, widthPx, style });
   }
 
-  /** Show each line's draped or lifted form, by how high the camera is. */
+  function lineItem({ id, points, widthPx, style }, far) {
+    return far
+      ? {
+          id,
+          positions: points.map(({ lon, lat }) =>
+            fromDegrees(lon, lat, LINE_LIFT_M),
+          ),
+          widthPx,
+          mode: 'geodesic',
+          style,
+        }
+      : {
+          id,
+          positions: points.map(({ lon, lat }) => fromDegrees(lon, lat)),
+          widthPx,
+          mode: 'draped',
+          clampTo: 'both',
+          style,
+        };
+  }
+
+  const drawLines = () =>
+    _lines?.set(_lineDefs.map((def) => lineItem(def, _linesFar === true)));
+
+  /** Draw each line draped or lifted, by how high the camera is. */
   function syncLines() {
-    const height = _viewer?.camera?.positionCartographic?.height;
-    if (!Number.isFinite(height) || !_dataSource) return;
+    const height = pose()?.height;
+    if (!Number.isFinite(height) || !_lines) return;
     const far = height > LINE_FAR_M;
     if (far === _linesFar) return;
     _linesFar = far;
-    for (const entity of _dataSource.entities.values) {
-      if (!entity.polyline) continue;
-      entity.show = String(entity.id).endsWith(':far') ? far : !far;
-    }
+    drawLines();
   }
 
   /** The limit of the partial eclipse, drawn once it has been worked out. */
@@ -280,11 +295,11 @@ export function createEclipsePathsLayer({
     const request = {};
     _limitFor = request;
     defer(() => {
-      if (!_enabled || !_dataSource || selected() !== eclipse) return;
+      if (!_enabled || !_lines || selected() !== eclipse) return;
       if (_limitFor !== request) return;
       const geometry = geometryOf(eclipse);
       geometry.limit ??= visibilityLimit(eclipse);
-      const color = Cesium.Color.fromCssColorString(KIND_COLORS[eclipse.kind]);
+      const color = hexColor(KIND_COLORS[eclipse.kind], 0.85);
       geometry.limit.forEach((line, index) => {
         addLine(
           `eclipse-path:limit:${index}`,
@@ -294,13 +309,10 @@ export function createEclipsePathsLayer({
             lat: Math.max(-89.9, Math.min(89.9, lat)),
           })),
           2,
-          () =>
-            new Cesium.PolylineDashMaterialProperty({
-              color: color.withAlpha(0.85),
-              dashLength: 12,
-            }),
+          { kind: 'dash', color, length: 12 },
         );
       });
+      drawLines();
       render();
     });
   }
@@ -310,7 +322,8 @@ export function createEclipsePathsLayer({
    * as the eclipse begins and ends. Between them the whole eclipse is seen;
    * outside both, none of it.
    */
-  function drawLunar(eclipse, color) {
+  function drawLunar(eclipse) {
+    const hex = KIND_COLORS[eclipse.kind];
     const lines = [
       ['penumbral', eclipse.contacts.penumbral, true],
       ['umbral', eclipse.contacts.partial, false],
@@ -322,84 +335,81 @@ export function createEclipsePathsLayer({
           `eclipse-path:horizon:${name}:${index}`,
           moonHorizon(eclipse, ms),
           2,
-          () =>
-            dashed
-              ? new Cesium.PolylineDashMaterialProperty({
-                  color: color.withAlpha(0.8),
-                  dashLength: 12,
-                })
-              : new Cesium.ColorMaterialProperty(color.withAlpha(0.85)),
+          dashed
+            ? { kind: 'dash', color: hexColor(hex, 0.8), length: 12 }
+            : { kind: 'solid', color: hexColor(hex, 0.85) },
         );
       });
     }
   }
 
+  /** A round mark on the ground; `size` in CSS pixels. */
+  const markItem = (id, lon, lat, image, size) => ({
+    id,
+    pos: { lon, lat },
+    height: 'clampGround',
+    image,
+    size: [size, size],
+    disableDepthTest: Number.POSITIVE_INFINITY,
+  });
+
   function drawPath() {
-    if (!_dataSource) return;
-    _dataSource.entities.removeAll();
+    if (!_lines) return;
+    _lineDefs = [];
+    _markItems = [];
+    _band?.clear();
     _limitFor = null;
     const eclipse = selected();
     const entries = [];
     if (eclipse && _enabled) {
-      const color = Cesium.Color.fromCssColorString(KIND_COLORS[eclipse.kind]);
+      const hex = KIND_COLORS[eclipse.kind];
       const lunar = eclipse.body === 'lunar';
       const { path } = geometryOf(eclipse);
-      if (lunar) drawLunar(eclipse, color);
+      if (lunar) drawLunar(eclipse);
       if (path) {
-        _dataSource.entities.add({
-          id: 'eclipse-path:band',
-          polygon: {
-            hierarchy: new Cesium.PolygonHierarchy(
-              cartesians(path.outline.slice(0, -1)),
-            ),
-            material: color.withAlpha(0.26),
-            classificationType: Cesium.ClassificationType.BOTH,
+        _band?.set([
+          {
+            id: 'eclipse-path:band',
+            geometry: {
+              kind: 'polygon',
+              rings: [
+                path.outline.slice(0, -1).map(({ lon, lat }) => ({ lon, lat })),
+              ],
+            },
+            fill: hexColor(hex, 0.26),
+            height: 'clampGround',
+            clampTo: 'both',
           },
-        });
+        ]);
         // One closed line round the band: both edges and its rounded ends.
-        addLine(
-          'eclipse-path:edge',
-          path.outline,
-          2,
-          () => new Cesium.ColorMaterialProperty(color.withAlpha(0.75)),
-        );
-        addLine(
-          'eclipse-path:center',
-          path.center,
-          3,
-          () =>
-            new Cesium.ColorMaterialProperty(
-              Cesium.Color.lerp(
-                color,
-                Cesium.Color.WHITE,
-                0.45,
-                new Cesium.Color(),
-              ),
-            ),
-        );
+        addLine('eclipse-path:edge', path.outline, 2, {
+          kind: 'solid',
+          color: hexColor(hex, 0.75),
+        });
+        addLine('eclipse-path:center', path.center, 3, {
+          kind: 'solid',
+          color: towardWhite(hex, 0.45, 1),
+        });
         // A time label each half hour of the clock along the central line.
         let next = Math.ceil(path.startMs / MARK_EVERY_MS) * MARK_EVERY_MS;
         for (const point of path.center) {
           if (point.ms < next) continue;
           next += MARK_EVERY_MS;
-          const position = Cesium.Cartesian3.fromDegrees(point.lon, point.lat);
-          _dataSource.entities.add({
-            id: `eclipse-path:mark:${point.ms}`,
-            position,
-            billboard: {
-              image: pathMarkImage('#ffffff', KIND_COLORS[eclipse.kind]),
-              width: 10,
-              height: 10,
-              heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-              disableDepthTestDistance: 5_000_000,
-            },
-          });
+          _markItems.push(
+            markItem(
+              `eclipse-path:mark:${point.ms}`,
+              point.lon,
+              point.lat,
+              pathMarkImage('#ffffff', hex),
+              10,
+            ),
+          );
           entries.push({
             id: `eclipse-mark:${point.ms}`,
-            position,
+            position: fromDegrees(point.lon, point.lat),
             variant: 'label',
             title: utcClock(point.ms),
-            accent: KIND_COLORS[eclipse.kind],
+            accent: hex,
             priority: 1,
             collisionGroup: 'ambient-label',
             paintLane: 'ambient-label',
@@ -414,29 +424,24 @@ export function createEclipsePathsLayer({
         }
       }
       if (!lunar) drawLimit(eclipse);
-      const greatest = Cesium.Cartesian3.fromDegrees(
-        eclipse.greatest.lon,
-        eclipse.greatest.lat,
+      const { lon, lat } = eclipse.greatest;
+      _markItems.push(
+        markItem(
+          'eclipse-path:greatest',
+          lon,
+          lat,
+          pathMarkImage(hex, '#ffffff'),
+          15,
+        ),
       );
-      _dataSource.entities.add({
-        id: 'eclipse-path:greatest',
-        position: greatest,
-        billboard: {
-          image: pathMarkImage(KIND_COLORS[eclipse.kind], '#ffffff'),
-          width: 15,
-          height: 15,
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-          disableDepthTestDistance: 5_000_000,
-        },
-      });
       // A small label at the peak; the facts are in the layer's row, so the
       // shadow's core stays in view.
       entries.push({
         id: `eclipse-greatest:${eclipse.id}`,
-        position: greatest,
+        position: fromDegrees(lon, lat),
         variant: 'label',
         title: greatestLabel(eclipse),
-        accent: KIND_COLORS[eclipse.kind],
+        accent: hex,
         priority: 1000,
         collisionGroup: 'ambient-label',
         paintLane: 'ambient-label',
@@ -449,6 +454,7 @@ export function createEclipsePathsLayer({
         placement: 'below',
       });
     }
+    drawLines();
     overlayHost?.setEntries(
       ECLIPSE_PATHS_OVERLAY_SOURCE_ID,
       entries,
@@ -487,32 +493,29 @@ export function createEclipsePathsLayer({
   function flyToSelected() {
     const eclipse = selected();
     const viewer = _viewer;
-    if (!eclipse || !viewer?.camera) return;
+    const camera = viewer && findCamera(viewer);
+    if (!eclipse || !camera) return;
     // The shadow if it is on the ground now, else where the eclipse peaks.
     const ms = now();
     const { lat, lon } =
       (_active === eclipse ? underPoint(eclipse, ms) : null) ??
       eclipse.greatest;
     const fly = () =>
-      viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(lon, lat, FOCUS_HEIGHT_M),
-        duration: reducedMotion() ? 0 : 1.6,
-      });
+      camera.flyTo(
+        { lon, lat, height: FOCUS_HEIGHT_M },
+        { durationS: reducedMotion() ? 0 : 1.6 },
+      );
     if (_runNavigation) _runNavigation(fly);
     else fly();
   }
 
   // ---- the shadow at the world time ---------------------------------------
   function skyShade(eclipse, ms) {
-    const position = _viewer?.camera?.positionCartographic;
-    if (!position || !(position.height < 200_000)) return 0;
-    const point = fromGeodetic(
-      Cesium.Math.toDegrees(position.latitude),
-      Cesium.Math.toDegrees(position.longitude),
-    );
+    const eye = pose();
+    if (!eye || !(eye.height < 200_000)) return 0;
+    const point = fromGeodetic(eye.lat, eye.lon);
     // Full on the ground, gone by the edge of space.
-    const low =
-      1 - Math.min(1, Math.max(0, (position.height - 20_000) / 180_000));
+    const low = 1 - Math.min(1, Math.max(0, (eye.height - 20_000) / 180_000));
     return skyShadeAt(eclipse, ms, point) * low;
   }
 
@@ -528,68 +531,52 @@ export function createEclipsePathsLayer({
 
   /** Stand the flag at the sky view's place, or take it away. */
   function drawFlag() {
-    if (!_dataSource) return;
+    if (!_marks) return;
     const eclipse = selected();
-    const entities = _dataSource.entities;
-    const existing = entities.getById('eclipse-sky:flag');
-    if (!eclipse || !_enabled || !_skyWanted) {
-      if (existing) entities.remove(existing);
-      return;
-    }
-    const { lat, lon } = skySpot(eclipse);
-    const position = Cesium.Cartesian3.fromDegrees(lon, lat);
-    if (existing) existing.position = position;
-    else
-      entities.add({
+    const items = [..._markItems];
+    if (eclipse && _enabled && _skyWanted) {
+      const { lat, lon } = skySpot(eclipse);
+      items.push({
         id: 'eclipse-sky:flag',
-        position,
-        billboard: {
-          image: skyFlagImage(),
-          width: 24,
-          height: 30,
-          // The foot of the pole stands on the spot.
-          pixelOffset: new Cesium.Cartesian2(7, 0),
-          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-          disableDepthTestDistance: 5_000_000,
-        },
+        pos: { lon, lat },
+        height: 'clampGround',
+        image: skyFlagImage(),
+        size: [24, 30],
+        // The foot of the pole stands on the spot.
+        anchor: 'bottom',
+        pixelOffset: { x: 7, y: 0 },
+        disableDepthTest: Number.POSITIVE_INFINITY,
       });
+    }
+    _marks.set(items);
     render();
   }
 
   /** A click on the globe moves the flag there. */
   function installClickHandler() {
-    if (_clickHandler || !screenSpaceEventHandlerFactory || !_viewer) return;
-    _clickHandler = screenSpaceEventHandlerFactory(_viewer);
-    _clickHandler.setInputAction((click) => {
-      if (!_enabled || !_skyWanted || _look || !selected()) return;
+    if (_clickOff || !inputFor || !_viewer) return;
+    _clickOff = inputFor(_viewer).onClick((event) => {
+      const at = event?.screenPosition;
+      console.debug(at, event?.topHit, pointer?.isPointerFree());
+      if (!_enabled || !_skyWanted || !selected() || !at) return;
       if (pointer && !pointer.isPointerFree()) return;
       // A click on another layer's object is that layer's.
-      const picked = _viewer.scene.pick?.(click.position);
-      const id = picked?.id?.id ?? picked?.id;
-      if (picked && !(typeof id === 'string' && id.startsWith('eclipse-')))
-        return;
-      const hit = _viewer.camera.pickEllipsoid?.(click.position);
-      if (!hit) return;
-      const where = Cesium.Cartographic.fromCartesian(hit);
-      const lat = Cesium.Math.toDegrees(where.latitude);
-      const lon = Cesium.Math.toDegrees(where.longitude);
+      const hit = event.topHit;
+      if (hit && !hit.surface && !String(hit.id).startsWith('eclipse-')) return;
+      const ground = findQuery(_viewer)?.pickEllipsoid(at.x, at.y);
+      const where = ground ? toLonLatH(ground) : null;
+      if (!where) return;
+      const { lat, lon } = where;
       _skySpot = { lat, lon, point: fromGeodetic(lat, lon) };
       drawFlag();
       syncShadow();
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
   }
 
   /** The sky view: the Sun as seen from the centre of the screen. */
   function syncSky(active, ms) {
     if (!_sky) return;
-    const spot = !active
-      ? null
-      : _look
-        ? _look.spot
-        : _skyWanted
-          ? skySpot(active)
-          : null;
+    const spot = active && _skyWanted ? skySpot(active) : null;
     if (!spot) {
       _sky.hide();
       return;
@@ -656,187 +643,42 @@ export function createEclipsePathsLayer({
     });
   }
 
-  /** Where the camera points to face the Sun from `spot` at `ms`. */
-  function sunAim(eclipse, ms, spot) {
-    const lunar = eclipse.body === 'lunar';
-    const frame = lunar ? null : shadowFrame(eclipse, ms);
-    // The Sun is far enough to stand in one direction from anywhere; the
-    // Moon is not.
-    const direction = lunar
-      ? Cesium.Cartesian3.normalize(
-          Cesium.Cartesian3.subtract(
-            Cesium.Cartesian3.multiplyByScalar(
-              Cesium.Cartesian3.fromArray(moonDirection(eclipse, ms)),
-              MOON_DISTANCE,
-              new Cesium.Cartesian3(),
-            ),
-            Cesium.Cartesian3.fromArray(spot.point),
-            new Cesium.Cartesian3(),
-          ),
-          new Cesium.Cartesian3(),
-        )
-      : Cesium.Cartesian3.fromArray(frame.k);
-    // The zenith is up; with the Sun straight overhead, north is.
-    const zenith = Cesium.Cartesian3.normalize(
-      Cesium.Cartesian3.fromArray(spot.point),
-      new Cesium.Cartesian3(),
-    );
-    const up = Cesium.Cartesian3.subtract(
-      zenith,
-      Cesium.Cartesian3.multiplyByScalar(
-        direction,
-        Cesium.Cartesian3.dot(zenith, direction),
-        new Cesium.Cartesian3(),
-      ),
-      new Cesium.Cartesian3(),
-    );
-    if (Cesium.Cartesian3.magnitude(up) < 0.05)
-      Cesium.Cartesian3.fromArray(frame?.j ?? [0, 0, 1], 0, up);
-    return { direction, up: Cesium.Cartesian3.normalize(up, up) };
-  }
-
-  const navigate = (fly) => (_runNavigation ? _runNavigation(fly) : fly());
-
-  /**
-   * Turn the camera round to face the Sun: down to the ground point at the
-   * centre of the screen, looking up through a long lens. With no eclipse
-   * under way, the clock goes to the chosen one's peak and the camera to
-   * where it peaks.
-   */
-  function turnToSun() {
-    const eclipse = selected();
-    const viewer = _viewer;
-    const camera = viewer?.camera;
-    if (!eclipse || !camera?.frustum || _look) return;
-    let spot = null;
-    if (inProgress(now()) !== eclipse) {
-      clock.pause();
-      clock.seek(eclipse.greatestMs);
-      const { lat, lon } = eclipse.greatest;
-      spot = { lat, lon, point: fromGeodetic(lat, lon) };
-    }
-    spot ??= skySpot(eclipse);
-    const scene = viewer.scene;
-    _look = {
-      spot,
-      settled: false,
-      // The scene's own Sun and Moon step aside for the layer's.
-      sun: scene.sun?.show,
-      moon: scene.moon?.show,
-      restore: {
-        destination: Cesium.Cartesian3.clone(camera.positionWC),
-        orientation: {
-          direction: Cesium.Cartesian3.clone(camera.directionWC),
-          up: Cesium.Cartesian3.clone(camera.upWC),
-        },
-        fov: camera.frustum.fov,
-      },
-    };
-    if (scene.sun) scene.sun.show = false;
-    if (scene.moon) scene.moon.show = false;
-    // The path's labels belong to the globe, not to the sky.
-    overlayHost?.setVisible?.(ECLIPSE_PATHS_OVERLAY_SOURCE_ID, false);
-    const look = _look;
-    const settle = () => {
-      look.settled = true;
-      render();
-    };
-    navigate(() =>
-      camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(
-          spot.lon,
-          spot.lat,
-          SUN_VIEW_HEIGHT_M,
-        ),
-        orientation: sunAim(eclipse, now(), spot),
-        duration: reducedMotion() ? 0 : 2.4,
-        complete: settle,
-        cancel: settle,
-      }),
-    );
-    notifyRow();
-    syncShadow();
-    render();
-  }
-
-  /** Turn back to the Earth; `fly` returns the camera to where it stood. */
-  function turnToEarth({ fly = true } = {}) {
-    const look = _look;
-    if (!look) return;
-    _look = null;
-    const viewer = _viewer;
-    const camera = viewer?.camera;
-    const scene = viewer?.scene;
-    if (scene?.sun && look.sun !== undefined) scene.sun.show = look.sun;
-    if (scene?.moon && look.moon !== undefined) scene.moon.show = look.moon;
-    if (camera?.frustum) camera.frustum.fov = look.restore.fov;
-    overlayHost?.setVisible?.(ECLIPSE_PATHS_OVERLAY_SOURCE_ID, _enabled);
-    if (fly && camera)
-      navigate(() =>
-        camera.flyTo({
-          destination: look.restore.destination,
-          orientation: look.restore.orientation,
-          duration: reducedMotion() ? 0 : 1.8,
-        }),
-      );
-    notifyRow();
-    render();
-  }
-
-  /** Each frame facing the Sun: narrow the lens and keep the Sun centred. */
-  function holdSunView(active, ms) {
-    const camera = _viewer?.camera;
-    if (!_look || !camera?.frustum) return;
-    // The eclipse is over: nothing left to look at.
-    if (!active) return turnToEarth();
-    const gap = SUN_VIEW_FOV - camera.frustum.fov;
-    if (Math.abs(gap) > 1e-4) {
-      camera.frustum.fov += gap * (reducedMotion() ? 1 : 0.12);
-      render();
-    }
-    if (!_look.settled) return;
-    // Something else took the camera far away: let it go.
-    if (camera.positionCartographic?.height > SUN_VIEW_CEILING_M)
-      return turnToEarth({ fly: false });
-    const aim = sunAim(active, ms, _look.spot);
-    if (Cesium.Cartesian3.dot(aim.direction, camera.directionWC) < 1 - 1e-12)
-      camera.setView({ orientation: aim });
-  }
-
   /** Bring the shadow, and which eclipse it belongs to, up to the world time. */
   function syncShadow() {
-    if (!_enabled || !_shadow) return;
+    if (!_enabled) return;
     const ms = now();
     const active = inProgress(ms);
     syncLines();
-    holdSunView(active, ms);
     if (
       _follow &&
       active?.body === 'solar' &&
-      !_look &&
       _playingTo !== null &&
       clock.isPlaying()
     )
       followShadow(active, ms);
     if (active?.body === 'lunar') {
       const state = lunarStateAt(active, ms);
-      const offset = moonInShadow(active, ms);
       const moon = moonDirection(active, ms);
-      _shadow.showLunar({
-        moon: [...moon.map((value) => value * MOON_DISTANCE), MOON_RADIUS],
-        shadow: [offset.x, offset.y, active.umbraRadius, active.penumbraRadius],
-        depth: Math.max(0, Math.min(1, state.umbral)),
-        facing: Boolean(_look),
+      _shadow?.update({
+        solar: null,
+        lunar: {
+          moon: [...moon.map((value) => value * MOON_DISTANCE), MOON_RADIUS],
+          depth: Math.max(0, Math.min(1, state.umbral)),
+        },
       });
-    } else if (active)
-      _shadow.show(
-        shadowFrame(active, ms),
-        skyShade(active, ms),
-        _look
-          ? { covered: skyViewAt(active, ms, _look.spot.point).covered }
-          : null,
-      );
-    else _shadow.hide();
+    } else if (active) {
+      const frame = shadowFrame(active, ms);
+      _shadow?.update({
+        lunar: null,
+        solar: {
+          origin: vector(frame.origin),
+          axis: vector(frame.k),
+          cones: [frame.l1, frame.l2, frame.tanF1, frame.tanF2],
+          skyShade: skyShade(active, ms),
+        },
+      });
+    } else if (_shadowShown) _shadow?.update({ solar: null, lunar: null });
+    _shadowShown = Boolean(active && _shadow);
     syncSky(active, ms);
     if (active !== _active) {
       _active = active;
@@ -891,9 +733,9 @@ export function createEclipsePathsLayer({
 
   /** Keep the camera over the shadow, at the height and tilt it has. */
   function followShadow(eclipse, ms) {
-    const camera = _viewer?.camera;
-    const height = camera?.positionCartographic?.height;
-    if (!Number.isFinite(height)) return;
+    const camera = _viewer && findCamera(_viewer);
+    const eye = camera?.pose?.();
+    if (!Number.isFinite(eye?.height)) return;
     // The camera rides the central line and no farther: it waits at the
     // line's start until the umbra lands there, and stays at its end once the
     // umbra has left, though the penumbra is still crossing the Earth.
@@ -916,18 +758,12 @@ export function createEclipsePathsLayer({
       underPoint(eclipse, ms) ??
       toGeodetic(shadowFrame(eclipse, ms).origin);
     camera.setView({
-      destination: Cesium.Cartesian3.fromDegrees(lon, lat, height),
-      orientation: {
-        heading: camera.heading,
-        pitch: camera.pitch,
-        roll: camera.roll,
-      },
+      destination: { lon, lat, height: eye.height },
+      orientation: { heading: eye.heading, pitch: eye.pitch, roll: eye.roll },
     });
   }
 
   const isPlaying = () => _playingTo !== null && clock.isPlaying();
-  /** Whether the camera may turn to face this eclipse's body. */
-  const canLook = (eclipse) => Boolean(eclipse) && sunView;
 
   const unregister = clock.register?.({
     id: ECLIPSE_PATHS_LAYER_ID,
@@ -1021,10 +857,25 @@ export function createEclipsePathsLayer({
         typeof services?.runNavigation === 'function'
           ? services.runNavigation
           : null;
-      _dataSource = new Cesium.CustomDataSource('eclipse-paths');
-      _dataSource.show = false;
-      viewer.dataSources.add(_dataSource);
-      _shadow = createShadow(viewer);
+      const draw = findDraw(viewer);
+      if (draw) {
+        _band = draw.shapes({ id: SET_IDS.band, show: false });
+        _lines = draw.lines({ id: SET_IDS.lines, show: false });
+        // Drawn over the ground they stand on, and hidden past the horizon.
+        _marks = draw.icons({
+          id: SET_IDS.marks,
+          show: false,
+          horizonCull: true,
+        });
+        _shadow =
+          draw.field?.({
+            kind: 'eclipseShadow',
+            id: SET_IDS.shadow,
+            solar: null,
+            lunar: null,
+            show: false,
+          }) ?? null;
+      }
       // The sky view's own close button does what its row chip does.
       _sky = createSky(viewer, {
         onClose: () => layer.setParams({ sky: false }),
@@ -1035,13 +886,14 @@ export function createEclipsePathsLayer({
     enable() {
       if (_enabled) return;
       _enabled = true;
-      if (_dataSource) _dataSource.show = true;
+      for (const part of [_band, _lines, _marks, _shadow])
+        if (part) part.show = true;
       overlayHost?.setVisible?.(ECLIPSE_PATHS_OVERLAY_SOURCE_ID, true);
       _releaseFollow = clock.hold?.(ECLIPSE_PATHS_LAYER_ID) ?? null;
       _unsubscribe = clock.subscribe?.(render) ?? null;
       installClickHandler();
       _removePreUpdate =
-        _viewer?.scene?.preUpdate?.addEventListener(syncShadow) ?? null;
+        (_viewer && findFrame(_viewer)?.on('preUpdate', syncShadow)) ?? null;
       drawPath();
       clock.coverageChanged?.();
       syncShadow();
@@ -1057,9 +909,8 @@ export function createEclipsePathsLayer({
         _playingTo = null;
         clock.pause();
       }
-      turnToEarth({ fly: false });
-      _clickHandler?.destroy();
-      _clickHandler = null;
+      _clickOff?.();
+      _clickOff = null;
       _removePreUpdate?.();
       _removePreUpdate = null;
       _unsubscribe?.();
@@ -1068,9 +919,11 @@ export function createEclipsePathsLayer({
       _releaseFollow = null;
       _active = null;
       syncTimer();
-      _shadow?.hide();
+      _shadow?.update({ solar: null, lunar: null });
+      _shadowShown = false;
       _sky?.hide();
-      if (_dataSource) _dataSource.show = false;
+      for (const part of [_band, _lines, _marks, _shadow])
+        if (part) part.show = false;
       overlayHost?.setEntries(
         ECLIPSE_PATHS_OVERLAY_SOURCE_ID,
         [],
@@ -1119,17 +972,14 @@ export function createEclipsePathsLayer({
       }
     },
 
-    destroy(viewer = _viewer) {
+    destroy() {
       layer.disable();
       unregister?.();
-      _shadow?.destroy();
-      _shadow = null;
+      for (const part of [_band, _lines, _marks, _shadow]) part?.dispose();
+      _band = _lines = _marks = _shadow = null;
+      _shadowShown = false;
       _sky?.destroy();
       _sky = null;
-      if (_dataSource) {
-        viewer?.dataSources?.remove(_dataSource, true);
-        _dataSource = null;
-      }
       overlayHost?.clearSource?.(ECLIPSE_PATHS_OVERLAY_SOURCE_ID);
       _viewer = null;
       _rowListener = null;
@@ -1142,7 +992,6 @@ export function createEclipsePathsLayer({
       return {
         eclipse: selected()?.id ?? null,
         sky: _skyWanted,
-        look: Boolean(_look),
         follow: _follow,
         bodies: _bodies,
       };
@@ -1151,7 +1000,7 @@ export function createEclipsePathsLayer({
     /**
      * `eclipse` chooses one by its day, `year` the first of that year (or
      * the next after it), `step` moves that many along the
-     * catalogue, `focus` flies to it, `follow` keeps the camera over the shadow while it plays, `look` turns to face the Sun (or back), and `play` runs the world clock through
+     * catalogue, `focus` flies to it, `follow` keeps the camera over the shadow while it plays, and `play` runs the world clock through
      * it (or pauses).
      */
     setParams(params = {}) {
@@ -1180,8 +1029,6 @@ export function createEclipsePathsLayer({
         _follow = params.follow;
         render();
       }
-      if (params.look === true && canLook(selected())) turnToSun();
-      else if (params.look === false) turnToEarth();
       if (params.play === true) play();
       else if (params.play === false && _playingTo !== null) {
         _playingTo = null;
@@ -1268,23 +1115,6 @@ export function createEclipsePathsLayer({
                 },
               ]
             : []),
-          ...(canLook(eclipse) || _look
-            ? [
-                {
-                  id: 'look',
-                  label: _look
-                    ? t('Look at the Earth')
-                    : eclipse.body === 'lunar'
-                      ? t('Look at the Moon')
-                      : t('Look at the Sun'),
-                  title: t(
-                    'Turn the camera round: go down to the ground at the centre of the screen and look up at the Sun and the Moon',
-                  ),
-                  active: Boolean(_look),
-                  params: { look: !_look },
-                },
-              ]
-            : []),
         ],
         segmented: {
           id: 'bodies',
@@ -1364,9 +1194,8 @@ export function createEclipsePathsLayer({
       return {
         selected: selected()?.id ?? null,
         inProgress: _active?.id ?? null,
-        shadowShown: _shadow?.isShown() ?? false,
+        shadowShown: _shadowShown,
         skyShown: _sky?.isShown() ?? false,
-        lookingUp: Boolean(_look),
         playing: isPlaying(),
       };
     },

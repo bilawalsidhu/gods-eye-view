@@ -1,7 +1,8 @@
 /**
  * @module render/cesium/drawFields
- * @description The Cesium draw port's `field` handles. It draws two kinds:
- * `windStreamlines` (drawStreamlines.js) and `rasterShell`, a raster on a
+ * @description The Cesium draw port's `field` handles. It draws three kinds:
+ * `windStreamlines` (drawStreamlines.js), `eclipseShadow` (eclipseShadow.js)
+ * and `rasterShell`, a raster on a
  * rectangle raised above the ellipsoid, drawn flat in the opaque pass in
  * the scene's primitive order (ascending height), alpha-blended, without
  * depth writes and never picked. Other kinds are refused loudly.
@@ -27,6 +28,7 @@
 import * as Cesium from 'cesium';
 import { listenerList, uncaught } from './common.js';
 import { createWindStreamlines } from './drawStreamlines.js';
+import { createEclipseShadowField } from './eclipseShadow.js';
 
 const MATERIAL_TYPE = 'DrawRasterShell';
 // Renders after an image swap: one queues the upload, one uploads and draws, one spare.
@@ -681,6 +683,17 @@ export function createCesiumFields({
       if (fields.has(spec?.id))
         throw new Error(`a field with id ${spec.id} is live`);
       if (spec?.kind === 'rasterShell') return rasterShell(spec);
+      if (spec?.kind === 'eclipseShadow') {
+        const handle = createEclipseShadowField({
+          scene,
+          spec,
+          onDispose: () => {
+            if (fields.get(spec.id) === handle) fields.delete(spec.id);
+          },
+        });
+        fields.set(spec.id, handle);
+        return handle;
+      }
       if (spec?.kind === 'windStreamlines') {
         const handle = createWindStreamlines({
           scene,

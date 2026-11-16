@@ -220,8 +220,11 @@ for each eclipse: a prediction for future centuries, so far from the present
 the path keeps its shape and latitude but may sit east or west of where it
 will fall.
 
-- **The shadow** is a post-process stage (`shadow.js`), on only while an
-  eclipse's penumbra is on the Earth at the world time. Each pixel's view ray is
+- **The shadow** is the draw port's `eclipseShadow` field (`draw.field`,
+  declared in `src/render/contract/draw.d.ts`): the layer hands it the shadow
+  axis and cones of the moment, in Earth radii, and the Cesium adapter
+  (`src/render/cesium/eclipseShadow.js`) draws it as one post-process stage,
+  on only while an eclipse's penumbra is on the Earth at the world time. Each pixel's view ray is
   met with the ellipsoid and the ground point tested against the two cones, so
   the penumbra darkens toward the axis as more of the Sun is covered, with a
   fine line at its edge and at each quarter of the Sun's diameter covered, and
@@ -237,7 +240,7 @@ will fall.
   round the axis each minute, every 10 s near the ends, cut by the Earth's limb
   where the umbra hangs off it), closed by a rounded end behind the first and
   last central points. Its width at greatest eclipse matches the catalogue to
-  about a kilometre. Marks are billboards, not point primitives. A partial eclipse
+  about a kilometre. Marks are icons in a draw set, not points. A partial eclipse
   has no path, only its peak. Colour is by kind: total, annular, hybrid,
   partial. A dashed line marks the limit of the region that sees any of the
   eclipse (`visibility.js`). Each node of a 1° grid takes, over samples two
@@ -247,9 +250,10 @@ will fall.
   sunrise and sunset alike, so its zero line, contoured by marching squares and
   rounded by two corner-cutting passes, is one smooth limit. It takes about
   0.15 s, so it is drawn a beat after the path and kept for the session.
-  Every line is two entities: draped on the ground for a camera below 2,500 km
-  and lifted 12 km over it above that, because a draped line breaks into
-  uneven dots seen from far off.
+  The band, the lines and the marks are the layer's own draw sets (shapes,
+  lines, icons). Every line is drawn draped on the ground for a camera below
+  2,500 km and lifted 12 km over it, geodesic, above that, because a draped
+  line breaks into uneven dots seen from far off.
 - **The sky view** (`skyView.js`, `skyPanel.js`) is a small picture, bottom
   right, of the eclipse as seen from one place on the ground while the shadow
   is on the Earth: the Moon's disc crossing the Sun with the zenith up, the
@@ -264,20 +268,6 @@ will fall.
   near the umbra, a soft-edged copper umbra the eye sees best once the whole
   Moon is inside). A row chip, or the
   cross in the view's corner, turns the view and its flag off.
-- **Look at the Sun** and **Look at the Moon** are off (the layer's `sunView`
-  option, false by default): the code stays for a later decision. Turned on,
-  it turns the real camera
-  round: it flies down to 12 km over the flag and looks up at the Sun through
-  a 4° lens, keeping it centred as the clock moves (with no eclipse under way
-  it first goes to the chosen eclipse's peak, at the point of greatest
-  eclipse). The scene's own Sun is a glare with no disc, so while the camera
-  faces the Sun the shadow stage draws both bodies where the elements put
-  them: the Sun's disc with its glare, the Moon's unlit disc in front, a blue
-  sky that falls dark as the Sun is covered, and the corona in totality; the
-  scene's Sun and Moon are hidden meanwhile. **Look at the Earth** restores the
-  lens and flies back to where the camera stood. It stays below the 1,000 km
-  under which the app allows free look, so the globe-in-view recovery leaves
-  it alone.
 - **Lunar eclipses** (`lunar.js`, `lunar.json`): the 3,440 lunar eclipses of
   the same years (970 total, 1,216 partial, 1,254 penumbral) from the Five
   Millennium Canon of Lunar Eclipses, built by
@@ -290,13 +280,11 @@ will fall.
   overhead at greatest eclipse, carried west at 14.49° an hour, gives where the
   Moon is in the sky. That place is given to the nearest degree and the Moon's
   declination is held fixed, so the horizon lines are good to about a degree.
-  While one is under way the shadow stage tints the half of the Earth that has
+  While one is under way the shadow field tints the half of the Earth that has
   the Moon in its sky (copper as the Moon enters the umbra) and marks its edge;
   the chosen eclipse draws the lines where the Moon sits on the horizon at the
   first and last contact with the penumbra (dashed) and the umbra (solid). The
-  sky view shows the Moon with the Earth's shadow across it, north up, and
-  **Look at the Moon** (off, see above) turns the camera to it, where the stage draws the Moon's
-  disc with the penumbra's dimming and the copper umbra. A switch in the row
+  sky view shows the Moon with the Earth's shadow across it, north up. A switch in the row
   lists all eclipses, the Sun's or the Moon's.
 - **The world clock**: the layer follows it (`worldClock.hold`) and registers
   the chosen eclipse's hours as its coverage, with greatest eclipse marked, so
