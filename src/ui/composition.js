@@ -29,6 +29,7 @@ import {
 import {
   activateWorldOverlayAction,
   destroyWorldOverlay,
+  hitTestWorldOverlay,
   initWorldOverlay,
   subscribeWorldOverlayActions,
 } from '../overlays/worldOverlay.js';
@@ -73,6 +74,7 @@ export class StyleManager extends ApplicationShell {
     super(viewer, {
       ...options,
       services: {
+        hitTestWorldOverlay,
         CITY_POIS,
         GLOBE_VIEW,
         flyToGlobeView,
