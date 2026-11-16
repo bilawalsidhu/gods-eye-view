@@ -1,10 +1,11 @@
 // The GhostMaps watcher stops polling GitHub when nobody wants the catalog.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { createGhostMapsWatcher, ghostMapsIdleMs } from './ghostMaps.js';
+import { createGhostMapsWatcher, ghostMapsIdleMs, ghostMapsProxy } from './ghostMaps.js';
 
 const HEAD = '1'.repeat(40);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -125,3 +126,55 @@ test('GHOSTMAPS_IDLE_MS: 10 min by default, 0 never stops, junk falls back', () 
   assert.equal(ghostMapsIdleMs('soon'), 600000);
   assert.equal(ghostMapsIdleMs('-5'), 600000);
 });
+
+test('a completed SSE GET keeps its viewer until the response closes', () =>
+  harness(async ({ watcher, clock, refPolls }) => {
+    let handler;
+    ghostMapsProxy({ watcher }).configureServer({
+      middlewares: { use: (_route, fn) => (handler = fn) },
+    });
+    let requestComplete = false;
+    const server = createServer((req, res) => {
+      req.once('close', () => {
+        requestComplete = true;
+      });
+      handler(req, res);
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const controller = new AbortController();
+    try {
+      const response = await fetch(
+        'http://127.0.0.1:' + server.address().port + '/events',
+        { signal: controller.signal },
+      );
+      assert.equal(response.status, 200);
+      assert.ok(
+        await until(() => requestComplete),
+        'the GET finishes while its event stream remains open',
+      );
+      assert.equal(
+        watcher.subscribers(),
+        1,
+        'finishing the GET must not unsubscribe its live event stream',
+      );
+
+      clock.t = 1000;
+      const before = refPolls();
+      assert.ok(
+        await until(() => refPolls() >= before + 2),
+        'an open stream prevents idle polling shutdown',
+      );
+
+      controller.abort();
+      assert.ok(
+        await until(() => watcher.subscribers() === 0),
+        'closing the response unsubscribes the viewer',
+      );
+      clock.t = 2000;
+      assert.ok((await quiet(refPolls)) > 0, 'the watcher stops when idle');
+    } finally {
+      controller.abort();
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
+    }
+  }));

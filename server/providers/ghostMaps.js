@@ -394,7 +394,7 @@ export function ghostMapsProxy({ watcher = createGhostMapsWatcher() } = {}) {
     res.end(JSON.stringify(value));
   };
 
-  function events(req, res) {
+  function events(res) {
     if (watcher.subscribers() >= MAX_SUBSCRIBERS)
       return json(res, 429, { error: 'too_many_subscribers' });
     res.writeHead(200, {
@@ -414,7 +414,8 @@ export function ghostMapsProxy({ watcher = createGhostMapsWatcher() } = {}) {
       clearInterval(heartbeat);
       unsubscribe();
     };
-    req.on('close', close);
+    // IncomingMessage closes when the GET is complete, not when SSE disconnects.
+    res.on('close', close);
     res.on('error', close);
   }
 
@@ -432,7 +433,7 @@ export function ghostMapsProxy({ watcher = createGhostMapsWatcher() } = {}) {
       if (!watcher.catalog().commit) await first;
       return json(res, 200, watcher.catalog());
     }
-    if (url.pathname === '/events') return events(req, res);
+    if (url.pathname === '/events') return events(res);
     try {
       if (!watcher.catalog().commit) await first;
       const found = await watcher.file(match[1]);
