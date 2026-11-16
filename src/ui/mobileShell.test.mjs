@@ -92,7 +92,12 @@ function element(tag, document) {
       walk(node);
       return found;
     },
-    getBoundingClientRect: () => ({ top: 0, height: 0 }),
+    // Mutable so a test can change a rail or the view switcher between measures.
+    bounds: { top: 0, height: 0 },
+    getBoundingClientRect: () => ({
+      top: node.bounds.top,
+      height: node.bounds.height,
+    }),
     getClientRects: () => (node.hidden ? [] : [{}]),
     matches: (selector) =>
       selector === '.panel-collapse-btn' &&
@@ -110,11 +115,22 @@ function element(tag, document) {
 
 const PANEL_IDS = [...new Set(Object.values(MOBILE_SHEET_PANELS).flat())];
 
+// shown() reads getComputedStyle; Node has none. display:none is hidden.
+if (typeof globalThis.getComputedStyle !== 'function') {
+  globalThis.getComputedStyle = (node) => ({
+    display: node?.style?.values?.get('display') ?? '',
+  });
+}
+
 function fixture({
   mobile = true,
   expanded = [],
   onTabOpened = () => {},
   afterPublish,
+  ResizeObserverImpl = null,
+  viewSwitcher = true,
+  viewSwitcherHeight = 0,
+  viewSwitcherDisplay = '',
 } = {}) {
   const document = new EventTarget();
   document.ids = new Map();
@@ -173,6 +189,15 @@ function fixture({
     tabBar.append(button);
   }
   document.body.append(backdrop, tabBar);
+  let switcher = null;
+  if (viewSwitcher) {
+    switcher = element('nav', document);
+    switcher.id = 'view-switcher';
+    switcher.bounds.height = viewSwitcherHeight;
+    if (viewSwitcherDisplay)
+      switcher.style.setProperty('display', viewSwitcherDisplay);
+    document.body.append(switcher);
+  }
   const views = [];
   const publish = (view) => {
     views.push(view);
@@ -194,6 +219,7 @@ function fixture({
   media.matches = mobile;
   const calls = [];
   const frames = [];
+  const resizeObservers = [];
   let closedCount = 0;
   let observed = null;
   class FakeMutationObserver {
@@ -212,7 +238,13 @@ function fixture({
     afterPublish,
     matchMedia: () => media,
     MutationObserverImpl: FakeMutationObserver,
-    ResizeObserverImpl: null,
+    ResizeObserverImpl: ResizeObserverImpl
+      ? function CapturedResizeObserver(callback) {
+          const observer = new ResizeObserverImpl(callback);
+          resizeObservers.push(observer);
+          return observer;
+        }
+      : null,
     requestFrame: (callback) => frames.push(callback),
     onSheetsClosed: () => {
       closedCount += 1;
@@ -260,6 +292,8 @@ function fixture({
     search,
     setBodyClass,
     collapsed,
+    switcher,
+    resizeObservers,
   };
 }
 
@@ -594,9 +628,27 @@ test('the phone shell keeps the required attribution visible', () => {
   );
   const dock = rule('body.mobile-shell #command-dock');
   const voice = rule('body.mobile-shell #command-dock #gev-voice-control');
-  const voiceHeightPx = Number(/height: ([\d.]+)rem/.exec(voice)[1]) * 16;
-  // Idle: the credit line clears the voice bar, which clears the tab bar.
-  assert.ok(lift(idleCredit) > lift(dock) + voiceHeightPx);
+  assert.match(voice, /height: var\(--mobile-voice-height\);/);
+  const voiceHeightRem = Number(
+    /--mobile-voice-height: ([\d.]+)rem/.exec(css)[1],
+  );
+  // Share the rem-aware switcher offset, never the old fixed 106px lift.
+  assert.match(
+    idleCredit,
+    /bottom: calc\(\s*var\(--mobile-view-switcher-bottom\) \+ var\(--world-timeline-lift, 0px\)\s*\) !important;/,
+  );
+  assert.doesNotMatch(idleCredit, /106px/);
+  const offset =
+    /--mobile-view-switcher-bottom: calc\(var\(--mobile-tab-space\) \+ ([\d.]+)px \+ var\(--mobile-voice-height\) \+ ([\d.]+)px\)/.exec(
+      css,
+    );
+  assert.ok(offset, 'offset must track the rem-sized voice height');
+  for (const rootPx of [16, 24]) {
+    const voiceHeightPx = voiceHeightRem * rootPx;
+    const creditLift = Number(offset[1]) + voiceHeightPx + Number(offset[2]);
+    assert.ok(creditLift > lift(dock) + voiceHeightPx);
+    if (rootPx === 16) assert.equal(creditLift, 106);
+  }
   // It must beat the dock's :has() placements, so the offset is !important.
   assert.match(idleCredit, /\) !important;/);
   assert.doesNotMatch(
@@ -992,5 +1044,154 @@ test('on phones the News panel shows in the Context sheet only, like Weather', (
   assert.match(
     css,
     /body\.mobile-shell\[data-mobile-sheet='context'\]\s+#right-context-rail\s+> #news-panel:not\(\[hidden\]\),/,
+  );
+});
+
+function publishedSwitcherHeight(document) {
+  return document.body.style.values.get('--mobile-view-switcher-height');
+}
+
+function observedIds(observer) {
+  return [...observer.active].map((node) => node.id).sort();
+}
+
+/** The sheet ResizeObserver, captured through the fixture's injection point. */
+class RecordingResizeObserver {
+  constructor(callback) {
+    this.callback = callback;
+    this.active = new Set();
+    this.observations = [];
+    this.disconnects = 0;
+  }
+
+  observe(node) {
+    this.observations.push(node.id ?? null);
+    this.active.add(node);
+  }
+
+  disconnect() {
+    this.disconnects += 1;
+    this.active.clear();
+  }
+
+  deliver() {
+    this.callback();
+  }
+}
+
+const SHEET_RESIZE_TARGETS = [
+  'command-dock',
+  'left-panel-stack',
+  'right-context-rail',
+  'view-switcher',
+];
+
+test('the mobile shell observer watches the view switcher with the rails and dock', () => {
+  const phone = fixture({ ResizeObserverImpl: RecordingResizeObserver });
+  assert.equal(phone.resizeObservers.length, 1);
+  assert.deepEqual(observedIds(phone.resizeObservers[0]), SHEET_RESIZE_TARGETS);
+  phone.shell.destroy();
+});
+
+test('measureSheet publishes the ceiled height of the shown view switcher', () => {
+  // 48.2 ceils to 49 and rounds to 48. An integer must not gain a pixel.
+  for (const height of [0, 24, 48.2]) {
+    const phone = fixture({ viewSwitcherHeight: height });
+    assert.equal(
+      publishedSwitcherHeight(phone.document),
+      `${Math.ceil(height)}px`,
+      `shown height ${height}`,
+    );
+    phone.shell.destroy();
+  }
+});
+
+test('an absent view switcher publishes zero height', () => {
+  const phone = fixture({ viewSwitcher: false });
+  assert.equal(phone.switcher, null);
+  assert.equal(publishedSwitcherHeight(phone.document), '0px');
+  phone.shell.destroy();
+});
+
+test('a hidden view switcher publishes zero height', () => {
+  const phone = fixture({
+    ResizeObserverImpl: RecordingResizeObserver,
+    viewSwitcherHeight: 80.7,
+    viewSwitcherDisplay: 'none',
+  });
+  assert.equal(
+    publishedSwitcherHeight(phone.document),
+    '0px',
+    'display:none is hidden even when the box has height',
+  );
+  assert.ok(
+    observedIds(phone.resizeObservers[0]).includes('view-switcher'),
+    'a hidden switcher stays observed so a later show is measured',
+  );
+  phone.shell.destroy();
+});
+
+test('observer delivery recalculates the view-switcher height when its size changes', () => {
+  const phone = fixture({
+    ResizeObserverImpl: RecordingResizeObserver,
+    viewSwitcherHeight: 20,
+  });
+  const observer = phone.resizeObservers[0];
+  assert.equal(publishedSwitcherHeight(phone.document), '20px');
+  // 10.2 ceils to 11 and rounds to 10.
+  phone.switcher.bounds.height = 10.2;
+  observer.deliver();
+  assert.equal(publishedSwitcherHeight(phone.document), `${Math.ceil(10.2)}px`);
+  phone.switcher.bounds.height = 40;
+  observer.deliver();
+  assert.equal(publishedSwitcherHeight(phone.document), '40px');
+  phone.switcher.style.setProperty('display', 'none');
+  phone.switcher.bounds.height = 90.4;
+  observer.deliver();
+  assert.equal(
+    publishedSwitcherHeight(phone.document),
+    '0px',
+    'hiding the switcher clears the published height',
+  );
+  phone.switcher.style.removeProperty('display');
+  phone.switcher.bounds.height = 15.2;
+  observer.deliver();
+  assert.equal(publishedSwitcherHeight(phone.document), `${Math.ceil(15.2)}px`);
+  phone.shell.destroy();
+});
+
+test('desktop disconnects the view-switcher observer and mobile reentry observes it again', () => {
+  const phone = fixture({
+    ResizeObserverImpl: RecordingResizeObserver,
+    viewSwitcherHeight: 22.4,
+  });
+  const observer = phone.resizeObservers[0];
+  const seen = () =>
+    observer.observations.filter((id) => id === 'view-switcher').length;
+  assert.equal(seen(), 1, 'mobile entry observes #view-switcher');
+  assert.equal(phone.resizeObservers.length, 1);
+  phone.resize(false);
+  assert.ok(observer.disconnects >= 1, 'desktop disconnects the observer');
+  assert.equal(observer.active.size, 0);
+  phone.switcher.bounds.height = 15.2;
+  phone.resize(true);
+  assert.equal(
+    phone.resizeObservers.length,
+    1,
+    'reentry reuses the existing observer',
+  );
+  assert.ok(seen() > 1, 'mobile reentry observes #view-switcher again');
+  assert.deepEqual(observedIds(observer), SHEET_RESIZE_TARGETS);
+  assert.equal(publishedSwitcherHeight(phone.document), `${Math.ceil(15.2)}px`);
+  phone.shell.destroy();
+});
+
+test('destroy removes the view-switcher height variable', () => {
+  const phone = fixture({ viewSwitcherHeight: 30.2 });
+  assert.equal(publishedSwitcherHeight(phone.document), `${Math.ceil(30.2)}px`);
+  phone.shell.destroy();
+  assert.equal(
+    phone.document.body.style.values.has('--mobile-view-switcher-height'),
+    false,
   );
 });

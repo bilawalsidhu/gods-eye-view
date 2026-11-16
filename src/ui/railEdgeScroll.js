@@ -39,7 +39,7 @@ const LINE_PX = 16;
  * control, and every panel in either side's stack (a panel scrolls itself).
  */
 const OWN_CONTROLS =
-  'a, button, input, select, textarea, dialog, [role="dialog"], .ui-panel, #left-panel-stack > :not(.gev-panel-rail), #right-context-rail > :not(.gev-panel-rail), #first-run-launcher, #cesium-credits, #world-timeline';
+  'a, button, input, select, textarea, dialog, [role="dialog"], .ui-panel, .gev-nav, #left-panel-stack > :not(.gev-panel-rail), #right-context-rail > :not(.gev-panel-rail), #first-run-launcher, #cesium-credits, #world-timeline';
 
 /**
  * @param {Document} [doc]
