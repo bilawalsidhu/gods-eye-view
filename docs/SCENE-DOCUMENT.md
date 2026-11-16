@@ -1,7 +1,8 @@
 # Scene document format
 
 Authoring exports a UTF-8 JSON project. Version 7 records Stories metadata.
-Versions 1 through 6 and unversioned legacy files migrate on import. Existing shots keep their
+Versions 1 through 6 and unversioned legacy files migrate on import, including
+version 6 projects written by early Stories builds. Existing shots keep their
 camera behavior. Unknown versions or unsupported fields are rejected with a
 field path before the current project, selection or saved bytes change.
 
@@ -33,9 +34,9 @@ Each scene requires a `shots` array; optional fields are `id`, `title`,
 `releaseLayerIds`, `appliedShotPacks` and version-4 `anchors`. A pack marker has `id`, optional numeric
 `version` and `shotBindings` (original shot title to saved shot ID). These markers
 retain the editor's existing pack-update and rename behavior.
-From version 7, scenes may include `stories` (true when saved to Stories),
-`storyThumb` (a JPEG or PNG data URL of at most 300,000 characters) and
-`storyTags` (up to five supported topic keys).
+From version 6 (written by early Stories builds), scenes may include `stories`
+(true when saved to Stories), `storyThumb` (a JPEG or PNG data URL of at most
+300,000 characters) and `storyTags` (up to five supported topic keys).
 
 Shots accept `id`, `title`, `durationSec`, `holdSec`, `camera`, `visual`, `layers`,
 `sourcePackId`, `sourcePackVersion` and version-4 `move`. Scene IDs are unique within the project;

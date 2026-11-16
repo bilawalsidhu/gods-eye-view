@@ -97,7 +97,8 @@ export function validateSceneDocument(project) {
       'shots',
       ...(version >= 4 ? ['anchors'] : []),
       ...(version >= 5 ? ['dataPacks'] : []),
-      ...(version >= 7 ? ['stories', 'storyThumb', 'storyTags'] : []),
+      // Early Stories builds wrote these in version 6 projects.
+      ...(version >= 6 ? ['stories', 'storyThumb', 'storyTags'] : []),
     ]);
     uniqueId(scene, path, sceneIds);
     optional(scene, 'title', path, (v, p) => string(v, p, 4096));

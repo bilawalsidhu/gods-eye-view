@@ -1641,8 +1641,8 @@ rules own presentation overrides and Nepal map fallback without changing saved
 shots or content. Scene-document validation and legacy migration now have separate
 owners. Invalid imports preserve the current project; unreadable saved projects
 are protected from fallback writes. Version 7 adds Scenes' optional Stories
-metadata (accepted only in version 7 documents) and reads prior project files with
-zero pitch, low camera heights, scope and detection edits preserved. See [the document contract](SCENE-DOCUMENT.md);
+metadata (accepted from version 6, which early Stories builds wrote) and reads
+prior project files, including version 6 drafts, with zero pitch, low camera heights, scope and detection edits preserved. See [the document contract](SCENE-DOCUMENT.md);
 see [Director](DIRECTOR.md) for camera, pack, action and sharing support.
 
 Search framing and annotations request semantic map features from an explicit source. The Overpass adapter owns bounded queries, member/tag decoding and request deadlines; callers retain candidate ranking, outline caching, deferred retries and scene placement. Empty, unavailable, transient and throttled outcomes remain distinct; a data reply is refused only for its `remark`, never for text in element tags. Traffic sources return road records and installation sources return mapped records with freshness/saturation metadata, so their layers no longer decode upstream elements. ALPR already normalizes its records in the source. Traffic uses OpenFreeMap roads with optional matched TomTom congestion; ALPR uses an hourly OpenStreetMap extract. Keyless installations use military-area tiles. Detailed feature queries require operator-configured Overpass.
