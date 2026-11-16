@@ -299,6 +299,14 @@ correction turns them to, paints the mask in a custom shader per colour
 clipping plane through the model's origin. The checks `draw.models.bytes`
 and `draw.models.fleet` cover them.
 
+An articulated model's joints are its item's `nodes`: transforms of the
+model's named glTF nodes, each a column-major 4×4 matrix in the node's
+parent frame that replaces the node's own (the ISS's solar arrays,
+radiators, dishes and arms). They change live; a node whose name leaves the
+map goes back to its authored pose, and names the model lacks are ignored.
+The Cesium port writes each node's matrix once the model is ready, and
+again only when its numbers change.
+
 The Cesium port draws timed imagery (`imageryFrames`): a layer given a timed
 source hides its own imagery and draws each frame its clock shows as a Cesium
 imagery layer just above it (in `blend` mode the later frame over the earlier

@@ -18,9 +18,9 @@ import { stationTrackedOn } from './policy.js';
  * a second, which at model range would show as a jump).
  *
  * The moving parts (the joint driver, `createArticulation`) write node
- * matrices into this part's node poses (`_nodePoses`), as they would into a
- * model's nodes; the draw contract has no per-node posing yet, so the model
- * draws rigid until it has, and the poses are kept for it.
+ * matrices into this part's node poses, as they would into a model's nodes;
+ * those poses are the draw item's `nodes`, which the renderer applies to the
+ * model's named glTF nodes.
  *
  * @typedef {object} StationModelSpec
  * @property {string} key Short id ('iss', 'tiangong'): the STATION
@@ -147,12 +147,14 @@ export function stationModelOrientation(position, axes, localAxes) {
 /**
  * Node poses as a joint driver writes them: `getNode(name)` hands a node
  * whose `matrix` it sets (a column-major 4×4, copied on write, as a model's
- * node copies), and `poses` keeps every matrix written, by node name.
+ * node copies), and `poses` keeps every matrix written, by node name: the
+ * draw item's `nodes` (`ModelItem.nodes`), one object for the item's life.
  * @returns {{ready: boolean, getNode: (name: string) => {matrix: Float64Array},
- *   poses: Map<string, Float64Array>, clear: () => void}}
+ *   poses: Record<string, Float64Array>, clear: () => void}}
  */
 export function createNodePoses() {
-  const poses = new Map();
+  /** @type {Record<string, Float64Array>} */
+  const poses = {};
   const nodes = new Map();
   return {
     ready: true,
@@ -162,14 +164,10 @@ export function createNodePoses() {
       if (!node) {
         node = {
           get matrix() {
-            return poses.get(name);
+            return poses[name];
           },
           set matrix(value) {
-            let kept = poses.get(name);
-            if (!kept) {
-              kept = new Float64Array(16);
-              poses.set(name, kept);
-            }
+            const kept = (poses[name] ??= new Float64Array(16));
             for (let i = 0; i < 16; i++) kept[i] = value[i];
           },
         };
@@ -177,8 +175,9 @@ export function createNodePoses() {
       }
       return node;
     },
+    /** Every node back to its authored pose (its name leaves the map). */
     clear() {
-      poses.clear();
+      for (const name of Object.keys(poses)) delete poses[name];
     },
   };
 }
@@ -318,6 +317,8 @@ export function createStationModel(
       displayRange: nearRange,
       // So a click on the model tracks the station, as a click on its dot does.
       meta: { norad },
+      // The joint driver's poses, applied to the model's named nodes.
+      nodes: nodePoses.poses,
       show: false,
     };
     set.upsert([item]);
@@ -763,7 +764,7 @@ export function createStationModel(
     _telemetryStatus: () => telemetry?.status() ?? null,
     /** The joint driver, for the STATION section. */
     _articulation: articulation,
-    /** The node matrices the joint driver last wrote, by node name. */
+    /** The node matrices the joint driver last wrote, by node name (the item's `nodes`). */
     _nodePoses: nodePoses.poses,
   };
 }

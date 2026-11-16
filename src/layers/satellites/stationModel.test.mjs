@@ -248,7 +248,23 @@ test('posed, the model sits on the station with its flight axes as heading, pitc
   const track = column(ISS_MODEL_LOCAL_AXES.indexOf('x'));
   assert.ok(Math.abs(along(track)) < 1e-6, 'the along-track axis is level');
   assert.equal(f.updates.length, 1, 'the joints are driven');
-  assert.equal(f.updates[0][0].ready, true, 'into node poses');
+  const nodes = f.updates[0][0];
+  assert.equal(nodes.ready, true, 'into node poses');
+  // What the driver writes to a node is the item's `nodes`, by name, as a
+  // column-major matrix the renderer applies to the model's glTF node.
+  const turned = new Float64Array(16);
+  turned[0] = turned[5] = turned[10] = turned[15] = 1;
+  turned[14] = 2.5;
+  nodes.getNode('SOLAR_JOINT').matrix = turned;
+  f.tick();
+  assert.equal(item.nodes, f.model._nodePoses, 'one object for the item');
+  assert.deepEqual(Array.from(item.nodes.SOLAR_JOINT), Array.from(turned));
+  f.model._destroyStationModel();
+  assert.equal(
+    Object.keys(f.model._nodePoses).length,
+    0,
+    'destroyed, every node goes back to its authored pose',
+  );
 });
 
 test('a station without views on its model hides it while the Cockpit rides the station, its own entry or a docked one', async (t) => {

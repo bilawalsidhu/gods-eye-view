@@ -1912,8 +1912,9 @@ waits while it is shown. The credit links the owner and the stream's own
 page, and the section's note says the video plays from YouTube.
 The model is NASA/JSC IGOAL's current-configuration station, reduced to 3 MB
 with its joints kept as nodes (`public/models/README.md`), fetched only once
-the camera nears its range. `issArticulation.js` turns them every frame, by
-default from computation: the two alpha joints and eight beta joints face
+the camera nears its range, and drawn as an item of a `models` set of the
+renderer's draw port, its joints posed through the item's `nodes`.
+`issArticulation.js` turns them every frame, by default from computation: the two alpha joints and eight beta joints face
 the arrays to the Sun (feathered along the flight direction in the Earth's
 shadow, taken as a cylinder), the two radiator joints keep the radiators
 edge-on to it, the two Ku-band dishes aim at the highest TDRS nominal slots
