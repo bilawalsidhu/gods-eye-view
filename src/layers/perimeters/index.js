@@ -311,6 +311,16 @@ export function createFirePerimetersLayer({
       if (_fills) _fills.show = _lines.show = false;
       removeClickHandler();
       clearSelection();
+      // A turned-off layer holds nothing: hidden fills and fire lines kept every
+      // polygon (about 3,400 on a US-wide snapshot) after OFF. Drop
+      // them and the per-incident facts, and forget the snapshot so the next
+      // enable's immediate update rebuilds from a fresh fetch.
+      abortLinkVerification();
+      _fills?.clear();
+      _lines?.clear();
+      _rowById.clear();
+      _snapshotSignature = null;
+      _count = 0;
     },
 
     async update() {

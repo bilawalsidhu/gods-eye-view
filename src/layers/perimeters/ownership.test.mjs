@@ -243,6 +243,27 @@ test('clicking a perimeter publishes its incident card; empty space clears it', 
   assert.equal(h.overlay.entries.get('fire-perimeters')?.length ?? 0, 0);
 });
 
+test('disable frees the polygons; the next enable + update rebuilds them', async () => {
+  let fetches = 0;
+  const h = harness({
+    getSnapshot: async () => {
+      fetches += 1;
+      return [row];
+    },
+  });
+  await h.layer.update(h.viewer);
+  const count = () => h.fills().items.size + h.lines().items.size;
+  assert.ok(count() > 0, 'polygons drawn');
+  h.layer.disable(h.viewer);
+  assert.equal(count(), 0, 'nothing kept while off');
+  assert.equal(h.layer.getStats().count, 0);
+  h.layer.enable(h.viewer);
+  assert.equal(await h.layer.update(h.viewer), true);
+  assert.ok(count() > 0, 'rebuilt on enable');
+  assert.equal(fetches, 2, 'a fresh fetch, not the dropped snapshot');
+  h.layer.destroy(h.viewer);
+});
+
 test('disable removes the click handler, pick ownership, and any card', async () => {
   const h = harness(
     { getSnapshot: async () => [row] },
