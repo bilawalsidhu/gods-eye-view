@@ -155,6 +155,21 @@ test('restore applies a hash even when the address already shows it', (t) => {
   manager.destroy();
 });
 
+test('restore reports a hash that is not a share state as not restored', (t) => {
+  installTab(t, SHARE_A);
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
+  manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
+  const restored = [];
+  manager.watchNavigation((state) => restored.push(state));
+  assert.equal(manager.restore('not-a-share-state'), false);
+  assert.equal(restored.length, 0);
+  // The caller's hashchange fallback is not swallowed as already known.
+  assert.equal(manager._knownHash, null);
+  assert.equal(manager.restore(SHARE_A), true);
+  assert.equal(restored.length, 1);
+  manager.destroy();
+});
+
 test('holding writes first writes a view change still waiting for its debounce', (t) => {
   installTab(t, SHARE_A);
   const timers = installManualTimers(t);

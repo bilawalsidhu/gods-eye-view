@@ -361,7 +361,8 @@ export class ShareLinkManager {
    * shows: an owner that changed the view under it (Stories, after a GEV
    * scene) hands the person's view back this way. Navigation must be watched.
    * @param {string} hash Without the leading `#`.
-   * @returns {boolean} Whether a restore began.
+   * @returns {boolean} Whether a restore began: false when the hash is not a
+   *   share state, which a later hashchange may then try again.
    */
   restore(hash) {
     if (this._destroyed || !this._onNavigate || typeof hash !== 'string')
@@ -370,18 +371,20 @@ export class ShareLinkManager {
     url.hash = hash;
     history.replaceState(history.state, '', url.href);
     this._knownHash = null;
-    this._handleLocationChange(this._onNavigate);
-    return this._knownHash === hash;
+    if (this._handleLocationChange(this._onNavigate)) return true;
+    this._knownHash = null;
+    return false;
   }
 
+  /** @returns {boolean} Whether a restore began. */
   _handleLocationChange(onNavigate) {
-    if (this._destroyed) return;
+    if (this._destroyed) return false;
     const hash = window.location.hash.slice(1);
     // Back/Forward fires both popstate and hashchange for one entry.
-    if (hash === this._knownHash) return;
+    if (hash === this._knownHash) return false;
     this._knownHash = hash;
     const state = this._parseShareHash(hash);
-    if (!state) return;
+    if (!state) return false;
     this._beginIncomingRestore(state);
     onNavigate(state);
     try {
@@ -389,6 +392,7 @@ export class ShareLinkManager {
     } catch (error) {
       console.warn('[ShareLink] library restore failed:', error);
     }
+    return true;
   }
 
   /**
