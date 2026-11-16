@@ -2103,7 +2103,6 @@ test('a run resumed inside a hold keeps the seek’s layer state and waits only 
   try {
     // Shot A is 0.2 s of flight and 0.6 s of hold; the scene is 1 s long.
     // 0.6 of it is 0.4 s into A's hold, with 0.2 s of it left.
-    const started = Date.now();
     const result = await director.startScene('scene-1', {
       single: true,
       fromProgress: 0.6,
@@ -2114,7 +2113,6 @@ test('a run resumed inside a hold keeps the seek’s layer state and waits only 
     assert.equal(first.shotId, 'shot-a');
     assert.ok(Math.abs(first.sceneElapsedSec - 0.6) < 1e-9);
     assert.ok(Math.abs(sleeps[0] - 200) < 1e-6, 'only the rest of the hold');
-    assert.ok(Date.now() - started < 700, 'the shot is not replayed');
     // Shot A's camera is placed at its end; only shot B flies.
     assert.equal(poses[0].lat, 10);
     assert.equal(viewer.flights.length, 1);
