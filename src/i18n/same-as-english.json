@@ -113,6 +113,7 @@
     "Layout",
     "Live",
     "London",
+    "Look",
     "Los Angeles",
     "MIL",
     "MINI",
@@ -140,6 +141,7 @@
     "Oldies",
     "OpenStreetMap + optional Google Maps Places",
     "Operator",
+    "Overlay",
     "PAUSE",
     "PLAY",
     "POS: LIVE",
@@ -250,7 +252,8 @@
     "Regional",
     "OPT-IN",
     "{minutes} min",
-    "1 min/s"
+    "1 min/s",
+    "Status"
   ],
   "es": [
     "1 min/s",
@@ -292,6 +295,7 @@
     "FOV {value}°",
     "FT",
     "Folk",
+    "Funicular",
     "Funk",
     "GEO",
     "GOOGLE STREET VIEW",
@@ -383,6 +387,7 @@
     "mph",
     "nominal",
     "panel",
+    "panel|VISUAL",
     "view band|GLOBAL",
     "voice|ERROR",
     "{hours} h",
@@ -412,7 +417,8 @@
     "MMSI: {id}",
     "NORAD: {id}",
     "Regional",
-    "{datasets} · {tiles} · {packs}"
+    "{datasets} · {tiles} · {packs}",
+    "VIRTUAL"
   ],
   "fr": [
     "1 min/s",
@@ -501,6 +507,7 @@
     "MINI",
     "MISSION",
     "MM",
+    "Monorail",
     "MSG/S",
     "Metal",
     "Minimal",
@@ -571,6 +578,7 @@
     "TAGS · {tags}",
     "TEMP",
     "TLE",
+    "Trolleybus",
     "TYPE",
     "Tallinn",
     "Techno",
@@ -729,6 +737,7 @@
     "ON",
     "ON/OFF",
     "Oldies",
+    "Overlay",
     "PAYLOAD",
     "PLAY",
     "POS: LIVE",
@@ -950,6 +959,7 @@
     "FOV {value}°",
     "FT",
     "Folk",
+    "Funicular",
     "Funk",
     "GEO",
     "GOOGLE STREET VIEW",
@@ -1043,6 +1053,7 @@
     "mini",
     "mph",
     "nominal",
+    "panel|VISUAL",
     "via {source}",
     "view band|GLOBAL",
     "{hours} h",
@@ -1068,7 +1079,8 @@
     "ICAO: {id}",
     "MMSI: {id}",
     "NORAD: {id}",
-    "Regional"
+    "Regional",
+    "VIRTUAL"
   ],
   "ru": [
     "1900–1945",
@@ -1265,7 +1277,8 @@
     "Period",
     "ICAO: {id}",
     "NORAD: {id}",
-    "MMSI: {id}"
+    "MMSI: {id}",
+    "Status"
   ],
   "uk": [
     "1900–1945",

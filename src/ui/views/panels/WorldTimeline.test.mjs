@@ -19,6 +19,8 @@ function mount(t) {
     // The store outlives the view; dispose it with its clock subscription.
     useWorldTimeStore(pinia).$dispose();
     worldClock.goLive();
+    // The clock keeps its rate; the next test starts at real time.
+    worldClock.setRate(1);
   });
   return () => document.getElementById('world-timeline');
 }
@@ -79,16 +81,16 @@ test('the timeline hides while no layer with time to show is on', async (t) => {
   const bar = mount(t);
   const at = Date.UTC(2026, 9, 30, 6, 15, 42);
   await nextTick();
-  assert.equal(bar(), null, 'live, nothing to play');
+  assert.equal(bar() === null, true, 'live, nothing to play');
   worldClock.seek(at);
   await nextTick();
-  assert.equal(bar(), null, 'away from live, but nothing to play');
+  assert.equal(bar() === null, true, 'away from live, but nothing to play');
   const remove = supportingLayer(t, at);
   await nextTick();
   assert.ok(bar());
   remove();
   await nextTick();
-  assert.equal(bar(), null, 'the layer went off');
+  assert.equal(bar() === null, true, 'the layer went off');
 });
 
 test('the track runs over the time the layers show, to now, and scrubs', async (t) => {
@@ -147,6 +149,41 @@ test('the track runs over the time the layers show, to now, and scrubs', async (
   await nextTick();
   assert.equal(worldClock.isLive(), false, 'a scrub past now stays there');
   assert.equal(worldClock.now(), ahead);
+});
+
+test('on a track that runs over years, only the last minutes are near now', async (t) => {
+  const bar = mount(t);
+  const now = Date.now();
+  // A layer whose source covers fourteen years, up to now.
+  const start = now - 14 * 365 * 86_400_000;
+  const release = worldClock.hold('test-years');
+  const unregister = worldClock.register({
+    id: 'test-years',
+    coverage: () => ({ start, end: now }),
+  });
+  t.after(() => {
+    unregister();
+    release();
+  });
+  await nextTick();
+  const input = bar().querySelector('input[type=range]');
+
+  // A day back is a day back, though it is well within a share of the track.
+  input.value = String(now - 86_400_000);
+  input.dispatchEvent(new Event('input'));
+  await nextTick();
+  assert.equal(worldClock.isLive(), false, 'a day back stays off live');
+  assert.equal(worldClock.now(), now - 86_400_000);
+
+  input.value = String(now - 10 * 60_000);
+  input.dispatchEvent(new Event('input'));
+  await nextTick();
+  assert.equal(worldClock.isLive(), false, 'ten minutes back stays off live');
+
+  input.value = String(Date.now() - 60_000);
+  input.dispatchEvent(new Event('input'));
+  await nextTick();
+  assert.equal(worldClock.isLive(), true, 'a minute back goes live');
 });
 
 test('play runs in real time, from the start of the track when at live', async (t) => {
@@ -430,7 +467,7 @@ test('play held for a layer to load shows a spinner once the hold lasts', async 
   // A clock tick (a quarter second) tells of the hold; the spinner waits on.
   await new Promise((resolve) => setTimeout(resolve, 250));
   await nextTick();
-  assert.equal(bubble().querySelector('.world-timeline-spinner'), null, 'not for a quick frame');
+  assert.equal(bubble().querySelector('.world-timeline-spinner') === null, true, 'not for a quick frame');
   // The clock tells of the hold on its next tick, and the bar shows it after.
   const until = async (shown) => {
     for (let waited = 0; waited < 3_000; waited += 50) {
@@ -545,4 +582,195 @@ test('a pinch measures from where the fingers are, and a lifted finger ends it',
   await nextTick();
   assert.ok(Math.abs(length() - zoomedTo) < 1_000);
   on(input, 'pointercancel', 100, 1);
+});
+
+test('a tick shows its label on hover, and a tap by it goes to its mark', async (t) => {
+  const bar = mount(t);
+  const now = Date.now();
+  const start = now - 10 * 86_400_000;
+  // Ticks a fifth and seven tenths along a 1000 px track.
+  const launch = start + (now - start) * 0.2;
+  const quake = start + (now - start) * 0.7;
+  const release = worldClock.hold('test-launches');
+  const unregister = worldClock.register({
+    id: 'test-launches',
+    coverage: () => ({
+      start,
+      end: now,
+      marks: [
+        start,
+        { time: launch, label: 'GAUNTLET PAYLOAD', id: 'l1', kind: 'launch' },
+        { time: quake, label: 'M6.4 · Fiji', kind: 'earthquake' },
+      ],
+    }),
+  });
+  t.after(() => {
+    unregister();
+    release();
+  });
+  await nextTick();
+  const track = bar().querySelector('.world-timeline-track');
+  const input = bar().querySelector('input[type=range]');
+  Object.defineProperty(track, 'clientWidth', { value: 1_000 });
+  track.getBoundingClientRect = () => ({ left: 0, width: 1_000, top: 0, height: 24 });
+  const press = (type, clientX, pointerId = 1) =>
+    track.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX, pointerId }));
+  const tip = () => bar().querySelector('.world-timeline-mark-label');
+  assert.equal(bar().querySelectorAll('.world-timeline-tick').length, 3, 'ticks stay ticks');
+  assert.equal(tip()?.textContent ?? null, null);
+
+  // Hovering within 6 px of a tick shows its label, in place of the track's hint.
+  press('pointermove', 205);
+  await nextTick();
+  assert.equal(tip()?.textContent, 'GAUNTLET PAYLOAD');
+  assert.equal(track.hasAttribute('title'), false);
+  press('pointermove', 698);
+  await nextTick();
+  assert.equal(tip()?.textContent, 'M6.4 · Fiji');
+  // Further off, or on a tick with no label, nothing shows.
+  press('pointermove', 690);
+  await nextTick();
+  assert.equal(tip()?.textContent ?? null, null);
+  assert.equal(track.hasAttribute('title'), true);
+  press('pointermove', 2);
+  await nextTick();
+  assert.equal(tip()?.textContent ?? null, null, 'an unlabelled mark has no label');
+  press('pointermove', 205);
+  track.dispatchEvent(new PointerEvent('pointerleave', { clientX: 1_100, pointerId: 1 }));
+  await nextTick();
+  assert.equal(tip()?.textContent ?? null, null, 'leaving the track hides it');
+
+  // A tap by a tick goes to its mark exactly; elsewhere, to the time there.
+  press('pointerdown', 704);
+  press('pointerup', 704);
+  await nextTick();
+  assert.equal(worldClock.now(), quake);
+  assert.match(input.getAttribute('aria-valuetext'), / · M6\.4 · Fiji$/);
+  press('pointerdown', 500);
+  press('pointerup', 500);
+  await nextTick();
+  const middle = start + (now - start) / 2;
+  assert.ok(Math.abs(worldClock.now() - middle) < 60_000, 'went to the middle');
+  assert.notEqual(worldClock.now(), quake);
+  assert.match(input.getAttribute('aria-valuetext'), /UTC$/, 'off a mark, the time alone');
+  // A drag from a tick still scrubs.
+  press('pointerdown', 200);
+  press('pointermove', 300);
+  press('pointerup', 300);
+  await nextTick();
+  assert.ok(Math.abs(worldClock.now() - (start + (now - start) * 0.3)) < 60_000);
+
+  // The arrows go to the marks and tell their labels; focused, the label shows.
+  input.dispatchEvent(new Event('focus'));
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }));
+  await nextTick();
+  assert.equal(worldClock.now(), launch);
+  assert.match(input.getAttribute('aria-valuetext'), / · GAUNTLET PAYLOAD$/);
+  assert.equal(tip()?.textContent, 'GAUNTLET PAYLOAD');
+  input.dispatchEvent(new Event('blur'));
+  await nextTick();
+  assert.equal(tip()?.textContent ?? null, null);
+});
+
+test('the pointer shows the nearer of two ticks within 6 px, and a zoom or a pan clears it', async (t) => {
+  const bar = mount(t);
+  const now = Date.now();
+  const start = now - 10 * 86_400_000;
+  // Two ticks 8 px apart on a 1000 px track, at 200 and 208 px.
+  const first = start + (now - start) * 0.2;
+  const second = start + (now - start) * 0.208;
+  const release = worldClock.hold('test-launches');
+  const unregister = worldClock.register({
+    id: 'test-launches',
+    coverage: () => ({
+      start,
+      end: now,
+      marks: [
+        { time: first, label: 'FIRST', kind: 'launch' },
+        { time: second, label: 'SECOND', kind: 'launch' },
+      ],
+    }),
+  });
+  t.after(() => {
+    unregister();
+    release();
+  });
+  await nextTick();
+  const track = bar().querySelector('.world-timeline-track');
+  Object.defineProperty(track, 'clientWidth', { value: 1_000 });
+  track.getBoundingClientRect = () => ({ left: 0, width: 1_000, top: 0, height: 24 });
+  const pointer = (type, clientX) =>
+    track.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX, pointerId: 1 }));
+  const tip = () => bar().querySelector('.world-timeline-mark-label');
+  // Where the first tick sits now, in px along the track.
+  const firstAt = () =>
+    Number.parseFloat(bar().querySelector('.world-timeline-tick').style.left) * 10;
+  // The handle between them, so a zoom keeps both in view.
+  worldClock.seek((first + second) / 2);
+  await nextTick();
+  pointer('pointermove', 203);
+  await nextTick();
+  assert.equal(tip()?.textContent, 'FIRST');
+  pointer('pointermove', 205);
+  await nextTick();
+  assert.equal(tip()?.textContent, 'SECOND', 'the nearer of the two');
+
+  // A wheel zoom moves the ticks from under the pointer: the label goes.
+  track.dispatchEvent(new WheelEvent('wheel', { deltaY: -200, cancelable: true }));
+  await nextTick();
+  assert.equal(track.classList.contains('is-zoomed'), true);
+  assert.equal(tip()?.textContent ?? null, null, 'a zoom clears the label');
+  // So does a pan, by wheel or by drag.
+  pointer('pointermove', firstAt());
+  await nextTick();
+  assert.equal(tip()?.textContent, 'FIRST');
+  track.dispatchEvent(
+    new WheelEvent('wheel', { deltaY: 40, shiftKey: true, cancelable: true }),
+  );
+  await nextTick();
+  assert.equal(tip()?.textContent ?? null, null, 'a pan clears the label');
+
+  // A tap between them goes to the nearer mark.
+  track.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+  await nextTick();
+  assert.equal(track.classList.contains('is-zoomed'), false);
+  pointer('pointerdown', 205);
+  pointer('pointerup', 205);
+  await nextTick();
+  assert.equal(worldClock.now(), second, 'a tap goes to the nearer mark');
+});
+
+test('the speed shown follows the world clock, and Play runs at its rate', async (t) => {
+  const bar = mount(t);
+  const now = Date.now();
+  const release = worldClock.hold('test-launches');
+  const unregister = worldClock.register({
+    id: 'test-launches',
+    coverage: () => ({ start: now - 10 * 86_400_000, end: now - 86_400_000 }),
+  });
+  t.after(() => {
+    unregister();
+    release();
+  });
+  await nextTick();
+  const select = () => bar().querySelector('select.world-timeline-speed');
+  assert.equal(select().value, 'real');
+  // A host sets the rate: the selector shows it.
+  worldClock.setRate(86_400);
+  await nextTick();
+  assert.equal(select().value, 'day');
+  // A rate not offered shows as the nearest offered speed, and Play keeps it.
+  worldClock.setRate(5_000);
+  await nextTick();
+  assert.equal(select().value, 'hour');
+  bar().querySelector('.world-timeline-play').click();
+  assert.equal(worldClock.isPlaying(), true);
+  assert.equal(worldClock.getRate(), 5_000, 'Play runs at the clock\'s own rate');
+  worldClock.pause();
+  // Chosen on the selector while paused, the clock takes it at once.
+  select().value = 'week';
+  select().dispatchEvent(new Event('change'));
+  await nextTick();
+  assert.equal(worldClock.getRate(), 604_800);
+  assert.equal(select().value, 'week');
 });

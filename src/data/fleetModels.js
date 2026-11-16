@@ -11,6 +11,9 @@
  * vehicle's road or rail top), and is drawn life size: a type's published
  * length over the model's built length is its scale.
  *
+ * An aid to navigation (a buoy, beacon, mark, RACON or light) is drawn as
+ * the set's buoy of its IALA mark, by the mark its type names.
+ *
  * The resolvers are plain functions over the parsed JSON; `loadFleetModelSet`
  * fetches the JSON and every GLB once, up front, so no model is fetched
  * mid-session.
@@ -18,6 +21,7 @@
 
 import { classifyAircraft } from './aircraftClass.js';
 import { FLEET_TRAIL_ANCHORS } from './fleetTrailAnchors.js';
+import { isAidToNavigation } from './vesselTypes.js';
 
 /** Where the model set is served, relative to the application base. */
 export const FLEET_MODEL_BASE = '/models/fleet/';
@@ -85,21 +89,112 @@ const TEXT_SHIP_TYPES = [
 ];
 
 /**
- * The model for an aircraft of ICAO type `type` (A320, B738, R44) and ADS-B
- * emitter category `category`: the type's, else the category's, else
- * `default_aircraft`.
+ * The buoy an aid to navigation is drawn as, by the mark its type names
+ * ("Cardinal Mark N", "Beacon, Port hand", "Safe Water"): the first pattern
+ * that matches. Beacons, lights, RACONs and reference points with no mark of
+ * their own are the special mark.
+ */
+const AID_MODELS = [
+  [/cardinal\b.*\bn(orth)?$/i, 'buoy_cardinal_north'],
+  [/cardinal\b.*\be(ast)?$/i, 'buoy_cardinal_east'],
+  [/cardinal\b.*\bs(outh)?$/i, 'buoy_cardinal_south'],
+  [/cardinal\b.*\bw(est)?$/i, 'buoy_cardinal_west'],
+  [/isolated danger/i, 'buoy_isolated_danger'],
+  [/safe water/i, 'buoy_safe_water'],
+  [/port hand/i, 'buoy_lateral_port'],
+  [/starboard hand/i, 'buoy_lateral_starboard'],
+  [/special mark|light vessel|lanby/i, 'buoy_special'],
+  [
+    /^(beacon|light\b|leading light|racon|reference point|navigation aid)/i,
+    'buoy_special',
+  ],
+];
+
+/** The buoy an aid to navigation whose type names no mark is drawn as. */
+export const DEFAULT_AID_MODEL = 'can_red';
+
+/**
+ * The buoy model of an aid to navigation's type, else undefined when the
+ * type names no mark.
+ * @param {string|null} [type]
+ * @returns {string|undefined}
+ */
+export function aidToNavigationModel(type) {
+  const text = String(type ?? '').trim();
+  for (const [pattern, model] of AID_MODELS)
+    if (pattern.test(text)) return model;
+  return undefined;
+}
+
+/**
+ * The model for an aircraft of ICAO type `type` (A320, B738, R44), ADS-B
+ * emitter category `category` and callsign `callsign`: the first of the
+ * type's callsign rules (`aircraft_callsign`) the callsign matches, else the
+ * type's, else the category's, else `default_aircraft`. An airport vehicle
+ * (type ZVEH) is a fire truck, tug or van by its callsign, else a car.
  * @param {object} types Parsed `types.json`.
  * @param {string} [type]
  * @param {string} [category]
+ * @param {string} [callsign]
  * @returns {{model: string, length: number|null}}
  */
-export function resolveAircraft(types, type, category) {
+export function resolveAircraft(types, type, category, callsign) {
   const t = type?.trim().toUpperCase();
+  const index = aircraftCallsignRule(types, t, callsign);
+  if (index >= 0) {
+    const rule = types.aircraft_callsign[t][index];
+    return { model: rule.model, length: rule.length };
+  }
   const [model, length] =
     (t && (types.aircraft[t] ?? types.helicopters[t])) ||
     (category && types.categories[category]) ||
     types.default_aircraft;
   return { model, length };
+}
+
+/**
+ * A callsign as the rules read it: upper case, spaces removed.
+ * @param {string} callsign
+ * @returns {string}
+ */
+function callsignKey(callsign) {
+  return String(callsign).toUpperCase().replace(/\s+/g, '');
+}
+
+/**
+ * Which of type `type`'s callsign rules (`types.json`'s
+ * `aircraft_callsign[type]`, each `{prefixes, model, length}`, first match
+ * wins) `callsign` matches: its index, -1 when none does or the type has
+ * none. A callsign matches a rule when, upper-cased with spaces removed, it
+ * starts with one of the rule's prefixes.
+ * @param {object} types Parsed `types.json`.
+ * @param {string|null} [type] ICAO type.
+ * @param {string|null} [callsign]
+ * @returns {number}
+ */
+export function aircraftCallsignRule(types, type, callsign) {
+  const t = String(type ?? '')
+    .trim()
+    .toUpperCase();
+  const rules = t ? types.aircraft_callsign?.[t] : undefined;
+  if (!rules || !callsign) return -1;
+  const c = callsignKey(callsign);
+  return rules.findIndex((rule) =>
+    rule.prefixes.some((prefix) => c.startsWith(callsignKey(prefix))),
+  );
+}
+
+/**
+ * Whether an aircraft of ICAO type `type` picks its model by callsign.
+ * @param {object} types Parsed `types.json`.
+ * @param {string|null} [type]
+ * @returns {boolean}
+ */
+export function aircraftModelByCallsign(types, type) {
+  const t = String(type ?? '')
+    .trim()
+    .toUpperCase();
+  return Boolean(t && types.aircraft_callsign?.[t]);
 }
 
 /**
@@ -306,24 +401,32 @@ function specOf(set, resolved, fallback, options) {
 }
 
 /**
- * The model an aircraft is drawn with. The type's entry first; then, for a
+ * The model an aircraft is drawn with. The type's callsign rules (an airport
+ * vehicle by its callsign), then the type's entry; then, for a
  * type the map lacks, the model of its class (a fast jet, a helicopter, a
  * glider) when the type names one; then the emitter category's; then
  * `default_aircraft`.
  * @param {{catalog: object, types: object}} set
  * @param {{typeCode?: string|null, type?: string|null,
- *   category?: string|number|null}} aircraft
+ *   category?: string|number|null, callsign?: string|null}} aircraft
  * @returns {object} {@link fleetModelSpec}
  */
-export function aircraftModelSpec(set, { typeCode, type, category } = {}) {
+export function aircraftModelSpec(
+  set,
+  { typeCode, type, category, callsign } = {},
+) {
   const { types, catalog } = set;
   const code = String(typeCode ?? type ?? '')
     .trim()
     .toUpperCase();
   const emitter = emitterCategory(category);
-  let resolved = resolveAircraft(types, code, emitter);
+  const sign = callsign ? String(callsign) : undefined;
+  let resolved = resolveAircraft(types, code, emitter, sign);
+  // A callsign rule names the model outright; a type's class only stands in
+  // for a type the map lacks.
+  const ruled = aircraftCallsignRule(types, code, sign) >= 0;
   const typed = code && (types.aircraft[code] || types.helicopters[code]);
-  if (!typed && code) {
+  if (!ruled && !typed && code) {
     const model = CLASS_MODELS[classifyAircraft({ typeCode: code })];
     if (model && catalog[model])
       resolved = { model, length: catalog[model].length };
@@ -336,13 +439,33 @@ export function aircraftModelSpec(set, { typeCode, type, category } = {}) {
 
 /**
  * The model a vessel is drawn with, from its AIS ship type (a code or a text
- * family), reported length and beam (metres) and name.
+ * family), reported length and beam (metres) and name. An aid to navigation
+ * ({@link isAidToNavigation}: its type names a buoy, beacon, mark, RACON or
+ * light, or its MMSI is an aid's) is the buoy of its mark
+ * ({@link aidToNavigationModel}), else {@link DEFAULT_AID_MODEL}, drawn as
+ * built and flagged `fixed`: it has no heading to turn to. A virtual aid
+ * (`virtual`) is broadcast where nothing physical stands, so it has no model.
  * @param {{catalog: object, types: object}} set
- * @param {{type?: string|number|null, length?: number|null,
- *   beam?: number|null, name?: string|null}} vessel
- * @returns {object} {@link fleetModelSpec}
+ * @param {{type?: string|number|null, mmsi?: string|number|null,
+ *   virtual?: boolean, length?: number|null, beam?: number|null,
+ *   name?: string|null}} vessel
+ * @returns {object|null} {@link fleetModelSpec}, with `fixed` for an aid;
+ *   null for a virtual aid
  */
-export function vesselModelSpec(set, { type, length, beam, name } = {}) {
+export function vesselModelSpec(
+  set,
+  { type, mmsi, virtual, length, beam, name } = {},
+) {
+  if (virtual === true) return null;
+  if (isAidToNavigation({ type, mmsi })) {
+    const model = aidToNavigationModel(type);
+    const known = model && set.catalog[model] ? model : DEFAULT_AID_MODEL;
+    if (set.catalog[known])
+      return Object.freeze({
+        ...fleetModelSpec(set, known, null),
+        fixed: true,
+      });
+  }
   // A beam counts only beside a reported length: a vessel drawn at its type's
   // typical length keeps the model's proportions.
   const reported = hullLength(length ?? undefined);
@@ -387,6 +510,9 @@ export function namedFleetModels(types) {
     ...pairs(types.aircraft),
     ...pairs(types.helicopters),
     ...pairs(types.categories),
+    ...Object.values(types.aircraft_callsign ?? {}).flatMap((rules) =>
+      rules.map((rule) => rule.model),
+    ),
     ...types.vessels.flatMap((group) => group.rules.map((rule) => rule.model)),
     types.default_aircraft[0],
     types.default_vessel,
@@ -396,6 +522,8 @@ export function namedFleetModels(types) {
     transit.default[0],
     ...Object.keys(transit.elevation),
     ...Object.values(CLASS_MODELS),
+    ...AID_MODELS.map(([, model]) => model),
+    DEFAULT_AID_MODEL,
   ]);
 }
 

@@ -33,6 +33,7 @@
  */
 import * as Cesium from 'cesium';
 import { registerPickOwner } from './pickRegistry.js';
+import { createFrameWait } from '../time/frameWait.js';
 
 // Round 6: trail ENTITIES are pickable (the old Primitive had
 // allowPicking:false). A trail hugs its aircraft, so an unclaimed pick would
@@ -58,9 +59,9 @@ const MIN_SEGMENT_DISTANCE_SQ = 0.01;
 const NO_POSITIONS = Object.freeze([]);
 /** @constant {number} Points per chunk; adjacent chunks share one point. */
 export const CHUNK_POINTS = 128;
-/** @constant {number} Visible frames a frozen chunk's stand-in waits for its
- *  static geometry before it is dropped anyway. */
-const STAND_IN_MAX_FRAMES = 600;
+/** @constant {number} Drawn time (ms) a frozen chunk's stand-in waits for its
+ *  static geometry while the trail is shown before it is dropped anyway. */
+const STAND_IN_MAX_MS = 10_000;
 
 /**
  * Create an always-visible polyline trail bound to a viewer.
@@ -80,7 +81,7 @@ export function createTrail(viewer, { color, width = 2.5 }) {
   const depthFailMaterial = baseColor.withAlpha(TRAIL_OCCLUDED_ALPHA);
   let destroyed = false;
   let visible = true;
-  /** @type {{positions: Cesium.Cartesian3[], entity: Cesium.Entity, standIn: boolean, frames: number}[]} */
+  /** @type {{positions: Cesium.Cartesian3[], entity: Cesium.Entity, standIn: boolean, wait: {tick: () => boolean, pause: () => void}}[]} */
   let frozen = [];
   /** Newest chunk of the newest segment: the only part that changes. */
   let tail = NO_POSITIONS;
@@ -152,9 +153,11 @@ export function createTrail(viewer, { color, width = 2.5 }) {
   function staticReady(chunk) {
     const display = viewer.dataSourceDisplay;
     if (typeof display?.getBoundingSphere !== 'function') return true;
-    if (!visible) return false;
-    chunk.frames += 1;
-    if (chunk.frames > STAND_IN_MAX_FRAMES) return true;
+    if (!visible) {
+      chunk.wait.pause();
+      return false;
+    }
+    if (chunk.wait.tick()) return true;
     try {
       return (
         display.getBoundingSphere(chunk.entity, false, scratchSphere) ===
@@ -262,7 +265,7 @@ export function createTrail(viewer, { color, width = 2.5 }) {
           positions,
           entity: addEntity(positions),
           standIn: true,
-          frames: 0,
+          wait: createFrameWait(STAND_IN_MAX_MS),
         });
         i = end;
       }

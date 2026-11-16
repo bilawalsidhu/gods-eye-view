@@ -217,6 +217,25 @@ test('a jump forgets how contacts moved; clearing drops every contact', () => {
   assert.ok(calls.includes('model:abc123'));
 });
 
+test('leaving the live edge forgets every contact a host placement was told of', () => {
+  const forgotten = [];
+  const flightState = {
+    records: records(),
+    _positionHistory: new Map([
+      ['abc123', []],
+      ['def456', []],
+    ]),
+    _displayCourse: new Map(),
+    _groundSnap: { clear() {} },
+    _displayFloorState: new Map(),
+  };
+  const parts = { tracking: { _clearTrail() {} } };
+  const services = { placement: { forget: (id) => forgotten.push(id) } };
+  createClockFollow({ flightState, services, parts }).resetMotion();
+  assert.deepEqual(forgotten, ['abc123', 'def456']);
+  assert.equal(flightState._positionHistory.size, 0);
+});
+
 test('a snapshot at a time the source drops for a newer one sets no error', async () => {
   const probe = ingestion({
     async getSnapshot() {

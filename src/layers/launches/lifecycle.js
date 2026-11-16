@@ -149,6 +149,9 @@ function restoreCameraView(viewer, view, landedView) {
   camera.setView(view);
 }
 
+/** The longest name a timeline mark carries, as in the mission index. */
+const MARK_LABEL_LENGTH = 27;
+
 export function createLifecycle({
   state: layerState,
   services,
@@ -158,18 +161,30 @@ export function createLifecycle({
   const { holdContinuousRender, releaseContinuousRender } = services.render;
   let hover = null;
   // While on, the launches loaded span the time from the first to the last,
-  // each one a mark. Registered once; off, the layer has no time to show, and
-  // each step tells the clock once it has settled.
+  // each one a mark labelled with its mission's name (the launch's where it
+  // has none), cut short and in capitals as the mission index shows names.
+  // Registered once; off, the layer has no time to show, and each step tells
+  // the clock once it has settled.
   worldClock.register({
     id: 'rocket-launches',
     coverage: () => {
       if (!layerState._enabled) return null;
       const marks = layerState._launches
-        .map((launch) => Date.parse(launch.launchTime))
-        .filter(Number.isFinite)
-        .sort((a, b) => a - b);
+        .map((launch) => ({
+          time: Date.parse(launch.launchTime),
+          label: parts.overlays
+            .shortMissionLabel(
+              launch.missionName || launch.name,
+              MARK_LABEL_LENGTH,
+            )
+            .toUpperCase(),
+          ...(launch.id != null ? { id: String(launch.id) } : {}),
+          kind: 'launch',
+        }))
+        .filter(({ time }) => Number.isFinite(time))
+        .sort((a, b) => a.time - b.time);
       if (!marks.length) return null;
-      return { start: marks[0], end: marks.at(-1), marks };
+      return { start: marks[0].time, end: marks.at(-1).time, marks };
     },
   });
 

@@ -6,7 +6,7 @@
   "type": "module",
   "license": "MIT",
   "author": "Bilawal Sidhu",
-  "homepage": "https://github.com/bilawalsidhu/gods-eye-view#readme",
+  "homepage": "https://godseyeview.ai",
   "repository": {
     "type": "git",
     "url": "https://github.com/bilawalsidhu/gods-eye-view.git"
@@ -69,6 +69,7 @@
     "cesium": "^1.124.0",
     "egm96-universal": "^1.1.1",
     "fzstd": "0.1.1",
+    "h3-js": "^4.4.0",
     "hls.js": "^1.7.3",
     "hyparquet": "1.31.2",
     "mapillary-js": "^4.1.2",
@@ -298,6 +299,7 @@
     },
     "./sources/rail-service": "./src/sources/railService.js",
     "./layers/rail/source": "./src/layers/rail/source.js",
+    "./layers/rail/paths": "./src/data/railPaths.js",
     "./sources/map-features": "./src/sources/overpassFeatures.js",
     "./server/providers/mapillary": {
       "node": "./server/providers/mapillary.js"

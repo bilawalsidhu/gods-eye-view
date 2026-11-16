@@ -700,7 +700,6 @@ export function createLocalAdsbLayer({
       if (viewer.scene?.primitives) {
         models = createLocalAdsbModels({
           viewer,
-          color,
           resolveAsset,
           groundSnap: services.groundSnap?.createGroundSnap?.() || null,
           ...(loadModel ? { loadModel } : {}),

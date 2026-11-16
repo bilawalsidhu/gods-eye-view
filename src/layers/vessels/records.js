@@ -1,4 +1,8 @@
 import {
+  mergeTimelineRuns,
+  readTimelineFixes,
+} from '../../time/timelineFixes.js';
+import {
   PARTIAL_RETENTION_MS,
   SELECTED_PIN_REFRESHES,
 } from './recordPolicy.js';
@@ -31,8 +35,13 @@ export function normalizeVessel(row) {
     speed: finiteNumber(row.speed),
     course: finiteNumber(row.course),
     heading: finiteNumber(row.heading),
+    // A virtual aid to navigation: a mark with nothing physical there.
+    virtual: row.virtual === true,
     lastPositionUtc: String(row.last_position_UTC || ''),
     lastPositionEpoch: finiteNumber(row.last_position_epoch),
+    // Its own track around the time, from a snapshot at a time (see
+    // src/time/timelineFixes.js); null when the row carries none.
+    fixes: readTimelineFixes(row.fixes),
     missedRefreshes: 0,
   };
 }
@@ -48,6 +57,9 @@ function stampFix(record, receivedAtMs, feedLatestEpoch) {
   record.fixReceivedAtMs = receivedAtMs;
   record.fixFeedEpoch = feedLatestEpoch;
 }
+
+/** A fix's time, as the fixes are merged (one function for every vessel). */
+const fixTime = (fix) => fix.atMs;
 
 function positiveNumber(value) {
   const number = finiteNumber(value);
@@ -144,8 +156,22 @@ export class VesselRecords {
           record.fixReceivedAtMs = next.fixReceivedAtMs;
           record.fixFeedEpoch = next.fixFeedEpoch;
         }
-        if (replace) record.motion = null;
-        else if (follow) record.motion = motionBetween(record, next);
+        if (replace) {
+          record.motion = null;
+          record.fixes = next.fixes;
+        } else if (follow) {
+          record.motion = motionBetween(record, next);
+          // Without fixes now, it is placed by its record, not by fixes
+          // that end before it.
+          record.fixes = next.fixes
+            ? mergeTimelineRuns(
+                record.fixes ?? [],
+                next.fixes,
+                fixTime,
+                (next.lastPositionEpoch ?? 0) * 1000,
+              )
+            : null;
+        } else record.fixes = null;
         record.reference = next.reference;
         record.mmsi = next.mmsi;
         record.receivedAtMs = next.receivedAtMs;
@@ -160,6 +186,7 @@ export class VesselRecords {
         record.speed = next.speed;
         record.course = next.course;
         record.heading = next.heading;
+        record.virtual = next.virtual;
         record.lastPositionUtc = next.lastPositionUtc;
         record.lastPositionEpoch = next.lastPositionEpoch;
         record.missedRefreshes = 0;

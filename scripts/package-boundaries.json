@@ -22,6 +22,9 @@
       "src/ui/vueRuntime.js",
       "src/ui/views/index.js",
       "src/ui/views/CockpitView.vue",
+      "src/ui/views/panels/CockpitProgress.vue",
+      "src/cockpitProgress.js",
+      "src/cockpitSubjectProviders.js",
       "src/ui/views/CommandDockView.vue",
       "src/ui/views/ContextView.vue",
       "src/ui/views/panels/RadioPanel.vue",
@@ -99,6 +102,7 @@
       "src/ui/stores/streetLevel.js",
       "src/ui/rail/RailChips.vue",
       "src/ui/views/panels/DisplayPanel.vue",
+      "src/ui/views/panels/VisualPresets.vue",
       "src/ui/views/panels/GeoImport.vue",
       "src/ui/views/panels/DrawControls.vue",
       "src/ui/views/panels/DrawMarkList.vue",
@@ -109,6 +113,8 @@
       "src/ui/views/panels/DataLibraryCard.vue",
       "src/ui/views/panels/DataLibraryDialog.vue",
       "src/ui/views/panels/DataLibraryBrowse.vue",
+      "src/ui/views/panels/LayerFinder.vue",
+      "src/ui/views/panels/LayerSectionIndex.vue",
       "src/ui/libraryBrowser.js",
       "src/ui/localSdrPresentation.js",
       "src/ui/unitLabels.js",
@@ -151,6 +157,8 @@
       "src/ui/kit/UiSegmented.vue",
       "src/ui/rail/RailPanel.vue",
       "src/ui/kit/UiPanel.vue",
+      "src/ui/kit/UiPanelEdge.vue",
+      "src/ui/panelEdge.js",
       "src/ui/kit/UiPanelToggle.vue",
       "src/ui/stores/panelChrome.js",
       "src/ui/rail/PanelCollapseButton.vue",
@@ -248,6 +256,7 @@
       "src/data/adsbLolFallback.js",
       "src/data/aisStreamAdapter.js",
       "src/data/aisWatchdog.js",
+      "src/data/vesselTypes.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
       "server/providers/acartia.js",
@@ -661,6 +670,8 @@
       "src/search/alpsGeocoder.js",
       "src/search/coordinateGeocoder.js",
       "src/search/coordinateParser.js",
+      "src/search/gridReference.js",
+      "src/search/plusCode.js",
       "src/search/presetGeocoder.js",
       "src/search/nominatim.js",
       "src/nominatimGeocode.js",
@@ -795,7 +806,6 @@
       "src/ui/layerPanel/RowSwitch.vue",
       "src/ui/layerPanel/RowRange.vue",
       "src/ui/layerPanel/RowSlider.vue",
-      "src/ui/railTimeline.js",
       "src/ui/clearLayersControl.js",
       "src/loadingFeedback.js",
       "src/data/installationFeedback.js",
@@ -828,7 +838,6 @@
       "src/ui/rail/RailCard.vue",
       "src/ui/rail/RailCards.vue",
       "src/ui/rail/utcClock.js",
-      "src/ui/rail/RailTimeline.vue",
       "src/ui/rail/rangeValue.js",
       "src/ui/weather/WeatherReadout.vue",
       "src/ui/newsPanel.js",
@@ -1010,6 +1019,8 @@
       "src/ui/cockpitInput.js",
       "src/data/inputOwnership.js",
       "src/ui/cockpitInstruments.js",
+      "src/cockpitSubjectProviders.js",
+      "src/cockpitProgress.js",
       "src/ui/cockpitLayout.js",
       "src/ui/cockpitPresentation.js",
       "src/ui/cockpitSignals.js",
@@ -1130,6 +1141,7 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
+      "src/ui/railEdgeScroll.js",
       "src/ui/localePicker.js",
       "src/ui/cyberSonarControls.js",
       "src/ui/locationNavigation.js",
@@ -1175,6 +1187,8 @@
       "src/ui/cockpitInput.js",
       "src/data/inputOwnership.js",
       "src/ui/cockpitInstruments.js",
+      "src/cockpitSubjectProviders.js",
+      "src/cockpitProgress.js",
       "src/ui/cockpitLayout.js",
       "src/ui/cockpitPresentation.js",
       "src/ui/cockpitSignals.js",
@@ -1203,7 +1217,6 @@
       "src/ui/layerPanel/RowSwitch.vue",
       "src/ui/layerPanel/RowRange.vue",
       "src/ui/layerPanel/RowSlider.vue",
-      "src/ui/railTimeline.js",
       "src/ui/layers.js",
       "src/ui/leftPanelRail.js",
       "src/ui/location.js",
@@ -1298,7 +1311,6 @@
       "src/ui/rail/RailCard.vue",
       "src/ui/rail/RailCards.vue",
       "src/ui/rail/utcClock.js",
-      "src/ui/rail/RailTimeline.vue",
       "src/ui/rail/rangeValue.js",
       "src/ui/weather/WeatherReadout.vue",
       "src/ui/newsPanel.js",
@@ -1342,7 +1354,8 @@
       "src/ui/views/panels/WildlifeSightingCard.vue",
       "src/ui/wildlifeSightingPlacement.js",
       "src/overlays/worldOverlayChrome.js",
-      "src/layers/wildlifeSightings/photoText.js"
+      "src/layers/wildlifeSightings/photoText.js",
+      "src/time/frameWait.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n"]
   },
@@ -1357,6 +1370,7 @@
       "src/ui/styles/status.css",
       "src/ui/styles/cockpit.css",
       "src/ui/styles/cockpitBridge.css",
+      "src/ui/styles/cockpitSubject.css",
       "src/ui/styles/cockpitRadar.css",
       "src/ui/styles/overlays.css",
       "src/ui/styles/layers.css",
@@ -1506,6 +1520,7 @@
     "exports": ["./layers/flights"],
     "modules": [
       "src/data/fleetModels.js",
+      "src/data/vesselTypes.js",
       "src/data/fleetTrailAnchors.js",
       "src/data/fleetModelInstances.js",
       "src/data/headingDegrees.js",
@@ -1551,6 +1566,8 @@
       "src/layers/flights/records.js",
       "src/layers/flights/clockFollow.js",
       "src/time/snapshotTimeline.js",
+      "src/data/timelineHistory.js",
+      "src/time/timelineFixes.js",
       "src/sources/live/contract.js",
       "src/layers/flights/recordPolicy.js",
       "src/layers/flights/snapshotRenderer.js",
@@ -1575,7 +1592,9 @@
       "src/ui/unitLabels.js",
       "src/time/worldClock.js",
       "src/time/julian.js",
-      "src/data/planespottersPhoto.js"
+      "src/data/planespottersPhoto.js",
+      "src/layers/flights/placed.js",
+      "src/data/courseFromFixes.js"
     ],
     "external": ["cesium"]
   },
@@ -1585,6 +1604,7 @@
       "src/layers/flights/modelSpec.js",
       "src/layers/flights/policy.js",
       "src/data/fleetModels.js",
+      "src/data/vesselTypes.js",
       "src/data/fleetTrailAnchors.js",
       "src/data/fleetModelInstances.js",
       "src/data/headingDegrees.js",
@@ -1615,6 +1635,8 @@
       "src/layers/military/ingestion.js",
       "src/layers/military/clockFollow.js",
       "src/time/snapshotTimeline.js",
+      "src/data/timelineHistory.js",
+      "src/time/timelineFixes.js",
       "src/sources/live/contract.js",
       "src/layers/military/lifecycle.js",
       "src/layers/military/motion.js",
@@ -1647,7 +1669,10 @@
       "src/i18n/locales/zh-Hant.json",
       "src/ui/unitLabels.js",
       "src/time/worldClock.js",
-      "src/time/julian.js"
+      "src/time/julian.js",
+      "src/layers/flights/placed.js",
+      "src/data/courseFromFixes.js",
+      "src/data/approxDistance.js"
     ],
     "external": ["cesium"]
   },
@@ -1700,6 +1725,7 @@
       "src/layers/vessels/ingestion.js",
       "src/layers/vessels/motion.js",
       "src/time/snapshotTimeline.js",
+      "src/time/timelineFixes.js",
       "src/time/worldClock.js",
       "src/sources/live/contract.js",
       "src/layers/vessels/cameraArea.js",
@@ -1708,6 +1734,7 @@
       "src/layers/vessels/policy.js",
       "src/layers/vessels/queries.js",
       "src/layers/vessels/rendering.js",
+      "src/data/windowProjection.js",
       "src/layers/vessels/selection.js",
       "src/layers/vessels/state.js",
       "src/layers/vessels/testing.js",
@@ -1747,7 +1774,8 @@
       "src/layers/earthquakes/index.js",
       "src/layers/earthquakes/model.js",
       "src/layers/earthquakes/source.js",
-      "src/layers/earthquakes/records.js"
+      "src/layers/earthquakes/records.js",
+      "src/time/worldClock.js"
     ],
     "external": ["cesium"]
   },
@@ -1838,6 +1866,7 @@
       "src/layers/satellites/interaction.js",
       "src/layers/satellites/labels.js",
       "src/layers/satellites/lifecycle.js",
+      "src/layers/satellites/motion.js",
       "src/layers/satellites/orbits.js",
       "src/layers/satellites/records.js",
       "src/layers/satellites/policy.js",
@@ -2875,6 +2904,8 @@
       "src/layers/flights/index.js",
       "src/layers/flights/clockFollow.js",
       "src/time/snapshotTimeline.js",
+      "src/data/timelineHistory.js",
+      "src/time/timelineFixes.js",
       "src/layers/flights/ingestion.js",
       "src/layers/flights/lifecycle.js",
       "src/layers/flights/motion.js",
@@ -2956,6 +2987,7 @@
       "src/layers/satellites/interaction.js",
       "src/layers/satellites/labels.js",
       "src/layers/satellites/lifecycle.js",
+      "src/layers/satellites/motion.js",
       "src/layers/satellites/orbits.js",
       "src/sources/tle.js",
       "src/layers/satellites/records.js",
@@ -3007,6 +3039,7 @@
       "src/layers/vessels/policy.js",
       "src/layers/vessels/queries.js",
       "src/layers/vessels/rendering.js",
+      "src/data/windowProjection.js",
       "src/layers/vessels/selection.js",
       "src/layers/vessels/state.js",
       "src/layers/vessels/testing.js",
@@ -3076,6 +3109,7 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
+      "src/ui/railEdgeScroll.js",
       "src/ui/mobileShell.js",
       "src/exclusiveSurfaces.js",
       "src/ui/localePicker.js",
@@ -3116,6 +3150,8 @@
       "src/ui/displayPanelScroll.js",
       "src/ui/cockpitInput.js",
       "src/ui/cockpitInstruments.js",
+      "src/cockpitSubjectProviders.js",
+      "src/cockpitProgress.js",
       "src/ui/cockpitLayout.js",
       "src/ui/cockpitPresentation.js",
       "src/ui/cockpitSignals.js",
@@ -3146,7 +3182,6 @@
       "src/ui/layerPanel/RowSwitch.vue",
       "src/ui/layerPanel/RowRange.vue",
       "src/ui/layerPanel/RowSlider.vue",
-      "src/ui/railTimeline.js",
       "src/ui/layers.js",
       "src/ui/leftPanelRail.js",
       "src/ui/location.js",
@@ -3248,6 +3283,8 @@
       "src/app/layers/directions.js",
       "src/search/coordinateGeocoder.js",
       "src/search/coordinateParser.js",
+      "src/search/gridReference.js",
+      "src/search/plusCode.js",
       "src/search/presetGeocoder.js",
       "src/voice/session.js",
       "src/voice/sessionCommands.js",
@@ -3310,6 +3347,7 @@
       "src/app/layers/rail.js",
       "src/data/railFeeds.js",
       "src/layers/rail/index.js",
+      "src/layers/rail/cockpitSubject.js",
       "src/layers/rail/source.js",
       "src/layers/rail/policy.js",
       "src/layers/rail/ingestion.js",
@@ -3336,6 +3374,7 @@
       "src/layers/transit/controls.js",
       "src/layers/transit/height.js",
       "src/layers/transit/index.js",
+      "src/layers/transit/cockpitSubject.js",
       "src/layers/transit/ingestion.js",
       "src/layers/transit/lifecycle.js",
       "src/layers/transit/policy.js",
@@ -3706,7 +3745,6 @@
       "src/ui/rail/RailCards.vue",
       "src/ui/rail/RailCardBlocks.vue",
       "src/ui/rail/utcClock.js",
-      "src/ui/rail/RailTimeline.vue",
       "src/ui/rail/rangeValue.js",
       "src/ui/weather/WeatherReadout.vue",
       "src/ui/newsPanel.js",
@@ -3811,7 +3849,11 @@
       "src/data/planespottersPhoto.js",
       "src/ui/stores/dataLibrary.js",
       "src/data/openVesselPhoto.js",
-      "src/layers/vessels/photos.js"
+      "src/layers/vessels/photos.js",
+      "src/layers/flights/placed.js",
+      "src/data/placementProvider.js",
+      "src/data/courseFromFixes.js",
+      "src/time/frameWait.js"
     ],
     "external": [
       "hls.js",
@@ -3825,6 +3867,7 @@
       "@jtarrio/webrtlsdr",
       "hyparquet",
       "fzstd",
+      "h3-js",
       "vue",
       "pinia",
       "vue-i18n"
@@ -4062,6 +4105,8 @@
       "src/layers/flights/index.js",
       "src/layers/flights/clockFollow.js",
       "src/time/snapshotTimeline.js",
+      "src/data/timelineHistory.js",
+      "src/time/timelineFixes.js",
       "src/sources/live/contract.js",
       "src/layers/flights/ingestion.js",
       "src/layers/flights/lifecycle.js",
@@ -4144,6 +4189,7 @@
       "src/layers/satellites/interaction.js",
       "src/layers/satellites/labels.js",
       "src/layers/satellites/lifecycle.js",
+      "src/layers/satellites/motion.js",
       "src/layers/satellites/orbits.js",
       "src/sources/tle.js",
       "src/layers/satellites/records.js",
@@ -4194,6 +4240,7 @@
       "src/layers/vessels/policy.js",
       "src/layers/vessels/queries.js",
       "src/layers/vessels/rendering.js",
+      "src/data/windowProjection.js",
       "src/layers/vessels/selection.js",
       "src/layers/vessels/state.js",
       "src/layers/vessels/testing.js",
@@ -4246,6 +4293,8 @@
       "src/app/layers/directions.js",
       "src/search/coordinateGeocoder.js",
       "src/search/coordinateParser.js",
+      "src/search/gridReference.js",
+      "src/search/plusCode.js",
       "src/search/presetGeocoder.js",
       "src/app/localGeojsonServices.js",
       "src/data/displayText.js",
@@ -4304,6 +4353,7 @@
       "src/app/layers/rail.js",
       "src/data/railFeeds.js",
       "src/layers/rail/index.js",
+      "src/layers/rail/cockpitSubject.js",
       "src/layers/rail/source.js",
       "src/layers/rail/policy.js",
       "src/layers/rail/ingestion.js",
@@ -4329,6 +4379,7 @@
       "src/layers/transit/controls.js",
       "src/layers/transit/height.js",
       "src/layers/transit/index.js",
+      "src/layers/transit/cockpitSubject.js",
       "src/layers/transit/ingestion.js",
       "src/layers/transit/lifecycle.js",
       "src/layers/transit/policy.js",
@@ -4533,7 +4584,11 @@
       "src/data/imagingSensors.js",
       "src/data/planespottersPhoto.js",
       "src/layers/vessels/photos.js",
-      "src/data/openVesselPhoto.js"
+      "src/data/openVesselPhoto.js",
+      "src/layers/flights/placed.js",
+      "src/data/placementProvider.js",
+      "src/data/courseFromFixes.js",
+      "src/time/frameWait.js"
     ],
     "external": [
       "hls.js",
@@ -4545,6 +4600,7 @@
       "mgrs",
       "mapillary-js",
       "@jtarrio/webrtlsdr",
+      "h3-js",
       "vue",
       "pinia",
       "vue-i18n"
@@ -4593,6 +4649,8 @@
       "src/services/terrainHeights.js",
       "src/search/coordinateGeocoder.js",
       "src/search/coordinateParser.js",
+      "src/search/gridReference.js",
+      "src/search/plusCode.js",
       "src/search/presetGeocoder.js",
       "src/search/nominatim.js",
       "src/nominatimGeocode.js",
@@ -4813,7 +4871,11 @@
       "src/data/approxDistance.js",
       "src/data/renderAltitude.js",
       "src/data/aircraftClass.js",
-      "src/data/aircraftEmergency.js"
+      "src/data/aircraftEmergency.js",
+      "src/data/fleetModels.js",
+      "src/data/vesselTypes.js",
+      "src/data/fleetTrailAnchors.js",
+      "src/data/courseFromFixes.js"
     ],
     "external": []
   },
@@ -4835,7 +4897,9 @@
       "src/data/aircraftMeta.js",
       "src/data/renderAltitude.js",
       "src/data/aircraftClass.js",
-      "src/data/aircraftEmergency.js"
+      "src/data/aircraftEmergency.js",
+      "src/data/courseFromFixes.js",
+      "src/data/approxDistance.js"
     ],
     "external": []
   },
@@ -4851,7 +4915,8 @@
     "exports": ["./layers/vessels/records"],
     "modules": [
       "src/layers/vessels/records.js",
-      "src/layers/vessels/recordPolicy.js"
+      "src/layers/vessels/recordPolicy.js",
+      "src/time/timelineFixes.js"
     ],
     "external": []
   },
@@ -5203,6 +5268,7 @@
     "exports": ["./layers/transit/standalone"],
     "modules": [
       "src/data/fleetModels.js",
+      "src/data/vesselTypes.js",
       "src/data/aircraftClass.js",
       "src/i18n/marker.js",
       "src/data/fleetModelInstances.js",
@@ -5240,6 +5306,7 @@
       "src/layers/transit/controls.js",
       "src/layers/transit/height.js",
       "src/layers/transit/index.js",
+      "src/layers/transit/cockpitSubject.js",
       "src/layers/transit/ingestion.js",
       "src/layers/transit/lifecycle.js",
       "src/layers/transit/movement.js",
@@ -5294,6 +5361,7 @@
     "modules": [
       "src/i18n/marker.js",
       "src/data/fleetModels.js",
+      "src/data/vesselTypes.js",
       "src/data/fleetModelInstances.js",
       "src/data/aircraftClass.js",
       "src/data/aircraftModelLighting.js",
@@ -5310,6 +5378,7 @@
       "src/layers/transit/controls.js",
       "src/layers/transit/height.js",
       "src/layers/transit/index.js",
+      "src/layers/transit/cockpitSubject.js",
       "src/layers/transit/ingestion.js",
       "src/layers/transit/lifecycle.js",
       "src/layers/transit/policy.js",
@@ -5499,7 +5568,7 @@
       "src/ui/statusText.js",
       "src/ui/layerNames.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "h3-js"]
   },
   "gnss-source": {
     "exports": ["./layers/gnss/source"],
@@ -5931,6 +6000,11 @@
       "src/layers/wildlifeSightings/gridViewport.js",
       "src/layers/wildlifeSightings/performance.js"
     ],
+    "external": []
+  },
+  "rail-paths": {
+    "exports": ["./layers/rail/paths"],
+    "modules": ["src/data/railPaths.js"],
     "external": []
   }
 }

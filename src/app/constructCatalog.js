@@ -6,6 +6,7 @@ import { createWeatherLayer } from '../layers/weather/index.js';
 import { createApplicationCyclones } from './layers/cyclones.js';
 import { createWindLayer } from '../layers/wind/index.js';
 import { createLayerCatalog } from './catalog.js';
+import { layerPlacement } from '../data/placementProvider.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
 import { createMilitaryRegistry } from '../layers/aircraft/classification.js';
 import { createApplicationFlights } from './layers/flights.js';
@@ -64,6 +65,9 @@ export const APPLICATION_LAYER_METADATA = Object.freeze([
 /** Construct the current catalog without choosing any source provider.
  * Scene engines remain page-owned; layers and classification have this app's lifetime.
  * The manager owns layer destruction, while abort releases classification even if startup fails.
+ * `placement`, a host-supplied placement provider (../data/placementProvider.js),
+ * places live aircraft, vessels, transit and trains; without one each layer
+ * uses its own motion.
  */
 export function createApplicationCatalog({
   surface,
@@ -75,6 +79,7 @@ export function createApplicationCatalog({
   resolveAsset,
   nepalBoundaryResolver,
   streetLevelProviders,
+  placement = null,
 }) {
   if (!signal?.addEventListener)
     throw new TypeError('An application lifetime signal is required');
@@ -98,17 +103,20 @@ export function createApplicationCatalog({
     const flights = createApplicationFlights({
       surface,
       source: sources.flights,
+      placement: layerPlacement(placement, 'aircraft'),
       militaryRegistry,
       resolveAsset,
     });
     const military = createApplicationMilitary({
       surface,
       source: sources.military,
+      placement: layerPlacement(placement, 'military'),
       militaryRegistry,
       resolveAsset,
     });
     const vessels = createApplicationVessels({
       source: sources.vessels,
+      placement: layerPlacement(placement, 'vessels'),
       options: vesselOptions,
       displayParams: () => flights.getParams(),
       ...(resolveAsset ? { resolveAsset } : {}),
@@ -174,6 +182,7 @@ export function createApplicationCatalog({
         createApplicationTransit({
           surface,
           source: sources.transit,
+          placement: layerPlacement(placement, 'transit'),
           displayParams: () => flights.getParams(),
           ...(resolveAsset ? { resolveAsset } : {}),
         }),
@@ -212,6 +221,7 @@ export function createApplicationCatalog({
         createApplicationRail({
           surface,
           source: sources.rail,
+          placement: layerPlacement(placement, 'rail'),
           displayParams: () => flights.getParams(),
           ...(resolveAsset ? { resolveAsset } : {}),
         }),

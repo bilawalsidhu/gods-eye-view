@@ -1,13 +1,28 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { FlightRecords } from './records.js';
 
-function records() {
+const FLEET = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../../public/models/fleet',
+);
+const fleetSet = {
+  catalog: JSON.parse(
+    fs.readFileSync(path.join(FLEET, 'catalog.json'), 'utf8'),
+  ),
+  types: JSON.parse(fs.readFileSync(path.join(FLEET, 'types.json'), 'utf8')),
+};
+
+function records(fleetModels = () => null) {
   return new FlightRecords({
     geoidHeight: () => 40,
     cachedGroundFloor: () => null,
     floorAltitudeM: (altitude) => altitude,
     approxDistanceKm: () => 0,
+    fleetModels,
   });
 }
 const view = () => ({
@@ -259,4 +274,94 @@ test('a repeated fix time marks the contact as not updated; removal is unchanged
   store.receive(observation({ positionTimeMs: fixMs + 10_000 }), view());
   store.forget('abc123');
   assert.equal(store.fixRepeated.has('abc123'), false);
+});
+
+test('a ground vehicle or station with no altitude stands on the ground; an aircraft does not', () => {
+  const store = records(() => fleetSet);
+  const noAltitude = { baroAltitudeM: null, ellipsoidAltitudeM: null };
+  const vehicle = store.receive(
+    observation({
+      id: 'v1',
+      typeCode: 'ZVEH',
+      callsign: 'FIRE 2',
+      ...noAltitude,
+    }),
+    view(),
+  ).meta;
+  assert.equal(vehicle.onGround, true);
+  assert.equal(vehicle.typeCode, 'ZVEH');
+  assert.equal(vehicle.altitude, 0);
+  const mast = store.receive(
+    observation({ id: 'm1', typeCode: 'GRND', callsign: 'RX5', ...noAltitude }),
+    view(),
+  ).meta;
+  assert.equal(mast.onGround, true);
+  assert.equal(mast.typeCode, 'GRND');
+  // An airliner with no altitude keeps the airborne default, and its feed
+  // type still waits for the airframe lookup.
+  const plane = store.receive(
+    observation({ id: 'p1', typeCode: 'A320', ...noAltitude }),
+    view(),
+  ).meta;
+  assert.equal(plane.onGround, false);
+  assert.equal(plane.altitude, 10000);
+  assert.equal(plane.typeCode, null);
+  // A vehicle reporting an altitude is placed by it.
+  const reported = store.receive(
+    observation({ id: 'v2', typeCode: 'ZVEH', baroAltitudeM: 12 }),
+    view(),
+  ).meta;
+  assert.equal(reported.onGround, false);
+  // Before the model set loads nothing is grounded by its model.
+  const unloaded = records().receive(
+    observation({ id: 'v3', typeCode: 'ZVEH', ...noAltitude }),
+    view(),
+  ).meta;
+  assert.equal(unloaded.onGround, false);
+});
+
+test('a contact reported with no course faces the way its newer fixes went', () => {
+  const store = records();
+  const T = 1700000000000;
+  const taxi = (latitude, seconds, fields = {}) =>
+    store.receive(
+      observation({
+        latitude,
+        longitude: -97.6588,
+        courseDeg: null,
+        onGround: true,
+        speedMps: 8,
+        positionTimeMs: T + seconds * 1000,
+        ...fields,
+      }),
+      view(),
+    );
+  const course = () => store.data.get('abc123').true_track;
+  taxi(30.1908, 0);
+  assert.equal(course(), 0, 'nothing known yet');
+  // Fixes a second apart, 8 m each: they add up until 30 m are covered.
+  taxi(30.19073, 1);
+  taxi(30.19066, 2);
+  assert.equal(course(), 0, 'under 30 m: still nothing');
+  taxi(30.19059, 3);
+  taxi(30.19052, 4);
+  assert.ok(Math.abs(course() - 180) < 0.1, 'southbound');
+  // An older fix from another feed, behind it: never turns it around.
+  taxi(30.1912, 2);
+  assert.ok(Math.abs(course() - 180) < 0.1, 'an older fix gives no course');
+  taxi(30.1901, 8);
+  assert.ok(Math.abs(course() - 180) < 0.1);
+  // Standing (reported under 2 m/s) with 40 m of position noise: kept.
+  taxi(30.18974, 12, { speedMps: 0.5, longitude: -97.6584 });
+  assert.ok(
+    Math.abs(course() - 180) < 0.1,
+    'a standing contact keeps its course',
+  );
+  // A reported course always wins.
+  taxi(30.189, 16, { courseDeg: 175 });
+  assert.equal(course(), 175);
+  // A reset forgets where it was: it starts again from north.
+  store.reset();
+  taxi(30.188, 20);
+  assert.equal(course(), 0);
 });

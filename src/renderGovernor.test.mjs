@@ -7,6 +7,8 @@ import {
   governorRequestRender,
   getRenderGovernorDiagnostics,
   _resetRenderGovernorForTest,
+  uninstallRenderGovernor,
+  IDLE_FRAME_RATE,
 } from './renderGovernor.js';
 
 function makeViewer() {
@@ -97,4 +99,133 @@ test('holds registered before install apply at install time', () => {
   assert.equal(scene.requestRenderMode, false, 'pre-install hold keeps continuous mode');
   releaseContinuousRender('flights');
   assert.equal(scene.requestRenderMode, true);
+});
+
+function makeEvent() {
+  const listeners = new Set();
+  return {
+    addEventListener(fn) {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+    raise() {
+      for (const fn of [...listeners]) fn();
+    },
+    get size() {
+      return listeners.size;
+    },
+  };
+}
+
+test('idle caps the frame rate; anything moving draws at the display rate', () => {
+  const { viewer } = makeViewer();
+  installRenderGovernor(viewer);
+  assert.equal(viewer.targetFrameRate, IDLE_FRAME_RATE);
+  holdContinuousRender('flights');
+  assert.equal(viewer.targetFrameRate, undefined);
+  releaseContinuousRender('flights');
+  assert.equal(viewer.targetFrameRate, IDLE_FRAME_RATE);
+});
+
+test('a camera move holds continuous render from moveStart to moveEnd', () => {
+  const { viewer, scene } = makeViewer();
+  viewer.camera = { moveStart: makeEvent(), moveEnd: makeEvent() };
+  installRenderGovernor(viewer);
+  viewer.camera.moveStart.raise();
+  assert.equal(scene.requestRenderMode, false);
+  assert.equal(viewer.targetFrameRate, undefined);
+  assert.deepEqual(getRenderGovernorDiagnostics().holds, ['camera']);
+  viewer.camera.moveEnd.raise();
+  assert.equal(scene.requestRenderMode, true);
+  assert.equal(viewer.targetFrameRate, IDLE_FRAME_RATE);
+  // Installing again does not double the listeners; uninstall removes them.
+  installRenderGovernor(viewer);
+  assert.equal(viewer.camera.moveStart.size, 1);
+  uninstallRenderGovernor(viewer);
+  assert.equal(viewer.camera.moveStart.size, 0);
+  assert.equal(viewer.camera.moveEnd.size, 0);
+});
+
+function fakeTimers() {
+  const queue = new Map();
+  let next = 1;
+  return {
+    setTimeout: (fn) => {
+      queue.set(next, fn);
+      return next++;
+    },
+    clearTimeout: (id) => queue.delete(id),
+    run() {
+      const due = [...queue.entries()];
+      queue.clear();
+      for (const [, fn] of due) fn();
+    },
+    get pending() {
+      return queue.size;
+    },
+  };
+}
+
+test('a camera that drifts by rounding errors and never raises moveEnd still releases its hold', () => {
+  const { viewer, scene } = makeViewer();
+  const timers = fakeTimers();
+  viewer.camera = {
+    moveStart: makeEvent(),
+    moveEnd: makeEvent(),
+    positionWC: { x: 6_400_000, y: 0, z: 0 },
+    directionWC: { x: -1, y: 0, z: 0 },
+  };
+  installRenderGovernor(viewer, timers);
+  viewer.camera.moveStart.raise();
+  assert.equal(scene.requestRenderMode, false);
+  // Still moving: the hold stays.
+  viewer.camera.positionWC = { x: 6_399_000, y: 0, z: 0 };
+  timers.run();
+  assert.equal(scene.requestRenderMode, false);
+  // Drifting by far less than a millimetre: half a second of this is at rest.
+  viewer.camera.positionWC = { x: 6_399_000 + 1e-7, y: 0, z: 0 };
+  timers.run();
+  timers.run();
+  assert.equal(scene.requestRenderMode, true);
+  assert.equal(viewer.targetFrameRate, IDLE_FRAME_RATE);
+  // A later move with no new moveStart takes the hold again.
+  viewer.camera.positionWC = { x: 6_000_000, y: 0, z: 0 };
+  timers.run();
+  assert.equal(scene.requestRenderMode, false);
+  // moveEnd stops the sampling and releases.
+  viewer.camera.moveEnd.raise();
+  assert.equal(scene.requestRenderMode, true);
+  assert.equal(timers.pending, 0);
+});
+
+test('sampling keeps running until moveEnd, so a move after a long drift still takes the hold', () => {
+  const { viewer, scene } = makeViewer();
+  const timers = fakeTimers();
+  viewer.camera = {
+    moveStart: makeEvent(),
+    moveEnd: makeEvent(),
+    positionWC: { x: 1, y: 0, z: 0 },
+    directionWC: { x: -1, y: 0, z: 0 },
+  };
+  installRenderGovernor(viewer, timers);
+  viewer.camera.moveStart.raise();
+  // Ten minutes at rest (2,400 samples): released, still sampling.
+  for (let i = 0; i < 2_400; i++) timers.run();
+  assert.equal(scene.requestRenderMode, true);
+  assert.equal(timers.pending, 1);
+  viewer.camera.positionWC = { x: 1_000, y: 0, z: 0 };
+  timers.run();
+  assert.equal(scene.requestRenderMode, false);
+});
+
+test('installing again drops a camera hold the old listeners can no longer release', () => {
+  const { viewer, scene } = makeViewer();
+  const timers = fakeTimers();
+  viewer.camera = { moveStart: makeEvent(), moveEnd: makeEvent() };
+  installRenderGovernor(viewer, timers);
+  viewer.camera.moveStart.raise();
+  assert.equal(scene.requestRenderMode, false);
+  installRenderGovernor(viewer, timers);
+  assert.equal(scene.requestRenderMode, true);
+  assert.equal(timers.pending, 0);
 });
