@@ -34,7 +34,7 @@ globalThis.HTMLCanvasElement.prototype.getContext = (kind) =>
 globalThis.requestAnimationFrame = () => 0;
 globalThis.cancelAnimationFrame = () => {};
 
-const { bootStories } = await import('./boot.js');
+const { bootStories, stopVoiceForStories } = await import('./boot.js');
 const { useStoriesStore } = await import('../ui/stores/stories.js');
 
 const { bindRenderer } = await import('../render/rendererOf.js');
@@ -75,6 +75,27 @@ const director = {
   seekScene() {},
   styleManager: { runImmediateNavigation: () => true },
 };
+
+test('entering Stories stops microphone sessions and preserves typed chat', () => {
+  let textOnly = false;
+  let active = true;
+  let stops = 0;
+  const session = {
+    adapter: { getStartOptions: () => ({ textOnly }) },
+    isActive: () => active,
+    stop: () => {
+      stops += 1;
+    },
+  };
+  assert.equal(stopVoiceForStories(session), true);
+  active = false;
+  assert.equal(stopVoiceForStories(session), false);
+  assert.equal(stops, 2);
+  textOnly = true;
+  active = true;
+  assert.equal(stopVoiceForStories(session), false);
+  assert.equal(stops, 2);
+});
 
 test('the shell loads the controller on first open, then steps aside', async () => {
   setActivePinia(createPinia());

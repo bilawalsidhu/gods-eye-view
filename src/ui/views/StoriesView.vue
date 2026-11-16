@@ -284,9 +284,23 @@ onBeforeUnmount(() => {
   removeEventListener('keydown', onKey, true);
   unguardKeys?.();
 });
-watch(mode, (m) => {
-  if (m === 'closed') requestAnimationFrame(placeEntry);
-  else popOpen.value = false;
+let returnFocus = null;
+watch(mode, (m, previous) => {
+  if (m === 'closed') {
+    requestAnimationFrame(placeEntry);
+    nextTick(() => {
+      if (mode.value !== 'closed') return;
+      const entry = rootEl.value?.querySelector('#hStories');
+      const target = returnFocus?.isConnected && returnFocus !== document.body
+        ? returnFocus
+        : entry;
+      target?.focus({ preventScroll: true });
+      returnFocus = null;
+    });
+  } else {
+    if (previous === 'closed') returnFocus = document.activeElement;
+    popOpen.value = false;
+  }
 });
 // Each screen (and each story, keyed) mounts its own map slot.
 watch([mode, storyId], () => nextTick(watchCredit));

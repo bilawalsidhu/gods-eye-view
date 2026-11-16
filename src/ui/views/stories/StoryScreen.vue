@@ -84,7 +84,7 @@ function goChapter(i) {
 }
 function goAnchor(ev) {
   store.controller.focusEvent(ev);
-  if (innerWidth <= 700) sheet.value = 'half';
+  if (innerWidth <= 720) sheet.value = 'half';
 }
 function bigPlayClick() {
   bigPlay.value = false;
@@ -205,7 +205,7 @@ function pokeControls() {
     expanded.value &&
     playback.value.playing &&
     !playback.value.exploring &&
-    innerWidth <= 700
+    innerWidth <= 720
   )
     pokeTimer = setTimeout(() => (controlsHidden.value = true), 3000);
 }
@@ -224,7 +224,7 @@ watch(
     if (!on || store.sheetHintSeen) return;
     hintTimers.push(
       setTimeout(() => {
-        if (store.sheetHintSeen || innerWidth > 700 || sheet.value !== 'peek')
+        if (store.sheetHintSeen || innerWidth > 720 || sheet.value !== 'peek')
           return;
         store.sheetHintSeen = true;
         sheetHint.value = true;

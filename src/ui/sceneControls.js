@@ -37,6 +37,7 @@ export class SceneControls {
     // The SceneShotList view renders the rows and the panel its buttons;
     // their actions come back here.
     this.storeToken = store.attach({
+      selectScene: (id) => this.run('selectScene', id),
       select: (id) => {
         this.run('selectShot', id);
         if (this.destroyed) return;

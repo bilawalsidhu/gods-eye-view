@@ -172,7 +172,7 @@ function headerSearch() {
 const feedEl = ref(null);
 function pick(id) {
   if (picked.value === id) return;
-  if (innerWidth <= 700 && feedSnap.value === 'list') setFeed('split');
+  if (innerWidth <= 720 && feedSnap.value === 'list') setFeed('split');
   store.controller.pick(id);
   nextTick(() =>
     feedEl.value
@@ -209,20 +209,13 @@ const pickedStory = computed(() =>
   picked.value ? store.byId(picked.value) : null,
 );
 
-// ── Pins: projected in window pixels, placed inside the map area ──
-const pinsEl = ref(null);
-const origin = ref({ x: 0, y: 0 });
-function measure() {
-  const r = pinsEl.value?.getBoundingClientRect();
-  if (r) origin.value = { x: r.left, y: r.top };
-}
-watch(pins, measure);
+// ── Pins: projected into the map area ──
 const placedPins = computed(() =>
   pins.value.map((p) => ({
     ...p,
     story: store.byId(p.id),
     style: {
-      transform: `translate(${p.x - origin.value.x}px, ${p.y - origin.value.y}px) translate(-50%, -100%)`,
+      transform: `translate(${p.x}px, ${p.y}px) translate(-50%, -100%)`,
     },
   })),
 );
@@ -240,7 +233,7 @@ function setFeed(snap) {
 }
 let fd = null;
 function onHeadDown(e) {
-  if (innerWidth > 700 || e.target.closest('.fh-tools')) return;
+  if (innerWidth > 720 || e.target.closest('.fh-tools')) return;
   try {
     e.currentTarget.setPointerCapture(e.pointerId);
   } catch {
@@ -358,7 +351,7 @@ function onResizeReset() {
 }
 const bodyStyle = computed(() => ({
   '--feed-h': `${(feedH.value ?? FEED[feedSnap.value]) * 100}%`,
-  ...(innerWidth > 700
+  ...(innerWidth > 720
     ? {
         '--feedw': `${feedW.value}px`,
         gridTemplateColumns: `${feedW.value}px minmax(0, 1fr)`,
@@ -370,13 +363,10 @@ onMounted(() => {
   document.addEventListener('pointerdown', onDocDown);
   // On the window: the Stories keyboard guard stops keys before the document.
   addEventListener('keydown', onSlash, true);
-  addEventListener('resize', measure);
-  measure();
 });
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onDocDown);
   removeEventListener('keydown', onSlash, true);
-  removeEventListener('resize', measure);
 });
 
 defineExpose({
@@ -680,7 +670,7 @@ defineExpose({
       </aside>
       <div class="ex-map">
         <div class="map-slot"></div>
-        <div id="pins" ref="pinsEl" class="pins">
+        <div id="pins" class="pins">
           <button
             v-for="p in placedPins"
             :key="p.id"

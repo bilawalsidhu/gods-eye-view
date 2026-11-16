@@ -207,7 +207,7 @@ body.ui-clean-view #gev-stories .gs-pop {
   z-index: 1201;
   bottom: 110px;
 }
-@media (max-width: 700px) {
+@media (max-width: 720px) {
   #gev-stories .gs-pop {
     left: 12px;
     right: 12px !important;

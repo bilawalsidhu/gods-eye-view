@@ -54,9 +54,10 @@ export function centreCrop(
  * URL, halving in steps so a large canvas downscales smoothly.
  * @param {HTMLCanvasElement} source
  * @param {() => HTMLCanvasElement} createCanvas Makes an empty canvas.
+ * @param {string} [credit] Attribution to include in an exported thumbnail.
  * @returns {string}
  */
-export function encodeStoryThumb(source, createCanvas) {
+export function encodeStoryThumb(source, createCanvas, credit = '') {
   const crop = centreCrop(source.width, source.height);
   if (!crop.width || !crop.height) throw new Error('Nothing to capture');
   let image = source;
@@ -98,6 +99,19 @@ export function encodeStoryThumb(source, createCanvas) {
     STORY_THUMB_WIDTH,
     STORY_THUMB_HEIGHT,
   );
+  if (credit) {
+    const lines = credit.split(' — ');
+    const height = lines.length * 11 + 6;
+    const top = STORY_THUMB_HEIGHT - height;
+    context.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    context.fillRect(0, top, STORY_THUMB_WIDTH, height);
+    context.fillStyle = '#fff';
+    context.font = '9px sans-serif';
+    context.textBaseline = 'top';
+    lines.forEach((line, i) =>
+      context.fillText(line, 5, top + 3 + i * 11, STORY_THUMB_WIDTH - 10),
+    );
+  }
   // A very busy view can exceed the limit; lower the quality until it fits.
   for (const quality of [STORY_THUMB_QUALITY, 0.7, 0.55, 0.4]) {
     const url = out.toDataURL('image/jpeg', quality);
@@ -116,12 +130,14 @@ export function encodeStoryThumb(source, createCanvas) {
  *   the canvas it draws in, as the caller found them for its scene.
  * @param {object} options
  * @param {() => HTMLCanvasElement} options.createCanvas Makes an empty canvas.
+ * @param {() => string | null | undefined} [options.creditForFrame] If supplied,
+ * the frame must have this attribution before the thumbnail can be copied.
  * @param {number} [options.timeoutMs] Give up when no frame is drawn.
  * @returns {Promise<string>} JPEG data URL.
  */
 export function captureStoryThumb(
   { frame, canvas } = {},
-  { createCanvas, timeoutMs = 3000 },
+  { createCanvas, creditForFrame, timeoutMs = 3000 },
 ) {
   if (!frame || !canvas) return Promise.reject(new Error('Globe not ready'));
   return new Promise((resolve, reject) => {
@@ -130,7 +146,12 @@ export function captureStoryThumb(
       remove();
       clearTimeout(timer);
       try {
-        resolve(encodeStoryThumb(canvas, createCanvas));
+        const credit = creditForFrame?.();
+        resolve(
+          creditForFrame && !credit
+            ? ''
+            : encodeStoryThumb(canvas, createCanvas, credit),
+        );
       } catch (error) {
         reject(error);
       }

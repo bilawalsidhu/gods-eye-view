@@ -1,5 +1,5 @@
 import { onFollowChanged } from '../data/followed.js';
-import { bootStories } from '../stories/boot.js';
+import { bootStories, stopVoiceForStories } from '../stories/boot.js';
 import { t } from '../i18n/index.js';
 import { useStoriesStore } from '../ui/stores/stories.js';
 import { SceneDirector } from '../scenes/director.js';
@@ -91,12 +91,7 @@ export function createApplicationTools({
     director: sceneDirector,
     store: storiesStore,
     onEnter: () => {
-      const session = voiceCommands?.session;
-      // A typed command can finish its reply without keeping a microphone on.
-      if (!session || session.adapter.getStartOptions?.().textOnly) return;
-      const wasActive = session.isActive();
-      session.stop();
-      if (wasActive)
+      if (stopVoiceForStories(voiceCommands?.session))
         storiesStore.flashToast(t('Voice is disabled in Stories.'), 4000);
     },
     onLoadFailed: () =>

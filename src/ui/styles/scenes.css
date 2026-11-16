@@ -177,6 +177,11 @@
   color: var(--scene-quiet);
 }
 
+#empty-scene-select {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
 /* A translated action longer than its button wraps inside the button instead
    of running past it. English keeps its one-line buttons. */
 html:not([lang='en']) #scene-panel .scene-controls .scene-btn {

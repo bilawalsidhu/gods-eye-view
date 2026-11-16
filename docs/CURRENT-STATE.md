@@ -687,7 +687,8 @@ first (`SceneDirector.storyScenes()`, refreshed on every `stories-changed`),
 then the person's other scenes with a shot as drafts
 (`SceneDirector.draftScenes()`, marked DRAFT), then the
 scenes GEV ships with a camera path while they are in the project
-(`SceneDirector.hasScene`). A saved scene brings the card image and topics
+(`SceneDirector.hasScene`). Zero-shot drafts can be reopened or deleted
+from the scene selector in AUTHORING after a reload. A saved scene brings the card image and topics
 picked for it in AUTHORING; the topic chips use AUTHORING's tag names and
 order. Explore opens at country level
 (2,500 km) over the first story and, while idle, flies on to the next story
@@ -710,7 +711,9 @@ story's place (`src/stories/thumbs.js`: the same Web Mercator tiles, from
 the same host, that GEV's Esri map draws, read as images) unless the scene
 has its own; with any other map stack than Esri Satellite
 (`mapStackController.getActiveId()`) the card shows its placeholder, and a
-card drawn from Esri earlier is dropped. A shot
+card drawn from Esri earlier is dropped. AUTHORING captures thumbnails only
+on a ready Esri World Imagery stack and embeds the imagery credit in the
+exported image. A shot
 tied to an anchor rather than a place pins the whole-globe view.
 
 A shipped story's context comes from what GEV knows about it
@@ -721,7 +724,10 @@ facts and sources (Vantor imagery and the GeoPera reconstruction, CC BY-NC
 4.0), and its key moments are the chapters that show them. Topic chips and
 region choices are the ones the listed stories carry. Closing Stories after
 a story played puts AUTHORING's own selection back (usually none);
-Open in GEV leaves the story's scene selected there. A paused link in the
+Open in GEV leaves the story's scene selected there. Entering Stories
+cancels in-flight Authoring work before it captures the view it will
+restore. Dragging the timeline previews the time, and releasing
+it seeks the globe once. A paused link in the
 final quarter-second retains its final shot on Play instead of restarting
 at the first shot. A scene that has actually ended still replays from the
 beginning; SceneDirector resumes from the shot boundary, not a fractional
@@ -1630,7 +1636,8 @@ holds; stale tick callbacks cannot publish into a replacement. Registered pack
 rules own presentation overrides and Nepal map fallback without changing saved
 shots or content. Scene-document validation and legacy migration now have separate
 owners. Invalid imports preserve the current project; unreadable saved projects
-are protected from fallback writes. Version 6 is the export format, with
+are protected from fallback writes. Version 7 adds Scenes' optional Stories
+metadata and reads prior project files, including version 6 drafts, with
 zero pitch, low camera heights, scope and detection edits preserved. See [the document contract](SCENE-DOCUMENT.md);
 see [Director](DIRECTOR.md) for camera, pack, action and sharing support.
 

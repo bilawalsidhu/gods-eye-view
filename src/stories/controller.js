@@ -73,6 +73,7 @@ export function createStoriesController({
 }) {
   let player = null;
   let saved = null;
+  let entryReady = null;
   // The view a Close is about to restore, once a stopping scene has settled.
   let pendingView = null;
   // Reopening reuses the saved view, but supersedes the old close request.
@@ -242,6 +243,7 @@ export function createStoriesController({
     }
   };
   function handlePopState() {
+    const returningToExplore = steppingBack;
     clearTimeout(backTimer);
     backTimer = 0;
     steppingBack = false;
@@ -264,7 +266,7 @@ export function createStoriesController({
     else if (params.has(PARAM_STORIES))
       store.mode === 'closed'
         ? controller.open({ fromHistory: true })
-        : controller.backToExplore({ fromHistory: true });
+        : controller.backToExplore({ fromHistory: true, returningToExplore });
     else if (store.mode !== 'closed') controller.close({ fromHistory: true });
     else if (pendingView) {
       // Another browser navigation landed while the scene was stopping.
@@ -367,7 +369,7 @@ export function createStoriesController({
   // handing the share state saved on open to GEV's own restore, the path a
   // pasted share link takes.
   function restoreShareState(saved) {
-    if (!saved?.ranScene || !saved.hash) return;
+    if ((!saved?.ranScene && !saved?.restoreOnExit) || !saved?.hash) return;
     // Directly, not by a hashchange: the share link skips a hash it already
     // restored as Back landed, while the scene was still tearing down.
     const share = director.styleManager?.shareLinkManager;
@@ -383,6 +385,9 @@ export function createStoriesController({
   const areaOf = (s) =>
     s.area ?? { lat: s.cover.lat, lon: s.cover.lon, alt: s.cover.range };
   let removePins = null;
+  let pinLayer = null;
+  let pinObserver = null;
+  let pinOffset = null;
   let places = [];
   // Pins follow the camera on every frame it draws. A change in which pins
   // show goes through the store (Vue renders them); a move alone is written
@@ -390,14 +395,30 @@ export function createStoriesController({
   function placePins() {
     const query = findQuery(viewer);
     if (!query) return;
-    const rect = canvas.getBoundingClientRect();
+    if (!pinLayer) {
+      pinLayer = document.getElementById('pins');
+      if (pinLayer) pinOffset = null;
+      if (pinLayer && globalThis.ResizeObserver) {
+        pinObserver = new ResizeObserver(refreshPinLayout);
+        pinObserver.observe(pinLayer);
+        pinObserver.observe(canvas);
+      }
+    }
+    if (!pinOffset) {
+      const rect = canvas.getBoundingClientRect();
+      const origin = pinLayer?.getBoundingClientRect();
+      pinOffset = {
+        x: rect.left - (origin?.left ?? 0),
+        y: rect.top - (origin?.top ?? 0),
+      };
+    }
     const pins = places.map(({ id, at }) => {
       const win = query.project(at);
       const visible = !!win && !query.isOccluded(at);
       return {
         id,
-        x: rect.left + (win?.x ?? -9999),
-        y: rect.top + (win?.y ?? -9999),
+        x: pinOffset.x + (win?.x ?? -9999),
+        y: pinOffset.y + (win?.y ?? -9999),
         visible,
       };
     });
@@ -411,17 +432,18 @@ export function createStoriesController({
       store.pins = pins;
       return;
     }
-    const layer = document.getElementById('pins');
-    const origin = layer?.getBoundingClientRect();
-    if (!origin) return;
-    for (const el of layer.querySelectorAll('.pin[data-id]')) {
+    for (const el of pinLayer?.querySelectorAll('.pin[data-id]') ?? []) {
       const n = pins.find((pin) => pin.id === el.dataset.id);
       if (!n) continue;
-      el.style.transform = `translate(${n.x - origin.left}px, ${n.y - origin.top}px) translate(-50%, -100%)`;
+      el.style.transform = `translate(${n.x}px, ${n.y}px) translate(-50%, -100%)`;
     }
     // Kept in step for the next render, without telling Vue.
     for (let k = 0; k < pins.length; k++)
       Object.assign(toRaw(before[k]), pins[k]);
+  }
+  function refreshPinLayout() {
+    pinOffset = null;
+    if (removePins) governorRequestRender('stories-layout');
   }
   function startPins() {
     stopPins();
@@ -430,6 +452,7 @@ export function createStoriesController({
       return { id: s.id, at: fromDegrees(lon, lat) };
     });
     removePins = frame()?.on('postRender', placePins) ?? (() => {});
+    addEventListener('resize', refreshPinLayout);
     governorRequestRender('stories-pins');
   }
   // ── Explore's idle tour: the globe turns from one story to the next ──
@@ -497,6 +520,9 @@ export function createStoriesController({
     stopSettling();
     removePins?.();
     removePins = null;
+    removeEventListener('resize', refreshPinLayout);
+    pinObserver?.disconnect();
+    pinLayer = pinObserver = pinOffset = null;
     store.pins = [];
   }
   /**
@@ -699,7 +725,7 @@ export function createStoriesController({
   let downAt = null;
   const onDown = (e) => {
     downAt = [e.clientX, e.clientY];
-    if (store.mode === 'story' && innerWidth <= 700 && store.sheet !== 'peek')
+    if (store.mode === 'story' && innerWidth <= 720 && store.sheet !== 'peek')
       store.sheet = 'peek';
   };
   const onUp = (e) => {
@@ -728,7 +754,8 @@ export function createStoriesController({
     const nav = director.styleManager;
     if (nav?.runImmediateNavigation?.('stories', () => true) === false)
       return false;
-    if (director.running) director.stopScene();
+    const settling = director.busy || director.running;
+    director.stopScene();
     stopFollowing(viewer);
     // Reopened while a scene from the last visit is still tearing down: the
     // person's view from before that visit is still the one to come back to.
@@ -744,10 +771,23 @@ export function createStoriesController({
         location.pathname + location.search,
       );
     if (pendingView) {
-      saved = pendingView;
+      saved = pendingView.view;
       pendingView = null;
-    } else saveView();
-    closeGeneration += 1;
+    } else if (!settling) saveView();
+    const generation = ++closeGeneration;
+    // A temporarily unavailable card may be retried on the next visit.
+    for (const id of thumbKeys.keys())
+      if (!store.thumbs?.[id]) thumbKeys.delete(id);
+    if (settling) {
+      entryReady = directorSettled(director).then(() => {
+        if (destroyed || generation !== closeGeneration) return;
+        if (!saved) {
+          saveView();
+          saved.restoreOnExit = true;
+        }
+        entryReady = null;
+      });
+    }
     document.body.classList.add('stories-mode');
     onEnter?.();
     return true;
@@ -755,6 +795,8 @@ export function createStoriesController({
 
   // ── Card images: drawn once per story place from the base imagery ──
   const ESRI_STACK = 'esri-imagery';
+  const isEsri = () =>
+    director.styleManager?.mapStackController?.getActiveId?.() === ESRI_STACK;
   const thumbKeys = new Map();
   let drawingThumbs = false;
   let thumbsAgain = false;
@@ -764,15 +806,21 @@ export function createStoriesController({
     drawingThumbs = true;
     thumbsAgain = false;
     try {
-      for (const story of listStories()) {
+      const stories = listStories();
+      const currentIds = new Set(stories.map(({ id }) => id));
+      for (const id of thumbKeys.keys())
+        if (!currentIds.has(id)) thumbKeys.delete(id);
+      const kept = Object.entries(store.thumbs ?? {}).filter(([id]) =>
+        currentIds.has(id),
+      );
+      if (kept.length !== Object.keys(store.thumbs ?? {}).length)
+        store.thumbs = Object.fromEntries(kept);
+      for (const story of stories) {
         if (destroyed || store.mode === 'closed') break;
         // Drawn only from the keyless Esri World Imagery, whose terms allow
         // showing it with its credit; any other imagery leaves the
         // placeholder unless the scene has its own image.
-        const esri =
-          director.styleManager?.mapStackController?.getActiveId?.() ===
-          ESRI_STACK;
-        if (!esri && !story.thumb) {
+        if (!isEsri() && !story.thumb) {
           // A card drawn from Esri earlier goes: its credit is not on
           // screen under another imagery.
           if (store.thumbs?.[story.id]) {
@@ -785,16 +833,19 @@ export function createStoriesController({
         // The place Explore frames for it, as its pin shows.
         const a = areaOf(story);
         const c = { lat: a.lat, lon: a.lon, range: a.alt };
-        const key = story.thumb
-          ? story.thumb.slice(-32)
-          : `${c.lat},${c.lon},${c.range}`;
-        if (thumbKeys.get(story.id) === key && store.thumbs?.[story.id])
-          continue;
+        const key = story.thumb || `${c.lat},${c.lon},${c.range}`;
+        if (thumbKeys.get(story.id) === key) continue;
         // A card image the person captured in AUTHORING wins.
         const url = story.thumb || (await drawThumb(c));
-        if (!url || destroyed) continue;
+        if (destroyed || store.mode === 'closed' || !storyById(story.id))
+          continue;
+        if (!story.thumb && !isEsri()) continue;
         thumbKeys.set(story.id, key);
-        store.thumbs = { ...store.thumbs, [story.id]: url };
+        if (url) store.thumbs = { ...store.thumbs, [story.id]: url };
+        else if (store.thumbs?.[story.id]) {
+          const { [story.id]: _gone, ...rest } = store.thumbs;
+          store.thumbs = rest;
+        }
       }
     } finally {
       drawingThumbs = false;
@@ -833,21 +884,43 @@ export function createStoriesController({
             if (entry === exploreEntry && store.mode === 'explore') run();
           })
         : run();
-    if (!saved?.ranScene) return whenLaidOut(frame);
     // Back from a scene: once it has torn down, the person's own layers,
     // style and clock come back before Explore frames the globe, as on
     // Close. The address keeps naming only Stories' place.
-    directorSettled(director).then(() => {
+    const settled = () => {
       if (entry !== exploreEntry || store.mode !== 'explore' || destroyed)
         return;
       if (viewer.isDestroyed?.()) return;
-      const query = location.pathname + location.search;
-      restoreShareState(saved);
-      if (location.hash) history.replaceState(history.state, '', query);
-      restoreClock(saved);
-      saved.ranScene = false;
-      frame();
+      if (saved?.ranScene) {
+        const query = location.pathname + location.search;
+        restoreShareState(saved);
+        if (location.hash) history.replaceState(history.state, '', query);
+        restoreClock(saved);
+        saved.ranScene = false;
+      }
+      whenLaidOut(frame);
+    };
+    if (entryReady) return entryReady.then(settled);
+    if (saved?.ranScene) return directorSettled(director).then(settled);
+    return whenLaidOut(frame);
+  }
+
+  async function openInAuthoring(story, shotId, atMs) {
+    const closing = controller.close({ keepCamera: true });
+    if (!closing) return;
+    const generation = closeGeneration;
+    await closing;
+    if (destroyed || generation !== closeGeneration) return;
+    director.selectShot?.(story.sceneId, shotId);
+    director.styleManager?.setPanelCollapsed?.('scene-panel', false, {
+      explicit: true,
     });
+    store.hostedToast = {
+      id: story.id,
+      title: story.title,
+      atMs,
+      when: anchorStamp(story, atMs, null),
+    };
   }
 
   const controller = {
@@ -875,6 +948,7 @@ export function createStoriesController({
         return;
       }
       const generation = ++closeGeneration;
+      entryReady = null;
       dropPlayer();
       stopPins();
       camera()?.cancelFlight();
@@ -888,7 +962,8 @@ export function createStoriesController({
       store.toast = '';
       const was = saved;
       saved = null;
-      pendingView = was;
+      const pending = { view: was };
+      pendingView = pending;
       // A camera owner that takes over during the wait (the person dragging
       // the globe, a layer's focus) keeps the camera: no snap back.
       let navigated = false;
@@ -909,7 +984,7 @@ export function createStoriesController({
         // Reopened meanwhile (the reopen took `was` over), or torn down.
         if (
           generation !== closeGeneration ||
-          pendingView !== was ||
+          pendingView !== pending ||
           destroyed ||
           viewer.isDestroyed?.()
         )
@@ -918,7 +993,7 @@ export function createStoriesController({
         if (!navigated) restoreView(was, { keepCamera });
         // AUTHORING shows what it showed before, unless the person opened
         // the story there.
-        if (!keepCamera && was.playedScene && was.authoring)
+        if (!keepCamera && was?.playedScene && was.authoring)
           director.selectShot?.(was.authoring.sceneId, was.authoring.shotId);
         const afterLanding = () => {
           // Open in GEV keeps this place and look: the live view is written
@@ -941,6 +1016,7 @@ export function createStoriesController({
       if (store.picked === id) return;
       const s = id ? storyById(id) : null;
       store.picked = s ? id : null;
+      if (entryReady) return;
       flyTo(s ? pickView(s) : startView(), s ? 1.6 : 1.4);
       if (s) stopTour();
       else armTour(1400 + TOUR_DWELL_MS);
@@ -981,18 +1057,29 @@ export function createStoriesController({
         exploring: false,
         chapterIndex: 0,
       };
-      // A GEV scene plays on the person's own globe and layers.
-      if (saved) saved.ranScene = saved.playedScene = true;
-      // The scene's own labels, videos and cards stay visible.
-      document.body.classList.add('stories-scene');
-      player = createGevPlayer(director, story, { onTick });
-      // Related stories show their card images too, after a link.
-      drawThumbs();
-      startCameraReadout();
-      // Explore may have restored a different look while the director still
-      // has this shot selected. Reopening restores the authored look too.
-      if (atMs || !autoplay) player.seek(atMs, { reloadShot: true });
-      if (autoplay) player.play();
+      const start = () => {
+        // A GEV scene plays on the person's own globe and layers.
+        if (saved) saved.ranScene = saved.playedScene = true;
+        document.body.classList.add('stories-scene');
+        player = createGevPlayer(director, story, { onTick });
+        drawThumbs();
+        startCameraReadout();
+        // Explore may have restored a different look while this shot
+        // remained selected. Reopening restores the authored look too.
+        if (atMs || !autoplay) player.seek(atMs, { reloadShot: true });
+        if (autoplay) player.play();
+      };
+      if (entryReady) {
+        const opening = store.playback;
+        entryReady.then(() => {
+          if (
+            !destroyed &&
+            store.mode === 'story' &&
+            store.playback === opening
+          )
+            start();
+        });
+      } else start();
       if (!fromHistory)
         navigate(
           atMs
@@ -1005,10 +1092,10 @@ export function createStoriesController({
         store.flashHint(t('Drag the map to explore · Resume any time'), 4200);
       }
     },
-    backToExplore({ fromHistory = false } = {}) {
+    backToExplore({ fromHistory = false, returningToExplore = false } = {}) {
       if (destroyed) return;
       cancelInitialLink();
-      // A second Back keeps the traversal, but cancels a story queued since.
+      // A second Back keeps the traversal and clears the queued action.
       if (!fromHistory && traversing()) {
         if (steppingBack) afterTraversal = null;
         return;
@@ -1039,8 +1126,17 @@ export function createStoriesController({
         navigate({ [PARAM_STORIES]: 'explore' }, true);
       } else {
         const params = new URLSearchParams(location.search);
-        if (params.has(PARAM_SELECTED_STORY))
+        if (returningToExplore && params.has(PARAM_SELECTED_STORY)) {
+          const story = store.picked && storyById(store.picked);
+          navigate(
+            story && !story.mine
+              ? { [PARAM_STORIES]: 'explore', [PARAM_SELECTED_STORY]: story.id }
+              : { [PARAM_STORIES]: 'explore' },
+            false,
+          );
+        } else if (params.has(PARAM_SELECTED_STORY)) {
           store.picked = exploreSelection(params);
+        }
       }
       showExplore();
     },
@@ -1053,36 +1149,27 @@ export function createStoriesController({
       return player ? 'gev' : null;
     },
     /** Layout changed (panel width, sheet, feed size): place the pins again. */
-    reframe() {
-      if (removePins) governorRequestRender('stories-layout');
-    },
+    reframe: refreshPinLayout,
     /**
      * A GEV scene leaves Stories for GEV's own Scenes panel: the globe stays
      * where the story was, and the scene and its current shot are selected
      * there for authoring.
      */
     async openInGev() {
-      const s = player?.story;
+      const s = store.storyId && storyById(store.storyId);
       if (!s) return;
       const atMs = store.playback.wallMs;
       const shotId = s.chapters[store.playback.chapterIndex]?.id ?? null;
-      player.pause();
-      // After Close has settled: the scene's teardown restores GEV's look
-      // and panels, which would fold the Scenes panel again.
-      const closing = controller.close({ keepCamera: true });
-      const generation = closeGeneration;
-      await closing;
-      if (destroyed || generation !== closeGeneration) return;
-      director.selectShot?.(s.sceneId, shotId);
-      director.styleManager?.setPanelCollapsed?.('scene-panel', false, {
-        explicit: true,
-      });
-      store.hostedToast = {
-        id: s.id,
-        title: s.title,
-        atMs,
-        when: anchorStamp(s, atMs, null),
-      };
+      if (steppingBack) {
+        afterTraversal = () => openInAuthoring(s, shotId, atMs);
+        return;
+      }
+      if (entryReady) {
+        await entryReady;
+        if (destroyed || player?.story !== s) return;
+      }
+      player?.pause();
+      return openInAuthoring(s, shotId, atMs);
     },
     /** The Stories place only: not the sender's camera, layers or style. */
     shareLink() {
@@ -1105,6 +1192,7 @@ export function createStoriesController({
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      entryReady = null;
       cancelInitialLink();
       clearTimeout(backTimer);
       clearTimeout(landingTimer);

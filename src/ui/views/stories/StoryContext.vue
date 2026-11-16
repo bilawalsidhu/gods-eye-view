@@ -131,7 +131,7 @@ function setSheet(s) {
   setTimeout(() => store.controller.reframe(), 320);
 }
 function onHandleDown(e) {
-  if (innerWidth > 700) return;
+  if (innerWidth > 720) return;
   try {
     e.currentTarget.setPointerCapture(e.pointerId);
   } catch {

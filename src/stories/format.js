@@ -23,7 +23,7 @@ export function creditPlacement({ map, feed, width, height }) {
     feed.right < map.right &&
     feed.top < map.bottom - 1 &&
     feed.bottom >= map.bottom - 1;
-  const gap = width <= 700 ? 10 : 24;
+  const gap = width <= 720 ? 10 : 24;
   return {
     bottom: Math.max(0, height - map.bottom) + 6,
     left: besideFeed ? feed.right + 14 : map.left + gap,

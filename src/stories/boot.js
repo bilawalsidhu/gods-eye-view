@@ -4,6 +4,14 @@ const wantsStories = () => {
   return STORIES_PARAMS.some((p) => params.has(p));
 };
 
+/** Stop microphone use on entry while letting an active typed turn finish. */
+export function stopVoiceForStories(session) {
+  if (!session || session.adapter.getStartOptions?.()?.textOnly) return false;
+  const wasActive = session.isActive();
+  session.stop();
+  return wasActive;
+}
+
 /**
  * Stories, loaded on first use. The controller, the story catalog, the
  * screens and their styles are separate chunks, fetched when the person

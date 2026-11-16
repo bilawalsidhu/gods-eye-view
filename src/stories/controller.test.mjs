@@ -357,6 +357,69 @@ test('Back to Explore after a related story steps past both stories', (t) => {
   controller.destroy();
 });
 
+test('Back to Explore keeps the returned story and finishes a queued Open in GEV', async (t) => {
+  const { controller, director, store } = setup();
+  t.after(() => controller.destroy());
+  const steps = recordGo(t);
+  const explore = '/?stories=explore&selectedStory=gev%3Aorbital-watch';
+  const entry = { gevStories: { stories: 'explore', depth: 1, explore: 1 } };
+  history.replaceState(entry, '', explore);
+  controller.open({ fromHistory: true });
+  controller.openStory('gev:flights-radar');
+  controller.backToExplore();
+  history.replaceState(entry, '', explore);
+  dispatchEvent(new PopStateEvent('popstate'));
+  assert.equal(store.picked, 'gev:flights-radar');
+  assert.equal(
+    new URL(location.href).searchParams.get('selectedStory'),
+    'gev:flights-radar',
+  );
+
+  controller.openStory('gev:flights-radar');
+  controller.backToExplore();
+  await controller.openInGev();
+  assert.deepEqual(director.selected, []);
+  history.replaceState(entry, '', explore);
+  dispatchEvent(new PopStateEvent('popstate'));
+  await tick();
+  assert.equal(store.mode, 'closed');
+  assert.deepEqual(steps, [-1, -1, -1]);
+  assert.equal(director.selected.at(-1)?.[0], 'flights-radar');
+});
+
+test('Stories waits for a stopped Authoring load before framing and saving the view', async (t) => {
+  const { controller, director, camera } = setup();
+  t.after(() => controller.destroy());
+  recordGo(t);
+  let resolveIdle;
+  director.busy = true;
+  director.whenIdle = () =>
+    new Promise((resolve) => {
+      resolveIdle = resolve;
+    });
+  const share = director.styleManager.shareLinkManager;
+  const snapshots = [];
+  share.snapshotHash = () => {
+    snapshots.push(director.busy);
+    return 'v=2&lat=25';
+  };
+  assert.equal(controller.open(), true);
+  assert.equal(director.stops, 1);
+  assert.deepEqual(snapshots, []);
+  assert.equal(camera.flights.length, 0);
+  await Promise.resolve();
+  director.busy = false;
+  resolveIdle();
+  await tick();
+  assert.deepEqual(snapshots, [false]);
+  assert.equal(camera.flights.length, 1);
+
+  director.whenIdle = async () => {};
+  await controller.close();
+  land();
+  assert.deepEqual(share.restored, ['v=2&lat=25']);
+});
+
 test('a second Close after a quick reopen still waits for the scene to tear down', async () => {
   const { controller, director, camera } = setup();
   controller.open();

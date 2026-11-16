@@ -267,7 +267,9 @@ function ownBoxEntries() {
       if (part.startsWith('body.mobile-shell')) continue;
       // So is Stories, with GEV's chrome stepped aside; storiesCredit.test.mjs
       // pins its attribution placement.
-      if (part.startsWith('body.stories-mode')) continue;
+      if (
+        /^body\.stories-mode:not\(#gs-a\):not\(#gs-b\) #(cesium|gev)-credits$/.test(part)
+      ) continue;
       entries.push({ rule, part });
     }
   }

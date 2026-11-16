@@ -3,6 +3,7 @@ import { computed, markRaw, shallowRef } from 'vue';
 
 /**
  * @typedef {object} SceneRowHandlers
+ * @property {(sceneId: string) => void} selectScene
  * @property {(shotId: string) => void} select
  * @property {(sceneId: string, shotId: string, title: string) => void} rename
  * @property {(sceneId: string, shotId: string) => void} load

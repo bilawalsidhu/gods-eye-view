@@ -18,7 +18,7 @@ export { SCENE_DOCUMENT_LIMITS, SceneDocumentError } from './documentFields.js';
 import { validateSceneInteractions } from './interactions/document.js';
 import { STORY_TAG_LIMIT, isStoryTagList } from '../scenes/storyTags.js';
 import { STORY_THUMB_MAX_LENGTH, isStoryThumb } from '../scenes/storyThumb.js';
-export const SCENE_DOCUMENT_VERSION = 6;
+export const SCENE_DOCUMENT_VERSION = 7;
 
 function visual(value, path, legacy) {
   fields(value, path, [
@@ -74,7 +74,11 @@ export function validateSceneDocument(project) {
     'scenes',
   ]);
   const version = Object.hasOwn(project, 'version') ? project.version : 1;
-  if (![1, 2, 3, 4, 5, 6].includes(version))
+  if (
+    !Number.isInteger(version) ||
+    version < 1 ||
+    version > SCENE_DOCUMENT_VERSION
+  )
     fail('$.version', 'unsupported scene project version');
   const legacy = version < 3;
   for (const key of ['createdAt', 'updatedAt'])

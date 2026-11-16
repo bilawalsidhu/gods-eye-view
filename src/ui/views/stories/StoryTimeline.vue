@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { t } from '../../../i18n/index.js';
 import { useStoriesStore } from '../../stores/stories.js';
@@ -25,7 +25,8 @@ const { playback, muted, expanded } = storeToRefs(store);
 const dur = computed(
   () => playback.value.durationMs || props.story.durationMs || 1,
 );
-const tNow = computed(() => playback.value.wallMs);
+const previewMs = ref(null);
+const tNow = computed(() => previewMs.value ?? playback.value.wallMs);
 const pct = computed(() => clamp((tNow.value / dur.value) * 100, 0, 100));
 const k = computed(() => chapterAt(props.story, tNow.value));
 const chapters = computed(() => props.story.chapters);
@@ -76,7 +77,12 @@ const segs = computed(() =>
 
 // ── Readout ──
 const clock = computed(() =>
-  clockText(props.story, tNow.value, playback.value.worldMs, k.value),
+  clockText(
+    props.story,
+    tNow.value,
+    previewMs.value == null ? playback.value.worldMs : null,
+    k.value,
+  ),
 );
 const stampAt = (ms) => fmtDur(ms);
 const headTime = computed(() => `${fmtDur(tNow.value)} / ${fmtDur(dur.value)}`);
@@ -84,18 +90,15 @@ const atEdge = computed(
   () => props.story.live && tNow.value >= dur.value - 600,
 );
 
-// ── Scrubbing: magnetic chapter ticks, momentum, haptic ticks ──
+// ── Scrubbing: preview locally, seek the globe once on release ──
 const track = ref(null);
-const scrubbing = ref(false);
+const scrubbing = computed(() => previewMs.value !== null);
 const snap = ref(-1);
 const hovered = ref(-1);
 const ghost = ref(0);
 const bubbleAt = ref(null);
 let sc = null;
-let coastRaf = 0;
 let pipSnap = -1;
-const reduceMotion = () =>
-  globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 const haptic = () => {
   try {
     navigator.vibrate?.(3);
@@ -105,10 +108,11 @@ const haptic = () => {
 };
 function trackAt(clientX) {
   const r = track.value.getBoundingClientRect();
-  let u = clamp((clientX - r.left) / r.width, 0, 1);
+  const width = r.width || 1;
+  let u = clamp((clientX - r.left) / width, 0, 1);
   let snapped = -1;
   chapters.value.forEach((c, i) => {
-    if (i && Math.abs(u - c.wallMs / dur.value) * r.width < 9) {
+    if (i && Math.abs(u - c.wallMs / dur.value) * width < 9) {
       u = c.wallMs / dur.value;
       snapped = i;
     }
@@ -141,31 +145,26 @@ function scrubTo(target) {
     haptic();
     sc.ch = ch;
   }
-  seek(tt);
+  previewMs.value = tt;
   snap.value = snapped;
   bubbleAt.value = tt;
-  return snapped >= 0 || snapped <= -2 ? Math.max(0, snapped) : -1;
 }
 function onDown(e) {
-  if (e.target.closest('.tl-pip')) return;
+  if (sc || e.button !== 0 || e.target.closest('.tl-pip')) return;
   try {
     track.value.setPointerCapture(e.pointerId);
   } catch {
     /* nothing to capture */
   }
-  cancelAnimationFrame(coastRaf);
-  scrubbing.value = true;
   const r = trackAt(e.clientX);
   sc = {
+    pointerId: e.pointerId,
     lastX: e.clientX,
     lastT: performance.now(),
-    v: 0,
     ch: chapterAt(props.story, r.t),
     at: r.t,
   };
-  seek(r.t);
-  snap.value = r.snapped;
-  bubbleAt.value = r.t;
+  scrubTo(r.t);
 }
 function onMove(e) {
   if (!scrubbing.value) {
@@ -184,47 +183,27 @@ function onMove(e) {
     bubbleAt.value = r.t;
     return;
   }
+  if (sc.pointerId !== e.pointerId) return;
   // Slow drags are fine, fast drags coarse.
   const now = performance.now();
   const dx = e.clientX - sc.lastX;
   const dtm = Math.max(1, now - sc.lastT);
   const w = track.value.getBoundingClientRect().width || 1;
   const gain = clamp(0.25 + (Math.abs(dx) / dtm) * 1.1, 0.25, 2.5);
-  const before = sc.at;
   sc.at = clamp(sc.at + (dx / w) * dur.value * gain, 0, dur.value - 10);
   scrubTo(sc.at);
-  sc.v = (sc.at - before) / dtm;
   sc.lastX = e.clientX;
   sc.lastT = now;
 }
-function onUp() {
-  scrubbing.value = false;
+function finishScrub(e) {
+  if (sc?.pointerId !== e.pointerId) return;
+  const at = previewMs.value;
+  sc = null;
+  previewMs.value = null;
   snap.value = -1;
   pipSnap = -1;
-  if (
-    !sc ||
-    reduceMotion() ||
-    Math.abs(sc.v) < 2 ||
-    performance.now() - sc.lastT > 120
-  ) {
-    sc = null;
-    return;
-  }
-  // A release coasts with momentum, stopping on a chapter tick.
-  let v = sc.v * 16;
-  let at = sc.at;
-  const coast = () => {
-    at += v;
-    const hit = scrubTo(at);
-    v *= 0.92;
-    if (hit >= 0 || Math.abs(v) < 20 || at <= 0 || at >= dur.value - 20) {
-      snap.value = -1;
-      sc = null;
-      return;
-    }
-    coastRaf = requestAnimationFrame(coast);
-  };
-  coastRaf = requestAnimationFrame(coast);
+  if (e.type === 'pointerup') seek(at);
+  else bubbleAt.value = null;
 }
 function onLeave() {
   if (scrubbing.value) return;
@@ -369,7 +348,6 @@ function jumpLive() {
   if (playback.value.exploring) store.controller.resume();
 }
 
-onBeforeUnmount(() => cancelAnimationFrame(coastRaf));
 defineExpose({ goChapter });
 </script>
 
@@ -410,8 +388,9 @@ defineExpose({ goChapter });
       :aria-valuetext="`${clock.big}, ${t('chapter')} ${k + 1}: ${chTitle(chapters[k])}`"
       @pointerdown="onDown"
       @pointermove="onMove"
-      @pointerup="onUp"
-      @pointercancel="onUp"
+      @pointerup="finishScrub"
+      @pointercancel="finishScrub"
+      @lostpointercapture="finishScrub"
       @pointerleave="onLeave"
       @keydown="onKey"
     >

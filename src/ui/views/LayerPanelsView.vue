@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
 import UiButton from '../kit/UiButton.vue';
@@ -24,6 +25,7 @@ const { toolbar, dialog } = storeToRefs(useSceneSharingStore());
 // answers the buttons through the store.
 const scenes = useSceneStore();
 const { panel: scene, currentScene } = storeToRefs(scenes);
+const emptyScenes = computed(() => scenes.scenes.filter(({ shots }) => !shots.length));
 const off = (name) => scene.value?.disabled[name] ?? false;
 // The current scene's Stories tags; a chip not yet on is off at the limit.
 const tagOn = (tag) => currentScene.value?.storyTags?.includes(tag) ?? false;
@@ -75,6 +77,17 @@ async function importChosen(event) {
       <p class="scene-step-heading">{{ t('SCENE') }}</p>
       <div class="scene-controls">
         <p id="scene-name" :class="{ 'scene-name-empty': !currentScene }">{{ currentScene?.title ?? t('No scene yet') }}</p>
+        <select
+          v-if="emptyScenes.length"
+          id="empty-scene-select"
+          :aria-label="t('Empty drafts')"
+          :disabled="off('new')"
+          :value="currentScene?.shots.length === 0 ? currentScene.id : ''"
+          @change="scenes.act('selectScene', $event.target.value)"
+        >
+          <option value="" disabled>{{ t('Empty drafts') }}</option>
+          <option v-for="draft in emptyScenes" :key="draft.id" :value="draft.id">{{ draft.title }}</option>
+        </select>
         <UiButton id="scene-new-btn" type="button" :disabled="off('new')" @click="scenes.act('create')" class="gev-action-button scene-btn" :title="t('Start a new, empty scene')">{{ t('NEW SCENE') }}</UiButton>
         <UiButton tone="alert" id="scene-delete-btn" type="button" :disabled="off('delete')" @click="scenes.act('deleteScene')" class="gev-action-button gev-action-button--danger scene-btn scene-btn-danger" :title="t('Delete this scene and all of its shots')">{{ t('DELETE') }}</UiButton>
       </div>

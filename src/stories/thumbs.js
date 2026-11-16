@@ -106,14 +106,18 @@ export async function drawThumb(cover, { loadTile = loadImage } = {}) {
           const x = (((x0 + dx) % n) + n) % n;
           const image = await tile(loadTile, x, y, level);
           if (!image) return;
-          ctx.drawImage(
-            image,
-            ox + dx * TILE_SIZE,
-            oy + dy * TILE_SIZE,
-            TILE_SIZE + 1,
-            TILE_SIZE + 1,
-          );
-          drawn += 1;
+          try {
+            ctx.drawImage(
+              image,
+              ox + dx * TILE_SIZE,
+              oy + dy * TILE_SIZE,
+              TILE_SIZE + 1,
+              TILE_SIZE + 1,
+            );
+            drawn += 1;
+          } finally {
+            image.close?.();
+          }
         }),
       ),
     );

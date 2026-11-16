@@ -862,7 +862,7 @@ test('Stories tag chips and THUMBNAIL follow the current scene', async () => {
   }
 });
 
-test('the real director captures into a new scene from an empty panel', async () => {
+test('authoring can reopen a saved empty draft and capture from an empty panel', async () => {
   const f = fixture();
   const previousStorage = globalThis.localStorage;
   let saved = null;
@@ -873,7 +873,14 @@ test('the real director captures into a new scene from an empty panel', async ()
       configurable: true,
       writable: true,
       value: {
-        getItem: () => JSON.stringify({ version: 3, scenes: f.state.scenes }),
+        getItem: () =>
+          JSON.stringify({
+            version: 3,
+            scenes: [
+              ...f.state.scenes,
+              { id: 'empty-draft', title: 'Empty draft', shots: [] },
+            ],
+          }),
         setItem: (_key, value) => {
           saved = JSON.parse(value);
         },
@@ -896,6 +903,23 @@ test('the real director captures into a new scene from an empty panel', async ()
     );
     await nextTick();
     assert.equal(f.elements.name.textContent, 'No scene yet');
+    const drafts = document.getElementById('empty-scene-select');
+    assert.ok(drafts);
+    drafts.value = 'empty-draft';
+    drafts.dispatchEvent(new Event('change'));
+    await nextTick();
+    assert.equal(f.elements.name.textContent, 'Empty draft');
+    assert.equal(
+      director.draftScenes().some(({ id }) => id === 'empty-draft'),
+      false,
+    );
+    window.confirm = () => true;
+    f.elements.delete.click();
+    await nextTick();
+    assert.equal(
+      saved.scenes.some(({ id }) => id === 'empty-draft'),
+      false,
+    );
     window.prompt = () => 'Harbour';
     f.elements.capture.click();
     await nextTick();

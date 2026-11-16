@@ -318,20 +318,23 @@ export function listStories() {
   const shippedIds = new Set(shipped.map((s) => s.sceneId));
   // One object per saved scene, kept across calls: the controller fills its
   // chapters in place when it opens, and the screens read the same object.
-  const own = (savedScenes() ?? [])
-    .filter((entry) => !shippedIds.has(entry.id))
-    .map((entry) => {
-      const story = saved.get(entry.id) ?? savedStory(entry);
-      story.title = entry.title;
-      story.draft = !!entry.draft;
-      story.description = describe(entry);
-      story.cover = coverOf(entry.camera);
-      story.topics = [...(entry.tags ?? [])];
-      story.tags = [...(entry.tags ?? [])];
-      story.thumb = entry.thumb ?? '';
-      saved.set(entry.id, story);
-      return story;
-    });
+  const entries = (savedScenes() ?? []).filter(
+    (entry) => !shippedIds.has(entry.id),
+  );
+  const ids = new Set(entries.map(({ id }) => id));
+  for (const id of saved.keys()) if (!ids.has(id)) saved.delete(id);
+  const own = entries.map((entry) => {
+    const story = saved.get(entry.id) ?? savedStory(entry);
+    story.title = entry.title;
+    story.draft = !!entry.draft;
+    story.description = describe(entry);
+    story.cover = coverOf(entry.camera);
+    story.topics = [...(entry.tags ?? [])];
+    story.tags = [...(entry.tags ?? [])];
+    story.thumb = entry.thumb ?? '';
+    saved.set(entry.id, story);
+    return story;
+  });
   return [...own, ...shipped.filter((s) => installed(s.sceneId))];
 }
 

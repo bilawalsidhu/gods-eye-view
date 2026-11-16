@@ -26,6 +26,7 @@ import {
   cameraOf,
   canvasOf,
   findCamera,
+  findCredits,
   findFrame,
 } from '../render/rendererOf.js';
 import {
@@ -455,6 +456,7 @@ export class SceneDirector {
         hasRun: !!this._lastRunJson,
       }),
       actions: {
+        selectScene: (id) => this.selectShot(id),
         selectShot: (id) => {
           this._selectedShotId = id;
           this._publish({ type: 'selection-changed' });
@@ -637,14 +639,37 @@ export class SceneDirector {
   async captureSceneThumb() {
     const scene = this._getSelectedScene();
     if (!scene || this._destroyed) return false;
+    const canCapture = () => {
+      const map = this.styleManager.mapStackController?.getState();
+      return map?.activeId === 'esri-imagery' && map.status === 'ready';
+    };
+    if (!canCapture()) {
+      this._updateStatus(() =>
+        t('Switch to Esri World Imagery to capture a thumbnail'),
+      );
+      return false;
+    }
     let thumb;
     try {
       thumb = await captureStoryThumb(
         { frame: findFrame(this.viewer), canvas: canvasOf(this.viewer) },
-        { createCanvas: () => document.createElement('canvas') },
+        {
+          createCanvas: () => document.createElement('canvas'),
+          creditForFrame: () =>
+            canCapture()
+              ? findCredits(this.viewer)
+                  ?.list()
+                  .find(({ text }) => text.startsWith('Powered by Esri'))?.text
+              : null,
+        },
       );
     } catch (error) {
       console.warn('[Scenes] Could not capture the thumbnail:', error);
+      if (!this._destroyed)
+        this._updateStatus(() => t('Thumbnail could not be captured'));
+      return false;
+    }
+    if (!thumb) {
       if (!this._destroyed)
         this._updateStatus(() => t('Thumbnail could not be captured'));
       return false;
@@ -2119,6 +2144,11 @@ export class SceneDirector {
   /** @returns {boolean} Whether a scene run is currently in progress */
   get running() {
     return this._running;
+  }
+
+  /** Whether an existing run, LOAD, seek or interaction still owns work. */
+  get busy() {
+    return this.running || Boolean(this._pendingWork?.size);
   }
 
   /**

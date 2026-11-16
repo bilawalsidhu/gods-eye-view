@@ -39,6 +39,8 @@ async function share() {
 }
 // Long titles scroll gently so the whole name can be read.
 const mtitle = ref(null);
+const back = ref(null);
+const trail = ref(null);
 let observer = null;
 function fitTitle() {
   const el = mtitle.value;
@@ -50,6 +52,10 @@ function fitTitle() {
   el.style.setProperty('--mq-dur', `${Math.max(5, (over + 22) / 22)}s`);
 }
 onMounted(() => {
+  const target = back.value?.getClientRects().length
+    ? back.value
+    : trail.value?.querySelector('button');
+  target?.focus({ preventScroll: true });
   if (globalThis.ResizeObserver && mtitle.value) {
     observer = new ResizeObserver(fitTitle);
     observer.observe(mtitle.value);
@@ -66,6 +72,7 @@ onBeforeUnmount(() => observer?.disconnect());
 <template>
   <header class="h-top s-head">
     <button
+      ref="back"
       class="s-back glass"
       type="button"
       :aria-label="
@@ -98,7 +105,7 @@ onBeforeUnmount(() => observer?.disconnect());
         </button>
         <span class="h-word" translate="no">GOD'S EYE <b>VIEW</b></span>
       </div>
-      <nav class="h-tag s-trail" :aria-label="t('Breadcrumb')">
+      <nav ref="trail" class="h-tag s-trail" :aria-label="t('Breadcrumb')">
         <template v-if="screen === 'explore'">
           <button type="button" @click="emit('home')">{{ t('Globe') }}</button>
           <span aria-hidden="true">/</span>

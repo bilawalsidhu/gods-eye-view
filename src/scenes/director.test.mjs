@@ -1905,7 +1905,7 @@ test('unsupported stored documents cannot be overwritten by fallback edits', asy
     assert.equal(localStorage.getItem('godsEyeView.sceneProject.v2'), saved);
     await director.importProjectFile({ name: 'valid.json', text: async () => JSON.stringify(PROJECT_FIXTURE) });
     assert.equal(director._storageReadError, null);
-    assert.equal(JSON.parse(localStorage.getItem('godsEyeView.sceneProject.v2')).version, 6);
+    assert.equal(JSON.parse(localStorage.getItem('godsEyeView.sceneProject.v2')).version, 7);
   } finally { restore(); }
 });
 
@@ -2499,7 +2499,8 @@ test('story thumbnail and tags survive a reload and an export/import round trip'
   try {
     first.director.setSceneStoryThumb('scene-1', THUMB);
     first.director.setSceneStoryTags('scene-1', ['Storms']);
-    saved = localStorage.getItem('godsEyeView.sceneProject.v2');
+    // Draft builds wrote the same optional Stories fields in version 6.
+    saved = JSON.stringify({ ...savedProject(), version: 6 });
   } finally {
     first.restore();
   }
@@ -2511,6 +2512,7 @@ test('story thumbnail and tags survive a reload and an export/import round trip'
     assert.equal(scene.storyThumb, THUMB);
     assert.deepEqual(scene.storyTags, ['Storms']);
     const exported = stringifySceneDocument(director._project);
+    assert.equal(JSON.parse(exported).version, 7);
     director.setSceneStoryTags('scene-1', []);
     director.setSceneStoryThumb('scene-1', 'data:image/png;base64,AAAA');
     assert.equal(
@@ -2565,8 +2567,8 @@ test('imports with a malformed thumbnail or tags are refused', async () => {
   }
 });
 
-test('THUMBNAIL stores the frame read in postRender on the selected scene', async () => {
-  const { director, viewer, restore } = makeDirector();
+test('THUMBNAIL stores only a credited Esri frame on the selected scene', async () => {
+  const { director, viewer, styleManager, restore } = makeDirector();
   const createElement = document.createElement;
   try {
     assert.equal(
@@ -2575,26 +2577,54 @@ test('THUMBNAIL stores the frame read in postRender on the selected scene', asyn
       'no scene, no capture',
     );
     director.selectShot('scene-1');
+    let activeId = 'photoreal';
+    styleManager.mapStackController = {
+      getState: () => ({ activeId, status: 'ready' }),
+    };
     // The renderer's frame port: postRender runs on the frame it is asked for.
     const listeners = new Set();
     const renderer = rendererOf(viewer);
     viewer.canvas = { width: 640, height: 360 };
+    renderer.credits = {
+      list: () => [{ text: 'Powered by Esri — Source: Esri and Maxar' }],
+    };
     renderer.frame = {
       on(phase, listener) {
         assert.equal(phase, 'postRender');
         listeners.add(listener);
         return () => listeners.delete(listener);
       },
-      requestRender: () => [...listeners].forEach((listener) => listener({})),
+      requestRender() {},
     };
+    const frame = () => [...listeners].forEach((listener) => listener());
+    const credit = [];
     document.createElement = () => ({
-      getContext: () => ({ drawImage() {} }),
+      getContext: () => ({
+        drawImage() {},
+        fillRect() {},
+        fillText: (line) => credit.push(line),
+      }),
       toDataURL: () => THUMB,
     });
-    assert.equal(await director.captureSceneThumb(), true);
+    assert.equal(await director.captureSceneThumb(), false);
+    assert.equal(listeners.size, 0);
+    activeId = 'esri-imagery';
+    const capturing = director.captureSceneThumb();
+    frame();
+    assert.equal(await capturing, true);
+    assert.ok(credit.some((line) => /Esri/.test(line)));
     assert.equal(director._project.scenes[0].storyThumb, THUMB);
     assert.equal(director._presentation.status, 'Thumbnail captured');
 
+    const switching = director.captureSceneThumb();
+    activeId = 'photoreal';
+    credit.length = 0;
+    frame();
+    assert.equal(await switching, false);
+    assert.deepEqual(credit, []);
+    assert.equal(director._project.scenes[0].storyThumb, THUMB);
+
+    activeId = 'esri-imagery';
     delete renderer.frame;
     assert.equal(await director.captureSceneThumb(), false);
     assert.equal(
