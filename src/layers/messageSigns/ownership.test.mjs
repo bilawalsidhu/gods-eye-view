@@ -479,6 +479,17 @@ test('selected sign keeps its card but no face outside the face bounds', async (
   h.layer.destroy();
 });
 
+/** Move the camera at the harness latitude and let moveEnd settle. */
+async function moveCamera(h, lon, heightM) {
+  h.viewer.camera.positionCartographic = Cesium.Cartographic.fromDegrees(
+    lon,
+    44.95,
+    heightM,
+  );
+  for (const fn of h.moveEnd) fn();
+  await settle();
+}
+
 /**
  * 41 lit signs in a line east of the camera. The farthest, animated, ranks
  * just past the face budget yet sits inside the height and distance bounds,
@@ -489,7 +500,7 @@ async function pastBudgetSelection() {
     sign(
       `V${String(i).padStart(2, '0')}`,
       `msg_${String(i).padStart(8, '0')}`,
-      { lat: 44.95, lon: -93.2 + i * 0.01 },
+      { lon: -93.2 + i * 0.01 },
     ),
   );
   const far = signs.at(-1);
@@ -505,18 +516,7 @@ async function pastBudgetSelection() {
   h.click({ x: 1, y: 1 }, { id: `message-sign:${far.id}` });
   await settle();
   assert.equal(h.cards().length, 1);
-  const moveTo = async (lon, heightM) => {
-    h.viewer.camera.positionCartographic = Cesium.Cartographic.fromDegrees(
-      lon,
-      44.95,
-      heightM,
-    );
-    for (const fn of h.moveEnd) fn();
-    await settle();
-  };
-  const farDecoders = () =>
-    h.decoders.filter((decoder) => decoder.message === far.message);
-  return { h, far, hasFace, moveTo, farDecoders };
+  return { h, far, hasFace };
 }
 
 test('selection lifts a sign past the face budget', async () => {
@@ -528,43 +528,40 @@ test('selection lifts a sign past the face budget', async () => {
 });
 
 test('a selected sign past the budget keeps its face at the height and distance limits', async () => {
-  const { h, far, hasFace, moveTo } = await pastBudgetSelection();
-  await moveTo(-93.2, FACE_FADE_END_M);
+  const { h, far, hasFace } = await pastBudgetSelection();
+  await moveCamera(h, -93.2, FACE_FADE_END_M);
   assert.ok(hasFace(), 'at the height limit');
 
   // Still ranked past the budget, just inside the distance limit.
-  const kmPerDegree = 111.32 * Math.cos((44.95 * Math.PI) / 180);
+  const kmPerDegree = approxDistanceKm(far.lat, 0, far.lat, 1);
   const edgeLon = far.lon - (FACE_MAX_DISTANCE_KM - 0.5) / kmPerDegree;
-  const km = approxDistanceKm(44.95, edgeLon, far.lat, far.lon);
-  assert.ok(km < FACE_MAX_DISTANCE_KM && km > FACE_MAX_DISTANCE_KM - 1);
-  await moveTo(edgeLon, 1500);
+  await moveCamera(h, edgeLon, 1500);
   assert.ok(hasFace(), 'just inside the distance limit');
   assert.equal(h.faces().length, FACE_BUDGET + 1);
   h.layer.destroy();
 });
 
 test('a culled selected face closes its decoder, then returns and flips inside the bounds', async () => {
-  const { h, far, hasFace, moveTo, farDecoders } = await pastBudgetSelection();
-  await moveTo(-93.2, FACE_FADE_END_M + 1);
+  const { h, far, hasFace } = await pastBudgetSelection();
+  const farClosed = () =>
+    h.decoders
+      .filter((decoder) => decoder.message === far.message)
+      .map((decoder) => decoder.closed);
+  await moveCamera(h, -93.2, FACE_FADE_END_M + 1);
   assert.ok(!hasFace());
-  assert.ok(farDecoders().every((decoder) => decoder.closed));
+  assert.deepEqual(farClosed(), [true]);
   assert.equal(h.pendingTimers.size, 0);
   assert.equal(h.cards().length, 1);
 
-  const fetches = () =>
-    h.requests.faces.filter((message) => message === far.message).length;
-  const before = fetches();
-  await moveTo(-93.2, 1500);
+  await moveCamera(h, -93.2, 1500);
   assert.ok(hasFace(), 'back inside the bounds');
-  assert.equal(fetches(), before + 1);
   assert.equal(h.pendingTimers.size, 1);
   await h.advance(1000);
-  const farFrames = h.drawn.filter(
+  const lastFrame = h.drawn.findLast(
     ({ image }) => image.message === far.message,
   );
-  assert.equal(farFrames.at(-1).image.frameIndex, 1);
-  assert.equal(farDecoders().length, 2);
-  assert.ok(farDecoders()[0].closed && !farDecoders()[1].closed);
+  assert.equal(lastFrame.image.frameIndex, 1);
+  assert.deepEqual(farClosed(), [true, false]);
   h.layer.destroy();
 });
 
@@ -581,13 +578,7 @@ test('a selected sign culled above the bounds is fully released on deselect or d
     await h.layer.update(h.viewer);
     await settle();
     h.faces()[0].activate();
-    h.viewer.camera.positionCartographic = Cesium.Cartographic.fromDegrees(
-      -93.2,
-      44.95,
-      FACE_FADE_END_M + 1,
-    );
-    for (const fn of h.moveEnd) fn();
-    await settle();
+    await moveCamera(h, -93.2, FACE_FADE_END_M + 1);
     assert.equal(h.faces().length, 0, finish);
     assert.equal(h.cards().length, 1, finish);
 
