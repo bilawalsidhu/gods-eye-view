@@ -29,7 +29,7 @@ export function createDependencies({
    * @returns {boolean} Whether a vessel became the subject.
    */
   function adoptSelectedVessel() {
-    const vessel = parts.subject.currentSelectedVesselSubject();
+    const vessel = parts.subject.currentSelectedVesselSubject?.();
     if (!vessel) return false;
     layerState.autoFocusRetryPending = false;
     parts.subject.selectSubject(vessel);

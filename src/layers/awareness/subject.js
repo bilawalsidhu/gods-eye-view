@@ -544,7 +544,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
     return subjectFromContext({
       layerId: 'ais-live-vessels',
       id: info.id,
-      label: info.name || (info.mmsi ? `MMSI ${info.mmsi}` : info.id),
+      label: info.name || info.mmsi || info.id,
       latitude: info.latitude,
       longitude: info.longitude,
       properties: { vesselId: info.id, mmsi: info.mmsi },
