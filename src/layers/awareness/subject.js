@@ -532,6 +532,26 @@ export function createSubject({ state: layerState, services, parts, source }) {
   }
 
   /**
+   * The AIS vessel the user has selected, as a subject. Contacts turned on
+   * after the selection never heard its `gev:entity-selected`, so activation
+   * asks the vessel layer and shapes its answer as that event's record.
+   * @returns {object|null} Detached subject, or null when no vessel is selected.
+   */
+
+  function currentSelectedVesselSubject() {
+    const info = aisLiveVesselsLayer.getSelectedInfo?.();
+    if (!info?.id) return null;
+    return subjectFromContext({
+      layerId: 'ais-live-vessels',
+      id: info.id,
+      label: info.name || (info.mmsi ? `MMSI ${info.mmsi}` : info.id),
+      latitude: info.latitude,
+      longitude: info.longitude,
+      properties: { vesselId: info.id, mmsi: info.mmsi },
+    });
+  }
+
+  /**
    * Record that the current subject left its feed on its own.
    *
    * The subject, its cohort results and its navigation history all survive: the
@@ -579,6 +599,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
     resolveSubjectPhoto,
     refreshSelectedSubject,
     subjectFromContext,
+    currentSelectedVesselSubject,
     markSubjectEvicted,
     clearAwarenessSubject,
   };
