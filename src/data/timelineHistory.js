@@ -1,4 +1,14 @@
-import * as Cesium from 'cesium';
+import {
+  fromDegrees,
+  fromRadians,
+  toCartographicRadians,
+} from '../geo/ellipsoid.js';
+import {
+  julianFromEpochMs,
+  julianLessThan,
+  secondsDifference,
+} from '../geo/julian.js';
+import { clone, copyInto, toDegrees, toRadians } from '../geo/vector.js';
 import {
   mergeTimelineRuns,
   readTimelineFixes,
@@ -12,9 +22,9 @@ const EARTH_RADIUS_M = 6_371_000;
 /** The initial great-circle course from one fix to another (degrees from
  * north), or null when they are too close to tell. */
 function courseBetween(from, to) {
-  const lat1 = Cesium.Math.toRadians(from.lat);
-  const lat2 = Cesium.Math.toRadians(to.lat);
-  const dLon = Cesium.Math.toRadians(to.lon - from.lon);
+  const lat1 = toRadians(from.lat);
+  const lat2 = toRadians(to.lat);
+  const dLon = toRadians(to.lon - from.lon);
   const dLat = lat2 - lat1;
   const a =
     Math.sin(dLat / 2) ** 2 +
@@ -25,7 +35,7 @@ function courseBetween(from, to) {
   const x =
     Math.cos(lat1) * Math.sin(lat2) -
     Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-  return (Cesium.Math.toDegrees(Math.atan2(y, x)) + 360) % 360;
+  return (toDegrees(Math.atan2(y, x)) + 360) % 360;
 }
 
 /**
@@ -61,9 +71,9 @@ export function mergeAircraftTimelineFixes(
         ? courseBetween(fix, fixes[index + 1])
         : courseBetween(fixes[index - 1], fix);
     return {
-      time: Cesium.JulianDate.fromDate(new Date(fix.atMs)),
+      time: julianFromEpochMs(fix.atMs),
       epochMs: fix.atMs,
-      position: Cesium.Cartesian3.fromDegrees(
+      position: fromDegrees(
         fix.lon,
         fix.lat,
         baroM !== null && fix.altitudeM !== null
@@ -90,8 +100,9 @@ export function mergeAircraftTimelineFixes(
  * entry when none is), by halving: a contact following the clock keeps up to
  * TIMELINE_FIXES_LIMIT entries, and it is placed on every fleet tick. The
  * bracketing pair is the entry before it and it.
- * @param {Array<{time: Cesium.JulianDate}>} history In time order.
- * @param {Cesium.JulianDate} renderTime
+ * @param {Array<{time: {dayNumber: number, secondsOfDay: number}}>} history
+ *   In time order (Julian dates, geo/julian).
+ * @param {{dayNumber: number, secondsOfDay: number}} renderTime
  * @returns {number}
  */
 export function historyBracketIndex(history, renderTime) {
@@ -99,8 +110,7 @@ export function historyBracketIndex(history, renderTime) {
   let high = history.length - 1;
   while (low < high) {
     const mid = (low + high) >> 1;
-    if (Cesium.JulianDate.lessThan(history[mid].time, renderTime))
-      low = mid + 1;
+    if (julianLessThan(history[mid].time, renderTime)) low = mid + 1;
     else high = mid;
   }
   return low;
@@ -111,16 +121,16 @@ export function historyBracketIndex(history, renderTime) {
  * its history is its own fixes around the time (`timeline` entries), and the
  * time is more than TIMELINE_UNSEEN_MS before the first, when it was not
  * there yet.
- * @param {Array<{time: Cesium.JulianDate, timeline?: boolean}>|undefined} history
- * @param {Cesium.JulianDate} renderTime
+ * @param {Array<{time: {dayNumber: number, secondsOfDay: number},
+ *   timeline?: boolean}>|undefined} history
+ * @param {{dayNumber: number, secondsOfDay: number}} renderTime
  * @returns {boolean}
  */
 export function historyUnseenAt(history, renderTime) {
   const first = history?.[0];
   return (
     first?.timeline === true &&
-    Cesium.JulianDate.secondsDifference(first.time, renderTime) >
-      TIMELINE_UNSEEN_MS / 1000
+    secondsDifference(first.time, renderTime) > TIMELINE_UNSEEN_MS / 1000
   );
 }
 
@@ -130,7 +140,7 @@ export function historyUnseenAt(history, renderTime) {
  * (`timeline` entries, the newest of them later than the time drawn), every
  * fix by the lift from `fromM` to `toM`, so it is not drawn rising to it.
  * @param {object[]|undefined} history
- * @param {Cesium.Cartesian3} position The newest fix lifted.
+ * @param {{x: number, y: number, z: number}} position The newest fix lifted (ECEF).
  * @param {number|null} fromM The height it was drawn at.
  * @param {number} toM The height it is lifted to.
  */
@@ -138,17 +148,16 @@ export function liftGroundedHistory(history, position, fromM, toM) {
   const newest = history?.[history.length - 1];
   if (!newest) return;
   if (history[0].timeline !== true || !Number.isFinite(fromM)) {
-    newest.position = Cesium.Cartesian3.clone(position, newest.position);
+    newest.position = newest.position
+      ? copyInto(position, newest.position)
+      : clone(position);
     return;
   }
   for (const entry of history) {
-    const carto = Cesium.Cartographic.fromCartesian(entry.position);
+    const carto = toCartographicRadians(entry.position);
     if (!carto) continue;
-    entry.position = Cesium.Cartesian3.fromRadians(
-      carto.longitude,
-      carto.latitude,
-      carto.height + (toM - fromM),
-      undefined,
+    copyInto(
+      fromRadians(carto.lon, carto.lat, carto.height + (toM - fromM)),
       entry.position,
     );
   }

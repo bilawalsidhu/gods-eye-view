@@ -5,7 +5,7 @@ import { msg, t } from '../../../i18n/index.js';
 import { useStatusStore } from '../../stores/status.js';
 import UiButton from '../../kit/UiButton.vue';
 
-// Published by installRenderFailureNotice() (src/ui/renderFailure.js).
+// Published by installRenderFailureNotice() (src/render/cesium/renderFailure.js).
 const { renderFailure: failure } = storeToRefs(useStatusStore());
 const panel = ref(null);
 const MESSAGES = {

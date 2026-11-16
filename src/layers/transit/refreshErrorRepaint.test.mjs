@@ -7,23 +7,22 @@ import { createViewport } from './viewport.js';
 import { createQueries } from './queries.js';
 import { LayerLifecycle } from '../../data/lifecycle.js';
 import { LayerPanel, layerFeedState } from '../../ui/layerPanel.js';
+import { bindRenderer } from '../../render/rendererOf.js';
 
-const rad = Math.PI / 180;
 const LONDON = { lat: 51.5072, lon: -0.1276 };
 const BOSTON = { lat: 42.3601, lon: -71.0589 };
 
+/** A viewer double whose camera port stands at `at`, `height` metres up. */
 function viewer(at, height) {
-  return {
+  const host = {};
+  bindRenderer(host, {
     camera: {
-      positionCartographic: {
-        height,
-        latitude: at.lat * rad,
-        longitude: at.lon * rad,
-      },
-      computeViewRectangle: () => undefined,
+      pose: () => ({ lon: at.lon, lat: at.lat, height }),
+      viewRectangle: () => null,
+      on: () => () => {},
     },
-    scene: { globe: {} },
-  };
+  });
+  return host;
 }
 
 test('leaving a feed whose tick failed repaints its error away', async () => {

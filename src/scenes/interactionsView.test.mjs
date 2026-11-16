@@ -1,5 +1,7 @@
 // src/scenes/interactionsView.test.mjs — the Scene actions panel renders in
 // the viewer's container from what the scene interactions owner presents.
+// The click dispatcher's input port over a viewer double: the Cesium adapter's.
+import '../render/cesium/input.js';
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';

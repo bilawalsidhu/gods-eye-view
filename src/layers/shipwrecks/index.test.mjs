@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import * as picking from '../../data/pickRegistry.js';
 import {
   createShipwrecksLayer,
@@ -36,48 +36,15 @@ function deferred() {
   return { promise, resolve };
 }
 
-/** A fake billboard collection that records what the layer adds. */
-function fakeMarkers() {
-  const collection = {
-    show: true,
-    billboards: [],
-    rebuilds: 0,
-    add(options) {
-      const billboard = { show: true, ...options };
-      collection.billboards.push(billboard);
-      return billboard;
-    },
-    removeAll() {
-      collection.rebuilds++;
-      collection.billboards = [];
-    },
-  };
-  return collection;
-}
-
 function harness({ snapshots, now = () => 1 } = {}) {
-  const markers = fakeMarkers();
-  const primitives = [];
   const cards = [];
   const handlers = [];
   const opened = [];
   let pickResult = null;
-  const viewer = {
-    camera: { positionWC: Cesium.Cartesian3.fromDegrees(-1, 50, 2e6) },
-    scene: {
-      canvas: {},
-      requestRender() {},
-      pick: () => pickResult,
-      preRender: { addEventListener: () => () => {} },
-      primitives: {
-        add: (primitive) => primitives.push(primitive),
-        remove: (primitive) =>
-          primitives.splice(primitives.indexOf(primitive), 1),
-        raiseToTop() {},
-        contains: (primitive) => primitives.includes(primitive),
-      },
-    },
-  };
+  // A touch's wider contact search, when it finds what the exact pick missed.
+  let nearResult = null;
+  const viewer = {};
+  const { draw } = bindFakeDraw(viewer);
   const queue = [...(snapshots || [])];
   const requests = [];
   const layer = createShipwrecksLayer({
@@ -89,48 +56,72 @@ function harness({ snapshots, now = () => 1 } = {}) {
         return next instanceof Promise ? next : Promise.resolve(next);
       },
     },
-    createMarkers: () => markers,
     overlayHost: {
       setEntries: (_source, entries) => cards.push(entries),
       setVisible() {},
       hitTest: () => null,
     },
-    screenSpaceEventHandlerFactory: () => {
-      const handler = {
-        setInputAction(callback) {
-          handler.click = callback;
-        },
-        destroy() {
+    // The globe's clicks: one listener per click handler installed.
+    input: () => ({
+      onClick(callback) {
+        const handler = {
+          click: (event) =>
+            callback({
+              ...event,
+              topHit: pickResult
+                ? { set: 'shipwrecks:', id: pickResult, surface: false }
+                : null,
+              id: pickResult ?? nearResult,
+            }),
+          destroyed: false,
+        };
+        handlers.push(handler);
+        return () => {
           handler.destroyed = true;
-        },
-      };
-      handlers.push(handler);
-      return handler;
-    },
+        };
+      },
+    }),
     picking,
     pointer: { isPointerFree: () => true },
     openExternal: (url) => opened.push(url),
     now: () => now(),
   });
   layer.init(viewer);
+  const markerSet = () => draw.find('shipwrecks:');
   return {
     layer,
-    markers,
-    primitives,
+    // The markers' set, its items in drawing order.
+    markers: {
+      get set() {
+        return markerSet();
+      },
+      get show() {
+        return markerSet()?.show;
+      },
+      get billboards() {
+        const set = markerSet();
+        return set && !set.disposed ? [...set.items.values()] : [];
+      },
+    },
     cards,
     handlers,
     requests,
     opened,
     pick(id) {
-      pickResult = id ? { id: `shipwreck:${id}` } : null;
+      pickResult = id ? `shipwreck:${id}` : null;
+    },
+    // What a touch's contact search finds near the tap, the exact pick
+    // being `pick`'s.
+    near(pickId) {
+      nearResult = pickId;
     },
     lastCard: () => cards.at(-1),
   };
 }
 
-test('markers live in one collection, shown only while the layer is on', async () => {
+test('markers live in one set, shown only while the layer is on', async () => {
   const h = harness({ snapshots: [snapshot([wreck('a'), wreck('b')])] });
-  assert.deepEqual(h.primitives, [h.markers]);
+  assert.ok(h.markers.set, 'one set for every marker');
   assert.equal(h.markers.show, false);
   h.layer.enable();
   assert.equal(h.markers.show, true);
@@ -141,7 +132,7 @@ test('markers live in one collection, shown only while the layer is on', async (
   assert.equal(h.markers.show, false);
   assert.equal(h.handlers[0].destroyed, true);
   h.layer.destroy();
-  assert.deepEqual(h.primitives, [], 'the collection leaves the scene');
+  assert.equal(h.markers.set, undefined, 'the set is disposed');
 });
 
 test('markers sit on the wreck: no eye offset, bigger toll drawn last', async () => {
@@ -160,7 +151,10 @@ test('markers sit on the wreck: no eye offset, bigger toll drawn last', async ()
   assert.deepEqual(ids, ['shipwreck:none', 'shipwreck:small', 'shipwreck:big']);
   for (const billboard of h.markers.billboards)
     assert.equal(billboard.eyeOffset, undefined);
-  assert.equal(h.markers.billboards[2].width, markerPixelSize(1500));
+  assert.deepEqual(h.markers.billboards[2].size, [
+    markerPixelSize(1500),
+    markerPixelSize(1500),
+  ]);
 });
 
 test('an unchanged snapshot does not rebuild the markers', async () => {
@@ -175,9 +169,9 @@ test('an unchanged snapshot does not rebuild the markers', async () => {
   h.layer.enable();
   await h.layer.update();
   await h.layer.update();
-  assert.equal(h.markers.rebuilds, 1);
+  assert.equal(h.markers.set.writes, 1);
   await h.layer.update();
-  assert.equal(h.markers.rebuilds, 2);
+  assert.equal(h.markers.set.writes, 2);
   assert.equal(h.markers.billboards.length, 2);
 });
 
@@ -202,7 +196,7 @@ test('a click opens the card; a period that excludes the wreck closes it', async
   h.layer.enable();
   await h.layer.update();
   h.pick('old');
-  h.handlers[0].click({ position: { x: 1, y: 1 } });
+  h.handlers[0].click({ screenPosition: { x: 1, y: 1 } });
   const [card] = h.lastCard();
   assert.equal(card.id, 'shipwreck-card:old');
   h.layer.setParams({ from: 1900, to: 1990 });
@@ -213,6 +207,24 @@ test('a click opens the card; a period that excludes the wreck closes it', async
     ['shipwreck:new'],
   );
   assert.equal(h.layer.getStats().count, 1);
+});
+
+test('a tap selects only the wreck exactly under it, as a click does', async () => {
+  const h = harness({ snapshots: [snapshot([wreck('a')])] });
+  h.layer.enable();
+  await h.layer.update();
+  // Near a wreck but on nothing: no card.
+  h.near('shipwreck:a');
+  h.handlers[0].click({ screenPosition: { x: 1, y: 1 } });
+  assert.equal(h.cards.flat().length, 0);
+  h.pick('a');
+  h.handlers[0].click({ screenPosition: { x: 1, y: 1 } });
+  assert.equal(h.lastCard()[0].id, 'shipwreck-card:a');
+  // On nothing, near another layer's contact: the card is closed.
+  h.pick(null);
+  h.near('flight:abc');
+  h.handlers[0].click({ screenPosition: { x: 1, y: 1 } });
+  assert.deepEqual(h.lastCard(), []);
 });
 
 test('the year pickers list only years with a wreck, and each era is counted', async () => {

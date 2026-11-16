@@ -1,5 +1,3 @@
-import * as Cesium from 'cesium';
-
 /**
  * Lighting options shared by every aircraft 3D model (Flights, Military
  * Flights, Local ADS-B).
@@ -16,16 +14,18 @@ export const AIRCRAFT_ENVIRONMENT_MAP_OPTIONS = Object.freeze({
   enabled: false,
 });
 
+const HIGHLIGHT = Object.freeze({ mode: 'highlight' });
+const FLAT = Object.freeze({ mode: 'mix', amount: 1 });
+
 /**
- * How an aircraft model's colour meets its mesh. HIGHLIGHT multiplies, so
- * white draws the mesh's own colours as built, and the tracked or emergency
- * colour tints the mesh without hiding its paint. The IR boost draws the
- * model flat white instead (MIX at 1, with its unlit shader).
+ * How an aircraft model's colour meets its mesh, as a draw item's
+ * `colorBlend`. `highlight` multiplies, so white draws the mesh's own
+ * colours as built, and the tracked or emergency colour tints the mesh
+ * without hiding its paint. The IR boost draws the model flat white instead
+ * (`mix` at 1, unlit).
  * @param {boolean} irBoost
- * @returns {{colorBlendMode: Cesium.ColorBlendMode, colorBlendAmount: number}}
+ * @returns {{mode: 'highlight'|'mix', amount?: number}}
  */
 export function aircraftModelBlend(irBoost) {
-  return irBoost
-    ? { colorBlendMode: Cesium.ColorBlendMode.MIX, colorBlendAmount: 1 }
-    : { colorBlendMode: Cesium.ColorBlendMode.HIGHLIGHT, colorBlendAmount: 0 };
+  return irBoost ? FLAT : HIGHLIGHT;
 }

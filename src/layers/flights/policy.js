@@ -1,16 +1,21 @@
-import * as Cesium from 'cesium';
 import { EMERGENCY_TINT_CSS } from '../../data/aircraftEmergency.js';
+import { cssColor } from '../../render/color.js';
+
+/** A CSS colour as frozen `[r, g, b, a]`, 0..1 (the renderer's `Color`). */
+const rgba = (css, alpha) =>
+  Object.freeze(
+    alpha === undefined ? cssColor(css) : [...cssColor(css).slice(0, 3), alpha],
+  );
 
 export const FOCUS_EVIDENCE_DEV = import.meta.env?.DEV === true;
 
 /** Amber tint for known-military aircraft rendered by this layer (matches the military layer's icon color). */
 
-export const MIL_TINT = Cesium.Color.fromCssColorString('#FFB800');
+export const MIL_TINT = rgba('#FFB800');
 
 /** Red tint for aircraft broadcasting an emergency (7500/7600/7700 or ADS-B status). */
 
-export const EMERGENCY_TINT =
-  Cesium.Color.fromCssColorString(EMERGENCY_TINT_CSS);
+export const EMERGENCY_TINT = rgba(EMERGENCY_TINT_CSS);
 
 // --- Ground traffic (owner reversal 2026-07-03: "absolutely we should see planes
 // taxiing and landing") -----------------------------------------------------------
@@ -47,12 +52,6 @@ export const MODEL_MIN_PX = 24;
 // min-pixel blob (was 54 — far planes at the All radius became white
 // star-bursts); ~matches the 2D icon size so the model↔billboard read is consistent
 
-export const TRACKED_MODEL_MIN_PX = 40;
-// keep the glTF silhouette comparable to the selected 2D glyph at handoff
-
-export const TRACKED_MODEL_MAX_PX = 200;
-// owner-selected close-range tracked-target feel
-
 // Per-mode caps. Each model is its own draw call (no instancing yet), so these bound the frame cost.
 
 export const MODEL_MAX = 150;
@@ -84,26 +83,33 @@ export const MODEL_ALL_KEEP_M = 450000;
 // all: KEEP modeled planes out to 450 km
 
 export const MODEL_HEADING_OFFSET_DEG = 180;
-// every fleet model is nose -X: opposite Cesium heading 0
+// every fleet model is nose -X: opposite the renderer's heading 0
 
-export const CYAN_TRANSPARENT = Cesium.Color.CYAN.withAlpha(0);
+/** A model's colour where it draws its mesh's own (`aircraftModelBlend`). */
+export const MODEL_WHITE = rgba('#FFFFFF');
+
+/** The tracked contact's tint, and its billboard once a model takes over. */
+export const TRACKED_CYAN = rgba('#00FFFF');
+export const CYAN_TRANSPARENT = rgba('#00FFFF', 0);
+/** An ordinary fleet contact's tint. */
+export const FLEET_TINT = rgba('#FFFFFF');
 
 export const COCKPIT_CONTACT_SIZE_PX = 6;
 
-export const COCKPIT_CIVILIAN_COLOR =
-  Cesium.Color.fromCssColorString('#DCEEFF');
+export const COCKPIT_CIVILIAN_COLOR = rgba('#DCEEFF');
 
-export const TRACKED_BILLBOARD_SCALE_BY_DISTANCE = new Cesium.NearFarScalar(
-  1000,
-  3.0,
-  8000000,
-  0.5,
-);
+/** The tracked billboard's size by eye distance (the renderer's `NearFar`). */
+export const TRACKED_BILLBOARD_SCALE_BY_DISTANCE = Object.freeze({
+  near: 1000,
+  nearValue: 3.0,
+  far: 8000000,
+  farValue: 0.5,
+});
 
 // ---------------------------------------------------------------------------
 // Track-history trail state (PRD WS-F F1/F4): a fading polyline behind the
 // tracked aircraft. The accumulation array is intentionally SEPARATE from
-// _positionHistory (capped at POSITION_HISTORY_LIMIT=5 for dead reckoning)
+// _positionHistory (capped at POSITION_HISTORY_LIMIT for drawing)
 // so the visible trail can grow to TRAIL_MAX_POINTS fixes.
 // ---------------------------------------------------------------------------
 
@@ -116,26 +122,36 @@ export const TRAIL_COLOR = '#00d4ff';
 export const TRAIL_MAX_POINTS = 2000;
 
 // ---------------------------------------------------------------------------
-// Render-behind smoothing (PRD WS-C C2 — approved product decision):
-// the fleet renders at now - RENDER_DELAY_SEC so positions interpolate
-// BETWEEN two known fixes instead of extrapolating ahead and snapping back
-// when the next poll lands. All consumers (labels, HUD, detection,
-// frame_overhead) share this delayed clock; removing the delay reintroduces
-// the back/forward oscillation and is a regression.
+// Render-behind smoothing (PRD WS-C C2 — approved product decision): the fleet
+// renders at now − the display delay so positions run BETWEEN two known
+// fixes instead of extrapolating ahead and snapping back when the next poll
+// lands. The delay follows how late the feed really is (data/displayDelay.js:
+// the 90th percentile of how long the display waits for each next report,
+// plus 5 s, changed slowly), never under RENDER_DELAY_SEC. All consumers
+// (labels, HUD, detection, frame_overhead, the tracked camera, trails and the
+// renderer's motion clock) share this one delayed clock; removing the delay
+// reintroduces the back/forward oscillation and is a regression.
 // ---------------------------------------------------------------------------
 
-/** @constant {number} Display latency in seconds (= one poll interval). */
+/** @constant {number} The shortest display delay in seconds (one poll interval). */
 
 export const RENDER_DELAY_SEC = 30;
+
+/** @constant {number} How often the feed is polled (ms). */
+
+export const POLL_INTERVAL_MS = 30_000;
 
 /** Whether the layer shows the world clock's time instead of the live feed:
  *  its source declares a timeline and the clock is away from live. */
 export const followsClock = (state) => state.timeline?.active() === true;
 
-/** How far behind the time contacts are drawn: RENDER_DELAY_SEC live, none
- *  following the clock, whose snapshots are loaded ahead of the time. */
+/** How far behind the time contacts are drawn (ms): the feed's display
+ *  delay live, none following the clock, whose snapshots are loaded ahead
+ *  of the time. */
 export const displayDelayMs = (state) =>
-  followsClock(state) ? 0 : RENDER_DELAY_SEC * 1000;
+  followsClock(state)
+    ? 0
+    : (state._displayDelay?.currentMs ?? RENDER_DELAY_SEC * 1000);
 
 /** @constant {number} Polls an aircraft may miss before removal (transient OpenSky dropouts). */
 
@@ -171,13 +187,11 @@ export const LANDED_SPEED_MAX_MPS = 23;
 /** @constant {number} Max viewer distance (km) for the fleet ground-floor clamp. */
 
 // ---------------------------------------------------------------------------
-// Icon orientation (2026-06-10 playtest fix): rotation is computed by
-// projecting each aircraft's course vector into WINDOW coordinates
-// (iconOrientation.js) with alignedAxis always ZERO — exact at every camera
-// pitch/heading, including tracked-entity orbit mode. Rotation passes run on
-// the fleet tick only when the camera pose changed (or 1s drift catch-up).
-// The same tick horizon-culls billboards: with the Cesium globe hidden there
-// is no far-side depth, so planes otherwise show through the planet.
+// Fleet icons are one GPU icon set (iconSet.js): the shader dead-reckons each
+// row's motion segment, projects its course into window coordinates and
+// horizon-culls it (with the Cesium globe hidden there is no far-side depth,
+// so planes otherwise show through the planet). The fleet tick only re-plans
+// expired rows and drives the model handoff.
 // ---------------------------------------------------------------------------
 
 /** @constant {number} Fleet dead-reckoning tick interval (ms) — ~12Hz, not per-frame. */
@@ -202,41 +216,6 @@ export const FLEET_MODEL_POLICY = Object.freeze({
   intervalMs: FLEET_DR_INTERVAL_MS,
 });
 
-/** @constant {number} Max ms between rotation passes while the camera is idle. */
-
-export const ROTATION_REFRESH_MS = 1000;
-
-/**
- * @constant {number} Dead-reckoning cadence (ms) for contacts hidden behind the
- * horizon. The worldwide feed carries ~13k contacts and a zoomed-in view shows
- * well under 1% of them; the rest still need positions for hidden-inclusive
- * proximity queries, but ~1 s old (≈250 m for an airliner) is well inside the
- * 30 s poll's own uncertainty. Each hidden contact is re-reckoned on one tick in
- * every HIDDEN_CONTACT_DR_TICKS, staggered by id so no tick carries them all.
- */
-
-export const HIDDEN_CONTACT_DR_INTERVAL_MS = 1000;
-
-export const HIDDEN_CONTACT_DR_TICKS = Math.max(
-  1,
-  Math.round(HIDDEN_CONTACT_DR_INTERVAL_MS / FLEET_DR_INTERVAL_MS),
-);
-
-/**
- * Stable slot in [0, HIDDEN_CONTACT_DR_TICKS) for a contact id, so each hidden
- * contact re-reckons on the same tick of every rotation.
- * @param {string} id Contact id (ICAO24).
- * @returns {number}
- */
-
-export function hiddenContactDrPhase(id) {
-  const text = String(id);
-  let hash = 0;
-  for (let i = 0; i < text.length; i++)
-    hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
-  return hash % HIDDEN_CONTACT_DR_TICKS;
-}
-
 /** Max course slew (deg/s) — well above real turns (≤4°/s), hides fix-boundary
  *  steps. Scaled down toward COURSE_MIN_DPS at low speed (courseSlewCapDps). */
 
@@ -245,6 +224,14 @@ export const COURSE_MAX_DPS = 60;
 /** Never spend a long render stall's full elapsed time in one visible course step. */
 
 export const COURSE_SLEW_DT_MAX_SEC = 0.25;
+
+/** Grounded contacts this close to the camera are floored every fleet tick. */
+
+export const FLOOR_NEAR_M = 50_000;
+
+/** Farther grounded contacts are floored once per this many fleet ticks (~1 s). */
+
+export const FLOOR_FAR_EVERY_TICKS = 12;
 
 // ---------------------------------------------------------------------------
 // adsbdb enrichment (best-effort, fail-silent). Bounded fan-out: max 4
@@ -323,14 +310,14 @@ export const ENRICH_AMBIENT_PER_SWEEP = 150;
 
 export const DR_CORRECTION_MS = 900;
 
-/** Bounded on-demand loading for the tracked model. The tracked regime is
- *  DEFAULT-ON and its driver runs every `scene.preUpdate`, so a missing or
- *  corrupt GLB — or a dead network — would otherwise spin load→reject at frame
- *  rate for as long as the contact stays selected. Failures are counted PER
- *  SELECTION: a short backoff absorbs a transient blip, then the layer stops
- *  asking until the operator selects something else. The billboard is the
- *  visual throughout (the handoff only fades it once a model actually renders),
- *  so a latched failure degrades to exactly the pre-3D presentation. */
+/** Bounded loading for the tracked model. Its driver runs every frame, so a
+ *  missing or corrupt GLB, or a dead network, would otherwise ask for the
+ *  model again for as long as the contact stays selected. Failures (the
+ *  model set's `loadFailed`) are counted PER SELECTION: a short backoff
+ *  absorbs a transient blip, then the layer stops asking until the operator
+ *  selects something else. The icon is the visual throughout (the handoff
+ *  only fades it once a model actually renders), so a latched failure
+ *  degrades to exactly the pre-3D presentation. */
 
 export const TRACKED_MODEL_MAX_LOAD_FAILS = 3;
 
@@ -464,21 +451,6 @@ export const FLOOR_EASE_EPSILON_M = 0.02;
  *  airborne long enough to have gone anywhere. */
 
 export const FLOOR_SEED_GRACE_MS = 90_000;
-
-/** Flip the whole 3D fleet's boost state by dropping models so the eligibility
- *  pass reloads them with creation-time boost options (both directions — a
- *  boosted model must not stay flat white back in Normal). Destroying 350
- *  GPU-backed models synchronously inside the style handler stalls the render
- *  thread (review P1; same failure the cockpit path documents), so the release
- *  is BATCHED through the fleet tick: each tick drops a bounded slice, showing
- *  each plane's billboard first (gap-proof per plane, no double-image window).
- *  Models are tagged with the boost state they loaded under, so queue entries
- *  whose model already matches the current state (rapid style cycling, or a
- *  reload that already happened) are skipped. In-flight loads are invalidated
- *  immediately (cheap gen bumps); the tracked model is a single primitive and
- *  reloads synchronously. */
-
-export const IR_RELOAD_BATCH = 40;
 
 /** Alpha of a contact that has missed an update or lost its signal: the stale fade, for the fleet and the tracked aircraft alike. */
 export const STALE_ALPHA = 0.45;

@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { getEventListeners } from 'node:events';
 import * as Cesium from 'cesium';
+import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
 import { createStreetLevelLayer } from './index.js';
 import { MAPILLARY_CREDIT_HTML } from './providers/mapillary/policy.js';
+import { creditFromMarkup } from '../../render/creditMarkup.js';
 import { createMapillaryProvider } from './providers/mapillary/index.js';
 import { createKartaViewProvider } from './providers/kartaview/index.js';
 import {
@@ -11,6 +13,7 @@ import {
   fakeMapillarySource,
   fakePhotoViewer,
   fakeStreetLevelProvider as fakeProvider,
+  streetPorts,
 } from '../../testSupport/streetLevelFakes.mjs';
 import { setLocale } from '../../i18n/index.js';
 // Loaded up front: it brings Vue, which reads `document` once when it loads,
@@ -70,13 +73,16 @@ const posingViewer = () =>
 
 test('the CC BY-SA credit shows while Mapillary is on and goes with it', async (t) => {
   const { layer, viewer } = await startLayer(t);
-  const shown = () => viewer.credits.map((credit) => credit.html);
-  assert.deepEqual(shown(), [MAPILLARY_CREDIT_HTML], 'shown on enable');
+  const shown = () =>
+    viewer.credits.map((credit) => creditFromMarkup(credit.html).text);
+  const mapillary = creditFromMarkup(MAPILLARY_CREDIT_HTML).text;
+  assert.deepEqual(shown(), [mapillary], 'shown on enable');
+  assert.ok(viewer.credits[0].showOnScreen, 'on the map');
   assert.match(shown()[0], /CC BY-SA 4\.0/);
   layer.setParams({ mapillary: false });
   assert.deepEqual(shown(), [], 'hidden with the switch');
   layer.setParams({ mapillary: true });
-  assert.deepEqual(shown(), [MAPILLARY_CREDIT_HTML]);
+  assert.deepEqual(shown(), [mapillary]);
   layer.disable();
   assert.deepEqual(shown(), [], 'the credit goes with the layer');
 });
@@ -330,16 +336,11 @@ function fakeViewer() {
     disableRootEvents: true,
     onwheel: null,
   });
-  return {
+  const viewer = {
     credits,
     flights,
     scene: {
       canvas,
-      primitives: { add: (p) => p, remove() {} },
-      // Enough of a scene for the position marker to clamp to the ground.
-      frameState: { mode: Cesium.SceneMode.SCENE3D },
-      updateHeight: () => () => {},
-      getHeight: () => undefined,
     },
     camera: {
       changed: new Cesium.Event(),
@@ -363,6 +364,7 @@ function fakeViewer() {
       },
     },
   };
+  return bindFakeCesiumCamera(viewer, streetPorts(viewer));
 }
 
 /** A layer over `providers`, initialised and enabled on a stand-in viewer. */
@@ -811,7 +813,11 @@ test('under Google 3D the ground is measured again once its tiles load, without 
   const viewer = fakeViewer();
   // 4 km up the ellipsoid, 2 km over a city whose tiles are still loading.
   let ground;
-  viewer.camera.positionCartographic = { height: 4000 };
+  viewer.camera.positionCartographic = {
+    longitude: 0,
+    latitude: 0,
+    height: 4000,
+  };
   viewer.scene.globe = { show: false };
   viewer.scene.sampleHeightSupported = true;
   viewer.scene.sampleHeight = () => ground;
@@ -835,7 +841,11 @@ test('an unknown ground is measured only a few times, and not after the layer is
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const viewer = fakeViewer();
   let samples = 0;
-  viewer.camera.positionCartographic = { height: 4000 };
+  viewer.camera.positionCartographic = {
+    longitude: 0,
+    latitude: 0,
+    height: 4000,
+  };
   viewer.scene.globe = { show: false };
   viewer.scene.sampleHeightSupported = true;
   viewer.scene.sampleHeight = () => {
@@ -922,7 +932,6 @@ test('off Google 3D not even Google\u2019s script is loaded for Street View', as
 
 test('the button’s “centre of the view” is the ground under the middle of the screen', async (t) => {
   const { createStreetLevelLayer: create } = await import('./index.js');
-  const scenePick = await import('../../data/scenePick.js');
   const lookups = [];
   const provider = fakeProvider({
     nearestImage: async (point) => {
@@ -943,7 +952,7 @@ test('the button’s “centre of the view” is the ground under the middle of 
   });
   viewer.scene.canvas.clientWidth = 1000;
   viewer.scene.canvas.clientHeight = 600;
-  const layer = create({ providers: [provider], services: { scenePick } });
+  const layer = create({ providers: [provider] });
   layer.init(viewer);
   layer.enable(viewer);
   t.after(() => {
@@ -954,6 +963,43 @@ test('the button’s “centre of the view” is the ground under the middle of 
   assert.equal(lookups.length, 1);
   assert.ok(Math.abs(lookups[0].lat - 38.5799) < 1e-9);
   assert.ok(Math.abs(lookups[0].lon - -121.4937) < 1e-9);
+});
+
+test('a pick that fails at the screen centre counts as a miss, and the ellipsoid answers', async (t) => {
+  const { createStreetLevelLayer: create } = await import('./index.js');
+  const lookups = [];
+  const provider = fakeProvider({
+    nearestImage: async (point) => {
+      lookups.push(point);
+      return null;
+    },
+  });
+  const saved = globalThis.document;
+  const drawing = new Proxy({}, { get: () => () => ({ addColorStop() {} }) });
+  globalThis.document = Object.assign(new EventTarget(), {
+    createElement: () => ({ getContext: () => drawing }),
+  });
+  const viewer = fakeViewer();
+  Object.assign(viewer.scene, {
+    pickPositionSupported: true,
+    pickPosition: () => {
+      throw new Error('no depth');
+    },
+  });
+  viewer.camera.pickEllipsoid = () =>
+    Cesium.Cartesian3.fromDegrees(-121.4937, 38.5799, 0);
+  viewer.scene.canvas.clientWidth = 1000;
+  viewer.scene.canvas.clientHeight = 600;
+  const layer = create({ providers: [provider] });
+  layer.init(viewer);
+  layer.enable(viewer);
+  t.after(() => {
+    layer.destroy();
+    globalThis.document = saved;
+  });
+  await layer.openNearest(undefined, { aim: 'screen-centre' });
+  assert.equal(lookups.length, 1);
+  assert.ok(Math.abs(lookups[0].lat - 38.5799) < 1e-9);
 });
 
 test('OPEN after a link armed opens at its point only while the view centre is still near it', async (t) => {
@@ -1006,7 +1052,6 @@ test('OPEN after a link armed opens at its point only while the view centre is s
 
 test('the button aimed at the sky opens nothing, and says to aim at a street', async (t) => {
   const { createStreetLevelLayer: create } = await import('./index.js');
-  const scenePick = await import('../../data/scenePick.js');
   const lookups = [];
   const provider = fakeProvider({
     nearestImage: async (point) => {
@@ -1028,7 +1073,7 @@ test('the button aimed at the sky opens nothing, and says to aim at a street', a
   viewer.camera.pickEllipsoid = () => undefined;
   viewer.scene.canvas.clientWidth = 1000;
   viewer.scene.canvas.clientHeight = 600;
-  const layer = create({ providers: [provider], services: { scenePick } });
+  const layer = create({ providers: [provider] });
   layer.init(viewer);
   layer.enable(viewer);
   t.after(() => {

@@ -15,9 +15,12 @@ import {
 import { validateProviders } from '../../registry.js';
 import { fakeHost, until } from '../../../../testSupport/kartaViewFakes.mjs';
 import {
+  bindStreetViewer,
   coverageViewer,
+  drawnLineSets,
   tileCentre,
 } from '../../../../testSupport/streetLevelFakes.mjs';
+import { fakeDrawPort } from '../../../../testSupport/fakeDrawPort.mjs';
 
 /** A photo record `metres` east of (42.3314, -83.0458), in sequence `seq` at `index`. */
 function photoRecord(id, { metres = 0, seq = '14010', index = 0 } = {}) {
@@ -411,24 +414,24 @@ async function withCones(t, env) {
     createElement: () => ({ getContext: () => drawing }),
   };
   t.after(() => (globalThis.document = saved));
-  let collection = null;
-  env.instance.init({
-    scene: {
-      frameState: { mode: Cesium.SceneMode.SCENE3D },
-      updateHeight: () => () => {},
-      getHeight: () => undefined,
-      primitives: { add: (c) => (collection = c), remove() {} },
-      preRender: { addEventListener: () => () => {} },
-    },
-    camera: { positionWC: new Cesium.Cartesian3(0, 0, 1e8) },
-  });
+  const draw = fakeDrawPort();
+  env.instance.init(
+    bindStreetViewer(
+      {
+        scene: { preRender: { addEventListener: () => () => {} } },
+        camera: { positionWC: new Cesium.Cartesian3(0, 0, 1e8) },
+      },
+      { draw },
+    ),
+  );
+  const drawn = () => [
+    ...(draw.find('street-level:kartaview-cones:')?.items.values() ?? []),
+  ];
   const cones = () => {
-    const indexes = [];
-    for (let i = 0; i < collection.length; i++)
-      indexes.push(Number(collection.get(i).id.split('-').at(-1)));
+    const indexes = drawn().map((cone) => Number(cone.id.split('-').at(-1)));
     return [Math.min(...indexes), Math.max(...indexes)];
   };
-  cones.count = () => collection?.length ?? 0;
+  cones.count = () => drawn().length;
   return cones;
 }
 
@@ -733,10 +736,7 @@ function coverageSetup(
     return { query };
   };
   const centre = tileCentre(-83.0458, 42.3314);
-  const viewer = coverageViewer(
-    { lon: centre.lon, lat: centre.lat, height },
-    t,
-  );
+  const viewer = coverageViewer({ lon: centre.lon, lat: centre.lat, height });
   const tiles = [];
   let hold = null;
   env.source.getTile = (tile) => {
@@ -815,7 +815,7 @@ test('a filter thins the lines to those its PNG mask draws; without one they all
   env.instance.setFilter();
   assert.ok(await until(() => env.instance.coverageStats().loading));
   assert.equal(
-    env.viewer.scene.groundPrimitives.items.size,
+    drawnLineSets(env.viewer).length,
     0,
     'the unfiltered lines are not shown as filtered ones',
   );
@@ -832,7 +832,7 @@ test('a filter thins the lines to those its PNG mask draws; without one they all
     `startDate=${new Date(since).toISOString().slice(0, 10)}`,
   );
   assert.equal(env.instance.coverageStats().hint, NO_COVERAGE_HINT);
-  assert.equal(env.viewer.scene.groundPrimitives.items.size, 0);
+  assert.equal(drawnLineSets(env.viewer).length, 0);
   // The same filter again asks KartaView for nothing.
   env.instance.setFilter();
   for (let i = 0; i < 5; i++) await settle();

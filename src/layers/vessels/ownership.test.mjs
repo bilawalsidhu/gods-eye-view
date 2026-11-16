@@ -2,6 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createVesselLayer } from './index.js';
 import { createVesselState } from './state.js';
+import * as Cesium from 'cesium';
+import { createVesselIconBook } from './iconBook.js';
+import { liftedForHorizon } from '../../geo/horizon.js';
+import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
+import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
+
+/** A query port with nothing on screen: the viewer doubles have no scene. */
+const offscreen = {
+  project: () => null,
+  projectMany: (source, out) => out.fill(NaN),
+};
 
 const noop = () => {};
 function services() {
@@ -13,7 +24,7 @@ function services() {
     trails: {
       createTrail: () => ({ setPositions: noop, clear: noop, destroy: noop }),
     },
-    labels: {},
+    labels: { formatKnots: (knots) => `${knots} kt` },
     picking: { unregisterPickOwner: noop },
     overlay: {
       setOverlayEntries: noop,
@@ -36,20 +47,12 @@ function services() {
     },
   };
 }
-function setup(source, options = {}) {
+function setup(source, options = {}, viewer = {}) {
   const layer = createVesselLayer({ source, services: services(), options });
-  const primitives = new Set();
-  layer.testing._setVesselStateForTest({
-    viewer: {},
-    billboardCollection: {
-      add(options) {
-        const primitive = { ...options };
-        primitives.add(primitive);
-        return primitive;
-      },
-      remove: (primitive) => primitives.delete(primitive),
-    },
-  });
+  const icons = createVesselIconBook();
+  if (viewer.camera)
+    bindFakeCesiumCamera(viewer, { query: offscreen, draw: fakeDrawPort() });
+  layer.testing._setVesselStateForTest({ viewer, icons });
   let now = 1000;
   layer.testing._setAisRuntimeForTest({
     now: () => now,
@@ -58,7 +61,7 @@ function setup(source, options = {}) {
   });
   return {
     layer,
-    primitives,
+    icons,
     advance: (ms) => {
       now += ms;
     },
@@ -96,7 +99,7 @@ test('vessel construction is inert and each instance owns its records, icon cach
   };
   const one = createVesselState({ source, services: services() });
   const two = createVesselState({ source, services: services() });
-  for (const key of ['state', 'shipIconCache', '_scratchFocusScreen'])
+  for (const key of ['state', 'shipIconCache'])
     assert.notEqual(one[key], two[key]);
   assert.notEqual(one.state.records.byId, two.state.records.byId);
   assert.notEqual(one.state.feed, two.state.feed);
@@ -283,27 +286,29 @@ test('partial-feed expiry releases a selected vessel and its pending trail', asy
   assert.equal(layer.testing._getVesselStateForTest().trailPositionCount, 0);
 });
 
-test('refresh keeps pick identity and renderer geometry separate, and eviction releases the primitive', async () => {
+test('refresh keeps the icon row and its pick identity, and eviction releases the row', async () => {
   let current = snapshot([observation('111')]);
-  const { layer, primitives } = setup({ getSnapshot: async () => current });
+  const { layer, icons } = setup({ getSnapshot: async () => current });
   await layer.update();
-  const [primitive] = primitives;
-  const record = primitive.id;
-  for (const key of ['position', 'surfacePosition', 'normal', 'billboard']) {
-    assert.equal(Object.hasOwn(record, key), false);
-  }
-  assert.equal(layer.findByQuery('111').position, primitive.position);
-  const oldPosition = primitive.position;
+  assert.deepEqual(icons.ids(), ['111']);
+  const meta = icons.item('111').meta;
+  const drawn = () => icons.item('111').pos;
+  const near = (a, b) => Cesium.Cartesian3.distance(a, b) < 0.01;
+  assert.ok(near(layer.findByQuery('111').position, drawn()));
+  const oldPosition = drawn();
   current = snapshot([{ ...observation('111'), longitude: 4.06 }]);
   await layer.update();
-  assert.equal(primitives.size, 1);
-  assert.equal([...primitives][0], primitive);
-  assert.equal(primitive.id, record);
-  assert.notDeepEqual(primitive.position, oldPosition);
-  assert.equal(layer.findByQuery('111').position, primitive.position);
+  assert.equal(icons.size, 1);
+  assert.equal(
+    icons.item('111').meta,
+    meta,
+    'focus identity survives a refresh',
+  );
+  assert.ok(!near(drawn(), oldPosition));
+  assert.ok(near(layer.findByQuery('111').position, drawn()));
   current = snapshot([observation('222')]);
   await layer.update();
-  assert.equal(primitives.has(primitive), false);
+  assert.equal(icons.has('111'), false);
   assert.equal(layer.findByQuery('111'), null);
 });
 
@@ -410,6 +415,43 @@ test('empty coverage cannot hide stale, incomplete or rejected source data', asy
   }
 });
 
+test('cards and detection judge the horizon where the icon shader culls the row', async () => {
+  // A camera over the limb that sees the row's cull point (lifted to 12 m) but
+  // not the drawn position (3 m above the ellipsoid before the geoid loads).
+  const ship = Cesium.Cartesian3.fromDegrees(4.05, 51.93, 3);
+  const lifted = Cesium.Cartesian3.fromDegrees(4.05, 51.93, 12);
+  const occluder = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, ship);
+  let positionWC = null;
+  for (let lon = 4.05; lon < 40 && !positionWC; lon += 0.0005) {
+    occluder.cameraPosition = Cesium.Cartesian3.fromDegrees(
+      lon,
+      51.93,
+      400_000,
+    );
+    if (occluder.isPointVisible(lifted) && !occluder.isPointVisible(ship))
+      positionWC = occluder.cameraPosition;
+  }
+  assert.ok(positionWC, 'found a camera between the two horizons');
+  const viewer = { camera: { positionWC, heading: 0, pitch: 0, roll: 0 } };
+  const current = snapshot([observation('111')]);
+  const { layer, icons } = setup(
+    { getSnapshot: async () => current },
+    {},
+    viewer,
+  );
+  await layer.update();
+  occluder.cameraPosition = positionWC;
+  assert.equal(
+    occluder.isPointVisible(liftedForHorizon(icons.item('111').pos)),
+    true,
+  );
+  assert.deepEqual(
+    layer.getDetectableObjects().map((entry) => entry.sourceId),
+    ['111'],
+  );
+  layer.testing._setVesselStateForTest({ enabled: false });
+});
+
 test('vessel stats name the provider the last snapshot reported', async () => {
   const { layer } = setup({
     label: 'Vessels',
@@ -429,13 +471,13 @@ test('two vessels sharing an MMSI under different ids stay two vessels', async (
     longitude,
     name: `HULL ${id}`,
   });
-  const { layer, primitives } = setup({
+  const { layer, icons } = setup({
     getSnapshot: async () =>
       snapshot([shared('hull-a', 4.05), shared('hull-b', 4.25)]),
   });
   await layer.update();
   assert.equal(layer.getStats().count, 2);
-  assert.equal(primitives.size, 2);
+  assert.equal(icons.size, 2);
   assert.equal(layer.hasContact('hull-a'), true);
   assert.equal(layer.hasContact('hull-b'), true);
   // An MMSI is not a key, but a link naming one still finds a vessel with it.
@@ -465,15 +507,14 @@ test('two vessels sharing an MMSI under different ids stay two vessels', async (
 });
 
 test('a vessel with an id and no MMSI renders and can be selected', async () => {
-  const { layer, primitives } = setup({
+  const { layer, icons } = setup({
     getSnapshot: async () =>
       snapshot([{ ...observation('7f3c9a10-provider-id'), name: 'NO MMSI' }]),
   });
   await layer.update();
-  assert.equal(primitives.size, 1);
-  const [primitive] = primitives;
-  assert.equal(primitive.id.id, '7f3c9a10-provider-id');
-  assert.equal(primitive.id.mmsi, '');
+  // Its icon row is keyed by its id.
+  assert.deepEqual(icons.ids(), ['7f3c9a10-provider-id']);
+  assert.equal(layer.findByQuery('7f3c9a10-provider-id').mmsi, '');
   assert.equal(layer.selectById('7f3c9a10-provider-id'), true);
   const info = layer.getSelectedInfo();
   assert.equal(info.id, '7f3c9a10-provider-id');
@@ -524,20 +565,19 @@ test('an aid to navigation is drawn as a disc, a vessel as its chevron', async (
     speedMps: 0,
   };
   const ship = { ...observation('366999002'), type: 'Cargo' };
-  const { layer, primitives } = setup({
+  const { layer, icons } = setup({
     async getSnapshot() {
       return snapshot([aid, ship]);
     },
   });
   await layer.update();
   const svgOf = (id) => {
-    const primitive = [...primitives].find((p) => p.id?.id === id);
-    assert.ok(primitive, id);
-    return atob(primitive.image.split(',')[1]);
+    assert.ok(icons.has(id), id);
+    return atob(icons.item(id).image.split(',')[1]);
   };
   assert.match(svgOf('993672001'), /<circle/);
   // The source's virtual flag reaches the layer's record.
-  const recordOf = (id) => [...primitives].find((p) => p.id?.id === id).id;
+  const recordOf = (id) => layer.testing._vesselRecordForTest(id);
   assert.equal(recordOf('993672001').virtual, false);
   assert.equal(recordOf('366999002').virtual, false);
   assert.doesNotMatch(svgOf('993672001'), /<path/);
@@ -551,14 +591,13 @@ test('a virtual aid to navigation keeps its disc and its virtual flag', async ()
     type: 'Isolated danger',
     virtual: true,
   };
-  const { layer, primitives } = setup({
+  const { layer, icons } = setup({
     async getSnapshot() {
       return snapshot([aid]);
     },
   });
   await layer.update();
-  const primitive = [...primitives].find((p) => p.id?.id === '993672009');
-  assert.ok(primitive);
-  assert.equal(primitive.id.virtual, true);
-  assert.match(atob(primitive.image.split(',')[1]), /<circle/);
+  assert.ok(icons.has('993672009'));
+  assert.equal(layer.testing._vesselRecordForTest('993672009').virtual, true);
+  assert.match(atob(icons.item('993672009').image.split(',')[1]), /<circle/);
 });

@@ -1,4 +1,9 @@
 import { radioLayer } from '../data/radio.js';
+import { bindRenderer } from '../render/rendererOf.js';
+import { bindFakeDraw } from './fakeDrawPort.mjs';
+// The layer's clicks and floors take a viewer of the test's own, with no
+// renderer bound: its factories load as `./render/cesium/unbound` loads them.
+import '../render/cesium/unbound.js';
 
 export function radioStationRow(overrides = {}) {
   return {
@@ -21,11 +26,17 @@ export function radioStationRow(overrides = {}) {
 }
 
 /**
- * Run `body` against an enabled `radioLayer` that serves `stations`.
+ * Run `body` against an enabled `radioLayer` that serves `stations`, drawing
+ * through `renderer.draw`, or a fake draw port (with `renderer`'s other
+ * ports, if given).
  * Streams listed in `failingUrls` (mutable) reject play(); `body` receives the
- * played URLs and the catalog, whose rows and generation the next update() serves.
+ * played URLs, the catalog, whose rows and generation the next update()
+ * serves, and the fake draw port.
  */
-export async function withRadioLayer({ stations, failingUrls = [] }, body) {
+export async function withRadioLayer(
+  { stations, failingUrls = [], renderer = {} },
+  body,
+) {
   const originalFetch = globalThis.fetch;
   const originalAudio = globalThis.Audio;
   const playUrls = [];
@@ -76,24 +87,23 @@ export async function withRadioLayer({ stations, failingUrls = [] }, body) {
         removeEventListener() {},
       },
     },
-    dataSources: { add() {}, remove() {} },
-    entities: {
-      add(entity) {
-        return entity;
-      },
-      remove() {},
-    },
   };
+  // The stations draw through the renderer's draw port: `renderer.draw`
+  // when given, else a fake one.
+  const { draw, unbind } = renderer.draw
+    ? { draw: renderer.draw, unbind: bindRenderer(viewer, renderer) }
+    : bindFakeDraw(viewer, renderer);
   radioLayer.destroy();
   try {
     radioLayer.init(viewer);
     radioLayer.enable();
     await radioLayer.update();
-    await body({ playUrls, catalog });
+    await body({ playUrls, catalog, draw });
   } finally {
     globalThis.fetch = originalFetch;
     if (originalAudio === undefined) delete globalThis.Audio;
     else globalThis.Audio = originalAudio;
     radioLayer.destroy();
+    unbind();
   }
 }

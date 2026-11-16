@@ -24,20 +24,26 @@ const ISS = twoline2satrec(
 const AT_MS = Date.UTC(2008, 8, 20, 12, 30, 0);
 const orbits = createOrbits({ state: {}, services: {}, parts: {} });
 
-/** A point primitive that counts position writes. */
+/** A dot's point item that counts moves (a write of its `pos`). */
 function point(show = true) {
-  let position = new Cesium.Cartesian3();
-  return {
+  let x = 0;
+  const item = {
     show,
     writes: 0,
+    pos: { y: 0, z: 0 },
     get position() {
-      return position;
-    },
-    set position(value) {
-      this.writes++;
-      position = Cesium.Cartesian3.clone(value);
+      return item.pos;
     },
   };
+  Object.defineProperty(item.pos, 'x', {
+    enumerable: true,
+    get: () => x,
+    set(value) {
+      item.writes++;
+      x = value;
+    },
+  });
+  return item;
 }
 
 function scene(entries, { tracked = null } = {}) {

@@ -1,3 +1,5 @@
+import { followedOf } from '../data/followed.js';
+import { readEntityRecord } from '../data/entityRecords.js';
 import { nextTick } from 'vue';
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
 import { ShellFacade } from './shellFacade.js';
@@ -34,7 +36,10 @@ import {
   setCyberSonarControls,
 } from './cyberSonarControls.js';
 
-import * as Cesium from 'cesium';
+import { toDegrees, toRadians } from '../geo/index.js';
+// A viewer with no renderer bound gets its ports (camera, effects, globe)
+// once its owner has loaded the package's `./render/cesium/unbound` export.
+import { cameraOf, canvasOf, findCamera } from '../render/rendererOf.js';
 
 import { aircraftTrackingTarget } from '../cockpitTracking.js';
 
@@ -59,6 +64,7 @@ import { applicationPinia, createUiRuntime } from './vueRuntime.js';
 import { useContextStore } from './stores/context.js';
 import { useMissionReplayStore } from './stores/missionReplay.js';
 import { useCelestialRingStore } from './stores/celestialRing.js';
+import { icrfToFixedAxes } from '../sky/icrf.js';
 import { useWorldOverlayActionsStore } from './stores/worldOverlayActions.js';
 import { useAwarenessDirectionStore } from './stores/awarenessDirection.js';
 import { useHudStore } from './stores/hud.js';
@@ -94,7 +100,7 @@ import { preloadOwnerFlags } from './ownerFlag.js';
 
 export class StyleManager extends ShellFacade {
   /**
-   * @param {Cesium.Viewer} viewer - The CesiumJS viewer instance.
+   * @param {object} viewer - The scene object the renderer draws.
    * @param {object} [options]
    * @param {boolean} [options.localePicker=true] - false removes the language
    *   picker, for a host that offers its own language choice.
@@ -212,8 +218,8 @@ export class StyleManager extends ShellFacade {
         this._showGlobalStatusNotice(message, options),
       feedback: this._feedback,
       updateFeedback: () => this._updateGlobalLoadingFeedback(),
-      applyFollowOffset: (entity, offset) =>
-        applyShareFollowOffset(viewer, entity, offset),
+      applyFollowOffset: (followed, offset) =>
+        applyShareFollowOffset(viewer, followed, offset),
     });
 
     this._visualSettings = new VisualSettings({
@@ -393,6 +399,13 @@ export class StyleManager extends ShellFacade {
         meshFloorPreferred: services.meshFloorPreferred,
         warmGroundFloor: services.warmGroundFloor,
         sampleMeshFloorCells: services.sampleMeshFloorCells,
+        // Whether the aircraft Cockpit flies still draws: an entity of the
+        // viewer's own (the scene's `viewerDrawsEntity` says), or a tracked
+        // contact whose layer draws it through the draw port and says so in
+        // its entity record.
+        trackedEntityDrawn: (entity) =>
+          services.viewerDrawsEntity?.(entity) === true ||
+          readEntityRecord(entity)?.drawn?.() === true,
         holdContinuousRender: services.holdContinuousRender,
         releaseContinuousRender: services.releaseContinuousRender,
         fetchRegionalBrief: services.fetchRegionalBrief,
@@ -465,6 +478,8 @@ export class StyleManager extends ShellFacade {
     this.celestialRing = new CelestialRing(viewer, {
       enabled: false,
       store: useCelestialRingStore(applicationPinia()),
+      // The precise frame, once the sky has loaded its tables.
+      preciseFrameAt: icrfToFixedAxes,
       onAutoDisable: () =>
         this.setCelestialRingEnabled(false, {
           syncShare: !!this.shareLinkManager,
@@ -479,7 +494,7 @@ export class StyleManager extends ShellFacade {
       },
       isNavigationCurrent: (generation) =>
         generation === this._navigationGeneration,
-      cancelOwnedNavigation: () => this.viewer.camera.cancelFlight(),
+      cancelOwnedNavigation: () => cameraOf(this.viewer).cancelFlight(),
       // A host may open a share code without a `/share/<code>` address.
       initialShareCode,
     });
@@ -1060,7 +1075,7 @@ export class StyleManager extends ShellFacade {
         _radioVolumeValue: this._radioVolumeValue,
       },
       radio: radioLayer,
-      canvas: this.viewer?.canvas,
+      canvas: canvasOf(this.viewer) ?? undefined,
       actions: {
         isRegistered: () => this._dataManager?.layers?.has('radio'),
         isEnabled: () => this._dataManager?.isEnabled('radio'),
@@ -1241,7 +1256,7 @@ export class StyleManager extends ShellFacade {
       setEnabled: (next) =>
         this._dataManager.setEnabled('cctv', next, { origin: 'user' }),
       readOwnership: () => ({
-        trackedEntity: this.viewer?.trackedEntity,
+        followed: followedOf(this.viewer),
         cockpitActive: !!this.cockpitView?.active,
       }),
       shouldFocus: () =>
@@ -1517,15 +1532,16 @@ export class StyleManager extends ShellFacade {
    * @returns {{lat: number, lon: number, alt: number, heading: number, pitch: number, roll: number}|null}
    */
   getCameraState() {
-    const carto = this.viewer.camera.positionCartographic;
-    if (!carto) return null;
+    const pose = findCamera(this.viewer)?.pose();
+    if (!pose || !Number.isFinite(pose.lat) || !Number.isFinite(pose.lon))
+      return null;
     return {
-      lat: Cesium.Math.toDegrees(carto.latitude),
-      lon: Cesium.Math.toDegrees(carto.longitude),
-      alt: carto.height,
-      heading: Cesium.Math.toDegrees(this.viewer.camera.heading),
-      pitch: Cesium.Math.toDegrees(this.viewer.camera.pitch),
-      roll: Cesium.Math.toDegrees(this.viewer.camera.roll),
+      lat: pose.lat,
+      lon: pose.lon,
+      alt: pose.height,
+      heading: toDegrees(pose.heading),
+      pitch: toDegrees(pose.pitch),
+      roll: toDegrees(pose.roll),
     };
   }
 
@@ -1537,20 +1553,18 @@ export class StyleManager extends ShellFacade {
    */
   applyCameraState(cameraState, duration = 2.8) {
     if (!cameraState) return;
-    this.viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(
-        cameraState.lon,
-        cameraState.lat,
-        cameraState.alt,
-      ),
-      orientation: {
-        heading: Cesium.Math.toRadians(cameraState.heading || 0),
-        pitch: Cesium.Math.toRadians(cameraState.pitch || -35),
-        roll: Cesium.Math.toRadians(cameraState.roll || 0),
+    cameraOf(this.viewer).flyTo(
+      { lon: cameraState.lon, lat: cameraState.lat, height: cameraState.alt },
+      {
+        orientation: {
+          heading: toRadians(cameraState.heading || 0),
+          pitch: toRadians(cameraState.pitch || -35),
+          roll: toRadians(cameraState.roll || 0),
+        },
+        durationS: Math.max(0.2, duration || 0),
+        easing: 'cubicInOut',
       },
-      duration: Math.max(0.2, duration || 0),
-      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-    });
+    );
   }
 
   /**
@@ -1802,7 +1816,7 @@ export class StyleManager extends ShellFacade {
    * altitude ceiling, and only the nearest MODEL_MAX in view are admitted, so
    * the default costs nothing at globe scale. `all` is the deliberate opt-in;
    * turning the toggle off returns the fleet to flat billboards. The TRACKED
-   * contact is independent of this toggle (see trackedModelRegime.js).
+   * contact follows the same rule: selecting a contact never changes its form.
    * @returns {void}
    */
 

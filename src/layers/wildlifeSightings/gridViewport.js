@@ -114,17 +114,18 @@ export function wildlifeGridTiles({ boxes, z } = {}) {
   return [...tiles.values()].sort((a, b) => a.x - b.x || a.y - b.y);
 }
 
-/** Unlike detail-row viewport queries, grids cover full globe views too. */
-export function wildlifeGridViewportBoxes(viewer) {
-  const rectangle = viewer?.camera?.computeViewRectangle?.(
-    viewer?.scene?.globe?.ellipsoid,
-  );
+/**
+ * Unlike detail-row viewport queries, grids cover full globe views too.
+ * `rectangle` is the camera's view rectangle in degrees (the camera port's
+ * `viewRectangle()`), or null.
+ */
+export function wildlifeGridViewportBoxes(rectangle) {
   if (!rectangle) return [];
   return normalizedBoxes([
     Object.fromEntries(
       ['south', 'west', 'north', 'east'].map((key) => [
         key,
-        Math.round(degrees(rectangle[key]) * 1e8) / 1e8,
+        Math.round(rectangle[key] * 1e8) / 1e8,
       ]),
     ),
   ]);

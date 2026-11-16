@@ -1,13 +1,5 @@
-import * as Cesium from 'cesium';
 import { destroyTrack } from '../../data/contactPlayback.js';
-import {
-  claimCameraSensitivity,
-  releaseCameraSensitivity,
-} from '../../data/cameraSensitivity.js';
-import {
-  CAMERA_PERCENTAGE_CHANGED,
-  RAIL_SELECTED_OVERLAY_SOURCE_ID,
-} from './policy.js';
+import { RAIL_SELECTED_OVERLAY_SOURCE_ID } from './policy.js';
 import { RAIL_STOP_OVERLAY_SOURCE_ID } from './stopLabels.js';
 import {
   RAIL_ENABLED_FEEDS,
@@ -16,18 +8,13 @@ import {
 
 /**
  * Init / enable / disable / update / destroy for one Rail layer instance.
- * Everything acquired here is released here: the primitive collection, the
- * sprite registration, the pick owner, listeners, the render hold and the
- * camera sensitivity this layer borrowed.
+ * Everything acquired here is released here: the icon set, the pick owner,
+ * listeners (the camera's at this layer's own threshold), and the render
+ * hold.
  * @param {object} context
  * @returns {object}
  */
 export function createLifecycle({ state, services, parts, timetable }) {
-  const {
-    registerSpriteCollection,
-    unregisterSpriteCollection,
-    restoreSpriteOrder,
-  } = services.sprites;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
   const { releaseContinuousRender } = services.render;
 
@@ -39,7 +26,7 @@ export function createLifecycle({ state, services, parts, timetable }) {
     }
     state._trains.clear();
     state._moving.clear();
-    state._markers?.removeAll();
+    parts.rendering.clearMarkers();
   }
 
   const methods = {
@@ -48,19 +35,13 @@ export function createLifecycle({ state, services, parts, timetable }) {
     icon: '🚆',
     source: 'GTFS-RT',
 
-    /** Create the marker collection. Called once at bootstrap. */
+    /** Create the train icon set. Called once at bootstrap. */
     init(viewer) {
       state._viewer = viewer;
-      state._markers = new Cesium.BillboardCollection({
-        blendOption: Cesium.BlendOption.TRANSLUCENT,
-      });
-      viewer.scene.primitives.add(state._markers);
-      registerSpriteCollection('rail', state._markers);
-      state._markers.show = false;
+      parts.rendering.createMarkers(viewer);
       state._enabled = false;
       state._overlayHost.setVisible(RAIL_SELECTED_OVERLAY_SOURCE_ID, false);
       state._overlayHost.setVisible(RAIL_STOP_OVERLAY_SOURCE_ID, false);
-      restoreSpriteOrder(viewer);
       // A feed that needs its schedule pack runs only once the server's
       // catalog lists it (its pack is built); the catalog's own count is
       // logged when it arrives (viewport.js).
@@ -77,29 +58,21 @@ export function createLifecycle({ state, services, parts, timetable }) {
       state._enabled = true;
       state._generation += 1;
       state._error = null;
-      state._markers.show = true;
+      parts.rendering.showMarkers(true);
       state._overlayHost.setVisible(RAIL_SELECTED_OVERLAY_SOURCE_ID, true);
       state._overlayHost.setVisible(RAIL_STOP_OVERLAY_SOURCE_ID, true);
       parts.selection.installClickHandler(viewer);
       registerPickOwner('rail', (pickedId) => state._trains.has(pickedId));
       if (!state._cameraChangedAttached) {
-        viewer.camera.changed.addEventListener(parts.viewport.onCameraChanged);
-        claimCameraSensitivity(
-          viewer.camera,
-          'rail',
-          CAMERA_PERCENTAGE_CHANGED,
-        );
-        state._cameraChangedAttached = true;
+        parts.viewport.watchCamera(viewer);
+        // Attached only with a camera to listen to, so a later enable retries.
+        state._cameraChangedAttached = state._cameraChangedOff !== null;
       }
-      if (!state._preRenderRemove)
-        state._preRenderRemove = viewer.scene.preRender.addEventListener(
-          parts.rendering.onPreRender,
-        );
+      parts.rendering.startFrames(viewer);
       state._networkFade = -1;
       parts.rendering.startModels();
       parts.viewport.loadCatalog();
       parts.viewport.runProximityCheck();
-      restoreSpriteOrder(viewer);
     },
 
     /** Hide everything, stop polling, drop all trains. */
@@ -113,15 +86,10 @@ export function createLifecycle({ state, services, parts, timetable }) {
       state._overlayHost.setVisible(RAIL_STOP_OVERLAY_SOURCE_ID, false);
       parts.selection.removeClickHandler();
       unregisterPickOwner('rail');
-      if (state._cameraChangedAttached) {
-        viewer.camera.changed.removeEventListener(
-          parts.viewport.onCameraChanged,
-        );
-        releaseCameraSensitivity(viewer.camera, 'rail');
-        state._cameraChangedAttached = false;
-      }
-      state._preRenderRemove?.();
-      state._preRenderRemove = null;
+      // Unconditional: whatever watching started, none of it outlives this.
+      parts.viewport.unwatchCamera();
+      state._cameraChangedAttached = false;
+      parts.rendering.stopFrames();
       parts.viewport.cancelCatalog();
       timetable.stop();
       parts.ingestion.abortAllInFlight();
@@ -135,7 +103,7 @@ export function createLifecycle({ state, services, parts, timetable }) {
       // Floor cells and track samples queued for trains now gone.
       parts.rendering.reset();
       parts.routes.hideAll();
-      if (state._markers) state._markers.show = false;
+      parts.rendering.showMarkers(false);
       state._altitudeGateOpen = false;
       if (state._renderHeld) {
         releaseContinuousRender('rail');
@@ -156,16 +124,12 @@ export function createLifecycle({ state, services, parts, timetable }) {
       );
     },
 
-    /** Tear down the collection and release every shared registration. */
+    /** Tear down the icon set and release every shared registration. */
     destroy(viewer) {
       this.disable(viewer);
       parts.rendering.stopModels(true);
       parts.routes.destroy();
-      if (state._markers) {
-        unregisterSpriteCollection('rail', state._markers);
-        viewer?.scene?.primitives?.remove(state._markers);
-        state._markers = null;
-      }
+      parts.rendering.destroyMarkers();
       state._overlayHost.clearSource(RAIL_SELECTED_OVERLAY_SOURCE_ID);
       state._dataManager = null;
       state._viewer = null;

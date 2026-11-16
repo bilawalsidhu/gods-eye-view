@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createSelection } from './selection.js';
+import { bindWildlifeViewer } from '../../testSupport/wildlifeViewer.mjs';
 
 const row = {
   stableId: 'inat:123',
@@ -13,7 +14,7 @@ const row = {
   link: 'https://www.inaturalist.org/observations/123',
 };
 
-function fixture(sighting = row) {
+function fixture(sighting = row, extraServices = {}) {
   const position = { x: 300, y: 300, z: 0 };
   const entries = new Map();
   const flights = [];
@@ -21,7 +22,6 @@ function fixture(sighting = row) {
   const painted = new Set();
   let hit = null;
   let projections = 0;
-  let picked = null;
   let click;
   const state = {
     enabled: true,
@@ -37,13 +37,11 @@ function fixture(sighting = row) {
     ambientRows: [],
     labelRows: [],
     viewer: {
-      scene: {
-        pick: () => picked,
-        canvas: { clientWidth: 1200, clientHeight: 900 },
-      },
+      scene: { canvas: { clientWidth: 1200, clientHeight: 900 } },
       camera: { positionCartographic: { height: 30_000 } },
     },
   };
+  bindWildlifeViewer(state.viewer);
   const selection = createSelection({
     state,
     services: {
@@ -60,12 +58,14 @@ function fixture(sighting = row) {
         return anchor;
       },
       focus: { requestWorldFocus: (request) => flights.push(request) },
-      screenSpaceEventHandlerFactory: () => ({
-        setInputAction: (fn) => (click = fn),
-        destroy() {},
+      input: () => ({
+        onClick(fn) {
+          click = fn;
+          return () => (click = null);
+        },
       }),
-      cesium: { ScreenSpaceEventType: { LEFT_CLICK: 0 } },
       eventTarget: new EventTarget(),
+      ...extraServices,
     },
     parts: {
       rendering: {
@@ -99,9 +99,13 @@ function fixture(sighting = row) {
       for (const id of ids) painted.add(id);
       selection.photoCardsChanged();
     },
-    click(id = `wildlife:${sighting.stableId}`) {
-      picked = id ? { id } : null;
-      click({ position: { x: 10, y: 20 } });
+    click(id = `wildlife:${sighting.stableId}`, { touchId } = {}) {
+      // The exact top hit, and the id a touch's wider contact search finds.
+      click({
+        screenPosition: { x: 10, y: 20 },
+        topHit: id ? { set: 'wildlife', id } : null,
+        id: touchId ?? id ?? undefined,
+      });
     },
   };
 }
@@ -298,4 +302,29 @@ test('empty clicks and layer removal release the selected row and its overlay', 
   assert.equal(f.state.selectedId, null);
   assert.equal(f.seen.at(-1).value, null);
   assert.equal(f.entries.size, 0);
+});
+
+test('a tap selects only a sighting exactly under it, not one the touch search found near it', () => {
+  const f = fixture();
+  f.selection.install();
+  f.click(null, { touchId: `wildlife:${row.stableId}` });
+  assert.equal(f.state.selectedId, null);
+  f.click();
+  assert.ok(f.state.selectedId);
+  f.click(null, { touchId: 'other:aircraft' });
+  assert.equal(f.state.selectedId, null, 'a tap near another contact clears');
+});
+
+test('each sighting in context carries the point voice projects to find what is in view', () => {
+  const registered = [];
+  const f = fixture(row, {
+    context: {
+      registerEntityContext: (entity, metadata) =>
+        registered.push({ entity, metadata }),
+    },
+  });
+  f.selection.refreshContexts();
+  assert.equal(registered.length, 1);
+  assert.equal(registered[0].metadata.id, row.stableId);
+  assert.equal(registered[0].metadata.targetPosition, f.position);
 });

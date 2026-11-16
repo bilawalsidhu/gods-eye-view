@@ -146,7 +146,6 @@ export class VesselRecords {
       seen.add(next.id);
       const record = this.byId.get(next.id);
       if (record) {
-        const before = effects.beforeUpdate(record);
         // A feed re-serving a cached row repeats its fix: the fix keeps the
         // time it was first received, so it goes on ageing.
         if (next.lastPositionEpoch !== record.lastPositionEpoch) {
@@ -188,7 +187,7 @@ export class VesselRecords {
         record.lastPositionEpoch = next.lastPositionEpoch;
         record.missedRefreshes = 0;
 
-        effects.updated(record, before);
+        effects.updated(record);
       } else {
         effects.add(next);
         this.byId.set(next.id, next);
