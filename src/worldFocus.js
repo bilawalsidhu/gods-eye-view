@@ -18,6 +18,9 @@ export const WORLD_FOCUS_FRAMING = Object.freeze({
   // A stopped train's one fly-to, and the frame a moving train is followed
   // in (src/layers/rail/follow.js): the train and the track either side.
   train: Object.freeze({ radiusM: 200, rangeM: 2500, pitchDeg: -35 }),
+  // A clicked quake's magnitude label: its disc (2^M km across, so about
+  // 11 km at M2.5 and 128 km at M6) and the ground around it.
+  earthquake: Object.freeze({ radiusM: 20000, rangeM: 220000, pitchDeg: -45 }),
   'sighting-area': Object.freeze({
     radiusM: 11000,
     rangeM: 60000,

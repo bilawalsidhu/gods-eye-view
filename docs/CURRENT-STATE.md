@@ -1851,6 +1851,19 @@ feed's place, cut to 40 characters (`earthquakeMarkLabel` in
 `src/layers/earthquakes/model.js`: `M6.4 · 113 km SSE of Lata, Solomon
 Islands`, or `M6.4` with no place).
 
+Clicking a quake's disc selects it; clicking its magnitude label (what a far
+view can hit) also flies the camera there through the world-focus request
+(`earthquake` framing in `src/worldFocus.js`). The selected quake shows a card
+(`describeEarthquake`): magnitude and USGS class (`M5.5 · Moderate`), a
+six-step class meter with the depth band, place, UTC time and source; with a
+USGS event id the card opens that event's page. The selection is also the
+shared context selection, so "what's selected" answers with it. Its disc is
+painted with a gradient fading to the outer circle and wavy contour lines
+(shaped by the quake's id, never crossing) under the labels. The package takes
+clicks, picking, context, focus, the opener, the painter and the translator by
+injection (`src/app/layers/earthquakes.js`); without input and picking it draws
+and takes no clicks, and its labels stay non-interactive.
+
 Air quality (`./layers/air-quality`) draws its station discs as one renderer
 draw set of ground-clamped fills and reads the view through the camera port; it
 no longer reaches Cesium, so a caller handing it a Cesium viewer,
@@ -8165,6 +8178,16 @@ on it.
   per frame, it holds NO continuous-render hold — the governor stays idle with
   earthquakes on, and the manager's `layer-tick` / `layer-visibility` requests
   carry new data to the screen. Pinned in `src/data/earthquakes.test.mjs`.
+  The one animation is the selected quake's contour lines
+  (`src/app/layers/earthquakeRipples.js`), painted on the world overlay, not
+  the ground set: they ask for frames for `RIPPLE_ACTIVE_CYCLES` (3) runs out
+  to the disc's edge after a selection (about 14 s), only while the disc is on
+  screen, then rest as still contours and ask for none. A parked camera with a
+  quake selected therefore returns to idle. A feed refresh updates the
+  selected quake in place: it neither runs the contours again nor takes back
+  a shared selection made since; only a click or a label's activation does.
+  Selecting fades that one disc's flat fill once (an `upsert`, not per frame)
+  under the painted gradient.
 - **Geocode framing has an off-centre sanity gate.** A viewport that is both
   bigger than any city (>300 km diagonal) and not centred on its own geocoded
   location (anchor >15% of the diagonal from the centroid) is replaced by a

@@ -209,6 +209,7 @@ test('fires frame wider than vessels — a fire is read by its surroundings', ()
 test('every framing is a real oblique standoff, not a nadir or an inside-out sphere', () => {
   const kinds = Object.keys(WORLD_FOCUS_FRAMING);
   assert.deepEqual(kinds.sort(), [
+    'earthquake',
     'fire',
     'sighting',
     'sighting-area',
@@ -232,8 +233,10 @@ test('every framing is a real oblique standoff, not a nadir or an inside-out sph
       framing.rangeM > framing.radiusM,
       `${kind}: range ${framing.rangeM} must stand off outside radius ${framing.radiusM}`,
     );
-    // An obscured sighting frames its entire 0.2° privacy cell.
-    const maximumRange = kind === 'sighting-area' ? 60000 : 10000;
+    // An obscured sighting frames its entire 0.2° privacy cell, and a quake
+    // its disc, up to 128 km across at M6.
+    const maximumRange =
+      { 'sighting-area': 60000, earthquake: 250000 }[kind] ?? 10000;
     assert.ok(
       framing.rangeM <= maximumRange,
       `${kind}: range must fit its surface extent, got ${framing.rangeM}`,
