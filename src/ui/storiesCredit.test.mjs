@@ -131,7 +131,11 @@ test('the corner controls are the readout and elements marked data-stories-corne
   const readout = root.appendChild(document.createElement('div'));
   readout.id = 'style-indicator';
   const other = root.appendChild(document.createElement('div'));
-  assert.deepEqual(cornerControls(root), [readout], 'an unmarked element is not');
+  assert.deepEqual(
+    cornerControls(root),
+    [readout],
+    'an unmarked element is not',
+  );
   // A marked element added later counts on the next look.
   const marked = root.appendChild(document.createElement('button'));
   marked.setAttribute('data-stories-corner', '');
