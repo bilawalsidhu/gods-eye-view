@@ -29,7 +29,7 @@ export const useDisplayStore = defineStore('gev-display', () => {
   }
 
   /**
-   * The groups an application adds under Effects, in the order first
+   * The groups added under Effects, in the order first
    * published: each `{id, rows}`. A row is a `toggle` (`{kind, id, label,
    * icon?, title?, checked, onChange(checked)}`), a `slider` (`{kind, id,
    * label, min, max, value, onChange(value)}`, its value shown in percent)

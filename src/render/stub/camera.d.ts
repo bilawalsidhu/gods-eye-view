@@ -1,7 +1,7 @@
 /**
  * The stub renderer's camera (`camera.js`): the reference camera's poses,
- * views, flights and events in plain maths, which a renderer of its own can
- * build its camera port on.
+ * views, flights and events in plain maths, which a camera port can be
+ * built on.
  */
 import type { CameraPort, Ecef, GeoRect, Vec3 } from '../contract/index';
 

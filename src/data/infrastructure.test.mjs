@@ -193,7 +193,7 @@ test('consumer build includes only infrastructure code and resolves assets under
   const output = result.output;
   const entry = output.find((item) => item.type === 'chunk' && item.isEntry);
   const sources = Object.keys(entry.modules).filter((id) => id.endsWith('.js'));
-  // It draws and takes clicks through the renderer's ports: a viewer of the
+  // It draws and takes clicks through the renderer's ports: a viewer with no
   // renderer bound draws once the caller has loaded
   // `./render/cesium/unbound`.
   assert.deepEqual(sources.map((id) => id.split('/').at(-1)).sort(), [

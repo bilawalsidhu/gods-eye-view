@@ -153,7 +153,7 @@ does this and returns the dispatcher as `scene.input`.
 height queries go. Layers, tools and the camera ask it instead of asking the
 renderer's query port (`sampleHeight`, `sampleHeightNow`, `clampToSurface`)
 or the scene themselves, so how the renderer answers heights can change
-in without touching them. Pass the viewer the renderer is bound to, not its
+without touching them. Pass the viewer the renderer is bound to, not its
 scene. A viewer with no renderer bound is answered by the Cesium adapter's
 fallback once the caller has loaded `gods-eye-view/render/cesium/unbound`;
 until then, every query answers `null`.

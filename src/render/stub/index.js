@@ -5,7 +5,7 @@
  * drawn (or a scripted table), scripted heights, and a log of calls.
  *
  * Tests across the repository use it in place of a real renderer, and the
- * suite runs against it, so the stub is itself checked against the contract.
+ * conformance suite runs against it, so the stub is itself checked against the contract.
  * Nothing runs on its own: `testing.tick()` and `testing.advance()` drive the
  * loop on a virtual clock, one frame at a time, in the contract's order.
  */

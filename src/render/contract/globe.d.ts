@@ -285,8 +285,7 @@ export interface LoadProgress {
 /**
  * `surface`: what `against: 'surface'` heights answer from has loaded what
  * is in view: the terrain while the globe is shown, otherwise the drawn
- * tiles; false when neither is drawn. A renderer that predates it answers
- * as `base`.
+ * tiles; false when neither is drawn.
  */
 export type SettleKind = 'base' | 'tiles' | 'terrain' | 'imagery' | 'surface';
 

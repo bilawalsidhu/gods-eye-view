@@ -1,4 +1,4 @@
-// src/ui/displayGroups.test.mjs — an application's groups reach the Display
+// src/ui/displayGroups.test.mjs — added groups reach the Display
 // panel's store on the page's Pinia.
 import test from 'node:test';
 import assert from 'node:assert/strict';

@@ -1,6 +1,6 @@
 /**
  * Full-screen effects: visual styles, bloom, sharpen and screen modulation.
- * Each style is a plain full-screen pass over the frame's colour. The
+ * Each style is a plain full-screen pass over the frame's colour. The application owns
  * application owns the styles and defines them on the renderer
  * renderer runs the same set; a renderer's own styles are extra ones.
  */

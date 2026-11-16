@@ -1,7 +1,7 @@
 /**
  * @module render/conformance
  * @description The renderer conformance suite. It runs every check against
- * a renderer through the contract alone, in Node or in a browser page, and
+ * the Cesium renderer or the stub through the contract alone, in Node or in a browser page, and
  * reports each as passed, failed or skipped.
  *
  * A harness says how to make the renderer under test and drive its clock:

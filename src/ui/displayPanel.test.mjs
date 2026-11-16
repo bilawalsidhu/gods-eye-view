@@ -803,7 +803,7 @@ test('the real portal lays out once the groups have moved and puts back the focu
   assert.deepEqual(layouts, [true]);
 });
 
-test('a group an application adds to Effects shows its toggles, notes and sliders, and goes', async (t) => {
+test('a group added to Effects shows its toggles, notes and sliders, and goes', async (t) => {
   const { store, $ } = fixture(t);
   const changes = [];
   store.publishGroup('conditions', {

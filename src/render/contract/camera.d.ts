@@ -370,8 +370,8 @@ export interface NativeCamera {
 }
 
 /**
- * A camera controller, as an application hands one to a renderer without a
- * camera of its own (or in place of its own): given the native camera, the
+ * A camera controller, handed to a renderer in place of its own camera:
+ * given the native camera, the
  * input port's pointer events and the page's keys, it makes the camera port.
  * The renderer runs `frame.beforeUpdate` before its `preUpdate` listeners
  * and `frame.afterUpdate` after them, each tick, drawn or not.

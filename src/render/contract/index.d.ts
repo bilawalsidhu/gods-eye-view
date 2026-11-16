@@ -1,6 +1,6 @@
 /**
  * The renderer contract: what the application asks of a renderer, typed
- * than the default one can draw the same application.
+ * one file per port.
  */
 export * from './common';
 export * from './renderer';

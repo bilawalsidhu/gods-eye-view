@@ -173,8 +173,8 @@ export interface Renderer {
   releaseUnused(): void;
   on(event: 'error', cb: (error: Error) => void): Off;
   /**
-   * The drawing context was lost, or came back. Where the renderer cannot
-   * restore its context it never sends `contextRestored`; the application
+   * The drawing context was lost, or came back. A renderer that cannot restore its context
+   * never sends `contextRestored`; the application then makes
    * a new renderer.
    */
   on(event: 'contextLost' | 'contextRestored', cb: () => void): Off;

@@ -1,8 +1,8 @@
 # Renderer contract
 
-The renderer contract is what the application asks of a 3D renderer. A
-renderer other than the default Cesium one can draw the same application if
-it meets the contract. The contract is version `0`. Today the application
+The renderer contract is what the application asks of a 3D renderer. The
+Cesium renderer draws the application through it, and the stub renderer
+stands in for it in tests. The contract is version `0`. Today the application
 still drives Cesium directly; later work moves the layers onto the contract
 one family at a time.
 
@@ -15,8 +15,8 @@ The package exports these modules:
 | `gods-eye-view/render/camera/events` | The camera port's events: `changed` per listener, `moveStart`/`moveEnd`, command hooks |
 | `gods-eye-view/render/conformance`   | The conformance suite, reference scenes and visual comparison                          |
 
-The pieces that do not depend on Cesium are exported too, each with its
-these exports too, each with its own `.d.ts`:
+The pieces that do not depend on Cesium are exported
+too, each with its own `.d.ts`:
 
 - `gods-eye-view/render/input/router`: the input port's leases and routing;
 - `gods-eye-view/render/stub/camera`, `.../stub/viewRectangle` and
@@ -34,10 +34,9 @@ these exports too, each with its own `.d.ts`:
 names match what it exports, that it type-checks under strict TypeScript and
 that it imports no Cesium.
 
-A camera of its own (a camera controller over a renderer without one) can
-take the camera events from `render/camera/events` and the geodesy it needs
-(`geodesicAt`, `horizonFrom` and the rest) from `gods-eye-view/geo`, so it
-measures and fires exactly as the stub does. `CameraControllerFactory`
+A camera controller takes the camera events from `render/camera/events`
+and the geodesy it needs (`geodesicAt`, `horizonFrom` and the rest) from
+`gods-eye-view/geo`, so it measures and fires exactly as the stub does. `CameraControllerFactory`
 (`camera.d.ts`) types such a controller: what it is given (`NativeCamera`)
 and what it gives back (the camera port and its two frame steps).
 
@@ -63,11 +62,11 @@ were removed or replaced (among them `camera.move`, `look`,
 `rotateAround` and `zoom`, now step views placed with `setView`;
 `query.sampleHeightNowMany`; `input.ctrlWheelZoom`, now the `ctrlWheel`
 zoom input), `depthFailColor` and `depthFailDash` became one `depthFail`
-style, and quality settings became detail only. A renderer written against
-an earlier `0` follows those changes.
+style, and quality settings became detail only. The Cesium port and the
+stub follow those changes.
 
 Some members and options were added to version `0` later. Each is
-optional, so a renderer written before it still conforms:
+optional:
 
 - `globe.isGlobeVisible()` (capability `globeVisibility`) reads back whether
   the globe surface is shown, for code that holds only the scene.
@@ -93,8 +92,8 @@ optional, so a renderer written before it still conforms:
   `detail: {image, rectangle}`, a sharper image drawn in place of the base
   one, and says how shells stack, blend and update. `FieldHandle.on('drawn')`
   says once per spec or `update` that it is drawn, never while hidden. These
-  change `fields` itself rather than add to it, so the renderer follows
-  `fields` before must follow them. The Cesium adapter lists `fields` and
+  change `fields` itself rather than add to it, so a renderer that lists
+  `fields` follows them. The Cesium adapter lists `fields` and
   draws `rasterShell` and `windStreamlines`. It reads the grid's samples as
   points, the first column at `rectangle.west` and the first row at
   `rectangle.north`, rows running south. Over the whole globe its paths
@@ -143,8 +142,7 @@ optional, so a renderer written before it still conforms:
 - A rectangle shape's `rotation` (radians counter-clockwise) turns it about
   its centre in longitude and latitude, as a KML ground overlay turns, and
   its image fill turns with it. The Cesium port drapes image fills too, each
-  on a ground primitive of its own. A renderer that predates it draws the
-  rectangle unturned.
+  on a ground primitive of its own.
 - `camera.controls.keepEarthFramed` (capability `keepEarthFramed`) stops
   the user's outward zooms at a whole-Earth view (about 40,000 km, or
   higher where a camera command left the eye) and, from high up, turns the
@@ -154,13 +152,13 @@ optional, so a renderer written before it still conforms:
   (`zoomOutGuard.js`). The application turns it on where a renderer has it.
 - `query.occlusionTest()` (capability `occlusionTest`) tests many points
   against the depth of the frames drawn without waiting for the GPU; the
-  detection overlay leaves out the street vehicles it finds hidden. A WebGL
-  renderer that hands over its frame's depth gets one from
-  `@gods-eye-view/core/render/occlusion` (`createDepthOcclusionTest`, given a
-  `DepthSource`: depth packed into RGBA8 or a depth texture, standard or
-  logarithmic, with the view it was drawn from).
+  detection overlay leaves out the street vehicles it finds hidden. The
+  Cesium port builds its test with `gods-eye-view/render/occlusion`
+  (`createDepthOcclusionTest`, given a `DepthSource`: depth packed into
+  RGBA8 or a depth texture, standard or logarithmic, with the view it was
+  drawn from).
 - `RendererPlugin.applicationHooks(renderer)` hands the application what
-  only some renderers have (`ApplicationHooks`); see
+  lies beside the contract (`ApplicationHooks`); see
   [The application and its renderer](#the-application-and-its-renderer).
 - `frame.renderNow()` throws when the frame fails to draw. With
   `{ifDue: true}` it runs one tick of the loop now, as the loop's own would
@@ -197,7 +195,7 @@ off, and no check compares colours. With
 none of its look, so the checks that read an exact colour (`bareSky` in
 `checks/ports.js`) set that sky first. The
 reference images under `src/render/conformance/goldens/visual/` are the
-default renderer's own, for checking it against itself.
+Cesium renderer's own, for checking it against itself.
 
 The Cesium port lists `followAutodetect`: an `autodetect` follow is
 Cesium's own AUTODETECT tracking frame, east-north-up on a still or slow
@@ -214,7 +212,7 @@ jump: from its first frame the eye is in the target's frame, and over
 (its offset and its view each turned and eased with smoothstep, the view
 ending on the target with no roll). The Cesium port, the stub and a camera
 controller import that rule rather than restating it. The tracked aircraft
-aircraft and followed trains use it with a `viewFrom` taken from the camera
+and followed trains use it with a `viewFrom` taken from the camera
 at the click: the eye's own view direction at its own range from the target,
 so neither changes and only the eye's place moves, sliding the target to the
 centre. The check `camera.follow.transition` pins it.
@@ -566,7 +564,7 @@ on (no `renderer.id`, no engine type, no engine object's presence).
   the renderer. Code reaches the renderer's
   ports through it (`findCamera`, `drawOf`, `canvasOf`...).
 - **What only the Cesium renderer needs at startup** is done in its
-  `create`: for Cesium, the free-look height limit and keyboard access to its
+  plugin's `create`: the free-look height limit and keyboard access to its
   credits' expand link (`src/render/cesium/appRenderer.js`).
 - **What a plugin may hand the application beside the contract** is its
   `applicationHooks(renderer)` (`ApplicationHooks`,
@@ -626,7 +624,7 @@ onCreate)` is the stub as a `RendererPlugin`. It has:
 `scriptPicks`, `setHeights` and `cacheHeight`, and records its calls.
 `testing.drawnPosition({ set, id }, aheadMs)` is where it draws an item now
 (or `aheadMs` from now), so a
-camera that is not the stub's own can follow drawn items there.
+camera controller over the stub can follow drawn items there.
 A listener that throws with nothing subscribed to `error` goes to
 `reportError`; Node has none, so the stub rethrows it on a microtask and
 `node:test` fails the running test. A test that expects a throw subscribes
@@ -635,8 +633,8 @@ The stub passes the whole conformance suite (`src/render/stub/stub.test.mjs`).
 
 ## Conformance suite
 
-`runConformance(harness)` runs every check against a renderer through the
-contract alone and reports each one as passed, failed or skipped. It runs in
+`runConformance(harness)` runs every check against the Cesium renderer or
+the stub through the contract alone and reports each one as passed, failed or skipped. It runs in
 Node and in a browser page. A harness tells the suite how to drive the
 renderer under test:
 

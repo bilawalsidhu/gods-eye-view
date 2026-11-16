@@ -61,15 +61,14 @@
   on. `./render/weather` and `./weather/effects` export the shared rules and
   the strengths of a weather observation. The Cesium renderer does not draw
   weather (samehkhamis).
-- An application can add its own groups of toggles, sliders and notes to the
-  Display panel under Effects, with `publishDisplayGroup` from
-  `./ui/display/groups` (samehkhamis).
-- The globe opens at planet level, the whole Earth in view, on every
-  renderer, instead of flying in to Austin. A shared link still flies from
-  there to its view. An application can start somewhere else, a city for
-  instance, with the `startView` option of `createApplicationControls`
-  (longitude, latitude and height, and heading and pitch in degrees)
+- Groups of toggles, sliders and notes can be added to the Display panel
+  under Effects, with `publishDisplayGroup` from `./ui/display/groups`
   (samehkhamis).
+- The globe opens at planet level, the whole Earth in view, instead of
+  flying in to Austin. A shared link still flies from
+  there to its view. The `startView` option of `createApplicationControls`
+  starts it somewhere else, a city for instance (longitude, latitude and
+  height, and heading and pitch in degrees) (samehkhamis).
 - An application's own tool can take the pointer as Draw does, and its click
   handlers can yield while a tool holds it, as the layers' do (`pointer` from
   `createApplicationTools`) (samehkhamis, #1641).
@@ -94,14 +93,14 @@
   port. A click's `hit`, `topHit`, `drawHit` and `drill()` hits, and
   `pickAt`'s result, are the renderer contract's `Hit`; positions are plain
   `{ x, y }`; `HANDLER_EVENT_TYPES` is gone. Cesium's own picks stay on
-  `event.native` (and `event.pick` and `event.pickWindow`). A viewer of your
-  own with no renderer bound needs `gods-eye-view/render/cesium/unbound`
+  `event.native` (and `event.pick` and `event.pickWindow`). A viewer with no
+  renderer bound needs `gods-eye-view/render/cesium/unbound`
   loaded once first (samehkhamis).
 - `gods-eye-view/application/operations` no longer reaches Cesium: ground
   snapping and mesh floor sampling ask the renderer's globe, camera and query
   ports, and see through the caller's draw sets by id (the raw
-  `excludeObjects` option and exclusion callbacks are gone). A viewer of your
-  own with no renderer bound needs `gods-eye-view/render/cesium/unbound`
+  `excludeObjects` option and exclusion callbacks are gone). A viewer with no
+  renderer bound needs `gods-eye-view/render/cesium/unbound`
   loaded once first, or location framing throws and snaps answer nothing
   (samehkhamis).
 - `gods-eye-view/layers/traffic` (and `gods-eye-view/application/sources`,

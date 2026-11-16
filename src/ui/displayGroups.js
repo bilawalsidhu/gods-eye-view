@@ -1,6 +1,6 @@
 /**
- * Groups of controls an application adds to the Display panel, under
- * Effects: toggles, sliders and notes it describes and answers itself.
+ * Groups of controls added to the Display panel, under
+ * Effects: toggles, sliders and notes, each answered by whoever added it.
  */
 import { applicationPinia } from './vueRuntime.js';
 import { useDisplayStore } from './stores/display.js';

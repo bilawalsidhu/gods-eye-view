@@ -740,7 +740,7 @@ test('each drawn shape is a row whose actions reach the board, and fly-to is a n
   }
 });
 
-test("an application's row actions show on the shapes they are for and run with the shape", async () => {
+test("row actions given to the tool show on the shapes they are for and run with the shape", async () => {
   const ran = [];
   const h = harness({
     markActions: [

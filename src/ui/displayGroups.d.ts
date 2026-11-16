@@ -1,4 +1,4 @@
-/** A row of a group an application adds to the Display panel. */
+/** A row of a group added to the Display panel. */
 export type DisplayGroupRow =
   | {
       kind: 'toggle';

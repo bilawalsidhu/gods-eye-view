@@ -19,7 +19,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
 
   /**
    * The renderer's camera and query ports for the layer's scene: the bound
-   * renderer's, or those the default renderer's adapter builds over a viewer
+   * renderer's, or those the Cesium adapter builds over a viewer with no
    * renderer bound.
    */
   const cameraPort = () => findCamera(layerState._viewer);

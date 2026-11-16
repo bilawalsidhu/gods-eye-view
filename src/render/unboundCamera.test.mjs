@@ -1,6 +1,6 @@
 /**
  * A public entry that reaches the renderer bridge (`rendererOf.js`) may hand
- * `cameraOf` a viewer of the caller's own, with no renderer bound. The
+ * `cameraOf` a Cesium viewer with no renderer bound. The
  * bridge builds a camera port for it with the factory the Cesium adapter
  * provides as `render/cesium/camera.js` loads, so every such entry must load
  * that module too. It loads `render/cesium/credits.js`, whose factory
@@ -183,7 +183,7 @@ const CAMERA_FROM_CALLER = new Set([
   './maps/controller',
   // The application shell and what assembles it: their controls fly, read
   // the eye, shade the globe and set styles through the ports alone; the
-  // application's renderer is bound to its viewer, and a viewer of the
+  // application's renderer is bound to its viewer, and a viewer with no
   // renderer bound gets its ports from `./render/cesium/unbound`.
   './ui/shell',
   './ui/composition',
@@ -195,7 +195,7 @@ const CAMERA_FROM_CALLER = new Set([
   // when it is given none), so its own viewer needs no factory.
   './application/scene',
   // The map stacks switch through the renderer's map engine or its globe
-  // port (`maps/globeEngine.js`), which a viewer of the caller's own gets
+  // port (`maps/globeEngine.js`), which a viewer with no renderer bound gets
   // from `./render/cesium/unbound`.
   './maps/defaults',
   // It restores a shared view through the camera, frame and canvas of the

@@ -2,7 +2,7 @@
  * @module sky
  * @description The sky background, Cesium-free: catalogue stars over a
  * soft Milky Way, both in ICRF/J2000, and the precise ICRF-to-fixed rotation
- * a renderer may provide for the rest of the application.
+ * the Cesium renderer provides for the rest of the application.
  */
 
 export {

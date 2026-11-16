@@ -1,6 +1,6 @@
 /**
- * The renderer conformance suite (`index.js`): every check run against a
- * renderer through the contract alone, in Node or in a browser page.
+ * The renderer conformance suite (`index.js`): every check run against the
+ * Cesium renderer or the stub through the contract alone, in Node or in a browser page.
  */
 import type {
   CameraPose,

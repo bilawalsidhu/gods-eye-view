@@ -9,7 +9,7 @@
 const renderers = new WeakMap();
 
 /**
- * Ports built for scene objects no renderer is bound to (a viewer of a
+ * Ports built for scene objects no renderer is bound to (a Cesium viewer
  * made directly, say), per port: each `{port, dispose}` kept for as long
  * as its scene object lives, or until a renderer is bound to it. The
  * renderer adapter provides the factory each is built with as it loads.
