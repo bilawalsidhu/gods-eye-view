@@ -235,7 +235,6 @@ function shippedStory(recipe) {
     id: `gev:${recipe.id}`,
     sceneId: recipe.id,
     kind: 'gev',
-    live: false,
     title: recipe.title,
     creator: 'GEV',
     tags: Object.entries(recipe.layers ?? {})
@@ -267,7 +266,6 @@ function savedStory(entry) {
     id: `gev:${entry.id}`,
     sceneId: entry.id,
     kind: 'gev',
-    live: false,
     mine: true,
     // Not saved with SAVE TO STORIES yet.
     draft: !!entry.draft,

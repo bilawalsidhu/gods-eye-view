@@ -342,7 +342,7 @@ watch([k, page], () => nextTick(sizeCard));
         <div class="ch-credit">
           <span class="label"
             ><span class="chip">{{
-              story.live ? t('LIVE') : story.draft ? t('DRAFT') : t('STORY')
+              story.draft ? t('DRAFT') : t('STORY')
             }}</span></span
           >
           <div class="t">{{ title }}</div>

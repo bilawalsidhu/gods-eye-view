@@ -716,24 +716,6 @@
   color: #eaf6f9;
   white-space: nowrap;
 }
-#gev-stories .chip .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--live);
-  animation: gsx-pulse 1.6s ease-out infinite;
-}
-@keyframes gsx-pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(255, 77, 77, 0.6);
-  }
-  70% {
-    box-shadow: 0 0 0 6px rgba(255, 77, 77, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(255, 77, 77, 0);
-  }
-}
 #gev-stories .thumb .chip {
   position: absolute;
   top: 6px;
@@ -2799,12 +2781,6 @@
   background: rgba(0, 212, 255, 0.14);
   border-color: rgba(0, 212, 255, 0.6);
   color: var(--accent);
-}
-#gev-stories .chip.live i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--live);
 }
 #gev-stories .fh-sort {
   flex: none;

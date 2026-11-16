@@ -62,10 +62,7 @@ const shown = computed(() => {
     const m = metaFor(s);
     const txt = searchText(s);
     if (words.some((w) => !txt.includes(w))) return false;
-    if (
-      chips.value.length &&
-      !chips.value.some((c) => (c === 'Live' ? s.live : m.topics.includes(c)))
-    )
+    if (chips.value.length && !chips.value.some((c) => m.topics.includes(c)))
       return false;
     if (f.region?.length && !f.region.includes(m.region)) return false;
     if (
@@ -548,10 +545,9 @@ defineExpose({
                   :key="c"
                   type="button"
                   class="chip"
-                  :class="{ live: c === 'Live' }"
                   :aria-pressed="chips.includes(c)"
                   @click="toggleChip(c)"
-                  ><i v-if="c === 'Live'"></i>{{ t(c) }}</button
+                  >{{ t(c) }}</button
                 >
               </div>
             </div>
@@ -623,10 +619,7 @@ defineExpose({
                   alt=""
                   loading="lazy"
                 />
-                <span v-if="s.live" class="chip"
-                  ><span class="dot"></span>{{ t('LIVE') }}</span
-                >
-                <span v-else class="chip">{{
+                <span class="chip">{{
                   s.draft ? t('DRAFT') : t('STORY')
                 }}</span>
                 <span class="dur">{{ fmtDur(s.durationMs) }}</span>
