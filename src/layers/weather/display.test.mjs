@@ -1,12 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { GeographicTilingScheme } from 'cesium';
 import { createWeatherLayer } from './index.js';
 import { createWeatherRendering } from './rendering.js';
-import { weatherDisplay, insideExtent, escapeCreditText } from './display.js';
-import { createShellCesium, createShellScene } from './shellFixture.mjs';
+import { weatherDisplay, insideExtent } from './display.js';
+import { createShellScene } from './shellFixture.mjs';
+import { fakeGlobePort } from '../../testSupport/fakeGlobePort.mjs';
 import { formatScaleLabel } from '../../ui/unitLabels.js';
+import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { fakeSceneFrame } from '../../testSupport/fakeCesiumScene.mjs';
 
 const times = ['2026-09-15T20:00:00.000Z', '2026-09-15T20:05:00.000Z'];
 const base = {
@@ -58,18 +61,25 @@ async function shownLayer(id, manifest, params, view = {}) {
       getDiagnostics: () => ({ time, loading: false, error: null }),
     }),
   });
-  layer.init({
-    camera: {
-      moveEnd: { addEventListener: () => () => {} },
-      flyTo: ({ destination }) => flights.push(destination),
-      pickEllipsoid: () =>
-        view.center ? Cesium.Cartesian3.fromDegrees(...view.center) : undefined,
-    },
-    scene: {
-      canvas: { clientWidth: 800, clientHeight: 600 },
-      globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
-    },
-  });
+  layer.init(
+    bindFakeCesiumCamera(
+      {
+        camera: {
+          moveEnd: { addEventListener: () => () => {} },
+          flyTo: ({ destination }) => flights.push(destination),
+        },
+        scene: { canvas: { clientWidth: 800, clientHeight: 600 } },
+      },
+      {
+        query: {
+          pickEllipsoid: (x, y) =>
+            x === 400 && y === 300 && view.center
+              ? fromDegrees(...view.center)
+              : null,
+        },
+      },
+    ),
+  );
   if (params) layer.setParams(params);
   layer.enable();
   await layer.update();
@@ -576,10 +586,6 @@ test('display validation bounds text, legend shape, colours and extents', () => 
   assert.equal(insideExtent(wrap.extent, -100, 10), true);
   assert.equal(insideExtent(wrap.extent, 50, 10), false);
   assert.equal(insideExtent(wrap.extent, -100, 81), false);
-  assert.equal(
-    escapeCreditText(`<b>"A" & 'B'</b>`),
-    '&lt;b&gt;&quot;A&quot; &amp; &#39;B&#39;&lt;/b&gt;',
-  );
 });
 
 function mockCanvas() {
@@ -593,35 +599,11 @@ function mockCanvas() {
   return canvas;
 }
 
-/** A globe viewer whose imagery collection records providers. */
+/** A globe viewer whose globe port records the layers added. */
 function globeViewer() {
-  const providers = [];
-  const layers = [];
-  const collection = {
-    addImageryProvider(provider) {
-      providers.push(provider);
-      const layer = { imageryProvider: provider, alpha: 1, show: true };
-      layers.push(layer);
-      return layer;
-    },
-    contains: (layer) => layers.includes(layer),
-    remove(layer) {
-      layers.splice(layers.indexOf(layer), 1);
-      return true;
-    },
-    get length() {
-      return layers.length;
-    },
-    get: (index) => layers[index],
-    indexOf: (layer) => layers.indexOf(layer),
-    lower() {},
-    raise() {},
-    raiseToTop() {},
-    isDestroyed: () => false,
-  };
   const listeners = new Set();
   const viewer = {
-    imageryLayers: collection,
+    imageryLayers: {},
     camera: {
       moveEnd: { addEventListener: () => () => {} },
       flyTo() {},
@@ -638,26 +620,21 @@ function globeViewer() {
       requestRender() {},
     },
   };
-  class Provider {
-    constructor(options) {
-      this.options = options;
-      this.tilingScheme = new GeographicTilingScheme();
-      this.errorEvent = new Cesium.Event();
-    }
-    requestImage() {
-      return undefined;
-    }
-  }
-  const cesium = {
-    ...createShellCesium(),
-    UrlTemplateImageryProvider: Provider,
-    GeographicTilingScheme,
-    Event: Cesium.Event,
-    Credit: Cesium.Credit,
-    Rectangle: Cesium.Rectangle,
+  bindFakeCesiumCamera(viewer, { frame: fakeSceneFrame(viewer) });
+  const globe = fakeGlobePort();
+  const owed = [];
+  const credits = {
+    addStatic(credit) {
+      const entry = { ...credit };
+      owed.push(entry);
+      return () => owed.splice(owed.indexOf(entry), 1);
+    },
   };
   const options = {
-    cesium,
+    globeOf: () => globe,
+    creditsOf: () => credits,
+    cameraOf: () => null,
+    toBitmap: (canvas) => canvas,
     fetchImpl: async () => ({
       ok: true,
       headers: new Headers(),
@@ -671,7 +648,7 @@ function globeViewer() {
     for (let i = 0; i < 2; i++) for (const fn of [...listeners]) fn();
     await flush();
   };
-  return { viewer, providers, options, settle };
+  return { viewer, providers: globe.added, owed, options, settle };
 }
 
 /** Show a frame of `manifest` and return the rendering and its globe. */
@@ -687,7 +664,8 @@ async function shownFrame(manifest) {
   return { ...globe, rendering };
 }
 
-const creditOf = (providers) => providers.at(-1).credit.html;
+/** The credit the shown frame owes. */
+const creditOf = (h) => h.owed.at(-1)?.text;
 
 test('the imagery credit uses the source credit as plain text, else the built-in one', async () => {
   for (const product of ['radar', 'lightning', 'clouds-regional', 'clouds']) {
@@ -697,7 +675,7 @@ test('the imagery credit uses the source credit as plain text, else the built-in
         product,
         ...(display ? { display } : {}),
       });
-      assert.equal(creditOf(h.providers), BUILT_IN[product].credit, product);
+      assert.equal(creditOf(h), BUILT_IN[product].credit, product);
       h.rendering.clear();
     }
     const h = await shownFrame({
@@ -706,8 +684,9 @@ test('the imagery credit uses the source credit as plain text, else the built-in
       display: { credit: 'Example <network> & partners' },
     });
     assert.equal(
-      creditOf(h.providers),
-      'Example &lt;network&gt; &amp; partners',
+      creditOf(h),
+      'Example <network> & partners',
+      'plain text: the credits port escapes it',
     );
     h.rendering.clear();
   }
@@ -720,7 +699,7 @@ test('a refreshed manifest updates the credit of the frame already shown', async
       product,
       display: { credit: 'First credit' },
     });
-    assert.equal(creditOf(h.providers), 'First credit');
+    assert.equal(creditOf(h), 'First credit');
     const again = (display) =>
       h.rendering.setFrame(
         { ...base, product, ...(display ? { display } : {}) },
@@ -728,22 +707,22 @@ test('a refreshed manifest updates the credit of the frame already shown', async
       );
     assert.equal(await again({ credit: 'Second credit' }), true);
     assert.equal(h.providers.length, 1, 'the frame is not restaged');
-    assert.equal(creditOf(h.providers), 'Second credit');
+    assert.equal(creditOf(h), 'Second credit');
     assert.equal(await again(), true);
-    assert.equal(creditOf(h.providers), BUILT_IN[product].credit);
+    assert.equal(creditOf(h), BUILT_IN[product].credit);
     h.rendering.updateSnapshot({
       ...base,
       product,
       display: { credit: 'Third credit' },
     });
-    assert.equal(creditOf(h.providers), 'Third credit');
+    assert.equal(creditOf(h), 'Third credit');
     // Another product's manifest leaves this frame alone.
     h.rendering.updateSnapshot({
       ...base,
       product: 'radar',
       display: { credit: 'Other' },
     });
-    assert.equal(creditOf(h.providers), 'Third credit');
+    assert.equal(creditOf(h), 'Third credit');
     h.rendering.clear();
   }
 });
@@ -784,7 +763,7 @@ test('a refreshed manifest leaves the shown snapshot for a host switch to restag
     display: { credit: 'Second credit' },
   };
   rendering.updateSnapshot(refreshed);
-  assert.equal(creditOf(globe.providers), 'Second credit');
+  assert.equal(creditOf(globe), 'Second credit');
   host = { collection: {}, kind: 'tileset' };
   assert.equal(rendering.rehome(), true);
   await flush();
@@ -793,15 +772,12 @@ test('a refreshed manifest leaves the shown snapshot for a host switch to restag
   assert.equal(rendering.rehome(), true);
   await globe.settle();
   assert.equal(globe.providers.length, 2);
-  const { west, south, east, north } = first.bounds;
-  assert.ok(
-    Cesium.Rectangle.equals(
-      globe.providers.at(-1).options.rectangle,
-      Cesium.Rectangle.fromDegrees(west, south, east, north),
-    ),
+  assert.deepEqual(
+    globe.providers.at(-1).spec.rectangle,
+    first.bounds,
     'the restaged frame keeps the bounds it was staged from',
   );
-  assert.equal(creditOf(globe.providers), 'Second credit');
+  assert.equal(creditOf(globe), 'Second credit');
   rendering.clear();
 });
 
@@ -841,7 +817,7 @@ test('a refresh during a host-switch restage keeps the newest credit', async () 
   rendering.updateSnapshot({ ...first, display: { credit: 'Third credit' } });
   await globe.settle();
   assert.equal(globe.providers.length, 2);
-  assert.equal(creditOf(globe.providers), 'Third credit');
+  assert.equal(creditOf(globe), 'Third credit');
   rendering.clear();
 });
 
@@ -873,7 +849,7 @@ test('a refresh while a frame loads survives a later host switch', async () => {
   rendering.updateSnapshot({ ...first, display: { credit: 'Second credit' } });
   await globe.settle();
   assert.equal(await shown, true);
-  assert.equal(creditOf(globe.providers), 'Second credit');
+  assert.equal(creditOf(globe), 'Second credit');
   host = { collection: {}, kind: 'tileset' };
   assert.equal(rendering.rehome(), true);
   await flush();
@@ -881,7 +857,7 @@ test('a refresh while a frame loads survives a later host switch', async () => {
   assert.equal(rendering.rehome(), true);
   await globe.settle();
   assert.equal(globe.providers.length, 2);
-  assert.equal(creditOf(globe.providers), 'Second credit');
+  assert.equal(creditOf(globe), 'Second credit');
   rendering.clear();
 });
 
@@ -900,7 +876,7 @@ test('a refresh before a frame is installed gives it the newest credit', async (
     });
     await globe.settle();
     assert.equal(await shown, true);
-    assert.equal(creditOf(globe.providers), 'Second credit', product);
+    assert.equal(creditOf(globe), 'Second credit', product);
     rendering.clear();
   }
 });
@@ -927,13 +903,13 @@ test('a layer refresh with the same latest frame updates the imagery credit', as
   const first = layer.update();
   await globe.settle();
   await first;
-  assert.equal(creditOf(globe.providers), 'First credit');
+  assert.equal(creditOf(globe), 'First credit');
   manifest = { ...manifest, display: { credit: 'Second credit' } };
   await layer.update();
   assert.equal(globe.providers.length, 1, 'the frame is not restaged');
-  assert.equal(creditOf(globe.providers), 'Second credit');
+  assert.equal(creditOf(globe), 'Second credit');
   manifest = { ...base, product: 'lightning' };
   await layer.update();
-  assert.equal(creditOf(globe.providers), BUILT_IN.lightning.credit);
+  assert.equal(creditOf(globe), BUILT_IN.lightning.credit);
   layer.destroy();
 });

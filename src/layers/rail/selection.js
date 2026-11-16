@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import {
   RAIL_SELECTED_OVERLAY_SOURCE_ID,
   RAIL_SELECTED_OVERLAY_SOURCE_OPTIONS,
@@ -7,7 +6,7 @@ import {
   createRailSelectedOverlayEntry,
 } from './policy.js';
 import { getRegisteredRailFeed } from '../../data/railFeeds.js';
-import { isPointerFree } from '../../data/inputOwnership.js';
+import { inputFor } from '../../input/dispatcher.js';
 import { t } from '../../i18n/index.js';
 
 /**
@@ -126,7 +125,7 @@ export function createSelection({ state, services, parts }) {
   /**
    * Deselect, letting go of the camera where it is.
    * @param {{untrack?: boolean}} [options] `untrack: false` when another
-   *   camera owner took over and its tracked entity must stay.
+   *   camera owner took over and what the camera follows must stay.
    */
   function clearSelection({ untrack = true } = {}) {
     const hadSelection = state._selectedKey !== null;
@@ -154,27 +153,37 @@ export function createSelection({ state, services, parts }) {
     if (event.key === 'Escape' && state._selectedKey) clearSelection();
   }
 
+  /**
+   * The train a click's hit names: one of this layer's icons, or a train's
+   * 3D model (its pick meta is the train's key); null for anything else.
+   */
+  function trainKeyOf(hit) {
+    if (!hit) return null;
+    if (hit.set && hit.set === state._icons?.id)
+      return state._trains.has(hit.id) ? hit.id : null;
+    const meta = hit.meta;
+    return typeof meta === 'string' && state._trains.has(meta) ? meta : null;
+  }
+
   function installClickHandler(viewer) {
-    if (state._clickHandler) return;
-    state._clickHandler = new Cesium.ScreenSpaceEventHandler(
-      viewer.scene.canvas,
-    );
-    state._clickHandler.setInputAction((click) => {
-      if (!state._enabled || !isPointerFree()) return;
+    if (state._clickSubscription) return;
+    // The dispatcher maps a sensor-style click back into the pick buffer
+    // and skips it while a tool holds the pointer.
+    state._clickSubscription = inputFor(viewer).onClick((event) => {
+      if (!state._enabled) return;
       // A held train keeps the selection until its view lets it go.
       if (state._cockpitSubjectKey) return;
-      const picked = viewer.scene.pick(click.position);
-      const id = typeof picked?.id === 'string' ? picked.id : null;
-      if (id && state._trains.has(id)) selectAndFocusTrain(id);
+      const key = trainKeyOf(event.drawHit);
+      if (key) selectAndFocusTrain(key);
       else if (state._selectedKey) clearSelection();
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
     globalThis.document?.addEventListener?.('keydown', onKeyDown);
     parts.follow.install(viewer);
   }
 
   function removeClickHandler() {
-    state._clickHandler?.destroy();
-    state._clickHandler = null;
+    state._clickSubscription?.();
+    state._clickSubscription = null;
     globalThis.document?.removeEventListener?.('keydown', onKeyDown);
     parts.follow.uninstall();
   }

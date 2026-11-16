@@ -4,13 +4,8 @@ import * as Cesium from 'cesium';
 import { createQueries } from './queries.js';
 
 function describe(info) {
-  const bb = {
-    show: true,
-    position: Cesium.Cartesian3.fromDegrees(-77, 39, 2000),
-  };
   const flightState = {
     feed: {},
-    _billboards: new Map([['ae1234', bb]]),
     _models: new Map(),
     _detectionObjects: new Map(),
     _scratchCarto: new Cesium.Cartographic(),
@@ -21,7 +16,12 @@ function describe(info) {
     labels: {},
     camera: {},
   };
-  const parts = { motion: { _deadReckon: () => null } };
+  const parts = {
+    motion: { _deadReckon: () => null },
+    icons: {
+      _iconPosition: () => Cesium.Cartesian3.fromDegrees(-77, 39, 2000),
+    },
+  };
   return createQueries({
     flightState,
     services,

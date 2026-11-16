@@ -9,7 +9,7 @@ import { markRaw, shallowRef } from 'vue';
  * bar the FPS readout createFrameRateMonitor() publishes. Each label keeps its
  * last text while hidden, so the next change flaps from what was shown. The
  * render failure notice is what installRenderFailureNotice()
- * (src/ui/renderFailure.js) publishes while the globe cannot draw.
+ * (src/render/cesium/renderFailure.js) publishes while the globe cannot draw.
  */
 export const useStatusStore = defineStore('gev-status', () => {
   /**

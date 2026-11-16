@@ -43,7 +43,11 @@ await app.destroy();
 ```
 
 The example's containers and three remaining constructors are supplied by the
-consumer. The viewer helper preserves the standalone viewer's render settings;
+caller. The standalone scene also returns `trimStaleCommands()`, which drops
+the draw commands the Cesium scene keeps after a turned-off layer stops drawing;
+the application tools call it one frame after each layer disable. A scene
+without it keeps those commands, and so the layer's memory, until they are
+overwritten. The viewer helper preserves the standalone viewer's render settings;
 it neither selects map sources nor reads keys. Supply a visible credit container
 and retain all attribution required by the chosen sources. Cesium is external to
 this export: the consuming build must provide the same instance used elsewhere
@@ -80,6 +84,119 @@ constructed component objects; the component instances themselves remain mutable
 
 `ready` means all constructors have returned. Background feed activity and the
 standalone share-restoration result keep their existing separate contracts.
+
+## Pointer input
+
+`gods-eye-view/input` exports `inputFor(viewer)`, the scene's one input
+dispatcher. Every layer and tool takes its pointer input from it, and so can
+the caller: one pointer handler per viewer, and a click picked once and
+handed to every subscriber.
+
+```js
+import { inputFor } from 'gods-eye-view/input';
+
+const input = inputFor(viewer);
+const off = input.onClick((event) => {
+  if (event.ownerId === 'flights') showFlight(event.id);
+});
+// Later:
+off();
+```
+
+`onClick` runs while no tool holds the pointer (the draw tool, the imagery
+box), so a vertex placed on an aircraft is not also a click on it. Its event
+reads lazily; a subscriber that reads nothing costs no pick:
+
+| Member               | What it is                                                                |
+| -------------------- | ------------------------------------------------------------------------- |
+| `screenPosition`     | Where the user clicked, in CSS pixels; for DOM and overlay hit-tests      |
+| `position`           | Where that lands in the pick buffer (corrected under sensor styles)       |
+| `gesture`            | `{ travelPx, durationMs }` of the press, to tell a click from a drag      |
+| `topHit`             | The renderer's `Hit` on top at `position`, or `null` for the map itself   |
+| `drawHit`            | `topHit` when it is an item of a draw set, else `null`                    |
+| `hit`                | `topHit`, or on a coarse pointer the contact under a surface pick         |
+| `id`, `ownerId`      | The hit's pick id and the layer that registered it, or `null`             |
+| `meta`               | The hit's own metadata, when it carries any                               |
+| `surface`            | Whether the hit is the map itself                                         |
+| `drill(limit)`       | The draw-set `Hit`s under the click, shared by every subscriber           |
+| `windowHit(w, h)`    | `{ id, drawHit, surface }` of a pick over a `w`×`h` window                |
+| `ground()`           | The world position under the click, or `null` over the sky                |
+| `native`             | The renderer adapter's own `{ pick, pickWindow(w, h), drill(limit) }`     |
+| `pick`, `pickWindow` | `native.pick` and `native.pickWindow`, for code bound to the engine picks |
+
+A hit is the renderer contract's `Hit` (`src/render/contract/query.d.ts`).
+Something drawn outside the renderer's draw port is a `Hit` with `set: ''`,
+named by the adapter. Positions are plain `{ x, y }` objects. The dispatcher
+takes its pointer events from the renderer's input port and its picks from
+its query port, so a viewer with no renderer bound needs the Cesium adapter's
+factories loaded (`gods-eye-view/render/cesium/unbound`), or `inputFor` throws.
+
+`onPointer(type, fn, { lease })` subscribes to `down`, `move`, `up`, `click`
+or `dblclick`; with a lease it runs only while that lease is current. A tool
+takes its lease with `claimPointer(ownerId, { onLost })` from the same export
+(and gives it back with `releasePointer(lease)`), which also keeps every
+ambient subscriber off its clicks; `isPointerFree()` and `pointerOwner()`
+report who holds it. The newest claim takes over, as on the renderer's input
+port: the tool holding the pointer has its `onLost` called once and turns
+itself off, and its late release frees nothing. `suspendCamera(reason)` and `suppressStockClicks()` return their
+own release: camera input and the viewer's stock select and double-click-track
+come back when the last hold is released, so two holders cannot undo each
+other. The renderer's input port owns the camera controller's `enableInputs`: a direct
+write (Cesium's camera flights make one when they start and end) is kept, but
+reads true only while no hold is out. A caller-supplied `createScene` that creates its own viewer registers
+`defer(() => inputFor(viewer).destroy())` right after it; the standalone scene
+does this and returns the dispatcher as `scene.input`.
+
+## Height queries
+
+`gods-eye-view/queries/heights` exports `heightsOf(viewer)`, the one place
+height queries go. Layers, tools and the camera ask it instead of asking the
+renderer's query port (`sampleHeight`, `sampleHeightNow`, `clampToSurface`)
+or the scene themselves, so how the renderer answers heights can change
+without touching them. Pass the viewer the renderer is bound to, not its
+scene. A viewer with no renderer bound is answered by the Cesium adapter's
+fallback once the caller has loaded `gods-eye-view/render/cesium/unbound`;
+until then, every query answers `null`.
+
+```js
+import { heightsOf } from 'gods-eye-view/queries/heights';
+
+const heights = heightsOf(viewer);
+const ground = heights.now({ lon, lat }, { exclude: [ownSetId] });
+if (ground !== null) place(ground);
+```
+
+| Member                        | What it answers                                                           |
+| ----------------------------- | ------------------------------------------------------------------------- |
+| `now(point, opts)`            | Height in metres from what is loaded, or `null`                           |
+| `clampNow(position, opts)`    | The ECEF `{ x, y, z }` moved onto the drawn surface, or `null`            |
+| `batch(points, opts)`         | A promise of heights once the most detailed tiles stream; `null` per miss |
+| `clampBatch(positions, opts)` | A promise of clamped `{ x, y, z }` copies; `null` per miss                |
+| `supported()`                 | `{ surface, clamp }`: whether the drawn surface can be queried at all     |
+
+A point is `{ lon, lat }` in degrees or `{ longitude, latitude }` in radians.
+`against: 'surface'` (the default) reads what is drawn, 3D tiles and globe;
+`against: 'terrain'` reads the loaded terrain alone; `against: 'tiles'` the
+tiles without the globe. Both `surface` and `tiles` include draw sets drawn
+with `includeInHeightQueries`; `clampNow` and `clampBatch` always clamp to
+the surface. `exclude` lists draw set ids to see through, of those drawn with
+`includeInHeightQueries`; every other draw set is seen through already. Every
+miss is `null`, and every caller treats it as one; `batch` and `clampBatch`
+reject when the query itself fails. Without depth-texture support the Cesium
+renderer answers no `surface` or `tiles` height; `now` still answers
+`terrain` from the loaded tiles, while `batch` misses terrain too.
+
+## Cesium internals
+
+The app reaches private Cesium fields only through
+`src/render/cesium/internals.js`, one named helper per field (the main and
+offscreen pick views, a billboard's collection, a cluster's point collection,
+the widget's render-loop latch, the WebGL context and whether a camera flight
+is under way). `internals.test.mjs` fails when the installed Cesium stops
+declaring one of them, and when a private field is reached anywhere else.
+Imagery that rations its tile requests states the policy as a hook with
+`withTileRequestHook(provider, { requestImage, credit })` from
+`src/render/cesium/tileRequests.js`, which leaves the provider untouched.
 
 ## Standalone wiring
 
@@ -187,7 +304,28 @@ instances. Configure sources with `application/sources` before registration or
 state restoration, and release them after the consumers stop. The catalog
 constructor (`application/layers`) also requires `wind`, `weather` and
 `cyclones` sources with `getSnapshot` for the Weather layers, and owns the
-observed-history clock those layers share for the catalog's lifetime.
+observed-history clock those layers share for the catalog's lifetime. That
+clock, the catalog's `weatherClock`, follows the world clock (`gods-eye-view/time`)
+and has no time controls of its own: move time with the world clock's `seek`,
+`play`, `pause` and `goLive` (`weatherClock.world` is the one it follows).
+
+A layer gives the world clock's timeline the time it can show with
+`worldClock.register({ id, coverage })` (`gods-eye-view/time`), which returns
+the unregister; call `worldClock.coverageChanged()` when that time changes.
+`coverage()` returns null while the layer has none, or
+`{ start, end, marks? }` in epoch ms. `marks` are the moments worth going to,
+drawn as ticks the timeline's arrow keys step to and a tap on or within 6 px of
+snaps to. Each mark is a number, or `{ time, label?, id?, kind? }`: `label` is
+short text (cut to 60 characters, ending in `…`) shown when the pointer is on
+the tick and told with the time while the handle is on the mark, `id` the layer's own key for the event and `kind`
+what sort of event it is (`'launch'`, `'earthquake'`). The two forms may be
+mixed; a mark without a finite time, and a `label`, `id` or `kind` that is not
+a non-empty string, are ignored. `worldClock.coverage()` returns the union of
+the registered layers, `{ start, end, marks, markDetails }`, or null: `marks`
+is every mark's time once, in order, as numbers, and `markDetails` the marks in
+time order, each a frozen `{ time, label?, id?, kind? }` holding only the
+fields given, with marks given alike by several layers once and a bare time
+left out where a mark with more to say shares it.
 A `weather` source may also supply decoded frames: an optional
 `getFrameImage({ product, time, size, bbox, signal })` returns a whole-extent or
 detail image and an optional `getFrameTile({ product, time, z, x, y, size,
@@ -195,6 +333,12 @@ signal })` returns one tile or null for a transparent tile, each as an
 `ImageBitmap`, `ImageData`, canvas or `VideoFrame` of exactly the requested
 size, which the layer draws once and closes. Without them the layers read the
 image and tile routes (`WeatherFrameFeed` in `src/layers/weather/source.js`).
+It may also name its source with an optional `sourceName(kind)`, `kind` being
+`'radar'`, `'lightning'` or `'satellite'`: the layer's row shows that name until
+a manifest names its own, and NOAA nowCOAST when the source names none. The
+name is read once, when the layer is built, and held to the same rule as a
+manifest's `display.source`. The map credit still comes from each manifest's
+`display.credit`, so a source that is not nowCOAST sets that too.
 
 `application/services` accepts boundary, terrain, regional-context, weather and
 summary services; its weather service supplies cockpit local conditions, not the

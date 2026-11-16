@@ -1,6 +1,7 @@
 import { createFlightSnapshotRenderer } from './snapshotRenderer.js';
 import { createFlightState } from './state.js';
 import { createRendering } from './rendering.js';
+import { createIcons } from './icons.js';
 import { createMotion } from './motion.js';
 import { createTracking } from './tracking.js';
 import { createController } from './controller.js';
@@ -24,6 +25,7 @@ export function createCivilFlightLayer({
   const layer = {};
   const context = { flightState, services, parts, layer, resolveAsset };
   parts.rendering = createRendering(context);
+  parts.icons = createIcons(context);
   parts.motion = createMotion(context);
   parts.tracking = createTracking(context);
   parts.controller = createController(context);
@@ -39,10 +41,10 @@ export function createCivilFlightLayer({
     records: flightState.records,
     militaryRegistry: services.militaryRegistry,
     groundFloor: services.groundFloor,
-    meshFloor: services.meshFloor,
     rendering: parts.rendering,
     tracking: parts.tracking,
     motion: parts.motion,
+    icons: parts.icons,
     enrichment: parts.enrichment,
     queries: parts.queries,
   });
@@ -84,4 +86,3 @@ export function createCivilFlightLayer({
   Object.defineProperty(layer, 'testing', { value: parts.testing });
   return layer;
 }
-export { TRACKED_MODEL_MAX_PX } from './policy.js';

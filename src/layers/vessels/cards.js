@@ -72,9 +72,7 @@ export function createCards({
     return {
       id: vesselOverlayEntryId(record),
       actionable: Boolean(record?.id),
-      position:
-        components.rendering.getVisual(record).billboard?.position ||
-        components.rendering.getVisual(record).position,
+      position: components.rendering.iconPosition(record),
       gapPx: 10,
       accent: vesselAccent(record, aid),
       title: trimHudValue(displayVesselName(record), 26),
@@ -117,9 +115,7 @@ export function createCards({
     return {
       id: vesselOverlayEntryId(record),
       actionable: Boolean(record?.id),
-      position:
-        components.rendering.getVisual(record).billboard?.position ||
-        components.rendering.getVisual(record).position,
+      position: components.rendering.iconPosition(record),
       gapPx: 12,
       accent: vesselAccent(record, aid),
       title: trimHudValue(displayVesselName(record), 32),

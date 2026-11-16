@@ -9,6 +9,13 @@ import assert from 'node:assert/strict';
 import { createPinia } from 'pinia';
 import { createApp, defineComponent, h, nextTick } from 'vue';
 import { DataLayerManager } from '../data/manager.js';
+import { withEntityRecord } from '../data/entityRecords.js';
+import {
+  bindFakeCesiumCamera,
+  followEntity,
+} from '../testSupport/fakeCameraPort.mjs';
+import { followedOf } from '../data/followed.js';
+import { fakeScenePorts } from '../testSupport/fakeCesiumScene.mjs';
 import { createDependencies } from '../layers/awareness/dependencies.js';
 import { CockpitCoordinator } from './cockpitCoordinator.js';
 import { ContextControls } from './contextControls.js';
@@ -78,17 +85,18 @@ function fixture(
     tracked?.layerId === layerId && dataManager.isEnabled(layerId)
       ? tracked.info
       : null;
-  const entityFor = (subject) => ({
-    position: { getValue: () => null },
-    show: true,
-    gevTrackedId: subject ? `${subject.layerId}:${subject.info.icao24}` : '',
-  });
+  const entityFor = (subject) =>
+    withEntityRecord(
+      { position: { getValue: () => null }, show: true },
+      {
+        trackedId: subject ? `${subject.layerId}:${subject.info.icao24}` : '',
+      },
+    );
   const entities = new Set();
   const entity = entityFor(tracked);
   entities.add(entity);
   const listeners = () => ({ addEventListener: () => () => {} });
   const viewer = {
-    trackedEntity: tracked ? entity : undefined,
     clock: { currentTime: null },
     camera: { cancelFlight() {}, frustum: { fov: 1, aspectRatio: 1 } },
     entities: { contains: (candidate) => entities.has(candidate) },
@@ -98,6 +106,9 @@ function fixture(
     },
     trackedEntityChanged: listeners(),
   };
+  // The Cockpit reads frames, the camera and what it follows through ports.
+  bindFakeCesiumCamera(viewer, fakeScenePorts(viewer));
+  if (tracked) followEntity(viewer, entity);
   const context = { mode: contextMode, changing };
   const coordinator = new CockpitCoordinator({
     viewer,
@@ -179,8 +190,9 @@ function fixture(
   /** Track another aircraft, as Contacts navigation does mid-session. */
   const retrack = (subject) => {
     tracked = subject;
-    viewer.trackedEntity = entityFor(subject);
-    entities.add(viewer.trackedEntity);
+    const next = entityFor(subject);
+    entities.add(next);
+    followEntity(viewer, next);
   };
   /** Select a vessel on the map, or none. */
   const selectVessel = (info) => {
@@ -534,8 +546,10 @@ test('a ride handed to an aircraft on a layer Contacts turned on keeps that laye
   await settle();
   assert.equal(cockpit.enter(), true);
   // NEXT hands the view to a military aircraft; Contacts turned its layer on.
+  // The follow's change adopts it as the ridden aircraft: the Cockpit
+  // takes the camera from the follow.
   retrack({ layerId: 'military', info: MILITARY });
-  assert.equal(cockpit._adoptTrackedEntity(performance.now()), true);
+  assert.equal(followedOf(cockpit.viewer), null, 'adopted');
   assert.equal(cockpit.readSubjectLayerId(), 'military');
   await manager.setEnabled('ais-live-vessels', false, { origin: 'user' });
   await settle();

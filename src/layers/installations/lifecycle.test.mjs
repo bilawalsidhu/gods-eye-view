@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as credits from '../../data/dataCredits.js';
 import { createLifecycle } from './lifecycle.js';
 import { LAYER_ID } from './policy.js';
+import { bindFakeCesiumCredits } from '../../testSupport/fakeCreditsPort.mjs';
 
 for (const source of [
   { name: 'OpenStreetMap', id: 'tile:base' },
@@ -13,20 +14,20 @@ for (const source of [
   test(`enable restores cached installation credits before a refresh: ${source?.id || 'empty'}`, () => {
     const visibleCredits = new Set();
     const noop = () => {};
-    const viewer = {
+    const viewer = bindFakeCesiumCredits({
       camera: {},
       creditDisplay: {
         addStaticCredit: (credit) => visibleCredits.add(credit),
         removeStaticCredit: (credit) => visibleCredits.delete(credit),
       },
-    };
+    });
     const state = {
       viewer,
       records: source ? [{ id: 'base', sources: [source] }] : [],
       recordById: new Map(),
-      dataSource: { show: false },
     };
     let markersVisible = false;
+    let drawnShown = false;
     const parts = {
       namedMarkers: {
         enable: () => {
@@ -37,7 +38,13 @@ for (const source of [
           markersVisible = false;
         },
       },
-      rendering: {},
+      rendering: {
+        attach: noop,
+        detach: noop,
+        setShown: (shown) => {
+          drawnShown = shown;
+        },
+      },
       viewport: { clearUnavailableRetry: noop },
       ingestion: { setInstallationStatus: noop },
     };
@@ -60,12 +67,12 @@ for (const source of [
     try {
       for (let cycle = 0; cycle < 2; cycle++) {
         lifecycle.enable();
-        assert.equal(state.dataSource.show, true);
+        assert.equal(drawnShown, true);
         assert.equal(markersVisible, true);
         // No renderRecords or successful fetch occurs between toggles.
         assert.equal(visibleCredits.size, expected);
         lifecycle.disable();
-        assert.equal(state.dataSource.show, false);
+        assert.equal(drawnShown, false);
         assert.equal(markersVisible, false);
         assert.equal(visibleCredits.size, 0);
       }

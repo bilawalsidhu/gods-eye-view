@@ -9,18 +9,8 @@ import {
 import { ACARTIA_GUARD_BOX } from './policy.js';
 import { getWildlifeHeightBand } from './model.js';
 
-const viewer = ({ south, west, north, east }) => ({
-  camera: {
-    computeViewRectangle: () =>
-      Object.fromEntries(
-        Object.entries({ south, west, north, east }).map(([key, value]) => [
-          key,
-          (value * Math.PI) / 180,
-        ]),
-      ),
-  },
-  scene: { globe: { ellipsoid: {} } },
-});
+// The camera port's view rectangle is in degrees.
+const viewer = (rectangle) => rectangle;
 
 test('local boxes snap outward to 0.1 degrees; wider views to whole degrees', () => {
   assert.deepEqual(
@@ -112,7 +102,7 @@ test('viewport rectangles split at 180 degrees and reject overly large or missin
     ),
     null,
   );
-  assert.equal(wildlifeViewportBoxes({}), null);
+  assert.equal(wildlifeViewportBoxes(null), null);
 });
 
 test('height bands retain representations across +/-5% and switch beyond +/-10%', () => {
