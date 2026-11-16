@@ -139,6 +139,15 @@ export function createDroneAirspaceLayer({
       const picked = event.topHit;
       const zoneId = picked ? pickedZoneId(event.drawHit) : null;
       if (zoneId) {
+        // Another layer's card or label painted over the zone (a quake's
+        // card or magnitude label, a fire card) is that layer's click: under
+        // it the zone is background, as it is to siblings, so it stays as is.
+        const top = overlayHost.hitTest?.(
+          event.screenPosition?.x,
+          event.screenPosition?.y,
+          {},
+        );
+        if (top && top.sourceId !== DRONE_AIRSPACE_OVERLAY_SOURCE_ID) return;
         _selectedId = zoneId;
         publishSelectedCard();
         return;

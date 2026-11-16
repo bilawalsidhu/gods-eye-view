@@ -230,6 +230,15 @@ export function createFirePerimetersLayer({
       const picked = event.topHit;
       const incidentId = picked ? pickedIncidentId(event.drawHit) : null;
       if (incidentId) {
+        // Another layer's card or label painted over the perimeter (a
+        // quake's card or magnitude label, a fire card) is that layer's
+        // click: under it the perimeter is background, so it stays as is.
+        const top = overlayHost.hitTest?.(
+          event.screenPosition?.x,
+          event.screenPosition?.y,
+          {},
+        );
+        if (top && top.sourceId !== PERIMETER_OVERLAY_SOURCE_ID) return;
         abortLinkVerification();
         _selectedId = incidentId;
         publishSelectedCard();

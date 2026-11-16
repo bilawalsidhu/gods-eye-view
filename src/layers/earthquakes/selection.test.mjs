@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import * as picking from '../../data/pickRegistry.js';
+import { fakeInput } from '../../input/testDoubles.mjs';
+import { createDroneAirspaceLayer } from '../droneAirspace/index.js';
 import {
   EARTHQUAKE_CARD_SOURCE_ID,
   EARTHQUAKE_OVERLAY_SOURCE_ID,
@@ -709,3 +711,170 @@ test("another layer's object under the quake card takes the click", async () => 
 function overlayHitCard(h, entryId, hit) {
   h.clickOverlayWith(EARTHQUAKE_CARD_SOURCE_ID, entryId, hit);
 }
+
+for (const kind of ['card', 'label']) {
+  for (const areaFirst of [false, true]) {
+    test(`quake ${kind} over an unowned area takes the click once (${areaFirst ? 'area' : 'quake'} handler first)`, async () => {
+      let sceneHit = null;
+      let painted = null;
+      const viewer = {
+        scene: { pick: () => (sceneHit ? { id: sceneHit } : null) },
+      };
+      const { draw, unbind } = bindFakeDraw(viewer);
+      const input = fakeInput(viewer);
+      const entries = new Map();
+      const opened = [];
+      const focused = [];
+      // As the real host does, hits are what was last painted: a card a
+      // subscriber publishes during a click changes nothing for the others
+      // until the next paint, so the outcome cannot depend on their order.
+      let screen = new Map();
+      const paint = () => {
+        screen = new Map(entries);
+      };
+      const host = {
+        setEntries: (source, rows) => entries.set(source, rows),
+        setVisible() {},
+        clearSource: (source) => entries.delete(source),
+        hitTest(_x, _y, { sourceId } = {}) {
+          if (!painted || (sourceId && sourceId !== painted.sourceId))
+            return null;
+          const entry = screen
+            .get(painted.sourceId)
+            ?.find((e) => e.id === painted.entryId);
+          return entry?.interactive ? { ...painted, entry } : null;
+        },
+      };
+      const click = () => {
+        paint();
+        input.click();
+      };
+      const q = createEarthquakesLayer({
+        source: { getSnapshot: async () => [quake('ak1')] },
+        overlayHost: host,
+        input: () => input.input,
+        picking,
+        openExternal: (url) => opened.push(url),
+        focus: { requestWorldFocus: (detail) => focused.push(detail) },
+      });
+      const area = createDroneAirspaceLayer({
+        source: {
+          getSnapshot: async () => [
+            {
+              stableId: '310',
+              name: 'Fixture area',
+              typeCode: 'P',
+              type: 'Prohibited',
+              lowerAltitude: 'SFC',
+              upperAltitude: '18000',
+              polygons: [
+                [
+                  [
+                    [-153.4, 59.9],
+                    [-153.2, 59.9],
+                    [-153.2, 60.1],
+                    [-153.4, 59.9],
+                  ],
+                ],
+              ],
+            },
+          ],
+        },
+        overlayHost: host,
+        inputFor: () => input.input,
+        picking,
+      });
+      const layers = areaFirst ? [area, q] : [q, area];
+      try {
+        for (const layer of layers) {
+          layer.init(viewer);
+          layer.enable(viewer);
+          await layer.update(viewer);
+        }
+        const ownHit = {
+          set: draw.find('earthquakes:').spec.id,
+          id: 'earthquake:ak1',
+        };
+        const areaSet = [...draw.sets.values()].find(
+          (set) =>
+            set.spec.id.startsWith('drone-airspace:') &&
+            set.spec.id.endsWith(':fills'),
+        );
+        const areaHit = { set: areaSet.spec.id, id: 'drone-airspace:310:0' };
+        assert.equal(picking.findPickOwner(areaHit.id), null);
+        sceneHit = ownHit;
+        click();
+        assert.equal(
+          entries.get('earthquake-card')[0].id,
+          'earthquake-card:ak1',
+        );
+        assert.equal(entries.get('drone-airspace')?.length ?? 0, 0);
+        painted = {
+          sourceId:
+            kind === 'card'
+              ? EARTHQUAKE_CARD_SOURCE_ID
+              : EARTHQUAKE_OVERLAY_SOURCE_ID,
+          entryId: kind === 'card' ? 'earthquake-card:ak1' : 'ak1',
+        };
+        sceneHit = areaHit;
+        click();
+        // The quake's card or label painted on top takes the click; the
+        // zone under it is background and stands aside: one action.
+        assert.equal(
+          entries.get('drone-airspace')?.length ?? 0,
+          0,
+          'the area under the overlay is not selected',
+        );
+        assert.equal(
+          entries.get('earthquake-card')[0].id,
+          'earthquake-card:ak1',
+          'the quake card stays',
+        );
+        assert.equal(opened.length, kind === 'card' ? 1 : 0);
+        assert.equal(focused.length, kind === 'label' ? 1 : 0);
+        // The same painted action works over its own disc and over open ground.
+        for (const hit of [ownHit, null]) {
+          sceneHit = hit;
+          click();
+        }
+        assert.equal(opened.length, kind === 'card' ? 3 : 0);
+        assert.equal(focused.length, kind === 'label' ? 3 : 0);
+        // With no overlay the area is selected and the quake deselects.
+        painted = null;
+        sceneHit = areaHit;
+        click();
+        assert.equal(entries.get('drone-airspace')?.length, 1);
+        assert.equal(entries.get('earthquake-card')?.length ?? 0, 0);
+      } finally {
+        for (const layer of layers) layer.destroy();
+        input.destroy();
+        unbind();
+      }
+    });
+  }
+}
+
+// Layers that never act on clicks still draw pickable items (air quality
+// stations, traffic heat lines, OSM places). They are not a click target, so
+// the quake card and labels painted over them keep working.
+test('quake card and label work over pickable items no layer acts on', async () => {
+  const h = harness([quake('ak1'), quake('ak2', { mag: 4 })]);
+  try {
+    h.layer.enable(h.viewer);
+    await h.layer.update(h.viewer);
+    h.clickDisc('ak1');
+    const decorative = [
+      { set: 'air-quality-markers:1', id: 'aq:station-1' },
+      { set: 'traffic:1:heat', id: 'traffic:segment-9' },
+      { set: 'osm-places:1:points', id: 'osm:node-3' },
+    ];
+    for (const hit of decorative) {
+      h.clickOverlayWith(EARTHQUAKE_CARD_SOURCE_ID, 'earthquake-card:ak1', hit);
+    }
+    assert.equal(h.opened.length, decorative.length, 'the card opens USGS');
+    h.clickOverlayWith(EARTHQUAKE_OVERLAY_SOURCE_ID, 'ak2', decorative[1]);
+    assert.equal(h.focused.at(-1)?.id, 'earthquake:ak2', 'the label flies');
+  } finally {
+    h.layer.destroy();
+  }
+});

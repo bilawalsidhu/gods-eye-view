@@ -143,6 +143,43 @@ test('clicking a zone publishes its card; empty space clears it', async () => {
   assert.equal(h.overlay.entries.get('drone-airspace')?.length ?? 0, 0);
 });
 
+// Another layer's card or label painted over the area (a quake's card or
+// magnitude label) is that layer's click: the area under it stands aside.
+test("another layer's overlay on top keeps a click off the area", async () => {
+  let pickResult = null;
+  let foreignOnTop = false;
+  const h = harness(
+    { getSnapshot: async () => [row] },
+    {
+      pick: () => pickResult,
+      // Unfiltered: the topmost entry of any source.
+      cardHit: (_x, _y, options) =>
+        foreignOnTop && !options?.sourceId
+          ? { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' }
+          : null,
+    },
+  );
+  await h.layer.update(h.viewer);
+  pickResult = zonePick('drone-airspace:310:0');
+  foreignOnTop = true;
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(h.overlay.entries.get('drone-airspace')?.length ?? 0, 0);
+  // With nothing painted over it, the same click selects the area.
+  foreignOnTop = false;
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(
+    h.overlay.entries.get('drone-airspace')[0].id,
+    'drone-airspace-card:310',
+  );
+  // An overlay on top never clears an existing selection either.
+  foreignOnTop = true;
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(
+    h.overlay.entries.get('drone-airspace')[0].id,
+    'drone-airspace-card:310',
+  );
+});
+
 test('late refresh cannot publish after disable or destroy', async () => {
   for (const action of ['disable', 'destroy']) {
     let resolve, signal;

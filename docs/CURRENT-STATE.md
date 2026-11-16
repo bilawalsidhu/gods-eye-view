@@ -1868,7 +1868,17 @@ like drone airspace and fire perimeters: sibling layers read a disc as empty
 space, so their cards, near-miss taps and deselection work over a quake as
 before. When another layer's card or label is painted over a disc (a fire card
 on a large quake), the quake handler yields to it rather than selecting the
-quake beneath.
+quake beneath. The same rule holds the other way: drone airspace and fire
+perimeters do not select a zone or incident from a shape hit while another
+layer's card or label is the topmost overlay entry, so a quake card or
+magnitude label over one of them acts once, as the quake's. Items of layers
+that never act on clicks (air-quality stations, traffic lines, OSM places) do
+not block the quake card or labels. A bare area click with nothing painted on
+top still selects the area and clears the quake selection. These rules hold in any
+listener order because world-overlay hit rectangles are what is painted on
+screen until the next paint: an overlay change (a click subscriber publishing
+its selection card) no longer clears them mid-click, and a paint that draws
+nothing clears them (`src/overlays/worldOverlay.js`).
 
 Air quality (`./layers/air-quality`) draws its station discs as one renderer
 draw set of ground-clamped fills and reads the view through the camera port; it
