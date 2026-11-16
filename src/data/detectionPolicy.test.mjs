@@ -1,4 +1,4 @@
-import { expandApplicationHtml } from '../../build/application-html.js';
+import { renderApplicationHtml } from '../testSupport/applicationHtml.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -19,7 +19,7 @@ import {
 } from './detectionPolicy.js';
 import { KEYHOLE_OUTSIDE_OPACITY_DEFAULT } from '../celestialRing.js';
 
-const indexHtml = expandApplicationHtml(fs.readFileSync(new URL('../../index.html', import.meta.url), 'utf8'));
+const indexHtml = await renderApplicationHtml(fs.readFileSync(new URL('../../index.html', import.meta.url), 'utf8'));
 
 test('side aircraft brackets stay readable without changing zero-opacity intent', () => {
   assert.equal(detectionBracketAlpha('AIR', 0), 0);

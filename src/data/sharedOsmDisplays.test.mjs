@@ -85,7 +85,7 @@ test('Warendorf webcam display introduces the shared OSM credit', (t) => {
   const v = viewer(t), empty = new Proxy({}, { get: () => noop });
   const lifecycle = createCctvLifecycle({ state: { _viewer: v, _records: [{ camera: { id: 'warendorf-marktplatz-rathaus', cityId: 'warendorf' } }], _recordById: new Map(), _cctvOverlayHost: overlayHost },
     services: { credits: { showOsmCredit, hideOsmCredit }, sprites: empty, activation: empty, picking: empty, focus: empty, render: empty },
-    parts: { selection: empty, geometryQueue: empty, rendering: empty, projection: empty, cards: empty, presentation: empty }, source: {} });
+    parts: { selection: empty, geometryQueue: empty, rendering: empty, projection: empty, cards: empty, presentation: empty, navigation: empty }, source: {} });
   lifecycle.methods.enable(); assertCredit(v); lifecycle.methods.disable();
   assert.equal(v.credits.filter(c => c.showOnScreen).length, 0);
 });

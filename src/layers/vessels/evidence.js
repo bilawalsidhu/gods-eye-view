@@ -47,7 +47,7 @@ export function createEvidence({
           )
         : null;
       return {
-        id: record.mmsi,
+        id: record.id,
         show: bb?.show === true,
         alpha: bb?.color?.alpha ?? null,
         x: screen?.x ?? null,

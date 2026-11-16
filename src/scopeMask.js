@@ -89,6 +89,12 @@ let _container = null;
 let _viewer = null;
 let _enabled = true;
 let _featherRatio = SCOPE_FEATHER_RATIO_DEFAULT;
+/**
+ * How strongly the whole mask shows, from the Display panel's Opacity slider:
+ * a fade over the painted mask, separate from the altitude terminus above,
+ * so the terminus band and its repaint gate stay as they are.
+ */
+let _maskOpacity = 1;
 let _resizeObserver = null;
 let _dprQuery = null;
 let _dprListener = null;
@@ -433,6 +439,7 @@ export function installScopeMask(viewer) {
   _canvas = document.createElement('canvas');
   _canvas.id = 'scope-mask';
   _canvas.setAttribute('aria-hidden', 'true');
+  _canvas.style.opacity = String(_maskOpacity);
   _container.appendChild(_canvas);
   _resizeObserver = new ResizeObserver(() => draw());
   _resizeObserver.observe(_container);
@@ -538,6 +545,23 @@ export function getScopeMaskFeather() {
 }
 
 /**
+ * @param {number} ratio - How strongly the mask shows, 0 (clear) to 1.
+ * @returns {void}
+ */
+export function setScopeMaskOpacity(ratio) {
+  _maskOpacity = Math.max(
+    0,
+    Math.min(1, Number.isFinite(Number(ratio)) ? Number(ratio) : 1),
+  );
+  if (_canvas) _canvas.style.opacity = String(_maskOpacity);
+}
+
+/** @returns {number} */
+export function getScopeMaskOpacity() {
+  return _maskOpacity;
+}
+
+/**
  * Tear the mask down (canvas + observer). Reinstall with installScopeMask.
  * @returns {void}
  */
@@ -567,6 +591,7 @@ export function _resetScopeMaskForTest() {
   _viewer = null;
   _enabled = true;
   _featherRatio = SCOPE_FEATHER_RATIO_DEFAULT;
+  _maskOpacity = 1;
   _terminusAlpha = SCOPE_OUTSIDE_ALPHA;
   _terminusOverride = null;
   _terminusRepaints = 0;

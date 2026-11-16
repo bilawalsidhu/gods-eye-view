@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import {
   LOCAL_RECEIVERS_ROUTE,
   createLocalReceiversHandler,
@@ -8,6 +9,10 @@ import {
   parseLocalReceiverFeeds,
 } from '../../server/providers/local-receivers.js';
 import { localProviderPlugins } from '../../server/providers/local.js';
+import { makeFixtureRoot } from '../tooling/fixtureRoot.mjs';
+
+const nominatimStorageDir = await makeFixtureRoot('gev-receivers-composition-');
+test.after(() => rm(nominatimStorageDir, { recursive: true, force: true }));
 
 const FIXTURE = readFileSync(
   new URL('./fixtures/adsb-austin-dump1090-aircraft.json', import.meta.url),
@@ -118,7 +123,7 @@ test('construction mounts the route once and neither parses nor fetches', (t) =>
   t.mock.method(globalThis, 'fetch', () => {
     throw Error('construction must not fetch');
   });
-  const plugins = localProviderPlugins();
+  const plugins = localProviderPlugins({ nominatimStorageDir });
   assert.equal(
     plugins.filter((plugin) => plugin.name === 'local-receivers-proxy').length,
     1,

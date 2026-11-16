@@ -1,12 +1,16 @@
 import * as Cesium from 'cesium';
 import { satelliteClassColor } from '../../data/satelliteClass.js';
+import { SATELLITE_CLASS_DISPLAY, SATELLITE_CLASS_IDS } from './classes.js';
 
 /**
  * Satellite Orbits — Real-time positions via CelesTrak TLE + SGP4 propagation.
  *
- * Loads six CelesTrak groups (~840 sats): stations, visual, GPS, GLONASS,
- * Galileo, and the geosynchronous belt. Optional dense mode (setParams
- * catalog:'dense') adds the Starlink shell as points-only extras.
+ * Loads eleven CelesTrak groups: stations, visual, GPS, GLONASS, Galileo, the
+ * geosynchronous belt, and the Earth resources, weather, Planet, SAR and
+ * science groups. Each object is filed under one of six classes
+ * (src/layers/satellites/classes.js) whose visibility the layer row toggles; dense mode
+ * (setParams catalog:'dense', the STARLINK toggle) adds the Starlink shell as
+ * points-only extras.
  * Renders positions via PointPrimitiveCollection, orbital paths as polylines.
  * Click any satellite to track it with camera follow + orbital path.
  *
@@ -27,8 +31,25 @@ export const ISS_OVERLAY_SOURCE_OPTIONS = Object.freeze({
 export const ORBIT_PATH_STEPS = 180;
 // points per orbital path
 
+/** How often every core satellite takes a fresh SGP4 sample (wall ms). */
 export const POSITION_UPDATE_MS = 1000;
-// re-propagate every 1s (SGP4 is smooth at this rate)
+/**
+ * Between SGP4 samples every point is reckoned each frame from its last one
+ * (motion.js). A sample this far from the world time is taken again, so a
+ * point is never more than about 10 m off SGP4 however fast time plays.
+ */
+export const ORBIT_SAMPLE_HORIZON_MS = 30_000;
+/** Beyond this from its sample a point is left where it is until sampled again. */
+export const ORBIT_RECKON_LIMIT_MS = 120_000;
+/** How far either side of now SGP4 on current element sets stays meaningful. */
+export const SATELLITE_COVERAGE_MS = 14 * 24 * 3_600_000;
+
+/**
+ * How far the world time may move from when an orbit ring was drawn before it
+ * is drawn again: the Earth's turn is followed exactly, but the orbit's plane
+ * drifts a few degrees a day.
+ */
+export const ORBIT_REBAKE_MS = 30 * 60_000;
 
 export const RING_ROTATION_MS = 1000;
 // re-align baked orbit rings to current GMST every 1s
@@ -49,6 +70,13 @@ export const CATALOG_GROUPS = [
   { tag: 'glonass', path: 'glo-ops' },
   { tag: 'galileo', path: 'galileo' },
   { tag: 'geo', path: 'geo' },
+  // Earth observation launched after the UCS snapshot, and science probes.
+  // Each object's class comes from src/layers/satellites/classes.js, not its group.
+  { tag: 'resource', path: 'resource' },
+  { tag: 'weather', path: 'weather' },
+  { tag: 'planet', path: 'planet' },
+  { tag: 'sar', path: 'sar' },
+  { tag: 'science', path: 'science' },
 ];
 
 // Dense-catalog mode (setParams({ catalog: 'dense' })): Starlink shell as
@@ -59,6 +87,14 @@ export const DENSE_GROUP_PATH = 'starlink';
 
 export const DENSE_REFRESH_FRAMES = 300;
 // full dense pass spread over ~300 frames (~5s @ 60fps)
+
+/**
+ * The most dense extras sampled in one frame while time plays fast (~4 ms).
+ * Past about 10 minutes of world time a second the full dense set no longer
+ * fits within ORBIT_RECKON_LIMIT_MS, and its points move only as they are
+ * sampled.
+ */
+export const DENSE_SAMPLES_PER_FRAME_MAX = 2000;
 
 export const DENSE_CREATE_CHUNK = 1500;
 // satrec builds per macro-task while loading
@@ -156,6 +192,37 @@ export const POINT_STYLES = {
     outlineWidth: 0,
   },
 };
+
+const CLASS_COLORS = Object.fromEntries(
+  SATELLITE_CLASS_IDS.map((id) => [
+    id,
+    Cesium.Color.fromCssColorString(SATELLITE_CLASS_DISPLAY[id].color),
+  ]),
+);
+const _classStyles = new Map();
+
+/**
+ * A satellite's point style: its group's size and outline, in its class's
+ * colour (src/layers/satellites/classes.js), so the dots match the class legend and
+ * toggles. Styles are shared per group and class.
+ * @param {string|undefined} group Catalog group tag.
+ * @param {string|undefined} satelliteClass Class id.
+ */
+export function classPointStyle(group, satelliteClass) {
+  const base = POINT_STYLES[group] || POINT_STYLES.visual;
+  const color = CLASS_COLORS[satelliteClass];
+  if (!color) return base;
+  const key = `${group}|${satelliteClass}`;
+  let style = _classStyles.get(key);
+  if (!style) {
+    style = Object.freeze({
+      ...base,
+      color: group === 'dense' ? color.withAlpha(0.9) : color,
+    });
+    _classStyles.set(key, style);
+  }
+  return style;
+}
 
 /**
  * Physically DOCKED vehicles are separate real tracks sharing one position: the

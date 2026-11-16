@@ -154,57 +154,200 @@ for (const targetHeight of [200, 2000]) test(`visible height steps stay pixel-li
   assert.equal(state._heightPending, true);
 });
 
-for (const outcome of ['timeout', 'abort']) test(`a road pass ${outcome} invalidates queued tiles and terrain publication without a newer generation`, async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  const held = [];
-  const setTimer = globalThis.setTimeout;
-  t.mock.method(globalThis, 'setTimeout', (fn, delay, ...args) => delay === 0
-    ? (held.push(fn), held.length) : setTimer(fn, delay, ...args));
-  let clock = 0;
-  t.mock.method(performance, 'now', () => clock += 13);
+function holdFlowTasks(t) {
+  const yields = [];
+  const scheduler = Object.getOwnPropertyDescriptor(globalThis, 'scheduler');
+  Object.defineProperty(globalThis, 'scheduler', {
+    configurable: true,
+    value: { yield: () => new Promise((resolve) => yields.push(resolve)) },
+  });
+  t.after(() => {
+    for (const resolve of yields) resolve();
+    if (scheduler) Object.defineProperty(globalThis, 'scheduler', scheduler);
+    else delete globalThis.scheduler;
+  });
+  return async () => {
+    assert.ok(yields.length, 'pass reached a flow task boundary');
+    yields.shift()();
+    await flush();
+  };
+}
+
+function flowFixture(source) {
   const state = createState({ services: {} });
-  let options, samples = 0;
-  const road = { type: 'primary', oneway: 1, coords: [[0, 0], [0.001, 0]],
-    waypoints: [C.Cartesian3.fromDegrees(0, 0), C.Cartesian3.fromDegrees(0.001, 0)], segmentDist: [111] };
-  const source = { getStatus: async () => ({ hasKey: false }), requestRoads: (_b, opts) => {
-    options = opts;
-    opts.onTile({ roads: [road] });
-    return new Promise(() => {});
-  } };
+  const calls = { samples: 0, selections: 0 };
+  const road = {
+    type: 'primary',
+    oneway: 1,
+    coords: [
+      [0, 0],
+      [0.001, 0],
+    ],
+    waypoints: [
+      C.Cartesian3.fromDegrees(0, 0),
+      C.Cartesian3.fromDegrees(0.001, 0),
+    ],
+    segmentDist: [111],
+  };
   const paints = [];
-  Object.assign(state, { _enabled: true, _roadMode: 'osm', _parseRoads: (data) => data.roads,
-    _viewer: { scene: { globe: { show: true, getHeight: () => { samples++; return 100; } } } } });
+  Object.assign(state, {
+    _enabled: true,
+    _roadMode: 'osm',
+    _parseRoads: (data) => data.roads,
+    _viewer: {
+      scene: {
+        globe: {
+          show: true,
+          getHeight: () => {
+            calls.samples++;
+            return 100;
+          },
+        },
+      },
+    },
+  });
   const parts = {
-    viewport: { clampBounds: (b) => b, getBoundsCenter: () => ({ lat: 0, lon: 0 }), onCameraChanged() {} },
-    rendering: { visibleRoadsForAltitude: (roads) => roads, renderRoadsForAltitude: (...args) => paints.push(args) },
-    model: { allocateRoadDotBudgets: (roads) => roads.map(() => 1), recolorDotsInPlace() {} },
+    viewport: {
+      clampBounds: (b) => b,
+      getBoundsCenter: () => ({ lat: 0, lon: 0 }),
+      onCameraChanged() {},
+    },
+    rendering: {
+      visibleRoadsForAltitude: (roads) => {
+        calls.selections++;
+        return roads;
+      },
+      renderRoadsForAltitude: (...args) => paints.push(args),
+    },
+    model: {
+      allocateRoadDotBudgets: (roads) => roads.map(() => 1),
+      recolorDotsInPlace() {},
+    },
   };
   const ctx = { state, source, services: { credits: {} }, parts };
   parts.flow = createFlow(ctx);
-  const ingestion = createIngestion(ctx);
-  const request = ingestion.loadRoadsForBounds(bounds, 450);
-  await flush();
-  assert.equal(held.length, 1);
-  held.shift()(); await flush();
-  assert.equal(held.length, 1, 'held at the final station before the real terrain onReady callback');
-  options.onTile({ roads: [road] });
-  const generation = state._loadGeneration;
-  const revision = state._surfaceRevision;
-  const samplesBefore = samples;
-  if (outcome === 'timeout') t.mock.timers.tick(12001);
-  else ingestion.cancelActiveFetch();
-  await request;
-  assert.equal(options.signal.aborted, true);
-  assert.equal(state._loadGeneration, generation);
-  assert.equal(state._fetching, false);
-  if (outcome === 'timeout') {
-    assert.equal(state._activeFetchAbort.signal.aborted, false);
-    assert.match(state._roadError, /timed out/);
-    assert.equal(state._retryAttempts, 1);
-  }
-  held.shift()(); await flush();
-  assert.equal(paints.length, 0, 'expired terrain cannot publish');
-  assert.equal(samples, samplesBefore, 'queued tiles cannot start surface preparation');
-  assert.equal(state._surfaceRevision, revision, 'queued tiles cannot invalidate another surface pass');
-  ingestion.cancelActiveFetch();
-});
+  return { state, road, paints, parts, ctx, calls };
+}
+
+for (const outcome of ['timeout', 'abort'])
+  test(`a road pass ${outcome} invalidates queued tiles and terrain publication without a newer generation`, async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const advanceFlowTask = holdFlowTasks(t);
+    const held = [];
+    const setTimer = globalThis.setTimeout;
+    t.mock.method(globalThis, 'setTimeout', (fn, delay, ...args) =>
+      delay === 0 ? (held.push(fn), held.length) : setTimer(fn, delay, ...args),
+    );
+    let clock = 0;
+    t.mock.method(performance, 'now', () => (clock += 13));
+    let options;
+    const source = {
+      getStatus: async () => ({ hasKey: false }),
+      requestRoads: (_b, opts) => {
+        options = opts;
+        opts.onTile({ roads: [road] });
+        return new Promise(() => {});
+      },
+    };
+    const { state, road, paints, ctx, calls } = flowFixture(source);
+    const ingestion = createIngestion(ctx);
+    const request = ingestion.loadRoadsForBounds(bounds, 450);
+    await flush();
+    await advanceFlowTask();
+    const samplesBeforeSurface = calls.samples;
+    await advanceFlowTask();
+    assert.equal(held.length, 1);
+    held.shift()();
+    await flush();
+    assert.equal(
+      held.length,
+      1,
+      'held at the final station before the real terrain onReady callback',
+    );
+    assert.equal(
+      calls.samples - samplesBeforeSurface,
+      road.coords.length,
+      'both terrain stations were sampled before the final hold',
+    );
+    options.onTile({ roads: [road] });
+    const generation = state._loadGeneration;
+    const revision = state._surfaceRevision;
+    const samplesBefore = calls.samples;
+    if (outcome === 'timeout') t.mock.timers.tick(12001);
+    else ingestion.cancelActiveFetch();
+    await request;
+    assert.equal(options.signal.aborted, true);
+    assert.equal(state._loadGeneration, generation);
+    assert.equal(state._fetching, false);
+    if (outcome === 'timeout') {
+      assert.equal(state._activeFetchAbort.signal.aborted, false);
+      assert.match(state._roadError, /timed out/);
+      assert.equal(state._retryAttempts, 1);
+    }
+    held.shift()();
+    await flush();
+    assert.equal(paints.length, 0, 'expired terrain cannot publish');
+    assert.equal(
+      calls.samples,
+      samplesBefore,
+      'queued tiles cannot start surface preparation',
+    );
+    assert.equal(
+      state._surfaceRevision,
+      revision,
+      'queued tiles cannot invalidate another surface pass',
+    );
+    ingestion.cancelActiveFetch();
+  });
+
+for (const checkpoint of ['none', 'prepare', 'surface'])
+  test(
+    checkpoint === 'none'
+      ? 'a current surface pass crosses both task boundaries'
+      : `a newer surface revision stops stale ${checkpoint} work without aborting the pass`,
+    async (t) => {
+      // These cases exercise ownership boundaries, not the surface slice budget.
+      t.mock.method(performance, 'now', () => 0);
+      const advanceFlowTask = holdFlowTasks(t);
+      const { state, road, paints, parts, calls } = flowFixture({});
+      const controller = new AbortController();
+      t.after(() => controller.abort());
+      const generation = state._loadGeneration;
+      const pass = parts.flow.applyFlowThenRender(
+        [road],
+        bounds,
+        generation,
+        450,
+        'Loaded tile',
+        null,
+        false,
+        controller.signal,
+      );
+      await flush();
+      if (checkpoint === 'prepare') state._surfaceRevision++;
+      await advanceFlowTask();
+      if (checkpoint === 'prepare') {
+        assert.equal(
+          calls.selections,
+          0,
+          'stale whole-graph preparation cannot start',
+        );
+      } else {
+        assert.ok(calls.selections > 0, 'the healthy preparation prefix ran');
+        if (checkpoint === 'surface') state._surfaceRevision++;
+        await advanceFlowTask();
+      }
+      const rendered = await pass;
+      assert.equal(state._loadGeneration, generation);
+      assert.equal(controller.signal.aborted, false);
+      if (checkpoint === 'none') {
+        assert.equal(rendered, true);
+        assert.ok(calls.samples > 0);
+        assert.ok(paints.length > 0);
+      } else {
+        assert.equal(rendered, false);
+        assert.equal(calls.samples, 0, 'superseded work cannot sample terrain');
+        assert.equal(paints.length, 0, 'superseded work cannot publish');
+      }
+    },
+  );

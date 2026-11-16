@@ -3,10 +3,10 @@ import { formatNumber, msg, t } from '../../i18n/index.js';
 import { translateFeedError } from '../../ui/statusText.js';
 import {
   GNSS_LEVEL_COLORS,
-  GNSS_MIN_AIRCRAFT,
   GNSS_WINDOW_MS,
   accumulateGnssObservations,
   binGnssCells,
+  gnssCellRing,
   gnssProvenance,
   pruneGnssObservations,
 } from './records.js';
@@ -62,18 +62,26 @@ export function defaultGnssViewAnchor(viewer) {
 
 /**
  * Own one GNSS navigation-integrity display: rolling integrity observations
- * around the views the user visits, binned into cells coloured by the
+ * around the views the user visits, binned into H3 hexagons coloured by the
  * gpsjam low-accuracy score. Share links retain token 3.
  */
 export function createGnssIntegrityLayer({
   source,
   viewAnchor = defaultGnssViewAnchor,
   now = () => Date.now(),
+  // The end of the window shown; retries and receipt times stay on `now`.
+  worldNow = now,
   monotonicNow = () => performance.now(),
-  windowMs = GNSS_WINDOW_MS,
+  windowMs: requestedWindowMs,
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('GNSS integrity layer requires a snapshot source');
+  // A source may set its own evidence window; anything but a positive finite
+  // duration keeps the default.
+  const windowMs =
+    Number.isFinite(requestedWindowMs) && requestedWindowMs > 0
+      ? requestedWindowMs
+      : GNSS_WINDOW_MS;
   let _viewer = null;
   let _primitives = null;
   let _request = null;
@@ -157,7 +165,7 @@ export function createGnssIntegrityLayer({
 
   /** Age the store without new evidence, so expired cells leave the globe. */
   function expire() {
-    pruneGnssObservations(_observations, now(), { windowMs });
+    pruneGnssObservations(_observations, worldNow(), { windowMs });
     _cells = binGnssCells(_observations);
     render();
   }
@@ -177,13 +185,12 @@ export function createGnssIntegrityLayer({
             (cell) =>
               new Cesium.GeometryInstance({
                 id: `${layer.id}:${cell.id}`,
-                geometry: new Cesium.RectangleGeometry({
-                  rectangle: Cesium.Rectangle.fromDegrees(
-                    cell.west,
-                    cell.south,
-                    cell.east,
-                    cell.north,
+                geometry: new Cesium.PolygonGeometry({
+                  // H3 edges are great-circle arcs, as Cesium's geodesic edges.
+                  polygonHierarchy: new Cesium.PolygonHierarchy(
+                    Cesium.Cartesian3.fromDegreesArray(gnssCellRing(cell)),
                   ),
+                  arcType: Cesium.ArcType.GEODESIC,
                   vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
                 }),
                 attributes: {
@@ -201,7 +208,7 @@ export function createGnssIntegrityLayer({
           }),
           classificationType: Cesium.ClassificationType.BOTH,
           allowPicking: false,
-          // Retain the compact rectangle descriptors for inspection, not Entity visualizers.
+          // Retain the compact polygon descriptors for inspection, not Entity visualizers.
           releaseGeometryInstances: false,
         }),
       );
@@ -375,7 +382,8 @@ export function createGnssIntegrityLayer({
         chips: [],
         info:
           t(
-            'Regional sample · 250 nm radius · cells from visited views over 30 min',
+            'Regional sample · 250 nm radius · cells from visited views over {minutes} min',
+            { minutes: formatNumber(provenance.window.minutes) },
           ) +
           (_lastError && _retryAt
             ? ` · ${translateFeedError(_lastError)} · ${
@@ -387,7 +395,7 @@ export function createGnssIntegrityLayer({
               }`
             : ''),
         infoTitle: t(
-          'Updates automatically after pan or zoom and once a minute. The public feed covers a 250-nautical-mile circle around the view centre; zooming out does not make it a worldwide snapshot. Blank cells are outside sampled coverage or have insufficient observations.',
+          'Updates automatically after pan or zoom and once a minute. The public feed covers a 250-nautical-mile circle around the view centre; zooming out does not make it a worldwide snapshot. Blank areas had no aircraft reporting navigation accuracy in the window.',
         ),
         legend: ['high', 'medium', 'low'].map((level, index) => ({
           label: t(LEVEL_LABELS[level]),
@@ -396,11 +404,7 @@ export function createGnssIntegrityLayer({
           ...(index === 0
             ? {
                 blurb: t(
-                  'Low-accuracy score = 100 × max(0, bad − 1) / total: one aircraft is discounted, so this is not the raw share. Cells need {aircraft} aircraft over {minutes} minutes. Navigation-integrity anomalies are not a detection of jamming or spoofing.',
-                  {
-                    aircraft: formatNumber(GNSS_MIN_AIRCRAFT),
-                    minutes: formatNumber(provenance.window.minutes),
-                  },
+                  'Low-accuracy score = 100 × max(0, bad − 1) / total: one aircraft is discounted, so this is not the raw share. Navigation-integrity anomalies are not a detection of jamming or spoofing.',
                 ),
               }
             : {}),

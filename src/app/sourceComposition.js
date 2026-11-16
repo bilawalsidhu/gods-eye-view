@@ -49,9 +49,14 @@ export const CATALOG_SOURCE_CONTRACTS = Object.freeze({
   'air-quality': contract(['air-quality'], ['getSnapshot']),
   'gnss-integrity': contract(['gnss-integrity'], ['getSnapshot']),
   's2-ghostmaps': contract(['s2-ghostmaps'], ['getCatalog', 'getFile']),
+  shipwrecks: contract(['shipwrecks'], ['getSnapshot']),
+  'drone-airspace': contract(['drone-airspace'], ['getSnapshot']),
+  news: contract(['news'], ['getHotspots', 'getFeed', 'getOutline']),
+  'wildlife-sightings': contract(['wildlife-sightings'], ['getSnapshot']),
   'message-signs': contract(['message-signs'], ['getSnapshot', 'getFaceImage']),
   cables: contract(['telegeography-submarine-cables'], ['fetch']),
   transit: contract(['transit'], ['requestSnapshot', 'getHistory']),
+  rail: contract(['rail'], ['requestSnapshot', 'getFeeds']),
 });
 
 /** An omitted provider is unavailable, never an authoritative empty dataset. */

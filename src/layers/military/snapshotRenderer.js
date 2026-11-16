@@ -4,15 +4,28 @@ import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import {
   turnRateFromFixHistory,
   liftRepeatedGroundFix,
+  staleHoldsForFix,
   synthesizeForwardKinematicsFix,
 } from '../../data/motionModel.js';
 import { aircraftIcon } from '../../data/aircraftIcons.js';
+import {
+  historyAfterTrail,
+  liftGroundedHistory,
+  mergeAircraftTimelineFixes,
+} from '../../data/timelineHistory.js';
 import { POSITION_HISTORY_LIMIT } from './recordPolicy.js';
-import { BILLBOARD_SCALE, GROUND_SCALE, TRACKED_ICON_COLOR } from './policy.js';
+import {
+  BILLBOARD_SCALE,
+  GROUND_SCALE,
+  TRACKED_ICON_COLOR,
+  followsClock,
+} from './policy.js';
+import { observeLiveAircraft } from '../flights/placed.js';
 
 /** Apply military record changes to Cesium resources and existing follow operations. */
 export function createMilitarySnapshotRenderer({
   flightState,
+  placement = null,
   records,
   groundFloor,
   meshFloor,
@@ -26,9 +39,14 @@ export function createMilitarySnapshotRenderer({
     groundFloor;
   const { sampleMeshFloorCells } = meshFloor;
   const { registerMilitaryIcaos } = militaryRegistry;
-  return function applySnapshot(snapshot, viewer) {
+  /**
+   * `replace`: the snapshot is the world at another time (the world clock
+   * jumped), so it stands in for every contact: one it lacks is gone at once.
+   */
+  return function applySnapshot(snapshot, viewer, { replace = false } = {}) {
     const currentIcaos = new Set();
     const receiptNowMs = snapshot.observedAtMs;
+    records.beginSnapshot(snapshot.observedAtMs);
     // Field-test fix (RS46): coarse floor cells to warm for the below-ground
     // clamp — collected during the loop (low airborne contacts only),
     // batch-resolved once after it. Never a fetch inside the loop.
@@ -62,59 +80,111 @@ export function createMilitarySnapshotRenderer({
       );
       const isTracked = icao24 === flightState._trackedIcao;
 
-      // Append to position history stamped with the FEED's fix epoch.
-      // adsb.lol's seen_pos is the AGE in seconds of the last position
-      // report, so the fix epoch is receipt time minus that age. Only
-      // append when the fix actually advances, so stale repeats don't
-      // create zero-dt segments.
-      const fixTime = Cesium.JulianDate.fromDate(new Date(fixEpochMs));
-      if (!flightState._positionHistory.has(icao24)) {
-        flightState._positionHistory.set(icao24, []);
-      }
-      const history = flightState._positionHistory.get(icao24);
-      const newest = history[history.length - 1];
-      if (!newest || Cesium.JulianDate.greaterThan(fixTime, newest.time)) {
-        // Per-fix kinematics: the fix's own velocity/track ride along so the
-        // extrapolation paths use the values that BELONG to the fix they
-        // extend, not whatever the latest poll reported.
-        history.push({
-          time: fixTime,
-          epochMs: fixEpochMs,
-          position: position.clone(),
-          velocity: meta.speedMps,
-          track: meta.track,
-        });
-        if (history.length > POSITION_HISTORY_LIMIT) {
-          history.shift();
-        }
-        // Turn rate from the fix-track history — computed once per new fix
-        // (≤5 samples), consumed by the extrapolation paths at tick rate.
-        meta.turnRateDps = turnRateFromFixHistory(history);
-        // Trail accumulation is separate from the 5-fix DR history (PRD F2)
-        // so the visible trail keeps growing while tracked. Round 2
-        // (owner): ground traffic appends too — taxi history stays live
-        // after touchdown; _appendTrailFix floors grounded positions at
-        // the surface so the ground leg drapes instead of diving.
-        if (isTracked) tracking._appendTrailFix(position.clone());
+      // Following the clock, a record may carry its own track around the
+      // time: the contact is placed on it, so the clock can move within it,
+      // back as well as on, without another snapshot.
+      const timelineHistory = followsClock(flightState)
+        ? mergeAircraftTimelineFixes(
+            flightState._positionHistory.get(icao24),
+            aircraft,
+            meta,
+            meta.speedMps,
+            snapshot.observedAtMs ?? fixEpochMs,
+          )
+        : null;
+      // A host-supplied placement, if any, is told every fix as taken.
+      observeLiveAircraft(
+        flightState,
+        placement,
+        icao24,
+        fixEpochMs,
+        meta,
+        meta.speedMps,
+        meta.track,
+      );
+      if (timelineHistory) {
+        if (isTracked)
+          for (const entry of historyAfterTrail(
+            timelineHistory,
+            flightState._trailFixes,
+            snapshot.observedAtMs ?? fixEpochMs,
+          ))
+            tracking._appendTrailFix(entry.position.clone(), entry.epochMs, {
+              nullAltitude: entry.inventedHeight,
+            });
+        flightState._positionHistory.set(icao24, timelineHistory);
+        meta.turnRateDps = 0;
       } else {
-        const modelOwnsGroundVisual = rendering._modelOwnsVisual(icao24);
-        if (!modelOwnsGroundVisual) {
-          liftRepeatedGroundFix(newest, position, meta.onGround);
+        // Append to position history stamped with the FEED's fix epoch.
+        // adsb.lol's seen_pos is the AGE in seconds of the last position
+        // report, so the fix epoch is receipt time minus that age. Only
+        // append when the fix actually advances, so stale repeats don't
+        // create zero-dt segments.
+        const fixTime = Cesium.JulianDate.fromDate(new Date(fixEpochMs));
+        if (!flightState._positionHistory.has(icao24)) {
+          flightState._positionHistory.set(icao24, []);
         }
-        const kinematicsChanged =
-          newest.velocity !== meta.speedMps || newest.track !== meta.track;
-        if (kinematicsChanged) {
-          const synthetic = synthesizeForwardKinematicsFix(newest, {
-            epochMs: Date.now(),
+        const history = flightState._positionHistory.get(icao24);
+        const newest = history[history.length - 1];
+        if (!newest || Cesium.JulianDate.greaterThan(fixTime, newest.time)) {
+          // Per-fix kinematics: the fix's own velocity/track ride along so the
+          // extrapolation paths use the values that BELONG to the fix they
+          // extend, not whatever the latest poll reported.
+          history.push({
+            time: fixTime,
+            epochMs: fixEpochMs,
+            position: position.clone(),
             velocity: meta.speedMps,
             track: meta.track,
-            turnRateDps: meta.turnRateDps,
+            // Drawn at an invented height: a trail seeded from history keeps no
+            // position for it.
+            inventedHeight: meta.renderAltitudeInvented === true,
           });
-          if (synthetic) {
-            history.push(synthetic);
-            if (history.length > POSITION_HISTORY_LIMIT) history.shift();
-            meta.turnRateDps = turnRateFromFixHistory(history);
-            if (isTracked) tracking._appendTrailFix(synthetic.position.clone());
+          if (history.length > POSITION_HISTORY_LIMIT) {
+            history.shift();
+          }
+          // Turn rate from the fix-track history — computed once per new fix
+          // (≤5 samples), consumed by the extrapolation paths at tick rate.
+          meta.turnRateDps = turnRateFromFixHistory(history);
+          // Trail accumulation is separate from the 5-fix DR history (PRD F2)
+          // so the visible trail keeps growing while tracked. Round 2
+          // (owner): ground traffic appends too — taxi history stays live
+          // after touchdown; _appendTrailFix floors grounded positions at
+          // the surface so the ground leg drapes instead of diving.
+          if (isTracked)
+            tracking._appendTrailFix(position.clone(), fixEpochMs, {
+              nullAltitude: meta.renderAltitudeInvented === true,
+            });
+        } else {
+          const modelOwnsGroundVisual = rendering._modelOwnsVisual(icao24);
+          if (!modelOwnsGroundVisual) {
+            liftRepeatedGroundFix(newest, position, meta.onGround);
+          }
+          // A forward synthetic fix follows the stale rules (none while the
+          // contact holds at its report, a coast capped from the real report,
+          // never below the ground) and is a motion aid, never a trail report.
+          const kinematicsChanged =
+            newest.velocity !== meta.speedMps || newest.track !== meta.track;
+          const holds = staleHoldsForFix(newest, {
+            onGround: meta.onGround,
+            cachedGroundFloor,
+          });
+          if (kinematicsChanged && !holds) {
+            const synthetic = synthesizeForwardKinematicsFix(newest, {
+              // Following the clock, the snapshot's time is the moment it moves on from.
+              epochMs: followsClock(flightState)
+                ? snapshot.observedAtMs
+                : Date.now(),
+              velocity: meta.speedMps,
+              track: meta.track,
+              turnRateDps: meta.turnRateDps,
+              cachedGroundFloor,
+            });
+            if (synthetic) {
+              history.push(synthetic);
+              if (history.length > POSITION_HISTORY_LIMIT) history.shift();
+              meta.turnRateDps = turnRateFromFixHistory(history);
+            }
           }
         }
       }
@@ -137,10 +207,15 @@ export function createMilitarySnapshotRenderer({
         ) {
           rendering._applyFleetBillboardPresentation(icao24, bb);
         }
-        // Per-class GLBs: a class change can mean a different asset OR scale —
-        // resync the live model, any in-flight load, and the tracked
-        // standalone (mirror of flights.js).
-        if (prevMeta?.klass !== meta.klass) rendering._syncModelToClass(icao24);
+        // Per-type fleet models: a type or category change can mean a
+        // different model OR scale — resync the live model, any in-flight
+        // load, and the tracked standalone (mirror of flights.js).
+        if (
+          prevMeta?.klass !== meta.klass ||
+          prevMeta?.type !== meta.type ||
+          prevMeta?.category !== meta.category
+        )
+          rendering._syncModelToClass(icao24);
         // Round 5: depth policy is uniform (always depth-test-free, see
         // _groundDepthDistance) — nothing to flip on landing/takeoff.
       } else {
@@ -150,6 +225,7 @@ export function createMilitarySnapshotRenderer({
         // it ahead until the next fleet tick snapped it back.
         const displayed =
           motion._deadReckon(icao24, new Cesium.Cartesian3()) || position;
+        const unseenAtStart = flightState._drUnseen;
         const bb = flightState._billboardCollection.add({
           position: displayed,
           image: aircraftIcon(rendering._iconKind(icao24, meta.klass)),
@@ -172,7 +248,9 @@ export function createMilitarySnapshotRenderer({
           // close (_groundDepthDistance).
           disableDepthTestDistance: rendering._groundDepthDistance(),
           id: icao24,
-          show: !isTracked, // hidden if currently tracked (entity replaces it)
+          // Hidden if currently tracked (entity replaces it), or not there yet
+          // at the time drawn (see historyUnseenAt).
+          show: !isTracked && !unseenAtStart,
         });
         flightState._billboards.set(icao24, bb);
         rendering._applyFleetBillboardPresentation(icao24, bb);
@@ -214,6 +292,7 @@ export function createMilitarySnapshotRenderer({
         info.renderAltitudeM >= floor - 1
       )
         continue;
+      const drawnM = info.renderAltitudeM;
       info.renderAltitudeM = lifted;
       flightState._cullPositions.delete(icao24);
       const liftedPos = Cesium.Cartesian3.fromDegrees(
@@ -221,15 +300,17 @@ export function createMilitarySnapshotRenderer({
         info.rawLat,
         lifted,
       );
-      const hist = flightState._positionHistory.get(icao24);
-      const newest = hist?.[hist.length - 1];
-      if (newest)
-        newest.position = Cesium.Cartesian3.clone(liftedPos, newest.position);
+      liftGroundedHistory(
+        flightState._positionHistory.get(icao24),
+        liftedPos,
+        drawnM,
+        lifted,
+      );
       const bbStale = flightState._billboards.get(icao24);
       if (bbStale) bbStale.position = liftedPos;
     }
-    // Round 4: sample the RENDERED mesh for those cells (one-shot per cell,
-    // budget-capped, viewer-proximate, google-3d regime only), excluding
+    // Round 4: sample the RENDERED mesh for those cells (a few probes per
+    // cell, budget-capped, viewer-proximate, google-3d regime only), excluding
     // this layer's own billboards/models from the probe.
     {
       const viewerCarto =
@@ -257,10 +338,15 @@ export function createMilitarySnapshotRenderer({
     // feed gap, and the full grace left phantom planes parked at airports.
     for (const [icao24, bb] of flightState._billboards) {
       if (currentIcaos.has(icao24)) continue;
-      const absence = records.absence(icao24, {
-        complete: snapshot.complete,
-        likelyLanded: queries._likelyLanded(icao24),
-      });
+      const absence = replace
+        ? 'remove'
+        : records.absence(icao24, {
+            complete: snapshot.complete,
+            retainIds: snapshot.retainIds,
+            likelyLanded: queries._likelyLanded(icao24),
+            tracked: icao24 === flightState._trackedIcao,
+            nowMs: flightState.now?.(),
+          });
       if (absence === 'retain') continue;
       if (absence === 'stale') {
         if (icao24 === flightState._trackedIcao && flightState._trackedEntity) {
@@ -287,11 +373,20 @@ export function createMilitarySnapshotRenderer({
       flightState._billboards.delete(icao24);
       rendering._releaseModel(icao24); // aged-out aircraft: drop its 3D model (no orphan / cap leak)
       records.forget(icao24);
+      placement?.forget(icao24);
       flightState._cullPositions.delete(icao24);
       flightState._positionHistory.delete(icao24);
       flightState._displayCourse.delete(icao24);
       flightState._groundSnap.forget(icao24);
     }
+
+    // The tracked contact at the new time: its trail starts there.
+    if (
+      replace &&
+      flightState._trackedIcao &&
+      currentIcaos.has(flightState._trackedIcao)
+    )
+      tracking._startTrail(flightState._trackedIcao);
 
     // Fresh courses arrived — force a rotation pass on the next fleet tick
     flightState._lastCamPoseSig = '';

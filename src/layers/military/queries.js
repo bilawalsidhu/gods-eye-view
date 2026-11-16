@@ -9,7 +9,11 @@ import {
   contactMatchWins,
   CONTACT_MATCH_TIER,
 } from '../../data/contactMatch.js';
-import { LANDED_ALT_MAX_FT, LANDED_SPEED_MAX_MPS } from './policy.js';
+import {
+  LANDED_ALT_MAX_FT,
+  LANDED_SPEED_MAX_MPS,
+  followsClock,
+} from './policy.js';
 import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
 
 export function createQueries({
@@ -480,9 +484,7 @@ export function createQueries({
         // contacts read the translation the fleet tick already wrote into their
         // modelMatrix; sprite-owned contacts keep `bb.position`, where sprite and bracket
         // are co-located anyway.
-        const spec = modelOwnsVisual
-          ? parts.rendering._modelSpec(info?.klass)
-          : null;
+        const spec = modelOwnsVisual ? parts.rendering._modelSpec(info) : null;
         const pos = isTracked
           ? parts.motion._trackedVisualCached() || bb.position
           : modelOwnsVisual
@@ -834,6 +836,8 @@ export function createQueries({
         retryInSec,
         source: flightState.feed._lastSource,
         fallback: false,
+        // Following the world clock, the snapshot's age is told from its time.
+        ...(followsClock(flightState) && { atMs: flightState.now() }),
       };
     },
   };

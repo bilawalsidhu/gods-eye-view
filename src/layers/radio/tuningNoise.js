@@ -50,6 +50,11 @@ export function createTuningNoise({
     layerState._tuningNoiseGain = null;
   }
 
+  function suspendTuningNoiseContext() {
+    const suspended = layerState._tuningNoiseContext?.suspend?.();
+    if (suspended?.catch) void suspended.catch(() => {});
+  }
+
   function syncTuningNoiseGain() {
     if (!layerState._tuningNoiseContext || !layerState._tuningNoiseGain) return;
     const audible = radioTuningStaticShouldPlay({
@@ -79,8 +84,21 @@ export function createTuningNoise({
     if (!AudioContextClass) return false;
     if (!layerState._tuningNoiseContext)
       layerState._tuningNoiseContext = new AudioContextClass();
-    const resumed = layerState._tuningNoiseContext.resume?.();
-    if (resumed?.catch) void resumed.catch(() => {});
+    const context = layerState._tuningNoiseContext;
+    const resumed = context.resume?.();
+    // A release before the device starts finds the context still suspended,
+    // so its suspend() is a no-op; suspend again once resume() settles.
+    if (resumed?.then)
+      void resumed.then(
+        () => {
+          if (
+            layerState._tuningNoiseContext === context &&
+            !layerState._tuningNoiseSource
+          )
+            suspendTuningNoiseContext();
+        },
+        () => {},
+      );
     if (layerState._tuningNoiseSource) return true;
 
     const frameCount = Math.max(
@@ -120,6 +138,7 @@ export function createTuningNoise({
     if (layerState._tuningCameraNavigation)
       parts.navigation.invalidateRadioCameraNavigation();
     layerState._tuningActive = false;
+    layerState._tuningResumesPlayback = false;
     layerState._tuningStatic = false;
     layerState._tuningAwaitingStationId = null;
     layerState._tuningPreviewId = null;
@@ -131,8 +150,7 @@ export function createTuningNoise({
     parts.rendering.updateSelectionEntity();
     syncTuningNoiseGain();
     stopTuningNoiseSource();
-    const suspended = layerState._tuningNoiseContext?.suspend?.();
-    if (suspended?.catch) void suspended.catch(() => {});
+    suspendTuningNoiseContext();
     if (emit) parts.presentation.emitState();
   }
   return {

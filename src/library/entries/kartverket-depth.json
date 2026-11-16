@@ -1,0 +1,102 @@
+{
+  "id": "kartverket-depth",
+  "kind": "tiles",
+  "family": "environment",
+  "title": "Norway sea depths (Kartverket)",
+  "provider": "Kartverket",
+  "description": "Kartverket's depth areas and depth contours of Norwegian waters, shown from coastal scale (zoom in to see them).",
+  "icon": "≋",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["NO"],
+    "bbox": [3.7, 57.6, 32, 71.6]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://wms.geonorge.no/skwms1/wms.dybdedata2?service=WMS&request=GetMap&version=1.3.0&layers=Dybdelag,Dybdekontur&styles=&crs=EPSG:3857&bbox={bbox-epsg-3857}&width=256&height=256&format=image/png&transparent=true",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 11,
+    "maxZoom": 20,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "legend": [
+      {
+        "label": "Minimum depth 0–5 m",
+        "color": "#e6ffff"
+      },
+      {
+        "label": "Minimum depth 5–10 m",
+        "color": "#dbfaff"
+      },
+      {
+        "label": "Minimum depth 10–20 m",
+        "color": "#d1f5ff"
+      },
+      {
+        "label": "Minimum depth 20–30 m",
+        "color": "#c7f2ff"
+      },
+      {
+        "label": "Minimum depth 30–40 m",
+        "color": "#c3f1ff"
+      },
+      {
+        "label": "Minimum depth 40–50 m",
+        "color": "#bdefff"
+      },
+      {
+        "label": "Minimum depth 50–100 m",
+        "color": "#b8edff"
+      },
+      {
+        "label": "Minimum depth 100–150 m",
+        "color": "#abe8ff"
+      },
+      {
+        "label": "Minimum depth 150–200 m",
+        "color": "#a6e5ff"
+      },
+      {
+        "label": "Minimum depth 200–250 m",
+        "color": "#a1e5ff"
+      },
+      {
+        "label": "Minimum depth 250–300 m",
+        "color": "#9ce3ff"
+      },
+      {
+        "label": "Minimum depth 300–350 m",
+        "color": "#96e3ff"
+      },
+      {
+        "label": "Minimum depth 350–400 m",
+        "color": "#91e0ff"
+      },
+      {
+        "label": "Minimum depth 400–450 m",
+        "color": "#8ce0ff"
+      },
+      {
+        "label": "Minimum depth 450–500 m",
+        "color": "#89deff"
+      },
+      {
+        "label": "Minimum depth 500–2,000 m",
+        "color": "#87dcff"
+      }
+    ]
+  },
+  "licence": {
+    "name": "CC BY 4.0 (Kartverket free products)",
+    "url": "https://www.kartverket.no/api-og-data/vilkar-for-bruk"
+  },
+  "attribution": {
+    "text": "© Kartverket",
+    "url": "https://www.kartverket.no/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

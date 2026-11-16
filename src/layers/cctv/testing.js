@@ -91,6 +91,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
     coverageMode = 'on',
     showProjection = false,
     healthById = new Map(),
+    openingCameraProvisional = false,
   } = {}) {
     layerState._viewer = viewer;
     layerState._records = Array.isArray(records) ? records : [];
@@ -104,6 +105,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
     layerState._billboards = null;
     layerState._activeCameraId = activeCameraId;
     layerState._autoHopSuspended = false;
+    layerState._openingCameraProvisional = !!openingCameraProvisional;
     layerState._enabled = !!enabled;
     layerState._coverageMode = parts.model.normalizeCoverageMode(
       coverageMode,

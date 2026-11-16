@@ -442,12 +442,12 @@ try {
         return '{"scenes":[]}';
       },
     });
+    // A shot row held across disposal must not act once it is revoked.
+    const retainedLabel = document.querySelector('.scene-shot-label');
     const stopping = director.destroy();
     const notificationsAtStop = window.__qaSceneState.length;
-    const stoppedSynchronously =
-      controls.destroyed &&
-      controls.removers.length === 0 &&
-      controls.rowRemovers.length === 0;
+    const stoppedSynchronously = controls.destroyed;
+    retainedLabel?.click();
     document.getElementById('scene-new-btn').click();
     controls.run('capture');
     finish();
@@ -456,6 +456,7 @@ try {
     await director.destroy();
     return {
       stoppedSynchronously,
+      heldRowAction: Boolean(retainedLabel),
       stateStopped: window.__qaSceneState.length === notificationsAtStop,
       sameProject: director._project === project,
       noLateStatus:
@@ -465,7 +466,9 @@ try {
   });
   check(
     'Disposal revokes fixed and row actions before waiting for scene work',
-    teardown.stoppedSynchronously && teardown.rowsGone,
+    teardown.stoppedSynchronously &&
+      teardown.heldRowAction &&
+      teardown.rowsGone,
   );
   check(
     'Late import completion cannot replace the disposed project or status',

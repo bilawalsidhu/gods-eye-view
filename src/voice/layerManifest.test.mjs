@@ -79,6 +79,23 @@ test('tool enums are generated from the manifest', () => {
   assert.ok(panels.includes('weather-panel') && panels.includes('recent-imagery-panel'));
 });
 
+test('the alias hint leaves out names the layer id already spells', () => {
+  const hint = voiceLayerAliasHint();
+  const entries = hint.split(';').map((entry) => entry.split('→'));
+  const flat = (text) => text.toLowerCase().replace(/[\s-]+/g, '');
+  for (const [aliases, id] of entries) {
+    for (const alias of aliases.split('/')) {
+      assert.ok(!flat(id).includes(flat(alias)), `"${alias}" is already spelled by ${id}`);
+    }
+  }
+  const ids = entries.map(([, id]) => id);
+  assert.ok(!ids.includes('local-dams'), 'a layer left with no alias gets no entry');
+  assert.ok(!ids.includes('weather-radar'));
+  assert.match(hint, /(^|;)aqhi→air-quality(;|$)/, 'an alias the id does not spell stays');
+  assert.match(hint, /(^|;)hurricanes→weather-cyclones(;|$)/);
+  assert.match(hint, /(^|;)fires\/wildfires→local-firms(;|$)/);
+});
+
 test('spoken aliases resolve to real layers, keep every legacy phrase and never collide', () => {
   const aliases = voiceLayerAliasMap();
   for (const id of aliases.values()) assert.ok(manifestIds.includes(id), id);
@@ -102,6 +119,7 @@ test('spoken aliases resolve to real layers, keep every legacy phrase and never 
     'weather radar': 'weather-radar', lightning: 'weather-lightning', 'military bases': 'military-installations',
     'recent imagery': 'recent-imagery', 'bike share': 'bikeshare', 'rocket launches': 'rocket-launches',
     'street level': 'street-level', mapillary: 'street-level',
+    'street view': 'street-level',
     wind: 'wind', directions: 'directions', 'fire perimeters': 'fire-perimeters',
     'wildfire perimeters': 'fire-perimeters', 'burn areas': 'fire-perimeters',
   };
@@ -112,38 +130,4 @@ test('spoken aliases resolve to real layers, keep every legacy phrase and never 
       assert.ok(!claimed.has(alias), `"${alias}" claimed by ${claimed.get(alias)} and ${entry.id}`);
       claimed.set(alias, entry.id);
     }
-});
-
-test('the alias hint drops aliases that only read the id aloud, which the runner still maps', () => {
-  const hint = voiceLayerAliasHint();
-  const aliases = voiceLayerAliasMap();
-  const hinted = new Map();
-  for (const segment of hint.split(';')) {
-    const [names, id, ...rest] = segment.split('→');
-    assert.equal(rest.length, 0, segment);
-    assert.ok(names && id, `"${segment}" needs an alias and an id`);
-    hinted.set(id, names.split('/'));
-  }
-  for (const [id, names] of hinted) {
-    const spokenId = id.replace(/-/g, ' ');
-    assert.ok(!names.some((name) => name.toLowerCase() === spokenId), `${id} hints its own id`);
-  }
-  let dropped = 0;
-  for (const entry of VOICE_LAYER_MANIFEST) {
-    if (!entry.toggle || !entry.aliases.length) continue;
-    const spokenId = entry.id.replace(/-/g, ' ');
-    const kept = entry.aliases.slice(0, 2);
-    const names = kept.filter((alias) => alias.toLowerCase() !== spokenId);
-    for (const alias of kept.filter((alias) => !names.includes(alias))) {
-      dropped += 1;
-      assert.equal(aliases.get(alias.toLowerCase()), entry.id, alias);
-    }
-    // A layer left with only id readings is omitted, never "→id".
-    if (!names.length) assert.ok(!hinted.has(entry.id), `${entry.id} is hinted with no alias`);
-    else if (hinted.has(entry.id)) assert.deepEqual(hinted.get(entry.id), names, entry.id);
-  }
-  assert.ok(dropped > 0, 'some layer reads its id aloud as an alias');
-  assert.ok(hint.split(';').includes('highway signs→message-signs'));
-  assert.doesNotMatch(hint, /message signs/);
-  assert.equal(aliases.get('message signs'), 'message-signs');
 });

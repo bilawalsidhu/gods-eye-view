@@ -124,12 +124,9 @@ test('malformed and ambiguous coordinates are refused, never guessed', () => {
     '0, 181',
     '0, -180.5',
     'N 100, W 74',
-    // Degrees/minutes/seconds is out of scope and must fall through, not
-    // be read as a decimal pair.
-    '40°26\'46"N, 79°58\'56"W',
+    // Degrees/minutes/seconds without their symbols must fall through, not
+    // be read as a decimal pair (marked ones are in gridReference.test.mjs).
     '40 26 46, 79 58 56',
-    // A grid reference is out of scope too.
-    '33UXP0500444998',
   ]) {
     assert.equal(
       parseCoordinateQuery(query),

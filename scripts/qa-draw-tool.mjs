@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Rendered acceptance for DISPLAY ▸ Draw: real clicks, real keys, real teardown. */
+/** Rendered acceptance for UTILITIES ▸ Draw: real clicks, real keys, real teardown. */
 import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
@@ -57,6 +57,47 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** A clip of the globe canvas, clear of the panels on every side. */
 const CANVAS_CLIP = { x: 340, y: 200, width: 560, height: 380 };
+
+// Clear of the open UTILITIES panel (x 100–380), whose own amber swatch
+// dims when its row's shape is hidden.
+const LINE_CLIP = { x: 390, y: 200, width: 510, height: 380 };
+/** The canvas clip as a PNG, for comparing two moments of the same view. */
+const canvasShot = () =>
+  page.screenshot({ clip: LINE_CLIP, type: 'png', encoding: 'base64' });
+
+/**
+ * Amber pixels in one shot that are not amber in another of the same view:
+ * a mark's own pixels, apart from imagery and panels that both shots share.
+ */
+function amberOnlyIn(shotA, shotB) {
+  return page.evaluate(
+    async (a, b) => {
+      const pixels = async (base64) => {
+        const bitmap = await createImageBitmap(
+          await (await fetch(`data:image/png;base64,${base64}`)).blob(),
+        );
+        const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+        const context = canvas.getContext('2d');
+        context.drawImage(bitmap, 0, 0);
+        return context.getImageData(0, 0, bitmap.width, bitmap.height).data;
+      };
+      const amber = (d, i) =>
+        d[i] > 150 &&
+        d[i + 1] > 90 &&
+        d[i + 1] < 220 &&
+        d[i + 2] < 130 &&
+        d[i] - d[i + 2] > 70 &&
+        d[i] - d[i + 1] > 20;
+      const [da, db] = [await pixels(a), await pixels(b)];
+      let only = 0;
+      for (let i = 0; i < da.length; i += 4)
+        if (amber(da, i) && !amber(db, i)) only += 1;
+      return only;
+    },
+    shotA,
+    shotB,
+  );
+}
 
 /**
  * How many amber pixels the clip contains. The drawn area's stroke and fill are
@@ -196,12 +237,14 @@ try {
     );
   check('visible tile content settles before drawing', settled);
 
-  // The DISPLAY rail starts collapsed on a first run: open it the way a user does.
+  // UTILITIES starts collapsed on a first run: open it the way a user does.
   await page.evaluate(() => {
-    const rail = document.getElementById('pp-toggles');
-    if (rail?.classList.contains('collapsed'))
+    const panel = document.getElementById('utilities-panel');
+    if (panel?.classList.contains('collapsed'))
       document
-        .querySelector('.panel-collapse-btn[data-collapse-target="pp-toggles"]')
+        .querySelector(
+          '.panel-collapse-btn[data-collapse-target="utilities-panel"]',
+        )
         ?.click();
   });
   await page.waitForFunction(
@@ -210,7 +253,7 @@ try {
     { timeout: 10_000 },
   );
   check(
-    'the Draw control is on the DISPLAY rail and starts off',
+    'the Draw control is in the UTILITIES panel and starts off',
     await page.evaluate(() => {
       const toggle = document.getElementById('draw-toggle');
       return (
@@ -298,8 +341,6 @@ try {
   // ── a pin, finished with Enter ──────────────────────────────────────────
   await page.click('#draw-toggle');
   await page.click('.pp-mode-btn[data-shape="pin"]');
-  await page.click('#draw-label-input');
-  await page.keyboard.type('Pin one');
   await clickWorld(520, 330);
   check(
     'the pointer is claimed while a session is open',
@@ -313,7 +354,8 @@ try {
 
   // ── a line along a road, with Backspace ─────────────────────────────────
   await page.click('.pp-mode-btn[data-shape="line"]');
-  await clickWorld(360, 300);
+  // Clear of the open UTILITIES panel, which sits beside the left rail.
+  await clickWorld(420, 300);
   await clickWorld(470, 380);
   await clickWorld(600, 470);
   const beforeBackspace = (await drawState()).vertices;
@@ -326,16 +368,9 @@ try {
     `${beforeBackspace} → ${afterBackspace}`,
   );
   await clickWorld(640, 500);
-  await page.click('#draw-label-input');
-  await page.keyboard.type('Market St');
   await page.keyboard.press('Enter');
-  check(
-    'a line finished from the label field lands on the board',
-    await waitForMarks(2),
-  );
-  const lineMark = (await marks()).find((mark) =>
-    mark.label?.startsWith('Market St'),
-  );
+  check('a line finished with Enter lands on the board', await waitForMarks(2));
+  const lineMark = (await marks()).find((mark) => mark.type === 'route');
   check(
     'a drawn line reports its length and never a travel time',
     Boolean(lineMark) &&
@@ -347,10 +382,8 @@ try {
 
   // ── an area, coloured and labelled, finished with a double-click ────────
   await page.click('.pp-mode-btn[data-shape="area"]');
-  await page.select('#draw-color-select', 'amber');
+  await page.click('.draw-color[data-color="amber"]');
   const amberBefore = await amberPixels();
-  await page.click('#draw-label-input');
-  await page.keyboard.type('Civic Center block');
   await clickWorld(400, 280);
   await clickWorld(700, 290);
   await clickWorld(720, 520);
@@ -373,13 +406,33 @@ try {
     afterDoubleClick === 3,
     `${afterDoubleClick} marks`,
   );
+  // ── each drawn shape gets a row: named, recoloured, hidden from there ──
+  const rowIds = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('#draw-mark-list [data-mark-id]')].map(
+        (row) => row.dataset.markId,
+      ),
+    );
+  const ids = await rowIds();
+  check('every drawn shape has a row under Draw', ids.length === 3, ids);
+  const areaId = ids[2];
+  const rowControl = (id, control) =>
+    `#draw-mark-list [data-mark-id="${id}"] [data-control="${control}"]`;
+  await page.click(rowControl(areaId, 'name'));
+  await page.keyboard.type('Civic Center block');
+  await page.keyboard.press('Enter');
+  await wait(300);
   const areaMark = (await marks()).find(
     (mark) => mark.label === 'Civic Center block',
   );
   check(
-    'the label and colour chosen in the panel are what is drawn',
+    'the name typed in its row and the colour picked before drawing are what is drawn',
     areaMark?.color === 'amber',
     JSON.stringify(areaMark),
+  );
+  check(
+    'naming a shape keeps Draw on and the shape in progress untouched',
+    (await drawState()).active === true,
   );
   await wait(1200);
   const amberAfter = await amberPixels();
@@ -389,6 +442,118 @@ try {
     `${amberBefore} → ${amberAfter} amber pixels (+${amberAfter - amberBefore})`,
   );
   await shot('01-area-with-label');
+
+  // ── the row's own controls: recolour, hide and show, fly to ─────────────
+  const markState = (id) =>
+    page.evaluate((id) => {
+      const mark = window.__gevAnnotations.list().find((m) => m.id === id);
+      return (
+        mark && { color: mark.color, hidden: mark.hidden, alpha: mark.alpha }
+      );
+    }, id);
+  // Wait for a mark to reach a state rather than for a fixed time.
+  const markReaches = (id, want) =>
+    page
+      .waitForFunction(
+        (id, want) => {
+          const mark = window.__gevAnnotations.list().find((m) => m.id === id);
+          return (
+            mark &&
+            Object.entries(want).every(([key, value]) => mark[key] === value)
+          );
+        },
+        { timeout: 10_000 },
+        id,
+        want,
+      )
+      .then(
+        () => true,
+        () => false,
+      );
+  await page.click(rowControl(areaId, 'swatch'));
+  await page.click(rowControl(areaId, 'color-green'));
+  await markReaches(areaId, { color: 'green' });
+  check(
+    'a colour picked in the row recolours that shape',
+    (await markState(areaId))?.color === 'green',
+  );
+  await page.click(rowControl(areaId, 'toggle'));
+  await markReaches(areaId, { hidden: true, alpha: 0 });
+  const hidden = await markState(areaId);
+  check(
+    'hiding a shape keeps it on the board but draws it at zero alpha',
+    hidden?.hidden === true && hidden.alpha === 0,
+    JSON.stringify(hidden),
+  );
+  await page.click(rowControl(areaId, 'toggle'));
+  check(
+    'showing it again brings it straight back',
+    await markReaches(areaId, { hidden: false, alpha: 1 }),
+  );
+  // Fly-to frames the line by its whole path: once the flight settles, the
+  // middle of the line sits near the middle of the view.
+  await page.click(rowControl(ids[1], 'fly'));
+  await page
+    .waitForFunction(() => !window.__godsEyeView.viewer.camera._currentFlight, {
+      timeout: 15_000,
+    })
+    .catch(() => {});
+  await wait(300);
+  const framed = await page.evaluate((id) => {
+    const { viewer } = window.__godsEyeView;
+    // No Cesium global in the page: borrow Cartesian3 from a live object.
+    const Cartesian3 = viewer.camera.positionWC.constructor;
+    const mark = window.__gevAnnotations.list().find((m) => m.id === id);
+    const lons = mark.path.map((p) => p.lon);
+    const lats = mark.path.map((p) => p.lat);
+    const middle = Cartesian3.fromDegrees(
+      (Math.min(...lons) + Math.max(...lons)) / 2,
+      (Math.min(...lats) + Math.max(...lats)) / 2,
+    );
+    const at = viewer.scene.cartesianToCanvasCoordinates(middle);
+    const canvas = viewer.scene.canvas;
+    return (
+      at && {
+        dx: Math.abs(at.x - canvas.clientWidth / 2) / canvas.clientWidth,
+        dy: Math.abs(at.y - canvas.clientHeight / 2) / canvas.clientHeight,
+      }
+    );
+  }, ids[1]);
+  check(
+    'fly to frames that shape: its middle is near the middle of the view',
+    Boolean(framed) && framed.dx < 0.2 && framed.dy < 0.2,
+    JSON.stringify(framed),
+  );
+
+  // ── a hidden Line leaves the globe: its flowing stroke keeps its own
+  // colour, so the check is the pixels, not the mark's state ─────────────
+  const lineId = ids[1];
+  await page.click(rowControl(lineId, 'swatch'));
+  await page.click(rowControl(lineId, 'color-amber'));
+  await markReaches(lineId, { color: 'amber', alpha: 1 });
+  await wait(800);
+  const shown = await canvasShot();
+  await page.click(rowControl(lineId, 'toggle'));
+  await markReaches(lineId, { hidden: true, alpha: 0 });
+  await wait(800);
+  const hiddenShot = await canvasShot();
+  // Amber the shown line had and the hidden one lost; amber that appears
+  // only once it is hidden is noise, and must stay small beside it.
+  const gone = await amberOnlyIn(shown, hiddenShot);
+  const noise = await amberOnlyIn(hiddenShot, shown);
+  check(
+    'a hidden Line is no longer painted',
+    gone > 40 && noise < gone * 0.2,
+    `${gone} amber pixels went with the line, ${noise} appeared`,
+  );
+  await page.click(rowControl(lineId, 'toggle'));
+  await wait(1200);
+  const back = await amberOnlyIn(await canvasShot(), hiddenShot);
+  check(
+    'and paints again when shown',
+    back > gone * 0.5,
+    `${back} of ${gone} line pixels back`,
+  );
   await shot('03-pins-and-shapes');
 
   // ── Escape cancels the shape, a second Escape leaves draw mode ──────────
@@ -418,6 +583,12 @@ try {
     'cancelling never removes a mark already on the board',
     afterSecondEscape.marks === 3,
     `${afterSecondEscape.marks} marks`,
+  );
+  await page.click(rowControl(ids[0], 'remove'));
+  await waitForMarks(2);
+  check(
+    'remove in a row takes that one shape off the board and out of the list',
+    (await rowIds()).join() === ids.slice(1).join(),
   );
 
   // ── a click that would select something selects nothing while drawing ───
@@ -480,10 +651,12 @@ try {
 
   // ── Clear wipes the board ───────────────────────────────────────────────
   await page.evaluate(() => {
-    const rail = document.getElementById('pp-toggles');
-    if (rail?.classList.contains('collapsed'))
+    const panel = document.getElementById('utilities-panel');
+    if (panel?.classList.contains('collapsed'))
       document
-        .querySelector('.panel-collapse-btn[data-collapse-target="pp-toggles"]')
+        .querySelector(
+          '.panel-collapse-btn[data-collapse-target="utilities-panel"]',
+        )
         ?.click();
   });
   await page.waitForFunction(

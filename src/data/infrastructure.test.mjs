@@ -82,7 +82,7 @@ test('infrastructure factory preserves identity and creates independent state wi
 
 test('dataset URLs still name the complete bundled sources', () => {
   for (const [file, count] of [
-    ['datacenters', 4351],
+    ['datacenters', 4352],
     ['dams', 704],
   ]) {
     const lines = readFileSync(

@@ -6,6 +6,11 @@ import { createStandaloneLayerSources } from '../standalone/layerSources.js';
 import { catalogControlServices } from './catalog.js';
 import { LayerLifecycle } from '../data/lifecycle.js';
 import { fakeStreetLevelProvider } from '../testSupport/streetLevelFakes.mjs';
+import { worldClock } from '../time/worldClock.js';
+
+const flush = async () => {
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+};
 
 function fixtureSources(ids, calls) {
   const sources = createStandaloneLayerSources();
@@ -27,6 +32,7 @@ test('catalogs construct distinct layers and classification from their supplied 
   t.after(() => {
     a.abort();
     b.abort();
+    worldClock.goLive();
   });
   const callsA = [];
   const callsB = [];
@@ -40,15 +46,23 @@ test('catalogs construct distinct layers and classification from their supplied 
     signal: b.signal,
     surface: fixtureSurface(b.signal),
   });
-  assert.equal(first.layers.length, 34);
+  assert.equal(first.layers.length, 42);
   assert.ok(first.get('local-adsb'), 'Local ADS-B is registered');
+  assert.deepEqual(
+    first.metadata.find(({ id }) => id === 'osm-places'),
+    { id: 'osm-places', disposition: 'local-only' },
+    'voice search results never enter share links or stored state',
+  );
   assert.deepEqual(
     first.metadata.find(({ id }) => id === 'local-adsb'),
     { id: 'local-adsb', disposition: 'local-only' },
     'the hardware-local layer is never serialized into links',
   );
   assert.notEqual(first.weatherClock, second.weatherClock);
-  await first.weatherClock.setTarget('2026-09-21T12:00:00.000Z');
+  // Time moves on the world clock, which the catalog's weather clock follows.
+  assert.equal(first.weatherClock.world, worldClock);
+  worldClock.seek(Date.parse('2026-09-21T12:00:00.000Z'));
+  await flush();
   assert.match(
     first.get('wind').getRowControls().info,
     /Forecast · does not follow history/,
@@ -62,6 +76,8 @@ test('catalogs construct distinct layers and classification from their supplied 
   assert.ok(first.get('fire-perimeters'));
   assert.ok(first.get('gnss-integrity'));
   assert.ok(first.get('s2-ghostmaps'));
+  assert.ok(first.get('drone-airspace'));
+  assert.ok(first.get('news'));
   assert.ok(first.get('message-signs'));
   assert.ok(first.get('transit'));
   const order = first.layers.map(({ id }) => id);
@@ -105,9 +121,16 @@ test('catalogs construct distinct layers and classification from their supplied 
   assert.equal(first.militaryRegistry.isMilitaryIcao('def456'), false);
   assert.equal(second.militaryRegistry.isMilitaryIcao('def456'), true);
   a.abort();
+  worldClock.seek(Date.parse('2026-09-21T13:00:00.000Z'));
+  await flush();
   assert.equal(
-    await first.weatherClock.setTarget('2026-09-21T13:00:00.000Z'),
-    false,
+    first.weatherClock.getState().target,
+    '2026-09-21T12:00:00.000Z',
+    'an aborted catalog no longer follows the world clock',
+  );
+  assert.equal(
+    second.weatherClock.getState().target,
+    '2026-09-21T13:00:00.000Z',
   );
   assert.equal(callsA[0].aborted, true);
   assert.equal(first.militaryRegistry.isMilitaryIcao('abc123'), false);
@@ -156,7 +179,7 @@ test('Mapillary can be omitted or replaced without changing catalog membership',
     surface: fixtureSurface(lifetime.signal),
   };
   const catalog = createApplicationCatalog(options);
-  assert.equal(catalog.layers.length, 34);
+  assert.equal(catalog.layers.length, 42);
   assert.deepEqual(catalog.get('street-level').providerIds, []);
   assert.equal(
     catalogControlServices(catalog).streetLevelLayer,
@@ -193,4 +216,42 @@ test('Mapillary can be omitted or replaced without changing catalog membership',
       }),
     /Mapillary source/,
   );
+});
+
+test('a GNSS integrity source can set the layer evidence window', (t) => {
+  const lifetime = new AbortController();
+  t.after(() => lifetime.abort());
+  const gnssLayer = (descriptor) => {
+    const sources = fixtureSources([], []);
+    sources['gnss-integrity'] = {
+      getSnapshot: async () => ({}),
+      ...descriptor,
+    };
+    return createApplicationCatalog({
+      sources,
+      signal: lifetime.signal,
+      surface: fixtureSurface(lifetime.signal),
+    }).get('gnss-integrity');
+  };
+  const shows = (layer, minutes) => {
+    assert.equal(layer.provenance.window.minutes, minutes);
+    const { info } = layer.getRowControls();
+    assert.match(info, new RegExp(`visited views over ${minutes} min`));
+  };
+  shows(gnssLayer({ windowMs: 65 * 60_000 }), 65);
+  shows(gnssLayer({}), 30);
+  for (const windowMs of [
+    undefined,
+    null,
+    NaN,
+    Infinity,
+    0,
+    -60_000,
+    '3600000',
+  ])
+    assert.equal(
+      gnssLayer({ windowMs }).provenance.window.minutes,
+      30,
+      `${String(windowMs)} falls back to the default`,
+    );
 });

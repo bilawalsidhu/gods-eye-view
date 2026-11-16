@@ -93,8 +93,10 @@ export class MapSourceController {
     return Boolean(source && source.available !== false);
   }
   _unavailableReason(stack) {
+    // A source may give its reason as a function, read in the current locale.
+    const reason = this._sources.get(stack?.id)?.unavailableReason;
     return (
-      this._sources.get(stack?.id)?.unavailableReason ||
+      (typeof reason === 'function' ? reason() : reason) ||
       `${stack?.label || 'This map stack'} is unavailable`
     );
   }

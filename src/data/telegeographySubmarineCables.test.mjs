@@ -1754,3 +1754,252 @@ test('another GeoJSON source renders with its own label and rebuilds from accept
     env.layer.destroy(env.viewer);
   }
 });
+
+function multipartCableFixture() {
+  return [
+    {
+      type: 'Feature',
+      properties: {
+        id: 'alpha',
+        name: 'Alpha cable',
+        color: '#ff0000',
+        coordinates: [-40, 35],
+      },
+      geometry: {
+        type: 'MultiLineString',
+        coordinates: [
+          [
+            [-40, 35],
+            [-39, 36],
+          ],
+          [
+            [-38, 37],
+            [-37, 38],
+          ],
+          [
+            [-36, 39],
+            [-35, 40],
+          ],
+        ],
+      },
+    },
+    {
+      type: 'Feature',
+      properties: {
+        id: 'beta',
+        name: 'Beta cable',
+        color: '#0000ff',
+        coordinates: [140, -35],
+      },
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [140, -35],
+          [141, -34],
+        ],
+      },
+    },
+  ];
+}
+
+function geometrySource(cables, landingPoints = []) {
+  return {
+    label: 'Multipart test source',
+    async fetch() {
+      return {
+        cables: { type: 'FeatureCollection', features: cables },
+        landingPoints: { type: 'FeatureCollection', features: landingPoints },
+      };
+    },
+  };
+}
+
+test('multipart association accepts frozen provider collections without modifying properties', async () => {
+  const payload = {
+    cables: { type: 'FeatureCollection', features: multipartCableFixture() },
+    landingPoints: {
+      type: 'FeatureCollection',
+      features: multipartCableFixture(),
+    },
+  };
+  payload.cables.features[0].properties.__gevSourceFeatureIndex =
+    'provider value';
+  const before = structuredClone(payload);
+  const freeze = (value) => {
+    if (value && typeof value === 'object') {
+      for (const child of Object.values(value)) freeze(child);
+      Object.freeze(value);
+    }
+    return value;
+  };
+  freeze(payload);
+  const env = await createRealCableLayerHarness({
+    source: { label: 'Frozen multipart source', fetch: async () => payload },
+  });
+  try {
+    for (const dataSource of env.dataSources.slice(0, 2)) {
+      assert.deepEqual(
+        dataSource.entities.values.map(
+          (entity) => entity.__gevTeleGeography?.label,
+        ),
+        ['Alpha cable', 'Alpha cable', 'Alpha cable', 'Beta cable'],
+      );
+    }
+    assert.equal(env.dataSources[2].entities.values.length, 4);
+    assert.deepEqual(payload, before);
+    const entity = env.dataSources[0].entities.values[0];
+    assert.equal(entity.properties.__gevSourceFeatureIndex.getValue(), 0);
+    assert.match(entity.description.getValue(), /__gevSourceFeatureIndex/);
+  } finally {
+    env.layer.destroy(env.viewer);
+  }
+});
+
+test('multipart cables retain their own styling, picking and culling on every segment', async () => {
+  const features = multipartCableFixture();
+  const before = JSON.stringify(features);
+  const env = await createRealCableLayerHarness({
+    source: geometrySource(features),
+  });
+  try {
+    const entities = env.dataSources[0].entities.values;
+    assert.equal(entities.length, 4);
+    for (const [index, entity] of entities.entries()) {
+      const feature = features[index < 3 ? 0 : 1];
+      const info = entity.__gevTeleGeography;
+      assert.equal(info?.label, feature.properties.name, entity.id);
+      assert.deepEqual(info.reference, {
+        lon: feature.properties.coordinates[0],
+        lat: feature.properties.coordinates[1],
+      });
+      assert.deepEqual(
+        entity.polyline.material.color.getValue(),
+        Cesium.Color.fromCssColorString(feature.properties.color).withAlpha(
+          0.92,
+        ),
+      );
+      assert.equal(entity.polyline.width.getValue(), 2.5);
+    }
+    env.raiseSweep();
+    assert.deepEqual(
+      entities.map((entity) => entity.show),
+      [true, true, true, false],
+    );
+    assert.equal(
+      env.dataSources[2].entities.values.length,
+      2,
+      'one reference per feature',
+    );
+    assert.equal(
+      JSON.stringify(features),
+      before,
+      'source features stay unchanged',
+    );
+  } finally {
+    env.layer.destroy(env.viewer);
+  }
+});
+
+test('multipart association supports missing and repeated IDs without guessing Cesium suffixes', async () => {
+  const features = multipartCableFixture();
+  features[1].id = 'alpha_2';
+  delete features[1].properties.id;
+  const generated = structuredClone(features[1]);
+  delete generated.id;
+  generated.properties.name = 'Generated cable';
+  features.push(generated);
+  const repeated = structuredClone(features[1]);
+  repeated.properties.id = 'alpha';
+  repeated.properties.name = 'Repeated ID cable';
+  features.push(repeated);
+  const env = await createRealCableLayerHarness({
+    source: geometrySource(features),
+  });
+  try {
+    const entities = env.dataSources[0].entities.values;
+    assert.deepEqual(
+      entities.map((entity) => entity.id),
+      ['alpha', 'alpha_2', 'alpha_3', 'alpha_2_2', 'cable-2', 'alpha_4'],
+    );
+    assert.deepEqual(
+      entities.map((entity) => entity.__gevTeleGeography?.label),
+      [
+        'Alpha cable',
+        'Alpha cable',
+        'Alpha cable',
+        'Beta cable',
+        'Generated cable',
+        'Repeated ID cable',
+      ],
+    );
+    assert.deepEqual(
+      env.dataSources[2].entities.values.map(
+        (entity) => entity.__gevTeleGeography.featureId,
+      ),
+      ['alpha', 'alpha_2', 'cable-2', 'alpha'],
+    );
+  } finally {
+    env.layer.destroy(env.viewer);
+  }
+});
+
+test('multipart landing geometry keeps every pick with one reference per feature', async () => {
+  const features = multipartCableFixture();
+  const env = await createRealCableLayerHarness({
+    source: geometrySource([], features),
+  });
+  try {
+    const entities = env.dataSources[1].entities.values;
+    assert.deepEqual(
+      entities.map((entity) => entity.__gevTeleGeography?.label),
+      ['Alpha cable', 'Alpha cable', 'Alpha cable', 'Beta cable'],
+    );
+    assert.ok(
+      entities.every(
+        (entity) => entity.__gevTeleGeography.kind === 'landing-point',
+      ),
+    );
+    assert.equal(env.dataSources[2].entities.values.length, 2);
+  } finally {
+    env.layer.destroy(env.viewer);
+  }
+});
+
+test('every bundled cable segment is associated with its source feature', async () => {
+  const { features } = JSON.parse(
+    readFileSync(
+      new URL(
+        './local_data/telegeography_submarine_cables/cable-geo.json',
+        import.meta.url,
+      ),
+      'utf8',
+    ),
+  );
+  // Some bundled features share a cable ID but have different references.
+  const expandedFeatures = features.flatMap((feature) =>
+    feature.geometry.coordinates.map(() => feature),
+  );
+  assert.ok(expandedFeatures.length > features.length);
+  const env = await createRealCableLayerHarness({
+    source: geometrySource(features),
+  });
+  try {
+    const entities = env.dataSources[0].entities.values;
+    assert.equal(entities.length, expandedFeatures.length);
+    for (const [index, entity] of entities.entries()) {
+      const feature = expandedFeatures[index];
+      assert.equal(
+        entity.__gevTeleGeography?.label,
+        feature.properties.name,
+        entity.id,
+      );
+      assert.deepEqual(entity.__gevTeleGeography.reference, {
+        lon: feature.properties.coordinates[0],
+        lat: feature.properties.coordinates[1],
+      });
+    }
+    assert.equal(env.dataSources[2].entities.values.length, features.length);
+  } finally {
+    env.layer.destroy(env.viewer);
+  }
+});
