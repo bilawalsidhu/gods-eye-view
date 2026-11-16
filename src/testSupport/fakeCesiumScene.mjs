@@ -208,10 +208,14 @@ export function fakeScenePorts(viewer) {
 /**
  * Bind the ports to `viewer`.
  * @param {object} viewer
- * @param {{draw?: object}} [options]
+ * @param {{draw?: object, capabilities?: ReadonlySet<string>}} [options]
+ *   `capabilities`: what the renderer reports it can draw (none by default).
  * @returns {{draw: object, camera: object, query: object, frame: object, unbind: () => void}}
  */
-export function bindFakeCesiumScene(viewer, { draw = fakeDrawPort() } = {}) {
+export function bindFakeCesiumScene(
+  viewer,
+  { draw = fakeDrawPort(), capabilities } = {},
+) {
   const cam = () => cameraOfDouble(viewer);
   const camera = {
     pose() {
@@ -277,6 +281,8 @@ export function bindFakeCesiumScene(viewer, { draw = fakeDrawPort() } = {}) {
     camera,
     query,
     frame,
+    // What the renderer can draw, when a test gives it (none otherwise).
+    ...(capabilities ? { capabilities } : null),
   });
   return { draw, camera, query, frame, unbind };
 }
