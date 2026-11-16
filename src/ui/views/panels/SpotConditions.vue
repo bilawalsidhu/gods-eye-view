@@ -24,6 +24,7 @@ const props = defineProps({
   lon: { type: Number, required: true },
   /** Show the standard blocks for a selected item. */
   entity: { type: Boolean, default: false },
+  withContacts: Boolean,
   /** The selected item's own key, left out of the nearby lists. */
   excludeKey: { type: String, default: '' },
   /** How far the spot moves before the weather and hazards are read again. */
@@ -111,7 +112,8 @@ const shownHazards = computed(() =>
   hazards.value.filter((hazard) => matchesContextSearch(hazard.title, hazard.detail, hazardLayers.value[hazard.kind]?.name)).slice(0, searching.value ? 12 : 5),
 );
 
-// The standard nearby lists for a selected item, from the layers that are on.
+// The merged card gets these cohorts and their coverage from Awareness.
+const CONTACT_LAYERS = ['flights', 'military', 'ais-live-vessels', 'military-installations'];
 const groups = computed(() => {
   void tick.value;
   if (!props.entity) return null;
@@ -119,17 +121,21 @@ const groups = computed(() => {
     radiusKm: radiusKm.value,
     limit: searching.value ? 12 : 4,
     excludeKey: props.excludeKey,
+    excludeLayers: props.withContacts ? CONTACT_LAYERS : undefined,
     query: contextNeedle.value,
   });
 });
-const trafficBlocks = computed(() =>
-  groups.value
-    ? [
-        { id: 'flights', icon: 'flight', title: t('Flights within {radius}', { radius: radiusText.value }), none: t('No flights within {radius} from the layers that are on.', { radius: radiusText.value }), ...groups.value.flights },
-        { id: 'vessels', icon: 'directions_boat', title: t('Vessels within {radius}', { radius: radiusText.value }), none: t('No vessels within {radius} from the layers that are on.', { radius: radiusText.value }), ...groups.value.vessels },
-      ]
-    : [],
-);
+const trafficBlocks = computed(() => {
+  if (!groups.value) return [];
+  if (props.withContacts)
+    return groups.value.flights.count
+      ? [{ id: 'local-adsb', icon: 'flight', title: t('Local ADS-B'), ...groups.value.flights }]
+      : [];
+  return [
+    { id: 'flights', icon: 'flight', title: t('Flights within {radius}', { radius: radiusText.value }), none: t('No flights within {radius} from the layers that are on.', { radius: radiusText.value }), ...groups.value.flights },
+    { id: 'vessels', icon: 'directions_boat', title: t('Vessels within {radius}', { radius: radiusText.value }), none: t('No vessels within {radius} from the layers that are on.', { radius: radiusText.value }), ...groups.value.vessels },
+  ];
+});
 
 // Local solar time at the spot, from its longitude: no time zone lookup.
 const localTime = computed(() => {

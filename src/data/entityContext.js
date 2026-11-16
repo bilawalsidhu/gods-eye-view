@@ -1142,12 +1142,19 @@ export function nearbyEntities(
  * @param {number} [options.radiusKm]
  * @param {number} [options.limit] Rows per group.
  * @param {string} [options.excludeKey] A record to leave out (the selected one).
+ * @param {string[]} [options.excludeLayers] Layers already presented by another section.
  * @returns {{flights: {count: number, items: Array<object>}, vessels: {count: number, items: Array<object>}, other: Array<object>}}
  */
 export function nearbyByKind(
   dataManager,
   here,
-  { radiusKm = 250, limit = 4, excludeKey = '', query = '' } = {},
+  {
+    radiusKm = 250,
+    limit = 4,
+    excludeKey = '',
+    excludeLayers = [],
+    query = '',
+  } = {},
 ) {
   const needle = text(query).toLowerCase();
   const groups = {
@@ -1160,6 +1167,7 @@ export function nearbyByKind(
   const found = { aircraft: [], vessel: [] };
   const other = [];
   for (const layer of enabledLayers(dataManager)) {
+    if (excludeLayers.includes(layer.id)) continue;
     const kind = entityKind(layer.id).kind;
     const group = found[kind];
     let closest = null;

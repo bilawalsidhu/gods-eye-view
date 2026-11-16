@@ -14,6 +14,10 @@ import { countryName, nearestCity } from '../../../data/wikidataCities.js';
 // The Context panel's card for one thing on the map: what it is, its facts,
 // links, actions, and what else is near it. It reads from the entity card
 // store, which the globe click, the omnibar and the nearby list all fill.
+const props = defineProps({
+  /** Contacts follows this same aircraft, and its list sits inside the card. */
+  withContacts: Boolean,
+});
 const store = useEntityCardStore();
 const { card, lost, tick } = storeToRefs(store);
 // Cameras carry only an id; the CCTV panel's store knows the picked one's name.
@@ -221,9 +225,9 @@ watch(
       <div class="entity-hero" :data-hero="heroKind">
         <CctvPreview v-if="heroKind === 'camera'" :camera-id="card.identity?.id || ''" />
         <!-- No imagery for it yet: its icon, with its headline figures beside it. -->
-        <div v-else class="entity-hero__placeholder" :class="{ 'entity-hero__placeholder--bare': !tiles.length }">
+        <div v-else class="entity-hero__placeholder" :class="{ 'entity-hero__placeholder--bare': props.withContacts || !tiles.length }">
           <span class="material-symbols-outlined entity-hero__glyph" aria-hidden="true">{{ card.icon }}</span>
-          <div v-if="tiles.length" class="entity-hero__figures">
+          <div v-if="!props.withContacts && tiles.length" class="entity-hero__figures">
             <div v-for="fact in tiles" :key="fact.field" class="entity-hero__figure">
               <strong>{{ factFigure(fact).number }}<small v-if="factFigure(fact).unit">{{ factFigure(fact).unit }}</small></strong>
               <span>{{ factLabel(fact) }}</span>
@@ -270,7 +274,7 @@ watch(
         <span>{{ routePlaces.from }}</span>
         <span>{{ routePlaces.to }}</span>
       </p>
-      <AltitudeGraph v-if="altitudeGraphed" :key="`altitude:${card.key}`" :altitude-m="lost ? null : card.altitudeM" :tick="tick" />
+      <AltitudeGraph v-if="altitudeGraphed" v-show="!props.withContacts" :key="`altitude:${card.key}`" :altitude-m="lost ? null : card.altitudeM" :tick="tick" />
       <p
         v-if="card.route && !card.route.verified"
         class="entity-card__route-note"
@@ -279,7 +283,7 @@ watch(
         <span class="material-symbols-outlined" aria-hidden="true">warning</span>{{ t('Scheduled · unverified: does not match where the plane is') }}
       </p>
 
-      <div v-if="tiles.length && heroKind !== 'none' && !contextNeedle" class="entity-card__tiles" :style="{ gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))` }">
+      <div v-if="!props.withContacts && tiles.length && heroKind !== 'none' && !contextNeedle" class="entity-card__tiles" :style="{ gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))` }">
         <div v-for="fact in tiles" :key="fact.field" class="entity-card__tile">
           <span>{{ factLabel(fact) }}</span>
           <strong>{{ factFigure(fact).number }}<small v-if="factFigure(fact).unit">{{ factFigure(fact).unit }}</small></strong>
@@ -303,7 +307,7 @@ watch(
 
       <div class="entity-card__actions">
         <!-- On an aircraft or a satellite, Cockpit leads: it is the action people come for. -->
-        <button v-if="store.canCockpit()" type="button" class="entity-card__action entity-card__action--primary" @click="store.cockpit()">
+        <button v-if="store.canCockpit()" type="button" class="entity-card__action entity-card__action--primary" data-entity-cockpit-entry @click="store.cockpit()">
           <span class="material-symbols-outlined" aria-hidden="true">{{ card.layerId === 'satellites' ? 'satellite_alt' : 'flight' }}</span>{{ card.layerId === 'satellites' ? t('Enter orbital view') : t('Enter Cockpit') }}
         </button>
         <div class="entity-card__action-row">
@@ -319,9 +323,8 @@ watch(
         </button>
       </div>
 
-      <!-- The same blocks for every item, in one order: weather and local
-           time, then flights, vessels and hazards within the Context radius. -->
-      <SpotConditions v-if="Number.isFinite(card.lat) && Number.isFinite(card.lon)" :key="card.key" entity :lat="card.lat" :lon="card.lon" :exclude-key="card.key" :settle-km="settleKm" />
+      <slot />
+      <SpotConditions v-if="Number.isFinite(card.lat) && Number.isFinite(card.lon)" :key="card.key" entity :lat="card.lat" :lon="card.lon" :exclude-key="card.key" :settle-km="settleKm" :with-contacts="props.withContacts" />
 
       <p v-if="source" class="entity-card__source">
         <span>{{ t('Source') }}</span> {{ source }}<template v-if="ageText"> · {{ ageText }}</template>

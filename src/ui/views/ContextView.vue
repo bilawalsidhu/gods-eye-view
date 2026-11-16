@@ -25,7 +25,7 @@ import { closeContextSearch, contextSearchOpen, contextSearchText } from '../con
 
 // ContextControls presents the mode switch and the nearby sites search and
 // publishes them; until it does, the panel shows its initial markup.
-const { view: ctx } = storeToRefs(useContextStore());
+const { view: ctx, awareness } = storeToRefs(useContextStore());
 const { presence: cockpit } = storeToRefs(useCockpitStore());
 // The entry names the subject it would ride (cockpitEntryFace).
 const entry = computed(() =>
@@ -39,6 +39,26 @@ const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
 // Context is one card for whatever was picked; until something is, it says how.
 const entityCards = useEntityCardStore();
 const { card: entityCard } = storeToRefs(entityCards);
+const contactsSubject = computed(() =>
+  ctx.value?.flightsActive ? awareness.value?.subjectIdentity : null,
+);
+const contactsMatchCard = computed(() => {
+  const card = entityCard.value;
+  const subject = contactsSubject.value;
+  return Boolean(
+    card?.kind === 'aircraft' &&
+      subject?.layerId === card.layerId &&
+      String(subject.id) === String(card.identity.id),
+  );
+});
+watch(
+  [() => contactsSubject.value?.layerId, () => contactsSubject.value?.id],
+  ([layerId, id]) => {
+    if (!['flights', 'military'].includes(layerId) || !id || contactsMatchCard.value) return;
+    // Contacts has already picked whom to follow. Only update the Inspector.
+    entityCards.select({ layerId, id, label: awareness.value?.subjectLabel }, { follow: false });
+  },
+);
 
 // Layer tabs: settings for the layers that are on, beside the card.
 let layerTimer = null;
@@ -55,12 +75,16 @@ const setPane = (id) => (el) => {
     if (target instanceof HTMLElement && target.parentElement !== el) el.appendChild(target);
   }
 };
+// Turning Radio or Launches on asks for the main tab, where they show.
+const showView = () => (activeTab.value = 'view');
 onMounted(() => {
+  globalThis.addEventListener?.('gev:context-show-view', showView);
   contextReady.value = true;
   readLayers();
   layerTimer = setInterval(readLayers, 1500);
 });
 onBeforeUnmount(() => {
+  globalThis.removeEventListener?.('gev:context-show-view', showView);
   clearInterval(layerTimer);
   contextReady.value = false;
 });
@@ -134,7 +158,7 @@ watch(
       <template #badge><span id="recent-imagery-panel-count" :aria-label="t('Imagery days in the box')"></span></template>
       <div id="recent-imagery-panel-body" class="ui-scroll" data-rail-scroller></div>
     </RailPanel>
-    <RailPanel id="global-context-panel" start-collapsed v-class-toggle="{ ...(ctx && { 'context-enabled': ctx.enabled }) }" :data-context-mode="ctx?.mode" :title="t('CONTEXT')" sideways scroll rail-scroller>
+    <RailPanel id="global-context-panel" start-collapsed v-class-toggle="{ ...(ctx && { 'context-enabled': ctx.enabled }) }" :data-context-mode="ctx?.mode" :data-context-tab="activeTab" :title="t('CONTEXT')" sideways scroll rail-scroller>
         <template #actions>
           <button type="button" class="context-dock-btn" :aria-pressed="String(contextSearchOpen)" :aria-label="contextSearchOpen ? t('Close Context search') : t('Search in Context')" :title="contextSearchOpen ? t('Close search') : t('Search in Context')" @click="toggleSearch">
             <span class="material-symbols-outlined" aria-hidden="true">search</span>
@@ -169,10 +193,7 @@ watch(
             <div :id="`context-tab-${tab.id}`" :ref="setPane(tab.id)" class="context-tab-pane"></div>
           </section>
         </div>
-        <div v-show="activeTab === 'view'" :class="{ 'context-searching': contextSearchOpen && contextSearchText.trim() }">
-        <EntityCard />
-        <ViewContext v-if="!entityCard" />
-        </div>
+        <RadioPanel />
         <div class="global-context-modes" role="tablist" :aria-label="t('Context mode')">
           <button id="global-context-flights-btn" class="context-mode-button" v-class-toggle="{ active: ctx?.flightsActive }" type="button" role="tab" tabindex="0" :aria-selected="String(ctx?.flightsActive ?? false)" :aria-disabled="ctx && String(ctx.busy)" :aria-busy="ctx && String(ctx.busy)" aria-controls="context-flights-view" :aria-label="t('CONTACTS')" :title="t('Cycles the nearest contacts of whatever type you select — planes, vessels, installations. Satellites track independently.')">
             <span class="material-symbols-outlined" aria-hidden="true">radar</span>
@@ -189,14 +210,14 @@ watch(
         </div>
         <section id="context-flights-view" class="context-mode-view" role="tabpanel" aria-labelledby="global-context-flights-btn" :hidden="!ctx?.flightsActive">
           <div class="global-context-actions" :aria-label="t('Contact Context actions')">
-            <button id="cockpit-entry" type="button" :hidden="!cockpit?.entryAvailable">
+            <button id="cockpit-entry" type="button" :hidden="!cockpit?.entryAvailable" aria-hidden="true" tabindex="-1">
               <span class="material-symbols-outlined" aria-hidden="true">{{ entry.icon }}</span>
               <span>{{ entry.label }}</span>
             </button>
             <button id="installations-search-btn" class="panel-layer-toggle" type="button" :aria-disabled="ctx && String(ctx.installationsBusy)" :aria-busy="ctx && String(ctx.installationsBusy)">{{ t('SEARCH NEARBY SITES') }}</button>
             <UiButton id="tr3b-toggle" class="tr3b-toggle" :pressed="!!cockpit?.tr3b?.converted" :hidden="!cockpit?.tr3b" :aria-label="t('Reclassify tracked contact as TR-3B')" :title="cockpit?.tr3b?.converted ? t('Restore real aircraft') : t('Reclassify as TR-3B')">🛸</UiButton>
           </div>
-          <AwarenessPanel />
+          <AwarenessPanel v-if="!contactsMatchCard" />
         </section>
         <section id="context-missions-view" class="context-mode-view" role="tabpanel" aria-labelledby="global-context-missions-btn" :hidden="!ctx?.missionsActive">
           <div id="space-mission-panel-host">
@@ -204,7 +225,12 @@ watch(
             <MissionDetail />
           </div>
         </section>
-        <RadioPanel />
+        <div v-show="activeTab === 'view'" :class="{ 'context-searching': contextSearchOpen && contextSearchText.trim() }">
+          <EntityCard :with-contacts="contactsMatchCard">
+            <AwarenessPanel v-if="contactsMatchCard" compact />
+          </EntityCard>
+          <ViewContext v-if="!entityCard" />
+        </div>
         </div>
     </RailPanel>
     <BhoteKoshiPanel />

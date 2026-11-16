@@ -325,18 +325,18 @@
   }
 }
 
-/* Context is one card for whatever is picked: the old Contacts and Space
-   Missions modes and the Radio strip are out of it. Their markup stays, as
-   their controls still find their buttons by id, but none of it shows. */
-#global-context-panel
-  :is(
-    .global-context-modes,
-    #context-mode-standby,
-    #context-flights-view,
-    #context-missions-view,
-    #radio-panel
-  ) {
+/* Radio can move between Context's two body hosts. Keep its visibility
+   tied to the Inspector and layer state in either location. */
+#global-context-panel[data-context-tab='props']
+  :is(.global-context-modes, .context-mode-view, #radio-panel),
+#global-context-panel #radio-panel:not(.radio-enabled),
+#global-context-panel #context-mode-standby,
+#global-context-panel #cockpit-entry {
   display: none !important;
+}
+
+#global-context-panel .global-context-actions:has(#tr3b-toggle:not([hidden])) {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 /* ── In view: what the panel shows while nothing is picked ───────────── */
