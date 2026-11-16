@@ -121,6 +121,10 @@ export function createIngestion({
         ownsAisRequest(requestController, requestSessionId) &&
         error?.name !== 'AbortError'
       ) {
+        // The key is missing only while the source says so; any other
+        // failure is an outage, not a key to add.
+        feed.transportStatus =
+          error?.code === 'key-required' ? 'missing-key' : null;
         markUnavailable(error?.message || msg('AIS live load failed'));
         console.warn('[Data:ais-live-vessels]', feed.error, error);
       }

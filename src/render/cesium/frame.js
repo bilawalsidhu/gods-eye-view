@@ -161,6 +161,8 @@ export function createSceneFrame(viewer) {
     liveTick = null;
   };
   const holds = new Map();
+  // Told when the first hold is taken and the last released.
+  const heldListeners = listenerList(uncaught);
   const pendingRenders = new Set();
   const gone = () => disposed || scene.isDestroyed?.();
   const sceneTime = (time) =>
@@ -244,8 +246,10 @@ export function createSceneFrame(viewer) {
     },
     holdContinuous(reason) {
       if (disposed) return () => {};
+      const first = holds.size === 0;
       holds.set(reason, (holds.get(reason) ?? 0) + 1);
       if (!gone()) scene.requestRender();
+      if (first) heldListeners.fire(true);
       let released = false;
       return () => {
         if (released) return;
@@ -255,8 +259,10 @@ export function createSceneFrame(viewer) {
         else holds.delete(reason);
         // What changed in the last held frame still gets drawn.
         if (!gone()) scene.requestRender();
+        if (holds.size === 0) heldListeners.fire(false);
       };
     },
+    onHeldChange: (cb) => heldListeners.on(cb),
     mode: () => (scene.requestRenderMode ? 'demand' : 'continuous'),
     diagnostics: () => ({
       mode: port.mode(),
@@ -324,6 +330,7 @@ export function createSceneFrame(viewer) {
       settleTick(false);
       for (const off of removers.splice(0)) off();
       for (const list of Object.values(listeners)) list.clear();
+      heldListeners.clear();
       holds.clear();
       // Waits settle rather than stay attached to a scene gone quiet.
       for (const done of [...pendingRenders]) done();

@@ -12,11 +12,13 @@ north.
 
 While anything moves (a layer in motion, the camera, a followed contact), the
 globe draws at the display's own refresh rate; there is no fixed 60 FPS cap.
-The Cesium frame port (`src/render/cesium/ports.js`, its `idleFps`) caps a
-parked scene at `IDLE_FRAME_RATE` (60, `src/renderGovernor.js`) ticks a
-second while no hold is out, because Cesium still runs the clock, data sources
-and update listeners on every animation frame even when it skips the draw; the
-viewer starts at that cap until the frame port takes over. Through the idle
+The render governor (`src/renderGovernor.js`) caps a parked scene at
+`IDLE_FRAME_RATE` (60) ticks a second while nothing holds the loop, because
+Cesium still runs the clock, data sources and update listeners on every
+animation frame even when it skips the draw, and lifts the cap while anything
+does: the frame port tells it when the loop's first hold is taken and its last
+released, its own holds (animated visual styles) included. The viewer starts
+at that cap until the governor is installed. Through the idle
 render governor, the camera port holds continuous render from `moveStart` to `moveEnd`, and samples its
 pose every 250 ms in between, so a camera drifting by rounding errors (no
 `moveEnd`) is released after half a second at rest and held again if it moves. The world clock holds continuous render while
@@ -3809,10 +3811,10 @@ which embeds the MAP_KEY.
 > a layer that needs no key, already holds one, or names a key the registry does
 > not recognise. The earthquakes half
 > still delivers in full. The shared loading reducer now treats an explicitly
-> declared missing optional key as a configured terminal state rather than a
-> failed multi-layer mission, so the global chip completes without showing
-> `LOAD FAILED`. A genuine lifecycle or fetch failure still retains failure
-> priority.
+> declared missing optional key as its own terminal state rather than a
+> failed multi-layer mission, so the global chip ends `KEY REQUIRED` (amber)
+> instead of `LOAD FAILED`, on the first load and on every refresh. A genuine
+> lifecycle or fetch failure still retains failure priority.
 >
 > **Acceptance changed with that ruling (2026-08-23).** `qa-firstrun` no longer
 > asserts "a keyless Environmental never shows a failure chip" — that stopped
@@ -4504,12 +4506,13 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   specific error or availability state. The shared presentation is delayed to
 >   avoid flashes, visible outside the rails, and retained in
 >   Cockpit. One continuous overlapping load interval retains the strongest
->   terminal outcome (`failed`, then `cancelled`, then `complete`) until every
->   participant settles, so a later success cannot mask an earlier failure.
->   A participating producer's terminal error, unavailable status, or
->   key-required state also outranks generic completion without requiring a
+>   terminal outcome (`failed`, then `key required`, then `cancelled`, then
+>   `complete`) until every participant settles, so a later success cannot
+>   mask an earlier failure. A participating producer's terminal error or
+>   unavailable status also outranks generic completion without requiring a
 >   separate manager failure event; AIS first-connect expiry therefore ends as
->   `LOAD FAILED`, not `LOAD COMPLETE`.
+>   `LOAD FAILED`, not `LOAD COMPLETE`. A producer whose only problem is a
+>   missing provider key (`stats.keyRequired`) ends the batch `KEY REQUIRED`.
 >   Slow disable work is labeled as turning live data off rather than
 >   as a completed load. Street Traffic's dedicated sync chip shows genuine
 >   work and one bounded completion; steady TomTom coverage, including 0%, does

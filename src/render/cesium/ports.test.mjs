@@ -507,26 +507,40 @@ test('suspend stops the loop at once and resumes it; target fps caps it', () => 
   ports.dispose();
 });
 
-test('with an idle rate, idle ticks at it and anything held draws at the display rate', () => {
+test('the quality cap and the rate setTargetFps asks for draw at the lower, and neither overwrites the other', () => {
+  const { widget } = tickingWidget();
+  const ports = createCesiumPorts(widget, { capabilities: all });
+  assert.equal(ports.quality.get().targetFps, 0, 'no cap by default');
+  ports.quality.set({ targetFps: 30 });
+  ports.frame.setTargetFps(60);
+  assert.equal(widget.targetFrameRate, 30, 'the cap is lower');
+  ports.frame.setTargetFps(0);
+  assert.equal(widget.targetFrameRate, 30, 'the cap holds at the display rate');
+  assert.equal(ports.quality.get().targetFps, 30, 'the cap reads back');
+  ports.frame.setTargetFps(24);
+  assert.equal(widget.targetFrameRate, 24, 'the asked rate is lower');
+  ports.quality.set({ targetFps: 0 });
+  assert.equal(widget.targetFrameRate, 24, 'cap lifted');
+  ports.dispose();
+});
+
+test('the loop says when its first hold is taken and its last released, and leaves its rate alone', () => {
   const { widget } = tickingWidget();
   widget.targetFrameRate = 60;
-  const ports = createCesiumPorts(widget, { capabilities: all, idleFps: 60 });
-  assert.equal(widget.targetFrameRate, 60, 'idle: the idle rate');
-  assert.equal(ports.frame.diagnostics().targetFps, 0, 'no cap of its own');
-  const release = ports.frame.holdContinuous('flights');
-  assert.equal(widget.targetFrameRate, undefined, 'held: the display rate');
-  release();
-  assert.equal(widget.targetFrameRate, 60);
-  // A cap holds while held, and idle ticks at the lower of the two.
-  ports.frame.setTargetFps(30);
-  assert.equal(widget.targetFrameRate, 30);
-  const again = ports.frame.holdContinuous('flights');
-  assert.equal(widget.targetFrameRate, 30);
-  ports.frame.setTargetFps(120);
-  assert.equal(widget.targetFrameRate, 120);
-  again();
-  assert.equal(widget.targetFrameRate, 60);
-  assert.equal(ports.frame.diagnostics().targetFps, 120);
+  const ports = createCesiumPorts(widget, { capabilities: all });
+  assert.equal(ports.frame.diagnostics().targetFps, 60, 'the widget’s cap');
+  const heard = [];
+  const off = ports.frame.onHeldChange((held) => heard.push(held));
+  const flights = ports.frame.holdContinuous('flights');
+  const effects = ports.frame.holdContinuous('effects:animated');
+  flights();
+  assert.deepEqual(heard, [true], 'once for the first hold');
+  effects();
+  assert.deepEqual(heard, [true, false], 'once for the last release');
+  assert.equal(widget.targetFrameRate, 60, 'its rate is its caller’s');
+  off();
+  ports.frame.holdContinuous('flights')();
+  assert.deepEqual(heard, [true, false], 'heard no more once off');
   ports.dispose();
 });
 
