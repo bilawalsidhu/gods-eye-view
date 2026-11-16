@@ -11,5 +11,5 @@ resources:
 # base directly. See k8s/README.md.
 images:
   - name: ghcr.io/bilawalsidhu/gods-eye-view
-    newName: ghcr.io/OWNER/gods-eye-view
+    newName: ghcr.io/bilawalsidhu/gods-eye-view
     newTag: latest
