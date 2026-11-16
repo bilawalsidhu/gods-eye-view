@@ -723,7 +723,7 @@ DATA_SOURCES.md lists for it. The Nepal story carries the event pack's own
 facts and sources (Vantor imagery and the GeoPera reconstruction, CC BY-NC
 4.0), and its key moments are the chapters that show them. Topic chips and
 region choices are the ones the listed stories carry. Closing Stories after
-a story played puts AUTHORING's own selection back (usually none);
+a story played puts AUTHORING's own selection back;
 Open in GEV leaves the story's scene selected there. Entering Stories
 cancels in-flight Authoring work before it captures the view it will
 restore. Dragging the timeline previews the time, and releasing
@@ -2294,22 +2294,19 @@ native double-click rename. Replacing rows revokes their old listeners. Disposal
 late file and failed-action completions cannot update removed presentation.
 
 The panel is titled Authoring and is laid out in four labelled steps: SCENE
-(the name of the scene being edited, read-only on its own row, or "No scene
-yet"; then NEW SCENE and DELETE), SHOTS (+ CAPTURE SHOT, UPDATE SHOT, the
-numbered shot list and a select/rename hint), PREVIEW (PLAY, STOP, NEXT) and
-SAVE & SHARE (a row of Stories tag chips; the thumbnail preview, CAPTURE
-THUMBNAIL and SAVE TO STORIES on one row; then EXPORT, IMPORT, RUN LOG, then
-the EDIT DETAILS / SHARE SCENE row). There is no scene picker, and on load no
-scene is selected: the panel reads "No scene yet" with an empty shot list. The
-built-in scenes stay in the project, where Stories plays them, but are never
-selected on their own. A scene becomes current through NEW SCENE, through
-CAPTURE SHOT with no scene (which asks for a name as NEW SCENE does, creates
-the scene and captures into it; the director's `captureShot()` names it
-"Scene N" itself), or when it is selected elsewhere (Stories' "Open in GEV"
-calls `SceneDirector.selectShot`), and the name follows that selection.
-Deleting the current scene goes back to no scene. An IMPORT keeps the scene
-being edited when the file still has it, else selects the file's first scene
-that is not a built-in one, else none. Playback still moves the selection to
+(picker on its own row listing every scene in the project, NEW SCENE, DELETE),
+SHOTS (+ CAPTURE SHOT, UPDATE SHOT, the numbered shot list and a select/rename
+hint), PREVIEW (PLAY, STOP, NEXT) and SAVE & SHARE (a row of Stories tag chips;
+the thumbnail preview, CAPTURE THUMBNAIL and SAVE TO STORIES on one row; then
+EXPORT, IMPORT, RUN LOG, then the EDIT DETAILS / SHARE SCENE row). On load the
+project's first scene and its first shot are selected, and deleting the
+selected scene selects the first scene again. Stories' "Open in GEV" selects a
+scene and shot through `SceneDirector.selectShot`, and the picker follows.
+With no scene at all (an imported empty project), CAPTURE SHOT asks for a name
+as NEW SCENE does, creates the scene and captures into it; the director's
+`captureShot()` names it "Scene N" itself. An IMPORT keeps the scene being
+edited when the file still has it, else selects the file's first scene that is
+not a built-in one, else its first scene. Playback still moves the selection to
 the shot it plays, as before.
 SAVE TO STORIES marks the scene as published to the Stories page and then reads
 REMOVE FROM STORIES, which clears the mark; the status line confirms either.

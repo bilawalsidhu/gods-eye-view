@@ -37,7 +37,7 @@ function fixture() {
   const byId = (id) => document.getElementById(id);
   const elements = {
     panel: byId('scene-panel'),
-    name: byId('scene-name'),
+    select: byId('scene-select'),
     new: byId('scene-new-btn'),
     delete: byId('scene-delete-btn'),
     capture: byId('scene-capture-btn'),
@@ -80,6 +80,7 @@ function fixture() {
   const calls = [];
   const actions = Object.fromEntries(
     [
+      'selectScene',
       'selectShot',
       'renameShot',
       'create',
@@ -128,8 +129,8 @@ test('Scene controls render the supplied selection and running/download states',
   const f = fixture();
   try {
     await nextTick();
-    assert.equal(f.elements.name.textContent, '<Scene A>');
-    assert.equal(document.getElementById('scene-select'), null);
+    assert.equal(f.elements.select.children[0].textContent, '<Scene A>');
+    assert.equal(f.elements.select.value, 'scene-a');
     assert.equal(f.label().textContent, '<Shot A>');
     assert.equal(
       f.elements.shots.children[0].children[1].textContent,
@@ -410,7 +411,6 @@ test('the real director preserves a selected shot label for the following double
       },
     });
     director = new SceneDirector({ camera: { cancelFlight() {} } }, {}, {});
-    director.selectShot('scene-a');
     await nextTick();
     const label = f.label();
     label.click();
@@ -432,7 +432,7 @@ test('the real director preserves a selected shot label for the following double
   }
 });
 
-test('the real director names the scene it selects and saves it to Stories', async () => {
+test('the real director shows the scene it selects and saves it to Stories', async () => {
   const f = fixture();
   const previousStorage = globalThis.localStorage;
   let saved = null;
@@ -452,15 +452,12 @@ test('the real director names the scene it selects and saves it to Stories', asy
     });
     director = new SceneDirector({ camera: { cancelFlight() {} } }, {}, {});
     await nextTick();
-    // Nothing is selected on load.
-    assert.equal(f.elements.name.textContent, 'No scene yet');
+    // The first scene is selected on load, as before Stories.
+    assert.equal(f.elements.select.value, 'scene-a');
     assert.equal(
       f.elements.shots.querySelectorAll('.scene-shot-row').length,
-      0,
+      1,
     );
-    director.selectShot('scene-a');
-    await nextTick();
-    assert.equal(f.elements.name.textContent, '<Scene A>');
     assert.equal(f.elements.stories.textContent, 'SAVE TO STORIES');
     f.elements.stories.click();
     await nextTick();
@@ -468,10 +465,10 @@ test('the real director names the scene it selects and saves it to Stories', asy
     assert.equal(f.elements.status.textContent, 'Saved to Stories');
     assert.equal(f.elements.stories.textContent, 'REMOVE FROM STORIES');
 
-    // Stories' "Open in GEV" selects programmatically; the name follows.
+    // Stories' "Open in GEV" selects programmatically; the select follows.
     assert.equal(director.selectShot('scene-b'), true);
     await nextTick();
-    assert.equal(f.elements.name.textContent, 'Scene B');
+    assert.equal(f.elements.select.value, 'scene-b');
     assert.equal(f.elements.stories.textContent, 'SAVE TO STORIES');
     assert.equal(f.elements.stories.disabled, true);
 
@@ -555,22 +552,40 @@ test('a rename keeps typed text across republishing and ends with its scene', as
   }
 });
 
-test('the read-only scene name follows the selected scene', async () => {
+test('the scene select follows option renders, as before', async () => {
   const f = fixture();
   try {
     await nextTick();
     f.state.scenes.push({ id: 'scene-b', title: 'B', shots: [] });
-    f.state.selectedSceneId = 'scene-b';
     f.owner.renderSceneSelect();
     await nextTick();
-    assert.equal(f.elements.name.textContent, 'B');
-    assert.equal(f.elements.name.classList.contains('scene-name-empty'), false);
-    f.state.scenes = [];
-    f.state.selectedSceneId = null;
+    f.state.selectedSceneId = 'scene-b';
     f.owner.renderShotList();
     await nextTick();
-    assert.equal(f.elements.name.textContent, 'No scene yet');
-    assert.equal(f.elements.name.classList.contains('scene-name-empty'), true);
+    assert.equal(f.elements.select.value, 'scene-a');
+    f.owner.renderSceneSelect();
+    await nextTick();
+    assert.equal(f.elements.select.value, 'scene-b');
+  } finally {
+    f.restore();
+  }
+});
+
+test('an option render restores the published scene after a local pick', async () => {
+  const f = fixture();
+  try {
+    f.state.scenes.push({ id: 'scene-b', title: 'B', shots: [] });
+    f.owner.renderSceneSelect();
+    await nextTick();
+    assert.equal(f.elements.select.value, 'scene-a');
+    // The person picks B; the owner re-renders the shot list only.
+    f.elements.select.value = 'scene-b';
+    f.owner.renderShotList();
+    await nextTick();
+    // Something reloads A and renders the options with the same choice.
+    f.owner.renderSceneSelect();
+    await nextTick();
+    assert.equal(f.elements.select.value, 'scene-a');
   } finally {
     f.restore();
   }
@@ -777,7 +792,6 @@ test('CAPTURE SHOT with no scene asks for a name, creates the scene, then captur
     f.owner.renderSceneSelect();
     f.owner.setButtons(false);
     await nextTick();
-    assert.equal(f.elements.name.textContent, 'No scene yet');
     let asked = 0;
     window.prompt = () => (asked++ ? null : 'Harbour');
     f.elements.capture.click();
@@ -862,7 +876,7 @@ test('Stories tag chips and THUMBNAIL follow the current scene', async () => {
   }
 });
 
-test('authoring can reopen a saved empty draft and capture from an empty panel', async () => {
+test('after a reload, authoring picks any scene, and PLAY and NEXT work', async () => {
   const f = fixture();
   const previousStorage = globalThis.localStorage;
   let saved = null;
@@ -879,6 +893,11 @@ test('authoring can reopen a saved empty draft and capture from an empty panel',
             scenes: [
               ...f.state.scenes,
               { id: 'empty-draft', title: 'Empty draft', shots: [] },
+              {
+                id: 'scene-c',
+                title: 'Scene C',
+                shots: [{ id: 'shot-c', title: 'Shot C' }],
+              },
             ],
           }),
         setItem: (_key, value) => {
@@ -901,18 +920,59 @@ test('authoring can reopen a saved empty draft and capture from an empty panel',
       },
       { getAll: () => [], getLayerParams: () => null },
     );
+    const runs = [];
+    director.startScene = (id) => runs.push(['start', id]);
+    director.runNextScene = () => runs.push(['next']);
     await nextTick();
-    assert.equal(f.elements.name.textContent, 'No scene yet');
-    const drafts = document.getElementById('empty-scene-select');
-    assert.ok(drafts);
-    drafts.value = 'empty-draft';
-    drafts.dispatchEvent(new Event('change'));
+    // The first scene and its first shot are selected, as before a reload.
+    assert.deepEqual(director.selection(), {
+      sceneId: 'scene-a',
+      shotId: 'shot-a',
+    });
+    assert.equal(f.elements.start.disabled, false);
+    assert.equal(f.elements.next.disabled, false);
+    f.elements.start.click();
+    f.elements.next.click();
+    assert.deepEqual(runs, [['start', 'scene-a'], ['next']]);
+
+    // The select lists every scene, with shots or not.
+    assert.deepEqual(
+      [...f.elements.select.options].map(({ value }) => value),
+      ['scene-a', 'empty-draft', 'scene-c'],
+    );
+    f.elements.select.value = 'scene-c';
+    f.elements.select.dispatchEvent(new Event('change'));
     await nextTick();
-    assert.equal(f.elements.name.textContent, 'Empty draft');
+    assert.deepEqual(director.selection(), {
+      sceneId: 'scene-c',
+      shotId: 'shot-c',
+    });
+
+    f.elements.select.value = 'empty-draft';
+    f.elements.select.dispatchEvent(new Event('change'));
+    await nextTick();
+    assert.equal(director.selection().sceneId, 'empty-draft');
     assert.equal(
       director.draftScenes().some(({ id }) => id === 'empty-draft'),
       false,
     );
+    // CAPTURE SHOT adds to the picked scene without asking for a name.
+    window.prompt = () => {
+      throw new Error('no name is asked for');
+    };
+    f.elements.capture.click();
+    await nextTick();
+    const draft = saved.scenes.find(({ id }) => id === 'empty-draft');
+    assert.equal(draft.shots.length, 1);
+    assert.equal(f.elements.thumb.disabled, false);
+    f.chips()[0].click();
+    await nextTick();
+    assert.deepEqual(
+      saved.scenes.find(({ id }) => id === 'empty-draft').storyTags,
+      ['Floods'],
+    );
+
+    // Deleting it selects the first scene again.
     window.confirm = () => true;
     f.elements.delete.click();
     await nextTick();
@@ -920,29 +980,8 @@ test('authoring can reopen a saved empty draft and capture from an empty panel',
       saved.scenes.some(({ id }) => id === 'empty-draft'),
       false,
     );
-    window.prompt = () => 'Harbour';
-    f.elements.capture.click();
-    await nextTick();
-    assert.equal(f.elements.name.textContent, 'Harbour');
-    assert.equal(saved.scenes.at(-1).title, 'Harbour');
-    assert.equal(saved.scenes.at(-1).shots.length, 1);
-    assert.equal(
-      f.elements.shots.querySelectorAll('.scene-shot-row').length,
-      1,
-    );
-    assert.equal(f.elements.thumb.disabled, false);
-
-    f.chips()[0].click();
-    await nextTick();
-    assert.deepEqual(saved.scenes.at(-1).storyTags, ['Floods']);
-    assert.equal(f.chips()[0].getAttribute('aria-pressed'), 'true');
-
-    // Deleting it goes back to no scene.
-    window.confirm = () => true;
-    f.elements.delete.click();
-    await nextTick();
-    assert.equal(f.elements.name.textContent, 'No scene yet');
-    assert.equal(f.elements.delete.disabled, true);
+    assert.equal(f.elements.select.value, 'scene-a');
+    assert.equal(director.selection().sceneId, 'scene-a');
   } finally {
     await director?.destroy();
     Object.defineProperty(globalThis, 'localStorage', {

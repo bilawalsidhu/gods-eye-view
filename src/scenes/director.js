@@ -189,10 +189,8 @@ export class SceneDirector {
     this._lastRunJson = '';
 
     this._project = this._loadProject();
-    // Authoring starts with no scene: the built-in scenes stay in the project
-    // (Stories plays them) but only NEW SCENE or selectShot makes one current.
-    this._selectedSceneId = null;
-    this._selectedShotId = null;
+    this._selectedSceneId = this._project.scenes[0]?.id || null;
+    this._selectedShotId = this._project.scenes[0]?.shots[0]?.id || null;
     /** @type {string|null} Scene whose layer state most recently landed. */
     this._loadedSceneId = null;
 
@@ -234,9 +232,6 @@ export class SceneDirector {
           }
         }
       }
-      // Upgrading a pack selects its scene; on load nothing is selected.
-      this._selectedSceneId = null;
-      this._selectedShotId = null;
     }
     this._initUI();
     // A status the director wrote itself follows the language; one it was
@@ -492,16 +487,12 @@ export class SceneDirector {
     });
   }
 
-  /**
-   * Keep the selection on an existing scene, or on none, and present the
-   * scene's name.
-   */
+  /** Rebuild the scene dropdown options and sync the selected value. */
   _renderSceneSelect() {
     if (
       !this._project.scenes.some((scene) => scene.id === this._selectedSceneId)
     ) {
-      this._selectedSceneId = null;
-      this._selectedShotId = null;
+      this._selectedSceneId = this._project.scenes[0]?.id || null;
     }
     this._publish({ type: 'scene-options-changed' });
   }
@@ -564,10 +555,7 @@ export class SceneDirector {
     this._publish({ type: 'scene-created', scene });
   }
 
-  /**
-   * Delete the currently selected scene after user confirmation and select
-   * none. Resets to defaults if empty.
-   */
+  /** Delete the currently selected scene after user confirmation. Resets to defaults if empty. */
   _deleteSelectedScene() {
     const scene = this._getSelectedScene();
     if (!scene) return;
@@ -580,9 +568,8 @@ export class SceneDirector {
       this._project = createDefaultProject();
     }
 
-    // Authoring goes back to no scene.
-    this._selectedSceneId = null;
-    this._selectedShotId = null;
+    this._selectedSceneId = this._project.scenes[0]?.id || null;
+    this._selectedShotId = this._project.scenes[0]?.shots[0]?.id || null;
     this._saveProject();
     this._publish({ type: 'scene-deleted', scene });
     if (scene.stories) this._publish({ type: 'stories-changed' });
@@ -2001,14 +1988,6 @@ export class SceneDirector {
    * @returns {boolean} False when the scene is not installed.
    */
   selectShot(sceneId, shotId = null) {
-    // No scene: AUTHORING goes back to "No scene yet".
-    if (sceneId == null) {
-      this._selectedSceneId = null;
-      this._selectedShotId = null;
-      this._renderSceneSelect();
-      this._renderShotList();
-      return true;
-    }
     const scene = this._project.scenes.find(({ id }) => id === sceneId);
     if (!scene) return false;
     this._selectedSceneId = scene.id;
@@ -2543,12 +2522,13 @@ export class SceneDirector {
       );
       this._storageReadError = null;
       // Keep authoring on the named or current scene, else the first scene
-      // that is not a built-in one, else none.
+      // that is not a built-in one, else the first scene.
       const builtIn = new Set(SCENE_RECIPES.map(({ id }) => id));
       const selected =
         project.scenes.find(({ id }) => id === selection?.sceneId) ||
         project.scenes.find(({ id }) => id === this._selectedSceneId) ||
         project.scenes.find(({ id }) => !builtIn.has(id)) ||
+        project.scenes[0] ||
         null;
       this._selectedSceneId = selected?.id ?? null;
       this._selectedShotId =

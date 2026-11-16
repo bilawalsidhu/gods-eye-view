@@ -96,7 +96,7 @@ try {
     () =>
       !document.body.classList.contains('stories-mode') &&
       document
-        .querySelector('#scene-name')
+        .querySelector('#scene-select option:checked')
         ?.textContent.includes('Global Flights Radar'),
   );
   const after = await pose();

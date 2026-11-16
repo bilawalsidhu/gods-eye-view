@@ -64,7 +64,7 @@ export class SceneControls {
         this.run(this.actions.reviewImport ? 'reviewImport' : 'import', file),
     });
     this.presentPanel({});
-    // Scene and shot titles are shown translated; the scene name and the list
+    // Scene and shot titles are shown translated; the select and the list
     // show them again.
     this.offLocale = onLocaleChange(() => {
       this.presentPanel({ playLabel: t('PLAY', { context: 'scene' }) });
@@ -173,9 +173,9 @@ export class SceneControls {
     }
   }
 
-  /** Publish the project to the scene name and the SceneShotList view. */
+  /** Publish the project to the SceneOptions and SceneShotList views. */
   renderSceneSelect() {
-    if (!this.destroyed) this.store.publish(this.read());
+    if (!this.destroyed) this.store.publishOptions(this.read());
   }
 
   /** NEW SCENE: ask for a name and create the scene. @returns {boolean} */

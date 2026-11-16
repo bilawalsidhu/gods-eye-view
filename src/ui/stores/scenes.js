@@ -3,7 +3,7 @@ import { computed, markRaw, shallowRef } from 'vue';
 
 /**
  * @typedef {object} SceneRowHandlers
- * @property {(sceneId: string) => void} selectScene
+ * @property {(sceneId: string) => void} selectScene The select's choice.
  * @property {(shotId: string) => void} select
  * @property {(sceneId: string, shotId: string, title: string) => void} rename
  * @property {(sceneId: string, shotId: string) => void} load
@@ -24,7 +24,12 @@ export const useSceneStore = defineStore('gev-scenes', () => {
   const scenes = shallowRef(markRaw([]));
   const selectedSceneId = shallowRef(null);
   const selectedShotId = shallowRef(null);
-  /** The scene being edited, whose name the panel shows, or null. */
+  // The select's choice, updated only when its options are rendered.
+  const listedSceneId = shallowRef(null);
+  // Counts option renders: each one re-applies the select's choice, which
+  // the person may have changed since.
+  const listedRevision = shallowRef(0);
+  /** The selected scene, whose Stories details the panel shows, or null. */
   const currentScene = computed(
     () =>
       scenes.value.find((scene) => scene.id === selectedSceneId.value) ?? null,
@@ -64,6 +69,13 @@ export const useSceneStore = defineStore('gev-scenes', () => {
     selectedShotId.value = state.selectedShotId ?? null;
   }
 
+  /** Publish the project and the select's choice. */
+  function publishOptions(state) {
+    publish(state);
+    listedSceneId.value = state.selectedSceneId ?? null;
+    listedRevision.value++;
+  }
+
   /** @param {string|null} id */
   function selectShot(id) {
     selectedShotId.value = id ?? null;
@@ -77,7 +89,7 @@ export const useSceneStore = defineStore('gev-scenes', () => {
     if (token !== owner) return;
     owner = null;
     attached.value = false;
-    publish({});
+    publishOptions({});
   }
 
   /** @returns {boolean} Whether `token` is the owner presenting now. */
@@ -98,12 +110,15 @@ export const useSceneStore = defineStore('gev-scenes', () => {
     scenes,
     selectedSceneId,
     selectedShotId,
+    listedSceneId,
+    listedRevision,
     currentScene,
     attached,
     panel,
     publishPanel,
     attach,
     publish,
+    publishOptions,
     selectShot,
     detach,
     owns,

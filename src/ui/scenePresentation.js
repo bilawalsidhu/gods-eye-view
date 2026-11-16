@@ -81,6 +81,7 @@ export function sceneButtonsDisabled(
   for (const name of [
     'start',
     'next',
+    'select',
     'new',
     'delete',
     'capture',

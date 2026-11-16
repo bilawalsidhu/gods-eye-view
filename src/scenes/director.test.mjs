@@ -732,9 +732,8 @@ test('a legacy three-shot Nepal browser project bootstraps to the current 25-sho
     for (const shot of scene.shots.slice(0, 8)) {
       assert.equal(scene.appliedShotPacks[0].shotBindings[shot.title], shot.id);
     }
-    // The upgrade selects nothing: authoring starts with no scene.
-    assert.equal(director._selectedSceneId, null);
-    assert.equal(director._selectedShotId, null);
+    assert.equal(director._selectedSceneId, scene.id);
+    assert.equal(director._selectedShotId, scene.shots[0].id);
   } finally {
     restore();
   }
@@ -2174,9 +2173,9 @@ test('selectShot selects a scene and shot for authoring, falling back to the fir
     });
     assert.equal(director.hasScene(scene.id), true);
     assert.equal(director.hasScene('no-such-scene'), false);
-    // No scene: back to "No scene yet".
-    assert.equal(director.selectShot(null), true);
-    assert.deepEqual(director.selection(), { sceneId: null, shotId: null });
+    // No scene id changes nothing.
+    assert.equal(director.selectShot(null), false);
+    assert.equal(director._selectedSceneId, scene.id);
   } finally {
     restore();
   }
@@ -2391,22 +2390,20 @@ test('deleting a scene or its last shot in Stories publishes stories-changed', (
   }
 });
 
-test('authoring selects no scene on load, with or without a saved project', () => {
+test('authoring selects the first scene and shot on load, with or without a saved project', () => {
   for (const options of [{}, { storage: {} }]) {
     const { director, restore } = makeDirector(options);
     try {
-      assert.ok(
-        director._project.scenes.length > 0,
-        'the scenes stay in the project',
-      );
-      assert.equal(director._selectedSceneId, null);
-      assert.equal(director._selectedShotId, null);
-      assert.equal(director._getSelectedScene(), null);
+      const [first] = director._project.scenes;
+      assert.ok(first, 'the project has scenes');
+      assert.equal(director._selectedSceneId, first.id);
+      assert.equal(director._selectedShotId, first.shots[0]?.id ?? null);
+      director._selectedSceneId = 'gone';
       director._renderSceneSelect();
       assert.equal(
         director._selectedSceneId,
-        null,
-        'nothing falls back to the first scene',
+        first.id,
+        'a missing scene falls back to the first scene',
       );
     } finally {
       restore();
@@ -2417,6 +2414,9 @@ test('authoring selects no scene on load, with or without a saved project', () =
 test('capture with no scene starts a new scene and captures into it', () => {
   const { director, restore } = makeDirector();
   try {
+    // An imported empty project leaves nothing selected.
+    director._selectedSceneId = null;
+    director._selectedShotId = null;
     const changes = recordChanges(director);
     const before = director._project.scenes.length;
     director.captureShot();
@@ -2442,6 +2442,7 @@ test('capture with no scene and no camera creates nothing', () => {
   const { director, styleManager, restore } = makeDirector();
   try {
     styleManager.getCameraState = () => null;
+    director._selectedSceneId = null;
     const before = director._project.scenes.length;
     director.captureShot();
     assert.equal(director._project.scenes.length, before);
@@ -2451,15 +2452,15 @@ test('capture with no scene and no camera creates nothing', () => {
   }
 });
 
-test('deleting the current scene selects none', () => {
+test('deleting the current scene selects the first scene', () => {
   const project = structuredClone(PROJECT_FIXTURE);
   project.scenes.push({ id: 'scene-2', title: 'Second', shots: [] });
   const { director, restore } = makeDirector({ project });
   try {
     director.selectShot('scene-2');
     director._deleteSelectedScene();
-    assert.equal(director._selectedSceneId, null);
-    assert.equal(director._selectedShotId, null);
+    assert.equal(director._selectedSceneId, 'scene-1');
+    assert.equal(director._selectedShotId, 'shot-a');
     assert.deepEqual(
       director._project.scenes.map(({ id }) => id),
       ['scene-1'],
@@ -2469,7 +2470,7 @@ test('deleting the current scene selects none', () => {
   }
 });
 
-test('an import keeps the current scene, else picks a non-built-in scene, else none', async () => {
+test('an import keeps the current scene, else picks a non-built-in scene, else the first', async () => {
   const { director, restore } = makeDirector();
   try {
     const exported = stringifySceneDocument(director._project);
@@ -2494,8 +2495,8 @@ test('an import keeps the current scene, else picks a non-built-in scene, else n
     );
     assert.equal(
       director._selectedSceneId,
-      null,
-      'a built-in scene is never picked',
+      SCENE_RECIPES[0].id,
+      'a built-in scene only when there is nothing else',
     );
   } finally {
     restore();

@@ -48,7 +48,9 @@ try {
   await page.click('[data-rail-item="scene-panel"]');
   await page.click('#scene-new-btn');
   await page.waitForFunction(
-    () => document.querySelector('#scene-name')?.textContent === 'QA Scene',
+    () =>
+      document.querySelector('#scene-select option:checked')?.textContent ===
+      'QA Scene',
   );
   check(
     'New creates and selects a persisted empty scene',
@@ -366,7 +368,7 @@ try {
   await page.screenshot({ path: path.join(shots, 'narrow.png') });
   check(
     'Scene controls stay inside the narrow viewport',
-    await page.$eval('#scene-name', (element) => {
+    await page.$eval('#scene-select', (element) => {
       const rect = element.getBoundingClientRect();
       return rect.width > 0 && rect.left >= 0 && rect.right <= innerWidth;
     }),
@@ -389,15 +391,14 @@ try {
     () =>
       !window.__godsEyeView.sceneDirector._project.scenes.some(
         (item) => item.title === 'QA Scene',
-      ) && document.querySelector('#scene-name.scene-name-empty'),
+      ),
   );
   check(
-    'Deleting the final scene restores the built-in recipes and clears Authoring',
+    'Deleting the final scene restores the built-in recipes',
     await page.evaluate(
       () =>
         window.__godsEyeView.sceneDirector._project.scenes.length > 0 &&
-        window.__godsEyeView.sceneDirector._getSelectedScene() === null &&
-        document.querySelector('#scene-name.scene-name-empty') !== null,
+        document.querySelectorAll('#scene-select option').length > 0,
     ),
   );
   check(

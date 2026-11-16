@@ -3,6 +3,6 @@
   from AUTHORING, or drafts) with a pin each and an idle tour between them; a
   story plays with chapters, key moments and its data sources, and Close puts
   the person's view, clock and layers back. Play after a pause, a seek or a
-  paused story link goes on from that exact moment. AUTHORING starts
-  with no scene and gains THUMBNAIL, topic tags and SAVE TO STORIES
+  paused story link goes on from that exact moment. AUTHORING gains
+  THUMBNAIL, topic tags and SAVE TO STORIES
   (Manjunath, @manjunath22466; Kevin Rajan, @kvnloo; #1724).

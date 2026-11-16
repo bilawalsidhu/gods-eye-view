@@ -92,8 +92,8 @@ test('SCENES actions stay on one line in English', () => {
       .length,
     0,
   );
-  const [name] = unguardedRules(css('scenes.css'), '#scene-name');
-  assert.equal(declaration(name, 'white-space'), undefined);
+  const [select] = unguardedRules(css('scenes.css'), '#scene-select');
+  assert.equal(declaration(select, 'white-space'), undefined);
 });
 
 test('Display and parameter rows keep their English layout', () => {
