@@ -898,6 +898,41 @@ and touch screens, while the rails are hidden (clean view, recording), and it
 follows the rails' sides in a right-to-left language. On a phone, Visual is in
 the More sheet with the dock's Visual Presets, as before.
 
+## Context panel — November 16, 2026
+
+Context leads with one card for whatever is picked. A click on anything a
+layer can identify (`src/ui/entityContextBridge.js`, through
+`src/data/pickedContext.js`) opens its card (`src/ui/stores/entityCard.js`,
+`src/ui/views/panels/EntityCard.vue`): the item's facts from its record, a
+route with progress for a flight, an altitude graph, the weather, local
+time and news where it is, and the flights, vessels, hazards and warnings
+within the radius the panel sets (25 to 2,500 km). Aircraft, satellites and
+vessels are followed as they are picked; the card says Following only while
+the camera follows the card's own item, and closing the card lets go.
+Aircraft and satellites offer Enter Cockpit and Enter orbital view; transit
+vehicles show their motion and fleet. A camera's card shows its latest frame
+from the CCTV panel.
+
+With nothing picked, the panel describes the view
+(`src/ui/views/panels/ViewContext.vue`): the place under the middle of the
+screen and the towns around it from the Wikidata cities pack, the height,
+the local solar time and daylight, what is in view per layer with live
+counts and breakdowns, and the same weather and hazards. A search field in
+the header narrows every list. Expanded, Context becomes a full-height
+column at the right edge (the left edge right to left) and the map credits
+stop short of it.
+
+The Contacts and Space Missions modes and the Radio strip stay in the
+panel's main tab, below the card. When Contacts follows the aircraft the
+card shows, its list sits inside the card. Turning Radio or Launches on
+opens Context. The Properties tab holds the Labels and 3D aircraft
+settings from Visual while a layer they act on is on.
+
+Context does its reading only while its panel is open. Weather and news
+come through the regional brief service; earthquakes, tropical storms and
+fire perimeters come from the same feeds as their layers, cached for five
+minutes; satellite fire hits only while the FIRMS layer is on.
+
 ## Wikidata cities pack — November 15, 2026
 
 `src/data/local_data/wikidata_cities/cities.json` bundles 31,827 settlements of
