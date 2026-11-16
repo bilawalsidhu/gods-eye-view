@@ -12,7 +12,11 @@ import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
 import { useStoriesStore } from '../stores/stories.js';
 import { GEV_LOGO_SYMBOL } from '../../stories/gevLogo.js';
-import { creditPlacement, entryPlacement } from '../../stories/format.js';
+import {
+  cornerControls,
+  creditPlacement,
+  entryPlacement,
+} from '../../stories/format.js';
 import { guardStoriesKeyboard } from '../../stories/keyboard.js';
 
 // The screens, their styles and the story data load with Stories (see
@@ -36,15 +40,15 @@ const reduceMotion = () =>
   globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 // ── Entry: in GEV's top-right row, left of what sits in the corner ──
-// GEV has its ACTIVE STYLE readout there; an element placed in that corner
-// (#account-control, with or beside the readout) can come after Stories mounts.
-const CORNER = ['style-indicator', 'account-control'];
+// GEV has its ACTIVE STYLE readout there; an element marked with
+// data-stories-corner (with or beside the readout) can come after Stories
+// mounts (cornerControls).
 // GEV's phone layout shows neither; the button then sits under this column.
 const COLUMN = 'corner-actions';
 const entry = ref({ top: 14, right: 14 });
 function placeEntry() {
   entry.value = entryPlacement(
-    CORNER.map((id) => document.getElementById(id)?.getBoundingClientRect()),
+    cornerControls(document).map((el) => el.getBoundingClientRect()),
     innerWidth,
     document.getElementById(COLUMN)?.getBoundingClientRect() ?? null,
   );
@@ -66,15 +70,17 @@ function watchCorner() {
     });
   }
   if (globalThis.ResizeObserver) cornerObserver ??= new ResizeObserver(placeEntry);
-  for (const id of [...CORNER, COLUMN]) {
-    const el = document.getElementById(id);
+  for (const el of [
+    ...cornerControls(document),
+    document.getElementById(COLUMN),
+  ]) {
     if (el && cornerObserver && !observed.has(el)) {
       cornerObserver.observe(el);
       observed.add(el);
     }
   }
   // Keep looking for a while for a control that mounts late.
-  if (observed.size < CORNER.length + 1 && ++entryTries < 20)
+  if (++entryTries < 20)
     entryTimer = setTimeout(watchCorner, 1000);
 }
 

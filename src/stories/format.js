@@ -31,9 +31,23 @@ export function creditPlacement({ map, feed, width, height }) {
 }
 
 /**
+ * The controls in GEV's top-right corner: the ACTIVE STYLE readout
+ * (`#style-indicator`) and any element marked with `data-stories-corner`.
+ * @param {Document|Element} root Where to look.
+ * @returns {Element[]}
+ */
+export function cornerControls(root) {
+  return [
+    root.querySelector('#style-indicator'),
+    ...root.querySelectorAll('[data-stories-corner]'),
+  ].filter(Boolean);
+}
+
+/**
  * Where the Stories button sits: just left of the leftmost visible control
- * in GEV's top-right corner — the ACTIVE STYLE readout, or an element placed
- * in that corner (with or beside the readout) — top-aligned with it.
+ * in GEV's top-right corner — the ACTIVE STYLE readout, or an element marked
+ * with `data-stories-corner` (with or beside the readout) — top-aligned with
+ * it.
  * Where none of those shows (GEV's phone layout, whose top row of icon
  * buttons spans the corner), it goes icon-only just under the right-hand
  * column of corner actions, aligned with its right edge.

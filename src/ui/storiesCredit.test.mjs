@@ -1,7 +1,12 @@
+import '../testSupport/registerDom.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { creditPlacement, entryPlacement } from '../stories/format.js';
+import {
+  cornerControls,
+  creditPlacement,
+  entryPlacement,
+} from '../stories/format.js';
 
 const css = readFileSync(
   new URL('./styles/stories.css', import.meta.url),
@@ -120,6 +125,20 @@ test('the measured place keeps the credit inside the map and on screen', () => {
   assert.match(view, /root\.removeProperty\('--gs-credit-left'\)/);
 });
 
+test('the corner controls are the readout and elements marked data-stories-corner', () => {
+  const root = document.createElement('div');
+  assert.deepEqual(cornerControls(root), [], 'nothing there yet');
+  const readout = root.appendChild(document.createElement('div'));
+  readout.id = 'style-indicator';
+  const other = root.appendChild(document.createElement('div'));
+  assert.deepEqual(cornerControls(root), [readout], 'an unmarked element is not');
+  // A marked element added later counts on the next look.
+  const marked = root.appendChild(document.createElement('button'));
+  marked.setAttribute('data-stories-corner', '');
+  assert.deepEqual(cornerControls(root), [readout, marked]);
+  assert.ok(other);
+});
+
 test('the Stories button sits left of whatever is in the top-right corner', () => {
   const box = (left, top, width, height) => ({
     left,
@@ -134,7 +153,8 @@ test('the Stories button sits left of whatever is in the top-right corner', () =
     top: 24,
     right: 270,
   });
-  // An element placed beside the readout; the leftmost wins.
+  // An element marked with data-stories-corner beside the readout; the
+  // leftmost wins.
   assert.deepEqual(
     entryPlacement([box(1650, 24, 220, 60), box(1898, 22, 38, 38)], 1960),
     { top: 24, right: 320 },

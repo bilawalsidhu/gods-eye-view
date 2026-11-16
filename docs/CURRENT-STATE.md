@@ -780,8 +780,9 @@ Inside an inline embed Stories is not offered: the URL and history are the
 host's.
 
 The Stories button sits left of whatever holds GEV's top-right corner: the
-ACTIVE STYLE readout, or an element placed in that corner (`#account-control`,
-with or beside the readout). On GEV's phone layout,
+ACTIVE STYLE readout (`#style-indicator`), or an element marked with
+`data-stories-corner` (with or beside the readout; one added after Stories
+mounts is found within 20 s). On GEV's phone layout,
 where neither shows, it is icon-only under the corner-actions column
 (`#corner-actions`), aligned with its right edge. The first-visit popup
 is a labelled region that does not take focus. The story page's rail offers
