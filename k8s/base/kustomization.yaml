@@ -4,3 +4,12 @@ kind: Kustomization
 resources:
   - deployment.yaml
   - service.yaml
+
+# The base has no real image. OWNER is a placeholder: the base cannot deploy
+# until an overlay sets newName to an image you built (the docker-publish
+# workflow pushes ghcr.io/<owner>/<repo>). Deploy through an overlay, not this
+# base directly. See k8s/README.md.
+images:
+  - name: ghcr.io/OWNER/gods-eye-view
+    newName: ghcr.io/OWNER/gods-eye-view
+    newTag: latest
