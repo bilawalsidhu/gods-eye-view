@@ -745,7 +745,8 @@ export function createStoriesController({
   let downAt = null;
   // Whether the story was playing when the tap began: a camera move the
   // scene drives frame by frame stops on the press itself, before the tap
-  // ends, and that tap still means pause.
+  // ends, and that tap still means pause. The press is read in the capture
+  // phase, before the director's own listener can stop the run.
   let playingAtDown = false;
   const onDown = (e) => {
     downAt = [e.clientX, e.clientY];
@@ -768,7 +769,7 @@ export function createStoriesController({
       store.bigPlay = true;
     } else player.play();
   };
-  canvas.addEventListener('pointerdown', onDown);
+  canvas.addEventListener('pointerdown', onDown, true);
   canvas.addEventListener('pointerup', onUp);
 
   /** @returns {boolean} False when the camera is not free (Cockpit). */
@@ -1237,7 +1238,8 @@ export function createStoriesController({
       useInstalledScenes(null);
       removeEventListener('popstate', onPopState);
       removeEventListener('popstate', onLandingCapture, true);
-      canvas.removeEventListener('pointerdown', onDown);
+      canvas.removeEventListener('pointerdown', onDown, true);
+      canvas.removeEventListener('pointerup', onUp);
       canvas.removeEventListener('pointerdown', onExploreInput);
       canvas.removeEventListener('pointerup', onExploreInput);
       canvas.removeEventListener('pointercancel', onExploreInput);

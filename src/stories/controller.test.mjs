@@ -783,7 +783,24 @@ test('a story opened while the scene tears down is not undone by the late restor
 });
 
 test('a tap pauses a story whose camera move stopped on the press', async () => {
-  const { controller, store, director, canvas } = setup();
+  setActivePinia(createPinia());
+  history.replaceState(null, '', '/?x=1#v=2&lat=1');
+  const store = useStoriesStore();
+  const scene = fakeScene();
+  const { canvas } = scene;
+  // As in the app, the director listens for the press before Stories does,
+  // and stopping its run publishes a stopped clock at once.
+  canvas.addEventListener('pointerdown', () => {
+    store.playback = { ...store.playback, playing: false };
+  });
+  const director = fakeDirector();
+  const controller = createStoriesController({
+    viewer: scene.viewer,
+    director,
+    store,
+    clock: fakeClock(),
+  });
+  store.connect(controller, listStories());
   controller.openStory('gev:flights-radar');
   await tick(20);
   let starts = 0;
@@ -793,9 +810,7 @@ test('a tap pauses a story whose camera move stopped on the press', async () => 
   };
   store.playback = { ...store.playback, playing: true };
   canvas.dispatchEvent(new Event('pointerdown'));
-  // A camera move the scene drives frame by frame stops on the press, so the
-  // story already reads as stopped when the tap ends.
-  store.playback = { ...store.playback, playing: false };
+  assert.equal(store.playback.playing, false, 'the press stopped the run');
   canvas.dispatchEvent(new Event('pointerup'));
   await tick(20);
   assert.equal(starts, 0, 'the tap does not play it again');
