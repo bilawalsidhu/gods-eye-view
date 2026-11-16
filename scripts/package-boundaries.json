@@ -77,6 +77,19 @@
       "src/app/application.js",
       "src/ui/vueRuntime.js",
       "src/ui/views/index.js",
+      "src/ui/views/StoriesView.vue",
+      "src/ui/views/stories/StoryContext.vue",
+      "src/ui/views/stories/StoriesHeader.vue",
+      "src/ui/views/stories/ExploreScreen.vue",
+      "src/ui/views/stories/StoryScreen.vue",
+      "src/ui/views/stories/StoryRail.vue",
+      "src/ui/views/stories/StoryTimeline.vue",
+      "src/ui/stores/stories.js",
+      "src/ui/styles/stories.css",
+      "src/stories/format.js",
+      "src/stories/keyboard.js",
+      "src/stories/storyMeta.js",
+      "src/stories/gevLogo.js",
       "src/ui/views/CockpitView.vue",
       "src/ui/views/panels/CockpitProgress.vue",
       "src/cockpitProgress.js",
@@ -236,7 +249,8 @@
       "src/ui/kit/UiIcon.vue",
       "src/ui/stores/worldTime.js",
       "src/ui/views/panels/WorldTimeline.vue",
-      "src/ui/surfaceKeyboard.js"
+      "src/ui/surfaceKeyboard.js",
+      "src/scenes/storyTags.js"
     ],
     "external": ["vue", "pinia", "vue-i18n"]
   },
@@ -1655,7 +1669,9 @@
       "src/director/sharing/preview.js",
       "src/i18n/marker.js",
       "src/director/sharing/lifetime.js",
-      "src/director/authoring.js"
+      "src/director/authoring.js",
+      "src/scenes/storyTags.js",
+      "src/scenes/storyThumb.js"
     ],
     "external": []
   },
@@ -1786,7 +1802,9 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/scenes/storyTags.js",
+      "src/scenes/storyThumb.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n", "kdbush"]
   },
@@ -4116,6 +4134,24 @@
       "src/render/cesium/applicationViewer.js",
       "src/render/cesium/ctrlWheelZoom.js",
       "src/render/cesium/starrySky.js",
+      "src/stories/catalog.js",
+      "src/stories/format.js",
+      "src/stories/keyboard.js",
+      "src/stories/storyMeta.js",
+      "src/stories/gevLogo.js",
+      "src/stories/boot.js",
+      "src/stories/controller.js",
+      "src/stories/gevPlayer.js",
+      "src/stories/thumbs.js",
+      "src/ui/views/StoriesView.vue",
+      "src/ui/views/stories/StoryContext.vue",
+      "src/ui/views/stories/StoriesHeader.vue",
+      "src/ui/views/stories/ExploreScreen.vue",
+      "src/ui/views/stories/StoryScreen.vue",
+      "src/ui/views/stories/StoryRail.vue",
+      "src/ui/views/stories/StoryTimeline.vue",
+      "src/ui/stores/stories.js",
+      "src/ui/styles/stories.css",
       "src/sky/stars.js",
       "src/app/atmosphereCompat.js",
       "src/bloom.js",
@@ -5366,7 +5402,9 @@
       "src/layers/flights/placed.js",
       "src/data/placementProvider.js",
       "src/data/courseFromFixes.js",
-      "src/time/frameWait.js"
+      "src/time/frameWait.js",
+      "src/scenes/storyTags.js",
+      "src/scenes/storyThumb.js"
     ],
     "external": [
       "hls.js",

@@ -1,4 +1,7 @@
 import { onFollowChanged } from '../data/followed.js';
+import { bootStories, stopVoiceForStories } from '../stories/boot.js';
+import { t } from '../i18n/index.js';
+import { useStoriesStore } from '../ui/stores/stories.js';
 import { SceneDirector } from '../scenes/director.js';
 import { initAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
@@ -18,6 +21,7 @@ import { createLibraryBrowser } from '../ui/libraryBrowser.js';
 import { useDataLibraryStore } from '../ui/stores/dataLibrary.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
+import { isStoriesOpen } from '../voice/realtimeInputPolicy.js';
 import { installViews, isEmbeddedInline } from './embed.js';
 import {
   installScopeMask,
@@ -76,6 +80,26 @@ export function createApplicationTools({
     }),
   );
   onSceneDirector?.(sceneDirector);
+  // Stories: GEV scenes on this globe, from a Stories button. Its screens,
+  // styles, story data and controller load on first use.
+  const storiesStore = useStoriesStore(applicationPinia());
+  let voiceCommands;
+  const stories = bootStories({
+    // Inline in a host page, the URL and history are the host's.
+    available: !isEmbeddedInline(),
+    viewer,
+    director: sceneDirector,
+    store: storiesStore,
+    onEnter: () => {
+      if (stopVoiceForStories(voiceCommands?.session))
+        storiesStore.flashToast(t('Voice is disabled in Stories.'), 4000);
+    },
+    onLoadFailed: () =>
+      styleManager._showToast?.(
+        t('Stories could not load. Check the connection and try again.'),
+      ),
+  });
+  defer(() => stories.destroy());
   const annotations = initAnnotations({
     viewer,
     tileset,
@@ -282,8 +306,15 @@ export function createApplicationTools({
   defer(() => {
     if (window.__godsEyeView === debug) delete window.__godsEyeView;
   });
-  const voiceCommands = initGevVoiceCommands({
+  voiceCommands = initGevVoiceCommands({
     ...voice,
+    canStartVoice: () => !isStoriesOpen(),
+    openStories: storiesStore.available
+      ? ({ isCurrent }) =>
+          storiesStore.mode === 'closed'
+            ? stories.open({ isCurrent })
+            : 'already-open'
+      : null,
     floorServices: operations.surface.groundFloor,
     annotationResolver: operations.annotationResolver,
     searchNavigation: operations.searchAndFlyTo,

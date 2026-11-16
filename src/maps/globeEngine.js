@@ -15,7 +15,8 @@
 import { findFrame, findGlobe, rendererOf } from '../render/rendererOf.js';
 import { KEYLESS_TERRAIN_URL } from './keylessTerrain.js';
 
-const ESRI_TILES =
+/** Esri World Imagery's tiles; Stories' card images draw from the same. */
+export const ESRI_TILES =
   'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 const ESRI_CREDIT =
   'Powered by Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community';
