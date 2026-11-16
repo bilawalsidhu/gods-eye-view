@@ -17,7 +17,9 @@ file sharing, along with the remaining extensions.
 The runner imports no renderer, UI, storage, recipe or dataset. An adapter supplies
 these phases, in order: `selectShot`, `applyVisual`, `applyLayers`, `travel`,
 `settle`, `hold`, `completeShot`. Each receives `{ scene, shot, index, total,
-token }`. It also supplies `releaseScene(scene, token?)` and optionally `complete()`.
+token, resume }`, where `resume` is the queue item's own (null unless the queue
+starts partway into its first shot). It also supplies `releaseScene(scene, token?)`
+and optionally `complete()`.
 Callbacks may return promises. Each playback invocation requires its own adapter
 state and token; the caller owns camera arbitration and concurrent-run refusal.
 
@@ -32,7 +34,13 @@ acquire no resources. This low-level API expects normalized scene objects;
 untrusted file validation belongs at the import boundary.
 
 `src/scenes/playbackAdapter.js` connects this runner to the existing
-`SceneDirector`. The latter still owns editor state, saved-project import/export,
+`SceneDirector`. `startScene(sceneId, { fromProgress })` starts a run at a
+point of the scene's clock: the queue begins with the shot that point falls in,
+carrying that point's seek state as `resume`. Inside the shot's flight the camera
+goes on from there along the rest of the path a seek samples, over the rest of the
+flight; inside its hold, the layers take that moment's state as a seek gives them
+(a clip playing at that moment is not started again) and only the rest of the
+hold is waited out. The scene clock carries on from the same point. `SceneDirector` still owns editor state, saved-project import/export,
 camera ownership and asynchronous load/seek arbitration. Pure seek calculations
 live in `src/director/timeline.js`; `src/director/clock.js` owns the run/load/shot
 tickers, hold deadlines, snapshots and clock subscriptions. Stop settles pending

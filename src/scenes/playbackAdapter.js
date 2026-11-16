@@ -2,6 +2,14 @@
 import { t } from '../i18n/index.js';
 import { displaySceneTitle, displayShotTitle } from './recipes.js';
 
+/**
+ * A run resumed partway into its first shot carries the seek state of that
+ * moment (`resume`). Inside the shot's hold, its layers take that moment's
+ * state as a seek gives it, and only the rest of the hold is waited out; inside
+ * its flight, the camera goes on from where it is along the rest of the path.
+ */
+const inHold = (resume) => resume?.holdElapsedSec > 0;
+
 export function createScenePlaybackAdapter(director, defaultShotDurationSec) {
   let timing;
   let travel;
@@ -37,10 +45,14 @@ export function createScenePlaybackAdapter(director, defaultShotDurationSec) {
         { isCurrent: () => !token.cancelled && !token.signal?.aborted },
       );
     },
-    async applyLayers({ scene, shot, token }) {
+    async applyLayers({ scene, shot, token, resume }) {
       director._setSceneMediaPlayback(scene, shot, token);
       const result = await director._applyLayerStates(
-        director._layerStatesForShot(scene, shot),
+        director._layerStatesForShot(
+          scene,
+          shot,
+          inHold(resume) ? { cameraSettled: true, sceneSeek: resume } : {},
+        ),
         token,
       );
       if (
@@ -51,20 +63,43 @@ export function createScenePlaybackAdapter(director, defaultShotDurationSec) {
         throw new Error('Data packs unavailable');
       return result;
     },
-    travel({ scene, shot, token }) {
+    travel({ scene, shot, token, resume }) {
       director._loadedSceneId = scene.id;
       const duration = shot.durationSec || defaultShotDurationSec;
-      timing = director._startSceneClockTicker(scene, shot, token);
-      travel = director._beginShotTravel(scene, shot, duration);
-      const flight = director._flyShotCamera(scene, shot, duration, token);
+      const cameraProgress = resume?.cameraProgress ?? 0;
+      timing = director._startSceneClockTicker(
+        scene,
+        shot,
+        token,
+        resume?.shotElapsedSec ?? 0,
+      );
+      if (cameraProgress >= 1) {
+        travel = null;
+        director._setCameraView(resume.camera);
+        return;
+      }
+      travel = director._beginShotTravel(
+        scene,
+        shot,
+        duration * (1 - cameraProgress),
+      );
+      const flight = director._flyShotCamera(
+        scene,
+        shot,
+        duration,
+        token,
+        cameraProgress,
+      );
       director._publishShotTravel(scene, shot, travel);
       return flight;
     },
-    settle({ scene, shot, token }) {
+    settle({ scene, shot, token, resume }) {
+      // Resumed inside the hold, the layers already hold that moment's state.
+      if (inHold(resume)) return;
       director._settleShotLayerStates(scene, shot, token, travel);
     },
-    hold({ scene, shot, token }) {
-      return director._holdShot(scene, shot, token);
+    hold({ scene, shot, token, resume }) {
+      return director._holdShot(scene, shot, token, resume);
     },
     completeShot({ scene, shot, index }) {
       director._clock.stopSceneTimer();

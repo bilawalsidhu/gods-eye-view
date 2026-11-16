@@ -727,11 +727,11 @@ a story played puts AUTHORING's own selection back (usually none);
 Open in GEV leaves the story's scene selected there. Entering Stories
 cancels in-flight Authoring work before it captures the view it will
 restore. Dragging the timeline previews the time, and releasing
-it seeks the globe once. A paused link in the
-final quarter-second retains its final shot on Play instead of restarting
-at the first shot. A scene that has actually ended still replays from the
-beginning; SceneDirector resumes from the shot boundary, not a fractional
-position inside a shot.
+it seeks the globe once. Play after a pause, a seek or a paused link goes on
+from that exact moment (`SceneDirector.startScene` with `fromProgress`), even
+inside a shot or its final quarter-second: the camera, the hold and the scene
+clock carry on from there. A scene that has actually ended replays from the
+beginning.
 
 Opening Stories claims the camera through the shared navigation policy, so
 orbit, a tracked contact or a flight end, and Cockpit refuses with the

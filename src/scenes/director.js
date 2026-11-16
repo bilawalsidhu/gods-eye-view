@@ -53,7 +53,11 @@ import {
   effectiveShotHoldSec,
   shotRuntimeDurationSec,
 } from './shotPresentation.js';
-import { sceneTimingForShot, sceneSeekState } from '../director/timeline.js';
+import {
+  sceneTimingForShot,
+  sceneSeekState,
+  cameraAtProgress,
+} from '../director/timeline.js';
 import { createPlaybackClock } from '../director/clock.js';
 import {
   normalizeLayerEntry,
@@ -2165,6 +2169,9 @@ export class SceneDirector {
    * @param {boolean} [options.single=false] - Play only the named scene instead of
    *   round-robining through the whole project (voice playback uses this).
    * @param {string|null} [options.afterShotId=null] - Begin after this shot without wrapping
+   * @param {number|null} [options.fromProgress=null] - Begin at this point of the
+   *   start scene (0–1 of its clock), partway into a shot when it falls inside
+   *   one: camera, hold and clock carry on from there, as after a seek.
    * @param {boolean} [options.preview=true] - Enter recording preview and release the scene on exit
    * @returns {Promise<{started: boolean, reason?: string, shots?: number}>}
    */
@@ -2177,7 +2184,12 @@ export class SceneDirector {
 
   async _startScene(
     sceneId,
-    { single = false, afterShotId = null, preview = true } = {},
+    {
+      single = false,
+      afterShotId = null,
+      fromProgress = null,
+      preview = true,
+    } = {},
   ) {
     if (this._running) return { started: false, reason: 'already-running' };
 
@@ -2192,6 +2204,18 @@ export class SceneDirector {
       if (index < 0) return { started: false, reason: 'shot-not-found' };
       queue = queue.slice(index + 1);
       if (!queue.length) return { started: false, reason: 'scene-complete' };
+    } else if (fromProgress !== null) {
+      const scene = this._project.scenes.find(({ id }) => id === startSceneId);
+      const resume = scene ? this._sceneSeekState(scene, fromProgress) : null;
+      const index = resume
+        ? queue.findIndex(
+            ({ scene, shot }) =>
+              scene.id === startSceneId && shot.id === resume.shot.id,
+          )
+        : -1;
+      if (index < 0) return { started: false, reason: 'shot-not-found' };
+      queue = queue.slice(index);
+      if (resume.shotElapsedSec > 0) queue[0] = { ...queue[0], resume };
     }
     if (!queue.length) {
       this._updateStatus(() => t('No shots to run'));
@@ -2249,7 +2273,8 @@ export class SceneDirector {
       return (
         sum +
         (item.shot.durationSec || 0) +
-        this._effectiveShotHoldSec(item.scene, item.shot)
+        this._effectiveShotHoldSec(item.scene, item.shot) -
+        (item.resume?.shotElapsedSec || 0)
       );
     }, 0);
 
@@ -2759,9 +2784,22 @@ export class SceneDirector {
     return true;
   }
 
-  /** Use the authored sampler only for explicit moves; ordinary shots keep their existing flights. */
-  async _flyShotCamera(scene, shot, durationSec, token) {
+  /**
+   * Use the authored sampler only for explicit moves; ordinary shots keep their
+   * existing flights. A resumed shot (`fromProgress` > 0) continues along the
+   * path a seek samples, so it goes on from exactly where the seek framed it.
+   */
+  async _flyShotCamera(scene, shot, durationSec, token, fromProgress = 0) {
     const move = resolveCameraMove(scene, shot);
+    if (fromProgress > 0)
+      return this._resumeShotCamera(
+        scene,
+        shot,
+        move,
+        durationSec,
+        token,
+        fromProgress,
+      );
     if (!move)
       return this._flyCamera(
         resolveCameraPose(scene, shot.camera),
@@ -2772,6 +2810,35 @@ export class SceneDirector {
       { ...move, durationSec },
       token,
     );
+    if (!completed && !token.cancelled && !this._destroyed)
+      this.stopScene(msg('Camera move interrupted'));
+  }
+
+  /** Play the rest of a shot's flight from `fromProgress` of the way along. */
+  async _resumeShotCamera(scene, shot, move, durationSec, token, fromProgress) {
+    const index = scene.shots.indexOf(shot);
+    const from = resolveCameraPose(
+      scene,
+      scene.shots[index - 1]?.camera || shot.camera,
+    );
+    const to = resolveCameraPose(scene, shot.camera);
+    // A resumed ordinary flight is driven frame by frame like an authored
+    // move, so a camera gesture during it stops the run the same way.
+    const authored = this._usesAuthoredCamera;
+    this._usesAuthoredCamera = true;
+    let completed;
+    try {
+      completed = await this._cameraMotion.play(
+        { ...move, durationSec },
+        token,
+        {
+          fromProgress,
+          ...(move ? {} : { sample: (_, p) => cameraAtProgress(from, to, p) }),
+        },
+      );
+    } finally {
+      if (!token.cancelled) this._usesAuthoredCamera = authored;
+    }
     if (!completed && !token.cancelled && !this._destroyed)
       this.stopScene(msg('Camera move interrupted'));
   }
@@ -2831,7 +2898,16 @@ export class SceneDirector {
   }
 
   /** Let an opt-in media owner finish playback and its fade before the next flight. */
-  async _holdShot(scene, shot, token) {
+  async _holdShot(scene, shot, token, resume = null) {
+    // Resumed inside the hold: its layers were set to that moment, as a seek
+    // sets them, so only the rest of the hold is left to wait.
+    if (resume?.holdElapsedSec > 0) {
+      await this._sleep(
+        Math.max(0, resume.holdDurationSec - resume.holdElapsedSec) * 1000,
+        token,
+      );
+      return;
+    }
     const readers = Object.entries(
       this._layerStatesForShot(scene, shot),
     ).flatMap(([id, state]) => {
@@ -2890,8 +2966,8 @@ export class SceneDirector {
   }
 
   /** Drive the public authored clock through one running shot. */
-  _startSceneClockTicker(scene, shot, token) {
-    return this._clock.startScene(scene, shot, token);
+  _startSceneClockTicker(scene, shot, token, offsetSec = 0) {
+    return this._clock.startScene(scene, shot, token, offsetSec);
   }
 
   /**

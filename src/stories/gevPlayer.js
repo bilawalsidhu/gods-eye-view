@@ -30,7 +30,7 @@ export function directorSettled(director) {
  * panel plays it, and reports the scene clock in the shape the Stories
  * timeline reads. SceneDirector has no pause: pausing seeks to the current
  * moment (which stops the run and frames it), and playing again starts the
- * run at the shot that moment is in.
+ * run from that same moment.
  *
  * @param {import('../scenes/director.js').SceneDirector} director
  * @param {object} story A catalog story of kind 'gev'.
@@ -124,14 +124,13 @@ export function createGevPlayer(director, story, hooks = {}) {
         wallMs = 0;
         shotIndex = 0;
       }
-      const shots = director.listShots(sceneId);
-      const afterShotId =
-        shotIndex > 0 ? (shots[shotIndex - 1]?.id ?? null) : null;
       playing = true;
       tick();
+      // Go on from the exact moment shown: partway into its shot, with the
+      // camera, the hold and the clock carrying on from there.
       const result = await director.startScene(sceneId, {
         single: true,
-        afterShotId,
+        fromProgress: durationMs ? wallMs / durationMs : 0,
         preview: true,
       });
       // startScene resolves after the run finishes, not when it starts.

@@ -2032,6 +2032,99 @@ test('startScene resolves its result, resumes after a shot without a scene id, a
   } finally { await director.destroy(); restore(); }
 });
 
+/** Drive frame-by-frame camera motion headlessly for one test. */
+function installAnimationFrames() {
+  const original = globalThis.requestAnimationFrame;
+  const originalCancel = globalThis.cancelAnimationFrame;
+  globalThis.requestAnimationFrame = (callback) => setTimeout(callback, 16);
+  globalThis.cancelAnimationFrame = (handle) => clearTimeout(handle);
+  return () => {
+    globalThis.requestAnimationFrame = original;
+    globalThis.cancelAnimationFrame = originalCancel;
+  };
+}
+
+test('a run resumed inside a flight goes on from that point of the path and clock', async () => {
+  const { director, viewer, restore } = makeDirector();
+  const restoreFrames = installAnimationFrames();
+  const clock = [];
+  director.subscribeSceneClock((snap) => clock.push(snap));
+  const poses = [];
+  const setView = director._setCameraView.bind(director);
+  director._setCameraView = (pose) => {
+    poses.push(pose);
+    return setView(pose);
+  };
+  try {
+    // 0.75 of a 0.4 s scene: halfway along shot B's 0.2 s flight.
+    const run = director.startScene('scene-1', {
+      single: true,
+      fromProgress: 0.75,
+      preview: false,
+    });
+    await settle(40);
+    const first = clock.find((snap) => snap.running);
+    assert.equal(first.shotId, 'shot-b', 'starts in the shot that moment is in');
+    assert.ok(Math.abs(first.sceneElapsedSec - 0.3) < 1e-9, 'the clock starts at the moment');
+    // The first frame is the seek's own framing, halfway from A to B.
+    assert.ok(poses.length, 'the camera is driven from where it is');
+    assert.ok(Math.abs(poses[0].lat - -10) < 0.5, 'halfway from A to B');
+    assert.deepEqual(await run, { started: true, shots: 1 });
+    assert.equal(poses.at(-1).lat, -30, 'and ends on shot B');
+    assert.equal(viewer.flights.length, 0, 'no fresh flight from the shot start');
+    assert.equal(director._lastRun.wasCancelled, false);
+  } finally { await director.destroy(); restoreFrames(); restore(); }
+});
+
+test('a run resumed inside a hold keeps the seek’s layer state and waits only the rest of it', async () => {
+  const project = structuredClone(PROJECT_FIXTURE);
+  project.scenes[0].shots[0].holdSec = 0.6;
+  const { director, viewer, restore } = makeDirector({ project });
+  const layerCalls = [];
+  const layerStates = director._layerStatesForShot.bind(director);
+  director._layerStatesForShot = (scene, shot, options) => {
+    layerCalls.push({ shot, options });
+    return layerStates(scene, shot, options);
+  };
+  const clock = [];
+  director.subscribeSceneClock((snap) => clock.push(snap));
+  const poses = [];
+  const setView = director._setCameraView.bind(director);
+  director._setCameraView = (pose) => {
+    poses.push(pose);
+    return setView(pose);
+  };
+  const sleeps = [];
+  const sleep = director._sleep.bind(director);
+  director._sleep = (ms, token) => {
+    sleeps.push(ms);
+    return sleep(ms, token);
+  };
+  try {
+    // Shot A is 0.2 s of flight and 0.6 s of hold; the scene is 1 s long.
+    // 0.6 of it is 0.4 s into A's hold, with 0.2 s of it left.
+    const started = Date.now();
+    const result = await director.startScene('scene-1', {
+      single: true,
+      fromProgress: 0.6,
+      preview: false,
+    });
+    assert.deepEqual(result, { started: true, shots: 2 });
+    const first = clock.find((snap) => snap.running);
+    assert.equal(first.shotId, 'shot-a');
+    assert.ok(Math.abs(first.sceneElapsedSec - 0.6) < 1e-9);
+    assert.ok(Math.abs(sleeps[0] - 200) < 1e-6, 'only the rest of the hold');
+    assert.ok(Date.now() - started < 700, 'the shot is not replayed');
+    // Shot A's camera is placed at its end; only shot B flies.
+    assert.equal(poses[0].lat, 10);
+    assert.equal(viewer.flights.length, 1);
+    const seekStates = layerCalls.filter(({ options }) => options?.sceneSeek);
+    assert.equal(seekStates.length, 1, 'shot A’s layers are given the moment');
+    assert.equal(seekStates[0].shot.id, 'shot-a');
+    assert.ok(Math.abs(seekStates[0].options.sceneSeek.holdElapsedSec - 0.4) < 1e-9);
+  } finally { await director.destroy(); restore(); }
+});
+
 test('a caught run failure resolves as run-failed, not success (#971)', async () => {
   const { director, styleManager, restore } = makeDirector();
   const warn = console.warn;

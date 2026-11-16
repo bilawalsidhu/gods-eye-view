@@ -34,7 +34,7 @@ function deferredDirector({ running = false } = {}) {
 
     seekScene: (id, f) => calls.push(`seek ${f}`),
     startScene: (_id, options) => {
-      director.startAfterShotId = options.afterShotId;
+      director.startOptions = options;
       calls.push('start');
       director.running = true;
       return new Promise((resolve) => {
@@ -154,7 +154,11 @@ test('Play from a paused link in the final quarter-second stays in the final sho
     59800,
     'the link is not treated as complete',
   );
-  assert.equal(director.startAfterShotId, 'a', 'resume in the final shot');
+  assert.equal(
+    director.startOptions.fromProgress,
+    59800 / 60000,
+    'resume at the same moment of the final shot',
+  );
   director.finishRun();
   await playing;
 });
@@ -166,7 +170,7 @@ test('Play after the actual end still starts the scene from shot one', async () 
   const playing = player.play();
   await turns();
   assert.equal(player.state.wallMs, 0);
-  assert.equal(director.startAfterShotId, null);
+  assert.equal(director.startOptions.fromProgress, 0);
   director.finishRun();
   await playing;
 });
@@ -196,7 +200,11 @@ test('in the director’s order, a paused link near the end resumes in its final
   assert.equal(player.state.wallMs, 59800, 'not rounded to the end');
   const playing = player.play();
   await turns();
-  assert.equal(director.startAfterShotId, 'a', 'resume in the final shot');
+  assert.equal(
+    director.startOptions.fromProgress,
+    59800 / 60000,
+    'resume at the same moment of the final shot',
+  );
   director.finishRun();
   await playing;
 });
@@ -215,7 +223,61 @@ test('a run that ends on its own is rounded to the end, and Play then starts ove
   const playing = player.play();
   await turns();
   assert.equal(player.state.wallMs, 0);
-  assert.equal(director.startAfterShotId, null, 'from the first shot');
+  assert.equal(director.startOptions.fromProgress, 0, 'from the start');
+  director.finishRun();
+  await playing;
+});
+
+test('Play after Pause goes on from the paused moment, not the shot’s start', async () => {
+  const director = deferredDirector();
+  const player = createGevPlayer(director, story);
+  const playing = player.play();
+  await turns();
+  // The run is 42 s in, 12 s into the second shot, when it is paused.
+  director.publish({
+    sceneDurationSec: 60,
+    sceneElapsedSec: 42,
+    shotIndex: 1,
+    running: true,
+  });
+  player.pause();
+  director.finishRun();
+  await playing;
+  assert.equal(player.state.wallMs, 42000);
+  const again = player.play();
+  await turns();
+  assert.equal(director.startOptions.fromProgress, 42000 / 60000);
+  director.finishRun();
+  await again;
+});
+
+test('Play after a seek goes on from the time sought', async () => {
+  const director = deferredDirector();
+  const player = createGevPlayer(director, story);
+  player.seek(12345);
+  const playing = player.play();
+  await turns();
+  assert.equal(director.startOptions.fromProgress, 12345 / 60000);
+  assert.equal(director.startOptions.afterShotId, undefined);
+  director.finishRun();
+  await playing;
+});
+
+test('Play from a paused link goes on from the link’s time', async () => {
+  const director = deferredDirector();
+  const player = createGevPlayer(director, story);
+  // Opening a paused link seeks to its time, and the director reports it.
+  player.seek(17500);
+  director.publish({
+    sceneDurationSec: 60,
+    sceneElapsedSec: 17.5,
+    shotIndex: 0,
+    running: false,
+    seeking: true,
+  });
+  const playing = player.play();
+  await turns();
+  assert.equal(director.startOptions.fromProgress, 17500 / 60000);
   director.finishRun();
   await playing;
 });
