@@ -884,7 +884,9 @@ function invalidateHost({ solve = true, layout = false } = {}) {
   if (layout) _occludersDirty = true;
   _canvasNeedsClear = true;
   _paintRectCount = 0;
-  _hitRectCount = 0;
+  // Hit rectangles stay what is painted on screen until the next paint
+  // rebuilds them: every click subscriber reads the same overlay, even after
+  // an earlier one republishes entries in that click (a selection card).
   _paintRectByKey.clear();
   requestOverlayRender();
 }
@@ -2783,10 +2785,9 @@ function drawWorldOverlay() {
     resetFrameDiagnostics();
     _solveDirty = false;
     if (_canvasNeedsClear || _detectionSurfaceNeedsClear) clearCanvas();
-    if (_accessibilitySignature) {
-      _hitRectCount = 0;
-      syncAccessibleActions();
-    }
+    // Nothing is painted now, so nothing can be hit.
+    _hitRectCount = 0;
+    if (_accessibilitySignature) syncAccessibleActions();
     syncPaintVisibility(false);
     return;
   }
