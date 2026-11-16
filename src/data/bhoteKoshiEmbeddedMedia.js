@@ -1,4 +1,10 @@
-import * as Cesium from 'cesium';
+import {
+  canvasOf,
+  findCamera,
+  findFrame,
+  findQuery,
+} from '../render/rendererOf.js';
+import { dot, sub } from '../geo/vector.js';
 import { t, msg, onLocaleChange } from '../i18n/index.js';
 
 const YOUTUBE_HOSTS = new Set([
@@ -538,23 +544,22 @@ function ensureProviderConnections(documentRef, provider) {
   }
 }
 
+/**
+ * Where an anchor (ECEF) is in the card root, through the renderer's camera
+ * and query ports; null behind the eye, off the root, or with no renderer.
+ */
 function anchorOnScreen(viewer, anchor, root) {
-  if (!viewer?.scene || !anchor || !root) return null;
-  const camera = viewer.camera;
-  if (camera?.positionWC && camera?.directionWC) {
-    const delta = Cesium.Cartesian3.subtract(
-      anchor,
-      camera.positionWC,
-      new Cesium.Cartesian3(),
-    );
-    if (Cesium.Cartesian3.dot(delta, camera.directionWC) <= 0) return null;
-  }
-  const pixel = Cesium.SceneTransforms.worldToWindowCoordinates(
-    viewer.scene,
-    anchor,
-  );
+  if (!anchor || !root) return null;
+  const camera = findCamera(viewer);
+  const query = findQuery(viewer);
+  if (!camera || !query) return null;
+  const pose = camera.pose();
+  if (dot(sub(anchor, pose.position), pose.direction) <= 0) return null;
+  const pixel = query.project(anchor);
   if (!pixel) return null;
-  const canvasBounds = viewer.canvas?.getBoundingClientRect?.();
+  // The renderer's canvas; a viewer with no renderer bound, its own.
+  const canvas = canvasOf(viewer);
+  const canvasBounds = canvas?.getBoundingClientRect?.();
   const rootBounds = root.getBoundingClientRect?.();
   if (!canvasBounds || !rootBounds) return null;
   const x = pixel.x + canvasBounds.left - rootBounds.left;
@@ -865,7 +870,7 @@ export function createBhoteKoshiEmbeddedMedia({
     }
   };
   const removePostRender =
-    viewer.scene?.postRender?.addEventListener?.(position);
+    findFrame(viewer)?.on('postRender', () => position()) ?? null;
 
   function hide({ immediate = false, preserveWarm = false } = {}) {
     if (!preserveWarm) clearWarm();

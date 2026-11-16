@@ -31,6 +31,7 @@ export function createVesselLayer({ source, services, options = {} } = {}) {
   parts.queries = createQueries(context);
   parts.snapshots = createVesselSnapshotRenderer({
     state: vesselState.state,
+    placement: services?.placement ?? null,
     records: vesselState.state.records,
     rendering: parts.rendering,
     tracking: parts.tracking,

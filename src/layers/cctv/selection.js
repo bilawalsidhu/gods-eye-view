@@ -1,8 +1,4 @@
-import {
-  bindTrackingClickGesture,
-  isTrackingClickGesture,
-} from '../../data/trackingClickGesture.js';
-import * as Cesium from 'cesium';
+import { isTrackingClickGesture } from '../../data/trackingClickGesture.js';
 
 export function createSelection({
   state: layerState,
@@ -34,24 +30,19 @@ export function createSelection({
   }
 
   /**
-   * Bind CCTV activation to clean taps while preserving the layer's hover-move
-   * callback on the shared Cesium handler. Drag-like and long-press gestures do
+   * Bind CCTV activation to clean taps. Drag-like and long-press gestures do
    * not reach camera activation or focus dispatch.
-   * @param {Cesium.ScreenSpaceEventHandler|Object} handler - Input handler.
-   * @param {(click: Object) => void} onClick - Accepted CCTV click callback.
-   * @param {Object} [options] - Gesture test seams and optional onMouseMove hook.
-   * @returns {void}
+   * @param {import('../../input/dispatcher.js').InputDispatcher} input
+   * @param {(event: import('../../input/dispatcher.js').ClickEvent) => void} onClick
+   *   Accepted CCTV click callback.
+   * @returns {() => void} Unsubscribe.
    */
 
-  function bindCctvWorldClickGesture(handler, onClick, options = {}) {
-    bindTrackingClickGesture(
-      handler,
-      (click, gesture) => {
-        if (!isTrackingClickGesture(gesture)) return;
-        onClick(click);
-      },
-      options,
-    );
+  function bindCctvWorldClickGesture(input, onClick) {
+    return input.onClick((event) => {
+      if (!isTrackingClickGesture(event.gesture)) return;
+      onClick(event);
+    });
   }
 
   /**
@@ -119,12 +110,13 @@ export function createSelection({
       layerState._geoQueue.splice(queueIdx, 1);
       layerState._geoQueue.unshift(record);
     }
-    // §9.1: one obstruction probe per activation, BEFORE the geometry pass so
-    // the range clamp lands in the same rewrite. A FIRST-EVER activation (no
-    // real ground sample yet) probes from the catalog-prior altitude — if that
-    // prior is off, the clamp is measured from a shifted origin, but a
-    // re-activation after the one-shot snap lands re-probes from real ground,
-    // so it self-corrects.
+    // §9.1: one obstruction probe per activation, cast before the geometry
+    // pass; its range clamp lands a microtask later, before the next frame,
+    // rewriting the geometry and asking again for the footprint ground. A
+    // FIRST-EVER activation (no real ground sample yet) probes from the
+    // catalog-prior altitude — if that prior is off, the clamp is measured
+    // from a shifted origin, but a re-activation after the one-shot snap
+    // lands re-probes from real ground, so it self-corrects.
     parts.geometry.runActivationObstructionProbe(record);
     // Coverage is activation-lazy even while the mode is OFF: the active
     // camera's projection representation must be ready without materializing
@@ -214,57 +206,14 @@ export function createSelection({
   }
 
   /**
-   * Extracts a camera ID from a Cesium pick result by checking billboard IDs,
-   * primitive IDs, and entity cctvCameraId properties.
-   * @param {Object|null} picked - Result from scene.pick().
-   * @returns {string|null} Camera ID, or null if the pick is not a CCTV entity.
+   * The camera a scene pick result is, or null: read by the rendering part,
+   * which owns the scene objects the pick names.
+   * @param {Object|null} picked - Result from a scene pick.
+   * @returns {string|null}
    */
 
   function extractPickedCameraId(picked) {
-    if (!picked) return null;
-
-    const entity = picked.id?.properties
-      ? picked.id
-      : picked.primitive?.id?.properties
-        ? picked.primitive.id
-        : null;
-    const maybeProp = entity?.properties?.cctvCameraId;
-    if (maybeProp) {
-      const value =
-        typeof maybeProp.getValue === 'function'
-          ? maybeProp.getValue(Cesium.JulianDate.now())
-          : maybeProp;
-      const record =
-        typeof value === 'string' ? layerState._recordById.get(value) : null;
-      const ownsCoverageEntity = Boolean(
-        record?.coverageEntities?.includes(entity),
-      );
-      const ownsProjectionEntity =
-        record?.projection?.planeEntity === entity ||
-        layerState._projectionEntities.some(
-          (runtime) =>
-            runtime?.cameraId === value && runtime.planeEntity === entity,
-        );
-      if (record && (ownsCoverageEntity || ownsProjectionEntity)) return value;
-    }
-
-    // Camera billboard IDs are intentionally the upstream camera ID, so a
-    // sibling may legitimately use the same string. A bare ID match is not
-    // ownership proof: require this layer's billboard collection or the exact
-    // billboard stored on the record.
-    const directId =
-      typeof picked.id === 'string'
-        ? picked.id
-        : typeof picked.primitive?.id === 'string'
-          ? picked.primitive.id
-          : null;
-    const record =
-      directId === null ? null : layerState._recordById.get(directId);
-    if (!record) return null;
-    return picked.primitive === layerState._billboards ||
-      picked.primitive === record.billboard
-      ? directId
-      : null;
+    return parts.rendering.extractPickedCameraId(picked);
   }
   return {
     getActiveRecord,

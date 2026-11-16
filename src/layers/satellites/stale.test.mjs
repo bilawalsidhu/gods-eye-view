@@ -1,3 +1,5 @@
+// The click dispatcher's input port over a viewer double: the Cesium adapter's.
+import '../../render/cesium/input.js';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { EventEmitter, once } from 'node:events';
@@ -10,6 +12,9 @@ import { createOrbits } from './orbits.js';
 import { createLabels } from './labels.js';
 import { createTracking } from './tracking.js';
 import { createRendering } from './rendering.js';
+import { bindRenderer } from '../../render/rendererOf.js';
+import { fakeSceneFrame } from '../../testSupport/fakeCesiumScene.mjs';
+import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
 import { createCatalog } from './catalog.js';
 import { createLifecycle } from './lifecycle.js';
 import { createInteraction } from './interaction.js';
@@ -72,7 +77,7 @@ async function fixture(t) {
     fetchImpl: (path, options) =>
       fetch(`http://127.0.0.1:${server.address().port}${path}`, options),
   });
-  // Application host services and native EventTargets; actual Cesium collections,
+  // Application host services and native EventTargets; a fake draw port,
   // input handler, events, SGP4, ingestion and lifecycle run without a WebGL scene.
   const noop = () => {};
   const services = {
@@ -84,7 +89,7 @@ async function fixture(t) {
     layerState: { isExplicitLayerStateOrigin: () => false },
     focus: {
       clearFocusTarget: noop,
-      publishFocusTargetFromCachedPosition: noop,
+      publishFocusTargetAt: noop,
       getFocusTarget: () => null,
     },
     context: {
@@ -123,9 +128,14 @@ async function fixture(t) {
     },
     trackedEntityChanged: new Cesium.Event(),
   };
+  const unbind = bindRenderer(viewer, {
+    frame: fakeSceneFrame(viewer),
+    draw: fakeDrawPort(),
+  });
   await parts.lifecycle.methods.init(viewer);
   t.after(async () => {
-    if (state._pointCollection) parts.lifecycle.methods.destroy(viewer);
+    unbind();
+    if (state._sets) parts.lifecycle.methods.destroy(viewer);
     viewer.scene.primitives.destroy();
     if (previousDocument === undefined) delete globalThis.document;
     else globalThis.document = previousDocument;

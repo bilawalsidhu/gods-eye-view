@@ -47,7 +47,7 @@ function createProviderState(context) {
     sequence: {
       selectedId: null,
       images: [],
-      collection: null,
+      set: null,
       loading: false,
       /** Why the selected sequence's images could not load, until it goes. */
       error: null,

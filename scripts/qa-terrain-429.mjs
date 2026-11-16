@@ -8,7 +8,7 @@
  * answers HTTP 429 for most of them. This harness drives that burst, counts the
  * throttled responses, keeps the first 429's headers as evidence, and then
  * checks whether every throttled tile eventually loaded — the contract the
- * client-side retry in `src/maps/terrain.js` provides.
+ * client-side retry in `src/render/cesium/mapTerrain.js` provides.
  *
  * Run against a keyless dev server (no Google or ion credentials):
  *   env -u GOOGLE_MAPS_API_KEY -u CESIUM_ION_TOKEN npm run dev -- --port 4180

@@ -11,6 +11,7 @@ import {
   showContextCard,
   updateContext,
 } from './cockpitContext.js';
+import { fromDegrees } from '../geo/index.js';
 import { createContextState } from './cockpitContextState.js';
 import {
   dropCockpitSignal,
@@ -171,6 +172,40 @@ test('a snapshot fills the card and keeps classes other code sets', async (t) =>
   );
   assert.equal(text('#cockpit-context-updated'), '12:34:56Z');
   assert.equal(layouts.length, 1);
+});
+
+test('when the tracked aircraft is the subject, the bearing points at the nearest contact', async (t) => {
+  const tracked = { layerId: 'flights', id: 'abc123', label: 'ABC123' };
+  const contact = (lon, lat) =>
+    snapshot({
+      subject: tracked,
+      cohorts: [
+        {
+          id: 'flights',
+          label: 'Flights',
+          count: 1,
+          relationship: 'OBSERVED',
+          nearest: [
+            { id: 'N1', distanceM: 96_000, position: fromDegrees(lon, lat) },
+          ],
+        },
+      ],
+    });
+  const { text, owner } = fixture(t, contact(-96, 30));
+  // Due east of a north-facing nose.
+  updateContext.call(owner, INFO, 0);
+  await nextTick();
+  assert.equal(text('#cockpit-context-bearing'), 'R 090°');
+  // Due north: inside the dead-ahead cone.
+  owner.snapshot = contact(-97, 31);
+  updateContext.call(owner, INFO, 0);
+  await nextTick();
+  assert.equal(text('#cockpit-context-bearing'), 'AHEAD');
+  // Due west of a nose turned to the north-east.
+  owner.snapshot = contact(-98, 30);
+  updateContext.call(owner, INFO, 45);
+  await nextTick();
+  assert.equal(text('#cockpit-context-bearing'), 'L 135°');
 });
 
 test('each count names the provider its snapshot reports, with its feed state', async (t) => {

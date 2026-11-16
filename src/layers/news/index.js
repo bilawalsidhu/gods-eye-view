@@ -1,5 +1,13 @@
-import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
+import { inputFor as defaultInputFor } from '../../input/dispatcher.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { cssColor } from '../../render/color.js';
+import {
+  findCamera,
+  findDraw,
+  findFrame,
+  rendererOf,
+} from '../../render/rendererOf.js';
 import { hitTestWorldOverlay } from '../../overlays/worldOverlay.js';
 import {
   isOwnedByOtherLayer,
@@ -136,6 +144,17 @@ const DISPUTED_LABEL_SCALE = 0.75;
 // itself, a few times, so a strict severity floor still fills the list.
 const AUTO_PAGES = 3;
 const PULSE_MS = 1_600;
+// Each layer's draw sets have ids of their own (`news:<n>:<part>`).
+let instances = 0;
+/** A CSS colour as the renderer's `[r, g, b, a]`, 0..1, at `alpha` when given. */
+const rgba = (css, alpha) => {
+  const [r, g, b, a] = cssColor(css) ?? [1, 1, 1, 1];
+  return [r, g, b, alpha ?? a];
+};
+const WHITE = Object.freeze([1, 1, 1, 1]);
+const BLACK_RIM = Object.freeze([0, 0, 0, 0.7]);
+// Markers and beacons draw over terrain at any distance.
+const OVER_TERRAIN = Number.POSITIVE_INFINITY;
 const emptyFeed = () => ({
   items: [],
   nextBefore: null,
@@ -181,7 +200,7 @@ const emptyInView = () => ({
 export function createNewsLayer({
   source,
   overlayHost,
-  cesium = Cesium,
+  inputFor = defaultInputFor,
   matchMedia = globalThis.matchMedia?.bind(globalThis),
   now = () => Date.now(),
   hitTestOverlay = hitTestWorldOverlay,
@@ -200,9 +219,9 @@ export function createNewsLayer({
     throw new TypeError('News picture cards must be a function');
 
   let viewer = null,
-    dataSource = null,
-    outlineSource = null,
-    clickHandler = null,
+    // The layer's draw sets (`sets.icons` and the rest), made on init.
+    sets = null,
+    clickOff = null,
     listener = null,
     runNavigation = null,
     request = null,
@@ -212,6 +231,7 @@ export function createNewsLayer({
     areaRequest = null,
     settleTimer = null,
     pulseTimer = null,
+    pulseFrameOff = null,
     removeCameraListener = null;
   let enabled = false,
     destroyed = false,
@@ -243,6 +263,12 @@ export function createNewsLayer({
   // The country badges drawn, by key: a click opens that country's news.
   let countryBadges = new Map();
   const contextEntities = new Map();
+  // What the context store asks of a record's source: whether it shows.
+  const contextSource = {
+    get show() {
+      return enabled;
+    },
+  };
   // Credits are registered once what they credit first shows; the registry
   // keeps them for the session (as TomTom's) and has no removal.
   const credited = new Set();
@@ -257,7 +283,8 @@ export function createNewsLayer({
       reports.some((r) => r?.kind === 'liveuamap'),
     );
   const notify = () => listener?.();
-  const requestRender = () => viewer?.scene?.requestRender?.();
+  const requestRender = () =>
+    viewer && findFrame(viewer)?.requestRender?.('news');
   const reducedMotion = () =>
     Boolean(matchMedia?.('(prefers-reduced-motion: reduce)')?.matches);
 
@@ -296,10 +323,11 @@ export function createNewsLayer({
 
   function markerCartesian(report, pin = 0) {
     const { lat, lon } = reportMarkerPosition(report, pin);
-    return cesium.Cartesian3.fromDegrees(lon, lat);
+    return fromDegrees(lon, lat);
   }
 
-  const cameraHeight = () => viewer?.camera?.positionCartographic?.height;
+  const cameraHeight = () =>
+    (viewer && findCamera(viewer)?.pose()?.height) ?? undefined;
 
   // Global view: one beacon per hotspot. Close up: outlines and individual
   // reports. A chosen hotspot keeps the detail out to three times the height
@@ -320,32 +348,84 @@ export function createNewsLayer({
     new Set(hotspots.filter((h) => h.catchAll).map((h) => h.id));
 
   // Markers draw over terrain (depth test off) so a pin is never swallowed by
-  // the ground it sits on; the shared horizon cull hides the far side.
+  // the ground it sits on; the shared horizon cull hides the far side. A
+  // cull target stands for one drawn item: `kind` names its set.
   const horizon = createHorizonCull({
     getViewer: () => viewer,
     items: () => cullTargets,
-    onChange: () => {
+    onChange: (changed) => {
+      writeTargets(changed);
       requestRender();
       updatePulse();
     },
   });
 
-  // A developing situation's beacon breathes, unless motion is reduced. The
-  // scene renders on demand, so a slow timer asks for frames only while such
-  // a beacon is in view.
+  /** Write the items of `targets` to their sets as they now are. */
+  function writeTargets(targets) {
+    if (!sets) return;
+    const byKind = new Map();
+    for (const target of targets) {
+      if (!byKind.has(target.kind)) byKind.set(target.kind, []);
+      byKind.get(target.kind).push(target.item);
+    }
+    for (const [kind, items] of byKind) sets[kind].upsert(items);
+  }
+
+  // A developing situation's beacon breathes, unless motion is reduced: each
+  // drawn frame sizes the beacons in view. The scene renders on demand, so a
+  // slow timer asks for a frame only while such a beacon is in view.
   const pulseSize = (size) =>
     size *
     (1 + 0.35 * (0.5 + 0.5 * Math.sin((Date.now() / PULSE_MS) * 2 * Math.PI)));
+  function resizeBeacons() {
+    const breathing = cullTargets.filter(
+      (target) => target.developing && target.show,
+    );
+    for (const target of breathing)
+      target.item.pixelSize = pulseSize(target.size);
+    writeTargets(breathing);
+  }
+  function stopPulse() {
+    clearInterval(pulseTimer);
+    pulseTimer = null;
+    pulseFrameOff?.();
+    pulseFrameOff = null;
+  }
   function updatePulse() {
     const pulsing =
       enabled &&
       !reducedMotion() &&
       cullTargets.some((target) => target.developing && target.show);
-    if (pulsing && !pulseTimer) pulseTimer = setInterval(requestRender, 250);
-    else if (!pulsing && pulseTimer) {
-      clearInterval(pulseTimer);
-      pulseTimer = null;
-    }
+    if (pulsing && !pulseTimer) {
+      pulseTimer = setInterval(requestRender, 250);
+      pulseFrameOff =
+        (viewer && findFrame(viewer)?.on('preRender', resizeBeacons)) || null;
+    } else if (!pulsing && pulseTimer) stopPulse();
+  }
+
+  /**
+   * One render's items, by set, and the horizon cull's targets for those
+   * placed at a point (everything but the hotspot boxes).
+   */
+  function drawList() {
+    const list = { halos: [], points: [], icons: [], boxes: [], targets: [] };
+    list.place = (kind, item, extra = {}) => {
+      list[kind].push(item);
+      list.targets.push({
+        kind,
+        item,
+        position: item.pos,
+        developing: false,
+        ...extra,
+        get show() {
+          return item.show !== false;
+        },
+        set show(value) {
+          item.show = value;
+        },
+      });
+    };
+    return list;
   }
 
   const ambientLabel = (extra) => ({
@@ -360,28 +440,24 @@ export function createNewsLayer({
   });
 
   // Several separate events in one country outside every hotspot.
-  function renderDeveloping(hotspot, entities, labels) {
+  function renderDeveloping(hotspot, list, labels) {
     const still = reducedMotion();
     for (const item of hotspot.developing || []) {
-      const position = cesium.Cartesian3.fromDegrees(
-        item.focus.lon,
-        item.focus.lat,
-      );
+      const position = fromDegrees(item.focus.lon, item.focus.lat);
       const size = beaconPixelSize(item.reports);
-      entities.add({
-        id: `${DEVELOPING_PREFIX}${hotspot.id}:${item.key}`,
-        position,
-        point: {
-          pixelSize: still
-            ? size
-            : new cesium.CallbackProperty(() => pulseSize(size), false),
-          color:
-            cesium.Color.fromCssColorString(DEVELOPING_COLOR).withAlpha(0.35),
-          outlineColor: cesium.Color.fromCssColorString(DEVELOPING_COLOR),
+      list.place(
+        'points',
+        {
+          id: `${DEVELOPING_PREFIX}${hotspot.id}:${item.key}`,
+          pos: position,
+          pixelSize: still ? size : pulseSize(size),
+          color: rgba(DEVELOPING_COLOR, 0.35),
+          outlineColor: rgba(DEVELOPING_COLOR),
           outlineWidth: 2,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          disableDepthTest: OVER_TERRAIN,
         },
-      });
+        { developing: !still, size },
+      );
       labels.push(
         ambientLabel({
           id: `developing:${item.key}`,
@@ -398,24 +474,22 @@ export function createNewsLayer({
     }
   }
 
-  function renderBeacons(entities, labels) {
+  function renderBeacons(list, labels) {
     for (const hotspot of hotspots) {
       if (hotspot.catchAll) {
-        renderDeveloping(hotspot, entities, labels);
+        renderDeveloping(hotspot, list, labels);
         continue;
       }
       const { lat, lon } = hotspot.focus;
-      const position = cesium.Cartesian3.fromDegrees(lon, lat);
-      entities.add({
+      const position = fromDegrees(lon, lat);
+      list.place('points', {
         id: `${HOTSPOT_PREFIX}${hotspot.id}`,
-        position,
-        point: {
-          pixelSize: beaconPixelSize(hotspot.last24h),
-          color: cesium.Color.fromCssColorString(HOTSPOT_COLOR).withAlpha(0.35),
-          outlineColor: cesium.Color.fromCssColorString(HOTSPOT_COLOR),
-          outlineWidth: 2,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        },
+        pos: position,
+        pixelSize: beaconPixelSize(hotspot.last24h),
+        color: rgba(HOTSPOT_COLOR, 0.35),
+        outlineColor: rgba(HOTSPOT_COLOR),
+        outlineWidth: 2,
+        disableDepthTest: OVER_TERRAIN,
       });
       const trend = hotspotTrend(hotspot.last24h, hotspot.prev24h);
       labels.push(
@@ -434,47 +508,36 @@ export function createNewsLayer({
     }
   }
 
-  function renderHotspotOutlines(entities, labels) {
+  function renderHotspotOutlines(list, labels) {
     for (const hotspot of hotspots) {
       if (hotspot.catchAll) continue;
       const [w, s, e, n] = hotspot.bbox;
       const active = filters.hotspot === hotspot.id;
       // The bounding box only until the real outline has loaded.
       if (!outlineParts.has(hotspot.id))
-        entities.add({
+        list.boxes.push({
           id: `${HOTSPOT_PREFIX}${hotspot.id}`,
-          polyline: {
-            positions: cesium.Cartesian3.fromDegreesArray([
-              w,
-              s,
-              e,
-              s,
-              e,
-              n,
-              w,
-              n,
-              w,
-              s,
-            ]),
-            width: active ? 3 : 2,
-            clampToGround: true,
-            material: new cesium.PolylineDashMaterialProperty({
-              color: cesium.Color.fromCssColorString(HOTSPOT_COLOR).withAlpha(
-                active ? 0.95 : 0.55,
-              ),
-              dashLength: 18,
-            }),
+          positions: [
+            [w, s],
+            [e, s],
+            [e, n],
+            [w, n],
+            [w, s],
+          ].map(([lon, lat]) => fromDegrees(lon, lat)),
+          widthPx: active ? 3 : 2,
+          mode: 'draped',
+          style: {
+            kind: 'dash',
+            color: rgba(HOTSPOT_COLOR, active ? 0.95 : 0.55),
+            length: 18,
           },
         });
       labels.push(
         ambientLabel({
           id: `hotspot:${hotspot.id}`,
           position: outlineParts.has(hotspot.id)
-            ? cesium.Cartesian3.fromDegrees(
-                hotspot.focus.lon,
-                hotspot.focus.lat,
-              )
-            : cesium.Cartesian3.fromDegrees(w, n),
+            ? fromDegrees(hotspot.focus.lon, hotspot.focus.lat)
+            : fromDegrees(w, n),
           title: hotspotLabel(hotspot),
           details: [
             tn(
@@ -497,7 +560,7 @@ export function createNewsLayer({
         labels.push(
           ambientLabel({
             id: `disputed:${hotspot.id}:${area.name}`,
-            position: cesium.Cartesian3.fromDegrees(lon, lat),
+            position: fromDegrees(lon, lat),
             title: disputedLabel(area),
             accent: DISPUTED_COLOR,
             priority: 8_000,
@@ -508,7 +571,7 @@ export function createNewsLayer({
     }
   }
 
-  function renderMarkers(entities, drawn) {
+  function renderMarkers(list, drawn) {
     for (const report of drawn) {
       const isSelected = report.id === selectedId;
       if (!report.pins.length || (!isSelected && !onMap(report))) continue;
@@ -519,98 +582,98 @@ export function createNewsLayer({
       // with the sources reporting its event and fades with age. A fresh,
       // widely reported or major event also gets a static halo.
       const look = markerStyle(report, now());
-      const color = cesium.Color.fromCssColorString(
-        severityStyle(report).color,
-      );
+      const css = severityStyle(report).color;
       const size = isSelected ? look.size + 4 : look.size;
       const sprite = markerSprite({ ...look, selected: isSelected });
       const pressing = isPressing(report, now());
       for (const [pin] of report.pins.entries()) {
         const position = markerCartesian(report, pin);
         if (pressing)
-          entities.add({
+          list.place('halos', {
             id: `${REPORT_PREFIX}${report.id}~${pin}~halo`,
-            position,
-            point: {
-              pixelSize: look.size * 2.4,
-              color: color.withAlpha(0.22),
-              outlineColor: color.withAlpha(0.6),
-              outlineWidth: 1,
-              heightReference: cesium.HeightReference.CLAMP_TO_GROUND,
-              disableDepthTestDistance: Number.POSITIVE_INFINITY,
-            },
+            pos: position,
+            height: 'clampGround',
+            pixelSize: look.size * 2.4,
+            color: rgba(css, 0.22),
+            outlineColor: rgba(css, 0.6),
+            outlineWidth: 1,
+            disableDepthTest: OVER_TERRAIN,
           });
-        entities.add({
-          id: `${REPORT_PREFIX}${report.id}~${pin}`,
-          position,
-          ...(sprite
-            ? {
-                billboard: {
-                  image: sprite,
-                  width: Math.round(size * SPRITE_SCALE),
-                  height: Math.round(size * SPRITE_SCALE),
-                  color: cesium.Color.WHITE.withAlpha(
-                    isSelected ? 1 : look.alpha,
-                  ),
-                  heightReference: cesium.HeightReference.CLAMP_TO_GROUND,
-                  disableDepthTestDistance: Number.POSITIVE_INFINITY,
-                },
-              }
-            : {
-                point: {
-                  pixelSize: size,
-                  color,
-                  outlineColor: isSelected
-                    ? cesium.Color.WHITE
-                    : cesium.Color.BLACK.withAlpha(0.7),
-                  outlineWidth: isSelected ? 3 : 1.5,
-                  heightReference: cesium.HeightReference.CLAMP_TO_GROUND,
-                  disableDepthTestDistance: Number.POSITIVE_INFINITY,
-                },
-              }),
-        });
+        const id = `${REPORT_PREFIX}${report.id}~${pin}`;
+        if (sprite)
+          list.place('icons', {
+            id,
+            pos: position,
+            height: 'clampGround',
+            image: sprite,
+            size: [
+              Math.round(size * SPRITE_SCALE),
+              Math.round(size * SPRITE_SCALE),
+            ],
+            alpha: isSelected ? 1 : look.alpha,
+            disableDepthTest: OVER_TERRAIN,
+          });
+        else
+          list.place('points', {
+            id,
+            pos: position,
+            height: 'clampGround',
+            pixelSize: size,
+            color: rgba(css),
+            outlineColor: isSelected ? WHITE : BLACK_RIM,
+            outlineWidth: isSelected ? 3 : 1.5,
+            disableDepthTest: OVER_TERRAIN,
+          });
       }
     }
   }
 
+  /**
+   * Drawing-buffer pixels per CSS pixel: the renderer's own resolution
+   * scale (its quality port's `pixelRatio`, 1 while that is 0, browser
+   * recommended), not the device's.
+   */
+  function scenePixelRatio() {
+    const ratio = viewer
+      ? rendererOf(viewer)?.quality?.get?.()?.pixelRatio
+      : undefined;
+    return Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+  }
+
   // News placed no closer than a country: one badge at its centre with the
   // number of reports, in place of that many markers piled there.
-  function renderCountryBadges(entities, drawn, labels) {
+  function renderCountryBadges(list, drawn, labels) {
     countryBadges = new Map();
     const groups = countryGroups(
       drawn.filter((r) => r.id !== selectedId && onMap(r)),
     );
     for (const group of groups) {
       countryBadges.set(group.key, group);
-      const position = cesium.Cartesian3.fromDegrees(group.lon, group.lat);
+      const position = fromDegrees(group.lon, group.lat);
       const size = COUNTRY_BADGE_PX;
-      const sprite = countSprite(
-        group.count,
-        size * (viewer?.scene?.pixelRatio || 1),
-      );
-      const color = cesium.Color.fromCssColorString(DISPUTED_COLOR);
-      entities.add({
-        id: `${COUNTRY_PREFIX}${group.key}`,
-        position,
-        ...(sprite
-          ? {
-              billboard: {
-                image: sprite,
-                width: Math.round(size * SPRITE_SCALE),
-                height: Math.round(size * SPRITE_SCALE),
-                disableDepthTestDistance: Number.POSITIVE_INFINITY,
-              },
-            }
-          : {
-              point: {
-                pixelSize: size,
-                color: color.withAlpha(0.3),
-                outlineColor: color,
-                outlineWidth: 2,
-                disableDepthTestDistance: Number.POSITIVE_INFINITY,
-              },
-            }),
-      });
+      const sprite = countSprite(group.count, size * scenePixelRatio());
+      const id = `${COUNTRY_PREFIX}${group.key}`;
+      if (sprite)
+        list.place('icons', {
+          id,
+          pos: position,
+          image: sprite,
+          size: [
+            Math.round(size * SPRITE_SCALE),
+            Math.round(size * SPRITE_SCALE),
+          ],
+          disableDepthTest: OVER_TERRAIN,
+        });
+      else
+        list.place('points', {
+          id,
+          pos: position,
+          pixelSize: size,
+          color: rgba(DISPUTED_COLOR, 0.3),
+          outlineColor: rgba(DISPUTED_COLOR),
+          outlineWidth: 2,
+          disableDepthTest: OVER_TERRAIN,
+        });
       labels.push(
         ambientLabel({
           id: `country:${group.key}`,
@@ -789,18 +852,13 @@ export function createNewsLayer({
   }
 
   function render() {
-    if (!dataSource) return;
-    const entities = dataSource.entities;
-    // Removed before events are suspended: a marker removed and re-added
-    // under the same id in one suspended batch reaches Cesium's visualizers
-    // as "changed", and they keep drawing the removed entity (i.e. nothing).
-    entities.removeAll();
-    entities.suspendEvents();
+    if (!sets) return;
+    const list = drawList();
     const labels = [];
     const detail = detailMode();
     shownDetail = detail;
-    if (detail) renderHotspotOutlines(entities, labels);
-    else renderBeacons(entities, labels);
+    if (detail) renderHotspotOutlines(list, labels);
+    else renderBeacons(list, labels);
     // A report picked in the feed or In view still gets its marker.
     const current = selected();
     const elsewhere = catchAllIds();
@@ -814,26 +872,15 @@ export function createNewsLayer({
       current && !shown.some((r) => r.id === current.id)
         ? [...shown, current]
         : shown;
-    renderMarkers(entities, drawn);
-    renderCountryBadges(entities, drawn, labels);
+    renderMarkers(list, drawn);
+    renderCountryBadges(list, drawn, labels);
     if (enabled) creditReports(drawn.filter((r) => r.pins.length && onMap(r)));
-    entities.resumeEvents();
     showOutlines(detail);
-    const at = cesium.JulianDate.now();
-    cullTargets = entities.values
-      .filter((entity) => (entity.point || entity.billboard) && entity.position)
-      .map((entity) => ({
-        position: entity.position.getValue(at),
-        developing: String(entity.id).startsWith(DEVELOPING_PREFIX),
-        get show() {
-          return entity.show;
-        },
-        set show(value) {
-          entity.show = value;
-        },
-      }))
-      .filter((target) => target.position);
-    horizon.update();
+    // Culled before they are written: the far side never draws a frame.
+    cullTargets = list.targets;
+    horizon.update(cullTargets, { quiet: true });
+    for (const kind of ['halos', 'points', 'icons', 'boxes'])
+      sets[kind].set(list[kind]);
     updatePulse();
     if (drawPictureCards)
       // At every height: zoomed out, a hotspot's reports give way to its
@@ -860,13 +907,16 @@ export function createNewsLayer({
       report,
       report.pins[selectedPin] ? selectedPin : 0,
     );
-    entity.__localBaseCartesian = cesium.Cartesian3.fromDegrees(lon, lat);
+    entity.__localBaseCartesian = fromDegrees(lon, lat);
     registerEntityContext(entity, {
+      // Where voice's in-view scan projects it.
+      targetPosition: entity.__localBaseCartesian,
       id: `news-report:${report.id}`,
       layerId: NEWS_LAYER_ID,
       layerName: 'News',
       source: report.publisher,
-      dataSource,
+      // Active while the layer draws.
+      dataSource: contextSource,
       label: report.title, // i18n-ignore: publisher headline (data)
       latitude: place.lat,
       longitude: place.lon,
@@ -894,41 +944,33 @@ export function createNewsLayer({
     notify();
   }
 
-  function flyTo(navigate) {
+  function flyTo(destination, durationS) {
     if (!runNavigation || !viewer) return;
-    runNavigation(() => (enabled && !destroyed ? navigate() : undefined));
+    runNavigation(() =>
+      enabled && !destroyed
+        ? findCamera(viewer)?.flyTo(destination, {
+            durationS: reducedMotion() ? 0 : durationS,
+          })
+        : undefined,
+    );
   }
 
   // A card's click: straight down over the event from 150 km.
   function focusReport(report) {
     if (!report?.pins.length) return;
     const { lat, lon } = report.pins[selectedPin] || report.pins[0];
-    flyTo(() =>
-      viewer.camera.flyTo({
-        destination: cesium.Cartesian3.fromDegrees(
-          lon,
-          lat,
-          NEWS_FOCUS_HEIGHT_M,
-        ),
-        duration: reducedMotion() ? 0 : 1.4,
-      }),
-    );
+    flyTo({ lon, lat, height: NEWS_FOCUS_HEIGHT_M }, 1.4);
   }
 
-  function focusRectangle([w, s, e, n]) {
-    flyTo(() =>
-      viewer.camera.flyTo({
-        destination: cesium.Rectangle.fromDegrees(w, s, e, n),
-        duration: reducedMotion() ? 0 : 1.6,
-      }),
-    );
+  function focusRectangle([west, south, east, north]) {
+    flyTo({ rect: { west, south, east, north } }, 1.6);
   }
 
-  // Hotspot extents (and developing countries) are drawn in their own data
-  // source, built once per outline and only shown or hidden afterwards:
-  // ground polygons over 3D tiles are slow to build, so they are never
-  // rebuilt on a re-render. A hotspot's fill clears when it is the chosen
-  // one so its border stays readable over the reports inside.
+  // Hotspot extents (and developing countries) are drawn in sets of their
+  // own, built once per outline and only shown or hidden afterwards: ground
+  // polygons over 3D tiles are slow to build, so they are never rebuilt on a
+  // re-render. A hotspot's fill clears when it is the chosen one so its
+  // border stays readable over the reports inside.
   const outlineParts = new Map();
   const outlineRequests = new Set();
   const outlineDisputed = new Map();
@@ -937,63 +979,55 @@ export function createNewsLayer({
     { polygons, borders, disputed = [] },
     { color, fillAlpha, pickId, lineAlpha = 0.85, width = 2 },
   ) {
-    if (!outlineSource || outlineParts.has(key)) return;
-    const css = cesium.Color.fromCssColorString(color);
+    if (!sets || outlineParts.has(key)) return;
     const parts = { fills: [], borders: [] };
-    const ring = (points) => cesium.Cartesian3.fromDegreesArray(points.flat());
-    const closed = (points) => ring([...points, points[0]]);
-    const line = (id, positions, width, material) =>
-      parts.borders.push(
-        outlineSource.entities.add({
-          id,
-          show: false,
-          polyline: { positions, width, clampToGround: true, material },
-        }),
-      );
+    const lonLat = (points) => points.map(([lon, lat]) => ({ lon, lat }));
+    const closed = (points) =>
+      [...points, points[0]].map(([lon, lat]) => fromDegrees(lon, lat));
+    const line = (id, positions, widthPx, style) =>
+      parts.borders.push({
+        id,
+        show: false,
+        positions,
+        widthPx,
+        mode: 'draped',
+        style,
+      });
     for (const [index, polygon] of polygons.entries()) {
       if (fillAlpha > 0)
-        parts.fills.push(
-          outlineSource.entities.add({
-            id: `${pickId}~fill${index}`,
-            show: false,
-            polygon: {
-              hierarchy: new cesium.PolygonHierarchy(
-                ring(polygon.outer),
-                polygon.holes.map(
-                  (hole) => new cesium.PolygonHierarchy(ring(hole)),
-                ),
-              ),
-              material: css.withAlpha(fillAlpha),
-              classificationType: cesium.ClassificationType.BOTH,
-            },
-          }),
-        );
+        parts.fills.push({
+          id: `${pickId}~fill${index}`,
+          show: false,
+          geometry: {
+            kind: 'polygon',
+            rings: [polygon.outer, ...polygon.holes].map(lonLat),
+          },
+          fill: rgba(color, fillAlpha),
+          height: 'clampGround',
+        });
       for (const [k, points] of [polygon.outer, ...polygon.holes].entries())
-        line(
-          `${pickId}~line${index}.${k}`,
-          closed(points),
-          width,
-          css.withAlpha(lineAlpha),
-        );
+        line(`${pickId}~line${index}.${k}`, closed(points), width, {
+          kind: 'solid',
+          color: rgba(color, lineAlpha),
+        });
     }
     // National borders inside a multi-country hotspot: thin and dashed.
     for (const [index, points] of borders.entries())
-      line(
-        `${pickId}~border${index}`,
-        closed(points),
-        1.5,
-        new cesium.PolylineDashMaterialProperty({
-          color: css.withAlpha(0.6),
-          dashLength: 12,
-        }),
-      );
-    const dotted = new cesium.PolylineDashMaterialProperty({
-      color: cesium.Color.fromCssColorString(DISPUTED_COLOR).withAlpha(0.9),
-      dashLength: 6,
-    });
+      line(`${pickId}~border${index}`, closed(points), 1.5, {
+        kind: 'dash',
+        color: rgba(color, 0.6),
+        length: 12,
+      });
+    const dotted = {
+      kind: 'dash',
+      color: rgba(DISPUTED_COLOR, 0.9),
+      length: 6,
+    };
     for (const [index, area] of disputed.entries())
       for (const [k, points] of area.rings.entries())
         line(`${pickId}~disputed${index}.${k}`, closed(points), 2, dotted);
+    if (parts.fills.length) sets.outlineFills.upsert(parts.fills);
+    if (parts.borders.length) sets.outlineLines.upsert(parts.borders);
     outlineDisputed.set(key, disputed);
     outlineParts.set(key, parts);
   }
@@ -1044,6 +1078,8 @@ export function createNewsLayer({
       localMode() && inView.area ? `local:${inView.area.key}` : null;
     // The built-in server's area outlines are Natural Earth's.
     credit(NATURAL_EARTH_CREDIT, enabled && outlineParts.has(localKey));
+    const changedFills = [];
+    const changedBorders = [];
     for (const [key, parts] of outlineParts) {
       const country = key.startsWith('developing:') ? key.slice(11) : null;
       const isLocal = key.startsWith('local:');
@@ -1055,11 +1091,19 @@ export function createNewsLayer({
             ? developing.has(country)
             : detail);
       const fill = visible && !country && !isLocal && filters.hotspot !== key;
-      for (const entity of parts.fills)
-        if (entity.show !== fill) entity.show = fill;
-      for (const entity of parts.borders)
-        if (entity.show !== visible) entity.show = visible;
+      for (const item of parts.fills)
+        if (item.show !== fill) {
+          item.show = fill;
+          changedFills.push(item);
+        }
+      for (const item of parts.borders)
+        if (item.show !== visible) {
+          item.show = visible;
+          changedBorders.push(item);
+        }
     }
+    if (sets && changedFills.length) sets.outlineFills.upsert(changedFills);
+    if (sets && changedBorders.length) sets.outlineLines.upsert(changedBorders);
   }
 
   const shownCount = () =>
@@ -1300,18 +1344,20 @@ export function createNewsLayer({
   }
 
   function installSelection() {
-    if (clickHandler || !viewer?.scene?.canvas) return;
-    clickHandler = new cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    clickHandler.setInputAction((click) => {
-      if (!enabled || destroyed || !isPointerFree() || !click?.position) return;
-      const card = hitTestOverlay(click.position.x, click.position.y, {
+    if (clickOff || !viewer || !inputFor) return;
+    clickOff = inputFor(viewer).onClick((event) => {
+      const at = event?.screenPosition;
+      if (!enabled || destroyed || !isPointerFree() || !at) return;
+      const card = hitTestOverlay(at.x, at.y, {
         sourceId: NEWS_OVERLAY_SOURCE_ID,
       });
       if (card?.entry?.activate) {
         card.entry.activate();
         return;
       }
-      const picked = viewer.scene.pick(click.position);
+      // What is on top under the click: a draw-set item, or null for the
+      // map itself or nothing.
+      const picked = event.topHit;
       const id = picked ? resolvePickId(picked) : null;
       if (typeof id === 'string' && id.startsWith(REPORT_PREFIX)) {
         const [reportId, pin] = id.slice(REPORT_PREFIX.length).split('~');
@@ -1363,12 +1409,12 @@ export function createNewsLayer({
       }
       if (id && isOwnedByOtherLayer(NEWS_LAYER_ID, id)) return;
       if (selectedId && !picked?.id) layer.setParams({ clear: true });
-    }, cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
   }
 
   function removeSelection() {
-    if (clickHandler && !clickHandler.isDestroyed?.()) clickHandler.destroy();
-    clickHandler = null;
+    clickOff?.();
+    clickOff = null;
   }
 
   function feedView() {
@@ -1439,12 +1485,46 @@ export function createNewsLayer({
 
     init(nextViewer) {
       viewer = nextViewer;
-      dataSource = new cesium.CustomDataSource(NEWS_LAYER_ID);
-      outlineSource = new cesium.CustomDataSource(`${NEWS_LAYER_ID}-outlines`);
-      dataSource.show = false;
-      outlineSource.show = false;
-      viewer.dataSources?.add(outlineSource);
-      viewer.dataSources?.add(dataSource);
+      // A scene with no renderer to draw with draws nothing.
+      const draw = viewer ? findDraw(viewer) : null;
+      if (draw && !sets) {
+        const base = `${NEWS_LAYER_ID}:${++instances}`;
+        // The outlines lowest, then halos under the markers they ring: sets
+        // at one draw order (the default, with the other overlays) draw in
+        // the order they were made.
+        sets = {
+          outlineFills: draw.shapes({
+            id: `${base}:outline-fills`,
+            clampTo: 'both',
+            show: false,
+          }),
+          outlineLines: draw.lines({
+            id: `${base}:outline-lines`,
+            clampTo: 'both',
+            show: false,
+          }),
+          boxes: draw.lines({
+            id: `${base}:boxes`,
+            clampTo: 'both',
+            show: false,
+          }),
+          halos: draw.points({
+            id: `${base}:halos`,
+            clampTo: 'both',
+            show: false,
+          }),
+          points: draw.points({
+            id: `${base}:points`,
+            clampTo: 'both',
+            show: false,
+          }),
+          icons: draw.icons({
+            id: `${base}:icons`,
+            clampTo: 'both',
+            show: false,
+          }),
+        };
+      }
       overlayHost.setVisible(NEWS_OVERLAY_SOURCE_ID, false);
     },
     attachShellServices(services) {
@@ -1456,8 +1536,7 @@ export function createNewsLayer({
     enable() {
       if (destroyed || enabled) return;
       enabled = true;
-      if (dataSource) dataSource.show = true;
-      if (outlineSource) outlineSource.show = true;
+      if (sets) for (const set of Object.values(sets)) set.show = true;
       overlayHost.setVisible(NEWS_OVERLAY_SOURCE_ID, true);
       registerPickOwner(
         NEWS_LAYER_ID,
@@ -1466,11 +1545,13 @@ export function createNewsLayer({
       installSelection();
       // Re-render only when a camera move crosses the detail threshold.
       removeCameraListener =
-        viewer?.camera?.moveEnd?.addEventListener?.(() => {
-          if (!enabled) return;
-          if (detailMode() !== shownDetail) render();
-          scheduleInView();
-        }) || null;
+        (viewer &&
+          findCamera(viewer)?.on('moveEnd', () => {
+            if (!enabled) return;
+            if (detailMode() !== shownDetail) render();
+            scheduleInView();
+          })) ||
+        null;
     },
     disable() {
       enabled = false;
@@ -1491,9 +1572,11 @@ export function createNewsLayer({
       removeCameraListener = null;
       horizon.stop();
       cullTargets = [];
-      clearInterval(pulseTimer);
-      pulseTimer = null;
-      if (outlineSource) outlineSource.show = false;
+      stopPulse();
+      if (sets) {
+        sets.outlineFills.show = false;
+        sets.outlineLines.show = false;
+      }
       selectedId = null;
       clearSelectedEntityContextForLayer(NEWS_LAYER_ID);
       removeEntityContextsForLayer(NEWS_LAYER_ID);
@@ -1502,10 +1585,11 @@ export function createNewsLayer({
       inView = emptyInView();
       needs = { conflicts: null, local: null };
       mapReports = [];
-      if (dataSource) {
-        dataSource.entities.removeAll();
-        dataSource.show = false;
-      }
+      if (sets)
+        for (const kind of ['halos', 'points', 'icons', 'boxes']) {
+          sets[kind].clear();
+          sets[kind].show = false;
+        }
       overlayHost.clearSource(NEWS_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(NEWS_OVERLAY_SOURCE_ID, false);
       drawPictureCards?.([], { selectedId: null });
@@ -1673,11 +1757,8 @@ export function createNewsLayer({
       if (destroyed) return;
       layer.disable();
       destroyed = true;
-      if (viewer && dataSource) viewer.dataSources?.remove(dataSource, true);
-      if (viewer && outlineSource)
-        viewer.dataSources?.remove(outlineSource, true);
-      dataSource = null;
-      outlineSource = null;
+      if (sets) for (const set of Object.values(sets)) set.dispose();
+      sets = null;
       outlineParts.clear();
       outlineDisputed.clear();
       viewer = null;
