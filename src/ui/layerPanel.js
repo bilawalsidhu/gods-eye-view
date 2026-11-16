@@ -775,13 +775,7 @@ export class LayerPanel {
       typeof stats.statusMessage === 'string' &&
       stats.statusMessage.trim()
     ) {
-      // A guidance prompt is the operator's next step, so it keeps the
-      // three-segment shape with the prompt in the third slot.
-      return t('{state} · {source} · {detail}', {
-        state: stateLabel,
-        source,
-        detail: translateStatusMessage(stats.statusMessage.trim()),
-      });
+      return `${source} · ${translateStatusMessage(stats.statusMessage.trim())}`;
     }
     const ago = stats.lastUpdate
       ? this._timeAgo(stats.lastUpdate, stats.atMs)

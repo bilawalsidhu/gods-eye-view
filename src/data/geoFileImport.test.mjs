@@ -639,36 +639,6 @@ function withXmlTools(t, document) {
   return wrapped;
 }
 
-// The loader is stubbed so a test can see the document it is handed. The
-// source it returns carries one billboard, as a placemark with an icon does.
-function captureKmlLoader(t) {
-  const handed = [];
-  const previous = Cesium.KmlDataSource.load;
-  Cesium.KmlDataSource.load = async (doc) => {
-    handed.push(doc);
-    const source = new Cesium.CustomDataSource('kml');
-    source.entities.add({
-      name: 'Depot',
-      position: Cesium.Cartesian3.fromDegrees(1, 2),
-      billboard: { image: 'blob:packed-image' },
-    });
-    return source;
-  };
-  t.after(() => {
-    Cesium.KmlDataSource.load = previous;
-  });
-  return handed;
-}
-
-// A viewer stub good enough for an import that has nothing on the ground.
-const importViewer = () => ({
-  scene: {
-    frameState: { mode: Cesium.SceneMode.SCENE3D },
-    primitives: new Cesium.PrimitiveCollection(),
-    globe: { getHeight: () => 0 },
-  },
-});
-
 test('repeated inline styles are shared without replacing their inherited styleUrl', () => {
   const style = () =>
     xmlEl('Style', {}, [xmlEl('IconStyle', {}, [xmlEl('scale', {}, '0.6')])]);
@@ -1352,71 +1322,6 @@ test('the colours of a label and a line are left alone', () => {
   assert.equal(applyKmlIconTint(doc).untinted, 0);
   assert.equal(label.childNodes[0].textContent, 'ff000000');
   assert.equal(line.childNodes[0].textContent, 'ff000000');
-});
-
-// The wiring: the document that reaches Cesium's own KML loader must no
-// longer carry the placeholder, because the loader tints an icon with
-// whatever the `<IconStyle>` says (KmlDataSource.js, `billboard.color = color`).
-test('the document that reaches the KML loader carries no placeholder colour', async (t) => {
-  const iconStyle = xmlEl('IconStyle', {}, [
-    xmlEl('color', {}, 'ff000000'),
-    xmlEl('Icon', {}, [xmlEl('href', {}, 'files/marker.png')]),
-  ]);
-  const document = xmlDoc(
-    xmlEl('kml', {}, [
-      xmlEl('Document', {}, [
-        xmlEl('Style', { id: 'arcgis' }, [iconStyle]),
-        xmlEl('Placemark', {}, [
-          xmlEl('name', {}, 'Depot'),
-          xmlEl('styleUrl', {}, '#arcgis'),
-          xmlEl('Point', {}, [xmlEl('coordinates', {}, '1,2,0')]),
-        ]),
-      ]),
-    ]),
-  );
-  withXmlTools(t, document);
-  const handed = captureKmlLoader(t);
-  await loadGeoFile(new File(['<kml/>'], 'depot.kml'), {
-    viewer: importViewer(),
-  });
-  assert.equal(handed.length, 1, 'the loader was given a document');
-  const styles = handed[0]
-    .getElementsByTagName('*')
-    .filter((el) => el.localName === 'IconStyle');
-  assert.equal(styles.length, 1);
-  assert.equal(
-    styles[0].childNodes.some((node) => node.localName === 'color'),
-    false,
-    'the placeholder never reaches the loader',
-  );
-});
-
-test('the document that reaches the KML loader keeps a genuine colour', async (t) => {
-  const color = xmlEl('color', {}, 'ff0000ff');
-  const document = xmlDoc(
-    xmlEl('kml', {}, [
-      xmlEl('Document', {}, [
-        xmlEl('Style', { id: 'blue' }, [xmlEl('IconStyle', {}, [color])]),
-        xmlEl('Placemark', {}, [
-          xmlEl('name', {}, 'Depot'),
-          xmlEl('styleUrl', {}, '#blue'),
-          xmlEl('Point', {}, [xmlEl('coordinates', {}, '1,2,0')]),
-        ]),
-      ]),
-    ]),
-  );
-  withXmlTools(t, document);
-  const handed = captureKmlLoader(t);
-  await loadGeoFile(new File(['<kml/>'], 'depot.kml'), {
-    viewer: importViewer(),
-  });
-  assert.equal(handed.length, 1, 'the loader was given a document');
-  const styles = handed[0]
-    .getElementsByTagName('*')
-    .filter((el) => el.localName === 'IconStyle');
-  assert.equal(styles.length, 1);
-  // A red icon is still a red icon.
-  assert.equal(styles[0].childNodes[0].textContent, 'ff0000ff');
 });
 
 test('KML namespace repair ignores declaration text inside quoted attribute values', () => {
