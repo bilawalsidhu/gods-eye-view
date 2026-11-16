@@ -219,7 +219,7 @@ test('a lost or silent connection is retried on a ladder, and stale events are i
   assert.equal(third.terminated, true);
 });
 
-test('a reconnect cannot mark the previous socket\'s joint samples live', () => {
+test("a reconnect cannot mark the previous socket's joint samples live", () => {
   const { relay, sockets, clock } = relayAt(NOV_13);
   relay.demand();
   const first = sockets[0];
@@ -256,10 +256,7 @@ test('a reconnect cannot mark the previous socket\'s joint samples live', () => 
     {},
     'the new clock must not revive old joint angles',
   );
-  second.emit(
-    'message',
-    `U,1,${index('S0000004')},${stampOf(clock.ms)}|23|24`,
-  );
+  second.emit('message', `U,1,${index('S0000004')},${stampOf(clock.ms)}|23|24`);
   assert.deepEqual(relay.snapshot().items.S0000004, [23, clock.ms]);
 });
 test('a refused or ended session starts over', () => {
