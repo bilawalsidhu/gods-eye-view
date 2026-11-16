@@ -1,6 +1,6 @@
 import { followedOf } from '../data/followed.js';
 import { readEntityRecord } from '../data/entityRecords.js';
-import { nextTick } from 'vue';
+import { nextTick, watch } from 'vue';
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
 import { ShellFacade } from './shellFacade.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
@@ -25,6 +25,7 @@ import { CctvControls } from './cctv.js';
 import { StreetLevelControls } from './streetLevelControls.js';
 import { createWildlifeSightingCard } from './wildlifeSightingCard.js';
 import { RadioControls } from './radio.js';
+import { LiveControls } from './liveControls.js';
 import { LocalSdrControls } from './localSdrControls.js';
 import { LocationNavigation } from './locationNavigation.js';
 import { bindCameraOrientationControls } from './cameraOrientationControls.js';
@@ -62,6 +63,8 @@ import { applyLocaleChoice } from './localePicker.js';
 import { PanelNavigation } from './panelNavigation.js';
 import { applicationPinia, createUiRuntime } from './vueRuntime.js';
 import { useContextStore } from './stores/context.js';
+import { useLiveStore } from './stores/live.js';
+import { useStationStore } from './stores/station.js';
 import { useMissionReplayStore } from './stores/missionReplay.js';
 import { useCelestialRingStore } from './stores/celestialRing.js';
 import { icrfToFixedAxes } from '../sky/icrf.js';
@@ -994,6 +997,7 @@ export class StyleManager extends ShellFacade {
       militaryInstallationsLayer,
       militaryAwarenessLayer,
       rocketLaunchesLayer,
+      satellitesLayer,
     } = this.services;
     const contextStore = useContextStore(applicationPinia());
     this._contextControls = new ContextControls({
@@ -1050,6 +1054,39 @@ export class StyleManager extends ShellFacade {
       rocketLaunchesLayer?.subscribeReplayOverlay?.((view) =>
         missionReplayStore.publish(view),
       );
+    // The STATION section: the selected space station's moving parts, as
+    // the satellites layer presents them; its controls reach the layer.
+    const stationStore = useStationStore(applicationPinia());
+    this._stationPanelUnsubscribe?.();
+    if (this._stationOwner) stationStore.detach(this._stationOwner);
+    this._stationOwner = null;
+    stationStore.publish(null);
+    if (satellitesLayer?.getStationActions)
+      this._stationOwner = stationStore.connect(
+        satellitesLayer.getStationActions(),
+      );
+    this._stationPanelUnsubscribe = satellitesLayer?.subscribeStationPanel?.(
+      (view) => stationStore.publish(view),
+    );
+    // The LIVE section: streams attached to whatever the tracking layers
+    // select, in the platform's own player, started as soon as one is chosen.
+    this._liveControls?.destroy();
+    const liveStore = useLiveStore(applicationPinia());
+    this._liveControls = new LiveControls({
+      store: liveStore,
+      actions: {
+        getLayer: (layerId) =>
+          this._dataManager?.layers?.get(layerId)?.module ?? null,
+        scheduleLayout: () => this._scheduleRightPanelLayout(),
+      },
+    });
+    // The Cockpit briefing offers its LIVE page while a stream is on offer.
+    this._liveOfferedUnwatch?.();
+    this._liveOfferedUnwatch = watch(
+      () => liveStore.view !== null,
+      (offered) => this.cockpitView?.setBriefLiveOffered?.(offered),
+      { immediate: true },
+    );
   }
 
   /** Wire the independent Radio companion controls. */
@@ -1907,6 +1944,14 @@ export class StyleManager extends ShellFacade {
     this.services?.streetLevelLayer?.attachNavigation?.(null);
     this._streetLevelControls?.destroy();
     this._radioControls?.destroy();
+    this._liveControls?.destroy();
+    this._liveOfferedUnwatch?.();
+    this._liveOfferedUnwatch = null;
+    this._stationPanelUnsubscribe?.();
+    this._stationPanelUnsubscribe = null;
+    if (this._stationOwner)
+      useStationStore(applicationPinia()).detach(this._stationOwner);
+    this._stationOwner = null;
     this._localSdrControls?.destroy();
     this._awarenessPanelUnsubscribe?.();
     this._awarenessPanelUnsubscribe = null;

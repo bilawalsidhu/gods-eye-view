@@ -1,4 +1,5 @@
 import { inputFor } from '../../input/dispatcher.js';
+import { modelHitNorad } from './stationModels.js';
 import { onFollowChanged } from '../../data/followed.js';
 
 export function createInteraction({
@@ -63,12 +64,11 @@ export function createInteraction({
         parts.tracking._trackSatellite(noradId, { origin: 'user' });
         return;
       }
-      // A station's 3D model carries its NORAD number as its pick id. A click
+      // A station's 3D model (stationModel.js) names its station. A click
       // on the tracked station's own model is already tracked; on another
       // station's model it tracks that one.
-      const modelPickId = picked?.primitive?.id;
-      const modelNorad = Number(modelPickId);
-      if (modelPickId != null && Number.isFinite(modelNorad)) {
+      const modelNorad = modelHitNorad(parts, hit);
+      if (modelNorad !== null) {
         if (modelNorad === layerState._trackedNorad) return;
         if (layerState._catalog.has(modelNorad)) {
           parts.tracking._cancelPendingTrackingRestore();

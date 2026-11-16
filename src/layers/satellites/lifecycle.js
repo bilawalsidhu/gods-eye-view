@@ -43,7 +43,8 @@ export function createLifecycle({
       const frame = frameOf(viewer);
       parts.catalog._abortActiveUpdates();
       clearFocusTarget('satellites');
-      parts.issModel?._destroyIssModel();
+      for (const model of parts.stationModels ?? [])
+        model._destroyStationModel();
       layerState._viewer = viewer;
       layerState._catalog = new Map();
       layerState._points = new Map();
@@ -135,10 +136,10 @@ export function createLifecycle({
       releaseContinuousRender('satellites');
       parts.rendering._setPointsShown(false);
       parts.rendering._setOrbitPathsShown(false);
-      parts.issModel?._updateIssModel(); // off: hides the model
+      for (const model of parts.stationModels ?? [])
+        model._updateStationModel(); // off: hides the model
       parts.tracking._clearTracking();
-      parts.issLive?._syncIssLive(); // off: closes the live video
-      parts.issCommand?._syncIssCommand(); // off: closes the command panel
+      parts.stationPanel?._syncStationPanel(); // off: takes the panel down
       parts.labels._syncIssOverlay();
       // Remove click handler + keydown listener + preRender propagation while disabled
       layerState._clickSubscription?.();
@@ -176,9 +177,9 @@ export function createLifecycle({
       }
       layerState._overlayHost.clearSource(ISS_OVERLAY_SOURCE_ID);
       layerState._overlayHost.setVisible(ISS_OVERLAY_SOURCE_ID, false);
-      parts.issModel?._destroyIssModel();
-      parts.issLive?._destroyIssLive();
-      parts.issCommand?._destroyIssCommand();
+      for (const model of parts.stationModels ?? [])
+        model._destroyStationModel();
+      parts.stationPanel?._destroyStationPanel();
       // The dots', tracked dot's and rings' sets are disposed of
       parts.rendering._detach(viewer);
       layerState._points.clear();

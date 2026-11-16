@@ -253,7 +253,10 @@
     "{minutes} min",
     "1 min/s",
     "Status",
-    "ISS LIVE · NASA"
+    "ON AIR",
+    "Stream",
+    "{seconds} s",
+    "Mode"
   ],
   "es": [
     "1 min/s",
@@ -419,7 +422,8 @@
     "Regional",
     "{datasets} · {tiles} · {packs}",
     "VIRTUAL",
-    "Manual"
+    "Manual",
+    "{seconds} s"
   ],
   "fr": [
     "1 min/s",
@@ -643,7 +647,8 @@
     "Orthophoto",
     "Oblique",
     "Type",
-    "{range} NM"
+    "{range} NM",
+    "{seconds} s"
   ],
   "it": [
     "1 min/s",
@@ -850,7 +855,8 @@
     "NORAD: {id}",
     "DATASET",
     "{count} datasets",
-    "ZOOM"
+    "ZOOM",
+    "{seconds} s"
   ],
   "ja": [
     "1090 MHz",
@@ -1082,7 +1088,8 @@
     "NORAD: {id}",
     "Regional",
     "VIRTUAL",
-    "Manual"
+    "Manual",
+    "{seconds} s"
   ],
   "ru": [
     "1900–1945",
@@ -1281,7 +1288,7 @@
     "NORAD: {id}",
     "MMSI: {id}",
     "Status",
-    "ISS LIVE · NASA"
+    "{seconds} s"
   ],
   "uk": [
     "1900–1945",

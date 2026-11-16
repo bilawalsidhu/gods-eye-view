@@ -1,19 +1,21 @@
 import { cameraOf } from '../../render/rendererOf.js';
 import { entityFollowTarget, stopFollowing } from '../../data/followed.js';
 import { satelliteClassText } from '../../data/satelliteClass.js';
-import { fromDegreesInto } from '../../geo/ellipsoid.js';
-import { clone, scale } from '../../geo/vector.js';
+import { fromDegrees, fromDegreesInto } from '../../geo/ellipsoid.js';
+import { clone, distance, scale } from '../../geo/vector.js';
 import { t } from '../../i18n/index.js';
 import { formatQuantity, unitLabel } from '../../ui/unitLabels.js';
 import {
-  ISS_NORAD,
   CONTEXT_REFRESH_INTERVAL_MS,
   HIGH_ORBIT_ALTITUDE_M,
+  ISS_NORAD,
+  STATIONS,
   TRACK_VIEW_FROM_HIGH_SCALE,
   TRACK_VIEW_FROM_LEO,
   TRACKED_ORBIT_COLOR,
 } from './policy.js';
 import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
+import { modelFor } from './stationModels.js';
 
 export function createTracking({ state: layerState, services, parts, source }) {
   const { clearFocusTarget } = services.focus;
@@ -118,6 +120,8 @@ export function createTracking({ state: layerState, services, parts, source }) {
       layerState._trackedEntity = null;
     }
     layerState._trackedNorad = null;
+    layerState._trackedDockedToStation = null;
+    layerState._trackedDockedToIss = false;
     parts.controls._syncIssOrbit?.();
     // A held Cockpit subject that stops being tracked gets its marks back.
     if (layerState._cockpitSubjectNorad !== null)
@@ -384,13 +388,11 @@ export function createTracking({ state: layerState, services, parts, source }) {
           : t('DOCKED · {name}', { name: companions[0] }),
       );
     }
-    // While the ISS model shows, the card keeps clear of it: the gap follows
-    // the station's size on screen, in steps so the card is not republished
-    // every frame.
+    // While a station's model shows, the card keeps clear of it: the gap
+    // follows the station's size on screen, in steps so the card is not
+    // republished every frame.
     const clearPx =
-      layerState._trackedNorad === ISS_NORAD
-        ? parts.issModel?._issCardClearPx?.()
-        : null;
+      modelFor(parts, layerState._trackedNorad)?._cardClearPx?.() ?? null;
     // The overlay's gap is twice the anchor radius, so half the clearance.
     const anchorRadiusPx = clearPx ? Math.round(clearPx / 8) * 4 : null;
     const current = readEntityRecord(layerState._trackedEntity)?.labelModel;
@@ -411,6 +413,33 @@ export function createTracking({ state: layerState, services, parts, source }) {
     refreshTrackedReadout(layerState._trackedEntity);
   }
 
+  /**
+   * The station a satellite is docked to: both orbits, propagated to one
+   * instant, within the station's companion radius (dots are moved at
+   * different moments, so their spacing cannot say). A station is docked to
+   * nothing, and the dense group never is.
+   * @param {number} noradId
+   * @returns {number|null} The station's NORAD number, or null.
+   */
+  function _dockedToStation(noradId) {
+    if (STATIONS.some((station) => station.norad === noradId)) return null;
+    const sat = layerState._catalog.get(noradId);
+    if (!sat?.satrec || sat.group === 'dense') return null;
+    const date = new Date(layerState.now());
+    const at = (p) => fromDegrees(p.longitude, p.latitude, p.altitude);
+    let own = null;
+    for (const station of STATIONS) {
+      const entry = layerState._catalog.get(station.norad);
+      if (!entry?.satrec) continue;
+      own ??= parts.orbits.propagatePosition(sat.satrec, date);
+      if (!own) return null;
+      const there = parts.orbits.propagatePosition(entry.satrec, date);
+      if (there && distance(at(own), at(there)) <= station.companionRadiusM)
+        return station.norad;
+    }
+    return null;
+  }
+
   function _trackSatellite(noradId, { origin = 'programmatic' } = {}) {
     _clearTracking(false, { origin });
 
@@ -425,9 +454,18 @@ export function createTracking({ state: layerState, services, parts, source }) {
     // Hide the dot — the tracked dot draws it, larger and over everything.
     parts.rendering._hidePoint(noradId);
 
-    // Show orbital path
-    parts.rendering._showOrbitPath(noradId, TRACKED_ORBIT_COLOR);
-    if (noradId === ISS_NORAD) parts.controls._syncIssOrbit?.();
+    // Show orbital path. An object docked to the ISS (Nauka, a Progress…)
+    // flies the station's orbit under elements of its own: its ring would
+    // run beside the ISS's, a second line through the same station. The
+    // ISS's ring stands for it instead. Another station's ring is drawn only
+    // while that station is tracked, so its docked objects keep their own.
+    layerState._trackedDockedToStation = _dockedToStation(noradId);
+    layerState._trackedDockedToIss =
+      layerState._trackedDockedToStation === ISS_NORAD;
+    if (!layerState._trackedDockedToIss)
+      parts.rendering._showOrbitPath(noradId, TRACKED_ORBIT_COLOR);
+    if (noradId === ISS_NORAD || layerState._trackedDockedToIss)
+      parts.controls._syncIssOrbit?.();
 
     // The tracked position propagates per evaluation through the per-frame
     // cache (WS-D2) — dot, host readout, and camera share one SGP4 epoch per frame.
@@ -462,10 +500,11 @@ export function createTracking({ state: layerState, services, parts, source }) {
     entityRecord(layerState._trackedEntity).trackedId = `satellites:${noradId}`;
     entityRecord(layerState._trackedEntity).displayPosition =
       _trackedDisplayCached;
-    // Up close the ISS is a 3D model: the card welds to where it is drawn.
-    if (noradId === ISS_NORAD)
-      entityRecord(layerState._trackedEntity).visualPosition = () =>
-        parts.issModel?._issVisualPosition?.() ?? null;
+    // Up close a station is a 3D model: the card welds to where it is drawn.
+    // So does the card of an object docked to it, which the model stands in
+    // for.
+    entityRecord(layerState._trackedEntity).visualPosition = () =>
+      modelFor(parts, noradId)?._visualPosition?.() ?? null;
     _updateTrackedSatelliteLabelModel(initialPos?.altitude ?? null);
 
     const dotPosition = parts.rendering._pointPosition(noradId);

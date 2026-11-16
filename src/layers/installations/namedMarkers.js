@@ -221,14 +221,20 @@ export function createNamedMarkers({ state, services, parts, overlayHost }) {
           // What `visit` hands out: the marker's id, position and whether
           // it is on this side of the horizon.
           point: { id: { installationId: record.id }, position, show: false },
-          entry: createInfrastructureOverlayEntry({
-            id: record.id,
-            source: LAYER_ID,
-            position,
-            title: installationTitle(record.name),
-            priority: record.areaM2 || 0,
-            accent: COLOR_BY_CLASS[record.class] || '#9ca6b0',
-          }),
+          entry: Object.assign(
+            createInfrastructureOverlayEntry({
+              id: record.id,
+              source: LAYER_ID,
+              position,
+              title: installationTitle(record.name),
+              priority: record.areaM2 || 0,
+              accent: COLOR_BY_CLASS[record.class] || '#9ca6b0',
+            }),
+            // The overlay keeps a hit rect for an interactive entry, so a
+            // click on the label box finds the site (controls.findAt), not
+            // only one on the dot.
+            { interactive: true },
+          ),
         };
         markers.set(record.id, marker);
       } else {

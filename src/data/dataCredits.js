@@ -173,10 +173,22 @@ export const DATA_CREDITS = [
       '<a href="https://science.nasa.gov/3d-resources/international-space-station-iss-d-igoal/" target="_blank" rel="noopener">NASA 3D Resources</a> (JSC IGOAL)',
   },
   {
+    key: 'tiangong-model',
+    html:
+      "Tiangong model: made for God's Eye View; dimensions from " +
+      '<a href="https://doi.org/10.34133/space.0035" target="_blank" rel="noopener">Wang, Zhang &amp; Wang 2023</a> ' +
+      '(CC BY 4.0) and eoPortal',
+  },
+  {
+    key: 'nasa-iss-telemetry',
+    html: 'ISS joint telemetry (where switched on): NASA ISSLive, via Lightstreamer',
+  },
+  {
     key: 'nasa-iss-live',
     html:
-      'ISS live video: NASA, via ' +
-      '<a href="https://www.youtube.com/watch?v=ROboUHfPUrU" target="_blank" rel="noopener">YouTube</a>',
+      'ISS live video (LIVE section): NASA, via YouTube ' +
+      '(<a href="https://www.youtube.com/watch?v=ROboUHfPUrU" target="_blank" rel="noopener">exterior cameras</a>, ' +
+      '<a href="https://www.youtube.com/watch?v=M3HKLzjvKPc" target="_blank" rel="noopener">live video and audio</a>)',
   },
   {
     key: 'ucs-satellite-database',

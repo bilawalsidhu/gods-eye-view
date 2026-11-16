@@ -26,10 +26,12 @@ import {
 import { update } from './cockpitCamera.js';
 import {
   beginOrbital,
+  orbitalViewSignal,
   endOrbital,
   resetOrbitalLook,
   jumpToSensorSwath,
   onOrbitalWheel,
+  stepOrbitalMount,
   stepOrbitalZoom,
   turnOrbitalLook,
   updateOrbital,
@@ -77,6 +79,7 @@ import {
   publishBriefView,
   showBriefPage,
   setBriefAutoRotate,
+  setBriefLiveOffered,
   startBriefRotation,
   stopBriefRotation,
   updateLocalPosition,
@@ -271,6 +274,8 @@ export class CockpitViewController {
     this.signalSignatures = new Map();
     this.briefPageIndex = 0;
     this.briefAutoRotateEnabled = false;
+    /** Whether the briefing offers its LIVE page (the subject has a stream). */
+    this.briefLiveOffered = false;
     // Cockpit's views render what these receive.
     this.publishPresence = publish.presence ?? (() => {});
     this.publishBrief = publish.brief ?? (() => {});
@@ -401,6 +406,10 @@ export class CockpitViewController {
       else if (target?.closest?.('#cockpit-orbital-zoom-out'))
         this.stepOrbitalZoom(-1);
       else if (target?.closest?.('#cockpit-orbital-nadir')) this.orbitalNadir();
+      else if (target?.closest?.('#cockpit-orbital-view-next'))
+        this.nextOrbitalView();
+      else if (target?.closest?.('#cockpit-orbital-view-previous'))
+        this.previousOrbitalView();
       else if (target?.closest?.('#cockpit-orbital-sensor'))
         this.jumpToSensorSwath();
     });
@@ -453,6 +462,26 @@ export class CockpitViewController {
   }
   beginOrbital() {
     return beginOrbital.call(this);
+  }
+
+  orbitalViewSignal(info) {
+    return orbitalViewSignal.call(this, info);
+  }
+
+  /**
+   * The station view's right arrow: step to the station's next view.
+   * @returns {boolean} True when the view changed.
+   */
+  nextOrbitalView() {
+    return stepOrbitalMount.call(this, 1);
+  }
+
+  /**
+   * The station view's left arrow: step back to the view before.
+   * @returns {boolean} True when the view changed.
+   */
+  previousOrbitalView() {
+    return stepOrbitalMount.call(this, -1);
   }
   endOrbital() {
     return endOrbital.call(this);
@@ -710,6 +739,9 @@ export class CockpitViewController {
   }
   setBriefAutoRotate(enabled) {
     return setBriefAutoRotate.call(this, enabled);
+  }
+  setBriefLiveOffered(offered) {
+    return setBriefLiveOffered.call(this, offered);
   }
   startBriefRotation(options) {
     return startBriefRotation.call(this, options);

@@ -5,6 +5,7 @@ import {
   findQuery,
 } from '../render/rendererOf.js';
 import { dot, sub } from '../geo/vector.js';
+import { loadYouTubeApi } from './youtubeApi.js';
 import { t, msg, onLocaleChange } from '../i18n/index.js';
 
 const YOUTUBE_HOSTS = new Set([
@@ -98,60 +99,6 @@ export function bhoteEventText(value) {
 let _xWidgetsPromise = null;
 let _facebookSdkPromise = null;
 let _facebookEmbedSequence = 0;
-const youtubeApis = new WeakMap();
-
-function loadYouTubeApi(documentRef, globalRef) {
-  if (typeof globalRef.YT?.Player === 'function')
-    return Promise.resolve(globalRef.YT);
-  if (youtubeApis.has(documentRef)) return youtubeApis.get(documentRef);
-  const pending = new Promise((resolve, reject) => {
-    const previous = globalRef.onYouTubeIframeAPIReady;
-    let timer;
-    let settled = false;
-    const script = documentRef.createElement('script');
-    const finish = (error) => {
-      if (settled) return;
-      settled = true;
-      globalRef.clearTimeout(timer);
-      if (globalRef.onYouTubeIframeAPIReady === ready)
-        globalRef.onYouTubeIframeAPIReady = previous;
-      if (error) {
-        script.remove();
-        reject(error);
-      } else resolve(globalRef.YT);
-    };
-    const ready = () => {
-      try {
-        previous?.();
-      } finally {
-        finish(
-          typeof globalRef.YT?.Player === 'function'
-            ? null
-            : new Error('YouTube API unavailable'),
-        );
-      }
-    };
-    globalRef.onYouTubeIframeAPIReady = ready;
-    script.src = 'https://www.youtube.com/iframe_api';
-    script.async = true;
-    script.addEventListener(
-      'error',
-      () => finish(new Error('YouTube API unavailable')),
-      { once: true },
-    );
-    timer = globalRef.setTimeout(
-      () => finish(new Error('YouTube API timed out')),
-      5000,
-    );
-    documentRef.head.append(script);
-  }).catch((error) => {
-    youtubeApis.delete(documentRef);
-    throw error;
-  });
-  youtubeApis.set(documentRef, pending);
-  return pending;
-}
-
 /** A trimmed clip follows provider time, never time spent loading its iframe. */
 export function createTrimmedYouTubePlayback({
   iframe,

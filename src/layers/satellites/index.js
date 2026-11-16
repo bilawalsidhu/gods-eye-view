@@ -7,9 +7,11 @@ import { createRendering } from './rendering.js';
 import { createTracking } from './tracking.js';
 import { createTesting } from './testing.js';
 import { createInteraction } from './interaction.js';
-import { createIssCommand } from './issCommand.js';
-import { createIssLive } from './issLive.js';
+import { issStationDescription } from './issStation.js';
+import { createStationPanel } from './stationPanel.js';
 import { createIssModel } from './issModel.js';
+import { createTiangongModel } from './tiangongModel.js';
+import { tiangongStationDescription } from './tiangongStation.js';
 import { createLifecycle } from './lifecycle.js';
 import { createIngestion } from './ingestion.js';
 import { createRecords } from './records.js';
@@ -32,9 +34,18 @@ export function createSatellitesLayer({
   parts.orbits = createOrbits(context);
   parts.records = createRecords(context);
   parts.rendering = createRendering(context);
+  // The stations drawn as models up close; the other parts ask
+  // stationModels.js which station an entry belongs to.
   parts.issModel = createIssModel({ ...context, resolveAsset });
-  parts.issLive = createIssLive(context);
-  parts.issCommand = createIssCommand(context);
+  parts.tiangongModel = createTiangongModel({ ...context, resolveAsset });
+  parts.stationModels = [parts.issModel, parts.tiangongModel];
+  parts.stationPanel = createStationPanel({
+    ...context,
+    stations: [
+      issStationDescription(context),
+      tiangongStationDescription(context),
+    ],
+  });
   parts.tracking = createTracking(context);
   parts.testing = createTesting(context);
   parts.interaction = createInteraction(context);
@@ -45,6 +56,7 @@ export function createSatellitesLayer({
     {},
     parts.controls.methods,
     parts.cockpit.methods,
+    parts.stationPanel.methods,
     parts.lifecycle.methods,
     parts.ingestion.methods,
     {

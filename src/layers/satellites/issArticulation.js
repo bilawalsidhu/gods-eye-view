@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { sunPositionFixed } from '../../geo/celestial.js';
 
 /**
  * The ISS model's moving parts. NASA's file names its joints; the build keeps
@@ -6,11 +6,15 @@ import * as Cesium from 'cesium';
  * the model's rest frame (glTF axes, meters: X port, Y zenith, Z forward), so
  * a joint turns by rotating its node about `pivot`.
  *
- * The angles are computed from where the Sun is, not read from telemetry: the
- * two alpha joints turn the outboard truss about the truss axis, each array's
- * beta joint turns it about its mast, and the two radiator joints keep the
+ * By default the angles are computed from where the Sun is: the two alpha
+ * joints turn the outboard truss about the truss axis, each array's beta
+ * joint turns it about its mast, and the two radiator joints keep the
  * radiators edge-on to the Sun. In the Earth's shadow the arrays feather:
  * masts along the flight direction, edge into it.
+ *
+ * Where the server relays NASA's public telemetry (issTelemetry.js), the
+ * arrays, the radiators and one dish take their real angles from it instead,
+ * and fall back to the computed ones whenever it has nothing to say.
  */
 
 /** Alpha joints (SARJ): rotate about the truss, glTF X. */
@@ -189,8 +193,8 @@ export function issStepAngle(current, target, maxStep) {
  * @param {'x'|'z'} axis
  * @param {number[]} pivot
  * @param {number} angle Radians.
- * @param {Cesium.Matrix4} result
- * @returns {Cesium.Matrix4}
+ * @param {ArrayLike<number>} result Any 16-slot array, column-major.
+ * @returns {ArrayLike<number>} `result`.
  */
 export function issJointMatrix(axis, pivot, angle, result) {
   const c = Math.cos(angle);
@@ -236,8 +240,18 @@ export function issJointMatrix(axis, pivot, angle, result) {
   ]);
 }
 
+/**
+ * Write a row-major 4×4 into `result`, column-major (a renderer's matrix
+ * layout; `result` is any 16-slot array).
+ * @param {ArrayLike<number> & {[i: number]: number}} [result] A new one when not given.
+ * @param {number[]} rowMajor
+ */
 function set(result, rowMajor) {
-  return Cesium.Matrix4.fromRowMajorArray(rowMajor, result);
+  result ??= new Float64Array(16);
+  for (let row = 0; row < 4; row++)
+    for (let column = 0; column < 4; column++)
+      result[column * 4 + row] = rowMajor[row * 4 + column];
+  return result;
 }
 
 /**
@@ -364,22 +378,30 @@ const DISH_MIN_UP = 0.15;
  * highest above the station first.
  * @param {number[]} positionEcef Meters.
  * @param {{x:number[], y:number[], z:number[]}} axes Flight axes.
+ * @param {readonly number[]} [longitudes] The relays' slots, degrees east;
+ *   NASA's for the ISS, another station passes its own.
  * @returns {number[][]} Unit vectors [port, zenith, forward].
  */
-export function issRelayDirections(positionEcef, axes) {
-  return ISS_RELAY_LONGITUDES_DEG.map((longitude) => {
-    const lon = (longitude * Math.PI) / 180;
-    const to = [
-      GEOSTATIONARY_RADIUS_M * Math.cos(lon) - positionEcef[0],
-      GEOSTATIONARY_RADIUS_M * Math.sin(lon) - positionEcef[1],
-      -positionEcef[2],
-    ];
-    const length = Math.hypot(to[0], to[1], to[2]);
-    return issSunInModelFrame(
-      to.map((c) => c / length),
-      axes,
-    );
-  }).sort((a, b) => b[1] - a[1]);
+export function issRelayDirections(
+  positionEcef,
+  axes,
+  longitudes = ISS_RELAY_LONGITUDES_DEG,
+) {
+  return longitudes
+    .map((longitude) => {
+      const lon = (longitude * Math.PI) / 180;
+      const to = [
+        GEOSTATIONARY_RADIUS_M * Math.cos(lon) - positionEcef[0],
+        GEOSTATIONARY_RADIUS_M * Math.sin(lon) - positionEcef[1],
+        -positionEcef[2],
+      ];
+      const length = Math.hypot(to[0], to[1], to[2]);
+      return issSunInModelFrame(
+        to.map((c) => c / length),
+        axes,
+      );
+    })
+    .sort((a, b) => b[1] - a[1]);
 }
 
 /**
@@ -416,8 +438,8 @@ export function issStepDirection(current, target, maxStep) {
  * @param {number[]} pivot
  * @param {number[]} axis Unit vector.
  * @param {number} angle Radians.
- * @param {Cesium.Matrix4} result
- * @returns {Cesium.Matrix4}
+ * @param {ArrayLike<number>} result Any 16-slot array, column-major.
+ * @returns {ArrayLike<number>} `result`.
  */
 export function issAxisMatrix(pivot, axis, angle, result) {
   const [x, y, z] = axis;
@@ -440,8 +462,8 @@ export function issAxisMatrix(pivot, axis, angle, result) {
  * A dish node's matrix that turns its rest boresight (+Y) onto `direction`.
  * @param {number[]} pivot
  * @param {number[]} direction Unit vector on the model's axes.
- * @param {Cesium.Matrix4} result
- * @returns {Cesium.Matrix4}
+ * @param {ArrayLike<number>} result Any 16-slot array, column-major.
+ * @returns {ArrayLike<number>} `result`.
  */
 export function issAimMatrix(pivot, direction, result) {
   // Y × direction
@@ -471,6 +493,12 @@ export function createIssArticulation() {
   let lastMs = 0;
   let override = null;
   let dishOverride = null;
+  /** Gives the joint angles from telemetry, or null: see setTelemetry. */
+  let telemetry = null;
+  /** Command panel state: Manual takes the joints, so telemetry is off. */
+  let telemetryAllowed = true;
+  /** Whether the last update took its angles from telemetry; null before one. */
+  let lastLive = null;
   /** Whether the last update had the station in sunlight; null before one. */
   let lastSunlit = null;
   /** Command panel state: the arm is being posed by hand, so the sway is off. */
@@ -493,10 +521,7 @@ export function createIssArticulation() {
   const SMALL_RADIATOR_ROOT_Y = -1.6;
   /** Where each dish looks now, on the model's axes. */
   let dishes = null;
-  const scratchJulian = new Cesium.JulianDate();
-  const scratchSun = new Cesium.Cartesian3();
-  const scratchToFixed = new Cesium.Matrix3();
-  const scratchMatrix = new Cesium.Matrix4();
+  const scratchMatrix = new Float64Array(16);
 
   function bind(model) {
     boundModel = model;
@@ -513,18 +538,9 @@ export function createIssArticulation() {
   }
 
   function sunEcef(date) {
-    const julian = Cesium.JulianDate.fromDate(date, scratchJulian);
-    const inertial =
-      Cesium.Simon1994PlanetaryPositions.computeSunPositionInEarthInertialFrame(
-        julian,
-        scratchSun,
-      );
-    const toFixed =
-      Cesium.Transforms.computeIcrfToFixedMatrix(julian, scratchToFixed) ??
-      Cesium.Transforms.computeTemeToPseudoFixedMatrix(julian, scratchToFixed);
-    Cesium.Matrix3.multiplyByVector(toFixed, inertial, scratchSun);
-    Cesium.Cartesian3.normalize(scratchSun, scratchSun);
-    return [scratchSun.x, scratchSun.y, scratchSun.z];
+    const sun = sunPositionFixed(date.getTime());
+    const length = Math.hypot(sun.x, sun.y, sun.z) || 1;
+    return [sun.x / length, sun.y / length, sun.z / length];
   }
 
   function write(node, axis, pivot, angle) {
@@ -533,9 +549,10 @@ export function createIssArticulation() {
   }
 
   /**
-   * @param {Cesium.Model} model A ready model.
+   * @param {{ready: boolean, getNode: (name: string) => object|undefined}} model
+   *   A ready model, or any holder of nodes that take a `matrix`.
    * @param {Date} date The instant the model is placed at.
-   * @param {Cesium.Cartesian3} position Earth-fixed station position.
+   * @param {{x:number,y:number,z:number}} position Earth-fixed station position.
    * @param {{x:number[], y:number[], z:number[]}} axes Its flight axes.
    * @param {number} [nowMs] Wall clock, for the turn rate.
    */
@@ -552,6 +569,13 @@ export function createIssArticulation() {
       lastSunlit = sunlit;
       targets = issJointTargets(issSunInModelFrame(sun, axes), sunlit, targets);
     }
+    // Telemetry, when it has a pose, replaces the computed targets; a Sun
+    // chosen by hand in the command panel is always computed.
+    const pose = telemetryAllowed && !forced ? (telemetry?.() ?? null) : null;
+    lastLive = Boolean(pose);
+    const alphaTargets = pose?.alpha ?? [targets.alpha, targets.alpha];
+    const betaTargets = pose?.beta ?? targets.beta;
+    const gammaTargets = pose?.gamma ?? [targets.gamma, targets.gamma];
     // A first frame, or one after a pause, goes straight to the pose.
     const elapsed = (nowMs - lastMs) / 1000;
     lastMs = nowMs;
@@ -560,16 +584,20 @@ export function createIssArticulation() {
         ? Number.POSITIVE_INFINITY
         : ISS_JOINT_RATE * elapsed;
     const next = {
-      alpha: issStepAngle(angles?.alpha ?? 0, targets.alpha, maxStep),
-      beta: targets.beta.map((target, i) =>
+      alpha: alphaTargets.map((target, i) =>
+        issStepAngle(angles?.alpha[i] ?? 0, target, maxStep),
+      ),
+      beta: betaTargets.map((target, i) =>
         issStepAngle(angles?.beta[i] ?? 0, target, maxStep),
       ),
-      gamma: issStepAngle(angles?.gamma ?? 0, targets.gamma, maxStep),
+      gamma: gammaTargets.map((target, i) =>
+        issStepAngle(angles?.gamma[i] ?? 0, target, maxStep),
+      ),
     };
-    if (!angles || next.alpha !== angles.alpha)
-      ISS_ALPHA_JOINTS.forEach((joint, i) =>
-        write(nodes.alpha[i], 'x', joint.pivot, next.alpha),
-      );
+    ISS_ALPHA_JOINTS.forEach((joint, i) => {
+      if (!angles || next.alpha[i] !== angles.alpha[i])
+        write(nodes.alpha[i], 'x', joint.pivot, next.alpha[i]);
+    });
     // Command panel: squash the arrays along their masts (see setDeploy).
     const deployStep = Number.isFinite(maxStep) ? elapsed / 8 : 1;
     const nextDeploy =
@@ -597,58 +625,63 @@ export function createIssArticulation() {
       radiatorDeploy +
       Math.sign(radiatorTarget - radiatorDeploy) *
         Math.min(Math.abs(radiatorTarget - radiatorDeploy), deployStep);
-    if (
-      !angles ||
-      next.gamma !== angles.gamma ||
-      nextRadiator !== radiatorDeploy
-    )
-      ISS_RADIATOR_JOINTS.forEach((joint, i) => {
-        const node = nodes.gamma[i];
-        if (!node) return;
-        const m = issJointMatrix('z', joint.pivot, next.gamma, scratchMatrix);
-        m[10] = nextRadiator;
-        m[14] = RADIATOR_ROOT_Z * (1 - nextRadiator);
-        node.matrix = m;
-      });
+    ISS_RADIATOR_JOINTS.forEach((joint, i) => {
+      if (
+        angles &&
+        next.gamma[i] === angles.gamma[i] &&
+        nextRadiator === radiatorDeploy
+      )
+        return;
+      const node = nodes.gamma[i];
+      if (!node) return;
+      const m = issJointMatrix('z', joint.pivot, next.gamma[i], scratchMatrix);
+      m[10] = nextRadiator;
+      m[14] = RADIATOR_ROOT_Z * (1 - nextRadiator);
+      node.matrix = m;
+    });
     // The four small radiators fold up to the truss, along Y.
     if (nextRadiator !== radiatorDeploy)
       for (const name of SMALL_RADIATOR_NODES) {
         const node = model.getNode(name);
         if (!node) continue;
-        node.matrix = Cesium.Matrix4.fromRowMajorArray(
-          [
-            1,
-            0,
-            0,
-            0,
-            0,
-            nextRadiator,
-            0,
-            SMALL_RADIATOR_ROOT_Y * (1 - nextRadiator),
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            0,
-            1,
-          ],
-          scratchMatrix,
-        );
+        node.matrix = set(scratchMatrix, [
+          1,
+          0,
+          0,
+          0,
+          0,
+          nextRadiator,
+          0,
+          SMALL_RADIATOR_ROOT_Y * (1 - nextRadiator),
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+        ]);
       }
     radiatorDeploy = nextRadiator;
     angles = next;
 
     // Dishes: the highest relay satellite for the first, the next for the
     // second; one below the station's horizon plane keeps its last aim.
+    // Telemetry reports one dish (the station uses one at a time, and does
+    // not say which): the first takes its real aim, wherever that is, and
+    // the second holds still.
+    const liveDish = !dishOverride && pose?.dish ? pose.dish : null;
     const relays = dishOverride
       ? [dishOverride, dishOverride]
-      : issRelayDirections([position.x, position.y, position.z], axes);
+      : liveDish
+        ? [liveDish, null]
+        : issRelayDirections([position.x, position.y, position.z], axes);
     const nextDishes = ISS_DISH_JOINTS.map((joint, i) => {
       const current = dishes?.[i] ?? [0, 1, 0];
       const wanted = relays[i];
-      const target = wanted && wanted[1] >= DISH_MIN_UP ? wanted : current;
+      const target =
+        wanted && (liveDish || wanted[1] >= DISH_MIN_UP) ? wanted : current;
       const stepped = issStepDirection(current, target, maxStep);
       const moved =
         !dishes || stepped.some((c, k) => Math.abs(c - current[k]) > 1e-9);
@@ -718,6 +751,26 @@ export function createIssArticulation() {
     return lastSunlit;
   }
 
+  /**
+   * Where the joint angles come from when telemetry has them: a function
+   * giving `{alpha, beta, gamma, dish}` (issTelemetryPose) or null.
+   * @param {(() => {alpha:number[], beta:number[], gamma:number[],
+   *   dish:number[]|null}|null)|null} fn
+   */
+  function setTelemetry(fn) {
+    telemetry = fn;
+  }
+
+  /** Command panel: Manual switches telemetry off, Automatic back on. */
+  function setTelemetryAllowed(allowed) {
+    telemetryAllowed = Boolean(allowed);
+  }
+
+  /** Whether the last update took its angles from telemetry; null before one. */
+  function isLive() {
+    return lastLive;
+  }
+
   /** Command panel: aim both dishes along a unit vector, or null for the relays. */
   function setDishOverride(direction) {
     dishOverride = direction;
@@ -757,5 +810,8 @@ export function createIssArticulation() {
     setDeploy,
     setRadiatorDeploy,
     isSunlit,
+    setTelemetry,
+    setTelemetryAllowed,
+    isLive,
   };
 }

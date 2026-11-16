@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  issCommandCameraOnStation,
+  issCommandZoomOffset,
+  issCommandZoomRange,
   ISS_COMMAND_ZOOM_RANGE_M,
   issCommandFastOrbit,
   issCommandShouldShow,
@@ -58,4 +61,119 @@ test('the status line says lit or in shadow, and nothing before the model is pla
   assert.notEqual(issCommandStatusText(true), issCommandStatusText(false));
   assert.ok(issCommandStatusText(true).length > 0);
   assert.ok(issCommandStatusText(false).length > 0);
+});
+
+test('the note says whether the joints are computed or on live telemetry', async () => {
+  const { issCommandNoteText } = await import('./issCommand.js');
+  assert.match(issCommandNoteText(false), /Computed, not live telemetry/);
+  assert.match(issCommandNoteText(true), /NASA's live telemetry/);
+  assert.doesNotMatch(issCommandNoteText(true), /not live telemetry/);
+});
+
+test('an object docked to the ISS is the station too', async () => {
+  const { issTrackedOnStation } = await import('./policy.js');
+  const NAUKA = 49044;
+  // Tracking Nauka, the ISS shares its position; tracking the ISS needs nothing.
+  assert.equal(issTrackedOnStation(ISS_NORAD, new Set()), true);
+  assert.equal(issTrackedOnStation(ISS_NORAD, null), true);
+  assert.equal(issTrackedOnStation(NAUKA, new Set([ISS_NORAD, 68837])), true);
+  // Another satellite, with or without neighbours, is not.
+  assert.equal(issTrackedOnStation(20580, new Set()), false);
+  assert.equal(issTrackedOnStation(20580, new Set([20581])), false);
+  assert.equal(issTrackedOnStation(null, new Set([ISS_NORAD])), false);
+  assert.equal(issTrackedOnStation(undefined, undefined), false);
+
+  // The panels show for a docked object as for the ISS, on the same terms.
+  const command = { enabled: true, trackedNorad: NAUKA, cockpitHeld: false };
+  assert.equal(issCommandShouldShow(command), false);
+  assert.equal(issCommandShouldShow({ ...command, docked: true }), true);
+  assert.equal(
+    issCommandShouldShow({ ...command, docked: true, cockpitHeld: true }),
+    false,
+  );
+  assert.equal(
+    issCommandShouldShow({ ...command, docked: true, trackedNorad: null }),
+    false,
+  );
+});
+
+test('the zoom range only ever shortens, settles at the target range and never runs away', () => {
+  let range = 1e9;
+  let steps = 0;
+  while (steps < 400) {
+    const next = issCommandZoomRange(range);
+    assert.ok(next <= range, `step ${steps} moved out: ${range} -> ${next}`);
+    assert.ok(next >= ISS_COMMAND_ZOOM_RANGE_M, 'never past the target');
+    if (next === range) break;
+    range = next;
+    steps += 1;
+  }
+  assert.ok(steps < 400, "settles within the loop's budget");
+  assert.ok(range <= ISS_COMMAND_ZOOM_RANGE_M * 1.02);
+  assert.equal(
+    issCommandZoomRange(ISS_COMMAND_ZOOM_RANGE_M),
+    ISS_COMMAND_ZOOM_RANGE_M,
+  );
+  assert.equal(
+    issCommandZoomRange(100),
+    100,
+    'closer than the range: left alone',
+  );
+  for (const bad of [0, -5, NaN, Infinity])
+    assert.ok(
+      Object.is(issCommandZoomRange(bad), bad),
+      `${bad} passes through`,
+    );
+});
+
+test('one zoom step shortens the follow offset on its own bearing, and stops at the range', () => {
+  const next = issCommandZoomOffset({ x: 3000, y: 4000, z: 0 });
+  const range = Math.hypot(next.x, next.y, next.z);
+  assert.ok(Math.abs(range - issCommandZoomRange(5000)) < 1e-9);
+  assert.ok(Math.abs(next.x / next.y - 3 / 4) < 1e-12, 'the bearing is kept');
+  assert.equal(next.z, 0);
+  // Already at the range, or closer: no step.
+  assert.equal(
+    issCommandZoomOffset({ x: ISS_COMMAND_ZOOM_RANGE_M, y: 0, z: 0 }),
+    null,
+  );
+  assert.equal(issCommandZoomOffset({ x: 0, y: 100, z: 0 }), null);
+  // Nothing to shorten: no follow offset yet (the follow has not framed).
+  assert.equal(issCommandZoomOffset(null), null);
+  assert.equal(issCommandZoomOffset(undefined), null);
+  assert.equal(issCommandZoomOffset({ x: 0, y: 0, z: 0 }), null);
+});
+
+test("the zoom needs the camera following the station's target, framed", () => {
+  const target = { key: 'satellites:25544' };
+  const on = { followed: target, followFramed: true };
+  assert.equal(issCommandCameraOnStation(on, target), true);
+  assert.equal(
+    issCommandCameraOnStation(
+      { followed: target, followFramed: false },
+      target,
+    ),
+    false,
+    'not before the follow has framed the eye',
+  );
+  assert.equal(
+    issCommandCameraOnStation({ followed: null, followFramed: false }, target),
+    false,
+  );
+  assert.equal(
+    issCommandCameraOnStation(
+      { followed: { key: 'flights:a' }, followFramed: true },
+      target,
+    ),
+    false,
+    'following something else',
+  );
+  assert.equal(issCommandCameraOnStation(null, target), false);
+  assert.equal(issCommandCameraOnStation(undefined, target), false);
+  assert.equal(issCommandCameraOnStation(on, null), false);
+  assert.equal(
+    issCommandCameraOnStation({ followed: null, followFramed: true }, null),
+    false,
+    'nothing followed and no target is not a match',
+  );
 });

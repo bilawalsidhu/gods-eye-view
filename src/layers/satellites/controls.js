@@ -9,6 +9,7 @@ import {
   mergeClassVisibility,
 } from './classes.js';
 import { ISS_NORAD, POINT_STYLES, classPointStyle } from './policy.js';
+import { modelFor, trackedStation } from './stationModels.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   const { isExplicitLayerStateOrigin } = services.layerState;
@@ -64,7 +65,8 @@ export function createControls({ state: layerState, services, parts, source }) {
 
   /**
    * Whether the ISS's ring shows: orbits on, the layer drawing, and its
-   * class on or the ISS tracked (a tracked satellite keeps its ring).
+   * class on or the ISS tracked (a tracked satellite keeps its ring), also
+   * as an object docked to it, which draws no ring of its own.
    */
   function _issOrbitVisible() {
     return (
@@ -72,7 +74,9 @@ export function createControls({ state: layerState, services, parts, source }) {
         layerState._enabled,
         layerState._params.showOrbits,
       ) &&
-      (_classVisible(ISS_NORAD) || layerState._trackedNorad === ISS_NORAD)
+      (_classVisible(ISS_NORAD) ||
+        layerState._trackedNorad === ISS_NORAD ||
+        Boolean(layerState._trackedDockedToIss))
     );
   }
 
@@ -253,13 +257,9 @@ export function createControls({ state: layerState, services, parts, source }) {
         // that card instead. Only members of the tracked cluster are affected —
         // unrelated nearby satellites are never suppressed.
         if (!isTracked && layerState._dockedCompanions.has(noradId)) continue;
-        // Up close the ISS is its 3D model: no mark on it, nor on what is
+        // Up close a station is its 3D model: no mark on it, nor on what is
         // docked to it.
-        if (
-          parts.issModel?._issStandsInFor?.(noradId) ||
-          (noradId === ISS_NORAD && parts.issModel?._issVisualPosition?.())
-        )
-          continue;
+        if (modelFor(parts, noradId)?._visualPosition?.()) continue;
         // The Cockpit camera rides a held subject; a bracket on it would sit
         // on the lens.
         if (isTracked && parts.cockpit?._cockpitHeld()) continue;
@@ -446,6 +446,18 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @param {string|number} noradId NORAD catalog number.
      * @returns {boolean} True if tracking started.
      */
+    /**
+     * The keys the LIVE section matches streams by for the tracked
+     * satellite: a station is `station:<key>` (`station:iss`,
+     * `station:tiangong`) whichever of its entries is tracked (the station,
+     * a module, a docked vehicle).
+     * @returns {string[]}
+     */
+    getLiveSubjectKeys() {
+      const station = trackedStation(layerState, parts);
+      return station ? [`station:${station.key}`] : [];
+    },
+
     trackById(noradId, { origin = 'programmatic' } = {}) {
       const id = Number(noradId);
       if (

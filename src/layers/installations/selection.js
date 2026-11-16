@@ -53,13 +53,17 @@ export function createSelection({
     layerState.clickSubscription = input.onClick((event) => {
       if (!layerState.enabled) return;
       // A site's dot, outline or fill, or a named marker: each draw item
-      // names its installation in its `meta`.
+      // names its installation in its `meta`. Else the label box the shared
+      // overlay paints for the site (controls.findAt reads its hit rects),
+      // which is what a click lands on from far out.
       const hit = event.drawHit;
       const id =
-        hit?.set === parts.namedMarkers?.setId ||
+        (hit?.set === parts.namedMarkers?.setId ||
         parts.rendering.ownsSet(hit?.set)
           ? hit.meta?.installationId
-          : null;
+          : null) ??
+        parts.controls?.findAt?.(event.position)?.id ??
+        null;
       if (id && layerState.recordById.has(id) && id !== layerState.selectedId) {
         selectRecord(id);
       } else if (layerState.selectedId) {

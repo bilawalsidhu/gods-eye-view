@@ -12,7 +12,9 @@ import AwarenessPanel from './panels/AwarenessPanel.vue';
 import BhoteKoshiPanel from './panels/BhoteKoshiPanel.vue';
 import MissionDetail from './panels/MissionDetail.vue';
 import MissionRoster from './panels/MissionRoster.vue';
+import LivePanel from './panels/LivePanel.vue';
 import RadioPanel from './panels/RadioPanel.vue';
+import StationPanel from './panels/StationPanel.vue';
 import UiButton from '../kit/UiButton.vue';
 import { cockpitEntryFace } from '../cockpitPresentation.js';
 
@@ -79,6 +81,8 @@ const sceneRuntime = computed(() => scenePanel.value?.runtime ?? '');
             <MissionDetail />
           </div>
         </section>
+        <StationPanel />
+        <LivePanel />
         <RadioPanel />
         </div>
     </RailPanel>
