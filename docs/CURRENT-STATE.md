@@ -731,7 +731,8 @@ it seeks the globe once. Play after a pause, a seek or a paused link goes on
 from that exact moment (`SceneDirector.startScene` with `fromProgress`), even
 inside a shot or its final quarter-second: the camera, the hold, the scene
 clock and the layers' reveals carry on from there (a clip that moment falls in
-starts again from its beginning, and the hold waits for it). A scene that has actually ended replays from the
+starts again from its beginning, and the hold waits for it, with the
+timeline held at the shot's end meanwhile). A scene that has actually ended replays from the
 beginning.
 
 Opening Stories claims the camera through the shared navigation policy, so

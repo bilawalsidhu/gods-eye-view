@@ -45,7 +45,9 @@ joined partway), while one the moment is past stays finished. A clip started
 again plays the hold out as from its start: until its media gate opens (a
 trimmed clip, with its fade), or for the shot's whole hold (a clip without
 one). Otherwise only the rest of the hold is waited out. The scene clock
-carries on from the same point. `SceneDirector` still owns editor state, saved-project import/export,
+carries on from the same point; while a restarted clip plays past where the
+shot would have ended, the timeline waits at the shot's end until the clip
+and the rest of the hold finish. `SceneDirector` still owns editor state, saved-project import/export,
 camera ownership and asynchronous load/seek arbitration. Pure seek calculations
 live in `src/director/timeline.js`; `src/director/clock.js` owns the run/load/shot
 tickers, hold deadlines, snapshots and clock subscriptions. Stop settles pending
