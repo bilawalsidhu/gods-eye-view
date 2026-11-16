@@ -36,7 +36,7 @@ spec:
         - name: gods-eye-view
           # Placeholder: each overlay sets its own registry path and tag
           # (images: newName, newTag).
-          image: ghcr.io/OWNER/gods-eye-view
+          image: ghcr.io/bilawalsidhu/gods-eye-view
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

@@ -10,6 +10,6 @@ resources:
 # workflow pushes ghcr.io/<owner>/<repo>). Deploy through an overlay, not this
 # base directly. See k8s/README.md.
 images:
-  - name: ghcr.io/OWNER/gods-eye-view
+  - name: ghcr.io/bilawalsidhu/gods-eye-view
     newName: ghcr.io/OWNER/gods-eye-view
     newTag: latest
