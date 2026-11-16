@@ -237,6 +237,11 @@ export function createStationModel(
   let dotHanded = false;
   /** Whether the tracked dot is, the tracked satellite being the station. */
   let trackedDotHanded = false;
+  /**
+   * @type {Set<number>} Objects docked to the station, orbit against orbit,
+   * at the last scan: the same body as the model whether or not it draws.
+   */
+  const dockedByOrbit = new Set();
   /** @type {Set<number>} Docked objects whose dots the model stands in for. */
   const handedCompanions = new Set();
   let lastCompanionScanMs = Number.NEGATIVE_INFINITY;
@@ -343,13 +348,16 @@ export function createStationModel(
   /**
    * Whether the tracked satellite is the station itself: its own entry, or
    * an object docked to it (a module, a cargo ship…), which has a catalog
-   * entry and a dot of its own but is the same body as the model.
+   * entry and a dot of its own but is the same body as the model. Read from
+   * the layer's docked set (dots sharing a position) and from this part's
+   * own scan (orbit against orbit), which stands whether or not the model
+   * draws: the answer must not depend on what it decides.
    */
   function _trackedOnStation() {
     const tracked = layerState._trackedNorad;
     return (
       stationTrackedOn(norad, tracked, layerState._dockedCompanions) ||
-      (tracked !== null && handedCompanions.has(tracked))
+      (tracked !== null && dockedByOrbit.has(tracked))
     );
   }
 
@@ -385,8 +393,10 @@ export function createStationModel(
    * range too. Rescanned once a second: a vehicle that undocks gets its dot
    * back, and a catalog rebuild's new dots are picked up.
    * @param {number} nowMs
+   * @param {boolean} handOver Whether the docked dots are left to the model
+   *   (it draws); otherwise the scan only keeps the docked set current.
    */
-  function _handOverCompanions(nowMs) {
+  function _scanCompanions(nowMs, handOver) {
     if (nowMs - lastCompanionScanMs < spec.companionScanMs) return;
     lastCompanionScanMs = nowMs;
     const stationPosition = parts.rendering._pointPosition(norad);
@@ -413,7 +423,9 @@ export function createStationModel(
             1000 <=
             spec.companionRadiusM;
       }
-      if (docked) {
+      if (docked) dockedByOrbit.add(noradId);
+      else dockedByOrbit.delete(noradId);
+      if (docked && handOver) {
         parts.rendering._setPointDisplayRange(noradId, farRange); // no-op when equal
         handedCompanions.add(noradId);
       } else if (handedCompanions.has(noradId)) {
@@ -421,6 +433,8 @@ export function createStationModel(
         handedCompanions.delete(noradId);
       }
     }
+    for (const noradId of dockedByOrbit)
+      if (!layerState._points.has(noradId)) dockedByOrbit.delete(noradId);
   }
 
   /** Give docked objects their dots back at every distance. */
@@ -428,7 +442,6 @@ export function createStationModel(
     for (const noradId of handedCompanions)
       parts.rendering._setPointDisplayRange(noradId, null);
     handedCompanions.clear();
-    lastCompanionScanMs = Number.NEGATIVE_INFINITY;
   }
 
   /** The station's ring back to its own rules (see `syncOrbit`). */
@@ -578,7 +591,7 @@ export function createStationModel(
     const tracked = layerState._trackedNorad;
     if (tracked !== null && vehicle(tracked)) return tracked;
     let lowest = null;
-    for (const group of [handedCompanions, layerState._dockedCompanions ?? []])
+    for (const group of [dockedByOrbit, layerState._dockedCompanions ?? []])
       for (const noradId of group)
         if (vehicle(noradId) && (lowest === null || noradId < lowest))
           lowest = noradId;
@@ -591,6 +604,9 @@ export function createStationModel(
    */
   function _updateStationModel() {
     visualValid = false;
+    // The docked set first: whether the model may show (the Cockpit riding
+    // the station) is read from it, so it is kept current before that.
+    if (item) _scanCompanions(Date.now(), false);
     const show = _shouldShow();
     if (!show) {
       _hide();
@@ -619,8 +635,9 @@ export function createStationModel(
         _load(dotPosition);
       return;
     }
-    // The docked set first: a tracked docked object is the station too.
-    _handOverCompanions(Date.now());
+    // The docked dots are the model's within its range.
+    lastCompanionScanMs = Number.NEGATIVE_INFINITY;
+    _scanCompanions(Date.now(), true);
     _handOverDots();
     _syncOrbitCloseUp(cameraDistance < spec.orbitHideM);
     // Out of range the model would not draw anyway: skip the SGP4 sample.
@@ -692,6 +709,8 @@ export function createStationModel(
     telemetry?.destroy();
     _releaseDots();
     _releaseCompanions();
+    dockedByOrbit.clear();
+    lastCompanionScanMs = Number.NEGATIVE_INFINITY;
     _syncOrbitCloseUp(false);
     offReady?.();
     offFailed?.();

@@ -262,12 +262,18 @@ test('a station without views on its model hides it while the Cockpit rides the 
   f.tick();
   assert.equal(f.modelItem().show, true, 'outside the Cockpit it draws');
   held = true;
-  f.tick();
-  assert.equal(
-    f.modelItem().show,
-    false,
-    'the Cockpit camera would sit inside the hull',
-  );
+  // Frame after frame: hiding the model gives the docked dots back, and
+  // that must not make the layer forget the companion is docked (which
+  // showed the model again, and so on, every other frame).
+  for (let i = 0; i < 4; i++) {
+    f.tick();
+    assert.equal(
+      f.modelItem().show,
+      false,
+      `the Cockpit camera would sit inside the hull (tick ${i})`,
+    );
+    assert.equal(f.model._trackedOnStation(), true, `docked (tick ${i})`);
+  }
   assert.equal(f.model._visualPosition(), null);
   // Riding the station itself.
   held = false;
