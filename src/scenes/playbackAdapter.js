@@ -5,8 +5,8 @@ import { displaySceneTitle, displayShotTitle } from './recipes.js';
 /**
  * A run resumed partway into its first shot carries the seek state of that
  * moment (`resume`). Inside the shot's hold, its layers take that moment's
- * state as a seek gives it and then play on from it, and only the rest of the
- * hold is waited out; inside
+ * state as a seek gives it and then play on from it, and the hold waits for a
+ * clip started again or else only its rest; inside
  * its flight, the camera goes on from where it is along the rest of the path.
  */
 const inHold = (resume) => resume?.holdElapsedSec > 0;

@@ -2933,15 +2933,6 @@ export class SceneDirector {
 
   /** Let an opt-in media owner finish playback and its fade before the next flight. */
   async _holdShot(scene, shot, token, resume = null) {
-    // Resumed inside the hold: its layers were set to that moment, as a seek
-    // sets them, so only the rest of the hold is left to wait.
-    if (resume?.holdElapsedSec > 0) {
-      await this._sleep(
-        Math.max(0, resume.holdDurationSec - resume.holdElapsedSec) * 1000,
-        token,
-      );
-      return;
-    }
     const readers = Object.entries(
       this._layerStatesForShot(scene, shot),
     ).flatMap(([id, state]) => {
@@ -2962,6 +2953,17 @@ export class SceneDirector {
           ]
         : [];
     });
+    // Resumed inside the hold, its layers play on from that moment: a clip
+    // they started again is waited for as in any hold; otherwise only the
+    // rest of the hold is left to wait.
+    const resumed = resume?.holdElapsedSec > 0;
+    if (resumed && !readers.some(({ read }) => read()?.pending === true)) {
+      await this._sleep(
+        Math.max(0, resume.holdDurationSec - resume.holdElapsedSec) * 1000,
+        token,
+      );
+      return;
+    }
     if (!readers.length) {
       await this._sleep(this._effectiveShotHoldSec(scene, shot) * 1000, token);
       return;

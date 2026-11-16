@@ -2108,6 +2108,34 @@ test('a revocation also covers the release a stopped run reaches later', async (
   } finally { await director.destroy(); restore(); }
 });
 
+test('a hold resumed partway waits for a clip that starts again, else only its rest', async () => {
+  const hold = async (pendingReads) => {
+    let reads = 0;
+    const module = {
+      getSceneShotMediaHold: () => ({ pending: reads++ < pendingReads, maxWaitMs: 20000 }),
+    };
+    const waits = [];
+    await SceneDirector.prototype._holdShot.call(
+      {
+        _layerStatesForShot: () => ({ media: { enabled: true, params: { beatId: 'b' } } }),
+        dataManager: { layers: new Map([['media', { module }]]) },
+        _effectiveShotHoldSec: () => 3,
+        _sleep: async (ms) => waits.push(ms),
+        stopScene: () => assert.fail('no timeout'),
+      },
+      { id: 'scene' },
+      { id: 'shot' },
+      { cancelled: false },
+      { holdElapsedSec: 1, holdDurationSec: 3 },
+    );
+    return waits;
+  };
+  // The clip plays again: the hold polls until it is done, as any hold does.
+  assert.deepEqual(await hold(4), [70, 70]);
+  // The moment was past the clip: only the rest of the hold.
+  assert.deepEqual(await hold(0), [2000]);
+});
+
 /** Drive frame-by-frame camera motion headlessly for one test. */
 function installAnimationFrames() {
   const original = globalThis.requestAnimationFrame;

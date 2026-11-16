@@ -41,8 +41,8 @@ goes on from there along the rest of the path a seek samples, over the rest of t
 flight; inside its hold, the layers take that moment's state as a seek gives them
 and then play on from it: a reveal goes on from where the seek put it, and a
 clip the moment falls in starts again from its beginning (a clip cannot be
-joined partway), while one the moment is past stays finished. Only the rest of
-the hold is waited out. The scene clock carries on from the same point. `SceneDirector` still owns editor state, saved-project import/export,
+joined partway), while one the moment is past stays finished. A clip started again is waited
+for as in any hold; otherwise only the rest of the hold is waited out. The scene clock carries on from the same point. `SceneDirector` still owns editor state, saved-project import/export,
 camera ownership and asynchronous load/seek arbitration. Pure seek calculations
 live in `src/director/timeline.js`; `src/director/clock.js` owns the run/load/shot
 tickers, hold deadlines, snapshots and clock subscriptions. Stop settles pending
