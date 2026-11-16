@@ -2621,6 +2621,46 @@ test('an invalid thumbnail is not kept and the save error is shown', () => {
   }
 });
 
+test('SAVE TO STORIES and tags that cannot be saved roll back and show the save error', () => {
+  const warn = console.warn;
+  console.warn = () => {};
+  const { director, storage, restore } = makeDirector();
+  const changes = recordChanges(director);
+  try {
+    director.setSceneStoryTags('scene-1', ['Storms']);
+    storage.full = true;
+    changes.length = 0;
+
+    assert.equal(director.setSceneInStories('scene-1', true), false);
+    assert.equal(Object.hasOwn(director._project.scenes[0], 'stories'), false);
+    assert.deepEqual(director.storyScenes(), []);
+    assert.match(director._presentation.status, /^Scene not saved/);
+
+    assert.equal(director.setSceneStoryTags('scene-1', ['Floods', 'Storms']), false);
+    assert.deepEqual(director._project.scenes[0].storyTags, ['Storms']);
+    assert.equal(director.setSceneStoryTags('scene-1', []), false);
+    assert.deepEqual(director._project.scenes[0].storyTags, ['Storms']);
+    assert.deepEqual(
+      changes.filter((type) => type !== 'status-changed'),
+      [],
+      'only the save error is announced',
+    );
+
+    // Taking a scene off Stories rolls back the same way.
+    storage.full = false;
+    assert.equal(director.setSceneInStories('scene-1', true), true);
+    storage.full = true;
+    assert.equal(director.setSceneInStories('scene-1', false), false);
+    assert.equal(director._project.scenes[0].stories, true);
+
+    // The panel's toggle reports no success either.
+    director._selectedSceneId = 'scene-1';
+    director._toggleSelectedSceneInStories();
+    assert.equal(director._project.scenes[0].stories, true);
+    assert.match(director._presentation.status, /^Scene not saved/);
+  } finally { console.warn = warn; restore(); }
+});
+
 test('story thumbnail and tags survive a reload and an export/import round trip', async () => {
   const first = makeDirector();
   let saved;

@@ -602,8 +602,9 @@ export class SceneDirector {
    * Set the tags a scene shows on its Stories card.
    * @param {string} sceneId
    * @param {string[]} tags Keys from STORY_TAGS, at most STORY_TAG_LIMIT.
-   * @returns {boolean} False when the scene does not exist or a tag is not
-   *   one of STORY_TAGS.
+   * @returns {boolean} False when the scene does not exist, a tag is not
+   *   one of STORY_TAGS, or the project could not be saved (the tags stay as
+   *   they were and the save error is shown).
    */
   setSceneStoryTags(sceneId, tags) {
     const scene = this._project.scenes.find(({ id }) => id === sceneId);
@@ -614,9 +615,14 @@ export class SceneDirector {
       !next.every((tag) => STORY_TAGS.includes(tag))
     )
       return false;
+    const previous = scene.storyTags;
     if (next.length) scene.storyTags = next;
     else delete scene.storyTags;
-    this._saveProject();
+    if (!this._saveProject()) {
+      if (previous === undefined) delete scene.storyTags;
+      else scene.storyTags = previous;
+      return false;
+    }
     this._publish({ type: 'story-details-changed', scene });
     if (scene.stories) this._publish({ type: 'stories-changed' });
     return true;
@@ -2027,15 +2033,21 @@ export class SceneDirector {
    * Publish a scene to the Stories page, or take it off.
    * @param {string} sceneId
    * @param {boolean} on
-   * @returns {boolean} False when the scene does not exist, or has no shots
-   *   and `on` is true.
+   * @returns {boolean} False when the scene does not exist, has no shots and
+   *   `on` is true, or the project could not be saved (the scene stays as it
+   *   was and the save error is shown).
    */
   setSceneInStories(sceneId, on) {
     const scene = this._project.scenes.find(({ id }) => id === sceneId);
     if (!scene || (on && !scene.shots.length)) return false;
+    const previous = scene.stories;
     if (on) scene.stories = true;
     else delete scene.stories;
-    this._saveProject();
+    if (!this._saveProject()) {
+      if (previous === undefined) delete scene.stories;
+      else scene.stories = previous;
+      return false;
+    }
     this._publish({ type: 'stories-changed' });
     return true;
   }
