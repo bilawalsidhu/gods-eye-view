@@ -3993,5 +3993,14 @@
   "{h} h {m} min": "{h} 小时 {m} 分钟",
   "{n} min": "{n} 分钟",
   "{speed} {direction}": "{direction}风 {speed}",
-  "{n} mm": "{n} 毫米"
+  "{n} mm": "{n} 毫米",
+  "Scanning": "扫描中",
+  "Route": "航线",
+  "3D model": "3D 模型",
+  "3D": "3D",
+  "Cockpit view": "驾驶舱视角",
+  "KT": "kt",
+  "Course to {code}: {course}": "前往 {code} 的航向：{course}",
+  "Over {place}": "{place}上空",
+  "Below": "下方"
 }

@@ -4272,5 +4272,14 @@
   "{h} h {m} min": "{h} ч {m} мин",
   "{n} min": "{n} мин",
   "{speed} {direction}": "{speed}, {direction}",
-  "{n} mm": "{n} мм"
+  "{n} mm": "{n} мм",
+  "Scanning": "Сканирование",
+  "Route": "Маршрут",
+  "3D model": "3D-модель",
+  "3D": "3D",
+  "Cockpit view": "Вид из кабины",
+  "KT": "УЗ",
+  "Course to {code}: {course}": "Курс на {code}: {course}",
+  "Over {place}": "Над: {place}",
+  "Below": "Под спутником"
 }
