@@ -7,6 +7,7 @@ import { createRendering } from './rendering.js';
 import { createSelection } from './selection.js';
 import { createTracking } from './tracking.js';
 import { createCards } from './cards.js';
+import { createPhotos } from './photos.js';
 import { createTesting } from './testing.js';
 import { createEvidence } from './evidence.js';
 import { createQueries } from './queries.js';
@@ -24,11 +25,13 @@ export function createVesselLayer({ source, services, options = {} } = {}) {
   parts.selection = createSelection(context);
   parts.tracking = createTracking(context);
   parts.cards = createCards(context);
+  parts.photos = createPhotos(context);
   parts.testing = createTesting(context);
   parts.evidence = createEvidence(context);
   parts.queries = createQueries(context);
   parts.snapshots = createVesselSnapshotRenderer({
     state: vesselState.state,
+    placement: services?.placement ?? null,
     records: vesselState.state.records,
     rendering: parts.rendering,
     tracking: parts.tracking,
@@ -90,6 +93,9 @@ export function createVesselLayer({ source, services, options = {} } = {}) {
     buildVesselCard: parts.cards.buildVesselCard,
     buildSelectedVesselCard: parts.cards.buildSelectedVesselCard,
     cardScreenSeparated: parts.cards.cardScreenSeparated,
+    /** The vessel's Open Vessel Photos photo, once its lookup answered. */
+    getVesselPhoto: (id) =>
+      parts.photos.vesselPhoto(vesselState.state.records.byId.get(id)),
   });
   Object.defineProperty(layer, 'testing', { value: parts.testing });
   return layer;

@@ -147,11 +147,9 @@ function leg(startMs, lat, lon, count) {
   );
 }
 
-function headPositions(v) {
-  const entity = v.added.find((definition) =>
-    String(definition.id).startsWith('gev-trail:fl-head-'),
-  );
-  return entity.polyline.positions.getValue();
+/** The live head the trail would draw now. */
+function headPositions({ tracking }) {
+  return tracking._trailHeadPositions();
 }
 
 test('a pair 40 minutes and 300 km apart stays joined', () => {
@@ -321,7 +319,7 @@ test('the head is drawn to a nearby aircraft and not to one more than 150 km awa
     head: near,
   });
   joined.tracking._startTrail('abc123');
-  const drawn = headPositions(joined.viewer);
+  const drawn = headPositions(joined);
   assert.equal(drawn.length, 2);
   assert.ok(Cesium.Cartesian3.distance(drawn[1], near) < 1e-6);
 
@@ -332,12 +330,12 @@ test('the head is drawn to a nearby aircraft and not to one more than 150 km awa
     head: far,
   });
   detached.tracking._startTrail('abc123');
-  assert.deepEqual(headPositions(detached.viewer), []);
+  assert.deepEqual(headPositions(detached), []);
 
   // An hour without a fix: the head no longer joins the last body point.
   const stale = trackedHarness({ liveFixes, nowMs: t0 + HOUR, head: near });
   stale.tracking._startTrail('abc123');
-  assert.deepEqual(headPositions(stale.viewer), []);
+  assert.deepEqual(headPositions(stale), []);
 });
 
 test('a live fix after a one-hour feed gap starts a new segment', () => {

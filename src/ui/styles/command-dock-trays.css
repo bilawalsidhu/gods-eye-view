@@ -462,6 +462,19 @@ body:not(.ui-clean-view):not(.recording-mode):has(
   text-align: left;
 }
 
+body:not(.ui-clean-view):not(.recording-mode) #gev-credits,
+body:not(.ui-clean-view):not(.recording-mode):has(
+    #intel-hud[data-variant='minimal'].active
+  )
+  #gev-credits {
+  right: auto;
+  bottom: calc(2vh + 5rem + var(--world-timeline-lift, 0px));
+  left: 1.5rem;
+  width: auto !important;
+  max-width: calc(100vw - 3rem);
+  text-align: left;
+}
+
 #intel-hud[data-variant='tactical'] .hud-bottom-left,
 #intel-hud[data-variant='tactical'] .hud-bottom-right {
   bottom: calc(2vh + 6.5rem + var(--world-timeline-lift, 0px));
@@ -487,6 +500,16 @@ body:not(.ui-clean-view):not(.recording-mode):has(
       #intel-hud[data-variant='minimal'].active
     )
     #cesium-credits {
+    bottom: calc(2vh + 5rem + var(--world-timeline-lift, 0px));
+    left: 0.75rem;
+    max-width: calc(100vw - 1.5rem);
+  }
+
+  body:not(.ui-clean-view):not(.recording-mode) #gev-credits,
+  body:not(.ui-clean-view):not(.recording-mode):has(
+      #intel-hud[data-variant='minimal'].active
+    )
+    #gev-credits {
     bottom: calc(2vh + 5rem + var(--world-timeline-lift, 0px));
     left: 0.75rem;
     max-width: calc(100vw - 1.5rem);

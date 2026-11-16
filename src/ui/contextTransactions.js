@@ -240,25 +240,35 @@ export async function _clearLayersOutsideContextMode(
 ) {
   const allowed = contextAllowedLayerIds(mode);
   const pending = [];
-  for (const [layerId] of this._dataManager.layers || []) {
-    // Effective visibility: a disallowed layer still mid-ENABLING must be
-    // isolated too, or it settles ON inside the exclusive mode.
-    if (
-      !allowed.has(layerId) &&
-      this._dataManager.isEffectivelyEnabled(layerId)
-    ) {
-      pending.push({
-        layerId,
-        transition: this._dataManager.setEnabled(layerId, false, {
-          notificationToken,
-          ...(signal ? { signal } : {}),
-        }),
-      });
+  // Panels read this while their layer goes off (suspendsLayer): a layer
+  // isolation switches off is suspended, not switched off by the user.
+  const isolating = [];
+  let results;
+  try {
+    for (const [layerId] of this._dataManager.layers || []) {
+      // Effective visibility: a disallowed layer still mid-ENABLING must be
+      // isolated too, or it settles ON inside the exclusive mode.
+      if (
+        !allowed.has(layerId) &&
+        this._dataManager.isEffectivelyEnabled(layerId)
+      ) {
+        if (!this._isolatingLayerIds.has(layerId)) {
+          this._isolatingLayerIds.add(layerId);
+          isolating.push(layerId);
+        }
+        pending.push({
+          layerId,
+          transition: this._dataManager.setEnabled(layerId, false, {
+            notificationToken,
+            ...(signal ? { signal } : {}),
+          }),
+        });
+      }
     }
+    results = await Promise.all(pending.map(({ transition }) => transition));
+  } finally {
+    for (const layerId of isolating) this._isolatingLayerIds.delete(layerId);
   }
-  const results = await Promise.all(
-    pending.map(({ transition }) => transition),
-  );
   const failed = pending
     .filter(
       ({ layerId }, index) =>

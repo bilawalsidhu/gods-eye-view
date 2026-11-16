@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import { negativePiToPi, toDegrees, toRadians } from '../../geo/vector.js';
+import { findCamera } from '../../render/rendererOf.js';
 import { GBFS_CITY_REGISTRY } from './registry.js';
 import {
   ACTIVATION_EXIT_ALTITUDE_M,
@@ -12,44 +13,42 @@ export function createViewport({ state: layerState, services, parts, source }) {
 
   /**
    * Get the camera's current altitude in meters above the ellipsoid.
-   * @param {Cesium.Viewer} viewer - Cesium viewer instance.
+   * @param {object} viewer - The viewer the layer draws on.
    * @returns {number} Altitude in meters, or Infinity if unavailable.
    */
 
   function getCameraAltitude(viewer) {
-    const carto = viewer?.camera?.positionCartographic;
-    return carto && Number.isFinite(carto.height) ? carto.height : Infinity;
+    const height = findCamera(viewer)?.pose().height;
+    return Number.isFinite(height) ? height : Infinity;
   }
 
   /**
    * Determine the lat/lon the camera is currently looking at.
-   * Prefers the center of the computed view rectangle; falls back to the
-   * camera's own cartographic position when the rectangle is unavailable.
-   * @param {Cesium.Viewer} viewer - Cesium viewer instance.
+   * Prefers the center of the view rectangle; falls back to the camera's
+   * own position when the rectangle is unavailable.
+   * @param {object} viewer - The viewer the layer draws on.
    * @returns {{ lat: number, lon: number }|null} Center coordinates in degrees, or null.
    */
 
   function getCameraCenterLatLon(viewer) {
+    const camera = findCamera(viewer);
     // Try view rectangle center first (more accurate for tilted views)
-    const rect = viewer?.camera?.computeViewRectangle?.(
-      viewer.scene.globe?.ellipsoid,
-    );
+    const rect = camera?.viewRectangle();
     if (rect) {
-      const center = Cesium.Rectangle.center(rect);
+      // Across the antimeridian the east edge is west of the west one.
+      let east = toRadians(rect.east);
+      const west = toRadians(rect.west);
+      if (east < west) east += 2 * Math.PI;
       return {
-        lat: Cesium.Math.toDegrees(center.latitude),
-        lon: Cesium.Math.toDegrees(center.longitude),
+        lat: (rect.south + rect.north) * 0.5,
+        lon: toDegrees(negativePiToPi((west + east) * 0.5)),
       };
     }
 
     // Fallback: use the camera's own position
-    const carto = viewer?.camera?.positionCartographic;
-    if (carto) {
-      return {
-        lat: Cesium.Math.toDegrees(carto.latitude),
-        lon: Cesium.Math.toDegrees(carto.longitude),
-      };
-    }
+    const pose = camera?.pose();
+    if (pose && Number.isFinite(pose.lat) && Number.isFinite(pose.lon))
+      return { lat: pose.lat, lon: pose.lon };
 
     return null;
   }

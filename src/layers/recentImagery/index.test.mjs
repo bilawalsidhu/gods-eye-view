@@ -1,8 +1,10 @@
 import test from 'node:test';
+import * as Cesium from 'cesium';
 import assert from 'node:assert/strict';
 import { NO_IMAGERY_HOST } from '../../maps/imageryHost.js';
 import { acquireImageryComparison } from '../../maps/imageryComparison.js';
 import { MapSourceController } from '../../maps/controller.js';
+import '../../render/cesium/mapEngine.js';
 import { createDefaultMapSources } from '../../maps/defaultSources.js';
 import { resetPointerOwnership } from '../../data/inputOwnership.js';
 import { initImageryBoxTool } from '../../ui/imageryBoxTool.js';
@@ -12,6 +14,8 @@ import {
   SPLIT_PUBLISH_MS,
   createRecentImageryLayer,
 } from './index.js';
+import { createImageryBoxPreview } from './rendering.js';
+import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
 import {
   BOX,
   CANDIDATES,
@@ -24,6 +28,8 @@ import {
   manualTimers,
   settle,
 } from './testDoubles.mjs';
+import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
+import { fakeSceneQuery } from '../../testSupport/fakeCesiumScene.mjs';
 
 const NOW = new Date('2026-09-21T15:00:00Z');
 const LINK_BOX = {
@@ -112,6 +118,8 @@ function fixture({
   hostKind = 'globe',
   controller = fakeController(),
   viirs = true,
+  globeOf,
+  ports = () => ({}),
 } = {}) {
   const renderer = fakeRenderer();
   const thumbnails = fakeThumbnails();
@@ -127,12 +135,14 @@ function fixture({
       collection: collections[hostState.kind],
       kind: hostState.kind,
     }),
+    ...(globeOf && { globeOf }),
     now: () => NOW,
     setTimeoutImpl: timers.setTimeoutImpl,
     clearTimeoutImpl: timers.clearTimeoutImpl,
   });
   if (viirs) layer.setSources({ viirs: true });
   const viewer = { camera: {} };
+  bindFakeCesiumCamera(viewer, ports(viewer));
   const reasons = [];
   layer.subscribe((snapshot, reason) => reasons.push(reason));
   layer.init(viewer);
@@ -826,6 +836,32 @@ test('without a host the drapes hide and say so; the stats poll rebinds when no 
   assert.equal(f.owned().a.kind, 'tileset');
 });
 
+test("the renderer is bound with the viewer's globe port, and the attached tileset while that is the host", async () => {
+  const globe = { name: 'globe port' };
+  const asked = [];
+  const f = fixture({
+    globeOf: (viewer) => {
+      asked.push(viewer);
+      return globe;
+    },
+  });
+  await f.ready();
+  const last = () => f.renderer.hosts.at(-1);
+  assert.equal(last().globe, globe);
+  assert.equal(last().tileset, null, 'a globe host carries no tileset');
+  assert.ok(asked.every((viewer) => viewer === f.viewer));
+  const tileset = { name: 'photoreal' };
+  f.hostState.kind = 'tileset';
+  f.layer.attachTileset(tileset);
+  assert.equal(last().kind, 'tileset');
+  assert.equal(last().globe, globe);
+  assert.equal(last().tileset, tileset);
+  f.hostState.kind = 'none';
+  f.layer.getStats();
+  assert.equal(last().globe, null, 'no host, no port');
+  f.layer.destroy();
+});
+
 test('a controller subscription moves the drape to the new host on every settled switch', async () => {
   const listeners = new Set();
   const controller = {
@@ -964,8 +1000,11 @@ test('USE VIEW takes the camera rectangle and refuses a view over the cap instea
 });
 
 test('ZOOM IN: an oversized box or view flies top-down to its centre at the height whose view is 400 km wide', () => {
-  const f = fixture();
+  // The renderer's query port picks the ellipsoid through the camera's own.
+  const f = fixture({ ports: (viewer) => ({ query: fakeSceneQuery(viewer) }) });
   const flights = [];
+  const landing = (i) =>
+    Cesium.Ellipsoid.WGS84.cartesianToCartographic(flights[i].destination);
   const deg = (rad) => (rad * 180) / Math.PI;
   const rad = (value) => (value * Math.PI) / 180;
   // A 1000 × 500 canvas with a 60° horizontal FOV.
@@ -973,20 +1012,25 @@ test('ZOOM IN: an oversized box or view flies top-down to its centre at the heig
   const expected = 400_000 / (2 * Math.tan(Math.PI / 6));
   let centreHit = null;
   Object.assign(f.viewer, {
-    scene: {
-      canvas: { clientWidth: 1000, clientHeight: 500 },
-      ellipsoid: {
-        cartographicToCartesian: (c) => ({ ...c, cartesian: true }),
-        cartesianToCartographic: (c) => c && { ...c },
-      },
-    },
+    canvas: { clientWidth: 1000, clientHeight: 500 },
   });
   Object.assign(f.viewer.camera, {
     frustum: { fovy },
     flyTo: (options) => flights.push(options),
     pickEllipsoid: (position) => {
-      assert.deepEqual(position, { x: 500, y: 250 }, 'the canvas centre');
-      return centreHit;
+      assert.deepEqual(
+        [position.x, position.y],
+        [500, 250],
+        'the canvas centre',
+      );
+      return (
+        centreHit &&
+        Cesium.Cartesian3.fromRadians(
+          centreHit.longitude,
+          centreHit.latitude,
+          centreHit.height,
+        )
+      );
     },
   });
   f.layer.enable();
@@ -999,9 +1043,9 @@ test('ZOOM IN: an oversized box or view flies top-down to its centre at the heig
   assert.ok(Math.abs(height - expected) < 1e-6, String(height));
   assert.equal(flights.length, 1);
   const [flight] = flights;
-  assert.ok(Math.abs(deg(flight.destination.longitude) - 10) < 1e-9);
-  assert.ok(Math.abs(deg(flight.destination.latitude) - 10) < 1e-9);
-  assert.equal(flight.destination.height, height);
+  assert.ok(Math.abs(deg(landing(0).longitude) - 10) < 1e-9);
+  assert.ok(Math.abs(deg(landing(0).latitude) - 10) < 1e-9);
+  assert.ok(Math.abs(landing(0).height - height) < 1e-6);
   assert.deepEqual(flight.orientation, {
     heading: 0,
     pitch: -Math.PI / 2,
@@ -1019,14 +1063,14 @@ test('ZOOM IN: an oversized box or view flies top-down to its centre at the heig
   assert.equal(f.layer.useCurrentView(), false);
   assert.equal(f.snap().zoomToFit, true);
   f.layer.zoomToFit();
-  assert.ok(Math.abs(deg(flights[1].destination.longitude) + 97) < 1e-9);
-  assert.ok(Math.abs(deg(flights[1].destination.latitude) - 31) < 1e-9);
+  assert.ok(Math.abs(deg(landing(1).longitude) + 97) < 1e-9);
+  assert.ok(Math.abs(deg(landing(1).latitude) - 31) < 1e-9);
   // Sky at the centre: the view rectangle's centre instead.
   centreHit = null;
   f.layer.useCurrentView();
   f.layer.zoomToFit();
-  assert.ok(Math.abs(deg(flights[2].destination.longitude) + 98) < 1e-9);
-  assert.ok(Math.abs(deg(flights[2].destination.latitude) - 30) < 1e-9);
+  assert.ok(Math.abs(deg(landing(2).longitude) + 98) < 1e-9);
+  assert.ok(Math.abs(deg(landing(2).latitude) - 30) < 1e-9);
   // The box tool's own oversized drag carries its box.
   f.layer.reportBoxRefusal('Box is 2,226 km wide · limit 1,000 km', {
     west: 0,
@@ -1365,7 +1409,8 @@ test('with SELECT BOX armed, Escape clears the preview first and the next Escape
   const cancels = [];
   const tool = initImageryBoxTool({
     viewer: fakes.viewer,
-    cesium: fakes.cesium,
+    createPreview: (viewer, dragBox) =>
+      createImageryBoxPreview(viewer, dragBox, { draw: fakeDrawPort() }),
     pickWorld: fakes.pickWorld,
     documentRef: fakes.documentRef,
     onBox: (box) => f.layer.setBox(box),

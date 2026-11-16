@@ -49,3 +49,15 @@ test('keeps grounded fallback contacts and rejects rows without positions', () =
   assert.equal(normalized.states[0][7], null);
   assert.equal(normalized.states[0][8], true);
 });
+
+test('an aircraft with no track takes its true heading, never its magnetic one', () => {
+  const at = (extra) =>
+    normalizeAdsbLolAircraftState(
+      { hex: 'abc123', lat: 37.7, lon: -122.2, alt_baro: 'ground', ...extra },
+      1000,
+    )[10];
+  assert.equal(at({ track: 56.25, true_heading: 40 }), 56.25, 'track first');
+  assert.equal(at({ true_heading: 244.69 }), 244.69, 'true heading');
+  assert.equal(at({ mag_heading: 278.44 }), null, 'not magnetic');
+  assert.equal(at({}), null, 'none');
+});

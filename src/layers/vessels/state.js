@@ -1,6 +1,5 @@
 import { createVesselFeed } from './ingestion.js';
 import { VesselRecords } from './records.js';
-import * as Cesium from 'cesium';
 import { DEFAULT_AIS_RUNTIME, followsClock } from './policy.js';
 import { worldTimeFor } from '../../time/worldClock.js';
 
@@ -18,8 +17,6 @@ export function createVesselState({ source, services }) {
   /** Camera pose signature at the last vessel rotation pass. */
 
   vesselState._lastCamPoseSig = '';
-
-  vesselState._scratchFocusScreen = new Cesium.Cartesian2();
 
   vesselState.DEFAULT_VESSEL_OVERLAY_HOST = Object.freeze({
     setEntries: setOverlayEntries,
@@ -60,27 +57,35 @@ export function createVesselState({ source, services }) {
 
   vesselState.shipIconCache = new Map();
 
+  /** Row ids for unkeyed (no-id) records, which are rebuilt every poll. */
+
+  vesselState._unkeyedIconSequence = 0;
+  // The ship whose icon is hidden under the bridge camera (cockpit subject).
+  vesselState._iconHiddenId = null;
+
   vesselState.state = {
     feed: createVesselFeed(),
     records: new VesselRecords({ now: () => vesselState.recordsNow() }),
     viewer: null,
 
-    billboardCollection: null,
-    clickHandler: null,
+    /** The vessels' icons as drawn (`iconBook.js`), and their draw set. */
+    icons: null,
+    /** The click subscription's unsubscribe. */
+    clickSubscription: null,
     /** Exact EventTarget currently holding the Escape listener. */
     keyTarget: null,
     /** Exact callback registered on keyTarget. */
     keydownHandler: null,
-    /** Cesium trackedEntityChanged listener disposer. */
+    /** Follow-change listener disposer. */
     trackedEntityRemover: null,
-    /** Test-only factory used to exercise enable-time interaction installation. */
-    interactionHandlerFactory: null,
-    /** Test-only key target paired with interactionHandlerFactory. */
+    /** Test-only key target for enable-time interaction installation. */
     interactionKeyTarget: null,
     preRenderRemover: null,
     /** Pending timer that renders one frame after a cadence-skipped pass. */
     trailingVisibilityTimer: null,
     lastVisibilityUpdate: 0,
+    /** Following the clock, the world time the last visibility pass drew. */
+    visibilityWorldMs: null,
     lastFocusUpdate: 0,
     /** Sprites whose animated emphasis remains outside the 1.0 deadband. */
     activeFocusCount: 0,
@@ -90,7 +95,7 @@ export function createVesselState({ source, services }) {
     cockpitSubjectId: null,
     /** @type {{setPositions: Function, clear: Function, destroy: Function}|null} Selected-vessel fading trail */
     trail: null,
-    /** @type {Cesium.Cartesian3[]} Chronological trail vertices (oldest first) */
+    /** @type {{x: number, y: number, z: number}[]} Chronological ECEF trail vertices (oldest first) */
     trailPositions: [],
     /** @type {string|null} Id of the vessel that owns the active selected-vessel trail. */
     trailId: null,
