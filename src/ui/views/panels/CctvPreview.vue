@@ -29,6 +29,8 @@ const params = computed(() => {
 const name = computed(() => params.value.get('label') || '');
 // The panel's meta line, e.g. "US-290 · HDG 248° · FOV 44° · RANGE 145m · … · TxDOT · …".
 const facts = computed(() => {
+  // The panel's line belongs to the camera it shows, which may be another.
+  if (!same.value) return [];
   const parts = String(view.value?.meta || '')
     .split(' · ')
     .map((p) => p.trim())

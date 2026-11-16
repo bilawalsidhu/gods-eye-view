@@ -280,6 +280,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   }
 
   function clear() {
+    if (following.value) shell.value?.letGo?.();
     following.value = null;
     clearInterval(timer);
     timer = null;
@@ -296,6 +297,11 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   const isFollowing = () =>
     Boolean(card.value && following.value === card.value.key);
   const ask = () => card.value && shell.value?.ask?.(card.value);
+  /** The regional brief (weather, local news) for a spot, from the shell. */
+  const readBrief = (lat, lon) =>
+    shell.value?.regionalBrief
+      ? shell.value.regionalBrief(lat, lon)
+      : Promise.resolve(null);
   const canFollow = () => Boolean(shell.value?.canFollow?.(card.value));
   /** Loaded items whose name or id matches typed text, for the omnibar. */
   const search = (query, options) =>
@@ -317,6 +323,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     flyTo,
     follow,
     ask,
+    readBrief,
     canFollow,
     isFollowing,
     following,

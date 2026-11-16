@@ -196,3 +196,16 @@ body.mobile-shell .context-dock-btn {
   ) {
   display: none;
 }
+
+/* Right to left, the rail sits on the left edge (rtl.css), and so does the
+   expanded column. */
+html[dir='rtl'] body.context-docked #right-context-rail {
+  right: auto !important;
+  left: 0 !important;
+}
+
+html[dir='rtl'] body.context-docked #global-context-panel .global-context-panel-inner {
+  border-left: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 18px 0 40px rgba(0, 0, 0, 0.35);
+}

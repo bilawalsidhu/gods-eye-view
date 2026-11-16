@@ -37,6 +37,8 @@ const FOLLOWABLE = new Set([
  * @param {(viewer: object, x: number, y: number) => ({lat: number, lon: number}|null)} [options.pickWorld]
  *   The ground under a normalized screen point; the view's centre falls back
  *   to the point under the camera without it.
+ * @param {(lat: number, lon: number) => Promise<object>} [options.regionalBrief]
+ *   The app's regional brief service, for the weather and news Context shows.
  * @returns {() => void} disconnects
  */
 export function installEntityContext({
@@ -44,12 +46,21 @@ export function installEntityContext({
   getDataManager,
   pinia,
   pickWorld,
+  regionalBrief,
 }) {
   const store = useEntityCardStore(pinia);
   const omnibar = useOmnibarStore(pinia);
   const voice = useVoiceStore(pinia);
   const cockpitStore = useCockpitStore(pinia);
   const doc = globalThis.document;
+  let disposed = false;
+  // When the card last asked the camera to follow its item: the tracking
+  // that starts right after is the card's own (see trackedEntityChanged).
+  let pickedAt = -Infinity;
+  /** The entity the camera follows for the card, once its tracking starts. */
+  let cardTracked = null;
+  const inCockpit = () =>
+    Boolean(doc?.body?.classList.contains('cockpit-mode'));
 
   function openPanel() {
     const button = doc?.querySelector(
@@ -82,27 +93,44 @@ export function installEntityContext({
   function follow(card) {
     const run = omnibar.runner;
     if (!run || !FOLLOWABLE.has(card.layerId)) return flyTo(card);
-    void run('track_entity', {
-      query: card.identity.id || card.title,
-      layerId: card.layerId,
-    });
+    pickedAt = performance.now();
+    Promise.resolve(
+      run('track_entity', {
+        query: card.identity.id || card.title,
+        layerId: card.layerId,
+      }),
+    ).catch(() => {});
+  }
+
+  // Closing the card lets go of the camera, when the camera follows the
+  // card's own item and nothing else took it over since.
+  function letGo() {
+    const run = omnibar.runner;
+    if (!run || !cardTracked || viewer.trackedEntity !== cardTracked) return;
+    cardTracked = null;
+    Promise.resolve(run('stop_tracking', {})).catch(() => {});
   }
 
   // Aircraft can be flown from, and a satellite ridden in the orbital view:
-  // track the craft, then enter Cockpit on it.
-  const COCKPIT_LAYERS = new Set([
-    'flights',
-    'military',
-    'local-adsb',
-    'satellites',
-  ]);
+  // track the craft, then enter Cockpit on it. Only layers the tracking
+  // action can follow are offered (local ADS-B cannot be tracked).
+  const COCKPIT_LAYERS = new Set(['flights', 'military', 'satellites']);
   async function cockpit(card) {
+    try {
+      await enterCockpit(card);
+    } catch {
+      // The craft left the feed or tracking failed; the card stays as it is.
+    }
+  }
+  async function enterCockpit(card) {
     const run = omnibar.runner;
     if (!run || !COCKPIT_LAYERS.has(card.layerId)) return;
+    pickedAt = performance.now();
     await run('track_entity', {
       query: card.identity.id || card.title,
       layerId: card.layerId,
     });
+    if (disposed) return;
     if (card.layerId !== 'satellites') {
       await run('control_cockpit', { action: 'enter' });
       return;
@@ -111,6 +139,8 @@ export function installEntityContext({
     // the orbital view once the satellite is tracked. Wait for it to say so;
     // if it never does (a class that cannot be ridden), nothing is entered.
     for (let tries = 0; tries < 40; tries++) {
+      // Another pick or a closed card in the meantime calls the ride off.
+      if (disposed || store.card?.key !== card.key) return;
       const presence = cockpitStore.presence;
       if (presence?.entryAvailable && presence.entryKind === 'satellite') {
         doc?.getElementById('cockpit-entry')?.click();
@@ -142,6 +172,8 @@ export function installEntityContext({
     openPanel,
     flyTo,
     follow,
+    letGo,
+    regionalBrief,
     ask,
     askText,
     cockpit,
@@ -207,7 +239,7 @@ export function installEntityContext({
       1000 - (now - lastRead),
     );
   });
-  setTimeout(readView, 0);
+  const firstRead = setTimeout(readView, 0);
 
   /** Layers whose own map click already follows what was clicked. */
   const CLICK_FOLLOWS = new Set([
@@ -227,8 +259,6 @@ export function installEntityContext({
   // pick starts the tracking, so tracking something else (another control,
   // another craft) is not mistaken for following the card.
   let trackCheck = 0;
-  let cardTracked = null;
-  let pickedAt = -Infinity;
   const removeTrackedChanged = viewer.trackedEntityChanged.addEventListener(
     () => {
       clearTimeout(trackCheck);
@@ -241,7 +271,11 @@ export function installEntityContext({
         }
         const card = store.card;
         const fromPick = performance.now() - pickedAt < 1500;
-        if (fromPick && card && (store.following === card.key || CLICK_FOLLOWS.has(card.layerId))) {
+        if (
+          fromPick &&
+          card &&
+          (store.following === card.key || CLICK_FOLLOWS.has(card.layerId))
+        ) {
           cardTracked = tracked;
           store.following = card.key;
         } else if (tracked !== cardTracked) {
@@ -273,7 +307,8 @@ export function installEntityContext({
     // A tool that owns the pointer (draw, measure) keeps its clicks.
     const press = pressed;
     pressed = null;
-    if (!isPointerFree()) return;
+    // Cockpit has its own picks, and Context is hidden while it runs.
+    if (!isPointerFree() || inCockpit()) return;
     const samePlace =
       press && Math.hypot(press.x - position.x, press.y - position.y) < 6;
     const picked = samePlace ? press.picked : pickAt(position);
@@ -299,7 +334,7 @@ export function installEntityContext({
   // Layers that select through the context store (GeoJSON sites, fires,
   // installations) announce it; their selection opens the card too.
   const onSelected = ({ detail: record }) => {
-    if (!record?.layerId) return;
+    if (!record?.layerId || inCockpit()) return;
     store.select({
       layerId: record.layerId,
       id: record.id,
@@ -311,6 +346,8 @@ export function installEntityContext({
   globalThis.addEventListener?.('gev:entity-selected', onSelected);
 
   return () => {
+    disposed = true;
+    clearTimeout(firstRead);
     handler.destroy();
     removeMoveEnd();
     removeChanged();

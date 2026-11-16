@@ -1,5 +1,5 @@
 import { codeWord, distanceKm } from '../data/entityContext.js';
-import { msg, t, tn } from '../i18n/index.js';
+import { formatNumber, msg, t, tn } from '../i18n/index.js';
 import { createUsgsEarthquakeSource } from '../layers/earthquakes/source.js';
 import { createCycloneSource } from '../layers/cyclones/source.js';
 import { createWfigsPerimeterSource } from '../layers/perimeters/source.js';
@@ -16,15 +16,24 @@ const BRIEF_TTL_MS = 10 * 60_000;
 const FEED_TTL_MS = 5 * 60_000;
 
 const briefs = new Map();
-/** The regional brief for a spot: `{weather, articles, place, newsSource}`. */
-export function regionalBrief(lat, lon) {
+/**
+ * The regional brief for a spot: `{weather, articles, place, newsSource}`,
+ * read with `load`, the app's regional service. A failed read is not kept,
+ * so the next ask tries again.
+ * @param {number} lat
+ * @param {number} lon
+ * @param {(lat: number, lon: number) => Promise<object>} load
+ */
+export function regionalBrief(lat, lon, load) {
   const key = `${lat.toFixed(2)},${lon.toFixed(2)}`;
   const kept = briefs.get(key);
   if (kept && Date.now() - kept.at < BRIEF_TTL_MS) return kept.promise;
-  const query = `latitude=${lat.toFixed(5)}&longitude=${lon.toFixed(5)}`;
-  const promise = fetch(`/api/regional-brief?${query}`)
-    .then((response) => (response.ok ? response.json() : null))
-    .catch(() => null);
+  const promise = Promise.resolve()
+    .then(() => load(lat, lon))
+    .catch(() => {
+      if (briefs.get(key)?.promise === promise) briefs.delete(key);
+      return null;
+    });
   briefs.set(key, { at: Date.now(), promise });
   if (briefs.size > 40) briefs.delete(briefs.keys().next().value);
   return promise;
@@ -164,7 +173,7 @@ export async function hazardsNear(
       title: fire.name || t('Wildfire'),
       detail: [
         Number.isFinite(acres)
-          ? t('{n} acres', { n: Math.round(acres).toLocaleString() })
+          ? t('{n} acres', { n: formatNumber(Math.round(acres)) })
           : '',
         Number.isFinite(fire.containedPct)
           ? t('{n}% contained', { n: fire.containedPct })

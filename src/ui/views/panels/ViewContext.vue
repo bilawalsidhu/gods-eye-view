@@ -78,7 +78,9 @@ const where = computed(() => {
 });
 const height = computed(() => {
   const m = view.value?.heightM ?? 0;
-  return m >= 10_000 ? t('{n} km up', { n: Math.round(m / 1000) }) : t('{n} m up', { n: Math.round(m) });
+  return m >= 10_000
+    ? t('{n} km up', { n: formatNumber(Math.round(m / 1000)) })
+    : t('{n} m up', { n: formatNumber(Math.round(m)) });
 });
 const placeName = computed(() => {
   const found = place.value;
@@ -142,6 +144,8 @@ watch(
   view,
   async (current) => {
     if (!current || current.heightM > 400_000) {
+      // Forget the last place too, so coming back down reads it again.
+      townsFor = '';
       towns.value = [];
       return;
     }

@@ -178,7 +178,10 @@ watch(
     routePlaces.value = { from: route?.fromAt?.name || '', to: route?.toAt?.name || '' };
     if (!route?.fromAt || !route?.toAt) return;
     const [from, to] = await Promise.all([airportPlace(route.fromAt), airportPlace(route.toAt)]);
-    if (card.value?.route?.fromAt?.code === route.fromAt.code) routePlaces.value = { from, to };
+    // Only for the same route still: another flight from the same airport
+    // may have taken the card meanwhile.
+    const now = card.value?.route;
+    if (now?.fromAt?.code === route.fromAt.code && now?.toAt?.code === route.toAt.code) routePlaces.value = { from, to };
   },
   { immediate: true },
 );

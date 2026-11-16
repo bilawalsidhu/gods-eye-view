@@ -87,6 +87,9 @@ onBeforeUnmount(() => {
   globalThis.removeEventListener?.('gev:context-show-view', showView);
   clearInterval(layerTimer);
   contextReady.value = false;
+  // A later mount starts as the button says: not expanded, no tab classes.
+  setDocked(false);
+  for (const tab of LAYER_TABS) globalThis.document?.body.classList.remove(`ctx-tab-${tab.id}`);
 });
 watch(availableTabs, (tabs) => {
   for (const tab of LAYER_TABS)
@@ -97,6 +100,11 @@ watch(availableTabs, (tabs) => {
 watch(entityCard, (next, prev) => {
   if (next && next?.key !== prev?.key) activeTab.value = 'view';
 });
+// The two tabs swap with the arrow keys, and focus follows (tabs pattern).
+function switchTab() {
+  activeTab.value = activeTab.value === 'view' ? 'props' : 'view';
+  void nextTick(() => globalThis.document?.getElementById(`context-tab-btn-${activeTab.value}`)?.focus());
+}
 const isShown = (id) => availableTabs.value.some((tab) => tab.id === id);
 // The names of the layers a section's settings act on.
 const layerNames = ref({});
@@ -131,10 +139,24 @@ const searchHint = computed(() =>
 // panel closes.
 const docked = ref(false);
 const { panels: chromePanels } = storeToRefs(usePanelChromeStore());
+// The phone layout and Cockpit have no room for the column: either one
+// arriving lets it go.
+let bodyWatch = null;
 function setDocked(next) {
   docked.value = next;
-  globalThis.document?.body.classList.toggle('context-docked', next);
+  const body = globalThis.document?.body;
+  body?.classList.toggle('context-docked', next);
+  bodyWatch?.disconnect();
+  bodyWatch = null;
+  if (next && body && globalThis.MutationObserver) {
+    bodyWatch = new MutationObserver(() => {
+      if (body.classList.contains('mobile-shell') || body.classList.contains('cockpit-mode')) setDocked(false);
+    });
+    bodyWatch.observe(body, { attributes: true, attributeFilter: ['class'] });
+  }
 }
+// Only an open panel reads what is picked and in view; closed, it does no work.
+const contextOpen = computed(() => chromePanels.value['global-context-panel']?.collapsed !== true);
 watch(
   () => chromePanels.value['global-context-panel']?.collapsed,
   (collapsed) => {
@@ -176,15 +198,15 @@ watch(
           </button>
         </div>
         <div v-if="availableTabs.length" class="context-tabs" role="tablist" :aria-label="t('Context tabs')">
-          <button type="button" role="tab" class="context-tabs__tab" :class="{ active: activeTab === 'view' }" :aria-selected="String(activeTab === 'view')" @click="activeTab = 'view'">
+          <button id="context-tab-btn-view" type="button" role="tab" class="context-tabs__tab" :class="{ active: activeTab === 'view' }" :aria-selected="String(activeTab === 'view')" aria-controls="context-tab-view" :tabindex="activeTab === 'view' ? 0 : -1" @click="activeTab = 'view'" @keydown.left.prevent="switchTab" @keydown.right.prevent="switchTab">
             <span class="material-symbols-outlined" aria-hidden="true">visibility</span><span class="context-tabs__label">{{ t('Inspector') }}</span>
           </button>
-          <button type="button" role="tab" class="context-tabs__tab" :class="{ active: activeTab === 'props' }" :aria-selected="String(activeTab === 'props')" @click="activeTab = 'props'">
+          <button id="context-tab-btn-props" type="button" role="tab" class="context-tabs__tab" :class="{ active: activeTab === 'props' }" :aria-selected="String(activeTab === 'props')" aria-controls="context-tab-props" :tabindex="activeTab === 'props' ? 0 : -1" @click="activeTab = 'props'" @keydown.left.prevent="switchTab" @keydown.right.prevent="switchTab">
             <span class="material-symbols-outlined" aria-hidden="true">tune</span><span class="context-tabs__label">{{ t('Properties') }}</span>
           </button>
         </div>
         <!-- Properties: settings of the layers that are on, one section each. -->
-        <div class="context-props" :hidden="activeTab !== 'props'" role="tabpanel">
+        <div id="context-tab-props" class="context-props" :hidden="activeTab !== 'props'" role="tabpanel" aria-labelledby="context-tab-btn-props">
           <section v-for="tab in LAYER_TABS" v-show="isShown(tab.id)" :key="tab.id" class="context-props__section">
             <h4 class="context-props__heading"><span class="material-symbols-outlined" aria-hidden="true">{{ tab.icon }}</span>{{ t(tab.label) }}</h4>
             <ul v-if="affects(tab.id).length" class="context-props__layers">
@@ -225,7 +247,7 @@ watch(
             <MissionDetail />
           </div>
         </section>
-        <div v-show="activeTab === 'view'" :class="{ 'context-searching': contextSearchOpen && contextSearchText.trim() }">
+        <div v-if="contextOpen" v-show="activeTab === 'view'" id="context-tab-view" role="tabpanel" aria-labelledby="context-tab-btn-view" :class="{ 'context-searching': contextSearchOpen && contextSearchText.trim() }">
           <EntityCard :with-contacts="contactsMatchCard">
             <AwarenessPanel v-if="contactsMatchCard" compact />
           </EntityCard>

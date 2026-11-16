@@ -60,7 +60,7 @@ async function read(lat, lon) {
   const mineHazards = ++readingHazards;
   loading.value = true;
   const [nextBrief, nextHazards] = await Promise.all([
-    regionalBrief(lat, lon),
+    regionalBrief(lat, lon, store.readBrief),
     hazardsNear(lat, lon, radiusKm.value, { fires: firesOn() }).catch(() => []),
   ]);
   if (reading !== mine) return;
@@ -86,6 +86,17 @@ async function rereadHazards(km) {
   hazards.value = next;
 }
 watch(radiusKm, (km) => void rereadHazards(km));
+// A spot that stays put (a parked selection, a still view) reads its weather,
+// news and hazards again once the kept copies are old.
+const REREAD_MS = 5 * 60_000;
+let rereadTimer = 0;
+onMounted(() => {
+  rereadTimer = setInterval(() => {
+    readAt = null;
+    void read(props.lat, props.lon);
+  }, REREAD_MS);
+});
+onBeforeUnmount(() => clearInterval(rereadTimer));
 // Hazard rows are worded as they are read, so a new language reads them again.
 const stopLocale = onLocaleChange(() => void rereadHazards(radiusKm.value));
 
@@ -212,6 +223,11 @@ const hazardLayers = computed(() => {
     }),
   );
 });
+// Turning FIRMS on or off adds or drops its fire hits at once.
+watch(
+  () => Boolean(hazardLayers.value.hotspots?.on),
+  () => void rereadHazards(radiusKm.value),
+);
 let layerTimer = 0;
 onMounted(() => {
   layerTimer = setInterval(() => layerTick.value++, 1500);

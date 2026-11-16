@@ -337,10 +337,15 @@ export function createVoiceCommands({
   else adapter.bindControls?.();
   window.__gevVoiceCommands = controls;
   // The omnibar runs the same actions directly, without a model.
-  const omnibar = useOmnibarStore(applicationPinia());
-  omnibar.connectRunner((name, args) => runner(name, args));
-  session.signal.addEventListener('abort', () => omnibar.connectRunner(null), {
-    once: true,
-  });
+  // A session already gone leaves the omnibar without a runner.
+  if (!session.disposed) {
+    const omnibar = useOmnibarStore(applicationPinia());
+    omnibar.connectRunner((name, args) => runner(name, args));
+    session.signal.addEventListener(
+      'abort',
+      () => omnibar.connectRunner(null),
+      { once: true },
+    );
+  }
   return controls;
 }
