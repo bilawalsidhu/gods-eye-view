@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { t } from '../../../i18n/index.js';
 import { nearestCity } from '../../../data/wikidataCities.js';
-import { ESRI_IMAGERY_CREDIT, ESRI_IMAGERY_URL } from '../../../maps/imagery.js';
+import { ESRI_IMAGERY_CREDIT, ESRI_TILES } from '../../../maps/attribution.js';
 import PreviewHud from './PreviewHud.vue';
 
 // What lies under a satellite: a dark, grey top-down image of the ground at
@@ -21,7 +21,6 @@ const props = defineProps({
   active: { type: Boolean, default: false },
 });
 
-const TILE_URL = `${ESRI_IMAGERY_URL}/tile`;
 const CLOSE_ZOOM = 13;
 const WIDE_ZOOM = 4;
 const TILE = 256;
@@ -75,7 +74,7 @@ const tiles = computed(() => {
       const x = (((cx + dx) % here.n) + here.n) % here.n;
       list.push({
         key: `${x}/${y}`,
-        src: `${TILE_URL}/${here.zoom}/${y}/${x}`,
+        src: ESRI_TILES.replace('{z}', here.zoom).replace('{y}', y).replace('{x}', x),
         left: (cx + dx - here.x) * TILE,
         top: (cy + dy - here.y) * TILE,
       });

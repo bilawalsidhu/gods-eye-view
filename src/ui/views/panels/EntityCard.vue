@@ -21,8 +21,6 @@ import { countryName, nearestCity } from '../../../data/wikidataCities.js';
 const props = defineProps({
   /** Contacts follows this same aircraft, and its list sits inside the card. */
   withContacts: Boolean,
-  /** The aircraft's photo from Contacts (`{src, link, credit}`), when it has one. */
-  aircraftPhoto: { type: Object, default: null },
 });
 const store = useEntityCardStore();
 const { card, lost, tick } = storeToRefs(store);
@@ -203,9 +201,10 @@ watch(
   { immediate: true },
 );
 
-// The hero tile at the top of every card. A flight shows its photo (from
-// Contacts), its route on a small globe, its 3D model and the view from its
-// cockpit; a satellite, the ground beneath it; a camera, its latest frame.
+// The hero tile at the top of every card. A flight shows its photo, its route
+// on a small globe, its 3D model and the view from its cockpit; a vessel, its
+// photo; a satellite, the ground beneath it; a camera, its latest frame.
+// The globe, model and cockpit view are the renderer's (`store.previews()`).
 // Anything else gets a quiet placeholder with its icon and its headline
 // figures until it has imagery of its own. Previews stay mounted so switching
 // shows the next one at once.
@@ -214,10 +213,26 @@ const modelFailed = ref(false);
 const cockpitFailed = ref(false);
 const hasPosition = computed(() => Number.isFinite(card.value?.lat) && Number.isFinite(card.value?.lon));
 const cockpitKnown = computed(() => card.value?.kind === 'aircraft' && hasPosition.value && !cockpitFailed.value);
-const modelKnown = computed(() => Boolean(card.value?.aircraftClass) && !modelFailed.value);
+const modelKnown = computed(() => Boolean(card.value?.aircraftModel) && !modelFailed.value);
 const preview = ref(null);
+// The photo the item's layer looked up (Planespotters for a tracked
+// airliner, Open Vessel Photos for a selected vessel), with its credit.
 const failedPhoto = ref('');
-const photoAvailable = computed(() => Boolean(props.aircraftPhoto?.src && props.aircraftPhoto.src !== failedPhoto.value));
+const photo = computed(() => {
+  const found = card.value?.photo;
+  if (!found?.src || found.src === failedPhoto.value) return null;
+  const { photographer, licence } = found;
+  const credit = licence
+    ? photographer
+      ? t('Photo: {photographer} · {licence}', { photographer, licence })
+      : t('Photo · {licence}', { licence })
+    : photographer
+      ? t('Photo © {photographer}', { photographer })
+      : '';
+  return { ...found, credit };
+});
+const photoAvailable = computed(() => Boolean(photo.value));
+const onPhotoError = (event) => (failedPhoto.value = event.currentTarget.getAttribute('src'));
 watch(() => props.withContacts, () => (preview.value = null));
 // The model and the cockpit view take turns: after each of the model's
 // cycles, the view ahead from the cockpit shows for as long as that cycle
@@ -250,7 +265,8 @@ function showOtherView(ms) {
 }
 
 const heroKind = computed(() => {
-  if (photoAvailable.value || routeKnown.value || modelKnown.value) return 'flight';
+  if (card.value?.kind === 'aircraft' && (photoAvailable.value || routeKnown.value || modelKnown.value)) return 'flight';
+  if (card.value?.kind === 'vessel' && photoAvailable.value) return 'photo';
   if (card.value?.layerId === 'satellites' && hasPosition.value) return 'satellite';
   if (card.value?.layerId === 'cctv') return 'camera';
   return 'none';
@@ -332,18 +348,18 @@ watch(
         <template v-if="heroKind === 'flight'">
           <a
             v-if="photoAvailable"
-            :key="aircraftPhoto.src"
+            :key="photo.src"
             class="entity-hero__layer entity-hero__photo"
             :class="{ 'is-shown': activeFlightPreview === 'photo' }"
-            :href="aircraftPhoto.link"
+            :href="photo.link || undefined"
             target="_blank"
             rel="noopener"
           >
-            <img :src="aircraftPhoto.src" :alt="t('Photo of {name}', { name: shownTitle })" @error="failedPhoto = $event.currentTarget.getAttribute('src')" />
-            <small v-if="aircraftPhoto.credit">{{ aircraftPhoto.credit }}</small>
+            <img :src="photo.src" :alt="t('Photo of {name}', { name: shownTitle })" v-on="{ error: onPhotoError }" />
+            <small v-if="photo.credit">{{ photo.credit }}</small>
           </a>
-          <RouteGlobe v-if="routeKnown" :key="`route-${card.key}`" class="entity-hero__layer" :class="{ 'is-shown': activeFlightPreview === 'route' }" :active="activeFlightPreview === 'route'" :from="card.route.fromAt" :to="card.route.toAt" :at="{ lat: card.lat, lon: card.lon }" :heading="card.heading" />
-          <AircraftModelHero v-if="card.aircraftClass && !modelFailed" :key="card.key" class="entity-hero__layer" :class="{ 'is-shown': activeFlightPreview === 'model' }" :active="activeFlightPreview === 'model'" :aircraft-class="card.aircraftClass" :heading="card.heading || 0" :callouts="callouts" @failed="modelFailed = true" @cycle="showOtherView" />
+          <RouteGlobe v-if="routeKnown" :key="`route-${card.key}`" class="entity-hero__layer" :class="{ 'is-shown': activeFlightPreview === 'route' }" :active="activeFlightPreview === 'route'" :from="card.route.fromAt" :to="card.route.toAt" :at="{ lat: card.lat, lon: card.lon }" />
+          <AircraftModelHero v-if="modelKnown" :key="card.key" class="entity-hero__layer" :class="{ 'is-shown': activeFlightPreview === 'model' }" :active="activeFlightPreview === 'model'" :aircraft="card.aircraftModel" :heading="card.heading || 0" :callouts="callouts" @failed="modelFailed = true" @cycle="showOtherView" />
           <FlightCockpitView v-if="cockpitMade && cockpitKnown" :key="`cockpit-${card.key}`" class="entity-hero__layer" :class="{ 'is-shown': activeFlightPreview === 'cockpit' }" :active="activeFlightPreview === 'cockpit'" :lat="card.lat" :lon="card.lon" :altitude-m="card.altitudeM" :heading="card.heading" :speed-mps="card.speedMps" @failed="onCockpitFailed" />
           <div v-if="cockpitKnown || (routeKnown && modelKnown) || (photoAvailable && (routeKnown || modelKnown))" class="entity-card__preview-switch" role="group" :aria-label="t('Preview')">
             <button v-if="photoAvailable" type="button" :class="{ active: activeFlightPreview === 'photo' }" :aria-pressed="String(activeFlightPreview === 'photo')" :aria-label="t('Photos')" :title="t('Photos')" @click="choosePreview('photo')"><span class="material-symbols-outlined" aria-hidden="true">photo_camera</span></button>
@@ -352,6 +368,10 @@ watch(
             <button v-if="cockpitKnown" type="button" :class="{ active: activeFlightPreview === 'cockpit' }" :aria-pressed="String(activeFlightPreview === 'cockpit')" :aria-label="t('Cockpit view')" :title="t('Cockpit view')" @click="choosePreview('cockpit')"><span class="material-symbols-outlined" aria-hidden="true">visibility</span></button>
           </div>
         </template>
+        <a v-else-if="heroKind === 'photo'" :key="photo.src" class="entity-hero__layer entity-hero__photo is-shown" :href="photo.link || undefined" target="_blank" rel="noopener">
+          <img :src="photo.src" :alt="t('Photo of {name}', { name: shownTitle })" v-on="{ error: onPhotoError }" />
+          <small v-if="photo.credit">{{ photo.credit }}</small>
+        </a>
         <SatelliteGroundView v-else-if="heroKind === 'satellite'" :key="`ground-${card.key}`" class="entity-hero__layer is-shown" active :lat="card.lat" :lon="card.lon" />
         <CctvPreview v-else-if="heroKind === 'camera'" :camera-id="card.identity?.id || ''" />
         <!-- No imagery for it yet: its icon, with its headline figures beside it. -->

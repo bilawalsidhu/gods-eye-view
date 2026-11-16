@@ -6,7 +6,8 @@ import {
   isTrackingClickGesture,
   isTrackingSelectionGesture,
 } from '../data/trackingClickGesture.js';
-import { findCamera } from '../render/rendererOf.js';
+import { applicationHooksOf } from '../render/applicationHooks.js';
+import { findCamera, rendererOf } from '../render/rendererOf.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useEntityCardStore } from './stores/entityCard.js';
 import { useOmnibarStore } from './stores/omnibar.js';
@@ -200,6 +201,8 @@ export function installEntityContext({
     letGo,
     isOpen,
     regionalBrief,
+    // The renderer's card previews, when it has them.
+    previews: () => applicationHooksOf(rendererOf(viewer)).cardPreviews ?? null,
     ask,
     askText,
     cockpit,

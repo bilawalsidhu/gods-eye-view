@@ -2187,7 +2187,7 @@
   border-radius: 3px;
 }
 
-.entity-hero:is([data-hero='flight'], [data-hero='satellite']) {
+.entity-hero:is([data-hero='flight'], [data-hero='satellite'], [data-hero='photo']) {
   height: 168px;
   background: radial-gradient(
     ellipse 55% 60% at 50% 55%,

@@ -4,7 +4,7 @@
  * the same tiles, from the same host, that GEV's Esri map draws (and credits
  * on screen); no other host is asked.
  */
-import { ESRI_TILES } from '../maps/globeEngine.js';
+import { ESRI_TILES } from '../maps/attribution.js';
 
 const WIDTH = 320;
 const HEIGHT = 180;
