@@ -415,6 +415,58 @@ test('trimmed scene media holds through provider startup, playback and fade, the
   }
 });
 
+test('scene media plays again when a run goes on from a seek inside its hold, unless the seek was past the clip', async () => {
+  const previous = { document: globalThis.document, window: globalThis.window,
+    requestAnimationFrame: globalThis.requestAnimationFrame,
+    cancelAnimationFrame: globalThis.cancelAnimationFrame };
+  installEventDom();
+  globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
+  // The reveal's frames are not driven here; only that it starts.
+  let frames = 0;
+  globalThis.requestAnimationFrame = () => ++frames;
+  globalThis.cancelAnimationFrame = () => {};
+  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
+  let plays = 0;
+  const layer = createBhoteKoshiEventLayer({
+    eventLoader: async () => event,
+    imagerySpecFactory: async (url) => ({ url }),
+    terrainSampler: async (_viewer, observations) => observations.map(() => ({ height: 800 })),
+    mediaLoader: async () => { throw Object.assign(new Error('No bundled clip'), { name: 'AbortError' }); },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+    renderHost: { request() {}, hold() {}, release() {} },
+    embeddedMediaFactory: () => ({ warm: () => true, show: () => true, play() { plays++; }, pause() {},
+      getPlaybackState: () => ({ phase: 'playing' }), hide() {}, destroy() {} }),
+  });
+  const controls = { evidenceMediaAutoplay: true, mediaPlaybackHoldSec: 4, cameraSettled: true,
+    deferEvidenceUntilCameraSettled: true };
+  const params = (sceneControls) => ({ presentation: 'scene-beat', sceneSurface: 'evidence-beat',
+    beatId: 'mailung-bazzar', sceneContext: { sceneId: 'scene', shotId: 'shot', holdSec: 7.65 }, sceneControls });
+  const seek = (holdElapsedSec) => ({ ...controls,
+    timelineSeek: { cameraProgress: 1, holdElapsedSec, holdDurationSec: 7.65, flightDurationSec: 2 } });
+  try {
+    const viewer = eventViewer();
+    await layer.init(viewer);
+    layer.setSceneMediaPlayback({ sceneId: 'scene', shotId: 'shot', token: { cancelled: false } });
+    // A seek 1 s into the hold shows that moment and plays nothing.
+    layer.setParams(params(seek(1)), { origin: 'scene' });
+    await layer.enable(viewer, { origin: 'scene' });
+    assert.equal(plays, 0);
+    assert.equal(layer.getSceneShotMediaHold('mailung-bazzar'), null);
+    // The run goes on from there: the clip starts again and holds the shot.
+    const framesBefore = frames;
+    layer.setParams(params(controls), { origin: 'scene' });
+    assert.ok(frames > framesBefore, 'the reveal runs again');
+    assert.ok(plays > 0, 'the clip plays');
+    assert.equal(layer.getSceneShotMediaHold('mailung-bazzar').pending, true);
+    // A seek after the clip goes on without it.
+    layer.setParams(params(seek(6)), { origin: 'scene' });
+    const before = plays;
+    layer.setParams(params(controls), { origin: 'scene' });
+    assert.equal(plays, before, 'the clip already played');
+    assert.equal(layer.getSceneShotMediaHold('mailung-bazzar').pending, false);
+  } finally { await layer.destroy(); Object.assign(globalThis, previous); }
+});
+
 test('Pinokio source-card fallback selects authored Director dwell, not an impossible player hold', async () => {
   const previous = { document: globalThis.document, window: globalThis.window };
   installEventDom();

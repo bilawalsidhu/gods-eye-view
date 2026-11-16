@@ -2152,7 +2152,7 @@ test('a run resumed inside a flight goes on from that point of the path and cloc
   } finally { await director.destroy(); restoreFrames(); restore(); }
 });
 
-test('a run resumed inside a hold keeps the seek’s layer state and waits only the rest of it', async () => {
+test('a run resumed inside a hold plays its layers on from the seek’s state and waits only the rest of it', async () => {
   const project = structuredClone(PROJECT_FIXTURE);
   project.scenes[0].shots[0].holdSec = 0.6;
   const { director, viewer, restore } = makeDirector({ project });
@@ -2196,6 +2196,12 @@ test('a run resumed inside a hold keeps the seek’s layer state and waits only 
     assert.equal(seekStates.length, 1, 'shot A’s layers are given the moment');
     assert.equal(seekStates[0].shot.id, 'shot-a');
     assert.ok(Math.abs(seekStates[0].options.sceneSeek.holdElapsedSec - 0.4) < 1e-9);
+    // Then they play on from that moment: shot A settles without the seek.
+    const after = layerCalls.slice(layerCalls.indexOf(seekStates[0]) + 1);
+    const played = after.find(({ shot }) => shot.id === 'shot-a');
+    assert.ok(played, 'shot A’s layers go back to running playback');
+    assert.equal(played.options.cameraSettled, true);
+    assert.equal(played.options.sceneSeek, undefined);
   } finally { await director.destroy(); restore(); }
 });
 

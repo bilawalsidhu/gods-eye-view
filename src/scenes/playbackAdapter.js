@@ -5,7 +5,8 @@ import { displaySceneTitle, displayShotTitle } from './recipes.js';
 /**
  * A run resumed partway into its first shot carries the seek state of that
  * moment (`resume`). Inside the shot's hold, its layers take that moment's
- * state as a seek gives it, and only the rest of the hold is waited out; inside
+ * state as a seek gives it and then play on from it, and only the rest of the
+ * hold is waited out; inside
  * its flight, the camera goes on from where it is along the rest of the path.
  */
 const inHold = (resume) => resume?.holdElapsedSec > 0;
@@ -101,9 +102,10 @@ export function createScenePlaybackAdapter(
       director._publishShotTravel(scene, shot, travel);
       return flight;
     },
-    settle({ scene, shot, token, resume }) {
-      // Resumed inside the hold, the layers already hold that moment's state.
-      if (inHold(resume)) return;
+    settle({ scene, shot, token }) {
+      // Resumed inside the hold too: the layers placed at that moment go back
+      // to running playback from it. Their reveals go on, and scene media
+      // starts its clip again, since a clip cannot be joined partway.
       director._settleShotLayerStates(scene, shot, token, travel);
     },
     hold({ scene, shot, token, resume }) {

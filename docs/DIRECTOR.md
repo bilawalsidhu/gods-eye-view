@@ -39,8 +39,10 @@ point of the scene's clock: the queue begins with the shot that point falls in,
 carrying that point's seek state as `resume`. Inside the shot's flight the camera
 goes on from there along the rest of the path a seek samples, over the rest of the
 flight; inside its hold, the layers take that moment's state as a seek gives them
-(a clip playing at that moment is not started again) and only the rest of the
-hold is waited out. The scene clock carries on from the same point. `SceneDirector` still owns editor state, saved-project import/export,
+and then play on from it: a reveal goes on from where the seek put it, and a
+clip the moment falls in starts again from its beginning (a clip cannot be
+joined partway), while one the moment is past stays finished. Only the rest of
+the hold is waited out. The scene clock carries on from the same point. `SceneDirector` still owns editor state, saved-project import/export,
 camera ownership and asynchronous load/seek arbitration. Pure seek calculations
 live in `src/director/timeline.js`; `src/director/clock.js` owns the run/load/shot
 tickers, hold deadlines, snapshots and clock subscriptions. Stop settles pending
