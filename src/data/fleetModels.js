@@ -539,6 +539,15 @@ export function fleetModelSet() {
 }
 
 /**
+ * The load a layer has started (resolving to the set), or null when none
+ * has: for a view that needs the set but does not fetch it itself.
+ * @returns {Promise<object>|null}
+ */
+export function fleetModelSetLoading() {
+  return loading;
+}
+
+/**
  * Fetch the model set once for every layer: `catalog.json`, `types.json` and
  * every GLB the catalog names, all up front, so no model is fetched while a
  * session runs. Resolves to `{catalog, types, bytes, loadMs, totalBytes}`,

@@ -208,7 +208,8 @@ watch(
 // Anything else gets a quiet placeholder with its icon and its headline
 // figures until it has imagery of its own. Previews stay mounted so switching
 // shows the next one at once.
-const routeKnown = computed(() => Boolean(card.value?.route?.fromAt && card.value?.route?.toAt));
+const routeFailed = ref(false);
+const routeKnown = computed(() => Boolean(card.value?.route?.fromAt && card.value?.route?.toAt) && !routeFailed.value);
 const modelFailed = ref(false);
 const cockpitFailed = ref(false);
 const hasPosition = computed(() => Number.isFinite(card.value?.lat) && Number.isFinite(card.value?.lon));
@@ -302,6 +303,7 @@ watch(
   () => card.value?.key,
   () => {
     preview.value = null;
+    routeFailed.value = false;
     modelFailed.value = false;
     cockpitFailed.value = false;
     clearTimeout(turnTimer);
@@ -358,7 +360,7 @@ watch(
             <img :src="photo.src" :alt="t('Photo of {name}', { name: shownTitle })" v-on="{ error: onPhotoError }" />
             <small v-if="photo.credit">{{ photo.credit }}</small>
           </a>
-          <RouteGlobe v-if="routeKnown" :key="`route-${card.key}`" class="entity-hero__layer" :class="{ 'is-shown': activeFlightPreview === 'route' }" :active="activeFlightPreview === 'route'" :from="card.route.fromAt" :to="card.route.toAt" :at="{ lat: card.lat, lon: card.lon }" />
+          <RouteGlobe v-if="routeKnown" :key="`route-${card.key}`" class="entity-hero__layer" :class="{ 'is-shown': activeFlightPreview === 'route' }" :active="activeFlightPreview === 'route'" :from="card.route.fromAt" :to="card.route.toAt" :at="{ lat: card.lat, lon: card.lon }" @failed="routeFailed = true" />
           <AircraftModelHero v-if="modelKnown" :key="card.key" class="entity-hero__layer" :class="{ 'is-shown': activeFlightPreview === 'model' }" :active="activeFlightPreview === 'model'" :aircraft="card.aircraftModel" :heading="card.heading || 0" :callouts="callouts" @failed="modelFailed = true" @cycle="showOtherView" />
           <FlightCockpitView v-if="cockpitMade && cockpitKnown" :key="`cockpit-${card.key}`" class="entity-hero__layer" :class="{ 'is-shown': activeFlightPreview === 'cockpit' }" :active="activeFlightPreview === 'cockpit'" :lat="card.lat" :lon="card.lon" :altitude-m="card.altitudeM" :heading="card.heading" :speed-mps="card.speedMps" @failed="onCockpitFailed" />
           <div v-if="cockpitKnown || (routeKnown && modelKnown) || (photoAvailable && (routeKnown || modelKnown))" class="entity-card__preview-switch" role="group" :aria-label="t('Preview')">

@@ -84,7 +84,7 @@ const graph = computed(() => {
   const line = points.map(([px, py], index) => `${index ? 'L' : 'M'}${px.toFixed(2)} ${py.toFixed(2)}`).join(' ');
   const moved = last.m - first.m;
   const feetScale = !SHOW[props.unit];
-  const change = feetScale ? feet(last.m) - feet(first.m) : Math.abs(moved) >= Math.max(1, last.m * 0.0005) ? moved : 0;
+  const change = feetScale ? feet(last.m) - feet(first.m) : Math.abs(moved) >= Math.max(1, last.m * (props.unit === 'metric' ? 0.005 : 0.0005)) ? moved : 0;
   const changeText = feetScale ? t('{n} ft', { n: number(Math.abs(change)) }) : shown(Math.abs(moved));
   const minutes = Math.floor((last.at - first.at) / 60_000);
   return {

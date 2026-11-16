@@ -19,11 +19,19 @@ const props = defineProps({
   /** Whether the tile is the one showing; a hidden one stops drawing. */
   active: { type: Boolean, default: true },
 });
+const emit = defineEmits(['failed']);
 const store = useEntityCardStore();
 
 const host = ref(null);
 const failed = ref(false);
 let preview = null;
+// A globe that cannot draw tells the card, which then shows another view.
+watch(failed, (now) => {
+  if (!now) return;
+  preview?.destroy();
+  preview = null;
+  emit('failed');
+});
 
 const place = (p) => ({ code: p?.code || '', lat: Number(p?.lat), lon: Number(p?.lon) });
 const at = () =>

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { aircraftModelSpec, fleetModelSet } from '../../../data/fleetModels.js';
+import { aircraftModelSpec, fleetModelSet, fleetModelSetLoading } from '../../../data/fleetModels.js';
 import { t } from '../../../i18n/index.js';
 import { useEntityCardStore } from '../../stores/entityCard.js';
 import PreviewHud from './PreviewHud.vue';
@@ -50,21 +50,27 @@ const shown = computed(() => {
 });
 const pad = (n) => String(n).padStart(2, '0');
 
-/** The fleet model's spec and bytes, or null before the set has loaded. */
-function fleetModel(aircraft) {
-  const set = fleetModelSet();
+/** The fleet model's spec and bytes, or null when it has none. */
+function fleetModel(set, aircraft) {
   if (!set || !aircraft) return null;
   const spec = aircraftModelSpec(set, aircraft);
   const gltf = set.bytes.get(spec.model);
   return gltf ? { gltf, basePath: spec.url } : null;
 }
 
-function show() {
+let showing = 0;
+async function show() {
   preview?.destroy();
   preview = null;
   phase.value = 'plain';
+  const asked = ++showing;
+  // A card opened before the Flights layer's model set has loaded waits for
+  // that load rather than giving up.
+  let set = fleetModelSet();
+  if (!set) set = await fleetModelSetLoading()?.catch(() => null);
+  if (asked !== showing) return;
   const previews = store.previews();
-  const model = fleetModel(props.aircraft);
+  const model = fleetModel(set, props.aircraft);
   if (!previews?.model || !model || !host.value) {
     failed.value = true;
     return;
@@ -99,6 +105,7 @@ watch(
   (active) => preview?.setActive(active),
 );
 onBeforeUnmount(() => {
+  showing++;
   clearInterval(cycle);
   preview?.destroy();
   preview = null;

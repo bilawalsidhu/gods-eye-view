@@ -91,6 +91,8 @@ const SCAN_TURNS = 0.3;
 const REVEAL_TURNS = 0.07;
 /** How long (ms) the plain model holds after the reveal before a cycle ends. */
 const HOLD_MS = 700;
+/** How fast the model turns, in radians a millisecond (about 0.3 a second). */
+const TURN_PER_MS = 0.0003;
 
 // Model space, normalised so the craft reaches about 1.7 from its centre.
 // u_reveal runs 0 to 2: from 0 to 1 the edge grows from the centre and
@@ -201,7 +203,13 @@ function modelPreview(
     const pitch = Cesium.Math.toRadians(-18);
     const ease = (x) => x * x * (3 - 2 * x);
     const frame = () => {
-      turn += 0.005;
+      // Only time spent drawing counts: a hidden preview stops drawing.
+      const now = performance.now();
+      const drawn = now - lastFrame < 250 ? now - lastFrame : 0;
+      lastFrame = now;
+      // A steady turn whatever the display's refresh rate; still under
+      // reduced motion.
+      if (!still) turn += TURN_PER_MS * drawn;
       const turns = (turn - first) / (2 * Math.PI);
       // Where in the scan it is, and from that how far each reveal has gone.
       const into = (turns % (PLAIN_TURNS + SCAN_TURNS)) - PLAIN_TURNS;
@@ -214,11 +222,7 @@ function modelPreview(
         else reveal = 1;
       }
       const next = reveal > 0 && reveal < 2 ? 'scan' : 'plain';
-      // Only time spent drawing counts: a hidden preview stops drawing.
-      const now = performance.now();
-      const drawn = now - lastFrame < 250 ? now - lastFrame : 0;
       cycleMs += drawn;
-      lastFrame = now;
       // The cycle ends once the reveal back to the model has finished and
       // the plain model has held a moment, never mid-reveal.
       if (phase === 'scan' && next === 'plain') holdMs = 0;
@@ -266,6 +270,15 @@ function modelPreview(
     });
     model.errorEvent?.addEventListener?.(fail);
   }, fail);
+
+  function move(atNow) {
+    const at = onRoute(from, to, atNow);
+    if (!widget || !at || !plane || flyingIn) return;
+    pose(plane, at);
+    if (flownLine) flownLine.polyline.positions = arc(from, at, 48);
+    if (aheadLine) aheadLine.polyline.positions = arc(at, to);
+    widget.scene.requestRender();
+  }
 
   return {
     setActive: (active) => loop.set(active),
@@ -440,6 +453,8 @@ function routePreview(container, route, { onFailed = () => {} } = {}) {
   let removeGrow = null;
   /** True while the plane flies in from the origin; moves wait for it. */
   let flyingIn = false;
+  /** The craft's latest position, kept through the fly-in and the load. */
+  let latest = route.at;
 
   const pose = (entity, where) => {
     const next = planePose(where, bearing(where, to));
@@ -545,6 +560,8 @@ function routePreview(container, route, { onFailed = () => {} } = {}) {
           flown.polyline.positions = arc(from, at, 48);
           removeGrow?.();
           removeGrow = null;
+          // The craft may have moved on while the plane flew in.
+          move(latest);
         }
       };
       removeGrow = scene.preRender.addEventListener(grow);
@@ -593,10 +610,19 @@ function routePreview(container, route, { onFailed = () => {} } = {}) {
       layer.brightness = 0.55;
       layer.saturation = 0.35;
       layer.contrast = 1.1;
-      draw(route.at);
+      draw(latest);
     },
     () => widget && onFailed(),
   );
+
+  function move(atNow) {
+    const at = onRoute(from, to, atNow);
+    if (!widget || !at || !plane || flyingIn) return;
+    pose(plane, at);
+    if (flownLine) flownLine.polyline.positions = arc(from, at, 48);
+    if (aheadLine) aheadLine.polyline.positions = arc(at, to);
+    widget.scene.requestRender();
+  }
 
   return {
     setActive: (active) => loop.set(active),
@@ -606,17 +632,13 @@ function routePreview(container, route, { onFailed = () => {} } = {}) {
      */
     update(next) {
       if (!widget) return;
+      latest = next.at;
       if (next.from?.code !== from.code || next.to?.code !== to.code) {
         ({ from, to } = next);
-        draw(next.at);
+        draw(latest);
         return;
       }
-      const at = onRoute(from, to, next.at);
-      if (!at || !plane || flyingIn) return;
-      pose(plane, at);
-      if (flownLine) flownLine.polyline.positions = arc(from, at, 48);
-      if (aheadLine) aheadLine.polyline.positions = arc(at, to);
-      widget.scene.requestRender();
+      move(latest);
     },
     destroy() {
       removeGrow?.();
@@ -645,6 +667,7 @@ const MIN_EYE_M = 60;
  */
 function cockpitPreview(container, craft, { onFailed = () => {} } = {}) {
   let widget = null;
+  let loop = null;
   let active = false;
   let at = craft;
   const place = () => {
@@ -683,6 +706,9 @@ function cockpitPreview(container, craft, { onFailed = () => {} } = {}) {
       scene.requestRender(),
     );
     place();
+    // Hidden, it draws nothing at all, not even as tiles arrive.
+    loop = renderLoopSwitch(widget);
+    loop.set(active);
   } catch {
     onFailed();
     return { setActive() {}, update() {}, destroy() {} };
@@ -698,6 +724,8 @@ function cockpitPreview(container, craft, { onFailed = () => {} } = {}) {
   return {
     setActive(next) {
       active = Boolean(next);
+      if (!widget) return;
+      loop.set(active);
       if (active) place();
     },
     /** While it shows, the view keeps up with the craft. */
