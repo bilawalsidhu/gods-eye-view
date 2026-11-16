@@ -59,6 +59,26 @@ try {
   );
   console.log('Back and Forward restore the style, paused time and focus');
 
+  await page.click('#tlPlay');
+  const resumedAt = await (
+    await page.waitForFunction(
+      () => {
+        const snap =
+          window.__godsEyeView.sceneDirector.getPlaybackTimingState().snapshot;
+        return snap?.running ? snap.sceneElapsedSec : false;
+      },
+      { timeout: 30000 },
+    )
+  ).jsonValue();
+  assert.ok(
+    resumedAt >= 1.25 && resumedAt < 3,
+    `Play went on from ${resumedAt} s, not the paused 1.25 s`,
+  );
+  await page.click('#tlPlay');
+  await page.waitForFunction(() => !window.__godsEyeView.sceneDirector.running);
+  await page.evaluate(() => window.__godsEyeView.sceneDirector.whenIdle());
+  console.log('Play goes on from the paused time, not the start of the shot');
+
   const track = await page.$('#tlTrack');
   const box = await track.boundingBox();
   assert.ok(box.width > 0);
