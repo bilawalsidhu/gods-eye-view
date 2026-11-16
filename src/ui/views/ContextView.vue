@@ -248,7 +248,7 @@ watch(
           </div>
         </section>
         <div v-if="contextOpen" v-show="activeTab === 'view'" id="context-tab-view" role="tabpanel" aria-labelledby="context-tab-btn-view" :class="{ 'context-searching': contextSearchOpen && contextSearchText.trim() }">
-          <EntityCard :with-contacts="contactsMatchCard">
+          <EntityCard :with-contacts="contactsMatchCard" :aircraft-photo="contactsMatchCard ? awareness?.photo : null">
             <AwarenessPanel v-if="contactsMatchCard" compact />
           </EntityCard>
           <ViewContext v-if="!entityCard" />
