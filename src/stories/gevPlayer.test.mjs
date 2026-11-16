@@ -2,7 +2,11 @@
 // to finish; a Pause, Seek or Destroy meanwhile must win.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGevPlayer } from './gevPlayer.js';
+import {
+  createGevPlayer,
+  directorSettled,
+  SETTLE_LIMIT_MS,
+} from './gevPlayer.js';
 
 const story = {
   sceneId: 'scene-1',
@@ -280,4 +284,35 @@ test('Play from a paused link goes on from the link’s time', async () => {
   assert.equal(director.startOptions.fromProgress, 17500 / 60000);
   director.finishRun();
   await playing;
+});
+
+test('a teardown that outlasts the limit is told apart, and loses its say over layers', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const warn = console.warn;
+  console.warn = () => {};
+  let revoked = 0;
+  const director = {
+    whenIdle: () => new Promise(() => {}),
+    revokeSceneRelease: () => revoked++,
+  };
+  try {
+    const settled = directorSettled(director);
+    await turns();
+    assert.equal(revoked, 0, 'nothing is revoked while waiting');
+    t.mock.timers.tick(SETTLE_LIMIT_MS);
+    assert.equal(await settled, false, 'a timeout is not settlement');
+    assert.equal(revoked, 1, 'the stale cleanup is revoked before going on');
+  } finally {
+    console.warn = warn;
+  }
+});
+
+test('a teardown that finishes settles without revoking anything', async () => {
+  let revoked = 0;
+  const director = {
+    whenIdle: async () => {},
+    revokeSceneRelease: () => revoked++,
+  };
+  assert.equal(await directorSettled(director), true);
+  assert.equal(revoked, 0);
 });

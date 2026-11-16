@@ -2683,13 +2683,19 @@ export class SceneDirector {
     const layerIds = Array.isArray(scene?.releaseLayerIds)
       ? scene.releaseLayerIds
       : [];
+    // revokeSceneRelease() ends this release's authority over layers.
+    this._releaseAbort ??= new AbortController();
+    const revoked = this._releaseAbort.signal;
+    const signal = token?.signal
+      ? AbortSignal.any([token.signal, revoked])
+      : revoked;
     let released = true;
     for (const layerId of layerIds) {
-      if (token?.cancelled) return false;
+      if (token?.cancelled || revoked.aborted) return false;
       try {
         const settled = await this.dataManager.setEnabled(layerId, false, {
           origin: 'scene',
-          signal: token?.signal,
+          signal,
         });
         if (settled === false) {
           released = false;
@@ -2714,7 +2720,18 @@ export class SceneDirector {
         });
       }
     }
-    return released && !token?.cancelled;
+    return released && !token?.cancelled && !revoked.aborted;
+  }
+
+  /**
+   * Stop every scene layer release still in flight from turning any further
+   * layer off: the one under way is aborted and the rest are skipped. For a
+   * caller that stopped waiting on a teardown (whenIdle) and is about to put
+   * layers back itself; a release started afterwards is unaffected.
+   */
+  revokeSceneRelease() {
+    this._releaseAbort?.abort();
+    this._releaseAbort = null;
   }
 
   /**

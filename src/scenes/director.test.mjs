@@ -2031,6 +2031,42 @@ test('startScene resolves its result, resumes after a shot without a scene id, a
   } finally { await director.destroy(); restore(); }
 });
 
+test('a revoked scene release turns no further layer off', async () => {
+  const project = structuredClone(PROJECT_FIXTURE);
+  project.scenes[0].releaseLayerIds = ['flights', 'traffic'];
+  const { director, dataManager, restore } = makeDirector({ project });
+  try {
+    const calls = [];
+    let finishFirst;
+    dataManager.setEnabled = (id, enabled, { signal }) => {
+      calls.push({ id, enabled, signal });
+      // The first layer's disable hangs, as a stuck teardown does.
+      return new Promise((resolve) => {
+        finishFirst = resolve;
+      });
+    };
+    const releasing = director._releaseSceneLayers(director._project.scenes[0]);
+    await settle();
+    assert.deepEqual(calls.map(({ id }) => id), ['flights']);
+    director.revokeSceneRelease();
+    assert.equal(calls[0].signal.aborted, true, 'the disable under way is aborted');
+    finishFirst(true);
+    assert.equal(await releasing, false);
+    assert.deepEqual(
+      calls.map(({ id }) => id),
+      ['flights'],
+      'the next layer is never turned off',
+    );
+    // A release started afterwards has its say again.
+    dataManager.setEnabled = async (id, enabled, { signal }) => {
+      calls.push({ id, enabled, signal });
+      return true;
+    };
+    assert.equal(await director._releaseSceneLayers(director._project.scenes[0]), true);
+    assert.deepEqual(calls.slice(1).map(({ id }) => id), ['flights', 'traffic']);
+  } finally { await director.destroy(); restore(); }
+});
+
 /** Drive frame-by-frame camera motion headlessly for one test. */
 function installAnimationFrames() {
   const original = globalThis.requestAnimationFrame;

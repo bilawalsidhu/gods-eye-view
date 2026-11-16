@@ -7,21 +7,28 @@ export const SETTLE_LIMIT_MS = 15000;
  * Resolves once the director is idle: no run, and every LOAD, seek and
  * interaction settled (SceneDirector.whenIdle). A teardown that never
  * finishes is given SETTLE_LIMIT_MS, so a stuck scene cannot leave Stories
- * unable to close; that case is logged.
+ * unable to close; that case is logged, and the scene's layer cleanup still
+ * in flight loses its say over layers (SceneDirector.revokeSceneRelease), so
+ * it cannot turn off a layer the caller puts back next.
  * @param {import('../scenes/director.js').SceneDirector} director
+ * @returns {Promise<boolean>} True once idle, false when the limit ran out.
  */
 export function directorSettled(director) {
   let timer = 0;
   const limit = new Promise((resolve) => {
     timer = setTimeout(() => {
       console.warn('Stories: the scene did not finish tearing down; going on');
-      resolve();
+      director.revokeSceneRelease?.();
+      resolve(false);
     }, SETTLE_LIMIT_MS);
   });
   // A failure to wait counts as settled: the view still comes back.
   const idle = Promise.resolve()
     .then(() => director.whenIdle())
-    .catch(() => {});
+    .then(
+      () => true,
+      () => true,
+    );
   return Promise.race([idle, limit]).finally(() => clearTimeout(timer));
 }
 

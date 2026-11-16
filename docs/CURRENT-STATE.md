@@ -756,7 +756,9 @@ globe, including when it opens from a story link without a hash.
 Close dismisses the Stories screens and keeps the keyboard and microphone
 guards until the previous view is back. The director is waited
 on until idle (`SceneDirector.whenIdle`: no run and no pending LOAD, seek or
-interaction; at most 15 s). The camera and world clock are put back (a clock
+interaction; at most 15 s). When the 15 s run out, the scene's layer cleanup
+still under way is revoked (`SceneDirector.revokeSceneRelease`) before
+anything is put back, so it cannot turn off a layer Close restores. The camera and world clock are put back (a clock
 nothing moved while Stories was open, with no jump and the same mode and
 rate, is left alone), unless a
 camera owner took over during the wait (a drag on the globe, a layer's
