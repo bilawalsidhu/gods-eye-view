@@ -633,7 +633,6 @@ export function createStationModel(
       if (
         !loading &&
         !failed &&
-        resolveAsset &&
         dotPosition &&
         cameraDistance <= spec.maxDistanceM * 1.5
       )
@@ -657,7 +656,10 @@ export function createStationModel(
 
     const frame = _stationFrame(scratchPosition);
     if (!frame) {
+      // Nowhere to draw the model (the orbit would not propagate): the dots
+      // draw at every distance rather than nothing at all.
       _hide();
+      _releaseDots();
       return;
     }
     const { date, axes } = frame;

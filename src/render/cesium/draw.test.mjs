@@ -7082,7 +7082,8 @@ test('a model poses its named nodes once ready, writes only what changed, and gi
         ),
         set matrix(m) {
           writes.push(name);
-          this.current = m;
+          // As Cesium's runtime node does: a copy, not the matrix handed in.
+          this.current = Cesium.Matrix4.clone(m);
         },
       };
     model.getNode = (name) => {

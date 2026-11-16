@@ -502,7 +502,8 @@ export function createIssArticulation() {
   /** Whether the last update had the station in sunlight; null before one. */
   let lastSunlit = null;
   /** Command panel state: the arm is being posed by hand, so the sway is off. */
-  let armManual = false;
+  /** The arm joints posed by hand (command panel); the rest keep swaying. */
+  const manualJoints = new Set();
   let armNodes = null;
   /** Command panel state: how far the arrays are rolled out, 0.05 to 1. */
   let deploy = 1;
@@ -697,10 +698,10 @@ export function createIssArticulation() {
     dishes = nextDishes;
 
     // Arm: an illustrative sway (see ISS_ARM_JOINTS).
-    if (!armManual) {
+    {
       const arm = issArmAngles(nowMs / 1000, ISS_SWAY_JOINTS);
       ISS_SWAY_JOINTS.forEach((joint, i) => {
-        if (!joint.sway) return;
+        if (!joint.sway || manualJoints.has(joint.node)) return;
         const node = (armNodes ??= ISS_SWAY_JOINTS.map(
           (entry) => model.getNode(entry.node) ?? null,
         ))[i];
@@ -723,7 +724,7 @@ export function createIssArticulation() {
    * @param {number} angle Radians.
    */
   function setJoint(name, pivot, axis, angle) {
-    armManual = true;
+    manualJoints.add(name);
     const node = boundModel?.getNode(name);
     if (node) node.matrix = issAxisMatrix(pivot, axis, angle, scratchMatrix);
   }
@@ -739,7 +740,7 @@ export function createIssArticulation() {
     override = null;
     dishOverride = null;
     telemetryAllowed = true;
-    armManual = false;
+    manualJoints.clear();
   }
 
   /**
@@ -802,7 +803,7 @@ export function createIssArticulation() {
 
   /** Command panel: hand the arm back to its sway. */
   function resumeArm() {
-    armManual = false;
+    manualJoints.clear();
   }
 
   return {

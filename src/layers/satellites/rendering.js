@@ -214,7 +214,7 @@ export function createRendering({
 
   function _setOrbitPathShown(noradId, show) {
     const path = layerState._orbitPaths.get(noradId);
-    if (!path) return;
+    if (!path || path.item.show === show) return;
     path.item.show = show;
     sets?.rings.upsert([path.item]);
   }

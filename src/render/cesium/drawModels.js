@@ -60,6 +60,9 @@ export const RECEDE_WRITE_EPSILON = 0.005;
  * written, so an update that keeps a node's matrix writes nothing.
  */
 const posedNodes = new WeakMap();
+/** A posed name the model has no node for: looked up once, then skipped. */
+const NO_NODE = Symbol('no such node');
+const scratchNodeMatrix = new Cesium.Matrix4();
 
 /**
  * Write the item's node transforms to `model` once it is ready: changed
@@ -75,18 +78,25 @@ function poseNodes(item, model) {
   for (const [name, last] of posed) {
     if (wanted && Object.hasOwn(wanted, name)) continue;
     posed.delete(name);
+    if (last === NO_NODE) continue;
     const node = model.getNode(name);
-    if (node && last) node.matrix = Cesium.Matrix4.clone(node.originalMatrix);
+    if (node) node.matrix = Cesium.Matrix4.clone(node.originalMatrix);
   }
   if (!wanted) return;
   for (const name of Object.keys(wanted)) {
     const matrix = wanted[name];
     if (!matrix || matrix.length < 16) continue;
     const last = posed.get(name);
+    if (last === NO_NODE) continue;
     if (last && sameMatrix(last, matrix)) continue;
     const node = model.getNode(name);
-    posed.set(name, node ? Array.from(matrix).slice(0, 16) : null);
-    if (node) node.matrix = Cesium.Matrix4.fromArray(matrix);
+    if (!node) {
+      posed.set(name, NO_NODE);
+      continue;
+    }
+    posed.set(name, Array.from(matrix).slice(0, 16));
+    // The node copies the matrix it is given.
+    node.matrix = Cesium.Matrix4.fromArray(matrix, 0, scratchNodeMatrix);
   }
 }
 

@@ -393,9 +393,17 @@ export function createTracking({ state: layerState, services, parts, source }) {
     // republished every frame.
     const clearPx =
       modelFor(parts, layerState._trackedNorad)?._cardClearPx?.() ?? null;
-    // The overlay's gap is twice the anchor radius, so half the clearance.
-    const anchorRadiusPx = clearPx ? Math.round(clearPx / 8) * 4 : null;
     const current = readEntityRecord(layerState._trackedEntity)?.labelModel;
+    // The overlay's gap is twice the anchor radius, so half the clearance,
+    // in 4 px steps. The step kept stands until the clearance has moved a
+    // pixel past the step's edge: at an edge, sub-pixel jitter in the range
+    // would otherwise flip it, and republish the card, every frame.
+    const kept = current?.anchorRadiusPx ?? null;
+    const anchorRadiusPx = !clearPx
+      ? null
+      : kept !== null && Math.abs(clearPx / 2 - kept) < 3
+        ? kept
+        : Math.round(clearPx / 8) * 4;
     // Compare the WHOLE detail array: comparing only `details[0]` swallowed any
     // change confined to the companions line, so the card would never republish.
     const unchanged =
