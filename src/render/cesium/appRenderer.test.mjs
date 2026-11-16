@@ -11,7 +11,6 @@ import {
   releaseContinuousRender,
   uninstallRenderGovernor,
 } from '../../renderGovernor.js';
-import { cesiumMapEngine } from './mapEngine.js';
 import {
   ReadonlySet,
   cesiumRenderer,
@@ -150,7 +149,11 @@ test('the plugin wraps the viewer it is given, behind the accessor only', async 
     'free look is limited to low heights from the start',
   );
   const hooks = plugin.applicationHooks(renderer);
-  assert.equal(hooks.mapEngine, cesiumMapEngine, 'the map stacks use Cesium');
+  assert.equal(
+    hooks.mapEngine,
+    undefined,
+    'the map stacks switch through the globe port',
+  );
   assert.equal(hooks.ownCreditDisplay, true, 'Cesium shows its own credits');
   assert.equal(hooks.qaHandles.viewer, viewer, 'QA scripts read the viewer');
   assert.equal(hooks.viewerDrawsEntity({ own: true }), true);

@@ -70,6 +70,116 @@ test('the globe is shown and hidden through the port, read back without globe vi
   assert.equal(engine.globeShown(visible.host), false);
 });
 
+/** Answer `fetch` from `answers` (url to response) while `run` runs. */
+async function withFetch(answers, run) {
+  const real = globalThis.fetch;
+  const asked = [];
+  globalThis.fetch = async (url) => {
+    asked.push(String(url));
+    const answer = answers(String(url));
+    if (answer instanceof Error) throw answer;
+    return answer;
+  };
+  try {
+    return await run(asked);
+  } finally {
+    globalThis.fetch = real;
+  }
+}
+
+const bytesResponse = (bytes, status = 200) => ({
+  ok: status >= 200 && status < 300,
+  status,
+  headers: { get: (name) => (name === 'content-type' ? 'image/jpeg' : null) },
+  arrayBuffer: async () => new Uint8Array(bytes).buffer,
+  json: async () => JSON.parse(new TextDecoder().decode(new Uint8Array(bytes))),
+});
+
+const jsonResponse = (body, status = 200) =>
+  bytesResponse([...new TextEncoder().encode(JSON.stringify(body))], status);
+
+/** Cesium ion's endpoints as a valid token is answered. */
+const ionAnswers = (url) =>
+  /assets\/1\/endpoint/.test(url)
+    ? jsonResponse({ type: 'TERRAIN', url: 'https://assets.ion.invalid/1/' })
+    : jsonResponse({ type: 'IMAGERY', externalType: 'BING', options: {} });
+
+// Nothing here reaches the network: ion and the keyless terrain answer,
+// offline.
+globalThis.fetch = async (url) =>
+  String(url).startsWith('https://api.cesium.com/')
+    ? ionAnswers(String(url))
+    : bytesResponse([1]);
+
+test('Esri goes to its deepest level, its no-imagery picture drawn from the parent', async () => {
+  const spec = engine.imagery.esri();
+  assert.equal(spec.maxLevel, 23);
+  const placeholder = [9, 9, 9];
+  await withFetch(
+    (url) =>
+      url.endsWith('/tile/23/0/0')
+        ? bytesResponse(placeholder)
+        : url.endsWith('/5/1/2')
+          ? bytesResponse([1, 2, 3, 4])
+          : url.endsWith('/22/7/7')
+            ? bytesResponse(placeholder)
+            : bytesResponse([], 503),
+    async (asked) => {
+      const signal = new AbortController().signal;
+      const tile = await spec.fetchTile({ url: `${'x'}/5/1/2`, signal });
+      assert.deepEqual([...new Uint8Array(tile.bytes)], [1, 2, 3, 4]);
+      assert.equal(tile.contentType, 'image/jpeg');
+      assert.deepEqual(
+        await spec.fetchTile({ url: 'x/22/7/7', signal }),
+        { missing: true },
+        'the no-imagery picture is a missing tile',
+      );
+      await assert.rejects(
+        spec.fetchTile({ url: 'x/1/1/1', signal }),
+        (error) => error.statusCode === 503,
+        'a refused tile is a failed one',
+      );
+      assert.equal(
+        asked.filter((url) => url.endsWith('/tile/23/0/0')).length,
+        1,
+        'the no-imagery picture is read once',
+      );
+    },
+  );
+});
+
+test('keyless terrain that does not answer is the flat ellipsoid, marked a fallback', async () => {
+  await withFetch(
+    () => new TypeError('offline'),
+    async (asked) => {
+      const warn = console.warn;
+      console.warn = () => {};
+      try {
+        assert.deepEqual(await engine.terrain.keyless(), {
+          provider: null,
+          spec: { kind: 'ellipsoid' },
+          fallback: true,
+        });
+      } finally {
+        console.warn = warn;
+      }
+      assert.deepEqual(asked, [`${KEYLESS_TERRAIN_URL}/layer.json`]);
+    },
+  );
+  await withFetch(
+    () => bytesResponse([], 503),
+    async () => {
+      const warn = console.warn;
+      console.warn = () => {};
+      try {
+        assert.equal((await engine.terrain.keyless()).fallback, true);
+      } finally {
+        console.warn = warn;
+      }
+    },
+  );
+});
+
 test('terrain is the port’s world terrain, or the keyless quantized mesh without a token', async () => {
   const { host, renderer } = scene(['terrain']);
   await assert.rejects(engine.terrain.world(''), /ion token/);
@@ -78,20 +188,66 @@ test('terrain is the port’s world terrain, or the keyless quantized mesh witho
   assert.deepEqual(calls(renderer, 'setTerrain').at(-1).args, [
     { kind: 'world', requestVertexNormals: true },
   ]);
-  engine.applyTerrain(host, await engine.terrain.keyless());
+  engine.applyTerrain(
+    host,
+    await withFetch(
+      () => bytesResponse([1]),
+      () => engine.terrain.keyless(),
+    ),
+  );
   assert.deepEqual(calls(renderer, 'setTerrain').at(-1).args, [
     { kind: 'quantizedMesh', url: KEYLESS_TERRAIN_URL },
   ]);
-  assert.throws(() => engine.imagery.ion(2, ''), /token/);
-  assert.deepEqual(engine.imagery.ion(3, 'token'), {
+  await assert.rejects(engine.imagery.ion(2, ''), /token/);
+  assert.deepEqual(await engine.imagery.ion(3, 'token'), {
     kind: 'world',
     worldStyle: 'aerialLabels',
   });
 });
 
+test('a token ion refuses refuses the switch with ion’s message, as Cesium’s own route did', async () => {
+  await withFetch(
+    () =>
+      jsonResponse(
+        { code: 'InvalidCredentials', message: 'Invalid access token' },
+        401,
+      ),
+    async (asked) => {
+      await assert.rejects(
+        engine.imagery.ion(2, 'bad'),
+        /Invalid access token/,
+      );
+      await assert.rejects(engine.terrain.world('bad'), /Invalid access token/);
+      assert.match(asked[0], /\/v1\/assets\/2\/endpoint\?access_token=bad$/);
+      assert.match(asked[1], /\/v1\/assets\/1\/endpoint\?access_token=bad$/);
+    },
+  );
+  await withFetch(
+    () => jsonResponse({ type: 'IMAGERY', externalType: 'GOOGLE_2D_MAPS' }),
+    async () => {
+      await assert.rejects(
+        engine.imagery.ion(2, 'token'),
+        /Bing imagery endpoint/,
+      );
+    },
+  );
+  await withFetch(
+    () => new TypeError('offline'),
+    async () => {
+      await assert.rejects(engine.terrain.world('token'), /offline/);
+    },
+  );
+});
+
 test('where the renderer draws no terrain the ellipsoid stays', async () => {
   const { host, renderer } = scene([]);
-  engine.applyTerrain(host, await engine.terrain.keyless());
+  engine.applyTerrain(
+    host,
+    await withFetch(
+      () => bytesResponse([1]),
+      () => engine.terrain.keyless(),
+    ),
+  );
   assert.deepEqual(calls(renderer, 'setTerrain').at(-1).args, [null]);
 });
 

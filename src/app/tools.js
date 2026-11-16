@@ -288,24 +288,27 @@ export function createApplicationTools({
   // loop burning behind a hidden tab. (perf wave 2 fix)
   syncVisibilitySuspension();
 
-  window.__godsEyeView = {
-    viewer,
-    styleManager,
-    tileset,
-    dataManager,
-    sceneDirector,
-    mapStackController,
-    annotations,
-    weatherEffects,
-    cockpitCloudEffects,
-    getRenderGovernorDiagnostics,
-    surfaceServices: operations.surface,
-    requestRender: governorRequestRender,
-    entityRecords: { read: readEntityRecord, write: entityRecord },
-    // What the renderer's plugin lets QA scripts read (the Cesium viewer,
-    // for the default renderer), in place of the scene object above.
-    ...scene.qaHandles,
-  };
+  window.__godsEyeView = Object.defineProperties(
+    {
+      viewer,
+      styleManager,
+      tileset,
+      dataManager,
+      sceneDirector,
+      mapStackController,
+      annotations,
+      weatherEffects,
+      cockpitCloudEffects,
+      getRenderGovernorDiagnostics,
+      surfaceServices: operations.surface,
+      requestRender: governorRequestRender,
+      entityRecords: { read: readEntityRecord, write: entityRecord },
+    },
+    // What the renderer's plugin lets QA scripts read (the Cesium viewer and
+    // its photoreal tileset, for the default renderer), in place of the
+    // scene's objects above; read as they are when asked.
+    Object.getOwnPropertyDescriptors(scene.qaHandles ?? {}),
+  );
   const debug = window.__godsEyeView;
   defer(() => {
     if (window.__godsEyeView === debug) delete window.__godsEyeView;
