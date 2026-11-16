@@ -150,7 +150,9 @@ try {
     manager._bloomSlider.focus();
     return {
       value: Number(manager._bloomSlider.value),
-      contrast: manager.viewer.scene.postProcessStages.bloom.uniforms.contrast,
+      contrast:
+        window.__godsEyeView.viewer.scene.postProcessStages.bloom.uniforms
+          .contrast,
     };
   });
   await page.keyboard.press('ArrowRight');
@@ -160,8 +162,8 @@ try {
       const manager = window.__godsEyeView.styleManager;
       return (
         Number(manager._bloomSlider.value) > before.value &&
-        manager.viewer.scene.postProcessStages.bloom.uniforms.contrast <
-          before.contrast
+        window.__godsEyeView.viewer.scene.postProcessStages.bloom.uniforms
+          .contrast < before.contrast
       );
     }, displayBefore),
   );
@@ -269,14 +271,15 @@ try {
       manager._displayBindings._detachDisplayControls();
       const before = manager.bloomEnabled;
       const contrast =
-        manager.viewer.scene.postProcessStages.bloom.uniforms.contrast;
+        window.__godsEyeView.viewer.scene.postProcessStages.bloom.uniforms
+          .contrast;
       manager._bloomBtn.click();
       manager._bloomSlider.value = '15';
       manager._bloomSlider.dispatchEvent(new Event('input', { bubbles: true }));
       return (
         manager.bloomEnabled === before &&
-        manager.viewer.scene.postProcessStages.bloom.uniforms.contrast ===
-          contrast
+        window.__godsEyeView.viewer.scene.postProcessStages.bloom.uniforms
+          .contrast === contrast
       );
     }),
   );

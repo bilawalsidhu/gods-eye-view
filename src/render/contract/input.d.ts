@@ -93,7 +93,12 @@ export interface InputPort {
     options?: { lease?: Lease | (() => Lease | null) },
   ): Off;
   /**
-   * Take the pointer for a tool. A new claim ends the previous lease.
+   * Take the pointer for a tool. The newest claim takes over: it ends the
+   * previous lease, whose `onLost` is called once, after the new lease holds
+   * the pointer, so that tool turns itself off (its button, a half-drawn
+   * shape). A lease its holder releases, or that has already ended, is never
+   * told, and releasing an ended lease frees nothing. An `onLost` that throws
+   * is reported.
    * `grab` decides each press from its `down` event, synchronously: true
    * makes it the tool's, anything else leaves it. A `down` carries no pick,
    * so `grab` decides from the position, button and modifiers (and the
@@ -103,7 +108,11 @@ export interface InputPort {
    */
   claimPointer(
     owner: string,
-    options?: { grab?: (down: PointerEv) => boolean },
+    options?: {
+      grab?: (down: PointerEv) => boolean;
+      /** Called once when a newer claim ends this lease. */
+      onLost?: () => void;
+    },
   ): Lease;
   isPointerFree(): boolean;
   /** Suspend user camera input until released. Holds are counted. */

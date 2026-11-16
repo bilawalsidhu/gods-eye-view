@@ -56,7 +56,10 @@ function sameView(a, b) {
  *   report: (error: unknown) => void, thresholds?: boolean}} options `pose`
  *   is read only while a `changed` listener is registered; `world` (the
  *   eye in world coordinates; `pose()` when omitted) is read by
- *   `stepMoveDetection`; `thresholds`
+ *   `stepMoveDetection`, which keeps what it returns: a view it is handed
+ *   again is the same eye, and a view is never changed once handed (a new
+ *   eye is a new object); `pose` and `world` results are read, never
+ *   changed; `thresholds`
  *   false (a renderer without `cameraChangeThreshold`) ignores a listener's
  *   own threshold, so every listener fires at 0.5.
  */
@@ -66,8 +69,10 @@ export function createCameraEvents({
   report,
   thresholds = true,
 }) {
+  // Lists are copied on change, not on delivery: a delivery runs over the
+  // list as it stood, and a change made during it makes a new one.
   const listeners = Object.fromEntries(CAMERA_EVENTS.map((e) => [e, []]));
-  const commandHooks = [];
+  let commandHooks = [];
   let lastView = null;
   let moving = false;
   let lastMovedAt = 0;
@@ -82,7 +87,7 @@ export function createCameraEvents({
   }
 
   function emit(event) {
-    for (const entry of listeners[event].slice()) deliver(entry);
+    for (const entry of listeners[event]) deliver(entry);
   }
 
   /**
@@ -92,15 +97,14 @@ export function createCameraEvents({
    * @returns {() => void}
    */
   function on(event, cb, options = {}) {
-    const list = listeners[event];
-    if (!list) throw new Error(`Unknown camera event: ${event}`);
+    if (!listeners[event]) throw new Error(`Unknown camera event: ${event}`);
     const threshold = thresholds ? (options.threshold ?? 0.5) : 0.5;
     const entry = { cb, live: true, threshold };
-    list.push(entry);
+    listeners[event] = [...listeners[event], entry];
     return () => {
+      if (!entry.live) return;
       entry.live = false;
-      const i = list.indexOf(entry);
-      if (i >= 0) list.splice(i, 1);
+      listeners[event] = listeners[event].filter((e) => e !== entry);
     };
   }
 
@@ -113,7 +117,7 @@ export function createCameraEvents({
     const list = listeners.changed;
     if (!list.length) return;
     const current = pose();
-    for (const entry of list.slice()) {
+    for (const entry of list) {
       if (!entry.live) continue;
       const t = entry.threshold;
       entry.heading ??= current.heading;
@@ -152,14 +156,11 @@ export function createCameraEvents({
    * @param {number} now
    */
   function stepMoveDetection(now) {
-    const v = world();
-    const current = {
-      position: v.position,
-      direction: v.direction,
-      up: v.up,
-      lens: v.lens,
-    };
-    const changed = lastView && !sameView(lastView, current);
+    // `world` hands its last view again while the eye stands: that one is
+    // unchanged without comparing.
+    const current = world();
+    const changed =
+      lastView !== null && current !== lastView && !sameView(lastView, current);
     lastView = current;
     if (changed) {
       lastMovedAt = now;
@@ -178,7 +179,7 @@ export function createCameraEvents({
    * @param {import('../contract/camera').CameraCommand['kind']} kind
    */
   function command(kind) {
-    for (const entry of commandHooks.slice()) {
+    for (const entry of commandHooks) {
       if (!entry.live) continue;
       try {
         entry.cb({ kind });
@@ -196,22 +197,22 @@ export function createCameraEvents({
    */
   function onCommand(cb) {
     const entry = { cb, live: true };
-    commandHooks.push(entry);
+    commandHooks = [...commandHooks, entry];
     return () => {
+      if (!entry.live) return;
       entry.live = false;
-      const i = commandHooks.indexOf(entry);
-      if (i >= 0) commandHooks.splice(i, 1);
+      commandHooks = commandHooks.filter((e) => e !== entry);
     };
   }
 
   /** Drop every listener and hook, including those of an event under way. */
   function clear() {
-    for (const list of Object.values(listeners)) {
-      for (const entry of list) entry.live = false;
-      list.length = 0;
+    for (const event of CAMERA_EVENTS) {
+      for (const entry of listeners[event]) entry.live = false;
+      listeners[event] = [];
     }
     for (const entry of commandHooks) entry.live = false;
-    commandHooks.length = 0;
+    commandHooks = [];
   }
 
   return {

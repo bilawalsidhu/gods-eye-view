@@ -20,7 +20,7 @@ test('the stub passes the conformance suite', async () => {
     .filter((r) => r.status === 'skip')
     .map((r) => r.id);
   // It draws only models into pixels, so the sweep's, a lit shape's, a line outline's, a
-  // split line's, a draped outlined line's and the blends' (over a drawn shape), video tiles' and the weather's pixels (drawn, and by scene time) go unread; its camera takes no user gestures: the drag and wheel scripts are for a
+  // split line's, a draped outlined line's and the blends' (over a drawn shape), video tiles', the weather's pixels (drawn, and by scene time) and an encoded capture go unread; its camera takes no user gestures: the drag and wheel scripts are for a
   // camera that does (a controller over it, say).
   assert.deepEqual(skipped, [
     'effects.screenModulation.pixels',
@@ -33,6 +33,8 @@ test('the stub passes the conformance suite', async () => {
     'globe.imagery.video',
     'globe.weather.drawn',
     'globe.weather.sceneTime',
+    'renderer.capture',
+    'effects.setStyleParams',
     ...CAMERA_SCRIPTS.filter(usesInput).map((s) => `camera.trace.${s.name}`),
   ]);
 });
@@ -345,4 +347,68 @@ test('a lit-shape check that fails still shows the globe again', async () => {
   });
   assert.equal(report.results[0].status, 'fail');
   assert.deepEqual(shown, [true]);
+});
+
+/** One check over the stub with `change` made to each renderer it makes. */
+async function checkWith(id, change, extra = {}) {
+  const base = createStubHarness();
+  const report = await runConformance(
+    {
+      ...base,
+      ...extra,
+      create: async (options) => {
+        const r = await base.create(options);
+        change(r);
+        return r;
+      },
+    },
+    { only: (c) => c === id },
+  );
+  return report.results[0];
+}
+
+test('the resize check fails a renderer whose resize does not follow its container', async () => {
+  assert.equal((await checkWith('renderer.resize', () => {})).status, 'pass');
+  const result = await checkWith('renderer.resize', (r) => {
+    r.resize = () => {};
+  });
+  assert.equal(result.status, 'fail', result.detail);
+});
+
+test('the progress check fails a renderer that never says what it loads', async () => {
+  assert.equal((await checkWith('globe.progress', () => {})).status, 'pass');
+  const result = await checkWith('globe.progress', (r) => {
+    r.globe.on = () => () => {};
+  });
+  assert.equal(result.status, 'fail', result.detail);
+});
+
+test('the after-destroy check fails a renderer whose sets keep items once it is destroyed', async () => {
+  assert.equal(
+    (await checkWith('renderer.afterDestroy', () => {})).status,
+    'pass',
+  );
+  const result = await checkWith('renderer.afterDestroy', (r) => {
+    const points = r.draw.points;
+    r.draw.points = (spec) => {
+      const set = points(spec);
+      let held = 0;
+      set.set = (items) => (held = items.length);
+      set.upsert = (items) => (held += items.length);
+      set.size = () => held;
+      return set;
+    };
+  });
+  assert.equal(result.status, 'fail', result.detail);
+});
+
+test('the stub keeps a set’s `recede` as given and as changed', () => {
+  const r = createStubRenderer({ capabilities: ['models'] });
+  r.draw.icons({ id: 'i', recede: { scaleFloor: 0.6 } });
+  const models = r.draw.models({ id: 'm', recede: {} });
+  assert.deepEqual(r.testing.setRecord('i').spec.recede, { scaleFloor: 0.6 });
+  assert.deepEqual(r.testing.setRecord('m').spec.recede, {});
+  models.setOptions({ recede: null });
+  assert.equal(r.testing.setRecord('m').spec.recede, null);
+  r.destroy();
 });

@@ -176,7 +176,8 @@ try {
           kind: 'pin',
           point: [+i.pos.lon.toFixed(6), +i.pos.lat.toFixed(6)],
           scale: i.scale ?? 1,
-          heading: Math.round(i.course ?? 0),
+          // A KML heading is drawn as a turn on screen, clockwise.
+          heading: Math.round((-(i.rotation ?? 0) * 180) / Math.PI),
           image: Boolean(i.image),
           color: css(i.color ?? 'white'),
         })),

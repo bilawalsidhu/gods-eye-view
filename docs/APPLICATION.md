@@ -133,10 +133,12 @@ factories loaded (`gods-eye-view/render/cesium/unbound`), or `inputFor` throws.
 
 `onPointer(type, fn, { lease })` subscribes to `down`, `move`, `up`, `click`
 or `dblclick`; with a lease it runs only while that lease is current. A tool
-takes its lease with `claimPointer(ownerId)` from the same export (and gives
-it back with `releasePointer(lease)`), which also keeps every ambient
-subscriber off its clicks; `isPointerFree()` and `pointerOwner()` report who
-holds it. `suspendCamera(reason)` and `suppressStockClicks()` return their
+takes its lease with `claimPointer(ownerId, { onLost })` from the same export
+(and gives it back with `releasePointer(lease)`), which also keeps every
+ambient subscriber off its clicks; `isPointerFree()` and `pointerOwner()`
+report who holds it. The newest claim takes over, as on the renderer's input
+port: the tool holding the pointer has its `onLost` called once and turns
+itself off, and its late release frees nothing. `suspendCamera(reason)` and `suppressStockClicks()` return their
 own release: camera input and the viewer's stock select and double-click-track
 come back when the last hold is released, so two holders cannot undo each
 other. The renderer's input port owns the camera controller's `enableInputs`: a direct

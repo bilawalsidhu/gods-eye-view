@@ -137,6 +137,27 @@ async function listenerRules(r, where, subscribe, fire) {
   offError();
 }
 
+/**
+ * Every call a set takes after it is disposed: each must do nothing. `item`
+ * (null: none) is what `set` and `upsert` are given.
+ */
+function lateCalls(set, item) {
+  const list = item ? [item] : [];
+  set.set(list);
+  set.upsert(item ? [{ ...item, id: 'b' }] : []);
+  set.show = true;
+  set.setOptions({ pickable: true, drawOrder: 3 });
+  set.setColumns?.({
+    ids: ['c'],
+    positions: new Float64Array(
+      item?.pos ? [item.pos.x, item.pos.y, item.pos.z] : [0, 0, 0],
+    ),
+  });
+  set.remove(['missing']);
+  set.upsert(list);
+  set.dispose();
+}
+
 /** A check over a fresh renderer, destroyed afterwards. */
 /**
  * The sky with the renderer's look off (`SkySettings`): what is drawn shows
@@ -774,6 +795,130 @@ export function portChecks() {
         b.dispose();
       },
     ),
+    check(
+      'draw.afterDispose',
+      'a disposed set draws nothing, whatever is called on it after',
+      async (h, r) => {
+        await overAustin(h, r);
+        const pos = h.toEcef({ ...AUSTIN, height: 0 });
+        // A live set beside them, so the picks below can find something.
+        const live = r.draw.points({ id: 'conf:kept' });
+        live.set([{ id: 'kept', pos, pixelSize: 8, color: '#0f0' }]);
+        const point = { id: 'a', pos, pixelSize: 30, color: '#f00' };
+        const icon = { id: 'a', pos, image: DOT, size: [32, 32] };
+        const gone = [
+          [r.draw.points({ id: 'conf:gone:points' }), point],
+          [r.draw.icons({ id: 'conf:gone:icons' }), icon],
+        ];
+        for (const [kind, capability] of SET_KINDS)
+          if (!capability || r.capabilities.has(capability))
+            gone.push([r.draw[kind]({ id: `conf:gone:${kind}:empty` }), null]);
+        for (const [set] of gone) set.dispose();
+        for (const [set, item] of gone) lateCalls(set, item);
+        await drawn(h, r);
+        await settled(r);
+        const s = r.query.project(pos);
+        ok(s, 'the point projects');
+        const hits = r.query.drillPick(s.x, s.y);
+        ok(
+          hits.some((hit) => hit.set === 'conf:kept'),
+          'the live set is picked',
+        );
+        ok(
+          hits.every((hit) => !String(hit.set).startsWith('conf:gone')),
+          'nothing of a disposed set is picked',
+        );
+        ok(
+          gone.every(([set]) => set.show === false || set.show === true),
+          'show still reads',
+        );
+        // Its id is free; the old handle does not reach the new set.
+        const again = r.draw.points({ id: 'conf:gone:points' });
+        lateCalls(gone[0][0], point);
+        equal(again.size(), 0, 'the newer set under the id is untouched');
+        again.dispose();
+        live.dispose();
+      },
+    ),
+    {
+      id: 'renderer.afterDestroy',
+      port: 'renderer',
+      title: 'once the renderer is destroyed, its sets and new ones do nothing',
+      async run(h) {
+        const r = await fresh(h);
+        const sets = [];
+        try {
+          await overAustin(h, r);
+          for (const [kind, capability] of SET_KINDS)
+            if (!capability || r.capabilities.has(capability))
+              sets.push(r.draw[kind]({ id: `conf:destroyed:${kind}` }));
+        } finally {
+          r.destroy();
+        }
+        const pos = h.toEcef({ ...AUSTIN, height: 0 });
+        const point = { id: 'a', pos, pixelSize: 30, color: '#f00' };
+        const late = r.draw.points({ id: 'conf:destroyed:late' });
+        // What is set on them is not kept, so nothing is drawn of it.
+        for (const set of [sets[1], late]) {
+          set.set([point]);
+          set.upsert([{ ...point, id: 'b' }]);
+          equal(set.size(), 0, `${set.id} keeps nothing set after destroy`);
+        }
+        for (const set of sets) lateCalls(set, set === sets[1] ? point : null);
+        lateCalls(late, point);
+        for (const set of [...sets, late]) set.dispose();
+      },
+    },
+    {
+      id: 'renderer.afterDestroy.frames',
+      port: 'renderer',
+      title:
+        'once the renderer is destroyed, renderOnce and capture reject, and a renderOnce waiting rejects too',
+      async run(h) {
+        const r = await fresh(h);
+        let waiting;
+        try {
+          await overAustin(h, r);
+          // Suspended, the loop draws nothing: the renderOnce waits.
+          r.frame.suspend(true);
+          waiting = r.frame.renderOnce().then(
+            () => 'resolved',
+            (error) => error,
+          );
+        } finally {
+          r.destroy();
+        }
+        const destroyed = (error, what) =>
+          ok(
+            error instanceof Error && /destroyed/.test(error.message),
+            `${what} rejects saying the renderer is destroyed (${error})`,
+          );
+        const settledIn = (promise) =>
+          Promise.race([
+            promise,
+            new Promise((resolve) => setTimeout(() => resolve('hung'), 2000)),
+          ]);
+        destroyed(await settledIn(waiting), 'a renderOnce waiting at destroy');
+        destroyed(
+          await settledIn(
+            r.frame.renderOnce().then(
+              () => 'resolved',
+              (error) => error,
+            ),
+          ),
+          'renderOnce',
+        );
+        destroyed(
+          await settledIn(
+            r.capture().then(
+              () => 'resolved',
+              (error) => error,
+            ),
+          ),
+          'capture',
+        );
+      },
+    },
     check(
       'draw.pick',
       'a drawn icon is picked under its projection with its set, id and meta',
@@ -1842,11 +1987,11 @@ export function portChecks() {
           [kind, image],
           [`atlas-${kind}`, { atlas: 'conf:images', slot: kind }],
         ]);
-        // Two sets: still icons, and icons that recede (drawn as moving
-        // ones are, where a renderer draws them apart).
+        // Two sets: still icons, and a set that recedes (drawn as moving
+        // icons are, where a renderer draws them apart).
         const rows = [
           ['still', {}, AUSTIN.lat + 0.004],
-          ['receding', { recede: true }, AUSTIN.lat - 0.004],
+          ['receding', { recede: {} }, AUSTIN.lat - 0.004],
         ];
         const at = (i, lat) =>
           h.toEcef({
@@ -1855,14 +2000,13 @@ export function portChecks() {
             height: 0,
           });
         const sets = rows.map(([name, extra, lat]) => {
-          const set = r.draw.icons({ id: `conf:images-${name}` });
+          const set = r.draw.icons({ id: `conf:images-${name}`, ...extra });
           set.set(
             images.map(([id, image], i) => ({
               id,
               pos: at(i, lat),
               image,
               size: [20, 20],
-              ...extra,
             })),
           );
           return set;
@@ -1883,6 +2027,105 @@ export function portChecks() {
           });
         for (const set of sets) set.dispose();
       },
+    ),
+    check(
+      'draw.sets.recede',
+      'icon and model sets take `recede` and change it live: their items, near the eye, are drawn and picked whether the set recedes or not',
+      async (h, r) => {
+        await overAustin(h, r);
+        const pos = h.toEcef({ ...AUSTIN, height: 0 });
+        const icons = r.draw.icons({ id: 'conf:recede-icons', recede: {} });
+        icons.set([{ id: 'one', pos, image: DOT, size: [24, 24], focus: 0.5 }]);
+        const models = r.draw.models?.({
+          id: 'conf:recede-models',
+          recede: { alphaFloor: 0.5 },
+        });
+        try {
+          await drawn(h, r);
+          await settled(r);
+          const s = r.query.project(pos);
+          ok(s, 'the icon projects');
+          const picked = () => r.query.pick(s.x, s.y);
+          deepEqual(
+            [picked()?.set, picked()?.id],
+            ['conf:recede-icons', 'one'],
+            'a receding icon near the eye is drawn and picked',
+          );
+          for (const recede of [null, { scaleFloor: 0.6 }, {}]) {
+            icons.setOptions({ recede });
+            models?.setOptions({ recede });
+            await drawn(h, r);
+            equal(
+              picked()?.id,
+              'one',
+              `drawn and picked with recede ${JSON.stringify(recede)}`,
+            );
+          }
+        } finally {
+          icons.dispose();
+          models?.dispose();
+        }
+      },
+    ),
+    check(
+      'draw.sets.recede.models',
+      'a model set that recedes composes each model’s focus as `RecedeSpec` says, and takes a new `recede` live: near the eye a model at focus 1 draws at full strength, at focus 0.25 faded, and a combined floor of 1 brings it back',
+      async (h, r) => {
+        if (!h.assets?.model) return { skip: 'no model asset in this harness' };
+        await overAustin(h, r);
+        const set = r.draw.models({ id: 'conf:recede-models', recede: {} });
+        const ready = [];
+        set.on('ready', (id) => ready.push(id));
+        const pos = h.toEcef({ ...AUSTIN, height: 0 });
+        const model = (focus) => ({
+          id: 'm',
+          pos,
+          url: h.assets.model,
+          orientation: { heading: 0, pitch: 0, roll: 0 },
+          minPixelSize: 160,
+          environmentMap: false,
+          shading: 'unlit',
+          tint: '#ff0000',
+          colorBlend: { mode: 'replace' },
+          focus,
+        });
+        try {
+          set.set([model(1)]);
+          for (let i = 0; i < 600 && !ready.length; i++) await drawn(h, r, 1);
+          deepEqual(ready, ['m'], 'ready');
+          const s = r.query.project(pos);
+          // How many pixels of a patch at the model's centre are red.
+          const red = async () => {
+            await drawn(h, r, 3);
+            await settled(r);
+            r.frame.renderNow();
+            const image = r.readPixels({
+              crop: {
+                x: Math.round(s.x) - 4,
+                y: Math.round(s.y) - 4,
+                width: 9,
+                height: 9,
+              },
+            });
+            let n = 0;
+            for (let i = 0; i < image.data.length; i += 4) {
+              const [r0, g, b] = image.data.subarray(i, i + 3);
+              if (r0 > 180 && g < 70 && b < 70) n++;
+            }
+            return n;
+          };
+          ok((await red()) >= 40, 'near the eye, focus 1: full strength');
+          set.upsert([model(0.25)]);
+          ok((await red()) < 10, 'focus 0.25 fades it');
+          set.setOptions({ recede: { combinedAlphaFloor: 1 } });
+          ok((await red()) >= 40, 'a combined floor of 1 holds it, live');
+          equal(r.query.pick(s.x, s.y)?.set, set.id, 'and it is picked');
+          deepEqual(ready, ['m'], 'without loading again');
+        } finally {
+          set.dispose();
+        }
+      },
+      { capability: 'models', bareSky: true },
     ),
     clusterCheck(false),
     clusterCheck(true),
@@ -4136,6 +4379,7 @@ export function portChecks() {
         const seen = [];
         r.input.on('click', () => seen.push('ambient'));
         const lease = r.input.claimPointer('tool');
+        equal(lease.owner, 'tool', 'the lease names its owner');
         for (const type of POINTER_TYPES) await h.pointer(r, type, 640, 360);
         deepEqual(ambient, ['move', 'up'], 'ambient under a lease');
         seen.length = 0;
@@ -4153,6 +4397,61 @@ export function portChecks() {
         ok(r.input.isPointerFree(), 'free again');
         await h.pointer(r, 'click', 640, 360);
         deepEqual(seen, ['ambient'], 'ambient again');
+      },
+    ),
+    check(
+      'input.lease.lost',
+      'the newest claim takes over: the lease it ends is told once, after the new one holds the pointer, and its late release frees nothing; a throwing onLost is reported',
+      async (h, r) => {
+        if (!h.pointer) return { skip: 'no pointer in this harness' };
+        const told = [];
+        // What the ended lease's holder sees from inside its `onLost`.
+        let inside = null;
+        const a = r.input.claimPointer('a', {
+          onLost: () => {
+            told.push('a');
+            inside = { free: r.input.isPointerFree(), current: a.current };
+          },
+        });
+        const heard = [];
+        r.input.on('down', () => heard.push('a'), { lease: a });
+        const b = r.input.claimPointer('b', { onLost: () => told.push('b') });
+        r.input.on('down', () => heard.push('b'), { lease: b });
+        deepEqual(told, ['a'], 'the ended lease is told');
+        deepEqual(
+          inside,
+          { free: false, current: false },
+          'inside onLost the new lease already holds the pointer and the old one has ended',
+        );
+        ok(!a.current && b.current, 'the newest lease holds the pointer');
+        await h.pointer(r, 'down', 640, 360);
+        await h.pointer(r, 'up', 640, 360);
+        deepEqual(heard, ['b'], 'the newest holder gets the press');
+        a.release();
+        ok(b.current, "the ended lease's release frees nothing");
+        ok(!r.input.isPointerFree(), 'still taken');
+        deepEqual(told, ['a'], 'told once');
+        b.release();
+        deepEqual(told, ['a'], 'a lease its holder releases is not told');
+        ok(r.input.isPointerFree(), 'free again');
+
+        const errors = [];
+        r.on('error', (e) => errors.push(e));
+        r.input.claimPointer('c', {
+          onLost: () => {
+            throw new Error('conformance onLost');
+          },
+        });
+        const d = r.input.claimPointer('d');
+        equal(errors.length, 1, 'a throwing onLost is reported');
+        ok(d.current, 'and the new lease holds the pointer regardless');
+        heard.length = 0;
+        r.input.on('down', () => heard.push('d'), { lease: d });
+        await h.pointer(r, 'down', 640, 360);
+        await h.pointer(r, 'up', 640, 360);
+        deepEqual(heard, ['d'], 'and gets the press');
+        d.release();
+        ok(r.input.isPointerFree(), 'free at the end');
       },
     ),
     check(
@@ -5374,6 +5673,279 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
           [part.width, part.height, part.data.length],
           [20, 15, 20 * 15 * 4],
           'a crop, scaled',
+        );
+      },
+    ),
+    check(
+      'renderer.capture',
+      'capture encodes the last drawn frame as asked: cropped, scaled, its type and quality, drawing none of its own when the frame is kept',
+      async (h, r) => {
+        if (h.pixels === false || typeof createImageBitmap !== 'function')
+          return { skip: 'no encoded pixels to read' };
+        await overAustin(h, r);
+        const set = r.draw.points({ id: 'conf:capture' });
+        const pos = h.toEcef({ ...AUSTIN, height: 0 });
+        set.set([{ id: 'p', pos, pixelSize: 24, color: '#ff0000' }]);
+        await drawn(h, r);
+        await settled(r);
+        const size = async (blob) => {
+          const bitmap = await createImageBitmap(blob);
+          const wh = [bitmap.width, bitmap.height];
+          bitmap.close();
+          return wh;
+        };
+        let frames = 0;
+        const off = r.frame.on('postRender', () => (frames += 1));
+        const full = await r.capture();
+        equal(full.type, 'image/png', 'a PNG by default');
+        deepEqual(
+          await size(full),
+          [SCRIPT_VIEWPORT.width, SCRIPT_VIEWPORT.height],
+          'the canvas’s CSS size',
+        );
+        const crop = { x: 10, y: 20, width: 40, height: 30 };
+        deepEqual(
+          await size(await r.capture({ crop, scale: 0.5 })),
+          [20, 15],
+          'a crop, scaled',
+        );
+        deepEqual(
+          await size(await r.capture({ scale: 0.25 })),
+          [SCRIPT_VIEWPORT.width / 4, SCRIPT_VIEWPORT.height / 4],
+          'scaled',
+        );
+        const low = await r.capture({ type: 'jpeg', quality: 0.05 });
+        const high = await r.capture({ type: 'jpeg', quality: 1 });
+        equal(low.type, 'image/jpeg', 'a JPEG when asked');
+        ok(low.size < high.size, 'a lower quality encodes smaller');
+        // What a crop over the point shows is the point, as drawn.
+        const s = r.query.project(pos);
+        const around = { x: s.x - 4, y: s.y - 4, width: 8, height: 8 };
+        const bitmap = await createImageBitmap(
+          await r.capture({ crop: around }),
+        );
+        const canvas = new OffscreenCanvas(8, 8);
+        const g = canvas.getContext('2d');
+        g.drawImage(bitmap, 0, 0);
+        bitmap.close();
+        const [red, green, blue] = g.getImageData(4, 4, 1, 1).data;
+        ok(
+          red > 200 && green < 60 && blue < 60,
+          `the point is in the crop (${red}, ${green}, ${blue})`,
+        );
+        off();
+        // Where the renderer keeps its frame it reads it; otherwise it may
+        // draw again to read.
+        const gl =
+          r.canvas.getContext?.('webgl2') ?? r.canvas.getContext?.('webgl');
+        if (gl?.getContextAttributes?.()?.preserveDrawingBuffer === true)
+          equal(frames, 0, 'no frame drawn for a capture of a kept frame');
+        set.dispose();
+      },
+    ),
+    check(
+      'renderer.resize',
+      'resize follows the container: the lens and the frame read take its new size',
+      async (h, r) => {
+        if (!h.resizeContainer)
+          return { skip: 'the harness cannot resize the container' };
+        await overAustin(h, r);
+        // A new aspect too, so a lens left as it was shows.
+        const size = { width: 480, height: 320 };
+        await h.resizeContainer(r, size);
+        r.resize();
+        await drawn(h, r);
+        near(
+          r.camera.pose().aspectRatio,
+          size.width / size.height,
+          1e-6,
+          'the aspect is the container’s',
+        );
+        const full = r.readPixels({ scale: 0.1 });
+        deepEqual(
+          [full.width, full.height],
+          [size.width / 10, size.height / 10],
+          'the frame is the container’s size',
+        );
+      },
+    ),
+    check(
+      'frame.setTargetFps',
+      'setTargetFps caps the loop; diagnostics say the cap, 0 the display rate',
+      (h, r) => {
+        r.frame.setTargetFps(24);
+        equal(r.frame.diagnostics().targetFps, 24, 'capped');
+        r.frame.setTargetFps(0);
+        equal(r.frame.diagnostics().targetFps, 0, 'the display’s rate');
+      },
+    ),
+    check(
+      'globe.setTerrain',
+      'setTerrain to the ellipsoid, exaggerated or not, resolves and leaves the globe settling',
+      async (h, r) => {
+        await r.globe.setTerrain({ kind: 'ellipsoid', exaggeration: 2 });
+        await r.globe.setTerrain({ kind: 'ellipsoid' });
+        await overAustin(h, r);
+        await drawn(h, r);
+        const result = await r.whenSettled({ timeoutMs: 10_000 });
+        ok(
+          !result.blockers.includes('terrain'),
+          `the ellipsoid has nothing to load (${result.blockers})`,
+        );
+      },
+    ),
+    check(
+      'globe.setPhotoreal',
+      'setPhotoreal(null) turns photoreal off: its status is route none',
+      async (h, r) => {
+        const status = await r.globe.setPhotoreal(null);
+        equal(status.route, 'none', 'off');
+      },
+    ),
+    check(
+      'globe.progress',
+      'progress listeners hear counts of what is loading, and their Off ends them',
+      async (h, r) => {
+        const heard = [];
+        const off = r.globe.on('progress', (p) => heard.push(p));
+        equal(typeof off, 'function', 'an Off');
+        await overAustin(h, r);
+        // Something to load: an image over the view.
+        const over = (url) =>
+          r.globe.imagery.add({
+            kind: 'single-image',
+            url,
+            rectangle: {
+              west: AUSTIN.lon - 1,
+              south: AUSTIN.lat - 1,
+              east: AUSTIN.lon + 1,
+              north: AUSTIN.lat + 1,
+            },
+          });
+        const layer = over(PIXEL_PNGS[0]);
+        // Frames until the load is heard, or a while passes: a renderer may
+        // first say nothing loads, before it starts on the image. The image
+        // loads in time of its own, so each frame lets some pass.
+        const loading = (p) =>
+          p.tilesPending + p.imageryPending + p.terrainPending > 0;
+        const until = Date.now() + 10_000;
+        for (let i = 0; !heard.some(loading) && i < 600; i++) {
+          if (Date.now() > until) break;
+          await drawn(h, r, 1);
+          await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+        ok(heard.some(loading), 'a load is heard');
+        for (const p of heard)
+          for (const key of [
+            'tilesPending',
+            'imageryPending',
+            'terrainPending',
+          ])
+            ok(p[key] >= 0, `${key} is a count (${p[key]})`);
+        off();
+        const before = heard.length;
+        layer.remove();
+        const again = over(PIXEL_PNGS[1]);
+        await overAustin(h, r, 9000);
+        await drawn(h, r);
+        equal(heard.length, before, 'none after its Off');
+        again.remove();
+      },
+    ),
+    check(
+      'effects.setStyleParams',
+      'a style’s parameters change what it draws',
+      async (h, r) => {
+        if (h.pixels === false) return { skip: 'no pixels to read' };
+        const off = r.effects.defineStyle({
+          id: 'conf:fill',
+          params: [{ key: 'red', min: 0, max: 1, default: 0 }],
+          animated: false,
+          shader: {
+            glsl: `uniform float red;
+void main() {
+  out_FragColor = vec4(red, 0.0, 0.0, 1.0);
+}`,
+            wgsl: `@fragment
+fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
+  return vec4f(params.red, 0.0, 0.0, 1.0);
+}`,
+          },
+        });
+        try {
+          await overAustin(h, r);
+          // Below the eye, in the units `readPixels` crops in.
+          const below = r.query.project(h.toEcef({ ...AUSTIN, height: 0 }));
+          ok(below, 'the ground below projects');
+          const red = async () => {
+            await settled(r);
+            r.frame.renderNow();
+            const px = r.readPixels({
+              crop: {
+                x: Math.round(below.x),
+                y: Math.round(below.y),
+                width: 1,
+                height: 1,
+              },
+            });
+            return px.data[0];
+          };
+          r.effects.setStyleIntensity('conf:fill', 1);
+          r.effects.setStyle('conf:fill', { red: 0 });
+          ok((await red()) < 30, 'its default draws black');
+          r.effects.setStyleParams('conf:fill', { red: 1 });
+          ok((await red()) > 225, 'red once its parameter is 1');
+          r.effects.setStyle(null);
+          r.effects.setStyleIntensity('conf:fill', 0);
+        } finally {
+          off();
+        }
+      },
+      { capability: 'styles' },
+    ),
+    check(
+      'effects.bloom',
+      'bloom on lists its pass, off drops it; the strength is kept',
+      (h, r) => {
+        const passes = () => r.effects.diagnostics().passes;
+        r.effects.bloom({ enabled: true, strength: 0.4 });
+        ok(passes().includes('bloom'), 'drawn while on');
+        r.effects.bloom({ enabled: false });
+        ok(!passes().includes('bloom'), 'not while off');
+        r.effects.bloom({ enabled: true });
+        ok(passes().includes('bloom'), 'on again at the kept strength');
+        r.effects.bloom({ enabled: false });
+      },
+      { capability: 'bloom' },
+    ),
+    check(
+      'effects.sharpen',
+      'sharpen on lists its pass, off drops it',
+      (h, r) => {
+        const passes = () => r.effects.diagnostics().passes;
+        r.effects.sharpen({ enabled: true, amount: 0.5 });
+        ok(passes().includes('sharpen'), 'drawn while on');
+        r.effects.sharpen({ enabled: false });
+        ok(!passes().includes('sharpen'), 'not while off');
+      },
+      { capability: 'sharpen' },
+    ),
+    check(
+      'quality.probe',
+      'probe says the device, the browser and the knobs',
+      (h, r) => {
+        const probe = r.quality.probe();
+        ok(
+          ['webgl1', 'webgl2', 'webgpu'].includes(probe.device.backend),
+          `a backend (${probe.device.backend})`,
+        );
+        ok(probe.device.maxTextureSize > 0, 'a texture size');
+        ok(probe.browser.devicePixelRatio > 0, 'a pixel ratio');
+        equal(typeof probe.browser.touchOnly, 'boolean', 'touch only or not');
+        deepEqual(
+          probe.knobs.map((k) => k.key),
+          r.quality.knobs().map((k) => k.key),
+          'the knobs, as knobs() lists them',
         );
       },
     ),

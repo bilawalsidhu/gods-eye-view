@@ -221,9 +221,45 @@ test('rows moving on a live clock keep frames coming until their segments end', 
   assert.equal(scene.renders, onScene);
 });
 
+test('a set that recedes draws on the GPU, every row receding by the set’s parameters, and changes live', () => {
+  const { scene, part, draw } = drawOver();
+  // An item's own `recede` is not the contract's: it changes nothing.
+  const still = draw.icons({ id: 'gpu:still' });
+  still.set([icon('a', { recede: true })]);
+  assert.ok(
+    !(scene.added.at(-1) instanceof IconSetPrimitive),
+    'still icons stay billboards',
+  );
+  const set = draw.icons({
+    id: 'gpu:recede',
+    recede: { scaleFloor: 0.6 },
+  });
+  set.set([icon('a'), icon('b')]);
+  const host = scene.added.at(-1);
+  assert.ok(host instanceof IconSetPrimitive, 'on the GPU, though still');
+  const { set: s } = rows(part, 'gpu:recede');
+  for (const id of ['a', 'b'])
+    assert.equal(s.flags(s.row(id)) & ICON_RECEDES, ICON_RECEDES, id);
+  assert.equal(host._recedeParams().scaleFloor, 0.6);
+  assert.equal(host._recedeParams().alphaFloor, 0.35, 'the rest the defaults');
+  set.setOptions({ recede: null });
+  for (const id of ['a', 'b'])
+    assert.equal(s.flags(s.row(id)) & ICON_RECEDES, 0, `${id} no longer`);
+  assert.equal(host._recedeParams(), null);
+  // A billboard set told to recede goes onto the GPU, its icons with it.
+  still.setOptions({ recede: {} });
+  const moved = part.sets.get('gpu:still').gpu;
+  assert.ok(moved, 'on the GPU now');
+  assert.equal(moved.set.count, 1);
+  assert.equal(
+    moved.set.flags(moved.set.row('a')) & ICON_RECEDES,
+    ICON_RECEDES,
+  );
+});
+
 test('an item’s look goes into its row: size, scale, tint, focus, flags, proxy, depth and images', () => {
   const { part, draw } = drawOver();
-  const set = draw.icons({ id: 'gpu:look', horizonCull: true });
+  const set = draw.icons({ id: 'gpu:look', horizonCull: true, recede: {} });
   set.set([
     icon('a', {
       motion: { kind: 'hold', courseDeg: 10 },
@@ -232,7 +268,6 @@ test('an item’s look goes into its row: size, scale, tint, focus, flags, proxy
       alpha: 0.5,
       color: [1, 0, 0, 1],
       focus: 0.25,
-      recede: true,
       rotationMode: 'course',
       pickProxy: { size: [48, 40] },
       disableDepthTest: Infinity,
@@ -1126,4 +1161,29 @@ test('a GPU icon set asks the frame port for its atlas frames, under its own rea
   } finally {
     iconAtlas.onChange = onChange;
   }
+});
+
+test('a live motion clock reads the date the draw port is given', () => {
+  const t0 = Date.UTC(2031, 0, 2, 3, 4, 5);
+  let date = t0 + 4000;
+  const { part, draw } = drawOver({ date: () => date });
+  const set = draw.icons({
+    id: 'gpu:dated',
+    motionClock: { kind: 'live', delayMs: 1000 },
+  });
+  const to = ecef(Cesium.Cartesian3.fromDegrees(4.2, 51.95, 2));
+  const item = icon('a', {
+    motion: { kind: 'lerp', from: ecef(AT), to, t0, t1: t0 + 10_000 },
+  });
+  set.set([item]);
+  const at = (ms) => iconPosition(item, ms);
+  assert.ok(
+    distance(part.drawnPosition({ set: 'gpu:dated', id: 'a' }), at(t0 + 3000)) <
+      0.1,
+  );
+  date = t0 + 8000;
+  assert.ok(
+    distance(part.drawnPosition({ set: 'gpu:dated', id: 'a' }), at(t0 + 7000)) <
+      0.1,
+  );
 });

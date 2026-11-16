@@ -296,27 +296,42 @@ test('turning Draw on takes a lease and turning it off gives it back', async () 
   }
 });
 
-test('Draw refuses to start when something else holds the pointer', async () => {
+test('Draw takes the pointer from another tool, which is told', async () => {
   const h = harness();
   try {
-    const other = claimPointer('directions');
+    let lost = 0;
+    claimPointer('directions', { onLost: () => (lost += 1) });
     h.act('toggleDraw');
-    assert.equal(h.tool.active, false, 'it must not half-start');
-    assert.equal(pointerOwner(), 'directions', 'and must not steal the claim');
-    // Named by its tool, not by the internal owner id.
-    assert.equal(
-      h.shown.view.hint,
-      'Directions is using the pointer — close it first.',
-    );
-    assert.equal(
-      h.tool.diagnostics().sceneHandler,
-      false,
-      'no handler was bound',
-    );
+    assert.equal(h.tool.active, true, 'the newest claim takes over');
+    assert.equal(pointerOwner(), 'draw');
+    assert.equal(lost, 1, 'the other tool is told once');
+  } finally {
+    h.restore();
+  }
+});
 
+test('Draw turns off, as if toggled off, when a newer tool takes the pointer', async () => {
+  const h = harness({
+    beforeInput(viewer) {
+      viewer.screenSpaceEventHandler.setInputAction(() => {}, LEFT_CLICK);
+    },
+  });
+  try {
+    h.act('toggleDraw');
+    assert.equal(h.tool.diagnostics().stockSingleClick, false);
+    assert.ok(h.tool.addVertex(10, 20), 'a shape is under way');
+    const other = claimPointer('directions');
+    assert.equal(h.tool.active, false);
+    assert.equal(h.tool.session, null, 'the half-drawn shape is dropped');
+    assert.equal(h.shown.view.active, false, 'the Draw control reads off');
+    const after = h.tool.diagnostics();
+    assert.equal(after.sceneHandler, false, 'its subscriptions are gone');
+    assert.equal(after.stockSingleClick, true, 'the stock clicks are back');
+    assert.equal(after.previewItems, 0, 'the preview is cleared');
+    assert.equal(pointerOwner(), 'directions', 'the newer tool keeps it');
     releasePointer(other);
     h.act('toggleDraw');
-    assert.equal(h.tool.active, true, 'and it starts once the pointer is free');
+    assert.equal(h.tool.active, true, 'and it turns on again when asked');
   } finally {
     h.restore();
   }

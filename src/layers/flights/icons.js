@@ -123,6 +123,8 @@ export function createIcons({ flightState, services, parts }) {
         icons._planIcon(icao24, { fromCourseDeg: set.course(icao24, t) });
       return;
     }
+    // Following the clock, not drawn at a time before it was there.
+    set.setUnseen(icao24, flightState._drUnseen);
     const planned = set.expires(icao24) !== -Infinity;
     const prev = planned ? set.course(icao24, t) : null;
     // The pin holds the position; the renderer glides the course onto the

@@ -5,6 +5,14 @@ import { createFlightState } from './state.js';
 import { createIcons } from './icons.js';
 import { createContactIcons } from '../../data/aircraftIconLayer.js';
 import { layerPlacement } from '../../data/placementProvider.js';
+import {
+  aircraftMotionRegime,
+  createMotionRegime,
+  fixEpochMs,
+} from '../../data/aircraftMotionRegime.js';
+import { mergeAircraftTimelineFixes } from '../../data/timelineHistory.js';
+import { julianFromEpochMs } from '../../geo/julian.js';
+import { TIMELINE_UNSEEN_MS } from '../../time/timelineFixes.js';
 
 function services(focus = {}) {
   return {
@@ -299,4 +307,111 @@ test('a live contact a placement places is drawn along where it places it', (t) 
   flightState.timeline = { active: () => true };
   icons._planIcon('p');
   assert.deepEqual(asked, []);
+});
+
+/**
+ * A layer following the world clock at `world.ms`, its contacts placed by
+ * the shared regime on their own fixes around the time.
+ */
+function clockSetup(world) {
+  const fields = { speed: 'velocity', track: 'true_track' };
+  const { flightState, icons, set } = setup({
+    motion: {
+      _displayTimeAt: (ms) => julianFromEpochMs(ms),
+      _fixEpochMs: fixEpochMs,
+      _deadReckon: () => null,
+      _motionRegime: (history, info, renderTime) =>
+        aircraftMotionRegime(
+          history,
+          info,
+          renderTime,
+          fields,
+          createMotionRegime(),
+        ),
+    },
+  });
+  flightState.timeline = { active: () => true };
+  flightState.now = () => world.ms;
+  return { flightState, icons, set };
+}
+
+/** A contact's row, never planned, and its own fixes at `times` (ms). */
+function onFixes(flightState, set, id, times) {
+  set.put(
+    {
+      id,
+      pos: { x: 0, y: 0, z: 0 },
+      motion: { kind: 'hold', courseDeg: 0 },
+      course: 0,
+      size: [20, 20],
+      show: true,
+      focus: 1,
+      meta: { layer: 'flights', id },
+    },
+    { expiresAt: -Infinity },
+  );
+  flightState.records.data.set(id, { velocity: 100 });
+  const history = mergeAircraftTimelineFixes(
+    [],
+    {
+      fixes: times.map((atMs, i) => ({
+        atMs,
+        lat: 30,
+        lon: i * 0.05,
+        altitudeM: null,
+      })),
+    },
+    { renderAltitudeM: 3_000 },
+    100,
+    times[0],
+  );
+  flightState._positionHistory.set(id, history);
+  return history;
+}
+
+test('following the clock, a contact is not drawn before it was there, and is from its warm-up on', () => {
+  const first = Date.UTC(2026, 10, 9, 12);
+  const world = { ms: first - 10 * 60_000 };
+  const { flightState, icons, set } = clockSetup(world);
+  onFixes(flightState, set, 'c', [first, first + 60_000]);
+  icons._planIcon('c');
+  assert.equal(set.shown('c'), false, 'ten minutes before its first fix');
+  assert.equal(set.expires('c'), first - TIMELINE_UNSEEN_MS);
+
+  // Half a minute before its first fix it is drawn, reaching it.
+  world.ms = first - 30_000;
+  icons._replanExpired(world.ms);
+  assert.equal(set.shown('c'), true);
+
+  // The clock moved back: not there yet again.
+  world.ms = first - 5 * 60_000;
+  icons._replanExpired(world.ms);
+  assert.equal(set.shown('c'), false);
+});
+
+test('following the clock, a move back within the fixes draws a contact where it was then', () => {
+  const t0 = Date.UTC(2026, 10, 9, 12);
+  const world = { ms: t0 + 100_000 };
+  const { flightState, icons, set } = clockSetup(world);
+  const history = onFixes(flightState, set, 'c', [
+    t0,
+    t0 + 60_000,
+    t0 + 120_000,
+  ]);
+  icons._planIcon('c');
+  icons._replanExpired(world.ms);
+  // Back to half way between the first two fixes.
+  world.ms = t0 + 30_000;
+  icons._replanExpired(world.ms);
+  const drawn = set.position('c', world.ms);
+  const half = Cesium.Cartesian3.distance(
+    history[0].position,
+    history[1].position,
+  );
+  for (const fix of history.slice(0, 2))
+    assert.ok(
+      Math.abs(Cesium.Cartesian3.distance(drawn, fix.position) - half / 2) <
+        half * 0.05,
+      'half way between its first two fixes',
+    );
 });

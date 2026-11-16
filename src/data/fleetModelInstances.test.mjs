@@ -327,6 +327,45 @@ test('a model stands on the floor its icon is lifted above', () => {
   layer.destroy();
 });
 
+test('a model that did not change is not written, nor built anew to find that out', () => {
+  const { layer, frame } = readyLayer({ display: { models3d: true } });
+  const tram = transitModelSpec(set, { mode: 'tram' });
+  // Reads of what only the draw item takes (its scales): a model whose item
+  // is built again reads them.
+  let shapeReads = 0;
+  const spec = new Proxy(tram, {
+    get(target, key) {
+      if (key === 'scale' || key === 'scaleXYZ') shapeReads += 1;
+      return target[key];
+    },
+  });
+  const tint = [1, 0, 0, 1];
+  const item = itemAt(10, spec, { pickId: 't', tint });
+  const items = new Map([['t', item]]);
+  const models = frame(items, 0);
+  const writes = models.writes;
+  shapeReads = 0;
+  for (let at = 2; at < 6; at++) layer.frame(items, at);
+  assert.equal(models.writes, writes, 'nothing written');
+  assert.equal(shapeReads, 0, 'no draw item built');
+
+  // A move, a turn and a route colour the layer changes in its own array
+  // are each written.
+  item.position = add(item.position, { x: 1, y: 0, z: 0 });
+  layer.frame(items, 6);
+  assert.equal(models.writes, writes + 1, 'a move is written');
+  item.headingDeg += 10;
+  layer.frame(items, 7);
+  assert.equal(models.writes, writes + 2, 'a turn is written');
+  tint[2] = 1;
+  layer.frame(items, 8);
+  assert.equal(models.writes, writes + 3, 'a colour changed in place');
+  assert.deepEqual(models.items.get('t').maskColor, [1, 0, 1, 1]);
+  layer.frame(items, 9);
+  assert.equal(models.writes, writes + 3, 'and then nothing');
+  layer.destroy();
+});
+
 test('under NVG/FLIR models draw unlit white, and lit again on exit, without loading again', () => {
   const display = { models3d: true, irBoost: false };
   const { layer, frame } = readyLayer({ display });

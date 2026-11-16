@@ -14,7 +14,10 @@
  * `maxPixelSize` (the scale capped so the bounding sphere spans at most that
  * many drawing-buffer pixels at its distance from the eye, as Cesium
  * measures `minPixelSize`), `scaleByDistance`, `fadeByDistance` (the tint's
- * alpha) and the set's `horizonCull`.
+ * alpha), the set's `horizonCull`, and its `recede`: the tint's alpha times
+ * the focus and haze (`render/recession.js`), written again once that moves
+ * by more than `RECEDE_WRITE_EPSILON`. A model of a set that does not
+ * recede draws at its tint's alpha times its `focus`.
  *
  * A failed load fires `loadFailed` (after the frame Cesium reported it in,
  * so a listener may change the set), and is tried again when its item is
@@ -25,6 +28,12 @@
  * them. Heights are absolute: models clamp nothing.
  */
 import * as Cesium from 'cesium';
+import {
+  recedeFactors,
+  recedeFrame,
+  recedeParams,
+  recededAlpha,
+} from '../recession.js';
 
 const BLEND_MODES = {
   highlight: Cesium.ColorBlendMode.HIGHLIGHT,
@@ -38,6 +47,13 @@ const BLEND_MODES = {
  * hiccup should not leave the item without its model for good).
  */
 export const MODEL_RETRY_MS = 5000;
+
+/**
+ * How far a receding model's emphasis (focus and haze) moves before its
+ * colour is written again: an eye in motion would otherwise write every
+ * model's colour every frame.
+ */
+export const RECEDE_WRITE_EPSILON = 0.005;
 
 /** Cesium's own blend amount, for a `mix` that names none. */
 const DEFAULT_MIX = 0.5;
@@ -85,9 +101,17 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
  */
 function entryShader(entry) {
   const shading = entry.item.shading;
-  if (entry.mask && shading !== 'thermal')
-    return maskShaderOf(shading, entry.mask);
-  return shaderOf(shading);
+  // Kept while its shading and mask colour are: a fleet re-poses every
+  // frame with the same look.
+  if (entry.shaderShading === shading && entry.shaderMask === entry.mask)
+    return entry.shader;
+  entry.shader =
+    entry.mask && shading !== 'thermal'
+      ? maskShaderOf(shading, entry.mask)
+      : shaderOf(shading);
+  entry.shaderShading = shading;
+  entry.shaderMask = entry.mask;
+  return entry.shader;
 }
 
 /**
@@ -151,8 +175,12 @@ const scratchAxes = new Cesium.Cartesian3();
 const scratchMatrix = new Cesium.Matrix4();
 const scratchSphere = new Cesium.BoundingSphere();
 const scratchColor = new Cesium.Color();
+const scratchFactors = { scale: 1, alpha: 1, limbRatio: null };
+const scratchFrame = { active: false, limbM: 1, strength: 0 };
 /** The colour last written to each model. */
 const writtenColors = new WeakMap();
+/** Written to a model drawn in its own colours: no colour at all. */
+const NO_COLOR = Symbol('drawModels.noColor');
 /** What the per-frame pass found, for a model it does not run on. */
 const STILL = Object.freeze({ scale: 1, alpha: 1, shown: true });
 
@@ -189,7 +217,12 @@ const needsFrame = (item, spec) =>
   item.maxPixelSize > 0 ||
   Boolean(item.scaleByDistance) ||
   Boolean(item.fadeByDistance) ||
-  Boolean(spec.horizonCull);
+  Boolean(spec.horizonCull) ||
+  Boolean(spec.recede);
+
+/** An item's focus, 0..1. */
+const focusOf = (item) =>
+  Number.isFinite(item.focus) ? Math.min(1, Math.max(0, item.focus)) : 1;
 
 /**
  * The models part of a Cesium draw port.
@@ -421,12 +454,27 @@ export function createModelSets({
       entry.tint ?? Cesium.Color.WHITE,
       scratchColor,
     );
-    color.alpha *= frame.alpha;
+    color.alpha *= frame.alpha * (entry.emphasis ?? focusOf(item));
+    // An untinted model at full opacity is drawn without a colour: a colour
+    // adds a colour stage to every draw of the model.
+    const plain = !entry.tint && color.alpha === 1;
     // Written only when what is asked changes, so a theme's own write to a
     // model's colour stands until then.
     const written = writtenColors.get(model);
-    if (!written || !Cesium.Color.equals(written, color)) {
-      writtenColors.set(model, Cesium.Color.clone(color, written));
+    if (plain) {
+      if (written !== NO_COLOR) {
+        writtenColors.set(model, NO_COLOR);
+        model.color = undefined;
+      }
+    } else if (
+      !written ||
+      written === NO_COLOR ||
+      !Cesium.Color.equals(written, color)
+    ) {
+      writtenColors.set(
+        model,
+        Cesium.Color.clone(color, written === NO_COLOR ? undefined : written),
+      );
       model.color = color;
     }
     const show =
@@ -434,17 +482,24 @@ export function createModelSets({
     if (model.show !== show) model.show = show;
   }
 
-  /** Add or change items, by id; true once handled (always, for models). */
+  /**
+   * Add or change items, by id. Whether any was added: models moved or
+   * restyled keep their pick ids, so only one added changes what height
+   * queries see through.
+   */
   function upsert(record, list) {
     hostOf(record);
-    for (const item of list) put(record, item);
-    notePickIds(record);
+    let added = false;
+    for (const item of list) if (put(record, item)) added = true;
+    if (added) notePickIds(record);
     requestRender();
-    return true;
+    return added;
   }
 
+  /** Draw `item` on its entry, made when it has none; true when made. */
   function put(record, item) {
     let entry = record.models.get(item.id);
+    const made = !entry;
     if (!entry) {
       entry = {
         item,
@@ -463,8 +518,15 @@ export function createModelSets({
         failedAt: 0,
         settleLoad: null,
         styled: null,
+        // The custom shader drawn with, for the shading and mask it is of
+        // (`entryShader`).
+        shader: undefined,
+        shaderShading: null,
+        shaderMask: null,
         dynamic: false,
         frame: null,
+        // Focus and haze in a set that recedes, else null (focus alone).
+        emphasis: null,
         pickId: pickId(record, item),
       };
       record.models.set(item.id, entry);
@@ -495,6 +557,7 @@ export function createModelSets({
       if (model) style(record, entry, model);
     const retry = entry.failed && Date.now() - entry.failedAt >= MODEL_RETRY_MS;
     if (entry.url !== item.url || retry) load(record, entry);
+    return made;
   }
 
   /** Stop the entry's load in flight, keeping the model it draws. */
@@ -527,8 +590,17 @@ export function createModelSets({
     const width = scene.drawingBufferWidth ?? scene.canvas?.width ?? 0;
     const height = scene.drawingBufferHeight ?? scene.canvas?.height ?? 0;
     let horizon;
+    const eyeHeight = scene.camera.positionCartographic?.height;
     for (const record of sets) {
       if (record.kind !== 'models' || !record.models) continue;
+      if (record.recedeFrom !== record.spec.recede) {
+        record.recedeFrom = record.spec.recede;
+        record.recede = recedeParams(record.spec.recede);
+      }
+      const recede = record.recede;
+      const recedeNow = recede
+        ? recedeFrame(eyeHeight, recede, scratchFrame)
+        : null;
       for (const entry of record.models.values()) {
         if (!entry.dynamic) {
           if (entry.frame) {
@@ -548,6 +620,20 @@ export function createModelSets({
               Math.max(0, nearFarValue(item.fadeByDistance, distance)),
             )
           : 1;
+        if (recede) {
+          const haze = recedeFactors(
+            distance,
+            recedeNow,
+            recede,
+            scratchFactors,
+          ).alpha;
+          const emphasis = recededAlpha(focusOf(item), haze, recede);
+          if (
+            entry.emphasis === null ||
+            Math.abs(entry.emphasis - emphasis) > RECEDE_WRITE_EPSILON
+          )
+            entry.emphasis = emphasis;
+        } else entry.emphasis = null;
         let shown = frame.alpha > 0;
         if (record.spec.horizonCull) {
           horizon ??= horizonNow();
@@ -609,8 +695,10 @@ export function createModelSets({
   /** The set's options changed: whether models need the frame pass. */
   function restyle(record) {
     if (!record.models) return;
-    for (const entry of record.models.values())
+    for (const entry of record.models.values()) {
       entry.dynamic = needsFrame(entry.item, record.spec);
+      if (!record.spec.recede) entry.emphasis = null;
+    }
   }
 
   return { build, upsert, beforeRender, restyle };

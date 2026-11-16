@@ -108,20 +108,26 @@ export function cesiumCapabilities(scene, only) {
   );
 }
 
+/** What `renderOnce` and `capture` reject with once the renderer is destroyed. */
+const destroyedError = () => new Error('renderer destroyed');
+
 /**
  * @param {object} widget A Cesium `CesiumWidget` or `Viewer`.
  * @param {{capabilities: ReadonlySet<string>, credentials?: object,
- *   cameraController?: Function, now?: () => number,
+ *   cameraController?: import('../contract/camera').CameraControllerFactory,
+ *   now?: () => number,
+ *   date?: () => number,
  *   idleFps?: number}} options
  *   The renderer's capabilities, which gate the members that need them, and
  *   the credentials its globe loads photoreal tiles and world data with
  *   (`googleApiKey`, `googleTokens`, `worldDataToken`). `now` is the clock
- *   each tick reads (`performance.now` by default; a test's virtual one).
- *   With `idleFps`, the loop ticks at most that often while no hold is out
- *   (Cesium ticks its clock and every update listener each animation frame
- *   even when it draws nothing), and at the display's rate while one is;
- *   `setTargetFps` then caps both, and the loop starts with no cap of its
- *   own. Without it, the widget's own rate is the cap.
+ *   each tick reads (`performance.now` by default; a test's virtual one);
+ *   `date`, the epoch ms a `live` motion clock reads (the system clock's by
+ *   default). With `idleFps`, the loop ticks at most that often while no
+ *   hold is out (Cesium ticks its clock and every update listener each
+ *   animation frame even when it draws nothing), and at the display's rate
+ *   while one is; `setTargetFps` then caps both, and the loop starts with no
+ *   cap of its own. Without it, the widget's own rate is the cap.
  *   With
  *   `cameraController`, the camera port is that controller's over Cesium's
  *   camera (`controlledCamera.js`); the ports then have `attachInput` and
@@ -134,6 +140,7 @@ export function createCesiumPorts(
     credentials = {},
     cameraController,
     now: clockNow = () => performance.now(),
+    date = null,
     idleFps = 0,
   },
 ) {
@@ -187,23 +194,39 @@ export function createCesiumPorts(
       });
     liveTick = null;
   };
+  // The camera's `changed`, measured before any `preUpdate` listener moves
+  // the camera, in a frame that had no clock tick to measure it at.
+  let measureCameraChanged = null;
+  const settleUndrawn = () => void settleTick(false);
   const tick = () => {
+    measureCameraChanged?.();
     settleTick(false);
     // A tick that does not draw settles at its end; one that does, at
     // preRender, before this runs.
-    atEndOfTick(scene, () => void settleTick(false));
+    atEndOfTick(scene, settleUndrawn);
     const now = clockNow();
     dt = (now - tickNow) / 1000;
     tickNow = now;
     frames += 1;
   };
+  // A scene time as epoch ms, worked out again only when the time moves:
+  // the phases of a frame, and the frames of a paused clock, share one.
+  let msJulian = null;
+  let msValue = 0;
+  // What `setTime` reads a time through.
+  const scratchDate = new Date(0);
+  const scratchJulian = new Cesium.JulianDate();
+  const msOf = (time) => {
+    if (msJulian && Cesium.JulianDate.equals(msJulian, time)) return msValue;
+    msValue = Cesium.JulianDate.toDate(time).getTime();
+    msJulian = Cesium.JulianDate.clone(time, msJulian ?? undefined);
+    return msValue;
+  };
   const onPhase = (phase) => (_scene, time) => {
     if (frameListeners[phase].size === 0) return;
     const t = {
       frame: frames,
-      time: Cesium.JulianDate.toDate(
-        time ?? widget.clock.currentTime,
-      ).getTime(),
+      time: msOf(time ?? widget.clock.currentTime),
       now: tickNow,
       dt,
       rendering: true,
@@ -245,7 +268,7 @@ export function createCesiumPorts(
   let controlled = null;
   const cameraTick = (time) => ({
     now: tickNow,
-    time: Cesium.JulianDate.toDate(time ?? widget.clock.currentTime).getTime(),
+    time: msOf(time ?? widget.clock.currentTime),
   });
   const removers = [
     scene.preUpdate.addEventListener(tick),
@@ -289,24 +312,26 @@ export function createCesiumPorts(
     idleFps <= 0 && widget.targetFrameRate > 0 ? widget.targetFrameRate : 0;
   if (idleFps > 0) applyRate();
 
-  // Pending one-shot renders; disposal settles them rather than leave them
+  // Pending one-shot renders; disposal rejects them rather than leave them
   // attached to a scene that will not render again.
   const pendingRenders = new Set();
-  /** Resolves after the next drawn frame; rejects after `timeoutMs`, if given. */
+  /**
+   * Resolves after the next drawn frame; rejects after `timeoutMs`, if
+   * given, and once the renderer is destroyed.
+   */
   function nextPostRender({ timeoutMs } = {}) {
-    if (disposed) return Promise.resolve();
+    if (disposed) return Promise.reject(destroyedError());
     return new Promise((resolve, reject) => {
       let timer;
       const settle = (error) => {
         off();
         clearTimeout(timer);
-        pendingRenders.delete(done);
+        pendingRenders.delete(settle);
         if (error) reject(error);
         else resolve();
       };
-      const done = () => settle();
-      const off = scene.postRender.addEventListener(done);
-      pendingRenders.add(done);
+      const off = scene.postRender.addEventListener(() => settle());
+      pendingRenders.add(settle);
       if (timeoutMs !== undefined)
         timer = setTimeout(
           () => settle(new Error('renderOnce timed out')),
@@ -380,9 +405,11 @@ export function createCesiumPorts(
      */
     setTime(ms) {
       const clock = widget.clock;
-      const time = Cesium.JulianDate.fromDate(new Date(ms));
+      scratchDate.setTime(ms);
+      const time = Cesium.JulianDate.fromDate(scratchDate, scratchJulian);
       const changed = !Cesium.JulianDate.equals(clock.currentTime, time);
-      clock.currentTime = time;
+      // The clock keeps the time it is given; it ignores an equal one.
+      if (changed) clock.currentTime = Cesium.JulianDate.clone(time);
       // In `preUpdate` the frame under way draws at it: Cesium stamps the
       // frame with this object next.
       if (stampTime) {
@@ -391,7 +418,7 @@ export function createCesiumPorts(
         if (liveTick) liveTick.time = ms;
       } else if (changed) frame.requestRender('time');
     },
-    time: () => Cesium.JulianDate.toDate(widget.clock.currentTime).getTime(),
+    time: () => msOf(widget.clock.currentTime),
   };
 
   // --- Draw ------------------------------------------------------------------
@@ -401,6 +428,7 @@ export function createCesiumPorts(
     report,
     capabilities,
     requestRender: (reason) => frame.requestRender(reason),
+    date,
   });
   const { port: draw, sets, tilesets } = drawPart;
 
@@ -454,6 +482,7 @@ export function createCesiumPorts(
           : {}),
       });
   const cameraPort = cameraPart.port;
+  measureCameraChanged = cameraPart.measureChanged ?? null;
   const effectsPart = createCesiumEffects(scene, {
     capabilities,
     frame,
@@ -482,10 +511,36 @@ export function createCesiumPorts(
     credentials,
   });
 
-  async function capture({ type = 'png' } = {}) {
-    scene.render(widget.clock.currentTime);
-    return new Promise((resolve) =>
-      scene.canvas.toBlob(resolve, `image/${type}`),
+  /**
+   * Whether the canvas still holds the last presented frame: a context that
+   * keeps its drawing buffer, once a frame has drawn. Otherwise the frame is
+   * drawn again to be read.
+   */
+  const frameKept = () =>
+    rendered > 0 &&
+    webglContext(scene)?.getContextAttributes?.()?.preserveDrawingBuffer ===
+      true;
+
+  /**
+   * The last presented frame, encoded: `crop` in CSS pixels, `scale`
+   * relative to the canvas's CSS size, `quality` for JPEG. Read from the
+   * canvas as it is where it keeps that frame, so a capture draws nothing.
+   */
+  async function capture({ type = 'png', quality, crop, scale = 1 } = {}) {
+    if (disposed) throw destroyedError();
+    if (!frameKept()) scene.render(widget.clock.currentTime);
+    const out = document.createElement('canvas').getContext('2d');
+    copyFrame(out, crop, scale);
+    return new Promise((resolve, reject) =>
+      out.canvas.toBlob(
+        (blob) => {
+          out.canvas.width = out.canvas.height = 0;
+          if (blob) resolve(blob);
+          else reject(new Error('the frame could not be encoded'));
+        },
+        `image/${type}`,
+        quality,
+      ),
     );
   }
 
@@ -493,33 +548,24 @@ export function createCesiumPorts(
   let reader = null;
 
   /**
-   * The drawn frame's pixels, `crop` in CSS pixels and `scale` relative to
-   * the canvas's CSS size. Read straight off the canvas: the application
-   * and conformance widgets keep their drawing buffers, and a read right
-   * after a draw sees it either way.
+   * Draws the canvas's frame into the 2D context `into`, `crop` in CSS
+   * pixels and `scale` relative to the canvas's CSS size, sized to it.
+   * Returns whether there was a frame to draw.
    */
-  function readPixels({ crop, scale = 1 } = {}) {
+  function copyFrame(into, crop, scale = 1) {
     const canvas = scene.canvas;
     const cssWidth = canvas.clientWidth || canvas.width;
     const cssHeight = canvas.clientHeight || canvas.height;
     const rect = crop ?? { x: 0, y: 0, width: cssWidth, height: cssHeight };
     const width = Math.max(1, Math.round(rect.width * scale));
     const height = Math.max(1, Math.round(rect.height * scale));
-    const made =
-      reader ??
-      document
-        .createElement('canvas')
-        .getContext('2d', { willReadFrequently: true });
-    // Disposed ports keep nothing to free.
-    if (!disposed) reader = made;
-    made.canvas.width = width;
-    made.canvas.height = height;
-    // A canvas with no size has drawn nothing: the read is blank.
-    if (!canvas.width || !canvas.height)
-      return made.getImageData(0, 0, width, height);
+    into.canvas.width = width;
+    into.canvas.height = height;
+    // A canvas with no size has drawn nothing: the copy is blank.
+    if (!canvas.width || !canvas.height) return false;
     const sx = canvas.width / cssWidth;
     const sy = canvas.height / cssHeight;
-    made.drawImage(
+    into.drawImage(
       canvas,
       rect.x * sx,
       rect.y * sy,
@@ -530,7 +576,25 @@ export function createCesiumPorts(
       width,
       height,
     );
-    return made.getImageData(0, 0, width, height);
+    return true;
+  }
+
+  /**
+   * The drawn frame's pixels, `crop` in CSS pixels and `scale` relative to
+   * the canvas's CSS size. Read straight off the canvas: the application
+   * and conformance widgets keep their drawing buffers, and a read right
+   * after a draw sees it either way.
+   */
+  function readPixels({ crop, scale = 1 } = {}) {
+    const made =
+      reader ??
+      document
+        .createElement('canvas')
+        .getContext('2d', { willReadFrequently: true });
+    // Disposed ports keep nothing to free.
+    if (!disposed) reader = made;
+    copyFrame(made, crop, scale);
+    return made.getImageData(0, 0, made.canvas.width, made.canvas.height);
   }
 
   // A release asked for whose globe trim waits for the next drawn frame.
@@ -779,7 +843,7 @@ export function createCesiumPorts(
       effectsPart.dispose();
       globePart.dispose();
       qualityPart.dispose();
-      for (const done of [...pendingRenders]) done();
+      for (const settle of [...pendingRenders]) settle(destroyedError());
     },
   };
 }

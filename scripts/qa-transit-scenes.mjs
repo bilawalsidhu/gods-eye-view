@@ -420,11 +420,13 @@ export async function runBostonMatrix({
             window.__godsEyeView.dataManager.layers.get('transit').module;
           layer._transitPartsForTest().selection.clearSelection();
           const e = layer._transitStateForTest()._vehicles.get(key);
-          // The billboard the draw port drew for it.
+          // The billboard the draw port drew for it: the last under its key,
+          // as the fleet sample above reads it (the fleet-models set draws
+          // one under the same key first).
           const scene = window.__godsEyeView.viewer.scene;
           const setIds = layer._transitSetIdsForTest();
           let drawn = null;
-          for (let i = 0; !drawn && i < scene.primitives.length; i++) {
+          for (let i = 0; i < scene.primitives.length; i++) {
             const host = scene.primitives.get(i);
             if (!setIds.includes(host?.drawSetId)) continue;
             for (let j = 0; j < host.length; j++)

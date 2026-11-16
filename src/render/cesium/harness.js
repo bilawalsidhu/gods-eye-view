@@ -24,6 +24,7 @@ export const CESIUM_CHECKS = new Set([
   'camera.trace.commands inside a lookAt frame',
   'camera.trace.changed fires by each listener’s threshold',
   'camera.moveEnd',
+  'camera.changed.order',
   'camera.controls.holds',
   'camera.controls.settings',
   'camera.follow',
@@ -74,6 +75,9 @@ export const CESIUM_CHECKS = new Set([
   'draw.lines.segments',
   'draw.lines.segmentStyles',
   'draw.sets.blend',
+  'draw.sets.recede',
+  'draw.sets.recede.models',
+  'draw.afterDispose',
   'draw.ids',
   'draw.models',
   'draw.shapes.lit',
@@ -123,6 +127,7 @@ export const CESIUM_CHECKS = new Set([
   'input.clickPick',
   'input.lease',
   'input.lease.grab',
+  'input.lease.lost',
   'input.lease.press',
   'query.heights',
   'query.pickBeforeStyles',
@@ -134,12 +139,24 @@ export const CESIUM_CHECKS = new Set([
   'quality',
   'quality.signals',
   'quality.signals.gpuTiming',
+  'renderer.afterDestroy',
+  'renderer.afterDestroy.frames',
   'renderer.listeners',
   'renderer.listenerRules',
   'renderer.shape',
+  'renderer.capture',
   'renderer.readPixels',
   'renderer.releaseUnused',
   'renderer.whenSettled',
+  'renderer.resize',
+  'frame.setTargetFps',
+  'globe.setTerrain',
+  'globe.setPhotoreal',
+  'globe.progress',
+  'effects.setStyleParams',
+  'effects.bloom',
+  'effects.sharpen',
+  'quality.probe',
 ]);
 
 /** A frame fails the check rather than hang it when frames stop. */
@@ -183,6 +200,7 @@ export function createCesiumHarness({
   // own that each frame moves on by 1/60 s: flights then step as the
   // reference traces do, frame by frame.
   const clocks = new WeakMap();
+  const containers = new WeakMap();
   return {
     name,
     // A camera controller hears the pointer events sent through `pointer`
@@ -220,7 +238,14 @@ export function createCesiumHarness({
         }
       };
       clocks.set(renderer, clock);
+      containers.set(renderer, container);
       return renderer;
+    },
+    resizeContainer: (r, { width, height }) => {
+      const container = containers.get(r);
+      if (!container) return;
+      container.style.width = `${width}px`;
+      container.style.height = `${height}px`;
     },
     frame: (r) => {
       const clock = clocks.get(r);

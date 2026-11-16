@@ -79,20 +79,31 @@ function matrixArray(matrix) {
   return out;
 }
 
+/** Whether `array` holds a Cesium matrix's 16 values, each the same. */
+function sameMatrix(array, matrix) {
+  for (let i = 0; i < 16; i++)
+    if (!Object.is(array[i], matrix[i])) return false;
+  return true;
+}
+
 /**
  * @param {{scene: object, camera: object, report: (error: unknown) => void,
  *   widget?: object, capabilities?: ReadonlySet<string>,
  *   now?: () => number, itemPosition?: Function}} options `scene`
- *   gives `requestRender` and the `postUpdate` tick `changed` is measured
- *   on; `widget`, the Viewer or CesiumWidget, gives the entity tracking
+ *   gives `requestRender`, the `preUpdate` a frame drawn without the
+ *   clock's tick measures `changed` at, and the `postUpdate` move detection
+ *   runs on; `widget`, the Viewer or CesiumWidget, gives the entity tracking
  *   `follow` runs on (without it the camera cannot follow);
  *   `capabilities`, the renderer's, gates the optional members (a camera
  *   with none given has them all); `now`, the clock moveEnd waits by,
  *   ms (`performance.now` by default); `itemPosition`, where the draw port
  *   draws an item at a scene time, which a follow of a drawn item tracks.
  * @returns {{port: import('../contract/camera').CameraPort,
- *   emit: (event: string) => void, dispose: () => void}} `emit` raises
- *   one of the port's events (a test's fake camera that raises its own).
+ *   measureChanged: () => void, emit: (event: string) => void,
+ *   dispose: () => void}} `measureChanged` measures this frame's `changed`
+ *   if nothing has yet, for a frame loop to run before its own `preUpdate`
+ *   listeners; `emit` raises one of the port's events (a test's fake camera
+ *   that raises its own).
  */
 export function createCesiumCamera({
   scene,
@@ -105,42 +116,92 @@ export function createCesiumCamera({
 }) {
   const removers = [];
   let lastWorld = null;
+  let lastMatrices = null;
+  let lastFollowFrame = null;
   // Camera events, measured on every tick: moveStart and moveEnd (500 ms
   // after the last change of the eye or its field of view, by `now`,
   // following or not, as Cesium's own), and `changed` per listener, where Cesium measures its
   // single threshold (`camera.percentageChanged`, which this leaves as it
   // is for everyone else listening to Cesium's own event). Cesium's own
   // moveStart and moveEnd are left out: it times them by the system clock.
+  // What the events read Cesium's camera through while it stands: the
+  // camera's own vectors, compared in place.
+  const eye = { position: null, direction: null, up: null };
   const cameraEvents = createCameraEvents({
-    pose: () => cameraPort.pose(),
+    // The memoised pose itself: the events only read it.
+    pose: () => sharedPose(),
     world: () => {
-      // Copies (Cesium updates its own vectors in place), and the last one
-      // again while Cesium's stand within rounding of it.
+      // The last view again while Cesium's vectors stand within rounding of
+      // it; copies once they move (Cesium updates its own in place).
       const f = camera.frustum;
-      const current = {
-        position: Cesium.Cartesian3.clone(camera.positionWC),
-        direction: Cesium.Cartesian3.clone(camera.directionWC),
-        up: Cesium.Cartesian3.clone(camera.upWC),
+      eye.position = camera.positionWC;
+      eye.direction = camera.directionWC;
+      eye.up = camera.upWC;
+      if (
+        lastWorld &&
         // A new field of view or aspect (a resize) is a move too, as
         // Cesium's own camera events count it.
+        Object.is(lastWorld.fovy, f.fovy) &&
+        Object.is(lastWorld.aspectRatio, f.aspectRatio) &&
+        sameEye(eye, lastWorld)
+      )
+        return lastWorld;
+      lastWorld = {
+        position: Cesium.Cartesian3.clone(eye.position),
+        direction: Cesium.Cartesian3.clone(eye.direction),
+        up: Cesium.Cartesian3.clone(eye.up),
+        fovy: f.fovy,
+        aspectRatio: f.aspectRatio,
         lens: `${f.fovy} ${f.aspectRatio}`,
       };
-      if (
-        !lastWorld ||
-        current.lens !== lastWorld.lens ||
-        !sameEye(current, lastWorld)
-      )
-        lastWorld = current;
       return lastWorld;
     },
     report,
     thresholds: capabilities?.has('cameraChangeThreshold') ?? true,
   });
+  // `changed` is measured once a frame where the contract's frame order
+  // puts it: after the flight and input (Cesium's `initializeFrame`), before
+  // follow and `preUpdate` move the camera. Cesium moves a followed target's
+  // camera in its clock's tick, so a frame of the loop is measured as that
+  // tick starts; a frame drawn with no tick (a forced render), as
+  // `preUpdate` starts. Move detection runs after `preUpdate`.
+  let measured = false;
+  const measureChanged = () => {
+    if (measured) return;
+    measured = true;
+    applyFov();
+    cameraEvents.stepChanged();
+  };
+  const clock = widget?.clock;
+  if (typeof clock?.tick === 'function') {
+    const ownTick = clock.tick;
+    let wrapping = true;
+    const tick = function (...args) {
+      if (wrapping) {
+        measured = false;
+        measureChanged();
+      }
+      return ownTick.apply(this, args);
+    };
+    clock.tick = tick;
+    // Disposed, the clock gets its own tick back; if something has wrapped
+    // it since, that wrapper stays and this part of it only passes through.
+    removers.push(() => {
+      wrapping = false;
+      if (clock.tick !== tick) return;
+      if (Object.getPrototypeOf(clock)?.tick === ownTick) delete clock.tick;
+      else clock.tick = ownTick;
+    });
+  }
+  const offPreUpdate = scene.preUpdate?.addEventListener(measureChanged);
+  if (offPreUpdate) removers.push(offPreUpdate);
   removers.push(
     scene.postUpdate.addEventListener(() => {
       applyFov();
-      cameraEvents.stepChanged();
+      // Measured already, unless the scene has no `preUpdate`.
+      measureChanged();
       cameraEvents.stepMoveDetection(now());
+      measured = false;
     }),
   );
 
@@ -413,10 +474,19 @@ export function createCesiumCamera({
     // The scene's own frame: ECEF in 3D, the only mode the app runs (Cesium's
     // 2D and Columbus view frames are projected map coordinates).
     matrices() {
-      return {
-        view: matrixArray(camera.viewMatrix),
-        projection: matrixArray(camera.frustum.projectionMatrix),
-      };
+      // The last ones again while Cesium's stand, new ones once they move.
+      const view = camera.viewMatrix;
+      const projection = camera.frustum.projectionMatrix;
+      if (
+        !lastMatrices ||
+        !sameMatrix(lastMatrices.view, view) ||
+        !sameMatrix(lastMatrices.projection, projection)
+      )
+        lastMatrices = {
+          view: matrixArray(view),
+          projection: matrixArray(projection),
+        };
+      return lastMatrices;
     },
     // Cesium's own corner picks (`computeViewRectangle`), on rays that
     // keep their precision (`pickRayAt`).
@@ -442,18 +512,24 @@ export function createCesiumCamera({
       );
     },
     pose() {
-      // An unmoved camera answers from the pose last read: a frame reads
-      // the pose many times over. Each caller gets objects of its own.
-      if (!poseKeyHolds() || !poseMemo) {
-        poseMemo = readPose();
-        // Outside 3D, Cesium measures heading, pitch and roll by moving the
-        // camera into the eye's frame and back, which can change its last
-        // bits: keyed as it is left.
-        if (scene.mode !== Cesium.SceneMode.SCENE3D) poseKeyHolds();
-      }
-      return copyPose(poseMemo);
+      // Each caller gets objects of its own.
+      return copyPose(sharedPose());
     },
   };
+  /**
+   * The pose, read again only when the camera has moved: a frame reads the
+   * pose many times over. Shared: never changed once read.
+   */
+  function sharedPose() {
+    if (!poseKeyHolds() || !poseMemo) {
+      poseMemo = readPose();
+      // Outside 3D, Cesium measures heading, pitch and roll by moving the
+      // camera into the eye's frame and back, which can change its last
+      // bits: keyed as it is left.
+      if (scene.mode !== Cesium.SceneMode.SCENE3D) poseKeyHolds();
+    }
+    return poseMemo;
+  }
   // The camera as the memoised pose was read: eye, axes, transform,
   // frustum and mode, compared value for value.
   const poseKey = new Float64Array(37);
@@ -469,15 +545,8 @@ export function createCesiumCamera({
     const r = camera.rightWC;
     const f = camera.frustum;
     const t = camera.transform;
-    let same = true;
-    let at = 0;
-    const put = (value) => {
-      if (!Object.is(poseKey[at], value)) {
-        same = false;
-        poseKey[at] = value;
-      }
-      at += 1;
-    };
+    keySame = true;
+    keyAt = 0;
     put(p.x);
     put(p.y);
     put(p.z);
@@ -502,7 +571,17 @@ export function createCesiumCamera({
     put(f.bottom ?? NaN);
     put(scene.mode ?? NaN);
     for (let i = 0; i < 16; i++) put(t[i]);
-    return same;
+    return keySame;
+  }
+  // Where `poseKeyHolds` writes next, and whether all it wrote held.
+  let keyAt = 0;
+  let keySame = true;
+  function put(value) {
+    if (!Object.is(poseKey[keyAt], value)) {
+      keySame = false;
+      poseKey[keyAt] = value;
+    }
+    keyAt += 1;
   }
   const enuScratch = new Cesium.Matrix4();
   /**
@@ -591,10 +670,15 @@ export function createCesiumCamera({
   // Cesium keeps the eye in `camera.transform`: a tracked entity's frame, a
   // `lookAt` target's, or the identity.
   if (!capabilities || capabilities.has('followFrame'))
-    cameraPort.followFrame = () => matrixArray(camera.transform);
+    cameraPort.followFrame = () => {
+      if (!lastFollowFrame || !sameMatrix(lastFollowFrame, camera.transform))
+        lastFollowFrame = matrixArray(camera.transform);
+      return lastFollowFrame;
+    };
 
   return {
     port: cameraPort,
+    measureChanged,
     emit: (event) => cameraEvents.emit(event),
     dispose() {
       following?.dispose();
@@ -607,7 +691,9 @@ export function createCesiumCamera({
 }
 
 // A Cesium viewer with no renderer bound to it gets a
-// camera port over its camera when code first asks `cameraOf` for one.
+// camera port over its camera when code first asks `cameraOf` for one. The
+// port wraps the viewer's `clock.tick` to measure `changed`, and gives it
+// back when a renderer is bound to the viewer.
 provideUnboundCamera((viewer) =>
   // By shape, not `instanceof`: the viewer may come from another
   // copy of Cesium.

@@ -313,8 +313,9 @@ export function createApplicationTools({
       terrain: operations.requests.terrain,
     }),
   );
-  // An application's own tool takes the pointer as Draw does, and its own
-  // click handlers yield while a tool holds it, as the layers' do
+  // An application's own tool takes the pointer as Draw does (the newest
+  // claim takes over; `claim(owner, {onLost})` tells the tool it replaces),
+  // and its own click handlers yield while a tool holds it, as the layers' do
   // (data/inputOwnership.js).
   return {
     sceneDirector,

@@ -14,6 +14,12 @@ import { alongLength } from '../../geo/polyline.js';
 import { clusterScreenPoints } from '../../geo/screenCluster.js';
 import { createInputRouter } from '../input/router.js';
 import { cssColor } from '../color.js';
+import {
+  recedeFactors,
+  recedeFrame,
+  recedeParams,
+  recededAlpha,
+} from '../recession.js';
 import { CLEAR_WEATHER, mergeWeather } from '../weather.js';
 import { CAPABILITIES, CONTRACT_VERSION } from '../contract/index.js';
 import { createStubCamera } from './camera.js';
@@ -154,7 +160,9 @@ function createCanvas(container, viewport) {
  * @param {object} [options]
  * @param {Iterable<import('../contract/common').Capability>} [options.capabilities] Default: all.
  * @param {HTMLElement} [options.container] In a page: the element the stub's
- *   canvas fills, as a plugin's `CreateOptions.container`.
+ *   canvas fills, as a plugin's `CreateOptions.container`. Elsewhere, an
+ *   object that says a size (`clientWidth`, `clientHeight`): `resize`
+ *   follows it.
  * @param {{width: number, height: number}} [options.viewport] CSS size; default 1280 × 720.
  * @param {number} [options.time] Scene time, epoch ms.
  * @returns {import('../contract/renderer').Renderer & {testing: StubTesting}}
@@ -183,6 +191,7 @@ export function createStubRenderer(options = {}) {
   // The frame under way while its `preUpdate` listeners run.
   let updating = null;
   const onceWaiters = [];
+  const destroyedError = () => new Error('renderer destroyed');
   const onceTimers = new Set();
   const stepLog = [];
 
@@ -296,6 +305,11 @@ export function createStubRenderer(options = {}) {
     // A frame each timed layer was asked to show is now drawn.
     for (const [layer, flush] of [...frameFlushes])
       if (frameFlushes.get(layer) === flush) flush();
+    // The imagery added since the last frame is drawn: loaded.
+    if (imageryLoading > 0) {
+      imageryLoading = 0;
+      announceProgress();
+    }
     step('postRender');
     runPhase('postRender', t);
     for (const waiter of onceWaiters.splice(0)) waiter();
@@ -351,12 +365,15 @@ export function createStubRenderer(options = {}) {
       tick();
     },
     renderOnce({ timeoutMs } = {}) {
+      if (destroyed) return Promise.reject(destroyedError());
       requestRender('renderOnce');
       return new Promise((resolve, reject) => {
         let timer = null;
-        const waiter = () => {
+        // Called with an error when the renderer is destroyed first.
+        const waiter = (error) => {
           clearTimeout(timer);
-          resolve();
+          if (error) reject(error);
+          else resolve();
         };
         onceWaiters.push(waiter);
         if (timeoutMs !== undefined)
@@ -405,6 +422,7 @@ export function createStubRenderer(options = {}) {
     };
     sets.set(spec.id, record);
     log('draw', kind, [spec]);
+    const gone = () => destroyed || sets.get(spec.id) !== record;
     // A model is ready once per load: when it is new or its url changes,
     // not when it is moved or restyled. One under the failing scheme fails
     // its load instead, unless it came with its bytes (`gltf`).
@@ -490,6 +508,9 @@ export function createStubRenderer(options = {}) {
       dispose() {
         // A newer set under the same id is not this handle's to remove.
         if (sets.get(spec.id) === record) sets.delete(spec.id);
+        // Its listeners hear nothing more, even mid-delivery.
+        for (const entry of record.readyListeners) entry.live = false;
+        for (const entry of record.loadFailedListeners) entry.live = false;
         requestRender('draw');
       },
     };
@@ -529,10 +550,20 @@ export function createStubRenderer(options = {}) {
       const call = handle[name];
       if (!call) continue;
       handle[name] = (...args) => {
+        // Disposed, or its renderer destroyed, it does nothing.
+        if (gone()) return;
         record.version += 1;
         return call(...args);
       };
     }
+    const { set: showSet } = Object.getOwnPropertyDescriptor(handle, 'show');
+    Object.defineProperty(handle, 'show', {
+      get: () => record.show,
+      set(value) {
+        if (!gone()) showSet.call(handle, value);
+      },
+      enumerable: true,
+    });
     return handle;
   }
 
@@ -774,12 +805,17 @@ export function createStubRenderer(options = {}) {
   /**
    * The shown models as the stub draws them: a square as wide as a pick
    * takes (at most `maxPixelSize`, at least `minPixelSize`), far
-   * ones first, in white shading blended with the tint by `colorBlend`.
+   * ones first, in white shading blended with the tint by `colorBlend`,
+   * over black at the tint's alpha times the model's emphasis (its `focus`,
+   * composed with the haze in a set that recedes).
    */
   function modelSquares() {
     const squares = [];
+    const eyeHeight = toCartographicRadians(eye().position).height;
     for (const set of sets.values()) {
       if (set.kind !== 'models' || !set.show) continue;
+      const recede = recedeParams(set.spec.recede);
+      const frame = recede ? recedeFrame(eyeHeight, recede) : null;
       for (const item of set.items.values()) {
         if (item.show === false) continue;
         const p = itemPosition(set, item);
@@ -795,20 +831,33 @@ export function createStubRenderer(options = {}) {
         let side = 10;
         if (item.maxPixelSize > 0) side = Math.min(side, item.maxPixelSize);
         side = Math.max(side, item.minPixelSize ?? 0);
+        const focus = Number.isFinite(item.focus)
+          ? Math.min(1, Math.max(0, item.focus))
+          : 1;
+        const emphasis = recede
+          ? recededAlpha(
+              focus,
+              recedeFactors(distance, frame, recede).alpha,
+              recede,
+            )
+          : focus;
         squares.push({
           x: s.x,
           y: s.y,
           half: side / 2,
           distance,
-          rgba: modelColor(item),
+          rgba: modelColor(item, emphasis),
         });
       }
     }
     return squares.sort((a, b) => b.distance - a.distance);
   }
 
-  /** A model's colour: white shading, the tint blended in by `colorBlend`. */
-  function modelColor(item) {
+  /**
+   * A model's colour: white shading, the tint blended in by `colorBlend`,
+   * over black at the tint's alpha times `emphasis`.
+   */
+  function modelColor(item, emphasis = 1) {
     const shaded = [1, 1, 1];
     const tint =
       item.tint === undefined || item.tint === null
@@ -829,7 +878,8 @@ export function createStubRenderer(options = {}) {
         amount === null ? c * tint[i] : c + (tint[i] - c) * amount,
       );
     }
-    return [...rgb.map((c) => Math.round(c * 255)), 255];
+    const alpha = (tint ? (tint[3] ?? 1) : 1) * emphasis;
+    return [...rgb.map((c) => Math.round(c * alpha * 255)), 255];
   }
 
   /** Where a drawn item is now (or `aheadMs` from now), or null. */
@@ -1431,6 +1481,15 @@ export function createStubRenderer(options = {}) {
   /** Each timed layer's announcement of the frame it drew, run after a render. */
   const frameFlushes = new Map();
   const progressListeners = [];
+  /** Imagery added since the last drawn frame: loading until it is drawn. */
+  let imageryLoading = 0;
+  function announceProgress() {
+    deliver(progressListeners, {
+      tilesPending: 0,
+      imageryPending: imageryLoading,
+      terrainPending: 0,
+    });
+  }
   const settled = { base: true, tiles: true, terrain: true, imagery: true };
   let sky = {
     atmosphere: true,
@@ -1555,6 +1614,8 @@ export function createStubRenderer(options = {}) {
     else imageryLayers.splice(index, 0, layer);
     log('globe', 'imagery.add', [spec, index]);
     requestRender('imagery');
+    imageryLoading += 1;
+    announceProgress();
     return layer;
   }
 
@@ -1911,6 +1972,7 @@ export function createStubRenderer(options = {}) {
     credits,
     quality,
     async capture(opts = {}) {
+      if (destroyed) throw destroyedError();
       return new Blob([], { type: `image/${opts.type ?? 'png'}` });
     },
     readPixels(opts = {}) {
@@ -1980,6 +2042,7 @@ export function createStubRenderer(options = {}) {
       if (options.container) canvas.remove?.();
       for (const clear of onceTimers) clear();
       onceTimers.clear();
+      for (const waiter of onceWaiters.splice(0)) waiter(destroyedError());
       sets.clear();
       sceneFrameLayers.clear();
       frameFlushes.clear();

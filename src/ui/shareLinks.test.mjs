@@ -643,16 +643,18 @@ test('a shared offset on the far side swings round, never jumping through the en
   followIn(viewer, entity);
   // Looking south at the nose: the opposite side of the app's framing.
   const offset = { range: 5800, heading: 180, pitch: -35 };
+  // The camera port's own listeners stay; the offset's is the one added.
+  const own = listeners.length;
   applyShareFollowOffset(viewer, followedOf(viewer), offset);
   let previous = viewer.camera.position;
-  for (let frame = 0; frame < 10 && listeners.length; frame += 1) {
-    listeners[0]();
+  for (let frame = 0; frame < 10 && listeners.length > own; frame += 1) {
+    listeners[own]();
     const now = viewer.camera.position;
     // The follow's guard treats a turn of 90° or more as a crossing.
     assert.ok(Cesium.Cartesian3.angleBetween(previous, now) < Math.PI / 2);
     previous = now;
   }
-  assert.equal(listeners.length, 0, 'it arrives');
+  assert.equal(listeners.length, own, 'it arrives');
   assert.ok(looks.length >= 2, `${looks.length} steps`);
   const expected = followOffsetToEnu(offset);
   const last = looks.at(-1);
@@ -676,9 +678,10 @@ test('applying a follow offset gives up when the follow ends', () => {
     camera: {},
   };
   bindFakeCesiumCamera(viewer, { frame: preUpdateFrame(viewer) });
+  const own = listeners.length;
   applyShareFollowOffset(viewer, {}, OFFSET);
-  listeners[0]();
-  assert.equal(listeners.length, 0);
+  listeners[own]();
+  assert.equal(listeners.length, own);
 });
 
 test('long links and hash navigation are unaffected by a share code start', async (t) => {

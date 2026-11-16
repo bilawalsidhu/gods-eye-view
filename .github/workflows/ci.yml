@@ -111,6 +111,11 @@ jobs:
           mkdir -p qa-artifacts
           npm run qa:stub-boot -- --json qa-artifacts/stub-boot.json
 
+      - name: The renderer contract's logic checks on Cesium, headless
+        run: |
+          mkdir -p qa-artifacts
+          npm run qa:conformance -- --json qa-artifacts/conformance.json
+
       - name: Preview server log
         if: failure()
         run: cat preview.log

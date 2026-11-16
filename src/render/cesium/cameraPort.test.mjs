@@ -21,7 +21,7 @@ import {
 } from './cameraGoldens.js';
 import { createCesiumCamera } from './camera.js';
 import { createCesiumPorts } from './ports.js';
-import { cameraOf } from '../rendererOf.js';
+import { bindRenderer, cameraOf } from '../rendererOf.js';
 
 /** Records the headless scene cannot answer: they need the query port. */
 const QUERY_RECORDS = new Set([
@@ -78,6 +78,7 @@ function headlessHarness(clock, { input = false } = {}) {
           clock.now += FRAME_MS;
           scene.tweens.update();
           if (input) scene.screenSpaceCameraController.update();
+          scene.preUpdate.raiseEvent(scene);
           scene.postUpdate.raiseEvent(scene);
         },
         scene,
@@ -285,6 +286,55 @@ test('a Cesium viewer with no renderer bound gets a camera port over its own cam
     assert.ok(Math.abs(pose.height - 1500) < 1e-6);
     assert.throws(() => cameraOf({ scene, camera: {} }), /no renderer camera/);
   });
+});
+
+test('the camera port gives the clock its own tick back as it goes', () => {
+  const ownTick = Cesium.Clock.prototype.tick;
+  // A viewer with no renderer bound: its port goes when a renderer is bound.
+  {
+    const { scene, camera } = headlessCamera();
+    scene.postUpdate = new Cesium.Event();
+    scene.requestRender = () => {};
+    const viewer = { scene, camera, clock: new Cesium.Clock() };
+    cameraOf(viewer);
+    assert.notEqual(viewer.clock.tick, ownTick, 'measured as the tick starts');
+    bindRenderer(viewer, {});
+    assert.equal(viewer.clock.tick, ownTick, 'its own tick once unbound');
+    assert.equal(Object.hasOwn(viewer.clock, 'tick'), false);
+  }
+  // Wrapped again after the port: disposing leaves the later wrapper, and
+  // the port's own part of the tick measures nothing more.
+  {
+    const { scene, camera } = headlessCamera();
+    scene.postUpdate = new Cesium.Event();
+    scene.requestRender = () => {};
+    const clock = new Cesium.Clock();
+    const part = createCesiumCamera({
+      scene,
+      camera,
+      report: () => {},
+      widget: { clock },
+    });
+    const wrapped = clock.tick;
+    let later = 0;
+    clock.tick = function (...args) {
+      later += 1;
+      return wrapped.apply(this, args);
+    };
+    part.dispose();
+    let reads = 0;
+    const frustum = camera.frustum;
+    Object.defineProperty(camera, 'frustum', {
+      get: () => {
+        reads += 1;
+        return frustum;
+      },
+      configurable: true,
+    });
+    clock.tick();
+    assert.equal(later, 1, 'the later wrapper still runs');
+    assert.equal(reads, 0, 'the disposed port reads nothing');
+  }
 });
 
 test('setFov holds the vertical angle across resizes, and waits for a first one', () => {

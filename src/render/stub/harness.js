@@ -9,10 +9,26 @@ import { toEcef } from './math.js';
 
 /** @returns {import('../conformance/index.js').ConformanceHarness} */
 export function createStubHarness(name = 'stub') {
+  // Each renderer's container: a stand-in that says its size, which the
+  // stub's `resize` follows.
+  const containers = new WeakMap();
   return {
     name,
-    create: async ({ viewport, capabilities }) =>
-      createStubRenderer({ viewport, capabilities }),
+    create: async ({ viewport, capabilities }) => {
+      const container = {
+        clientWidth: viewport.width,
+        clientHeight: viewport.height,
+      };
+      const r = createStubRenderer({ viewport, capabilities, container });
+      containers.set(r, container);
+      return r;
+    },
+    resizeContainer: (r, { width, height }) => {
+      const container = containers.get(r);
+      if (!container) return;
+      container.clientWidth = width;
+      container.clientHeight = height;
+    },
     frame: (r) => {
       r.testing.tick();
     },

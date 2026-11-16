@@ -19,7 +19,7 @@ import VisualPresets from './VisualPresets.vue';
 // and each publishes them; until they do, the panel shows its initial markup.
 // Draw and Import live in UTILITIES (LayerPanelsView).
 const display = useDisplayStore();
-const { view, models3d, parameters, cockpitPortal, weather, sky } = storeToRefs(display);
+const { view, models3d, parameters, cockpitPortal, groups, sky } = storeToRefs(display);
 // A control's change goes to its owner (DisplayBindings).
 const act = (name, ...args) => display.act(name, ...args);
 const pct = (value) => `${value}%`;
@@ -44,12 +44,6 @@ const celestialTitle = computed(() =>
     ? t('Celestial ring — available in Normal style')
     : t('Celestial ring — reveal the full globe'),
 );
-const weatherRows = computed(() => [
-  { key: 'clouds', label: t('Clouds') },
-  { key: 'fog', label: t('Fog') },
-  { key: 'rain', label: t('Rain') },
-  { key: 'snow', label: t('Snow') },
-]);
 const skyRows = computed(() => [
   { key: 'atmosphere', label: t('Atmosphere'), icon: 'public' },
   { key: 'lighting', label: t('Day and night'), icon: 'adjust' },
@@ -223,21 +217,23 @@ const allocationOptions = computed(() => [
       <span class="pp-slider-value">{{ pct(sky.milkyWay) }}</span>
     </div>
   </div>
-  <!-- Weather: only where the renderer draws it. -->
-  <div v-if="weather" class="pp-toggle-group" id="weather-group">
-    <label class="pp-toggle-btn pp-scope-toggle" :title="t('Live weather: the conditions under the camera')">
-      <span class="pp-icon material-symbols-outlined" aria-hidden="true">partly_cloudy_day</span>
-      <span class="pp-label">{{ t('Weather') }} · {{ t('Live') }}</span>
-      <input type="checkbox" id="weather-live-toggle" @change="act('setWeatherLive', $event.target.checked)" :checked="weather.live" />
-    </label>
-    <div v-if="weather.live && weather.status === 'unavailable'" class="pp-slider-row visible" id="weather-status">
-      <span class="pp-slider-mini-label">{{ t('No weather report here') }}</span>
-    </div>
-    <div v-for="row in weatherRows" :key="row.key" class="pp-slider-row visible" :id="`weather-${row.key}-row`">
-      <span class="pp-slider-mini-label">{{ row.label }}</span>
-      <UiSlider class="pp-slider" :id="`weather-${row.key}-slider`" @update:model-value="act('setWeatherValue', row.key, $event)" min="0" max="100" :model-value="weather.values[row.key] ?? 0" :aria-label="row.label" />
-      <span class="pp-slider-value">{{ pct(weather.values[row.key] ?? 0) }}</span>
-    </div>
+  <!-- Groups the application adds (store `publishGroup`). -->
+  <div v-for="group in groups" :key="group.id" class="pp-toggle-group" :id="`${group.id}-group`">
+    <template v-for="row in group.rows" :key="row.id">
+      <label v-if="row.kind === 'toggle'" class="pp-toggle-btn pp-scope-toggle" :title="row.title">
+        <span v-if="row.icon" class="pp-icon material-symbols-outlined" aria-hidden="true">{{ row.icon }}</span>
+        <span class="pp-label">{{ row.label }}</span>
+        <input type="checkbox" :id="`${group.id}-${row.id}-toggle`" @change="row.onChange?.($event.target.checked)" :checked="row.checked" />
+      </label>
+      <div v-else-if="row.kind === 'note'" class="pp-slider-row visible" :id="`${group.id}-${row.id}`">
+        <span class="pp-slider-mini-label">{{ row.text }}</span>
+      </div>
+      <div v-else-if="row.kind === 'slider'" class="pp-slider-row visible" :id="`${group.id}-${row.id}-row`">
+        <span class="pp-slider-mini-label">{{ row.label }}</span>
+        <UiSlider class="pp-slider" :id="`${group.id}-${row.id}-slider`" @update:model-value="row.onChange?.($event)" :min="String(row.min)" :max="String(row.max)" :model-value="row.value" :aria-label="row.label" />
+        <span class="pp-slider-value" :id="`${group.id}-${row.id}-value`">{{ pct(row.value) }}</span>
+      </div>
+    </template>
   </div>
   <div class="pp-toggle-group">
     <button class="pp-toggle-btn" :class="{ active: view?.bloom.active }" :aria-pressed="String(Boolean(view?.bloom.active))" id="bloom-toggle" @click="act('toggleBloom')" :title="t('Bloom / Glow')">

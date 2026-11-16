@@ -373,6 +373,7 @@ export function createCesiumQuery({
     },
     pickRay(x, y) {
       const ray = pickRayAt(scene, camera, x, y);
+      if (!ray) return null;
       return { origin: ecef(ray.origin), direction: ecef(ray.direction) };
     },
     project(position) {
@@ -387,8 +388,8 @@ export function createCesiumQuery({
       return s ? { x: s.x, y: s.y } : null;
     },
     projectMany(source, out) {
-      const p = new Cesium.Cartesian3();
-      const s = new Cesium.Cartesian2();
+      const p = projectedPoint;
+      const s = projectedWindow;
       for (let i = 0, j = 0; i + 2 < source.length; i += 3, j += 2) {
         p.x = source[i];
         p.y = source[i + 1];

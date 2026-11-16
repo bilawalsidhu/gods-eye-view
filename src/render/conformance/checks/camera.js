@@ -4,6 +4,7 @@
  */
 import goldens from '../goldens/camera.json' with { type: 'json' };
 import {
+  AUSTIN,
   CAMERA_SCRIPTS,
   SCRIPT_VIEWPORT,
   usesInput,
@@ -433,6 +434,58 @@ export function cameraChecks() {
       },
     },
     {
+      id: 'camera.changed.order',
+      port: 'camera',
+      title:
+        '`changed` is measured before preUpdate; a move made in preUpdate is reported on the next frame',
+      async run(h) {
+        const r = await fresh(h);
+        try {
+          const at = (height) => ({
+            destination: { ...AUSTIN, height },
+            orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+          });
+          r.camera.setView(at(2000));
+          const seen = [];
+          let move = null;
+          r.camera.on('changed', () => seen.push('changed'));
+          r.frame.on('preUpdate', () => {
+            seen.push('preUpdate');
+            if (move) r.camera.setView(move);
+            move = null;
+          });
+          // The first measure is the listener's starting point.
+          await h.frame(r);
+          await h.frame(r);
+          seen.length = 0;
+          r.camera.setView(at(8000));
+          await h.frame(r);
+          deepEqual(
+            seen,
+            ['changed', 'preUpdate'],
+            'a move made before the frame is reported before preUpdate',
+          );
+          seen.length = 0;
+          move = at(2000);
+          await h.frame(r);
+          deepEqual(
+            seen,
+            ['preUpdate'],
+            'a move made in preUpdate is not reported in its own frame',
+          );
+          seen.length = 0;
+          await h.frame(r);
+          deepEqual(
+            seen,
+            ['changed', 'preUpdate'],
+            'it is reported as the next frame starts',
+          );
+        } finally {
+          r.destroy();
+        }
+      },
+    },
+    {
       id: 'camera.follow',
       port: 'camera',
       title: 'a follow keeps the eye at its offset from a moving target',
@@ -786,7 +839,7 @@ export function cameraChecks() {
         const r = await fresh(h);
         const at = async (height, pitch = -Math.PI / 2) => {
           r.camera.setView({
-            destination: { lon: -97.74, lat: 30.27, height },
+            destination: { ...AUSTIN, height },
             orientation: { heading: 0, pitch, roll: 0 },
           });
           await h.frame(r);

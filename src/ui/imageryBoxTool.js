@@ -1,16 +1,13 @@
 /**
  * Box selection for the Recent Imagery layer: press on the world, drag, and
  * release to hand the layer a degrees box. Follows the draw tool's ownership
- * rules — the pointer is claimed for the session, the viewer's own click
- * actions are suppressed and given back, and `destroy()` returns everything —
- * and holds the camera only while a drag is in progress.
+ * rules — the pointer is claimed for the session (a newer claim cancels it),
+ * the viewer's own click actions are suppressed and given back, and
+ * `destroy()` returns everything — and holds the camera only while a drag is
+ * in progress.
  */
 import { pickWorldFromScreen } from '../annotations/annotationResolver.js';
-import {
-  claimPointer,
-  pointerOwner,
-  releasePointer,
-} from '../data/inputOwnership.js';
+import { claimPointer, releasePointer } from '../data/inputOwnership.js';
 import { inputFor as defaultInputFor } from '../input/dispatcher.js';
 import { validateBox } from '../layers/recentImagery/model.js';
 import { createImageryBoxPreview } from '../layers/recentImagery/rendering.js';
@@ -154,14 +151,16 @@ export function initImageryBoxTool({
   function setActive(next) {
     if (next === active) return active;
     if (next) {
-      lease = claimPointer(IMAGERY_BOX_POINTER_OWNER);
-      if (!lease) {
-        onCancel?.(
-          'pointer-busy',
-          `${pointerOwner()} is using the pointer — close it first`,
-        );
-        return active;
-      }
+      // The newest claim takes over: a tool holding the pointer is told and
+      // turns itself off, and a newer one cancels this session as if the
+      // person had.
+      const claimed = claimPointer(IMAGERY_BOX_POINTER_OWNER, {
+        onLost: () => {
+          if (lease === claimed) cancel();
+        },
+      });
+      if (!claimed) return active;
+      lease = claimed;
       active = true;
       bindScene();
     } else {
@@ -182,7 +181,7 @@ export function initImageryBoxTool({
   }
 
   return {
-    /** Begin a box session. False when the pointer is held elsewhere. */
+    /** Begin a box session, taking the pointer from any tool holding it. */
     start() {
       return !destroyed && setActive(true);
     },

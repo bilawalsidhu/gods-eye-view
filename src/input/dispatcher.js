@@ -14,17 +14,21 @@
  * and every subscriber reads the same {@link ClickEvent}; what a layer does
  * with a click that is not its own stays the layer's decision.
  *
- * Who gets the pointer:
+ * Who gets the pointer: while a tool holds it (src/data/inputOwnership.js)
+ * the port holds a lease for it (`bridgePointer`), so the port is not free,
+ * but that lease takes no press: each event is decided here when it arrives.
  * - Ambient subscribers ({@link InputDispatcher.onClick}, and `onPointer`
- *   without a lease) run only while no tool holds the pointer
- *   (src/data/inputOwnership.js). The check is made once per event, before
- *   any subscriber runs, so a tool that releases its lease while handling a
- *   click does not let that same click through to ambient selection. Ambient
- *   `move` and `up` are the exceptions: hover sees every move, so it can drop
- *   its cursor or card when a tool takes the pointer, and a release always
- *   reaches whoever began the press, so a drag started while the pointer was
- *   free still ends (and gives its camera hold back).
+ *   without a lease) run only while no tool holds the pointer. The check is
+ *   made once per event, before any subscriber runs, so a tool that releases
+ *   its lease while handling a click does not let that same click through
+ *   to ambient selection. Ambient `move` and `up` are the exceptions: hover
+ *   sees every move, so it can drop its cursor or card when a tool takes the
+ *   pointer, and a release always reaches whoever began the press, so a drag
+ *   started while the pointer was free still ends (and gives its camera hold
+ *   back).
  * - Tool subscribers pass their lease and run only while it is current.
+ * - A claim made on the port by anyone else takes the presses it grabs; the
+ *   rest reach the subscribers here as above.
  *
  * Camera input is suspended through the input port's counted holds
  * (`suspendCameraControls`), so a camera flight that ends cannot re-enable
@@ -39,7 +43,11 @@
  * lives until {@link InputDispatcher.destroy}; the application scene owns
  * it.
  */
-import { isLeaseCurrent, isPointerFree } from '../data/inputOwnership.js';
+import {
+  bridgePointer,
+  isLeaseCurrent,
+  pointerOwner,
+} from '../data/inputOwnership.js';
 import {
   findPickOwner,
   pickContact,
@@ -267,6 +275,10 @@ function createDispatcher(viewer, { query: givenQuery, ...portOptions } = {}) {
   const cameraHolds = new Set();
   let destroyed = false;
 
+  // The port holds a lease while a tool here holds the pointer.
+  const bridge = bridgePointer(port);
+
+  /** Tool subscribers whose lease is current, and ambient ones if `free`. */
   const run = (list, free, arg) => {
     for (const entry of [...list]) {
       if (entry.lease ? !isLeaseCurrent(leaseOf(entry)) : !free) continue;
@@ -278,16 +290,18 @@ function createDispatcher(viewer, { query: givenQuery, ...portOptions } = {}) {
     }
   };
 
-  // Each type is one port listener; the pointer's owner is read once per
-  // event, before any subscriber runs.
-  const offPort = [
-    port.on('down', (ev) => {
+  // Whether ambient subscribers hear a press, read once as it arrives. A
+  // claim on the port that is not this bridge's has already taken the
+  // presses it grabs; what reaches here is free unless a tool here holds it.
+  const free = () => pointerOwner() === null;
+
+  // Each type is one port listener.
+  const deliver = {
+    down: (ev) => {
       if (!unmodifiedLeft(ev)) return;
-      run(pointerSubscribers.down, isPointerFree(), {
-        position: xy(ev.position),
-      });
-    }),
-    port.on('move', (ev) => {
+      run(pointerSubscribers.down, free(), { position: xy(ev.position) });
+    },
+    move: (ev) => {
       if (!unmodified(ev)) return;
       const endPosition = xy(ev.endPosition ?? ev.position);
       let pickPosition;
@@ -305,30 +319,29 @@ function createDispatcher(viewer, { query: givenQuery, ...portOptions } = {}) {
           return pickPosition;
         },
       });
-    }),
-    port.on('up', (ev) => {
+    },
+    up: (ev) => {
       if (!unmodifiedLeft(ev)) return;
       run(pointerSubscribers.up, true, { position: xy(ev.position) });
-    }),
-    port.on('click', (ev) => {
+    },
+    click: (ev) => {
       if (!unmodifiedLeft(ev)) return;
-      const free = isPointerFree();
+      const ambient = free();
       const event = createClickEvent(
         viewer,
         queryOf,
         xy(ev.position),
         ev.gesture ?? { travelPx: 0, durationMs: 0 },
       );
-      run(pointerSubscribers.click, free, event);
-      if (free) run(clickSubscribers, true, event);
-    }),
-    port.on('dblclick', (ev) => {
+      run(pointerSubscribers.click, ambient, event);
+      if (ambient) run(clickSubscribers, true, event);
+    },
+    dblclick: (ev) => {
       if (!unmodifiedLeft(ev)) return;
-      run(pointerSubscribers.dblclick, isPointerFree(), {
-        position: xy(ev.position),
-      });
-    }),
-  ];
+      run(pointerSubscribers.dblclick, free(), { position: xy(ev.position) });
+    },
+  };
+  const offPort = POINTER_TYPES.map((type) => port.on(type, deliver[type]));
 
   const subscribe = (list, entry) => {
     if (destroyed) return () => {};
@@ -393,6 +406,7 @@ function createDispatcher(viewer, { query: givenQuery, ...portOptions } = {}) {
       clickSubscribers.length = 0;
       for (const type of POINTER_TYPES) pointerSubscribers[type].length = 0;
       for (const off of offPort) off();
+      bridge.off();
       for (const hold of [...stockHolds]) hold();
       for (const hold of [...cameraHolds]) hold();
       // A port built for this viewer goes with its dispatcher; a

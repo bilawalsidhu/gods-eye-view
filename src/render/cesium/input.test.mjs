@@ -94,6 +94,7 @@ function setup({ stock = true, document = null, takeStock = true } = {}) {
     handler.fire(T.LEFT_CLICK, { position: at(x, y) }, modifier);
   };
   return {
+    widget,
     input,
     port: input.port,
     handler,
@@ -441,4 +442,32 @@ test('not taking the stock, they stay on the viewer’s handler but while held',
     'function',
     'dispose gives a held one back',
   );
+});
+
+test("a tool that does not hold off stock clicks leaves the viewer's select and double-click follow running; one that does stops them", async (t) => {
+  const { inputFor } = await import('../../input/dispatcher.js');
+  const { claimPointer, releasePointer } =
+    await import('../../data/inputOwnership.js');
+  const s = setup();
+  // The dispatcher over this port, as the application's layers take input.
+  const dispatcher = inputFor(s.widget, {
+    query: { pick: () => null, drillPick: () => [] },
+  });
+  t.after(() => dispatcher.destroy());
+  const placed = [];
+  const lease = claimPointer('placing-tool');
+  t.after(() => releasePointer(lease));
+  dispatcher.onPointer('click', () => placed.push('tool'), { lease });
+  s.press(5, 6);
+  s.handler.fire(T.LEFT_DOUBLE_CLICK, { position: s.at(5, 6) });
+  assert.deepEqual(placed, ['tool']);
+  assert.equal(s.selected.length, 1, 'the stock select ran on its click');
+  assert.equal(s.followed.length, 1, 'and the double-click follow');
+  const hold = dispatcher.suppressStockClicks();
+  s.press(5, 6);
+  s.handler.fire(T.LEFT_DOUBLE_CLICK, { position: s.at(5, 6) });
+  hold();
+  assert.deepEqual(placed, ['tool', 'tool']);
+  assert.equal(s.selected.length, 1, 'held off: no stock select');
+  assert.equal(s.followed.length, 1, 'nor follow');
 });

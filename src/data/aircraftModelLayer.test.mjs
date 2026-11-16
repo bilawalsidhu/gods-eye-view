@@ -84,6 +84,9 @@ function fleetFixture(positions) {
     },
   });
   const shown = new Map([...positions.keys()].map((id) => [id, true]));
+  let alphaOf = 1;
+  let focusOf = 1;
+  const unseenIds = new Set();
   const icons = {
     show: true,
     setId: 'flights-icons:1',
@@ -91,9 +94,10 @@ function fleetFixture(positions) {
     has: (id) => positions.has(id),
     position: (id) => positions.get(id),
     course: () => 90,
-    alpha: () => 1,
-    focus: () => 1,
+    alpha: () => alphaOf,
+    focus: () => focusOf,
     setShown: (id, value) => shown.set(id, value),
+    unseen: (id) => unseenIds.has(id),
     flush() {},
   };
   const state = {
@@ -116,6 +120,7 @@ function fleetFixture(positions) {
     },
   };
   let now = 1_000_000;
+  let iconRecedeSyncs = 0;
   const parts = {
     icons: {
       _displayMs: () => now,
@@ -124,6 +129,9 @@ function fleetFixture(positions) {
       _focusIcons() {},
       _occluder: () => null,
       _aboveHorizon: () => true,
+      _syncRecede() {
+        iconRecedeSyncs += 1;
+      },
     },
     motion: { _displayTimeAt: () => null },
     tracking: {
@@ -157,6 +165,18 @@ function fleetFixture(positions) {
     removes,
     shown,
     failNextUpsert: () => (failNextUpsert = true),
+    /** How often the icons were told to recede by the tuning as it is now. */
+    iconRecedeSyncs: () => iconRecedeSyncs,
+    /** Mark a contact as not there yet at the time drawn, or there again. */
+    setUnseen(id, value) {
+      if (value) unseenIds.add(id);
+      else unseenIds.delete(id);
+    },
+    /** The icons' alpha and focus the fleet models take. */
+    look(alpha, focus) {
+      alphaOf = alpha;
+      focusOf = focus;
+    },
     /** One fleet tick, past the tick interval. */
     tick() {
       now += 1000;
@@ -295,4 +315,77 @@ test('a fleet model whose load failed is loaded again after a wait, not before',
   } finally {
     Date.now = realNow;
   }
+});
+
+test('fleet model alpha is worked out once a fleet tick from the camera then, as base × max(floor, focus × haze); the IR boost draws full strength', async () => {
+  const {
+    aircraftTreatmentAlpha,
+    setAircraftRecessionParams,
+    resetAircraftRecessionParams,
+  } = await import('./aircraftRecession.js');
+  const position = near(1);
+  const f = fleetFixture(new Map([['a1', position]]));
+  assert.equal(f.fleet().spec.recede ?? null, null, 'the set does not recede');
+  const eye = fromDegrees(-97.71, 30.21, 30_000);
+  const expected = (focusFactor) =>
+    aircraftTreatmentAlpha({
+      baseAlpha: 0.8,
+      focusFactor,
+      cameraDistanceM: Math.hypot(
+        eye.x - position.x,
+        eye.y - position.y,
+        eye.z - position.z,
+      ),
+      cameraHeightM: 30_000,
+    });
+  try {
+    // Recede from the eye on, so the haze is not 1 here.
+    setAircraftRecessionParams({ startLimbRatio: 0, alphaFloor: 0.05 });
+    f.look(0.8, 0.5);
+    f.tick();
+    f.draw.ready(f.fleetId, 'a1');
+    f.tick();
+    const item = f.fleet().items.get('a1');
+    assert.equal(item.tint[3], expected(0.5), 'the tint carries it all');
+    assert.equal(item.focus ?? 1, 1, 'with no focus for the set to compose');
+    // A frame inside the fleet interval writes nothing, whatever changed.
+    f.look(0.8, 0.25);
+    f.models._fleetTick();
+    assert.equal(f.fleet().items.get('a1').tint[3], item.tint[3]);
+    f.tick();
+    assert.equal(
+      f.fleet().items.get('a1').tint[3],
+      expected(0.25),
+      'the next tick takes it',
+    );
+  } finally {
+    resetAircraftRecessionParams();
+  }
+  f.state._irBoost = true;
+  f.models._reloadModelsForIrBoost();
+  f.tick();
+  assert.equal(f.fleet().items.get('a1').tint[3], 1, 'boosted: full strength');
+});
+
+test('a tuning change reaches the icons on the next frame, icons shown or not', async () => {
+  const f = fleetFixture(new Map([['a1', near(1)]]));
+  f.state._icons.show = false;
+  const before = f.iconRecedeSyncs();
+  f.models._fleetTick();
+  assert.ok(f.iconRecedeSyncs() > before, 'the icons are told');
+});
+
+test('a contact not there yet at the time drawn has its fleet model hidden, as one beyond the horizon', () => {
+  const f = fleetFixture(new Map([['a1', near(1)]]));
+  f.tick();
+  f.draw.ready(f.fleetId, 'a1');
+  f.tick();
+  assert.equal(f.fleet().items.get('a1').show, true, 'drawn while there');
+  f.setUnseen('a1', true);
+  f.tick();
+  assert.equal(f.fleet().items.get('a1').show, false, 'hidden while unseen');
+  f.setUnseen('a1', false);
+  f.tick();
+  f.tick();
+  assert.equal(f.fleet().items.get('a1').show, true, 'drawn again');
 });

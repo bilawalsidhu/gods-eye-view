@@ -144,9 +144,12 @@ export function createCesiumGlobe(
   // The vector base's sources' credits.
   const vectorCredits = [];
 
-  /** Every 3D tileset the scene holds. */
-  function tilesets() {
-    const found = [];
+  /**
+   * Every 3D tileset the scene holds, into `found` (emptied first): the
+   * per-frame readers pass `scratchTilesets` rather than make a list.
+   */
+  function tilesets(found = []) {
+    found.length = 0;
     const primitives = scene.primitives;
     const n = primitives?.length ?? 0;
     for (let i = 0; i < n; i++) {
@@ -155,12 +158,13 @@ export function createCesiumGlobe(
     }
     return found;
   }
+  const scratchTilesets = [];
 
   /** The base tileset drawn now, which `objects` imagery drapes on. */
   function drawnBase() {
     if (photoreal && !photoreal.isDestroyed() && photoreal.show)
       return photoreal;
-    for (const tileset of tilesets())
+    for (const tileset of tilesets(scratchTilesets))
       if (isBaseTileset(tileset) && tileset.show && !tileset.isDestroyed())
         return tileset;
     return null;
@@ -401,7 +405,7 @@ export function createCesiumGlobe(
   function surfaceLoaded() {
     if (scene.globe?.show) return scene.globe.tilesLoaded !== false;
     let found = false;
-    for (const tileset of tilesets()) {
+    for (const tileset of tilesets(scratchTilesets)) {
       if (!tileset.show || tileset.isDestroyed?.()) continue;
       found = true;
       if (tileset.tilesLoaded === false) return false;
@@ -423,7 +427,7 @@ export function createCesiumGlobe(
     // The shown tilesets as a set: their order among the primitives is no
     // change to the surface.
     let count = 0;
-    for (const tileset of tilesets()) {
+    for (const tileset of tilesets(scratchTilesets)) {
       if (!tileset.show || tileset.isDestroyed?.()) continue;
       count += 1;
       if (!surfaceSeen.tiles.has(tileset)) changed = true;
@@ -433,7 +437,7 @@ export function createCesiumGlobe(
       surfaceSeen.globe = globe;
       surfaceSeen.terrain = terrain;
       surfaceSeen.tiles.clear();
-      for (const tileset of tilesets())
+      for (const tileset of scratchTilesets)
         if (tileset.show && !tileset.isDestroyed?.())
           surfaceSeen.tiles.add(tileset);
       surfaceVersion = ++surfaceVersions;
@@ -480,7 +484,7 @@ export function createCesiumGlobe(
             applyShading();
             requestRender('base');
           }
-          if (imagery.list().length) imagery.sync();
+          if (imagery.size) imagery.sync();
           if (progressListeners.size === 0) return;
           const base = drawnBase();
           progress.tilesPending = base && !base.tilesLoaded ? 1 : 0;

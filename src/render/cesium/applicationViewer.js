@@ -54,11 +54,13 @@ if (typeof window !== 'undefined' && !window.__CESIUM__)
 /**
  * Cesium.Viewer options of the standard globe viewer. `showRenderLoopErrors`
  * false leaves render errors to the caller's own notice instead of Cesium's
- * panel.
+ * panel; `msaa` is the multisampling to start with (0 off, 4 by default).
+ * The drawing buffer is kept after presenting, for `capture` and
+ * `readPixels` to read the frame drawn.
  */
 export function applicationViewerOptions(
   creditContainer,
-  { showRenderLoopErrors = true } = {},
+  { showRenderLoopErrors = true, msaa = 4 } = {},
 ) {
   return {
     timeline: false,
@@ -77,23 +79,31 @@ export function applicationViewerOptions(
     // which would also stop CesiumWidget from creating the Sun and Moon.
     skyBox: new StarrySky(),
     creditContainer,
-    msaaSamples: 4,
+    // Cesium's 1 is no multisampling.
+    msaaSamples: msaa || 1,
     contextOptions: { webgl: { preserveDrawingBuffer: true } },
     showRenderLoopErrors,
   };
 }
 
-/** Create the standard globe viewer in caller-owned, visible containers. */
+/**
+ * Create the standard globe viewer in caller-owned, visible containers;
+ * `msaa` as `applicationViewerOptions` takes it.
+ */
 export function createApplicationViewer({
   container,
   creditContainer,
   showRenderLoopErrors,
+  msaa,
 }) {
   if (!container || !creditContainer)
     throw new TypeError('Viewer and credit containers are required');
   const viewer = new Cesium.Viewer(
     container,
-    applicationViewerOptions(creditContainer, { showRenderLoopErrors }),
+    applicationViewerOptions(creditContainer, {
+      showRenderLoopErrors,
+      msaa,
+    }),
   );
   try {
     // Until the frame port takes over (appRenderer.js), tick at the idle

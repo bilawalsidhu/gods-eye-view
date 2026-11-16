@@ -193,7 +193,7 @@ test('the application’s loop ticks at the idle rate while nothing moves, and a
   renderer.destroy();
 });
 
-test('work pending at destroy settles and lets go of the scene', async (t) => {
+test('work pending at destroy is rejected and lets go of the scene', async (t) => {
   withDocument(t, fakeDocument());
   const viewers = [];
   const plugin = createCesiumRendererPlugin({
@@ -207,9 +207,10 @@ test('work pending at destroy settles and lets go of the scene', async (t) => {
   const renderer = await plugin.create({ container: {} });
   const rendered = renderer.frame.renderOnce();
   renderer.destroy();
-  await rendered;
+  await assert.rejects(rendered, /renderer destroyed/, 'the one waiting');
   assert.equal(viewers[0].listeners.size, 0, 'no one-shot render stays');
-  await renderer.frame.renderOnce();
+  await assert.rejects(renderer.frame.renderOnce(), /renderer destroyed/);
+  await assert.rejects(renderer.capture(), /renderer destroyed/);
 
   const waiting = await plugin.create({ container: {} });
   const standing = viewers[1].listeners.size;
@@ -325,3 +326,61 @@ test('only renderers this plugin made reach a Cesium viewer', () => {
 });
 
 const EXPECTED_MISSING = [];
+
+test('the plugin makes its viewer with the creation options, and sets the sky, time and clock before the first frame', async (t) => {
+  const doc = fakeDocument();
+  withDocument(t, doc);
+  const log = [];
+  let given;
+  let viewer;
+  const plugin = createCesiumRendererPlugin({
+    createViewer(options) {
+      given = options;
+      viewer = fakeViewer(log);
+      for (const phase of [
+        'preUpdate',
+        'postUpdate',
+        'preRender',
+        'postRender',
+      ])
+        viewer.scene[phase] = new Cesium.Event();
+      viewer.scene.skyAtmosphere = { show: true };
+      viewer.scene.fog = { enabled: true };
+      viewer.clock = { currentTime: Cesium.JulianDate.now() };
+      return viewer;
+    },
+  });
+  const time = Date.UTC(2030, 5, 21, 12);
+  const clock = { now: () => 1234.5, date: () => time + 60_000 };
+  const renderer = await plugin.create({
+    container: { tag: 'container' },
+    signal: new AbortController().signal,
+    msaa: 2,
+    sky: { atmosphere: false, fog: false },
+    time,
+    clock,
+  });
+  assert.equal(given.msaa, 2, 'multisampling');
+  assert.equal(viewer.scene.skyAtmosphere.show, false, 'the sky, set');
+  assert.equal(viewer.scene.fog.enabled, false);
+  assert.equal(renderer.globe.sky.get().fog, false);
+  assert.equal(
+    Cesium.JulianDate.toDate(viewer.clock.currentTime).getTime(),
+    time,
+    'the scene time',
+  );
+  const ticks = [];
+  renderer.frame.on('preUpdate', (tick) => ticks.push(tick.now));
+  viewer.scene.preUpdate.raiseEvent(viewer.scene, viewer.clock.currentTime);
+  assert.deepEqual(ticks, [1234.5], 'ticks read the clock given');
+  renderer.destroy();
+
+  // Not given, the viewer is made as it always was.
+  await plugin
+    .create({
+      container: { tag: 'container' },
+      signal: new AbortController().signal,
+    })
+    .then((r) => r.destroy());
+  assert.equal(given.msaa, undefined);
+});

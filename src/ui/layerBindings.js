@@ -119,7 +119,6 @@ export class LayerBindings {
         this.runImmediateNavigation('route', navigate),
       floorFn: (lat, lon) => this.services.cachedGroundFloor(lat, lon),
       warmFn: (cells) => this.services.warmGroundFloor(cells),
-      showToast: (message) => this._showToast(message),
     });
   }
 

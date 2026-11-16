@@ -53,11 +53,17 @@ const HARNESSES = {
   ],
 };
 
-/** Runs the logic suite on `which`; `all` runs every check, listed or not. */
-async function runLogic(which = 'stub', { all = false } = {}) {
+/**
+ * Runs the logic suite on `which`; `all` runs every check, listed or not;
+ * `only` (check ids) runs just those of them.
+ */
+async function runLogic(which = 'stub', { all = false, only } = {}) {
   status(`running the logic suite on ${which}…`);
   const [harness, options] = HARNESSES[which]();
-  const report = await runConformance(harness, all ? {} : options);
+  const listed = all ? () => true : (options.only ?? (() => true));
+  const report = await runConformance(harness, {
+    only: (id) => listed(id) && (!only || only.includes(id)),
+  });
   $('logicResults').innerHTML =
     `<p>${report.harness}: <b class="pass">${report.passed} passed</b>, <b class="fail">${report.failed} failed</b>, ${report.skipped} skipped</p>
     <table>${report.results
@@ -73,6 +79,7 @@ async function runLogic(which = 'stub', { all = false } = {}) {
     failed: report.failed,
     skipped: report.skipped,
     failures: report.results.filter((r) => r.status === 'fail'),
+    skips: report.results.filter((r) => r.status === 'skip'),
   };
 }
 

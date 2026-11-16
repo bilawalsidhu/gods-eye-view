@@ -121,7 +121,12 @@ export type Off = () => void;
 /** Gives back a hold. Calling it twice is harmless. */
 export type Release = () => void;
 
-/** A handle on something the renderer draws. */
+/**
+ * A handle on something the renderer draws. Once disposed, and once the
+ * renderer is destroyed, it does nothing: its methods neither draw nor
+ * throw, and a set or field asked for after destroy is such a handle.
+ * Disposing it again is harmless.
+ */
 export interface Handle {
   show: boolean;
   dispose(): void;

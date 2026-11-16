@@ -10,7 +10,8 @@
  * (`alignedAxis` zero), depth test disabled at any distance (drawn on the near plane),
  * opaque and translucent passes, horizon culling, and per-row picks whose object is
  * `{ id, meta, primitive }` (`primitive.show` hides that one row, as drillPick expects).
- * Rows flagged to recede also take the aircraft limb recession, composed with focus.
+ * Rows flagged to recede (the set's `recede`) also take the limb recession
+ * (`render/recession.js`), composed with focus.
  *
  * On WebGL 2 each row also reads its extras ({@link module:iconSet}'s
  * `extras`) from a float texture by instance: a screen offset and anchor, a
@@ -37,10 +38,10 @@ import {
   MIN_ICON_SLOTS,
   NEAR_IMAGE_DEVICE_PX,
 } from '../../data/iconAtlas.js';
-import {
-  cameraLimbDistanceM,
-  getAircraftRecessionParams,
-} from '../../data/aircraftRecession.js';
+import { recedeFrame, recedeParams } from '../recession.js';
+
+/** The parameters the uniforms hold while the set does not recede. */
+const NO_RECEDE = recedeParams({});
 
 const ATTRIBUTE_LOCATIONS = Object.freeze({
   corner: 0,
@@ -339,12 +340,18 @@ export class IconSetPrimitive {
     renderTime,
     requestRender,
     cull,
+    recede,
     translucent,
     pickObject,
   }) {
     this.set = set;
     this.renderTime = renderTime;
     this._cull = cull ?? (() => true);
+    // The set's `recede`, and the parameters last made from it.
+    this._recede = recede ?? (() => null);
+    this._recedeFrom = undefined;
+    this._recedeResolved = null;
+    this._recedeFrame = { active: false, limbM: 1, strength: 0 };
     this._translucent = translucent ?? (() => false);
     this._pickObject = pickObject ?? null;
     this._pickPass = 0;
@@ -694,31 +701,19 @@ export class IconSetPrimitive {
       this._horizon,
     );
 
-    const tuning = getAircraftRecessionParams();
-    const height = camera.positionCartographic?.height;
-    const limb = cameraLimbDistanceM(height, tuning.earthRadiusM);
-    const active =
-      Number.isFinite(height) &&
-      height > 0 &&
-      height < tuning.globeViewBlendEndM &&
-      limb > 0;
-    let strength = 0;
-    if (active) {
-      const g = Math.min(
-        1,
-        Math.max(
-          0,
-          (height - tuning.globeViewBlendStartM) /
-            (tuning.globeViewBlendEndM - tuning.globeViewBlendStartM),
-        ),
-      );
-      strength = 1 - g * g * (3 - 2 * g);
-    }
+    // Rows recede only while the set does (their flag says so); its
+    // parameters, or the defaults' while it does not, fill the uniforms.
+    const tuning = this._recedeParams() ?? NO_RECEDE;
+    const frame = recedeFrame(
+      camera.positionCartographic?.height,
+      tuning,
+      this._recedeFrame,
+    );
     Cesium.Cartesian4.fromElements(
-      active ? limb : 1,
+      frame.limbM,
       tuning.startLimbRatio,
-      strength,
-      active ? 1 : 0,
+      frame.strength,
+      frame.active ? 1 : 0,
       this._recession,
     );
     Cesium.Cartesian3.fromElements(
@@ -727,6 +722,16 @@ export class IconSetPrimitive {
       tuning.combinedAlphaFloor,
       this._recessionFloors,
     );
+  }
+
+  /** The set's `recede` as the parameters it draws with; null: it does not recede. */
+  _recedeParams() {
+    const spec = this._recede();
+    if (spec !== this._recedeFrom) {
+      this._recedeFrom = spec;
+      this._recedeResolved = recedeParams(spec);
+    }
+    return this._recedeResolved;
   }
 
   _createCommands(context) {

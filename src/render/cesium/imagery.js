@@ -835,6 +835,10 @@ export function createCesiumImagery(
   /** After each frame: each timed layer's shown frame, once it is drawn. */
   function announceFrames() {
     if (disposed) return;
+    // Most frames have no timed layer: the copy below is made only for one.
+    let timedLayers = false;
+    for (const record of layers) if (record.timed?.at) timedLayers = true;
+    if (!timedLayers) return;
     for (const record of layers.slice()) {
       const timed = record.timed;
       // A layer removed by another's listener says nothing.
@@ -858,6 +862,10 @@ export function createCesiumImagery(
   return {
     add,
     list: () => layers.map((record) => record.handle),
+    /** How many layers the port holds, without listing them. */
+    get size() {
+      return layers.length;
+    },
     /** Layers whose providers are still being built, as promises. */
     ready: (handles) =>
       Promise.allSettled(

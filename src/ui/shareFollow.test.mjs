@@ -168,10 +168,12 @@ for (const offset of [
     reference.lookAtTransform(reference.transform, goal);
 
     const viewer = following(start);
+    // The camera port's own listeners stay; the offset's goes on arrival.
+    const own = viewer.scene.preUpdate.numberOfListeners;
     applyShareFollowOffset(viewer, followedOf(viewer), offset);
     viewer.scene.preUpdate.raiseEvent();
     viewer.scene.preUpdate.raiseEvent();
-    assert.equal(viewer.scene.preUpdate.numberOfListeners, 0, 'it arrives');
+    assert.equal(viewer.scene.preUpdate.numberOfListeners, own, 'it arrives');
     samePose(snapshot(viewer.camera), snapshot(reference));
   });
 

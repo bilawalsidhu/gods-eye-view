@@ -169,7 +169,7 @@ try {
         result.bloom.intensityPct === 98 &&
         snapshot.bloom.intensity === 98 &&
         manager._visualEffects.bloomIntensity === 98 &&
-        manager.viewer.scene.postProcessStages.bloom.enabled
+        window.__godsEyeView.viewer.scene.postProcessStages.bloom.enabled
       );
     }),
   );
@@ -184,7 +184,7 @@ try {
         manager.getVisualState().sharpen.intensity === 61 &&
         manager._visualEffects.sharpenIntensity === 0.61 &&
         Math.abs(
-          manager.viewer.scene.postProcessStages.getStageByName(
+          window.__godsEyeView.viewer.scene.postProcessStages.getStageByName(
             'effects_sharpen',
           ).uniforms.amount - 1.32,
         ) < 1e-9
@@ -203,7 +203,7 @@ try {
     const manager = window.__godsEyeView.styleManager;
     const effects = manager._visualEffects;
     manager.setStyle('retro');
-    const collection = manager.viewer.scene.postProcessStages;
+    const collection = window.__godsEyeView.viewer.scene.postProcessStages;
     const owned = Object.keys(effects.stages).map((name) =>
       collection.getStageByName(`effects_style_${name}`),
     );

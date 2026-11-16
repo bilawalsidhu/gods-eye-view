@@ -32,6 +32,8 @@ import {
   TRACKED_ICON_PX,
 } from './aircraftIcons.js';
 import { cockpitContactDotImage } from './cockpitContactDot.js';
+import { aircraftRecedeSpec } from './aircraftRecession.js';
+import { TIMELINE_UNSEEN_MS } from '../time/timelineFixes.js';
 
 /** Raster size of the cockpit contact pip (cockpitContactDot.js draws 16 px). */
 const COCKPIT_DOT_PX = 16;
@@ -97,6 +99,14 @@ export function createContactIcons(drawSet = null, { capabilities } = {}) {
   const book = createIconBook(null, { capabilities });
   const pending = new Map();
   const removed = new Set();
+  // Ids not drawn whatever their item says: following the clock, the time
+  // drawn is before the contact was there (`setUnseen`).
+  const unseen = new Set();
+  /** The item as the draw set takes it: hidden while unseen. */
+  const drawnItem = (item) =>
+    unseen.has(item.id) && item.show !== false
+      ? { ...item, show: false }
+      : item;
   // The ids the draw set holds.
   const sent = new Set();
   let queued = false;
@@ -157,7 +167,7 @@ export function createContactIcons(drawSet = null, { capabilities } = {}) {
       return p && result ? copyInto(p, result) : p;
     },
     course: (id, t) => book.course(id, t),
-    shown: (id) => book.item(id)?.show !== false,
+    shown: (id) => book.item(id)?.show !== false && !unseen.has(id),
     focus: (id) => book.focus(id),
     alpha: (id) => book.item(id)?.alpha ?? 1,
     scale: (id) => book.item(id)?.scale ?? 1,
@@ -165,7 +175,7 @@ export function createContactIcons(drawSet = null, { capabilities } = {}) {
     put(item, options) {
       book.put(item, options);
       removed.delete(item.id);
-      pending.set(item.id, item);
+      pending.set(item.id, drawnItem(item));
       schedule();
     },
     /**
@@ -190,10 +200,25 @@ export function createContactIcons(drawSet = null, { capabilities } = {}) {
       return true;
     },
     setShown: (id, value) => icons.update(id, { show: value !== false }),
+    /**
+     * Keep an id from being drawn (true) whatever its item's `show` says, or
+     * draw it as its item says again (false).
+     */
+    setUnseen(id, value) {
+      const item = book.item(id);
+      if (!item || unseen.has(id) === Boolean(value)) return;
+      if (value) unseen.add(id);
+      else unseen.delete(id);
+      pending.set(id, drawnItem(item));
+      schedule();
+    },
+    /** Whether an id is kept from being drawn (`setUnseen`). */
+    unseen: (id) => unseen.has(id),
     setFocus: (id, factor) => icons.update(id, { focus: factor }),
     remove(id) {
       if (!book.has(id)) return;
       book.remove(id);
+      unseen.delete(id);
       pending.delete(id);
       if (sent.has(id)) {
         removed.add(id);
@@ -202,6 +227,7 @@ export function createContactIcons(drawSet = null, { capabilities } = {}) {
     },
     clear() {
       for (const id of book.ids()) book.remove(id);
+      unseen.clear();
       pending.clear();
       removed.clear();
       sent.clear();
@@ -211,6 +237,7 @@ export function createContactIcons(drawSet = null, { capabilities } = {}) {
     flush,
     dispose() {
       for (const id of book.ids()) book.remove(id);
+      unseen.clear();
       pending.clear();
       removed.clear();
       sent.clear();
@@ -438,6 +465,16 @@ export function createAircraftIcons({
   let liveSet = null;
   let sceneClock = false;
   let sentDelayMs = NaN;
+  // The `recede` the set was last sent.
+  let sentRecede = null;
+  /**
+   * From when (display ms) each planned row's motion holds: a row whose
+   * motion starts after the time drawn is planned again when the time moves
+   * back before it (`_replanExpired`).
+   */
+  const planFrom = new Map();
+  /** The display time the rows were last checked against. */
+  let replannedAt = -Infinity;
 
   /** The motion clock for whether the layer follows the world clock. */
   const motionClock = (scene) =>
@@ -464,15 +501,27 @@ export function createAircraftIcons({
     liveSet.setOptions({ motionClock: motionClock(scene) });
   }
 
+  /** The set recedes by the aircraft tuning: sent again when it changes. */
+  function _syncRecede() {
+    if (!liveSet) return;
+    const recede = aircraftRecedeSpec();
+    if (recede === sentRecede) return;
+    sentRecede = recede;
+    liveSet.setOptions({ recede });
+  }
+
   /**
-   * Create the draw set for one layer lifetime, drawn over depth and culled
-   * at the horizon on the delayed live clock, stacked by the sprite order.
+   * Create the draw set for one layer lifetime, drawn over depth, culled at
+   * the horizon and receding toward the limb on the delayed live clock,
+   * stacked by the sprite order.
    * @returns {string} The set's id.
    */
   function _createIcons(viewer) {
+    sentRecede = aircraftRecedeSpec();
     const set = drawOf(viewer).icons({
       id: `${layerId}-icons:${++instances}`,
       horizonCull: true,
+      recede: sentRecede,
       motionClock: motionClock(followsClock()),
       drawOrder: services.sprites?.spriteDrawOrder?.(layerId) ?? 0,
     });
@@ -494,6 +543,8 @@ export function createAircraftIcons({
     state._icons?.dispose();
     state._icons = null;
     liveSet = null;
+    planFrom.clear();
+    replannedAt = -Infinity;
   }
 
   /** The near-image switch in CSS px for the scene's pixel ratio. */
@@ -553,11 +604,16 @@ export function createAircraftIcons({
    * oldest fix, or the coast arc past the newest. The displayed nose glides
    * from where it is onto the new course at the fleet's slew cap; a hovering
    * contact keeps its nose. The item expires when the regime would change.
+   * Following the clock, a contact not there yet at the time drawn
+   * (`regime.unseen`) is not drawn until its warm-up begins.
    * @param {string} icao24
-   * @param {{fromCourseDeg?: number|null}} [options] Nose to glide from when
-   *   the row's own motion is not what was on screen (tracking handoff).
+   * @param {{fromCourseDeg?: number|null, rewound?: boolean}} [options]
+   *   `fromCourseDeg`: nose to glide from when the row's own motion is not
+   *   what was on screen (tracking handoff). `rewound`: the time drawn moved
+   *   back before the row's motion; it is drawn where it was then, with no
+   *   easing from where it is drawn now.
    */
-  function _planIcon(icao24, { fromCourseDeg } = {}) {
+  function _planIcon(icao24, { fromCourseDeg, rewound = false } = {}) {
     const icons = state._icons;
     if (!icons?.has(icao24) || holdsPlan(icao24)) return;
     const history = state._positionHistory.get(icao24);
@@ -575,11 +631,31 @@ export function createAircraftIcons({
     if (_planPlaced(icao24, info, history, t)) return;
 
     const regime = parts.motion._motionRegime(history, info, renderTime);
+    if (regime.unseen) {
+      // Held at its first fix, not drawn, until its warm-up begins.
+      const course = regime.heading;
+      icons.setUnseen(icao24, true);
+      icons.update(
+        icao24,
+        {
+          pos: clone(regime.fix.position),
+          course,
+          motion: { kind: 'hold', courseDeg: course },
+          courseGlide: undefined,
+        },
+        { expiresAt: fixMs(regime.fix) - TIMELINE_UNSEEN_MS },
+      );
+      planFrom.set(icao24, -Infinity);
+      return;
+    }
+    icons.setUnseen(icao24, false);
     let speed;
     let motion;
     let pos;
     let course;
     let expiresAt = Infinity;
+    // From when the motion holds: before it, the time drawn has moved back.
+    let validFrom = t;
     if (regime.kind === 'between' && regime.piece) {
       // Along the curve between the two reports, a piece at a time.
       const segment = regime.piece.segment;
@@ -588,6 +664,7 @@ export function createAircraftIcons({
       pos = clone(segment.fix);
       course = motionCourse(motion, undefined, t);
       expiresAt = regime.piece.t1;
+      validFrom = regime.piece.t0;
     } else if (regime.kind === 'between') {
       const { a, b, span, trackFrom, trackTo, chordCourse } = regime;
       speed = regime.speed;
@@ -609,10 +686,19 @@ export function createAircraftIcons({
         motion = { kind: 'hold', courseDeg: course };
       }
       expiresAt = fixMs(b);
+      validFrom = fixMs(a);
     } else {
       const { fix, heading } = regime;
       speed = regime.speed;
       const t0 = fixMs(fix);
+      // A warm-up runs back to its start (a contact following the clock on
+      // its own fixes is unseen before that); a coast holds from its fix.
+      validFrom =
+        regime.maxDt === 0 && t0 > t
+          ? history[0].timeline === true
+            ? t0 - TIMELINE_UNSEEN_MS
+            : -Infinity
+          : t0;
       pos = clone(fix.position);
       course = heading;
       motion =
@@ -643,6 +729,7 @@ export function createAircraftIcons({
             motion = floored.motion;
             pos = floored.pos;
             course = floored.course;
+            validFrom = t;
           }
           expiresAt = Math.min(expiresAt, floored.expiresAt);
         }
@@ -656,6 +743,7 @@ export function createAircraftIcons({
     // whose motion ran out long ago, is simply drawn where it is now).
     if (
       fromCourseDeg == null &&
+      !rewound &&
       icons.shown(icao24) &&
       icons.expires(icao24) > t - RECOVER_STALE_PLAN_MS
     ) {
@@ -680,6 +768,7 @@ export function createAircraftIcons({
         pos = clone(drawn);
         course = motionCourse(motion, undefined, t);
         expiresAt = end;
+        validFrom = t;
       }
     }
     // Below hover speed the nose holds what is on screen (or, for a new row,
@@ -703,6 +792,7 @@ export function createAircraftIcons({
             };
     }
     icons.update(icao24, { pos, course, motion, courseGlide }, { expiresAt });
+    planFrom.set(icao24, validFrom);
   }
 
   /**
@@ -735,16 +825,27 @@ export function createAircraftIcons({
           courseSlopeDeg: norm180(end.courseDeg - course),
         }
       : { kind: 'hold', courseDeg: course };
+    state._icons.setUnseen(icao24, false);
     state._icons.update(
       icao24,
       { pos: clone(from), course, motion, courseGlide: undefined },
       { expiresAt: t1 },
     );
+    planFrom.set(icao24, t);
     return true;
   }
 
-  /** Re-plan every row whose regime ended by `t` (epoch ms). */
+  /**
+   * Re-plan every row whose regime ended by `t` (epoch ms), and, following
+   * the clock, every row whose motion starts after `t` once the time drawn
+   * moved back (a seek, or the clock run backward): it is drawn where it was
+   * then, as it is when the time moves on.
+   */
   function _replanExpired(t) {
+    if (followsClock() && t < replannedAt)
+      for (const [icao24, from] of planFrom)
+        if (from > t) _planIcon(icao24, { rewound: true });
+    replannedAt = t;
     for (const icao24 of state._icons.due(t)) _planIcon(icao24);
   }
 
@@ -889,6 +990,7 @@ export function createAircraftIcons({
   /** Drop a contact and everything the layer keeps for it. */
   function _forgetContact(icao24) {
     state._icons?.remove(icao24);
+    planFrom.delete(icao24);
     parts.rendering._releaseModel(icao24);
     state.records.forget(icao24);
     // The host-supplied placement, if any, forgets it as well.
@@ -907,6 +1009,7 @@ export function createAircraftIcons({
   return {
     _displayMs,
     _syncMotionClock,
+    _syncRecede,
     _createIcons,
     _disposeIcons,
     _syncImageSwitch,
@@ -930,8 +1033,8 @@ export function createAircraftIcons({
 
 /**
  * A contact's icon item before it is styled or planned: held at the origin
- * (as a fresh row of the icon set was), always drawn over depth, receding
- * toward the limb, picked as `{layer, id}`. Its image comes with its style
+ * (as a fresh row of the icon set was), always drawn over depth (receding
+ * toward the limb, as its set does), picked as `{layer, id}`. Its image comes with its style
  * (`_applyIconPresentation`), before the item is first written.
  */
 function baseContactItem(layerId, icao24, show) {
@@ -942,7 +1045,6 @@ function baseContactItem(layerId, icao24, show) {
     course: 0,
     size: [FLEET_ICON_SIZE_PX, FLEET_ICON_SIZE_PX],
     rotationMode: 'course',
-    recede: true,
     disableDepthTest: Infinity,
     focus: 1,
     show,

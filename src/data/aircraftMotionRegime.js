@@ -8,6 +8,7 @@ import {
 } from '../geo/julian.js';
 import { clone, distance } from '../geo/vector.js';
 import { curvePieceAt, fixCurveCached } from './fixCurve.js';
+import { historyBracketIndex, historyUnseenAt } from './timelineHistory.js';
 import {
   COAST_MAX_SPEED_MPS,
   courseBetweenCartesians,
@@ -136,6 +137,7 @@ export function createMotionRegime() {
     turnRateDps: 0,
     minDt: 0,
     maxDt: 0,
+    unseen: false,
   };
 }
 
@@ -164,7 +166,9 @@ export function createMotionRegime() {
  *   five minutes past it, then stops (SIGNAL LOST). A contact last heard on
  *   or near the ground holds there instead (`staleHoldsForFix`, decided once
  *   per report), and a chain of synthetic fixes never coasts further than
- *   the real report they were built from would.
+ *   the real report they were built from would. Following the clock, a
+ *   warm-up well before a contact's own first fix is `unseen`: it was not
+ *   there yet, and is not drawn (`historyUnseenAt`).
  *
  * @param {Array<object>} history Non-empty, oldest first.
  * @param {object|undefined} info The contact's record.
@@ -186,13 +190,24 @@ export function aircraftMotionRegime(
   // contact is drawn report to report, as its trail is.
   let report = history.length - 1;
   while (report >= 0 && isSyntheticFix(history[report])) report--;
+  // The pairs are read back from the fix after the first one at or after
+  // the render time (so a fix at exactly that time takes the later pair, as
+  // it always did; past any superseded synthetic fix there), found by
+  // halving, and stop at the first pair wholly before it: a contact
+  // following the clock keeps a long history.
+  let start = Math.min(
+    historyBracketIndex(history, renderTime) + 1,
+    history.length - 1,
+  );
+  while (start < report && isSyntheticFix(history[start])) start++;
   let b = null;
-  for (let i = history.length - 1; i >= 0; i--) {
+  for (let i = start; i >= 0; i--) {
     const a = history[i];
     if (i < report && isSyntheticFix(a)) continue;
     const pairB = b;
     b = a;
     if (!pairB) continue;
+    if (julianLessThan(pairB.time, renderTime)) break;
     if (
       !julianLessThanOrEquals(a.time, renderTime) ||
       !julianLessThanOrEquals(renderTime, pairB.time)
@@ -219,6 +234,7 @@ export function aircraftMotionRegime(
     result.chordCourse =
       blend > 0 ? courseBetweenCartesians(a.position, pairB.position) : null;
     result.blend = blend;
+    result.unseen = false;
     return result;
   }
   const newest = history[history.length - 1];
@@ -226,6 +242,7 @@ export function aircraftMotionRegime(
   result.kind = 'fix';
   result.piece = null;
   result.fix = warming ? history[0] : newest;
+  result.unseen = warming && historyUnseenAt(history, renderTime);
   result.speed = fixSpeedMps(result.fix, info, fields);
   result.heading = fixTrackDeg(result.fix, info, fields);
   // Past the newest report it flies straight on along its course: a turn

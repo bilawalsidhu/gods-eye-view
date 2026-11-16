@@ -4394,6 +4394,22 @@ test('an aircraft layer draws its contacts as one GPU icon set moving on the del
     assert.equal(flags & ICON_RECEDES, ICON_RECEDES);
     assert.equal(flags & ICON_CULL_LIFT, ICON_CULL_LIFT);
     assert.ok(set.depthTestDistance(row) >= 1e30, 'over depth everywhere');
+    // The set recedes by the aircraft tuning, and follows it when it changes.
+    const recession = await import('../../data/aircraftRecession.js');
+    assert.equal(
+      part.sets.get(setId).spec.recede,
+      recession.aircraftRecedeSpec(),
+    );
+    assert.equal('recede' in part.sets.get(setId).items.get('abc123'), false);
+    try {
+      recession.setAircraftRecessionParams({ scaleFloor: 0.6 });
+      icons._syncRecede();
+      assert.equal(host._recedeParams().scaleFloor, 0.6);
+    } finally {
+      recession.resetAircraftRecessionParams();
+      icons._syncRecede();
+    }
+    assert.equal(host._recedeParams().scaleFloor, 0.45);
 
     // Drawn where the layer reads it, between its two fixes.
     const t = Date.now() - delayMs;
@@ -6674,7 +6690,7 @@ test('models re-pose and restyle in place; only a new url loads again', async ()
       Cesium.ColorBlendMode.HIGHLIGHT,
       'no tint to blend in: its own colour',
     );
-    assert.equal(model.color.alpha, 1);
+    assert.equal(model.color, undefined, 'and no colour of its own');
     set.upsert([plane({ show: false })]);
     assert.equal(model.show, false, 'hidden in place');
 
@@ -6905,6 +6921,193 @@ test('a model past its pixel cap is scaled down each frame; fades and culls too'
     scene.camera.positionWC = new Cesium.Cartesian3(-2e7, 0, 0);
     part.beforeRender();
     assert.equal(model.show, false, 'culled past the horizon');
+    set.dispose();
+  } finally {
+    restore();
+  }
+});
+
+test('an untinted model drawn fully opaque is given no colour; a fade gives one, and full opacity takes it away again', async () => {
+  // A colour on a Cesium model adds a colour stage to every draw of it.
+  const { loads, restore } = fakeModelLoads();
+  try {
+    const scene = fakeScene();
+    let metresPerPixel = 0.1;
+    scene.camera.getPixelSize = () => metresPerPixel;
+    const part = createCesiumDraw({
+      scene,
+      report: (error) => assert.fail(error),
+    });
+    const set = part.port.models({ id: 'm' });
+    const eye = scene.camera.positionWC;
+    const at = Cesium.Cartesian3.fromDegrees(0, 0, 1000);
+    const distance = Cesium.Cartesian3.distance(eye, at);
+    const item = (extra = {}) => ({
+      id: 'a',
+      pos: { lon: 0, lat: 0, height: 1000 },
+      url: 'a.glb',
+      orientation: { heading: 0, pitch: 0, roll: 0 },
+      ...extra,
+    });
+    set.set([item()]);
+    loads[0].resolve();
+    await settle();
+    const model = loads[0].model;
+    loads[0].ready();
+    part.beforeRender();
+    assert.equal(model.color, undefined, 'opaque, untinted: no colour');
+    set.upsert([
+      item({
+        fadeByDistance: {
+          near: distance - 10,
+          nearValue: 1,
+          far: distance + 10,
+          farValue: 0,
+        },
+      }),
+    ]);
+    part.beforeRender();
+    assert.ok(model.color, 'faded: a colour');
+    assert.ok(Math.abs(model.color.alpha - 0.5) < 1e-6, 'faded halfway');
+    set.upsert([item()]);
+    part.beforeRender();
+    assert.equal(model.color, undefined, 'opaque again: no colour');
+    set.dispose();
+  } finally {
+    restore();
+  }
+});
+
+test('models moved every frame keep their shader and pick ids: only a new look or a new model changes them', async () => {
+  // A fleet re-poses every model each frame with the same look.
+  const { loads, restore } = fakeModelLoads();
+  const toCss = Cesium.Color.prototype.toCssHexString;
+  let shaderLookups = 0;
+  Cesium.Color.prototype.toCssHexString = function () {
+    shaderLookups += 1;
+    return toCss.call(this);
+  };
+  try {
+    const scene = fakeScene();
+    const part = createCesiumDraw({
+      scene,
+      report: (error) => assert.fail(error),
+    });
+    const set = part.port.models({ id: 'fleet' });
+    const item = (id, lon, extra = {}) => ({
+      id,
+      pos: { lon, lat: 0, height: 10 },
+      url: 'a.glb',
+      orientation: { heading: 0, pitch: 0, roll: 0 },
+      maskColor: '#ff8800',
+      ...extra,
+    });
+    set.set([item('a', 0), item('b', 1)]);
+    for (const load of loads) load.resolve();
+    await settle();
+    for (const load of loads) load.ready();
+    const [a, b] = loads.map((load) => load.model);
+    const shader = a.customShader;
+    assert.ok(shader instanceof Cesium.CustomShader, 'the mask shader');
+    const version = part.version();
+    shaderLookups = 0;
+    for (let frame = 1; frame <= 5; frame++) {
+      set.upsert([item('a', frame * 1e-5), item('b', 1 + frame * 1e-5)]);
+      part.beforeRender();
+    }
+    const moved = Cesium.Matrix4.getTranslation(
+      a.modelMatrix,
+      new Cesium.Cartesian3(),
+    );
+    assert.ok(
+      Cesium.Cartesian3.distance(
+        moved,
+        Cesium.Cartesian3.fromDegrees(5e-5, 0, 10),
+      ) < 1e-6,
+      'moved',
+    );
+    assert.equal(a.customShader, shader, 'the same shader');
+    assert.equal(shaderLookups, 0, 'not looked up again');
+    assert.equal(part.version(), version, 'no pick id added or gone');
+
+    // A new mask colour, a new shading and the mask again: each drawn.
+    set.upsert([item('a', 0, { maskColor: '#0000ff' })]);
+    assert.notEqual(a.customShader, shader, 'a new colour, a new shader');
+    assert.equal(b.customShader, shader, 'the other keeps its own');
+    set.upsert([item('a', 0, { maskColor: '#0000ff', shading: 'thermal' })]);
+    const thermal = a.customShader;
+    assert.ok(thermal instanceof Cesium.CustomShader);
+    assert.notEqual(thermal, shader);
+    set.upsert([item('a', 0)]);
+    assert.equal(a.customShader, shader, 'its mask again');
+    set.upsert([item('a', 0, { maskColor: undefined })]);
+    assert.equal(a.customShader, undefined, 'no mask: lit as it is');
+
+    // A model added changes what height queries see through.
+    set.upsert([item('c', 2)]);
+    assert.notEqual(part.version(), version, 'a pick id added');
+    set.dispose();
+  } finally {
+    Cesium.Color.prototype.toCssHexString = toCss;
+    restore();
+  }
+});
+
+test('a model set that recedes fades its models toward the limb with their focus; focus alone dims', async () => {
+  const { recedeFactors, recedeFrame, recedeParams, recededAlpha } =
+    await import('../recession.js');
+  const { loads, restore } = fakeModelLoads();
+  try {
+    const scene = fakeScene();
+    const heightM = 1_000_000;
+    scene.camera.positionWC = new Cesium.Cartesian3(6_378_137 + heightM, 0, 0);
+    scene.camera.positionCartographic = { height: heightM };
+    const part = createCesiumDraw({
+      scene,
+      report: (error) => assert.fail(error),
+    });
+    const set = part.port.models({ id: 'm', recede: {} });
+    const item = (extra = {}) => ({
+      id: 'a',
+      pos: { lon: 25, lat: 0, height: 0 },
+      url: 'a.glb',
+      orientation: { heading: 0, pitch: 0, roll: 0 },
+      tint: [1, 0, 0, 0.8],
+      focus: 0.5,
+      ...extra,
+    });
+    set.set([item()]);
+    loads[0].resolve();
+    await settle();
+    const model = loads[0].model;
+    loads[0].ready();
+    part.beforeRender();
+    const params = recedeParams({});
+    const d = Cesium.Cartesian3.distance(
+      scene.camera.positionWC,
+      Cesium.Cartesian3.fromDegrees(25, 0, 0),
+    );
+    const haze = recedeFactors(d, recedeFrame(heightM, params), params).alpha;
+    assert.ok(haze < 0.9, `receding: ${haze}`);
+    const want = 0.8 * recededAlpha(0.5, haze, params);
+    assert.ok(
+      Math.abs(model.color.alpha - want) < 1e-6,
+      `${model.color.alpha} vs ${want}`,
+    );
+    assert.equal(model.color.red, 1, 'the tint kept');
+    // Not receding: the tint's alpha times the focus.
+    set.setOptions({ recede: null });
+    part.beforeRender();
+    assert.ok(Math.abs(model.color.alpha - 0.4) < 1e-6, `${model.color.alpha}`);
+    set.upsert([item({ focus: undefined })]);
+    part.beforeRender();
+    assert.ok(Math.abs(model.color.alpha - 0.8) < 1e-6);
+    // Receding again, over the blend band: only the combined floor holds.
+    set.setOptions({ recede: {} });
+    scene.camera.positionCartographic = { height: 9_000_000 };
+    set.upsert([item({ focus: 0.1 })]);
+    part.beforeRender();
+    assert.ok(Math.abs(model.color.alpha - 0.8 * 0.2) < 1e-6);
     set.dispose();
   } finally {
     restore();
@@ -7894,6 +8097,70 @@ test('icons that only move are moved on the billboards they have, and still rest
   set.dispose();
 });
 
+test('icons moved every frame are each read once, and a new image or a new icon still draws', () => {
+  const scene = fakeScene();
+  const part = createCesiumDraw({
+    scene,
+    report: (error) => assert.fail(error),
+  });
+  const set = part.port.icons({ id: 'icons:fleet' });
+  // Reads of each item's image: what a moved icon is drawn with is
+  // looked up once an update.
+  let imageReads = 0;
+  const icon = (id, lon) => {
+    let image = 'a.png';
+    return {
+      id,
+      pos: { ...Cesium.Cartesian3.fromDegrees(lon, 10) },
+      get image() {
+        imageReads += 1;
+        return image;
+      },
+      set image(value) {
+        image = value;
+      },
+      size: [20, 20],
+      color: '#33ccff',
+      rotationMode: 'screen',
+      rotation: 0,
+      disableDepthTest: Infinity,
+      meta: { id },
+    };
+  };
+  const items = [icon('a', 0), icon('b', 1), icon('c', 2)];
+  set.set(items);
+  const [host] = scene.added;
+  const billboards = [0, 1, 2].map((i) => host.get(i));
+  const version = part.version();
+  imageReads = 0;
+  for (let frame = 1; frame <= 4; frame++) {
+    for (const item of items) item.pos.x += 1;
+    set.upsert(items);
+  }
+  assert.equal(imageReads, 4 * items.length, 'each image read once a frame');
+  assert.equal(scene.added[0], host, 'the same collection');
+  billboards.forEach((billboard, i) => {
+    assert.equal(host.get(i), billboard, 'the same billboards');
+    assert.equal(billboard.position.x, items[i].pos.x, 'moved');
+  });
+  assert.equal(part.version(), version, 'nothing added or removed');
+
+  // Only some moved: the others stay where they are.
+  items[1].pos.x += 1;
+  set.upsert([items[1]]);
+  assert.equal(billboards[1].position.x, items[1].pos.x);
+  // A new image is drawn on the billboard it has.
+  items[0].image = 'b.png';
+  set.upsert(items);
+  assert.equal(host.get(0), billboards[0], 'the same billboard');
+  assert.equal(billboards[0].image, 'b.png');
+  // An icon added joins after the others.
+  set.upsert([...items, icon('d', 3)]);
+  assert.equal(host.length, 4);
+  assert.notEqual(part.version(), version, 'an icon added');
+  set.dispose();
+});
+
 test('the transit layer draws its vehicles as two icon sets, moving a marker between them, on a viewer of its own', async () => {
   const { createRendering } = await import('../../layers/transit/rendering.js');
   const { createState } = await import('../../layers/transit/state.js');
@@ -8359,5 +8626,141 @@ test('a quad that moves from a blob to a URL lets the blob go once its old mater
   } finally {
     URL.createObjectURL = create;
     names.forEach((name, i) => (globalThis[name] = real[i]));
+  }
+});
+
+test('a set disposed by one of its listeners tells the later ones nothing more', async () => {
+  const { loads, restore } = fakeModelLoads();
+  try {
+    const plane = (id) => ({
+      id,
+      pos: { lon: 0, lat: 0, height: 10 },
+      url: 'a.glb',
+    });
+    const loaded = async (load) => {
+      load.resolve();
+      await settle();
+      load.ready();
+    };
+
+    // Disposed by its handle, from its first ready listener.
+    const part = createCesiumDraw({
+      scene: fakeScene(),
+      report: (error) => assert.fail(error),
+    });
+    const set = part.port.models({ id: 'planes' });
+    const heard = [];
+    set.on('ready', () => set.dispose());
+    set.on('ready', (id) => heard.push(id));
+    set.on('loadFailed', (id) => heard.push(`failed ${id}`));
+    set.set([plane('p')]);
+    await loaded(loads[0]);
+    assert.deepEqual(heard, [], 'the second listener does not run');
+
+    // Every set, when the port is disposed from a ready listener.
+    const gone = createCesiumDraw({
+      scene: fakeScene(),
+      report: (error) => assert.fail(error),
+    });
+    const other = gone.port.models({ id: 'planes' });
+    const late = [];
+    other.on('ready', () => gone.dispose({ removeHosts: true }));
+    other.on('ready', (id) => late.push(id));
+    other.set([plane('q')]);
+    await loaded(loads[1]);
+    assert.deepEqual(late, [], 'nothing after the port is gone');
+  } finally {
+    restore();
+  }
+});
+
+test('a disposed set, and every set once the port is disposed, does nothing on later calls', async () => {
+  const { loads, restore } = fakeModelLoads();
+  try {
+    const items = {
+      points: { id: 'a', pos: { lon: 0, lat: 0 }, pixelSize: 4, color: '#fff' },
+      lines: {
+        id: 'a',
+        positions: [
+          { lon: 0, lat: 0 },
+          { lon: 1, lat: 1 },
+        ],
+        widthPx: 2,
+        style: { kind: 'solid', color: '#fff' },
+      },
+      icons: {
+        id: 'a',
+        pos: { lon: 0, lat: 0 },
+        image: 'data:image/png;base64,iVBORw0KGgo=',
+      },
+      shapes: {
+        id: 'a',
+        geometry: {
+          kind: 'ellipse',
+          center: { lon: 0, lat: 0 },
+          semiMajor: 1000,
+          semiMinor: 1000,
+        },
+        fill: [1, 0, 0, 0.5],
+      },
+      models: { id: 'a', pos: { lon: 0, lat: 0, height: 10 }, url: 'a.glb' },
+    };
+    const lateCalls = (set, item) => {
+      set.set([item]);
+      set.upsert([{ ...item, id: 'b' }]);
+      set.show = true;
+      set.setOptions({ clampTo: 'terrain', pickable: false, drawOrder: 3 });
+      set.setOptions({ show: true });
+      set.setColumns?.({
+        ids: ['c'],
+        positions: new Float64Array([6378137, 0, 0]),
+      });
+      set.remove(['a']);
+      set.clear();
+      assert.equal(typeof set.on('ready', () => {}), 'function');
+    };
+
+    // Disposed by its handle.
+    const scene = fakeScene();
+    const part = createCesiumDraw({
+      scene,
+      report: (error) => assert.fail(error),
+    });
+    for (const [kind, item] of Object.entries(items)) {
+      const set = part.port[kind]({ id: kind });
+      set.dispose();
+      lateCalls(set, item);
+      assert.equal(scene.added.length, 0, `${kind}: nothing drawn`);
+      assert.equal(part.sets.size, 0, `${kind}: no set live`);
+      set.dispose();
+    }
+    // A newer set under the same id is not changed by the old handle.
+    const old = part.port.points({ id: 'same' });
+    old.dispose();
+    const newer = part.port.points({ id: 'same' });
+    old.set([items.points]);
+    assert.equal(newer.size(), 0, 'the newer set keeps its items');
+    newer.dispose();
+
+    // Every set, once the port is disposed (its renderer destroyed), and a
+    // set asked for after that.
+    const held = fakeScene();
+    const gone = createCesiumDraw({
+      scene: held,
+      report: (error) => assert.fail(error),
+    });
+    const before = Object.keys(items).map((kind) => [
+      kind,
+      gone.port[kind]({ id: kind }),
+    ]);
+    gone.dispose({ removeHosts: true });
+    for (const [kind, set] of before) lateCalls(set, items[kind]);
+    for (const [kind, item] of Object.entries(items))
+      lateCalls(gone.port[kind]({ id: `${kind}:late` }), item);
+    assert.equal(held.added.length, 0, 'nothing drawn after the port is gone');
+    assert.equal(gone.sets.size, 0, 'no set live after the port is gone');
+    assert.equal(loads.length, 0, 'no model loads');
+  } finally {
+    restore();
   }
 });

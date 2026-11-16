@@ -2,7 +2,6 @@ import { catalogControlServices } from './catalog.js';
 import { StyleManager } from '../ui/composition.js';
 import { applyStartView, START_VIEW } from '../camera.js';
 import { initCockpitCloudEffects } from '../cockpitCloudEffects.js';
-import { createViewWeather } from '../viewWeather.js';
 import { createViewSky } from '../viewSky.js';
 import { findGlobe } from '../render/rendererOf.js';
 import { useDisplayStore } from '../ui/stores/display.js';
@@ -66,13 +65,6 @@ export function createApplicationControls({
         weatherService: operations.requests.weather,
       });
   defer(() => cockpitCloudEffects?.destroy());
-  // Clouds, fog, rain and snow on a renderer that draws them: the conditions
-  // under the camera, or what the user sets in the Display panel.
-  const viewWeather = createViewWeather(viewer, {
-    weatherService: operations.requests.weather,
-    store: useDisplayStore(applicationPinia()),
-  });
-  defer(() => viewWeather.destroy());
   // The atmosphere, sun lighting, sun, moon, stars and Milky Way the user
   // chooses in the Display panel.
   const viewSky = createViewSky(viewer, {

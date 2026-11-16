@@ -74,3 +74,15 @@ test('flat maps keep zooming out unlimited', () => {
   viewer.scene.preRender.raiseEvent();
   assert.equal(controller.maximumZoomDistance, Infinity);
 });
+
+test('the viewer options take multisampling, by default 4, and keep the drawing buffer', async () => {
+  const { applicationViewerOptions } = await import('./applicationViewer.js');
+  const credits = {};
+  const plain = applicationViewerOptions(credits);
+  assert.equal(plain.msaaSamples, 4);
+  assert.equal(plain.contextOptions.webgl.preserveDrawingBuffer, true);
+  const given = applicationViewerOptions(credits, { msaa: 0 });
+  assert.equal(given.msaaSamples, 1, 'Cesium’s 1 is off');
+  assert.equal(given.contextOptions.webgl.preserveDrawingBuffer, true);
+  assert.equal(applicationViewerOptions(credits, { msaa: 8 }).msaaSamples, 8);
+});

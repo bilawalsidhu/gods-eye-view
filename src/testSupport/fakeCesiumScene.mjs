@@ -5,8 +5,9 @@
  * their scene.
  *
  * - camera: `pose()` from the double's camera (`viewer.camera`, else
- *   `viewer.scene.camera`): `positionWC`, `directionWC` and
- *   `positionCartographic`; `matrices()` from its `viewMatrix` and
+ *   `viewer.scene.camera`): `positionWC`, `directionWC`,
+ *   `positionCartographic` and `frustum.fovy` (none for an orthographic
+ *   frustum, π/3 without a frustum); `matrices()` from its `viewMatrix` and
  *   `frustum.projectionMatrix`; `viewRectangle()` from its
  *   `computeViewRectangle()`, in degrees; events from its own `moveEnd`,
  *   `moveStart` and `changed`.
@@ -231,7 +232,11 @@ export function bindFakeCesiumScene(viewer, { draw = fakeDrawPort() } = {}) {
           : { x: 0, y: 0, z: -1 },
         up: { x: 0, y: 1, z: 0 },
         right: { x: 1, y: 0, z: 0 },
-        fovy: Math.PI / 3,
+        // An orthographic frustum has none, as the Cesium port reports it.
+        fovy:
+          c?.frustum instanceof Cesium.OrthographicOffCenterFrustum
+            ? undefined
+            : (c?.frustum?.fovy ?? Math.PI / 3),
         aspectRatio: 1,
         near: 1,
         far: 5e8,

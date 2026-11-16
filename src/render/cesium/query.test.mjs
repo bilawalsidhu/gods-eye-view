@@ -274,3 +274,22 @@ test('hiding the sets seen through answers as seeing through their items did, ne
   ground.dispose();
   markers.dispose();
 });
+
+test('a canvas with no size has no pick ray: null, not a throw', () => {
+  const viewer = fakeViewer();
+  const { scene } = viewer;
+  scene.mode = Cesium.SceneMode.SCENE3D;
+  scene.canvas = { clientWidth: 0, clientHeight: 0 };
+  Object.assign(scene.camera, {
+    frustum: new Cesium.PerspectiveFrustum({ fov: 1, aspectRatio: 1 }),
+    directionWC: new Cesium.Cartesian3(-1, 0, 0),
+    rightWC: new Cesium.Cartesian3(0, 1, 0),
+    upWC: new Cesium.Cartesian3(0, 0, 1),
+  });
+  const query = queryOf(viewer);
+  assert.equal(query.pickRay(0, 0), null);
+  scene.canvas = { clientWidth: 100, clientHeight: 100 };
+  const ray = query.pickRay(50, 50);
+  assert.deepEqual(ray.origin, { x: 2e7, y: 0, z: 0 });
+  assert.ok(Math.abs(ray.direction.x + 1) < 1e-9);
+});

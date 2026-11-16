@@ -26,7 +26,6 @@ import {
 } from '../layers/recentImagery/model.js';
 import { displayDay, displayMetres } from '../layers/recentImagery/display.js';
 import { formatQuantity } from './unitLabels.js';
-import { pointerOwnerName } from '../data/pointerOwnerNames.js';
 import { canvasOf, findFrame, findGlobe } from '../render/rendererOf.js';
 
 const PANEL_ID = 'recent-imagery-panel';
@@ -50,7 +49,6 @@ const LAYER_NOTICES = new Set([
 // imageryBoxTool.js); fixed refusals there are msg() text for translateKnown.
 const TOO_LARGE = /^(Box|View) is ([\d,]+) km wide · limit ([\d,]+) km$/;
 const POLAR = /^Imagery stops at ±([\d.]+)° latitude$/;
-const POINTER_BUSY = /^(.+) is using the pointer — close it first$/;
 
 /**
  * The notice line in the UI language: notices and box refusals arrive in
@@ -68,11 +66,6 @@ export function localizeNotice(text) {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       }),
-    });
-  const busy = POINTER_BUSY.exec(text);
-  if (busy)
-    return t('{owner} is using the pointer — close it first', {
-      owner: translateKnown(pointerOwnerName(busy[1])),
     });
   const tooLarge = TOO_LARGE.exec(text);
   if (!tooLarge) return translateKnown(text);

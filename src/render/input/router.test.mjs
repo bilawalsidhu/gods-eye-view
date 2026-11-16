@@ -122,3 +122,43 @@ test('dispose ends delivery, even of the event under way', () => {
   assert.equal(lease.current, false, 'the lease ended');
   assert.equal(port.isPointerFree(), true);
 });
+
+test('a newer claim takes over and tells the lease it ended, once', () => {
+  const { port, dispatch } = router();
+  const lost = [];
+  const a = port.claimPointer('a', { onLost: () => lost.push('a') });
+  const heard = [];
+  port.on('down', () => heard.push('a'), { lease: a });
+  const b = port.claimPointer('b', {
+    onLost: () => lost.push('b'),
+  });
+  port.on('down', () => heard.push('b'), { lease: b });
+  assert.deepEqual(lost, ['a'], 'the old holder is told');
+  assert.equal(a.current, false);
+  assert.equal(b.current, true);
+  dispatch(ev('down'));
+  assert.deepEqual(heard, ['b'], 'the newest holder gets the press');
+  a.release();
+  assert.equal(b.current, true, "the old holder's late release frees nothing");
+  assert.equal(port.isPointerFree(), false);
+  assert.deepEqual(lost, ['a'], 'told once');
+  b.release();
+  assert.deepEqual(lost, ['a'], 'a holder that lets go is not told');
+  assert.equal(port.isPointerFree(), true);
+});
+
+test('the ended lease is told after the new one holds; its error is reported', () => {
+  const errors = [];
+  const { port } = router({ report: (error) => errors.push(error) });
+  let seen = null;
+  const a = port.claimPointer('a', {
+    onLost: () => {
+      seen = { free: port.isPointerFree(), current: a.current };
+      throw new Error('onLost');
+    },
+  });
+  const b = port.claimPointer('b');
+  assert.deepEqual(seen, { free: false, current: false });
+  assert.equal(b.current, true);
+  assert.equal(errors.length, 1);
+});

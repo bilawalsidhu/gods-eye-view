@@ -802,3 +802,44 @@ test('the real portal lays out once the groups have moved and puts back the focu
   await nextTick();
   assert.deepEqual(layouts, [true]);
 });
+
+test('a group an application adds to Effects shows its toggles, notes and sliders, and goes', async (t) => {
+  const { store, $ } = fixture(t);
+  const changes = [];
+  store.publishGroup('conditions', {
+    rows: [
+      {
+        kind: 'toggle',
+        id: 'live',
+        icon: 'partly_cloudy_day',
+        label: 'Live',
+        title: 'Live conditions',
+        checked: true,
+        onChange: (on) => changes.push(['live', on]),
+      },
+      { kind: 'note', id: 'status', text: 'Nothing here' },
+      {
+        kind: 'slider',
+        id: 'level',
+        label: 'Level',
+        min: 0,
+        max: 100,
+        value: 40,
+        onChange: (value) => changes.push(['level', value]),
+      },
+    ],
+  });
+  await nextTick();
+  const toggle = $('conditions-live-toggle');
+  assert.ok(toggle, 'its toggle is drawn');
+  assert.equal(toggle.checked, true);
+  assert.equal(toggle.closest('label').title, 'Live conditions');
+  assert.equal($('conditions-status').textContent.trim(), 'Nothing here');
+  assert.equal($('conditions-level-value').textContent.trim(), '40%');
+  toggle.checked = false;
+  toggle.dispatchEvent(new Event('change'));
+  assert.deepEqual(changes, [['live', false]]);
+  store.publishGroup('conditions', null);
+  await nextTick();
+  assert.equal($('conditions-group'), null, 'gone once removed');
+});

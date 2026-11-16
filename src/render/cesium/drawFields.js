@@ -664,8 +664,20 @@ export function createCesiumFields({
     return handle;
   }
 
+  // Once the fields are disposed (their renderer destroyed), a field asked
+  // for draws nothing and does nothing.
+  let gone = false;
+  const inert = (spec) => ({
+    id: spec?.id,
+    show: true,
+    update() {},
+    on: () => () => {},
+    dispose() {},
+  });
+
   return {
     field(spec) {
+      if (gone) return inert(spec);
       if (fields.has(spec?.id))
         throw new Error(`a field with id ${spec.id} is live`);
       if (spec?.kind === 'rasterShell') return rasterShell(spec);
@@ -688,6 +700,7 @@ export function createCesiumFields({
     },
     has: (id) => fields.has(id),
     dispose() {
+      gone = true;
       for (const handle of [...fields.values()]) handle.dispose();
     },
   };

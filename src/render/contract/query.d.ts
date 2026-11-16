@@ -82,7 +82,8 @@ export interface QueryPort {
   pickEllipsoid(x: number, y: number): Ecef | null;
   /** Where a ray meets the globe surface (not tiles). */
   pickGlobe(ray: Ray): Ecef | null;
-  pickRay(x: number, y: number): Ray;
+  /** Null while the canvas has no size (hidden, not laid out yet). */
+  pickRay(x: number, y: number): Ray | null;
   /** Screen position, or null behind the eye (off-screen points still answer). */
   project(position: Ecef): ScreenXY | null;
   /**

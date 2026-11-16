@@ -2,7 +2,7 @@
  * @module render/cesium/gpuIcons
  * @description The Cesium draw port's GPU icon sets: an icon set whose items
  * move (`motionSegments`), glide their course (`courseGlide`), recede
- * toward the limb, pick through a larger proxy,
+ * toward the limb (`recede`, the set's), pick through a larger proxy,
  * switch images by drawn size, or that takes columns (`columns`), draws as
  * one instanced primitive (`IconSetPrimitive`) over an icon set's typed
  * columns (`iconSet.js`) instead of a billboard collection. Each item is one
@@ -200,16 +200,19 @@ function rasterPxOf(url, item) {
 
 /**
  * @param {{scene: object, capabilities: ReadonlySet<string>,
+ *   date?: (() => number)|null,
  *   toColor: (color: unknown) => Cesium.Color,
  *   imageOf: (record: object, image: unknown) => unknown,
  *   peekImage: (ref: {atlas: string, slot: string}) => unknown,
- *   requestRender: (reason: string) => void}} options `imageOf` reads an atlas slot
+ *   requestRender: (reason: string) => void}} options `date` is the epoch
+ *   ms a `live` motion clock reads (null: the system clock's); `imageOf` reads an atlas slot
  *   through the draw port's atlases (undefined while it is not registered),
  *   noting that the set draws from it; `peekImage` only reads it.
  */
 export function createGpuIcons({
   scene,
   capabilities,
+  date = null,
   toColor,
   imageOf,
   peekImage,
@@ -217,13 +220,13 @@ export function createGpuIcons({
 }) {
   const can = (capability) => capabilities.has(capability);
 
-  /** Whether drawing these items needs a GPU icon set. */
-  function wants(items) {
+  /** Whether drawing these items (in a set of `spec`) needs a GPU icon set. */
+  function wants(items, spec = {}) {
+    if (spec.recede) return true;
     for (const item of items) {
       if (
         (item.motion && can('motionSegments')) ||
         (item.courseGlide && can('courseGlide')) ||
-        item.recede ||
         item.pickProxy ||
         item.imageLod
       )
@@ -293,7 +296,9 @@ export function createGpuIcons({
           result,
         );
       return Cesium.JulianDate.addSeconds(
-        Cesium.JulianDate.now(result),
+        date
+          ? Cesium.JulianDate.fromDate(new Date(date()), result)
+          : Cesium.JulianDate.now(result),
         -(clock?.delayMs ?? 0) / 1000,
         result,
       );
@@ -309,6 +314,7 @@ export function createGpuIcons({
         clockTime(frameState, new Cesium.JulianDate()),
       requestRender: () => requestRender(`icons:${spec.id}`),
       cull: () => spec.horizonCull === true,
+      recede: () => spec.recede,
       translucent: () => spec.blend === 'translucent',
       // Picked as the draw port's other items are: `{set, id, meta}` as
       // the item now is, hidden row by row for drill picks.
@@ -423,7 +429,7 @@ export function createGpuIcons({
         isCurve(item.scaleByDistance) ? item.scaleByDistance : undefined,
       );
       set.setFlag(row, ICON_ROTATES, item.rotationMode === 'course');
-      set.setFlag(row, ICON_RECEDES, item.recede === true);
+      set.setFlag(row, ICON_RECEDES, Boolean(spec.recede));
       set.setFlag(row, ICON_CULL_LIFT, spec.horizonCull === true);
       set.setPickProxy(
         row,
@@ -727,10 +733,15 @@ export function createGpuIcons({
           }
         columnIds = ids;
       },
-      /** After `setOptions`: the cull lift follows `horizonCull`. */
+      /**
+       * After `setOptions`: the cull lift follows `horizonCull`, and every
+       * row recedes while the set does.
+       */
       restyle() {
-        for (let row = 0; row < set.count; row++)
+        for (let row = 0; row < set.count; row++) {
           set.setFlag(row, ICON_CULL_LIFT, spec.horizonCull === true);
+          set.setFlag(row, ICON_RECEDES, Boolean(spec.recede));
+        }
       },
       /** Rewrite the rows drawing from atlas `id`. */
       reatlas(id) {

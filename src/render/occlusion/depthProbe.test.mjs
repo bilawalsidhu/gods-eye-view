@@ -11,7 +11,7 @@ const FAR = 100_000;
 const WIDTH = 64;
 const HEIGHT = 32;
 
-/** A depth texture of a frame drawn with three's log depth (near 0): left half a wall 400 m away, right half ground 500 m away. */
+/** A depth texture of a frame drawn with log depth and no near plane: left half a wall 400 m away, right half ground 500 m away. */
 function depthSource(gl, { webgl2 = true } = {}) {
   const texture = gl.createTexture();
   texture.image = rawDepthImage(WIDTH, HEIGHT, (column) =>

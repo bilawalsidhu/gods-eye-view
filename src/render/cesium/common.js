@@ -14,22 +14,24 @@ import * as Cesium from 'cesium';
  * @param {(error: unknown) => void} onThrow
  */
 export function listenerList(onThrow) {
-  const entries = [];
+  // Copied on change, not on delivery: a delivery runs over the list as it
+  // stood, and a change made during it makes a new one.
+  let entries = [];
   return {
     get size() {
       return entries.length;
     },
     on(cb) {
       const entry = { cb, live: true };
-      entries.push(entry);
+      entries = [...entries, entry];
       return () => {
+        if (!entry.live) return;
         entry.live = false;
-        const i = entries.indexOf(entry);
-        if (i >= 0) entries.splice(i, 1);
+        entries = entries.filter((e) => e !== entry);
       };
     },
     fire(...args) {
-      for (const entry of entries.slice()) {
+      for (const entry of entries) {
         if (!entry.live) continue;
         try {
           entry.cb(...args);
@@ -40,7 +42,7 @@ export function listenerList(onThrow) {
     },
     clear() {
       for (const entry of entries) entry.live = false;
-      entries.length = 0;
+      entries = [];
     },
   };
 }

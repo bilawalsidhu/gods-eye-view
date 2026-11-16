@@ -150,7 +150,7 @@ export function createCesiumEffects(
         onChange: () => {
           if (gone() || modulation.draws() === modulationListed) return;
           modulationListed = modulation.draws();
-          listeners.fire(port.diagnostics());
+          if (listeners.size) listeners.fire(port.diagnostics());
         },
       })
     : null;
@@ -223,7 +223,8 @@ export function createCesiumEffects(
     if (gone()) return;
     apply();
     frame.requestRender(reason);
-    listeners.fire(port.diagnostics());
+    // A fade changes every frame: its diagnostics are listed only for ears.
+    if (listeners.size) listeners.fire(port.diagnostics());
   }
 
   /** Whether `id` names a style; changes to unknown ones are ignored. */

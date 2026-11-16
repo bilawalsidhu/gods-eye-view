@@ -11,7 +11,9 @@ import {
   pointerOwner,
   releasePointer,
   resetPointerOwnership,
+  bridgePointer,
 } from './inputOwnership.js';
+import { createInputRouter } from '../render/input/router.js';
 
 const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -35,22 +37,61 @@ test('the pointer starts free and a claim hands back a lease', () => {
   assert.equal(isLeaseCurrent(lease), true);
 });
 
-test('a claim is never stolen — not even by the same tool name', () => {
-  const first = claimPointer('draw');
-  assert.ok(first);
+test('the newest claim takes over and the holder it replaces is told, once', () => {
+  const told = [];
+  const first = claimPointer('draw', { onLost: () => told.push('draw') });
+  const second = claimPointer('directions', {
+    onLost: () => told.push('directions'),
+  });
+  assert.ok(second, 'a second claim is not refused');
+  assert.deepEqual(told, ['draw']);
+  assert.equal(pointerOwner(), 'directions');
+  assert.equal(isLeaseCurrent(first), false);
+  assert.equal(isLeaseCurrent(second), true);
+  assert.equal(
+    releasePointer(first),
+    false,
+    'the old late release frees nothing',
+  );
+  assert.equal(pointerOwner(), 'directions');
+  assert.deepEqual(told, ['draw'], 'told once');
+  assert.equal(releasePointer(second), true);
+  assert.deepEqual(told, ['draw'], 'a holder that lets go is not told');
+});
 
-  assert.equal(
-    claimPointer('directions'),
-    null,
-    'another tool must not displace it',
-  );
-  assert.equal(
-    claimPointer('draw'),
-    null,
-    'a SECOND instance of the same tool is a second owner, not a no-op',
-  );
-  assert.equal(pointerOwner(), 'draw');
-  assert.equal(isLeaseCurrent(first), true);
+test('a second instance of the same tool takes over from the first', () => {
+  // An old instance mid-teardown and its replacement already running are two
+  // owners: the replacement wins, and the old one is told to turn off.
+  let lost = 0;
+  const old = claimPointer('draw', { onLost: () => (lost += 1) });
+  const live = claimPointer('draw');
+  assert.notEqual(live.id, old.id);
+  assert.equal(lost, 1);
+  assert.equal(isLeaseCurrent(live), true);
+});
+
+test('the holder is told after the new claim holds the pointer; its error stays its own', (t) => {
+  const errors = [];
+  t.mock.method(console, 'error', (...args) => errors.push(args));
+  let seen = null;
+  const first = claimPointer('draw', {
+    onLost: () => {
+      seen = { owner: pointerOwner(), current: isLeaseCurrent(first) };
+      throw new Error('onLost');
+    },
+  });
+  const second = claimPointer('directions');
+  assert.deepEqual(seen, { owner: 'directions', current: false });
+  assert.equal(isLeaseCurrent(second), true);
+  assert.equal(errors.length, 1);
+});
+
+test('reset tells no one', () => {
+  let lost = 0;
+  claimPointer('draw', { onLost: () => (lost += 1) });
+  resetPointerOwnership();
+  claimPointer('directions');
+  assert.equal(lost, 0);
 });
 
 test('a replaced instance cannot free its successor’s claim', () => {
@@ -172,4 +213,65 @@ test('ambient selection handlers never claim the pointer themselves', () => {
       `${file} must not claim the pointer`,
     );
   }
+});
+
+/** A renderer's input port, as the contract's router keeps it. */
+const portOf = () =>
+  createInputRouter({
+    report: (error) => {
+      throw error;
+    },
+    suspendCamera: () => () => {},
+  }).port;
+
+test('a bridged port holds a lease for as long as a tool holds the pointer', () => {
+  const port = portOf();
+  const bridge = bridgePointer(port);
+  assert.equal(bridge.lease(), null);
+  const lease = claimPointer('draw');
+  assert.equal(port.isPointerFree(), false, 'the port is taken too');
+  assert.equal(bridge.lease().owner, 'draw');
+  assert.equal(bridge.lease().current, true);
+  const next = claimPointer('directions');
+  assert.equal(bridge.lease().owner, 'directions');
+  releasePointer(lease);
+  assert.equal(port.isPointerFree(), false, 'a stale release frees nothing');
+  releasePointer(next);
+  assert.equal(port.isPointerFree(), true);
+  assert.equal(bridge.lease(), null);
+  bridge.off();
+});
+
+test('a claim made on the port takes over from the page’s tool, and back', () => {
+  const port = portOf();
+  const bridge = bridgePointer(port);
+  const told = [];
+  const page = claimPointer('draw', { onLost: () => told.push('draw') });
+  const other = port.claimPointer('other', {
+    onLost: () => told.push('other'),
+  });
+  assert.deepEqual(told, ['draw'], 'the page’s tool is told');
+  assert.equal(isLeaseCurrent(page), false);
+  assert.equal(
+    isPointerFree(),
+    false,
+    'the port’s own claim holds the pointer',
+  );
+  assert.equal(bridge.lease(), null);
+  claimPointer('directions');
+  assert.deepEqual(told, ['draw', 'other'], 'a newer page claim takes it back');
+  assert.equal(other.current, false);
+  assert.equal(bridge.lease().owner, 'directions');
+  bridge.off();
+});
+
+test('a port bridged while a tool holds the pointer takes its lease at once; off gives it back', () => {
+  const lease = claimPointer('draw');
+  const port = portOf();
+  const bridge = bridgePointer(port);
+  assert.equal(port.isPointerFree(), false);
+  bridge.off();
+  assert.equal(port.isPointerFree(), true);
+  assert.equal(isLeaseCurrent(lease), true, 'the page claim stands');
+  assert.equal(isPointerFree(), false);
 });

@@ -74,6 +74,8 @@ export function createInputRouter({
 
   /** Each lease's `grab`, or null when it takes every press. */
   const leaseGrab = new WeakMap();
+  /** Each lease's ending by a newer claim, which hands back its `onLost`. */
+  const endLease = new WeakMap();
   /**
    * The presses under way, by button, from their `down`: `owner` is the
    * lease each went to, or null when it went to everyone else. A press's
@@ -96,9 +98,12 @@ export function createInputRouter({
       };
     },
     claimPointer(owner, opts = {}) {
-      if (currentLease) currentLease.release();
+      // The newest claim takes over. The lease it ends is told once, after
+      // this one holds the pointer, so its holder turns itself off.
+      const ended = currentLease ? endLease.get(currentLease)() : null;
       let released = false;
       const grab = typeof opts.grab === 'function' ? opts.grab : null;
+      const onLost = typeof opts.onLost === 'function' ? opts.onLost : null;
       const lease = {
         owner: String(owner),
         get current() {
@@ -110,8 +115,19 @@ export function createInputRouter({
           if (currentLease === lease) currentLease = null;
         },
       };
+      // Ends it for a newer claim; returns who to tell.
+      endLease.set(lease, () => {
+        lease.release();
+        return onLost;
+      });
       currentLease = lease;
       leaseGrab.set(lease, grab);
+      if (ended)
+        try {
+          ended();
+        } catch (error) {
+          report(error);
+        }
       return lease;
     },
     isPointerFree: () => currentLease === null,

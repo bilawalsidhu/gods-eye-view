@@ -21,7 +21,8 @@
  * Optional harness members widen what is checked: `pointer(r, type, x, y)`
  * (synthetic input; with `cameraInput`, the camera scripts' drags and
  * wheels too), `scriptHeights(r, fn)` (heights from a function),
- * `wallTime(r)` (the wall clock a `live` motion clock reads), `pixels`
+ * `wallTime(r)` (the wall clock a `live` motion clock reads),
+ * `resizeContainer(r, size)` (sizes the element the renderer fills), `pixels`
  * (false skips the checks that read drawn pixels),
  * `assets.model` (a glTF URL). `create` may return null when it cannot
  * make a renderer with fewer capabilities; those checks are then skipped.
@@ -55,6 +56,7 @@ import { portChecks } from './checks/ports.js';
  * @property {boolean} [cameraInput] The renderer's camera moves on pointer input sent through `pointer` (its own gestures, or a camera controller's): the camera scripts with `input` steps run.
  * @property {(r: object, fn: (point: {lon: number, lat: number}, against?: string) => number|null) => void} [scriptHeights]
  * @property {(r: object) => number} [wallTime] Epoch ms the renderer's `live` motion clock reads.
+ * @property {(r: object, size: {width: number, height: number}) => void|Promise<void>} [resizeContainer] Sizes the element the renderer fills, in CSS pixels, for the check that `resize` follows it.
  * @property {{model?: string, missingModel?: string, modelBytes?: () => Promise<Uint8Array>}} [assets] `modelBytes`: the bytes of a model, for the check that a model given its bytes never fetches its url.
  */
 

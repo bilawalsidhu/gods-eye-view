@@ -20,14 +20,7 @@ import { roadLabel } from '../../data/routeSteps.js';
 import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
 import { hexColor } from '../../render/color.js';
 import { drawOf } from '../../render/rendererOf.js';
-import {
-  t,
-  msg,
-  formatNumber,
-  getLocale,
-  translateKnown,
-} from '../../i18n/index.js';
-import { pointerOwnerName } from '../../data/pointerOwnerNames.js';
+import { t, msg, formatNumber, getLocale } from '../../i18n/index.js';
 import { inputFor } from '../../input/dispatcher.js';
 import {
   formatQuantity,
@@ -520,46 +513,6 @@ export function directionsRowControls(state) {
 }
 
 /**
- * Plain names for the tools that can be holding the pointer, and how to leave
- * each one. A tool missing from here still gets a usable sentence from its id.
- */
-export const POINTER_TOOL_EXITS = Object.freeze({
-  draw: Object.freeze({
-    name: msg('Draw'),
-    leave: msg('press Escape twice to leave Draw'),
-  }),
-});
-
-/**
- * What to say when a globe click cannot be armed because something else owns
- * the pointer.
- *
- * The claim failing used to be silent: the chip simply did not light and the
- * operator was left to guess which of the open tools was eating the click
- * (owner field test — he thought Directions was broken). So the message names
- * the tool and says how to put it down. Pure.
- * @param {string|null} owner Current pointer-owner id.
- * @param {'a'|'b'} which Endpoint that was being armed.
- * @returns {string|null} Toast text, or null when nothing holds the pointer.
- */
-export function pointerBlockedMessage(owner, which) {
-  const id = typeof owner === 'string' ? owner.trim() : '';
-  if (!id || id === DIRECTIONS_POINTER_OWNER) return null;
-  const endpoint = which === 'b' ? 'B' : 'A';
-  const known = POINTER_TOOL_EXITS[id];
-  if (!known)
-    return t('{name} is active — turn {name} off, then set {endpoint}', {
-      name: translateKnown(pointerOwnerName(id)),
-      endpoint,
-    });
-  return t('{name} is active — {leave}, then set {endpoint}', {
-    name: t(known.name),
-    leave: t(known.leave),
-    endpoint,
-  });
-}
-
-/**
  * Which maneuvers get a dot on the globe: every one except departure and
  * arrival, which the A and B markers already stand for.
  * @param {object[]} steps
@@ -675,29 +628,8 @@ export function stepIndexAtDistance(steps, traveledM) {
  * @returns {object}
  */
 export function directionsStats(state) {
-  const {
-    mode,
-    a,
-    b,
-    status,
-    error,
-    route,
-    lastUpdate,
-    armed,
-    pointerBlocked,
-  } = state;
+  const { mode, a, b, status, error, route, lastUpdate, armed } = state;
   const source = 'OSM routing'; // English in layer state; the layer row translates it
-  if (pointerBlocked) {
-    return {
-      count: route?.steps.length || 0,
-      lastUpdate,
-      error: msg(
-        'Another map tool is using clicks — close it, then SET A again',
-      ),
-      status: 'empty',
-      source,
-    };
-  }
   if (status === 'routing') {
     return {
       count: 0,
@@ -970,8 +902,6 @@ export function createDirectionsLayer({ services, source }) {
   let _renderHeld = false;
   let _rowControlsListener = null;
   let _dataManager = null;
-  /** Set when arming failed because another tool holds the pointer. */
-  let _pointerBlocked = false;
   /**
    * What `claimPointer` handed back for the claim this layer currently holds, or
    * null. Held rather than re-derived so the release names THIS claim: a claim
@@ -1020,7 +950,6 @@ export function createDirectionsLayer({ services, source }) {
       lastUpdate: _lastUpdate,
       selectedStep: _selectedStep,
       flightStep: _flightStep,
-      pointerBlocked: _pointerBlocked,
     };
   }
 
@@ -1346,11 +1275,14 @@ export function createDirectionsLayer({ services, source }) {
    * Give the pointer back, but only once the click that consumed it has finished
    * being dispatched.
    *
-   * The input dispatcher decides who hears a click before any subscriber runs,
-   * but DOM listeners on the canvas (evidence cards) still run later inside
-   * the SAME browser event. Releasing the claim the instant this layer places
-   * an endpoint would hand that same click to them. A timer, not a microtask:
-   * a microtask checkpoint runs between two DOM listeners, which is exactly the
+   * The input dispatcher decides who hears a click before any subscriber
+   * runs, so its own click subscribers cannot hear this click once it is let
+   * go. DOM `click` listeners on the canvas (the evidence cards) are another
+   * matter: the renderer's click comes from the pointer's `up`, and the
+   * browser's `click` follows inside the SAME input event, where they ask
+   * `isPointerFree()`. Releasing the claim the instant this layer places an
+   * endpoint would hand that same click to them. A timer, not a microtask: a
+   * microtask checkpoint runs between two DOM listeners, which is exactly the
    * gap this closes.
    */
   function releaseClaimAfterDispatch() {
@@ -1368,7 +1300,6 @@ export function createDirectionsLayer({ services, source }) {
    */
   function disarm({ afterDispatch = false } = {}) {
     _armed = null;
-    _pointerBlocked = false;
     if (afterDispatch) releaseClaimAfterDispatch();
     else releaseClaim();
   }
@@ -1403,8 +1334,9 @@ export function createDirectionsLayer({ services, source }) {
    * Arm (or cancel) a globe click for one endpoint.
    *
    * Placement is a TOOL: it takes the pointer so no ambient layer also selects
-   * whatever happened to be under the click. If another tool already holds it,
-   * this refuses — nothing is armed and the row says why.
+   * whatever happened to be under the click. The newest claim takes over: the
+   * tool holding it is told and turns itself off, and a newer tool taking it
+   * disarms this layer.
    * @param {null|'a'|'b'} which
    * @returns {boolean} Whether the layer is armed after this call.
    */
@@ -1413,23 +1345,19 @@ export function createDirectionsLayer({ services, source }) {
       disarm();
       return false;
     }
-    // A claim does not stack, not even under the same name — two live instances
-    // of one tool are two owners. So re-arming for the other endpoint reuses the
-    // lease already held instead of asking for a second one.
+    // Two live instances of one tool are two owners, so a second claim under
+    // the same name would end this layer's own. Re-arming for the other
+    // endpoint reuses the lease already held instead.
     if (!services.input.isLeaseCurrent(_pointerClaim)) {
-      const lease = services.input.claimPointer(DIRECTIONS_POINTER_OWNER);
-      if (!lease) {
-        _armed = null;
-        _pointerBlocked = true;
-        // The row already says it, but the row is not where the operator is
-        // looking after pressing a chip — say it where the app says everything.
-        const message = pointerBlockedMessage(
-          services.input.pointerOwner(),
-          which,
-        );
-        if (message) _shellSeams?.showToast?.(message);
-        return false;
-      }
+      // The newest claim takes over: a tool holding the pointer is told and
+      // turns itself off, and a newer one disarms this layer as Escape would.
+      const lease = services.input.claimPointer(DIRECTIONS_POINTER_OWNER, {
+        onLost: () => {
+          if (_pointerClaim !== lease) return;
+          disarm();
+          notifyRow();
+        },
+      });
       _pointerClaim = lease;
     }
     // A pending release from the previous placement would otherwise hand the
@@ -1438,7 +1366,6 @@ export function createDirectionsLayer({ services, source }) {
       clearTimeout(_releaseTimer);
       _releaseTimer = null;
     }
-    _pointerBlocked = false;
     _armed = which;
     _clearStepSelection();
     return true;
@@ -1741,7 +1668,6 @@ export function createDirectionsLayer({ services, source }) {
      */
     enable(viewer) {
       _enabled = true;
-      _pointerBlocked = false;
       if (_sets) _sets.steps.show = true;
       _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, true);
       _overlayHost.setVisible(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID, true);
@@ -1839,10 +1765,7 @@ export function createDirectionsLayer({ services, source }) {
      * the same immediate-navigation facade voice destinations use — so the route
      * dolly is one more caller of the single camera owner rather than a second
      * one. `floorFn`/`warmFn` are the shared ground floor the dolly flies over.
-     * `showToast` is the app's own toast, so a refusal is said where the rest of
-     * the UI says things.
-     * @param {{runNavigation?: Function, floorFn?: Function, warmFn?: Function,
-     *   showToast?: Function}|null} services
+     * @param {{runNavigation?: Function, floorFn?: Function, warmFn?: Function}|null} services
      */
     attachShellServices(services) {
       _shellSeams = services || null;

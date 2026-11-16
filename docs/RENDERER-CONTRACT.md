@@ -6,7 +6,7 @@ it meets the contract. The contract is version `0`. Today the application
 still drives Cesium directly; later work moves the layers onto the contract
 one family at a time.
 
-The package exports four modules:
+The package exports these modules:
 
 | Export                               | What it is                                                                             |
 | ------------------------------------ | -------------------------------------------------------------------------------------- |
@@ -15,10 +15,31 @@ The package exports four modules:
 | `gods-eye-view/render/camera/events` | The camera port's events: `changed` per listener, `moveStart`/`moveEnd`, command hooks |
 | `gods-eye-view/render/conformance`   | The conformance suite, reference scenes and visual comparison                          |
 
+The pieces that do not depend on Cesium are exported too, each with its
+these exports too, each with its own `.d.ts`:
+
+- `gods-eye-view/render/input/router`: the input port's leases and routing;
+- `gods-eye-view/render/stub/camera`, `.../stub/viewRectangle` and
+  `.../stub/harness`: the stub's camera, its view rectangle and its
+  conformance harness;
+- `gods-eye-view/render/motion`: where a moving icon is drawn at a time;
+- `gods-eye-view/render/vectorBase`: the vector base painter;
+- `gods-eye-view/render/iconSegment`: icon motion segments;
+- `gods-eye-view/render/recession`: how a set that recedes shrinks and
+  fades its items toward the limb;
+- `gods-eye-view/render/windStreamlines`: the wind field's streamlines;
+- `gods-eye-view/geo/screenCluster`: screen-space clustering.
+
+`src/render/neutralExports.test.mjs` checks that each is declared, that its
+names match what it exports, that it type-checks under strict TypeScript and
+that it imports no Cesium.
+
 A camera of its own (a camera controller over a renderer without one) can
 take the camera events from `render/camera/events` and the geodesy it needs
 (`geodesicAt`, `horizonFrom` and the rest) from `gods-eye-view/geo`, so it
-measures and fires exactly as the stub does.
+measures and fires exactly as the stub does. `CameraControllerFactory`
+(`camera.d.ts`) types such a controller: what it is given (`NativeCamera`)
+and what it gives back (the camera port and its two frame steps).
 
 ## Ports
 
@@ -98,6 +119,23 @@ optional, so a renderer written before it still conforms:
   flat colour (false); omitted, extruded shapes are lit and the rest flat,
   as before. The Cesium port lights unclamped shapes only
   (clamped ones drape unlit). The `shapes-lit` scene draws both.
+- `SetSpec.recede` (`RecedeSpec`, for icon and model sets) makes a set's
+  items shrink and fade toward the globe's limb, replacing the icon item's
+  own `recede` flag. Its parameters (each optional: where receding starts
+  as a share of the limb's distance, the scale and haze reached at the
+  limb, the least focus × haze draws with, and the eye heights over which
+  it all eases off for a view of the whole globe) and the maths are
+  `render/recession`'s, so the renderer draws exactly those factors: an icon
+  draws at its scale times the scale factor, and an icon or model at its
+  alpha times `max(combinedAlphaFloor, focus × haze)`. `ModelItem.focus`
+  dims a model as `IconItem.focus` dims an icon. It changes live
+  (`setOptions`). The Cesium port draws a receding icon set on the GPU,
+  the factors worked out in its shader, and fades a receding model set's
+  models each frame before the scene draws, writing a model's colour again
+  once its focus and haze move by more than 0.005. The check
+  `draw.sets.recede` makes and changes both kinds, and
+  `draw.sets.recede.models` reads a receding model's pixels: at focus 0.25
+  it draws faded, and a `combinedAlphaFloor` of 1, set live, brings it back.
 - `SetSpec.drawOrder` stacks sets drawn over depth: a higher one draws over
   a lower one and is picked first; equal ones keep the order they were
   made in. The Cesium port stacks opaque icons and points by it;
@@ -142,13 +180,10 @@ it while `globe.sky`'s `fog` is on.
 
 `weather` adds `globe.weather`: clouds, fog, haze, rain and snow drawn
 around the view, each a strength from 0 to 1, with the wind they drift on.
-`src/render/weather.js` keeps and clamps them alike for the renderer
-(`mergeWeather`). The app's `src/viewWeather.js` sets the conditions observed
-under the camera (the weather service, through
-`deriveWeatherEffectProfile`), asking again after five minutes or 25 km,
-and none from orbit; the Display panel's Weather group turns live off and
-sets clouds, fog, rain and snow by hand, and shows only on a renderer that
-lists `weather`. The Cesium port does not list it. The strengths say what
+`src/render/weather.js` (exported as `./render/weather`) keeps and clamps
+them (`mergeWeather`), and `./weather/effects`
+turns a weather observation into strengths (`deriveWeatherEffectProfile`).
+The application sets none, and the Cesium port does not list it. The strengths say what
 is observed (`clouds` is the fraction of the sky covered), not how it is
 drawn: the renderer draws clouds, fog and haze its own way, with clouds
 placed by scene time and the wind, and shading the ground under them where
@@ -205,7 +240,7 @@ quad given another source lets the old blob go with its old material, once the
 frame has drawn), a
 keyed canvas, and an atlas slot as the image it holds (an icon waits for an
 unregistered slot; anything else refuses it). The check `draw.icons.images`
-draws each kind on still and receding icons.
+draws each kind on still icons and in a set that recedes.
 
 Icon sets with `cluster` (`ClusterSpec`) cluster the same way on every
 renderer: `clusterScreenPoints` (`src/geo/screenCluster.js`) over the shown
@@ -218,7 +253,7 @@ and `meta` and the cluster's position, so `pick` gives the seed and
 `drillPick` every member. Clusters are made again in the frames drawn after
 the camera moves or the set changes, never on a timer. The Cesium port draws
 a set's cluster icons in a billboard collection of their own and hides the
-members' billboards. A set on the GPU (`columns`, or moving, receding,
+members' billboards. A set on the GPU (`columns`, a set that recedes, or moving,
 proxy-picked or level-of-detail icons) clusters its rows where their segments
 (and ground) put them at the frame's motion-clock time, hiding the members'
 rows; while rows still move it clusters again every frame. The checks
@@ -336,9 +371,35 @@ The rules that hold everywhere:
   follow → `preUpdate` → move detection → `preRender` → render →
   `postRender`, the default renderer's own. A camera move made by follow or
   in `preUpdate` is reported by `changed` on the next frame.
+- **Destroy ends everything.** After `destroy()`, every handle does
+  nothing: a set's or field's methods neither draw nor throw, and a set or
+  field asked for afterwards is such a handle. The same holds for one handle
+  after its own `dispose()`. `frame.renderOnce()` and `capture()` reject
+  with a "renderer destroyed" error, and a `renderOnce` still waiting at
+  destroy rejects rather than hang.
+- **Results are read-only.** `camera.matrices()` and `followFrame()` may
+  hand the same arrays again while they hold, and hand new ones once they
+  change, so one kept from an earlier frame stays as it was.
+- **Reading the frame.** `capture()` and `readPixels()` read the last
+  presented frame; neither draws one of its own when the frame is kept.
+  Whether to keep the drawing buffer is the renderer's own business, not a
+  creation option. The creation options a renderer takes are `msaa`, `sky`
+  and `time`, set before the first frame, and `clock`, which its frame
+  ticks, the camera's `moveEnd` wait, its input and its flights read, and
+  its inertia where the renderer times that itself: on Cesium, inertia
+  keeps Cesium's own timing.
 - **Leases:** a tool takes the pointer with `claimPointer`. With `grab`, it
   takes only the presses it grabs on `down`; the rest, and wheel and pinch,
-  stay with the camera and everyone else.
+  stay with the camera and everyone else. The newest claim takes over: it
+  ends the previous lease, whose `onLost` is called once, after the new lease
+  holds the pointer, so that tool turns itself off. A lease its holder
+  releases is never told, and an ended lease's release frees nothing.
+  The application's own tools (Draw, the imagery box, Directions) claim through
+  `src/data/inputOwnership.js`, which the input dispatcher bridges onto the
+  port, so a claim on either takes over from the other. The bridge's lease
+  grabs no press: the dispatcher decides who hears each event when it
+  arrives, and the renderer's stock select and double-click follow run
+  unless a tool holds them off.
 
 `src/render/contract/index.js` lists every member of every port in `PORTS`,
 along with `CAPABILITIES`, `FRAME_STEPS` and `QUALITY_KEYS`.
@@ -586,8 +647,10 @@ renderer under test:
 
 Optional members widen what is checked: `pointer` for synthetic input,
 `cameraInput` (the camera answers that input: the drag and wheel traces
-run), `scriptHeights`, `assets.model`, and `assets.missingModel` (a model
-url that fails to load, for the `loadFailed` check). `pixels: false` says
+run), `scriptHeights`, `resizeContainer` (sizes the element the renderer
+fills, for the `resize` check, which skips without it), `assets.model`, and
+`assets.missingModel` (a model url that fails to load, for the `loadFailed`
+check). `pixels: false` says
 the renderer draws nothing but models into its pixels, as the stub: the
 checks that read drawn icons, lines and fields then skip. Without it they
 run, and the renderer fails them if it draws nothing there.
@@ -661,6 +724,13 @@ The scenes load nothing from the network.
   The page shows the capture, the reference and the difference side by side.
 
 `window.conformance.runScenes()` and `runLogic()` do the same from a script.
+
+`npm run qa:conformance` runs the logic checks on the Cesium renderer in
+headless Chromium (software WebGL, no GPU needed). It starts its own Vite
+server unless given `--url`; `--only id,id` runs just those checks and
+`--json path` writes the report. It fails on any failed check and on any
+skip it does not expect (`query.heights`, which needs scripted heights, is
+the one it expects). CI runs it in the `street-level-browser` job.
 Browser checks use the chrome-devtools MCP against a page in its own window.
 
 The Cesium scene renderer (`src/render/cesium/sceneRenderer.js`) draws

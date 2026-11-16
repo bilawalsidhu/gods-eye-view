@@ -97,3 +97,24 @@ test('model hue changes at constant alpha, then clears without redundant writes'
   assert.equal(applyAircraftModelTreatment({model,baseColor:color(1,1,1),alpha:0.65}),1);
   assert.equal(model.color.green,1);
 });
+
+test('the aircraft sets recede by the tuning: one object until it changes', async () => {
+  const {
+    aircraftRecedeSpec,
+    setAircraftRecessionParams,
+    resetAircraftRecessionParams,
+  } = await import('./aircraftRecession.js');
+  const { RECEDE_DEFAULTS } = await import('../render/recession.js');
+  resetAircraftRecessionParams();
+  const first = aircraftRecedeSpec();
+  assert.deepEqual(first, { ...RECEDE_DEFAULTS });
+  assert.equal(aircraftRecedeSpec(), first);
+  setAircraftRecessionParams({ scaleFloor: 0.6, globeViewHeightM: 4_000_000 });
+  const tuned = aircraftRecedeSpec();
+  assert.notEqual(tuned, first);
+  assert.equal(tuned.scaleFloor, 0.6);
+  assert.equal(tuned.globeViewBlendEndM, 4_000_000);
+  assert.equal('writeEpsilon' in tuned, false);
+  resetAircraftRecessionParams();
+  assert.deepEqual(aircraftRecedeSpec(), first);
+});

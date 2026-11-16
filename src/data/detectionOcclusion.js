@@ -124,7 +124,7 @@ export function depthToViewDistance(depth, near, far, logDepth) {
   if (logDepth)
     return near + Math.pow(2, depth * Math.log2(far - near + 1)) - 1;
   // Standard depth needs a near plane in front of the eye; log depth does not
-  // (as WebGL log depth writes it, with none).
+  // (it can be written with none, as log2(1 + d) / log2(far + 1)).
   if (!(near > 0)) return Number.NaN;
   return (near * far) / (far - depth * (far - near));
 }

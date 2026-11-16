@@ -30,12 +30,15 @@ import type {
   GeoRect,
   HeadingPitchRange,
   HeadingPitchRoll,
+  LonLat,
   Off,
   Position,
   Release,
   Sphere,
   Vec3,
 } from './common';
+import type { PointerEv, PointerEventType } from './input';
+import type { HeightOptions } from './query';
 
 export interface CameraPose {
   lon: number;
@@ -297,6 +300,7 @@ export interface CameraPort {
    * reading is valid only for the tick it is read in. `setView` places a
    * world pose and keeps this frame, so code can re-express an offset in
    * the follow's own frame, whichever frame that is, and place the eye there.
+   * Read-only, handed again while it holds, as `matrices()` are.
    */
   followFrame?(): Float64Array;
   readonly controls: CameraControls;
@@ -313,7 +317,78 @@ export interface CameraPort {
    * Column-major, right-handed: `view` takes ECEF to eye space (absolute,
    * not eye-relative); `projection` takes eye space to clip space with depth
    * in [-1, 1]. A renderer with an infinite far plane returns the
-   * infinite-far form, and `pose().far` is `Infinity`.
+   * infinite-far form, and `pose().far` is `Infinity`. Read-only: a
+   * renderer may hand the same arrays again while they hold, and hands new
+   * ones once they change (one kept from an earlier frame stays as it was).
    */
-  matrices(): { view: Float64Array; projection: Float64Array };
+  matrices(): {
+    readonly view: Float64Array;
+    readonly projection: Float64Array;
+  };
 }
+
+/** A camera controller's frame tick: the loop's clock and the scene time. */
+export interface CameraTick {
+  /** The loop's clock, ms, on the `performance.now()` timeline. */
+  now: number;
+  /** Scene time, epoch ms. */
+  time: number;
+}
+
+/** The eye a camera controller writes, in ECEF; `fovy` vertical, radians. */
+export interface ControllerEye {
+  position: Ecef;
+  direction: Ecef;
+  up: Ecef;
+  right: Ecef;
+  fovy: number;
+}
+
+/**
+ * The camera a renderer hands a camera controller: it reads and writes the
+ * eye exactly, says the canvas's CSS size, and lends the query, draw and
+ * frame ports' members the controller needs.
+ */
+export interface NativeCamera {
+  pose(): {
+    position: Ecef;
+    direction: Ecef;
+    up: Ecef;
+    near: number;
+    far: number;
+  };
+  setPose(eye: ControllerEye): void;
+  viewport(): { width: number; height: number };
+  sampleHeightNow?(point: LonLat, options?: HeightOptions): number | null;
+  pickPosition?(x: number, y: number): Ecef | null;
+  /** Where the draw port draws an item it moves itself. */
+  itemPosition?(
+    item: { set: string; id: string | number },
+    aheadMs?: number,
+  ): Ecef | null;
+  requestRender?(reason: string): void;
+}
+
+/**
+ * A camera controller, as an application hands one to a renderer without a
+ * camera of its own (or in place of its own): given the native camera, the
+ * input port's pointer events and the page's keys, it makes the camera port.
+ * The renderer runs `frame.beforeUpdate` before its `preUpdate` listeners
+ * and `frame.afterUpdate` after them, each tick, drawn or not.
+ */
+export type CameraControllerFactory = (options: {
+  native: NativeCamera;
+  input?: {
+    on(type: PointerEventType, cb: (event: PointerEv) => void): Off;
+  };
+  report?: (error: unknown) => void;
+  keyTarget?: EventTarget;
+  thresholds?: boolean;
+}) => {
+  port: CameraPort;
+  frame: {
+    beforeUpdate(tick: CameraTick): void;
+    afterUpdate(tick: CameraTick): void;
+  };
+  destroy(): void;
+};

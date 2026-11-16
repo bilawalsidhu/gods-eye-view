@@ -84,7 +84,11 @@ export interface FramePort {
    * the animation frames the loop runs on.
    */
   renderNow(options?: { ifDue?: boolean }): void;
-  /** Resolves after the next frame has been drawn and presented. */
+  /**
+   * Resolves after the next frame has been drawn and presented. Once the
+   * renderer is destroyed it rejects with a "renderer destroyed" error, and
+   * so does one still waiting when the renderer is destroyed.
+   */
   renderOnce(options?: { timeoutMs?: number }): Promise<void>;
   /** Cap the loop's rate; 0 is the display's rate. */
   setTargetFps(fps: number): void;

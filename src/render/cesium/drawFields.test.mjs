@@ -691,3 +691,32 @@ test('the Cesium fields refuse kinds they cannot draw and live ids', () => {
   field.dispose();
   h.fields.field(spec).dispose();
 });
+
+test('once the fields are disposed, a field asked for draws nothing and does nothing', () => {
+  const h = fieldHarness();
+  const field = h.fields.field({
+    kind: 'rasterShell',
+    id: 'shell',
+    image: h.image(),
+    rectangle: RECT,
+    heightM: 1,
+  });
+  h.fields.dispose();
+  assert.equal(h.live().length, 0, 'the live field went');
+  field.update({ alpha: 0.5 });
+  field.show = true;
+  const late = h.fields.field({
+    kind: 'rasterShell',
+    id: 'late',
+    image: h.image(),
+    rectangle: RECT,
+    heightM: 1,
+  });
+  late.update({ heightM: 2 });
+  late.show = true;
+  assert.equal(typeof late.on('drawn', () => {}), 'function');
+  h.render();
+  assert.equal(h.live().length, 0, 'nothing drawn after');
+  assert.equal(h.fields.has('late'), false);
+  late.dispose();
+});

@@ -24,7 +24,7 @@
  * settle into static batches that cost nothing until they change, and a
  * line that moves again goes back to the collection (`settleLines`).
  *
- * Icon sets whose items move, glide, recede, pick by proxy or switch images
+ * Icon sets that recede, or whose items move, glide, pick by proxy or switch images
  * by size, or that take columns, draw on the GPU instead (`gpuIcons.js`).
  *
  * Built over a scene by `createCesiumPorts`, and on its own over a Cesium
@@ -441,6 +441,9 @@ const ICONS_KEPT = 'kept';
 const POINTS_ADDED = 'added';
 const POINTS_KEPT = 'kept';
 
+/** Whether a set's GPU icons move on in the frames that follow. */
+const animating = (record) => record.gpu?.animating();
+
 /**
  * The draw port over `scene`, and what the other ports read of it: the live
  * sets by id, a version that changes with what height queries see through
@@ -448,17 +451,20 @@ const POINTS_KEPT = 'kept';
  * the clamp-state watch the frame loop runs after each draw.
  * @param {{scene: object, report: (error: unknown) => void,
  *   capabilities?: ReadonlySet<string>,
- *   requestRender?: (reason: string) => void}} options `capabilities` gate
+ *   requestRender?: (reason: string) => void,
+ *   date?: () => number}} options `capabilities` gate
  *   the GPU icon sets' members (by default they all are); `requestRender`,
  *   the frame port's, asks for the frames a GPU icon set needs on its own
  *   (its images packed), under the reason `icons:<set id>` (by default the
- *   scene's, with no reason).
+ *   scene's, with no reason); `date`, the epoch ms a `live` motion clock
+ *   reads (by default the system clock's).
  */
 export function createCesiumDraw({
   scene,
   report,
   capabilities = new Set(GPU_ICON_CAPABILITIES),
   requestRender: requestFrame = null,
+  date = null,
 }) {
   const sets = new Map();
   // Fields share the sets' ids.
@@ -481,6 +487,15 @@ export function createCesiumDraw({
   const requestRender = () => {
     if (live()) scene.requestRender();
   };
+  // Once the port is disposed (its renderer destroyed), every set does
+  // nothing, and so does a set asked for after that.
+  let portDisposed = false;
+
+  /** A disposed set's listeners hear nothing more, even mid-delivery. */
+  function silence(record) {
+    record.listeners.ready.clear();
+    record.listeners.loadFailed.clear();
+  }
 
   function makeSet(kind, spec, build) {
     if (sets.has(spec.id) || fieldPart.has(spec.id))
@@ -569,6 +584,9 @@ export function createCesiumDraw({
           record.gpu.write(list);
           return patched();
         }
+        // Icons drawn already, with the images they are drawn with, each
+        // changed where it is.
+        if (patchDrawnIcons(record, list)) return iconsPatched(ICONS_KEPT);
         // Points restyled, moved or added keep the pick ids they had, so
         // only points added change what height queries see through.
         const points = patchPoints(record, list);
@@ -578,13 +596,22 @@ export function createCesiumDraw({
           requestRender();
           return;
         }
+        // Models are changed where they are; moved or restyled they keep
+        // their pick ids, so only models added change what height queries
+        // see through.
+        if (kind === 'models') {
+          const added = modelSets.upsert(record, list);
+          for (const item of list) items.set(item.id, item);
+          if (added) setsVersion += 1;
+          requestRender();
+          return;
+        }
         // Lines that only change how they show or where an undraped one
         // runs, and clamped shapes that only show or hide, or a few colour
         // fills that only move (`moveShape`), are changed where they are.
         if (
           patchLines(record, list) ||
           patchShapes(record, list) ||
-          (kind === 'models' && modelSets.upsert(record, list)) ||
           (kind === 'quads' && quadSets.upsert(record, list)) ||
           (kind === 'meshes' && meshSets.upsert(record, list))
         ) {
@@ -639,8 +666,12 @@ export function createCesiumDraw({
           requestRender();
           return;
         }
-        // Refused, changing nothing, where icons on the GPU cannot take it.
+        // Refused, changing nothing, where icons on the GPU cannot take it
+        // (all of them, for billboards told to recede, which go onto it).
+        const toGpu =
+          kind === 'icons' && !record.gpu && Boolean(options.recede);
         if (record.gpu) gpu.check([], { ...spec, ...options });
+        else if (toGpu) gpu.check(items.values(), { ...spec, ...options });
         const culled = spec.horizonCull;
         const clampTo = spec.clampTo;
         const blend = spec.blend;
@@ -666,6 +697,10 @@ export function createCesiumDraw({
         // A set that stops picking lets its old ground go now: still drawn
         // while the new builds, it would keep hiding the ground from picks.
         if (pickable && spec.pickable === false) retire(record);
+        if (toGpu) {
+          onGpu(record, [], true, true);
+          record.gpu.sync();
+        }
         record.gpu?.restyle();
         if (kind === 'models') modelSets.restyle(record);
         setsVersion += 1;
@@ -784,6 +819,42 @@ export function createCesiumDraw({
         handle.upsert([...record.inertialDraped.values()]);
       };
     }
+    // A disposed set does nothing on later calls: one would draw what
+    // nothing removes.
+    record.disposed = portDisposed;
+    for (const name of [
+      'set',
+      'upsert',
+      'remove',
+      'clear',
+      'setOptions',
+      'setColumns',
+    ]) {
+      const call = handle[name];
+      if (!call) continue;
+      handle[name] = (...args) => {
+        if (!record.disposed) return call(...args);
+      };
+    }
+    const { set: showSet } = Object.getOwnPropertyDescriptor(handle, 'show');
+    Object.defineProperty(handle, 'show', {
+      get: () => spec.show !== false,
+      set(value) {
+        if (!record.disposed) showSet.call(handle, value);
+      },
+      enumerable: true,
+    });
+    const on = handle.on;
+    handle.on = (event, cb) => (record.disposed ? () => {} : on(event, cb));
+    const disposeOnce = handle.dispose;
+    handle.dispose = () => {
+      if (record.disposed) return;
+      record.disposed = true;
+      // A listener that disposes the set stops the rest of that delivery.
+      silence(record);
+      disposeOnce();
+    };
+    if (record.disposed) return handle;
     sets.set(spec.id, record);
     setsVersion += 1;
     return handle;
@@ -792,6 +863,7 @@ export function createCesiumDraw({
   const gpu = createGpuIcons({
     scene,
     capabilities,
+    date,
     toColor,
     imageOf: (record, image) => iconImage(record, image),
     peekImage: (image) => atlases.get(image.atlas)?.[image.slot],
@@ -811,7 +883,7 @@ export function createCesiumDraw({
    */
   function onGpu(record, list, replacing = false, force = false) {
     if (record.kind !== 'icons') return false;
-    if (!record.gpu && !force && !gpu.wants(list)) return false;
+    if (!record.gpu && !force && !gpu.wants(list, record.spec)) return false;
     gpu.check(list, record.spec);
     if (record.gpu) return true;
     if (!replacing) gpu.check(record.items.values(), record.spec);
@@ -1073,11 +1145,6 @@ export function createCesiumDraw({
    */
   function clusterIcons(frameState = scene.frameState) {
     let pose;
-    const poseNow = () => {
-      const eye = scene.camera?.positionWC;
-      const dir = scene.camera?.directionWC;
-      return `${eye?.x},${eye?.y},${eye?.z},${dir?.x},${dir?.y},${dir?.z},${scene.canvas?.clientWidth},${scene.canvas?.clientHeight}`;
-    };
     for (const record of sets.values()) {
       if (!clusters(record)) {
         if (record.clusterHost || record.clusterState) {
@@ -1095,19 +1162,52 @@ export function createCesiumDraw({
         record.clusterKey = null;
         record.clusteredHost = host;
       }
-      pose ??= poseNow();
-      // Rows still moving on their segments cluster again every frame.
-      const key = record.gpu?.moving(frameState)
-        ? `${pose}@${frameState?.frameNumber ?? Math.random()}`
-        : pose;
-      if (record.clusterKey === key) {
+      pose ??= clusterPoseNow();
+      // Rows still moving on their segments cluster again every frame (NaN,
+      // a frame with no number, is never the last).
+      const frameKey = record.gpu?.moving(frameState)
+        ? (frameState?.frameNumber ?? NaN)
+        : null;
+      if (record.clusterKey === pose && record.clusterFrame === frameKey) {
         if (record.clusterHost)
           record.clusterHost.show = record.spec.show !== false;
         continue;
       }
-      record.clusterKey = key;
+      record.clusterKey = pose;
+      record.clusterFrame = frameKey;
       reclusterIcons(record, frameState);
     }
+  }
+
+  // The eye and canvas the clusters were last measured at, and a count of
+  // their changes: a set clusters again when the count it clustered at is
+  // not the count now.
+  const clusterPose = new Float64Array(8).fill(NaN);
+  let clusterPoseVersion = 0;
+  let clusterPoseAt = 0;
+  let clusterPoseSame = true;
+  function putClusterPose(value) {
+    if (!Object.is(clusterPose[clusterPoseAt], value)) {
+      clusterPoseSame = false;
+      clusterPose[clusterPoseAt] = value;
+    }
+    clusterPoseAt += 1;
+  }
+  function clusterPoseNow() {
+    const eye = scene.camera?.positionWC;
+    const dir = scene.camera?.directionWC;
+    clusterPoseAt = 0;
+    clusterPoseSame = true;
+    putClusterPose(eye?.x ?? NaN);
+    putClusterPose(eye?.y ?? NaN);
+    putClusterPose(eye?.z ?? NaN);
+    putClusterPose(dir?.x ?? NaN);
+    putClusterPose(dir?.y ?? NaN);
+    putClusterPose(dir?.z ?? NaN);
+    putClusterPose(scene.canvas?.clientWidth ?? NaN);
+    putClusterPose(scene.canvas?.clientHeight ?? NaN);
+    if (!clusterPoseSame) clusterPoseVersion += 1;
+    return clusterPoseVersion;
   }
 
   /** The points a GPU set clusters: its shown rows where they are drawn. */
@@ -1274,9 +1374,13 @@ export function createCesiumDraw({
 
   /** Whether a shown set shows flow lines, which draw on in later frames. */
   const flowing = () =>
-    [...sets.values()].some(
-      (record) => record.spec.show !== false && record.flowShown,
-    );
+    anySet((record) => record.spec.show !== false && record.flowShown);
+
+  /** Whether any set passes `test`, without copying the sets (per frame). */
+  function anySet(test) {
+    for (const record of sets.values()) if (test(record)) return true;
+    return false;
+  }
 
   /** Note whether a line set shows any flow line, once its lines change. */
   function noteFlows(record) {
@@ -1621,37 +1725,48 @@ export function createCesiumDraw({
   }
 
   /**
-   * `syncIcons`' quick case: every item is drawn, every touched one keeps
-   * the image it is drawn with, and nothing drawn has gone, so each touched
-   * one is changed where it is and nothing is added, removed or reordered.
-   * False, changing nothing, otherwise.
+   * `upsert`'s quick case for an icon set on billboards: every item is
+   * drawn, every one of `list` keeps the image it is drawn with, and
+   * nothing drawn has gone, so each of `list` is changed where it is
+   * (`patchIcon`: only moved, when that is all that changed) and nothing is
+   * added, removed or reordered. Each item is read once: a layer moves its
+   * icons every frame. The items are taken as the set's. False, changing
+   * nothing, otherwise.
    * @param {object} record
-   * @param {readonly string[]} touched
+   * @param {readonly object[]} list
    */
-  function patchDrawnIcons(record, touched) {
+  function patchDrawnIcons(record, list) {
     const drawn = record.billboards;
+    const host = record.billboardHost;
     // Nothing to remove: every item drawn, and nothing drawn but items.
     if (
-      !Array.isArray(touched) ||
-      touched.length === 0 ||
+      record.kind !== 'icons' ||
+      !drawn ||
+      !host ||
+      record.host !== host ||
+      host.isDestroyed() ||
+      list.length === 0 ||
       drawn.size !== record.items.size
     )
       return false;
-    for (const id of touched) {
-      const entry = drawn.get(id);
-      const item = record.items.get(id);
-      if (!entry || !item) return false;
-      const image = iconImage(record, item.image);
+    const entries = new Array(list.length);
+    const images = new Array(list.length);
+    for (let i = 0; i < list.length; i++) {
+      const entry = drawn.get(list[i].id);
+      if (!entry) return false;
+      const image = iconImage(record, list[i].image);
       if (
         image === undefined ||
         imageKeyOf(image) !== entry.image ||
         (isKeyed(image) && image.canvas !== entry.canvas)
       )
         return false;
+      entries[i] = entry;
+      images[i] = image;
     }
-    for (const id of touched) {
-      const item = record.items.get(id);
-      patchIcon(record, drawn.get(id), item, iconImage(record, item.image));
+    for (let i = 0; i < list.length; i++) {
+      record.items.set(list[i].id, list[i]);
+      patchIcon(record, entries[i], list[i], images[i]);
     }
     return true;
   }
@@ -1685,7 +1800,6 @@ export function createCesiumDraw({
       host.isDestroyed()
     )
       return false;
-    if (!reordered && patchDrawnIcons(record, touched)) return ICONS_KEPT;
     const images = new Map();
     for (const id of touched) {
       const item = record.items.get(id);
@@ -2467,7 +2581,7 @@ export function createCesiumDraw({
       ? Cesium.JulianDate.toDate(
           scene.frameState?.time ?? Cesium.JulianDate.now(),
         ).getTime()
-      : Date.now() - (clock?.delayMs ?? 0);
+      : (date ? date() : Date.now()) - (clock?.delayMs ?? 0);
   }
 
   /**
@@ -5300,7 +5414,7 @@ export function createCesiumDraw({
       return record.gpu.drawnAt(ref.id, aheadMs, time ? { time } : undefined);
     },
     /** Whether a set's ground primitives are still being built. */
-    building: () => [...sets.values()].some((record) => record.pending),
+    building: () => anySet((record) => record.pending),
     /** Each frame, before it draws: the horizon cull. */
     beforeRender() {
       pulsing = runPulses();
@@ -5343,19 +5457,14 @@ export function createCesiumDraw({
       // Rows moving on a live clock, and flowing lines, draw on in the
       // frames that follow.
       const playing = quadSets.afterRender(sets.values());
-      if (
-        [...sets.values()].some((record) => record.gpu?.animating()) ||
-        flowing() ||
-        pulsing ||
-        playing
-      )
-        requestRender();
+      if (anySet(animating) || flowing() || pulsing || playing) requestRender();
     },
     /**
      * Let go of the sets; with `removeHosts`, take what they draw out of
      * the scene too (a scene the port does not own outlives it).
      */
     dispose({ removeHosts = false } = {}) {
+      portDisposed = true;
       clampListeners.clear();
       // Fields go with the port, and their frame listeners with them.
       fieldPart.dispose();
@@ -5366,6 +5475,8 @@ export function createCesiumDraw({
           retire(record);
         }
         record.host = null;
+        record.disposed = true;
+        silence(record);
       }
       sets.clear();
     },

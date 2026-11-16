@@ -207,23 +207,8 @@ export function createCesiumCredits({ display, scene, report, requestRender }) {
     const { statics, screen, lightbox, logo } = creditDisplayContents(
       displayLive() ? display : undefined,
     );
-    let same = true;
-    let at = 0;
-    const put = (value) => {
-      if (!Object.is(lastInputs[at], value)) {
-        same = false;
-        lastInputs[at] = value;
-      }
-      at += 1;
-    };
-    const putElements = (elements) => {
-      put(elements.length);
-      for (const element of elements) {
-        put(element.credit);
-        put(element.count);
-        put(element.credit?.showOnScreen);
-      }
-    };
+    inputsSame = true;
+    inputAt = 0;
     put(coreVersion);
     put(logo);
     put(logo?.showOnScreen);
@@ -234,7 +219,25 @@ export function createCesiumCredits({ display, scene, report, requestRender }) {
     }
     putElements(screen);
     putElements(lightbox);
-    return same;
+    return inputsSame;
+  }
+  // Where `inputsHeld` writes next, and whether all it wrote held.
+  let inputAt = 0;
+  let inputsSame = true;
+  function put(value) {
+    if (!Object.is(lastInputs[inputAt], value)) {
+      inputsSame = false;
+      lastInputs[inputAt] = value;
+    }
+    inputAt += 1;
+  }
+  function putElements(elements) {
+    put(elements.length);
+    for (const element of elements) {
+      put(element.credit);
+      put(element.count);
+      put(element.credit?.showOnScreen);
+    }
   }
   inputsHeld();
 

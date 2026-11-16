@@ -160,17 +160,36 @@ test('an Escape interceptor that claims the key leaves the tool armed; the next 
   await f.tool.destroy();
 });
 
-test('a held pointer refuses the session and nothing is borrowed', async () => {
+test('a session takes the pointer from another tool, which is told', async () => {
   const f = fixture();
+  let lost = 0;
+  claimPointer('draw', { onLost: () => (lost += 1) });
+  assert.equal(f.tool.start(), true);
+  assert.equal(pointerOwner(), IMAGERY_BOX_POINTER_OWNER);
+  assert.equal(lost, 1);
+  assert.deepEqual(f.cancels, []);
+  await f.tool.destroy();
+});
+
+test('a newer tool taking the pointer mid-drag cancels the session and returns everything', async () => {
+  const f = fixture();
+  f.tool.start();
+  f.fire('LEFT_DOWN', { position: { x: 250, y: 125 } });
+  f.fire('MOUSE_MOVE', { endPosition: { x: 500, y: 250 } });
+  assert.equal(f.camera.enableInputs, false);
   const lease = claimPointer('draw');
-  assert.equal(f.tool.start(), false);
-  assert.deepEqual(f.cancels, [
-    ['pointer-busy', 'draw is using the pointer — close it first'],
-  ]);
+  assert.equal(f.tool.isActive(), false);
+  assert.deepEqual(f.cancels, [['cancel', undefined]], 'as if cancelled');
+  assert.deepEqual(f.actives, [true, false]);
+  assert.equal(f.camera.enableInputs, true, 'the camera is back');
+  assert.equal(f.preview(), false, 'no box is left on the globe');
   assert.equal(f.stockAction('LEFT_CLICK'), f.originalClick);
   assert.equal(f.bound(), false);
+  assert.equal(f.documentRef.classes.has('gev-imagery-box'), false);
+  assert.equal(pointerOwner(), 'draw', 'the newer tool keeps it');
+  f.fire('LEFT_UP', { position: { x: 500, y: 250 } });
+  assert.deepEqual(f.boxes, [], 'the drag it ended hands over no box');
   releasePointer(lease);
-  assert.equal(f.tool.start(), true);
   await f.tool.destroy();
 });
 

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { inputFor, pickAt } from './dispatcher.js';
-import { bindRenderer } from '../render/rendererOf.js';
+import { bindRenderer, findInput } from '../render/rendererOf.js';
 import {
   FAKE_EVENT_TYPES,
   FakeScreenSpaceEventHandler as FakeHandler,
@@ -191,6 +191,98 @@ test('a stale lease gets nothing once its successor holds the pointer', (t) => {
   t.after(() => releasePointer(second));
   h.click();
   assert.equal(staleRan, 0);
+});
+
+test("a tool's claim holds the renderer's input port without taking its presses", (t) => {
+  const h = harness();
+  t.after(() => h.input.destroy());
+  const port = findInput(h.viewer);
+  const heard = [];
+  port.on('click', () => heard.push('port'));
+  const lease = claimPointer('test-tool');
+  t.after(() => releasePointer(lease));
+  h.input.onPointer('click', () => heard.push('tool'), { lease });
+  assert.equal(port.isPointerFree(), false);
+  h.click();
+  // Who hears a click is decided here, when it arrives; the port gives
+  // every press on, so the renderer's own select runs unless held off.
+  assert.deepEqual(heard, ['tool', 'port']);
+  releasePointer(lease);
+  assert.equal(port.isPointerFree(), true);
+  h.click();
+  assert.deepEqual(heard, ['tool', 'port', 'port']);
+});
+
+test('a click goes where the pointer is when it arrives: a tool that claims during the press gets it, ambient selection does not', (t) => {
+  const h = harness();
+  t.after(() => h.input.destroy());
+  const heard = [];
+  h.input.onClick(() => heard.push('ambient'));
+  let lease = null;
+  h.input.onPointer('click', () => heard.push('tool'), {
+    lease: () => lease,
+  });
+  h.input.onPointer('dblclick', () => heard.push('tool:dblclick'), {
+    lease: () => lease,
+  });
+  h.input.onPointer('dblclick', () => heard.push('ambient:dblclick'));
+  h.handler.fire(TYPES.LEFT_DOWN, { position: { x: 10, y: 10 } });
+  lease = claimPointer('test-tool');
+  t.after(() => releasePointer(lease));
+  h.handler.fire(TYPES.LEFT_UP, { position: { x: 10, y: 10 } });
+  h.handler.fire(TYPES.LEFT_CLICK, { position: { x: 10, y: 10 } });
+  h.handler.fire(TYPES.LEFT_DOUBLE_CLICK, { position: { x: 10, y: 10 } });
+  assert.deepEqual(heard, ['tool', 'tool:dblclick']);
+});
+
+test('a click goes where the pointer is when it arrives: after a tool lets go during the press, ambient selection gets it', (t) => {
+  const h = harness();
+  t.after(() => h.input.destroy());
+  const heard = [];
+  h.input.onClick(() => heard.push('ambient'));
+  const lease = claimPointer('test-tool');
+  t.after(() => releasePointer(lease));
+  h.input.onPointer('click', () => heard.push('tool'), { lease });
+  h.input.onPointer('dblclick', () => heard.push('ambient:dblclick'));
+  h.handler.fire(TYPES.LEFT_DOWN, { position: { x: 10, y: 10 } });
+  releasePointer(lease);
+  h.handler.fire(TYPES.LEFT_UP, { position: { x: 10, y: 10 } });
+  h.handler.fire(TYPES.LEFT_CLICK, { position: { x: 10, y: 10 } });
+  h.handler.fire(TYPES.LEFT_DOUBLE_CLICK, { position: { x: 10, y: 10 } });
+  assert.deepEqual(heard, ['ambient', 'ambient:dblclick']);
+});
+
+test("a claim on the renderer's port takes over from the tool, which is told", (t) => {
+  const h = harness();
+  t.after(() => h.input.destroy());
+  const port = findInput(h.viewer);
+  const told = [];
+  const heard = [];
+  const lease = claimPointer('test-tool', { onLost: () => told.push('tool') });
+  h.input.onPointer('click', () => heard.push('tool'), { lease });
+  h.input.onClick(() => heard.push('ambient'));
+  const other = port.claimPointer('other');
+  t.after(() => other.release());
+  port.on('click', () => heard.push('other'), { lease: other });
+  assert.deepEqual(told, ['tool']);
+  h.click();
+  assert.deepEqual(
+    heard,
+    ['other'],
+    'neither the old tool nor ambient selection',
+  );
+  releasePointer(lease);
+  assert.equal(other.current, true, "the old tool's release frees nothing");
+});
+
+test('destroy gives the port its lease back', () => {
+  const h = harness();
+  const port = findInput(h.viewer);
+  const lease = claimPointer('test-tool');
+  assert.equal(port.isPointerFree(), false);
+  h.input.destroy();
+  assert.equal(port.isPointerFree(), true);
+  releasePointer(lease);
 });
 
 test('camera input returns only when the last hold releases', (t) => {

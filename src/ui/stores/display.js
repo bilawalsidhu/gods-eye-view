@@ -29,14 +29,32 @@ export const useDisplayStore = defineStore('gev-display', () => {
   }
 
   /**
-   * The Weather group, `{live, status, values}` (values in percent by
-   * condition); null where the renderer draws no weather.
+   * The groups an application adds under Effects, in the order first
+   * published: each `{id, rows}`. A row is a `toggle` (`{kind, id, label,
+   * icon?, title?, checked, onChange(checked)}`), a `slider` (`{kind, id,
+   * label, min, max, value, onChange(value)}`, its value shown in percent)
+   * or a `note` (`{kind, id, text}`).
    */
-  const weather = shallowRef(null);
+  const groups = shallowRef([]);
 
-  /** @param {?object} next A fresh presentation of the Weather group. */
-  function publishWeather(next) {
-    weather.value = next && markRaw(next);
+  /**
+   * Show the group `id` as `group` describes it, in place where it is shown
+   * already; null takes it away.
+   * @param {string} id
+   * @param {?{rows: object[]}} group
+   */
+  function publishGroup(id, group) {
+    const at = groups.value.findIndex((g) => g.id === id);
+    const next = [...groups.value];
+    if (!group) {
+      if (at < 0) return;
+      next.splice(at, 1);
+    } else {
+      const shown = markRaw({ id, rows: [...(group.rows ?? [])] });
+      if (at < 0) next.push(shown);
+      else next[at] = shown;
+    }
+    groups.value = next;
   }
 
   /**
@@ -130,8 +148,8 @@ export const useDisplayStore = defineStore('gev-display', () => {
     publish,
     models3d,
     publishModels3d,
-    weather,
-    publishWeather,
+    groups,
+    publishGroup,
     sky,
     publishSky,
     draw,

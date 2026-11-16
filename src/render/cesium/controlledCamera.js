@@ -61,7 +61,7 @@ const plain = (v) => ({ x: v.x, y: v.y, z: v.z });
 /**
  * @param {{
  *   scene: object,
- *   controller: Function,
+ *   controller: import('../contract/camera').CameraControllerFactory,
  *   query: {pickPosition?: Function, sampleHeightNow?: Function},
  *   itemPosition?: (item: {set: string, id: string|number}, aheadMs?: number) => object|null,
  *   requestRender: (reason: string) => void,

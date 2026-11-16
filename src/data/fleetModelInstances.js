@@ -69,6 +69,15 @@ function inView(pose, point) {
   );
 }
 
+/** Two colours as `fleetColor` gives them, alike (arrays element by element). */
+function sameColor(a, b) {
+  if (a === b) return true;
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length)
+    return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
 let instances = 0;
 
 /**
@@ -221,9 +230,8 @@ export function createFleetModelLayer({
     return fromDegrees(at.lon, at.lat, at.height + lift);
   }
 
-  /** The draw item for an admitted model, as the set draws it. */
-  function itemOf(id, record, item, show, boost) {
-    const at = placement(item);
+  /** The draw item for an admitted model, as the set draws it, at `at`. */
+  function itemOf(id, record, item, show, boost, at = placement(item)) {
     const mask = item.spec.tinted && !boost ? fleetColor(item.tint) : null;
     return {
       id,
@@ -257,16 +265,43 @@ export function createFleetModelLayer({
     };
   }
 
-  /** The item to write for a record, or null when nothing it draws changed. */
+  /**
+   * The item to write for a record, or null when nothing it draws changed:
+   * what it was last written with is compared value by value, and the item
+   * is built only when something did (a fleet passes every model each
+   * frame, and most of what it draws stays).
+   */
   function changed(id, record, item, show, boost) {
-    const next = itemOf(id, record, item, show, boost);
-    const p = next.pos;
-    const mask = next.maskColor ? String(next.maskColor) : '';
-    const key = `${p.x},${p.y},${p.z}|${next.orientation.heading}|${item.spec.key}|${mask}|${boost}|${show}`;
-    if (key === record.sent && next.meta === record.meta) return null;
-    record.sent = key;
-    record.meta = next.meta;
-    return next;
+    const at = placement(item);
+    const heading = item.headingDeg || 0;
+    const mask = item.spec.tinted && !boost ? fleetColor(item.tint) : null;
+    const meta = item.pickId ?? id;
+    const sent = record.sent;
+    if (
+      sent !== null &&
+      sent.x === at.x &&
+      sent.y === at.y &&
+      sent.z === at.z &&
+      sent.heading === heading &&
+      sent.specKey === item.spec.key &&
+      sameColor(sent.mask, mask) &&
+      sent.boost === boost &&
+      sent.show === show &&
+      sent.meta === meta
+    )
+      return null;
+    const next = (record.sent ??= {});
+    next.x = at.x;
+    next.y = at.y;
+    next.z = at.z;
+    next.heading = heading;
+    next.specKey = item.spec.key;
+    // A colour array is kept as a copy: the layer may change its own.
+    next.mask = Array.isArray(mask) ? [...mask] : mask;
+    next.boost = boost;
+    next.show = show;
+    next.meta = meta;
+    return itemOf(id, record, item, show, boost, at);
   }
 
   return {

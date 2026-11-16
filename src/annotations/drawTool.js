@@ -15,7 +15,8 @@
  *   (`src/data/inputOwnership.js`), and every ambient selection handler yields,
  *   so a vertex clicked on top of an aircraft or a camera is a vertex and
  *   nothing else. It is one claim consulted by all of them, not a list of
- *   exceptions inside each.
+ *   exceptions inside each. Turning Draw on takes the pointer from any tool
+ *   holding it; a newer tool taking it turns Draw off.
  * - Cesium's Viewer binds its OWN left click (select the entity under the
  *   pointer) and double click (track it) on the viewer's handler, outside every
  *   layer and therefore outside the shared claim. Both are suppressed for the
@@ -37,7 +38,6 @@ import {
   releasePointer,
 } from '../data/inputOwnership.js';
 import { inputFor } from '../input/dispatcher.js';
-import { pointerOwnerName } from '../data/pointerOwnerNames.js';
 import {
   DRAW_SHAPES,
   MAX_VERTICES,
@@ -59,7 +59,7 @@ import {
   presentDrawMarks,
 } from './drawMarks.js';
 
-import { onLocaleChange, t, translateKnown } from '../i18n/index.js';
+import { onLocaleChange, t } from '../i18n/index.js';
 import { fromDegrees } from '../geo/index.js';
 import { cssColor } from '../render/color.js';
 import {
@@ -407,18 +407,15 @@ export function initDrawTool({
   function setActive(next) {
     if (destroyed || next === active) return active;
     if (next) {
-      lease = claimPointer(DRAW_POINTER_OWNER);
-      if (!lease) {
-        // Somebody else is using the pointer — possibly an older instance of
-        // this same tool that has not finished tearing down. Say so instead of
-        // half-starting.
-        setHint(() =>
-          t('{owner} is using the pointer — close it first.', {
-            owner: translateKnown(pointerOwnerName(pointerOwner())),
-          }),
-        );
-        return active;
-      }
+      // The newest claim takes over: a tool holding the pointer is told and
+      // turns itself off, and a newer one turns Draw off as if the person had.
+      const claimed = claimPointer(DRAW_POINTER_OWNER, {
+        onLost: () => {
+          if (lease === claimed) setActive(false);
+        },
+      });
+      if (!claimed) return active;
+      lease = claimed;
     }
     active = next;
     present();

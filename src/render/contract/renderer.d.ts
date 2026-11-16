@@ -104,16 +104,16 @@ export interface CreateOptions {
   worldDataToken?: string;
   /** Initial multisampling; quality can change it later. */
   msaa?: 0 | 2 | 4 | 8;
-  /** Keep the drawing buffer after presenting, for capture. */
-  preserveDrawingBuffer?: boolean;
   /** Sky applied before the first frame, so nothing draws in the wrong sky. */
   sky?: Partial<SkySettings>;
   /** Scene time in epoch ms. The application passes its boot time. */
   time?: number;
   /**
-   * The clocks the renderer reads, for flights, inertia, tweens and
-   * `FrameTime.now`: `now` on the `performance.now()` timeline, `date` in
-   * epoch ms. Omitted: the browser's. Tests pass virtual ones.
+   * The clocks the renderer reads, for `FrameTime.now`, the camera's
+   * `moveEnd` wait, input, flights and tweens, and for inertia where it
+   * times that itself (Cesium's keeps Cesium's own timing): `now` on the
+   * `performance.now()` timeline, `date` in epoch ms. Omitted: the
+   * browser's. Tests pass virtual ones.
    */
   clock?: { now(): number; date(): number };
   /** Aborts creation; the renderer cleans up whatever it had built. */
@@ -149,7 +149,10 @@ export interface Renderer {
   readonly effects: EffectsPort;
   readonly credits: CreditsPort;
   readonly quality: QualityPort;
-  /** The last presented frame as an encoded image. */
+  /**
+   * The last presented frame as an encoded image. Once the renderer is
+   * destroyed it rejects with a "renderer destroyed" error.
+   */
   capture(options?: CaptureOptions): Promise<Blob>;
   /**
    * The last presented frame's pixels, synchronously, for loops that render
@@ -175,5 +178,10 @@ export interface Renderer {
    * a new renderer.
    */
   on(event: 'contextLost' | 'contextRestored', cb: () => void): Off;
+  /**
+   * Lets go of everything. Afterwards handles do nothing (`Handle`), and
+   * `frame.renderOnce` and `capture` reject with a "renderer destroyed"
+   * error, as does a `renderOnce` still waiting.
+   */
   destroy(): void;
 }

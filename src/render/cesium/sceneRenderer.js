@@ -35,7 +35,8 @@ export const pointerFeedOf = (renderer) => feeds.get(renderer) ?? null;
 
 /**
  * @param {{container: HTMLElement, msaa?: number, capabilities?: Iterable<string>,
- *   cameraController?: Function, now?: () => number}} options
+ *   cameraController?: import('../contract/camera').CameraControllerFactory,
+ *   now?: () => number}} options
  *   `capabilities` limits the renderer to those it lists; `cameraController`
  *   puts the camera port on that controller (`controlledCamera.js`); `now`
  *   is the clock its ticks and pointer events read (`performance.now` by

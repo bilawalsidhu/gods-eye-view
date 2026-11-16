@@ -55,6 +55,35 @@ export interface ClusterSpec {
   icon?: (count: number) => ImageRef;
 }
 
+/**
+ * `recede`: a set's items shrink and fade toward the globe's limb, as
+ * `src/render/recession.js` (exported as `render/recession`) works it out,
+ * so the renderer draws exactly those factors. Nearer than `startLimbRatio` of
+ * the eye's distance to the limb an item is drawn as it is; from there it
+ * eases (smoothstep) to `scaleFloor` times its scale and `alphaFloor` haze
+ * at the limb and beyond. All of it eases back to nothing as the eye climbs
+ * from `globeViewBlendStartM` to `globeViewBlendEndM` above the ellipsoid.
+ * An item draws at its alpha times `max(combinedAlphaFloor, focus × haze)`,
+ * that floor holding even while nothing recedes. Icons shrink and fade;
+ * models only fade. Every parameter is optional, the defaults in brackets.
+ */
+export interface RecedeSpec {
+  /** Where receding starts, as a share of the limb's distance [0.5]. */
+  startLimbRatio?: number;
+  /** The scale an item reaches at the limb [0.45]; icons only. */
+  scaleFloor?: number;
+  /** The haze an item reaches at the limb [0.35]. */
+  alphaFloor?: number;
+  /** The least `focus × haze` draws with [0.2]. */
+  combinedAlphaFloor?: number;
+  /** Eye height above the ellipsoid where receding starts to ease off, metres [3,500,000]. */
+  globeViewBlendStartM?: number;
+  /** Eye height from which nothing recedes, metres [4,500,000]. */
+  globeViewBlendEndM?: number;
+  /** The radius of the sphere the limb is measured on, metres [6,378,137]. */
+  earthRadiusM?: number;
+}
+
 /** Options of a whole set; the mutable ones can change later through `setOptions`. */
 export interface SetSpec {
   /**
@@ -66,6 +95,11 @@ export interface SetSpec {
   horizonCull?: boolean;
   /** `cluster`: screen-space clustering (icons only; see `ClusterSpec`). */
   cluster?: ClusterSpec | null;
+  /**
+   * Icons and models: the items recede toward the limb (`RecedeSpec`; `{}`
+   * for the defaults). Omitted or `null`: they do not. Changes live.
+   */
+  recede?: RecedeSpec | null;
   /**
    * How the set's items blend with what is drawn. Omitted: opaque parts
    * opaque with depth writes, items with alpha under 1 alpha-blended without
@@ -212,9 +246,10 @@ export interface IconItem extends Placed {
   imageLod?: { near: ImageRef; switchPx: number };
   /** A larger invisible pick target, CSS pixels. */
   pickProxy?: { size: [width: number, height: number] };
-  /** Fade and shrink toward the globe's limb. */
-  recede?: boolean;
-  /** Emphasis factor for a focused item, 1 = none. */
+  /**
+   * Emphasis for a focused item, 0..1, 1 = none: the alpha is multiplied by
+   * it (in a set that recedes, as `RecedeSpec` says).
+   */
   focus?: number;
 }
 
@@ -409,6 +444,12 @@ export interface ModelItem extends Placed {
    * would not hide what lies below it). Can change live.
    */
   clip?: 'belowOrigin';
+  /**
+   * Emphasis for a focused model, 0..1, 1 = none: the tint's alpha is
+   * multiplied by it (in a set that recedes, as `RecedeSpec` says). Can
+   * change live.
+   */
+  focus?: number;
 }
 
 /** A plane showing an image, a video or a canvas. */

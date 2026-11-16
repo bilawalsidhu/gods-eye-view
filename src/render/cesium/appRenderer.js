@@ -23,6 +23,7 @@
  * `cesiumViewerOf` (`viewers.js`), never through a renderer member, so no
  * engine type crosses the contract.
  */
+import * as Cesium from 'cesium';
 import { createApplicationViewer } from './applicationViewer.js';
 import { CONTRACT_VERSION } from '../contract/index.js';
 import { bindRenderer } from '../rendererOf.js';
@@ -80,7 +81,13 @@ export function createCesiumRendererPlugin({
     id: 'cesium',
     /**
      * The credentials are the globe port's, for a base set through it; the
-     * scene still loads the application's own base itself.
+     * scene still loads the application's own base itself. `msaa` makes
+     * the viewer (4 when not given);
+     * `sky` and `time` are set before the first frame; `clock.now` is what
+     * the frame ticks, the camera's `moveEnd` wait, input and flights (the
+     * scene's tweens step on it) read, `clock.date` what a `live` motion
+     * clock reads. Inertia keeps Cesium's own timing: its camera controls
+     * time a release by the system clock.
      * @param {import('../contract/renderer').CreateOptions} options
      * @returns {Promise<TransitionalRenderer>}
      */
@@ -90,6 +97,10 @@ export function createCesiumRendererPlugin({
       googleApiKey,
       googleTokens,
       worldDataToken,
+      msaa,
+      sky,
+      time,
+      clock,
     }) {
       signal?.throwIfAborted();
       // Provider attribution stays visible, including clean-view and recording.
@@ -109,7 +120,11 @@ export function createCesiumRendererPlugin({
           // The application's notice (`renderFailureNotice`) replaces
           // Cesium's dead-end panel when rendering stops.
           showRenderLoopErrors: false,
+          msaa,
         });
+        if (Number.isFinite(time))
+          viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(time));
+        const now = clock ? () => clock.now() : undefined;
         capabilities = new ReadonlySet(cesiumCapabilities(viewer.scene));
         ports = createCesiumPorts(viewer, {
           capabilities,
@@ -117,6 +132,7 @@ export function createCesiumRendererPlugin({
           idleFps: IDLE_FRAME_RATE,
           credentials: { googleApiKey, googleTokens, worldDataToken },
           ...(cameraController ? { cameraController } : {}),
+          ...(clock ? { now, date: () => clock.date() } : {}),
         });
         input = createCesiumInput(viewer, {
           query: ports.query,
@@ -124,7 +140,10 @@ export function createCesiumRendererPlugin({
           ...(ports.suspendCamera
             ? { suspendCamera: ports.suspendCamera }
             : {}),
+          ...(clock ? { now } : {}),
         });
+        // Before the first frame, so nothing draws in the wrong sky.
+        if (sky) ports.globe.sky.set(sky);
         ports.attachInput?.(input.port);
         // Free look is limited to low heights from the start, on Cesium's
         // own controls (the controller keeps its own limits).

@@ -787,6 +787,9 @@ export function createAircraftModels({
     // clock. (The tracked trail moves on in its own pass before each frame.)
     if (state._viewer) parts.tracking._staleCueTick?.();
     try {
+      // Every frame too: the icons recede by the tuning as it is now, so a
+      // change shows on the next frame, shown or not.
+      parts.icons._syncRecede?.();
       _fleetPass();
     } finally {
       // The models first, then the icons they take over from, so a pass
@@ -921,9 +924,13 @@ export function createAircraftModels({
       if (icao24 === state._trackedIcao) continue;
       if (!icons.has(icao24)) continue;
       const position = icons.position(icao24, t);
-      if (!parts.icons._aboveHorizon(position, occluder)) {
+      if (
+        icons.unseen?.(icao24) ||
+        !parts.icons._aboveHorizon(position, occluder)
+      ) {
         // A model that crossed the limb would keep drawing through the
-        // hidden globe; the icon's own cull is on the GPU.
+        // hidden globe; the icon's own cull is on the GPU. A contact not
+        // there yet at the time drawn is hidden as one beyond it.
         const hidden = state._models.get(icao24);
         if (hidden?.show) {
           showModel(hidden, false);
