@@ -1,5 +1,30 @@
 # God's Eye View Current State
 
+An aircraft (civil or military) faces its reported ground track, else its
+true heading (readsb `true_heading`). With neither, it faces the way its own
+fixes went (`courseFromFixes`, `src/data/courseFromFixes.js`): the course runs
+from an anchor fix to the newest once they are 30 m apart, and the anchor then
+moves on, so frequent fixes of a slow aircraft add up while position noise on
+a parked one never makes a course. A fix that is not a second newer (a repeat,
+or an older position from another feed) and one reported slower than 2 m/s
+give no course and keep the last; an aircraft with no course at all faces
+north.
+
+While anything moves (a layer in motion, the camera, a followed contact), the
+globe draws at the display's own refresh rate; there is no fixed 60 FPS cap.
+The idle render governor (`src/renderGovernor.js`) caps a parked scene at
+`IDLE_FRAME_RATE` (60) ticks a second, because Cesium still runs the clock,
+data sources and update listeners on every animation frame even when it skips
+the draw; the viewer starts at that cap until the governor is installed. The
+camera holds continuous render from `moveStart` to `moveEnd`, and samples its
+pose every 250 ms in between, so a camera drifting by rounding errors (no
+`moveEnd`) is released after half a second at rest and held again if it moves. The world clock holds continuous render while
+it plays away from the live edge (not while it steps or waits for data), so
+playback draws at the display's rate too. Waits that used to count frames (a followed contact's first
+position, a shared follow view, a trail's temporary copy) count drawn time
+through `src/time/frameWait.js`, at most 100 ms a frame, so they last the same
+at any refresh rate and a background tab does not use them up.
+
 Docker Compose mounts the checkout with the shared SELinux `:z` label so
 containers can read it on enforcing SELinux hosts. The separate image-owned
 `node_modules` volume and loopback-only port publishing remain unchanged.
@@ -1020,7 +1045,9 @@ other map content draws over the shells, and shells are not pickable. A
 map-source change tears down one renderer and restages the shown observation on
 the other. A map without an imagery host pauses history while metadata refresh
 continues, then resumes when a host returns.
-Globe tiled products use 256 px tiles to maximum level 6. The tile proxy accepts
+Globe tiled products use 256 px tiles to maximum level 6, or to the level a
+feed that supplies its own tiles names for the product (`frameMaximumLevel`,
+0–12; any other answer keeps 6). The tile proxy accepts
 size=256 (default), 512 or 1024 and keys cached bytes by size, retaining the
 24-hour immutable response and eight upstream slots. The image proxy serves every
 product as one whole-extent PNG at its advertised bounds, up to 4096×2048 for
@@ -1062,7 +1089,11 @@ open latest.
 Global infrared fetches one capped 4 MiB, 2048×1024 mosaic per frame and decodes
 and processes it before staging. Globe hosts crop that canvas into 256 px tiles
 to maximum level 3 on a geographic 2×1 root grid bounded to the manifest extent,
-avoiding request-dependent contrast seams.
+avoiding request-dependent contrast seams. On globe hosts, a feed that supplies
+tiles and names a level for global infrared instead has it drawn from its tiles
+to that level,
+each tile given the same display transfer as regional infrared tiles, and no
+mosaic is read.
 On globe hosts, regional infrared retains network tiles and processes each
 decoded tile once; shells process each whole frame once.
 Exact-time tile and image responses are immutable for 24 hours; manifests and
@@ -1977,7 +2008,7 @@ layer's existing lifecycle and selection guards continue to reject late work.
 ### Following the world clock
 
 A source may declare a timeline: it can answer a snapshot at a given time.
-`source.timeline` is `{ coverage(), stepMs, subscribe? }`, validated by
+`source.timeline` is `{ coverage(), stepMs, spanMs?, subscribe? }`, validated by
 `readSnapshotTimeline` (`src/sources/live/contract.js`): `coverage()` returns
 the span `{ start, end }` in epoch ms it can answer, or null while it does not
 know yet; `stepMs` is the spacing of its snapshots; the optional
@@ -2000,8 +2031,12 @@ Playing, the layer stays a snapshot ahead of the time, and play does not pass a
 snapshot still loading for more than 8 seconds. Those snapshots apply as polls
 do, so contacts move on smoothly: aircraft are drawn at the clock's time
 rather than behind it, and vessels between two fixes move along the great
-circle, never past the newer one, redrawn every frame with frames asked for
-as for placed live vessels (vessels out of view move on every 250 ms). Records, absences and the Layers panel's age
+circle, never past the newer one. Drawn vessels move again once the fastest
+of them would have moved half a pixel on screen at the speed it last moved,
+at least once a second, and at once when the camera moves or changes height
+by a tenth of its height or the view zooms, with frames asked for as for
+placed live vessels; vessels out of view move on a share of them each frame,
+each within 250 ms, and one that comes into view is moved to the time first. Records, absences and the Layers panel's age
 are judged at the clock's time. Outside the coverage the layer shows no
 contacts and loads nothing; while the coverage is unknown it loads nothing and
 clears nothing. A snapshot that fails clears the time and is asked again after
@@ -2010,6 +2045,20 @@ failure, and nothing is cleared. A layer has one snapshot loading at a time:
 the older is aborted before a newer starts. Moving the view while vessels follow the clock asks for the new
 area at the same time. Back at live the contacts are cleared and the layer
 polls at once.
+
+A timeline may also declare `spanMs`: each record of a snapshot at a time then
+carries `fixes`, `{ atMs, lat, lon, altitudeM? }` in time order, its own track
+from `spanMs` before the time to `spanMs` after it
+(`src/time/timelineFixes.js`). The layer places each contact on its fixes at
+the clock's time, so a seek or a move back that stays within the fixes the
+loaded snapshots carry is no jump: nothing is cleared, play does not wait,
+and contacts move to the time smoothly. The snapshot at a step before the
+newest loaded is asked for once and then stands in for every contact: it
+brings back any that had left after it and drops those not there yet, while
+those it has keep their place, as their fixes put them. Paused, a time nearing
+the end of the fixes after the newest asks for the snapshot there. A contact is not drawn more than a minute before its first
+fix, as it was not there yet. Each contact keeps at most 240 fixes, at least
+20 seconds apart, and the loaded snapshot times span at most 20 minutes.
 
 A snapshot at `atMs` describes the world as it stood then: `observedAtMs` is
 at or before `atMs`, no record is observed later than `atMs`, freshness and
@@ -5467,7 +5516,7 @@ its criteria cannot be silently ignored.
 | FIRMS Active Fires ▲                 | NASA FIRMS live (VIIRS ×2 NRT + MODIS NRT, trailing 24h)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `src/data/firmsHeatmap.js`                                                                                                                                | `/api/firms` (`FIRMS_MAP_KEY`)                                                                                               | 10 min (proxy TTL 30 min)                                                                                                   |
 | Street Level 📷                      | Mapillary street-level imagery (vector tiles, Graph API, MapillaryJS)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `src/layers/streetLevel/` via `src/app/layers/streetLevel.js`                                                                                             | `/api/mapillary/status`, `/api/mapillary/tiles/coverage/{z}/{x}/{y}` (`MAPILLARY_CLIENT_TOKEN`)                              | camera-driven (320 ms debounce, ≤9 tiles, server memory cache 24 h)                                                         |
 | Wind 🌬                               | NOAA GFS 10 m wind (keyless, 0.25°→1° grid; animated particles)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `src/data/wind.js`                                                                                                                                        | `/api/wind`                                                                                                                  | 1 h (forecast cycle)                                                                                                        |
-| GNSS Integrity 📡 (`gnss-integrity`) | adsb.lol point snapshot, low navigation accuracy binned per 0.5° cell (GEV NIC/NACp threshold + gpsjam.org formula and bands, keyless, ODbL)                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `src/layers/gnss/` via `src/app/layers/gnss.js`                                                                                                           | `/api/gnss-integrity`                                                                                                        | camera-driven (600 ms debounce, minimum 2.5 s between reads) + 60s poll (server cache 60 s; 30 min rolling window)          |
+| GNSS Integrity 📡 (`gnss-integrity`) | adsb.lol point snapshot, low navigation accuracy binned per H3 res-4 hexagon (GEV NIC/NACp threshold + gpsjam.org grid, formula and bands, keyless, ODbL)                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `src/layers/gnss/` via `src/app/layers/gnss.js`                                                                                                           | `/api/gnss-integrity`                                                                                                        | camera-driven (600 ms debounce, minimum 2.5 s between reads) + 60s poll (server cache 60 s; 30 min rolling window)          |
 | S2 GhostMaps 👻 (`s2-ghostmaps`)     | S2 Underground's public GhostMaps repository on GitHub (KMZ intel products, keyless, CC BY-NC-SA 4.0)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `src/layers/ghostMaps/` via `src/app/layers/ghostMaps.js`                                                                                                 | `/api/ghostmaps/catalog`, `/api/ghostmaps/events` (server-sent events), `/api/ghostmaps/file/{product}`                      | branch head checked every 15 s; new commits pushed to the page; 5 min catalog backstop                                      |
 | Sea Marks ⚓ (`sea-marks`)           | OpenSeaMap seamark raster tiles (keyless; CC BY-SA 2.0 tiles, OSM data ODbL)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `src/data/osmOverlays.js`                                                                                                                                 | — (browser-direct tiles)                                                                                                     | on view (Cesium tile requests; no polling)                                                                                  |
 | Ski Pistes ⛷ (`ski-pistes`)          | OpenSnowMap piste raster tiles (keyless; CC BY-SA tiles, OSM data ODbL; no bulk download)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `src/data/osmOverlays.js`                                                                                                                                 | — (browser-direct tiles)                                                                                                     | on view (Cesium tile requests; no polling)                                                                                  |
@@ -5481,8 +5530,13 @@ GNSS Integrity samples a 250 nm circle around the Earth point under the screen
 centre. Camera reads debounce for 600 ms with a monotonic 2.5 s minimum gap;
 nearby views share whole-degree cache keys, and a minute poll refreshes data.
 Counts and bands cover visited views over 30 minutes, including regions now off
-screen. Non-pickable ground primitives preserve Street Level and perimeter
-selection. The legend describes a low-accuracy score, not the raw aircraft share;
+screen. Cells are H3 resolution-4 hexagons, gpsjam.org's grid, keyed by their H3
+index (`gnssCellKey`) and drawn from `cellToBoundary` (via `h3-js`) as one ground
+primitive of polygons, rebuilt only when a cell or band changes; a cell across the
+antimeridian is drawn with its longitudes unwrapped around its centre. As on
+gpsjam.org there is no minimum aircraft count: every cell with an aircraft is
+shown, and the one-aircraft discount is the only small-sample guard.
+Non-pickable ground primitives preserve Street Level and perimeter selection. The legend describes a low-accuracy score, not the raw aircraft share;
 `getStats().levels` exposes nominal, medium and high counts separately.
 
 Transient source failures keep activation enabled and show unavailable/degraded

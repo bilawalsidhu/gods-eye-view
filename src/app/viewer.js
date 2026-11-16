@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { IDLE_FRAME_RATE } from '../renderGovernor.js';
 import { applyModelAtmosphereWorkaround } from './atmosphereCompat.js';
 import { StarrySky } from '../sky/starrySky.js';
 import {
@@ -420,7 +421,9 @@ export function createApplicationViewer({
     applicationViewerOptions(creditContainer, { showRenderLoopErrors }),
   );
   try {
-    viewer.targetFrameRate = 60;
+    // Until the render governor takes over (app/tools.js), tick at the idle
+    // rate so the startup load does not compete with drawing at 240 fps.
+    viewer.targetFrameRate = IDLE_FRAME_RATE;
     // A phone pinch spans fewer screen pixels than desktop zoom gestures.
     // Keep Cesium's distance-aware zoom and collision limits, with less travel
     // required on touch-first screens. Mouse/trackpad sensitivity stays native.

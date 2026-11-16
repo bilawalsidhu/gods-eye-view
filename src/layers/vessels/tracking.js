@@ -77,7 +77,9 @@ export function createTracking({
       visual.drawnLat = NaN;
       visual.drawnLon = NaN;
       visual.followedAtMs = undefined;
+      visual.drawnAtMs = Number.NaN;
     }
+    components.rendering.forgetClockStep();
   }
 
   /**

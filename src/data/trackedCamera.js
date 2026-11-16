@@ -1,6 +1,8 @@
 import * as Cesium from 'cesium';
+import { createFrameWait } from '../time/frameWait.js';
 
-const MAX_FRAME_ATTEMPTS = 120;
+/** Drawn time (ms) to wait for the tracked entity's first position. */
+const MAX_POSITION_WAIT_MS = 2_000;
 const MIN_TRACKED_RANGE_M = 150;
 const ZOOM_INERTIA_STATES = new WeakMap();
 
@@ -154,7 +156,7 @@ export function clampTrackedCameraPosition(
  */
 export function applyTrackedCameraFrame(viewer, entity, viewFrom) {
   if (!viewer || !entity || !viewFrom) return;
-  let attempts = 0;
+  const positionWait = createFrameWait(MAX_POSITION_WAIT_MS);
   const trackedTransform = new Cesium.Matrix4();
   const trackedPosition = new Cesium.Cartesian3();
   const resolvedViewFrom = new Cesium.Cartesian3();
@@ -184,7 +186,6 @@ export function applyTrackedCameraFrame(viewer, entity, viewFrom) {
       stop();
       return;
     }
-    attempts += framed ? 0 : 1;
     // Prefer the display cache exposed by the flight layer. Calling the
     // CallbackProperty from preUpdate can advance dead reckoning again while
     // Cesium's billboard/label still holds the prior visualizer sample. At a
@@ -198,7 +199,7 @@ export function applyTrackedCameraFrame(viewer, entity, viewFrom) {
         trackedPosition,
       );
       if (!position) {
-        if (attempts >= MAX_FRAME_ATTEMPTS) stop();
+        if (positionWait.tick()) stop();
         return;
       }
       const transform = Cesium.Transforms.eastNorthUpToFixedFrame(
