@@ -39,10 +39,8 @@ const background = computed(() =>
     .map((part) => storyText(part))
     .join(' '),
 );
-const stamp = (ms, world) => anchorStamp(props.story, ms, world);
-const facts = computed(() =>
-  nowFacts(props.story, playback.value.worldMs, playback.value.wallMs),
-);
+const stamp = (ms) => anchorStamp(props.story, ms);
+const facts = computed(() => nowFacts(props.story));
 const peekFacts = computed(() => facts.value.slice(0, 3));
 const sheetSum = computed(
   () =>
@@ -77,7 +75,7 @@ const results = computed(() => {
       k: i,
       ev,
       title: storyText(ev.label),
-      sub: `${t('Key moments')} · ${stamp(ev.wallMs, ev.tMs)}`,
+      sub: `${t('Key moments')} · ${stamp(ev.wallMs)}`,
     }))
     .filter(hit);
   const srcs = props.story.sources
@@ -363,7 +361,7 @@ defineExpose({ dragging });
               :class="{ past: playback.wallMs >= ev.wallMs }"
               @click="emit('anchor', ev)"
             >
-              <span class="tchip">{{ stamp(ev.wallMs, ev.tMs) }}</span>
+              <span class="tchip">{{ stamp(ev.wallMs) }}</span>
               <span class="al"
                 ><i :style="{ background: ev.color }"></i
                 >{{ storyText(ev.label) }}</span

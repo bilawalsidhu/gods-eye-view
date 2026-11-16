@@ -96,7 +96,7 @@ export function topicsOf(stories) {
 }
 
 /** The clock overlay: big line and small line. */
-export function clockText(s, wallMs, worldMs, chapterIndex) {
+export function clockText(s, chapterIndex) {
   return {
     big: t('Shot {n} of {total}', {
       n: chapterIndex + 1,
@@ -133,12 +133,12 @@ export function anchorStamp(s, wallMs) {
 
 /** Legend entries [shape, colour, label]. */
 export function layersFor(s) {
-  if (s.mock?.legend?.length) return s.mock.legend;
+  if (s.legend?.length) return s.legend;
   return (s.tags ?? []).map((tag) => ['dot', '#e8eaed', tag]);
 }
 
-/** "Right now" facts per story (prototype nowFacts): [value, label, warn]. */
-export function nowFacts(s, worldMs, wallMs = 0) {
+/** "Right now" facts per story: [value, label]. */
+export function nowFacts(s) {
   const out = [[String(s.chapters.length), msg('Shots')]];
   if (s.tags?.length) out.push([String(s.tags.length), msg('Layers on')]);
   return out;

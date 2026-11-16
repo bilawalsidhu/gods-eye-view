@@ -24,10 +24,8 @@ export const useStoriesStore = defineStore('stories', {
     thumbs: {},
     playback: {
       wallMs: 0,
-      worldMs: null,
       durationMs: 0,
       playing: false,
-      exploring: false,
       chapterIndex: 0,
     },
     /** The big Play button over a story that opened paused. */

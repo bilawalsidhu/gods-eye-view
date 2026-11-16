@@ -1565,21 +1565,6 @@
   background: rgba(10, 10, 16, 0.94);
   border-top: 1px solid var(--glass-border);
 }
-#gev-stories .tl-play {
-  width: 42px;
-  height: 42px;
-  flex: none;
-  border-radius: 13px;
-  display: grid;
-  place-items: center;
-  background: var(--accent);
-  color: #001820;
-  box-shadow: 0 0 20px -6px var(--accent-glow);
-}
-#gev-stories .tl-play svg {
-  width: 18px;
-  height: 18px;
-}
 #gev-stories .tl-track {
   position: relative;
   flex: 1;
@@ -1588,22 +1573,6 @@
   touch-action: none;
   cursor: pointer;
   border-radius: 6px;
-}
-#gev-stories .tl-rail {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 6px;
-  margin-top: -3px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.12);
-}
-#gev-stories .tl-fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  border-radius: inherit;
-  background: linear-gradient(90deg, rgba(0, 212, 255, 0.5), var(--accent));
 }
 #gev-stories .tl-pip {
   position: absolute;
@@ -1702,11 +1671,6 @@
   width: 18px;
   height: 18px;
 }
-#gev-stories .tl-play.resume {
-  background: var(--warn);
-  color: #241400;
-  box-shadow: 0 0 20px -6px rgba(255, 180, 90, 0.6);
-}
 #gev-stories .tl-track:focus-visible {
   outline: 2px solid var(--text-primary);
 }
@@ -1731,6 +1695,9 @@
 #gev-stories .tl-play {
   width: 40px;
   height: 40px;
+  flex: none;
+  display: grid;
+  place-items: center;
   border-radius: 12px;
   background: rgba(0, 212, 255, 0.14);
   color: var(--accent);
@@ -1752,19 +1719,9 @@
   width: 16px;
   height: 16px;
 }
-#gev-stories .tl-play.resume {
-  background: rgba(255, 180, 90, 0.16);
-  color: var(--warn);
-  border-color: rgba(255, 180, 90, 0.55);
-  box-shadow: 0 0 18px -8px rgba(255, 180, 90, 0.6);
-}
 #gev-stories .tl-track {
   height: 36px;
   margin: 0 4px;
-}
-#gev-stories .tl-rail,
-#gev-stories .tl-fill {
-  display: none;
 }
 #gev-stories #tlTicks {
   position: absolute;
@@ -2066,50 +2023,6 @@
   min-width: 0;
   color: var(--text-secondary);
 }
-#gev-stories .tl-live {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 9px;
-  border-radius: 8px;
-  border: 1px solid var(--glass-border-hover);
-  font: 600 10px var(--font-mono);
-  letter-spacing: 0.14em;
-  color: var(--text-dim);
-  background: transparent;
-}
-#gev-stories .tl-live[hidden] {
-  display: none;
-}
-#gev-stories .tl-live i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-#gev-stories .tl-live:hover {
-  color: var(--text-primary);
-}
-#gev-stories .tl-live.edge {
-  color: var(--live);
-  border-color: rgba(255, 77, 77, 0.5);
-}
-#gev-stories .tl-live.edge i {
-  animation: gsx-pulse 1.6s ease-out infinite;
-}
-#gev-stories .timeline[data-kind='live'] #tlTicks::after {
-  content: '';
-  position: absolute;
-  right: -1px;
-  top: -5px;
-  bottom: -5px;
-  width: 2px;
-  border-radius: 2px;
-  background: var(--live);
-  box-shadow: 0 0 8px var(--live);
-}
 @container app (max-width: 1100px) {
   #gev-stories .tl-time .tt-c {
     display: none;
@@ -2129,9 +2042,6 @@
   #gev-stories #tlHeadTime {
     display: inline;
   }
-  #gev-stories .tl-live {
-    display: none;
-  }
   #gev-stories .tl-pip {
     width: 26px;
     height: 18px;
@@ -2147,9 +2057,6 @@
   #gev-stories .tl-bubble,
   #gev-stories #tlTicks {
     transition: none !important;
-  }
-  #gev-stories .tl-live.edge i {
-    animation: none;
   }
 }
 #gev-stories .cx-sec {
@@ -2728,9 +2635,6 @@
     font-size: 12px;
   }
   #gev-stories .ov-legend {
-    display: none;
-  }
-  #gev-stories .scr-story.exploring .ov-clock {
     display: none;
   }
   #gev-stories .ov-hint {

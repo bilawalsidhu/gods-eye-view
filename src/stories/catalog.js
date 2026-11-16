@@ -184,7 +184,7 @@ function sceneContext(recipe) {
     places: own.places ?? [],
     moments: own.moments ?? [],
     // The layers' own names on the legend.
-    mock: { legend: layers.map((l) => ['dot', '#6be8ff', l.label]) },
+    legend: layers.map((l) => ['dot', '#6be8ff', l.label]),
     sources: [...(own.sources ?? []), ...layers.flatMap((l) => l.sources)],
     // Each part is translated on its own, as shown.
     background: own.background ?? layers.map((l) => l.about),

@@ -14,7 +14,7 @@ import {
 
 /**
  * The story timeline (prototype `.timeline`): chapter segments with
- * magnetic ticks, key-moment pips, a scrub bubble, sound and expand.
+ * magnetic ticks, key-moment pips, a scrub bubble and expand.
  * Positions are wall milliseconds on the GEV scene's own clock.
  */
 const props = defineProps({ story: { type: Object, required: true } });
@@ -34,24 +34,15 @@ const chTitle = (c) => chapterTitle(props.story, c);
 const events = computed(() => props.story.events ?? []);
 const seek = (ms) => store.controller.seek(clamp(ms, 0, dur.value - 10));
 
-// ── Play button: pause while playing, resume while exploring, otherwise play ──
+// ── Play button: pause while playing, otherwise play ──
 const ICON = {
   pause:
     '<rect x="6.5" y="5" width="4" height="14" rx="1.4"/><rect x="13.5" y="5" width="4" height="14" rx="1.4"/>',
   play: '<path d="M8 5.7v12.6c0 .9 1 1.4 1.7.9l9.7-6.3a1.1 1.1 0 0 0 0-1.8L9.7 4.8C9 4.3 8 4.8 8 5.7Z"/>',
-  resume:
-    '<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M3.5 3.8v4.6h4.6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>',
 };
-const playMode = computed(() =>
-  playback.value.exploring && !playback.value.playing
-    ? 'resume'
-    : playback.value.playing
-      ? 'pause'
-      : 'play',
-);
+const playMode = computed(() => (playback.value.playing ? 'pause' : 'play'));
 function togglePlay() {
-  if (playMode.value === 'resume') store.controller.resume();
-  else if (playback.value.playing) store.controller.pause();
+  if (playback.value.playing) store.controller.pause();
   else store.controller.play();
 }
 
@@ -76,19 +67,9 @@ const segs = computed(() =>
 );
 
 // ── Readout ──
-const clock = computed(() =>
-  clockText(
-    props.story,
-    tNow.value,
-    previewMs.value == null ? playback.value.worldMs : null,
-    k.value,
-  ),
-);
+const clock = computed(() => clockText(props.story, k.value));
 const stampAt = (ms) => fmtDur(ms);
 const headTime = computed(() => `${fmtDur(tNow.value)} / ${fmtDur(dur.value)}`);
-const atEdge = computed(
-  () => props.story.live && tNow.value >= dur.value - 600,
-);
 
 // ── Scrubbing: preview locally, seek the globe once on release ──
 const track = ref(null);
@@ -216,14 +197,7 @@ function onLeave() {
 // The bubble follows the knob while playing and the pointer while hovering.
 const bubbleT = computed(() => bubbleAt.value ?? tNow.value);
 const bubbleK = computed(() => chapterAt(props.story, bubbleT.value));
-const bubbleClock = computed(() =>
-  clockText(
-    props.story,
-    bubbleT.value,
-    bubbleAt.value == null ? playback.value.worldMs : null,
-    bubbleK.value,
-  ),
-);
+const bubbleClock = computed(() => clockText(props.story, bubbleK.value));
 const bubbleEm = computed(() => {
   if (snap.value >= 0) return { text: t('Chapter start'), color: null };
   if (snap.value <= -2) {
@@ -278,7 +252,6 @@ function pipClick(i) {
 // ── Keyboard on the track ──
 function goChapter(i) {
   seek(chapters.value[i].wallMs + 1);
-  if (playback.value.exploring) store.controller.resume();
 }
 // Previous goes to the start of this chapter first, like a video player.
 function stepChapter(d) {
@@ -339,28 +312,17 @@ function toggleExpand() {
   store.ctxOpen = false;
   setTimeout(() => store.controller.reframe(), 320);
 }
-function jumpLive() {
-  seek(dur.value);
-  if (playback.value.exploring) store.controller.resume();
-}
 
 defineExpose({ goChapter });
 </script>
 
 <template>
-  <div id="timeline" class="timeline" :data-kind="story.live ? 'live' : ''">
+  <div id="timeline" class="timeline">
     <button
       id="tlPlay"
       class="tl-play"
-      :class="{ resume: playMode === 'resume' }"
       type="button"
-      :aria-label="
-        playMode === 'resume'
-          ? t('Resume story')
-          : playMode === 'pause'
-            ? t('Pause')
-            : t('Play')
-      "
+      :aria-label="playMode === 'pause' ? t('Pause') : t('Play')"
       @click="togglePlay"
     >
       <svg
@@ -390,9 +352,6 @@ defineExpose({ goChapter });
       @pointerleave="onLeave"
       @keydown="onKey"
     >
-      <div class="tl-rail">
-        <div id="tlFill" class="tl-fill" :style="{ width: `${pct}%` }"></div>
-      </div>
       <div id="tlTicks">
         <span
           v-for="s in segs"
@@ -478,20 +437,8 @@ defineExpose({ goChapter });
       </div>
     </div>
     <span id="tlTime" class="tl-time" aria-hidden="true">
-      <b v-if="story.live">{{ clock.big }}</b>
-      <span v-else class="tt-c">{{ headTime }}</span>
+      <span class="tt-c">{{ headTime }}</span>
     </span>
-    <button
-      v-if="story.live"
-      id="tlLive"
-      class="tl-live"
-      :class="{ edge: atEdge }"
-      type="button"
-      :aria-label="t('Jump to live')"
-      @click="jumpLive"
-    >
-      <i></i>{{ t('LIVE') }}
-    </button>
     <button
       id="stExpand"
       class="tl-vol"

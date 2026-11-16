@@ -47,18 +47,9 @@ const title = computed(() => titleOf(props.story));
 const k = computed(() => chapterAt(props.story, playback.value.wallMs));
 const chapter = computed(() => props.story.chapters[k.value]);
 const chTitle = (c) => chapterTitle(props.story, c);
-const clock = computed(() =>
-  clockText(
-    props.story,
-    playback.value.wallMs,
-    playback.value.worldMs,
-    k.value,
-  ),
-);
+const clock = computed(() => clockText(props.story, k.value));
 const layers = computed(() => layersFor(props.story));
-const facts = computed(() =>
-  nowFacts(props.story, playback.value.worldMs, playback.value.wallMs),
-);
+const facts = computed(() => nowFacts(props.story));
 const posText = computed(() => {
   const { lat, lon, altKm } = camera.value;
   return {
@@ -80,7 +71,6 @@ const legendClass = (l) => (l[0] === 'dot' ? 'dot' : l[0] === 'sq' ? 'sq' : '');
 const timelineRef = ref(null);
 function goChapter(i) {
   store.controller.seek(props.story.chapters[i].wallMs + 1);
-  if (playback.value.exploring) store.controller.resume();
 }
 function goAnchor(ev) {
   store.controller.focusEvent(ev);
@@ -88,8 +78,7 @@ function goAnchor(ev) {
 }
 function bigPlayClick() {
   bigPlay.value = false;
-  if (playback.value.exploring) store.controller.resume();
-  else store.controller.play();
+  store.controller.play();
 }
 
 // ── Story card: Chapter · On the map · Right now ──
@@ -201,12 +190,7 @@ let pokeTimer = 0;
 function pokeControls() {
   controlsHidden.value = false;
   clearTimeout(pokeTimer);
-  if (
-    expanded.value &&
-    playback.value.playing &&
-    !playback.value.exploring &&
-    innerWidth <= 720
-  )
+  if (expanded.value && playback.value.playing && innerWidth <= 720)
     pokeTimer = setTimeout(() => (controlsHidden.value = true), 3000);
 }
 watch([expanded, () => playback.value.playing], pokeControls);
@@ -331,7 +315,6 @@ watch([k, page], () => nextTick(sizeCard));
     id="scrStory"
     class="scr scr-story"
     :class="{
-      exploring: playback.exploring,
       expanded,
       'ctx-open': ctxOpen,
       'ctx-sized': !!contextWidth,

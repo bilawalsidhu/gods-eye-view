@@ -57,10 +57,8 @@ export function createGevPlayer(director, story, hooks = {}) {
 
   const state = () => ({
     wallMs,
-    worldMs: null,
     durationMs,
     playing,
-    exploring: false,
     chapterIndex: Math.min(shotIndex, story.chapters.length - 1),
   });
   const tick = () => {
@@ -157,9 +155,6 @@ export function createGevPlayer(director, story, hooks = {}) {
       wallMs = Math.max(0, Math.min(durationMs, ms));
       shotIndex = chapterAt(story, wallMs);
       seekToCurrentTime(options);
-    },
-    resume() {
-      return this.play();
     },
     /** A key moment: go to that point of the scene. */
     focus(event) {

@@ -710,10 +710,8 @@ export function createStoriesController({
   function onTick(state) {
     store.playback = {
       wallMs: state.wallMs,
-      worldMs: state.worldMs,
       durationMs: state.durationMs,
       playing: state.playing,
-      exploring: state.exploring,
       chapterIndex: state.chapterIndex,
     };
     if (state.playing) store.bigPlay = false;
@@ -919,7 +917,7 @@ export function createStoriesController({
       id: story.id,
       title: story.title,
       atMs,
-      when: anchorStamp(story, atMs, null),
+      when: anchorStamp(story, atMs),
     };
   }
 
@@ -1051,10 +1049,8 @@ export function createStoriesController({
         : 0;
       store.playback = {
         wallMs: atMs,
-        worldMs: null,
         durationMs: story.durationMs,
         playing: false,
-        exploring: false,
         chapterIndex: 0,
       };
       const start = () => {
@@ -1143,7 +1139,6 @@ export function createStoriesController({
     play: () => player?.play(),
     pause: () => player?.pause(),
     seek: (ms) => player?.seek(ms),
-    resume: () => player?.resume(),
     focusEvent: (event) => player?.focus(event),
     get kind() {
       return player ? 'gev' : null;
