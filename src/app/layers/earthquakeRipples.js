@@ -361,7 +361,10 @@ export function createEarthquakeRipples({
     });
     lane.setActive(true);
     lane.requestPaint();
-    if (running() && frameHandle === null) frameHandle = requestFrame(tick);
+    // A refresh while the disc is out of sight asks for no frame; a paint
+    // that finds it on screen again starts them (a restart sets onScreen).
+    if (running() && onScreen && frameHandle === null)
+      frameHandle = requestFrame(tick);
   }
 
   function hide() {

@@ -1863,6 +1863,12 @@ painted with a gradient fading to the outer circle and wavy contour lines
 clicks, picking, context, focus, the opener, the painter and the translator by
 injection (`src/app/layers/earthquakes.js`); without input and picking it draws
 and takes no clicks, and its labels stay non-interactive.
+Quake discs are deliberately not registered in the pick-ownership registry,
+like drone airspace and fire perimeters: sibling layers read a disc as empty
+space, so their cards, near-miss taps and deselection work over a quake as
+before. When another layer's card or label is painted over a disc (a fire card
+on a large quake), the quake handler yields to it rather than selecting the
+quake beneath.
 
 Air quality (`./layers/air-quality`) draws its station discs as one renderer
 draw set of ground-clamped fills and reads the view through the camera port; it

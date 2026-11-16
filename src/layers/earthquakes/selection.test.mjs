@@ -42,6 +42,8 @@ function harness(rows, { context = null, ripples = null } = {}) {
   const focused = [];
   // What the overlay hit test finds under the click, per source.
   const overlayHits = new Map();
+  // Another layer's interactive entry painted on top, if any.
+  let foreignTop = null;
   const viewer = {};
   const { draw } = bindFakeDraw(viewer);
   const layer = createEarthquakesLayer({
@@ -54,7 +56,15 @@ function harness(rows, { context = null, ripples = null } = {}) {
       setVisible: (sourceId, show) => visible.set(sourceId, show),
       clearSource() {},
       // As the real host does, only an interactive entry painted now is hit.
-      hitTest(_x, _y, { sourceId }) {
+      hitTest(_x, _y, { sourceId } = {}) {
+        // Unfiltered, as the host answers: another layer's entry on top
+        // first, else this layer's own.
+        if (!sourceId)
+          return (
+            foreignTop ??
+            this.hitTest(_x, _y, { sourceId: EARTHQUAKE_CARD_SOURCE_ID }) ??
+            this.hitTest(_x, _y, { sourceId: EARTHQUAKE_OVERLAY_SOURCE_ID })
+          );
         const hit = overlayHits.get(sourceId);
         const painted =
           sourceId === EARTHQUAKE_CARD_SOURCE_ID ? cards.at(-1) : labels.at(-1);
@@ -99,11 +109,12 @@ function harness(rows, { context = null, ripples = null } = {}) {
       snapshot = next;
     },
     /** Click a quake's disc (by stable id), something else, or the map. */
-    click(hit) {
+    click(hit, resolvedHit = hit) {
       for (const { callback } of live())
         callback({
           screenPosition: { x: 10, y: 10 },
           topHit: hit,
+          hit: resolvedHit,
           drawHit: hit && !hit.surface ? hit : null,
         });
     },
@@ -120,10 +131,16 @@ function harness(rows, { context = null, ripples = null } = {}) {
     clickOverlay(sourceId, entryId) {
       this.clickOverlayWith(sourceId, entryId, null);
     },
-    /** Click an overlay entry with `hit` drawn under the same pixel. */
-    clickOverlayWith(sourceId, entryId, hit) {
-      overlayHits.set(sourceId, { sourceId, entryId });
+    /** Click another layer's card painted on top, with `hit` under it. */
+    clickForeignCard(sourceId, entryId, hit) {
+      foreignTop = { sourceId, entryId };
       this.click(hit);
+      foreignTop = null;
+    },
+    /** Click an overlay entry with `hit` drawn under the same pixel. */
+    clickOverlayWith(sourceId, entryId, hit, resolvedHit = hit) {
+      overlayHits.set(sourceId, { sourceId, entryId });
+      this.click(hit, resolvedHit);
       overlayHits.delete(sourceId);
     },
     lastCard: () => cards.at(-1),
@@ -188,12 +205,15 @@ test('a quake with no USGS id gets a card with no link', async () => {
   h.layer.destroy();
 });
 
-test("another layer's pick leaves the card; its own pick ids are claimed", async () => {
+test("another layer's pick leaves the card; discs stay unowned, as area layers do", async () => {
   const h = harness([quake('ak1')]);
   h.layer.enable(h.viewer);
   await h.layer.update(h.viewer);
-  assert.equal(picking.findPickOwner('earthquake:ak1'), 'earthquakes');
-  assert.equal(picking.findPickOwner('earthquake:gone'), null);
+  // Like drone airspace and fire perimeters, the discs are not registered:
+  // siblings read a disc as empty space, so their cards and deselection
+  // work over a quake (a fire card, a radio near-miss, a followed plane).
+  assert.equal(picking.findPickOwner('earthquake:ak1'), null);
+  assert.equal(picking.isOwnedByOtherLayer('firms', 'earthquake:ak1'), false);
   picking.registerPickOwner('test-other', (id) => id === 'plane-1');
   try {
     h.clickDisc('ak1');
@@ -608,3 +628,84 @@ test("another layer's object over a magnitude label takes the click", async () =
     h.layer.destroy();
   }
 });
+
+test('a touch-expanded quake hit selects its disc without flying', async () => {
+  const h = harness([quake('ak1')]);
+  try {
+    h.layer.enable(h.viewer);
+    await h.layer.update(h.viewer);
+    h.click(null, { set: h.discs().spec.id, id: 'earthquake:ak1' });
+    assert.equal(h.lastCard()?.[0]?.id, 'earthquake-card:ak1');
+    assert.equal(h.focused.length, 0);
+  } finally {
+    h.layer.destroy();
+  }
+});
+
+test('a touch-expanded sibling hit takes precedence over a quake label', async () => {
+  const h = harness([quake('ak1'), quake('ak2')]);
+  try {
+    h.layer.enable(h.viewer);
+    await h.layer.update(h.viewer);
+    h.clickDisc('ak1');
+    picking.registerPickOwner('test-plane', (id) => id === 'plane-9');
+    h.clickOverlayWith(EARTHQUAKE_OVERLAY_SOURCE_ID, 'ak2', null, {
+      set: 'flights:1',
+      id: 'plane-9',
+    });
+    assert.equal(h.lastCard()[0].id, 'earthquake-card:ak1');
+    assert.equal(h.focused.length, 0);
+  } finally {
+    picking.unregisterPickOwner('test-plane');
+    h.layer.destroy();
+  }
+});
+
+test("another layer's card over a quake disc takes the click, and the disc yields", async () => {
+  const h = harness([quake('ak1', { mag: 6 })]);
+  try {
+    h.layer.enable(h.viewer);
+    await h.layer.update(h.viewer);
+    // A fire's card painted over the disc: the disc is what the scene picks.
+    h.clickForeignCard('firms', 'fire:x', {
+      set: h.discs().spec.id,
+      id: 'earthquake:ak1',
+    });
+    assert.equal(h.cards.length, 0, 'the quake is not selected');
+    assert.equal(h.focused.length, 0);
+    // The same disc with nothing painted over it selects the quake.
+    h.clickDisc('ak1');
+    assert.equal(h.lastCard()[0].id, 'earthquake-card:ak1');
+  } finally {
+    h.layer.destroy();
+  }
+});
+
+test("another layer's object under the quake card takes the click", async () => {
+  const h = harness([quake('ak1')]);
+  picking.registerPickOwner('test-plane', (id) => id === 'plane-9');
+  try {
+    h.layer.enable(h.viewer);
+    await h.layer.update(h.viewer);
+    h.clickDisc('ak1');
+    const card = h.lastCard()[0];
+    // The card is painted over a plane: the flight layer acts on the click,
+    // so the card neither opens its link nor changes.
+    overlayHitCard(h, card.id, { set: 'flights:1', id: 'plane-9' });
+    assert.deepEqual(h.opened, []);
+    assert.equal(h.lastCard()[0].id, card.id, 'the card stays');
+    // Over open ground the card opens the USGS page.
+    h.clickCard(card.id);
+    assert.deepEqual(h.opened, [
+      'https://earthquake.usgs.gov/earthquakes/eventpage/ak1',
+    ]);
+  } finally {
+    picking.unregisterPickOwner('test-plane');
+    h.layer.destroy();
+  }
+});
+
+/** Click this layer's card with `hit` (another layer's object) under it. */
+function overlayHitCard(h, entryId, hit) {
+  h.clickOverlayWith(EARTHQUAKE_CARD_SOURCE_ID, entryId, hit);
+}

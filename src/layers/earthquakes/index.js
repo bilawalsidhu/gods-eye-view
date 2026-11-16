@@ -60,8 +60,7 @@ let instances = 0;
  *   the card be clicked).
  * @param {(viewer: object) => {onClick: Function}} [options.input] The
  *   viewer's click dispatcher.
- * @param {{resolvePickId: Function, isOwnedByOtherLayer: Function,
- *   registerPickOwner: Function, unregisterPickOwner: Function}} [options.picking]
+ * @param {{resolvePickId: Function, isOwnedByOtherLayer: Function}} [options.picking]
  * @param {{registerEntityContext: Function, selectEntityContext: Function,
  *   clearSelectedEntityContextForLayer: Function,
  *   getContextStore: Function}} [options.context] Shared selection store.
@@ -306,10 +305,12 @@ export function createEarthquakesLayer({
 
   function installClickHandler() {
     if (!canSelect() || _clickHandler || !_viewer) return;
-    picking.registerPickOwner?.(
-      EARTHQUAKES_LAYER_ID,
-      (pickedId) => _enabled && eventOfPickId(pickedId) !== null,
-    );
+    // Deliberately NOT registered in the pick-ownership registry, like drone
+    // airspace and fire perimeters: siblings yield to owned picks before
+    // their own card hit-tests and treat an owned pick as not empty space,
+    // so claiming these large discs would make their cards inert and their
+    // selections stick anywhere over a quake. Unowned, a disc reads as
+    // empty space to them; this handler finds its own discs by draw set.
     // A viewer with no renderer input bound takes no clicks.
     let clicks = null;
     try {
@@ -321,6 +322,23 @@ export function createEarthquakesLayer({
     _clickHandler = clicks.onClick((click) => {
       if (!_enabled || (pointer && !pointer.isPointerFree())) return;
       const at = click.screenPosition;
+      // Another layer's card or label painted on top (a fire's card over a
+      // quake disc) is that layer's click: the disc under it is background.
+      const topEntry = overlayHost.hitTest?.(at?.x, at?.y);
+      if (
+        topEntry &&
+        topEntry.sourceId !== EARTHQUAKE_CARD_SOURCE_ID &&
+        topEntry.sourceId !== EARTHQUAKE_OVERLAY_SOURCE_ID
+      )
+        return;
+      // Another layer's pick (an aircraft, a camera) is not this layer's,
+      // even under this layer's card or a magnitude label: that layer acts
+      // on the click itself, and this card stays. Checked before the card
+      // and the labels, as the fire layer does.
+      const hit = click.hit;
+      const pickId = picking.resolvePickId(hit);
+      if (pickId && picking.isOwnedByOtherLayer(EARTHQUAKES_LAYER_ID, pickId))
+        return;
       const cardHit = overlayHost.hitTest?.(at?.x, at?.y, {
         sourceId: EARTHQUAKE_CARD_SOURCE_ID,
       });
@@ -328,14 +346,6 @@ export function createEarthquakesLayer({
         if (_selectedLink) openExternal(_selectedLink);
         return;
       }
-      // Another layer's pick (an aircraft, a camera) is not this layer's,
-      // even under a magnitude label: that layer handles it, and this card
-      // stays. Checked before the labels, as the fire layer does.
-      const pickId = click.topHit
-        ? (picking.resolvePickId(click.topHit) ?? null)
-        : null;
-      if (pickId && picking.isOwnedByOtherLayer(EARTHQUAKES_LAYER_ID, pickId))
-        return;
       // A magnitude label is what a far view (the whole globe) can click:
       // it selects the quake and flies to it.
       const labelHit = overlayHost.hitTest?.(at?.x, at?.y, {
@@ -345,7 +355,7 @@ export function createEarthquakesLayer({
         selectAndFocus(labelHit.entryId);
         return;
       }
-      const event = pickedEvent(click.drawHit ?? click.topHit);
+      const event = pickedEvent(hit);
       if (event) {
         _selectedId = event.stableId;
         publishCard({ user: true });
@@ -373,7 +383,6 @@ export function createEarthquakesLayer({
   function removeClickHandler() {
     _clickHandler?.();
     _clickHandler = null;
-    picking?.unregisterPickOwner?.(EARTHQUAKES_LAYER_ID);
   }
 
   const layer = {
