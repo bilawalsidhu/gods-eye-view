@@ -1172,14 +1172,18 @@ test('destroy releases every shared registration this layer took', async (t) => 
     [undefined, undefined],
     'both marker sets are let go',
   );
-  // The station pin collection is a scene-level primitive like the fleet's
-  // billboard collections, so it has to leave the scene too, and its state
-  // slot has to be emptied: a layer that is destroyed and rebuilt must not
-  // inherit a collection the previous viewer owned.
+  // The station pin set is drawn like the fleet's icon sets, so it has to
+  // be let go too, and its state slot emptied: a layer that is destroyed and
+  // rebuilt must not inherit a set the previous viewer owned.
   assert.equal(
     app.state()._stationPoints,
     null,
-    'the station pin collection is released',
+    'the station pin set is released',
+  );
+  assert.equal(
+    app.draw.find('transit:') === undefined,
+    true,
+    'no transit set is left live',
   );
   assert.equal(
     app.overlaySources.has('transit-stations'),
@@ -4671,22 +4675,32 @@ test('clicking a station pin opens its card; a vehicle click, empty space and Es
     },
   ];
   parts.stations.renderStations();
-  const click = () =>
-    app
-      .state()
-      ._clickHandler.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK)({
-      position: new Cesium.Cartesian2(500, 400),
-    });
-  const pin = app.state()._stationPointById.get('chindrieux');
+  const stationSet = app.state()._stationPoints;
+  const hit = (id, set = stationSet.id) => ({
+    primitive: {},
+    id: { set, id, meta: {} },
+  });
+  const click = () => app.input.click(new Cesium.Cartesian2(500, 400));
+  const pinId = 'sncf-station:chindrieux';
+  assert.equal(
+    app.draw.set(stationSet.id).items.get(pinId).pixelSize,
+    9,
+    'the pin rests at its principal size',
+  );
 
   // The pick owner claims the pin, so other layers leave the click alone.
   assert.equal(app.pickOwners.get('transit')('sncf-station:chindrieux'), true);
   assert.equal(app.pickOwners.get('transit')('somebody-else'), false);
 
   // Both pick shapes reach the station.
-  for (const pick of [{ primitive: pin }, { id: pin.id }]) {
-    app.viewer.scene.pick = () => pick;
+  {
+    app.viewer.scene.pick = () => hit(pinId);
     click();
+    assert.equal(
+      app.draw.set(stationSet.id).items.get(pinId).pixelSize,
+      14,
+      'the selected pin is larger',
+    );
     assert.equal(app.state()._stationSelectedId, 'chindrieux');
     assert.equal(
       app.overlaySources.get('transit-selected')[0].title,
@@ -4695,19 +4709,25 @@ test('clicking a station pin opens its card; a vehicle click, empty space and Es
     app.viewer.scene.pick = () => undefined;
     click();
     assert.equal(app.state()._stationSelectedId, null);
+    assert.equal(
+      app.draw.set(stationSet.id).items.get(pinId).pixelSize,
+      9,
+      'the pin goes back',
+    );
+    assert.equal(app.overlaySources.has('transit-selected'), false);
   }
 
   // A vehicle click replaces the station card, and the pin goes back.
   const entry = app.vehicles()[0];
-  app.viewer.scene.pick = () => ({ primitive: pin });
+  app.viewer.scene.pick = () => hit(pinId);
   click();
-  app.viewer.scene.pick = () => ({ id: entry.key });
+  app.viewer.scene.pick = () => app.pickOf(entry);
   click();
   assert.equal(app.state()._selectedKey, entry.key);
   assert.equal(app.state()._stationSelectedId, null);
 
   // A station click replaces the vehicle card.
-  app.viewer.scene.pick = () => ({ primitive: pin });
+  app.viewer.scene.pick = () => hit(pinId);
   click();
   assert.equal(app.state()._selectedKey, null);
   assert.equal(app.state()._stationSelectedId, 'chindrieux');
@@ -4715,10 +4735,83 @@ test('clicking a station pin opens its card; a vehicle click, empty space and Es
   // Escape closes it, and disable leaves nothing selected.
   parts.selection.onKeyDown({ key: 'Escape' });
   assert.equal(app.state()._stationSelectedId, null);
-  app.viewer.scene.pick = () => ({ primitive: pin });
+  // A pick in another set with a station-shaped id is not a station.
+  app.viewer.scene.pick = () => hit(pinId, 'somebody-else');
   click();
+  assert.equal(app.state()._stationSelectedId, null);
+  app.viewer.scene.pick = () => hit(pinId);
+  click();
+  assert.equal(app.state()._stationSelectedId, 'chindrieux');
   app.layer.disable(app.viewer);
   assert.equal(app.state()._stationSelectedId, null);
+  assert.equal(app.draw.set(stationSet.id).items.size, 0, 'the pins go');
+  assert.equal(app.draw.set(stationSet.id).show, false);
+  assert.equal(app.overlaySources.has('transit-selected'), false);
+});
+
+test('the station catalogue loads on enable above the fleet gate, and the chips choose what is drawn', async (t) => {
+  // 10,000 km: the fleet's altitude gate is shut, the static catalogue is not.
+  const app = harness(t, { altitude: 10_000_000 });
+  app.serve('stations', () => ({
+    status: 200,
+    body: {
+      total: 2,
+      stations: [
+        {
+          id: 'chindrieux',
+          name: 'Chindrieux',
+          shortCode: 'CWX',
+          uic: '87741116',
+          insee: '73085',
+          segment: 'C',
+          lon: 5.8468876,
+          lat: 45.8034376,
+        },
+        {
+          id: 'vitry',
+          name: 'Vitry-en-Artois',
+          shortCode: 'VYN',
+          uic: '87342113',
+          insee: '62865',
+          segment: 'C',
+          lon: 2.9820833,
+          lat: 50.3276092,
+        },
+      ],
+    },
+  }));
+  app.layer.enable(app.viewer);
+  for (let i = 0; i < 5; i += 1) await Promise.resolve();
+  const state = app.state();
+  const set = () => app.draw.set(state._stationPoints.id);
+  assert.ok(
+    app.requested.some((url) => url.includes('/api/sncf/')),
+    'the catalogue was asked for',
+  );
+  assert.equal(set().items.size, 2);
+  assert.equal(set().show, true);
+  assert.equal(state._altitudeGateOpen, false, 'the fleet gate stays shut');
+
+  // Select a station, then switch to vehicles only: pins and card go.
+  const parts = app.layer._transitPartsForTest();
+  parts.stations.selectStation('vitry');
+  app.layer.setParams({ display: 'vehicles' });
+  assert.equal(set().show, false);
+  assert.equal(state._stationSelectedId, null);
+  assert.equal(state._stillIcons.show, true);
+  app.layer.setParams({ display: 'stations' });
+  assert.equal(set().show, true);
+  assert.equal(state._stillIcons.show, false);
+  assert.equal(state._movingIcons.show, false);
+
+  // A disable and a new enable honour the chosen mode and read again.
+  app.layer.disable(app.viewer);
+  assert.equal(set().show, false);
+  app.layer.enable(app.viewer);
+  assert.equal(state._stillIcons.show, false);
+  assert.equal(set().show, true);
+  for (let i = 0; i < 5; i += 1) await Promise.resolve();
+  assert.equal(set().items.size, 2);
 });
 
 test('a view with no feed reads its coverage prompt, not an undated feed', async (t) => {

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
+import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
+import { bindRenderer } from '../../render/rendererOf.js';
+import { hexColor } from '../../render/color.js';
 import {
   STATION_PIN_DISABLE_DEPTH_TEST_DISTANCE,
   STATION_PIN_SCALE_BY_DISTANCE,
@@ -12,37 +14,30 @@ import {
 } from './stations.js';
 import { transitStationClass } from './stationModel.js';
 
-/** A viewer-shaped stub: the layer only adds and removes primitives. */
+/** A viewer double with a fake draw port and a camera the test can move. */
 function viewerStub() {
-  const primitives = [];
-  return {
-    primitives,
-    viewer: {
-      scene: {
-        primitives: {
-          add(primitive) {
-            primitives.push(primitive);
-            return primitive;
-          },
-          remove(primitive) {
-            const index = primitives.indexOf(primitive);
-            if (index >= 0) primitives.splice(index, 1);
-            return index >= 0;
-          },
-        },
-      },
+  const viewer = {};
+  const draw = fakeDrawPort();
+  const camera = { height: 50_000, rect: null };
+  bindRenderer(viewer, {
+    draw,
+    camera: {
+      pose: () => ({ height: camera.height }),
+      viewRectangle: () => camera.rect,
     },
-  };
+  });
+  return { viewer, draw, camera };
 }
 
 /** The minimum state and services the station network needs. */
 function harness() {
   const overlaySources = new Map();
+  const { viewer, draw, camera } = viewerStub();
   const state = {
     _enabled: true,
     _display: 'both',
     _stations: [],
-    _stationPoints: new Cesium.PointPrimitiveCollection(),
+    _viewer: viewer,
     _overlayHost: {
       setEntries(id, entries) {
         overlaySources.set(id, entries);
@@ -62,47 +57,62 @@ function harness() {
     parts,
     source: {},
   });
-  return { state, parts, network, renders, overlaySources };
+  network.createPins(viewer);
+  state._stationPoints.show = true;
+  /** The pin items the set holds, in order. */
+  const pins = () => [...draw.set(state._stationPoints.id).items.values()];
+  return { state, parts, network, renders, overlaySources, draw, camera, pins };
 }
 
 test('the station network draws one point pin per station and no ground ellipse', () => {
   const app = harness();
   app.state._stations = [
-    { id: 'a', name: 'Paris Gare du Nord', shortCode: 'PV', uic: '1', lon: 2.35, lat: 48.88, segment: 'A' },
-    { id: 'b', name: 'Local halt', shortCode: null, uic: null, lon: 1.0, lat: 45.0, segment: 'A' },
+    {
+      id: 'a',
+      name: 'Paris Gare du Nord',
+      shortCode: 'PV',
+      uic: '1',
+      lon: 2.35,
+      lat: 48.88,
+      segment: 'A',
+    },
+    {
+      id: 'b',
+      name: 'Local halt',
+      shortCode: null,
+      uic: null,
+      lon: 1.0,
+      lat: 45.0,
+      segment: 'A',
+    },
   ];
   app.network.renderStations();
-  assert.equal(app.state._stationPoints.length, 2);
+  assert.equal(app.pins().length, 2);
+  assert.equal(app.draw.set(app.state._stationPoints.id).spec.clampTo, 'both');
   // The pins carry the class colour, and the pin sizes follow the rank.
   const principal = transitStationClass(app.state._stations[0]);
   const local = transitStationClass(app.state._stations[1]);
-  const pins = app.state._stationPoints.get(0);
+  const [pins, second] = app.pins();
   assert.equal(pins.pixelSize, STATION_PIN_SIZE_PRINCIPAL);
-  // The pin's RGB is the class colour the legend paints; the pin carries a
-  // small alpha, which the distance translucency then fades further.
-  const rgb = (color) => [color.red, color.green, color.blue];
-  const expected = Cesium.Color.fromCssColorString(principal.color);
-  assert.deepEqual(rgb(pins.color), rgb(expected));
-  const second = app.state._stationPoints.get(1);
+  assert.equal(pins.height, 'clampGround');
+  assert.equal(pins.id, 'sncf-station:a');
+  assert.deepEqual(pins.color, hexColor(principal.color, 0.95));
   assert.equal(second.pixelSize, STATION_PIN_SIZE_LOCAL);
-  assert.deepEqual(
-    rgb(second.color),
-    rgb(Cesium.Color.fromCssColorString(local.color)),
-  );
+  assert.deepEqual(second.color, hexColor(local.color, 0.95));
   // The distance behaviour is the Bike Share one: shrink and fade, never vanish.
-  assert.equal(pins.scaleByDistance.near, STATION_PIN_SCALE_BY_DISTANCE.near);
-  assert.equal(pins.scaleByDistance.far, STATION_PIN_SCALE_BY_DISTANCE.far);
-  assert.equal(pins.scaleByDistance.nearValue, STATION_PIN_SCALE_BY_DISTANCE.nearScale);
-  assert.equal(pins.scaleByDistance.farValue, STATION_PIN_SCALE_BY_DISTANCE.farScale);
-  assert.equal(
-    pins.translucencyByDistance.far,
-    STATION_PIN_TRANSLUCENCY_BY_DISTANCE.far,
-  );
-  assert.equal(
-    pins.translucencyByDistance.farValue,
-    STATION_PIN_TRANSLUCENCY_BY_DISTANCE.farTranslucency,
-  );
-  assert.equal(pins.disableDepthTestDistance, STATION_PIN_DISABLE_DEPTH_TEST_DISTANCE);
+  assert.deepEqual(pins.scaleByDistance, {
+    near: STATION_PIN_SCALE_BY_DISTANCE.near,
+    nearValue: STATION_PIN_SCALE_BY_DISTANCE.nearScale,
+    far: STATION_PIN_SCALE_BY_DISTANCE.far,
+    farValue: STATION_PIN_SCALE_BY_DISTANCE.farScale,
+  });
+  assert.deepEqual(pins.fadeByDistance, {
+    near: STATION_PIN_TRANSLUCENCY_BY_DISTANCE.near,
+    nearValue: STATION_PIN_TRANSLUCENCY_BY_DISTANCE.nearTranslucency,
+    far: STATION_PIN_TRANSLUCENCY_BY_DISTANCE.far,
+    farValue: STATION_PIN_TRANSLUCENCY_BY_DISTANCE.farTranslucency,
+  });
+  assert.equal(pins.disableDepthTest, STATION_PIN_DISABLE_DEPTH_TEST_DISTANCE);
   // A render is requested for the rebuilt network.
   assert.ok(app.renders.includes('transit-stations'));
   // The overlay labels are still published.
@@ -112,12 +122,20 @@ test('the station network draws one point pin per station and no ground ellipse'
 test('rendering the network again replaces the pins instead of adding to them', () => {
   const app = harness();
   app.state._stations = [
-    { id: 'a', name: 'A', shortCode: null, uic: null, lon: 1, lat: 45, segment: 'A' },
+    {
+      id: 'a',
+      name: 'A',
+      shortCode: null,
+      uic: null,
+      lon: 1,
+      lat: 45,
+      segment: 'A',
+    },
   ];
   app.network.renderStations();
   app.state._stations = [];
   app.network.renderStations();
-  assert.equal(app.state._stationPoints.length, 0);
+  assert.equal(app.pins().length, 0);
 });
 
 test('the display chips hide and show the station pins', () => {
@@ -175,11 +193,11 @@ test('selecting a station highlights its pin and publishes a card with every cat
   for (const field of ['CWX', '87741116', 'Segment C', '73085', '45.80344']) {
     assert.ok(text.includes(field), `the card carries ${field}`);
   }
-  const pin = app.state._stationPointById.get('chindrieux');
+  const pin = app.pins().find((p) => p.id === 'sncf-station:chindrieux');
   assert.equal(pin.pixelSize, STATION_PIN_SELECTED_SIZE);
   // The other pin is untouched.
   assert.equal(
-    app.state._stationPointById.get('vitry').pixelSize,
+    app.pins().find((p) => p.id === 'sncf-station:vitry').pixelSize,
     STATION_PIN_SIZE_PRINCIPAL,
   );
 });
@@ -189,13 +207,16 @@ test('selecting another station moves the highlight; clearing restores the pin a
   app.network.selectStation('chindrieux');
   app.network.selectStation('vitry');
   assert.equal(
-    app.state._stationPointById.get('chindrieux').pixelSize,
+    app.pins().find((p) => p.id === 'sncf-station:chindrieux').pixelSize,
     STATION_PIN_SIZE_PRINCIPAL,
   );
-  assert.equal(app.overlaySources.get('transit-selected')[0].title, 'Vitry-en-Artois');
+  assert.equal(
+    app.overlaySources.get('transit-selected')[0].title,
+    'Vitry-en-Artois',
+  );
   assert.equal(app.network.clearStationSelection(), true);
   assert.equal(
-    app.state._stationPointById.get('vitry').pixelSize,
+    app.pins().find((p) => p.id === 'sncf-station:vitry').pixelSize,
     STATION_PIN_SIZE_PRINCIPAL,
   );
   assert.equal(app.overlaySources.has('transit-selected'), false);
@@ -221,7 +242,7 @@ test('a catalogue rebuild keeps the selection, and drops it when the station is 
   app.network.renderStations();
   assert.equal(app.state._stationSelectedId, 'vitry');
   assert.equal(
-    app.state._stationPointById.get('vitry').pixelSize,
+    app.pins().find((p) => p.id === 'sncf-station:vitry').pixelSize,
     STATION_PIN_SELECTED_SIZE,
   );
   app.state._stations = app.state._stations.filter((s) => s.id !== 'vitry');
@@ -232,24 +253,15 @@ test('a catalogue rebuild keeps the selection, and drops it when the station is 
 
 test('labels follow the camera: nearest the view, none from a national view', () => {
   const app = selectableHarness();
-  const rect = Cesium.Rectangle.fromDegrees(5, 45, 7, 47);
-  let height = 50_000;
-  app.state._viewer = {
-    camera: {
-      get positionCartographic() {
-        return { height };
-      },
-      computeViewRectangle: () => rect,
-    },
-    scene: { globe: {} },
-  };
+  app.camera.rect = { west: 5, south: 45, east: 7, north: 47 };
+  app.camera.height = 50_000;
   app.network.refreshLabels();
   assert.deepEqual(
     app.overlaySources.get('transit-stations').map((e) => e.id),
     ['chindrieux'],
     'only the station inside the view is named',
   );
-  height = 3_000_000;
+  app.camera.height = 3_000_000;
   app.network.refreshLabels();
   assert.deepEqual(app.overlaySources.get('transit-stations'), []);
 });
