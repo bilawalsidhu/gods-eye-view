@@ -1,7 +1,7 @@
 /**
  * @module layers/entityCard
  *
- * Click-to-open card for layers whose map marks are Cesium entities.
+ * Click-to-open card for layers whose map marks are renderer draw items.
  *
  * One controller per layer: it listens for a left click, asks the layer
  * whether the picked entity is one of its own, and shows that entity's card
@@ -12,7 +12,7 @@
  * Nothing here imports the app: the pick registry and the pointer-ownership
  * check arrive through `interaction`, so the module stays portable.
  */
-import * as Cesium from 'cesium';
+import { inputFor as defaultInputFor } from '../input/dispatcher.js';
 
 /** The overlay host slot options of a one-card source. */
 export const ENTITY_CARD_SOURCE_OPTIONS = Object.freeze({
@@ -25,7 +25,8 @@ export const ENTITY_CARD_SOURCE_OPTIONS = Object.freeze({
  * The overlay entry for one open card.
  *
  * @param {string} id Pick id of the entity the card belongs to.
- * @param {Cesium.Cartesian3} position Where the card is anchored.
+ * @param {{x: number, y: number, z: number}} position Where the card is
+ *   anchored, in ECEF.
  * @param {{title: string, details?: string[]}} copy The card text.
  * @param {string} accent CSS colour.
  * @returns {object|null}
@@ -55,13 +56,16 @@ export function createEntityCardOverlayEntry(id, position, copy, accent) {
   };
 }
 
-/** The string id of a scene.pick() result, or null. */
-export function pickedEntityId(picked) {
-  const raw = picked?.id;
-  if (typeof raw === 'string') return raw;
-  if (typeof raw?.id === 'string') return raw.id;
-  const primitive = picked?.primitive?.id;
-  return typeof primitive === 'string' ? primitive : null;
+/**
+ * The id of what a click landed on: a draw item of this application, or
+ * null. Reads the dispatcher's own hit, so one click is one pick.
+ *
+ * @param {{drawHit?: {id?: unknown}|null}|null} event
+ * @returns {string|null}
+ */
+export function pickedEntityId(event) {
+  const id = event?.drawHit?.id;
+  return typeof id === 'string' ? id : null;
 }
 
 /**
@@ -69,9 +73,9 @@ export function pickedEntityId(picked) {
  * @param {string} options.layerId Pick-owner id.
  * @param {object} options.overlayHost The shared overlay host.
  * @param {string} options.sourceId Overlay source id the card lives in.
- * @param {(id: string, click: {position: Cesium.Cartesian3|null}) =>
+ * @param {(id: string, click: {position: object|null}) =>
  *   ({title: string, details?: string[], accent: string,
- *     position?: Cesium.Cartesian3}|null)} options.resolve Card for a
+ *     position?: object}|null)} options.resolve Card for a
  *   picked entity id, or null when the id is not this layer's.
  * @param {(id: string) => boolean} options.owns Whether the id is this
  *   layer's (so siblings leave the pick alone).
@@ -79,6 +83,8 @@ export function pickedEntityId(picked) {
  * @param {() => void} [options.onClear] Called when the card closes.
  * @param {{registerPickOwner?: Function, unregisterPickOwner?: Function,
  *   isPointerFree?: () => boolean}} [options.interaction]
+ * @param {(viewer: object) => {onClick: Function}} [options.inputFor] The
+ *   pointer-input dispatcher of a scene; injectable for tests.
  */
 export function createEntityCard({
   layerId,
@@ -89,9 +95,10 @@ export function createEntityCard({
   onSelect,
   onClear,
   interaction = {},
+  inputFor = defaultInputFor,
 }) {
   const isFree = interaction.isPointerFree ?? (() => true);
-  let handler = null;
+  let unsubscribe = null;
   let selectedId = null;
 
   function clear() {
@@ -130,31 +137,26 @@ export function createEntityCard({
     clear,
 
     install(viewer) {
-      if (handler || !viewer?.scene?.canvas) return;
+      if (unsubscribe || !viewer) return;
       overlayHost.setVisible(sourceId, true);
       interaction.registerPickOwner?.(layerId, owns);
-      handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-      handler.setInputAction((click) => {
+      unsubscribe = inputFor(viewer).onClick((event) => {
         // A pointer a tool has claimed is not an ambient selection.
         if (!isFree()) return;
-        const id = pickedEntityId(viewer.scene.pick(click.position));
+        const id = pickedEntityId(event);
         if (id && owns(id)) {
           // Zones are lines: anchor their card where the click landed.
-          const ground = viewer.camera?.pickEllipsoid?.(
-            click.position,
-            viewer.scene.globe?.ellipsoid,
-          );
-          if (select(id, { position: ground ?? null })) return;
+          if (select(id, { position: event.ground?.() ?? null })) return;
         }
         clear();
-      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+      });
       if (typeof document !== 'undefined')
         document.addEventListener('keydown', onKeyDown);
     },
 
     remove() {
-      handler?.destroy();
-      handler = null;
+      unsubscribe?.();
+      unsubscribe = null;
       if (typeof document !== 'undefined')
         document.removeEventListener('keydown', onKeyDown);
       interaction.unregisterPickOwner?.(layerId);

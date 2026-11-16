@@ -27,12 +27,77 @@ function harness(overrides = {}) {
   return { card, calls };
 }
 
-test('a pick id is read from an entity, a string id or a primitive id', () => {
-  assert.equal(pickedEntityId({ id: 'x' }), 'x');
-  assert.equal(pickedEntityId({ id: { id: 'y' } }), 'y');
-  assert.equal(pickedEntityId({ primitive: { id: 'z' } }), 'z');
+test('a pick id is read from the draw hit of a click, and only a string counts', () => {
+  assert.equal(pickedEntityId({ drawHit: { id: 'x' } }), 'x');
+  assert.equal(pickedEntityId({ drawHit: { id: 7 } }), null);
+  assert.equal(pickedEntityId({ drawHit: null }), null);
   assert.equal(pickedEntityId(null), null);
-  assert.equal(pickedEntityId({ id: 7 }), null);
+});
+
+function clickHarness(overrides = {}) {
+  let listener = null;
+  const registered = [];
+  const inputFor = () => ({
+    onClick(fn) {
+      listener = fn;
+      return () => {
+        listener = null;
+      };
+    },
+  });
+  const made = harness({
+    inputFor,
+    interaction: {
+      registerPickOwner: (...args) => registered.push(['register', ...args]),
+      unregisterPickOwner: (...args) =>
+        registered.push(['unregister', ...args]),
+    },
+    ...overrides,
+  });
+  return {
+    ...made,
+    registered,
+    click: (event) => listener?.(event),
+    get listening() {
+      return listener !== null;
+    },
+  };
+}
+
+test('a click on an owned item opens its card; a click elsewhere closes it', () => {
+  const h = clickHarness();
+  h.card.install({});
+  assert.equal(h.listening, true);
+  assert.deepEqual(h.registered[0].slice(0, 2), ['register', 'demo']);
+  h.click({ drawHit: { id: 'demo:a' }, ground: () => ({ x: 1, y: 2, z: 3 }) });
+  assert.equal(h.card.selectedId, 'demo:a');
+  h.click({ drawHit: null, ground: () => null });
+  assert.equal(h.card.selectedId, null);
+});
+
+test('a click on a line anchors the card where it landed', () => {
+  const h = clickHarness({
+    resolve: (id, click) => ({
+      title: 'Zone',
+      accent: '#fff',
+      position: click.position,
+    }),
+  });
+  h.card.install({});
+  h.click({ drawHit: { id: 'demo:z' }, ground: () => ({ x: 4, y: 5, z: 6 }) });
+  const [, , entries] = h.calls.at(-1);
+  assert.deepEqual(entries[0].position, { x: 4, y: 5, z: 6 });
+});
+
+test('a pointer a tool holds opens nothing; remove stops listening', () => {
+  const h = clickHarness({
+    interaction: { isPointerFree: () => false },
+  });
+  h.card.install({});
+  h.click({ drawHit: { id: 'demo:a' }, ground: () => null });
+  assert.equal(h.card.selectedId, null);
+  h.card.remove();
+  assert.equal(h.listening, false);
 });
 
 test('selecting an owned id publishes one selected card', () => {
