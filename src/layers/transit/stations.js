@@ -1,7 +1,7 @@
 /**
  * @module layers/transit/stations
  * @description The French passenger-station network as the Transit layer draws
- * it: point pins in a Cesium PointPrimitiveCollection plus the overlay
+ * it: ground-clamped point pins in a draw-port points set plus the overlay
  * labels.
  *
  * WHY IT LIVES IN TRANSIT: the owner asked for the station network to be part
@@ -9,12 +9,14 @@
  * keeps one Transit row that draws the live GTFS-RT fleet AND the French rail
  * network's stations.
  *
- * The markers are POINT PINS, in the same PointPrimitiveCollection pattern the
- * Bike Share and satellite layers use. The network is national (2 792
+ * The markers are POINT PINS, in the same points-set pattern the Bike Share
+ * and satellite layers use. The network is national (2 792
  * stations), so ground ellipses big enough to see from orbit covered the map;
  * pins keep the network legible at every scale.
  */
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { drawOf, findCamera } from '../../render/rendererOf.js';
+import { hexColor } from '../../render/color.js';
 import {
   TRANSIT_STATION_PICK_PREFIX,
   TRANSIT_STATION_RANK_PRINCIPAL,
@@ -35,7 +37,7 @@ import {
 import { t } from '../../i18n/index.js';
 
 /** The pin outline, the same soft black the Bike Share points use. */
-const STATION_PIN_OUTLINE_COLOR = Cesium.Color.BLACK.withAlpha(0.25);
+const STATION_PIN_OUTLINE_COLOR = Object.freeze([0, 0, 0, 0.25]);
 
 export * from './stationModel.js';
 
@@ -87,7 +89,10 @@ export const STATION_PIN_DISABLE_DEPTH_TEST_DISTANCE = 2_500;
 /** The selected pin: larger, with a white ring, like the Bike Share highlight. */
 export const STATION_PIN_SELECTED_SIZE = 14;
 export const STATION_PIN_SELECTED_OUTLINE_WIDTH = 2;
-const STATION_PIN_SELECTED_OUTLINE_COLOR = Cesium.Color.WHITE;
+const STATION_PIN_SELECTED_OUTLINE_COLOR = Object.freeze([1, 1, 1, 1]);
+
+/** Makes each layer instance's pin set id unique among the live sets. */
+let instances = 0;
 
 /** The retry ladder after a failed catalogue read: 30 s, 60 s, ... 5 min. */
 export const STATION_RETRY_BASE_MS = 30_000;
@@ -96,14 +101,34 @@ export const STATION_RETRY_MAX_MS = 300_000;
 /**
  * The station network the Transit layer owns.
  *
- * It is a scene-level part like the fleet: one Cesium PointPrimitiveCollection
- * of pins plus the overlay labels, both released on destroy.
+ * It is a scene-level part like the fleet: one draw-port points set of pins
+ * plus the overlay labels, both released on destroy.
  *
  * @param {object} context
  * @returns {object}
  */
 export function createStationNetwork({ state, services, parts, source }) {
   const { governorRequestRender } = services.render;
+  const instance = (instances += 1);
+
+  /** The pin set, hidden and empty, in the scene now. */
+  function createPins(viewer) {
+    destroyPins();
+    state._stationPoints = drawOf(viewer).points({
+      id: `transit:${instance}:stations`,
+      clampTo: 'both',
+      show: false,
+    });
+    state._stationPoints.set([]);
+  }
+
+  /** Let the pin set go. */
+  function destroyPins() {
+    state._stationPoints?.dispose();
+    state._stationPoints = null;
+    state._stationById = new Map();
+    state._stationPointById = new Map();
+  }
 
   /** Abort a station read that is still in flight, and any queued retry. */
   function abortStations() {
@@ -113,12 +138,11 @@ export function createStationNetwork({ state, services, parts, source }) {
     state._stationRetryTimer = null;
   }
 
-  /** The pin's resting look, from its station class. */
+  /** The pin's resting look, from its station class. Mutates the item. */
   function stylePin(point, station, selected) {
     const classification = transitStationClass(station);
     const principal = classification.rank === TRANSIT_STATION_RANK_PRINCIPAL;
-    const color = Cesium.Color.fromCssColorString(classification.color);
-    point.color = color.withAlpha(0.95);
+    point.color = hexColor(classification.color, 0.95);
     if (selected) {
       point.pixelSize = STATION_PIN_SELECTED_SIZE;
       point.outlineColor = STATION_PIN_SELECTED_OUTLINE_COLOR;
@@ -151,24 +175,14 @@ export function createStationNetwork({ state, services, parts, source }) {
    */
   function refreshLabels() {
     if (!state._overlayHost || !state._enabled) return;
-    const viewer = state._viewer;
-    const height = viewer?.camera?.positionCartographic?.height;
+    const camera = findCamera(state._viewer);
+    const height = camera?.pose().height;
     let cohort = [];
     if (
       !Number.isFinite(height) ||
       height <= TRANSIT_STATIONS_LABEL_MAX_ALTITUDE_M
     ) {
-      const rect = viewer?.camera?.computeViewRectangle?.(
-        viewer.scene?.globe?.ellipsoid,
-      );
-      const bounds = rect
-        ? {
-            south: Cesium.Math.toDegrees(rect.south),
-            north: Cesium.Math.toDegrees(rect.north),
-            west: Cesium.Math.toDegrees(rect.west),
-            east: Cesium.Math.toDegrees(rect.east),
-          }
-        : null;
+      const bounds = camera?.viewRectangle() ?? null;
       cohort = selectTransitStationLabelCohort(state._stations, bounds, {
         exclude: state._stationSelectedId ?? null,
       });
@@ -176,7 +190,7 @@ export function createStationNetwork({ state, services, parts, source }) {
     const entries = cohort.map((station) =>
       createTransitStationOverlayEntry({
         id: station.id,
-        position: Cesium.Cartesian3.fromDegrees(station.lon, station.lat),
+        position: fromDegrees(station.lon, station.lat),
         title: station.name,
         accent: transitStationClass(station).color,
       }),
@@ -196,7 +210,10 @@ export function createStationNetwork({ state, services, parts, source }) {
     state._stationSelectedId = null;
     const point = state._stationPointById?.get(id);
     const station = stationById(id);
-    if (point && station) stylePin(point, station, false);
+    if (point && station) {
+      stylePin(point, station, false);
+      state._stationPoints?.upsert([point]);
+    }
     state._overlayHost?.clearSource(TRANSIT_SELECTED_OVERLAY_SOURCE_ID);
     if (state._enabled) refreshLabels();
     governorRequestRender('transit-station-deselect');
@@ -220,9 +237,10 @@ export function createStationNetwork({ state, services, parts, source }) {
     parts.selection.clearSelection();
     state._stationSelectedId = id;
     stylePin(point, station, true);
+    state._stationPoints.upsert([point]);
     const card = createTransitStationSelectedOverlayEntry(
       id,
-      point.position,
+      point.pos,
       buildTransitStationCopy(station, t),
       transitStationClass(station).color,
     );
@@ -243,31 +261,36 @@ export function createStationNetwork({ state, services, parts, source }) {
   function renderStations() {
     const points = state._stationPoints;
     if (!points) return;
-    points.removeAll();
     state._stationById = new Map();
     state._stationPointById = new Map();
+    const items = [];
     for (const station of state._stations) {
-      const point = points.add({
+      const point = {
         id: `${TRANSIT_STATION_PICK_PREFIX}${station.id}`,
-        position: Cesium.Cartesian3.fromDegrees(station.lon, station.lat),
-        scaleByDistance: new Cesium.NearFarScalar(
-          STATION_PIN_SCALE_BY_DISTANCE.near,
-          STATION_PIN_SCALE_BY_DISTANCE.nearScale,
-          STATION_PIN_SCALE_BY_DISTANCE.far,
-          STATION_PIN_SCALE_BY_DISTANCE.farScale,
-        ),
-        translucencyByDistance: new Cesium.NearFarScalar(
-          STATION_PIN_TRANSLUCENCY_BY_DISTANCE.near,
-          STATION_PIN_TRANSLUCENCY_BY_DISTANCE.nearTranslucency,
-          STATION_PIN_TRANSLUCENCY_BY_DISTANCE.far,
-          STATION_PIN_TRANSLUCENCY_BY_DISTANCE.farTranslucency,
-        ),
-        disableDepthTestDistance: STATION_PIN_DISABLE_DEPTH_TEST_DISTANCE,
-      });
+        pos: fromDegrees(station.lon, station.lat),
+        height: 'clampGround',
+        pixelSize: STATION_PIN_SIZE_LOCAL,
+        color: [0, 0, 0, 1],
+        scaleByDistance: {
+          near: STATION_PIN_SCALE_BY_DISTANCE.near,
+          nearValue: STATION_PIN_SCALE_BY_DISTANCE.nearScale,
+          far: STATION_PIN_SCALE_BY_DISTANCE.far,
+          farValue: STATION_PIN_SCALE_BY_DISTANCE.farScale,
+        },
+        fadeByDistance: {
+          near: STATION_PIN_TRANSLUCENCY_BY_DISTANCE.near,
+          nearValue: STATION_PIN_TRANSLUCENCY_BY_DISTANCE.nearTranslucency,
+          far: STATION_PIN_TRANSLUCENCY_BY_DISTANCE.far,
+          farValue: STATION_PIN_TRANSLUCENCY_BY_DISTANCE.farTranslucency,
+        },
+        disableDepthTest: STATION_PIN_DISABLE_DEPTH_TEST_DISTANCE,
+      };
       stylePin(point, station, false);
+      items.push(point);
       state._stationById.set(station.id, station);
       state._stationPointById.set(station.id, point);
     }
+    points.set(items);
     // A station that is no longer in the catalogue cannot stay selected.
     if (
       state._stationSelectedId != null &&
@@ -362,8 +385,8 @@ export function createStationNetwork({ state, services, parts, source }) {
     if (!state._enabled) return true;
     const showVehicles = mode !== 'stations';
     const showStations = mode !== 'vehicles';
-    if (state._markers) state._markers.show = showVehicles;
-    if (state._animatedMarkers) state._animatedMarkers.show = showVehicles;
+    if (state._stillIcons) state._stillIcons.show = showVehicles;
+    if (state._movingIcons) state._movingIcons.show = showVehicles;
     if (state._stationPoints) state._stationPoints.show = showStations;
     state._overlayHost.setVisible(
       TRANSIT_STATIONS_OVERLAY_SOURCE_ID,
@@ -380,7 +403,31 @@ export function createStationNetwork({ state, services, parts, source }) {
     return true;
   }
 
+  /**
+   * Take the network off the screen: cancel its read, drop its pins, labels
+   * and selection, and forget the rows. The pin set itself stays (hidden).
+   */
+  function clearStations() {
+    clearStationSelection();
+    state._overlayHost.setVisible(TRANSIT_STATIONS_OVERLAY_SOURCE_ID, false);
+    state._overlayHost.clearSource(TRANSIT_STATIONS_OVERLAY_SOURCE_ID);
+    abortStations();
+    if (state._stationPoints) {
+      state._stationPoints.show = false;
+      state._stationPoints.set([]);
+    }
+    state._stationById.clear();
+    state._stationPointById.clear();
+    state._stations = [];
+    state._stationTotal = 0;
+    state._stationError = null;
+    state._stationFailures = 0;
+  }
+
   return {
+    createPins,
+    destroyPins,
+    clearStations,
     renderStations,
     refreshLabels,
     selectStation,

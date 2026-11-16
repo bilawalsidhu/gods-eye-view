@@ -3,12 +3,15 @@ import test from 'node:test';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import { createCopernicusEmsLayer } from './index.js';
 
+const inputFor = () => ({ onClick: () => () => {} });
+
 function harness(source) {
   const events = [];
   const viewer = {};
   const { draw } = bindFakeDraw(viewer);
   const layer = createCopernicusEmsLayer({
     source,
+    inputFor,
     overlayHost: {
       setEntries(...args) {
         events.push(args);
@@ -20,6 +23,12 @@ function harness(source) {
   layer.init(viewer);
   layer.enable(viewer);
   return { layer, viewer, draw, events };
+}
+
+function viewerWithDraw() {
+  const viewer = {};
+  bindFakeDraw(viewer);
+  return viewer;
 }
 
 test('a layer requires its source and an overlay host', () => {
@@ -44,6 +53,7 @@ test('a disabled layer does not fetch', async () => {
         return { activations: [], total: 0 };
       },
     },
+    inputFor,
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
   layer.init(viewerWithDraw());
@@ -75,13 +85,82 @@ test('a late refresh cannot publish after disable or destroy', async () => {
   }
 });
 
-test('two displays own separate data sources and destruction', async () => {
-  const a = harness({ getSnapshot: async () => ({ activations: [], total: 0 }) });
-  const b = harness({ getSnapshot: async () => ({ activations: [], total: 0 }) });
+test('two displays own separate draw sets and destruction', async () => {
+  const a = harness({
+    getSnapshot: async () => ({ activations: [], total: 0 }),
+  });
+  const b = harness({
+    getSnapshot: async () => ({ activations: [], total: 0 }),
+  });
   await a.layer.update(a.viewer);
   await b.layer.update(b.viewer);
   a.layer.destroy();
-  assert.equal(a.sources.length, 0);
-  assert.equal(b.sources.length, 1);
+  assert.equal(a.draw.find('copernicus-ems:'), undefined);
+  assert.ok(b.draw.find('copernicus-ems:'));
   b.layer.destroy();
+});
+
+test('each activation is a clamped disc; a click on one opens its card', async () => {
+  const slots = [];
+  let click = null;
+  const viewer = {};
+  const { draw } = bindFakeDraw(viewer);
+  const layer = createCopernicusEmsLayer({
+    source: {
+      getSnapshot: async () => ({
+        total: 1,
+        activations: [
+          {
+            id: 'EMSR1',
+            code: 'EMSR1',
+            name: 'Flood',
+            category: 'flood',
+            categoryLabel: 'Flood',
+            color: '#3399ff',
+            phase: null,
+            phaseLabel: null,
+            countries: [],
+            country: 'FR',
+            lon: 2,
+            lat: 46,
+          },
+        ],
+      }),
+    },
+    overlayHost: {
+      setEntries: (id, entries) => slots.push([id, entries]),
+      setVisible() {},
+      clearSource() {},
+    },
+    inputFor: () => ({
+      onClick(fn) {
+        click = fn;
+        return () => {
+          click = null;
+        };
+      },
+    }),
+  });
+  layer.init(viewer);
+  layer.enable();
+  await layer.update();
+  const set = draw.find('copernicus-ems:');
+  assert.equal(set.kind, 'shapes');
+  assert.equal(set.spec.clampTo, 'both');
+  const disc = set.items.get('copernicus-activation:EMSR1');
+  assert.equal(disc.geometry.kind, 'ellipse');
+  assert.deepEqual(disc.geometry.center, { lon: 2, lat: 46 });
+  assert.equal(disc.geometry.semiMajor, 12000);
+  assert.equal(disc.fill[3], 0.35);
+  assert.equal(disc.outline[3], 0.9);
+  assert.equal(disc.height, 'clampGround');
+  click({
+    drawHit: { id: 'copernicus-activation:EMSR1' },
+    ground: () => ({ x: 1, y: 2, z: 3 }),
+  });
+  const card = slots.filter(([id]) => /selected/.test(id)).at(-1)[1][0];
+  assert.equal(card.id, 'copernicus-activation:EMSR1');
+  assert.match(card.title, /EMSR1 · Flood/);
+  layer.destroy();
+  assert.equal(draw.set(set.spec.id), undefined);
 });

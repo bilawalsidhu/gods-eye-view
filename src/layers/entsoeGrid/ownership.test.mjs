@@ -3,12 +3,15 @@ import test from 'node:test';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import { createEntsoeGridLayer } from './index.js';
 
+const inputFor = () => ({ onClick: () => () => {} });
+
 function harness(source) {
   const events = [];
   const viewer = {};
   const { draw } = bindFakeDraw(viewer);
   const layer = createEntsoeGridLayer({
     source,
+    inputFor,
     overlayHost: {
       setEntries(...args) {
         events.push(args);
@@ -20,6 +23,12 @@ function harness(source) {
   layer.init(viewer);
   layer.enable(viewer);
   return { layer, viewer, draw, events };
+}
+
+function viewerWithDraw() {
+  const viewer = {};
+  bindFakeDraw(viewer);
+  return viewer;
 }
 
 test('a layer requires its source and an overlay host', () => {
@@ -44,6 +53,7 @@ test('a disabled layer does not fetch', async () => {
         return { zones: [], unit: null, day: null };
       },
     },
+    inputFor,
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
   layer.init(viewerWithDraw());
@@ -75,7 +85,7 @@ test('a late refresh cannot publish after disable or destroy', async () => {
   }
 });
 
-test('two displays own separate data sources and destruction', async () => {
+test('two displays own separate draw sets and destruction', async () => {
   const a = harness({
     getSnapshot: async () => ({ zones: [], unit: null, day: null }),
   });
@@ -85,8 +95,8 @@ test('two displays own separate data sources and destruction', async () => {
   await a.layer.update(a.viewer);
   await b.layer.update(b.viewer);
   a.layer.destroy();
-  assert.equal(a.sources.length, 0);
-  assert.equal(b.sources.length, 1);
+  assert.equal(a.draw.find('entsoe-grid:'), undefined);
+  assert.ok(b.draw.find('entsoe-grid:'));
   b.layer.destroy();
 });
 test('the layer declares the key it needs through the registry id', () => {
@@ -131,7 +141,9 @@ const zonesSnapshot = () => ({
 
 test('one pin per zone, and picking a pin opens its card and focuses the rail', async () => {
   const slots = [];
-  const sources = [];
+  let click = null;
+  const viewer = {};
+  const { draw } = bindFakeDraw(viewer);
   const layer = createEntsoeGridLayer({
     source: { getSnapshot: async () => zonesSnapshot() },
     overlayHost: {
@@ -139,19 +151,44 @@ test('one pin per zone, and picking a pin opens its card and focuses the rail', 
       setVisible() {},
       clearSource: (id) => slots.push([id, null]),
     },
+    inputFor: () => ({
+      onClick(fn) {
+        click = fn;
+        return () => {
+          click = null;
+        };
+      },
+    }),
   });
-  layer.init({
-    dataSources: { add: (value) => sources.push(value), remove() {} },
-  });
+  layer.init(viewer);
   layer.enable();
   await layer.update();
-  const entities = sources[0].entities.values;
-  assert.deepEqual(entities.map((entity) => entity.id).sort(), [
+  const set = draw.find('entsoe-grid:');
+  assert.equal(set.kind, 'points');
+  assert.equal(set.show, true);
+  assert.deepEqual([...set.items.keys()].sort(), [
     'entsoe-zone:DE',
     'entsoe-zone:FR',
   ]);
+  const pin = set.items.get('entsoe-zone:FR');
+  assert.equal(pin.pixelSize, 12);
+  assert.deepEqual(pin.outlineColor, [1, 1, 1, 0.85]);
+  assert.equal(pin.color[3], 0.95);
   assert.equal(layer.getStats().count, 2);
   // The rail follows France until another country is chosen.
   assert.match(layer.getRowControls().summary.detail, /France/);
+  // Picking Germany opens its card and points the rail at it.
+  click({ drawHit: { id: 'entsoe-zone:DE' }, ground: () => null });
+  const opened = slots.filter(
+    ([id, entries]) => /selected/.test(id) && entries,
+  );
+  assert.equal(opened.at(-1)[1][0].id, 'entsoe-zone:DE');
+  assert.match(layer.getRowControls().summary.detail, /Germany/);
+  // A click on empty globe closes it.
+  click({ drawHit: null, ground: () => null });
+  assert.equal(slots.at(-1)[1], null);
+  layer.disable();
+  assert.equal(set.show, false);
   layer.destroy();
+  assert.equal(draw.set(set.spec.id), undefined);
 });

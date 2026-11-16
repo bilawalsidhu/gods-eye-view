@@ -3,12 +3,15 @@ import test from 'node:test';
 import { createVigicruesFloodsLayer } from './index.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
+const quietInput = () => ({ onClick: () => () => {} });
+
 function harness(source) {
   const events = [];
   const viewer = {};
   const { draw } = bindFakeDraw(viewer);
   const layer = createVigicruesFloodsLayer({
     source,
+    inputFor: quietInput,
     overlayHost: {
       setEntries(...args) {
         events.push(args);
@@ -46,6 +49,7 @@ test('a disabled layer does not fetch', async () => {
       },
     },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+    inputFor: quietInput,
   });
   layer.init({});
   assert.equal(await layer.update(), false);
