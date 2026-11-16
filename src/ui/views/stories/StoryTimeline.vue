@@ -20,7 +20,7 @@ import {
 const props = defineProps({ story: { type: Object, required: true } });
 const emit = defineEmits(['anchor']);
 const store = useStoriesStore();
-const { playback, muted, expanded } = storeToRefs(store);
+const { playback, expanded } = storeToRefs(store);
 
 const dur = computed(
   () => playback.value.durationMs || props.story.durationMs || 1,
@@ -333,11 +333,7 @@ function onKey(e) {
   seek(tt);
 }
 
-// ── Sound, expand ──
-const VOL = {
-  off: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor" stroke="none"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>',
-  on: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor" stroke="none"/><path d="M15.5 9a4.5 4.5 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11"/>',
-};
+// ── Expand ──
 function toggleExpand() {
   store.expanded = !store.expanded;
   store.ctxOpen = false;
@@ -495,26 +491,6 @@ defineExpose({ goChapter });
       @click="jumpLive"
     >
       <i></i>{{ t('LIVE') }}
-    </button>
-    <button
-      id="tlVol"
-      class="tl-vol"
-      type="button"
-      :aria-label="muted ? t('Unmute') : t('Mute')"
-      :aria-pressed="!muted"
-      @click="muted = !muted"
-    >
-      <svg
-        id="tlVolIcon"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.9"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-        v-html="muted ? VOL.off : VOL.on"
-      ></svg>
     </button>
     <button
       id="stExpand"

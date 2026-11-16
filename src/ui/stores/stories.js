@@ -33,7 +33,6 @@ export const useStoriesStore = defineStore('stories', {
     /** The big Play button over a story that opened paused. */
     bigPlay: false,
     camera: { lat: 0, lon: 0, altKm: 0 },
-    muted: true,
     expanded: false,
     /** Context panel shown over the map while expanded (desktop). */
     ctxOpen: false,
