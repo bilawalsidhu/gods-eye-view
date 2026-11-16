@@ -30,7 +30,6 @@ import { bindRenderer } from '../rendererOf.js';
 import { FREE_LOOK_MAX_HEIGHT_METERS } from '../../globeInView.js';
 import { createCesiumInput } from './input.js';
 import { cesiumCapabilities, createCesiumPorts } from './ports.js';
-import { IDLE_FRAME_RATE } from '../../renderGovernor.js';
 import { cesiumMapEngine } from './mapEngine.js';
 import { installFreeLookHeightLimit } from './freeLookLimit.js';
 import { trimStaleSceneCommands } from './sceneCommandRelease.js';
@@ -128,8 +127,6 @@ export function createCesiumRendererPlugin({
         capabilities = new ReadonlySet(cesiumCapabilities(viewer.scene));
         ports = createCesiumPorts(viewer, {
           capabilities,
-          // Ticking at the display's rate only while anything moves.
-          idleFps: IDLE_FRAME_RATE,
           credentials: { googleApiKey, googleTokens, worldDataToken },
           ...(cameraController ? { cameraController } : {}),
           ...(clock ? { now, date: () => clock.date() } : {}),

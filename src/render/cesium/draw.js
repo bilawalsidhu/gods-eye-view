@@ -413,18 +413,25 @@ function flowTime(speed) {
 }
 
 /**
- * Drawn frames a line set's lines stay unchanged before the solid ones
- * among them settle into a static batch (`settleLines`).
+ * Milliseconds a line set's lines stay unchanged before the solid ones
+ * among them settle into a static batch (`settleLines`), and a shape set's
+ * moved shapes go back into its batches (`settleShapes`). Timed, so a
+ * batch builds as soon at every refresh rate.
  */
-export const SETTLE_FRAMES = 30;
+export const SETTLE_MS = 500;
 
 /**
  * Fewer lines than this left in the collection beside a static batch wait
- * `LONG_SETTLE_FRAMES` to settle, as rebuilding the batch for them costs
+ * `LONG_SETTLE_MS` to settle, as rebuilding the batch for them costs
  * more than drawing them in the collection for a while.
  */
 export const FEW_LOOSE_LINES = 64;
-export const LONG_SETTLE_FRAMES = 300;
+export const LONG_SETTLE_MS = 5000;
+
+/** A line set's settling: waiting the short time, the long one, or done. */
+const SETTLE_SHORT = 0;
+const SETTLE_LONG = 1;
+const SETTLE_DONE = 2;
 
 /**
  * Clamped fills a set draws alone at most, each where it last moved
@@ -452,12 +459,14 @@ const animating = (record) => record.gpu?.animating();
  * @param {{scene: object, report: (error: unknown) => void,
  *   capabilities?: ReadonlySet<string>,
  *   requestRender?: (reason: string) => void,
- *   date?: () => number}} options `capabilities` gate
+ *   date?: () => number,
+ *   now?: () => number}} options `capabilities` gate
  *   the GPU icon sets' members (by default they all are); `requestRender`,
  *   the frame port's, asks for the frames a GPU icon set needs on its own
  *   (its images packed), under the reason `icons:<set id>` (by default the
  *   scene's, with no reason); `date`, the epoch ms a `live` motion clock
- *   reads (by default the system clock's).
+ *   reads (by default the system clock's); `now`, the milliseconds settling
+ *   waits are timed by (`performance.now` by default).
  */
 export function createCesiumDraw({
   scene,
@@ -465,6 +474,7 @@ export function createCesiumDraw({
   capabilities = new Set(GPU_ICON_CAPABILITIES),
   requestRender: requestFrame = null,
   date = null,
+  now = () => performance.now(),
 }) {
   const sets = new Map();
   // Fields share the sets' ids.
@@ -3107,7 +3117,8 @@ export function createCesiumDraw({
     record.lineBox = settling ? own : null;
     record.batch = null;
     record.batchPending = null;
-    record.settled = 0;
+    record.changedAt = now();
+    record.settleStage = SETTLE_SHORT;
     if (!draped.size && !glows.size && !alone.length && !groundPieces.length) {
       noteFlows(record);
       return replaceHost(record, own);
@@ -3581,7 +3592,8 @@ export function createCesiumDraw({
    * still building drew them as they were, so it is dropped.
    */
   function unsettle(record) {
-    record.settled = 0;
+    record.changedAt = now();
+    record.settleStage = SETTLE_SHORT;
     const pending = record.batchPending;
     if (!pending) return;
     record.batchPending = null;
@@ -3736,10 +3748,10 @@ export function createCesiumDraw({
   }
 
   /**
-   * After a draw: a line set whose lines have not changed for
-   * `SETTLE_FRAMES` drawn frames starts building its static batch, of all
-   * its lines that `settles`, once some are still in the collection (when
-   * it has a batch and only a few are, after `LONG_SETTLE_FRAMES`); one
+   * After a draw: a line set whose lines have not changed for `SETTLE_MS`
+   * starts building its static batch, of all its lines that `settles`, once
+   * some are still in the collection (when it has a batch and only a few
+   * are, after `LONG_SETTLE_MS`); one
    * built swaps in for the collection's lines it draws (`swapBatch`).
    * Unchanged lines in a polyline collection cost a material id a line
    * every frame; in a batch they cost nothing until they change.
@@ -3750,13 +3762,10 @@ export function createCesiumDraw({
       swapBatch(record);
       return;
     }
-    if (record.settled > LONG_SETTLE_FRAMES) return;
-    record.settled += 1;
-    if (
-      record.settled !== SETTLE_FRAMES &&
-      record.settled !== LONG_SETTLE_FRAMES
-    )
-      return;
+    if (record.settleStage === SETTLE_DONE) return;
+    const wait =
+      record.settleStage === SETTLE_SHORT ? SETTLE_MS : LONG_SETTLE_MS;
+    if (now() - record.changedAt < wait) return;
     // The lines that can settle still in the collection: a batch is
     // rebuilt whole for them, so a few wait longer, as a few cost little.
     let loose = 0;
@@ -3765,10 +3774,12 @@ export function createCesiumDraw({
     if (
       record.batch &&
       loose < FEW_LOOSE_LINES &&
-      record.settled < LONG_SETTLE_FRAMES
-    )
+      record.settleStage === SETTLE_SHORT
+    ) {
+      record.settleStage = SETTLE_LONG;
       return;
-    record.settled = LONG_SETTLE_FRAMES + 1;
+    }
+    record.settleStage = SETTLE_DONE;
     if (!loose) return;
     const members = [];
     for (const [itemId, part] of record.lineParts) {
@@ -5007,7 +5018,7 @@ export function createCesiumDraw({
       if (part.batch.ready) showOn(part.batch, part.id, false);
     }
     hideRetiringShape(record, item.id);
-    record.shapesStill = 0;
+    record.shapesMovedAt = now();
     part.solo = true;
     part.pendingShow = undefined;
     part.look = lookOf(item);
@@ -5081,7 +5092,7 @@ export function createCesiumDraw({
 
   /**
    * After a draw: a shape set whose shapes drawn alone have not moved for
-   * `SETTLE_FRAMES` drawn frames rebuilds, so they go back into its
+   * `SETTLE_MS` rebuilds, so they go back into its
    * batches; the host drawing them alone draws until the rebuild is ready.
    */
   function settleShapes(record) {
@@ -5093,9 +5104,8 @@ export function createCesiumDraw({
         break;
       }
     if (!alone) return;
-    record.shapesStill = (record.shapesStill ?? 0) + 1;
-    if (record.shapesStill < SETTLE_FRAMES) return;
-    record.shapesStill = 0;
+    if (now() - record.shapesMovedAt < SETTLE_MS) return;
+    record.shapesMovedAt = now();
     record.rebuild();
     requestRender();
   }
