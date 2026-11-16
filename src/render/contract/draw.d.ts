@@ -525,6 +525,34 @@ export type FieldSpec =
        */
       detail?: { image: ImageRef; rectangle: GeoRect } | null;
       alpha?: number;
+    }
+  | {
+      /**
+       * An eclipse's shadow on the Earth, drawn over the frame: the Moon's
+       * penumbra and umbra where they fall on the ground (`solar`), or the
+       * half of the Earth with the eclipsed Moon in its sky (`lunar`). At
+       * most one of the two is drawn; with neither, nothing is. Lengths are in
+       * Earth equatorial radii, Earth-fixed. Never picked and never in
+       * height queries; `update` changes it in place, without a rebuild.
+       */
+      kind: 'eclipseShadow';
+      id: string;
+      solar?: {
+        /** A point on the shadow axis, and its direction toward the Sun. */
+        origin: Vec3;
+        axis: Vec3;
+        /** The penumbra's and umbra's radii on the fundamental plane, and the tangents of their cones' half-angles: `[l1, l2, tanF1, tanF2]`. */
+        cones: [number, number, number, number];
+        /** How dark the sky over the camera is, 0..1. */
+        skyShade?: number;
+      } | null;
+      lunar?: {
+        /** The Moon's centre and radius. */
+        moon: [x: number, y: number, z: number, radius: number];
+        /** The share of the Moon's diameter in the umbra, 0..1. */
+        depth: number;
+      } | null;
+      show?: boolean;
     };
 
 export interface FieldHandle extends Handle {

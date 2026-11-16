@@ -9,6 +9,7 @@
   ["directions", "n"],
   ["drone-airspace", "8"],
   ["earthquakes", "e"],
+  ["eclipse-paths", "03"],
   ["fire-perimeters", "2"],
   ["flights", "f"],
   ["gnss-integrity", "3"],
