@@ -238,6 +238,10 @@ export class SceneDirector {
         }
       }
     }
+    // Upgrades select the scene they change; startup still opens on the
+    // first scene and shot.
+    this._selectedSceneId = this._project.scenes[0]?.id || null;
+    this._selectedShotId = this._project.scenes[0]?.shots[0]?.id || null;
     this._initUI();
     // A status the director wrote itself follows the language; one it was
     // handed (an error message) stays as it is.

@@ -721,6 +721,33 @@ test('installed v12 Nepal pack inserts ten points without replacing renamed came
 });
 
 
+test('startup selects the first scene after upgrading a later scene’s shot pack', () => {
+  const first = makeDirector({ project: nepalProjectFixture() });
+  let legacy;
+  const recipe = getSceneAppendRecipeById('bhote-koshi-nepal-evidence-pack');
+  try {
+    first.director.appendShotPack('scene-1', recipe.id);
+    legacy = structuredClone(first.director._project);
+    const scene = legacy.scenes[0];
+    scene.id = 'nepal';
+    scene.shots = scene.shots.filter((shot) => !shot.sourcePackId
+      || recipe.previousRequiredSourcePackBeatIds.includes(shot.layers['bhote-koshi-2026'].params.beatId));
+    scene.appliedShotPacks[0].version = 12;
+    const ids = new Set(scene.shots.map(({ id }) => id));
+    scene.appliedShotPacks[0].shotBindings = Object.fromEntries(
+      Object.entries(scene.appliedShotPacks[0].shotBindings).filter(([, id]) => ids.has(id)));
+    // An ordinary scene comes first; the pack to upgrade is in the second.
+    legacy.scenes.unshift(structuredClone(PROJECT_FIXTURE.scenes[0]));
+  } finally { first.restore(); }
+  const upgraded = makeDirector({ project: legacy });
+  try {
+    const { director } = upgraded;
+    assert.equal(director._project.scenes[1].appliedShotPacks[0].version, 18, 'the pack was upgraded');
+    assert.equal(director._selectedSceneId, 'scene-1');
+    assert.equal(director._selectedShotId, 'shot-a');
+  } finally { upgraded.restore(); }
+});
+
 test('a legacy three-shot Nepal browser project bootstraps to the current 25-shot sequence', () => {
   const project = legacyThreeShotNepalProjectFixture();
   const originalIds = project.scenes[0].shots.map(({ id }) => id);
