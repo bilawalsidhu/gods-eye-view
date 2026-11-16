@@ -3719,5 +3719,19 @@
   "Search layers…": "Rechercher des couches…",
   "Layer groups": "Groupes de couches",
   "Jump to {name}": "Aller à {name}",
-  "No layers match": "Aucune couche ne correspond"
+  "No layers match": "Aucune couche ne correspond",
+  "Highway message signs": "Panneaux à messages variables",
+  "MnDOT · Minnesota only": "MnDOT · Minnesota seulement",
+  "MnDOT network error": "MnDOT : erreur réseau",
+  "{count} signs lit": {
+    "one": "{count} panneau allumé",
+    "many": "{count} de panneaux allumés",
+    "other": "{count} panneaux allumés"
+  },
+  "Message sign, {location}": "Panneau à messages, {location}",
+  "SIGN · {location}": "PANNEAU · {location}",
+  "MnDOT data {age}": "Données MnDOT {age}",
+  "STALE · MnDOT data {age}": "OBSOLÈTE · données MnDOT {age}",
+  "Page {n} of {total}": "Page {n} sur {total}",
+  "Graphic only": "Graphique seulement"
 }

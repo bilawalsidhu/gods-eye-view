@@ -3719,5 +3719,19 @@
   "Search layers…": "Pesquisar camadas…",
   "Layer groups": "Grupos de camadas",
   "Jump to {name}": "Ir para {name}",
-  "No layers match": "Nenhuma camada corresponde"
+  "No layers match": "Nenhuma camada corresponde",
+  "Highway message signs": "Painéis de mensagens em rodovias",
+  "MnDOT · Minnesota only": "MnDOT · só Minnesota",
+  "MnDOT network error": "MnDOT: erro de rede",
+  "{count} signs lit": {
+    "one": "{count} painel aceso",
+    "many": "{count} de painéis acesos",
+    "other": "{count} painéis acesos"
+  },
+  "Message sign, {location}": "Painel de mensagens, {location}",
+  "SIGN · {location}": "PAINEL · {location}",
+  "MnDOT data {age}": "Dados do MnDOT {age}",
+  "STALE · MnDOT data {age}": "DESATUALIZADO · dados do MnDOT {age}",
+  "Page {n} of {total}": "Página {n} de {total}",
+  "Graphic only": "Só gráfico"
 }

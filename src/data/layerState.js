@@ -685,6 +685,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     optionOwner: 'local-firms',
   }),
   Object.freeze({
+    id: 'message-signs',
+    token: '03',
+    disposition: 'enabled-only',
+  }),
+  Object.freeze({
     id: 'military',
     token: 'm',
     disposition: 'enabled+mirrored-options',

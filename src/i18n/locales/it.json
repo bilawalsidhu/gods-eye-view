@@ -3719,5 +3719,19 @@
   "Search layers…": "Cerca livelli…",
   "Layer groups": "Gruppi di livelli",
   "Jump to {name}": "Vai a {name}",
-  "No layers match": "Nessun livello corrisponde"
+  "No layers match": "Nessun livello corrisponde",
+  "Highway message signs": "Pannelli a messaggio variabile",
+  "MnDOT · Minnesota only": "MnDOT · solo Minnesota",
+  "MnDOT network error": "MnDOT: errore di rete",
+  "{count} signs lit": {
+    "one": "{count} pannello acceso",
+    "many": "{count} di pannelli accesi",
+    "other": "{count} pannelli accesi"
+  },
+  "Message sign, {location}": "Pannello a messaggio variabile, {location}",
+  "SIGN · {location}": "PANNELLO · {location}",
+  "MnDOT data {age}": "Dati MnDOT {age}",
+  "STALE · MnDOT data {age}": "OBSOLETO · dati MnDOT {age}",
+  "Page {n} of {total}": "Pagina {n} di {total}",
+  "Graphic only": "Solo grafica"
 }

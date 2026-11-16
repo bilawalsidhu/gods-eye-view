@@ -3545,5 +3545,17 @@
   "Search layers…": "レイヤーを検索…",
   "Layer groups": "レイヤーのグループ",
   "Jump to {name}": "{name} へ移動",
-  "No layers match": "一致するレイヤーはありません"
+  "No layers match": "一致するレイヤーはありません",
+  "Highway message signs": "高速道路情報板",
+  "MnDOT · Minnesota only": "MnDOT · ミネソタ州のみ",
+  "MnDOT network error": "MnDOTのネットワークエラー",
+  "{count} signs lit": {
+    "other": "{count}基が点灯中"
+  },
+  "Message sign, {location}": "情報板、{location}",
+  "SIGN · {location}": "情報板 · {location}",
+  "MnDOT data {age}": "MnDOTデータ {age}",
+  "STALE · MnDOT data {age}": "更新遅延 · MnDOTデータ {age}",
+  "Page {n} of {total}": "ページ {n}/{total}",
+  "Graphic only": "グラフィックのみ"
 }

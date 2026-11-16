@@ -3806,5 +3806,20 @@
   "Search layers…": "Пошук шарів…",
   "Layer groups": "Групи шарів",
   "Jump to {name}": "Перейти до «{name}»",
-  "No layers match": "Немає відповідних шарів"
+  "No layers match": "Немає відповідних шарів",
+  "Highway message signs": "Інформаційні табло на автомагістралях",
+  "MnDOT · Minnesota only": "MnDOT · лише Міннесота",
+  "MnDOT network error": "MnDOT: помилка мережі",
+  "{count} signs lit": {
+    "one": "{count} табло світиться",
+    "few": "{count} табло світяться",
+    "many": "{count} табло світяться",
+    "other": "{count} табло світяться"
+  },
+  "Message sign, {location}": "Інформаційне табло, {location}",
+  "SIGN · {location}": "ТАБЛО · {location}",
+  "MnDOT data {age}": "Дані MnDOT {age}",
+  "STALE · MnDOT data {age}": "ЗАСТАРІЛО · дані MnDOT {age}",
+  "Page {n} of {total}": "Сторінка {n} з {total}",
+  "Graphic only": "Лише графіка"
 }

@@ -37,6 +37,7 @@ import { createApplicationShipwrecks } from './layers/shipwrecks.js';
 import { createApplicationDroneAirspace } from './layers/droneAirspace.js';
 import { createApplicationNews } from './layers/news.js';
 import { createApplicationWildlifeSightings } from './layers/wildlifeSightings.js';
+import { createApplicationMessageSigns } from './layers/messageSigns.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createOsmOverlayLayers } from '../data/osmOverlays.js';
 import { createApplicationStreetLevel } from './layers/streetLevel.js';
@@ -167,6 +168,10 @@ export function createApplicationCatalog({
           groundFloor: surface.groundFloor,
         }),
         createApplicationAlpr({ surface, source: sources.alpr }),
+        createApplicationMessageSigns({
+          surface,
+          source: sources['message-signs'],
+        }),
         createApplicationStreetLevel({
           surface,
           sources: { mapillary: sources.mapillary },

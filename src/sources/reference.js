@@ -5,6 +5,7 @@ import { createDroneAirspaceSource } from '../layers/droneAirspace/source.js';
 import { createBundledCableSource } from '../layers/submarineCables/bundledSource.js';
 import { createAdsbGnssSource } from '../layers/gnss/source.js';
 import { createWildlifeSightingsSource } from '../layers/wildlifeSightings/source.js';
+import { createMessageSignsSource } from '../layers/messageSigns/source.js';
 
 /** Construct the existing reference feeds independently of application setup. */
 export function createReferenceSources() {
@@ -16,5 +17,6 @@ export function createReferenceSources() {
     'wildlife-sightings': createWildlifeSightingsSource(),
     cables: createBundledCableSource(),
     'gnss-integrity': createAdsbGnssSource(),
+    'message-signs': createMessageSignsSource(),
   };
 }

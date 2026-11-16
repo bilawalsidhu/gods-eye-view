@@ -622,6 +622,13 @@ export const DATA_CREDITS = [
       ' · Shipwrecks (worldwide): <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0)',
   },
   {
+    key: 'mndot-message-signs',
+    html:
+      'Highway message signs (Minnesota): ' +
+      '<a href="https://www.dot.state.mn.us/" target="_blank" rel="noopener">Minnesota Department of Transportation (MnDOT)</a>, ' +
+      'public sign messages and sign images from the MnDOT IRIS system',
+  },
+  {
     key: 'drivebc-cctv',
     html:
       'CCTV cameras &amp; frames (British Columbia): ' +

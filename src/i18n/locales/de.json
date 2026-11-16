@@ -3632,5 +3632,18 @@
   "Search layers…": "Ebenen suchen…",
   "Layer groups": "Ebenengruppen",
   "Jump to {name}": "Zu {name} springen",
-  "No layers match": "Keine passenden Ebenen"
+  "No layers match": "Keine passenden Ebenen",
+  "Highway message signs": "Autobahn-Anzeigetafeln",
+  "MnDOT · Minnesota only": "MnDOT · nur Minnesota",
+  "MnDOT network error": "MnDOT: Netzwerkfehler",
+  "{count} signs lit": {
+    "one": "{count} Tafel leuchtet",
+    "other": "{count} Tafeln leuchten"
+  },
+  "Message sign, {location}": "Anzeigetafel, {location}",
+  "SIGN · {location}": "TAFEL · {location}",
+  "MnDOT data {age}": "MnDOT-Daten {age}",
+  "STALE · MnDOT data {age}": "VERALTET · MnDOT-Daten {age}",
+  "Page {n} of {total}": "Seite {n} von {total}",
+  "Graphic only": "Nur Grafik"
 }
