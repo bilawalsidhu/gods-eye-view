@@ -28,12 +28,24 @@
  * short stable strings ('flights', 'traffic', 'style-anim', …) so the
  * diagnostics read like a story.
  *
+ * Frame rate: in continuous mode the viewer draws at the display's own
+ * refresh rate (no `targetFrameRate`). In idle mode it is capped at
+ * IDLE_FRAME_RATE, because Cesium still ticks the clock, data sources and
+ * every pre/post-update listener once per animation frame even when it skips
+ * the draw. Camera movement takes a 'camera' hold from `moveStart` to
+ * `moveEnd`, so drags and flights run at the full rate too.
+ *
  * The governor is O(1) passive: no per-frame work of its own, ever.
  */
+
+/** Frames a second the viewer ticks while nothing moves. */
+export const IDLE_FRAME_RATE = 60;
 
 let _viewer = null;
 let _installed = false;
 const _holds = new Set();
+/** Removes the camera move listeners added at install. */
+let _removeCameraListeners = null;
 
 /** Debug trail of the most recent one-shot render requests (idle mode only). */
 const _recentRequests = [];
@@ -43,6 +55,7 @@ function applyMode() {
   if (!_installed || !_viewer?.scene) return;
   const continuous = _holds.size > 0;
   const scene = _viewer.scene;
+  _viewer.targetFrameRate = continuous ? undefined : IDLE_FRAME_RATE;
   if (scene.requestRenderMode === !continuous) return;
   scene.requestRenderMode = !continuous;
   if (!continuous) {
@@ -52,15 +65,101 @@ function applyMode() {
   }
 }
 
+/** Pose sampling while the camera moves (see watchCameraMotion). */
+const CAMERA_SAMPLE_MS = 250;
+const CAMERA_POSITION_TOLERANCE_M = 1e-3;
+const CAMERA_DIRECTION_TOLERANCE = 1e-9;
+
+function near(a, b, tolerance) {
+  return (
+    Math.abs(a.x - b.x) <= tolerance &&
+    Math.abs(a.y - b.y) <= tolerance &&
+    Math.abs(a.z - b.z) <= tolerance
+  );
+}
+
+/**
+ * Hold continuous render while the camera moves. Cesium's `moveStart` takes
+ * the hold and `moveEnd` releases it. Cesium compares the pose with the last
+ * frame's to the last rounding error, and at some poses the camera drifts by
+ * a rounding error every frame, so `moveEnd` never comes (see
+ * `installGlobeInViewRecovery` in app/viewer.js). So from `moveStart` until
+ * `moveEnd` the pose is also sampled every 250 ms with a tolerance for that
+ * drift: half a second at rest releases the hold and a later move takes it
+ * again (Cesium raises no new `moveStart` under that drift). Sampling runs
+ * until `moveEnd`, however long that takes; it costs four checks a second.
+ * @returns {(() => void)|null} Removes the listeners and the sampling.
+ */
+function watchCameraMotion(camera, { schedule, unschedule }) {
+  if (!camera?.moveStart || !camera?.moveEnd) return null;
+  const last = { position: null, direction: null };
+  let timer = null;
+  let restingSamples = 0;
+  const copy = (v) => (v ? { x: v.x, y: v.y, z: v.z } : null);
+  const remember = () => {
+    last.position = copy(camera.positionWC);
+    last.direction = copy(camera.directionWC);
+  };
+  const stopSampling = () => {
+    if (timer !== null) unschedule(timer);
+    timer = null;
+  };
+  const sample = () => {
+    timer = null;
+    const position = camera.positionWC;
+    const direction = camera.directionWC;
+    const atRest =
+      !position ||
+      !direction ||
+      !last.position ||
+      (near(position, last.position, CAMERA_POSITION_TOLERANCE_M) &&
+        near(direction, last.direction, CAMERA_DIRECTION_TOLERANCE));
+    if (atRest) {
+      restingSamples += 1;
+      if (restingSamples >= 2) releaseContinuousRender('camera');
+    } else {
+      restingSamples = 0;
+      holdContinuousRender('camera');
+    }
+    remember();
+    timer = schedule(sample, CAMERA_SAMPLE_MS);
+  };
+  const removeStart = camera.moveStart.addEventListener(() => {
+    holdContinuousRender('camera');
+    stopSampling();
+    restingSamples = 0;
+    remember();
+    timer = schedule(sample, CAMERA_SAMPLE_MS);
+  });
+  const removeEnd = camera.moveEnd.addEventListener(() => {
+    stopSampling();
+    releaseContinuousRender('camera');
+  });
+  return () => {
+    stopSampling();
+    removeStart();
+    removeEnd();
+  };
+}
+
 /**
  * Install the governor on the viewer. Idempotent. Before install,
  * hold/release still record into the holds set (and apply at install time);
  * requests are safe no-ops — so modules can call all three unconditionally
  * in tests without a viewer.
  * @param {Cesium.Viewer} viewer
+ * @param {{setTimeout?: Function, clearTimeout?: Function}} [timers] Injectable
+ *   timers for tests.
  * @returns {void}
  */
-export function installRenderGovernor(viewer) {
+export function installRenderGovernor(
+  viewer,
+  {
+    setTimeout: schedule = globalThis.setTimeout,
+    clearTimeout: unschedule = globalThis.clearTimeout,
+  } = {},
+) {
+  const timers = { schedule, unschedule };
   if (!viewer?.scene)
     throw new TypeError('installRenderGovernor requires a Cesium viewer');
   _viewer = viewer;
@@ -69,6 +168,12 @@ export function installRenderGovernor(viewer) {
   // idle means idle. All re-renders are camera/tiles (Cesium-native) or
   // explicit requests.
   viewer.scene.maximumRenderTimeChange = Infinity;
+  _removeCameraListeners?.();
+  _holds.delete('camera');
+  _removeCameraListeners = watchCameraMotion(
+    viewer.camera ?? viewer.scene.camera,
+    timers,
+  );
   applyMode();
 }
 
@@ -132,6 +237,8 @@ export function getRenderGovernorDiagnostics() {
 /** Release the installed viewer after its animation owners have stopped. */
 export function uninstallRenderGovernor(viewer) {
   if (_viewer !== viewer) return;
+  _removeCameraListeners?.();
+  _removeCameraListeners = null;
   _viewer = null;
   _installed = false;
   _holds.clear();
@@ -140,6 +247,8 @@ export function uninstallRenderGovernor(viewer) {
 
 /** Test seam: reset module state between unit tests. */
 export function _resetRenderGovernorForTest() {
+  _removeCameraListeners?.();
+  _removeCameraListeners = null;
   _viewer = null;
   _installed = false;
   _holds.clear();

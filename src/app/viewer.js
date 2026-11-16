@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { IDLE_FRAME_RATE } from '../renderGovernor.js';
 import { applyModelAtmosphereWorkaround } from './atmosphereCompat.js';
 import { StarrySky } from '../sky/starrySky.js';
 import {
@@ -375,8 +376,15 @@ export function installGlobeInViewRecovery(
   };
 }
 
-/** Cesium.Viewer options of the standard globe viewer. */
-export function applicationViewerOptions(creditContainer) {
+/**
+ * Cesium.Viewer options of the standard globe viewer. `showRenderLoopErrors`
+ * false leaves render errors to the caller's own notice instead of Cesium's
+ * panel.
+ */
+export function applicationViewerOptions(
+  creditContainer,
+  { showRenderLoopErrors = true } = {},
+) {
   return {
     timeline: false,
     animation: false,
@@ -396,19 +404,26 @@ export function applicationViewerOptions(creditContainer) {
     creditContainer,
     msaaSamples: 4,
     contextOptions: { webgl: { preserveDrawingBuffer: true } },
+    showRenderLoopErrors,
   };
 }
 
 /** Create the standard globe viewer in caller-owned, visible containers. */
-export function createApplicationViewer({ container, creditContainer }) {
+export function createApplicationViewer({
+  container,
+  creditContainer,
+  showRenderLoopErrors,
+}) {
   if (!container || !creditContainer)
     throw new TypeError('Viewer and credit containers are required');
   const viewer = new Cesium.Viewer(
     container,
-    applicationViewerOptions(creditContainer),
+    applicationViewerOptions(creditContainer, { showRenderLoopErrors }),
   );
   try {
-    viewer.targetFrameRate = 60;
+    // Until the render governor takes over (app/tools.js), tick at the idle
+    // rate so the startup load does not compete with drawing at 240 fps.
+    viewer.targetFrameRate = IDLE_FRAME_RATE;
     // A phone pinch spans fewer screen pixels than desktop zoom gestures.
     // Keep Cesium's distance-aware zoom and collision limits, with less travel
     // required on touch-first screens. Mouse/trackpad sensitivity stays native.

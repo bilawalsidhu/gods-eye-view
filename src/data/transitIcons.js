@@ -21,7 +21,9 @@ import {
  * at the ~18 px the fleet renders at, by shape and not only by colour: a bus is
  * short and blunt, a tram is long and slender with articulation joints, a metro
  * car is squared off, a mainline train has a tapered nose, and a ferry is a
- * hull with a bow.
+ * hull with a bow. A trolleybus trails its two poles, a cable car is a short
+ * single car, a monorail the slimmest bullet, a funicular hangs off its rope,
+ * and a gondola is a cabin on its cable.
  *
  * Interior detail is drawn with the same dark hairline as the edge — windscreen
  * lines, articulation joints, a deck line — because a solid dark panel would
@@ -103,6 +105,49 @@ const HEADING_BODIES = {
           fill="white" ${STROKE}/>
     <path d="M-7.5,-6 L7.5,-6 L7.5,20 L-7.5,20 Z" ${DETAIL}/>`,
 
+  // ── Trolleybus: a bus a little narrower, trailing the two trolley poles
+  //    that reach back to its wires. Body and poles are one outline, so no
+  //    edge is drawn across the body.
+  trolleybus: `
+    <path d="M0,-41 L15,-26 L15,25 C15,28.5 13,30 9,30 L7.5,30 L7.5,42 L4,42
+             L4,30 L-4,30 L-4,42 L-7.5,42 L-7.5,30 L-9,30 C-13,30 -15,28.5 -15,25
+             L-15,-26 Z"
+          fill="white" ${STROKE}/>
+    <path d="M-10,-21 L10,-21" ${DETAIL}/>`,
+
+  // ── Cable car (street cable railway): a short single car, under half a
+  //    tram, with open platforms at both ends.
+  cable_tram: `
+    <path d="M0,-30 L11,-21 L11,26 C11,28 9,29 0,29 C-9,29 -11,28 -11,26
+             L-11,-21 Z"
+          fill="white" ${STROKE}/>
+    <path d="M-11,-12 L11,-12" ${DETAIL}/>
+    <path d="M-11,18 L11,18" ${DETAIL}/>`,
+
+  // ── Monorail: the slimmest train in the set, a rounded bullet nose over
+  //    its beam.
+  monorail: `
+    <path d="M0,-45 C3,-45 8.5,-36 8.5,-22 L8.5,42 L-8.5,42 L-8.5,-22
+             C-8.5,-36 -3,-45 0,-45 Z"
+          fill="white" ${STROKE}/>
+    <path d="M0,-18 L0,38" ${DETAIL}/>`,
+
+  // ── Funicular: a squat car hauled by the rope at its upper end.
+  funicular: `
+    <path d="M-6,-30 L6,-30 L11,-24 L11,36 L-11,36 L-11,-24 Z
+             M-1.75,-46 L1.75,-46 L1.75,-30 L-1.75,-30 Z"
+          fill="white" ${STROKE}/>
+    <path d="M-11,-8 L11,-8" ${DETAIL}/>
+    <path d="M-11,14 L11,14" ${DETAIL}/>`,
+
+  // ── Gondola (aerial lift): a cabin hung on the cable that runs through
+  //    it; the cabin's nose is its front.
+  aerial_lift: `
+    <path d="M0,-18 L12,-7 L12,14 C12,16 10,17 0,17 C-10,17 -12,16 -12,14
+             L-12,-7 Z
+             M-2.5,-40 L2.5,-40 L2.5,46 L-2.5,46 Z"
+          fill="white" ${STROKE}/>`,
+
   // ── Unknown: a plain marker with a nose and nothing else, so an
   //    unclassified vehicle never pretends to be a mode it is not.
   unknown: `
@@ -145,6 +190,40 @@ const NEUTRAL_BODIES = {
              L12.5,30 C12.5,36 8,38 0,38 C-8,38 -12.5,36 -12.5,30 Z"
           fill="white" ${STROKE}/>
     <path d="M-7.5,-13 L7.5,-13 L7.5,13 L-7.5,13 Z" ${DETAIL}/>`,
+
+  trolleybus: `
+    <path d="M-15,-26 C-15,-30 -13,-32 -9,-32 L-7.5,-32 L-7.5,-42 L-4,-42
+             L-4,-32 L4,-32 L4,-42 L7.5,-42 L7.5,-32 L9,-32 C13,-32 15,-30 15,-26
+             L15,26 C15,30 13,32 9,32 L7.5,32 L7.5,42 L4,42 L4,32 L-4,32 L-4,42
+             L-7.5,42 L-7.5,32 L-9,32 C-13,32 -15,30 -15,26 Z"
+          fill="white" ${STROKE}/>`,
+
+  cable_tram: `
+    <path d="M-11,-25 C-11,-27 -9,-28 0,-28 C9,-28 11,-27 11,-25
+             L11,25 C11,27 9,28 0,28 C-9,28 -11,27 -11,25 Z"
+          fill="white" ${STROKE}/>
+    <path d="M-11,-17 L11,-17" ${DETAIL}/>
+    <path d="M-11,17 L11,17" ${DETAIL}/>`,
+
+  monorail: `
+    <path d="M0,-44 C5,-44 8.5,-38 8.5,-28 L8.5,28 C8.5,38 5,44 0,44
+             C-5,44 -8.5,38 -8.5,28 L-8.5,-28 C-8.5,-38 -5,-44 0,-44 Z"
+          fill="white" ${STROKE}/>
+    <path d="M0,-24 L0,24" ${DETAIL}/>`,
+
+  funicular: `
+    <path d="M-11,-30 L11,-30 L11,30 L-11,30 Z
+             M-1.75,-46 L1.75,-46 L1.75,-30 L-1.75,-30 Z
+             M-1.75,30 L1.75,30 L1.75,46 L-1.75,46 Z"
+          fill="white" ${STROKE}/>
+    <path d="M-11,-10 L11,-10" ${DETAIL}/>
+    <path d="M-11,10 L11,10" ${DETAIL}/>`,
+
+  aerial_lift: `
+    <path d="M-12,-14 C-12,-16 -10,-17 0,-17 C10,-17 12,-16 12,-14
+             L12,14 C12,16 10,17 0,17 C-10,17 -12,16 -12,14 Z
+             M-2.5,-46 L2.5,-46 L2.5,46 L-2.5,46 Z"
+          fill="white" ${STROKE}/>`,
 
   unknown: `
     <path d="M-10,-26 C-10,-30 -7,-32 0,-32 C7,-32 10,-30 10,-26

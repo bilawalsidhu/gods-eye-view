@@ -107,10 +107,6 @@ export const MODEL_ALL_KEEP_M = 450000;
 
 export const MODEL_HEADING_OFFSET_DEG = 180;
 // every fleet model is nose -X: opposite Cesium heading 0
-// Preserve the layer's amber identity while reducing the models' own colours
-// to a weak diffuse hint, matching civilian launch presentation.
-
-export const MODEL_COLOR_BLEND_AMOUNT = 0.94;
 
 /** Amber fade target for the tracked billboard once the model takes over (mirrors flights.js CYAN_TRANSPARENT). */
 

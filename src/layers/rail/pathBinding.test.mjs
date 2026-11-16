@@ -201,3 +201,64 @@ test('a segment whose reports do not fit the line keeps the straight line', () =
   assert.equal(placeOnPath(binding, stale.sample, stale.segment, out), false);
   assert.equal(placeOnPath(null, stale.sample, stale.segment, out), false);
 });
+
+test('a binding learns which way its train runs, and keeps it through a stop', () => {
+  const p = pack();
+  const ids = { tripId: 'full', routeId: 'main' };
+  const along = bindTrainPath(p, ids, fix(0, 500, 0));
+  assert.equal(along.direction, 0, 'one report tells no direction');
+  assert.ok(followFix(along, fix(10_000, 700, 0)));
+  assert.equal(along.direction, 1);
+  // Standing still (under a metre) keeps what it learnt.
+  assert.ok(followFix(along, fix(20_000, 700.4, 0)));
+  assert.equal(along.direction, 1);
+  const against = bindTrainPath(p, ids, fix(0, 1500, 0));
+  assert.ok(followFix(against, fix(10_000, 1200, 0)));
+  assert.equal(against.direction, -1);
+  // A playback segment between two reports tells it too.
+  const played = bindTrainPath(p, ids, fix(0, 300, 0));
+  const segment = {
+    from: { seq: 1, ...fix(0, 300, 0) },
+    to: { seq: 2, ...fix(10_000, 100, 0) },
+  };
+  assert.ok(
+    placeOnPath(played, { fromSeq: 1, toSeq: 2, fraction: 0.5 }, segment, {}),
+  );
+  assert.equal(played.direction, -1);
+  // A rebind starts again.
+  const rebound = rebindTrainPath(
+    p,
+    { routeId: 'main' },
+    along,
+    fix(30_000, 2000, -300),
+  );
+  assert.equal(rebound?.direction ?? 0, 0);
+});
+
+test('a report that runs back turns the drawn train only when playback does', () => {
+  const p = pack();
+  const ids = { tripId: 'full', routeId: 'main' };
+  const binding = bindTrainPath(p, ids, fix(0, 300, 0));
+  const forward = {
+    from: { seq: 1, ...fix(0, 300, 0) },
+    to: { seq: 2, ...fix(10_000, 500, 0) },
+  };
+  const sample = (fraction) => ({ fromSeq: 1, toSeq: 2, fraction });
+  assert.ok(placeOnPath(binding, sample(0.2), forward, {}));
+  assert.equal(binding.direction, 1);
+  // The newest report lies behind the last one (a reversal, or GPS jitter)
+  // while playback still draws the forward segment.
+  assert.ok(followFix(binding, fix(10_000, 500, 0)));
+  assert.ok(followFix(binding, fix(20_000, 450, 0)));
+  assert.ok(placeOnPath(binding, sample(0.6), forward, {}));
+  assert.equal(binding.direction, 1, 'the drawn train still runs forward');
+  // Playback reaches the reversed segment: now it turns.
+  const back = {
+    from: { seq: 2, ...fix(10_000, 500, 0) },
+    to: { seq: 3, ...fix(20_000, 450, 0) },
+  };
+  assert.ok(
+    placeOnPath(binding, { fromSeq: 2, toSeq: 3, fraction: 0.5 }, back, {}),
+  );
+  assert.equal(binding.direction, -1);
+});

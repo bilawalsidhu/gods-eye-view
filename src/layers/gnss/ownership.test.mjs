@@ -75,8 +75,8 @@ function harness(
 const MIN = 60_000;
 const threeHealthy = () => [
   row('a1', 1.1, false),
-  row('a2', 1.2, false),
-  row('a3', 1.3, false),
+  row('a2', 1.12, false),
+  row('a3', 1.14, false),
 ];
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
@@ -216,21 +216,25 @@ test('an enabled refresh bins the snapshot into coloured ground cells', async ()
   assert.equal(sources[0].show, true);
   assert.equal(await layer.update(), true);
   const entities = sources[0].get(0).geometryInstances;
-  assert.equal(entities.length, 1, 'the one-aircraft cell is withheld');
-  assert.equal(entities[0].id, 'gnss-integrity:280:420');
-  assert.ok(entities[0].geometry instanceof Cesium.RectangleGeometry);
+  assert.equal(entities.length, 2, 'a one-aircraft cell is shown too');
+  assert.deepEqual(
+    entities.map(({ id }) => id),
+    ['gnss-integrity:841e631ffffffff', 'gnss-integrity:841f6b3ffffffff'],
+  );
+  for (const { geometry } of entities)
+    assert.ok(geometry instanceof Cesium.PolygonGeometry);
   assert.equal(sources[0].get(0).allowPicking, false);
   const stats = layer.getStats();
-  assert.equal(stats.count, 1);
+  assert.equal(stats.count, 2);
   assert.equal(stats.error, null);
   assert.equal(stats.fallback, false);
   const { legend } = layer.getRowControls();
   assert.deepEqual(
     legend.map(({ count }) => count),
-    [1, 0, 0],
+    [1, 0, 1],
   );
   assert.match(legend[0].blurb, /not a detection/);
-  assert.match(legend[0].blurb, /need 3 aircraft/);
+  assert.doesNotMatch(legend[0].blurb, /need \d+ aircraft/);
 });
 
 test('the visible layer leads with low navigation accuracy and exposes its provenance', async () => {
@@ -262,10 +266,10 @@ test('the visible layer leads with low navigation accuracy and exposes its prove
   assert.deepEqual(layer.provenance.window, {
     minutes: 30,
     scope: 'visited-view',
-    cellDeg: 0.5,
-    minAircraft: 3,
     definedBy: 'GEV',
   });
+  assert.equal(layer.provenance.aggregation.grid, 'h3');
+  assert.equal(layer.provenance.aggregation.h3Resolution, 4);
   assert.equal(layer.provenance.interpretation.validated, false);
   assert.equal(layer.getStats().provenance, layer.provenance);
 });
@@ -277,8 +281,8 @@ test('a failed refresh keeps the last cells and reports the error', async () => 
     return {
       rows: [
         row('a1', 1.1, false),
-        row('a2', 1.2, false),
-        row('a3', 1.3, false),
+        row('a2', 1.12, false),
+        row('a3', 1.14, false),
       ],
       stale: true,
     };
@@ -305,7 +309,11 @@ test('observations expire with the window, and disable aborts the request in fli
   layer.enable();
   let result = layer.update();
   pending.resolve({
-    rows: [row('a1', 1.1, false), row('a2', 1.2, false), row('a3', 1.3, false)],
+    rows: [
+      row('a1', 1.1, false),
+      row('a2', 1.12, false),
+      row('a3', 1.14, false),
+    ],
   });
   assert.equal(await result, true);
   assert.equal(layer.getStats().count, 1);

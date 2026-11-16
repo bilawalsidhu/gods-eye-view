@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { trackedDisplayPositionForCamera } from '../data/trackedCamera.js';
+import { createFrameWait } from '../time/frameWait.js';
 import {
   SHARE_VIEW_ENTITY_KINDS,
   SHARE_VIEW_FOLLOW_RANGE_MAX_M,
@@ -17,7 +18,8 @@ import {
 const KIND_BY_LAYER = new Map(
   SHARE_VIEW_ENTITY_KINDS.map((entry) => [entry.layerId, entry.kind]),
 );
-const MAX_FRAMES = 120;
+/** Drawn time (ms) to wait for the follow to frame the entity. */
+const MAX_FRAMING_WAIT_MS = 2_000;
 
 /** `position`'s local east/north/up offset from `origin`, in metres. */
 function enuOffset(origin, position) {
@@ -136,6 +138,7 @@ export function applyShareFollowOffset(viewer, entity, offset) {
     return () => {};
   const local = followOffsetToEnu(offset);
   let frames = 0;
+  const framingWait = createFrameWait(MAX_FRAMING_WAIT_MS);
   let remove = null;
   const stop = () => {
     remove?.();
@@ -160,7 +163,7 @@ export function applyShareFollowOffset(viewer, entity, offset) {
         )
       : null;
     if (!target) {
-      if (frames >= MAX_FRAMES) stop();
+      if (framingWait.tick()) stop();
       return;
     }
     // The offset is east/north/up at the entity; the follow's own frame may

@@ -45,7 +45,10 @@ import {
   STALE_ALPHA,
   displayDelayMs,
 } from './policy.js';
-import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
+import {
+  AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
+  aircraftModelBlend,
+} from '../../data/aircraftModelLighting.js';
 
 export function createRendering({
   flightState,
@@ -192,11 +195,12 @@ export function createRendering({
    * @returns {void}
    */
 
-  /** Model tint, mirroring the billboard color rules. */
+  /** Model colour: the mesh's own (white), tinted cyan while tracked and red
+   *  while broadcasting an emergency. */
 
   function _modelColor(icao24) {
     if (icao24 === flightState._trackedIcao) return Cesium.Color.CYAN;
-    return _fleetBillboardColor(icao24);
+    return _isEmergency(icao24) ? EMERGENCY_TINT : Cesium.Color.WHITE;
   }
 
   /** The FLEET's 3D-model regime: models3d enabled AND the camera zoomed in past the altitude
@@ -526,10 +530,7 @@ export function createRendering({
         minimumPixelSize: MODEL_MIN_PX,
         scale: spec.scale,
         color: flightState._irBoost ? Cesium.Color.WHITE : _modelColor(icao24),
-        colorBlendMode: Cesium.ColorBlendMode.MIX,
-        // Launch presentation keeps the code-side tint dominant for every approved
-        // model; IR boost removes the remaining diffuse hint with flat UNLIT white.
-        colorBlendAmount: flightState._irBoost ? 1.0 : spec.blendAmount,
+        ...aircraftModelBlend(flightState._irBoost),
         customShader: flightState._irBoost
           ? flightState._IR_UNLIT_SHADER
           : undefined,
@@ -748,10 +749,7 @@ export function createRendering({
         minimumPixelSize: TRACKED_MODEL_MIN_PX,
         scale: trackedSpec.scale,
         color: flightState._irBoost ? Cesium.Color.WHITE : Cesium.Color.CYAN,
-        colorBlendMode: Cesium.ColorBlendMode.MIX,
-        // The tracked aircraft uses the same dominant light tint as the fleet;
-        // IR boost removes the remaining diffuse hint with flat UNLIT white.
-        colorBlendAmount: flightState._irBoost ? 1.0 : trackedSpec.blendAmount,
+        ...aircraftModelBlend(flightState._irBoost),
         customShader: flightState._irBoost
           ? flightState._IR_UNLIT_SHADER
           : undefined,
@@ -1034,6 +1032,7 @@ export function createRendering({
         flightState._scratchFleetPos,
         renderTime,
       );
+      const unseen = flightState._drUnseen;
       // The dead-reckoned point drifts away from the fix whose cell supplied the
       // height, so a grounded contact's sprite ends up under the mesh it taxied
       // (or coasted) over. Re-floor at the DISPLAYED coordinate — read-only, and
@@ -1059,9 +1058,12 @@ export function createRendering({
       // sub-ellipsoid point near the limb "beyond the horizon" and the fleet
       // pass would hide a plane that is really just low over high-N terrain
       // waiting for its floor to warm (ATL grounded contacts at geoid −31 m).
-      const beyondHorizon = !occluder.isPointVisible(
-        flightState._cullPositions.get(icao24) || bb.position,
-      );
+      // A contact not there yet at the time drawn is hidden as one beyond it.
+      const beyondHorizon =
+        unseen ||
+        !occluder.isPointVisible(
+          flightState._cullPositions.get(icao24) || bb.position,
+        );
       // A billboard flipping INTO view (horizon reveal while the camera idles)
       // gets its rotation refreshed THIS tick even without a pose change —
       // otherwise it reappears wearing its stale (often creation-north) nose for

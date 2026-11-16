@@ -599,7 +599,10 @@ html:not([lang='en']):not(:lang(zh)):not(:lang(ja))
 
 #pp-toggles.collapsed .pp-toggle-group,
 #pp-toggles.collapsed #clean-view-toggle,
-#pp-toggles.collapsed #param-slider-panel {
+#pp-toggles.collapsed #param-slider-panel,
+#pp-toggles.collapsed .visual-presets,
+#pp-toggles.collapsed .pp-section-heading,
+#pp-toggles.collapsed .pp-reset-btn {
   display: none;
 }
 

@@ -20,6 +20,7 @@ import {
 } from './gtfsRealtime.js';
 import { decodeNgsiVehicles } from './ngsiVehicles.js';
 import { getTransitFeed } from './transitFeeds.js';
+export { transitModeFor, transitRouteType } from './transitFeeds.js';
 
 /**
  * Wire formats a registry entry may declare in `format`. Absent means

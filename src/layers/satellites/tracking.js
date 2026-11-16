@@ -429,7 +429,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
 
     // Tracked entity position propagates per evaluation through the per-frame
     // cache (WS-D2) — dot, host readout, and camera share one SGP4 epoch per frame.
-    // Falls back to the point primitive's 1s-throttled position if SGP4 fails.
+    // Falls back to the point primitive's reckoned position if SGP4 fails.
     const positionProperty = new Cesium.CallbackProperty(() => {
       const pos = _getTrackedFramePosition();
       return pos ? layerState._trackedFrameCartesian : point.position;
