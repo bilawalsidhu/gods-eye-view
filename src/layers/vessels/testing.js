@@ -182,18 +182,32 @@ export function createTesting({
     components.rendering.followPlacements();
   }
 
+  /**
+   * Run what one live frame runs (not following the clock): settle whether
+   * icons move on the renderer's clock, then the placement pass. Test-only
+   * seam.
+   */
+
+  function _runLiveFrameForTest() {
+    components.rendering.syncSegments();
+    components.rendering.followPlacements();
+  }
+
   /** Run one world-clock pass at world time `atMs`. Test-only seam. */
 
   function _runClockPassForTest(atMs) {
     vesselState.worldNow = () => atMs;
-    components.rendering.followClockPositions();
+    components.rendering.followClock();
   }
 
-  /** Follow the world clock, standing at world time `atMs`. Test-only seam. */
+  /**
+   * Follow the world clock, standing at world time `atMs`; `null` goes back
+   * to live. Test-only seam.
+   */
 
   function _followClockForTest(atMs) {
-    vesselState.timeline = { active: () => true };
-    vesselState.worldNow = () => atMs;
+    vesselState.timeline = { active: () => atMs !== null };
+    vesselState.worldNow = () => atMs ?? 0;
   }
 
   /** True while a trailing visibility frame is scheduled. Test-only seam. */
@@ -240,6 +254,7 @@ export function createTesting({
     _vesselVisualForTest,
     _runPlacementPassForTest,
     _runClockPassForTest,
+    _runLiveFrameForTest,
     _hasTrailingVisibilityPassForTest,
   };
 }
