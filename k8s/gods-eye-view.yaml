@@ -1,12 +1,13 @@
-# Kubernetes equivalent of compose.yaml's service, for the Kustomize base.
+# God's Eye View on Kubernetes: one file, no Kustomize needed.
 #
-# Differences from compose.yaml, and why:
-# - No bind mount of the checkout. The code is baked into the image; the pod
-#   has no host filesystem. Keys pasted into the setup UI write to .env inside
-#   the container and are lost on pod restart. Use a Secret for provider keys.
-# - Runs as uid 1000 (the image's `node` user), matching the Dockerfile.
-# - One replica with Recreate: local state lives on the container filesystem,
-#   so two pods must never write it at once.
+# 1. Change the image below to the one you built (see k8s/README.md).
+# 2. Change GEV_ALLOWED_HOSTS to the hostname you will open the app at.
+# 3. Create the keys Secret (optional, see k8s/README.md).
+# 4. Deploy:  kubectl apply -f gods-eye-view.yaml
+#
+# Runs one copy of the app. Keep replicas at 1: the app keeps its state inside
+# the container, so two copies would not share it.
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -34,9 +35,9 @@ spec:
           type: RuntimeDefault
       containers:
         - name: gods-eye-view
-          # Placeholder: each overlay sets its own registry path and tag
-          # (images: newName, newTag).
-          image: ghcr.io/bilawalsidhu/gods-eye-view
+          # CHANGE THIS: the image you built, for example
+          # ghcr.io/your-github-name/gods-eye-view:latest
+          image: ghcr.io/OWNER/gods-eye-view:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -46,15 +47,16 @@ spec:
               value: "0.0.0.0"
             - name: PORT
               value: "4173"
-            # Same knobs as compose.yaml. Set GEV_ALLOWED_HOSTS to the public
-            # hostname so the Host allowlist accepts requests through Istio.
+            # CHANGE THIS: the hostname you open the app at. Use "localhost"
+            # when you reach it with kubectl port-forward.
             - name: GEV_ALLOWED_HOSTS
-              value: ""
+              value: "localhost"
+            # Leave empty: keys are set through the Secret, not the browser.
             - name: GEV_KEY_SETUP_TRUSTED_PEERS
               value: ""
-          # Provider keys (OPENAI_API_KEY, ...) come from a Secret created
-          # outside git, so kustomize never owns or resets its values. It is
-          # optional: the pod starts without it, and the keys are simply absent.
+          # Provider keys (OPENAI_API_KEY, ...) come from the optional Secret
+          # gev-provider-keys. The pod starts without it; those features are
+          # simply unavailable until it exists.
           envFrom:
             - secretRef:
                 name: gev-provider-keys
@@ -63,11 +65,7 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
-          # Same check as the Dockerfile HEALTHCHECK. The startup probe covers
-          # Vite's first-run dependency optimisation (up to ~3 minutes).
-          # No `host:` here: in httpGet it is the address kubelet dials, and
-          # 127.0.0.1 is refused. Leaving it unset probes the pod IP, which the
-          # app listens on.
+          # The startup probe allows up to ~3 minutes for the first start.
           startupProbe:
             httpGet:
               path: /
@@ -94,8 +92,7 @@ spec:
             limits:
               memory: "4Gi"
           volumeMounts:
-            # Scratch space for Vite's dep-optimizer cache and /tmp. Ephemeral
-            # by design: rebuilt on start, never needs to persist.
+            # Scratch space that is rebuilt on each start.
             - name: tmp
               mountPath: /tmp
             - name: vite-cache
@@ -105,3 +102,21 @@ spec:
           emptyDir: {}
         - name: vite-cache
           emptyDir: {}
+---
+# ClusterIP only: reach the app through your ingress or with kubectl
+# port-forward. Do not change this to LoadBalancer, because the server holds
+# your provider API keys.
+apiVersion: v1
+kind: Service
+metadata:
+  name: gods-eye-view
+  labels:
+    app.kubernetes.io/name: gods-eye-view
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: gods-eye-view
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

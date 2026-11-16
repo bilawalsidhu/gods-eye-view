@@ -1,143 +1,94 @@
-# Kubernetes deployment
+# Deploy God's Eye View on Kubernetes
 
-Kustomize manifests for running God's Eye View on a Kubernetes cluster. The
-`base/` folder is generic. Each environment is an overlay in `overlays/` that
-sets its own image, public hostname and routing.
+Everything is in one file, [`gods-eye-view.yaml`](gods-eye-view.yaml). You do
+not need Kustomize or Helm.
+
+You need `kubectl` pointed at your cluster, and a container image of the app.
+
+## 1. Get an image
+
+The repository has a GitHub Actions workflow
+(`.github/workflows/docker-publish.yml`). It builds the app and publishes it to
+GitHub Container Registry under your account:
+
+1. Fork the repository on GitHub.
+2. Go to the **Actions** tab of your fork and run **Docker image** (or push a
+   commit to `main`).
+3. Your image is then at `ghcr.io/<your-github-name>/gods-eye-view`. Make the
+   package public under the repository's **Packages** settings, or give the
+   cluster a pull secret.
+
+## 2. Edit the file
+
+Open `gods-eye-view.yaml` and change two things, marked `CHANGE THIS`:
+
+- `image:` the image from step 1, for example
+  `ghcr.io/your-github-name/gods-eye-view:latest`.
+- `GEV_ALLOWED_HOSTS` the hostname you will open the app at. Keep `localhost`
+  if you will use port-forward.
+
+## 3. Add your API keys (optional)
+
+Keys such as `OPENAI_API_KEY` are read from a Secret. Put them in a file
+called `keys.env`, one per line:
 
 ```
-k8s/
-├── base/                 Deployment and ClusterIP Service, no environment data
-└── overlays/<env>/       One folder per environment: image, hostname, routing
+OPENAI_API_KEY=sk-...
 ```
 
-## What the base provides
-
-- One replica, `Recreate` strategy. State lives on the container filesystem,
-  so two pods must never write it at once.
-- Runs as non-root uid 1000, with privilege escalation disabled and all
-  capabilities dropped.
-- Port 4173, with startup, readiness and liveness probes on `/`.
-- An optional Secret, `gev-provider-keys`, for provider API keys (see below).
-- A ClusterIP Service only. Expose the app through your own ingress or
-  gateway, never a LoadBalancer: the server brokers provider API keys.
-
-The base image is a placeholder (`ghcr.io/OWNER/gods-eye-view`). An overlay
-must set the real image before the base will deploy.
-
-## 1. Build the image
-
-The `Docker image` workflow (`.github/workflows/docker-publish.yml`) builds
-`Dockerfile.prod` and pushes it to `ghcr.io/<owner>/<repo>` on each push to
-`main` and on `v*` tags. It uses the built-in `GITHUB_TOKEN`, so a fork
-publishes to its own namespace.
-
-Each build is tagged `sha-<short-commit>`. Pin that tag in your overlay so
-redeploys are reproducible. Make the package public, or give the cluster an
-image pull secret.
-
-## 2. Create an overlay
-
-Copy an existing overlay (or start from this layout) and set the image and
-hostname:
-
-```yaml
-# overlays/<env>/kustomization.yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-namespace: <env-namespace>
-
-resources:
-  - ../../base
-  # your ingress / gateway routing goes here, for example a VirtualService
-
-images:
-  - name: ghcr.io/OWNER/gods-eye-view
-    newName: ghcr.io/<owner>/gods-eye-view
-    newTag: sha-<short-commit>
-
-patches:
-  - path: deployment-patch.yaml
-```
-
-```yaml
-# overlays/<env>/deployment-patch.yaml
-# The app rejects Host headers it does not know. Set this to the public hostname.
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: gods-eye-view
-spec:
-  template:
-    spec:
-      containers:
-        - name: gods-eye-view
-          env:
-            - name: GEV_ALLOWED_HOSTS
-              value: <public-hostname>
-```
-
-## 3. Provide provider API keys
-
-Keys are read from the `gev-provider-keys` Secret, which is **not** managed by
-kustomize. Create it in the target namespace and keep it out of git:
+Then create the Secret, and delete the file:
 
 ```bash
-# keys.env holds lines such as OPENAI_API_KEY=... and GEMINI_API_KEY=...
-kubectl -n <env-namespace> create secret generic gev-provider-keys \
-  --from-env-file=keys.env
+kubectl create secret generic gev-provider-keys --from-env-file=keys.env
 rm keys.env
 ```
 
-Names come from `.env.example`. Set only the keys you use. The pod starts
-without the Secret, but the features that need keys will be unavailable.
+Names come from `.env.example` in the repository. Only add the keys you use.
+The app starts without the Secret, but features that need a key stay off.
 
-To rotate a key, recreate the Secret (add `--dry-run=client -o yaml | kubectl
-apply -f -`) and restart the pod:
+To change a key later, delete the Secret and create it again, then restart:
 
 ```bash
-kubectl -n <env-namespace> rollout restart deployment/gods-eye-view
+kubectl delete secret gev-provider-keys
+kubectl create secret generic gev-provider-keys --from-env-file=keys.env
+kubectl rollout restart deployment/gods-eye-view
 ```
 
 ## 4. Deploy
 
 ```bash
-kubectl apply -k k8s/overlays/<env>
-kubectl -n <env-namespace> rollout status deployment/gods-eye-view
+kubectl apply -f k8s/gods-eye-view.yaml
+kubectl rollout status deployment/gods-eye-view
 ```
 
-Check the pod is running and the Secret is attached:
+Add `-n <namespace>` to both commands if you use a namespace.
+
+## 5. Open the app
+
+For a quick local check, forward the port and open the address in your browser:
 
 ```bash
-kubectl -n <env-namespace> get pods -l app.kubernetes.io/name=gods-eye-view
-kubectl -n <env-namespace> exec deploy/gods-eye-view -- sh -c 'test -n "$OPENAI_API_KEY" && echo set'
+kubectl port-forward svc/gods-eye-view 4173:80
 ```
 
-## Access without a gateway
+Then open `http://localhost:4173`. The forward stops when you close the
+terminal.
 
-For a quick local check that skips the ingress:
-
-```bash
-kubectl -n <env-namespace> port-forward svc/gods-eye-view 4173:80
-```
-
-Then open `http://localhost:4173`.
+To reach the app through your own ingress or gateway, route its hostname to the
+`gods-eye-view` Service on port 80, and set `GEV_ALLOWED_HOSTS` to that hostname.
 
 ## Known limitations
 
-- **Forwarding headers block sensitive routes.** The app refuses requests that
-  carry reverse-proxy headers (`X-Forwarded-For`, `X-Forwarded-Proto`,
-  `X-Forwarded-Host`, `Forwarded`, `Via`, and similar) on the realtime token
-  (voice) and typed chat routes, and on Provider Settings. Ingress and gateway
-  layers add these headers, so voice and chat will fail through them. The
-  options are to strip the headers at the mesh, or to change the gate in code.
-  See `SECURITY.md` before changing the gate.
+- **Voice and chat through a gateway.** The app refuses requests that carry
+  proxy headers (`X-Forwarded-For`, `X-Forwarded-Proto` and similar) on the
+  voice token, typed chat and Provider Settings routes. Gateways add those
+  headers, so voice and chat fail through them. Port-forward works. See
+  `SECURITY.md` before changing this.
 - **Provider Settings is local-only.** The in-app key panel only accepts
-  loopback requests, so set keys through the Secret.
-- **No persistence.** Anything written to the container (including keys set
-  in the in-app panel) is lost on pod restart or redeploy.
-- **Single replica.** Do not scale above one replica.
-- **Keys are server-side only.** `OPENAI_API_KEY`, `GEMINI_API_KEY` and
-  similar keys never reach the browser. `GOOGLE_MAPS_API_KEY`,
-  `CESIUM_ION_TOKEN` and `MAPILLARY_CLIENT_TOKEN` are sent to the browser by
-  design, so restrict them in the provider's console.
+  requests from the pod's own machine. Set keys with the Secret instead.
+- **No persistence.** Anything the app writes to its container is lost when the
+  pod restarts or is redeployed.
+- **One copy only.** Keep `replicas: 1`.
+- **Browser-side keys.** `GOOGLE_MAPS_API_KEY`, `CESIUM_ION_TOKEN` and
+  `MAPILLARY_CLIENT_TOKEN` are sent to the browser by design. Restrict them in
+  the provider's console. Keys such as `OPENAI_API_KEY` stay on the server.
