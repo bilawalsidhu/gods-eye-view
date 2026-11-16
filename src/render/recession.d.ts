@@ -1,7 +1,7 @@
 /**
  * How a set that recedes (`SetSpec.recede`) shrinks and fades its items
  * toward the globe's limb (`recession.js`), so the renderer draws exactly
- * same factors.
+ * those factors.
  */
 import type { RecedeSpec } from './contract/index';
 

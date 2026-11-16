@@ -8129,7 +8129,7 @@ renderer's own objects: the record of files that still did,
 - The renderer follows its container's size (`Renderer.resize`, from a
   `ResizeObserver`).
 - The credits: the Cesium renderer's plugin says it shows them in a display
-  its own (`ownCreditDisplay`; Cesium's `#cesium-credits`) keeps it. On the
+  of its own (`ownCreditDisplay`; `#cesium-credits`), which it keeps. On the
   stub, the application shows what the credits port lists in its own line
   at the bottom left (`#gev-credits`, `src/ui/creditsView.js`): the inline
   credits on the line, the rest (the layers' data credits among them) in

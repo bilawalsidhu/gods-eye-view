@@ -15,8 +15,8 @@ The package exports these modules:
 | `gods-eye-view/render/camera/events` | The camera port's events: `changed` per listener, `moveStart`/`moveEnd`, command hooks |
 | `gods-eye-view/render/conformance`   | The conformance suite, reference scenes and visual comparison                          |
 
-The pieces that do not depend on Cesium are exported
-too, each with its own `.d.ts`:
+The pieces that do not depend on Cesium are exported too, each with its
+own `.d.ts`:
 
 - `gods-eye-view/render/input/router`: the input port's leases and routing;
 - `gods-eye-view/render/stub/camera`, `.../stub/viewRectangle` and
@@ -92,8 +92,8 @@ optional:
   `detail: {image, rectangle}`, a sharper image drawn in place of the base
   one, and says how shells stack, blend and update. `FieldHandle.on('drawn')`
   says once per spec or `update` that it is drawn, never while hidden. These
-  change `fields` itself rather than add to it, so a renderer that lists
-  `fields` follows them. The Cesium adapter lists `fields` and
+  change `fields` itself rather than add to it, so the renderer follows
+  them where it lists `fields`. The Cesium adapter lists `fields` and
   draws `rasterShell` and `windStreamlines`. It reads the grid's samples as
   points, the first column at `rectangle.west` and the first row at
   `rectangle.north`, rows running south. Over the whole globe its paths
@@ -411,7 +411,7 @@ fails when `PORTS` and the types disagree on a single member.
 `vectorBase` (`BaseSpec.vector = { styleUrl }`) draws a MapLibre style
 document's vector tiles as the globe's base. They are painted in shared,
 Cesium-free code, `src/render/vectorBase/`, which the renderer draws as
-draws imagery draws the same pixels:
+imagery:
 
 - `loadVectorStyle(styleUrl, fetch)` fetches the style and the TileJSON its
   vector sources name (a source's `url`; inline `tiles` are used as given,

@@ -1,5 +1,6 @@
 /**
- * Who hears each pointer event: the contract's input rules
+ * Who hears each pointer event: the contract's input rules, shared by the
+ * Cesium port and the stub
  * (`router.js`).
  */
 import type { InputPort, Lease, PointerEv } from '../contract/index';

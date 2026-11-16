@@ -34,9 +34,9 @@ export interface RendererPlugin {
 }
 
 /**
- * What only some renderers have and the application uses where given, does
+ * What the renderer's plugin hands the application beside the contract; the
  * application uses each where given and does without where not. None is a
- * do is in the ports.
+ * contract member: what the renderer should do is in the ports.
  */
 export interface ApplicationHooks {
   /**
@@ -173,9 +173,9 @@ export interface Renderer {
   releaseUnused(): void;
   on(event: 'error', cb: (error: Error) => void): Off;
   /**
-   * The drawing context was lost, or came back. A renderer that cannot restore its context
-   * never sends `contextRestored`; the application then makes
-   * a new renderer.
+   * The drawing context was lost, or came back. Where the renderer cannot
+   * restore its context it never sends `contextRestored`; the application
+   * then makes a new renderer.
    */
   on(event: 'contextLost' | 'contextRestored', cb: () => void): Off;
   /**

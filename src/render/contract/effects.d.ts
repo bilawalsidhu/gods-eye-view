@@ -1,8 +1,8 @@
 /**
  * Full-screen effects: visual styles, bloom, sharpen and screen modulation.
- * Each style is a plain full-screen pass over the frame's colour. The application owns
+ * Each style is a plain full-screen pass over the frame's colour. The
  * application owns the styles and defines them on the renderer
- * renderer runs the same set; a renderer's own styles are extra ones.
+ * (`defineStyle`); the renderer's own styles are extra ones.
  */
 import type { Off } from './common';
 

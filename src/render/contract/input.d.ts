@@ -26,7 +26,7 @@
  *
  * A click is delivered with its pick already made, once, and shared by
  * every subscriber (`PointerEv.pick`). Where the renderer's picks answer a
- * or two late delivers the click that much later rather than answering
+ * frame or two late, it delivers the click that much later rather than answering
  * without them; `query.pick` stays synchronous for everything else.
  *
  * The engine's stock behaviours (select on click, follow on double-click)

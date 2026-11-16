@@ -208,12 +208,11 @@ export interface BaseStatus {
 /**
  * The sky. These switch parts of it on and off; they do not say how it
  * looks. How the sky, the atmosphere over the ground, distance haze, the
- * lighting and the tone mapping and exposure of the frame look is each
- * renderer's own, and no check compares colours with
- * another's. With `atmosphere`, `fog` and `lighting` off and clear weather,
- * a renderer applies none of its look: what is drawn shows its own colours.
- * A renderer whose sun, moon or fog are not separate from its
- * atmosphere follows `atmosphere` for them and reports them as it draws them.
+ * lighting and the tone mapping and exposure of the frame look is the
+ * renderer's own, and no check compares colours. With `atmosphere`, `fog`
+ * and `lighting` off and clear weather, the renderer applies none of its
+ * look: what is drawn shows its own colours. Where the renderer's sun, moon
+ * or fog are not separate from its atmosphere, it follows `atmosphere` for them and reports them as it draws them.
  */
 export interface SkySettings {
   atmosphere: boolean;

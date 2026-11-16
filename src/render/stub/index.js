@@ -2133,7 +2133,7 @@ export function createStubRenderer(options = {}) {
 /**
  * The stub as a renderer plugin (`RendererPlugin`), for running the whole
  * application on it: each renderer it makes fills the container it is given
- * with a canvas, as any plugin's does. Nothing runs on its own: the caller
+ * with a canvas, as the Cesium plugin's does. Nothing runs on its own: the caller
  * drives the loop (`testing.tick()`), each frame or as a test needs.
  * @param {Parameters<typeof createStubRenderer>[0]} [options] For each
  *   renderer it makes (`capabilities`, `viewport`, `time`...).

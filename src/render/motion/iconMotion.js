@@ -5,7 +5,7 @@
  * `MotionSegment` and `CourseGlide` in `render/contract/draw.d.ts`). The app
  * reads a moving icon back with it (to follow it, label it, judge a pick or
  * its horizon) instead of asking the renderer; the renderer evaluates its
- * segments with it on the CPU, and the default renderer's GPU icons draw the
+ * segments with it on the CPU, and the Cesium port's GPU icons draw the
  * same path (`data/iconSegment.js` packs it, the shader evaluates it).
  *
  * Times are epoch ms on the set's motion clock. Plain numbers and `{x, y, z}`

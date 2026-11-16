@@ -6,7 +6,7 @@
  *
  * The renderer's plugin may hand the application a map engine of its own
  * (`mapEngine` in `src/render/applicationHooks.js`); when it hands none, the
- * hands none switches through its globe port (`globeEngine.js`). A viewer
+ * renderer switches through its globe port (`globeEngine.js`). A viewer
  * with no renderer bound uses the engine its adapter
  * provided as it loaded (the Cesium one through the package's
  * `./render/cesium/unbound` export).

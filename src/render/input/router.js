@@ -1,7 +1,8 @@
 /**
  * @module render/input/router
  * @description Who hears each pointer event: the contract's input rules
- * (`src/render/contract/input.d.ts`). The renderer feeds it
+ * (`src/render/contract/input.d.ts`), shared by the Cesium port and the stub.
+ * The renderer feeds it
  * the events its engine sees, already shaped as `PointerEv` (its clicks with
  * their pick); the router decides, from the leases and the presses under
  * way, which listeners get each one, and keeps the input port's leases and

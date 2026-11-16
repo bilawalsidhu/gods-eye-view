@@ -48,7 +48,7 @@ async function overAustin(h, r, height = 2000) {
 /**
  * Waits until what is drawn has loaded (icon images, tiles, models), as a
  * query answers from what is loaded. Where the renderer draws synchronously it
- * settled at once.
+ * is settled at once.
  */
 async function settled(r) {
   const result = await r.whenSettled({ timeoutMs: 20000 });

@@ -55,7 +55,7 @@ export interface CameraPose {
   /**
    * Vertical field of view, radians. `fovy` and `aspectRatio` describe a
    * centred perspective frustum. Where the renderer's frustum is off-centre or
-   * orthographic reports the nearest centred one here and its exact
+   * orthographic, it reports the nearest centred one here and its exact
    * projection only in `matrices()`; code that culls or projects exactly
    * reads `matrices()`.
    */
@@ -147,7 +147,7 @@ export interface FollowTarget {
   visualPosition?(t: number): Ecef | null;
   /**
    * The drawn item this target is, when it is one. Where the renderer moves
-   * items itself (`motionSegments`) follows where it draws the item, so the
+   * items itself (`motionSegments`), it follows where it draws the item, so the
    * eye and the icon never part; `position` stays the answer elsewhere.
    */
   item?: { set: string; id: string };

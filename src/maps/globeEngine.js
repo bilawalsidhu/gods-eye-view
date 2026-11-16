@@ -1,7 +1,7 @@
 /**
  * @module maps/globeEngine
  * @description The map engine (`engine.js`) over the renderer contract's
- * globe port, for a renderer whose plugin hands the application no map
+ * globe port, for when the renderer's plugin hands the application no map
  * engine of its own (`src/render/applicationHooks.js`). The map stacks'
  * sources become the port's specs: Esri and OSM as `xyz` imagery, Cesium
  * ion's world imagery as `world` imagery, the photoreal stack as the port's

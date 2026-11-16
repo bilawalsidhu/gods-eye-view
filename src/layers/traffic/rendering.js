@@ -67,7 +67,7 @@ export function createRendering({
    * Kept roads are jam first, then slow, then free, longest first; overflow
    * is logged. The set swaps its whole contents at once, so a rebuild never
    * blinks. No-op in sim mode or when both looks are off. Where the renderer
-   * cannot drape draws them over the surface instead (the draw port's
+   * cannot drape, it draws them over the surface instead (the draw port's
    * `overlay`).
    *
    * One build runs at a time. A city loads in progressive paints, each asking

@@ -2,7 +2,7 @@
  * @module render/recession
  * @description How a set that recedes (`SetSpec.recede`) shrinks and fades
  * its items toward the globe's limb, free of Cesium, so the renderer
- * draws the same factors. The factors are 1 while an item is nearer than
+ * draws exactly those factors. The factors are 1 while an item is nearer than
  * `startLimbRatio` of the distance from the eye to the limb, and ease
  * (smoothstep) to `scaleFloor` and `alphaFloor` at the limb. The whole of it
  * eases back to nothing as the eye climbs through the blend band
