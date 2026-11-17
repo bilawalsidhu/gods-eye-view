@@ -397,8 +397,7 @@ test('a feed with rider-facing route ids is left alone', () => {
 });
 
 test('TransLink route keys lose their GTFS version; Cairns loses its C prefix', () => {
-  // Both TransLink feeds key routes `<route>-<version>`, and Cairns prefixes
-  // its numbered buses with C. Ids seen in the live feeds, 9 Nov 2026.
+  // Ids seen in the live feeds, 9 Nov 2026.
   const seq = getTransitFeed('translink-seq');
   assert.equal(transitRouteLabel(seq, '200-4'), '200');
   assert.equal(transitRouteLabel(seq, 'L1-32'), 'L1', 'Gold Coast light rail');

@@ -455,11 +455,10 @@ function burlingtonRouteLabel(routeId) {
 }
 
 /**
- * TransLink (Queensland) route ids are `<route>-<version>`. Rail lines are two
- * two-letter station codes (`BRBN`, `SHCL`), ferries are `F<n>` plus the
- * Southern Moreton Bay Islands service `SMBI`, and the Gold Coast light rail
- * is `L1`. `SHUT` is the rail-replacement bus. Everything else is a bus, left
- * to the feed default so movement plausibility treats it as a guess.
+ * TransLink route ids are `<route>-<version>`. Rail lines pair two station
+ * codes (`BRBN`), ferries are `F<n>` and `SMBI`, light rail is `L1`. Buses,
+ * the `SHUT` rail-replacement bus included, stay on the feed default, which
+ * movement plausibility treats as a guess.
  * @param {string|null} routeId
  * @returns {string}
  */
@@ -473,10 +472,9 @@ function translinkRouteMode(routeId) {
 }
 
 /**
- * TransLink route key to the route a rider would say: drop the `-<version>`
- * suffix (`200-4` → `200`, `L1-32` → `L1`), and drop the `C` Cairns puts in
- * front of its numbered buses (`C123-33` → `123`). South East Queensland has no
- * `C<digits>` routes; its rail codes such as `CLSH` are letters only.
+ * The route a rider would say: `200-4` → `200`, `L1-32` → `L1`, and Cairns
+ * `C123-33` → `123`. Only Cairns has `C<digits>` routes; rail codes such as
+ * `CLSH` are letters only.
  * @param {string|null} routeId
  * @returns {string|null}
  */

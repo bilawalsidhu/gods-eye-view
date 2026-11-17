@@ -48,8 +48,7 @@ test('TransLink route ids resolve rail, light rail and ferries; buses stay a def
     assert.equal(transitModeFor(seq, routeId), mode, routeId);
     assert.equal(transitModeResolved(seq, routeId), true, routeId);
   }
-  // Buses, Brisbane Metro and the rail-replacement shuttle are buses by the
-  // feed default, so movement plausibility does not treat them as known.
+  // Buses stay on the feed default, so movement plausibility treats them as a guess.
   for (const routeId of ['600', '250-5169', 'M1-4949', 'SHUT-5213', null]) {
     assert.equal(transitModeFor(seq, routeId), 'bus', String(routeId));
     assert.equal(transitModeResolved(seq, routeId), false, String(routeId));
@@ -60,7 +59,6 @@ test('TransLink route ids resolve rail, light rail and ferries; buses stay a def
 });
 
 test('Adelaide Metro route ids resolve trains, trams and the SeaLink ferry', () => {
-  // The feed entry is main's; this PR adds only its routeMode.
   const adelaide = getTransitFeed('adelaide-metro');
   const cases = [
     ['BEL', 'rail'],
@@ -121,6 +119,6 @@ test('DATA_SOURCES documents the TransLink feeds in the transit row style', () =
   assert.equal(
     adelaide.length,
     1,
-    'exactly one Adelaide Metro transit row (main’s)',
+    'one Adelaide Metro Transit row',
   );
 });

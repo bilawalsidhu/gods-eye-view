@@ -6438,14 +6438,13 @@ a record from the bundled proxy is classified by the hints alone. Route hints
 read from each operator's routes.txt cover Prague's trolleybus lines and Petřín
 funicular, and Bucharest, Cluj-Napoca and Turin's trams, trolleybuses and metro
 lines (and Turin's Sassi–Superga rack tramway, typed a funicular in its
-routes.txt). TransLink route ids resolve rail, Gold Coast light rail and
-ferries; Adelaide Metro route ids resolve trains, trams and the SeaLink ferry;
-other routes in those feeds keep the feed's bus default. Le Havre's funicular is a correction, not read from routes.txt: its
+routes.txt). Route-id hints also cover TransLink's rail, Gold Coast light rail
+and ferries, and Adelaide Metro's trains, trams and SeaLink ferry; their other
+routes stay buses by default. Le Havre's funicular is a correction, not read from routes.txt: its
 route hint and its correction both say funicular. Vilnius publishes no route ids in its positions, so
-its trolleybuses read as buses. TransLink route keys are shown
-without their GTFS version, and Cairns buses without their `C` prefix
-(`C123-33` reads as route 123). Retained history classifies its epochs the same
-way, so a trail joins the live vehicle.
+its trolleybuses read as buses. TransLink labels drop the GTFS version and
+Cairns's `C` prefix (`C123-33` reads as route 123). Retained history classifies
+its epochs the same way, so a trail joins the live vehicle.
 
 Retained transit history uses the same outlier quarantine as live observations and
 preserves the active live bracket. Rejected reports do not publish route or mode
