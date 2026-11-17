@@ -1,5 +1,6 @@
 import { EMERGENCY_TINT_CSS } from '../../data/aircraftEmergency.js';
 import { cssColor } from '../../render/color.js';
+import { VEHICLE_TINT_CSS } from '../../data/aircraftClass.js';
 
 /** A CSS colour as frozen `[r, g, b, a]`, 0..1 (the renderer's `Color`). */
 const rgba = (css, alpha) =>
@@ -12,6 +13,10 @@ export const FOCUS_EVIDENCE_DEV = import.meta.env?.DEV === true;
 /** Amber tint for known-military aircraft rendered by this layer (matches the military layer's icon color). */
 
 export const MIL_TINT = rgba('#FFB800');
+
+/** Amber tint for airport vehicles (type ZVEH, emitter C1/C2), apart from aircraft. */
+
+export const VEHICLE_TINT = rgba(VEHICLE_TINT_CSS);
 
 /** Red tint for aircraft broadcasting an emergency (7500/7600/7700 or ADS-B status). */
 

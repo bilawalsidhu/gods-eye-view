@@ -401,6 +401,11 @@ const OPENSKY_CATEGORY = {
   7: 'fastjet', // High performance (>5g, >400 kt)
   8: 'helicopter', // Rotorcraft
   9: 'glider',
+  16: 'vehicle', // Surface vehicle, emergency
+  17: 'vehicle', // Surface vehicle, service
+  18: 'station', // Point obstacle
+  19: 'station', // Cluster obstacle
+  20: 'station', // Line obstacle
 };
 
 /** ADS-B emitter-category string → class. */
@@ -413,13 +418,35 @@ const EMITTER_CATEGORY = {
   A6: 'fastjet',
   A7: 'helicopter',
   B1: 'glider',
+  C1: 'vehicle', // Surface vehicle, emergency
+  C2: 'vehicle', // Surface vehicle, service
+  C3: 'station', // Point obstacle
+  C4: 'station', // Cluster obstacle
+  C5: 'station', // Line obstacle
 };
 
+/**
+ * The type codes feeds give what is not an aircraft: an airport vehicle
+ * (ZVEH) and a ground station (GRND).
+ */
+const GROUND_TYPE_CLASS = { ZVEH: 'vehicle', GRND: 'station' };
+
+/**
+ * The class an aircraft draws and reads as, from its ICAO type code (which
+ * outranks the category), else its OpenSky integer or ADS-B emitter category.
+ * Besides the aircraft classes, `vehicle` is an airport vehicle (type ZVEH,
+ * emitter C1 or C2) and `station` a ground station or obstacle (type GRND,
+ * emitter C3 to C5). A known type code outside every set is an airliner, and
+ * so is a contact with nothing to go on.
+ * @param {{typeCode?: string|null, category?: string|number|null}} [record]
+ * @returns {string}
+ */
 export function classifyAircraft({ typeCode, category } = {}) {
   const code = String(typeCode || '')
     .trim()
     .toUpperCase();
   if (code) {
+    if (GROUND_TYPE_CLASS[code]) return GROUND_TYPE_CLASS[code];
     if (FASTJET.has(code)) return 'fastjet';
     if (UAV.has(code)) return 'uav';
     if (HELI.has(code)) return 'helicopter';
@@ -452,18 +479,13 @@ export const AIRCRAFT_CLASS_LABELS = Object.freeze({
   fastjet: msg('Fast jet'),
   bizjet: msg('Business jet'),
   uav: msg('Drone'),
+  vehicle: msg('Airport vehicle'),
+  station: msg('Ground station / obstacle'),
 });
 
-/** Billboard scale multipliers (skylight GLYPH_SCALE, + fastjet). */
-export const CLASS_SCALE_2D = {
-  light: 0.62,
-  glider: 0.58,
-  turboprop: 0.86,
-  airliner: 1.0,
-  widebody: 1.3,
-  quadjet: 1.45,
-  helicopter: 0.82,
-  fastjet: 0.8,
-  bizjet: 0.72,
-  uav: 0.75,
-};
+/**
+ * The tint an airport vehicle's sprite draws with in Flights and Local
+ * ADS-B: an orange amber, apart from aircraft white and the military layer's
+ * yellow amber (#FFB800).
+ */
+export const VEHICLE_TINT_CSS = '#FF8F1F';

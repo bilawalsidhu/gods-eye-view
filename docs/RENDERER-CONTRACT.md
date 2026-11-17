@@ -163,6 +163,42 @@ optional:
 - `frame.renderNow()` throws when the frame fails to draw. With
   `{ifDue: true}` it runs one tick of the loop now, as the loop's own would
   (camera flight, input, clock), and draws only a frame that is due.
+- `ModelItem.parts` (capability `modelParts`, `ModelPartState`) poses a
+  model's moving parts. It applies to a model whose mesh carries a `_PART`
+  vertex attribute (each vertex's part index) and whose root node's glTF
+  `extras.parts` is its part table: each part's name, kind (`body`, `spin`,
+  `hinge`, `slide`, `deploy`, `separable`, `marker`), pivot, axis, limits,
+  rest and parent. `spin` turns parts at degrees a second, advanced by the
+  renderer on its own clock (a change of rate goes on from the angle
+  reached); `deploy` sets parts between stowed (0) and deployed (1);
+  `poses` moves, turns, hides or highlights a part by name, in the model's
+  glTF frame (forward −X, up +Y, right −Z). It changes live without loading
+  the model again. A model without a part table ignores it, and a renderer
+  without the capability, or that cannot pose parts, draws the model
+  whole, at rest, as its file draws it: the application runs fully without
+  it. The maths is `gods-eye-view/render/modelParts` (`partMatrices`:
+  deploy, then spin, then the pose, then the parent's), so a renderer that
+  poses parts draws exactly those; with `axisScale` the parts turn rigidly
+  in the stretched model. The Cesium port lists it and poses parts where
+  its context is WebGL 2 with floating-point textures, drawing models whole
+  elsewhere. A posed model gets a custom shader that moves each vertex by
+  its part's matrix, read from a small texture written in place when the
+  parts change and each frame a part of a model in view spins (a model out
+  of view or under 4 pixels across is not turned and asks for no frame),
+  composed with `maskColor`, `unlit` and `thermal`. A moved part's material
+  normal (its normal map and back-face flip kept) turns by the inverse
+  transpose of its matrix, exact under `axisScale`; a hidden part draws
+  nothing and a highlighted one is mixed toward its colour. A model at rest
+  keeps the shader it had, and part shaders go with the draw port. Cesium
+  culls and picks a model by its bounds as its file draws it, so a part
+  moved outside them (a large `offsetM`) draws only while those bounds are
+  in view, and is not picked there. The check `draw.models.parts` poses,
+  hides, moves, clamps and spins the parts of a model built in code
+  (`render/conformance/partsModel.js`): a move right lands a quarter turn
+  clockwise of a move forward, a mesh node turned, scaled and moved changes
+  nothing, a move stretches with `axisScale`, and a slide and a hinge stop
+  at their limits. The live layers drive it from each vehicle's record
+  (`src/data/modelPartDrivers.js`).
 
 The Cesium port lists `gpuTiming` where its context has
 `EXT_disjoint_timer_query_webgl2`: while anyone listens to frame signals,

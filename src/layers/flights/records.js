@@ -123,9 +123,14 @@ export class FlightRecords {
         stickyText(callsign, prevMeta?.callsign),
       );
     const feedType = observation.typeCode || null;
-    const typeCode =
-      airframe?.typeCode ??
-      (feedType && groundModel(feedType) ? feedType : null);
+    // The feed's type is kept for what it names itself, not for a surface
+    // category: a C1 contact whose feed names an airliner type stays a vehicle.
+    const keepFeedType =
+      Boolean(feedType) &&
+      (groundCategory(category)
+        ? GROUND_FEED_TYPES.has(feedType.trim().toUpperCase())
+        : groundModel(feedType));
+    const typeCode = airframe?.typeCode ?? (keepFeedType ? feedType : null);
     const onGround =
       on_ground === true ||
       (!Number.isFinite(baro_alt) &&
@@ -280,7 +285,8 @@ export class FlightRecords {
     const groundFlipped =
       !!prevMeta && (prevMeta.onGround === true) !== onGround;
     // Store flight metadata for click-to-track labels
-    const cat = stickyNumber(category, prevMeta?.category, null);
+    // OpenSky's integer category, or a feed's ADS-B emitter category ("C1").
+    const cat = stickyCategory(category, prevMeta?.category);
     const nextCallsign = stickyText(callsign, prevMeta?.callsign);
     // A route (and its airline) belongs to the callsign it was looked up for;
     // a new callsign drops it, so an old flight's route never shows under it.
@@ -325,11 +331,9 @@ export class FlightRecords {
       ),
       courseAnchor: course.anchor,
       category: cat,
-      // An adsbdb-enriched type code outranks the coarse OpenSky category.
-      klass: classifyAircraft({
-        typeCode: airframe?.typeCode ?? null,
-        category: cat,
-      }),
+      // An adsbdb-enriched type code outranks the coarse OpenSky category;
+      // a feed's own ground type (ZVEH, GRND) classes it from the first fix.
+      klass: classifyAircraft({ typeCode, category: cat }),
       turnRateDps: prevMeta?.turnRateDps || 0,
       verticalRate: stickyNumber(vertical_rate, prevMeta?.verticalRate, null),
       // Analyst seam: OpenSky origin_country (state[2]) — additive, sticky
@@ -452,13 +456,46 @@ export class FlightRecords {
   }
 }
 
+/** An ADS-B emitter category as a feed gives it ("A3", "C1"). */
+const EMITTER_CATEGORY = /^[A-D][0-7]$/;
+
+/**
+ * A contact's category, kept across polls that omit it: OpenSky's integer
+ * category or an ADS-B emitter category string, else the last one, else null.
+ * @param {*} next
+ * @param {*} prev
+ * @returns {number|string|null}
+ */
+function stickyCategory(next, prev) {
+  if (Number.isFinite(next)) return next;
+  const text = typeof next === 'string' ? next.trim().toUpperCase() : '';
+  if (EMITTER_CATEGORY.test(text)) return text;
+  return prev ?? null;
+}
+
+/** The types a feed gives airport vehicles (ZVEH) and ground stations (GRND). */
+const GROUND_FEED_TYPES = new Set(['ZVEH', 'GRND']);
+
 /** Per loaded fleet model set: whether a type, category and callsign rule draw a ground model. */
 const groundModelCaches = new WeakMap();
 
 /**
+ * Whether an emitter category is a surface one: a vehicle or an obstacle
+ * (ADS-B C1 to C5, OpenSky 16 to 20).
+ * @param {string|number|null} category
+ * @returns {boolean}
+ */
+function groundCategory(category) {
+  if (Number.isInteger(category)) return category >= 16 && category <= 20;
+  return typeof category === 'string' && /^C[1-5]$/i.test(category.trim());
+}
+
+/**
  * Whether an aircraft of this type, emitter category and callsign is drawn
  * with a model built standing on the ground (catalog category `other`: an
- * airport vehicle, a ground station's mast). False before the set loads.
+ * airport vehicle, a ground station's mast). A surface emitter category
+ * (C1 to C5, OpenSky 16 to 20) always is. Otherwise, before the set loads,
+ * whether the type is one a feed gives ground vehicles and stations.
  * Answered once per type, category and callsign rule matched.
  * @param {object|null} set The loaded fleet model set.
  * @param {string|null} typeCode
@@ -467,7 +504,11 @@ const groundModelCaches = new WeakMap();
  * @returns {boolean}
  */
 function drawnAsGroundModel(set, typeCode, category, callsign) {
-  if (!set || !typeCode) return false;
+  if (groundCategory(category)) return true;
+  if (!typeCode) return false;
+  // Before the set loads, the feed's own ground types: an airport vehicle
+  // must not be drawn as an aircraft until the set says what it is.
+  if (!set) return GROUND_FEED_TYPES.has(typeCode.trim().toUpperCase());
   let cache = groundModelCaches.get(set);
   if (!cache) groundModelCaches.set(set, (cache = new Map()));
   const rule = aircraftCallsignRule(set.types, typeCode, callsign);

@@ -1,4 +1,3 @@
-import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import {
   aircraftLayerModelSpec,
   aircraftModelSpecCacheKey,
@@ -41,15 +40,11 @@ export function createRendering({
     return spec;
   }
 
-  /** Fleet icon scale: per-class scale, ×GROUND_SCALE while grounded. */
+  /** Fleet icon scale: one size for every class, ×GROUND_SCALE while grounded. */
 
   function _fleetBillboardScale(icao24) {
     const meta = flightState.records.data.get(icao24);
-    return (
-      BILLBOARD_SCALE *
-      (CLASS_SCALE_2D[meta?.klass] || 1) *
-      (meta?.onGround ? GROUND_SCALE : 1)
-    );
+    return BILLBOARD_SCALE * (meta?.onGround ? GROUND_SCALE : 1);
   }
 
   /** Sprite kind for one contact's icon. Identity for every aircraft except

@@ -1285,6 +1285,8 @@ const AIRCRAFT_CLASS_NAMES = {
   turboprop: msg('Turboprops'),
   fastjet: msg('Fast jets'),
   quadjet: msg('Four-engine jets'),
+  vehicle: msg('Airport vehicles'),
+  station: msg('Ground stations / obstacles'),
 };
 
 /**

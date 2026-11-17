@@ -53,10 +53,6 @@ export function createVesselState({ source, services }) {
 
   vesselState._geoidReady = false;
 
-  /** @type {Map<string, string>} `${cssColor}:${variant}` -> chevron SVG data URL */
-
-  vesselState.shipIconCache = new Map();
-
   /** Row ids for unkeyed (no-id) records, which are rebuilt every poll. */
 
   vesselState._unkeyedIconSequence = 0;

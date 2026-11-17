@@ -1,5 +1,7 @@
-import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
+import { VEHICLE_TINT_CSS } from '../../data/aircraftClass.js';
 import { aircraftIcon } from '../../data/aircraftIcons.js';
+import { rotorFrame } from '../../data/rotorFrames.js';
+import { KNOT_MPS } from '../../data/units.js';
 import {
   courseScreenRotation,
   stabilizeScreenRotation,
@@ -133,6 +135,8 @@ export function createLocalAdsbLayer({
   } = services.context;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
   const color = hexColor(LOCAL_ADSB_COLOR);
+  // An airport vehicle's tint, as in the Flights layer.
+  const vehicleColor = hexColor(VEHICLE_TINT_CSS);
   const uatRingColor = hexColor(LOCAL_ADSB_UAT_RING_COLOR);
 
   let viewer = null;
@@ -265,9 +269,7 @@ export function createLocalAdsbLayer({
   }
 
   function billboardScale(marker) {
-    return (
-      (CLASS_SCALE_2D[marker.klass] || 1) * (marker.onGround ? GROUND_SCALE : 1)
-    );
+    return marker.onGround ? GROUND_SCALE : 1;
   }
 
   /** Class silhouette and per-class scale (×0.8 on the ground), magenta. */
@@ -350,18 +352,34 @@ export function createLocalAdsbLayer({
     };
   }
 
-  /** A marker's icon, where and how it now draws. */
-  function markerItem(marker, basis) {
+  /**
+   * A marker's icon, where and how it now draws: a helicopter's rotor frame
+   * at `at` (still on the ground), an airport vehicle in its own tint, a
+   * ground station's mast upright.
+   */
+  function markerItem(marker, basis, at) {
+    const kind = marker.iconKind ?? 'airliner';
     return {
       id: marker.id,
       pos: marker.position,
-      image: aircraftIcon(marker.iconKind ?? 'airliner'),
+      image: aircraftIcon(
+        kind,
+        undefined,
+        kind === 'helicopter'
+          ? rotorFrame(marker.id, at, {
+              onGround: marker.onGround,
+              speedMps: Number.isFinite(marker.record?.groundSpeedKt)
+                ? marker.record.groundSpeedKt * KNOT_MPS
+                : null,
+            })
+          : undefined,
+      ),
       size: [MARKER_SPRITE.width, MARKER_SPRITE.height],
       scale: marker.iconScale ?? 1,
-      color,
+      color: kind === 'vehicle' ? vehicleColor : color,
       scaleByDistance: MARKER_SPRITE.scaleByDistance,
       rotationMode: 'screen',
-      rotation: markerRotation(marker, basis),
+      rotation: kind === 'station' ? 0 : markerRotation(marker, basis),
       // The 3D model, once loaded and placed, is the visual instead.
       show: !marker.modelOwnsVisual,
       disableDepthTest: Number.POSITIVE_INFINITY,
@@ -390,11 +408,12 @@ export function createLocalAdsbLayer({
   function drawMarkers() {
     if (!sets) return;
     const basis = cameraBasis();
+    const at = now();
     const icons = [];
     const rings = [];
     for (const marker of markers.values()) {
       if (!marker.position) continue;
-      icons.push(markerItem(marker, basis));
+      icons.push(markerItem(marker, basis, at));
       if (marker.uat) rings.push(ringItem(marker));
     }
     if (icons.length) sets.markers.upsert(icons);
