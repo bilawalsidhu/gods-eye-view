@@ -34,7 +34,8 @@ globalThis.HTMLCanvasElement.prototype.getContext = (kind) =>
 globalThis.requestAnimationFrame = () => 0;
 globalThis.cancelAnimationFrame = () => {};
 
-const { bootStories, stopVoiceForStories } = await import('./boot.js');
+const { bootStories, stopVoiceForStories, storiesOpener } =
+  await import('./boot.js');
 const { useStoriesStore } = await import('../ui/stores/stories.js');
 
 const { bindRenderer } = await import('../render/rendererOf.js');
@@ -75,6 +76,48 @@ const director = {
   seekScene() {},
   styleManager: { runImmediateNavigation: () => true },
 };
+
+test('open_stories runs the app’s own openStories when it supplies one', async () => {
+  const calls = [];
+  const opened = [];
+  const own = async (options) => {
+    calls.push(options);
+    return true;
+  };
+  const open = storiesOpener({
+    openStories: own,
+    store: { available: true, mode: 'closed' },
+    stories: { open: (options) => opened.push(options) },
+  });
+  assert.equal(open, own);
+  const isCurrent = () => true;
+  assert.equal(await open({ isCurrent }), true);
+  assert.deepEqual(calls, [{ isCurrent }]);
+  assert.deepEqual(opened, [], 'the Stories page is not opened');
+});
+
+test('open_stories opens the Stories page by default', () => {
+  const opened = [];
+  const store = { available: true, mode: 'closed' };
+  const stories = {
+    open: (options) => {
+      opened.push(options);
+      return true;
+    },
+  };
+  const open = storiesOpener({ store, stories });
+  const isCurrent = () => true;
+  assert.equal(open({ isCurrent }), true);
+  assert.deepEqual(opened, [{ isCurrent }]);
+  store.mode = 'explore';
+  assert.equal(open({ isCurrent }), 'already-open');
+  assert.equal(opened.length, 1);
+  // Where Stories is not offered, there is nothing to open.
+  assert.equal(
+    storiesOpener({ store: { available: false, mode: 'closed' }, stories }),
+    null,
+  );
+});
 
 test('entering Stories stops microphone sessions and preserves typed chat', () => {
   let textOnly = false;
