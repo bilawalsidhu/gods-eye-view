@@ -415,6 +415,7 @@ export function createTiangongArticulation() {
     dish = null;
     override = null;
     wingManual.clear();
+    armManual.clear();
   }
 
   /**
@@ -437,8 +438,16 @@ export function createTiangongArticulation() {
    * @param {'cmm'|'emm'} [key]
    */
   function resumeArm(key) {
-    if (key) armManual.delete(key);
-    else armManual.clear();
+    for (const arm of key ? [key] : [...armManual]) {
+      if (!armManual.delete(arm)) continue;
+      // Joints the sway does not move would keep their manual angle: they go
+      // back to the folded pose. The swaying ones are posed again next update.
+      for (const joint of TIANGONG_ARMS[arm] ?? []) {
+        if (joint.sway || joint.centre) continue;
+        const node = boundModel?.getNode(joint.node);
+        if (node) node.matrix = undefined;
+      }
+    }
   }
 
   /**

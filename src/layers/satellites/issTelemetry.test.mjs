@@ -465,3 +465,47 @@ test('the latest epoch is the newest dated item, and nothing without one', () =>
   assert.equal(issTelemetryLatestEpoch({}), null);
   assert.equal(issTelemetryLatestEpoch(null), null);
 });
+
+test('the status says where the angles stand: pending, live, disabled', async () => {
+  const time = fakeTime();
+  const { fetchImpl } = fakeFetch([LIVE]);
+  const feed = createIssTelemetryFeed({ fetchImpl, ...time });
+  assert.equal(feed.status().state, 'pending', 'before the first answer');
+  feed.touch();
+  await time.advance(0);
+  const live = feed.status();
+  assert.equal(live.state, 'live');
+  assert.ok(live.poseAgeMs >= 0 && live.poseAgeMs < ISS_TELEMETRY_FRESH_MS);
+
+  const off = fakeFetch([{ configured: false }]);
+  const offFeed = createIssTelemetryFeed({ fetchImpl: off.fetchImpl, ...time });
+  offFeed.touch();
+  await time.advance(0);
+  assert.equal(offFeed.status().state, 'disabled');
+});
+
+test('a relay route that is not there reads as unavailable, not as connecting forever', async () => {
+  const time = fakeTime();
+  // A 404, or a deploy's HTML fallback page: never a relay answer.
+  const answers = [
+    { ok: false, status: 404, json: async () => ({}) },
+    {
+      ok: true,
+      json: async () => {
+        throw new SyntaxError('Unexpected token <');
+      },
+    },
+  ];
+  let call = 0;
+  const fetchImpl = async () => answers[Math.min(call++, answers.length - 1)];
+  const feed = createIssTelemetryFeed({ fetchImpl, ...time });
+  feed.touch();
+  await time.advance(0);
+  assert.equal(feed.configured(), null, 'never answered');
+  assert.equal(feed.status().state, 'unavailable');
+  for (let i = 0; i < 30; i++) {
+    feed.touch();
+    await time.advance(1000);
+  }
+  assert.equal(feed.status().state, 'unavailable');
+});

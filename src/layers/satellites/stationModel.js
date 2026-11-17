@@ -173,6 +173,12 @@ export function createNodePoses() {
             return poses[name];
           },
           set matrix(value) {
+            // None: the node goes back to its authored pose (its name leaves
+            // the map), as a model's node does.
+            if (value === undefined || value === null) {
+              delete poses[name];
+              return;
+            }
             const kept = (poses[name] ??= new Float64Array(16));
             for (let i = 0; i < 16; i++) kept[i] = value[i];
           },

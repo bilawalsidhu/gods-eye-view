@@ -266,7 +266,10 @@ export function createIssTelemetryFeed({
       const poseAgeMs = poseAt === null ? null : at - poseAt;
       let state;
       if (configured === false) state = 'disabled';
-      else if (configured === null) state = 'pending';
+      // Never answered: still asking, or the route is not there (a 404, an
+      // HTML fallback page), which is unavailable rather than pending.
+      else if (configured === null)
+        state = failures > 0 ? 'unavailable' : 'pending';
       else if (pose && poseAgeMs < ISS_TELEMETRY_FRESH_MS) state = 'live';
       else if (failures === 0 && relayStatus === 'no-signal')
         state = 'no-signal';

@@ -339,6 +339,10 @@ export const ISS_SMALL_ARM_JOINTS = Object.freeze(
 
 /** Every joint that sways. */
 const ISS_SWAY_JOINTS = [...ISS_ARM_JOINTS, ...ISS_SMALL_ARM_JOINTS];
+/** The arm joints the sway moves; the rest hold NASA's filed pose. */
+const ISS_SWAYING_NODES = new Set(
+  ISS_SWAY_JOINTS.filter((joint) => joint.sway).map((joint) => joint.node),
+);
 
 /**
  * The arm's illustrative joint angles at a wall-clock time.
@@ -803,6 +807,13 @@ export function createIssArticulation() {
 
   /** Command panel: hand the arm back to its sway. */
   function resumeArm() {
+    // A joint the sway does not move would keep its manual angle: it goes
+    // back to its filed pose. The swaying ones are posed again next update.
+    for (const name of manualJoints) {
+      if (ISS_SWAYING_NODES.has(name)) continue;
+      const node = boundModel?.getNode(name);
+      if (node) node.matrix = undefined;
+    }
     manualJoints.clear();
   }
 

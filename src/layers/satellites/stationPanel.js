@@ -88,6 +88,17 @@ export function createStationPanel({
     }
   }
 
+  /**
+   * The telemetry status with its ages in whole seconds: the section words
+   * them so, and an age in ms would make every frame a change.
+   */
+  function wholeSeconds(status) {
+    if (!status) return status;
+    const second = (ms) =>
+      Number.isFinite(ms) ? Math.floor(ms / 1000) * 1000 : ms;
+    return { ...status, poseAgeMs: second(status.poseAgeMs) };
+  }
+
   function _publish() {
     const station = current;
     if (!station) {
@@ -109,7 +120,7 @@ export function createStationPanel({
       title: station.title,
       subject: station.subjectName(),
       mode,
-      telemetry: station.telemetry(),
+      telemetry: wholeSeconds(station.telemetry()),
       sunlit: mode === 'manual' ? null : (articulation?.isSunlit?.() ?? null),
       note:
         (articulation?.isLive?.() ? station.notes?.live : null) ??
