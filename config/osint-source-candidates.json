@@ -52,7 +52,8 @@
       "license": "CC-BY-4.0",
       "limits_note": "API quota documented as 5,000 requests/day; token requested from maintainer. Downloads are free.",
       "use_note": "Versioned historical/event context; show codebook definitions and publication lag.",
-      "proposed_secret": "UCDP_API_TOKEN"
+      "proposed_secret": "UCDP_API_TOKEN",
+      "license_note": "CC BY 4.0 for the GED download; retain UCDP attribution and cite the dataset version/codebook. Confirm API-specific terms separately."
     },
     {
       "id": "copernicus-dataspace-stac",
