@@ -1,3 +1,4 @@
+import { lookupVoiceAircraft } from './aircraftLookup.js';
 import { isFollowing, stopFollowing } from '../data/followed.js';
 import { interruptGlobeRotation } from '../cameraVerbs.js';
 import { normalizeDisplayText } from '../data/displayText.js';
@@ -306,6 +307,7 @@ export function createGevActionRunner({
   readVoicePanelOperation = null,
   osmSearch = null,
   areaOptions = null,
+  toolCatalog = null,
 }) {
   // Voice enable times and analyst follow-up memory belong to this runner.
   // Speech builders turn results into say/display envelopes; callers extend
@@ -1690,6 +1692,43 @@ export function createGevActionRunner({
     }
 
     if (name === 'track_entity') {
+      const aircraftQuery =
+        /^(?:[a-f0-9]{6}|[a-z]{2,3}[ -]*\d{1,4}[a-z]?)$/i.test(
+          String(args.query || '').trim(),
+        );
+      const aircraftLayer =
+        !args.layerId ||
+        ['flights', 'military'].includes(normalizeLayerId(args.layerId));
+      if (args.lookupOnly && (!aircraftQuery || !aircraftLayer)) {
+        const error =
+          'lookupOnly supports aircraft flight numbers or ICAO identifiers only. For ships or satellites use analyst_query on loaded layers.';
+        return {
+          ok: false,
+          tracking: false,
+          action: name,
+          error,
+          say: error,
+        };
+      }
+      if (args.lookupOnly || (toolCatalog && aircraftQuery && aircraftLayer)) {
+        return lookupVoiceAircraft(args, {
+          loadCatalog: toolCatalog,
+          dataManager,
+          signal: runOptions.signal,
+          isCurrent: current,
+          enable: (layerId) =>
+            runGevAction(
+              'set_layer_visibility',
+              { layerId, enabled: true },
+              runOptions,
+            ),
+          follow: (target, exactId) =>
+            trackEntity(viewer, dataManager, styleManager, target, {
+              isCurrent: current,
+              exactId,
+            }),
+        });
+      }
       return trackEntity(viewer, dataManager, styleManager, args, {
         isCurrent: current,
       });
@@ -1725,6 +1764,7 @@ export function createGevActionRunner({
   // direct call still invalidates the older attempt.
   const serializedSiblingActions = new Set([
     'analyst_query',
+    'track_entity',
     'resolve_area',
     'find_imagery',
     'osm_query',
@@ -2803,7 +2843,7 @@ async function trackEntity(
   dataManager,
   styleManager,
   args = {},
-  { isCurrent = () => true } = {},
+  { isCurrent = () => true, exactId = null } = {},
 ) {
   const cancelled = () => ({
     ok: false,
@@ -2889,6 +2929,11 @@ async function trackEntity(
     if (!module || typeof module.findByQuery !== 'function') continue;
     const found = module.findByQuery(query);
     if (!found) continue;
+    if (
+      exactId &&
+      (String(found.icao24 || '').toLowerCase() !== exactId || found.stale)
+    )
+      continue;
 
     if (!isCurrent()) return cancelled();
 
@@ -6178,4 +6223,4 @@ async function runAnalystQuery(
       : {}),
     ...(countsReconciliation ? { countsReconciliation } : {}),
   };
-}
+          }
