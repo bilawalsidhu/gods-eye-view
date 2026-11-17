@@ -10,7 +10,7 @@ export function createHover({ state: layerState, services, parts, source }) {
    * Throttled MOUSE_MOVE hover pass (owner round 2, item B): pointing at a
    * camera icon that has no card summons its card immediately. This is
    * EVENT-DRIVEN picking on a user gesture, not steady-state work — the
-   * ≥120 ms throttle caps it at ~8 scene.pick calls/s while the pointer is
+   * ≥120 ms throttle caps it at ~8 scene picks/s while the pointer is
    * actually moving (a still pointer costs nothing), so it can never approach
    * per-frame cost. Skipped while the camera is in motion, while ADJUST mode
    * owns the pointer (gizmo drags), and while the layer is disabled.
@@ -29,13 +29,7 @@ export function createHover({ state: layerState, services, parts, source }) {
     const now = Date.now();
     if (now - layerState._hoverLastPickAt < HOVER_PICK_THROTTLE_MS) return;
     layerState._hoverLastPickAt = now;
-    let picked = null;
-    try {
-      picked = layerState._viewer.scene.pick(position);
-    } catch {
-      picked = null;
-    }
-    const cameraId = parts.selection.extractPickedCameraId(picked);
+    const cameraId = parts.rendering.pickCameraIdAt(position);
     if (cameraId && cameraId === layerState._hoverCardId) {
       // Still on the hovered camera — keep the card alive.
       cancelHoverRelease();

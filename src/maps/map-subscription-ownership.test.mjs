@@ -1,15 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MapSourceController } from './controller.js';
+// The controller switches stacks through the Cesium map engine.
+import '../render/cesium/mapEngine.js';
 function fixture() {
   return new MapSourceController(
     {
       scene: {
         globe: { show: true },
         requestRender() {},
-        frameState: {
-          creditDisplay: { addStaticCredit() {}, removeStaticCredit() {} },
-        },
         primitives: { add() {}, remove() {} },
       },
       imageryLayers: { add() {}, remove() {} },

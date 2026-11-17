@@ -77,7 +77,7 @@ test('an application\'s row actions sit before fly to, labelled, and act on thei
   const note = row('a1').querySelector('.draw-mark-note');
   assert.equal(note.getAttribute('role'), 'status');
   assert.equal(note.textContent, '');
-  assert.equal(row('a2').querySelector('.draw-mark-note'), null, 'a row without actions has no note');
+  assert.equal(row('a2').querySelector('.draw-mark-note') === null, true, 'a row without actions has no note');
   const line = { ...LINE, path: [[0, 0], [1, 0]] };
   store.publishDraw({ active: true, shape: 'area', color: 'primary', hint: '', marks: presentDrawMarks([line], drawMarkActions([tag]), new Map([['a1', { busy: true, text: '' }]])) });
   await nextTick();

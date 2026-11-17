@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import {
   DEFAULT_CAPACITY,
   POINT_SIZE_MIN,
@@ -11,7 +10,21 @@ import {
   POINT_HEIGHT_OFFSET_M,
   MAX_TOTAL_POINTS,
   COLOR_OUTLINE,
+  POINT_SCALE_BY_DISTANCE,
+  POINT_FADE_BY_DISTANCE,
+  POINT_DISABLE_DEPTH_TEST_M,
 } from './policy.js';
+import { heightsOf } from '../../queries/heights.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { drawOf } from '../../render/rendererOf.js';
+
+/**
+ * The draw sets the stations are drawn in start with this; each layer has
+ * its own (`bikeshare:1:stations`, `bikeshare:1:selected`), so several can
+ * share a renderer. Picks name them as `Hit.set`.
+ */
+export const BIKESHARE_SET_ID = 'bikeshare';
+let instances = 0;
 
 export function createRendering({
   state: layerState,
@@ -20,6 +33,59 @@ export function createRendering({
   source,
 }) {
   const { governorRequestRender } = services.render;
+
+  /**
+   * Make the layer's draw sets on `viewer`'s renderer (`drawOf`): the
+   * station dots, hidden until the layer is enabled, and the selected
+   * station's highlight. Sets made before are let go first.
+   * @param {object} viewer
+   */
+  function attachSets(viewer) {
+    const draw = drawOf(viewer);
+    detachSets();
+    const prefix = `${BIKESHARE_SET_ID}:${++instances}`;
+    layerState._stationSet = draw.points({
+      id: `${prefix}:stations`,
+      blend: 'translucent',
+      show: false,
+      drawOrder: services.sprites?.spriteDrawOrder?.('bikeshare') ?? 0,
+    });
+    layerState._selectedSet = draw.points({ id: `${prefix}:selected` });
+    // Drawn from the start, empty, so both take their place in the scene
+    // now, as the layer's collections did; the stations' place among the
+    // other sprite layers is their draw order (`spriteDrawOrder`).
+    layerState._stationSet.set([]);
+    layerState._selectedSet.set([]);
+  }
+
+  /** Let the layer's draw sets go. */
+  function detachSets() {
+    layerState._stationSet?.dispose();
+    layerState._selectedSet?.dispose();
+    layerState._stationSet = null;
+    layerState._selectedSet = null;
+  }
+
+  /**
+   * A station's dot, from its render record; the selected station's own dot
+   * is hidden while its highlight replaces it.
+   * @param {Object} record - Render record from _stationRenderMap.
+   * @returns {import('../../render/contract/draw').PointItem}
+   */
+  function stationItem(record) {
+    return {
+      id: record.key,
+      pos: record.position,
+      pixelSize: record.pixelSize,
+      color: record.color,
+      outlineColor: COLOR_OUTLINE,
+      outlineWidth: 1,
+      scaleByDistance: POINT_SCALE_BY_DISTANCE,
+      fadeByDistance: POINT_FADE_BY_DISTANCE,
+      disableDepthTest: POINT_DISABLE_DEPTH_TEST_M,
+      show: record.key !== layerState._selectedKey,
+    };
+  }
 
   /**
    * Resolve the effective dock capacity for a station.
@@ -68,7 +134,7 @@ export function createRendering({
    * - <30% bikes available: red.
    * @param {Object|null} status - Station status object.
    * @param {number} capacity - Resolved station capacity.
-   * @returns {Cesium.Color} Color to apply to the station point.
+   * @returns {readonly number[]} Renderer colour `[r, g, b, a]` for the station point.
    */
 
   function statusToColor(status, capacity) {
@@ -87,10 +153,10 @@ export function createRendering({
   }
 
   /**
-   * Create a Cartesian3 position for a station, terrain-clamped when possible.
+   * The ECEF position for a station, on the sampled surface when possible.
    * Falls back to a fixed small height offset if terrain sampling is unsupported.
    * @param {Object} station - Station info object with lat/lon.
-   * @returns {Cesium.Cartesian3|null} World position, or null if coordinates are invalid.
+   * @returns {{x: number, y: number, z: number}|null} ECEF metres, or null if coordinates are invalid.
    */
 
   function createStationPosition(station) {
@@ -100,15 +166,13 @@ export function createRendering({
 
     let height = POINT_HEIGHT_OFFSET_M;
     // Sample terrain height so points sit on ground rather than at ellipsoid level
-    if (layerState._viewer?.scene?.sampleHeightSupported) {
-      const carto = Cesium.Cartographic.fromDegrees(lon, lat);
-      const sampled = layerState._viewer.scene.sampleHeight(carto);
-      if (Number.isFinite(sampled)) {
-        height = sampled + POINT_HEIGHT_OFFSET_M;
-      }
+    const viewer = layerState._viewer;
+    if (viewer && heightsOf(viewer).supported().surface) {
+      const sampled = heightsOf(viewer).now({ lon, lat });
+      if (sampled !== null) height = sampled + POINT_HEIGHT_OFFSET_M;
     }
 
-    return Cesium.Cartesian3.fromDegrees(lon, lat, height);
+    return fromDegrees(lon, lat, height);
   }
 
   /**
@@ -126,8 +190,8 @@ export function createRendering({
   }
 
   /**
-   * Ensure point primitives exist for all stations in a city.
-   * Creates new points for stations not yet rendered; skips existing ones.
+   * Ensure dots exist for all stations in a city.
+   * Creates new dots for stations not yet rendered; skips existing ones.
    * Respects the MAX_TOTAL_POINTS global cap to prevent GPU overload.
    * @param {string} cityId - City identifier.
    * @param {Map<string, Object>} stationMap - Parsed station info map for the city.
@@ -139,6 +203,7 @@ export function createRendering({
     governorRequestRender('bikeshare-points');
     const runtime = ensureCityRuntime(cityId);
 
+    const added = [];
     for (const station of stationMap.values()) {
       const key = parts.model.stationKey(cityId, station.stationId);
       if (layerState._stationRenderMap.has(key)) {
@@ -160,30 +225,14 @@ export function createRendering({
       const position = createStationPosition(station);
       if (!position) continue;
 
-      // Add a point primitive with distance-based scale and translucency falloff
-      const point = layerState._pointCollection.add({
-        position,
-        pixelSize: capacityToPixelSize(station.capacity),
-        color: COLOR_NEUTRAL,
-        outlineColor: COLOR_OUTLINE,
-        outlineWidth: 1,
-        scaleByDistance: new Cesium.NearFarScalar(200, 1.35, 130000, 0.4),
-        translucencyByDistance: new Cesium.NearFarScalar(
-          200,
-          1.0,
-          180000,
-          0.15,
-        ),
-        disableDepthTestDistance: 2500,
-        id: key,
-      });
-
-      layerState._stationRenderMap.set(key, {
+      const record = {
         key,
         cityId,
         stationId: station.stationId,
         stationName: station.name,
-        point,
+        position,
+        pixelSize: capacityToPixelSize(station.capacity),
+        color: COLOR_NEUTRAL,
         capacity: parts.model.toNonNegativeInteger(station.capacity),
         publishedCapacity: parts.model.toNonNegativeInteger(station.capacity),
         bikesAvailable: null,
@@ -191,16 +240,20 @@ export function createRendering({
         isInstalled: station.isInstalled,
         isRenting: station.isRenting,
         isReturning: station.isReturning,
-      });
+      };
+      layerState._stationRenderMap.set(key, record);
+      // A dot with distance-based scale and translucency falloff.
+      added.push(stationItem(record));
 
       runtime.stationKeys.add(key);
     }
+    if (added.length) layerState._stationSet?.upsert(added);
 
     layerState._count = layerState._stationRenderMap.size;
   }
 
   /**
-   * Remove all rendered point primitives for a city and clean up runtime state.
+   * Remove all rendered dots for a city and clean up runtime state.
    * Also clears any active selection if it belongs to this city.
    * @param {string} cityId - City identifier to remove.
    */
@@ -217,12 +270,13 @@ export function createRendering({
       parts.selection._clearSelection();
     }
 
+    const removed = [];
     for (const key of runtime.stationKeys) {
-      const record = layerState._stationRenderMap.get(key);
-      if (!record) continue;
-      layerState._pointCollection.remove(record.point);
+      if (!layerState._stationRenderMap.has(key)) continue;
+      removed.push(key);
       layerState._stationRenderMap.delete(key);
     }
+    if (removed.length) layerState._stationSet?.remove(removed);
 
     layerState._cityRuntime.delete(cityId);
     layerState._count = layerState._stationRenderMap.size;
@@ -241,6 +295,7 @@ export function createRendering({
     const runtime = layerState._cityRuntime.get(cityId);
     if (!runtime) return;
 
+    const updated = [];
     for (const key of runtime.stationKeys) {
       const record = layerState._stationRenderMap.get(key);
       if (!record) continue;
@@ -267,11 +322,16 @@ export function createRendering({
       );
 
       // Update visual properties based on current status
-      record.point.pixelSize = capacityToPixelSize(capacity);
-      record.point.color = statusToColor(status, capacity);
+      record.pixelSize = capacityToPixelSize(capacity);
+      record.color = statusToColor(status, capacity);
+      updated.push(stationItem(record));
     }
+    if (updated.length) layerState._stationSet?.upsert(updated);
   }
   return {
+    attachSets,
+    detachSets,
+    stationItem,
     resolveCapacity,
     capacityToPixelSize,
     statusToColor,

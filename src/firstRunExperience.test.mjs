@@ -386,8 +386,13 @@ test('one ESC does one thing — a Cockpit utility disclosure stops later docume
   // they own the same contract: their capture handler is the only one that can
   // keep a later document listener (Cockpit exit, the launcher) off the key, and
   // only the immediate form does it.
-  const utilityEsc = ui.slice(ui.indexOf('if (!displayOpen && !radioOpen) return;'));
-  const claim = utilityEsc.slice(0, utilityEsc.indexOf('setCockpitDisclosure(kind, false'));
+  const utilityEsc = ui.slice(
+    ui.indexOf('if (!displayOpen && !radioOpen) return;'),
+  );
+  const claim = utilityEsc.slice(
+    0,
+    utilityEsc.indexOf('setCockpitDisclosure(kind, false'),
+  );
   assert.match(claim, /event\.preventDefault\(\);/);
   assert.match(claim, /event\.stopImmediatePropagation\(\);/);
   assert.doesNotMatch(
@@ -606,11 +611,8 @@ test('the tile is the FULLY CONFIGURED experience: quakes and fires together', (
   const environmental = FIRST_RUN_MISSIONS.environmental;
   assert.deepEqual(environmental.layerIds, ['earthquakes', 'local-firms']);
 
-  // Keyless, the honest surface is the LAYER ROW ("KEY REQUIRED"), which the
-  // FIRMS layer already reports. The misleading part is the GLOBAL chip folding
-  // that row into LOAD FAILED — a defect in the shared state machine, ledgered
-  // post-launch, and the note must stay where the next editor will read it
-  // rather than being re-discovered as a launcher bug.
+  // Keyless, FIRMS says so on its layer row and in the global chip (both
+  // KEY REQUIRED), and the note says where the chip's ending comes from.
   const module = fs.readFileSync(
     new URL('./firstRunExperience.js', import.meta.url),
     'utf8',
@@ -621,7 +623,7 @@ test('the tile is the FULLY CONFIGURED experience: quakes and fires together', (
   );
   assert.match(table, /KEY REQUIRED/);
   assert.match(table, /src\/loadingFeedback\.js/);
-  assert.match(table, /LEDGERED post-launch/);
+  assert.match(table, /global status chip\s+\/\/\s+ends KEY REQUIRED/);
 });
 
 test('every visitor gets the same tile — there is no degraded keyless variant', async () => {
@@ -991,6 +993,7 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
         'find_imagery',
         'osm_query',
         'show_street_level',
+        'open_stories',
       ].includes(tool.name),
   );
   const hudLayout = legacyTools.find((tool) => tool.name === 'set_hud')

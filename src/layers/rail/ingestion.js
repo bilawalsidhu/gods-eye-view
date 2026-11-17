@@ -69,12 +69,20 @@ export function createIngestion({ state, services, parts, source }) {
   function removeTrain(key) {
     const entry = state._trains.get(key);
     if (!entry) return;
+    // A first-person view on it loses its subject (cockpitSubject.js); its
+    // feed stays polled until the view lets go, so the train is found again
+    // if the feed lists it again.
+    if (state._cockpitSubjectKey === key) {
+      state._cockpitSubjectKey = null;
+      state._cockpitLostFeedId = entry.feedId;
+    }
     if (state._selectedKey === key) parts.selection.clearSelection();
-    if (entry.marker) state._markers?.remove(entry.marker);
+    parts.rendering.removeMarker(entry);
     entry.marker = null;
     state._moving.delete(entry);
     parts.rendering.cancelWake(entry);
     destroyTrack(entry.track);
+    entry.placement?.forget(key);
     state._trains.delete(key);
     state._revision += 1;
     // A copy it hid may now be the one to draw.
@@ -267,6 +275,8 @@ export function createIngestion({ state, services, parts, source }) {
     const entry = {
       key,
       feedId: feed.id,
+      // A host-supplied placement, if any, draws it while live.
+      placement: services.placement ?? null,
       marker: null,
       category: record.category,
       railMode: record.mode,

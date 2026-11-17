@@ -18,6 +18,7 @@ import ScreenAnnotations from './panels/ScreenAnnotations.vue';
 import AwarenessDirection from './panels/AwarenessDirection.vue';
 import UiButton from '../kit/UiButton.vue';
 import GlobeActions from './panels/GlobeActions.vue';
+import RenderFailure from './panels/RenderFailure.vue';
 import WorldTimeline from './panels/WorldTimeline.vue';
 
 // The ACTIVE STYLE corner shows the style VisualSettings publishes.
@@ -61,6 +62,7 @@ const vToastText = {
 
 <template>
   <div id="cesiumContainer"></div>
+  <RenderFailure />
   <div id="world-overlay-root" aria-hidden="true">
     <canvas id="world-overlay-canvas"></canvas>
   </div>
