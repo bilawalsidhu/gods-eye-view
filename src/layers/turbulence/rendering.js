@@ -89,24 +89,31 @@ const recordsKey = (records) =>
  * timeline scrub only switches which one shows. Warnings and reports are
  * redrawn only when what is in force changes. Volumes take no part in picks:
  * a pickable slab would cover every aircraft and satellite inside it.
+ *
+ * Every set is made when it first has something to draw and disposed by
+ * `clear`, so a layer turned off leaves nothing in the scene.
  */
 export function createTurbulenceRendering({ viewer }) {
   const draw = drawOf(viewer);
   const prefix = `${TURBULENCE_SET_PREFIX}:${++instances}`;
   /** @type {Map<number, {set: object, key: string}>} */
   const forecastSets = new Map();
-  const warnings = draw.shapes({
-    id: `${prefix}:warnings`,
-    blend: 'translucent',
-    pickable: false,
-    show: false,
-  });
-  const reports = draw.points({
-    id: `${prefix}:reports`,
-    // Drawn without depth test, so hidden past the horizon here.
-    horizonCull: true,
-    show: false,
-  });
+  let warnings = null;
+  let reports = null;
+  const warningsSet = () =>
+    (warnings ??= draw.shapes({
+      id: `${prefix}:warnings`,
+      blend: 'translucent',
+      pickable: false,
+      show: visible,
+    }));
+  const reportsSet = () =>
+    (reports ??= draw.points({
+      id: `${prefix}:reports`,
+      // Drawn without depth test, so hidden past the horizon here.
+      horizonCull: true,
+      show: visible,
+    }));
   let visible = false;
   let shownForecast = null;
   let warningsKey = null;
@@ -167,20 +174,23 @@ export function createTurbulenceRendering({ viewer }) {
     setWarnings(records) {
       const key = recordsKey(records);
       if (key === warningsKey) return;
-      warnings.set(records.flatMap((r) => volumeItems(r, WARNING_ALPHA)));
       warningsKey = key;
+      if (!records.length && !warnings) return;
+      warningsSet().set(records.flatMap((r) => volumeItems(r, WARNING_ALPHA)));
       builds++;
     },
     /** Draw the reports in the window; unchanged ones are not rewritten. */
     setReports(records) {
       const key = recordsKey(records);
       if (key === reportsKey) return;
-      reports.set(records.map(reportItem));
       reportsKey = key;
+      if (!records.length && !reports) return;
+      reportsSet().set(records.map(reportItem));
     },
     setVisible(on) {
       visible = Boolean(on);
-      warnings.show = reports.show = visible;
+      if (warnings) warnings.show = visible;
+      if (reports) reports.show = visible;
       syncForecastVisibility();
     },
     /**
@@ -190,21 +200,24 @@ export function createTurbulenceRendering({ viewer }) {
      */
     isVolumeHit(hit) {
       if (!hit || hit.surface || typeof hit.set !== 'string') return false;
-      if (hit.set === warnings.id) return true;
+      if (warnings && hit.set === warnings.id) return true;
       for (const entry of forecastSets.values())
         if (entry.set.id === hit.set) return true;
       return false;
     },
     /** The report id a click's draw hit names, or null. */
     pickReport(hit) {
-      if (!hit || hit.surface || hit.set !== reports.id) return null;
+      if (!hit || hit.surface || !reports || hit.set !== reports.id)
+        return null;
       return typeof hit.id === 'string' ? hit.id : null;
     },
+    /** Dispose every set: nothing of the layer is left in the scene. */
     clear() {
       for (const entry of forecastSets.values()) entry.set.dispose();
       forecastSets.clear();
-      warnings.clear();
-      reports.clear();
+      warnings?.dispose();
+      reports?.dispose();
+      warnings = reports = null;
       warningsKey = reportsKey = null;
       shownForecast = null;
     },
@@ -219,8 +232,9 @@ export function createTurbulenceRendering({ viewer }) {
     destroy() {
       for (const entry of forecastSets.values()) entry.set.dispose();
       forecastSets.clear();
-      warnings.dispose();
-      reports.dispose();
+      warnings?.dispose();
+      reports?.dispose();
+      warnings = reports = null;
     },
   };
 }

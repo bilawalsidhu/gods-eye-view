@@ -343,6 +343,25 @@ test('stale and partial snapshots show in the chip, not as errors', async (t) =>
   assert.equal(h.layer.getRowControls().summary.status, 'Stale source');
 });
 
+test('turned off, the layer leaves no draw set behind; on again, it redraws', async (t) => {
+  const h = harness();
+  t.after(() => h.layer.destroy());
+  await h.layer.update();
+  assert.ok(h.forecastSets().length && h.warnings() && h.reports());
+  h.layer.disable();
+  const live = [...h.draw.sets.values()].filter((set) => !set.disposed);
+  assert.deepEqual(
+    live.map((set) => set.spec.id),
+    [],
+    'every turbulence set is disposed',
+  );
+  h.layer.enable();
+  await h.layer.update();
+  assert.equal(h.forecastSets().length, 5);
+  assert.equal(h.shownForecast().length, 1);
+  assert.ok(h.warnings().show && h.reports().show, 'redrawn and shown');
+});
+
 test('the clock is held while on and offers the forecast span', async (t) => {
   const h = harness();
   t.after(() => h.layer.destroy());
