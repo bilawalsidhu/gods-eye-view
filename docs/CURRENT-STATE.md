@@ -8986,24 +8986,35 @@ request HTTPS tiles even on HTTP localhost, with the existing Content Security
 Policy unchanged. Ion attribution and Bing's per-tile credits are preserved;
 other ion imagery assets continue through the SDK's standard ion factory.
 
-The imagery, terrain and 3D factories are the Cesium renderer's
-(`src/render/cesium/mapImagery.js`, `mapTerrain.js`, `google3d.js`; the
-package exports `./maps/imagery`, `./maps/terrain` and `./maps/3d` point
-there). The catalog, the default registry and the controller are
-Cesium-free: they reach those factories, and the scene operations a
-switch makes (imagery layers, terrain, the globe's visibility, tilesets),
-through the scene's map engine (`mapEngineFor` in `src/maps/engine.js`). The
-Cesium plugin hands the application its own engine with each renderer it makes
-(`src/render/cesium/mapEngine.js`, through `src/render/applicationHooks.js`),
-and the application scene loads the photoreal base through it too. A renderer
-whose plugin hands none switches through its globe port
-(`src/maps/globeEngine.js`): Esri and OSM as `xyz` imagery, ion's world
-imagery as `world` imagery, photoreal as the port's photoreal base (turned off
-while hidden, on again when shown), and world terrain, or without a key
-Re:Earth's keyless terrain as `quantizedMesh` terrain at its URL
-(`src/maps/keylessTerrain.js`), as the Cesium engine draws it; a renderer
-without the `terrain` capability keeps the ellipsoid. A viewer with no renderer bound gets the Cesium engine, with the
-other unbound ports, from the package's `./render/cesium/unbound` export.
+The catalog, the default registry and the controller are Cesium-free: they
+reach the map sources, and the scene operations a switch makes (imagery
+layers, terrain, the globe's visibility, the photoreal base), through the
+scene's map engine (`mapEngineFor` in `src/maps/engine.js`). Every renderer,
+Cesium included, switches through its globe port (`src/maps/globeEngine.js`),
+unless its plugin hands the application a map engine of its own
+(`src/render/applicationHooks.js`):
+
+- Esri World Imagery as `xyz` imagery to its deepest level (23); Esri's "Map
+  data not yet available" picture is answered as a missing tile, so the
+  parent's imagery stays, and a refused tile counts toward the fallback to
+  OSM. OSM as `xyz` imagery to level 19.
+- Cesium ion's world imagery as `world` imagery; on Cesium that is Bing
+  through ion, its tiles over HTTPS on any page, with ion's credits
+  (`src/render/cesium/mapImagery.js`).
+- Photoreal as the port's photoreal base, by the same routes as ever (the
+  Google key, else Google's session tokens, else the ion copy;
+  `src/render/cesium/google3d.js`). Turned off, Cesium's globe port keeps the
+  tileset hidden, and the same spec shows it again without loading it anew.
+  `window.__godsEyeView.tileset` is that Cesium tileset, shown or hidden.
+- World terrain through ion, or without an ion token Re:Earth's keyless
+  terrain as `quantizedMesh` terrain at its URL (`src/maps/keylessTerrain.js`);
+  while the keyless terrain does not answer, the ellipsoid stands in and the
+  map stack tries it again behind it. A renderer without the `terrain`
+  capability keeps the ellipsoid.
+
+A viewer with no renderer bound gets the Cesium engine
+(`src/render/cesium/mapEngine.js`), with the other unbound ports, from the
+package's `./render/cesium/unbound` export.
 
 The controller accepts other source registries without adding provider branches.
 Each instance caches source construction, ignores superseded scene changes and

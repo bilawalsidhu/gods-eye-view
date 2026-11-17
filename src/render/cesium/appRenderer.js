@@ -7,17 +7,15 @@
  * The renderer it makes is transitional. Its ports are the shared Cesium
  * ports (`ports.js`), the ones the conformance renderer is checked with,
  * and it has every member of the contract. The application's base (the
- * photoreal tiles, the map stack's imagery and terrain) is still loaded
- * through the Cesium map engine (`mapEngine.js`), which the plugin hands
- * the application with the renderer (its `applicationHooks`); the globe
- * port drapes its imagery on that base as drawn (see `globe.js`).
+ * photoreal tiles, the map stack's imagery and terrain) is loaded through
+ * the globe port, as on any renderer (`src/maps/globeEngine.js`).
  * `whenSettled` waits for the globe, the scene's 3D tiles and what the draw
  * sets hold.
  *
  * What only this renderer needs at startup is set up here: the free-look
  * height limit, keyboard access to the credits' expand link (in the page's
  * language). The plugin's `applicationHooks` are what the application
- * uses where a renderer has them: the map engine, stale command trimming,
+ * uses where a renderer has them: stale command trimming,
  * whether an entity is the viewer's own, and the viewer QA scripts read.
  * Adapter code reaches the viewer behind a renderer through
  * `cesiumViewerOf` (`viewers.js`), never through a renderer member, so no
@@ -30,7 +28,6 @@ import { bindRenderer } from '../rendererOf.js';
 import { FREE_LOOK_MAX_HEIGHT_METERS } from '../../globeInView.js';
 import { createCesiumInput } from './input.js';
 import { cesiumCapabilities, createCesiumPorts } from './ports.js';
-import { cesiumMapEngine } from './mapEngine.js';
 import { installFreeLookHeightLimit } from './freeLookLimit.js';
 import { trimStaleSceneCommands } from './sceneCommandRelease.js';
 import { configureCreditKeyboardAccess } from './creditKeyboard.js';
@@ -38,6 +35,7 @@ import { onLocaleChange } from '../../i18n/index.js';
 import { cesiumViewerOf, recordViewer } from './viewers.js';
 import { installRenderFailureNotice } from './renderFailure.js';
 import { cesiumCardPreviews } from './cardPreviews.js';
+import { cesiumPhotorealOf } from './globe.js';
 
 export { cesiumViewerOf };
 
@@ -212,7 +210,6 @@ export function createCesiumRendererPlugin({
     applicationHooks(renderer) {
       const viewer = cesiumViewerOf(renderer);
       return {
-        mapEngine: cesiumMapEngine,
         // Cesium's credit display (#cesium-credits) shows the credits.
         ownCreditDisplay: true,
         // Drops the draw commands the scene keeps after it stops drawing
@@ -222,7 +219,13 @@ export function createCesiumRendererPlugin({
         // the aircraft it flies still draws).
         viewerDrawsEntity: (entity) => viewer.entities.contains(entity),
         // QA scripts drive and read the viewer itself.
-        qaHandles: { viewer },
+        qaHandles: {
+          viewer,
+          /** The photoreal tileset the globe holds now, shown or hidden. */
+          get tileset() {
+            return cesiumPhotorealOf(viewer.scene);
+          },
+        },
         // A recoverable notice when the globe stops drawing
         // (renderFailure.js).
         renderFailureNotice: (options) =>
