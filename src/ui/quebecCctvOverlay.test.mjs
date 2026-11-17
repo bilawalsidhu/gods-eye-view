@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../geo/ellipsoid.js';
+import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
+import { fakeCameraPort } from '../testSupport/fakeCameraPort.mjs';
 import { createQuebecCctvOverlay } from './quebecCctvOverlay.js';
 
 const MEDIA_URL =
@@ -46,21 +48,22 @@ function mountOverlay(t, { play = () => Promise.resolve() } = {}) {
   };
   window.clearInterval = (id) => intervals.delete(id);
   const renderListeners = new Set();
-  const viewer = {
-    camera: {
-      positionWC: Cesium.Cartesian3.fromDegrees(-73.5502, 45.51651, 1000),
-    },
-    scene: {
-      canvas: { clientWidth: 800, clientHeight: 600 },
-      cartesianToCanvasCoordinates: () => null,
-      postRender: {
-        addEventListener(fn) {
-          renderListeners.add(fn);
-          return () => renderListeners.delete(fn);
-        },
+  const viewer = { canvas: { clientWidth: 800, clientHeight: 600 } };
+  const { unbind } = bindFakeDraw(viewer, {
+    camera: fakeCameraPort({
+      pose: { position: fromDegrees(-73.5502, 45.51651, 1000) },
+    }).port,
+    query: { project: () => null },
+    frame: {
+      on(phase, fn) {
+        if (phase !== 'postRender') return () => {};
+        renderListeners.add(fn);
+        return () => renderListeners.delete(fn);
       },
+      requestRender() {},
     },
-  };
+  });
+  t.after(unbind);
   const overlay = createQuebecCctvOverlay(viewer);
   t.after(() => {
     overlay?.dispose();
@@ -95,7 +98,11 @@ test('selecting a Québec camera contacts Québec 511 only after Play', (t) => {
   assert.equal(ui.renderListeners.size, 1);
 
   ui.playButton().click();
-  assert.deepEqual(ui.loads, [MEDIA_URL, MEDIA_URL], 'live player and map still');
+  assert.deepEqual(
+    ui.loads,
+    [MEDIA_URL, MEDIA_URL],
+    'live player and map still',
+  );
   assert.equal(ui.playButton().hidden, true);
   assert.equal(ui.intervals.size, 1);
 
@@ -111,7 +118,11 @@ test('selecting a Québec camera contacts Québec 511 only after Play', (t) => {
   assert.equal(ui.playButton().hidden, false);
 
   ui.overlay.setCamera(null);
-  assert.equal(ui.renderListeners.size, 0, 'deselect drops the per-frame listener');
+  assert.equal(
+    ui.renderListeners.size,
+    0,
+    'deselect drops the per-frame listener',
+  );
 });
 
 test('a camera without browser media shows only its provider link', (t) => {
@@ -155,7 +166,9 @@ test('an interrupted play() is not reported as an unavailable source', async (t)
 
 test('a real play() failure is reported', async (t) => {
   const fail = () =>
-    Promise.reject(new DOMException('no supported source', 'NotSupportedError'));
+    Promise.reject(
+      new DOMException('no supported source', 'NotSupportedError'),
+    );
   const ui = mountOverlay(t, { play: fail });
   ui.overlay.setCamera(CAMERA);
   ui.playButton().click();

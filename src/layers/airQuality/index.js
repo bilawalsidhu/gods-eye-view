@@ -1,4 +1,11 @@
-import * as Cesium from 'cesium';
+import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
+import { cssColor } from '../../render/color.js';
+import {
+  drawOf,
+  findCamera,
+  findQuery,
+  rendererOf,
+} from '../../render/rendererOf.js';
 import { keyRequirementText } from '../../ui/keyGuidance.js';
 import { ECCC_DEFINITION } from './providers.js';
 import { msg, t, tn } from '../../i18n/index.js';
@@ -23,6 +30,15 @@ const STATION_MARKER_RADIUS_M = 6_000;
 /** Readings listed in the readout card. */
 const READOUT_LIMIT = 5;
 
+export const AIR_QUALITY_MARKER_SET_ID = 'air-quality';
+let instances = 0;
+
+/** A reading's colour at `alpha`; an unreadable colour falls back to white. */
+function withAlpha(css, alpha) {
+  const [r, g, b] = cssColor(css) ?? [1, 1, 1];
+  return [r, g, b, alpha];
+}
+
 /** Own one air-quality display, its refresh lifecycle, and its readout card. */
 export function createAirQualityLayer({ source, overlayHost } = {}) {
   if (typeof source?.getSnapshot !== 'function')
@@ -30,7 +46,8 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
   if (!overlayHost) throw new TypeError('Air quality requires an overlay host');
   let _viewer = null;
   let _request = null;
-  let _dataSource = null;
+  let _markers = null;
+  let _points = null;
   let _readings = [];
   let _count = 0;
   let _lastUpdate = null;
@@ -75,40 +92,29 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
   };
 
   /** The camera's lon/lat rectangle in degrees, or null when unresolvable. */
-  const viewRectangle = () => {
-    const rectangle = _viewer?.camera?.computeViewRectangle?.();
-    if (!rectangle) return null;
-    const toDeg = Cesium.Math.toDegrees;
-    return {
-      west: toDeg(rectangle.west),
-      south: toDeg(rectangle.south),
-      east: toDeg(rectangle.east),
-      north: toDeg(rectangle.north),
-    };
-  };
+  const viewRectangle = () =>
+    _viewer ? (findCamera(_viewer)?.viewRectangle() ?? null) : null;
 
   const currentView = () => {
     const rect = viewRectangle();
     if (!rect) return null;
     const width = (rect.east - rect.west + 360) % 360 || 360;
     const lon = ((rect.west + width / 2 + 540) % 360) - 180;
-    const canvas = _viewer?.scene?.canvas;
+    const canvas = rendererOf(_viewer)?.canvas;
     const focus =
       canvas &&
-      _viewer.camera.pickEllipsoid?.(
-        new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2),
-        _viewer.scene.globe?.ellipsoid,
+      findQuery(_viewer)?.pickEllipsoid(
+        canvas.clientWidth / 2,
+        canvas.clientHeight / 2,
       );
-    const center = focus ? Cesium.Cartographic.fromCartesian(focus) : null;
+    const center = focus ? toLonLatH(focus) : null;
     const values = [
       rect.west,
       rect.south,
       rect.east,
       rect.north,
-      center ? Cesium.Math.toDegrees(center.longitude) : lon,
-      center
-        ? Cesium.Math.toDegrees(center.latitude)
-        : (rect.south + rect.north) / 2,
+      center ? center.lon : lon,
+      center ? center.lat : (rect.south + rect.north) / 2,
     ];
     const rounded = values.map((v) => Number(v.toFixed(4)));
     return rounded[0] === rounded[2] || rounded[1] >= rounded[3]
@@ -125,8 +131,16 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
 
     init(viewer) {
       if (_viewer) throw new Error('Air quality layer is already initialized');
+      _markers = drawOf(viewer).shapes({
+        id: `${AIR_QUALITY_MARKER_SET_ID}:${++instances}`,
+        show: false,
+      });
+      _points = drawOf(viewer).points({
+        id: `${AIR_QUALITY_MARKER_SET_ID}:points:${instances}`,
+        show: false,
+      });
       _viewer = viewer;
-      removeMoveEnd = viewer.camera?.moveEnd?.addEventListener(() => {
+      removeMoveEnd = findCamera(viewer)?.on('moveEnd', () => {
         if (_enabled) {
           this._publishOverlays();
           if (
@@ -148,9 +162,6 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
           notify();
         }
       });
-      _dataSource = new Cesium.CustomDataSource('air-quality');
-      _dataSource.show = false;
-      viewer.dataSources.add(_dataSource);
       _readings = [];
       _count = 0;
       _lastUpdate = null;
@@ -161,7 +172,8 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
 
     enable() {
       _enabled = true;
-      if (_dataSource) _dataSource.show = true;
+      if (_markers) _markers.show = true;
+      if (_points) _points.show = true;
       overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, true);
       notify();
     },
@@ -175,7 +187,8 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       moveTimer = null;
       loading = false;
       _enabled = false;
-      if (_dataSource) _dataSource.show = false;
+      if (_markers) _markers.show = false;
+      if (_points) _points.show = false;
       overlayHost.clearSource(AIR_QUALITY_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, false);
       notify();
@@ -216,7 +229,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
     },
 
     async update() {
-      if (!_enabled || !_dataSource) return false;
+      if (!_enabled || !_markers) return false;
       _request?.abort();
       const request = new AbortController();
       _request = request;
@@ -277,47 +290,43 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       }
     },
 
-    /** Rebuild entities and overlay labels from the current readings. */
+    /** Redraw the station markers and overlay labels from the current readings. */
     _render() {
-      if (!_dataSource) return;
-      _dataSource.entities.removeAll();
+      if (!_markers) return;
+      const markers = [];
+      const points = [];
       overlayEntries = [];
       for (const reading of _readings) {
-        const position = Cesium.Cartesian3.fromDegrees(
-          reading.lon,
-          reading.lat,
-        );
-        const color = Cesium.Color.fromCssColorString(reading.color);
-        _dataSource.entities.add(
-          new Cesium.Entity({
+        const position = fromDegrees(reading.lon, reading.lat);
+        // A filled disc on the ground with static axes, as in the earthquake
+        // layer: a per-frame axis re-tessellates clamped ground geometry
+        // every frame. No outline: clamped to the ground, the default
+        // renderer never drew one.
+        const meta = { ...reading };
+        if (observation()) {
+          points.push({
             id: `air-quality:${reading.id}`,
-            position,
-            ...(observation()
-              ? {
-                  point: {
-                    pixelSize: 8,
-                    color,
-                    outlineColor: Cesium.Color.BLACK,
-                    outlineWidth: 1,
-                    heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-                  },
-                }
-              : {
-                  ellipse: {
-                    // Static axes, as in the earthquake layer: a per-frame axis
-                    // re-tessellates the clamped ground primitive every frame.
-                    semiMajorAxis: STATION_MARKER_RADIUS_M,
-                    semiMinorAxis: STATION_MARKER_RADIUS_M,
-                    material: new Cesium.ColorMaterialProperty(
-                      color.withAlpha(0.35),
-                    ),
-                    outline: true,
-                    outlineColor: color.withAlpha(0.9),
-                    outlineWidth: 2,
-                    heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-                  },
-                }),
-            properties: {
+            pos: { lon: reading.lon, lat: reading.lat, height: 0 },
+            pixelSize: 8,
+            color: reading.color,
+            outlineColor: '#000000',
+            outlineWidth: 1,
+            height: 'clampGround',
+            meta,
+          });
+        } else
+          markers.push({
+            id: `air-quality:${reading.id}`,
+            geometry: {
+              kind: 'ellipse',
+              center: { lon: reading.lon, lat: reading.lat },
+              semiMajor: STATION_MARKER_RADIUS_M,
+              semiMinor: STATION_MARKER_RADIUS_M,
+            },
+            fill: withAlpha(reading.color, 0.35),
+            height: 'clampGround',
+            clampTo: 'both',
+            meta: {
               provider: reading.provider,
               scale: reading.scale,
               value: reading.value,
@@ -327,12 +336,10 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
               risk: reading.risk,
               observedMs: reading.observedMs,
               note: reading.note,
-              assessment: reading.assessment,
               lat: reading.lat,
               lon: reading.lon,
             },
-          }),
-        );
+          });
         overlayEntries.push(
           createAirQualityOverlayEntry({
             id: reading.id,
@@ -343,6 +350,8 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
           }),
         );
       }
+      _markers.set(markers);
+      _points.set(points);
       this._publishOverlays();
     },
 
@@ -371,7 +380,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       }
     },
 
-    destroy(viewer = _viewer) {
+    destroy() {
       _request?.abort();
       _request = null;
       cancelRetry();
@@ -381,10 +390,10 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       _enabled = false;
       overlayHost.clearSource(AIR_QUALITY_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, false);
-      if (_dataSource) {
-        viewer?.dataSources?.remove(_dataSource, true);
-        _dataSource = null;
-      }
+      _markers?.dispose();
+      _markers = null;
+      _points?.dispose();
+      _points = null;
       removeMoveEnd?.();
       removeMoveEnd = null;
       _viewer = null;
@@ -410,28 +419,14 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
         scale: isObservation ? parameter : definition().scale,
       };
       const rectangle = viewRectangle();
-      const ellipsoid = _viewer?.scene?.globe?.ellipsoid;
-      const cameraPosition = _viewer?.camera?.positionWC;
-      const occluder =
-        ellipsoid && cameraPosition
-          ? new Cesium.EllipsoidalOccluder(ellipsoid, cameraPosition)
-          : null;
+      const query = findQuery(_viewer);
       const visible = readingsInView(
         _readings,
         rectangle,
         _readings.length,
       ).filter(
         (reading) =>
-          !occluder ||
-          (rectangle &&
-            occluder.isPointVisible(
-              Cesium.Cartesian3.fromDegrees(
-                reading.lon,
-                reading.lat,
-                0,
-                ellipsoid,
-              ),
-            )),
+          !query?.isOccluded?.(fromDegrees(reading.lon, reading.lat)),
       );
       const inView = (
         isObservation

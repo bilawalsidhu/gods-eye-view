@@ -3,20 +3,12 @@ import test from 'node:test';
 import { createAirQualityLayer } from './index.js';
 import { layerFeedState } from '../../data/feedState.js';
 import { STALE_AFTER_MS } from './model.js';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
-function harness(source) {
-  const sources = [];
+function harness(source, renderer = {}) {
   const events = [];
-  const viewer = {
-    dataSources: {
-      add(value) {
-        sources.push(value);
-      },
-      remove(value) {
-        sources.splice(sources.indexOf(value), 1);
-      },
-    },
-  };
+  const viewer = {};
+  const { draw } = bindFakeDraw(viewer, renderer);
   const layer = createAirQualityLayer({
     source,
     overlayHost: {
@@ -29,7 +21,8 @@ function harness(source) {
   });
   layer.init(viewer);
   layer.enable(viewer);
-  return { layer, viewer, sources, events };
+  const markers = () => draw.find('air-quality:');
+  return { layer, viewer, draw, markers, events };
 }
 
 const reading = (id, value, overrides = {}) => ({
@@ -61,12 +54,70 @@ test('a layer requires both a snapshot source and an overlay host', () => {
   );
 });
 
-test('initialization is single-use and owns exactly one data source', () => {
-  const { layer, viewer, sources } = harness(staticSource([]));
-  assert.equal(sources.length, 1);
+test('initialization is single-use and owns separate shape and point draw sets', () => {
+  const { layer, viewer, draw, markers } = harness(staticSource([]));
+  const owned = markers();
+  assert.equal(owned.kind, 'shapes');
+  assert.equal(
+    [...draw.sets.values()].filter((set) => !set.disposed).length,
+    2,
+  );
   assert.throws(() => layer.init(viewer), /already initialized/);
   layer.destroy(viewer);
-  assert.equal(sources.length, 0);
+  assert.equal(owned.disposed, true);
+  assert.ok([...draw.sets.values()].every((set) => set.disposed));
+});
+
+test('stations are ground discs in their band colour, shown only while enabled', async () => {
+  const { layer, markers } = harness(
+    staticSource([reading('A', 2), reading('B', 7, { color: '#c1121f' })]),
+  );
+  assert.equal(await layer.update(), true);
+  const set = markers();
+  assert.equal(set.show, true);
+  assert.deepEqual(
+    [...set.items.keys()],
+    ['air-quality:eccc:A', 'air-quality:eccc:B'],
+  );
+  const disc = set.items.get('air-quality:eccc:B');
+  assert.deepEqual(disc.geometry, {
+    kind: 'ellipse',
+    center: { lon: -79.38, lat: 43.65 },
+    semiMajor: 6_000,
+    semiMinor: 6_000,
+  });
+  assert.equal(disc.height, 'clampGround');
+  assert.equal(disc.clampTo, 'both');
+  assert.deepEqual(disc.fill, [0xc1 / 255, 0x12 / 255, 0x1f / 255, 0.35]);
+  assert.equal(disc.outline, undefined);
+  assert.equal(disc.meta.name, 'B');
+  assert.equal(disc.meta.value, 7);
+  layer.disable();
+  assert.equal(set.show, false);
+  layer.enable();
+  assert.equal(set.show, true);
+  assert.equal(await layer.update(), true);
+  assert.equal(set.items.size, 2, 'a refresh replaces, not appends');
+});
+
+test('the readout lists only readings inside the camera port view rectangle', async () => {
+  const { layer } = harness(
+    staticSource([
+      reading('Toronto', 2),
+      reading('Vancouver', 4, { lat: 49.28, lon: -123.12 }),
+    ]),
+    {
+      camera: {
+        on: () => () => {},
+        viewRectangle: () => ({ west: -90, south: 40, east: -70, north: 50 }),
+      },
+    },
+  );
+  await layer.update();
+  assert.deepEqual(
+    layer.getRowControls().list.items.map((item) => item.text),
+    ['Toronto · Low health risk'],
+  );
 });
 
 test('a refresh renders readings and publishes an overlay cohort', async () => {
@@ -276,4 +327,88 @@ test('a failed refresh over good readings reports degraded, not nominal', async 
     'degraded',
     'showing old data after a failure is degraded',
   );
+});
+
+test('injected observations use point markers and dispose both render sets', async () => {
+  const row = reading('sample', 12, {
+    provider: 'custom',
+    scale: 'PM2.5',
+    assessment: { label: 'Good' },
+  });
+  const { layer, draw } = harness({
+    definitions: [
+      {
+        id: 'custom',
+        observation: true,
+        parameters: ['PM2.5'],
+        network: 'Test network',
+      },
+    ],
+    getSnapshot: async () => [row],
+  });
+  await layer.update();
+  const points = [...draw.sets.values()].find((set) => set.kind === 'points');
+  const shapes = [...draw.sets.values()].find((set) => set.kind === 'shapes');
+  assert.equal(shapes.items.size, 0);
+  const point = points.items.get(`air-quality:${row.id}`);
+  assert.deepEqual(point.pos, { lon: row.lon, lat: row.lat, height: 0 });
+  assert.equal(point.color, row.color);
+  assert.equal(point.height, 'clampGround');
+  assert.equal(point.meta.assessment.label, 'Good');
+  assert.equal(points.show, true);
+  layer.disable();
+  assert.equal(points.show, false);
+  layer.destroy();
+  assert.ok([...draw.sets.values()].every((set) => set.disposed));
+});
+
+test('viewport discovery takes degree bounds and map focus from renderer ports', async () => {
+  const { fromDegrees } = await import('../../geo/ellipsoid.js');
+  const requests = [];
+  const picks = [];
+  let removed = false;
+  const viewer = { canvas: { clientWidth: 800, clientHeight: 600 } };
+  bindFakeDraw(viewer, {
+    camera: {
+      viewRectangle: () => ({ west: 170, south: -20, east: -170, north: 20 }),
+      on(event) {
+        assert.equal(event, 'moveEnd');
+        return () => {
+          removed = true;
+        };
+      },
+    },
+    query: {
+      pickEllipsoid(x, y) {
+        picks.push([x, y]);
+        return fromDegrees(178, -5);
+      },
+      isOccluded: () => false,
+    },
+  });
+  const layer = createAirQualityLayer({
+    source: {
+      definitions: [
+        {
+          id: 'custom',
+          observation: true,
+          viewDriven: true,
+          parameters: ['PM2.5'],
+          network: 'Test',
+        },
+      ],
+      getSnapshot: async (request) => {
+        requests.push(request);
+        return [];
+      },
+    },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+  });
+  layer.init(viewer);
+  layer.enable();
+  await layer.update();
+  assert.deepEqual(requests[0].view, [170, -20, -170, 20, 178, -5]);
+  assert.deepEqual(picks[0], [400, 300]);
+  layer.destroy();
+  assert.equal(removed, true);
 });

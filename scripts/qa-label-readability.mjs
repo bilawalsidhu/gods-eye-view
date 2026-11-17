@@ -257,10 +257,6 @@ async function main() {
       () => window.__godsEyeView?.viewer && window.__godsEyeView?.styleManager,
       { timeout: 60_000, polling: 100 },
     );
-    // flyToAustin arrives ~500 ms after init; let it start and land before any
-    // scene sets its own pose, or the arrival overwrites the first camera.
-    await new Promise((resolve) => setTimeout(resolve, 2500));
-
     const selected = SCENE_FILTER.length
       ? SCENES.filter((scene) => SCENE_FILTER.some((prefix) => scene.id.startsWith(prefix)))
       : SCENES;

@@ -1,3 +1,4 @@
+import { initAirQualityTestLayer } from '../../testSupport/airQualityViewer.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -241,7 +242,7 @@ test('provider switch clears old markers and ignores late requests; view changes
       clearSource() {},
     },
   });
-  layer.init({
+  initAirQualityTestLayer(layer, {
     dataSources: { add() {}, remove() {} },
     camera: {
       computeViewRectangle: () => ({
@@ -369,7 +370,7 @@ test('view-driven providers debounce navigation, abort old requests, and separat
     },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
-  layer.init({
+  initAirQualityTestLayer(layer, {
     dataSources: { add() {}, remove() {} },
     camera: {
       computeViewRectangle: () => rect,
@@ -433,7 +434,7 @@ test('partial or stale coverage does not label visible observations unavailable'
     },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
-  layer.init({ dataSources: { add() {}, remove() {} } });
+  initAirQualityTestLayer(layer, { dataSources: { add() {}, remove() {} } });
   layer.enable();
   await layer.update();
   assert.equal(layer.getStats().count, 1);
@@ -457,7 +458,7 @@ test('viewport rate limits are explicit and do not disable the layer', async () 
     },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
-  layer.init({
+  initAirQualityTestLayer(layer, {
     dataSources: { add() {}, remove() {} },
     camera: {
       computeViewRectangle: () => ({
@@ -489,7 +490,7 @@ test('unresolved camera waits for a view instead of starting worldwide acquisiti
     },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
-  layer.init({ dataSources: { add() {}, remove() {} } });
+  initAirQualityTestLayer(layer, { dataSources: { add() {}, remove() {} } });
   layer.enable();
   try {
     assert.equal(await layer.update(), true);
@@ -525,7 +526,7 @@ test('progressive updates and rate-limit errors retry automatically; disable and
       },
       overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
     });
-    layer.init({
+    initAirQualityTestLayer(layer, {
       dataSources: { add() {}, remove() {} },
       camera: {
         computeViewRectangle: () => ({
@@ -591,7 +592,7 @@ test('navigation cancels the old view retry and only refreshes the new camera', 
     },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
-  layer.init({
+  initAirQualityTestLayer(layer, {
     dataSources: { add() {}, remove() {} },
     camera: {
       computeViewRectangle: () => rect,

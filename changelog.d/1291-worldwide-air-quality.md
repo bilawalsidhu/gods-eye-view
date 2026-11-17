@@ -13,3 +13,6 @@
   (khanmjk, #1291).
 - Reject calendar-impossible SAAQIS observation timestamps instead of
   silently rolling them into another day (khanmjk, #1291).
+- Use renderer camera/query ports and separate point markers for observation
+  providers, preserving viewport discovery and horizon filtering after the
+  renderer migration (khanmjk, #1291).

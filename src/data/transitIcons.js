@@ -249,7 +249,10 @@ const _b64 = (s) =>
  * little minification.
  */
 const FLEET_RASTER_PX = 48;
-/** The selected vehicle draws bigger and deserves a crisper source. */
+/**
+ * Source size for the selected vehicle: drawn at the fleet's size, from a
+ * crisper raster under its wider halo.
+ */
 export const SELECTED_ICON_PX = 96;
 
 /**
@@ -319,7 +322,8 @@ export function transitIcon(kind, px = FLEET_RASTER_PX, options = {}) {
   );
   const style =
     profile === 'mono' ? 'thermal' : profile === 'crt' ? 'retro' : 'normal';
-  const displayPx = (selected ? 30 : 20) * presetSpriteScale(style, selected);
+  // Selected or not, the glyph is drawn at the fleet's size.
+  const displayPx = FLEET_SCREEN_PX * presetSpriteScale(style, selected);
   const frame = haloFrame(presetSpriteOutlinePx(style, selected), displayPx);
   const heading = options.heading !== false;
   const bodies = heading ? HEADING_BODIES : NEUTRAL_BODIES;

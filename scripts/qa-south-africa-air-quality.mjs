@@ -177,16 +177,12 @@ try {
     });
     await dm.setEnabled('air-quality', true);
     await dm.layers.get('air-quality').module.update();
-    viewer.camera.cancelFlight();
-    viewer.camera.setView({
-      destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
-        longitude: (18.42 * Math.PI) / 180,
-        latitude: (-33.92 * Math.PI) / 180,
-        height: 80_000,
-      }),
-      orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+    const { cameraOf } = await import('/src/render/rendererOf.js');
+    const camera = cameraOf(viewer);
+    camera.cancelFlight();
+    camera.setView({
+      destination: { lon: 18.42, lat: -33.92, height: 80_000 },
     });
-    viewer.scene.requestRender();
   });
   const state = () =>
     page.evaluate(() => {
@@ -235,6 +231,13 @@ try {
   );
   const co2 = await page.$('[data-chip-id="CO2"]');
   assert.ok(co2, 'real Weather card exposes the pollutant controls');
+  // Camera restoration and Vue publication may settle after the layer data.
+  await page.waitForFunction(
+    () =>
+      document.querySelector(
+        '[data-card-id="air-quality"] .data-row-list-badge',
+      )?.textContent === 'Moderate · 4/10',
+  );
   assert.equal(
     await page.$eval('.data-row-list-badge', (el) => el.textContent),
     'Moderate · 4/10',
@@ -257,17 +260,12 @@ try {
   if (process.env.QA_SA_SCREENSHOT)
     await page.screenshot({ path: process.env.QA_SA_SCREENSHOT });
 
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     const { viewer } = window.__godsEyeView;
-    viewer.camera.setView({
-      destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
-        longitude: (24 * Math.PI) / 180,
-        latitude: (-30 * Math.PI) / 180,
-        height: 20_000,
-      }),
-      orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+    const { cameraOf } = await import('/src/render/rendererOf.js');
+    cameraOf(viewer).setView({
+      destination: { lon: 24, lat: -30, height: 20_000 },
     });
-    viewer.scene.requestRender();
   });
   result = await state();
   assert.equal(result.controls.list.items.length, 0);

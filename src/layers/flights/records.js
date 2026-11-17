@@ -1,4 +1,5 @@
 import { stickyNumber, stickyText } from '../../data/aircraftMeta.js';
+import { courseFromFixes } from '../../data/courseFromFixes.js';
 import {
   geoidSurfaceLastResortM,
   pickRenderAltitudeM,
@@ -291,6 +292,12 @@ export class FlightRecords {
       observation.positionTimeMs > 0
         ? observation.positionTimeMs
         : this.now();
+    const course = courseFromFixes(prevMeta?.courseAnchor, {
+      lat,
+      lon,
+      ms: fixEpochMs,
+      speedMps: velocity,
+    });
     const meta = {
       sourceReference: observation.reference,
       observedReceiptMs: this.now(),
@@ -309,7 +316,14 @@ export class FlightRecords {
       // applies to contacts that actually flew this session.
       wasAirborne: prevMeta?.wasAirborne === true || !onGround,
       velocity: stickyNumber(velocity, prevMeta?.velocity, 0),
-      true_track: stickyNumber(true_track, prevMeta?.true_track, 0),
+      // With no reported track or true heading, a moving contact faces the
+      // way its fixes went (src/data/courseFromFixes.js); else the last one.
+      true_track: stickyNumber(
+        true_track,
+        course.courseDeg ?? prevMeta?.true_track,
+        0,
+      ),
+      courseAnchor: course.anchor,
       category: cat,
       // An adsbdb-enriched type code outranks the coarse OpenSky category.
       klass: classifyAircraft({

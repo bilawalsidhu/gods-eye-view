@@ -1,5 +1,6 @@
 import { getKeyholeGeometry } from './celestialRing.js';
 import { SCOPE_FEATHER_RATIO_MAX } from './scopeMaskPolicy.js';
+import { findCamera, findFrame } from './render/rendererOf.js';
 
 /**
  * Scope mask — the app's signature circular viewport treatment, made real.
@@ -453,7 +454,7 @@ export function installScopeMask(viewer) {
 
 /** @returns {number} Live camera height above the ellipsoid, or +Inf if unknown. */
 function currentCameraHeightM() {
-  const height = _viewer?.camera?.positionCartographic?.height;
+  const height = findCamera(_viewer)?.pose().height;
   return Number.isFinite(height) ? height : Number.POSITIVE_INFINITY;
 }
 
@@ -467,9 +468,9 @@ function currentCameraHeightM() {
  * @returns {void}
  */
 function watchCameraHeight(viewer) {
-  const preRender = viewer?.scene?.preRender;
-  if (preRender?.addEventListener) {
-    _cameraSampleRemover = preRender.addEventListener(() => {
+  const frame = findFrame(viewer);
+  if (frame) {
+    _cameraSampleRemover = frame.on('preRender', () => {
       // SCOPE OFF paints nothing, so it samples nothing: no height read, no
       // throttle bookkeeping, no quantize — the listener is a single compare.
       // setScopeMaskEnabled(true) re-syncs the alpha it skipped.
@@ -481,9 +482,9 @@ function watchCameraHeight(viewer) {
       updateScopeTerminusForHeight(currentCameraHeightM());
     });
   }
-  const moveEnd = viewer?.camera?.moveEnd;
-  if (moveEnd?.addEventListener) {
-    _cameraMoveEndRemover = moveEnd.addEventListener(() => {
+  const camera = findCamera(viewer);
+  if (camera) {
+    _cameraMoveEndRemover = camera.on('moveEnd', () => {
       if (!_enabled) return;
       updateScopeTerminusForHeight(currentCameraHeightM());
     });

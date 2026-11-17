@@ -1,4 +1,8 @@
 import {
+  mergeTimelineRuns,
+  readTimelineFixes,
+} from '../../time/timelineFixes.js';
+import {
   PARTIAL_RETENTION_MS,
   SELECTED_PIN_REFRESHES,
 } from './recordPolicy.js';
@@ -35,6 +39,9 @@ export function normalizeVessel(row) {
     virtual: row.virtual === true,
     lastPositionUtc: String(row.last_position_UTC || ''),
     lastPositionEpoch: finiteNumber(row.last_position_epoch),
+    // Its own track around the time, from a snapshot at a time (see
+    // src/time/timelineFixes.js); null when the row carries none.
+    fixes: readTimelineFixes(row.fixes),
     missedRefreshes: 0,
   };
 }
@@ -139,15 +146,28 @@ export class VesselRecords {
       seen.add(next.id);
       const record = this.byId.get(next.id);
       if (record) {
-        const before = effects.beforeUpdate(record);
         // A feed re-serving a cached row repeats its fix: the fix keeps the
         // time it was first received, so it goes on ageing.
         if (next.lastPositionEpoch !== record.lastPositionEpoch) {
           record.fixReceivedAtMs = next.fixReceivedAtMs;
           record.fixFeedEpoch = next.fixFeedEpoch;
         }
-        if (replace) record.motion = null;
-        else if (follow) record.motion = motionBetween(record, next);
+        if (replace) {
+          record.motion = null;
+          record.fixes = next.fixes;
+        } else if (follow) {
+          record.motion = motionBetween(record, next);
+          // Without fixes now, it is placed by its record, not by fixes
+          // that end before it.
+          record.fixes = next.fixes
+            ? mergeTimelineRuns(
+                record.fixes ?? [],
+                next.fixes,
+                (fix) => fix.atMs,
+                (next.lastPositionEpoch ?? 0) * 1000,
+              )
+            : null;
+        } else record.fixes = null;
         record.reference = next.reference;
         record.mmsi = next.mmsi;
         record.receivedAtMs = next.receivedAtMs;
@@ -167,7 +187,7 @@ export class VesselRecords {
         record.lastPositionEpoch = next.lastPositionEpoch;
         record.missedRefreshes = 0;
 
-        effects.updated(record, before);
+        effects.updated(record);
       } else {
         effects.add(next);
         this.byId.set(next.id, next);

@@ -180,18 +180,12 @@ try {
   scoped = true;
   async function navigate(lat, lon) {
     await page.evaluate(
-      ({ lat, lon }) => {
+      async ({ lat, lon }) => {
         const { viewer } = window.__godsEyeView;
-        viewer.camera.cancelFlight();
-        viewer.camera.setView({
-          destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
-            longitude: (lon * Math.PI) / 180,
-            latitude: (lat * Math.PI) / 180,
-            height: 150_000,
-          }),
-          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-        });
-        viewer.scene.requestRender();
+        const { cameraOf } = await import('/src/render/rendererOf.js');
+        const camera = cameraOf(viewer);
+        camera.cancelFlight();
+        camera.setView({ destination: { lon, lat, height: 150_000 } });
       },
       { lat, lon },
     );

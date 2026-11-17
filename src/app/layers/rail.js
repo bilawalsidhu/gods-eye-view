@@ -4,7 +4,6 @@ import { fleetModelServices } from './fleetModels.js';
 import * as sprites from '../../data/spriteOrder.js';
 import * as picking from '../../data/pickRegistry.js';
 import * as overlays from '../../overlays/worldOverlay.js';
-import { applyTrackedCameraFrame } from '../../data/trackedCamera.js';
 import { WORLD_FOCUS_FRAMING, requestWorldFocus } from '../../worldFocus.js';
 import {
   railFeedCredit,
@@ -52,7 +51,6 @@ export function createApplicationRail({
       camera: {
         framing: WORLD_FOCUS_FRAMING.train,
         requestWorldFocus,
-        applyTrackedCameraFrame,
         isCockpitActive: () =>
           globalThis.document?.body?.classList?.contains('cockpit-mode') ===
           true,

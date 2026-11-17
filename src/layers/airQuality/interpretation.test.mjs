@@ -1,3 +1,4 @@
+import { initAirQualityTestLayer } from '../../testSupport/airQualityViewer.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
@@ -134,7 +135,7 @@ test('readout leads with the highest selected-pollutant category and distinguish
     source: { definitions: [definition], getSnapshot: async () => rows },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
-  layer.init({
+  initAirQualityTestLayer(layer, {
     dataSources: { add() {}, remove() {} },
     camera: {
       computeViewRectangle: () => ({
@@ -188,7 +189,7 @@ test('the overview excludes stations beyond the horizon and suppresses guidance 
     },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
-  layer.init({
+  initAirQualityTestLayer(layer, {
     dataSources: { add() {}, remove() {} },
     camera: {
       positionWC: Cesium.Cartesian3.fromDegrees(0, 0, 1_000_000),

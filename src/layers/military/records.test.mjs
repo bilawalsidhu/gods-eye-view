@@ -269,3 +269,26 @@ test('a repeated military fix time marks the contact as not updated; removal is 
   records.forget('aaa001');
   assert.equal(records.fixRepeated.has('aaa001'), false);
 });
+
+test('a military contact reported with no course faces the way its newer fixes went', () => {
+  const records = store();
+  const T = 1700000000000;
+  const taxi = (latitude, seconds) =>
+    records.receive(
+      observation({
+        latitude,
+        onGround: true,
+        baroAltitudeM: null,
+        courseDeg: null,
+        speedMps: 8,
+        positionTimeMs: T + seconds * 1000,
+      }),
+      context({ observedAtMs: T + seconds * 1000 + 500 }),
+    );
+  assert.equal(taxi(39, 0).meta.track, 0);
+  assert.ok(Math.abs(taxi(38.9995, 5).meta.track - 180) < 0.1);
+  assert.ok(
+    Math.abs(taxi(39.002, 3).meta.track - 180) < 0.1,
+    'an older fix gives no course',
+  );
+});

@@ -1,5 +1,9 @@
-import * as Cesium from 'cesium';
+import { stopFollowing } from '../../data/followed.js';
+import { toCartographicRadians } from '../../geo/ellipsoid.js';
+import { clamp, distance, toRadians } from '../../geo/vector.js';
 import { t } from '../../i18n/index.js';
+import { cameraOf, findCamera, findFrame } from '../../render/rendererOf.js';
+import { lerp } from './geometry.js';
 import {
   REPLAY_ASCENT_FALLBACK_SEC,
   REPLAY_ASCENT_MIN_SEC,
@@ -53,10 +57,10 @@ export function createReplay({ state: layerState, services, parts, source }) {
     if (!previous || !next) return next;
     const distance = Math.hypot(next.x - previous.x, next.y - previous.y);
     if (!Number.isFinite(distance) || distance > snapDistance) return next;
-    const amount = Cesium.Math.clamp(Number(alpha) || 0, 0, 1);
+    const amount = clamp(Number(alpha) || 0, 0, 1);
     return {
-      x: Cesium.Math.lerp(previous.x, next.x, amount),
-      y: Cesium.Math.lerp(previous.y, next.y, amount),
+      x: lerp(previous.x, next.x, amount),
+      y: lerp(previous.y, next.y, amount),
     };
   }
 
@@ -66,7 +70,8 @@ export function createReplay({ state: layerState, services, parts, source }) {
    * SECO, or separation timing. Sparse records fall back to the reconstructed
    * path length and a conservative ascent velocity estimate.
    * @param {object} launch Normalized launch record.
-   * @param {Cesium.Cartesian3[]} ascentPath Reconstructed or supplied ascent.
+   * @param {Array<{x: number, y: number, z: number}>} ascentPath
+   *   Reconstructed or supplied ascent, ECEF.
    * @returns {number} Replay duration in seconds.
    */
 
@@ -77,14 +82,13 @@ export function createReplay({ state: layerState, services, parts, source }) {
       const pathLength = ascentPath
         .slice(1)
         .reduce(
-          (total, point, index) =>
-            total + Cesium.Cartesian3.distance(ascentPath[index], point),
+          (total, point, index) => total + distance(ascentPath[index], point),
           0,
         );
       realAscentSeconds = Math.max(180, pathLength / 9000);
     }
     if (!realAscentSeconds) realAscentSeconds = REPLAY_ASCENT_FALLBACK_SEC * 50;
-    return Cesium.Math.clamp(
+    return clamp(
       REPLAY_ASCENT_FALLBACK_SEC * (realAscentSeconds / 600),
       REPLAY_ASCENT_MIN_SEC,
       REPLAY_ASCENT_MAX_SEC,
@@ -100,11 +104,7 @@ export function createReplay({ state: layerState, services, parts, source }) {
   function normalizeReplaySpeed(value) {
     const numeric = Number(value);
     if (!Number.isFinite(numeric)) return 1;
-    const clamped = Cesium.Math.clamp(
-      numeric,
-      REPLAY_SPEED_MIN,
-      REPLAY_SPEED_MAX,
-    );
+    const clamped = clamp(numeric, REPLAY_SPEED_MIN, REPLAY_SPEED_MAX);
     return Math.round(clamped / REPLAY_SPEED_STEP) * REPLAY_SPEED_STEP;
   }
 
@@ -316,12 +316,10 @@ export function createReplay({ state: layerState, services, parts, source }) {
     layerState._replayCameraRemover = null;
     // Cancel the layer's own flights, never one navigation started after
     // taking the camera.
-    if (
-      (stoppedLaunchId || !layerState._cameraReleased) &&
-      layerState._viewer?.camera
-    ) {
-      layerState._viewer.camera.cancelFlight();
-      layerState._viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+    if (stoppedLaunchId || !layerState._cameraReleased) {
+      const camera = findCamera(layerState._viewer);
+      camera?.cancelFlight();
+      camera?.release();
     }
     layerState._replayCameraLaunchId = null;
     layerState._replayPaused = false;
@@ -335,7 +333,9 @@ export function createReplay({ state: layerState, services, parts, source }) {
   function startMissionReplay(launchId) {
     const launch = layerState._launches.find((item) => item.id === launchId);
     const track = layerState._replayTracks.get(launchId);
-    if (!layerState._viewer || !launch || !track) return false;
+    // The chase camera moves on the frame loop; without one, no replay.
+    const frame = findFrame(layerState._viewer);
+    if (!layerState._viewer || !launch || !track || !frame) return false;
     if (layerState._replayCameraLaunchId === launchId) {
       stopMissionReplay();
       return false;
@@ -358,8 +358,9 @@ export function createReplay({ state: layerState, services, parts, source }) {
     syncReplayButton();
     parts.overlays.syncMissionOverlayEntries();
     parts.policyHelpers.releaseAircraftTracking(layerState._dataManager);
-    layerState._viewer.trackedEntity = undefined;
-    layerState._viewer.camera.cancelFlight();
+    stopFollowing(layerState._viewer);
+    const camera = cameraOf(layerState._viewer);
+    camera.cancelFlight();
     layerState._animationStarts.set(
       launchId,
       Date.now() +
@@ -371,140 +372,127 @@ export function createReplay({ state: layerState, services, parts, source }) {
     // Move the chase camera before scene traversal. Mutating it in preRender
     // makes Cesium discover a new view after 3D-tile refinement, which can cause
     // a self-sustaining refinement loop and visible stutter during slow replay.
-    layerState._replayCameraRemover =
-      layerState._viewer.scene.preUpdate.addEventListener(() => {
-        if (
-          token !== layerState._replayCameraToken ||
-          layerState._replayCameraLaunchId !== launchId
-        )
-          return;
-        const state = track.beginReplayFrame();
-        syncReplayCountdownButton(state);
-        if (!cameraReady) return;
-        const path = state.ascending
-          ? track.ascentPath
-          : track.animatedOrbitPath;
-        const position = parts.paths.samplePath(path, state.phaseProgress);
-        if (!position) return;
-        const pathHeading = parts.camera.cameraHeadingForPath(
-          path,
-          state.phaseProgress,
-          track.lastCameraHeading,
-        );
-        const orbitBlend = !state.ascending
-          ? Cesium.Math.clamp(
-              (Number(state.phaseProgress) || 0) /
-                REPLAY_ORBIT_PULLBACK_FRACTION,
-              0,
-              1,
-            )
-          : 0;
-        const desiredHeading = parts.camera.replayChaseCameraHeading(
-          pathHeading,
-          orbitBlend,
-        );
-        if (state.ascending) track.orbitCameraWorldFrame = false;
-        const nowMs = performance.now();
-        const frameDurationMs = Number.isFinite(lastCameraUpdateMs)
-          ? Cesium.Math.clamp(nowMs - lastCameraUpdateMs, 4, 50)
-          : 1000 / 60;
-        lastCameraUpdateMs = nowMs;
-        track.lastCameraHeading = parts.camera.smoothReplayCameraHeading(
-          track.lastCameraHeading,
-          desiredHeading,
-          (Cesium.Math.toRadians(2) * frameDurationMs) / (1000 / 60),
-        );
-        const cartographic =
-          Cesium.Ellipsoid.WGS84.cartesianToCartographic(position);
-        const altitude = Math.max(0, cartographic?.height || 0);
-        const cameraView = parts.camera.replayCameraView(state, altitude);
-        const defaultOrbitTarget = !state.ascending
-          ? parts.camera.replayOrbitGlobeAnchor(position, orbitBlend)
-          : position;
-        const cameraTarget = !state.ascending
-          ? parts.camera.replayOrbitCameraTarget(
-              defaultOrbitTarget,
-              track.orbitFrameSphere?.center,
-              orbitBlend,
-            )
-          : defaultOrbitTarget;
-        const cameraRange = !state.ascending
-          ? parts.camera.replayOrbitGlobeRange(
-              cameraView.range,
-              altitude,
-              orbitBlend,
-              track.orbitFrameSphere?.radius,
-            )
-          : cameraView.range;
-        if (state.ascending) {
-          layerState._viewer.camera.lookAt(
-            cameraTarget,
-            new Cesium.HeadingPitchRange(
-              track.lastCameraHeading,
-              cameraView.pitch,
-              cameraRange,
-            ),
-          );
-        } else {
-          const tangentStep = Math.max(
-            0.002,
-            0.8 / Math.max(2, path.length - 1),
-          );
-          const tangentProgress = Math.min(
+    layerState._replayCameraRemover = frame.on('preUpdate', () => {
+      if (
+        token !== layerState._replayCameraToken ||
+        layerState._replayCameraLaunchId !== launchId
+      )
+        return;
+      const state = track.beginReplayFrame();
+      // Asked for each frame, not kept: a renderer bound meanwhile
+      // replaces the port.
+      const chaseCamera = cameraOf(layerState._viewer);
+      syncReplayCountdownButton(state);
+      if (!cameraReady) return;
+      const path = state.ascending ? track.ascentPath : track.animatedOrbitPath;
+      const position = parts.paths.samplePath(path, state.phaseProgress);
+      if (!position) return;
+      const pathHeading = parts.camera.cameraHeadingForPath(
+        path,
+        state.phaseProgress,
+        track.lastCameraHeading,
+      );
+      const orbitBlend = !state.ascending
+        ? clamp(
+            (Number(state.phaseProgress) || 0) / REPLAY_ORBIT_PULLBACK_FRACTION,
+            0,
             1,
-            state.phaseProgress + tangentStep,
-          );
-          const tangentPosition = parts.paths.samplePath(
-            path,
-            tangentProgress > state.phaseProgress
-              ? tangentProgress
-              : Math.max(0, state.phaseProgress - tangentStep),
-          );
-          const orbitPose = parts.camera.replayOrbitCameraPose(
-            position,
-            tangentPosition,
-            cameraTarget,
-            cameraRange,
-            cameraView.pitch,
-          );
-          if (orbitPose) {
-            if (!track.orbitCameraWorldFrame) {
-              layerState._viewer.camera.lookAtTransform(
-                Cesium.Matrix4.IDENTITY,
-              );
-              track.orbitCameraWorldFrame = true;
-            }
-            layerState._viewer.camera.setView({
-              destination: orbitPose.destination,
-              orientation: {
-                direction: orbitPose.direction,
-                up: orbitPose.up,
-              },
-            });
+          )
+        : 0;
+      const desiredHeading = parts.camera.replayChaseCameraHeading(
+        pathHeading,
+        orbitBlend,
+      );
+      if (state.ascending) track.orbitCameraWorldFrame = false;
+      const nowMs = performance.now();
+      const frameDurationMs = Number.isFinite(lastCameraUpdateMs)
+        ? clamp(nowMs - lastCameraUpdateMs, 4, 50)
+        : 1000 / 60;
+      lastCameraUpdateMs = nowMs;
+      track.lastCameraHeading = parts.camera.smoothReplayCameraHeading(
+        track.lastCameraHeading,
+        desiredHeading,
+        (toRadians(2) * frameDurationMs) / (1000 / 60),
+      );
+      const cartographic = toCartographicRadians(position);
+      const altitude = Math.max(0, cartographic?.height || 0);
+      const cameraView = parts.camera.replayCameraView(state, altitude);
+      const defaultOrbitTarget = !state.ascending
+        ? parts.camera.replayOrbitGlobeAnchor(position, orbitBlend)
+        : position;
+      const cameraTarget = !state.ascending
+        ? parts.camera.replayOrbitCameraTarget(
+            defaultOrbitTarget,
+            track.orbitFrameSphere?.center,
+            orbitBlend,
+          )
+        : defaultOrbitTarget;
+      const cameraRange = !state.ascending
+        ? parts.camera.replayOrbitGlobeRange(
+            cameraView.range,
+            altitude,
+            orbitBlend,
+            track.orbitFrameSphere?.radius,
+          )
+        : cameraView.range;
+      if (state.ascending) {
+        chaseCamera.lookAt(cameraTarget, {
+          heading: track.lastCameraHeading,
+          pitch: cameraView.pitch,
+          range: cameraRange,
+        });
+      } else {
+        const tangentStep = Math.max(0.002, 0.8 / Math.max(2, path.length - 1));
+        const tangentProgress = Math.min(1, state.phaseProgress + tangentStep);
+        const tangentPosition = parts.paths.samplePath(
+          path,
+          tangentProgress > state.phaseProgress
+            ? tangentProgress
+            : Math.max(0, state.phaseProgress - tangentStep),
+        );
+        const orbitPose = parts.camera.replayOrbitCameraPose(
+          position,
+          tangentPosition,
+          cameraTarget,
+          cameraRange,
+          cameraView.pitch,
+        );
+        if (orbitPose) {
+          if (!track.orbitCameraWorldFrame) {
+            chaseCamera.release();
+            track.orbitCameraWorldFrame = true;
           }
+          chaseCamera.setView({
+            destination: orbitPose.destination,
+            orientation: {
+              direction: orbitPose.direction,
+              up: orbitPose.up,
+            },
+          });
         }
-        if (
-          state.elapsedSinceStart >=
-          ascentDurationSec + REPLAY_ORBIT_DURATION_SEC
-        ) {
-          stopMissionReplay();
-        }
-      });
+      }
+      if (
+        state.elapsedSinceStart >=
+        ascentDurationSec + REPLAY_ORBIT_DURATION_SEC
+      ) {
+        stopMissionReplay();
+      }
+    });
 
-    layerState._viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(track.ascentPath[0], 0),
+    camera.flyToBounds(
+      { center: track.ascentPath[0], radius: 0 },
       {
-        offset: new Cesium.HeadingPitchRange(
-          initialHeading,
-          Cesium.Math.toRadians(-20),
-          REPLAY_INITIAL_RANGE_M,
-        ),
-        duration: 1.4,
-        easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-        complete: () => {
+        offset: {
+          heading: initialHeading,
+          pitch: toRadians(-20),
+          range: REPLAY_INITIAL_RANGE_M,
+        },
+        durationS: 1.4,
+        easing: 'cubicInOut',
+        onComplete: () => {
           cameraReady = true;
         },
-        cancel: () => {
+        onCancel: () => {
           if (
             token === layerState._replayCameraToken &&
             layerState._replayCameraLaunchId === launchId

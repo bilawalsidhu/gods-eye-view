@@ -1,4 +1,7 @@
-import * as Cesium from 'cesium';
+import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
+import { horizonFrom } from '../geo/horizon.js';
+import { add, sub } from '../geo/vector.js';
+import { canvasOf, findCamera, findQuery } from '../render/rendererOf.js';
 import { WORLD_OVERLAY_OCCLUDER_SELECTORS } from '../overlays/worldOverlayChrome.js';
 
 // DOM cards also avoid the HUD edges and responsive sheet containers.
@@ -38,7 +41,7 @@ export function readWildlifeCardSafeArea({
   viewer,
   windowRef = globalThis.window,
 }) {
-  const canvasRect = viewer?.scene?.canvas?.getBoundingClientRect?.();
+  const canvasRect = canvasOf(viewer)?.getBoundingClientRect?.();
   const width =
     windowRef?.innerWidth || documentRef.documentElement.clientWidth;
   const height =
@@ -209,66 +212,51 @@ export function placeWildlifeSightingCard(point, size, safeArea) {
 
 /** Project a front-side sighting into viewport coordinates. */
 export function projectWildlifeSighting(viewer, row, layer) {
+  const camera = viewer ? findCamera(viewer) : null;
+  const query = viewer ? findQuery(viewer) : null;
   if (
-    !viewer?.scene ||
+    !camera ||
+    !query ||
     !Number.isFinite(row?.lat) ||
     !Number.isFinite(row?.lon)
   )
     return null;
   const position =
-    layer?.getSightingPosition?.(row.stableId) ||
-    Cesium.Cartesian3.fromDegrees(row.lon, row.lat);
-  const ellipsoid = viewer.scene.globe?.ellipsoid || Cesium.Ellipsoid.WGS84;
-  if (
-    viewer.camera?.positionWC &&
-    new Cesium.EllipsoidalOccluder(
-      ellipsoid,
-      viewer.camera.positionWC,
-    ).isPointVisible(position) !== true
-  )
+    layer?.getSightingPosition?.(row.stableId) || fromDegrees(row.lon, row.lat);
+  if (horizonFrom(camera.pose().position).isPointVisible(position) !== true)
     return null;
-  const point = Cesium.SceneTransforms.worldToWindowCoordinates(
-    viewer.scene,
-    position,
-  );
+  const point = query.project(position);
   if (!point) return null;
-  const rect = viewer.scene.canvas?.getBoundingClientRect?.();
+  const rect = canvasOf(viewer)?.getBoundingClientRect?.();
   return { x: point.x + (rect?.left || 0), y: point.y + (rect?.top || 0) };
 }
 
 /** Translate the camera by the smallest screen correction and preserve its
  * altitude/orientation. A card must never zoom merely to reveal its anchor. */
 export function panWildlifeSighting(viewer, from, to, reducedMotion = false) {
-  const camera = viewer?.camera;
-  if (!camera?.pickEllipsoid || !camera.flyTo) return false;
-  const rect = viewer.scene.canvas.getBoundingClientRect();
-  const local = (p) => new Cesium.Cartesian2(p.x - rect.left, p.y - rect.top);
-  const ellipsoid = viewer.scene.globe?.ellipsoid || Cesium.Ellipsoid.WGS84;
-  const start = camera.pickEllipsoid(local(from), ellipsoid);
-  const finish = camera.pickEllipsoid(local(to), ellipsoid);
-  if (!start || !finish || !camera.positionWC) return false;
-  const delta = Cesium.Cartesian3.subtract(
-    start,
-    finish,
-    new Cesium.Cartesian3(),
-  );
-  const destination = Cesium.Cartesian3.add(
-    camera.positionWC,
-    delta,
-    new Cesium.Cartesian3(),
-  );
-  const cartographic = ellipsoid.cartesianToCartographic(destination);
-  if (!cartographic) return false;
-  cartographic.height = camera.positionCartographic.height;
-  camera.flyTo({
-    destination: ellipsoid.cartographicToCartesian(cartographic),
-    orientation: {
-      heading: camera.heading,
-      pitch: camera.pitch,
-      roll: camera.roll,
+  const camera = viewer ? findCamera(viewer) : null;
+  const query = viewer ? findQuery(viewer) : null;
+  const canvas = canvasOf(viewer);
+  if (!camera || !query || !canvas) return false;
+  const rect = canvas.getBoundingClientRect();
+  const pick = (p) => query.pickEllipsoid(p.x - rect.left, p.y - rect.top);
+  const start = pick(from);
+  const finish = pick(to);
+  if (!start || !finish) return false;
+  const pose = camera.pose();
+  const destination = toLonLatH(add(pose.position, sub(start, finish)));
+  if (!destination) return false;
+  camera.flyTo(
+    { lon: destination.lon, lat: destination.lat, height: pose.height },
+    {
+      orientation: {
+        heading: pose.heading,
+        pitch: pose.pitch,
+        roll: pose.roll,
+      },
+      durationS: reducedMotion ? 0 : 0.22,
+      easing: 'quadraticOut',
     },
-    duration: reducedMotion ? 0 : 0.22,
-    easingFunction: Cesium.EasingFunction.QUADRATIC_OUT,
-  });
+  );
   return true;
 }

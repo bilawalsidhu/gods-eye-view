@@ -1,3 +1,4 @@
+import { initAirQualityTestLayer } from '../../testSupport/airQualityViewer.mjs';
 // The Air quality layer (AQHI) reads in the UI language: layer name, Weather
 // card (title, coverage, status, legend, risk) and its own failure text.
 import assert from 'node:assert/strict';
@@ -10,6 +11,7 @@ import { createAirQualityLayer } from './index.js';
 import { createDefaultAirQualityProviders } from './providers.js';
 import { interpretHourly, hourlyLegend } from './interpretation.js';
 import { attachSaIndexes, SA_INDEX_BANDS } from './southAfrica.js';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
 function inLocale(locale, run) {
   setLocale(locale);
@@ -25,7 +27,8 @@ function harness(source) {
     source,
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
-  const viewer = { dataSources: { add() {}, remove() {} } };
+  const viewer = {};
+  bindFakeDraw(viewer);
   layer.init(viewer);
   layer.enable(viewer);
   return layer;
@@ -143,7 +146,7 @@ for (const [providerId, expected] of Object.entries(russianScales)) {
         clearSource() {},
       },
     });
-    layer.init({ dataSources: { add() {}, remove() {} } });
+    initAirQualityTestLayer(layer, { dataSources: { add() {}, remove() {} } });
     layer.enable();
     setLocale('ru');
     try {

@@ -2,29 +2,25 @@
 
 # 🌐 God's Eye View
 
-[![CI](https://github.com/bilawalsidhu/gods-eye-view/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bilawalsidhu/gods-eye-view/actions/workflows/ci.yml) [![Reached #1 on GitHub Trending](https://img.shields.io/badge/%231_GitHub_Trending-thank_you!-F0A63C?style=flat-square&logo=github)](https://x.com/bilawalsidhu/status/2093798887815348521)
+**Official site: [godseyeview.ai](https://godseyeview.ai)** · [Download](https://godseyeview.ai/download/) · [Guide](https://godseyeview.ai/guide/) · [Releases](https://godseyeview.ai/releases/) · [Hosted version waitlist](https://godseyeview.ai/online/) · [Media](https://godseyeview.ai/press/)
 
-### A spy-satellite simulator in your browser — then you realize the sources are public and the data is real.
+[![CI](https://github.com/bilawalsidhu/gods-eye-view/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bilawalsidhu/gods-eye-view/actions/workflows/ci.yml) [![Reached #1 on GitHub Trending](https://img.shields.io/badge/%231_GitHub_Trending-thank_you!-F0A63C?style=flat-square&logo=github)](https://www.star-history.com/?type=date&repos=bilawalsidhu%2Fgods-eye-view) [![GitHub stars](https://img.shields.io/github/stars/bilawalsidhu/gods-eye-view?style=flat-square&color=4fe3ff)](https://github.com/bilawalsidhu/gods-eye-view/stargazers) [![MIT License](https://img.shields.io/badge/license-MIT-4fe3ff?style=flat-square)](LICENSE)
 
-Photorealistic 3D globe. Live aircraft, ships, satellites, earthquakes, traffic, and public cameras. Hands-free voice control powered by a realtime AI agent.
+### A spy-satellite simulator in your browser. Except the data is real.
 
-_No place left behind._
+_The window through which we see our world._
 
-![Orbital HUD, a tracked live globe, FLIR terrain — then OPEN SOURCED](docs/media/hero-open-source-reveal.gif)
+[![God's Eye View: a live 3D globe indexing the planet's public signals](docs/media/site/hero.webp)](https://godseyeview.ai)
 
-<a href="https://www.youtube.com/@bilawalsidhu">
-  <img src="docs/media/youtube-popular-videos.png" alt="The God's Eye View video series on YouTube" width="100%">
-</a>
+Click any satellite, plane, ship or public camera and you can track it. Turn on FLIR mode and suddenly you're wondering, holy crap, is this real? And it's free, and open source.
 
-▶️ **From the project behind the viral God's Eye View series** _(formerly WorldView)_ — [5M+ on YouTube](https://youtube.com/playlist?list=PL6qSg2I-7_koPbDnSMo0QeeHX_RknA2uv&si=nBGYMoHWQw41v93Q) · [25M+ across socials](https://www.google.com/search?q=god%27s+eye+view)
+**[One-click install with Pinokio](https://pinokio.co/apps/github-com-bilawalsidhu-gods-eye-view)** · **[Run it from the terminal](#-quick-start)** · **[Hosted version waitlist](https://godseyeview.ai/online/)**
 
-🏆 **Reached #1 on GitHub Trending, daily and weekly · August 2026**
+🏆 **#1 on GitHub Trending**, daily and weekly · **[#8 Product of the Day](https://www.producthunt.com/products/god-s-eye-view?launch=god-s-eye-view)**, hunted by Chris Messina · _“pretty cool”_ — [Brendan Eich](https://x.com/BrendanEich/status/2094592096401490266), creator of JavaScript · Featured on **[Pinokio](https://pinokio.co/posts/01m1m4p9xxm3qw7dnnpj2wr93g)**
 
-**[#8 Product of the Day](https://www.producthunt.com/products/god-s-eye-view?launch=god-s-eye-view)** · Hunted by Chris Messina, creator of the hashtag
+▶️ **From the project behind the God's Eye View series** _(formerly WorldView)_ — [25M+ views on YouTube](https://youtube.com/playlist?list=PL6qSg2I-7_koPbDnSMo0QeeHX_RknA2uv&si=nBGYMoHWQw41v93Q)
 
-_“pretty cool”_ — [Brendan Eich](https://x.com/BrendanEich/status/2094592096401490266), creator of JavaScript and co-founder of Mozilla and Brave · Featured on **[Pinokio](https://pinokio.co/posts/01m1m4p9xxm3qw7dnnpj2wr93g)**
-
-⚡ **Start without API keys.** Install with [Pinokio](https://pinokio.co/apps/github-com-bilawalsidhu-gods-eye-view) or run locally from the terminal. Add optional keys inside the app. **[→ Quick Start](#-quick-start)**
+**As seen on** [Matt Wolfe](https://www.youtube.com/watch?v=S2VJU5DQqlU) · [Riley Brown](https://www.youtube.com/watch?v=NR_GMq2lDCE) · [Digg](https://digg.com/tech/r7whv988) · [The Escapist](https://www.escapistmagazine.com/news-gods-eye-view-spy-satellite-simulator-setup-focus-keyphrase-gods-eye-view/) · [UNILAD Tech](https://www.uniladtech.com/social-media/youtube/viewers-concerned-youtubers-safety-built-gods-eye-monitor-889810-20260309) · [Al Jazeera](https://www.aljazeera.com/video/the-stream/2026/3/8/how-do-you-track-a-war-in-real-time) · [NDTV](https://www.ndtv.com/video/strait-of-hormuz-news-hormuz-stranglehold-no-end-in-sight-1080351) · [Mojo Story](https://www.youtube.com/watch?v=UXkJjyFfrwc) · [all media](https://godseyeview.ai/press/)
 
 </div>
 
@@ -32,7 +28,7 @@ _“pretty cool”_ — [Brendan Eich](https://x.com/BrendanEich/status/20945920
 
 <div align="center">
 
-**[Quick Start](#-quick-start) · [First Five Minutes](#-the-first-five-minutes) · [Talk to It](#-talk-to-it) · [What's Live](#-whats-on-the-globe) · [Under the Hood](#-under-the-hood) · [Keys & Costs](#-api-keys) · [Contributing](CONTRIBUTING.md)**
+**[Quick Start](#-quick-start) · [What It Does](#️-what-this-thing-does) · [First Five Minutes](#-the-first-five-minutes) · [Talk to It](#️-talk-to-it) · [What's Live](#️-whats-on-the-globe) · [Keys & Costs](#-api-keys) · [Contributing](CONTRIBUTING.md)**
 
 </div>
 
@@ -56,6 +52,36 @@ Start with the included data sources, then add your own. Each layer is a separat
 
 ## 🎛️ What This Thing Does
 
+The world is already broadcasting. We fuse it together into a 3D globe for you and your agents.
+
+We've got a plurality of sensor systems watching the planet right now. Satellite imagery, flights, ships, weather, public cameras. Each captures a sliver of what's happening. God's Eye View pulls that treasure trove of public data into a single picture.
+
+<table>
+<tr>
+<td width="33%" valign="top"><img src="docs/media/site/voice.webp" alt="Ask the planet in God's Eye View" width="100%"><br><b>Ask the planet</b><br><sub>Use voice to ask the planet questions in natural language, and it annotates the 3D globe with the answer.</sub></td>
+<td width="33%" valign="top"><img src="docs/media/site/flights.webp" alt="Flights and vessels in God's Eye View" width="100%"><br><b>Flights and vessels</b><br><sub>Click on a satellite, plane, ship or public camera and you can track it.</sub></td>
+<td width="33%" valign="top"><img src="docs/media/site/satellites.webp" alt="Satellites in God's Eye View" width="100%"><br><b>Satellites</b><br><sub>Toggle on different kinds of satellites, everything from GPS to Starlink.</sub></td>
+</tr>
+<tr>
+<td width="33%" valign="top"><img src="docs/media/site/cameras.webp" alt="Public cameras in God's Eye View" width="100%"><br><b>Public cameras</b><br><sub>Some layers, like traffic and camera poses, are estimates, and the app says so.</sub></td>
+<td width="33%" valign="top"><img src="docs/media/site/cockpit.webp" alt="Cockpit in God's Eye View" width="100%"><br><b>Cockpit</b><br><sub>Visualize a flight from the third-person perspective and jump into a rendered cockpit view.</sub></td>
+<td width="33%" valign="top"><img src="docs/media/site/weather.webp" alt="World class weather in God's Eye View" width="100%"><br><b>World class weather</b><br><sub>Clouds, rain radar, lightning density and cyclone tracks with forecast cones. And since we say 4D, you can scrub the cloud imagery backwards in time.</sub></td>
+</tr>
+<tr>
+<td width="33%" valign="top"><img src="docs/media/site/imagery.webp" alt="Recent imagery in God's Eye View" width="100%"><br><b>Recent imagery</b><br><sub>Draw a bounding box around a fire and it'll retrieve the Sentinel-2 images, draped on the 3D terrain. All keyless, ladies and gentlemen.</sub></td>
+<td width="33%" valign="top"><img src="docs/media/site/transit.webp" alt="Transit in God's Eye View" width="100%"><br><b>Transit</b><br><sub>Click a bus in Boston and it starts leaving a trail. This might be the most overkill way to track your bus.</sub></td>
+<td width="33%" valign="top"><img src="docs/media/site/sdr.webp" alt="RF and SDR support in God's Eye View" width="100%"><br><b>RF and SDR support</b><br><sub>Now you can connect your own SDR and visualize everything you're detecting. The SDR nerds know all the other possibilities.</sub></td>
+</tr>
+<tr>
+<td width="33%" valign="top"><img src="docs/media/site/radio.webp" alt="World radio in God's Eye View" width="100%"><br><b>World radio</b><br><sub>Ask for radio near anywhere and the globe starts broadcasting. Drag the tuner across up to 750 stations.</sub></td>
+<td width="33%" valign="top"><img src="docs/media/site/mcp.webp" alt="MCP server in God's Eye View" width="100%"><br><b>MCP server</b><br><sub>We've built MCP access so your agents can query the same picture and add their findings to a shared canvas.</sub></td>
+<td width="33%" valign="top"><img src="docs/media/site/director.webp" alt="Director Mode in God's Eye View" width="100%"><br><b>Director Mode</b><br><sub>Draw outlines, sketch paths, drop your annotations on the map.</sub></td>
+</tr>
+</table>
+
+<details>
+<summary><b>Everything else it does</b></summary>
+
 - **🛩️ Cockpit view:** Ride inside a tracked flight — the camera holds the terrain under you all the way down.
 - **📡 Contacts:** A 250 km roster of everything near your target — step through live aircraft and drop into any cockpit.
 - **🎯 Click-to-track anything:** Camera locks on, draws a fading trail, surfaces full metadata — and a tracked fire or vessel hands you off to the nearest live camera in one click.
@@ -76,6 +102,8 @@ Start with the included data sources, then add your own. Each layer is a separat
 - **🔍 Keyless search:** Type decimal coordinates, a two-dimensional WGS84 `geo:` URI (for example, `geo:39.7392,-104.9903`), or a bundled city or landmark to fly there with no geocoder request; other names use Google when configured, then Photon and Nominatim.
 - **📦 Shareable scenes:** Import, preview and share Director scenes as files or bundles, with camera anchors, authored moves and data packs.
 - **🌊 Nepal flood scene:** Replay the Bhote Koshi flood: flood path, witness sources and before-and-after imagery (bundled data is non-commercial; see [DATA_SOURCES.md](DATA_SOURCES.md)).
+
+</details>
 
 ---
 
@@ -156,7 +184,8 @@ See [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 **macOS shortcut:** `./scripts/dev-fresh.sh` clears the Vite cache and pulls any
 configured keys straight from the Keychain. It starts keyless too.
 
-### Path 3 — Docker
+<details>
+<summary><b>Path 3 — Docker</b></summary>
 
 No Node install needed; the container publishes the same dev server.
 
@@ -234,7 +263,10 @@ the container.
 
 </details>
 
-### Path 4 — GitHub Codespaces (cloud, no local install)
+</details>
+
+<details>
+<summary><b>Path 4 — GitHub Codespaces (cloud, no local install)</b></summary>
 
 Codespaces requires a GitHub account. Overpass queries, the News layer and OpenAI
 voice token requests return HTTP 403 through its forwarded HTTPS URL, even with API keys
@@ -271,6 +303,8 @@ ignored on purpose, so pass that exact name.
 wider-publish case in [Sharing an instance](#-sharing-an-instance). Provider
 Settings is unavailable on the forwarded URL. Never commit your workspace
 `.env`. [SECURITY.md](SECURITY.md) has the threat model.
+
+</details>
 
 ### Then power it up — in the app, not in a file
 
@@ -314,28 +348,18 @@ and it carries the LAN-sharing rules alongside [Keys & Costs](#-api-keys).
 
 ## 🕐 The First Five Minutes
 
-Choose a first-run mission, or try these in order. The GIFs show Google Photorealistic 3D; your starting basemap depends on the keys you've added.
+Choose a first-run mission, or try these in order. Your starting basemap depends on the keys you've added.
 
 1. **Light up the sky.** Take the **Live Contacts** mission (or turn on **Flights** yourself) — thousands of live aircraft, gliding on real telemetry, detection mesh already reading the scene. Click one: the camera locks on, a trail draws behind it, and its live telemetry card comes up.
 2. **Take the controls.** Hit **COCKPIT** on your tracked plane and ride it down, switching sensors mid-flight: NVG into Ironbow FLIR.
 
-![Riding with a live aircraft in cockpit view while switching sensor modes](docs/media/06-cockpit-ar.gif)
-
 3. **Drop into a busy airport.** Search one and descend to the taxiways with **3D** aircraft on — grounded contacts, taxi trails, the whole apron working in real time.
-
-![Moving from a full airport overhead down to close taxiway inspection with 3D flight models](docs/media/start-here/airport-ground-traffic-google-3d.gif)
 
 4. **Look through a public camera.** Turn on **Cameras** over Austin, London, California, Finland, or Delaware (live video). The feeds aren't webcam embeds — they project _into_ the 3D city. Cycle coverage to **VIEWSHED** and every camera draws its estimated coverage volume — where it reaches, and where it goes blind.
 
-![Diving into an Austin intersection with a live public camera projected into the 3D scene](docs/media/03-austin-cctv.gif)
-
 5. **Track something in orbit.** Turn on **Satellites** and click the ISS — you ride along at orbital distance, orbit ring and all.
 
-![Tracking the ISS along its orbital path as it crosses over Ukraine](docs/media/14-iss-over-ukraine.gif)
-
 6. **Switch the optics.** Tap `1`–`6` — CRT, NVG, FLIR — and the whole live planet re-renders through a different sensor.
-
-![Cycling a dense live globe through CRT, FLIR, and NVG in one continuous view](docs/media/01-style-sweep.gif)
 
 7. **Talk to it** _(needs an OpenAI key)_: _"Take me to LAX and select the nearest airborne aircraft."_
 8. **Come home.** Hit **Reset Globe** — or just say _"zoom out to a globe view."_
@@ -343,24 +367,10 @@ Choose a first-run mission, or try these in order. The GIFs show Google Photorea
 **Keyboard:** `1`–`6` visual styles · `H` HUD · `D` detection · `C` CCTV · `` ` `` frame rate · `Esc` out. Trackpad pinch zooms the globe.
 
 ---
-
-## 🛩️ The Cockpit
-
-> Every plane should let you do this.
-
-Real-time cockpit mode, built from live flight data: the camera rides your contact with real terrain holding underneath, all the way down — sensor styles come along for the ride, and **Contacts** keeps the 250 km roster one click away: jump plane to plane and fall straight into the next cockpit.
-
-![Jumping between live aircraft and falling straight into a cockpit view](docs/media/12-switch-aircraft-cockpit.gif)
-
-The cockpit even carries its own briefing strip: nearby live signals, regional headlines, and real local weather — with an opt-in **WX** mode that renders volumetric clouds from actual observations around your aircraft.
-
-![A live military contact ridden through Normal, NVG, and Ironbow FLIR with dense detection](docs/media/start-here/military-cockpit-dense-google-3d.gif)
-
-_Why cockpit mode exists: you're riding a real aircraft over real terrain — and you get to pick which sensor you see the world through._
-
----
-
 ## 🎙️ Talk to It
+
+<details>
+<summary><b>Providers, chat, ChatGPT OAuth and the voice check</b></summary>
 
 The standalone app offers **OpenAI** and **Gemini** under **AI Provider** in Settings, one choice shared by voice and chat. OpenAI is the initial default; your choice is saved in this browser. To use Gemini, add `GEMINI_API_KEY` in Provider Settings or your local `.env` file, then select Gemini. `GEMINI_LIVE_MODEL` defaults to `gemini-3.8-live`. The permanent key stays on the local server, which issues a constrained, single-use session credential.
 
@@ -375,6 +385,8 @@ The OAuth option is experimental. OpenAI documents ChatGPT plan usage for the [R
 GEV reads Codex's file credentials but does not write or refresh them. It checks token shape and expiry, and reports expired sign-in as requiring re-authentication. The login button runs `codex login`, permits one pending attempt, and reports exit failures or a two-minute timeout. `CODEX_HOME` must match the directory that Codex uses. If `CODEX_AUTH_JSON` points elsewhere, sign in separately or fix that mismatch before using the button. Codex credential storage must use `auth.json`; Keychain-only and in-memory storage are not readable by GEV. On Windows, the login button may not be able to start an npm-installed Codex; run `codex login` yourself, then select OAuth. See [Codex credential storage](https://learn.chatgpt.com/docs/auth#credential-storage).
 
 For a live voice check, run `node scripts/qa-voice-auth.mjs http://127.0.0.1:4189 oauth microphone.wav` against your local dev server. Use a WAV with three seconds of leading silence followed by a short spoken reply request. Replace `oauth` with `api-key` to check the API-key path. The check verifies audio input, a completed spoken reply, usage, resource cleanup, and reconnect. It saves screenshots and credential-free results under `.gev-logs/voice-auth/`.
+
+</details>
 
 Click **GEV MIC**, grant the microphone, and just talk. This is more than a voice-controlled remote:
 
@@ -400,10 +412,6 @@ camera input stops rotation.
 
 **✍️ Or draw it yourself** — UTILITIES ▸ **Draw**: pick Area, Line or Pin and a colour, click the vertices on the real world, double-click to finish, then name, recolour, hide or fly to each shape from its row. Same whiteboard, same persistence, no microphone needed.
 
-![Zilker Park and Lady Bird Lake drawing onto the 3D city as persistent vector annotations, by voice](docs/media/01-voice-annotate-zilker.gif)
-
-![A spoken distance measurement spanning an airport, inspected from orbit](docs/media/04-airport-distance.gif)
-
 **🔎 Interrogate it** — analyst queries against the live layers:
 
 > 🗣️ _"How many flights are over Texas right now?"_ · _"Which ships are headed to Oakland?"_ · _"What is the biggest fire near Los Angeles?"_ · _"Is anything flying above forty thousand feet?"_ · _"When does the ISS pass over next?"_ · _"How many datacenters are in view?"_
@@ -416,10 +424,6 @@ camera input stops rotation.
 
 > 🗣️ _"Show me global infrastructure."_ (stages the layers and pulls back to the globe) · _"Play Orbital Watch."_ (a full cinematic scene) · _"Set detection density to fifty percent."_ · _"Next contact — helicopters only."_ (mid-cockpit) · _"Show me space missions."_ · _"Switch to OSM."_ · _"Sharpen the image a touch."_ · _"Switch to the tactical layout."_ · _"What's turned on right now?"_
 
-![The globe populating with the world's radio stations as another live layer](docs/media/15-global-radio-layer.gif)
-
-_Ask for radio near anywhere and the globe starts broadcasting — every station is a real place you can fly to._
-
 ---
 
 **💬 Or ask from Claude and Codex.** God's Eye View is also an MCP server: ask Claude Desktop, Codex or ChatGPT desktop to show a place, and the live globe opens right in the conversation. Setup takes a minute — see [docs/MCP_SETUP.md](docs/MCP_SETUP.md).
@@ -427,6 +431,9 @@ _Ask for radio near anywhere and the globe starts broadcasting — every station
 ## 🛰️ What's on the Globe
 
 Twenty-three layers and map sources. **Twenty-one have a keyless path.** Some offer additional capabilities with a provider key. (🟢 no key · 🟡 free key · 🔴 metered.)
+
+<details>
+<summary><b>All twenty-three layers and map sources, with sources and keys</b></summary>
 
 | Layer                       | What you get                                                                                                                                                                                                                                                                                                                                                                        | Source                                  | Auth                                                                                                |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -459,6 +466,8 @@ Twenty-three layers and map sources. **Twenty-one have a keyless path.** Some of
 | 🌦️ **Observed Weather**     | Rain radar (contiguous US), Satellite clouds (GOES regional or global infrared, Clouds only or Full image) and Lightning density (Americas and Pacific) on one history timeline                                                                                                                                                                                                     | NOAA nowCOAST                           | 🟢                                                                                                  |
 | 🌀 **Cyclones**             | Advisory positions, forecast tracks and uncertainty cones for the Atlantic and eastern/central North Pacific                                                                                                                                                                                                                                                                        | NOAA NHC / CPHC                         | 🟢                                                                                                  |
 
+</details>
+
 **Weather, keyless.** **Wind** animates 10 m forecast flow from NOAA GFS or ECMWF IFS, with an optional color field and a reading at map center. **Rain radar**, **Satellite clouds** and **Lightning density** are observations on one history timeline in the **WEATHER** panel (step back, **Play**, **Latest**); **Cyclone advisories** draw NHC and CPHC positions, forecast tracks and cones. On Google 3D Tiles the observed layers float above the city as translucent shells, sharpened around your view.
 
 In the app, **Data Layers** groups them as Movement, Cameras, Infrastructure, Events, Weather and Audio; Directions and OSM Places sit in the separate **Utilities** panel with Draw and Import.
@@ -471,19 +480,16 @@ In the app, **Data Layers** groups them as Movement, Cameras, Infrastructure, Ev
 | 🟡 A free Cesium ion token | **Google Photorealistic 3D cities** and world terrain — eligible personal, non-commercial use; current ion terms and quotas apply                                            |
 | 🔴 A Google Maps key       | The same 3D direct from Google, plus Google place search — the billing-enabled, metered route                                                                                |
 
-![A reconstructed Falcon 9 ascent climbing and curving into its projected orbit](docs/media/08-falcon9-replay.gif)
-
-_The Space Missions layer replaying a Falcon 9 ascent — labeled `RECONSTRUCTED ESTIMATE`, scrubbable 0.25×–4×._
-
 **Also on the globe:** neighborhood overlays · an optional cockpit WX cloud effect. **Bundled static infrastructure:** Datacenters (4,352), Dams (704), and Submarine Cables (712).
-
-![Diving into the Bahamas and revealing labeled submarine cable routes beneath the globe](docs/media/09-undersea-cables.gif)
 
 **Missing a layer you want?** Open an issue — or add it and send the PR.
 
 ---
 
 ## 📷 Street Level
+
+<details>
+<summary><b>Street Level setup and use</b></summary>
 
 > Street-level photos from any provider in one panel. This build ships **Mapillary** (a free client token), **Google Street View** (your Google Maps key), **KartaView** and **Panoramax** (no key).
 
@@ -493,37 +499,26 @@ _The Space Missions layer replaying a Falcon 9 ascent — labeled `RECONSTRUCTED
 
 Share links carry the provider switches and filters (`0.m.0` Mapillary off, `0.m.0_0.r.google-1` Street View on, `0.m.0_0.r.google-0*kartaview-1*panoramax-0` KartaView on and `0.m.0_0.r.google-0*kartaview-0*panoramax-1` Panoramax on, as the app writes them (`0.m.0_0.r.kartaview-1` and `0.m.0_0.r.panoramax-1` work too; a link that leaves out `m` keeps Mapillary, the default, lit), `0.p.p` panoramas only, `0.s.365` the last year). To add a provider, implement the contract in `src/layers/streetLevel/registry.js` and register it in `src/app/layers/streetLevel.js`.
 
-## 🎖️ Field Missions
+</details>
 
-Once the basics click, run these:
+## 🎬 Reconstructions and the Series
 
-| Mission                             | How                                                                                                                                                                                                       |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **🚁 Ask the planet**               | _"Why are all these military helicopters flying in circles?"_ Select a military track — it silently backfills ~24 h of real trace history — and see what it's been doing, resolved as stacked 3D loops.   |
-| **✈️ Final approach**               | Click-track an airliner lining up for a runway, hop into the **cockpit**, and ride it down.                                                                                                               |
-| **🌃 Night watch**                  | Fly to your own city, switch to **NVG**, and let the detection mesh and HUD read the scene.                                                                                                               |
-| **🚢 Port call**                    | Vessels on over the Port of Long Beach. Click a tanker for its tactical card and wake trail — then hit **NEAREST** in the CCTV panel and look at the same water through a public camera.                  |
-| **📻 Tokyo FM**                     | Orbit Shibuya with the **Radio** layer on — then drag the analog tuner needle: every position snaps to a real station and the globe flies to whoever's broadcasting.                                      |
-| **🔥 Fire line**                    | FIRMS over California. Click a detection — the camera dives to it — read the intensity, then hit **NEAREST** in the CCTV panel for a ground view.                                                         |
-| **🚶 Ask for a walking route** _🎙️_ | Tell the world where you want to go and watch a real street-following route trace itself through the 3D city — then _"fly it"_: banked turns, eased ends, a camera that leads the path like a drone shot. |
-| **📏 Measure LAX to DFW** _🎙️_      | _"How far is LAX from DFW?"_ — an arrow spans the country, the distance lands in the caption, and the endpoints stay pinned to the real world as you orbit.                                               |
-| **🚀 Launch replay**                | Open **Space Missions**, pick a launch from the last 30 days, and ride the T-minus countdown through ascent to orbit — scrub it at 0.25×–4×. Labeled `RECONSTRUCTED ESTIMATE`, because it is one.         |
-| **🪦 Walk the boneyard**            | Fly from regional context down into dense, fully resolved rows of retired aircraft.                                                                                                                       |
-| **🏗️ Orbit Three Gorges**           | Sweep the dam and its terrain at a glance — then flip on the **Dams** layer and find 703 more.                                                                                                            |
+This started as a mad science experiment that suddenly blew up. Next thing you know, Iran happened. Bilawal reconstructed it in 4D. The questions we kept getting: when can I use this thing, and can I bring my own data to the party?
 
-_🎙️ = voice missions — they need an OpenAI key._
+<table>
+<tr>
+<td width="33%" valign="top"><a href="https://www.youtube.com/watch?v=o_FJ1NIH9yw"><img src="https://img.youtube.com/vi/o_FJ1NIH9yw/mqdefault.jpg" alt="God's Eye View Blew Up. Here's What You Can Do With It." width="100%"></a><br><a href="https://www.youtube.com/watch?v=o_FJ1NIH9yw"><b>God's Eye View Blew Up. Here's What You Can Do With It.</b></a><br><sub>3.1M views on YouTube</sub></td>
+<td width="33%" valign="top"><a href="https://www.youtube.com/watch?v=0p8o7AeHDzg"><img src="https://img.youtube.com/vi/0p8o7AeHDzg/mqdefault.jpg" alt="I Built God's Eye View to Monitor Iran in 4D" width="100%"></a><br><a href="https://www.youtube.com/watch?v=0p8o7AeHDzg"><b>I Built God's Eye View to Monitor Iran in 4D</b></a><br><sub>1.9M views on YouTube</sub></td>
+<td width="33%" valign="top"><a href="https://www.youtube.com/watch?v=GRJaKcXZS94"><img src="https://img.youtube.com/vi/GRJaKcXZS94/mqdefault.jpg" alt="We Got Open Source God's Eye Before GTA 6" width="100%"></a><br><a href="https://www.youtube.com/watch?v=GRJaKcXZS94"><b>We Got Open Source God's Eye Before GTA 6</b></a><br><sub>1.2M views on YouTube</sub></td>
+</tr>
+<tr>
+<td width="33%" valign="top"><a href="https://www.youtube.com/watch?v=pMZR4HmziyA"><img src="https://img.youtube.com/vi/pMZR4HmziyA/mqdefault.jpg" alt="Florida Learjet Crash - Final 78 Seconds Reconstructed in God's Eye View" width="100%"></a><br><a href="https://www.youtube.com/watch?v=pMZR4HmziyA"><b>Florida Learjet Crash - Final 78 Seconds Reconstructed in God's Eye View</b></a><br><sub>3.5M views on YouTube</sub></td>
+<td width="33%" valign="top"><a href="https://www.youtube.com/watch?v=ccZzOGnT4Cg"><img src="https://img.youtube.com/vi/ccZzOGnT4Cg/mqdefault.jpg" alt="God's Eye View Reveals Iran's Chokehold on the Global Economy" width="100%"></a><br><a href="https://www.youtube.com/watch?v=ccZzOGnT4Cg"><b>God's Eye View Reveals Iran's Chokehold on the Global Economy</b></a><br><sub>700K views on YouTube</sub></td>
+<td width="33%" valign="top"><a href="https://www.youtube.com/watch?v=g3toZwkrQQE"><img src="https://img.youtube.com/vi/g3toZwkrQQE/mqdefault.jpg" alt="God's Eye View Just Got a Massive Upgrade (Thanks To You!)" width="100%"></a><br><a href="https://www.youtube.com/watch?v=g3toZwkrQQE"><b>God's Eye View Just Got a Massive Upgrade (Thanks To You!)</b></a><br><sub>502K views on YouTube</sub></td>
+</tr>
+</table>
 
-![Resolving a selected aircraft's recent flight path into stacked 3D loops above the terrain](docs/media/07-helicopter-loops.gif)
-
-_Ask the planet: a military contact's last ~24 hours of real trace history, resolved as stacked 3D loops._
-
-![Asking for a walking route and flying the generated path through the 3D city](docs/media/10-walking-route-flythrough.gif)
-
-_"Draw the walking route… now fly it" — banked turns, eased ends, the camera leading the path like a drone shot._
-
-![Descending from regional context into dense rows of retired aircraft at the boneyard](docs/media/08-boneyard.gif)
-
-_Walk the boneyard: rows of retired airframes, fully resolved in 3D._
+More reconstructions, interviews and press: [godseyeview.ai/press](https://godseyeview.ai/press/) · [the full series on YouTube](https://youtube.com/playlist?list=PL6qSg2I-7_koPbDnSMo0QeeHX_RknA2uv&si=nBGYMoHWQw41v93Q)
 
 ---
 
@@ -532,7 +527,7 @@ _Walk the boneyard: rows of retired airframes, fully resolved in 3D._
 How the globe handles live data:
 
 - **World-stable icons.** Aircraft and ships point along their _true real-world heading_ at every camera angle — tracked or not, looking straight down or across the horizon — via per-frame screen-space course projection. No spinning, no viewport-locking.
-- **Smooth motion from choppy data.** Live feeds arrive every 15–30s; the globe renders one interval behind real time and interpolates between known fixes. Dead reckoning fills the gaps.
+- **Smooth motion from choppy data.** Live feeds arrive every 15–30s, often minutes late; the globe renders as far behind real time as the feed is late (at least one interval) and draws each aircraft along a smooth curve between its known fixes. Dead reckoning fills the gaps.
 - **Honest satellites.** SGP4 propagation with orbit rings that stay locked to their satellites via GMST realignment — no drift, no per-second flicker.
 - **Sits on the real ground.** Entity heights are aligned to work with Google 3D tiles, so aircraft park on aprons and cameras stand on street corners instead of floating.
 - **Caching and request budgets.** An OpenSky credit governor, a TomTom daily tile budget, and disk-cached TLEs reduce repeated requests. These controls do not replace provider quotas or billing controls.
@@ -549,7 +544,7 @@ src/
 ├── voice/                  # OpenAI Realtime session + 30 voice tools
 ├── layers/                 # Layer components — weather, wind, cyclones, transit, ALPR, …
 ├── data/                   # One module per layer + orchestration + context store
-│   ├── iconOrientation.js  # Screen-projected headings + horizon cull
+│   ├── iconOrientation.js  # Horizon backdrop for labels (headings: screenRotation.js)
 │   └── local_data/         # Bundled datasets (per-folder provenance)
 └── scenes/                 # Cinematic scene director
 ```
@@ -589,10 +584,6 @@ metered and Liveuamap is a paid subscription:
 | 🟡  | **Mapillary**   | 📷 Street Level coverage and photos. A public client token by design (see SECURITY.md)                                                                                               | [mapillary.com/dashboard/developers](https://www.mapillary.com/dashboard/developers) — register an app, copy its Client Token                                        |
 | 🟡  | **World News API** | 📰 News layer, Local: the news of the country in view. The free plan allows 50 points a day; `WORLDNEWSAPI_DAILY_READS` (default 30) keeps Core inside it. Core keeps each country's news for up to 1 hour, and World News API's [terms](https://worldnewsapi.com/terms/) allow caching only with its prior written permission, which is yours to get. The Data attribution popover credits it with a link | [worldnewsapi.com/console](https://worldnewsapi.com/console/) — free plan |
 | 🔴  | **Liveuamap**   | 📰 News layer, Conflicts: Liveuamap's mapped items beside GDELT's reports (🟢 Conflicts works without) | [liveuamap.com/promo/api](https://liveuamap.com/promo/api) — paid API |
-
-![Diving from city-scale live congestion straight into an intersection's public camera](docs/media/05-traffic-to-cctv.gif)
-
-_What the TomTom key buys you: rush-hour density painted on the city — then dive from the jam straight into the camera watching it._
 
 ### Cherry on top
 
@@ -704,7 +695,7 @@ God's Eye View runs on **public data, clear sources, and local-first execution.*
 
 **Maintainers:** [Bilawal Sidhu](https://github.com/bilawalsidhu) and [Sameh Khamis](https://github.com/samehkhamis) at [Halfpixel](https://halfpixel.ai).
 
-<sub>Media note: the capture GIFs on this page show Google Photorealistic 3D Tiles and live data layers, used promotionally with in-frame attribution; they aren't licensed for standalone reuse. See [media provenance and permissions](docs/media/README.md); full source terms in [DATA_SOURCES.md](DATA_SOURCES.md).</sub>
+<sub>Media note: the clips on this page are the ones shown on godseyeview.ai. Some show Google Photorealistic 3D Tiles and live data layers, used promotionally with in-frame attribution; they aren't licensed for standalone reuse. See [media provenance and permissions](docs/media/README.md); full source terms in [DATA_SOURCES.md](DATA_SOURCES.md).</sub>
 
 > [!IMPORTANT]
 > God's Eye View is an exploratory visualization of public and third-party data.
@@ -725,13 +716,13 @@ So here it is. Step inside the spy-thriller cockpit — except the data is real 
 
 One heads-up from the inside: build in this space for a week and you learn that **the present is the cheap part**. The moment you try to go back in time — tiling, serving, and scrubbing _what happened_ and _what changed_ at any real resolution — the data gets expensive and the compute gets brutal. That's the long game.
 
-**Update — a hosted version is coming.** We originally planned to keep this repository as the open-source client and build a separate professional product. Then the launch happened, and the loudest request wasn't another feature — it was _"just give me a link."_ So we're building an official hosted God's Eye View at [Halfpixel](https://halfpixel.ai): no installation, just open it in your browser. The hosted version is the easiest way into this open-source project. More soon.
+**Update — a hosted version is coming.** We originally planned to keep this repository as the open-source client and build a separate professional product. Then the launch happened, and the loudest request wasn't another feature — it was _"just give me a link."_ So we're building an official hosted God's Eye View at [Halfpixel](https://halfpixel.ai): no installation, just open it in your browser. The hosted version is the easiest way into this open-source project. Sign up for the [waitlist](https://godseyeview.ai/online/) and get notified.
 
 ---
 
 <div align="center">
 
-▶️ [Watch the God's Eye View series](https://youtube.com/playlist?list=PL6qSg2I-7_koPbDnSMo0QeeHX_RknA2uv&si=nBGYMoHWQw41v93Q) · 📬 [Map the World](https://maptheworld.ai/) — the newsletter behind the project
+🌐 [godseyeview.ai](https://godseyeview.ai), the official site · ▶️ [Watch the God's Eye View series](https://youtube.com/playlist?list=PL6qSg2I-7_koPbDnSMo0QeeHX_RknA2uv&si=nBGYMoHWQw41v93Q) · 📬 [Map the World](https://maptheworld.ai/) — the newsletter behind the project
 
 **🌐 God's Eye View. No place left behind.**
 

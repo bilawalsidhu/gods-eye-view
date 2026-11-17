@@ -1,4 +1,5 @@
 import { t } from '../i18n/index.js';
+import { isStoriesOpen } from './realtimeInputPolicy.js';
 
 const DISCONNECT_GRACE_MS = 6000;
 
@@ -52,7 +53,8 @@ export class RealtimeConnection {
     return this.readStatus();
   }
   async start({ pushToTalk = false } = {}) {
-    if (this.isActive() || this.lifetimeSignal?.aborted) return;
+    if (isStoriesOpen() || this.isActive() || this.lifetimeSignal?.aborted)
+      return;
     this.pauseRadioForVoice();
     const pushToTalkKeyHeld = pushToTalk && this.input.pushToTalkKeyHeld;
     const spaceKeyHeld = this.input.spaceKeyHeld;

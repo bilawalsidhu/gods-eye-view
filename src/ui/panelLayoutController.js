@@ -27,6 +27,7 @@ const LEFT_STACK_OBSTACLE_SELECTOR = [
   '#cockpit-context',
   '#cesium-credits .cesium-credit-logoContainer',
   '#cesium-credits .cesium-credit-textContainer',
+  '#gev-credits',
   '#location-bar',
   '#control-panel',
   '#gev-voice-control',
@@ -58,6 +59,7 @@ const RIGHT_STACK_OBSTACLE_SELECTOR = [
   '#cockpit-signal-stream',
   '#cesium-credits .cesium-credit-logoContainer',
   '#cesium-credits .cesium-credit-textContainer',
+  '#gev-credits',
   '#command-dock',
   '#gev-voice-control',
   '#world-timeline',
@@ -352,12 +354,13 @@ export class PanelLayoutController {
           attributeFilter: ['class', 'data-variant'],
         });
       }
-      const credits = document.getElementById('cesium-credits');
-      if (credits) {
-        this._leftStackMutationObserver.observe(credits, {
-          subtree: true,
-          childList: true,
-        });
+      for (const id of ['cesium-credits', 'gev-credits']) {
+        const credits = document.getElementById(id);
+        if (credits)
+          this._leftStackMutationObserver.observe(credits, {
+            subtree: true,
+            childList: true,
+          });
       }
     }
 
