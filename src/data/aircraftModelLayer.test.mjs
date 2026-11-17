@@ -449,3 +449,30 @@ test('models are drawn at their true size, with no minimum pixel size', () => {
   f.tick();
   assert.equal(f.fleet().items.get('a1').minPixelSize ?? 0, 0);
 });
+
+test('the selected contact keeps a loaded, hidden fleet model that takes it back on deselect', () => {
+  const positions = new Map([['a1', near(1)]]);
+  const f = fleetFixture(positions);
+  // Selected while an icon: the fleet pass admits its model all the same.
+  f.state._trackedIcao = 'a1';
+  f.shown.set('a1', false); // selecting it hides its icon
+  f.tick();
+  assert.ok(f.fleet().items.has('a1'), 'admitted and loading while selected');
+  f.draw.ready(f.fleetId, 'a1');
+  positions.set('a1', near(2));
+  f.tick();
+  const item = f.fleet().items.get('a1');
+  assert.equal(item.show, false, 'never drawn while selected');
+  assert.deepEqual(
+    item.pos,
+    { x: near(2).x, y: near(2).y, z: near(2).z },
+    'placed where its icon is',
+  );
+  assert.equal(f.shown.get('a1'), false, 'the icon stays hidden');
+
+  // Deselected: its model draws it in the same frame, its icon never shows.
+  f.state._trackedIcao = null;
+  f.models._handBackDeselected('a1');
+  assert.equal(f.fleet().items.get('a1').show, true);
+  assert.equal(f.shown.get('a1'), false);
+});

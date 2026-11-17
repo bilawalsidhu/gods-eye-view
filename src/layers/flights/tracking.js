@@ -703,10 +703,11 @@ export function createTracking({
     // Hand the contact back to its icon only now: settling floors a grounded
     // contact, and while it still read as tracked its tracked model owned the
     // visual, so the floor would have stepped aside.
-    if (flightState._icons?.has(clearedIcao)) {
-      flightState._icons.setShown(clearedIcao, true);
+    // Its fleet model, kept loaded while it was selected, takes it back in
+    // this frame; the icon shows only when there is no loaded one.
+    parts.rendering._handBackDeselected(clearedIcao);
+    if (flightState._icons?.has(clearedIcao))
       parts.icons._settleIcon(clearedIcao, { fromCourseDeg: trackedCourseDeg });
-    }
     parts.icons._applyIconPresentation(clearedIcao);
     clearTrackedSubjectContext('flights');
     _emitAwarenessEvent('gev:awareness-subject-cleared', {
