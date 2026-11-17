@@ -65,6 +65,10 @@ nears the station.
 - **Corrections:** NASA's file is a mirror image of the station (port and
   starboard swapped), which is undone; 15 materials NASA marks as blended
   are made opaque, because blended they draw see-through.
+- **Marks on the textures:** the station's textures carry the marks it flies
+  with: the NASA insignia and the ESA, Columbus, JAXA and Nanoracks marks on
+  the partners' modules. They are kept as flown, to show the station as it
+  is; their presence implies no endorsement by NASA or by any partner.
 - **Moving parts:** parts that move stay separate nodes at the joints NASA
   names (two alpha joints, eight array beta joints, two radiator joints,
   Canadarm2's seven joints, two joints on each Dextre arm, three on the
@@ -82,7 +86,9 @@ third-party geometry, texture or image is in it. It loads only when the camera
 nears the station.
 
 - **Built:** in Blender 5.3 from primitives only (cylinders, cones, spheres,
-  tori, boxes), every texture generated procedurally by the build script.
+  tori, boxes), every texture generated procedurally by the build script,
+  [`scripts/build-tiangong-model.py`](../../scripts/build-tiangong-model.py)
+  (`blender -b --python scripts/build-tiangong-model.py -- <out_dir>`).
   26,460 triangles, 12 materials, 15 WebP textures (`EXT_texture_webp`),
   Draco-compressed, 382 KB.
 - **Dimensions, as published:** Wang, Zhang & Wang 2023, "Design and
