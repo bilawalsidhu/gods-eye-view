@@ -64,7 +64,13 @@ import { stationTrackedOn } from './policy.js';
  * @property {(() => void)|null} syncOrbit Puts the station's ring back to
  *   its own rules on leaving the close-up; null for the layer's orbit toggle
  *   (a ring that exists only while the station is tracked).
+ * @property {number} [unloadAfterMs] How long the model may go undrawn (out
+ *   of range, or hidden) before its draw set is released and its GPU memory
+ *   with it; asked for again on the next approach. Default one minute.
  */
+
+/** Default `unloadAfterMs`: a minute undrawn releases the model. */
+export const STATION_MODEL_UNLOAD_AFTER_MS = 60_000;
 
 /**
  * Whether a station model may be drawn: the dot's own rules (layer on, points
@@ -245,6 +251,8 @@ export function createStationModel(
   const handedCompanions = new Set();
   /** Whether the model draws and the docked dots are left to it. */
   let handingOver = false;
+  /** Wall-clock ms since when the model has not been drawn, or null. */
+  let undrawnSince = null;
   let lastCompanionScanMs = Number.NEGATIVE_INFINITY;
   /** Whether the station's orbit ring is hidden for the close-up. */
   let orbitHidden = false;
@@ -296,10 +304,12 @@ export function createStationModel(
       if (id !== itemId) return;
       ready = true;
       loading = false;
+      failed = false;
     });
     offFailed = set.on('loadFailed', (id, message) => {
       if (id !== itemId) return;
-      // The dot keeps drawing at every distance; nothing else depends on this.
+      // The dots keep drawing at every distance (the model is never ready);
+      // the next approach after the model is released tries again.
       failed = true;
       loading = false;
       console.warn(
@@ -619,6 +629,10 @@ export function createStationModel(
       if (handedCompanions.size) _releaseCompanions();
       handingOver = false;
       _syncOrbitCloseUp(false);
+      // Off, the layer gives the model's memory back at once; hidden, after
+      // a while.
+      if (!layerState._enabled) _unload();
+      else _undrawn();
       return;
     }
     const dotPosition = parts.rendering._pointPosition(norad);
@@ -639,6 +653,17 @@ export function createStationModel(
         _load(dotPosition);
       return;
     }
+    // Until the renderer has the model loaded and posed, the dots stand at
+    // every distance: the station never goes dark while the file loads, nor
+    // for good when it fails to.
+    if (!ready) {
+      _hide();
+      _releaseDots();
+      if (handedCompanions.size) _releaseCompanions();
+      handingOver = false;
+      _syncOrbitCloseUp(false);
+      return;
+    }
     // The docked dots are the model's within its range: handed over at
     // once when the model starts drawing, then with each scan.
     if (!handingOver) {
@@ -651,8 +676,10 @@ export function createStationModel(
     // Out of range the model would not draw anyway: skip the SGP4 sample.
     if (cameraDistance > spec.maxDistanceM * 1.5) {
       _hide();
+      _undrawn();
       return;
     }
+    undrawnSince = null;
 
     const frame = _stationFrame(scratchPosition);
     if (!frame) {
@@ -710,20 +737,35 @@ export function createStationModel(
     );
   }
 
-  function _destroyStationModel() {
+  /**
+   * The model has not been drawn this frame: once that has lasted
+   * `unloadAfterMs`, release it.
+   */
+  function _undrawn() {
+    if (!item) return;
+    const nowMs = Date.now();
+    undrawnSince ??= nowMs;
+    if (
+      nowMs - undrawnSince >=
+      (spec.unloadAfterMs ?? STATION_MODEL_UNLOAD_AFTER_MS)
+    )
+      _unload();
+  }
+
+  /**
+   * Release the model's draw set, and the renderer's model and GPU memory
+   * with it; the dots stand at every distance. The next approach loads it
+   * again (a failed load is tried again then too).
+   */
+  function _unload() {
+    _releaseDots();
+    _releaseCompanions();
+    handingOver = false;
     loading = false;
     failed = false;
     ready = false;
     visualValid = false;
-    articulation.reset();
-    nodePoses.clear();
-    telemetry?.destroy();
-    _releaseDots();
-    _releaseCompanions();
-    handingOver = false;
-    dockedByOrbit.clear();
-    lastCompanionScanMs = Number.NEGATIVE_INFINITY;
-    _syncOrbitCloseUp(false);
+    undrawnSince = null;
     offReady?.();
     offFailed?.();
     offReady = null;
@@ -731,6 +773,16 @@ export function createStationModel(
     set?.dispose();
     set = null;
     item = null;
+  }
+
+  function _destroyStationModel() {
+    _unload();
+    articulation.reset();
+    nodePoses.clear();
+    telemetry?.destroy();
+    dockedByOrbit.clear();
+    lastCompanionScanMs = Number.NEGATIVE_INFINITY;
+    _syncOrbitCloseUp(false);
   }
 
   /** Whether the model is standing in for this docked object's dot. */

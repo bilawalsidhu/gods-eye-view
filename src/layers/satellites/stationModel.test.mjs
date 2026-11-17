@@ -171,6 +171,9 @@ function fixture(t) {
       draw.ready(MODEL_SET, MODEL_ITEM);
       await settle();
     },
+    /** The renderer reports the model loaded, or failed to. */
+    readyModel: () => draw.ready(MODEL_SET, MODEL_ITEM),
+    failModel: () => draw.loadFailed(MODEL_SET, MODEL_ITEM),
     /** Track `noradId`, placing the tracked sample on the station. */
     track(noradId, at) {
       state._trackedNorad = noradId;
@@ -303,6 +306,74 @@ test('a station without views on its model hides it while the Cockpit rides the 
   f.model.spec.hideInCockpit = false;
   f.tick();
   assert.equal(f.modelItem().show, true);
+});
+
+test('until the renderer has the model the dots stand at every distance, and stay so when it fails to load', async (t) => {
+  const f = fixture(t);
+  f.parts.rendering._showOrbitPath(STATION, TRACKED_ORBIT_COLOR);
+  f.track(COMPANION, f.stationPos);
+  f.cameraAt(MAX_M * 1.4);
+  f.tick(); // asks for the model
+  f.cameraAt(20_000);
+  f.tick();
+  f.tick();
+  // Loading: nothing is handed over, so the station never goes dark.
+  assert.equal(f.modelItem().show, false);
+  assert.equal(f.drawn(STATION).displayRange, undefined);
+  assert.equal(f.drawn(COMPANION).displayRange, undefined);
+  assert.equal(f.trackedDot().displayRange, undefined);
+  assert.equal(
+    f.ring(STATION).show,
+    true,
+    'the ring is not hidden for a model not drawn',
+  );
+  assert.equal(f.model._visualPosition(), null, 'the card keeps the dot');
+  assert.equal(f.model._cockpitMount(), null);
+  // The load fails: the dots stay at every distance, frame after frame.
+  f.failModel();
+  for (let i = 0; i < 3; i++) f.tick();
+  assert.equal(f.modelItem().show, false);
+  assert.equal(f.drawn(STATION).displayRange, undefined);
+  assert.equal(f.drawn(COMPANION).displayRange, undefined);
+  assert.equal(f.trackedDot().displayRange, undefined);
+  // A load that does finish hands them over.
+  f.readyModel();
+  f.tick();
+  assert.equal(f.modelItem().show, true);
+  assert.deepEqual(f.drawn(STATION).displayRange, FAR_RANGE);
+  assert.deepEqual(f.trackedDot().displayRange, FAR_RANGE);
+});
+
+test('turning the layer off, or a while undrawn, releases the model; the next approach asks for it again', async (t) => {
+  const f = fixture(t);
+  await f.load();
+  f.cameraAt(20_000);
+  f.tick();
+  assert.equal(f.modelItem().show, true);
+  // Out of range, within the grace: kept.
+  f.cameraAt(MAX_M * 5);
+  f.tick();
+  assert.ok(f.modelSet(), 'kept for a while');
+  // Past it: released, and the dots stand everywhere.
+  f.model.spec.unloadAfterMs = 0;
+  f.tick();
+  assert.equal(f.modelSet(), undefined, 'its set is disposed');
+  assert.equal(f.drawn(STATION).displayRange, undefined);
+  // The next approach asks for it again.
+  f.cameraAt(MAX_M * 1.4);
+  f.tick();
+  assert.ok(f.modelItem(), 'asked for again');
+  f.readyModel();
+  f.cameraAt(20_000);
+  f.tick();
+  assert.equal(f.modelItem().show, true);
+  // Turning the layer off releases it at once.
+  f.model.spec.unloadAfterMs = 60_000;
+  // (The layer's disable asks the model once, as here: no frame runs then.)
+  f.state._enabled = false;
+  f.model._updateStationModel();
+  assert.equal(f.modelSet(), undefined);
+  assert.equal(f.drawn(STATION).displayRange, undefined);
 });
 
 test('within its range the model stands in for the dots and hides the ring; beyond it the dots draw', async (t) => {

@@ -141,7 +141,7 @@ export function createLifecycle({
       parts.rendering._setPointsShown(false);
       parts.rendering._setOrbitPathsShown(false);
       for (const model of parts.stationModels ?? [])
-        model._updateStationModel(); // off: hides the model
+        model._updateStationModel(); // off: releases the model
       parts.tracking._clearTracking();
       parts.stationPanel?._syncStationPanel(); // off: takes the panel down
       parts.labels._syncIssOverlay();
