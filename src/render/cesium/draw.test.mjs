@@ -469,6 +469,46 @@ test('clamped extruded shapes and walls stand on the surface, unclamped', () => 
   set.dispose();
 });
 
+test('a set that never picks builds its absolute volumes and their outlines without picking', () => {
+  const { scene, draw } = drawOver();
+  const volumes = draw.shapes({ id: 'volumes', pickable: false });
+  const at = (lon, lat) => ({ lon, lat, height: 1000 });
+  volumes.set([
+    {
+      id: 'slab',
+      geometry: {
+        kind: 'polygon',
+        rings: [[at(0, 0), at(1, 0), at(1, 1), at(0, 0)]],
+      },
+      fill: [1, 0.5, 0, 0.2],
+      outline: [1, 0.5, 0, 0.8],
+      extrudeHeight: 9000,
+      height: 'absolute',
+      lit: false,
+    },
+  ]);
+  const primitives = () => {
+    const found = [];
+    const walk = (primitive) => {
+      if (!primitive) return;
+      if (primitive instanceof Cesium.PrimitiveCollection)
+        for (let i = 0; i < primitive.length; i++) walk(primitive.get(i));
+      else if (primitive instanceof Cesium.Primitive) found.push(primitive);
+    };
+    walk(scene.added.at(-1));
+    return found;
+  };
+  assert.equal(primitives().length, 2, 'the volume and its outline');
+  assert.ok(
+    primitives().every((primitive) => primitive.allowPicking === false),
+    'neither takes part in picks',
+  );
+  // Whether it picks is built into the primitives: a change rebuilds them.
+  volumes.setOptions({ pickable: true });
+  assert.ok(primitives().every((primitive) => primitive.allowPicking === true));
+  volumes.dispose();
+});
+
 test('a set that never picks keeps its ground fills and draped lines out of picks', () => {
   const { scene, draw } = drawOver();
   const fills = draw.shapes({ id: 'cells', pickable: false });
