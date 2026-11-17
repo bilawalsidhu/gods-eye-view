@@ -20,7 +20,8 @@
  *
  * @module layers/magnetosphere
  */
-import * as Cesium from 'cesium';
+import { sunPositionFixed } from '../../geo/celestial.js';
+import { findFrame } from '../../render/rendererOf.js';
 import { coefficientsFor, decimalYear, IGRF_VALID_UNTIL } from './field.js';
 import { fieldLineSeeds } from './geometry.js';
 import { createMagnetosphereRendering } from './rendering.js';
@@ -55,33 +56,16 @@ function degreesBetween(a, b) {
  *
  * The magnetopause is a surface of revolution about the Earth-Sun line, so
  * this is the only ephemeris the layer needs — not a full GSM frame, whose
- * remaining axes the boundary is symmetric in anyway.
+ * remaining axes the boundary is symmetric in anyway. The frame is the
+ * pseudo-fixed one (`sunPositionFixed`); it differs from the EOP-corrected
+ * fixed frame by precession and nutation, far below RETRACE_SUN_DEGREES.
+ * @param {number|null} ms Scene time, epoch ms.
+ * @returns {{x:number,y:number,z:number}|null} Null without a time.
  */
-export function sunDirectionFixed(cesium, julianDate) {
-  const inertial =
-    cesium.Simon1994PlanetaryPositions.computeSunPositionInEarthInertialFrame(
-      julianDate,
-      new cesium.Cartesian3(),
-    );
-  const toFixed =
-    cesium.Transforms.computeIcrfToFixedMatrix(
-      julianDate,
-      new cesium.Matrix3(),
-    ) ||
-    cesium.Transforms.computeTemeToPseudoFixedMatrix(
-      julianDate,
-      new cesium.Matrix3(),
-    );
-  // ICRF data is loaded asynchronously and may not be ready on first frame.
-  // Without it the direction would be wrong rather than merely late, so the
-  // caller is told to try again instead of being handed a plausible lie.
-  if (!toFixed) return null;
-  const fixed = cesium.Matrix3.multiplyByVector(
-    toFixed,
-    inertial,
-    new cesium.Cartesian3(),
-  );
-  const length = cesium.Cartesian3.magnitude(fixed);
+export function sunDirectionAt(ms) {
+  if (!Number.isFinite(ms)) return null;
+  const fixed = sunPositionFixed(ms);
+  const length = Math.hypot(fixed.x, fixed.y, fixed.z);
   if (!(length > 0)) return null;
   return { x: fixed.x / length, y: fixed.y / length, z: fixed.z / length };
 }
@@ -170,6 +154,11 @@ export function createMagnetosphereLayer({
   createRendering = createMagnetosphereRendering,
   meridians = 8,
   now = () => Date.now(),
+  // Scene time, epoch ms; null until a renderer's frame port is bound. Without
+  // it there is no Sun direction, and the layer waits rather than tracing in a
+  // guessed frame.
+  sceneTime = (viewer) => findFrame(viewer)?.time() ?? null,
+  sunDirection: sunAt = sunDirectionAt,
 } = {}) {
   let rendering = null;
   let state = null;
@@ -197,10 +186,7 @@ export function createMagnetosphereLayer({
       sunDirection = options.sunDirection;
       return;
     }
-    const cesium = layer._cesium;
-    if (!cesium) return;
-    const time = viewer?.clock?.currentTime || cesium.JulianDate.now();
-    const next = sunDirectionFixed(cesium, time);
+    const next = sunAt(sceneTime(viewer));
     if (next) sunDirection = next;
   }
 
@@ -221,10 +207,8 @@ export function createMagnetosphereLayer({
     showInTogglePanel: true,
     updateInterval: REFRESH_MS,
 
-    async init(viewer, options = {}) {
-      const cesium = options.cesium || Cesium;
-      layer._cesium = cesium;
-      rendering = createRendering({ viewer, cesium });
+    async init(viewer) {
+      rendering = createRendering({ viewer });
       const year = decimalYear(new Date(now()));
       coefficients = coefficientsFor(year);
       // Kept so the panel can say the model is being run past its published
