@@ -978,6 +978,34 @@ test('a held vehicle with no floor yet tells its view no height', async (t) => {
   assert.equal(app.layer.getCockpitSubject().position.groundHeightM, null);
 });
 
+test('far above the ground, a held vehicle drawn on the ellipsoid tells its view no height', async (t) => {
+  // Above the height gate a vehicle with no floor is drawn on the ellipsoid
+  // at once, not held back; the ellipsoid is still no floor to stand a view
+  // on.
+  const app = harness(t, { altitude: 100_000, floorAt: () => undefined });
+  app.serve('mbta', () => ({
+    status: 200,
+    body: snapshot(
+      'mbta',
+      'MBTA',
+      [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)],
+      { fetchedAt: Date.now() },
+    ),
+  }));
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  app.settle();
+  const [entry] = app.vehicles();
+  assert.ok(app.layer.setCockpitSubject(entry.key) !== false);
+  app.frame();
+  assert.equal(entry.surfaceReady, true, 'it is drawn');
+  const drawnM = Cesium.Cartographic.fromCartesian(
+    entry.marker.position,
+  ).height;
+  assert.ok(Math.abs(drawnM) < 1e-3, `on the ellipsoid, got ${drawnM} m`);
+  assert.equal(app.layer.getCockpitSubject().position.groundHeightM, null);
+});
+
 test('a vehicle waits for its floor rather than standing on the ellipsoid', async (t) => {
   // The shared ground-floor system answers from the rendered mesh cell or the
   // real DEM cell; until one of them is warm there is no honest height to draw
@@ -2124,6 +2152,11 @@ test('a segment climbs from the ground it left to the ground it reaches', async 
   assert.ok(
     Math.abs(height() - 11.5) < 3,
     `at the corridor floor, got ${height().toFixed(1)} m`,
+  );
+  // The two reports' floors blended at the fraction would say about 55 m.
+  assert.ok(
+    Math.abs(floor() + 1.5 - height()) < 1,
+    `its snapshot stands on that floor too, got ${floor().toFixed(1)} m`,
   );
   app.run(TRANSIT_POLL_MS);
   assert.ok(
@@ -4879,4 +4912,77 @@ test('a held vehicle hides, keeps moving out of view, and lets go when it goes',
   assert.equal(app.vehicles().length, 0, 'the vehicle is gone');
   assert.equal(app.state()._cockpitSubjectKey, null);
   assert.equal(app.layer.getCockpitSubject(), null);
+});
+
+test('turning Transit off ends a hold; on again, Escape deselects and the vehicle shows', async (t) => {
+  const app = harness(t);
+  const key = await busRunningNorth(app);
+  assert.equal(app.layer.setCockpitSubject(key), true);
+  app.layer.disable(app.viewer);
+  assert.equal(
+    app.state()._cockpitSubjectKey,
+    null,
+    'the hold ended with the layer',
+  );
+  // On again, without a release: the same bus is listed again.
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  app.settle();
+  app.run(TRANSIT_POLL_MS);
+  await app.layer.update();
+  app.settle();
+  assert.equal(app.layer.focusVehicle(key), true);
+  const [entry] = app.vehicles();
+  app.frame();
+  assert.equal(entry.marker.show, true, 'the vehicle is drawn, not held');
+  globalThis.document.dispatchEvent(
+    Object.assign(new Event('keydown'), { key: 'Escape' }),
+  );
+  assert.equal(app.state()._selectedKey, null, 'Escape deselects');
+});
+
+test('a held parked vehicle draws no icon; let go, it draws its icon again', async (t) => {
+  // A parked bus with no course: nothing moves or turns its icon, so only the
+  // hold itself can take the icon out of the set that draws it.
+  const app = harness(t);
+  app.serve('mbta', () => ({
+    status: 200,
+    body: snapshot(
+      'mbta',
+      'MBTA',
+      [vehicle('bus-1', 42.36, -71.06, reported(), { stopId: 'place-1' })],
+      { fetchedAt: Date.now() },
+    ),
+  }));
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  app.settle();
+  for (let i = 0; i < 3; i += 1) {
+    app.run(TRANSIT_POLL_MS);
+    await app.layer.update();
+    app.settle();
+  }
+  const key = 'mbta:bus-1';
+  const [entry] = app.vehicles();
+  const icon = () =>
+    app.markers('still').get(key) ?? app.markers('moving').get(key);
+  assert.equal(icon()?.show, true, 'drawn before the hold');
+  assert.equal(app.layer.setCockpitSubject(key), true);
+  // The view rides it for a while: frames, a sweep, a poll.
+  app.run(2_000, 16);
+  app.settle();
+  app.run(TRANSIT_POLL_MS);
+  await app.layer.update();
+  app.settle();
+  assert.equal(entry.marker.show, false, 'its marker is hidden');
+  assert.equal(
+    icon()?.show ?? false,
+    false,
+    'and so is the icon the set draws',
+  );
+
+  assert.equal(app.layer.setCockpitSubject(null), true);
+  app.advance(250);
+  app.settle();
+  assert.equal(icon()?.show, true, 'let go: drawn again');
 });

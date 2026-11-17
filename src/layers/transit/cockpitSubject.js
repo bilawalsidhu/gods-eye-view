@@ -84,12 +84,16 @@ export function createTransitCockpitSubject({ state, parts, services }) {
    * or held), which near the ground follows the terrain between reports;
    * else its segment's two reports' floors at the playback fraction. Null
    * while either floor is unknown, as on cold terrain, so a view waits for
-   * the surface. Not `entry.heightM`, the floor at the newest report, which
-   * playback has not reached yet.
+   * the surface: far above the ground such a marker is drawn on the
+   * ellipsoid, which is no floor. Not `entry.heightM`, the floor at the
+   * newest report, which playback has not reached yet.
    */
   function drawnFloorOf(entry) {
     const segment = entry.segment;
     if (!segment || entry.heightPending) return null;
+    const from = segment.from?.h;
+    const to = segment.to?.h;
+    if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
     const placed =
       entry.surfaceReady === true &&
       entry.hasRendered &&
@@ -99,9 +103,6 @@ export function createTransitCockpitSubject({ state, parts, services }) {
       const drawn = toCartographicRadians(entry.marker.position);
       if (drawn) return drawn.height - liftM;
     }
-    const from = segment.from?.h;
-    const to = segment.to?.h;
-    if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
     const f = Number.isFinite(segment.fraction)
       ? Math.max(0, Math.min(1, segment.fraction))
       : 1;
@@ -173,11 +174,17 @@ export function createTransitCockpitSubject({ state, parts, services }) {
     return snapshot;
   }
 
-  /** Show or hide a vehicle's sprite and trail for the hold. */
+  /**
+   * Show or hide a vehicle's sprite and trail for the hold. The sprite goes
+   * through the renderer (setShown, flushMarkers): its set draws a marker
+   * only as last pushed.
+   */
   function repaint(entry) {
     if (!entry?.marker) return;
-    if (entry.key === state._cockpitSubjectKey) entry.marker.show = false;
+    if (entry.key === state._cockpitSubjectKey)
+      parts.rendering.setShown(entry, false);
     else parts.rendering.placeSample(entry);
+    parts.rendering.flushMarkers();
     parts.rendering.schedulePlayback(entry);
     parts.trails.update();
     state._detectRevision += 1;
