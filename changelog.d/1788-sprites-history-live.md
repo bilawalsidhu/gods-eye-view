@@ -4,4 +4,4 @@
   type plus one buoy. Going back to live keeps contacts on screen and replaces
   them by id instead of emptying the map, and 1 min/s playback no longer
   stalls waiting for positions. Cesium models move their parts (rotors,
-  propellers, gear, doors) from the optional model part state (sameh, #1788).
+  propellers, gear, doors) from the optional model part state (samehkhamis, #1788).
