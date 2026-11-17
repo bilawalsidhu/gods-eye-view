@@ -3279,8 +3279,8 @@ async function main() {
       // these pins with it rather than stranding them on stale numbers.
       const reg = await import(`${window.__gevQaSourceBase || '/src'}/layers/flights/policy.js`);
       window.__dfRegime = {
-        enter: reg.MODEL_PROX_ADD_M,
-        exit: reg.MODEL_PROX_KEEP_M,
+        enter: reg.MODEL_ADD_M,
+        exit: reg.MODEL_KEEP_M,
       };
       // Zooming while following is safe: the tracked-camera framer positions
       // the camera ONCE per selection and is deliberately read-only on normal
@@ -3976,7 +3976,7 @@ async function main() {
         // Hand the camera back to the CLOSE follow range before releasing. The
         // LOADING scenario below needs BOTH an active tracked regime and a
         // fleet model for this contact, and the fleet only admits models within
-        // MODEL_PROX_ADD_M of the camera — parking just inside the enter
+        // MODEL_ADD_M of the camera — parking just inside the enter
         // ceiling satisfies the regime but sits outside that add radius, which
         // silently starved the fleet half into a skip.
         await window.__dfZoomBelow(belowH + 500);

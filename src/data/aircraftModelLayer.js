@@ -225,10 +225,10 @@ export function createAircraftModels({
     return sets ? [sets.fleet.id, sets.tracked.id] : [];
   }
 
-  /** The FLEET's 3D-model regime: models3d enabled AND the camera zoomed in past the altitude
-   *  ceiling. Since 2026-08-22 the toggle DEFAULTS ON in `proximity`, which is itself the
-   *  budget: models only appear below MODEL_ALT_CEIL_M and only for the nearest MODEL_MAX in
-   *  view. The toggle still OWNS the fleet — an operator who wants every in-view plane arms
+  /** The FLEET's 3D-model regime: models3d enabled AND the camera below the altitude ceiling,
+   *  above which no contact can be within the model radius. Since 2026-08-22 the toggle DEFAULTS
+   *  ON in `proximity`, which is itself the budget: models only appear within MODEL_ADD_M of the
+   *  camera and only for the nearest MODEL_MAX. The toggle still OWNS the fleet — an operator who wants every in-view plane arms
    *  `all`, and one who wants none turns 3D off — this predicate is unchanged. The TRACKED
    *  contact routes through here too (`_trackedModelRegimeActive`), with its place in the
    *  fleet's cap, so selecting a contact never changes its form. */
@@ -254,20 +254,17 @@ export function createAircraftModels({
       : mapCap;
   }
 
-  /** Active ADD radius (m) — new planes inside this range get a model. Mode-aware: 'all' reaches far. */
+  /** ADD radius (m) — new planes inside this range get a model. Both modes
+   *  share it; they differ by their caps. */
 
   function _modelAddDistM() {
-    return state._models3dMode === 'all'
-      ? policy.MODEL_ALL_ADD_M
-      : policy.MODEL_PROX_ADD_M;
+    return policy.MODEL_ADD_M;
   }
 
-  /** Active KEEP radius (m) — a modeled plane keeps its model out to here (hysteresis vs ADD). */
+  /** KEEP radius (m) — a modeled plane keeps its model out to here (hysteresis vs ADD). */
 
   function _modelKeepDistM() {
-    return state._models3dMode === 'all'
-      ? policy.MODEL_ALL_KEEP_M
-      : policy.MODEL_PROX_KEEP_M;
+    return policy.MODEL_KEEP_M;
   }
 
   /** What a grounded model's ground sample sees through: the vertical sample
@@ -585,7 +582,6 @@ export function createAircraftModels({
       specKey: _specKeyFor(meta), // type-change sync compares against this
       bellyM: spec.bellyM,
       scale: spec.scale,
-      minPixelSize: policy.MODEL_MIN_PX,
     });
     record.url = resolveAsset(spec.url);
     record.gltf = _gltfOf(spec);
@@ -690,7 +686,7 @@ export function createAircraftModels({
    *  in, can never stall or freeze the centering (the old model-graphic-on-entity failure mode).
    *
    *  The model draws exactly as the fleet would draw this contact: the same
-   *  asset at the same scale and `minPixelSize` (`MODEL_MIN_PX`), only its
+   *  asset at the same scale (its true size), only its
    *  tint the tracked colour; whether it draws at all is the fleet's rule too
    *  (`_trackedModelRegimeActive`). Selecting a contact changes its colour,
    *  never its size or form. */
@@ -736,7 +732,6 @@ export function createAircraftModels({
         specKey: _specKeyFor(meta), // type-change sync compares against this
         bellyM: spec.bellyM,
         scale: spec.scale,
-        minPixelSize: policy.MODEL_MIN_PX,
       });
       record.id = icao24;
       record.url = resolveAsset(spec.url);

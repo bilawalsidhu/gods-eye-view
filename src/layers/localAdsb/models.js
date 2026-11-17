@@ -11,15 +11,12 @@ import { aircraftLayerModelSpec } from '../flights/modelSpec.js';
 import { fleetModelSet, loadFleetModelSet } from '../../data/fleetModels.js';
 import {
   FLEET_DR_INTERVAL_MS,
-  MODEL_ALL_ADD_M,
-  MODEL_ALL_KEEP_M,
+  MODEL_ADD_M,
   MODEL_ALT_CEIL_M,
   MODEL_HEADING_OFFSET_DEG,
+  MODEL_KEEP_M,
   MODEL_MAX,
   MODEL_MAX_ALL,
-  MODEL_MIN_PX,
-  MODEL_PROX_ADD_M,
-  MODEL_PROX_KEEP_M,
 } from '../flights/policy.js';
 import {
   AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
@@ -173,19 +170,17 @@ export function createLocalAdsbModels({
   function refreshEligibility(markers, preferences, pose) {
     const all = preferences.models3dMode === 'all';
     const cap = all ? MODEL_MAX_ALL : MODEL_MAX;
-    const addM = all ? MODEL_ALL_ADD_M : MODEL_PROX_ADD_M;
-    const keepM = all ? MODEL_ALL_KEEP_M : MODEL_PROX_KEEP_M;
     const candidates = [];
     for (const [id, marker] of markers) {
       if (!marker.position) continue;
       const distanceSq = distanceSquared(pose.position, marker.position);
-      if (distanceSq > keepM * keepM) continue;
+      if (distanceSq > MODEL_KEEP_M * MODEL_KEEP_M) continue;
       candidates.push([id, distanceSq, inView(pose, marker.position)]);
     }
     candidates.sort((a, b) => a[1] - b[1]);
     eligible = selectModelEligible(candidates, {
       cap,
-      addDistSq: addM * addM,
+      addDistSq: MODEL_ADD_M * MODEL_ADD_M,
       isModeled: (id) => models.has(id),
     });
     release([...models.keys()].filter((id) => !eligible.has(id)));
@@ -263,7 +258,6 @@ export function createLocalAdsbModels({
             roll: 0,
           },
           scale: spec.scale,
-          minPixelSize: MODEL_MIN_PX,
           // The mesh's own colours (white, multiplied).
           tint: WHITE,
           colorBlend: aircraftModelBlend(false),

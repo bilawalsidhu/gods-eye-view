@@ -27,6 +27,10 @@ import {
 } from '../../data/trackingClickGesture.js';
 import { inputFor } from '../../input/dispatcher.js';
 import {
+  COCKPIT_AIR_ALL_ADD_M,
+  COCKPIT_AIR_ALL_KEEP_M,
+  COCKPIT_AIR_PROX_ADD_M,
+  COCKPIT_AIR_PROX_KEEP_M,
   TRAIL_MAX_POINTS,
   displayDelayMs,
   followsClock,
@@ -212,11 +216,13 @@ export function createTracking({
       );
       distancesSquared.push([icao24, distanceSquared(eye, position)]);
     }
+    // The AIR band follows the 3D mode, not the 3D model radius.
+    const all = flightState._models3dMode === 'all';
     const next = nextCockpitNearContacts(
       previous,
       distancesSquared,
-      parts.rendering._modelAddDistM(),
-      parts.rendering._modelKeepDistM(),
+      all ? COCKPIT_AIR_ALL_ADD_M : COCKPIT_AIR_PROX_ADD_M,
+      all ? COCKPIT_AIR_ALL_KEEP_M : COCKPIT_AIR_PROX_KEEP_M,
     );
     flightState._cockpitNearContacts = next;
     for (const icao24 of previous)
