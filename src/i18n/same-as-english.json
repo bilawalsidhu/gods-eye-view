@@ -296,7 +296,9 @@
     "{n} mm",
     "Route",
     "3D",
-    "KT"
+    "KT",
+    "<1 km",
+    "{distance} km"
   ],
   "es": [
     "1 min/s",
@@ -490,7 +492,9 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "<1 km",
+    "{distance} km"
   ],
   "fr": [
     "1 min/s",
@@ -748,7 +752,9 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "<1 km",
+    "{distance} km"
   ],
   "it": [
     "1 min/s",
@@ -982,7 +988,9 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "<1 km",
+    "{distance} km"
   ],
   "ja": [
     "1090 MHz",
@@ -1066,7 +1074,9 @@
     "{n} hPa",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "<1 km",
+    "{distance} km"
   ],
   "pt": [
     "1 min/s",
@@ -1260,7 +1270,9 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "<1 km",
+    "{distance} km"
   ],
   "ru": [
     "1900–1945",
@@ -1498,7 +1510,9 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "<1 km",
+    "{distance} km"
   ],
   "uk": [
     "1900–1945",
@@ -1537,7 +1551,9 @@
     "M {n}",
     "{n}%",
     "{kind} {name}",
-    "3D"
+    "3D",
+    "<1 km",
+    "{distance} km"
   ],
   "zh-CN": [
     "1090 MHz",
@@ -1622,7 +1638,9 @@
     "{n} MW",
     "{n}%",
     "{n} hPa",
-    "3D"
+    "3D",
+    "<1 km",
+    "{distance} km"
   ],
   "zh-Hant": [
     "1090 MHz",
@@ -1707,7 +1725,9 @@
     "{n} MW",
     "{n}%",
     "{n} hPa",
-    "3D"
+    "3D",
+    "<1 km",
+    "{distance} km"
   ],
   "he": [
     "{speed} kn",

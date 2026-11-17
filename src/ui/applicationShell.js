@@ -1,3 +1,4 @@
+import { toLonLatH } from '../geo/ellipsoid.js';
 import { followedOf } from '../data/followed.js';
 import { readEntityRecord } from '../data/entityRecords.js';
 import { nextTick } from 'vue';
@@ -39,7 +40,12 @@ import {
 import { toDegrees, toRadians } from '../geo/index.js';
 // A viewer with no renderer bound gets its ports (camera, effects, globe)
 // once its owner has loaded the package's `./render/cesium/unbound` export.
-import { cameraOf, canvasOf, findCamera } from '../render/rendererOf.js';
+import {
+  cameraOf,
+  canvasOf,
+  findCamera,
+  findQuery,
+} from '../render/rendererOf.js';
 
 import { aircraftTrackingTarget } from '../cockpitTracking.js';
 
@@ -1228,6 +1234,9 @@ export class StyleManager extends ShellFacade {
         _cctvPrevBtn: this._cctvPrevBtn,
         _cctvProjectionBtn: this._cctvProjectionBtn,
         _cctvQualityChip: this._cctvQualityChip,
+        _cctvSearch: this._cctvSearch,
+        _cctvScope: this._cctvScope,
+        _cctvDiscoveryStatus: this._cctvDiscoveryStatus,
         _cctvSelect: this._cctvSelect,
         _cctvSourceBadge: this._cctvSourceBadge,
         _cctvSummary: this._cctvSummary,
@@ -1235,6 +1244,30 @@ export class StyleManager extends ShellFacade {
       cctv: cctvLayer,
       viewer: this.viewer,
       actions: {
+        subscribeMapView: (callback) =>
+          cameraOf(this.viewer).on('moveEnd', callback),
+        readMapView: () => {
+          const viewer = this.viewer;
+          const rectangle = cameraOf(viewer).viewRectangle();
+          if (!rectangle) return null;
+          const canvas = canvasOf(viewer);
+          const point =
+            canvas &&
+            findQuery(viewer)?.pickEllipsoid(
+              canvas.clientWidth / 2,
+              canvas.clientHeight / 2,
+            );
+          const width = (rectangle.east - rectangle.west + 360) % 360 || 360;
+          const center = point ? toLonLatH(point) : null;
+          return {
+            ...rectangle,
+            center: {
+              lat: center?.lat ?? (rectangle.south + rectangle.north) / 2,
+              lon:
+                center?.lon ?? ((rectangle.west + width / 2 + 540) % 360) - 180,
+            },
+          };
+        },
         isEnabled: () => this._dataManager?.isEnabled('cctv'),
         setParams: (params, options) =>
           this._dataManager?.setLayerParams('cctv', params, options),
@@ -1280,7 +1313,7 @@ export class StyleManager extends ShellFacade {
         !this._disposed &&
         this._dataManager.isEnabled('cctv') &&
         !this._cctvControls?.getState()?.activeCameraId,
-      activate: () => cctvLayer.focusNearest({ focus: false }),
+      activate: () => this._cctvControls?.selectNearestDiscoveredCamera(),
       fly: (cameraId) =>
         this._runExplicitCctvFocus(
           () => cameraId,

@@ -111,6 +111,13 @@ try {
     owner.actions = {
       ...owner.actions,
       isEnabled: () => true,
+      readMapView: () => ({
+        west: -2,
+        east: 2,
+        south: -2,
+        north: 2,
+        center: { lat: 0, lon: 0 },
+      }),
       toggleEnabled: async () => {
         record('enable');
         return true;
@@ -120,13 +127,9 @@ try {
       showToast: () => {},
     };
     owner.cctv = {
-      focusNearest: () => {
-        record('nearest');
-        return 'a';
-      },
-      cycleCamera: (direction) => {
-        record('cycle', direction);
-        return 'b';
+      selectCamera: (id) => {
+        record('select', id);
+        return id;
       },
       focusCamera: (id, seconds) => record('focus', id, seconds),
     };
@@ -134,8 +137,8 @@ try {
       enabled: true,
       activeCameraId: 'a',
       cameras: [
-        { id: 'a', city: 'Fixture', name: 'A' },
-        { id: 'b', city: 'Fixture', name: 'B' },
+        { id: 'a', city: 'Fixture', name: 'A', lat: 0, lon: 0 },
+        { id: 'b', city: 'Fixture', name: 'B', lat: 0, lon: 1 },
       ],
       activeCamera: { id: 'a', name: 'A', basePose: {} },
     };
@@ -153,7 +156,7 @@ try {
     await page.evaluate(
       () =>
         JSON.stringify(window.__qaButtonCalls) ===
-        JSON.stringify([['enable'], ['cycle', 1], ['focus', 'b', 1.4]]),
+        JSON.stringify([['enable'], ['select', 'b'], ['focus', 'b', 1.4]]),
     ),
   );
   check(
@@ -176,12 +179,12 @@ try {
     await page.evaluate(
       () =>
         JSON.stringify(window.__qaButtonCalls) ===
-        JSON.stringify([['enable'], ['cycle', -1], ['focus', 'b', 1.4]]),
+        JSON.stringify([['enable'], ['select', 'b'], ['focus', 'b', 1.4]]),
     ),
   );
 
   for (const [id, expected] of [
-    ['cctv-nearest-btn', [['enable'], ['nearest'], ['focus', 'a', 1.8]]],
+    ['cctv-nearest-btn', [['enable'], ['select', 'a'], ['focus', 'a', 1.8]]],
     [
       'cctv-focus-btn',
       [
