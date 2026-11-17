@@ -6135,6 +6135,10 @@ export function createCesiumDraw({
       };
       solids.set(item.id, part);
       const solid = item.extrudeHeight !== undefined;
+      // A set that never takes part in picks builds its primitives without a
+      // pick pass, as its ground primitives are: a translucent volume drawn
+      // over the map must not hide what is under it from picks.
+      const allowPicking = record.spec.pickable !== false;
       // `lit`: shaded by Cesium's light, or flat; by default solids are lit.
       const lit = item.lit ?? solid;
       if (imageFill && !item.outlineOnly) {
@@ -6163,6 +6167,7 @@ export function createCesiumDraw({
               closed: solid,
               flat: !lit,
             }),
+            allowPicking,
             asynchronous: false,
           }),
         );
@@ -6187,6 +6192,7 @@ export function createCesiumDraw({
               flat: !lit,
               faceForward: !solid,
             }),
+            allowPicking,
             asynchronous: false,
           }),
         );
@@ -6217,6 +6223,7 @@ export function createCesiumDraw({
                       ),
               },
             }),
+            allowPicking,
             asynchronous: false,
           }),
         );
