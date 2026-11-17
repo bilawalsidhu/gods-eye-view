@@ -91,7 +91,13 @@ export function createControls({ state, parts, timetable }) {
         return true;
       state._categories = next;
       const selected = state._trains.get(state._selectedKey);
-      if (selected && next[selected.category] === false)
+      // A held train keeps the selection until its view lets it go
+      // (cockpitSubject.js).
+      if (
+        selected &&
+        next[selected.category] === false &&
+        selected.key !== state._cockpitSubjectKey
+      )
         parts.selection.clearSelection();
       parts.rendering.applyCategoryVisibility();
       state._revision += 1;

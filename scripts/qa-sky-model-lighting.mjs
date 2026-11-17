@@ -32,13 +32,15 @@ try {
   const results = await page.evaluate(async () => {
     window.CESIUM_BASE_URL = '/cesium/';
     // Use StarrySky's exact Vite dependency URL, including its version query.
-    const source = await fetch('/src/sky/starrySky.js').then((r) => r.text());
+    const source = await fetch('/src/render/cesium/starrySky.js').then((r) =>
+      r.text(),
+    );
     const cesiumUrl = source.match(
       /from ["']([^"']*\/cesium\.js[^"']*)["']/,
     )?.[1];
     if (!cesiumUrl) throw new Error('run against the Vite dev server');
     const C = await import(cesiumUrl);
-    const { StarrySky } = await import('/src/sky/starrySky.js');
+    const { StarrySky } = await import('/src/render/cesium/starrySky.js');
     const time = C.JulianDate.fromIso8601('2026-10-19T00:00:00Z');
     const results = {};
     for (const kind of ['black', 'starry', 'white']) {
@@ -75,7 +77,7 @@ try {
         }
         const position = C.Cartesian3.fromDegrees(0, 0, 10000);
         const model = await C.Model.fromGltfAsync({
-          url: '/models/airplane.glb',
+          url: '/models/fleet/aircraft/a320.glb',
           modelMatrix: C.Transforms.eastNorthUpToFixedFrame(position),
         });
         scene.primitives.add(model);

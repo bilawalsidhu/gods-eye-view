@@ -450,3 +450,42 @@ test('the real layout pass drives the mounted controls: compact hides the collap
   assert.equal(cockpit.utilityLayout.top, '120.00px');
   assert.equal(strip.classList.contains('layout-primary-only'), false);
 });
+
+test('the rail opens one panel at a time and reads as a disclosure', async (t) => {
+  const { $, controls } = fixture(t);
+  const item = (kind) =>
+    document.querySelector(`[data-cockpit-rail-item="${kind}"]`);
+  item('display').click();
+  await nextTick();
+  assert.equal($('cockpit-display-panel').hidden, false);
+  assert.equal(item('display').getAttribute('aria-expanded'), 'true');
+  assert.equal(
+    item('display').getAttribute('aria-controls'),
+    'cockpit-display-panel',
+  );
+  item('radio').click();
+  await nextTick();
+  assert.equal($('cockpit-display-panel').hidden, true);
+  assert.equal($('cockpit-radio-panel').hidden, false);
+  assert.equal(item('display').getAttribute('aria-expanded'), 'false');
+  assert.equal(item('radio').getAttribute('aria-expanded'), 'true');
+  item('radio').click();
+  await nextTick();
+  assert.equal(controls._cockpitDisclosureOpen('radio'), false);
+  assert.equal(controls._cockpitDisclosureOpen('display'), false);
+});
+
+test('collapsing an open panel hands focus to the rail when its toggle is hidden', async (t) => {
+  const { $, controls } = fixture(t);
+  const railItem = document.querySelector('[data-cockpit-rail-item="radio"]');
+  // happy-dom lays nothing out: show the rail and hide the launcher's toggle
+  // as the desktop look does.
+  railItem.getClientRects = () => [{ width: 32, height: 32 }];
+  $('cockpit-radio-toggle-btn').getClientRects = () => [];
+  controls._setCockpitDisclosure('radio', true);
+  await nextTick();
+  document.querySelector('.cockpit-utility-collapse').click();
+  await nextTick();
+  assert.equal($('cockpit-radio-panel').hidden, true);
+  assert.equal(document.activeElement, railItem);
+});

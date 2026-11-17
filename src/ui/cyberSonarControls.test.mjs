@@ -57,6 +57,9 @@ test('real runner and facade use visual settings, preserve visibility and return
     camera: { moveEnd: { addEventListener() {} } },
     clock: { onTick: { addEventListener: () => () => {} } },
     scene: { canvas: new EventTarget() },
+    get canvas() {
+      return this.scene.canvas;
+    },
   };
   try {
     const runner = createGevActionRunner({ styleManager: owner, viewer, dataManager: {} });

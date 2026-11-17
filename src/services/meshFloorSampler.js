@@ -1,5 +1,6 @@
-import * as Cesium from 'cesium';
 import { approxDistanceKm } from '../data/approxDistance.js';
+import { heightsOf } from '../queries/heights.js';
+import { findCamera, findGlobe } from '../render/rendererOf.js';
 
 /** Construct an instance-owned meshFloorSampler service with explicit dependencies. */
 export function createMeshFloorSampler({
@@ -63,8 +64,8 @@ export function createMeshFloorSampler({
   /** @type {Map<string, Array<{lat: number, lon: number}>>} Points probed
    *  per cell that returned a reading. */
   const _probedPoints = new Map();
-  /** @type {Cesium.Cartographic} Scratch for probe coordinates. */
-  const _scratchProbe = new Cesium.Cartographic();
+  /** Scratch for probe coordinates (degrees). */
+  const _scratchProbe = { lon: 0, lat: 0 };
 
   // Regime tracking: mesh cells only apply while the photoreal (google-3d)
   // stack renders. main.js re-dispatches MapStackController.onChange as this
@@ -73,21 +74,22 @@ export function createMeshFloorSampler({
   // bundle, and the subscription is idempotent for the app's lifetime.
 
   /**
-   * True when a VISIBLE 3D tileset in the scene reports its streaming queue
-   * drained (tilesLoaded) — the mirror of cctv.js's projectionTilesReady.
-   * Walks top-level primitives only (a handful; once per poll).
-   * @param {Cesium.Scene} scene
+   * True when the globe is hidden (the google-3d regime draws the mesh
+   * alone) and the drawn 3D tiles have loaded what is in view; false with
+   * the globe shown or no tiles drawn. Asked of the globe port once per poll.
+   * The globe check matters on its own: the regime flag can still say
+   * photoreal while a switch to a globe stack is loading, or after a silent
+   * one, and a probe of the globe there would latch terrain as mesh.
+   * @param {object} viewer
    * @returns {boolean}
    */
-  function _visibleTilesetLoaded(scene) {
+  function _surfaceSettled(viewer) {
     try {
-      const prims = scene.primitives;
-      for (let i = 0; i < prims.length; i++) {
-        const p = prims.get(i);
-        if (p instanceof Cesium.Cesium3DTileset && p.show) {
-          return !!p.tilesLoaded;
-        }
-      }
+      const globe = findGlobe(viewer);
+      return (
+        globe?.isGlobeVisible?.() === false &&
+        globe.isSettled('surface') === true
+      );
     } catch {
       /* mid-teardown */
     }
@@ -97,34 +99,44 @@ export function createMeshFloorSampler({
   /**
    * Samples the rendered mesh height for the coarse cells containing `points`,
    * a few probes per cell, budget-capped, viewer-proximity-gated. Call ONCE per
-   * layer poll (never per contact, never per frame). Synchronous — Cesium's
+   * layer poll (never per contact, never per frame). Synchronous — the renderer's
    * sampleHeight is a CPU-side query against loaded tiles.
    *
-   * @param {Cesium.Scene|undefined} scene - The scene (skipped when absent/torn down).
+   * @param {object|undefined} viewer - The viewer whose renderer draws the
+   *   mesh (skipped when absent/torn down). The probe asks its query port
+   *   (`heightsOf`), which sees through every draw set not drawn as ground.
    * @param {Array<{lat: number, lon: number}>} points - Contact/waypoint coords.
    * @param {object} [options]
-   * @param {Array<object>} [options.excludeObjects] - Own billboards/models to
-   *   exclude from the probe (Cesium matches instances/.primitive/.id — pass
-   *   Billboard and Model instances, NOT collections).
+   * @param {string[]} [options.sets] - The caller's own draw set ids, seen
+   *   through as well.
    * @param {number} [options.viewerLat] @param {number} [options.viewerLon]
    *   Viewer subpoint (computed once by the caller's poll).
    */
   function sampleMeshFloorCells(
-    scene,
+    viewer,
     points,
-    { excludeObjects = [], viewerLat, viewerLon } = {},
+    { sets, viewerLat, viewerLon } = {},
   ) {
     if (!meshFloorPreferred()) return;
-    if (!scene || typeof scene.sampleHeight !== 'function') return;
+    if (!viewer || viewer.isDestroyed?.()) return;
+    const heights = heightsOf(viewer);
+    const exclude = Array.isArray(sets) ? sets : undefined;
+    // Without depth-texture support every probe throws: nothing to latch.
+    if (!heights?.supported().surface) return;
     if (!Array.isArray(points) || !points.length) return;
     // Round-5 hardening (the CCTV projectionTilesReady lesson, ported late):
     // while tiles are MID-STREAM a probe returns coarse-LOD heights — real
     // numbers, wildly wrong — and the one-shot latch made them permanent.
-    // Only sample when the visible Google tileset reports tilesLoaded AND the
+    // Only sample when the drawn tiles report they have settled AND the
     // camera is low enough that the streamed LOD near it is fine-grained.
-    const camH = scene.camera?.positionCartographic?.height;
+    let camH;
+    try {
+      camH = findCamera(viewer)?.pose().height;
+    } catch {
+      return; // mid-teardown
+    }
     if (!Number.isFinite(camH) || camH > MAX_CAMERA_HEIGHT_M) return;
-    if (!_visibleTilesetLoaded(scene)) return;
+    if (!_surfaceSettled(viewer)) return;
     let sampled = 0;
     const attempted = new Set();
     for (const p of points) {
@@ -156,22 +168,15 @@ export function createMeshFloorSampler({
       ) {
         continue; // too far: tiles not streamed there, probe would be a guaranteed miss
       }
-      let height;
-      try {
-        // Probe where the caller's point is, not at the cell's centre: a
-        // centre that falls on a roof would lift everything in the cell.
-        const carto = Cesium.Cartographic.fromDegrees(
-          p.lon,
-          p.lat,
-          0,
-          _scratchProbe,
-        );
-        height = scene.sampleHeight(carto, excludeObjects);
-        sampled += 1;
-      } catch {
-        continue; // scene mid-teardown — try again next poll
-      }
-      if (!Number.isFinite(height)) continue; // tiles not loaded yet — no negative latch
+      // Probe where the caller's point is, not at the cell's centre: a
+      // centre that falls on a roof would lift everything in the cell.
+      _scratchProbe.lon = p.lon;
+      _scratchProbe.lat = p.lat;
+      const height = heights.now(_scratchProbe, { exclude });
+      // A miss counts against the budget whatever its cause: past the support
+      // gate a probe only throws mid-teardown, when every later cell would too.
+      sampled += 1;
+      if (height === null) continue; // tiles not loaded yet — no negative latch
       // Round 5: a REAL Re:Earth prior is REQUIRED before any sample latches.
       //  - A geoid-fallback prior (cached while the proxy was failing) is a
       //    sea-level poison that rejected legitimate samples at elevated

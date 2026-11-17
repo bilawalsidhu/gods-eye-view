@@ -8,6 +8,7 @@ import { parseSharePath } from '../share/shareLinkPath.js';
 import { decodeShareView } from '../share/viewCodec.js';
 import { applicationPinia } from './vueRuntime.js';
 import { useGlobeActionsStore } from './stores/globeActions.js';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 
 /** The decoded view of a `/share/<code>` link. */
 const sharedState = (href) =>
@@ -28,7 +29,7 @@ function makeManager(href, { positioned = true } = {}) {
       roll: 0,
     },
   };
-  return new ShareLinkManager(viewer);
+  return new ShareLinkManager(bindFakeCesiumCamera(viewer));
 }
 
 function installClipboard(writeText) {
@@ -190,7 +191,7 @@ test('the shell’s camera controls answer tilt and north-up and publish their s
   const store = useGlobeActionsStore(applicationPinia());
   const navigations = [];
   const owner = {
-    viewer: { camera: { heading: 0 } },
+    viewer: bindFakeCesiumCamera({ camera: { heading: 0 } }),
     _navigation: {
       runOrientation: (noun, navigate) => {
         navigations.push(noun);
@@ -230,7 +231,7 @@ test('a shell that goes after a newer one leaves the newer one’s bar state', (
   const shellWith = () => {
     const owner = {
       _disposed: false,
-      viewer: { camera: { heading: 0 } },
+      viewer: bindFakeCesiumCamera({ camera: { heading: 0 } }),
       _navigation: { runOrientation: (_noun, navigate) => navigate() },
       _showToast() {},
       clearSelectedLayers: async () => {},
@@ -268,7 +269,7 @@ test('an older shell that answers again shows its clear and its unchanged camera
   const shellWith = (heading) => {
     const owner = {
       _disposed: false,
-      viewer: { camera: { heading } },
+      viewer: bindFakeCesiumCamera({ camera: { heading } }),
       _navigation: { runOrientation: (_noun, navigate) => navigate() },
       _showToast() {},
       clearSelectedLayers: async () => {},

@@ -321,15 +321,12 @@ function trailHarness({ fixes, nowMs, head }) {
     },
     layer: {},
   });
-  const headEntity = () =>
-    added.find((definition) =>
-      String(definition.id).startsWith('gev-trail:fl-head-'),
-    );
   return {
     tracking,
     flightState,
     drawn: () => (calls.at(-1) ?? []).flat(),
-    head: () => headEntity().polyline.positions.getValue(),
+    // The live head the trail would draw now.
+    head: () => tracking._trailHeadPositions(),
     setClock: (ms) => {
       clock = ms;
     },
@@ -372,11 +369,19 @@ test('while the display is between reports, the trail stops at the report behind
   const icon = Cesium.Cartesian3.fromDegrees(-100 + 0.075, 40, 10_000);
   const h = trailHarness({ fixes, nowMs, head: icon });
   h.tracking._startTrail('00a001');
-  // Reports at 0, 10 and 20 s are behind the icon (display time 25 s).
-  assert.equal(h.drawn().length, 3);
+  // Reports at 0, 10 and 20 s are behind the icon (display time 25 s): the
+  // body runs through them along their curve and ends at the third.
+  const body = h.drawn();
+  for (const report of fixes.slice(0, 3))
+    assert.ok(
+      body.some((p) => Cesium.Cartesian3.distance(p, report.position) < 0.01),
+    );
+  assert.ok(Cesium.Cartesian3.distance(body.at(-1), fixes[2].position) < 0.01);
+  // The head runs on from it to the icon.
   const head = h.head();
-  assert.equal(head.length, 2);
+  assert.ok(head.length >= 2);
   assert.ok(Cesium.Cartesian3.distance(head[0], fixes[2].position) < 0.01);
+  assert.ok(Cesium.Cartesian3.distance(head.at(-1), icon) < 0.01);
 });
 
 test('the hold-or-coast decision is made once per report: a floor that resolves mid-coast does not snap the icon back', () => {

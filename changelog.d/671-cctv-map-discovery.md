@@ -4,4 +4,5 @@
   distant preview. Explicit Nearest can reach the closest camera worldwide
   from an empty view without making panel enable jump away. Panning out of
   and back into an active camera does not reopen a deliberately collapsed
-  panel (khanmjk, kvnloo, #671).
+  panel. Read map movement, bounds and focus through the shared renderer
+  ports (khanmjk, kvnloo, #671).

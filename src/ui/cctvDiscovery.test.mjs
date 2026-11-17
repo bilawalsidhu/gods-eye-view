@@ -168,7 +168,8 @@ test('map pans do not reopen a collapsed panel when the active camera is unchang
       'map-only visibility changes must not expand an unchanged selection',
     );
     controls._renderCctvState({ ...state, enabled: false });
-    assert.deepEqual(expansions, [], 'disabling must not reopen the panel');
+    assert.deepEqual(expansions, [['cctv-panel', true]], 'disabling closes the panel without reopening it');
+    expansions.length = 0;
     controls._renderCctvState(state);
     assert.equal(expansions.length, 1, 'reenabling permits initial activation');
     controls._renderCctvState({

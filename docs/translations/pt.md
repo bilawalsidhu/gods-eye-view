@@ -57,6 +57,9 @@ The `many` form is the `other` text with «de» after the number: «{count} de c
 | aircraft, plane / flight / military flights   | aeronave, avião / voo / voos militares                       |
 | vessel, ship / TANKER (AIS class)             | embarcação / NAVIO-TANQUE                                    |
 | satellite / shell (Starlink) / DENSE          | satélite / camada orbital / DENSO                            |
+| FOCUS (the held object; the button)           | FOCO / FOCAR                                                 |
+| CONFIRMED (sightings chip; a landing)         | CONFIRMADOS / CONFIRMADA                                     |
+| CURRENTLY OVER (orbit, before a place name)   | SOBREVOO                                                     |
 | SPARSE / BALANCED / DENSE (detection modes)   | ESPARSO / EQUILIBRADO / DENSO (o modo)                       |
 | launch (rocket) / launch site / space mission | lançamento / local de lançamento / missão espacial           |
 | KM DOWNRANGE / EST. DOWNRANGE                 | KM DO LOCAL DE LANÇAMENTO / EST. PELA DIST. DO LANÇAMENTO    |
@@ -89,7 +92,7 @@ The `many` form is the `other` text with «de» after the number: «{count} de c
 | detection overlay                             | sobreposição de detecção                                     |
 | pin (Draw tool) / box (Recent Imagery)        | marcador / área                                              |
 | Cyber (HUD layout, effect)                    | Ciber                                                        |
-| heading / course / altitude / ground speed    | rumo / curso / altitude / velocidade solo (VELOC. SOLO)      |
+| heading / course / altitude / ground speed    | rumo / curso (a ship's course: rumo) / altitude / velocidade solo (VELOC. SOLO) |
 | map heading / bearing (compass, north up)     | orientação (do mapa)                                         |
 | HDG / BRG / CRS / FOV / DEST / SPD / RANGE    | HDG / BRG / CRS / FOV / DEST / SPD / RANGE (unchanged)       |
 | V/S (vertical speed code)                     | V/S (unchanged)                                              |

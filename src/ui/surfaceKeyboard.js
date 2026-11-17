@@ -33,6 +33,8 @@ export function createSurfaceKeyboard({
       return;
     }
     if (event.key !== 'Tab') return;
+    // Stories covers GEV while it is open: Tab stays in Stories.
+    if (documentRef.body?.classList?.contains?.('stories-mode')) return;
     const order = [
       ...root.querySelectorAll(
         'button, input, [href], [tabindex]:not([tabindex="-1"])',

@@ -340,12 +340,12 @@ test('the provider settings corner shows the picker only while the shell publish
   app.mount(host);
   t.after(() => app.unmount());
   const store = useLocaleStore(pinia);
-  assert.equal(document.getElementById('locale-picker'), null);
+  assert.equal(document.getElementById('locale-picker') === null, true);
   store.publishPicker({ current: 'de', onSelect() {} });
   await nextTick();
   const code = document.querySelector('#corner-actions .locale-picker-code');
   assert.equal(code?.textContent, 'DE');
   store.publishPicker(null);
   await nextTick();
-  assert.equal(document.getElementById('locale-picker'), null);
+  assert.equal(document.getElementById('locale-picker') === null, true);
 });

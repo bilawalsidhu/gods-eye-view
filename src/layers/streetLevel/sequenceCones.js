@@ -1,12 +1,23 @@
-import * as Cesium from 'cesium';
 import { imageConeGlyph } from './glyphs.js';
 import { passesImageryFilter } from './filter.js';
 import { createHorizonCull, metresBetween } from './view.js';
 import { msg } from '../../i18n/index.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { drawOf } from '../../render/rendererOf.js';
 
 /** Cones closer than this to the previous kept one are dropped. */
 const IMAGE_CONE_MIN_SPACING_M = 3;
 const IMAGE_CONE_SIZE_PX = 26;
+/** Cones a little larger near the eye, a third of their size far off. */
+const IMAGE_CONE_SCALE = Object.freeze({
+  near: 200,
+  nearValue: 1.1,
+  far: 6000,
+  farValue: 0.35,
+});
+
+/** Draw-set ids of the cone sets made so far, so every provider instance has its own. */
+let coneSets = 0;
 
 /**
  * @typedef {object} ConeImage   One image of a sequence, as the cones draw it.
@@ -43,7 +54,7 @@ export function thinImages(images, spacingM = IMAGE_CONE_MIN_SPACING_M) {
  *   The sequence's images in capture order, thinned (see `thinImages`).
  * @param {{coverage: string}} options.colors
  * @param {string} options.pickPrefix   Pick-id prefix of the cones.
- * @param {string} options.spriteId     Sprite-order id of the cone collection.
+ * @param {string} options.spriteId     Stem of the cone set's draw-set id.
  * @param {string} options.renderKey    Render-governor reason.
  * @param {(sequenceId: string|null) => void} [options.onHighlight]
  *   Highlight the sequence's coverage line (null: none).
@@ -60,7 +71,7 @@ export function createSequenceCones({
   onHighlight = () => {},
   passes = passesImageryFilter,
 }) {
-  const { render, sprites } = state.services;
+  const { render } = state.services;
 
   function requestRender() {
     render?.governorRequestRender?.(renderKey);
@@ -70,37 +81,41 @@ export function createSequenceCones({
     state.context.notify();
   }
 
-  /** Drawn cone billboards. */
+  /** Drawn cones: `{icon, position, show}` each, `icon` as last sent. */
   let cones = [];
 
   // The cones skip the depth test: hide the ones behind the globe.
   const horizon = createHorizonCull({
     getViewer: () => state.viewer,
     items: () => cones,
-    onChange: requestRender,
+    onChange: (changed) => {
+      state.sequence.set?.upsert(
+        changed.map((cone) => ({ ...cone.icon, show: cone.show })),
+      );
+      requestRender();
+    },
   });
 
   function ensureCollections(viewer) {
-    if (state.sequence.collection) return;
-    state.sequence.collection = new Cesium.BillboardCollection({
-      scene: viewer.scene,
+    if (state.sequence.set) return;
+    state.sequence.set = drawOf(viewer).icons({
+      id: `${spriteId}:${++coneSets}`,
     });
-    viewer.scene.primitives.add(state.sequence.collection);
-    sprites?.registerSpriteCollection?.(spriteId, state.sequence.collection);
+    // Drawn from now, empty: the cones keep their place by when they were
+    // made (after the marker).
+    state.sequence.set.set([]);
   }
 
   function clearCones() {
-    state.sequence.collection?.removeAll();
+    state.sequence.set?.clear();
     state.sequence.images = [];
     cones = [];
     horizon.stop();
   }
 
   function renderCones(images) {
-    const collection = state.sequence.collection;
-    if (!collection) return;
-    collection.removeAll();
-    cones = [];
+    const set = state.sequence.set;
+    if (!set) return;
     // One colour per source; 360° images keep the ring shape.
     const cone = imageConeGlyph({ size: 32, color: colors.coverage });
     const ring = imageConeGlyph({
@@ -110,25 +125,29 @@ export function createSequenceCones({
     });
     // Resolved now, so a "since N days" window keeps up with the clock.
     const filter = state.context.getFilter();
+    cones = [];
     for (const image of images) {
       if (!passes(image, filter)) continue;
-      const billboard = collection.add({
-        id: `${pickPrefix}${image.id}`,
-        position: Cesium.Cartesian3.fromDegrees(image.lon, image.lat),
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-        image: image.isPano ? ring : cone,
-        imageId: image.isPano ? `${spriteId}:pano` : `${spriteId}:flat`,
-        width: IMAGE_CONE_SIZE_PX,
-        height: IMAGE_CONE_SIZE_PX,
-        rotation: -Cesium.Math.toRadians(image.compassAngle),
-        alignedAxis: Cesium.Cartesian3.UNIT_Z,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        verticalOrigin: Cesium.VerticalOrigin.CENTER,
-        scaleByDistance: new Cesium.NearFarScalar(200, 1.1, 6000, 0.35),
+      cones.push({
+        position: fromDegrees(image.lon, image.lat),
+        show: true,
+        icon: {
+          id: `${pickPrefix}${image.id}`,
+          pos: { lon: image.lon, lat: image.lat },
+          height: 'clampGround',
+          image: image.isPano ? ring : cone,
+          size: [IMAGE_CONE_SIZE_PX, IMAGE_CONE_SIZE_PX],
+          rotationMode: 'course',
+          course: image.compassAngle,
+          anchor: 'center',
+          disableDepthTest: Number.POSITIVE_INFINITY,
+          scaleByDistance: IMAGE_CONE_SCALE,
+        },
       });
-      cones.push(billboard);
     }
-    horizon.update();
+    // Culled before they are drawn, so far-side cones never show.
+    horizon.update(cones, { quiet: true });
+    set.set(cones.map((item) => ({ ...item.icon, show: item.show })));
     requestRender();
   }
 
@@ -202,7 +221,7 @@ export function createSequenceCones({
   }
 
   function setVisible(visible) {
-    if (state.sequence.collection) state.sequence.collection.show = visible;
+    if (state.sequence.set) state.sequence.set.show = visible;
     requestRender();
   }
 
@@ -210,11 +229,10 @@ export function createSequenceCones({
     state.sequence.abort?.abort();
     horizon.stop();
     cones = [];
-    const collection = state.sequence.collection;
-    if (collection) {
-      sprites?.unregisterSpriteCollection?.(spriteId, collection);
-      viewer?.scene?.primitives?.remove(collection);
-      state.sequence.collection = null;
+    const set = state.sequence.set;
+    if (set) {
+      set.dispose();
+      state.sequence.set = null;
     }
     state.sequence.images = [];
     state.sequence.selectedId = null;
