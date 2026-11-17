@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { clientKey, makeRateLimiter } from '../common/rate-limit.js';
+import { clientNetworkKey, makeRateLimiter } from '../common/rate-limit.js';
 import { admitSameSiteKeyless } from '../common/same-site.js';
 
 /**
@@ -76,6 +76,14 @@ const SILENCE_MS = 30_000;
 const IDLE_MS = 120_000;
 /** Waits between connection attempts, the last one repeating. */
 const RETRY_LADDER_MS = Object.freeze([5_000, 15_000, 60_000, 300_000]);
+/**
+ * A session that has run this long has proved itself: its updates bring the
+ * retry ladder back to its first step. One that ends sooner (a snapshot and
+ * then `END`, over and over) keeps climbing the ladder.
+ */
+const STABLE_SESSION_MS = 60_000;
+/** The opening handshake with the feed gives up after this. */
+const HANDSHAKE_TIMEOUT_MS = 10_000;
 /** A frame larger than this is not telemetry; it is dropped unread. */
 const MAX_FRAME_BYTES = 64 * 1024;
 const TICK_MS = 5_000;
@@ -173,11 +181,14 @@ export function createIssTelemetryRelay({ createSocket, now = Date.now }) {
   let failures = 0;
   let retryAt = 0;
   let unavailable = false;
+  /** When the live socket was opened, or null without one. */
+  let connectedAt = null;
 
   function drop() {
     generation += 1;
     const old = socket;
     socket = null;
+    connectedAt = null;
     fields.clear();
     // A replacement session must rebuild both its joint snapshot and signal
     // credit; a new clock tick cannot make the old session's angles live.
@@ -223,7 +234,8 @@ export function createIssTelemetryRelay({ createSocket, now = Date.now }) {
     const name = ISS_TELEMETRY_ITEMS[update.item - 1];
     if (!name) return;
     fields.set(update.item, update.fields);
-    failures = 0;
+    if (connectedAt !== null && now() - connectedAt >= STABLE_SESSION_MS)
+      failures = 0;
     const [stamp, raw, statusClass] = update.fields;
     const at = now();
     if (name === SIGNAL_ITEM) {
@@ -257,6 +269,7 @@ export function createIssTelemetryRelay({ createSocket, now = Date.now }) {
     generation += 1;
     const mine = generation;
     socket = opened;
+    connectedAt = now();
     lastFrameAt = now();
     opened.on('open', () => {
       if (mine !== generation) return;
@@ -380,7 +393,14 @@ export function issTelemetryProxy({
   env,
   createSocket = () => {
     const WebSocket = loadWebSocket();
-    return WebSocket ? new WebSocket(FEED_URL, FEED_PROTOCOL) : null;
+    // `ws` buffers a whole frame before handing it over, up to 100 MiB by
+    // default: the frame cap applies on the socket, not only after it.
+    return WebSocket
+      ? new WebSocket(FEED_URL, FEED_PROTOCOL, {
+          maxPayload: MAX_FRAME_BYTES,
+          handshakeTimeout: HANDSHAKE_TIMEOUT_MS,
+        })
+      : null;
   },
   now = Date.now,
 } = {}) {
@@ -407,6 +427,12 @@ export function issTelemetryProxy({
 
   function handle(req, res) {
     if (admitSameSiteKeyless(req, res)) return;
+    // The route is the one path: anything under it is not found, as JSON.
+    const path = String(req.url ?? '/').split('?')[0];
+    if (path !== '/' && path !== '') {
+      json(res, 404, { error: 'Not Found' });
+      return;
+    }
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       json(res, 405, { error: 'Method Not Allowed' });
       return;
@@ -416,7 +442,8 @@ export function issTelemetryProxy({
       json(res, 200, { configured: false });
       return;
     }
-    if (!allow(clientKey(req))) {
+    // IPv6 clients fold to their /64, so one host cannot spread across it.
+    if (!allow(clientNetworkKey(req))) {
       json(res, 429, { error: 'Too Many Requests' });
       return;
     }

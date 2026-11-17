@@ -315,7 +315,7 @@ function install(plugin, preview = false) {
   plugin[preview ? 'configurePreviewServer' : 'configureServer']({
     middlewares: { use: (route, handler) => routes.set(route, handler) },
   });
-  return (method = 'GET', headers = {}) => {
+  return (method = 'GET', headers = {}, url = '/') => {
     const res = {
       headers: {},
       writeHead(status, headers) {
@@ -329,10 +329,7 @@ function install(plugin, preview = false) {
         this.status ??= this.statusCode;
       },
     };
-    routes.get(ISS_TELEMETRY_ROUTE)(
-      { url: '/', method, headers, socket: {} },
-      res,
-    );
+    routes.get(ISS_TELEMETRY_ROUTE)({ url, method, headers, socket: {} }, res);
     return res;
   };
 }
@@ -375,6 +372,10 @@ test('switched on, the route opens the feed once and serves the snapshot', () =>
     request();
     assert.equal(sockets.length, 1, 'one connection for every request');
     assert.equal(request('POST').status, 405);
+    const unknown = request('GET', {}, '/anything');
+    assert.equal(unknown.status, 404);
+    assert.deepEqual(JSON.parse(unknown.body), { error: 'Not Found' });
+    assert.equal(request('GET', {}, '/?t=1').status, 200, 'a query is fine');
     assert.equal(
       request('GET', { 'sec-fetch-site': 'cross-site' }).status,
       403,
@@ -387,4 +388,43 @@ test('switched on, the route opens the feed once and serves the snapshot', () =>
     plugin.closeBundle();
   }
   assert.equal(sockets[0].terminated, true);
+});
+
+test('a session that keeps ending soon after its snapshot climbs the retry ladder', () => {
+  const { relay, sockets, clock } = relayAt(NOV_13);
+  relay.demand();
+  /** The current socket opens, sends a snapshot update, then ends. */
+  const shortSession = () => {
+    const socket = sockets.at(-1);
+    socket.emit('open');
+    socket.emit('message', 'CONOK,S1,50000,5000,*');
+    socket.emit(
+      'message',
+      `U,1,${index('S0000004')},${stampOf(clock.ms)}|17|24`,
+    );
+    socket.emit('message', 'END,41,session closed');
+  };
+  // Each wait is the next step: 5 s, 15 s, 60 s, then 5 minutes.
+  for (const wait of [5_000, 15_000, 60_000, 300_000, 300_000]) {
+    shortSession();
+    const before = sockets.length;
+    clock.ms += wait - 1_000;
+    relay.demand();
+    assert.equal(sockets.length, before, `not before ${wait / 1000} s`);
+    clock.ms += 1_000;
+    relay.demand();
+    assert.equal(sockets.length, before + 1, `again after ${wait / 1000} s`);
+  }
+  // A session that runs a minute before its updates brings the ladder down.
+  const socket = sockets.at(-1);
+  socket.emit('open');
+  socket.emit('message', 'CONOK,S1,50000,5000,*');
+  clock.ms += 60_000;
+  relay.demand();
+  socket.emit('message', `U,1,${index('S0000004')},${stampOf(clock.ms)}|17|24`);
+  socket.emit('message', 'END,41,session closed');
+  const before = sockets.length;
+  clock.ms += 5_000;
+  relay.demand();
+  assert.equal(sockets.length, before + 1, 'back to 5 s');
 });
