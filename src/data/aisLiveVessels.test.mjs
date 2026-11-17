@@ -1461,6 +1461,36 @@ test('enable owns one grace timer and disable/re-enable starts a new session', a
   }
 });
 
+test('the layer turns on and off when its feed fails', async () => {
+  const harness = installWireHarness(undefined, { enabled: false });
+  const priorFetch = globalThis.fetch;
+  const priorWarn = console.warn;
+  const clock = makeFakeAisRuntime();
+  _setAisRuntimeForTest(clock.runtime);
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 503,
+    json: async () => ({
+      status: 'missing-key',
+      error: 'AISSTREAM_API_KEY is not set',
+    }),
+  });
+  console.warn = () => {};
+  try {
+    // Turning it on succeeds; the failure is shown on the layer.
+    assert.notEqual(await aisLiveVesselsLayer.enable(harness.viewer), false);
+    const feed = _getVesselFeedStateForTest();
+    assert.equal(feed.status, 'unavailable');
+    assert.equal(feed.error, 'AISSTREAM_API_KEY not set');
+    assert.notEqual(aisLiveVesselsLayer.disable(), false);
+  } finally {
+    globalThis.fetch = priorFetch;
+    console.warn = priorWarn;
+    harness.cleanup();
+    _setAisRuntimeForTest();
+  }
+});
+
 test('vessel trail lifecycle: deselect clears the selected-vessel trail', () => {
   const harness = installWireHarness(undefined);
   try {
