@@ -336,7 +336,7 @@ function updateVessel(nowMs) {
  * gives none) and slew toward its heading. A frame that is null, malformed or
  * for another subject ends the view, as an aircraft tracked meanwhile does.
  * The update runs on the provider's `cameraIntervalMs` (0: every frame), and
- * its rates advance by the time that interval spans (cockpitSubjectStepSec).
+ * its rates advance by the time since the last update (cockpitSubjectStepSec).
  */
 function updateSubject(nowMs) {
   const provider = this.subjectProvider;
@@ -366,7 +366,7 @@ function updateSubject(nowMs) {
       frame.longitude,
     );
     // A frame with no height stands on the shared floor; while that is cold
-    // it keeps the height it last stood at.
+    // it keeps the last height it had, the entry frame's included.
     heightM = Number.isFinite(floorM) ? floorM : this.subjectHeightM;
   }
   if (!Number.isFinite(heightM)) {

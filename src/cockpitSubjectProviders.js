@@ -146,8 +146,12 @@ function providerName(provider, order) {
   return `#${order}`;
 }
 
-/** Why `provider` cannot be kept, or null. */
-function refusal(provider, kinds) {
+/**
+ * Why `provider` cannot be kept, or null. Its worded members, read once here,
+ * go into `words` (`face`, `labels`, `look`) to seed its copy, so one that
+ * fails when read again cannot undo this check.
+ */
+function refusal(provider, kinds, words) {
   if (!isObject(provider)) return 'not an object';
   if (typeof provider.kind !== 'string' || !KIND_PATTERN.test(provider.kind))
     return 'malformed kind';
@@ -165,11 +169,14 @@ function refusal(provider, kinds) {
     typeof provider.isEntryAllowed !== 'function'
   )
     return 'isEntryAllowed is not a function';
-  if (!wordedNow(provider, 'entryFace', faceOf)) return 'malformed entry face';
-  if (!wordedNow(provider, 'labels', labelsOf))
-    return 'labels need view, exit and exitText';
-  if (provider.look != null && !wordedNow(provider, 'look', lookOf))
-    return 'look needs an aheadLabel';
+  words.face = wordedNow(provider, 'entryFace', faceOf);
+  if (!words.face) return 'malformed entry face';
+  words.labels = wordedNow(provider, 'labels', labelsOf);
+  if (!words.labels) return 'labels need view, exit and exitText';
+  if (provider.look != null) {
+    words.look = wordedNow(provider, 'look', lookOf);
+    if (!words.look) return 'look needs an aheadLabel';
+  }
   return null;
 }
 
@@ -222,9 +229,10 @@ export function cockpitSubjectProviders(
   (Array.isArray(list) ? list : []).forEach((provider, order) => {
     let reason;
     let copy = null;
+    const words = { face: null, labels: null, look: null };
     try {
-      reason = refusal(provider, kinds);
-      if (!reason) copy = keptProvider(provider, order);
+      reason = refusal(provider, kinds, words);
+      if (!reason) copy = keptProvider(provider, order, words);
     } catch {
       reason = 'a member threw when read';
     }
@@ -241,14 +249,15 @@ export function cockpitSubjectProviders(
   return Object.freeze(kept);
 }
 
-/** The frozen copy the Cockpit keeps of a provider `refusal` passed. */
-function keptProvider(provider, order) {
+/**
+ * The frozen copy the Cockpit keeps of a provider `refusal` passed, seeded
+ * with the worded members it checked.
+ */
+function keptProvider(provider, order, words) {
   // Worded members are read again on each use (see above); the last good
   // read stands in for one that is malformed or throws.
-  let face = wordedNow(provider, 'entryFace', faceOf);
-  let labels = wordedNow(provider, 'labels', labelsOf);
+  let { face, labels, look } = words;
   // On or off, and its rest pitch, as first read.
-  let look = wordedNow(provider, 'look', lookOf);
   const restPitchDeg = look?.restPitchDeg ?? 0;
   return Object.freeze({
     kind: provider.kind,
@@ -337,9 +346,9 @@ function candidateOf(raw) {
  * A `heightM` that is not finite or lies outside
  * COCKPIT_SUBJECT_MIN_HEIGHT_M..COCKPIT_SUBJECT_MAX_HEIGHT_M reads as null:
  * the eye then stands on the shared floor, or where it last stood while that
- * is cold. The anchor is `'inertial'` only when asked for and the frame
- * gives a speed; otherwise it is `'exact'`. An id is compared with `heldId`
- * trimmed, as `cockpitSubjectCandidate` trims it.
+ * is cold. The anchor is `'inertial'` by default for a frame with a valid
+ * speed, and `'exact'` when asked for or with no speed. An id is compared
+ * with `heldId` trimmed, as `cockpitSubjectCandidate` trims it.
  * @param {unknown} raw What `read()` returned.
  * @param {string} heldId The subject the view holds.
  * @returns {object|null} `{id, name, latitude, longitude, heightM, headingDeg,

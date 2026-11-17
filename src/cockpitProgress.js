@@ -30,13 +30,29 @@ const TONE_RANK = Object.freeze([
 const stronger = (a, b) =>
   TONE_RANK.indexOf(b) > TONE_RANK.indexOf(a) ? b : a;
 
-/** A label's width estimate (px): its longer line in small capitals. */
+/**
+ * Full-width glyphs (CJK ideographs and punctuation, kana, Hangul, full-width
+ * forms), each about 1 em wide.
+ */
+const WIDE_GLYPH =
+  /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꥠ-꥿가-힣豈-﫿︰-﹏＀-｠￠-￦\u{20000}-\u{3fffd}]/u;
+
+/** One line's width in the label's 10 px type, 0.06 em apart (px). */
+function lineWidthPx(line) {
+  let wide = 0;
+  let narrow = 0;
+  for (const glyph of String(line ?? ''))
+    if (WIDE_GLYPH.test(glyph)) wide += 1;
+    else narrow += 1;
+  return wide * 10.6 + narrow * 6.4;
+}
+
+/**
+ * A label's width estimate (px): its longer line, a full-width glyph at
+ * 10.6 px and any other at 6.4 px.
+ */
 export function estimateProgressLabelPx(label) {
-  const longest = Math.max(
-    String(label?.text ?? '').length,
-    String(label?.detail ?? '').length,
-  );
-  return longest * 6.4 + 8;
+  return Math.max(lineWidthPx(label?.text), lineWidthPx(label?.detail)) + 8;
 }
 
 /**

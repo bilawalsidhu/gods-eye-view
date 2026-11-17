@@ -735,8 +735,16 @@ export class CockpitViewController {
   publishCockpitSignals() {
     return publishCockpitSignals.call(this);
   }
-  pushCockpitSignal(key, tone, title, detail, target) {
-    return pushCockpitSignal.call(this, key, tone, title, detail, target);
+  pushCockpitSignal(key, tone, title, detail, target, options) {
+    return pushCockpitSignal.call(
+      this,
+      key,
+      tone,
+      title,
+      detail,
+      target,
+      options,
+    );
   }
   dropCockpitSignal(key) {
     return dropCockpitSignal.call(this, key);

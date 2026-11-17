@@ -4,7 +4,10 @@
 // the travelled part.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cockpitProgressLayout } from './cockpitProgress.js';
+import {
+  cockpitProgressLayout,
+  estimateProgressLabelPx,
+} from './cockpitProgress.js';
 
 const tick = (at, label = null, tone = 'normal') => ({ at, tone, label });
 const label = (text, priority, align = 'center', detail = '') => ({
@@ -141,4 +144,18 @@ test('a long run of calls still lays out, every one a tick or part of one', () =
   assert.equal(count(wide), 60);
   assert.ok(narrow.ticks.length < wide.ticks.length);
   assert.equal(wide.ticks.length, 60);
+});
+
+test('a CJK stop name gets the width its full-width glyphs need', () => {
+  const text = '中央駅前広場東口'; // 8 full-width glyphs
+  // 10 px type, 0.06 em apart.
+  const needPx = text.length * (10 + 0.6);
+  const givenPx = estimateProgressLabelPx({ text, detail: '' });
+  assert.ok(
+    givenPx >= needPx,
+    `${givenPx} px given, about ${needPx} px needed`,
+  );
+  // Latin, and half-width katakana, keep the narrower estimate.
+  assert.equal(estimateProgressLabelPx({ text: 'CENTRAL' }), 7 * 6.4 + 8);
+  assert.equal(estimateProgressLabelPx({ text: 'ｶﾀｶﾅ' }), 4 * 6.4 + 8);
 });

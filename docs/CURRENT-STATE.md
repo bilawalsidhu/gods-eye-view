@@ -2743,28 +2743,33 @@ first in that order decides alone: when its gate is shut there is no entry
 rather than the next subject's.
 
 A frame places the eye `eye.upM` above `heightM` (the shared floor where the
-frame gives none, or where it last stood while that floor is cold; with
-neither, the camera stays where it is and the HUD reads ACQUIRING SURFACE for
+frame gives none, or the last height it had, the entry frame's included, while
+that floor is cold; with neither, the camera stays where it is and the HUD reads ACQUIRING SURFACE for
 at most `COCKPIT_GROUND_WAIT_TIMEOUT_MS`, after which the view ends and the
 subject is released: no height stands in for a floor never read), slews toward `headingDeg` at the provider's rate, and may
 turn off the floor clamps (`groundClamp: false`, for a subject inside a
 structure) or keep the anchor exactly on the subject (`anchor: 'exact'`, for a
 layer that already moves it smoothly; a frame with no `speedMps` is always
 exact, since an inertial anchor runs on at the frame's speed); `cameraIntervalMs: 0` updates the
-camera every rendered frame. A frame that is null, malformed or for another
+camera every rendered frame. Each update turns, eases and moves the view by the
+time since the last one, so it keeps up when the browser draws few frames; an
+update more than a second past its interval (a hidden tab) moves it as one a
+second late would. A frame that is null, malformed or for another
 subject ends the view (`restoreTracking: false`), as an aircraft tracked
 meanwhile and the provider's layer turning off do; the exit control asks the
 provider to restore its subject. The generic HUD shows the provider's kicker,
 title, meta line, speed with its unit and tag, readout cards, always-visible
-source rows, banner, route card and Live Signals rows, a veil that darkens the
+source rows, banner, route card and Live Signals rows (each changes where it
+stands, so a changing ETA never pushes a steady warning off the list), a veil that darkens the
 picture under the HUD (with passing light streaks, which stop under reduced
 motion), arrow-key look-around when the provider asks for it, and a progress
 line along the bottom edge (`src/cockpitProgress.js`: close ticks merge,
-labels never overlap). Core translates none of the provider's text: a host
+labels never overlap, a full-width CJK, kana or Hangul glyph given about 1 em). Core translates none of the provider's text: a host
 words it for the page's language (`gods-eye-view/i18n`:
 `getLocale`, `onLocaleChange`). Its entry face, labels and look may be
 functions, read again when they are shown and on a change of language, as the
-HUD view is.
+HUD view is; a read that throws or is malformed keeps the last good words, at
+first those checked when the provider was registered.
 
 The Rail layer offers a read API for such a view: `getSelectedTrain()` and
 `getCockpitSubject()` (a snapshot of the train: where it is along its line,

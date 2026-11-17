@@ -39,17 +39,32 @@ export function publishCockpitSignals() {
   this.scheduleContextLayout();
 }
 
-export function pushCockpitSignal(key, tone, title, detail, target = null) {
+/**
+ * Log a signal as the newest row, unless its key last said the same.
+ * @param {{inPlace?: boolean}} [options] `inPlace`: a status row, such as a
+ *   provider's, that changes where it stands rather than log a new row, and
+ *   comes back if newer rows pushed it off the list.
+ */
+export function pushCockpitSignal(
+  key,
+  tone,
+  title,
+  detail,
+  target = null,
+  { inPlace = false } = {},
+) {
   if (!title || !detail) return;
   const signature = `${title}|${detail}|${target?.layerId || ''}|${target?.id || ''}`;
-  if (this.signalSignatures.get(key) === signature) return;
-  this.signalSignatures.set(key, signature);
   // A locale change words the signal again where it stands.
-  const shown = this.rewordingSignals
-    ? this.signalItems.find((item) => item.key === key)
-    : null;
+  const shown =
+    this.rewordingSignals || inPlace
+      ? this.signalItems.find((item) => item.key === key)
+      : null;
+  if (this.signalSignatures.get(key) === signature && (!inPlace || shown))
+    return;
+  this.signalSignatures.set(key, signature);
   if (shown) {
-    Object.assign(shown, { title, detail });
+    Object.assign(shown, { tone, title, detail });
     this.publishCockpitSignals();
     return;
   }

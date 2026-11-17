@@ -257,6 +257,8 @@ function updateSubjectHud(info, nowMs, forceContext) {
     this.maybeRefreshRegionalBrief(info);
     this.showContextCard(false);
     const keys = new Set();
+    // The view's rows are its current signals: each changes where it stands,
+    // so a changing one (an ETA) never pushes a steady one off the list.
     for (const signal of hud.signals) {
       const key = `subject:${signal.id}`;
       keys.add(key);
@@ -265,6 +267,8 @@ function updateSubjectHud(info, nowMs, forceContext) {
         SUBJECT_SIGNAL_TONES[signal.tone] ?? 'info',
         signal.title,
         signal.detail || signal.title,
+        null,
+        { inPlace: true },
       );
     }
     for (const key of this.subjectSignalKeys ?? [])
