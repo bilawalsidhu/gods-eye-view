@@ -4086,5 +4086,14 @@
   "{h} h {m} min": "{h} h {m} min",
   "{n} min": "{n} min",
   "{speed} {direction}": "{speed} från {direction}",
-  "{n} mm": "{n} mm"
+  "{n} mm": "{n} mm",
+  "Scanning": "Skannar",
+  "Route": "Rutt",
+  "3D model": "3D-modell",
+  "3D": "3D",
+  "Cockpit view": "Cockpitvy",
+  "KT": "KT",
+  "Course to {code}: {course}": "Kurs mot {code}: {course}",
+  "Over {place}": "Över {place}",
+  "Below": "Nedanför"
 }

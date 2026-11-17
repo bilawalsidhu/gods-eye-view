@@ -1,10 +1,14 @@
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { formatNumber, t } from '../../../i18n/index.js';
 import { factFigure, factLabel, factValue, sayWords, useEntityCardStore } from '../../stores/entityCard.js';
+import AircraftModelHero from './AircraftModelHero.vue';
+import SatelliteGroundView from './SatelliteGroundView.vue';
+import FlightCockpitView from './FlightCockpitView.vue';
 import AltitudeGraph from './AltitudeGraph.vue';
 import { contextNeedle, contextSearchText, matchesContextSearch } from '../../contextSearch.js';
+import RouteGlobe from './RouteGlobe.vue';
 import CctvPreview from './CctvPreview.vue';
 import { useCctvStore } from '../../stores/cctv.js';
 import SpotConditions from './SpotConditions.vue';
@@ -89,19 +93,30 @@ const ageText = computed(() => {
 // depth; a fire's power), in that order. The rest stay in the grid. An
 // aircraft's altitude is left out: its graph already leads with the figure.
 const altitudeGraphed = computed(() => card.value?.kind === 'aircraft' && Number.isFinite(card.value?.altitudeM));
+// A satellite graphs its altitude and its speed, and leaves both out of the
+// tiles and the grid.
+const orbitGraphed = computed(() => card.value?.kind === 'satellite' && Number.isFinite(card.value?.altitudeM));
+const graphedFields = computed(() => (orbitGraphed.value ? ['altitudeM', 'speedMps'] : altitudeGraphed.value ? ['altitudeM'] : []));
 const tiles = computed(() => {
   const facts = card.value?.facts || [];
   return (card.value?.headline || [])
-    .filter((field) => !(altitudeGraphed.value && field === 'altitudeM'))
+    .filter((field) => !graphedFields.value.includes(field))
     .map((field) => facts.find((fact) => fact.field === field))
     .filter(Boolean)
     .slice(0, 3);
 });
 const restFacts = computed(() => {
   const shown = new Set(tiles.value.map((fact) => fact.field));
-  if (altitudeGraphed.value) shown.add('altitudeM');
+  for (const field of graphedFields.value) shown.add(field);
   return (card.value?.facts || []).filter((fact) => !shown.has(fact.field));
 });
+
+// What the turning model's callout says: what can be worked out about the
+// flight (its phase, flight level, Mach, what its squawk means, how fresh its
+// signal is), which the facts below don't already show.
+const callouts = computed(() =>
+  (card.value?.insights || []).map((item) => ({ label: t(item.label), value: sayWords(item.words, item.value) })),
+);
 
 
 // The line under the name: who runs it and what it is. The layer is already
@@ -186,10 +201,116 @@ watch(
   { immediate: true },
 );
 
-// The hero tile at the top of every card. A camera shows its latest frame.
+// The hero tile at the top of every card. A flight shows its photo, its route
+// on a small globe, its 3D model and the view from its cockpit; a vessel, its
+// photo; a satellite, the ground beneath it; a camera, its latest frame.
+// The globe, model and cockpit view are the renderer's (`store.previews()`).
 // Anything else gets a quiet placeholder with its icon and its headline
-// figures until it has imagery of its own.
-const heroKind = computed(() => (card.value?.layerId === 'cctv' ? 'camera' : 'none'));
+// figures until it has imagery of its own. Previews stay mounted so switching
+// shows the next one at once.
+const routeFailed = ref(false);
+const routeKnown = computed(() => Boolean(card.value?.route?.fromAt && card.value?.route?.toAt) && !routeFailed.value);
+const modelFailed = ref(false);
+const cockpitFailed = ref(false);
+const hasPosition = computed(() => Number.isFinite(card.value?.lat) && Number.isFinite(card.value?.lon));
+const cockpitKnown = computed(() => card.value?.kind === 'aircraft' && hasPosition.value && !cockpitFailed.value);
+const modelKnown = computed(() => Boolean(card.value?.aircraftModel) && !modelFailed.value);
+const preview = ref(null);
+// The photo the item's layer looked up (Planespotters for a tracked
+// airliner, Open Vessel Photos for a selected vessel), with its credit.
+const failedPhoto = ref('');
+const photo = computed(() => {
+  const found = card.value?.photo;
+  if (!found?.src || found.src === failedPhoto.value) return null;
+  const { photographer, licence } = found;
+  const credit = licence
+    ? photographer
+      ? t('Photo: {photographer} · {licence}', { photographer, licence })
+      : t('Photo · {licence}', { licence })
+    : photographer
+      ? t('Photo © {photographer}', { photographer })
+      : '';
+  return { ...found, credit };
+});
+const photoAvailable = computed(() => Boolean(photo.value));
+const onPhotoError = (event) => (failedPhoto.value = event.currentTarget.getAttribute('src'));
+watch(() => props.withContacts, () => (preview.value = null));
+// The model and the cockpit view take turns: after each of the model's
+// cycles, the view ahead from the cockpit shows for as long as that cycle
+// took. It is made only once it is first needed. A manual selection holds the
+// preview until another view or another item is selected.
+const modelTurn = ref('model');
+const cockpitMade = ref(false);
+const activeFlightPreview = computed(() => {
+  const chosen = preview.value;
+  if (photoAvailable.value && (chosen === null || chosen === 'photo')) return 'photo';
+  if (cockpitKnown.value && (chosen === 'cockpit' || modelTurn.value === 'other')) return 'cockpit';
+  if (routeKnown.value && (chosen !== 'model' || !modelKnown.value)) return 'route';
+  if (modelKnown.value) return 'model';
+  return photoAvailable.value ? 'photo' : null;
+});
+let turnTimer = 0;
+function onCockpitFailed() {
+  cockpitFailed.value = true;
+  if (preview.value === 'cockpit') preview.value = null;
+  clearTimeout(turnTimer);
+  modelTurn.value = 'model';
+}
+function showOtherView(ms) {
+  if (preview.value !== null || !hasPosition.value) return;
+  if (!cockpitKnown.value || activeFlightPreview.value === 'photo') return;
+  clearTimeout(turnTimer);
+  modelTurn.value = 'other';
+  cockpitMade.value = true;
+  turnTimer = setTimeout(() => (modelTurn.value = 'model'), Math.min(Math.max(ms, 4000), 30000));
+}
+
+const heroKind = computed(() => {
+  if (card.value?.kind === 'aircraft' && (photoAvailable.value || routeKnown.value || modelKnown.value)) return 'flight';
+  if (card.value?.kind === 'vessel' && photoAvailable.value) return 'photo';
+  if (card.value?.layerId === 'satellites' && hasPosition.value) return 'satellite';
+  if (card.value?.layerId === 'cctv') return 'camera';
+  return 'none';
+});
+// The route globe has no cycle of its own: it shows for ROUTE_TURN_MS,
+// then the cockpit view shows for as long, and round again.
+const ROUTE_TURN_MS = 20_000;
+let routeTimer = 0;
+watch(
+  [heroKind, activeFlightPreview, preview, cockpitKnown, () => card.value?.key],
+  () => {
+    clearTimeout(routeTimer);
+    // Under reduced motion the views do not swap by themselves (the model
+    // shows no scan there either, so it never hands over).
+    if (globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
+    if (preview.value === null && cockpitKnown.value && heroKind.value === 'flight' && activeFlightPreview.value === 'route')
+      routeTimer = setTimeout(() => showOtherView(ROUTE_TURN_MS), ROUTE_TURN_MS);
+  },
+  { immediate: true },
+);
+// Picking a preview shows it at once, ending the cockpit view's turn.
+function choosePreview(which) {
+  clearTimeout(turnTimer);
+  modelTurn.value = 'model';
+  preview.value = which;
+  if (which === 'cockpit') cockpitMade.value = true;
+}
+onBeforeUnmount(() => {
+  clearTimeout(turnTimer);
+  clearTimeout(routeTimer);
+});
+watch(
+  () => card.value?.key,
+  () => {
+    preview.value = null;
+    routeFailed.value = false;
+    modelFailed.value = false;
+    cockpitFailed.value = false;
+    clearTimeout(turnTimer);
+    modelTurn.value = 'model';
+    cockpitMade.value = false;
+  },
+);
 
 // Things that move are read again only after they have gone a fair way, so
 // following a jet does not ask for the weather every few seconds.
@@ -226,7 +347,35 @@ watch(
   <Transition name="entity-card">
     <section v-if="card" id="entity-card" class="entity-card" :aria-label="t('Selected on the map')" :data-layer="card.layerId">
       <div class="entity-hero" :data-hero="heroKind">
-        <CctvPreview v-if="heroKind === 'camera'" :camera-id="card.identity?.id || ''" />
+        <template v-if="heroKind === 'flight'">
+          <a
+            v-if="photoAvailable"
+            :key="photo.src"
+            class="entity-hero__layer entity-hero__photo"
+            :class="{ 'is-shown': activeFlightPreview === 'photo' }"
+            :href="photo.link || undefined"
+            target="_blank"
+            rel="noopener"
+          >
+            <img :src="photo.src" :alt="t('Photo of {name}', { name: shownTitle })" v-on="{ error: onPhotoError }" />
+            <small v-if="photo.credit">{{ photo.credit }}</small>
+          </a>
+          <RouteGlobe v-if="routeKnown" :key="`route-${card.key}`" class="entity-hero__layer" :class="{ 'is-shown': activeFlightPreview === 'route' }" :active="activeFlightPreview === 'route'" :from="card.route.fromAt" :to="card.route.toAt" :at="{ lat: card.lat, lon: card.lon }" @failed="routeFailed = true" />
+          <AircraftModelHero v-if="modelKnown" :key="card.key" class="entity-hero__layer" :class="{ 'is-shown': activeFlightPreview === 'model' }" :active="activeFlightPreview === 'model'" :aircraft="card.aircraftModel" :heading="card.heading || 0" :callouts="callouts" @failed="modelFailed = true" @cycle="showOtherView" />
+          <FlightCockpitView v-if="cockpitMade && cockpitKnown" :key="`cockpit-${card.key}`" class="entity-hero__layer" :class="{ 'is-shown': activeFlightPreview === 'cockpit' }" :active="activeFlightPreview === 'cockpit'" :lat="card.lat" :lon="card.lon" :altitude-m="card.altitudeM" :heading="card.heading" :speed-mps="card.speedMps" @failed="onCockpitFailed" />
+          <div v-if="cockpitKnown || (routeKnown && modelKnown) || (photoAvailable && (routeKnown || modelKnown))" class="entity-card__preview-switch" role="group" :aria-label="t('Preview')">
+            <button v-if="photoAvailable" type="button" :class="{ active: activeFlightPreview === 'photo' }" :aria-pressed="String(activeFlightPreview === 'photo')" :aria-label="t('Photos')" :title="t('Photos')" @click="choosePreview('photo')"><span class="material-symbols-outlined" aria-hidden="true">photo_camera</span></button>
+            <button v-if="routeKnown" type="button" :class="{ active: activeFlightPreview === 'route' }" :aria-pressed="String(activeFlightPreview === 'route')" :aria-label="t('Route')" :title="t('Route')" @click="choosePreview('route')"><span class="material-symbols-outlined" aria-hidden="true">timeline</span></button>
+            <button v-if="modelKnown" type="button" :class="{ active: activeFlightPreview === 'model' }" :aria-pressed="String(activeFlightPreview === 'model')" :title="t('3D model')" @click="choosePreview('model')">{{ t('3D') }}</button>
+            <button v-if="cockpitKnown" type="button" :class="{ active: activeFlightPreview === 'cockpit' }" :aria-pressed="String(activeFlightPreview === 'cockpit')" :aria-label="t('Cockpit view')" :title="t('Cockpit view')" @click="choosePreview('cockpit')"><span class="material-symbols-outlined" aria-hidden="true">visibility</span></button>
+          </div>
+        </template>
+        <a v-else-if="heroKind === 'photo'" :key="photo.src" class="entity-hero__layer entity-hero__photo is-shown" :href="photo.link || undefined" target="_blank" rel="noopener">
+          <img :src="photo.src" :alt="t('Photo of {name}', { name: shownTitle })" v-on="{ error: onPhotoError }" />
+          <small v-if="photo.credit">{{ photo.credit }}</small>
+        </a>
+        <SatelliteGroundView v-else-if="heroKind === 'satellite'" :key="`ground-${card.key}`" class="entity-hero__layer is-shown" active :lat="card.lat" :lon="card.lon" />
+        <CctvPreview v-else-if="heroKind === 'camera'" :camera-id="card.identity?.id || ''" />
         <!-- No imagery for it yet: its icon, with its headline figures beside it. -->
         <div v-else class="entity-hero__placeholder" :class="{ 'entity-hero__placeholder--bare': props.withContacts || !tiles.length }">
           <span class="material-symbols-outlined entity-hero__glyph" aria-hidden="true">{{ card.icon }}</span>
@@ -278,6 +427,10 @@ watch(
         <span>{{ routePlaces.to }}</span>
       </p>
       <AltitudeGraph v-if="altitudeGraphed" v-show="!props.withContacts" :key="`altitude:${card.key}`" :altitude-m="lost ? null : card.altitudeM" :tick="tick" />
+      <template v-if="orbitGraphed">
+        <AltitudeGraph :key="`orbit-altitude:${card.key}`" :altitude-m="lost ? null : card.altitudeM" :tick="tick" unit="km" />
+        <AltitudeGraph v-if="Number.isFinite(card.speedMps)" :key="`orbit-speed:${card.key}`" :altitude-m="lost ? null : card.speedMps" :tick="tick" unit="km/s" :label="t('Speed')" />
+      </template>
       <p
         v-if="card.route && !card.route.verified"
         class="entity-card__route-note"

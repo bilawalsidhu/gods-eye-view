@@ -933,6 +933,19 @@ come through the regional brief service; earthquakes, tropical storms and
 fire perimeters come from the same feeds as their layers, cached for five
 minutes; satellite fire hits only while the FIRMS layer is on.
 
+The card's top tile previews what is picked. A flight shows its
+Planespotters photo once the flights layer has looked one up for the plane
+it tracks, its route on a small globe (origin to destination, flown part
+solid, the plane on it), its fleet model turning with callouts of what can
+be worked out about the flight, and the view ahead from its cockpit with
+speed and altitude tapes; the model and the cockpit view take turns. A
+vessel shows its Open Vessel Photos photo, a satellite the ground beneath it
+from Esri World Imagery with its altitude and speed graphed. The globe, model
+and cockpit view are drawn by the renderer through its `cardPreviews`
+application hook (`src/render/cesium/cardPreviews.js`), each in a small scene
+of its own that frees its graphics context as it closes; the model comes from
+the fleet set loaded at startup, so opening a card fetches no model.
+
 ## Wikidata cities pack — November 15, 2026
 
 `src/data/local_data/wikidata_cities/cities.json` bundles 31,827 settlements of

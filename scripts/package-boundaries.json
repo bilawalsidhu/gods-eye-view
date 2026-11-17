@@ -276,7 +276,16 @@
       "src/ui/views/panels/EntityCard.vue",
       "src/data/aircraftEmergency.js",
       "src/data/aircraftClass.js",
-      "src/data/entityRecords.js"
+      "src/data/entityRecords.js",
+      "src/ui/views/panels/RouteGlobe.vue",
+      "src/maps/attribution.js",
+      "src/ui/views/panels/FlightCockpitView.vue",
+      "src/ui/views/panels/PreviewHud.vue",
+      "src/data/fleetTrailAnchors.js",
+      "src/ui/views/panels/SatelliteGroundView.vue",
+      "src/data/vesselTypes.js",
+      "src/data/fleetModels.js",
+      "src/ui/views/panels/AircraftModelHero.vue"
     ],
     "external": ["vue", "pinia", "vue-i18n"]
   },
@@ -1636,7 +1645,8 @@
       "src/ui/stores/entityCard.js",
       "src/ui/entityContextBridge.js",
       "src/data/trackingClickGesture.js",
-      "src/ui/stores/sceneSharing.js"
+      "src/ui/stores/sceneSharing.js",
+      "src/maps/attribution.js"
     ],
     "external": [
       "cesium",
@@ -2422,7 +2432,8 @@
       "src/render/vectorBase/paint.js",
       "src/layers/wind/streamlines.js",
       "src/layers/wind/model.js",
-      "src/sky/assets.js"
+      "src/sky/assets.js",
+      "src/render/cesium/cardPreviews.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile", "kdbush"]
   },
@@ -2571,7 +2582,8 @@
       "src/render/applicationHooks.js",
       "src/maps/globeEngine.js",
       "src/maps/engine.js",
-      "src/maps/keylessTerrain.js"
+      "src/maps/keylessTerrain.js",
+      "src/maps/attribution.js"
     ],
     "external": ["cesium"]
   },
@@ -5216,37 +5228,13 @@
       "src/library/entries/wri-global-power-plants.json",
       "src/library/entries/wv-statewide-imagery.json",
       "src/library/formats.js",
-      "src/library/entries/gvp-holocene-volcanoes.json",
-      "src/library/entries/nasa-black-marble.json",
-      "src/library/entries/nasa-eonet-events.json",
       "src/library/catalog.js",
       "src/library/source.js",
       "src/library/layers.js",
       "src/library/controller.js",
       "src/library/extent.js",
       "src/library/camera.js",
-      "src/library/entries/imf-portwatch-disruptions.json",
-      "src/library/entries/imf-portwatch-chokepoints.json",
-      "src/library/entries/noaa-tide-stations.json",
-      "src/library/entries/nws-active-alerts.json",
-      "src/library/entries/wri-global-power-plants.json",
-      "src/library/entries/fema-usa-structures.json",
-      "src/library/entries/epc-england-wales.json",
       "src/library/parquet.js",
-      "src/library/entries/bkg-topplus-open.json",
-      "src/library/entries/epa-superfund-sites.json",
-      "src/library/entries/epa-toxic-release-facilities.json",
-      "src/library/entries/gbif-occurrence-density.json",
-      "src/library/entries/gdacs-disaster-alerts.json",
-      "src/library/entries/gsi-japan-map.json",
-      "src/library/entries/ign-orthophotos-france.json",
-      "src/library/entries/gsi-japan-photo.json",
-      "src/library/entries/jrc-surface-water.json",
-      "src/library/entries/ntad-national-bridges.json",
-      "src/library/entries/usgs-hydrography.json",
-      "src/library/entries/macrostrat-geology.json",
-      "src/library/entries/swisstopo-swissimage.json",
-      "src/library/entries/usgs-topo.json",
       "src/library/outlines.js",
       "src/library/relief.js",
       "src/sceneCommandRelease.js",
@@ -5444,7 +5432,8 @@
       "src/ui/stores/omnibar.js",
       "src/data/entityContext.js",
       "src/ui/stores/entityCard.js",
-      "src/ui/entityContextBridge.js"
+      "src/ui/entityContextBridge.js",
+      "src/render/cesium/cardPreviews.js"
     ],
     "external": [
       "hls.js",
@@ -6213,8 +6202,6 @@
       "src/layers/osmPlaces/index.js",
       "src/app/layers/osmPlaces.js",
       "src/layers/awareness/rangeRing.js",
-      "src/data/feedState.js",
-      "src/loadingFeedback.js",
       "src/data/firmsIntensity.js",
       "src/data/firmsHeatRaster.js",
       "src/layers/firms/heatImagery.js",
@@ -6272,7 +6259,8 @@
       "src/layers/flights/placed.js",
       "src/data/placementProvider.js",
       "src/data/courseFromFixes.js",
-      "src/time/frameWait.js"
+      "src/time/frameWait.js",
+      "src/maps/attribution.js"
     ],
     "external": [
       "hls.js",

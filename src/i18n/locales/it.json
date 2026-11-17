@@ -4179,5 +4179,14 @@
   "{h} h {m} min": "{h} h {m} min",
   "{n} min": "{n} min",
   "{speed} {direction}": "{speed} da {direction}",
-  "{n} mm": "{n} mm"
+  "{n} mm": "{n} mm",
+  "Scanning": "Scansione",
+  "Route": "Rotta",
+  "3D model": "Modello 3D",
+  "3D": "3D",
+  "Cockpit view": "Vista dalla cabina",
+  "KT": "KT",
+  "Course to {code}: {course}": "Rotta verso {code}: {course}",
+  "Over {place}": "Sopra {place}",
+  "Below": "Sotto"
 }

@@ -3993,5 +3993,14 @@
   "{h} h {m} min": "{h}時間{m}分",
   "{n} min": "{n}分",
   "{speed} {direction}": "{direction}の風 {speed}",
-  "{n} mm": "{n} mm"
+  "{n} mm": "{n} mm",
+  "Scanning": "スキャン中",
+  "Route": "ルート",
+  "3D model": "3Dモデル",
+  "3D": "3D",
+  "Cockpit view": "コックピット視点",
+  "KT": "KT",
+  "Course to {code}: {course}": "{code}への針路: {course}",
+  "Over {place}": "{place}上空",
+  "Below": "直下"
 }

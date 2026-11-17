@@ -949,6 +949,36 @@ export function aircraftInsights(record, { nowMs = Date.now() } = {}) {
   return out;
 }
 
+/**
+ * The item's photo, once its layer has looked one up: the tracked airliner's
+ * Planespotters photo, or the selected vessel's Open Vessel Photos photo.
+ * @returns {{src: string, link: string, photographer: string,
+ *   licence: string}|null}
+ */
+function cardPhoto(dataManager, layerId, record) {
+  let photo = null;
+  try {
+    const layer = dataManager?.layers?.get?.(layerId)?.module;
+    if (layerId === 'ais-live-vessels')
+      photo = layer?.getVesselPhoto?.(text(record?.vesselId));
+    else if (layerId === 'flights') {
+      // Looked up only for the plane the layer tracks.
+      const tracked = layer?.getTrackedSubject?.();
+      if (tracked && text(tracked.id) === text(record?.icao24))
+        photo = tracked.photo;
+    }
+  } catch {
+    photo = null;
+  }
+  if (!text(photo?.src)) return null;
+  return {
+    src: text(photo.src),
+    link: text(photo.link),
+    photographer: text(photo.photographer),
+    licence: text(photo.licence),
+  };
+}
+
 export function describeEntity(
   dataManager,
   identity,
@@ -1024,6 +1054,16 @@ export function describeEntity(
     warningWords: warnings.map((entry) => entry.words),
     // For the aircraft card's model and route line.
     aircraftClass,
+    // What picks the fleet model the globe draws this aircraft with.
+    aircraftModel:
+      kind.kind === 'aircraft' && record
+        ? {
+            typeCode: text(record.typeCode ?? record.type) || null,
+            category: record.category ?? null,
+            callsign: text(record.callsign) || null,
+          }
+        : null,
+    photo: cardPhoto(dataManager, layerId, record),
     // Its class's English name, for the UI to translate; null when unknown.
     aircraftClassName: AIRCRAFT_CLASS_LABELS[aircraftClass] || null,
     insights:

@@ -55,7 +55,8 @@
     "{n}%",
     "{n} hPa",
     "{kind} {name}",
-    "{speed} {direction}"
+    "{speed} {direction}",
+    "3D"
   ],
   "de": [
     "1090 MHz",
@@ -292,7 +293,10 @@
     "{n} hPa",
     "Turboprops",
     "{kind} {name}",
-    "{n} mm"
+    "{n} mm",
+    "Route",
+    "3D",
+    "KT"
   ],
   "es": [
     "1 min/s",
@@ -484,7 +488,9 @@
     "{kind} {name}",
     "{h} h {m} min",
     "{n} min",
-    "{n} mm"
+    "{n} mm",
+    "3D",
+    "KT"
   ],
   "fr": [
     "1 min/s",
@@ -740,7 +746,9 @@
     "{kind} {name}",
     "{h} h {m} min",
     "{n} min",
-    "{n} mm"
+    "{n} mm",
+    "3D",
+    "KT"
   ],
   "it": [
     "1 min/s",
@@ -972,7 +980,9 @@
     "{kind} {name}",
     "{h} h {m} min",
     "{n} min",
-    "{n} mm"
+    "{n} mm",
+    "3D",
+    "KT"
   ],
   "ja": [
     "1090 MHz",
@@ -1054,7 +1064,9 @@
     "{n} MW",
     "{n}%",
     "{n} hPa",
-    "{n} mm"
+    "{n} mm",
+    "3D",
+    "KT"
   ],
   "pt": [
     "1 min/s",
@@ -1246,7 +1258,9 @@
     "{kind} {name}",
     "{h} h {m} min",
     "{n} min",
-    "{n} mm"
+    "{n} mm",
+    "3D",
+    "KT"
   ],
   "ru": [
     "1900–1945",
@@ -1290,7 +1304,8 @@
     "{n}°",
     "M {n}",
     "{n}%",
-    "{kind} {name}"
+    "{kind} {name}",
+    "3D"
   ],
   "sv": [
     "STATION",
@@ -1481,7 +1496,9 @@
     "{kind} {name}",
     "{h} h {m} min",
     "{n} min",
-    "{n} mm"
+    "{n} mm",
+    "3D",
+    "KT"
   ],
   "uk": [
     "1900–1945",
@@ -1519,7 +1536,8 @@
     "{n}°",
     "M {n}",
     "{n}%",
-    "{kind} {name}"
+    "{kind} {name}",
+    "3D"
   ],
   "zh-CN": [
     "1090 MHz",
@@ -1603,7 +1621,8 @@
     "M {n}",
     "{n} MW",
     "{n}%",
-    "{n} hPa"
+    "{n} hPa",
+    "3D"
   ],
   "zh-Hant": [
     "1090 MHz",
@@ -1687,7 +1706,8 @@
     "M {n}",
     "{n} MW",
     "{n}%",
-    "{n} hPa"
+    "{n} hPa",
+    "3D"
   ],
   "he": [
     "{speed} kn",
@@ -1802,6 +1822,8 @@
     "{n} MW",
     "{n}%",
     "{n} hPa",
-    "{kind} {name}"
+    "{kind} {name}",
+    "3D",
+    "KT"
   ]
 }

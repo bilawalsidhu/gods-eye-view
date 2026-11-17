@@ -4179,5 +4179,14 @@
   "{h} h {m} min": "{h} שע׳ {m} דק׳",
   "{n} min": "{n} דק׳",
   "{speed} {direction}": "{speed} מ־{direction}",
-  "{n} mm": "{n} מ״מ"
+  "{n} mm": "{n} מ״מ",
+  "Scanning": "סורק",
+  "Route": "מסלול",
+  "3D model": "דגם תלת־ממדי",
+  "3D": "3D",
+  "Cockpit view": "מבט מתא הטייס",
+  "KT": "KT",
+  "Course to {code}: {course}": "כיוון אל {code}: {course}",
+  "Over {place}": "מעל {place}",
+  "Below": "מתחת"
 }

@@ -4458,5 +4458,14 @@
   "{h} h {m} min": "{h} س {m} د",
   "{n} min": "{n} د",
   "{speed} {direction}": "{speed} {direction}",
-  "{n} mm": "{n} مم"
+  "{n} mm": "{n} مم",
+  "Scanning": "جارٍ المسح",
+  "Route": "المسار",
+  "3D model": "نموذج ثلاثي الأبعاد",
+  "3D": "3D",
+  "Cockpit view": "منظر قمرة القيادة",
+  "KT": "عقدة",
+  "Course to {code}: {course}": "المسار إلى {code}: {course}",
+  "Over {place}": "فوق {place}",
+  "Below": "في الأسفل"
 }

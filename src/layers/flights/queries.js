@@ -288,6 +288,9 @@ export function createQueries({
       // A converted contact reports the class it RENDERS as, so an analyst
       // filter/superlative agrees with the triangle on screen.
       aircraftClass: tr3bAircraftClass(icao24, text(info?.klass)),
+      // What picks its fleet model, for the context card's turning model.
+      typeCode: text(info?.typeCode),
+      category: info?.category ?? null,
       originCountry: text(info?.originCountry),
       operator: text(info?.airline),
       squawk: text(info?.squawk),

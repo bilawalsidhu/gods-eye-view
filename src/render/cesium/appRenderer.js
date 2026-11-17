@@ -37,6 +37,7 @@ import { configureCreditKeyboardAccess } from './creditKeyboard.js';
 import { onLocaleChange } from '../../i18n/index.js';
 import { cesiumViewerOf, recordViewer } from './viewers.js';
 import { installRenderFailureNotice } from './renderFailure.js';
+import { cesiumCardPreviews } from './cardPreviews.js';
 
 export { cesiumViewerOf };
 
@@ -226,6 +227,9 @@ export function createCesiumRendererPlugin({
         // (renderFailure.js).
         renderFailureNotice: (options) =>
           installRenderFailureNotice(viewer, options),
+        // The Context card's previews, each in a small scene of its own
+        // (cardPreviews.js).
+        cardPreviews: cesiumCardPreviews,
       };
     },
   });

@@ -13,13 +13,9 @@
  * photoreal base is turned off through the port and on again when shown.
  */
 import { findFrame, findGlobe, rendererOf } from '../render/rendererOf.js';
+import { ESRI_IMAGERY_CREDIT, ESRI_TILES } from './attribution.js';
 import { KEYLESS_TERRAIN_URL } from './keylessTerrain.js';
 
-/** Esri World Imagery's tiles; Stories' card images draw from the same. */
-export const ESRI_TILES =
-  'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-const ESRI_CREDIT =
-  'Powered by Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community';
 const OSM_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const OSM_CREDIT = '© OpenStreetMap contributors';
 /** Cesium ion's world imagery assets (`MAP_STACKS`' `style`). */
@@ -136,7 +132,7 @@ export const globeMapEngine = Object.freeze({
         url: ESRI_TILES,
         tiling: 'webMercator',
         maxLevel: 19,
-        credit: credit(ESRI_CREDIT),
+        credit: credit(ESRI_IMAGERY_CREDIT),
       }),
     ion(style, accessToken) {
       if (!String(accessToken || '').trim())

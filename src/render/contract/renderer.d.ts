@@ -67,6 +67,75 @@ export interface ApplicationHooks {
     allowReload: boolean;
     store: RenderFailureStore;
   }): () => void;
+  /** The Context card's previews of a picked aircraft. */
+  cardPreviews?: CardPreviews;
+}
+
+/**
+ * Previews the Context card draws into an element of its own. Each returns
+ * at once; one that cannot be made calls its `onFailed`.
+ */
+export interface CardPreviews {
+  /**
+   * A model turning on its own, from its GLB's bytes, starting to face
+   * `heading` (degrees); `viewRange` is the camera's distance in bounding
+   * radii. `onPhase` says when it turns to wire for its scan and back;
+   * `onCycle` when a look and its scan end, with the drawing time they took.
+   */
+  model(
+    container: HTMLElement,
+    model: {
+      gltf: Uint8Array | ArrayBuffer;
+      basePath?: string;
+      heading?: number;
+      viewRange?: number;
+    },
+    events?: {
+      onPhase?(phase: 'plain' | 'scan'): void;
+      onCycle?(ms: number): void;
+      onFailed?(): void;
+    },
+  ): CardPreview<void>;
+  /** A flight's route from `from` to `to` on a small globe, the craft `at`. */
+  route(
+    container: HTMLElement,
+    route: CardRoute,
+    events?: { onFailed?(): void },
+  ): CardPreview<CardRoute>;
+  /** The view ahead from an aircraft's position, height and heading. */
+  cockpit(
+    container: HTMLElement,
+    craft: CardCraft,
+    events?: { onFailed?(): void },
+  ): CardPreview<CardCraft>;
+}
+
+/** A place on a card's route: an airport's code and position, degrees. */
+export interface CardPlace {
+  code?: string;
+  lat: number;
+  lon: number;
+}
+
+export interface CardRoute {
+  from: CardPlace;
+  to: CardPlace;
+  at?: { lat: number; lon: number } | null;
+}
+
+/** An aircraft's position (degrees), height (metres) and heading (degrees). */
+export interface CardCraft {
+  lat: number;
+  lon: number;
+  altitudeM?: number | null;
+  heading?: number | null;
+}
+
+/** One preview: hidden, it rests on its last frame. */
+export interface CardPreview<Values> {
+  setActive(active: boolean): void;
+  update(values: Values): void;
+  destroy(): void;
 }
 
 /** Where a renderer's failure notice is published for the application to show. */

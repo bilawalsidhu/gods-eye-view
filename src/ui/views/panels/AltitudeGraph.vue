@@ -2,7 +2,8 @@
 import { computed, ref, watch } from 'vue';
 import { formatNumber, t } from '../../../i18n/index.js';
 
-// A height as a filled graph (an aircraft's altitude, the camera's height):
+// A figure as a filled graph (an aircraft's altitude, the camera's height, a
+// satellite's altitude and speed):
 // each reading since it opened, left to right. The scale fits the readings (never less than about
 // 2,000 ft tall), so a climb or descent shows as a slope, and the fill
 // fades from the line down to the baseline.
@@ -13,7 +14,11 @@ const props = defineProps({
   tick: { type: Number, default: 0 },
   /** The caption; 'Altitude' when not given. */
   label: { type: String, default: '' },
-  /** 'feet' for aircraft; 'metric' reads in metres and kilometres. */
+  /**
+   * 'feet' for aircraft; 'metric' reads in metres and kilometres on a log
+   * scale (the camera); 'km' is a height in kilometres and 'km/s' a speed
+   * (given in m/s), both on a straight scale (a satellite).
+   */
   unit: { type: String, default: 'feet' },
   /** Only the caption, the current figure and the line: no scale or change. */
   compact: { type: Boolean, default: false },
@@ -43,7 +48,14 @@ const metric = (m) =>
     : m >= 1000
       ? t('{n} km', { n: formatNumber(m / 1000, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })
       : t('{n} m', { n: number(Math.round(m)) });
-const shown = (m) => (props.unit === 'metric' ? metric(m) : t('{n} ft', { n: number(feet(m)) }));
+const SHOW = {
+  metric,
+  km: (m) => t('{n} km', { n: number(Math.round(m / 100) / 10) }),
+  'km/s': (m) => t('{n} km/s', { n: formatNumber(m / 1000, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }),
+};
+const shown = (m) => (SHOW[props.unit] || ((value) => t('{n} ft', { n: number(feet(value)) })))(m);
+/** The least each scale spans, so a steady figure still reads as a line. */
+const LEAST = { feet: MIN_RANGE_M, km: 2000, 'km/s': 20 };
 
 const graph = computed(() => {
   const list = readings.value;
@@ -60,7 +72,7 @@ const graph = computed(() => {
   const low = Math.min(...heights);
   // The least the scale spans: about 2,000 ft for aircraft, half a decade
   // for the camera.
-  const least = log ? 0.5 : MIN_RANGE_M;
+  const least = log ? 0.5 : LEAST[props.unit] || MIN_RANGE_M;
   const pad = Math.max((least - (high - low)) / 2, (high - low) * 0.15);
   const bottom = Math.max(0, low - pad);
   const top = Math.max(high + pad, bottom + least);
@@ -71,8 +83,9 @@ const graph = computed(() => {
   const points = list.length > 1 ? list.map((item) => [x(item.at), y(item.m)]) : [[0, y(first.m)], [WIDTH, y(first.m)]];
   const line = points.map(([px, py], index) => `${index ? 'L' : 'M'}${px.toFixed(2)} ${py.toFixed(2)}`).join(' ');
   const moved = last.m - first.m;
-  const change = props.unit === 'metric' ? (Math.abs(moved) >= Math.max(1, last.m * 0.005) ? moved : 0) : feet(last.m) - feet(first.m);
-  const changeText = props.unit === 'metric' ? metric(Math.abs(moved)) : t('{n} ft', { n: number(Math.abs(change)) });
+  const feetScale = !SHOW[props.unit];
+  const change = feetScale ? feet(last.m) - feet(first.m) : Math.abs(moved) >= Math.max(1, last.m * (props.unit === 'metric' ? 0.005 : 0.0005)) ? moved : 0;
+  const changeText = feetScale ? t('{n} ft', { n: number(Math.abs(change)) }) : shown(Math.abs(moved));
   const minutes = Math.floor((last.at - first.at) / 60_000);
   return {
     line,

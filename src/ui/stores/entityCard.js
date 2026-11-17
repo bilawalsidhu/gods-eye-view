@@ -304,6 +304,8 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
       ? shell.value.regionalBrief(lat, lon)
       : Promise.resolve(null);
   const canFollow = () => Boolean(shell.value?.canFollow?.(card.value));
+  /** The renderer's card previews (`CardPreviews`), or null without them. */
+  const previews = () => shell.value?.previews?.() ?? null;
   /** Loaded items whose name or id matches typed text, for the omnibar. */
   const search = (query, options) =>
     shell.value
@@ -325,6 +327,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     follow,
     ask,
     readBrief,
+    previews,
     canFollow,
     isFollowing,
     following,
