@@ -46,6 +46,8 @@ export function openHistoryStore(file, { createFolder = true } = {}) {
       layer TEXT NOT NULL, kind TEXT NOT NULL, lat REAL, lon REAL);
     CREATE INDEX IF NOT EXISTS fence_events_ts ON fence_events(ts);
     CREATE TABLE IF NOT EXISTS pins(id TEXT PRIMARY KEY, created_ts INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS views(
+      name TEXT PRIMARY KEY, saved_ts INTEGER NOT NULL, body TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS contacts(
       layer TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL,
       last_seen INTEGER NOT NULL, PRIMARY KEY(layer, id));
@@ -366,19 +368,32 @@ export function openHistoryStore(file, { createFolder = true } = {}) {
           .run(cut).changes,
       );
     },
-    purgeBefore(ts) {
-      db.prepare('DELETE FROM fence_events WHERE ts < ?').run(ts);
-      db.prepare('DELETE FROM alerts WHERE ts < ?').run(ts);
-      db.prepare('DELETE FROM feed_events WHERE ts < ?').run(ts);
+    /**
+     * Drops everything older than `ts`. `only` limits it to one layer (its own
+     * retention); `skip` leaves layers alone (they have their own). Events,
+     * alerts and feed logs follow the general cut only.
+     */
+    purgeBefore(ts, { only = null, skip = [] } = {}) {
+      const layerSql = only
+        ? ' AND layer = ?'
+        : skip.length
+          ? ` AND layer NOT IN (${skip.map(() => '?').join(',')})`
+          : '';
+      const layerArgs = only ? [only] : skip;
+      if (!only) {
+        db.prepare('DELETE FROM fence_events WHERE ts < ?').run(ts);
+        db.prepare('DELETE FROM alerts WHERE ts < ?').run(ts);
+        db.prepare('DELETE FROM feed_events WHERE ts < ?').run(ts);
+      }
       db.prepare(
-        'DELETE FROM contacts WHERE last_seen < ? AND id NOT IN (SELECT id FROM pins)',
-      ).run(ts);
+        `DELETE FROM contacts WHERE last_seen < ? AND id NOT IN (SELECT id FROM pins)${layerSql}`,
+      ).run(ts, ...layerArgs);
       return Number(
         db
           .prepare(
-            'DELETE FROM positions WHERE ts < ? AND id NOT IN (SELECT id FROM pins)',
+            `DELETE FROM positions WHERE ts < ? AND id NOT IN (SELECT id FROM pins)${layerSql}`,
           )
-          .run(ts).changes,
+          .run(ts, ...layerArgs).changes,
       );
     },
     /** Pinned contacts keep their history past retention and the size cap. */
@@ -394,6 +409,23 @@ export function openHistoryStore(file, { createFolder = true } = {}) {
     },
     listPins() {
       return db.prepare('SELECT id, created_ts FROM pins ORDER BY id').all();
+    },
+    /** Saved views: a name and the panel state as JSON text. */
+    saveView(name, body, savedTs) {
+      db.prepare(
+        `INSERT INTO views(name, saved_ts, body) VALUES (?, ?, ?)
+         ON CONFLICT(name) DO UPDATE SET saved_ts = excluded.saved_ts, body = excluded.body`,
+      ).run(name, savedTs, body);
+    },
+    removeView(name) {
+      return Number(
+        db.prepare('DELETE FROM views WHERE name = ?').run(name).changes,
+      );
+    },
+    listViews() {
+      return db
+        .prepare('SELECT name, saved_ts, body FROM views ORDER BY name')
+        .all();
     },
     close() {
       db.close();
@@ -413,6 +445,7 @@ export function createUnavailableStore(message) {
     usedBytes: 0,
     listFences: [],
     listPins: [],
+    listViews: [],
     track: [],
     window: [],
     at: [],

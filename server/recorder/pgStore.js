@@ -51,6 +51,8 @@ export function createPgStore(url, { loadPg = () => import('pg') } = {}) {
       CREATE INDEX IF NOT EXISTS fence_events_ts ON fence_events(ts);
       CREATE TABLE IF NOT EXISTS pins(
         id TEXT PRIMARY KEY, created_ts BIGINT NOT NULL);
+      CREATE TABLE IF NOT EXISTS views(
+        name TEXT PRIMARY KEY, saved_ts BIGINT NOT NULL, body TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS contacts(
         layer TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL,
         last_seen BIGINT NOT NULL, PRIMARY KEY(layer, id));
@@ -382,6 +384,19 @@ export function createPgStore(url, { loadPg = () => import('pg') } = {}) {
       return (await query('DELETE FROM pins WHERE id = $1', [id])).rowCount;
     },
     listPins: () => rows('SELECT id, created_ts FROM pins ORDER BY id'),
+    async saveView(name, body, savedTs) {
+      await query(
+        `INSERT INTO views(name, saved_ts, body) VALUES ($1, $2, $3)
+         ON CONFLICT (name) DO UPDATE SET saved_ts = EXCLUDED.saved_ts, body = EXCLUDED.body`,
+        [name, savedTs, body],
+      );
+    },
+    async removeView(name) {
+      return (await query('DELETE FROM views WHERE name = $1', [name]))
+        .rowCount;
+    },
+    listViews: () =>
+      rows('SELECT name, saved_ts, body FROM views ORDER BY name'),
     async usedBytes() {
       const [r] = await rows("SELECT pg_total_relation_size('positions') AS n");
       return Number(r.n);
@@ -398,18 +413,27 @@ export function createPgStore(url, { loadPg = () => import('pg') } = {}) {
         )
       ).rowCount;
     },
-    async purgeBefore(ts) {
-      await query('DELETE FROM fence_events WHERE ts < $1', [ts]);
-      await query('DELETE FROM alerts WHERE ts < $1', [ts]);
-      await query('DELETE FROM feed_events WHERE ts < $1', [ts]);
+    /** See the SQLite store: `only` is one layer, `skip` layers left alone. */
+    async purgeBefore(ts, { only = null, skip = [] } = {}) {
+      const layerSql = only
+        ? ' AND layer = $2'
+        : skip.length
+          ? ` AND layer <> ALL($2::text[])`
+          : '';
+      const layerArgs = only ? [only] : skip.length ? [skip] : [];
+      if (!only) {
+        await query('DELETE FROM fence_events WHERE ts < $1', [ts]);
+        await query('DELETE FROM alerts WHERE ts < $1', [ts]);
+        await query('DELETE FROM feed_events WHERE ts < $1', [ts]);
+      }
       await query(
-        'DELETE FROM contacts WHERE last_seen < $1 AND id NOT IN (SELECT id FROM pins)',
-        [ts],
+        `DELETE FROM contacts WHERE last_seen < $1 AND id NOT IN (SELECT id FROM pins)${layerSql}`,
+        [ts, ...layerArgs],
       );
       return (
         await query(
-          'DELETE FROM positions WHERE ts < $1 AND id NOT IN (SELECT id FROM pins)',
-          [ts],
+          `DELETE FROM positions WHERE ts < $1 AND id NOT IN (SELECT id FROM pins)${layerSql}`,
+          [ts, ...layerArgs],
         )
       ).rowCount;
     },

@@ -18,6 +18,44 @@ export function parseDuration(text, fallbackDays = 7) {
   return Math.round(Number(match[1]) * UNITS[match[2] || 'd']);
 }
 
+/**
+ * Time to keep each layer for, apart from the general retention: text like
+ * "sat=1d, local=30d" (or an object of the same) -> { sat: 'text', ... } with
+ * each time checked. 0 keeps that layer for ever. Empty text means none.
+ * @returns {Record<string, string>} layer -> duration text
+ */
+export function parseLayerRetention(input) {
+  const pairs =
+    typeof input === 'string'
+      ? input
+          .split(',')
+          .map((part) => part.trim())
+          .filter(Boolean)
+          .map((part) => {
+            const at = part.indexOf('=');
+            if (at < 1)
+              throw new TypeError(`Bad layer retention "${part}" (use sat=1d)`);
+            return [part.slice(0, at).trim(), part.slice(at + 1).trim()];
+          })
+      : Object.entries(input ?? {});
+  const out = {};
+  for (const [layer, text] of pairs) {
+    if (!ALL_LAYERS.includes(layer))
+      throw new TypeError(
+        `Unknown layer "${layer}" (use ${ALL_LAYERS.join(', ')})`,
+      );
+    parseDuration(text); // throws a readable message when it is not a time
+    out[layer] = String(text).trim();
+  }
+  return out;
+}
+
+/** The seconds for each layer of a parsed layer retention. */
+export const layerRetentionSec = (parsed) =>
+  Object.fromEntries(
+    Object.entries(parsed).map(([layer, text]) => [layer, parseDuration(text)]),
+  );
+
 export const CONFIG_FILE = 'recorder.config.json';
 
 /**
@@ -42,6 +80,13 @@ export function loadConfigFile(root, env = process.env) {
   if (typeof raw.enabled === 'boolean')
     set('GEV_RECORDER', raw.enabled ? 1 : 0);
   set('GEV_HISTORY_RETENTION', raw.retention);
+  if (raw.layerRetention && typeof raw.layerRetention === 'object')
+    set(
+      'GEV_HISTORY_LAYER_RETENTION',
+      Object.entries(raw.layerRetention)
+        .map(([layer, text]) => `${layer}=${text}`)
+        .join(','),
+    );
   set('GEV_HISTORY_MAX_MB', raw.maxMb);
   set('GEV_RECORDER_LAYERS', [].concat(raw.layers ?? []).join(','));
   set('GEV_RECORDER_INTERVAL', raw.interval);
@@ -65,6 +110,11 @@ export function cleanSettings(input = {}) {
     const text = String(input.retention).trim() || '7d';
     out.runtime.retentionSec = parseDuration(text);
     out.file.retention = text;
+  }
+  if (input.layerRetention !== undefined) {
+    const parsed = parseLayerRetention(input.layerRetention);
+    out.runtime.layerRetention = layerRetentionSec(parsed);
+    out.file.layerRetention = parsed;
   }
   if (input.maxMb !== undefined) {
     const mb = Number(input.maxMb);
@@ -118,6 +168,9 @@ export function recorderConfig(env = process.env) {
   const interval = Number(env.GEV_RECORDER_INTERVAL ?? 30);
   return {
     retentionSec: parseDuration(retention, 7),
+    layerRetention: layerRetentionSec(
+      parseLayerRetention(env.GEV_HISTORY_LAYER_RETENTION || ''),
+    ),
     layers: layers.length ? layers : DEFAULT_LAYERS,
     satGroups: String(env.GEV_RECORDER_SAT_GROUPS || '')
       .split(',')

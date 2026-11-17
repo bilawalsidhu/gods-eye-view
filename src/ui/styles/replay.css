@@ -320,3 +320,53 @@
 .replay-drive-full[data-level='low'] {
   color: #ffb000;
 }
+
+/* The panel's time slider (restored from the rail timeline upstream removed). */
+.rail-timeline {
+  padding: 5px;
+  border-bottom: 1px solid var(--weather-card-border);
+}
+.rail-timeline-track {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 3px 8px;
+  margin-top: 6px;
+}
+.rail-timeline-track input {
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+}
+.rail-timeline-endpoints {
+  display: flex;
+  grid-column: 2;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 3px 8px;
+  font: 8px/1.45 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.rail-timeline-endpoints span {
+  white-space: nowrap;
+}
+.rail-timeline-endpoints span:last-child {
+  margin-left: auto;
+}
+.rail-timeline-controls .data-toggle-chip {
+  flex: 0 0 auto;
+}
+.rail-timeline-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.rail-timeline-readout {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}

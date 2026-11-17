@@ -9,6 +9,13 @@ import {
   vesselPoints,
 } from './extract.js';
 import {
+  defaultBackupFolder,
+  listBackups,
+  makeBackup,
+  stageRestore,
+} from './backup.js';
+import { cleanView, readViews, roomForView, viewName } from './views.js';
+import {
   ALL_LAYERS,
   cleanSettings,
   mergedSettings,
@@ -118,6 +125,7 @@ export function recorderPlugin(env = process.env) {
     const recorder = createRecorder({
       file,
       retentionSec: config.retentionSec,
+      layerRetention: config.layerRetention,
       layers: config.layers,
       maxBytes: config.maxBytes,
       intervalSec: config.intervalSec,
@@ -343,10 +351,68 @@ export function recorderPlugin(env = process.env) {
       };
     }
 
+    /** Where backups go: the folder asked for, or "backups" beside the history. */
+    function backupFolder(requested) {
+      if (!requested) return defaultBackupFolder(file);
+      const check = checkFolder(requested);
+      if (!check.ok) throw new TypeError(check.error);
+      return check.path;
+    }
+    const sqliteOnly = () => {
+      if (config.databaseUrl)
+        throw new TypeError(
+          'This history is in PostgreSQL: back it up with pg_dump',
+        );
+    };
+
+    /** Makes a complete copy of the history now. */
+    async function backUp(body) {
+      sqliteOnly();
+      await recorder.flush();
+      return makeBackup({
+        store: recorder.store,
+        folder: backupFolder(body?.folder),
+      });
+    }
+
+    /**
+     * Switches recording to a copy of a backup. The history it replaces stays
+     * on disk under its own name, so a wrong choice can be undone.
+     */
+    async function restoreFrom(body) {
+      sqliteOnly();
+      if (!body?.file) throw new TypeError('Choose a backup to restore');
+      await recorder.flush();
+      const staged = stageRestore({
+        source: String(body.file),
+        historyFile: file,
+      });
+      const next = openHistoryStore(staged.path, { createFolder: false });
+      const old = await recorder.switchStore(next);
+      const previous = file;
+      file = staged.path;
+      let kept = true;
+      try {
+        saveConfigFile(root, { file: staged.path }, env);
+      } catch {
+        kept = false;
+      }
+      await Promise.resolve(old.close()).catch(() => {});
+      return {
+        restored: true,
+        saved: kept,
+        count: staged.count,
+        from: String(body.file),
+        to: file,
+        previous,
+      };
+    }
+
     /** Which settings an environment variable sets, so the panel can say so. */
     const lockedSettings = () =>
       Object.entries({
         retention: ['GEV_HISTORY_RETENTION', 'GEV_HISTORY_DAYS'],
+        layerRetention: ['GEV_HISTORY_LAYER_RETENTION'],
         maxMb: ['GEV_HISTORY_MAX_MB'],
         interval: ['GEV_RECORDER_INTERVAL'],
         file: ['GEV_HISTORY_FILE'],
@@ -408,6 +474,7 @@ export function recorderPlugin(env = process.env) {
             recording: true,
             retention_days: live.retentionSec / 86400,
             retention_sec: live.retentionSec,
+            layer_retention_sec: live.layerRetention,
             backend: config.databaseUrl ? 'postgres' : 'sqlite',
             layers: live.layers,
             available_layers: ALL_LAYERS,
@@ -454,6 +521,44 @@ export function recorderPlugin(env = process.env) {
             }
             return sendJson(res, 200, { applied: true, saved: kept, moved });
           });
+        if (url.pathname === '/views' && req.method === 'GET')
+          return sendJson(res, 200, {
+            views: readViews(await recorder.store.listViews()),
+          });
+        if (url.pathname === '/views' && req.method === 'POST')
+          return readJson(req, res, async (body) => {
+            const name = viewName(body?.name);
+            const view = cleanView(body?.view);
+            const have = readViews(await recorder.store.listViews());
+            if (
+              !roomForView(
+                have.length,
+                have.some((v) => v.name === name),
+              )
+            )
+              throw new TypeError('Too many saved views: delete one first');
+            await recorder.store.saveView(name, JSON.stringify(view), nowSec());
+            return sendJson(res, 200, { saved: name });
+          });
+        if (url.pathname === '/views/delete' && req.method === 'POST')
+          return readJson(req, res, async (body) =>
+            sendJson(res, 200, {
+              removed: await recorder.store.removeView(viewName(body?.name)),
+            }),
+          );
+        if (url.pathname === '/backups' && req.method === 'GET') {
+          sqliteOnly();
+          const folder = backupFolder(url.searchParams.get('folder'));
+          return sendJson(res, 200, { folder, files: listBackups(folder) });
+        }
+        if (url.pathname === '/backup' && req.method === 'POST')
+          return readJson(req, res, async (body) =>
+            sendJson(res, 200, await backUp(body)),
+          );
+        if (url.pathname === '/restore' && req.method === 'POST')
+          return readJson(req, res, async (body) =>
+            sendJson(res, 200, await restoreFrom(body)),
+          );
         if (url.pathname === '/thin' && req.method === 'POST')
           return readJson(req, res, async (body) => {
             const olderSec = parseDuration(body?.olderThan || '1d');

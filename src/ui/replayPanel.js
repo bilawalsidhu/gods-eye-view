@@ -1,4 +1,6 @@
-import { msg, t, translateKnown } from '../i18n/index.js';
+import { msg, t, tn, translateKnown } from '../i18n/index.js';
+import { createBackupBlock } from './replayBackup.js';
+import { createViewsBlock } from './replayViews.js';
 import { aircraftEmergency } from '../data/aircraftEmergency.js';
 import {
   formatBytes,
@@ -201,6 +203,11 @@ export function createReplayPanel({ container, controller } = {}) {
     'text',
     t('Keep for (6h, 14d, 8w, 3m, 1y)'),
   );
+  const layerRetentionIn = makeInput(
+    settingsBlock,
+    'text',
+    t('Per layer, e.g. sat=1d, local=30d (blank for none)'),
+  );
   const capIn = makeInput(
     settingsBlock,
     'number',
@@ -216,11 +223,16 @@ export function createReplayPanel({ container, controller } = {}) {
   intervalIn.max = '3600';
   const settingsInputs = {
     retention: retentionIn,
+    layerRetention: layerRetentionIn,
     maxMb: capIn,
     interval: intervalIn,
   };
   settingsBlock.replaceChildren(
     field(t('Keep for (6h, 14d, 8w, 3m, 1y)'), retentionIn),
+    field(
+      t('Per layer, e.g. sat=1d, local=30d (blank for none)'),
+      layerRetentionIn,
+    ),
     field(t('Size cap in MB (0 for none)'), capIn),
     field(t('Save a point every (seconds)'), intervalIn),
   );
@@ -335,6 +347,7 @@ export function createReplayPanel({ container, controller } = {}) {
               }
             : {}),
           retention: retentionIn.value,
+          layerRetention: layerRetentionIn.value,
           maxMb: capIn.value === '' ? 0 : capIn.value,
           interval: intervalIn.value,
           layers: [...recordChosen],
@@ -433,6 +446,12 @@ export function createReplayPanel({ container, controller } = {}) {
       render(controller.state());
     },
   );
+  const viewsBlock = createViewsBlock({ controller, makeChip, makeInput });
+  const backupBlock = createBackupBlock({
+    controller,
+    makeChip,
+    onChanged: () => render(controller.state()),
+  });
   settingsBlock.prepend(locationBlock);
   settingsBlock.append(
     recordLabel,
@@ -443,6 +462,8 @@ export function createReplayPanel({ container, controller } = {}) {
     thinFields,
     thinRow,
     thinNote,
+    viewsBlock.element,
+    backupBlock.element,
   );
   const feedsChip = makeChip(
     analysisRow,
@@ -459,7 +480,11 @@ export function createReplayPanel({ container, controller } = {}) {
     t('Change how the recorder keeps data'),
     () => {
       settingsBlock.hidden = !settingsBlock.hidden;
-      if (!settingsBlock.hidden) settingsDirty = false;
+      if (!settingsBlock.hidden) {
+        settingsDirty = false;
+        backupBlock.refresh();
+        viewsBlock.refresh();
+      }
       render(controller.state());
     },
   );
@@ -780,6 +805,7 @@ export function createReplayPanel({ container, controller } = {}) {
     if (!s || settingsBlock.hidden) return;
     // Show what the recorder uses now, until the viewer starts editing.
     set(locationBlock, 'hidden', s.backend === 'postgres');
+    set(backupBlock.element, 'hidden', s.backend === 'postgres');
     loadDrives();
     if (!settingsDirty) {
       folderIn.value = String(s.storage?.path ?? '').replace(
@@ -801,6 +827,9 @@ export function createReplayPanel({ container, controller } = {}) {
       retentionIn.value = s.retention_sec
         ? formatSpanCompact(s.retention_sec)
         : '0';
+      layerRetentionIn.value = Object.entries(s.layer_retention_sec ?? {})
+        .map(([layer, sec]) => `${layer}=${formatSpanCompact(sec)}`)
+        .join(', ');
       capIn.value = s.max_bytes
         ? String(Math.round(s.max_bytes / 1048576))
         : '0';
@@ -1005,7 +1034,7 @@ export function createReplayPanel({ container, controller } = {}) {
               part(`● ${t('first')} ${stamp(tr.first)}`, 'replay-track-first'),
               ' · ',
               part(`● ${t('last')} ${stamp(tr.last)}`, 'replay-track-last'),
-              ` · ${t('{count} gaps', { count: tr.gaps.length })}${gapWhy(tr.gapKinds)}`,
+              ` · ${tn(tr.gaps.length, '{count} gap', '{count} gaps')}${gapWhy(tr.gapKinds)}`,
             ]
           : []),
       );

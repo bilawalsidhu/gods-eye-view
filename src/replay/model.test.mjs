@@ -158,6 +158,17 @@ test('retention is spelled the way the settings file spells it', async () => {
   assert.equal(formatSpanCompact(12 * 3600), '12h');
 });
 
+test('a retention that is not a whole unit keeps its fraction and never reads as forever', async () => {
+  const { formatSpanCompact } = await import('./model.js');
+  const { parseDuration } = await import('../../server/recorder/config.js');
+  assert.equal(formatSpanCompact(1800), '0.5h');
+  assert.equal(formatSpanCompact(86400 + 1800), '1.02d');
+  assert.equal(formatSpanCompact(5), '0.01h');
+  for (const sec of [1800, 86400 + 1800, 5400, 100000])
+    assert.ok(parseDuration(formatSpanCompact(sec)) > 0, String(sec));
+  assert.equal(parseDuration(formatSpanCompact(1800)), 1800);
+});
+
 test('gaps are matched to the feed trouble that explains them', async () => {
   const { feedOutages, classifyGaps } = await import('./model.js');
   const events = [

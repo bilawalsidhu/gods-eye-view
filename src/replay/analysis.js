@@ -1,6 +1,8 @@
-import * as Cesium from 'cesium';
 import { msg } from '../i18n/index.js';
+import { cameraOf, drawOf, findGlobe } from '../render/rendererOf.js';
 import { diffContacts, heatColor, niceCell } from './model.js';
+import { withAlpha } from './overlays.js';
+import { lonLatOf } from './sampling.js';
 
 const MAX_CANVAS = 2048;
 const MAX_DRAWN = 2000;
@@ -24,8 +26,11 @@ export function createAnalysis({
   getFilters,
   onChange,
 }) {
-  const compareSource = new Cesium.CustomDataSource('replay-compare');
-  viewer.dataSources.add(compareSource);
+  const compareSet = drawOf(viewer).points({
+    id: 'replay-compare',
+    pickable: false,
+  });
+  const camera = cameraOf(viewer);
   // The heat map is one image laid over the globe as an imagery layer, so it
   // follows the terrain and is drawn once however many squares it holds.
   let heatLayer = null;
@@ -35,25 +40,22 @@ export function createAnalysis({
   let busy = 0;
 
   const redraw = () => {
-    viewer.scene.requestRender?.();
     onChange?.();
   };
 
   /** The part of the globe on screen, in degrees, and how wide it is. */
   function view() {
-    const rect = viewer.camera.computeViewRectangle?.();
+    const rect = camera.viewRectangle();
     if (!rect) return { bbox: null, width: 360 };
-    const deg = Cesium.Math.toDegrees;
-    const west = deg(rect.west);
-    const east = deg(rect.east);
+    const { west, east } = rect;
     return {
-      bbox: [west, deg(rect.south), east, deg(rect.north)],
+      bbox: [west, rect.south, east, rect.north],
       width: east >= west ? east - west : east + 360 - west,
     };
   }
 
   function removeHeat() {
-    if (heatLayer) viewer.imageryLayers.remove(heatLayer, true);
+    heatLayer?.remove();
     heatLayer = null;
   }
 
@@ -101,20 +103,18 @@ export function createAnalysis({
         image.data.set(heatColor(c.n, max), (y * w + x) * 4);
       }
       context.putImageData(image, 0, 0);
-      const provider = await Cesium.SingleTileImageryProvider.fromUrl(
-        canvas.toDataURL('image/png'),
-        {
-          rectangle: Cesium.Rectangle.fromDegrees(
-            minGx * cell - 180,
-            minGy * cell - 90,
-            (minGx + w) * cell - 180,
-            (minGy + h) * cell - 90,
-          ),
-        },
-      );
-      // A newer request may have replaced this one while the image loaded.
+      // A newer request may have replaced this one while the data loaded.
       removeHeat();
-      heatLayer = viewer.imageryLayers.addImageryProvider(provider);
+      heatLayer = findGlobe(viewer).imagery.add({
+        kind: 'single-image',
+        url: canvas.toDataURL('image/png'),
+        rectangle: {
+          west: minGx * cell - 180,
+          south: minGy * cell - 90,
+          east: (minGx + w) * cell - 180,
+          north: (minGy + h) * cell - 90,
+        },
+      });
       heat = { max, cell, squares: cells.length };
     } catch {
       hint = msg('Heat map failed');
@@ -132,7 +132,7 @@ export function createAnalysis({
     clearTimeout(settle);
     settle = setTimeout(() => showHeat(true), 600);
   };
-  viewer.camera.moveEnd.addEventListener(onMoveEnd);
+  const offMoveEnd = camera.on('moveEnd', onMoveEnd);
 
   async function contactsAt(ms) {
     const query = new URLSearchParams({
@@ -143,7 +143,7 @@ export function createAnalysis({
   }
 
   async function runCompare(aMs, bMs) {
-    compareSource.entities.removeAll();
+    compareSet.clear();
     compare = null;
     hint = '';
     if (!Number.isFinite(aMs) || !Number.isFinite(bMs)) {
@@ -159,23 +159,24 @@ export function createAnalysis({
       const { appeared, gone, stayed } = diffContacts(before, after);
       if (!before.length && !after.length)
         hint = msg('Nothing recorded near those times');
+      const items = [];
       for (const [kind, list] of [
         ['stayed', stayed],
         ['gone', gone],
         ['appeared', appeared],
       ])
         for (const p of list.slice(0, MAX_DRAWN))
-          compareSource.entities.add({
+          items.push({
             id: `replay-compare:${kind}:${p.layer}:${p.id}`,
-            name: p.id,
-            position: Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt || 0),
-            point: {
-              pixelSize: kind === 'stayed' ? 4 : 8,
-              color: Cesium.Color.fromCssColorString(
-                COMPARE_COLORS[kind],
-              ).withAlpha(kind === 'stayed' ? 0.55 : 1),
-            },
+            pos: lonLatOf(p),
+            pixelSize: kind === 'stayed' ? 4 : 8,
+            color: withAlpha(
+              COMPARE_COLORS[kind],
+              kind === 'stayed' ? 0.55 : 1,
+            ),
+            meta: { name: p.id },
           });
+      compareSet.set(items);
       compare = {
         appeared: appeared.length,
         gone: gone.length,
@@ -196,16 +197,16 @@ export function createAnalysis({
     refreshHeat: () => (heat ? showHeat(true) : undefined),
     compare: runCompare,
     clearCompare() {
-      compareSource.entities.removeAll();
+      compareSet.clear();
       compare = null;
       hint = '';
       redraw();
     },
     destroy() {
       clearTimeout(settle);
-      viewer.camera.moveEnd.removeEventListener(onMoveEnd);
+      offMoveEnd();
       removeHeat();
-      viewer.dataSources.remove(compareSource, true);
+      compareSet.dispose();
     },
   };
 }

@@ -1,18 +1,19 @@
-import * as Cesium from 'cesium';
-import { msg, t } from '../i18n/index.js';
+import { inputFor } from '../input/dispatcher.js';
+import { msg } from '../i18n/index.js';
+import { cameraOf, frameOf } from '../render/rendererOf.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createAnalysis } from './analysis.js';
+import { createReplayClock } from './clock.js';
+import { CONTACT_SET, createContacts } from './contacts.js';
 import {
   buildTicks,
   classifyGaps,
   feedOutages,
-  groupTracks,
-  nearestDeltaMs,
-  OBSERVED_WINDOW_MS,
   replayWindow,
-  splitAtGaps,
   tickIndexAt,
 } from './model.js';
+import { createOverlays } from './overlays.js';
+import { boundingSphere, ecefOf } from './sampling.js';
 
 // Live layer id -> recorded layer that replaces it.
 const LIVE_LAYERS = {
@@ -28,15 +29,17 @@ const LAYER_COLORS = {
   local: '#c77dff',
   sat: '#ff5ea8',
 };
-const TRAIL_SECONDS = 600;
 const SPEEDS = [0.5, 1, 2, 5, 10, 30, 60];
 const WINDOW_HOURS = [1, 6, 24];
 const NOTIFY_MS = 250;
+const FOLLOW_EASE_MS = 2000;
 
 /**
- * Replays recorded positions on the globe. Each contact becomes an entity with
- * a sampled position, and the slider moves the viewer clock, so Cesium does the
- * animating. Live layers are switched off while replaying and restored after.
+ * Replays recorded positions on the globe through the renderer contract. Each
+ * contact is a point placed where its recording puts it at the replay time
+ * (`replay/contacts`), and the slider moves the replay clock (`replay/clock`),
+ * which sets the scene's time. Live layers are switched off while replaying and
+ * restored after.
  */
 export function createReplayController({
   viewer,
@@ -44,7 +47,6 @@ export function createReplayController({
   fetchImpl = (...args) => globalThis.fetch(...args),
 } = {}) {
   const listeners = new Set();
-  let source = null;
   let ticks = [];
   let range = null;
   let active = false;
@@ -52,7 +54,6 @@ export function createReplayController({
   let error = '';
   let speed = 10;
   let hidden = [];
-  let savedClock = null;
   let lastNotify = 0;
   let destroyed = false;
   let windowHours = 6;
@@ -70,10 +71,11 @@ export function createReplayController({
   let track = null;
   let pins = [];
   let trackPoints = [];
-  const trackSource = new Cesium.CustomDataSource('replay-track');
-  viewer.dataSources.add(trackSource);
-  const fenceSource = new Cesium.CustomDataSource('replay-fences');
-  viewer.dataSources.add(fenceSource);
+  const camera = cameraOf(viewer);
+  const overlays = createOverlays(viewer);
+  const contactDraw = createContacts(viewer, LAYER_COLORS);
+  const clock = createReplayClock({ viewer, onTick: (ms) => tick(ms) });
+  let stopClicks = null;
   const layers = new Set(['air', 'mil', 'vessel', 'local', 'sat']);
 
   const state = () => {
@@ -102,27 +104,40 @@ export function createReplayController({
       contacts,
       windowHours,
       windows: WINDOW_HOURS,
-      playing: active && viewer.clock.shouldAnimate,
+      playing: active && clock.playing,
       index: active ? tickIndexAt(ticks, currentMs()) : ticks.length - 1,
       timeMs: active ? currentMs() : Date.now(),
     };
   };
-  const currentMs = () =>
-    Cesium.JulianDate.toDate(viewer.clock.currentTime).getTime();
+  const currentMs = () => clock.ms;
   const notify = () => {
     lastNotify = Date.now();
     for (const listener of listeners) listener(state());
   };
   // Clicking a replayed contact follows it; its trail keeps drawing.
-  const onSelect = (entity) => {
-    if (active && String(entity?.id).startsWith('replay:'))
-      viewer.trackedEntity = entity;
+  const onClick = (event) => {
+    const hit = event.drawHit;
+    if (!active || hit?.set !== CONTACT_SET) return;
+    const track = contactDraw.trackOf(hit.id);
+    if (!track) return;
+    camera.follow({
+      key: hit.id,
+      position: (ms) => contactDraw.ecefAt(track, ms),
+      frame: 'enu',
+      viewFrom: { x: 0, y: -6000, z: 4000 },
+      transitionS: 1.2,
+    });
+    // The follow eases over wall time, so frames must run while it does, even paused.
+    const release = frameOf(viewer).holdContinuous('replay-follow');
+    setTimeout(release, FOLLOW_EASE_MS);
   };
-  const onTick = () => {
-    if (!active) return;
-    const end = Date.parse(ticks.at(-1));
-    if (currentMs() >= end) viewer.clock.shouldAnimate = false;
-    if (Date.now() - lastNotify > NOTIFY_MS) notify();
+  const tick = (ms) => {
+    contactDraw.update(ms);
+    if (active && Date.now() - lastNotify > NOTIFY_MS) notify();
+  };
+  const watchClicks = (on) => {
+    stopClicks?.();
+    stopClicks = on ? inputFor(viewer).onClick(onClick) : null;
   };
 
   async function getJson(path) {
@@ -157,57 +172,7 @@ export function createReplayController({
   }
 
   /** Show each watched area as an outlined box on the map. */
-  function drawFences() {
-    fenceSource.entities.removeAll();
-    const color = Cesium.Color.fromCssColorString('#8be9ff');
-    for (const f of fences) {
-      const west = f.west;
-      const east = f.west <= f.east ? f.east : f.east + 360;
-      const corners = Cesium.Cartesian3.fromDegreesArray([
-        west,
-        f.south,
-        east,
-        f.south,
-        east,
-        f.north,
-        west,
-        f.north,
-        west,
-        f.south,
-      ]);
-      // A ground-draped rectangle cannot draw an outline, so the edge is its
-      // own dashed polyline, as in the imagery box tool.
-      fenceSource.entities.add({
-        id: `replay-fence:${f.id}`,
-        name: f.name,
-        rectangle: {
-          coordinates: Cesium.Rectangle.fromDegrees(
-            west,
-            f.south,
-            east,
-            f.north,
-          ),
-          material: color.withAlpha(0.18),
-          classificationType: Cesium.ClassificationType.BOTH,
-        },
-      });
-      fenceSource.entities.add({
-        id: `replay-fence-edge:${f.id}`,
-        name: f.name,
-        polyline: {
-          positions: corners,
-          width: 2,
-          clampToGround: true,
-          classificationType: Cesium.ClassificationType.BOTH,
-          material: new Cesium.PolylineDashMaterialProperty({
-            color: color.withAlpha(0.95),
-            dashLength: 12,
-          }),
-        },
-      });
-    }
-    viewer.scene.requestRender?.();
-  }
+  const drawFences = () => overlays.setFences(fences);
 
   async function sendJson(path, init) {
     const response = await fetchImpl(path, {
@@ -243,79 +208,41 @@ export function createReplayController({
     await refreshRange();
   }
 
-  const REGION_COLOR = '#ffb000';
-  const regionSource = new Cesium.CustomDataSource('replay-region');
-  viewer.dataSources.add(regionSource);
-
   async function setRegion(box) {
     region = box;
-    regionSource.entities.removeAll();
-    if (box)
-      regionSource.entities.add({
-        id: 'replay-region',
-        rectangle: {
-          coordinates: Cesium.Rectangle.fromDegrees(
-            box.west,
-            box.south,
-            box.east,
-            box.north,
-          ),
-          material:
-            Cesium.Color.fromCssColorString(REGION_COLOR).withAlpha(0.1),
-          outline: false,
-          classificationType: Cesium.ClassificationType.BOTH,
-        },
-      });
-    viewer.scene.requestRender?.();
+    overlays.setRegion(box);
     if (active) await enter();
     else notify();
     await analysis.refreshHeat();
   }
 
-  /** Draw a contact's whole recorded path, its first and last fix, and gaps. */
-  function drawTrack() {
-    trackSource.entities.removeAll();
-    if (track) {
-      const at = (p) => Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt || 0);
-      const gold = Cesium.Color.fromCssColorString('#ffd24d');
-      const red = Cesium.Color.fromCssColorString('#ff5c5c');
-      trackSource.entities.add({
-        id: 'replay-track:path',
-        polyline: { positions: trackPoints.map(at), width: 3, material: gold },
-      });
-      const byTs = new Map(trackPoints.map((p) => [p.ts, p]));
-      track.gaps.forEach((gap, i) => {
-        const a = byTs.get(gap.from);
-        const b = byTs.get(gap.to);
-        if (a && b)
-          trackSource.entities.add({
-            id: `replay-track:gap:${i}`,
-            polyline: {
-              positions: [at(a), at(b)],
-              width: 3,
-              material: new Cesium.PolylineDashMaterialProperty({
-                color: red,
-                dashLength: 10,
-              }),
-            },
-          });
-      });
-      for (const [key, p, label, color] of [
-        ['first', track.first, t('FIRST'), '#4dff9a'],
-        ['last', track.last, t('LAST'), '#ff5c5c'],
-      ])
-        trackSource.entities.add({
-          id: `replay-track:${key}`,
-          name: label,
-          position: at(p),
-          point: {
-            pixelSize: 9,
-            color: Cesium.Color.fromCssColorString(color),
-          },
-        });
-    }
-    viewer.scene.requestRender?.();
+  /** What a saved view keeps: where the window starts and its length, the area, layers and speed. */
+  const viewSnapshot = () => ({
+    // Empty unless a time was jumped to: such a view always opens on the newest history.
+    fromSec: customFromSec,
+    windowHours,
+    layers: [...layers],
+    region,
+    speed,
+  });
+
+  /** Goes back to a saved view: its layers, area, window and speed, then replays. */
+  async function applyView(view) {
+    layers.clear();
+    for (const layer of view.layers) layers.add(layer);
+    windowHours = WINDOW_HOURS.includes(view.windowHours)
+      ? view.windowHours
+      : windowHours;
+    if (SPEEDS.includes(view.speed)) speed = view.speed;
+    customFromSec = view.fromSec ?? null;
+    range = replayWindow(rawRange, windowHours);
+    await setRegion(view.region ?? null);
+    if (!active) await enter();
+    clock.setSpeed(speed);
   }
+
+  /** Draw a contact's whole recorded path, its first and last fix, and gaps. */
+  const drawTrack = () => overlays.setTrack(track, trackPoints);
 
   /** Finds a contact by callsign, ship name, hex code or MMSI. */
   async function lookUp(text) {
@@ -382,66 +309,13 @@ export function createReplayController({
       }
     }
     drawTrack();
-    if (track) viewer.flyTo(trackSource, { duration: 1.5 });
-    notify();
-  }
-
-  function buildEntities(points) {
-    const next = new Cesium.CustomDataSource('replay');
-    for (const track of groupTracks(points).values()) {
-      if (track.points.length < 2 || !layers.has(track.layer)) continue;
-      const position = new Cesium.SampledPositionProperty();
-      for (const p of track.points)
-        position.addSample(
-          Cesium.JulianDate.fromDate(new Date(p.ts * 1000)),
-          Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt || 0),
-        );
-      const color = Cesium.Color.fromCssColorString(
-        LAYER_COLORS[track.layer] || '#ffffff',
-      );
-      // A solid dot means a recorded position; a faint ring means the spot is
-      // estimated between two recordings. Stretches with no recording are not
-      // drawn at all, rather than bridged.
-      const times = track.points.map((p) => p.ts * 1000);
-      const faint = color.withAlpha(0.15);
-      const dot = new Cesium.CallbackProperty(
-        (time) =>
-          nearestDeltaMs(times, Cesium.JulianDate.toDate(time).getTime()) <=
-          OBSERVED_WINDOW_MS
-            ? color
-            : faint,
-        false,
-      );
-      const spans = splitAtGaps(track.points).map(
-        (part) =>
-          new Cesium.TimeInterval({
-            start: Cesium.JulianDate.fromDate(new Date(part[0].ts * 1000)),
-            stop: Cesium.JulianDate.fromDate(
-              new Date(part[part.length - 1].ts * 1000),
-            ),
-          }),
-      );
-      next.entities.add({
-        id: `replay:${track.layer}:${track.id}`,
-        name: track.id,
-        availability: new Cesium.TimeIntervalCollection(spans),
-        position,
-        point: {
-          pixelSize: 6,
-          color: dot,
-          outlineColor: color,
-          outlineWidth: 1.5,
-        },
-        path: {
-          resolution: 30,
-          trailTime: TRAIL_SECONDS,
-          leadTime: 0,
-          width: 1.5,
-          material: color.withAlpha(0.6),
-        },
+    const sphere = track && boundingSphere(trackPoints.map(ecefOf));
+    if (sphere)
+      camera.flyToBounds(sphere, {
+        offset: { heading: 0, pitch: -Math.PI / 4, range: 0 },
+        durationS: 1.5,
       });
-    }
-    return next;
+    notify();
   }
 
   async function setLive(on) {
@@ -504,38 +378,18 @@ export function createReplayController({
       if (destroyed) return;
       if (!active) {
         await setLive(true);
-        const c = viewer.clock;
-        savedClock = {
-          current: c.currentTime.clone(),
-          start: c.startTime.clone(),
-          stop: c.stopTime.clone(),
-          range: c.clockRange,
-          multiplier: c.multiplier,
-          animate: c.shouldAnimate,
-        };
-        viewer.clock.onTick.addEventListener(onTick);
-        viewer.selectedEntityChanged.addEventListener(onSelect);
+        watchClicks(true);
       }
-      if (source) viewer.dataSources.remove(source, true);
-      source = buildEntities(points);
-      contacts = source.entities.values.length;
-      await viewer.dataSources.add(source);
+      contacts = contactDraw.load(points, layers);
       ticks = buildTicks(window.fromSec * 1000, window.toSec * 1000);
-      const c = viewer.clock;
-      c.startTime = Cesium.JulianDate.fromDate(new Date(ticks[0]));
-      c.stopTime = Cesium.JulianDate.fromDate(new Date(ticks.at(-1)));
-      c.currentTime = c.startTime.clone();
-      c.clockRange = Cesium.ClockRange.CLAMPED;
-      c.multiplier = speed;
-      c.shouldAnimate = false;
+      clock.start(Date.parse(ticks[0]), Date.parse(ticks.at(-1)), speed);
       active = true;
-      viewer.scene.requestRender?.();
     } catch {
       error = 'failed';
       // Do not leave the live layers hidden when replay never started.
       if (!active) {
-        viewer.clock.onTick.removeEventListener(onTick);
-        viewer.selectedEntityChanged.removeEventListener(onSelect);
+        watchClicks(false);
+        clock.stop();
         await setLive(false).catch(() => {});
       }
     } finally {
@@ -552,33 +406,18 @@ export function createReplayController({
     customFromSec = null;
     if (!active) return;
     active = false;
-    viewer.clock.onTick.removeEventListener(onTick);
-    viewer.selectedEntityChanged.removeEventListener(onSelect);
-    if (String(viewer.trackedEntity?.id).startsWith('replay:'))
-      viewer.trackedEntity = undefined;
-    if (source) viewer.dataSources.remove(source, true);
-    source = null;
-    if (savedClock) {
-      const c = viewer.clock;
-      c.startTime = savedClock.start;
-      c.stopTime = savedClock.stop;
-      c.currentTime = savedClock.current;
-      c.clockRange = savedClock.range;
-      c.multiplier = savedClock.multiplier;
-      c.shouldAnimate = savedClock.animate;
-      savedClock = null;
-    }
+    watchClicks(false);
+    if (String(camera.followed?.key).startsWith(`${CONTACT_SET}:`))
+      camera.follow(null);
+    contactDraw.load([], layers);
+    clock.stop();
     await setLive(false);
-    viewer.scene.requestRender?.();
     notify();
   }
 
   function seek(index) {
     if (!active || !ticks[index]) return;
-    viewer.clock.currentTime = Cesium.JulianDate.fromDate(
-      new Date(ticks[index]),
-    );
-    viewer.scene.requestRender?.();
+    clock.seek(ticks[index] ? Date.parse(ticks[index]) : currentMs());
     notify();
   }
 
@@ -659,35 +498,22 @@ export function createReplayController({
     },
     togglePlay() {
       if (!active) return;
-      const c = viewer.clock;
-      if (!c.shouldAnimate && currentMs() >= Date.parse(ticks.at(-1))) seek(0);
-      c.shouldAnimate = !c.shouldAnimate;
+      clock.toggle();
       notify();
     },
     /** Fly the camera to the replayed contacts. */
     fit() {
-      if (!source) return;
-      // Cesium cannot frame a contact that has no position at the clock time
-      // (a jump can start just before its first fix), so use each contact's
-      // position now, or its first recorded one.
-      const time = viewer.clock.currentTime;
-      const points = [];
-      for (const entity of source.entities.values) {
-        const at =
-          entity.position?.getValue(time) ??
-          (entity.availability?.start &&
-            entity.position?.getValue(entity.availability.start));
-        if (at) points.push(at);
-      }
-      if (!points.length) return;
-      const sphere = Cesium.BoundingSphere.fromPoints(points);
-      viewer.camera.flyToBoundingSphere(sphere, {
-        duration: 1.5,
-        offset: new Cesium.HeadingPitchRange(
-          0,
-          -Math.PI / 4,
-          Math.max(sphere.radius * 2.5, 20000),
-        ),
+      // A jump can start just before a contact's first fix, so each contact
+      // is placed where it is now, or at its first recorded fix.
+      const sphere = contactDraw.sphereAt(currentMs());
+      if (!sphere) return;
+      camera.flyToBounds(sphere, {
+        offset: {
+          heading: 0,
+          pitch: -Math.PI / 4,
+          range: Math.max(sphere.radius * 2.5, 20000),
+        },
+        durationS: 1.5,
       });
     },
     async setWindowHours(hours) {
@@ -724,6 +550,36 @@ export function createReplayController({
         body: JSON.stringify(params),
       });
       if (!params.dryRun) await refreshRange();
+      return result;
+    },
+    /** The saved views: [{ name, savedTs, view }]. */
+    async listViews() {
+      return (await getJson('/api/history/views')).views;
+    },
+    /** Saves the replay state as a view under this name (replacing one). */
+    saveView: (name) =>
+      sendJson('/api/history/views', {
+        method: 'POST',
+        body: JSON.stringify({ name, view: viewSnapshot() }),
+      }),
+    deleteView: (name) =>
+      sendJson('/api/history/views/delete', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      }),
+    applyView,
+    /** The backups on disk, newest first: { folder, files: [{ name, path, bytes }] }. */
+    listBackups: () => getJson('/api/history/backups'),
+    /** Saves a complete copy of the history now; { path, count, bytes }. */
+    backUp: () =>
+      sendJson('/api/history/backup', { method: 'POST', body: '{}' }),
+    /** Switches recording to a copy of a backup file; { count, previous, to }. */
+    async restoreBackup(file) {
+      const result = await sendJson('/api/history/restore', {
+        method: 'POST',
+        body: JSON.stringify({ file }),
+      });
+      await refreshRange();
       return result;
     },
     /** Shows or hides where contacts were densest in the current period. */
@@ -786,7 +642,7 @@ export function createReplayController({
     setSpeed(value) {
       if (!SPEEDS.includes(value)) return;
       speed = value;
-      if (active) viewer.clock.multiplier = value;
+      clock.setSpeed(value);
       notify();
     },
     async toggleLayer(layer) {
@@ -802,10 +658,9 @@ export function createReplayController({
       clearInterval(noticePoll);
       analysis.destroy();
       await boxTool?.destroy();
-      viewer.dataSources.remove(fenceSource, true);
-      viewer.dataSources.remove(trackSource, true);
-      viewer.dataSources.remove(regionSource, true);
       await exit();
+      overlays.dispose();
+      contactDraw.dispose();
       listeners.clear();
     },
   };

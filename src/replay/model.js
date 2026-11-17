@@ -214,7 +214,10 @@ export function formatSpanCompact(seconds) {
     ['h', 3600],
   ])
     if (s % size === 0) return `${s / size}${unit}`;
-  return `${Math.round(s / 86400)}d`;
+  // Not a whole week, day or hour: keep the fraction (the parser takes
+  // decimals), and never round down to 0, which means "keep forever".
+  const part = (size) => Math.max(0.01, Math.round((s / size) * 100) / 100);
+  return s < 86400 ? `${part(3600)}h` : `${part(86400)}d`;
 }
 
 /**

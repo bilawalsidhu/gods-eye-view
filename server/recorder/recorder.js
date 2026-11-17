@@ -22,6 +22,8 @@ export function createRecorder({
   reopen = null,
   retentionDays = 7,
   retentionSec = retentionDays * 86400,
+  // Layers that are kept for their own time: { sat: 86400, local: 2592000 }.
+  layerRetention = {},
   layers = null,
   maxBytes = 0,
   intervalSec = 30,
@@ -130,8 +132,16 @@ export function createRecorder({
     });
   }
   async function purge() {
+    const nowSec = Math.floor(now() / 1000);
+    const own = Object.keys(layerRetention);
     if (retentionSec > 0)
-      await store.purgeBefore(Math.floor(now() / 1000) - retentionSec);
+      await store.purgeBefore(nowSec - retentionSec, { skip: own });
+    // 0 for a layer keeps it for ever, even past the general time.
+    for (const layer of own)
+      if (layerRetention[layer] > 0)
+        await store.purgeBefore(nowSec - layerRetention[layer], {
+          only: layer,
+        });
   }
   /** Keeps the store under maxBytes by dropping the oldest positions. */
   async function enforceCap() {
@@ -187,9 +197,12 @@ export function createRecorder({
       tracker.setFences(await next.listFences());
       return old;
     },
+    /** Applies retention now (it also runs hourly). */
+    purgeNow: purge,
     /** What the recorder is using now. */
     settings: () => ({
       retentionSec,
+      layerRetention: { ...layerRetention },
       maxBytes,
       intervalSec,
       layers: wanted ? [...wanted] : null,
@@ -197,6 +210,8 @@ export function createRecorder({
     /** Changes settings from now on: { retentionSec, maxBytes, intervalSec, layers }. */
     configure(patch) {
       if (patch.retentionSec !== undefined) retentionSec = patch.retentionSec;
+      if (patch.layerRetention !== undefined)
+        layerRetention = { ...patch.layerRetention };
       if (patch.maxBytes !== undefined) maxBytes = patch.maxBytes;
       if (patch.intervalSec !== undefined) {
         intervalSec = patch.intervalSec;

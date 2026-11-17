@@ -988,6 +988,8 @@
   "src/ui/weatherPanel.test.mjs",
   "src/ui/railCards.js",
   "src/ui/railCards.test.mjs",
+  "src/ui/railTimeline.js",
+  "src/ui/railTimeline.test.mjs",
   "src/layers/weather/imageryOrder.js",
   "src/layers/weather/imageryOrder.test.mjs",
   "server/providers/cyclones.js",

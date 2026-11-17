@@ -61,6 +61,7 @@ one-off switch without a file.
 | ----------- | --------------------- | --------------------------------------------------------------------- |
 | `enabled`   | `false`               | `true` turns recording on                                             |
 | `retention` | `"7d"`                | How long to keep: `6h`, `14d`, `8w`, `3m`, `1y`; `0` keeps everything |
+| `layerRetention` | none             | Own time for some layers, apart from `retention`: `{ "sat": "1d", "local": "30d" }`; `0` keeps that layer for ever |
 | `maxMb`     | off (`0`)             | Size cap; the oldest positions are dropped to stay under it           |
 | `layers`    | all                   | Which to record: `air`, `mil`, `vessel`, `local`, and `sat` (off unless named) |
 | `satelliteGroups` | `stations`, `visual`, `gps-ops`, `galileo` | CelesTrak groups to record when `sat` is on |
@@ -71,7 +72,8 @@ one-off switch without a file.
 Environment variables do the same job and win over the file:
 `GEV_RECORDER` (`1` or `0`), `GEV_HISTORY_RETENTION` (older form
 `GEV_HISTORY_DAYS`), `GEV_HISTORY_MAX_MB`, `GEV_RECORDER_LAYERS` (comma list),
-`GEV_RECORDER_INTERVAL`, `GEV_HISTORY_FILE`, `GEV_HISTORY_DB`.
+`GEV_RECORDER_INTERVAL`, `GEV_HISTORY_FILE`, `GEV_HISTORY_DB`, and
+`GEV_HISTORY_LAYER_RETENTION` (`sat=1d,local=30d`).
 
 Positions are recorded only while the app is open and polling. Aircraft are
 captured from the `/api/flights` and `/api/military` responses; vessels are
@@ -284,6 +286,41 @@ disk may stay the same size until it is reused. In the red zone the storage
 warning points here. In these boxes `m` means months and there is no minutes
 unit, so use hours (`1h`) for short ages.
 
+## Retention per layer
+
+Satellites add a great many rows and are rarely worth a week, while your own
+receivers may be worth a month. In SETTINGS, "Per layer" takes a list such as
+`sat=1d, local=30d`. A layer named there is kept for its own time, whether that
+is shorter or longer than the general retention; `sat=0` keeps that layer for
+ever. Layers not named follow the general retention. Pinned contacts are kept
+regardless, and watched-area events, alerts and feed logs follow the general
+time. A layer name that does not exist, or a time that cannot be read, is
+refused with a message and nothing changes.
+
+## Backup and restore
+
+SETTINGS has a **Backup and restore** block (SQLite only; for PostgreSQL use
+`pg_dump`). **BACK UP NOW** saves a complete, checked copy of the history while
+recording carries on, as `gev-history-backup-YYYYMMDD-HHMMSS.sqlite` in a
+`backups` folder beside the history file. Copies are whole databases, so one
+also holds your watched areas, pins and saved views. The list shows the newest
+backups. **RESTORE** copies the chosen one beside the current history as
+`history-restored-YYYYMMDD-HHMMSS.sqlite`, switches recording to that copy and
+saves the new file name in the settings file. The history it replaced is not
+touched: it stays on disk under its own name, and the panel says where, so a
+wrong choice can be undone by pointing the file setting back at it. A file that
+is not a recorded history is refused without being changed. Backups are not
+deleted automatically.
+
+## Saved views
+
+SETTINGS also has **Saved views**. SAVE VIEW keeps the current window length,
+the time you jumped to (if you jumped; otherwise the view always opens on the
+newest history), the drawn area, the layers and the speed under a name; saving
+the same name again replaces it. OPEN VIEW goes back to it and starts the
+replay; DELETE VIEW removes it. Views live in the history database, so they
+travel with a backup. Up to 200 views.
+
 ## Heat map and comparing two times
 
 **HEAT** draws where contacts were densest during the period the panel covers
@@ -343,7 +380,9 @@ and only announces ones that happen after the page opened.
 - `GET /api/history/at?to=<epoch s>&bbox&layers` — last position of each
   contact within 10 minutes before `to`.
 - `GET /api/history/drives` — other drives and volumes with free space, and the folder in use.
-- `POST /api/history/settings` — change retention, size cap, interval or layers (`{ retention, maxMb, interval, layers }`), and where to record (`folder`, `copy`, `deleteOld`); applied at once and saved. Same-origin JSON only. `/status` has `storage` (`path`, `ok`, `error`, `waiting`).
+- `POST /api/history/settings` — change retention, size cap, interval or layers (`{ retention, layerRetention, maxMb, interval, layers }`), and where to record (`folder`, `copy`, `deleteOld`); applied at once and saved. Same-origin JSON only. `/status` has `storage` (`path`, `ok`, `error`, `waiting`).
+- `GET /api/history/backups?folder` — backups in the default folder (or `folder`), newest first. `POST /api/history/backup` — `{ folder? }` saves a checked copy; returns `{ path, count, bytes }`. `POST /api/history/restore` — `{ file }` switches recording to a copy of that backup; returns `{ count, to, previous }`. Same-origin JSON only; SQLite only.
+- `GET /api/history/views`, `POST /api/history/views` (`{ name, view }`) and `POST /api/history/views/delete` (`{ name }`) — saved views.
 - `POST /api/history/thin` — `{ olderThan, keepEvery, dryRun }`; `dryRun` (the default) only counts. Returns `{ removed, total }`.
 - `GET /api/history/feeds?layer&from&to` — logged feed changes for one layer (ok, empty, failing, idle), oldest first, led by the one in force at `from`. `/status` also carries the current `feeds`.
 - `GET /api/history/density?from&to&cell&bbox&layers` — contacts seen per `cell`-degree square, busiest first (up to 20,000 squares).

@@ -1089,7 +1089,8 @@
     "{value} KM/S",
     "ΔN",
     "≥ {value} MW",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "Backups"
   ],
   "ru": [
     "1900–1945",
