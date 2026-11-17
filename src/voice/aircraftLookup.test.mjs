@@ -363,4 +363,4 @@ for (const args of [
     assert.deepEqual(f.events, []);
     runner.dispose();
   });
-      }
+}
