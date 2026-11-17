@@ -7684,6 +7684,8 @@ and unreachable upstream (502/504) separately from road geometry.
   the map. Non-aircraft kinds fail closed with a refusal and redirect to
   `analyst_query` on loaded layers. Following enables/refreshes the required layer
   and verifies the exact ICAO twice: after refresh and immediately before tracking.
+  Follow requires contact time within 120 seconds of the feed observation in
+  either direction; stale/unknown and future-dated times are refused separately.
 
 > **Reading `npm test` totals:** the count depends on the Node major. The two
 > GC-bracketed allocation microbenchmarks (`src/data/focusAllocations.test.mjs`
