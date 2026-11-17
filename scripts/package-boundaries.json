@@ -74,6 +74,12 @@
   "application": {
     "exports": ["./application"],
     "modules": [
+      "src/layers/ports/index.js",
+      "src/layers/ports/source.js",
+      "src/layers/ports/supplements.js",
+      "src/app/layers/ports.js",
+      "src/ui/stores/ports.js",
+      "src/ui/views/panels/PortsPanel.vue",
       "src/app/application.js",
       "src/ui/vueRuntime.js",
       "src/ui/views/index.js",
@@ -4061,6 +4067,12 @@
       "./standalone/catalog"
     ],
     "modules": [
+      "src/layers/ports/index.js",
+      "src/layers/ports/source.js",
+      "src/layers/ports/supplements.js",
+      "src/app/layers/ports.js",
+      "src/ui/stores/ports.js",
+      "src/ui/views/panels/PortsPanel.vue",
       "src/render/stub/viewRectangle.js",
       "src/render/stub/math.js",
       "src/render/cesium/controlledCamera.js",
@@ -5462,6 +5474,13 @@
   "application-layer-construction": {
     "exports": ["./application/layers"],
     "modules": [
+      "src/ui/stores/owners.js",
+      "src/layers/ports/index.js",
+      "src/layers/ports/source.js",
+      "src/layers/ports/supplements.js",
+      "src/app/layers/ports.js",
+      "src/ui/stores/ports.js",
+      "src/ui/views/panels/PortsPanel.vue",
       "src/layers/flights/icons.js",
       "src/data/aircraftIconLayer.js",
       "src/data/fixCurve.js",

@@ -17,6 +17,7 @@ import GeoImport from './panels/GeoImport.vue';
 import UiSelect from '../kit/UiSelect.js';
 import LayerSectionIndex from './panels/LayerSectionIndex.vue';
 import LayerFinder from './panels/LayerFinder.vue';
+import PortsPanel from './panels/PortsPanel.vue';
 import DataLibraryBrowse from './panels/DataLibraryBrowse.vue';
 
 // Scene sharing (src/scenes/sharing.js) offers its authoring bar and presents
@@ -65,6 +66,8 @@ async function importChosen(event) {
     <div id="utilities-toggles" class="data-toggle-list utilities-list"></div>
     <div class="utilities-tools"><DrawControls /><GeoImport /></div>
   </RailPanel>
+
+  <PortsPanel />
 
   <!-- CCTV Coverage Panel -->
   <CctvPanel />

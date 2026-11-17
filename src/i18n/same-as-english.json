@@ -296,7 +296,8 @@
     "{n} mm",
     "Route",
     "3D",
-    "KT"
+    "KT",
+    "Container"
   ],
   "es": [
     "1 min/s",
@@ -490,7 +491,8 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "No"
   ],
   "fr": [
     "1 min/s",
@@ -748,7 +750,8 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "Ports"
   ],
   "it": [
     "1 min/s",
@@ -982,7 +985,8 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "No"
   ],
   "ja": [
     "1090 MHz",
