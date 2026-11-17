@@ -23,6 +23,7 @@ export const LABEL_LAYERS = new Set([
   'local-firms',
   'fire-perimeters',
   'weather-cyclones',
+  'weather-turbulence',
   'air-quality',
   'alpr-cameras',
   'drone-airspace',
