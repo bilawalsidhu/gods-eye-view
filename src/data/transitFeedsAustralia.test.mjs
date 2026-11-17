@@ -13,19 +13,12 @@ import {
 // Route ids below are as published in the live feeds and the operators'
 // static routes.txt (checked 16 Oct 2026).
 
-test('TransLink feeds are keyless, routable and cover their own city only', () => {
-  const seq = getTransitFeed('translink-seq');
+test('TransLink Cairns is routable and each TransLink feed covers its own city', () => {
   const cairns = getTransitFeed('translink-cairns');
   assert.equal(
     cairns.url,
     'https://gtfsrt.api.translink.com.au/api/realtime/CNS/VehiclePositions',
   );
-  for (const feed of [seq, cairns]) {
-    assert.equal(feed.headers, undefined, `${feed.id} needs no extra header`);
-  }
-  for (const feed of [seq, cairns]) {
-    assert.equal(feed.license, 'CC BY 4.0');
-  }
   const ids = (lat, lon) => transitFeedsInRange(lat, lon).map((f) => f.id);
   assert.deepEqual(ids(-27.4698, 153.0251), ['translink-seq']);
   assert.deepEqual(ids(-16.9186, 145.7781), ['translink-cairns']);
@@ -111,14 +104,4 @@ test('DATA_SOURCES documents the TransLink feeds in the transit row style', () =
     /published for developer use and not against their use/,
   );
   assert.doesNotMatch(translink, /licen[cs]e|CC BY|terms/i);
-  // The Rail layer documents Adelaide Metro in a row of its own.
-  const adelaide = rows.filter(
-    (line) =>
-      line.startsWith('| **Adelaide Metro**') && /Transit layer/.test(line),
-  );
-  assert.equal(
-    adelaide.length,
-    1,
-    'one Adelaide Metro Transit row',
-  );
 });

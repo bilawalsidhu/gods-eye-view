@@ -479,7 +479,6 @@ function translinkRouteMode(routeId) {
  * @returns {string|null}
  */
 function translinkRouteLabel(routeId) {
-  if (!routeId) return routeId;
   const route = routeId.replace(/-\d+$/, '');
   const cairns = /^C(\d+)$/.exec(route);
   return cairns ? cairns[1] : route;
@@ -970,23 +969,22 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     routeMode: translinkRouteMode,
     routeLabel: translinkRouteLabel,
   }),
-  Object.freeze({
+  transitFeed({
     id: 'translink-cairns',
     name: 'TransLink',
     operator: 'TransLink (Queensland Government)',
     region: 'Cairns, Australia',
-    center: Object.freeze({ lat: -16.9186, lon: 145.7781 }),
+    center: { lat: -16.9186, lon: 145.7781 },
     loadRadiusKm: 60,
     url: 'https://gtfsrt.api.translink.com.au/api/realtime/CNS/VehiclePositions',
     license: 'CC BY 4.0',
     licenseUrl: 'https://translink.com.au/about-translink/open-data',
     attribution: 'Translink, Department of Transport and Main Roads',
-    defaultEnabled: true,
-    terms: Object.freeze({
+    terms: {
       quote:
         'Our data is licensed under a Creative Commons Attribution 4.0 International License. Authentication is not required to use the feed.',
       note: 'The same open-data page lists Cairns (CNS) vehicle positions beside South East Queensland; same terms, text-only credit.',
-    }),
+    },
     defaultMode: 'bus',
     routeMode: translinkRouteMode,
     routeLabel: translinkRouteLabel,
