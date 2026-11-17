@@ -5,4 +5,4 @@
   floor is known reports no height, so the view waits for the ground instead
   of standing on the ellipsoid. A train standing at a platform keeps the way
   it runs: GPS jitter of a few metres no longer turns the ride around
-  (German, @gekh, #0000).
+  (German, @gekh, #1786).
