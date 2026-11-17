@@ -1,0 +1,37 @@
+{
+  "id": "digitraffic-ais-vessels",
+  "kind": "dataset",
+  "family": "movement",
+  "title": "Vessel positions, northern Baltic (Digitraffic AIS)",
+  "provider": "Fintraffic",
+  "description": "The last AIS position of each vessel Fintraffic's network heard within a day, most minutes old, some hours: MMSI, speed in knots (102.3 means unknown) and course (360 means unknown). A snapshot every 5 minutes, not a moving track.",
+  "icon": "⚓",
+  "maintainer": "github:Herr-Enklo",
+  "coverage": {
+    "countries": ["FI", "EE", "SE", "RU"],
+    "bbox": [17.9, 58.7, 30.4, 65.9]
+  },
+  "source": {
+    "format": "geojson",
+    "url": "https://meri.digitraffic.fi/api/ais/v1/locations",
+    "fetch": "browser-direct",
+    "cacheSeconds": 300,
+    "maxBytes": 8388608,
+    "maxFeatures": 5000
+  },
+  "display": {
+    "color": "#4fd1c5",
+    "label": "mmsi",
+    "fields": ["sog", "cog"]
+  },
+  "licence": {
+    "name": "CC BY 4.0 (Digitraffic terms of service)",
+    "url": "https://www.digitraffic.fi/en/terms-of-service/"
+  },
+  "attribution": {
+    "text": "Source: Fintraffic / digitraffic.fi, license CC 4.0 BY",
+    "url": "https://www.digitraffic.fi/en/marine-traffic/"
+  },
+  "status": "community",
+  "reviewed": "2026-11-17"
+}

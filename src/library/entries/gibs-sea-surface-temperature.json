@@ -1,0 +1,84 @@
+{
+  "id": "gibs-sea-surface-temperature",
+  "kind": "tiles",
+  "family": "environment",
+  "title": "Sea surface temperature, daily (NASA MUR)",
+  "provider": "NASA GIBS",
+  "description": "Daily global sea surface temperature at 1 km from the GHRSST Level 4 MUR analysis (NASA JPL), which blends several satellites and buoys so clouds leave no gaps. The newest field is about a day old.",
+  "icon": "♨",
+  "maintainer": "github:Herr-Enklo",
+  "coverage": {
+    "global": true
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature/default/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png",
+    "fetch": "browser-direct",
+    "cacheSeconds": 21600,
+    "minZoom": 0,
+    "maxZoom": 7
+  },
+  "display": {
+    "opacity": 0.85,
+    "legend": [
+      {
+        "label": "Below 0 °C",
+        "color": "#2b001a"
+      },
+      {
+        "label": "3 °C",
+        "color": "#6c0466"
+      },
+      {
+        "label": "6 °C",
+        "color": "#490a5e"
+      },
+      {
+        "label": "9 °C",
+        "color": "#1e2163"
+      },
+      {
+        "label": "12 °C",
+        "color": "#214ea1"
+      },
+      {
+        "label": "15 °C",
+        "color": "#2b8edd"
+      },
+      {
+        "label": "18 °C",
+        "color": "#1ba548"
+      },
+      {
+        "label": "21 °C",
+        "color": "#c5ec00"
+      },
+      {
+        "label": "24 °C",
+        "color": "#ffaf00"
+      },
+      {
+        "label": "27 °C",
+        "color": "#ec5300"
+      },
+      {
+        "label": "30 °C",
+        "color": "#ab1900"
+      },
+      {
+        "label": "32 °C and above",
+        "color": "#6b0200"
+      }
+    ]
+  },
+  "licence": {
+    "name": "NASA data: U.S. public domain; no endorsement implied",
+    "url": "https://www.earthdata.nasa.gov/engage/open-data-services-software-policies"
+  },
+  "attribution": {
+    "text": "NASA GIBS — GHRSST Level 4 MUR sea surface temperature (JPL MUR MEaSUREs Project)",
+    "url": "https://podaac.jpl.nasa.gov/dataset/MUR-JPL-L4-GLOB-v4.1"
+  },
+  "status": "community",
+  "reviewed": "2026-11-17"
+}

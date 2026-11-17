@@ -1,0 +1,61 @@
+{
+  "id": "emodnet-vessel-density",
+  "kind": "tiles",
+  "family": "movement",
+  "title": "Vessel traffic density 2023, European seas (EMODnet)",
+  "provider": "EMODnet",
+  "description": "Where ships sailed in 2023: the annual average of all vessel types in hours per square kilometre a month, on a 1 km grid of EU waters and their neighbours, made by EMODnet from AIS data. Not live traffic.",
+  "icon": "⛴",
+  "maintainer": "github:Herr-Enklo",
+  "coverage": {
+    "bbox": [-42, 24, 68, 84]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://ows.emodnet-humanactivities.eu/wms?service=WMS&request=GetMap&version=1.3.0&layers=emodnet:vesseldensity_allavg&styles=&crs=EPSG:3857&bbox={bbox-epsg-3857}&width=256&height=256&format=image/png&transparent=true&time=2023-01-01T00:00:00Z",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 2,
+    "maxZoom": 11,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 0.85,
+    "legend": [
+      {
+        "label": "0.5 hours per km² a month",
+        "color": "#20998f"
+      },
+      {
+        "label": "2 hours per km² a month",
+        "color": "#00db00"
+      },
+      {
+        "label": "5 hours per km² a month",
+        "color": "#ffff00"
+      },
+      {
+        "label": "10 hours per km² a month",
+        "color": "#eda113"
+      },
+      {
+        "label": "20 hours per km² a month",
+        "color": "#dd3a1b"
+      },
+      {
+        "label": "100 and more hours per km² a month",
+        "color": "#9b1800"
+      }
+    ]
+  },
+  "licence": {
+    "name": "CC BY 4.0 (EMODnet Human Activities)",
+    "url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "attribution": {
+    "text": "EMODnet Human Activities (data originator Cogea), CC BY 4.0",
+    "url": "https://emodnet.ec.europa.eu/en/human-activities"
+  },
+  "status": "community",
+  "reviewed": "2026-11-17"
+}

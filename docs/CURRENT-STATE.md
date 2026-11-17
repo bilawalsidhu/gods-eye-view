@@ -511,11 +511,11 @@ Cesium's colour-to-alpha (max channel distance 0.02): measured fills are
 swisstopo white, IGN's flat ocean blue (#0a3b59) and GSI's ocean grey
 (#343434). Without both, a white fill covered the whole globe. A 4xx tile
 answer counts as "no imagery here", never as a tile error. IGN's overseas
-departments are outside its single bbox and are not shown. The aerial set now holds 60
+departments are outside its single bbox and are not shown. The aerial set now holds 61
 entries: 57 imported from the Open Imagery Register (national programmes in
 Belgium (Wallonia), Germany, Estonia, Spain, Poland, Portugal, Australia's
 NSW, and 49 US services: NAIP plus state, county and city programmes) plus
-IGN, GSI and SWISSIMAGE, each with an `imagery`
+IGN, GSI, SWISSIMAGE and LGB's Brandenburg and Berlin DOP20, each with an `imagery`
 block (type, published resolution, true ortho, years flown, refresh) that
 Browse shows as a spec list. Tiles take `xyz` (with `{reverseY}` for TMS) or
 `bbox` templates (`{bbox-epsg-3857}`: WMS GetMap and ArcGIS export, filled
@@ -633,7 +633,36 @@ TopPlusOpen, GSI Japan map and photos and JRC surface water occurrence.
 Entries whose licence or provider pages no longer resolve (404 or unreachable
 host, checked 2026-11-12) were removed: OpenSeaMap seamarks, EMODnet
 bathymetry, SEDAC GPW population density, PDOK, basemap.at, Geneva SITG,
-ICGC Catalunya, Luxembourg, Vlaanderen, Minnesota and Bangor aerial photos. `npm run library:check` validates manifests,
+ICGC Catalunya, Luxembourg, Vlaanderen, Minnesota and Bangor aerial photos.
+Added 2026-11-17, each probed live and loaded in a browser from the app's
+origin. For Germany: PEGELONLINE waterway gauges (JSON records; the card shows
+value and unit, since some gauges report metres above datum instead of cm;
+coloured by the level's state against mean low and mean high water, with
+out-of-date values in their own colour; gauges the service lists without
+coordinates are not drawn), DWD weather warnings (WFS GeoJSON, running and
+announced, coloured by CAP severity only, so advance notices, heat and UV
+warnings do not get the DWD's own styles; an empty answer in calm weather is
+healthy, though `library:probe` reads it as a failure), the DWD radar
+composite and NowCastMIX lightning density (WMS), the BfS gamma dose rate
+network (WFS GeoJSON; the BfS catalogue licenses its ODL open-data products
+under dl-de/by-2-0) and LGB's Brandenburg and Berlin DOP20 aerial photos. For
+European seas: EMODnet Human Activities' offshore wind farms, as areas and as
+points (two entries, mostly different farms), its oil and gas installations (a
+`cql_filter` leaves the set's buoy categories out) and its 2023 vessel density
+(WMS with a fixed `time`; the provider flags 2024 as thinner), and Fintraffic's
+Digitraffic AIS positions for the northern Baltic (GeoJSON, each vessel's last
+position within a day; the API answers only clients that accept gzip, as
+browsers and Node's `fetch` do). Worldwide: GEBCO 2026 shaded relief (WMS, the
+grid's versioned endpoint, so the citation stays true) and two NASA GIBS
+drapes that ask for the `default` time in the tile path, IMERG half-hourly
+precipitation and MUR sea surface temperature, with legends from GIBS's colour
+maps. None of these datasets sets a rank, so a zoomed-out view keeps the
+features nearest the view centre. Library tile layers do not reload on a
+timer: the radar, lightning and precipitation drapes show the time step
+current when each tile was fetched, with no time shown, so a session left
+open keeps what it loaded and can mix time steps until the layer is switched
+off and on.
+`npm run library:check` validates manifests,
 the ledger (append-only with `--base-ref`, run in CI on pull requests) and the
 generated DATA_SOURCES.md section; `npm run library:probe` hits every upstream
 once; `npm run qa:data-library` is the browser gate (fixture-backed).

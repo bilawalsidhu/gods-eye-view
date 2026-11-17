@@ -1,0 +1,65 @@
+{
+  "id": "pegelonline-water-levels",
+  "kind": "dataset",
+  "family": "environment",
+  "title": "German waterway gauges, water levels (PEGELONLINE)",
+  "provider": "WSV PEGELONLINE",
+  "description": "About 690 gauges on Germany's federal waterways and coasts with their latest water level: cm at most, metres above datum at some canals and reservoirs. Coloured by state against mean low and high water; stale values marked. Raw data.",
+  "icon": "≈",
+  "maintainer": "github:Herr-Enklo",
+  "coverage": {
+    "countries": ["DE", "NL", "CH"],
+    "bbox": [5.4, 47.5, 14.8, 55.1]
+  },
+  "source": {
+    "format": "json",
+    "url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations.json",
+    "query": {
+      "timeseries": "W",
+      "includeTimeseries": "true",
+      "includeCurrentMeasurement": "true"
+    },
+    "columns": {
+      "lat": "latitude",
+      "lon": "longitude"
+    },
+    "fetch": "browser-direct",
+    "cacheSeconds": 900,
+    "maxBytes": 4194304,
+    "maxFeatures": 1500
+  },
+  "display": {
+    "color": "#a0aec0",
+    "label": "longname",
+    "fields": ["timeseries.0.currentMeasurement.value", "timeseries.0.unit"],
+    "colorBy": {
+      "field": "timeseries.0.currentMeasurement.stateMnwMhw",
+      "colors": {
+        "low": "#fab219",
+        "normal": "#0ca30c",
+        "high": "#d03b3b",
+        "unknown": "#a0aec0",
+        "commented": "#b794f4",
+        "out-dated": "#4a5568"
+      },
+      "labels": {
+        "low": "Below mean low water",
+        "normal": "Between mean low and high water",
+        "high": "Above mean high water",
+        "unknown": "No reference levels",
+        "commented": "Flagged by the operator",
+        "out-dated": "Value out of date"
+      }
+    }
+  },
+  "licence": {
+    "name": "Datenlizenz Deutschland – Zero – Version 2.0",
+    "url": "https://www.govdata.de/dl-de/zero-2-0"
+  },
+  "attribution": {
+    "text": "PEGELONLINE, Wasserstraßen- und Schifffahrtsverwaltung des Bundes (WSV)",
+    "url": "https://www.pegelonline.wsv.de/"
+  },
+  "status": "community",
+  "reviewed": "2026-11-17"
+}
