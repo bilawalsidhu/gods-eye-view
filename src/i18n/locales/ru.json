@@ -4542,7 +4542,7 @@
   "Pilot report · {severity}": "Донесение пилота · {severity}",
   "Turbulence data unavailable": "Данные о турбулентности недоступны",
   "Forecast areas {forecasts} · Warnings {warnings} · Pilot reports {reports}": "Зоны прогноза {forecasts} · Предупреждения {warnings} · Донесения пилотов {reports}",
-  "Some feeds unavailable": "Некоторые источники недоступны",
+  "Some feeds unavailable": "Некоторые потоки данных недоступны",
   "Turbulence": "Турбулентность",
   "US forecasts · worldwide warnings": "Прогнозы США · предупреждения по миру",
   "Pilot reports from the 3 hours before the time shown": "Донесения пилотов за 3 часа до показанного времени",

@@ -4215,7 +4215,7 @@
   "turbulence|Severe": "強い",
   "turbulence|Extreme": "非常に強い",
   "Top unknown": "上限不明",
-  "Valid {time}": "{time} 時点で有効",
+  "Valid {time}": "対象時刻 {time}",
   "Valid {from} to {to}": "{from}～{to} 有効",
   "Reported {time}": "{time} 報告",
   "Turbulence forecast · {severity}": "乱気流予報 · {severity}",

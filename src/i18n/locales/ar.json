@@ -4745,7 +4745,7 @@
   "turbulence|Severe": "شديد",
   "turbulence|Extreme": "بالغ الشدة",
   "Top unknown": "الحد الأعلى غير معروف",
-  "Valid {time}": "سارٍ عند {time}",
+  "Valid {time}": "وقت التوقع {time}",
   "Valid {from} to {to}": "سارٍ من {from} إلى {to}",
   "Reported {time}": "أُبلغ عنه {time}",
   "Turbulence forecast · {severity}": "توقعات الاضطراب · {severity}",
