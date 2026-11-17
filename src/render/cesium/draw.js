@@ -5312,10 +5312,14 @@ export function createCesiumDraw({
     replaceHost,
     horizonNow,
     requestRender,
+    parts: capabilities.has('modelParts'),
+    now,
   });
   const buildModels = (record) => modelSets.build(record);
   // Whether shapes pulsed in the last frame, which draws on in the next.
   let pulsing = false;
+  // Whether a shown model's parts spun in the last frame, likewise.
+  let spinning = false;
   const lineWidth = (px) =>
     typeof scene.clampLineWidth === 'function'
       ? scene.clampLineWidth(px)
@@ -5452,7 +5456,7 @@ export function createCesiumDraw({
           turnInertial(record);
         record.drapeInertial?.();
       }
-      modelSets.beforeRender(sets.values());
+      spinning = modelSets.beforeRender(sets.values());
       quadSets.beforeRender(sets.values());
     },
     /** Each frame, after it drew: clamp state, and ground swaps. */
@@ -5483,7 +5487,8 @@ export function createCesiumDraw({
       // Rows moving on a live clock, and flowing lines, draw on in the
       // frames that follow.
       const playing = quadSets.afterRender(sets.values());
-      if (anySet(animating) || flowing() || pulsing || playing) requestRender();
+      if (anySet(animating) || flowing() || pulsing || spinning || playing)
+        requestRender();
     },
     /**
      * Let go of the sets; with `removeHosts`, take what they draw out of
@@ -5494,6 +5499,8 @@ export function createCesiumDraw({
       clampListeners.clear();
       // Fields go with the port, and their frame listeners with them.
       fieldPart.dispose();
+      // Part shaders and their textures go with it too.
+      modelSets.dispose();
       // Late model loads find no host and destroy themselves.
       for (const record of sets.values()) {
         if (removeHosts && !scene.isDestroyed?.()) {
@@ -5538,7 +5545,7 @@ provideUnboundDraw((viewer) => {
   const part = createCesiumDraw({
     scene,
     report: uncaught,
-    capabilities: new Set([...GPU_ICON_CAPABILITIES, 'fields']),
+    capabilities: new Set([...GPU_ICON_CAPABILITIES, 'fields', 'modelParts']),
   });
   unboundParts.set(part.port, part);
   const offs = [

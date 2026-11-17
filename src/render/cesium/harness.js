@@ -85,6 +85,7 @@ export const CESIUM_CHECKS = new Set([
   'draw.models.tint',
   'draw.models.blend',
   'draw.models.update',
+  'draw.models.parts',
   'draw.motion',
   'draw.motion.arc',
   'draw.motion.climb',

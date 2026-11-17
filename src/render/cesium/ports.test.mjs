@@ -33,7 +33,14 @@ test('capabilities follow what the scene supports', () => {
     'vectorBase',
   ];
   const globe = { show: true };
-  const draw = ['models', 'modelAtmosphere', 'quads', 'meshes', 'fields'];
+  const draw = [
+    'models',
+    'modelParts',
+    'modelAtmosphere',
+    'quads',
+    'meshes',
+    'fields',
+  ];
   assert.deepEqual(cesiumCapabilities({}), [...draw, ...effects]);
   // A scene with a globe reads its visibility back.
   assert.deepEqual(cesiumCapabilities({ globe }), [

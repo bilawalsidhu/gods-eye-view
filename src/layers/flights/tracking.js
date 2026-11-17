@@ -919,10 +919,7 @@ export function createTracking({
       width: look.size[0],
       height: look.size[1],
       get scale() {
-        return parts.rendering._fleetBillboardScale(
-          icao24,
-          flightState.records.data.get(icao24)?.klass,
-        );
+        return parts.rendering._fleetBillboardScale(icao24);
       },
       scaleByDistance: look.scaleByDistance,
     };
@@ -1099,6 +1096,8 @@ export function createTracking({
         const pos = getTrackedPosition();
         if (!tracked || !pos || !flightState._viewer)
           return flightState._lastTrackedRotation;
+        // A ground station's mast stands upright.
+        if (tracked.klass === 'station') return 0;
         const projected = courseScreenRotation(
           _pose(),
           pos,

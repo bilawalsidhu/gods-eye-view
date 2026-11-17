@@ -35,7 +35,6 @@ import {
   recoveryMs,
   limitCourseStep,
 } from '../../data/motionModel.js';
-import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import { placeLiveAircraft } from '../flights/placed.js';
 import {
   modelVisualAnchor,
@@ -321,10 +320,7 @@ export function createMotion({
     const sprite = readEntityRecord(flightState._trackedEntity)?.sprite;
     const width = sprite?.width ?? 28;
     const height = sprite?.height ?? 28;
-    const scale =
-      sprite?.scale ??
-      BILLBOARD_SCALE *
-        (CLASS_SCALE_2D[flightState.records.data.get(icao24)?.klass] || 1);
+    const scale = sprite?.scale ?? BILLBOARD_SCALE;
     const scaleByDistance =
       sprite?.scaleByDistance ?? TRACKED_BILLBOARD_SCALE_BY_DISTANCE;
     const distanceScale = nearFarScalarValueAtDistance(scaleByDistance, rangeM);
