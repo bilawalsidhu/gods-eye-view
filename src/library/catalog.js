@@ -48,6 +48,7 @@ import grandForksNd from './entries/grand-forks-nd.json' with { type: 'json' };
 import gsiJapanMap from './entries/gsi-japan-map.json' with { type: 'json' };
 import gsiJapanPhoto from './entries/gsi-japan-photo.json' with { type: 'json' };
 import gvpHoloceneVolcanoes from './entries/gvp-holocene-volcanoes.json' with { type: 'json' };
+import hamburgTrafficCameras from './entries/hamburg-traffic-cameras.json' with { type: 'json' };
 import iaStatewideImagery from './entries/ia-statewide-imagery.json' with { type: 'json' };
 import idStatewideImagery from './entries/id-statewide-imagery.json' with { type: 'json' };
 import ignOrthophotosFrance from './entries/ign-orthophotos-france.json' with { type: 'json' };
@@ -161,6 +162,7 @@ export const LIBRARY_MANIFESTS = Object.freeze([
   gsiJapanMap,
   gsiJapanPhoto,
   gvpHoloceneVolcanoes,
+  hamburgTrafficCameras,
   iaStatewideImagery,
   idStatewideImagery,
   ignOrthophotosFrance,

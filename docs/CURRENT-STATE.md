@@ -647,7 +647,9 @@ styles, and two warnings on one area blend their fills; an empty answer in
 calm weather is healthy, though `library:probe` reads it as a failure), the DWD radar
 composite and NowCastMIX lightning density (WMS), the BfS gamma dose rate
 network (WFS GeoJSON; the BfS catalogue licenses its ODL open-data products
-under dl-de/by-2-0) and LGB's Brandenburg and Berlin DOP20 aerial photos. For
+under dl-de/by-2-0) and LGB's Brandenburg and Berlin DOP20 aerial photos, plus the 22 Hamburg
+traffic-camera positions the city publishes as open data (locations and the
+junction watched only, no image). For
 European seas: EMODnet Human Activities' offshore wind farms, as areas and as
 points (two entries, mostly different farms), its oil and gas installations (a
 `cql_filter` leaves the set's buoy categories out) and its 2023 vessel density

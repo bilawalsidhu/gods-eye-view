@@ -1,0 +1,40 @@
+{
+  "id": "hamburg-traffic-cameras",
+  "kind": "dataset",
+  "family": "cameras",
+  "title": "Hamburg traffic camera positions",
+  "provider": "Stadt Hamburg (BVM)",
+  "description": "Where 22 of the Hamburg traffic control centre's cameras stand, from the city's open-data register, with the junction each watches. Positions only, no live image: the control centre steers each camera, which can face several ways.",
+  "icon": "◉",
+  "maintainer": "github:Herr-Enklo",
+  "coverage": { "countries": ["DE"], "bbox": [9.88, 53.451, 10.179, 53.658] },
+  "source": {
+    "format": "geojson",
+    "url": "https://geodienste.hamburg.de/wfs_verkehrskameras",
+    "query": {
+      "service": "WFS",
+      "version": "2.0.0",
+      "request": "GetFeature",
+      "typeNames": "de.hh.up:verkehrskameras",
+      "outputFormat": "application/geo+json",
+      "srsName": "EPSG:4326"
+    },
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "maxFeatures": 500
+  },
+  "display": {
+    "color": "#e53e3e",
+    "label": "lage"
+  },
+  "licence": {
+    "name": "Datenlizenz Deutschland – Namensnennung – Version 2.0",
+    "url": "https://www.govdata.de/dl-de/by-2-0"
+  },
+  "attribution": {
+    "text": "Freie und Hansestadt Hamburg, Behörde für Verkehr und Mobilitätswende (BVM), dl-de/by-2-0",
+    "url": "https://suche.transparenz.hamburg.de/dataset/verkehrskameras-hamburg3"
+  },
+  "status": "community",
+  "reviewed": "2026-11-18"
+}
