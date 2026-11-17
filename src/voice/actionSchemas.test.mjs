@@ -61,7 +61,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // show_street_level (map, source, photo) adds one tool.
     // open_stories adds the Stories Explore entry action.
     // Aircraft feed lookup adds lookupOnly and aircraft-only tracking guidance.
-    '2f6a54aa85b8727e69f3a024f950a7897a4bee25249a06e4a3d0eab121ee5678',
+    'a392aa4b55b31532f0d76ee765292bb7cc47abd1d1cda5138320153f22cce852',
   );
 });
 
