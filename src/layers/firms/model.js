@@ -1,16 +1,26 @@
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { rectangleHeight, rectangleWidth } from '../../geo/rectangle.js';
+import {
+  PI_OVER_TWO,
+  TWO_PI,
+  negativePiToPi,
+  toDegrees,
+} from '../../geo/vector.js';
+import { formatNumber, getLocale, isolate, t, tn } from '../../i18n/index.js';
 import {
   satelliteShortName,
   fireDetectionKey,
   accentForSeverity,
+  formatFrpMw,
 } from '../../data/firmsLabels.js';
+import { FRP_RAMP, frpRampStop } from '../../data/firmsIntensity.js';
 import {
   VIEW_PADDING,
   DETECTION_COLOR_STOPS,
-  CULL_LIFT_THRESHOLD_M,
-  CULL_LIFT_M,
+  GLOW_SPRITE_PX,
   LABEL_MIN_SEP_PX,
 } from './policy.js';
+import { ICON_CULL_HEIGHT_M } from '../../data/iconSet.js';
 
 export function createModel({
   layerState,
@@ -56,35 +66,36 @@ export function createModel({
    * Expand a view rectangle by VIEW_PADDING per side and convert to degree
    * bounds with an explicit anti-meridian wrap flag. Returns null for
    * near-global views where clipping would be pointless.
-   * @param {Cesium.Rectangle} rect - Camera view rectangle (radians).
+   * @param {{west: number, south: number, east: number, north: number}} rect
+   *   Camera view rectangle, radians.
    * @returns {?{west: number, south: number, east: number, north: number, wraps: boolean}}
    */
 
   function paddedDegreeBounds(rect) {
-    const width = Cesium.Rectangle.computeWidth(rect);
-    const height = Cesium.Rectangle.computeHeight(rect);
+    const width = rectangleWidth(rect);
+    const height = rectangleHeight(rect);
     if (width >= Math.PI * 1.85) return null;
     const padLon = width * VIEW_PADDING;
     const padLat = height * VIEW_PADDING;
-    const south = Math.max(-Cesium.Math.PI_OVER_TWO, rect.south - padLat);
-    const north = Math.min(Cesium.Math.PI_OVER_TWO, rect.north + padLat);
+    const south = Math.max(-PI_OVER_TWO, rect.south - padLat);
+    const north = Math.min(PI_OVER_TWO, rect.north + padLat);
     let west = rect.west - padLon;
     let east = rect.east + padLon;
     let wraps;
-    if (width + padLon * 2 >= Cesium.Math.TWO_PI) {
+    if (width + padLon * 2 >= TWO_PI) {
       west = -Math.PI;
       east = Math.PI;
       wraps = false;
     } else {
-      west = Cesium.Math.negativePiToPi(west);
-      east = Cesium.Math.negativePiToPi(east);
+      west = negativePiToPi(west);
+      east = negativePiToPi(east);
       wraps = west > east;
     }
     return {
-      west: Cesium.Math.toDegrees(west),
-      south: Cesium.Math.toDegrees(south),
-      east: Cesium.Math.toDegrees(east),
-      north: Cesium.Math.toDegrees(north),
+      west: toDegrees(west),
+      south: toDegrees(south),
+      east: toDegrees(east),
+      north: toDegrees(north),
       wraps,
     };
   }
@@ -117,27 +128,30 @@ export function createModel({
     );
   }
 
-  function heatColor(value, alpha) {
-    if (value > 0.72) return Cesium.Color.RED.withAlpha(alpha);
-    if (value > 0.42) return Cesium.Color.ORANGE.withAlpha(alpha);
-    return Cesium.Color.YELLOW.withAlpha(alpha);
+  /**
+   * The ramp stop for a fire radiative power (stepped, weakest first).
+   * Intensity alone drives the color: confidence feeds the card text and the
+   * switch, brightness is unreliable (saturates at 367 K) — see HAL-675.
+   * @param {number} frp - Megawatts.
+   * @returns {{name: string, minFrp: number, color: number[]}}
+   */
+
+  function frpColorStop(frp) {
+    const name = frpRampStop(frp).name;
+    return (
+      DETECTION_COLOR_STOPS.find((stop) => stop.name === name) ||
+      DETECTION_COLOR_STOPS[0]
+    );
   }
 
   /**
-   * Pick a sprite color stop from FRP + confidence, reusing the same
-   * yellow → orange → red thresholds as the aggregated heat cells.
+   * Pick a sprite color stop for one detection from its FRP on the shared ramp.
    * @param {Object} fire - Detection record.
-   * @returns {{name: string, color: Cesium.Color}}
+   * @returns {{name: string, color: number[]}}
    */
 
   function detectionColorStop(fire) {
-    const heat = Math.min(
-      1,
-      Math.sqrt(Math.max(0, fire.frp) / 150) * 0.85 + fire.confidence * 0.15,
-    );
-    if (heat > 0.72) return DETECTION_COLOR_STOPS[0];
-    if (heat > 0.42) return DETECTION_COLOR_STOPS[1];
-    return DETECTION_COLOR_STOPS[2];
+    return frpColorStop(fire?.frp);
   }
 
   /** FRP → core marker pixel size, clamped to 8..28px. */
@@ -158,18 +172,17 @@ export function createModel({
   /**
    * Build (and cache) a radial-glow sprite: hot near-white center fading
    * through the stop color to a transparent edge. The glow lives in the
-   * sprite itself because global bloom defaults OFF.
-   * @param {{name: string, color: Cesium.Color}} stop - Color stop.
-   * @param {number} corePx - Bucketed core size in pixels.
+   * sprite itself because global bloom defaults OFF. One raster per color
+   * (GLOW_SPRITE_PX); each fire draws it at its own size.
+   * @param {{name: string, color: number[]}} stop - Color stop.
    * @returns {string} PNG data URL.
    */
 
-  function glowSprite(stop, corePx) {
-    const key = `${stop.name}:${corePx}`;
-    const cached = layerState.glowSpriteCache.get(key);
+  function glowSprite(stop) {
+    const cached = layerState.glowSpriteCache.get(stop.name);
     if (cached) return cached;
 
-    const dimension = corePx * 2;
+    const dimension = GLOW_SPRITE_PX;
     const canvas = document.createElement('canvas');
     canvas.width = dimension;
     canvas.height = dimension;
@@ -177,9 +190,9 @@ export function createModel({
     if (!context) return '';
     const radius = dimension / 2;
     const rgb = [
-      Math.round(stop.color.red * 255),
-      Math.round(stop.color.green * 255),
-      Math.round(stop.color.blue * 255),
+      Math.round(stop.color[0] * 255),
+      Math.round(stop.color[1] * 255),
+      Math.round(stop.color[2] * 255),
     ].join(',');
     const gradient = context.createRadialGradient(
       radius,
@@ -197,12 +210,12 @@ export function createModel({
     context.fillRect(0, 0, dimension, dimension);
 
     const dataUrl = canvas.toDataURL('image/png');
-    layerState.glowSpriteCache.set(key, dataUrl);
+    layerState.glowSpriteCache.set(stop.name, dataUrl);
     return dataUrl;
   }
 
   /**
-   * Lazily-cached Cartesian3 anchor at the shared ground floor (DEM/mesh cell
+   * Lazily-cached ECEF anchor at the shared ground floor (DEM/mesh cell
    * + lift) when the floor is warm, else ellipsoid height 0 (owner field
    * finding 2026-07-21: height-0 anchors read as buried under high terrain at
    * close/oblique zoom). Warm-cache read only — floors are warmed in batch by
@@ -213,37 +226,50 @@ export function createModel({
    * free either way (contacts are ALWAYS visible — never below the surface,
    * slightly above is fine).
    * @param {Object} fire - Detection record.
-   * @returns {Cesium.Cartesian3}
+   * @returns {{x: number, y: number, z: number}} ECEF.
    */
 
   function firePosition(fire) {
     const height = fireAnchorHeight(fire.lat, fire.lon);
     if (!fire.position || fire.positionHeight !== height) {
-      fire.position = Cesium.Cartesian3.fromDegrees(fire.lon, fire.lat, height);
+      fire.position = fromDegrees(fire.lon, fire.lat, height);
       fire.positionHeight = height;
     }
     return fire.position;
   }
 
   /**
-   * Occlusion-test anchor for one detection. Returns the render position
-   * outright for anchors comfortably above the ellipsoid (the common case) and
-   * a lazily-cached lifted point otherwise — see CULL_LIFT_THRESHOLD_M. This
-   * NEVER feeds rendering: the datum-correct anchor from {@link firePosition}
-   * is what the sprite and the card are drawn at.
+   * The anchor already built for a detection, without the floor lookup;
+   * for the far marker band, where floors are never warmed and the height
+   * difference is invisible, so tens of thousands of markers skip a cache
+   * read each per rebuild. Builds one through {@link firePosition} once.
    * @param {Object} fire - Detection record.
-   * @returns {Cesium.Cartesian3}
+   * @returns {{x: number, y: number, z: number}} ECEF.
    */
 
-  function fireCullPosition(fire) {
-    const position = firePosition(fire);
-    if (fire.positionHeight >= CULL_LIFT_THRESHOLD_M) return position;
+  function fireBuiltPosition(fire) {
+    return fire.position ?? firePosition(fire);
+  }
+
+  /**
+   * Occlusion-test anchor for one detection. Returns the render position
+   * outright for anchors comfortably above the ellipsoid (the common case) and
+   * a lazily-cached lifted point otherwise, the point the icon set's GPU
+   * horizon test judges a fire row at (ICON_CULL_LIFT), so a card shows exactly
+   * when its sprite does. In negative-geoid coastal regions the floored anchor
+   * lands tens of metres BELOW the WGS84 ellipsoid, which the occluder judges
+   * beyond the horizon while true-surface neighbours stay visible. This NEVER
+   * feeds rendering: the datum-correct anchor from {@link firePosition} is what
+   * the sprite and the card are drawn at.
+   * @param {Object} fire - Detection record.
+   * @param {{x: number, y: number, z: number}} [position] Its render anchor, if at hand.
+   * @returns {{x: number, y: number, z: number}} ECEF.
+   */
+
+  function fireCullPosition(fire, position = firePosition(fire)) {
+    if (fire.positionHeight >= ICON_CULL_HEIGHT_M) return position;
     if (!fire.cullPosition) {
-      fire.cullPosition = Cesium.Cartesian3.fromDegrees(
-        fire.lon,
-        fire.lat,
-        CULL_LIFT_M,
-      );
+      fire.cullPosition = fromDegrees(fire.lon, fire.lat, ICON_CULL_HEIGHT_M);
     }
     return fire.cullPosition;
   }
@@ -254,58 +280,18 @@ export function createModel({
    * boundary case, so they get the same lift as sub-ellipsoid fire anchors.
    * @param {number} lon - Cell center longitude in degrees.
    * @param {number} lat - Cell center latitude in degrees.
-   * @returns {Cesium.Cartesian3}
+   * @returns {{x: number, y: number, z: number}} ECEF.
    */
 
   function cellCullPosition(lon, lat) {
-    return Cesium.Cartesian3.fromDegrees(lon, lat, CULL_LIFT_M);
-  }
-
-  /**
-   * Horizon-cull a billboard collection against an ellipsoid occluder.
-   *
-   * The Cesium globe is hidden in this app (Google 3D Tiles render the planet),
-   * so nothing writes far-side depth — and these sprites are additionally
-   * always-on-top (`disableDepthTestDistance: INFINITY`, so a detection is never
-   * swallowed by terrain it sits on). Without an explicit occluder pass, fires on
-   * the opposite side of the Earth shine through the planet at tilted mid-altitude
-   * views. Same pattern as the flights/CCTV layers' `EllipsoidalOccluder` passes.
-   *
-   * Pure and allocation-free: reads `billboard.position`, writes `billboard.show`
-   * only when it actually flips (assigning `show` dirties the collection's vertex
-   * buffer). Accepts any `{length, get(i)}` shape so it is unit-testable without
-   * a WebGL scene.
-   *
-   * @param {?{length: number, get: function(number): (Object|undefined)}} billboards
-   *   Billboard collection (or collection-shaped stub).
-   * @param {?{isPointVisible: function(Object): boolean}} occluder Horizon occluder.
-   * @param {?Array<Cesium.Cartesian3>} [cullPositions=null] Index-aligned lifted
-   *   occlusion-test anchors (see {@link fireCullPosition}); falls back to the
-   *   billboard's own render position wherever an entry is absent.
-   * @returns {number} Count of billboards left visible (0 when nothing to test).
-   */
-
-  function applyHorizonCull(billboards, occluder, cullPositions = null) {
-    if (!billboards || typeof billboards.get !== 'function') return 0;
-    if (typeof occluder?.isPointVisible !== 'function') return 0;
-    const total = Number(billboards.length) || 0;
-    let visibleCount = 0;
-    for (let i = 0; i < total; i += 1) {
-      const billboard = billboards.get(i);
-      if (!billboard) continue;
-      const point = (cullPositions && cullPositions[i]) || billboard.position;
-      const visible = occluder.isPointVisible(point) === true;
-      if (billboard.show !== visible) billboard.show = visible;
-      if (visible) visibleCount += 1;
-    }
-    return visibleCount;
+    return fromDegrees(lon, lat, ICON_CULL_HEIGHT_M);
   }
 
   /**
    * True when `screen` is at least LABEL_MIN_SEP_PX away from every accepted
    * screen position (greedy declutter accept test).
    * @param {Array<{x: number, y: number}>} accepted - Accepted label positions.
-   * @param {Cesium.Cartesian2} screen - Candidate window coordinates.
+   * @param {{x: number, y: number}} screen - Candidate window coordinates.
    * @returns {boolean}
    */
 
@@ -324,19 +310,23 @@ export function createModel({
    * (on top) and never distance-faded by the overlay.
    * Exported for unit tests.
    * @param {Object} fire - Detection record.
-   * @param {number} nowMs - Current epoch milliseconds.
+   * @param {number} nowMs - Epoch milliseconds ages count back from.
    * @returns {Object} firmsLabels entry.
    */
 
   function buildSelectedFireCard(fire, nowMs) {
-    const meta = [`${confidenceBucket(fire.confidence)} conf`];
+    const meta = [
+      t('{value} conf', {
+        value: confidenceLabel(confidenceBucket(fire.confidence)),
+      }),
+    ];
     if (fire.acqMs > 0) {
-      const age = formatAge(nowMs - fire.acqMs);
-      if (age) meta.push(`${age} ago`);
+      const age = formatAgeLabel(nowMs - fire.acqMs);
+      if (age) meta.push(t('{value} ago', { value: age }));
     }
     const sat = satelliteShortName(fire.satellite);
     meta.push(
-      sat ? `${fire.sensor || 'VIIRS'} ${sat}` : fire.sensor || 'sensor n/a',
+      sat ? `${fire.sensor || 'VIIRS'} ${sat}` : fire.sensor || t('sensor n/a'),
     );
     return {
       id: `selected-fire:${fireDetectionKey(fire)}`,
@@ -346,10 +336,11 @@ export function createModel({
       cullPosition: fireCullPosition(fire),
       gapPx: frpPixelSize(fire.frp),
       accent: accentForSeverity(detectionColorStop(fire).name),
-      title: `FIRE · ${formatFrp(fire.frp)} MW`,
+      title: t('FIRE · {frp} MW', { frp: formatFrpLabel(fire.frp) }),
       details: [
         meta.join(' · '),
-        formatLatLon(fire.lat, fire.lon) + (fire.night ? ' · NIGHT' : ''),
+        formatLatLonLabel(fire.lat, fire.lon) +
+          (fire.night ? ` · ${t('NIGHT')}` : ''),
       ],
       selected: true,
       priority: Number.MAX_SAFE_INTEGER,
@@ -360,17 +351,18 @@ export function createModel({
    * Card model for an ambient fire detection, e.g. title "▲ 47 MW", detail
    * "high · 14h · N20". Ages are computed against each detection's acquisition
    * time — with the live feed everything reads under 24 h (and a stale cache
-   * reads truthfully old). Exported for unit tests.
-   * @param {{fire: Object, position: Cesium.Cartesian3}} candidate - Label candidate.
-   * @param {number} nowMs - Current epoch milliseconds.
+   * reads truthfully old); `nowMs` is the time ages count back from, the end
+   * of the window shown (see {@link ageReferenceMs}). Exported for unit tests.
+   * @param {{fire: Object, position: {x: number, y: number, z: number}}} candidate - Label candidate.
+   * @param {number} nowMs - Epoch milliseconds ages count back from.
    * @returns {Object} firmsLabels entry.
    */
 
   function buildFireCard(candidate, nowMs) {
     const fire = candidate.fire;
-    const meta = [confidenceBucket(fire.confidence)];
+    const meta = [confidenceLabel(confidenceBucket(fire.confidence))];
     if (fire.acqMs > 0) {
-      const age = formatAge(nowMs - fire.acqMs);
+      const age = formatAgeLabel(nowMs - fire.acqMs);
       if (age) meta.push(age);
     }
     const sat = satelliteShortName(fire.satellite) || fire.sensor;
@@ -382,7 +374,7 @@ export function createModel({
       cullPosition: candidate.cullPosition || candidate.position,
       gapPx: frpPixelSize(fire.frp),
       accent: accentForSeverity(detectionColorStop(fire).name),
-      title: `▲ ${formatFrp(fire.frp)} MW`,
+      title: t('▲ {frp} MW', { frp: formatFrpLabel(fire.frp) }),
       details: [meta.join(' · ')],
       selected: false,
       priority: Number(fire.frp) || 0,
@@ -391,28 +383,32 @@ export function createModel({
 
   /**
    * Card model for an aggregated heat cell, e.g. title "14 FIRES", detail
-   * "max 210 MW · new 3h". Accent comes from the candidate (heat-normalized
-   * score is only known at renderCells time). Exported for unit tests.
-   * @param {{cell: Object, position: Cesium.Cartesian3, accent: string}} candidate
-   * @param {number} nowMs - Current epoch milliseconds.
+   * "max 210 MW · new 3h". Accent comes from the candidate (renderHeat sets
+   * it with {@link cellCardAccent}). Exported for unit tests.
+   * @param {{cell: Object, position: {x: number, y: number, z: number}, accent: string}} candidate
+   * @param {number} nowMs - Epoch milliseconds ages count back from.
    * @returns {Object} firmsLabels entry.
    */
 
   function buildCellCard(candidate, nowMs) {
     const cell = candidate.cell;
-    const noun = cell.count === 1 ? 'FIRE' : 'FIRES';
-    const parts = [`max ${formatFrp(cell.maxFrp)} MW`];
+    const parts = [t('max {value} MW', { value: formatFrpLabel(cell.maxFrp) })];
     if (cell.newestAcqMs > 0) {
-      const age = formatAge(nowMs - cell.newestAcqMs);
-      if (age) parts.push(`new ${age}`);
+      const age = formatAgeLabel(nowMs - cell.newestAcqMs);
+      if (age) parts.push(t('new {value}', { value: age }));
     }
     return {
       id: `cell:${cell.latCell ?? 'x'}:${cell.lonCell ?? 'x'}`,
       position: candidate.position,
       cullPosition: candidate.cullPosition || candidate.position,
       gapPx: 10,
-      accent: candidate.accent || accentForSeverity('yellow'),
-      title: `${cell.count} ${noun}`,
+      accent: candidate.accent || accentForSeverity(FRP_RAMP[0].name),
+      // The count picks the plural form of the language ("حريقان (2)",
+      // "14 حريقًا", "14 ПОЖАРОВ"); the card shows it in capitals like the
+      // other card titles.
+      title: tn(cell.count, '{n} fire', '{n} fires', {
+        n: cell.count,
+      }).toLocaleUpperCase(getLocale()),
       details: [parts.join(' · ')],
       selected: false,
       priority: Number(cell.maxFrp) || 0,
@@ -453,16 +449,14 @@ export function createModel({
   }
 
   /**
-   * Heat-normalized cell score → severity accent, mirroring heatColor's
-   * red/orange/yellow thresholds.
-   * @param {number} normalized - 0..1 normalized heat score.
+   * Cell card accent: the cell's strongest fire on the FRP ramp, the same
+   * color its markers take once the camera is close enough to show them.
+   * @param {{maxFrp?: number}} cell - Aggregated cell.
    * @returns {string} "r, g, b" accent string.
    */
 
-  function cellAccent(normalized) {
-    if (normalized > 0.72) return accentForSeverity('red');
-    if (normalized > 0.42) return accentForSeverity('orange');
-    return accentForSeverity('yellow');
+  function cellCardAccent(cell) {
+    return accentForSeverity(frpColorStop(cell?.maxFrp ?? 0).name);
   }
 
   /** Coordinate line like "30.512°N 75.831°E". */
@@ -474,27 +468,110 @@ export function createModel({
   }
 
   function formatFrp(frp) {
-    return frp >= 10 ? frp.toFixed(0) : frp.toFixed(1);
+    return formatFrpMw(frp);
+  }
+
+  /** formatFrp for a card, with the locale's decimal separator ("4,9"). */
+
+  function formatFrpLabel(frp) {
+    const text = formatFrpMw(frp);
+    const digits = text.includes('.') ? 1 : 0;
+    return formatNumber(Number(text), {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+      useGrouping: false,
+    });
+  }
+
+  /** formatLatLon for a card: "8,389° ю. ш. 44,162° з. д." in Russian. */
+
+  function formatLatLonLabel(lat, lon) {
+    const amount = (value) =>
+      formatNumber(Math.abs(value), {
+        minimumFractionDigits: 3,
+        maximumFractionDigits: 3,
+        useGrouping: false,
+      });
+    const latPart =
+      lat >= 0
+        ? t('{value}°N', { value: amount(lat) })
+        : t('{value}°S', { value: amount(lat) });
+    const lonPart =
+      lon >= 0
+        ? t('{value}°E', { value: amount(lon) })
+        : t('{value}°W', { value: amount(lon) });
+    return `${isolate(latPart)} ${isolate(lonPart)}`;
+  }
+
+  /**
+   * Millisecond delta → `{ unit: '<1h' | 'h' | 'd', count }`, or null for
+   * invalid input. Both age formatters read it, so they pick the same unit.
+   */
+
+  function ageParts(deltaMs) {
+    if (!Number.isFinite(deltaMs) || deltaMs < 0) return null;
+    const hours = deltaMs / 3600000;
+    if (hours < 1) return { unit: '<1h', count: 0 };
+    const wholeHours = Math.round(hours);
+    if (wholeHours < 48) return { unit: 'h', count: wholeHours };
+    return { unit: 'd', count: Math.round(hours / 24) };
+  }
+
+  /**
+   * The time a card's ages count back from: the end of the 24 hours shown
+   * when the snapshot ends at a set time, now while it runs to now. A window
+   * that ended months ago then reads its fires as hours old, as they were.
+   * @param {number} [nowMs] - Current epoch milliseconds.
+   * @returns {number}
+   */
+
+  function ageReferenceMs(nowMs = Date.now()) {
+    const at = layerState?._at;
+    return Number.isFinite(at) ? at : nowMs;
   }
 
   /** Millisecond delta → "<1h" / "Xh" / "Xd", or '' for invalid input. */
 
   function formatAge(deltaMs) {
-    if (!Number.isFinite(deltaMs) || deltaMs < 0) return '';
-    const hours = deltaMs / 3600000;
-    if (hours < 1) return '<1h';
-    if (hours < 48) return `${Math.round(hours)}h`;
-    return `${Math.round(hours / 24)}d`;
+    const age = ageParts(deltaMs);
+    if (!age) return '';
+    return age.unit === '<1h' ? '<1h' : `${age.count}${age.unit}`;
   }
 
   /** Millisecond delta → "<1m ago" / "Xm ago" / "Xh ago" (fresh-feed readout). */
 
   function formatAgoMinutes(deltaMs) {
-    if (!Number.isFinite(deltaMs) || deltaMs < 0) return 'just now';
+    if (!Number.isFinite(deltaMs) || deltaMs < 0) return t('just now');
     const minutes = Math.floor(deltaMs / 60000);
-    if (minutes < 1) return '<1m ago';
-    if (minutes < 90) return `${minutes}m ago`;
-    return `${Math.round(minutes / 60)}h ago`;
+    if (minutes < 1) return t('<1m ago');
+    if (minutes < 90) return t('{count}m ago', { count: minutes });
+    return t('{count}h ago', { count: Math.round(minutes / 60) });
+  }
+
+  /** A confidence bucket as a card shows it, in the UI language. */
+
+  function confidenceLabel(bucket) {
+    switch (bucket) {
+      case 'high':
+        return t('high', { context: 'fire confidence' });
+      case 'nominal':
+        return t('nominal', { context: 'fire confidence' });
+      case 'low':
+        return t('low', { context: 'fire confidence' });
+      default:
+        return bucket;
+    }
+  }
+
+  /** formatAge for a card: "<1h", "24h", "3d" in the UI language ("24 ч"). */
+
+  function formatAgeLabel(deltaMs) {
+    const age = ageParts(deltaMs);
+    if (!age) return '';
+    if (age.unit === '<1h') return t('<1h', { context: 'age' });
+    return age.unit === 'h'
+      ? t('{count}h', { context: 'age', count: age.count })
+      : t('{count}d', { context: 'age', count: age.count });
   }
 
   /** Normalized 0..1 confidence → low/nominal/high display bucket. */
@@ -510,24 +587,26 @@ export function createModel({
     boundsContainPoint,
     cellIntersectsBounds,
     heatScore,
-    heatColor,
+    frpColorStop,
     detectionColorStop,
     frpPixelSize,
     sizeBucket,
     glowSprite,
     firePosition,
+    fireBuiltPosition,
     fireCullPosition,
     cellCullPosition,
-    applyHorizonCull,
     screenSeparated,
     buildSelectedFireCard,
     buildFireCard,
     buildCellCard,
     applyFirmsOverlayPolicy,
-    cellAccent,
+    cellCardAccent,
     formatLatLon,
     formatFrp,
+    ageReferenceMs,
     formatAge,
+    formatAgeLabel,
     formatAgoMinutes,
     confidenceBucket,
   };

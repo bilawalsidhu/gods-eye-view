@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import { WORLD_OVERLAY_OCCLUDER_SELECTORS } from './worldOverlayChrome.js';
+export { WORLD_OVERLAY_OCCLUDER_SELECTORS } from './worldOverlayChrome.js';
 import {
   createCyberSonarSampler,
   isCyberContactSonarActive as isCyberSonarActive,
@@ -19,8 +20,16 @@ import {
   measureOverlayEntry,
   paintOverlayEntry,
   placementVariants,
+  truncateOverlayTitle,
 } from './worldOverlayDraw.js';
 import { WORLD_OVERLAY_STYLE } from './worldOverlayTokens.js';
+import { t } from '../i18n/index.js';
+import {
+  canvasOf,
+  findCamera,
+  findFrame,
+  findQuery,
+} from '../render/rendererOf.js';
 
 /**
  * @module worldOverlay
@@ -32,9 +41,6 @@ import { WORLD_OVERLAY_STYLE } from './worldOverlayTokens.js';
 const ROOT_ID = 'world-overlay-root';
 const CANVAS_ID = 'world-overlay-canvas';
 const DETECTION_SURFACE_ID = 'world-overlay-detection-surface';
-const ACCESSIBILITY_ROOT_ID = 'world-overlay-actions';
-const ACCESSIBILITY_LIST_ID = 'world-overlay-action-list';
-const ACCESSIBILITY_STATUS_ID = 'world-overlay-status';
 const PAINT_TARGET_SHARED = 'shared';
 const PAINT_TARGET_DETECTION = 'detection';
 const OCCLUDER_PADDING_PX = 6;
@@ -74,64 +80,13 @@ const PAINT_LANE_INDEX = new Map(
   WORLD_OVERLAY_PAINT_LANES.map((lane, index) => [lane, index]),
 );
 
-/**
- * Unified UI exclusion inventory. Selectors may match multiple elements; the
- * service caches their rectangles and observes layout/visibility changes.
- *
- * These rectangles are a PLACEMENT policy, never a paint mask. Every element
- * listed here composites ABOVE the overlay host — map chrome sits at z90–z1000
- * and the cockpit HUD at z145, against this host's z5/z6 — so the browser
- * already keeps overlay pixels off it and no canvas needs clipping. What the
- * inventory buys is readability: a card placed under solid chrome is simply
- * lost, so the solver PREFERS placements clear of it. When nothing is clear the
- * entry still renders and the chrome covers it, exactly as it did before the
- * host existed.
- *
- * The list therefore holds only chrome dense enough to swallow a card. The
- * cockpit's thin translucent line art — rims, arcs, rails, tapes, toplines,
- * readouts — is deliberately ABSENT under the owner's AR-HUD ruling:
- * world-space overlay content renders beneath the cockpit's screen-space HUD,
- * which paints over it by z-order. Those elements are also enormous (the
- * altitude rim is keyhole-tall, the topline viewport-wide), and excluding them
- * suppressed essentially the entire cockpit view. Only the two solid,
- * backdrop-filled cockpit windows survive as exclusions.
- */
-export const WORLD_OVERLAY_OCCLUDER_SELECTORS = Object.freeze([
-  '#title-bar',
-  '#style-indicator',
-  '#top-center-actions',
-  '#traffic-sync-chip',
-  '#cctv-sync-chip',
-  '#left-panel-stack',
-  '#right-context-rail',
-  '.weather-summary',
-  '#pp-toggles',
-  '#command-dock',
-  '#gev-voice-control',
-  '#cesium-credits',
-  '.hud-top-left',
-  '.hud-top-right',
-  '.hud-bottom-left',
-  '.hud-bottom-right',
-  '.hud-top-bar',
-  '.hud-bottom-bar',
-  '#space-mission-panel',
-  '#space-mission-panel-host',
-  '#military-awareness-panel',
-  '#bhote-koshi-event-panel',
-  // Cockpit: solid backdrop-filled windows only (both bounded to
-  // `min(340px, 28vw)` wide and `min(42vh, 410px)` tall, both `hidden` until
-  // toggled). Every other cockpit selector was removed — see the block comment.
-  '#cockpit-context',
-  '#cockpit-signal-stream',
-]);
-
 /** @typedef {{x:number,y:number,w:number,h:number}} OverlayRect */
 /**
  * @typedef {object} WorldOverlayEntry
  * @property {string} id Stable identity within the source.
  * @property {string} source Owning source id.
- * @property {Cesium.Cartesian3|function():Cesium.Cartesian3} position
+ * @property {{x: number, y: number, z: number}|function():{x: number, y: number, z: number}} position
+ *   ECEF metres.
  * @property {'label'|'track'|'card'|'thumbnail'|'selected'|'tracked'} variant
  * @property {string} [accessibilityLabel] Accessible name for an actionable card.
  * @property {function():*} [activate] Keyboard/assistive activation callback.
@@ -146,22 +101,42 @@ export const WORLD_OVERLAY_OCCLUDER_SELECTORS = Object.freeze([
  * @property {number} [maxVisible=Infinity] Source ceiling within a shared domain.
  * @property {boolean} [moving=false] Enables bounded interval re-solves.
  * @property {number} [solveIntervalMs=125]
+ * @property {function(Set<string>):void} [onVisibilityChange] Painted entry ids,
+ *   reported only on membership changes. The borrowed Set is read-only.
  */
 
-/** @type {Cesium.Viewer|null} */
+/**
+ * The scene object the host was given (a viewer): its `container` and
+ * `canvas` place and size the overlay, and the renderer's ports drawing it
+ * project, cull and drive the frames.
+ * @type {object|null}
+ */
 let _viewer = null;
+/** @type {import('../render/contract/camera').CameraPort|null} */
+let _camera = null;
+/** @type {import('../render/contract/frame').FramePort|null} */
+let _frame = null;
+/** @type {import('../render/contract/query').QueryPort|null} */
+let _query = null;
+/** The eye this frame, ECEF metres, and its height above the ellipsoid. */
+const _eye = { x: 0, y: 0, z: 0 };
+let _eyeHeight = Number.NaN;
 /** @type {HTMLElement|null} */
 let _root = null;
 /** @type {HTMLCanvasElement|null} */
 let _canvas = null;
 /** @type {CanvasRenderingContext2D|null} */
 let _ctx = null;
-/** @type {HTMLElement|null} Focusable mirror of painted actionable cards. */
-let _accessibilityRoot = null;
-/** @type {HTMLElement|null} */
-let _accessibilityList = null;
-/** @type {HTMLElement|null} */
-let _accessibilityStatus = null;
+/**
+ * The focusable mirror of painted actionable cards, as its view renders it:
+ * `{owner, items, status, announced}`, or null without a host. `announced`
+ * counts accepted focuses, so a repeated announcement is spoken again. Subscribers (the
+ * application shell, which publishes it to a store) receive every change;
+ * the module itself needs no Vue, for the portable transit entry.
+ * @type {?{owner: object, items: object[], status: string, announced: number}}
+ */
+let _actions = null;
+const _actionsListeners = new Set();
 let _accessibilitySignature = '';
 const _accessibleActivatorByKey = new Map();
 /** @type {HTMLCanvasElement|null} Host-owned detection blend-isolation surface. */
@@ -218,13 +193,30 @@ const _domains = new Map();
 const _domainList = [];
 /** @type {Map<string, object>} */
 const _records = new Map();
-const _scratchViewProjection = new Cesium.Matrix4();
+/**
+ * A record's ECEF position. A class, not a literal: its fields take doubles
+ * from the first write in place, which keeps the projection pass from
+ * allocating per candidate.
+ */
+class Position {
+  constructor() {
+    this.x = 0.0;
+    this.y = 0.0;
+    this.z = 0.0;
+  }
+}
+/** Column-major projection × view, this frame. */
+const _scratchViewProjection = new Float64Array(16);
 const _viewProjectionScalars = {};
 const _viewport = { width: 0, height: 0 };
+/**
+ * The horizon test handed to custom paint lanes and used by the projection
+ * pass: the renderer's own (`query.isOccluded`), from this frame's eye.
+ */
+const _horizon = Object.freeze({
+  isPointVisible: (position) => !_query?.isOccluded(position),
+});
 let _occluder = null;
-let _occluderCameraX = Number.NaN;
-let _occluderCameraY = Number.NaN;
-let _occluderCameraZ = Number.NaN;
 /** Cached keyhole geometry, versioned by both its box and shared tuning. */
 let _keyhole = null;
 let _keyholeWidth = -1;
@@ -247,6 +239,8 @@ const _customPaintFrame = {
   viewProjectionMatrix: _scratchViewProjection,
   viewProjection: _viewProjectionScalars,
   cameraPosition: null,
+  /** The eye's height above the ellipsoid (m), from the camera port's pose. */
+  cameraHeight: Number.NaN,
   occluder: null,
   keyhole: null,
   uiRects: _uiOcclusionRects,
@@ -257,6 +251,10 @@ const _paintQueue = [];
 const _paintItemPool = [];
 const _paintRectPool = [];
 const _paintRectByKey = new Map();
+/** @type {Map<string, Map<string, object>>} This frame's paint items by source and entry id. */
+const _queuedItemBySource = new Map();
+/** Index rows that stop painting are dropped this many frames apart. */
+const QUEUED_ITEM_PRUNE_FRAMES = 600;
 const _hitRects = [];
 const _paintedBySource = Object.create(null);
 const _paintedSourceKeys = [];
@@ -403,12 +401,12 @@ export function paintLaneForOverlayEntry(entry = {}) {
  *   invoked once rather than once per validated component;
  * - a throwing accessor is contained here — it degrades that one entry to
  *   "no cull anchor" instead of aborting normalization for the whole source;
- * - the components are copied into a fresh Cartesian3, so a caller mutating
+ * - the components are copied into a fresh vector, so a caller mutating
  *   or recycling its own vector after publishing cannot feed NaN (or a moved
  *   point) to the per-frame occluder.
  *
  * @param {object} entry - Raw source entry.
- * @returns {?Cesium.Cartesian3} Host-owned lifted anchor, or null.
+ * @returns {?{x: number, y: number, z: number}} Host-owned lifted anchor, or null.
  */
 function snapshotCullPosition(entry) {
   let candidate;
@@ -421,7 +419,7 @@ function snapshotCullPosition(entry) {
   const { x, y, z } = candidate;
   if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z))
     return null;
-  return new Cesium.Cartesian3(x, y, z);
+  return { x, y, z };
 }
 
 export function normalizeOverlayEntry(sourceId, entry) {
@@ -469,6 +467,11 @@ export function normalizeOverlayEntry(sourceId, entry) {
     collisionGroup: String(
       entry.collisionGroup || defaultCollisionGroup(variant),
     ),
+    // Optional lower-priority content must fit around the actual painted
+    // members of another domain, including its sticky positions and exit fades.
+    yieldToCollisionGroup: entry.yieldToCollisionGroup
+      ? String(entry.yieldToCollisionGroup)
+      : null,
     // Explicit field pick rather than `{ ...entry, variant }`: the lane
     // resolver reads only these four, and a full spread re-invokes every
     // accessor the source put on its entry (a throwing one would abort
@@ -591,12 +594,15 @@ export function normalizeOverlayEntry(sourceId, entry) {
     metadata: entry.metadata ?? null,
     thumbnailWidth: entry.thumbnailWidth,
     thumbnailHeight: entry.thumbnailHeight,
+    thumbnailFit: entry.thumbnailFit === 'contain' ? 'contain' : null,
+    thumbnailFixedWidth: entry.thumbnailFixedWidth === true,
     thumbnailPadX: entry.thumbnailPadX,
     thumbnailPadTop: entry.thumbnailPadTop,
     thumbnailPadBottom: entry.thumbnailPadBottom,
     thumbnailTitleGap: entry.thumbnailTitleGap,
     thumbnailTitleHeight: entry.thumbnailTitleHeight,
     thumbnailTitleChars: entry.thumbnailTitleChars,
+    thumbnailTitleWordBoundary: entry.thumbnailTitleWordBoundary === true,
     thumbnailBackground: entry.thumbnailBackground,
     thumbnailTitleColor: entry.thumbnailTitleColor,
     thumbnailTitleFont: entry.thumbnailTitleFont,
@@ -610,13 +616,21 @@ export function normalizeOverlayEntry(sourceId, entry) {
     _overlayTrackDisplayText: '',
     _overlayThumbnailTitle:
       variant === 'thumbnail'
-        ? String(entry.title ?? '')
-            .toUpperCase()
-            .slice(
-              0,
+        ? entry.thumbnailTitleWordBoundary === true
+          ? truncateOverlayTitle(
+              String(entry.title ?? '').toUpperCase(),
               Math.max(0, Math.floor(Number(entry.thumbnailTitleChars) || 0)) ||
-                undefined,
+                Infinity,
             )
+          : String(entry.title ?? '')
+              .toUpperCase()
+              .slice(
+                0,
+                Math.max(
+                  0,
+                  Math.floor(Number(entry.thumbnailTitleChars) || 0),
+                ) || undefined,
+              )
         : '',
   };
   normalized._overlayKey = entryKey(source, id);
@@ -713,6 +727,12 @@ function normalizeSourceOptions(options = {}, previous = {}) {
           DEFAULT_MOVING_SOLVE_MS,
       ) || 0,
     ),
+    onVisibilityChange:
+      options.onVisibilityChange === undefined
+        ? previous.onVisibilityChange || null
+        : typeof options.onVisibilityChange === 'function'
+          ? options.onVisibilityChange
+          : null,
   };
 }
 
@@ -843,6 +863,7 @@ function getOrCreateSource(sourceId, options = {}) {
       cohortLists: [],
       cohortCount: 0,
       demandByDomain: new Map(),
+      visibleIds: new Set(),
       options: normalizeSourceOptions(options),
     };
     _sources.set(id, source);
@@ -853,6 +874,11 @@ function getOrCreateSource(sourceId, options = {}) {
   return source;
 }
 
+/** Ask the renderer for a frame, for the overlay to paint again. */
+function requestOverlayRender() {
+  _frame?.requestRender('world-overlay');
+}
+
 function invalidateHost({ solve = true, layout = false } = {}) {
   if (solve) _solveDirty = true;
   if (layout) _occludersDirty = true;
@@ -860,7 +886,7 @@ function invalidateHost({ solve = true, layout = false } = {}) {
   _paintRectCount = 0;
   _hitRectCount = 0;
   _paintRectByKey.clear();
-  _viewer?.scene?.requestRender?.();
+  requestOverlayRender();
 }
 
 function inertPaintLaneHandle() {
@@ -1065,6 +1091,32 @@ export function getOverlayPaintRect(sourceId, entryId) {
 }
 
 /**
+ * Opacity an entry paints with this frame, or 0 when it is not queued or the
+ * yield-collision pass hid it. Custom lanes may call it before later lanes
+ * publish paint rects. Leaves out the Cyber sonar fade.
+ * @param {string} sourceId
+ * @param {string} entryId
+ * @returns {number}
+ */
+export function getQueuedOverlayEntryAlpha(sourceId, entryId) {
+  if (_destroyed) return 0;
+  const item = _queuedItemBySource.get(sourceId)?.get(entryId);
+  // Pooled items are reassigned every frame: check the frame and the entry.
+  if (!item || item.stamp !== _frameStamp) return 0;
+  // Declutter has already run when custom lanes call this.
+  if (item.collisionHidden) return 0;
+  const record = item.record;
+  if (record.entry.id !== entryId || record.entry.source !== sourceId) return 0;
+  return (
+    record.sourceAlpha *
+    item.temporalAlpha *
+    record.distanceAlpha *
+    record.altitudeAlpha *
+    (_keyhole ? entryKeyholeAlpha(record.entry, item.placement, _keyhole) : 1)
+  );
+}
+
+/**
  * Resolve the topmost interactive world-overlay entry at CSS-pixel coords.
  * @param {number} x
  * @param {number} y
@@ -1154,43 +1206,31 @@ export function isOverlayPointVisible(
  * Return true when a rectangle intersects any cached UI exclusion box.
  * `count` lets pooled buffers expose a live prefix without truncating.
  */
-export function overlayRectIntersectsAny(
-  rect,
-  exclusions,
-  count = exclusions.length,
-) {
+function overlayRectIntersectsAny(rect, exclusions, count = exclusions.length) {
   for (let i = 0; i < count; i++) {
-    const other = exclusions[i];
-    if (
-      rect.x < other.x + other.w &&
-      rect.x + rect.w > other.x &&
-      rect.y < other.y + other.h &&
-      rect.y + rect.h > other.y
-    )
-      return true;
+    if (overlayRectsOverlap(rect, exclusions[i])) return true;
   }
   return false;
+}
+
+function overlayRectsOverlap(a, b) {
+  return (
+    a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
+  );
 }
 
 /**
  * Like `overlayRectIntersectsAny`, but only against exclusions that composite
  * BELOW the host — the ones a placement may never overlap at any cost.
  */
-export function overlayRectIntersectsAnyHard(
+function overlayRectIntersectsAnyHard(
   rect,
   exclusions,
   count = exclusions.length,
 ) {
   for (let i = 0; i < count; i++) {
     const other = exclusions[i];
-    if (!other.hard) continue;
-    if (
-      rect.x < other.x + other.w &&
-      rect.x + rect.w > other.x &&
-      rect.y < other.y + other.h &&
-      rect.y + rect.h > other.y
-    )
-      return true;
+    if (other.hard && overlayRectsOverlap(rect, other)) return true;
   }
   return false;
 }
@@ -1263,35 +1303,15 @@ function ensureOverlayDom() {
   _root.setAttribute('aria-hidden', 'true');
   _canvas.setAttribute('aria-hidden', 'true');
   _detectionSurface.setAttribute('aria-hidden', 'true');
-  _accessibilityRoot = document.getElementById(ACCESSIBILITY_ROOT_ID);
-  if (!_accessibilityRoot) {
-    _accessibilityRoot = document.createElement('div');
-    _accessibilityRoot.id = ACCESSIBILITY_ROOT_ID;
-    _accessibilityRoot.className = 'world-overlay-accessibility';
-    _accessibilityRoot.setAttribute('role', 'region');
-    _accessibilityRoot.setAttribute('aria-label', 'Visible map targets');
-    document.body.appendChild(_accessibilityRoot);
-  }
-  _accessibilityList = document.getElementById(ACCESSIBILITY_LIST_ID);
-  if (!_accessibilityList) {
-    _accessibilityList = document.createElement('div');
-    _accessibilityList.id = ACCESSIBILITY_LIST_ID;
-    _accessibilityRoot.appendChild(_accessibilityList);
-  }
-  _accessibilityStatus = document.getElementById(ACCESSIBILITY_STATUS_ID);
-  if (!_accessibilityStatus) {
-    _accessibilityStatus = document.createElement('div');
-    _accessibilityStatus.id = ACCESSIBILITY_STATUS_ID;
-    _accessibilityStatus.setAttribute('role', 'status');
-    _accessibilityStatus.setAttribute('aria-live', 'polite');
-    _accessibilityStatus.setAttribute('aria-atomic', 'true');
-    _accessibilityRoot.appendChild(_accessibilityStatus);
-  }
-  _ctx = _canvas.getContext('2d', { alpha: true, desynchronized: true });
-  _detectionCtx = _detectionSurface.getContext('2d', {
-    alpha: true,
-    desynchronized: true,
-  });
+  // Each host owns its action list; a click from an earlier host's list is
+  // ignored.
+  if (!_actions)
+    presentActions({ owner: {}, items: [], status: '', announced: 0 });
+  // Synchronized contexts: on a desynchronized one Chrome can present an
+  // earlier buffer after a frame that only clears, so cards that left stay
+  // on screen until something paints over them.
+  _ctx = _canvas.getContext('2d', { alpha: true });
+  _detectionCtx = _detectionSurface.getContext('2d', { alpha: true });
 }
 
 function sizeCanvasSurface(canvas, ctx, width, height, dpr) {
@@ -1317,15 +1337,11 @@ function sizeCanvasSurface(canvas, ctx, width, height, dpr) {
  * that actually has paint work.
  */
 function ensureCanvasSize() {
-  if (!_canvas || !_viewer?.canvas) return false;
-  const width = Math.max(
-    0,
-    Math.round(Number(_viewer.canvas.clientWidth) || 0),
-  );
-  const height = Math.max(
-    0,
-    Math.round(Number(_viewer.canvas.clientHeight) || 0),
-  );
+  // The renderer's canvas; a viewer with no renderer bound, its own.
+  const sceneCanvas = canvasOf(_viewer);
+  if (!_canvas || !sceneCanvas) return false;
+  const width = Math.max(0, Math.round(Number(sceneCanvas.clientWidth) || 0));
+  const height = Math.max(0, Math.round(Number(sceneCanvas.clientHeight) || 0));
   const dpr = Math.max(1, Number(globalThis.window?.devicePixelRatio) || 1);
   const changed =
     _canvas.width !== Math.round(width * dpr) ||
@@ -1450,7 +1466,7 @@ function refreshUiOccluders(timestamp, force = false) {
       _occluderRefreshTimer = setTimeout(
         () => {
           _occluderRefreshTimer = null;
-          _viewer?.scene?.requestRender?.();
+          requestOverlayRender();
         },
         Math.max(0, OCCLUDER_REFRESH_MS - elapsed),
       );
@@ -1693,13 +1709,23 @@ function overlayHasPaintWork(timestamp = nowMs()) {
   return false;
 }
 
+/** `out = a × b`, 4 × 4 column-major. */
+function multiplyMatrices(a, b, out) {
+  for (let column = 0; column < 4; column++) {
+    const b0 = b[column * 4];
+    const b1 = b[column * 4 + 1];
+    const b2 = b[column * 4 + 2];
+    const b3 = b[column * 4 + 3];
+    for (let row = 0; row < 4; row++)
+      out[column * 4 + row] =
+        a[row] * b0 + a[4 + row] * b1 + a[8 + row] * b2 + a[12 + row] * b3;
+  }
+  return out;
+}
+
 function prepareProjectionMatrix() {
-  const camera = _viewer.camera;
-  const matrix = Cesium.Matrix4.multiply(
-    camera.frustum.projectionMatrix,
-    camera.viewMatrix,
-    _scratchViewProjection,
-  );
+  const { view, projection } = _camera.matrices();
+  const matrix = multiplyMatrices(projection, view, _scratchViewProjection);
   _viewProjectionScalars.m0 = matrix[0];
   _viewProjectionScalars.m1 = matrix[1];
   _viewProjectionScalars.m3 = matrix[3];
@@ -1717,17 +1743,11 @@ function prepareProjectionMatrix() {
 
 function prepareCustomPaintFrame(timestamp, keyhole) {
   const viewProjection = prepareProjectionMatrix();
-  const camera = _viewer.camera.positionWC;
-  if (
-    camera.x !== _occluderCameraX ||
-    camera.y !== _occluderCameraY ||
-    camera.z !== _occluderCameraZ
-  ) {
-    _occluder.cameraPosition = camera;
-    _occluderCameraX = camera.x;
-    _occluderCameraY = camera.y;
-    _occluderCameraZ = camera.z;
-  }
+  const pose = _camera.pose();
+  _eye.x = pose.position.x;
+  _eye.y = pose.position.y;
+  _eye.z = pose.position.z;
+  _eyeHeight = pose.height;
   _customPaintFrame.canvas = _canvas;
   _customPaintFrame.surface = _canvas;
   _customPaintFrame.ctx = _ctx;
@@ -1735,7 +1755,8 @@ function prepareCustomPaintFrame(timestamp, keyhole) {
   _customPaintFrame.height = _canvasHeight;
   _customPaintFrame.dpr = _canvasDpr;
   _customPaintFrame.timestamp = timestamp;
-  _customPaintFrame.cameraPosition = camera;
+  _customPaintFrame.cameraPosition = _eye;
+  _customPaintFrame.cameraHeight = _eyeHeight;
   _customPaintFrame.occluder = _occluder;
   _customPaintFrame.keyhole = keyhole;
   _customPaintFrame.uiRectCount = _uiOcclusionRects.length;
@@ -1749,7 +1770,7 @@ function getProjectionRecord(entry) {
     record = {
       key: entry._overlayKey,
       entry,
-      position: new Cesium.Cartesian3(),
+      position: new Position(),
       screen: { x: 0, y: 0 },
       layout: entry._overlayLayout,
       placements: [],
@@ -1933,7 +1954,7 @@ function snapshotAndProject(entry, source, viewProjection, keyhole) {
   // scalar steps stay local: the range is computed inline, and the common
   // "no far limit" fade policy resolves without calling out at all. Both are
   // exact restatements of `Cartesian3.distance` / `distanceFade`.
-  const cameraPosition = _viewer.camera.positionWC;
+  const cameraPosition = _eye;
   const rangeX = cameraPosition.x - record.position.x;
   const rangeY = cameraPosition.y - record.position.y;
   const rangeZ = cameraPosition.z - record.position.z;
@@ -1946,10 +1967,26 @@ function snapshotAndProject(entry, source, viewProjection, keyhole) {
         ? 1
         : 0
       : distanceFade(distance, record.distanceOptions);
-  const cameraAltitude = _viewer.camera.positionCartographic?.height;
-  record.paintScale = entry.distanceScale
-    ? distanceScale(distance, entry.distanceScale)
-    : 1;
+  const cameraAltitude = _eyeHeight;
+  // The distance curve is local for the same reason as the altitude curve
+  // below: through a helper the engine may not inline, its result is boxed.
+  // `entry.distanceScale` was normalized when the entry was registered.
+  const scaleCurve = entry.distanceScale;
+  if (!scaleCurve || !Number.isFinite(distance)) {
+    record.paintScale = 1;
+  } else if (
+    distance <= scaleCurve.near ||
+    scaleCurve.far === scaleCurve.near
+  ) {
+    record.paintScale = scaleCurve.nearValue;
+  } else if (distance >= scaleCurve.far) {
+    record.paintScale = scaleCurve.farValue;
+  } else {
+    record.paintScale =
+      scaleCurve.nearValue +
+      (scaleCurve.farValue - scaleCurve.nearValue) *
+        ((distance - scaleCurve.near) / (scaleCurve.far - scaleCurve.near));
+  }
   // Keep the source-configurable piecewise curve local to the projection hot
   // path. Passing its five doubles through a non-inlined helper boxed them for
   // every thumbnail candidate and broke the shared 154 B/candidate gate.
@@ -2276,7 +2313,35 @@ function addPaintItem(record, placement, temporalAlpha, selected) {
   item.lane = paintLaneForOverlayEntry(record.entry);
   item.zIndex = record.entry.zIndex;
   item.key = record.key;
+  item.collisionHidden = false;
+  item.stamp = _frameStamp;
   _paintQueue[_paintCount++] = item;
+  // Keyed by source and id, not `record.key`, so a lookup builds no string.
+  // Also holds cards fading out after they left `_records`.
+  let bySource = _queuedItemBySource.get(record.entry.source);
+  if (!bySource) {
+    bySource = new Map();
+    _queuedItemBySource.set(record.entry.source, bySource);
+  }
+  bySource.set(record.entry.id, item);
+}
+
+/** Drop index rows for entries that stopped painting (bounded, not per frame). */
+function pruneQueuedItemIndex() {
+  for (const [sourceId, bySource] of _queuedItemBySource) {
+    for (const [entryId, item] of bySource) {
+      // A pooled item that now paints another entry keeps a fresh stamp.
+      const entry = item.record.entry;
+      if (
+        item.stamp !== _frameStamp ||
+        entry.id !== entryId ||
+        entry.source !== sourceId
+      ) {
+        bySource.delete(entryId);
+      }
+    }
+    if (bySource.size === 0) _queuedItemBySource.delete(sourceId);
+  }
 }
 
 function sourceCanPaint(sourceId) {
@@ -2348,6 +2413,7 @@ function solveDomains(timestamp) {
     solveRevision += domain.arbiter.solveRevision;
   }
   _paintQueue.length = _paintCount;
+  if (_frameStamp % QUEUED_ITEM_PRUNE_FRAMES === 0) pruneQueuedItemIndex();
   _solveDirty = false;
   _diagnostics.solveMs = solveMs;
   _diagnostics.selectedCount = selectedCount;
@@ -2375,9 +2441,46 @@ function publishPaintRect(item) {
   if (record.entry.interactive) _hitRects[_hitRectCount++] = rect;
 }
 
+/** Publish the action list to every subscriber. */
+function presentActions(next) {
+  _actions = next && Object.freeze(next);
+  for (const listener of _actionsListeners) listener(_actions);
+}
+
+/**
+ * Receive the visible map target list now and after every change.
+ * @param {(view: ?object) => void} listener
+ * @returns {() => void} Unsubscribe.
+ */
+export function subscribeWorldOverlayActions(listener) {
+  _actionsListeners.add(listener);
+  listener(_actions);
+  return () => _actionsListeners.delete(listener);
+}
+
+/**
+ * Focus a listed target, as its button does, announcing an accepted focus.
+ * @param {object} owner The `owner` of the list the button belongs to.
+ * @param {string} key The item's key.
+ */
+export function activateWorldOverlayAction(owner, key) {
+  if (!_actions || owner !== _actions.owner) return;
+  const item = _actions.items.find((candidate) => candidate.key === key);
+  const activate = _accessibleActivatorByKey.get(key);
+  if (!item || !activate) return;
+  const accepted = activate();
+  if (accepted !== false && _actions?.owner === owner) {
+    presentActions({
+      ..._actions,
+      status: t('Focusing {label}', { label: item.label }),
+      announced: _actions.announced + 1,
+    });
+  }
+}
+
 /** Keep a stable, bounded accessible mirror of currently painted actions. */
 function syncAccessibleActions() {
-  if (!_accessibilityList) return;
+  if (!_actions) return;
   _accessibleActivatorByKey.clear();
   const items = [];
   for (let i = _hitRectCount - 1; i >= 0; i--) {
@@ -2401,29 +2504,7 @@ function syncAccessibleActions() {
     .join('\u0001');
   if (signature === _accessibilitySignature) return;
   _accessibilitySignature = signature;
-  if (typeof _accessibilityList.replaceChildren === 'function') {
-    _accessibilityList.replaceChildren();
-  } else {
-    while (_accessibilityList.firstChild)
-      _accessibilityList.removeChild(_accessibilityList.firstChild);
-  }
-  for (const item of items) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = item.label;
-    button.setAttribute('aria-label', item.label);
-    button.setAttribute('aria-pressed', String(item.selected));
-    button.dataset.overlayActionKey = item.key;
-    button.addEventListener?.('click', () => {
-      const activate = _accessibleActivatorByKey.get(item.key);
-      if (!activate) return;
-      const accepted = activate();
-      if (accepted !== false && _accessibilityStatus) {
-        _accessibilityStatus.textContent = `Focusing ${item.label}`;
-      }
-    });
-    _accessibilityList.appendChild(button);
-  }
+  presentActions({ ..._actions, items });
 }
 
 let _detectionSurfacePrepared = false;
@@ -2461,23 +2542,26 @@ function paintCustomLane(lane) {
   }
 }
 
+/** Keyhole edge fade of one placed entry (1 for entries that do not fade). */
+function entryKeyholeAlpha(entry, placement, keyhole) {
+  if (entry.edgeFade !== 'keyhole') return 1;
+  const keyholeX = placement.centerX - keyhole.centerX;
+  const keyholeY = placement.centerY - keyhole.centerY;
+  return keyholeX * keyholeX + keyholeY * keyholeY <=
+    keyhole.radius * keyhole.radius
+    ? 1
+    : keyholeLabelAlphaFromGeometry(
+        placement.centerX,
+        placement.centerY,
+        keyhole,
+      );
+}
+
 function paintEntryItem(item, keyhole, sonar) {
+  if (item.collisionHidden) return;
   const { record, placement } = item;
   const entry = record.entry;
-  let keyholeAlpha = 1;
-  if (entry.edgeFade === 'keyhole') {
-    const keyholeX = placement.centerX - keyhole.centerX;
-    const keyholeY = placement.centerY - keyhole.centerY;
-    keyholeAlpha =
-      keyholeX * keyholeX + keyholeY * keyholeY <=
-      keyhole.radius * keyhole.radius
-        ? 1
-        : keyholeLabelAlphaFromGeometry(
-            placement.centerX,
-            placement.centerY,
-            keyhole,
-          );
-  }
+  const keyholeAlpha = entryKeyholeAlpha(entry, placement, keyhole);
   // All five channels are normalized at their source. Keep the multiply on
   // the hot paint path so its intermediate doubles remain unboxed; the pure
   // `combinedOverlayAlpha` export still specifies/tests the same binding.
@@ -2525,6 +2609,90 @@ function paintEntryItem(item, keyhole, sonar) {
   _paintedBySource[entry.source]++;
 }
 
+function compareYieldingPaintItems(a, b) {
+  const aYields = !!a.record.entry.yieldToCollisionGroup;
+  const bYields = !!b.record.entry.yieldToCollisionGroup;
+  return (
+    Number(aYields) - Number(bYields) ||
+    b.record.entry.priority - a.record.entry.priority ||
+    compareStableKeys(a.key, b.key)
+  );
+}
+
+/** Recheck yielding content every painted frame, even between camera solves.
+ * The arbiter's sticky/exit placements are intentionally retained for cards;
+ * labels can only use the remaining rectangles. All buffers are reused. */
+function declutterYieldingEntries() {
+  let hasYielding = false;
+  for (let i = 0; i < _paintCount; i++)
+    if (_paintQueue[i].record.entry.yieldToCollisionGroup) {
+      hasYielding = true;
+      break;
+    }
+  if (!hasYielding) return;
+  sortPooledRange(_paintQueue, _paintCount, compareYieldingPaintItems);
+  for (let i = 0; i < _paintCount; i++) {
+    const item = _paintQueue[i];
+    const entry = item.record.entry;
+    if (!entry.yieldToCollisionGroup) continue;
+    const placements = item.record.placements;
+    let accepted = null;
+    // Try the arbiter's chosen corner first, then its other valid placements.
+    for (let p = -1; p < placements.length; p++) {
+      const placement = p < 0 ? item.placement : placements[p];
+      if (p >= 0 && placement === item.placement) continue;
+      let blocked = false;
+      for (let j = 0; j < i; j++) {
+        const other = _paintQueue[j];
+        if (other.collisionHidden) continue;
+        const group = other.record.entry.collisionGroup;
+        if (
+          (group === entry.collisionGroup ||
+            group === entry.yieldToCollisionGroup) &&
+          overlayRectsOverlap(placement.rect, other.placement.rect)
+        ) {
+          blocked = true;
+          break;
+        }
+      }
+      if (!blocked) {
+        accepted = placement;
+        break;
+      }
+    }
+    if (accepted) item.placement = accepted;
+    else item.collisionHidden = true;
+  }
+}
+
+function syncPaintVisibility(painted = true) {
+  for (let s = 0; s < _sourceList.length; s++) {
+    const source = _sourceList[s];
+    const callback = source.options.onVisibilityChange;
+    if (!callback) continue;
+    const count = painted ? _paintedBySource[source.id] || 0 : 0;
+    let changed = count !== source.visibleIds.size;
+    if (!changed && painted) {
+      for (const id of source.visibleIds) {
+        if (
+          _paintRectByKey.get(entryKey(source.id, id))?.stamp !== _frameStamp
+        ) {
+          changed = true;
+          break;
+        }
+      }
+    }
+    if (!changed) continue;
+    source.visibleIds.clear();
+    if (painted)
+      for (let i = 0; i < _paintRectCount; i++) {
+        const rect = _paintRectPool[i];
+        if (rect.sourceId === source.id) source.visibleIds.add(rect.entryId);
+      }
+    callback(source.visibleIds);
+  }
+}
+
 function paintFrame(keyhole) {
   const started = nowMs();
   const sonar = isCyberSonarActive()
@@ -2539,6 +2707,7 @@ function paintFrame(keyhole) {
     clearCanvas(false, true);
   _paintRectCount = 0;
   _hitRectCount = 0;
+  declutterYieldingEntries();
   sortPooledRange(_paintQueue, _paintCount, comparePaintItems);
   // The shared canvas is not clipped either. Cards already avoid solid chrome
   // by placement, and every occluder composites above this host in the DOM, so
@@ -2561,6 +2730,7 @@ function paintFrame(keyhole) {
   _diagnostics.paintRectPoolSize = _paintRectPool.length;
   _diagnostics.paintMs = nowMs() - started;
   syncAccessibleActions();
+  syncPaintVisibility();
   _canvasNeedsClear =
     _paintRectCount > 0 || activeCustomPaintLaneCount(PAINT_TARGET_SHARED) > 0;
 }
@@ -2617,6 +2787,7 @@ function drawWorldOverlay() {
       _hitRectCount = 0;
       syncAccessibleActions();
     }
+    syncPaintVisibility(false);
     return;
   }
   if (_resizeDirty) ensureCanvasSize();
@@ -2653,13 +2824,12 @@ function drawWorldOverlay() {
   if (_paintRectCount > 0 && isCyberSonarActive()) {
     _sonarRenderTimer = setTimeout(() => {
       _sonarRenderTimer = null;
-      if (!_destroyed && isCyberSonarActive())
-        _viewer?.scene?.requestRender?.();
+      if (!_destroyed && isCyberSonarActive()) requestOverlayRender();
     }, CYBER_SONAR_RENDER_INTERVAL_MS);
   }
   const animationsRemaining =
     activeFadeCount(timestamp) + activeLeaderAnimationCount(timestamp);
-  if (animationsRemaining > 0) _viewer.scene.requestRender?.();
+  if (animationsRemaining > 0) requestOverlayRender();
 }
 
 function createDevFacade() {
@@ -2669,36 +2839,36 @@ function createDevFacade() {
 
 /**
  * Initialize the singleton host. Repeated calls for the same viewer are no-op.
- * @param {Cesium.Viewer} viewer
+ * @param {object} viewer The scene object a renderer draws (its `container`
+ *   and `canvas` place the overlay); the renderer's camera, frame and query
+ *   ports project, cull and drive it.
  */
 export function initWorldOverlay(viewer) {
-  if (!viewer?.scene?.postRender?.addEventListener) {
+  const camera = viewer ? findCamera(viewer) : null;
+  const frame = viewer ? findFrame(viewer) : null;
+  const query = viewer ? findQuery(viewer) : null;
+  if (!camera || !frame || !query) {
     throw new TypeError(
-      'initWorldOverlay requires a Cesium viewer with scene.postRender',
+      'initWorldOverlay requires a viewer with a renderer (camera, frame and query ports)',
     );
   }
   if (_viewer === viewer && _canvas && _removePostRender) return;
   if (_viewer) destroyWorldOverlay();
   _destroyed = false;
   _viewer = viewer;
+  _camera = camera;
+  _frame = frame;
+  _query = query;
   ensureOverlayDom();
-  _occluder = new Cesium.EllipsoidalOccluder(
-    Cesium.Ellipsoid.WGS84,
-    viewer.camera?.positionWC || new Cesium.Cartesian3(),
-  );
+  _occluder = _horizon;
   _cockpitActive = !!document.body?.classList?.contains('cockpit-mode');
   _cockpitModeHandler = (event) => {
     _cockpitActive = event?.detail?.active === true;
     invalidateHost();
   };
   window.addEventListener('gev:cockpit-mode-changed', _cockpitModeHandler);
-  _removePostRender =
-    viewer.scene.postRender.addEventListener(drawWorldOverlay);
-  if (viewer.camera?.moveEnd?.addEventListener) {
-    _removeMoveEnd = viewer.camera.moveEnd.addEventListener(() =>
-      invalidateHost(),
-    );
-  }
+  _removePostRender = frame.on('postRender', () => drawWorldOverlay());
+  _removeMoveEnd = camera.on('moveEnd', () => invalidateHost());
   installUiOccluderObservers();
   // The backing store and the occluder inventory are both deferred to the
   // first frame with real paint work: a dormant host must not hold a
@@ -2741,7 +2911,6 @@ export function destroyWorldOverlay() {
   if (_occluderRefreshTimer != null) clearTimeout(_occluderRefreshTimer);
   _occluderRefreshTimer = null;
   _root?.remove?.();
-  _accessibilityRoot?.remove?.();
   // The detection surface is not a child of `_root` (it lives in the Cesium
   // container so its `screen` blend reaches the scene), so it has to be torn
   // down explicitly rather than by the root's removal.
@@ -2752,6 +2921,7 @@ export function destroyWorldOverlay() {
   ) {
     delete window.__gevWorldOverlay;
   }
+  syncPaintVisibility(false);
   _sources.clear();
   _sourceList.length = 0;
   for (let i = 0; i < _customPaintLaneList.length; i++) {
@@ -2779,6 +2949,7 @@ export function destroyWorldOverlay() {
   _accessibleActivatorByKey.clear();
   _accessibilitySignature = '';
   _paintRectByKey.clear();
+  _queuedItemBySource.clear();
   _paintCount = 0;
   _paintRectCount = 0;
   _hitRectCount = 0;
@@ -2789,15 +2960,17 @@ export function destroyWorldOverlay() {
   _root = null;
   _canvas = null;
   _ctx = null;
-  _accessibilityRoot = null;
-  _accessibilityList = null;
-  _accessibilityStatus = null;
+  if (_actions) presentActions(null);
   _detectionSurface = null;
   _detectionCtx = null;
   _occluder = null;
-  _occluderCameraX = Number.NaN;
-  _occluderCameraY = Number.NaN;
-  _occluderCameraZ = Number.NaN;
+  _camera = null;
+  _frame = null;
+  _query = null;
+  _eye.x = 0;
+  _eye.y = 0;
+  _eye.z = 0;
+  _eyeHeight = Number.NaN;
   _keyhole = null;
   _keyholeWidth = -1;
   _keyholeHeight = -1;
@@ -2825,6 +2998,7 @@ export function destroyWorldOverlay() {
   _customPaintFrame.dpr = 1;
   _customPaintFrame.timestamp = 0;
   _customPaintFrame.cameraPosition = null;
+  _customPaintFrame.cameraHeight = Number.NaN;
   _customPaintFrame.occluder = null;
   _customPaintFrame.keyhole = null;
   _customPaintFrame.uiRectCount = 0;

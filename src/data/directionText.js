@@ -28,22 +28,34 @@ export function directionToHeading(value, allowBare = false) {
     .trim()
     .toUpperCase();
   if (!text) return NaN;
-  // Explicit travel/intercardinal forms — safe on free-form text (a street
-  // name almost never contains "NORTHBOUND" or a lone "NB" token).
-  if (/\bNORTHBOUND\b|\bNB\b/.test(text)) return 0;
-  if (/\bSOUTHBOUND\b|\bSB\b/.test(text)) return 180;
-  if (/\bEASTBOUND\b|\bEB\b/.test(text)) return 90;
-  if (/\bWESTBOUND\b|\bWB\b/.test(text)) return 270;
-  if (/\bNORTHEAST\b|\bNE\b/.test(text)) return 45;
-  if (/\bNORTHWEST\b|\bNW\b/.test(text)) return 315;
-  if (/\bSOUTHEAST\b|\bSE\b/.test(text)) return 135;
-  if (/\bSOUTHWEST\b|\bSW\b/.test(text)) return 225;
-  // Bare cardinals — dedicated direction fields only.
-  if (allowBare) {
-    if (/\bNORTH\b/.test(text)) return 0;
-    if (/\bSOUTH\b/.test(text)) return 180;
-    if (/\bEAST\b/.test(text)) return 90;
-    if (/\bWEST\b/.test(text)) return 270;
+  const tiers = [
+    [
+      [/\bNORTHBOUND\b|\bNB\b/, 0],
+      [/\bSOUTHBOUND\b|\bSB\b/, 180],
+      [/\bEASTBOUND\b|\bEB\b/, 90],
+      [/\bWESTBOUND\b|\bWB\b/, 270],
+    ],
+    [
+      [/\bNORTHEAST\b|\bNE\b/, 45],
+      [/\bNORTHWEST\b|\bNW\b/, 315],
+      [/\bSOUTHEAST\b|\bSE\b/, 135],
+      [/\bSOUTHWEST\b|\bSW\b/, 225],
+    ],
+  ];
+  if (allowBare)
+    tiers.push([
+      [/\bNORTH\b/, 0],
+      [/\bSOUTH\b/, 180],
+      [/\bEAST\b/, 90],
+      [/\bWEST\b/, 270],
+    ]);
+  for (const forms of tiers) {
+    const headings = new Set();
+    for (const [pattern, heading] of forms) {
+      if (pattern.test(text)) headings.add(heading);
+    }
+    if (headings.size)
+      return headings.size === 1 ? headings.values().next().value : NaN;
   }
   return NaN;
 }

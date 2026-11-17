@@ -11,7 +11,13 @@ test('encodeParams writes one boolean per provider plus the filter', () => {
       ],
       filter: { pano: 'flat', sinceDays: 365 },
     }),
-    { mapillary: true, panoramax: false, pano: 'flat', sinceDays: 365 },
+    {
+      mapillary: true,
+      panoramax: false,
+      providerSwitches: 'panoramax-0',
+      pano: 'flat',
+      sinceDays: 365,
+    },
   );
 });
 

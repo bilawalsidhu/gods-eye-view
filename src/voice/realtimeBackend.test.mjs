@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
 import { createRealtimeBackend } from './realtimeBackend.js';
 import { GevRealtimeController } from './realtimeController.js';
 
@@ -38,6 +39,22 @@ test('separate configured token and SDP transports preserve model metadata and c
   assert.deepEqual(calls, [
     '/api/voice/token?tier=mini',
     'https://voice.example/calls',
+  ]);
+});
+
+test('OAuth is an additive token query while API key stays the default', async () => {
+  const calls = [];
+  const backend = createRealtimeBackend({
+    tokenTransport: async (input) => {
+      calls.push(input);
+      return tokenReply();
+    },
+  });
+  await backend.requestToken();
+  await backend.requestToken({ authMode: 'oauth' });
+  assert.deepEqual(calls, [
+    '/api/realtime/token?tier=standard',
+    '/api/realtime/token?tier=standard&auth=oauth',
   ]);
 });
 
@@ -115,11 +132,7 @@ test('controller lifetime stops pending transport and releases resources through
     runner: async () => ({}),
     signal: lifetime.signal,
     debugSink: null,
-    ui: {
-      root: { dataset: {}, querySelectorAll: () => [], remove() {} },
-      status: {},
-      detail: {},
-    },
+    ui: createTestVoiceUi(),
   });
   controller.connectionAbort = new AbortController();
   const connection = controller.connectionAbort.signal;
@@ -129,4 +142,18 @@ test('controller lifetime stops pending transport and releases resources through
   assert.equal(stopped, 1);
   assert.equal(controller.stream, null);
   assert.equal(controller.isActive(), false);
+});
+
+test('a missing server key keeps its code, so the UI can point to Provider Settings', async () => {
+  const backend = createRealtimeBackend({
+    tokenTransport: async () =>
+      Response.json(
+        { error: 'OPENAI_API_KEY is not set', code: 'API_KEY_MISSING' },
+        { status: 503 },
+      ),
+  });
+  await assert.rejects(backend.requestToken(), {
+    message: 'OPENAI_API_KEY is not set',
+    code: 'API_KEY_MISSING',
+  });
 });

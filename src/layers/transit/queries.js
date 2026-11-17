@@ -1,16 +1,46 @@
 import {
-  ACTIVATION_ALTITUDE_M,
+  ACTIVATION_ENTER_ALTITUDE_M,
   FEED_STALE_AFTER_MS,
   aggregateTransitFeedHealth,
   transitDetectionClass,
   transitDetectionId,
   transitDetectionMetric,
+  vehicleReportTimeMs,
 } from './policy.js';
 import {
   TRANSIT_ENABLED_FEEDS,
   getRegisteredTransitFeed,
+  transitRouteLabel,
 } from '../../data/transitFeeds.js';
 import { transitModeTier } from '../../data/transitPresetStyle.js';
+import { displayMotion } from './movement.js';
+
+/** The display's motion word as a record field for the Context card. */
+const MOTION_FIELD = Object.freeze({
+  'EN ROUTE': 'moving',
+  STOPPED: 'stopped',
+  WAITING: 'waiting',
+  'NO FIX': 'no-fix',
+});
+
+/** Regions, not feeds: one region can carry several feeds (Rio has two). */
+const TRANSIT_REGION_COUNT = new Set(
+  TRANSIT_ENABLED_FEEDS.map((feed) => feed.region),
+).size;
+
+/**
+ * The registry entry behind a vehicle. Live feeds answer first so a feed the
+ * session disabled stops supplying vocabulary; the registry is the fallback,
+ * because a vehicle can outlive the poll that brought it.
+ * @param {object} state Layer state.
+ * @param {object} entry Vehicle entry.
+ * @returns {object|null}
+ */
+function feedForEntry(state, entry) {
+  const id = entry?.feedId;
+  if (!id) return null;
+  return state._activeFeeds.get(id) || getRegisteredTransitFeed(id) || null;
+}
 
 /**
  * The layer row's answer to "what is on screen and is it honest?".
@@ -70,7 +100,7 @@ export function createQueries({ state, parts }) {
    * @returns {Array<object>}
    */
   function collectDetectableVehicles(options = defaults) {
-    if (!state._enabled || !state._markers?.show) return empty;
+    if (!state._enabled || !state._markersShown) return empty;
     if (state._vehicles.size === 0) return empty;
     const maxCount = Number.isFinite(options.maxCount)
       ? Math.max(1, Math.floor(options.maxCount))
@@ -101,6 +131,7 @@ export function createQueries({ state, parts }) {
           contact._entry,
           contact._entry.mode,
           now,
+          feedForEntry(state, contact._entry),
         );
       return;
     }
@@ -109,7 +140,9 @@ export function createQueries({ state, parts }) {
     const visible = [];
     for (const entry of state._visible) {
       const marker = entry.marker;
-      if (!marker?.position || marker.show === false) continue;
+      // A vehicle drawn as its 3D model is present though its marker is hidden.
+      if (!marker?.position) continue;
+      if (marker.show === false && entry.modelOwnsVisual !== true) continue;
       visible.push(entry);
     }
     let chosen = visible;
@@ -128,14 +161,17 @@ export function createQueries({ state, parts }) {
       // Route and operator text change with the record and the mode, both of
       // which arrive on polls — the same events that rebuild this list.
       if (!entry.labelId || entry.labelRecord !== entry.record) {
-        entry.labelId = transitDetectionId(entry.record);
+        entry.labelId = transitDetectionId(
+          entry.record,
+          feedForEntry(state, entry),
+        );
         entry.labelRecord = entry.record;
       }
       if (!entry.labelClass || entry.labelMode !== entry.mode) {
-        const feed =
-          state._activeFeeds.get(entry.feedId) ||
-          getRegisteredTransitFeed(entry.feedId);
-        entry.labelClass = transitDetectionClass(entry.mode, feed);
+        entry.labelClass = transitDetectionClass(
+          entry.mode,
+          feedForEntry(state, entry),
+        );
         entry.labelMode = entry.mode;
       }
       const contact = {
@@ -146,7 +182,12 @@ export function createQueries({ state, parts }) {
         id: entry.labelId,
         type: 'VEH',
         klass: entry.labelClass,
-        metric: transitDetectionMetric(entry, entry.mode, now),
+        metric: transitDetectionMetric(
+          entry,
+          entry.mode,
+          now,
+          feedForEntry(state, entry),
+        ),
         // The bracket carries the mode colour in every preset: the detection
         // canvas sits above the post-FX chain, where the sprites' own colour
         // is lost under NVG and FLIR. Keyless too — the feeds are keyless.
@@ -181,10 +222,14 @@ export function createQueries({ state, parts }) {
      * query engine. On demand only (once per spoken query); [] while the
      * layer is off.
      * @param {number} [maxCount=Infinity] Most records to return.
-     * @returns {Array<Object>} {id, label, routeId, mode, lat, lon, speedMps, courseDeg, status, occupancy}.
+     * @returns {Array<Object>} {id, label, routeId, mode, lat, lon, speedMps, courseDeg, status, occupancy},
+     *   plus `key` (the layer's own vehicle key, which a map click carries),
+     *   `route`, `operator`, `place`, `observedMs` and `motion` (what the
+     *   display shows: moving, stopped, waiting or no-fix) for the Context card.
      */
     getAnalystRecords(maxCount = Infinity) {
       if (!state._enabled) return [];
+      const now = Date.now();
       const num = (v) => (Number.isFinite(v) ? v : null);
       const result = [];
       for (const entry of state._vehicles.values()) {
@@ -192,6 +237,8 @@ export function createQueries({ state, parts }) {
         const record = entry.record || {};
         if (!Number.isFinite(record.lat) || !Number.isFinite(record.lon))
           continue;
+        const feed = feedForEntry(state, entry);
+        const reportedMs = vehicleReportTimeMs(record, entry.fetchedAt);
         result.push({
           id: record.label || record.id || entry.key,
           label: record.label || null,
@@ -203,6 +250,15 @@ export function createQueries({ state, parts }) {
           courseDeg: num(entry.courseDeg ?? record.bearing),
           status: record.status || null,
           occupancy: record.occupancy || null,
+          key: entry.key,
+          route:
+            record.routeId && feed
+              ? transitRouteLabel(feed, record.routeId)
+              : record.routeId || null,
+          operator: feed?.name || null,
+          place: feed?.region || null,
+          observedMs: Number.isFinite(reportedMs) ? reportedMs : null,
+          motion: MOTION_FIELD[displayMotion(entry, now).word] || null,
         });
       }
       return result;
@@ -217,15 +273,19 @@ export function createQueries({ state, parts }) {
       const health = aggregateTransitFeedHealth(statuses, now);
       const count = state._vehicles.size;
       if (state._enabled && active.length === 0) {
+        // English: the analyst's empty note and the row's prompt, both shown
+        // through translateStatusMessage (ui/statusText.js).
+        const note = state._altitudeGateOpen
+          ? `No feed here yet · ${TRANSIT_REGION_COUNT} regions available`
+          : `Fly below ${Math.round(ACTIVATION_ENTER_ALTITUDE_M / 1000).toLocaleString('en-US')} km to a covered region`;
         return {
           count: 0,
           lastUpdate: state._lastUpdate,
           error: null,
           source: 'GTFS-RT',
           status: 'zoom-in',
-          coverage: state._altitudeGateOpen
-            ? `No feed here yet · ${TRANSIT_ENABLED_FEEDS.length} regions available`
-            : `Fly below ${Math.round(ACTIVATION_ALTITUDE_M / 1000).toLocaleString()} km to a covered region`,
+          statusMessage: note,
+          coverage: note,
         };
       }
       // Age is shown by the same rule the row state uses, so the text and the
@@ -254,6 +314,7 @@ export function createQueries({ state, parts }) {
         degraded: count > 0 && health.degraded,
         loading: health.loading && count === 0,
         loadingLabel:
+          // i18n-ignore: English data, translated on display (ui/statusText.js)
           health.loading && count === 0
             ? `Loading ${active.map((feed) => feed.name).join(', ')}`
             : undefined,

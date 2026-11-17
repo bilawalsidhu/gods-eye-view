@@ -28,6 +28,11 @@ export function resolveCameraMove(scene, shot) {
   };
 }
 
+/** Wrap an interpolated camera longitude to WGS84 without changing authored endpoints. */
+export function normalizeCameraLongitude(longitude) {
+  return ((((longitude + 180) % 360) + 360) % 360) - 180;
+}
+
 /** Sample the same authored curve for playback and seeking, taking the short longitude/angle arc. */
 export function sampleCameraMove(move, progress) {
   const t = Math.max(0, Math.min(1, Number(progress) || 0));
@@ -45,7 +50,7 @@ export function sampleCameraMove(move, progress) {
   const { from, to } = move;
   return {
     lat: lerp(from.lat, to.lat),
-    lon: ((((angle(from.lon, to.lon) + 180) % 360) + 360) % 360) - 180,
+    lon: normalizeCameraLongitude(angle(from.lon, to.lon)),
     alt: lerp(from.alt, to.alt),
     heading: angle(from.heading, to.heading),
     pitch: lerp(from.pitch, to.pitch),

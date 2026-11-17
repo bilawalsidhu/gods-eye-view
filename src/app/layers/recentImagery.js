@@ -2,18 +2,22 @@ import { createRecentImageryLayer } from '../../layers/recentImagery/index.js';
 import { createRecentImageryRenderer } from '../../layers/recentImagery/rendering.js';
 import { createThumbnailLoader } from '../../layers/recentImagery/thumbnails.js';
 import { governorRequestRender } from '../../renderGovernor.js';
+import { worldTimeFor } from '../../time/worldClock.js';
 
-/**
- * Construct the Recent Imagery layer with the real GIBS renderer and the
- * browser thumbnail loader. It takes no data source: the catalog is NASA
- * CMR and the tiles are GIBS, both browser-direct and keyless.
- * @returns {object} A fresh layer instance for this catalog.
- */
-export function createApplicationRecentImagery() {
+const imageryTime = worldTimeFor('recent-imagery');
+
+/** Construct imagery presentation over one explicitly supplied acquisition source. */
+export function createApplicationRecentImagery({ source }) {
   return createRecentImageryLayer({
+    catalog: { searchHls: (...args) => source.searchHls(...args) },
     renderer: createRecentImageryRenderer({
       requestRender: governorRequestRender,
+      tileTemplate: (...args) => source.getTileTemplate(...args),
+      credit: source.credit || source.label || 'Imagery',
     }),
-    thumbnails: createThumbnailLoader(),
+    thumbnails: createThumbnailLoader({
+      requestThumbnail: (...args) => source.getThumbnail(...args),
+    }),
+    now: () => new Date(imageryTime()),
   });
 }

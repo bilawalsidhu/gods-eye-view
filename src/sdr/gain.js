@@ -10,7 +10,7 @@
  * about 1 msg/s and 28.0 dB about 9 msg/s on the same antenna.
  */
 
-export const SDR_GAIN_AUTO = 'auto';
+const SDR_GAIN_AUTO = 'auto';
 
 /** R820T tuner gain steps in dB, as listed by librtlsdr. */
 export const R820T_GAIN_STEPS_DB = Object.freeze([

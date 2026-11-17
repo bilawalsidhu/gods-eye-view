@@ -2,6 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createVesselLayer } from './index.js';
 import { createVesselState } from './state.js';
+import * as Cesium from 'cesium';
+import { createVesselIconBook } from './iconBook.js';
+import { liftedForHorizon } from '../../geo/horizon.js';
+import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
+import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
+
+/** A query port with nothing on screen: the viewer doubles have no scene. */
+const offscreen = {
+  project: () => null,
+  projectMany: (source, out) => out.fill(NaN),
+};
 
 const noop = () => {};
 function services() {
@@ -13,7 +24,7 @@ function services() {
     trails: {
       createTrail: () => ({ setPositions: noop, clear: noop, destroy: noop }),
     },
-    labels: {},
+    labels: { formatKnots: (knots) => `${knots} kt` },
     picking: { unregisterPickOwner: noop },
     overlay: {
       setOverlayEntries: noop,
@@ -29,23 +40,19 @@ function services() {
       forgetSpriteFocus: noop,
     },
     worldFocus: {},
-    render: { releaseContinuousRender: noop },
+    render: {
+      holdContinuousRender: noop,
+      releaseContinuousRender: noop,
+      governorRequestRender: noop,
+    },
   };
 }
-function setup(source, options = {}) {
+function setup(source, options = {}, viewer = {}) {
   const layer = createVesselLayer({ source, services: services(), options });
-  const primitives = new Set();
-  layer.testing._setVesselStateForTest({
-    viewer: {},
-    billboardCollection: {
-      add(options) {
-        const primitive = { ...options };
-        primitives.add(primitive);
-        return primitive;
-      },
-      remove: (primitive) => primitives.delete(primitive),
-    },
-  });
+  const icons = createVesselIconBook();
+  if (viewer.camera)
+    bindFakeCesiumCamera(viewer, { query: offscreen, draw: fakeDrawPort() });
+  layer.testing._setVesselStateForTest({ viewer, icons });
   let now = 1000;
   layer.testing._setAisRuntimeForTest({
     now: () => now,
@@ -54,7 +61,7 @@ function setup(source, options = {}) {
   });
   return {
     layer,
-    primitives,
+    icons,
     advance: (ms) => {
       now += ms;
     },
@@ -92,9 +99,9 @@ test('vessel construction is inert and each instance owns its records, icon cach
   };
   const one = createVesselState({ source, services: services() });
   const two = createVesselState({ source, services: services() });
-  for (const key of ['state', 'shipIconCache', '_scratchFocusScreen'])
+  for (const key of ['state', 'shipIconCache'])
     assert.notEqual(one[key], two[key]);
-  assert.notEqual(one.state.records.byMmsi, two.state.records.byMmsi);
+  assert.notEqual(one.state.records.byId, two.state.records.byId);
   assert.notEqual(one.state.feed, two.state.feed);
   assert.notEqual(one.state.records.all, two.state.records.all);
   assert.notEqual(one.state.records.unkeyed, two.state.records.unkeyed);
@@ -268,7 +275,7 @@ test('partial-feed expiry releases a selected vessel and its pending trail', asy
   layer.selectById('222');
   current = snapshot([observation('111')], { complete: false });
   await layer.update();
-  assert.equal(layer.getSelectedInfo().mmsi, '222');
+  assert.equal(layer.getSelectedInfo().id, '222');
   assert.equal(signal.aborted, false);
   advance(5 * 60 * 1000);
   await layer.update();
@@ -279,27 +286,29 @@ test('partial-feed expiry releases a selected vessel and its pending trail', asy
   assert.equal(layer.testing._getVesselStateForTest().trailPositionCount, 0);
 });
 
-test('refresh keeps pick identity and renderer geometry separate, and eviction releases the primitive', async () => {
+test('refresh keeps the icon row and its pick identity, and eviction releases the row', async () => {
   let current = snapshot([observation('111')]);
-  const { layer, primitives } = setup({ getSnapshot: async () => current });
+  const { layer, icons } = setup({ getSnapshot: async () => current });
   await layer.update();
-  const [primitive] = primitives;
-  const record = primitive.id;
-  for (const key of ['position', 'surfacePosition', 'normal', 'billboard']) {
-    assert.equal(Object.hasOwn(record, key), false);
-  }
-  assert.equal(layer.findByQuery('111').position, primitive.position);
-  const oldPosition = primitive.position;
+  assert.deepEqual(icons.ids(), ['111']);
+  const meta = icons.item('111').meta;
+  const drawn = () => icons.item('111').pos;
+  const near = (a, b) => Cesium.Cartesian3.distance(a, b) < 0.01;
+  assert.ok(near(layer.findByQuery('111').position, drawn()));
+  const oldPosition = drawn();
   current = snapshot([{ ...observation('111'), longitude: 4.06 }]);
   await layer.update();
-  assert.equal(primitives.size, 1);
-  assert.equal([...primitives][0], primitive);
-  assert.equal(primitive.id, record);
-  assert.notDeepEqual(primitive.position, oldPosition);
-  assert.equal(layer.findByQuery('111').position, primitive.position);
+  assert.equal(icons.size, 1);
+  assert.equal(
+    icons.item('111').meta,
+    meta,
+    'focus identity survives a refresh',
+  );
+  assert.ok(!near(drawn(), oldPosition));
+  assert.ok(near(layer.findByQuery('111').position, drawn()));
   current = snapshot([observation('222')]);
   await layer.update();
-  assert.equal(primitives.has(primitive), false);
+  assert.equal(icons.has('111'), false);
   assert.equal(layer.findByQuery('111'), null);
 });
 
@@ -360,4 +369,253 @@ test('partial vessel snapshots preserve freshness and recover after a complete u
   assert.equal(layer.getStats().partial, true);
   layer.destroy();
   assert.equal(layer.getStats().partial, false);
+});
+
+test('authoritative empty coverage clears old contacts without declaring an outage', async () => {
+  let current = snapshot([observation('111')]);
+  const { layer } = setup({
+    async getSnapshot() {
+      return current;
+    },
+  });
+  await layer.update();
+  current = snapshot([], { observedAtMs: null, lastMessageAt: 500 });
+  await layer.update();
+  assert.ok(!layer.hasContact('111'));
+  assert.equal(layer.getStats().count, 0);
+  assert.equal(layer.getStats().error, null);
+  assert.equal(layer.getStats().stale, false);
+  assert.equal(layer.getStats().lastUpdate, null);
+});
+
+test('empty coverage cannot hide stale, incomplete or rejected source data', async () => {
+  for (const patch of [
+    { freshness: 'unknown' },
+    { freshness: 'stale' },
+    { complete: false },
+    { rawRowCount: 1 },
+    { transportStatus: 'stale' },
+    { lastMessageAt: null },
+  ]) {
+    let current = snapshot([observation('111')]);
+    const { layer } = setup({
+      async getSnapshot() {
+        return current;
+      },
+    });
+    await layer.update();
+    current = snapshot([], {
+      observedAtMs: null,
+      lastMessageAt: 500,
+      ...patch,
+    });
+    await layer.update();
+    assert.equal(layer.hasContact('111'), true, JSON.stringify(patch));
+    assert.ok(layer.getStats().error, JSON.stringify(patch));
+  }
+});
+
+test('cards and detection judge the horizon where the icon shader culls the row', async () => {
+  // A camera over the limb that sees the row's cull point (lifted to 12 m) but
+  // not the drawn position (3 m above the ellipsoid before the geoid loads).
+  const ship = Cesium.Cartesian3.fromDegrees(4.05, 51.93, 3);
+  const lifted = Cesium.Cartesian3.fromDegrees(4.05, 51.93, 12);
+  const occluder = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, ship);
+  let positionWC = null;
+  for (let lon = 4.05; lon < 40 && !positionWC; lon += 0.0005) {
+    occluder.cameraPosition = Cesium.Cartesian3.fromDegrees(
+      lon,
+      51.93,
+      400_000,
+    );
+    if (occluder.isPointVisible(lifted) && !occluder.isPointVisible(ship))
+      positionWC = occluder.cameraPosition;
+  }
+  assert.ok(positionWC, 'found a camera between the two horizons');
+  const viewer = { camera: { positionWC, heading: 0, pitch: 0, roll: 0 } };
+  const current = snapshot([observation('111')]);
+  const { layer, icons } = setup(
+    { getSnapshot: async () => current },
+    {},
+    viewer,
+  );
+  await layer.update();
+  occluder.cameraPosition = positionWC;
+  assert.equal(
+    occluder.isPointVisible(liftedForHorizon(icons.item('111').pos)),
+    true,
+  );
+  assert.deepEqual(
+    layer.getDetectableObjects().map((entry) => entry.sourceId),
+    ['111'],
+  );
+  layer.testing._setVesselStateForTest({ enabled: false });
+});
+
+test('vessel stats name the provider the last snapshot reported', async () => {
+  const { layer } = setup({
+    label: 'Vessels',
+    async getSnapshot() {
+      return snapshot([observation('111')], { source: 'Datalastic' });
+    },
+  });
+  assert.equal(layer.getStats().source, 'Vessels');
+  await layer.update();
+  assert.equal(layer.getStats().source, 'Datalastic');
+});
+
+test('two vessels sharing an MMSI under different ids stay two vessels', async () => {
+  const shared = (id, longitude) => ({
+    ...observation(id),
+    mmsi: '123456789',
+    longitude,
+    name: `HULL ${id}`,
+  });
+  const { layer, icons } = setup({
+    getSnapshot: async () =>
+      snapshot([shared('hull-a', 4.05), shared('hull-b', 4.25)]),
+  });
+  await layer.update();
+  assert.equal(layer.getStats().count, 2);
+  assert.equal(icons.size, 2);
+  assert.equal(layer.hasContact('hull-a'), true);
+  assert.equal(layer.hasContact('hull-b'), true);
+  // An MMSI is not a key, but a link naming one still finds a vessel with it.
+  assert.equal(layer.hasContact('123456789'), true);
+  assert.equal(layer.hasContact('987654321'), false);
+  assert.deepEqual(
+    layer
+      .getAllPositions()
+      .map(({ id }) => id)
+      .sort(),
+    ['hull-a', 'hull-b'],
+  );
+  assert.equal(layer.selectById('hull-b'), true);
+  assert.deepEqual(
+    [layer.getSelectedInfo().id, layer.getSelectedInfo().mmsi],
+    ['hull-b', '123456789'],
+  );
+  assert.equal(
+    layer.selectById('123456789'),
+    true,
+    'a link naming the MMSI selects a vessel with it',
+  );
+  assert.equal(layer.getSelectedInfo().mmsi, '123456789');
+  assert.equal(layer.selectById('hull-b'), true);
+  // A lookup by the shared MMSI still finds a vessel that has it.
+  assert.equal(layer.findByQuery('123456789').mmsi, '123456789');
+});
+
+test('a vessel with an id and no MMSI renders and can be selected', async () => {
+  const { layer, icons } = setup({
+    getSnapshot: async () =>
+      snapshot([{ ...observation('7f3c9a10-provider-id'), name: 'NO MMSI' }]),
+  });
+  await layer.update();
+  // Its icon row is keyed by its id.
+  assert.deepEqual(icons.ids(), ['7f3c9a10-provider-id']);
+  assert.equal(layer.findByQuery('7f3c9a10-provider-id').mmsi, '');
+  assert.equal(layer.selectById('7f3c9a10-provider-id'), true);
+  const info = layer.getSelectedInfo();
+  assert.equal(info.id, '7f3c9a10-provider-id');
+  assert.equal(info.mmsi, '');
+  assert.equal(layer.getCockpitSubject().id, '7f3c9a10-provider-id');
+  assert.equal(layer.testing._getVesselStateForTest().trailId, info.id);
+});
+
+test('a vessel keyed by a UUID is found in any case and names its drawn fix', async () => {
+  const uuid = '0770e3ca-b896-c307-f499-4f9df2b8f86b';
+  const { layer } = setup({
+    getSnapshot: async () =>
+      snapshot([{ ...observation(uuid.toUpperCase()), name: 'UUID HULL' }]),
+  });
+  await layer.update();
+  assert.equal(layer.getSelectedFix(), null, 'nothing selected');
+  // A share link carries the UUID in lowercase.
+  assert.equal(layer.hasContact(uuid), true);
+  assert.equal(layer.selectById(uuid), true);
+  const fix = layer.getSelectedFix();
+  assert.equal(fix.id, uuid.toUpperCase());
+  assert.ok(fix.position, 'where the vessel is drawn');
+  assert.equal(fix.observedAtMs, 500);
+  assert.equal(layer.hasContact('0770e3ca-b896-c307-f499-4f9df2b8f86c'), false);
+});
+
+test('AIS feed rows stay keyed by their MMSI', async () => {
+  const { vesselSnapshot } = await import('../../sources/live/vessels.js');
+  const row = { mmsi: '235000001', lat: 51.93, lon: 4.05, name: 'TERN' };
+  const { layer } = setup({
+    getSnapshot: async () =>
+      vesselSnapshot({ rows: [row, { ...row, lon: 4.2 }], status: 'live' }),
+  });
+  await layer.update();
+  assert.equal(layer.getStats().count, 1, 'one MMSI is one vessel on AIS');
+  assert.equal(layer.selectById('235000001'), true);
+  assert.deepEqual(
+    [layer.getSelectedInfo().id, layer.getSelectedInfo().mmsi],
+    ['235000001', '235000001'],
+  );
+});
+
+test('an aid to navigation is drawn as a disc, a vessel as its chevron', async () => {
+  const aid = {
+    ...observation('993672001'),
+    mmsi: '993672001',
+    type: 'Port Hand Mark',
+    speedMps: 0,
+  };
+  const ship = { ...observation('366999002'), type: 'Cargo' };
+  const { layer, icons } = setup({
+    async getSnapshot() {
+      return snapshot([aid, ship]);
+    },
+  });
+  await layer.update();
+  const svgOf = (id) => {
+    assert.ok(icons.has(id), id);
+    return atob(icons.item(id).image.split(',')[1]);
+  };
+  assert.match(svgOf('993672001'), /<circle/);
+  // The source's virtual flag reaches the layer's record.
+  const recordOf = (id) => layer.testing._vesselRecordForTest(id);
+  assert.equal(recordOf('993672001').virtual, false);
+  assert.equal(recordOf('366999002').virtual, false);
+  assert.doesNotMatch(svgOf('993672001'), /<path/);
+  assert.match(svgOf('366999002'), /<path/);
+});
+
+test('a virtual aid to navigation keeps its disc and its virtual flag', async () => {
+  const aid = {
+    ...observation('993672009'),
+    mmsi: '993672009',
+    type: 'Isolated danger',
+    virtual: true,
+  };
+  const { layer, icons } = setup({
+    async getSnapshot() {
+      return snapshot([aid]);
+    },
+  });
+  await layer.update();
+  assert.ok(icons.has('993672009'));
+  assert.equal(layer.testing._vesselRecordForTest('993672009').virtual, true);
+  assert.match(atob(icons.item('993672009').image.split(',')[1]), /<circle/);
+});
+
+test('a feed with no AISStream key reports its key as required, and a live one does not', async () => {
+  let current = snapshot([], {
+    transportStatus: 'missing-key',
+    complete: false,
+  });
+  const { layer } = setup({
+    async getSnapshot() {
+      return current;
+    },
+  });
+  assert.equal(layer.requiresKeyId, 'aisstream');
+  await layer.update();
+  assert.equal(layer.getStats().keyRequired, true);
+  current = snapshot([observation('111')]);
+  await layer.update();
+  assert.equal(layer.getStats().keyRequired, false);
 });

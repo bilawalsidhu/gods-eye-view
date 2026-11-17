@@ -9,6 +9,7 @@ import {
   isKeySetupExternallyManaged,
   keySetupStatus,
   keySetupRequirement,
+  keySetupWithAlternatives,
   knownKeySetupEnvVars,
   parseWindowsUserSid,
   upsertDotenvValues,
@@ -258,6 +259,23 @@ test('the admission gate refuses every non-local shape, one assertion per refusa
   assert.equal(admitKeySetupRequest({ ...local, env: { PINOKIO_SHARE_LOCAL: '1' } }).ok, false, 'LAN sharing disables the surface');
   // A LAN peer reaching a wide-bound server.
   assert.equal(admitKeySetupRequest({ ...local, remoteAddress: '192.168.1.20' }).ok, false, 'non-loopback socket refused');
+  // A container publishes its port on the host's loopback, yet the host's own
+  // browser still arrives from the container network's gateway. Only an exact
+  // address the operator listed admits it, and nothing else is relaxed.
+  const trusted = { GEV_KEY_SETUP_TRUSTED_PEERS: ' 10.0.0.9 , 172.29.73.1 ' };
+  const gateway = { ...local, remoteAddress: '172.29.73.1' };
+  assert.equal(admitKeySetupRequest(gateway).ok, false, 'container gateway refused without the opt-in');
+  assert.equal(admitKeySetupRequest({ ...gateway, env: trusted }).ok, true, 'listed peer admitted');
+  assert.equal(admitKeySetupRequest({ ...gateway, remoteAddress: '::ffff:172.29.73.1', env: trusted }).ok, true, 'IPv4-mapped form of a listed peer admitted');
+  assert.equal(admitKeySetupRequest({ ...local, remoteAddress: '192.168.1.20', env: trusted }).ok, false, 'unlisted peer still refused');
+  assert.equal(admitKeySetupRequest({ ...gateway, env: { GEV_KEY_SETUP_TRUSTED_PEERS: '*' } }).ok, false, 'wildcards are not addresses');
+  assert.equal(admitKeySetupRequest({ ...gateway, env: { GEV_KEY_SETUP_TRUSTED_PEERS: '172.29.73.0/24' } }).ok, false, 'prefixes are not addresses');
+  assert.equal(admitKeySetupRequest({ ...gateway, env: { GEV_KEY_SETUP_TRUSTED_PEERS: '' } }).ok, false, 'an empty list trusts nothing');
+  assert.equal(admitKeySetupRequest({ ...gateway, env: { GEV_KEY_SETUP_TRUSTED_PEERS: ' , , ' } }).ok, false, 'blank entries trust nothing');
+  assert.equal(admitKeySetupRequest({ ...gateway, env: { ...trusted, PINOKIO_SHARE_LOCAL: '1' } }).ok, false, 'sharing still disables the surface for a listed peer');
+  assert.equal(admitKeySetupRequest({ ...gateway, env: trusted, hostHeader: 'abc.trycloudflare.com' }).ok, false, 'a listed peer still needs a local Host');
+  assert.equal(admitKeySetupRequest({ ...gateway, env: trusted, origin: 'https://evil.example' }).ok, false, 'a listed peer still needs the exact Origin');
+  assert.equal(admitKeySetupRequest({ ...gateway, env: trusted, proxyHeaders: { 'x-forwarded-for': '203.0.113.5' } }).ok, false, 'a listed peer still refuses proxied requests');
   // Tunnel and DNS-rebinding traffic carries a foreign Host over a loopback socket.
   assert.equal(admitKeySetupRequest({ ...local, hostHeader: 'abc.trycloudflare.com' }).ok, false, 'foreign Host refused');
   assert.equal(admitKeySetupRequest({ ...local, hostHeader: 'workstation.local:4173' }).ok, false, 'non-localhost hostnames refused');
@@ -361,4 +379,17 @@ test('server Google key remains supported without appearing in setup or its miss
   assert.deepEqual(complete, keySetupStatus({ ...allVisibleConfigured, GOOGLE_MAPS_SERVER_API_KEY: secret }));
   assert.ok(!JSON.stringify(status).includes('GOOGLE_MAPS_SERVER_API_KEY'));
   assert.ok(!JSON.stringify(status).includes(secret));
+});
+
+test('key guidance can offer another source that works with a key already set', () => {
+  const streetView = { label: 'STREET VIEW', requiresKeyId: 'google-maps' };
+  assert.equal(
+    keySetupWithAlternatives(keySetupRequirement('mapillary'), [streetView]),
+    'Needs MAPILLARY_CLIENT_TOKEN — add it in Provider Settings, or light STREET VIEW to use your Google Maps key',
+  );
+  assert.equal(
+    keySetupWithAlternatives('', [streetView]),
+    'Light STREET VIEW to use your Google Maps key',
+  );
+  assert.equal(keySetupWithAlternatives('Needs X', []), 'Needs X');
 });

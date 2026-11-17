@@ -20,7 +20,7 @@ import {
   PRODUCTS,
   boxCentre,
   boxFromPin,
-  boxFromRectangle,
+  boxFromDegrees,
   boxSideKm,
   dequantizeBox,
   fitViewHeightM,
@@ -28,11 +28,19 @@ import {
   parseCandidateKey,
   quantizeBox,
   rankLatest,
-  shortDay,
   utcDay,
   validateBox,
   viewTooLargeMessage,
 } from './model.js';
+import { msg, t } from '../../i18n/index.js';
+import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
+import { READOUT_WORDS, displayDay, displayMetres } from './display.js';
+import {
+  canvasOf,
+  findCamera,
+  findGlobe,
+  findQuery,
+} from '../../render/rendererOf.js';
 
 /**
  * Quiet time after the last arrow key before the focused day previews, so a
@@ -46,10 +54,11 @@ export const SPLIT_PUBLISH_MS = 400;
 /** The three modes, in share-link order (`m` = index). */
 export const MODES = Object.freeze(['image', 'basemap', 'ab']);
 
-const COMPARISON_IN_USE = 'Comparison in use by another scene';
-const COMPARISON_UNAVAILABLE = 'Esri map unavailable · no swipe';
-const COMPARISON_NEEDS_GLOBE = 'Swipe needs a globe map';
-const ESRI_KEPT = 'Imagery stays on Esri · CLEAR to use Google 3D';
+// Kept English in the snapshot (AI tools read it); the card translates them.
+const COMPARISON_IN_USE = msg('Comparison in use by another scene');
+const COMPARISON_UNAVAILABLE = msg('Esri map unavailable · no swipe');
+const COMPARISON_NEEDS_GLOBE = msg('Swipe needs a globe map');
+const ESRI_KEPT = msg('Imagery stays on Esri · CLEAR to use Google 3D');
 /** ZOOM IN's flight time, in seconds. */
 const ZOOM_FIT_SECONDS = 1.2;
 const DEFAULT_SPLIT = 0.5;
@@ -64,10 +73,6 @@ const clampUnit = (value, fallback) => {
 const boxSignature = (box) =>
   box ? BOX_EDGES.map((edge) => Number(box[edge]).toFixed(6)).join(',') : '';
 const sourceOf = (product) => PRODUCTS[product]?.source || null;
-const toDegrees = (radians) => (radians * 180) / Math.PI;
-const toRadians = (degrees) => (degrees * Math.PI) / 180;
-const ellipsoidOf = (viewer) =>
-  viewer?.scene?.ellipsoid || viewer?.scene?.globe?.ellipsoid || null;
 
 /**
  * The ground under the canvas centre, in degrees; null when the centre is
@@ -76,20 +81,14 @@ const ellipsoidOf = (viewer) =>
  * @returns {{ lon: number, lat: number } | null}
  */
 function viewCentre(viewer) {
-  const ellipsoid = ellipsoidOf(viewer);
-  const canvas = viewer?.scene?.canvas;
+  const query = findQuery(viewer);
+  const canvas = canvasOf(viewer);
   const width = Number(canvas?.clientWidth);
   const height = Number(canvas?.clientHeight);
-  if (!ellipsoid?.cartesianToCartographic || !(width > 0) || !(height > 0))
-    return null;
-  const hit = viewer.camera?.pickEllipsoid?.(
-    { x: width / 2, y: height / 2 },
-    ellipsoid,
-  );
-  const ground = hit ? ellipsoid.cartesianToCartographic(hit) : null;
-  return ground
-    ? { lon: toDegrees(ground.longitude), lat: toDegrees(ground.latitude) }
-    : null;
+  if (!query || !(width > 0) || !(height > 0)) return null;
+  const hit = query.pickEllipsoid(width / 2, height / 2);
+  const ground = hit ? toLonLatH(hit) : null;
+  return ground ? { lon: ground.lon, lat: ground.lat } : null;
 }
 const modeFrom = (value) =>
   MODES.includes(value)
@@ -100,13 +99,14 @@ const modeFrom = (value) =>
 
 /**
  * Create the layer.
- * @param {{ catalog?: { searchHls: Function }, renderer: object, thumbnails: object, host?: Function, now?: () => Date, days?: number, setTimeoutImpl?: Function, clearTimeoutImpl?: Function }} options
+ * @param {{ catalog?: { searchHls: Function }, renderer: object, thumbnails: object, host?: Function, globeOf?: Function, now?: () => Date, days?: number, setTimeoutImpl?: Function, clearTimeoutImpl?: Function }} options
  */
 export function createRecentImageryLayer({
   catalog = { searchHls },
   renderer,
   thumbnails,
   host = resolveImageryHost,
+  globeOf = findGlobe,
   now = () => new Date(),
   days = CATALOG_DAYS,
   setTimeoutImpl = (fn, ms) => globalThis.setTimeout(fn, ms),
@@ -377,7 +377,13 @@ export function createRecentImageryLayer({
     const changed =
       next.collection !== _hostInfo.collection || next.kind !== _hostInfo.kind;
     _hostInfo = next;
-    renderer.rebind(next);
+    // The layers drape through the viewer's globe port, on the tileset too
+    // when that is the host.
+    renderer.rebind({
+      ...next,
+      globe: next.kind === 'none' ? null : globeOf(_viewer),
+      tileset: next.kind === 'tileset' ? _tileset : null,
+    });
     return changed;
   }
 
@@ -630,7 +636,7 @@ export function createRecentImageryLayer({
     } catch (error) {
       if (abort.signal.aborted) return;
       resetCatalog();
-      _catalogError = error?.message || 'Imagery catalog unavailable';
+      _catalogError = error?.message || msg('Imagery catalog unavailable');
     } finally {
       if (_searchAbort === abort) {
         _searchAbort = null;
@@ -748,15 +754,21 @@ export function createRecentImageryLayer({
 
   function notes() {
     const out = [];
-    if (_truncated) out.push('Catalog truncated · a newer clear day may exist');
+    if (_truncated)
+      out.push(t('Catalog truncated · a newer clear day may exist'));
     for (const error of _catalogErrors) {
       const label = PRODUCTS[error.product]?.label || error.product;
-      out.push(`${label} catalog unavailable · ${error.message}`);
+      out.push(
+        t('{label} catalog unavailable · {detail}', {
+          label,
+          detail: error.message,
+        }),
+      );
     }
     const today = utcDay(now());
     const viirsToday = candidateFor(`VIIRS:${today}`);
     if (viirsToday?.availability === 'unknown' && _sources.viirs)
-      out.push('Daily overview for today may still be empty until the pass');
+      out.push(t('Daily overview for today may still be empty until the pass'));
     return out;
   }
 
@@ -767,7 +779,7 @@ export function createRecentImageryLayer({
       key: key || null,
       candidate: candidateFor(key),
       label: parsed
-        ? `${shortDay(parsed.day)} · ${PRODUCTS[parsed.product].name} · ${PRODUCTS[parsed.product].resolutionM} m`
+        ? `${displayDay(parsed.day)} · ${t(PRODUCTS[parsed.product].name)} · ${displayMetres(PRODUCTS[parsed.product].resolutionM)}`
         : null,
       sourceOff,
       drapable: drapable(candidateFor(key)),
@@ -947,10 +959,10 @@ export function createRecentImageryLayer({
      * @returns {boolean}
      */
     useCurrentView(viewer = _viewer) {
-      const rectangle = viewer?.camera?.computeViewRectangle?.();
+      const rectangle = findCamera(viewer)?.viewRectangle();
       if (!rectangle)
         return refuseBox('Point the camera at the ground to use the view');
-      const box = boxFromRectangle(rectangle);
+      const box = boxFromDegrees(rectangle);
       if (validateBox(box).reason === 'too-large') {
         const { width, height } = boxSideKm(box);
         return refuseBox(
@@ -969,24 +981,19 @@ export function createRecentImageryLayer({
      */
     zoomToFit() {
       const target = _boxError ? _refusalTarget : null;
-      const camera = _viewer?.camera;
-      const ellipsoid = ellipsoidOf(_viewer);
-      if (!target || !camera?.flyTo || !ellipsoid?.cartographicToCartesian)
-        return null;
-      const canvas = _viewer.scene?.canvas;
+      // No camera port: a viewer of the caller's own whose renderer did not
+      // bring the camera factory (GEV's own imagery renderer does).
+      const port = findCamera(_viewer);
+      if (!target || !port) return null;
+      const canvas = canvasOf(_viewer);
       const height = fitViewHeightM({
         width: canvas?.clientWidth,
         height: canvas?.clientHeight,
-        fovy: camera.frustum?.fovy,
+        fovy: port.pose().fovy,
       });
-      camera.flyTo({
-        destination: ellipsoid.cartographicToCartesian({
-          longitude: toRadians(target.lon),
-          latitude: toRadians(target.lat),
-          height,
-        }),
+      port.flyTo(fromDegrees(target.lon, target.lat, height), {
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-        duration: ZOOM_FIT_SECONDS,
+        durationS: ZOOM_FIT_SECONDS,
       });
       return height;
     },
@@ -1201,6 +1208,16 @@ export function createRecentImageryLayer({
       notify('alpha');
     },
 
+    /** Stop catalog/preview work owned by a cancelled voice action. */
+    cancelPendingSearch() {
+      // Without a note the emptied strip would read as "no imagery".
+      if (_searching) _notice = msg('Search cancelled');
+      cancelSearch();
+      clearPending();
+      syncRender();
+      notify();
+    },
+
     /**
      * Forget the box, the candidates, both pins, the preview and any pending
      * pick; reset opacity and split and cancel the box tool. Mode and
@@ -1227,7 +1244,7 @@ export function createRecentImageryLayer({
         _alpha = 1;
         for (const slotId of SLOT_IDS) renderer.setAlpha(slotId, 1);
       }
-      _notice = 'Box and images cleared';
+      _notice = msg('Box and images cleared');
       syncRender();
       publish([...BOX_EDGES, 'a', 'b', 'split']);
       notify();
@@ -1276,7 +1293,9 @@ export function createRecentImageryLayer({
         candidates,
         focusIndex,
         focus,
-        readout: focus ? formatCandidateReadout(focus, now()) : '',
+        readout: focus
+          ? formatCandidateReadout(focus, now(), READOUT_WORDS)
+          : '',
         recommended: ranked.candidate
           ? { key: ranked.candidate.key, reason: ranked.reason }
           : null,
@@ -1329,17 +1348,18 @@ export function createRecentImageryLayer({
         chips: [
           {
             id: 'hls',
-            label: 'MORE DETAIL · 30 m',
+            label: t('MORE DETAIL · 30 m'),
             active: _sources.hls,
-            title: 'Sentinel-2 and Landsat via HLS, 30 m, every 2–6 days',
+            title: t('Sentinel-2 and Landsat via HLS, 30 m, every 2–6 days'),
             params: { hls: !_sources.hls },
           },
           {
             id: 'viirs',
-            label: 'DAILY OVERVIEW · 250 m',
+            label: t('DAILY OVERVIEW · 250 m'),
             active: _sources.viirs,
-            title:
+            title: t(
               'VIIRS daily mosaic, 250 m, follows broad changes; little detail under 25 km',
+            ),
             params: { viirs: !_sources.viirs },
           },
         ],

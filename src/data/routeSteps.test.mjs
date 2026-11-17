@@ -78,6 +78,26 @@ test('instructions read like a navigator, one sentence per OSRM maneuver', () =>
     'Take the ramp on the left',
   );
   assert.equal(
+    instructionFor({ type: 'on ramp', modifier: 'slight left', name: 'I-95' }),
+    'Take the ramp slightly left onto I-95',
+  );
+  assert.equal(
+    instructionFor({ type: 'off ramp', modifier: 'sharp right', ref: 'I-280' }),
+    'Take the exit sharply right onto I-280',
+  );
+  assert.equal(
+    instructionFor({ type: 'on ramp', modifier: 'straight', name: 'US 101' }),
+    'Take the ramp onto US 101',
+  );
+  assert.equal(
+    instructionFor({ type: 'use lane', modifier: 'slight left' }),
+    'Use the left lane',
+  );
+  assert.equal(
+    instructionFor({ type: 'use lane', modifier: 'right', name: 'Main St' }),
+    'Use the right lane onto Main St',
+  );
+  assert.equal(
     instructionFor({
       type: 'merge',
       modifier: 'slight left',
@@ -206,9 +226,9 @@ test('the step list is capped, and the cap is reported rather than hidden', () =
   // would present a route that simply stops in the middle of a road.
   assert.equal(cut.truncated, true);
   const exact = normalizeOsrmSteps({
-    legs: [{ steps: many.slice(0, ROUTE_STEPS_MAX - 1) }],
+    legs: [{ steps: many.slice(0, ROUTE_STEPS_MAX) }],
   });
-  assert.equal(exact.steps.length, ROUTE_STEPS_MAX - 1);
+  assert.equal(exact.steps.length, ROUTE_STEPS_MAX);
   assert.equal(exact.truncated, false, 'a route that fits is not cut');
 });
 
@@ -216,6 +236,8 @@ test('distance and duration formatting', () => {
   assert.equal(formatRouteDistance(8), '8 m');
   assert.equal(formatRouteDistance(846), '850 m');
   assert.equal(formatRouteDistance(1234), '1.2 km');
+  assert.equal(formatRouteDistance(996), '1.0 km');
+  assert.equal(formatRouteDistance(9960), '10 km');
   assert.equal(formatRouteDistance(21479), '21 km');
   assert.equal(formatRouteDistance(-1), '');
   assert.equal(formatRouteDuration(40), '40 s');

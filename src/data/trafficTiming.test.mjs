@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -136,6 +139,7 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
   const timeouts = new Map();
   let timerId = 0;
   let server;
+  const cacheDir = mkdtempSync(path.join(tmpdir(), 'gev-traffic-timing-vite-'));
   let trafficLayer;
   let viewer;
 
@@ -159,6 +163,12 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
     };
     server = await createServer({
       root: fileURLToPath(new URL('../..', import.meta.url)),
+      // Its own optimizer cache, not node_modules/.vite in the package tree:
+      // a host running Core's suite refuses files inside Core.
+      cacheDir,
+      // The test loads modules over SSR; the browser dependency optimizer would
+      // keep writing its cache after the server closes.
+      optimizeDeps: { noDiscovery: true, include: [] },
       configFile: false,
       appType: 'custom',
       logLevel: 'silent',
@@ -221,6 +231,9 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
     setLongitude(longitude);
     viewer = {
       camera,
+      get canvas() {
+        return this.scene?.canvas;
+      },
       scene: {
         canvas: { clientWidth: 0, clientHeight: 0, width: 0, height: 0 },
         preRender,
@@ -228,6 +241,36 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
         primitives: { add: (primitive) => primitive, remove: () => true },
       },
     };
+
+    // The layer reads the camera through the renderer's camera port.
+    const { bindRenderer } = await server.ssrLoadModule('/src/render/rendererOf.js');
+    const degrees = (radians) => radians * 180 / Math.PI;
+    const cameraEvents = { moveEnd, changed };
+    const frameEvents = { preRender, postRender };
+    bindRenderer(viewer, {
+      // The scene's channels, raised by the test as Cesium would.
+      frame: {
+        on: (phase, cb) => frameEvents[phase].addEventListener(cb),
+        requestRender() {},
+      },
+      camera: {
+        on: (event, cb) => cameraEvents[event].addEventListener(cb),
+        pose: () => ({
+          lon: degrees(camera.positionCartographic.longitude),
+          lat: degrees(camera.positionCartographic.latitude),
+          height: camera.positionCartographic.height,
+        }),
+        viewRectangle() {
+          const r = camera.computeViewRectangle();
+          return { west: degrees(r.west), south: degrees(r.south), east: degrees(r.east), north: degrees(r.north) };
+        },
+      },
+      // The dots' and heat-lines' draw sets: timing reads none of what they draw.
+      draw: {
+        points: () => ({ show: false, upsert() {}, remove() {}, clear() {}, dispose() {} }),
+        lines: () => ({ show: true, set() {}, upsert() {}, clear() {}, dispose() {} }),
+      },
+    });
 
     performance.clearMarks();
     performance.clearMeasures();
@@ -328,6 +371,7 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
     console.warn = originalWarn;
     performance.clearMarks();
     performance.clearMeasures();
+    rmSync(cacheDir, { recursive: true, force: true, maxRetries: 3 });
   }
 });
 

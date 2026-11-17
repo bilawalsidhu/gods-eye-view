@@ -18,6 +18,29 @@ function isOverpassBoundaryQuery(cacheKey) {
   return /is_in\s*\(|\bpivot\b/i.test(String(cacheKey || ''));
 }
 
+// Input has already had quoted literals and comments removed. Consume each
+// character once: a regex that searches for a closing bracket from every `[` is
+// quadratic on an unterminated filter. Nested or unmatched brackets are invalid.
+function stripTagFilters(text) {
+  const parts = [];
+  let start = 0;
+  let inFilter = false;
+  for (let i = 0; i < text.length; i += 1) {
+    if (text[i] === '[') {
+      if (inFilter) return null;
+      parts.push(text.slice(start, i), ' ');
+      inFilter = true;
+    } else if (text[i] === ']') {
+      if (!inFilter) return null;
+      inFilter = false;
+      start = i + 1;
+    }
+  }
+  if (inFilter) return null;
+  parts.push(text.slice(start));
+  return parts.join('');
+}
+
 /**
  * Validate + clamp an Overpass form body. Defends the generic proxy against
  * planet-scale abuse: requires exactly one `data` query in which EVERY element
@@ -50,6 +73,10 @@ function sanitizeOverpassBody(rawBody) {
   // Blank quoted literals + strip comments in one lexer pass so a fake bound or a
   // `//` inside a string can't hide an unbounded selector (or satisfy a bound).
   const stripped = stripOverpassNoise(data);
+  const withoutTags = stripTagFilters(stripped);
+  if (withoutTags === null) {
+    return { ok: false, error: 'Malformed Overpass tag filter' };
+  }
 
   // Reject oversized radii in EVERY around form — point `around:r,lat,lon` AND the
   // input-set form `around.set:r` — and parse the full numeric token so scientific
@@ -93,20 +120,21 @@ function sanitizeOverpassBody(rawBody) {
   // statement. So `way[...]->.a` (global assigned to a set) is rejected, while the
   // app's `is_in(...)->.a; area.a[...]` and `area(id)->.x; rel(pivot.x)` validate.
   const boundedSets = new Set();
-  for (let stmt of stripped.split(';')) {
+  for (let stmt of withoutTags.split(';')) {
     stmt = stmt.trim();
-    if (!stmt || stmt.startsWith('[') || /^out\b/.test(stmt)) continue;
+    // The settings block (`[out:json][timeout:25]`) was blanked together with
+    // the tag filters, so it arrives here as an empty statement.
+    if (!stmt || /^out\b/.test(stmt)) continue;
 
-    // Strip output-set assignments (NOT input bounds), then strip bracket tag
-    // filters so a tag KEY/value (e.g. `way[is_in]`, `node[around]`) can never be
-    // misread as a spatial bound. Bounds live in (...) / function calls / set
-    // refs, never inside [...], so the probe loses nothing real.
+    // Strip output-set assignments (NOT input bounds). With the tag filters
+    // already gone, a tag KEY/value (e.g. `way[is_in]`, `node[around]`) cannot
+    // be misread as a spatial bound; bounds live in (...) / function calls /
+    // set refs, never inside [...], so nothing real was lost.
     const outSets = [];
-    const body = stmt.replace(/->\s*\.(\w+)/g, (_, name) => {
+    const probe = stmt.replace(/->\s*\.(\w+)/g, (_, name) => {
       outSets.push(name);
       return ' ';
     });
-    const probe = body.replace(/\[[^\]]*\]/g, ' ');
 
     // Reject element-in-area scans on the TAG-STRIPPED probe, so a tag filter
     // between the selector and the area filter (way["highway"](area.a)) can't hide
@@ -140,8 +168,10 @@ function sanitizeOverpassBody(rawBody) {
     if (bounded) for (const name of outSets) boundedSets.add(name);
   }
 
+  // Tolerate whitespace around the directive so `[ timeout : N ]` is clamped
+  // rather than passed through as written.
   const clamped = data.replace(
-    /\[timeout:\s*(\d+)\s*\]/gi,
+    /\[\s*timeout\s*:\s*(\d+)\s*\]/gi,
     (_, n) =>
       `[timeout:${Math.min(Number(n) || OVERPASS_MAX_QL_TIMEOUT, OVERPASS_MAX_QL_TIMEOUT)}]`,
   );

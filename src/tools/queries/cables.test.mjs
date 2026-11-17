@@ -89,6 +89,59 @@ test('cables are found by area and name, with landing points and attribution', a
   );
 });
 
+test('a cable split into several features is listed once', async () => {
+  // TeleGeography splits a few cables (2Africa, Echo, Hawaiki) into several
+  // features under one id.
+  const cable = (id, name, coordinates) => ({
+    properties: { id, name },
+    geometry: { type: 'MultiLineString', coordinates: [coordinates] },
+  });
+  const split = {
+    async fetch() {
+      return {
+        cables: {
+          features: [
+            cable('2africa', '2Africa', [
+              [60, 18],
+              [57, 22],
+            ]),
+            cable('equiano', 'Equiano', [
+              [-10, 5],
+              [3, 6],
+            ]),
+            cable('2africa', '2Africa', [
+              [-21, 16],
+              [-17, 14],
+            ]),
+          ],
+        },
+        landingPoints: { features: [] },
+      };
+    },
+  };
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { cables: split },
+  });
+  const named = await catalog.call('find_submarine_cables', {
+    name: '2africa',
+  });
+  assert.equal(named.summary, '1 submarine cable matching "2africa".');
+  assert.deepEqual(named.data.rows, [{ id: '2africa', name: '2Africa' }]);
+  const both = await catalog.call('find_submarine_cables', {
+    area: { bbox: [-30, 0, 70, 30] },
+  });
+  assert.deepEqual(
+    both.data.rows.map((row) => row.id),
+    ['2africa', 'equiano'],
+  );
+  // Only the second part crosses this box; the cable is still found.
+  const west = await catalog.call('find_submarine_cables', {
+    area: { bbox: [-25, 10, -10, 20] },
+  });
+  assert.deepEqual(west.data.rows, [{ id: '2africa', name: '2Africa' }]);
+});
+
 test('the local fetch serves bundled data files and nothing outside them', async () => {
   const fetchImpl = createApiFetch({
     apiBase: 'http://127.0.0.1:1',

@@ -53,7 +53,9 @@ export function createHttpGeospatialProvider({
   endpoints = {},
 } = {}) {
   const urls = {
-    reverse: 'https://maps.googleapis.com/maps/api/geocode/json',
+    // Same-origin like its siblings below: Google's Geocoding web service
+    // refuses referrer-restricted keys, so the key stays on the server (#363).
+    reverse: '/api/google/reverse-geocode',
     textSearch: '/api/google/text-search',
     nearby: '/api/google/nearby-places',
     route: '/api/route',
@@ -88,14 +90,11 @@ export function createHttpGeospatialProvider({
     },
     routeProfiles: ['foot', 'car', 'bike'],
     async reverseGeocode(latitude, longitude, options) {
-      const key = resolveApiKey?.();
-      if (resolveApiKey && !key) return null;
+      // The browser key gates the provider without travelling with the
+      // request: the proxy supplies the key Google actually sees.
+      if (resolveApiKey && !resolveApiKey()) return null;
       return normalizeGoogleReverse(
-        await json(
-          urls.reverse,
-          { latlng: `${latitude},${longitude}`, ...(key ? { key } : {}) },
-          options,
-        ),
+        await json(urls.reverse, { lat: latitude, lon: longitude }, options),
       );
     },
     async textSearch(query, { latitude, longitude, radiusM = 6000 }, options) {

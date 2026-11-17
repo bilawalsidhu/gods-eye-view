@@ -14,7 +14,7 @@ export function createLabels({ state: layerState, services, parts, source }) {
       id: String(ISS_NORAD),
       position,
       variant: 'label',
-      title: 'ISS',
+      title: 'ISS', // i18n-ignore: satellite name, as in the satellite catalog
       accent: '#ff4444',
       priority: 1000,
       collisionGroup: 'ambient-label',
@@ -38,7 +38,7 @@ export function createLabels({ state: layerState, services, parts, source }) {
   /** Cached ISS point only; never performs a fresh SGP4 propagation. */
 
   function _issDisplayCached() {
-    return layerState._points.get(ISS_NORAD)?.position || null;
+    return parts.rendering._pointPosition(ISS_NORAD);
   }
 
   /**
@@ -63,11 +63,13 @@ export function createLabels({ state: layerState, services, parts, source }) {
     let changed = false;
     let found = 0;
     const next = new Set();
-    for (const [noradId, point] of layerState._points) {
-      if (noradId === layerState._trackedNorad || !point?.position) continue;
-      const dx = point.position.x - trackedPosition.x;
-      const dy = point.position.y - trackedPosition.y;
-      const dz = point.position.z - trackedPosition.z;
+    for (const noradId of layerState._points.keys()) {
+      if (noradId === layerState._trackedNorad) continue;
+      const position = parts.rendering._pointPosition(noradId);
+      if (!position) continue;
+      const dx = position.x - trackedPosition.x;
+      const dy = position.y - trackedPosition.y;
+      const dz = position.z - trackedPosition.z;
       if (dx * dx + dy * dy + dz * dz > radiusSq) continue;
       next.add(noradId);
       found++;
@@ -83,6 +85,8 @@ export function createLabels({ state: layerState, services, parts, source }) {
   function _dockedCompanionNames() {
     const names = [];
     for (const noradId of layerState._dockedCompanions) {
+      // A hidden class is not named on the tracked card either.
+      if (parts.controls?._classVisible?.(noradId) === false) continue;
       names.push(
         layerState._catalog.get(noradId)?.name?.trim() || `SAT-${noradId}`,
       );
@@ -102,6 +106,7 @@ export function createLabels({ state: layerState, services, parts, source }) {
       layerState._trackedNorad !== ISS_NORAD &&
       !layerState._dockedCompanions.has(ISS_NORAD) &&
       layerState._catalog.has(ISS_NORAD) &&
+      parts.controls?._classVisible?.(ISS_NORAD) !== false &&
       _issDisplayCached();
     if (!visible) {
       layerState._overlayHost.clearSource(ISS_OVERLAY_SOURCE_ID);

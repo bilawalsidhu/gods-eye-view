@@ -24,11 +24,9 @@
 
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { projectRoot } from '../scripts/project-root.mjs';
 import sharp from 'sharp';
 
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const PROJECT_ROOT = projectRoot(import.meta.url);
 
 // ---------------------------------------------------------------------------
@@ -159,7 +157,7 @@ async function fetchTile(apiKey, session, panoId, z, x, y) {
 // ---------------------------------------------------------------------------
 
 async function stitchPanorama(apiKey, session, panoId, metadata, zoom) {
-  const { imageWidth, imageHeight, tileWidth, tileHeight } = metadata;
+  const { tileWidth, tileHeight } = metadata;
 
   // Street View tile grids follow a fixed power-of-2 scheme:
   //   zoom 0: 1×1    (360° FOV, entire panorama in one tile)

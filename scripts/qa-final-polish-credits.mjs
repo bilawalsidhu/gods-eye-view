@@ -52,7 +52,6 @@ try {
       id,
       value,
     );
-  const text = () => page.$eval('#cesium-credits', (e) => e.innerText);
   const shot = async (name, osm, tiles) => {
     await sleep(300);
     const state = await page.$eval('#cesium-credits', (e) => {

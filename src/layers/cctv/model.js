@@ -1,4 +1,7 @@
-import * as Cesium from 'cesium';
+import { cross, negate, toDegrees, toRadians } from '../../geo/vector.js';
+import { fromAxes } from '../../geo/quaternion.js';
+import { findCamera } from '../../render/rendererOf.js';
+import { greatCircleKm } from '../../geoDistance.js';
 import { staticFrameRefreshMs } from '../../data/cctvLod.js';
 import { frameFetchDue, cardFetchPolicy } from '../../data/cctvCards.js';
 import { DEFAULT_CAMERA_CALIBRATION } from './policy.js';
@@ -13,7 +16,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    */
 
   function toRad(deg) {
-    return Cesium.Math.toRadians(deg);
+    return toRadians(deg);
   }
 
   /**
@@ -95,14 +98,38 @@ export function createModel({ state: layerState, services, parts, source }) {
     return feedType === 'mp4' || feedType === 'hls' || feedType === 'webm';
   }
 
+  /** A browser-only source still counts as live-capable for map icon/LOD policy. */
+  function isVideoFeedCamera(camera) {
+    return (
+      isVideoFeedType(normalizeFeedType(camera?.feedType)) ||
+      Boolean(camera?.browserMediaUrl)
+    );
+  }
+
+  /** Québec source pages and browser-played MP4s use the DOM overlay path. */
+  function isBrowserOverlayCamera(camera) {
+    return String(camera?.sourceKind || '').startsWith('quebec-');
+  }
+
   /**
    * Coerces a value to a finite number or returns the fallback.
+   *
+   * Absent, blank and boolean values return the fallback as well. The source
+   * list serializes an unknown number (NaN) as JSON null, and `Number(null)`
+   * is 0, so without this an unknown pose field arrived as zero and was
+   * clamped to the field's floor instead of taking its default.
    * @param {*} value
    * @param {number} [fallback=NaN]
    * @returns {number}
    */
 
   function safeNumber(value, fallback = NaN) {
+    if (
+      value == null ||
+      typeof value === 'boolean' ||
+      (typeof value === 'string' && !value.trim())
+    )
+      return fallback;
     const n = Number(value);
     return Number.isFinite(n) ? n : fallback;
   }
@@ -283,8 +310,8 @@ export function createModel({ state: layerState, services, parts, source }) {
     const lon2 = lon1 + Math.atan2(y, x);
 
     return {
-      lat: Cesium.Math.toDegrees(lat2),
-      lon: Cesium.Math.toDegrees(lon2),
+      lat: toDegrees(lat2),
+      lon: toDegrees(lon2),
     };
   }
 
@@ -298,12 +325,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    */
 
   function haversineKm(lat1, lon1, lat2, lon2) {
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-    return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return greatCircleKm({ lat: lat1, lon: lon1 }, { lat: lat2, lon: lon2 });
   }
 
   /**
@@ -325,12 +347,22 @@ export function createModel({ state: layerState, services, parts, source }) {
    * @returns {string} Grid key in the form "zoomBucket:latGrid:lonGrid".
    */
 
+  /**
+   * The eye's pose from the camera port, or null when there is no camera or
+   * the eye has no geographic position (the earth's centre).
+   * @returns {object|null}
+   */
+
+  function eyePose() {
+    const pose = findCamera(layerState._viewer)?.pose();
+    return Number.isFinite(pose?.lat) ? pose : null;
+  }
+
   function currentViewContext() {
-    const carto = layerState._viewer?.camera?.positionCartographic;
-    if (!carto) return 'none';
-    const lat = Cesium.Math.toDegrees(carto.latitude);
-    const lon = Cesium.Math.toDegrees(carto.longitude);
-    const alt = carto.height || 0;
+    const pose = eyePose();
+    if (!pose) return 'none';
+    const { lat, lon } = pose;
+    const alt = pose.height || 0;
     const zoomBucket =
       alt < 1500
         ? 'street'
@@ -351,43 +383,13 @@ export function createModel({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Reports whether the active Google Photorealistic 3D Tileset (if any) has
-   * finished loading the tiles in view. Shared mesh-floor sampling is gated on
-   * this so a one-shot cell never bakes in a miss from still-streaming tiles.
-   * Discovers + caches the tileset lazily from scene
-   * primitives (the CCTV module holds only a `_viewer` reference). When no
-   * tileset is present (OSM fallback) this returns true so ground sampling is
-   * not permanently blocked.
-   *
-   * Task 5 (review correction, spec §2): a HIDDEN tileset (`show === false`,
-   * i.e. a globe stack is active) must NOT report ready — Cesium 1.138's
-   * the shared sampler can only inspect *visible* 3D tilesets, so a sample taken
-   * against the hidden Google tileset would silently miss.
-   *
-   * @returns {boolean} True when tiles are loaded AND visible (or no tileset
-   *   exists to wait on).
+   * Whether the photoreal tiles in view have finished loading; the rendering
+   * part, which reads the scene, answers.
+   * @returns {boolean}
    */
 
   function projectionTilesReady() {
-    if (
-      !layerState._activeTileset ||
-      layerState._activeTileset.isDestroyed?.()
-    ) {
-      layerState._activeTileset = null;
-      const primitives = layerState._viewer?.scene?.primitives;
-      if (primitives && typeof primitives.get === 'function') {
-        for (let i = 0; i < primitives.length; i++) {
-          const p = primitives.get(i);
-          if (p instanceof Cesium.Cesium3DTileset && !p.isDestroyed?.()) {
-            layerState._activeTileset = p;
-            break;
-          }
-        }
-      }
-    }
-    if (!layerState._activeTileset) return true;
-    if (layerState._activeTileset.show === false) return false;
-    return layerState._activeTileset.tilesLoaded === true;
+    return parts.rendering.projectionTilesReady();
   }
 
   /**
@@ -398,30 +400,17 @@ export function createModel({ state: layerState, services, parts, source }) {
    * frame-up, so the 16:9 texture maps upright and unmirrored. Static geometry —
    * computed only on slider/save/activation, never per frame (§2b).
    * @param {Object} camera - Camera pose.
-   * @param {Cesium.Cartesian3} capCenterPos - Plane center in ECEF.
-   * @returns {Cesium.Quaternion}
+   * @param {{x: number, y: number, z: number}} capCenterPos - Plane center in ECEF.
+   * @returns {{x: number, y: number, z: number, w: number}} The quaternion.
    */
 
   function planeOrientationFor(camera, capCenterPos) {
     const frame = parts.geometry.frustumFrameEcef(camera, capCenterPos);
-    const right = Cesium.Cartesian3.cross(
-      frame.dir,
-      frame.up,
-      new Cesium.Cartesian3(),
-    );
-    const normal = Cesium.Cartesian3.negate(frame.dir, new Cesium.Cartesian3());
-    const m = new Cesium.Matrix3(
-      right.x,
-      frame.up.x,
-      normal.x,
-      right.y,
-      frame.up.y,
-      normal.y,
-      right.z,
-      frame.up.z,
-      normal.z,
-    );
-    return Cesium.Quaternion.fromRotationMatrix(m);
+    return fromAxes({
+      x: cross(frame.dir, frame.up),
+      y: frame.up,
+      z: negate(frame.dir),
+    });
   }
 
   /**
@@ -440,7 +429,12 @@ export function createModel({ state: layerState, services, parts, source }) {
 
   function projectionLoopIsNeeded() {
     if (!layerState._enabled || !layerState._viewer) return false;
-    if (layerState._showProjection && parts.selection.getActiveRecord())
+    const active = parts.selection.getActiveRecord();
+    if (
+      layerState._showProjection &&
+      active &&
+      !isBrowserOverlayCamera(active.camera)
+    )
       return true;
     return focusPassIsNeeded(
       getFocusTarget(),
@@ -539,6 +533,7 @@ export function createModel({ state: layerState, services, parts, source }) {
     return cameraId !== activeCameraId || record?.activationDone !== true;
   }
   return {
+    eyePose,
     toRad,
     normalizeHeading,
     clamp,
@@ -546,6 +541,8 @@ export function createModel({ state: layerState, services, parts, source }) {
     angularDeltaAbs,
     normalizeFeedType,
     isVideoFeedType,
+    isVideoFeedCamera,
+    isBrowserOverlayCamera,
     safeNumber,
     headingFromId,
     quantize,

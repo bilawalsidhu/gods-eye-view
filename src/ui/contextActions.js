@@ -1,12 +1,26 @@
+import { t, tn } from '../i18n/index.js';
 import {
   settleUserFacingContextAction,
   contextModeWord,
 } from '../contextModePolicy.js';
 
+/** Why a Space Missions entry failed: its mission index never loaded, and
+ * the error is no older than `since` (an earlier attempt's is not the cause). */
+export function spaceMissionsIndexFailure(dataManager, since = 0) {
+  const stats = dataManager?.layers
+    ?.get('rocket-launches')
+    ?.module?.getStats?.();
+  return stats?.error && stats.lastUpdate == null && stats.errorAt >= since
+    ? t(
+        'Space Missions unavailable: the mission index could not load. Try again later.',
+      )
+    : null;
+}
+
 export async function _runUserFacingContextAction(
   operation,
-  message = 'Context could not restore every layer; try again',
-  { falseIsFailure = true } = {},
+  message = t('Context could not restore every layer; try again'),
+  { falseIsFailure = true, localizedMessage = null } = {},
 ) {
   if (this.destroyed) return false;
   const notificationToken = Symbol('user-facing-context-action');
@@ -18,7 +32,10 @@ export async function _runUserFacingContextAction(
       onFailure: (error) => {
         if (this.destroyed) return;
         console.warn('[Context] user-facing transition failed', error);
-        this.showToast(message);
+        this.showToast(
+          localizedMessage ||
+            (typeof message === 'function' ? message() : message),
+        );
       },
     });
   } finally {
@@ -222,21 +239,29 @@ export function clearSelectedLayers() {
   const operation = managerOperation
     .then((result) => {
       if (result.targetIds.length === 0) {
-        this.showToast('No selected data layers');
+        this.showToast(t('No selected data layers'));
       } else if (result.notClearedIds.length > 0) {
         this.showToast(
-          `${result.notClearedIds.length} data layer${result.notClearedIds.length === 1 ? '' : 's'} could not be cleared`,
+          tn(
+            result.notClearedIds.length,
+            '{count} data layer could not be cleared',
+            '{count} data layers could not be cleared',
+          ),
         );
       } else {
         this.showToast(
-          `Cleared ${result.clearedIds.length} data layer${result.clearedIds.length === 1 ? '' : 's'}`,
+          tn(
+            result.clearedIds.length,
+            'Cleared {count} data layer',
+            'Cleared {count} data layers',
+          ),
         );
       }
       return result;
     })
     .catch((error) => {
       console.warn('[Data] clear selected layers failed', error);
-      this.showToast('Selected data layers could not be cleared');
+      this.showToast(t('Selected data layers could not be cleared'));
       return {
         targetIds: [],
         items: [],

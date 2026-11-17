@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import {
   DEFAULT_AIRCRAFT_RECESSION_PARAMS,
   aircraftRecessionFactors,
-  applyAircraftBillboardTreatment,
   applyAircraftModelTreatment,
   cameraLimbDistanceM,
+  aircraftTreatmentAlpha,
 } from './aircraftRecession.js';
 
 const params = { ...DEFAULT_AIRCRAFT_RECESSION_PARAMS };
@@ -66,72 +66,15 @@ test('globe-view transition eases to identity without a threshold pop', () => {
   assert.deepEqual(end, { scale: 1, alpha: 1, limbRatio: null });
 });
 
-test('aircraft billboard wire writes scale and alpha only for the far treatment', () => {
-  const color = { withAlpha: (alpha) => ({ alpha }) };
-  const near = { scale: 1.2, color: { alpha: 0.8 } };
-  const nearResult = applyAircraftBillboardTreatment({
-    billboard: near,
-    baseScale: 1.2,
-    baseAlpha: 0.8,
-    baseColor: color,
-    focusFactor: 1,
-    cameraDistanceM: limb * 0.4,
-    cameraHeightM,
-    params,
-  });
-  assert.equal(nearResult.scaleWrites, 0);
-  assert.equal(nearResult.alphaWrites, 0);
-
-  const far = { scale: 1.2, color: { alpha: 0.8 } };
-  const farResult = applyAircraftBillboardTreatment({
-    billboard: far,
-    baseScale: 1.2,
-    baseAlpha: 0.8,
-    baseColor: color,
-    focusFactor: 0.5,
-    cameraDistanceM: limb,
-    cameraHeightM,
-    params,
-  });
-  assert.equal(farResult.scaleWrites, 1);
-  assert.equal(farResult.alphaWrites, 1);
-  assert.ok(Math.abs(far.scale - (1.2 * 0.45)) < 1e-12);
-  assert.ok(Math.abs(far.color.alpha - (0.8 * 0.20)) < 1e-12);
-});
-
 test('combined focus and haze product is clamped at the composed alpha floor', () => {
-  const color = { withAlpha: (alpha) => ({ alpha }) };
-  const billboard = { scale: 0.45, color: { alpha: 1 } };
-  const result = applyAircraftBillboardTreatment({
-    billboard,
-    baseScale: 1,
+  const alpha = aircraftTreatmentAlpha({
     baseAlpha: 1,
-    baseColor: color,
     focusFactor: 0.25,
     cameraDistanceM: limb,
     cameraHeightM,
     params,
   });
-  assert.equal(result.alpha, 0.20);
-  assert.equal(billboard.color.alpha, 0.20);
-});
-
-test('applyAircraftBillboardTreatment returns its documented module singleton', () => {
-  const color = { withAlpha: (alpha) => ({ alpha }) };
-  const billboard = { scale: 1, color: { alpha: 1 } };
-  const input = {
-    billboard,
-    baseAlpha: 1,
-    baseColor: color,
-    focusFactor: 1,
-    cameraDistanceM: 0,
-    cameraHeightM,
-    params,
-  };
-  const first = applyAircraftBillboardTreatment({ ...input, baseScale: 1 });
-  const second = applyAircraftBillboardTreatment({ ...input, baseScale: 0.5 });
-  assert.strictEqual(first, second);
-  assert.equal(first.scale, 0.5, 'the prior reference reflects the next call');
+  assert.equal(alpha, 0.2);
 });
 
 test('ambient model presentation receives composed alpha without changing blend semantics', () => {
@@ -141,4 +84,37 @@ test('ambient model presentation receives composed alpha without changing blend 
   assert.deepEqual(model.color, { alpha: 0.2, rgb: 'amber' });
   assert.equal(model.colorBlendAmount, 0.9);
   assert.equal(applyAircraftModelTreatment({ model, baseColor: color, alpha: 0.2, params }), 0);
+});
+
+
+test('model hue changes at constant alpha, then clears without redundant writes', () => {
+  const color = (red,green,blue) => ({red,green,blue,withAlpha(alpha){return {red,green,blue,alpha};}});
+  const model = {color:color(1,1,1).withAlpha(0.65)};
+  assert.equal(applyAircraftModelTreatment({model,baseColor:color(1,0.2,0.2),alpha:0.65}),1);
+  assert.equal(model.color.green,0.2);
+  assert.equal(model.color.alpha,0.65);
+  assert.equal(applyAircraftModelTreatment({model,baseColor:color(1,0.2,0.2),alpha:0.65}),0);
+  assert.equal(applyAircraftModelTreatment({model,baseColor:color(1,1,1),alpha:0.65}),1);
+  assert.equal(model.color.green,1);
+});
+
+test('the aircraft sets recede by the tuning: one object until it changes', async () => {
+  const {
+    aircraftRecedeSpec,
+    setAircraftRecessionParams,
+    resetAircraftRecessionParams,
+  } = await import('./aircraftRecession.js');
+  const { RECEDE_DEFAULTS } = await import('../render/recession.js');
+  resetAircraftRecessionParams();
+  const first = aircraftRecedeSpec();
+  assert.deepEqual(first, { ...RECEDE_DEFAULTS });
+  assert.equal(aircraftRecedeSpec(), first);
+  setAircraftRecessionParams({ scaleFloor: 0.6, globeViewHeightM: 4_000_000 });
+  const tuned = aircraftRecedeSpec();
+  assert.notEqual(tuned, first);
+  assert.equal(tuned.scaleFloor, 0.6);
+  assert.equal(tuned.globeViewBlendEndM, 4_000_000);
+  assert.equal('writeEpsilon' in tuned, false);
+  resetAircraftRecessionParams();
+  assert.deepEqual(aircraftRecedeSpec(), first);
 });

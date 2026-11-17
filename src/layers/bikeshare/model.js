@@ -5,6 +5,7 @@ import {
   parseStationStatus,
   toNonNegativeInteger,
 } from '../../sources/gbfsStations.js';
+import { greatCircleKm } from '../../geoDistance.js';
 
 export function createModel({ state: layerState, services, parts, source }) {
   /**
@@ -28,15 +29,31 @@ export function createModel({ state: layerState, services, parts, source }) {
    */
 
   function haversineKm(aLat, aLon, bLat, bLon) {
-    const toRad = (value) => (value * Math.PI) / 180;
-    const dLat = toRad(bLat - aLat);
-    const dLon = toRad(bLon - aLon);
-    const p1 = toRad(aLat);
-    const p2 = toRad(bLat);
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(p1) * Math.cos(p2) * Math.sin(dLon / 2) ** 2;
-    return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return greatCircleKm({ lat: aLat, lon: aLon }, { lat: bLat, lon: bLon });
+  }
+
+  /**
+   * Drop stations outside a city's load radius. Some operators list depots on
+   * other continents as in-service stations in a city's feed (Bogotá's and
+   * Santiago's PBSC feeds carry warehouses in São Paulo and Madrid), which
+   * would otherwise draw as live docks thousands of kilometres away.
+   * @param {{ centerLat: number, centerLon: number, loadRadiusKm: number }} city
+   * @param {Map<string, Object>} stationMap - Parsed station info map.
+   * @returns {Map<string, Object>} Stations within the city's load radius.
+   */
+
+  function stationsWithinCity(city, stationMap) {
+    const kept = new Map();
+    for (const [stationId, station] of stationMap) {
+      const distance = haversineKm(
+        city.centerLat,
+        city.centerLon,
+        station.lat,
+        station.lon,
+      );
+      if (distance <= city.loadRadiusKm) kept.set(stationId, station);
+    }
+    return kept;
   }
 
   return {
@@ -44,6 +61,7 @@ export function createModel({ state: layerState, services, parts, source }) {
     toNonNegativeInteger,
     stationKey,
     haversineKm,
+    stationsWithinCity,
     extractStationsArray,
     parseStationInformation,
     parseStationStatus,

@@ -25,12 +25,13 @@
  * Visual proof saved to qa-shots/ (gitignored).
  *
  * Run:  node scripts/qa-traffic.mjs --url http://localhost:4410
- * Add --fixtures for synthetic roads and the recorded flow tile without a key;
- * that mode does not qualify live source access or quota accounting.
+ * Add --fixtures for synthetic road/flow tiles and a flat terrain surface without a key;
+ * that mode does not qualify geographic terrain, live source access or quota accounting.
  * Exits non-zero on any FAIL. Does not commit anything.
  */
 
 import puppeteer from 'puppeteer';
+import { captureQaScreenshot } from './qa-chrome.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -44,10 +45,12 @@ const getOpt = (name, dflt) => {
   const i = argv.indexOf(name);
   return i >= 0 && argv[i + 1] ? argv[i + 1] : dflt;
 };
-const APP_URL = getOpt('--url', 'http://localhost:4410');
+const appUrl = new URL(getOpt('--url', 'http://localhost:4410'));
+appUrl.searchParams.set('welcome', '0');
+const APP_URL = appUrl.href;
 const HEADFUL = argv.includes('--headful');
 const FIXTURES = argv.includes('--fixtures');
-const fixtureResponse = FIXTURES ? (await import('./traffic-fixtures.mjs')).trafficFixtureResponse : () => null;
+const { installTrafficRoutes } = await import('./traffic-fixtures.mjs');
 
 const CHROME_EXECUTABLE_CANDIDATES = [
   process.env.PUPPETEER_EXECUTABLE_PATH,
@@ -80,6 +83,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Enable traffic + teleport, then poll the layer until settled. */
 async function settleTraffic(page, view, { minCount = 1, timeoutS = 30 } = {}) {
+  // The app deliberately stops rendering hidden pages. Programmatic camera
+  // changes do not activate a headful window the way a real UI click does.
+  await page.bringToFront();
+  await page.waitForFunction(() => document.visibilityState === 'visible');
   return page.evaluate(async (v, minC, tS) => {
     const gev = window.__godsEyeView;
     const dm = gev.dataManager;
@@ -97,6 +104,7 @@ async function settleTraffic(page, view, { minCount = 1, timeoutS = 30 } = {}) {
     });
     let s = null;
     for (let i = 0; i < tS; i++) {
+      if (document.visibilityState !== 'visible') throw new Error('Traffic QA page became hidden; rendering is intentionally paused');
       await new Promise((r) => setTimeout(r, 1000));
       s = mod.getStats();
       // Retained roads from the previous city can satisfy count/loading before
@@ -113,17 +121,21 @@ async function main() {
 
   try {
     const res = await fetch(APP_URL);
+    // Only the status matters; an unread body can hold the socket open.
+    await res.body?.cancel();
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   } catch (e) {
     console.error(`\x1b[31mDev server not reachable at ${APP_URL} (${e.message}).\x1b[0m`);
-    process.exit(2);
+    process.exitCode = 2;
+    return;
   }
 
-  const statusBefore = FIXTURES ? {hasKey:true,dailyCount:0} : await fetch(`${APP_URL}/api/tomtom/status`).then((r) => r.json()).catch(() => null);
-  if (FIXTURES) console.log('Source mode: synthetic roads and recorded flow tiles; live quota is not qualified.');
+  const statusBefore = FIXTURES ? {hasKey:true,dailyCount:0} : await fetch(`${appUrl.origin}/api/tomtom/status`).then((r) => r.json()).catch(() => null);
+  if (FIXTURES) console.log('Source mode: synthetic road/flow tiles and a flat terrain surface; live quota is not qualified.');
   if (!statusBefore?.hasKey) {
     console.error('\x1b[31mServer has no TomTom key — run against the keyed dev server (:4410).\x1b[0m');
-    process.exit(2);
+    process.exitCode = 2;
+    return;
   }
 
   fs.mkdirSync(SHOTS_DIR, { recursive: true });
@@ -131,8 +143,10 @@ async function main() {
     headless: HEADFUL ? false : 'new',
     ...(findChromeExecutable() ? { executablePath: findChromeExecutable() } : {}),
     args: [
-      '--no-sandbox', '--disable-setuid-sandbox', '--use-gl=angle', '--use-angle=swiftshader',
-      '--disable-dev-shm-usage', '--disable-web-security',
+      '--no-sandbox', '--disable-setuid-sandbox',
+      ...(!HEADFUL ? ['--use-gl=angle', '--use-angle=swiftshader'] : []),
+      '--disable-backgrounding-occluded-windows',
+      '--disable-dev-shm-usage',
       '--disable-background-timer-throttling', '--disable-renderer-backgrounding',
       '--window-size=1440,900',
     ],
@@ -140,24 +154,22 @@ async function main() {
 
   let exitCode = 0;
   try {
-    const page = await browser.newPage();
-    const onFixture = (request) => {
-      const response = fixtureResponse(request);
-      if (response) void request.respond(response); else void request.continue();
-    };
-    if (FIXTURES) { await page.setRequestInterception(true); page.on('request', onFixture); }
+    let page = await browser.newPage();
+    // Keep this visible-page regression deterministic even if the OS starts
+    // Chrome minimized. Use browser focus emulation, not patched DOM getters.
+    const focusSession = await page.createCDPSession();
+    await focusSession.send('Emulation.setFocusEmulationEnabled', { enabled: true });
     await page.setViewport({ width: 1440, height: 900 });
 
-    // Track flow-tile requests + traffic console lines for (ii)/(iii)/(v).
+    // Track flow-tile requests for the (iii) budget check.
     const flowRequests = [];
     page.on('request', (req) => {
       if (req.url().includes('/api/tomtom/flow/')) flowRequests.push(req.url());
     });
-    const trafficLogs = [];
-    page.on('console', (msg) => {
-      const t = msg.text();
-      if (t.includes('[Data:Traffic]')) trafficLogs.push(t);
-    });
+    const pageErrors = [];
+    if (FIXTURES) await installTrafficRoutes(page, { origin: appUrl.origin, fixtures: true, onError: error => pageErrors.push(error.message) });
+    page.on('pageerror', error => { pageErrors.push(error.message); console.error('PAGE ERROR:', error.message); });
+    page.on('console', message => { if (message.type() === 'error') console.error('BROWSER ERROR:', message.text()); });
 
     console.log('Loading app...');
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -190,7 +202,7 @@ async function main() {
         `coverage=${mumbai.flowCoveragePct}% tiles=${mumbai.tilesFetched}`);
       if (mumbai.mode !== 'live' || !(mumbai.count > 0) || !(colored > 0)) exitCode = 1;
       await sleep(1200);
-      await page.screenshot({ path: path.join(SHOTS_DIR, 'traffic-live-flow.png') });
+      await captureQaScreenshot(page, { path: path.join(SHOTS_DIR, 'traffic-live-flow.png') }, { headful: HEADFUL });
     }
 
     // ── (iv) uncovered-roads param — hide vs sim ─────────────────────────────
@@ -223,7 +235,7 @@ async function main() {
         (hid.flowBuckets?.sim || 0) === 0 && hid.count > 0,
         `count=${hid.count} sim=${hid.flowBuckets?.sim}`);
       if ((hid.flowBuckets?.sim || 0) !== 0) exitCode = 1;
-      await page.screenshot({ path: path.join(SHOTS_DIR, 'traffic-live-hide-mode.png') });
+      await captureQaScreenshot(page, { path: path.join(SHOTS_DIR, 'traffic-live-hide-mode.png') }, { headful: HEADFUL });
     } else {
       record('PARAM: hide mode renders zero sim (white) dots', null,
         'view had 100% coverage (no sim dots to hide) — inconclusive here, covered by unit tests');
@@ -231,30 +243,26 @@ async function main() {
 
     // ── (ii) C4 oblique bounds ───────────────────────────────────────────────
     console.log('\n(ii) C4 — oblique fetch bounds land at the look-at point...');
-    trafficLogs.length = 0;
-    await settleTraffic(page, { lon: -97.72, lat: 30.245, height: 2500, heading: 315, pitch: -20 }, { minCount: 100 });
+    const oblique = await settleTraffic(page, { lon: -97.72, lat: 30.245, height: 2500, heading: 315, pitch: -20 }, { minCount: 100 });
     {
-      const fetchLine = trafficLogs.find((t) => t.includes('fetch') && t.includes('['));
-      let ok = false; let detail = 'no fetch log captured';
-      if (fetchLine) {
-        const m = fetchLine.match(/\[(-?[\d.]+),(-?[\d.]+),(-?[\d.]+),(-?[\d.]+)\]/);
-        if (m) {
-          const [s, w, n, e] = m.slice(1).map(Number);
-          const cLat = (s + n) / 2; const cLon = (w + e) / 2;
-          const dKm = Math.sqrt(((cLat - 30.245) * 111) ** 2 + ((cLon - (-97.72)) * 111 * Math.cos(30.27 * Math.PI / 180)) ** 2);
-          ok = dKm > 1 && dKm <= 13; // look-at ~6.9 km ahead; clamp allows ≤12 (+margin)
-          detail = `box center (${cLat.toFixed(4)},${cLon.toFixed(4)}) is ${dKm.toFixed(1)} km from camera (want 1–13 km; pre-fix bug: 25+ km)`;
-        }
+      const bounds = oblique?.roadBounds;
+      let ok = false; let detail = 'no road bounds published';
+      if (bounds) {
+        const cLat = (bounds.south + bounds.north) / 2;
+        const cLon = (bounds.west + bounds.east) / 2;
+        const dKm = Math.hypot((cLat - 30.245) * 111, (cLon + 97.72) * 111 * Math.cos(30.27 * Math.PI / 180));
+        ok = dKm > 1 && dKm <= 13;
+        detail = `road box center is ${dKm.toFixed(1)} km from camera (want 1–13 km)`;
       }
       record('C4: oblique fetch box centers on the look-at point', ok, detail);
       if (!ok) exitCode = 1;
-      await page.screenshot({ path: path.join(SHOTS_DIR, 'traffic-c4-oblique.png') });
+      await captureQaScreenshot(page, { path: path.join(SHOTS_DIR, 'traffic-c4-oblique.png') }, { headful: HEADFUL });
     }
 
     // ── (iii) budget honesty ─────────────────────────────────────────────────
     console.log('\n(iii) Budget — dailyCount grew by ≤ requests this run...');
     {
-      const statusAfter = FIXTURES ? statusBefore : await fetch(`${APP_URL}/api/tomtom/status`).then((r) => r.json());
+      const statusAfter = FIXTURES ? statusBefore : await fetch(`${appUrl.origin}/api/tomtom/status`).then((r) => r.json());
       const grew = statusAfter.dailyCount - statusBefore.dailyCount;
       const ok = grew >= 0 && grew <= flowRequests.length;
       record('BUDGET: /api/tomtom/status growth ≤ page tile requests', FIXTURES ? null : ok,
@@ -264,25 +272,22 @@ async function main() {
 
     // ── (v) KEYLESS fallback (intercepted — server key untouched) ────────────
     console.log('\n(v) KEYLESS — intercepted status, expect pure simulation...');
-    if (FIXTURES) page.off('request', onFixture);
-    await page.setRequestInterception(true);
+    // Keyless is an independent fresh-session contract. Close the keyed page
+    // so its workers, terrain work and intercepted cache cannot leak into it.
+    await page.close();
+    page = await browser.newPage();
+    await page.setViewport({ width: 1440, height: 900 });
+    const keylessFocus = await page.createCDPSession();
+    await keylessFocus.send('Emulation.setFocusEmulationEnabled', { enabled: true });
+    page.on('pageerror', error => { pageErrors.push(error.message); console.error('PAGE ERROR:', error.message); });
+    page.on('console', message => { if (message.type() === 'error') console.error('BROWSER ERROR:', message.text()); });
     const keylessFlowReqs = [];
-    page.on('request', (req) => {
-      const url = req.url();
-      if (url.includes('/api/tomtom/status')) {
-        req.respond({ status: 200, contentType: 'application/json', body: JSON.stringify({ hasKey: false }) });
-        return;
-      }
-      if (url.includes('/api/tomtom/flow/')) {
-        keylessFlowReqs.push(url);
-        req.respond({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'no_key' }) });
-        return;
-      }
-      const response = fixtureResponse(req);
-      if (response) { void req.respond(response); return; }
-      try { req.continue(); } catch { /* already handled */ }
+    await installTrafficRoutes(page, {
+      origin: appUrl.origin, fixtures: FIXTURES, keyless: true,
+      onFlow: url => keylessFlowReqs.push(url),
+      onError: error => pageErrors.push(error.message),
     });
-    await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(
       () => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
       { timeout: 60000 },
@@ -312,8 +317,9 @@ async function main() {
         exitCode = 1;
       }
       await sleep(1000);
-      await page.screenshot({ path: path.join(SHOTS_DIR, 'traffic-sim-keyless.png') });
+      await captureQaScreenshot(page, { path: path.join(SHOTS_DIR, 'traffic-sim-keyless.png') }, { headful: HEADFUL });
     }
+    record('BROWSER: no uncaught page exceptions', pageErrors.length === 0, pageErrors.join('; '));
   } catch (e) {
     console.error('\x1b[31mHarness error:\x1b[0m', e);
     exitCode = 3;

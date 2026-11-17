@@ -10,7 +10,10 @@ export const MARKER_LIFT_M = 2.5;
 
 export const SELECTED_LIFT_M = 5;
 
-export const RADIO_PICK_TOLERANCE_PX = 8;
+const RADIO_PICK_TOLERANCE_PX = 8;
+
+/** A click this close to a station picks it: one drill window of this size. */
+export const RADIO_PICK_WINDOW_PX = RADIO_PICK_TOLERANCE_PX * 2 + 1;
 
 export const RADIO_TUNER_DIRECTORY_LIMIT = 750;
 
@@ -23,6 +26,10 @@ export const RADIO_VOICE_PLAYBACK_TIMEOUT_MS = 12_000;
 export const RADIO_DIRECTORY_STALE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const RADIO_DIRECTORY_FUTURE_SKEW_MS = 5 * 60 * 1000;
+
+// Bound for the server's `rejectedStationCount` envelope field and the
+// combined client counter; matches server/providers/radio/constants.js.
+export const RADIO_REJECTED_STATION_COUNT_MAX = 10_000;
 
 export const RADIO_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -47,47 +54,40 @@ export const RADIO_OVERLAY_SOURCE_OPTIONS = Object.freeze({
   moving: false,
 });
 
-export const RADIO_PICK_OFFSETS = Object.freeze([
-  [0, -RADIO_PICK_TOLERANCE_PX],
-  [RADIO_PICK_TOLERANCE_PX, 0],
-  [0, RADIO_PICK_TOLERANCE_PX],
-  [-RADIO_PICK_TOLERANCE_PX, 0],
-  [6, -6],
-  [6, 6],
-  [-6, 6],
-  [-6, -6],
-]);
-
 export const DEFAULT_RADIO_FILTER = 'all';
 
 export const GLOBAL_RADIO_ALTITUDE_M = 2_000_000;
 
+// Genre labels stay English data (the radio source, shared with the AI tools,
+// imports this module); categories.js translates them.
+const msg = (text) => text;
+
 export const MUSIC_GENRES = Object.freeze([
-  ['alternative', 'Alternative'],
-  ['ambient', 'Ambient'],
-  ['blues', 'Blues'],
-  ['classical', 'Classical'],
-  ['country', 'Country'],
-  ['dance', 'Dance'],
-  ['electronic', 'Electronic'],
-  ['folk', 'Folk'],
-  ['funk', 'Funk'],
-  ['hip hop', 'Hip-Hop'],
-  ['house', 'House'],
-  ['indie', 'Indie'],
-  ['jazz', 'Jazz'],
-  ['latin', 'Latin'],
-  ['metal', 'Metal'],
-  ['oldies', 'Oldies'],
-  ['pop', 'Pop'],
-  ['punk', 'Punk'],
-  ['r&b', 'R&B'],
-  ['reggae', 'Reggae'],
-  ['rock', 'Rock'],
-  ['soul', 'Soul'],
-  ['techno', 'Techno'],
-  ['trance', 'Trance'],
-  ['world', 'World'],
+  ['alternative', msg('Alternative')],
+  ['ambient', msg('Ambient')],
+  ['blues', msg('Blues')],
+  ['classical', msg('Classical')],
+  ['country', msg('Country')],
+  ['dance', msg('Dance')],
+  ['electronic', msg('Electronic')],
+  ['folk', msg('Folk')],
+  ['funk', msg('Funk')],
+  ['hip hop', msg('Hip-Hop')],
+  ['house', msg('House')],
+  ['indie', msg('Indie')],
+  ['jazz', msg('Jazz')],
+  ['latin', msg('Latin')],
+  ['metal', msg('Metal')],
+  ['oldies', msg('Oldies')],
+  ['pop', msg('Pop')],
+  ['punk', msg('Punk')],
+  ['r&b', msg('R&B')],
+  ['reggae', msg('Reggae')],
+  ['rock', msg('Rock')],
+  ['soul', msg('Soul')],
+  ['techno', msg('Techno')],
+  ['trance', msg('Trance')],
+  ['world', msg('World')],
 ]);
 
 export const CATEGORY_MATCHERS = Object.freeze({
@@ -125,17 +125,6 @@ export const RADIO_CATEGORY_COLORS = Object.freeze({
   'traffic-transit': '#ffd166',
   music: '#54d17a',
   other: '#9aa7b3',
-});
-
-export const RADIO_CLUSTER_LABELS = Object.freeze({
-  news: 'NEWS',
-  talk: 'TALK',
-  weather: 'WEATHER',
-  'public-safety': 'SAFETY',
-  'aviation-marine': 'AIR / SEA',
-  'traffic-transit': 'TRANSIT',
-  music: 'MUSIC',
-  other: 'OTHER',
 });
 
 export const RADIO_MARKER_CATEGORY_ORDER = Object.freeze([

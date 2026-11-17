@@ -20,7 +20,7 @@
  *    jam keeps a size bump so queues read as fat beads.
  *  - `crt` (retro): saturated primaries that survive 10-level posterization
  *    plus an all-bucket size boost to out-shout the pixel grid.
- *  - `normal` (normal/anime/snow/unknown): every lookup returns null/0 —
+ *  - `normal` (normal/anime/unknown): every lookup returns null/0 —
  *    the shipped palette and sizing apply untouched.
  *
  * Sim/uncovered dots (bucket null/'sim') are NEVER restyled under any

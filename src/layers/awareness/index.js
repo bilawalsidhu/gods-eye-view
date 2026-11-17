@@ -13,7 +13,14 @@ import { createControls } from './controls.js';
 import { createIngestion } from './ingestion.js';
 import { createState } from './state.js';
 
-/** Construct one layer with its own scene state and supplied application services. */
+/**
+ * Construct one layer with its own scene state and supplied application services.
+ *
+ * Its context rim is a renderer draw set (`drawOf(viewer)`) and its flights
+ * go through `cameraOf`. Given a Cesium viewer with no
+ * renderer bound, the caller loads the package's `./render/cesium/unbound`
+ * export first.
+ */
 export function createAwarenessLayer({ services, source }) {
   const state = createState({ services });
   const parts = {};
@@ -51,12 +58,13 @@ export function createAwarenessLayer({ services, source }) {
         parts.queries.collectAircraftProximityWindow,
       _getAwarenessNavigationStateForTest:
         parts.testing._getAwarenessNavigationStateForTest,
+      _getAwarenessPanelRendersForTest:
+        parts.testing._getAwarenessPanelRendersForTest,
       canNavigateAwarenessNext: parts.navigation.canNavigateAwarenessNext,
       historySubjectSnapshot: parts.history.historySubjectSnapshot,
       findCompatibleHistoryIndex: parts.history.findCompatibleHistoryIndex,
-      awarenessPanelControlKey: parts.panel.awarenessPanelControlKey,
-      captureAwarenessPanelFocus: parts.panel.captureAwarenessPanelFocus,
-      restoreAwarenessPanelFocus: parts.panel.restoreAwarenessPanelFocus,
+      subscribePanel: parts.panel.subscribePanel,
+      subscribeDirectionOverlay: parts.rendering.subscribeDirectionOverlay,
       awarenessResultsAreLive: parts.panel.awarenessResultsAreLive,
       awarenessNeedsContinuousRender:
         parts.model.awarenessNeedsContinuousRender,

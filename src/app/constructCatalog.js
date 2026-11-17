@@ -1,9 +1,12 @@
+import { resolveCatalogSources } from './sourceComposition.js';
 import { createWeatherClock } from '../layers/weather/clock.js';
+import { worldClock } from '../time/worldClock.js';
+import { NEWS_LAYER_ID } from '../layers/news/model.js';
 import { createWeatherLayer } from '../layers/weather/index.js';
-import { createCyclonesLayer } from '../layers/cyclones/index.js';
+import { createApplicationCyclones } from './layers/cyclones.js';
 import { createWindLayer } from '../layers/wind/index.js';
 import { createLayerCatalog } from './catalog.js';
-import { MAPILLARY_SOURCE_METHODS } from '../layers/streetLevel/providers/mapillary/policy.js';
+import { layerPlacement } from '../data/placementProvider.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
 import { createMilitaryRegistry } from '../layers/aircraft/classification.js';
 import { createApplicationFlights } from './layers/flights.js';
@@ -15,7 +18,9 @@ import { createApplicationTraffic } from './layers/traffic.js';
 import { createApplicationBikeshare } from './layers/bikeshare.js';
 import { createApplicationDirections } from './layers/directions.js';
 import { createApplicationRecentImagery } from './layers/recentImagery.js';
+import { createApplicationOsmPlaces } from './layers/osmPlaces.js';
 import { createApplicationTransit } from './layers/transit.js';
+import { createApplicationRail } from './layers/rail.js';
 import { createApplicationInstallations } from './layers/militaryInstallations.js';
 import { createApplicationSatellites } from './layers/satellites.js';
 import { createApplicationLaunches } from './layers/rocketLaunches.js';
@@ -24,41 +29,21 @@ import { createApplicationLocalAdsb } from './layers/localAdsb.js';
 import { createApplicationAwareness } from './layers/militaryAwareness.js';
 import { createApplicationFirms } from './layers/firms.js';
 import { createApplicationEarthquakes } from './layers/earthquakes.js';
+import { createApplicationAirQuality } from './layers/airQuality.js';
 import { createApplicationFirePerimeters } from './layers/perimeters.js';
+import { createApplicationGnssIntegrity } from './layers/gnss.js';
+import { createApplicationGhostMaps } from './layers/ghostMaps.js';
+import { createApplicationShipwrecks } from './layers/shipwrecks.js';
+import { createApplicationDroneAirspace } from './layers/droneAirspace.js';
+import { createApplicationNews } from './layers/news.js';
+import { createApplicationWildlifeSightings } from './layers/wildlifeSightings.js';
 import { createApplicationCables } from './layers/submarineCables.js';
+import { createOsmOverlayLayers } from '../data/osmOverlays.js';
 import { createApplicationStreetLevel } from './layers/streetLevel.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
 import { createBhoteKoshiEventLayer } from '../data/bhoteKoshiEvent.js';
 import { createBhoteKoshiLocatorLayer } from '../data/bhoteKoshiLocator.js';
-
-const SOURCE_METHODS = Object.freeze({
-  flights: ['getSnapshot'],
-  military: ['getSnapshot'],
-  vessels: ['getSnapshot'],
-  cctv: ['getCatalog', 'getHealth', 'getFrameUrl', 'getMediaUrl'],
-  radio: ['getDirectory', 'recordClick'],
-  traffic: [
-    'requestRoads',
-    'getStatus',
-    'fetchFlowForBounds',
-    'getFlowSessionStats',
-    'resetFlowTileCache',
-  ],
-  bikeshare: ['getStations'],
-  installations: ['getMappedSites', 'searchNearby'],
-  satellites: ['readGroup'],
-  launches: ['getLaunches', 'getActiveTle'],
-  alpr: ['fetch'],
-  firms: ['getSnapshot'],
-  wind: ['getSnapshot'],
-  weather: ['getSnapshot'],
-  cyclones: ['getSnapshot'],
-  earthquakes: ['getSnapshot'],
-  'fire-perimeters': ['getSnapshot'],
-  cables: ['fetch'],
-  mapillary: MAPILLARY_SOURCE_METHODS,
-});
 
 /**
  * Hardware-local layers are registered like any other but never enter share
@@ -66,6 +51,8 @@ const SOURCE_METHODS = Object.freeze({
  */
 export const LOCAL_ONLY_LAYER_METADATA = Object.freeze([
   Object.freeze({ id: 'local-adsb', disposition: 'local-only' }),
+  // Voice search results belong to this session, like a receiver to this machine.
+  Object.freeze({ id: 'osm-places', disposition: 'local-only' }),
 ]);
 
 /** Serialization metadata for every layer the application catalog constructs. */
@@ -77,6 +64,9 @@ export const APPLICATION_LAYER_METADATA = Object.freeze([
 /** Construct the current catalog without choosing any source provider.
  * Scene engines remain page-owned; layers and classification have this app's lifetime.
  * The manager owns layer destruction, while abort releases classification even if startup fails.
+ * `placement`, a host-supplied placement provider (../data/placementProvider.js),
+ * places live aircraft, vessels, transit and trains; without one each layer
+ * uses its own motion.
  */
 export function createApplicationCatalog({
   surface,
@@ -84,8 +74,11 @@ export function createApplicationCatalog({
   signal,
   metadata = APPLICATION_LAYER_METADATA,
   vesselOptions,
+  newsOptions,
   resolveAsset,
   nepalBoundaryResolver,
+  streetLevelProviders,
+  placement = null,
 }) {
   if (!signal?.addEventListener)
     throw new TypeError('An application lifetime signal is required');
@@ -93,14 +86,10 @@ export function createApplicationCatalog({
   if (!surface?.groundFloor || !surface?.terrain)
     throw new TypeError('Application surface services are required');
 
-  for (const [name, methods] of Object.entries(SOURCE_METHODS)) {
-    if (
-      methods.some((method) => typeof sources?.[name]?.[method] !== 'function')
-    )
-      throw new TypeError(`Invalid catalog source: ${name}`);
-  }
+  const sourceComposition = resolveCatalogSources(sources);
+  sources = sourceComposition.sources;
   const militaryRegistry = createMilitaryRegistry();
-  const weatherClock = createWeatherClock();
+  const weatherClock = createWeatherClock({ world: worldClock });
   const dispose = () => {
     signal.removeEventListener('abort', dispose);
     militaryRegistry.dispose();
@@ -108,22 +97,28 @@ export function createApplicationCatalog({
   };
   signal.addEventListener('abort', dispose, { once: true });
   try {
-    militaryRegistry.configureSource(sources.military, { signal });
+    if (sourceComposition.isConfigured('military'))
+      militaryRegistry.configureSource(sources.military, { signal });
     const flights = createApplicationFlights({
       surface,
       source: sources.flights,
+      placement: layerPlacement(placement, 'aircraft'),
       militaryRegistry,
       resolveAsset,
     });
     const military = createApplicationMilitary({
       surface,
       source: sources.military,
+      placement: layerPlacement(placement, 'military'),
       militaryRegistry,
       resolveAsset,
     });
     const vessels = createApplicationVessels({
       source: sources.vessels,
+      placement: layerPlacement(placement, 'vessels'),
       options: vesselOptions,
+      displayParams: () => flights.getParams(),
+      ...(resolveAsset ? { resolveAsset } : {}),
     });
     const installations = createApplicationInstallations({
       surface,
@@ -147,23 +142,52 @@ export function createApplicationCatalog({
           ...(resolveAsset ? { resolveAsset } : {}),
         }),
         createApplicationEarthquakes({ source: sources.earthquakes }),
+        createApplicationAirQuality({ source: sources['air-quality'] }),
         createApplicationFirePerimeters({
           source: sources['fire-perimeters'],
+        }),
+        createApplicationGnssIntegrity({
+          source: sources['gnss-integrity'],
+          windowMs: sources['gnss-integrity'].windowMs,
+        }),
+        createApplicationGhostMaps({ source: sources['s2-ghostmaps'] }),
+        createApplicationShipwrecks({ source: sources.shipwrecks }),
+        createApplicationDroneAirspace({
+          source: sources['drone-airspace'],
+        }),
+        // Ages, the window and the counts read the world clock: a host that
+        // follows it for the layer shows the news at the time on the timeline.
+        createApplicationNews({
+          now: worldClock.timeFor(NEWS_LAYER_ID),
+          ...newsOptions,
+          source: sources.news,
+        }),
+        createApplicationWildlifeSightings({
+          source: sources['wildlife-sightings'],
+          groundFloor: surface.groundFloor,
         }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         createApplicationStreetLevel({
           surface,
           sources: { mapillary: sources.mapillary },
+          providers: streetLevelProviders,
         }),
         satellites,
         createApplicationLaunches({ source: sources.launches, satellites }),
         createApplicationTraffic({ source: sources.traffic, surface }),
         createApplicationCctv({ surface, source: sources.cctv }),
         createApplicationRadio({ surface, source: sources.radio }),
-        createApplicationTransit({ surface, source: sources.transit }),
+        createApplicationTransit({
+          surface,
+          source: sources.transit,
+          placement: layerPlacement(placement, 'transit'),
+          displayParams: () => flights.getParams(),
+          ...(resolveAsset ? { resolveAsset } : {}),
+        }),
         createApplicationBikeshare({ source: sources.bikeshare }),
-        createApplicationDirections(),
-        createApplicationRecentImagery(),
+        createApplicationDirections({ source: sources.directions }),
+        createApplicationRecentImagery({ source: sources['recent-imagery'] }),
+        createApplicationOsmPlaces(),
         vessels,
         installations,
         createApplicationAwareness({
@@ -188,9 +212,17 @@ export function createApplicationCatalog({
           id: 'weather-lightning',
           clock: weatherClock,
         }),
-        createCyclonesLayer({ feed: sources.cyclones }),
+        createApplicationCyclones({ feed: sources.cyclones }),
+        ...createOsmOverlayLayers(),
         ...createInfrastructureLayers(localGeoJsonServices),
         createApplicationCables({ source: sources.cables }),
+        createApplicationRail({
+          surface,
+          source: sources.rail,
+          placement: layerPlacement(placement, 'rail'),
+          displayParams: () => flights.getParams(),
+          ...(resolveAsset ? { resolveAsset } : {}),
+        }),
         createApplicationFirms({
           surface,
           id: 'local-firms',
@@ -204,6 +236,9 @@ export function createApplicationCatalog({
     );
     return Object.freeze({
       ...catalog,
+      getSourceAvailability: sourceComposition.createAvailabilityLookup(
+        catalog.layers,
+      ),
       militaryRegistry,
       surface,
       weatherClock,

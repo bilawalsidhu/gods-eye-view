@@ -7,10 +7,40 @@ import {
   polygonCentroid,
   clipTileLine,
   createOpenFreeMapSource,
+  estimateOpenFreeMapProjectionBytes,
 } from './openFreeMap.js';
-import { createVectorTileSource } from './vectorTiles.js';
+import {
+  createSharedDecodedTileCache,
+  createVectorTileSource,
+} from './vectorTiles.js';
 const fixture = (name) =>
   readFileSync(new URL(`../data/fixtures/${name}`, import.meta.url));
+
+test('projected tile geometry has deterministic accounting and a coordinate cap', () => {
+  const small = {
+    streets: [
+      {
+        name: 'A',
+        coordinates: [
+          [0, 1],
+          [2, 3],
+        ],
+      },
+    ],
+  };
+  assert.equal(
+    estimateOpenFreeMapProjectionBytes(small),
+    estimateOpenFreeMapProjectionBytes(structuredClone(small)),
+  );
+  assert.ok(estimateOpenFreeMapProjectionBytes(small) > 4 * 8);
+  assert.throws(
+    () =>
+      estimateOpenFreeMapProjectionBytes({
+        coordinates: Array.from({ length: 250_001 }, () => [0, 0]),
+      }),
+    /coordinate limit/,
+  );
+});
 
 test('real z14 and z12 Austin tiles decode only drivable roads', () => {
   for (const [z, x, y, name] of [
@@ -116,6 +146,36 @@ test('Camp Mabry tile emits an unnamed polygon and its centroid marker', () => {
     ]),
     [4 / 3, 4 / 3],
   );
+});
+
+test('a shared consumer is charged only its own slice of each tile', async () => {
+  const bytes = fixture('ofm-austin-14-3743-6745.pbf');
+  const sharedDecodedCache = createSharedDecodedTileCache({
+    maxEntries: 4,
+    maxCacheBytes: 64 * 1024 * 1024,
+  });
+  const source = createOpenFreeMapSource({
+    template: 'https://tiles.openfreemap.org/planet/v/test/{z}/{x}/{y}.pbf',
+    sharedDecodedCache,
+    selectDecoded: ({ military }) => ({ military }),
+    fetchImpl: async () => new Response(bytes),
+  });
+  try {
+    const box = { south: 30.267, north: 30.268, west: -97.744, east: -97.743 };
+    const { tiles } = await source.fetchBounds(box, { zoom: 14 });
+    const stats = source.getStats();
+    assert.equal(stats.cacheEntries, 1);
+    assert.equal(
+      stats.cacheBytes,
+      estimateOpenFreeMapProjectionBytes(tiles[0]),
+      'the slice estimate, not the whole decoded tile',
+    );
+    assert.ok(stats.cacheBytes < bytes.byteLength * 4);
+    assert.ok(sharedDecodedCache.stats().bytes >= bytes.byteLength * 4);
+  } finally {
+    source.clear();
+    sharedDecodedCache.clear();
+  }
 });
 
 test('TileJSON is resolved once and decoded tile LRU prevents per-pan refetch', async () => {
@@ -319,4 +379,42 @@ test('Capitol, greenbelt and commercial property fixtures exclude non-public dri
     assert.ok(records.some((r) => r.area === area && r.drivable));
     assert.ok(records.some((r) => r.area === area && !r.drivable));
   }
+});
+
+test('repointing tileJsonUrl at a mirror never falls back to the default tile host', async () => {
+  const urls = [];
+  const mirror = 'http://127.0.0.1:12348';
+  const source = createOpenFreeMapSource({
+    fetchImpl: async (url) => {
+      urls.push(url);
+      return url.endsWith('/planet')
+        ? Response.json({ tiles: [`${mirror}/planet/v/{z}/{x}/{y}.pbf`] })
+        : new Response(fixture('ofm-austin-14-3743-6745.pbf'));
+    },
+    tileJsonUrl: `${mirror}/planet`,
+  });
+  await source.fetchBounds(
+    { south: 30.264, north: 30.271, west: -97.75, east: -97.74 },
+    { zoom: 14 },
+  );
+  assert.ok(urls.length > 1, 'tiles were fetched');
+  assert.deepEqual(
+    urls.filter((url) => !url.startsWith(mirror)),
+    [],
+    'a repointed source must not fetch from tiles.openfreemap.org',
+  );
+});
+
+test('a mirror that serves the default host TileJSON verbatim fails loudly', async () => {
+  // A transparent caching proxy returns upstream's TileJSON unchanged, whose
+  // tiles[0] is an absolute upstream URL. That must be an error, not 100% of
+  // tile traffic quietly leaving the configured mirror.
+  const source = createOpenFreeMapSource({
+    fetchImpl: async () =>
+      Response.json({
+        tiles: ['https://tiles.openfreemap.org/planet/v/{z}/{x}/{y}.pbf'],
+      }),
+    tileJsonUrl: 'http://127.0.0.1:12348/planet',
+  });
+  await assert.rejects(source.getMetadata(), { retryable: false });
 });

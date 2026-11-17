@@ -1,13 +1,10 @@
-/** Resolve the visible surface that can own weather imagery without scene mutation. */
-export function resolveImageryHost({ viewer, tileset }) {
-  if (viewer?.scene?.globe?.show === true)
-    return { collection: viewer.imageryLayers, kind: 'globe' };
-  if (tileset?.imageryLayers)
-    return { collection: tileset.imageryLayers, kind: 'tileset' };
-  return { collection: null, kind: 'none' };
-}
+import { NO_IMAGERY_HOST } from '../../maps/imageryHost.js';
 
-export const NO_IMAGERY_HOST = 'Hidden by this map source · choose a globe map';
+/**
+ * Resolve the visible surface that can own weather imagery without scene
+ * mutation: the map stack's imagery host (`src/maps/imageryHost.js`).
+ */
+export { NO_IMAGERY_HOST, resolveImageryHost } from '../../maps/imageryHost.js';
 
 /** Report imagery suspension without changing or detaching the resolved host. */
 export function imageryHostStatus(host) {
