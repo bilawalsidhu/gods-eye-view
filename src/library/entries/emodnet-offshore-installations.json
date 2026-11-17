@@ -2,9 +2,9 @@
   "id": "emodnet-offshore-installations",
   "kind": "dataset",
   "family": "infrastructure",
-  "title": "Offshore oil and gas installations, Europe (EMODnet)",
+  "title": "Oil and gas installations, European seas (EMODnet)",
   "provider": "EMODnet",
-  "description": "About 1,560 oil and gas installations in European seas from EMODnet's 2024 revision: platforms, subsea structures and terminals, mostly in the North Sea, with operator and product. Coloured by status; the set's buoy categories are left out.",
+  "description": "About 1,560 oil and gas installations around European seas from EMODnet's 2024 revision: platforms, subsea structures and onshore terminals, working or decommissioned, mostly North Sea, with operator and product. Buoy categories left out.",
   "icon": "⛽",
   "maintainer": "github:Herr-Enklo",
   "coverage": {

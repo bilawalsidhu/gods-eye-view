@@ -4,7 +4,7 @@
   "family": "weather",
   "title": "Weather warnings, Germany (DWD)",
   "provider": "DWD",
-  "description": "DWD warnings and advance notices, running or announced, on merged municipality areas with start and end time. Coloured by CAP severity only: advance notices, heat and UV look like ordinary warnings, unlike on the DWD's map. German texts.",
+  "description": "DWD warnings and advance notices, running or announced, on merged municipality areas with start and end time, in German. Coloured by CAP severity; advance notices, heat and UV look like ordinary warnings. A wide view draws only part.",
   "icon": "⚠",
   "maintainer": "github:Herr-Enklo",
   "coverage": {
@@ -33,10 +33,10 @@
     "colorBy": {
       "field": "SEVERITY",
       "colors": {
-        "Extreme": "#880e4f",
-        "Severe": "#e53935",
-        "Moderate": "#fb8c00",
-        "Minor": "#ffeb3b"
+        "Extreme": "#d03b3b",
+        "Severe": "#ec835a",
+        "Moderate": "#fab219",
+        "Minor": "#0ca30c"
       },
       "labels": {
         "Extreme": "Extreme",

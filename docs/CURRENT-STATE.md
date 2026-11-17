@@ -515,9 +515,10 @@ departments are outside its single bbox and are not shown. The aerial set now ho
 entries: 57 imported from the Open Imagery Register (national programmes in
 Belgium (Wallonia), Germany, Estonia, Spain, Poland, Portugal, Australia's
 NSW, and 49 US services: NAIP plus state, county and city programmes) plus
-IGN, GSI, SWISSIMAGE and LGB's Brandenburg and Berlin DOP20, each with an `imagery`
+IGN, GSI and SWISSIMAGE, each with an `imagery`
 block (type, published resolution, true ortho, years flown, refresh) that
-Browse shows as a spec list. Tiles take `xyz` (with `{reverseY}` for TMS) or
+Browse shows as a spec list, and LGB's Brandenburg and Berlin DOP20, whose
+block gives type, resolution and true ortho only. Tiles take `xyz` (with `{reverseY}` for TMS) or
 `bbox` templates (`{bbox-epsg-3857}`: WMS GetMap and ArcGIS export, filled
 by Cesium in the browser and by the proxy from z/x/y). Sub-national entries
 draw a `bbox` rectangle outline without fetching the country borders. 35
@@ -640,9 +641,10 @@ value and unit, since some gauges report metres above datum instead of cm;
 coloured by the level's state against mean low and mean high water, with
 out-of-date values in their own colour; gauges the service lists without
 coordinates are not drawn), DWD weather warnings (WFS GeoJSON, running and
-announced, coloured by CAP severity only, so advance notices, heat and UV
-warnings do not get the DWD's own styles; an empty answer in calm weather is
-healthy, though `library:probe` reads it as a failure), the DWD radar
+announced, coloured by CAP severity in the fixed status palette as NWS
+severity is, so advance notices, heat and UV warnings do not get the DWD's own
+styles, and two warnings on one area blend their fills; an empty answer in
+calm weather is healthy, though `library:probe` reads it as a failure), the DWD radar
 composite and NowCastMIX lightning density (WMS), the BfS gamma dose rate
 network (WFS GeoJSON; the BfS catalogue licenses its ODL open-data products
 under dl-de/by-2-0) and LGB's Brandenburg and Berlin DOP20 aerial photos. For
@@ -652,12 +654,16 @@ points (two entries, mostly different farms), its oil and gas installations (a
 (WMS with a fixed `time`; the provider flags 2024 as thinner), and Fintraffic's
 Digitraffic AIS positions for the northern Baltic (GeoJSON, each vessel's last
 position within a day; the API answers only clients that accept gzip, as
-browsers and Node's `fetch` do). Worldwide: GEBCO 2026 shaded relief (WMS, the
+browsers and Node's `fetch` do; a manifest cannot send the `Digitraffic-User`
+header the core Digitraffic feeds send, so these requests count against the
+per-IP limit for unidentified clients). Worldwide: GEBCO 2026 shaded relief (WMS, the
 grid's versioned endpoint, so the citation stays true) and two NASA GIBS
 drapes that ask for the `default` time in the tile path, IMERG half-hourly
 precipitation and MUR sea surface temperature, with legends from GIBS's colour
-maps. None of these datasets sets a rank, so a zoomed-out view keeps the
-features nearest the view centre. Library tile layers do not reload on a
+maps. None of these datasets sets a rank. As for every library dataset, a
+zoomed-out view draws only part of a large set (80, 200 or 420 features by
+camera height) while the row counts all of them, so the warning areas of a
+stormy day are not all drawn in a Germany-wide view. Library tile layers do not reload on a
 timer: the radar, lightning and precipitation drapes show the time step
 current when each tile was fetched, with no time shown, so a session left
 open keeps what it loaded and can mix time steps until the layer is switched

@@ -4,7 +4,7 @@
   "family": "weather",
   "title": "Rain radar, Germany (DWD)",
   "provider": "DWD",
-  "description": "The DWD's national radar composite (WN): reflectivity in dBZ on a 1 km grid, a new image every 5 minutes. Tiles keep the time step they loaded with: switch off and on to refresh. A magenta line marks the edge of radar range.",
+  "description": "The DWD's radar composite (WN): reflectivity in dBZ on a 1 km grid, new every 5 minutes. Tiles keep the time step they loaded with: switch off and on to refresh. A magenta line marks the edge of radar range; the grey veil beyond is no data.",
   "icon": "☂",
   "maintainer": "github:Herr-Enklo",
   "coverage": {
