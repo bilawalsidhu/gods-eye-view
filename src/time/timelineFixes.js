@@ -59,6 +59,33 @@ export function readTimelineFixes(value) {
   return fixes;
 }
 
+/** The share of records whose fixes reach no further than fixesReachMs. */
+export const FIXES_REACH_SHARE = 0.9;
+
+/**
+ * How far the fixes a snapshot's records carry reach: the time by which
+ * FIXES_REACH_SHARE of them have their newest fix, so a few reaching far
+ * ahead do not stand for the rest (those whose fixes end sooner left), or
+ * null when none carries fixes.
+ * @param {Array<{fixes?: unknown}>|undefined} records
+ * @returns {number|null}
+ */
+export function fixesReachMs(records) {
+  const reaches = [];
+  for (const record of records ?? []) {
+    if (!Array.isArray(record?.fixes)) continue;
+    let reach = -Infinity;
+    for (const fix of record.fixes) {
+      const atMs = Number(fix?.atMs);
+      if (Number.isFinite(atMs) && atMs > reach) reach = atMs;
+    }
+    if (reach > -Infinity) reaches.push(reach);
+  }
+  if (!reaches.length) return null;
+  reaches.sort((a, b) => a - b);
+  return reaches[Math.ceil(FIXES_REACH_SHARE * reaches.length) - 1];
+}
+
 /**
  * Two runs of entries in time order (`timeOf` reads an entry's epoch ms) as
  * one: `newer` stands in for the entries of `older` within the time it

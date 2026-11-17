@@ -1,10 +1,33 @@
 import { readSnapshotTimeline } from '../sources/live/contract.js';
-import { TIMELINE_HELD_MS } from './timelineFixes.js';
+import { fixesReachMs, TIMELINE_HELD_MS } from './timelineFixes.js';
 
 /** The longest play waits on a snapshot before it goes on without it. */
 export const SNAPSHOT_WAIT_MS = 8_000;
 /** How long a snapshot that failed to load waits before it is asked again. */
 export const SNAPSHOT_RETRY_MS = 5_000;
+/**
+ * How much play keeps of the loaded fixes after the newest snapshot: it holds
+ * this far short of their end (at most half of them), so a contact never
+ * reaches the end of its fixes while the next snapshot loads.
+ */
+export const SNAPSHOT_HOLD_MARGIN_MS = 60_000;
+/**
+ * How far ahead, in real time at the clock's rate, play asks for snapshots:
+ * at a high rate it asks several steps before the time needs them.
+ */
+export const SNAPSHOT_PREFETCH_MS = 4_000;
+
+/**
+ * What a layer's `load` answers once it applied `snapshot`: `{ reachMs }`,
+ * how far its records' fixes reach (fixesReachMs), when they carry fixes;
+ * else true.
+ * @param {{records?: Array<{fixes?: unknown}>}} snapshot
+ * @returns {true|{reachMs: number}}
+ */
+export function snapshotAnswer(snapshot) {
+  const reachMs = fixesReachMs(snapshot?.records);
+  return reachMs === null ? true : { reachMs };
+}
 
 /**
  * Let a layer of live contacts (flights, military aircraft, vessels) follow
@@ -26,7 +49,10 @@ export const SNAPSHOT_RETRY_MS = 5_000;
  *   are applied as polls are (`replace: false`), so contacts move on smoothly.
  * - When the source's timeline declares `spanMs`, its records carry their
  *   fixes from `spanMs` before a snapshot's time to `spanMs` after it, and
- *   the layer places each contact on them by the clock. A seek or a move
+ *   the layer places each contact on them by the clock. Playing on, it asks
+ *   for the next step SNAPSHOT_PREFETCH_MS of play ahead (at least a step),
+ *   and play holds only SNAPSHOT_HOLD_MARGIN_MS short of the end of the
+ *   newest snapshot's fixes, not at the step still loading. A seek or a move
  *   back that stays within the fixes the loaded snapshots carry is then no
  *   jump: nothing is cleared, play does not wait, and contacts move to the
  *   time smoothly. A move to a step before the newest loaded asks for that
@@ -36,17 +62,23 @@ export const SNAPSHOT_RETRY_MS = 5_000;
  *   fixes after the newest asks for the snapshot there (`replace: false`).
  * - Outside the source's coverage the layer is `clear()`ed and nothing loads;
  *   while the coverage is not known yet nothing loads and nothing is cleared.
- * - Back at live, the layer is `clear()`ed and `resumeLive()` polls at once.
+ * - Back at live, `resumeLive()` polls at once and its snapshot takes the
+ *   place of every contact: those it has move on from where they are drawn,
+ *   and only those it lacks go. The contacts stay until it answers; when it
+ *   answers anything but true (it could not be had), the layer is `clear()`ed.
+ *   A rejection named AbortError (a newer poll took its place) clears nothing.
  *
- * `load` resolves true once the snapshot is applied and false (or rejects)
- * when it could not be; it must not apply anything once `signal` aborts. A
+ * `load` resolves true once the snapshot is applied, or `{ reachMs }` when its
+ * records carry fixes, the newest of them (`fixesReachMs`), and false (or
+ * rejects) when it could not be; it must not apply anything once `signal` aborts. A
  * rejection named AbortError is a request the source dropped for a newer
  * one: it is not a failure, and nothing is cleared.
  *
  * @param {{id: string, clock: ReturnType<typeof import('./worldClock.js').createWorldClock>,
  *   source: () => object|null,
- *   load: (atMs: number, options: {signal: AbortSignal, replace: boolean}) => Promise<boolean>,
- *   clear: () => void, resumeLive: () => void,
+ *   load: (atMs: number, options: {signal: AbortSignal, replace: boolean}) =>
+ *     Promise<boolean|{reachMs: number}>,
+ *   clear: () => void, resumeLive: () => boolean|Promise<boolean>,
  *   now?: () => number, setTimeout?: typeof globalThis.setTimeout,
  *   clearTimeout?: typeof globalThis.clearTimeout}} options `source`
  *   returns the layer's current source; it is read when the layer starts.
@@ -86,6 +118,10 @@ export function createSnapshotTimeline({
   let gated;
   let failedUntil = -Infinity;
   let retryTimer = null;
+  // Each return to live; an answer to an older one is dropped.
+  let handovers = 0;
+  // How far the fixes of each snapshot applied since the last jump reach.
+  const reaches = new Map();
 
   const span = () => {
     let covered;
@@ -194,7 +230,7 @@ export function createSnapshotTimeline({
             return;
           }
           inflight = null;
-          held(atMs, replace);
+          held(atMs, replace, applied?.reachMs);
           empty = false;
           capped = false;
           stopWaiting();
@@ -218,24 +254,27 @@ export function createSnapshotTimeline({
   // afresh: the contacts have no fixes for the time between. The stretch is
   // kept to TIMELINE_HELD_MS, from the end just loaded, which every
   // contact's fixes still cover.
-  function held(atMs, replace) {
+  function held(atMs, replace, reachMs) {
     const reach = 2 * (timeline.spanMs || 0);
     scrubbed = null;
-    if (
-      replace ||
-      lead === null ||
-      atMs > lead + reach ||
-      atMs < base - reach
-    ) {
+    const afresh =
+      replace || lead === null || atMs > lead + reach || atMs < base - reach;
+    if (afresh) reaches.clear();
+    if (Number.isFinite(reachMs)) reaches.set(atMs, reachMs);
+    else reaches.delete(atMs);
+    if (afresh) {
       lead = atMs;
       base = atMs;
       return;
     }
     lead = Math.max(lead, atMs);
     base = Math.min(base, atMs);
-    if (lead - base <= TIMELINE_HELD_MS) return;
-    if (atMs === lead) base = lead - TIMELINE_HELD_MS;
-    else lead = base + TIMELINE_HELD_MS;
+    if (lead - base > TIMELINE_HELD_MS) {
+      if (atMs === lead) base = lead - TIMELINE_HELD_MS;
+      else lead = base + TIMELINE_HELD_MS;
+    }
+    for (const at of reaches.keys())
+      if (at < base || at > lead) reaches.delete(at);
   }
 
   // Ask again for what the time needs, after a failure or a dropped load:
@@ -316,8 +355,12 @@ export function createSnapshotTimeline({
       clearOnce();
       return;
     }
+    const hold = lead === null ? null : holdAt(covered);
     if (inflight) {
-      if (playsOn(state) && timeMs >= inflight.atMs && !inflight.quiet)
+      // With fixes past the newest snapshot, play waits only at their end.
+      const waitsAt =
+        timeline.spanMs > 0 && hold !== null ? hold : inflight.atMs;
+      if (playsOn(state) && timeMs >= waitsAt && !inflight.quiet)
         startWaiting();
       return;
     }
@@ -331,8 +374,8 @@ export function createSnapshotTimeline({
       return;
     }
     const step = timeline.stepMs;
-    if (lead - timeMs >= step) {
-      setGate(lead);
+    if (lead - timeMs >= prefetchMs(state)) {
+      setGate(hold);
       return;
     }
     const next = Math.min(
@@ -343,11 +386,60 @@ export function createSnapshotTimeline({
       setGate(null);
       return;
     }
-    setGate(capped ? null : next);
+    setGate(capped ? null : timeline.spanMs > 0 ? hold : next);
     // Past what the loaded fixes reach (play went on without waiting), the
     // contacts have no fixes for the time between: the step stands in for
     // them all.
     request(next, timeline.spanMs > 0 && next > lead + 2 * timeline.spanMs);
+  }
+
+  // Where play holds while the next snapshot loads: the newest loaded,
+  // or, with fixes past it, SNAPSHOT_HOLD_MARGIN_MS short of where they
+  // end: as far as that snapshot's fixes reach, at most the declared span
+  // (never past the coverage).
+  function holdAt(covered) {
+    const reach = timeline.spanMs || 0;
+    if (reach <= 0) return lead;
+    const margin = Math.min(SNAPSHOT_HOLD_MARGIN_MS, reach / 2);
+    const carried = reaches.get(lead);
+    const end = Number.isFinite(carried)
+      ? Math.min(lead + reach, carried)
+      : lead + reach;
+    return Math.max(lead, Math.min(covered.end, end - margin));
+  }
+
+  // How far ahead of the time play asks for the next step: a step, or with
+  // fixes past each snapshot, SNAPSHOT_PREFETCH_MS of play at the clock's
+  // rate, up to where play holds.
+  function prefetchMs(state) {
+    const step = timeline.stepMs;
+    const reach = timeline.spanMs || 0;
+    if (reach <= 0) return step;
+    const rate = Number.isFinite(state.rate) ? Math.abs(state.rate) : 1;
+    const margin = Math.min(SNAPSHOT_HOLD_MARGIN_MS, reach / 2);
+    return Math.max(
+      step,
+      Math.min(reach - margin, rate * SNAPSHOT_PREFETCH_MS),
+    );
+  }
+
+  // Back at live: the first live snapshot takes the place of every contact,
+  // which stay drawn until it does; one that cannot be had clears them.
+  function handOver() {
+    const mine = ++handovers;
+    const current = () => mine === handovers && started && clock.isLive();
+    Promise.resolve()
+      .then(() => resumeLive())
+      .then(
+        (applied) => {
+          if (current() && applied !== true) clear();
+        },
+        (error) => {
+          if (!current() || error?.name === 'AbortError') return;
+          console.warn(`Live snapshot failed: ${id}`, error);
+          clear();
+        },
+      );
   }
 
   function follow(state) {
@@ -363,10 +455,11 @@ export function createSnapshotTimeline({
       base = null;
       empty = false;
       failedUntil = -Infinity;
-      clear();
-      resumeLive();
+      handOver();
       return;
     }
+    // Away from live, a return to it still answering no longer applies.
+    handovers += 1;
     const timeMs = state.timeMs;
     // Away from live already: a move may stay within the loaded fixes.
     const wasFollowing = wasActive;
@@ -432,6 +525,7 @@ export function createSnapshotTimeline({
     stop() {
       if (!started) return;
       started = false;
+      handovers += 1;
       cancel();
       setGate(null);
       wasActive = false;

@@ -29,6 +29,7 @@ const NEUTRAL = [
   './render/vectorBase',
   './render/iconSegment',
   './render/recession',
+  './render/modelParts',
   './render/windStreamlines',
   './render/weather',
   './weather/effects',

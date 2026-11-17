@@ -97,7 +97,7 @@ for (const layer of LAYERS) {
     // `_iconKind` is identity for every unconverted contact (see
     // tr3bRegistry.test.mjs) — it only swaps the glyph for a contact the
     // operator explicitly converted into a TR-3B.
-    assert.match(source, /aircraftIcon\(\s*(?:parts\.)?rendering\._iconKind\(icao24, info\?\.klass\),?\s*(?:FLEET_ICON_PX,?\s*)?\)/,
+    assert.match(source, /aircraftIcon\(\s*(?:parts\.)?rendering\._iconKind\(icao24, info\?\.klass\),?\s*(?:FLEET_ICON_PX,?\s*)?(?:frame,?\s*)?\)/,
       'near contacts and model fallbacks retain the class-derived aircraft silhouette');
     assert.match(source, /color: rgba\(rendering\._cockpitContactColor\(icao24, info\)\),\s*rotationMode: 'screen',/,
       'far dots are reset to a rotation-free presentation');
