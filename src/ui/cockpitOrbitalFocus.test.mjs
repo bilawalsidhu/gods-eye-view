@@ -24,6 +24,7 @@ import {
   fakeInput,
 } from '../input/testDoubles.mjs';
 import { CockpitViewController } from './cockpitController.js';
+import { setLocale, t as translate } from '../i18n/index.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useHudStore } from './stores/hud.js';
 import CockpitView from './views/CockpitView.vue';
@@ -572,6 +573,18 @@ test('a site row turns the camera onto it, holds it, and reads its off-nadir ang
   assert.match(held.className, /^track actionable$/);
   assert.match(held.detail, /^FOCUS · BASE · OFF-NADIR/);
   assert.equal(siteRow(scene, 'alpha').getAttribute('aria-label'), 'Release the camera from Camp Alpha');
+  // The held site's FOCUS is a status, worded apart from the FOCUS command.
+  t.after(() => setLocale('en'));
+  setLocale('es');
+  await refreshRows(scene);
+  const heldEs = rows(scene).find((row) => row.target?.id === SITES.alpha.id);
+  assert.match(heldEs.detail, /^ENFOQUE · /);
+  assert.match(
+    $('#cockpit-orbital-focus').textContent,
+    /^ENFOQUE · /,
+    'the card names the held site with the same word',
+  );
+  assert.equal(translate('FOCUS'), 'ENFOCAR', 'the command keeps its verb');
 });
 
 test('another site row switches the focus; the held site row ends it', async (t) => {

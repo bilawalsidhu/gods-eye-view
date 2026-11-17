@@ -6,7 +6,11 @@ import {
   feedProvenanceEnvelope,
 } from '../data/layerSnapshot.js';
 import { readLayerLifecycleSummary } from './layerSummary.js';
-import { SPEECH_BUILDERS, attachVoiceResult } from './speech.js';
+import {
+  SPEECH_BUILDERS,
+  VIEW_CENTRE_LABEL,
+  attachVoiceResult,
+} from './speech.js';
 import { resolveDeicticArgs } from './deixis.js';
 import { isStoriesOpen } from './realtimeInputPolicy.js';
 export { readLayerLifecycleSummary } from './layerSummary.js';
@@ -4015,7 +4019,7 @@ async function requestStreetLevel(
     query ||
     (entity ? String(entity.label || entity.id) : '') ||
     (hasCoordinates ? `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` : '') ||
-    'the view centre';
+    VIEW_CENTRE_LABEL;
   atViewCentre = !query && !hasCoordinates && !entity;
   let point = null;
   let location = null;
