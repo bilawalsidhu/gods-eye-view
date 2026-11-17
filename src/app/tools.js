@@ -315,7 +315,7 @@ export function createApplicationTools({
     canStartVoice: () => !isStoriesOpen(),
     // An app may supply what open_stories does; the Stories page by default.
     openStories: storiesOpener({
-      openStories: voice.openStories,
+      openStories: voice?.openStories,
       store: storiesStore,
       stories,
     }),
