@@ -144,7 +144,7 @@ Implement NOAA SWPC, OpenAQ and UCDP first. They add distinct explanatory value 
 This roadmap is a research/design artifact. It does not claim that any new provider has been connected, that the credentials have been rotated, or that runtime integration tests have passed.
 
 
-## 8. Upstream synchronization review (2026-11-17)
+## 9. Upstream synchronization review (2026-11-17)
 
 The previous source-roadmap pull request was merged into `main`. A fresh comparison against upstream confirms that the fork contains the upstream snapshot at `624c229bc2a86fc1e47ed34c95fc7cefa2ac1676`; the fork's current main is a descendant of that snapshot. The three-commit comparison result is the fork's merge/roadmap history, not three missing upstream commits. Do not re-import the same upstream history.
 
@@ -156,7 +156,7 @@ The upstream snapshot includes these changes relevant to GEV:
 
 The upstream PR descriptions report successful tests/builds for the relevant changes, but this audit did not execute those tests locally. The fork's merged sync PR #1 was a very large update; a passing GitHub mergeability result is not a substitute for local validation. Run the repository's documented test, format, boundary, library, build, stub-renderer and conformance gates before a production release.
 
-## 9. New source candidates and source-contract cautions
+## 10. New source candidates and source-contract cautions
 
 ### Additional candidates
 
@@ -174,7 +174,7 @@ NOAA's SWPC data service exposes products, JSON, text and archive endpoints. Its
 
 Official documentation: https://www.spaceweather.gov/content/data-access and https://www.weather.gov/media/notification/pdf_2026/scn26-21_Data_Format_Changes_Impacting_SWPC_Products.pdf
 
-## 10. Implementation backlog and acceptance gates
+## 11. Implementation backlog and acceptance gates
 
 The following are implementation tasks, not completed runtime integrations:
 
