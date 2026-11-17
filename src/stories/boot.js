@@ -13,6 +13,23 @@ export function stopVoiceForStories(session) {
 }
 
 /**
+ * What the `open_stories` action does, spoken or typed: the app's own
+ * `openStories` when it supplies one, else open the Stories page (none
+ * where Stories is not offered). It is called with `{ isCurrent }` and
+ * answers true when it opened, 'already-open', or false.
+ * @param {{openStories?: Function|null,
+ *   store: {available: boolean, mode: string},
+ *   stories: {open: (options: {isCurrent: () => boolean}) => unknown}}} options
+ * @returns {Function|null}
+ */
+export function storiesOpener({ openStories, store, stories }) {
+  if (typeof openStories === 'function') return openStories;
+  if (!store.available) return null;
+  return ({ isCurrent }) =>
+    store.mode === 'closed' ? stories.open({ isCurrent }) : 'already-open';
+}
+
+/**
  * Stories, loaded on first use. The controller, the story catalog, the
  * screens and their styles are separate chunks, fetched when the person
  * opens Stories, follows a Stories link or

@@ -1,5 +1,9 @@
 import { onFollowChanged } from '../data/followed.js';
-import { bootStories, stopVoiceForStories } from '../stories/boot.js';
+import {
+  bootStories,
+  stopVoiceForStories,
+  storiesOpener,
+} from '../stories/boot.js';
 import { t } from '../i18n/index.js';
 import { useStoriesStore } from '../ui/stores/stories.js';
 import { SceneDirector } from '../scenes/director.js';
@@ -309,12 +313,12 @@ export function createApplicationTools({
   voiceCommands = initGevVoiceCommands({
     ...voice,
     canStartVoice: () => !isStoriesOpen(),
-    openStories: storiesStore.available
-      ? ({ isCurrent }) =>
-          storiesStore.mode === 'closed'
-            ? stories.open({ isCurrent })
-            : 'already-open'
-      : null,
+    // An app may supply what open_stories does; the Stories page by default.
+    openStories: storiesOpener({
+      openStories: voice.openStories,
+      store: storiesStore,
+      stories,
+    }),
     floorServices: operations.surface.groundFloor,
     annotationResolver: operations.annotationResolver,
     searchNavigation: operations.searchAndFlyTo,
