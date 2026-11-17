@@ -54,12 +54,27 @@ test('toZhHant converts characters, not vocabulary, and fixes what s2tw picks wr
   assert.equal(toZhHant('50 年历史'), '50 年歷史');
   assert.equal(toZhHant('发布于 {date}'), '發布於 {date}');
   assert.equal(toZhHant('1 周/秒'), '1 週/秒');
+  assert.equal(toZhHant('已宣布紧急情况'), '已宣布緊急情況');
+  assert.equal(toZhHant('全部 {n} 个中'), '全部 {n} 個中');
+  // 併道 only where the English key is about merging.
+  assert.equal(toZhHant('前方并道路段', 'Merge ahead'), '前方併道路段');
   assert.equal(
-    toZhHant('{direction}并道，进入 {road}'),
-    '{direction}併道，進入 {road}',
+    toZhHant('事故并道路封闭', 'Crash, road closed'),
+    '事故並道路封閉',
   );
-  assert.equal(toZhHant('事故并道路封闭'), '事故並道路封閉');
-  assert.equal(toZhHant('已关闭并道歉'), '已關閉並道歉');
+  assert.equal(toZhHant('挥手并道谢', 'Waved and thanked'), '揮手並道謝');
+  assert.deepEqual(
+    zhHantCatalog({
+      'Merge {direction} onto {road}': '{direction}并道，进入 {road}',
+      'maneuver|Merge': '并道',
+      'Closed and apologized': '已关闭并道歉',
+    }),
+    {
+      'Merge {direction} onto {road}': '{direction}併道，進入 {road}',
+      'maneuver|Merge': '併道',
+      'Closed and apologized': '已關閉並道歉',
+    },
+  );
 });
 
 test('checkZhHant names each entry that is not the conversion of zh-CN', () => {
@@ -96,6 +111,21 @@ test('checkZhHant names each entry that is not the conversion of zh-CN', () => {
   assert.deepEqual(checkZhHant(zhCN, { Server, ...withoutServer }), [
     'entries leave the zh-CN order at "Video": run npm run i18n -- --zh-hant',
   ]);
+  // A key checkCatalog already lists as missing is not reported twice.
+  assert.deepEqual(checkZhHant(zhCN, withoutServer, new Set(['Server'])), []);
+});
+
+test('a zh-Hant entry still in English points to zh-CN and its same-as-English line', () => {
+  const fixture = new Map([['Bloom', { plural: false }]]);
+  const errors = (locale) =>
+    checkCatalog(locale, { Bloom: 'Bloom' }, fixture, new Set()).errors;
+  assert.deepEqual(errors('zh-Hant'), [
+    '"Bloom" is still English: translate it in zh-CN and run npm run i18n -- --zh-hant, or list it under "zh-Hant" in src/i18n/same-as-english.json as under "zh-CN"',
+  ]);
+  assert.match(
+    errors('zh-CN')[0],
+    /^"Bloom" is still English: translate it, or/,
+  );
 });
 
 test('every UI string is marked for translation or kept on purpose (npm run i18n)', () => {
