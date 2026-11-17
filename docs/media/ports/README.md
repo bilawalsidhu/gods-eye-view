@@ -20,4 +20,4 @@ node scripts/qa-ports.mjs --record
 npm run test:track -- --offline-imagery
 ```
 
-See the pull request validation checklist for the final tracking-harness result and any environment limitations. No provider keys are needed for the ports layer. Filters are session-local; share token `03` restores only the enabled state.
+The stock tracking harness returned 97 passed, 6 failed and 4 skipped on both this feature and clean upstream `624c229`, with identical failure details. See [tracking-comparison.md](tracking-comparison.md); PR #1783 remains draft while that required gate is unresolved. No provider keys are needed for the ports layer. Filters are session-local; share token `03` restores only the enabled state.
