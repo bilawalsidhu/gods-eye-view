@@ -39,6 +39,7 @@ const WEATHER = [
   'weather-satellite',
   'weather-lightning',
   'weather-cyclones',
+  'weather-turbulence',
 ];
 
 const browser = await puppeteer.launch({
