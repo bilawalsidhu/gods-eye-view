@@ -157,6 +157,8 @@ export type Capability =
   | 'terrain'
   /** Atmosphere scattering applied to drawn models. */
   | 'modelAtmosphere'
+  /** A model item's `nodes` pose the model's named glTF nodes. */
+  | 'modelNodes'
   /** Clouds, fog, haze, rain and snow around the view (`globe.weather`). */
   | 'weather'
   /** Imagery draped onto 3D tiles as well as the globe. */

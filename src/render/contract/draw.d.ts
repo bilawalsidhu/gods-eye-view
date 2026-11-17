@@ -449,7 +449,8 @@ export interface ModelItem extends Placed {
    * joints): each a column-major 4×4 matrix in the node's parent frame that
    * replaces the node's own transform. A node whose name leaves the map goes
    * back to its authored pose; names the model lacks are ignored. Applied
-   * once the model is ready. Can change live.
+   * once the model is ready, on a renderer with the `modelNodes`
+   * capability; elsewhere the model draws as authored. Can change live.
    */
   nodes?: Readonly<Record<string, ArrayLike<number>>>;
   /**

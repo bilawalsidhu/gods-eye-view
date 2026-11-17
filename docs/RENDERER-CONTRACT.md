@@ -304,8 +304,11 @@ model's named glTF nodes, each a column-major 4×4 matrix in the node's
 parent frame that replaces the node's own (the ISS's solar arrays,
 radiators, dishes and arms). They change live; a node whose name leaves the
 map goes back to its authored pose, and names the model lacks are ignored.
-The Cesium port writes each node's matrix once the model is ready, and
-again only when its numbers change.
+A renderer that poses nodes lists `modelNodes`; one without it draws the
+model as authored. The Cesium port lists it, and writes each node's matrix
+once the model is ready, and again only when its numbers change. The check
+`draw.models.nodes` moves the harness model's node off the screen's centre
+and back.
 
 The Cesium port draws timed imagery (`imageryFrames`): a layer given a timed
 source hides its own imagery and draws each frame its clock shows as a Cesium
