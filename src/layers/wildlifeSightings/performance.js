@@ -38,7 +38,7 @@ export function wildlifeMeasure(stage, work) {
 }
 
 // A unit is at most 128 cells/billboards. The one-millisecond target leaves
-// room for the last unit, Cesium setters and the overlay host within 4ms.
+// room for the last unit, draw-set writes and the overlay host within 4ms.
 export const WILDLIFE_WORK_UNIT = 128;
 const WILDLIFE_WORK_SLICE_MS = 1;
 export const WILDLIFE_SYNC_CELL_LIMIT = 256;

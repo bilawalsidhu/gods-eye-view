@@ -142,7 +142,7 @@ test('the map source row renders the published chips and selects through the con
   assert.equal(osm.classList.contains('active'), true);
   assert.equal(osm.getAttribute('aria-pressed'), 'true');
   assert.equal(osm.hasAttribute('aria-label'), false);
-  assert.equal(esri.querySelector('.map-stack-chip-req'), null);
+  assert.equal(esri.querySelector('.map-stack-chip-req') === null, true);
   bing.click();
   esri.click();
   assert.deepEqual(selected, ['esri-imagery']);

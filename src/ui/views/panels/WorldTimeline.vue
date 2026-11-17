@@ -8,11 +8,12 @@ import UiIcon from '../../kit/UiIcon.vue';
 import UiSelect from '../../kit/UiSelect.js';
 
 // The world timeline: play and pause and the speed on the left, a track
-// across the stretch the layers on can show (each launch or frame a tick)
-// with a handle to scrub and the time in a bubble over it, and the way back
-// to live on the right, lit while live. Scrolling or pinching the track
-// zooms it around the handle, dragging it moves along it, and a double-click
-// shows it all again. It shows
+// across the stretch the layers on can show (each mark, a launch or a strong
+// earthquake, a tick, its label shown over it on hover) with a handle to
+// scrub and the time in a bubble over it, and the way back to live on the
+// right, lit while live. Scrolling or pinching the track zooms it around the
+// handle, dragging it moves along it, a tap on or by a tick goes to its
+// mark's time exactly, and a double-click shows it all again. It shows
 // while a layer with a time of its own (weather, satellites, launches,
 // or one a host follows) is on with time to show; with only live feeds such
 // as flights on, the bar stays hidden.
@@ -53,6 +54,8 @@ const ZOOM_STEP = 1.5;
 const WHEEL_ZOOM = 0.0025;
 // Two presses this close are a double-click.
 const DOUBLE_PRESS_MS = 500;
+// A tap or a hover this near a tick, in pixels, is on its mark.
+const MARK_HIT_PX = 6;
 
 const readout = computed(() =>
   Number.isFinite(time.value.timeMs)
@@ -109,8 +112,10 @@ const view = computed(() => {
 });
 const zoomed = computed(() => zoom.value !== null);
 const viewLength = () => view.value.end - view.value.start;
-// Show `length` of the span ending at `viewEnd`, held to the span.
+// Show `length` of the span ending at `viewEnd`, held to the span. A zoom
+// or a pan moves the ticks from under the pointer, so its label goes.
 function showView(length, viewEnd) {
+  hovered.value = null;
   const { start, end } = span.value;
   if (length >= end - start) {
     showWhole();
@@ -138,6 +143,7 @@ const follow = (ms) => {
 };
 const offView = (ms) => ms < view.value.start || ms > view.value.end;
 const showWhole = () => {
+  hovered.value = null;
   zoom.value = null;
   panned = false;
 };
@@ -212,6 +218,7 @@ let movedTime = false;
 const onPointerDown = (event) => {
   // Only the main button: a right-click is for the menu.
   if (event.button > 0) return;
+  hovered.value = null;
   const onHandle = event.target instanceof HTMLInputElement;
   pointers.set(event.pointerId, { x: event.clientX, onHandle });
   if (pointers.size === 1) {
@@ -241,6 +248,10 @@ const onPointerDown = (event) => {
   gesture = { kind: 'press', x: event.clientX, end: view.value.end };
 };
 const onPointerMove = (event) => {
+  // A pointer hovering, none pressed, shows the label of the tick under it.
+  hovered.value = pointers.size
+    ? null
+    : (markNear(event.clientX, event.currentTarget)?.time ?? null);
   const pointer = pointers.get(event.pointerId);
   if (!pointer) return;
   pointer.x = event.clientX;
@@ -266,8 +277,14 @@ const onPointerMove = (event) => {
 };
 const onPointerUp = (event) => {
   if (!pointers.delete(event.pointerId)) return;
+  // A tap on or by a tick goes to its mark exactly; elsewhere, to the time
+  // under it.
   if (gesture?.kind === 'press' && event.type === 'pointerup')
-    store.scrub(timeAt(event.clientX, event.currentTarget), viewLength());
+    store.scrub(
+      markNear(event.clientX, event.currentTarget)?.time ??
+        timeAt(event.clientX, event.currentTarget),
+      viewLength(),
+    );
   // A finger lifted from a pinch ends it; the other one moves nothing.
   gesture = null;
 };
@@ -276,11 +293,66 @@ const place = (ms) => {
   const { start, end } = view.value;
   return end > start ? ((ms - start) / (end - start)) * 100 : 100;
 };
+// The labels of the marks at each time marked; a time may have none.
+const markLabels = computed(() => {
+  const labels = new Map();
+  for (const mark of span.value?.markDetails ?? []) {
+    if (!labels.has(mark.time)) labels.set(mark.time, []);
+    if (mark.label) labels.get(mark.time).push(mark.label);
+  }
+  return labels;
+});
+// A tick for each time marked in view: where it sits, as a share of the
+// track, and its marks' labels.
 const ticks = computed(() => {
   const { start, end } = view.value;
   return span.value.marks
     .filter((mark) => mark >= start && mark <= end)
-    .map((mark) => `${place(mark)}%`);
+    .map((mark) => ({
+      time: mark,
+      share: place(mark) / 100,
+      labels: markLabels.value.get(mark) ?? [],
+    }));
+});
+// The tick nearest `clientX` within MARK_HIT_PX of it, or null.
+function markNear(clientX, track) {
+  if (!view.value) return null;
+  const { left, width } = track.getBoundingClientRect();
+  if (!(width > 0)) return null;
+  let near = null;
+  let nearest = MARK_HIT_PX;
+  for (const tick of ticks.value) {
+    const off = Math.abs(left + tick.share * width - clientX);
+    if (off <= nearest) {
+      near = tick;
+      nearest = off;
+    }
+  }
+  return near;
+}
+// The time of the tick the pointer hovers, and whether the handle has focus.
+const hovered = shallowRef(null);
+const focused = shallowRef(false);
+// The labels shown over the track: the hovered tick's, or with the handle
+// focused and paused on a mark (an arrow key or a tap took it there), that
+// mark's. Nothing for a mark with no label.
+const markTip = computed(() => {
+  if (!view.value) return null;
+  const onMark = !time.value.live && focused.value ? time.value.timeMs : null;
+  const over = ticks.value.find((each) => each.time === hovered.value);
+  const tick = over ?? ticks.value.find((each) => each.time === onMark);
+  return tick?.labels.length
+    ? { share: tick.share, text: tick.labels.join('\n'), hover: Boolean(over) }
+    : null;
+});
+// The time as the handle tells it, with the labels of the mark it is on.
+const valueText = computed(() => {
+  const labels = time.value.live
+    ? null
+    : markLabels.value.get(time.value.timeMs);
+  return labels?.length
+    ? `${readout.value} · ${labels.join('; ')}`
+    : readout.value;
 });
 const shown = computed(() =>
   Math.min(view.value.end, Math.max(view.value.start, at.value)),
@@ -294,10 +366,11 @@ const scrub = (event) => {
   }
   store.scrub(Number(event.target.value), viewLength());
 };
-// Arrows go to the previous or next mark (a launch, a frame), or a step along
-// the track as shown; Page keys take a tenth of it; Home and End go to the
-// ends of all of it. Plus and minus zoom, and zero shows it all; with a
-// modifier they are the browser's own zoom.
+// Arrows go to the previous or next mark (a launch, a strong earthquake),
+// whose label the handle then tells with the time, or a step along the track
+// as shown where there is none; Page keys take a tenth
+// of it; Home and End go to the ends of all of it. Plus and minus zoom, and
+// zero shows it all; with a modifier they are the browser's own zoom.
 const ZOOM_KEYS = ['+', '=', '-', '0'];
 const onKey = (event) => {
   if (ZOOM_KEYS.includes(event.key)) {
@@ -331,17 +404,18 @@ const onKey = (event) => {
     ><UiButton class="world-timeline-play" :label="time.playing ? t('Pause') : t('Play')" @click="store.togglePlay()"
       ><UiIcon :name="time.playing ? 'pause' : 'play_arrow'" :size="20" /></UiButton
     ><UiSelect class="gev-field gev-field--compact world-timeline-speed" :aria-label="t('Play speed')" :title="t('Play speed')" :options="speeds" :model-value="speed" @update:model-value="store.setSpeed($event)"
-    /><div class="world-timeline-track" :class="{ 'is-zoomed': zoomed }" :title="t('Scroll or pinch to zoom, drag to move along · double-click to see it all')" @wheel="onWheel" @dblclick="showAll" @pointerdown="onPointerDown" @pointermove="onPointerMove" @pointerup="onPointerUp" @pointercancel="onPointerUp"
+    /><div class="world-timeline-track" :class="{ 'is-zoomed': zoomed }" :title="markTip?.hover ? undefined : t('Scroll or pinch to zoom, drag to move along · double-click to see it all')" @wheel="onWheel" @dblclick="showAll" @pointerdown="onPointerDown" @pointermove="onPointerMove" @pointerup="onPointerUp" @pointercancel="onPointerUp" @pointerleave="hovered = null"
       ><time class="world-timeline-time" :class="{ 'is-waiting': waiting }" :style="{ '--at': place(shown) / 100 }" :datetime="new Date(time.timeMs).toISOString()" aria-live="off"
         ><span v-if="waiting" class="world-timeline-spinner" aria-hidden="true"></span>{{ bubble }}</time
-      ><span v-for="(left, index) in ticks" :key="index" class="world-timeline-tick" :style="{ left }" aria-hidden="true"></span
+      ><span v-if="markTip" class="world-timeline-mark-label" :style="{ '--at': markTip.share }" aria-hidden="true">{{ markTip.text }}</span
+      ><span v-for="tick in ticks" :key="tick.time" class="world-timeline-tick" :style="{ left: `${tick.share * 100}%` }" aria-hidden="true"></span
       ><span class="world-timeline-fill" :style="{ width: `${place(shown)}%` }" aria-hidden="true"></span
       ><input
         class="world-timeline-scrub"
         :class="{ 'is-off-view': handleOff }"
         type="range"
         :aria-label="t('World time')"
-        :aria-valuetext="readout"
+        :aria-valuetext="valueText"
         :min="view.start"
         :max="view.end"
         step="any"
@@ -349,6 +423,8 @@ const onKey = (event) => {
         @input="scrub"
         aria-keyshortcuts="+ - 0"
         @keydown="onKey"
+        @focus="focused = true"
+        @blur="focused = false"
     /></div
     ><UiButton class="world-timeline-live" :label="time.live ? t('Live') : t('Back to live')" :pressed="time.live" pressed-class="is-live" :disabled="time.live" @click="store.goLive()">{{ t('Live') }}</UiButton
   ></div>

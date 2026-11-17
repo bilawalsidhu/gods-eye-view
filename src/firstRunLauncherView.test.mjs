@@ -165,7 +165,7 @@ test('the DISMISS button closes the card the way ESC does', async (t) => {
   assert.notEqual(sessionStorageRef.read(), null, 'dismissed for the session');
   root.dispatchEvent(new Event('transitionend'));
   await nextTick();
-  assert.equal(document.getElementById('first-run-launcher'), null);
+  assert.equal(document.getElementById('first-run-launcher') === null, true);
 });
 
 test('the scroll fade clears when the tiles fit after a resize', async (t) => {
@@ -191,5 +191,5 @@ test('ESC closes the card, returns focus, and removes it without a transition', 
   // Reduced motion: no transitionend, so the bounded fallback removes it.
   t.mock.timers.tick(400);
   await nextTick();
-  assert.equal(document.getElementById('first-run-launcher'), null);
+  assert.equal(document.getElementById('first-run-launcher') === null, true);
 });

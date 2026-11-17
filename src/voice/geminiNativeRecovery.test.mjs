@@ -1,3 +1,4 @@
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -47,21 +48,20 @@ const outputs = (ws) =>
 function fixture({ holdFirst = false } = {}) {
   const state = { height: 1000, renders: 0, providerWrites: [], panels: [] };
   const position = { x: 6379137, y: 0, z: 0 };
-  const viewer = {
+  const viewer = bindFakeCesiumCamera({
     clock: { onTick: { addEventListener: () => () => {} } },
     camera: {
       positionWC: position,
       positionCartographic: { height: 1000 },
       moveEnd: { addEventListener() {} },
       cancelFlight() {},
-      zoomIn(n) {
-        position.x -= n;
-        state.height -= n;
-        this.positionCartographic.height = state.height;
-      },
-      zoomOut(n) {
-        position.x += n;
-        state.height += n;
+      // Looking straight down at the surface along -x.
+      directionWC: { x: -1, y: 0, z: 0 },
+      upWC: { x: 0, y: 0, z: 1 },
+      rightWC: { x: 0, y: 1, z: 0 },
+      setView({ destination }) {
+        state.height -= position.x - destination.x;
+        position.x = destination.x;
         this.positionCartographic.height = state.height;
       },
     },
@@ -76,7 +76,7 @@ function fixture({ holdFirst = false } = {}) {
         state.renders++;
       },
     },
-  };
+  });
   const runner = createGevActionRunner({
     viewer,
     dataManager: { layers: new Map() },

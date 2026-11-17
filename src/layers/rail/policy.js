@@ -152,7 +152,6 @@ export const TRACK_MAX_GRADE = 0.05;
 export const TRACK_SETTLE_MPS = 0.5;
 export const TRACK_SNAP_M = 2_000;
 export const MARKER_PIXEL_SIZE = 18;
-export const SELECTED_PIXEL_SIZE = 28;
 export const SELECTED_CARD_REFRESH_MS = 250;
 /** While a train is selected, every other train is drawn at this opacity. */
 export const UNSELECTED_TRAIN_ALPHA = 0.35;

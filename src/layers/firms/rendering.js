@@ -1,20 +1,29 @@
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import {
+  drawOf,
+  findFrame,
+  findGlobe,
+  findQuery,
+} from '../../render/rendererOf.js';
 import { FIRMS_OVERLAY_SOURCE_ID } from '../../data/firmsLabels.js';
-import { horizonOccluder } from '../../data/iconOrientation.js';
 import { buildHeatRaster } from '../../data/firmsHeatRaster.js';
 import {
   LOD_LEVELS,
   CONTEXT_TOP_N,
+  GLOW_SPRITE_PX,
   HANDOFF_FADE,
   HEAT_RASTER,
   HEAT_REBUILD_MS,
 } from './policy.js';
 import { createHeatImagery } from './heatImagery.js';
 
+/** Icon sets made so far, by every fire layer: set ids unique to each. */
+let iconSets = 0;
+
 /** The markers drawn under the far bands' heatmap for the hand-off fade. */
 const HANDOFF_MARKER_LOD = LOD_LEVELS.find((lod) => lod.mode === 'detections');
 
-/** Fade steps: a moving camera rewrites marker colors at most this often. */
+/** Fade steps: a moving camera rewrites marker opacity at most this often. */
 const FADE_STEPS = 32;
 
 export function createRendering({
@@ -25,7 +34,7 @@ export function createRendering({
   feed,
 }) {
   const { warmFireAnchorFloors } = services.anchors;
-  const { registerSpriteCollection, restoreSpriteOrder } = services.sprites;
+  const { spriteDrawOrder } = services.sprites;
   const { overlayHost } = config;
 
   /**
@@ -33,19 +42,18 @@ export function createRendering({
    * when neither the (hysteresis-damped) LOD band nor the padded view
    * rectangle changed meaningfully.
    * @param {boolean} force - Rebuild even if LOD/view appear unchanged.
-   * @returns {boolean} True when a rebuild actually ran. Callers use this to
-   *   avoid a second horizon walk in the same tick: a rebuild already culls
-   *   its freshly-added sprites, an early-out does not.
+   * @returns {boolean} True when a rebuild actually ran.
    */
 
   function renderCurrentLod(force = false) {
-    if (
-      !layerState._dataSource ||
-      !layerState._fires.length ||
-      !layerState._viewer
-    ) {
+    if (!layerState._cells || !layerState._viewer) return false;
+    if (!layerState._fires.length) {
       // A filter that leaves nothing shown must not leave the old heat behind.
-      if (!layerState._fires.length) layerState._heatImagery?.setShow(false);
+      layerState._heatImagery?.setShow(false);
+      // A refresh that came back empty takes down what the last one drew, so
+      // no sprite or card is left on screen (and clickable) for a fire that is
+      // gone.
+      if (force) clearRendered();
       return false;
     }
     const lodIndex = components.viewport.selectLodIndex(
@@ -61,9 +69,7 @@ export function createRendering({
       return false;
     layerState._currentLodIndex = lodIndex;
     layerState._currentLodId = lod.id;
-    layerState._lastViewRect = viewRect
-      ? Cesium.Rectangle.clone(viewRect)
-      : null;
+    layerState._lastViewRect = viewRect ? { ...viewRect } : null;
     const bounds = viewRect
       ? components.model.paddedDegreeBounds(viewRect)
       : null;
@@ -86,7 +92,8 @@ export function createRendering({
     applyHandoffFade(true);
   }
 
-  const fadeColor = new Cesium.Color();
+  /** The opacity the drawn glows were last written with. */
+  let glowAlpha = 1;
 
   /**
    * Cross-fade between markers and heatmap by camera height (HANDOFF_FADE),
@@ -108,12 +115,44 @@ export function createRendering({
     if (!force && heat === layerState._handoffHeat) return;
     layerState._handoffHeat = heat;
     layerState._heatImagery?.setOpacity(heat);
-    const billboards = layerState._billboards;
-    if (!billboards) return;
-    billboards.show = layerState._enabled && heat < 1;
-    const color = Cesium.Color.WHITE.withAlpha(1 - heat, fadeColor);
-    for (let i = 0; i < billboards.length; i += 1)
-      billboards.get(i).color = color;
+    // Glows written from here on carry the fade (fireGlow); those already
+    // drawn are rewritten only when it changed.
+    const alpha = 1 - heat;
+    const changed = alpha !== glowAlpha;
+    glowAlpha = alpha;
+    const set = layerState._icons;
+    if (!set) return;
+    set.show = layerState._enabled && heat < 1;
+    if (!changed || !drawnGlows.size) return;
+    const faded = [];
+    for (const drawn of drawnGlows.values()) {
+      drawn.glow = { ...drawn.glow, alpha };
+      faded.push(drawn.glow);
+    }
+    set.upsert(faded);
+  }
+
+  /**
+   * Each drawn glow's detection, anchor and item, by its item id: what it
+   * was last written with, so a rebuild writes only the glows that changed.
+   * @type {Map<string, {fire: object, position: object, glow: object}>}
+   */
+  const drawnGlows = new Map();
+
+  /** Take every glow down (no write when there are none). */
+  function clearIcons() {
+    if (!drawnGlows.size) return;
+    drawnGlows.clear();
+    layerState._icons?.clear();
+  }
+
+  function clearRendered() {
+    clearIcons();
+    layerState._pickIndexById.clear();
+    layerState._cellCount = 0;
+    layerState._labelCandidates = [];
+    components.cards.rebuildAmbientLabels();
+    components.selection.refreshContextRegistrations([]);
   }
 
   /**
@@ -180,12 +219,13 @@ export function createRendering({
   function heatImagery() {
     if (!layerState._heatImagery) {
       layerState._heatImagery = createHeatImagery({
-        cesium: Cesium,
-        getHost: () =>
-          layerState._imageryHost?.() ?? {
-            collection: layerState._viewer?.imageryLayers ?? null,
-            kind: 'globe',
-          },
+        // Draped through the renderer's globe port, on the surface the
+        // active map stack draws (the shell's imagery host names it; without
+        // a shell, the globe).
+        getHost: () => ({
+          globe: findGlobe(layerState._viewer),
+          kind: layerState._imageryHost?.()?.kind ?? 'globe',
+        }),
       });
     }
     return layerState._heatImagery;
@@ -260,7 +300,7 @@ export function createRendering({
       const centerLon = cell.lonCell + lod.gridDegrees / 2;
       const centerLat = cell.latCell + lod.gridDegrees / 2;
       layerState._labelCandidates.push({
-        position: Cesium.Cartesian3.fromDegrees(centerLon, centerLat, 0),
+        position: fromDegrees(centerLon, centerLat, 0),
         cullPosition: components.model.cellCullPosition(centerLon, centerLat),
         fire: null,
         cell,
@@ -276,7 +316,7 @@ export function createRendering({
 
   /**
    * Render individual detections (local/close bands) as pre-baked
-   * radial-glow sprite billboards sized by FRP, capped per viewport by
+   * radial-glow sprite icons sized by FRP, capped per viewport by
    * highest FRP, depth test disabled. The 3D Tiles mesh is never sampled
    * per point; instead, the CLOSE band (where terrain parallax is actually
    * visible) batch-warms the shared cached DEM floor for its rendered
@@ -321,20 +361,19 @@ export function createRendering({
 
   /**
    * The glow-sprite markers for a detections band: the strongest fires in
-   * view, capped at the band's maxDetections, horizon-culled.
+   * view, capped at the band's maxDetections. The set culls the far side of
+   * the globe itself (`horizonCull`).
    * @param {Object} lod - Detections band descriptor.
    * @param {?Object} bounds - Padded view bounds in degrees, or null.
    * @returns {?Array<Object>} Label candidates for the fires drawn,
-   *   strongest first; null before the sprite collection exists.
+   *   strongest first; null before the icon set exists.
    */
 
   function paintMarkers(lod, bounds) {
     ensureDetectionCollections();
-    layerState._dataSource.entities.removeAll();
-    if (!layerState._billboards) return null;
-    layerState._billboards.removeAll();
+    const set = layerState._icons;
+    if (!set) return null;
     layerState._pickIndexById.clear();
-    layerState._cullPositions.length = 0;
 
     let candidates;
     if (bounds) {
@@ -359,96 +398,113 @@ export function createRendering({
       lod.id === 'close'
         ? components.model.firePosition
         : components.model.fireBuiltPosition;
+    // Fires keep their glows across rebuilds: a pan that keeps a fire in
+    // view rewrites nothing for it, and only glows that left the view go.
+    const keep = new Set();
+    const writes = [];
     for (const fire of candidates) {
-      const coreSize = components.model.frpPixelSize(fire.frp);
       const position = anchor(fire);
       const cullPosition = components.model.fireCullPosition(fire, position);
       const pickId = `firms-${fire.index}`;
       layerState._pickIndexById.set(pickId, fire);
-      layerState._cullPositions.push(cullPosition);
+      keep.add(pickId);
+      const glow = fireGlow(pickId, fire, position);
+      if (glow) writes.push({ glow, fire, position });
       markers.push({ position, cullPosition, fire, cell: null });
-      layerState._billboards.add({
-        id: pickId,
-        position,
-        image: components.model.glowSprite(
-          components.model.detectionColorStop(fire),
-          components.model.sizeBucket(coreSize),
-        ),
-        verticalOrigin: Cesium.VerticalOrigin.CENTER,
-        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      });
     }
-
-    // Freshly-added sprites default to show=true; cull the far side now so a
-    // rebuild never flashes through-the-planet detections while the camera
-    // sits still (the moveEnd/preRender hooks only fire on camera motion).
-    refreshHorizonCulling();
+    const gone = [];
+    for (const pickId of drawnGlows.keys())
+      if (!keep.has(pickId)) gone.push(pickId);
+    for (const pickId of gone) drawnGlows.delete(pickId);
+    if (gone.length) set.remove(gone);
+    if (writes.length) {
+      set.upsert(writes.map((write) => write.glow));
+      for (const { glow, fire, position } of writes)
+        drawnGlows.set(glow.id, { fire, position, glow });
+    }
     return markers;
   }
 
+  /**
+   * A fire's glow icon, when it is new or changed since it was last drawn
+   * (else null): drawn depth-test-free at its anchor (a detection is never
+   * swallowed by terrain it sits on), with the far side of the globe culled
+   * by the set's horizon cull each frame. The Cesium globe is hidden here
+   * (Google 3D Tiles render the planet), so nothing writes far-side depth,
+   * and the cull is what keeps fires from shining through the planet. The
+   * anchor moves once, when its floor warms. A refresh reuses indices, so a
+   * kept id can hold a different detection, restyled then. It is written at
+   * the hand-off fade's current opacity (applyHandoffFade).
+   *
+   * The glow is rasterised once per colour at GLOW_SPRITE_PX and drawn at
+   * the fire's own size by its scale. Its hold motion draws it on the
+   * renderer's moving-icon path, which culls the horizon on the GPU.
+   */
+  function fireGlow(pickId, fire, position) {
+    const drawn = drawnGlows.get(pickId);
+    if (drawn && drawn.fire === fire && drawn.position === position)
+      return null;
+    const corePx = components.model.sizeBucket(
+      components.model.frpPixelSize(fire.frp),
+    );
+    return {
+      id: pickId,
+      pos: { x: position.x, y: position.y, z: position.z },
+      image: components.model.glowSprite(
+        components.model.detectionColorStop(fire),
+      ),
+      size: [GLOW_SPRITE_PX, GLOW_SPRITE_PX],
+      scale: (corePx * 2) / GLOW_SPRITE_PX,
+      alpha: glowAlpha,
+      disableDepthTest: Infinity,
+      motion: { kind: 'hold' },
+      meta: { layer: 'firms', id: pickId },
+    };
+  }
+
   function ensureDetectionCollections() {
-    if (!layerState._viewer || layerState._billboards) return;
-    layerState._billboards = new Cesium.BillboardCollection({
-      scene: layerState._viewer.scene,
-      blendOption: Cesium.BlendOption.TRANSLUCENT,
+    if (!layerState._viewer || layerState._icons) return;
+    const set = drawOf(layerState._viewer).icons({
+      id: `firms:${++iconSets}:icons`,
+      // Blended as one translucent pass, as its billboards were.
+      blend: 'translucent',
+      horizonCull: true,
+      show: layerState._enabled && !(layerState._handoffHeat >= 1),
+      drawOrder: spriteDrawOrder?.('firms') ?? 0,
     });
-    layerState._billboards.show = layerState._enabled;
-    layerState._viewer.scene.primitives.add(layerState._billboards);
-    registerSpriteCollection('firms', layerState._billboards);
-    restoreSpriteOrder(layerState._viewer);
+    // Columns of no rows put the set's host in the scene now, rather than
+    // with its first fire.
+    set.setColumns?.({ ids: [] });
+    layerState._icons = set;
     overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, layerState._enabled);
   }
 
-  function removeDetectionCollections(viewer) {
-    const scene = viewer?.scene || layerState._viewer?.scene;
-    if (scene && !scene.isDestroyed?.()) {
-      try {
-        if (layerState._billboards)
-          scene.primitives.remove(layerState._billboards);
-      } catch {
-        /* already torn down */
-      }
-    }
-    layerState._billboards = null;
+  /**
+   * Let the glow set go, whichever viewer the caller tears down: its
+   * renderer takes it out of the scene it draws in.
+   */
+  function removeDetectionCollections() {
+    layerState._icons?.dispose();
+    layerState._icons = null;
+    drawnGlows.clear();
     overlayHost.clearSource(FIRMS_OVERLAY_SOURCE_ID);
     overlayHost.setVisible(FIRMS_OVERLAY_SOURCE_ID, false);
   }
 
   /**
-   * Shared horizon occluder positioned at the current camera, or null when
-   * there is no usable camera yet (init order / headless stubs).
-   * `viewer.camera` and `viewer.scene.camera` are the SAME object in Cesium;
-   * both are probed so a partial stub (either shape) still gets a real
-   * occluder rather than silently degrading to "nothing is ever occluded".
-   * @returns {?Cesium.EllipsoidalOccluder}
+   * The renderer's query and frame ports the cards and the LOD watcher use:
+   * the bound renderer's, or for a viewer with no
+   * renderer bound, those the Cesium adapter builds over it once the
+   * caller has loaded `./render/cesium/unbound` (`findQuery`, `findFrame`).
+   * @returns {{query: object|null, frame: object|null}}
    */
-
-  function fireHorizonOccluder() {
-    const camera = layerState._viewer?.camera?.positionWC
-      ? layerState._viewer.camera
-      : layerState._viewer?.scene?.camera;
-    if (!camera?.positionWC) return null;
-    return horizonOccluder(camera);
+  function scenePorts() {
+    const viewer = layerState._viewer;
+    return { query: findQuery(viewer), frame: findFrame(viewer) };
   }
 
-  /**
-   * Hide detection sprites that sit beyond the ellipsoid horizon (see
-   * {@link applyHorizonCull}). Runs on the cadences that already exist in this
-   * layer — the throttled LOD preRender watcher (camera-moved only), camera
-   * moveEnd, and each detection rebuild — never as a new per-frame pass.
-   * No-ops in the `cells` bands, where the collection is empty.
-   */
-
-  function refreshHorizonCulling() {
-    if (!layerState._billboards || !layerState._billboards.length) return;
-    components.model.applyHorizonCull(
-      layerState._billboards,
-      fireHorizonOccluder(),
-      layerState._cullPositions,
-    );
-  }
   return {
+    scenePorts,
     renderCurrentLod,
     renderBand,
     aggregateFires,
@@ -457,7 +513,5 @@ export function createRendering({
     applyHandoffFade,
     ensureDetectionCollections,
     removeDetectionCollections,
-    fireHorizonOccluder,
-    refreshHorizonCulling,
   };
 }

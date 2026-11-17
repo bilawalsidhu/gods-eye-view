@@ -8,6 +8,7 @@ import AwarenessNames from './AwarenessNames.vue';
 // The Contacts panel inside Context. The Contacts layer publishes its view
 // (standby, results or empty); until it does, the panel shows its initial
 // markup. Buttons call the layer's navigation as the person's own.
+const props = defineProps({ compact: Boolean });
 const { awareness: view, awarenessLayer: layer } = storeToRefs(useContextStore());
 const user = { origin: 'user' };
 const root = ref(null);
@@ -58,8 +59,8 @@ onUpdated(() => {
       <span>{{ view.text }}</span>
     </div>
     <template v-else-if="view.kind === 'results'">
-      <div class="military-awareness-subject">{{ view.subject }}</div>
-      <a v-if="view.photo && view.photo.src !== failedPhoto" class="military-awareness-photo" :href="view.photo.link" target="_blank" rel="noopener">
+      <div v-if="!props.compact" class="military-awareness-subject">{{ view.subject }}</div>
+      <a v-if="!props.compact && view.photo && view.photo.src !== failedPhoto" class="military-awareness-photo" :href="view.photo.link" target="_blank" rel="noopener">
         <img :src="view.photo.src" :width="view.photo.width ?? undefined" :height="view.photo.height ?? undefined" alt="" @error="fail" />
         <small v-if="view.photo.credit">{{ view.photo.credit }}</small>
       </a>

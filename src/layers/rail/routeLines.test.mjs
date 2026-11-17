@@ -227,6 +227,7 @@ test('the selected train’s line is its trip’s shape, else its route’s long
     train('T2', LAT + 0.01, -71.07, { routeId: 'R2' }),
   ]);
   await app.enable();
+  const routeSets = new Set();
   for (const [id, shapeIndex, vertices] of [
     ['T1', 0, 31],
     ['T2', 1, 2],
@@ -242,7 +243,16 @@ ${shapeIndex}`,
       id,
     );
     assert.equal(route.vertices, vertices, id);
+    // Each route is drawn in a set made for it, on top of every line set
+    // made before it, as its primitive was added when it was drawn.
+    const lines = [...app.draw.sets.values()].filter(
+      (set) => set.kind === 'lines' && !set.disposed,
+    );
+    assert.match(lines.at(-1).spec.id, /:route:\d+$/, id);
+    assert.equal(lines.filter((set) => /:route:/.test(set.spec.id)).length, 1);
+    routeSets.add(lines.at(-1).spec.id);
   }
+  assert.equal(routeSets.size, 2, 'a set of its own for each route');
 });
 
 /** A one-shape Boston pack for mbta-rail. */

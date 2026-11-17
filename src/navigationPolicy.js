@@ -8,6 +8,7 @@
  */
 
 import { t, msg } from './i18n/index.js';
+import { canvasOf } from './render/rendererOf.js';
 
 export const NAVIGATION_AUTHORITY_EVENT = 'gev:navigation-authority-taken';
 
@@ -42,6 +43,8 @@ const COCKPIT_REFUSALS = Object.freeze({
   aircraft: msg('Exit cockpit to fly to an aircraft'),
   satellite: msg('Exit cockpit to fly to a satellite'),
   frame: msg('Exit cockpit to frame contacts'),
+  // Opening Stories (src/stories/controller.js) takes the camera.
+  stories: msg('Exit cockpit to open Stories'),
 });
 
 /** The destination nouns with their own Cockpit refusal (for tests). */
@@ -56,8 +59,8 @@ function cockpitRefusal(noun) {
 /**
  * Announce that a layer-owned camera flight is taking navigation authority.
  *
- * Aircraft focus reaches the stamp for free: it assigns `viewer.trackedEntity`,
- * and the UI stamps on `trackedEntityChanged`. Vessel and installation focus
+ * Aircraft focus reaches the stamp for free: the camera follows the aircraft,
+ * and the UI stamps when what it follows changes. Vessel and installation focus
  * fly the camera WITHOUT ever setting a tracked entity, so they have no such
  * seam — an earlier deferred geocode would still match the generation it
  * captured and could resolve on top of the new Context focus. This is that
@@ -196,7 +199,7 @@ const CAMERA_GESTURES = ['pointerdown', 'wheel'];
  */
 export function watchCameraOwner(viewer, navigation) {
   let generation = navigation?._navigationGeneration;
-  const canvas = viewer?.canvas ?? viewer?.scene?.canvas ?? null;
+  const canvas = canvasOf(viewer);
   let taken = false;
   const onGesture = () => {
     taken = true;

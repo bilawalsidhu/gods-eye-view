@@ -49,7 +49,8 @@ export const CONTEXT_RIM_HEIGHT_M = 2500;
  *  the FLIR, NVG and CRT styles. A bright core inside a dark halo keeps
  *  luminance contrast on light and dark ground alike, and luminance is what
  *  the monochrome styles keep. The core is the Context panel's blue; the halo
- *  is the map-card ink. Widths are screen pixels; `outlineWidth` is per side.
+ *  is the map-card ink. Widths are screen pixels; `outlineWidth` is the
+ *  halo's width in all, half on each side.
  *  It is drawn as an unpickable primitive, so clicks on its edge reach the
  *  contacts underneath.
  *  While the sonar pulses run, the ring dims to `restOpacity` and flashes
@@ -74,30 +75,32 @@ export const AWARENESS_RANGE_RING_STYLE = Object.freeze({
  *  over `fadeInFraction` of its travel, then fades as (1 - travel) to the
  *  `fadeOutPower` down to `endOpacityFraction` of `peakOpacity`, so a pulse
  *  is dim but still visible when it reaches the ring and the ring flashes.
- *  Each line is `width` CSS pixels wide, its outer `outlineWidth` a dark
- *  halo, in the ring's colours, as Cesium's polyline outline material draws.
+ *  Each front is a line `width` CSS pixels wide whose outer `outlineWidth`,
+ *  half on each side, is a dark halo, in the ring's colours.
  *  Behind each line a radial gradient in the same blue fades inward over
- *  `gradientDepthFraction` of the radius, at most
- *  `gradientOpacity` strong. One unpickable disc draws the lines and the
- *  gradient, so pulses never catch a click meant for a contact; its shader
- *  takes at most four pulses. The disc follows the subject by a model-matrix
- *  rotation, so it stays concentric with the ring, and is rebuilt only after
- *  the subject moves `gradientRebuildM` from where it was built; while the
- *  pulses rest the hidden disc is left alone and catches up when they wake. The
- *  disc is hidden while the camera is below its height, where it would sweep
- *  the sky.
+ *  `gradientDepthFraction` of the radius, at most `gradientOpacity` strong,
+ *  painted on a canvas that fills one flat ellipse at the rim. Lines and
+ *  ellipse are unpickable, so pulses never catch a click meant for a
+ *  contact. The ellipse is `gradientRebuildM` wider than the ring and moves
+ *  only after the subject moves that far from where it was built, the
+ *  canvas keeping the band concentric meanwhile; while the pulses rest the
+ *  hidden band is left alone and catches up when they wake. The band is
+ *  hidden while the camera is below its height, where it would sweep the
+ *  sky.
  *  The pulses run for `activeMs` (three ring flashes) after a selection or
  *  a camera move, fading in and out over `settleMs`, then rest: the ring
  *  stays on screen, static, and nothing asks for frames, so a parked view
  *  goes quiet again. Only a camera move within `inputWakeMs` of the user
  *  handling the map (pointer, wheel or touch on the canvas, which covers a
  *  drag's inertia, while the camera controls take input) wakes them; a moving subject and the app's own camera moves
- *  (tracking, cockpit, orbit, a fly-to) do not. Below the disc's height they
+ *  (tracking, cockpit, orbit, a fly-to) do not. Below the band's height they
  *  rest too. While they run they never hold
- *  continuous rendering; each drawn frame arms one more request after the
- *  Cyber sonar's 80 ms cadence, so the two never beat. When something else
- *  already renders continuously they update every frame. Skipped under
- *  prefers-reduced-motion. */
+ *  continuous rendering; each drawn frame arms one more step after the
+ *  Cyber sonar's 80 ms cadence, so the two never beat. Fronts and band,
+ *  fixed in the world, step at that cadence however many frames are
+ *  drawn, so they look the same whether the camera moves or not; crossing
+ *  the rim height shows or hides them at once.
+ *  Skipped under prefers-reduced-motion. */
 export const AWARENESS_RANGE_PULSE = Object.freeze({
   count: 3,
   periodMs: 9000,
