@@ -1,4 +1,6 @@
-import * as Cesium from 'cesium';
+import { inputFor } from '../../input/dispatcher.js';
+import { toLonLatH } from '../../geo/index.js';
+import { globeImageryHost } from '../weather/shellRendering.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
 import { createGravityRendering, GRAVITY_COLORS } from './rendering.js';
 import { landMaskAt } from './landMask.js';
@@ -46,7 +48,6 @@ export function gravityValueAt(field, index, lat, lon) {
  */
 export function createGravityLayer({
   feed,
-  cesium = Cesium,
   createRendering = createGravityRendering,
   eventTarget = globalThis.window,
   setTimeout: setTimeoutImpl = globalThis.setTimeout,
@@ -62,7 +63,7 @@ export function createGravityLayer({
   let imageryHost = null;
   let enabled = false;
   let listener = null;
-  let clickHandler = null;
+  let offClick = null;
   let index = null;
   let field = null;
   let shownId = null;
@@ -90,11 +91,7 @@ export function createGravityLayer({
     if (!list.length) return null;
     return list.some(({ id }) => id === month) ? month : list.at(-1).id;
   };
-  const getHost = () =>
-    imageryHost?.() ?? {
-      collection: viewer?.imageryLayers ?? viewer?.scene?.imageryLayers,
-      kind: 'globe',
-    };
+  const getHost = () => imageryHost?.() ?? globeImageryHost(viewer);
   const onMapStackChanged = () => rendering?.rehome();
   // Land only draws nothing until the mask arrives, rather than flashing the
   // oceans first; without a mask it falls back to every cell.
@@ -279,29 +276,22 @@ export function createGravityLayer({
   // A click on open ground reads the shown month at that spot. Clicks on
   // anything with an id belong to that thing's own layer.
   function installProbe() {
-    if (
-      clickHandler ||
-      !viewer?.scene?.canvas ||
-      typeof cesium.ScreenSpaceEventHandler !== 'function'
-    )
-      return;
-    clickHandler = new cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    clickHandler.setInputAction((click) => {
-      if (!enabled || !field || !isPointerFree() || !click?.position) return;
-      const picked = viewer.scene.pick?.(click.position);
-      if (picked?.id !== undefined) return;
-      const hit = viewer.camera?.pickEllipsoid?.(click.position);
-      if (!hit) return;
-      const place = cesium.Cartographic.fromCartesian(hit);
-      setProbe(
-        cesium.Math.toDegrees(place.latitude),
-        cesium.Math.toDegrees(place.longitude),
-      );
-    }, cesium.ScreenSpaceEventType.LEFT_CLICK);
+    if (offClick || !viewer) return;
+    // The dispatcher already skips a click while a draw tool or Director
+    // holds the pointer.
+    offClick = inputFor(viewer).onClick((event) => {
+      if (!enabled || !field || !isPointerFree() || !event.screenPosition)
+        return;
+      if (event.topHit) return;
+      const position = event.ground();
+      const place = position && toLonLatH(position);
+      if (!place) return;
+      setProbe(place.lat, place.lon);
+    });
   }
   function removeProbe() {
-    if (clickHandler && !clickHandler.isDestroyed?.()) clickHandler.destroy();
-    clickHandler = null;
+    offClick?.();
+    offClick = null;
     probeRequest?.abort();
     probeRequest = null;
     probe = null;
@@ -325,7 +315,7 @@ export function createGravityLayer({
     updateInterval: 6 * 3600_000,
     init(nextViewer) {
       viewer = nextViewer;
-      rendering = createRendering({ viewer, cesium, getHost });
+      rendering = createRendering({ viewer, getHost });
       eventTarget?.addEventListener?.(
         'gev:map-stack-changed',
         onMapStackChanged,

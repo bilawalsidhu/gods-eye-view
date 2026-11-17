@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGravityLayer, gravityValueAt } from './index.js';
+import { fakeInput } from '../../input/testDoubles.mjs';
+import { bindRenderer } from '../../render/rendererOf.js';
+import { fromDegreesInto } from '../../geo/ellipsoid.js';
 import { decodeLandMaskRuns, landMaskAt } from './landMask.js';
 import { encodeLandMaskRuns } from '../../../server/providers/gravity/grid.js';
 
@@ -21,6 +24,7 @@ const MASK = syntheticMask();
 import {
   createGravityRaster,
   createGravityRendering,
+  createGravityShell,
   gravityColor,
   GRAVITY_COLORS,
 } from './rendering.js';
@@ -90,11 +94,17 @@ function harness({ fieldReady = () => Promise.resolve() } = {}) {
     setTimeout: (fn) => timers.push(fn),
     clearTimeout: () => timers.splice(0),
   });
-  layer.init({ scene: {} });
+  layer.init(withInput({ scene: {} }));
   return { layer, fetched, drawn, filters, timers, cells };
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+/** A viewer double with the dispatcher a layer's click probe subscribes to. */
+function withInput(viewer) {
+  fakeInput(viewer);
+  return viewer;
+}
 
 test('colours run red for loss and blue for gain, clamp at the ends, and hide no-data', () => {
   assert.deepEqual(gravityColor(-1000), GRAVITY_COLORS[0][1]);
@@ -336,7 +346,7 @@ test('a record still being prepared is reported, not thrown', async () => {
     }),
     eventTarget: null,
   });
-  layer.init({ scene: {} });
+  layer.init(withInput({ scene: {} }));
   layer.enable();
   assert.equal(await layer.update(), true);
   assert.match(layer.getRowControls().info, /Preparing the gravity record/);
@@ -356,7 +366,6 @@ test('the rendering keeps one shell and alternates canvases so each month upload
   });
   const rendering = createGravityRendering({
     viewer: { scene: { requestRender() {} } },
-    cesium: { Rectangle: { MAX_VALUE: {} } },
     getHost: () => ({ kind: 'globe' }),
     createCanvas: canvas,
     createSurface: () => {
@@ -470,7 +479,7 @@ test('land only waits for the mask, and falls back to every cell without one', a
       }),
       eventTarget: null,
     });
-    layer.init({ scene: {} });
+    layer.init(withInput({ scene: {} }));
     layer.enable();
     return layer;
   };
@@ -492,18 +501,6 @@ test('land only waits for the mask, and falls back to every cell without one', a
 });
 
 test('a click on open ground reads the month and charts that cell', async () => {
-  let onClick = null;
-  const cesium = {
-    ScreenSpaceEventHandler: class {
-      setInputAction(fn) {
-        onClick = fn;
-      }
-      destroy() {}
-    },
-    ScreenSpaceEventType: { LEFT_CLICK: 'click' },
-    Cartographic: { fromCartesian: (hit) => hit },
-    Math: { toDegrees: (radians) => (radians * 180) / Math.PI },
-  };
   const cells = [];
   let picked;
   const layer = createGravityLayer({
@@ -516,7 +513,6 @@ test('a click on open ground reads the month and charts that cell', async () => 
       },
       getLandMask: async () => MASK,
     },
-    cesium,
     createRendering: () => ({
       setField() {},
       clear() {},
@@ -527,23 +523,20 @@ test('a click on open ground reads the month and charts that cell', async () => 
     }),
     eventTarget: null,
   });
-  const radians = (degrees) => (degrees * Math.PI) / 180;
-  layer.init({
+  const viewer = {
     scene: { canvas: {}, pick: () => picked },
-    camera: {
-      pickEllipsoid: () => ({
-        latitude: radians(28.2),
-        longitude: radians(77.9),
-      }),
-    },
-  });
+    camera: { pickEllipsoid: () => fromDegreesInto(77.9, 28.2, 0, {}) },
+  };
+  const input = fakeInput(viewer);
+  const onClick = () => input.click({ x: 1, y: 1 });
+  layer.init(viewer);
   layer.enable();
   await layer.update();
   picked = { id: 'flight-123' };
-  onClick({ position: { x: 1, y: 1 } });
+  onClick();
   assert.equal(layer.getCardState().probe, null, 'another layer owns that');
   picked = undefined;
-  onClick({ position: { x: 1, y: 1 } });
+  onClick();
   await settle();
   const probe = layer.getCardState().probe;
   assert.equal(probe.cm, -30);
@@ -557,4 +550,43 @@ test('a click on open ground reads the month and charts that cell', async () => 
   assert.equal(cells.length, 1);
   layer.setParams({ clearProbe: true });
   assert.equal(layer.getCardState().probe, null);
+});
+
+test('the shell is one raster-shell field on the draw port, updated in place', () => {
+  const fields = [];
+  const viewer = {};
+  const unbind = bindRenderer(viewer, {
+    draw: {
+      field(spec) {
+        const field = { spec, updates: [], disposed: false };
+        field.update = (patch) => field.updates.push(patch);
+        field.dispose = () => {
+          field.disposed = true;
+        };
+        fields.push(field);
+        return field;
+      },
+    },
+  });
+  try {
+    const shell = createGravityShell({ viewer, height: 12_000 });
+    shell.setAlpha(0.85);
+    assert.equal(fields.length, 0, 'no field before there is an image');
+    const month = { width: 1, height: 1 };
+    shell.setImage(month);
+    const { spec } = fields[0];
+    assert.equal(spec.kind, 'rasterShell');
+    assert.equal(spec.heightM, 12_000);
+    assert.equal(spec.alpha, 0.85);
+    assert.equal(spec.image.canvas, month);
+    shell.setImage(month);
+    assert.equal(fields.length, 1, 'a new month updates the same field');
+    assert.notEqual(fields[0].updates[0].image, spec.image);
+    shell.setAlpha(0.45);
+    assert.deepEqual(fields[0].updates[1], { alpha: 0.45 });
+    shell.destroy();
+    assert.equal(fields[0].disposed, true);
+  } finally {
+    unbind();
+  }
 });

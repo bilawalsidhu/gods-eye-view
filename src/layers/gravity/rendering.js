@@ -1,4 +1,4 @@
-import { createShellSurface } from '../weather/shellRendering.js';
+import { findDraw, findFrame } from '../../render/rendererOf.js';
 import { NO_IMAGERY_HOST } from '../weather/imageryHost.js';
 import { msg } from '../../i18n/index.js';
 import { GRAVITY_COLORS } from './display.js';
@@ -169,13 +169,60 @@ export function createGravityRaster(
 }
 
 /** One raised shell drawing the selected month. */
+const WHOLE_GLOBE = Object.freeze({
+  west: -180,
+  south: -90,
+  east: 180,
+  north: 90,
+});
+let gravityShells = 0;
+
+/**
+ * The raised shell, drawn through the draw port's raster-shell field. The
+ * field is made on the first image; each later image is a new reference, so
+ * the port re-uploads it.
+ * @returns {{setImage(canvas:object):void, setAlpha(alpha:number):void, destroy():void}}
+ */
+export function createGravityShell({ viewer, height }) {
+  const id = `gravity-shell:${(gravityShells += 1)}`;
+  let field = null;
+  let alpha = 0;
+  let images = 0;
+  return {
+    setImage(canvas) {
+      const image = { canvas, key: `${id}:${(images += 1)}` };
+      if (field) {
+        field.update({ image });
+        return;
+      }
+      field = findDraw(viewer).field({
+        kind: 'rasterShell',
+        id,
+        image,
+        rectangle: WHOLE_GLOBE,
+        heightM: height,
+        alpha,
+        detail: null,
+      });
+    },
+    setAlpha(next) {
+      alpha = next;
+      field?.update({ alpha });
+    },
+    destroy() {
+      field?.dispose();
+      field = null;
+    },
+  };
+}
+
 export function createGravityRendering({
   viewer,
-  cesium,
   getHost,
   createCanvas = () => document.createElement('canvas'),
-  createSurface = createShellSurface,
+  createSurface = createGravityShell,
 } = {}) {
+  const requestRender = () => findFrame(viewer)?.requestRender('gravity');
   let surface = null;
   let raster = null;
   let alpha = 0.85;
@@ -199,7 +246,7 @@ export function createGravityRendering({
   function remove() {
     surface?.destroy();
     surface = null;
-    viewer.scene?.requestRender?.();
+    requestRender();
   }
   function show() {
     if (!raster) return;
@@ -211,8 +258,6 @@ export function createGravityRendering({
     try {
       surface ??= createSurface({
         viewer,
-        cesium,
-        rectangle: cesium.Rectangle.MAX_VALUE,
         height: GRAVITY_SHELL_HEIGHT,
       });
       surface.setImage(paint());
@@ -223,7 +268,7 @@ export function createGravityRendering({
       remove();
       error = IMAGE_UNAVAILABLE;
     }
-    viewer.scene?.requestRender?.();
+    requestRender();
   }
   return {
     setField(field, format, mask = null) {
