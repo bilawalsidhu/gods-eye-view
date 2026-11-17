@@ -9294,7 +9294,9 @@ destroy disposes its renderer-owned marker set. No port geometry is bundled.
 The Ports panel filters the map and selector by country and affirmative WPI
 container/solid-bulk/oil/LNG facility flags. Unknown flags stay unknown and
 never match a positive filter. Click a marker or select a name to open its
-profile. Selecting a name flies to the port. Profiles show stable WPI identity,
+profile. Selecting a name flies to the port. The floating panel can collapse
+without disabling the layer; it stays above the context dock with an opaque
+background so markers and other panels do not obscure its text. Profiles show stable WPI identity,
 UN/LOCODE, facility flags, operator, ownership, dated annual throughput,
 handling capacity, status and expansions. Unavailable fields are explicitly
 labelled. WPI inclusion is not treated as evidence of operational status.

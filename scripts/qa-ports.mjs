@@ -49,10 +49,19 @@ fixtures.forEach((feature, i) => {
 const browser = await puppeteer.launch({
   headless: process.env.GEV_HEADLESS_SHELL ? 'shell' : true,
   pipe: true,
-  args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader'],
+  args: [
+    '--no-sandbox',
+    '--disable-dev-shm-usage',
+    '--use-gl=angle',
+    '--use-angle=swiftshader',
+  ],
   defaultViewport: { width: 1440, height: 1000 },
 });
 const page = await browser.newPage();
+await page.evaluateOnNewDocument(() => {
+  localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
+  localStorage.setItem('gevStoriesPopSeen', '1');
+});
 const errors = [];
 page.on('pageerror', (e) => {
   errors.push(e.message);
@@ -81,9 +90,10 @@ page.on('request', (req) => {
     });
   }
   if (
-    (url.hostname === 'services.arcgisonline.com' &&
+    !live &&
+    ((url.hostname === 'services.arcgisonline.com' &&
       url.pathname.includes('/tile/')) ||
-    url.hostname === 'tile.openstreetmap.org'
+      url.hostname === 'tile.openstreetmap.org')
   )
     return void req.respond({
       status: 200,
@@ -100,16 +110,28 @@ try {
     timeout: 120000,
   });
   const screenshot = (name) =>
-    page.screenshot({ path: new URL(name, out).pathname });
+    page.screenshot({
+      path: new URL(name.replace(/\.png$/, '.jpg'), out).pathname,
+      type: 'jpeg',
+      quality: 90,
+    });
   // Recording shows enable, navigation, record selection, filtering, and disable.
+  await page.waitForFunction(
+    () =>
+      document.querySelector('#loading-screen')?.classList.contains('hidden'),
+    { timeout: 120000 },
+  );
   console.log('App ready');
 
   await page.keyboard.press('Escape');
   const notNow = await page.$('#hPop .tbtn:not(.solid)');
-  if (notNow) await notNow.click();
+  if (notNow && (await notNow.isVisible())) await notNow.click();
   if (process.argv.includes('--record'))
     recorder = await page.screencast({
       path: new URL(live ? 'live.webm' : 'fixtures.webm', out).pathname,
+      fps: 3,
+      scale: 0.75,
+      speed: 1,
     });
   console.log('Enabling ports');
   await page.evaluate(() =>
@@ -120,11 +142,22 @@ try {
       const s = window.__godsEyeView.dataManager.layers
         .get('world-ports')
         ?.module.getStats();
+      if (s?.error) throw new Error(s.error);
       return s?.count > 0 && !s.loading;
     },
     { timeout: 120000 },
   );
   console.log('Port acquisition complete');
+  assert.equal(
+    await page.$eval('#ports-panel', (panel) => {
+      const box = panel.getBoundingClientRect();
+      return panel.contains(
+        document.elementFromPoint(box.right - 50, box.top + 150),
+      );
+    }),
+    true,
+    'Ports panel must remain above the context dock',
+  );
   if (live) {
     const count = await page.evaluate(
       () =>
@@ -147,6 +180,18 @@ try {
     assert.equal(stats.duplicates, 2);
     console.log(`Live DOE WPI: ${count} ports acquired in browser`);
   }
+  await page.evaluate(async () => {
+    const { findCamera } = await import('/src/render/rendererOf.js');
+    findCamera(window.__godsEyeView.viewer).flyTo(
+      { lon: 60, lat: 20, height: 18000000 },
+      {
+        durationS: 0,
+        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+      },
+    );
+  });
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  await screenshot(live ? 'live-globe.png' : 'fixture-globe.png');
   await page.select('#ports-panel label:nth-of-type(3) select', '48276');
   await page.waitForFunction(() =>
     document.querySelector('#ports-panel')?.textContent.includes('19,400,000'),
@@ -158,6 +203,13 @@ try {
   assert.match(profile, /15,500,000 TEU/);
   assert.match(profile, /2024/);
   assert.match(profile, /Not provided by source/);
+  await page.$eval('#ports-panel', (el) => {
+    el.scrollTop = 560;
+  });
+  await screenshot(live ? 'live-facts.png' : 'fixture-facts.png');
+  await page.$eval('#ports-panel', (el) => {
+    el.scrollTop = 0;
+  });
   console.log('Filtering ports');
   await page.select(
     '#ports-panel label:nth-of-type(1) select',
@@ -208,6 +260,7 @@ try {
   // container flag from DP World's commercial supplement.
   await screenshot(live ? 'live-filtered.png' : 'fixture-filtered.png');
   await page.select('#ports-panel label:nth-of-type(2) select', '');
+  console.log('Checking rendered marker selection');
   await page.select('#ports-panel label:nth-of-type(3) select', '48276');
   await new Promise((resolve) => setTimeout(resolve, 1500));
   // Click the actual rendered marker using the renderer's projection.
@@ -225,6 +278,7 @@ try {
   await page.waitForFunction(() =>
     document.querySelector('#ports-panel')?.textContent.includes('19,400,000'),
   );
+  console.log('Checking phone layout and disable');
   await page.setViewport({ width: 390, height: 844 });
   await screenshot(live ? 'live-phone.png' : 'fixture-phone.png');
   assert.equal(
@@ -247,11 +301,7 @@ try {
     0,
   );
 } finally {
-  if (recorder)
-    await Promise.race([
-      recorder.stop(),
-      new Promise((resolve) => setTimeout(resolve, 10000)),
-    ]);
+  if (recorder) await recorder.stop();
   await browser.close();
 }
 assert.deepEqual(errors, []);

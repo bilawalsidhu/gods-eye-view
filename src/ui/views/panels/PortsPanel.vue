@@ -172,10 +172,10 @@ const labels = {
   max-height: 70vh;
   overflow-y: auto;
   pointer-events: auto;
-  z-index: 120;
+  z-index: 180;
   padding: 14px;
   box-sizing: border-box;
-  background: var(--glass-bg, #0a1424);
+  background: rgba(10, 20, 36, 0.98);
   border: 1px solid var(--glass-border, #277b89);
   border-radius: var(--panel-radius, 12px);
 }
