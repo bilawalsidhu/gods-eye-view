@@ -5,15 +5,21 @@ import { createAuroraSource, validateAuroraSnapshot } from './source.js';
 import {
   createAuroraRaster,
   createAuroraRendering,
+  createAuroraShell,
   AURORA_SHELL_STACK,
 } from './rendering.js';
 import { createAuroraLayer } from './index.js';
+import { bindRenderer } from '../../render/rendererOf.js';
 
 function payload() {
   const coordinates = [];
   for (let lon = 0; lon < 360; lon++)
     for (let lat = -90; lat <= 90; lat++)
-      coordinates.push([lon, lat, lat === -90 ? 25 : lat === 90 ? 75 : lat === 0 ? 0.5 : 0]);
+      coordinates.push([
+        lon,
+        lat,
+        lat === -90 ? 25 : lat === 90 ? 75 : lat === 0 ? 0.5 : 0,
+      ]);
   return {
     'Observation Time': '2026-09-25T12:00:00Z',
     'Forecast Time': '2026-09-25T13:00:00Z',
@@ -42,7 +48,7 @@ test('raster preserves both hemispheres and flips rows for canvas north-up', () 
   assert.equal(raster.width, 360);
   assert.equal(raster.height, 181);
   const northAlpha = raster.rgba[3];
-  const southAlpha = raster.rgba[(180 * 360) * 4 + 3];
+  const southAlpha = raster.rgba[180 * 360 * 4 + 3];
   assert.ok(northAlpha > southAlpha);
 });
 
@@ -116,9 +122,15 @@ test('presents variable forecast horizon and uncertainty, never observation cert
   assert.match(controls.summary.label, /FORECAST/);
   assert.equal(controls.summary.coverage, 'Both hemispheres · 1° grid');
   assert.equal(controls.summary.horizon, 'Variable 30–90 min forecast');
-  assert.equal(controls.summary.uncertainty, 'Modeled probability, not guaranteed visibility');
+  assert.equal(
+    controls.summary.uncertainty,
+    'Modeled probability, not guaranteed visibility',
+  );
   assert.match(controls.info, /30–90 min horizon/);
-  assert.match(controls.info, /Clouds, darkness, local light pollution, and model uncertainty/);
+  assert.match(
+    controls.info,
+    /Clouds, darkness, local light pollution, and model uncertainty/,
+  );
   assert.match(controls.info, /not a guarantee/);
   assert.doesNotMatch(controls.info, /Latest observation/);
   assert.equal(controls.legend[0].label, '0%');
@@ -149,10 +161,14 @@ test('preserves the last valid raster when a later response is explicitly unavai
   const layer = createAuroraLayer({
     feed: { getSnapshot: async () => responses.shift() },
     createRendering: () => ({
-      setField(value) { calls.fields.push(value); },
+      setField(value) {
+        calls.fields.push(value);
+      },
       setAlpha() {},
       rehome() {},
-      clear() { calls.clears += 1; },
+      clear() {
+        calls.clears += 1;
+      },
       destroy() {},
       getDiagnostics: () => ({ imageryActive: true }),
     }),
@@ -173,7 +189,10 @@ test('the field is drawn as a raised stack on every host, never draped', () => {
   // be draped on the globe the way radar and cloud imagery are. Two things are
   // pinned here because only a browser would otherwise catch them: that no host
   // takes a draped path, and that the stack really has vertical extent.
-  const snapshot = { grid: { nx: 4, ny: 3 }, probabilities: new Array(12).fill(50) };
+  const snapshot = {
+    grid: { nx: 4, ny: 3 },
+    probabilities: new Array(12).fill(50),
+  };
   for (const kind of ['globe', 'tileset']) {
     const built = [];
     const canvas = {
@@ -186,19 +205,11 @@ test('the field is drawn as a raised stack on every host, never draped', () => {
       toDataURL: () => 'data:image/png;base64,AAAA',
     };
     const collection = {
-      addImageryProvider: () => assert.fail(`${kind} draped the aurora on imagery`),
+      addImageryProvider: () =>
+        assert.fail(`${kind} draped the aurora on imagery`),
     };
     const rendering = createAuroraRendering({
       viewer: { scene: { requestRender: () => {} } },
-      cesium: {
-        Rectangle: { MAX_VALUE: Symbol('rectangle') },
-        Credit: class {},
-        SingleTileImageryProvider: class {
-          constructor() {
-            assert.fail(`${kind} built a draped imagery provider`);
-          }
-        },
-      },
       getHost: () => ({ kind, collection }),
       createCanvas: () => canvas,
       createSurface: (options) => {
@@ -208,9 +219,17 @@ test('the field is drawn as a raised stack on every host, never draped', () => {
     });
     rendering.setField(snapshot);
 
-    assert.equal(built.length, AURORA_SHELL_STACK.length, `${kind} shell count`);
+    assert.equal(
+      built.length,
+      AURORA_SHELL_STACK.length,
+      `${kind} shell count`,
+    );
     const heights = built.map((o) => o.height);
-    assert.deepEqual(heights, [...heights].sort((a, b) => a - b), 'ascending');
+    assert.deepEqual(
+      heights,
+      [...heights].sort((a, b) => a - b),
+      'ascending',
+    );
     assert.ok(heights[0] >= 90_000, 'the curtain starts in the E-region');
     assert.ok(
       heights.at(-1) - heights[0] >= 150_000,
@@ -229,4 +248,58 @@ test('stacked shell opacity composites to roughly one shell, so depth does not d
   assert.ok(composite > 0.75 && composite < 1.05, `composite ${composite}`);
   for (const { weight } of AURORA_SHELL_STACK)
     assert.ok(weight > 0 && weight <= 0.5, `weight ${weight} stays a wash`);
+});
+
+test('each shell is one raster-shell field on the draw port, updated in place', () => {
+  const fields = [];
+  const viewer = {};
+  const unbind = bindRenderer(viewer, {
+    draw: {
+      field(spec) {
+        const field = { spec, updates: [], disposed: false };
+        field.update = (patch) => field.updates.push(patch);
+        field.dispose = () => {
+          field.disposed = true;
+        };
+        fields.push(field);
+        return field;
+      },
+    },
+  });
+  try {
+    const shell = createAuroraShell({
+      viewer,
+      height: 147_000,
+      granularityDegrees: 1.75,
+    });
+    shell.setAlpha(0.3);
+    assert.equal(fields.length, 0, 'no field before there is an image');
+    const first = { width: 1, height: 1 };
+    shell.setImage(first);
+    assert.equal(fields.length, 1);
+    const { spec } = fields[0];
+    assert.equal(spec.kind, 'rasterShell');
+    assert.equal(spec.heightM, 147_000);
+    assert.equal(spec.granularityDegrees, 1.75);
+    assert.equal(spec.alpha, 0.3);
+    assert.deepEqual(spec.rectangle, {
+      west: -180,
+      south: -90,
+      east: 180,
+      north: 90,
+    });
+    assert.equal(spec.image.canvas, first);
+    // A repaint reuses its canvas; a fresh reference is what makes the port
+    // upload it again.
+    shell.setImage(first);
+    assert.equal(fields.length, 1, 'later images update the same field');
+    assert.equal(fields[0].updates[0].image.canvas, first);
+    assert.notEqual(fields[0].updates[0].image, spec.image);
+    shell.setAlpha(0.6);
+    assert.deepEqual(fields[0].updates[1], { alpha: 0.6 });
+    shell.destroy();
+    assert.equal(fields[0].disposed, true);
+  } finally {
+    unbind();
+  }
 });

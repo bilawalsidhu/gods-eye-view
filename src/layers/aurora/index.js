@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { globeImageryHost } from '../weather/shellRendering.js';
 import {
   createAuroraRendering,
   AURORA_COLORS,
@@ -11,7 +11,6 @@ const utc = (value) =>
 
 export function createAuroraLayer({
   feed,
-  cesium = Cesium,
   createRendering = createAuroraRendering,
   eventTarget = globalThis.window,
   setInterval: setIntervalImpl = globalThis.setInterval,
@@ -59,11 +58,7 @@ export function createAuroraLayer({
       Math.round(1000 / AURORA_TRANSITION_FPS),
     );
   };
-  const getHost = () =>
-    imageryHost?.() ?? {
-      collection: viewer?.imageryLayers ?? viewer?.scene?.imageryLayers,
-      kind: 'globe',
-    };
+  const getHost = () => imageryHost?.() ?? globeImageryHost(viewer);
   const onMapStackChanged = () => rendering?.rehome();
   const layer = {
     id: 'weather-aurora',
@@ -73,7 +68,7 @@ export function createAuroraLayer({
     updateInterval: 5 * 60_000,
     init(nextViewer) {
       viewer = nextViewer;
-      rendering = createRendering({ viewer, cesium, getHost });
+      rendering = createRendering({ viewer, getHost });
       eventTarget?.addEventListener?.(
         'gev:map-stack-changed',
         onMapStackChanged,

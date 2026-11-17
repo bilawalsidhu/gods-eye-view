@@ -112,7 +112,11 @@ test('with no transition the raster is byte-for-byte the direct copy', () => {
     { previous: field, mix: 1, axis: dipoleAxis(new Date()) },
   ]) {
     const got = createAuroraRaster(field, transition);
-    assert.deepEqual(got.rgba, plain.rgba, `transition ${JSON.stringify(transition?.mix)}`);
+    assert.deepEqual(
+      got.rgba,
+      plain.rgba,
+      `transition ${JSON.stringify(transition?.mix)}`,
+    );
   }
 });
 
@@ -145,7 +149,9 @@ test('the oval slides between forecasts instead of ghosting', () => {
   const current = rotateField(previous, axis, rotationRadians);
 
   const peaks = [0, 0.25, 0.5, 0.75, 1].map((mix) =>
-    peakOf(createAuroraRaster(current, { previous, mix, axis, rotationRadians })),
+    peakOf(
+      createAuroraRaster(current, { previous, mix, axis, rotationRadians }),
+    ),
   );
   const longitudes = peaks.map((p) => p.longitudeDeg);
   // It must actually move, and in one direction.
@@ -157,7 +163,12 @@ test('the oval slides between forecasts instead of ghosting', () => {
   );
   // And it must stay a single peak rather than splitting into two ghosts.
   for (const mix of [0.25, 0.5, 0.75]) {
-    const raster = createAuroraRaster(current, { previous, mix, axis, rotationRadians });
+    const raster = createAuroraRaster(current, {
+      previous,
+      mix,
+      axis,
+      rotationRadians,
+    });
     const brightest = Math.max(...raster.rgba.filter((_, i) => i % 4 === 3));
     const plainPeak = Math.max(
       ...createAuroraRaster(current).rgba.filter((_, i) => i % 4 === 3),
@@ -189,7 +200,6 @@ function renderingHarness() {
   let clock = 1000;
   const rendering = createAuroraRendering({
     viewer: { scene: { requestRender: () => {} } },
-    cesium: { Rectangle: { MAX_VALUE: Symbol('r') } },
     getHost: () => ({ kind: 'globe', collection: {} }),
     createCanvas: makeCanvas,
     now: () => clock,
@@ -215,7 +225,11 @@ test('consecutive forecasts transition; anything else installs outright', () => 
 
   const first = renderingHarness();
   first.rendering.setField(a);
-  assert.equal(first.rendering.isTransitioning(), false, 'nothing to blend from');
+  assert.equal(
+    first.rendering.isTransitioning(),
+    false,
+    'nothing to blend from',
+  );
 
   first.rendering.setField(b);
   assert.equal(first.rendering.isTransitioning(), true);
@@ -260,8 +274,7 @@ test('successive frames alternate canvases so the texture actually re-uploads', 
   // One entry per shell per paint.
   const perPaint = AURORA_SHELL_STACK.length;
   const paints = [];
-  for (let i = 0; i < h.images.length; i += perPaint)
-    paints.push(h.images[i]);
+  for (let i = 0; i < h.images.length; i += perPaint) paints.push(h.images[i]);
   assert.ok(paints.length >= 3, `only ${paints.length} paints`);
   for (let i = 1; i < paints.length; i += 1)
     assert.notEqual(

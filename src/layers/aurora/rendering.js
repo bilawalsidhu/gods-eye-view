@@ -1,4 +1,4 @@
-import { createShellSurface } from '../weather/shellRendering.js';
+import { findDraw, findFrame } from '../../render/rendererOf.js';
 import { msg } from '../../i18n/index.js';
 import { NO_IMAGERY_HOST } from '../weather/imageryHost.js';
 import { dipoleAxis, mltRotationRadians } from './magneticLocalTime.js';
@@ -242,16 +242,64 @@ export function createAuroraRaster(snapshot, transition = null) {
   return { width, height, rgba };
 }
 
+const WHOLE_GLOBE = Object.freeze({
+  west: -180,
+  south: -90,
+  east: 180,
+  north: 90,
+});
+let auroraShells = 0;
+
+/**
+ * One shell of the stack, drawn through the draw port's raster-shell field.
+ * The field is made on the first image; each later image is a new reference,
+ * so the port re-uploads it.
+ * @returns {{setImage(canvas:object):void, setAlpha(alpha:number):void, destroy():void}}
+ */
+export function createAuroraShell({ viewer, height, granularityDegrees }) {
+  const id = `aurora-shell:${(auroraShells += 1)}`;
+  let field = null;
+  let alpha = 0;
+  let images = 0;
+  return {
+    setImage(canvas) {
+      const image = { canvas, key: `${id}:${(images += 1)}` };
+      if (field) {
+        field.update({ image });
+        return;
+      }
+      field = findDraw(viewer).field({
+        kind: 'rasterShell',
+        id,
+        image,
+        rectangle: WHOLE_GLOBE,
+        heightM: height,
+        alpha,
+        granularityDegrees,
+        detail: null,
+      });
+    },
+    setAlpha(next) {
+      alpha = next;
+      field?.update({ alpha });
+    },
+    destroy() {
+      field?.dispose();
+      field = null;
+    },
+  };
+}
+
 export function createAuroraRendering({
   viewer,
-  cesium,
   getHost,
   now = () => Date.now(),
   createCanvas = () => document.createElement('canvas'),
   // Injected for the same reason as createCanvas: the stack's altitudes and
   // weights are the whole feature, and a unit test can only see them here.
-  createSurface = createShellSurface,
+  createSurface = createAuroraShell,
 } = {}) {
+  const requestRender = () => findFrame(viewer)?.requestRender('aurora');
   let snapshot = null;
   let previous = null;
   let transition = null;
@@ -269,7 +317,7 @@ export function createAuroraRendering({
     for (const { surface } of shells) surface.destroy();
     shells = [];
     kind = null;
-    viewer.scene?.requestRender?.();
+    requestRender();
   }
   /**
    * Draw the field at a point in the transition and hand it to every shell.
@@ -300,7 +348,7 @@ export function createAuroraRendering({
     image.data.set(raster.rgba);
     context.putImageData(image, 0, 0);
     for (const { surface } of shells) surface.setImage(canvas);
-    viewer.scene?.requestRender?.();
+    requestRender();
     return canvas;
   }
 
@@ -335,8 +383,6 @@ export function createAuroraRendering({
         ({ height, weight, granularityDegrees }) => {
           const surface = createSurface({
             viewer,
-            cesium,
-            rectangle: cesium.Rectangle.MAX_VALUE,
             height,
             granularityDegrees,
           });
@@ -345,7 +391,7 @@ export function createAuroraRendering({
           return { surface, weight };
         },
       );
-      viewer.scene?.requestRender?.();
+      requestRender();
       error = null;
     } catch (cause) {
       // Keep the cause. A bare catch here made a hard constructor assertion
@@ -355,7 +401,7 @@ export function createAuroraRendering({
       for (const { surface } of shells) surface.destroy();
       shells = [];
       kind = null;
-      viewer.scene?.requestRender?.();
+      requestRender();
       error = msg('Aurora field image unavailable');
       return;
     }
@@ -431,7 +477,7 @@ export function createAuroraRendering({
       alpha = next;
       for (const { surface, weight } of shells)
         surface.setAlpha(alpha * weight);
-      viewer.scene?.requestRender?.();
+      requestRender();
     },
     rehome() {
       const host = getHost();
