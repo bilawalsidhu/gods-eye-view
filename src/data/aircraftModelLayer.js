@@ -14,7 +14,8 @@ import {
   showModel,
 } from './modelRecord.js';
 import { modelDrawnScale } from './modelVisualAnchor.js';
-import { fleetModelSet } from './fleetModels.js';
+import { fleetModelSet, fleetPartTable } from './fleetModels.js';
+import { aircraftLayerPartState } from './modelPartDrivers.js';
 import { findCamera, findDraw, rendererOf } from '../render/rendererOf.js';
 import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
 import {
@@ -341,6 +342,54 @@ export function createAircraftModels({
     record.tint = [base[0], base[1], base[2], alpha];
   }
 
+  /** A finite number of the first of `values` that is one, else null. */
+  const _finite = (...values) =>
+    values.find((v) => typeof v === 'number' && Number.isFinite(v)) ?? null;
+
+  /**
+   * How high an aircraft flies above the ground under it: its render
+   * altitude over the cached ground floor there; null where that floor is
+   * not known (the gear then follows the approach rule instead).
+   */
+  function _heightAboveGround(meta) {
+    const altitude = _finite(meta.renderAltitudeM);
+    const floor =
+      Number.isFinite(meta.rawLat) && Number.isFinite(meta.rawLon)
+        ? services.groundFloor?.cachedGroundFloor?.(meta.rawLat, meta.rawLon)
+        : null;
+    return altitude !== null && Number.isFinite(floor)
+      ? altitude - floor
+      : null;
+  }
+
+  /**
+   * The moving parts a contact's model is posed with, from its record
+   * (`aircraftLayerPartState`): gear, doors and flaps by its height and climb,
+   * fans, propellers and rotors while it flies or taxis. An airport vehicle
+   * is a road vehicle (`groundVehiclePartState`): its wheels roll with its
+   * speed. Undefined for a model without parts.
+   */
+  function _partsOf(meta, spec) {
+    if (!meta) return undefined;
+    const table = fleetPartTable(fleetModelSet(), spec?.model);
+    if (!table) return undefined;
+    return aircraftLayerPartState(table, {
+      klass: meta.klass,
+      onGround: meta.onGround === true,
+      heightAboveGroundM: _heightAboveGround(meta),
+      altitudeM: _finite(meta.altitude, meta.altitudeM),
+      verticalRateMps: _finite(meta.verticalRate, meta.verticalRateMps),
+      speedMps: _finite(meta.velocity, meta.speedMps),
+    });
+  }
+
+  /** Pose a record's parts as its contact's record says, and key them for `_send`. */
+  function _poseParts(record, meta, spec) {
+    const pose = _partsOf(meta, spec);
+    record.parts = pose;
+    record.partsKey = pose ? JSON.stringify(pose) : '';
+  }
+
   /** The record's item, as its set draws it. */
   function _itemOf(id, record) {
     return {
@@ -358,6 +407,7 @@ export function createAircraftModels({
       // the IR boost draws it flat white.
       colorBlend: aircraftModelBlend(state._irBoost === true),
       environmentMap: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS.enabled,
+      ...(record.parts ? { parts: record.parts } : {}),
       show: record.show,
     };
   }
@@ -367,7 +417,7 @@ export function createAircraftModels({
     if (!set) return;
     const p = record.position;
     const t = record.tint ?? WHITE;
-    const key = `${record.url}|${p.x},${p.y},${p.z}|${record.heading}|${record.scale}|${record.minPixelSize}|${t[0]},${t[1]},${t[2]},${t[3]}|${state._irBoost === true}|${record.show}`;
+    const key = `${record.url}|${p.x},${p.y},${p.z}|${record.heading}|${record.scale}|${record.minPixelSize}|${t[0]},${t[1]},${t[2]},${t[3]}|${state._irBoost === true}|${record.show}|${record.partsKey ?? ''}`;
     if (key === record.sent) return;
     record.sent = key;
     const item = _itemOf(id, record);
@@ -426,6 +476,7 @@ export function createAircraftModels({
     // Placed BEFORE the readiness test on purpose: a model can turn ready
     // between ticks, and its first drawn frame must be at this placement.
     placeModel(record, displayPos, _modelHeading(course, meta));
+    _poseParts(record, meta, spec);
     if (!record.ready) {
       showModel(record, false); // not loaded yet → keep the 2D icon, no half-model flash
       _send(set, icao24, record, spec, out);
@@ -766,6 +817,7 @@ export function createAircraftModels({
       displayPos,
       _modelHeading(parts.motion._trackedDisplayCourse(), meta),
     );
+    _poseParts(record, meta, spec);
     showModel(record, record.ready);
     _send(state._modelSets.tracked, icao24, record, spec);
     if (record.ready) _releaseTrackedFleetModel();
@@ -841,6 +893,13 @@ export function createAircraftModels({
     afterReplan(renderTime, t, nowMs, pose?.position ?? null);
     const focusTarget = getFocusTarget();
     parts.icons._focusIcons(t, nowMs, focusTarget);
+    // Airborne helicopters in view step their rotor frame (none: no work).
+    if (parts.icons._rotorsTurning?.())
+      parts.icons._turnRotors(
+        Date.now(),
+        t,
+        pose ? (position) => inView(pose, position) : null,
+      );
 
     // 3D model regime: only when enabled AND the camera is zoomed in past the altitude ceiling.
     // Drop all models the moment we leave it (toggled off / zoomed out) so icons resume.

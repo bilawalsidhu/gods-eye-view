@@ -14,6 +14,7 @@ import { AUSTIN, SCRIPT_VIEWPORT } from '../cameraScripts.js';
 import { deepEqual, equal, near, nearVec, ok, throws } from '../expect.js';
 import { iconPosition } from '../../motion/iconMotion.js';
 import { encodeVectorTile } from '../../vectorBase/encode.js';
+import { partsModelGlb } from '../partsModel.js';
 
 /** 1 × 1 PNGs (red, green, blue), so imagery checks load nothing from the network. */
 const PIXEL_PNGS = [
@@ -4122,6 +4123,183 @@ export function portChecks() {
         set.dispose();
       },
       { capability: 'models' },
+    ),
+    check(
+      'draw.models.parts',
+      'a model’s parts are moved, hidden, clamped and spun live, without loading again',
+      async (h, r) => {
+        await overAustin(h, r, 200);
+        const set = r.draw.models({ id: 'conf:models.parts' });
+        const ready = [];
+        const failed = [];
+        set.on('ready', (id) => ready.push(id));
+        set.on('loadFailed', (id) => failed.push(id));
+        // `partsModel.js`: a body, a pod on it, a ram on that, an arm ahead.
+        const models = {
+          m: partsModelGlb(),
+          // The same model, its mesh node turned, scaled and moved.
+          n: partsModelGlb({ scale: 4, turnDeg: 90, translation: [3, 2, -1] }),
+        };
+        const pos = h.toEcef({ ...AUSTIN, height: 0 });
+        const model = (id, parts, extra = {}) => ({
+          id,
+          pos,
+          url: `conformance:parts-model-${id}.glb`,
+          gltf: models[id],
+          orientation: { heading: 0, pitch: 0, roll: 0 },
+          environmentMap: false,
+          meta: { n: 1 },
+          ...extra,
+          ...(parts ? { parts } : {}),
+        });
+        const metresPerLon = 111320 * Math.cos((AUSTIN.lat * Math.PI) / 180);
+        /** The point `east`, `north` metres from the model, `up` above it. */
+        const at = ([east, north], metres, up = 0) =>
+          h.toEcef({
+            lon: AUSTIN.lon + (east * metres) / metresPerLon,
+            lat: AUSTIN.lat + (north * metres) / 110574,
+            height: up,
+          });
+        const pickedAt = (p) => {
+          const s = r.query.project(p);
+          return (
+            s !== null &&
+            r.query.drillPick(s.x, s.y).some((hit) => hit.set === set.id)
+          );
+        };
+        // The compass, clockwise seen from above.
+        const COMPASS = [
+          [0, 1],
+          [1, 0],
+          [0, -1],
+          [-1, 0],
+        ];
+        const clockwise = ([e, n]) => [n, -e];
+        const same = (a, b) => a[0] === b[0] && a[1] === b[1];
+        /** The compass points 15 m off at which the model is picked. */
+        const pickedAround = (up = 0) =>
+          COMPASS.filter((d) => pickedAt(at(d, 15, up)));
+        const picks = h.pixels !== false;
+        const look = async () => {
+          await drawn(h, r, 3);
+          await settled(r);
+        };
+        const show = async (item) => {
+          set.upsert([item]);
+          await look();
+        };
+        set.set([model('m')]);
+        for (let i = 0; i < 600 && !ready.length && !failed.length; i++)
+          await drawn(h, r, 1);
+        deepEqual(ready, ['m'], 'ready');
+        await look();
+        if (picks) ok(pickedAt(pos), 'drawn whole, at rest');
+
+        await show(model('m', { poses: { pod: { hidden: true } } }));
+        if (picks) ok(pickedAt(pos), 'the pod hidden, the body drawn');
+        await show(model('m', { poses: { body: { hidden: true } } }));
+        if (picks) ok(!pickedAt(pos), 'the body hidden, and all riding it');
+
+        // Moves go where they say: forward, then right of that.
+        await show(model('m', { poses: { body: { offsetM: [0, 15, 0] } } }));
+        const ahead = picks ? pickedAround() : [];
+        if (picks) equal(ahead.length, 1, 'moved forward, drawn 15 m one way');
+        await show(model('m', { poses: { body: { offsetM: [15, 0, 0] } } }));
+        if (picks) {
+          ok(!pickedAt(pos), 'moved right, gone from its place');
+          const right = pickedAround();
+          equal(right.length, 1, 'moved right, drawn 15 m one way');
+          ok(
+            ahead.length === 1 &&
+              right.length === 1 &&
+              same(right[0], clockwise(ahead[0])),
+            'its right is a quarter turn clockwise of its forward',
+          );
+        }
+        const forward = ahead[0] ?? COMPASS[0];
+        const rightward = clockwise(forward);
+        const back = clockwise(clockwise(forward));
+
+        // A mesh node turned, scaled and moved: parts move in the model's
+        // frame all the same.
+        set.set([model('n')]);
+        for (let i = 0; i < 600 && ready.length < 2 && !failed.length; i++)
+          await drawn(h, r, 1);
+        deepEqual(ready, ['m', 'n'], 'the turned-node model ready');
+        await show(model('n', { poses: { body: { offsetM: [15, 0, 0] } } }));
+        if (picks) {
+          ok(
+            !pickedAt(pos),
+            'its node turned: moved right, gone from its place',
+          );
+          ok(pickedAt(at(rightward, 15)), 'and drawn 15 m to its right');
+        }
+        set.set([model('m')]);
+        for (let i = 0; i < 600 && ready.length < 3 && !failed.length; i++)
+          await drawn(h, r, 1);
+        await look();
+
+        // Stretched twice its length: a move along it stretches with it.
+        const stretched = { axisScale: [2, 1, 1] };
+        await show(model('m', undefined, stretched));
+        if (picks) ok(!pickedAt(at(back, 30)), 'stretched, it ends 20 m back');
+        await show(
+          model('m', { poses: { body: { offsetM: [0, -7.5, 0] } } }, stretched),
+        );
+        if (picks)
+          ok(
+            pickedAt(at(back, 30)),
+            'moved 7.5 m back stretched, drawn 15 m back',
+          );
+
+        // A slide's travel stays within its limits: the ram stops at 20 m.
+        const ramAhead = at(forward, 20, 23);
+        await show(model('m'));
+        if (picks) ok(!pickedAt(ramAhead), 'the ram at rest, on top');
+        await show(model('m', { poses: { ram: { offsetM: [0, 40, 0] } } }));
+        if (picks) ok(pickedAt(ramAhead), 'pushed 40 m, the ram stops at 20 m');
+        await show(model('m', { deploy: { ram: 1 } }));
+        if (picks) ok(pickedAt(ramAhead), 'deployed, the ram is out 20 m');
+
+        // A hinge's turn stays within its limits: the arm swings 45° left
+        // at most, and not at all to the right.
+        const left = clockwise(back);
+        const armAt = (d, m = 15) => at(d, m, 3);
+        const diagonal = (side) =>
+          h.toEcef({
+            lon: AUSTIN.lon + ((forward[0] + side[0]) * 10.6) / metresPerLon,
+            lat: AUSTIN.lat + ((forward[1] + side[1]) * 10.6) / 110574,
+            height: 3,
+          });
+        if (picks) ok(pickedAt(armAt(forward)), 'the arm at rest, ahead');
+        await show(model('m', { poses: { arm: { yawDeg: -90 } } }));
+        if (picks) {
+          ok(!pickedAt(armAt(forward)), 'turned left, the arm leaves');
+          ok(!pickedAt(armAt(left)), 'and stops short of a quarter turn');
+          ok(pickedAt(diagonal(left)), 'at 45° ahead and to the left');
+        }
+        await show(model('m', { poses: { arm: { yawDeg: 90 } } }));
+        if (picks) {
+          ok(!pickedAt(armAt(rightward)), 'turned right, the arm does not');
+          ok(pickedAt(armAt(forward)), 'and stays ahead');
+        }
+
+        await show(
+          model('m', {
+            spin: { pod: 90 },
+            deploy: { pod: 1, missing: 1 },
+            poses: { pod: { highlight: true }, missing: { hidden: true } },
+          }),
+        );
+        if (picks) ok(pickedAt(pos), 'spinning and highlighted, where it is');
+        await show(model('m'));
+        if (picks) ok(pickedAt(pos), 'back at rest');
+        deepEqual(ready, ['m', 'n', 'm'], 'posed without loading again');
+        deepEqual(failed, [], 'nothing failed');
+        equal(set.size(), 1, 'one model');
+        set.dispose();
+      },
+      { capability: ['models', 'modelParts'] },
     ),
 
     // --- Query -------------------------------------------------------------

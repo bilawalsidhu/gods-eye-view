@@ -191,6 +191,8 @@ export type Capability =
   | 'motionSegments'
   /** glTF models. */
   | 'models'
+  /** Moving parts of glTF models posed as an item's `parts` says. */
+  | 'modelParts'
   /** Image, video and canvas planes. */
   | 'quads'
   /** Custom meshes in a local east-north-up frame. */
