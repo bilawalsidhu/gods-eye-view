@@ -32,6 +32,7 @@ import {
   videoProvider,
 } from './imageryFrames.js';
 import { withTileRequestHook } from './tileRequests.js';
+import { createIonImagery } from './mapImagery.js';
 
 const SPLITS = { none: 'NONE', left: 'LEFT', right: 'RIGHT' };
 const DRAPES = new Set(['surface', 'objects', 'all']);
@@ -157,9 +158,11 @@ export function providerFor(spec, { worldDataToken } = {}) {
         throw new TypeError(
           'World imagery needs the renderer’s world data token',
         );
-      return Cesium.IonImageryProvider.fromAssetId(
+      // Bing through ion, its tiles over HTTPS on any page, with ion's
+      // credits, as the map stacks have always drawn it.
+      return createIonImagery(
         WORLD_ASSETS[spec.worldStyle ?? 'aerial'] ?? WORLD_ASSETS.aerial,
-        { accessToken },
+        accessToken,
       );
     }
     // The app's own: the vector base's tiles, painted from its style.

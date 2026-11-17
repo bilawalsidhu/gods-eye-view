@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
-import { createCesiumGlobe, markBaseTileset } from './globe.js';
+import {
+  cesiumPhotorealOf,
+  createCesiumGlobe,
+  markBaseTileset,
+} from './globe.js';
 import { hookProvider, TILE_RETRY_DELAY_MS, xyzTileUrl } from './imagery.js';
 
 const ALL = new Set([
@@ -804,4 +808,44 @@ test('hillshade shading owns a free globe material, follows the terrain, gives i
   port.setSurfaceShading(null);
   assert.equal(scene.globe.material, theirs);
   dispose();
+});
+
+test('photoreal turned off is kept hidden, and the same spec shows it without loading it again', async () => {
+  const scene = fakeScene();
+  const loads = [];
+  const { port } = createCesiumGlobe(
+    { scene },
+    {
+      capabilities: new Set(['photoreal']),
+      requestRender: () => {},
+      credentials: { worldDataToken: 'ion' },
+      loadPhotoreal: async (_sdk, credentials) => {
+        loads.push(credentials);
+        return { tileset: fakeTileset(), route: 'direct', errors: [] };
+      },
+    },
+  );
+  const spec = { provider: 'google', key: 'key', fallback: true };
+  assert.deepEqual(await port.setPhotoreal(spec), { route: 'google' });
+  assert.equal(loads.length, 1);
+  assert.equal(loads[0].googleApiKey, 'key');
+  assert.equal(loads[0].cesiumToken, 'ion');
+  const first = cesiumPhotorealOf(scene);
+  assert.equal(first.show, true);
+
+  assert.deepEqual(await port.setPhotoreal(null), { route: 'none' });
+  assert.equal(first.isDestroyed(), false, 'kept');
+  assert.equal(first.show, false, 'hidden');
+  assert.equal(cesiumPhotorealOf(scene), first, 'QA scripts still read it');
+
+  assert.deepEqual(await port.setPhotoreal(spec), { route: 'google' });
+  assert.equal(loads.length, 1, 'not loaded again');
+  assert.equal(cesiumPhotorealOf(scene), first);
+  assert.equal(first.show, true);
+
+  await port.setPhotoreal(null);
+  await port.setPhotoreal({ provider: 'google', key: 'other' });
+  assert.equal(loads.length, 2, 'another spec loads its own');
+  assert.equal(first.isDestroyed(), true, 'the kept one goes');
+  assert.notEqual(cesiumPhotorealOf(scene), first);
 });

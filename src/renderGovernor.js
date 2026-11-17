@@ -29,12 +29,15 @@
  * short stable strings ('flights', 'traffic', 'style-anim', …) so the
  * diagnostics read like a story.
  *
- * Frame rate: in continuous mode the loop draws at the display's own
- * refresh rate. In idle mode the renderer's frame port ticks it at most at
- * IDLE_FRAME_RATE, because Cesium still ticks the clock, data sources and
- * every pre/post-update listener once per animation frame even when it skips
- * the draw. Camera movement takes a 'camera' hold from `moveStart` to
- * `moveEnd`, so drags and flights run at the full rate too.
+ * Frame rate: while the loop is held it draws at the display's own refresh
+ * rate; while nothing holds it, the governor caps it at IDLE_FRAME_RATE,
+ * because Cesium still ticks the clock, data sources and every
+ * pre/post-update listener once per animation frame even when it skips the
+ * draw. The frame port says when its first hold is taken and its last
+ * released (`onHeldChange`), the renderer's own holds included (animated
+ * visual styles), so those draw at the full rate too. Camera movement takes
+ * a 'camera' hold from `moveStart` to `moveEnd`, so drags and flights run at
+ * the full rate as well.
  *
  * The governor is O(1) passive: no per-frame work of its own, ever.
  */
@@ -50,6 +53,13 @@ let _frame = null;
 const _holds = new Map();
 /** Removes the camera move listeners added at install. */
 let _removeCameraListeners = null;
+/** Stops hearing the installed port's holds. */
+let _offHeldChange = null;
+
+/** The loop's rate: the display's while held, IDLE_FRAME_RATE while not. */
+function applyRate(held) {
+  _frame?.setTargetFps(held ? 0 : IDLE_FRAME_RATE);
+}
 
 /** Debug trail of the most recent one-shot render requests (idle mode only). */
 const _recentRequests = [];
@@ -163,14 +173,20 @@ export function installRenderGovernor(
     clearTimeout: unschedule = globalThis.clearTimeout,
   } = {},
 ) {
-  if (typeof frame?.holdContinuous !== 'function')
+  if (
+    typeof frame?.holdContinuous !== 'function' ||
+    typeof frame.onHeldChange !== 'function'
+  )
     throw new TypeError('installRenderGovernor requires a frame port');
   _removeCameraListeners?.();
   _removeCameraListeners = null;
   releaseContinuousRender('camera');
   if (_frame !== frame) {
     if (_frame) releaseFrameHolds();
+    _offHeldChange?.();
     _frame = frame;
+    _offHeldChange = frame.onHeldChange(applyRate);
+    applyRate(frame.diagnostics().holds.length > 0);
     for (const ownerId of _holds.keys()) holdOnFrame(ownerId);
   }
   _removeCameraListeners = watchCameraMotion(camera, { schedule, unschedule });
@@ -247,6 +263,8 @@ export function uninstallRenderGovernor(frame) {
   _removeCameraListeners?.();
   _removeCameraListeners = null;
   releaseFrameHolds();
+  _offHeldChange?.();
+  _offHeldChange = null;
   _frame = null;
   _holds.clear();
   _recentRequests.length = 0;
@@ -256,6 +274,8 @@ export function uninstallRenderGovernor(frame) {
 export function _resetRenderGovernorForTest() {
   _removeCameraListeners?.();
   _removeCameraListeners = null;
+  _offHeldChange?.();
+  _offHeldChange = null;
   _frame = null;
   _holds.clear();
   _recentRequests.length = 0;

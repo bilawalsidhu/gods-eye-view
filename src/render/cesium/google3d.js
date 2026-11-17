@@ -59,10 +59,11 @@ export async function loadPhotorealisticTileset(
 export function createGoogleDirectTileset(Cesium, key) {
   key = clean(key);
   if (!key) throw new Error('Google 3D requires an explicit browser key');
-  // Tiles keep drawing their own texture while draped weather loads.
+  // Tiles keep drawing their own texture while draped weather loads, and
+  // clamped marks land on them, as on the token routes' tiles.
   return Cesium.createGooglePhotorealistic3DTileset(
     { key, onlyUsingWithGoogleGeocoder: true },
-    { asynchronouslyLoadImagery: true },
+    { asynchronouslyLoadImagery: true, enableCollision: true },
   );
 }
 

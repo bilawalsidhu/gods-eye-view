@@ -474,15 +474,15 @@ test('reveals sustained loading and then a bounded completion state', () => {
   );
 });
 
-test('terminal loading feedback centers its label without an empty detail slot', () => {
+test('terminal loading feedback, KEY REQUIRED included, centers its label without an empty detail slot', () => {
   const css = readStylesheet(new URL('../style.css', import.meta.url));
   assert.match(
     css,
-    /#global-loading-status:is\(\s*\[data-state='complete'\],\s*\[data-state='cancelled'\],\s*\[data-state='error'\]\s*\)\s*\{[\s\S]*?justify-content:\s*center;[\s\S]*?text-align:\s*center;/,
+    /#global-loading-status:is\(\s*\[data-state='complete'\],\s*\[data-state='cancelled'\],\s*\[data-state='key-required'\],\s*\[data-state='error'\]\s*\)\s*\{[\s\S]*?justify-content:\s*center;[\s\S]*?text-align:\s*center;/,
   );
   assert.match(
     css,
-    /#global-loading-status:is\(\s*\[data-state='complete'\],\s*\[data-state='cancelled'\],\s*\[data-state='error'\]\s*\)\s*#global-loading-detail\s*\{\s*display:\s*none;/,
+    /#global-loading-status:is\(\s*\[data-state='complete'\],\s*\[data-state='cancelled'\],\s*\[data-state='key-required'\],\s*\[data-state='error'\]\s*\)\s*#global-loading-detail\s*\{\s*display:\s*none;/,
   );
 });
 
@@ -618,7 +618,7 @@ test('AIS first-connect grace expiry reports failure even without a terminal man
   );
 });
 
-test('participant stats failure outranks a simultaneous visibility completion', () => {
+test('a participant waiting for its key outranks a simultaneous visibility completion', () => {
   const enabling = aggregateLayerLoading([
     {
       id: 'ais-live-vessels',
@@ -645,7 +645,97 @@ test('participant stats failure outranks a simultaneous visibility completion', 
     enabled: true,
   });
 
-  assert.equal(state.terminal, 'error');
+  assert.equal(state.terminal, 'key-required');
+  const view = presentLoadingFeedback(state, missingKey, 250);
+  assert.equal(view.label, 'KEY REQUIRED');
+  assert.equal(view.state, 'key-required');
+  assert.equal(
+    state.hideAt,
+    250 + LOADING_FAILURE_DWELL_MS,
+    'shown long enough to read',
+  );
+});
+
+test('a keyless layer’s refresh failing ends KEY REQUIRED, and another layer’s LOAD FAILED', () => {
+  const refreshEnd = (layer) => {
+    const refreshing = aggregateLayerLoading([
+      {
+        ...layer,
+        enabled: true,
+        lifecycleState: 'enabled',
+        stats: { ...layer.stats, refreshing: true },
+      },
+    ]);
+    let state = reduceLoadingFeedback(
+      createLoadingFeedbackState(),
+      refreshing,
+      0,
+    );
+    state = reduceLoadingFeedback(state, refreshing, 200);
+    const done = aggregateLayerLoading([
+      { ...layer, enabled: true, lifecycleState: 'enabled' },
+    ]);
+    state = reduceLoadingFeedback(state, done, 300, {
+      type: 'refresh-failed',
+      layerId: layer.id,
+      error: new Error(layer.stats.error),
+    });
+    return presentLoadingFeedback(state, done, 300).label;
+  };
+  assert.equal(
+    refreshEnd({
+      id: 'ais-live-vessels',
+      stats: { keyRequired: true, error: 'AISSTREAM_API_KEY not set' },
+    }),
+    'KEY REQUIRED',
+  );
+  assert.equal(
+    refreshEnd({ id: 'ais-live-vessels', stats: { error: 'feed down' } }),
+    'LOAD FAILED',
+  );
+});
+
+test('a missing key ends a batch KEY REQUIRED, and another layer failing still ends it LOAD FAILED', () => {
+  const loading = (ids) =>
+    aggregateLayerLoading(
+      ids.map((id) => ({ id, lifecycleState: 'enabling' })),
+    );
+  const ended = (layers) => {
+    let state = reduceLoadingFeedback(
+      createLoadingFeedbackState(),
+      loading(layers.map((layer) => layer.id)),
+      0,
+    );
+    state = reduceLoadingFeedback(
+      state,
+      loading(layers.map((layer) => layer.id)),
+      200,
+    );
+    const done = aggregateLayerLoading(
+      layers.map((layer) => ({
+        ...layer,
+        enabled: true,
+        lifecycleState: 'enabled',
+      })),
+    );
+    state = reduceLoadingFeedback(state, done, 300);
+    return presentLoadingFeedback(state, done, 300).label;
+  };
+  // A keyless layer's own error is the missing key.
+  const keyless = {
+    id: 'ais-live-vessels',
+    stats: { keyRequired: true, error: 'AISSTREAM_API_KEY not set' },
+  };
+  assert.equal(ended([keyless]), 'KEY REQUIRED');
+  assert.equal(
+    ended([keyless, { id: 'quakes', stats: { count: 3 } }]),
+    'KEY REQUIRED',
+  );
+  assert.equal(
+    ended([keyless, { id: 'flights', stats: { error: 'Failed' } }]),
+    'LOAD FAILED',
+  );
+  assert.equal(ended([{ id: 'quakes', stats: { count: 3 } }]), 'LOAD COMPLETE');
 });
 
 test('retains the worst terminal outcome until every concurrent load drains', () => {
