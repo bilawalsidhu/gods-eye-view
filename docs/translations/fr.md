@@ -49,6 +49,8 @@ The `many` form is the `other` text with « de » (« d' » before a vowel) afte
 | aircraft / flight / military flights                         | aéronef (avion in short copy) / vol / vols militaires                   |
 | vessel, ship / tanker (AIS type)                             | navire / navire-citerne                                                 |
 | satellite / shell (Starlink) / DENSE                         | satellite / couche de la constellation / DENSE                          |
+| FOCUS (the held object; the button)                          | CENTRÉ / CENTRER                                                        |
+| CONFIRMED (sightings chip; a landing)                        | CONFIRMÉES / CONFIRMÉE                                                  |
 | launch / launch site / space mission                         | lancement / site de lancement / mission spatiale                        |
 | ascent / replay / payload / stage / downrange                | ascension / rejeu / charge utile / étage / distance au sol (DIST. SOL)  |
 | contact / tracking / track (HUD)                             | contact / suivi / piste                                                 |
