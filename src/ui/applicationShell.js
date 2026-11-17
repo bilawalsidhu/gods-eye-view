@@ -71,6 +71,8 @@ import { useHudStore } from './stores/hud.js';
 import { useDisplayStore } from './stores/display.js';
 import { useLocaleStore } from './stores/locale.js';
 import { useLocationStore } from './stores/location.js';
+import { useOmnibarStore } from './stores/omnibar.js';
+import { installEntityContext } from './entityContextBridge.js';
 import { installRailEdgeScroll } from './railEdgeScroll.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useGlobeActionsStore } from './stores/globeActions.js';
@@ -171,6 +173,12 @@ export class StyleManager extends ShellFacade {
     });
     // Vue views share this runtime and its stores; dispose unmounts them.
     this._ui = createUiRuntime({ pinia: applicationPinia() });
+    // The omnibar and Context list and toggle data layers through the shell.
+    useOmnibarStore(applicationPinia()).connect({
+      layers: () => this._dataManager?.getAll?.() || [],
+      setLayer: (id, enabled) =>
+        this._dataManager?.setEnabled(id, enabled, { origin: 'user' }),
+    });
     // Scrolling at a screen edge steps through that side's rail panels.
     this._removeRailEdgeScroll = installRailEdgeScroll();
     this._feedback = new ShellFeedback({
@@ -184,6 +192,15 @@ export class StyleManager extends ShellFacade {
       this._updateGlobalLoadingFeedback(),
     );
     this.viewer = viewer;
+    // A click on anything a layer can identify opens its card in Context.
+    this._removeEntityContext = installEntityContext({
+      viewer,
+      getDataManager: () => this._dataManager,
+      pinia: applicationPinia(),
+      pickWorld: services.pickWorldFromScreen,
+      regionalBrief: services.fetchRegionalBrief,
+      overlayHit: services.hitTestWorldOverlay,
+    });
     this.mapStackController = mapStackController;
     this.placeSearch = placeSearch;
 
@@ -1879,7 +1896,9 @@ export class StyleManager extends ShellFacade {
     const { destroyTrackedReadout, destroyWorldOverlay, destroyDetection } =
       this.services;
     if (this._disposed) return;
+    useOmnibarStore(applicationPinia()).connect(null);
     this._removeRailEdgeScroll?.();
+    this._removeEntityContext?.();
     this._shareRestoration.destroy();
     this._feedback.clearLoadingStatus();
     this._disposed = true;

@@ -345,23 +345,46 @@ export class ShareLinkManager {
     const target = globalThis.window;
     if (typeof target?.addEventListener !== 'function') return;
     const handler = () => this._handleLocationChange(onNavigate);
+    this._onNavigate = onNavigate;
     target.addEventListener('hashchange', handler);
     target.addEventListener('popstate', handler);
     this._unwatchNavigation = () => {
       target.removeEventListener('hashchange', handler);
       target.removeEventListener('popstate', handler);
       this._unwatchNavigation = null;
+      this._onNavigate = null;
     };
   }
 
+  /**
+   * Restore a share hash now, even when it is the one the address already
+   * shows: an owner that changed the view under it (Stories, after a GEV
+   * scene) hands the person's view back this way. Navigation must be watched.
+   * @param {string} hash Without the leading `#`.
+   * @returns {boolean} Whether a restore began: false when the hash is not a
+   *   share state, which a later hashchange may then try again.
+   */
+  restore(hash) {
+    if (this._destroyed || !this._onNavigate || typeof hash !== 'string')
+      return false;
+    const url = new URL(window.location.href);
+    url.hash = hash;
+    history.replaceState(history.state, '', url.href);
+    this._knownHash = null;
+    if (this._handleLocationChange(this._onNavigate)) return true;
+    this._knownHash = null;
+    return false;
+  }
+
+  /** @returns {boolean} Whether a restore began. */
   _handleLocationChange(onNavigate) {
-    if (this._destroyed) return;
+    if (this._destroyed) return false;
     const hash = window.location.hash.slice(1);
     // Back/Forward fires both popstate and hashchange for one entry.
-    if (hash === this._knownHash) return;
+    if (hash === this._knownHash) return false;
     this._knownHash = hash;
     const state = this._parseShareHash(hash);
-    if (!state) return;
+    if (!state) return false;
     this._beginIncomingRestore(state);
     onNavigate(state);
     try {
@@ -369,6 +392,7 @@ export class ShareLinkManager {
     } catch (error) {
       console.warn('[ShareLink] library restore failed:', error);
     }
+    return true;
   }
 
   /**
@@ -692,8 +716,28 @@ export class ShareLinkManager {
     }
   }
 
+  /**
+   * Hold the address's hash writes, for an owner that covers the view and
+   * keeps the person's camera and layers out of the address while it does
+   * (Stories). Releasing writes the current view again.
+   * @param {boolean} held
+   */
+  holdWrites(held) {
+    if (held && !this._writesHeld && this._debounceTimer) {
+      // A view change still waiting for its debounce is written first, so
+      // the address the owner saves is the live view.
+      clearTimeout(this._debounceTimer);
+      this._debounceTimer = null;
+      this._updateHash();
+    }
+    this._writesHeld = !!held;
+    if (!held) this._scheduleUpdate();
+    else clearTimeout(this._debounceTimer);
+  }
+
   _scheduleUpdate() {
-    if (this._destroyed || this._initialRestorePending) return;
+    if (this._destroyed || this._initialRestorePending || this._writesHeld)
+      return;
     clearTimeout(this._debounceTimer);
     this._debounceTimer = setTimeout(() => this._updateHash(), DEBOUNCE_MS);
   }
@@ -711,7 +755,14 @@ export class ShareLinkManager {
       : new URL(window.location.href);
     url.hash = params.toString();
     this._knownHash = url.hash.slice(1);
-    history.replaceState(null, '', url.href);
+    // Keep the entry's state: another owner (Stories) may have stored its
+    // place there, and a hash update is not a new place.
+    history.replaceState(history.state, '', url.href);
+  }
+
+  /** Capture the live share hash without changing the current history entry. */
+  snapshotHash() {
+    return this._buildHashParams()?.toString() ?? null;
   }
 
   /** Build a deterministic snapshot without mutating history. */

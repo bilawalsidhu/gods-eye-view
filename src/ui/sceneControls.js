@@ -25,6 +25,8 @@ export class SceneControls {
     this.panel = {
       running: false,
       hasShots: false,
+      // Whether the selected scene is published to the Stories page.
+      inStories: false,
       disabled: sceneButtonsDisabled(false, false),
       status: '',
       progress: 0,
@@ -35,6 +37,7 @@ export class SceneControls {
     // The SceneShotList view renders the rows and the panel its buttons;
     // their actions come back here.
     this.storeToken = store.attach({
+      selectScene: (id) => this.run('selectScene', id),
       select: (id) => {
         this.run('selectShot', id);
         if (this.destroyed) return;
@@ -45,10 +48,12 @@ export class SceneControls {
         this.run('renameShot', sceneId, shotId, title),
       load: (sceneId, shotId) => this.run('load', sceneId, shotId),
       remove: (sceneId, shotId) => this.deleteShot(sceneId, shotId),
-      selectScene: (sceneId) => this.run('selectScene', sceneId),
       create: () => this.createScene(),
       deleteScene: () => this.deleteSelectedScene(),
-      capture: () => this.run('capture'),
+      stories: () => this.run('stories'),
+      thumb: () => this.run('thumb'),
+      tag: (tag) => this.run('tag', tag),
+      capture: () => this.captureShot(),
       update: () => this.run('update'),
       next: () => this.run('next'),
       export: () => this.run('export'),
@@ -92,6 +97,7 @@ export class SceneControls {
         'scene-created',
         'scene-deleted',
         'project-imported',
+        'story-details-changed',
       ].includes(type)
     )
       this.renderSceneSelect();
@@ -123,6 +129,8 @@ export class SceneControls {
         'shot-captured',
         'shot-deleted',
         'project-imported',
+        'stories-changed',
+        'story-details-changed',
       ].includes(type)
     )
       this.setButtons(state.running);
@@ -170,13 +178,27 @@ export class SceneControls {
     if (!this.destroyed) this.store.publishOptions(this.read());
   }
 
+  /** NEW SCENE: ask for a name and create the scene. @returns {boolean} */
   createScene() {
-    if (this.destroyed) return;
+    if (this.destroyed) return false;
     const name = window.prompt(
       t('New scene name'),
       t('Scene {n}', { n: this.read().scenes.length + 1 }),
     );
-    if (name) this.run('create', name);
+    if (!name) return false;
+    this.run('create', name);
+    return true;
+  }
+
+  /** CAPTURE SHOT; with no scene it starts one first, as NEW SCENE does. */
+  captureShot() {
+    if (this.destroyed) return;
+    const state = this.read();
+    const hasScene = state.scenes.some(
+      (scene) => scene.id === state.selectedSceneId,
+    );
+    if (!hasScene && !this.createScene()) return;
+    this.run('capture');
   }
 
   deleteSelectedScene() {
@@ -221,8 +243,10 @@ export class SceneControls {
     this.presentPanel({
       running: !!running,
       hasShots: shots.length > 0,
+      inStories: scene?.stories === true,
       disabled: sceneButtonsDisabled(running, state.hasRun, {
         hasScene: !!scene,
+        sceneShots: shots.length,
         // PLAY and NEXT run on into the following scenes.
         playableShots: (state.scenes ?? []).reduce(
           (total, item) => total + (item.shots?.length ?? 0),

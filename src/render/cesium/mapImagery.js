@@ -4,6 +4,7 @@
  * World Imagery and Cesium ion's world imagery (Bing over HTTPS).
  */
 import * as Cesium from 'cesium';
+import { ESRI_IMAGERY_CREDIT } from '../../maps/attribution.js';
 
 export { ESRI_ATTRIBUTION_HTML } from '../../maps/attribution.js';
 
@@ -18,8 +19,7 @@ export function createEsriImagery() {
   return Cesium.ArcGisMapServerImageryProvider.fromUrl(
     'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer',
     {
-      credit:
-        'Powered by Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+      credit: ESRI_IMAGERY_CREDIT,
       enablePickFeatures: false,
     },
   );

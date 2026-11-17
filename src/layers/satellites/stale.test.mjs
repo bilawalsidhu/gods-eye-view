@@ -5,6 +5,7 @@ import http from 'node:http';
 import { EventEmitter, once } from 'node:events';
 import test from 'node:test';
 import * as Cesium from 'cesium';
+import { worldClock } from '../../time/worldClock.js';
 import { createSatelliteSource } from './source.js';
 import { createState } from './state.js';
 import { createControls } from './controls.js';
@@ -308,4 +309,29 @@ test('destroy aborts an in-flight response and initialization starts with new ow
   await f.update();
   assert.equal(f.stats().count, CORE.length);
   assert.equal(f.feed(), 'nominal');
+});
+
+test('destroy takes the layer off the world clock, and init puts it back', async (t) => {
+  // Each registration the layer makes, while it stands.
+  const register = worldClock.register;
+  const standing = new Set();
+  worldClock.register = (source) => {
+    standing.add(source);
+    const off = register.call(worldClock, source);
+    return () => {
+      standing.delete(source);
+      off();
+    };
+  };
+  t.after(() => {
+    worldClock.register = register;
+  });
+  const f = await fixture(t);
+  const mine = () =>
+    [...standing].filter(({ id }) => id === 'satellites').length;
+  assert.equal(mine(), 1);
+  f.parts.lifecycle.methods.destroy(f.viewer);
+  assert.equal(mine(), 0);
+  await f.parts.lifecycle.methods.init(f.viewer);
+  assert.equal(mine(), 1);
 });

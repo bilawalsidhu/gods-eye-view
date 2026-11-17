@@ -299,6 +299,8 @@ export function createQueries({
     icon: '◭',
 
     source: 'AISStream',
+    // Without an AISStream key the feed cannot start; the panel names the key.
+    requiresKeyId: 'aisstream',
 
     updateInterval: REFRESH_MS,
 
@@ -366,7 +368,7 @@ export function createQueries({
       for (const record of records) {
         if (!Number.isFinite(record.lat) || !Number.isFinite(record.lon))
           continue;
-        const position = components.rendering.iconPosition(record);
+        const position = components.rendering.drawnPositionNow(record);
         if (!position) continue;
         const distanceM = distance(centerCartesian, position);
         if (!Number.isFinite(distanceM) || distanceM > range) continue;
@@ -471,7 +473,7 @@ export function createQueries({
 
       for (const record of records) {
         if (result.length >= cap) break;
-        const position = components.rendering.iconPosition(record);
+        const position = components.rendering.drawnPositionNow(record);
         if (!position) continue;
         result.push({
           id: record.id,
@@ -664,6 +666,7 @@ export function createQueries({
           !visual.modelOwnsVisual
         )
           continue;
+        components.rendering.readVesselNow(record);
         const position = visual.position;
         if (!position) continue;
         result.push({
@@ -712,6 +715,7 @@ export function createQueries({
             ? 'unavailable'
             : undefined,
         transportStatus: state.feed.transportStatus,
+        keyRequired: state.feed.transportStatus === 'missing-key',
         lastMessageAt: state.feed.lastMessageAt,
         rawRowCount: state.feed.rawRowCount,
         acceptedRowCount: state.feed.acceptedRowCount,

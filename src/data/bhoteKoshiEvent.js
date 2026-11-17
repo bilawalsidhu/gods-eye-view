@@ -1088,6 +1088,10 @@ export function createBhoteKoshiEventLayer({
   let _sceneRevealAnimationFrame = null;
   let _sceneRevealHoldActive = false;
   let _sceneRevealProgress = 1;
+  // How far a timeline seek's settled-camera reveal had come (0..1, linear).
+  let _sceneSeekRevealLinear = 1;
+  // The beat whose clip a run going on from a seek in its hold started again.
+  let _sceneMediaRestartBeatId = null;
   let _cinematicKeyframes = [];
   let _cinematicActive = false;
   let _cinematicReplayArmed = false;
@@ -1411,6 +1415,16 @@ export function createBhoteKoshiEventLayer({
       : null;
   }
 
+  /** Whether a seek's moment in the hold comes after the shot's clip. */
+  function sceneSeekPassedMedia(seek) {
+    if (_sceneControls.evidenceMediaAutoplay !== true) return false;
+    const mediaDurationSec = Math.max(
+      SCENE_MEDIA_MIN_PLAYBACK_SECONDS,
+      Number(_sceneControls.mediaPlaybackHoldSec) || 0,
+    );
+    return Math.max(0, Number(seek?.holdElapsedSec) || 0) >= mediaDurationSec;
+  }
+
   function sceneTimelineMediaVisible() {
     const seek = sceneTimelineSeek();
     if (!seek || _sceneControls.evidenceMediaAutoplay !== true) return true;
@@ -1537,6 +1551,19 @@ export function createBhoteKoshiEventLayer({
     return (
       Number(media?.embedEndAtSec) > Number(media?.embedStartAtSec || 0) &&
       resolveEmbeddedMediaSource(media?.sourceUrl)?.provider === 'youtube'
+    );
+  }
+
+  /**
+   * Whether a run going on from a seek in this beat's hold started its clip
+   * again, so the hold has to play out as from its start.
+   */
+  function sceneShotRestartsMedia(beatId) {
+    return (
+      _enabled &&
+      _sceneBeatId === beatId &&
+      _sceneMediaRestartBeatId === beatId &&
+      sceneEvidenceMediaAutoplays()
     );
   }
 
@@ -1821,6 +1848,7 @@ export function createBhoteKoshiEventLayer({
   function applySceneTimelineSeek() {
     const seek = sceneTimelineSeek();
     if (!seek) return false;
+    _sceneSeekRevealLinear = 1;
     stopScenePathReveal();
     stopSceneEvidenceReveal();
     stopSceneMediaPlayback();
@@ -1844,6 +1872,43 @@ export function createBhoteKoshiEventLayer({
       _sceneRevealProgress = 1;
       return true;
     }
+
+    // The settled-camera reveal waits out the shot's clip and its exit
+    // (unless the path runs during the clip), then runs for its duration.
+    const mediaDurationSec =
+      _sceneControls.evidenceMediaAutoplay === true
+        ? Math.max(
+            SCENE_MEDIA_MIN_PLAYBACK_SECONDS,
+            Number(_sceneControls.mediaPlaybackHoldSec) || 0,
+          )
+        : 0;
+    const exitDurationSec =
+      _sceneControls.evidenceMediaAutoplay === true
+        ? Math.max(
+            SCENE_MEDIA_EXIT_SECONDS,
+            Number(_sceneControls.mediaExitDurationSec) || 0,
+          )
+        : 0;
+    const settledDurationSec = Math.max(
+      0.25,
+      Number(
+        sceneUsesSourcePath()
+          ? _sceneControls.evidencePathDurationSec
+          : sceneEvidenceSequenceAnimates()
+            ? _sceneControls.evidenceSequenceDurationSec
+            : _sceneControls.evidenceRevealDurationSec,
+      ) || 0.9,
+    );
+    const settledStartSec = Math.max(
+      0,
+      Number(_sceneControls.evidencePathStartDelaySec) || 0,
+      _sceneControls.evidencePathDuringMedia === true
+        ? 0
+        : mediaDurationSec + exitDurationSec,
+    );
+    const settledLinear = clampUnit(
+      (holdElapsedSec - settledStartSec) / settledDurationSec,
+    );
 
     if (scenePathMovesDuringCamera()) {
       const authoredDurationSec = Number(
@@ -1870,41 +1935,25 @@ export function createBhoteKoshiEventLayer({
                   Number(_sceneControls.evidenceRevealDurationSec) || 0.9,
                 ),
             );
+      // In the hold, an animated evidence sequence runs on its own clock
+      // after the camera's path; it stands where that clock has it.
+      const sequenceWindow =
+        cameraProgress >= 1 && sceneEvidenceSequenceAnimates()
+          ? evidenceSequenceWindow(_sceneBeatId, _evidenceTimeline)
+          : null;
+      if (sequenceWindow) {
+        _sceneSeekRevealLinear = settledLinear;
+        _sceneRevealProgress = smoothstep(0, 1, settledLinear);
+        _progress =
+          sequenceWindow.startProgress +
+          (sequenceWindow.targetProgress - sequenceWindow.startProgress) *
+            _sceneRevealProgress;
+      }
       return true;
     }
 
-    const mediaDurationSec =
-      _sceneControls.evidenceMediaAutoplay === true
-        ? Math.max(
-            SCENE_MEDIA_MIN_PLAYBACK_SECONDS,
-            Number(_sceneControls.mediaPlaybackHoldSec) || 0,
-          )
-        : 0;
-    const exitDurationSec =
-      _sceneControls.evidenceMediaAutoplay === true
-        ? Math.max(
-            SCENE_MEDIA_EXIT_SECONDS,
-            Number(_sceneControls.mediaExitDurationSec) || 0,
-          )
-        : 0;
-    const pathDurationSec = Math.max(
-      0.25,
-      Number(
-        sceneUsesSourcePath()
-          ? _sceneControls.evidencePathDurationSec
-          : sceneEvidenceSequenceAnimates()
-            ? _sceneControls.evidenceSequenceDurationSec
-            : _sceneControls.evidenceRevealDurationSec,
-      ) || 0.9,
-    );
-    const pathStartSec = Math.max(
-      0,
-      Number(_sceneControls.evidencePathStartDelaySec) || 0,
-      _sceneControls.evidencePathDuringMedia === true
-        ? 0
-        : mediaDurationSec + exitDurationSec,
-    );
-    const linear = clampUnit((holdElapsedSec - pathStartSec) / pathDurationSec);
+    const linear = settledLinear;
+    _sceneSeekRevealLinear = linear;
     _sceneRevealProgress = smoothstep(0, 1, linear);
     _scenePathRevealProgress =
       startProgress + (targetProgress - startProgress) * _sceneRevealProgress;
@@ -2025,7 +2074,11 @@ export function createBhoteKoshiEventLayer({
     _scenePathAnimationFrame = requestAnimationFrame(step);
   }
 
-  function startSceneEvidenceReveal() {
+  /**
+   * Start the settled-camera reveal, from `fromLinear` of its way when a run
+   * goes on from a timeline seek that had already brought it that far.
+   */
+  function startSceneEvidenceReveal(fromLinear = 0) {
     stopSceneEvidenceReveal();
     const sequenceAnimates = sceneEvidenceSequenceAnimates();
     if (
@@ -2069,7 +2122,25 @@ export function createBhoteKoshiEventLayer({
           );
     if (sequenceWindow) updateProgress(sequenceWindow.startProgress);
     let lastTickAt = performance.now();
-    let activeElapsedMs = 0;
+    let activeElapsedMs = clampUnit(fromLinear) * durationMs;
+    const applyReveal = (linear) => {
+      _sceneRevealProgress = smoothstep(0, 1, linear);
+      if (sequenceWindow) {
+        updateProgress(
+          sequenceWindow.startProgress +
+            (sequenceWindow.targetProgress - sequenceWindow.startProgress) *
+              _sceneRevealProgress,
+        );
+      } else if (!scenePathMovesDuringCamera()) {
+        const floodProgress = sourceWindow
+          ? sourceWindow.start +
+            (sourceWindow.target - sourceWindow.start) * _sceneRevealProgress
+          : targetFloodProgress * _sceneRevealProgress;
+        updateFloodTrace(floodProgress);
+        updateSurgeFront(floodProgress);
+      }
+    };
+    if (activeElapsedMs > 0) applyReveal(activeElapsedMs / durationMs);
     renderHost.hold(SCENE_REVEAL_RENDER_HOLD);
     _sceneRevealHoldActive = true;
     const step = (now) => {
@@ -2086,21 +2157,7 @@ export function createBhoteKoshiEventLayer({
         activeElapsedMs += tickAt - lastTickAt;
       lastTickAt = tickAt;
       const linear = clampUnit(activeElapsedMs / durationMs);
-      _sceneRevealProgress = smoothstep(0, 1, linear);
-      if (sequenceWindow) {
-        updateProgress(
-          sequenceWindow.startProgress +
-            (sequenceWindow.targetProgress - sequenceWindow.startProgress) *
-              _sceneRevealProgress,
-        );
-      } else if (!scenePathMovesDuringCamera()) {
-        const floodProgress = sourceWindow
-          ? sourceWindow.start +
-            (sourceWindow.target - sourceWindow.start) * _sceneRevealProgress
-          : targetFloodProgress * _sceneRevealProgress;
-        updateFloodTrace(floodProgress);
-        updateSurgeFront(floodProgress);
-      }
+      applyReveal(linear);
       renderHost.request('bhote-koshi-scene-beat-reveal');
       if (linear < 1) {
         _sceneRevealAnimationFrame = requestAnimationFrame(step);
@@ -3786,6 +3843,7 @@ export function createBhoteKoshiEventLayer({
       _sceneControls.cameraTravel?.completed === true;
     const previousTravelCancelled =
       _sceneControls.cameraTravel?.cancelled === true;
+    const previousSeek = sceneTimelineSeek();
     if (params.presentation === BHOTE_KOSHI_SCENE_PRESENTATION) {
       _presentation = BHOTE_KOSHI_SCENE_PRESENTATION;
       _sceneSurface =
@@ -3840,6 +3898,27 @@ export function createBhoteKoshiEventLayer({
       stopSceneMediaPlayback();
       _sceneMediaPlaybackCompletedBeatId = null;
     }
+    // A run going on from a seek inside the settled hold plays on from that
+    // moment: the reveal continues from where the seek put it, and the clip
+    // starts again unless the seek was already past it.
+    const resumesSeek =
+      previousSeek != null &&
+      !sceneTimelineSeek() &&
+      !beatChanged &&
+      cameraIsSettled &&
+      cameraWasSettled &&
+      previouslyDeferred &&
+      nowDeferred;
+    if (resumesSeek && sceneSeekPassedMedia(previousSeek))
+      _sceneMediaPlaybackCompletedBeatId = _sceneBeatId;
+    if (
+      resumesSeek &&
+      sceneEvidenceMediaAutoplays() &&
+      !sceneSeekPassedMedia(previousSeek)
+    )
+      _sceneMediaRestartBeatId = _sceneBeatId;
+    else if (beatChanged || sceneTimelineSeek())
+      _sceneMediaRestartBeatId = null;
     if (!nowDeferred) {
       stopSceneEvidenceReveal();
       _sceneRevealProgress = 1;
@@ -3906,9 +3985,9 @@ export function createBhoteKoshiEventLayer({
         !timelineSeekActive &&
         cameraIsSettled &&
         (nowDeferred || sceneEvidenceSequenceAnimates()) &&
-        (beatChanged || !previouslyDeferred || !cameraWasSettled)
+        (beatChanged || !previouslyDeferred || !cameraWasSettled || resumesSeek)
       ) {
-        startSceneEvidenceReveal();
+        startSceneEvidenceReveal(resumesSeek ? _sceneSeekRevealLinear : 0);
       }
       if (!sceneDirected && params.cinematic === true)
         startCinematic({ play: params.autoPlay !== false });
@@ -3954,6 +4033,7 @@ export function createBhoteKoshiEventLayer({
     setParams,
     getParams,
     getSceneShotMediaHold,
+    sceneShotRestartsMedia,
     setSceneMediaPlayback,
     getStats() {
       return {

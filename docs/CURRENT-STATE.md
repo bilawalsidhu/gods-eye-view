@@ -12,11 +12,13 @@ north.
 
 While anything moves (a layer in motion, the camera, a followed contact), the
 globe draws at the display's own refresh rate; there is no fixed 60 FPS cap.
-The Cesium frame port (`src/render/cesium/ports.js`, its `idleFps`) caps a
-parked scene at `IDLE_FRAME_RATE` (60, `src/renderGovernor.js`) ticks a
-second while no hold is out, because Cesium still runs the clock, data sources
-and update listeners on every animation frame even when it skips the draw; the
-viewer starts at that cap until the frame port takes over. Through the idle
+The render governor (`src/renderGovernor.js`) caps a parked scene at
+`IDLE_FRAME_RATE` (60) ticks a second while nothing holds the loop, because
+Cesium still runs the clock, data sources and update listeners on every
+animation frame even when it skips the draw, and lifts the cap while anything
+does: the frame port tells it when the loop's first hold is taken and its last
+released, its own holds (animated visual styles) included. The viewer starts
+at that cap until the governor is installed. Through the idle
 render governor, the camera port holds continuous render from `moveStart` to `moveEnd`, and samples its
 pose every 250 ms in between, so a camera drifting by rounding errors (no
 `moveEnd`) is released after half a second at rest and held again if it moves. The world clock holds continuous render while
@@ -658,6 +660,147 @@ owner (open state, filters, the rows they show, Remove all) and the text
 helpers the view renders, so every label follows the locale. Only the modal
 open/close and focus moves are imperative.
 
+## Stories — November 13, 2026
+
+A Stories button (top right, `#hStories`) opens Explore: a feed of stories
+over GEV's own globe with their pins, then a Story screen with a
+timeline, chapters and context. Every GEV page loads only what the
+closed state needs: the boot shell (`src/stories/boot.js`), the store,
+`StoriesView.vue` with the Stories button, first-visit popup and
+back-to-story toast, and their styles (`stories-entry.css`). The screens
+(`ExploreScreen.vue`, `StoryScreen.vue` and their parts), their styles
+(`stories.css`), the story data (`storyMeta.js`, `catalog.js`) and the
+controller are separate chunks fetched together on first open, on a
+`?stories=` / `?story=` link, or on Back or Forward into Stories; a failed
+fetch is reported and the next attempt tries again. Stories keeps its place
+in the query, not the share-state hash, with one history entry per screen;
+Close steps back over those entries, so Back afterwards does not reopen it,
+and share links carry the Stories screen and place. Explore links use
+`stories=explore` and optionally `selectedStory`. Player links use `story`
+and optionally `storyTime` in milliseconds, opening paused at that time.
+GEV's share link keeps
+`history.state` when it rewrites the hash, so Stories' entries survive.
+
+Every story is a GEV scene, played on the person's own globe through
+`SceneDirector`, with its labels, embedded media, A/B imagery split (marked
+`data-globe-overlay`) and data-pack cards kept while the rest of GEV is
+hidden. Explore lists the scenes the person saved to Stories from AUTHORING
+first (`SceneDirector.storyScenes()`, refreshed on every `stories-changed`),
+then the person's other scenes with a shot as drafts
+(`SceneDirector.draftScenes()`, marked DRAFT), then the
+scenes GEV ships with a camera path while they are in the project
+(`SceneDirector.hasScene`). Zero-shot drafts can be reopened or deleted
+from the scene selector in AUTHORING after a reload. A saved scene brings the card image and topics
+picked for it in AUTHORING; the topic chips use AUTHORING's tag names and
+order. Explore opens at country level
+(2,500 km) over the first story and, while idle, flies on to the next story
+every few seconds, for a minute after the last touch (never with a story
+picked or with reduced motion). The start view and a picked story's place
+(at an angle, −60°) are framed in the middle of the map Explore leaves
+visible (`.ex-map`: beside the feed on a wide screen, above the sheet on a
+phone), not of the whole canvas; a flight that lands after that area has
+moved makes one short correction. Stories reaches the globe only
+through the renderer's ports (`src/render/rendererOf.js`): its flights,
+pose and Close's restore go through the camera port, and after each landing
+a continuous-render hold keeps the globe drawing only until the globe port
+reports the base settled (at most 10 s). Each story's pin, in the
+world overlay's label style (`src/overlays/worldOverlayTokens.js`), is placed
+from the query port's projection in the frame port's `postRender`, on every
+drawn frame, written straight to the pin's transform, and hidden behind the
+globe (`query.isOccluded`); the pins ask for no frames of their own. Card
+images are drawn from the keyless Esri World Imagery tiles around the
+story's place (`src/stories/thumbs.js`: the same Web Mercator tiles, from
+the same host, that GEV's Esri map draws, read as images) unless the scene
+has its own; with any other map stack than Esri Satellite
+(`mapStackController.getActiveId()`) the card shows its placeholder, and a
+card drawn from Esri earlier is dropped. AUTHORING captures thumbnails only
+on a ready Esri World Imagery stack and embeds the imagery credit in the
+exported image. A shot
+tied to an anchor rather than a place pins the whole-globe view.
+
+A shipped story's context comes from what GEV knows about it
+(`src/stories/catalog.js`): what it shows, the place each shot goes, and,
+for each layer it turns on, what the layer shows and the data sources
+DATA_SOURCES.md lists for it. The Nepal story carries the event pack's own
+facts and sources (Vantor imagery and the GeoPera reconstruction, CC BY-NC
+4.0), and its key moments are the chapters that show them. Topic chips and
+region choices are the ones the listed stories carry. Closing Stories after
+a story played puts AUTHORING's own selection back;
+Open in GEV leaves the story's scene selected there. Entering Stories
+cancels in-flight Authoring work before it captures the view it will
+restore. Dragging the timeline previews the time, and releasing
+it seeks the globe once. Play after a pause, a seek or a paused link goes on
+from that exact moment (`SceneDirector.startScene` with `fromProgress`), even
+inside a shot or its final quarter-second: the camera, the hold, the scene
+clock and the layers' reveals carry on from there (a clip that moment falls in
+starts again from its beginning, and the hold waits for it, with the
+timeline held at the shot's end meanwhile). A scene that has actually ended replays from the
+beginning.
+
+Opening Stories claims the camera through the shared navigation policy, so
+orbit, a tracked contact or a flight end, and Cockpit refuses with the
+policy's own toast ("Exit cockpit to open Stories"). Those owners are not
+started again on Close: the camera and the world clock (`src/time/worldClock.js`:
+live, or the time it showed, playing on as if never paused) come back, a
+follow or orbit does not. While Stories is open it owns the keyboard (`src/stories/keyboard.js`):
+a key pressed in Stories stops at its root, and a key pressed anywhere else
+stops at the window, so none of GEV's document-level shortcuts act behind it,
+except on a playing GEV scene's own on-globe controls (`data-globe-overlay`);
+the capture-phase listeners (hold Space to talk, a surface's Tab trap, the
+wildlife card's Escape) check `body.stories-mode` themselves. "Open Stories"
+works from voice or typed AI chat. Entering Stories ends active or pending
+microphone capture and blocks microphone starts while Stories owns the
+globe. Stories shows a notice when it turns off an active or connecting
+voice session. A typed reply can finish after opening Stories. Globe tool calls
+are refused while `stories-mode` is set ("Close Stories first").
+
+The address bar names only the story while Stories is open. Stories holds
+hash writes (`ShareLinkManager.holdWrites`) and saves a snapshot of the live
+globe, including when it opens from a story link without a hash.
+Close dismisses the Stories screens and keeps the keyboard and microphone
+guards until the previous view is back. The director is waited
+on until idle (`SceneDirector.whenIdle`: no run and no pending LOAD, seek or
+interaction; at most 15 s). When the 15 s run out, the scene's layer cleanup
+still under way is revoked (`SceneDirector.revokeSceneRelease`) before
+anything is put back, so it cannot turn off a layer Close restores. The camera and world clock are put back (a clock
+nothing moved while Stories was open, with no jump and the same mode and
+rate, is left alone), unless a
+camera owner took over during the wait (a drag on the globe, a layer's
+focus). History steps back over Stories' entries; once that lands (or after
+2 s if it never does), the saved share state is re-applied directly
+(`ShareLinkManager.restore`, since the share link skips a hash it already
+knows) and the share link writes the live view again. Back out of Stories
+re-applies it the same way, and Back to Explore from a story re-applies it
+once the scene has torn down, with the address still naming only Stories.
+"Open in GEV" (GEV scene stories only) closes the
+same way but keeps the place and look: nothing is put back, the scene and its
+current shot are selected (`SceneDirector.selectShot`) and the Scenes panel
+opens for authoring; Back then goes to the page before Stories. A Close or
+open made while a traversal is landing runs once it has landed; a second Back
+to Explore is ignored. Reopening Stories while a closed GEV scene is still
+tearing down keeps the view from before Stories as the one Close restores.
+Inside an inline embed Stories is not offered: the URL and history are the
+host's.
+
+The Stories button sits left of whatever holds GEV's top-right corner: the
+ACTIVE STYLE readout (`#style-indicator`), or an element marked with
+`data-stories-corner` (with or beside the readout; one added after Stories
+mounts is found within 20 s). On GEV's phone layout,
+where neither shows, it is icon-only under the corner-actions column
+(`#corner-actions`), aligned with its right edge. The first-visit popup
+is a labelled region that does not take focus. The story page's rail offers
+Open in GEV and Share only. Share on Explore reopens the list with the same
+shipped story selected. A story link opens paused at the shared
+point on its timeline. A scene of the person's own (saved or draft)
+shows as theirs ("You") and has no Share: the project lives on this device,
+so a link to it would open nothing elsewhere; a link to a story that is not
+here opens Explore and says so. GEV's own credit line stays on screen throughout, inside the
+Stories map while a scene plays (`creditPlacement` in
+`src/stories/format.js`): `stories.css` places the renderer's own credit
+display (`#cesium-credits`) and the application's credit line
+(`#gev-credits`, `src/ui/creditsView.js`, with its list opening above it)
+alike, and exempts both from the rule that hides GEV's chrome.
+
 ## Utilities panel — October 29, 2026
 
 UTILITIES is its own left-side panel, between Data Layers and Scenes, with
@@ -754,6 +897,54 @@ world timeline in the strip keep their own wheel. The strip is off on phones
 and touch screens, while the rails are hidden (clean view, recording), and it
 follows the rails' sides in a right-to-left language. On a phone, Visual is in
 the More sheet with the dock's Visual Presets, as before.
+
+## Context panel — November 16, 2026
+
+Context leads with one card for whatever is picked. A click on anything a
+layer can identify (`src/ui/entityContextBridge.js`, through
+`src/data/pickedContext.js`) opens its card (`src/ui/stores/entityCard.js`,
+`src/ui/views/panels/EntityCard.vue`): the item's facts from its record, a
+route with progress for a flight, an altitude graph, the weather, local
+time and news where it is, and the flights, vessels, hazards and warnings
+within the radius the panel sets (25 to 2,500 km). Aircraft, satellites and
+vessels are followed as they are picked; the card says Following only while
+the camera follows the card's own item, and closing the card lets go.
+Aircraft and satellites offer Enter Cockpit and Enter orbital view; transit
+vehicles show their motion and fleet. A camera's card shows its latest frame
+from the CCTV panel.
+
+With nothing picked, the panel describes the view
+(`src/ui/views/panels/ViewContext.vue`): the place under the middle of the
+screen and the towns around it from the Wikidata cities pack, the height,
+the local solar time and daylight, what is in view per layer with live
+counts and breakdowns, and the same weather and hazards. A search field in
+the header narrows every list. Expanded, Context becomes a full-height
+column at the right edge (the left edge right to left) and the map credits
+stop short of it.
+
+The Contacts and Space Missions modes and the Radio strip stay in the
+panel's main tab, below the card. When Contacts follows the aircraft the
+card shows, its list sits inside the card. Turning Radio or Launches on
+opens Context. The Properties tab holds the Labels and 3D aircraft
+settings from Visual while a layer they act on is on.
+
+Context does its reading only while its panel is open. Weather and news
+come through the regional brief service; earthquakes, tropical storms and
+fire perimeters come from the same feeds as their layers, cached for five
+minutes; satellite fire hits only while the FIRMS layer is on.
+
+The card's top tile previews what is picked. A flight shows its
+Planespotters photo once the flights layer has looked one up for the plane
+it tracks, its route on a small globe (origin to destination, flown part
+solid, the plane on it), its fleet model turning with callouts of what can
+be worked out about the flight, and the view ahead from its cockpit with
+speed and altitude tapes; the model and the cockpit view take turns. A
+vessel shows its Open Vessel Photos photo, a satellite the ground beneath it
+from Esri World Imagery with its altitude and speed graphed. The globe, model
+and cockpit view are drawn by the renderer through its `cardPreviews`
+application hook (`src/render/cesium/cardPreviews.js`), each in a small scene
+of its own that frees its graphics context as it closes; the model comes from
+the fleet set loaded at startup, so opening a card fetches no model.
 
 ## Wikidata cities pack — November 15, 2026
 
@@ -1271,7 +1462,7 @@ Native `<select>` controls declare a dark colour scheme and explicit option
 colours, so the browser-painted option list matches the panel it drops out of.
 The scheme is declared on the controls rather than on the document root, so
 hand-tuned scrollbar and text-input skins are unchanged. Applies to the HUD
-layout, Authoring, CCTV camera, Radio filter and Draw colour menus.
+layout, CCTV camera, Radio filter and Draw colour menus.
 
 Vessel snapshot completeness is separate from freshness. A current snapshot with
 rejected or duplicate records shows PARTIAL with accepted/received counts; stale
@@ -1501,8 +1692,9 @@ holds; stale tick callbacks cannot publish into a replacement. Registered pack
 rules own presentation overrides and Nepal map fallback without changing saved
 shots or content. Scene-document validation and legacy migration now have separate
 owners. Invalid imports preserve the current project; unreadable saved projects
-are protected from fallback writes. Version 6 is the export format, with
-zero pitch, low camera heights, scope and detection edits preserved. See [the document contract](SCENE-DOCUMENT.md);
+are protected from fallback writes. Version 7 adds Scenes' optional Stories
+metadata (accepted from version 6, which early Stories builds wrote) and reads
+prior project files, including version 6 drafts, with zero pitch, low camera heights, scope and detection edits preserved. See [the document contract](SCENE-DOCUMENT.md);
 see [Director](DIRECTOR.md) for camera, pack, action and sharing support.
 
 Search framing and annotations request semantic map features from an explicit source. The Overpass adapter owns bounded queries, member/tag decoding and request deadlines; callers retain candidate ranking, outline caching, deferred retries and scene placement. Empty, unavailable, transient and throttled outcomes remain distinct; a data reply is refused only for its `remark`, never for text in element tags. Traffic sources return road records and installation sources return mapped records with freshness/saturation metadata, so their layers no longer decode upstream elements. ALPR already normalizes its records in the source. Traffic uses OpenFreeMap roads with optional matched TomTom congestion; ALPR uses an hourly OpenStreetMap extract. Keyless installations use military-area tiles. Detailed feature queries require operator-configured Overpass.
@@ -2158,14 +2350,59 @@ native double-click rename. Replacing rows revokes their old listeners. Disposal
 late file and failed-action completions cannot update removed presentation.
 
 The panel is titled Authoring and is laid out in four labelled steps: SCENE
-(picker on its own row, NEW SCENE, DELETE), SHOTS (+ CAPTURE SHOT, UPDATE SHOT,
-the numbered shot list and a select/rename hint), PREVIEW (PLAY, STOP, NEXT) and
-SAVE & SHARE (EXPORT, IMPORT, RUN LOG, then the EDIT DETAILS / SHARE SCENE row).
+(picker on its own row listing every scene in the project, NEW SCENE, DELETE),
+SHOTS (+ CAPTURE SHOT, UPDATE SHOT, the numbered shot list and a select/rename
+hint), PREVIEW (PLAY, STOP, NEXT) and SAVE & SHARE (a row of Stories tag chips;
+the thumbnail preview, CAPTURE THUMBNAIL and SAVE TO STORIES on one row; then
+EXPORT, IMPORT, RUN LOG, then the EDIT DETAILS / SHARE SCENE row). On load the
+project's first scene and its first shot are selected, and deleting the
+selected scene selects the first scene again. Stories' "Open in GEV" selects a
+scene and shot through `SceneDirector.selectShot`, and the picker follows.
+With no scene at all (an imported empty project), CAPTURE SHOT asks for a name
+as NEW SCENE does, creates the scene and captures into it; the director's
+`captureShot()` names it "Scene N" itself. An IMPORT keeps the scene being
+edited when the file still has it, else selects the file's first scene that is
+not a built-in one, else its first scene. Playback still moves the selection to
+the shot it plays, as before.
+SAVE TO STORIES marks the scene as published to the Stories page and then reads
+REMOVE FROM STORIES, which clears the mark; the status line confirms either.
+The mark is the scene's `stories: true` field, saved with the project and kept
+through reload, EXPORT and IMPORT; projects without it load unchanged. The
+director's `setSceneInStories(sceneId, on)` sets or clears it (refusing a scene
+without shots) and `storyScenes()` lists the marked scenes that have shots, in
+project order, as `{ id, title, camera, shotCount, thumb, tags }` with the
+first shot's camera. Every change to that list (the mark, a scene or its last
+shot deleted, a shot captured into a marked scene or its first shot updated, a
+marked scene's thumbnail or tags changed, an import) publishes
+`stories-changed`.
+Deleting a marked scene's last shot clears its mark.
+THUMBNAIL keeps the globe as it is drawn now as the scene's Stories
+card image: it asks the renderer's frame port for a render and reads the
+renderer's canvas inside that frame's `postRender` (the WebGL canvas does
+not preserve its drawing buffer; `captureStoryThumb` is handed the frame
+port and canvas, so the scene document's module stays renderer-free),
+centre-crops it to 16:9, scales it to 320 × 180 and stores a JPEG data URL
+(quality 0.82, lowered only if the image would pass the limit) as the scene's
+`storyThumb`, shown as a 64 × 36 preview beside the button; the status line
+reads "Thumbnail captured". The tag chips (Floods, Wildfires, Storms,
+Earthquakes, Flights, Maritime, Space, Conflict, Infrastructure, Climate,
+from `STORY_TAGS` in `src/scenes/storyTags.js`, shown translated) are toggle
+buttons with `aria-pressed`; a scene keeps up to five as `storyTags` (English
+keys), and once it has five the other chips are disabled. Both fields are
+optional and validated by the scene document (`storyThumb` a base64 JPEG or
+PNG data URL of at most 300,000 characters, the one text allowed past the
+usual 65,536 characters; `storyTags` up to five different keys from `STORY_TAGS`), and
+are kept through save, reload, EXPORT, IMPORT and the shared scene JSON. Share
+links never carry scene documents, so neither reaches a URL. `storyScenes()`
+reports them as `thumb` (`''` when none was captured) and `tags`.
 Every button in the step rows has a tooltip, and the status line is a polite
 live region. Outside playback a button that would do nothing is disabled:
-DELETE and CAPTURE SHOT without a scene, UPDATE SHOT without a selected shot,
-PLAY and NEXT when no scene in the project has a shot (both continue into the
-following scenes). During playback the authoring and file actions stay disabled
+DELETE, THUMBNAIL, the tag chips and SAVE TO STORIES without a scene,
+UPDATE SHOT without a selected shot, SAVE TO STORIES when the scene has no
+shots, PLAY and NEXT without a scene or when no scene in the project has a shot
+(both continue into the following scenes), EDIT DETAILS without a selected shot
+and SHARE SCENE without a scene. EXPORT stays available, since it writes the
+whole project. During playback the authoring and file actions stay disabled
 and STOP is enabled, as before; RUN LOG follows the last run, and EDIT DETAILS /
 SHARE SCENE keep their own checks. PLAY uses the `scene|PLAY` catalog entry,
 apart from the radio's PLAY.
@@ -3809,10 +4046,10 @@ which embeds the MAP_KEY.
 > a layer that needs no key, already holds one, or names a key the registry does
 > not recognise. The earthquakes half
 > still delivers in full. The shared loading reducer now treats an explicitly
-> declared missing optional key as a configured terminal state rather than a
-> failed multi-layer mission, so the global chip completes without showing
-> `LOAD FAILED`. A genuine lifecycle or fetch failure still retains failure
-> priority.
+> declared missing optional key as its own terminal state rather than a
+> failed multi-layer mission, so the global chip ends `KEY REQUIRED` (amber)
+> instead of `LOAD FAILED`, on the first load and on every refresh. A genuine
+> lifecycle or fetch failure still retains failure priority.
 >
 > **Acceptance changed with that ruling (2026-08-23).** `qa-firstrun` no longer
 > asserts "a keyless Environmental never shows a failure chip" — that stopped
@@ -4504,12 +4741,13 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   specific error or availability state. The shared presentation is delayed to
 >   avoid flashes, visible outside the rails, and retained in
 >   Cockpit. One continuous overlapping load interval retains the strongest
->   terminal outcome (`failed`, then `cancelled`, then `complete`) until every
->   participant settles, so a later success cannot mask an earlier failure.
->   A participating producer's terminal error, unavailable status, or
->   key-required state also outranks generic completion without requiring a
+>   terminal outcome (`failed`, then `key required`, then `cancelled`, then
+>   `complete`) until every participant settles, so a later success cannot
+>   mask an earlier failure. A participating producer's terminal error or
+>   unavailable status also outranks generic completion without requiring a
 >   separate manager failure event; AIS first-connect expiry therefore ends as
->   `LOAD FAILED`, not `LOAD COMPLETE`.
+>   `LOAD FAILED`, not `LOAD COMPLETE`. A producer whose only problem is a
+>   missing provider key (`stats.keyRequired`) ends the batch `KEY REQUIRED`.
 >   Slow disable work is labeled as turning live data off rather than
 >   as a completed load. Street Traffic's dedicated sync chip shows genuine
 >   work and one bounded completion; steady TomTom coverage, including 0%, does
@@ -8748,24 +8986,35 @@ request HTTPS tiles even on HTTP localhost, with the existing Content Security
 Policy unchanged. Ion attribution and Bing's per-tile credits are preserved;
 other ion imagery assets continue through the SDK's standard ion factory.
 
-The imagery, terrain and 3D factories are the Cesium renderer's
-(`src/render/cesium/mapImagery.js`, `mapTerrain.js`, `google3d.js`; the
-package exports `./maps/imagery`, `./maps/terrain` and `./maps/3d` point
-there). The catalog, the default registry and the controller are
-Cesium-free: they reach those factories, and the scene operations a
-switch makes (imagery layers, terrain, the globe's visibility, tilesets),
-through the scene's map engine (`mapEngineFor` in `src/maps/engine.js`). The
-Cesium plugin hands the application its own engine with each renderer it makes
-(`src/render/cesium/mapEngine.js`, through `src/render/applicationHooks.js`),
-and the application scene loads the photoreal base through it too. A renderer
-whose plugin hands none switches through its globe port
-(`src/maps/globeEngine.js`): Esri and OSM as `xyz` imagery, ion's world
-imagery as `world` imagery, photoreal as the port's photoreal base (turned off
-while hidden, on again when shown), and world terrain, or without a key
-Re:Earth's keyless terrain as `quantizedMesh` terrain at its URL
-(`src/maps/keylessTerrain.js`), as the Cesium engine draws it; a renderer
-without the `terrain` capability keeps the ellipsoid. A viewer with no renderer bound gets the Cesium engine, with the
-other unbound ports, from the package's `./render/cesium/unbound` export.
+The catalog, the default registry and the controller are Cesium-free: they
+reach the map sources, and the scene operations a switch makes (imagery
+layers, terrain, the globe's visibility, the photoreal base), through the
+scene's map engine (`mapEngineFor` in `src/maps/engine.js`). Every renderer,
+Cesium included, switches through its globe port (`src/maps/globeEngine.js`),
+unless its plugin hands the application a map engine of its own
+(`src/render/applicationHooks.js`):
+
+- Esri World Imagery as `xyz` imagery to its deepest level (23); Esri's "Map
+  data not yet available" picture is answered as a missing tile, so the
+  parent's imagery stays, and a refused tile counts toward the fallback to
+  OSM. OSM as `xyz` imagery to level 19.
+- Cesium ion's world imagery as `world` imagery; on Cesium that is Bing
+  through ion, its tiles over HTTPS on any page, with ion's credits
+  (`src/render/cesium/mapImagery.js`).
+- Photoreal as the port's photoreal base, by the same routes as ever (the
+  Google key, else Google's session tokens, else the ion copy;
+  `src/render/cesium/google3d.js`). Turned off, Cesium's globe port keeps the
+  tileset hidden, and the same spec shows it again without loading it anew.
+  `window.__godsEyeView.tileset` is that Cesium tileset, shown or hidden.
+- World terrain through ion, or without an ion token Re:Earth's keyless
+  terrain as `quantizedMesh` terrain at its URL (`src/maps/keylessTerrain.js`);
+  while the keyless terrain does not answer, the ellipsoid stands in and the
+  map stack tries it again behind it. A renderer without the `terrain`
+  capability keeps the ellipsoid.
+
+A viewer with no renderer bound gets the Cesium engine
+(`src/render/cesium/mapEngine.js`), with the other unbound ports, from the
+package's `./render/cesium/unbound` export.
 
 The controller accepts other source registries without adding provider branches.
 Each instance caches source construction, ignores superseded scene changes and
@@ -8925,7 +9174,7 @@ when their footprints touch or contain one another, never across a seam toleranc
 
 ### Shared native dropdowns and numeric fields
 
-- Scene and CCTV selects share the default `gev-field` surface. HUD layout
+- CCTV selects use the default `gev-field` surface. HUD layout
   retains compact density; Draw's colour is a row of swatches, not a select. Radio filter, tuner gain and FM frequency
   use the same base while retaining their feature-specific skins and layout.
 - The CCTV inline number editor is rendered by its pose chip component with

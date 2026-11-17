@@ -3,8 +3,14 @@ import test from 'node:test';
 import * as Cesium from 'cesium';
 import { CONTRACT_VERSION, checkRendererShape } from '../contract/index.js';
 import { rendererOf } from '../rendererOf.js';
-import { IDLE_FRAME_RATE } from '../../renderGovernor.js';
-import { cesiumMapEngine } from './mapEngine.js';
+import {
+  _resetRenderGovernorForTest,
+  holdContinuousRender,
+  IDLE_FRAME_RATE,
+  installRenderGovernor,
+  releaseContinuousRender,
+  uninstallRenderGovernor,
+} from '../../renderGovernor.js';
 import {
   ReadonlySet,
   cesiumRenderer,
@@ -143,7 +149,11 @@ test('the plugin wraps the viewer it is given, behind the accessor only', async 
     'free look is limited to low heights from the start',
   );
   const hooks = plugin.applicationHooks(renderer);
-  assert.equal(hooks.mapEngine, cesiumMapEngine, 'the map stacks use Cesium');
+  assert.equal(
+    hooks.mapEngine,
+    undefined,
+    'the map stacks switch through the globe port',
+  );
   assert.equal(hooks.ownCreditDisplay, true, 'Cesium shows its own credits');
   assert.equal(hooks.qaHandles.viewer, viewer, 'QA scripts read the viewer');
   assert.equal(hooks.viewerDrawsEntity({ own: true }), true);
@@ -169,7 +179,7 @@ test('the plugin wraps the viewer it is given, behind the accessor only', async 
   assert.deepEqual(log, ['resize', 'destroy'], 'destroying twice is safe');
 });
 
-test('the application’s loop ticks at the idle rate while nothing moves, and at the display’s while anything does', async (t) => {
+test('with the governor installed, the loop ticks at the idle rate while nothing moves, and at the display’s while anything does, the renderer’s own holds included', async (t) => {
   withDocument(t, fakeDocument());
   let viewer;
   const plugin = createCesiumRendererPlugin({
@@ -184,12 +194,19 @@ test('the application’s loop ticks at the idle rate while nothing moves, and a
     container: {},
     signal: new AbortController().signal,
   });
+  installRenderGovernor(renderer.frame);
+  t.after(() => _resetRenderGovernorForTest());
+  assert.equal(viewer.targetFrameRate, IDLE_FRAME_RATE, 'idle');
+  holdContinuousRender('flights');
+  assert.equal(viewer.targetFrameRate, undefined, 'a layer moving');
+  releaseContinuousRender('flights');
   assert.equal(viewer.targetFrameRate, IDLE_FRAME_RATE);
-  assert.equal(renderer.frame.diagnostics().targetFps, 0, 'no cap');
-  const release = renderer.frame.holdContinuous('flights');
-  assert.equal(viewer.targetFrameRate, undefined);
+  // As animated visual styles hold it (effects.js).
+  const release = renderer.frame.holdContinuous('effects:animated');
+  assert.equal(viewer.targetFrameRate, undefined, 'the renderer’s own hold');
   release();
   assert.equal(viewer.targetFrameRate, IDLE_FRAME_RATE);
+  uninstallRenderGovernor(renderer.frame);
   renderer.destroy();
 });
 

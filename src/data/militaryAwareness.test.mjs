@@ -1370,8 +1370,9 @@ test('a cached Context subject re-reads its label when enrichment lands after se
       /N123AB/,
       'the rendered Context panel must show the registration without a position change',
     );
+    // `subjectIdentity` is the subject's id for matching, never shown.
     assert.doesNotMatch(
-      JSON.stringify(repainted.view),
+      JSON.stringify({ ...repainted.view, subjectIdentity: undefined }),
       /ae1fa4/,
       'the hex must be gone from the panel',
     );
