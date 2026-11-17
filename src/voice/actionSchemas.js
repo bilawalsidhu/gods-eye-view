@@ -573,6 +573,7 @@ const schemas = [
       type: 'object',
       additionalProperties: false,
       properties: {
+        lookupOnly: { type: 'boolean' },
         query: {
           type: 'string',
           minLength: 1,
@@ -1106,4 +1107,4 @@ function describe(schema, metadata, allowDescription = true) {
     return Object.fromEntries(entries);
   }
   return result;
-}
+                      }
