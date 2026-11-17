@@ -424,3 +424,33 @@ test('the position marker is a passive pick; our items act', () => {
     h.restore();
   }
 });
+
+// Under another layer's card, our window can name a different item from the
+// tap's touch contact. The card yields to that contact, an item of ours, so
+// Street Level opens it instead of leaving the click dead.
+test('under a card, the touch contact item is ours even when the window names another', (t) => {
+  const previous = globalThis.matchMedia;
+  globalThis.matchMedia = () => ({ matches: true });
+  t.after(() => {
+    if (previous) globalThis.matchMedia = previous;
+    else delete globalThis.matchMedia;
+  });
+  const h = harness({
+    services: {
+      picking: pickRegistry,
+      overlayHit: () => ({ sourceId: 'earthquake-card', entryId: 'q' }),
+    },
+    sceneExtras: {
+      pick: (_position, width = 3) =>
+        width >= 9 ? { id: 'mly:img:window' } : null,
+      drillPick: () => [{ id: 'mly:img:contact' }],
+    },
+  });
+  try {
+    h.click();
+    assert.deepEqual(h.opened, ['contact']);
+    assert.equal(h.groundClicks.length, 0);
+  } finally {
+    h.restore();
+  }
+});

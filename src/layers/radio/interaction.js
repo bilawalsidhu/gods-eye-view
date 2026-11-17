@@ -51,9 +51,11 @@ export function createInteraction({
       if (!stationId) continue;
       // Found only through our wider window, not as the tap's touch contact:
       // another layer's card or label painted here is that layer's click,
-      // since its handler never sees this window.
-      if (stationFromPick(event.hit) !== stationId && foreignCardAt(event))
-        return null;
+      // since its handler never sees this window. A station of ours that is
+      // the contact is still ours: that card yields to it.
+      const contactStationId = stationFromPick(event.hit);
+      if (contactStationId !== stationId && foreignCardAt(event))
+        return contactStationId;
       return stationId;
     }
     return null;

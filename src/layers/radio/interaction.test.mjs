@@ -101,3 +101,35 @@ test('a window-only station yields to a card painted over it', () => {
   top = { sourceId: 'radio', entryId: 'radio:kexp' };
   assert.equal(radio.pickedRadioStationAt(near()), 'kexp', 'our own card');
 });
+
+// Under another layer's card, radio's window can name a different station
+// from the tap's touch contact. The card yields to that contact, a station of
+// ours, so radio acts on it instead of leaving the click dead.
+test('under a card, the touch contact station is ours even when the window names another', () => {
+  const radio = createInteraction({
+    state: { _stationById: new Map([['kexp', {}], ['kuow', {}]]) },
+    services: {
+      picking: {
+        resolvePickId: (picked) => picked?.id ?? null,
+        isOwnedByOtherLayer: () => false,
+        registerPickOwner() {},
+        unregisterPickOwner() {},
+      },
+      overlays: {
+        setOverlaySourceVisible() {},
+        hitTestWorldOverlay: () => ({
+          sourceId: 'earthquake-card',
+          entryId: 'earthquake-card:ak1',
+        }),
+      },
+    },
+    parts: { rendering: { radioStationIdFromPick } },
+  });
+  const tap = (contact) => ({
+    ...clickEvent({ windowHits: [hit('radio:kexp')] }),
+    hit: contact,
+    screenPosition: { x: 5, y: 5 },
+  });
+  assert.equal(radio.pickedRadioStationAt(tap(hit('radio:kuow'))), 'kuow');
+  assert.equal(radio.pickedRadioStationAt(tap(null)), null, 'no contact');
+});

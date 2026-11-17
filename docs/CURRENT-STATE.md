@@ -2064,7 +2064,9 @@ vessels act on that contact, and so do radio and Street Level, which also pick
 through their own windows (17 and 9 px). A station or Street Level item found
 only through that window, not as the exact hit or the touch contact, yields to
 another layer's card or label painted over it, so a quake card or label beside
-one acts alone, with a mouse or a coarse pointer. Fire and CCTV cards in turn
+one acts alone, with a mouse or a coarse pointer; under such a card, their own
+touch contact stays theirs even when the window names another item. Fire and
+CCTV cards in turn
 yield to a touch contact whose layer acts on it. The aircraft a layer already
 tracks and Street Level's position marker are passive picks, since a click on
 either does nothing. The pick registry records which owners act on a click's

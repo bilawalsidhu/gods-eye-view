@@ -36,9 +36,14 @@ export function createSelection({ state, parts }) {
     // Found only through our window, not as the contact (which is the exact
     // hit whenever there is one): another layer's card or label painted here
     // is that layer's click, since its handler never sees this window.
+    // An item of ours that is the contact is still ours: that card yields
+    // to it.
     if (route && windowId !== contactId) {
       const at = event.screenPosition;
-      if (state.services.overlayHit?.(at?.x, at?.y)) return;
+      if (state.services.overlayHit?.(at?.x, at?.y)) {
+        route = contactId ? parts.router.resolve(contactId) : null;
+        if (!route) return;
+      }
     }
     if (!route && contactId) route = parts.router.resolve(contactId);
     // Not ours: the ground handler decides whether it is the map itself.
