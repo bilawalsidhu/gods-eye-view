@@ -1,3 +1,4 @@
+import { createPortsSource } from '../layers/ports/source.js';
 import { createDirectionsSource } from '../layers/directions/source.js';
 import { createRecentImagerySource } from '../layers/recentImagery/source.js';
 import { createOpenFreeMapSource } from '../sources/openFreeMap.js';
@@ -69,6 +70,7 @@ export function createStandaloneLayerSources(
     // unavailable without retrying.
     news: createNewsSource(),
     shipwrecks: createShipwrecksSource(),
+    ports: createPortsSource(),
     wind: createWindSource(),
     weather: createWeatherSource(),
     cyclones: createCycloneSource(),

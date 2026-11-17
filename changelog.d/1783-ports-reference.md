@@ -1,0 +1,1 @@
+Adds a keyless Ports & terminals Infrastructure layer using NGA WPI reference data hosted by DOE NETL, with country/facility filters, selectable source-linked profiles and explicitly dated commercial facts for selected ports.

@@ -9273,3 +9273,48 @@ browser-only media links, refresh cadence, and location provenance where
 available. When MLIT serves its recognized adjustment image, `/api/cctv/frame`
 returns a God’s Eye maintenance card and `/api/cctv/health` reports the camera
 as degraded with the provider-adjustment reason.
+
+
+## Ports and terminals reference layer
+
+`world-ports` is a keyless Infrastructure layer, off by default. NGA World Port
+Index features are fetched at runtime from the US DOE NETL ArcGIS mirror,
+ordered by objectid in at most six 1,000-row pages (4 MiB per response,
+20-second request timeout). A repeated page, malformed envelope or overflow
+fails rather than silently presenting global coverage. Invalid individual
+records and duplicate WPI IDs are excluded and mark the snapshot partial.
+The 2026-11-17 mirror check returned 3,824 source rows: 3,820 valid unique
+ports, two non-integer WPI IDs and two duplicate IDs. The panel displays the
+exclusion count. Metadata and strictly increasing object IDs are validated;
+pagination offsets advance by the actual page length. Only complete successful snapshots are
+cached for 24 hours; failed refreshes retain previous records with an error.
+Disable/destroy abort acquisition, remove click handlers and hide the panel;
+destroy disposes its renderer-owned marker set. No port geometry is bundled.
+
+The Ports panel filters the map and selector by country and affirmative WPI
+container/solid-bulk/oil/LNG facility flags. Unknown flags stay unknown and
+never match a positive filter. Click a marker or select a name to open its
+profile. Selecting a name flies to the port. The floating panel can collapse
+without disabling the layer; it stays above the context dock with an opaque
+background so markers and other panels do not obscure its text. Profiles show stable WPI identity,
+UN/LOCODE, facility flags, operator, ownership, dated annual throughput,
+handling capacity, status and expansions. Unavailable fields are explicitly
+labelled. WPI inclusion is not treated as evidence of operational status.
+
+Small manually reviewed primary-source supplements are keyed by WPI number
+for Mina Jabal Ali, Los Angeles and Keppel. Each fact has its own scope,
+reporting period, reviewed date and source link; there is no scraping or
+automatic updating of these facts. Keppel's related Tuas consolidation project
+is labelled separately, not represented as Keppel's capacity. Throughput is
+not capacity; future capacity remains in the expansion field. Source links
+and mirror last-edit time are distinct from retrieval time and never claimed
+as per-port verification or live status. No navigation or investment advice.
+
+Filters are session-local; token `03` shares only the enabled state. The layer
+offers `getAnalystRecords()` to callers with the currently loaded, filtered
+reference records and field-level provenance. This does not add an analyst
+query schema or MCP tool. The source factory can be imported directly without
+Vue or a renderer. Portable layer UI is published through a callback; the
+application adapter connects it to a Pinia store and PortsPanel.vue.
+
+Regression gate: `node scripts/qa-ports.mjs` (running dev server).

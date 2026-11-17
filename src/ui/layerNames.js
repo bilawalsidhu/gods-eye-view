@@ -26,6 +26,7 @@ export const LAYER_NAME_KEYS = Object.freeze({
   'military-installations': msg('Mapped Installations'),
   'military-awareness': msg('Global Context'),
   'local-datacenters': msg('Datacenters'),
+  'world-ports': msg('Ports & terminals'),
   'local-dams': msg('Dams'),
   'telegeography-submarine-cables': msg('Submarine Cables'),
   'local-firms': msg('FIRMS Active Fires'),

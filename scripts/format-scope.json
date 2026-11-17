@@ -1581,5 +1581,7 @@
   "src/ui/layerFinder.test.mjs",
   "src/data/wikidataCities.js",
   "src/data/wikidataCities.test.mjs",
-  "scripts/build-wikidata-cities.mjs"
+  "scripts/build-wikidata-cities.mjs",
+  "scripts/qa-ports.mjs",
+  "src/layers/ports/ports.test.mjs"
 ]

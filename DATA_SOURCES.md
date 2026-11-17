@@ -708,3 +708,32 @@ NOAA density imagery with the raw GLM product.
 ## In-app attribution
 
 The required Google Maps / Cesium credit renders on the on-globe credit line (`#cesium-credits`, bottom-left) and must stay visible — including in clean-view and recording modes (the whole line, logo + "Google Maps" + the "Data attribution" link, stays on screen; only the GEV panels/HUD fade). The layer-specific credits (adsb.lol, adsbdb, Planespotters.net, Open Vessel Photos, TeleGeography, OSM datacenters/dams/roads, NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic, GBFS, Radio Browser, OpenSky, AISStream) are registered into the expandable **"Data attribution"** popover on that credit line via `viewer.creditDisplay.addStaticCredit(new Cesium.Credit(html, /* showOnScreen */ false))` — see `src/data/dataCredits.js`. When you add a new data source, add its license and attribution to this file **and** append an entry to `DATA_CREDITS` in `src/data/dataCredits.js` so it surfaces in the app.
+
+
+## Ports and terminals (NGA World Port Index)
+
+- Provider: National Geospatial-Intelligence Agency, World Port Index (Pub 150).
+- Runtime host: US Department of Energy, NETL,
+  https://arcgis.netl.doe.gov/server/rest/services/Hosted/CCS_EJ_SJ_Data/FeatureServer/17
+  (`/query`, WGS84 GeoJSON, ordered and paginated; no account/key).
+- Reference: https://msi.nga.mil/Publications/WPI . The NGA direct service was
+  unavailable during the 2026-11-17 review; the DOE mirror answered with 3,824
+  features (3,820 valid unique integer WPI IDs; two non-integer IDs and two
+  duplicate IDs excluded, snapshot labelled partial). Its metadata last edit is 2026-04-20; this is a mirror snapshot,
+  not a promise of the latest monthly NGA publication.
+- Terms: NGA public information may be copied/distributed unless specified
+  otherwise; credits requested: https://www.nga.mil/resources/Privacy_Policy.html .
+  US federal government-produced WPI data; no third-party licence notice was
+  found in the mirror layer metadata. DOE NETL disclaimer:
+  https://netl.doe.gov/home/disclaimer . No NGA/DOE endorsement is implied.
+- Attribution: NGA World Port Index / US DOE NETL, in the common credit
+  display and Ports panel. Data is fetched at runtime; no global snapshot
+  is copied into the repository. Facilities are reference attributes, not
+  live observations; unknown does not mean absent.
+- Supplemental factual entries: `src/layers/ports/supplements.js` holds a
+  handful of independently transcribed names/numbers and short factual
+  descriptions from DP World, Port of Los Angeles and Singapore MPA. Each
+  field names its original URL, period, scope and review date. These sources
+  do not grant an MIT licence to their websites; no article text, logos,
+  imagery or bulk commercial dataset is redistributed. No runtime scraping.
+  Missing commercial fields and operational status remain unavailable.

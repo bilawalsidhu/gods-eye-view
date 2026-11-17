@@ -112,6 +112,10 @@ export const NYC_DOT_DISCLAIMER =
   'The public is advised to observe posted signage for compliance with applicable laws and regulations.';
 
 export const DATA_CREDITS = [
+  {
+    key: 'world-ports',
+    html: 'Ports: <a href="https://msi.nga.mil/Publications/WPI" target="_blank" rel="noopener">NGA World Port Index</a> (US Government reference data), hosted by <a href="https://arcgis.netl.doe.gov/server/rest/services/Hosted/CCS_EJ_SJ_Data/FeatureServer/17" target="_blank" rel="noopener">DOE NETL</a>. Selected commercial facts: DP World, Port of Los Angeles, Maritime and Port Authority of Singapore (field sources in the Ports panel). No government endorsement.',
+  },
   // ── Live sources ────────────────────────────────────────────────
   {
     key: 'opensky',
