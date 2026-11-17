@@ -94,7 +94,13 @@ function poseNodes(item, model) {
       posed.set(name, NO_NODE);
       continue;
     }
-    posed.set(name, Array.from(matrix).slice(0, 16));
+    // The last matrix written, kept in one array per node, copied in place.
+    let kept = last;
+    if (!(kept instanceof Float64Array)) {
+      kept = new Float64Array(16);
+      posed.set(name, kept);
+    }
+    for (let i = 0; i < 16; i++) kept[i] = matrix[i];
     // The node copies the matrix it is given.
     node.matrix = Cesium.Matrix4.fromArray(matrix, 0, scratchNodeMatrix);
   }
