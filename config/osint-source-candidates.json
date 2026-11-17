@@ -158,6 +158,51 @@
       "limits_note": "Approved appname required; confirm current usage limits.",
       "use_note": "Humanitarian context and retrospective reporting, not a live sensor feed.",
       "proposed_secret": "RELIEFWEB_APPNAME"
+    },
+    {
+      "id": "global-energy-monitor",
+      "name": "Global Energy Monitor open datasets",
+      "priority": "P2",
+      "status": "candidate-dataset-license-review",
+      "access": "public-download",
+      "domains": [
+        "energy-infrastructure",
+        "strategic-context",
+        "historical-baseline"
+      ],
+      "data": [
+        "power-plants",
+        "coal-infrastructure",
+        "oil-gas-infrastructure",
+        "steel-and-cement-infrastructure"
+      ],
+      "endpoint": "https://globalenergymonitor.org/download-data/",
+      "license_note": "Review the licence and attribution for each dataset individually before bundling or redistributing; do not assume one licence covers all datasets.",
+      "limits_note": "Download-based datasets; no live API or polling quota asserted.",
+      "use_note": "Static/periodic infrastructure baseline and retrospective context only; not evidence of current operational activity.",
+      "proposed_secret": null
+    },
+    {
+      "id": "opensanctions",
+      "name": "OpenSanctions",
+      "priority": "P2",
+      "status": "access-and-terms-gated",
+      "access": "api-key-public-interest-eligibility-or-paid-metered-api",
+      "domains": [
+        "entity-resolution",
+        "sanctions-context",
+        "organization-context"
+      ],
+      "data": [
+        "sanctions-designations",
+        "pep-records",
+        "entity-relationships"
+      ],
+      "endpoint": "https://api.opensanctions.org/",
+      "license_note": "Hosted API terms and underlying dataset rights apply; confirm public-interest eligibility and current terms before use.",
+      "limits_note": "Not an unlimited free API; API usage is metered for paid plans. Entity and statements endpoints may have different billing treatment.",
+      "use_note": "Analyst-initiated entity research only; never infer identity from name similarity or automatically screen people found in live observations.",
+      "proposed_secret": "OPENSANCTIONS_API_KEY"
     }
   ]
 }
