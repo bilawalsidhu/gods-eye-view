@@ -95,7 +95,10 @@ function specificity(selector) {
       if (rest[i] === '(') depth += 1;
       else if (rest[i] === ')') {
         depth -= 1;
-        if (depth === 0) { end = i; break; }
+        if (depth === 0) {
+          end = i;
+          break;
+        }
       }
     }
     assert.ok(end > 0, `unbalanced functional pseudo-class in "${selector}"`);
@@ -116,7 +119,9 @@ function specificity(selector) {
   classes += (rest.match(/\[[^\]]*\]/g) || []).length;
   types += (rest.match(/::[\w-]+/g) || []).length;
   classes += (rest.replace(/::[\w-]+/g, '').match(/:[\w-]+/g) || []).length;
-  types += (rest.replace(/\[[^\]]*\]/g, '').match(/(?:^|[\s>+~])[a-zA-Z][\w-]*/g) || []).length;
+  types += (
+    rest.replace(/\[[^\]]*\]/g, '').match(/(?:^|[\s>+~])[a-zA-Z][\w-]*/g) || []
+  ).length;
   return [ids, classes, types];
 }
 
@@ -165,7 +170,11 @@ function flattenRules(source) {
       rules.push({
         order: rules.length,
         media: [...mediaStack],
-        parts: splitTopLevel(head, ',').map((part) => part.trim().replace(/\(\s+/g, '(').replace(/\s+\)/g, ')')).filter(Boolean),
+        parts: splitTopLevel(head, ',')
+          .map((part) =>
+            part.trim().replace(/\(\s+/g, '(').replace(/\s+\)/g, ')'),
+          )
+          .filter(Boolean),
         decls,
       });
       index = close + 1;
@@ -217,14 +226,37 @@ const RECOGNIZED = new Set([
   '#command-dock.dock-has-two-pinned-trays #control-panel.dock-pinned-top.dock-pinned:not(.collapsed) .dock-popover-content',
 ]);
 
-const ELEMENT_KEYS = ['#cesium-credits', '#command-dock', '#right-context-rail', '.dock-popover-content'];
+const DOCKED_RAIL = 'body.context-docked #right-context-rail';
+const ELEMENT_KEYS = [
+  '#cesium-credits',
+  '#command-dock',
+  '#right-context-rail',
+  '.dock-popover-content',
+];
 
 // Any of these on a modelled element's own box changes the geometry this pin
 // reasons about, so each occurrence must be recognized and vetted.
 const GUARDED_PROPS = new Set([
-  'bottom', 'top', 'inset', 'inset-block', 'inset-block-end', 'inset-inline', 'inset-inline-end',
-  'margin', 'margin-bottom', 'margin-block', 'margin-block-end', 'all',
-  'height', 'min-height', 'max-height', 'position', 'transform', 'translate', 'scale', 'zoom',
+  'bottom',
+  'top',
+  'inset',
+  'inset-block',
+  'inset-block-end',
+  'inset-inline',
+  'inset-inline-end',
+  'margin',
+  'margin-bottom',
+  'margin-block',
+  'margin-block-end',
+  'all',
+  'height',
+  'min-height',
+  'max-height',
+  'position',
+  'transform',
+  'translate',
+  'scale',
+  'zoom',
 ]);
 
 // Custom properties allowed inside a modelled offset. Each is a pinned-tray
@@ -265,6 +297,11 @@ function ownBoxEntries() {
       // The phone shell is its own layout; mobileShell.test.mjs pins its
       // attribution clearance.
       if (part.startsWith('body.mobile-shell')) continue;
+      // So is Stories, with GEV's chrome stepped aside; storiesCredit.test.mjs
+      // pins its attribution placement.
+      if (
+        /^body\.stories-mode:not\(#gs-a\):not\(#gs-b\) #(cesium|gev)-credits$/.test(part)
+      ) continue;
       entries.push({ rule, part });
     }
   }
@@ -285,7 +322,10 @@ function parseMediaCondition(condition) {
 function appliesAt(rule, width, label) {
   return rule.media.every((condition) => {
     const maxWidth = parseMediaCondition(condition);
-    assert.ok(maxWidth !== null, `unmodelled media condition "${condition}" gates ${label}`);
+    assert.ok(
+      maxWidth !== null,
+      `unmodelled media condition "${condition}" gates ${label}`,
+    );
     return width <= maxWidth;
   });
 }
@@ -300,13 +340,26 @@ function resolve(candidates, prop, width, label) {
       if (!candidates.includes(part)) continue;
       for (const decl of rule.decls) {
         if (decl.prop !== prop) continue;
-        const contender = { decl, part, order: rule.order, spec: specificity(part) };
-        if (!winner) { winner = contender; continue; }
-        const byImportance = Number(contender.decl.important) - Number(winner.decl.important);
+        const contender = {
+          decl,
+          part,
+          order: rule.order,
+          spec: specificity(part),
+        };
+        if (!winner) {
+          winner = contender;
+          continue;
+        }
+        const byImportance =
+          Number(contender.decl.important) - Number(winner.decl.important);
         const bySpecificity = compareSpecificity(contender.spec, winner.spec);
-        if (byImportance > 0
-          || (byImportance === 0 && bySpecificity > 0)
-          || (byImportance === 0 && bySpecificity === 0 && contender.order > winner.order)) {
+        if (
+          byImportance > 0 ||
+          (byImportance === 0 && bySpecificity > 0) ||
+          (byImportance === 0 &&
+            bySpecificity === 0 &&
+            contender.order > winner.order)
+        ) {
           winner = contender;
         }
       }
@@ -320,10 +373,26 @@ function resolve(candidates, prop, width, label) {
 function toPx(value, viewportHeight, where) {
   const trimmed = value.trim();
   const inner = /^calc\(/.test(trimmed) ? trimmed.slice(5, -1) : trimmed;
-  assert.doesNotMatch(inner, /\bcalc\(/, `nested calc() in ${where}: "${value}"`);
-  assert.doesNotMatch(inner, /\b(min|max|clamp|env|attr|round|mod)\(/, `unmodelled function in ${where}: "${value}"`);
-  assert.doesNotMatch(inner, /[*/]/, `unmodelled operator in ${where}: "${value}"`);
-  assert.doesNotMatch(inner, /\s-\s/, `unmodelled subtraction in ${where}: "${value}"`);
+  assert.doesNotMatch(
+    inner,
+    /\bcalc\(/,
+    `nested calc() in ${where}: "${value}"`,
+  );
+  assert.doesNotMatch(
+    inner,
+    /\b(min|max|clamp|env|attr|round|mod)\(/,
+    `unmodelled function in ${where}: "${value}"`,
+  );
+  assert.doesNotMatch(
+    inner,
+    /[*/]/,
+    `unmodelled operator in ${where}: "${value}"`,
+  );
+  assert.doesNotMatch(
+    inner,
+    /\s-\s/,
+    `unmodelled subtraction in ${where}: "${value}"`,
+  );
   let total = 0;
   for (const raw of splitTopLevel(inner, '+')) {
     const term = raw.trim();
@@ -331,40 +400,60 @@ function toPx(value, viewportHeight, where) {
     if (term === '100%') continue; // the tray's own panel height, added separately
     if (term.startsWith('var(')) {
       const name = term.slice(4, term.lastIndexOf(')')).split(',')[0].trim();
-      assert.ok(VETTED_VARS.has(name), `unvetted custom property ${name} in ${where}: "${value}"`);
+      assert.ok(
+        VETTED_VARS.has(name),
+        `unvetted custom property ${name} in ${where}: "${value}"`,
+      );
       if (name === '--world-timeline-lift') total += liftPx;
       continue; // proven non-negative; 0 is the conservative floor
     }
-    assert.match(term, /^-?[\d.]+(px|rem|vh)$/, `unmodelled length term "${term}" in ${where}: "${value}"`);
+    assert.match(
+      term,
+      /^-?[\d.]+(px|rem|vh)$/,
+      `unmodelled length term "${term}" in ${where}: "${value}"`,
+    );
     const number = Number.parseFloat(term);
     if (term.endsWith('rem')) total += number * REM_PX;
-    else if (term.endsWith('vh')) total += number * viewportHeight / 100;
+    else if (term.endsWith('vh')) total += (number * viewportHeight) / 100;
     else total += number;
   }
   return total;
 }
 
-const WIDTHS = [1440, 1024, 980, 900, 830, 800, 760, 721, 720, 700, 640, 600, 480, 375];
+const WIDTHS = [
+  1440, 1024, 980, 900, 830, 800, 760, 721, 720, 700, 640, 600, 480, 375,
+];
 const HEIGHTS = [500, 560, 640, 700, 800, 900, 1000, 1080, 1200, 1440, 1600];
 
-const CREDIT_SELECTORS = ['#cesium-credits', 'body:not(.ui-clean-view):not(.recording-mode) #cesium-credits'];
-const MINIMAL_HUD_CREDIT = "body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minimal'].active) #cesium-credits";
-const TRAY_ORDINARY = ['#command-dock .dock-popover-content', '#command-dock #location-bar .dock-popover-content'];
+const CREDIT_SELECTORS = [
+  '#cesium-credits',
+  'body:not(.ui-clean-view):not(.recording-mode) #cesium-credits',
+];
+const MINIMAL_HUD_CREDIT =
+  "body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minimal'].active) #cesium-credits";
+const TRAY_ORDINARY = [
+  '#command-dock .dock-popover-content',
+  '#command-dock #location-bar .dock-popover-content',
+];
 const TRAY_SCENARIOS = [
   { name: 'ordinary tray', offset: TRAY_ORDINARY },
   {
     name: 'one pinned tray',
-    offset: [...TRAY_ORDINARY,
-      '#command-dock.dock-has-pinned-tray #location-bar:not(.collapsed):not(.dock-pinned) .dock-popover-content'],
+    offset: [
+      ...TRAY_ORDINARY,
+      '#command-dock.dock-has-pinned-tray #location-bar:not(.collapsed):not(.dock-pinned) .dock-popover-content',
+    ],
     stackVar: '--dock-pinned-stack-height',
   },
   {
     name: 'two pinned trays (upper)',
-    offset: [...TRAY_ORDINARY,
+    offset: [
+      ...TRAY_ORDINARY,
       // The stock form still governs above 900px; the ID form is what keeps it
       // ahead of the ordinary narrow rule below it.
       '#command-dock.dock-has-two-pinned-trays .dock-pinned-top.dock-pinned:not(.collapsed) .dock-popover-content',
-      '#command-dock.dock-has-two-pinned-trays #location-bar.dock-pinned-top.dock-pinned:not(.collapsed) .dock-popover-content'],
+      '#command-dock.dock-has-two-pinned-trays #location-bar.dock-pinned-top.dock-pinned:not(.collapsed) .dock-popover-content',
+    ],
     stackVar: '--dock-lower-pinned-height',
   },
 ];
@@ -377,12 +466,18 @@ function creditTopPx(width, height) {
 function trayBottomPx(scenario, width, height) {
   const dock = resolve(['#command-dock'], 'bottom', width, 'command dock');
   const offset = resolve(scenario.offset, 'bottom', width, scenario.name);
-  const margin = resolve(['#command-dock #location-bar:not(.collapsed) .dock-popover-content'],
-    'margin-bottom', width, 'open tray margin');
-  return toPx(dock.decl.value, height, 'dock bottom')
-    + COMPACT_DOCK_HEIGHT_PX
-    + toPx(offset.decl.value, height, `${scenario.name} offset`)
-    + toPx(margin.decl.value, height, 'tray margin');
+  const margin = resolve(
+    ['#command-dock #location-bar:not(.collapsed) .dock-popover-content'],
+    'margin-bottom',
+    width,
+    'open tray margin',
+  );
+  return (
+    toPx(dock.decl.value, height, 'dock bottom') +
+    COMPACT_DOCK_HEIGHT_PX +
+    toPx(offset.decl.value, height, `${scenario.name} offset`) +
+    toPx(margin.decl.value, height, 'tray margin')
+  );
 }
 
 // ── Fail-closed guards ──────────────────────────────────────────────────────
@@ -390,15 +485,31 @@ function trayBottomPx(scenario, width, height) {
 test('the specificity calculator itself is pinned', () => {
   const cases = [
     ['#cesium-credits', [1, 0, 0]],
-    ['body:not(.ui-clean-view):not(.recording-mode) #cesium-credits', [1, 2, 1]],
+    [
+      'body:not(.ui-clean-view):not(.recording-mode) #cesium-credits',
+      [1, 2, 1],
+    ],
     ['#command-dock #location-bar .dock-popover-content', [2, 1, 0]],
-    ['#command-dock.dock-has-pinned-tray #location-bar:not(.collapsed):not(.dock-pinned) .dock-popover-content', [2, 4, 0]],
-    ['#command-dock.dock-has-two-pinned-trays #location-bar.dock-pinned-top.dock-pinned:not(.collapsed) .dock-popover-content', [2, 5, 0]],
-    ['#command-dock.dock-has-two-pinned-trays .dock-pinned-top.dock-pinned:not(.collapsed) .dock-popover-content', [1, 5, 0]],
+    [
+      '#command-dock.dock-has-pinned-tray #location-bar:not(.collapsed):not(.dock-pinned) .dock-popover-content',
+      [2, 4, 0],
+    ],
+    [
+      '#command-dock.dock-has-two-pinned-trays #location-bar.dock-pinned-top.dock-pinned:not(.collapsed) .dock-popover-content',
+      [2, 5, 0],
+    ],
+    [
+      '#command-dock.dock-has-two-pinned-trays .dock-pinned-top.dock-pinned:not(.collapsed) .dock-popover-content',
+      [1, 5, 0],
+    ],
     ['#command-dock .dock-popover-content::after', [1, 1, 1]],
   ];
   for (const [selector, expected] of cases) {
-    assert.deepEqual(specificity(selector), expected, `specificity of "${selector}"`);
+    assert.deepEqual(
+      specificity(selector),
+      expected,
+      `specificity of "${selector}"`,
+    );
   }
 });
 
@@ -407,28 +518,46 @@ test('the model refuses every cascade construct it cannot resolve', () => {
   for (const { rule, part } of ownBoxEntries()) {
     const guarded = rule.decls.filter((decl) => GUARDED_PROPS.has(decl.prop));
     if (!guarded.length) continue;
+    // Expanded Context covers the right edge top to bottom; the credit row
+    // stops short of it instead (the docked-Context test below).
+    if (part === DOCKED_RAIL) continue;
     if (!RECOGNIZED.has(part)) {
-      complaints.push(`unrecognized selector positions a modelled element: "${part}" (${guarded.map((d) => d.prop).join(', ')})`);
+      complaints.push(
+        `unrecognized selector positions a modelled element: "${part}" (${guarded.map((d) => d.prop).join(', ')})`,
+      );
       continue;
     }
     for (const condition of rule.media) {
       if (parseMediaCondition(condition) === null) {
-        complaints.push(`unmodelled media condition "${condition}" on "${part}"`);
+        complaints.push(
+          `unmodelled media condition "${condition}" on "${part}"`,
+        );
       }
     }
     if (rule.media.length > 1) {
-      complaints.push(`nested media queries on "${part}": ${rule.media.join(' && ')}`);
+      complaints.push(
+        `nested media queries on "${part}": ${rule.media.join(' && ')}`,
+      );
     }
     for (const decl of guarded) {
       // Measurement is synchronous and restored before returning or painting.
       // Only these two exact declarations earn the exemption tested below.
-      const railMeasurement = part === '#right-context-rail[data-rail-measuring]'
-        && ((decl.prop === 'height' && decl.value === 'auto')
-          || (decl.prop === 'max-height' && decl.value === 'none'));
-      if (decl.important && !railMeasurement) complaints.push(`!important on ${decl.prop} of "${part}"`);
-      if (decl.prop === 'inset' || decl.prop === 'margin' || decl.prop === 'all'
-        || decl.prop.startsWith('inset-') || decl.prop.startsWith('margin-block')) {
-        complaints.push(`shorthand ${decl.prop} on "${part}" — the model reads longhands only`);
+      const railMeasurement =
+        part === '#right-context-rail[data-rail-measuring]' &&
+        ((decl.prop === 'height' && decl.value === 'auto') ||
+          (decl.prop === 'max-height' && decl.value === 'none'));
+      if (decl.important && !railMeasurement)
+        complaints.push(`!important on ${decl.prop} of "${part}"`);
+      if (
+        decl.prop === 'inset' ||
+        decl.prop === 'margin' ||
+        decl.prop === 'all' ||
+        decl.prop.startsWith('inset-') ||
+        decl.prop.startsWith('margin-block')
+      ) {
+        complaints.push(
+          `shorthand ${decl.prop} on "${part}" — the model reads longhands only`,
+        );
       }
       if (decl.prop === 'height' || decl.prop === 'max-height') {
         // A capped height can override `bottom` and invalidate the measured
@@ -437,68 +566,159 @@ test('the model refuses every cascade construct it cannot resolve', () => {
         // modelled band by the rail clearance test) and `.layout-focus`
         // (proven inapplicable at <=720px by the mobile-mode test), plus
         // synchronous measurement, which is removed before any paint.
-        const railOwn = part === '#right-context-rail' && decl.prop === 'max-height';
+        const railOwn =
+          part === '#right-context-rail' && decl.prop === 'max-height';
         const railFocus = part === '#right-context-rail.layout-focus';
-        if (!railOwn && !railFocus && !railMeasurement) complaints.push(`${decl.prop}: ${decl.value} on "${part}"`);
+        if (!railOwn && !railFocus && !railMeasurement)
+          complaints.push(`${decl.prop}: ${decl.value} on "${part}"`);
       }
-      if (decl.prop === 'transform' && /translateY|translate3d|matrix|scale\(/.test(decl.value)) {
+      if (
+        decl.prop === 'transform' &&
+        /translateY|translate3d|matrix|scale\(/.test(decl.value)
+      ) {
         const identity = decl.value === 'translateY(0) scale(1)';
-        const closedTray = part === '#command-dock .dock-popover-content'
-          && decl.value === 'translateY(0.55rem) scale(0.985)';
-        if (!identity && !closedTray) complaints.push(`vertical transform on "${part}": ${decl.value}`);
+        const closedTray =
+          part === '#command-dock .dock-popover-content' &&
+          decl.value === 'translateY(0.55rem) scale(0.985)';
+        if (!identity && !closedTray)
+          complaints.push(`vertical transform on "${part}": ${decl.value}`);
       }
-      if (decl.prop === 'translate' || decl.prop === 'scale' || decl.prop === 'zoom') {
-        complaints.push(`${decl.prop} on "${part}" moves the box outside the model`);
+      if (
+        decl.prop === 'translate' ||
+        decl.prop === 'scale' ||
+        decl.prop === 'zoom'
+      ) {
+        complaints.push(
+          `${decl.prop} on "${part}" moves the box outside the model`,
+        );
       }
     }
   }
-  assert.deepEqual(complaints, [], `the attribution model cannot resolve:\n  ${complaints.join('\n  ')}\n`);
+  assert.deepEqual(
+    complaints,
+    [],
+    `the attribution model cannot resolve:\n  ${complaints.join('\n  ')}\n`,
+  );
 });
 
 test('custom properties inside modelled offsets are provably non-negative', () => {
   // The model evaluates them at 0, which is only a conservative floor if they
   // can never go negative. Both writers are checked: CSS and the JS.
-  const declared = RULES.flatMap((rule) => rule.decls.filter((decl) => VETTED_VARS.has(decl.prop)));
-  assert.ok(declared.length >= VETTED_VARS.size, 'every vetted custom property needs a CSS default');
+  const declared = RULES.flatMap((rule) =>
+    rule.decls.filter((decl) => VETTED_VARS.has(decl.prop)),
+  );
+  assert.ok(
+    declared.length >= VETTED_VARS.size,
+    'every vetted custom property needs a CSS default',
+  );
   for (const decl of declared) {
-    assert.doesNotMatch(decl.value, /-\s*\d/, `${decl.prop} has a negative CSS default: ${decl.value}`);
-    const shape = FIXED_LENGTH_VARS.has(decl.prop) ? /^(0|\d+px)$/ : /^(0|0px)$/;
-    assert.match(decl.value, shape, `${decl.prop} default is not a vetted shape: ${decl.value}`);
+    assert.doesNotMatch(
+      decl.value,
+      /-\s*\d/,
+      `${decl.prop} has a negative CSS default: ${decl.value}`,
+    );
+    const shape = FIXED_LENGTH_VARS.has(decl.prop)
+      ? /^(0|\d+px)$/
+      : /^(0|0px)$/;
+    assert.match(
+      decl.value,
+      shape,
+      `${decl.prop} default is not a vetted shape: ${decl.value}`,
+    );
   }
-  const layout = fs.readFileSync(new URL('./ui/panelLayoutController.js', import.meta.url), 'utf8');
+  const layout = fs.readFileSync(
+    new URL('./ui/panelLayoutController.js', import.meta.url),
+    'utf8',
+  );
   const start = layout.indexOf('_updateCommandDockTrayStack() {');
   assert.ok(start > 0, '_updateCommandDockTrayStack is missing');
-  const writer = layout.slice(start, layout.indexOf('  _scheduleAdaptivePanelLayout(', start));
+  const writer = layout.slice(
+    start,
+    layout.indexOf('  _scheduleAdaptivePanelLayout(', start),
+  );
   // Every value traces back to a rect height, floored at 0 and rounded up.
-  assert.match(writer, /const locationHeight =\s*[\s\S]{0,180}?getBoundingClientRect\(\)\.height\s*\|\| 0;/);
-  assert.match(writer, /const presetsHeight =\s*[\s\S]{0,180}?getBoundingClientRect\(\)\.height\s*\|\| 0;/);
-  assert.match(writer, /const lowerPinnedHeight =\s*[\s\S]{0,220}?getBoundingClientRect\(\)\.height\s*\|\| 0;/);
-  assert.match(writer, /const locationHeightPx = Math\.ceil\(locationHeight\);/);
+  assert.match(
+    writer,
+    /const locationHeight =\s*[\s\S]{0,180}?getBoundingClientRect\(\)\.height\s*\|\| 0;/,
+  );
+  assert.match(
+    writer,
+    /const presetsHeight =\s*[\s\S]{0,180}?getBoundingClientRect\(\)\.height\s*\|\| 0;/,
+  );
+  assert.match(
+    writer,
+    /const lowerPinnedHeight =\s*[\s\S]{0,220}?getBoundingClientRect\(\)\.height\s*\|\| 0;/,
+  );
+  assert.match(
+    writer,
+    /const locationHeightPx = Math\.ceil\(locationHeight\);/,
+  );
   assert.match(writer, /const presetsHeightPx = Math\.ceil\(presetsHeight\);/);
-  assert.match(writer, /'--dock-location-pinned-height',\s*`\$\{locationHeightPx\}px`/);
-  assert.match(writer, /'--dock-presets-pinned-height',\s*`\$\{presetsHeightPx\}px`/);
-  assert.match(writer, /'--dock-lower-pinned-height',\s*`\$\{Math\.ceil\(lowerPinnedHeight\)\}px`/);
+  assert.match(
+    writer,
+    /'--dock-location-pinned-height',\s*`\$\{locationHeightPx\}px`/,
+  );
+  assert.match(
+    writer,
+    /'--dock-presets-pinned-height',\s*`\$\{presetsHeightPx\}px`/,
+  );
+  assert.match(
+    writer,
+    /'--dock-lower-pinned-height',\s*`\$\{Math\.ceil\(lowerPinnedHeight\)\}px`/,
+  );
   assert.match(writer, /'--dock-pinned-stack-height', stackHeight/);
-  assert.match(writer, /const stackHeight =\s*pinnedCount > 1[\s\S]{0,160}?`calc\(\$\{locationHeightPx\}px \+ \$\{presetsHeightPx\}px \+ 1\.2rem\)`/);
+  assert.match(
+    writer,
+    /const stackHeight =\s*pinnedCount > 1[\s\S]{0,160}?`calc\(\$\{locationHeightPx\}px \+ \$\{presetsHeightPx\}px \+ 1\.2rem\)`/,
+  );
 });
 
 test('the inputs behind the measured constants are unchanged', () => {
   // 28px credit / 62px dock are measured, not derived. Guard the CSS that
   // determines them so a change forces a re-measure instead of a silent drift.
-  const creditBase = RULES.find((rule) => rule.parts.length === 1 && rule.parts[0] === '#cesium-credits');
+  const creditBase = RULES.find(
+    (rule) => rule.parts.length === 1 && rule.parts[0] === '#cesium-credits',
+  );
   assert.ok(creditBase, '#cesium-credits base rule is missing');
-  const declOf = (rule, prop) => rule.decls.find((decl) => decl.prop === prop)?.value;
-  assert.equal(declOf(creditBase, 'font-size'), '10px', 'credit font-size drives its measured 28px height');
-  assert.equal(declOf(creditBase, 'white-space'), 'nowrap', 'a wrapping credit is taller than the measured 28px');
-  for (const prop of ['height', 'min-height', 'max-height', 'line-height', 'padding']) {
-    assert.equal(declOf(creditBase, prop), undefined, `#cesium-credits gained ${prop}; re-measure CREDIT_HEIGHT_PX`);
+  const declOf = (rule, prop) =>
+    rule.decls.find((decl) => decl.prop === prop)?.value;
+  assert.equal(
+    declOf(creditBase, 'font-size'),
+    '10px',
+    'credit font-size drives its measured 28px height',
+  );
+  assert.equal(
+    declOf(creditBase, 'white-space'),
+    'nowrap',
+    'a wrapping credit is taller than the measured 28px',
+  );
+  for (const prop of [
+    'height',
+    'min-height',
+    'max-height',
+    'line-height',
+    'padding',
+  ]) {
+    assert.equal(
+      declOf(creditBase, prop),
+      undefined,
+      `#cesium-credits gained ${prop}; re-measure CREDIT_HEIGHT_PX`,
+    );
   }
   // Only `min-height` may floor the dock — that direction only ADDS clearance.
   for (const { rule, part } of ownBoxEntries()) {
     if (part !== '#command-dock') continue;
     for (const decl of rule.decls) {
-      assert.notEqual(decl.prop, 'height', 'a fixed dock height invalidates COMPACT_DOCK_HEIGHT_PX');
-      assert.notEqual(decl.prop, 'max-height', 'a capped dock height invalidates COMPACT_DOCK_HEIGHT_PX');
+      assert.notEqual(
+        decl.prop,
+        'height',
+        'a fixed dock height invalidates COMPACT_DOCK_HEIGHT_PX',
+      );
+      assert.notEqual(
+        decl.prop,
+        'max-height',
+        'a capped dock height invalidates COMPACT_DOCK_HEIGHT_PX',
+      );
     }
   }
 });
@@ -509,23 +729,44 @@ test('the full-width rail cannot inherit a height that overrides its floor', () 
   // over-constrained. It is safe only because the rail's layout pass switches
   // to a mobile mode at the SAME breakpoint and removes both the class and the
   // custom property. Pin that, or the exemption above is unearned.
-  const rail = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'rightPanelRail.js'), 'utf8');
+  const rail = fs.readFileSync(
+    path.join(ROOT, 'src', 'ui', 'rightPanelRail.js'),
+    'utf8',
+  );
   const gate = rail.indexOf("windowRef.matchMedia('(max-width: 720px)')");
-  assert.ok(gate > 0, 'the rail layout pass no longer keys off (max-width: 720px)');
-  const mobileBranch = rail.slice(gate, rail.indexOf("layoutMode = 'mobile'", gate) + 40);
+  assert.ok(
+    gate > 0,
+    'the rail layout pass no longer keys off (max-width: 720px)',
+  );
+  const mobileBranch = rail.slice(
+    gate,
+    rail.indexOf("layoutMode = 'mobile'", gate) + 40,
+  );
   assert.match(mobileBranch, /stack\.classList\.remove\('layout-focus'\)/);
-  assert.match(mobileBranch, /stack\.style\.removeProperty\('--right-stack-max-height'\)/);
+  assert.match(
+    mobileBranch,
+    /stack\.style\.removeProperty\('--right-stack-max-height'\)/,
+  );
 });
 
 test('right rail measurement cannot persist into a painted attribution layout', () => {
-  const rail = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'rightPanelRail.js'), 'utf8');
+  const rail = fs.readFileSync(
+    path.join(ROOT, 'src', 'ui', 'rightPanelRail.js'),
+    'utf8',
+  );
   const start = rail.indexOf("stack.setAttribute('data-rail-measuring', '')");
-  const end = rail.indexOf("stack.removeAttribute('data-rail-measuring')", start);
+  const end = rail.indexOf(
+    "stack.removeAttribute('data-rail-measuring')",
+    start,
+  );
   assert.ok(start > rail.indexOf("layoutMode = 'mobile'"));
   assert.ok(end > start);
   const measurement = rail.slice(start, end);
   assert.match(measurement, /try \{[\s\S]*\} finally \{/);
-  assert.doesNotMatch(measurement, /\b(?:await|return|yield)\b|requestAnimationFrame|setTimeout/);
+  assert.doesNotMatch(
+    measurement,
+    /\b(?:await|return|yield)\b|requestAnimationFrame|setTimeout/,
+  );
 });
 
 // ── Clearance ───────────────────────────────────────────────────────────────
@@ -540,15 +781,22 @@ test('every open dock tray clears the required credit at every modelled viewport
     for (const scenario of TRAY_SCENARIOS) {
       for (const width of WIDTHS.filter((w) => w <= 900)) {
         for (const height of HEIGHTS) {
-          const clearance = trayBottomPx(scenario, width, height) - creditTopPx(width, height);
+          const clearance =
+            trayBottomPx(scenario, width, height) - creditTopPx(width, height);
           if (clearance < MIN_CLEARANCE_PX) {
-            failures.push(`${scenario.name} @ ${width}x${height} lift ${lift}: ${clearance.toFixed(1)}px`);
+            failures.push(
+              `${scenario.name} @ ${width}x${height} lift ${lift}: ${clearance.toFixed(1)}px`,
+            );
           }
         }
       }
     }
   });
-  assert.deepEqual(failures, [], `a dock tray re-enters the credit band:\n  ${failures.join('\n  ')}\n`);
+  assert.deepEqual(
+    failures,
+    [],
+    `a dock tray re-enters the credit band:\n  ${failures.join('\n  ')}\n`,
+  );
 });
 
 test('a pinned tray still stacks above its sibling at narrow widths', () => {
@@ -575,33 +823,100 @@ test('the full-width context rail clears the required credit at every modelled v
       if (decl.prop === 'bottom') anchors.push({ rule, decl });
     }
   }
-  assert.equal(anchors.length, 1, 'the rail has exactly one bottom anchor to reason about');
-  assert.equal(parseMediaCondition(anchors[0].rule.media[0]), 720, 'the rail only goes full-width below 720px');
+  assert.equal(
+    anchors.length,
+    1,
+    'the rail has exactly one bottom anchor to reason about',
+  );
+  assert.equal(
+    parseMediaCondition(anchors[0].rule.media[0]),
+    720,
+    'the rail only goes full-width below 720px',
+  );
 
   const failures = [];
   for (const width of WIDTHS.filter((w) => w <= 720)) {
     // `bottom` only governs the floor while the box is not height-capped:
     // top + bottom + a resolved height is over-constrained and drops `bottom`.
     assert.equal(
-      resolve(['#right-context-rail'], 'max-height', width, 'context rail').decl.value,
+      resolve(['#right-context-rail'], 'max-height', width, 'context rail').decl
+        .value,
       'none',
       `at ${width}px the rail is height-capped, so its bottom anchor no longer decides its floor`,
     );
     eachLift((lift) => {
       for (const height of HEIGHTS) {
-        const rail = resolve(['#right-context-rail'], 'bottom', width, 'context rail');
-        const clearance = toPx(rail.decl.value, height, 'rail bottom') - creditTopPx(width, height);
-        if (clearance < MIN_CLEARANCE_PX) failures.push(`${width}x${height} lift ${lift}: ${clearance.toFixed(1)}px`);
+        const rail = resolve(
+          ['#right-context-rail'],
+          'bottom',
+          width,
+          'context rail',
+        );
+        const clearance =
+          toPx(rail.decl.value, height, 'rail bottom') -
+          creditTopPx(width, height);
+        if (clearance < MIN_CLEARANCE_PX)
+          failures.push(
+            `${width}x${height} lift ${lift}: ${clearance.toFixed(1)}px`,
+          );
       }
     });
   }
-  assert.deepEqual(failures, [], `context rail re-enters the credit band at ${failures.join(', ')}`);
+  assert.deepEqual(
+    failures,
+    [],
+    `context rail re-enters the credit band at ${failures.join(', ')}`,
+  );
+});
+
+test('expanded Context and the credit row never overlap', () => {
+  const docked = RULES.filter((rule) => rule.parts.includes(DOCKED_RAIL));
+  assert.equal(
+    docked.length,
+    1,
+    'expanded Context has exactly one rule for its column',
+  );
+  assert.deepEqual(
+    docked[0].media,
+    [],
+    'the expanded column applies at every width',
+  );
+  const decl = (prop) => docked[0].decls.find((d) => d.prop === prop)?.value;
+  assert.equal(decl('right'), '0');
+  assert.equal(decl('width'), 'var(--context-dock-width)');
+  // The credit row starts under 3rem from the left and may run to its
+  // max-width: with 3rem and the column's width taken off, it ends short of
+  // the column.
+  for (const base of [CREDIT_SELECTORS[1], MINIMAL_HUD_CREDIT]) {
+    const selector = base.replace('body:not(', 'body.context-docked:not(');
+    assert.ok(compareSpecificity(specificity(selector), specificity(base)) > 0);
+    for (const width of WIDTHS) {
+      const left = resolve([base], 'left', width, 'credit').decl.value;
+      const rem = /^(\d*\.?\d+)rem$/.exec(left);
+      assert.ok(
+        rem && Number(rem[1]) < 3,
+        `at ${width}px the credit starts at ${left}`,
+      );
+      assert.equal(
+        resolve([base, selector], 'max-width', width, 'docked credit').decl
+          .value,
+        'calc(100vw - 3rem - var(--context-dock-width))',
+        `at ${width}px the credit row can run under expanded Context`,
+      );
+    }
+  }
 });
 
 test('the dock anchor changes at 720px — the 2vh cancellation is band-limited', () => {
   const lift = 'var(--world-timeline-lift, 0px)';
-  assert.equal(resolve(['#command-dock'], 'bottom', 800, 'dock').decl.value, `calc(2vh + ${lift})`);
-  assert.equal(resolve(['#command-dock'], 'bottom', 720, 'dock').decl.value, `calc(8px + ${lift})`);
+  assert.equal(
+    resolve(['#command-dock'], 'bottom', 800, 'dock').decl.value,
+    `calc(2vh + ${lift})`,
+  );
+  assert.equal(
+    resolve(['#command-dock'], 'bottom', 720, 'dock').decl.value,
+    `calc(8px + ${lift})`,
+  );
   assert.equal(
     resolve(CREDIT_SELECTORS, 'bottom', 720, 'credit').decl.value,
     `calc(2vh + 5rem + ${lift})`,
@@ -612,10 +927,16 @@ test('the dock anchor changes at 720px — the 2vh cancellation is band-limited'
 test('the minimal-HUD credit variant tracks the ordinary one', () => {
   // It is MORE specific, so if the two ever diverge the model reads the wrong
   // anchor while the browser paints the other.
-  assert.ok(compareSpecificity(specificity(MINIMAL_HUD_CREDIT), specificity(CREDIT_SELECTORS[1])) > 0);
+  assert.ok(
+    compareSpecificity(
+      specificity(MINIMAL_HUD_CREDIT),
+      specificity(CREDIT_SELECTORS[1]),
+    ) > 0,
+  );
   for (const width of WIDTHS) {
     assert.equal(
-      resolve([MINIMAL_HUD_CREDIT], 'bottom', width, 'minimal-HUD credit').decl.value,
+      resolve([MINIMAL_HUD_CREDIT], 'bottom', width, 'minimal-HUD credit').decl
+        .value,
       resolve(CREDIT_SELECTORS, 'bottom', width, 'credit').decl.value,
       `the minimal-HUD credit anchor diverges at ${width}px`,
     );
@@ -623,25 +944,81 @@ test('the minimal-HUD credit variant tracks the ordinary one', () => {
 });
 
 test('the tray only spans the credit corner at the widths the model covers', () => {
-  const widened = RULES.filter((rule) => rule.parts.includes('#command-dock .dock-popover-content')
-    && rule.decls.some((decl) => decl.prop === 'width' && decl.value.includes('--dock-popover-mobile-width')));
+  const widened = RULES.filter(
+    (rule) =>
+      rule.parts.includes('#command-dock .dock-popover-content') &&
+      rule.decls.some(
+        (decl) =>
+          decl.prop === 'width' &&
+          decl.value.includes('--dock-popover-mobile-width'),
+      ),
+  );
   assert.equal(widened.length, 1);
   assert.equal(parseMediaCondition(widened[0].media[0]), 900);
 });
 
 test('the credit line is never suppressed to make room', () => {
-  const creditBlocks = [...css.matchAll(/#cesium-credits[^{]*\{([^}]*)\}/g)].map((m) => m[1]);
+  const creditBlocks = [
+    ...css.matchAll(/#cesium-credits[^{]*\{([^}]*)\}/g),
+  ].map((m) => m[1]);
   assert.ok(creditBlocks.length > 0);
   for (const block of creditBlocks) {
-    assert.doesNotMatch(block, /display\s*:\s*none/, 'the credit must never be display:none');
-    assert.doesNotMatch(block, /visibility\s*:\s*hidden/, 'the credit must never be hidden');
-    assert.doesNotMatch(block, /opacity\s*:\s*0(\D|$)/, 'the credit must never be faded out');
+    assert.doesNotMatch(
+      block,
+      /display\s*:\s*none/,
+      'the credit must never be display:none',
+    );
+    assert.doesNotMatch(
+      block,
+      /visibility\s*:\s*hidden/,
+      'the credit must never be hidden',
+    );
+    assert.doesNotMatch(
+      block,
+      /opacity\s*:\s*0(\D|$)/,
+      'the credit must never be faded out',
+    );
   }
-  assert.match(css, /body\.ui-clean-view #cesium-credits,\s*\n\s*body\.recording-mode #cesium-credits \{[^}]*bottom: 36px;/);
+  assert.match(
+    css,
+    /body\.ui-clean-view #cesium-credits,\s*\n\s*body\.recording-mode #cesium-credits \{[^}]*bottom: 36px;/,
+  );
 });
-
 
 test('OSM-derived layers never force the desktop credit row into a stack', () => {
   assert.doesNotMatch(css, /body:has\([^)]*alpr-cameras[^}]*#cesium-credits/);
-  assert.doesNotMatch(css, /#cesium-credits\s+\.cesium-credit-expand-link\s*\{[^}]*display:\s*block/);
+  assert.doesNotMatch(
+    css,
+    /#cesium-credits\s+\.cesium-credit-expand-link\s*\{[^}]*display:\s*block/,
+  );
+});
+
+test('expanded Context keeps the credits beside it right to left and with the minimal HUD', () => {
+  const css = fs
+    .readFileSync(
+      path.join(ROOT, 'src', 'ui', 'styles', 'context-dock.css'),
+      'utf8',
+    )
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\s+/g, ' ');
+  const rule = (selectorPart, decl) =>
+    new RegExp(
+      `${selectorPart}[^{}]*:is\\(#cesium-credits, #gev-credits\\) \\{[^}]*${decl}`,
+    ).test(css);
+  // Right to left the column docks to the left edge, where the credits start.
+  assert.ok(
+    rule(
+      "html\\[dir='rtl'\\] body\\.context-docked",
+      'left: calc\\(36px \\+ var\\(--context-dock-width\\)\\)',
+    ),
+    'right to left, the credits start past the expanded column',
+  );
+  // The minimal HUD puts the credits bottom right, where the column docks.
+  assert.ok(
+    rule(
+      "^.*body\\.context-docked:not\\(\\.ui-clean-view\\):not\\(\\.recording-mode\\):has\\( #intel-hud\\[data-variant='minimal'\\]\\.active \\)",
+      'right: calc\\(36px \\+ var\\(--context-dock-width\\)\\)',
+    ),
+    'with the minimal HUD, the credits end before the expanded column',
+  );
 });

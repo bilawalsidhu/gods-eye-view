@@ -284,7 +284,10 @@ rejects delayed responses; a new start requests a fresh secret. Secret expiry
 limits connection creation and does not describe the connected session lifetime.
 
 `createStandaloneApplication({ voice })` passes these construction options to
-the controls. An incompatible protocol needs a separate controller adapter;
+the controls. An app can supply `voice.openStories({ isCurrent })` for what the
+`open_stories` action does, spoken or typed; it answers true when it opened,
+`'already-open'`, or false. Without it the action opens the Stories page.
+An incompatible protocol needs a separate controller adapter;
 changing an endpoint alone does not translate protocol messages. No alternate
 model is bundled by this extraction. The Node Realtime provider accepts
 `realtime: { endpoint, models: { standard, mini }, resolveApiKey, fetchImpl }`;

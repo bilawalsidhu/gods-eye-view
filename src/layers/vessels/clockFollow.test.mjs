@@ -175,3 +175,44 @@ test('a vessel snapshot at a time the source drops for a newer one is no failure
   assert.equal(probe.feed.loading, false);
   assert.deepEqual(probe.applied, []);
 });
+
+test('back at live, the live poll goes out at once even while a snapshot at a time was still loading', async () => {
+  const queries = [];
+  const probe = ingestion({
+    getSnapshot(query, { signal }) {
+      queries.push(query);
+      if (query.atMs === undefined)
+        return Promise.resolve({
+          records: [{ id: '111', latitude: 1, longitude: 2, observedAtMs: 5 }],
+          observedAtMs: 5,
+          freshness: 'current',
+          complete: true,
+          transportStatus: 'live',
+        });
+      // A snapshot at a time answers only when dropped.
+      return new Promise((_, reject) =>
+        signal.addEventListener('abort', () => {
+          const error = new Error('aborted');
+          error.name = 'AbortError';
+          reject(error);
+        }),
+      );
+    },
+  });
+  probe.state.follows = true;
+  const timeline = new AbortController();
+  const atTime = probe.loadAt(5_000, {
+    signal: timeline.signal,
+    replace: true,
+  });
+  // The clock goes back to live: the timeline drops what loads and resumes
+  // the live poll in the same turn.
+  probe.state.follows = false;
+  timeline.abort();
+  const live = probe.loadLivePositions({});
+  await assert.rejects(atTime, { name: 'AbortError' });
+  await live;
+  assert.equal(queries.length, 2);
+  assert.equal(Object.hasOwn(queries[1], 'atMs'), false);
+  assert.equal(probe.applied.at(-1).rows.length, 1);
+});

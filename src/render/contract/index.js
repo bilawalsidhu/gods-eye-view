@@ -118,6 +118,7 @@ export const PORTS = deepFreeze({
       'on',
       'requestRender',
       'holdContinuous',
+      'onHeldChange',
       'mode',
       'diagnostics',
       'suspend',

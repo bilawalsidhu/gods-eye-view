@@ -809,10 +809,11 @@ export function exit({ restoreTracking = true } = {}) {
     this.services.satellitesLayer?.refocusTrackedById?.(satelliteSubject);
   }
   this.syncEntry();
-  // Back to whichever entry was used: the Contacts button or the readout's.
+  // Return to the card or readout control that opened Cockpit.
   const readoutEntry = document.getElementById('cockpit-entry-readout');
   const restoreTarget =
     this.entryFocusOrigin === this.entry ||
+    this.entryFocusOrigin?.hasAttribute('data-entity-cockpit-entry') ||
     (readoutEntry && this.entryFocusOrigin === readoutEntry)
       ? this.entryFocusOrigin
       : this.entry || this.entryFocusOrigin;

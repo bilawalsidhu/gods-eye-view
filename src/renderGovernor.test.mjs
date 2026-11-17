@@ -8,6 +8,7 @@ import {
   getRenderGovernorDiagnostics,
   _resetRenderGovernorForTest,
   uninstallRenderGovernor,
+  IDLE_FRAME_RATE,
 } from './renderGovernor.js';
 import { framePortFor } from './testSupport/fakeFramePort.mjs';
 
@@ -16,7 +17,9 @@ function makeViewer() {
   const scene = {
     requestRenderMode: false,
     maximumRenderTimeChange: 0,
-    requestRender() { calls.requestRender += 1; },
+    requestRender() {
+      calls.requestRender += 1;
+    },
   };
   return { viewer: { scene }, scene, calls };
 }
@@ -73,7 +76,11 @@ test('holds are identity-keyed: double-hold cannot leak, double-release cannot c
   holdContinuousRender('traffic');
   holdContinuousRender('traffic');
   releaseContinuousRender('traffic');
-  assert.equal(scene.requestRenderMode, true, 'single release clears an idempotent double-hold');
+  assert.equal(
+    scene.requestRenderMode,
+    true,
+    'single release clears an idempotent double-hold',
+  );
   releaseContinuousRender('traffic');
   releaseContinuousRender('never-held');
   assert.equal(scene.requestRenderMode, true);
@@ -97,7 +104,10 @@ test('governorRequestRender forwards to the scene and records reasons only in id
   const baseline = calls.requestRender;
   governorRequestRender('layer-tick:earthquakes');
   assert.equal(calls.requestRender, baseline + 1);
-  assert.equal(getRenderGovernorDiagnostics().recentRequests.at(-1).reason, 'layer-tick:earthquakes');
+  assert.equal(
+    getRenderGovernorDiagnostics().recentRequests.at(-1).reason,
+    'layer-tick:earthquakes',
+  );
   holdContinuousRender('flights');
   const idleRequests = getRenderGovernorDiagnostics().recentRequests.length;
   governorRequestRender('slider');
@@ -119,7 +129,11 @@ test('holds registered before install apply at install time', () => {
   holdContinuousRender('flights');
   const { viewer, scene } = makeViewer();
   installRenderGovernor(framePortFor(viewer.scene));
-  assert.equal(scene.requestRenderMode, false, 'pre-install hold keeps continuous mode');
+  assert.equal(
+    scene.requestRenderMode,
+    false,
+    'pre-install hold keeps continuous mode',
+  );
   releaseContinuousRender('flights');
   assert.equal(scene.requestRenderMode, true);
 });
@@ -146,8 +160,41 @@ function makeCamera({ position = null, direction = null } = {}) {
   return camera;
 }
 
-// The frame rate each mode draws at is the frame port's (ports.test.mjs:
-// 'with an idle rate, …'); the governor only holds and releases.
+test('idle, the loop ticks at the idle rate; held, at the display rate', () => {
+  const { viewer, scene } = makeViewer();
+  installRenderGovernor(framePortFor(viewer.scene));
+  assert.equal(scene.targetFps, IDLE_FRAME_RATE, 'idle at install');
+  holdContinuousRender('flights');
+  assert.equal(scene.targetFps, 0, 'held: the display rate');
+  releaseContinuousRender('flights');
+  assert.equal(scene.targetFps, IDLE_FRAME_RATE);
+});
+
+test('a hold already out at install draws at the display rate', () => {
+  holdContinuousRender('boot');
+  const { viewer, scene } = makeViewer();
+  installRenderGovernor(framePortFor(viewer.scene));
+  assert.equal(scene.targetFps, 0);
+  releaseContinuousRender('boot');
+  assert.equal(scene.targetFps, IDLE_FRAME_RATE);
+});
+
+test('the renderer holding the loop itself (animated visual styles) also draws at the display rate', () => {
+  const { viewer, scene } = makeViewer();
+  const frame = framePortFor(viewer.scene);
+  installRenderGovernor(frame);
+  const release = frame.holdContinuous('effects:animated');
+  assert.equal(scene.targetFps, 0, 'held by the renderer');
+  holdContinuousRender('flights');
+  release();
+  assert.equal(scene.targetFps, 0, 'still held by flights');
+  releaseContinuousRender('flights');
+  assert.equal(scene.targetFps, IDLE_FRAME_RATE);
+  // Uninstalled, the governor no longer sets the rate.
+  uninstallRenderGovernor(frame);
+  frame.holdContinuous('effects:animated');
+  assert.equal(scene.targetFps, IDLE_FRAME_RATE);
+});
 
 test('a camera move holds continuous render from moveStart to moveEnd', () => {
   const { viewer, scene } = makeViewer();

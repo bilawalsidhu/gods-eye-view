@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fixesMove, vesselPositionAt } from './motion.js';
+import {
+  fixesMove,
+  greatCircleAt,
+  vesselPositionAt,
+  vesselSpanAt,
+} from './motion.js';
 
 const record = {
   lat: 1,
@@ -60,4 +65,77 @@ test('fixes that stay in one place do not move a vessel', () => {
     true,
   );
   assert.equal(fixesMove(null), false);
+});
+
+const fixes = [
+  { atMs: 1_000, lat: 0, lon: 0 },
+  { atMs: 2_000, lat: 0, lon: 1 },
+  { atMs: 3_000, lat: 1, lon: 1 },
+];
+
+test('vesselSpanAt holds at the first fix before it, until it', () => {
+  assert.deepEqual(vesselSpanAt({ fixes }, 500), {
+    kind: 'hold',
+    lat: 0,
+    lon: 0,
+    fromMs: -Infinity,
+    untilMs: 1_000,
+  });
+});
+
+test('vesselSpanAt runs from the fix at or before the time to the next, ending after it', () => {
+  for (const [atMs, t0, t1] of [
+    [1_000, 1_000, 2_000],
+    [1_999, 1_000, 2_000],
+    [2_000, 2_000, 3_000],
+    [2_500, 2_000, 3_000],
+  ]) {
+    const span = vesselSpanAt({ fixes }, atMs);
+    assert.equal(span.kind, 'move');
+    assert.deepEqual([span.t0, span.t1], [t0, t1], `at ${atMs}`);
+    assert.ok(span.t1 > atMs);
+  }
+  // A degree of longitude on the equator.
+  assert.ok(Math.abs(vesselSpanAt({ fixes }, 1_500).metres - 111_195) < 10);
+});
+
+test('vesselSpanAt holds at the last fix from it on', () => {
+  assert.deepEqual(vesselSpanAt({ fixes }, 3_000), {
+    kind: 'hold',
+    lat: 1,
+    lon: 1,
+    fromMs: 3_000,
+    untilMs: Infinity,
+  });
+});
+
+test("vesselSpanAt follows a record's one move, and nothing for none", () => {
+  assert.equal(vesselSpanAt(record, 500).untilMs, 1_000);
+  const span = vesselSpanAt(record, 1_500);
+  assert.equal(span.kind, 'move');
+  assert.deepEqual([span.lat0, span.lat1], [0, 1]);
+  assert.deepEqual(vesselSpanAt(record, 9_000), {
+    kind: 'hold',
+    lat: 1,
+    lon: 1,
+    fromMs: record.motion.toMs,
+    untilMs: Infinity,
+  });
+  assert.equal(vesselSpanAt({ lat: 1, lon: 1 }, 1_500), null);
+});
+
+test('vesselSpanAt agrees with vesselPositionAt along the span', () => {
+  for (const atMs of [1_000, 1_250, 2_000, 2_750]) {
+    const span = vesselSpanAt({ fixes }, atMs);
+    const at = greatCircleAt(
+      span.lat0,
+      span.lon0,
+      span.lat1,
+      span.lon1,
+      (atMs - span.t0) / (span.t1 - span.t0),
+    );
+    const expected = vesselPositionAt({ fixes }, atMs);
+    assert.ok(Math.abs(at.lat - expected.lat) < 1e-9);
+    assert.ok(Math.abs(at.lon - expected.lon) < 1e-9);
+  }
 });
