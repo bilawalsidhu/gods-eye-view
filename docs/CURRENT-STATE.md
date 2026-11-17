@@ -2768,8 +2768,9 @@ HUD view is.
 
 The Rail layer offers a read API for such a view: `getSelectedTrain()` and
 `getCockpitSubject()` (a snapshot of the train: where it is along its line,
-which way it runs (`pathBinding.js` learns it), its rail height, speed as
-reported or derived, position source, feed credit and stops, and
+which way it runs (`pathBinding.js` learns it), its rail height (null while
+no floor is known and it is drawn on the ellipsoid), speed as reported or
+derived, position source, feed credit and stops, and
 `selectedAtMs`, when the user last selected it by a click or `focusTrain`,
 even again; null after a deselection and for a train only a hold selected),
 `setCockpitSubject(key)` (its marker, 3D model and card hidden, the selection kept, its
@@ -2784,11 +2785,15 @@ offers the same for a vehicle (`getSelectedVehicle`, `getCockpitSubject`,
 `setCockpitSubject`, `focusVehicle`): a held vehicle keeps playing when it is
 out of the camera's view, and its sprite, 3D model, card, trail and detection
 box are hidden; released, it is out of play until a visibility sweep finds it in
-view. Its snapshot's `position.groundHeightM` is the floor where playback draws
-it (the drawn marker's height while it is placed, else its segment's two
-reports' floors at the playback fraction), not the newest report's, and null while that floor is unknown. Rail's `path.direction` is the
-way the drawn train runs: once playback has placed it, a report that runs back
-turns it only when playback reaches that report. `docs/APPLICATION.md` (Cockpit subjects) shows a minimal provider. `src/ui/cockpitSubjectView.test.mjs`,
+view. Turning the layer off ends the hold. Its snapshot's
+`position.groundHeightM` is the floor where playback draws it (the drawn
+marker's height while it is placed, else its segment's two reports' floors at
+the playback fraction), not the newest report's, and null while that floor is
+unknown, also far above the ground, where such a vehicle is drawn on the
+ellipsoid. Rail's `path.direction` is the way the drawn train runs: once
+playback has placed it, a report that runs back turns it only when playback
+reaches that report, and a step of at most 15 m between two reports (a standing
+train's GPS jitter) keeps the direction it had. `docs/APPLICATION.md` (Cockpit subjects) shows a minimal provider. `src/ui/cockpitSubjectView.test.mjs`,
 `src/cockpitSubjectProviders.test.mjs`, `src/cockpitProgress.test.mjs`,
 `src/layers/rail/cockpitSubject.test.mjs` and the Transit lifecycle tests
 cover them.
