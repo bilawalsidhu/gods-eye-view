@@ -80,6 +80,11 @@ export async function lookupVoiceAircraft(
         'Aircraft position is stale or observation time is unknown',
         result,
       );
+    if (contact - observed > 120_000)
+      return fail(
+        'Aircraft position is inconsistent: contact time is future-dated',
+        result,
+      );
     const layerId = candidate[0].feed === 'military' ? 'military' : 'flights';
     if (args.layerId && args.layerId !== layerId)
       return fail('Aircraft was reported by a different layer', result);
