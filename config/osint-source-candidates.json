@@ -1,0 +1,163 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-11-17",
+  "status": "research-candidates-not-enabled",
+  "principles": [
+    "read-only",
+    "server-side-secrets",
+    "provenance-first",
+    "bounded-polling",
+    "attribution-required",
+    "no-person-tracking",
+    "retrospective-or-aggregated-analysis"
+  ],
+  "sources": [
+    {
+      "id": "noaa-swpc",
+      "name": "NOAA Space Weather Prediction Center",
+      "priority": "P0",
+      "status": "candidate",
+      "access": "public-keyless-json",
+      "domains": [
+        "space-weather",
+        "gnss-context"
+      ],
+      "data": [
+        "alerts",
+        "planetary-k-index",
+        "solar-flares",
+        "solar-wind"
+      ],
+      "endpoint": "https://services.swpc.noaa.gov/products/",
+      "license_note": "Review NOAA/NWS data notices; preserve attribution and disclaimer.",
+      "limits_note": "No fixed quota verified in this registry; use conservative caching.",
+      "use_note": "Contextual GNSS quality correlation only; not evidence of intentional interference.",
+      "proposed_secret": null
+    },
+    {
+      "id": "ucdp-ged",
+      "name": "Uppsala Conflict Data Program Georeferenced Event Dataset",
+      "priority": "P0",
+      "status": "candidate",
+      "access": "free-download-cc-by-4.0;api-token-request",
+      "domains": [
+        "conflict-events",
+        "historical-baseline"
+      ],
+      "data": [
+        "georeferenced-organized-violence-events",
+        "yearly-conflict-series"
+      ],
+      "endpoint": "https://ucdp.uu.se/apidocs/",
+      "license": "CC-BY-4.0",
+      "limits_note": "API quota documented as 5,000 requests/day; token requested from maintainer. Downloads are free.",
+      "use_note": "Versioned historical/event context; show codebook definitions and publication lag.",
+      "proposed_secret": "UCDP_API_TOKEN"
+    },
+    {
+      "id": "copernicus-dataspace-stac",
+      "name": "Copernicus Data Space Ecosystem STAC",
+      "priority": "P1",
+      "status": "candidate",
+      "access": "free-registered-account-oauth",
+      "domains": [
+        "earth-observation",
+        "retrospective-change-detection"
+      ],
+      "data": [
+        "sentinel-1-grd",
+        "sentinel-1-slc",
+        "sentinel-2-l1c",
+        "sentinel-2-mosaics"
+      ],
+      "endpoint": "https://stac.dataspace.copernicus.eu/v1/",
+      "license_note": "Check collection-specific Copernicus terms and any contributing-mission conditions.",
+      "limits_note": "Published free-tier quotas vary by API; consult live quota documentation.",
+      "use_note": "Metadata discovery first; user-requested retrospective comparisons, not real-time tactical monitoring.",
+      "proposed_secret": "COPERNICUS_OAUTH_CLIENT_CREDENTIALS"
+    },
+    {
+      "id": "openaq-v3",
+      "name": "OpenAQ API v3",
+      "priority": "P1",
+      "status": "candidate",
+      "access": "free-api-key",
+      "domains": [
+        "air-quality",
+        "environmental-context"
+      ],
+      "data": [
+        "station-metadata",
+        "sensor-measurements"
+      ],
+      "endpoint": "https://api.openaq.org/v3/",
+      "license_note": "OpenAQ attribution required; check each underlying provider's licence and terms.",
+      "limits_note": "Free general-use key: 60 requests/minute and 2,000 requests/hour.",
+      "use_note": "Environmental context only; air-quality readings do not attribute cause.",
+      "proposed_secret": "OPENAQ_API_KEY"
+    },
+    {
+      "id": "global-fishing-watch",
+      "name": "Global Fishing Watch APIs",
+      "priority": "P1",
+      "status": "candidate-terms-gated",
+      "access": "free-api-token-noncommercial",
+      "domains": [
+        "maritime-context",
+        "aggregate-vessel-activity"
+      ],
+      "data": [
+        "fishing-activity",
+        "encounters",
+        "ais-gap-indicators",
+        "vessel-identity-context"
+      ],
+      "endpoint": "https://api-doc.globalfishingwatch.org/",
+      "license": "CC-BY-NC-4.0",
+      "limits_note": "Terms currently state up to 50,000 requests/day and 1,500,000/month.",
+      "use_note": "Non-commercial only; use retrospective/aggregated context. Not comprehensive vessel coverage and not a military-vessel tracker.",
+      "proposed_secret": "GFW_API_TOKEN"
+    },
+    {
+      "id": "acled",
+      "name": "ACLED",
+      "priority": "P2",
+      "status": "access-and-licence-review-required",
+      "access": "myacled-account-oauth",
+      "domains": [
+        "political-violence-events",
+        "conflict-context"
+      ],
+      "data": [
+        "event-records",
+        "actor-and-event-categories"
+      ],
+      "endpoint": "https://acleddata.com/api-documentation/getting-started",
+      "license_note": "Confirm current user eligibility, API plan, redistribution and commercial terms before implementation.",
+      "limits_note": "No free quota asserted here.",
+      "use_note": "Cross-check event reporting; keep ACLED classifications separate from analyst conclusions.",
+      "proposed_secret": "ACLED_OAUTH_CREDENTIALS"
+    },
+    {
+      "id": "reliefweb",
+      "name": "ReliefWeb API",
+      "priority": "P2",
+      "status": "appname-approval-required",
+      "access": "approved-appname",
+      "domains": [
+        "humanitarian-context",
+        "conflict-reporting"
+      ],
+      "data": [
+        "humanitarian-reports",
+        "disaster-reports",
+        "situation-updates"
+      ],
+      "endpoint": "https://apidoc.reliefweb.int/",
+      "license_note": "Respect API terms and the rights of original report publishers.",
+      "limits_note": "Approved appname required; confirm current usage limits.",
+      "use_note": "Humanitarian context and retrospective reporting, not a live sensor feed.",
+      "proposed_secret": "RELIEFWEB_APPNAME"
+    }
+  ]
+}
