@@ -389,7 +389,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   track_entity: {
     description:
-      'Aircraft-only lookupOnly:true needs a flight number/ICAO; no map movement. Otherwise follow exact identity after layer refresh. Report feed time/coverage and uncertainty; claim aircraft follow only if tracking:true. Ships/satellites use enabled layers.',
+      'lookupOnly:true: aircraft flight#/ICAO only, no map move. Report feed time/coverage/uncertainty. Refresh/follow exact ID; claim only if tracking:true. Ships/satellites: enabled layers.',
     $position: 1,
     parameters: {
       properties: {
