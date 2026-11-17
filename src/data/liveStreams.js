@@ -65,9 +65,9 @@ export function youtubeWatchUrl(videoId) {
 
 /**
  * The parameters the live player is created with: starts on creation (the
- * player is built as soon as a subject with a stream is selected), muted so
- * the browser lets it, inline on phones, no related videos, and the page's
- * origin so the player API may be spoken to.
+ * player is built only when the viewer presses Play), muted so the browser
+ * lets it start once the player API has loaded, inline on phones, no related
+ * videos, and the page's origin so the player API may be spoken to.
  * @param {string} origin The page's origin.
  * @returns {Record<string, string|number>}
  */

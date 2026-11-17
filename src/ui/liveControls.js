@@ -27,12 +27,14 @@ export const LIVE_SUBJECT_REFRESH_MS = 2000;
  * Own the live video: which object is selected (the tracking layers'
  * `gev:awareness-subject-selected`), which streams the list attaches to it,
  * and the one player. The views (the LIVE section in Context and the Cockpit
- * briefing's LIVE page) render what this publishes and ask for the stream to
- * start (`playLive`) as soon as one is chosen; the player is built into
- * whichever view is shown, the section's outside the Cockpit and the page's
- * inside it, and built again in the other when the Cockpit is entered or
- * left (an embedded player cannot change parents without reloading). It goes
- * when the selection changes or clears.
+ * briefing's LIVE page) render what this publishes, and the player is built
+ * only when the viewer presses Play in one of them (`playLive`): YouTube sees
+ * the viewer's IP address, so selecting a station by click, a link, a scene
+ * or voice never loads it. The player is built into the view that is shown,
+ * the section's outside the Cockpit and the page's inside it, and goes when
+ * that view is hidden (the section collapsed, Context closed, the Cockpit
+ * page left: `hideLive`), when the Cockpit is entered or left, and when the
+ * selection moves to an object without that stream or clears.
  */
 export class LiveControls {
   /**
@@ -72,6 +74,8 @@ export class LiveControls {
     this.cockpitActive =
       documentRef?.body?.classList?.contains?.('cockpit-mode') === true;
     this.timer = null;
+    /** The stop held back for one tick after a clear (see `_onCleared`). */
+    this.clearGrace = null;
     this.listeners = new AbortController();
     const { signal } = this.listeners;
     const target = globalRef.addEventListener ? globalRef : null;
@@ -95,48 +99,88 @@ export class LiveControls {
       playLive: () => this.play(),
       stopLive: () => this.stop(),
       retryLive: () => this.play({ restart: true }),
+      hideLive: (where) => this.hide(where),
     });
     store.publish(null);
   }
 
+  /**
+   * A new selection. A player that is on keeps playing when the new subject
+   * offers the same stream (another entry of the same station: a module, a
+   * docked vehicle, the Cockpit stepping between views on it); otherwise it
+   * goes.
+   */
   _onSelected(detail) {
     if (this.destroyed || !detail?.layerId || detail.id == null) return;
-    const same =
-      this.subject &&
-      this.subject.layerId === detail.layerId &&
-      String(this.subject.id) === String(detail.id);
+    this._cancelClearGrace();
     this.subject = {
       layerId: detail.layerId,
       id: detail.id,
       label: String(detail.label ?? detail.id),
     };
-    if (!same) this.stop();
+    if (this.player) {
+      const offered = liveStreamsFor(this._subjectKeys(), this.streams);
+      if (offered.some((stream) => stream.id === this.playerStreamId))
+        this.currentId = this.playerStreamId;
+      else this.stop();
+    }
     this._refresh();
     this._arm();
   }
 
+  /**
+   * The selection cleared. With a player on, the stop waits one tick: the
+   * Cockpit stepping between views on a station clears the selection and
+   * selects the next entry at once, and a player for the same stream should
+   * not be torn down and rebuilt between the two.
+   */
   _onCleared(detail) {
     if (this.destroyed || !this.subject) return;
     if (detail?.layerId && detail.layerId !== this.subject.layerId) return;
     this.subject = null;
-    this.stop();
     this._disarm();
+    if (this.player && this.globalRef.setTimeout) {
+      this._cancelClearGrace();
+      this.clearGrace = this.globalRef.setTimeout(() => {
+        this.clearGrace = null;
+        if (this.destroyed || this.subject) return;
+        this.stop();
+        this._refresh();
+      }, 0);
+      return;
+    }
+    this.stop();
     this._refresh();
   }
 
+  _cancelClearGrace() {
+    if (this.clearGrace !== null)
+      this.globalRef.clearTimeout?.(this.clearGrace);
+    this.clearGrace = null;
+  }
+
   /**
-   * The Cockpit went on or off: the view shown changed, so a player that is
-   * loading or playing is built again in the host now shown. With no such
-   * host in the page the player goes, and the view starts it again once its
-   * screen is there.
+   * The Cockpit went on or off: the view the player was in is hidden now,
+   * so the player goes. The view now shown offers Play again.
    */
   _onCockpitMode(active) {
     if (this.destroyed || active === this.cockpitActive) return;
     this.cockpitActive = active;
-    if (this.player === null) return;
-    const host = this._host();
-    if (host && host === this.playerHost) return;
-    if (!this.play({ restart: true })) this.stop();
+    this.stop();
+  }
+
+  /**
+   * A view was hidden (`section`: the LIVE section collapsed or Context
+   * closed; `cockpit`: the briefing left its LIVE page or went): the player
+   * goes if it was in that view's screen, so nothing plays unseen.
+   * @param {'section'|'cockpit'} where
+   * @returns {boolean} True when a player was removed.
+   */
+  hide(where) {
+    const id =
+      where === 'cockpit' ? COCKPIT_LIVE_PLAYER_HOST_ID : LIVE_PLAYER_HOST_ID;
+    if (!this.player || this.playerHost?.id !== id) return false;
+    return this.stop();
   }
 
   /** The element the player belongs in now: the Cockpit page's, or the section's. */
@@ -254,8 +298,8 @@ export class LiveControls {
 
   /**
    * Start the chosen stream in the host now shown: the one call that loads
-   * the player. A player already loading or playing that stream in that host
-   * is left alone, so the views may ask whenever they see nothing playing;
+   * the player, made only by the viewer's Play (or Try again). A player
+   * already loading or playing that stream in that host is left alone;
    * `restart` (Try again) builds a fresh one regardless.
    * @returns {boolean} True when a player is loading or playing afterwards.
    */
@@ -309,6 +353,7 @@ export class LiveControls {
 
   destroy() {
     if (this.destroyed) return;
+    this._cancelClearGrace();
     this.stop();
     this.destroyed = true;
     this._disarm();

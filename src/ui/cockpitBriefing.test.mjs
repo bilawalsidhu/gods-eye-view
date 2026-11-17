@@ -71,6 +71,7 @@ function fixture(t) {
     playLive: () => liveActed.push(['play']),
     stopLive: () => liveActed.push(['stop']),
     retryLive: () => liveActed.push(['retry']),
+    hideLive: (where) => liveActed.push(['hide', where]),
   });
   const offerLive = async (view) => {
     liveStore.publish(
@@ -209,7 +210,12 @@ test('with a stream the LIVE page is the fourth, reached by the arrows and its t
   assert.ok($('#cockpit-live-previous'));
   assert.ok($('#cockpit-live-next'));
   assert.equal(text('#cockpit-live-badge-text'), 'OFF');
-  assert.equal(text('#cockpit-live-status'), 'Starting…');
+  assert.equal(text('#cockpit-live-status'), 'Click to play');
+  assert.ok($('#cockpit-live-play'), 'Play, under the IP notice');
+  assert.match(
+    page.querySelector('.cockpit-live-privacy').textContent,
+    /sees your IP address/,
+  );
   assert.equal(
     $('#cockpit-live-watch-link').getAttribute('href'),
     'https://www.youtube.com/watch?v=ROboUHfPUrU',
@@ -221,15 +227,14 @@ test('with a stream the LIVE page is the fourth, reached by the arrows and its t
   assert.equal(text('#cockpit-brief-position'), '1 / 4');
 });
 
-test('the LIVE page asks for the stream as soon as it is offered, and its controls reach LiveControls', async (t) => {
+test('the LIVE page loads the stream only on Play, stops it when left, and its controls reach LiveControls', async (t) => {
   const { $, owner, offerLive, liveActed } = fixture(t);
   await offerLive({});
-  assert.deepEqual(
-    liveActed,
-    [['play']],
-    'the player starts on selection, whichever page is shown',
-  );
+  assert.deepEqual(liveActed, [], 'riding the station loads no player');
   showBriefPage.call(owner, 3);
+  await nextTick();
+  $('#cockpit-live-play').click();
+  assert.deepEqual(liveActed, [['play']]);
   await offerLive({ state: 'playing' });
   const page = $('[data-cockpit-brief-page="live"]');
   assert.equal($('#cockpit-live-badge-text').textContent, 'ON AIR');
@@ -245,6 +250,12 @@ test('the LIVE page asks for the stream as soon as it is offered, and its contro
   $('#cockpit-live-next').click();
   $('#cockpit-live-previous').click();
   assert.deepEqual(liveActed, [['play'], ['cycle', 1], ['cycle', -1]]);
+  // Leaving the page stops what plays there.
+  showBriefPage.call(owner, 0);
+  await nextTick();
+  assert.deepEqual(liveActed.at(-1), ['hide', 'cockpit']);
+  showBriefPage.call(owner, 3);
+  await nextTick();
   await offerLive({ state: 'offline', reason: 'timeout' });
   const card = page.querySelector('.live-card');
   assert.equal(card.classList.contains('offline'), true);

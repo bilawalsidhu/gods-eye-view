@@ -140,6 +140,36 @@
 .live-screen:not(.active) .live-player-host {
   display: none;
 }
+/* The poster's Play: the only way the player is loaded. */
+.live-play {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: max-content;
+  height: max-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 4px;
+  background: rgba(0, 7, 12, 0.72);
+  color: #f4fbff;
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+.live-play:hover,
+.live-play:focus-visible {
+  border-color: #ff3b3b;
+  outline: none;
+}
+.live-play .material-symbols-outlined {
+  font-size: 20px;
+}
 .live-card {
   position: absolute;
   inset: 0;

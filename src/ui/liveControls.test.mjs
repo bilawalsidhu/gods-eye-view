@@ -59,6 +59,19 @@ function fixture({
     const timer = intervals.find((entry) => entry.id === id);
     if (timer) timer.cleared = true;
   };
+  const timeouts = [];
+  globalRef.setTimeout = (callback, ms) => {
+    timeouts.push({ callback, ms, done: false });
+    return timeouts.length;
+  };
+  globalRef.clearTimeout = (id) => {
+    if (timeouts[id - 1]) timeouts[id - 1].done = true;
+  };
+  /** Run the timeouts due now, as the next tick would. */
+  const tick = () => {
+    for (const timeout of timeouts.splice(0))
+      if (!timeout.done) timeout.callback();
+  };
   const host = { id: LIVE_PLAYER_HOST_ID };
   const cockpitHost = { id: COCKPIT_LIVE_PLAYER_HOST_ID };
   const documentRef = {
@@ -125,6 +138,7 @@ function fixture({
     layouts,
     intervals,
     running,
+    tick,
     host,
     cockpitHost,
   };
@@ -276,12 +290,37 @@ test('clearing the selection takes the section down; another layer clearing does
   f.dispatch('gev:awareness-subject-cleared', { layerId: 'flights' });
   assert.equal(f.view().count, 2, 'another layer clearing is not ours');
   f.dispatch('gev:awareness-subject-cleared', { layerId: 'satellites' });
+  assert.equal(f.running().length, 0, 'the timer stops with the selection');
+  // The stop waits a tick, for a selection that moves straight on.
+  assert.equal(f.players[0].destroyed, 0);
+  f.tick();
   assert.equal(f.view(), null);
   assert.equal(f.players[0].destroyed, 1);
-  assert.equal(f.running().length, 0, 'the timer stops with the selection');
 });
 
-test("entering the Cockpit builds the player again in the briefing page's screen, and leaving it in the section's", () => {
+test('a selection that moves straight on to an entry with the same stream keeps the player', () => {
+  const f = fixture();
+  f.setKeys(['station:test']);
+  f.select();
+  f.store.act('playLive');
+  // The Cockpit stepping to the next view on the station: cleared, then the
+  // next entry selected, in one go.
+  f.dispatch('gev:awareness-subject-cleared', { layerId: 'satellites' });
+  f.select({ id: 49044, label: 'ISS (NAUKA)' });
+  f.tick();
+  assert.equal(f.players.length, 1, 'not rebuilt');
+  assert.equal(f.players[0].destroyed, 0);
+  assert.equal(f.view().label, 'ISS (NAUKA)');
+  assert.equal(f.view().current.id, 'one');
+  // One without that stream stops it.
+  f.dispatch('gev:awareness-subject-cleared', { layerId: 'satellites' });
+  f.setKeys(['station:other']);
+  f.select({ id: 99999, label: 'OTHER' });
+  f.tick();
+  assert.equal(f.players[0].destroyed, 1);
+});
+
+test('entering or leaving the Cockpit removes the player: the view now shown offers Play again', () => {
   const f = fixture();
   f.setKeys(['station:test']);
   f.select();
@@ -289,20 +328,43 @@ test("entering the Cockpit builds the player again in the briefing page's screen
   f.players[0].options.onChange({ state: 'playing', reason: null });
   f.dispatch('gev:cockpit-mode-changed', { active: true });
   assert.equal(f.players[0].destroyed, 1, 'the rail is hidden in the Cockpit');
-  assert.equal(f.players.length, 2);
-  assert.equal(f.players[1].options.host, f.cockpitHost);
-  assert.equal(f.players[1].options.videoId, 'AAAAAAAAAAA');
-  assert.equal(f.view().state, 'loading', 'a fresh player starts again');
+  assert.equal(f.players.length, 1, 'nothing is built by itself');
+  assert.equal(f.view().state, 'idle');
   // The same state again changes nothing.
   f.dispatch('gev:cockpit-mode-changed', { active: true });
-  assert.equal(f.players.length, 2);
-  // playLive from the hidden section's view finds the Cockpit's screen too.
+  assert.equal(f.players.length, 1);
+  // Play in the Cockpit's page builds it in that page's screen.
   assert.equal(f.store.act('playLive'), true);
-  assert.equal(f.players.length, 2);
+  assert.equal(f.players[1].options.host, f.cockpitHost);
   f.dispatch('gev:cockpit-mode-changed', { active: false });
   assert.equal(f.players[1].destroyed, 1);
-  assert.equal(f.players.length, 3);
-  assert.equal(f.players[2].options.host, f.host);
+  assert.equal(f.players.length, 2);
+});
+
+test('a view that is hidden removes the player only when it is in that view', () => {
+  const f = fixture();
+  f.setKeys(['station:test']);
+  f.select();
+  f.store.act('playLive');
+  assert.equal(f.store.act('hideLive', 'cockpit'), false, 'not in the page');
+  assert.equal(f.players[0].destroyed, 0);
+  assert.equal(f.store.act('hideLive', 'section'), true);
+  assert.equal(f.players[0].destroyed, 1);
+  assert.equal(f.view().state, 'idle');
+  assert.equal(f.store.act('hideLive', 'section'), false, 'nothing left');
+});
+
+test('selecting a station with streams builds no player until Play', () => {
+  const f = fixture();
+  f.setKeys(['station:test']);
+  f.select();
+  f.select({ origin: 'pick' });
+  f.dispatch('gev:cockpit-mode-changed', { active: true });
+  f.dispatch('gev:cockpit-mode-changed', { active: false });
+  assert.equal(f.players.length, 0);
+  assert.equal(f.view().state, 'idle');
+  f.store.act('playLive');
+  assert.equal(f.players.length, 1);
 });
 
 test('the Cockpit going on or off with nothing playing builds nothing', () => {

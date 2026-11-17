@@ -2081,27 +2081,32 @@ which no stream is listed for yet), and the keys are read again every 2 s while
 something is selected, since a docked entry is judged so only once both
 orbits have been compared. The section shows the subject, the stream's name
 with two arrows when there are several, a screen and a status line. It
-starts collapsed, and the player loads as soon as a station is selected:
-`youtubeLivePlayer.js` builds YouTube's player on the privacy-enhanced host,
-muted, with the IFrame API, and reads its state back (the views ask for the
-stream whenever one is chosen and nothing plays, `src/ui/liveScreen.js`).
-The section's +/- only hides and shows the body; the stream plays on, muted,
-underneath. ON AIR with a blinking red dot while it plays; an amber dot
-while it starts; an offline card ("Stream is offline", with Try again) when
+starts collapsed, and nothing loads on selection: the screen is a poster
+with Play, under the line "Video plays from YouTube, which sees your IP
+address." Play is the one thing that loads the player:
+`youtubeLivePlayer.js` builds YouTube's player (the IFrame API from
+`www.youtube.com`, the video on `www.youtube-nocookie.com`), muted, and reads
+its state back. Collapsing the section, collapsing or closing Context, or the
+section leaving the page removes the player, so nothing plays unseen. ON AIR
+with a blinking red dot while it plays; LOADING with an amber dot while it
+starts; an offline card ("Stream is offline", with Try again) when
 the player reports the video ended, errored or did not start within 25 s,
 which is how an off-air broadcast shows; "This stream cannot play here" when
 the owner refuses embedding or the API does not load. Stepping to another
-stream hands a playing one over; a new selection, clearing it or turning the
-layer off removes the player. In the Cockpit the rail is hidden, so the
+stream hands a playing one over; a selection that moves to an object
+without that stream, clearing it or turning the layer off removes the
+player, while another entry of the same station (a module, a docked vehicle,
+the Cockpit stepping between views) keeps it. In the Cockpit the rail is hidden, so the
 briefing card gains a fourth page, LIVE (SIG / NEWS / LOCAL / LIVE,
 `CockpitLivePage.vue`), with the same subject line, arrows, screen, states
-and credit; it is offered only while the ridden subject has a stream, and
-with none the briefing keeps its three pages. There is one player: on entry
-it is built again in the page's screen, on exit in the section's (an embedded
-player cannot change parents without reloading). Previous, Next and the tabs
-reach the LIVE page; the automatic 9-second cycle never turns to it and
-waits while it is shown. The credit links the owner and the stream's own
-page, and the section's note says the video plays from YouTube.
+and credit, and the same poster with Play under the IP line; it is offered
+only while the ridden subject has a stream, and with none the briefing keeps
+its three pages. There is one player: entering or leaving the Cockpit
+removes it (an embedded player cannot change parents without reloading, and
+the view it was in is hidden), and so does leaving the LIVE page; the view
+now shown offers Play again. Previous, Next and the tabs reach the LIVE page;
+the automatic 9-second cycle never turns to it and waits while it is shown.
+The credit links the owner and the stream's own page.
 The model is NASA/JSC IGOAL's current-configuration station, reduced to 3 MB
 with its joints kept as nodes (`public/models/README.md`), fetched only once
 the camera nears its range, and drawn as an item of a `models` set of the

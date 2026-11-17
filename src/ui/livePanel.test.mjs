@@ -29,6 +29,7 @@ function fixture(t) {
     playLive: () => acted.push(['play']),
     stopLive: () => acted.push(['stop']),
     retryLive: () => acted.push(['retry']),
+    hideLive: (where) => acted.push(['hide', where]),
   });
   const chrome = usePanelChromeStore(pinia);
   const token = chrome.connect({ toggle() {}, pin() {} });
@@ -66,7 +67,7 @@ function fixture(t) {
     );
     await settle();
   };
-  return { $, publish, acted, setOpen };
+  return { $, publish, acted, setOpen, chrome, token };
 }
 
 test('without a view the section is hidden and shows OFF', (t) => {
@@ -81,7 +82,7 @@ test('without a view the section is hidden and shows OFF', (t) => {
   assert.deepEqual(acted, [], 'nothing to start');
 });
 
-test('a view shows the subject and the stream, and starts it at once, with the section collapsed', async (t) => {
+test('a view shows the subject, the stream and Play under the IP notice, and loads nothing by itself', async (t) => {
   const { $, publish, acted } = fixture(t);
   await publish({});
   const panel = $('live-panel');
@@ -96,17 +97,30 @@ test('a view shows the subject and the stream, and starts it at once, with the s
     'https://www.youtube.com/watch?v=ROboUHfPUrU',
   );
   assert.equal($('live-watch-link').getAttribute('rel'), 'noopener noreferrer');
-  assert.deepEqual(acted, [['play']], 'the stream starts on selection');
-  // Loading and playing change nothing further.
+  assert.deepEqual(acted, [], 'selecting the station loads no player');
+  // The notice that YouTube sees the viewer's IP address comes before Play.
+  const notice = panel.querySelector('.live-privacy');
+  const play = $('live-play-btn');
+  assert.ok(notice && play);
+  assert.match(notice.textContent, /sees your IP address/);
+  assert.equal(
+    notice.compareDocumentPosition(play) & Node.DOCUMENT_POSITION_FOLLOWING,
+    Node.DOCUMENT_POSITION_FOLLOWING,
+    'the notice is above Play',
+  );
+  assert.equal($('live-status').textContent, 'Click to play');
+  play.click();
+  assert.deepEqual(acted, [['play']], 'Play is what loads the player');
+  // Loading and playing hide Play and ask for nothing more.
   await publish({ state: 'loading' });
+  assert.equal($('live-play-btn'), null);
   await publish({ state: 'playing' });
   assert.deepEqual(acted, [['play']]);
 });
 
-test('a different stream chosen while idle starts too', async (t) => {
-  const { publish, acted } = fixture(t);
+test('a different stream chosen while idle waits for Play too', async (t) => {
+  const { $, publish, acted } = fixture(t);
   await publish({});
-  assert.deepEqual(acted, [['play']]);
   await publish({
     current: {
       id: 'iss-crew',
@@ -118,19 +132,26 @@ test('a different stream chosen while idle starts too', async (t) => {
     },
     index: 1,
   });
-  assert.deepEqual(acted, [['play'], ['play']]);
+  assert.deepEqual(acted, []);
+  assert.ok($('live-play-btn'));
 });
 
-test('collapsing or opening the section neither stops nor restarts the stream', async (t) => {
-  const { $, publish, acted, setOpen } = fixture(t);
+test('collapsing the section, or Context, stops the player; opening it starts nothing', async (t) => {
+  const { $, publish, acted, setOpen, chrome, token } = fixture(t);
   await setOpen(true);
   await publish({ state: 'playing' });
   assert.deepEqual(acted, [], 'already playing: nothing to start');
   await setOpen(false);
-  assert.deepEqual(acted, [], 'the +/- only hides the body');
-  assert.ok($('live-player-host'), 'the player keeps its element');
+  assert.deepEqual(acted, [['hide', 'section']], 'nothing plays unseen');
+  assert.ok($('live-player-host'), 'the screen keeps its element');
   await setOpen(true);
-  assert.deepEqual(acted, []);
+  assert.deepEqual(acted, [['hide', 'section']], 'opening starts nothing');
+  chrome.publish(token, 'global-context-panel', { collapsed: true });
+  await settle();
+  assert.deepEqual(acted, [
+    ['hide', 'section'],
+    ['hide', 'section'],
+  ]);
 });
 
 test('while playing the badge says ON AIR with the blinking dot, and there is no card', async (t) => {
@@ -151,10 +172,10 @@ test('while playing the badge says ON AIR with the blinking dot, and there is no
   assert.equal($('live-status').textContent, 'Live');
 });
 
-test('starting shows the waiting dot', async (t) => {
+test('starting shows the waiting dot and says LOADING', async (t) => {
   const { $, publish } = fixture(t);
   await publish({ state: 'loading' });
-  assert.equal($('live-badge-text').textContent, 'OFF');
+  assert.equal($('live-badge-text').textContent, 'LOADING');
   assert.equal(
     $('live-panel').querySelector('.live-dot').classList.contains('waiting'),
     true,
