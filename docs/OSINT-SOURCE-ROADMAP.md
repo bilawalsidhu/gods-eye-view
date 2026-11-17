@@ -142,3 +142,51 @@ Before a provider is enabled:
 Implement NOAA SWPC, OpenAQ and UCDP first. They add distinct explanatory value while fitting existing GEV layer seams. Treat Copernicus STAC and Global Fishing Watch as the next research integrations, gated by account setup, quota and licence review. ACLED and ReliefWeb remain optional until access and reuse terms are confirmed.
 
 This roadmap is a research/design artifact. It does not claim that any new provider has been connected, that the credentials have been rotated, or that runtime integration tests have passed.
+
+
+## 8. Upstream synchronization review (2026-11-17)
+
+The previous source-roadmap pull request was merged into `main`. A fresh comparison against upstream confirms that the fork contains the upstream snapshot at `624c229bc2a86fc1e47ed34c95fc7cefa2ac1676`; the fork's current main is a descendant of that snapshot. The three-commit comparison result is the fork's merge/roadmap history, not three missing upstream commits. Do not re-import the same upstream history.
+
+The upstream snapshot includes these changes relevant to GEV:
+- **Lifecycle cleanup:** launch and satellite layers unregister their world-clock sources on destroy and register on init. Keep the regression test pattern used by the earthquakes layer.
+- **Renderer basemap contract:** basemap changes are routed through the globe/renderer port. New map providers should use that contract rather than calling Cesium directly.
+- **Flight and vessel context previews:** entity cards can use renderer-owned previews. Keep rendering resources scoped to card visibility and dispose auxiliary contexts when cards close.
+- **Voice action override:** application-provided `voice.openStories({ isCurrent })` takes precedence over the default Stories page behavior.
+
+The upstream PR descriptions report successful tests/builds for the relevant changes, but this audit did not execute those tests locally. The fork's merged sync PR #1 was a very large update; a passing GitHub mergeability result is not a substitute for local validation. Run the repository's documented test, format, boundary, library, build, stub-renderer and conformance gates before a production release.
+
+## 9. New source candidates and source-contract cautions
+
+### Additional candidates
+
+- **Global Energy Monitor (GEM):** open-access downloadable datasets describing energy infrastructure and resources. Useful as a static strategic-infrastructure baseline and for retrospective context. This is not a live activity feed. Review the licence and attribution attached to each specific dataset before bundling or redistributing it: https://globalenergymonitor.org/download-data/
+- **OpenSanctions:** useful for carefully sourced entity-resolution and sanctions-context lookups, not for identifying military operations. Hosted API access requires an API key; public-interest work may qualify for a free key, while commercial API use is metered/paid. Treat this as access-gated, not a generally unlimited free API. Never auto-screen incidental people from live map observations; use only deliberate analyst-initiated entity research with false-match warnings: https://www.opensanctions.org/docs/api/ and https://www.opensanctions.org/docs/api/authentication/
+
+### NOAA SWPC contract update
+
+NOAA's SWPC data service exposes products, JSON, text and archive endpoints. Its 2026 service-change notice announced JSON format changes for several products, including planetary K-index and solar-wind magnetic-field summaries. Before implementing the SWPC adapter:
+1. Pin the exact product endpoint(s) and document their current schema.
+2. Preserve source timestamps and distinguish observed values from forecasts/alerts.
+3. Add fixtures for both valid and malformed/changed payloads.
+4. Reject unknown schema shapes rather than silently interpreting them.
+5. Keep space-weather conditions as a contextual covariate, never as proof of GNSS interference or intentional action.
+
+Official documentation: https://www.spaceweather.gov/content/data-access and https://www.weather.gov/media/notification/pdf_2026/scn26-21_Data_Format_Changes_Impacting_SWPC_Products.pdf
+
+## 10. Implementation backlog and acceptance gates
+
+The following are implementation tasks, not completed runtime integrations:
+
+| ID | Work | Priority | Acceptance gate |
+| --- | --- | --- | --- |
+| GEV-OSINT-01 | Add provider-neutral provenance envelope and source-health status contract | P0 | Unit tests for missing timestamps, stale data, failed fetches, rate limits and unknown fields |
+| GEV-OSINT-02 | Add NOAA SWPC context provider through server-side proxy | P0 | Pinned JSON fixtures, schema drift tests, no client secret, clear observation/forecast labels |
+| GEV-OSINT-03 | Add OpenAQ as an additive provider to the existing air-quality source | P1 | Existing ECCC behavior unchanged; key remains server-side; provider attribution and sensor licence surfaced |
+| GEV-OSINT-04 | Import versioned UCDP GED snapshots with checksums and codebook metadata | P1 | Reproducible import, source version recorded, duplicate/event-time tests, CC BY attribution |
+| GEV-OSINT-05 | Add Copernicus STAC metadata discovery | P1 | OAuth kept server-side; bounded paging; metadata-only default; no automatic full-scene downloads |
+| GEV-OSINT-06 | Evaluate GEM static infrastructure packs | P2 | Dataset-by-dataset licence review; version, download date, checksum and attribution |
+| GEV-OSINT-07 | Evaluate OpenSanctions deliberate lookup workflow | P2 | Confirm public-interest eligibility and API terms; explicit user action; entity match score and false-positive caveat |
+| GEV-OSINT-08 | Evaluate Global Fishing Watch aggregated historical maritime context | P2 | Non-commercial terms gate; no individual-vessel operational tracking or tactical use |
+
+No item above is marked implemented by this documentation change. The next code change should be the P0 provenance/source-health contract and SWPC adapter, not a new standalone map layer. Reuse existing layer and server-provider seams, keep secrets server-side, and add synthetic tests before any live provider is enabled.
