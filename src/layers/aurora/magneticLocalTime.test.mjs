@@ -149,7 +149,10 @@ test('rotating about an axis preserves length and leaves the axis alone', () => 
   );
   const onAxis = rotateAbout(axis, axis, 1.1);
   for (const key of ['x', 'y', 'z'])
-    assert.ok(Math.abs(onAxis[key] - axis[key]) < 1e-12, `axis moved in ${key}`);
+    assert.ok(
+      Math.abs(onAxis[key] - axis[key]) < 1e-12,
+      `axis moved in ${key}`,
+    );
   // A full turn is the identity.
   const full = rotateAbout(v, axis, 2 * Math.PI);
   for (const key of ['x', 'y', 'z'])

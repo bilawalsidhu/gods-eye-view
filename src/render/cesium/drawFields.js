@@ -107,6 +107,10 @@ export function createShellSurface({
   cesium = Cesium,
   rectangle,
   height,
+  // Half a degree keeps a troposphere shell flush with the terrain it covers.
+  // A shell far above the ground can take a coarser mesh: its facets show
+  // less against the limb, and a stack of them costs less to draw.
+  granularityDegrees = 0.5,
   onSettled = () => {},
   onWake = null,
 }) {
@@ -141,7 +145,7 @@ export function createShellSurface({
       geometry: new cesium.RectangleGeometry({
         rectangle,
         height,
-        granularity: cesium.Math.toRadians(0.5),
+        granularity: cesium.Math.toRadians(granularityDegrees),
         vertexFormat: cesium.EllipsoidSurfaceAppearance.VERTEX_FORMAT,
       }),
     }),
@@ -427,6 +431,8 @@ export function createCesiumFields({
     };
     let liftM = Number(spec.liftM) || 0;
     let alpha = spec.alpha ?? 1;
+    // Fixed for the field's life; only the aurora stack sets it.
+    const granularityDegrees = Number(spec.granularityDegrees) || 0.5;
     let shown = true;
     let disposed = false;
     // The surface drawn, and one being built for a new rectangle or height.
@@ -452,6 +458,7 @@ export function createCesiumFields({
         cesium,
         rectangle: cesium.Rectangle.fromDegrees(west, south, east, north),
         height: c.heightM,
+        granularityDegrees,
         onSettled: () => settled(entry),
         onWake: () => watch(),
       });

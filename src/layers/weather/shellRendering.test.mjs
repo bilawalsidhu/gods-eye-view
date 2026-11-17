@@ -122,7 +122,7 @@ async function show(h, time, options) {
   return pending;
 }
 
-test('shell heights stack every product with aurora highest', () => {
+test('shell heights stack every product with lightning highest', () => {
   assert.deepEqual(WEATHER_SHELL_HEIGHTS, {
     'air-quality': 4_700,
     'air-quality-inset': 4_850,
@@ -131,10 +131,6 @@ test('shell heights stack every product with aurora highest', () => {
     'clouds-regional': 5_800,
     radar: 6_200,
     lightning: 6_600,
-    // Not a rung on the troposphere ladder: this is the floor of the auroral
-    // curtain, in the thermosphere. The aurora layer stacks its own shells up
-    // from here, so the gap to `lightning` is physical, not ordering slack.
-    aurora: 95_000,
   });
   assert.equal(WEATHER_SHELL_CACHE_BYTES, 128 * 1024 * 1024);
 });
