@@ -1,0 +1,125 @@
+/* ── Context layer tabs ─────────────────────────────────────────────────
+   Settings for the layers that are on, as tabs beside the card. */
+.context-tabs {
+  display: flex;
+  flex: none;
+  min-height: 34px;
+  box-sizing: border-box;
+  gap: 4px;
+  margin: 0 0 0.7rem;
+  padding: 3px;
+  overflow-x: auto;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  scrollbar-width: none;
+}
+
+.context-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.context-tabs__tab {
+  display: inline-flex;
+  flex: none;
+  min-height: 26px;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 9.5rem;
+  padding: 0.3rem 0.55rem;
+  color: rgba(199, 214, 222, 0.65);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.context-tabs__tab .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.context-tabs__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-tabs__tab:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.context-tabs__tab.active {
+  color: #7af0ff;
+  background: rgba(54, 220, 255, 0.12);
+  border-color: rgba(54, 220, 255, 0.35);
+}
+
+.context-tab-pane[hidden] {
+  display: none !important;
+}
+
+/* Controls moved in from Visual show their rows openly here. */
+.context-tab-pane .pp-toggle-group {
+  margin: 0;
+}
+
+/* Two even tabs: Inspector and Properties. */
+.context-tabs__tab {
+  flex: 1 1 0;
+  justify-content: center;
+  max-width: none;
+}
+
+.context-props[hidden] {
+  display: none !important;
+}
+
+.context-props__section + .context-props__section {
+  margin-top: 0.9rem;
+}
+
+.context-props__heading {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.45rem;
+  color: rgba(199, 214, 222, 0.55);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 500;
+  letter-spacing: 0.14rem;
+  text-transform: uppercase;
+}
+
+.context-props__heading .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.context-props__layers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  margin: -0.15rem 0 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.context-props__layers li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: rgba(214, 228, 236, 0.8);
+  font-size: 0.66rem;
+}
+
+.context-props__layers i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 6px currentColor;
+}

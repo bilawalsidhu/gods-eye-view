@@ -54,10 +54,94 @@ export function vesselPositionAt(record, tMs) {
 }
 
 const RAD = Math.PI / 180;
+/** The mean Earth radius (metres) a span's length is judged on. */
+const EARTH_RADIUS_M = 6371008.8;
+
+/**
+ * The stretch of a vessel's track around world time `tMs`, as
+ * vesselPositionAt draws it: between the last fix at or before the time and
+ * the next one (`move`, which always ends after `tMs`), or where it holds
+ * still (`hold`) before its first fix, after its last, or around a record's
+ * one move; from when (`fromMs`) until when (`untilMs`) the answer holds.
+ * Null for a vessel the clock never moves (no fixes and no move).
+ * @param {object} record
+ * @param {number} tMs
+ * @returns {{kind: 'move', lat0: number, lon0: number, t0: number,
+ *   lat1: number, lon1: number, t1: number, metres: number}|
+ *   {kind: 'hold', lat: number, lon: number, fromMs: number,
+ *   untilMs: number}|null}
+ */
+export function vesselSpanAt(record, tMs) {
+  if (!Number.isFinite(tMs)) return null;
+  const fixes = record?.fixes;
+  if (fixes?.length >= 2) {
+    const first = fixes[0];
+    const last = fixes[fixes.length - 1];
+    if (tMs < first.atMs)
+      return hold(first.lat, first.lon, -Infinity, first.atMs);
+    if (tMs >= last.atMs) return hold(last.lat, last.lon, last.atMs, Infinity);
+    // The first fix after the time: the one before it is at or before it.
+    let low = 1;
+    let high = fixes.length - 1;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if (fixes[mid].atMs <= tMs) low = mid + 1;
+      else high = mid;
+    }
+    const a = fixes[low - 1];
+    const b = fixes[low];
+    return move(a.lat, a.lon, a.atMs, b.lat, b.lon, b.atMs);
+  }
+  const motion = record?.motion;
+  if (!motion || !(motion.toMs > motion.fromMs)) return null;
+  if (tMs < motion.fromMs)
+    return hold(motion.fromLat, motion.fromLon, -Infinity, motion.fromMs);
+  if (tMs >= motion.toMs)
+    return hold(record.lat, record.lon, motion.toMs, Infinity);
+  return move(
+    motion.fromLat,
+    motion.fromLon,
+    motion.fromMs,
+    motion.toLat,
+    motion.toLon,
+    motion.toMs,
+  );
+}
+
+const hold = (lat, lon, fromMs, untilMs) => ({
+  kind: 'hold',
+  lat,
+  lon,
+  fromMs,
+  untilMs,
+});
+
+function move(lat0, lon0, t0, lat1, lon1, t1) {
+  return {
+    kind: 'move',
+    lat0,
+    lon0,
+    t0,
+    lat1,
+    lon1,
+    t1,
+    metres: greatCircleAngle(lat0, lon0, lat1, lon1) * EARTH_RADIUS_M,
+  };
+}
+
+/** The angle (radians) between two positions, seen from the Earth's centre. */
+function greatCircleAngle(lat1, lon1, lat2, lon2) {
+  const phi1 = lat1 * RAD;
+  const phi2 = lat2 * RAD;
+  const s =
+    Math.sin((phi2 - phi1) / 2) ** 2 +
+    Math.cos(phi1) * Math.cos(phi2) * Math.sin(((lon2 - lon1) * RAD) / 2) ** 2;
+  return 2 * Math.asin(Math.min(1, Math.sqrt(s)));
+}
 
 /** The point `fraction` of the way from one position to another. It runs
  * for every drawn vessel as the clock plays, so it builds no arrays. */
-function greatCircleAt(lat1, lon1, lat2, lon2, fraction) {
+export function greatCircleAt(lat1, lon1, lat2, lon2, fraction) {
   const phi1 = lat1 * RAD;
   const lambda1 = lon1 * RAD;
   const phi2 = lat2 * RAD;

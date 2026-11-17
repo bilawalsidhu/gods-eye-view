@@ -5770,6 +5770,26 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
       },
     ),
     check(
+      'frame.onHeldChange',
+      'onHeldChange is told the first hold and the last release, whoever holds, and nothing once off',
+      (h, r) => {
+        const heard = [];
+        const off = r.frame.onHeldChange((held) => heard.push(held));
+        try {
+          const one = r.frame.holdContinuous('conformance:one');
+          const two = r.frame.holdContinuous('conformance:two');
+          one();
+          deepEqual(heard, [true], 'once for the first hold');
+          two();
+          deepEqual(heard, [true, false], 'once for the last release');
+        } finally {
+          off();
+        }
+        r.frame.holdContinuous('conformance:after')();
+        deepEqual(heard, [true, false], 'nothing once off');
+      },
+    ),
+    check(
       'frame.setTargetFps',
       'setTargetFps caps the loop; diagnostics say the cap, 0 the display rate',
       (h, r) => {

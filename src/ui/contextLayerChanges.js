@@ -249,6 +249,21 @@ export function _handleContextLayerChange(change) {
       );
     }
   }
+  if (
+    change.type === 'visibility' &&
+    change.enabled &&
+    change.origin === 'user' &&
+    !this.cockpitView?.active &&
+    (change.layerId === 'radio' || change.layerId === 'rocket-launches')
+  ) {
+    // Context's panel shows its main tab for them (ContextView listens).
+    globalThis.dispatchEvent?.(new Event('gev:context-show-view'));
+    this.actions.setPanelCollapsed('global-context-panel', false, {
+      explicit: true,
+    });
+    if (change.layerId === 'radio')
+      this.actions.setPanelCollapsed('radio-panel', false, { explicit: true });
+  }
   // Turning off the layer the view rides ends it; every other layer may be
   // turned on or off freely during a session.
   const riddenLayerId = this.cockpitView?.active
