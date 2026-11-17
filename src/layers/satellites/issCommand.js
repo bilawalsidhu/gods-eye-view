@@ -5,35 +5,8 @@ const unit = (v) => {
   return v.map((c) => c / n);
 };
 
-/**
- * The Sun positions Manual offers, on the model's axes (port, zenith,
- * forward), and whether the station is lit there.
- * @returns {Array<{label: string, sun: number[], sunlit: boolean}>}
- */
-export function issCommandSunPoses() {
-  return [
-    { label: t('Overhead'), sun: [0, 1, 0], sunlit: true },
-    { label: t('Ahead'), sun: unit([0, 0.05, 1]), sunlit: true },
-    { label: t('Behind'), sun: unit([0, 0.05, -1]), sunlit: true },
-    { label: t('Below'), sun: unit([0, -1, 0.05]), sunlit: true },
-    { label: t('Port side'), sun: unit([0.8, 0.5, 0.3]), sunlit: true },
-    { label: t('Starboard side'), sun: unit([-0.8, 0.5, 0.3]), sunlit: true },
-    { label: t('Night (shadow)'), sun: [0, -1, 0], sunlit: false },
-  ];
-}
-
 /** Where "Zoom to the ISS" stops: the whole 109 m station fills the view. */
 export const ISS_COMMAND_ZOOM_RANGE_M = 260;
-
-/**
- * The Automatic mode's status line.
- * @param {boolean|null} sunlit Null while the model has not been placed yet.
- * @returns {string}
- */
-export function issCommandStatusText(sunlit) {
-  if (sunlit === null) return '';
-  return sunlit ? t('Now: in sunlight') : t("Now: in the Earth's shadow");
-}
 
 /** Beyond this the camera counts as far, and the zoom button is offered. */
 export const ISS_COMMAND_FAR_M = 1000;

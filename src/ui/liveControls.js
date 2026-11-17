@@ -74,6 +74,8 @@ export class LiveControls {
     this.cockpitActive =
       documentRef?.body?.classList?.contains?.('cockpit-mode') === true;
     this.timer = null;
+    /** The view last published, as text: the 2 s refresh resends nothing new. */
+    this.publishedKey = undefined;
     /** The stop held back for one tick after a clear (see `_onCleared`). */
     this.clearGrace = null;
     this.listeners = new AbortController();
@@ -244,10 +246,18 @@ export class LiveControls {
     if (changed) this.actions.scheduleLayout?.();
   }
 
+  /** Publish `view` unless it is the one published last. */
+  _send(view) {
+    const key = JSON.stringify(view);
+    if (key === this.publishedKey) return;
+    this.publishedKey = key;
+    this.store.publish(view);
+  }
+
   _publish() {
     if (this.destroyed) return;
     if (!this.subject || !this.offered.length) {
-      this.store.publish(null);
+      this._send(null);
       return;
     }
     const index = Math.max(
@@ -255,7 +265,7 @@ export class LiveControls {
       this.offered.findIndex((stream) => stream.id === this.currentId),
     );
     const current = this.offered[index];
-    this.store.publish({
+    this._send({
       label: this.subject.label,
       streams: this.offered.map((stream) => ({
         id: stream.id,

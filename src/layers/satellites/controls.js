@@ -441,12 +441,6 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
 
     /**
-     * Track a satellite by NORAD id (camera follow + orbit path + highlight),
-     * same path as clicking its point.
-     * @param {string|number} noradId NORAD catalog number.
-     * @returns {boolean} True if tracking started.
-     */
-    /**
      * The keys the LIVE section matches streams by for the tracked
      * satellite: a station is `station:<key>` (`station:iss`,
      * `station:tiangong`) whichever of its entries is tracked (the station,
@@ -458,6 +452,12 @@ export function createControls({ state: layerState, services, parts, source }) {
       return station ? [`station:${station.key}`] : [];
     },
 
+    /**
+     * Track a satellite by NORAD id (camera follow + orbit path + highlight),
+     * same path as clicking its point.
+     * @param {string|number} noradId NORAD catalog number.
+     * @returns {boolean} True if tracking started.
+     */
     trackById(noradId, { origin = 'programmatic' } = {}) {
       const id = Number(noradId);
       if (

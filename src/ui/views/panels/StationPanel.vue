@@ -1,7 +1,7 @@
 <script setup>
 import { storeToRefs } from 'pinia';
 import { computed } from 'vue';
-import { formatNumber, t } from '../../../i18n/index.js';
+import { formatDate, formatNumber, t } from '../../../i18n/index.js';
 import RailPanel from '../../rail/RailPanel.vue';
 import { vClassToggle } from '../../rail/classToggle.js';
 import UiSlider from '../../kit/UiSlider.js';
@@ -27,7 +27,7 @@ const ago = (ms) => {
 };
 const clock = (ms) =>
   Number.isFinite(ms)
-    ? new Date(ms).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+    ? formatDate(ms, { hour: '2-digit', minute: '2-digit' })
     : '';
 const telemetry = computed(() => view.value?.telemetry ?? null);
 const telemetryText = computed(() => {
@@ -65,6 +65,15 @@ const sunText = computed(() => {
   if (sunlit === null || sunlit === undefined) return '';
   return sunlit ? t('Now: in sunlight') : t("Now: in the Earth's shadow");
 });
+// The mode radios: arrow keys move the choice and the focus, as a radio
+// group's do, and only the checked one is in the tab order.
+function stepMode(event) {
+  const next = manual.value ? 'automatic' : 'manual';
+  act('setStationMode', next);
+  event.currentTarget
+    ?.querySelector(`#station-${next}-btn`)
+    ?.focus({ preventScroll: true });
+}
 const stationWords = computed(() => ({
   expandLabel: t('Expand Station section'),
   collapseLabel: t('Collapse Station section'),
@@ -78,9 +87,9 @@ const stationWords = computed(() => ({
   <template #badge><span id="station-badge" class="station-badge">{{ view ? view.title : '' }}</span></template>
   <template v-if="view">
     <div class="station-subject">{{ view.subject }}</div>
-    <div class="station-modes" role="radiogroup" :aria-label="t('Mode')">
-      <button id="station-automatic-btn" type="button" role="radio" class="station-mode" :aria-checked="String(!manual)" v-class-toggle="{ 'is-active': !manual }" @click="act('setStationMode', 'automatic')">{{ t('Automatic') }}</button>
-      <button id="station-manual-btn" type="button" role="radio" class="station-mode" :aria-checked="String(manual)" v-class-toggle="{ 'is-active': manual }" @click="act('setStationMode', 'manual')">{{ t('Manual') }}</button>
+    <div class="station-modes" role="radiogroup" :aria-label="t('Mode')" @keydown.left.prevent="stepMode" @keydown.right.prevent="stepMode" @keydown.up.prevent="stepMode" @keydown.down.prevent="stepMode">
+      <button id="station-automatic-btn" type="button" role="radio" class="station-mode" :tabindex="manual ? -1 : 0" :aria-checked="String(!manual)" v-class-toggle="{ 'is-active': !manual }" @click="act('setStationMode', 'automatic')">{{ t('Automatic') }}</button>
+      <button id="station-manual-btn" type="button" role="radio" class="station-mode" :tabindex="manual ? 0 : -1" :aria-checked="String(manual)" v-class-toggle="{ 'is-active': manual }" @click="act('setStationMode', 'manual')">{{ t('Manual') }}</button>
     </div>
     <p id="station-telemetry" class="station-telemetry" :data-tone="telemetryTone" role="status" aria-live="polite"><span class="station-telemetry-dot" aria-hidden="true"></span>{{ telemetryText }}</p>
     <p v-if="!manual && sunText" id="station-sun" class="station-note">{{ sunText }}</p>

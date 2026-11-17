@@ -113,6 +113,12 @@
 .live-step .material-symbols-outlined {
   font-size: 18px;
 }
+@media (pointer: coarse) {
+  .live-step {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
 .live-step:hover,
 .live-step:focus-visible {
   border-color: var(--cockpit-accent, #00dcff);

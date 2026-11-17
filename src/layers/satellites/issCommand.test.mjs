@@ -45,14 +45,6 @@ test('the zoom is offered only from far away', async () => {
   assert.equal(issCommandOffersZoom(150), false);
 });
 
-test('the status line says lit or in shadow, and nothing before the model is placed', async () => {
-  const { issCommandStatusText } = await import('./issCommand.js');
-  assert.equal(issCommandStatusText(null), '');
-  assert.notEqual(issCommandStatusText(true), issCommandStatusText(false));
-  assert.ok(issCommandStatusText(true).length > 0);
-  assert.ok(issCommandStatusText(false).length > 0);
-});
-
 test('an object docked to the ISS is the station too', async () => {
   const { issTrackedOnStation } = await import('./policy.js');
   const NAUKA = 49044;

@@ -428,3 +428,15 @@ test('destroy stops the stream, detaches the actions and publishes nothing', () 
   f.select();
   assert.equal(f.published.length, before, 'events after destroy are ignored');
 });
+
+test('the 2 s refresh publishes nothing when nothing changed', () => {
+  const f = fixture();
+  f.setKeys(['station:test']);
+  f.select();
+  const count = f.published.length;
+  for (const timer of f.running()) timer.callback();
+  for (const timer of f.running()) timer.callback();
+  assert.equal(f.published.length, count, 'the same view is not sent again');
+  f.store.act('playLive');
+  assert.ok(f.published.length > count, 'a change is');
+});
