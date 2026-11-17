@@ -336,12 +336,31 @@ test('until the renderer has the model the dots stand at every distance, and sta
   assert.equal(f.drawn(STATION).displayRange, undefined);
   assert.equal(f.drawn(COMPANION).displayRange, undefined);
   assert.equal(f.trackedDot().displayRange, undefined);
-  // A load that does finish hands them over.
+  // After the retry delay the model is released, and the next frame asks
+  // for it again: one transient failure does not cost the session.
+  f.model.spec.retryAfterMs = 0;
+  f.tick();
+  assert.equal(f.modelSet(), undefined, 'released after a failure');
+  f.tick();
+  assert.ok(f.modelItem(), 'asked for again');
+  // That load finishes: the dots are handed over.
   f.readyModel();
   f.tick();
   assert.equal(f.modelItem().show, true);
   assert.deepEqual(f.drawn(STATION).displayRange, FAR_RANGE);
   assert.deepEqual(f.trackedDot().displayRange, FAR_RANGE);
+});
+
+test('a model still loading counts as undrawn out of range and is released', (t) => {
+  const f = fixture(t);
+  f.cameraAt(MAX_M * 1.4);
+  f.tick(); // asks for the model, which never answers
+  f.cameraAt(MAX_M * 5);
+  f.tick();
+  assert.ok(f.modelSet(), 'kept for a while');
+  f.model.spec.unloadAfterMs = 0;
+  f.tick();
+  assert.equal(f.modelSet(), undefined);
 });
 
 test('turning the layer off, or a while undrawn, releases the model; the next approach asks for it again', async (t) => {

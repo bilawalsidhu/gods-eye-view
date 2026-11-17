@@ -233,3 +233,33 @@ test('a click on a site dot or its outline selects the site; another set does no
   h.click({ id: { set: 'other:1', id: outline.id, meta: outline.meta } });
   assert.equal(selectedNow(), false);
 });
+
+test('a click on the map itself reads the label box at the click; a click on something drawn there does not', (t) => {
+  const h = harness(t);
+  let answer = null;
+  const asked = [];
+  h.parts.controls = {
+    methods: {
+      findAt(position) {
+        asked.push(position);
+        return answer;
+      },
+    },
+  };
+  // Nothing picked and no label there: the selection is released.
+  h.click(undefined);
+  assert.equal(asked.length, 1);
+  assert.deepEqual(asked[0], { x: 640, y: 400 }, 'in CSS px, where clicked');
+  h.assertSelected(false);
+  // The site's label box at the click selects it.
+  answer = { id: 'base' };
+  h.click(undefined);
+  assert.equal(asked.length, 2);
+  h.assertSelected(true);
+  // Something else drawn under the click (an aircraft, a vessel): the label
+  // box is not read, and the site's selection is released as for any other
+  // contact.
+  h.click({ id: 'flight:abc123' });
+  assert.equal(asked.length, 2, 'the label box is not asked');
+  h.assertSelected(false);
+});

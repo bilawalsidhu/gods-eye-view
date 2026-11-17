@@ -217,6 +217,11 @@ watch(
             <div :id="`context-tab-${tab.id}`" :ref="setPane(tab.id)" class="context-tab-pane"></div>
           </section>
         </div>
+        <!-- Sections PanelChrome owns sit outside the Inspector view, which mounts
+             only while Context is open: PanelChrome finds collapsible panels once,
+             at startup. -->
+        <StationPanel />
+        <LivePanel />
         <RadioPanel />
         <div class="global-context-modes" role="tablist" :aria-label="t('Context mode')">
           <button id="global-context-flights-btn" class="context-mode-button" v-class-toggle="{ active: ctx?.flightsActive }" type="button" role="tab" tabindex="0" :aria-selected="String(ctx?.flightsActive ?? false)" :aria-disabled="ctx && String(ctx.busy)" :aria-busy="ctx && String(ctx.busy)" aria-controls="context-flights-view" :aria-label="t('CONTACTS')" :title="t('Cycles the nearest contacts of whatever type you select — planes, vessels, installations. Satellites track independently.')">
@@ -253,8 +258,6 @@ watch(
           <EntityCard :with-contacts="contactsMatchCard">
             <AwarenessPanel v-if="contactsMatchCard" compact />
           </EntityCard>
-          <StationPanel />
-          <LivePanel />
           <ViewContext v-if="!entityCard" />
         </div>
         </div>

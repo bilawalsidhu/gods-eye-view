@@ -67,10 +67,18 @@ import { stationTrackedOn } from './policy.js';
  * @property {number} [unloadAfterMs] How long the model may go undrawn (out
  *   of range, or hidden) before its draw set is released and its GPU memory
  *   with it; asked for again on the next approach. Default one minute.
+ * @property {number} [retryAfterMs] How long after a failed load the model
+ *   is released and asked for again. Default 30 s.
  */
 
 /** Default `unloadAfterMs`: a minute undrawn releases the model. */
 export const STATION_MODEL_UNLOAD_AFTER_MS = 60_000;
+/**
+ * A model that failed to load is released after this and asked for again
+ * on the next frame in range (the renderer retries a load only on an
+ * update, and a model that is not ready is not sent).
+ */
+export const STATION_MODEL_RETRY_AFTER_MS = 30_000;
 
 /**
  * Whether a station model may be drawn: the dot's own rules (layer on, points
@@ -229,6 +237,8 @@ export function createStationModel(
   let ready = false;
   let loading = false;
   let failed = false;
+  /** When the renderer said the load failed (wall-clock ms), or null. */
+  let failedAt = null;
   /** Turns the moving parts by where the Sun (and the relays) are. */
   const articulation = spec.createArticulation();
   /** Where the joint driver writes; kept for a renderer that poses nodes. */
@@ -315,8 +325,9 @@ export function createStationModel(
     offFailed = set.on('loadFailed', (id, message) => {
       if (id !== itemId) return;
       // The dots keep drawing at every distance (the model is never ready);
-      // the next approach after the model is released tries again.
+      // after `retryAfterMs` the model is released and asked for again.
       failed = true;
+      failedAt = Date.now();
       loading = false;
       console.warn(
         `[Data:Satellites] ${spec.label} model failed to load:`,
@@ -668,6 +679,14 @@ export function createStationModel(
       if (handedCompanions.size) _releaseCompanions();
       handingOver = false;
       _syncOrbitCloseUp(false);
+      if (
+        failedAt !== null &&
+        Date.now() - failedAt >=
+          (spec.retryAfterMs ?? STATION_MODEL_RETRY_AFTER_MS)
+      )
+        _unload(); // asked for again on the next frame in range
+      else if (cameraDistance > spec.maxDistanceM * 1.5) _undrawn();
+      else undrawnSince = null;
       return;
     }
     // The docked dots are the model's within its range: handed over at
@@ -769,6 +788,7 @@ export function createStationModel(
     handingOver = false;
     loading = false;
     failed = false;
+    failedAt = null;
     ready = false;
     visualValid = false;
     undrawnSince = null;

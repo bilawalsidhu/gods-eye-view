@@ -348,3 +348,23 @@ test('actions without a station are refused; destroy publishes nothing', () => {
   f.panel._destroyStationPanel();
   assert.equal(f.view(), null);
 });
+
+test('frame after frame, the section is republished only when the age crosses a whole second', (t) => {
+  const f = fixture();
+  t.after(() => f.panel._destroyStationPanel());
+  f.select(true);
+  f.setTelemetry({ state: 'live', poseAgeMs: 3010, liveUntilMs: null });
+  f.panel._syncStationPanel();
+  const published = f.views.length;
+  assert.equal(f.view().telemetry.poseAgeMs, 3000, 'in whole seconds');
+  // The tick runs every frame; the age moves by milliseconds.
+  for (const age of [3020, 3150, 3600, 3999]) {
+    f.setTelemetry({ state: 'live', poseAgeMs: age, liveUntilMs: null });
+    f.panel._syncStationPanel();
+  }
+  assert.equal(f.views.length, published, 'nothing new to show');
+  f.setTelemetry({ state: 'live', poseAgeMs: 4001, liveUntilMs: null });
+  f.panel._syncStationPanel();
+  assert.equal(f.views.length, published + 1);
+  assert.equal(f.view().telemetry.poseAgeMs, 4000);
+});

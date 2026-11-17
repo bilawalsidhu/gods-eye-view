@@ -1,5 +1,3 @@
-import { t } from '../../i18n/index.js';
-
 const unit = (v) => {
   const n = Math.hypot(...v);
   return v.map((c) => c / n);

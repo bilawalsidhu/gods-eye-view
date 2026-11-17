@@ -85,7 +85,7 @@ function leaveSignals() {
         <a class="cockpit-weather-credit" href="https://open-meteo.com/" target="_blank" rel="noopener">{{ t('Weather data by Open-Meteo.com') }}</a>
       </section>
       <section data-cockpit-brief-page="live" :aria-label="t('Live video')" :hidden="b.pageId !== 'live'">
-        <CockpitLivePage v-if="live" :shown="b.pageId === 'live'" />
+        <CockpitLivePage v-if="live" :shown="b.pageId === 'live' && !collapsed" />
       </section>
     </div>
     <footer class="cockpit-signal-footer">
