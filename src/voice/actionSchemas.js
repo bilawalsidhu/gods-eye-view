@@ -1107,4 +1107,4 @@ function describe(schema, metadata, allowDescription = true) {
     return Object.fromEntries(entries);
   }
   return result;
-                      }
+}
