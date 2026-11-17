@@ -701,33 +701,70 @@ test("another layer's card over a quake disc takes the click, and the disc yield
   }
 });
 
-test("another layer's object under the quake card takes the click", async () => {
-  const h = harness([quake('ak1')]);
-  picking.registerPickOwner('test-plane', (id) => id === 'plane-9');
-  try {
+for (const coarse of [false, true]) {
+  test(`a quake card yields while an aircraft starts tracking (${coarse ? 'coarse' : 'exact'} hit)`, async (t) => {
+    const previous = globalThis.matchMedia;
+    globalThis.matchMedia = () => ({ matches: coarse });
+    t.after(() => {
+      if (previous) globalThis.matchMedia = previous;
+      else delete globalThis.matchMedia;
+    });
+    const plane = { set: 'flights:1', id: 'plane-9' };
+    let sceneHit = null;
+    let nearby = null;
+    let tracked = null;
+    let tracks = 0;
+    let input;
+    const h = harness([quake('ak1')], {
+      input(viewer) {
+        viewer.scene = {
+          pick: () => (sceneHit ? { id: sceneHit } : null),
+          drillPick: () => (nearby ? [{ id: nearby }] : []),
+        };
+        input = fakeInput(viewer);
+        // The aircraft layer runs first and changes its passive predicate
+        // synchronously after reading the dispatched hit.
+        input.input.onClick((event) => {
+          const id = event.hit?.id;
+          if (id !== plane.id || tracked === id) return;
+          tracked = id;
+          tracks++;
+        });
+        return input.input;
+      },
+    });
+    picking.registerPickOwner('test-plane', (id) => id === plane.id, {
+      expanded: true,
+      passive: (id) => id === tracked,
+    });
+    t.after(() => {
+      picking.unregisterPickOwner('test-plane');
+      h.layer.destroy();
+      input?.destroy();
+    });
     h.layer.enable(h.viewer);
     await h.layer.update(h.viewer);
-    h.clickDisc('ak1');
+    sceneHit = { set: h.discs().spec.id, id: 'earthquake:ak1' };
+    input.click();
     const card = h.lastCard()[0];
-    // The card is painted over a plane: the flight layer acts on the click,
-    // so the card neither opens its link nor changes.
-    overlayHitCard(h, card.id, { set: 'flights:1', id: 'plane-9' });
-    assert.deepEqual(h.opened, []);
+    h.overlayHits.set(EARTHQUAKE_CARD_SOURCE_ID, {
+      sourceId: EARTHQUAKE_CARD_SOURCE_ID,
+      entryId: card.id,
+    });
+    sceneHit = coarse ? null : plane;
+    nearby = coarse ? plane : null;
+
+    input.click();
+    assert.equal(tracks, 1, 'the aircraft starts tracking');
+    assert.deepEqual(h.opened, [], 'the quake card yields for the whole click');
     assert.equal(h.lastCard()[0].id, card.id, 'the card stays');
-    // Over open ground the card opens the USGS page.
-    h.clickCard(card.id);
+
+    input.click();
+    assert.equal(tracks, 1, 'already tracking the aircraft');
     assert.deepEqual(h.opened, [
       'https://earthquake.usgs.gov/earthquakes/eventpage/ak1',
     ]);
-  } finally {
-    picking.unregisterPickOwner('test-plane');
-    h.layer.destroy();
-  }
-});
-
-/** Click this layer's card with `hit` (another layer's object) under it. */
-function overlayHitCard(h, entryId, hit) {
-  h.clickOverlayWith(EARTHQUAKE_CARD_SOURCE_ID, entryId, hit);
+  });
 }
 
 for (const kind of ['card', 'label']) {

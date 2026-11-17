@@ -147,5 +147,5 @@ export function cardKeepsClick(click, underCard) {
   const pickId = resolvePickId(click.hit);
   if (!pickId) return false;
   const expanded = pickId !== resolvePickId(click.topHit ?? null);
-  return !isActedOnByOtherLayer('', pickId, { expanded });
+  return !isActedOnByOtherLayer('', pickId, { expanded, click });
 }

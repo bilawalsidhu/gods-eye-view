@@ -62,7 +62,9 @@ export function createSelection({
         (String(pickedId).startsWith('gev-trail:') ||
           (Boolean(isActedOnByOtherLayer) &&
             isOwnedByOtherLayer('ais-live-vessels', pickedId) &&
-            !isActedOnByOtherLayer('ais-live-vessels', pickedId)));
+            !isActedOnByOtherLayer('ais-live-vessels', pickedId, {
+              click: event,
+            })));
       if (passivePick && !ownCardUnder()) return;
 
       // A sibling layer already owns this click. Preserve the current vessel
@@ -85,6 +87,7 @@ export function createSelection({
           resolvePickId?.(event.topHit ?? null) !== pickedId &&
           !isActedOnByOtherLayer('ais-live-vessels', pickedId, {
             expanded: true,
+            click: event,
           });
         if (!nearMissOfExactOnly || !ownCardUnder()) return;
       }

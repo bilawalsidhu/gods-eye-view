@@ -356,7 +356,8 @@ export function createEarthquakesLayer({
       // since the dispatcher may expose distinct objects for the same pick.
       const expanded =
         'topHit' in click && picking.resolvePickId(click.topHit) !== pickId;
-      if (pickId && actedOn(EARTHQUAKES_LAYER_ID, pickId, { expanded })) return;
+      if (pickId && actedOn(EARTHQUAKES_LAYER_ID, pickId, { expanded, click }))
+        return;
       const cardHit = overlayHost.hitTest?.(at?.x, at?.y, {
         sourceId: EARTHQUAKE_CARD_SOURCE_ID,
       });

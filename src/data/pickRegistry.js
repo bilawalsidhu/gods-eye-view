@@ -35,6 +35,8 @@ const _owners = new Map();
 const _passive = new Map();
 /** Owners whose click handlers also select nearby contacts. */
 const _expanded = new Set();
+/** @type {WeakMap<object, Map<string, [string, boolean][]>>} */
+const clickActions = new WeakMap();
 /**
  * Layers whose shapes are background to any card painted over them: their
  * click handlers stand aside under a card, so the card's layer may act there.
@@ -130,33 +132,58 @@ export function isOwnedByOtherLayer(layerId, pickedId) {
   return false;
 }
 
+/** @param {string} pickedId @returns {Generator<[string, boolean]>} */
+function* actingPickOwners(pickedId) {
+  for (const [ownerId, predicate] of _owners) {
+    try {
+      if (!predicate(pickedId)) continue;
+      const passive = _passive.get(ownerId);
+      if (passive === true) continue;
+      if (typeof passive === 'function' && passive(pickedId)) continue;
+      yield [ownerId, _expanded.has(ownerId)];
+    } catch {
+      // a broken predicate must never break click handling
+    }
+  }
+}
+
+/**
+ * Hold the acting owners as soon as a click resolves a hit. A handler can
+ * start tracking the hit and make it passive before later handlers run.
+ * @param {object} click The shared dispatcher event.
+ * @param {import('../render/contract/query').Hit|null} hit The resolved hit.
+ */
+export function rememberClickPickActions(click, hit) {
+  const pickedId = resolvePickId(hit);
+  if (!pickedId) return;
+  let actions = clickActions.get(click);
+  if (!actions) clickActions.set(click, (actions = new Map()));
+  if (!actions.has(pickedId)) {
+    actions.set(pickedId, [...actingPickOwners(pickedId)]);
+  }
+}
+
 /**
  * True when some OTHER registered layer owns the picked id and acts on a
  * click on it: {@link isOwnedByOtherLayer} without passive owners. A card
  * painted over a passive pick (a flight trail) is still the card's click.
  * @param {string} layerId - The asking layer's id (excluded from the scan).
  * @param {string} pickedId - Picked primitive/entity id.
- * @param {{expanded?: boolean}} [options] A nearby rather than exact hit:
- *   only owners whose handlers select nearby contacts take precedence.
+ * @param {{expanded?: boolean, click?: object}} [options] For a nearby hit,
+ *   only expanded owners take precedence. Pass the shared click to use the
+ *   acting owners from when it first resolved this hit.
  * @returns {boolean}
  */
 export function isActedOnByOtherLayer(
   layerId,
   pickedId,
-  { expanded = false } = {},
+  { expanded = false, click } = {},
 ) {
   if (!pickedId) return false;
-  for (const [ownerId, predicate] of _owners) {
-    if (ownerId === layerId || (expanded && !_expanded.has(ownerId))) continue;
-    try {
-      if (!predicate(pickedId)) continue;
-      const passive = _passive.get(ownerId);
-      if (passive === true) continue;
-      if (typeof passive === 'function' && passive(pickedId)) continue;
-      return true;
-    } catch {
-      // a broken predicate must never break click handling
-    }
+  const owners =
+    clickActions.get(click)?.get(pickedId) ?? actingPickOwners(pickedId);
+  for (const [ownerId, selectsNearby] of owners) {
+    if (ownerId !== layerId && (!expanded || selectsNearby)) return true;
   }
   return false;
 }

@@ -1012,7 +1012,12 @@ function makeCesiumEvent() {
   };
 }
 
-function installWireHarness(picked, stateOverrides = {}, sceneExtras = {}) {
+function installWireHarness(
+  picked,
+  stateOverrides = {},
+  sceneExtras = {},
+  firstClick = null,
+) {
   const hadWindow = Object.hasOwn(globalThis, 'window');
   const hadDocument = Object.hasOwn(globalThis, 'document');
   const priorWindow = globalThis.window;
@@ -1041,6 +1046,8 @@ function installWireHarness(picked, stateOverrides = {}, sceneExtras = {}) {
     scene: { pick: () => picked, ...sceneExtras },
   };
   const input = fakeInput(viewer);
+  // A subscriber that runs before the layer's own (an aircraft layer).
+  if (firstClick) input.input.onClick(firstClick);
   // The camera port other layers follow through, with no pose to read; its
   // followChanged event counts who listens.
   const followChanged = makeCesiumEvent();
@@ -1990,6 +1997,42 @@ test('vessel interaction wire: a sibling-owned pick wins without selection mutat
     _setVesselOverlayHostForTest(null);
     harness.cleanup();
     unregisterPickOwner('flights');
+  }
+});
+
+// The aircraft layer runs first and starts tracking the plane under the
+// vessel's card, making it passive. The card reads the owners that acted
+// when the click resolved, so it still yields: one action.
+test('vessel interaction wire: a card yields to an aircraft that starts tracking in the same click', (t) => {
+  let tracked = null;
+  registerPickOwner('test-planes', (pickedId) => pickedId === 'plane:9', {
+    expanded: true,
+    passive: (pickedId) => pickedId === tracked,
+  });
+  t.after(() => unregisterPickOwner('test-planes'));
+  const harness = installWireHarness(
+    { id: 'plane:9' },
+    { selectedRecord: null },
+    {},
+    (event) => {
+      if (event.hit?.id === 'plane:9') tracked = 'plane:9';
+    },
+  );
+  const requests = [];
+  harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
+    requests.push(event.detail),
+  );
+  _setVesselOverlayHostForTest(
+    hostWithCardHit(`vessel:${harness.record.mmsi}`),
+  );
+  try {
+    harness.handler.click({ position: { x: 10, y: 20 } });
+    assert.equal(tracked, 'plane:9', 'the aircraft starts tracking');
+    assert.equal(requests.length, 0, 'the vessel card yields');
+    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi ?? null, null);
+  } finally {
+    _setVesselOverlayHostForTest(null);
+    harness.cleanup();
   }
 });
 

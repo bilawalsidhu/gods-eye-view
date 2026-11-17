@@ -51,7 +51,7 @@ export function createSelection({
         if (pickedId && isOwnedByOtherLayer(id, pickedId)) {
           passivePick =
             Boolean(isActedOnByOtherLayer) &&
-            !isActedOnByOtherLayer(id, pickedId);
+            !isActedOnByOtherLayer(id, pickedId, { click: event });
           if (!passivePick) return;
         }
       }
@@ -68,7 +68,7 @@ export function createSelection({
         cardHit &&
         contactId &&
         contactId !== resolvePickId(picked ?? null) &&
-        isActedOnByOtherLayer?.(id, contactId, { expanded: true })
+        isActedOnByOtherLayer?.(id, contactId, { expanded: true, click: event })
       )
         return;
       if (cardHit) {

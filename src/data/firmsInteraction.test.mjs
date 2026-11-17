@@ -64,6 +64,7 @@ function harness({
   withGlobe = false,
   feed = null,
   drilled = null,
+  firstClick = null,
 } = {}) {
   const hadWindow = Object.hasOwn(globalThis, 'window');
   const priorWindow = globalThis.window;
@@ -137,6 +138,8 @@ function harness({
   if (!withGlobe)
     layer.attachShellServices({ imageryHost: () => ({ kind: 'none' }) });
   const input = fakeInput(viewer);
+  // A subscriber that runs before the layer's own (an aircraft layer).
+  if (firstClick) input.input.onClick(firstClick);
   // The LOD rebuild (and with it the context-registration sweep) is inert
   // without a data source, so tests that drive a real refresh need one.
   if (withDataSource) layer.init(viewer);
@@ -573,6 +576,35 @@ test('a fire card keeps a tap whose contact does not act; bare taps still clear'
     assert.equal(bare.layer.getSelectedInfo(), null, 'the bare tap clears');
   } finally {
     bare.cleanup();
+  }
+});
+
+// The aircraft layer runs first and starts tracking the plane it was clicked
+// on, which makes that plane passive. The fire card painted over it reads
+// the owners that acted when the click resolved, so it still yields.
+test('a fire card yields to an aircraft that starts tracking in the same click', (t) => {
+  const fire = makeFire();
+  let tracked = null;
+  registerPickOwner('test-planes', (pickedId) => pickedId === 'plane:9', {
+    expanded: true,
+    passive: (pickedId) => pickedId === tracked,
+  });
+  t.after(() => unregisterPickOwner('test-planes'));
+  const h = harness({
+    fires: [fire],
+    picked: { id: 'plane:9' },
+    cardHit: `fire:${fireDetectionKey(fire)}`,
+    firstClick: (event) => {
+      if (event.hit?.id === 'plane:9') tracked = 'plane:9';
+    },
+  });
+  try {
+    h.click();
+    assert.equal(tracked, 'plane:9', 'the aircraft starts tracking');
+    assert.equal(h.requests.length, 0, 'the fire card yields');
+    assert.equal(h.layer.getSelectedInfo(), null);
+  } finally {
+    h.cleanup();
   }
 });
 

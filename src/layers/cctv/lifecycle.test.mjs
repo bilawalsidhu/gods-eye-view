@@ -88,6 +88,12 @@ test('world clicks respect the painted top card and registered card backgrounds'
   };
   let drilled = [];
   const input = fakeInput(viewer);
+  // An aircraft layer that runs before ours and starts tracking the plane
+  // it was clicked on, which makes that plane passive mid-click.
+  let tracked = null;
+  input.input.onClick((event) => {
+    if (event.hit?.id === 'plane:9') tracked = 'plane:9';
+  });
   const ownCard = { sourceId: CCTV_OVERLAY_SOURCE_ID, entryId: 'cam-1' };
   const foreignCard = {
     sourceId: 'earthquake-card',
@@ -145,6 +151,7 @@ test('world clicks respect the painted top card and registered card backgrounds'
     picking.unregisterPickOwner('area-control');
     picking.unregisterPickOwner('test-trails');
     picking.unregisterPickOwner('test-planes');
+    picking.unregisterPickOwner('test-tracking');
     picking.unregisterCardBackground('area-fixture');
   });
   await lifecycle.methods.init(viewer);
@@ -225,6 +232,15 @@ test('world clicks respect the painted top card and registered card backgrounds'
   picking.unregisterPickOwner('test-planes');
   if (previousMatch) globalThis.matchMedia = previousMatch;
   else delete globalThis.matchMedia;
+  // The live card reads the owners that acted when the click resolved, so it
+  // yields to the aircraft even though tracking made it passive meanwhile.
+  picking.registerPickOwner('test-tracking', (id) => id === 'plane:9', {
+    expanded: true,
+    passive: (id) => id === tracked,
+  });
+  click({ set: 'flights:1', id: 'plane:9', surface: false }, [ownCard], []);
+  assert.equal(tracked, 'plane:9', 'the aircraft started tracking');
+  picking.unregisterPickOwner('test-tracking');
   picking.registerPickOwner('area-control', (id) => id === drone.id);
   click(drone, [ownCard], []);
   picking.unregisterPickOwner('area-control');

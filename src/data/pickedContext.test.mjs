@@ -11,7 +11,7 @@ globalThis.CustomEvent ||= class CustomEvent {
 globalThis.dispatchEvent ||= () => true;
 
 const { registerEntityContext } = await import('./contextStore.js');
-const { registerPickOwner, unregisterPickOwner, findPickOwner } = await import('./pickRegistry.js');
+const { registerPickOwner, unregisterPickOwner, findPickOwner, rememberClickPickActions } = await import('./pickRegistry.js');
 const { resolvePickedContext, pickedKindForLayer, cardKeepsClick } = await import('./pickedContext.js');
 
 function manager({ enabled = new Set(['flights', 'local-datacenters']), modules = {} } = {}) {
@@ -146,4 +146,24 @@ test('a card keeps a click from items whose layer does not act on that hit', (t)
     "a step is directions' own",
   );
   assert.equal(cardKeepsClick({ topHit: null, hit: null }, true), false);
+});
+
+// An aircraft layer can start tracking the plane it was clicked on before
+// Context runs, making that plane passive. Context reads the owners that
+// acted when the click resolved, so the card over it does not keep the click.
+test('a card keeps a click by the owners that acted when it resolved', (t) => {
+  let tracked = null;
+  registerPickOwner('test-planes', (id) => id === 'plane:9', {
+    expanded: true,
+    passive: (id) => id === tracked,
+  });
+  t.after(() => unregisterPickOwner('test-planes'));
+  const plane = { set: 'planes:1', id: 'plane:9' };
+  const click = { topHit: plane, hit: plane };
+  rememberClickPickActions(click, plane);
+  tracked = 'plane:9';
+  assert.equal(cardKeepsClick(click, true), false, 'the aircraft acted');
+  // A click that resolves now sees the tracked plane as passive.
+  const later = { topHit: { ...plane }, hit: { ...plane } };
+  assert.equal(cardKeepsClick(later, true), true);
 });

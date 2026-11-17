@@ -2067,9 +2067,13 @@ another layer's card or label painted over it, so a quake card or label beside
 one acts alone, with a mouse or a coarse pointer. Fire and CCTV cards in turn
 yield to a touch contact whose layer acts on it. The aircraft a layer already
 tracks and Street Level's position marker are passive picks, since a click on
-either does nothing. Fire, CCTV and vessel cards, like the quake's, act over a
-passive owner's pick (a flight trail, the directions route); with no card
-there, that pick still leaves a selection alone. Context
+either does nothing. The pick registry records which owners act on a click's
+exact hit and touch contact when the click first reads them
+(`rememberClickPickActions`), and every layer asks that record for the rest of
+the click, so an aircraft that starts tracking during the click does not leave
+it to a later card handler as well. Fire, CCTV and vessel cards, like the
+quake's, act over a passive owner's pick (a flight trail, the directions
+route); with no card there, that pick still leaves a selection alone. Context
 (`src/ui/entityContextBridge.js`) names what a click identifies, except under a
 world-overlay card or label when the item's owner does not act on that hit
 (`cardKeepsClick` in `src/data/pickedContext.js`): a passive route, or a fire

@@ -437,7 +437,7 @@ export function createLifecycle({
             typeof pickedId === 'string' &&
             Boolean(isActedOnByOtherLayer) &&
             isOwnedByOtherLayer?.('cctv', pickedId) &&
-            !isActedOnByOtherLayer('cctv', pickedId);
+            !isActedOnByOtherLayer('cctv', pickedId, { click: event });
           if (pickedId !== null && !cardBackground && !passiveUnderCard) return;
           // A coarse tap's touch contact (not the exact pick) that its layer
           // acts on (an aircraft, a vessel, a radio station) is that layer's
@@ -447,7 +447,10 @@ export function createLifecycle({
             cardId &&
             contactId &&
             contactId !== pickedId &&
-            isActedOnByOtherLayer?.('cctv', contactId, { expanded: true })
+            isActedOnByOtherLayer?.('cctv', contactId, {
+              expanded: true,
+              click: event,
+            })
           )
             return;
           if (cardHit && cardHit.sourceId !== CCTV_OVERLAY_SOURCE_ID) return;
