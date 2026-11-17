@@ -439,6 +439,8 @@
   "src/layers/earthquakes/ownership.test.mjs",
   "src/layers/earthquakes/selection.test.mjs",
   "src/layers/submarineCables/interaction.test.mjs",
+  "src/data/pickOwnerExpanded.test.mjs",
+  "src/ui/entityContextBridge.test.mjs",
   "src/layers/launches/clickYield.test.mjs",
   "src/app/layers/earthquakeRipples.js",
   "src/app/layers/earthquakeRipples.test.mjs",

@@ -4,6 +4,7 @@ import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import * as picking from '../../data/pickRegistry.js';
 // Registers the shared `gev-trail:` owner as passive, as the app does.
 import '../../data/trailRenderer.js';
+import { createSelection as createFireSelection } from '../firms/selection.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
 import { createDroneAirspaceLayer } from '../droneAirspace/index.js';
 import {
@@ -36,7 +37,10 @@ const quake = (id, extra = {}) => ({
 });
 
 /** A layer whose globe clicks, card hits and context store the test drives. */
-function harness(rows, { context = null, ripples = null } = {}) {
+function harness(
+  rows,
+  { context = null, ripples = null, input: inputFactory = null } = {},
+) {
   let snapshot = rows;
   const handlers = [];
   const opened = [];
@@ -50,41 +54,44 @@ function harness(rows, { context = null, ripples = null } = {}) {
   let foreignTop = null;
   const viewer = {};
   const { draw } = bindFakeDraw(viewer);
+  const overlayHost = {
+    setEntries(sourceId, entries) {
+      if (sourceId === EARTHQUAKE_CARD_SOURCE_ID) cards.push(entries);
+      if (sourceId === EARTHQUAKE_OVERLAY_SOURCE_ID) labels.push(entries);
+    },
+    setVisible: (sourceId, show) => visible.set(sourceId, show),
+    clearSource() {},
+    // As the real host does, only an interactive entry painted now is hit.
+    hitTest(_x, _y, { sourceId } = {}) {
+      // Unfiltered, as the host answers: another layer's entry on top
+      // first, else this layer's own.
+      if (!sourceId)
+        return (
+          foreignTop ??
+          this.hitTest(_x, _y, { sourceId: EARTHQUAKE_CARD_SOURCE_ID }) ??
+          this.hitTest(_x, _y, { sourceId: EARTHQUAKE_OVERLAY_SOURCE_ID })
+        );
+      const hit = overlayHits.get(sourceId);
+      const painted =
+        sourceId === EARTHQUAKE_CARD_SOURCE_ID ? cards.at(-1) : labels.at(-1);
+      const entry = painted?.find((e) => e.id === hit?.entryId);
+      return hit && entry?.interactive === true ? hit : null;
+    },
+  };
   const layer = createEarthquakesLayer({
     source: { getSnapshot: async () => snapshot },
-    overlayHost: {
-      setEntries(sourceId, entries) {
-        if (sourceId === EARTHQUAKE_CARD_SOURCE_ID) cards.push(entries);
-        if (sourceId === EARTHQUAKE_OVERLAY_SOURCE_ID) labels.push(entries);
-      },
-      setVisible: (sourceId, show) => visible.set(sourceId, show),
-      clearSource() {},
-      // As the real host does, only an interactive entry painted now is hit.
-      hitTest(_x, _y, { sourceId } = {}) {
-        // Unfiltered, as the host answers: another layer's entry on top
-        // first, else this layer's own.
-        if (!sourceId)
-          return (
-            foreignTop ??
-            this.hitTest(_x, _y, { sourceId: EARTHQUAKE_CARD_SOURCE_ID }) ??
-            this.hitTest(_x, _y, { sourceId: EARTHQUAKE_OVERLAY_SOURCE_ID })
-          );
-        const hit = overlayHits.get(sourceId);
-        const painted =
-          sourceId === EARTHQUAKE_CARD_SOURCE_ID ? cards.at(-1) : labels.at(-1);
-        const entry = painted?.find((e) => e.id === hit?.entryId);
-        return hit && entry?.interactive === true ? hit : null;
-      },
-    },
-    input: () => ({
-      onClick(callback) {
-        const handler = { callback, destroyed: false };
-        handlers.push(handler);
-        return () => {
-          handler.destroyed = true;
-        };
-      },
-    }),
+    overlayHost,
+    input:
+      inputFactory ??
+      (() => ({
+        onClick(callback) {
+          const handler = { callback, destroyed: false };
+          handlers.push(handler);
+          return () => {
+            handler.destroyed = true;
+          };
+        },
+      })),
     picking,
     context,
     ripples,
@@ -108,6 +115,8 @@ function harness(rows, { context = null, ripples = null } = {}) {
     visible,
     focused,
     handlers,
+    overlayHost,
+    overlayHits,
     discs,
     setRows(next) {
       snapshot = next;
@@ -657,7 +666,9 @@ test('a touch-expanded sibling hit takes precedence over a quake label', async (
     h.layer.enable(h.viewer);
     await h.layer.update(h.viewer);
     h.clickDisc('ak1');
-    picking.registerPickOwner('test-plane', (id) => id === 'plane-9');
+    picking.registerPickOwner('test-plane', (id) => id === 'plane-9', {
+      expanded: true,
+    });
     h.clickOverlayWith(EARTHQUAKE_OVERLAY_SOURCE_ID, 'ak2', null, {
       set: 'flights:1',
       id: 'plane-9',
@@ -929,5 +940,80 @@ test('quake card and label act over a flight trail and a directions route', asyn
     picking.unregisterPickOwner('test-directions');
     picking.unregisterPickOwner('test-plane');
     h.layer.destroy();
+  }
+});
+
+test('coarse FIRMS near-misses leave quake overlays actionable; exact fire hits act once', async (t) => {
+  const previous = globalThis.matchMedia;
+  globalThis.matchMedia = () => ({ matches: true });
+  t.after(() => {
+    if (previous) globalThis.matchMedia = previous;
+    else delete globalThis.matchMedia;
+  });
+  let sceneHit = null;
+  const fireHit = { set: 'firms:test', id: 'fire:test' };
+  let input;
+  const h = harness([quake('ak1')], {
+    input(viewer) {
+      viewer.scene = {
+        pick: () => (sceneHit ? { id: sceneHit } : null),
+        drillPick: () => [{ id: fireHit }],
+      };
+      input ??= fakeInput(viewer);
+      return input.input;
+    },
+  });
+  const fire = { lat: 60, lon: -153, frp: 5, acqMs: 1, sensor: 'test' };
+  const fireFocus = [];
+  const state = {
+    _viewer: h.viewer,
+    _icons: { id: fireHit.set },
+    _pickIndexById: new Map([[fireHit.id, fire]]),
+    _fireByCardId: new Map(),
+    _contextIds: new Set(),
+  };
+  const selection = createFireSelection({
+    layerState: state,
+    services: {
+      picking,
+      context: {},
+      focus: { requestWorldFocus: (x) => fireFocus.push(x) },
+    },
+    components: {
+      cards: { rebuildAmbientLabels() {} },
+      model: { firePosition: () => ({ x: 1, y: 2, z: 3 }) },
+    },
+    config: { id: 'firms', name: 'FIRMS', overlayHost: h.overlayHost },
+    feed: {},
+  });
+  try {
+    h.layer.enable(h.viewer);
+    await h.layer.update(h.viewer);
+    selection.installClickHandler();
+    picking.registerPickOwner('firms', (id) => state._pickIndexById.has(id));
+    h.overlayHits.set(EARTHQUAKE_OVERLAY_SOURCE_ID, {
+      sourceId: EARTHQUAKE_OVERLAY_SOURCE_ID,
+      entryId: 'ak1',
+    });
+    input.click();
+    assert.equal(h.focused.length, 1, 'label acts on the exact miss');
+    assert.equal(fireFocus.length, 0, 'nearby fire does not act');
+    h.overlayHits.clear();
+    h.overlayHits.set(EARTHQUAKE_CARD_SOURCE_ID, {
+      sourceId: EARTHQUAKE_CARD_SOURCE_ID,
+      entryId: 'earthquake-card:ak1',
+    });
+    input.click();
+    assert.equal(h.opened.length, 1, 'selected card opens once');
+    assert.equal(fireFocus.length, 0);
+    sceneHit = fireHit;
+    input.click();
+    assert.equal(fireFocus.length, 1, 'exact fire hit acts');
+    assert.equal(h.opened.length, 1, 'card yields to the exact fire');
+  } finally {
+    selection.removeClickHandler();
+    picking.unregisterPickOwner('firms');
+    h.layer.destroy();
+    input?.destroy();
   }
 });

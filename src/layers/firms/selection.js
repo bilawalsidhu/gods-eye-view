@@ -13,7 +13,8 @@ export function createSelection({
   config,
   feed,
 }) {
-  const { resolvePickId, isOwnedByOtherLayer } = services.picking;
+  const { resolvePickId, isOwnedByOtherLayer, isActedOnByOtherLayer } =
+    services.picking;
   const { requestWorldFocus } = services.focus;
   const {
     selectEntityContext,
@@ -42,14 +43,34 @@ export function createSelection({
       }
       // A pick that belongs to a sibling layer (e.g. an aircraft) is not
       // "empty space" — leave the selection alone and let that layer handle it.
+      // A passive owner's pick (a flight trail, a directions route) acts for
+      // nobody, so a card of ours painted over it still takes the click.
+      let passivePick = false;
       if (picked) {
         const pickedId = resolvePickId(picked);
-        if (pickedId && isOwnedByOtherLayer(id, pickedId)) return;
+        if (pickedId && isOwnedByOtherLayer(id, pickedId)) {
+          passivePick =
+            Boolean(isActedOnByOtherLayer) &&
+            !isActedOnByOtherLayer(id, pickedId);
+          if (!passivePick) return;
+        }
       }
       const cardHit = overlayHost.hitTest?.(
         event.screenPosition?.x,
         event.screenPosition?.y,
       );
+      if (passivePick && cardHit?.sourceId !== FIRMS_OVERLAY_SOURCE_ID) return;
+      // A coarse tap's touch contact (not the exact pick) that its layer acts
+      // on (an aircraft, a vessel, a radio station) is that layer's click,
+      // even under a card of ours.
+      const contactId = resolvePickId(event.hit ?? null);
+      if (
+        cardHit &&
+        contactId &&
+        contactId !== resolvePickId(picked ?? null) &&
+        isActedOnByOtherLayer?.(id, contactId, { expanded: true })
+      )
+        return;
       if (cardHit) {
         if (cardHit.sourceId !== FIRMS_OVERLAY_SOURCE_ID) return;
         const carded = layerState._fireByCardId.get(cardHit.entryId);

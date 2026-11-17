@@ -10,7 +10,8 @@ export function createSelection({
   options,
 }) {
   const { state } = vesselState;
-  const { isOwnedByOtherLayer } = services.picking;
+  const { isOwnedByOtherLayer, isActedOnByOtherLayer, resolvePickId } =
+    services.picking;
   const { requestWorldFocus } = services.worldFocus;
   const {
     selectEntityContext,
@@ -47,19 +48,46 @@ export function createSelection({
       // `gev-trail:*` pick is also a no-op. Every other non-vessel pick — sibling
       // unowned scene picks dismiss the current vessel inspection.
       if (ownRecordPick && (!pickedId || !record)) return;
-      if (pickedId && !record && String(pickedId).startsWith('gev-trail:'))
-        return;
+      /** Whether this layer's own card is painted under the click. */
+      const ownCardUnder = () =>
+        vesselState._vesselOverlayHost.hitTest?.(
+          event.screenPosition?.x,
+          event.screenPosition?.y,
+        )?.sourceId === VESSEL_OVERLAY_SOURCE_ID;
+      // A passive owner's pick (a trail, a directions route) acts for nobody:
+      // a card of ours painted over it keeps the click; otherwise a no-op.
+      const passivePick =
+        Boolean(pickedId) &&
+        !record &&
+        (String(pickedId).startsWith('gev-trail:') ||
+          (Boolean(isActedOnByOtherLayer) &&
+            isOwnedByOtherLayer('ais-live-vessels', pickedId) &&
+            !isActedOnByOtherLayer('ais-live-vessels', pickedId)));
+      if (passivePick && !ownCardUnder()) return;
 
       // A sibling layer already owns this click. Preserve the current vessel
       // selection and do not compete with its camera command.
       const siblingOwned =
-        pickedId && isOwnedByOtherLayer('ais-live-vessels', pickedId);
+        !passivePick &&
+        pickedId &&
+        isOwnedByOtherLayer('ais-live-vessels', pickedId);
       // Cyclone geometry is ambient context behind painted cards. Its handler
       // yields to the same foreground AIS hit. Keep moving-contact precedence
       // unchanged: those handlers may issue their own camera command.
       const cycloneBackground =
         siblingOwned && !isOwnedByOtherLayer('weather-cyclones', pickedId);
-      if (siblingOwned && !cycloneBackground) return;
+      if (siblingOwned && !cycloneBackground) {
+        // A coarse tap's nearby contact (not the exact pick) whose layer acts
+        // only on exact hits (a fire, a camera) does not take a tap on this
+        // layer's own card: that card keeps it.
+        const nearMissOfExactOnly =
+          isActedOnByOtherLayer &&
+          resolvePickId?.(event.topHit ?? null) !== pickedId &&
+          !isActedOnByOtherLayer('ais-live-vessels', pickedId, {
+            expanded: true,
+          });
+        if (!nearMissOfExactOnly || !ownCardUnder()) return;
+      }
 
       // Cards are painted on a pointer-events:none canvas, so the scene pick is
       // usually terrain behind the card. Resolve against the host's current

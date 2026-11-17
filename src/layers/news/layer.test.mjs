@@ -5,11 +5,7 @@ import { fromDegrees } from '../../geo/ellipsoid.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
 import { NEWS_KEY_PROVIDERS, createNewsLayer } from './index.js';
-import {
-  findPickOwner,
-  registerPickOwner,
-  unregisterPickOwner,
-} from '../../data/pickRegistry.js';
+import { findPickOwner } from '../../data/pickRegistry.js';
 // Registers the shared `gev-trail:` no-op owner, as the app does.
 import '../../data/trailRenderer.js';
 import { getSelectedEntityContext } from '../../data/contextStore.js';

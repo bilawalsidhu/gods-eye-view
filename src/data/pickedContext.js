@@ -1,6 +1,10 @@
 import { getContextStore, isContextRecordActive } from './contextStore.js';
 import { readEntityRecord } from './entityRecords.js';
-import { findPickOwner, resolvePickId } from './pickRegistry.js';
+import {
+  findPickOwner,
+  isActedOnByOtherLayer,
+  resolvePickId,
+} from './pickRegistry.js';
 
 /**
  * Resolve a pick (the contract's `Hit`, as `pickAt` in
@@ -122,4 +126,26 @@ export function resolvePickedContext(picked, { dataManager = null } = {}) {
     lon: finite(found?.longitude),
     altitudeM: finite(found?.altitudeM),
   };
+}
+
+/**
+ * Whether a world-overlay card or label under a click keeps it from the item
+ * the click names, because that item's owner does not act on this hit: a
+ * passive owner (a directions route) acts on none, and an owner that acts
+ * only on exact hits (a fire, a camera) does not act on a coarse pointer's
+ * nearby contact (`hit` is not the exact `topHit`). The card's layer takes
+ * such a click (quake, fire, camera, vessel, news and wildlife cards act over
+ * it; an inert card, such as a selected drone-zone card, does nothing), so
+ * Context leaves the item; owners that act on it (an aircraft, a vessel, a
+ * directions step) still name it.
+ * @param {{hit?: object|null, topHit?: object|null}} click
+ * @param {boolean} underCard Whether a world-overlay entry is under it.
+ * @returns {boolean}
+ */
+export function cardKeepsClick(click, underCard) {
+  if (!underCard || !click?.hit) return false;
+  const pickId = resolvePickId(click.hit);
+  if (!pickId) return false;
+  const expanded = pickId !== resolvePickId(click.topHit ?? null);
+  return !isActedOnByOtherLayer('', pickId, { expanded });
 }

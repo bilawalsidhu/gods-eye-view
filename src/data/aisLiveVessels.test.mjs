@@ -1012,7 +1012,7 @@ function makeCesiumEvent() {
   };
 }
 
-function installWireHarness(picked, stateOverrides = {}) {
+function installWireHarness(picked, stateOverrides = {}, sceneExtras = {}) {
   const hadWindow = Object.hasOwn(globalThis, 'window');
   const hadDocument = Object.hasOwn(globalThis, 'document');
   const priorWindow = globalThis.window;
@@ -1038,7 +1038,7 @@ function installWireHarness(picked, stateOverrides = {}) {
     },
   };
   const viewer = {
-    scene: { pick: () => picked },
+    scene: { pick: () => picked, ...sceneExtras },
   };
   const input = fakeInput(viewer);
   // The camera port other layers follow through, with no pose to read; its
@@ -1990,6 +1990,75 @@ test('vessel interaction wire: a sibling-owned pick wins without selection mutat
     _setVesselOverlayHostForTest(null);
     harness.cleanup();
     unregisterPickOwner('flights');
+  }
+});
+
+// A trail acts for nobody: the vessel's card painted over it still selects,
+// and a bare trail pick stays a no-op that keeps the selection.
+test('vessel interaction wire: a card over a trail selects; a bare trail is a no-op', () => {
+  for (const carded of [true, false]) {
+    const harness = installWireHarness(
+      { id: 'gev-trail:fl-a1b2c3:head' },
+      { selectedRecord: null },
+    );
+    const requests = [];
+    harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
+      requests.push(event.detail),
+    );
+    _setVesselOverlayHostForTest(
+      hostWithCardHit(carded ? `vessel:${harness.record.mmsi}` : null),
+    );
+    try {
+      harness.handler.click({ position: { x: 10, y: 20 } });
+      assert.equal(requests.length, carded ? 1 : 0, `card: ${carded}`);
+      assert.equal(
+        aisLiveVesselsLayer.getSelectedInfo()?.mmsi ?? null,
+        carded ? harness.record.mmsi : null,
+      );
+    } finally {
+      _setVesselOverlayHostForTest(null);
+      harness.cleanup();
+    }
+  }
+});
+
+// A coarse tap on the vessel's card finds a fire nearby through the shared
+// touch contact. The fire layer acts only on exact hits, so the card keeps the
+// tap; an exact fire pick under the card still belongs to the fire.
+test('vessel interaction wire: a coarse near miss of an exact-only item keeps the card tap', (t) => {
+  const previous = globalThis.matchMedia;
+  globalThis.matchMedia = () => ({ matches: true });
+  t.after(() => {
+    if (previous) globalThis.matchMedia = previous;
+    else delete globalThis.matchMedia;
+  });
+  const fire = 'fire:near-miss';
+  registerPickOwner('test-exact-fires', (pickedId) => pickedId === fire);
+  t.after(() => unregisterPickOwner('test-exact-fires'));
+  for (const exact of [false, true]) {
+    const harness = installWireHarness(
+      exact ? { id: fire } : null,
+      { selectedRecord: null },
+      { drillPick: () => [{ id: fire }] },
+    );
+    const requests = [];
+    harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
+      requests.push(event.detail),
+    );
+    _setVesselOverlayHostForTest(
+      hostWithCardHit(`vessel:${harness.record.mmsi}`),
+    );
+    try {
+      harness.handler.click({ position: { x: 10, y: 20 } });
+      assert.equal(requests.length, exact ? 0 : 1, `exact fire: ${exact}`);
+      assert.equal(
+        aisLiveVesselsLayer.getSelectedInfo()?.mmsi ?? null,
+        exact ? null : harness.record.mmsi,
+      );
+    } finally {
+      _setVesselOverlayHostForTest(null);
+      harness.cleanup();
+    }
   }
 });
 

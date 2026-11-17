@@ -84,7 +84,9 @@ test('world clicks respect the painted top card and registered card backgrounds'
   viewer.scene = {
     canvas: {},
     pick: () => (picked ? { id: picked } : undefined),
+    drillPick: () => drilled.map((id) => ({ id })),
   };
+  let drilled = [];
   const input = fakeInput(viewer);
   const ownCard = { sourceId: CCTV_OVERLAY_SOURCE_ID, entryId: 'cam-1' };
   const foreignCard = {
@@ -141,6 +143,8 @@ test('world clicks respect the painted top card and registered card backgrounds'
     lifecycle.detachViewListeners();
     input.destroy();
     picking.unregisterPickOwner('area-control');
+    picking.unregisterPickOwner('test-trails');
+    picking.unregisterPickOwner('test-planes');
     picking.unregisterCardBackground('area-fixture');
   });
   await lifecycle.methods.init(viewer);
@@ -190,6 +194,37 @@ test('world clicks respect the painted top card and registered card backgrounds'
     { ...drone, id: 'unregistered-local-entity' },
   ])
     click(hit, [ownCard], []);
+  // A passive owner's pick (a trail, a route) acts for nobody: the live top
+  // card keeps the click, and with no card the pick is not empty map.
+  const trail = { set: 'trails:1', id: 'gev-trail:fl-1:head', surface: false };
+  picking.registerPickOwner('test-trails', (id) => id === trail.id, {
+    passive: true,
+  });
+  click(trail, [ownCard], ['cam-1']);
+  click(trail, [], []);
+  click(trail, [foreignCard, ownCard], []);
+  picking.unregisterPickOwner('test-trails');
+  // A coarse tap whose touch contact is an aircraft (a layer that acts on
+  // nearby contacts) is the aircraft's, even under a live CCTV card.
+  const previousMatch = globalThis.matchMedia;
+  globalThis.matchMedia = () => ({ matches: true });
+  picking.registerPickOwner('test-planes', (id) => id === 'plane:1', {
+    expanded: true,
+  });
+  drilled = ['plane:1'];
+  click(null, [ownCard], []);
+  // With no card, the bare tap near the aircraft still deselects.
+  click(null, [], ['clear']);
+  // A contact whose layer acts only on exact hits leaves the card its tap.
+  picking.registerPickOwner('test-exact', (id) => id === 'exact:1');
+  drilled = ['exact:1'];
+  click(null, [ownCard], ['cam-1']);
+  picking.unregisterPickOwner('test-exact');
+  drilled = [];
+  click(null, [ownCard], ['cam-1']);
+  picking.unregisterPickOwner('test-planes');
+  if (previousMatch) globalThis.matchMedia = previousMatch;
+  else delete globalThis.matchMedia;
   picking.registerPickOwner('area-control', (id) => id === drone.id);
   click(drone, [ownCard], []);
   picking.unregisterPickOwner('area-control');

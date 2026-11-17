@@ -12,7 +12,7 @@ globalThis.dispatchEvent ||= () => true;
 
 const { registerEntityContext } = await import('./contextStore.js');
 const { registerPickOwner, unregisterPickOwner, findPickOwner } = await import('./pickRegistry.js');
-const { resolvePickedContext, pickedKindForLayer } = await import('./pickedContext.js');
+const { resolvePickedContext, pickedKindForLayer, cardKeepsClick } = await import('./pickedContext.js');
 
 function manager({ enabled = new Set(['flights', 'local-datacenters']), modules = {} } = {}) {
   return {
@@ -96,4 +96,54 @@ test('disabled layers, trails and empty picks never resolve', () => {
   assert.equal(resolvePickedContext({ set: '', id: '', surface: true }), null);
   assert.equal(resolvePickedContext(hit('unknown'), { dataManager: manager() }), null);
   assert.equal(pickedKindForLayer('ais-live-vessels'), 'vessel');
+});
+
+test('a card keeps a click from items whose layer does not act on that hit', (t) => {
+  registerPickOwner('test-fires', (id) => id === 'fire:1');
+  registerPickOwner('test-planes', (id) => id === 'plane:1', {
+    expanded: true,
+  });
+  registerPickOwner('test-route', (id) => id.startsWith('route:'), {
+    passive: (id) => !id.startsWith('route:step:'),
+  });
+  t.after(() => {
+    unregisterPickOwner('test-fires');
+    unregisterPickOwner('test-planes');
+    unregisterPickOwner('test-route');
+  });
+  const fire = { set: 'fires:1', id: 'fire:1' };
+  const plane = { set: 'planes:1', id: 'plane:1' };
+  const exact = (hit) => ({ topHit: { ...hit }, hit });
+  // A coarse tap: nothing exact, the contact found nearby.
+  const near = (hit) => ({ topHit: null, hit });
+  assert.equal(
+    cardKeepsClick(near(fire), true),
+    true,
+    'fires act only on exact hits',
+  );
+  assert.equal(cardKeepsClick(near(plane), true), false, 'aircraft act nearby');
+  assert.equal(
+    cardKeepsClick(near(fire), false),
+    false,
+    'open map: Context names it',
+  );
+  assert.equal(
+    cardKeepsClick(exact(fire), true),
+    false,
+    "an exact fire is the fire's",
+  );
+  const line = { set: 'route:1', id: 'route:line' };
+  const step = { set: 'route:1', id: 'route:step:2' };
+  // Every card layer acts over a passive route, so the card keeps the click.
+  assert.equal(
+    cardKeepsClick(exact(line), true),
+    true,
+    'a route acts for nobody',
+  );
+  assert.equal(
+    cardKeepsClick(exact(step), true),
+    false,
+    "a step is directions' own",
+  );
+  assert.equal(cardKeepsClick({ topHit: null, hit: null }, true), false);
 });

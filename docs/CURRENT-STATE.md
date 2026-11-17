@@ -2055,6 +2055,25 @@ painted with a gradient fading to the outer circle and wavy contour lines
 clicks, picking, context, focus, the opener, the painter and the translator by
 injection (`src/app/layers/earthquakes.js`); without input and picking it draws
 and takes no clicks, and its labels stay non-interactive.
+On a coarse pointer, a nearby FIRMS or CCTV icon that requires an exact hit
+does not swallow a quake card or label tap, or a tap on a vessel's own card.
+Owners that pick nearby contacts register as `expanded` pick owners: flights,
+military aircraft, vessels, radio and Street Level, and a quake card or label
+yields to one the shared touch contact (14 px) reaches. Flights, military and
+vessels act on that contact, and so do radio and Street Level, which also pick
+through their own windows (17 and 9 px). A station or Street Level item found
+only through that window, not as the exact hit or the touch contact, yields to
+another layer's card or label painted over it, so a quake card or label beside
+one acts alone, with a mouse or a coarse pointer. Fire and CCTV cards in turn
+yield to a touch contact whose layer acts on it. The aircraft a layer already
+tracks and Street Level's position marker are passive picks, since a click on
+either does nothing. Fire, CCTV and vessel cards, like the quake's, act over a
+passive owner's pick (a flight trail, the directions route); with no card
+there, that pick still leaves a selection alone. Context
+(`src/ui/entityContextBridge.js`) names what a click identifies, except under a
+world-overlay card or label when the item's owner does not act on that hit
+(`cardKeepsClick` in `src/data/pickedContext.js`): a passive route, or a fire
+or camera reached only as a nearby contact. The card takes that click.
 Quake discs are deliberately not registered in the pick-ownership registry,
 like drone airspace and fire perimeters: sibling layers read a disc as empty
 space, so their cards, near-miss taps and deselection work over a quake as
@@ -2082,10 +2101,10 @@ card of these layers or clear their selection; a marker of theirs under that
 card is still theirs to select. Flight trails and the directions route line and
 markers are passive pick owners (`registerPickOwner(…, { passive })`): still
 not empty space (`isOwnedByOtherLayer`), but `isActedOnByOtherLayer` leaves
-them out, so the quake card and magnitude labels act over them. Directions
-selects only its maneuver steps, though any other click still clears a selected
-step. Fire, vessel and CCTV cards over a trail or the route stay as they were
-(no action). Submarine cables and rocket launches, whose own overlays are not
+them out, so the quake card and magnitude labels act over them, as do fire,
+vessel and CCTV cards. Directions selects only its maneuver steps, though any
+other click still clears a selected step. Submarine cables and rocket
+launches, whose own overlays are not
 interactive, stand aside when any overlay entry is under the click, so a card
 or label over a cable or a launch marker acts once. Layers whose shapes stand
 aside like this (drone airspace, fire perimeters, quake discs, cables,

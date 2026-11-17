@@ -159,6 +159,40 @@ test('ownership: passive owners still own their picks but act on none of them', 
     assert.equal(isActedOnByOtherLayer('cards', 'route:step:3'), true);
     assert.equal(isActedOnByOtherLayer('cards', 'plane:1'), true);
     assert.equal(
+      isActedOnByOtherLayer('cards', 'plane:1', { expanded: true }),
+      false,
+    );
+    registerPickOwner('test-plane', (id) => id === 'plane:1', {
+      expanded: true,
+    });
+    assert.equal(
+      isActedOnByOtherLayer('cards', 'plane:1', { expanded: true }),
+      true,
+    );
+    registerPickOwner('test-plane', (id) => id === 'plane:1', {
+      expanded: true,
+      passive: true,
+    });
+    assert.equal(
+      isActedOnByOtherLayer('cards', 'plane:1', { expanded: true }),
+      false,
+    );
+    registerPickOwner('test-plane', (id) => id === 'plane:1');
+    assert.equal(
+      isActedOnByOtherLayer('cards', 'plane:1', { expanded: true }),
+      false,
+    );
+    registerPickOwner('test-plane', (id) => id === 'plane:1', {
+      expanded: true,
+    });
+    unregisterPickOwner('test-plane');
+    registerPickOwner('test-plane', (id) => id === 'plane:1');
+    assert.equal(
+      isActedOnByOtherLayer('cards', 'plane:1', { expanded: true }),
+      false,
+    );
+
+    assert.equal(
       isActedOnByOtherLayer('test-plane', 'plane:1'),
       false,
       'never the asker',

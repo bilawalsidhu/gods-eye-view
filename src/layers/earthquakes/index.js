@@ -352,7 +352,11 @@ export function createEarthquakesLayer({
       const pickId = picking.resolvePickId(hit);
       const actedOn =
         picking.isActedOnByOtherLayer ?? picking.isOwnedByOtherLayer;
-      if (pickId && actedOn(EARTHQUAKES_LAYER_ID, pickId)) return;
+      // Exact-only handlers cannot act on a nearby touch hit. Compare ids,
+      // since the dispatcher may expose distinct objects for the same pick.
+      const expanded =
+        'topHit' in click && picking.resolvePickId(click.topHit) !== pickId;
+      if (pickId && actedOn(EARTHQUAKES_LAYER_ID, pickId, { expanded })) return;
       const cardHit = overlayHost.hitTest?.(at?.x, at?.y, {
         sourceId: EARTHQUAKE_CARD_SOURCE_ID,
       });

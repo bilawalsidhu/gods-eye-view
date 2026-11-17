@@ -134,6 +134,14 @@ export function createLifecycle({
       registerPickOwner(
         'flights',
         (pickedId) => flightState._icons?.has(pickedId) === true,
+        {
+          expanded: true,
+          // A click on the aircraft already tracked is ignored: for that one
+          // plane the layer acts on nothing, so a card over it keeps the tap.
+          passive: (pickedId) =>
+            Boolean(flightState._trackedIcao) &&
+            pickedId === flightState._trackedIcao,
+        },
       );
       const frame = findFrame(viewer);
       if (!flightState._preRenderRemove && frame) {

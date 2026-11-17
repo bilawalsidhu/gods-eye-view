@@ -1,4 +1,4 @@
-import { resolvePickedContext } from '../data/pickedContext.js';
+import { cardKeepsClick, resolvePickedContext } from '../data/pickedContext.js';
 import { followedOf, onFollowChanged } from '../data/followed.js';
 import { fromDegreesInto } from '../geo/ellipsoid.js';
 import { inputFor } from '../input/dispatcher.js';
@@ -315,6 +315,12 @@ export function installEntityContext({
       dataManager: getDataManager(),
     });
     if (identity) {
+      // A card or label painted over an item its layer does not act on here
+      // (a quake card beside a fire, or over a route) is the card's click.
+      const underCard = Boolean(
+        overlayHit?.(event.screenPosition?.x, event.screenPosition?.y),
+      );
+      if (cardKeepsClick(event, underCard)) return;
       // These layers start following on their own click; following again
       // from here would fight them (the flights layer reads a second track
       // of the same plane as a click on empty map and lets go).

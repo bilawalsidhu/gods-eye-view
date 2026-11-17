@@ -33,6 +33,8 @@ const _owners = new Map();
  * @type {Map<string, true | ((pickedId: string) => boolean)>}
  */
 const _passive = new Map();
+/** Owners whose click handlers also select nearby contacts. */
+const _expanded = new Set();
 /**
  * Layers whose shapes are background to any card painted over them: their
  * click handlers stand aside under a card, so the card's layer may act there.
@@ -60,14 +62,22 @@ export function resolvePickId(hit) {
  * @param {string} layerId - Owning layer id (e.g. 'flights').
  * @param {(pickedId: string) => boolean} predicate - Returns true when the
  *   picked primitive/entity id belongs to this layer.
- * @param {{passive?: boolean | ((pickedId: string) => boolean)}} [options]
+ * @param {{passive?: boolean | ((pickedId: string) => boolean), expanded?: boolean}} [options]
  *   `passive`: the layer never acts on a click on these picks (all of them,
  *   or those the predicate names). See {@link isActedOnByOtherLayer}.
+ *   `expanded`: preserve precedence for handlers that select nearby contacts,
+ *   through the shared contact hit or their own pick window.
  * @returns {void}
  */
-export function registerPickOwner(layerId, predicate, { passive } = {}) {
+export function registerPickOwner(
+  layerId,
+  predicate,
+  { passive, expanded = false } = {},
+) {
   if (!layerId || typeof predicate !== 'function') return;
   _owners.set(layerId, predicate);
+  if (expanded) _expanded.add(layerId);
+  else _expanded.delete(layerId);
   if (passive === true || typeof passive === 'function')
     _passive.set(layerId, passive);
   else _passive.delete(layerId);
@@ -80,6 +90,7 @@ export function registerPickOwner(layerId, predicate, { passive } = {}) {
  */
 export function unregisterPickOwner(layerId) {
   _owners.delete(layerId);
+  _expanded.delete(layerId);
   _passive.delete(layerId);
 }
 
@@ -125,12 +136,18 @@ export function isOwnedByOtherLayer(layerId, pickedId) {
  * painted over a passive pick (a flight trail) is still the card's click.
  * @param {string} layerId - The asking layer's id (excluded from the scan).
  * @param {string} pickedId - Picked primitive/entity id.
+ * @param {{expanded?: boolean}} [options] A nearby rather than exact hit:
+ *   only owners whose handlers select nearby contacts take precedence.
  * @returns {boolean}
  */
-export function isActedOnByOtherLayer(layerId, pickedId) {
+export function isActedOnByOtherLayer(
+  layerId,
+  pickedId,
+  { expanded = false } = {},
+) {
   if (!pickedId) return false;
   for (const [ownerId, predicate] of _owners) {
-    if (ownerId === layerId) continue;
+    if (ownerId === layerId || (expanded && !_expanded.has(ownerId))) continue;
     try {
       if (!predicate(pickedId)) continue;
       const passive = _passive.get(ownerId);

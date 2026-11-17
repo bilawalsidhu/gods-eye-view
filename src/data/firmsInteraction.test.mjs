@@ -63,6 +63,7 @@ function harness({
   withDataSource = false,
   withGlobe = false,
   feed = null,
+  drilled = null,
 } = {}) {
   const hadWindow = Object.hasOwn(globalThis, 'window');
   const priorWindow = globalThis.window;
@@ -112,6 +113,7 @@ function harness({
   const viewer = {
     scene: {
       pick,
+      ...(drilled ? { drillPick: () => drilled } : {}),
       canvas: { clientWidth: 1280, clientHeight: 800 },
       camera: cameraPosition ? { positionWC: cameraPosition } : undefined,
       globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
@@ -161,6 +163,9 @@ function harness({
     click: () => input.click({ x: 400, y: 300 }),
     cover: (hit) => {
       topCard = hit;
+    },
+    setPicked: (next) => {
+      picked = next;
     },
     cleanup() {
       Cesium.SceneTransforms.worldToWindowCoordinates = priorProjection;
@@ -460,6 +465,116 @@ for (const [layerId, ownedId, picked] of SIBLING_PICKS) {
     }
   });
 }
+
+// A passive owner's pick (a directions route, a flight trail) acts for nobody:
+// a fire card over it still takes the click, and with no card the pick is
+// still not empty space, so the selection stays.
+test('a fire card acts over a passive pick; the bare pick leaves the selection', () => {
+  const fire = makeFire();
+  registerPickOwner('test-route', (pickedId) => pickedId === 'route:line', {
+    passive: true,
+  });
+  const carded = harness({
+    fires: [fire],
+    picked: { id: 'route:line' },
+    cardHit: `fire:${fireDetectionKey(fire)}`,
+  });
+  try {
+    carded.click();
+    assert.equal(carded.requests.length, 1, 'the card acts over the route');
+    assert.ok(carded.layer.getSelectedInfo());
+  } finally {
+    carded.cleanup();
+  }
+  const bare = harness({ fires: [fire], picked: { id: 'route:line' } });
+  try {
+    bare.click();
+    assert.equal(bare.requests.length, 0);
+    assert.equal(
+      bare.layer.getSelectedInfo(),
+      null,
+      'nothing to clear or pick',
+    );
+  } finally {
+    bare.cleanup();
+    unregisterPickOwner('test-route');
+  }
+});
+
+// A coarse tap on a fire card finds an aircraft nearby through the shared
+// touch contact. The flights layer acts on that contact, so the card yields:
+// one action, not two.
+test('a fire card yields to a touch contact its layer acts on', (t) => {
+  const previous = globalThis.matchMedia;
+  globalThis.matchMedia = () => ({ matches: true });
+  t.after(() => {
+    if (previous) globalThis.matchMedia = previous;
+    else delete globalThis.matchMedia;
+  });
+  const fire = makeFire();
+  registerPickOwner('test-planes', (pickedId) => pickedId === 'plane:1', {
+    expanded: true,
+  });
+  t.after(() => unregisterPickOwner('test-planes'));
+  const h = harness({
+    fires: [fire],
+    drilled: [{ id: 'plane:1' }],
+    cardHit: `fire:${fireDetectionKey(fire)}`,
+  });
+  try {
+    h.click();
+    assert.equal(h.requests.length, 0, 'the aircraft takes the tap');
+    assert.equal(h.layer.getSelectedInfo(), null);
+  } finally {
+    h.cleanup();
+  }
+});
+
+// A touch contact whose layer acts only on exact hits does not take the tap
+// from our card; with no card, a coarse tap near an aircraft still clears.
+test('a fire card keeps a tap whose contact does not act; bare taps still clear', (t) => {
+  const previous = globalThis.matchMedia;
+  globalThis.matchMedia = () => ({ matches: true });
+  t.after(() => {
+    if (previous) globalThis.matchMedia = previous;
+    else delete globalThis.matchMedia;
+  });
+  const fire = makeFire();
+  registerPickOwner('test-cameras', (pickedId) => pickedId === 'cam:1');
+  registerPickOwner('test-planes', (pickedId) => pickedId === 'plane:1', {
+    expanded: true,
+  });
+  t.after(() => {
+    unregisterPickOwner('test-cameras');
+    unregisterPickOwner('test-planes');
+  });
+  const carded = harness({
+    fires: [fire],
+    drilled: [{ id: 'cam:1' }],
+    cardHit: `fire:${fireDetectionKey(fire)}`,
+  });
+  try {
+    carded.click();
+    assert.equal(carded.requests.length, 1, 'the card acts');
+  } finally {
+    carded.cleanup();
+  }
+  const bare = harness({
+    fires: [fire],
+    picked: glowPick('firms-7'),
+    drilled: [{ id: 'plane:1' }],
+  });
+  try {
+    bare.click();
+    assert.ok(bare.layer.getSelectedInfo(), 'a fire is selected');
+    // Nothing exact now; the touch contact is an aircraft, with no card.
+    bare.setPicked(null);
+    bare.click();
+    assert.equal(bare.layer.getSelectedInfo(), null, 'the bare tap clears');
+  } finally {
+    bare.cleanup();
+  }
+});
 
 test('a stale card id resolves to nothing instead of an arbitrary fire', () => {
   const h = harness({

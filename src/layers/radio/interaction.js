@@ -48,9 +48,24 @@ export function createInteraction({
       RADIO_PICK_WINDOW_PX,
     )) {
       const stationId = stationFromPick(picked);
-      if (stationId) return stationId;
+      if (!stationId) continue;
+      // Found only through our wider window, not as the tap's touch contact:
+      // another layer's card or label painted here is that layer's click,
+      // since its handler never sees this window.
+      if (stationFromPick(event.hit) !== stationId && foreignCardAt(event))
+        return null;
+      return stationId;
     }
     return null;
+  }
+
+  /** Whether another layer's world-overlay card or label is under a click. */
+  function foreignCardAt(event) {
+    const top = services.overlays?.hitTestWorldOverlay?.(
+      event.screenPosition?.x,
+      event.screenPosition?.y,
+    );
+    return Boolean(top) && top.sourceId !== RADIO_OVERLAY_SOURCE_ID;
   }
 
   function radioPresentationAllowed() {
@@ -80,7 +95,9 @@ export function createInteraction({
 
   function installInteraction() {
     if (!layerState._viewer || layerState._clickSubscription) return;
-    registerPickOwner('radio', (id) => id.startsWith(RADIO_PREFIX));
+    registerPickOwner('radio', (id) => id.startsWith(RADIO_PREFIX), {
+      expanded: true,
+    });
     const viewer = layerState._viewer;
     layerState._clickSubscription = inputFor(viewer).onClick((event) => {
       if (!radioPresentationAllowed()) return;

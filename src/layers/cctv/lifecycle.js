@@ -28,6 +28,7 @@ export function createLifecycle({
     registerPickOwner,
     unregisterPickOwner,
     isOwnedByOtherLayer,
+    isActedOnByOtherLayer,
     isCardBackground,
   } = services.picking;
   const { onFocusTargetAppear } = services.focus;
@@ -429,7 +430,26 @@ export function createLifecycle({
             typeof pickedId === 'string' &&
             !isOwnedByOtherLayer?.('cctv', pickedId) &&
             Boolean(isCardBackground?.(hit));
-          if (pickedId !== null && !cardBackground) return;
+          // A passive owner's pick (a flight trail, a directions route) acts
+          // for nobody, so a live top CCTV card over it keeps the click.
+          const passiveUnderCard =
+            cardId &&
+            typeof pickedId === 'string' &&
+            Boolean(isActedOnByOtherLayer) &&
+            isOwnedByOtherLayer?.('cctv', pickedId) &&
+            !isActedOnByOtherLayer('cctv', pickedId);
+          if (pickedId !== null && !cardBackground && !passiveUnderCard) return;
+          // A coarse tap's touch contact (not the exact pick) that its layer
+          // acts on (an aircraft, a vessel, a radio station) is that layer's
+          // click, even under a card of ours.
+          const contactId = resolvePickId(event.hit ?? null);
+          if (
+            cardId &&
+            contactId &&
+            contactId !== pickedId &&
+            isActedOnByOtherLayer?.('cctv', contactId, { expanded: true })
+          )
+            return;
           if (cardHit && cardHit.sourceId !== CCTV_OVERLAY_SOURCE_ID) return;
           if (cardId) {
             activateCctvCameraFromWorldClick(

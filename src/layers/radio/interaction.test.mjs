@@ -62,3 +62,42 @@ test('a direct hit needs no drill, and another layer’s contact keeps its click
   });
   assert.equal(pickedRadioStationAt(other), null);
 });
+
+// A station found only through radio's wider window, not as the tap's own
+// pick or its touch contact, sits under another layer's card or label: that
+// layer acts and never sees this window, so radio leaves the click.
+test('a window-only station yields to a card painted over it', () => {
+  let top = null;
+  const radio = createInteraction({
+    state: { _stationById: new Map([['kexp', {}]]) },
+    services: {
+      picking: {
+        resolvePickId: (picked) => picked?.id ?? null,
+        isOwnedByOtherLayer: () => false,
+        registerPickOwner() {},
+        unregisterPickOwner() {},
+      },
+      overlays: {
+        setOverlaySourceVisible() {},
+        hitTestWorldOverlay: () => top,
+      },
+    },
+    parts: { rendering: { radioStationIdFromPick } },
+  });
+  const station = hit('radio:kexp');
+  const near = (contact = null) => ({
+    ...clickEvent({ windowHits: [station] }),
+    hit: contact,
+    screenPosition: { x: 5, y: 5 },
+  });
+  assert.equal(radio.pickedRadioStationAt(near()), 'kexp', 'open map');
+  top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  assert.equal(radio.pickedRadioStationAt(near()), null, 'under a quake card');
+  assert.equal(
+    radio.pickedRadioStationAt(near(station)),
+    'kexp',
+    'the touch contact: the card yielded to the station',
+  );
+  top = { sourceId: 'radio', entryId: 'radio:kexp' };
+  assert.equal(radio.pickedRadioStationAt(near()), 'kexp', 'our own card');
+});
