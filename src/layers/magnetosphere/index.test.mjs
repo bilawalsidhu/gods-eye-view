@@ -1,28 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createMagnetosphereLayer, traceFilaments } from './index.js';
+import {
+  createMagnetosphereLayer,
+  sunDirectionAt,
+  traceFilaments,
+} from './index.js';
+import { createMagnetosphereRendering } from './rendering.js';
 import { coefficientsFor } from './field.js';
 import { fieldLineSeeds } from './geometry.js';
-
-/**
- * Enough of Cesium for init to build its rendering; nothing here draws.
- *
- * The Transforms stubs return null, which is the real "ICRF data has not loaded
- * yet" path: sunDirectionFixed bails rather than handing back a plausible but
- * wrong direction.
- */
-const cesium = {
-  JulianDate: { now: () => null },
-  Cartesian3: function Cartesian3() {},
-  Matrix3: function Matrix3() {},
-  Simon1994PlanetaryPositions: {
-    computeSunPositionInEarthInertialFrame: () => ({ x: 1, y: 0, z: 0 }),
-  },
-  Transforms: {
-    computeIcrfToFixedMatrix: () => null,
-    computeTemeToPseudoFixedMatrix: () => null,
-  },
-};
 
 /** A rendering that records what it was handed instead of touching a GPU. */
 function recordingRendering() {
@@ -100,7 +85,7 @@ const PAST_REFRESH_MS = 200_000;
 
 test('the first trace runs from IGRF alone so the layer paints without the network', async () => {
   const { layer, calls } = harness([t96State]);
-  await layer.init(null, { cesium });
+  await layer.init(null);
   assert.ok(layer.getStats().count > 0, 'init must produce filaments');
   // Nothing has been fetched yet, so no model has been chosen.
   assert.equal(layer.getStats().externalModel, null);
@@ -109,7 +94,7 @@ test('the first trace runs from IGRF alone so the layer paints without the netwo
 
 test('the feed arriving upgrades the filaments to T96', async () => {
   const { layer } = harness([t96State]);
-  await layer.init(null, { cesium });
+  await layer.init(null);
   const before = layer.getStats().count;
   await layer.enable(null, { sunDirection: SUN });
   await layer.update(null, { sunDirection: SUN });
@@ -129,7 +114,7 @@ test('the feed arriving upgrades the filaments to T96', async () => {
 
 test('a feed with only Kp falls back to T89 rather than to nothing', async () => {
   const { layer } = harness([{ ...t96State, dst: null, byNT: null }]);
-  await layer.init(null, { cesium });
+  await layer.init(null);
   await layer.enable(null, { sunDirection: SUN });
   await layer.update(null, { sunDirection: SUN });
   const stats = layer.getStats();
@@ -144,7 +129,7 @@ test('an out-of-range solar wind says so in the row rather than silently clampin
   const { layer } = harness([
     { ...t96State, dst: -250, bzNT: -30, dynamicPressureNPa: 40 },
   ]);
-  await layer.init(null, { cesium });
+  await layer.init(null);
   await layer.enable(null, { sunDirection: SUN });
   await layer.update(null, { sunDirection: SUN });
   const stats = layer.getStats();
@@ -155,7 +140,7 @@ test('an out-of-range solar wind says so in the row rather than silently clampin
 
 test('an unchanged field does not pay for a second trace', async () => {
   const { layer } = harness([t96State]);
-  await layer.init(null, { cesium });
+  await layer.init(null);
   await layer.enable(null, { sunDirection: SUN });
   await layer.update(null, { sunDirection: SUN });
   // retrace() is idempotent for the same solar wind state: the selector's key
@@ -167,7 +152,7 @@ test('an unchanged field does not pay for a second trace', async () => {
 test('a material change in the solar wind does earn a re-trace', async () => {
   const stormy = { ...t96State, bzNT: -9, dst: -80 };
   const { layer, advance } = harness([t96State, stormy]);
-  await layer.init(null, { cesium });
+  await layer.init(null);
   await layer.enable(null, { sunDirection: SUN });
   await layer.update(null, { sunDirection: SUN });
   assert.equal(await layer.retrace(), false, 'same state, no work');
@@ -183,7 +168,7 @@ test('a material change in the solar wind does earn a re-trace', async () => {
 
 test('a feed failure leaves the previous filaments standing', async () => {
   const { layer, advance } = harness([t96State, new Error('upstream_down')]);
-  await layer.init(null, { cesium });
+  await layer.init(null);
   await layer.enable(null, { sunDirection: SUN });
   await layer.update(null, { sunDirection: SUN });
   const traced = layer.getStats().count;
@@ -200,7 +185,7 @@ test('no Sun direction means no re-trace rather than a wrong frame', async () =>
   // The GSM frame needs the Sun direction. Tracing without it would silently
   // produce a magnetosphere pointing the wrong way, which looks fine.
   const { layer } = harness([t96State]);
-  await layer.init(null, { cesium });
+  await layer.init(null);
   await layer.update(null, {});
   assert.equal(await layer.retrace(), false);
 });
@@ -209,7 +194,7 @@ test('the row keeps naming the internal field until a Sun frame lets T96 draw', 
   // The feed can name T96 before Cesium has a Sun direction. The filaments are
   // still the IGRF-only ones from init, so the row must not claim T96 yet.
   const { layer } = harness([t96State]);
-  await layer.init(null, { cesium });
+  await layer.init(null);
   await layer.update(null, {});
   const waiting = layer.getStats();
   assert.equal(waiting.externalModel, null);
@@ -237,7 +222,7 @@ test('the filaments follow the Sun, not only the solar wind', async () => {
   // Sun, so a tail traced against the old Sun would point the wrong way. The
   // feed is still fresh, so only the Sun can be what triggers the trace.
   const { layer, loads } = harness([t96State]);
-  await layer.init(null, { cesium });
+  await layer.init(null);
   await layer.enable(null, { sunDirection: SUN });
   await layer.update(null, { sunDirection: SUN });
   const retraces = recordRetraces(layer);
@@ -257,7 +242,7 @@ test('an internal-only trace does not go stale with the Sun', async () => {
   // IGRF is Earth-fixed, so with no usable external model there is nothing to
   // re-trace when the Sun moves.
   const { layer } = harness([{ ...t96State, dst: null, byNT: null, kp: null }]);
-  await layer.init(null, { cesium });
+  await layer.init(null);
   await layer.enable(null, { sunDirection: SUN });
   await layer.update(null, { sunDirection: SUN });
   const retraces = recordRetraces(layer);
@@ -385,4 +370,82 @@ test('the default yield falls back to a zero-delay timer without MessageChannel 
   );
   assert.equal(pauses, 1);
   assert.deepEqual(lines, []);
+});
+
+test('the Sun direction comes from scene time, north of the equator in June', () => {
+  assert.equal(sunDirectionAt(null), null, 'no scene time, no direction');
+  const june = sunDirectionAt(Date.parse('2026-06-21T12:00:00Z'));
+  assert.ok(Math.abs(Math.hypot(june.x, june.y, june.z) - 1) < 1e-9);
+  const declination = (Math.asin(june.z) * 180) / Math.PI;
+  assert.ok(Math.abs(declination - 23.4) < 0.5, `declination ${declination}`);
+  // Noon UTC puts the Sun over the prime meridian, give or take the equation
+  // of time.
+  const longitude = (Math.atan2(june.y, june.x) * 180) / Math.PI;
+  assert.ok(Math.abs(longitude) < 3, `longitude ${longitude}`);
+});
+
+test('with a scene clock the layer traces without being handed a Sun', async () => {
+  // The row names a model only once that model has drawn, so T96 here means
+  // a trace ran against the Sun the scene clock gave.
+  const make = (sceneTime) => {
+    const { rendering } = recordingRendering();
+    return createMagnetosphereLayer({
+      source: { load: async () => t96State },
+      createRendering: () => rendering,
+      meridians: 1,
+      sceneTime,
+    });
+  };
+  const clocked = make(() => Date.parse('2026-06-21T12:00:00Z'));
+  await clocked.init(null);
+  await clocked.update(null, {});
+  assert.equal(clocked.getStats().externalModel, 't96');
+  const unclocked = make(() => null);
+  await unclocked.init(null);
+  await unclocked.update(null, {});
+  assert.equal(unclocked.getStats().externalModel, null);
+});
+
+test('the renderer hands the draw port two line sets of 3d solid lines', () => {
+  const sets = new Map();
+  const rendering = createMagnetosphereRendering({
+    viewer: null,
+    createLines: (id) => {
+      const set = {
+        items: [],
+        cleared: 0,
+        disposed: false,
+        set(items) {
+          this.items = items;
+        },
+        clear() {
+          this.items = [];
+          this.cleared += 1;
+        },
+        dispose() {
+          this.disposed = true;
+        },
+      };
+      sets.set(id, set);
+      return set;
+    },
+  });
+  const points = [
+    { x: 7000, y: 0, z: 0 },
+    { x: 9000, y: 0, z: 3000 },
+    { x: 7000, y: 0, z: 6000 },
+  ];
+  rendering.setFilaments([{ points }]);
+  const [filaments, boundary] = [...sets.values()];
+  assert.equal(sets.size, 2);
+  assert.equal(filaments.items.length, 1);
+  const [line] = filaments.items;
+  assert.equal(line.mode, '3d');
+  assert.equal(line.style.kind, 'solid');
+  assert.match(line.style.color, /^rgba\(\d+, \d+, \d+, 0\.75\)$/);
+  assert.deepEqual([...line.positions.slice(0, 3)], [7_000_000, 0, 0]);
+  rendering.setBoundary(null, null);
+  assert.equal(boundary.cleared, 1, 'no parameters, no cage');
+  rendering.destroy();
+  assert.equal(filaments.disposed && boundary.disposed, true);
 });

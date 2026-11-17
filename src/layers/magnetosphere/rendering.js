@@ -1,8 +1,7 @@
 /**
- * Cesium binding for the magnetosphere layer.
+ * Draw-port binding for the magnetosphere layer.
  *
- * Two polyline collections: the field-line filaments, and the magnetopause
- * cage. Depth testing stays on so the globe occludes the far side — that
+ * Two line sets: the field-line filaments, and the magnetopause cage. Depth testing stays on so the globe occludes the far side — that
  * occlusion is most of what makes the structure read as surrounding the
  * planet rather than drawn over it.
  *
@@ -10,8 +9,10 @@
  */
 import { clipToBoundary, magnetopauseWireframe } from './geometry.js';
 import { EARTH_RADIUS_KM } from './trace.js';
+import { findDraw, findFrame } from '../../render/rendererOf.js';
 
 const KM_TO_M = 1000;
+let renderings = 0;
 
 /** Warm to cold with distance reached, so the eye reads altitude as colour. */
 export const FILAMENT_STOPS = Object.freeze([
@@ -44,16 +45,15 @@ export function apexRe(points) {
 /**
  * Build the renderer.
  *
- * `createCollection` is injected for the same reason the aurora layer injects
- * its canvas: the collection wiring is the part a unit test can see, and a
- * headless test has no Cesium.
+ * `createLines` is injected so a unit test can see the line sets without a
+ * renderer; by default they are the draw port's.
  */
 export function createMagnetosphereRendering({
   viewer,
-  cesium,
-  createCollection = () => new cesium.PolylineCollection(),
+  createLines = (id) => findDraw(viewer).lines({ id }),
 } = {}) {
-  const scene = viewer?.scene;
+  const requestRender = () => findFrame(viewer)?.requestRender('magnetosphere');
+  const prefix = `magnetosphere:${(renderings += 1)}`;
   let filaments = null;
   let boundary = null;
   let opacity = 0.75;
@@ -61,27 +61,31 @@ export function createMagnetosphereRendering({
   let lastBoundary = null;
 
   function ensure() {
-    if (!filaments) {
-      filaments = createCollection();
-      scene?.primitives?.add?.(filaments);
-    }
-    if (!boundary) {
-      boundary = createCollection();
-      scene?.primitives?.add?.(boundary);
-    }
+    filaments ??= createLines(`${prefix}:filaments`);
+    boundary ??= createLines(`${prefix}:boundary`);
   }
 
   function toPositions(points) {
-    const flat = [];
-    for (const p of points) {
-      flat.push(p.x * KM_TO_M, p.y * KM_TO_M, p.z * KM_TO_M);
-    }
-    return cesium.Cartesian3.unpackArray(flat);
+    const flat = new Float64Array(points.length * 3);
+    points.forEach((p, i) => {
+      flat[i * 3] = p.x * KM_TO_M;
+      flat[i * 3 + 1] = p.y * KM_TO_M;
+      flat[i * 3 + 2] = p.z * KM_TO_M;
+    });
+    return flat;
   }
 
-  function colorOf([r, g, b], alpha) {
-    return cesium.Color.fromBytes(r, g, b, Math.round(alpha * 255));
-  }
+  // A CSS colour keeps the sRGB bytes exact; the contract reads a tuple as
+  // linear.
+  const colorOf = ([r, g, b], alpha) => `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  const line = (id, points, color, widthPx) => ({
+    id,
+    positions: toPositions(points),
+    widthPx,
+    mode: '3d',
+    style: { kind: 'solid', color },
+    pickable: false,
+  });
 
   return {
     /**
@@ -92,47 +96,43 @@ export function createMagnetosphereRendering({
     setFilaments(lines, { parameters = null, sunDirection = null } = {}) {
       ensure();
       lastLines = lines;
-      filaments.removeAll();
-      for (const line of lines) {
+      const items = [];
+      lines.forEach((traced, index) => {
         const { segments } =
           parameters && sunDirection
-            ? clipToBoundary(line.points, parameters, sunDirection)
-            : { segments: [line.points] };
-        const color = colorOf(filamentColorFor(apexRe(line.points)), opacity);
-        for (const points of segments) {
-          if (!points || points.length < 2) continue;
-          filaments.add({
-            positions: toPositions(points),
-            width: 1.5,
-            material: cesium.Material.fromType('Color', { color }),
-          });
-        }
-      }
-      scene?.requestRender?.();
+            ? clipToBoundary(traced.points, parameters, sunDirection)
+            : { segments: [traced.points] };
+        const color = colorOf(filamentColorFor(apexRe(traced.points)), opacity);
+        segments.forEach((points, part) => {
+          if (!points || points.length < 2) return;
+          items.push(line(`f${index}:${part}`, points, color, 1.5));
+        });
+      });
+      filaments.set(items);
+      requestRender();
     },
     setBoundary(parameters, sunDirection) {
       ensure();
       lastBoundary = { parameters, sunDirection };
-      boundary.removeAll();
       const wireframe =
         parameters && sunDirection
           ? magnetopauseWireframe(parameters, sunDirection)
           : null;
       if (!wireframe) {
-        scene?.requestRender?.();
+        boundary.clear();
+        requestRender();
         return;
       }
-      const draw = (line, alpha, width) =>
-        boundary.add({
-          positions: toPositions(line),
-          width,
-          material: cesium.Material.fromType('Color', {
-            color: colorOf([150, 210, 255], alpha),
-          }),
-        });
-      for (const line of wireframe.meridians) draw(line, opacity * 0.8, 1.5);
-      for (const line of wireframe.rings) draw(line, opacity * 0.5, 1);
-      scene?.requestRender?.();
+      const color = (alpha) => colorOf([150, 210, 255], alpha);
+      boundary.set([
+        ...wireframe.meridians.map((points, i) =>
+          line(`m${i}`, points, color(opacity * 0.8), 1.5),
+        ),
+        ...wireframe.rings.map((points, i) =>
+          line(`r${i}`, points, color(opacity * 0.5), 1),
+        ),
+      ]);
+      requestRender();
     },
     setOpacity(next) {
       opacity = next;
@@ -141,24 +141,20 @@ export function createMagnetosphereRendering({
         this.setBoundary(lastBoundary.parameters, lastBoundary.sunDirection);
     },
     clear() {
-      filaments?.removeAll();
-      boundary?.removeAll();
+      filaments?.clear();
+      boundary?.clear();
       lastLines = [];
       lastBoundary = null;
-      scene?.requestRender?.();
+      requestRender();
     },
     destroy() {
-      for (const collection of [filaments, boundary]) {
-        if (!collection) continue;
-        // Removing from the collection releases its GPU buffers; Cesium
-        // destroys the primitive on remove unless told otherwise.
-        scene?.primitives?.remove?.(collection);
-      }
+      filaments?.dispose();
+      boundary?.dispose();
       filaments = null;
       boundary = null;
       lastLines = [];
       lastBoundary = null;
-      scene?.requestRender?.();
+      requestRender();
     },
     getDiagnostics() {
       return {
