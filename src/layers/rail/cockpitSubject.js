@@ -205,7 +205,10 @@ export function createRailCockpitSubject({
       finiteOrNull(drawn?.lat) ?? finiteOrNull(sample?.lat) ?? record.lat;
     position.longitude =
       finiteOrNull(drawn?.lon) ?? finiteOrNull(sample?.lon) ?? record.lon;
-    position.railHeightM = Number.isFinite(drawn?.h) ? drawn.h - liftM : null;
+    // Quality 0 is the ellipsoid a train is drawn on while no floor is
+    // known: no height, so a view waits for the surface.
+    position.railHeightM =
+      Number.isFinite(drawn?.h) && drawn.q > 0 ? drawn.h - liftM : null;
     position.heightQuality = Number.isFinite(drawn?.q) ? drawn.q : 0;
     position.atMs = finiteOrNull(drawn?.at);
 
