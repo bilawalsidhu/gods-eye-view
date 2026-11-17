@@ -176,6 +176,10 @@ test('warnings follow their validity, reports the three hours before', async (t)
   h.clock.seek(NOW);
   assert.equal(reportItem().height, 'absolute');
   assert.equal(reportItem().pos.height, 39_000 * FEET_TO_METERS);
+  // Zoomed out, a dot spans kilometres: drawn over depth so the globe does
+  // not cut it, and culled past the horizon instead.
+  assert.equal(reportItem().disableDepthTest, Number.POSITIVE_INFINITY);
+  assert.equal(h.reports().spec.horizonCull, true);
 });
 
 test('filters hide records; the panel chips carry the toggles', async (t) => {

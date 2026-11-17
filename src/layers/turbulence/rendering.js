@@ -51,7 +51,12 @@ export function volumeItems(record, alpha) {
   }));
 }
 
-/** One point at the reported flight level. */
+/**
+ * One point at the reported flight level. Drawn over depth: zoomed out, a
+ * few pixels span kilometres, so a dot a few kilometres up would otherwise
+ * be cut by the globe or tiles beneath it. Its set culls it past the
+ * horizon instead.
+ */
 export function reportItem(record) {
   return {
     id: record.id,
@@ -61,6 +66,7 @@ export function reportItem(record) {
       height: record.baseFt * FEET_TO_METERS,
     },
     height: 'absolute',
+    disableDepthTest: Number.POSITIVE_INFINITY,
     pixelSize: REPORT_PIXELS,
     color: cssColor(severityColor(record.severity)),
     outlineColor: [0, 0, 0, 0.85],
@@ -95,7 +101,12 @@ export function createTurbulenceRendering({ viewer }) {
     pickable: false,
     show: false,
   });
-  const reports = draw.points({ id: `${prefix}:reports`, show: false });
+  const reports = draw.points({
+    id: `${prefix}:reports`,
+    // Drawn without depth test, so hidden past the horizon here.
+    horizonCull: true,
+    show: false,
+  });
   let visible = false;
   let shownForecast = null;
   let warningsKey = null;
