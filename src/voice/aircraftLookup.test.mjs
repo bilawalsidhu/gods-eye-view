@@ -322,6 +322,25 @@ test('an old individual observation cannot be followed from a current snapshot',
   );
 });
 
+test('a future-dated contact cannot authorize follow from a current snapshot', async () => {
+  const f = fixture({
+    records: [
+      {
+        id: 'aaa111',
+        callsign: 'UAL123',
+        latitude: 30,
+        longitude: -97,
+        contactTimeMs: 3_601_000,
+      },
+    ],
+  });
+  const out = await lookupVoiceAircraft({ query: 'UA123' }, f.dependencies);
+  assert.equal(out.ok, false);
+  assert.equal(out.tracking, false);
+  assert.match(out.error, /future-dated/);
+  assert.deepEqual(f.events, [['feed', {}]]);
+});
+
 test('invalid long identity is rejected before querying a provider', async () => {
   const f = fixture();
   const out = await lookupVoiceAircraft(
