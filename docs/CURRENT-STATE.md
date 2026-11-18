@@ -7686,6 +7686,8 @@ and unreachable upstream (502/504) separately from road geometry.
   and verifies the exact ICAO twice: after refresh and immediately before tracking.
   Follow requires contact time within 120 seconds of the feed observation in
   either direction; stale/unknown and future-dated times are refused separately.
+  Exact ICAO callsigns preserve every digit, while two-letter IATA flight
+  numbers are normalized through the explicit alias table.
 
 > **Reading `npm test` totals:** the count depends on the Node major. The two
 > GC-bracketed allocation microbenchmarks (`src/data/focusAllocations.test.mjs`
