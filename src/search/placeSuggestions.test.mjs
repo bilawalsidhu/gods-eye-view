@@ -327,3 +327,61 @@ test('a UK postcode without its space is a place', () => {
   for (const line of ['EC1A1BB', 'W1A0AX', 'BT487NN'])
     assert.equal(mayBePrivate(line), false, line);
 });
+
+test('emails, keys and codes in other shapes stay private', () => {
+  for (const line of [
+    'john @Gmail.com',
+    'John @EXAMPLE.COM',
+    '030 12345',
+    'Alice 12345-6789',
+    'access_token=abcdef',
+    'secret_key=abcdef',
+    '"sk-abcdefghijklmnop"',
+    '(ghp_abcdef)',
+    'OTP: ABCDEF',
+    'verification code ABCDEF',
+    'PIN: A7B2',
+  ])
+    assert.equal(mayBePrivate(line), true, line);
+  for (const line of [
+    '10 Downing Street SW1A2AA, London',
+    'Washington DC 20500-0003',
+    'Pin Oak',
+    'Gate Code Lane',
+  ])
+    assert.equal(mayBePrivate(line), false, line);
+});
+
+test('two houses on one street are two suggestions, asked once', async () => {
+  let sent = 0;
+  const house = (number, lon) => ({
+    geometry: { type: 'Point', coordinates: [lon, 51.5034] },
+    properties: {
+      street: 'Downing Street',
+      housenumber: number,
+      city: 'London',
+      country: 'United Kingdom',
+      countrycode: 'gb',
+      osm_value: 'house',
+    },
+  });
+  const service = createPlaceSuggester({
+    endpoint: 'https://fixture.test/api/',
+    fetchImpl: async () => {
+      sent++;
+      return Response.json({
+        features: [house('10', -0.1276), house('12', -0.1277)],
+      });
+    },
+  });
+  const [first, second] = await Promise.all([
+    service.suggest('Downing Street'),
+    service.suggest('Downing Street'),
+  ]);
+  assert.deepEqual(
+    first.map((place) => place.name),
+    ['10 Downing Street', '12 Downing Street'],
+  );
+  assert.deepEqual(second, first);
+  assert.equal(sent, 1);
+});

@@ -108,7 +108,7 @@ function privacyReason(text) {
   // Chandambylu").
   // Also while it is typed ("john.smith@") or spaced ("john @ gmail.com").
   if (
-    /[^\s@]@[^\s@]|(?:^|\s)@[a-z0-9_]{2,}(?![\p{L}\p{N}])|[^\s@]@(?:\s|$)|\S\s+@\s+[\p{L}\p{N}-]{2,}\.\p{L}{2,}/u.test(
+    /[^\s@]@[^\s@]|(?:^|\s)@[a-z0-9_]{2,}(?![\p{L}\p{N}])|[^\s@]@(?:\s|$)|\S\s+@\s+[\p{L}\p{N}-]{2,}\.\p{L}{2,}/iu.test(
       line,
     )
   )
@@ -138,8 +138,9 @@ function privacyReason(text) {
       ? line
       : line
           .replace(
-            /(^|\s)\d{1,4}[a-z]?,?\s+\d{5}(?:-\d{3})?(?=\s+\p{L}|$)/giu,
-            '$1 ',
+            // A street word before ("030 12345" is a phone number).
+            /(?<=\p{L}\.?\s)\d{1,4}[a-z]?,?\s+\d{5}(?:-\d{3})?(?=\s+\p{L}|$)/giu,
+            ' ',
           )
           // Other postcodes after a street's house number and before the city (a
           // four-digit one after a comma, so "is 555 0100 thanks" stays a number):
@@ -150,7 +151,9 @@ function privacyReason(text) {
             /(?<=\p{L}\.?\s)\d{1,4}[a-z]?(?:,\s*\d{4}(?:-\d{3})?|,?\s+(?:\d{2}-\d{3}|\d{3} \d{2}|\d{6}))(?=\s+\p{L})/giu,
             ' x ',
           )
-          .replace(/(?<=\p{L}\.?,?\s)\d{5}-\d{4}\b/gu, ' x ')
+          // ZIP+4 after a state's two letters ("DC 20500-0003"), not after
+          // any word ("Alice 12345-6789").
+          .replace(/(?<=(?:^|\s)\p{L}{2},?\s)\d{5}-\d{4}\b/gu, ' x ')
           .replace(/\b\d{5}-\d{3}\b/g, ' x ')
           .replace(
             /〒\s?\d{3}-\d{4}|\b\d{3}-\d{4}(?=\s*[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}])/gu,
@@ -173,7 +176,7 @@ function privacyReason(text) {
     /(?<!\p{L})(?:contraseña|passwort|kennwort|mot de passe|senha|parola d'ordine|lösenord|пароль|пароля|密码|密碼|パスワード|비밀번호|סיסמה|كلمة (?:السر|المرور))(?!\p{L})\s*[:=#]?\s*\S/iu.test(
       line,
     ) ||
-    /\b(?:api[ _-]?key|access[ _-]?token|secret[ _-]?key)\s+\S{6,}/i.test(
+    /\b(?:api[ _-]?key|access[ _-]?token|secret[ _-]?key|auth[ _-]?token|client[ _-]?secret)(?:\s*[:=]\s*|\s+)\S{4,}/i.test(
       line,
     ) ||
     /\b(?:token|secret|api[ _-]?key|key|pass)\s*[:=]\s*\S/i.test(line) ||
@@ -184,12 +187,20 @@ function privacyReason(text) {
     /\b\S+\s+at\s+\S+\s+dot\s+(?:com|net|org|edu|gov|io|co)\b/i.test(line) ||
     /\b(?:pin|otp|2fa|mfa|cvv|cvc|(?:door|access|gate|alarm|entry|security|verification|one-time|auth|login) code|card ending(?: in)?)(?:\s+(?:code|number|is|no\.?))*\s*[:=#]?\s*\d/i.test(
       line,
-    )
+    ) ||
+    // A code of letters too, after a label that can only be a code
+    // ("OTP: ABCDEF", "verification code ABCDEF", "PIN: A7B2"); "Pin Oak"
+    // has no colon and stays a place.
+    /\b(?:pin|otp|2fa|mfa|cvv|cvc)\s*[:=#]\s*[a-z0-9]/i.test(line) ||
+    codeAfterLabel(line)
   )
     return 'other';
   if (
     line
       .split(/\s+/)
+      // A key in quotes or brackets ("\"sk-…\"") and a postcode before a
+      // comma ("SW1A2AA,") are read without them.
+      .map((token) => token.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ''))
       .some(
         (token) =>
           /^(?:sk[-_]|rk_|pk_live|ghp_|xox[abposr]-)/i.test(token) ||
@@ -199,6 +210,21 @@ function privacyReason(text) {
   )
     return 'other';
   return longNumber ? 'number' : null;
+}
+
+/**
+ * A code of letters after a label that can only be a code, without a colon
+ * ("verification code ABCDEF", "otp 7GH2K"): written in capitals or holding
+ * a digit, so "Gate Code Lane" stays a street.
+ */
+function codeAfterLabel(line) {
+  const match =
+    /\b(?:otp|2fa|mfa|(?:door|access|gate|alarm|entry|security|verification|one-time|auth|login) code)(?:\s+is)?\s*[:=#]?\s*([a-z0-9]{4,})\b/i.exec(
+      line,
+    );
+  if (!match) return false;
+  const value = match[1];
+  return /\d/.test(value) || value === value.toUpperCase();
 }
 
 /**
@@ -282,6 +308,8 @@ export function createPlaceSuggester({
         }
       }
       signal?.throwIfAborted();
+      // The same text asked again while this one waited is answered now.
+      if (cache.has(key)) return cache.get(key);
       if (Date.now() < shared.pausedUntil) return [];
       const url = new URL(photonSearchUrl(text, { endpoint, limit }));
       if (['en', 'de', 'fr', 'it'].includes(language))
@@ -323,8 +351,15 @@ export function createPlaceSuggester({
           countrycode: countryCode,
           osm_value: osmType,
           type,
+          street,
+          housenumber: houseNumber,
         } = feature.properties ?? {};
-        const name = normalized.name || city || state || country;
+        // A house has no name of its own: its street and number are its
+        // name, so two houses on one street stay two places.
+        const address = street
+          ? [houseNumber, street].filter(Boolean).join(' ')
+          : '';
+        const name = normalized.name || address || city || state || country;
         if (!name) continue;
         const detail = [...new Set([city, state, country])]
           .filter((part) => part && part !== name)
