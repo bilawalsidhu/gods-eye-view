@@ -30,6 +30,7 @@ import dwdLightningDensity from './entries/dwd-lightning-density.json' with { ty
 import dwdRainRadar from './entries/dwd-rain-radar.json' with { type: 'json' };
 import dwdWeatherWarnings from './entries/dwd-weather-warnings.json' with { type: 'json' };
 import eeMaaAmetOrtofoto from './entries/ee-maa-amet-ortofoto.json' with { type: 'json' };
+import eeaAirQualityIndex from './entries/eea-air-quality-index.json' with { type: 'json' };
 import eiaPowerPlants from './entries/eia-power-plants.json' with { type: 'json' };
 import emodnetOffshoreInstallations from './entries/emodnet-offshore-installations.json' with { type: 'json' };
 import emodnetOffshoreWindFarmAreas from './entries/emodnet-offshore-wind-farm-areas.json' with { type: 'json' };
@@ -144,6 +145,7 @@ export const LIBRARY_MANIFESTS = Object.freeze([
   dwdRainRadar,
   dwdWeatherWarnings,
   eeMaaAmetOrtofoto,
+  eeaAirQualityIndex,
   eiaPowerPlants,
   emodnetOffshoreInstallations,
   emodnetOffshoreWindFarmAreas,

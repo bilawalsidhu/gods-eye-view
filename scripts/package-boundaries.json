@@ -5152,6 +5152,7 @@
       "src/library/entries/dwd-rain-radar.json",
       "src/library/entries/dwd-weather-warnings.json",
       "src/library/entries/ee-maa-amet-ortofoto.json",
+      "src/library/entries/eea-air-quality-index.json",
       "src/library/entries/eia-power-plants.json",
       "src/library/entries/emodnet-offshore-installations.json",
       "src/library/entries/emodnet-offshore-wind-farm-areas.json",

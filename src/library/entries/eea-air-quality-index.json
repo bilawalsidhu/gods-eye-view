@@ -1,0 +1,61 @@
+{
+  "id": "eea-air-quality-index",
+  "kind": "tiles",
+  "family": "weather",
+  "title": "European Air Quality Index (EEA)",
+  "provider": "EEA",
+  "description": "The EEA's European Air Quality Index: a modelled hourly surface combining NO₂, O₃, PM₁₀ and PM₂.₅ into one band from Good to Extremely poor, across Europe. A model estimate, not individual station readings.",
+  "icon": "◍",
+  "maintainer": "github:Herr-Enklo",
+  "coverage": {
+    "bbox": [-25, 28, 45, 72]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://air.discomap.eea.europa.eu/arcgis/rest/services/AQMobile_2025/MOSAIC_GLOBAL_AQI/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png&transparent=true&renderingRule=%7B%22rasterFunction%22%3A%22Colormap%22%2C%22rasterFunctionArguments%22%3A%7B%22Colormap%22%3A%5B%5B1%2C80%2C240%2C230%5D%2C%5B2%2C80%2C204%2C170%5D%2C%5B3%2C240%2C230%2C65%5D%2C%5B4%2C255%2C80%2C80%5D%2C%5B5%2C150%2C0%2C50%5D%2C%5B6%2C125%2C33%2C129%5D%5D%7D%7D&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 1800,
+    "minZoom": 3,
+    "maxZoom": 10,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 0.75,
+    "legend": [
+      {
+        "label": "Good",
+        "color": "#50f0e6"
+      },
+      {
+        "label": "Fair",
+        "color": "#50ccaa"
+      },
+      {
+        "label": "Moderate",
+        "color": "#f0e641"
+      },
+      {
+        "label": "Poor",
+        "color": "#ff5050"
+      },
+      {
+        "label": "Very poor",
+        "color": "#960032"
+      },
+      {
+        "label": "Extremely poor",
+        "color": "#7d2181"
+      }
+    ]
+  },
+  "licence": {
+    "name": "EEA standard re-use policy: free with acknowledgement; no endorsement implied",
+    "url": "https://www.eea.europa.eu/en/legal-notice"
+  },
+  "attribution": {
+    "text": "European Environment Agency — European Air Quality Index (modelled)",
+    "url": "https://airindex.eea.europa.eu/"
+  },
+  "status": "community",
+  "reviewed": "2026-11-18"
+}

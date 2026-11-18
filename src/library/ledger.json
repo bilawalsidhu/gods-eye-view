@@ -106,5 +106,6 @@
   ["gibs-precipitation-rate", "2w"],
   ["gibs-sea-surface-temperature", "2x"],
   ["pegelonline-water-levels", "2y"],
-  ["hamburg-traffic-cameras", "2z"]
+  ["hamburg-traffic-cameras", "2z"],
+  ["eea-air-quality-index", "30"]
 ]
