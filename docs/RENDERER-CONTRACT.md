@@ -81,6 +81,9 @@ optional:
   target's east-north-up frame, or the identity. `setView` keeps that frame
   while it places a world pose. A share link's follow offset is
   re-expressed in it, satellites included.
+- `camera.visiblePoints(points, horizonMarginM)` (capability `pointVisibility`)
+  conservatively reports whether a point set may be visible; `null` means the
+  renderer cannot determine visibility and callers should fail open.
 - `globe.surfaceVersion()` (capability `surfaceIdentity`) is a number that
   changes whenever what surface heights answer against changes (base,
   terrain or photoreal route swapped, the globe shown or hidden) and never
