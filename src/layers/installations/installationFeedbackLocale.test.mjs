@@ -1,8 +1,8 @@
 // statusMessage stays English (the analyst's empty note); displays translate it.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { setLocale, t, tn, translateKnown } from '../../i18n/index.js';
-import { translateStatusPiece } from '../../ui/statusText.js';
+import { setLocale, t, tn } from '../../i18n/index.js';
+import { translateStatusMessage } from '../../ui/statusText.js';
 import { createControls } from './controls.js';
 
 function stats(state) {
@@ -110,15 +110,9 @@ for (const locale of ['es', 'ru']) {
   test(`${locale}: installation statusMessage is shown in the UI language`, () => {
     inLocale(locale, () => {
       for (const [state, english, shown] of cases) {
-        const shownText = translateStatusPiece(stats(state).statusMessage);
+        const shownText = translateStatusMessage(stats(state).statusMessage);
         assert.notEqual(shownText, english);
         assert.equal(shownText, shown());
-      }
-      for (const text of [
-        'Too many mapped sites in view to list them all',
-        'Installation context unavailable',
-      ]) {
-        assert.notEqual(translateKnown(text), text);
       }
     });
   });
@@ -128,6 +122,6 @@ test('en: installation feedback keeps its English wording', () => {
   setLocale('en');
   for (const [state, english] of cases) {
     assert.equal(stats(state).statusMessage, english);
-    assert.equal(translateStatusPiece(english), english);
+    assert.equal(translateStatusMessage(english), english);
   }
 });

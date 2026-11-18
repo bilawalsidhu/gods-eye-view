@@ -20,7 +20,7 @@ const FALLBACK_REASON = msg('Overpass temporarily unavailable');
  * @param {number} [now]
  * @returns {{text: string, reason?: string, seconds?: number}|{count: number, km: ?number}}
  */
-export function describeInstallationFeedback(stats = {}, now = Date.now()) {
+function describeInstallationFeedback(stats = {}, now = Date.now()) {
   const reason = REASONS[stats.failureReason] || FALLBACK_REASON;
   if (stats.loading)
     return {
