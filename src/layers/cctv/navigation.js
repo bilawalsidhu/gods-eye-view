@@ -15,15 +15,11 @@ export function createNavigation({
    * @returns {string|null} Camera ID, or null (invalid point, empty catalog).
    */
   function nearestCameraIdToPoint(lat, lon) {
-    const latitude = Number(lat);
-    const longitude = Number(lon);
     if (
-      !Number.isFinite(latitude) ||
-      !Number.isFinite(longitude) ||
-      latitude < -90 ||
-      latitude > 90 ||
-      longitude < -180 ||
-      longitude > 180 ||
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lon) ||
+      Math.abs(lat) > 90 ||
+      Math.abs(lon) > 180 ||
       !layerState._records.length
     )
       return null;
@@ -31,8 +27,8 @@ export function createNavigation({
     let best = null;
     for (const record of layerState._records) {
       const distKm = parts.model.haversineKm(
-        latitude,
-        longitude,
+        lat,
+        lon,
         record.camera.lat,
         record.camera.lon,
       );
