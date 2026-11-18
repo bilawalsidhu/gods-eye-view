@@ -1684,6 +1684,12 @@ body.scene-playback-mode .first-run-backdrop {
     justify-content: center;
     white-space: nowrap;
   }
+  /* A status line (a mission that could not open) takes its own row above
+     the buttons instead of a sliver beside the checkbox and BACK. */
+  .first-run-footer .first-run-note:not(:empty) {
+    flex: 1 0 100%;
+    order: -1;
+  }
 }
 
 /* Short viewports — landscape phones, small laptop windows. The chrome tightens

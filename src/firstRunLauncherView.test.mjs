@@ -182,7 +182,11 @@ test('a busy mission marks the choices aria-disabled, never disabled', async (t)
     0,
     'the new action cannot launch during the step transition',
   );
+  // A press begun during the transition and released after it runs nothing.
+  enter.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
   await settle(frames);
+  enter.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+  assert.equal(calls, 0, 'a press held through the step change never launches');
   assert.ok(
     document.activeElement === enter,
     'the primary action retains focus',
@@ -339,6 +343,22 @@ test('BROWSE STORIES closes the card and opens Stories in place', async (t) => {
   button.dispatchEvent(new MouseEvent('click', { detail: 1 }));
   await nextTick();
   assert.equal(opened, 1, 'a closing card cannot open Stories again');
+});
+
+test('BROWSE STORIES keeps the welcome up when Stories refuses to open', async (t) => {
+  const { root, pinia, frames, sessionStorageRef } = await launch(t);
+  const stories = useStoriesStore(pinia);
+  stories.connect({ open: () => false });
+  await move(root, frames);
+  await move(root, frames);
+  root.querySelector('[data-first-run-stories]').click();
+  await nextTick();
+  assert.equal(root.classList.contains('visible'), true, 'the card stays');
+  assert.equal(sessionStorageRef.read(), null, 'not dismissed');
+  assert.equal(
+    document.body.classList.contains('first-run-opening-stories'),
+    false,
+  );
 });
 
 test('the Stories card is left out where Stories is not offered', async (t) => {

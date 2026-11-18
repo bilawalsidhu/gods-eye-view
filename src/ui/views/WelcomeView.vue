@@ -34,8 +34,18 @@ function go(next, event) {
   direction.value = next > step.value ? 'forward' : 'back';
   step.value = Math.min(STEPS, Math.max(1, next));
 }
+// A press belongs to the step it began on: one begun while the steps were
+// changing (and released after) runs nothing. Keyboard clicks (detail 0)
+// have no press.
+let pressedOn = null;
+function onPrimaryDown() {
+  pressedOn = settling.value ? null : step.value;
+}
 function onPrimary(event) {
   if (settling.value || event.detail > 1) return;
+  const pressed = pressedOn;
+  pressedOn = null;
+  if (event.detail === 1 && pressed !== step.value) return;
   if (step.value < STEPS) go(step.value + 1, event);
   else controls.value?.choose(start.value);
 }
@@ -44,16 +54,27 @@ function onPrimary(event) {
 // so it does not flash up between the card closing and Explore opening; it is
 // still not marked seen. The card is left out where Stories is not offered.
 const stories = useStoriesStore();
+let openingStories = false;
 function openStories(event) {
   if (event?.detail > 1) return;
   if (settling.value || launcher.value?.busy === 'true' || launcher.value?.closing) return;
   if (!stories.available || !stories.controller) return;
+  if (openingStories) return;
   const body = globalThis.document?.body;
+  // Stories says at once whether it opens (it refuses while another mode
+  // holds the globe): only then does the card close, so a refusal never
+  // leaves nothing on screen.
+  const opening = stories.controller.open();
+  if (opening === false) return;
+  openingStories = true;
   body?.classList.add('first-run-opening-stories');
   controls.value?.dismiss();
-  Promise.resolve(stories.controller.open()).finally(() =>
-    body?.classList.remove('first-run-opening-stories'),
-  );
+  Promise.resolve(opening)
+    .catch(() => {})
+    .finally(() => {
+      openingStories = false;
+      body?.classList.remove('first-run-opening-stories');
+    });
 }
 function onPrimaryKeydown(event) {
   if (event.repeat) event.preventDefault();
@@ -278,7 +299,7 @@ function onSuppress(event) {
       <!-- The card's main action: God mode, starting where the selected tile
            says (a clean globe by default). -->
       <button v-if="step > 1" type="button" class="first-run-back" :aria-disabled="String(settling || launcher?.busy === 'true')" @click="go(step - 1, $event)">{{ t('BACK') }}</button>
-      <button type="button" class="first-run-enter" :data-first-run-choice="step === STEPS ? start : undefined" :data-first-run-next="step < STEPS ? '' : undefined" data-first-run-primary aria-describedby="first-run-title first-run-description" @keydown.enter="onPrimaryKeydown" :aria-disabled="String(settling || launcher?.busy === 'true')" @click="onPrimary">
+      <button type="button" class="first-run-enter" :data-first-run-choice="step === STEPS ? start : undefined" :data-first-run-next="step < STEPS ? '' : undefined" data-first-run-primary aria-describedby="first-run-title first-run-description" @pointerdown="onPrimaryDown" @keydown.enter="onPrimaryKeydown" :aria-disabled="String(settling || launcher?.busy === 'true')" @click="onPrimary">
         {{ step < STEPS ? t('NEXT') : t('ENTER GOD MODE') }} <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
       </button>
     </div>

@@ -4117,8 +4117,8 @@ which embeds the MAP_KEY.
 > click-through backdrop tints the globe behind it (`.first-run-backdrop`, a
 > 28% dark tint with no blur); it never takes input, so the card stays
 > non-modal. The last step links out to the GitHub repository and
-> Halfpixel's channels (YouTube, X, Instagram, LinkedIn, bilawal.ai,
-> halfpixel.ai); each opens in a new tab with `rel="noopener noreferrer"`, and
+> its author's channels (YouTube, X, Instagram, LinkedIn, bilawal.ai) and
+> halfpixel.ai; each opens in a new tab with `rel="noopener noreferrer"`, and
 > the addresses live in `FIRST_RUN_LINKS` (`src/firstRunCopy.js`). The GEV
 > Stories card's BROWSE STORIES button closes the card (a session dismissal,
 > like Skip) and opens the in-app Stories Explore view, keeping the Stories
