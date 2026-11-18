@@ -28,7 +28,12 @@ own `.d.ts`:
 - `gods-eye-view/render/recession`: how a set that recedes shrinks and
   fades its items toward the limb;
 - `gods-eye-view/render/windStreamlines`: the wind field's streamlines;
-- `gods-eye-view/geo/screenCluster`: screen-space clustering.
+- `gods-eye-view/geo/screenCluster`: screen-space clustering;
+- `gods-eye-view/fleet`: fleet contacts as the Flights and Vessels layers
+  draw them: the fleet model set and its loader, which model and size an
+  aircraft or a vessel takes, the distances a contact's icon hands over to
+  its model at, how a model is lit, tinted and posed, and the vessel hull
+  sprites.
 
 `src/render/neutralExports.test.mjs` checks that each is declared, that its
 names match what it exports, that it type-checks under strict TypeScript and
