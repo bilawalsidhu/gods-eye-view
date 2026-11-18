@@ -336,6 +336,9 @@ export class FlightRecords {
       geoAltitudeM,
       renderAltitudeM,
       renderAltitudeInvented,
+      // The feed estimated this position: it places the aircraft, and stands
+      // in on the tracked trail only until the next received report.
+      estimated: observation.estimated === true,
       groundM: Number.isFinite(groundM) ? groundM : null,
       onGround,
       // Round 7: sticky airborne history — the landed fast-cull only
