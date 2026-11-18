@@ -114,6 +114,7 @@ export function createApplicationCatalog({
       resolveAsset,
     });
     const vessels = createApplicationVessels({
+      surface,
       source: sources.vessels,
       placement: layerPlacement(placement, 'vessels'),
       options: vesselOptions,

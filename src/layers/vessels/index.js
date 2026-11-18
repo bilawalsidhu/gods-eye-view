@@ -50,7 +50,11 @@ export function createVesselLayer({ source, services, options = {} } = {}) {
     readArea: vesselViewArea,
     getRowLimit: parts.rendering.renderRowLimit,
     readCount: () => vesselState.state.records.all.length,
-    applyRows: parts.snapshots.reconcileVessels,
+    applyRows: (...args) => {
+      parts.snapshots.reconcileVessels(...args);
+      // The water level under the vessels now in view, if not yet known.
+      parts.tracking.warmWaterSurface();
+    },
     classifySnapshot: parts.queries.classifyAisFeedSnapshot,
     isDefinitiveTransportFailure: parts.lifecycle.isDefinitiveTransportFailure,
     isGraceEligibleTransport: parts.lifecycle.isGraceEligibleTransport,

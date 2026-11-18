@@ -6,5 +6,6 @@ const terrainHeights = createTerrainHeights({
 export const {
   cachedEllipsoidalGround,
   cachedRealEllipsoidalGround,
+  cachedRealOrthometricGround,
   resolveEllipsoidalGround,
 } = terrainHeights;

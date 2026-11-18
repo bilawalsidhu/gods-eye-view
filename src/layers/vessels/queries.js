@@ -235,18 +235,20 @@ export function createQueries({
   }
 
   /**
-   * Ellipsoidal render height (m) for a sea-surface object: the local geoid
-   * undulation N plus a small lift. The sea surface ≈ the geoid, which sits
-   * −106…+85 m off the WGS84 ellipsoid worldwide (Rotterdam ≈ +45 m — at
-   * height 0 the tile sea mesh occludes every chevron; Houston ≈ −27 m).
+   * Ellipsoidal render height (m) for a water-surface object: the surface's
+   * ellipsoidal height plus a small lift. At sea that is the local geoid
+   * undulation N: the sea surface ≈ the geoid, which sits −106…+85 m off the
+   * WGS84 ellipsoid worldwide (Rotterdam ≈ +45 m — at height 0 the tile sea
+   * mesh occludes every chevron; Houston ≈ −27 m). Inland it is the lake's or
+   * river's own level (tracking.currentWaterSurfaceM).
    * Pure seam, exported for unit tests.
-   * @param {number|null|undefined} geoidN - Undulation N (m), or null/undefined while the grid is cold.
-   * @param {number} liftM - Lift above the sea surface (m).
-   * @returns {number} Ellipsoidal height h = N + lift (N treated as 0 when absent).
+   * @param {number|null|undefined} surfaceM - Surface height (m), or null/undefined while the geoid grid is cold.
+   * @param {number} liftM - Lift above the water surface (m).
+   * @returns {number} Ellipsoidal height h = surface + lift (surface treated as 0 when absent).
    */
 
-  function vesselDatumHeightM(geoidN, liftM) {
-    return (Number.isFinite(geoidN) ? geoidN : 0) + liftM;
+  function vesselDatumHeightM(surfaceM, liftM) {
+    return (Number.isFinite(surfaceM) ? surfaceM : 0) + liftM;
   }
 
   /**
@@ -582,22 +584,40 @@ export function createQueries({
     /**
      * Describe the selected vessel for the Cockpit bridge view.
      * @returns {object|null} `vesselCockpitInfo` fields plus `seaSurfaceHeightM`
-     *   (the local geoid height the sprite datum uses) and `markHeightM` (the
-     *   height the sprite is drawn at), or null when the layer is off or
-     *   nothing is selected.
+     *   (the bridge's floor, which it raises onto the water it reads off the
+     *   scene: the local geoid, or the water the ship is drawn on where that
+     *   lies lower, as on a flat globe or the Caspian) and `markHeightM` (the height
+     *   the sprite is drawn at: on a lake or river, the water's own level), or
+     *   null when the layer is off or nothing is selected.
      */
     getCockpitSubject() {
       if (!state.feed.enabled) return null;
-      const info = vesselCockpitInfo(state.selectedRecord);
+      const record = state.selectedRecord;
+      const info = vesselCockpitInfo(record);
       if (!info) return null;
       const geoidN = components.tracking.currentGeoidN(
         info.latitude,
         info.longitude,
       );
+      // The water at the position the bridge is placed at (its fix), with
+      // the level kept for the ship standing in where that cell is not
+      // fetched yet; read without moving that level, which the drawing keeps.
+      const surfaceM = components.tracking.peekWaterSurfaceM(
+        info.latitude,
+        info.longitude,
+        record,
+      );
+      // The bridge's floor: the sea, or the water the ship is drawn on where
+      // that lies lower (a flat globe's 0, the Caspian). Raised water above
+      // it the bridge reads off the scene itself.
+      const floorM =
+        Number.isFinite(geoidN) && Number.isFinite(surfaceM)
+          ? Math.min(geoidN, surfaceM)
+          : (surfaceM ?? geoidN);
       return {
         ...info,
-        seaSurfaceHeightM: vesselDatumHeightM(geoidN, 0),
-        markHeightM: vesselDatumHeightM(geoidN, VESSEL_LIFT_M),
+        seaSurfaceHeightM: vesselDatumHeightM(floorM, 0),
+        markHeightM: vesselDatumHeightM(surfaceM, VESSEL_LIFT_M),
       };
     },
 

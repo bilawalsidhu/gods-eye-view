@@ -24,11 +24,12 @@ export const VESSEL_DEFAULT_EYE_HEIGHT_M = 12;
 export const VESSEL_DEAD_RECKON_MAX_S = 180;
 
 /**
- * The vessel layer floats every ship on the geoid (mean sea level), but a
- * river or lake can sit well above it: the Seine through Paris is ~27 m up,
- * which put a bridge eye under the water. The bridge reads the rendered
- * surface around its ship instead: probes on a ring this far out, plus one
- * at the ship itself.
+ * The bridge stands on the geoid (mean sea level), but a river or lake can
+ * sit well above it: the Seine through Paris is ~27 m up, which put a bridge
+ * eye under the water. The vessel layer draws such ships at the terrain's
+ * water level, which is coarse; the bridge reads the rendered surface around
+ * its ship instead: probes on a ring this far out, plus one at the ship
+ * itself.
  */
 export const VESSEL_WATERLINE_PROBE_RADIUS_M = 30;
 
@@ -77,7 +78,8 @@ export function waterlineProbePoints(
  * moored boats and the ship's own model all stand above the water, so the
  * lowest probe is the water. A lowest probe barely above sea level is the
  * sea; one implausibly high is a bad sample. Either way the geoid stands.
- * @param {number} seaSurfaceM The geoid sea surface the layer floats ships on.
+ * @param {number} seaSurfaceM The bridge's floor: the geoid, or the water the
+ *   layer draws its ship on where that lies lower (`seaSurfaceHeightM`).
  * @param {Array<number|null|undefined>} sampleHeightsM Rendered-surface probes.
  * @returns {number}
  */

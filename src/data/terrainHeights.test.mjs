@@ -20,6 +20,7 @@ import {
   resolveEllipsoidalGround,
   cachedEllipsoidalGround,
   cachedRealEllipsoidalGround,
+  cachedRealOrthometricGround,
 } from './terrainHeights.js';
 
 const AUSTIN = { lat: 30.2672, lon: -97.7431 };
@@ -406,4 +407,50 @@ test('resolveEllipsoidalGround: a partial list of the wrong length is ignored', 
       assert.deepEqual(out.map((r) => r.source), ['geoid-fallback', 'geoid-fallback']);
     }
   );
+});
+
+test('a real answer keeps the service elevation; a fallback or a missing one gives none', async () => {
+  await withFakeFetch(
+    async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        results: [
+          { lon: -87, lat: 44.1, elevation: 176.8, geoid: -36.4, ellipsoid: 140.4 },
+          { lon: -87, lat: 44.2, ellipsoid: 141 },
+        ],
+      }),
+    }),
+    async () => {
+      const out = await resolveEllipsoidalGround([
+        { lat: 44.1, lon: -87 },
+        { lat: 44.2, lon: -87 },
+      ]);
+      // The resolver's answer keeps its shape.
+      assert.deepEqual(out[0], { ellipsoid: 140.4, source: 'reearth' });
+    }
+  );
+  assert.equal(cachedRealOrthometricGround(44.1, -87), 176.8);
+  assert.equal(cachedRealOrthometricGround(44.2, -87), null, 'none sent');
+  assert.equal(cachedRealEllipsoidalGround(44.2, -87), 141);
+  assert.equal(cachedRealOrthometricGround(44.3, -87), null, 'not fetched');
+  // A partial answer during an outage keeps its elevations too.
+  await withFakeFetch(
+    async () => ({
+      ok: false,
+      status: 502,
+      json: async () => ({
+        error: 'upstream paused',
+        partial: [{ ellipsoid: 38.1, elevation: 75.3 }, null],
+      }),
+    }),
+    async () => {
+      await resolveEllipsoidalGround([
+        { lat: 43.631, lon: -79.401 },
+        { lat: 43.632, lon: -79.402 },
+      ]);
+    }
+  );
+  assert.equal(cachedRealOrthometricGround(43.631, -79.401), 75.3);
+  assert.equal(cachedRealOrthometricGround(43.632, -79.402), null, 'geoid fallback');
 });
