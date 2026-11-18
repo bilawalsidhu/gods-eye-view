@@ -8,6 +8,27 @@ import { measurePanelNaturalHeight } from './panelMeasurement.js';
 import { settleSideAccordion } from './panelAccordion.js';
 
 /**
+ * Whether the desktop Omnibar dock is laid out, by the condition
+ * omnibar-dock.css lays it out by: the bar and the voice control in the
+ * dock, outside the phone layout, the cockpit, playback, clean view and
+ * recording.
+ */
+const DOCK_OFF = [
+  'mobile-shell',
+  'cockpit-mode',
+  'scene-playback-mode',
+  'ui-clean-view',
+  'recording-mode',
+];
+function desktopOmnibarDock(documentRef) {
+  if (!documentRef?.getElementById?.('gev-omnibar')) return false;
+  const body = documentRef.body;
+  if (DOCK_OFF.some((name) => body?.classList?.contains?.(name))) return false;
+  const voice = documentRef.getElementById('gev-voice-control');
+  return Boolean(voice) && voice.parentElement?.id === 'command-dock';
+}
+
+/**
  * Measure and place the left panel rail for one synchronous layout pass.
  * The caller owns scheduling, obstacle selection, disclosure preferences and
  * persistence. Auto-collapse is presentation only and reports through callbacks.
@@ -233,7 +254,7 @@ export function layoutLeftPanelRail({
     exclusive &&
     expandedPanels.length === 1 &&
     expandedPanels[0].id === 'data-panel' &&
-    Boolean(documentRef?.getElementById?.('gev-omnibar'));
+    desktopOmnibarDock(documentRef);
   const shouldTail =
     !fillDataLayers &&
     expandedPanels.length > 0 &&

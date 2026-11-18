@@ -53,7 +53,12 @@ const error = ref('');
 const busy = ref(false);
 let generation = 0;
 let stopGuide;
-const searchError = computed(() => locationView.value?.searchOrigin === 'omnibar' ? locationView.value.searchError : '');
+// A search's error shows under the line it was for: one that fails after
+// the line was edited says nothing under the new text.
+const searchedFor = ref(null);
+const searchError = computed(() =>
+  locationView.value?.searchOrigin === 'omnibar' && searchedFor.value === query.value ? locationView.value.searchError : '',
+);
 const feedback = computed(() => error.value || searchError.value);
 const voiceOn = computed(() => voice.view?.root?.assistantMode === 'voice');
 // Voice taking over supersedes whatever the field was still running: a plan
@@ -133,7 +138,8 @@ watch(query, (value) => {
   // Only text that may name a place goes to the place service, and only the
   // part that names it: never private text, a question, a sentence, a
   // command, a switch, coordinates or an aircraft code (see placeQuery).
-  const asked = suggester.enabled ? reader.value.placeQuery(text) : null;
+  // Nothing is looked up for a field hidden under voice.
+  const asked = suggester.enabled && !voiceOn.value ? reader.value.placeQuery(text) : null;
   if (!asked) {
     places.value = [];
     placesFor.value = '';
@@ -381,6 +387,7 @@ async function goTo({ latitude, longitude }) {
   if (runner.value) return settled(await runner.value('fly_to_location', { latitude, longitude }));
   const location = locationStore.controls;
   if (!location || location.destroyed) throw new Error();
+  searchedFor.value = query.value;
   await location.search(`${latitude}, ${longitude}`);
   return true;
 }
@@ -389,6 +396,9 @@ function chooseChip(chip, { viaKey = false } = {}) {
   if (screenIsOwned()) return;
   generation++;
   busy.value = false;
+  // A chip is a new request: the last one's error goes.
+  error.value = '';
+  locationStore.controls?.editSearch();
   if (chip.kind === 'entity') {
     entityCard.select(chip.identity, { fly: true });
     reset({ blur: !keepsFocus(viaKey) });
@@ -406,7 +416,10 @@ function chooseChip(chip, { viaKey = false } = {}) {
     reset();
     return;
   }
-  if (chip.kind === 'city') locationStore.controls?.chooseCity(chip.cityId);
+  // The city whose landmarks are open would only fold them: it is flown to.
+  if (chip.kind === 'city' && locationView.value?.poiCity === chip.cityId && runner.value)
+    void runner.value('fly_to_location', { locationId: chip.cityId });
+  else if (chip.kind === 'city') locationStore.controls?.chooseCity(chip.cityId);
   else if (chip.kind === 'landmark') {
     if (locationView.value?.poiCity === chip.cityId) locationStore.controls?.choosePoi(chip.index);
     else {
@@ -563,7 +576,10 @@ watch(
   () => (focused.value ? villagesAsked.value : ''),
   (asked) => {
     clearTimeout(villagesTimer);
-    if (!asked || villages.value?.asked === asked) return;
+    // "around here" and "near it" move with the view and the selection, so
+    // they are looked up again; a named place is the same place.
+    const relative = HERE.test(asked) || /^(me|it|this|that)$/i.test(asked);
+    if (!asked || (villages.value?.asked === asked && !relative)) return;
     villagesTimer = setTimeout(() => void findVillages(asked), 250);
   },
 );
@@ -628,6 +644,9 @@ const showFeedback = computed(() => feedback.value && (focused.value || !assista
 const showResults = computed(() => open.value || showFeedback.value || noCommand.value || privateNote.value);
 
 function onInput(event) {
+  // Text an input method is still composing is read when it is committed
+  // (compositionend), not sent to the place service half-written.
+  if (event.isComposing) return;
   query.value = event.target.value;
   generation++;
   busy.value = false;
@@ -739,6 +758,7 @@ async function runPlan(steps, current) {
           // the plan go on; a cancelled, missing or failed one stops it.
           const location = locationStore.controls;
           if (!location || location.destroyed) throw new Error();
+          searchedFor.value = query.value;
           const flight = await location.search(step.place);
           if (flight !== true) return;
         }
@@ -829,8 +849,11 @@ async function choose(item, { viaKey = false } = {}) {
       } else {
         const location = locationStore.controls;
         if (!location || location.destroyed) throw new Error();
+        searchedFor.value = query.value;
         const result = await location.search(coords ? `${coords.latitude}, ${coords.longitude}` : place);
-        if (result === false || locationView.value?.searchOrigin !== 'omnibar' || searchError.value) return;
+        // Only a search that found the place counts: a refused or cancelled
+        // one (undefined) keeps the line, as the plan path does.
+        if (result !== true || locationView.value?.searchOrigin !== 'omnibar' || searchError.value) return;
       }
       // A typed spot is the user's own; a looked-up place keeps its source.
       if (coords && item.kind === 'place') rememberPlace({ name: place, ...coords, source: item.source || 'typed' });
@@ -932,6 +955,9 @@ function onKeydown(event) {
   } else if (event.key === 'Enter') {
     if (!open.value) return;
     event.preventDefault();
+    // A held or repeated Enter does not start the same line again over its
+    // flight; an edited line (which clears busy) runs.
+    if (event.repeat || busy.value) return;
     if (inStrip.value && chips[chipIndex.value]) chooseChip(chips[chipIndex.value], { viaKey: true });
     else choose(items.value[active.value], { viaKey: true });
   } else if (event.key === 'Escape' && !showResults.value && !query.value.trim()) {
@@ -952,7 +978,8 @@ function onKeydown(event) {
 // focuses the field. Ctrl+K on a Mac is left to the text field it is in.
 const isMac = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform || '');
 function onGlobalKeydown(event) {
-  if (event.defaultPrevented || event.isComposing || screenIsOwned() || !input.value?.getClientRects().length) return;
+  // With voice on the field is hidden: the shortcut does not focus it.
+  if (event.defaultPrevented || event.isComposing || voiceOn.value || screenIsOwned() || !input.value?.getClientRects().length) return;
   // An open modal dialog, or focus inside any dialog (the guide), keeps its
   // keys: the shortcut does not pull focus out of it.
   const doc = globalThis.document;
@@ -1026,6 +1053,7 @@ watch(
         :placeholder="t('Search places, layers, flights… or ask GEV  ·  > for commands')"
         :value="query"
         @input="onInput"
+        @compositionend="onInput"
         @keydown="onKeydown"
         @focus="focused = true; dismissed = false; navigated = false; inStrip = false; layerRevision++"
         @blur="focused = false"
@@ -1337,6 +1365,10 @@ small {
     --omnibar-result-padding: 1px;
     --omnibar-message-padding: 1px;
     --omnibar-item-padding: 2px;
+  }
+  /* The field takes the HUD readout's row (48-82px): the readout sits under it. */
+  :global(body.mobile-shell:has(#world-timeline):has(#gev-omnibar) #intel-hud .hud-bottom-left) {
+    top: calc(var(--mobile-top-inset, 0px) + 88px);
   }
 }
 :global(body.ui-clean-view #gev-omnibar),

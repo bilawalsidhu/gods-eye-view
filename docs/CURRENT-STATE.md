@@ -7817,8 +7817,8 @@ and unreachable upstream (502/504) separately from road geometry.
 ### Omnibar
 
 The desktop Omnibar sits above the footer with the existing mic and chat
-buttons on either side. Suggestions open upward; the phone field stays at
-the top and opens downward. While voice is on, the desktop field shows
+buttons on either side. Suggestions open upward. On phones the Omnibar is
+a field near the top, beside the Search sheet, and opens downward. While voice is on, the desktop field shows
 three audio traces in place of the search text and icon. The thinking dots
 sit on the field's top edge. World Time appears immediately above the dock
 and hides while suggestions, chat, or voice settings are visible. `/`
@@ -8088,7 +8088,8 @@ recovery or seed phrases, "my secret is …" and an email spelled out ("john
 at example dot com") are private too. Text that parses as coordinates or a
 grid reference is not private. A place's name is six words at most, or ten
 when it has a number in it (an address: "1600 Pennsylvania Ave NW
-Washington DC 20500"). The places you go to from the Omnibar (the last 20:
+Washington DC 20500"). The places picked from the Omnibar's rows and chips that carry a position
+(a typed name searched as a place, or a plan's place, is not kept; the last 20:
 name, position and where the name came from) are kept in this browser's
 `localStorage` under `gev:omnibar:recent-places` for the strip; nothing
 clears them but the browser's own site data. Setting `PHOTON_URL`

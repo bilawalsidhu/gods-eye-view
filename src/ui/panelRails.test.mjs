@@ -250,8 +250,13 @@ test('a centered timeline only shortens the corridor when it reaches the visible
 test('Data Layers extends to the HUD even if its list is currently short', () => {
   const f = fixture('left');
   f.first.id = 'data-panel';
+  const dock = { id: 'command-dock' };
   f.options.documentRef.getElementById = (id) =>
-    id === 'gev-omnibar' ? {} : null;
+    id === 'gev-omnibar'
+      ? {}
+      : id === 'gev-voice-control'
+        ? { parentElement: dock }
+        : null;
   f.expand(f.first, 250);
   f.options.obstacles = [element('hud', { top: 760, height: 45 })];
   f.run();
