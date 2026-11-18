@@ -2,8 +2,10 @@
  * @file Browser loader for the bundled 2-bit land/sea mask asset.
  *
  * One shared memoized instance is available to future browser consumers.
- * No application consumer is wired yet. The asset is content-hashed by Vite,
- * so it is fetched with `force-cache`.
+ * No application consumer is wired yet. The fetch follows ordinary HTTP
+ * caching: a build's URL is content-hashed and cached as the server says,
+ * while `vite dev` serves the file under its own unhashed name, where
+ * `force-cache` would keep serving a mask that has since been regenerated.
  *
  * BROWSER ONLY. The Node byte source lives in `server/landSeaMask.js` over
  * the same pure codec. This module used to branch on an `isNode` check and pull
@@ -36,7 +38,7 @@ const MASK_URL = new URL(
 
 /** @returns {Promise<ArrayBuffer>} Raw asset bytes. */
 async function fetchMaskBytes() {
-  const res = await fetch(MASK_URL, { cache: 'force-cache' });
+  const res = await fetch(MASK_URL);
   if (!res.ok)
     throw new Error(`land/sea mask fetch failed: HTTP ${res.status}`);
   return res.arrayBuffer();

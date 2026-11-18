@@ -88,8 +88,25 @@ test('mask global statistics stay in the plausible band', async () => {
   const mask = await loadLandSeaMask();
   const counts = [0, 0, 0, 0];
   const cells = mask.width * mask.height;
-  for (let i = 0; i < cells; i += 1) {
-    counts[(mask.data[i >> 2] >> ((i & 3) * 2)) & 3] += 1;
+  // Land per row (a coastal cell counts half), weighted by the row's share of
+  // the sphere: sin(north edge) - sin(south edge), equal for every column.
+  let weightedLand = 0;
+  let weight = 0;
+  const rad = Math.PI / 180;
+  for (let row = 0; row < mask.height; row += 1) {
+    const south = -90 + (row * 180) / mask.height;
+    const rowWeight =
+      Math.sin((south + 180 / mask.height) * rad) - Math.sin(south * rad);
+    let rowLand = 0;
+    for (let col = 0; col < mask.width; col += 1) {
+      const i = row * mask.width + col;
+      const state = (mask.data[i >> 2] >> ((i & 3) * 2)) & 3;
+      counts[state] += 1;
+      if (state === MASK_LAND) rowLand += 1;
+      else if (state === MASK_COASTAL) rowLand += 0.5;
+    }
+    weightedLand += rowWeight * rowLand;
+    weight += rowWeight * mask.width;
   }
   assert.equal(counts[3], 0, 'reserved state never appears');
   assert.ok(counts[MASK_COASTAL] > 0, 'coastal cells exist');
@@ -98,4 +115,79 @@ test('mask global statistics stay in the plausible band', async () => {
     landFraction > 0.25 && landFraction < 0.35,
     `land fraction ${landFraction.toFixed(4)}`,
   );
+  // By area the committed mask is 0.2867 land; the cell count above reads
+  // 0.3356 because the polar rows, mostly Antarctica, are as many cells as
+  // the equatorial ones. A leaked fill or an inverted level moves this far
+  // outside the band.
+  const landAreaFraction = weightedLand / weight;
+  assert.ok(
+    landAreaFraction > 0.27 && landAreaFraction < 0.31,
+    `land fraction by area ${landAreaFraction.toFixed(4)}`,
+  );
+});
+
+// The browser loader, under node:test with `fetch` replaced. Each case
+// imports its own instance of the module, since the loader memoizes.
+async function withFetch(stub, run) {
+  const prior = globalThis.fetch;
+  globalThis.fetch = stub;
+  try {
+    return await run();
+  } finally {
+    globalThis.fetch = prior;
+  }
+}
+
+test('the browser loader rejects a response that is not OK and says its status', async () => {
+  const browser = await import('./landSeaMask.js?case=not-ok');
+  await withFetch(
+    async () => ({ ok: false, status: 404 }),
+    async () => {
+      await assert.rejects(
+        browser.loadLandSeaMask(),
+        /land\/sea mask fetch failed: HTTP 404/,
+      );
+    },
+  );
+});
+
+test('the browser loader decodes the committed bytes once and names no cache mode', async () => {
+  const browser = await import('./landSeaMask.js?case=ok');
+  const bytes = readFileSync(ASSET_URL);
+  const calls = [];
+  await withFetch(
+    async (...args) => {
+      calls.push(args);
+      return {
+        ok: true,
+        status: 200,
+        arrayBuffer: async () =>
+          bytes.buffer.slice(
+            bytes.byteOffset,
+            bytes.byteOffset + bytes.byteLength,
+          ),
+      };
+    },
+    async () => {
+      const mask = await browser.loadLandSeaMask();
+      assert.equal(mask.width, 2880);
+      assert.equal(mask.height, 1440);
+      assert.equal(mask.data.byteLength, (2880 * 1440) / 4);
+      assert.equal(
+        browser.maskStateAt(mask, 39.74, -104.99),
+        browser.MASK_LAND,
+        'the same bytes the Node loader reads',
+      );
+      assert.equal(await browser.loadLandSeaMask(), mask, 'memoized');
+    },
+  );
+  assert.equal(calls.length, 1, 'fetched once');
+  const [url, init] = calls[0];
+  assert.match(
+    String(url),
+    /\/src\/data\/local_data\/gshhg_mask\/land-sea-mask\.bin$/,
+  );
+  // `force-cache` would serve a stale mask from the dev server, whose URL
+  // for the file is not content-hashed.
+  assert.equal(init?.cache, undefined);
 });

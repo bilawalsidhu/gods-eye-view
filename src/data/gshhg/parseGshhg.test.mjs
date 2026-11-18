@@ -114,6 +114,21 @@ test('unpacks flag bits: level, greenwich, river', () => {
   assert.equal(p.level, 2);
   assert.equal(p.greenwich, true);
   assert.equal(p.river, true);
+  // Each bit alone: set together, swapped shifts would read the same.
+  const points = [0, 0, 1_000_000, 0, 0, 1_000_000];
+  const [onlyGreenwich, onlyRiver] = parseGshhg(
+    stream(
+      encodePolygon({ level: 1, greenwich: 1, river: 0, points }),
+      encodePolygon({ level: 1, greenwich: 0, river: 1, points }),
+    ),
+  );
+  assert.equal(onlyGreenwich.greenwich, true);
+  assert.equal(onlyGreenwich.river, false);
+  assert.equal(onlyRiver.greenwich, false);
+  assert.equal(onlyRiver.river, true);
+  // Bits of the flag the parser does not name leave the level alone.
+  assert.equal(onlyGreenwich.level, 1);
+  assert.equal(onlyRiver.level, 1);
 });
 
 test('converts micro-degree points to a [lon, lat, ...] Float64Array in degrees', () => {
