@@ -1134,7 +1134,8 @@ export function createRendering({ state, services, parts }) {
       visibility.noSample = noSample;
       const wasShown = entry.marker.show;
       const wasVisible = state._visible.has(entry);
-      // Let go of a hold, it played on (cockpitSubject.js): its clock stands.
+      // Just let go of a hold (cockpitSubject.js): it played on, so keep
+      // its clock.
       const playedOn = entry.releasedFromHold === true;
       entry.releasedFromHold = false;
       if (visible) state._visible.add(entry);

@@ -188,7 +188,8 @@ export function createTransitCockpitSubject({ state, parts, services }) {
 
   /**
    * A vehicle let go of is out of play until a sweep finds it in view. It
-   * played on while held, so that sweep keeps its clock (rendering.js).
+   * played on while held, so the next sweep keeps its clock if it finds it in
+   * view (rendering.js).
    */
   function release(entry) {
     if (!entry) return;

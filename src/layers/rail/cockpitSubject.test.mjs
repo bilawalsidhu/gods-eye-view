@@ -202,28 +202,6 @@ test('a standing train keeps its operator’s bearing through reports that leave
   assert.deepEqual(seen, Array(6).fill(-1));
 });
 
-test('a train bound standing, its line late, runs the way its earlier reports went', async (t) => {
-  t.mock.method(console, 'warn', () => {});
-  const paths = { 'mbta-rail': 503 };
-  const app = harness(t, { paths, at: BOSTON });
-  let eastM = 1600;
-  app.feeds.set('mbta-rail', () => [train('T1', LAT, LON0 + eastM / KX)]);
-  await app.enable();
-  // No line yet: it runs 300 m west, with no bearing, and stands.
-  for (const next of [1500, 1400, 1300, 1300, 1300, 1300, 1300, 1300]) {
-    eastM = next;
-    app.run(RAIL_POLL_MS);
-    await app.poll();
-  }
-  assert.equal(app.entry(T1).path, null, 'not bound yet');
-  paths['mbta-rail'] = PACK;
-  const slot = app.state()._pathPacks.get('mbta-rail');
-  app.run(Math.max(0, slot.retryAt - Date.now()));
-  await app.poll();
-  app.parts().selection.selectTrain(T1);
-  assert.equal(app.layer.getSelectedTrain().path.direction, -1);
-});
-
 test('a snapshot read again while nothing changed is the one read before', async (t) => {
   let list = stopList('Alpha', 'Bravo', 'Charlie');
   const app = await onTheLine(t, {

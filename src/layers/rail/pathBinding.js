@@ -74,8 +74,8 @@ function createBinding(shapeIndex, path, via, s, fix) {
     via,
     /**
      * Which way the drawn train runs along the shape: +1 along it, -1
-     * against it, 0 until it has moved DIRECTION_MIN_M (steer, or
-     * recallDirection). Kept until a rebind, and while the train stands.
+     * against it, 0 until it has moved DIRECTION_MIN_M (steer). Kept until
+     * a rebind, and while the train stands.
      * Once a playback segment has told it (`directionPlayed`), only playback
      * changes it: the newest reports run ahead of the drawn train, so a
      * reversal they show turns it when playback reaches it.
@@ -84,7 +84,7 @@ function createBinding(shapeIndex, path, via, s, fix) {
     directionPlayed: false,
     /** steer() turn points: one for the reports, one for the played segments. */
     reportTurn: { s },
-    playTurn: { s: NaN },
+    playTurn: { s: NaN, epoch: NaN },
     /** The newest operator bearing its reports gave (deg), NaN before one. */
     bearingDeg: Number.isFinite(fix.bearingDeg) ? fix.bearingDeg : NaN,
     /** Arc and time of the newest report. */
@@ -205,32 +205,6 @@ export function rebindTrainPath(pack, { routeId } = {}, binding, fix) {
     : null;
 }
 
-/**
- * Which way a train just bound standing ran before: the newest of its
- * earlier reports (newest first) DIRECTION_MIN_M or more along the line
- * from its newest one tells. Stops at the first report off the line.
- * @param {object} binding Just made, from the newest report.
- * @param {Array<{t: number, lat: number, lon: number}>} earlier
- */
-export function recallDirection(binding, earlier) {
-  if (!binding || binding.direction) return;
-  for (const fix of earlier) {
-    const hit = projectOnPath(
-      binding.path,
-      fix.lat,
-      fix.lon,
-      binding.fixS,
-      pathWindowM(binding.fixT - fix.t),
-    );
-    if (!hit || hit.offsetM > PATH_OFF_TRACK_M) return;
-    const step = binding.fixS - hit.s;
-    if (Math.abs(step) >= DIRECTION_MIN_M) {
-      binding.direction = Math.sign(step);
-      return;
-    }
-  }
-}
-
 /** Project one playback report, near the last drawn arc when that is useful. */
 function projectReport(binding, fix, hintS, hintT) {
   const path = binding.path;
@@ -296,8 +270,11 @@ export function placeOnPath(binding, sample, segment, out) {
     cache.ok = Number.isFinite(sFrom) && Number.isFinite(sTo);
     if (cache.ok) {
       const turn = binding.playTurn;
-      // A break is a corrected position, not a move: steer on from there.
-      if (from.flags & FIX_FLAGS.BREAK) turn.s = sFrom;
+      // A break or a new epoch is a corrected position, not a move: steer
+      // on from there.
+      if (from.flags & FIX_FLAGS.BREAK || from.epoch !== turn.epoch)
+        turn.s = sFrom;
+      turn.epoch = from.epoch;
       binding.direction = steer(binding.direction, turn, sFrom);
       binding.direction = steer(binding.direction, turn, sTo);
       if (binding.direction) binding.directionPlayed = true;

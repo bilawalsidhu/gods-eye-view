@@ -958,8 +958,8 @@ test('disable aborts in-flight work and a response that lands late is ignored', 
 });
 
 /**
- * Serves one bus at `place.lat` (read on every poll), enables the layer and
- * polls once; returns its entry.
+ * Serves one bus at `place.lat` (read on every poll), enables the layer, polls
+ * once and settles; returns its entry.
  */
 async function oneBus(app, place = { lat: 42.36 }) {
   app.serve('mbta', () => ({
@@ -4930,6 +4930,11 @@ test('a held vehicle hides, keeps moving out of view, and lets go when it goes',
   assert.equal(app.layer.getCockpitSubject(), null);
 });
 
+/** A vehicle's icon in the set that draws it, still or moving. */
+function iconOf(app, key) {
+  return app.markers('still').get(key) ?? app.markers('moving').get(key);
+}
+
 test('turning Transit off ends a hold; on again, the vehicle shows, a click selects it and Escape deselects it', async (t) => {
   const app = harness(t);
   const key = await busRunningNorth(app);
@@ -4950,8 +4955,7 @@ test('turning Transit off ends a hold; on again, the vehicle shows, a click sele
   const [entry] = app.vehicles();
   app.frame();
   assert.equal(entry.marker.show, true, 'the vehicle is drawn, not held');
-  const icon = app.markers('still').get(key) ?? app.markers('moving').get(key);
-  assert.equal(icon?.show, true, 'and so is its icon in the set');
+  assert.equal(iconOf(app, key)?.show, true, 'and so is its icon in the set');
   app.viewer.scene.pick = () => app.pickOf(entry);
   app.input.click(new Cesium.Cartesian2(500, 400));
   assert.equal(app.state()._selectedKey, key, 'a click selects it');
@@ -4984,11 +4988,9 @@ test('a held parked vehicle draws no icon; let go, it draws its icon again', asy
   }
   const key = 'mbta:bus-1';
   const [entry] = app.vehicles();
-  const icon = () =>
-    app.markers('still').get(key) ?? app.markers('moving').get(key);
-  assert.equal(icon()?.show, true, 'drawn before the hold');
+  assert.equal(iconOf(app, key)?.show, true, 'drawn before the hold');
   assert.equal(app.layer.setCockpitSubject(key), true);
-  assert.equal(icon()?.show ?? false, false, 'hidden at once');
+  assert.equal(iconOf(app, key)?.show ?? false, false, 'hidden at once');
   // The view rides it for a while: frames, a sweep, a poll.
   app.run(2_000, 16);
   app.settle();
@@ -4997,7 +4999,7 @@ test('a held parked vehicle draws no icon; let go, it draws its icon again', asy
   app.settle();
   assert.equal(entry.marker.show, false, 'its marker is hidden');
   assert.equal(
-    icon()?.show ?? false,
+    iconOf(app, key)?.show ?? false,
     false,
     'and so is the icon the set draws',
   );
@@ -5005,7 +5007,7 @@ test('a held parked vehicle draws no icon; let go, it draws its icon again', asy
   assert.equal(app.layer.setCockpitSubject(null), true);
   app.advance(250);
   app.settle();
-  assert.equal(icon()?.show, true, 'let go: drawn again');
+  assert.equal(iconOf(app, key)?.show, true, 'let go: drawn again');
 });
 
 test('a hold moved to another vehicle lets the first go out of view', async (t) => {
@@ -5069,7 +5071,7 @@ test('a vehicle in view let go of a hold goes on from its own clock', async (t) 
         app.run(TRANSIT_POLL_MS);
         await app.layer.update();
       }
-      // One late poll: the lag the feed earns grows.
+      // One late poll raises the feed's target lag.
       app.run(TRANSIT_POLL_MS + 10_000);
       fixAt += TRANSIT_POLL_MS;
       north += 0.001;
