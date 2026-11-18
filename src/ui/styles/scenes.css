@@ -220,7 +220,7 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
 }
 
 /* One primary action per step: CAPTURE SHOT and PLAY. The panel id keeps
-   this above Cyber's shared button surface. */
+   this above the shared button surface. */
 #scene-panel .scene-btn-primary:not(:disabled) {
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);

@@ -836,7 +836,6 @@
     "exports": ["./ui/layout"],
     "modules": [
       "src/ui/panelRails.js",
-      "src/ui/displayPanelScroll.js",
       "src/ui/leftPanelRail.js",
       "src/ui/rightPanelRail.js",
       "src/ui/panelMeasurement.js",
@@ -1211,7 +1210,6 @@
       "src/ui/cockpitController.js",
       "src/data/followed.js",
       "src/ui/cockpitDisplayPortal.js",
-      "src/ui/displayPanelScroll.js",
       "src/ui/cockpitInput.js",
       "src/ui/cockpitInstruments.js",
       "src/cockpitSubjectProviders.js",
@@ -1434,7 +1432,6 @@
       "src/ui/cockpitContext.js",
       "src/ui/cockpitController.js",
       "src/ui/cockpitDisplayPortal.js",
-      "src/ui/displayPanelScroll.js",
       "src/ui/cockpitInput.js",
       "src/ui/cockpitInstruments.js",
       "src/cockpitSubjectProviders.js",
@@ -4750,7 +4747,6 @@
       "src/ui/cockpitContext.js",
       "src/ui/cockpitController.js",
       "src/ui/cockpitDisplayPortal.js",
-      "src/ui/displayPanelScroll.js",
       "src/ui/cockpitInput.js",
       "src/ui/cockpitInstruments.js",
       "src/cockpitSubjectProviders.js",
@@ -6698,7 +6694,6 @@
   "ui-panel-chrome": {
     "exports": ["./ui/panel-chrome"],
     "modules": [
-      "src/ui/displayPanelScroll.js",
       "src/ui/radioPanelPlacement.js",
       "src/panelStackLayout.js",
       "src/ui/leftPanelRail.js",

@@ -279,9 +279,7 @@ export const FEATURE_GUIDES = Object.freeze({
       prepare: () => $('#hud-toggle')?.scrollIntoView?.({ block: 'center' }),
       targets: () => [$('#hud-toggle')],
       text: () =>
-        t(
-          'Switch the HUD on or off here; Layout picks Tactical, Minimal or Cyber',
-        ),
+        t('Switch the HUD on or off here; Layout picks Tactical or Minimal'),
     },
   ],
   scope: () => [

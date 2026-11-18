@@ -326,8 +326,10 @@ body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
     :is(#cesium-credits, #gev-credits) {
     bottom: 1rem;
   }
+  /* 8px above the bottom-right corner row (Power Up and the language picker:
+     32px tall, 14px up), as outside the Omnibar layout. */
   #intel-hud[data-variant='tactical'] .hud-bottom-right {
-    bottom: calc(4.2rem - 26px);
+    bottom: 3.375rem;
   }
   #intel-hud:is([data-variant='tactical'], [data-variant='minimal'])
     .hud-bottom-left {

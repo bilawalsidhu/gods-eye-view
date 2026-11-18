@@ -1,5 +1,4 @@
 import { readStylesheet } from '../testSupport/readStylesheet.mjs';
-import { displayPanelScroller } from './displayPanelScroll.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -9,21 +8,9 @@ import {
 } from './panelRails.js';
 import { applyPanelState, readPanelState } from './rail/panelState.js';
 
-test('Display uses an inner scroll body only in Cyber', () => {
-  const body = { scrollTop: 95 };
-  const panel = {
-    ownerDocument: { documentElement: { dataset: { uiTheme: 'cyber' } } },
-    querySelector: () => body,
-  };
-  assert.equal(displayPanelScroller(panel), body);
-  panel.ownerDocument.documentElement.dataset.uiTheme = 'tactical';
-  assert.equal(displayPanelScroller(panel), panel);
-  assert.equal(displayPanelScroller(null), null);
-});
-
 for (const side of ['left', 'right']) {
   test(`${side} desktop rail keeps one expanded owner in every HUD layout`, () => {
-    for (const variant of ['tactical', 'minimal', 'cyber']) {
+    for (const variant of ['tactical', 'minimal']) {
       const f = fixture(side, { hud: { visible: true, variant } });
       f.expand(f.first, 250);
       f.expand(f.second, 250);
@@ -232,7 +219,7 @@ test('left corridor respects a lower obstacle but ignores an obstacle hidden by 
   assert.equal(Number(f.stack.dataset.safeBottomPct), 65.47);
 });
 
-test('a centered timeline only shortens the corridor when it reaches the visible panel', () => {
+test('a centered timeline only shortens the corridor when it reaches a laid-out panel', () => {
   const f = fixture('left');
   f.stack.rect.width = 360;
   f.stack.rect.right = f.stack.rect.left + 360;
@@ -244,6 +231,11 @@ test('a centered timeline only shortens the corridor when it reaches the visible
   timeline.rect.left = 280;
   f.run();
   assert(clear > 85);
+  assert(Number(f.stack.dataset.safeBottomPct) < 73);
+  // Any other obstacle in the same gutter still bounds the corridor.
+  const blocker = element('blocker', { top: 650, left: 320 });
+  f.options.obstacles = [blocker];
+  f.run();
   assert(Number(f.stack.dataset.safeBottomPct) < 73);
 });
 
@@ -413,12 +405,6 @@ test('left rail buttons hold still whether the open panel is short or tall', () 
   assert.equal(f.stack.dataset.layoutMode, 'focus');
   assert.notEqual(short.stack.dataset.layoutMode, 'focus');
   assert.ok(Math.abs(railTop(f.stack) - railTop(short.stack)) < 0.2);
-
-  // A theme that pins the stack's top (Cyber) leaves nothing to offset.
-  f.stack.computed.getPropertyValue = (name) =>
-    name === '--panel-stack-top-pinned' ? ' 1' : '';
-  f.run();
-  assert.equal(f.stack.style.getPropertyValue('--panel-rail-offset'), '0.0px');
 });
 
 // The left rail's `top` animates after the right pass runs, and nothing
@@ -459,9 +445,9 @@ test('right rail falls back to the committed left target when the transition end
 });
 
 test('right rail follows a settled left rail whose CSS overrides the committed target', () => {
-  // Cyber pins the left rail with `top: ... !important`, so the committed
+  // A stylesheet that pins the left rail's `top` means the committed
   // percentage is not where it renders and no `top` transition runs.
-  const f = fixture('right', { hud: { visible: true, variant: 'cyber' } });
+  const f = fixture('right', { hud: { visible: true, variant: 'minimal' } });
   f.options.leftStack.rect.top = 220;
   f.options.leftStack.dataset.safeTopPct = '26.00';
   f.options.leftStack.getAnimations = () => [];

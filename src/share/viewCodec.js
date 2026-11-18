@@ -114,6 +114,9 @@ export const SHARE_VIEW_ENUMS = Object.freeze({
     'esri-imagery',
     'osm',
   ]),
+  // Removed layouts keep their index so old links decode: Operator opens in
+  // Tactical. Cyber means Tactical with the Sonar style on; the app still
+  // writes it for that state.
   hudVariant: Object.freeze(['tactical', 'operator', 'minimal', 'cyber']),
   detectionMode: Object.freeze(['OFF', 'SPARSE', 'BALANCED', 'DENSE']),
   detectionAllocation: Object.freeze(['ELASTIC', 'WEIGHTED']),

@@ -94,11 +94,6 @@
     width: 100%;
   }
 }
-:root[data-ui-theme='cyber'] .news-panel-inner {
-  border-radius: 0;
-  clip-path: var(--cyber-panel-frame);
-  box-shadow: var(--cyber-panel-shadow);
-}
 
 .news-readout {
   display: flex;

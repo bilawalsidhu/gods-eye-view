@@ -440,6 +440,15 @@ test('precision: coordinates 1e-4 degrees, angles and lengths whole units', () =
   assert.deepEqual([wild.lat, wild.lon, wild.pitch], [90, -170, -90]);
 });
 
+test('links made with a retired HUD layout still decode to its name', () => {
+  // The app restores Operator as Tactical and Cyber as Tactical with Sonar on
+  // (VisualSettings._setHudVariant); the codec only keeps the name.
+  for (const hudVariant of ['operator', 'cyber']) {
+    const state = { ...createDefaultShareViewState(), hudVariant };
+    assert.equal(decodeOk(encodeShareView(state)).state.hudVariant, hudVariant);
+  }
+});
+
 test('defaults travel as frozen meanings that match today’s app defaults', () => {
   const defaults = createDefaultShareViewState();
   // When an app default moves, these tests should be updated to document the
@@ -448,7 +457,8 @@ test('defaults travel as frozen meanings that match today’s app defaults', () 
   assert.equal(defaults.bloomVersion, BLOOM_SCALE_VERSION);
   assert.equal(defaults.hudVariant, HUD_LAYOUTS[0]);
   // Codes are append-only: the retired Operator layout keeps code 1 so old
-  // links still parse, and the app restores them as Tactical.
+  // links still parse, and the app restores them as Tactical. The retired
+  // Cyber layout keeps code 3; the app restores it as Tactical with Sonar on.
   assert.deepEqual(SHARE_VIEW_ENUMS.hudVariant, [
     'tactical',
     'operator',
@@ -456,7 +466,9 @@ test('defaults travel as frozen meanings that match today’s app defaults', () 
     'cyber',
   ]);
   assert.deepEqual(
-    SHARE_VIEW_ENUMS.hudVariant.filter((variant) => variant !== 'operator'),
+    SHARE_VIEW_ENUMS.hudVariant.filter(
+      (variant) => variant !== 'operator' && variant !== 'cyber',
+    ),
     [...HUD_LAYOUTS],
   );
   // Snow is retired; its code stays reserved (see the retired-style test).

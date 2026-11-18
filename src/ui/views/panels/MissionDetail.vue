@@ -13,7 +13,7 @@ const { mission: m, missionsLayer: layer } = storeToRefs(useContextStore());
 const root = ref(null);
 
 // Each newly presented selection returns the Context panel to the top.
-const SCROLLER = ":root[data-ui-theme='cyber'] .cyber-panel-body, .global-context-panel-inner";
+const SCROLLER = '.global-context-panel-inner';
 watch(
   () => m.value?.scrollRequest,
   async (request) => {

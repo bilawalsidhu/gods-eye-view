@@ -2,7 +2,6 @@ import { UiLifetime } from './uiLifetime.js';
 import { prefersCollapsed, readPanelState } from './rail/panelState.js';
 import { usePanelChromeStore } from './stores/panelChrome.js';
 import { applicationPinia } from './vueRuntime.js';
-import { displayPanelScroller } from './displayPanelScroll.js';
 import { PanelPositionControls } from './panelPositionControls.js';
 import { PanelLayoutController } from './panelLayoutController.js';
 import {
@@ -121,7 +120,7 @@ export class PanelChrome {
       readDisplayScrollTop: () =>
         this._displayPortalScrollRestoreOwner === 'standard'
           ? this._standardDisplayScrollTop
-          : displayPanelScroller(this._ppToggles)?.scrollTop || 0,
+          : this._ppToggles?.scrollTop || 0,
     });
   }
   get hud() {

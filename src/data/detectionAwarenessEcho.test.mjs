@@ -53,7 +53,7 @@ test('the echo bracket pulses outward from the contact bracket and fades', (t) =
   assert.ok(half.spreadPx > echo.spreadPx * 0.5);
   assert.ok(half.spreadPx < echo.spreadPx);
   assert.ok(half.band < STEPS && half.band >= 1);
-  // The bracket's own dimming (keyhole fade, Cyber sonar sweep) carries
+  // The bracket's own dimming (keyhole fade, sonar sweep) carries
   // over, and the echo is never drawn brighter than its bracket: a bracket
   // too dim for even one band draws no echo.
   assert.equal(at(arrival, 0.25).band, 2);

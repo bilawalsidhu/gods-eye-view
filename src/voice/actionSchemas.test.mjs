@@ -60,7 +60,9 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // absolute with its -45 default, with steps sent as a direction.
     // show_street_level (map, source, photo) adds one tool.
     // open_stories adds the Stories Explore entry action.
-    '5a2deb65bef5db8fa49ee55dd66efb884e7c3ba97dbdcaad3fada087170d2225',
+    // The Cyber HUD layout leaves set_hud's layout enum (its sonar is a
+    // visual style; set_cyber_sonar is excluded above).
+    '97f78bc5e66d757da87333c515ebdbf5c2a6908156b3e676e9c2ca45e9b5e4f3',
   );
 });
 
@@ -227,9 +229,9 @@ test('all legacy action arguments are byte-identical after removing the delibera
     delete center.properties[axis].minimum;
     delete center.properties[axis].maximum;
   }
-  // Cyber adds one HUD layout and Operator was retired.
+  // Operator and then Cyber were retired.
   const hud = property('set_hud').layout;
-  assert.deepEqual(hud.enum, ['tactical', 'minimal', 'cyber']);
+  assert.deepEqual(hud.enum, ['tactical', 'minimal']);
   hud.enum = ['tactical', 'operator', 'minimal'];
   // Snow is retired from set_visual_style; restore it to keep the legacy pin.
   const visualStyle = legacy.find((tool) => tool.name === 'set_visual_style')

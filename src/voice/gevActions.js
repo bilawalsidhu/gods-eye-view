@@ -1604,7 +1604,7 @@ export function createGevActionRunner({
         return {
           ok: false,
           action: 'set_cyber_sonar',
-          error: 'Cyber sonar controls are unavailable.',
+          error: 'Sonar controls are unavailable.',
         };
       }
       return { action: 'set_cyber_sonar', ...styleManager.setCyberSonar(args) };
