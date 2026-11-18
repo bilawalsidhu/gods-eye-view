@@ -31,10 +31,6 @@ export const BILLBOARD_SCALE = 0.7;
 
 export const MIL_ICON_COLOR = rgba('#FFB800');
 
-/** @constant {number[]} Lighter amber tint applied to the actively tracked aircraft */
-
-export const TRACKED_ICON_COLOR = rgba('#FFD166');
-
 /** @constant {number[]} Red tint for aircraft broadcasting an emergency (mirror of flights) */
 
 export const EMERGENCY_ICON_COLOR = rgba(EMERGENCY_TINT_CSS);
@@ -61,21 +57,26 @@ export const MODEL_WHITE = rgba('#FFFFFF');
 export const GROUND_SCALE = 0.8;
 
 // --- 3D model rendering (mirrors flights.js) -----------------------------------------
-// When enabled, military aircraft render as 3D glTF models once the camera is below
-// MODEL_ALT_CEIL_M (zoomed in); higher up they stay flat billboards. Eligibility is
-// FRUSTUM-based (on-screen), and the slots go to either the nearest planes ('proximity')
-// or every in-view plane ('all'), each backed by a hard cap so a draw-call explosion
-// can't tank the frame (no instancing yet). Each aircraft draws the fleet model of its
-// type, as the flights layer does; the amber tint sets this layer apart.
+// When enabled, a military aircraft draws as its 3D glTF model only within MODEL_ADD_M of the
+// camera (eye to aircraft); farther away it stays its icon. Models are drawn at their true size,
+// with no minimum pixel size. Eligibility is distance-based with on-screen priority, and the slots
+// go to either the nearest planes ('proximity') or every in-range plane ('all'): the two modes share
+// the radius and differ by their caps. Each aircraft draws the fleet model of its type, as the
+// flights layer does; the amber tint sets this layer apart.
 
-export const MODEL_ALT_CEIL_M = 800000;
-// m: below this camera altitude, draw 3D models (raised so it's easy to trigger)
+export const MODEL_ADD_M = 3000;
+// model NEW planes within 3 km of the camera (mirror of flights.js)
 
-export const MODEL_MIN_PX = 24;
-// floor so distant models stay visible without ballooning into a min-pixel blob (mirror of flights.js)
+export const MODEL_KEEP_M = 3600;
+// KEEP modeled planes out to 3.6 km (hysteresis, mirror of flights.js)
 
-// Per-mode caps + radii — mirror of flights.js. Modes differ by RADIUS (not just cap) so Proximity
-// and All aren't identical when few planes are in range; on-screen planes win the cap (see flights.js).
+export const MODEL_HIGHEST_CONTACT_M = 30000;
+// m above the ellipsoid: no aircraft the layer draws flies higher (mirror of flights.js)
+
+export const MODEL_ALT_CEIL_M = MODEL_HIGHEST_CONTACT_M + MODEL_KEEP_M;
+// m: above this camera altitude no contact can be within MODEL_KEEP_M (mirror of flights.js)
+
+// Per-mode caps — mirror of flights.js; on-screen planes win the cap (see flights.js).
 
 export const MODEL_MAX = 150;
 // 'proximity' cap
@@ -83,31 +84,23 @@ export const MODEL_MAX = 150;
 export const MODEL_MAX_ALL = 350;
 // 'all' cap
 
-export const MODEL_PROX_ADD_M = 150000;
-// proximity: model NEW planes within 150 km
-
-export const MODEL_PROX_KEEP_M = 185000;
-// proximity: KEEP modeled planes out to 185 km
-
-// Cockpit keeps the standard Display radii but lowers the GLB budget. Contacts
-// inside the selected band remain AIR silhouettes when they cannot own a model;
-// contacts outside the band use compact dots.
-
 export const COCKPIT_MODEL_MAX = 60;
 // max concurrent GLBs in cockpit (never raises the map cap)
 
-export const MODEL_ALL_ADD_M = 400000;
-// all: model NEW planes within 400 km (~to the horizon)
+// Cockpit's AIR band (mirror of flights.js): contacts inside it remain AIR
+// silhouettes when they cannot own a model; contacts outside it use compact
+// dots. Independent of the 3D model radius.
 
-export const MODEL_ALL_KEEP_M = 450000;
-// all: KEEP modeled planes out to 450 km
+export const COCKPIT_AIR_PROX_ADD_M = 150000;
+
+export const COCKPIT_AIR_PROX_KEEP_M = 185000;
+
+export const COCKPIT_AIR_ALL_ADD_M = 400000;
+
+export const COCKPIT_AIR_ALL_KEEP_M = 450000;
 
 export const MODEL_HEADING_OFFSET_DEG = 180;
 // every fleet model is nose -X: opposite Cesium heading 0
-
-/** Amber fade target for the tracked billboard once the model takes over (mirrors flights.js CYAN_TRANSPARENT). */
-
-export const AMBER_TRANSPARENT = rgba('#FFB800', 0);
 
 export const COCKPIT_CONTACT_SIZE_PX = 6;
 

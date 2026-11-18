@@ -163,6 +163,42 @@ optional:
 - `frame.renderNow()` throws when the frame fails to draw. With
   `{ifDue: true}` it runs one tick of the loop now, as the loop's own would
   (camera flight, input, clock), and draws only a frame that is due.
+- `ModelItem.parts` (capability `modelParts`, `ModelPartState`) poses a
+  model's moving parts. It applies to a model whose mesh carries a `_PART`
+  vertex attribute (each vertex's part index) and whose root node's glTF
+  `extras.parts` is its part table: each part's name, kind (`body`, `spin`,
+  `hinge`, `slide`, `deploy`, `separable`, `marker`), pivot, axis, limits,
+  rest and parent. `spin` turns parts at degrees a second, advanced by the
+  renderer on its own clock (a change of rate goes on from the angle
+  reached); `deploy` sets parts between stowed (0) and deployed (1);
+  `poses` moves, turns, hides or highlights a part by name, in the model's
+  glTF frame (forward −X, up +Y, right −Z). It changes live without loading
+  the model again. A model without a part table ignores it, and a renderer
+  without the capability, or that cannot pose parts, draws the model
+  whole, at rest, as its file draws it: the application runs fully without
+  it. The maths is `gods-eye-view/render/modelParts` (`partMatrices`:
+  deploy, then spin, then the pose, then the parent's), so a renderer that
+  poses parts draws exactly those; with `axisScale` the parts turn rigidly
+  in the stretched model. The Cesium port lists it and poses parts where
+  its context is WebGL 2 with floating-point textures, drawing models whole
+  elsewhere. A posed model gets a custom shader that moves each vertex by
+  its part's matrix, read from a small texture written in place when the
+  parts change and each frame a part of a model in view spins (a model out
+  of view or under 4 pixels across is not turned and asks for no frame),
+  composed with `maskColor`, `unlit` and `thermal`. A moved part's material
+  normal (its normal map and back-face flip kept) turns by the inverse
+  transpose of its matrix, exact under `axisScale`; a hidden part draws
+  nothing and a highlighted one is mixed toward its colour. A model at rest
+  keeps the shader it had, and part shaders go with the draw port. Cesium
+  culls and picks a model by its bounds as its file draws it, so a part
+  moved outside them (a large `offsetM`) draws only while those bounds are
+  in view, and is not picked there. The check `draw.models.parts` poses,
+  hides, moves, clamps and spins the parts of a model built in code
+  (`render/conformance/partsModel.js`): a move right lands a quarter turn
+  clockwise of a move forward, a mesh node turned, scaled and moved changes
+  nothing, a move stretches with `axisScale`, and a slide and a hinge stop
+  at their limits. The live layers drive it from each vehicle's record
+  (`src/data/modelPartDrivers.js`).
 
 The Cesium port lists `gpuTiming` where its context has
 `EXT_disjoint_timer_query_webgl2`: while anyone listens to frame signals,
@@ -282,6 +318,9 @@ opaque command and before the translucent pass, which blends
 order-independently and would undo the addition; ground commands keep their
 pass and stencil and only blend differently. The checks `draw.sets.blend`
 (points, icons, lines, shapes) and `draw.models.blend` read the pixels.
+`draw.models.paint` reads a lit model's vertex paint (`COLOR_0`) at a fixed
+sun: its colour by day, still its colour (not black) with the sun below the
+horizon, and its paint kept under a tint mixed in.
 
 A model item may bring its glTF bytes (`gltf`): the renderer builds it from
 them and never fetches its `url`, which stays the model's identity, so a
@@ -575,7 +614,10 @@ on (no `renderer.id`, no engine type, no engine object's presence).
   (`ownCreditDisplay`; otherwise the application's own line,
   `src/ui/creditsView.js`, shows the credits port's list), and what QA
   scripts read from `window.__godsEyeView` (Cesium's viewer there, for the
-  scripts that drive it). Each is optional, none is a contract member, and
+  scripts that drive it), and its own engine (`engine`, whose `kind` names
+  it: Cesium's is `{kind: 'cesium', viewer}`) for an application that draws
+  with that engine directly beside the contract, only with engines whose
+  kind it knows, adding, updating and removing what it draws. Each is optional, none is a contract member, and
   a renderer without them runs the application without that behaviour.
 - **What the renderer should do is in the ports**, each through the
   application's own code: outward zooms stop at a whole-Earth view that

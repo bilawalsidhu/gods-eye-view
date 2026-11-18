@@ -293,6 +293,68 @@ export function trailHeadCurvePoints(fixes, count, displayMs) {
   return curvePoints(curve, last.timeMs, displayMs);
 }
 
+/** @constant {number} How far back from the newest report `trailTimeAt` looks for the aircraft (ms). */
+export const TRAIL_TIME_AT_SEARCH_MS = 15 * 60_000;
+
+/**
+ * The time on the trail at which `position` lies: the pair of consecutive
+ * reports, one path, whose straight line passes closest to it (the newest
+ * pair when two are as close), and the time that far along between them.
+ * Past the newest report the time runs on at that pair's pace; before the
+ * oldest pair it runs back the same way. Only pairs ending within
+ * TRAIL_TIME_AT_SEARCH_MS of the newest report are looked at, so a loop
+ * flown earlier is not mistaken for where the aircraft is now.
+ *
+ * This is how the trail finds the time an aircraft placed by someone else
+ * (a host-supplied placement) is drawn at: whatever delay that placement
+ * draws with, the trail then ends where the aircraft is drawn.
+ * @param {object[]} fixes - The trail, chronological.
+ * @param {{x: number, y: number, z: number}|null|undefined} position - Where the aircraft is drawn.
+ * @returns {number} Epoch ms; NaN when no pair of reports is one path.
+ */
+export function trailTimeAt(fixes, position) {
+  if (!position || fixes.length < 2) return NaN;
+  const newestMs = fixes[fixes.length - 1].timeMs;
+  let bestM = Infinity;
+  let bestMs = NaN;
+  for (let i = fixes.length - 1; i > 0; i--) {
+    const b = fixes[i];
+    if (newestMs - b.timeMs > TRAIL_TIME_AT_SEARCH_MS) break;
+    const a = fixes[i - 1];
+    if (!a.position || !b.position || b.breakBefore) continue;
+    const spanMs = b.timeMs - a.timeMs;
+    if (!(spanMs > 0)) continue;
+    const dx = b.position.x - a.position.x;
+    const dy = b.position.y - a.position.y;
+    const dz = b.position.z - a.position.z;
+    const lengthSq = dx * dx + dy * dy + dz * dz;
+    let u =
+      lengthSq > 0
+        ? ((position.x - a.position.x) * dx +
+            (position.y - a.position.y) * dy +
+            (position.z - a.position.z) * dz) /
+          lengthSq
+        : 0;
+    // Only the newest pair runs on past its end, only the oldest looked at
+    // back past its start; the rest are their own segment.
+    const newest = i === fixes.length - 1;
+    const oldest =
+      i === 1 || newestMs - fixes[i - 1].timeMs > TRAIL_TIME_AT_SEARCH_MS;
+    const along = Math.min(Math.max(u, 0), 1);
+    const offM = Math.hypot(
+      position.x - (a.position.x + along * dx),
+      position.y - (a.position.y + along * dy),
+      position.z - (a.position.z + along * dz),
+    );
+    if (!(offM < bestM)) continue;
+    if (!(u > 1 && newest)) u = Math.min(u, 1);
+    if (!(u < 0 && oldest)) u = Math.max(u, 0);
+    bestM = offM;
+    bestMs = a.timeMs + u * spanMs;
+  }
+  return bestMs;
+}
+
 /**
  * Draw body segments. A trail without breaks support draws only the newest
  * segment, never a line across a break.

@@ -4230,6 +4230,7 @@ test('the actual Transit lifecycle keeps exactly its own camera listener in ever
         onCameraChanged: noop,
         runProximityCheck: noop,
         deactivateAllCities: noop,
+        showCoverage: noop,
       },
       ingestion: { abortAllInFlight: noop },
     },
