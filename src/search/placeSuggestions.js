@@ -130,25 +130,34 @@ function privacyReason(text) {
   // ("DC 20500-0003"), a Brazilian CEP ("01310-200") and a Japanese one
   // after "〒" or before the address ("〒100-0001", "100-0001 東京都").
   // "#" (a street number's sign, "Calle 100 # 19-61") splits digits too.
-  const digits = line
-    .replace(/(^|\s)\d{1,4}[a-z]?,?\s+\d{5}(?:-\d{3})?(?=\s+\p{L}|$)/giu, '$1 ')
-    // Other postcodes after a street's house number and before the city (a
-    // four-digit one after a comma, so "is 555 0100 thanks" stays a number):
-    // "Nowy Świat 10, 00-950 Warszawa", "Drottninggatan 53, 111 21
-    // Stockholm", "Mariahilfer Straße 120, 1070 Wien", "Rua Augusta 274,
-    // 1100-053 Lisboa", "Tverskaya 13 125009 Moscow".
-    .replace(
-      /(?<=\p{L}\.?\s)\d{1,4}[a-z]?(?:,\s*\d{4}(?:-\d{3})?|,?\s+(?:\d{2}-\d{3}|\d{3} \d{2}|\d{6}))(?=\s+\p{L})/giu,
-      ' x ',
-    )
-    .replace(/(?<=\p{L}\.?,?\s)\d{5}-\d{4}\b/gu, ' x ')
-    .replace(/\b\d{5}-\d{3}\b/g, ' x ')
-    .replace(
-      /〒\s?\d{3}-\d{4}|\b\d{3}-\d{4}(?=\s*[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}])/gu,
-      ' x ',
-    )
-    .replace(/#/g, ' x ')
-    .replace(/[^\p{L}\p{N}]/gu, '');
+  // A word that says what the number is ("card 4111 111111", "call 0207
+  // 946095") keeps the digits together: no address is read out of them.
+  const named = NUMBER_CONTEXT.test(line);
+  const digits = (
+    named
+      ? line
+      : line
+          .replace(
+            /(^|\s)\d{1,4}[a-z]?,?\s+\d{5}(?:-\d{3})?(?=\s+\p{L}|$)/giu,
+            '$1 ',
+          )
+          // Other postcodes after a street's house number and before the city (a
+          // four-digit one after a comma, so "is 555 0100 thanks" stays a number):
+          // "Nowy Świat 10, 00-950 Warszawa", "Drottninggatan 53, 111 21
+          // Stockholm", "Mariahilfer Straße 120, 1070 Wien", "Rua Augusta 274,
+          // 1100-053 Lisboa", "Tverskaya 13 125009 Moscow".
+          .replace(
+            /(?<=\p{L}\.?\s)\d{1,4}[a-z]?(?:,\s*\d{4}(?:-\d{3})?|,?\s+(?:\d{2}-\d{3}|\d{3} \d{2}|\d{6}))(?=\s+\p{L})/giu,
+            ' x ',
+          )
+          .replace(/(?<=\p{L}\.?,?\s)\d{5}-\d{4}\b/gu, ' x ')
+          .replace(/\b\d{5}-\d{3}\b/g, ' x ')
+          .replace(
+            /〒\s?\d{3}-\d{4}|\b\d{3}-\d{4}(?=\s*[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}])/gu,
+            ' x ',
+          )
+          .replace(/#/g, ' x ')
+  ).replace(/[^\p{L}\p{N}]/gu, '');
   const longNumber =
     /\d{7,}/.test(digits) ||
     // A phone number written with dots ("415.555.0100").
@@ -205,6 +214,8 @@ function mayBeSecret(token) {
   // is a name.
   // Latin letters only: CJK addresses are written without spaces
   // ("東京都港区六本木6丁目", "北京市朝阳区建国路88号").
+  // A UK postcode written without its space ("EC1A1BB", "BT487NN").
+  if (/^[a-z]{1,2}\d[a-z\d]?\d[a-z]{2}$/i.test(token)) return false;
   const mixed = token
     .split(/[^\p{L}\p{N}]+/u)
     .some((run) => /\p{Script=Latin}/u.test(run) && /\d/.test(run));
@@ -221,6 +232,19 @@ const TIMEOUT_MS = 6000;
 const PAUSE_AFTER_REFUSAL_MS = 60_000;
 const CACHE_LIMIT = 200;
 
+/**
+ * The spacing, the pause and the cache, shared by every suggester in the tab:
+ * a search box that is put up again starts from where the last one left off.
+ */
+const shared = { nextRequestAt: 0, pausedUntil: 0, cache: new Map() };
+
+/** Forget the shared spacing, pause and cache (tests). */
+export function resetPlaceSuggestions() {
+  shared.nextRequestAt = 0;
+  shared.pausedUntil = 0;
+  shared.cache.clear();
+}
+
 /** List Photon candidates while typing. The submitted search owns navigation. */
 export function createPlaceSuggester({
   endpoint,
@@ -228,9 +252,7 @@ export function createPlaceSuggester({
   limit = 4,
 } = {}) {
   const enabled = endpoint === undefined || Boolean(endpoint);
-  const cache = new Map();
-  let nextRequestAt = 0;
-  let pausedUntil = 0;
+  const { cache } = shared;
 
   return {
     enabled,
@@ -244,14 +266,14 @@ export function createPlaceSuggester({
       const language = (globalThis.document?.documentElement?.lang || 'en')
         .slice(0, 2)
         .toLowerCase();
-      const key = `${language}|${text.toLowerCase()}`;
+      const key = `${endpoint ?? ''}|${limit}|${language}|${text.toLowerCase()}`;
       if (cache.has(key)) return cache.get(key);
 
       // Concurrent callers recheck the gap after waking before sending.
-      while (nextRequestAt > Date.now()) {
+      while (shared.nextRequestAt > Date.now()) {
         let timer;
         const pause = new Promise((resolve) => {
-          timer = setTimeout(resolve, nextRequestAt - Date.now());
+          timer = setTimeout(resolve, shared.nextRequestAt - Date.now());
         });
         try {
           await waitForSignal(pause, signal);
@@ -260,25 +282,32 @@ export function createPlaceSuggester({
         }
       }
       signal?.throwIfAborted();
-      if (Date.now() < pausedUntil) return [];
+      if (Date.now() < shared.pausedUntil) return [];
       const url = new URL(photonSearchUrl(text, { endpoint, limit }));
       if (['en', 'de', 'fr', 'it'].includes(language))
         url.searchParams.set('lang', language);
 
-      nextRequestAt = Date.now() + MIN_GAP_MS;
-      const features = await requestWithDeadline(
-        async (requestSignal) => {
-          const response = await fetchImpl(url, { signal: requestSignal });
-          requestSignal.throwIfAborted();
-          if (!response.ok) {
-            pausedUntil = Date.now() + PAUSE_AFTER_REFUSAL_MS;
-            return null;
-          }
-          const data = await response.json();
-          return data?.features;
-        },
-        { signal, timeoutMs: TIMEOUT_MS },
-      );
+      shared.nextRequestAt = Date.now() + MIN_GAP_MS;
+      let features;
+      try {
+        features = await requestWithDeadline(
+          async (requestSignal) => {
+            const response = await fetchImpl(url, { signal: requestSignal });
+            requestSignal.throwIfAborted();
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            return data?.features;
+          },
+          { signal, timeoutMs: TIMEOUT_MS },
+        );
+      } catch (error) {
+        signal?.throwIfAborted();
+        // A refusal, a timeout or a failed request (a refusal sent without
+        // CORS headers arrives as one) all hold suggestions off a while.
+        void error;
+        shared.pausedUntil = Date.now() + PAUSE_AFTER_REFUSAL_MS;
+        return [];
+      }
       signal?.throwIfAborted();
       if (!Array.isArray(features)) return [];
 

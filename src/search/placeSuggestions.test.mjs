@@ -5,7 +5,11 @@ import {
   createPlaceSuggester,
   inExtent,
   mayBePrivate,
+  resetPlaceSuggestions,
 } from './placeSuggestions.js';
+
+// The spacing, pause and cache are the tab's: each test starts clean.
+test.beforeEach(() => resetPlaceSuggestions());
 
 test('Photon suggestions keep distinct valid candidates and their region bounds', async () => {
   const texas = {
@@ -277,4 +281,49 @@ test('cards, phones, IBANs, keys and passwords are private', () => {
     'Passau',
   ])
     assert.equal(mayBePrivate(text), false, text);
+});
+
+const answering = (calls, answer) => async (url) => {
+  calls.push(String(url));
+  if (answer instanceof Error) throw answer;
+  return { ok: true, json: async () => ({ features: [] }) };
+};
+
+test('a failed or timed-out request pauses suggestions as a refusal does', async () => {
+  const calls = [];
+  const suggester = createPlaceSuggester({
+    endpoint: 'https://photon.test/api/',
+    fetchImpl: answering(calls, new TypeError('Failed to fetch')),
+  });
+  assert.deepEqual(await suggester.suggest('Paris'), []);
+  assert.deepEqual(await suggester.suggest('Berlin'), []);
+  assert.equal(calls.length, 1);
+});
+
+test('every suggester in the tab keeps one spacing and one pause', async () => {
+  const calls = [];
+  const options = {
+    endpoint: 'https://photon.test/api/',
+    fetchImpl: answering(calls),
+  };
+  const first = createPlaceSuggester(options);
+  const second = createPlaceSuggester(options);
+  const started = Date.now();
+  await Promise.all([first.suggest('Paris'), second.suggest('Berlin')]);
+  assert.equal(calls.length, 2);
+  assert.ok(Date.now() - started >= 490);
+});
+
+test('a number named as a card or a phone stays private', () => {
+  for (const line of [
+    'card 4111 111111 thanks',
+    'call 0207 946095 now',
+    'phone 12 345678 home',
+  ])
+    assert.equal(mayBePrivate(line), true, line);
+});
+
+test('a UK postcode without its space is a place', () => {
+  for (const line of ['EC1A1BB', 'W1A0AX', 'BT487NN'])
+    assert.equal(mayBePrivate(line), false, line);
 });
