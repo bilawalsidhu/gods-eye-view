@@ -34,12 +34,11 @@ const POINT_SCALE_BY_DISTANCE = Object.freeze({
 });
 
 /**
- * The tracked satellite's dot: 14 px yellow with a white outline, drawn
- * over everything.
+ * The tracked satellite's dot: 14 px in the satellite's own colour with a
+ * white outline, drawn over everything. Tracking never recolours it.
  */
 const TRACKED_DOT = Object.freeze({
   pixelSize: 14,
-  color: Object.freeze([1, 1, 0, 1]),
   outlineColor: Object.freeze([1, 1, 1, 1]),
   outlineWidth: 2,
   disableDepthTest: Number.POSITIVE_INFINITY,
@@ -386,12 +385,13 @@ export function createRendering({
   /**
    * Draw the tracked satellite's dot and make the carrier the follow target
    * and the tracked card read (its entity record holds the card).
-   * @param {{position: () => object, viewFrom: {x: number, y: number,
-   *   z: number}}} options `position` is read as the follow camera reads
-   *   it, once each frame before the tick moves the sample on.
+   * @param {{position: () => object, color: number[], viewFrom: {x: number,
+   *   y: number, z: number}}} options `position` is read as the follow
+   *   camera reads it, once each frame before the tick moves the sample on;
+   *   `color` is the satellite's own dot colour.
    * @returns {object} The carrier.
    */
-  function _addTrackedEntity({ position }) {
+  function _addTrackedEntity({ position, color }) {
     const noradId = layerState._trackedNorad;
     const carrier = { noradId };
     trackedDot = {
@@ -400,6 +400,7 @@ export function createRendering({
         id: String(noradId),
         pos: { x: 0, y: 0, z: 0 },
         ...TRACKED_DOT,
+        color,
         meta: { noradId },
       },
       drawn: false,

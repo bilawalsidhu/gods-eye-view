@@ -95,9 +95,6 @@ export const MODEL_HEADING_OFFSET_DEG = 180;
 /** A model's colour where it draws its mesh's own (`aircraftModelBlend`). */
 export const MODEL_WHITE = rgba('#FFFFFF');
 
-/** The tracked contact's tint, and its billboard once a model takes over. */
-export const TRACKED_CYAN = rgba('#00FFFF');
-export const CYAN_TRANSPARENT = rgba('#00FFFF', 0);
 /** An ordinary fleet contact's tint. */
 export const FLEET_TINT = rgba('#FFFFFF');
 

@@ -400,7 +400,7 @@ export function createAircraftModels({
       minPixelSize: record.minPixelSize,
       shading: _shadingOf(),
       tint: record.tint ?? WHITE,
-      // The mesh's own colours, tinted while tracked or in an emergency;
+      // The mesh's own colours, tinted red in an emergency;
       // the IR boost draws it flat white.
       colorBlend: aircraftModelBlend(state._irBoost === true, record.tint),
       environmentMap: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS.enabled,
@@ -828,10 +828,9 @@ export function createAircraftModels({
    *  in, can never stall or freeze the centering (the old model-graphic-on-entity failure mode).
    *
    *  The model draws exactly as the fleet would draw this contact: the same
-   *  asset at the same scale (its true size), only its
-   *  tint the tracked colour; whether it draws at all is the fleet's rule too
-   *  (`_trackedModelRegimeActive`). Selecting a contact changes its colour,
-   *  never its size or form. */
+   *  asset at the same scale (its true size) in the same colours; whether it
+   *  draws at all is the fleet's rule too (`_trackedModelRegimeActive`).
+   *  Selecting a contact changes neither its colour nor its size or form. */
 
   function _updateTrackedModel() {
     // A failed load is let go (the icon carries the contact); the budget

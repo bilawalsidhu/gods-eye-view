@@ -31,10 +31,6 @@ export const BILLBOARD_SCALE = 0.7;
 
 export const MIL_ICON_COLOR = rgba('#FFB800');
 
-/** @constant {number[]} Lighter amber tint applied to the actively tracked aircraft */
-
-export const TRACKED_ICON_COLOR = rgba('#FFD166');
-
 /** @constant {number[]} Red tint for aircraft broadcasting an emergency (mirror of flights) */
 
 export const EMERGENCY_ICON_COLOR = rgba(EMERGENCY_TINT_CSS);
@@ -105,10 +101,6 @@ export const COCKPIT_AIR_ALL_KEEP_M = 450000;
 
 export const MODEL_HEADING_OFFSET_DEG = 180;
 // every fleet model is nose -X: opposite Cesium heading 0
-
-/** Amber fade target for the tracked billboard once the model takes over (mirrors flights.js CYAN_TRANSPARENT). */
-
-export const AMBER_TRANSPARENT = rgba('#FFB800', 0);
 
 export const COCKPIT_CONTACT_SIZE_PX = 6;
 
