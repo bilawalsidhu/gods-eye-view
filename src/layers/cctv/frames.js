@@ -43,6 +43,7 @@ export function fitToProjection(sourceW, sourceH) {
 }
 
 const _scratchPoints = [];
+const HORIZON_MARGIN_M = 200;
 
 export function createFrames({ state: layerState, services, parts, source }) {
   /**
@@ -267,7 +268,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
     if (placed?.br) points.push(placed.br);
     if (placed?.bl) points.push(placed.bl);
     // Unknown modes or unsupported cameras must not suppress pictures.
-    return camera.visiblePoints(points, 200) !== false;
+    return camera.visiblePoints(points, HORIZON_MARGIN_M) !== false;
   }
 
   /**

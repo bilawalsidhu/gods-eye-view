@@ -433,7 +433,6 @@ export function createCesiumCamera({
   }
 
   const cameraPort = {
-    visiblePoints: createPointsVisibility(scene, camera),
     on: (event, cb, options) => cameraEvents.on(event, cb, options),
     onCommand: (cb) => commandHooks.on(cb),
     setView(spec) {
@@ -753,6 +752,8 @@ export function createCesiumCamera({
   });
   // Cesium keeps the eye in `camera.transform`: a tracked entity's frame, a
   // `lookAt` target's, or the identity.
+  if (!capabilities || capabilities.has('pointVisibility'))
+    cameraPort.visiblePoints = createPointsVisibility(scene, camera);
   if (!capabilities || capabilities.has('followFrame'))
     cameraPort.followFrame = () => {
       if (!lastFollowFrame || !sameMatrix(lastFollowFrame, camera.transform))
