@@ -1,5 +1,6 @@
 import {
   cellCenter,
+  cellLonLat,
   formatCameraCount,
   mergeCountCells,
 } from '../../data/cctvCellCounts.js';
@@ -201,16 +202,32 @@ export function createCountMarkers(
     };
   }
 
-  /** Reuse marker slots in ground-key order, and invalidate only changed frames. */
-  function update(cells, project) {
+  /**
+   * Reuse marker slots in ground-key order, and invalidate only changed frames.
+   * `groundHeight(lon, lat)` answers the drawn terrain height in metres, or
+   * null where it is not loaded; with it a count stands on the ground it
+   * marks whatever heights its cameras hold.
+   */
+  function update(cells, project, groundHeight = null) {
     // Lone cameras take part so that one beside a count joins it.
     let visible = cells.slice().sort((a, b) => a.key.localeCompare(b.key));
     const footprint = (count) => (count > 1 ? sizeFor(count) : SINGLE_ICON);
+    /** A lone camera keeps its icon's own position; a count goes to ground. */
+    const ground = (list) => {
+      if (!groundHeight) return;
+      for (const cell of list) {
+        if (cell.count === 1 || cell.groundM !== undefined) continue;
+        const { lon, lat } = cellLonLat(cell);
+        const height = groundHeight(lon, lat);
+        cell.groundM = Number.isFinite(height) ? Math.round(height) : null;
+      }
+    };
     for (
       let pass = 0;
       pass < COUNT_MERGE_PASSES && visible.length > 1;
       pass++
     ) {
+      ground(visible);
       const merged = mergeCountCells(
         visible,
         project,
@@ -225,6 +242,7 @@ export function createCountMarkers(
     for (const cell of cells)
       if (cell.count === 1) cell.absorbed = !apart.has(cell);
     visible = visible.filter((cell) => cell.count > 1);
+    ground(visible);
     let changed = visible.length !== markers.length;
     for (let i = 0; i < visible.length; i++) {
       const cell = visible[i];
@@ -236,7 +254,8 @@ export function createCountMarkers(
         last.count !== cell.count ||
         last.latSum !== cell.latSum ||
         last.lonSum !== cell.lonSum ||
-        last.heightSum !== cell.heightSum
+        last.heightSum !== cell.heightSum ||
+        last.groundM !== cell.groundM
       ) {
         marker.pos = cellCenter(cell);
         changed = true;

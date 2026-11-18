@@ -5,4 +5,7 @@
   whose icon would sit against it, and a click zooms in until the group
   splits. The camera layer's colour is now green: count markers and idle
   single cameras share it, the active camera stays gold and live-video cameras
-  stay violet (gekh, #1808).
+  stay violet. Cameras that share one mount draw side by side instead of as
+  one icon with several callouts, and a camera the terrain height service
+  never answered for stands on the drawn terrain instead of drifting under
+  it (gekh, #1808).

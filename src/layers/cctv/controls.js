@@ -219,7 +219,8 @@ export function createControls({ state: layerState, services, parts, source }) {
       for (let i = start; i < records.length; i += stride) {
         const camera = records[i].camera;
         objects.push({
-          position: records[i].position,
+          // A camera sharing its mount is drawn beside its mates.
+          position: records[i].spreadPosition ?? records[i].position,
           sourceId: camera.id,
           // Short semantic code where the id is opaque (see cameraDisplayCode).
           id: `CAM-${camera.code || camera.id}`,

@@ -71,6 +71,14 @@ export const VIEW_CELL_PX = 40;
 
 export const VIEW_MIN_CELL_M = 60;
 
+// Cameras on one mount (the same point to about a metre) draw side by side,
+// this many pixels apart, once they show as icons.
+export const VIEW_SITE_SPREAD_PX = 30;
+
+// Cameras without a ground height that one view pass may read from the drawn
+// terrain. The rest wait for the next pass.
+export const VIEW_GROUND_READS = 300;
+
 // Diameter at one camera before applying the size limits, in CSS pixels.
 export const COUNT_BASE_PX = 38;
 

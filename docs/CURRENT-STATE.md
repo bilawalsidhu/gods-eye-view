@@ -1958,7 +1958,17 @@ a small green camera pictogram under its top edge and the count just below its
 middle. The marker grows with the count and is drawn on the world overlay at
 the same resolution as camera callouts. A lone camera whose icon would sit
 within 4 px of a marker is counted in that marker instead of being drawn; the
-active camera always keeps its own icon.
+active camera always keeps its own icon. On a globe map a marker stands on
+the drawn terrain under its cameras' mean position, and a click frames that
+ground. A camera the terrain height batch never answered for (no prior, or
+the geoid fallback a failed or rate-limited chunk leaves) takes the terrain
+the globe draws under it as its ground once it is near the screen, up to 300
+cameras a view pass, and reads it again from less than half as far; a batch
+answer that arrives later replaces it. Without this such a camera sits near
+sea level, drifts across mountain terrain as the view tilts or pans, and
+never leaves its count. Cameras on one mount (the same point to about a
+metre) draw side by side, 30 px apart, once they show as icons; their records
+keep the mount's position.
 The count includes cameras beyond the screen edge and excludes cameras beyond
 the horizon. Counts that would overlap on screen merge into one that carries
 their sum. Clicking a count zooms to its group. Single cameras keep their icons,

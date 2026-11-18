@@ -17,6 +17,8 @@ import {
   VIEW_CELL_PX,
   VIEW_ICON_MARGIN,
   VIEW_MIN_CELL_M,
+  VIEW_SITE_SPREAD_PX,
+  VIEW_GROUND_READS,
 } from './policy.js';
 import { createIconBook } from '../../render/motion/iconBook.js';
 import { frustumVolumeGeometryData } from '../../data/cctvViewshed.js';
@@ -27,6 +29,7 @@ import {
   findGlobe,
   findQuery,
 } from '../../render/rendererOf.js';
+import { heightsOf } from '../../queries/heights.js';
 import { fromDegrees, WGS84 } from '../../geo/ellipsoid.js';
 import { eastNorthUp } from '../../geo/frames.js';
 import { poseProjector } from '../../geo/frustum.js';
@@ -383,6 +386,16 @@ export function createRendering({
     const picker = [];
     const cells = new Map();
     const visibleCells = [];
+    // The terrain the globe draws, where it is the surface (not on the
+    // photoreal stack) and loaded: null elsewhere.
+    const heights = heightsOf(layerState._viewer);
+    const groundHeight =
+      findQuery(layerState._viewer) &&
+      findGlobe(layerState._viewer)?.isGlobeVisible?.() === true
+        ? (lon, lat) => heights.now({ lon, lat }, { against: 'terrain' })
+        : null;
+    let groundReads = groundHeight ? VIEW_GROUND_READS : 0;
+    const regrounded = [];
     for (const record of layerState._records) {
       const position = record.position;
       if (!position) continue;
@@ -397,20 +410,49 @@ export function createRendering({
             (vtDotVc * vtDotVc) / (vx * vx + vy * vy + vz * vz) > limbSquared
       )
         continue;
-      const screen = project(position);
+      let screen = project(position);
+      let range = distance(position, viewer);
+      // A camera the height batch never answered for (no prior, or the
+      // geoid fallback a failed chunk leaves) sits near sea level, which can
+      // be kilometres under the terrain: it would project to the wrong
+      // place, drift as the view moves and measure too far for its cell.
+      // Anywhere near the screen, it takes the drawn terrain.
+      const prior = record.groundPrior;
+      const drawn = prior?.source === 'drawn-terrain';
+      if (
+        groundReads > 0 &&
+        (!prior ||
+          prior.source === 'geoid-fallback' ||
+          (drawn && prior.rangeM > 2 * range)) &&
+        screen &&
+        screen.x >= -width &&
+        screen.x <= 2 * width &&
+        screen.y >= -height &&
+        screen.y <= 2 * height
+      ) {
+        groundReads--;
+        const ground = groundHeight(record.camera.lon, record.camera.lat);
+        if (Number.isFinite(ground)) {
+          if (drawn && Math.abs(ground - prior.ellipsoid) < 1) {
+            prior.rangeM = range;
+          } else if (record.frustumGeometry) {
+            // Recomputing geometry writes draw sets: after this pass.
+            regrounded.push([record, ground, range]);
+          } else if (
+            parts.ground.adoptDrawnGround(record, ground, range) === 'moved'
+          ) {
+            screen = project(position);
+            range = distance(position, viewer);
+          }
+        }
+      }
       const nearScreen =
         screen &&
         screen.x >= minX &&
         screen.x <= maxX &&
         screen.y >= minY &&
         screen.y <= maxY;
-      const dx = position.x - viewer.x;
-      const dy = position.y - viewer.y;
-      const dz = position.z - viewer.z;
-      const cellM =
-        VIEW_CELL_PX *
-        metresPerPixelPerMetre *
-        Math.sqrt(dx * dx + dy * dy + dz * dz);
+      const cellM = VIEW_CELL_PX * metresPerPixelPerMetre * range;
       if (record.camera.id === activeId || !(cellM >= VIEW_MIN_CELL_M)) {
         if (!nearScreen) continue;
         record.viewPass = record.pickerPass = pass;
@@ -435,8 +477,10 @@ export function createRendering({
         cell.rank = rank;
       }
     }
-    // Marks each lone camera that a count marker beside it has taken in.
-    layerState._counts?.update(visibleCells, project);
+    // A count stands on the drawn terrain too: its cell may be too far for
+    // its cameras to have been read. Marks each lone camera that a count
+    // marker beside it has taken in.
+    layerState._counts?.update(visibleCells, project, groundHeight);
     for (const cell of visibleCells) {
       const record = cell.winner;
       picker.push(record);
@@ -446,6 +490,7 @@ export function createRendering({
         shown.push(record);
       }
     }
+    spreadSharedMounts(shown, pose, metresPerPixelPerMetre, pass);
     const writes = [];
     let coverageChanged = false;
     let cardsChanged = false;
@@ -462,12 +507,21 @@ export function createRendering({
           layerState._cardIds?.has(id) || layerState._hoverCardId === id;
       }
       record.viewGrouped = grouped;
-      const item = patchedCameraIcon(record.camera.id, {
-        show: record.viewPass === pass,
-      });
+      const fields = { show: record.viewPass === pass };
+      if (record.spreadPass === pass) {
+        const drawn = layerState._icons?.item(record.camera.id)?.pos;
+        if (!drawn || !samePoint(drawn, record.spreadPosition))
+          fields.pos = copyPoint(record.spreadPosition);
+      } else if (record.spreadPosition) {
+        // No longer beside a mount mate: back onto its own position.
+        record.spreadPosition = null;
+        fields.pos = copyPoint(record.position);
+      }
+      const item = patchedCameraIcon(record.camera.id, fields);
       if (item) writes.push(item);
     }
     writeCameraIcons(writes);
+    if (regrounded.length) queueMicrotask(() => reground(regrounded));
     const previous = layerState._viewRecords;
     const changed =
       previous.length !== shown.length ||
@@ -481,6 +535,65 @@ export function createRendering({
     if (coverageChanged) refreshCoverageStyles();
     if (cardsChanged) parts.cards.pushAmbientCardEntries();
     return changed || pickerChanged;
+  }
+
+  /**
+   * Cameras that have geometry take the drawn terrain after the pass that
+   * read it, then the view is passed again from their new positions.
+   */
+  function reground(entries) {
+    let changed = false;
+    for (const [record, ground, range] of entries)
+      changed =
+        parts.ground.adoptDrawnGround(record, ground, range) !== null ||
+        changed;
+    if (!changed) return;
+    if (refreshHorizonCulling()) parts.geometryQueue.enqueueViewGeometry();
+    parts.presentation.notifyListeners();
+  }
+
+  /**
+   * Cameras on one mount would draw as one icon with several callouts. Among
+   * the cameras shown, those that share a point to about a metre get draw
+   * positions side by side along the screen's horizontal, in id order,
+   * `VIEW_SITE_SPREAD_PX` apart at the distance they are seen from. The
+   * record's own position is untouched: geometry and cards keep the mount.
+   */
+  function spreadSharedMounts(shown, pose, metresPerPixelPerMetre, pass) {
+    const { right, direction, position: eye } = pose;
+    if (!right || !direction || shown.length < 2) return;
+    const mounts = new Map();
+    for (const record of shown) {
+      const { lat, lon } = record.camera;
+      const key = `${Math.round(lat * 1e5)}:${Math.round(lon * 1e5)}`;
+      const mates = mounts.get(key);
+      if (mates) mates.push(record);
+      else mounts.set(key, [record]);
+    }
+    for (const mates of mounts.values()) {
+      if (mates.length < 2) continue;
+      mates.sort((a, b) => a.camera.id.localeCompare(b.camera.id));
+      for (let i = 0; i < mates.length; i++) {
+        const record = mates[i];
+        const p = record.position;
+        // A pixel's width on the ground grows with depth along the view.
+        const depth =
+          (p.x - eye.x) * direction.x +
+          (p.y - eye.y) * direction.y +
+          (p.z - eye.z) * direction.z;
+        const metres =
+          (i - (mates.length - 1) / 2) *
+          VIEW_SITE_SPREAD_PX *
+          metresPerPixelPerMetre *
+          depth;
+        record.spreadPosition = {
+          x: p.x + right.x * metres,
+          y: p.y + right.y * metres,
+          z: p.z + right.z * metres,
+        };
+        record.spreadPass = pass;
+      }
+    }
   }
 
   /**

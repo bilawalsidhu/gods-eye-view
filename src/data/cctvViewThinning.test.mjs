@@ -55,7 +55,7 @@ function recordsAt(lonLats) {
  * equator, north up, through a camera port: the view pass projects the
  * cameras from its pose.
  */
-function viewerAt(heightM, lonDeg = 0, flights = []) {
+function viewerAt(heightM, lonDeg = 0, flights = [], ports = {}) {
   const eye = Cesium.Cartesian3.fromDegrees(lonDeg, 0, heightM);
   const down = Cesium.Cartesian3.normalize(
     Cesium.Cartesian3.negate(eye, new Cesium.Cartesian3()),
@@ -84,6 +84,7 @@ function viewerAt(heightM, lonDeg = 0, flights = []) {
     bindRenderer(viewer, {
       camera: port,
       canvas: { clientWidth: WIDTH, clientHeight: HEIGHT },
+      ...ports,
     }),
   );
   return viewer;
@@ -367,6 +368,190 @@ test('a lone camera beside a count joins it, unless it is the active camera', ()
     markers().map((item) => item.cell.count),
     [3],
   );
+});
+
+test('cameras the height batch never answered for take the drawn terrain', () => {
+  // Two mounts on one pole in the mountains and a lone camera. The batch
+  // answered for none of them, so they hold the catalog height (10 m), far
+  // under the terrain; a fourth camera has its answer and keeps it.
+  const { records } = recordsAt([
+    [0.001, 0.0005],
+    [0.001, 0.0005],
+    [0.2, 0],
+    [0.3, 0],
+  ]);
+  // A failed chunk leaves the geoid fallback; a real answer is 'reearth'.
+  records[2].groundPrior = { ellipsoid: -20, source: 'geoid-fallback' };
+  records[3].groundPrior = { ellipsoid: 2, source: 'reearth' };
+  const flights = [];
+  const samples = [];
+  let terrain = 1872.4;
+  let globeShown = true;
+  const ports = {
+    globe: { isGlobeVisible: () => globeShown },
+    query: {
+      sampleHeightNow(point, options) {
+        samples.push([point, options]);
+        return terrain;
+      },
+    },
+  };
+  const heightOf = (position) =>
+    Cesium.Cartographic.fromCartesian(position).height;
+  const icon = (i) => _cctvIconsForTest().item(records[i].camera.id);
+  seedCoverage({ viewer: viewerAt(20_000, 0, flights, ports), records });
+
+  // The photoreal stack hides the globe: terrain is not the surface there.
+  globeShown = false;
+  refreshHorizonCulling();
+  assert.equal(samples.length, 0);
+  assert.ok(Math.abs(heightOf(records[0].position) - 10) < 0.01);
+
+  // Terrain that has not loaded leaves a camera where it is, to be read again.
+  globeShown = true;
+  terrain = null;
+  refreshHorizonCulling();
+  assert.ok(samples.length >= 3);
+  assert.ok(samples.every(([, options]) => options.against === 'terrain'));
+  assert.equal(records[0].groundPrior, undefined);
+  assert.ok(Math.abs(heightOf(markers()[0].pos) - 10) < 0.01);
+
+  terrain = 1872.4;
+  refreshHorizonCulling();
+  // Each unanswered camera stands its mount height above the drawn terrain.
+  for (const i of [0, 1, 2]) {
+    assert.equal(records[i].groundPrior.source, 'drawn-terrain');
+    assert.ok(Math.abs(records[i].camera.absoluteHeightM - 1880.4) < 1e-9);
+    assert.ok(Math.abs(heightOf(records[i].position) - 1880.4) < 0.01);
+    assert.ok(Math.abs(heightOf(icon(i).pos) - 1880.4) < 0.01);
+  }
+  // The answered one is left alone.
+  assert.equal(records[3].groundPrior.source, 'reearth');
+  assert.ok(Math.abs(heightOf(records[3].position) - 10) < 0.01);
+  // The count stands on the terrain and its click frames the ground there.
+  const [marker] = markers();
+  assert.equal(marker.cell.count, 2);
+  assert.ok(Math.abs(heightOf(marker.pos) - 1872) < 0.01);
+  clickMarker(marker);
+  assert.ok(Math.abs(heightOf(flights.at(-1).bounds.center) - 1872) < 0.01);
+
+  // Read once: the same view does not read a camera's terrain again.
+  samples.length = 0;
+  refreshHorizonCulling();
+  assert.ok(samples.every(([point]) => Math.abs(point.lat - 0.0005) < 1e-9));
+
+  // From less than half as far the finer terrain is read and replaces it.
+  terrain = 1890;
+  seedCoverage({ viewer: viewerAt(9_000, 0, flights, ports), records });
+  refreshHorizonCulling();
+  assert.ok(Math.abs(records[0].camera.absoluteHeightM - 1898) < 1e-9);
+  assert.equal(records[3].groundPrior.source, 'reearth');
+});
+
+test('a tilted view keeps the count of cameras that stood under the terrain', () => {
+  // The same pole seen from 200 m above the terrain and 1 km away, a view
+  // 11 degrees below the horizontal. Projected from its catalog height the
+  // pole falls below the padded screen and its count vanishes; on the
+  // terrain it is in the middle of the view.
+  const { records } = recordsAt([
+    [0, 0],
+    [0, 0],
+  ]);
+  const ground = 1872;
+  const eye = Cesium.Cartesian3.fromDegrees(0, -0.009, ground + 200);
+  const target = Cesium.Cartesian3.fromDegrees(0, 0, ground);
+  const direction = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.subtract(target, eye, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3(),
+  );
+  const right = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.cross(direction, eye, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3(),
+  );
+  const up = Cesium.Cartesian3.cross(right, direction, new Cesium.Cartesian3());
+  const plain = ({ x, y, z }) => ({ x, y, z });
+  const { port } = fakeCameraPort({
+    pose: {
+      lon: 0,
+      lat: -0.009,
+      height: ground + 200,
+      position: plain(eye),
+      direction: plain(direction),
+      up: plain(up),
+      right: plain(right),
+      fovy: Math.PI / 3,
+      aspectRatio: WIDTH / HEIGHT,
+      near: 0.1,
+      far: 5e8,
+    },
+  });
+  let terrain = null;
+  const viewer = {};
+  bindings.push(
+    bindRenderer(viewer, {
+      camera: port,
+      canvas: { clientWidth: WIDTH, clientHeight: HEIGHT },
+      globe: { isGlobeVisible: () => true },
+      query: { sampleHeightNow: () => terrain },
+    }),
+  );
+  seedCoverage({ viewer, records });
+  refreshHorizonCulling();
+  assert.equal(markers().length, 0, 'under the terrain it is off the screen');
+  terrain = ground;
+  refreshHorizonCulling();
+  assert.deepEqual(
+    markers().map((item) => item.cell.count),
+    [2],
+  );
+});
+
+test('cameras on one mount draw side by side once they show as icons', () => {
+  const { records } = recordsAt([
+    [0.001, 0.0005],
+    [0.001, 0.0005],
+    [0.0011, 0.0005],
+  ]);
+  // Close enough that every camera shows: about 0.87 m a pixel.
+  seedCoverage({ viewer: viewerAt(460), records });
+  refreshHorizonCulling();
+  assert.deepEqual(shownIds(records), ['cam-0', 'cam-1', 'cam-2']);
+  const icons = _cctvIconsForTest();
+  const [a, b, c] = records.map((record) => icons.item(record.camera.id).pos);
+  // 30 px apart along the screen's horizontal, centred on the shared mount.
+  const metres = Cesium.Cartesian3.distance(a, b);
+  const metresPerPixel = ((2 * Math.tan(Math.PI / 6)) / HEIGHT) * 450;
+  assert.ok(Math.abs(metres / metresPerPixel - 30) < 0.5);
+  const middle = Cesium.Cartesian3.midpoint(a, b, new Cesium.Cartesian3());
+  assert.ok(Cesium.Cartesian3.distance(middle, records[0].position) < 1e-6);
+  // The third camera, 11 m away, has a mount of its own.
+  assert.ok(Cesium.Cartesian3.distance(c, records[2].position) < 1e-6);
+  // The records keep the mount; callouts follow the drawn icons.
+  assert.ok(
+    Cesium.Cartesian3.distance(records[0].position, records[1].position) < 1e-9,
+  );
+  const callouts = cctvLayer.getDetectableObjects();
+  for (const [i, pos] of [a, b].entries()) {
+    const callout = callouts.find((o) => o.sourceId === `cam-${i}`);
+    assert.ok(Cesium.Cartesian3.distance(callout.position, pos) < 1e-9);
+  }
+  // An unchanged view writes nothing more.
+  const before = [a, b];
+  refreshHorizonCulling();
+  assert.equal(icons.item('cam-0').pos, before[0]);
+  assert.equal(icons.item('cam-1').pos, before[1]);
+
+  // Grouped again, both icons are back on the mount for their next showing.
+  seedCoverage({ viewer: viewerAt(20_000), records });
+  refreshHorizonCulling();
+  assert.deepEqual(shownIds(records), []);
+  for (const i of [0, 1])
+    assert.ok(
+      Cesium.Cartesian3.distance(
+        _cctvIconsForTest().item(`cam-${i}`).pos,
+        records[i].position,
+      ) < 1e-6,
+    );
 });
 
 test('a pan keeps the same winners, and an unchanged view keeps its list', () => {

@@ -214,54 +214,80 @@ export function createGround({ state: layerState, services, parts, source }) {
     let applied = 0;
     let moved = 0;
     for (let i = 0; i < records.length && i < priors.length; i++) {
-      const record = records[i];
-      const prior = priors[i];
-      if (!record || !prior || !Number.isFinite(prior.ellipsoid)) continue;
-      // Stale-record guard: init() may have re-run (destroy/init cycle) while
-      // the batch was in flight — only touch records still live in the map.
-      if (layerState._recordById.get(record.camera.id) !== record) continue;
-      record.groundPrior = prior;
-      // Keep the cheap pre-enable altitude consistent for records whose
-      // geometry hasn't been applied yet (applyFrustumGeometry overwrites it).
-      if (!record.frustumPositions) {
-        record.camera.absoluteHeightM =
-          prior.ellipsoid + record.camera.mountHeightM;
-      }
-      // Cameras without geometry only move their icon onto the prior, so the
-      // view pass projects the right point; their frustums are built when
-      // they enter the view, as recomputing the whole catalog here would
-      // stall a large one.
-      if (!record.frustumGeometry) {
-        if (record.position) {
-          // In place: the record keeps its position object.
-          const { x, y, z } = fromDegrees(
-            record.camera.lon,
-            record.camera.lat,
-            record.camera.absoluteHeightM,
-          );
-          record.position.x = x;
-          record.position.y = y;
-          record.position.z = z;
-          parts.rendering.moveCameraIcon(record);
-          moved += 1;
-        }
-        continue;
-      }
-      const regime = currentSurfaceRegime();
-      if (regime === 'terrain-globe') {
-        // Prior IS the resolution — re-latch onto the fresh value.
-        parts.geometry.updateRecordGeometry(record, { sampleGround: false });
-        applied += 1;
-      } else if (!Number.isFinite(record.groundSamples['google-3d'])) {
-        // Still awaiting the shared floor: snap interim geometry onto the exact
-        // prior (pure recompute; the shared cell may refine later).
-        parts.geometry.applyFrustumGeometry(record, prior.ellipsoid);
-        applied += 1;
-      }
+      const outcome = applyGroundPrior(records[i], priors[i]);
+      if (outcome === 'moved') moved += 1;
+      else if (outcome === 'applied') applied += 1;
     }
     if (moved && parts.rendering.refreshHorizonCulling())
       parts.geometryQueue.enqueueViewGeometry();
     if (applied || moved) parts.presentation.notifyListeners();
+  }
+
+  /**
+   * Gives one live record a ground prior: `'moved'` when only its icon went
+   * onto the prior in place, `'applied'` when its geometry was recomputed,
+   * null when nothing changed. Pure recomputes, no scene queries.
+   */
+  function applyGroundPrior(record, prior) {
+    if (!record || !prior || !Number.isFinite(prior.ellipsoid)) return null;
+    // Stale-record guard: init() may have re-run (destroy/init cycle) while
+    // the batch was in flight — only touch records still live in the map.
+    if (layerState._recordById.get(record.camera.id) !== record) return null;
+    record.groundPrior = prior;
+    // Keep the cheap pre-enable altitude consistent for records whose
+    // geometry hasn't been applied yet (applyFrustumGeometry overwrites it).
+    if (!record.frustumPositions) {
+      record.camera.absoluteHeightM =
+        prior.ellipsoid + record.camera.mountHeightM;
+    }
+    // Cameras without geometry only move their icon onto the prior, so the
+    // view pass projects the right point; their frustums are built when
+    // they enter the view, as recomputing the whole catalog here would
+    // stall a large one.
+    if (!record.frustumGeometry) {
+      if (!record.position) return null;
+      // In place: the record keeps its position object.
+      const { x, y, z } = fromDegrees(
+        record.camera.lon,
+        record.camera.lat,
+        record.camera.absoluteHeightM,
+      );
+      record.position.x = x;
+      record.position.y = y;
+      record.position.z = z;
+      parts.rendering.moveCameraIcon(record);
+      return 'moved';
+    }
+    const regime = currentSurfaceRegime();
+    if (regime === 'terrain-globe') {
+      // Prior IS the resolution — re-latch onto the fresh value.
+      parts.geometry.updateRecordGeometry(record, { sampleGround: false });
+      return 'applied';
+    }
+    if (!Number.isFinite(record.groundSamples['google-3d'])) {
+      // Still awaiting the shared floor: snap interim geometry onto the exact
+      // prior (pure recompute; the shared cell may refine later).
+      parts.geometry.applyFrustumGeometry(record, prior.ellipsoid);
+      return 'applied';
+    }
+    return null;
+  }
+
+  /**
+   * A camera the height batch never answered for (a failed or rate-limited
+   * chunk leaves it on the catalog's fabricated ground) takes the terrain
+   * the globe draws under it as its prior, so that it stands on the surface
+   * the user sees. `rangeM` is how far the eye was when the terrain was
+   * read: a closer look reads finer terrain and replaces it, and so does a
+   * batch answer that arrives later.
+   * @returns {'moved'|'applied'|null} As `applyGroundPrior`.
+   */
+  function adoptDrawnGround(record, heightM, rangeM) {
+    return applyGroundPrior(record, {
+      ellipsoid: heightM,
+      source: 'drawn-terrain',
+      rangeM,
+    });
   }
 
   /**
@@ -399,6 +425,7 @@ export function createGround({ state: layerState, services, parts, source }) {
     resolveCommittedGroundAnchor,
     resolveGroundPriors,
     applyLateGroundPriors,
+    adoptDrawnGround,
     handleMapStackChanged,
   };
 }

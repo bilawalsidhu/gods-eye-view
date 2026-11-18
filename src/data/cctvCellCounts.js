@@ -43,12 +43,28 @@ export function addCellCamera(cell, camera) {
   cell.high = Math.max(cell.high, height);
 }
 
-/** Geographic mean on the globe surface at the mean mount height. */
+/** Mean longitude and latitude of a cell's mounts, in degrees. */
+export function cellLonLat(cell) {
+  return {
+    lon: cell.lonSum / (1e7 * cell.count),
+    lat: cell.latSum / (1e7 * cell.count),
+  };
+}
+
+/**
+ * Geographic mean of the mounts. Its height is the drawn ground under it
+ * when the cell carries one (`groundM`), since a camera nobody has looked at
+ * yet may still hold a catalog height far from the terrain; otherwise the
+ * mean mount height.
+ */
 export function cellCenter(cell) {
+  const { lon, lat } = cellLonLat(cell);
   return fromDegrees(
-    cell.lonSum / (1e7 * cell.count),
-    cell.latSum / (1e7 * cell.count),
-    cell.heightSum / (100 * cell.count),
+    lon,
+    lat,
+    Number.isFinite(cell.groundM)
+      ? cell.groundM
+      : cell.heightSum / (100 * cell.count),
   );
 }
 
@@ -56,7 +72,9 @@ export function cellCenter(cell) {
 export function cellBounds(cell) {
   const lat = (cell.north + cell.south) / 2;
   const lon = (cell.east + cell.west) / 2;
-  const height = (cell.high + cell.low) / 2;
+  const height = Number.isFinite(cell.groundM)
+    ? cell.groundM
+    : (cell.high + cell.low) / 2;
   // The parallel nearest the equator bounds the width of every row.
   const parallel = (Math.max(0, cell.south, -cell.north) * Math.PI) / 180;
   // Half the diagonal plus 20% padding on every side.
