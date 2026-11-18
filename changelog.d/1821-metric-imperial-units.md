@@ -3,4 +3,4 @@
   weather, the wind layer's temperature overlay, entity cards, the HUD,
   altitude graphs, directions and measurements; aviation and marine readings
   keep feet, knots and hectopascals in both. The choice is kept for the next
-  visit, and metric text is unchanged (CaliMiller, #0000).
+  visit, and metric text is unchanged (CaliMiller, #1821).
