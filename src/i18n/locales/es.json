@@ -1784,9 +1784,7 @@
   "Export failed · {error}": "La exportación falló · {error}",
   "← → preview · A or B pins the focused day": "← → vista previa · A o B fija el día enfocado",
   "← → preview the other side · A or B pins it": "← → vista previa del otro lado · A o B lo fija",
-  "LOAD": "CARGAR",
   "No shots yet. Use CAPTURE SHOT to save current look.": "Aún no hay planos. Usa CAPTURAR PLANO para guardar el aspecto actual.",
-  "Double-click to rename": "Doble clic para cambiar el nombre",
   "Shot name": "Nombre del plano",
   "RETRYING ALPR CAMERAS": "REINTENTANDO CÁMARAS ALPR",
   "FETCHING ALPR CAMERAS": "OBTENIENDO CÁMARAS ALPR",
@@ -3235,7 +3233,6 @@
   "+ CAPTURE SHOT": "+ CAPTURAR PLANO",
   "Add the current view, style and layers as the next shot": "Añade la vista, el estilo y las capas actuales como el siguiente plano",
   "Replace the selected shot with the current view": "Sustituye el plano seleccionado por la vista actual",
-  "Click a shot to select it, double-click to rename.": "Haz clic en un plano para seleccionarlo y doble clic para cambiarle el nombre.",
   "scene|PLAY": "REPRODUCIR",
   "Stop playback (Esc)": "Detén la reproducción (Esc)",
   "SAVE & SHARE": "GUARDAR Y COMPARTIR",
@@ -4239,5 +4236,9 @@
   "Course to {code}: {course}": "Rumbo a {code}: {course}",
   "Over {place}": "Sobre {place}",
   "Below": "Debajo",
+  "Go to this shot. Double-click to rename.": "Ir a este plano. Doble clic para cambiar el nombre.",
+  "Move up": "Subir",
+  "Move down": "Bajar",
+  "Click a shot to go to it, double-click to rename.": "Haz clic en un plano para ir a él y doble clic para cambiarle el nombre.",
   "Back to live at the starting view": "Volver al directo en la vista inicial"
 }

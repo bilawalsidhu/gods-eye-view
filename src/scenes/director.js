@@ -492,6 +492,8 @@ export class SceneDirector {
         download: () => this.downloadLastRunMetadata(),
         load: (sceneId, shotId) => this.loadShot(sceneId, shotId),
         deleteShot: (sceneId, shotId) => this.deleteShot(sceneId, shotId),
+        moveShot: (sceneId, shotId, index) =>
+          this.moveShot(sceneId, shotId, index),
       },
     });
   }
@@ -1223,6 +1225,31 @@ export class SceneDirector {
     this._saveProject();
     this._shotOutcome('shot-deleted', scene, shot, index);
     if (inStories) this._publish({ type: 'stories-changed' });
+  }
+
+  /**
+   * Move a shot to another place in its scene's playback order, the shots
+   * between shifting over (the shot list's up and down buttons swap it with
+   * its neighbour). Not while the scene plays.
+   * @param {string} sceneId
+   * @param {string} shotId
+   * @param {number} index Its new place, kept within the scene's shots.
+   * @returns {boolean} Whether it moved.
+   */
+  moveShot(sceneId, shotId, index) {
+    if (this._running || !Number.isInteger(index)) return false;
+    const { scene, shot } = this._getShot(sceneId, shotId);
+    if (!scene || !shot) return false;
+    const from = scene.shots.indexOf(shot);
+    const to = Math.max(0, Math.min(scene.shots.length - 1, index));
+    if (from === to) return false;
+    const shots = scene.shots.filter((item) => item !== shot);
+    shots.splice(to, 0, shot);
+    scene.shots = shots;
+    this._saveProject();
+    this._shotOutcome('shot-moved', scene, shot, to);
+    if (scene.stories) this._publish({ type: 'stories-changed' });
+    return true;
   }
 
   /**

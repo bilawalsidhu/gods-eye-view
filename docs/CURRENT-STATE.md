@@ -2369,12 +2369,20 @@ Scene controls own creation/deletion prompts, panel listeners, shot rows, playba
 and keyboard cancellation. The director supplies project reads and explicit
 editing/playback actions while retaining persistence, camera and layer sequencing.
 Shot selection updates the highlight without replacing the row, preserving
-native double-click rename. Replacing rows revokes their old listeners. Disposal stops controls immediately;
+native double-click rename. A click anywhere on a shot row (its number, title or
+summary line), or Enter or Space on its title, goes to the shot: it is selected
+and loaded (`SceneDirector.loadShot`: its look, layers and camera), so the row
+has no separate LOAD button. Each row's up and down arrows swap the shot with
+its neighbour (`SceneDirector.moveShot`, saved with the project and published as
+`shot-moved`); they are disabled at the ends and while the scene plays, and,
+like DEL, never load the shot. Shot rows show no thumbnail: a shot keeps no
+picture of its view, only the scene's Stories card does. Replacing rows revokes
+their old listeners. Disposal stops controls immediately;
 late file and failed-action completions cannot update removed presentation.
 
 The panel is titled Authoring and is laid out in four labelled steps: SCENE
 (picker on its own row listing every scene in the project, NEW SCENE, DELETE),
-SHOTS (+ CAPTURE SHOT, UPDATE SHOT, the numbered shot list and a select/rename
+SHOTS (+ CAPTURE SHOT, UPDATE SHOT, the numbered shot list and a go-to/rename
 hint), PREVIEW (PLAY, STOP, NEXT) and SAVE & SHARE (a row of Stories tag chips;
 the thumbnail preview, CAPTURE THUMBNAIL and SAVE TO STORIES on one row; then
 EXPORT, IMPORT, RUN LOG, then the EDIT DETAILS / SHARE SCENE row). On load the
@@ -3191,8 +3199,8 @@ retain their specialized ownership. Browser acceptance:
 
 ## Ordinary action buttons
 
-Scene panel actions, shot LOAD/DEL actions, the EDIT DETAILS / SHARE SCENE
-bar and one-shot CCTV actions use the shared `gev-action-button` surface in
+Scene panel actions, shot move-up/move-down/DEL actions, the EDIT DETAILS /
+SHARE SCENE bar and one-shot CCTV actions use the shared `gev-action-button` surface in
 `ui/styles/action-button.css`, with default/danger variants and
 default/compact sizes, drawn by the scene panels view (`LayerPanelsView.vue`,
 `SceneShotList.vue`) and the CCTV panel. Feature

@@ -8,6 +8,8 @@ import { computed, markRaw, shallowRef } from 'vue';
  * @property {(sceneId: string, shotId: string, title: string) => void} rename
  * @property {(sceneId: string, shotId: string) => void} load
  * @property {(sceneId: string, shotId: string) => void} remove
+ * @property {(sceneId: string, shotId: string, index: number) => void} move
+ *   Move a shot to `index` in its scene's playback order.
  * @property {(file: File) => Promise<void>|void} importFile A chosen file.
  * @property {() => void} create, deleteScene, stories, thumb, capture, update,
  *   start, stop, next, export, download The panel's buttons.
