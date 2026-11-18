@@ -631,6 +631,21 @@ test('a globe flight without callbacks still flies (both hooks are optional)', (
   viewer.flights[0].complete();
 });
 
+test('a globe flight to a given view flies there, not out over the current spot', () => {
+  const viewer = stubViewer();
+  const target = flyToGlobeView(viewer, {
+    view: { lon: -82.5, lat: 35, height: 23000000 },
+  });
+  assert.deepEqual(target, { latitude: 35, longitude: -82.5, heightM: 23000000 });
+  const flight = viewer.flights[0];
+  const end = Cesium.Cartographic.fromCartesian(flight.destination);
+  assert.ok(Math.abs(Cesium.Math.toDegrees(end.longitude) + 82.5) < 1e-6);
+  assert.ok(Math.abs(Cesium.Math.toDegrees(end.latitude) - 35) < 1e-6);
+  assert.ok(Math.abs(end.height - 23000000) < 1);
+  assert.equal(flight.orientation.heading, 0);
+  assert.ok(Math.abs(flight.orientation.pitch + Math.PI / 2) < 1e-9);
+});
+
 test('geocoded Location branches forward the resolved-navigation ownership hook', () => {
   const source = fs.readFileSync(new URL('./locations.js', import.meta.url), 'utf8');
   const searchStart = source.indexOf('export async function searchAndFlyTo');
