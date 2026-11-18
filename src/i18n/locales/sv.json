@@ -4259,5 +4259,8 @@
     "other": "Visa {what} i {place} ({count} objekt)"
   },
   "Go there": "Gå dit",
-  "Open draw options": "Öppna ritalternativ"
+  "Open draw options": "Öppna ritalternativ",
+  "Clean view: hide the controls": "Rent gränssnitt: dölj kontrollerna",
+  "Exit clean view: show the controls": "Lämna rent gränssnitt: visa kontrollerna",
+  "{label} (V)": "{label} (V)"
 }

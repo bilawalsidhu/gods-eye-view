@@ -4675,5 +4675,8 @@
     "other": "عرض {what} في {place} ({count} عنصر)"
   },
   "Go there": "انتقل إلى هناك",
-  "Open draw options": "فتح خيارات الرسم"
+  "Open draw options": "فتح خيارات الرسم",
+  "Clean view: hide the controls": "العرض النظيف: إخفاء عناصر التحكم",
+  "Exit clean view: show the controls": "الخروج من العرض النظيف: إظهار عناصر التحكم",
+  "{label} (V)": "{label} (V)"
 }

@@ -4363,5 +4363,8 @@
     "other": "Mostrar {what} em {place} ({count} itens)"
   },
   "Go there": "Ir até lá",
-  "Open draw options": "Abrir opções de desenho"
+  "Open draw options": "Abrir opções de desenho",
+  "Clean view: hide the controls": "Vista limpa: ocultar os controles",
+  "Exit clean view: show the controls": "Sair da vista limpa: mostrar os controles",
+  "{label} (V)": "{label} (V)"
 }

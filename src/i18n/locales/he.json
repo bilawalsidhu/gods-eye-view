@@ -4363,5 +4363,8 @@
     "other": "הצגת {what} ב{place} ({count} פריטים)"
   },
   "Go there": "מעבר למקום",
-  "Open draw options": "פתיחת אפשרויות הציור"
+  "Open draw options": "פתיחת אפשרויות הציור",
+  "Clean view: hide the controls": "תצוגה נקייה: הסתרת הפקדים",
+  "Exit clean view: show the controls": "יציאה מהתצוגה הנקייה: הצגת הפקדים",
+  "{label} (V)": "{label} (V)"
 }

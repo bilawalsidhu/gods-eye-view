@@ -8,6 +8,7 @@ export function readShellElements(document = globalThis.document) {
     _bloomSlider: document.getElementById('bloom-intensity-slider'),
     _hudBtn: document.getElementById('hud-toggle'),
     _cleanViewBtn: document.getElementById('clean-view-toggle'),
+    _cleanViewEyeBtn: document.getElementById('clean-view-eye'),
     _dataPanel: document.getElementById('data-panel'),
     _scenePanel: document.getElementById('scene-panel'),
     _cctvPanel: document.getElementById('cctv-panel'),
