@@ -119,10 +119,13 @@ address it browses to belongs in the two host lists.
 ## Updating, logs and removal
 
 ```bash
-pct exec <CTID> -- gev-update                       # pull, reinstall dependencies, restart
+pct exec <CTID> -- /usr/local/bin/gev-update        # pull, reinstall dependencies, restart
 pct exec <CTID> -- journalctl -u gods-eye-view -f   # follow the logs
 pct stop <CTID> && pct destroy <CTID>               # remove the container entirely
 ```
+
+`pct exec` may not search `/usr/local/bin`, so give `gev-update` its full
+path from the node's shell; inside the container, `gev-update` alone works.
 
 Your keys (`.env`) and the data cache (`.gev-cache/`) live in
 `/opt/gods-eye-view` and survive updates. Proxmox backups of the container

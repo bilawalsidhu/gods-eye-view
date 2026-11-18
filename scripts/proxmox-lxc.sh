@@ -84,7 +84,7 @@ pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE}" \
   --features nesting=1 \
   --unprivileged 1 --onboot 1 \
   --tags "gods-eye-view;node" \
-  --description "God's Eye View (headless). Web UI: http://<ip>:${PORT}  — app in ${APP_DIR}, keys in ${APP_DIR}/.env, update with: gev-update" \
+  --description "God's Eye View (headless). Web UI: http://<ip>:${PORT}  — app in ${APP_DIR}, keys in ${APP_DIR}/.env, update with: pct exec <id> -- /usr/local/bin/gev-update" \
   >/dev/null
 pct start "$CTID"
 ok "Container started"
@@ -216,7 +216,7 @@ cat <<EOF
                pct exec ${CTID} -- nano ${APP_DIR}/.env
                then: pct exec ${CTID} -- systemctl restart gods-eye-view
   ${c_ok}Logs:${c_off}        pct exec ${CTID} -- journalctl -u gods-eye-view -f
-  ${c_ok}Update:${c_off}      pct exec ${CTID} -- gev-update
+  ${c_ok}Update:${c_off}      pct exec ${CTID} -- /usr/local/bin/gev-update
 
   ${c_warn}Heads-up:${c_off} anyone who can reach this port can spend your configured API keys.
   Keep it on a network you trust (no public tunnel) and set billing caps with each provider.
