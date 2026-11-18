@@ -4033,5 +4033,6 @@
   "Course to {code}: {course}": "{code}への針路: {course}",
   "Over {place}": "{place}上空",
   "Below": "直下",
-  "Back to live at the starting view": "ライブに戻り、最初の表示へ"
+  "Back to live at the starting view": "ライブに戻り、最初の表示へ",
+  "Exit cockpit to fly to a bike share city": "シェアサイクルのある都市へ移動するにはコックピットを終了してください"
 }

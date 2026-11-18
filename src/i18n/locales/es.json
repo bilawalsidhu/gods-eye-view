@@ -4239,5 +4239,6 @@
   "Course to {code}: {course}": "Rumbo a {code}: {course}",
   "Over {place}": "Sobre {place}",
   "Below": "Debajo",
-  "Back to live at the starting view": "Volver al directo en la vista inicial"
+  "Back to live at the starting view": "Volver al directo en la vista inicial",
+  "Exit cockpit to fly to a bike share city": "Sal de la cabina para volar a una ciudad con bicicletas compartidas"
 }

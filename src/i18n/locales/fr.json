@@ -4239,5 +4239,6 @@
   "Course to {code}: {course}": "Cap vers {code} : {course}",
   "Over {place}": "Au-dessus de {place}",
   "Below": "En dessous",
-  "Back to live at the starting view": "Revenir au direct dans la vue de départ"
+  "Back to live at the starting view": "Revenir au direct dans la vue de départ",
+  "Exit cockpit to fly to a bike share city": "Quittez le cockpit pour aller vers une ville avec vélos en libre-service"
 }

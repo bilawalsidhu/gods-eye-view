@@ -4033,5 +4033,6 @@
   "Course to {code}: {course}": "前往 {code} 的航向：{course}",
   "Over {place}": "{place}上空",
   "Below": "下方",
-  "Back to live at the starting view": "回到實時並返回初始視圖"
+  "Back to live at the starting view": "回到實時並返回初始視圖",
+  "Exit cockpit to fly to a bike share city": "退出駕駛艙以飛往有共享單車的城市"
 }

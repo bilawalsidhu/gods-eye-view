@@ -4342,5 +4342,6 @@
   "Course to {code}: {course}": "Курс на {code}: {course}",
   "Over {place}": "Над: {place}",
   "Below": "Под спутником",
-  "Back to live at the starting view": "Вернуться в прямой эфир в начальном виде"
+  "Back to live at the starting view": "Вернуться в прямой эфир в начальном виде",
+  "Exit cockpit to fly to a bike share city": "Выйдите из кабины, чтобы перелететь в город с прокатом велосипедов"
 }

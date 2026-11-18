@@ -4136,5 +4136,6 @@
   "Course to {code}: {course}": "Kurs mot {code}: {course}",
   "Over {place}": "Över {place}",
   "Below": "Nedanför",
-  "Back to live at the starting view": "Tillbaka till live i startvyn"
+  "Back to live at the starting view": "Tillbaka till live i startvyn",
+  "Exit cockpit to fly to a bike share city": "Lämna cockpit för att flyga till en stad med lånecyklar"
 }
