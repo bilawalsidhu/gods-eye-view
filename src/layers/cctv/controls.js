@@ -336,13 +336,13 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
 
     /**
-     * Selects the camera nearest an explicit WGS84 point and optionally flies.
+     * Selects the camera nearest a WGS84 point and optionally flies to it.
      * @param {number} lat Latitude in degrees.
      * @param {number} lon Longitude in degrees.
      * @param {Object} [options={}]
      * @param {boolean} [options.focus=true] Whether to fly after selection.
      * @param {number} [options.durationSec] Fly-to duration in seconds.
-     * @returns {string|null} The nearest camera ID, or null if none found.
+     * @returns {string|null} Camera ID, or null (invalid point, empty catalog).
      */
     focusNearestToPoint(lat, lon, options = {}) {
       const nearest = parts.navigation.nearestCameraIdToPoint(lat, lon);

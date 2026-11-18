@@ -9,10 +9,10 @@ export function createNavigation({
   source,
 }) {
   /**
-   * Find the catalog camera nearest one WGS84 point.
+   * Nearest catalog camera to a WGS84 point.
    * @param {number} lat Latitude in degrees.
    * @param {number} lon Longitude in degrees.
-   * @returns {string|null} Camera ID of the nearest camera, or null.
+   * @returns {string|null} Camera ID, or null (invalid point, empty catalog).
    */
   function nearestCameraIdToPoint(lat, lon) {
     const latitude = Number(lat);
