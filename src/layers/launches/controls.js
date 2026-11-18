@@ -16,6 +16,18 @@ export function createControls({ state: layerState, services, parts, source }) {
           : entries.length - 1
         : (index + step + entries.length) % entries.length;
     parts.panel.selectMissionAt(entries[next].index);
+    // Stepped from the Data Layers row: the panel opens, as for a globe pick.
+    const id = layerState._selectedLaunchId;
+    for (const listener of [...(layerState._globePickListeners || [])]) {
+      try {
+        listener(id);
+      } catch (error) {
+        console.warn(
+          '[Data:RocketLaunches] mission step listener failed',
+          error,
+        );
+      }
+    }
   }
 
   const methods = {

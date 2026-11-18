@@ -1012,6 +1012,26 @@ export function createGevActionRunner({
           error: say,
         };
       }
+      // The Cockpit owns the screen and hides the right rail: the panel is
+      // not opened (or its preference written) under it.
+      if (
+        open &&
+        panelId === 'space-missions-panel' &&
+        styleManager?.getCockpitState?.()?.active
+      ) {
+        const say =
+          'The Space Missions panel opens once you leave the cockpit.';
+        return {
+          ok: false,
+          action: 'set_panel_open',
+          panelId,
+          open,
+          applied: false,
+          unavailable: true,
+          say,
+          error: say,
+        };
+      }
       if (!setPanelOpen(styleManager, panelId, open)) {
         const say = 'There is no panel to open here.';
         return {
@@ -1023,6 +1043,9 @@ export function createGevActionRunner({
           error: say,
         };
       }
+      // A phone shows the right rail only as tab sheets: show this one's.
+      if (open && panelId === 'space-missions-panel')
+        styleManager?.revealPanel?.(panelId);
       return { ok: true, action: 'set_panel_open', panelId, open };
     }
 
@@ -1077,6 +1100,7 @@ export function createGevActionRunner({
           !styleManager?.getCockpitState?.()?.active
         ) {
           setPanelOpen(styleManager, 'space-missions-panel', true);
+          styleManager?.revealPanel?.('space-missions-panel');
         }
         return {
           ...result,
@@ -1084,13 +1108,19 @@ export function createGevActionRunner({
           mode: 'space-missions',
         };
       }
+      const contextState = styleManager.getContextModeState?.() || {};
       if (
         mode === 'off' &&
-        !styleManager.getContextModeState?.()?.mode &&
-        dataManager.isEnabled?.('rocket-launches')
+        !contextState.mode &&
+        !contextState.changing &&
+        !contextState.entering &&
+        !dataManager.isEffectivelyEnabled?.('military-awareness') &&
+        (dataManager.isEffectivelyEnabled?.('rocket-launches') ??
+          dataManager.isEnabled?.('rocket-launches'))
       ) {
         // "Exit Space Missions" still arrives as context off. With no Context
-        // mode on, Space Missions is what is being left: switch its layer off.
+        // mode on, entering or starting (Contacts), Space Missions, on or
+        // still starting, is what is being left: switch its layer off.
         const result = await runGevAction(
           'set_layer_visibility',
           { layerId: 'rocket-launches', enabled: false },
