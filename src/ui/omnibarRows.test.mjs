@@ -601,3 +601,49 @@ test('only a layer in or near a place is counted, never a name', () => {
   ])
     assert.equal(omnibar.countRequest(text), null, text);
 });
+
+test('a place named Left or Right is no panel to close', () => {
+  const omnibar = createOmnibar({ layers: layers(['flights']) });
+  const { rows, defaultIndex } = omnibar.rows(
+    'hide flights near Left Bank, Paris',
+  );
+  assert.equal(rows[defaultIndex].kind, 'plan');
+  assert.ok(rows[defaultIndex].steps.every((step) => step.kind !== 'panel'));
+  for (const text of ['hide the left panel', 'close right side']) {
+    const read = omnibar.rows(text);
+    assert.ok(
+      read.rows[read.defaultIndex].steps.some((step) => step.kind === 'panel'),
+      text,
+    );
+  }
+});
+
+test('the place service gets the whole place, however it is asked', () => {
+  const omnibar = createOmnibar({ layers: layers() });
+  assert.equal(
+    omnibar.placeQuery('flights near Trinidad and Tobago'),
+    'trinidad and tobago',
+  );
+  assert.equal(
+    omnibar.placeQuery('take me to New York City NY'),
+    'New York City NY',
+  );
+  // A signed longitude or a semicolon stays inside the coordinates.
+  for (const text of [
+    'show flights near 30.27, +97.74',
+    'go to 30.27; -97.74',
+  ]) {
+    const { rows, defaultIndex } = omnibar.rows(text);
+    assert.ok(defaultIndex >= 0, text);
+    assert.equal(omnibar.placeQuery(text), null, text);
+    assert.notEqual(rows[defaultIndex].kind, 'none', text);
+  }
+});
+
+test('several switches in one line are one plan', () => {
+  const omnibar = createOmnibar({ layers: layers(['flights']) });
+  for (const text of ['hide flights, show radio', 'hide flights; show radio']) {
+    const { rows, defaultIndex } = omnibar.rows(text);
+    assert.equal(rows[defaultIndex].kind, 'plan', text);
+  }
+});

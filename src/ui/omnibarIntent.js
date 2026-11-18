@@ -109,9 +109,10 @@ function panelStep(clause) {
       (/\beverything\b/.test(clause) && onlyNames(clause, /\beverything\b/))
     )
       return { kind: 'panel', action: 'close', side: 'all' };
-    if (/\bleft\b/.test(clause))
+    // "hide the left panel", never "hide flights near Left Bank".
+    if (/\bleft\b/.test(clause) && onlyNames(clause, /\b(left|side)\b/g))
       return { kind: 'panel', action: 'close', side: 'left' };
-    if (/\bright\b/.test(clause))
+    if (/\bright\b/.test(clause) && onlyNames(clause, /\b(right|side)\b/g))
       return { kind: 'panel', action: 'close', side: 'right' };
     for (const [pattern, side, item, name] of PANEL_NAMES)
       if (pattern.test(clause) && /panel/.test(clause))
@@ -359,7 +360,7 @@ const GO_TAIL =
 
 /** Clause separators; "black and white" is joined first so it survives. */
 const SEPARATORS =
-  /(\s*(?:,|;|\+|&|\band then\b|\bthen\b|\band\b|\balso\b)\s*)/;
+  /(\s*(?:,|;(?!\s*[-+]?\d)|\+(?!\d)|&|\band then\b|\bthen\b|\band\b|\balso\b)\s*)/;
 
 function tidy(text) {
   return text.replace(/\s+/g, ' ').trim();

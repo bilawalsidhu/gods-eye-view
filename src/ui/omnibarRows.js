@@ -932,7 +932,8 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
       !switching ||
       isPanelText(line) ||
       isWholeMapClear(line) ||
-      /\b(near|in|at|over|around|and|then)\b/.test(switching[2] || '')
+      // More than one request ("hide flights, show ships") is the parser's.
+      /\b(near|in|at|over|around|and|then)\b|[,;+&]/.test(switching[2] || '')
     )
       return null;
     const verb = switching[1];
@@ -1517,8 +1518,7 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
     if (line.length < minPlaceChars(line) || line.startsWith('>')) return null;
     if (/^[0-9a-f]{6}$/i.test(line) || CALLSIGN.test(line.replace(/\s+/g, '')))
       return null;
-    if (line.includes('?') || line.split(/\s+/).length > placeWordLimit(line))
-      return null;
+    if (line.includes('?')) return null;
     if (VILLAGES.test(line) || exactCommand(line) || coordinateTarget(line))
       return null;
     if (switchRows(line, askRow(text))) return null;
@@ -1531,13 +1531,22 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
     if (place && !/[\p{L}\p{N}]/u.test(place.place)) return null;
     // A line of commands with no place in it ("night vision", "zoom in").
     if (parsed.steps.length && !place) return null;
+    const words = (value) => value.split(/\s+/).length;
+    // The words the place has, not the command around it ("take me to New
+    // York City NY"); a line that may be one name counts all of its words.
+    const named = place && !parsed.ambiguous ? place.place : line;
+    if (words(named) > placeWordLimit(named)) return null;
+    // "flights near Trinidad and Tobago": the whole name is looked up; the
+    // rows still offer each part ("Tokyo and Osaka").
+    const joined = (value) =>
+      [value, ...(parsed.extraPlaces || [])].join(' and ');
     // After "go to … , noir" the place read is the one to look up.
-    if (parsed.peeled && place) return place.place;
+    if (parsed.peeled && place) return joined(place.place);
     return parsed.ambiguous || !place
       ? text
       : place.place === line
         ? text
-        : place.place;
+        : joined(place.place);
   }
 
   /**
