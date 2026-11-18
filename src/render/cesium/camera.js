@@ -350,6 +350,9 @@ export function createCesiumCamera({
   }
 
   const cameraPort = {
+    // The ECEF camera pose describes the globe only in 3D. Consumers that
+    // cannot prove this must avoid globe-only visibility culling.
+    isWorld3D: () => scene.mode === Cesium.SceneMode.SCENE3D,
     on: (event, cb, options) => cameraEvents.on(event, cb, options),
     onCommand: (cb) => commandHooks.on(cb),
     setView(spec) {

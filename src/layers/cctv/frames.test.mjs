@@ -4,6 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+import { bindRenderer } from '../../render/rendererOf.js';
 import { createFrames, fitToProjection } from './frames.js';
 import {
   FRAME_SIGNATURE_W,
@@ -174,7 +175,7 @@ function planeRecord() {
 }
 
 function viewerAt(position, direction, up) {
-  return {
+  const viewer = {
     isDestroyed: () => false,
     scene: { mode: Cesium.SceneMode.SCENE3D },
     camera: {
@@ -191,6 +192,22 @@ function viewerAt(position, direction, up) {
       }),
     },
   };
+  bindRenderer(viewer, {
+    camera: {
+      isWorld3D: () => viewer.scene.mode === Cesium.SceneMode.SCENE3D,
+      pose: () => ({
+        position: viewer.camera.positionWC,
+        direction: viewer.camera.directionWC,
+        up: viewer.camera.upWC,
+        fovy: viewer.camera.frustum.fovy,
+        aspectRatio: viewer.camera.frustum.aspectRatio,
+        near: viewer.camera.frustum.near,
+        far: viewer.camera.frustum.far,
+      }),
+      matrices: () => ({ projection: viewer.camera.frustum.projectionMatrix }),
+    },
+  });
+  return viewer;
 }
 
 // Above the mount, looking straight down at the ground.
@@ -354,6 +371,67 @@ test('a skipped refresh does not use up the interval: the plane fetches once it 
   assert.equal(record.projection.image.src, undefined);
   frames.refreshProjectionImage(record);
   assert.match(record.projection.image.src, /projTs=/);
+});
+
+test('the renderer scene host culls the far side without raw viewer access', () => {
+  const native = lookingDown();
+  const viewer = { isDestroyed: () => false };
+  const camera = native.camera;
+  const unbind = bindRenderer(viewer, {
+    camera: {
+      isWorld3D: () => true,
+      matrices: () => ({ projection: camera.frustum.projectionMatrix }),
+      pose: () => ({
+        position: camera.positionWC,
+        direction: Cesium.Cartesian3.UNIT_X,
+        up: camera.upWC,
+        fovy: camera.frustum.fovy,
+        aspectRatio: camera.frustum.aspectRatio,
+        near: camera.frustum.near,
+        far: camera.frustum.far,
+      }),
+    },
+  });
+  try {
+    assert.equal(framesFor(viewer).projectionInView(planeRecord()), false);
+  } finally {
+    unbind();
+  }
+});
+
+test('deep viewers do not lose nearby planes to the horizon test', () => {
+  const mount = point(0, 0, -350);
+  const position = point(0.00135, 0, -300);
+  const direction = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.subtract(mount, position, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3(),
+  );
+  const record = planeRecord();
+  record.frustumPositions = { mount };
+  record.position = mount;
+  assert.equal(
+    framesFor(
+      viewerAt(position, direction, Cesium.Cartesian3.UNIT_Z),
+    ).projectionInView(record),
+    true,
+  );
+});
+
+test('flat, unknown, and off-centre projections fail open', () => {
+  const native = lookingDown();
+  native.camera.directionWC = Cesium.Cartesian3.UNIT_X;
+  native.scene.mode = Cesium.SceneMode.COLUMBUS_VIEW;
+  assert.equal(framesFor(native).projectionInView(planeRecord()), true);
+  native.scene.mode = Cesium.SceneMode.SCENE3D;
+  native.camera.frustum.xOffset = 0.1;
+  assert.equal(framesFor(native).projectionInView(planeRecord()), true);
+  const host = {};
+  const unbind = bindRenderer(host, { camera: { pose: () => ({}) } });
+  try {
+    assert.equal(framesFor(host).projectionInView(planeRecord()), true);
+  } finally {
+    unbind();
+  }
 });
 
 test('what cannot be judged counts as visible', () => {
