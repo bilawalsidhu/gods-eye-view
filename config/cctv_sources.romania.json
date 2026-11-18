@@ -1,0 +1,23 @@
+[
+  {
+    "id": "ro-giroc-webcamromania",
+    "name": "Giroc — Webcam Romania",
+    "city": "Giroc, Timiș",
+    "cityId": "giroc",
+    "provider": "Webcam Romania · webcamromania.ro",
+    "sourceKind": "configured",
+    "feedType": "hls",
+    "url": "https://w4.webcamromania.ro/giroc/index.m3u8",
+    "snapshotUrl": "https://webcamromania.ro/media/snapshots/01a0267e-d893-7203-a7eb-7ce3c8c99703/latest.jpg",
+    "lat": 45.70028947266781,
+    "lon": 21.233675914004227,
+    "headingDeg": 0,
+    "headingConfidence": "low",
+    "pitchDeg": -17,
+    "fovDeg": 74,
+    "rangeM": 700,
+    "mountHeightM": 24,
+    "groundElevationM": 87,
+    "license": "Public camera: https://webcamromania.ro/webcam-orase/webcam-giroc/ . Provider terms: https://webcamromania.ro/termeni-si-conditii/ . Video rights remain with the camera operator. Coordinates corrected by the contributor; direction, height, elevation and field of view are uncalibrated estimates."
+  }
+]

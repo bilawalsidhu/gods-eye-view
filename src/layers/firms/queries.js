@@ -8,7 +8,7 @@ import {
   rampTrackGradient,
   sliderPositionForFrp,
 } from '../../data/firmsIntensity.js';
-import { formatNumber, t } from '../../i18n/index.js';
+import { formatNumber, formatUtcDayMonth, t } from '../../i18n/index.js';
 import { LOD_LEVELS, REFRESH_INTERVAL_MS } from './policy.js';
 
 /** Slider resolution: whole-percent positions along the log axis. */
@@ -190,8 +190,9 @@ export function createQueries({
      * Layer stats for the data panel. Degraded feed states surface through
      * `error` (established qa-failstate pattern: a dead feed must never look
      * like a healthy empty layer) with a matching human `loadingLabel`:
-     * 'LIVE · updated Xm ago' fresh, 'STALE · cached Xh' when the proxy
-     * served past-TTL cache, 'KEY REQUIRED' keyless.
+     * 'LIVE · updated Xm ago' fresh, '24 h to MM-DD HH:MM UTC' for a
+     * snapshot that ends at a set time (`at`), 'STALE · cached Xh' when the
+     * proxy served past-TTL cache, 'KEY REQUIRED' keyless.
      */
     getStats() {
       const now = Date.now();
@@ -213,6 +214,11 @@ export function createQueries({
         loadingLabel = staleText;
       } else if (layerState._error) {
         loadingLabel = layerState._error;
+      } else if (Number.isFinite(layerState._at)) {
+        loadingLabel = t('24 h to {day} {time} UTC', {
+          day: formatUtcDayMonth(layerState._at),
+          time: new Date(layerState._at).toISOString().slice(11, 16),
+        });
       } else if (layerState._lastUpdate) {
         loadingLabel = t('LIVE · updated {age}', {
           age: components.model.formatAgoMinutes(now - layerState._lastUpdate),
@@ -226,6 +232,11 @@ export function createQueries({
         lastUpdate: layerState._lastUpdate,
         loading: layerState._loading,
         stale: layerState._stale,
+        // The end of the 24 hours shown when the snapshot ends at a set time;
+        // null for the trailing 24 hours to now. Such a snapshot is not live,
+        // so the row names the provider without the catalog's "LIVE".
+        at: Number.isFinite(layerState._at) ? layerState._at : null,
+        ...(Number.isFinite(layerState._at) ? { source: 'NASA FIRMS' } : {}),
         // The machine-readable half of the keyless state, ahead of the human
         // strings below: without it "no key configured" is indistinguishable
         // from a broken feed, and the row reads as a fault instead of a step
@@ -267,7 +278,8 @@ export function createQueries({
      * layer's greedy declutter as the SELECTOR and the shared overlay remains
      * the renderer. Walks the FRP-sorted index so the strongest fires come first.
      * @param {{maxCount?: number}} [options]
-     * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string}>}
+     * @returns {Array<{position: {x: number, y: number, z: number}, id: string, type: string}>}
+     *   Positions are ECEF.
      */
     getDetectableObjects(options = {}) {
       if (!layerState._enabled || !layerState._firesByFrp.length) return [];
@@ -322,9 +334,9 @@ export function createQueries({
       components.rendering.applyHandoffFade();
     },
 
-    /** Test seam: entities drawn by the layer's data source. */
+    /** Test seam: shapes drawn in the layer's own set (none: the heat is imagery). */
     _entityCountForTest() {
-      return layerState._dataSource?.entities?.values?.length ?? 0;
+      return layerState._cells?.size() ?? 0;
     },
 
     /** Test seam that binds the production click path and indexes. */
@@ -339,13 +351,13 @@ export function createQueries({
       layerState._totalCount = fires.length;
       layerState._pickIndexById.clear();
       layerState._labelLodDistance = 1e7;
+      components.rendering.ensureDetectionCollections();
       layerState._labelCandidates = fires.map((fire) => {
         layerState._pickIndexById.set(`firms-${fire.index}`, fire);
         return { fire, position: components.model.firePosition(fire) };
       });
       components.cards.rebuildAmbientLabels();
       components.selection.installClickHandler();
-      return layerState._clickHandler;
     },
   };
 

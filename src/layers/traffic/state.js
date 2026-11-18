@@ -1,28 +1,30 @@
-import { normalizeRoadMode } from './roadModes.js';
-import * as Cesium from 'cesium';
+import { normalizeRoadMode, normalizeRoadModes } from './roadModes.js';
 import { FLOW_BUCKET_COLORS } from './policy.js';
 
-export function createState({ services }) {
+export function createState({ services, source }) {
   const layerState = {};
+  /** The host's offered road sources (createTrafficSource `roadModes`). */
+  layerState._roadModes = normalizeRoadModes(source?.roadModes);
   layerState._roadMode =
     typeof location === 'undefined'
       ? null
       : normalizeRoadMode(
           new URLSearchParams(location.search).get('trafficRoads'),
+          layerState._roadModes,
         );
   // The query override is consumed at construction and shields passive restoration.
   layerState._roadModeUrlOverride = layerState._roadMode;
 
   // ─── Module State ──────────────────────────────────────────
-  /** @type {Cesium.Viewer|null} */
+  /** @type {object|null} The scene's viewer. */
 
   layerState._viewer = null;
 
-  /** @type {Cesium.PointPrimitiveCollection|null} */
+  /** @type {object|null} The dots' draw set (points), made at init. */
 
-  layerState._pointCollection = null;
+  layerState._dotSet = null;
 
-  /** @type {Array<{point:Cesium.PointPrimitive, waypoints:Cesium.Cartesian3[], segmentDist:number[], numSegments:number, segIdx:number, t:number, mps:number, direction:number, stoppedUntil:number}>} Active animated dots */
+  /** @type {Array<{point:object, waypoints:Array<{x:number, y:number, z:number}>, segmentDist:number[], numSegments:number, segIdx:number, t:number, mps:number, direction:number, stoppedUntil:number}>} Active animated dots */
 
   layerState._dots = [];
   layerState._nextDotId = 1;
@@ -34,7 +36,7 @@ export function createState({ services }) {
     recycled: 0,
   };
 
-  /** @type {Array<{coords:number[][], type:string, waypoints:Cesium.Cartesian3[], segmentDist:number[]}>} Parsed roads with pre-computed Cartesian3 waypoints */
+  /** @type {Array<{coords:number[][], type:string, waypoints:Array<{x:number, y:number, z:number}>, segmentDist:number[]}>} Parsed roads with pre-computed ECEF waypoints */
 
   layerState._roads = [];
 
@@ -42,11 +44,11 @@ export function createState({ services }) {
 
   layerState._enabled = false;
 
-  /** @type {Function|null} Disposer returned by preRender event subscription */
+  /** @type {Function|null} Disposer of the frame port's preRender listener */
 
   layerState._preRenderRemover = null;
 
-  /** @type {Function|null} Disposer returned by camera.changed event subscription */
+  /** @type {Function|null} Disposers of the camera port's changed and moveEnd listeners */
 
   layerState._cameraRemover = null;
   layerState._arrivalRemover = null;
@@ -90,10 +92,6 @@ export function createState({ services }) {
   /** @type {{lat:number,lon:number}|null} Center of last-fetched viewport for shift gating */
 
   layerState._lastViewCenter = null;
-
-  /** @type {number|null} camera.percentageChanged value before we overrode it, restored on disable */
-
-  layerState._prevPercentageChanged = null;
 
   /** @type {boolean} Live TomTom flow mode — true iff /api/tomtom/status reports a key */
 
@@ -168,26 +166,40 @@ export function createState({ services }) {
   layerState._jamViz = 'density';
 
   /**
-   * Congestion heat-lines are GroundPolylinePrimitive batches draped onto the
-   * rendered 3D tiles (ClassificationType.CESIUM_3D_TILE). One
-   * primitive per bucket so the jam batch can pulse via a single shared
-   * material uniform.
-   * @type {Cesium.GroundPolylinePrimitive|null}
+   * Row toggles (`lines` / `dots` params): flow-colored road lines draped on
+   * the surface, and the moving dots. Live mode only for lines — the keyless
+   * simulation has no flow to color them with.
+   */
+  layerState._showLines = false;
+  layerState._showDots = true;
+
+  /**
+   * Road lines (congestion heat-lines, or the flow lines): a lines draw set
+   * draped on the surface, made at init.
+   * @type {object|null}
    */
 
-  layerState._heatJamPrim = null;
+  layerState._heatSet = null;
 
-  /** @type {Cesium.GroundPolylinePrimitive|null} Slow-bucket heat-line batch. */
+  /**
+   * The slow heat-lines, a lines set made after `_heatSet` so they draw
+   * over the jam ones, as before.
+   * @type {object|null}
+   */
 
-  layerState._heatSlowPrim = null;
+  layerState._heatOverSet = null;
+
+  /** @type {Array} The jam heat-line items, recoloured as they pulse. */
+
+  layerState._heatJam = [];
+
+  /** @type {number[]} The jam heat-lines' colour, without its alpha. */
+
+  layerState._heatJamRgb = [1, 1, 1];
 
   /** @type {number} Heat-lines in the current render (stats). */
 
   layerState._heatLineCount = 0;
-
-  /** @type {boolean|null} GroundPolylinePrimitive.isSupported, checked once. */
-
-  layerState._heatSupported = null;
 
   /** @type {number} Altitude of the last render, for late-flow heat rebuilds. */
 
@@ -217,7 +229,8 @@ export function createState({ services }) {
    * Effective per-bucket dot colors: preset override when one applies, else
    * the shipped FLOW_BUCKET_COLORS. Rebuilt on style/param change only —
    * spawn/recolor/restyle all read from here, no per-dot allocation.
-   * @type {{free:Cesium.Color, slow:Cesium.Color, jam:Cesium.Color}}
+   * Renderer colours (`[r, g, b, a]`, 0..1).
+   * @type {{free:number[], slow:number[], jam:number[]}}
    */
 
   layerState._activeBucketColors = { ...FLOW_BUCKET_COLORS };
@@ -287,10 +300,6 @@ export function createState({ services }) {
    */
 
   layerState._tileCache = new Map();
-
-  /** Reusable scratch Cartesian3 to avoid per-frame allocation / GC pressure */
-
-  layerState._scratchLerp = new Cesium.Cartesian3();
 
   // ─── Animation ─────────────────────────────────────────────
 

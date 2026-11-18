@@ -9,6 +9,7 @@ import {
   spaceMissionEntryCancellationDisposition,
 } from '../contextModePolicy.js';
 import { localizeLayerName } from './layerNames.js';
+import { spaceMissionsIndexFailure } from './contextActions.js';
 
 /**
  * A blocked-visibility reason in the UI language. Reasons stay English (voice
@@ -120,10 +121,14 @@ export function _handleContextLayerChange(change) {
     return;
   }
   if (change?.type === 'visibility-failed') {
-    const failureMessage = t('{layerId} could not {action} cleanly', {
-      layerId: change.layerId,
-      action: change.enabled ? t('start') : t('stop'),
-    });
+    const failureMessage =
+      (change.layerId === 'rocket-launches' &&
+        change.enabled &&
+        spaceMissionsIndexFailure(this._dataManager)) ||
+      t('{layerId} could not {action} cleanly', {
+        layerId: change.layerId,
+        action: change.enabled ? t('start') : t('stop'),
+      });
     // A failed direct Context-shell START has already had its siblings
     // cleared by the visibility guard. Wait outside the synchronous manager
     // notification for this queue to settle, then reconcile the complete
@@ -243,6 +248,21 @@ export function _handleContextLayerChange(change) {
         ),
       );
     }
+  }
+  if (
+    change.type === 'visibility' &&
+    change.enabled &&
+    change.origin === 'user' &&
+    !this.cockpitView?.active &&
+    (change.layerId === 'radio' || change.layerId === 'rocket-launches')
+  ) {
+    // Context's panel shows its main tab for them (ContextView listens).
+    globalThis.dispatchEvent?.(new Event('gev:context-show-view'));
+    this.actions.setPanelCollapsed('global-context-panel', false, {
+      explicit: true,
+    });
+    if (change.layerId === 'radio')
+      this.actions.setPanelCollapsed('radio-panel', false, { explicit: true });
   }
   // Turning off the layer the view rides ends it; every other layer may be
   // turned on or off freely during a session.

@@ -9,6 +9,13 @@ import assert from 'node:assert/strict';
 import { createPinia } from 'pinia';
 import { createApp, defineComponent, h, nextTick } from 'vue';
 import { DataLayerManager } from '../data/manager.js';
+import { withEntityRecord } from '../data/entityRecords.js';
+import {
+  bindFakeCesiumCamera,
+  followEntity,
+} from '../testSupport/fakeCameraPort.mjs';
+import { followedOf } from '../data/followed.js';
+import { fakeScenePorts } from '../testSupport/fakeCesiumScene.mjs';
 import { createDependencies } from '../layers/awareness/dependencies.js';
 import { CockpitCoordinator } from './cockpitCoordinator.js';
 import { ContextControls } from './contextControls.js';
@@ -25,6 +32,20 @@ const CIVIL = Object.freeze({
   latitude: 30,
   longitude: -97,
 });
+/** A tracked satellite, as the Satellites layer reports it. */
+const SATELLITE = Object.freeze({
+  kind: 'satellite',
+  layerId: 'satellites',
+  id: '25544',
+  noradId: 25544,
+  name: 'ISS (ZARYA)',
+  classLabel: 'STATION · ISS',
+  latitude: 30,
+  longitude: -97,
+  altitudeM: 420_000,
+  velocityMps: 7_660,
+  stale: false,
+});
 const MILITARY = Object.freeze({
   ...CIVIL,
   icao24: 'ae0001',
@@ -36,12 +57,16 @@ function fixture(
   {
     enabled = [],
     tracked = null,
+    satellite = null,
     contextMode = null,
     changing = false,
     dataManager: suppliedManager = null,
     readContext = null,
+    subjects = [],
+    vessel = null,
   } = {},
 ) {
+  let selectedVessel = vessel;
   document.body.replaceChildren();
   const host = document.body.appendChild(document.createElement('div'));
   const pinia = createPinia();
@@ -60,17 +85,18 @@ function fixture(
     tracked?.layerId === layerId && dataManager.isEnabled(layerId)
       ? tracked.info
       : null;
-  const entityFor = (subject) => ({
-    position: { getValue: () => null },
-    show: true,
-    gevTrackedId: subject ? `${subject.layerId}:${subject.info.icao24}` : '',
-  });
+  const entityFor = (subject) =>
+    withEntityRecord(
+      { position: { getValue: () => null }, show: true },
+      {
+        trackedId: subject ? `${subject.layerId}:${subject.info.icao24}` : '',
+      },
+    );
   const entities = new Set();
   const entity = entityFor(tracked);
   entities.add(entity);
   const listeners = () => ({ addEventListener: () => () => {} });
   const viewer = {
-    trackedEntity: tracked ? entity : undefined,
     clock: { currentTime: null },
     camera: { cancelFlight() {}, frustum: { fov: 1, aspectRatio: 1 } },
     entities: { contains: (candidate) => entities.has(candidate) },
@@ -80,16 +106,34 @@ function fixture(
     },
     trackedEntityChanged: listeners(),
   };
+  // The Cockpit reads frames, the camera and what it follows through ports.
+  bindFakeCesiumCamera(viewer, fakeScenePorts(viewer));
+  if (tracked) followEntity(viewer, entity);
   const context = { mode: contextMode, changing };
   const coordinator = new CockpitCoordinator({
     viewer,
     services: {
       flightsLayer: { getTrackedInfo: trackedFrom('flights') },
       militaryFlightsLayer: { getTrackedInfo: trackedFrom('military') },
+      // Like the layer, no subject while Live AIS Vessels is off.
+      aisLiveVesselsLayer: {
+        getCockpitSubject: () =>
+          selectedVessel && layers.has('ais-live-vessels')
+            ? { ...selectedVessel }
+            : null,
+      },
+      // Like the layer, no subject while Satellites is off.
+      satellitesLayer: {
+        getCockpitSubject: () =>
+          satellite && layers.has('satellites') ? { ...satellite } : null,
+        getCockpitPosition: () => null,
+        setCockpitSubject: () => true,
+      },
       militaryAwarenessLayer: { getContextSnapshot: () => null },
       isTr3b: () => false,
       holdContinuousRender() {},
       releaseContinuousRender() {},
+      cockpitSubjects: subjects,
     },
     elements: {},
     operations: {
@@ -120,7 +164,12 @@ function fixture(
   t.after(() => {
     coordinator.stop();
     app.unmount();
-    document.body.classList.remove('cockpit-mode');
+    document.body.classList.remove(
+      'cockpit-mode',
+      'cockpit-bridge',
+      'cockpit-orbit',
+      'cockpit-subject',
+    );
   });
   /** Turn a layer off and tell the Context owner, as the data manager does. */
   const disable = (layerId) => {
@@ -141,12 +190,38 @@ function fixture(
   /** Track another aircraft, as Contacts navigation does mid-session. */
   const retrack = (subject) => {
     tracked = subject;
-    viewer.trackedEntity = entityFor(subject);
-    entities.add(viewer.trackedEntity);
+    const next = entityFor(subject);
+    entities.add(next);
+    followEntity(viewer, next);
+  };
+  /** Select a vessel on the map, or none. */
+  const selectVessel = (info) => {
+    selectedVessel = info;
   };
   const $ = (selector) => document.querySelector(selector);
-  return { $, coordinator, cockpit, store, layers, disable, retrack, pinia };
+  return {
+    $,
+    coordinator,
+    cockpit,
+    store,
+    layers,
+    disable,
+    retrack,
+    selectVessel,
+    pinia,
+  };
 }
+
+/** A selected vessel as the AIS layer gives it to the bridge view. */
+const VESSEL = Object.freeze({
+  id: '211000001',
+  name: 'EXAMPLE',
+  latitude: 54,
+  longitude: 10,
+  headingDeg: 90,
+  courseDeg: 90,
+  speedMps: 5,
+});
 
 test('a civilian aircraft enters with Live Flights alone: no Contacts, no Military', (t) => {
   const { coordinator, cockpit } = fixture(t, {
@@ -157,6 +232,7 @@ test('a civilian aircraft enters with Live Flights alone: no Contacts, no Milita
   assert.equal(state.entryAllowed, true);
   assert.equal(state.entryBlockedReason, null);
   assert.equal(cockpit.enter(), true);
+  assert.equal(cockpit.subjectKind, 'aircraft');
 });
 
 test('a military aircraft enters with Military Flights alone', (t) => {
@@ -195,6 +271,47 @@ test('with no aircraft layer on, entry is refused for that reason, never for Con
   assert.doesNotMatch(voice.error, /contacts/i);
   assert.equal(voice.state.entryBlockedReason, 'subject-layer-off');
   assert.equal(cockpit.active, false);
+});
+
+test('voice entry on a vessel bridge refuses before it touches tracking', (t) => {
+  const { coordinator, cockpit } = fixture(t, { enabled: ['flights'] });
+  let navigated = false;
+  coordinator.services.militaryAwarenessLayer.navigateNext = () => {
+    navigated = true;
+    return true;
+  };
+  // Stand in for a bridge ride: the refusal reads only these two.
+  cockpit.active = true;
+  cockpit.subjectKind = 'vessel';
+  t.after(() => {
+    cockpit.active = false;
+    cockpit.subjectKind = null;
+  });
+  const voice = coordinator.controlCockpit('enter', { targetLayer: 'flights' });
+  assert.equal(voice.ok, false);
+  assert.match(voice.error, /vessel bridge/);
+  assert.equal(navigated, false, 'no aircraft was tracked');
+  assert.equal(cockpit.subjectKind, 'vessel');
+});
+
+test('voice entry in an orbital view refuses before it touches tracking', (t) => {
+  const { coordinator, cockpit } = fixture(t, { enabled: ['flights'] });
+  let navigated = false;
+  coordinator.services.militaryAwarenessLayer.navigateNext = () => {
+    navigated = true;
+    return true;
+  };
+  cockpit.active = true;
+  cockpit.subjectKind = 'satellite';
+  t.after(() => {
+    cockpit.active = false;
+    cockpit.subjectKind = null;
+  });
+  const voice = coordinator.controlCockpit('enter', { targetLayer: 'flights' });
+  assert.equal(voice.ok, false);
+  assert.match(voice.error, /orbital view/);
+  assert.equal(navigated, false, 'no aircraft was tracked');
+  assert.equal(cockpit.subjectKind, 'satellite');
 });
 
 test('with an aircraft layer on but nothing tracked, the reason is the missing aircraft', (t) => {
@@ -429,14 +546,32 @@ test('a ride handed to an aircraft on a layer Contacts turned on keeps that laye
   await settle();
   assert.equal(cockpit.enter(), true);
   // NEXT hands the view to a military aircraft; Contacts turned its layer on.
+  // The follow's change adopts it as the ridden aircraft: the Cockpit
+  // takes the camera from the follow.
   retrack({ layerId: 'military', info: MILITARY });
-  assert.equal(cockpit._adoptTrackedEntity(performance.now()), true);
+  assert.equal(followedOf(cockpit.viewer), null, 'adopted');
   assert.equal(cockpit.readSubjectLayerId(), 'military');
   await manager.setEnabled('ais-live-vessels', false, { origin: 'user' });
   await settle();
   assert.equal(controls.getContextModeState().mode, null);
   assert.equal(cockpit.active, true);
   assert.deepEqual(on(manager), ['flights', 'military']);
+});
+
+test('Live AIS Vessels, once adopted as the ridden layer, outlives Contacts', async (t) => {
+  const live = await liveFixture(t, {
+    tracked: { layerId: 'flights', info: CIVIL },
+  });
+  const { manager, controls, coordinator, settle } = live;
+  assert.equal(await controls._selectContextMode('flights'), true);
+  await settle();
+  assert.equal(manager.isEnabled('ais-live-vessels'), true);
+  // The bridge reports its layer on entry (cockpitBridge.test.mjs).
+  coordinator._adoptRiddenLayer('ais-live-vessels');
+  await controls._selectContextMode(null);
+  await settle();
+  assert.equal(controls.getContextModeState().mode, null);
+  assert.deepEqual(on(manager), ['ais-live-vessels']);
 });
 
 test('the ridden layer still ends the Cockpit while Contacts is on', async (t) => {
@@ -464,4 +599,273 @@ test('without a Cockpit, ending Contacts restores the layers it found', async (t
   await settle();
   assert.equal(controls.getContextModeState().mode, null);
   assert.deepEqual(on(manager), [], 'Live Flights goes back off');
+});
+
+test('the readout entry reads BRIDGE for a selected vessel', async (t) => {
+  const { $, store } = fixture(t);
+  store.publishPresence({
+    active: false,
+    entryAvailable: true,
+    entryKind: 'vessel',
+    subjectKind: null,
+    tr3b: null,
+  });
+  await nextTick();
+  const readoutEntry = $('#cockpit-entry-readout');
+  assert.equal(readoutEntry.hidden, false);
+  assert.match(readoutEntry.textContent, /directions_boat/);
+  assert.match(readoutEntry.textContent, /BRIDGE/);
+});
+
+test('without providers the built-in order decides: a vessel selected after an aircraft still reads COCKPIT', async (t) => {
+  const { $, cockpit, store, selectVessel } = fixture(t, {
+    enabled: ['flights', 'ais-live-vessels'],
+    tracked: { layerId: 'flights', info: CIVIL },
+  });
+  cockpit.syncEntry();
+  assert.equal(store.presence.entryKind, 'aircraft');
+  await new Promise((resolve) => setTimeout(resolve, 2));
+  selectVessel(VESSEL);
+  cockpit.syncEntry();
+  await nextTick();
+  assert.equal(store.presence.entryKind, 'aircraft');
+  assert.match($('#cockpit-entry-readout').textContent, /COCKPIT/);
+  // And the other way round: an aircraft tracked after the vessel.
+  const later = fixture(t, {
+    enabled: ['flights', 'ais-live-vessels'],
+    vessel: VESSEL,
+  });
+  later.cockpit.syncEntry();
+  assert.equal(later.store.presence.entryKind, 'vessel');
+  await new Promise((resolve) => setTimeout(resolve, 2));
+  later.retrack({ layerId: 'flights', info: CIVIL });
+  later.cockpit.syncEntry();
+  assert.equal(later.store.presence.entryKind, 'aircraft');
+});
+
+test('a tracked satellite needs Satellites on for the ORBIT entry', async (t) => {
+  const { $, cockpit } = fixture(t, { satellite: SATELLITE });
+  cockpit.syncEntry();
+  await nextTick();
+  assert.equal($('#cockpit-entry').hidden, true, 'Satellites off: no entry');
+  assert.equal(cockpit.enter(), false);
+});
+
+test('with Satellites on, the tracked satellite offers ORBIT and reports itself', async (t) => {
+  const { $, cockpit, coordinator, pinia } = fixture(t, {
+    enabled: ['satellites'],
+    satellite: SATELLITE,
+  });
+  useHudStore(pinia);
+  cockpit.syncEntry();
+  await nextTick();
+  for (const selector of ['#cockpit-entry', '#cockpit-entry-readout']) {
+    assert.equal($(selector).hidden, false, selector);
+    assert.match($(selector).textContent, /satellite_alt/);
+    assert.match($(selector).textContent, /ORBIT/);
+  }
+  // Voice stays aircraft-only: it neither offers nor takes the satellite.
+  assert.equal(coordinator.getCockpitState().entryAllowed, false);
+  assert.equal(coordinator.controlCockpit('enter').ok, false);
+  assert.equal(cockpit.active, false);
+  $('#cockpit-entry-readout').click();
+  await nextTick();
+  assert.equal(cockpit.active, true);
+  assert.equal(cockpit.subjectKind, 'satellite');
+  const state = coordinator.getCockpitState();
+  assert.equal(state.active, true);
+  assert.deepEqual(state.subject, {
+    kind: 'satellite',
+    id: '25544',
+    layerId: 'satellites',
+    callsign: null,
+    name: 'ISS (ZARYA)',
+  });
+});
+
+test('tracked debris offers no ORBIT entry and refuses to be entered', async (t) => {
+  const { $, cockpit } = fixture(t, {
+    enabled: ['satellites'],
+    satellite: {
+      ...SATELLITE,
+      id: '27386',
+      noradId: 27386,
+      name: 'SL-16 R/B',
+      satelliteClass: 'debris',
+      enterable: false,
+    },
+  });
+  cockpit.syncEntry();
+  await nextTick();
+  for (const selector of ['#cockpit-entry', '#cockpit-entry-readout'])
+    assert.equal($(selector).hidden, true, selector);
+  assert.equal(cockpit.enter(), false);
+  assert.equal(cockpit.enter({ kind: 'satellite' }), false);
+  assert.equal(cockpit.active, false);
+});
+
+test('a Context change in flight blocks the orbital view too', (t) => {
+  const { cockpit } = fixture(t, {
+    enabled: ['satellites'],
+    satellite: SATELLITE,
+    changing: true,
+  });
+  assert.equal(cockpit.enter(), false);
+});
+
+test('turning Satellites off ends the orbital view', (t) => {
+  const { cockpit, disable } = fixture(t, {
+    enabled: ['satellites', 'flights'],
+    satellite: SATELLITE,
+  });
+  assert.equal(cockpit.enter(), true);
+  disable('flights');
+  assert.equal(cockpit.active, true, 'other feeds are free to go off');
+  disable('satellites');
+  assert.equal(cockpit.active, false);
+});
+
+/** An application provider whose subject sits on `example-layer`. */
+function exampleSubject() {
+  const released = [];
+  return {
+    released,
+    provider: {
+      kind: 'example-kind',
+      layerId: 'example-layer',
+      entryFace: { icon: 'commute', label: 'RIDE' },
+      labels: { view: 'Example view', exit: 'Exit example', exitText: 'EXIT' },
+      candidate: () => ({ id: 'a1', name: 'Example 12' }),
+      hold: () => true,
+      read: () => ({
+        id: 'a1',
+        name: 'Example 12',
+        latitude: 30,
+        longitude: -97,
+        heightM: 200,
+        headingDeg: 90,
+        eye: { upM: 2 },
+      }),
+      hud: () => ({ title: 'Example 12' }),
+      release: (id, { restore }) => released.push([id, restore]),
+    },
+  };
+}
+
+test("a provider's subject needs only its own layer, and never a Context change in flight", async (t) => {
+  const { provider } = exampleSubject();
+  let changing = false;
+  const off = fixture(t, { subjects: [provider] });
+  off.cockpit.syncEntry();
+  await nextTick();
+  assert.equal(off.$('#cockpit-entry').hidden, true, 'its layer is off');
+  assert.equal(off.cockpit.enter(), false);
+  const on = fixture(t, {
+    enabled: ['example-layer'],
+    subjects: [provider],
+    readContext: () => ({ mode: null, changing }),
+  });
+  changing = true;
+  on.cockpit.syncEntry();
+  await nextTick();
+  assert.equal(on.$('#cockpit-entry').hidden, true, 'Context is changing');
+  changing = false;
+  on.cockpit.syncEntry();
+  await nextTick();
+  assert.equal(on.$('#cockpit-entry').hidden, false);
+  assert.match(on.$('#cockpit-entry').textContent, /RIDE/);
+  assert.match(on.$('#cockpit-entry-readout').textContent, /commute/);
+});
+
+test("a provider's view reports its subject, refuses voice entry and ends with its layer", async (t) => {
+  const { provider, released } = exampleSubject();
+  const { cockpit, coordinator, disable } = fixture(t, {
+    enabled: ['example-layer', 'flights'],
+    subjects: [provider],
+  });
+  cockpit.syncEntry();
+  assert.equal(cockpit.enter(), true);
+  const state = coordinator.getCockpitState();
+  assert.equal(state.active, true);
+  assert.deepEqual(state.subject, {
+    kind: 'example-kind',
+    id: 'a1',
+    layerId: 'example-layer',
+    callsign: null,
+    name: 'Example 12',
+  });
+  assert.equal(coordinator.controlCockpit('enter').ok, false);
+  assert.match(coordinator._cockpitEntryRefusal(), /another first-person view/);
+  disable('flights');
+  assert.equal(cockpit.active, true, 'another layer is free to go off');
+  disable('example-layer');
+  assert.equal(cockpit.active, false, 'its own layer going off ends it');
+  assert.deepEqual(released, [['a1', false]]);
+});
+
+test("a provider's guards: a throwing candidate, gate or release, and a gate that is not true", async (t) => {
+  const warned = [];
+  t.mock.method(console, 'warn', (message) => warned.push(String(message)));
+  const entered = (provider) => {
+    const { cockpit } = fixture(t, {
+      enabled: ['example-layer'],
+      subjects: [provider],
+    });
+    cockpit.syncEntry();
+    return { cockpit, entered: cockpit.enter() };
+  };
+  const { provider: base } = exampleSubject();
+  // A candidate() that throws offers nothing.
+  const noCandidate = entered({
+    ...base,
+    candidate: () => {
+      throw new Error('candidate failed');
+    },
+  });
+  assert.equal(noCandidate.entered, false);
+  assert.equal(noCandidate.cockpit.resolveEntry(), null);
+  // An isEntryAllowed() that throws, or answers anything but true, shuts
+  // the gate.
+  for (const isEntryAllowed of [
+    () => {
+      throw new Error('gate failed');
+    },
+    () => 1,
+    () => 'yes',
+    () => ({}),
+  ]) {
+    const gated = entered({ ...base, isEntryAllowed });
+    assert.equal(gated.entered, false, String(isEntryAllowed));
+    assert.equal(gated.cockpit.active, false);
+  }
+  // A release() that throws still ends the view.
+  const { provider } = exampleSubject();
+  const releasing = entered({
+    ...provider,
+    release: () => {
+      throw new Error('release failed');
+    },
+  });
+  assert.equal(releasing.entered, true);
+  assert.equal(releasing.cockpit.exit(), true);
+  assert.equal(releasing.cockpit.active, false);
+  assert.equal(document.body.classList.contains('cockpit-subject'), false);
+  for (const method of ['candidate', 'isEntryAllowed', 'release'])
+    assert.ok(
+      warned.some((line) => line.includes(`${method}() failed`)),
+      method,
+    );
+});
+
+test('a malformed provider is left out and the built-in kinds are unchanged', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  const { cockpit } = fixture(t, {
+    enabled: ['flights'],
+    tracked: { layerId: 'flights', info: CIVIL },
+    subjects: [{ kind: 'aircraft', layerId: 'flights' }],
+  });
+  assert.deepEqual(cockpit.subjectProviders, []);
+  cockpit.syncEntry();
+  assert.equal(cockpit.enter(), true);
+  assert.equal(cockpit.subjectKind, 'aircraft');
 });

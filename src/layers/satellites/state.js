@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import { DEFAULT_SATELLITE_CLASSES } from './classes.js';
+import { worldClock, worldTimeFor } from '../../time/worldClock.js';
 
 export function createState({ services }) {
   const { setOverlayEntries, setOverlaySourceVisible, clearOverlaySource } =
@@ -13,22 +14,24 @@ export function createState({ services }) {
 
   state._overlayHost = state.DEFAULT_OVERLAY_HOST;
 
-  // Satellite catalog: { noradId → { name, satrec, group } }
+  // Satellite catalog: { noradId → { name, satrec, group, line1, line2,
+  // satelliteClass, ucs, satcat } } — class, UCS and SATCAT records from
+  // src/layers/satellites/classes.js and the sources the update read.
 
   state._catalog = new Map();
 
-  state._pointCollection = null;
+  /** The draw sets (`{points, tracked, rings}`), owned by the rendering part. */
+  state._sets = null;
 
   state._points = new Map();
-  // noradId → point primitive
+  // noradId → the point item its dot is drawn from (the rendering part's)
   /** Stable lightweight records reused by the detection overlay between updates. */
 
   state._detectionObjects = new Map();
 
-  // noradId → { primitive, gmstAtBake }
-  // primitive is a one-instance Cesium.Primitive holding the ring baked in ECEF
-  // at gmstAtBake; the preRender tick re-aligns it to current GMST by updating
-  // its modelMatrix (rigid Z-rotation — no geometry rebuild, WS-D1).
+  // noradId → { base, gmstAtBake, item }, owned by the rendering part: base
+  // is the ring baked in ECEF at gmstAtBake; the preRender tick turns it to
+  // current GMST (rigid Z-rotation, WS-D1) into the line item drawn.
 
   state._orbitPaths = new Map();
 
@@ -42,6 +45,12 @@ export function createState({ services }) {
 
   // Cache provenance belongs to admitted core and dense records separately.
   state._coreStale = false;
+  // How current the SATCAT records behind the classes are: null before any
+  // read, then 'current' | 'stale' | 'unavailable' (see ingestion.js).
+  state._satcatState = null;
+  // When _satcatState was last set (Date.now()); a current read is kept
+  // SATCAT_KEEP_MS (src/layers/satellites/ingestion.js).
+  state._satcatReadAtMs = Number.NEGATIVE_INFINITY;
   state._denseStale = false;
 
   state._activeUpdateControllers = new Set();
@@ -54,6 +63,10 @@ export function createState({ services }) {
 
   state._lastPropagation = 0;
 
+  // The world time of the last frame that reckoned the points (motion.js),
+  // NaN before the first.
+  state._lastReckonMs = NaN;
+
   state._lastRingRotation = 0;
 
   state._lastFocusUpdate = 0;
@@ -61,8 +74,6 @@ export function createState({ services }) {
   /** Points whose animated emphasis remains outside the 1.0 deadband. */
 
   state._activeFocusCount = 0;
-
-  state._scratchFocusScreen = new Cesium.Cartesian2();
 
   state._enabled = false;
 
@@ -83,17 +94,35 @@ export function createState({ services }) {
   };
 
   state._trackedEntity = null;
+  /** The FollowTarget the camera follows the tracked satellite with. */
+  state._followTarget = null;
 
-  state._clickHandler = null;
+  state._clickSubscription = null;
 
-  /** @type {Cesium.Event.RemoveCallback|null} trackedEntityChanged listener disposer (cross-layer untrack) */
+  /** @type {(() => void)|null} follow-changed listener disposer (cross-layer untrack) */
 
   state._trackedEntityChangedRemove = null;
 
   // Runtime params (DataLayerManager.setLayerParams path)
 
-  state._params = { catalog: 'core', showPoints: true, showOrbits: true };
+  state._params = {
+    catalog: 'core',
+    showPoints: true,
+    showOrbits: true,
+    // Which satellite classes show (src/layers/satellites/classes.js). Starlink
+    // follows `catalog`: its points exist only in dense mode.
+    classes: { ...DEFAULT_SATELLITE_CLASSES },
+  };
   // 'core' | 'dense'
+
+  /** SATCAT records (object type, status, owner) by NORAD id, last update. */
+  state._satcat = new Map();
+
+  /** The UCS pack by NORAD id, once loaded; null until then or if it failed. */
+  state._ucs = null;
+
+  /** The imaging-sensor index, once loaded; null until then or if it failed. */
+  state._sensors = null;
 
   state._denseIds = [];
   // norad ids of dense extras, round-robin order
@@ -138,24 +167,38 @@ export function createState({ services }) {
 
   // Per-frame cache for the tracked satellite (WS-D2): dot, host readout, camera, and
   // getTrackedInfo all read one SGP4 sample per rendered frame, keyed on
-  // scene.frameState.frameNumber, so they never diverge in epoch.
+  // the rendered-frame number, so they never diverge in epoch.
 
   state._trackedFrameNumber = -1;
 
   state._trackedFrameGeo = null;
   // { longitude, latitude, altitude } or null
 
-  state._trackedFrameCartesian = new Cesium.Cartesian3();
+  // The matching ECEF sample; the rendering part creates it.
+  state._trackedFrameCartesian = null;
 
   /** Optional deterministic clock used only by the production-frame test seam. */
 
   state._trackedFrameNowForTest = null;
 
-  // Scratch variables
+  // Cockpit orbital-view hold (cockpitSubject.js): the NORAD id the Cockpit
+  // camera rides, and what the hold hid so release restores exactly that.
 
-  state._scratchCartesian = new Cesium.Cartesian3();
+  state._cockpitSubjectNorad = null;
 
-  state._scratchRingRotation = new Cesium.Matrix3();
+  state._cockpitHiddenPoints = new Set();
+
+  state._cockpitHiddenPath = null;
+
+  state._cockpitHiddenDot = false;
+
+  /** The time satellites are propagated to, in epoch ms. */
+
+  state.now = worldTimeFor('satellites');
+
+  /** The catalog changed, so the time satellites can be shown at may have. */
+
+  state.coverageChanged = () => worldClock.coverageChanged();
 
   /** Update the explicit model only when the rounded altitude line changes. */
   /** Epoch of the last shared-context refresh for the tracked satellite. */

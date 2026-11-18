@@ -1,0 +1,35 @@
+{
+  "id": "gsi-japan-map",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Japan standard map (GSI)",
+  "provider": "GSI",
+  "description": "The Geospatial Information Authority of Japan's standard map tiles.",
+  "icon": "⛰",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["JP"],
+    "bbox": [122, 20, 154, 46]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 2,
+    "maxZoom": 18
+  },
+  "display": {
+    "opacity": 1
+  },
+  "licence": {
+    "name": "GSI Tiles terms (free use with attribution)",
+    "url": "https://maps.gsi.go.jp/development/ichiran.html"
+  },
+  "attribution": {
+    "text": "Geospatial Information Authority of Japan (GSI Tiles)",
+    "url": "https://maps.gsi.go.jp/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-22"
+}

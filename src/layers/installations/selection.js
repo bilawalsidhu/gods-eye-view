@@ -1,5 +1,4 @@
-import * as Cesium from 'cesium';
-import { isPointerFree } from '../../data/inputOwnership.js';
+import { inputFor } from '../../input/dispatcher.js';
 import { LAYER_ID } from './policy.js';
 
 export function createSelection({
@@ -30,15 +29,15 @@ export function createSelection({
 
   function selectRecord(id) {
     const record = layerState.recordById.get(id);
-    if (!record || !layerState.dataSource) return false;
+    if (!record || !layerState.sets) return false;
     layerState.selectedId = id;
     parts.rendering.renderRecords({ claimSelection: true });
-    // renderRecords drops selectedId when the record produced no entity.
+    // renderRecords drops selectedId when the record produced no marker.
     return layerState.selectedId === id;
   }
 
   function installInteraction(viewer) {
-    if (layerState.clickHandler) return;
+    if (layerState.clickSubscription) return;
     const events = [
       'gev:entity-selected',
       'gev:entity-selection-cleared',
@@ -50,17 +49,17 @@ export function createSelection({
       for (const event of events)
         globalThis.window?.removeEventListener?.(event, syncContextSelection);
     };
-    layerState.clickHandler = new Cesium.ScreenSpaceEventHandler(
-      viewer.scene.canvas,
-    );
-    layerState.clickHandler.setInputAction((click) => {
-      // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
-      if (!isPointerFree()) return;
+    const input = inputFor(viewer);
+    layerState.clickSubscription = input.onClick((event) => {
       if (!layerState.enabled) return;
-      const picked = viewer.scene.pick(click.position);
+      // A site's dot, outline or fill, or a named marker: each draw item
+      // names its installation in its `meta`.
+      const hit = event.drawHit;
       const id =
-        picked?.id?.installationId ||
-        (typeof picked?.id?.id === 'string' ? picked.id.id : null);
+        hit?.set === parts.namedMarkers?.setId ||
+        parts.rendering.ownsSet(hit?.set)
+          ? hit.meta?.installationId
+          : null;
       if (id && layerState.recordById.has(id) && id !== layerState.selectedId) {
         selectRecord(id);
       } else if (layerState.selectedId) {
@@ -71,7 +70,7 @@ export function createSelection({
         clearSelectedEntityContextForLayer(LAYER_ID);
         parts.rendering.renderRecords();
       }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
   }
   return {
     selectRecord,

@@ -1,12 +1,12 @@
-import * as Cesium from 'cesium';
-import { createFrustumVolumePrimitive } from '../../data/cctvViewshed.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { eastNorthUp, frameVector } from '../../geo/frames.js';
+import { distance, vec } from '../../geo/vector.js';
 import {
   FRUSTUM_GROUND_CLEARANCE_M,
   PROBE_MIN_RANGE_M,
   PROBE_CLEARANCE_M,
   COVERAGE_NEIGHBOR_RADIUS_KM,
   COVERAGE_NEIGHBOR_LIMIT,
-  IDLE_COVERAGE_COLOR,
   PLANE_FOOTPRINT_LIFT_CAP_M,
 } from './policy.js';
 
@@ -261,30 +261,18 @@ export function createGeometry({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Converts a computeFrustumGeometry result into the Cartesian3 positions the
-   * entities consume. Fresh objects per call (geometry updates are rare —
-   * slider/save/activation — and entities must never share scratch objects).
-   * @param {Object} geometry - Result of computeFrustumGeometry.
-   * @returns {{ mount: Cesium.Cartesian3, capCenter: Cesium.Cartesian3,
-   *   tl: Cesium.Cartesian3, tr: Cesium.Cartesian3, br: Cesium.Cartesian3,
-   *   bl: Cesium.Cartesian3, label: Cesium.Cartesian3 }}
+   * Distance along a pitched-down view axis to flat ground at the mount's own
+   * ground height, or null for an axis at or above the horizon.
+   * @param {number} mountHeightM Mount height above its ground.
+   * @param {number} pitchDeg Axis pitch (negative looks down).
+   * @returns {number|null}
    */
 
-  function frustumCartesians(geometry) {
-    const at = (p) => Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt);
-    return {
-      mount: at(geometry.mount),
-      capCenter: at(geometry.capCenter),
-      tl: at(geometry.corners.tl),
-      tr: at(geometry.corners.tr),
-      br: at(geometry.corners.br),
-      bl: at(geometry.corners.bl),
-      label: Cesium.Cartesian3.fromDegrees(
-        geometry.topCenter.lon,
-        geometry.topCenter.lat,
-        geometry.topCenter.alt + 1.2,
-      ),
-    };
+  function flatGroundAxisDistance(mountHeightM, pitchDeg) {
+    const height = Number(mountHeightM);
+    const pitch = Number(pitchDeg);
+    if (!Number.isFinite(height) || height <= 0 || !(pitch < 0)) return null;
+    return height / Math.sin((Math.min(89, -pitch) * Math.PI) / 180);
   }
 
   /**
@@ -292,40 +280,35 @@ export function createGeometry({ state: layerState, services, parts, source }) {
    * Used by the plane orientation and the activation obstruction probe — both
    * need the UNCLAMPED axis, so it comes from the pose, not from clamped points.
    * @param {Object} camera - Camera pose (headingDeg, pitchDeg).
-   * @param {Cesium.Cartesian3} atPos - ECEF position defining the local ENU frame.
-   * @returns {{ dir: Cesium.Cartesian3, up: Cesium.Cartesian3 }} View axis + the
+   * @param {{x: number, y: number, z: number}} atPos - ECEF position defining the local ENU frame.
+   * @returns {{ dir: {x: number, y: number, z: number}, up: {x: number, y: number, z: number} }} View axis + the
    *   frame's in-plane "up" (both unit, mutually perpendicular).
    */
 
   function frustumFrameEcef(camera, atPos) {
     const h = parts.model.toRad(camera.headingDeg);
     const p = parts.model.toRad(camera.pitchDeg);
-    const enu = Cesium.Transforms.eastNorthUpToFixedFrame(atPos);
-    const rot = Cesium.Matrix4.getMatrix3(enu, new Cesium.Matrix3());
+    const enu = eastNorthUp(atPos);
     // ENU components: view axis + the perpendicular "up" of the pitched cap.
-    const dirEnu = new Cesium.Cartesian3(
+    const dirEnu = vec(
       Math.sin(h) * Math.cos(p),
       Math.cos(h) * Math.cos(p),
       Math.sin(p),
     );
-    const upEnu = new Cesium.Cartesian3(
+    const upEnu = vec(
       -Math.sin(p) * Math.sin(h),
       -Math.sin(p) * Math.cos(h),
       Math.cos(p),
     );
     return {
-      dir: Cesium.Matrix3.multiplyByVector(
-        rot,
-        dirEnu,
-        new Cesium.Cartesian3(),
-      ),
-      up: Cesium.Matrix3.multiplyByVector(rot, upEnu, new Cesium.Cartesian3()),
+      dir: frameVector(enu, dirEnu),
+      up: frameVector(enu, upEnu),
     };
   }
 
   /**
    * Recomputes the pure frustum geometry from the camera pose + the given ground
-   * altitude and writes it into the scene: billboard position, the 5 wireframe
+   * altitude and writes it into the scene: icon position, the 5 wireframe
    * polylines (4 corner rays + closed far-plane rectangle), and the monitor
    * plane placement. This is the ONLY place v2 geometry is written — called on
    * slider input / save / activation / the one-shot ground snap, never per frame.
@@ -340,38 +323,16 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       record.probeClampRangeM,
       footprintGroundFor(record),
     );
-    const positions = frustumCartesians(geometry);
+    const positions = parts.rendering.frustumCartesians(geometry);
     record.frustumGeometry = geometry;
     record.frustumPositions = positions;
     record.position = positions.mount;
     record.camera.absoluteHeightM = geometry.mount.alt;
-    if (record.billboard) {
-      record.billboard.position = positions.mount;
-    }
+    parts.rendering.moveCameraIcon(record);
+    record.groundAltM = groundAltM;
     if (record.coverageEntities?.length >= 5) {
-      record.coverageEntities[0].polyline.positions = [
-        positions.mount,
-        positions.tl,
-      ];
-      record.coverageEntities[1].polyline.positions = [
-        positions.mount,
-        positions.tr,
-      ];
-      record.coverageEntities[2].polyline.positions = [
-        positions.mount,
-        positions.br,
-      ];
-      record.coverageEntities[3].polyline.positions = [
-        positions.mount,
-        positions.bl,
-      ];
-      record.coverageEntities[4].polyline.positions = [
-        positions.tl,
-        positions.tr,
-        positions.br,
-        positions.bl,
-        positions.tl,
-      ];
+      parts.rendering.placeCoverageLines(record.coverageEntities, positions);
+      parts.drawSets.writeLines(record.coverageEntities);
     }
     // A live viewshed volume tracks its wireframe: rebuild from the SAME fresh
     // positions (weld invariant). Only records currently showing a volume pay
@@ -379,8 +340,8 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     // Tint derives from the live active id, not the cached viewshedActiveTint —
     // during an activation switch this runs BEFORE refreshCoverageStyles, and
     // the cache is stale for exactly that window.
-    if (record.viewshedPrimitive) {
-      rebuildViewshedVolume(
+    if (record.viewshedVolume) {
+      parts.rendering.rebuildViewshedVolume(
         record,
         record.camera.id === layerState._activeCameraId,
       );
@@ -448,24 +409,17 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     }
 
     // Photoreal regime. Sampling is delegated to the shared coarse-cell
-    // sampler. It remains event-driven, one-shot per cell, and keeps its
+    // sampler. It remains event-driven, a few probes per cell, and keeps its
     // existing acceptance window; CCTV adds no rooftop rejection policy.
     if (sampleGround && parts.model.projectionTilesReady()) {
       record.groundMeshSampleRequestCount =
         (record.groundMeshSampleRequestCount || 0) + 1;
-      const viewerCarto = layerState._viewer?.camera?.positionCartographic;
-      const excludeObjects = [...(record.coverageEntities || [])];
-      if (record.billboard) excludeObjects.push(record.billboard);
-      if (record.projection?.planeEntity)
-        excludeObjects.push(record.projection.planeEntity);
-      sampleMeshFloorCells(layerState._viewer?.scene, [point], {
-        excludeObjects: excludeObjects.filter(Boolean),
-        viewerLat: viewerCarto
-          ? Cesium.Math.toDegrees(viewerCarto.latitude)
-          : undefined,
-        viewerLon: viewerCarto
-          ? Cesium.Math.toDegrees(viewerCarto.longitude)
-          : undefined,
+      const eye = parts.model.eyePose();
+      // The layer's own lines and plane are not ground; named all the same.
+      sampleMeshFloorCells(layerState._viewer, [point], {
+        sets: parts.drawSets.pickableSetIds(),
+        viewerLat: eye ? eye.lat : undefined,
+        viewerLon: eye ? eye.lon : undefined,
       });
     }
 
@@ -526,52 +480,6 @@ export function createGeometry({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Removes (and destroys) a record's viewshed volume primitive, if any.
-   * @param {Object} record - Camera record.
-   */
-
-  function destroyViewshedVolume(record) {
-    if (!record) return;
-    if (record.viewshedPrimitive && layerState._viewer) {
-      layerState._viewer.scene.primitives.remove(record.viewshedPrimitive);
-    }
-    record.viewshedPrimitive = null;
-  }
-
-  /**
-   * (Re)builds a record's translucent viewshed volume from its CURRENT
-   * frustumPositions — the same 5 Cartesians the wireframe draws, so the volume
-   * is welded to the cone by construction. Called only where the wireframe
-   * already rewrites (style refresh on mode/visible-set/active changes,
-   * applyFrustumGeometry on pose edits) — no new update cadence, zero scene
-   * queries (viewshed design §3b).
-   * @param {Object} record - Camera record.
-   * @param {boolean} isActive - Active camera gets the brighter fill.
-   */
-
-  function rebuildViewshedVolume(record, isActive) {
-    destroyViewshedVolume(record);
-    if (
-      !layerState._viewer ||
-      !record?.frustumPositions ||
-      !record.viewshedColors
-    )
-      return;
-    const color = isActive
-      ? record.viewshedColors.fillActive
-      : record.viewshedColors.fill;
-    const primitive = createFrustumVolumePrimitive(
-      record.frustumPositions,
-      color,
-    );
-    // QA tag: the harness counts viewshed volumes by this marker.
-    primitive._gevViewshed = record.camera.id;
-    record.viewshedPrimitive =
-      layerState._viewer.scene.primitives.add(primitive);
-    record.viewshedActiveTint = !!isActive;
-  }
-
-  /**
    * Counts how many other cameras have overlapping coverage with the target.
    * Overlap is approximated by comparing inter-camera distance against the
    * combined range of both cameras (scaled by 0.92).
@@ -611,47 +519,94 @@ export function createGeometry({ state: layerState, services, parts, source }) {
 
   /**
    * §9.1 activation obstruction probe (LOCKED owner decision): on camera
-   * ACTIVATION only, fire ONE scene.pickFromRay along the frustum axis
+   * ACTIVATION only, cast ONE ray against the scene along the frustum axis
    * (mount → cap-center direction). If it hits the tiles closer than the pose
    * range, clamp the plane's effective range just short of the first hit so the
    * "big and dramatic" true end cap never clips into downtown buildings.
    *
-   * This is the ONLY raycast in the whole CCTV subsystem — once per activation,
-   * never per-frame (the zero-raycast invariant applies to steady state). The
-   * per-camera range slider overrides the clamp: a user-set rangeScale skips the
-   * probe entirely. Probe failure/miss keeps the unclamped range.
+   * On a globe map it also casts along the same axis against the globe's
+   * terrain (flat ground at the mount's ground when terrain is missed or met
+   * beyond the range) and clamps at the nearer end. These are the ONLY
+   * raycasts in the whole CCTV subsystem — once per activation, never
+   * per-frame (the zero-raycast invariant applies to steady state). The
+   * per-camera range slider overrides the clamp: a user-set rangeScale skips
+   * the probe entirely. A miss on the photoreal stack or a probe failure
+   * keeps the unclamped range.
+   *
+   * The casts are made now, against the scene as it is, and answer a
+   * microtask later: the clamp then lands by rewriting the geometry from the
+   * ground it was last written at, before the next frame draws. A newer
+   * activation, or the camera's deactivation, drops an answer still to come.
    * @param {Object} record - Camera record being activated.
+   * @returns {Promise<void>} Settled once the clamp (if any) has landed.
    */
 
   function runActivationObstructionProbe(record) {
     record.probeClampRangeM = null;
-    const scene = layerState._viewer?.scene;
-    if (!scene || typeof scene.pickFromRay !== 'function') return;
+    const token = (record.probeToken = (record.probeToken || 0) + 1);
+    const viewer = layerState._viewer;
+    if (!parts.rendering.canPickFromRay()) return Promise.resolve();
     const camera = record.camera;
     const rangeScale = parts.calibration.normalizeCalibration(
       camera.calibration,
     ).rangeScale;
-    if (Math.abs(rangeScale - 1) > 0.0001) return; // slider overrides the clamp
+    // The slider overrides the clamp.
+    if (Math.abs(rangeScale - 1) > 0.0001) return Promise.resolve();
     try {
       const mountAlt = parts.ground.groundAltFor(record) + camera.mountHeightM;
-      const mountPos = Cesium.Cartesian3.fromDegrees(
-        camera.lon,
-        camera.lat,
-        mountAlt,
-      );
+      const mountPos = fromDegrees(camera.lon, camera.lat, mountAlt);
       const { dir } = frustumFrameEcef(camera, mountPos);
-      // Exclude everything the layer itself draws so the probe can only hit the
-      // world (3D tiles), not our own billboards/polylines/planes.
-      const exclude = [layerState._billboards, ...layerState._coverageEntities];
-      for (const runtime of layerState._projectionEntities) {
-        if (runtime?.planeEntity) exclude.push(runtime.planeEntity);
-      }
-      const hit = scene.pickFromRay(new Cesium.Ray(mountPos, dir), exclude);
-      if (!hit?.position) return;
-      const dist = Cesium.Cartesian3.distance(mountPos, hit.position);
-      record.probeClampRangeM = activationProbeClampRange(camera.rangeM, dist);
+      // The casts see through everything the layer draws. The surface cast
+      // meets what is drawn on the globe (the photoreal tiles); on a globe
+      // map the axis also ends on the globe's terrain, the nearer of that and
+      // any surface hit. A hit at or beyond the range counts as none. Terrain
+      // still loading at a coarse level can be missed or met beyond the
+      // range; then flat ground at the mount's own ground stands in for it.
+      const inRange = (d) => Number.isFinite(d) && d > 0 && d < camera.rangeM;
+      return Promise.all([
+        parts.rendering.obstructionHit(mountPos, dir),
+        parts.rendering.terrainHit?.(mountPos, dir) ?? null,
+      ])
+        .then(([hit, terrain]) => {
+          if (record.probeToken !== token) return;
+          if (record.camera.id !== layerState._activeCameraId) return;
+          // A layer torn down or re-initialised since (another viewer, or
+          // a new record for the same camera) is not the one it asked for.
+          if (layerState._viewer !== viewer) return;
+          if (layerState._recordById?.get(record.camera.id) !== record) return;
+          const hitDist = hit ? distance(mountPos, hit) : NaN;
+          const distances = inRange(hitDist) ? [hitDist] : [];
+          if (terrain) {
+            const terrainDist = terrain.hit
+              ? distance(mountPos, terrain.hit)
+              : NaN;
+            const ground = inRange(terrainDist)
+              ? terrainDist
+              : flatGroundAxisDistance(camera.mountHeightM, camera.pitchDeg);
+            if (Number.isFinite(ground) && ground > 0) distances.push(ground);
+          }
+          if (!distances.length) return;
+          const clamp = activationProbeClampRange(
+            camera.rangeM,
+            Math.min(...distances),
+          );
+          if (!Number.isFinite(clamp)) return;
+          record.probeClampRangeM = clamp;
+          if (Number.isFinite(record.groundAltM))
+            applyFrustumGeometry(record, record.groundAltM);
+          // The activation asked for the ground under the unclamped plane's
+          // footprint; the clamped plane's is asked for now, and the layer
+          // restyles and tells its listeners, as that answer will.
+          void parts.ground.resolveFootprintGround(record);
+          parts.rendering.refreshCoverageStyles();
+          parts.presentation.notifyListeners();
+        })
+        .catch(() => {
+          // probe failure → keep the unclamped range
+        });
     } catch {
       // probe failure → keep the unclamped range
+      return Promise.resolve();
     }
   }
 
@@ -664,6 +619,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
    */
 
   function clearProbeClampOnDeactivation(record, rewriteGeometry) {
+    if (record) record.probeToken = (record.probeToken || 0) + 1;
     if (!record || !Number.isFinite(record.probeClampRangeM)) return false;
     record.probeClampRangeM = null;
     rewriteGeometry?.(record);
@@ -671,70 +627,9 @@ export function createGeometry({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Creates the five Cesium polyline entities that visualize a camera's pitched
-   * frustum: 4 corner rays (mount → far-plane corner) + the closed far-plane
-   * rectangle. Entity ids stay in the `cctv-<id>-<role>` scheme (pick-owner
-   * regex depends on it): roles ray-tl / ray-tr / ray-br / ray-bl / cap.
-   * @param {Object} record - Camera record.
-   * @returns {Cesium.Entity[]} Array of five coverage entities.
-   */
-
-  function buildCoverageEntities(record) {
-    const { camera } = record;
-    // Prefer the record's already-refined geometry. Lazy creation commonly
-    // happens after the staggered ground pass; recomputing from the catalog
-    // prior here would regress the camera to its pre-sampled datum.
-    let geometry = record.frustumGeometry;
-    let positions = record.frustumPositions;
-    if (!geometry || !positions) {
-      geometry = computeFrustumGeometry(
-        camera,
-        parts.ground.groundPriorAltFor(record),
-        record.probeClampRangeM,
-      );
-      positions = frustumCartesians(geometry);
-      record.frustumGeometry = geometry;
-      record.frustumPositions = positions;
-      record.position = positions.mount;
-    }
-
-    const addPolyline = (role, linePositions) =>
-      layerState._viewer.entities.add({
-        id: `cctv-${camera.id}-${role}`,
-        properties: { cctvCameraId: camera.id },
-        polyline: {
-          positions: linePositions,
-          width: 1.2,
-          material: IDLE_COVERAGE_COLOR,
-        },
-      });
-
-    const entities = [
-      addPolyline('ray-tl', [positions.mount, positions.tl]),
-      addPolyline('ray-tr', [positions.mount, positions.tr]),
-      addPolyline('ray-br', [positions.mount, positions.br]),
-      addPolyline('ray-bl', [positions.mount, positions.bl]),
-      addPolyline('cap', [
-        positions.tl,
-        positions.tr,
-        positions.br,
-        positions.bl,
-        positions.tl,
-      ]),
-    ];
-
-    entities[0]._coverageRole = 'edge';
-    entities[1]._coverageRole = 'edge';
-    entities[2]._coverageRole = 'edge';
-    entities[3]._coverageRole = 'edge';
-    entities[4]._coverageRole = 'cap';
-    return entities;
-  }
-
-  /**
    * Materializes coverage entities for eligible records exactly once.
    * The helper is dependency-injected so unit tests can prove the enable policy
-   * without constructing Cesium entities.
+   * without constructing entities.
    *
    * @param {Object[]} records CCTV runtime records.
    * @param {(record: Object) => boolean} [isEligible] Eligibility predicate.
@@ -792,7 +687,10 @@ export function createGeometry({ state: layerState, services, parts, source }) {
 
   function ensureActiveCoverageEntities(record) {
     return registerCoverageEntities(
-      materializeCctvActiveCoverageEntities(record, buildCoverageEntities),
+      materializeCctvActiveCoverageEntities(
+        record,
+        parts.rendering.buildCoverageEntities,
+      ),
     );
   }
 
@@ -801,7 +699,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       materializeCctvVisibleCoverageEntities(
         records,
         visibleIds,
-        buildCoverageEntities,
+        parts.rendering.buildCoverageEntities,
       ),
     );
   }
@@ -812,13 +710,11 @@ export function createGeometry({ state: layerState, services, parts, source }) {
 
   function destroyCoverageEntities() {
     if (!layerState._viewer) return;
-    for (const entity of layerState._coverageEntities) {
-      layerState._viewer.entities.remove(entity);
-    }
+    parts.rendering.removeCoverageEntities();
     layerState._coverageEntities = [];
 
     for (const record of layerState._records) {
-      destroyViewshedVolume(record);
+      parts.rendering.destroyViewshedVolume(record);
     }
 
     for (const runtime of layerState._projectionEntities) {
@@ -831,17 +727,14 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     hasShippedFootprint,
     footprintPose,
     activationProbeClampRange,
-    frustumCartesians,
+    flatGroundAxisDistance,
     frustumFrameEcef,
     applyFrustumGeometry,
     updateRecordGeometry,
     buildCoverageVisibleSet,
-    destroyViewshedVolume,
-    rebuildViewshedVolume,
     coverageNeighborCount,
     runActivationObstructionProbe,
     clearProbeClampOnDeactivation,
-    buildCoverageEntities,
     materializeCctvCoverageEntities,
     materializeCctvActiveCoverageEntities,
     materializeCctvVisibleCoverageEntities,

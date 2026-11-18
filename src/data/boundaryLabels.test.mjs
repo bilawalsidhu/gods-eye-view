@@ -8,6 +8,8 @@ import { readFileSync } from 'node:fs';
 import * as Cesium from 'cesium';
 import { FEATURE_SOURCE_METHODS } from '../sources/featureSource.js';
 import { createAnnotationResolver } from '../annotations/resolver.js';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
 import { createWorldAnnotationRenderer } from '../annotations/worldAnnotationRenderer.js';
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
@@ -21,7 +23,7 @@ const DATA_MODULES = [
   './local_data/wof_neighborhoods/files.js',
 ];
 
-/** Modules that use Cesium for outlines but must not draw text with it. */
+/** Modules that draw outlines but must not draw text with Cesium. */
 const CESIUM_MODULES = [
   '../annotations/resolver.js',
   '../annotations/worldAnnotationRenderer.js',
@@ -109,21 +111,22 @@ test('drawing bundled place and neighborhood outlines creates no Cesium label', 
     featureSource,
   });
   const primitives = [];
-  const dataSources = [];
-  const viewer = {
-    camera: {
-      positionCartographic: Cesium.Cartographic.fromDegrees(
-        -97.7431,
-        30.2672,
-        3000,
-      ),
+  const draw = fakeDrawPort();
+  // The resolver reads the camera through the renderer's camera port; the
+  // world renderer draws through its draw port.
+  const viewer = bindFakeCesiumCamera(
+    {
+      camera: {
+        positionCartographic: Cesium.Cartographic.fromDegrees(
+          -97.7431,
+          30.2672,
+          3000,
+        ),
+      },
+      scene: { primitives: { add: (p) => primitives.push(p) } },
     },
-    scene: { primitives: { add: (p) => primitives.push(p) } },
-    dataSources: {
-      add: (ds) => dataSources.push(ds),
-      remove() {},
-    },
-  };
+    { draw },
+  );
   const renderer = createWorldAnnotationRenderer(viewer);
   for (const [target, lon, lat] of [
     ['Austin', -97.7431, 30.2672],
@@ -135,8 +138,8 @@ test('drawing bundled place and neighborhood outlines creates no Cesium label', 
       3000,
     );
     const resolved = await resolveAnnotationTarget({
-      // The resolver reads only the camera (no scene to pick from).
-      viewer: { camera: viewer.camera },
+      // The resolver reads only the camera (no query port to pick with).
+      viewer,
       target,
       footprint: true,
       deferFootprint: true,
@@ -155,8 +158,14 @@ test('drawing bundled place and neighborhood outlines creates no Cesium label', 
     });
   }
   assert.equal(primitives.length, 0, 'no primitive collections');
-  const entities = dataSources.flatMap((ds) => ds.entities.values);
-  assert.ok(entities.length >= 2, 'the outlines were drawn');
-  for (const entity of entities) assert.equal(entity.label, undefined);
+  const live = [...draw.sets.values()].filter((record) => !record.disposed);
+  const items = live.flatMap((record) => [...record.items.values()]);
+  assert.ok(items.length >= 2, 'the outlines were drawn');
+  // Fills and lines only: no point, text or label is drawn for a name.
+  assert.deepEqual([...new Set(live.map((record) => record.kind))].sort(), [
+    'lines',
+    'shapes',
+  ]);
+  for (const item of items) assert.equal(item.label, undefined);
   renderer.destroy();
 });

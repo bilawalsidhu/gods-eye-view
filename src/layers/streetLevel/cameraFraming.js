@@ -1,5 +1,6 @@
-import * as Cesium from 'cesium';
 import { plausibleSurfaceHeight, sampledSurfaceHeight } from './view.js';
+import { toRadians } from '../../geo/index.js';
+import { cameraOf, findQuery } from '../../render/rendererOf.js';
 
 /** Fly the globe camera once to frame a photo after it opens. */
 export function createCameraFraming({ state }) {
@@ -27,10 +28,13 @@ export function createCameraFraming({ state }) {
    * ellipsoid before tiles load, so only a plausible height counts.
    */
   function groundHeightAt(lon, lat, fallback) {
-    const scene = state.viewer?.scene;
-    const carto = Cesium.Cartographic.fromDegrees(lon, lat);
-    let height = sampledSurfaceHeight(scene, carto);
-    if (height === null) height = scene?.globe?.getHeight?.(carto);
+    const viewer = state.viewer;
+    const point = { lon, lat };
+    let height = sampledSurfaceHeight(viewer, point);
+    if (height === null && viewer)
+      height =
+        findQuery(viewer)?.sampleHeightNow(point, { against: 'terrain' }) ??
+        null;
     if (!plausibleSurfaceHeight(height)) height = fallback;
     return plausibleSurfaceHeight(height) ? height : 0;
   }
@@ -47,36 +51,37 @@ export function createCameraFraming({ state }) {
       return;
     const ground = groundHeightAt(position.lon, position.lat, altitude);
     // Owned before the call: starting it cancels the previous flight (ours
-    // included) synchronously, and a zero-length one completes at once.
+    // included), and a zero-length one completes inside the call.
     const current = {};
     flight = current;
     const release = () => {
       if (flight === current) flight = null;
     };
-    state.viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(
-        Cesium.Cartesian3.fromDegrees(position.lon, position.lat, ground + 2),
-        4,
-      ),
+    const started = cameraOf(state.viewer).flyToBounds(
       {
-        offset: new Cesium.HeadingPitchRange(
-          Cesium.Math.toRadians(bearing || 0),
-          Cesium.Math.toRadians(-32),
-          140,
-        ),
-        duration: 1.6,
-        complete: release,
-        cancel: release,
+        center: { lon: position.lon, lat: position.lat, height: ground + 2 },
+        radius: 4,
+      },
+      {
+        offset: {
+          heading: toRadians(bearing || 0),
+          pitch: toRadians(-32),
+          range: 140,
+        },
+        durationS: 1.6,
+        onComplete: release,
+        onCancel: release,
       },
     );
+    if (flight === current) current.handle = started;
   }
 
   /** Stop our framing flight if it is still in the air; another feature's flight is left alone. */
   function cancel() {
     if (!flight) return;
-    // Give up ownership first: cancelFlight delivers `cancel` synchronously.
+    const { handle } = flight;
     flight = null;
-    state.viewer?.camera?.cancelFlight?.();
+    handle?.cancel();
   }
 
   return { attachNavigation, begin, frame, cancel };

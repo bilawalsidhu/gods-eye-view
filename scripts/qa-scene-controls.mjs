@@ -45,7 +45,7 @@ try {
       window.__qaSceneState.push(notification),
     );
   });
-  await page.click('[data-collapse-target="scene-panel"]');
+  await page.click('[data-rail-item="scene-panel"]');
   await page.click('#scene-new-btn');
   await page.waitForFunction(
     () =>
@@ -278,7 +278,7 @@ try {
       panel.classList.contains('collapsed'),
     )
   )
-    await page.click('[data-collapse-target="scene-panel"]');
+    await page.click('[data-rail-item="scene-panel"]');
   await page.waitForSelector('#scene-download-btn', { visible: true });
   await page.click('#scene-download-btn');
   const metadata = await page.evaluate(async () =>
@@ -426,6 +426,10 @@ try {
       );
     }),
   );
+  promptValue = 'Disposal scene';
+  await page.click('#scene-new-btn');
+  await page.click('#scene-capture-btn');
+  await page.waitForSelector('.scene-shot-label', { visible: true });
   const teardown = await page.evaluate(async () => {
     const director = window.__godsEyeView.sceneDirector;
     const controls = director._controls;

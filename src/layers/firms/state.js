@@ -1,26 +1,25 @@
-import * as Cesium from 'cesium';
 import { DEFAULT_FIRE_FILTER } from '../../data/firmsIntensity.js';
 
 export function createFirmsState({ services, config }) {
   const layerState = {};
 
-  /** Pre-baked radial-glow sprites keyed by `<colorStop>:<sizeBucket>`. */
+  /** Pre-baked radial-glow sprites keyed by color stop name. */
 
   layerState.glowSpriteCache = new Map();
 
-  layerState.scratchViewRect = new Cesium.Rectangle();
-
-  layerState.scratchCenterA = new Cesium.Cartographic();
-
-  layerState.scratchCenterB = new Cesium.Cartographic();
-
-  layerState.scratchWindowCoord = new Cesium.Cartesian2();
-
   layerState._viewer = null;
 
-  layerState._dataSource = null;
+  /**
+   * The layer's own shape set (made at `init`): empty since the heat became
+   * draped imagery, it marks the layer initialized and carries the `show`
+   * the context store reads.
+   */
 
-  layerState._billboards = null;
+  layerState._cells = null;
+
+  /** The detection glows' icon draw set (made with the first render). */
+
+  layerState._icons = null;
 
   layerState._enabled = false;
 
@@ -77,6 +76,8 @@ export function createFirmsState({ services, config }) {
 
   layerState._lastUpdate = null;
 
+  layerState._at = null;
+
   layerState._currentLodId = null;
 
   layerState._currentLodIndex = -1;
@@ -91,7 +92,7 @@ export function createFirmsState({ services, config }) {
 
   layerState._contextIds = new Set();
 
-  layerState._clickHandler = null;
+  layerState._clickSubscription = null;
 
   layerState._moveEndRemover = null;
 
@@ -110,16 +111,6 @@ export function createFirmsState({ services, config }) {
   /** Actionable card id -> current detection record painted for that id. */
 
   layerState._fireByCardId = new Map();
-
-  /**
-   * Occlusion-test anchors index-aligned with the billboard collection (the
-   * collection is cleared and refilled in one ordered pass per rebuild, and
-   * nothing else adds to it). Lifted where the render anchor sits at/below
-   * the ellipsoid — see {@link fireCullPosition}.
-   * @type {Array<Cesium.Cartesian3>}
-   */
-
-  layerState._cullPositions = [];
 
   /**
    * gridDegrees -> heat-sorted full cell list. The full-grid aggregation is
@@ -150,7 +141,7 @@ export function createFirmsState({ services, config }) {
 
   layerState._heatImagery = null;
 
-  /** Shell-provided imagery host resolver; falls back to viewer.imageryLayers. */
+  /** Shell-provided imagery host resolver; without one, the globe. */
 
   layerState._imageryHost = null;
 
@@ -158,9 +149,9 @@ export function createFirmsState({ services, config }) {
 
   layerState._camSnapValid = false;
 
-  layerState._camPos = new Cesium.Cartesian3();
+  layerState._camPos = { x: 0, y: 0, z: 0 };
 
-  layerState._camDir = new Cesium.Cartesian3();
+  layerState._camDir = { x: 0, y: 0, z: 0 };
   layerState.request = null;
   return layerState;
 }

@@ -29,7 +29,7 @@ import {
 } from '../i18n/index.js';
 import { layerNameForId, sourceLabel } from '../ui/layerNames.js';
 import { localizePlaceName } from '../ui/placeNames.js';
-import { translateStatusLine } from '../ui/statusText.js';
+import { translateStatusMessage } from '../ui/statusText.js';
 import { formatQuantity } from '../ui/unitLabels.js';
 
 /** Split "a; b" caveat text into separate notes. */
@@ -397,27 +397,6 @@ const NOTE_PATTERNS = [
             'Contacts panel snapshot — the same retained cohort supplies the card, speech, and follow-up memory',
           )) + period,
   ],
-  // Transit's empty note when no feed covers the view (transit/queries.js);
-  // the model gets the English.
-  [
-    /^Fly below ([\d,]+) km to a covered region$/,
-    ([, km]) =>
-      t('Fly below {km} km to a covered region', {
-        km: formatNumber(Number(km.replace(/,/g, ''))),
-      }),
-  ],
-  [
-    /^No feed here yet · ([\d,]+) regions available$/,
-    ([, regions]) => {
-      const count = Number(regions.replace(/,/g, ''));
-      return tn(
-        count,
-        'No feed here yet · {n} region available',
-        'No feed here yet · {n} regions available',
-        { n: formatNumber(count) },
-      );
-    },
-  ],
   [
     /^([a-z0-9-]+) (off|loading|error)$/,
     ([, key, status]) =>
@@ -444,10 +423,10 @@ function shownNote(text) {
     const shown = match ? show(match) : null;
     if (shown) return shown;
   }
-  // A layer's empty note can be its status line, English pieces joined by
-  // " · " ("feeds 1090, 978 stale · 0 heard", "TTC 0 (95s old)").
-  const known = translateKnown(text);
-  return known !== text ? known : translateStatusLine(text);
+  // A layer's empty note can be its coverage note ("Fly below 2,850 km to a
+  // covered region") or its status line, English pieces joined by " · "
+  // ("feeds 1090, 978 stale · 0 heard", "TTC 0 (95s old)").
+  return translateStatusMessage(text);
 }
 
 /** Feed states as the card's chips show them; the values stay English. */
