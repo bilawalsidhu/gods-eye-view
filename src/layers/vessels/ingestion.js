@@ -32,7 +32,22 @@ export function createIngestion({
   // may still be set while it loads (see resumeLive).
   let liveLoad = null;
 
-  async function loadLivePositions(viewer, { handover = false } = {}) {
+  /**
+   * Poll the live vessels (or take the live poll already out). Resolves
+   * when it is done, with nothing: a feed that fails is shown on the layer,
+   * and turning the layer on still succeeds.
+   * @param {object} viewer
+   * @returns {Promise<void>}
+   */
+  async function loadLivePositions(viewer) {
+    await pollLive(viewer);
+  }
+
+  /**
+   * The live poll: resolves what loadPositions answers (false when it could
+   * not be had), or that of the live poll already out.
+   */
+  async function pollLive(viewer, { handover = false } = {}) {
     // Following the world clock, the layer shows the snapshots loadAt applies.
     if (followsClock()) return false;
     // Back at live, a snapshot at a time still loading no longer applies:
@@ -63,7 +78,7 @@ export function createIngestion({
    * @returns {Promise<boolean>}
    */
   async function resumeLive(viewer) {
-    const applied = await loadLivePositions(viewer || readViewer(), {
+    const applied = await pollLive(viewer || readViewer(), {
       handover: true,
     });
     return applied === true;
