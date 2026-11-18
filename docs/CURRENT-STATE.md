@@ -2867,6 +2867,10 @@ while `_clearLayersOutsideContextMode` switches the layer off): the user
 switching CCTV off inside Contacts closes the panel as anywhere else. A panel opened by hand while the layer is off stays open, and its
 meta line reads the catalog count, not the last active camera.
 
+The CCTV control `focusNearestToPoint(lat, lon, options)` selects the catalog
+camera nearest a WGS84 point and flies to it unless `focus: false`. No UI action
+calls it yet.
+
 ## UI disposal
 
 UI disposal releases the CCTV subscription, command-dock observer, legacy drag
