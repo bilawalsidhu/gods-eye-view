@@ -1294,6 +1294,11 @@ export class ShellFacade {
     return this._locationNavigation.resetToGlobeView(...args);
   }
 
+  /** Back to live, at the view the app started from (the title's logo). */
+  returnToStart() {
+    return this._locationNavigation.returnToStart();
+  }
+
   /**
    * Displays a temporary toast notification for 2 seconds.
    * @param {string} message - Text to show in the toast.

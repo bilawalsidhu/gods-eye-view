@@ -3,6 +3,7 @@ import { stopFollowing } from '../data/followed.js';
 import { t } from '../i18n/index.js';
 import { createStateChannel } from '../app/stateChannel.js';
 import { LocationControls } from './location.js';
+import { worldClock } from '../time/worldClock.js';
 
 /** Own destination selection, lookup, orbit and world-jump lifetime. */
 export class LocationNavigation {
@@ -14,10 +15,11 @@ export class LocationNavigation {
     navigation,
     readCockpit,
     operations,
+    homeView = null,
   }) {
     Object.assign(
       this,
-      { viewer, placeSearch, services, navigation, readCockpit },
+      { viewer, placeSearch, services, navigation, readCockpit, homeView },
       elements,
       operations,
     );
@@ -315,7 +317,24 @@ export class LocationNavigation {
     }
   }
 
-  resetToGlobeView() {
+  /**
+   * Back to live, at the view the app started from (the logo): the world
+   * clock goes live and the camera flies to the start view as the globe reset
+   * does, letting go of whatever it follows.
+   */
+  returnToStart() {
+    if (!this._disposed) worldClock.goLive();
+    if (!this.homeView) return this.resetToGlobeView();
+    // A globe reset under way flies elsewhere: this one replaces it.
+    this._cancelGlobeReset?.();
+    return this.resetToGlobeView({ view: this.homeView });
+  }
+
+  /**
+   * Fly out to the full globe over the current spot, or to `view` (the start
+   * view's shape: `{ lon, lat, height, heading?, pitch? }`, degrees).
+   */
+  resetToGlobeView({ view = null } = {}) {
     const {
       GLOBE_VIEW,
       flyToGlobeView,
@@ -374,6 +393,7 @@ export class LocationNavigation {
     camera?.release();
     this._beginWorldJumpTransition();
 
+    const heightM = view?.height ?? GLOBE_VIEW.heightM;
     let resolveReset;
     const resetPromise = new Promise((resolve) => {
       resolveReset = resolve;
@@ -391,7 +411,7 @@ export class LocationNavigation {
         ok: !cancelled,
         action: 'zoom_to_globe',
         cancelled,
-        heightKm: Math.round(GLOBE_VIEW.heightM / 1000),
+        heightKm: Math.round(heightM / 1000),
         centeredOn: {
           latitude: Number.isFinite(pose?.lat)
             ? Number(pose.lat.toFixed(2))
@@ -409,15 +429,13 @@ export class LocationNavigation {
     this._cancelGlobeReset = () => finish(true);
     timer = window.setTimeout(() => {
       const height = findCamera(this.viewer)?.pose().height;
-      finish(
-        !Number.isFinite(height) ||
-          Math.abs(height - GLOBE_VIEW.heightM) > 1000,
-      );
+      finish(!Number.isFinite(height) || Math.abs(height - heightM) > 1000);
     }, 4200);
     this._publishGlobeResetting?.(true);
     const target = flyToGlobeView(this.viewer, {
       onComplete: () => finish(false),
       onCancel: () => finish(true),
+      ...(view ? { view } : {}),
     });
     if (!target) finish(true);
     return resetPromise;
