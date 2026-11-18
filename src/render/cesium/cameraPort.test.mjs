@@ -337,21 +337,23 @@ test('the camera port gives the clock its own tick back as it goes', () => {
   }
 });
 
-test('camera reports globe mode and fails closed for other modes', () => {
+test('camera visibility is unknown outside 3D and resolves on the globe', () => {
   const { scene, camera } = headlessCamera();
   scene.postUpdate = new Cesium.Event();
   scene.requestRender = () => {};
   const { port } = createCesiumCamera({ scene, camera, report: () => {} });
-  for (const [mode, expected] of [
-    [Cesium.SceneMode.SCENE3D, true],
-    [Cesium.SceneMode.SCENE2D, false],
-    [Cesium.SceneMode.COLUMBUS_VIEW, false],
-    [Cesium.SceneMode.MORPHING, false],
-    [undefined, false],
+  const points = [Cesium.Cartesian3.fromDegrees(0, 0, 10)];
+  for (const mode of [
+    Cesium.SceneMode.SCENE2D,
+    Cesium.SceneMode.COLUMBUS_VIEW,
+    Cesium.SceneMode.MORPHING,
+    undefined,
   ]) {
     scene.mode = mode;
-    assert.equal(port.isWorld3D(), expected);
+    assert.equal(port.visiblePoints(points, 200), null);
   }
+  scene.mode = Cesium.SceneMode.SCENE3D;
+  assert.equal(typeof port.visiblePoints(points, 200), 'boolean');
 });
 
 test('setFov holds the vertical angle across resizes, and waits for a first one', () => {

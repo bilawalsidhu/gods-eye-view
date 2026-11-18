@@ -1,8 +1,4 @@
 import { findCamera } from '../../render/rendererOf.js';
-import { offsetEllipsoid } from '../../geo/ellipsoid.js';
-import { horizonFrom } from '../../geo/horizon.js';
-import { frustumPlanes, sphereOutside } from '../../geo/frustum.js';
-import { sphereFromPoints } from '../../geo/sphere.js';
 import {
   FRAME_SIGNATURE_W,
   FRAME_SIGNATURE_H,
@@ -46,9 +42,7 @@ export function fitToProjection(sourceW, sourceH) {
   };
 }
 
-// Keep the occluding surface below common negative geoid undulations.
-const HORIZON_MARGIN_M = 200;
-const _horizonEllipsoid = offsetEllipsoid(-HORIZON_MARGIN_M);
+const _scratchPoints = [];
 
 export function createFrames({ state: layerState, services, parts, source }) {
   /**
@@ -260,53 +254,19 @@ export function createFrames({ state: layerState, services, parts, source }) {
     const viewer = layerState._viewer;
     if (!viewer || viewer.isDestroyed?.()) return true;
     const camera = findCamera(viewer);
-    if (camera?.isWorld3D?.() !== true) return true;
-    const pose = camera.pose?.();
-    const projection = camera.matrices?.()?.projection;
-    const finiteVector = (v) => v && [v.x, v.y, v.z].every(Number.isFinite);
-    // A centred perspective is the only shape frustumPlanes can judge exactly.
-    if (
-      !finiteVector(pose?.position) ||
-      !finiteVector(pose.direction) ||
-      !finiteVector(pose.up) ||
-      !(pose.fovy > 0 && pose.fovy < Math.PI) ||
-      !(pose.aspectRatio > 0) ||
-      !(pose.near > 0 && pose.far > pose.near) ||
-      !projection ||
-      projection[8] !== 0 ||
-      projection[9] !== 0 ||
-      projection[15] !== 0
-    )
-      return true;
+    if (typeof camera?.visiblePoints !== 'function') return true;
     const placed = record?.frustumPositions;
-    const points = [
-      record?.position,
-      placed?.mount,
-      placed?.capCenter,
-      placed?.tl,
-      placed?.tr,
-      placed?.br,
-      placed?.bl,
-    ].filter(Boolean);
-    if (
-      !points.length ||
-      points.some(
-        (p) =>
-          !Number.isFinite(p.x) ||
-          !Number.isFinite(p.y) ||
-          !Number.isFinite(p.z),
-      )
-    )
-      return true;
-    const o = _horizonEllipsoid.oneOverRadii;
-    const eye = pose.position;
-    // Below the shrunken ellipsoid the occluder can hide nearby visible points.
-    const outside = Math.hypot(eye.x * o.x, eye.y * o.y, eye.z * o.z) >= 1;
-    const horizon = outside ? horizonFrom(eye, _horizonEllipsoid) : null;
-    if (horizon && !points.some((point) => horizon.isPointVisible(point)))
-      return false;
-    const sphere = sphereFromPoints(points);
-    return !sphereOutside(frustumPlanes(pose), sphere.center, sphere.radius);
+    const points = _scratchPoints;
+    points.length = 0;
+    if (record?.position) points.push(record.position);
+    if (placed?.mount) points.push(placed.mount);
+    if (placed?.capCenter) points.push(placed.capCenter);
+    if (placed?.tl) points.push(placed.tl);
+    if (placed?.tr) points.push(placed.tr);
+    if (placed?.br) points.push(placed.br);
+    if (placed?.bl) points.push(placed.bl);
+    // Unknown modes or unsupported cameras must not suppress pictures.
+    return camera.visiblePoints(points, 200) !== false;
   }
 
   /**

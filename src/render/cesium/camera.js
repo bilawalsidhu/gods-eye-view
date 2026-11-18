@@ -86,6 +86,89 @@ function sameMatrix(array, matrix) {
   return true;
 }
 
+/** Conservative globe/frustum visibility; null means unknown. */
+export function createPointsVisibility(scene, camera) {
+  const visibilitySphere = new Cesium.BoundingSphere();
+  let visibilityMargin = null;
+  let visibilityEllipsoid = null;
+  let visibilityOccluder = null;
+  return function visiblePoints(points, marginM) {
+    if (
+      scene.mode !== Cesium.SceneMode.SCENE3D ||
+      !points?.length ||
+      !Number.isFinite(marginM) ||
+      marginM < 0 ||
+      typeof camera.frustum?.computeCullingVolume !== 'function'
+    )
+      return null;
+    const radii = Cesium.Ellipsoid.WGS84.radii;
+    if (marginM >= Math.min(radii.x, radii.y, radii.z)) return null;
+    const eye = camera.positionWC;
+    if (
+      !eye ||
+      !Number.isFinite(eye.x) ||
+      !Number.isFinite(eye.y) ||
+      !Number.isFinite(eye.z)
+    )
+      return null;
+    const direction = camera.directionWC;
+    const up = camera.upWC;
+    if (
+      !direction ||
+      !up ||
+      !Number.isFinite(direction.x) ||
+      !Number.isFinite(direction.y) ||
+      !Number.isFinite(direction.z) ||
+      !Number.isFinite(up.x) ||
+      !Number.isFinite(up.y) ||
+      !Number.isFinite(up.z)
+    )
+      return null;
+    for (const p of points) {
+      if (
+        !p ||
+        !Number.isFinite(p.x) ||
+        !Number.isFinite(p.y) ||
+        !Number.isFinite(p.z)
+      )
+        return null;
+    }
+    if (visibilityMargin !== marginM) {
+      visibilityMargin = marginM;
+      visibilityEllipsoid = new Cesium.Ellipsoid(
+        radii.x - marginM,
+        radii.y - marginM,
+        radii.z - marginM,
+      );
+      visibilityOccluder = new Cesium.EllipsoidalOccluder(visibilityEllipsoid);
+    }
+    const inverse = visibilityEllipsoid.oneOverRadii;
+    const outside =
+      Math.hypot(eye.x * inverse.x, eye.y * inverse.y, eye.z * inverse.z) >= 1;
+    if (outside) {
+      visibilityOccluder.cameraPosition = eye;
+      let visible = false;
+      for (const p of points) {
+        if (visibilityOccluder.isPointVisible(p)) {
+          visible = true;
+          break;
+        }
+      }
+      if (!visible) return false;
+    }
+    const culling = camera.frustum.computeCullingVolume(
+      eye,
+      camera.directionWC,
+      camera.upWC,
+    );
+    return (
+      culling.computeVisibility(
+        Cesium.BoundingSphere.fromPoints(points, visibilitySphere),
+      ) !== Cesium.Intersect.OUTSIDE
+    );
+  };
+}
+
 /**
  * @param {{scene: object, camera: object, report: (error: unknown) => void,
  *   widget?: object, capabilities?: ReadonlySet<string>,
@@ -350,9 +433,7 @@ export function createCesiumCamera({
   }
 
   const cameraPort = {
-    // The ECEF camera pose describes the globe only in 3D. Consumers that
-    // cannot prove this must avoid globe-only visibility culling.
-    isWorld3D: () => scene.mode === Cesium.SceneMode.SCENE3D,
+    visiblePoints: createPointsVisibility(scene, camera),
     on: (event, cb, options) => cameraEvents.on(event, cb, options),
     onCommand: (cb) => commandHooks.on(cb),
     setView(spec) {

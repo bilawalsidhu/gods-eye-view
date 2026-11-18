@@ -234,8 +234,8 @@ export type CameraEvent =
   'changed' | 'moveStart' | 'moveEnd' | 'followChanged' | 'flightEnd';
 
 export interface CameraPort {
-  /** True only when its pose is an ECEF view of the 3D globe. Missing means unknown. */
-  isWorld3D?(): boolean;
+  /** Conservative visibility of an ECEF point set, with a horizon margin in metres; null means unknown. */
+  visiblePoints?(points: Ecef[], horizonMarginM: number): boolean | null;
   pose(): CameraPose;
   /**
    * Place the eye. A position with a `{direction, up}` orientation is placed

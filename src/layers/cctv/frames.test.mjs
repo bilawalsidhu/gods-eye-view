@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { bindRenderer } from '../../render/rendererOf.js';
+import { createPointsVisibility } from '../../render/cesium/camera.js';
 import { createFrames, fitToProjection } from './frames.js';
 import {
   FRAME_SIGNATURE_W,
@@ -194,17 +195,7 @@ function viewerAt(position, direction, up) {
   };
   bindRenderer(viewer, {
     camera: {
-      isWorld3D: () => viewer.scene.mode === Cesium.SceneMode.SCENE3D,
-      pose: () => ({
-        position: viewer.camera.positionWC,
-        direction: viewer.camera.directionWC,
-        up: viewer.camera.upWC,
-        fovy: viewer.camera.frustum.fovy,
-        aspectRatio: viewer.camera.frustum.aspectRatio,
-        near: viewer.camera.frustum.near,
-        far: viewer.camera.frustum.far,
-      }),
-      matrices: () => ({ projection: viewer.camera.frustum.projectionMatrix }),
+      visiblePoints: createPointsVisibility(viewer.scene, viewer.camera),
     },
   });
   return viewer;
@@ -377,23 +368,34 @@ test('the renderer scene host culls the far side without raw viewer access', () 
   const native = lookingDown();
   const viewer = { isDestroyed: () => false };
   const camera = native.camera;
+  camera.directionWC = Cesium.Cartesian3.UNIT_X;
   const unbind = bindRenderer(viewer, {
-    camera: {
-      isWorld3D: () => true,
-      matrices: () => ({ projection: camera.frustum.projectionMatrix }),
-      pose: () => ({
-        position: camera.positionWC,
-        direction: Cesium.Cartesian3.UNIT_X,
-        up: camera.upWC,
-        fovy: camera.frustum.fovy,
-        aspectRatio: camera.frustum.aspectRatio,
-        near: camera.frustum.near,
-        far: camera.frustum.far,
-      }),
-    },
+    camera: { visiblePoints: createPointsVisibility(native.scene, camera) },
   });
   try {
     assert.equal(framesFor(viewer).projectionInView(planeRecord()), false);
+  } finally {
+    unbind();
+  }
+});
+
+test('visibility checks reuse the points array across ticks', () => {
+  const seen = [];
+  const host = {};
+  const unbind = bindRenderer(host, {
+    camera: {
+      visiblePoints: (points) => {
+        seen.push(points);
+        return true;
+      },
+    },
+  });
+  try {
+    const frames = framesFor(host);
+    frames.projectionInView(planeRecord());
+    frames.projectionInView(planeRecord());
+    assert.equal(seen.length, 2);
+    assert.strictEqual(seen[0], seen[1]);
   } finally {
     unbind();
   }
@@ -417,13 +419,13 @@ test('deep viewers do not lose nearby planes to the horizon test', () => {
   );
 });
 
-test('flat, unknown, and off-centre projections fail open', () => {
+test('flat and unknown projections fail open', () => {
   const native = lookingDown();
   native.camera.directionWC = Cesium.Cartesian3.UNIT_X;
   native.scene.mode = Cesium.SceneMode.COLUMBUS_VIEW;
   assert.equal(framesFor(native).projectionInView(planeRecord()), true);
   native.scene.mode = Cesium.SceneMode.SCENE3D;
-  native.camera.frustum.xOffset = 0.1;
+  native.camera.directionWC = undefined;
   assert.equal(framesFor(native).projectionInView(planeRecord()), true);
   const host = {};
   const unbind = bindRenderer(host, { camera: { pose: () => ({}) } });
