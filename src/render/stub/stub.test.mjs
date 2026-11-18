@@ -30,6 +30,7 @@ test('the stub passes the conformance suite', async () => {
     'draw.lines.split',
     'draw.lines.outlineDraped',
     'draw.models.blend',
+    'draw.models.paint',
     'globe.imagery.video',
     'globe.weather.drawn',
     'globe.weather.sceneTime',

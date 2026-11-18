@@ -402,7 +402,7 @@ export function createAircraftModels({
       tint: record.tint ?? WHITE,
       // The mesh's own colours, tinted while tracked or in an emergency;
       // the IR boost draws it flat white.
-      colorBlend: aircraftModelBlend(state._irBoost === true),
+      colorBlend: aircraftModelBlend(state._irBoost === true, record.tint),
       environmentMap: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS.enabled,
       ...(record.parts ? { parts: record.parts } : {}),
       show: record.show,
