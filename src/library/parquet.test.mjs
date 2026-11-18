@@ -250,7 +250,10 @@ test('a view that moves on does not cancel the index build the next view waits f
   await tick();
   first.abort();
   await assert.rejects(a);
-  const b = source.loadDataset(epc, { bbox: box, signal: new AbortController().signal });
+  const b = source.loadDataset(epc, {
+    bbox: box,
+    signal: new AbortController().signal,
+  });
   await tick();
   release();
   const view = await b;

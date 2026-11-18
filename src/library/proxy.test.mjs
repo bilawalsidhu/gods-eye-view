@@ -169,8 +169,88 @@ test('a view box snaps out to two grid cells a side, with one spelling', () => {
   // Nearby views name the same box.
   assert.deepEqual(libraryViewBox([-77.0305, 38.8895, -77.0205, 38.8995]), box);
   assert.deepEqual(parseLibraryViewBox(box.join(',')), box);
-  assert.equal(parseLibraryViewBox(box.map((v) => v.toFixed(8)).join(',')), null);
+  assert.equal(
+    parseLibraryViewBox(box.map((v) => v.toFixed(8)).join(',')),
+    null,
+  );
   assert.equal(parseLibraryViewBox('-77,38,-76,39.5'), null);
   assert.equal(parseLibraryViewBox('0,0,4,4'), null);
   assert.equal(libraryViewBox([0, 0, 3, 3]), null);
+});
+
+test('a tile path has one spelling: no leading zeros, no empty segments, inside the grid', async () => {
+  const calls = [];
+  const xyz = entries.find(({ id }) => id === 'hidden-tiles');
+  const handle = createLibraryHandler({
+    entries: [xyz],
+    proxied: () => true,
+    keep: false,
+    fetchImpl: async (url) => {
+      calls.push(url);
+      return png();
+    },
+  });
+  for (const path of [
+    '/tile/hidden-tiles/02/1/1',
+    '/tile/hidden-tiles/2/01/1',
+    '/tile/hidden-tiles/2/1/4',
+    '/tile/hidden-tiles/2/1/1.5',
+    '/tile/hidden-tiles/23/1/1',
+  ])
+    assert.equal((await get(handle, path)).status, 400, path);
+  for (const path of [
+    '/tile/hidden-tiles//2/1/1',
+    '/tile/hidden-tiles/2/1/1/',
+    '//tile/hidden-tiles/2/1/1',
+  ])
+    assert.equal((await get(handle, path)).status, 404, path);
+  assert.equal(calls.length, 0);
+  assert.equal((await get(handle, '/tile/hidden-tiles/2/1/3')).status, 200);
+  assert.equal(calls.length, 1);
+});
+
+test('a partitioned dataset reads its index from the given fetch, never builds one, and stays under the subrequest limit', async () => {
+  const epc = libraryEntry('epc-england-wales');
+  const box = libraryViewBox(epc.source.view.sample);
+  const upstream = [];
+  const indexes = [];
+  const handler = (fetchIndex, subrequestLimit = Infinity) =>
+    createLibraryHandler({
+      entries: [epc],
+      proxied: () => true,
+      keep: false,
+      fetchIndex,
+      subrequestLimit,
+      fetchImpl: async (url) => {
+        upstream.push(String(url));
+        return new Response('', { status: 500 });
+      },
+    });
+
+  // No index to be had: refused clearly, the publisher never asked.
+  const missing = await get(
+    handler(async (entry) => {
+      indexes.push(entry.id);
+      return new Response('', { status: 404 });
+    }),
+    `/data/epc-england-wales?bbox=${box}`,
+  );
+  assert.equal(missing.status, 503);
+  assert.deepEqual(await missing.json(), { error: 'index_unavailable' });
+  assert.deepEqual(indexes, ['epc-england-wales']);
+  assert.deepEqual(upstream, []);
+
+  // An index naming partitions in view: reading them would pass the limit.
+  const partitions = Array.from({ length: 8 }, (_, i) => ({
+    url: `${epc.source.partitions.keyBase}addresscloud/epc/geoparquet-local-authority/p${i}.parquet`,
+    bbox: box,
+  }));
+  const over = await get(
+    handler(async () => Response.json({ partitions, complete: true }), 3),
+    `/data/epc-england-wales?bbox=${box}`,
+  );
+  assert.equal(over.status, 503);
+  assert.deepEqual(await over.json(), { error: 'subrequest_limit' });
+  // The index fetch and two upstream reads; the third read was refused.
+  assert.equal(upstream.length, 2);
 });

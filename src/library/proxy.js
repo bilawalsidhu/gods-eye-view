@@ -36,6 +36,10 @@ import {
   readResponseTextCapped,
 } from '../sources/httpBody.js';
 
+/** The catalog and its view grid, for a server that decides what it serves. */
+export { LIBRARY_ENTRIES } from './catalog.js';
+export { libraryViewBox, parseLibraryViewBox } from './manifest.js';
+
 const DATASET_TIMEOUT_MS = 30_000;
 const TILE_TIMEOUT_MS = 10_000;
 /** Each listing page or footer read while building a partition index. */
@@ -91,7 +95,10 @@ export function libraryAvailability(entries, env) {
  * @returns {{ z: number, x: number, y: number } | null}
  */
 export function parseLibraryTilePath(parts, source) {
-  if (parts.length !== 3 || !parts.every((part) => /^\d{1,8}$/.test(part)))
+  if (
+    parts.length !== 3 ||
+    !parts.every((part) => /^(0|[1-9]\d{0,7})$/.test(part))
+  )
     return null;
   const [z, x, y] = parts.map(Number);
   const minZoom = source.minZoom ?? 0;
@@ -161,6 +168,17 @@ function cacheControl(entry) {
  * @param {boolean} [options.keep] Keep answers in this process's memory for
  *   `cacheSeconds` (and serve a stale dataset when a refresh fails). A server
  *   with a shared cache in front turns it off.
+ * @param {Map<string, object[]>} [options.partitionCache] Decoded GeoParquet
+ *   partitions, shared by every request this map is given to; at most four
+ *   are kept (pass one map per process to cap them there).
+ * @param {(entry: object, init: { signal?: AbortSignal }) => Promise<Response>} [options.fetchIndex]
+ *   Fetches a partitioned entry's index, e.g. this handler's own `/index/<id>`
+ *   through a shared cache. By default the index route is answered in
+ *   process. A dataset request never builds an index itself.
+ * @param {number} [options.subrequestLimit] Most upstream requests one
+ *   dataset or tile request may make (a host's per-request subrequest
+ *   limit); a request that would need more is refused with 503
+ *   `subrequest_limit` before passing it.
  * @returns {(request: Request) => Promise<Response>}
  */
 export function createLibraryHandler({
@@ -172,6 +190,9 @@ export function createLibraryHandler({
   listed = () => true,
   proxied = () => false,
   keep = true,
+  partitionCache = new Map(),
+  fetchIndex = null,
+  subrequestLimit = Infinity,
 } = {}) {
   const shown = entries.filter((entry) => listed(entry));
   const byId = new Map(shown.map((entry) => [entry.id, entry]));
@@ -180,7 +201,6 @@ export function createLibraryHandler({
   const tiles = new Map();
   const indexes = new Map();
   const partialIndexes = new Map();
-  const readers = new Map();
   const inFlight = new Map();
 
   const routed = (entry) =>
@@ -214,47 +234,62 @@ export function createLibraryHandler({
     return result;
   }
 
+  /** Counts one request's upstream fetches against `subrequestLimit`. */
+  function subrequests() {
+    let used = 0;
+    return () => {
+      used += 1;
+      if (used > subrequestLimit)
+        throw Object.assign(new Error('subrequest_limit'), { status: 503 });
+    };
+  }
+
   /**
-   * A GeoParquet entry's reader: the browser's own, fetching upstream from
-   * here, with its partition index kept for the life of this handler.
+   * A GeoParquet entry's reader for one request: the browser's own, fetching
+   * upstream from here, with its index fetched (never built) and decoded
+   * partitions shared through `partitionCache`.
    */
-  function readerFor(entry) {
-    let reader = readers.get(entry.id);
-    if (!reader) {
-      const direct = {
-        ...entry,
-        source: { ...entry.source, fetch: 'browser-direct' },
-      };
-      const source = createLibrarySource({
-        entries: [direct],
-        base: null,
-        storage: null,
-        now,
-        fetchImpl: async (url, init = {}) => {
-          const range = new Headers(init.headers).get('range');
-          const { response } = await upstream(entry, String(url), {
-            timeoutMs: DATASET_TIMEOUT_MS,
-            signal: init.signal,
-            headers: range ? { Range: range } : {},
-          });
-          return response;
-        },
-      });
-      reader = { entry: direct, source };
-      readers.set(entry.id, reader);
-    }
-    return reader;
+  function readerFor(entry, count) {
+    const direct = {
+      ...entry,
+      source: { ...entry.source, fetch: 'browser-direct' },
+    };
+    const source = createLibrarySource({
+      entries: [direct],
+      base: null,
+      storage: null,
+      now,
+      partitionCache,
+      buildIndex: false,
+      fetchIndex: async (_entry, init) => {
+        count();
+        return fetchIndex ? fetchIndex(entry, init) : index(entry);
+      },
+      fetchImpl: async (url, init = {}) => {
+        count();
+        const range = new Headers(init.headers).get('range');
+        const { response } = await upstream(entry, String(url), {
+          timeoutMs: DATASET_TIMEOUT_MS,
+          signal: init.signal,
+          headers: range ? { Range: range } : {},
+        });
+        return response;
+      },
+    });
+    return { entry: direct, source };
   }
 
   async function fetchDataset(entry, bbox) {
+    const count = subrequests();
     if (entry.source.format === 'geoparquet') {
-      const reader = readerFor(entry);
+      const reader = readerFor(entry, count);
       const result = await reader.source.loadDataset(reader.entry, { bbox });
       return { ...result, fetchedAt: now() };
     }
     const collection = await loadLibraryDataset(
       entry,
       async (url, budget) => {
+        count();
         const { response, signal } = await okUpstream(entry, url, {
           timeoutMs: DATASET_TIMEOUT_MS,
         });
@@ -296,7 +331,12 @@ export function createLibraryHandler({
 
   function failure(error) {
     if (error?.status === 429) return json(429, { error: 'rate_limited' });
-    if (error?.status === 503) return json(503, { error: 'key_missing' });
+    if (error?.status === 503)
+      return json(503, {
+        error: ['subrequest_limit', 'index_unavailable'].includes(error.message)
+          ? error.message
+          : 'key_missing',
+      });
     return json(502, { error: 'library_upstream_unavailable' });
   }
 
@@ -317,8 +357,10 @@ export function createLibraryHandler({
         key,
         entry.source.cacheSeconds * 1000,
         async () => {
+          const count = subrequests();
           const built = await buildPartitionIndex(entry, {
             fetchImpl: async (url, options = {}) => {
+              count();
               const range = new Headers(options.headers).get('range');
               const { response } = await upstream(entry, String(url), {
                 timeoutMs: INDEX_TIMEOUT_MS,
@@ -428,7 +470,11 @@ export function createLibraryHandler({
     const path = url.pathname.startsWith(base)
       ? url.pathname.slice(base.length)
       : url.pathname;
-    const parts = path.split('/').filter(Boolean);
+    // One spelling per resource, so a cache keyed on the path holds each
+    // tile or answer once: no empty segments, no trailing slash.
+    const parts = path.replace(/^\//, '').split('/');
+    if (parts.some((part) => part === ''))
+      return json(404, { error: 'unknown_entry' });
     const availability = libraryAvailability(shown, env);
 
     if (parts.length === 1 && parts[0] === 'catalog') {

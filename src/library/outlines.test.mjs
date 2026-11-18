@@ -70,9 +70,8 @@ test('a bbox outline is the coverage rectangle, with no border file needed', () 
 });
 
 test('outlines come from the bundled Natural Earth countries, closed and in coverage', async () => {
-  const { loadCountryOutlines, resetCountryOutlines } = await import(
-    './outlines.js'
-  );
+  const { loadCountryOutlines, resetCountryOutlines } =
+    await import('./outlines.js');
   resetCountryOutlines();
   const countries = await loadCountryOutlines();
   for (const id of ['ign-orthophotos-france', 'ee-maa-amet-ortofoto']) {

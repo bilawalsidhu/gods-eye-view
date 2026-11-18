@@ -151,6 +151,16 @@ export function staticLibraryAvailability(entries) {
   );
 }
 
+/** Every entry unavailable and left out of the list. */
+function unlisted(entries) {
+  return new Map(
+    entries.map(({ id }) => [
+      id,
+      { available: false, reason: 'server-unavailable', listed: false },
+    ]),
+  );
+}
+
 /**
  * @param {object} options
  * @param {object[]} options.entries
@@ -166,6 +176,17 @@ export function staticLibraryAvailability(entries) {
  * @param {(request: { entry: object, url: string, signal?: AbortSignal }) => Promise<Response>} [options.fetchData]
  *   Fetches a proxied dataset's answer from the library server in place of
  *   `fetchImpl`.
+ * @param {boolean} [options.requireCatalog] Offer only what the server's
+ *   catalog names: while it does not answer, nothing is offered (and
+ *   `getAvailability` says `retry`), rather than every browser-direct entry.
+ * @param {Map<string, object[]>} [options.partitionCache] Decoded GeoParquet
+ *   partitions, most recent last, shared by sources given the same map; at
+ *   most four are kept.
+ * @param {(entry: object, init: { signal?: AbortSignal }) => Promise<Response>} [options.fetchIndex]
+ *   Fetches a partitioned entry's index (`{ partitions, complete }`) in
+ *   place of the library server's `/index/<id>`.
+ * @param {boolean} [options.buildIndex] Build a partition index here when
+ *   no complete one can be fetched; false uses an incomplete one or fails.
  */
 export function createLibrarySource({
   entries,
@@ -173,6 +194,10 @@ export function createLibrarySource({
   base = LIBRARY_API_BASE,
   fetchTile = null,
   fetchData = null,
+  requireCatalog = false,
+  partitionCache = new Map(),
+  fetchIndex = null,
+  buildIndex = true,
   storage = null,
   now = () => Date.now(),
   loadParquet = () => import('./parquet.js'),
@@ -180,10 +205,12 @@ export function createLibrarySource({
   const known = new Set(entries.map(({ id }) => id));
   /** Entries the library server routes through itself (its catalog says). */
   const routed = new Set();
+  // What the last catalog answer offered; with `requireCatalog`, nothing
+  // else is ever loaded.
+  const offered = new Set();
   const isProxied = (entry) =>
     entry.source.fetch === 'proxied' || routed.has(entry.id);
   const indexes = new Map();
-  const partitionCache = new Map();
 
   /**
    * A partitioned entry's index: from this app's server (built once and
@@ -223,11 +250,13 @@ export function createLibrarySource({
           : null;
       let partial = null;
       try {
-        const response = base
-          ? await fetchImpl(`${base}/index/${encodeURIComponent(entry.id)}`, {
-              headers: { Accept: 'application/json' },
-            })
-          : null;
+        const response = fetchIndex
+          ? await fetchIndex(entry, {})
+          : base
+            ? await fetchImpl(`${base}/index/${encodeURIComponent(entry.id)}`, {
+                headers: { Accept: 'application/json' },
+              })
+            : null;
         if (response?.ok) {
           const body = await response.json();
           if (Array.isArray(body?.partitions)) {
@@ -244,6 +273,10 @@ export function createLibrarySource({
         now() - storedComplete.savedAt < entry.source.cacheSeconds * 1000
       )
         return { partitions: storedComplete.partitions, complete: true };
+      if (!buildIndex) {
+        if (partial) return { partitions: partial, complete: false };
+        throw Object.assign(new Error('index_unavailable'), { status: 503 });
+      }
       // The server's index is incomplete, or there is no server: build here.
       const { buildPartitionIndex } = await loadParquet();
       const built = await buildPartitionIndex(entry, { fetchImpl });
@@ -393,9 +426,15 @@ export function createLibrarySource({
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const body = await response.json();
-      const availability = staticLibraryAvailability(entries);
+      if (!Array.isArray(body?.entries)) throw new Error('no catalog');
+      // A required catalog is an allowlist: what it does not name is not
+      // offered.
+      const availability = requireCatalog
+        ? unlisted(entries)
+        : staticLibraryAvailability(entries);
       routed.clear();
-      for (const row of Array.isArray(body?.entries) ? body.entries : []) {
+      offered.clear();
+      for (const row of body.entries) {
         if (!known.has(row?.id)) continue;
         // An entry the server does not list is not offered at all.
         const listed = row.listed !== false;
@@ -408,14 +447,21 @@ export function createLibrarySource({
           ...(listed ? {} : { listed: false }),
         });
         if (listed && row.fetch === 'proxied') routed.add(row.id);
+        if (available) offered.add(row.id);
       }
       return { server: true, availability };
     } catch (error) {
       if (signal?.aborted) throw error;
-      return {
-        server: false,
-        availability: staticLibraryAvailability(entries),
-      };
+      // Without the server's word, a required catalog offers nothing (the
+      // caller asks again later); otherwise the static rule applies.
+      routed.clear();
+      offered.clear();
+      return requireCatalog
+        ? { server: false, availability: unlisted(entries), retry: true }
+        : {
+            server: false,
+            availability: staticLibraryAvailability(entries),
+          };
     }
   }
 
@@ -427,6 +473,8 @@ export function createLibrarySource({
    * @returns {Promise<{ features: object[], truncated: boolean }>}
    */
   async function loadDataset(entry, { signal, bbox = null } = {}) {
+    if (requireCatalog && !offered.has(entry.id))
+      throw new Error(`${entry.id} is not offered by the library server`);
     if (isProxied(entry)) {
       // A view-bounded entry asks for its snapped box (`libraryViewBox`),
       // so nearby views share one answer.
@@ -518,5 +566,11 @@ export function createLibrarySource({
     return (request) => fetchTile({ ...request, entry });
   }
 
-  return { getAvailability, loadDataset, tileTemplate, tileFetch };
+  return {
+    getAvailability,
+    loadDataset,
+    tileTemplate,
+    tileFetch,
+    requireCatalog,
+  };
 }
