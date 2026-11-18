@@ -670,6 +670,64 @@ test('a worded getter that starts throwing keeps the last good words', () => {
   assert.equal(ride.labels.view, 'Ride view');
 });
 
+for (const form of ['function', 'getter']) {
+  test(`worded members (as a ${form}) that throw from their second read keep the words checked at registration`, () => {
+    const definition = provider();
+    for (const [key, value] of Object.entries({
+      labels: { view: 'Ride view', exit: 'Exit ride view', exitText: 'EXIT' },
+      entryFace: { icon: 'commute', label: 'RIDE' },
+      look: { restPitchDeg: 10, aheadLabel: 'Look ahead' },
+    })) {
+      let read = false;
+      const once = () => {
+        if (read) throw new Error('word bundle unloaded');
+        read = true;
+        return value;
+      };
+      if (form === 'function') definition[key] = once;
+      else Object.defineProperty(definition, key, { get: once });
+    }
+    const { kept, warnings } = keep([definition]);
+    assert.deepEqual(warnings, []);
+    const [ride] = kept;
+    assert.equal(ride.labels.view, 'Ride view');
+    assert.equal(ride.entryFace.label, 'RIDE');
+    assert.deepEqual(ride.look, { restPitchDeg: 10, aheadLabel: 'Look ahead' });
+  });
+}
+
+test('a worded member that returns a rejected promise keeps the last good words, the rejection caught', async () => {
+  const definition = provider();
+  const words = definition.labels;
+  let reads = 0;
+  definition.labels = () => {
+    reads += 1;
+    return reads === 1 ? words : Promise.reject(new Error('late words'));
+  };
+  const { kept, warnings } = keep([definition]);
+  assert.deepEqual(warnings, []);
+  assert.equal(kept[0].labels.view, words.view);
+  // An unhandled rejection would fail this test once it surfaces.
+  await new Promise((resolve) => setTimeout(resolve, 10));
+});
+
+test('a frame field read through a getter is read once', () => {
+  const frame = { id: 'a1', latitude: 1, longitude: 2, eye: { upM: 3 } };
+  const once = (value) => {
+    let read = false;
+    return () => {
+      const answer = read ? undefined : value;
+      read = true;
+      return answer;
+    };
+  };
+  Object.defineProperty(frame, 'heightM', { get: once(420) });
+  Object.defineProperty(frame, 'speedMps', { get: once(12) });
+  const normalized = cockpitSubjectFrame(frame, 'a1');
+  assert.equal(normalized.heightM, 420);
+  assert.equal(normalized.speedMps, 12);
+});
+
 test('a candidate, frame or HUD view whose getter throws reads as null', () => {
   assert.equal(
     cockpitSubjectCandidate(throwingGetter({ name: 'Example' }, 'id')),

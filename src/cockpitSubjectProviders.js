@@ -118,20 +118,31 @@ function lookOf(raw) {
 }
 
 /**
- * A provider's worded member `key` as it reads now, normalized: the value,
- * or what the function it is returns when called on `provider` (so it can
- * follow the page's language); null when it is malformed or a read throws.
- * Reading the member, and reading what it gives, runs provider code too (a
- * getter), so both are guarded as the call is.
+ * A worded member's `value` normalized: the value, or what it returns when it
+ * is a function called on `provider` (so it can follow the page's language);
+ * null when it is malformed or a read throws. Reading what it gives runs
+ * provider code too (a getter), so it is guarded as the call is; a promise is
+ * malformed, and its rejection is caught rather than left unhandled.
  */
+function worded(provider, value, normalize) {
+  try {
+    const words = typeof value === 'function' ? value.call(provider) : value;
+    if (typeof words?.then === 'function') {
+      Promise.resolve(words).catch(() => {});
+      return null;
+    }
+    return normalize(words) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** A provider's worded member `key` as it reads now (see `worded`). */
 function wordedNow(provider, key, normalize) {
   try {
-    const value = provider[key];
-    return (
-      normalize(typeof value === 'function' ? value.call(provider) : value) ??
-      null
-    );
+    return worded(provider, provider[key], normalize);
   } catch {
+    // A getter for the member threw.
     return null;
   }
 }
@@ -146,12 +157,8 @@ function providerName(provider, order) {
   return `#${order}`;
 }
 
-/**
- * Why `provider` cannot be kept, or null. Its worded members, read once here,
- * go into `words` (`face`, `labels`, `look`) to seed its copy, so one that
- * fails when read again cannot undo this check.
- */
-function refusal(provider, kinds, words) {
+/** Why `provider` cannot be kept, its worded members aside, or null. */
+function refusal(provider, kinds) {
   if (!isObject(provider)) return 'not an object';
   if (typeof provider.kind !== 'string' || !KIND_PATTERN.test(provider.kind))
     return 'malformed kind';
@@ -169,15 +176,23 @@ function refusal(provider, kinds, words) {
     typeof provider.isEntryAllowed !== 'function'
   )
     return 'isEntryAllowed is not a function';
-  words.face = wordedNow(provider, 'entryFace', faceOf);
-  if (!words.face) return 'malformed entry face';
-  words.labels = wordedNow(provider, 'labels', labelsOf);
-  if (!words.labels) return 'labels need view, exit and exitText';
-  if (provider.look != null) {
-    words.look = wordedNow(provider, 'look', lookOf);
-    if (!words.look) return 'look needs an aheadLabel';
-  }
   return null;
+}
+
+/**
+ * A provider's worded members, each read once, to seed its copy (so one that
+ * fails when read again cannot undo this check), or why one is malformed.
+ * @returns {{face: object, labels: object, look: ?object}|string}
+ */
+function checkedWords(provider) {
+  const face = wordedNow(provider, 'entryFace', faceOf);
+  if (!face) return 'malformed entry face';
+  const labels = wordedNow(provider, 'labels', labelsOf);
+  if (!labels) return 'labels need view, exit and exitText';
+  const lookValue = provider.look;
+  if (lookValue == null) return { face, labels, look: null };
+  const look = worded(provider, lookValue, lookOf);
+  return look ? { face, labels, look } : 'look needs an aheadLabel';
 }
 
 /**
@@ -198,7 +213,8 @@ function refusal(provider, kinds, words) {
  *   object: it is called on the provider again whenever they are shown and
  *   when the page's language changes, so its words can follow it
  *   (`./i18n`). A read that throws or is malformed keeps the last
- *   good one; `look` is on or off and `restPitchDeg` fixed as first read;
+ *   good one; `look` is on or off and `restPitchDeg` fixed as read at
+ *   registration;
  * - `cameraIntervalMs` (optional): 0..1000, null for the Cockpit's default; 0
  *   updates the camera every rendered frame;
  * - `headingSlewDps` (optional): how fast the view turns to a new heading,
@@ -229,10 +245,13 @@ export function cockpitSubjectProviders(
   (Array.isArray(list) ? list : []).forEach((provider, order) => {
     let reason;
     let copy = null;
-    const words = { face: null, labels: null, look: null };
     try {
-      reason = refusal(provider, kinds, words);
-      if (!reason) copy = keptProvider(provider, order, words);
+      reason = refusal(provider, kinds);
+      if (!reason) {
+        const words = checkedWords(provider);
+        if (typeof words === 'string') reason = words;
+        else copy = keptProvider(provider, order, words);
+      }
     } catch {
       reason = 'a member threw when read';
     }
@@ -250,14 +269,14 @@ export function cockpitSubjectProviders(
 }
 
 /**
- * The frozen copy the Cockpit keeps of a provider `refusal` passed, seeded
- * with the worded members it checked.
+ * The frozen copy the Cockpit keeps of a provider that passed `refusal`,
+ * seeded with the worded members `checkedWords` read.
  */
 function keptProvider(provider, order, words) {
   // Worded members are read again on each use (see above); the last good
   // read stands in for one that is malformed or throws.
   let { face, labels, look } = words;
-  // On or off, and its rest pitch, as first read.
+  // Look stays on or off, at its rest pitch, as read at registration.
   const restPitchDeg = look?.restPitchDeg ?? 0;
   return Object.freeze({
     kind: provider.kind,
@@ -345,8 +364,8 @@ function candidateOf(raw) {
  * read of it that throws (a getter runs provider code).
  * A `heightM` that is not finite or lies outside
  * COCKPIT_SUBJECT_MIN_HEIGHT_M..COCKPIT_SUBJECT_MAX_HEIGHT_M reads as null:
- * the eye then stands on the shared floor, or where it last stood while that
- * is cold. The anchor is `'inertial'` by default for a frame with a valid
+ * the eye then stands on the shared floor, or at the last height a frame gave,
+ * the entry frame's included, while that is cold. The anchor is `'inertial'` by default for a frame with a valid
  * speed, and `'exact'` when asked for or with no speed. An id is compared
  * with `heldId` trimmed, as `cockpitSubjectCandidate` trims it.
  * @param {unknown} raw What `read()` returned.
@@ -376,18 +395,20 @@ function frameOf(raw, heldId) {
   const heading = (value) =>
     finite(value) ? ((value % 360) + 360) % 360 : null;
   const headingDeg = heading(raw.headingDeg);
-  const speedMps =
-    finite(raw.speedMps) && raw.speedMps >= 0 ? raw.speedMps : null;
+  // Each read once: a getter on the frame runs provider code.
+  const rawSpeedMps = raw.speedMps;
+  const speedMps = finite(rawSpeedMps) && rawSpeedMps >= 0 ? rawSpeedMps : null;
+  const rawHeightM = raw.heightM;
   return {
     id: heldId,
     name: cockpitSubjectText(raw.name, 64) || cockpitSubjectText(heldId, 64),
     latitude,
     longitude: ((((longitude + 180) % 360) + 360) % 360) - 180,
     heightM:
-      finite(raw.heightM) &&
-      raw.heightM >= COCKPIT_SUBJECT_MIN_HEIGHT_M &&
-      raw.heightM <= COCKPIT_SUBJECT_MAX_HEIGHT_M
-        ? raw.heightM
+      finite(rawHeightM) &&
+      rawHeightM >= COCKPIT_SUBJECT_MIN_HEIGHT_M &&
+      rawHeightM <= COCKPIT_SUBJECT_MAX_HEIGHT_M
+        ? rawHeightM
         : null,
     headingDeg,
     courseDeg: heading(raw.courseDeg) ?? headingDeg,

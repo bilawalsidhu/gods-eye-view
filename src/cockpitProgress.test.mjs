@@ -155,9 +155,12 @@ test('a CJK stop name gets the width its full-width glyphs need', () => {
     givenPx >= needPx,
     `${givenPx} px given, about ${needPx} px needed`,
   );
-  // Latin, and half-width katakana, keep the narrower estimate.
-  assert.equal(estimateProgressLabelPx({ text: 'CENTRAL' }), 7 * 6.4 + 8);
-  assert.equal(estimateProgressLabelPx({ text: 'ｶﾀｶﾅ' }), 4 * 6.4 + 8);
+  // As many Latin letters are narrower; half-width katakana are as narrow.
+  assert.ok(givenPx > estimateProgressLabelPx({ text: 'CENTRALS' }));
+  assert.equal(
+    estimateProgressLabelPx({ text: 'ｶﾀｶﾅ' }),
+    estimateProgressLabelPx({ text: 'KANA' }),
+  );
 });
 
 test('emoji and other astral glyphs in a progress label get at least 1 em each', () => {

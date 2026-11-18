@@ -30,9 +30,13 @@ const TONE_RANK = Object.freeze([
 const stronger = (a, b) =>
   TONE_RANK.indexOf(b) > TONE_RANK.indexOf(a) ? b : a;
 
-/** Full-width glyphs (CJK, kana, Hangul, full-width forms): about 1 em each. */
+/**
+ * Full-width glyphs in the BMP (CJK, kana, Hangul, full-width forms): about
+ * 1 em each. Astral ones (CJK extensions, emoji) are wide enough as any
+ * other two UTF-16 units (lineWidthPx).
+ */
 const WIDE_GLYPH =
-  /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꥠ-꥿가-힣豈-﫿︰-﹏＀-｠￠-￦\u{20000}-\u{3fffd}]/u;
+  /[\u1100-\u115F\u2E80-\u303E\u3041-\u33FF\u3400-\u4DBF\u4E00-\u9FFF\uA960-\uA97F\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6]/;
 
 /**
  * One line's width (px) in `.cockpit-progress-label` type (cockpitSubject.css:

@@ -27,6 +27,10 @@ import { fakeScenePorts } from '../testSupport/fakeCesiumScene.mjs';
 const LAT = 47;
 const LON = 8;
 const FLOOR_M = 400;
+/** Metres in a degree of longitude at LAT. */
+const M_PER_DEG_LON = 111_320 * Math.cos(Cesium.Math.toRadians(LAT));
+/** The longitude `m` metres east of LON. */
+const eastM = (m) => LON + m / M_PER_DEG_LON;
 
 /** A HUD view model as a provider words it. */
 const HUD = Object.freeze({
@@ -560,7 +564,7 @@ test('a subject updated every 500 ms turns, eases and closes on its target at it
   ride.subject.frame = {
     ...ride.subject.frame,
     headingDeg: 180,
-    longitude: LON + 100 / (111_320 * Math.cos(Cesium.Math.toRadians(LAT))),
+    longitude: eastM(100),
   };
   setFloor(FLOOR_M + 3.5);
   clock.advance(500);
@@ -588,20 +592,35 @@ test('a subject updated every 500 ms turns, eases and closes on its target at it
   assert.ok(Math.abs(cockpit.heading - 110) < 1e-6, 'at most 1.5 s');
 });
 
-test('an inertial subject drawn at 5 frames a second stays near its target', async (t) => {
+test('a subject turning at the largest finite rate reaches its heading after a late update', async (t) => {
   const clock = manualClock(t, 10_000);
+  const ride = subjectProvider({
+    cameraIntervalMs: 500,
+    headingSlewDps: Number.MAX_VALUE,
+  });
+  const { cockpit } = fixture(t, { providers: [ride] });
+  cockpit.syncEntry();
+  assert.equal(cockpit.enter(), true);
+  clock.advance(500);
+  cockpit.update();
+  ride.subject.frame = { ...ride.subject.frame, headingDeg: 180 };
+  // A 1.5 s step: the rate times it overflows to Infinity.
+  clock.advance(1500);
+  cockpit.update();
+  assert.equal(cockpit.heading, 180);
+});
+
+test('an inertial subject drawn at 5 frames a second stays near its target', async (t) => {
+  const startMs = 10_000;
+  const clock = manualClock(t, startMs);
   const ride = subjectProvider();
   const SPEED_MPS = 30;
-  const startMs = 10_000;
-  const eastOf = (ms) =>
-    LON +
-    (SPEED_MPS * (ms - startMs)) /
-      1000 /
-      (111_320 * Math.cos((LAT * Math.PI) / 180));
-  let nowMs = startMs;
+  const eastNow = () =>
+    eastM((SPEED_MPS * (performance.now() - startMs)) / 1000);
+  const base = ride.subject.frame;
   ride.subject.frame = () => ({
-    ...subjectProvider().subject.frame,
-    longitude: eastOf(nowMs),
+    ...base,
+    longitude: eastNow(),
     speedMps: SPEED_MPS,
     anchor: 'inertial',
   });
@@ -610,14 +629,9 @@ test('an inertial subject drawn at 5 frames a second stays near its target', asy
   assert.equal(cockpit.enter(), true);
   for (let i = 0; i < 300; i += 1) {
     clock.advance(200);
-    nowMs += 200;
     cockpit.update();
   }
-  const target = Cesium.Cartesian3.fromDegrees(
-    eastOf(nowMs),
-    LAT,
-    FLOOR_M + 3.5,
-  );
+  const target = Cesium.Cartesian3.fromDegrees(eastNow(), LAT, FLOOR_M + 3.5);
   const gapM = Cesium.Cartesian3.distance(shots.at(-1).destination, target);
   assert.ok(
     gapM < 50,
@@ -633,15 +647,14 @@ for (const [intervalMs, waitMs] of [
     const startMs = 10_000;
     const clock = manualClock(t, startMs);
     const SPEED_MPS = 30;
-    const mPerDegLon = 111_320 * Math.cos(Cesium.Math.toRadians(LAT));
-    const eastOf = () =>
-      LON + (SPEED_MPS * (performance.now() - startMs)) / 1000 / mPerDegLon;
+    const eastNow = () =>
+      eastM((SPEED_MPS * (performance.now() - startMs)) / 1000);
     const ride = subjectProvider({ cameraIntervalMs: intervalMs });
     const base = ride.subject.frame;
     ride.subject.frame = () => ({
       ...base,
       heightM: null,
-      longitude: eastOf(),
+      longitude: eastNow(),
       speedMps: SPEED_MPS,
       anchor: 'inertial',
       eye: { ...base.eye, forwardM: 0 },
@@ -666,7 +679,7 @@ for (const [intervalMs, waitMs] of [
     cockpit.update();
     const shot = Cesium.Cartographic.fromCartesian(shots[before].destination);
     const leadM =
-      (Cesium.Math.toDegrees(shot.longitude) - eastOf()) * mPerDegLon;
+      (Cesium.Math.toDegrees(shot.longitude) - eastNow()) * M_PER_DEG_LON;
     assert.ok(
       Math.abs(leadM) < 1,
       `the first camera update leads the subject by ${leadM.toFixed(2)} m`,
@@ -949,31 +962,46 @@ test('a floor that never comes ends the view after the bounded wait, releasing t
   assert.deepEqual(lastRelease(ride.calls), ['release', 'a1', false]);
 });
 
-test('a height the entry frame gave holds while later frames give none and the floor is cold', async (t) => {
-  const clock = manualClock(t, 10_000);
-  const ride = subjectProvider();
-  const { cockpit, shots, setFloor } = fixture(t, { providers: [ride] });
-  setFloor(undefined);
-  cockpit.syncEntry();
-  // The entry frame stands at FLOOR_M (heightM 400).
-  assert.equal(cockpit.enter(), true);
-  ride.subject.frame = { ...ride.subject.frame, heightM: null };
-  for (
-    let elapsed = 0;
-    elapsed < COCKPIT_GROUND_WAIT_TIMEOUT_MS + 1000;
-    elapsed += 100
-  ) {
+for (const entryHeightM of [0, FLOOR_M]) {
+  test(`a height the entry frame gave (${entryHeightM} m) holds while later frames give none and the floor is cold`, async (t) => {
+    const clock = manualClock(t, 10_000);
+    const ride = subjectProvider();
+    ride.subject.frame = { ...ride.subject.frame, heightM: entryHeightM };
+    const { cockpit, shots, setFloor } = fixture(t, { providers: [ride] });
+    setFloor(undefined);
+    cockpit.syncEntry();
+    assert.equal(cockpit.enter(), true);
+    ride.subject.frame = { ...ride.subject.frame, heightM: null };
+    const waitPastTimeout = () => {
+      for (
+        let elapsed = 0;
+        elapsed < COCKPIT_GROUND_WAIT_TIMEOUT_MS + 1000;
+        elapsed += 100
+      ) {
+        clock.advance(100);
+        cockpit.update();
+      }
+    };
+    waitPastTimeout();
+    assert.equal(
+      cockpit.active,
+      true,
+      'the view keeps the height its entry frame gave',
+    );
+    assert.ok(shots.length > 0, 'the camera is placed');
+    assert.ok(Math.abs(shotHeight(shots) - (entryHeightM + 3.5)) < 0.01);
+    // A floor that comes takes over, and is kept once it is cold again.
+    const floorM = FLOOR_M - 100;
+    setFloor(floorM);
     clock.advance(100);
     cockpit.update();
-  }
-  assert.equal(
-    cockpit.active,
-    true,
-    'the view keeps the height its entry frame gave',
-  );
-  assert.ok(shots.length > 0, 'the camera is placed');
-  assert.ok(Math.abs(shotHeight(shots) - (FLOOR_M + 3.5)) < 0.01);
-});
+    assert.ok(Math.abs(shotHeight(shots) - (floorM + 3.5)) < 0.01);
+    setFloor(undefined);
+    waitPastTimeout();
+    assert.equal(cockpit.active, true);
+    assert.ok(Math.abs(shotHeight(shots) - (floorM + 3.5)) < 0.01);
+  });
+}
 
 test('an asynchronous hold that lands after entry was refused is released again', async (t) => {
   let heldId = null;
@@ -1054,39 +1082,28 @@ test('a provider’s labels, entry face and look follow a change of language', a
   );
 });
 
-/** Labels that read well once, when the provider is checked, then throw. */
-const GOOD_LABELS = Object.freeze({
-  view: 'Ride view',
-  exit: 'Exit ride view',
-  exitText: 'EXIT RIDE',
-  kicker: 'RIDE',
-});
-const labelsOnce = () => {
-  let reads = 0;
-  return function labels() {
-    reads += 1;
-    if (reads > 1) throw new Error('word bundle unloaded');
-    return GOOD_LABELS;
-  };
-};
-
-test('labels that start throwing after the first read keep the first good words', () => {
-  const warned = [];
-  const [kept] = cockpitSubjectProviders(
-    [{ ...subjectProvider().definition, labels: labelsOnce() }],
-    { warn: (message) => warned.push(message) },
-  );
-  assert.ok(kept, 'the provider is kept');
-  assert.deepEqual({ ...kept.labels }, GOOD_LABELS);
-});
-
-test('entering such a provider with no HUD kicker does not throw', async (t) => {
+test('a provider whose labels throw after registration enters with no HUD kicker', async (t) => {
   manualClock(t, 10_000);
-  const ride = subjectProvider({ labels: labelsOnce() });
+  let read = false;
+  const ride = subjectProvider({
+    labels() {
+      if (read) throw new Error('word bundle unloaded');
+      read = true;
+      return {
+        view: 'Tram view',
+        exit: 'Exit tram view',
+        exitText: 'EXIT TRAM',
+        kicker: 'TRAM 4',
+      };
+    },
+  });
   ride.subject.hud = { title: 'Example 12' };
-  const { cockpit } = fixture(t, { providers: [ride] });
+  const { $, cockpit } = fixture(t, { providers: [ride] });
   cockpit.syncEntry();
-  assert.doesNotThrow(() => cockpit.enter());
+  assert.equal(cockpit.enter(), true);
+  await settle();
+  // The kicker checked at registration stands in for the HUD view's.
+  assert.equal($('.cockpit-kicker').textContent, 'TRAM 4');
 });
 
 test('a read that throws ends the view once; a hud that throws keeps the last', async (t) => {
@@ -1320,6 +1337,9 @@ test('the same double-click on the vessel alone enters its bridge', async (t) =>
   cockpit.syncEntry();
   assert.equal(store.presence.entryKind, 'vessel');
   assert.equal(cockpit.onSceneDoubleClick({ x: 100, y: 100 }), true);
+  await settle();
+  assert.equal(store.presence.active, true, 'the bridge is entered');
+  assert.equal(cockpit.subjectKind, 'vessel');
 });
 
 test('a provider view with look turns with the arrow keys and words its readout', async (t) => {
@@ -1374,27 +1394,35 @@ test('a signal still listed stays in Live Signals while another one changes', as
   // The real Live Signals rows, not the fixture's recorder.
   delete cockpit.pushCockpitSignal;
   delete cockpit.dropCockpitSignal;
+  // The ETA is logged first, so it stands below the warning.
   const hudWith = (minutes) => ({
     ...HUD,
     signals: [
+      { id: 'eta', title: 'NEXT', detail: `Central in ${minutes} min` },
       {
         id: 'doors',
         tone: 'warning',
         title: 'DOORS',
         detail: 'door fault, car 2',
       },
-      { id: 'eta', title: 'NEXT', detail: `Central in ${minutes} min` },
     ],
   });
+  const etaRow = () =>
+    cockpit.signalItems.find((row) => row.key === 'subject:eta');
   ride.subject.hud = hudWith(10);
   cockpit.syncEntry();
   assert.equal(cockpit.enter(), true);
+  const keysAtEntry = cockpit.signalItems.map((row) => row.key);
+  const etaFirstSeen = etaRow().timestamp;
   for (let minutes = 9; minutes >= 2; minutes -= 1) {
     ride.subject.hud = hudWith(minutes);
     clock.advance(1000);
     cockpit.update();
   }
   const keys = cockpit.signalItems.map((row) => row.key);
+  // Each row keeps its place, and the ETA the time it first appeared.
+  assert.deepEqual(keys, keysAtEntry);
+  assert.equal(etaRow().timestamp, etaFirstSeen);
   assert.ok(
     keys.includes('subject:doors'),
     `the warning the HUD still lists is shown (rows: ${keys.join(', ')})`,

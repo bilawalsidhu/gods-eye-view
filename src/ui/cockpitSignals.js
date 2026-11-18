@@ -42,8 +42,9 @@ export function publishCockpitSignals() {
 /**
  * Log a signal as the newest row, unless its key last said the same.
  * @param {{inPlace?: boolean}} [options] `inPlace`: a status row, such as a
- *   provider's, that changes where it stands rather than log a new row, and
- *   comes back if newer rows pushed it off the list.
+ *   provider's, that changes where it stands rather than log a new row, so a
+ *   changing ETA never pushes a steady warning off the list; it keeps the
+ *   time it first appeared, and comes back if newer rows pushed it off.
  */
 export function pushCockpitSignal(
   key,

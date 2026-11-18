@@ -411,7 +411,9 @@ function updateSubject(nowMs) {
         : slewHeading(
             this.heading ?? frame.headingDeg,
             frame.headingDeg,
-            rate * dtSec,
+            // At most half a turn, which reaches any heading: a huge rate times
+            // the step must not overflow to Infinity and stop the turn.
+            Math.min(rate * dtSec, 180),
           );
   }
   let look = null;
@@ -506,8 +508,8 @@ function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
     );
     const correction = sub(target, this.cockpitAnchor);
     const correctionDistanceM = magnitude(correction);
-    // An application subject's step is already bounded by its own update
-    // interval (cockpitSubjectStepSec); the built-in views keep the 0.1 s.
+    // An application subject's step is already bounded (cockpitSubjectStepSec);
+    // the built-in views keep the 0.1 s.
     const correctionStepM = cockpitAnchorCorrectionStep(
       correctionDistanceM,
       speedMps,

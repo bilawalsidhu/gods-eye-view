@@ -58,19 +58,15 @@ export function cockpitAnchorCorrectionStep(
   return Math.min(distanceM, eased, correctionRateMps * dt);
 }
 
-/**
- * How late past its interval a subject's camera update may come and still
- * advance by all of it: a browser drawing a frame a second still keeps up.
- */
+/** How late past its interval an update may come and still count in full. */
 const COCKPIT_SUBJECT_LATE_SEC = 1;
 
 /**
  * The seconds an application subject's camera update advances its heading
  * slew, ground lift and anchor by: the time since the last update, at most
- * its update interval plus a second. A subject updated every 500 ms, or a
- * browser drawing 5 frames a second, then turns, eases and moves at its
- * configured rates, while a long stall (a hidden tab) still moves it no
- * further than one late update would.
+ * its interval plus COCKPIT_SUBJECT_LATE_SEC. A subject updated every 500 ms,
+ * or a browser drawing 5 frames a second, then keeps up, while a long stall
+ * (a hidden tab) counts as one late update.
  * @param {number} elapsedMs Time since the last camera update.
  * @param {number} intervalMs The subject's update interval (0: every frame).
  * @returns {number}

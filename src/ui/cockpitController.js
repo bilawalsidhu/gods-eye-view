@@ -194,7 +194,10 @@ export class CockpitViewController {
     this.surfaceWaitStartedMs = 0;
     this.surfaceAcquiring = false;
     this.surfaceFallback = false;
-    /** The height an application subject's frame last stood at (m). */
+    /**
+     * The last height an application subject's frame gave, the entry frame's
+     * included (m).
+     */
     this.subjectHeightM = null;
     /** The ground clamp's eased lift under that subject's eye (m). */
     this.subjectLiftM = null;
