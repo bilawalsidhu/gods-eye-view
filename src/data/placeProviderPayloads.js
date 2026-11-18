@@ -1,3 +1,7 @@
+// Turn-by-turn steps for a route, as Core's own /api/route serves them with
+// steps=1; a hosted route proxy projects the same OSRM answer.
+export { normalizeOsrmSteps } from './routeSteps.js';
+
 function placeContextPriority(types) {
   const typeSet = new Set(types);
   if (typeSet.has('historical_landmark') || typeSet.has('monument')) return 100;
