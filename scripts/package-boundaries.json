@@ -423,7 +423,11 @@
   },
   "place-payloads": {
     "exports": ["./sources/places"],
-    "modules": ["src/data/placeProviderPayloads.js"],
+    "modules": [
+      "src/data/placeProviderPayloads.js",
+      "src/data/routeSteps.js",
+      "src/data/distanceFormat.js"
+    ],
     "external": []
   },
   "space-providers": {
