@@ -109,6 +109,7 @@ export function createQueries({
       derivedSpeedMps: flightState._drSpeedMps,
       derivedTrackDeg: flightState._drCourseDeg,
       reportedSpeedMps: info?.speedMps,
+      derivedFromPlacement: flightState._drSpeedPlaced === true,
       reportedTrackDeg: info?.track,
     });
     const carto = toLonLatH(basePos);
