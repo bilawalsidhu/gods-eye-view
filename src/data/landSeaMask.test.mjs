@@ -25,7 +25,7 @@ test('the committed mask asset is byte-exact for the frozen layout', () => {
   assert.equal(statSync(fileURLToPath(ASSET_URL)).size, 1_036_816);
   assert.equal(
     createHash('sha256').update(readFileSync(ASSET_URL)).digest('hex'),
-    '82d2973fe937462bc181f913e0fa340ec61fb72bba226fe63cd403ee41efac80',
+    '38bc7dfb353c5dcd41261e3aed2435488f7e01d345432973d369c73e3e2f08db',
     'intentional regeneration must update the asset digest and provenance README',
   );
 });

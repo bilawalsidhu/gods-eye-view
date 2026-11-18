@@ -190,10 +190,9 @@ water, land and coastal-mixed. The packed asset is 1,036,816 bytes and carries
 LGPL-3.0-or-later notices beside it. A pure codec supports separate browser-fetch
 and Node-file loaders; no application consumer is wired yet. Invalid or
 off-globe latitudes return coastal rather than a confident land/water answer.
-The mask/parser/rasterizer and build-input unit suites cover these contracts. This local
-preparation includes an exact shoreline grid-traversal correction, but the
-asset has not yet been regenerated; its new digest and runtime checks remain
-pending before merge.
+The mask/parser/rasterizer and build-input unit suites cover these contracts. Every cell a
+shoreline edge crosses is coastal (exact grid traversal), and a test pins the
+asset's SHA-256.
 
 Shared distance checks use `src/geoDistance.js` with `{ lat, lon }` points and
 the IUGG mean spherical Earth radius, 6371.0088 km. `greatCircleKm` is

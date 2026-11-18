@@ -554,8 +554,7 @@ in this contribution. Composition: L1 land, L2 lakes carved back to water,
 L3 islands-in-lakes land, L4 ponds water, L5 Antarctic ice front land, L6
 grounding line skipped. The regeneration script is committed:
 `node scripts/build-land-sea-mask.mjs path/to/gshhs_i.b`.
-The locally prepared grid-traversal correction still needs asset regeneration
-and an updated output digest before merge; see the folder README.
+Every cell a shoreline edge crosses is coastal-mixed (exact grid traversal).
 
 GSHHG is distributed under the **LGPL, version 3 or later**; this raster is a
 derived work of the data and keeps that license (see the carve-out in
