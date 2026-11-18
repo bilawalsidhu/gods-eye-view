@@ -217,3 +217,18 @@ test('the detail tile cache keeps the 64 most recently used tiles', async () => 
   await placesNear(around(keys[0]), fetchPack);
   assert.equal(tileReads().length, 66);
 });
+
+test('a tile that cannot be read leaves the other places and the cities', async () => {
+  const { placesNear } = await import('./wikidataCities.js?failing');
+  const fetchPack = async (url) =>
+    /_-100\.json$/.test(url.pathname)
+      ? new Response('', { status: 503 })
+      : new Response(await readFile(url));
+  // Around Austin, on the corner of the 30_-100 and 30_-95 tiles.
+  const near = await placesNear(
+    { latitude: 30.27, longitude: -97.74, radiusKm: 300, limit: Infinity },
+    fetchPack,
+  );
+  assert.ok(near.some((place) => place.name === 'Austin'));
+  assert.ok(near.some((place) => place.longitude > -95));
+});

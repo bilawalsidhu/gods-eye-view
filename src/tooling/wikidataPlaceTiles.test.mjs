@@ -24,6 +24,8 @@ test('a tile is named by its south-west corner', () => {
   assert.equal(tileKey(30.343, -97.557), '30_-100');
   assert.equal(tileKey(-0.5, 0), '-5_0');
   assert.equal(tileKey(10.682, -71.036), '10_-75');
+  // In the tiles the lookups read: the top row, and -180 for 180.
+  assert.equal(tileKey(90, 180), '85_-180');
 });
 
 test('re-tiles the shipped rows deterministically', async () => {

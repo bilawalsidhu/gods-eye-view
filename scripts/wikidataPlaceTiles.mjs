@@ -33,7 +33,10 @@ export function withoutCities(rows, cityIds) {
 /** The tile a point falls in, named by its south-west corner. */
 export function tileKey(lat, lon) {
   const corner = (value) => Math.floor(value / TILE_DEGREES) * TILE_DEGREES;
-  return `${corner(lat)}_${corner(lon)}`;
+  // As the lookups read them: latitude 90 is in the top row of tiles, and
+  // longitude 180 is longitude -180.
+  const top = 90 - TILE_DEGREES;
+  return `${Math.min(top, corner(lat))}_${corner((((lon % 360) + 540) % 360) - 180)}`;
 }
 
 /**

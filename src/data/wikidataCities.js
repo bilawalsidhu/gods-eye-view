@@ -251,7 +251,9 @@ async function readPlaceTiles(latitude, longitude, radiusKm, fetchImpl) {
   const keys = tileKeysAround(latitude, longitude, radiusKm).filter(
     (key) => index.tiles[key],
   );
-  return Promise.all(
+  // A tile that cannot be read is left out: the places of the others,
+  // and the cities, are still the answer.
+  const settled = await Promise.allSettled(
     keys.map((key) => {
       let load = tiles.get(key);
       if (load) tiles.delete(key);
@@ -267,6 +269,9 @@ async function readPlaceTiles(latitude, longitude, radiusKm, fetchImpl) {
       return load();
     }),
   );
+  return settled
+    .filter((result) => result.status === 'fulfilled')
+    .map((result) => result.value);
 }
 
 async function readPlacePack(url, fetchImpl) {
@@ -292,7 +297,8 @@ export async function placesNear(
   const radius = Math.min(radiusKm, Math.PI * EARTH_KM);
   const [{ cells }, detail] = await Promise.all([
     loadCities(fetchImpl),
-    readPlaceTiles(latitude, longitude, radius, fetchImpl),
+    // Without the pack's index there are still the cities.
+    readPlaceTiles(latitude, longitude, radius, fetchImpl).catch(() => []),
   ]);
   // A smaller place that has the name of a city within TWIN_KM in the same
   // country is the same place listed twice (a town and its municipality):

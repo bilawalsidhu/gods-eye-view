@@ -53,12 +53,11 @@ const LABEL_BATCH = 400;
 
 const args = process.argv.slice(2);
 const flag = (name) =>
-  args.includes(name) ? Number(args[args.indexOf(name) + 1]) : NaN;
+  args.includes(name) ? Number(args[args.indexOf(name) + 1]) : undefined;
 const tilesMode = args.includes('--tiles');
-const minPopulation = flag('--min-population') || (tilesMode ? 1000 : 15000);
-const maxPopulation = tilesMode
-  ? flag('--max-population') || 15000
-  : flag('--max-population') || Infinity;
+const minPopulation = flag('--min-population') ?? (tilesMode ? 1000 : 15000);
+const maxPopulation =
+  flag('--max-population') ?? (tilesMode ? 15000 : Infinity);
 if (!(maxPopulation > minPopulation))
   throw new Error('--max-population must be above --min-population');
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
