@@ -28,6 +28,10 @@ import {
 } from '../../data/trackingClickGesture.js';
 import { inputFor } from '../../input/dispatcher.js';
 import {
+  COCKPIT_AIR_ALL_ADD_M,
+  COCKPIT_AIR_ALL_KEEP_M,
+  COCKPIT_AIR_PROX_ADD_M,
+  COCKPIT_AIR_PROX_KEEP_M,
   TRAIL_MAX_POINTS,
   TRAIL_COLOR,
   CYAN_TRANSPARENT,
@@ -222,11 +226,13 @@ export function createTracking({
       );
       distancesSquared.push([icao24, distanceSquared(eye, position)]);
     }
+    // The AIR band follows the 3D mode, not the 3D model radius.
+    const all = flightState._models3dMode === 'all';
     const next = nextCockpitNearContacts(
       previous,
       distancesSquared,
-      parts.rendering._modelAddDistM(),
-      parts.rendering._modelKeepDistM(),
+      all ? COCKPIT_AIR_ALL_ADD_M : COCKPIT_AIR_PROX_ADD_M,
+      all ? COCKPIT_AIR_ALL_KEEP_M : COCKPIT_AIR_PROX_KEEP_M,
     );
     flightState._cockpitNearContacts = next;
     for (const icao24 of previous)
@@ -697,10 +703,11 @@ export function createTracking({
     // Hand the contact back to its icon only now: settling floors a grounded
     // contact, and while it still read as tracked its tracked model owned the
     // visual, so the floor would have stepped aside.
-    if (flightState._icons?.has(clearedIcao)) {
-      flightState._icons.setShown(clearedIcao, true);
+    // Its fleet model, kept loaded while it was selected, takes it back in
+    // this frame; the icon shows only when there is no loaded one.
+    parts.rendering._handBackDeselected(clearedIcao);
+    if (flightState._icons?.has(clearedIcao))
       parts.icons._settleIcon(clearedIcao, { fromCourseDeg: trackedCourseDeg });
-    }
     parts.icons._applyIconPresentation(clearedIcao);
     clearTrackedSubjectContext('flights');
     _emitAwarenessEvent('gev:awareness-subject-cleared', {

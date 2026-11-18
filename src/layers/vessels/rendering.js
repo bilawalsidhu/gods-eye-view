@@ -627,11 +627,7 @@ export function createRendering({
       ? findCamera(state.viewer)?.pose()?.position
       : null;
     if (!eye) return;
-    const policy = services.fleet.policy;
-    const keepM =
-      services.fleet.display?.()?.models3dMode === 'all'
-        ? policy.keepAllM
-        : policy.keepM;
+    const keepM = services.fleet.policy.keepM;
     const limitSq = keepM * keepM * 1.44;
     for (const record of state.records.all) {
       const waterline = getVisual(record).waterline;

@@ -19,9 +19,8 @@
  * marker the scene itself hides behind geometry. Everything else keeps its
  * label exactly as before, which covers contacts high above the ground
  * (aircraft, satellites): their markers are drawn on top of the scene by
- * design, their 3D models can be scaled up to a minimum pixel size and so fill
- * the very pixel being read, and a label that hid while its marker stayed on
- * screen would be the worse mismatch.
+ * design, their 3D models can fill the very pixel being read, and a label
+ * that hid while its marker stayed on screen would be the worse mismatch.
  *
  * This file is plain arithmetic; it never touches the renderer.
  */

@@ -7,13 +7,10 @@ import { fetchPublicFile } from './fleetGlb.mjs';
 /** A model policy whose eligibility is read again on every frame. */
 export const FLEET_TEST_POLICY = Object.freeze({
   altitudeCeilingM: 800_000,
-  minimumPixelSize: 16,
   cap: 4,
   capAll: 8,
   addM: 5_000,
-  addAllM: 20_000,
   keepM: 6_000,
-  keepAllM: 24_000,
   intervalMs: 0,
 });
 
