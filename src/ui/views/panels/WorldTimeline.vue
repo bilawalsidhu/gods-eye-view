@@ -20,7 +20,7 @@ import UiSelect from '../../kit/UiSelect.js';
 const store = useWorldTimeStore();
 const { time, speed } = storeToRefs(store);
 const speeds = computed(() => [
-  { value: 'real', label: '1×' },
+  { value: 'real', label: t('Real-time') },
   { value: 'minute', label: t('1 min/s') },
   { value: 'hour', label: t('1 h/s') },
   { value: 'day', label: t('1 d/s') },

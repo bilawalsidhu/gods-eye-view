@@ -2784,36 +2784,47 @@ priority; one first seen together with a built-in subject comes after it. The
 first in that order decides alone: when its gate is shut there is no entry
 rather than the next subject's.
 
-A frame places the eye `eye.upM` above `heightM` (the shared floor where the
-frame gives none, or where it last stood while that floor is cold; with
-neither, the camera stays where it is and the HUD reads ACQUIRING SURFACE for
-at most `COCKPIT_GROUND_WAIT_TIMEOUT_MS`, after which the view ends and the
-subject is released: no height stands in for a floor never read), slews toward `headingDeg` at the provider's rate, and may
-turn off the floor clamps (`groundClamp: false`, for a subject inside a
-structure) or keep the anchor exactly on the subject (`anchor: 'exact'`, for a
-layer that already moves it smoothly; a frame with no `speedMps` is always
-exact, since an inertial anchor runs on at the frame's speed); `cameraIntervalMs: 0` updates the
-camera every rendered frame. A frame that is null, malformed or for another
-subject ends the view (`restoreTracking: false`), as an aircraft tracked
-meanwhile and the provider's layer turning off do; the exit control asks the
-provider to restore its subject. The generic HUD shows the provider's kicker,
-title, meta line, speed with its unit and tag, readout cards, always-visible
-source rows, banner, route card and Live Signals rows, a veil that darkens the
-picture under the HUD (with passing light streaks, which stop under reduced
-motion), arrow-key look-around when the provider asks for it, and a progress
-line along the bottom edge (`src/cockpitProgress.js`: close ticks merge,
-labels never overlap). Core translates none of the provider's text: a host
-words it for the page's language (`gods-eye-view/i18n`:
-`getLocale`, `onLocaleChange`). Its entry face, labels and look may be
-functions, read again when they are shown and on a change of language, as the
-HUD view is.
+A frame places the eye `eye.upM` above `heightM`. With no `heightM` the eye
+stands on the shared floor; while that floor is cold, at the last height it
+stood at (at first the entry frame's). With neither, the camera stays where it
+is and the HUD reads ACQUIRING SURFACE for at most
+`COCKPIT_GROUND_WAIT_TIMEOUT_MS`, after which the view ends and the subject is
+released: no height stands in for a floor never read. The view slews toward
+`headingDeg` at the provider's rate. A frame may turn off the floor clamps
+(`groundClamp: false`, for a subject inside a structure) or keep the anchor
+exactly on the subject (`anchor: 'exact'`, for a layer that already moves it
+smoothly; a frame with no `speedMps` is always exact, since an inertial anchor
+runs on at the frame's speed); `cameraIntervalMs: 0` updates the camera every
+rendered frame. Each update turns the view, eases its lift and moves an inertial
+anchor by the time since the last one, at most a second past the interval
+(`cockpitSubjectStepSec`); an exact anchor stands where the frame is. The first
+update after entry (after any floor wait) stands its anchor on the subject; the
+first height to replace the entry frame's moves the anchor to that height where
+it stands. A frame that is null, malformed or for another subject ends the view
+(`restoreTracking: false`), as an aircraft tracked meanwhile and the provider's
+layer turning off do; the exit control asks the provider to restore its subject.
+The generic HUD shows the provider's kicker, title, meta line, speed with its
+unit and tag, readout cards, always-visible source rows, banner, route card and
+Live Signals rows (each changes in place, its tone included, and keeps its time
+while it stays listed; one pushed off comes back as the newest row; rows the
+view no longer lists leave before new ones come in), a veil that darkens the
+picture under the HUD (with passing light streaks, which stand still under
+reduced motion), arrow-key look-around when the provider asks for it, and a
+progress line along the bottom edge (`src/cockpitProgress.js`: close ticks
+merge, labels never overlap and are sized for CJK, kana and Hangul). Core
+translates none of the provider's text: a host words it for the page's language
+(`gods-eye-view/i18n`: `getLocale`, `onLocaleChange`). Its entry face, labels
+and look may be functions, read again when they are shown and on a change of
+language, as the HUD view is; a read that throws or is malformed keeps the last
+good words, at first those checked when the provider was registered.
 
 The Rail layer offers a read API for such a view: `getSelectedTrain()` and
 `getCockpitSubject()` (a snapshot of the train: where it is along its line,
-which way it runs (`pathBinding.js` learns it), its rail height, speed as
-reported or derived, position source, feed credit and stops, and
-`selectedAtMs`, when the user last selected it by a click or `focusTrain`,
-even again; null after a deselection and for a train only a hold selected),
+which way it runs (`pathBinding.js` learns it), its rail height (null while
+no floor is known), speed as reported or derived, position source, feed
+credit and stops, and `selectedAtMs`, when the user last selected it by a
+click or `focusTrain`, even again; null after a deselection and for a train
+only a hold selected),
 `setCockpitSubject(key)` (its marker, 3D model and card hidden, the selection kept, its
 feed held, clicks and Escape left to the view; the held copy stays the one
 drawn of its train while held, another feed's copy hidden, and it keeps
@@ -2826,14 +2837,23 @@ offers the same for a vehicle (`getSelectedVehicle`, `getCockpitSubject`,
 `setCockpitSubject`, `focusVehicle`): a held vehicle keeps playing when it is
 out of the camera's view, and its sprite, 3D model, card, trail and detection
 box are hidden; released, it is out of play until a visibility sweep finds it in
-view. Its snapshot's `position.groundHeightM` is the floor where playback draws
-it (the drawn marker's height while it is placed, else its segment's two
-reports' floors at the playback fraction), not the newest report's, and null while that floor is unknown. Rail's `path.direction` is the
-way the drawn train runs: once playback has placed it, a report that runs back
-turns it only when playback reaches that report. `docs/APPLICATION.md` (Cockpit subjects) shows a minimal provider. `src/ui/cockpitSubjectView.test.mjs`,
-`src/cockpitSubjectProviders.test.mjs`, `src/cockpitProgress.test.mjs`,
-`src/layers/rail/cockpitSubject.test.mjs` and the Transit lifecycle tests
-cover them.
+view. Turning the layer off ends the hold. Its snapshot's
+`position.groundHeightM` is the floor where playback draws it (the drawn
+marker's height while it is placed, else its segment's two reports' floors at
+the playback fraction), not the newest report's, and null while either of
+those two floors is unknown. Rail's `path.direction` is the way the drawn
+train runs: once playback has told its direction, a report that runs back
+turns it only when playback starts the segment to that report. A train turns
+once it is more than a standing train's GPS jitter back from the last place a
+longer move took it, however slowly it backs, so jitter on either side of
+where it stands keeps its direction, and so does playback's jump to a
+corrected position (a break, or a new clock epoch). While movement gives no
+direction, the snapshot uses the operator's last reported bearing.
+`docs/APPLICATION.md` (Cockpit subjects) shows a minimal provider.
+`src/ui/cockpitSubjectView.test.mjs`, `src/cockpitSubjectProviders.test.mjs`,
+`src/cockpitProgress.test.mjs`, `src/layers/rail/cockpitSubject.test.mjs`,
+`src/layers/rail/pathBinding.test.mjs` and the Transit lifecycle tests cover
+them.
 
 ## Context coordination
 

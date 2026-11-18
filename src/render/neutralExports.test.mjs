@@ -34,6 +34,7 @@ const NEUTRAL = [
   './render/weather',
   './weather/effects',
   './geo/screenCluster',
+  './fleet',
 ];
 
 const fileOf = (key) => path.join(ROOT, PKG.exports[key]);
