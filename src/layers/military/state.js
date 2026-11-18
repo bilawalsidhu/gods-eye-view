@@ -236,6 +236,12 @@ export function createFlightState({ source, services }) {
 
   flightState._drSpeedPlaced = false;
 
+  /** Sibling of `_cachedDRPosition`: whether a host-supplied placement placed
+   *  it (`_drSpeedPlaced` as the tracked aircraft was drawn), so its trail
+   *  ends where it is drawn rather than at the layer's display delay. */
+
+  flightState._cachedDRPlaced = false;
+
   flightState._drCourseHold = false;
 
   /** Set by `_deadReckon`: following the clock, the time drawn is well

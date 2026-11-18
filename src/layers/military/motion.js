@@ -349,6 +349,8 @@ export function createMotion({
     const sameTrack =
       flightState._drReconcileValid && flightState._drReconcileIcao === icao24;
     const raw = _deadReckon(icao24, flightState._scratchDrRaw);
+    flightState._cachedDRPlaced =
+      Boolean(raw) && flightState._drSpeedPlaced === true;
     flightState._cachedDRCourse = flightState._drCourseDeg;
     flightState._cachedDRSpeedMps = flightState._drSpeedMps;
     flightState._cachedDRHold = flightState._drCourseHold;
@@ -474,6 +476,16 @@ export function createMotion({
    *  settled on this frame. Mirror of flights.js: getDetectableObjects + the readout run in postRender,
    *  later in the frame, so recomputing _trackedDisplayPosition there jitters the label against the
    *  now-stable plane. Null when no valid fix (callers fall back to the icon position). */
+
+  /** Whether a host-supplied placement placed the tracked aircraft where
+   *  `_trackedDisplayCached` holds it this frame, rather than this layer's
+   *  own motion at its display delay. */
+
+  function _trackedPlaced() {
+    return (
+      _trackedDisplayCached() !== null && flightState._cachedDRPlaced === true
+    );
+  }
 
   function _trackedDisplayCached() {
     return flightState._drReconcileValid &&
@@ -697,6 +709,7 @@ export function createMotion({
     _trackedFocusSizePx,
     _trackedDisplayPosition,
     _trackedDisplayCached,
+    _trackedPlaced,
     _trackedVisualCached,
     _trackedModelCenterWorld,
     _trackedModelEnvelopeM,
