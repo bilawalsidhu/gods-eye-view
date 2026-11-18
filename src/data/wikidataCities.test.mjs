@@ -1,7 +1,7 @@
-// src/data/wikidataCities.test.mjs — lookups over the bundled Wikidata
-// places packs, with the packs served from memory.
+// src/data/wikidataCities.test.mjs — lookups over fixture and shipped places packs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import {
   citiesWithin,
   foldName,
@@ -118,4 +118,117 @@ test('a country qualifier that matches no namesake finds nothing', async () => {
 test('a lookup wraps at the antimeridian', () => {
   const cells = indexCities([['Taveuni', -16.8, -179.9, 15000, 'FJ', 'Q2']]);
   assert.equal(citiesWithin(cells, -16.8, 179.9, 40).length, 1);
+});
+
+test('small places use the shipped detail tile only when requested', async () => {
+  const { findPlace, placesNear } = await import('./wikidataCities.js?detail');
+  const fetched = [];
+  const fetchPack = async (url) => {
+    fetched.push(url.pathname.split('/').at(-1));
+    return new Response(await readFile(url));
+  };
+  const near = { latitude: 30.343, longitude: -97.557 };
+  const options = { near, radiusKm: 20 };
+  assert.equal(await findPlace('Manor, US', options, fetchPack), null);
+  assert.deepEqual(fetched, ['cities.json']);
+
+  const manor = await findPlace(
+    'Manor, US',
+    { ...options, includeSmallPlaces: true },
+    fetchPack,
+  );
+  assert.equal(manor?.wikidata, 'Q973072');
+  assert.equal(manor?.distanceKm, 0);
+  assert.deepEqual(fetched, ['cities.json', 'index.json', '30_-100.json']);
+
+  const [closest] = await placesNear({ ...near, limit: 1 }, fetchPack);
+  assert.deepEqual(closest, manor);
+  assert.equal(
+    await findPlace(
+      'Manor, France',
+      {
+        ...options,
+        includeSmallPlaces: true,
+      },
+      fetchPack,
+    ),
+    null,
+  );
+  assert.equal(fetched.length, 3);
+});
+
+test('a detail row whose name has no letter is not offered', async () => {
+  const { placesNear } = await import('./wikidataCities.js?unnamed');
+  const fetchPack = async (url) => new Response(await readFile(url));
+  const near = await placesNear(
+    { latitude: 12.126, longitude: -86.281, radiusKm: 1, limit: Infinity },
+    fetchPack,
+  );
+  assert.equal(
+    near.some((place) => place.wikidata === 'Q138762349'),
+    false,
+  );
+  assert.ok(near.every((place) => /\p{L}/u.test(place.name)));
+});
+
+test('a small place that is a city of the same name nearby is listed once', async () => {
+  const { placesNear } = await import('./wikidataCities.js?twins');
+  const fetchPack = async (url) => new Response(await readFile(url));
+  // Perth, Western Australia: the cities pack's Perth (Q3183) and a smaller
+  // listing of it (Q14229145) 1 km apart; villages near Perth name neither
+  // twice.
+  const near = await placesNear(
+    { latitude: -31.952, longitude: 115.861, radiusKm: 20, limit: Infinity },
+    fetchPack,
+  );
+  const perths = near.filter((place) => place.name === 'Perth');
+  assert.deepEqual(
+    perths.map((place) => place.wikidata),
+    ['Q3183'],
+  );
+});
+
+test('the detail tile cache keeps the 64 most recently used tiles', async () => {
+  const { placesNear } = await import('./wikidataCities.js?lru');
+  const index = JSON.parse(
+    await readFile(
+      new URL('./local_data/wikidata_places/index.json', import.meta.url),
+    ),
+  );
+  const keys = Object.keys(index.tiles).slice(0, 66);
+  const fetched = [];
+  const fetchPack = async (url) => {
+    fetched.push(url.pathname.split('/').at(-1));
+    return new Response(await readFile(url));
+  };
+  // The middle of each tile, with a radius inside it.
+  const around = (key) => {
+    const [lat, lon] = key.split('_').map(Number);
+    return { latitude: lat + 2.5, longitude: lon + 2.5, radiusKm: 1 };
+  };
+  for (const key of keys.slice(0, 65)) await placesNear(around(key), fetchPack);
+  const tileReads = () =>
+    fetched.filter((name) => /^-?\d+_-?\d+\.json$/.test(name));
+  assert.equal(tileReads().length, 65);
+  // The first tile was the least recently used, so it is read again; the
+  // most recent one is still kept.
+  await placesNear(around(keys[64]), fetchPack);
+  assert.equal(tileReads().length, 65);
+  await placesNear(around(keys[0]), fetchPack);
+  assert.equal(tileReads().length, 66);
+});
+
+test('a tile that cannot be read leaves the other places and the cities', async () => {
+  const { placesNear } = await import('./wikidataCities.js?failing');
+  const fetchPack = async (url) =>
+    /_-100\.json$/.test(url.pathname)
+      ? new Response('', { status: 503 })
+      : new Response(await readFile(url));
+  // Around Austin, on the corner of the 30_-100 and 30_-95 tiles.
+  const near = await placesNear(
+    { latitude: 30.27, longitude: -97.74, radiusKm: 300, limit: Infinity },
+    fetchPack,
+  );
+  assert.ok(near.some((place) => place.name === 'Austin'));
+  assert.ok(near.some((place) => place.longitude > -95));
 });
