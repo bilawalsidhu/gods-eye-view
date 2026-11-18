@@ -53,10 +53,6 @@ export function createVesselState({ source, services }) {
 
   vesselState._geoidReady = false;
 
-  /** @type {Map<string, string>} `${cssColor}:${variant}` -> chevron SVG data URL */
-
-  vesselState.shipIconCache = new Map();
-
   /** Row ids for unkeyed (no-id) records, which are rebuilt every poll. */
 
   vesselState._unkeyedIconSequence = 0;
@@ -97,6 +93,13 @@ export function createVesselState({ source, services }) {
     trail: null,
     /** @type {{x: number, y: number, z: number}[]} Chronological ECEF trail vertices (oldest first) */
     trailPositions: [],
+    /** @type {number[]} Epoch ms of each trail vertex (NaN: undated, drawn
+     *  at any time), parallel to trailPositions. */
+    trailTimes: [],
+    /** How many trail vertices the body draws now, or -1 before it draws. */
+    trailBodyCount: -1,
+    /** @type {(() => void)|null} Stops drawing the trail's head each frame. */
+    trailHeadOff: null,
     /** @type {string|null} Id of the vessel that owns the active selected-vessel trail. */
     trailId: null,
     /** @type {number} Monotonic token — invalidates in-flight backfill responses */

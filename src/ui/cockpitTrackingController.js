@@ -683,9 +683,11 @@ export function enter({ kind = null } = {}) {
       'track',
       t('TRACK ACQUIRED'),
       // A ship with no true heading is held on its course over ground; one
-      // with neither is named without a direction.
+      // with neither is named without a direction. A ship's course has a
+      // word of its own: pt «RUMO», where an aircraft's is «CURSO».
       info.trackSource === 'course'
         ? t('{label} · COURSE {heading}°', {
+            context: 'vessel',
             label: info.name,
             heading: trackHeading,
           })
@@ -809,10 +811,11 @@ export function exit({ restoreTracking = true } = {}) {
     this.services.satellitesLayer?.refocusTrackedById?.(satelliteSubject);
   }
   this.syncEntry();
-  // Back to whichever entry was used: the Contacts button or the readout's.
+  // Return to the card or readout control that opened Cockpit.
   const readoutEntry = document.getElementById('cockpit-entry-readout');
   const restoreTarget =
     this.entryFocusOrigin === this.entry ||
+    this.entryFocusOrigin?.hasAttribute('data-entity-cockpit-entry') ||
     (readoutEntry && this.entryFocusOrigin === readoutEntry)
       ? this.entryFocusOrigin
       : this.entry || this.entryFocusOrigin;

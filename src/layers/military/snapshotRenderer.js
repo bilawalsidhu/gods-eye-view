@@ -55,8 +55,16 @@ export function createMilitarySnapshotRenderer({
   /**
    * `replace`: the snapshot is the world at another time (the world clock
    * jumped), so it stands in for every contact: one it lacks is gone at once.
+   * `handover`: the first live snapshot after the clock came back to live: it
+   * stands in for every contact too, and those it has keep their icon and
+   * model and ease on from where they are drawn; of those it lacks, only
+   * those absence keeps (judged by their newest fix) stay.
    */
-  return function applySnapshot(snapshot, viewer, { replace = false } = {}) {
+  return function applySnapshot(
+    snapshot,
+    viewer,
+    { replace = false, handover = false } = {},
+  ) {
     // Before init (or after destroy) there is no icon set to draw into.
     if (!flightState._icons) return { count: 0, ids: new Set() };
     const currentIcaos = new Set();
@@ -223,7 +231,7 @@ export function createMilitarySnapshotRenderer({
         // freshness change and the cockpit contract all land on the row's
         // style; motion re-plans from the updated history.
         icons._applyIconPresentation(icao24);
-        icons._planIcon(icao24);
+        icons._planIcon(icao24, handover ? { handover } : undefined);
         // Per-type fleet models: a type or category change can mean a
         // different model OR scale — resync the live model, any in-flight
         // load, and the tracked standalone (mirror of flights.js).
@@ -279,6 +287,23 @@ export function createMilitarySnapshotRenderer({
     // EXCEPTION: likely-landed planes (last fix low + slow) get only
     // LANDED_MISSING_POLL_LIMIT — their disappearance means "landed", not a
     // feed gap, and the full grace left phantom planes parked at airports.
+    // Back at live, a contact it lacks is from the time the clock left: it
+    // goes at once, unless absence keeps it as any poll would (a partial or
+    // retaining snapshot, the tracked aircraft), judged by its newest fix.
+    // No missed-poll grace, and a landed tracked aircraft is not kept.
+    const absenceAtHandover = (icao24) => {
+      const likelyLanded = queries._likelyLanded(icao24);
+      const judged = records.absence(icao24, {
+        complete: snapshot.complete,
+        retainIds: snapshot.retainIds,
+        likelyLanded,
+        tracked: icao24 === flightState._trackedIcao && !likelyLanded,
+        nowMs: flightState.now?.(),
+      });
+      return judged === 'stale' && icao24 !== flightState._trackedIcao
+        ? 'remove'
+        : judged;
+    };
     const absentIds = [];
     for (const icao24 of flightState._icons.ids()) {
       if (!currentIcaos.has(icao24)) absentIds.push(icao24);
@@ -286,13 +311,15 @@ export function createMilitarySnapshotRenderer({
     for (const icao24 of absentIds) {
       const absence = replace
         ? 'remove'
-        : records.absence(icao24, {
-            complete: snapshot.complete,
-            retainIds: snapshot.retainIds,
-            likelyLanded: queries._likelyLanded(icao24),
-            tracked: icao24 === flightState._trackedIcao,
-            nowMs: flightState.now?.(),
-          });
+        : handover
+          ? absenceAtHandover(icao24)
+          : records.absence(icao24, {
+              complete: snapshot.complete,
+              retainIds: snapshot.retainIds,
+              likelyLanded: queries._likelyLanded(icao24),
+              tracked: icao24 === flightState._trackedIcao,
+              nowMs: flightState.now?.(),
+            });
       if (absence === 'retain') continue;
       if (absence === 'stale') {
         icons._applyIconPresentation(icao24); // the faded freshness alpha
@@ -319,7 +346,8 @@ export function createMilitarySnapshotRenderer({
       icons._forgetContact(icao24); // aged out: its 3D model goes too (no orphan / cap leak)
     }
 
-    // The tracked contact at the new time: its trail starts there.
+    // The tracked contact at the new time: its trail starts there. Back at
+    // live its trail goes on.
     if (
       replace &&
       flightState._trackedIcao &&

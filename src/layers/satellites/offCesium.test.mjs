@@ -271,13 +271,22 @@ test('the rendering part draws the dots, the tracked dot and the rings through t
     state._enabled = true;
     state._params = { showPoints: false, showOrbits: false };
     let at = { x: 10, y: 20, z: 30 };
-    const carrier = rendering._addTrackedEntity({ position: () => at });
+    const issRed = [1, 0.27, 0.27, 1];
+    const carrier = rendering._addTrackedEntity({
+      position: () => at,
+      color: issRed,
+    });
     assert.deepEqual(carrier, { noradId: 25544 });
     const tracked = draw.set(points.replace(':points', ':tracked'));
     assert.equal(tracked.items.size, 0);
     rendering._preRenderTick({ frame: 3 });
     assert.deepEqual(tracked.items.get('25544').pos, at);
     assert.equal(tracked.items.get('25544').pixelSize, 14);
+    assert.deepEqual(
+      tracked.items.get('25544').color,
+      issRed,
+      'the satellite keeps its own colour',
+    );
     assert.equal(tracked.items.get('25544').disableDepthTest, Infinity);
     at = { x: 11, y: 21, z: 31 };
     rendering._preRenderTick({ frame: 4 });

@@ -167,8 +167,10 @@ test('pointer input, camera holds and the stock clicks go through the one dispat
     [
       /\.enableInputs\s*=(?!=)/,
       'writes enableInputs instead of suspendCamera()',
-      // The scene's camera-input holds, which own the flag.
-      ['src/render/cesium/cameraInput.js'],
+      // The scene's camera-input holds, which own the flag; the Context
+      // card's previews turn it off in their own small scenes, which take
+      // no input at all.
+      ['src/render/cesium/cameraInput.js', 'src/render/cesium/cardPreviews.js'],
     ],
     [
       /(?:screenSpaceEventHandler|stockHandler)\??\.removeInputAction\(/,

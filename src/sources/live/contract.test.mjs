@@ -614,3 +614,18 @@ test('a vessel with no name is not named by its id; a ten-digit MMSI is an MMSI'
   );
   assert.equal(named.name, 'EVER GIVEN');
 });
+
+test('a type sent alongside the state vectors becomes the record type code', () => {
+  const row = (id) => [id, 'TEST1', 'US', 1, 1, -77, 39, 1000, false, 100, 90];
+  const snapshot = openSkySnapshot({
+    time: 1,
+    states: [row('abc123'), row('def456')],
+    typeByIcao: { abc123: ' ec45 ', zzz999: 'B738' },
+  });
+  assert.equal(snapshot.records[0].typeCode, 'EC45');
+  assert.equal(snapshot.records[1].typeCode, null);
+  assert.equal(
+    openSkySnapshot({ states: [row('abc123')] }).records[0].typeCode,
+    null,
+  );
+});

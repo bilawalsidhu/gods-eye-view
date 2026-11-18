@@ -1,4 +1,11 @@
 import { onFollowChanged } from '../data/followed.js';
+import {
+  bootStories,
+  stopVoiceForStories,
+  storiesOpener,
+} from '../stories/boot.js';
+import { t } from '../i18n/index.js';
+import { useStoriesStore } from '../ui/stores/stories.js';
 import { SceneDirector } from '../scenes/director.js';
 import { initAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
@@ -18,6 +25,7 @@ import { createLibraryBrowser } from '../ui/libraryBrowser.js';
 import { useDataLibraryStore } from '../ui/stores/dataLibrary.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
+import { isStoriesOpen } from '../voice/realtimeInputPolicy.js';
 import { installViews, isEmbeddedInline } from './embed.js';
 import {
   installScopeMask,
@@ -40,6 +48,10 @@ import { overlayHost } from './layers/overlayHost.js';
  * Attach scene tools, rendering listeners and the application debug handle.
  * `scene` is what `createApplicationScene` returns; its `trimStaleCommands`
  * runs after each layer disable (a scene without one keeps that memory).
+ * `library.fetchTile` and `library.fetchData` fetch the Data Library's tiles
+ * and proxied datasets in place of the defaults (`createLibrarySource`).
+ * `library.requireCatalog` offers only what the server's library catalog
+ * names, and nothing while it does not answer.
  */
 export function createApplicationTools({
   scene,
@@ -52,6 +64,7 @@ export function createApplicationTools({
   onSceneDirector,
   sceneDataPacks,
   drawMarkActions = [],
+  library = {},
   signal,
   defer,
 }) {
@@ -76,6 +89,26 @@ export function createApplicationTools({
     }),
   );
   onSceneDirector?.(sceneDirector);
+  // Stories: GEV scenes on this globe, from a Stories button. Its screens,
+  // styles, story data and controller load on first use.
+  const storiesStore = useStoriesStore(applicationPinia());
+  let voiceCommands;
+  const stories = bootStories({
+    // Inline in a host page, the URL and history are the host's.
+    available: !isEmbeddedInline(),
+    viewer,
+    director: sceneDirector,
+    store: storiesStore,
+    onEnter: () => {
+      if (stopVoiceForStories(voiceCommands?.session))
+        storiesStore.flashToast(t('Voice is disabled in Stories.'), 4000);
+    },
+    onLoadFailed: () =>
+      styleManager._showToast?.(
+        t('Stories could not load. Check the connection and try again.'),
+      ),
+  });
+  defer(() => stories.destroy());
   const annotations = initAnnotations({
     viewer,
     tileset,
@@ -130,6 +163,11 @@ export function createApplicationTools({
     mapStackController,
     shareLink: styleManager.shareLinkManager,
     requestRender: governorRequestRender,
+    // An application's own tile and dataset fetches, when it keeps them in
+    // its own cache.
+    fetchTile: library.fetchTile ?? null,
+    fetchData: library.fetchData ?? null,
+    requireCatalog: library.requireCatalog === true,
     // Zoom to layer: an immediate navigation, so Cockpit can refuse it and
     // the current follow owner is released first (as for imported files).
     zoomTo: (extent) =>
@@ -260,30 +298,40 @@ export function createApplicationTools({
   // loop burning behind a hidden tab. (perf wave 2 fix)
   syncVisibilitySuspension();
 
-  window.__godsEyeView = {
-    viewer,
-    styleManager,
-    tileset,
-    dataManager,
-    sceneDirector,
-    mapStackController,
-    annotations,
-    weatherEffects,
-    cockpitCloudEffects,
-    getRenderGovernorDiagnostics,
-    surfaceServices: operations.surface,
-    requestRender: governorRequestRender,
-    entityRecords: { read: readEntityRecord, write: entityRecord },
-    // What the renderer's plugin lets QA scripts read (the Cesium viewer,
-    // for the default renderer), in place of the scene object above.
-    ...scene.qaHandles,
-  };
+  window.__godsEyeView = Object.defineProperties(
+    {
+      viewer,
+      styleManager,
+      tileset,
+      dataManager,
+      sceneDirector,
+      mapStackController,
+      annotations,
+      weatherEffects,
+      cockpitCloudEffects,
+      getRenderGovernorDiagnostics,
+      surfaceServices: operations.surface,
+      requestRender: governorRequestRender,
+      entityRecords: { read: readEntityRecord, write: entityRecord },
+    },
+    // What the renderer's plugin lets QA scripts read (the Cesium viewer and
+    // its photoreal tileset, for the default renderer), in place of the
+    // scene's objects above; read as they are when asked.
+    Object.getOwnPropertyDescriptors(scene.qaHandles ?? {}),
+  );
   const debug = window.__godsEyeView;
   defer(() => {
     if (window.__godsEyeView === debug) delete window.__godsEyeView;
   });
-  const voiceCommands = initGevVoiceCommands({
+  voiceCommands = initGevVoiceCommands({
     ...voice,
+    canStartVoice: () => !isStoriesOpen(),
+    // An app may supply what open_stories does; the Stories page by default.
+    openStories: storiesOpener({
+      openStories: voice?.openStories,
+      store: storiesStore,
+      stories,
+    }),
     floorServices: operations.surface.groundFloor,
     annotationResolver: operations.annotationResolver,
     searchNavigation: operations.searchAndFlyTo,

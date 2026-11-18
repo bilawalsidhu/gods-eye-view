@@ -27,6 +27,17 @@ export function createState({ services }) {
 
   layerState._stationSet = null;
 
+  /**
+   * Draw set of the covered cities' markers, shown above the activation
+   * height so the globe says where bike share is, or null.
+   */
+
+  layerState._coverageSet = null;
+
+  /** The shell's camera action for a marker's flight (`attachShellServices`), or null. */
+
+  layerState._runNavigation = null;
+
   /** Draw set of the selected station's highlight dot, or null. */
 
   layerState._selectedSet = null;

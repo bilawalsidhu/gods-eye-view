@@ -62,6 +62,7 @@ export function createTesting({
     state.trailPositions = Array.isArray(options.trailPositions)
       ? [...options.trailPositions]
       : [];
+    state.trailTimes = state.trailPositions.map(() => Number.NaN);
     state.feed.transportStatus = options.transportStatus || null;
     state.feed.lastMessageAt = options.lastMessageAt ?? null;
     state.feed.rawRowCount = Number.isFinite(options.rawRowCount)

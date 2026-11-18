@@ -145,6 +145,7 @@ export function createQueries({
       derivedSpeedMps: flightState._drSpeedMps,
       derivedTrackDeg: flightState._drCourseDeg,
       reportedSpeedMps: info?.velocity,
+      derivedFromPlacement: flightState._drSpeedPlaced === true,
       reportedTrackDeg: info?.true_track,
     });
     const carto = toLonLatH(basePos);
@@ -248,6 +249,19 @@ export function createQueries({
    *   routeDestination: string|null}}
    */
 
+  /** An airport at one end of a route, when it has a position. */
+  function routeEnd(airport) {
+    const lat = Number(airport?.lat ?? airport?.latitude);
+    const lon = Number(airport?.lon ?? airport?.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    return {
+      code: String(airport?.code ?? '').trim() || null,
+      name: String(airport?.name ?? airport?.municipality ?? '').trim() || null,
+      lat,
+      lon,
+    };
+  }
+
   function mapAnalystRecord(
     icao24,
     info,
@@ -277,6 +291,9 @@ export function createQueries({
       // A converted contact reports the class it RENDERS as, so an analyst
       // filter/superlative agrees with the triangle on screen.
       aircraftClass: tr3bAircraftClass(icao24, text(info?.klass)),
+      // What picks its fleet model, for the context card's turning model.
+      typeCode: text(info?.typeCode),
+      category: info?.category ?? null,
       originCountry: text(info?.originCountry),
       operator: text(info?.airline),
       squawk: text(info?.squawk),
@@ -295,6 +312,19 @@ export function createQueries({
       lastContactAtMs: num(info?.lastContactEpochMs),
       routeOrigin: routeOk ? text(info?.route?.origin?.code) : null,
       routeDestination: routeOk ? text(info?.route?.destination?.code) : null,
+      // The airports themselves, for the context card's route globe.
+      routeFrom: routeOk ? routeEnd(info?.route?.origin) : null,
+      routeTo: routeOk ? routeEnd(info?.route?.destination) : null,
+      // The scheduled route when it does not fit where the plane is (often
+      // another leg of the same flight number): the card shows it marked
+      // unverified, everything else still treats the flight as routeless.
+      routeScheduled:
+        !routeOk && info?.route?.origin?.code && info?.route?.destination?.code
+          ? {
+              from: text(info.route.origin.code),
+              to: text(info.route.destination.code),
+            }
+          : null,
     };
   }
   const methods = {
@@ -318,11 +348,11 @@ export function createQueries({
 
     /**
      * Live layer params.
-     * `models3d` toggles 3D glTF model rendering for the FLEET (altitude-gated): when on,
-     * surrounding aircraft become 3D models once the camera is zoomed in past MODEL_ALT_CEIL_M.
+     * `models3d` toggles 3D glTF model rendering for the FLEET: when on, aircraft within
+     * MODEL_ADD_M (3 km) of the camera become 3D models, drawn at their true size.
      * The TRACKED contact follows the same rule (`_trackedModelRegimeActive`), so selecting
      * a contact never turns its icon into a model or its model into an icon.
-     * `models3dMode` is 'proximity' (nearest MODEL_MAX in view) or 'all' (every in-view plane).
+     * `models3dMode` is 'proximity' (cap MODEL_MAX) or 'all' (cap MODEL_MAX_ALL); both use the 3 km radius.
      * @param {{models3d?: boolean, models3dMode?: 'proximity'|'all', selectedFlightsTrackingId?: string|null}} params
      */
     setParams(params = {}, { origin = 'programmatic' } = {}) {
@@ -748,6 +778,18 @@ export function createQueries({
         if (result.length >= limit) break;
       }
       return result;
+    },
+
+    /**
+     * Ask for an aircraft's scheduled route (origin and destination airports),
+     * as tracking does; it lands on the record when the lookup answers.
+     * @param {string} icao24
+     */
+    requestRoute(icao24) {
+      if (icao24)
+        parts.enrichment._requestRouteEnrichment(
+          String(icao24).trim().toLowerCase(),
+        );
     },
 
     /**

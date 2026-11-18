@@ -163,7 +163,7 @@ export function createLifecycle({
   // has none), cut short and in capitals as the mission index shows names.
   // Registered once; off, the layer has no time to show, and each step tells
   // the clock once it has settled.
-  worldClock.register({
+  const clockSource = {
     id: 'rocket-launches',
     coverage: () => {
       if (!layerState._enabled) return null;
@@ -184,11 +184,15 @@ export function createLifecycle({
       if (!marks.length) return null;
       return { start: marks[0].time, end: marks.at(-1).time, marks };
     },
-  });
+  };
+  // Unregistered on destroy, so a page that builds the app again holds no old layer; init
+  // registers it again.
+  let uncover = worldClock.register(clockSource);
 
   const methods = {
     init(viewer) {
       layerState._viewer = viewer;
+      uncover ??= worldClock.register(clockSource);
       layerState._enabled = false;
       parts.panel.createMissionPanel();
       parts.overlays.createReplayVehicleOverlay();
@@ -324,6 +328,8 @@ export function createLifecycle({
 
     async destroy(viewer) {
       hover?.destroy();
+      uncover?.();
+      uncover = null;
       hover = null;
       layerState._sourceController.abort();
       releaseContinuousRender('rocket-launches'); // direct-destroy path (perf wave 2 fix)

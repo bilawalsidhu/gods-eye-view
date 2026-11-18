@@ -1,4 +1,5 @@
-const KNOT_MPS = 1852 / 3600;
+import { KNOT_MPS } from '../../data/units.js';
+
 const finiteOrNaN = (value) =>
   typeof value === 'number' && Number.isFinite(value) ? value : NaN;
 
@@ -34,11 +35,15 @@ export function createVesselSnapshotRenderer({
   cards,
   followsClock = () => false,
 }) {
-  /** `replace`: the rows are the world at another time (see VesselRecords). */
+  /**
+   * `replace`: the rows are the world at another time (see VesselRecords).
+   * `handover`: the first live rows after the clock came back to live (see
+   * VesselRecords); they are live fixes.
+   */
   function reconcileVessels(
     viewer,
     rows,
-    { complete = true, replace = false } = {},
+    { complete = true, replace = false, handover = false } = {},
   ) {
     rendering.ensureCollections(viewer);
     const occluder = rendering.makeOccluder();
@@ -57,6 +62,7 @@ export function createVesselSnapshotRenderer({
         selectedRecord: state.selectedRecord,
         cap: rendering.renderRowLimit(),
         ...(replace && { replace }),
+        ...(handover && { handover }),
         ...(follow && { follow }),
       },
       {
@@ -90,9 +96,9 @@ export function createVesselSnapshotRenderer({
         },
       },
     );
-    // The selected vessel at the new time: its trail starts there.
+    // The selected vessel at the new time: its trail is drawn to it.
     if (replace && state.selectedRecord && state.trailId)
-      tracking.startSelectedVesselTrail(state.selectedRecord);
+      tracking.retimeSelectedVesselTrail(state.selectedRecord);
     state.lastVisibilityUpdate = 0;
     rendering.updateVisibility(true);
   }

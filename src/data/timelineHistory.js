@@ -39,6 +39,29 @@ function courseBetween(from, to) {
 }
 
 /**
+ * Where in `fixes` (in time order) the fixes to make begin: the last at or
+ * before the newest a contact holds, so the held run goes on into the new
+ * one and its seam is made again from the new run (its course heads where
+ * the new run goes, at the new record's height), and those after it. 0
+ * unless `history` is its own fixes around a time (`timeline` entries) and
+ * `fixes` starts at or before the newest of them and reaches it.
+ * @param {object[]|undefined} history
+ * @param {Array<{atMs: number}>} fixes
+ * @returns {number}
+ */
+function heldThrough(history, fixes) {
+  const newest = history?.[history.length - 1];
+  if (!newest || history[0].timeline !== true || newest.timeline !== true)
+    return 0;
+  const heldMs = newest.epochMs;
+  if (!(fixes[0].atMs <= heldMs && fixes[fixes.length - 1].atMs >= heldMs))
+    return 0;
+  let index = 0;
+  while (index < fixes.length && fixes[index].atMs <= heldMs) index++;
+  return index - 1;
+}
+
+/**
  * An aircraft's motion history with the fixes its record carries at a time
  * (`observation.fixes`, see src/time/timelineFixes.js) merged in, so the
  * layer places it on its own track at any time they span; null when the
@@ -65,7 +88,12 @@ export function mergeAircraftTimelineFixes(
   const baroM = Number.isFinite(observation.baroAltitudeM)
     ? observation.baroAltitudeM
     : null;
-  const entries = fixes.map((fix, index) => {
+  // Playing on, the next snapshot's fixes mostly repeat those held: when its
+  // run reaches back into the held fixes, those stay as they are and only
+  // the seam and the fixes past it are made and added.
+  const from = heldThrough(history, fixes);
+  const entries = fixes.slice(from).map((fix, offset) => {
+    const index = from + offset;
     const course =
       index + 1 < fixes.length
         ? courseBetween(fix, fixes[index + 1])

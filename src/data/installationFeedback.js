@@ -1,6 +1,7 @@
 import { msg } from '../i18n/marker.js';
 
-// layers/installations/controls.js translates describeInstallationFeedback().
+// installationFeedback() stays English for the analyst. ui/statusText.js and
+// ui/shellFeedback.js (HUD) translate it: keep both in step with this wording.
 const REASONS = Object.freeze({
   rate_limited: msg('Overpass rate-limited'),
   timeout: msg('Overpass timed out'),
@@ -19,7 +20,7 @@ const FALLBACK_REASON = msg('Overpass temporarily unavailable');
  * @param {number} [now]
  * @returns {{text: string, reason?: string, seconds?: number}|{count: number, km: ?number}}
  */
-export function describeInstallationFeedback(stats = {}, now = Date.now()) {
+function describeInstallationFeedback(stats = {}, now = Date.now()) {
   const reason = REASONS[stats.failureReason] || FALLBACK_REASON;
   if (stats.loading)
     return {

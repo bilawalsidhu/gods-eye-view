@@ -25,7 +25,7 @@ export function createDefaultMapSources({
     id: hasIon ? 'world' : 'keyless',
     create: hasIon
       ? (request) => engineOf().terrain.world(ionToken, request)
-      : () => engineOf().terrain.keyless(),
+      : (request) => engineOf().terrain.keyless(request),
   };
   return {
     defaultId: googleTileset ? 'photoreal' : 'esri-imagery',

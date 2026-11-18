@@ -6,7 +6,7 @@ import { createStubRenderer } from '../../render/stub/index.js';
 import { createMotion } from './motion.js';
 import { createFlightState } from './state.js';
 import { createTracking } from './tracking.js';
-import { RENDER_DELAY_SEC, STALE_ALPHA } from './policy.js';
+import { MIL_ICON_COLOR, RENDER_DELAY_SEC, STALE_ALPHA } from './policy.js';
 
 // A tracked military contact's trail is its reports joined along the curve
 // the icon is drawn along between them, so the icon always sits on its trail
@@ -104,7 +104,11 @@ function harness({ fixes, info, nowMs, ground = () => null }) {
   flightState.now = () => clock;
   flightState._positionHistory.set(ICAO, fixes);
   const parts = {
-    rendering: { _modelOwnsVisual: () => false, _modelSpec: () => ({}) },
+    rendering: {
+      _modelOwnsVisual: () => false,
+      _modelSpec: () => ({}),
+      _fleetBillboardColor: () => MIL_ICON_COLOR,
+    },
     queries: {
       _toCleanText: (value) => (typeof value === 'string' ? value.trim() : ''),
       _formatAltitude: (ft) => `${ft} ft`,
@@ -649,6 +653,11 @@ test('military: a stalled feed dims the tracked plane as STALE', () => {
       dimmed: true,
     });
     assert.equal(h.tracking._trackedIconColor()[3], STALE_ALPHA);
+    assert.deepEqual(
+      h.tracking._trackedIconColor().slice(0, 3),
+      MIL_ICON_COLOR.slice(0, 3),
+      'faded in its own colour, never recoloured',
+    );
     assert.equal(h.flightState.records.missingPolls.has(ICAO), false);
   } finally {
     h.restore();

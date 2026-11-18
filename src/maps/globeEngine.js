@@ -13,12 +13,18 @@
  * photoreal base is turned off through the port and on again when shown.
  */
 import { findFrame, findGlobe, rendererOf } from '../render/rendererOf.js';
+import { ESRI_IMAGERY_CREDIT, ESRI_TILES } from './attribution.js';
 import { KEYLESS_TERRAIN_URL } from './keylessTerrain.js';
 
-const ESRI_TILES =
-  'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-const ESRI_CREDIT =
-  'Powered by Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community';
+/** Esri World Imagery's deepest level (its tile info lists levels 0–23). */
+const ESRI_MAX_LEVEL = 23;
+/**
+ * A tile Esri has no imagery for: it answers every such tile with this one
+ * "Map data not yet available" picture, the same bytes each time.
+ */
+const ESRI_MISSING_TILE =
+  'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/23/0/0';
+const OSM_MAX_LEVEL = 19;
 const OSM_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const OSM_CREDIT = '© OpenStreetMap contributors';
 /** Cesium ion's world imagery assets (`MAP_STACKS`' `style`). */
@@ -32,6 +38,90 @@ const layers = new WeakMap();
 const shownGlobes = new WeakMap();
 
 const credit = (text) => ({ text });
+
+/** Esri's "no imagery here" picture's bytes, once read; null if unread. */
+let esriMissing = null;
+
+/** Read Esri's "no imagery here" picture, once; null while it cannot be. */
+function esriMissingTile() {
+  esriMissing ??= fetch(ESRI_MISSING_TILE)
+    .then((response) => (response.ok ? response.arrayBuffer() : null))
+    .then((buffer) => (buffer ? new Uint8Array(buffer) : null))
+    .catch(() => null)
+    .then((bytes) => {
+      // Not read: asked for again with the next tile.
+      if (!bytes) esriMissing = null;
+      return bytes;
+    });
+  return esriMissing;
+}
+
+const sameBytes = (a, b) =>
+  a.length === b.length && a.every((byte, i) => byte === b[i]);
+
+/**
+ * An Esri tile, fetched. Esri's "no imagery here" picture is a missing tile,
+ * drawn from its parent, as Cesium's own Esri provider discards it; a
+ * refused tile is a failed one, which counts toward the Esri source's
+ * fallback to OSM.
+ */
+async function fetchEsriTile({ url, signal }) {
+  const [response, missing] = await Promise.all([
+    fetch(url, { signal }),
+    esriMissingTile(),
+  ]);
+  if (!response.ok) {
+    const error = new Error(`Esri tile answered ${response.status}`);
+    error.statusCode = response.status;
+    throw error;
+  }
+  const bytes = await response.arrayBuffer();
+  if (missing && sameBytes(new Uint8Array(bytes), missing))
+    return { missing: true };
+  const contentType = response.headers.get('content-type');
+  return { bytes, ...(contentType ? { contentType } : {}) };
+}
+
+/** Cesium World Terrain's ion asset. */
+const ION_WORLD_TERRAIN = 1;
+
+/**
+ * Ask Cesium ion for an asset's endpoint, as Cesium does before it draws
+ * one: a token ion refuses, or no answer, refuses the switch with ion's
+ * message, so the map stack stays where it was and says why.
+ * @param {number} asset
+ * @param {string} token
+ * @param {AbortSignal} [signal]
+ */
+async function ionEndpoint(asset, token, signal) {
+  const response = await fetch(
+    `https://api.cesium.com/v1/assets/${asset}/endpoint?access_token=${encodeURIComponent(token)}`,
+    { signal },
+  );
+  const body = await response.json().catch(() => null);
+  if (!response.ok)
+    throw new Error(
+      body?.message ||
+        `Cesium ion answered ${response.status} for asset ${asset}`,
+    );
+  return body;
+}
+
+/**
+ * Whether the keyless terrain answers: its `layer.json`, read as any
+ * quantized-mesh terrain is read before its first tile.
+ */
+async function keylessTerrainAnswers(signal) {
+  try {
+    const response = await fetch(`${KEYLESS_TERRAIN_URL}/layer.json`, {
+      signal,
+    });
+    return response.ok;
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    return false;
+  }
+}
 
 /**
  * Turn a photoreal handle's base on or off. Turning it on can fail (the
@@ -126,7 +216,7 @@ export const globeMapEngine = Object.freeze({
         kind: 'xyz',
         url: OSM_TILES,
         tiling: 'webMercator',
-        maxLevel: 19,
+        maxLevel: OSM_MAX_LEVEL,
         credit: credit(OSM_CREDIT),
       }),
     esri: () =>
@@ -134,12 +224,18 @@ export const globeMapEngine = Object.freeze({
         kind: 'xyz',
         url: ESRI_TILES,
         tiling: 'webMercator',
-        maxLevel: 19,
-        credit: credit(ESRI_CREDIT),
+        maxLevel: ESRI_MAX_LEVEL,
+        fetchTile: fetchEsriTile,
+        credit: credit(ESRI_IMAGERY_CREDIT),
       }),
-    ion(style, accessToken) {
-      if (!String(accessToken || '').trim())
-        throw new Error('Ion imagery requires an explicit token');
+    async ion(style, accessToken, { signal } = {}) {
+      const token = String(accessToken || '').trim();
+      if (!token) throw new Error('Ion imagery requires an explicit token');
+      const endpoint = await ionEndpoint(style, token, signal);
+      if (endpoint?.type !== 'IMAGERY' || endpoint.externalType !== 'BING')
+        throw new Error(
+          'Ion world imagery did not return a Bing imagery endpoint',
+        );
       return Object.freeze({
         kind: 'world',
         worldStyle: WORLD_STYLES[style] ?? 'aerial',
@@ -147,19 +243,31 @@ export const globeMapEngine = Object.freeze({
     },
   }),
   terrain: Object.freeze({
-    world: async (accessToken) => {
-      if (!String(accessToken || '').trim())
+    world: async (accessToken, { signal } = {}) => {
+      const token = String(accessToken || '').trim();
+      if (!token)
         throw new Error('World terrain requires an explicit ion token');
+      await ionEndpoint(ION_WORLD_TERRAIN, token, signal);
       return {
         provider: null,
         spec: { kind: 'world', requestVertexNormals: true },
       };
     },
-    // Re:Earth's keyless terrain, as the Cesium map engine draws it.
-    keyless: async () => ({
-      provider: null,
-      spec: { kind: 'quantizedMesh', url: KEYLESS_TERRAIN_URL },
-    }),
+    /**
+     * Re:Earth's keyless terrain. While it does not answer, the ellipsoid
+     * stands in as a fallback the map stack tries the terrain again behind.
+     */
+    keyless: async ({ signal } = {}) => {
+      if (await keylessTerrainAnswers(signal))
+        return {
+          provider: null,
+          spec: { kind: 'quantizedMesh', url: KEYLESS_TERRAIN_URL },
+        };
+      console.warn(
+        '[MapStack] Re:Earth terrain unavailable, falling back to flat ellipsoid terrain',
+      );
+      return { provider: null, spec: { kind: 'ellipsoid' }, fallback: true };
+    },
   }),
   createImageryLayer: (spec) => ({ spec, layer: null }),
   requestRender(host) {

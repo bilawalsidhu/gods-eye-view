@@ -13,7 +13,11 @@ import {
   POINT_SCALE_BY_DISTANCE,
   POINT_FADE_BY_DISTANCE,
   POINT_DISABLE_DEPTH_TEST_M,
+  COVERAGE_PIXEL_SIZE,
+  COVERAGE_OUTLINE_WIDTH,
+  COVERAGE_HEIGHT_M,
 } from './policy.js';
+import { GBFS_CITY_REGISTRY } from './registry.js';
 import { heightsOf } from '../../queries/heights.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { drawOf } from '../../render/rendererOf.js';
@@ -24,6 +28,9 @@ import { drawOf } from '../../render/rendererOf.js';
  * share a renderer. Picks name them as `Hit.set`.
  */
 export const BIKESHARE_SET_ID = 'bikeshare';
+
+/** A covered city's marker id: its registry id under this prefix. */
+export const COVERAGE_ID_PREFIX = 'city:';
 let instances = 0;
 
 export function createRendering({
@@ -51,6 +58,23 @@ export function createRendering({
       drawOrder: services.sprites?.spriteDrawOrder?.('bikeshare') ?? 0,
     });
     layerState._selectedSet = draw.points({ id: `${prefix}:selected` });
+    // One marker per covered city, drawn while the camera is too high for
+    // stations: the globe shows where bike share is.
+    layerState._coverageSet = draw.points({
+      id: `${prefix}:coverage`,
+      show: false,
+      drawOrder: services.sprites?.spriteDrawOrder?.('bikeshare') ?? 0,
+    });
+    layerState._coverageSet.set(
+      GBFS_CITY_REGISTRY.map((city) => ({
+        id: `${COVERAGE_ID_PREFIX}${city.id}`,
+        pos: fromDegrees(city.centerLon, city.centerLat, COVERAGE_HEIGHT_M),
+        pixelSize: COVERAGE_PIXEL_SIZE,
+        color: COLOR_GREEN,
+        outlineColor: [1, 1, 1, 0.9],
+        outlineWidth: COVERAGE_OUTLINE_WIDTH,
+      })),
+    );
     // Drawn from the start, empty, so both take their place in the scene
     // now, as the layer's collections did; the stations' place among the
     // other sprite layers is their draw order (`spriteDrawOrder`).
@@ -62,8 +86,10 @@ export function createRendering({
   function detachSets() {
     layerState._stationSet?.dispose();
     layerState._selectedSet?.dispose();
+    layerState._coverageSet?.dispose();
     layerState._stationSet = null;
     layerState._selectedSet = null;
+    layerState._coverageSet = null;
   }
 
   /**
