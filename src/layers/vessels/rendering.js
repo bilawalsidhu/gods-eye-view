@@ -61,8 +61,6 @@ const HIDDEN_FOLLOW_MS = 250;
 
 /** A vessel or aid sprite's drawn size before its scale (CSS px). */
 const SHIP_ICON_PX = 32;
-/** A selected vessel's or aid's tint. */
-const SELECTED_TINT = Object.freeze([1, 1, 1, 1]);
 
 let instances = 0;
 
@@ -413,7 +411,6 @@ export function createRendering({
 
   /** The icon item a record draws, as it now is. */
   function iconItem(record, visual) {
-    const selected = record === state.selectedRecord;
     const aid = isAidToNavigation(record);
     const courseDeg = vesselCourseDeg(record);
     // Following the clock, not there yet at the time drawn.
@@ -430,8 +427,8 @@ export function createRendering({
       pos: plan?.pos ?? visual.position,
       image: shipIcon(record),
       size: [SHIP_ICON_PX, SHIP_ICON_PX],
-      // Tinted by type; selection changes the colour only, never the size.
-      color: selected ? SELECTED_TINT : shipTint(record),
+      // Tinted by type; selection changes neither the colour nor the size.
+      color: shipTint(record),
       scale: shipScale(record),
       // An aid's buoy stands upright on screen; a vessel turns with course.
       rotationMode: aid ? 'screen' : 'course',

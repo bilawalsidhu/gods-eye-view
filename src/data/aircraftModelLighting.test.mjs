@@ -81,12 +81,12 @@ test('an untinted model draws its mesh in its own colours', () => {
   }
 });
 
-test('the tracked and emergency tints keep every paint, never black or one flat colour', () => {
+test('the emergency tints keep every paint, never black or one flat colour', () => {
   const tints = {
-    'tracked cyan': flightsPolicy.TRACKED_CYAN,
     emergency: flightsPolicy.EMERGENCY_TINT,
-    'military tracked': militaryPolicy.TRACKED_ICON_COLOR,
     'military emergency': militaryPolicy.EMERGENCY_ICON_COLOR,
+    // Any saturated tint: one with no red once drew a red helicopter black.
+    cyan: [0, 1, 1, 1],
   };
   for (const [tintName, tint] of Object.entries(tints)) {
     const blend = aircraftModelBlend(false, tint);
@@ -94,7 +94,7 @@ test('the tracked and emergency tints keep every paint, never black or one flat 
     for (const [paintName, paint] of Object.entries(PAINTS)) {
       const out = blended(paint, tint, blend);
       drawn[paintName] = out;
-      // Multiplying by the tracked cyan (no red) drew a red helicopter black.
+      // Multiplying by a tint with no red drew a red helicopter black.
       paint.forEach((c, i) =>
         assert.ok(
           out[i] >= c * 0.6,
@@ -110,6 +110,6 @@ test('the tracked and emergency tints keep every paint, never black or one flat 
 });
 
 test('the IR boost draws every model flat white whatever its tint', () => {
-  for (const tint of [null, flightsPolicy.TRACKED_CYAN])
+  for (const tint of [null, flightsPolicy.EMERGENCY_TINT])
     assert.deepEqual(aircraftModelBlend(true, tint), { mode: 'mix', amount: 1 });
 });

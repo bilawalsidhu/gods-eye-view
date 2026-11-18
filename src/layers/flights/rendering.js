@@ -8,7 +8,6 @@ import {
   EMERGENCY_TINT,
   VEHICLE_TINT,
   FLEET_TINT,
-  TRACKED_CYAN,
   GROUND_SCALE,
   COCKPIT_CIVILIAN_COLOR,
 } from './policy.js';
@@ -81,11 +80,10 @@ export function createRendering({
   const _iconKind = (icao24, klass) =>
     tr3bIconKind(icao24, klass, { hot: flightState._irBoost });
 
-  /** Model colour: the mesh's own (white), tinted cyan while tracked and red
-   *  while broadcasting an emergency. */
+  /** Model colour: the mesh's own (white), tinted red while broadcasting an
+   *  emergency. Tracking never recolours it. */
 
   function _modelColor(icao24) {
-    if (icao24 === flightState._trackedIcao) return TRACKED_CYAN;
     return _isEmergency(icao24) ? EMERGENCY_TINT : policy.MODEL_WHITE;
   }
 

@@ -6,7 +6,7 @@ import { createStubRenderer } from '../../render/stub/index.js';
 import { createMotion } from './motion.js';
 import { createFlightState } from './state.js';
 import { createTracking } from './tracking.js';
-import { RENDER_DELAY_SEC, STALE_ALPHA } from './policy.js';
+import { FLEET_TINT, RENDER_DELAY_SEC, STALE_ALPHA } from './policy.js';
 
 // A tracked trail is the aircraft's reports joined along the curve the icon
 // is drawn along between them, so the icon always sits on its trail and a
@@ -116,7 +116,11 @@ function harness({
   flightState.now = () => clock;
   flightState._positionHistory.set(ICAO, fixes);
   const parts = {
-    rendering: { _modelOwnsVisual: () => false, _modelSpec: () => ({}) },
+    rendering: {
+      _modelOwnsVisual: () => false,
+      _modelSpec: () => ({}),
+      _fleetBillboardColor: () => FLEET_TINT,
+    },
     queries: { _contactLabel: (id, info) => info?.callsign || id },
   };
   parts.motion = createMotion({ flightState, services: svc, parts });
@@ -797,6 +801,11 @@ test('a stalled feed dims the tracked plane as STALE', () => {
       dimmed: true,
     });
     assert.equal(h.tracking._trackedIconColor()[3], STALE_ALPHA);
+    assert.deepEqual(
+      h.tracking._trackedIconColor().slice(0, 3),
+      FLEET_TINT.slice(0, 3),
+      'faded in its own colour, never recoloured',
+    );
     assert.equal(h.flightState.records.missingPolls.has(ICAO), false);
   } finally {
     h.restore();
