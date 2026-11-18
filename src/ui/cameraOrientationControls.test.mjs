@@ -12,6 +12,39 @@ import {
   toggleCameraTilt,
 } from './cameraOrientationControls.js';
 import { NavigationController } from './navigationController.js';
+import { bindRenderer } from '../render/rendererOf.js';
+import {
+  createCesiumQuery,
+  queryCapabilities,
+} from '../render/cesium/query.js';
+import {
+  bindFakeCesiumCamera,
+  followEntity,
+  followedEntity,
+} from '../testSupport/fakeCameraPort.mjs';
+import { entityFollowTarget } from '../data/followed.js';
+import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';
+import { entityRecord } from '../data/entityRecords.js';
+
+/**
+ * Bind the camera, query and frame ports over a viewer double, as the
+ * renderer does: the Cesium query port over its scene, and the frame
+ * phases from the scene's own events.
+ */
+function withPorts(viewer, { frames = true } = {}) {
+  return bindFakeCesiumCamera(viewer, {
+    query: createCesiumQuery({
+      scene: viewer.scene,
+      camera: viewer.camera,
+      draw: { sets: new Map(), version: () => 0 },
+      capabilities: new Set(queryCapabilities(viewer.scene)),
+    }),
+    ...(frames ? { frame: fakeSceneFrame(viewer) } : {}),
+  });
+}
+
+/** Coordinates only, as the query port answers. */
+const plain = (p) => ({ x: p.x, y: p.y, z: p.z });
 
 function createViewer({ cameraPosition, target, pickPosition = null } = {}) {
   const calls = [];
@@ -25,7 +58,7 @@ function createViewer({ cameraPosition, target, pickPosition = null } = {}) {
     heading: Cesium.Math.toRadians(90),
     changed,
     pickEllipsoid: () => surface,
-    getPickRay: () => ({}),
+    getPickRay: () => new Cesium.Ray(),
     lookAt(targetValue, offset) {
       calls.push({ type: 'lookAt', target: targetValue, offset });
     },
@@ -46,26 +79,28 @@ function createViewer({ cameraPosition, target, pickPosition = null } = {}) {
       requestRender: () => calls.push({ type: 'requestRender' }),
     },
   };
-  return { viewer, calls, target: surface };
+  return { viewer: withPorts(viewer), calls, target: surface };
 }
 
-class FakeButton extends EventTarget {
-  constructor() {
-    super();
-    this.attributes = new Map();
-    this.style = {
-      setProperty: (name, value) => this.attributes.set(name, value),
-    };
-  }
-  setAttribute(name, value) {
-    this.attributes.set(name, String(value));
-  }
-  getAttribute(name) {
-    return this.attributes.get(name);
-  }
-  click() {
-    this.dispatchEvent(new Event('click'));
-  }
+/**
+ * Record what the controls publish as the globe actions store keeps it:
+ * `state` is the latest, and `publishes` counts the changes.
+ */
+function recorder() {
+  const bar = {
+    state: null,
+    publishes: 0,
+    publish(state) {
+      if (
+        bar.state?.tilted === state.tilted &&
+        bar.state?.heading === state.heading
+      )
+        return;
+      bar.state = state;
+      bar.publishes += 1;
+    },
+  };
+  return bar;
 }
 
 /**
@@ -94,8 +129,12 @@ function createRealCamera() {
   return { camera, scene };
 }
 
-/** A viewer whose center pick is a fixed ground point and whose camera is real. */
-function createRealViewer(target) {
+/**
+ * A viewer whose center pick is a fixed ground point and whose camera is
+ * real. Without `frames` it has no frame loop, so orientation changes land
+ * at once rather than easing.
+ */
+function createRealViewer(target, { frames = true } = {}) {
   const { camera, scene } = createRealCamera();
   scene.pickPositionSupported = false;
   scene.pickPosition = () => null;
@@ -104,8 +143,16 @@ function createRealViewer(target) {
   // The binding drives the needle from the scene's per-frame signal, not from
   // `camera.changed`, so the fixture has to carry one.
   scene.preRender = new Cesium.Event();
-  camera.getPickRay = () => ({});
-  return { viewer: { camera, scene }, target };
+  camera.getPickRay = () => new Cesium.Ray();
+  // Cesium's entity tracking, without entities of its own: the camera port
+  // follows on a tracking widget of the fake's.
+  const viewer = {
+    camera,
+    scene,
+    trackedEntityChanged: new Cesium.Event(),
+    entities: {},
+  };
+  return { viewer: withPorts(viewer, { frames }), target };
 }
 
 /** Place a real camera in an orbit around `target` and release the frame. */
@@ -275,31 +322,31 @@ test('tilt alternates at globe range, not only at map range', () => {
 
 test('the button shows the state the next click will produce, at every range', () => {
   for (const range of [3_000, 18_000_000]) {
-    const { viewer } = createRealViewer(AUSTIN_GROUND);
+    const { viewer } = createRealViewer(AUSTIN_GROUND, { frames: false });
     orbit(viewer, AUSTIN_GROUND, 0, STRAIGHT_DOWN_PITCH, range);
-    const tiltButton = new FakeButton();
+    const bar = recorder();
     const controls = bindCameraOrientationControls({
       viewer,
-      elements: { tiltButton, northButton: new FakeButton() },
+      publish: bar.publish,
       runNavigation: (_noun, navigate) => navigate(),
     });
 
     assert.equal(
-      tiltButton.getAttribute('aria-pressed'),
-      'false',
+      bar.state.tilted,
+      false,
       `straight down at ${range} m must not read as tilted`,
     );
-    tiltButton.click();
+    controls.tilt();
     assert.equal(
-      tiltButton.getAttribute('aria-pressed'),
-      'true',
+      bar.state.tilted,
+      true,
       `after one click at ${range} m the button must read tilted`,
     );
     // And the exact refresh that runs when the camera settles must agree.
     controls.refreshTilt();
     assert.equal(
-      tiltButton.getAttribute('aria-pressed'),
-      'true',
+      bar.state.tilted,
+      true,
       `the settled state at ${range} m must agree with the commanded one`,
     );
     controls.destroy();
@@ -309,13 +356,13 @@ test('the button shows the state the next click will produce, at every range', (
 test('the needle follows a rotation too small for the camera-changed threshold', () => {
   const { viewer } = createRealViewer(AUSTIN_GROUND);
   orbit(viewer, AUSTIN_GROUND, 0, Cesium.Math.toRadians(-80), 5_000);
-  const northButton = new FakeButton();
+  const bar = recorder();
   const controls = bindCameraOrientationControls({
     viewer,
-    elements: { tiltButton: new FakeButton(), northButton },
+    publish: bar.publish,
     runNavigation: (_noun, navigate) => navigate(),
   });
-  assert.equal(northButton.getAttribute('--camera-heading'), '0deg');
+  assert.equal(bar.state.heading, 0);
 
   // Ten degrees is far below Cesium's default percentageChanged, so
   // `camera.changed` may never fire for it; the per-frame signal must.
@@ -326,23 +373,23 @@ test('the needle follows a rotation too small for the camera-changed threshold',
   orbit(viewer, AUSTIN_GROUND, 10, Cesium.Math.toRadians(-80), 5_000);
   viewer.scene.preRender.raiseEvent();
   assert.equal(
-    northButton.getAttribute('--camera-heading'),
-    '10deg',
+    bar.state.heading,
+    10,
     `needle must follow a 10 degree rotation (camera.changed fired ${changedFired} time(s))`,
   );
 
   orbit(viewer, AUSTIN_GROUND, 13, Cesium.Math.toRadians(-80), 5_000);
   viewer.scene.preRender.raiseEvent();
-  assert.equal(northButton.getAttribute('--camera-heading'), '13deg');
+  assert.equal(bar.state.heading, 13);
   controls.destroy();
 });
 
 test('north-up indicator follows real heading including the 360-degree seam', () => {
   const { viewer } = createRealViewer(AUSTIN_GROUND);
-  const northButton = new FakeButton();
+  const bar = recorder();
   const controls = bindCameraOrientationControls({
     viewer,
-    elements: { northButton },
+    publish: bar.publish,
     runNavigation: (_noun, navigate) => navigate(),
   });
   for (const [heading, active] of [
@@ -355,66 +402,49 @@ test('north-up indicator follows real heading including the 360-degree seam', ()
   ]) {
     orbit(viewer, AUSTIN_GROUND, heading, Cesium.Math.toRadians(-80), 5_000);
     viewer.scene.preRender.raiseEvent();
-    assert.equal(
-      northButton.getAttribute('data-north-up'),
-      String(active),
-      `heading ${heading}`,
-    );
+    assert.equal(bar.state.heading === 0, active, `heading ${heading}`);
   }
   controls.destroy();
 });
 
-test('a settled camera writes nothing, and teardown releases every signal', () => {
+test('a settled camera publishes no change, and teardown releases every signal', () => {
   const { viewer } = createRealViewer(AUSTIN_GROUND);
   orbit(viewer, AUSTIN_GROUND, 0, Cesium.Math.toRadians(-80), 5_000);
-  const tiltButton = new FakeButton();
-  const northButton = new FakeButton();
-  let writes = 0;
-  const count = (element) => {
-    const setAttribute = element.setAttribute.bind(element);
-    const setProperty = element.style.setProperty.bind(element.style);
-    element.setAttribute = (name, value) => {
-      writes += 1;
-      setAttribute(name, value);
-    };
-    element.style.setProperty = (name, value) => {
-      writes += 1;
-      setProperty(name, value);
-    };
-  };
-  count(tiltButton);
-  count(northButton);
-
+  const bar = recorder();
   const preRenderBefore = viewer.scene.preRender.numberOfListeners;
   const moveEndBefore = viewer.camera.moveEnd.numberOfListeners;
   const controls = bindCameraOrientationControls({
     viewer,
-    elements: { tiltButton, northButton },
+    publish: bar.publish,
     runNavigation: (_noun, navigate) => navigate(),
   });
   assert.equal(viewer.scene.preRender.numberOfListeners, preRenderBefore + 1);
   assert.equal(viewer.camera.moveEnd.numberOfListeners, moveEndBefore + 1);
 
-  writes = 0;
+  bar.publishes = 0;
   for (let i = 0; i < 60; i += 1) viewer.scene.preRender.raiseEvent();
-  assert.equal(writes, 0, '60 frames of a settled camera write nothing');
+  assert.equal(
+    bar.publishes,
+    0,
+    '60 frames of a settled camera publish no change',
+  );
 
   orbit(viewer, AUSTIN_GROUND, 47, Cesium.Math.toRadians(-80), 5_000);
   viewer.scene.preRender.raiseEvent();
-  assert.ok(writes > 0, 'a rotated camera updates the needle');
-  writes = 0;
+  assert.ok(bar.publishes > 0, 'a rotated camera updates the needle');
+  bar.publishes = 0;
   for (let i = 0; i < 20; i += 1) viewer.scene.preRender.raiseEvent();
-  assert.equal(writes, 0, 'and then goes quiet again');
+  assert.equal(bar.publishes, 0, 'and then goes quiet again');
 
   controls.destroy();
   assert.equal(viewer.scene.preRender.numberOfListeners, preRenderBefore);
   assert.equal(viewer.camera.moveEnd.numberOfListeners, moveEndBefore);
-  writes = 0;
+  bar.publishes = 0;
   orbit(viewer, AUSTIN_GROUND, 120, Cesium.Math.toRadians(-80), 5_000);
   viewer.scene.preRender.raiseEvent();
   viewer.camera.moveEnd.raiseEvent();
-  tiltButton.click();
-  assert.equal(writes, 0, 'a destroyed binding writes nothing');
+  controls.tilt();
+  assert.equal(bar.publishes, 0, 'a destroyed binding publishes nothing');
 });
 
 test('a sky-facing camera yields no frame and both actions decline', () => {
@@ -423,9 +453,13 @@ test('a sky-facing camera yields no frame and both actions decline', () => {
   scene.pickPosition = () => null;
   scene.globe.pick = () => undefined;
   scene.requestRender = () => {};
-  camera.getPickRay = () => ({});
-  camera.pickEllipsoid = () => undefined;
-  const viewer = { camera, scene };
+  // 1000 km up, looking above the horizon: no ray from the centre meets
+  // the ellipsoid.
+  camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(-97.74, 30.27, 1_000_000),
+    orientation: { heading: 0, pitch: Cesium.Math.toRadians(30), roll: 0 },
+  });
+  const viewer = withPorts({ camera, scene });
 
   assert.equal(readCameraTargetFrame(viewer), null);
   assert.equal(toggleCameraTilt(viewer), false);
@@ -439,16 +473,16 @@ test('center picking prefers terrain over the ellipsoid and falls through an inv
   const { viewer } = createViewer({ pickPosition: () => invalid });
   viewer.scene.globe.pick = () => terrain;
   viewer.camera.pickEllipsoid = () => sea;
-  assert.equal(
+  assert.deepEqual(
     pickViewTarget(viewer),
-    terrain,
+    plain(terrain),
     'the rendered ground wins over sea level',
   );
 
   viewer.scene.globe.pick = () => null;
-  assert.equal(
+  assert.deepEqual(
     pickViewTarget(viewer),
-    sea,
+    plain(sea),
     'the ellipsoid still answers when nothing is under the cursor',
   );
 });
@@ -468,7 +502,7 @@ test('tilt preserves the picked target and range while choosing oblique pitch', 
   const result = toggleCameraTilt(viewer);
   const lookAt = calls.find((call) => call.type === 'lookAt');
   assert.deepEqual(result, { tilted: true, pitch: OBLIQUE_PITCH });
-  assert.equal(lookAt.target, target);
+  assert.ok(Cesium.Cartesian3.equals(lookAt.target, target));
   assert.equal(lookAt.offset.range, before.range);
   assert.equal(lookAt.offset.pitch, OBLIQUE_PITCH);
   assert.ok(calls.some((call) => call.type === 'lookAtTransform'));
@@ -487,13 +521,12 @@ test('north-up preserves target pitch and range', () => {
 
 test('bindings route both controls and release every listener on destroy', () => {
   const { viewer } = createViewer();
-  const tiltButton = new FakeButton();
-  const northButton = new FakeButton();
+  const bar = recorder();
   const navigations = [];
   const toasts = [];
   const controls = bindCameraOrientationControls({
     viewer,
-    elements: { tiltButton, northButton },
+    publish: bar.publish,
     runNavigation(noun, navigate) {
       navigations.push(noun);
       return navigate();
@@ -501,20 +534,20 @@ test('bindings route both controls and release every listener on destroy', () =>
     showToast: (message) => toasts.push(message),
   });
 
-  tiltButton.click();
-  northButton.click();
+  controls.tilt();
+  controls.northUp();
   assert.deepEqual(navigations, ['camera', 'camera']);
   assert.deepEqual(toasts, ['Tilted view', 'North up']);
   // The button shows the state the click just commanded, not a re-measurement.
-  assert.equal(tiltButton.getAttribute('aria-pressed'), 'true');
-  assert.equal(northButton.getAttribute('--camera-heading'), '90deg');
+  assert.equal(bar.state.tilted, true);
+  assert.equal(bar.state.heading, 90);
 
   viewer.camera.heading = -1e-12;
   controls.sync();
-  assert.equal(northButton.getAttribute('--camera-heading'), '0deg');
+  assert.equal(bar.state.heading, 0);
 
   controls.destroy();
-  tiltButton.click();
+  controls.tilt();
   assert.deepEqual(navigations, ['camera', 'camera']);
   assert.equal(STRAIGHT_DOWN_PITCH, Cesium.Math.toRadians(-89));
 });
@@ -539,8 +572,8 @@ for (const [label, altitude, range] of [
       position: new Cesium.CallbackPositionProperty(() => target, false),
       trackingReferenceFrame: Cesium.TrackingReferenceFrame.ENU,
     });
-    entity.gevDisplayPosition = () => target;
-    viewer.trackedEntity = entity;
+    entityRecord(entity).displayPosition = () => target;
+    followEntity(viewer, entity);
     const follow = new Cesium.EntityView(entity, viewer.scene);
     follow.update(viewer.clock.currentTime);
     viewer.camera.lookAt(
@@ -569,7 +602,7 @@ for (const [label, altitude, range] of [
         follow.update(viewer.clock.currentTime);
         const transform = Cesium.Matrix4.clone(viewer.camera.transform);
         viewer.scene.preUpdate.raiseEvent();
-        assert.equal(viewer.trackedEntity, entity);
+        assert.equal(followedEntity(viewer), entity);
         assert.ok(
           Cesium.Matrix4.equalsEpsilon(
             viewer.camera.transform,
@@ -589,7 +622,7 @@ for (const [label, altitude, range] of [
     }
     target = Cesium.Cartesian3.fromDegrees(-96, 31, altitude);
     follow.update(viewer.clock.currentTime);
-    assert.equal(viewer.trackedEntity, entity);
+    assert.equal(followedEntity(viewer), entity);
     assert.ok(Math.abs(readCameraTargetFrame(viewer).range - range) < 1e-5);
   });
 }
@@ -603,10 +636,10 @@ test('orientation animation cancels on replacement and explicit cancellation', (
   animator.animate(frame, { heading: 0, pitch: STRAIGHT_DOWN_PITCH });
   animator.animate(frame, { heading: 0, pitch: OBLIQUE_PITCH });
   assert.equal(viewer.scene.preUpdate.numberOfListeners, 1);
-  viewer.trackedEntity = {};
+  followEntity(viewer, {});
   viewer.scene.preUpdate.raiseEvent();
   assert.equal(viewer.scene.preUpdate.numberOfListeners, 0);
-  viewer.trackedEntity = undefined;
+  followEntity(viewer, null);
   animator.animate(frame, { heading: 0, pitch: STRAIGHT_DOWN_PITCH });
   animator.cancel();
   assert.equal(viewer.scene.preUpdate.numberOfListeners, 0);
@@ -615,10 +648,18 @@ test('orientation animation cancels on replacement and explicit cancellation', (
 test('orientation navigation preserves follow and selection; new navigation cancels animation', () => {
   const calls = [];
   const entity = {};
-  const viewer = {
-    trackedEntity: entity,
-    camera: { cancelFlight: () => calls.push('cancel-flight') },
-  };
+  const viewer = {};
+  bindRenderer(viewer, {
+    camera: {
+      cancelFlight: () => calls.push('cancel-flight'),
+      // The camera follows `entity`.
+      followed: entityFollowTarget(entity, {}),
+      follow(target) {
+        this.followed = target;
+      },
+      on: () => () => {},
+    },
+  });
   let cockpit = false;
   const navigation = new NavigationController({
     viewer,
@@ -635,7 +676,7 @@ test('orientation navigation preserves follow and selection; new navigation canc
     navigation.runOrientation('camera', () => 'animated'),
     'animated',
   );
-  assert.equal(viewer.trackedEntity, entity);
+  assert.equal(followedEntity(viewer), entity);
   assert.deepEqual(calls, [
     'cancel-orientation',
     'interrupt-motion',
@@ -663,22 +704,21 @@ test('rapid tilt presses reverse direction and north-up keeps the requested tilt
   const { viewer } = createRealViewer(target);
   orbit(viewer, target, 90, OBLIQUE_PITCH, 1000);
   viewer.scene.preUpdate = new Cesium.Event();
-  const tiltButton = new FakeButton();
-  const northButton = new FakeButton();
+  const bar = recorder();
   let controls;
   controls = bindCameraOrientationControls({
     viewer,
-    elements: { tiltButton, northButton },
+    publish: bar.publish,
     runNavigation: (_noun, navigate) => {
       controls.cancel();
       return navigate();
     },
   });
-  tiltButton.click();
-  tiltButton.click();
-  assert.equal(tiltButton.getAttribute('aria-pressed'), 'true');
-  tiltButton.click();
-  northButton.click();
+  controls.tilt();
+  controls.tilt();
+  assert.equal(bar.state.tilted, true);
+  controls.tilt();
+  controls.northUp();
   assert.equal(viewer.scene.preUpdate.numberOfListeners, 1);
   time = 650;
   viewer.scene.preUpdate.raiseEvent();

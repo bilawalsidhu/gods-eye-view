@@ -1,5 +1,5 @@
-import * as Cesium from 'cesium';
 import { createWindRendering } from '../wind/rendering.js';
+import { findCamera } from '../../render/rendererOf.js';
 import { OCEAN_FIELD_SPEC, fieldRampMax } from '../wind/fieldSpec.js';
 import { formatWindValidTime } from '../wind/index.js';
 import { t, msg, translateKnown } from '../../i18n/index.js';
@@ -8,20 +8,23 @@ import { unitLabel } from '../../ui/unitLabels.js';
 const BOX_STEP_DEG = 0.25;
 const DOT = '·';
 
-/** Camera view rectangle in degrees, or null when the camera sees no Earth. */
-export function viewBox(viewer, cesium) {
-  const camera = viewer?.scene?.camera ?? viewer?.camera;
-  if (!camera?.computeViewRectangle) return null;
+/**
+ * The camera port's view rectangle as a field box in degrees, or null when
+ * the camera sees no Earth.
+ */
+export function viewBox(viewer, cameraOf = findCamera) {
+  const camera = cameraOf(viewer);
+  if (!camera?.viewRectangle) return null;
   let rect;
   try {
-    rect = camera.computeViewRectangle(cesium?.Ellipsoid?.WGS84);
+    rect = camera.viewRectangle();
   } catch {
     return null;
   }
   if (!rect) return null;
   // Degrees rounded to 1e-4 (about 10 m): stable query strings, no
-  // radian round-off such as -75.00000000000001.
-  const deg = (r) => Math.round(((r * 180) / Math.PI) * 1e4) / 1e4;
+  // round-off such as -75.00000000000001.
+  const deg = (d) => Math.round(d * 1e4) / 1e4;
   const box = {
     latMin: Math.max(-90, deg(rect.south)),
     latMax: Math.min(90, deg(rect.north)),
@@ -151,7 +154,7 @@ function presentProblem(problem) {
 export function createOceanCurrentsLayer({
   feed,
   clock,
-  cesium = Cesium,
+  cameraOf = findCamera,
   container,
   createRendering = createWindRendering,
   debounceMs = 450,
@@ -195,7 +198,7 @@ export function createOceanCurrentsLayer({
     if (!enabled) return;
     if (timer) clearTimeout(timer);
     timer = null;
-    const next = viewBox(viewer, cesium);
+    const next = viewBox(viewer, cameraOf);
     if (!boxChanged(lastBox, next)) return;
     // Crossing a tier line (a zoom from the globe into a region, or from a
     // region to the coast) is the case that waits longest for new data, so
@@ -206,7 +209,7 @@ export function createOceanCurrentsLayer({
     }
     timer = setTimeout(() => {
       timer = null;
-      const settled = viewBox(viewer, cesium);
+      const settled = viewBox(viewer, cameraOf);
       if (boxChanged(lastBox, settled)) void layer.update(viewer);
     }, debounceMs);
   }
@@ -255,7 +258,7 @@ export function createOceanCurrentsLayer({
     request = controller;
     loading = true;
     notify();
-    const box = viewBox(viewer, cesium);
+    const box = viewBox(viewer, cameraOf);
     if (box) lastTier = viewTier(box);
     try {
       signal?.throwIfAborted();
@@ -304,14 +307,10 @@ export function createOceanCurrentsLayer({
     init(nextViewer) {
       viewer = nextViewer;
       rendering = createRendering({
-        cesium,
         container: container ?? nextViewer.container,
         getViewer: () => viewer,
-        getHost: () =>
-          imageryHost?.() ?? {
-            collection: viewer.imageryLayers ?? viewer.scene?.imageryLayers,
-            kind: 'globe',
-          },
+        // Without a host from the shell, the rendering drapes on the globe.
+        getHost: () => imageryHost?.(),
         onStatusChange: notify,
         spec: OCEAN_FIELD_SPEC,
       });
@@ -328,14 +327,9 @@ export function createOceanCurrentsLayer({
     enable() {
       enabled = true;
       rendering?.start();
-      const moveEnd = viewer?.scene?.camera?.moveEnd ?? viewer?.camera?.moveEnd;
-      if (!removeMoveEnd && moveEnd?.addEventListener) {
-        const remove = moveEnd.addEventListener(onMoveEnd);
-        removeMoveEnd =
-          typeof remove === 'function'
-            ? remove
-            : () => moveEnd.removeEventListener(onMoveEnd);
-      }
+      const camera = viewer ? cameraOf(viewer) : null;
+      if (!removeMoveEnd && typeof camera?.on === 'function')
+        removeMoveEnd = camera.on('moveEnd', onMoveEnd);
     },
     disable() {
       enabled = false;

@@ -1,9 +1,8 @@
 /**
  * @file Browser loader for the bundled 2-bit land/sea mask asset.
  *
- * ONE shared memoized instance serves both ocean click gating and the drift
- * beaching fallback — the decoded mask is never copied or transferred, so the
- * ~1 MB payload exists once per session. The asset is content-hashed by Vite,
+ * One shared memoized instance is available to future browser consumers.
+ * No application consumer is wired yet. The asset is content-hashed by Vite,
  * so it is fetched with `force-cache`.
  *
  * BROWSER ONLY. The Node byte source lives in `server/landSeaMask.js` over

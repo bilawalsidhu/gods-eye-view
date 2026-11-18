@@ -1,0 +1,2852 @@
+/* ── Context panel: the card for one thing on the map ──────────────────
+   Sits at the top of the Context panel, above the mode switch. Glass like
+   the omnibar sheet; the title in the mono face the HUD uses. */
+.entity-card {
+  margin: 0 0 0.75rem;
+  padding: 0.7rem 0.75rem 0.6rem;
+  color: rgba(225, 236, 242, 0.92);
+  background: rgba(40, 44, 52, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+}
+
+.entity-card__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.entity-card__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  color: #36dcff;
+  font-size: 1.1rem;
+  background: rgba(29, 69, 81, 0.35);
+  border: 1px solid rgba(48, 194, 224, 0.35);
+  border-radius: 7px;
+}
+
+.entity-card__kind {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 0.62rem;
+  letter-spacing: 0.06rem;
+  text-transform: uppercase;
+}
+
+.entity-card__kind > span:first-child {
+  color: rgba(225, 236, 242, 0.85);
+}
+
+.entity-card__layer {
+  overflow: hidden;
+  color: rgba(199, 214, 222, 0.5);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entity-card__status {
+  flex: none;
+  padding: 0.12rem 0.45rem;
+  font-size: 0.58rem;
+  white-space: nowrap;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+
+.entity-card__status--live {
+  color: #5ee6a0;
+}
+
+.entity-card__status--live::before {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 0.3rem;
+  vertical-align: middle;
+  background: currentColor;
+  border-radius: 50%;
+  content: '';
+  animation: entity-card-pulse 1.6s ease-in-out infinite;
+}
+
+.entity-card__status--aged {
+  color: rgba(199, 214, 222, 0.6);
+}
+
+.entity-card__status--lost {
+  color: #ff9f43;
+}
+
+.entity-card__close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  color: rgba(199, 214, 222, 0.6);
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.entity-card__close:hover,
+.entity-card__close:focus-visible {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.entity-card__close .material-symbols-outlined {
+  font-size: 1rem;
+}
+
+.entity-card__title {
+  margin: 0.55rem 0 0.1rem;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.02rem;
+}
+
+.entity-card__where {
+  margin: 0 0 0.5rem;
+  color: rgba(199, 214, 222, 0.5);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  white-space: pre;
+}
+
+.entity-card__facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem 0.75rem;
+  margin: 0 0 0.55rem;
+}
+
+.entity-card__fact {
+  min-width: 0;
+}
+
+.entity-card__fact dt {
+  color: rgba(199, 214, 222, 0.5);
+  font-size: 0.56rem;
+  letter-spacing: 0.05rem;
+  text-transform: uppercase;
+}
+
+.entity-card__fact dd {
+  margin: 0.1rem 0 0;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entity-card__empty {
+  margin: 0 0 0.55rem;
+  color: rgba(199, 214, 222, 0.55);
+  font-size: 0.68rem;
+}
+
+.entity-card__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0 0 0.55rem;
+}
+
+.entity-card__links a {
+  padding: 0.15rem 0.5rem;
+  color: #36dcff;
+  font-size: 0.64rem;
+  text-decoration: none;
+  border: 1px solid rgba(48, 194, 224, 0.35);
+  border-radius: 999px;
+}
+
+.entity-card__links a:hover,
+.entity-card__links a:focus-visible {
+  background: rgba(48, 194, 224, 0.12);
+}
+
+.entity-card__actions {
+  display: flex;
+  gap: 0.35rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.entity-card__action {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  height: 1.9rem;
+  padding: 0 0.4rem;
+  color: rgba(225, 236, 242, 0.88);
+  font-size: 0.66rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease;
+}
+
+.entity-card__action .material-symbols-outlined {
+  font-size: 0.95rem;
+}
+
+.entity-card__action:hover,
+.entity-card__action:focus-visible {
+  background: rgba(48, 194, 224, 0.12);
+  border-color: rgba(48, 194, 224, 0.45);
+}
+
+.entity-card__action--ask {
+  color: #ffb877;
+}
+
+.entity-card__action--ask:hover,
+.entity-card__action--ask:focus-visible {
+  background: rgba(255, 159, 67, 0.12);
+  border-color: rgba(255, 159, 67, 0.5);
+}
+
+.entity-card__nearby {
+  margin-top: 0.65rem;
+}
+
+.entity-card__nearby h4 {
+  margin: 0 0 0.25rem;
+  color: rgba(199, 214, 222, 0.5);
+  font-size: 0.56rem;
+  font-weight: 500;
+  letter-spacing: 0.06rem;
+  text-transform: uppercase;
+}
+
+.entity-card__nearby ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entity-card__nearby button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.3rem 0.35rem;
+  color: rgba(225, 236, 242, 0.85);
+  font-size: 0.68rem;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.entity-card__nearby button:hover,
+.entity-card__nearby button:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.entity-card__nearby .material-symbols-outlined {
+  color: rgba(199, 214, 222, 0.6);
+  font-size: 0.95rem;
+}
+
+.entity-card__row-title {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entity-card__row-title small {
+  color: rgba(199, 214, 222, 0.45);
+  font-size: 0.56rem;
+}
+
+.entity-card__row-meta {
+  flex: none;
+  color: rgba(199, 214, 222, 0.55);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+}
+
+.entity-card-enter-active,
+.entity-card-leave-active {
+  transition:
+    opacity 200ms ease,
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.entity-card-enter-from,
+.entity-card-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+@keyframes entity-card-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .entity-card-enter-active,
+  .entity-card-leave-active {
+    transition: opacity 120ms ease;
+  }
+
+  .entity-card-enter-from,
+  .entity-card-leave-to {
+    transform: none;
+  }
+
+  .entity-card__status--live::before {
+    animation: none;
+  }
+}
+
+/* The Properties tab shows only the layers' settings. The idle hint gives
+   way to the view summary, and Contacts' Cockpit entry to the card's own
+   while the card offers one. */
+#global-context-panel[data-context-tab='props']
+  :is(.global-context-modes, .context-mode-view, #radio-panel),
+#global-context-panel #context-mode-standby,
+#global-context-panel:has([data-entity-cockpit-entry]) #cockpit-entry {
+  display: none !important;
+}
+
+#global-context-panel .global-context-actions:has(#tr3b-toggle:not([hidden])) {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+/* ── In view: what the panel shows while nothing is picked ───────────── */
+.view-context {
+  margin: 0 0 0.75rem;
+  padding: 0.7rem 0.75rem 0.6rem;
+  color: rgba(225, 236, 242, 0.92);
+  background: rgba(40, 44, 52, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+}
+
+.view-context__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.view-context__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  color: #36dcff;
+  font-size: 1.1rem;
+  background: rgba(29, 69, 81, 0.35);
+  border: 1px solid rgba(48, 194, 224, 0.35);
+  border-radius: 7px;
+}
+
+.view-context__kind {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.62rem;
+  letter-spacing: 0.06rem;
+  text-transform: uppercase;
+}
+
+.view-context__sub {
+  color: rgba(199, 214, 222, 0.5);
+}
+
+.view-context__title {
+  margin: 0.55rem 0 0.1rem;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.view-context__where {
+  margin: 0 0 0.55rem;
+  color: rgba(199, 214, 222, 0.5);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  white-space: pre;
+}
+
+.view-context__total,
+.view-context__empty {
+  margin: 0 0 0.4rem;
+  color: rgba(199, 214, 222, 0.7);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.view-context__group + .view-context__group {
+  margin-top: 0.45rem;
+}
+
+.view-context__group h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.15rem;
+  color: rgba(199, 214, 222, 0.6);
+  font-size: 0.58rem;
+  font-weight: 500;
+  letter-spacing: 0.06rem;
+  text-transform: uppercase;
+}
+
+.view-context__group h4 .material-symbols-outlined {
+  font-size: 0.95rem;
+}
+
+.view-context__count {
+  margin-inline-start: auto;
+  color: #36dcff;
+  font-family: var(--font-mono);
+}
+
+.view-context__group ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.view-context__group button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.28rem 0.35rem 0.28rem 1.75rem;
+  color: rgba(225, 236, 242, 0.85);
+  font-size: 0.68rem;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.view-context__group button:hover,
+.view-context__group button:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.view-context__row-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A moving item's state on its row: green moving, amber stopped, grey
+   while its feed has nothing new. */
+.view-context__row-motion {
+  flex: none;
+  margin-right: 6px;
+  color: rgba(199, 214, 222, 0.5);
+  font-size: 14px;
+}
+
+.view-context__row-motion[data-motion='moving'] {
+  color: #5dff9f;
+}
+
+.view-context__row-motion[data-motion='stopped'] {
+  color: #ffb86b;
+}
+
+.view-context__row-meta {
+  flex: none;
+  color: rgba(199, 214, 222, 0.55);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+}
+
+.view-context__actions {
+  display: flex;
+  margin-top: 0.6rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.context-empty {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  padding: 14px 4px 6px;
+  color: var(--text-secondary);
+  font: 12px/1.45 var(--font-sans);
+}
+
+.context-empty .material-symbols-outlined {
+  color: var(--accent);
+  font-size: 22px;
+}
+
+.context-empty strong {
+  color: var(--text-primary);
+  font: 600 11px/1.2 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* A warning leads the card, above the name: an emergency, a tsunami flag. */
+.entity-card__warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0.55rem 0 0;
+  padding: 0.4rem 0.55rem;
+  color: #ffd6d0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.35;
+  background: rgba(255, 75, 62, 0.16);
+  border: 1px solid rgba(255, 75, 62, 0.55);
+  border-radius: 7px;
+}
+
+.entity-card__warning .material-symbols-outlined {
+  flex: none;
+  color: #ff6b5e;
+  font-size: 1rem;
+}
+
+/* Where the card's data comes from, and how fresh it is. */
+.entity-card__source {
+  margin: 0.6rem 0 0;
+  padding-top: 0.45rem;
+  color: rgba(199, 214, 222, 0.5);
+  font-size: 0.6rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.entity-card__source span {
+  letter-spacing: 0.06rem;
+  text-transform: uppercase;
+}
+
+/* Open, Context fills the right column top to bottom, its card scrolling
+   inside rather than the panel growing and shrinking with each selection. */
+#right-context-rail > #global-context-panel:not(.collapsed),
+#right-context-rail.layout-focus > #global-context-panel:not(.collapsed) {
+  flex: 0 0 var(--right-stack-max-height, auto);
+  height: var(--right-stack-max-height, auto);
+  max-height: var(--right-stack-max-height, 100%);
+}
+
+#right-context-rail
+  > #global-context-panel:not(.collapsed)
+  .global-context-panel-inner {
+  height: 100%;
+}
+
+/* The icon font's own rules (display: block, 24px) beat the badge's; keep
+   the glyph centred in its square at the badge's size. */
+.entity-card__head .entity-card__icon.material-symbols-outlined,
+.view-context__head .view-context__icon.material-symbols-outlined {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 1.9rem;
+  height: 1.9rem;
+  font-size: 1.1rem;
+  line-height: 1;
+  overflow: hidden;
+}
+
+/* The aircraft's model, turning at the top of its card on a soft spotlight. */
+
+/* Origin to destination, as one line with the craft on it. */
+.entity-card__route {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.15rem 0 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.entity-card__route-line {
+  position: relative;
+  display: grid;
+  flex: 1;
+  place-items: center;
+  height: 1rem;
+  background: linear-gradient(
+      90deg,
+      rgba(199, 214, 222, 0.35) 50%,
+      transparent 0
+    )
+    center / 7px 1px repeat-x;
+}
+
+.entity-card__route-line .material-symbols-outlined {
+  padding: 0 0.25rem;
+  color: #36dcff;
+  font-size: 0.95rem;
+  background: rgba(40, 44, 52, 1);
+  transform: rotate(90deg);
+}
+
+/* Headline figures: big numbers, small labels. */
+.entity-card__tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin: 0.2rem 0 0.55rem;
+}
+
+.entity-card__tile {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.45rem 0.4rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+}
+
+.entity-card__tile span {
+  color: rgba(199, 214, 222, 0.5);
+  font-size: 0.54rem;
+  letter-spacing: 0.06rem;
+  text-transform: uppercase;
+}
+
+.entity-card__tile strong {
+  overflow: hidden;
+  color: rgba(236, 244, 248, 0.95);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The callout on the turning model, in the frame's top-left corner. The
+   leader sits under the text: a dot near the craft lights first, the line
+   draws from it up to the corner, then the label and value fade in. */
+
+/* The parts legend and the scan caption, bottom right of the model. */
+
+/* ── Card, second pass ──────────────────────────────────────────────────
+   One surface: inside Context the card is the panel's content, not a box in
+   a box. Identity leads (kind, name, who and what), then status and place,
+   the model, headline figures, details, actions, what is near, the source. */
+#global-context-panel .entity-card,
+#global-context-panel .view-context {
+  margin: 0;
+  padding: 0.15rem 0 0.4rem;
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
+
+.entity-card__head {
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.entity-card__name {
+  display: grid;
+  flex: 1;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+#entity-card .entity-card__kind {
+  display: block;
+  color: rgba(199, 214, 222, 0.5);
+  font-size: 0.56rem;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+}
+
+#entity-card .entity-card__title {
+  margin: 0;
+  font-size: 1.15rem;
+  line-height: 1.1;
+  letter-spacing: 0.03rem;
+}
+
+.entity-card__subtitle {
+  overflow: hidden;
+  color: rgba(225, 236, 242, 0.72);
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entity-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+  margin: 0.55rem 0 0.15rem;
+}
+
+#entity-card .entity-card__where {
+  margin: 0;
+  font-size: 0.6rem;
+}
+
+/* The model sits edge to edge under the name, framed by hairlines. */
+
+/* Tiles: the number leads, its unit sits small beside it. */
+#entity-card .entity-card__tile strong {
+  display: flex;
+  align-items: baseline;
+  gap: 0.2rem;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+}
+
+#entity-card .entity-card__tile small {
+  color: rgba(199, 214, 222, 0.6);
+  font-size: 0.6rem;
+  font-weight: 500;
+}
+
+/* Sections get a quiet heading with a hairline under it. */
+.entity-card__section {
+  margin-top: 0.75rem;
+}
+
+.entity-card__section > h4,
+#entity-card .entity-card__nearby h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.35rem;
+  padding-bottom: 0.3rem;
+  color: rgba(199, 214, 222, 0.55);
+  font-size: 0.56rem;
+  font-weight: 500;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.entity-card__section > h4 span {
+  padding: 0 0.3rem;
+  color: rgba(54, 220, 255, 0.85);
+  font-family: var(--font-mono);
+  background: rgba(54, 220, 255, 0.1);
+  border-radius: 999px;
+}
+
+/* Actions: the three moves in a row, then asking GEV across the width. */
+#entity-card .entity-card__actions {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.8rem;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.entity-card__action-row {
+  display: flex;
+  gap: 0.35rem;
+}
+
+#entity-card .entity-card__action--ask {
+  width: 100%;
+  height: 2.1rem;
+  color: #ffb86b;
+  background: rgba(255, 159, 67, 0.08);
+  border-color: rgba(255, 159, 67, 0.35);
+}
+
+#entity-card .entity-card__action--ask:hover,
+#entity-card .entity-card__action--ask:focus-visible {
+  background: rgba(255, 159, 67, 0.16);
+  border-color: rgba(255, 159, 67, 0.6);
+}
+
+/* ── Callout states ──────────────────────────────────────────────────────
+   Enter 0-2.3 s (dot, leader, text), hold to 5.2 s (dot breathes, timer
+   fills), exit over 1 s (text, then leader back into the dot, then dot). */
+
+/* Exit: text first, then the leader retracts toward the dot, then the dot. */
+
+/* The route on its small globe, and the Route / Model switch above it. */
+
+/* In view, richer: region, the view's figures as tiles, places in view and
+   layer switches as chips. */
+.view-context__region {
+  margin: 0 0 0.15rem;
+  color: rgba(225, 236, 242, 0.7);
+  font-size: 0.7rem;
+}
+
+.view-context__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin: 0.4rem 0 0.7rem;
+}
+
+.view-context__fact {
+  display: grid;
+  gap: 0.18rem;
+  padding: 0.45rem 0.5rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+}
+
+.view-context__fact span {
+  color: rgba(199, 214, 222, 0.5);
+  font-size: 0.54rem;
+  letter-spacing: 0.06rem;
+  text-transform: uppercase;
+}
+
+.view-context__fact strong {
+  overflow: hidden;
+  color: rgba(236, 244, 248, 0.95);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.view-context__towns {
+  margin: 0.2rem 0 0.7rem;
+}
+
+.view-context__towns h4 {
+  margin: 0 0 0.35rem;
+  padding-bottom: 0.3rem;
+  color: rgba(199, 214, 222, 0.55);
+  font-size: 0.56rem;
+  font-weight: 500;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.view-context__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.view-context__chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.28rem 0.6rem;
+  color: rgba(225, 236, 242, 0.85);
+  font-size: 0.66rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.view-context__chips button:hover,
+.view-context__chips button:focus-visible {
+  color: #fff;
+  background: rgba(54, 220, 255, 0.12);
+  border-color: rgba(54, 220, 255, 0.4);
+}
+
+.view-context__chips .material-symbols-outlined {
+  font-size: 0.85rem;
+}
+
+/* A scheduled route that does not fit the plane's position: amber, dashed,
+   with a note, so it cannot pass for the flight's actual route. */
+.entity-card__route--unverified strong {
+  color: #ffb86b;
+}
+
+.entity-card__route--unverified .entity-card__route-line {
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 184, 107, 0.55) 50%,
+    transparent 0
+  );
+}
+
+.entity-card__route--unverified
+  .entity-card__route-line
+  .material-symbols-outlined {
+  color: #ffb86b;
+}
+
+.entity-card__route-note {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: -0.3rem 0 0.55rem;
+  color: rgba(255, 184, 107, 0.85);
+  font-size: 0.6rem;
+}
+
+.entity-card__route-note .material-symbols-outlined {
+  font-size: 0.85rem;
+}
+
+/* Route progress: the line filled from the origin up to the plane, which
+   sits at its share of the way, and dashed beyond it to the destination. */
+.entity-card__route--progress .entity-card__route-line {
+  display: block;
+  background:
+    linear-gradient(90deg, #36dcff, #36dcff) left center /
+      var(--route-share, 0%) 2px no-repeat,
+    linear-gradient(90deg, rgba(199, 214, 222, 0.35) 50%, transparent 0)
+      center / 7px 1px repeat-x;
+  transition: background-size 600ms ease;
+}
+
+.entity-card__route--progress
+  .entity-card__route-line
+  .material-symbols-outlined {
+  position: absolute;
+  top: 50%;
+  left: var(--route-share, 0%);
+  padding: 0 0.15rem;
+  transform: translate(-50%, -50%) rotate(90deg);
+  transition: left 600ms ease;
+}
+
+.entity-card__route-stats {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: -0.3rem 0 0.6rem;
+  color: rgba(199, 214, 222, 0.6);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+}
+
+/* The route globe's corner label: each airport's code over its city and
+   state, on a soft scrim so it reads over the imagery. */
+
+/* The airports' cities, under the progress bar: origin left, destination right. */
+.entity-card__route-places {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: -0.35rem 0 0.65rem;
+  color: rgba(225, 236, 242, 0.75);
+  font-size: 0.64rem;
+}
+
+.entity-card__route-places span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entity-card__route-places span:last-child {
+  text-align: right;
+}
+
+/* While the preview takes turns, a hairline under the active tab fills until
+   the switch; a tab the viewer picked stays put and shows no timer. */
+/* The minimap's compass, top right: north at the top (the view is north up),
+   the cyan needle on the course to the destination, its bearing beneath. */
+
+/* Follow, while the camera is on the craft. */
+#entity-card .entity-card__action--on {
+  color: #36dcff;
+  background: rgba(54, 220, 255, 0.12);
+  border-color: rgba(54, 220, 255, 0.45);
+}
+
+/* ── Context refinements: one heading style, one tile style, even rhythm ── */
+.view-context__towns h4,
+.view-context__group h4,
+.spot-conditions__block h4,
+.entity-card__section h4,
+.entity-card__nearby h4 {
+  margin: 0 0 0.4rem;
+  color: rgba(199, 214, 222, 0.55);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 500;
+  letter-spacing: 0.14rem;
+  text-transform: uppercase;
+}
+
+.view-context__towns,
+.view-context__groups,
+.spot-conditions__block,
+.entity-card__section {
+  margin-top: 0.85rem;
+}
+
+.view-context__fact,
+.entity-card__tile,
+.spot-conditions__weather {
+  border-radius: 8px;
+  border-color: rgba(255, 255, 255, 0.07);
+}
+
+.view-context__title {
+  letter-spacing: 0.02em;
+}
+
+.view-context__where {
+  margin-bottom: 0.2rem;
+}
+
+/* Place chips match the omnibox's chips. */
+.view-context__chips button {
+  border-radius: 999px;
+}
+
+/* ── In view: the layers that are on ── */
+.view-context__live {
+  margin-top: 0.85rem;
+}
+
+.view-context__live h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.4rem;
+  color: rgba(199, 214, 222, 0.55);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 500;
+  letter-spacing: 0.14rem;
+  text-transform: uppercase;
+}
+
+.view-context__live h4 .view-context__count {
+  margin-inline-start: auto;
+}
+
+.view-context__live ul {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.view-context__live-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.4rem 0.45rem 0.4rem 0.55rem;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.view-context__live-icon {
+  flex: none;
+  font-size: 0.95rem;
+}
+
+.view-context__live-main {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 0.08rem;
+  min-width: 0;
+}
+
+.view-context__live-name {
+  overflow: hidden;
+  color: rgba(236, 244, 248, 0.94);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.view-context__live-meta {
+  overflow: hidden;
+  color: rgba(199, 214, 222, 0.55);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.view-context__live-state {
+  flex: none;
+  padding: 0.12rem 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.1rem;
+  text-transform: uppercase;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+
+.view-context__live-state--live {
+  color: #4be3a0;
+}
+.view-context__live-state--loading {
+  color: #36dcff;
+}
+.view-context__live-state--stale {
+  color: #ffb547;
+}
+.view-context__live-state--error {
+  color: #ff5c6c;
+}
+
+.view-context__live-off {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: rgba(199, 214, 222, 0.5);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.view-context__live-off .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.view-context__live-off:hover,
+.view-context__live-off:focus-visible {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+/* ── Selected camera: thumbnail, facts, More info ── */
+.cctv-preview {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0.75rem;
+}
+
+.cctv-preview__frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #05080b;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+
+.cctv-preview__frame img,
+.cctv-preview__live {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cctv-preview__frame.is-empty span:first-child {
+  color: rgba(199, 214, 222, 0.5);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.12rem;
+  text-transform: uppercase;
+}
+
+.cctv-preview__badge {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  padding: 2px 7px;
+  color: #4be3a0;
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.1rem;
+  background: rgba(5, 8, 11, 0.8);
+  border: 1px solid rgba(75, 227, 160, 0.45);
+  border-radius: 999px;
+}
+
+.cctv-preview__name {
+  margin: 0;
+  color: rgba(236, 244, 248, 0.94);
+  font-size: 0.78rem;
+}
+
+.cctv-preview__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.cctv-preview__facts div {
+  padding: 0.35rem 0.5rem;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 7px;
+}
+
+.cctv-preview__facts dt {
+  color: rgba(199, 214, 222, 0.5);
+  font-size: 0.52rem;
+  letter-spacing: 0.06rem;
+  text-transform: uppercase;
+}
+
+.cctv-preview__facts dd {
+  overflow: hidden;
+  margin: 0.1rem 0 0;
+  color: rgba(236, 244, 248, 0.92);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cctv-preview__more {
+  justify-content: center;
+}
+
+.cctv-preview__expand {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: rgba(236, 244, 248, 0.9);
+  background: rgba(5, 8, 11, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.cctv-preview__expand .material-symbols-outlined {
+  font-size: 15px;
+}
+
+.cctv-preview__expand:hover,
+.cctv-preview__expand:focus-visible {
+  color: #7af0ff;
+  border-color: rgba(54, 220, 255, 0.6);
+}
+
+/* ── Bigger camera view ── */
+.cctv-popup {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  background: rgba(2, 4, 8, 0.55);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation: cctv-popup-in 160ms ease;
+}
+
+@keyframes cctv-popup-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.cctv-popup__card {
+  display: grid;
+  gap: 0.6rem;
+  width: min(960px, 92vw);
+  margin: 0;
+  padding: 0.7rem;
+  background: rgba(12, 12, 20, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+.cctv-popup__head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0 0.2rem;
+  color: rgba(236, 244, 248, 0.94);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+}
+
+.cctv-popup__head > .material-symbols-outlined {
+  color: #36dcff;
+  font-size: 18px;
+}
+
+.cctv-popup__badge {
+  padding: 2px 8px;
+  color: #4be3a0;
+  font-size: 0.55rem;
+  letter-spacing: 0.1rem;
+  border: 1px solid rgba(75, 227, 160, 0.45);
+  border-radius: 999px;
+}
+
+.cctv-popup__close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-inline-start: auto;
+  padding: 0;
+  color: rgba(236, 244, 248, 0.8);
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.cctv-popup__close:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.cctv-popup__card img {
+  width: 100%;
+  max-height: 72vh;
+  object-fit: contain;
+  background: #000;
+  border-radius: 8px;
+}
+
+.cctv-popup__card figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.1rem;
+  padding: 0 0.2rem 0.1rem;
+  color: rgba(199, 214, 222, 0.6);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+}
+
+.cctv-popup__card figcaption b {
+  color: rgba(236, 244, 248, 0.92);
+  font-weight: 500;
+}
+
+/* CCTV, open, fills the right column top to bottom like Context. */
+#right-context-rail > #cctv-panel:not(.collapsed),
+#right-context-rail.layout-focus > #cctv-panel:not(.collapsed) {
+  flex: 0 0 var(--right-stack-max-height, auto);
+  height: var(--right-stack-max-height, auto);
+  max-height: var(--right-stack-max-height, 100%);
+}
+
+#right-context-rail > #cctv-panel:not(.collapsed) > .cctv-panel-inner,
+#right-context-rail > #cctv-panel:not(.collapsed) > [class$='-inner'] {
+  height: 100%;
+}
+
+/* ── Hero tile ───────────────────────────────────────────────────────────
+   One slot at the top of every card: an aircraft's route globe and turning
+   model, a camera's frame, or a quiet placeholder with the item's icon and
+   name. */
+.entity-hero {
+  position: relative;
+  margin: 0 0 0.6rem;
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+/* Both previews fill the tile, one over the other; the hidden one keeps its
+   size, so showing it needs no layout and no fresh canvas. */
+
+.entity-hero .cctv-preview {
+  margin: 0;
+}
+
+.entity-hero__placeholder {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.9rem;
+  min-height: 84px;
+  padding: 0.7rem 0.9rem;
+  background:
+    radial-gradient(
+      ellipse 45% 90% at 12% 50%,
+      rgba(54, 220, 255, 0.1),
+      transparent 70%
+    ),
+    rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+}
+
+.entity-hero__placeholder--bare {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  gap: 0.3rem;
+  text-align: center;
+}
+
+.entity-hero__glyph.material-symbols-outlined {
+  display: grid;
+  place-items: center;
+  width: 3.2rem;
+  height: 3.2rem;
+  color: #36dcff;
+  font-size: 1.9rem;
+  background: rgba(54, 220, 255, 0.08);
+  border: 1px solid rgba(54, 220, 255, 0.18);
+  border-radius: 50%;
+}
+
+.entity-hero__figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.1rem;
+  min-width: 0;
+}
+
+.entity-hero__figure {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.entity-hero__figure strong {
+  overflow: hidden;
+  color: rgba(240, 247, 250, 0.98);
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entity-hero__figure strong small {
+  margin-inline-start: 0.2rem;
+  color: rgba(199, 214, 222, 0.7);
+  font-size: 0.62rem;
+  font-weight: 500;
+}
+
+.entity-hero__figure span,
+.entity-hero__kind {
+  color: rgba(199, 214, 222, 0.55);
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.12rem;
+  text-transform: uppercase;
+}
+
+/* ── Cockpit leads an aircraft's actions ─────────────────────────────── */
+#entity-card .entity-card__action--primary {
+  width: 100%;
+  height: 2.3rem;
+  color: #04131a;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.04rem;
+  background: #36dcff;
+  border-color: #36dcff;
+  box-shadow: 0 0 18px rgba(54, 220, 255, 0.28);
+}
+
+#entity-card .entity-card__action--primary:hover,
+#entity-card .entity-card__action--primary:focus-visible {
+  color: #04131a;
+  background: #7be8ff;
+  border-color: #7be8ff;
+}
+
+/* Following is a state, not the main action: outlined, not filled. */
+#entity-card .entity-card__action--on {
+  background: transparent;
+}
+
+/* ── Worldwide counts (globe view, nothing selected) ─────────────────── */
+.view-context__world {
+  margin: 0.6rem 0 0.75rem;
+}
+
+.view-context__world h4 {
+  margin: 0 0 0.4rem;
+  color: rgba(199, 214, 222, 0.55);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 500;
+  letter-spacing: 0.14rem;
+  text-transform: uppercase;
+}
+
+.view-context__world-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.view-context__world-tile {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.05rem 0.5rem;
+  padding: 0.5rem 0.6rem;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+}
+
+.view-context__world-tile .material-symbols-outlined {
+  grid-row: 1 / 3;
+  color: #36dcff;
+  font-size: 1.3rem;
+}
+
+.view-context__world-tile strong {
+  color: rgba(240, 247, 250, 0.98);
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.view-context__world-tile span:last-child {
+  overflow: hidden;
+  color: rgba(199, 214, 222, 0.6);
+  font-size: 0.58rem;
+  letter-spacing: 0.04rem;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.view-context__world-tile.is-off {
+  cursor: pointer;
+  border-style: dashed;
+}
+
+.view-context__world-tile.is-off .material-symbols-outlined,
+.view-context__world-tile.is-off strong {
+  color: rgba(199, 214, 222, 0.45);
+}
+
+.view-context__world-tile.is-off:hover,
+.view-context__world-tile.is-off:focus-visible {
+  background: rgba(54, 220, 255, 0.08);
+  border-color: rgba(54, 220, 255, 0.3);
+}
+
+/* An aircraft's altitude as a filled graph, graded by height: bright at
+   the top, fading towards the baseline. */
+.altitude-graph {
+  margin: 0 0 0.7rem;
+  padding: 0.5rem 0.6rem 0.45rem;
+  border: 1px solid rgba(160, 200, 220, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.altitude-graph__head,
+.altitude-graph__foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.altitude-graph__label,
+.altitude-graph__foot {
+  color: rgba(199, 214, 222, 0.6);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.altitude-graph__now {
+  color: #eef6fa;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.altitude-graph__plot {
+  position: relative;
+  height: 3.4rem;
+  margin: 0.35rem 0 0.3rem;
+  border-bottom: 1px solid rgba(160, 200, 220, 0.22);
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(160, 200, 220, 0.08) 0 1px,
+    transparent 1px 25%
+  );
+}
+
+.altitude-graph__plot svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.altitude-graph__stop--high {
+  stop-color: var(--accent);
+  stop-opacity: 0.75;
+}
+
+.altitude-graph__stop--mid {
+  stop-color: var(--accent);
+  stop-opacity: 0.3;
+}
+
+.altitude-graph__stop--low {
+  stop-color: var(--accent);
+  stop-opacity: 0.04;
+}
+
+.altitude-graph__line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.altitude-graph__head-dot {
+  position: absolute;
+  right: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+  transform: translateY(-50%);
+}
+
+.altitude-graph__scale {
+  position: absolute;
+  top: 1px;
+  left: 2px;
+  color: rgba(199, 214, 222, 0.45);
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+}
+
+.altitude-graph[data-trend='up'] .altitude-graph__change {
+  color: #7fe0a8;
+}
+
+.altitude-graph[data-trend='down'] .altitude-graph__change {
+  color: #f0b46a;
+}
+
+.altitude-graph__scale--low {
+  top: auto;
+  bottom: 1px;
+}
+
+/* What a layer that is on is made of: under its row, a bar per split whose
+   segments are the parts, and a legend with each part's count. */
+.view-context__live-item {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.view-context__live-item > .view-context__live-row {
+  background: none;
+  border: 0;
+}
+
+.view-context__split {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0 0.55rem 0.55rem;
+}
+
+.view-context__split-basis {
+  margin: 0;
+  color: rgba(199, 214, 222, 0.5);
+  font-family: var(--font-mono);
+  font-size: 0.54rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.view-context__split-bar {
+  display: flex;
+  gap: 2px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.view-context__split-bar i {
+  min-width: 2px;
+}
+
+.view-context__split-legend {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.15rem 0.6rem;
+  margin: 0.3rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.view-context__split-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  color: rgba(199, 214, 222, 0.75);
+  font-size: 0.6rem;
+}
+
+.view-context__split-legend i {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.view-context__split-legend span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.view-context__split-legend strong {
+  color: #eef6fa;
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+/* The compact graph: caption, figure and a short line, nothing else. */
+.altitude-graph--compact {
+  padding-bottom: 0.5rem;
+}
+
+.altitude-graph--compact .altitude-graph__plot {
+  height: 1.9rem;
+  margin-bottom: 0;
+  background: none;
+}
+
+/* "Layers on" leads the view, under the place name. */
+.view-context__live {
+  margin: 0.6rem 0 0.7rem;
+}
+
+/* ── Card previews: the photo, route globe, turning model, cockpit view and
+   satellite ground view in the hero tile ─────────────────────────────── */
+
+.aircraft-hero {
+  position: relative;
+  height: 150px;
+  margin: 0.55rem -0.25rem 0.2rem;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      ellipse 60% 55% at 50% 58%,
+      rgba(54, 220, 255, 0.14),
+      transparent 70%
+    ),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0));
+  border-radius: 8px;
+}
+
+.aircraft-hero__scene,
+.aircraft-hero__scene .cesium-widget,
+.aircraft-hero__scene canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.aircraft-hero__scene canvas {
+  display: block;
+}
+.aircraft-hero__callout {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  z-index: 1;
+  display: grid;
+  gap: 1px;
+  max-width: 62%;
+  pointer-events: none;
+}
+
+.aircraft-hero__label,
+.aircraft-hero__value {
+  opacity: 0;
+  animation: aircraft-hero-text 700ms ease-out 200ms forwards;
+}
+
+.aircraft-hero__value {
+  animation-delay: 1650ms;
+}
+
+.aircraft-hero__label {
+  color: rgba(54, 220, 255, 0.75);
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.1rem;
+  text-transform: uppercase;
+}
+
+.aircraft-hero__value {
+  overflow: hidden;
+  color: #e8fbff;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.aircraft-hero-callout-leave-active {
+  transition:
+    opacity 600ms ease-in,
+    filter 600ms ease-in;
+}
+
+.aircraft-hero-callout-leave-to {
+  opacity: 0;
+  filter: blur(2px);
+}
+
+@keyframes aircraft-hero-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes aircraft-hero-dot {
+  from {
+    opacity: 0;
+    transform: scale(0);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes aircraft-hero-text {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aircraft-hero__label,
+  .aircraft-hero__value {
+    animation: none;
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+  .aircraft-hero-callout-leave-active {
+    transition: none;
+  }
+}
+.aircraft-hero__scan {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  z-index: 1;
+  margin: 0;
+  pointer-events: none;
+}
+
+.aircraft-hero__scan {
+  color: #36dcff;
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.14rem;
+  text-transform: uppercase;
+  animation: aircraft-hero-blink 1.1s steps(1, end) infinite;
+}
+
+@keyframes aircraft-hero-blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.aircraft-hero-legend-enter-active,
+.aircraft-hero-legend-leave-active {
+  transition: opacity 500ms ease;
+}
+
+.aircraft-hero-legend-enter-from,
+.aircraft-hero-legend-leave-to {
+  opacity: 0;
+}
+#entity-card .aircraft-hero {
+  height: 168px;
+  margin: 0.55rem 0 0.6rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 0;
+}
+.aircraft-hero__label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+
+.aircraft-hero__label em {
+  color: rgba(199, 214, 222, 0.4);
+  font-style: normal;
+  letter-spacing: 0.04rem;
+}
+
+.aircraft-hero__timer {
+  display: block;
+  width: 100%;
+  height: 1px;
+  margin-top: 4px;
+  background:
+    linear-gradient(90deg, rgba(54, 220, 255, 0.7), rgba(54, 220, 255, 0.7))
+      left / 0 100% no-repeat,
+    rgba(255, 255, 255, 0.08);
+  opacity: 0;
+  animation:
+    aircraft-hero-text 300ms ease-out 2000ms forwards,
+    aircraft-hero-timer 2900ms linear 2300ms forwards;
+}
+
+.aircraft-hero__label,
+.aircraft-hero__value {
+  animation-name: aircraft-hero-slide;
+}
+.aircraft-hero-callout-leave-active .aircraft-hero__label,
+.aircraft-hero-callout-leave-active .aircraft-hero__value,
+.aircraft-hero-callout-leave-active .aircraft-hero__timer {
+  opacity: 1;
+  animation: aircraft-hero-fade-out 350ms ease-in forwards;
+}
+
+.aircraft-hero-callout-leave-active .aircraft-hero__timer {
+  background-size:
+    100% 100%,
+    auto;
+}
+
+.aircraft-hero-callout-leave-active,
+.aircraft-hero-callout-leave-to {
+  transition: none;
+  opacity: 1;
+  filter: none;
+}
+
+@keyframes aircraft-hero-slide {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes aircraft-hero-timer {
+  to {
+    background-size:
+      100% 100%,
+      auto;
+  }
+}
+
+@keyframes aircraft-hero-breathe {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes aircraft-hero-fade-out {
+  to {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+}
+
+@keyframes aircraft-hero-retract {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 1;
+  }
+}
+
+@keyframes aircraft-hero-dot-out {
+  to {
+    opacity: 0;
+    transform: scale(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aircraft-hero__timer,
+  .aircraft-hero-callout-leave-active .aircraft-hero__label,
+  .aircraft-hero-callout-leave-active .aircraft-hero__value {
+    animation: none;
+  }
+  .aircraft-hero__timer {
+    opacity: 1;
+  }
+}
+.route-globe {
+  position: relative;
+  height: 168px;
+  margin: 0.35rem 0 0.6rem;
+  overflow: hidden;
+  background: radial-gradient(
+    ellipse 55% 60% at 50% 55%,
+    rgba(54, 220, 255, 0.1),
+    transparent 70%
+  );
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.route-globe__scene,
+.route-globe__scene .cesium-widget,
+.route-globe__scene canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.route-globe__codes {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+  color: rgba(199, 214, 222, 0.6);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  pointer-events: none;
+}
+
+.route-globe__codes strong {
+  color: #e8fbff;
+  font-size: 0.8rem;
+}
+
+.entity-card__preview-switch {
+  display: inline-flex;
+  gap: 2px;
+  margin-top: 0.55rem;
+  padding: 2px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 7px;
+}
+
+.entity-card__preview-switch button {
+  padding: 0.22rem 0.6rem;
+  color: rgba(199, 214, 222, 0.65);
+  font-size: 0.6rem;
+  letter-spacing: 0.06rem;
+  text-transform: uppercase;
+  background: none;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.entity-card__preview-switch button.active {
+  color: #36dcff;
+  background: rgba(54, 220, 255, 0.12);
+}
+.route-globe__codes {
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem 0.35rem;
+  background: rgba(6, 12, 16, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.route-globe__end {
+  display: grid;
+  gap: 1px;
+}
+
+.route-globe__end small {
+  max-width: 7.5rem;
+  overflow: hidden;
+  color: rgba(199, 214, 222, 0.7);
+  font-family: var(--font-sans, inherit);
+  font-size: 0.56rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.route-globe__arrow {
+  padding-top: 0.05rem;
+  color: rgba(54, 220, 255, 0.8);
+}
+.route-globe__compass {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  pointer-events: auto;
+}
+
+.route-globe__compass svg {
+  width: 46px;
+  height: 46px;
+  overflow: visible;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
+}
+
+.route-globe__compass-ring {
+  fill: rgba(6, 12, 16, 0.6);
+  stroke: rgba(199, 214, 222, 0.35);
+  stroke-width: 1;
+}
+
+.route-globe__compass-ticks line {
+  stroke: rgba(199, 214, 222, 0.55);
+  stroke-width: 1;
+}
+
+.route-globe__compass-n {
+  fill: #ff6b5e;
+  font: 700 7px var(--font-mono);
+  text-anchor: middle;
+}
+
+.route-globe__compass-needle path {
+  fill: #36dcff;
+  filter: drop-shadow(0 0 2px rgba(54, 220, 255, 0.8));
+}
+
+.route-globe__compass-needle {
+  transition: transform 600ms ease;
+}
+
+.route-globe__compass-hub {
+  fill: #e8fbff;
+}
+
+.route-globe__compass span {
+  padding: 0 0.3rem;
+  color: rgba(225, 236, 242, 0.85);
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  background: rgba(6, 12, 16, 0.6);
+  border-radius: 3px;
+}
+
+.entity-hero:is([data-hero='flight'], [data-hero='satellite'], [data-hero='photo']) {
+  height: 168px;
+  background: radial-gradient(
+    ellipse 55% 60% at 50% 55%,
+    rgba(54, 220, 255, 0.1),
+    rgba(255, 255, 255, 0.02) 70%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.entity-hero .entity-hero__layer {
+  position: absolute;
+  inset: 0;
+  height: auto;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  visibility: hidden;
+}
+
+.entity-hero .entity-hero__layer.is-shown {
+  visibility: visible;
+}
+
+.entity-hero__photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.entity-hero__photo small {
+  position: absolute;
+  inset-block-start: 6px;
+  inset-inline-end: 6px;
+  max-width: calc(100% - 12px);
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(10, 14, 20, 0.86);
+  color: #fff;
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.entity-hero__photo:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+
+.entity-hero .entity-card__preview-switch {
+  position: absolute;
+  z-index: 2;
+  bottom: 6px;
+  left: 6px;
+  margin: 0;
+  background: rgba(10, 14, 20, 0.78);
+  border-color: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.satellite-ground {
+  overflow: hidden;
+  background: #05080b;
+}
+
+.satellite-ground__map {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  filter: grayscale(1) brightness(0.78) contrast(1.2);
+  transform-origin: 0 0;
+}
+
+.satellite-ground__map.is-drifting {
+  animation: satellite-ground-drift 9s ease-out both;
+}
+
+@keyframes satellite-ground-drift {
+  from {
+    transform: scale(1.18);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.satellite-ground__tile {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 256px;
+  height: 256px;
+  max-width: none;
+  user-select: none;
+}
+
+.satellite-ground__rings {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 150px;
+  height: 150px;
+  overflow: visible;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.satellite-ground__ring {
+  fill: none;
+  stroke: rgba(150, 236, 220, 0.85);
+  vector-effect: non-scaling-stroke;
+}
+
+.satellite-ground__ring--inner {
+  fill: rgba(150, 236, 220, 0.06);
+  stroke-width: 1.5;
+  animation: satellite-ground-pulse 2.4s ease-in-out infinite;
+}
+
+.satellite-ground__ring--middle,
+.satellite-ground__ring--outer {
+  stroke: rgba(150, 236, 220, 0.5);
+  stroke-dasharray: 1 4;
+  stroke-linecap: round;
+  stroke-width: 1.5;
+  transform-origin: 0 0;
+  animation: satellite-ground-turn 40s linear infinite;
+}
+
+.satellite-ground__ring--outer {
+  stroke: rgba(150, 236, 220, 0.3);
+  animation-direction: reverse;
+}
+
+@keyframes satellite-ground-pulse {
+  50% {
+    stroke: rgba(150, 236, 220, 0.5);
+  }
+}
+
+@keyframes satellite-ground-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.satellite-ground__label {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  display: grid;
+  gap: 1px;
+  color: rgba(54, 220, 255, 0.75);
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.1rem;
+  text-transform: uppercase;
+}
+
+.satellite-ground__label strong {
+  color: #e8fbff;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.04rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.satellite-ground__credit {
+  position: absolute;
+  right: 8px;
+  bottom: 5px;
+  color: rgba(225, 236, 242, 0.5);
+  font-size: 0.48rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .satellite-ground__map.is-drifting,
+  .satellite-ground__ring {
+    animation: none;
+  }
+}
+.preview-hud {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  --hud-line: rgba(200, 236, 248, 0.55);
+  --hud-dim: rgba(200, 236, 248, 0.22);
+}
+
+.preview-hud__corner {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 0 solid var(--hud-line);
+  animation: preview-hud-breathe 3.2s ease-in-out infinite;
+}
+
+.preview-hud__corner--tl {
+  top: 5px;
+  left: 5px;
+  border-top-width: 1px;
+  border-left-width: 1px;
+}
+.preview-hud__corner--tr {
+  top: 5px;
+  right: 5px;
+  border-top-width: 1px;
+  border-right-width: 1px;
+}
+.preview-hud__corner--bl {
+  bottom: 5px;
+  left: 5px;
+  border-bottom-width: 1px;
+  border-left-width: 1px;
+}
+.preview-hud__corner--br {
+  right: 5px;
+  bottom: 5px;
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+  animation-delay: 1.6s;
+}
+.preview-hud__ruler {
+  position: absolute;
+  top: 34%;
+  right: 9px;
+  width: 5px;
+  height: 40%;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--hud-dim) 0 1px,
+    transparent 1px 6px
+  );
+}
+
+.preview-hud__ruler i {
+  position: absolute;
+  right: -3px;
+  width: 8px;
+  height: 1px;
+  background: #e8fbff;
+  box-shadow: 0 0 4px rgba(200, 236, 248, 0.8);
+  animation: preview-hud-ride 5.5s ease-in-out infinite alternate;
+}
+.preview-hud__scale {
+  position: absolute;
+  bottom: 9px;
+  left: 12px;
+  width: 38%;
+  height: 4px;
+  background:
+    repeating-linear-gradient(
+      to right,
+      var(--hud-dim) 0 1px,
+      transparent 1px 5px
+    ),
+    repeating-linear-gradient(
+      to right,
+      var(--hud-line) 0 1px,
+      transparent 1px 25px
+    );
+  background-size:
+    100% 3px,
+    100% 4px;
+  background-repeat: repeat-x;
+  background-position:
+    0 bottom,
+    0 bottom;
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 20%,
+    #000 80%,
+    transparent
+  );
+  animation: preview-hud-crawl 6s linear infinite;
+}
+.preview-hud__meter {
+  position: absolute;
+  top: 9px;
+  right: 12px;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 9px;
+}
+
+.preview-hud__meter i {
+  width: 2px;
+  height: 100%;
+  background: var(--hud-line);
+  transform-origin: bottom;
+  animation: preview-hud-level 1.4s ease-in-out infinite;
+}
+
+.preview-hud__meter i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.preview-hud__meter i:nth-child(3) {
+  animation-delay: 0.45s;
+}
+.preview-hud__meter i:nth-child(4) {
+  animation-delay: 0.7s;
+}
+
+.preview-hud__meter b {
+  width: 4px;
+  height: 4px;
+  margin: 0 0 3px 4px;
+  border-radius: 50%;
+  background: #ff5a5a;
+  animation: preview-hud-blink 1.2s steps(1, end) infinite;
+}
+.preview-hud__ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 132px;
+  height: 132px;
+  overflow: visible;
+  transform: translate(-50%, -50%);
+}
+
+.preview-hud__dash {
+  fill: none;
+  stroke: var(--hud-dim);
+  stroke-dasharray: 2 6;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  transform-origin: 0 0;
+  animation: preview-hud-turn 30s linear infinite;
+}
+
+.preview-hud__ticks {
+  stroke: var(--hud-line);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.preview-hud--ground .preview-hud__ring {
+  display: none;
+}
+.preview-hud__sweep {
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 22px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(150, 236, 220, 0.08) 80%,
+    rgba(150, 236, 220, 0.5) 100%
+  );
+  animation: preview-hud-sweep 4.5s linear infinite;
+}
+
+@keyframes preview-hud-breathe {
+  50% {
+    opacity: 0.45;
+  }
+}
+@keyframes preview-hud-ride {
+  from {
+    top: 8%;
+  }
+  to {
+    top: 88%;
+  }
+}
+@keyframes preview-hud-crawl {
+  to {
+    background-position:
+      -25px bottom,
+      -25px bottom;
+  }
+}
+@keyframes preview-hud-level {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+@keyframes preview-hud-blink {
+  50% {
+    opacity: 0.15;
+  }
+}
+@keyframes preview-hud-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes preview-hud-sweep {
+  from {
+    top: -22px;
+  }
+  to {
+    top: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-hud *,
+  .preview-hud__dash {
+    animation: none !important;
+  }
+
+  .preview-hud__sweep {
+    display: none;
+  }
+}
+.preview-hud__grid {
+  position: absolute;
+  border: 1px solid rgba(200, 236, 248, 0.14);
+  background:
+    repeating-linear-gradient(
+      to right,
+      rgba(200, 236, 248, 0.14) 0 1px,
+      transparent 1px 22px
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      rgba(200, 236, 248, 0.14) 0 1px,
+      transparent 1px 22px
+    );
+}
+
+.preview-hud__cell {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 23px;
+  height: 23px;
+  border: 1px solid rgba(150, 236, 220, 0.85);
+  background: rgba(150, 236, 220, 0.16);
+  box-shadow: 0 0 6px rgba(150, 236, 220, 0.35);
+  transition: opacity 160ms linear;
+}
+.preview-hud--ground {
+  opacity: 0.4;
+}
+
+.preview-hud--ground .preview-hud__grid {
+  opacity: 0.6;
+}
+
+.preview-hud--ground .preview-hud__cell {
+  border-color: rgba(150, 236, 220, 0.5);
+  background: rgba(150, 236, 220, 0.08);
+  box-shadow: none;
+}
+
+.satellite-ground__rings {
+  opacity: 0.45;
+}
+.flight-cockpit {
+  overflow: hidden;
+  background: #05080b;
+}
+
+.flight-cockpit__scene,
+.flight-cockpit__scene .cesium-widget,
+.flight-cockpit__scene canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.flight-cockpit__horizon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 46px;
+  height: 1px;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(
+    to right,
+    rgba(232, 251, 255, 0.7) 0 16px,
+    transparent 16px 30px,
+    rgba(232, 251, 255, 0.7) 30px
+  );
+}
+
+.flight-cockpit__horizon i {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  border: 1px solid rgba(232, 251, 255, 0.75);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.flight-cockpit__label {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  z-index: 2;
+  display: grid;
+  gap: 1px;
+  color: rgba(54, 220, 255, 0.85);
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.1rem;
+  text-transform: uppercase;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+.flight-cockpit__label strong {
+  color: #e8fbff;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.04rem;
+}
+
+.flight-cockpit__credit {
+  position: absolute;
+  right: 8px;
+  bottom: 5px;
+  z-index: 2;
+  color: rgba(225, 236, 242, 0.6);
+  font-size: 0.48rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+.preview-hud--cockpit {
+  opacity: 0.45;
+}
+
+.preview-hud--cockpit .preview-hud__ring {
+  display: none;
+}
+.flight-cockpit__tape {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  width: 44px;
+  height: 92px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.flight-cockpit__tape--speed {
+  left: 12px;
+}
+
+.flight-cockpit__tape--alt {
+  right: 12px;
+  width: 52px;
+}
+
+.flight-cockpit__ticks {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(232, 251, 255, 0.55) 0 1px,
+    transparent 1px 8px
+  );
+  background-size: 9px 100%;
+  background-repeat: repeat-y;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    #000 25%,
+    #000 75%,
+    transparent
+  );
+  transition: background-position-y 1.2s linear;
+  animation: flight-cockpit-jitter 2.6s ease-in-out infinite;
+}
+
+.flight-cockpit__tape--speed .flight-cockpit__ticks {
+  background-position-x: right;
+  border-right: 1px solid rgba(232, 251, 255, 0.35);
+}
+
+.flight-cockpit__tape--alt .flight-cockpit__ticks {
+  border-left: 1px solid rgba(232, 251, 255, 0.35);
+}
+
+.flight-cockpit__tape b {
+  position: relative;
+  align-self: center;
+  grid-row: 1;
+  grid-column: 1;
+  min-width: 34px;
+  padding: 1px 4px;
+  border: 1px solid rgba(232, 251, 255, 0.8);
+  background: rgba(5, 8, 11, 0.7);
+  color: #e8fbff;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.flight-cockpit__tape em {
+  position: absolute;
+  bottom: -12px;
+  color: rgba(54, 220, 255, 0.85);
+  font-family: var(--font-mono);
+  font-size: 0.45rem;
+  font-style: normal;
+  letter-spacing: 0.1rem;
+}
+
+@keyframes flight-cockpit-jitter {
+  50% {
+    transform: translateY(2px);
+  }
+}
+
+.preview-hud--cockpit .preview-hud__ruler {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flight-cockpit__ticks {
+    animation: none;
+    transition: none;
+  }
+}
+.entity-card__preview-switch button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 22px;
+  padding: 0;
+}
+
+.entity-card__preview-switch button .material-symbols-outlined {
+  font-size: 15px;
+}
+
+.entity-card__preview-switch button:not(:has(.material-symbols-outlined)) {
+  width: auto;
+  padding: 0 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+}
+.satellite-ground__credit,
+.flight-cockpit__credit {
+  left: 8px;
+  max-width: none;
+  line-height: 1.25;
+  text-align: right;
+}
+.satellite-ground__credit,
+.flight-cockpit__credit {
+  left: auto;
+  max-width: calc(100% - 110px);
+}

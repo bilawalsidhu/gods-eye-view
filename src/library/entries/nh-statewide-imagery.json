@@ -1,0 +1,48 @@
+{
+  "id": "nh-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "New Hampshire Statewide Imagery (2022)",
+  "provider": "NH GRANIT",
+  "description": "Aerial orthophotos: Statewide coverage of New Hampshire.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-72.6173, 42.6862, -70.5548, 45.3128]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://nhgeodata.unh.edu/image/rest/services/ImageServices/NH_2021_2022_6in_RGB/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "6 in",
+    "resolutionM": 0.1524,
+    "trueOrtho": false,
+    "vintage": "2022–present",
+    "updateCycle": "Multi-year cycles",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Open — NH GRANIT terms",
+    "url": "https://www.granit.unh.edu/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "NH GRANIT, University of New Hampshire",
+    "url": "https://www.granit.unh.edu/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

@@ -178,8 +178,9 @@ function fillPolygon(base, width, height, edges, fillValue) {
 }
 
 /**
- * Marks every cell a real shoreline edge passes through as coastal, sampling
- * at half-cell steps along the edge (0.0625 deg on the production grid).
+ * Marks every cell crossed by a real shoreline edge using grid traversal.
+ * Corner crossings conservatively mark both side cells. Grid-aligned edges
+ * use the same half-open cell membership as maskStateAt.
  * Artificial pole seams (indices >= realCount) are skipped: the seam is not
  * shoreline. Accumulates across all polygons of all levels.
  * @param {Uint8Array} coastal - width*height flag grid, mutated.
@@ -192,20 +193,57 @@ function markCoastal(coastal, width, height, edges) {
   const sx = width / 360;
   const sy = height / 180;
   const { x1, y1, x2, y2, realCount } = edges;
+  const mark = (col, row) => {
+    const wrappedCol = ((col % width) + width) % width;
+    const clampedRow = Math.max(0, Math.min(height - 1, row));
+    coastal[clampedRow * width + wrappedCol] = 1;
+  };
   for (let e = 0; e < realCount; e += 1) {
-    const dx = x2[e] - x1[e];
-    const dy = y2[e] - y1[e];
-    const steps = Math.max(
-      1,
-      Math.ceil(2 * Math.max(Math.abs(dx) * sx, Math.abs(dy) * sy)),
-    );
-    for (let k = 0; k <= steps; k += 1) {
-      const t = k / steps;
-      const col = Math.floor((wrapLon(x1[e] + dx * t) + 180) * sx) % width;
-      let row = Math.floor((y1[e] + dy * t + 90) * sy);
-      if (row < 0) row = 0;
-      else if (row > height - 1) row = height - 1;
-      coastal[row * width + col] = 1;
+    // Keep columns unwrapped until writing so a dateline crossing takes the
+    // short path. The polar closure edges are outside realCount.
+    const startX = (x1[e] + 180) * sx;
+    const startY = (y1[e] + 90) * sy;
+    const endX = (x2[e] + 180) * sx;
+    const endY = (y2[e] + 90) * sy;
+    const dx = endX - startX;
+    const dy = endY - startY;
+    const stepX = Math.sign(dx);
+    const stepY = Math.sign(dy);
+    let col = Math.floor(startX);
+    let row = Math.floor(startY);
+    const deltaX = dx === 0 ? Infinity : 1 / Math.abs(dx);
+    const deltaY = dy === 0 ? Infinity : 1 / Math.abs(dy);
+    let nextX =
+      dx === 0 ? Infinity : ((stepX > 0 ? col + 1 : col) - startX) / dx;
+    let nextY =
+      dy === 0 ? Infinity : ((stepY > 0 ? row + 1 : row) - startY) / dy;
+    mark(col, row);
+    mark(Math.floor(endX), Math.floor(endY));
+    // At most one crossing per row/column boundary, plus endpoint contacts.
+    // The explicit bound also prevents a stalled floating-point increment
+    // from turning a malformed input into an infinite loop.
+    const maxCrossings =
+      Math.abs(Math.floor(endX) - col) + Math.abs(Math.floor(endY) - row) + 2;
+    for (let k = 0; k < maxCrossings; k += 1) {
+      // Endpoints were marked using floor above; a negative-direction
+      // crossing at t=1 must not step into a cell beyond the segment.
+      if (Math.min(nextX, nextY) >= 1) break;
+      if (nextX === nextY) {
+        // A corner touches the two side cells as well as the diagonal one.
+        mark(col + stepX, row);
+        mark(col, row + stepY);
+        col += stepX;
+        row += stepY;
+        nextX += deltaX;
+        nextY += deltaY;
+      } else if (nextX < nextY) {
+        col += stepX;
+        nextX += deltaX;
+      } else {
+        row += stepY;
+        nextY += deltaY;
+      }
+      mark(col, row);
     }
   }
 }

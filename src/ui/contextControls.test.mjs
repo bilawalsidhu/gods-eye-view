@@ -17,7 +17,9 @@ class Button extends EventTarget {
 const turn = () => new Promise((resolve) => setImmediate(resolve));
 function fixture(t, elements = {}) {
   const calls = [];
+  const views = [];
   const controls = new ContextControls({
+    publish: (view) => views.push(view),
     elements,
     installations: {},
     actions: {
@@ -35,7 +37,7 @@ function fixture(t, elements = {}) {
     controls.stop();
     controls.disconnect();
   });
-  return { controls, calls };
+  return { controls, calls, views };
 }
 
 test('Context starts with an explicit idle snapshot', (t) => {
@@ -70,7 +72,9 @@ test('a pending Context tab cannot reopen a disposed panel', async (t) => {
 
 test('stopping during installations enable prevents the delayed search', async (t) => {
   const button = new Button();
-  const { controls, calls } = fixture(t, { _installationsSearchBtn: button });
+  const { controls, calls, views } = fixture(t, {
+    _installationsSearchBtn: button,
+  });
   let release;
   controls._dataManager = {
     layers: new Map([['military-installations', {}]]),
@@ -87,11 +91,8 @@ test('stopping during installations enable prevents the delayed search', async (
   release(true);
   await turn();
   assert.equal(calls.length, 0);
-  assert.equal(
-    button.getAttribute('aria-busy'),
-    'true',
-    'disposed controls are not mutated by completion',
-  );
+  assert.equal(views.length, 1, 'disposed controls publish nothing more');
+  assert.equal(views[0].installationsBusy, true);
 });
 
 test('a late installations search cannot publish a notice after disposal', async (t) => {
@@ -151,4 +152,57 @@ test('a rejected tracked reaction settles without an unhandled rejection', async
   await assert.rejects(pending, failure);
   await controls._waitForContextLayerSettlement();
   assert.equal(controls._contextLayerReactionPromises.size, 0);
+});
+
+test('only a layer Context isolation is switching off is suspended', async (t) => {
+  const { controls } = fixture(t);
+  const enabled = new Set(['cctv']);
+  // What the CCTV panel is told at each visibility change of its layer.
+  const seen = [];
+  controls._dataManager = {
+    layers: new Map([['cctv', {}]]),
+    getEnabledLayerIds: () => [...enabled],
+    getLayerParams: () => null,
+    setLayerParams() {},
+    isEnabled: (layerId) => enabled.has(layerId),
+    isEffectivelyEnabled: (layerId) => enabled.has(layerId),
+    async setEnabled(layerId, next) {
+      // The layer tells its panel it is off while it is being disabled.
+      if (next) enabled.add(layerId);
+      else enabled.delete(layerId);
+      seen.push([layerId, next, controls.suspendsLayer(layerId)]);
+      return true;
+    },
+    async restoreEnabledLayerIds(layerIds) {
+      for (const layerId of layerIds) await this.setEnabled(layerId, true);
+    },
+  };
+  assert.equal(controls.suspendsLayer('cctv'), false);
+  controls._captureContextSessionSnapshot();
+  await controls._clearLayersOutsideContextMode('flights');
+  assert.deepEqual(seen, [['cctv', false, true]]);
+  assert.equal(controls.suspendsLayer('cctv'), false, 'only while isolating');
+  // Inside the mode the user turns CCTV back on, then off: their own.
+  await controls._dataManager.setEnabled('cctv', true);
+  await controls._dataManager.setEnabled('cctv', false);
+  assert.deepEqual(seen.at(-1), ['cctv', false, false]);
+  await controls._restoreContextSession();
+  assert.equal(enabled.has('cctv'), true);
+  // A switch-off after the mode is left is the user's own too.
+  await controls._dataManager.setEnabled('cctv', false);
+  assert.deepEqual(seen.at(-1), ['cctv', false, false]);
+});
+
+test('a failed isolation leaves no layer suspended', async (t) => {
+  const { controls } = fixture(t);
+  controls._dataManager = {
+    layers: new Map([['cctv', {}]]),
+    isEffectivelyEnabled: () => true,
+    isEnabled: () => true,
+    setEnabled: async () => {
+      throw new Error('disable failed');
+    },
+  };
+  await assert.rejects(controls._clearLayersOutsideContextMode('flights'));
+  assert.equal(controls.suspendsLayer('cctv'), false);
 });

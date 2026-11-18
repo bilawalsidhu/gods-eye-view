@@ -1,7 +1,7 @@
 # GSHHG land/sea mask
 
-Bundled 1/8° three-state global land/sea bitmask — synchronous ocean-click
-gating and drift-beaching fallback with no network dependency. Codec:
+Bundled 1/8° three-state global land/sea bitmask for synchronous lookups after
+loading. No application consumer is wired yet. Codec:
 `src/data/landSeaMaskCodec.js`; loader: `src/data/landSeaMask.js`.
 
 | File | Grid | States (2 bits/cell) |
@@ -14,13 +14,19 @@ High-resolution Geography), intermediate resolution `gshhs_i.b` extracted from
 (SOEST Hawaii, fetched 2026-08-29).
 `gshhs_i.b` SHA-256: `7d44bf4e16efe6056ff9d147ac0af189bbf0c16a31608426ef63ff8a91c418db`
 
+**Committed output SHA-256:**
+`38bc7dfb353c5dcd41261e3aed2435488f7e01d345432973d369c73e3e2f08db`
+(regenerated 2026-11-17 from the input above by the grid-traversal generator;
+pinned by `src/data/landSeaMask.test.mjs`). Cell counts over the 2880×1440
+grid: 2,692,026 water, 1,328,492 land, 126,682 coastal-mixed, 0 reserved.
+
 **License:** LGPL-3.0-or-later (Wessel & Smith, GSHHG — see DATA_SOURCES.md
 for the credit line). `LICENSE.TXT` and `COPYING.LESSERv3` in this
 folder are GSHHG's copyright and permission notice and the LGPL text it refers
 to, copied unchanged from the same archive.
 
 **Level semantics** (GSHHG hierarchy → fill parity): L1 continents/islands →
-land, L2 lakes → water (Great Lakes NDBC buoys stay clickable), L3
+land, L2 lakes → water, L3
 island-in-lake → land, L4 pond-on-island → water, **L5 Antarctica ice front →
 land**, **L6 grounding line → skipped** (the ice front is the land boundary;
 L1 excludes Antarctica entirely).
@@ -34,9 +40,10 @@ L1 excludes Antarctica entirely).
   longitude unwrap with mod-2880 column writes (dateline-safe); the
   globe-circling Antarctica ring is closed through the south pole via
   artificial seam edges (fill-only, never marked coastal).
-- Every real shoreline edge sampled at half-cell steps (0.0625°) marks its
-  cells coastal-mixed; coastal overrides interior fill and is never trusted
-  as land or water downstream (clicks probe, drift never beaches there).
+- Every real shoreline edge is traversed through the grid.
+  Crossed cells are coastal-mixed, including diagonal corner crossings, with
+  modular columns and half-open membership for grid-aligned edges. Coastal
+  overrides interior fill.
 - Packed 2 bits/cell, 4 cells/byte, LSB-first, behind a 16-byte `GEVM`
   header (`src/data/landSeaMaskCodec.js`).
 
@@ -46,3 +53,9 @@ pinned by `src/data/landSeaMask.test.mjs`.
 **Regenerate:**
 
     node scripts/build-land-sea-mask.mjs path/to/gshhs_i.b
+
+The script checks the input SHA-256 against the source digest above and prints
+the output digest. For an intentional source change only, pass
+`--allow-source-mismatch` and update the source provenance. After regeneration,
+update the output digest and cell counts here and the digest in
+`src/data/landSeaMask.test.mjs`, and run the mask tests plus the repository checks.

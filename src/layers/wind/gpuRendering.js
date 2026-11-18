@@ -1,364 +1,276 @@
 import {
+  WIND_NARROW_PATH_LIMIT,
+  WIND_PATH_LIMIT,
+  WIND_PATH_STEPS,
   bakeWindStreamlines,
   measureLineCoverage,
-  groupWindPaths,
-  WIND_PATH_LIMIT,
-  WIND_NARROW_PATH_LIMIT,
 } from './streamlines.js';
 import {
   WIND_FIELD_SPEC,
   fieldRampMax,
-  fieldSpeedScale,
-  rampStopVectors,
-  isGlobeField,
   fieldSeedBudget,
+  fieldSpeedScale,
+  isGlobeField,
 } from './fieldSpec.js';
+import {
+  canvasOf,
+  findCamera,
+  findDraw,
+  findFrame,
+  rendererOf,
+} from '../../render/rendererOf.js';
 
-export const WIND_FADE_LOW_METERS = 15000;
-export const WIND_FADE_HIGH_METERS = 60000;
+// The streamlines' colour: the ghost and the trail; the moving tip brightens it.
+const WIND_STREAMLINE_COLOR = '#80c9e6';
+const WIND_STREAMLINE_WIDTH_PX = 2.4;
+// The tracer's own step and calm cutoff: a field that keeps them names neither.
+const DEFAULT_STEP_SECONDS = 1800;
+const DEFAULT_CALM_MS = 0.15;
 
-// Original material: a persistent fine curve plus a moving, tapered highlight.
-// The integer part of s identifies a path; its fractional part follows the wind.
-// fieldRamp() tints the curve by the path's seed speed; the wind spec passes
-// five white stops, so its pixels are unchanged.
-const FLOW_MATERIAL = `
-in float v_windFacing;
-in float v_fieldSpeed;
-vec3 fieldRamp(float t)
-{
-    float p = clamp(t, 0.0, 1.0) * 4.0;
-    vec3 c = mix(rampStop0, rampStop1, clamp(p, 0.0, 1.0));
-    c = mix(c, rampStop2, clamp(p - 1.0, 0.0, 1.0));
-    c = mix(c, rampStop3, clamp(p - 2.0, 0.0, 1.0));
-    c = mix(c, rampStop4, clamp(p - 3.0, 0.0, 1.0));
-    return c;
+let fieldIds = 0;
+
+/**
+ * The streamline fade for a camera this high: none at or below the spec's
+ * `fadeLowMeters`, full from `fadeHighMeters` (wind: 15 km and 60 km).
+ */
+export function windHeightFade(height, spec = WIND_FIELD_SPEC) {
+  return Math.max(
+    0,
+    Math.min(
+      1,
+      (height - spec.fadeLowMeters) /
+        (spec.fadeHighMeters - spec.fadeLowMeters),
+    ),
+  );
 }
-czm_material czm_getMaterial(czm_materialInput materialInput)
-{
-    czm_material material = czm_getDefaultMaterial(materialInput);
-    float pathId = floor(materialInput.st.s);
-    float along = fract(materialInput.st.s);
-    float offset = fract((pathId + 1.0) * 0.61803398875);
-    float behind = fract(phaseTime * 0.16 + offset - along);
-    float tail = (1.0 - smoothstep(0.0, 0.32, behind));
-    float tip = 1.0 - smoothstep(0.0, 0.045, behind);
-    float ends = smoothstep(0.0, 0.055, along) * (1.0 - smoothstep(0.945, 1.0, along));
-    float edge = 1.0 - smoothstep(0.26, 0.5, abs(materialInput.st.t - 0.5));
-    float horizon = smoothstep(0.0, 0.065, v_windFacing);
-    material.diffuse = mix(vec3(0.50, 0.79, 0.90), vec3(0.91, 0.99, 1.0), tip) * fieldRamp(pow(v_fieldSpeed, rampGamma));
-    material.alpha = (ghostAlpha + 0.64 * tail + 0.16 * tip) * ends * edge * horizon * heightFade;
-    return material;
-}`;
 
-/** Native Cesium geometry/material owner. No animation loop or DOM ownership. */
+/** The rectangle a grid's samples span; a grid round the globe spans 360°. */
+function gridRectangle(field) {
+  const span = field.nx * field.dx;
+  const wraps = span >= 360 - 1e-9;
+  const west = field.lo1;
+  const north = field.la1;
+  return {
+    west,
+    south: north - (field.ny - 1) * field.dy,
+    east: west + (wraps ? span : (field.nx - 1) * field.dx),
+    north,
+  };
+}
+
+/**
+ * A vector grid as the draw port's `windStreamlines` field: samples are
+ * points, the first column at `lo1` and the first row at `la1`, rows
+ * running south; a grid that wraps the globe spans 360° of longitude.
+ * `spec` (a field spec, wind's by default) gives the draw height, the calm
+ * cutoff and the speed ramp; a ramp of one colour is not sent, and neither
+ * are a step or a cutoff equal to the tracer's own, so the wind's field is
+ * what it was before fields had specs.
+ */
+export function windStreamlineSpec(
+  field,
+  { id, pathBudget, alpha, paused, spec = WIND_FIELD_SPEC },
+) {
+  const stepSeconds = DEFAULT_STEP_SECONDS * fieldSpeedScale(spec, field);
+  const tinted = spec.ramp.some((stop) => stop !== spec.ramp[0]);
+  return {
+    kind: 'windStreamlines',
+    id,
+    u: field.u,
+    v: field.v,
+    width: field.nx,
+    height: field.ny,
+    rectangle: gridRectangle(field),
+    pathBudget,
+    steps: WIND_PATH_STEPS,
+    style: {
+      color: WIND_STREAMLINE_COLOR,
+      widthPx: WIND_STREAMLINE_WIDTH_PX,
+      ...(tinted
+        ? {
+            ramp: {
+              stops: [...spec.ramp],
+              maxMs: fieldRampMax(spec, field),
+              gamma: spec.rampGamma,
+            },
+          }
+        : {}),
+    },
+    ...(Number.isFinite(field.noData) ? { noData: field.noData } : {}),
+    ...(stepSeconds !== DEFAULT_STEP_SECONDS ? { stepSeconds } : {}),
+    ...(spec.calmCutoffMs !== DEFAULT_CALM_MS
+      ? { calmMs: spec.calmCutoffMs }
+      : {}),
+    heightM: spec.displayHeightMeters,
+    alpha,
+    paused,
+  };
+}
+
+/**
+ * Seeds to ask the renderer for. The globe takes the spec's share of the
+ * base budget. A boxed field with a spec coverage starts from the estimate
+ * (`fieldSeedBudget`), which assumes median-length paths; coasts and no-data
+ * cut them short, so the paths are traced once here, as the renderer will
+ * trace them, and the seed count is rescaled by the measured shortfall,
+ * still bounded by the base budget.
+ * @returns {{seeds: number, lineCoverage: number | null}}
+ */
+export function streamlineSeeds(field, spec, baseBudget) {
+  let seeds = fieldSeedBudget(spec, field, baseBudget);
+  const target = spec.boxLineCoverage;
+  if (isGlobeField(field) || !Number.isFinite(target) || target <= 0)
+    return { seeds, lineCoverage: null };
+  const bounds = gridRectangle(field);
+  const span = bounds.east - bounds.west;
+  const grid = { ...field, periodic: false };
+  const coverageAt = (count) =>
+    measureLineCoverage(
+      bakeWindStreamlines(grid, {
+        count,
+        maxCount: count,
+        stepSeconds: DEFAULT_STEP_SECONDS * fieldSpeedScale(spec, field),
+        calmCutoffMs: spec.calmCutoffMs,
+        bounds,
+      }),
+      span,
+    );
+  let lineCoverage = coverageAt(seeds);
+  if (lineCoverage > 0 && lineCoverage < 0.9 * target) {
+    const corrected = Math.min(
+      baseBudget,
+      Math.round((seeds * target) / lineCoverage),
+    );
+    if (corrected > seeds) {
+      seeds = corrected;
+      lineCoverage = coverageAt(seeds);
+    }
+  }
+  return { seeds, lineCoverage };
+}
+
+/**
+ * Streamlines through the draw port's `windStreamlines` field (capability
+ * `fields`): the renderer traces, draws, culls and animates them; this
+ * fades them by camera height and pauses them. Where the renderer has no
+ * such field, or refuses this one, `setField` answers false and the layer
+ * paints on its canvas instead. No animation loop or DOM ownership.
+ */
 export function createWindGpuRendering({
-  cesium: C,
   getViewer,
+  drawOf = findDraw,
+  cameraOf = findCamera,
+  frameOf = findFrame,
   spec = WIND_FIELD_SPEC,
-}) {
-  const cells = [];
-  let occluder = null;
-  let collection = null;
-  let material = null;
+} = {}) {
+  let handle = null;
   let paused = false;
   let destroyed = false;
+  let heightFade = 0;
+  let drawn = false;
   const emptyDiagnostics = () => ({
     pathCount: 0,
-    vertexCount: 0,
     buildMs: 0,
     readyMs: null,
     error: null,
-    cellCount: 0,
-    visibleCells: 0,
-    visibleVertexCount: 0,
     heightFade: 0,
     speedScale: 1,
-    stepSeconds: 1800,
+    stepSeconds: DEFAULT_STEP_SECONDS,
   });
   let diagnostics = emptyDiagnostics();
-  // Entry of the last setField, so readyMs shares buildMs's origin.
-  let buildStarted = 0;
   const now = () => globalThis.performance?.now?.() ?? Date.now();
-
-  // Cesium builds the geometry on workers after the primitives are added, so
-  // "ready" lands frames after setField returns. The frame loop reads these
-  // diagnostics every frame; the first read that sees every cell ready stamps
-  // readyMs, measured from the same start as buildMs.
-  function allReady() {
-    const ready =
-      cells.length > 0 && cells.every((cell) => cell.primitive.ready);
-    if (ready && diagnostics.readyMs === null)
-      diagnostics.readyMs = now() - buildStarted;
-    return ready;
-  }
+  const viewer = () => getViewer?.() ?? null;
 
   function supported() {
-    const scene = getViewer?.()?.scene;
-    return (
-      !destroyed &&
-      Boolean(
-        scene?.primitives &&
-        C?.Primitive &&
-        C?.GeometryInstance &&
-        C?.GeometryInstanceAttribute &&
-        C?.ComponentDatatype?.FLOAT !== undefined &&
-        C?.PolylineGeometry &&
-        C?.PolylineMaterialAppearance &&
-        C?.Material &&
-        C?.BoundingSphere?.fromPoints &&
-        C?.Occluder &&
-        C?.Ellipsoid?.WGS84 &&
-        C?.Intersect &&
-        C?.Cartesian3?.fromDegrees,
-      ) &&
-      (C.SceneMode?.SCENE3D === undefined ||
-        scene.mode === undefined ||
-        scene.mode === C.SceneMode.SCENE3D)
-    );
+    const host = viewer();
+    if (destroyed || !host) return false;
+    const capabilities = rendererOf(host)?.capabilities;
+    if (capabilities && !capabilities.has('fields')) return false;
+    return typeof drawOf(host)?.field === 'function';
   }
 
   function clear() {
-    for (const cell of cells) {
-      collection?.remove(cell.primitive);
-      if (!cell.primitive.isDestroyed?.()) cell.primitive.destroy?.();
-    }
-    cells.length = 0;
-    occluder = null;
-    collection = null;
-    material?.destroy?.();
-    material = null;
+    handle?.dispose();
+    handle = null;
+    drawn = false;
     diagnostics = emptyDiagnostics();
+  }
+
+  function readFade() {
+    const height = cameraOf(viewer())?.pose?.().height;
+    return Number.isFinite(height) ? windHeightFade(height, spec) : heightFade;
   }
 
   function setField(field) {
     clear();
     if (!supported() || !field) return false;
     const started = now();
-    buildStarted = started;
+    const width = canvasOf(viewer())?.clientWidth;
+    const baseBudget =
+      width > 0 && width < 700 ? WIND_NARROW_PATH_LIMIT : WIND_PATH_LIMIT;
+    heightFade = readFade();
+    let seeds;
+    let lineCoverage;
     try {
-      const width = getViewer().scene.canvas?.clientWidth;
-      const baseBudget =
-        width > 0 && width < 700 ? WIND_NARROW_PATH_LIMIT : WIND_PATH_LIMIT;
-      const budget = fieldSeedBudget(spec, field, baseBudget);
-      const speedScale = fieldSpeedScale(spec, field);
-      const stepSeconds = 1800 * speedScale;
-      const rampMax = fieldRampMax(spec, field);
-      const globe = isGlobeField(field);
-      const seedSpan = globe
-        ? 360
-        : (((field.bbox.lonMax - field.bbox.lonMin) % 360) + 360) % 360 || 360;
-      const bake = (count) =>
-        bakeWindStreamlines(field, {
-          count,
-          maxCount: count,
-          stepSeconds,
-          calmCutoffMs: spec.calmCutoffMs,
-        });
-      let seeds = budget;
-      let paths = bake(seeds);
-      let coverage = measureLineCoverage(paths, seedSpan);
-      // The box budget assumes median-length paths; coasts and no-data cut
-      // them short. One correction pass rescales the seed count by the
-      // shortfall, still bounded by the base budget.
-      const target = spec.boxLineCoverage;
-      if (
-        !globe &&
-        Number.isFinite(target) &&
-        target > 0 &&
-        coverage > 0 &&
-        coverage < 0.9 * target
-      ) {
-        const corrected = Math.min(
-          baseBudget,
-          Math.round((seeds * target) / coverage),
-        );
-        if (corrected > seeds) {
-          seeds = corrected;
-          paths = bake(seeds);
-          coverage = measureLineCoverage(paths, seedSpan);
-        }
-      }
-      if (!paths.length) return false;
-      let vertexCount = 0;
-      const stops = rampStopVectors(spec.ramp);
-      material = new C.Material({
-        fabric: {
-          type: 'GevWindStreamline',
-          uniforms: {
-            phaseTime: 0,
-            ghostAlpha: paused ? 0.34 : 0.25,
-            heightFade: 0,
-            rampGamma: spec.rampGamma,
-            ...Object.fromEntries(
-              stops.map(([r, g, b], i) => [
-                `rampStop${i}`,
-                new C.Cartesian3(r, g, b),
-              ]),
-            ),
-          },
-          source: FLOW_MATERIAL,
-        },
-        translucent: () => true,
-      });
-      const base = new C.PolylineMaterialAppearance({ material });
-      // Extend the public default shader rather than duplicate Cesium's polyline
-      // expansion/precision code. Explicit facing also masks the far hemisphere
-      // when a scene chooses not to preserve globe depth for translucent objects.
-      const source = base.vertexShaderSource;
-      if (
-        !/void\s+main\s*\(\s*\)/.test(source) ||
-        !/v_st\.s\s*=\s*st\.s\s*;/.test(source)
-      )
-        throw new Error('Wind polyline shader entry unavailable');
-      const seededSource = source.replace(
-        /v_st\.s\s*=\s*st\.s\s*;/,
-        'v_st.s = st.s * 0.999 + czm_batchTable_windSeed(batchId);',
+      ({ seeds, lineCoverage } = streamlineSeeds(field, spec, baseBudget));
+      handle = drawOf(viewer()).field(
+        windStreamlineSpec(field, {
+          id: `wind-streamlines:${(fieldIds += 1)}`,
+          pathBudget: seeds,
+          alpha: heightFade,
+          paused,
+          spec,
+        }),
       );
-      const vertexShaderSource =
-        `out float v_windFacing;\nout float v_fieldSpeed;\n${seededSource}`.replace(
-          /void\s+main\s*\(\s*\)\s*\{/,
-          `void main() {\nvec3 windWorld = (czm_model * vec4(position3DHigh + position3DLow, 1.0)).xyz;\nv_windFacing = dot(normalize(windWorld), normalize(czm_viewerPositionWC - windWorld));\nv_fieldSpeed = czm_batchTable_fieldSpeed(batchId);\n`,
-        );
-      const scene = getViewer().scene;
-      collection = scene.primitives;
-      // EllipsoidalOccluder only tests points. Use Cesium's sphere occluder
-      // with an inscribed Earth sphere, independent of scene.globe.show.
-      occluder = new C.Occluder(
-        new C.BoundingSphere(
-          C.Cartesian3.ZERO,
-          C.Ellipsoid.WGS84.minimumRadius,
-        ),
-        scene.camera.positionWC,
-      );
-      for (const group of groupWindPaths(paths)) {
-        const cellPositions = [];
-        let cellVertexCount = 0;
-        const instances = group.paths.map((path) => {
-          const positions = path.coordinates.map(([lon, lat]) =>
-            C.Cartesian3.fromDegrees(lon, lat, spec.displayHeightMeters),
-          );
-          // Pass the native description to Cesium's worker. Per-instance seed
-          // attributes avoid touching the expanded vertex buffer on the UI thread.
-          const geometry = new C.PolylineGeometry({
-            positions,
-            width: 2.4,
-            arcType: C.ArcType?.NONE,
-            vertexFormat: C.PolylineMaterialAppearance.VERTEX_FORMAT,
-          });
-          cellPositions.push(...positions);
-          cellVertexCount += positions.length * 4 - 4;
-          return new C.GeometryInstance({
-            geometry,
-            attributes: {
-              windSeed: new C.GeometryInstanceAttribute({
-                componentDatatype: C.ComponentDatatype.FLOAT,
-                componentsPerAttribute: 1,
-                value: [path.seed],
-              }),
-              fieldSpeed: new C.GeometryInstanceAttribute({
-                componentDatatype: C.ComponentDatatype.FLOAT,
-                componentsPerAttribute: 1,
-                value: [Math.max(0, Math.min(1, path.speed / rampMax))],
-              }),
-            },
-          });
-        });
-        const appearance = new C.PolylineMaterialAppearance({
-          material,
-          vertexShaderSource,
-          translucent: true,
-          renderState: { depthTest: { enabled: true }, depthMask: false },
-        });
-        const primitive = new C.Primitive({
-          show: false,
-          geometryInstances: instances,
-          appearance,
-          asynchronous: true,
-          allowPicking: false,
-          releaseGeometryInstances: true,
-          compressVertices: false,
-        });
-        const cell = {
-          primitive,
-          sphere: C.BoundingSphere.fromPoints(cellPositions),
-          vertexCount: cellVertexCount,
-        };
-        cells.push(cell);
-        collection.add(primitive);
-        vertexCount += cellVertexCount;
-      }
-      diagnostics = {
-        ...emptyDiagnostics(),
-        cellCount: cells.length,
-        pathCount: paths.length,
-        vertexCount,
-        buildMs: now() - started,
-        error: null,
-        speedScale,
-        stepSeconds,
-        seedCount: seeds,
-        lineCoverage: coverage,
-      };
-      return true;
     } catch (error) {
-      clear();
+      handle = null;
       diagnostics.error =
         // i18n-ignore: GPU diagnostics only; the panel never shows this field
         error instanceof Error ? error.message : 'Wind geometry unavailable';
       return false;
     }
+    const built = handle;
+    handle.on('drawn', () => {
+      if (handle !== built) return;
+      drawn = true;
+      // Geometry is built on workers after the field is made, so "ready"
+      // lands frames after setField returns; readyMs shares buildMs's origin.
+      if (diagnostics.readyMs === null) diagnostics.readyMs = now() - started;
+      // One more frame, so a still scene shows the layer ready.
+      frameOf(viewer())?.requestRender?.('wind');
+    });
+    const speedScale = fieldSpeedScale(spec, field);
+    diagnostics = {
+      ...emptyDiagnostics(),
+      pathCount: seeds,
+      seedCount: seeds,
+      lineCoverage,
+      buildMs: now() - started,
+      heightFade,
+      speedScale,
+      stepSeconds: DEFAULT_STEP_SECONDS * speedScale,
+    };
+    return true;
   }
 
-  // Cesium reuses its frustum culling volume and the occluder's scratch vectors.
-  // This loop creates no positions, spheres, appearances or per-cell temporaries.
-  function updateVisibility(camera) {
-    const height = camera.positionCartographic.height;
-    const heightFade = Math.max(
-      0,
-      Math.min(
-        1,
-        (height - spec.fadeLowMeters) /
-          (spec.fadeHighMeters - spec.fadeLowMeters),
-      ),
-    );
-    diagnostics.heightFade = heightFade;
-    if (material) material.uniforms.heightFade = heightFade;
-    diagnostics.visibleCells = 0;
-    diagnostics.visibleVertexCount = 0;
-    let volume;
-    if (heightFade > 0 && cells.length) {
-      occluder.cameraPosition = camera.positionWC;
-      volume = camera.frustum.computeCullingVolume(
-        camera.positionWC,
-        camera.directionWC,
-        camera.upWC,
-      );
-    }
-    for (let i = 0; i < cells.length; i++) {
-      const cell = cells[i];
-      cell.primitive.show =
-        heightFade > 0 &&
-        occluder.isBoundingSphereVisible(cell.sphere) &&
-        volume.computeVisibility(cell.sphere) !== C.Intersect.OUTSIDE;
-      if (cell.primitive.show) {
-        diagnostics.visibleCells++;
-        diagnostics.visibleVertexCount += cell.vertexCount;
-      }
-    }
-    return diagnostics.visibleCells > 0 && heightFade > 0;
+  /** Fade by camera height; whether anything can draw. */
+  function updateVisibility() {
+    const fade = readFade();
+    diagnostics.heightFade = fade;
+    if (handle && fade !== heightFade) handle.update({ alpha: fade });
+    heightFade = fade;
+    return Boolean(handle) && fade > 0;
   }
 
   return {
     supported,
     setField,
     updateVisibility,
-    tick(elapsedSeconds) {
-      if (material && !paused && Number.isFinite(elapsedSeconds))
-        material.uniforms.phaseTime = Math.max(0, elapsedSeconds) % 10000;
-    },
     setOptions(options = {}) {
-      if (typeof options.paused === 'boolean') paused = options.paused;
-      if (material) material.uniforms.ghostAlpha = paused ? 0.34 : 0.25;
+      if (typeof options.paused !== 'boolean' || options.paused === paused)
+        return;
+      paused = options.paused;
+      handle?.update({ paused });
     },
     clear,
     destroy() {
@@ -366,14 +278,11 @@ export function createWindGpuRendering({
       destroyed = true;
     },
     getParticleCount: () => diagnostics.pathCount,
-    getDiagnostics: () => {
-      const ready = allReady(); // stamps readyMs before the copy below
-      return {
-        ...diagnostics,
-        ready,
-        mode: 'gpu-streamlines',
-        displayHeightMeters: spec.displayHeightMeters,
-      };
-    },
+    getDiagnostics: () => ({
+      ...diagnostics,
+      ready: Boolean(handle) && drawn,
+      mode: 'gpu-streamlines',
+      displayHeightMeters: spec.displayHeightMeters,
+    }),
   };
 }

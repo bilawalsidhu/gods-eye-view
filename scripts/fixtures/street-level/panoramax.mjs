@@ -28,7 +28,7 @@ export const PNX_PARK = Object.freeze({
   height: 700,
   pitch: -1.4,
 });
-export const PNX_CREATOR = 'Fixture Mapper';
+const PNX_CREATOR = 'Fixture Mapper';
 const PNX_SPACING_M = 10;
 const METRES_PER_DEG_LON = 111_320 * Math.cos((PNX_LINE.lat * Math.PI) / 180);
 const API = 'https://api.panoramax.xyz/api';

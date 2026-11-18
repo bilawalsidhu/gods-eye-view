@@ -6,7 +6,7 @@
 // (1 land, 2 lake, 3 island-in-lake, 4 pond, 5 Antarctica ice front,
 // 6 Antarctica grounding line), `greenwich = (flag >> 16) & 1`,
 // `river = (flag >> 25) & 1`; then n big-endian (lon, lat) int32
-// micro-degree pairs in the -180/+180 range.
+// micro-degree pairs (longitudes may use the native 0..360 range).
 // Source: GSHHG v2.3.7 README, SOEST Hawaii (soest.hawaii.edu/pwessel/gshhg/),
 // transcribed 2026-08-29. Data license: LGPL-3.0-or-later (Wessel & Smith, GSHHG).
 //

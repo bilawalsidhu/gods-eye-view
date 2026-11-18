@@ -3,14 +3,43 @@ import {
   FRAME_SIGNATURE_H,
   PROJECTION_CANVAS_WIDTH,
   PROJECTION_CANVAS_HEIGHT,
+  PROJECTION_MATTE_COLOR,
   PROJECTION_TEXTURE_SWAP_MS,
-  ACTIVE_FRAME_REFRESH_MS,
-  FRAME_ENDPOINT,
-  MEDIA_ENDPOINT,
   PROJECTION_ACTIVE_REFRESH_MS,
   PROJECTION_IDLE_REFRESH_MS,
   PLACEHOLDER_REPAINT_MS,
 } from './policy.js';
+
+/**
+ * Contain-fits a source frame into the projection canvas: scaled to the
+ * largest size that fits, centered, with the margins left for the matte fill.
+ * Falls back to the full canvas when either dimension is missing or zero.
+ *
+ * @param {number} sourceW - Source width in pixels.
+ * @param {number} sourceH - Source height in pixels.
+ * @returns {{x:number,y:number,w:number,h:number}} Draw rectangle in canvas pixels.
+ */
+export function fitToProjection(sourceW, sourceH) {
+  if (!sourceW || !sourceH)
+    return {
+      x: 0,
+      y: 0,
+      w: PROJECTION_CANVAS_WIDTH,
+      h: PROJECTION_CANVAS_HEIGHT,
+    };
+  const scale = Math.min(
+    PROJECTION_CANVAS_WIDTH / sourceW,
+    PROJECTION_CANVAS_HEIGHT / sourceH,
+  );
+  const w = Math.round(sourceW * scale);
+  const h = Math.round(sourceH * scale);
+  return {
+    x: Math.round((PROJECTION_CANVAS_WIDTH - w) / 2),
+    y: Math.round((PROJECTION_CANVAS_HEIGHT - h) / 2),
+    w,
+    h,
+  };
+}
 
 export function createFrames({ state: layerState, services, parts, source }) {
   /**
@@ -77,9 +106,9 @@ export function createFrames({ state: layerState, services, parts, source }) {
    * Blits the latest projection canvas into the next of two alternating
    * offscreen buffer canvases and returns it (H5).
    *
-   * Two buffers are required because Cesium's Material image path re-uploads a
-   * canvas texture only when the uniform receives a NEW object reference —
-   * redrawing the same canvas in place is invisible to the GPU. Alternating
+   * Two buffers are required because the plane re-uploads a canvas texture
+   * only when it is given a NEW canvas — redrawing the same canvas in place
+   * is invisible to the GPU. Alternating
    * references forces a texture recreate, which at <=1Hz and 1080p is cheap.
    *
    * @param {Object} runtime - Projection runtime with `.canvas`.
@@ -110,8 +139,8 @@ export function createFrames({ state: layerState, services, parts, source }) {
    * Pushes fresh pixels into the monitor plane material. Called every
    * projection tick.
    *
-   * Video feeds are skipped entirely — their HTMLVideoElement uniform is
-   * updated per-frame by Cesium natively (H5). Image/webcam-frame feeds swap
+   * Video feeds are skipped entirely — the renderer reads their
+   * HTMLVideoElement every frame (H5). Image/webcam-frame feeds swap
    * the double-buffer canvas reference, throttled to PROJECTION_TEXTURE_SWAP_MS.
    *
    * @param {Object} record - Camera record with an initialized projection runtime.
@@ -127,7 +156,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
     )
       return;
 
-    const planeShowing = !!(runtime.planeEntity?.show && runtime.planeMaterial);
+    const planeShowing = !!runtime.plane?.show;
     if (!planeShowing) return;
 
     // Only swap when the canvas content actually changed since the last swap.
@@ -141,7 +170,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
     if (!buffer) return;
     runtime.lastTextureSwapAt = now;
     runtime.lastSwappedCanvasStamp = runtime.canvasStamp;
-    runtime.planeMaterial.image = buffer;
+    parts.projection.setPlaneSource(runtime, { canvas: buffer });
   }
 
   /**
@@ -182,7 +211,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
     ctx.clearRect(0, 0, w, h);
     const g = ctx.createLinearGradient(0, 0, w, h);
     g.addColorStop(0, '#05111a');
-    g.addColorStop(1, '#01070c');
+    g.addColorStop(1, PROJECTION_MATTE_COLOR);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
 
@@ -226,11 +255,20 @@ export function createFrames({ state: layerState, services, parts, source }) {
     // clears this latch so the next normal tick can refresh.
     if (runtime.imageLoading) return;
     const now = Date.now();
-    const refreshMs =
+    const defaultRefreshMs =
       record.camera.id === layerState._activeCameraId
         ? PROJECTION_ACTIVE_REFRESH_MS
         : PROJECTION_IDLE_REFRESH_MS;
-    if (!force && now - runtime.lastImageRefreshAt < refreshMs) return;
+    const sourceRefreshMs = parts.model.safeNumber(
+      record.camera.frameRefreshMs,
+      0,
+    );
+    const refreshMs = Math.max(defaultRefreshMs, sourceRefreshMs);
+    const sinceLastRefresh = now - runtime.lastImageRefreshAt;
+    // Forced activation may skip the normal active interval, but it cannot
+    // bypass a provider's explicit minimum between image requests.
+    if (sourceRefreshMs > 0 && sinceLastRefresh < sourceRefreshMs) return;
+    if (!force && sinceLastRefresh < refreshMs) return;
     runtime.lastImageRefreshAt = now;
 
     const frameUrl = frameUrlFor(record.camera, refreshMs);
@@ -317,10 +355,17 @@ export function createFrames({ state: layerState, services, parts, source }) {
         // camera republished once in 5 minutes, an Austin one not at all.
         // Redrawing regardless bumped canvasStamp, which forced a buffer swap
         // and a fresh 1920x1080 texture upload; the plane renders its white
-        // base color (planeMaterial color = WHITE, alpha .95) for the frame or
+        // base color (white, alpha .95) for the frame or
         // two Cesium needs to rebind, which IS the periodic white flash from the
         // owner field tests (2026-07-04 and 2026-07-30).
-        const signature = projectionFrameSignature(runtime);
+        const fit = fitToProjection(
+          runtime.image.naturalWidth,
+          runtime.image.naturalHeight,
+        );
+        // Pixels are hashed at a fixed size, so the fit carries the aspect.
+        const pixels = projectionFrameSignature(runtime);
+        const signature =
+          pixels === null ? null : `${pixels}:${fit.w}x${fit.h}`;
         runtime.drawnImageStamp = runtime.imageStamp;
         if (signature !== null && signature === runtime.lastFrameSignature) {
           // Identical pixels — leave the canvas, and therefore the bound
@@ -328,19 +373,14 @@ export function createFrames({ state: layerState, services, parts, source }) {
           return;
         }
         runtime.lastFrameSignature = signature;
-        runtime.ctx.clearRect(
+        runtime.ctx.fillStyle = PROJECTION_MATTE_COLOR;
+        runtime.ctx.fillRect(
           0,
           0,
           PROJECTION_CANVAS_WIDTH,
           PROJECTION_CANVAS_HEIGHT,
         );
-        runtime.ctx.drawImage(
-          runtime.image,
-          0,
-          0,
-          PROJECTION_CANVAS_WIDTH,
-          PROJECTION_CANVAS_HEIGHT,
-        );
+        runtime.ctx.drawImage(runtime.image, fit.x, fit.y, fit.w, fit.h);
         runtime.canvasStamp = (runtime.canvasStamp || 0) + 1;
         runtime.lastPlaceholderPaintAt = 0;
       }

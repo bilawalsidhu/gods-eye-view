@@ -6,6 +6,10 @@
  * served field are functions of the field object (`speed` statistics from
  * the manifest), never baked into the spec.
  */
+import { fieldStepCap } from './streamlines.js';
+
+export { fieldStepCap };
+
 const WHITE = '#ffffff';
 
 export function createFieldSpec(overrides = {}) {
@@ -124,17 +128,6 @@ export function fieldSpeedScale(spec, field) {
   const median = field?.speed?.medianMs;
   if (!Number.isFinite(median)) return 1;
   return spec.targetMedianMs / Math.max(median, 1e-3);
-}
-
-/**
- * Per-step geographic bound in degrees: 0.75 for global grids (today's
- * constant), span/64 for regional ones so a 16-step half path never exceeds
- * a quarter of the field's longer side.
- */
-export function fieldStepCap(field) {
-  const span = Math.max(field.nx * field.dx, (field.ny - 1) * field.dy);
-  if (!Number.isFinite(span) || span <= 0) return 0.75;
-  return Math.min(0.75, span / 64);
 }
 
 function parseHex(color) {

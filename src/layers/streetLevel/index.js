@@ -1,66 +1,76 @@
-import * as Cesium from 'cesium';
 import { createState } from './state.js';
 import { createMarker } from './marker.js';
-import { createCameraFollow } from './cameraFollow.js';
+import { createCameraFraming } from './cameraFraming.js';
 import { createCredits } from './credits.js';
 import { createPickRouter } from './pickRouter.js';
 import { createSelection } from './selection.js';
 import { createViewerHost } from './viewerHost.js';
 import { filtersOf, requiresKeyIdFor, validateProviders } from './registry.js';
 import { normalizeFilter, resolveFilter, sameFilter } from './filter.js';
+import { worldTimeFor } from '../../time/worldClock.js';
 import { decodeParams, encodeParams } from './params.js';
 import {
   composeUIState,
   keyAlternatives,
   summarizeCoverage,
 } from './uiState.js';
-import { cameraHeightAboveGround, viewCentre, whenIdle } from './view.js';
+import {
+  canvasSize,
+  groundUnderCamera,
+  metresBetween,
+  viewCentre,
+} from './view.js';
+import { toLonLatH } from '../../geo/index.js';
+import { findCamera, findQuery } from '../../render/rendererOf.js';
+import { isPickedWorldPosition } from '../../data/scenePick.js';
 import { createGroundClick, groundClickHeightOk } from './groundClick.js';
-import { createGroundCaster, nextSurfaceMode } from './groundCast.js';
-import { createMeshSampler } from './meshSampler.js';
 import { msg, t, translateKnown } from '../../i18n/index.js';
-
-/** Above this camera height the ground under the camera is not worth fetching. */
-const SURFACE_WARM_BELOW_M = 6000;
 import {
   AIM_AT_GROUND_MESSAGE,
-  FOLLOW_MAP_STACK_ID,
+  keyStatusLabel,
   NEAREST_RADIUS_M,
+  NEAREST_RADIUS_MAX_M,
   POSITION_PICK_ID,
   STREET_LEVEL_LAYER_ID,
 } from './policy.js';
 
 export { STREET_LEVEL_LAYER_ID } from './policy.js';
 
+/** Longest wait for a provider's key status; past it, the provider decides. */
+const KEY_STATUS_TIMEOUT_MS = 10_000;
+/** Re-measures of a ground not loaded yet (Google 3D), a second apart. */
+const GROUND_RETRY_LIMIT = 5;
+const GROUND_RETRY_MS = 1000;
+/**
+ * An armed point stays the OPEN button's target while the view centre is
+ * this close to it (m); a user who moved on opens what the view shows now.
+ */
+const ARMED_REACH_M = 1000;
+
 /**
  * The Street Level layer over imagery providers (contract in registry.js).
- * The core owns what they share; providers own coverage, sequences, viewer.
+ * The core owns what they share: the filter and switches, the photo viewer
+ * host, the position marker, the click handler and nearest-image lookups.
+ * Providers own coverage, sequences and their viewer. One source is lit at
+ * a time. It reaches the camera, queries and frames through the renderer's
+ * ports; given a Cesium viewer with no renderer bound,
+ * the caller loads the package's `./render/cesium/unbound` export first.
  * @param {{providers: Array<import('./registry.js').StreetLevelProvider>, services?: object}} options
  */
+// "Since N days" counts back from the world time.
+const streetLevelTime = worldTimeFor(STREET_LEVEL_LAYER_ID);
+
 export function createStreetLevelLayer({
   providers: definitions,
   services = {},
 }) {
-  const definitionsFrozen = validateProviders(definitions);
+  const defs = validateProviders(definitions);
   const state = createState({ services });
   const parts = {};
   const context = { state, parts };
-  parts.groundCaster = services.terrain?.resolveEllipsoidalGround
-    ? createGroundCaster({ terrain: services.terrain })
-    : null;
-  // Mesh samples follow the application's rules: a real bare-earth prior,
-  // its mesh window, and a tileset that has finished streaming.
-  parts.meshSampler = parts.groundCaster
-    ? createMeshSampler({
-        getViewer: () => state.viewer,
-        groundAt: parts.groundCaster.groundAt,
-        withinPrior: services.ground?.meshFloorSampleWithinPrior ?? null,
-        tilesReady: services.meshFloor?.visibleTilesetLoaded ?? null,
-      })
-    : null;
   parts.credits = createCredits();
   parts.marker = createMarker(context);
-  parts.follow = createCameraFollow(context);
+  parts.framing = createCameraFraming(context);
   parts.router = createPickRouter(() => state.providers.values(), {
     positionId: POSITION_PICK_ID,
   });
@@ -78,7 +88,6 @@ export function createStreetLevelLayer({
     state,
     openNearest: (point, options) => layer.openNearest(point, options),
     isAvailable: (entry) => providerAvailable(entry),
-    groundAt: parts.groundCaster?.groundAt ?? null,
   });
 
   let notifyQueued = false;
@@ -102,11 +111,10 @@ export function createStreetLevelLayer({
   function providerContext(entry) {
     return Object.freeze({
       services: state.services,
-      getFilter: () => resolveFilter(state.filter),
+      /** Resolved against now, so "since N days" keeps up with the clock. */
+      getFilter: () => resolveFilter(state.filter, streetLevelTime()),
+      /** The layer and this provider's switch are both on. */
       isActive: () => state.enabled && entry.on,
-      groundCaster: parts.groundCaster,
-      meshSampler: parts.meshSampler,
-      getSurface: () => state.surface,
       notify,
       actions: {
         /** `{frame: false}` opens it without moving the camera. */
@@ -137,14 +145,25 @@ export function createStreetLevelLayer({
     });
   }
 
-  // One source at a time: the first provider that defaults on.
-  const startsOn = definitionsFrozen.find((def) => def.defaultOn !== false);
-  for (const def of definitionsFrozen) {
+  /** `def` if its key is ready, else the first keyless provider not refused. */
+  function keylessInstead(def, refused = () => false) {
+    if (def.keyReady?.() !== false) return def;
+    return defs.find((d) => !d.requiresKeyId && !refused(d.id)) || def;
+  }
+
+  // One source at a time: the first provider that defaults on. Without its
+  // key, the first keyless source instead, so a fresh keyless install opens
+  // on coverage rather than KEY REQUIRED.
+  const preferred = defs.find((def) => def.defaultOn !== false);
+  const startsOn = preferred && keylessInstead(preferred);
+  for (const def of defs) {
     const entry = {
       def,
       instance: null,
       on: def === startsOn,
       status: null,
+      /** The status request in flight; overlapping checks share it. */
+      statusCheck: null,
       /** The error this provider last reported, until it withdraws it. */
       reportedError: null,
     };
@@ -154,15 +173,6 @@ export function createStreetLevelLayer({
 
   let mapStack = null;
   let unsubscribeMapStack = null;
-
-  /** Follow is offered only on the Google 3D stack; leaving it stops following. */
-  function syncFollowAvailability() {
-    const available = mapStack?.getActiveId?.() === FOLLOW_MAP_STACK_ID;
-    if (available === state.street.followAvailable) return;
-    state.street.followAvailable = available;
-    if (!available && state.street.follow) parts.follow.setFollow(false);
-    notify();
-  }
 
   /** Usable only on its map stack (Google's terms: Street View on Google 3D only). */
   function providerAvailable(entry) {
@@ -175,6 +185,12 @@ export function createStreetLevelLayer({
     const owner = state.providers.get(state.street.providerId);
     if (state.street.open && owner && !providerAvailable(owner))
       layer.closeViewer();
+    // An armed lookup for a source whose map left dies too.
+    const armedFor = state.street.armed?.providerIds?.map((id) =>
+      state.providers.get(id),
+    );
+    if (armedFor?.some((entry) => entry && !providerAvailable(entry)))
+      state.street.armed = null;
     for (const entry of state.providers.values()) {
       if (!entry.def.requiresMapStack) continue;
       if (state.enabled && entry.on && providerAvailable(entry))
@@ -184,113 +200,86 @@ export function createStreetLevelLayer({
         parts.viewerHost.unmount(entry.def.id);
       }
     }
+    remeasureGround();
     notify();
   }
 
-  /** Whether a ground click can open an image: the camera is at street zoom. */
+  let groundRetry = null;
+  let groundRetries = 0;
+  function cancelGroundRetry() {
+    clearTimeout(groundRetry);
+    groundRetry = null;
+  }
+
+  /**
+   * Whether a ground click can open an image: the camera is at street zoom.
+   * Under Google 3D the ground is unknown until its tiles load, so an unknown
+   * ground is measured again a few times instead of waiting for the next move.
+   */
   function syncGroundClickReady() {
-    const ready =
+    cancelGroundRetry();
+    const ready = state.enabled && groundClickHeightOk(state.viewer);
+    if (
       state.enabled &&
-      groundClickHeightOk(state.viewer, parts.groundCaster?.groundAt);
+      !ready &&
+      groundRetries < GROUND_RETRY_LIMIT &&
+      groundUnderCamera(state.viewer) === null
+    ) {
+      groundRetries++;
+      groundRetry = setTimeout(syncGroundClickReady, GROUND_RETRY_MS);
+    }
     if (ready === state.groundClickReady) return;
     state.groundClickReady = ready;
     notify();
   }
 
-  /**
-   * Camera height above bare earth, for the surface mode. A cold grid cell is
-   * fetched once and the mode rechecked when it lands.
-   */
-  function cameraHeightForSurface() {
-    const carto = state.viewer?.camera?.positionCartographic;
-    if (!carto) return null;
-    const caster = parts.groundCaster;
-    const height = cameraHeightAboveGround(state.viewer, {
-      groundAt: caster.groundAt,
-    });
-    const lon = (carto.longitude * 180) / Math.PI;
-    const lat = (carto.latitude * 180) / Math.PI;
-    if (caster.groundAt(lon, lat) === null && height < SURFACE_WARM_BELOW_M)
-      caster.prepare([[lon, lat]]).then((ready) => {
-        if (ready) scheduleSurfaceSync();
-      });
-    return height;
-  }
-
-  /** Cast overlays to bare earth on Google 3D at street zoom; drape them elsewhere. */
-  function syncSurface() {
+  /** A camera move or a map change measures afresh. */
+  function remeasureGround() {
+    groundRetries = 0;
     syncGroundClickReady();
-    const available = Boolean(parts.groundCaster) && state.enabled;
-    const photoreal = mapStack?.getActiveId?.() === FOLLOW_MAP_STACK_ID;
-    const mode = nextSurfaceMode(state.surface, {
-      available,
-      photoreal,
-      heightM: available && photoreal ? cameraHeightForSurface() : null,
-    });
-    if (mode === state.surface) return;
-    state.surface = mode;
-    parts.meshSampler?.setEnabled(mode === 'terrain');
-    parts.marker.setSurface(mode);
-    for (const entry of state.providers.values())
-      entry.instance.setSurface?.(mode);
-    notify();
   }
 
-  let surfaceTimer = null;
-  function scheduleSurfaceSync() {
-    clearTimeout(surfaceTimer);
-    surfaceTimer = setTimeout(syncSurface, 150);
-  }
-
-  let removeSurfaceListeners = null;
-  function watchSurface(viewer) {
-    removeSurfaceListeners?.();
-    const camera = viewer?.camera;
-    if (!camera?.changed || !camera?.moveEnd) {
-      removeSurfaceListeners = null;
-      return;
-    }
-    const removeChanged = camera.changed.addEventListener(scheduleSurfaceSync);
-    const removeEnd = camera.moveEnd.addEventListener(scheduleSurfaceSync);
-    removeSurfaceListeners = () => {
-      removeChanged();
-      removeEnd();
-    };
-  }
-
-  function unwatchSurface() {
-    removeSurfaceListeners?.();
-    removeSurfaceListeners = null;
-    clearTimeout(surfaceTimer);
-    surfaceTimer = null;
+  let removeCameraListener = null;
+  function watchCamera(viewer) {
+    removeCameraListener?.();
+    removeCameraListener =
+      (viewer && findCamera(viewer)?.on('moveEnd', remeasureGround)) || null;
   }
 
   const activeEntries = () =>
     [...state.providers.values()].filter((entry) => entry.on);
 
-  async function refreshStatus(entry) {
-    try {
-      entry.status = await entry.instance.status();
-    } catch {
-      entry.status = null;
-    }
-    notify();
+  /** A provider's key status. A hung server must not hold LOADING, or the next check, forever. */
+  function checkStatus(entry) {
+    entry.statusCheck ||= (async () => {
+      try {
+        entry.status = await entry.instance.status({
+          signal: AbortSignal.timeout(KEY_STATUS_TIMEOUT_MS),
+        });
+      } catch {
+        entry.status = null;
+      }
+      notify();
+    })().finally(() => {
+      entry.statusCheck = null;
+    });
+    return entry.statusCheck;
   }
 
   function activate(entry) {
     if (!state.viewer) return;
     entry.instance.activate(state.viewer);
-    if (!entry.status) refreshStatus(entry);
-    if (!providerAvailable(entry)) return;
-    parts.credits.show(state.viewer, entry.def);
-    // The map may have changed by then.
-    whenIdle(() => {
-      if (providerAvailable(entry)) parts.viewerHost.prewarm([entry]);
-    }, 1500);
+    // Without a known key, a switch-on asks again: the server may be back,
+    // or have a key now.
+    if (entry.status?.configured !== true) checkStatus(entry);
+    if (providerAvailable(entry)) parts.credits.show(state.viewer, entry.def);
   }
 
+  /** Sources whose open photo a replacing request keeps up while it switches them off. */
+  const heldViewers = new Map();
+
   function deactivate(entry) {
-    parts.viewerHost.unmount(entry.def.id);
+    if (!heldViewers.has(entry.def.id)) parts.viewerHost.unmount(entry.def.id);
     entry.instance.deactivate();
     parts.credits.hide(state.viewer, entry.def);
   }
@@ -303,28 +292,47 @@ export function createStreetLevelLayer({
     nearestLookup = null;
   }
 
-  /** Ground under the screen centre; null for sky, undefined when it cannot aim. */
+  /** Close the image and deselect its sequence on the map. */
+  function closeViewer() {
+    abortNearest();
+    parts.viewerHost.close();
+    parts.clearSequences();
+  }
+
+  /**
+   * Ground under the screen centre: the drawn surface, else the ellipsoid;
+   * null for sky, undefined when it cannot aim.
+   */
   function screenCentreGround() {
-    const canvas = state.viewer?.scene?.canvas;
-    const pick = state.services.scenePick?.pickGroundPosition;
-    if (!pick || !canvas?.clientWidth || !canvas?.clientHeight)
-      return undefined;
-    const position = pick(state.viewer, {
-      x: canvas.clientWidth / 2,
-      y: canvas.clientHeight / 2,
-    });
-    const carto = position && Cesium.Cartographic.fromCartesian(position);
-    return carto
-      ? {
-          lon: Cesium.Math.toDegrees(carto.longitude),
-          lat: Cesium.Math.toDegrees(carto.latitude),
-        }
-      : null;
+    const { width, height } = canvasSize(state.viewer);
+    const query = state.viewer ? findQuery(state.viewer) : null;
+    if (!query || !width || !height) return undefined;
+    const [x, y] = [width / 2, height / 2];
+    // A pick that fails is a miss, as the ellipsoid's is.
+    const attempt = (pick) => {
+      try {
+        const position = pick();
+        return isPickedWorldPosition(position) ? position : null;
+      } catch {
+        return null;
+      }
+    };
+    const position =
+      attempt(() => query.pickPosition(x, y)) ??
+      attempt(() => query.pickEllipsoid(x, y));
+    const ground = position && toLonLatH(position);
+    return ground ? { lon: ground.lon, lat: ground.lat } : null;
   }
 
   /** `frame: false` keeps the camera where it is (the user picked the spot). */
-  function openImage(providerId, imageId, { frame = true } = {}) {
+  function openImage(
+    providerId,
+    imageId,
+    { frame = true, signal = null } = {},
+  ) {
+    if (signal?.aborted) return Promise.resolve(false);
     abortNearest();
+    state.street.armed = null;
     const entry = state.providers.get(providerId);
     if (entry && !providerAvailable(entry)) {
       state.street.loading = false;
@@ -332,7 +340,7 @@ export function createStreetLevelLayer({
       notify();
       return Promise.resolve(false);
     }
-    return parts.viewerHost.open(providerId, imageId, { frame });
+    return parts.viewerHost.open(providerId, imageId, { frame, signal });
   }
 
   function unavailableReason(entry) {
@@ -378,6 +386,9 @@ export function createStreetLevelLayer({
   function switchProvider(entry, on) {
     if (entry.on === on) return;
     entry.on = on;
+    // A lookup armed for this source dies with it.
+    if (!on && state.street.armed?.providerIds?.includes(entry.def.id))
+      state.street.armed = null;
     if (!state.enabled) return;
     if (on) activate(entry);
     else deactivate(entry);
@@ -404,7 +415,7 @@ export function createStreetLevelLayer({
     const filter = normalizeFilter(next, state.filter);
     if (sameFilter(filter, state.filter)) return;
     state.filter = filter;
-    const resolved = resolveFilter(filter);
+    const resolved = resolveFilter(filter, streetLevelTime());
     for (const entry of state.providers.values())
       entry.instance.setFilter(resolved);
     notify();
@@ -413,8 +424,9 @@ export function createStreetLevelLayer({
   /** The hint a ground-click provider shows, or the provider's own. */
   function hintFor(entry, stats) {
     if (entry.def.groundClick && stats.hint && !state.groundClickReady)
+      // No-break spaces keep a provider name (Google Street View) on one line.
       return t('zoom in to a street to open {name}', {
-        name: translateKnown(entry.def.name),
+        name: translateKnown(entry.def.name).replace(/ /g, '\u00a0'),
       });
     return stats.hint || '';
   }
@@ -442,7 +454,6 @@ export function createStreetLevelLayer({
         error: stats.error || null,
         color: entry.def.colors.coverage,
         coverageLabel: entry.def.coverageLabel || null,
-        highlightsSequence: entry.def.highlightsSequence !== false,
         sinceBasis: entry.def.sinceBasis === 'upload' ? 'upload' : 'capture',
         groundClick: entry.def.groundClick === true,
         filters: [...filtersOf(entry.def)],
@@ -450,23 +461,30 @@ export function createStreetLevelLayer({
     });
   }
 
+  /** The selected sequence; the provider showing the open image answers first. */
   function sequenceSnapshot() {
-    // The provider showing the open image answers first.
     const owner = state.providers.get(state.street.providerId);
     const candidates = owner
       ? [owner, ...[...state.providers.values()].filter((e) => e !== owner)]
       : [...state.providers.values()];
     for (const entry of candidates) {
       const stats = entry.instance.sequenceStats?.();
-      if (stats?.selectedId || stats?.loading)
+      if (stats?.selectedId || stats?.loading || stats?.error)
         return {
           providerId: entry.def.id,
           selectedId: stats.selectedId || null,
           images: stats.images || 0,
           loading: stats.loading === true,
+          error: stats.error || null,
         };
     }
-    return { providerId: null, selectedId: null, images: 0, loading: false };
+    return {
+      providerId: null,
+      selectedId: null,
+      images: 0,
+      loading: false,
+      error: null,
+    };
   }
 
   function getUIState() {
@@ -478,7 +496,6 @@ export function createStreetLevelLayer({
       providers: providerSnapshots(),
       street,
       sequence: sequenceSnapshot(),
-      surface: state.surface,
     });
     // The lit source cannot run on this map: say so, not a blank panel.
     const stranded = [...state.providers.values()].find(
@@ -503,15 +520,40 @@ export function createStreetLevelLayer({
     statsRefreshInterval: 1000,
     /** The key the switched-on providers share (or null), for the layer row. */
     get requiresKeyId() {
-      const on = [...state.providers.values()].filter((entry) => entry.on);
-      return requiresKeyIdFor(
-        on.length ? on.map((entry) => entry.def) : definitionsFrozen,
-      );
+      const on = activeEntries();
+      return requiresKeyIdFor(on.length ? on.map((entry) => entry.def) : defs);
     },
     /** Registered providers, in chip order. */
-    providerIds: definitionsFrozen.map((def) => def.id),
+    providerIds: defs.map((def) => def.id),
+    /** The map stack a provider needs (`requiresMapStack`), or null for any. */
+    requiredMapStack(providerId) {
+      const def = defs.find((entry) => entry.id === providerId);
+      return def?.requiresMapStack || null;
+    },
+    /**
+     * A provider's name and key state on any map (the panel lists a provider
+     * only on the map it needs). `configured` is null until its status call
+     * answers; `keyRequired` covers a missing or refused key.
+     */
+    providerStatus(providerId) {
+      const entry = state.providers.get(providerId);
+      if (!entry) return null;
+      const stats = entry.instance.coverageStats();
+      return {
+        id: entry.def.id,
+        name: entry.def.name,
+        on: entry.on,
+        configured: entry.status ? entry.status.configured === true : null,
+        keyRequired: stats.keyRequired === true || stats.keyRejected === true,
+        keyRejected: stats.keyRejected === true,
+        groundClick: entry.def.groundClick === true,
+        billed: entry.def.billedPerImage === true,
+        available: providerAvailable(entry),
+        error: stats.error || null,
+      };
+    },
     getSourceAvailability() {
-      const available = definitionsFrozen.length > 0;
+      const available = defs.length > 0;
       return {
         available,
         source: STREET_LEVEL_LAYER_ID,
@@ -522,15 +564,12 @@ export function createStreetLevelLayer({
     },
 
     init(viewer) {
-      if (state.initialized)
-        throw new Error('Street Level layer is already initialized');
       state.viewer = viewer;
-      state.initialized = true;
       parts.marker.ensure(viewer);
       parts.marker.setVisible(false);
       for (const entry of state.providers.values()) {
         entry.instance.init(viewer);
-        refreshStatus(entry);
+        checkStatus(entry);
       }
       console.log('[Data:StreetLevel] Initialized');
     },
@@ -541,18 +580,20 @@ export function createStreetLevelLayer({
       parts.marker.setVisible(true);
       parts.selection.install(viewer);
       for (const entry of activeEntries()) activate(entry);
-      watchSurface(viewer);
-      syncSurface();
+      watchCamera(viewer);
+      remeasureGround();
       notify();
     },
 
     disable() {
       state.enabled = false;
       abortNearest();
-      unwatchSurface();
+      removeCameraListener?.();
+      removeCameraListener = null;
+      cancelGroundRetry();
       parts.viewerHost.unmount();
       for (const entry of state.providers.values()) entry.instance.deactivate();
-      syncSurface();
+      syncGroundClickReady();
       parts.credits.hideAll(state.viewer);
       parts.selection.uninstall();
       parts.marker.setVisible(false);
@@ -568,27 +609,22 @@ export function createStreetLevelLayer({
       for (const entry of state.providers.values())
         entry.instance.destroy(viewer);
       parts.marker.destroy(viewer);
-      parts.meshSampler?.destroy();
-      parts.follow.destroy();
+      parts.framing.attachNavigation(null);
       unsubscribeMapStack?.();
       unsubscribeMapStack = null;
       mapStack = null;
       state.listeners.clear();
       state.viewer = null;
-      state.initialized = false;
-      state.destroyed = true;
     },
 
     getStats() {
       // The lifecycle polls this every second: summarise, don't snapshot.
+      // English data: the layer panel translates these through translateKnown.
       const snapshots = providerSnapshots();
       const coverage = summarizeCoverage(snapshots);
-      // English data: the layer panel translates these through translateKnown.
+      const keyLabel = keyStatusLabel(coverage);
       let loadingLabel = '';
-      const keyLabel = coverage.keyRejected
-        ? msg('KEY REJECTED')
-        : msg('KEY REQUIRED');
-      if (coverage.keyRequired) loadingLabel = keyLabel;
+      if (keyLabel) loadingLabel = keyLabel;
       else if (coverage.loading) loadingLabel = msg('loading coverage...');
       else if (coverage.hint && state.enabled) loadingLabel = coverage.hint;
       return {
@@ -597,7 +633,8 @@ export function createStreetLevelLayer({
         loading: coverage.loading,
         keyRequired: coverage.keyRequired,
         keyAlternatives: keyAlternatives(snapshots),
-        error: coverage.keyRequired
+        // A rejected key's message names the fix; a missing one says so.
+        error: keyLabel
           ? coverage.keyRejected
             ? coverage.error || keyLabel
             : keyLabel
@@ -606,30 +643,18 @@ export function createStreetLevelLayer({
       };
     },
 
-    /**
-     * The application's camera authority: `run(noun, move)`, the deferred
-     * `begin(noun)` / `reassert(generation)` pair and
-     * `subscribeHandoff(listener)`. FOLLOW claims the camera with `run`; a
-     * photo claims it when opening starts and frames only if it still owns
-     * it once loaded. FOLLOW stops when another feature takes the camera.
-     */
+    /** A photo frames itself only if it still owns the camera once loaded. */
     attachNavigation(navigation) {
-      parts.follow.attachNavigation(navigation);
+      parts.framing.attachNavigation(navigation);
     },
 
-    /** The application map stack; FOLLOW is available only on Google 3D. */
+    /** The application map stack; Street View is usable only on Google 3D. */
     attachMapStackController(controller) {
       unsubscribeMapStack?.();
       mapStack = controller || null;
       unsubscribeMapStack =
-        mapStack?.subscribe?.(() => {
-          syncFollowAvailability();
-          syncProviderAvailability();
-          syncSurface();
-        }) || null;
-      syncFollowAvailability();
+        mapStack?.subscribe?.(syncProviderAvailability) || null;
       syncProviderAvailability();
-      syncSurface();
     },
 
     /** Share-link and stored state: provider switches plus the filter. */
@@ -640,12 +665,23 @@ export function createStreetLevelLayer({
       });
     },
 
+    /** Unknown providers and malformed values are ignored, so any link applies. */
     setParams(params = {}) {
       const decoded = decodeParams(params, {
         providerIds: state.providers.keys(),
         filter: state.filter,
       });
-      const lit = litByParams(decoded.providers);
+      // A restored "Mapillary on" (the codec default) would light a source a
+      // keyless install cannot draw. Only redirect a provider the params switch
+      // on: a filter-only update keeps whatever the user chose.
+      const asked = litByParams(decoded.providers);
+      const lit =
+        asked && decoded.providers.get(asked) === true
+          ? keylessInstead(
+              state.providers.get(asked).def,
+              (id) => decoded.providers.get(id) === false,
+            ).id
+          : asked;
       const before = litIds();
       for (const [id, entry] of state.providers)
         if (id !== lit) switchProvider(entry, false);
@@ -666,35 +702,73 @@ export function createStreetLevelLayer({
     /** The DOM element provider viewers render into. */
     attachViewerHost(element) {
       parts.viewerHost.attach(element);
-      if (element && state.enabled)
-        whenIdle(
-          () =>
-            parts.viewerHost.prewarm(
-              activeEntries().filter((entry) => providerAvailable(entry)),
-            ),
-          1500,
-        );
     },
     setProviderEnabled,
-    /** Imagery filter for coverage, cones and nearest-image lookups. */
-    setCoverageFilter,
     openImage,
     /**
      * Open the nearest image of the active providers (or `providerIds`) near
      * a point, else the view centre, or with `aim: 'screen-centre'` the ground
-     * under the screen centre (sky: nothing).
+     * under the screen centre (sky: nothing). Providers without
+     * `nearestImage` are skipped. Options:
+     * - `radiusM` widens the search where a provider can (a geocoded landmark
+     *   is rarely within 50 m of a street);
+     * - `signal` retires the lookup: nothing opens after it fires;
+     * - `armed: false` (the assistant's own request) ignores a link's armed
+     *   point and keeps it until a photo opens;
+     * - `replace: true` keeps an open photo (and EXPAND) up while it looks and
+     *   closes it if nothing opens;
+     * - `proceed()` is asked before a found photo loads or an empty lookup
+     *   reports; false retires the request and leaves the panel as it was.
+     * Why nothing opened is in `street.nearestOutcome`: 'empty', 'sky' or
+     * null (an error).
      */
     async openNearest(
       point,
-      { providerIds = null, frame = true, aim = 'view' } = {},
+      {
+        providerIds = null,
+        frame = true,
+        aim = 'view',
+        radiusM = null,
+        signal: callerSignal = null,
+        armed: useArmed = true,
+        replace = false,
+        proceed = null,
+      } = {},
     ) {
+      if (callerSignal?.aborted) return false;
+      state.street.nearestOutcome = null;
+      // An OPEN press after a link armed a lookup opens what the link asked;
+      // any other lookup is a new request and drops the armed one.
+      const armed = useArmed ? state.street.armed : null;
+      if (useArmed) state.street.armed = null;
+      const closeReplaced = () => {
+        if (replace && state.street.open) closeViewer();
+      };
+      if (!point && aim === 'screen-centre' && armed) {
+        // OPEN promises the view centre: the link's spot only while the view
+        // still shows it, or when the view cannot be picked.
+        const centre = armed.point ? screenCentreGround() : null;
+        if (!armed.point) radiusM ??= armed.radiusM;
+        else if (
+          centre === undefined ||
+          (centre && metresBetween(centre, armed.point) <= ARMED_REACH_M)
+        ) {
+          point = armed.point;
+          radiusM ??= armed.radiusM;
+        }
+      }
+      const radius = Number.isFinite(radiusM)
+        ? Math.min(NEAREST_RADIUS_MAX_M, Math.max(1, radiusM))
+        : NEAREST_RADIUS_M;
       let view = point;
       if (!view && aim === 'screen-centre') {
         view = screenCentreGround();
         if (view === null) {
           abortNearest();
+          closeReplaced();
           state.street.loading = false;
           state.street.error = AIM_AT_GROUND_MESSAGE;
+          state.street.nearestOutcome = 'sky';
           notify();
           return false;
         }
@@ -706,12 +780,26 @@ export function createStreetLevelLayer({
       const lookup = new AbortController();
       nearestLookup = lookup;
       const { signal } = lookup;
+      const onCallerAbort = () => lookup.abort();
+      callerSignal?.addEventListener('abort', onCallerAbort, { once: true });
+      const retired = () => {
+        callerSignal?.removeEventListener('abort', onCallerAbort);
+        // A newer lookup owns the panel, its spinner and its error.
+        if (nearestLookup !== lookup) return false;
+        nearestLookup = null;
+        if (state.street.loading) {
+          state.street.loading = false;
+          notify();
+        }
+        return false;
+      };
       state.street.loading = true;
       state.street.error = null;
       notify();
       let lastError = null;
       const asked = (entry) =>
         (!providerIds || providerIds.includes(entry.def.id)) &&
+        typeof entry.instance.nearestImage === 'function' &&
         providerAvailable(entry);
       const entries = activeEntries().filter(asked);
       for (const entry of entries) {
@@ -719,67 +807,111 @@ export function createStreetLevelLayer({
         try {
           imageId = await entry.instance.nearestImage(
             { lat: view.lat, lon: view.lon },
-            { signal },
+            radius === NEAREST_RADIUS_M
+              ? { signal }
+              : { signal, radiusM: radius },
           );
         } catch (error) {
+          if (callerSignal?.aborted) return retired();
           // Overtaken: whatever replaced it owns the panel, errors included.
-          if (signal.aborted) return false;
+          if (signal.aborted) return retired();
           // One provider failing (no key, offline) must not hide the others.
           lastError = error;
           continue;
         }
-        if (signal.aborted) return false;
+        if (callerSignal?.aborted) return retired();
+        if (signal.aborted) return retired();
         if (!state.enabled) break;
         // Switched off, or its map left, while it looked: try the next.
         if (!imageId || !entry.on || !providerAvailable(entry)) continue;
+        if (proceed && proceed() !== true) return retired();
         nearestLookup = null;
-        return openImage(entry.def.id, imageId, { frame });
+        callerSignal?.removeEventListener('abort', onCallerAbort);
+        // A sequence playing in the replaced photo would step past this one.
+        if (replace && state.street.open) parts.viewerHost.stopPlayback();
+        // The caller's signal still counts while the viewer mounts and loads.
+        return openImage(entry.def.id, imageId, {
+          frame,
+          signal: callerSignal,
+        });
       }
-      if (nearestLookup === lookup) nearestLookup = null;
+      callerSignal?.removeEventListener('abort', onCallerAbort);
+      // Replaced while it looked: the panel is the newer lookup's.
+      if (nearestLookup !== lookup) return false;
+      // Given up by its caller: the panel stays as it was.
+      if (proceed && proceed() !== true) return retired();
+      nearestLookup = null;
+      closeReplaced();
       // Switched off while it looked: nothing to open, nothing to report.
       const stillOn = entries.some(
         (entry) => entry.on && providerAvailable(entry),
       );
       // A provider's own refusal is English data that the panel translates;
       // the core's refusal is built here, for the panel only, in the language.
+      if (state.enabled && stillOn && !lastError)
+        state.street.nearestOutcome = 'empty';
       if (state.enabled && stillOn)
         state.street.error =
           lastError?.message ||
           (point
             ? t('No street-level imagery within {radius} m of that point', {
-                radius: NEAREST_RADIUS_M,
+                radius,
               })
             : t(
                 'No street-level imagery within {radius} m of the view centre',
                 {
-                  radius: NEAREST_RADIUS_M,
+                  radius,
                 },
               ));
       state.street.loading = false;
       notify();
       return false;
     },
-    /** Close the image and deselect it everywhere on the map. */
-    closeViewer() {
-      abortNearest();
-      parts.viewerHost.close();
-      parts.clearSequences();
+    closeViewer,
+    /**
+     * Keep the open photo up while a request that replaces it switches its
+     * source off, so EXPAND stays; only that source's own switch-off is held,
+     * a source switched by hand meanwhile still stops a load. Release frees
+     * the old viewer.
+     */
+    holdViewer() {
+      const id = state.street.open ? state.street.providerId : null;
+      if (!id) return () => {};
+      heldViewers.set(id, (heldViewers.get(id) || 0) + 1);
+      let held = true;
+      return () => {
+        if (!held) return;
+        held = false;
+        const left = heldViewers.get(id) - 1;
+        if (left > 0) return void heldViewers.set(id, left);
+        heldViewers.delete(id);
+        if (state.providers.get(id)?.on !== false) return;
+        // Its photo still up (the request gave up) closes with its source;
+        // otherwise the request replaced or closed it, and the panel keeps
+        // what that request left (an error, an armed OPEN).
+        if (state.street.open && state.street.providerId === id)
+          parts.viewerHost.unmount(id);
+        else parts.viewerHost.release(id);
+      };
+    },
+    /**
+     * Arm a nearest lookup for the next OPEN press without running it (a link
+     * to a source that bills every load). Any other lookup, open or close, the
+     * source switched off or its map leaving clears it.
+     */
+    armNearest(point, { providerIds = null, radiusM = null } = {}) {
+      state.street.armed = {
+        point:
+          Number.isFinite(point?.lat) && Number.isFinite(point?.lon)
+            ? { lat: point.lat, lon: point.lon }
+            : null,
+        providerIds: Array.isArray(providerIds) ? [...providerIds] : null,
+        radiusM: Number.isFinite(radiusM) ? radiusM : null,
+      };
+      notify();
     },
     setViewerRenderMode: (mode) => parts.viewerHost.setRenderMode(mode),
-    setFollow: (enabled) => parts.follow.setFollow(enabled),
     resizeViewer: () => parts.viewerHost.resize(),
-    selectSequence(
-      sequenceId,
-      providerId = state.providers.keys().next().value,
-    ) {
-      return state.providers
-        .get(providerId)
-        ?.instance.selectSequence?.(sequenceId);
-    },
-    clearSequence: () => parts.clearSequences(),
-    refreshCoverage() {
-      for (const entry of activeEntries()) entry.instance.refreshCoverage();
-    },
   };
   return layer;
 }

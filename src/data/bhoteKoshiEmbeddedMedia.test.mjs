@@ -6,9 +6,11 @@ import {
   createBhoteKoshiEmbeddedMedia,
   createTrimmedYouTubePlayback,
   embeddedMediaFrameUrl,
+  placeCard,
   publicEmbeddedMediaUrl,
   resolveEmbeddedMediaSource,
 } from './bhoteKoshiEmbeddedMedia.js';
+import { bindRenderer } from '../render/rendererOf.js';
 
 test('Pinokio fallback never creates provider DOM or loads SDKs', async () => {
   const unexpected = () => { throw new Error('Provider resource allocated in Pinokio'); };
@@ -348,7 +350,7 @@ test('camera updates retain a preload until the visible player loads', () => {
   assert.equal(frame.parent, root, 'keep the preload while the visible player starts');
   const card = root.children.find(node => node.tag === 'section');
   const body = card.children.find(node => node.className === 'bhote-embedded-callout-body');
-  const player = body.children.find(node => node.className === 'bhote-embedded-callout-player');
+  const player = body.children.find(node => node.className.split(' ').includes('bhote-embedded-callout-player'));
   player.children.find(node => node.tag === 'iframe').dispatchEvent(new Event('load'));
   assert.equal(frame.parent, null, 'visible player readiness releases the preload');
   media.destroy();
@@ -393,4 +395,78 @@ test('pausing cancels a mounted Facebook preload and rejects its late ready call
   ready({ type: 'video', instance: { play() { playerCalls.push('play'); }, pause() { playerCalls.push('pause'); } } });
   assert.deepEqual(playerCalls, []);
   media.destroy();
+});
+
+test('a media card stays between the panels when right-to-left swaps their sides', () => {
+  const rect = (left, right, top = 0, bottom = 900) => ({ left, right, top, bottom, width: right - left, height: bottom - top });
+  // Arabic: the scene panel sits on the right, the context rail on the left.
+  const panels = {
+    '#scene-panel': rect(1040, 1420),
+    '#right-context-rail': rect(20, 340),
+    '#command-dock': rect(500, 940, 820, 880),
+  };
+  const card = {
+    offsetWidth: 392,
+    offsetHeight: 360,
+    parentElement: { getBoundingClientRect: () => rect(0, 1440) },
+    ownerDocument: { querySelector: (selector) => ({ getBoundingClientRect: () => panels[selector] }) },
+    classList: { contains: () => false },
+    style: {},
+  };
+  placeCard(card, { querySelector: () => null }, { x: 700, y: 400, width: 1440, height: 900 });
+  const left = parseFloat(card.style.left);
+  assert.ok(left >= 340 + 18, `card at ${left}px lands on the context rail`);
+  assert.ok(left + 392 <= 1040 - 18, `card at ${left}px lands on the scene panel`);
+});
+
+test('a shown card follows its anchor through the renderer ports', () => {
+  class Element extends EventTarget {
+    constructor(tag) {
+      super(); this.tag = tag; this.children = []; this.dataset = {}; this.style = {};
+      this.classList = { add() {}, remove() {}, contains() { return false; } };
+    }
+    setAttribute() {}
+    removeAttribute() {}
+    querySelector() { return null; }
+    getBoundingClientRect() { return { left: 0, top: 0, right: 1000, bottom: 800, width: 1000, height: 800 }; }
+    append(...children) { for (const child of children) { child.remove(); child.parent = this; this.children.push(child); } }
+    remove() { if (this.parent) this.parent.children = this.parent.children.filter((child) => child !== this); this.parent = null; }
+  }
+  const documentRef = {
+    body: new Element('body'),
+    createElement: (tag) => new Element(tag),
+    createElementNS: (_, tag) => new Element(tag),
+  };
+  const listeners = new Set();
+  const viewer = { canvas: { getBoundingClientRect: () => ({ left: 500, top: 500 }) } };
+  let pose = { position: { x: 0, y: 0, z: 0 }, direction: { x: 1, y: 0, z: 0 } };
+  const projected = [];
+  // The renderer's canvas, not the viewer's, places the card.
+  const unbind = bindRenderer(viewer, {
+    canvas: { getBoundingClientRect: () => ({ left: 10, top: 5 }) },
+    camera: { pose: () => pose },
+    query: { project: (p) => { projected.push(p); return { x: 300, y: 200 }; } },
+    frame: {
+      on(phase, cb) {
+        const entry = [phase, cb];
+        listeners.add(entry);
+        return () => listeners.delete(entry);
+      },
+    },
+  });
+  const media = createBhoteKoshiEmbeddedMedia({ viewer, documentRef, globalRef: {} });
+  assert.deepEqual([...listeners].map(([phase]) => phase), ['postRender']);
+  const anchor = { x: 10, y: 0, z: 0 };
+  assert.equal(media.show({ observation: { title: 'Clip', media: { sourceUrl: 'https://youtu.be/DbqRexFxv3k' } }, anchor }), true);
+  const card = documentRef.body.children[0].children.find((node) => node.tag === 'section');
+  assert.equal(card.hidden, false);
+  assert.equal(projected.at(-1), anchor);
+  assert.equal(card.style.left, `${300 + 10 + 42}px`);
+  // Behind the eye: hidden on the next drawn frame.
+  pose = { ...pose, direction: { x: -1, y: 0, z: 0 } };
+  for (const [, cb] of listeners) cb();
+  assert.equal(card.hidden, true);
+  media.destroy();
+  assert.equal(listeners.size, 0);
+  unbind();
 });

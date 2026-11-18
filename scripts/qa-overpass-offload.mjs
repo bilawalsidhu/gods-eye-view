@@ -306,7 +306,16 @@ try {
   await observeNetwork(page);
   page.on('pageerror', (error) => result.errors.push(error.message));
   page.on('console', (message) => {
-    if (message.type() === 'error' && result.consoleErrors.length < 30)
+    if (message.type() !== 'error') return;
+    // A keyless server does not offer optional Google tokens. Keep every other
+    // HTTP or JavaScript error visible, including failures of this route other
+    // than its expected capability-miss 404.
+    const optionalTokenMiss =
+      message.location().url === new URL('/api/google/tiles-token', url).href &&
+      /^Failed to load resource: the server responded with a status of 404\b/.test(
+        message.text(),
+      );
+    if (!optionalTokenMiss && result.consoleErrors.length < 30)
       result.consoleErrors.push(message.text());
   });
   page.on('requestfailed', (request) => {
@@ -1268,8 +1277,9 @@ try {
         outlines = 0;
       for (let i = 0; i < viewer.dataSources.length; i++)
         for (const entity of viewer.dataSources.get(i).entities.values) {
-          if (!ids.has(entity.installationId || entity.id) || !entity.show)
-            continue;
+          // Outline entities are `<record id>:outline:<ring>`.
+          const recordId = String(entity.id).replace(/:outline:\d+$/, '');
+          if (!ids.has(recordId) || !entity.show) continue;
           if (entity.billboard || entity.point) markers++;
           if (entity.polyline) outlines++;
         }

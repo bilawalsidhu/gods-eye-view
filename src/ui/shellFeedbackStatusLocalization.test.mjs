@@ -10,14 +10,13 @@ import {
   reduceLoadingFeedback,
 } from '../loadingFeedback.js';
 
-const elements = {
-  'global-loading-status': { hidden: true, dataset: {} },
-  'global-loading-detail': { textContent: '' },
-};
 globalThis.document ??= {
-  getElementById: (id) => elements[id] ?? null,
+  getElementById: () => null,
   addEventListener() {},
   removeEventListener() {},
+  // The layer panel reaches Vue, whose DOM runtime creates one element as it
+  // loads.
+  createElement: () => ({}),
   hidden: false,
 };
 const { ShellFeedback, localizeLoadingPresentation } =
@@ -35,10 +34,14 @@ function alprChipDetail(locale, retryInMs) {
       retryAt: Date.now() + retryInMs,
     },
   };
-  const feedback = new ShellFeedback({ readLayers: () => [layer] });
+  let loading = null;
+  const feedback = new ShellFeedback({
+    readLayers: () => [layer],
+    store: { publishLoading: (view) => (loading = view) },
+  });
   feedback._armLoadingFeedbackTicker = () => {};
   feedback._updateGlobalLoadingFeedback(0);
-  return elements['global-loading-detail'].textContent;
+  return loading.detail;
 }
 
 test.afterEach(() => setLocale('en'));
@@ -137,3 +140,14 @@ for (const locale of ['es', 'ru']) {
     assert.equal(shown.label, t(error).toLocaleUpperCase(locale));
   });
 }
+
+test('the place names loading beside the layers are named in the language', () => {
+  setLocale('de');
+  const localized = localizeLoadingPresentation({
+    state: 'loading',
+    label: 'LOADING LIVE DATA',
+    detail: 'Satellites · Place names',
+  });
+  assert.equal(localized.detail, 'Satelliten · Ortsnamen');
+  setLocale('en');
+});

@@ -9,7 +9,8 @@ import {
   displacementPlausible,
 } from './movement.js';
 import { buildTransitSelectionCopy } from './policy.js';
-import { seek, sampleAt } from '../../data/contactPlayback.js';
+import { sampleAt } from '../../data/contactPlayback.js';
+import { layerPlacement } from '../../data/placementProvider.js';
 const entry = () => {
   const e = { mode: 'bus', modeInferred: false, courseDeg: null };
   initializePlayback(e);
@@ -162,4 +163,102 @@ test('course fallback prefers held course, then finite reported bearing, then un
     applyDisplayCourse(e, 100);
     assert.equal(e.courseDeg, expected);
   }
+});
+
+const placedEntry = (placement) => {
+  const e = {
+    key: 'feed:7',
+    feedId: 'feed',
+    mode: 'bus',
+    modeInferred: false,
+    courseDeg: null,
+    placement,
+  };
+  initializePlayback(e);
+  return e;
+};
+const drive = (e) => {
+  recordFix(e, { ...fix(0), bearingDeg: 10 });
+  recordFix(e, { ...fix(15000, 42.001), bearingDeg: 20 });
+  recordFix(e, fix(30000, 42.002));
+  const samples = [];
+  for (let wall = 0; wall <= 120000; wall += 2500) {
+    updatePlayback(e, wall, wall);
+    samples.push({ ...e.sample });
+  }
+  return samples;
+};
+test('without a placement, or one that places nothing, playback is the layer own', () => {
+  const own = drive(placedEntry(null));
+  const declined = [];
+  const placement = layerPlacement(
+    {
+      layer: () => ({
+        observe: (id, f) => declined.push([id, f.timeMs]),
+        place: () => null,
+      }),
+    },
+    'transit',
+  );
+  const e = placedEntry(placement);
+  assert.deepEqual(drive(e), own);
+  assert.equal(e.placed, false);
+  assert.deepEqual(declined, [
+    ['feed:7', 0],
+    ['feed:7', 15000],
+    ['feed:7', 30000],
+  ]);
+});
+test('a placement draws the vehicle where it places it, keeping the playback state', () => {
+  const own = drive(placedEntry(null));
+  const e = placedEntry(
+    layerPlacement(
+      {
+        layer: () => ({
+          place: (id, wallMs) =>
+            wallMs >= 60000
+              ? { lat: 1, lon: 2, courseDeg: 45, speedMps: 7 }
+              : { lat: 3, lon: 4 },
+        }),
+      },
+      'transit',
+    ),
+  );
+  const placed = drive(e);
+  assert.equal(e.placed, true);
+  for (let i = 0; i < own.length; i++) {
+    const late = i * 2500 >= 60000;
+    assert.equal(placed[i].lat, late ? 1 : 3);
+    assert.equal(placed[i].lon, late ? 2 : 4);
+    assert.equal(placed[i].phase, own[i].phase);
+    assert.equal(placed[i].motion, own[i].motion);
+    if (late) {
+      assert.equal(placed[i].segmentCourseDeg, 45);
+      assert.equal(placed[i].segmentSpeedMps, 7);
+    } else {
+      // No course or speed placed: the playback's own stand.
+      assert.deepEqual(
+        [placed[i].segmentCourseDeg, placed[i].segmentSpeedMps],
+        [own[i].segmentCourseDeg, own[i].segmentSpeedMps],
+      );
+    }
+  }
+});
+test('a refused fix is never told to the placement', () => {
+  const told = [];
+  const e = placedEntry(
+    layerPlacement(
+      {
+        layer: () => ({
+          observe: (id, f) => told.push(f.lat),
+          place: () => null,
+        }),
+      },
+      'transit',
+    ),
+  );
+  recordFix(e, fix(0));
+  recordFix(e, fix(15000, 42.001));
+  assert.equal(recordFix(e, fix(30000, 43)).accepted, false);
+  assert.deepEqual(told, [42, 42.001]);
 });

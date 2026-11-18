@@ -46,8 +46,6 @@
   max-height: calc(var(--right-stack-max-height, 50svh) - 64px);
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 212, 255, 0.46) transparent;
 }
 #recent-imagery-panel.collapsed #recent-imagery-panel-body,
 #recent-imagery-panel.collapsed #recent-imagery-panel-count,
@@ -55,10 +53,6 @@
 #recent-imagery-panel [hidden],
 #recent-imagery-split-line[hidden] {
   display: none !important;
-}
-#recent-imagery-panel.collapsed .panel-title {
-  font-size: 8px;
-  letter-spacing: 1.8px;
 }
 #recent-imagery-panel.collapsed .panel-header {
   margin-bottom: 2px;
@@ -172,7 +166,6 @@
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x proximity;
-  scrollbar-width: thin;
   outline: none;
   border-radius: 6px;
 }
@@ -309,10 +302,10 @@ html:not([lang='en'])
   display: none;
 }
 
-/* 4. The selection bar: mode, then two rows that are always there. */
+/* 4. The selection bar: 24px mode buttons plus borders, then two stable rows. */
 .recent-imagery-readout .ri-selection {
   display: grid;
-  grid-template-rows: 20px 20px 20px;
+  grid-template-rows: 26px 20px 20px;
   row-gap: 4px;
   padding: 5px;
   border: 1px solid var(--weather-card-border);
@@ -321,7 +314,6 @@ html:not([lang='en'])
 .recent-imagery-readout .ri-mode {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
 }
 .recent-imagery-readout .ri-selection .data-toggle-chip {
   height: 20px;
@@ -423,16 +415,6 @@ html:not([lang='en']) .recent-imagery-readout .ri-opacity-label {
 }
 .recent-imagery-readout .ri-opacity-value {
   font-variant-numeric: tabular-nums;
-  color: var(--text-secondary);
-}
-.recent-imagery-readout .ri-opacity {
-  width: 100%;
-  min-width: 0;
-  margin: 0;
-  accent-color: var(--accent);
-}
-.recent-imagery-readout .ri-opacity:disabled {
-  opacity: 0.35;
 }
 .recent-imagery-readout .ri-swap {
   width: 40px;

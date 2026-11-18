@@ -2,7 +2,6 @@ import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import { dispatchCockpitModeChanged, enter, exit, _adoptTrackedEntity } from '../ui/cockpitTrackingController.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import * as Cesium from 'cesium';
 import flightsLayer, {
   _setCockpitDetectionSubjectForTest as setFlightsCockpitSubject,
@@ -28,8 +27,8 @@ const LAYERS = [
       _setTrackedFlightRefreshStateForTest({
         icao24,
         entity: null,
-        billboard: candidateBillboard(icao24),
-        billboardCollection: { show: true, remove() {} },
+        icon: candidateBillboard(icao24),
+        iconLayer: { show: true, remove() {} },
         viewer: candidateViewer(),
         tracked: false,
         meta: {
@@ -49,8 +48,8 @@ const LAYERS = [
       _setTrackedMilitaryRefreshStateForTest({
         icao24,
         entity: null,
-        billboard: candidateBillboard(icao24),
-        billboardCollection: { show: true, remove() {} },
+        icon: candidateBillboard(icao24),
+        iconLayer: { show: true, remove() {} },
         viewer: candidateViewer(),
         tracked: false,
         meta: {

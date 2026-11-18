@@ -44,7 +44,10 @@ test('pack + build + decode round-trips a random state grid exactly', () => {
   // Direct packing contract: 4 cells/byte, LSB-first, 2 bits each.
   const packed = packMaskStates(states);
   assert.equal(packed.length, Math.ceil((width * height) / 4));
-  assert.equal(packed[0], states[0] | (states[1] << 2) | (states[2] << 4) | (states[3] << 6));
+  assert.equal(
+    packed[0],
+    states[0] | (states[1] << 2) | (states[2] << 4) | (states[3] << 6),
+  );
 
   const file = buildMaskFileBuffer(states, width, height);
   assert.equal(file.byteLength, 16 + Math.ceil((width * height) / 4));
@@ -104,7 +107,12 @@ test('maskStateAt handles the poles, the dateline column, and out-of-range longi
 
 test('maskStateAt reads non-finite coordinates as coastal, never as water', () => {
   const mask = decodeMaskBuffer(buildMaskFileBuffer(new Uint8Array(16), 4, 4));
-  for (const [lat, lon] of [[NaN, 0], [0, NaN], [Infinity, 0], [0, -Infinity]]) {
+  for (const [lat, lon] of [
+    [NaN, 0],
+    [0, NaN],
+    [Infinity, 0],
+    [0, -Infinity],
+  ]) {
     assert.equal(maskStateAt(mask, lat, lon), MASK_COASTAL, `(${lat}, ${lon})`);
   }
 });
@@ -123,7 +131,17 @@ test('maskStateAt accepts ±90 as boundary rows but fails closed on finite off-g
   assert.equal(maskStateAt(mask, -90, 0), MASK_LAND);
 
   // Finite but not a geographic position: never a confident polar answer.
-  for (const lat of [90.00001, -90.00001, 91, -91, 100, -100, 1000, -1e6, Number.MAX_VALUE]) {
+  for (const lat of [
+    90.00001,
+    -90.00001,
+    91,
+    -91,
+    100,
+    -100,
+    1000,
+    -1e6,
+    Number.MAX_VALUE,
+  ]) {
     assert.equal(maskStateAt(mask, lat, 0), MASK_COASTAL, `lat ${lat}`);
   }
   // Longitude stays intentionally wrapped — only latitude is range-gated.

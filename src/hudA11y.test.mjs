@@ -1,9 +1,9 @@
-import { expandApplicationHtml } from '../build/application-html.js';
+import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const html = expandApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
+const html = await renderApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
 const parameters = readFileSync(new URL('./ui/styleParameters.js', import.meta.url), 'utf8');
 
 // Focused markup guards; actual computed names are checked in Chromium.
@@ -24,10 +24,11 @@ test('HUD sliders and location search have descriptive explicit names', () => {
 test('the first-run checkbox keeps its native visible label', () => {
   // The span may carry a data-i18n extraction attribute; the native wrapping
   // label contract is what this guards.
-  assert.match(html, /<label\b[^>]*class="first-run-suppress"[^>]*>\s*<input type="checkbox" data-first-run-suppress \/>\s*<span\b[^>]*>Don't show this again<\/span>\s*<\/label>/);
+  assert.match(html, /<label\b[^>]*class="first-run-suppress"[^>]*>\s*<input type="checkbox" data-first-run-suppress\s*\/?>\s*<span\b[^>]*>Don't show this again<\/span>\s*<\/label>/);
 });
 
 test('generated style sliders use the visible parameter label as their name', () => {
-  assert.match(parameters, /label\.textContent\s*=\s*t\(metadata\.label\);/);
-  assert.match(parameters, /slider\.setAttribute\(['"]aria-label['"],\s*t\(metadata\.label\)\)/);
+  assert.match(parameters, /label:\s*t\(metadata\.label\),/);
+  assert.match(parameters, /h\('span', \{ class: 'param-label' \}, row\.label\)/);
+  assert.match(parameters, /'aria-label': row\.label,/);
 });

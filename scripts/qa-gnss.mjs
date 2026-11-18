@@ -9,22 +9,24 @@
  * stub that route in the page so they are deterministic.
  *
  *   (i)   LIVE — over Poland and the southern Baltic the layer settles with no error,
- *         one geometry per cell and legend band counts that sum to the cell
+ *         its cells drawn and legend band counts that sum to the cell
  *         count; cells are required only when the returned rows, binned
- *         with the layer's own rules, reach the per-cell minimum (live
- *         traffic varies by hour). Requires a non-stale response no older than 60 s.
+ *         into H3 cells with the layer's own rules, give at least one cell
+ *         (live traffic varies by hour). Requires a non-stale response no older than 60 s.
  *   (ii)  BANDS (synthetic) — a 10-aircraft cell with 5 degraded is high,
  *         a 30-aircraft cell with 2 degraded is medium, a 3-aircraft cell
  *         with 1 degraded is low (first bad discounted), a clean cell at sea
- *         is low, a 2-aircraft cell is withheld; `stale: true` reaches
+ *         is low, a 2-aircraft cell with 2 degraded is shown high (no
+ *         minimum aircraft count, as on gpsjam.org); `stale: true` reaches
  *         getStats. Every band is drawn and low is shown over land and sea.
  *         The row reads as low navigation accuracy, and stats carry the
- *         machine-readable provenance (GEV classifier, gpsjam bands, window).
+ *         machine-readable provenance (GEV classifier, gpsjam bands and H3
+ *         grid, window).
  *         PICK verifies actual perimeter and empty-ground clicks under GNSS.
  *         CAMERA/GLOBE verify automatic sampling and the screen-centre anchor.
  *   (iii) FAILURE — the route stubbed to 502: stats.error is set and the
  *         cells already on the globe are kept.
- *   (iv)  DISABLE — owned ground primitives are hidden.
+ *   (iv)  DISABLE — the cells' ground primitives are hidden.
  *   (v)   KEYBOARD — the row's toggle button, focused, turns the layer on
  *         with Enter and off with Space, keeps focus and names its state.
  *   (vi)  VIEWPORT — at a 390x844 phone viewport the open row and its legend
@@ -114,10 +116,34 @@ async function boot(page, { lon, lat, height }) {
   );
 }
 
+/**
+ * In the page: the GNSS cells' ground primitives, each with the collection
+ * drawing it. The layer draws them through the renderer's draw port as
+ * ground fills that never take part in picks, the only such fills the app
+ * draws, so they are found by that.
+ */
+function gnssGround() {
+  const out = [];
+  const walk = (collection) => {
+    for (let i = 0; i < collection.length; i++) {
+      const item = collection.get(i);
+      if (typeof item?.length === 'number' && typeof item.get === 'function')
+        walk(item);
+      else if (
+        item?.allowPicking === false &&
+        item.classificationType !== undefined
+      )
+        out.push({ primitive: item, host: collection });
+    }
+  };
+  walk(window.__godsEyeView.viewer.scene.primitives);
+  return out;
+}
+
 /** Enable (or refresh) the layer and poll until it settles. */
 async function enableAndSettle(page, { refresh = false } = {}) {
   return page.evaluate(
-    async (id, again) => {
+    async (id, again, findGround) => {
       const dm = window.__godsEyeView.dataManager;
       const layer = dm.layers.get(id).module;
       if (again) await dm.refreshLayer(id);
@@ -129,22 +155,21 @@ async function enableAndSettle(page, { refresh = false } = {}) {
       const rowName =
         document.querySelector(`[data-layer-id="${id}"] .data-name`)
           ?.textContent ?? '';
-      const all = window.__godsEyeView.viewer.scene.groundPrimitives;
-      const ds = Array.from({ length: all.length }, (_, i) => all.get(i)).find(
-        (item) => item.id === id,
-      );
+      // eslint-disable-next-line no-new-func
+      const ground = new Function(`return (${findGround})()`)();
       return {
         stats,
         legend,
         blurb,
         rowName,
         name: layer.name,
-        entities: ds?.get(0)?.geometryInstances.length ?? 0,
-        shown: ds?.show ?? null,
+        drawn: ground.length > 0,
+        shown: ground[0]?.host.show ?? null,
       };
     },
     LAYER_ID,
     refresh,
+    String(gnssGround),
   );
 }
 
@@ -184,31 +209,21 @@ async function shoot(page, name) {
   await page.screenshot({ path: path.join(SHOTS_DIR, `gnss-${name}.png`) });
 }
 
-/** Bounding-sphere state of every GNSS cell: DONE = 0, PENDING = 1, FAILED = 2. */
-function cellStates(id) {
-  const { viewer } = window.__godsEyeView;
-  const all = viewer.scene.groundPrimitives;
-  const ds = Array.from({ length: all.length }, (_, i) => all.get(i)).find(
-    (item) => item.id === id,
-  );
-  if (!ds?.length) return [];
-  return [ds.get(0).ready ? 0 : 1];
-}
+/** Build state of every GNSS ground primitive: DONE = 0, PENDING = 1. */
+const cellStates = `() => (${gnssGround})().map(({ primitive }) => (primitive.ready ? 0 : 1))`;
 
-/** Wait until every GNSS cell's ground rectangle has finished building. */
+/** Wait until every GNSS cell's ground polygon has finished building. */
 async function waitForBuiltCells(page, timeoutMs = 60000) {
   const built = await page
-    .waitForFunction(
-      `(${cellStates})(${JSON.stringify(LAYER_ID)}).every((state) => state === 0)`,
-      { timeout: timeoutMs, polling: 250 },
-    )
+    .waitForFunction(`(${cellStates})().every((state) => state === 0)`, {
+      timeout: timeoutMs,
+      polling: 250,
+    })
     .then(
       () => true,
       () => false,
     );
-  const states = await page.evaluate(
-    `(${cellStates})(${JSON.stringify(LAYER_ID)})`,
-  );
+  const states = await page.evaluate(`(${cellStates})()`);
   return { built, detail: `states=${JSON.stringify(states)}` };
 }
 
@@ -223,22 +238,23 @@ const fixtureRow = (hex, lat, lon, degraded) => ({
 });
 
 /**
- * Synthetic 0.5° cells: high at sea (5/10 bad), medium on land (2/30 bad),
- * low on land (1/3 bad), low at sea (0/4 bad), withheld (2 aircraft).
+ * Synthetic H3 res-4 cells, each group inside one hexagon: high at sea
+ * (5/10 bad), medium on land (2/30 bad), low on land (1/3 bad), low at sea
+ * (0/4 bad), and high from only 2 aircraft (2/2 bad; no minimum count).
  */
 function fixturePayload() {
   const rows = [];
   const hex = (prefix, i) => `${prefix}${i.toString(16).padStart(2, '0')}`;
   for (let i = 0; i < 10; i++)
-    rows.push(fixtureRow(hex('a000', i), 55.1 + i * 0.01, 19.1, i < 5));
+    rows.push(fixtureRow(hex('a000', i), 55.1 + i * 0.001, 19.1, i < 5));
   for (let i = 0; i < 30; i++)
-    rows.push(fixtureRow(hex('d000', i), 54.1 + i * 0.01, 19.6, i < 2));
+    rows.push(fixtureRow(hex('d000', i), 54.1 + i * 0.001, 19.6, i < 2));
   for (let i = 0; i < 3; i++)
-    rows.push(fixtureRow(hex('b000', i), 54.1 + i * 0.01, 18.1, i === 0));
+    rows.push(fixtureRow(hex('b000', i), 54.1 + i * 0.001, 18.1, i === 0));
   for (let i = 0; i < 4; i++)
-    rows.push(fixtureRow(hex('e000', i), 55.1 + i * 0.01, 18.1, false));
+    rows.push(fixtureRow(hex('e000', i), 55.1 + i * 0.001, 18.1, false));
   for (let i = 0; i < 2; i++)
-    rows.push(fixtureRow(hex('c000', i), 53.1 + i * 0.01, 17.1, true));
+    rows.push(fixtureRow(hex('c000', i), 53.1 + i * 0.001, 17.1, true));
   return {
     fetchedAt: Date.now(),
     anchor: { lat: 55, lon: 19 },
@@ -385,8 +401,8 @@ async function main() {
     const l = await enableAndSettle(live);
     const legendTotal = l.legend.reduce((sum, { count }) => sum + count, 0);
     // Bin what adsb.lol actually returned with the layer's own rules: live
-    // traffic varies by hour, so cells are required only when some cell
-    // really reached the minimum aircraft count.
+    // traffic varies by hour, so cells are required only when the rows
+    // really bin into some cell.
     const liveSnapshots = (await Promise.allSettled(liveBodies))
       .filter((r) => r.status === 'fulfilled')
       .map((r) => r.value);
@@ -417,9 +433,9 @@ async function main() {
     }
     const expectedCells = binGnssCells(expectedStore).length;
     record(
-      'LIVE: no error, one geometry per cell',
-      !l.stats.error && l.entities === l.stats.count,
-      `cells=${l.stats.count} entities=${l.entities} error=${JSON.stringify(l.stats.error)}`,
+      'LIVE: no error, cells drawn when there are any',
+      !l.stats.error && l.drawn === l.stats.count > 0,
+      `cells=${l.stats.count} drawn=${l.drawn} error=${JSON.stringify(l.stats.error)}`,
     );
     if (expectedCells > 0) {
       record(
@@ -429,7 +445,7 @@ async function main() {
       );
     } else {
       console.log(
-        `  [info] ${liveRows} live rows, no cell reaches the minimum — cell count not asserted`,
+        `  [info] ${liveRows} live rows bin into no cell — cell count not asserted`,
       );
     }
     record(
@@ -439,7 +455,7 @@ async function main() {
     );
     const liveBuilt = await waitForBuiltCells(live);
     record(
-      'LIVE: every cell rectangle is built on a parked camera',
+      'LIVE: every cell polygon is built on a parked camera',
       liveBuilt.built,
       liveBuilt.detail,
     );
@@ -454,7 +470,7 @@ async function main() {
     await page.setViewport({ width: 1440, height: 900 });
     page.on('pageerror', (e) => errors.push(e.message));
     // Stub the route in-page rather than with request interception: an
-    // intercepted page stalls Cesium's geometry workers, so ground rectangles
+    // intercepted page stalls Cesium's geometry workers, so ground polygons
     // never finish building and the screenshot would not show real behaviour.
     await stubRoute(page);
     await boot(page, { lon: 18.6, lat: 54.6, height: 450_000 });
@@ -462,25 +478,27 @@ async function main() {
     const band = (prefix) =>
       f.legend.find(({ label }) => label.startsWith(prefix))?.count;
     record(
-      'BANDS: 4 cells shown, the 2-aircraft cell withheld',
-      f.stats.count === 4 && f.entities === 4,
-      `cells=${f.stats.count} entities=${f.entities}`,
+      'BANDS: 5 cells shown, the 2-aircraft cell included',
+      f.stats.count === 5 && f.drawn,
+      `cells=${f.stats.count} drawn=${f.drawn}`,
     );
     record(
-      'BANDS: 5/10 is high, 2/30 is medium, 1/3 and 0/4 are low',
-      band('Low-accuracy score >') === 1 &&
+      'BANDS: 5/10 and 2/2 are high, 2/30 is medium, 1/3 and 0/4 are low',
+      band('Low-accuracy score >') === 2 &&
         band('Low-accuracy score 2') === 1 &&
         band('Low-accuracy score <') === 2,
       JSON.stringify(f.legend),
     );
     const prov = f.stats.provenance;
     record(
-      'PROVENANCE: GEV classifier, gpsjam bands and visited-view window are machine-readable',
+      'PROVENANCE: GEV classifier, gpsjam bands and H3 grid, and visited-view window are machine-readable',
       prov?.classifier?.id === 'gev-nic-nacp-v2' &&
         prov.classifier.definedBy === 'GEV' &&
         prov.classifier.validated === false &&
         prov.aggregation?.source === 'https://gpsjam.org/faq' &&
         JSON.stringify(prov.aggregation.bands) === '[2,10]' &&
+        prov.aggregation.grid === 'h3' &&
+        prov.aggregation.h3Resolution === 4 &&
         prov.window?.minutes === 30 &&
         prov.window.scope === 'visited-view' &&
         prov.interpretation?.validated === false,
@@ -503,7 +521,7 @@ async function main() {
     );
     const bandsBuilt = await waitForBuiltCells(page);
     record(
-      'BANDS: every cell rectangle is built on a parked camera',
+      'BANDS: every cell polygon is built on a parked camera',
       bandsBuilt.built,
       bandsBuilt.detail,
     );
@@ -769,20 +787,22 @@ async function main() {
     const e = await enableAndSettle(page, { refresh: true });
     record(
       'FAILURE: error surfaced, cells kept',
-      Boolean(e.stats.error) && e.stats.count === 4 && e.entities === 4,
+      Boolean(e.stats.error) && e.stats.count === 5 && e.drawn,
       `error=${JSON.stringify(e.stats.error)} cells=${e.stats.count}`,
     );
     await shoot(page, 'failure');
 
     // ── (iv) DISABLE ──────────────────────────────────────────────────────
     console.log('\n(iv) DISABLE...');
-    const shown = await page.evaluate(async (id) => {
-      await window.__godsEyeView.dataManager.setEnabled(id, false);
-      const all = window.__godsEyeView.viewer.scene.groundPrimitives;
-      return Array.from({ length: all.length }, (_, i) => all.get(i)).find(
-        (item) => item.id === id,
-      )?.show;
-    }, LAYER_ID);
+    const shown = await page.evaluate(
+      async (id, findGround) => {
+        await window.__godsEyeView.dataManager.setEnabled(id, false);
+        // eslint-disable-next-line no-new-func
+        return new Function(`return (${findGround})()`)()[0]?.host.show;
+      },
+      LAYER_ID,
+      String(gnssGround),
+    );
     record('DISABLE: data source hidden', shown === false, `show=${shown}`);
     await shoot(page, 'disabled');
 
@@ -797,7 +817,7 @@ async function main() {
       'KEYBOARD: Enter on the focused toggle enables the layer and keeps focus',
       on.enabled &&
         on.focused &&
-        on.count === 4 &&
+        on.count === 5 &&
         /^GNSS Integrity: /.test(on.label) &&
         !/OFF$/.test(on.label),
       JSON.stringify(on),
@@ -906,7 +926,7 @@ async function main() {
         return (
           layer.enabled &&
           layer.module.getStats().error === null &&
-          layer.module.getStats().count === 4
+          layer.module.getStats().count === 5
         );
       },
       { timeout: 20000 },
@@ -948,8 +968,8 @@ async function main() {
     const old = await enableAndSettle(aged, {});
     record(
       'AGE: a snapshot observed 31 min ago adds no cells and is not an error',
-      old.stats.count === 0 && old.entities === 0 && !old.stats.error,
-      `cells=${old.stats.count} entities=${old.entities} error=${JSON.stringify(old.stats.error)}`,
+      old.stats.count === 0 && !old.drawn && !old.stats.error,
+      `cells=${old.stats.count} drawn=${old.drawn} error=${JSON.stringify(old.stats.error)}`,
     );
     await aged.evaluate(() => {
       window.__gnssQaAgeMs = 29 * 60_000;
@@ -957,8 +977,8 @@ async function main() {
     const recent = await enableAndSettle(aged, { refresh: true });
     record(
       'AGE: the same snapshot observed 29 min ago is still inside the window',
-      recent.stats.count === 4 && recent.entities === 4,
-      `cells=${recent.stats.count} entities=${recent.entities}`,
+      recent.stats.count === 5 && recent.drawn,
+      `cells=${recent.stats.count} drawn=${recent.drawn}`,
     );
     await aged.close();
     record(

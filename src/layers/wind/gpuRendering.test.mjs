@@ -1,147 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createWindGpuRendering } from './gpuRendering.js';
 import {
-  BoundingSphere,
-  Cartesian3,
-  Ellipsoid,
-  Intersect,
-  Occluder,
-  PerspectiveFrustum,
-} from 'cesium';
-import { bakeWindStreamlines } from './streamlines.js';
+  createWindGpuRendering,
+  streamlineSeeds,
+  windHeightFade,
+  windStreamlineSpec,
+} from './gpuRendering.js';
+import {
+  WIND_DISPLAY_HEIGHT_METERS,
+  WIND_NARROW_PATH_LIMIT,
+  WIND_PATH_LIMIT,
+  WIND_PATH_STEPS,
+  bakeWindStreamlines,
+  measureLineCoverage,
+} from './streamlines.js';
+import {
+  OCEAN_FIELD_SPEC,
+  WIND_FIELD_SPEC,
+  fieldSeedBudget,
+} from './fieldSpec.js';
 
-function harness({ width = 1000 } = {}) {
-  const members = new Set();
-  let geometryBuilds = 0;
-  const spheres = [];
-  const visibility = {
-    horizon: () => true,
-    frustum: () => Intersect.INSIDE,
-    horizonTests: 0,
-    frustumTests: 0,
-  };
-  let occluderBuilds = 0;
-  class Material {
-    constructor(options) {
-      this.uniforms = options.fabric.uniforms;
-      this.source = options.fabric.source;
-    }
-    destroy() {
-      assert.ok(!this.destroyed, 'owned resource destroyed once');
-      this.destroyed = true;
-    }
-  }
-  class Appearance {
-    static VERTEX_FORMAT = {};
-    constructor(options) {
-      Object.assign(this, options);
-      this.vertexShaderSource ??=
-        'in vec3 position3DHigh; in vec3 position3DLow; void main() { gl_Position = vec4(0.0); v_st.s = st.s; }';
-    }
-  }
-  class Polyline {
-    constructor(options) {
-      Object.assign(this, options);
-    }
-    static createGeometry(options) {
-      geometryBuilds++;
-      const st = new Float32Array(options.positions.length * 2);
-      for (let i = 0; i < options.positions.length; i++)
-        st[i * 2] = i / (options.positions.length - 1);
-      return { attributes: { st: { values: st } } };
-    }
-  }
-  class Primitive {
-    constructor(options) {
-      Object.assign(this, options);
-      this.ready = true;
-    }
-    destroy() {
-      assert.ok(!this.destroyed, 'owned resource destroyed once');
-      this.destroyed = true;
-    }
-    isDestroyed() {
-      return Boolean(this.destroyed);
-    }
-  }
-  const C = {
-    ComponentDatatype: { FLOAT: 5126 },
-    GeometryInstanceAttribute: class {
-      constructor(options) {
-        Object.assign(this, options);
-      }
-    },
-    Material,
-    PolylineMaterialAppearance: Appearance,
-    PolylineGeometry: Polyline,
-    Primitive,
-    GeometryInstance: class {
-      constructor(options) {
-        Object.assign(this, options);
-      }
-    },
-    Cartesian3,
-    Ellipsoid,
-    Intersect,
-    BoundingSphere: class extends BoundingSphere {
-      static fromPoints(points) {
-        const sphere = BoundingSphere.fromPoints(points);
-        spheres.push({ sphere, points });
-        return sphere;
-      }
-    },
-    Occluder: class {
-      constructor(sphere, cameraPosition) {
-        occluderBuilds++;
-        this.cameraPosition = cameraPosition;
-      }
-      isBoundingSphereVisible(sphere) {
-        visibility.horizonTests++;
-        return visibility.horizon(sphere, this.cameraPosition);
-      }
-    },
-    ArcType: { NONE: 0 },
-  };
-  const volume = {
-    computeVisibility(sphere) {
-      visibility.frustumTests++;
-      return visibility.frustum(sphere);
-    },
-  };
-  const scene = {
-    globe: { show: false },
-    camera: {
-      positionWC: Cartesian3.fromDegrees(0, 0, 1e7),
-      positionCartographic: { height: 1e7 },
-      directionWC: new Cartesian3(-1, 0, 0),
-      upWC: new Cartesian3(0, 0, 1),
-      frustum: { computeCullingVolume: () => volume },
-    },
-    canvas: { clientWidth: width },
-    primitives: {
-      add(item) {
-        members.add(item);
-      },
-      remove(item) {
-        const removed = members.delete(item);
-        if (removed) item.destroy();
-        return removed;
-      },
-    },
-  };
-  return {
-    C,
-    scene,
-    members,
-    builds: () => geometryBuilds,
-    spheres,
-    visibility,
-    occluderBuilds: () => occluderBuilds,
-    owner: createWindGpuRendering({ cesium: C, getViewer: () => ({ scene }) }),
-  };
-}
-const field = () => ({
+const wind = () => ({
   nx: 4,
   ny: 3,
   lo1: -180,
@@ -152,424 +31,256 @@ const field = () => ({
   v: new Float32Array(12),
 });
 
-test('GPU owner builds regional native batches; ticks update uniforms without rebuilding geometry', () => {
-  const h = harness();
-  assert.equal(h.owner.setField(field()), true);
-  assert.equal(h.members.size, 72);
-  const batch = [...h.members][0];
-  assert.equal(batch.allowPicking, false);
-  assert.equal(batch.asynchronous, true);
-  assert.ok(batch.appearance.vertexShaderSource.includes('v_windFacing = dot'));
-  assert.ok(
-    batch.appearance.material.source.includes(
-      'smoothstep(0.0, 0.065, v_windFacing)',
-    ),
-  );
-  const builds = h.builds();
-  assert.equal(builds, 0, 'expanded geometry is deferred to Cesium workers');
-  assert.ok(
-    batch.appearance.vertexShaderSource.includes(
-      'czm_batchTable_windSeed(batchId)',
-    ),
-  );
-  h.owner.tick(3);
-  assert.equal(batch.appearance.material.uniforms.phaseTime, 3);
-  h.owner.setOptions({ paused: true });
-  h.owner.tick(8);
-  assert.equal(batch.appearance.material.uniforms.phaseTime, 3);
-  h.owner.setOptions({ paused: false });
-  h.owner.tick(9);
-  assert.equal(batch.appearance.material.uniforms.phaseTime, 9);
-  assert.equal(h.builds(), builds);
-  const diagnostics = h.owner.getDiagnostics();
-  assert.ok(diagnostics.pathCount <= 7200);
-  assert.ok(
-    diagnostics.pathCount > 7000,
-    'desktop retains the requested doubled global density',
-  );
-  assert.ok(diagnostics.vertexCount > 0);
-  assert.ok(
-    diagnostics.vertexCount <= 7200 * 128,
-    'expanded geometry remains bounded',
-  );
-  assert.equal(diagnostics.ready, true);
-  assert.equal(diagnostics.displayHeightMeters, 12000);
-  assert.equal(diagnostics.cellCount, 72);
-  assert.equal(h.spheres.length, 72);
-  assert.equal(new Set([...h.members].map((p) => p.appearance)).size, 72);
-  for (const cell of h.members) {
-    assert.equal(cell.appearance.material, batch.appearance.material);
-    assert.equal(cell.appearance.material.uniforms.phaseTime, 9);
-    assert.equal(cell.appearance.material.uniforms.ghostAlpha, 0.25);
-    assert.equal(cell.compressVertices, false);
-    assert.equal(cell.releaseGeometryInstances, true);
-  }
-  batch.ready = false;
-  assert.equal(
-    h.owner.getDiagnostics().ready,
-    false,
-    'every cell must be ready',
-  );
-  batch.ready = true;
-  const instances = [...h.members].flatMap((p) => p.geometryInstances);
-  const baked = bakeWindStreamlines(field());
-  assert.equal(instances.length, baked.length);
-  const bySeed = new Map(
-    instances.map((i) => [i.attributes.windSeed.value[0], i]),
-  );
-  for (const path of baked) {
-    assert.deepEqual(
-      bySeed.get(path.seed).geometry.positions,
-      path.coordinates.map(([lon, lat]) =>
-        Cartesian3.fromDegrees(lon, lat, 12000),
-      ),
-    );
-  }
-  for (const { sphere, points } of h.spheres) {
-    assert.deepEqual(sphere, BoundingSphere.fromPoints(points));
-    for (const point of points)
-      assert.ok(
-        Cartesian3.distance(point, sphere.center) <= sphere.radius + 1e-6,
-      );
-  }
-  for (const instance of instances) {
-    assert.ok(instance.geometry instanceof h.C.PolylineGeometry);
-    assert.equal(instance.geometry.width, 2.4);
-    assert.equal(instance.attributes.windSeed.componentsPerAttribute, 1);
-    assert.ok(Number.isInteger(instance.attributes.windSeed.value[0]));
-  }
+// A draw port whose fields record what they were asked, a camera at
+// `height` and a canvas `width` wide.
+function harness({
+  width = 1000,
+  height = 2_000_000,
+  refuse = null,
+  spec,
+} = {}) {
+  const fields = [];
+  const camera = { height };
+  const viewer = { canvas: { clientWidth: width } };
+  const draw = {
+    field(spec) {
+      if (refuse) throw refuse;
+      const listeners = [];
+      const handle = {
+        spec,
+        updates: [],
+        disposed: false,
+        show: true,
+        update(patch) {
+          this.updates.push(patch);
+        },
+        on(event, cb) {
+          assert.equal(event, 'drawn');
+          listeners.push(cb);
+          return () => {};
+        },
+        dispose() {
+          assert.equal(this.disposed, false, 'disposed once');
+          this.disposed = true;
+        },
+        tell: () => listeners.forEach((cb) => cb()),
+      };
+      fields.push(handle);
+      return handle;
+    },
+  };
+  const frames = [];
+  const owner = createWindGpuRendering({
+    getViewer: () => viewer,
+    drawOf: () => draw,
+    cameraOf: () => ({ pose: () => ({ height: camera.height }) }),
+    frameOf: () => ({ requestRender: (reason) => frames.push(reason) }),
+    spec,
+  });
+  return { owner, fields, camera, viewer, draw, frames };
+}
+
+test('the fade by camera height is none below 15 km and full from 60 km', () => {
+  assert.equal(windHeightFade(10_000), 0);
+  assert.equal(windHeightFade(15_000), 0);
+  assert.equal(windHeightFade(37_500), 0.5);
+  assert.equal(windHeightFade(60_000), 1);
+  assert.equal(windHeightFade(2e7), 1);
 });
 
-test('replacement, clear and destroy dispose every owned cell and the shared material', () => {
-  const h = harness();
-  const assertDisposed = (batches) => {
-    assert.equal(batches.length, 72);
-    for (const batch of batches) {
-      assert.equal(batch.destroyed, true);
-      assert.equal(batch.appearance.material.destroyed, true);
-    }
-  };
-  h.owner.setField(field());
-  const first = [...h.members];
-  h.owner.setField(field());
-  assertDisposed(first);
-  const second = [...h.members];
+test('a wind grid becomes a windStreamlines spec over the rectangle its samples span', () => {
+  const field = wind();
+  const spec = windStreamlineSpec(field, {
+    id: 'w',
+    pathBudget: 100,
+    alpha: 0.5,
+    paused: true,
+  });
+  assert.equal(spec.kind, 'windStreamlines');
+  assert.deepEqual(spec.rectangle, {
+    west: -180,
+    south: -90,
+    east: 180,
+    north: 90,
+  });
+  assert.equal(spec.width, 4);
+  assert.equal(spec.height, 3);
+  assert.equal(spec.steps, WIND_PATH_STEPS);
+  assert.equal(spec.heightM, WIND_DISPLAY_HEIGHT_METERS);
+  assert.equal(spec.alpha, 0.5);
+  assert.equal(spec.paused, true);
+  assert.equal(spec.u, field.u);
+  assert.equal(spec.v, field.v);
+  const regional = windStreamlineSpec(
+    { ...field, nx: 4, ny: 4, lo1: -100, la1: 50, dx: 10, dy: 10 },
+    { id: 'r', pathBudget: 1 },
+  );
+  assert.deepEqual(
+    regional.rectangle,
+    { west: -100, south: 20, east: -70, north: 50 },
+    'a regional grid spans its samples and does not wrap',
+  );
+});
+
+test('streamlines draw through the port, faded by height, paused and ready once drawn', () => {
+  const h = harness({ height: 37_500 });
+  assert.equal(h.owner.supported(), true);
+  assert.equal(h.owner.setField(wind()), true);
+  const [field] = h.fields;
+  assert.equal(field.spec.pathBudget, WIND_PATH_LIMIT);
+  assert.equal(field.spec.alpha, 0.5);
+  assert.equal(field.spec.paused, false);
+  assert.equal(h.owner.getDiagnostics().ready, false);
+  assert.equal(h.owner.getDiagnostics().mode, 'gpu-streamlines');
+  assert.equal(h.owner.getParticleCount(), WIND_PATH_LIMIT);
+  field.tell();
+  assert.equal(h.owner.getDiagnostics().ready, true);
+  assert.deepEqual(h.frames, ['wind'], 'a still scene draws the ready state');
+  assert.equal(h.owner.updateVisibility(), true);
+  assert.deepEqual(field.updates, [], 'an unchanged fade asks nothing');
+  h.camera.height = 10_000;
+  assert.equal(h.owner.updateVisibility(), false, 'nothing draws low down');
+  assert.deepEqual(field.updates, [{ alpha: 0 }]);
+  assert.equal(h.owner.getDiagnostics().heightFade, 0);
+  h.camera.height = 100_000;
+  assert.equal(h.owner.updateVisibility(), true);
+  h.owner.setOptions({ paused: true });
+  h.owner.setOptions({ paused: true });
+  h.owner.setOptions({ overlay: 'speed' });
+  assert.deepEqual(field.updates, [
+    { alpha: 0 },
+    { alpha: 1 },
+    { paused: true },
+  ]);
+  h.owner.setField(wind());
+  assert.equal(field.disposed, true, 'a new grid replaces the field');
+  assert.equal(h.fields[1].spec.paused, true, 'and keeps the pause');
+  assert.notEqual(h.fields[1].spec.id, field.spec.id);
   h.owner.clear();
-  assertDisposed(second);
-  assert.equal(h.members.size, 0);
+  assert.equal(h.fields[1].disposed, true);
   assert.equal(h.owner.getParticleCount(), 0);
   assert.equal(h.owner.getDiagnostics().ready, false);
-  h.owner.setField(field());
-  const third = [...h.members];
   h.owner.destroy();
-  assertDisposed(third);
-  assert.equal(h.members.size, 0);
   assert.equal(h.owner.supported(), false);
-  assert.equal(h.owner.setField(field()), false);
-});
-
-test('unsupported or failed geometry cleanly requests the existing fallback', () => {
-  const missing = createWindGpuRendering({
-    cesium: {},
-    getViewer: () => ({ scene: {} }),
-  });
-  assert.equal(missing.setField(field()), false);
-  const h = harness();
-  h.C.PolylineGeometry = class {
-    constructor() {
-      throw new Error('test build failure');
-    }
-  };
-  assert.equal(h.owner.setField(field()), false);
-  assert.equal(h.members.size, 0);
-  assert.match(h.owner.getDiagnostics().error, /test build failure/);
+  assert.equal(h.owner.setField(wind()), false);
 });
 
 test('narrow canvases use a lower bounded path budget', () => {
-  const h = harness({ width: 390 });
-  assert.equal(h.owner.setField(field()), true);
-  assert.ok(h.owner.getParticleCount() <= 1200);
-  assert.ok(h.owner.getParticleCount() > 1000);
+  const h = harness({ width: 600 });
+  assert.equal(h.owner.setField(wind()), true);
+  assert.equal(h.fields[0].spec.pathBudget, WIND_NARROW_PATH_LIMIT);
 });
 
-test('cell visibility combines horizon, frustum and height with shared fade uniforms', () => {
-  const h = harness();
-  h.owner.setField(field());
-  const batches = [...h.members];
-  const camera = h.scene.camera;
-  h.visibility.horizon = (sphere) =>
-    h.spheres.findIndex((s) => s.sphere === sphere) % 2 === 0;
-  h.visibility.frustum = (sphere) =>
-    h.spheres.findIndex((s) => s.sphere === sphere) % 3 === 0
-      ? Intersect.INTERSECTING
-      : Intersect.OUTSIDE;
-  assert.equal(h.owner.updateVisibility(camera), true);
-  assert.equal(h.owner.getDiagnostics().visibleCells, 12);
-  let vertices = 0;
-  for (let i = 0; i < batches.length; i++) {
-    assert.equal(batches[i].show, i % 6 === 0);
-    if (batches[i].show)
-      vertices += batches[i].geometryInstances.reduce(
-        (sum, p) => sum + p.geometry.positions.length * 4 - 4,
-        0,
-      );
-  }
-  assert.equal(h.owner.getDiagnostics().visibleVertexCount, vertices);
-  assert.equal(h.visibility.horizonTests, 72);
-  assert.equal(h.visibility.frustumTests, 36);
-  for (const [height, fade] of [
-    [60000, 1],
-    [37500, 0.5],
-    [15000, 0],
-    [1200, 0],
-  ]) {
-    camera.positionCartographic.height = height;
-    assert.equal(h.owner.updateVisibility(camera), fade > 0);
-    assert.equal(h.owner.getDiagnostics().heightFade, fade);
-    for (const batch of batches) {
-      assert.equal(batch.appearance.material.uniforms.heightFade, fade);
-      assert.match(batch.appearance.material.source, /horizon \* heightFade/);
-      if (!fade) assert.equal(batch.show, false);
-    }
-  }
-  assert.equal(h.owner.getDiagnostics().visibleVertexCount, 0);
-  assert.equal(h.owner.getDiagnostics().visibleCells, 0);
-  assert.equal(
-    h.visibility.horizonTests,
-    216,
-    'zero fade skips all sphere tests',
-  );
-  assert.equal(h.visibility.frustumTests, 108);
-  assert.equal(
-    h.occluderBuilds(),
-    1,
-    'occluder is reused across camera updates',
-  );
-});
-
-test('real Cesium sphere culling hides far hemisphere with globe hidden and rejects a sky-facing view', () => {
-  const h = harness();
-  h.C.Occluder = Occluder;
-  h.owner.setField(field());
-  const camera = h.scene.camera;
-  camera.frustum = new PerspectiveFrustum({
-    fov: Math.PI / 3,
-    aspectRatio: 1.5,
-    near: 1,
-    far: 5e7,
+test('a refused or missing field falls back to the canvas', () => {
+  const refused = harness({ refuse: new TypeError('no streamlines here') });
+  assert.equal(refused.owner.setField(wind()), false);
+  assert.equal(refused.owner.getDiagnostics().error, 'no streamlines here');
+  assert.equal(refused.owner.getParticleCount(), 0);
+  const none = createWindGpuRendering({
+    getViewer: () => ({}),
+    drawOf: () => ({}),
+    cameraOf: () => null,
   });
-  assert.equal(h.owner.updateVisibility(camera), true);
-  const facingEarth = h.owner.getDiagnostics();
-  assert.ok(facingEarth.visibleCells > 0 && facingEarth.visibleCells < 72);
-  for (let i = 0; i < h.spheres.length; i++) {
-    const sphere = h.spheres[i].sphere;
-    if (sphere.center.x < -5e6) assert.equal([...h.members][i].show, false);
-  }
-  camera.directionWC.x = 1;
-  assert.equal(h.owner.updateVisibility(camera), false);
-  assert.equal(h.owner.getDiagnostics().visibleCells, 0);
-  camera.positionWC = Cartesian3.fromDegrees(180, 0, 1e7);
-  assert.equal(
-    h.owner.updateVisibility(camera),
-    true,
-    'camera position updates the owned horizon test',
-  );
-  h.owner.destroy();
+  assert.equal(none.supported(), false);
+  assert.equal(none.setField(wind()), false);
+  const absent = createWindGpuRendering({ getViewer: () => null });
+  assert.equal(absent.supported(), false);
 });
 
-test('a failed later cell build releases already installed cells and shared material', () => {
-  const h = harness();
-  const NativePrimitive = h.C.Primitive;
-  const built = [];
-  h.C.Primitive = class extends NativePrimitive {
-    constructor(options) {
-      if (built.length === 2) throw new Error('later cell failed');
-      super(options);
-      built.push(this);
-    }
-  };
-  assert.equal(h.owner.setField(field()), false);
-  assert.equal(h.members.size, 0);
-  assert.equal(built.length, 2);
-  for (const batch of built) {
-    assert.equal(batch.destroyed, true);
-    assert.equal(batch.appearance.material.destroyed, true);
-  }
-  assert.match(h.owner.getDiagnostics().error, /later cell failed/);
+// A 10 x 10 lattice over 30..39 N, 75..66 W at 0.4 m/s east.
+const oceanBox = () => ({
+  nx: 10,
+  ny: 10,
+  lo1: -75,
+  la1: 39,
+  dx: 1,
+  dy: 1,
+  u: new Float32Array(100).fill(0.4),
+  v: new Float32Array(100),
+  periodic: false,
+  noData: -9999,
+  bbox: { latMin: 30, latMax: 39, lonMin: -75, lonMax: -66 },
+  speed: { medianMs: 0.4, p95Ms: 0.8 },
 });
 
-test('wind spec reproduces the shipped bake and shader; ramp uniforms are white', async () => {
+test('the wind spec names no ramp, no-data, step or calm cutoff: its field is unchanged', () => {
+  const spec = windStreamlineSpec(wind(), { id: 'w', pathBudget: 100 });
+  assert.deepEqual(Object.keys(spec.style).sort(), ['color', 'widthPx']);
+  for (const key of ['noData', 'stepSeconds', 'calmMs'])
+    assert.equal(key in spec, false, `${key} is the tracer's default`);
   const h = harness();
-  h.owner.setField(field());
-  const batch = [...h.members][0];
-  assert.ok(
-    batch.appearance.vertexShaderSource.includes(
-      'czm_batchTable_fieldSpeed(batchId)',
-    ),
-  );
-  assert.ok(
-    batch.appearance.vertexShaderSource.includes('out float v_fieldSpeed;'),
-  );
-  assert.ok(
-    batch.appearance.material.source.includes(
-      'fieldRamp(pow(v_fieldSpeed, rampGamma))',
-    ),
-  );
-  const uniforms = batch.appearance.material.uniforms;
-  for (let i = 0; i < 5; i++)
-    assert.deepEqual(
-      [
-        uniforms[`rampStop${i}`].x,
-        uniforms[`rampStop${i}`].y,
-        uniforms[`rampStop${i}`].z,
-      ],
-      [1, 1, 1],
-    );
-  assert.equal(uniforms.rampGamma, 1);
+  h.owner.setField(wind());
   const diagnostics = h.owner.getDiagnostics();
   assert.equal(diagnostics.speedScale, 1);
   assert.equal(diagnostics.stepSeconds, 1800);
-  for (const instance of [...h.members].flatMap((p) => p.geometryInstances)) {
-    assert.equal(instance.attributes.fieldSpeed.componentsPerAttribute, 1);
-    assert.ok(
-      Math.abs(instance.attributes.fieldSpeed.value[0] - 15 / 30) < 1e-12,
-    );
-  }
+  assert.equal(diagnostics.lineCoverage, null);
 });
 
-test('ocean spec scales the step by (E1), colours paths by speed and seeds inside the bbox', async () => {
-  const { OCEAN_FIELD_SPEC, rampStopVectors } = await import('./fieldSpec.js');
-  const h = harness();
-  const owner = createWindGpuRendering({
-    cesium: h.C,
-    getViewer: () => ({ scene: h.scene }),
-    spec: OCEAN_FIELD_SPEC,
-  });
-  const ocean = {
-    nx: 10,
-    ny: 10,
-    lo1: -75,
-    la1: 39,
-    dx: 1,
-    dy: 1,
-    u: new Float32Array(100).fill(0.4),
-    v: new Float32Array(100),
-    periodic: false,
-    noData: -9999,
-    bbox: { latMin: 30, latMax: 39, lonMin: -75, lonMax: -66 },
-    speed: { medianMs: 0.4, p95Ms: 0.8 },
-  };
-  assert.equal(owner.setField(ocean), true);
-  const diagnostics = owner.getDiagnostics();
+test('ocean spec scales the step by (E1), sends its ramp and keeps the field box', () => {
+  const h = harness({ spec: OCEAN_FIELD_SPEC });
+  assert.equal(h.owner.setField(oceanBox()), true);
+  const diagnostics = h.owner.getDiagnostics();
   assert.equal(diagnostics.speedScale, 5.836 / 0.4);
   assert.equal(diagnostics.stepSeconds, 1800 * (5.836 / 0.4));
-  const batches = [...h.members];
-  assert.ok(batches.length > 0);
-  const batch = batches[0];
-  const stops = rampStopVectors(OCEAN_FIELD_SPEC.ramp);
-  const stop4 = batch.appearance.material.uniforms.rampStop4;
-  assert.deepEqual([stop4.x, stop4.y, stop4.z], stops[4]);
-  assert.equal(batch.appearance.material.uniforms.rampGamma, 0.55);
-  for (const instance of batches.flatMap((p) => p.geometryInstances)) {
-    assert.ok(
-      Math.abs(instance.attributes.fieldSpeed.value[0] - 0.4 / 1) < 1e-6,
-    );
-    for (const position of instance.geometry.positions) {
-      const carto = Ellipsoid.WGS84.cartesianToCartographic(position);
-      const lon = (carto.longitude * 180) / Math.PI;
-      const lat = (carto.latitude * 180) / Math.PI;
-      assert.ok(
-        lon >= -75.001 && lon <= -65.999 && lat >= 29.999 && lat <= 39.001,
-        `${lon}, ${lat}`,
-      );
-    }
-  }
-  owner.destroy();
+  const { spec } = h.fields[0];
+  assert.equal(spec.stepSeconds, 1800 * (5.836 / 0.4));
+  assert.equal(spec.calmMs, 0.02);
+  assert.equal(spec.noData, -9999);
+  assert.deepEqual(spec.rectangle, {
+    west: -75,
+    south: 30,
+    east: -66,
+    north: 39,
+  });
+  // The ramp saturates at max(0.2, 1.25 x p95) = 1 m/s.
+  assert.deepEqual(spec.style.ramp, {
+    stops: [...OCEAN_FIELD_SPEC.ramp],
+    maxMs: 1,
+    gamma: 0.55,
+  });
 });
 
-test('display height and height-fade thresholds come from the field spec', async () => {
-  const { OCEAN_FIELD_SPEC, WIND_FIELD_SPEC } = await import('./fieldSpec.js');
+test('display height and height-fade thresholds come from the field spec', () => {
   assert.equal(WIND_FIELD_SPEC.displayHeightMeters, 12000);
   assert.equal(WIND_FIELD_SPEC.fadeLowMeters, 15000);
   assert.equal(WIND_FIELD_SPEC.fadeHighMeters, 60000);
   assert.equal(OCEAN_FIELD_SPEC.displayHeightMeters, 100);
   assert.equal(OCEAN_FIELD_SPEC.fadeLowMeters, 300);
   assert.equal(OCEAN_FIELD_SPEC.fadeHighMeters, 1200);
-  const h = harness();
-  const owner = createWindGpuRendering({
-    cesium: h.C,
-    getViewer: () => ({ scene: h.scene }),
-    spec: OCEAN_FIELD_SPEC,
-  });
-  const ocean = {
-    nx: 10,
-    ny: 10,
-    lo1: -75,
-    la1: 39,
-    dx: 1,
-    dy: 1,
-    u: new Float32Array(100).fill(0.4),
-    v: new Float32Array(100),
-    periodic: false,
-    noData: -9999,
-    bbox: { latMin: 30, latMax: 39, lonMin: -75, lonMax: -66 },
-    speed: { medianMs: 0.4, p95Ms: 0.8 },
-  };
-  assert.equal(owner.setField(ocean), true);
-  assert.equal(owner.getDiagnostics().displayHeightMeters, 100);
-  for (const instance of [...h.members].flatMap((p) => p.geometryInstances)) {
-    for (const position of instance.geometry.positions) {
-      const carto = Ellipsoid.WGS84.cartesianToCartographic(position);
-      assert.ok(Math.abs(carto.height - 100) < 1e-3, `height ${carto.height}`);
-    }
-  }
-  // Fade thresholds: 1000 m up is (1000 - 300) / 900 of the way from low to high.
-  const camera = { ...h.scene.camera, positionCartographic: { height: 1000 } };
-  owner.updateVisibility(camera);
-  assert.ok(Math.abs(owner.getDiagnostics().heightFade - 700 / 900) < 1e-9);
-  owner.destroy();
+  // 1000 m up is (1000 - 300) / 900 of the way from low to high.
+  assert.ok(
+    Math.abs(windHeightFade(1000, OCEAN_FIELD_SPEC) - 700 / 900) < 1e-12,
+  );
+  const h = harness({ spec: OCEAN_FIELD_SPEC, height: 1000 });
+  assert.equal(h.owner.setField(oceanBox()), true);
+  assert.equal(h.fields[0].spec.heightM, 100);
+  assert.ok(Math.abs(h.fields[0].spec.alpha - 700 / 900) < 1e-12);
+  assert.equal(h.owner.getDiagnostics().displayHeightMeters, 100);
+  h.camera.height = 200;
+  assert.equal(h.owner.updateVisibility(), false, 'below the ocean fade');
+  assert.equal(h.owner.getDiagnostics().heightFade, 0);
 });
 
-test('ocean spec seeds the globe at globeSeedScale times the wind budget', async () => {
-  const { OCEAN_FIELD_SPEC } = await import('./fieldSpec.js');
-  const h = harness();
-  const owner = createWindGpuRendering({
-    cesium: h.C,
-    getViewer: () => ({ scene: h.scene }),
-    spec: OCEAN_FIELD_SPEC,
-  });
+test('ocean spec seeds the globe at globeSeedScale times the wind budget', () => {
+  const h = harness({ spec: OCEAN_FIELD_SPEC });
   // The served global manifest carries the lattice extent as its bbox.
   const globe = {
-    ...field(),
+    ...wind(),
     periodic: true,
     bbox: { latMin: -90, latMax: 90, lonMin: -180, lonMax: 180 },
     speed: { medianMs: 0.2, p95Ms: 0.5 },
   };
-  assert.equal(owner.setField(globe), true);
-  const pathCount = owner.getDiagnostics().pathCount;
-  assert.ok(
-    pathCount > 7200,
-    `globe seeds past the wind limit, got ${pathCount}`,
-  );
-  assert.ok(
-    pathCount <= 14400,
-    `globe seeds bounded by 2 x 7200, got ${pathCount}`,
-  );
-  assert.ok(
-    pathCount > 14000,
-    `dense field keeps nearly every seed, got ${pathCount}`,
-  );
-  owner.destroy();
+  assert.equal(h.owner.setField(globe), true);
+  assert.equal(h.fields[0].spec.pathBudget, 2 * WIND_PATH_LIMIT);
+  assert.equal(h.owner.getDiagnostics().seedCount, 2 * WIND_PATH_LIMIT);
+  assert.equal(h.owner.getDiagnostics().lineCoverage, null);
+  const narrow = harness({ spec: OCEAN_FIELD_SPEC, width: 600 });
+  narrow.owner.setField(globe);
+  assert.equal(narrow.fields[0].spec.pathBudget, 2 * WIND_NARROW_PATH_LIMIT);
 });
 
-test('ocean spec seeds a box from its line coverage and reports the realized coverage', async () => {
-  const { OCEAN_FIELD_SPEC, fieldSeedBudget } = await import('./fieldSpec.js');
-  const h = harness();
-  const owner = createWindGpuRendering({
-    cesium: h.C,
-    getViewer: () => ({ scene: h.scene }),
-    spec: OCEAN_FIELD_SPEC,
-  });
+test('ocean spec seeds a box from its line coverage and reports the realized coverage', () => {
+  const h = harness({ spec: OCEAN_FIELD_SPEC });
   const ocean = {
     nx: 97,
     ny: 81,
@@ -584,39 +295,46 @@ test('ocean spec seeds a box from its line coverage and reports the realized cov
     bbox: { latMin: 25, latMax: 45, lonMin: -82, lonMax: -58 },
     speed: { medianMs: 0.4, p95Ms: 0.8, validCells: 7857, totalCells: 7857 },
   };
-  assert.equal(owner.setField(ocean), true);
-  const d = owner.getDiagnostics();
+  assert.equal(h.owner.setField(ocean), true);
+  const d = h.owner.getDiagnostics();
   const seeds = fieldSeedBudget(OCEAN_FIELD_SPEC, ocean, 7200);
   assert.equal(d.seedCount, seeds);
+  assert.equal(h.fields[0].spec.pathBudget, seeds);
   assert.ok(
     seeds < 1000,
     `coverage budget is far below the wind limit, got ${seeds}`,
   );
-  assert.ok(
-    d.pathCount > seeds * 0.8 && d.pathCount <= seeds,
-    `uniform field keeps nearly every seed, got ${d.pathCount}`,
-  );
   // Uniform 0.4 m/s: every step is 0.4 x 1800 x (5.836 / 0.4) m = 0.0945 deg,
   // 32 steps per path over a 24 deg span; paths seeded near the east and
-  // west edges stop at the edge, so the realized coverage falls a few
-  // percent short of the full-length estimate.
+  // west edges stop at the edge, so the realized coverage falls short of
+  // every seed running its full length.
   const perPath = (32 * (0.4 * 1800 * (5.836 / 0.4))) / 111195;
-  const full = (d.pathCount * perPath) / 24;
+  const full = (seeds * perPath) / 24;
   assert.ok(
-    d.lineCoverage > 0.9 * full && d.lineCoverage <= full + 1e-9,
+    d.lineCoverage > 0.75 * full && d.lineCoverage <= full + 1e-9,
     `lineCoverage ${d.lineCoverage} vs full-length ${full}`,
   );
-  owner.destroy();
+  // The coverage is that of the paths the renderer will trace.
+  const { spec } = h.fields[0];
+  const traced = bakeWindStreamlines(
+    { ...ocean },
+    {
+      count: spec.pathBudget,
+      maxCount: spec.pathBudget,
+      stepSeconds: spec.stepSeconds,
+      calmCutoffMs: spec.calmMs,
+      bounds: spec.rectangle,
+    },
+  );
+  assert.equal(d.lineCoverage, measureLineCoverage(traced, 24));
+  assert.deepEqual(streamlineSeeds(ocean, OCEAN_FIELD_SPEC, 7200), {
+    seeds,
+    lineCoverage: d.lineCoverage,
+  });
 });
 
-test('a box whose paths stop early is reseeded until it holds the spec coverage', async () => {
-  const { OCEAN_FIELD_SPEC, fieldSeedBudget } = await import('./fieldSpec.js');
-  const h = harness();
-  const owner = createWindGpuRendering({
-    cesium: h.C,
-    getViewer: () => ({ scene: h.scene }),
-    spec: OCEAN_FIELD_SPEC,
-  });
+test('a box whose paths stop early is reseeded until it holds the spec coverage', () => {
+  const h = harness({ spec: OCEAN_FIELD_SPEC });
   // Northward flow with a no-data row every other degree: every path ends
   // within a degree of its seed, a third of the median path length the
   // budget assumes, so the first pass lands well under the coverage.
@@ -653,45 +371,47 @@ test('a box whose paths stop early is reseeded until it holds the spec coverage'
       totalCells: nx * ny,
     },
   };
-  assert.equal(owner.setField(ocean), true);
-  const d = owner.getDiagnostics();
+  assert.equal(h.owner.setField(ocean), true);
+  const d = h.owner.getDiagnostics();
   const firstPass = fieldSeedBudget(OCEAN_FIELD_SPEC, ocean, 7200);
   assert.ok(
     d.seedCount > firstPass,
     `reseeded past ${firstPass}, got ${d.seedCount}`,
   );
   assert.ok(d.seedCount <= 7200);
+  assert.equal(h.fields[0].spec.pathBudget, d.seedCount);
   assert.ok(
     d.lineCoverage >= 0.85 * OCEAN_FIELD_SPEC.boxLineCoverage,
     `coverage ${d.lineCoverage} vs target ${OCEAN_FIELD_SPEC.boxLineCoverage}`,
   );
-  owner.destroy();
 });
 
-test('readyMs stamps the first diagnostics read that sees every cell ready', () => {
+test("readyMs is stamped once, when the renderer says the field is drawn", () => {
   const h = harness();
-  h.owner.setField(field());
-  const batch = [...h.members][0];
-  batch.ready = false;
+  h.owner.setField(wind());
   const pending = h.owner.getDiagnostics();
   assert.equal(pending.ready, false);
-  assert.equal(pending.readyMs, null, 'not ready: no stamp');
-  batch.ready = true;
+  assert.equal(pending.readyMs, null, 'not drawn: no stamp');
+  h.fields[0].tell();
   const done = h.owner.getDiagnostics();
   assert.equal(done.ready, true);
-  assert.ok(Number.isFinite(done.readyMs), 'ready: stamped');
+  assert.ok(Number.isFinite(done.readyMs), 'drawn: stamped');
   assert.ok(done.readyMs >= done.buildMs, 'ready follows the build');
-  const again = h.owner.getDiagnostics();
-  assert.equal(again.readyMs, done.readyMs, 'stamped once');
-  h.owner.setField(field());
-  const fresh = [...h.members][0];
-  fresh.ready = false;
+  h.fields[0].tell();
+  assert.equal(h.owner.getDiagnostics().readyMs, done.readyMs, 'stamped once');
+  h.owner.setField(wind());
   assert.equal(
     h.owner.getDiagnostics().readyMs,
     null,
-    'a new field resets the stamp until its cells report ready',
+    'a new field resets the stamp until it is drawn',
   );
-  fresh.ready = true;
+  h.fields[0].tell();
+  assert.equal(
+    h.owner.getDiagnostics().readyMs,
+    null,
+    'a replaced field is not the one waited for',
+  );
+  h.fields[1].tell();
   assert.ok(Number.isFinite(h.owner.getDiagnostics().readyMs));
   h.owner.clear();
   assert.equal(h.owner.getDiagnostics().readyMs, null);

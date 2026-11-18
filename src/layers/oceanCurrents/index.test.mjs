@@ -44,7 +44,27 @@ const snapshot = (tier = 'regional') => ({
 });
 
 const rad = Math.PI / 180;
-const cesium = { Ellipsoid: { WGS84: {} } };
+// The camera port over a viewer double whose camera answers in radians, as
+// the doubles below were written: the port speaks degrees.
+const cameraOf = (viewer) => {
+  const camera = viewer?.scene?.camera;
+  if (!camera) return null;
+  return {
+    viewRectangle() {
+      const r = camera.computeViewRectangle();
+      return r
+        ? {
+            west: r.west / rad,
+            south: r.south / rad,
+            east: r.east / rad,
+            north: r.north / rad,
+          }
+        : null;
+    },
+    on: (name, cb) =>
+      name === 'moveEnd' ? camera.moveEnd.addEventListener(cb) : () => {},
+  };
+};
 
 function harness(
   feed,
@@ -81,7 +101,7 @@ function harness(
     feed,
     debounceMs,
     retryMs,
-    cesium,
+    cameraOf,
     createRendering: (options) => {
       spec = options.spec;
       return rendering;
@@ -106,13 +126,13 @@ test('box helpers: camera rectangle to degrees and the quarter-degree change gat
         },
       },
     },
-    cesium,
+    cameraOf,
   );
   assert.deepEqual(box, { latMin: 34, latMax: 39, lonMin: -75, lonMax: -70 });
   assert.equal(
     viewBox(
       { scene: { camera: { computeViewRectangle: () => undefined } } },
-      cesium,
+      cameraOf,
     ),
     null,
   );

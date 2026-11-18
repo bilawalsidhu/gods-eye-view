@@ -13,20 +13,7 @@ import { createPanel } from './panel.js';
 const NOW = new Date('2026-07-27T00:00:00Z');
 
 function shownStatus(status) {
-  const outputs = new Map();
   const state = {
-    _missionPanel: {
-      querySelector(selector) {
-        if (!outputs.has(selector))
-          outputs.set(selector, {
-            textContent: '',
-            closest: () => null,
-            removeAttribute() {},
-          });
-        return outputs.get(selector);
-      },
-      closest: () => null,
-    },
     _selectedLaunchId: 'mission-1',
     _launches: [
       {
@@ -39,15 +26,14 @@ function shownStatus(status) {
     ],
     _replayTracks: new Map(),
   };
-  createPanel({
+  return createPanel({
     state,
     parts: {
       overlays: { shortMissionLabel: (name) => name },
       policyHelpers: { missionPathPresentation: () => ({}) },
-      replay: { syncReplayButton() {} },
+      replay: { presentReplay: () => ({}) },
     },
-  }).renderMissionPanel();
-  return outputs.get('[data-mission-status]').textContent;
+  }).presentMission().status;
 }
 
 test('a launch without a status keeps the English fallback in its record', () => {
@@ -82,4 +68,39 @@ test('the mission panel translates only the fallback status', (t) => {
   setLocale('es');
   assert.equal(shownStatus(UNKNOWN_LAUNCH_STATUS), 'Desconocido');
   assert.equal(shownStatus('Launch Successful'), 'Launch Successful');
+});
+
+test('a confirmed landing position is worded apart from the CONFIRMED sightings chip', (t) => {
+  t.after(() => setLocale('en'));
+  const position = () =>
+    createPanel({
+      state: {
+        _selectedLaunchId: 'mission-1',
+        _launches: [
+          {
+            id: 'mission-1',
+            name: 'Example',
+            status: 'Launch Successful',
+            payloads: [],
+            recoveryStages: [
+              {
+                name: 'B1080',
+                endpoint: { lat: 28.41, lon: -80.6, accuracy: 'CONFIRMED' },
+              },
+            ],
+          },
+        ],
+        _replayTracks: new Map(),
+      },
+      parts: {
+        overlays: { shortMissionLabel: (name) => name },
+        policyHelpers: { missionPathPresentation: () => ({}) },
+        replay: { presentReplay: () => ({}) },
+      },
+    }).presentMission().stages[0].position;
+  assert.match(position(), / · CONFIRMED$/);
+  // One landing, singular: sv BEKRÄFTAD, where the sightings chip says
+  // BEKRÄFTADE.
+  setLocale('sv');
+  assert.match(position(), / · BEKRÄFTAD$/);
 });

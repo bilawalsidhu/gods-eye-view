@@ -26,7 +26,9 @@ export function buildPlaybackQueue(
 /**
  * Run ordered shots through an application-supplied playback adapter.
  *
- * Each phase receives {scene, shot, index, total, token}. The adapter owns
+ * Each phase receives {scene, shot, index, total, token, resume}. `resume` is
+ * the queue item's own, opaque to the runner: a queue may start partway into
+ * its first shot, and the adapter decides what that means. The adapter owns
  * camera/rendering resources and must observe token.signal or token.cancelled
  * while awaiting work. The runner rechecks both after every phase; it cannot
  * interrupt an adapter that ignores cancellation. No timers, UI, storage,
@@ -35,6 +37,7 @@ export function buildPlaybackQueue(
  * releaseScene(scene, token?) leaves a previously loaded scene before playback
  * (false refuses that initial handoff). Between scenes and during final cleanup
  * it receives no cancelled token, so resource release can finish after Stop.
+ * The first error wins when the final release also fails.
  * An empty/already-cancelled queue acquires and releases no resources.
  *
  * @param {Array<{scene:Object, shot:Object}>} queue Normalized, fixed shot queue.
@@ -53,6 +56,7 @@ export async function playSceneQueue(
   const cancelled = () => Boolean(token.cancelled || token.signal?.aborted);
   let activeScene = null;
   let completedShots = 0;
+  let runFailed = false;
   try {
     if (!queue.length || cancelled()) {
       return {
@@ -66,14 +70,22 @@ export async function playSceneQueue(
         throw new Error(`Could not leave scene: ${previousScene.title}`);
     }
     for (let index = 0; index < queue.length && !cancelled(); index++) {
-      const { scene, shot } = queue[index];
+      const { scene, shot, resume = null } = queue[index];
       if (activeScene && activeScene.id !== scene.id) {
-        await adapter.releaseScene(activeScene);
+        const toRelease = activeScene;
         activeScene = null;
+        await adapter.releaseScene(toRelease);
         if (cancelled()) break;
       }
       activeScene = scene;
-      const context = { scene, shot, index, total: queue.length, token };
+      const context = {
+        scene,
+        shot,
+        index,
+        total: queue.length,
+        token,
+        resume,
+      };
       for (const phase of SHOT_PHASES) {
         if (cancelled()) break;
         await adapter[phase](context);
@@ -82,8 +94,23 @@ export async function playSceneQueue(
     }
     if (!cancelled()) await adapter.complete?.();
     return { status: cancelled() ? 'cancelled' : 'completed', completedShots };
+  } catch (error) {
+    runFailed = true;
+    throw error;
   } finally {
-    if (releaseOnFinish && activeScene) await adapter.releaseScene(activeScene);
+    if (releaseOnFinish && activeScene) {
+      const toRelease = activeScene;
+      activeScene = null;
+      try {
+        await adapter.releaseScene(toRelease);
+      } catch (error) {
+        if (runFailed) {
+          console.warn('[Scenes] Scene release failed:', error);
+        } else {
+          throw error;
+        }
+      }
+    }
   }
 }
 

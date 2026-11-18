@@ -6,7 +6,7 @@
  * uint32 LE height — then a payload of 2 bits/cell, 4 cells/byte, LSB-first,
  * row-major with `idx = row*width + col`, row 0 = lat band starting at −90,
  * col 0 = lon band starting at −180. Pure module: importable by the build
- * script, the click-gating loader, and the leeway worker alike.
+ * script and the browser and Node loaders.
  *
  * @module data/landSeaMaskCodec
  */
@@ -133,8 +133,7 @@ export function decodeMaskBuffer(buffer) {
 }
 
 /**
- * Read the state of the cell containing (lat, lon). Allocation-free — safe
- * inside the per-particle leeway step loop.
+ * Read the state of the cell containing (lat, lon) without allocation.
  *
  * @param {{width: number, height: number, data: Uint8Array}} mask - From
  *   {@link decodeMaskBuffer}.

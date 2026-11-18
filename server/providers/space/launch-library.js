@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { providerCooldownMs } from './cooldown.js';
 import { promises as fsp } from 'node:fs';
 import {
   readResponseTextCapped,
@@ -13,6 +14,8 @@ export function launchLibraryRequestHeaders(token = process.env.LL2_API_TOKEN) {
   const normalized = String(token || '').trim();
   return {
     Accept: 'application/json',
+    'User-Agent':
+      'gods-eye-view-launch-library-proxy/1.0 (+https://github.com/bilawalsidhu/gods-eye-view)',
     ...(normalized ? { Authorization: `Token ${normalized}` } : {}),
   };
 }
@@ -28,6 +31,8 @@ export function rocketLaunchesProxy() {
     'launch-library-2-v2.3.json',
   );
   let cache = null;
+  let cooldownUntil = 0;
+  let cooldownStatus = 502;
   let diskLoaded = false;
   const inFlight = new Map();
 
@@ -60,7 +65,18 @@ export function rocketLaunchesProxy() {
   function send(res, status, body, cacheState) {
     res.writeHead(status, {
       'Content-Type': 'application/json',
-      'Cache-Control': status === 200 ? 'public, max-age=900' : 'no-store',
+      'Cache-Control':
+        status === 200 && cacheState !== 'STALE-ERROR'
+          ? 'public, max-age=900'
+          : 'no-store',
+      ...(cache ? { 'X-GEV-Cached-At': new Date(cache.at).toISOString() } : {}),
+      ...(Date.now() < cooldownUntil
+        ? {
+            'Retry-After': String(
+              Math.ceil((cooldownUntil - Date.now()) / 1000),
+            ),
+          }
+        : {}),
       'X-GEV-Cache': cacheState,
     });
     res.end(body);
@@ -73,17 +89,25 @@ export function rocketLaunchesProxy() {
       signal: AbortSignal.timeout(20000),
       headers: launchLibraryRequestHeaders(),
     });
-    const body = await readResponseTextCapped(upstream, maxResponseBytes);
     if (!upstream.ok) {
+      const deadline = Date.now() + providerCooldownMs(upstream);
+      // Never shorten a longer cooldown that is already in force.
+      if (deadline >= cooldownUntil) {
+        cooldownUntil = deadline;
+        cooldownStatus = upstream.status;
+      }
+      void upstream.body?.cancel().catch(() => {});
       const error = new Error(`upstream HTTP ${upstream.status}`);
       error.upstreamStatus = upstream.status;
       throw error;
     }
+    const body = await readResponseTextCapped(upstream, maxResponseBytes);
     const parsed = JSON.parse(body);
     if (!Array.isArray(parsed?.results))
       throw new Error('malformed upstream response');
     const fresh = { at: Date.now(), body };
     cache = fresh;
+    cooldownUntil = 0;
     void saveDiskCache(fresh);
     return fresh;
   }
@@ -101,6 +125,16 @@ export function rocketLaunchesProxy() {
         return;
       }
       const stale = cache;
+      if (now < cooldownUntil) {
+        send(
+          res,
+          stale ? 200 : cooldownStatus,
+          stale?.body ||
+            JSON.stringify({ error: 'Launch Library 2 unavailable' }),
+          stale ? 'STALE-ERROR' : 'NONE',
+        );
+        return;
+      }
       const request = coalesceProxyRequest(
         inFlight,
         'recent-launches',
@@ -110,6 +144,10 @@ export function rocketLaunchesProxy() {
         const fresh = await request.promise;
         send(res, 200, fresh.body, request.shared ? 'INFLIGHT' : 'MISS');
       } catch (error) {
+        if (Date.now() >= cooldownUntil) {
+          cooldownUntil = Date.now() + 60000;
+          cooldownStatus = 502;
+        }
         // Log only a bounded status, never upstream bodies, URLs, or credentials.
         const status = Number.isInteger(error?.upstreamStatus)
           ? error.upstreamStatus

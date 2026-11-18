@@ -1,9 +1,19 @@
 import {
-  createShellSurface,
+  followShellLift,
+  globeImageryHost,
   WEATHER_SHELL_HEIGHTS,
 } from '../weather/shellRendering.js';
 import { createWindRelief } from './relief.js';
-import { orderWeatherImagery } from '../weather/imageryOrder.js';
+import { WEATHER_IMAGERY_Z } from '../weather/imageryOrder.js';
+import {
+  canvasOf,
+  findCamera,
+  findDraw,
+  findFrame,
+  findGlobe,
+  findQuery,
+} from '../../render/rendererOf.js';
+import { fromDegreesInto } from '../../geo/ellipsoid.js';
 import { NO_IMAGERY_HOST } from '../weather/imageryHost.js';
 import { msg } from '../../i18n/index.js';
 import { createWindGpuRendering } from './gpuRendering.js';
@@ -69,22 +79,87 @@ function sameWind(previous, next, previousField, nextField) {
   return true;
 }
 
+let windShells = 0;
+
+const WHOLE_GLOBE = Object.freeze({
+  west: -180,
+  south: -90,
+  east: 180,
+  north: 90,
+});
+
+/** The colour field as a raised shell over `rectangle`, through the
+ * draw port's raster-shell field; it rises with the camera. */
+function createWindShell(viewer, draw, texture, alpha, ports, rectangle) {
+  const seq = (windShells += 1);
+  const height = WEATHER_SHELL_HEIGHTS.wind;
+  const field = draw.field({
+    kind: 'rasterShell',
+    id: `wind-shell:${seq}`,
+    image: { canvas: texture, key: `wind-shell:${seq}` },
+    rectangle,
+    heightM: height,
+    alpha,
+  });
+  let shownAlpha = alpha;
+  let drawn = false;
+  let owed = true;
+  field.on('drawn', () => {
+    drawn = true;
+    owed = false;
+  });
+  const offLift = followShellLift(
+    viewer,
+    (liftM) => {
+      owed = true;
+      field.update({ liftM });
+    },
+    ports,
+  );
+  return {
+    setAlpha(value) {
+      if (value === shownAlpha) return;
+      shownAlpha = value;
+      owed = true;
+      field.update({ alpha: value });
+    },
+    setShow(value) {
+      field.show = Boolean(value);
+    },
+    destroy() {
+      offLift();
+      field.dispose();
+    },
+    getDiagnostics: () => ({
+      height,
+      ready: drawn,
+      uploaded: drawn,
+      show: field.show,
+      alpha: shownAlpha,
+      rendering: owed && field.show,
+      detail: { uploaded: false, window: null },
+    }),
+  };
+}
+
 /** Globe-projected surface flow plus one owned, static colour field: globe
  * imagery on the globe host, a raised shell on the 3D Tiles host. */
 export function createWindRendering({
-  cesium,
   container,
   getViewer,
-  getHost = () => ({
-    collection:
-      getViewer?.()?.imageryLayers ?? getViewer?.()?.scene?.imageryLayers,
-    kind: 'globe',
-  }),
+  getHost: hostOf,
   eventTarget = globalThis.window,
   createGpuRendering = createWindGpuRendering,
+  globeOf = findGlobe,
+  drawOf = findDraw,
+  cameraOf = findCamera,
+  frameOf = findFrame,
+  queryOf = findQuery,
   onStatusChange,
   spec = WIND_FIELD_SPEC,
 } = {}) {
+  // The host the shell names, else the viewer's globe imagery.
+  const getHost = () => hostOf?.() ?? globeImageryHost(getViewer?.());
   let canvas = null;
   let context = null;
   let snapshot = null;
@@ -101,7 +176,6 @@ export function createWindRendering({
   let reducedMotion = false;
   let imagery = null;
   let shell = null;
-  let imageryCollection = null;
   let imageryKind = null;
   let imageryError = null;
   let imageryErrorRemove = null;
@@ -110,24 +184,18 @@ export function createWindRendering({
   let bounds = null;
   let cameraChanged = true;
   let painted = 0;
-  const gpu = createGpuRendering({ cesium, getViewer, spec });
-  let speedScale = 1;
+  const gpu = createGpuRendering({ getViewer, drawOf, spec });
+  // (E1) field-median scale on the canvas particles' advection; 1 for wind.
+  let fieldScale = 1;
   let imageryRectangle = null;
   let gpuActive = false;
-  let gpuVisible = false;
   let reportedGpuReady = null;
   let gpuNarrow = false;
-  let flowTime = 0;
-  const relief = createWindRelief({ cesium, getViewer });
+  const relief = createWindRelief({ getViewer, globeOf });
   const signature = Array(8).fill(null);
   const wind = { u: 0, v: 0 };
   const before = { lon: 0, lat: 0 };
-  const world =
-    typeof cesium.Cartesian3 === 'function' ? new cesium.Cartesian3() : {};
-  const screenA =
-    typeof cesium.Cartesian2 === 'function' ? new cesium.Cartesian2() : {};
-  const screenB =
-    typeof cesium.Cartesian2 === 'function' ? new cesium.Cartesian2() : {};
+  const world = { x: 0, y: 0, z: 0 };
   const degree = Math.PI / 180;
   const hidden = () => globalThis.document?.hidden === true;
   const still = () => paused || reducedMotion;
@@ -143,6 +211,19 @@ export function createWindRendering({
     const viewer = getViewer?.();
     return viewer && !viewer.isDestroyed?.() ? viewer : null;
   };
+  const poseOf = (viewer) => cameraOf(viewer)?.pose?.() ?? null;
+  // The camera's height, or undefined where there is none (or the eye sits
+  // at the earth's centre and it is not a number).
+  const heightOf = (viewer) => {
+    const height = viewer ? poseOf(viewer)?.height : undefined;
+    return Number.isFinite(height) ? height : undefined;
+  };
+  const requestRender = (viewer) => frameOf(viewer)?.requestRender?.('wind');
+  // What a paint projects with: the query port and the eye's position.
+  const viewOf = (viewer) => ({
+    query: queryOf(viewer),
+    eye: poseOf(viewer)?.position ?? null,
+  });
 
   function cancel() {
     if (frame !== null) globalThis.cancelAnimationFrame(frame);
@@ -155,7 +236,7 @@ export function createWindRendering({
       canvas &&
       !hidden() &&
       !still() &&
-      (!gpuActive || gpuVisible) &&
+      !gpuActive &&
       frame === null
     )
       frame = globalThis.requestAnimationFrame(draw);
@@ -166,10 +247,9 @@ export function createWindRendering({
 
   function resize(viewer) {
     const ratio = Math.min(2, globalThis.devicePixelRatio || 1);
-    cssWidth =
-      viewer?.scene?.canvas?.clientWidth || container?.clientWidth || 1;
-    cssHeight =
-      viewer?.scene?.canvas?.clientHeight || container?.clientHeight || 1;
+    const surface = canvasOf(viewer);
+    cssWidth = surface?.clientWidth || container?.clientWidth || 1;
+    cssHeight = surface?.clientHeight || container?.clientHeight || 1;
     const width = Math.max(1, Math.floor(cssWidth * ratio));
     const height = Math.max(1, Math.floor(cssHeight * ratio));
     // Assigning even unchanged dimensions erases a real canvas.
@@ -182,16 +262,16 @@ export function createWindRendering({
     return true;
   }
 
-  function checkCamera(scene) {
-    const camera = scene.camera;
-    const position = camera?.positionWC;
+  function checkCamera(viewer) {
+    const pose = poseOf(viewer);
+    const position = pose?.position;
     const values = [
       position?.x,
       position?.y,
       position?.z,
-      camera?.heading,
-      camera?.pitch,
-      camera?.roll,
+      pose?.heading,
+      pose?.pitch,
+      pose?.roll,
       cssWidth,
       cssHeight,
     ];
@@ -203,16 +283,17 @@ export function createWindRendering({
     return changed;
   }
 
-  function updateBounds(scene) {
+  function updateBounds(viewer) {
     bounds = null;
-    if (!scene.camera?.computeViewRectangle || !cesium.Ellipsoid) return;
+    const camera = cameraOf(viewer);
+    if (!camera?.viewRectangle) return;
     try {
-      const rect = scene.camera.computeViewRectangle(cesium.Ellipsoid.WGS84);
+      const rect = camera.viewRectangle();
       if (!rect) return;
-      const west = rect.west / degree;
-      let east = rect.east / degree;
-      const south = Math.max(-89, rect.south / degree);
-      const north = Math.min(89, rect.north / degree);
+      const west = rect.west;
+      let east = rect.east;
+      const south = Math.max(-89, rect.south);
+      const north = Math.min(89, rect.north);
       if (east < west) east += 360;
       if (
         [west, east, south, north].every(Number.isFinite) &&
@@ -230,34 +311,12 @@ export function createWindRendering({
     }
   }
 
-  function makeOccluder(scene) {
-    if (
-      !cesium.EllipsoidalOccluder ||
-      !cesium.Ellipsoid ||
-      !scene.camera?.positionWC
-    )
+  function project(view, lon, lat) {
+    if (!Number.isFinite(lon) || !Number.isFinite(lat) || !view.query)
       return null;
-    return new cesium.EllipsoidalOccluder(
-      cesium.Ellipsoid.WGS84,
-      scene.camera.positionWC,
-    );
-  }
-
-  function project(scene, occluder, lon, lat, result) {
-    if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
-    const point = cesium.Cartesian3.fromDegrees(
-      lon,
-      lat,
-      0,
-      cesium.Ellipsoid?.WGS84,
-      world,
-    );
-    if (occluder && !occluder.isPointVisible(point)) return null;
-    const projected = cesium.SceneTransforms.worldToWindowCoordinates(
-      scene,
-      point,
-      result,
-    );
+    const point = fromDegreesInto(lon, lat, 0, world);
+    if (view.eye && view.query.isOccluded?.(point)) return null;
+    const projected = view.query.project(point);
     if (
       !projected ||
       !Number.isFinite(projected.x) ||
@@ -265,7 +324,7 @@ export function createWindRendering({
     )
       return null;
     // A perspective surface normal dims the limb instead of accumulating a bright rim.
-    const camera = scene.camera?.positionWC;
+    const camera = view.eye;
     const dx = camera?.x - point.x;
     const dy = camera?.y - point.y;
     const dz = camera?.z - point.z;
@@ -287,7 +346,7 @@ export function createWindRendering({
     point.x <= cssWidth &&
     point.y <= cssHeight;
 
-  function spawn(particle, scene, occluder) {
+  function spawn(particle, view) {
     const range = intersectBounds(
       bounds ?? { west: -180, east: 180, sinSouth: -0.9998, sinNorth: 0.9998 },
       field?.bbox ?? null,
@@ -307,42 +366,37 @@ export function createWindRendering({
       particle.lat = Math.asin(low + Math.random() * (high - low)) / degree;
       particle.age = 1 + Math.random() * 7;
       particle.life = 8 + Math.random() * 4;
-      if (inView(project(scene, occluder, particle.lon, particle.lat, screenA)))
-        return;
+      if (inView(project(view, particle.lon, particle.lat))) return;
     }
   }
-  function seed(scene, occluder) {
+  function seed(viewer, view = viewOf(viewer)) {
     const count = budget();
     if (particles.length > count) particles.length = count;
     while (particles.length < count)
       particles.push({ lon: 0, lat: 0, age: 0, life: 10 });
-    updateBounds(scene);
-    for (const particle of particles) spawn(particle, scene, occluder);
+    updateBounds(viewer);
+    for (const particle of particles) spawn(particle, view);
   }
 
   function removeImagery() {
     imageryErrorRemove?.();
     imageryErrorRemove = null;
-    if (imagery && imageryCollection && !imageryCollection.isDestroyed?.())
-      imageryCollection.remove(imagery, true);
-    else if (imagery && !imagery.isDestroyed?.()) imagery.destroy?.();
+    imagery?.remove();
     imagery = null;
     shell?.destroy();
     shell = null;
-    imageryCollection = null;
     imageryKind = null;
     imageryRectangle = null;
   }
-  function updateImageryFade(camera, settled = false) {
+  function updateImageryFade(height, settled = false) {
     // The tileset shell keeps the quantised move-end fade; globe imagery keeps
     // its smooth per-frame fade.
     if (
       (!imagery && !shell) ||
-      !camera?.positionCartographic ||
+      !Number.isFinite(height) ||
       (imageryKind === 'tileset' && !settled)
     )
       return;
-    const height = camera.positionCartographic.height;
     const fade = !gpuActive
       ? 1
       : height <= WIND_FIELD_FADE_LOW_METERS
@@ -363,7 +417,7 @@ export function createWindRendering({
       return;
     }
     if (Math.abs(imagery.alpha - alpha) > 0.005) imagery.alpha = alpha;
-    const show = alpha > 0;
+    const show = alpha > 0 && getHost().kind !== 'none';
     if (imagery.show !== show) imagery.show = show;
   }
   function installImagery() {
@@ -371,11 +425,12 @@ export function createWindRendering({
     imageryError = null;
     const viewer = viewerReady();
     if (!snapshot || overlay === 'none' || !viewer) return;
-    const { collection, kind } = getHost();
+    const { kind } = getHost();
     if (kind === 'none') {
       imageryError = NO_IMAGERY_HOST;
       return;
     }
+    const globe = kind === 'tileset' ? null : globeOf(viewer);
     const size = rasterSizeFor(snapshot);
     const raster = createFieldRaster(
       snapshot,
@@ -388,24 +443,22 @@ export function createWindRendering({
       imageryError = fieldUnavailableText(overlay);
       return;
     }
-    if (
-      kind === 'tileset'
-        ? !cesium.Primitive
-        : !collection || !cesium.SingleTileImageryProvider
-    ) {
+    const draw = kind === 'tileset' ? drawOf(viewer) : null;
+    if (kind === 'tileset' ? !draw?.field : !globe) {
       imageryError = msg('Globe imagery unavailable');
       return;
     }
     const box = snapshot.bbox;
-    const rectangle =
-      box && cesium.Rectangle?.fromDegrees
-        ? cesium.Rectangle.fromDegrees(
-            box.lonMin,
-            box.latMin,
-            box.lonMax,
-            box.latMax,
-          )
-        : cesium.Rectangle.MAX_VALUE;
+    // A field with a box draws its colour inside it; any other, over the globe.
+    const rectangle = box
+      ? {
+          west: box.lonMin,
+          south: box.latMin,
+          east: box.lonMax,
+          north: box.latMax,
+        }
+      : WHOLE_GLOBE;
+    const boxed = box ? [box.lonMin, box.latMin, box.lonMax, box.latMax] : null;
     try {
       const texture = document.createElement('canvas');
       texture.width = raster.width;
@@ -415,43 +468,37 @@ export function createWindRendering({
       pixels.data.set(raster.rgba);
       ctx.putImageData(pixels, 0, 0);
       if (kind === 'tileset') {
-        shell = createShellSurface({
+        shell = createWindShell(
           viewer,
-          cesium,
+          draw,
+          texture,
+          overlay === 'temperature' ? 1 : 0.85,
+          { cameraOf, frameOf },
           rectangle,
-          height: WEATHER_SHELL_HEIGHTS.wind,
-        });
-        shell.setImage(texture);
+        );
         imageryKind = kind;
-        imageryRectangle = box
-          ? [box.lonMin, box.latMin, box.lonMax, box.latMax]
-          : null;
-        shell.setAlpha(overlay === 'temperature' ? 1 : 0.85);
-        updateImageryFade(viewer.scene.camera, true);
-        viewer.scene?.requestRender?.();
+        imageryRectangle = boxed;
+        updateImageryFade(heightOf(viewer), true);
+        requestRender(viewer);
         return;
       }
-      const provider = new cesium.SingleTileImageryProvider({
+      imagery = globe.imagery.add({
+        kind: 'single-image',
         url: texture.toDataURL('image/png'),
-        tileWidth: raster.width,
-        tileHeight: raster.height,
         rectangle,
+        zOrder: WEATHER_IMAGERY_Z.wind,
       });
-      imagery = collection.addImageryProvider(provider);
-      orderWeatherImagery(collection, imagery, 0);
-      imageryCollection = collection;
+      imagery.drapeOn = 'surface';
       imageryKind = kind;
-      imageryRectangle = box
-        ? [box.lonMin, box.latMin, box.lonMax, box.latMax]
-        : null;
+      imageryRectangle = boxed;
       // Temperature colors carry quantitative meaning; double transparency
       // blends orange heat into blue ocean and obscures useful gradients.
       imagery.alpha = overlay === 'temperature' ? 1 : 0.85;
-      if (gpuActive) updateImageryFade(viewer.scene.camera, true);
-      imageryErrorRemove = provider.errorEvent?.addEventListener(() => {
+      if (gpuActive) updateImageryFade(heightOf(viewer), true);
+      imageryErrorRemove = imagery.on('tileError', () => {
         imageryError = msg('Globe field image unavailable');
       });
-      viewer.scene?.requestRender?.();
+      requestRender(viewer);
     } catch {
       removeImagery();
       imageryError = msg('Globe field image unavailable');
@@ -460,7 +507,7 @@ export function createWindRendering({
 
   function rehome() {
     if (!snapshot || overlay === 'none') return;
-    const { collection, kind } = getHost();
+    const { kind } = getHost();
     const wasHidden = imageryError === NO_IMAGERY_HOST;
     if ((imagery || shell) && kind !== 'none' && kind !== imageryKind) {
       installImagery();
@@ -469,17 +516,15 @@ export function createWindRendering({
     }
     // A host without imagery hides the retained shell until a host returns.
     if (shell && kind === 'none') shell.setShow(false);
-    if (imagery && collection !== imageryCollection) {
-      imageryCollection?.remove(imagery, false);
-      imageryCollection = collection;
-      if (collection) {
-        collection.add(imagery);
-        orderWeatherImagery(collection, imagery, 0);
-      }
-      viewerReady()?.scene?.requestRender?.();
+    // Globe imagery stays on the globe, which draws nothing while hidden;
+    // it is hidden too until a host returns.
+    const show = kind !== 'none' && imagery?.alpha > 0;
+    if (imagery && imagery.show !== show) {
+      imagery.show = show;
+      requestRender(viewerReady());
     }
     if ((gpuActive || kind === 'tileset') && kind !== 'none')
-      updateImageryFade(viewerReady()?.scene?.camera, true);
+      updateImageryFade(heightOf(viewerReady()), true);
     if (kind === 'none') imageryError = NO_IMAGERY_HOST;
     else if (wasHidden) {
       imageryError = null;
@@ -492,39 +537,33 @@ export function createWindRendering({
   function viewChanged() {
     if (gpuActive) {
       const viewer = viewerReady();
-      if (viewer) updateImageryFade(viewer.scene.camera);
-      const narrow = (viewer?.scene?.canvas?.clientWidth || 800) < 700;
+      if (viewer) updateImageryFade(heightOf(viewer));
+      const narrow = (canvasOf(viewer)?.clientWidth || 800) < 700;
       let visibilityUpdated = false;
       if (running && field && !hidden() && narrow !== gpuNarrow) {
         gpuNarrow = narrow;
         gpuActive = gpu.setField(field);
         if (!gpuActive && viewer) {
           resize(viewer);
-          seed(viewer.scene, makeOccluder(viewer.scene));
+          seed(viewer);
         }
         motionChanged();
         visibilityUpdated = true;
       }
-      if (gpuActive && viewer && !visibilityUpdated) {
-        gpuVisible = gpu.updateVisibility(viewer.scene.camera);
-        if (gpuVisible) schedule();
-        else {
-          cancel();
-          lastTime = null;
-        }
-      }
+      // The renderer culls and animates the streamlines; this fades them.
+      if (gpuActive && viewer && !visibilityUpdated) gpu.updateVisibility();
       const ready = gpuActive ? gpu.getDiagnostics().ready : null;
       if (ready !== reportedGpuReady) {
         reportedGpuReady = ready;
         onStatusChange?.();
       }
-      return; // Cesium projects persistent curves; only a responsive budget change rebuilds them.
+      return; // The renderer projects persistent curves; only a responsive budget change rebuilds them.
     }
     if (!running || !field || hidden() || !canvas) return;
     const viewer = viewerReady();
     if (!viewer) return;
     const resized = resize(viewer);
-    if (resized || checkCamera(viewer.scene)) {
+    if (resized || checkCamera(viewer)) {
       cameraChanged = true;
       if (still()) paint(viewer, 0, true);
       else schedule();
@@ -539,13 +578,8 @@ export function createWindRendering({
     if (!running || !field || hidden()) return;
     const viewer = viewerReady();
     if (gpuActive) {
-      if (viewer) updateImageryFade(viewer.scene.camera);
-      gpuVisible = viewer ? gpu.updateVisibility(viewer.scene.camera) : false;
-      if (gpuVisible) {
-        gpu.tick(flowTime);
-        viewer.scene.requestRender();
-        schedule();
-      }
+      if (viewer) updateImageryFade(heightOf(viewer));
+      if (viewer) gpu.updateVisibility();
       return;
     }
     if (still() && viewer) paint(viewer, 0, true);
@@ -558,23 +592,18 @@ export function createWindRendering({
   }
   function cameraSettled() {
     if (gpuActive || imageryKind === 'tileset')
-      updateImageryFade(viewerReady()?.scene?.camera, true);
+      updateImageryFade(heightOf(viewerReady()), true);
     cameraMoved();
   }
   function cameraMoved() {
     viewChanged();
     // A parked request-render scene may never run preRender until we wake it.
     if (gpuActive && running && field && !hidden())
-      viewerReady()?.scene?.requestRender?.();
+      requestRender(viewerReady());
   }
-  function listenScene(event, callback) {
-    if (!event?.addEventListener) return;
-    const remove = event.addEventListener(callback);
-    removers.push(
-      typeof remove === 'function'
-        ? remove
-        : () => event.removeEventListener(callback),
-    );
+  function listenPort(port, event, callback) {
+    const off = port?.on?.(event, () => callback());
+    if (typeof off === 'function') removers.push(off);
   }
   function attachListeners() {
     if (removers.length) return;
@@ -585,9 +614,9 @@ export function createWindRendering({
     listen(globalThis, 'resize', cameraMoved);
     listen(eventTarget, 'gev:map-stack-changed', rehome);
     const viewer = viewerReady();
-    const camera = viewer?.scene?.camera;
-    listenScene(viewer?.scene?.preRender, viewChanged);
-    listenScene(camera?.moveEnd, cameraSettled);
+    if (!viewer) return;
+    listenPort(frameOf(viewer), 'preRender', viewChanged);
+    listenPort(cameraOf(viewer), 'moveEnd', cameraSettled);
   }
   function detachListeners() {
     for (const remove of removers) remove();
@@ -596,16 +625,15 @@ export function createWindRendering({
   }
 
   function paint(viewer, dt, staticFrame, fadeSeconds = dt) {
-    const scene = viewer.scene;
     const resized = resize(viewer);
-    const changed = checkCamera(scene) || cameraChanged || resized;
-    const occluder = makeOccluder(scene);
+    const changed = checkCamera(viewer) || cameraChanged || resized;
+    const view = viewOf(viewer);
     if (changed) {
       clearPixels();
-      updateBounds(scene);
+      updateBounds(viewer);
       cameraChanged = false;
     }
-    if (particles.length !== budget()) seed(scene, occluder);
+    if (particles.length !== budget()) seed(viewer, view);
     if (staticFrame) clearPixels();
     context.globalAlpha = 1;
     context.globalCompositeOperation = 'destination-out';
@@ -613,10 +641,10 @@ export function createWindRendering({
     context.fillRect(0, 0, cssWidth, cssHeight);
     context.globalCompositeOperation = 'source-over';
     context.lineCap = 'round';
-    const cameraHeight = scene.camera?.positionCartographic?.height ?? 1e6;
+    const cameraHeight = heightOf(viewer) ?? 1e6;
     const advection = {
       speedScale:
-        Math.max(0.002, Math.min(4000, cameraHeight / 400)) * speedScale,
+        Math.max(0.002, Math.min(4000, cameraHeight / 400)) * fieldScale,
     };
     // Stroke length is a display sample of the local field, not frame travel.
     // At low FPS capped advection still moves the head by dt, but a readable
@@ -629,27 +657,21 @@ export function createWindRendering({
         advectParticle(particle, wind, dt, advection);
         particle.age += dt;
       }
-      let point = project(scene, occluder, particle.lon, particle.lat, screenB);
+      let point = project(view, particle.lon, particle.lat);
       if (changed && !inView(point)) {
         // Refill newly exposed regions while retaining world anchors still in view.
-        spawn(particle, scene, occluder);
+        spawn(particle, view);
         sampleWind(field, particle.lon, particle.lat, wind);
-        point = project(scene, occluder, particle.lon, particle.lat, screenB);
+        point = project(view, particle.lon, particle.lat);
       }
       if (particle.age > particle.life || !inView(point)) {
-        spawn(particle, scene, occluder);
+        spawn(particle, view);
         continue;
       }
       before.lon = particle.lon;
       before.lat = particle.lat;
       advectParticle(before, wind, -strokeSeconds, advection);
-      const previous = project(
-        scene,
-        occluder,
-        before.lon,
-        before.lat,
-        screenA,
-      );
+      const previous = project(view, before.lon, before.lat);
       if (!inView(previous)) continue;
       const startX = previous.x;
       const startY = previous.y;
@@ -705,26 +727,17 @@ export function createWindRendering({
 
   function draw(time) {
     frame = null;
-    if (!running || !field || hidden() || still()) return;
-    if (gpuActive && !gpuVisible) {
-      lastTime = null;
-      return;
-    }
+    if (!running || !field || hidden() || still() || gpuActive) return;
     const viewer = viewerReady();
     if (!viewer) return;
     try {
-      const resized = !gpuActive && resize(viewer);
+      const resized = resize(viewer);
       if (resized) cameraChanged = true;
       const elapsed =
         lastTime === null ? 1 / 60 : Math.max(0, (time - lastTime) / 1000);
       // Limit full particle paints to 30 Hz while preserving elapsed-time motion/fading.
       if (lastTime === null || elapsed >= 0.032 || cameraChanged) {
-        if (gpuActive) {
-          flowTime += elapsed;
-          gpu.tick(flowTime);
-          viewer.scene.requestRender();
-          cameraChanged = false;
-        } else paint(viewer, Math.min(0.1, elapsed), false, elapsed);
+        paint(viewer, Math.min(0.1, elapsed), false, elapsed);
         lastTime = time;
       }
     } catch (error) {
@@ -764,9 +777,9 @@ export function createWindRendering({
             speed: next.speed,
           }
         : next;
-      speedScale = fieldSpeedScale(spec, nextField);
+      fieldScale = fieldSpeedScale(spec, nextField);
       const viewer = viewerReady();
-      const nextNarrow = (viewer?.scene?.canvas?.clientWidth || 800) < 700;
+      const nextNarrow = (canvasOf(viewer)?.clientWidth || 800) < 700;
       const reuseGeometry =
         gpuActive &&
         gpuNarrow === nextNarrow &&
@@ -782,13 +795,12 @@ export function createWindRendering({
         if (!reuseGeometry) {
           gpuActive = gpu.supported() && gpu.setField(field);
           reportedGpuReady = gpuActive ? gpu.getDiagnostics().ready : null;
-          flowTime = 0;
         }
         clearPixels();
         particles = [];
         if (viewer && !gpuActive) {
           resize(viewer);
-          seed(viewer.scene, makeOccluder(viewer.scene));
+          seed(viewer);
         }
         installImagery();
         relief.attach();
@@ -836,9 +848,7 @@ export function createWindRendering({
       gpu.clear();
       relief.clear();
       gpuActive = false;
-      gpuVisible = false;
       reportedGpuReady = null;
-      flowTime = 0;
       removeImagery();
       imageryError = null;
       clearPixels();
@@ -871,7 +881,7 @@ export function createWindRendering({
         host: shell ? 'shell' : imagery ? 'globe' : null,
         shell: shell?.getDiagnostics() ?? null,
         imageryError,
-        speedScale,
+        speedScale: fieldScale,
         imageryRectangle,
       };
     },

@@ -1,10 +1,14 @@
-import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
-import { isPointerFree } from '../../data/inputOwnership.js';
+import { inputFor } from '../../input/dispatcher.js';
 import {
   BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
   BIKESHARE_SELECTED_OVERLAY_SOURCE_OPTIONS,
+  SELECTED_POINT_STYLE,
+  COVERAGE_FLY_HEIGHT_M,
 } from './policy.js';
+import { GBFS_CITY_REGISTRY } from './registry.js';
+import { COVERAGE_ID_PREFIX } from './rendering.js';
+import { cameraOf } from '../../render/rendererOf.js';
 
 export function createSelection({
   state: layerState,
@@ -63,7 +67,7 @@ export function createSelection({
    */
 
   function createBikeshareSelectedOverlayEntry(key, record) {
-    const position = record?.point?.position;
+    const position = record?.position;
     if (!key || !position) return null;
     const [title, ...details] = buildSelectionLabel(record).split('\n');
     return {
@@ -91,29 +95,22 @@ export function createSelection({
 
   /**
    * Clear the current station selection.
-   * Re-shows the hidden point primitive and removes the highlight entity.
+   * Shows the station's own dot again and removes the highlight.
    */
 
   function _clearSelection() {
-    if (layerState._selectedKey) {
-      const record = layerState._stationRenderMap.get(layerState._selectedKey);
-      if (record?.point) {
-        record.point.show = true;
-      }
-    }
-
-    if (layerState._selectedEntity && layerState._viewer) {
-      layerState._viewer.entities.remove(layerState._selectedEntity);
-    }
-
+    const key = layerState._selectedKey;
     layerState._selectedKey = null;
-    layerState._selectedEntity = null;
+    const record = key ? layerState._stationRenderMap.get(key) : null;
+    if (record?.position)
+      layerState._stationSet?.upsert([parts.rendering.stationItem(record)]);
+    if (layerState._selectedSet?.size()) layerState._selectedSet.clear();
     layerState._overlayHost.clearSource(BIKESHARE_SELECTED_OVERLAY_SOURCE_ID);
   }
 
   /**
-   * Select a station by key: hides the original point primitive and adds a
-   * highlighted cyan entity plus a protected shared-host availability card.
+   * Select a station by key: hides its own dot and draws a highlighted cyan
+   * one in its place, plus a protected shared-host availability card.
    * @param {string} key - Composite "cityId:stationId" key.
    */
 
@@ -121,22 +118,14 @@ export function createSelection({
     _clearSelection();
 
     const record = layerState._stationRenderMap.get(key);
-    if (!record || !record.point?.position || !layerState._viewer) return;
+    if (!record || !record.position || !layerState._stationSet) return;
 
     layerState._selectedKey = key;
-    // Hide the base point so the highlight entity replaces it visually
-    record.point.show = false;
-
-    layerState._selectedEntity = layerState._viewer.entities.add({
-      position: record.point.position,
-      point: {
-        pixelSize: 14,
-        color: Cesium.Color.CYAN,
-        outlineColor: Cesium.Color.BLACK,
-        outlineWidth: 2,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
-    });
+    // Hide the base dot so the highlight replaces it visually
+    layerState._stationSet.upsert([parts.rendering.stationItem(record)]);
+    layerState._selectedSet?.set([
+      { id: 'selected', pos: record.position, ...SELECTED_POINT_STYLE },
+    ]);
     const entry = createBikeshareSelectedOverlayEntry(key, record);
     if (entry) {
       layerState._overlayHost.setEntries(
@@ -151,46 +140,73 @@ export function createSelection({
    * Install a screen-space click handler for station selection/deselection.
    * Also registers a global keydown listener for Escape-to-deselect.
    * Idempotent — does nothing if a handler is already installed.
-   * @param {Cesium.Viewer} viewer - Cesium viewer instance.
+   * @param {object} viewer - The viewer the layer draws on.
    */
 
+  /**
+   * The covered city a marker id names, or null.
+   * @param {unknown} id
+   */
+  function coverageCityOf(id) {
+    if (typeof id !== 'string' || !id.startsWith(COVERAGE_ID_PREFIX))
+      return null;
+    const cityId = id.slice(COVERAGE_ID_PREFIX.length);
+    return GBFS_CITY_REGISTRY.find((city) => city.id === cityId) ?? null;
+  }
+
+  /**
+   * Straight down over a covered city, low enough for its stations, as the
+   * shell's camera action when it gave one.
+   * @param {{ centerLat: number, centerLon: number }} city
+   */
+  function flyIntoCity(city) {
+    const viewer = layerState._viewer;
+    if (!viewer) return;
+    const fly = () =>
+      cameraOf(viewer).flyTo(
+        {
+          lon: city.centerLon,
+          lat: city.centerLat,
+          height: COVERAGE_FLY_HEIGHT_M,
+        },
+        { orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 } },
+      );
+    if (layerState._runNavigation) layerState._runNavigation(fly);
+    else fly();
+  }
+
   function _installClickHandler(viewer) {
-    if (layerState._clickHandler) return;
+    if (layerState._clickSubscription) return;
 
-    layerState._clickHandler = new Cesium.ScreenSpaceEventHandler(
-      viewer.scene.canvas,
-    );
-    layerState._clickHandler.setInputAction((click) => {
-      // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
-      if (!isPointerFree()) return;
-      const picked = viewer.scene.pick(click.position);
+    layerState._clickSubscription = inputFor(viewer).onClick((event) => {
+      const hit = event.drawHit;
 
-      if (picked) {
-        // Clicking selected entity itself — ignore (don't deselect).
-        if (picked.id === layerState._selectedEntity) return;
+      if (hit) {
+        // Clicking the selected highlight itself — ignore (don't deselect).
+        if (hit.set === layerState._selectedSet?.id) return;
 
-        // Check if the picked primitive or entity id matches a station key
-        const primitive = picked.primitive;
-        if (
-          primitive &&
-          typeof primitive.id === 'string' &&
-          layerState._stationRenderMap.has(primitive.id)
-        ) {
-          _selectStation(primitive.id);
-          return;
+        // A covered city's marker: fly down into it.
+        if (hit.set === layerState._coverageSet?.id) {
+          const city = coverageCityOf(hit.id);
+          if (city) {
+            flyIntoCity(city);
+            return;
+          }
         }
+
+        // A station dot of this layer's own set
         if (
-          typeof picked.id === 'string' &&
-          layerState._stationRenderMap.has(picked.id)
+          hit.set === layerState._stationSet?.id &&
+          layerState._stationRenderMap.has(hit.id)
         ) {
-          _selectStation(picked.id);
+          _selectStation(hit.id);
           return;
         }
       }
 
-      // Clicked empty space — deselect.
+      // Clicked anything else — deselect.
       if (layerState._selectedKey) _clearSelection();
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
 
     document.addEventListener('keydown', _onKeyDown);
   }
@@ -212,5 +228,6 @@ export function createSelection({
     _selectStation,
     _installClickHandler,
     _onKeyDown,
+    coverageCityOf,
   };
 }

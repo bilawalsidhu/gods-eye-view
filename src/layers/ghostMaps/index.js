@@ -1,0 +1,942 @@
+import {
+  decodeXml,
+  kmzImageResolver,
+  kmzMainDocument,
+  parseXml,
+  readZipEntries,
+  resolveKmzPath,
+} from '../../data/geoFileImport.js';
+import {
+  formatNumber,
+  formatUtcDayMonth,
+  msg,
+  t,
+  tn,
+} from '../../i18n/index.js';
+import { createHorizonCull } from '../streetLevel/view.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { hexColor } from '../../render/color.js';
+import { drawOf, findFrame } from '../../render/rendererOf.js';
+import { readGhostMapsKml } from './kml.js';
+import {
+  fieldLabel,
+  GHOSTMAPS_AGE_OPTIONS,
+  GHOSTMAPS_DEFAULT_AGE_DAYS,
+  ghostMapsEventDate,
+  isGhostMapsEventExpired,
+  parseDescriptionFields,
+  wrapCardText,
+} from './records.js';
+import { inputFor as defaultInputFor } from '../../input/dispatcher.js';
+export * from './catalog.js';
+export * from './records.js';
+export { readGhostMapsKml } from './kml.js';
+export { createGhostMapsSource } from './source.js';
+
+export const GHOSTMAPS_LAYER_ID = 's2-ghostmaps';
+export const GHOSTMAPS_OVERLAY_SOURCE_ID = 's2-ghostmaps';
+const PICK_PREFIX = 'ghostmaps:';
+const STORAGE_KEY = 'gev.ghostmaps.products';
+const AGE_STORAGE_KEY = 'gev.ghostmaps.ageDays';
+const ACCENT = '#c8ff00';
+const MAX_ICON_BYTES = 512 * 1024;
+const CARD_HOST_OPTIONS = Object.freeze({
+  cohortLimit: 1,
+  collisionCapacity: 1,
+  moving: false,
+});
+const MAX_CARD_LINES = 12;
+
+/** Panel names for the catalog's product ids (the catalog sends English). */
+const PRODUCT_LABELS = Object.freeze({
+  cip: msg('Intel Picture'),
+  'kinetic-30d': msg('Kinetic 30d'),
+  'border-crisis': msg('Border Crisis'),
+  'iran-cip': msg('Iran Picture'),
+  'iran-kinetic': msg('Iran Kinetic'),
+  'yemen-flot': msg('Yemen FLOT'),
+  'latest-drop': msg('Latest Drop'),
+});
+
+/** One distinct fallback marker color per product. */
+const PRODUCT_COLORS = Object.freeze({
+  cip: '#c8ff00',
+  'kinetic-30d': '#ff5a36',
+  'border-crisis': '#ffb547',
+  'iran-cip': '#39d0ff',
+  'iran-kinetic': '#ff3b8d',
+  'yemen-flot': '#5dff9f',
+  'latest-drop': '#b48cff',
+});
+
+function defaultStorage() {
+  try {
+    return globalThis.localStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function readStoredSelection(storage) {
+  try {
+    const value = JSON.parse(storage?.getItem(STORAGE_KEY) ?? 'null');
+    return Array.isArray(value) ? new Set(value.map(String)) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredSelection(storage, selected) {
+  try {
+    storage?.setItem(STORAGE_KEY, JSON.stringify([...selected]));
+  } catch {
+    /* private window or blocked storage: the selection lasts this session */
+  }
+}
+
+function readStoredAge(storage) {
+  try {
+    const raw = storage?.getItem(AGE_STORAGE_KEY);
+    if (raw !== null && raw !== undefined) {
+      const value = JSON.parse(raw);
+      if (GHOSTMAPS_AGE_OPTIONS.includes(value)) return value;
+    }
+  } catch {
+    /* unavailable or invalid storage uses the default */
+  }
+  return GHOSTMAPS_DEFAULT_AGE_DAYS;
+}
+
+/** A round marker for placemarks whose icon is missing or remote. */
+const markerCache = new Map();
+function markerImage(color) {
+  if (markerCache.has(color)) return markerCache.get(color);
+  let url = null;
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 20;
+    const ctx = canvas.getContext('2d');
+    ctx.beginPath();
+    ctx.arc(10, 10, 7, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.stroke();
+    url = canvas.toDataURL();
+  } catch {
+    url = null;
+  }
+  markerCache.set(color, url);
+  return url;
+}
+
+const drawColor = (rgba, fallback, alpha) =>
+  rgba
+    ? [rgba[0], rgba[1], rgba[2], alpha ?? rgba[3]]
+    : hexColor(fallback, alpha ?? 1);
+
+/** The size a marker image draws at, before its scale: the product marker. */
+const MARKER_SIZE = [20, 20];
+
+/**
+ * An image's own size in pixels, as an icon drew it unsized; null when it
+ * cannot be read here (no DOM, or the image does not decode).
+ */
+async function imageSizeOf(url) {
+  if (typeof globalThis.Image !== 'function' || !url) return null;
+  try {
+    const image = new globalThis.Image();
+    image.src = url;
+    await image.decode();
+    return image.naturalWidth > 0 && image.naturalHeight > 0
+      ? [image.naturalWidth, image.naturalHeight]
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Each layer's draw sets have ids of their own. */
+let instances = 0;
+
+function anchorOf(geometry) {
+  if (geometry.type === 'point') return geometry.position;
+  const ring =
+    geometry.type === 'polygon' ? geometry.outer : geometry.positions;
+  let lon = 0;
+  let lat = 0;
+  for (const [x, y] of ring) {
+    lon += x;
+    lat += y;
+  }
+  return [lon / ring.length, lat / ring.length];
+}
+
+/**
+ * S2 Underground GhostMaps: the current editions of S2's public KMZ intel
+ * products, kept in step with the GitHub repository. The proxy watches the
+ * branch head and pushes each new commit; only changed products reload.
+ */
+export function createGhostMapsLayer({
+  source,
+  overlayHost = null,
+  inputFor = defaultInputFor,
+  picking = null,
+  openExternal = null,
+  storage = defaultStorage(),
+  now = () => Date.now(),
+} = {}) {
+  if (typeof source?.getCatalog !== 'function')
+    throw new TypeError('GhostMaps layer requires a catalog source');
+  let _viewer = null;
+  let _enabled = false;
+  let _catalog = null;
+  let _lastError = null;
+  let _unsubscribe = null;
+  let _stream = 'closed';
+  let _queue = Promise.resolve();
+  let _clickSubscription = null;
+  let _rowListener = null;
+  let _selectedKey = null;
+  let _selectedCardId = null;
+  let _selectedLink = null;
+  let _lifetime = new AbortController();
+  let _selection = readStoredSelection(storage);
+  let _ageDays = readStoredAge(storage);
+  let _expiryTimer = null;
+  /** productId → {version, ageDays, sets, urls, features: Map<index, record>, pins} */
+  const _loaded = new Map();
+  /** productId → in-flight version */
+  const _loading = new Map();
+  /** productId → error text */
+  const _failed = new Map();
+
+  const notifyRow = () => _rowListener?.();
+  const render = () =>
+    _viewer && findFrame(_viewer)?.requestRender?.('ghostmaps');
+  /** This layer's draw sets' ids start with this; one set per edition. */
+  const setBase = `${GHOSTMAPS_LAYER_ID}:${++instances}`;
+  let editions = 0;
+  // Pins skip the depth test, and with Google 3D tiles the globe is hidden,
+  // so nothing else stops far-side pins drawing through the planet.
+  const _horizon = createHorizonCull({
+    getViewer: () => _viewer,
+    items: function* () {
+      for (const item of _loaded.values()) yield* item.pins;
+    },
+    // Pins the cull turned are written to their editions' icon sets.
+    onChange: (changed) => {
+      const bySet = new Map();
+      for (const pin of changed) {
+        if (!bySet.has(pin.set)) bySet.set(pin.set, []);
+        bySet.get(pin.set).push(pin.item);
+      }
+      for (const [set, items] of bySet) set?.upsert(items);
+      render();
+    },
+  });
+  const canSelect = () => overlayHost && inputFor && picking;
+
+  function wanted(product) {
+    return _selection ? _selection.has(product.id) : product.defaultOn;
+  }
+
+  function selectedIds() {
+    return (_catalog?.products || []).filter(wanted).map(({ id }) => id);
+  }
+
+  function unload(id, keepSelection = false) {
+    const item = _loaded.get(id);
+    if (!item) return;
+    _loaded.delete(id);
+    disposeSets(item.sets);
+    item.urls.forEach((url) => URL.revokeObjectURL(url));
+    if (!keepSelection && _selectedKey?.startsWith(`${id}:`)) clearSelection();
+  }
+
+  // Remove expired placemarks' items, rather than hiding them: horizon
+  // culling must never make an old pin visible again. Map keys keep
+  // surviving picks stable.
+  function expireEvents() {
+    const at = now();
+    let changed = false;
+    for (const [productId, item] of _loaded) {
+      for (const [index, feature] of item.features) {
+        if (!isGhostMapsEventExpired(feature.dateMs, at, _ageDays)) continue;
+        for (const [kind, ids] of Object.entries(feature.itemIds))
+          if (ids.length) item.sets?.[kind]?.remove(ids);
+        item.features.delete(index);
+        if (_selectedKey === `${productId}:${index}`) clearSelection();
+        changed = true;
+      }
+      item.pins = item.pins.filter((pin) => item.features.has(pin.index));
+    }
+    if (changed) {
+      notifyRow();
+      render();
+    }
+  }
+
+  function disposeSets(sets) {
+    if (!sets) return;
+    for (const set of Object.values(sets)) set.dispose();
+  }
+
+  /**
+   * Draw a loaded edition in sets of its own, beside any edition drawing
+   * now. One that cannot be drawn draws nothing and lets its images go.
+   */
+  function mount(next) {
+    const base = `${setBase}:${++editions}`;
+    const sets = {};
+    try {
+      // Inside the try: a viewer with no renderer bound draws nothing and
+      // still lets the edition's images go.
+      const draw = drawOf(_viewer);
+      sets.shapes = draw.shapes({ id: `${base}:shapes`, clampTo: 'both' });
+      sets.lines = draw.lines({ id: `${base}:lines`, clampTo: 'both' });
+      sets.icons = draw.icons({ id: `${base}:icons`, clampTo: 'both' });
+      sets.shapes.set(next.items.shapes);
+      sets.lines.set(next.items.lines);
+      sets.icons.set(next.items.icons);
+    } catch (error) {
+      disposeSets(sets);
+      next.urls.forEach((url) => URL.revokeObjectURL(url));
+      throw error;
+    }
+    for (const pin of next.pins) pin.set = sets.icons;
+    next.sets = sets;
+  }
+
+  /** The placemark a hit on one of this layer's items is, or null. */
+  function hitKey(hit) {
+    if (
+      !hit?.set?.startsWith(`${setBase}:`) ||
+      !hit.id?.startsWith(PICK_PREFIX)
+    )
+      return null;
+    const [productId, index] = hit.id.slice(PICK_PREFIX.length).split(':');
+    const loaded = _loaded.get(productId);
+    // Only the drawing edition's sets: a retiring one may still pick.
+    const current = loaded?.sets
+      ? Object.values(loaded.sets).some((set) => set?.id === hit.set)
+      : false;
+    return current && loaded.features.has(Number(index))
+      ? `${productId}:${index}`
+      : null;
+  }
+
+  /** Build one product's draw items off-scene, then swap them in. */
+  async function load(product, signal) {
+    const ageDays = _ageDays;
+    const bytes = await source.getFile(product.id, product.version, { signal });
+    signal.throwIfAborted();
+    const entries = await readZipEntries(bytes);
+    signal.throwIfAborted();
+    const main = kmzMainDocument(entries);
+    if (!main) throw new Error(msg('That KMZ holds no KML document.'));
+    const urls = [];
+    const resolvePacked = kmzImageResolver(entries, main, (url) =>
+      urls.push(url),
+    );
+    // Icons only: ArcGIS exports also pack multi-megabyte photo attachments,
+    // which fall back to the product marker instead of being decoded.
+    const resolveImage = (href) => {
+      const path = resolveKmzPath(href, main, entries);
+      return path && entries.get(path).length <= MAX_ICON_BYTES
+        ? resolvePacked(href)
+        : null;
+    };
+    try {
+      const parsed = readGhostMapsKml(
+        parseXml(decodeXml(entries.get(main)), 'KML'),
+        resolveImage,
+      );
+      entries.clear();
+      signal.throwIfAborted();
+      const color = PRODUCT_COLORS[product.id] || ACCENT;
+      const icons = [];
+      const lines = [];
+      const shapes = [];
+      const features = new Map();
+      const pins = [];
+      const at = now();
+      // Each distinct icon's own size, read once: icons draw at it, scaled.
+      const sizes = new Map();
+      const marker = markerImage(color);
+      for (const feature of parsed.features)
+        for (const geometry of feature.geometries)
+          if (geometry.type === 'point') {
+            const image = feature.style.icon || marker;
+            if (image && !sizes.has(image))
+              sizes.set(
+                image,
+                image === marker ? MARKER_SIZE : imageSizeOf(image),
+              );
+          }
+      for (const [image, size] of sizes) sizes.set(image, await size);
+      signal.throwIfAborted();
+      parsed.features.forEach((feature, index) => {
+        const dateMs = ghostMapsEventDate(feature.description);
+        if (isGhostMapsEventExpired(dateMs, at, ageDays)) return;
+        const key = `${product.id}:${index}`;
+        const { style } = feature;
+        // The items each placemark draws, by set, for expiry to take off.
+        const itemIds = { icons: [], lines: [], shapes: [] };
+        feature.geometries.forEach((geometry, part) => {
+          const id = `${PICK_PREFIX}${key}:${part}`;
+          if (geometry.type === 'point') {
+            const position = fromDegrees(...geometry.position);
+            const image = style.icon || marker;
+            // An image that cannot be drawn shows nothing, as before.
+            if (!image) return;
+            const item = {
+              id,
+              pos: position,
+              image,
+              size: sizes.get(image) ?? MARKER_SIZE,
+              scale: Math.min(
+                1.5,
+                Math.max(0.35, (style.iconScale ?? 1) * 0.7),
+              ),
+              ...(style.icon && style.iconColor
+                ? { color: style.iconColor }
+                : {}),
+              height: 'clampGround',
+              anchor: 'center',
+              // Ground-clamped icons would sink into terrain and 3D tiles; the
+              // horizon cull hides the far side instead (see `_horizon`).
+              disableDepthTest: Number.POSITIVE_INFINITY,
+            };
+            const slot = icons.push(item) - 1;
+            itemIds.icons.push(id);
+            // What the horizon cull turns: the icon as it draws now, in its
+            // edition's icon set once mounted.
+            pins.push({
+              index,
+              position,
+              set: null,
+              get item() {
+                return icons[slot];
+              },
+              get show() {
+                return icons[slot].show !== false;
+              },
+              set show(value) {
+                icons[slot] = { ...icons[slot], show: value };
+              },
+            });
+          } else if (geometry.type === 'line') {
+            itemIds.lines.push(id);
+            lines.push({
+              id,
+              positions: geometry.positions.map(([lon, lat]) =>
+                fromDegrees(lon, lat),
+              ),
+              widthPx: Math.min(8, Math.max(1.5, style.lineWidth ?? 2)),
+              mode: 'draped',
+              style: {
+                kind: 'solid',
+                color: drawColor(style.lineColor, color),
+              },
+            });
+          } else {
+            const ring = (points) => points.map(([lon, lat]) => ({ lon, lat }));
+            itemIds.shapes.push(id);
+            shapes.push({
+              id,
+              geometry: {
+                kind: 'polygon',
+                rings: [ring(geometry.outer), ...geometry.holes.map(ring)],
+              },
+              // An unfilled polygon is still there to click, as before.
+              fill:
+                style.fill === false
+                  ? [0, 0, 0, 0]
+                  : drawColor(
+                      style.polyColor,
+                      color,
+                      style.polyColor ? undefined : 0.25,
+                    ),
+              height: 'clampGround',
+            });
+            if (style.outline !== false) itemIds.lines.push(`${id}:outline`);
+            if (style.outline !== false)
+              lines.push({
+                id: `${id}:outline`,
+                positions: [...geometry.outer, geometry.outer[0]].map(
+                  ([lon, lat]) => fromDegrees(lon, lat),
+                ),
+                widthPx: Math.min(6, Math.max(1.5, style.lineWidth ?? 2)),
+                mode: 'draped',
+                style: {
+                  kind: 'solid',
+                  color: drawColor(style.lineColor, color),
+                },
+              });
+          }
+        });
+        features.set(index, {
+          name: feature.name,
+          folder: feature.folder,
+          description: feature.description,
+          dateMs,
+          itemIds,
+          anchor: anchorOf(feature.geometries[0]),
+        });
+      });
+      return {
+        version: product.version,
+        ageDays,
+        items: { icons, lines, shapes },
+        sets: null,
+        urls,
+        features,
+        pins,
+      };
+    } catch (error) {
+      urls.forEach((url) => URL.revokeObjectURL(url));
+      throw error;
+    }
+  }
+
+  /** Bring the globe in line with the catalog and the chip selection. */
+  function sync() {
+    const run = _queue.then(async () => {
+      if (!_enabled || !_viewer || !_catalog) return;
+      expireEvents();
+      const signal = _lifetime.signal;
+      const products = new Map(_catalog.products.map((p) => [p.id, p]));
+      for (const id of [..._loaded.keys()]) {
+        const product = products.get(id);
+        if (!product || !wanted(product)) unload(id);
+      }
+      for (const product of _catalog.products) {
+        if (!wanted(product) || signal.aborted) continue;
+        const loaded = _loaded.get(product.id);
+        if (loaded?.version === product.version && loaded.ageDays === _ageDays)
+          continue;
+        _loading.set(product.id, product.version);
+        _failed.delete(product.id);
+        notifyRow();
+        try {
+          const next = await load(product, signal);
+          if (signal.aborted || !_enabled || next.ageDays !== _ageDays) {
+            next.urls.forEach((url) => URL.revokeObjectURL(url));
+            return;
+          }
+          // Cull before the first frame so far-side pins never flash.
+          _horizon.update(next.pins, { quiet: true });
+          mount(next);
+          // The new edition is on the globe before the old one leaves. The card
+          // stays only if its index still holds the same report: the server
+          // may answer a pinned version with newer bytes.
+          const index = Number(_selectedKey?.split(':')[1]);
+          const before = loaded?.features.get(index);
+          const after = next.features.get(index);
+          unload(
+            product.id,
+            Boolean(before && after) &&
+              before.name === after.name &&
+              before.description === after.description,
+          );
+          _loaded.set(product.id, next);
+        } catch (error) {
+          if (signal.aborted) return;
+          console.warn(`[Data:GhostMaps] ${product.id}:`, error);
+          _failed.set(
+            product.id,
+            error?.template ||
+              error?.message ||
+              msg('GhostMaps file could not be read'),
+          );
+        } finally {
+          _loading.delete(product.id);
+          notifyRow();
+          render();
+        }
+      }
+    });
+    _queue = run.catch(() => {});
+    return run;
+  }
+
+  function applyCatalog(catalog) {
+    _catalog = catalog;
+    _lastError = catalog.error || null;
+    notifyRow();
+    return sync();
+  }
+
+  function toggleProduct(id) {
+    // The first change pins the whole current selection, defaults included.
+    if (!_selection) _selection = new Set(selectedIds());
+    if (_selection.has(id)) _selection.delete(id);
+    else _selection.add(id);
+    writeStoredSelection(storage, _selection);
+    notifyRow();
+    void sync();
+  }
+
+  function setAgeDays(ageDays) {
+    if (!GHOSTMAPS_AGE_OPTIONS.includes(ageDays) || ageDays === _ageDays)
+      return;
+    _ageDays = ageDays;
+    try {
+      storage?.setItem(AGE_STORAGE_KEY, JSON.stringify(ageDays));
+    } catch {
+      /* private window or blocked storage: keep the session choice */
+    }
+    expireEvents();
+    // Narrowing only removes markers. A product loaded with a narrower window
+    // keeps its old ageDays, so sync() restores omitted placemarks from the
+    // cached KMZ even though its upstream version has not changed.
+    for (const [id, item] of _loaded)
+      if (
+        item.ageDays === null ||
+        (ageDays !== null && item.ageDays >= ageDays)
+      ) {
+        item.ageDays = ageDays;
+        // A failed wider reload no longer matters; a stale edition retries.
+        _failed.delete(id);
+      }
+    notifyRow();
+    return sync();
+  }
+
+  // ---- selection card ----------------------------------------------------
+  function featureFor(key) {
+    const [productId, index] = key.split(':');
+    return {
+      product: _catalog?.products.find((p) => p.id === productId) || null,
+      feature: _loaded.get(productId)?.features.get(Number(index)) || null,
+    };
+  }
+
+  function publishCard() {
+    if (!canSelect()) return;
+    const { product, feature } = _selectedKey ? featureFor(_selectedKey) : {};
+    if (!feature) {
+      _selectedKey = null;
+      _selectedCardId = null;
+      _selectedLink = null;
+      overlayHost.setEntries(
+        GHOSTMAPS_OVERLAY_SOURCE_ID,
+        [],
+        CARD_HOST_OPTIONS,
+      );
+      return;
+    }
+    const { fields, links } = parseDescriptionFields(feature.description);
+    _selectedLink = links[0] || null;
+    const heading = [t(PRODUCT_LABELS[product?.id] || product?.title || '')];
+    if (feature.folder) heading.push(fieldLabel(feature.folder));
+    if (product?.dateMs) heading.push(formatUtcDayMonth(product.dateMs));
+    const details = [heading.filter(Boolean).join(' · ')];
+    for (const { label, value } of fields) {
+      if (details.length >= MAX_CARD_LINES) break;
+      // ArcGIS repeats the feature type as the first row; the title has it.
+      if (value === feature.name) continue;
+      const line = label ? `${fieldLabel(label)}: ${value}` : value;
+      details.push(
+        ...wrapCardText(line, 60, Math.min(4, MAX_CARD_LINES - details.length)),
+      );
+    }
+    if (_selectedLink && openExternal)
+      details.push(
+        tn(
+          links.length,
+          '{count} source link ↗ · click card to open',
+          '{count} source links ↗ · click card to open the first',
+          { count: formatNumber(links.length) },
+        ),
+      );
+    const title = t('S2 · {name}', {
+      name: fieldLabel(feature.name || feature.folder) || t('Report'),
+    });
+    const card = {
+      id: `ghostmaps-card:${_selectedKey}`,
+      selected: true,
+      interactive: Boolean(_selectedLink && openExternal),
+      title,
+      details,
+      accent: PRODUCT_COLORS[product?.id] || ACCENT,
+      priority: Number.MAX_SAFE_INTEGER,
+      gapPx: 15,
+      verticalOnly: true,
+      placement: 'above',
+      // A click card comes and goes with the click, as CCTV cards do, rather
+      // than holding the label arbiter's 2.5 s minimum lifetime; and it hides
+      // when its marker turns behind the planet.
+      stateless: true,
+      horizonCull: true,
+      position: fromDegrees(...feature.anchor),
+    };
+    if (card.interactive) {
+      const link = _selectedLink;
+      card.accessibilityLabel = t('Open the source for {title}', { title });
+      card.activate = () => {
+        openExternal(link);
+        return true;
+      };
+    }
+    _selectedCardId = card.id;
+    overlayHost.setEntries(
+      GHOSTMAPS_OVERLAY_SOURCE_ID,
+      [card],
+      CARD_HOST_OPTIONS,
+    );
+    overlayHost.setVisible?.(GHOSTMAPS_OVERLAY_SOURCE_ID, true);
+  }
+
+  function clearSelection() {
+    _selectedKey = null;
+    _selectedCardId = null;
+    _selectedLink = null;
+    // An empty publish, as the perimeter cards deselect: it releases the
+    // selected card's paint lane, which clearing the source alone left drawn.
+    overlayHost?.setEntries(GHOSTMAPS_OVERLAY_SOURCE_ID, [], CARD_HOST_OPTIONS);
+  }
+
+  function installClickHandler() {
+    if (!canSelect() || _clickSubscription || !_viewer) return;
+    picking.registerPickOwner?.(
+      GHOSTMAPS_LAYER_ID,
+      (pickedId) =>
+        typeof pickedId === 'string' && pickedId.startsWith(PICK_PREFIX),
+    );
+    _clickSubscription = inputFor(_viewer).onClick((event) => {
+      const cardHit = overlayHost.hitTest?.(
+        event.screenPosition?.x,
+        event.screenPosition?.y,
+        { sourceId: GHOSTMAPS_OVERLAY_SOURCE_ID },
+      );
+      if (cardHit && cardHit.entryId === _selectedCardId) {
+        if (_selectedLink && openExternal) openExternal(_selectedLink);
+        return;
+      }
+      const picked = event.topHit;
+      const key = picked ? hitKey(event.drawHit) : null;
+      if (key) {
+        _selectedKey = key;
+        publishCard();
+        render();
+        return;
+      }
+      if (picked) {
+        const pickId = picking.resolvePickId(picked);
+        if (pickId && picking.isOwnedByOtherLayer(GHOSTMAPS_LAYER_ID, pickId))
+          return;
+      }
+      if (_selectedKey) {
+        clearSelection();
+        render();
+      }
+    });
+  }
+
+  function removeClickHandler() {
+    _clickSubscription?.();
+    _clickSubscription = null;
+    picking?.unregisterPickOwner?.(GHOSTMAPS_LAYER_ID);
+  }
+
+  function featureCount() {
+    let count = 0;
+    for (const item of _loaded.values()) count += item.features.size;
+    return count;
+  }
+
+  const layer = {
+    id: GHOSTMAPS_LAYER_ID,
+    name: 'S2 GhostMaps',
+    icon: '👻',
+    source: 'S2 Underground',
+    // Pushes arrive within seconds over the event stream; this interval is
+    // the backstop if the stream is down.
+    updateInterval: 300000,
+
+    init(viewer) {
+      if (_viewer) throw new Error('GhostMaps layer is already initialized');
+      _viewer = viewer;
+    },
+
+    enable() {
+      _enabled = true;
+      _lifetime = new AbortController();
+      if (_expiryTimer === null)
+        _expiryTimer = setInterval(expireEvents, 60_000);
+      for (const item of _loaded.values())
+        for (const set of Object.values(item.sets ?? {})) set.show = true;
+      installClickHandler();
+      if (!_unsubscribe && typeof source.subscribe === 'function')
+        _unsubscribe = source.subscribe(
+          (catalog) => {
+            if (_enabled) void applyCatalog(catalog);
+          },
+          (state) => {
+            if (_stream === state) return;
+            _stream = state;
+            notifyRow();
+          },
+        );
+    },
+
+    disable() {
+      _enabled = false;
+      clearInterval(_expiryTimer);
+      _expiryTimer = null;
+      _lifetime.abort();
+      _unsubscribe?.();
+      _unsubscribe = null;
+      _stream = 'closed';
+      removeClickHandler();
+      clearSelection();
+      _horizon.stop();
+      for (const id of [..._loaded.keys()]) unload(id);
+      render();
+    },
+
+    async update(_viewerArg, { signal } = {}) {
+      if (!_enabled || signal?.aborted) return false;
+      expireEvents();
+      try {
+        const catalog = await source.getCatalog({ signal });
+        if (!_enabled) return false;
+        await applyCatalog(catalog);
+        return true;
+      } catch (error) {
+        if (signal?.aborted || !_enabled) return false;
+        console.warn('[Data:GhostMaps] catalog error:', error);
+        _lastError = error?.message || msg('GhostMaps catalog unavailable');
+        notifyRow();
+        // Keep the layer on; the event stream or the next interval recovers.
+        return true;
+      }
+    },
+
+    destroy() {
+      layer.disable();
+      _viewer = null;
+      _catalog = null;
+      _rowListener = null;
+    },
+
+    setRowControlsListener(listener) {
+      _rowListener = listener;
+    },
+
+    getRowControls() {
+      const products = _catalog?.products || [];
+      const commit = _catalog?.commit;
+      const info = commit
+        ? _stream === 'open'
+          ? t('LIVE · GitHub {commit} · {message} · checked every {seconds}s', {
+              commit: commit.slice(0, 7),
+              message: _catalog.message || '—',
+              seconds: formatNumber(
+                Math.round((_catalog.pollMs || 15000) / 1000),
+              ),
+            })
+          : t('GitHub {commit} · {message} · reconnecting for live updates', {
+              commit: commit.slice(0, 7),
+              message: _catalog.message || '—',
+            })
+        : t('Connecting to the S2 GhostMaps repository…');
+      return {
+        segmented: {
+          id: 'age',
+          label: t('Event age'),
+          options: GHOSTMAPS_AGE_OPTIONS.map((days) => ({
+            id: `age-${days ?? 'all'}`,
+            label:
+              days === null
+                ? t('All', { context: 'event age filter' })
+                : t('{days}d', { days: formatNumber(days) }),
+            title:
+              days === null
+                ? t('Show markers of every age')
+                : tn(
+                    days,
+                    'Maximum event age: {days}d; undated markers are kept',
+                    'Maximum event age: {days}d; undated markers are kept',
+                    { days: formatNumber(days) },
+                  ),
+            active: days === _ageDays,
+            onClick: () => setAgeDays(days),
+          })),
+        },
+        chips: products.map((product) => {
+          const loaded = _loaded.get(product.id);
+          const failed = _failed.get(product.id);
+          return {
+            id: product.id,
+            label: t(PRODUCT_LABELS[product.id] || product.title),
+            active: wanted(product),
+            busy: _loading.has(product.id),
+            state: failed ? 'error' : undefined,
+            color: PRODUCT_COLORS[product.id],
+            title: [
+              product.fileTitle,
+              loaded
+                ? tn(
+                    loaded.features.size,
+                    '{count} placemark',
+                    '{count} placemarks',
+                    {
+                      count: formatNumber(loaded.features.size),
+                    },
+                  )
+                : null,
+              failed ? t(failed) : null,
+            ]
+              .filter(Boolean)
+              .join(' · '),
+            onClick: () => toggleProduct(product.id),
+          };
+        }),
+        legend: [],
+        info: `${_ageDays === null ? t('All markers') : tn(_ageDays, 'Event age: {days}d · undated kept', 'Event age: {days}d · undated kept', { days: formatNumber(_ageDays) })} · ${info}`,
+        infoTitle: t(
+          'S2 Underground publishes these KMZ products to GitHub. New uploads are detected within seconds and replace the previous edition automatically. Click a marker for its report.',
+        ),
+      };
+    },
+
+    getStats() {
+      return {
+        count: featureCount(),
+        ageDays: _ageDays,
+        products: [..._loaded.keys()],
+        commit: _catalog?.commit || null,
+        lastUpdate: _catalog?.committedAt || _catalog?.changedAt || null,
+        checkedAt: _catalog?.checkedAt || null,
+        stream: _stream,
+        loading: _loading.size > 0,
+        error: _lastError || [..._failed.values()][0] || null,
+        fallback: false,
+      };
+    },
+
+    /** Loaded placemarks as plain records, for tools and QA. */
+    getAnalystRecords(maxCount = Infinity) {
+      if (!_enabled) return [];
+      const out = [];
+      for (const [productId, item] of _loaded) {
+        for (const feature of item.features.values()) {
+          if (out.length >= maxCount) return out;
+          out.push({
+            product: productId,
+            name: feature.name,
+            folder: feature.folder,
+            lon: feature.anchor[0],
+            lat: feature.anchor[1],
+          });
+        }
+      }
+      return out;
+    },
+  };
+  return layer;
+}

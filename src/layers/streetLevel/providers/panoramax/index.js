@@ -1,13 +1,13 @@
-import { createLineCoverage, sequenceIdFromPick } from '../../lineCoverage.js';
+import {
+  createLineCoverage,
+  freshCoverage,
+  sequenceIdFromPick,
+} from '../../lineCoverage.js';
 import { createSequenceCones, thinImages } from '../../sequenceCones.js';
 import { passesImageryFilter } from '../../filter.js';
-import {
-  lonToTileX,
-  latToTileY,
-  overviewZoomForHeight,
-  tileBounds,
-} from '../../tileMath.js';
+import { lonToTileX, latToTileY, tileBounds } from '../../tileMath.js';
 import { metresBetween } from '../../view.js';
+import { findCamera } from '../../../../render/rendererOf.js';
 import { createLru, createTileCache } from '../../tileCache.js';
 import { decodeCoverageTileSliced, decodePictures } from './decode.js';
 import { createPanoramaxSource } from './source.js';
@@ -29,7 +29,6 @@ import {
   NEAREST_RADIUS_M,
   FILTERED_HINT,
   NO_COVERAGE_HINT,
-  OVERVIEW_HINT,
   PANORAMAX_CREDIT_HTML,
   PANORAMAX_LABEL,
   PANORAMAX_NAME,
@@ -39,10 +38,9 @@ import {
   PICTURE_TILE_ZOOM,
   RATE_LIMITED_MESSAGE,
   UNREADABLE_TILE_MESSAGE,
+  ZOOM_IN_HINT,
   normalizeItem,
 } from './policy.js';
-
-export { PANORAMAX_PROVIDER_ID } from './policy.js';
 
 /**
  * A tile's bytes decoded by `decode`; a body that is not a vector tile
@@ -59,15 +57,6 @@ async function readable(decode) {
   }
 }
 
-/**
- * A density dot's size: busier places draw bigger (2.5 px for one picture,
- * 8 px from a few hundred thousand), so a city does not read like farmland.
- */
-export function overviewPointSize(point) {
-  const weight = Math.max(1, Number(point?.weight) || 1);
-  return Math.min(8, 2.5 + Math.log10(weight));
-}
-
 /** Pictures kept in memory by id (lookups and ‹ › fill it). */
 const PHOTO_CACHE_SIZE = 2000;
 /** Sequences whose cone centre is remembered. */
@@ -78,44 +67,31 @@ const COVERAGE_TILE_CACHE_SIZE = 16;
 const PICTURE_LIST_CACHE_SIZE = 32;
 
 /**
- * Sequence lines at z10–14 below 60 km; above, the density grid at z5 and
- * coarser.
+ * Sequence lines at z10–14 below 60 km; above, nothing is drawn (the hint
+ * says to zoom in).
  */
 export function panoramaxZoomFor(heightM) {
-  if (!Number.isFinite(heightM)) return null;
-  if (heightM <= COVERAGE_LINES_BELOW_M) {
-    const zoom =
-      heightM <= COVERAGE_Z14_BELOW_M
-        ? 14
-        : heightM <= COVERAGE_Z13_BELOW_M
-          ? 13
-          : heightM <= COVERAGE_Z12_BELOW_M
-            ? 12
-            : heightM <= COVERAGE_Z11_BELOW_M
-              ? 11
-              : 10;
-    return { zoom, kind: 'sequence' };
-  }
-  return {
-    zoom: Math.min(5, overviewZoomForHeight(heightM) ?? 5),
-    kind: 'overview',
-  };
+  if (!Number.isFinite(heightM) || heightM > COVERAGE_LINES_BELOW_M)
+    return null;
+  return heightM <= COVERAGE_Z14_BELOW_M
+    ? 14
+    : heightM <= COVERAGE_Z13_BELOW_M
+      ? 13
+      : heightM <= COVERAGE_Z12_BELOW_M
+        ? 12
+        : heightM <= COVERAGE_Z11_BELOW_M
+          ? 11
+          : 10;
 }
 
 /**
- * The imagery filter for lines and grid cells. A cell (undated, with 360°
- * and flat counts) stays while it holds pictures of the kind asked for. A
- * line is dated by its sequence's first day, so a sequence still growing
- * may hide under "since" while its newer pictures can be opened; a line
- * with no camera type or no day is kept (a click finds out).
+ * The imagery filter for lines. A line is dated by its sequence's first
+ * day, so a sequence still growing may hide under "since" while its newer
+ * pictures can be opened; a line with no camera type or no day is kept (a
+ * click finds out).
  */
 export function passesCoverage(record, filter) {
   if (!filter) return true;
-  if ('hasPano' in record) {
-    if (filter.pano === 'pano') return record.hasPano;
-    if (filter.pano === 'flat') return record.hasFlat;
-    return true;
-  }
   return passesImageryFilter(record, {
     pano: typeof record.isPano === 'boolean' ? filter.pano : 'all',
     sinceMs: record.capturedAt ? filter.sinceMs : null,
@@ -159,8 +135,8 @@ const tileKey = ({ x, y, z }) => `${z}/${x}/${y}`;
 
 /**
  * Panoramax Street Level provider: the federated, keyless, open
- * street-level commons. Coverage from its vector tiles (density points
- * from orbit, sequence lines near the ground); a click on a line opens that
+ * street-level commons. Coverage from its vector tiles (sequence lines
+ * near the ground, nothing from orbit); a click on a line opens that
  * sequence's picture nearest the click, with cones along the sequence
  * around it and ‹ › to step through it. Flat pictures show as photos, 360°
  * ones on the shared WebGL panorama.
@@ -190,30 +166,13 @@ export function createPanoramaxProvider({
         context,
         services: context.services,
         viewer: null,
-        keyRequired: false,
-        keyRejected: false,
-        statusKnown: true,
-        coverage: {
-          zoom: null,
-          tiles: new Map(),
-          stale: new Map(),
-          staleTimer: null,
-          pending: new Map(),
-          lastError: null,
-          holdUntil: 0,
-          holdTimer: null,
-          debounceTimer: null,
-          removeCameraListener: null,
-          terrainReady: null,
-          hint: '',
-          kind: null,
-        },
+        coverage: freshCoverage({ keyless: true }),
         sequence: {
           selectedId: null,
           images: [],
-          cache: new Map(),
-          collection: null,
+          set: null,
           loading: false,
+          error: null,
           abort: null,
         },
       };
@@ -298,7 +257,9 @@ export function createPanoramaxProvider({
        * from high up the click may land tens of metres off the line.
        */
       function lineClickRadius() {
-        const height = state.viewer?.camera?.positionCartographic?.height;
+        const height = state.viewer
+          ? findCamera(state.viewer)?.pose().height
+          : undefined;
         if (!Number.isFinite(height)) return NEAREST_RADIUS_M;
         return Math.min(
           LINE_CLICK_RADIUS_MAX_M,
@@ -354,9 +315,8 @@ export function createPanoramaxProvider({
         pickPrefix: PICK_PREFIX.sequence,
         renderKey: 'panoramax-coverage',
         tuning: COVERAGE_TUNING,
-        messages: { rateLimited: RATE_LIMITED_MESSAGE },
+        messages: { rateLimited: RATE_LIMITED_MESSAGE, tooHigh: ZOOM_IN_HINT },
         passes: passesCoverage,
-        overviewPointSize,
       });
 
       const cones = createSequenceCones({
@@ -406,8 +366,7 @@ export function createPanoramaxProvider({
         pickPrefix: PICK_PREFIX.image,
         spriteId: 'street-level:panoramax-cones',
         renderKey: 'panoramax-sequence',
-        onHighlight: (sequenceId, selected) =>
-          coverage.recolorSequence(sequenceId, selected),
+        onHighlight: (sequenceId) => coverage.highlight(sequenceId),
       });
 
       /**
@@ -500,7 +459,7 @@ export function createPanoramaxProvider({
         deactivate() {
           coverage.detach();
           coverage.clear();
-          coverage.resetErrors();
+          coverage.unblock();
           cones.clearSelection();
           cones.setVisible(false);
           drawn = null;
@@ -513,11 +472,9 @@ export function createPanoramaxProvider({
         destroy(cesiumViewer) {
           coverage.detach();
           coverage.clear();
-          coverage.resetErrors();
+          coverage.unblock();
           cones.destroy(cesiumViewer);
         },
-
-        refreshCoverage: () => coverage.refresh(),
 
         /** The filter changed: redraw. Each draw reads it from the context. */
         setFilter() {
@@ -525,43 +482,20 @@ export function createPanoramaxProvider({
           cones.rerender();
         },
 
-        setSurface() {
-          coverage.setSurface();
-          cones.rerender();
-        },
-
         coverageStats() {
-          const { kind } = state.coverage;
-          const lines = kind === 'sequence';
-          const shown = coverage.sequenceCount();
-          // Density dots are not sequences: they are not counted as such.
-          const count = lines ? shown : 0;
-          const loading = state.coverage.pending.size > 0;
-          const settled = !loading && !state.coverage.lastError;
+          const stats = coverage.stats();
           let fallback = '';
-          // Tiles that held something the filter hid all of.
-          const filteredOut = [...state.coverage.tiles.values()].some(
-            (tile) => tile.total > 0,
-          );
-          if (kind === 'overview')
-            fallback =
-              shown > 0 || !settled
-                ? OVERVIEW_HINT
-                : filteredOut
-                  ? FILTERED_HINT
-                  : NO_COVERAGE_HINT;
-          else if (lines && settled && count === 0)
+          // Lines drawn for the camera (a zoom), all settled, none shown.
+          const settled =
+            state.coverage.zoom != null && !stats.loading && !stats.error;
+          if (settled && stats.count === 0) {
+            // Tiles that held lines the filter hid all of.
+            const filteredOut = [...state.coverage.tiles.values()].some(
+              (tile) => tile.total > 0,
+            );
             fallback = filteredOut ? FILTERED_HINT : NO_COVERAGE_HINT;
-          return {
-            count,
-            zoom: state.coverage.zoom,
-            kind: state.coverage.kind,
-            loading,
-            hint: state.coverage.hint || fallback,
-            error: state.coverage.lastError,
-            keyRequired: false,
-            keyRejected: false,
-          };
+          }
+          return { ...stats, hint: stats.hint || fallback };
         },
 
         /**
@@ -599,6 +533,7 @@ export function createPanoramaxProvider({
           selectedId: state.sequence.selectedId,
           images: state.sequence.images.length,
           loading: state.sequence.loading,
+          error: state.sequence.error,
         }),
 
         /**

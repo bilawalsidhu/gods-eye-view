@@ -59,7 +59,7 @@ test('v1/v2 bloom migrates once; IDs, edits, pack bindings and zero holds surviv
     const migrated = normalizeProject(
       parseSceneDocument(JSON.stringify(project)),
     );
-    assert.equal(migrated.version, 6);
+    assert.equal(migrated.version, 7);
     assert.equal(migrated.scenes[0].shots[0].visual.bloom.intensity, 150);
     assert.equal(migrated.scenes[0].shots[0].id, 'shot');
     assert.deepEqual(
@@ -133,6 +133,15 @@ test('document byte, nesting, collection, finite-number and string bounds are en
     () => validateSceneDocument({ scenes: Array(257).fill({ shots: [] }) }),
     /256/,
   );
+});
+
+test('a shot saved with the retired Snow style migrates to Normal', () => {
+  const project = fixture();
+  project.scenes[0].shots[0].visual = { style: 'snow' };
+  const migrated = normalizeProject(
+    parseSceneDocument(JSON.stringify(project)),
+  );
+  assert.equal(migrated.scenes[0].shots[0].visual.style, 'normal');
 });
 
 test('captured scope and extended detection edits survive migration', () => {

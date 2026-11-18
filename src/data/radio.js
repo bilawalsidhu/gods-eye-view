@@ -49,34 +49,12 @@ export const buildRadioTunerBand = layer.buildRadioTunerBand;
 export const radioTuningStaticShouldPlay = layer.radioTuningStaticShouldPlay;
 export const getRadioAcceptedCatalogSnapshot =
   layer.getRadioAcceptedCatalogSnapshot;
-export const radioStationResolutionMatches =
-  layer.radioStationResolutionMatches;
 export const getRadioUIState = layer.getRadioUIState;
-export const subscribeToRadio = layer.subscribeToRadio;
-export const subscribeToRadioPlaybackControls =
-  layer.subscribeToRadioPlaybackControls;
-export const getRadioTunerStations = layer.getRadioTunerStations;
-export const beginRadioTuning = layer.beginRadioTuning;
-export const setRadioTuningStatic = layer.setRadioTuningStatic;
 export const radioCameraNavigationAllowed = layer.radioCameraNavigationAllowed;
-export const previewRadioTuningStation = layer.previewRadioTuningStation;
-export const endRadioTuning = layer.endRadioTuning;
-export const cancelRadioTuning = layer.cancelRadioTuning;
-export const commitRadioTuningStation = layer.commitRadioTuningStation;
-export const playSelectedRadio = layer.playSelectedRadio;
 export const confirmRadioPlayback = layer.confirmRadioPlayback;
-export const playPreparedRadioForVoice = layer.playPreparedRadioForVoice;
-export const stopRadioPlayback = layer.stopRadioPlayback;
-export const toggleRadioPlayback = layer.toggleRadioPlayback;
-export const pauseRadioPlayback = layer.pauseRadioPlayback;
 export const setRadioVolume = layer.setRadioVolume;
 export const setRadioParams = layer.setRadioParams;
-export const getRadioParams = layer.getRadioParams;
 export const setRadioVoiceDucking = layer.setRadioVoiceDucking;
-export const selectRadioStation = layer.selectRadioStation;
-export const cycleRadioStation = layer.cycleRadioStation;
-export const selectRequestedRadioStation = layer.selectRequestedRadioStation;
-export const setRadioFilter = layer.setRadioFilter;
 export const retainRadioClusterIdentitiesForStations =
   layer.retainRadioClusterIdentitiesForStations;
 export {
@@ -86,10 +64,8 @@ export {
   RADIO_SINGLETON_MID_LIMIT,
   RADIO_SINGLETON_NEAR_LIMIT,
   RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M,
-  RADIO_GLOBE_RECENTER_MAX_HEIGHT_M,
   RADIO_OVERLAY_SOURCE_OPTIONS,
   DEFAULT_RADIO_FILTER,
-  GLOBAL_RADIO_ALTITUDE_M,
 } from '../layers/radio/index.js';
 export default layer;
 

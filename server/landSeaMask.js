@@ -3,9 +3,8 @@
  *
  * The same asset, the same codec, a different byte source. `data/landSeaMask.js`
  * is the BROWSER loader and fetches the Vite-emitted asset URL; this one reads
- * the committed file off disk for the dev/preview server's ocean-field tier
- * (`server/ocean/waterCells.js`) and for the unit tests that assert the
- * committed bytes.
+ * the committed file off disk for Node consumers and the asset tests.
+ * No application consumer is wired in this contribution.
  *
  * WHY THEY ARE SEPARATE FILES. They used to be one module branching on an
  * `isNode` check, with a dynamic `import('node:fs')` inside the branch. Vite
@@ -55,8 +54,8 @@ async function readMaskBytes() {
  *
  * Memoized on success for the process; failures back off per
  * `data/retryableLoad`, so a caller may retry. Shape-identical to the browser
- * loader's result, so `server/ocean/waterCells.js` and the tests consume one
- * mask type regardless of which runtime produced it.
+ * loader's result, so callers consume one mask type regardless of which
+ * runtime produced it.
  *
  * @type {() => Promise<{width: number, height: number, data: Uint8Array}>}
  */

@@ -18,6 +18,9 @@ import {
   SCOPE_TERMINUS_MIN_PCT,
   SCOPE_TERMINUS_MAX_PCT,
   SCOPE_FEATHER_RATIO_DEFAULT,
+  getScopeMaskFeather,
+  setScopeMaskOpacity,
+  getScopeMaskOpacity,
   SCOPE_OUTSIDE_ALPHA,
   SCOPE_TERMINUS_ALPHA_NEAR,
   SCOPE_TERMINUS_FAR_M,
@@ -26,6 +29,8 @@ import {
   _resetScopeMaskForTest,
 } from './scopeMask.js';
 import { KEYHOLE_OUTER_RADIUS } from './celestialRing.js';
+import { bindFakeCesiumScene } from './testSupport/fakeCesiumScene.mjs';
+import { SCOPE_FEATHER_RATIO_MAX, clampScopeFeatherPct } from './scopeMaskPolicy.js';
 
 beforeEach(() => _resetScopeMaskForTest());
 
@@ -47,14 +52,32 @@ test('zero feather produces a hard edge exactly at the keyhole radius', () => {
   assert.equal(geo.outerR, keyholeR);
 });
 
-test('feather ratio is clamped to [0,1] and bad input falls back to 0', () => {
+test('feather ratio reaches the center at 200% and clamps larger input', () => {
   const wide = scopeMaskGeometry(1000, 800, 7);
-  const one = scopeMaskGeometry(1000, 800, 1);
-  assert.equal(wide.innerR, one.innerR);
-  assert.equal(wide.outerR, one.outerR);
+  const maximum = scopeMaskGeometry(1000, 800, SCOPE_FEATHER_RATIO_MAX);
+  const keyholeR = 800 * 0.5 * KEYHOLE_OUTER_RADIUS;
+  assert.equal(maximum.innerR, 0);
+  assert.equal(maximum.outerR, keyholeR * 2);
+  assert.equal(wide.innerR, maximum.innerR);
+  assert.equal(wide.outerR, maximum.outerR);
+  for (const ratio of [1, 1.5, 2]) {
+    setScopeMaskFeather(ratio);
+    assert.equal(getScopeMaskFeather(), ratio);
+    const geometry = scopeMaskGeometry(1000, 800);
+    assert.equal((geometry.innerR + geometry.outerR) / 2, keyholeR);
+    assert.equal(geometry.outerR - geometry.innerR, keyholeR * ratio);
+  }
+  setScopeMaskFeather(7);
+  assert.equal(getScopeMaskFeather(), SCOPE_FEATHER_RATIO_MAX);
   const nan = scopeMaskGeometry(1000, 800, Number.NaN);
   const zero = scopeMaskGeometry(1000, 800, 0);
   assert.equal(nan.innerR, zero.innerR);
+});
+
+test('UI and share feather percentages share one bounded integer range', () => {
+  for (const [value, expected] of [[0, 0], [11, 11], [175.6, 176], [200, 200], [350, 200], [-4, 0], [Number.NaN, 0]]) {
+    assert.equal(clampScopeFeatherPct(value), expected);
+  }
 });
 
 test('degenerate viewport yields null instead of a broken gradient', () => {
@@ -136,12 +159,14 @@ function stubScopeMaskDom({ width = 1000, height = 800, dpr = 1 } = {}) {
       removeEventListener: (type, fn) => listeners.delete(fn),
     }),
   };
-  globalThis.document = { createElement: () => canvas };
+  const documentElement = { dataset: {} };
+  globalThis.document = { documentElement, createElement: () => canvas };
   globalThis.ResizeObserver = class { observe() {} disconnect() {} };
   const container = { clientWidth: width, clientHeight: height, appendChild() {} };
   return {
     canvas,
     container,
+    documentElement,
     /** Canvas work counters: backing-store resizes, clears, fills. */
     ops,
     /** Every fillStyle string assigned since install (hard-crop path). */
@@ -159,6 +184,60 @@ function stubScopeMaskDom({ width = 1000, height = 800, dpr = 1 } = {}) {
     },
   };
 }
+
+test('scope appearance follows direct state changes and install/destroy lifecycles', () => {
+  const dom = stubScopeMaskDom();
+  try {
+    setScopeMaskEnabled(false);
+    assert.equal(dom.documentElement.dataset.scopeMask, 'off');
+    delete dom.documentElement.dataset.scopeMask;
+    installScopeMask({ container: dom.container });
+    assert.equal(dom.documentElement.dataset.scopeMask, 'off', 'install publishes retained OFF state');
+    destroyScopeMask();
+    assert.equal(dom.documentElement.dataset.scopeMask, undefined, 'destroy clears the document marker');
+    installScopeMask({ container: dom.container });
+    assert.equal(dom.documentElement.dataset.scopeMask, 'off', 'reinstall retains the preference');
+    setScopeMaskEnabled(true);
+    assert.equal(dom.documentElement.dataset.scopeMask, undefined, 'ON uses the original presentation');
+    setScopeMaskEnabled(false);
+    _resetScopeMaskForTest();
+    assert.equal(dom.documentElement.dataset.scopeMask, undefined, 'test reset clears the marker');
+  } finally {
+    destroyScopeMask();
+    dom.restore();
+  }
+});
+
+test('scope opacity fades the painted mask without repainting it', () => {
+  const dom = stubScopeMaskDom();
+  try {
+    assert.equal(getScopeMaskOpacity(), 1, 'full by default');
+    setScopeMaskOpacity(0.4);
+    installScopeMask({ container: dom.container });
+    assert.equal(dom.canvas.style.opacity, '0.4', 'a choice made before install applies');
+    const paints = { ...dom.ops };
+    const terminus = getScopeTerminusAlpha();
+    setScopeMaskOpacity(0.25);
+    assert.equal(dom.canvas.style.opacity, '0.25');
+    assert.deepEqual(dom.ops, paints, 'the mask is not repainted');
+    assert.equal(getScopeTerminusAlpha(), terminus, 'the terminus is its own setting');
+    setScopeMaskOpacity(3);
+    assert.equal(getScopeMaskOpacity(), 1);
+    setScopeMaskOpacity(-1);
+    assert.equal(getScopeMaskOpacity(), 0);
+    setScopeMaskOpacity('soft');
+    assert.equal(getScopeMaskOpacity(), 1, 'not a number is full');
+    setScopeMaskOpacity(0.5);
+    destroyScopeMask();
+    installScopeMask({ container: dom.container });
+    assert.equal(dom.canvas.style.opacity, '0.5', 'reinstall keeps it');
+    _resetScopeMaskForTest();
+    assert.equal(getScopeMaskOpacity(), 1, 'test reset restores full');
+  } finally {
+    destroyScopeMask();
+    dom.restore();
+  }
+});
 
 test('a DPR change with no resize still repaints the backing store', () => {
   const dom = stubScopeMaskDom({ width: 1000, height: 800, dpr: 1 });
@@ -367,7 +446,10 @@ test('one quantum is the smallest step that can repaint', () => {
 // ~8 Hz through the altitude band and draw() performed the full backing-store
 // resize + clear BEFORE checking whether the scope was even enabled.
 
-/** A viewer stub with the two camera signals the terminus sampler listens on. */
+/**
+ * A viewer stub with the two camera signals the terminus sampler listens on,
+ * read through the renderer's frame and camera ports as the app's are.
+ */
 function stubScopeViewer(container, heightM) {
   const preRenderListeners = new Set();
   const moveEndListeners = new Set();
@@ -376,12 +458,14 @@ function stubScopeViewer(container, heightM) {
     set.add(listener);
     return () => set.delete(listener);
   };
+  const viewer = {
+    container,
+    scene: { preRender: { addEventListener: addTo(preRenderListeners) } },
+    camera: { positionCartographic, moveEnd: { addEventListener: addTo(moveEndListeners) } },
+  };
+  bindFakeCesiumScene(viewer);
   return {
-    viewer: {
-      container,
-      scene: { preRender: { addEventListener: addTo(preRenderListeners) } },
-      camera: { positionCartographic, moveEnd: { addEventListener: addTo(moveEndListeners) } },
-    },
+    viewer,
     setHeight(next) { positionCartographic.height = next; },
     raisePreRender(times = 1) {
       for (let i = 0; i < times; i += 1) for (const fn of [...preRenderListeners]) fn();

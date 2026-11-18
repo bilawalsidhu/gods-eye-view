@@ -160,7 +160,7 @@ test('Esc: the docked viewer offers it to the provider first; expanded, it is th
   assert.equal(asked, 1);
   assert.equal(docked.prevented && docked.stopped, true);
   root.closest = (selector) =>
-    selector.includes('sl-viewer-wrap-expanded') ? {} : null;
+    selector.includes('sl-viewer-wrap:fullscreen') ? {} : null;
   const expanded = press();
   assert.equal(asked, 1, 'not asked while expanded');
   assert.equal(expanded.prevented, false);
@@ -535,4 +535,39 @@ test('an <img> that turns out too large is refused and let go', async (t) => {
   controller.abort();
   await assert.rejects(aborted);
   assert.equal(images.at(-1).src, '', 'its download stops');
+});
+
+test('a browser without :fullscreen / :popover-open (Safari < 16.4) still opens a flat photo and hands Esc on', async () => {
+  let asked = 0;
+  const viewer = createPhotoViewer({
+    providerId: 'test',
+    name: 'Test',
+    sources: SOURCES,
+    getPhoto: async (id) => PHOTOS[id],
+    step: async () => null,
+    onStep() {},
+    onEscape: () => ++asked > 0,
+    load: async (url) => ({ src: url }),
+  });
+  const host = fakeHost();
+  await viewer.mount(host);
+  const root = host.children[0];
+  // Safari 16.0–16.3: neither pseudo-class parses, so closest() throws.
+  root.closest = (selector) => {
+    if (/:fullscreen|:popover-open/.test(selector))
+      throw new SyntaxError(`'${selector}' is not a valid selector`);
+    return null;
+  };
+  let failure = null;
+  try {
+    await viewer.open('f');
+  } catch (error) {
+    failure = error;
+  }
+  assert.equal(failure, null, 'opening a flat photo does not throw');
+  const event = { key: 'Escape' };
+  event.preventDefault = () => {};
+  event.stopPropagation = () => {};
+  assert.doesNotThrow(() => root.fire('keydown', event), 'Esc does not throw');
+  assert.equal(asked, 1, 'Esc reaches the provider');
 });

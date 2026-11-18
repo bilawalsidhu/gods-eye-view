@@ -8,6 +8,7 @@ import {
   normalizeBudget as normalizeTomTomBudget,
   isOverBudget as isTomTomOverBudget,
 } from '../../src/data/tomtomTiles.js';
+import { admitSameSite } from './common/same-site.js';
 
 /**
  * TomTom traffic-flow vector-tile proxy with a daily budget governor.
@@ -34,6 +35,13 @@ import {
  * a month's entire allowance in five days, leaving the traffic layer dead
  * for the rest of the billing period. 6,000/day keeps a full 31-day month
  * inside the allowance (186,000) with headroom to spare.
+ *
+ * Cross-site gate: both routes refuse cross-site browser requests with 403
+ * (the gate Mapillary, OpenAI and Places already use). Every uncached tile is
+ * a billed upstream attempt counted against the persistent daily budget, so
+ * without the gate any web page the user visits could fire `<img>` requests
+ * at distinct tiles, spend the TomTom quota and leave the traffic layer on
+ * 429 budget for the rest of the UTC day.
  *
  * GET /api/tomtom/status → {hasKey, dailyCount, budget, date}. Keyless mode:
  * status reports hasKey:false and the tile endpoint 503s {error:'no_key'}
@@ -161,6 +169,8 @@ export function tomtomProxy() {
 
   const installMiddleware = (server) => {
     server.middlewares.use('/api/tomtom', async (req, res) => {
+      // Gate first: a cross-site <img>/fetch must not reach the budget counter.
+      if (admitSameSite(req, res)) return;
       // Sanitized responses only (proxy/security baseline): no upstream
       // error details, and never echo the key or the upstream URL.
       const sendJson = (status, obj, extraHeaders = {}) => {
@@ -172,14 +182,17 @@ export function tomtomProxy() {
         });
         res.end(JSON.stringify(obj));
       };
-      const sendTile = (buf, cacheStatus) => {
+      // x-tomtom-fetched-at is when the proxy fetched the tile (ms since the
+      // epoch), so a client handed a STALE-* copy can say how old it is.
+      const sendTile = (entry, cacheStatus) => {
         if (res.headersSent) return;
         res.writeHead(200, {
           'Content-Type': 'application/x-protobuf',
           'Cache-Control': 'no-store',
           'x-tomtom-cache': cacheStatus,
+          'x-tomtom-fetched-at': String(Math.round(entry.at)),
         });
-        res.end(buf);
+        res.end(entry.buf);
       };
 
       try {
@@ -225,14 +238,14 @@ export function tomtomProxy() {
         }
         // Fresh cache hit — never counts against the budget.
         if (entry && now - entry.at < TILE_TTL_MS) {
-          sendTile(entry.buf, 'HIT');
+          sendTile(entry, 'HIT');
           return;
         }
 
         // Budget governor: over the soft cap, last-good data beats a dead layer.
         if (isTomTomOverBudget(currentBudget(), dailyBudgetLimit())) {
           if (entry) {
-            sendTile(entry.buf, 'STALE-BUDGET');
+            sendTile(entry, 'STALE-BUDGET');
           } else {
             sendJson(429, { error: 'budget' });
           }
@@ -261,9 +274,9 @@ export function tomtomProxy() {
         }
         const fresh = await inflight.get(key);
         if (fresh) {
-          sendTile(fresh.buf, 'MISS');
+          sendTile(fresh, 'MISS');
         } else if (entry) {
-          sendTile(entry.buf, 'STALE-ERROR'); // upstream down — stale beats empty
+          sendTile(entry, 'STALE-ERROR'); // upstream down — stale beats empty
         } else {
           sendJson(502, { error: 'upstream' });
         }
