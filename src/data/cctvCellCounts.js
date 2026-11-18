@@ -91,6 +91,8 @@ function collectNeighbors(marker, grid, members, gap) {
       const bucket = grid.get(`${marker.col + col},${marker.row + row}`);
       if (!bucket) continue;
       for (const other of bucket) {
+        // Lone cameras join a count beside them, never each other.
+        if (marker.cell.count === 1 && other.cell.count === 1) continue;
         // Distance between the horizontal centre segments of the two pills.
         const extra = marker.halfSegment + other.halfSegment;
         const dx = Math.max(0, Math.abs(marker.x - other.x) - extra);
@@ -107,6 +109,8 @@ function collectNeighbors(marker, grid, members, gap) {
 /**
  * Merge connected groups of overlapping horizontal pills. Each marker occupies
  * one grid bucket. Even the widest pill can only touch its eight neighbors.
+ * A cell with one camera takes the footprint `sizeFor(1)` gives its icon and
+ * joins a count it touches; two such cells alone stay apart.
  * Ground cells stay intact for the camera picker and individual-icon pass.
  */
 export function mergeCountCells(cells, project, sizeFor, gap) {

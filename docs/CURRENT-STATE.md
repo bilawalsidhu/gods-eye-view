@@ -1956,7 +1956,9 @@ The CCTV layer draws only the cameras on or near the screen. Zoomed out, a
 ground cell containing multiple cameras shows, at their centre, a marker with
 a small green camera pictogram under its top edge and the count just below its
 middle. The marker grows with the count and is drawn on the world overlay at
-the same resolution as camera callouts.
+the same resolution as camera callouts. A lone camera whose icon would sit
+within 4 px of a marker is counted in that marker instead of being drawn; the
+active camera always keeps its own icon.
 The count includes cameras beyond the screen edge and excludes cameras beyond
 the horizon. Counts that would overlap on screen merge into one that carries
 their sum. Clicking a count zooms to its group. Single cameras keep their icons,

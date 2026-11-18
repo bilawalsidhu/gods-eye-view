@@ -94,3 +94,44 @@ test('stadiums merge by their own radii and segment lengths across grid boundari
   // Large pills can reach across a row boundary at their full diameter.
   check([7350, 7350], [origin, { x: 35, y: 88 }], [14700]);
 });
+
+test('a lone camera joins a count it touches, and lone cameras alone stay apart', () => {
+  const sizes = {
+    1: { width: 24, height: 24 },
+    9: { width: 40, height: 40 },
+  };
+  const gap = 4;
+  const check = (counts, positions, expected) => {
+    const cells = counts.map((count, i) => ({
+      ...createCameraCell(String(i)),
+      count,
+    }));
+    let i = 0;
+    const groups = mergeCountCells(
+      cells,
+      () => positions[i++],
+      (count) => sizes[count],
+      gap,
+    );
+    assert.deepEqual(
+      groups.map((cell) => cell.count),
+      expected,
+    );
+    // A lone camera that stays apart is still its own cell object.
+    assert.deepEqual(
+      groups.filter((cell) => cell.count === 1),
+      cells.filter((cell) => groups.includes(cell) && cell.count === 1),
+    );
+  };
+  const at = (x, y = 100) => ({ x, y });
+  // Radii 20 and 12: the four-pixel gap is clear at 36 pixels.
+  check([9, 1], [at(100), at(135)], [10]);
+  check([9, 1], [at(100), at(136)], [9, 1]);
+  check([1, 9], [at(135), at(100)], [10]);
+  // Overlapping icons with no count beside them stay two icons.
+  check([1, 1], [at(100), at(110)], [1, 1]);
+  // A count takes every lone camera it touches, on either side.
+  check([1, 9, 1], [at(70), at(100), at(130)], [11]);
+  // A lone camera that only touches another lone camera is left alone.
+  check([1, 1, 9], [at(40), at(70), at(100)], [1, 10]);
+});

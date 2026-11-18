@@ -332,6 +332,43 @@ test('a crowded cell shows its count and a singleton keeps its icon', () => {
   );
 });
 
+test('a lone camera beside a count joins it, unless it is the active camera', () => {
+  // Three cameras north of a cell boundary, one 111 m away south of it.
+  const { records } = recordsAt([
+    [0.0005, 0.0005],
+    [0.0006, 0.0005],
+    [0.0007, 0.0005],
+    [0.0006, -0.0005],
+    [0.2, 0],
+  ]);
+  seedCoverage({ viewer: viewerAt(20_000), records });
+  refreshHorizonCulling();
+  assert.deepEqual(shownIds(records), ['cam-4']);
+  assert.deepEqual(_viewRecordIdsForTest(), ['cam-4']);
+  assert.deepEqual(
+    markers().map((item) => item.cell.count),
+    [4],
+  );
+  assert.deepEqual(
+    cctvLayer.getDetectableObjects().map((o) => o.sourceId),
+    ['cam-4'],
+  );
+  // The picker still offers one camera from each ground cell.
+  assert.equal(cctvLayer.getUIState().cameraIndex.length, 3);
+
+  seedCoverage({
+    viewer: viewerAt(20_000),
+    records,
+    activeCameraId: 'cam-3',
+  });
+  refreshHorizonCulling();
+  assert.deepEqual(shownIds(records), ['cam-3', 'cam-4']);
+  assert.deepEqual(
+    markers().map((item) => item.cell.count),
+    [3],
+  );
+});
+
 test('a pan keeps the same winners, and an unchanged view keeps its list', () => {
   const { records } = recordsAt(CLUSTER);
   seedCoverage({
@@ -698,20 +735,22 @@ test('overlapping cells merge at their weighted centre and keep every camera in 
     });
     refreshHorizonCulling();
     const shown = markers();
-    assert.deepEqual(shownIds(records), ['cam-7', 'cam-8']);
+    // The lone camera 111 m south sits under the merged marker and joins it;
+    // the active one beside it keeps its own icon.
+    assert.deepEqual(shownIds(records), ['cam-7']);
     assert.equal(
       shown.reduce((sum, m) => sum + m.cell.count, 0),
-      7,
+      8,
     );
     assert.deepEqual(
       shown.map((m) => m.cell.count).sort((a, b) => a - b),
-      [2, 5],
+      [2, 6],
     );
-    const merged = shown.find((m) => m.cell.count === 5);
+    const merged = shown.find((m) => m.cell.count === 6);
     assert.ok(
       Cesium.Cartesian3.distance(
         merged.pos,
-        Cesium.Cartesian3.fromDegrees(0.0008, 0, 10),
+        Cesium.Cartesian3.fromDegrees(0.004 / 6, -0.001 / 6, 10),
       ) < 0.01,
     );
     const positions = shown.map((m) => [m.cell.key, m.pos, m.height, m.width]);
@@ -720,13 +759,10 @@ test('overlapping cells merge at their weighted centre and keep every camera in 
     clickMarker(merged);
     const { bounds } = flights.at(-1);
     assert.ok(
-      records
-        .slice(0, 5)
-        .every(
-          (r) =>
-            Cesium.Cartesian3.distance(r.position, bounds.center) <
-            bounds.radius,
-        ),
+      [...records.slice(0, 5), records[8]].every(
+        (r) =>
+          Cesium.Cartesian3.distance(r.position, bounds.center) < bounds.radius,
+      ),
     );
     assert.ok(
       bounds.radius < 300,

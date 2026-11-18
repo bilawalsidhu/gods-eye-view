@@ -104,6 +104,10 @@ export const COUNT_LABEL_DROP = 0.2;
 // Minimum gap between the outer rims of two separate markers.
 export const COUNT_MERGE_GAP_PX = 4;
 
+// On-screen size of a lone camera's icon when testing it against a count
+// marker: an icon closer than the merge gap joins that count.
+export const COUNT_SINGLE_ICON_PX = 24;
+
 // Recheck moved centres and wider labels while bounding work on motion ticks.
 export const COUNT_MERGE_PASSES = 3;
 

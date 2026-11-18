@@ -19,6 +19,7 @@ import {
   COUNT_GLYPH_PADDING_PX,
   COUNT_LABEL_DROP,
   COUNT_MERGE_GAP_PX,
+  COUNT_SINGLE_ICON_PX,
   COUNT_MERGE_PASSES,
 } from './policy.js';
 
@@ -28,6 +29,10 @@ const GLYPH_ASPECT = 1.5;
 const RING_PX = 2;
 const RIM_PX = 1;
 const STROKE_INSET = RIM_PX + RING_PX / 2;
+const SINGLE_ICON = Object.freeze({
+  width: COUNT_SINGLE_ICON_PX,
+  height: COUNT_SINGLE_ICON_PX,
+});
 
 /** Apply the billboard's RGB tint to the sprite and find its painted bounds. */
 function rasterizeGlyph(canvas, image, size, dpr, color) {
@@ -198,9 +203,9 @@ export function createCountMarkers(
 
   /** Reuse marker slots in ground-key order, and invalidate only changed frames. */
   function update(cells, project) {
-    let visible = cells
-      .filter((cell) => cell.count > 1)
-      .sort((a, b) => a.key.localeCompare(b.key));
+    // Lone cameras take part so that one beside a count joins it.
+    let visible = cells.slice().sort((a, b) => a.key.localeCompare(b.key));
+    const footprint = (count) => (count > 1 ? sizeFor(count) : SINGLE_ICON);
     for (
       let pass = 0;
       pass < COUNT_MERGE_PASSES && visible.length > 1;
@@ -209,12 +214,17 @@ export function createCountMarkers(
       const merged = mergeCountCells(
         visible,
         project,
-        sizeFor,
+        footprint,
         COUNT_MERGE_GAP_PX,
       );
       if (merged.length === visible.length) break;
       visible = merged;
     }
+    // A lone camera that is no longer its own entry now counts in a marker.
+    const apart = new Set(visible);
+    for (const cell of cells)
+      if (cell.count === 1) cell.absorbed = !apart.has(cell);
+    visible = visible.filter((cell) => cell.count > 1);
     let changed = visible.length !== markers.length;
     for (let i = 0; i < visible.length; i++) {
       const cell = visible[i];

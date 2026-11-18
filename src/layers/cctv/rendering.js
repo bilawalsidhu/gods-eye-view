@@ -435,23 +435,26 @@ export function createRendering({
         cell.rank = rank;
       }
     }
+    // Marks each lone camera that a count marker beside it has taken in.
+    layerState._counts?.update(visibleCells, project);
     for (const cell of visibleCells) {
       const record = cell.winner;
       picker.push(record);
       record.pickerPass = pass;
-      if (cell.count === 1) {
+      if (cell.count === 1 && !cell.absorbed) {
         record.viewPass = pass;
         shown.push(record);
       }
     }
-    layerState._counts?.update(visibleCells, project);
     const writes = [];
     let coverageChanged = false;
     let cardsChanged = false;
     for (const record of layerState._records) {
       const cell = record.viewCell;
       record.viewCell = null;
-      const grouped = Boolean(cell?.winner && cell.count > 1);
+      const grouped = Boolean(
+        cell?.winner && (cell.count > 1 || cell.absorbed),
+      );
       if (grouped !== !!record.viewGrouped) {
         const id = record.camera.id;
         coverageChanged ||= layerState._coverageCohort?.has(id);
