@@ -71,11 +71,38 @@ export const VIEW_CELL_PX = 40;
 
 export const VIEW_MIN_CELL_M = 60;
 
-// Diameter of a grouped camera marker in CSS pixels.
-export const COUNT_MARKER_PX = 34;
+// Diameter at one camera before applying the size limits, in CSS pixels.
+export const COUNT_BASE_PX = 38;
 
-// Separation of two circular counts, including a four-pixel gap between rings.
-export const COUNT_MERGE_DISTANCE_PX = COUNT_MARKER_PX + 4;
+// Extra diameter for each tenfold increase in camera count.
+export const COUNT_PX_PER_DECADE = 5;
+
+// Minimum height of a count marker in CSS pixels.
+export const COUNT_MIN_HEIGHT_PX = 40;
+
+// Maximum height of a count marker in CSS pixels.
+export const COUNT_MAX_HEIGHT_PX = 58;
+
+// Clear fill between the count and the inside of the ring, in CSS pixels.
+export const COUNT_TEXT_PADDING_PX = 6;
+
+// Height of the camera glyph in the smallest and the largest marker.
+export const COUNT_GLYPH_MIN_PX = 7.5;
+export const COUNT_GLYPH_MAX_PX = 10;
+
+// Clear fill above the glyph in the smallest and the largest marker.
+export const COUNT_GLYPH_TOP_MIN_PX = 3;
+export const COUNT_GLYPH_TOP_MAX_PX = 4;
+
+// Clear fill between the glyph's top corners and the inside of the ring.
+export const COUNT_GLYPH_PADDING_PX = 2;
+
+// The middle of the digits sits this share of the inner radius below the
+// marker's centre, which leaves the glyph clear of the count.
+export const COUNT_LABEL_DROP = 0.2;
+
+// Minimum gap between the outer rims of two separate markers.
+export const COUNT_MERGE_GAP_PX = 4;
 
 // Recheck moved centres and wider labels while bounding work on motion ticks.
 export const COUNT_MERGE_PASSES = 3;
@@ -194,25 +221,30 @@ export const DEFAULT_CAMERA_CALIBRATION = Object.freeze({
  * 2× display draws it at 60 device px, and it stays sharp there.
  */
 
-export const CAMERA_ICON = (() => {
+function cameraIcon(neutral) {
+  const tone = (original, gray) => (neutral ? gray : original);
+  const stroke = tone('#75e7ff', '#fff');
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 36 36">
     <defs>
       <linearGradient id="lens" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="#c9f6ff"/>
-        <stop offset="45%" stop-color="#6fd9ff"/>
-        <stop offset="100%" stop-color="#1a5f78"/>
+        <stop offset="0%" stop-color="${tone('#c9f6ff', '#fff')}"/>
+        <stop offset="45%" stop-color="${tone('#6fd9ff', '#ddd')}"/>
+        <stop offset="100%" stop-color="${tone('#1a5f78', '#666')}"/>
       </linearGradient>
     </defs>
     <g transform="translate(4 6)">
-      <rect x="0" y="8" width="20" height="9" rx="2.5" fill="#0e1720" stroke="#75e7ff" stroke-width="1.2"/>
-      <rect x="17" y="10" width="10" height="5" rx="1.5" fill="#132433" stroke="#75e7ff" stroke-width="1"/>
-      <circle cx="24" cy="12.5" r="3.1" fill="url(#lens)" stroke="#dbfbff" stroke-width="0.8"/>
-      <rect x="6.4" y="17" width="4.2" height="8.5" rx="1.2" fill="#10212d" stroke="#75e7ff" stroke-width="1"/>
-      <rect x="4.2" y="24" width="8.6" height="2.5" rx="1.1" fill="#0b151d" stroke="#4ecde7" stroke-width="0.8"/>
+      <rect x="0" y="8" width="20" height="9" rx="2.5" fill="${tone('#0e1720', '#181818')}" stroke="${stroke}" stroke-width="1.2"/>
+      <rect x="17" y="10" width="10" height="5" rx="1.5" fill="${tone('#132433', '#222')}" stroke="${stroke}" stroke-width="1"/>
+      <circle cx="24" cy="12.5" r="3.1" fill="url(#lens)" stroke="${tone('#dbfbff', '#fff')}" stroke-width="0.8"/>
+      <rect x="6.4" y="17" width="4.2" height="8.5" rx="1.2" fill="${tone('#10212d', '#202020')}" stroke="${stroke}" stroke-width="1"/>
+      <rect x="4.2" y="24" width="8.6" height="2.5" rx="1.1" fill="${tone('#0b151d', '#151515')}" stroke="${tone('#4ecde7', '#ccc')}" stroke-width="0.8"/>
     </g>
   </svg>`;
   return 'data:image/svg+xml;base64,' + btoa(svg);
-})();
+}
+
+export const CAMERA_ICON = cameraIcon(false);
+export const IDLE_CAMERA_ICON = cameraIcon(true);
 
 /**
  * Seed camera definitions used when no live sources are available.
@@ -450,7 +482,10 @@ export const CAMERA_SEEDS = [
 // Visual style constants: renderer colours, [r, g, b, a] in 0..1
 // ---------------------------------------------------------------------------
 
-export const IDLE_CAMERA_COLOR = hexColor('#6be8ff', 0.88);
+/** Shared accent for idle still cameras and grouped cameras. */
+export const CAMERA_GREEN = '#5dff8f';
+
+export const IDLE_CAMERA_COLOR = hexColor(CAMERA_GREEN);
 
 export const ACTIVE_CAMERA_COLOR = hexColor('#ffd97a', 0.95);
 

@@ -5,19 +5,112 @@ import {
 } from '../../data/cctvCellCounts.js';
 import { WORLD_OVERLAY_STYLE } from '../../overlays/worldOverlayTokens.js';
 import {
-  COUNT_MARKER_PX,
-  COUNT_MERGE_DISTANCE_PX,
+  CAMERA_GREEN,
+  IDLE_CAMERA_ICON,
+  COUNT_BASE_PX,
+  COUNT_PX_PER_DECADE,
+  COUNT_MIN_HEIGHT_PX,
+  COUNT_MAX_HEIGHT_PX,
+  COUNT_TEXT_PADDING_PX,
+  COUNT_GLYPH_MIN_PX,
+  COUNT_GLYPH_MAX_PX,
+  COUNT_GLYPH_TOP_MIN_PX,
+  COUNT_GLYPH_TOP_MAX_PX,
+  COUNT_GLYPH_PADDING_PX,
+  COUNT_LABEL_DROP,
+  COUNT_MERGE_GAP_PX,
   COUNT_MERGE_PASSES,
 } from './policy.js';
 
 const FONT = WORLD_OVERLAY_STYLE.fontTitle;
-const RING = '#75e7ff';
+// Reserve the camera's landscape slot even while the map sprite is loading.
+const GLYPH_ASPECT = 1.5;
+const RING_PX = 2;
+const RIM_PX = 1;
+const STROKE_INSET = RIM_PX + RING_PX / 2;
+
+/** Apply the billboard's RGB tint to the sprite and find its painted bounds. */
+function rasterizeGlyph(canvas, image, size, dpr, color) {
+  if (!canvas) return null;
+  // The artwork occupies just over half the height of the square SVG viewport.
+  const side = 2 * Math.ceil(size * dpr);
+  canvas.width = canvas.height = side;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.drawImage(image, 0, 0, side, side);
+  const pixels = ctx.getImageData(0, 0, side, side);
+  const { data } = pixels;
+  const rgb = Number.parseInt(color.slice(1), 16);
+  const red = (rgb >> 16) / 255;
+  const green = ((rgb >> 8) & 255) / 255;
+  const blue = (rgb & 255) / 255;
+  let left = side,
+    top = side,
+    right = -1,
+    bottom = -1;
+  for (let y = 0; y < side; y++) {
+    for (let x = 0; x < side; x++) {
+      const i = (y * side + x) * 4;
+      if (!data[i + 3]) continue;
+      data[i] *= red;
+      data[i + 1] *= green;
+      data[i + 2] *= blue;
+      left = Math.min(left, x);
+      right = Math.max(right, x);
+      top = Math.min(top, y);
+      bottom = y;
+    }
+  }
+  if (right < 0) return null;
+  ctx.putImageData(pixels, 0, 0);
+  const width = right - left + 1;
+  const height = bottom - top + 1;
+  const scale = Math.min(size / height, (size * GLYPH_ASPECT) / width);
+  return {
+    canvas,
+    left,
+    top,
+    width,
+    height,
+    drawWidth: width * scale,
+    drawHeight: height * scale,
+  };
+}
+
+/** Load the map artwork once, then share each tinted device-density raster. */
+export function createCameraGlyphCache(createCanvas, source, onLoad) {
+  const glyphs = new Map();
+  let image;
+  let ready = false;
+  return (size, dpr, color) => {
+    if (!image && typeof Image !== 'undefined') {
+      image = new Image();
+      image.onload = () => {
+        ready = true;
+        onLoad?.();
+      };
+      image.src = source;
+    }
+    if (!ready) return null;
+    const key = `${size}:${dpr}:${color}`;
+    if (!glyphs.has(key)) {
+      glyphs.set(key, rasterizeGlyph(createCanvas(), image, size, dpr, color));
+    }
+    return glyphs.get(key);
+  };
+}
 
 /** Merged camera groups and their last painted hit rectangles in CSS pixels. */
-export function createCountMarkers(registerPaintLane, id, refreshView) {
+export function createCountMarkers(
+  registerPaintLane,
+  id,
+  refreshView,
+  createCanvas = () => globalThis.document?.createElement('canvas'),
+) {
+  let dpr = Math.max(1, Number(globalThis.window?.devicePixelRatio) || 1);
   const markers = [];
   const hits = [];
-  const widths = new Map();
+  const textMetrics = new Map();
   const fonts = globalThis.document?.fonts;
   let measureCtx;
   let hitCount = 0;
@@ -26,30 +119,81 @@ export function createCountMarkers(registerPaintLane, id, refreshView) {
     active: false,
     target: 'shared',
   });
+  const glyphFor = createCameraGlyphCache(
+    createCanvas,
+    IDLE_CAMERA_ICON,
+    () => {
+      if (!markers.length) return;
+      refreshGlyphs();
+      lane?.requestPaint();
+    },
+  );
   fonts?.addEventListener?.('loadingdone', fontsLoaded);
 
   /** Font changes can widen a pill enough to merge it with its neighbor. */
   function fontsLoaded() {
-    widths.clear();
+    textMetrics.clear();
     if (!markers.length) return;
     refreshView();
     lane?.requestPaint();
   }
 
-  /** Short labels fit the circle. A longer label leaves room for rounded ends. */
-  function widthForText(text) {
-    if (text.length <= 3) return COUNT_MARKER_PX;
-    let width = widths.get(text);
-    if (width === undefined) {
-      measureCtx ??= document.createElement('canvas').getContext('2d');
-      measureCtx.font = FONT;
-      width = Math.max(
-        COUNT_MARKER_PX + 1,
-        Math.ceil(measureCtx.measureText(text).width) + 20,
-      );
-      widths.set(text, width);
+  /** Seat the glyph under the top of the ring and the count just below centre. */
+  function sizeFor(count) {
+    const text = formatCameraCount(count);
+    let metrics = textMetrics.get(text);
+    if (!metrics) {
+      measureCtx ??= createCanvas()?.getContext('2d');
+      if (measureCtx) {
+        measureCtx.font = FONT;
+        measureCtx.textBaseline = 'middle';
+        metrics = measureCtx.measureText(text);
+      } else {
+        metrics = { width: text.length * 8 };
+      }
+      textMetrics.set(text, metrics);
     }
-    return width;
+    const diameter = COUNT_BASE_PX + COUNT_PX_PER_DECADE * Math.log10(count);
+    const clamped = Math.max(
+      COUNT_MIN_HEIGHT_PX,
+      Math.min(COUNT_MAX_HEIGHT_PX, diameter),
+    );
+    const height = 2 * Math.round(clamped / 2);
+    const grown =
+      (height - COUNT_MIN_HEIGHT_PX) /
+      (COUNT_MAX_HEIGHT_PX - COUNT_MIN_HEIGHT_PX);
+    const glyphHeight =
+      COUNT_GLYPH_MIN_PX + (COUNT_GLYPH_MAX_PX - COUNT_GLYPH_MIN_PX) * grown;
+    const radius = height / 2 - RIM_PX - RING_PX;
+    const glyphTop =
+      COUNT_GLYPH_TOP_MIN_PX +
+      (COUNT_GLYPH_TOP_MAX_PX - COUNT_GLYPH_TOP_MIN_PX) * grown -
+      radius;
+    // Width-only metrics use half the 12 px type size on each side of the baseline.
+    const ascent = metrics.actualBoundingBoxAscent ?? 6;
+    const descent = metrics.actualBoundingBoxDescent ?? 6;
+    const labelY = COUNT_LABEL_DROP * radius + (ascent - descent) / 2;
+    // Each row must clear the ring at the edge where the circle is narrowest.
+    const chordAt = (y) => 2 * Math.sqrt(Math.max(0, radius ** 2 - y ** 2));
+    const extra = Math.max(
+      0,
+      Math.ceil(
+        Math.max(
+          metrics.width + 2 * COUNT_TEXT_PADDING_PX - chordAt(labelY + descent),
+          glyphHeight * GLYPH_ASPECT +
+            2 * COUNT_GLYPH_PADDING_PX -
+            chordAt(glyphTop),
+        ),
+      ),
+    );
+    return {
+      text,
+      width: height + extra,
+      height,
+      glyphHeight,
+      glyphBottom: glyphTop + glyphHeight,
+      labelY,
+    };
   }
 
   /** Reuse marker slots in ground-key order, and invalidate only changed frames. */
@@ -65,9 +209,8 @@ export function createCountMarkers(registerPaintLane, id, refreshView) {
       const merged = mergeCountCells(
         visible,
         project,
-        (count) => widthForText(formatCameraCount(count)),
-        COUNT_MARKER_PX,
-        COUNT_MERGE_DISTANCE_PX,
+        sizeFor,
+        COUNT_MERGE_GAP_PX,
       );
       if (merged.length === visible.length) break;
       visible = merged;
@@ -77,8 +220,7 @@ export function createCountMarkers(registerPaintLane, id, refreshView) {
       const cell = visible[i];
       const marker = markers[i] ?? (markers[i] = { focus: 1 });
       const last = marker.cell;
-      const text = formatCameraCount(cell.count);
-      const width = widthForText(text);
+      const size = sizeFor(cell.count);
       if (
         !last ||
         last.count !== cell.count ||
@@ -98,10 +240,14 @@ export function createCountMarkers(registerPaintLane, id, refreshView) {
       ) {
         changed = true;
       }
-      changed ||= text !== marker.text || width !== marker.width;
+      changed ||=
+        size.text !== marker.text ||
+        size.width !== marker.width ||
+        size.glyphBottom !== marker.glyphBottom ||
+        size.labelY !== marker.labelY;
       marker.cell = cell;
-      marker.text = text;
-      marker.width = width;
+      Object.assign(marker, size);
+      marker.glyph = glyphFor(size.glyphHeight, dpr, CAMERA_GREEN);
       // Paint never grows the hit buffer, even when a pan reveals every group.
       hits[i] ??= {};
     }
@@ -109,6 +255,12 @@ export function createCountMarkers(registerPaintLane, id, refreshView) {
     // Keep the last frame pickable until the host clears its pixels.
     lane?.setActive(markers.length > 0 || hitCount > 0);
     if (changed) lane?.requestPaint();
+  }
+
+  /** Attach the raster for the current overlay density to each visible group. */
+  function refreshGlyphs() {
+    for (const marker of markers)
+      marker.glyph = glyphFor(marker.glyphHeight, dpr, CAMERA_GREEN);
   }
 
   /** Draw at device density using the host's CSS-pixel transform and projection. */
@@ -121,7 +273,10 @@ export function createCountMarkers(registerPaintLane, id, refreshView) {
     }
     hitCount = 0;
     const { ctx, occluder, viewProjectionMatrix: m } = frame;
-    const height = COUNT_MARKER_PX;
+    if (dpr !== frame.dpr) {
+      dpr = frame.dpr;
+      refreshGlyphs();
+    }
     ctx.save();
     try {
       ctx.font = FONT;
@@ -129,6 +284,7 @@ export function createCountMarkers(registerPaintLane, id, refreshView) {
       ctx.textBaseline = 'middle';
       for (let i = 0; i < markers.length; i++) {
         const marker = markers[i];
+        const { height } = marker;
         const { x: px, y: py, z: pz } = marker.pos;
         const w = m[3] * px + m[7] * py + m[11] * pz + m[15];
         if (!(w > 0) || (occluder && !occluder.isPointVisible(marker.pos)))
@@ -155,22 +311,36 @@ export function createCountMarkers(registerPaintLane, id, refreshView) {
         ctx.globalAlpha = marker.focus;
         ctx.beginPath();
         ctx.roundRect(
-          rect.x + 2,
-          rect.y + 2,
-          rect.w - 4,
-          height - 4,
-          height / 2 - 2,
+          rect.x + STROKE_INSET,
+          rect.y + STROKE_INSET,
+          rect.w - 2 * STROKE_INSET,
+          height - 2 * STROKE_INSET,
+          height / 2 - STROKE_INSET,
         );
         ctx.strokeStyle = 'rgba(8, 14, 20, 0.85)';
-        ctx.lineWidth = 4;
+        ctx.lineWidth = RING_PX + 2 * RIM_PX;
         ctx.stroke();
         ctx.fillStyle = '#0e1720';
         ctx.fill();
-        ctx.strokeStyle = RING;
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = CAMERA_GREEN;
+        ctx.lineWidth = RING_PX;
         ctx.stroke();
-        ctx.fillStyle = RING;
-        ctx.fillText(marker.text, x, y);
+        ctx.fillStyle = CAMERA_GREEN;
+        const glyph = marker.glyph;
+        if (glyph) {
+          ctx.drawImage(
+            glyph.canvas,
+            glyph.left,
+            glyph.top,
+            glyph.width,
+            glyph.height,
+            x - glyph.drawWidth / 2,
+            y + marker.glyphBottom - glyph.drawHeight,
+            glyph.drawWidth,
+            glyph.drawHeight,
+          );
+        }
+        ctx.fillText(marker.text, x, y + marker.labelY);
         rect.cell = marker.cell;
         hitCount++;
       }

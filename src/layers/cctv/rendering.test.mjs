@@ -1,7 +1,7 @@
 // src/layers/cctv/rendering.test.mjs
 // Icon colors under focus de-emphasis (#1200): the focus pass fades each icon
 // from the same base color the coverage refresh assigns, so a video-feed camera
-// stays violet while it dims instead of falling back to the idle cyan.
+// stays violet while it dims instead of falling back to the idle green.
 // Teardown lets go of the icon set of the viewer that drew it.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -112,6 +112,32 @@ test('focus de-emphasis fades each icon from its own color', () => {
   } finally {
     unbind();
   }
+});
+
+test('focus uses the painted half-width and half-height of each count', () => {
+  const markers = [
+    { width: 40, height: 40 },
+    { width: 72, height: 58 },
+  ];
+  const sizes = [];
+  const rendering = createRendering({
+    state: { _counts: { markers } },
+    services: {
+      focus: {
+        focusPassIsNeeded: () => true,
+        advanceSpriteFocus(_owner, { spriteHalfWidthPx, spriteHalfHeightPx }) {
+          sizes.push([spriteHalfWidthPx, spriteHalfHeightPx]);
+          return { factor: 1 };
+        },
+        focusAlphaNeedsWrite: () => false,
+      },
+    },
+  });
+  rendering.applyCctvFocusDeemphasis({});
+  assert.deepEqual(sizes, [
+    [20, 20],
+    [36, 29],
+  ]);
 });
 
 test('the icons go with the viewer that drew them, whichever tears down', () => {

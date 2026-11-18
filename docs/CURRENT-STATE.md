@@ -1953,8 +1953,10 @@ accepts forwarding headers, so cameras work behind a reverse proxy; a forwarded
 request skips the key-bearing Street View fallback and gets the placeholder.
 
 The CCTV layer draws only the cameras on or near the screen. Zoomed out, a
-ground cell containing multiple cameras shows a cyan count at their centre,
-drawn on the world overlay at the same resolution as camera callouts.
+ground cell containing multiple cameras shows, at their centre, a marker with
+a small green camera pictogram under its top edge and the count just below its
+middle. The marker grows with the count and is drawn on the world overlay at
+the same resolution as camera callouts.
 The count includes cameras beyond the screen edge and excludes cameras beyond
 the horizon. Counts that would overlap on screen merge into one that carries
 their sum. Clicking a count zooms to its group. Single cameras keep their icons,
@@ -7339,7 +7341,7 @@ silently demoting every later lookup for the session.
   ground clamp now lifts the cap _center_ only so the wireframe stays a true pyramid welded to
   the plane (was a flattened fan / the ~47.5 m divergence — RESOLVED), re-selecting the active
   camera is a no-op (killed a click-flash), and texture swaps gate on canvas content (killed a
-  periodic white flash). Camera icons are cyan for stills, violet for cameras with a video feed, and amber for the active camera. Coverage is now **metro-wide: 250 cameras** (`CCTV_AUSTIN_MAX_SOURCES`
+  periodic white flash). Camera icons are green for stills, violet for cameras with a video feed, and amber for the active camera. Coverage is now **metro-wide: 250 cameras** (`CCTV_AUSTIN_MAX_SOURCES`
   default 36 → 250, hard bound 300), filtered to `camera_status === TURNED_ON` (~815 live of
   1,003 rows). City packs (2026-07-04): Caltrans (districts 4/7/11/3 — SF, LA, San Diego,
   Sacramento; cap 300) and TfL London JamCams (cap 250) join Austin (cap 250) as keyless default

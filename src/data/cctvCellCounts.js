@@ -1,12 +1,11 @@
-import { formatNumber } from '../i18n/index.js';
 import { fromDegrees } from '../geo/ellipsoid.js';
 
-/** Exact small counts and compact thousands in the current UI locale. */
+/** Exact camera counts below a thousand, then rounded thousands with a K suffix. */
 export function formatCameraCount(count) {
-  return formatNumber(
-    count,
-    count < 1000 ? undefined : { notation: 'compact' },
-  );
+  if (count < 1000) return String(count);
+  const thousands =
+    count < 10000 ? Math.round(count / 100) / 10 : Math.round(count / 1000);
+  return `${thousands}K`;
 }
 
 /** An empty cell and its on-screen picker candidate. */
@@ -86,17 +85,18 @@ function addCell(target, cell) {
 }
 
 /** Claim the touching pills in this marker's bucket and its eight neighbors. */
-function collectNeighbors(marker, grid, members, height, mergeDistance) {
+function collectNeighbors(marker, grid, members, gap) {
   for (let col = -1; col <= 1; col++) {
     for (let row = -1; row <= 1; row++) {
       const bucket = grid.get(`${marker.col + col},${marker.row + row}`);
       if (!bucket) continue;
       for (const other of bucket) {
         // Distance between the horizontal centre segments of the two pills.
-        const extra = (marker.width + other.width) / 2 - height;
+        const extra = marker.halfSegment + other.halfSegment;
         const dx = Math.max(0, Math.abs(marker.x - other.x) - extra);
         const dy = marker.y - other.y;
-        if (dx * dx + dy * dy >= mergeDistance * mergeDistance) continue;
+        const reach = marker.radius + other.radius + gap;
+        if (dx * dx + dy * dy >= reach * reach) continue;
         bucket.delete(other);
         members.push(other);
       }
@@ -109,27 +109,28 @@ function collectNeighbors(marker, grid, members, height, mergeDistance) {
  * one grid bucket. Even the widest pill can only touch its eight neighbors.
  * Ground cells stay intact for the camera picker and individual-icon pass.
  */
-export function mergeCountCells(
-  cells,
-  project,
-  widthFor,
-  height,
-  mergeDistance,
-) {
-  const gap = mergeDistance - height;
-  let columnWidth = mergeDistance;
+export function mergeCountCells(cells, project, sizeFor, gap) {
+  let columnWidth = 0;
+  let rowHeight = 0;
   const markers = cells.map((cell) => {
     const screen = project(cellCenter(cell));
-    const width = widthFor(cell.count);
+    const { width, height } = sizeFor(cell.count);
     columnWidth = Math.max(columnWidth, width + gap);
+    rowHeight = Math.max(rowHeight, height + gap);
     // The view projector reuses its result object.
-    return { cell, x: screen?.x, y: screen?.y, width };
+    return {
+      cell,
+      x: screen?.x,
+      y: screen?.y,
+      halfSegment: (width - height) / 2,
+      radius: height / 2,
+    };
   });
   const grid = new Map();
   for (const marker of markers) {
     if (!Number.isFinite(marker.x) || !Number.isFinite(marker.y)) continue;
     marker.col = Math.floor(marker.x / columnWidth);
-    marker.row = Math.floor(marker.y / mergeDistance);
+    marker.row = Math.floor(marker.y / rowHeight);
     const key = `${marker.col},${marker.row}`;
     if (!grid.has(key)) grid.set(key, new Set());
     marker.bucket = grid.get(key);
@@ -147,7 +148,7 @@ export function mergeCountCells(
     members.length = 0;
     members.push(seed);
     for (let i = 0; i < members.length; i++)
-      collectNeighbors(members[i], grid, members, height, mergeDistance);
+      collectNeighbors(members[i], grid, members, gap);
 
     if (members.length === 1) {
       groups.push(seed.cell);

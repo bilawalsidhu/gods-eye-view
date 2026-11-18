@@ -4,6 +4,7 @@ import { isHeadingEstimated } from './headingConfidence.js';
 import {
   ACTIVE_CAMERA_COLOR,
   CAMERA_ICON,
+  IDLE_CAMERA_ICON,
   IDLE_CAMERA_COLOR,
   LIVE_CAMERA_COLOR,
   ACTIVE_COVERAGE_CENTER,
@@ -13,7 +14,6 @@ import {
   IDLE_COVERAGE_EDGE_MUTED,
   ACTIVE_COVERAGE_EDGE_DEPTHFAIL,
   IDLE_COVERAGE_COLOR,
-  COUNT_MARKER_PX,
   VIEW_CELL_PX,
   VIEW_ICON_MARGIN,
   VIEW_MIN_CELL_M,
@@ -32,6 +32,10 @@ import { eastNorthUp } from '../../geo/frames.js';
 import { poseProjector } from '../../geo/frustum.js';
 import { horizonFrom } from '../../geo/horizon.js';
 import { distance } from '../../geo/vector.js';
+
+const IDLE_ICON_STYLE = { image: IDLE_CAMERA_ICON, color: IDLE_CAMERA_COLOR };
+const ACTIVE_ICON_STYLE = { image: CAMERA_ICON, color: ACTIVE_CAMERA_COLOR };
+const LIVE_ICON_STYLE = { image: CAMERA_ICON, color: LIVE_CAMERA_COLOR };
 
 /** An RGBA colour with another alpha. */
 const withAlpha = (color, alpha) => [color[0], color[1], color[2], alpha];
@@ -164,9 +168,8 @@ export function createRendering({
     return {
       id,
       pos: copyPoint(record.position),
-      image: CAMERA_ICON,
+      ...cameraIconStyleFor(record),
       size: [CAMERA_ICON_PX, CAMERA_ICON_PX],
-      color: cameraColorFor(record),
       scale: 1,
       scaleByDistance: CAMERA_SCALE_BY_DISTANCE,
       disableDepthTest: Infinity,
@@ -215,12 +218,12 @@ export function createRendering({
     icons.put({ ...item, pos: copyPoint(record.position) });
   }
 
-  /** Icon color: active wins, then live-capable video feeds, then idle stills. */
-  function cameraColorFor(record) {
+  /** Select the sprite and tint together when a camera changes state. */
+  function cameraIconStyleFor(record) {
     if (record.camera.id === layerState._activeCameraId)
-      return ACTIVE_CAMERA_COLOR;
-    if (parts.model.isVideoFeedCamera(record.camera)) return LIVE_CAMERA_COLOR;
-    return IDLE_CAMERA_COLOR;
+      return ACTIVE_ICON_STYLE;
+    if (parts.model.isVideoFeedCamera(record.camera)) return LIVE_ICON_STYLE;
+    return IDLE_ICON_STYLE;
   }
 
   const {
@@ -326,7 +329,7 @@ export function createRendering({
         marker.pos,
         true,
         marker.width,
-        COUNT_MARKER_PX,
+        marker.height,
         marker.focus,
       );
       if (factor !== null) marker.focus = factor;
@@ -611,7 +614,7 @@ export function createRendering({
     for (const record of layerState._records) {
       const isActive = record.camera.id === activeId;
       const icon = patchedCameraIcon(record.camera.id, {
-        color: cameraColorFor(record),
+        ...cameraIconStyleFor(record),
         scale: isActive ? 1.25 : 1.0,
       });
       if (icon) restyled.push(icon);

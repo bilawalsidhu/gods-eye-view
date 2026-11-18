@@ -4,7 +4,9 @@
 import { afterEach, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { getLocale, setLocale } from '../i18n/index.js';
+import { CAMERA_GREEN } from '../layers/cctv/policy.js';
+import { createCameraGlyphCache } from '../layers/cctv/countMarkers.js';
+import { createCameraCell } from './cctvCellCounts.js';
 import { bindRenderer } from '../render/rendererOf.js';
 import { DEFAULT_FOCUS_DEEMPHASIS_PARAMS } from './focusDeemphasis.js';
 import { fakeCameraPort } from '../testSupport/fakeCameraPort.mjs';
@@ -93,8 +95,59 @@ let painter;
 let paintRequests;
 let measured;
 let glyphWidth;
+let inkHalfHeight;
 let ctx;
 const fonts = new EventTarget();
+let rasters;
+let spriteImages;
+
+/** Model the sprite’s neutral highlights, dark fills and translucent edges. */
+function markerCanvas() {
+  const canvas = {};
+  const context = {
+    measureText(text) {
+      measured++;
+      return {
+        width: text.length * glyphWidth,
+        actualBoundingBoxAscent: inkHalfHeight,
+        actualBoundingBoxDescent: inkHalfHeight,
+      };
+    },
+    drawImage(image, x, y, width, height) {
+      assert.equal(image.loaded, true);
+      assert.deepEqual(
+        [x, y, width, height],
+        [0, 0, canvas.width, canvas.height],
+      );
+      canvas.source = image.src;
+      const h = Math.floor(height / 2);
+      canvas.ink = [2, 3, Math.floor(h * 1.5), h];
+      rasters.push(canvas);
+    },
+    getImageData() {
+      const data = new Uint8ClampedArray(canvas.width * canvas.height * 4);
+      const [left, top, width, height] = canvas.ink;
+      for (let y = top; y < top + height; y++) {
+        for (let x = left; x < left + width; x++) {
+          const shade = x === left ? 255 : 64;
+          data.set(
+            [shade, shade, shade, y === top ? 1 : 255],
+            (y * canvas.width + x) * 4,
+          );
+        }
+      }
+      return { data };
+    },
+    putImageData({ data }) {
+      const [left, top] = canvas.ink;
+      const start = (top * canvas.width + left) * 4;
+      canvas.stroke = [...data.slice(start, start + 4)];
+      canvas.fill = [...data.slice(start + 4, start + 8)];
+    },
+  };
+  canvas.getContext = () => context;
+  return canvas;
+}
 
 function seedCoverage(options) {
   _setCctvCoverageStateForTest({
@@ -113,21 +166,23 @@ function seedCoverage(options) {
 }
 
 beforeEach(() => {
+  spriteImages = [];
+  globalThis.Image = class {
+    constructor() {
+      spriteImages.push(this);
+    }
+    finish() {
+      this.loaded = true;
+      this.onload();
+    }
+  };
   paintRequests = 0;
   measured = 0;
   glyphWidth = 8;
-  globalThis.document = {
-    fonts,
-    createElement: () => ({
-      getContext: () => ({
-        measureText(text) {
-          measured++;
-          return { width: text.length * glyphWidth };
-        },
-      }),
-    }),
-  };
-  let savedState;
+  inkHalfHeight = 4;
+  rasters = [];
+  globalThis.document = { fonts, createElement: markerCanvas };
+  const stack = [];
   ctx = {
     font: 'initial',
     globalAlpha: 1,
@@ -136,17 +191,32 @@ beforeEach(() => {
     textAlign: 'start',
     textBaseline: 'top',
     lineWidth: 1,
+    glyphs: [],
+    rings: [],
     labels: [],
     shapes: [],
     save() {
-      savedState = { ...this };
+      stack.push({ ...this });
     },
     restore() {
-      Object.assign(this, savedState);
+      Object.assign(this, stack.pop());
     },
     beginPath() {},
     fill() {},
-    stroke() {},
+    drawImage(image, left, top, sw, sh, x, y, width, height) {
+      assert.deepEqual([left, top, sw, sh], image.ink);
+      assert.ok(Math.abs(width / height - sw / sh) < 1e-9);
+      this.glyphs.push({
+        image,
+        x: x + width / 2,
+        y: y + height / 2,
+        width,
+        height,
+      });
+    },
+    stroke() {
+      this.rings.push(this.strokeStyle);
+    },
     roundRect(...args) {
       this.shapes.push(args);
     },
@@ -155,6 +225,7 @@ beforeEach(() => {
         text,
         x,
         y,
+        color: this.fillStyle,
         alpha: this.globalAlpha,
         font: this.font,
       });
@@ -164,12 +235,16 @@ beforeEach(() => {
 
 /** Reproject on each paint in CSS pixels, as the host does. */
 function paint(overrides = {}) {
-  ctx.labels.length = ctx.shapes.length = 0;
+  ctx.glyphs.length =
+    ctx.rings.length =
+    ctx.labels.length =
+    ctx.shapes.length =
+      0;
   painter({
     ctx,
     width: WIDTH,
     height: HEIGHT,
-    dpr: 2,
+    dpr: 1,
     viewProjectionMatrix: new Float64Array([
       0,
       0,
@@ -196,6 +271,7 @@ function paint(overrides = {}) {
 }
 
 afterEach(() => {
+  delete globalThis.Image;
   delete globalThis.document;
   for (const unbind of bindings.splice(0)) unbind();
 });
@@ -314,7 +390,8 @@ test('the picker prefers the healthy camera and the marker stays at the mean', (
       cctvLayer.getUIState().cameraIndex.map((c) => c.id),
       [id],
     );
-    const { pos } = markers()[0];
+    const { pos, height } = markers()[0];
+    assert.equal(height, 40);
     const center = Cesium.Cartesian3.fromDegrees(0.0005, 0, 10);
     assert.ok(Cesium.Cartesian3.distance(pos, center) < 0.02);
     if (first) assert.deepEqual(pos, first);
@@ -637,7 +714,7 @@ test('overlapping cells merge at their weighted centre and keep every camera in 
         Cesium.Cartesian3.fromDegrees(0.0008, 0, 10),
       ) < 0.01,
     );
-    const positions = shown.map((m) => [m.cell.key, m.pos]);
+    const positions = shown.map((m) => [m.cell.key, m.pos, m.height, m.width]);
     if (previous) assert.deepEqual(positions, previous);
     previous = positions;
     clickMarker(merged);
@@ -658,84 +735,137 @@ test('overlapping cells merge at their weighted centre and keep every camera in 
   }
 });
 
-test('the overlay paints short counts as circles and long localized labels as pills', () => {
-  const locale = getLocale();
-  try {
-    setLocale('ru');
+test('the overlay paints narrow count labels as circles and wide labels as pills', () => {
+  glyphWidth = 10;
+  const { records } = recordsAt([
+    ...Array(1300).fill([-0.008, 0]),
+    ...Array(99).fill([0.06, 0]),
+    [0.1, 0],
+  ]);
+  seedCoverage({ viewer: viewerAt(20_000), records });
+  refreshHorizonCulling();
+  const short = markers().find((m) => m.cell.count === 99);
+  const long = markers().find((m) => m.cell.count === 1300);
+  const measurements = measured;
+  assert.equal(measurements, 2);
+  const pending = paint().map(({ text, x, y }) => [text, x, y]);
+  const pendingShapes = [...ctx.shapes];
+  const requests = paintRequests;
+  assert.equal(ctx.glyphs.length, 0);
+  assert.equal(spriteImages.length, 1);
+  spriteImages[0].finish();
+  assert.equal(paintRequests, requests + 1);
+  const labels = paint();
+  assert.deepEqual(
+    labels.map(({ text, x, y }) => [text, x, y]),
+    pending,
+  );
+  assert.deepEqual(ctx.shapes, pendingShapes);
+  refreshHorizonCulling();
+  assert.equal(measured, measurements);
+  const text = '1.3K';
+  assert.equal(labels.length, 2);
+  assert.equal(ctx.shapes.length, labels.length);
+  const [sx, sy, sw, sh] = ctx.shapes[labels.findIndex((l) => l.text === '99')];
+  const [lx, ly, lw, lh] = ctx.shapes[labels.findIndex((l) => l.text === text)];
+  assert.equal(sw, sh);
+  assert.ok(lw > lh);
+  assert.ok(lw > text.length * glyphWidth);
+  assert.equal(sh + 4, 48);
+  assert.equal(lh + 4, 54);
+  // The four-pixel outer stroke extends two pixels on each side of the path.
+  assert.equal(sw + 4, short.width);
+  assert.equal(lw + 4, long.width);
+  assert.equal(sy + sh / 2, HEIGHT / 2);
+  assert.equal(ly + lh / 2, HEIGHT / 2);
+  assert.ok(Math.abs(sx + sw / 2 - (WIDTH / 2 + short.pos.y / 30)) < 1e-9);
+  assert.ok(Math.abs(lx + lw / 2 - (WIDTH / 2 + long.pos.y / 30)) < 1e-9);
+  assert.equal(ctx.glyphs.length, labels.length);
+  assert.equal(CAMERA_GREEN, '#5dff8f');
+  assert.deepEqual(
+    ctx.rings.filter((_, i) => i % 2 === 1),
+    labels.map(() => CAMERA_GREEN),
+  );
+  for (const [i, label] of labels.entries()) {
+    const glyph = ctx.glyphs[i];
+    const [left, top, w, h] = ctx.shapes[i];
+    const cx = left + w / 2,
+      cy = top + h / 2;
+    assert.equal(glyph.x, cx);
+    assert.equal(label.x, cx);
+    assert.deepEqual(glyph.image.stroke, [93, 255, 143, 1]);
+    assert.deepEqual(glyph.image.fill, [23, 64, 36, 1]);
+    assert.equal(label.color, CAMERA_GREEN);
+    const radius = h / 2 - 1;
+    // 48 and 54 px markers: the glyph and its top gap grow with the marker.
+    const grown = (h + 4 - 40) / 18;
+    assert.ok(Math.abs(glyph.height - (7.5 + 2.5 * grown)) < 1e-9);
+    assert.ok(
+      Math.abs(glyph.y - glyph.height / 2 - (cy - radius + 3 + grown)) < 1e-9,
+    );
+    // The middle of the digits sits a fifth of the inner radius below centre.
+    assert.ok(Math.abs(label.y - (cy + 0.2 * radius)) < 1e-9);
+    assert.ok(label.y - inkHalfHeight - (glyph.y + glyph.height / 2) >= 5);
+    for (const [width, edgeY, padding] of [
+      [glyph.width, glyph.y - glyph.height / 2, 2],
+      [label.text.length * glyphWidth, label.y + inkHalfHeight, 6],
+    ]) {
+      const chord = 2 * Math.sqrt(radius ** 2 - (edgeY - cy) ** 2);
+      assert.ok((w - h + chord - width) / 2 >= padding - 1e-9);
+    }
+  }
+  const builds = rasters.length;
+  const images = ctx.glyphs.map((glyph) => glyph.image);
+  assert.notEqual(images[0], images[1]);
+  const idleCamera = _cctvIconsForTest().item(records.at(-1).camera.id);
+  assert.equal(idleCamera.show, true);
+  for (const image of images) assert.equal(image.source, idleCamera.image);
+  paint();
+  assert.deepEqual(
+    ctx.glyphs.map((glyph) => glyph.image),
+    images,
+  );
+  assert.equal(rasters.length, builds);
+  assert.equal(paintRequests, requests + 1);
+  assert.match(labels[0].font, /JetBrains Mono/);
+  assert.equal(ctx.font, 'initial');
+  assert.equal(ctx.fillStyle, 'initial');
+  assert.equal(ctx.lineWidth, 1);
+  ctx.drawImage = () => {
+    throw new Error('glyph paint failed');
+  };
+  assert.throws(() => paint(), /glyph paint failed/);
+  assert.equal(ctx.font, 'initial');
+  assert.equal(ctx.fillStyle, 'initial');
+});
+
+test('a wide count label merges a horizontal neighbor beyond the circle diameter', () => {
+  glyphWidth = 12;
+  // The centers are 56 CSS pixels apart. Only the pill reaches its neighbor.
+  const at = (count) => {
     const { records } = recordsAt([
-      ...Array(1300).fill([-0.008, 0]),
-      [0.06, 0],
-      [0.06, 0],
+      ...Array(count).fill([-0.0097, 0]),
+      [0.0097, 0],
+      [0.0097, 0],
     ]);
     seedCoverage({ viewer: viewerAt(20_000), records });
     refreshHorizonCulling();
-    const short = markers().find((m) => m.cell.count === 2);
-    const long = markers().find((m) => m.cell.count === 1300);
-    const measurements = measured;
-    assert.equal(measurements, 1);
-    const labels = paint();
-    refreshHorizonCulling();
-    assert.equal(measured, measurements);
-    const text = new Intl.NumberFormat('ru', { notation: 'compact' }).format(
-      1300,
-    );
-    assert.equal(labels.length, 2);
-    assert.equal(ctx.shapes.length, labels.length);
-    const [sx, sy, sw, sh] =
-      ctx.shapes[labels.findIndex((l) => l.text === '2')];
-    const [lx, ly, lw, lh] =
-      ctx.shapes[labels.findIndex((l) => l.text === text)];
-    assert.equal(sw, sh);
-    assert.ok(lw > text.length * glyphWidth);
-    assert.equal(lh, sh);
-    // The four-pixel outer stroke extends two pixels on each side of the path.
-    assert.equal(sw + 4, short.width);
-    assert.equal(lw + 4, long.width);
-    assert.equal(sy + sh / 2, HEIGHT / 2);
-    assert.equal(ly + lh / 2, HEIGHT / 2);
-    assert.ok(Math.abs(sx + sw / 2 - (WIDTH / 2 + short.pos.y / 30)) < 1e-9);
-    assert.ok(Math.abs(lx + lw / 2 - (WIDTH / 2 + long.pos.y / 30)) < 1e-9);
-    assert.match(labels[0].font, /JetBrains Mono/);
-    assert.equal(ctx.font, 'initial');
-    assert.equal(ctx.fillStyle, 'initial');
-    assert.equal(ctx.lineWidth, 1);
-  } finally {
-    setLocale(locale);
-  }
-});
-
-test('a wider localized pill merges a horizontal neighbor beyond the circle diameter', () => {
-  const locale = getLocale();
-  try {
-    setLocale('ru');
-    // The centers are 46 CSS pixels apart. Only the pill reaches its neighbor.
-    const at = (count) => {
-      const { records } = recordsAt([
-        ...Array(count).fill([-0.008, 0]),
-        [0.008, 0],
-        [0.008, 0],
-      ]);
-      seedCoverage({ viewer: viewerAt(20_000), records });
-      refreshHorizonCulling();
-      return markers().map((m) => m.cell.count);
-    };
-    assert.deepEqual(at(2), [2, 2]);
-    assert.deepEqual(at(1300), [1302]);
-  } finally {
-    setLocale(locale);
-  }
+    return markers().map((m) => m.cell.count);
+  };
+  assert.deepEqual(at(2), [2, 2]);
+  assert.deepEqual(at(1300), [1302]);
 });
 
 test('a merged centre can pick up a third count marker', () => {
-  // The two northern centres are 35 px apart. Each is 40 px from the
-  // southern one, but their combined centre is only 36 px away.
+  // The northern pair is 42 px apart. Its centre is 44.5 px from the
+  // southern group, within reach only after the count grows from two to four.
   const { records } = recordsAt([
-    [-0.006, 0],
-    [-0.006, 0],
-    [0.006, 0],
-    [0.006, 0],
-    [0, -0.0126],
-    [0, -0.0126],
+    [-0.0073, 0],
+    [-0.0073, 0],
+    [0.0073, 0],
+    [0.0073, 0],
+    [0, -0.0154],
+    [0, -0.0154],
   ]);
   seedCoverage({ viewer: viewerAt(20_000), records });
   refreshHorizonCulling();
@@ -758,10 +888,10 @@ test('each paint follows the overlay projection, horizon and hard HUD exclusions
   assert.ok(paintRequests > 0);
   const requests = paintRequests;
   const widths = measured;
-  assert.deepEqual(
-    paint().map(({ text, x, y }) => [text, x, y]),
-    [['4', 400, 300]],
-  );
+  const [label] = paint();
+  assert.equal(label.text, '4');
+  assert.equal(label.x, 400);
+  assert.ok(label.y > 300);
   const first = { x: 400, y: 300 };
   assert.equal(counts.pickedCell(first).count, 4);
   const at = (x) => {
@@ -782,28 +912,22 @@ test('each paint follows the overlay projection, horizon and hard HUD exclusions
 });
 
 test('loaded font metrics remerge visible cells without waiting for a move', () => {
-  const locale = getLocale();
-  try {
-    setLocale('ru');
-    glyphWidth = 3;
-    const { records } = recordsAt([
-      ...Array(1300).fill([-0.009, 0]),
-      [0.009, 0],
-      [0.009, 0],
-    ]);
-    seedCoverage({ viewer: viewerAt(20_000), records });
-    refreshHorizonCulling();
-    assert.equal(markers().length, 2);
-    glyphWidth = 12;
-    fonts.dispatchEvent(new Event('loadingdone'));
-    assert.deepEqual(
-      markers().map((m) => m.cell.count),
-      [1302],
-    );
-    assert.equal(paint().length, 1);
-  } finally {
-    setLocale(locale);
-  }
+  glyphWidth = 3;
+  const { records } = recordsAt([
+    ...Array(1300).fill([-0.0097, 0]),
+    [0.0097, 0],
+    [0.0097, 0],
+  ]);
+  seedCoverage({ viewer: viewerAt(20_000), records });
+  refreshHorizonCulling();
+  assert.equal(markers().length, 2);
+  glyphWidth = 14;
+  fonts.dispatchEvent(new Event('loadingdone'));
+  assert.deepEqual(
+    markers().map((m) => m.cell.count),
+    [1302],
+  );
+  assert.equal(paint().length, 1);
 });
 
 test('hits follow paint order and keep the last painted group until the overlay clears', () => {
@@ -828,4 +952,166 @@ test('hits follow paint order and keep the last painted group until the overlay 
   assert.equal(counts.pickedCell(point), top);
   assert.deepEqual(paint(), []);
   assert.equal(counts.pickedCell(point), null);
+});
+
+test('paint, HUD exclusions and hit rectangles use the count-scaled height', () => {
+  seedCoverage({ viewer: viewerAt(20_000) });
+  const counts = cctvLayer._cctvDrawnForTest().counts;
+  for (const [count, height] of [
+    [2, 40],
+    [10, 44],
+    [100, 48],
+    [1000, 54],
+    [3162, 56],
+    [3163, 56],
+    [7350, 58],
+    [1e8, 58],
+  ]) {
+    const cell = { ...createCameraCell('cell'), count };
+    for (const lon of [0, 0.025]) {
+      counts.update(
+        [{ ...cell, lonSum: Math.round(lon * 1e7) * count }],
+        () => null,
+      );
+      if (!spriteImages[0]?.loaded) spriteImages[0].finish();
+      let rect;
+      const [label] = paint({
+        overlapsHardUi(value) {
+          rect = { ...value };
+          return false;
+        },
+      });
+      if (height === 40 || height === 58)
+        assert.equal(ctx.glyphs[0].height, height === 40 ? 7.5 : 10);
+      const marker = markers()[0];
+      assert.equal(marker.height, height);
+      assert.equal(rect.h, height);
+      assert.equal(rect.w, marker.width);
+      const [x, y, w, h] = ctx.shapes[0];
+      assert.deepEqual(
+        [x - 2, y - 2, w + 4, h + 4],
+        [rect.x, rect.y, rect.w, rect.h],
+      );
+      for (const sign of [-1, 1]) {
+        const edgeY = rect.y + height / 2 + (sign * height) / 2;
+        assert.equal(counts.pickedCell({ x: label.x, y: edgeY }).count, count);
+        assert.equal(
+          counts.pickedCell({ x: label.x, y: edgeY + sign * 0.1 }),
+          null,
+        );
+      }
+    }
+    // Centred 23 px above the canvas: the taller badges still cross the edge.
+    const matrix = new Float64Array(16);
+    matrix[13] = 1 + 46 / HEIGHT;
+    matrix[15] = 1;
+    assert.equal(
+      paint({ viewProjectionMatrix: matrix }).length,
+      height > 46 ? 1 : 0,
+    );
+  }
+});
+
+test('measured ink width selects the circle or pill and clears the curved ring', () => {
+  const { records } = recordsAt(Array(99).fill([0, 0]));
+  seedCoverage({ viewer: viewerAt(20_000), records });
+  for (const [width, extent, circle] of [
+    [7, 4, true],
+    [25, 4, false],
+    // Width-only metrics reserve the full type height below the baseline.
+    [6, undefined, true],
+  ]) {
+    glyphWidth = width;
+    inkHalfHeight = extent;
+    fonts.dispatchEvent(new Event('loadingdone'));
+    refreshHorizonCulling();
+    const [label] = paint();
+    const [, top, pathWidth, pathHeight] = ctx.shapes[0];
+    assert.equal(pathHeight + 4, 48);
+    assert.equal(pathWidth === pathHeight, circle);
+    // At the top of the ink, the circle ends narrow the usable inner width.
+    const innerRadius = pathHeight / 2 - 1;
+    const edge = label.y + (extent ?? 6) - (top + pathHeight / 2);
+    const clearWidth =
+      pathWidth - pathHeight + 2 * Math.sqrt(innerRadius ** 2 - edge ** 2);
+    assert.ok((clearWidth - label.text.length * width) / 2 >= 6);
+  }
+});
+
+test('equal-size camera groups share a camera sprite and follow overlay pixel density', () => {
+  const { records } = recordsAt([
+    [0, 0],
+    [0, 0],
+    [0.05, 0],
+    [0.05, 0],
+  ]);
+  seedCoverage({ viewer: viewerAt(20_000), records });
+  refreshHorizonCulling();
+  spriteImages[0].finish();
+  paint({ dpr: 1 });
+  const low = ctx.glyphs[0].image;
+  assert.equal(ctx.glyphs[1].image, low);
+  const builds = rasters.length;
+  paint({ dpr: 2 });
+  const high = ctx.glyphs[0].image;
+  assert.equal(ctx.glyphs[1].image, high);
+  assert.notEqual(high, low);
+  // The raster follows the device density; the painted size does not.
+  assert.deepEqual([low.width, high.width], [16, 30]);
+  assert.equal(ctx.glyphs[0].height, 7.5);
+  paint({ dpr: 2 });
+  assert.equal(rasters.length, builds + 1);
+  paint({ dpr: 1 });
+  assert.equal(ctx.glyphs[0].image, low);
+  assert.equal(rasters.length, builds + 1);
+});
+
+test('the glyph cache draws its supplied map sprite and multiplies its colours', () => {
+  const source =
+    'data:image/svg+xml,' +
+    encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg"><circle r="5"/></svg>',
+    );
+  const glyphFor = createCameraGlyphCache(markerCanvas, source);
+  assert.equal(glyphFor(12, 2, CAMERA_GREEN), null);
+  assert.equal(spriteImages[0].src, source);
+  spriteImages[0].finish();
+  const green = glyphFor(12, 2, CAMERA_GREEN);
+  assert.equal(glyphFor(12, 2, CAMERA_GREEN), green);
+  const white = glyphFor(12, 2, '#ffffff');
+  assert.notEqual(white, green);
+  assert.deepEqual(
+    rasters.map(({ source: drawn }) => drawn),
+    [source, source],
+  );
+  assert.deepEqual(white.canvas.stroke, [255, 255, 255, 1]);
+  assert.deepEqual(white.canvas.fill, [64, 64, 64, 1]);
+});
+
+test('a sprite that loads after disposal does not request a paint', () => {
+  const { records } = recordsAt(CLUSTER);
+  seedCoverage({ viewer: viewerAt(20_000), records });
+  refreshHorizonCulling();
+  cctvLayer._cctvDrawnForTest().counts.dispose();
+  const requests = paintRequests;
+  spriteImages[0].finish();
+  assert.equal(rasters.length, 0);
+  assert.equal(paintRequests, requests);
+});
+
+test('counts still paint when an offscreen 2D context is unavailable', () => {
+  document.createElement = () => ({ getContext: () => null });
+  const { records } = recordsAt([
+    [0, 0],
+    [0, 0],
+  ]);
+  seedCoverage({ viewer: viewerAt(20_000), records });
+  refreshHorizonCulling();
+  spriteImages[0].finish();
+  assert.deepEqual(
+    paint().map((label) => label.text),
+    ['2'],
+  );
+  assert.equal(ctx.glyphs.length, 0);
+  assert.equal(ctx.shapes.length, 1);
 });
