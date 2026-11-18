@@ -48,18 +48,35 @@ export function pathWindowM(dtMs) {
 }
 
 /**
- * Arc moved between two reports before it says which way a train runs (m).
- * A standing train's GPS jitter, a few metres back and forth, stays under it
- * (the same parked-train jitter as FOLLOW_MIN_MOVE_M, policy.js) and keeps
- * the direction learnt.
+ * Arc a train must move before that says which way it runs (m): a standing
+ * train's GPS jitter, back and forth, stays within it.
  */
-const DIRECTION_MIN_M = 15;
+export const DIRECTION_MIN_M = 15;
 
-/** +1 or -1 for an arc step longer than DIRECTION_MIN_M, else `known`. */
-function directionOf(step, known) {
-  return Number.isFinite(step) && Math.abs(step) > DIRECTION_MIN_M
-    ? Math.sign(step)
-    : known;
+/**
+ * Track one more arc position of a train. `turn.s` is the farthest arc it
+ * has reached the way it runs (where it was first seen while that is
+ * unknown); it turns once it is DIRECTION_MIN_M or more back from there,
+ * however small each step.
+ * @param {number} direction +1, -1 or 0.
+ * @param {{s: number}} turn Updated in place.
+ * @param {number} s
+ * @returns {number} The direction now.
+ */
+function steer(direction, turn, s) {
+  if (!Number.isFinite(s)) return direction;
+  if (!Number.isFinite(turn.s)) {
+    turn.s = s;
+    return direction;
+  }
+  const step = s - turn.s;
+  if (direction && step * direction >= 0) {
+    turn.s = s;
+    return direction;
+  }
+  if (Math.abs(step) < DIRECTION_MIN_M) return direction;
+  turn.s = s;
+  return Math.sign(step);
 }
 
 function createBinding(shapeIndex, path, via, s, fix) {
@@ -77,6 +94,9 @@ function createBinding(shapeIndex, path, via, s, fix) {
      */
     direction: 0,
     directionPlayed: false,
+    /** How far the reports and the played segments have run (steer). */
+    reportTurn: { s },
+    playTurn: { s: NaN },
     /** Arc and time of the newest report. */
     fixS: s,
     fixT: fix.t,
@@ -165,7 +185,7 @@ export function followFix(binding, fix) {
   );
   if (!hit || hit.offsetM > PATH_OFF_TRACK_M) return false;
   if (!binding.directionPlayed)
-    binding.direction = directionOf(hit.s - binding.fixS, binding.direction);
+    binding.direction = steer(binding.direction, binding.reportTurn, hit.s);
   binding.fixS = hit.s;
   binding.fixT = fix.t;
   binding.fixLat = fix.lat;
@@ -258,7 +278,9 @@ export function placeOnPath(binding, sample, segment, out) {
     cache.sTo = sTo;
     cache.ok = Number.isFinite(sFrom) && Number.isFinite(sTo);
     if (cache.ok) {
-      binding.direction = directionOf(sTo - sFrom, binding.direction);
+      const turn = binding.playTurn;
+      binding.direction = steer(binding.direction, turn, sFrom);
+      binding.direction = steer(binding.direction, turn, sTo);
       if (binding.direction) binding.directionPlayed = true;
     }
   }

@@ -323,3 +323,64 @@ test('GPS jitter in the newest reports before playback keeps the direction', () 
   });
   assert.deepEqual(learnt, [1, 1, 1, 1], 'from the newest reports');
 });
+
+/** The direction after each played segment, `[fromM, toM]` 15 s apart. */
+function playDirections(binding, steps) {
+  return steps.map(([fromM, toM], seq) => {
+    const { sample, segment } = playback(
+      seq,
+      seq + 1,
+      fix(seq * 15_000, fromM, 0),
+      fix((seq + 1) * 15_000, toM, 0),
+      0.5,
+    );
+    assert.ok(placeOnPath(binding, sample, segment, {}));
+    return binding.direction;
+  });
+}
+
+test('a train that moves under 15 m a report still tells its direction', () => {
+  const p = pack();
+  const ids = { tripId: 'full', routeId: 'main' };
+  // It sets off slowly, runs east, then backs out 10 m a report.
+  const reports = bindTrainPath(p, ids, fix(0, 1000, 0));
+  const learnt = [1010, 1020, 1600, 1590, 1580, 1570].map((eastM, i) => {
+    assert.ok(followFix(reports, fix((i + 1) * 15_000, eastM, 0)));
+    return reports.direction;
+  });
+  assert.deepEqual(learnt, [0, 1, 1, 1, -1, -1], 'from the newest reports');
+  const played = bindTrainPath(p, ids, fix(0, 1000, 0));
+  assert.deepEqual(
+    playDirections(played, [
+      [1000, 1600],
+      [1600, 1590],
+      [1590, 1580],
+      [1580, 1570],
+    ]),
+    [1, 1, -1, -1],
+    'from the played-back segments',
+  );
+});
+
+test('GPS jitter of up to 14 m at a standing train keeps its direction', () => {
+  const p = pack();
+  const ids = { tripId: 'full', routeId: 'main' };
+  const reports = bindTrainPath(p, ids, fix(0, 1000, 0));
+  const learnt = [1600, 1588, 1600, 1586, 1599, 1587].map((eastM, i) => {
+    assert.ok(followFix(reports, fix((i + 1) * 15_000, eastM, 0)));
+    return reports.direction;
+  });
+  assert.deepEqual(learnt, [1, 1, 1, 1, 1, 1], 'from the newest reports');
+  const played = bindTrainPath(p, ids, fix(0, 1000, 0));
+  assert.deepEqual(
+    playDirections(played, [
+      [1000, 1600],
+      [1600, 1588],
+      [1588, 1600],
+      [1600, 1586],
+      [1586, 1599],
+    ]),
+    [1, 1, 1, 1, 1],
+    'from the played-back segments',
+  );
+});

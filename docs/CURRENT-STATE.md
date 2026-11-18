@@ -2792,8 +2792,9 @@ the playback fraction), not the newest report's, and null while that floor is
 unknown, also far above the ground, where such a vehicle is drawn on the
 ellipsoid. Rail's `path.direction` is the way the drawn train runs: once
 playback has placed it, a report that runs back turns it only when playback
-reaches that report, and a step of at most 15 m between two reports (a standing
-train's GPS jitter) keeps the direction it had. `docs/APPLICATION.md` (Cockpit subjects) shows a minimal provider. `src/ui/cockpitSubjectView.test.mjs`,
+reaches that report. A train turns once it is 15 m back from the farthest point
+it reached, however slowly it backs, so a standing train's GPS jitter keeps the
+direction it had. `docs/APPLICATION.md` (Cockpit subjects) shows a minimal provider. `src/ui/cockpitSubjectView.test.mjs`,
 `src/cockpitSubjectProviders.test.mjs`, `src/cockpitProgress.test.mjs`,
 `src/layers/rail/cockpitSubject.test.mjs` and the Transit lifecycle tests
 cover them.
