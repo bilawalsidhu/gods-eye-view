@@ -117,13 +117,14 @@ function lookOf(raw) {
   });
 }
 
-/** Promises worded members gave, each one's rejection caught once. */
+/** Promises already given a catch: a pending one is read again on every use. */
 const caughtWords = new WeakSet();
 
 /**
  * A worded member as `read()` gives it, normalized: called on `provider`
  * when it is a function (so it can follow the page's language); null when it
- * is malformed (a promise too) or provider code throws.
+ * is malformed (a promise too) or provider code throws, its getter included
+ * (hence `read`).
  */
 function worded(provider, read, normalize) {
   try {
@@ -269,7 +270,6 @@ export function cockpitSubjectProviders(
  */
 function keptProvider(provider, order, words) {
   let { face, labels, look } = words;
-  // Look stays on or off, at its rest pitch, as read at registration.
   const restPitchDeg = look?.restPitchDeg ?? 0;
   return Object.freeze({
     kind: provider.kind,

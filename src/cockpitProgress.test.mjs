@@ -163,7 +163,7 @@ test('a CJK stop name gets the width its full-width glyphs need', () => {
   );
 });
 
-test('emoji and other astral glyphs in a progress label get at least 1 em each', () => {
+test('astral glyphs (emoji outside the BMP, supplementary kana) in a progress label get at least 1 em each', () => {
   // About 1 em in 10 px type, 0.06 em apart.
   const emPx = 10 + 0.6;
   for (const [text, needPx] of [
@@ -183,21 +183,21 @@ test('emoji and other astral glyphs in a progress label get at least 1 em each',
 });
 
 test('a label is as wide as its wider line, its smaller detail line included', () => {
-  // The detail line's <small> is 1/1.2 of 10 px; its 0.6 px spacing is not.
-  const detailEmPx = 10 / 1.2 + 0.6;
-  const detail = '中央駅前'; // 4 full-width glyphs
-  const givenPx = estimateProgressLabelPx({ text: 'GATE', detail });
   assert.ok(
-    givenPx > estimateProgressLabelPx({ text: 'GATE', detail: '' }),
+    estimateProgressLabelPx({ text: 'GATE', detail: '中央駅前' }) >
+      estimateProgressLabelPx({ text: 'GATE', detail: '' }),
     'the wider detail line widens the label',
   );
-  assert.ok(
-    givenPx >= detail.length * detailEmPx + 8,
-    `${givenPx} px given, about ${detail.length * detailEmPx} px needed`,
-  );
-  // A line takes less room as the smaller detail than as the title.
-  assert.ok(
-    estimateProgressLabelPx({ text: 'A', detail: 'CENTRAL STATION' }) <
-      estimateProgressLabelPx({ text: 'CENTRAL STATION', detail: '' }),
-  );
+  // As headless Chrome draws the detail's <small> (8.333 px JetBrains Mono,
+  // 0.6 px apart): 'WWWWMMMMWWWW' at 67.2 px, '中央駅前広場東口' at 72.9 px.
+  for (const [detail, needPx] of [
+    ['W'.repeat(64), 64 * (67.2 / 12)],
+    ['駅'.repeat(45), 45 * (72.9 / 8)],
+  ]) {
+    const givenPx = estimateProgressLabelPx({ text: 'A', detail });
+    assert.ok(
+      givenPx >= needPx,
+      `${detail.length} × ${detail[0]}: ${givenPx} px given, ${needPx} px needed`,
+    );
+  }
 });

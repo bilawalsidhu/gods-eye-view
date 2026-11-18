@@ -219,22 +219,20 @@ function fixture(
     showBriefPage() {},
     startBriefRotation() {},
     stopBriefRotation() {},
-    pushCockpitSignal(key, tone, title, detail) {
-      signals.push({ key, tone, title, detail });
-    },
-    dropCockpitSignal(key) {
-      dropped.push(key);
-    },
     scheduleContextLayout() {},
     updateLocalPosition() {},
     maybeRefreshRegionalBrief() {},
     showContextCard() {},
   });
-  if (realSignals) {
-    // The real Live Signals rows, published, not the recorder above.
-    delete cockpit.pushCockpitSignal;
-    delete cockpit.dropCockpitSignal;
-  }
+  if (!realSignals)
+    Object.assign(cockpit, {
+      pushCockpitSignal(key, tone, title, detail) {
+        signals.push({ key, tone, title, detail });
+      },
+      dropCockpitSignal(key) {
+        dropped.push(key);
+      },
+    });
   t.after(() => {
     cockpit.stop();
     app.unmount();
@@ -297,7 +295,7 @@ const lastRelease = (calls) => calls.findLast(([name]) => name === 'release');
 /**
  * Move `ride`'s subject east at `speedMps` from `startMs` (the manual clock's
  * start) on an inertial anchor, its frame otherwise as it was with `extra`
- * on top; returns where it is now (longitude).
+ * on top; returns a function giving its longitude now.
  */
 function movingEast(ride, startMs, speedMps, extra = {}) {
   const eastNow = () =>
@@ -1355,9 +1353,7 @@ test("a moving vessel's first bridge update after entry stands the anchor on its
   assert.equal(cockpit.enter(), true);
   clock.advance(1000);
   cockpit.update();
-  const anchor = Cesium.Cartographic.fromCartesian(
-    Cesium.Cartesian3.clone(cockpit.cockpitAnchor),
-  );
+  const anchor = Cesium.Cartographic.fromCartesian(cockpit.cockpitAnchor);
   const fix = cockpit.vesselFix;
   const gapM = Cesium.Cartesian3.distance(
     Cesium.Cartesian3.fromRadians(anchor.longitude, anchor.latitude, 0),
@@ -1563,4 +1559,85 @@ test('an inertial subject placed at its entry height stands on the floor once it
     Math.abs(heightM - (floorM + 3.5)) < 1,
     `1 s after the floor came the eye is at ${heightM.toFixed(2)} m, not ${floorM + 3.5} m`,
   );
+});
+
+/** How far east of LON the camera's last shot is (m). */
+const shotEastM = (shots) =>
+  (Cesium.Math.toDegrees(
+    Cesium.Cartographic.fromCartesian(shots.at(-1).destination).longitude,
+  ) -
+    LON) *
+  M_PER_DEG_LON;
+
+test('the first floor after an entry height moves an inertial anchor as a cold floor does', async (t) => {
+  // The provider corrects its subject 100 m east as the floor arrives.
+  const run = (warm) => {
+    const clock = manualClock(t, 10_000);
+    const ride = subjectProvider();
+    ride.subject.frame = {
+      ...ride.subject.frame,
+      heightM: FLOOR_M,
+      speedMps: 0,
+      anchor: 'inertial',
+      groundClamp: false,
+    };
+    const { cockpit, shots, setFloor } = fixture(t, { providers: [ride] });
+    setFloor(undefined);
+    cockpit.syncEntry();
+    assert.equal(cockpit.enter(), true);
+    ride.subject.frame = { ...ride.subject.frame, heightM: null };
+    clock.advance(100);
+    cockpit.update();
+    const beforeM = shotEastM(shots);
+    ride.subject.frame = { ...ride.subject.frame, longitude: eastM(100) };
+    if (warm) setFloor(FLOOR_M + 0.1);
+    clock.advance(100);
+    cockpit.update();
+    const stepM = shotEastM(shots) - beforeM;
+    const heightM = shotHeight(shots);
+    cockpit.stop();
+    return { stepM, heightM };
+  };
+  const cold = run(false);
+  const warm = run(true);
+  assert.ok(
+    Math.abs(warm.stepM - cold.stepM) < 0.02,
+    `east step ${warm.stepM.toFixed(3)} m with the floor arriving, ${cold.stepM.toFixed(3)} m with it cold`,
+  );
+  assert.ok(Math.abs(warm.heightM - (FLOOR_M + 0.1 + 3.5)) < 0.02);
+});
+
+test('the first floor after an entry height never steps an inertial anchor back to a held fix', async (t) => {
+  const startMs = 10_000;
+  const clock = manualClock(t, startMs);
+  const ride = subjectProvider();
+  const base = {
+    ...ride.subject.frame,
+    heightM: FLOOR_M,
+    speedMps: 30,
+    anchor: 'inertial',
+    groundClamp: false,
+  };
+  ride.subject.frame = base;
+  const { cockpit, shots, setFloor } = fixture(t, { providers: [ride] });
+  setFloor(undefined);
+  cockpit.syncEntry();
+  assert.equal(cockpit.enter(), true);
+  // Telemetry that gives a new fix once a second, 30 m on each time.
+  ride.subject.frame = () => ({
+    ...base,
+    heightM: null,
+    longitude: eastM(30 * Math.floor((performance.now() - startMs) / 1000)),
+  });
+  for (let i = 0; i < 17; i += 1) {
+    clock.advance(100);
+    cockpit.update();
+  }
+  const beforeM = shotEastM(shots);
+  // The floor arrives 1 cm off the entry height, between two fixes.
+  setFloor(FLOOR_M + 0.01);
+  clock.advance(100);
+  cockpit.update();
+  const stepM = shotEastM(shots) - beforeM;
+  assert.ok(stepM > 0, `the eye stepped ${stepM.toFixed(2)} m east`);
 });

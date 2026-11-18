@@ -56,8 +56,8 @@ export function pushCockpitSignal(
   { inPlace = false } = {},
 ) {
   if (!title || !detail) return;
-  // JSON keeps the fields apart: joined with `|`, a title or detail holding a
-  // `|` read as another pair. An in-place row also changes with its tone alone.
+  // JSON, not a joined string, so a separator inside a title or detail cannot
+  // make two rows match. An in-place row also changes with its tone alone.
   const signature = JSON.stringify([
     title,
     detail,

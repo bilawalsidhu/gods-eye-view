@@ -403,11 +403,18 @@ function updateSubject(nowMs) {
   this.surfaceWaitStartedMs = 0;
   this.surfaceAcquiring = false;
   if (!held) {
-    // The first height to replace the entry frame's places the anchor
-    // anew: an inertial one would close on it only at the horizontal
-    // correction's rate.
-    if (this.subjectHeightFromEntry && heightM !== this.subjectHeightM)
-      this.cockpitAnchorValid = false;
+    // The first height to replace the entry frame's is the anchor's at once
+    // (an inertial anchor would close on it only at the horizontal
+    // correction's rate); where the anchor stands, it stays.
+    if (
+      this.subjectHeightFromEntry &&
+      this.cockpitAnchorValid &&
+      heightM !== this.subjectHeightM
+    ) {
+      const anchor = toCartographicRadians(this.cockpitAnchor);
+      if (anchor)
+        this.cockpitAnchor = fromRadians(anchor.lon, anchor.lat, heightM);
+    }
     this.subjectHeightFromEntry = false;
   }
   this.subjectHeightM = heightM;
@@ -472,9 +479,8 @@ function updateSubject(nowMs) {
  *   Aircraft pass none and look along the heading at the profile pitch.
  */
 function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
-  // An update that sets the anchor stands it on the target with no step:
-  // the first one (the time before it, an entry or a floor wait, moved
-  // nothing), and a subject's whose height replaced its entry frame's.
+  // The update that first sets the anchor stands it on the target: the time
+  // before it (an entry, a floor wait) moved nothing, so it has no step.
   const anchoring = !this.cockpitAnchorValid;
   if (anchoring) {
     this.cockpitAnchorValid = true;
