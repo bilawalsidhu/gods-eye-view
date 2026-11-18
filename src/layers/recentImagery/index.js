@@ -833,8 +833,7 @@ export function createRecentImageryLayer({
           pruned &&
           (_followKey !== previousFollow || _previewKey !== previousPreview)
         ) {
-          // A new automatic day can have had its probe cancelled while offscreen.
-          // Re-request it even when the visible window has not moved.
+          // The new automatic day's probe may have been cancelled off-screen.
           requestThumbnails();
         }
         if (pruned) syncRender();

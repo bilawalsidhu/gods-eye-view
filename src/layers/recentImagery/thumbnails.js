@@ -169,9 +169,8 @@ export function createThumbnailLoader({
       if (existing) {
         touch(existing);
         if (existing.loading && existing.controller?.signal.aborted) {
-          // A known-present re-fetch keeps its metadata when cancelled. If
-          // that day is wanted again before cancellation settles, give the
-          // new request its own entry so the old run cannot discard it.
+          // Wanted again before the abort settles: a fresh entry, so the old
+          // run cannot discard it.
           const renewed = {
             ...existing,
             priority,
@@ -237,11 +236,9 @@ export function createThumbnailLoader({
     },
 
     /**
-     * Keep only refinement work still wanted by the current UI intent.
-     *
-     * Known decoded/probed entries may remain warm under the LRU residency
-     * policy, but queued or in-flight acquisition for no-longer-wanted keys is
-     * cancelled. A cancelled known-present re-fetch keeps its proven metadata.
+     * Cancel queued and in-flight work for every key not in `keys`. Settled
+     * entries stay under the LRU; a cancelled re-fetch of a present day keeps
+     * its status.
      * @param {Iterable<string>} keys
      */
     retain(keys) {

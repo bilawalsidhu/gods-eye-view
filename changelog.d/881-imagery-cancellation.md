@@ -1,1 +1,5 @@
-- Cancel superseded Recent Imagery thumbnail fetches when focus, visible range, pins or preview change; retain known-good availability metadata and count each aborted in-flight request once. When the followed automatic day resolves empty, re-request its successor even if scrolling previously cancelled that probe (kvnloo, #881; independent reviews: quanticsoul4772, gekh).
+- Cancel Recent Imagery thumbnail fetches that are no longer wanted when focus,
+  the visible strip, pins or sources change; a day already known to have
+  imagery stays known. When the automatic day turns out empty, fetch the next
+  day again even if scrolling had cancelled it (kvnloo, #881; reviews:
+  quanticsoul4772, gekh).
