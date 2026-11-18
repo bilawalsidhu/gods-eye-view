@@ -14,6 +14,7 @@ import { DataLayerManager } from '../data/manager.js';
 const viewerFixture = () => ({
   clock: { onTick: { addEventListener: () => () => {} } },
   camera: { moveEnd: { addEventListener() {} } },
+  canvas: { addEventListener() {}, removeEventListener() {} },
   scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
 });
 const request = (ws, id, name, args = {}) =>

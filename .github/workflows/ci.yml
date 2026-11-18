@@ -53,6 +53,10 @@ jobs:
         if: github.event_name == 'pull_request'
         run: npm run layer-token:check -- --base-ref origin/main
 
+      - name: Check Data Library manifests and share tokens
+        if: github.event_name == 'pull_request'
+        run: npm run library:check -- --base-ref origin/main
+
       - name: Run unit tests
         run: npm test
 
@@ -101,6 +105,16 @@ jobs:
 
       - name: Street Level gate with Mapillary fixtures
         run: npm run qa:street-level:fixtures -- --strict --url http://localhost:4173
+
+      - name: The whole application on the stub renderer, with no Cesium loaded
+        run: |
+          mkdir -p qa-artifacts
+          npm run qa:stub-boot -- --json qa-artifacts/stub-boot.json
+
+      - name: The renderer contract's logic checks on Cesium, headless
+        run: |
+          mkdir -p qa-artifacts
+          npm run qa:conformance -- --json qa-artifacts/conformance.json
 
       - name: Preview server log
         if: failure()

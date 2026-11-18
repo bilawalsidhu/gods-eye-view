@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import { creditFromMarkup } from '../render/creditMarkup.js';
+import { findCredits } from '../render/rendererOf.js';
 
 /**
  * Per-layer data attribution registered into Cesium's credit display.
@@ -44,6 +45,20 @@ export const ACARTIA_CREDIT = Object.freeze({
 
 const osmDisplays = new WeakMap();
 
+/** The short inline OSM credits, as the renderer's credits port takes them. */
+const OSM_INLINE_CREDITS = Object.freeze({
+  osm: Object.freeze({
+    text: '© OpenStreetMap',
+    href: 'https://www.openstreetmap.org/copyright',
+    inline: true,
+  }),
+  tiles: Object.freeze({
+    text: '© OpenMapTiles',
+    href: 'https://openmaptiles.org',
+    inline: true,
+  }),
+});
+
 function updateOsmDisplay(viewer, state) {
   const osm = state.owners.size > 0;
   let tiles = false;
@@ -52,37 +67,27 @@ function updateOsmDisplay(viewer, state) {
     ['osm', osm],
     ['tiles', tiles],
   ]) {
-    if (state[key].visible === visible) continue;
-    state[key].visible = visible;
-    viewer.creditDisplay[visible ? 'addStaticCredit' : 'removeStaticCredit'](
-      state[key].credit,
-    );
-    viewer.scene?.requestRender?.();
+    if (Boolean(state.offs[key]) === visible) continue;
+    if (visible) {
+      // Looked up each time: a renderer bound later takes over.
+      const credits = findCredits(viewer);
+      if (credits) state.offs[key] = credits.addStatic(OSM_INLINE_CREDITS[key]);
+    } else {
+      state.offs[key]();
+      state.offs[key] = null;
+    }
   }
 }
 
-/** Keep one short inline credit while an OSM display owner has visible data. */
+/**
+ * Keep one short inline credit, through the renderer's credits port, while
+ * an OSM display owner has visible data.
+ */
 export function showOsmCredit(viewer, owner, { openMapTiles = false } = {}) {
-  if (!viewer?.creditDisplay?.addStaticCredit || !owner) return false;
+  if (!owner || !findCredits(viewer)) return false;
   let state = osmDisplays.get(viewer);
   if (!state) {
-    state = {
-      owners: new Map(),
-      osm: {
-        visible: false,
-        credit: new Cesium.Credit(
-          '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>',
-          true,
-        ),
-      },
-      tiles: {
-        visible: false,
-        credit: new Cesium.Credit(
-          '<a href="https://openmaptiles.org" target="_blank" rel="noopener">© OpenMapTiles</a>',
-          true,
-        ),
-      },
-    };
+    state = { owners: new Map(), offs: { osm: null, tiles: null } };
     osmDisplays.set(viewer, state);
   }
   if (state.owners.get(owner) === openMapTiles) return false;
@@ -140,6 +145,13 @@ export const DATA_CREDITS = [
       'Aircraft photos: ' +
       '<a href="https://www.planespotters.net" target="_blank" rel="noopener">Planespotters.net</a> ' +
       '· each photo is © its photographer, credited beside it',
+  },
+  {
+    key: 'openvesselphotos',
+    html:
+      'Vessel photos: ' +
+      '<a href="https://openvesselphotos.org" target="_blank" rel="noopener">Open Vessel Photos</a> ' +
+      "· each photo keeps its author's open licence, credited beside it",
   },
   {
     key: 'aisstream',
@@ -504,6 +516,10 @@ export const DATA_CREDITS = [
     html: 'Transit vehicles: operator GTFS-Realtime feeds (each operator is credited below when its vehicles are shown)',
   },
   {
+    key: 'rail-gtfs-rt',
+    html: 'Trains: operator realtime feeds (each operator is credited below when its trains are shown)',
+  },
+  {
     key: 'radio-browser',
     html:
       'Internet-radio station directory: ' +
@@ -574,6 +590,38 @@ export const DATA_CREDITS = [
       'Shown as published; reports are S2 assessments, not verified fact.',
   },
   {
+    key: 'news',
+    html:
+      'News: every report is credited to its own publisher and links to the original article; ' +
+      'pictures are the publishers’ own, shown from their sites with the publisher named. ' +
+      'Places, categories, severity and English headlines are derived automatically, by ' +
+      'bundled rules, the news provider or the configured news server, and can be wrong.',
+  },
+  {
+    // GDELT's terms ask for a citation and a link.
+    key: 'gdelt-news',
+    html:
+      'News, Conflicts without a news server: events and page titles from the ' +
+      '<a href="https://www.gdeltproject.org/" target="_blank" rel="noopener">GDELT Project</a> ' +
+      '(GDELT 2.0 events and GKG; places and categories are machine-coded)',
+  },
+  {
+    // World News API's free plan asks for a visible "World News API" link to
+    // its site; always listed, so a free-plan key is never shown without it.
+    key: 'worldnewsapi',
+    html:
+      'News, Local without a news server: headlines from ' +
+      '<a href="https://worldnewsapi.com/" target="_blank" rel="noopener">World News API</a>',
+  },
+  {
+    key: 'shipwrecks',
+    html:
+      'Shipwrecks (Europe): <a href="https://emodnet.ec.europa.eu/en/human-activities" target="_blank" rel="noopener">EMODnet Human Activities</a> ' +
+      '(data originator AND-International, compiled from SHOM, Ireland&rsquo;s National Monuments Service, Historic England and the Oxford Roman Economy Project), ' +
+      'licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>' +
+      ' · Shipwrecks (worldwide): <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0)',
+  },
+  {
     key: 'drivebc-cctv',
     html:
       'CCTV cameras &amp; frames (British Columbia): ' +
@@ -639,6 +687,15 @@ export const TOMTOM_CREDIT = {
     '<a href="https://www.tomtom.com" target="_blank" rel="noopener">TomTom</a>',
 };
 
+/** Registered when the News layer shows a Liveuamap report (only with
+ * LIVEUAMAP_API_KEY set and no news server). */
+export const LIVEUAMAP_CREDIT = {
+  key: 'liveuamap',
+  html:
+    'News, Conflicts: mapped reports from ' +
+    '<a href="https://liveuamap.com/" target="_blank" rel="noopener">Liveuamap</a>',
+};
+
 /** Registered when the first Natural Earth region or state/province outline
  * resolves (public domain — no attribution required; credited as a courtesy). */
 export const NATURAL_EARTH_CREDIT = {
@@ -646,6 +703,15 @@ export const NATURAL_EARTH_CREDIT = {
   html:
     'Country, state/province and physical region boundaries from ' +
     '<a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a> (public domain)',
+};
+
+/** Registered when a name from the bundled Wikidata places packs is first
+ * shown (CC0 — no attribution required; credited as a courtesy). */
+export const WIKIDATA_PLACES_CREDIT = {
+  key: 'wikidata-places',
+  html:
+    'City, town and village names from ' +
+    '<a href="https://www.wikidata.org" target="_blank" rel="noopener">Wikidata</a> (CC0)',
 };
 
 /** Registered when the first bundled US county or place outline resolves
@@ -718,6 +784,20 @@ export function transitFeedCredit(feed, snapshot = null) {
   };
 }
 
+/**
+ * Per-feed rail credit, registered the first time that feed's trains render
+ * (see `src/data/railFeeds.js` for the licence of each).
+ * @param {{ id: string, attribution: string, license: string, licenseUrl: string }} feed
+ * @returns {{ key: string, html: string }}
+ */
+export function railFeedCredit(feed) {
+  const transit = transitFeedCredit(feed);
+  return {
+    key: `rail-${feed.id}`,
+    html: transit.html.replace(/^Transit \(/, 'Trains ('),
+  };
+}
+
 /** Registered when the Bhote Koshi event reconstruction activates. */
 export const BHOTE_KOSHI_CREDIT = {
   key: 'bhote-koshi-2026',
@@ -737,43 +817,84 @@ export const BHOTE_KOSHI_LOCATOR_CREDIT = {
     '(CC BY-NC 4.0)',
 };
 
+/** A link, its whole element. */
+const LINK = /<a\b(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?<\/a\s*>/gi;
+/**
+ * The separators text between two links can break at; it breaks at its
+ * last. A semicolon ending a character reference is not one. A full stop
+ * after an abbreviation reads as one, so keep "Dr." and "e.g." out of the
+ * text between links.
+ */
+const SEPARATOR = /\s*(?:[,·—–]|(?<!&#?\w+);)\s*|\.\s+|\s+(?=\()/g;
+
+/**
+ * A credit's markup as the renderer's credits, one link each: the
+ * contract's credit carries one link, so markup with several becomes one
+ * credit per link, shown together in order. The text between two links
+ * breaks at its last separator (a comma, semicolon, dot or dash, a full
+ * stop, or before an opening bracket); closing brackets right after a link
+ * stay with it, and a break's comma, semicolon, dot or dash is dropped.
+ * @param {string} html
+ * @returns {import('../render/contract/credits').Credit[]}
+ */
+export function creditsFromMarkup(html) {
+  const markup = String(html);
+  const pieces = [''];
+  let at = 0;
+  for (const link of markup.matchAll(LINK)) {
+    let gap = markup.slice(at, link.index);
+    if (at > 0) {
+      const close = /^[)\]]*/.exec(gap)[0];
+      gap = gap.slice(close.length);
+      const cut = [...gap.matchAll(SEPARATOR)].at(-1);
+      const before = cut ? gap.slice(0, cut.index) : '';
+      const stop = cut && cut[0].trimStart().startsWith('.') ? '.' : '';
+      pieces[pieces.length - 1] += close + before + stop;
+      pieces.push(cut ? gap.slice(cut.index + cut[0].length) : gap);
+    } else pieces[0] += gap;
+    pieces[pieces.length - 1] += link[0];
+    at = link.index + link[0].length;
+  }
+  pieces[pieces.length - 1] += markup.slice(at);
+  return pieces
+    .map((piece) => ({ ...creditFromMarkup(piece), inline: false }))
+    .filter((credit) => credit.text);
+}
+
+/** Add a data credit to the attribution list through the renderer. */
+function addDataCredit(viewer, credit) {
+  const credits = findCredits(viewer);
+  if (!credits) return false;
+  for (const one of creditsFromMarkup(credit.html)) credits.addStatic(one);
+  return true;
+}
+
 /** @type {Set<string>} Keys of dynamic credits already registered this session. */
 const _dynamicCreditKeys = new Set();
 
 /**
  * Register a conditional credit at the moment its data source activates.
- * Idempotent per `credit.key`; lands in the same "Data attribution" popover
- * as the static credits (showOnScreen=false).
- * @param {Cesium.Viewer} viewer — the initialized Cesium viewer
+ * Idempotent per `credit.key`; lands in the same "Data attribution" list
+ * as the static credits, through the renderer's credits port.
+ * @param {object} viewer — the scene object the renderer is bound to
  * @param {{ key: string, html: string }} credit — e.g. `TOMTOM_CREDIT`
  * @returns {boolean} True when the credit is (now) registered.
  */
 export function registerDynamicCredit(viewer, credit) {
-  const creditDisplay = viewer?.creditDisplay;
-  if (!creditDisplay || typeof creditDisplay.addStaticCredit !== 'function') {
-    return false;
-  }
-  if (!credit?.key || !credit?.html) return false;
-  if (_dynamicCreditKeys.has(credit.key)) return true;
-  creditDisplay.addStaticCredit(new Cesium.Credit(credit.html, false));
+  if (!viewer || !credit?.key || !credit?.html) return false;
+  if (_dynamicCreditKeys.has(credit.key)) return Boolean(findCredits(viewer));
+  if (!addDataCredit(viewer, credit)) return false;
   _dynamicCreditKeys.add(credit.key);
   return true;
 }
 
 /**
- * Register every per-layer data credit into the viewer's credit display.
- * Idempotent: safe to call once at init. Credits are static and always
- * present in the "Data attribution" popover.
- * @param {Cesium.Viewer} viewer — the initialized Cesium viewer
+ * Register every per-layer data credit through the renderer's credits
+ * port. Safe to call once at init. Credits are static and always present
+ * in the "Data attribution" list, not on the map's credit line.
+ * @param {object} viewer — the scene object the renderer is bound to
  */
 export function registerDataCredits(viewer, credits = DATA_CREDITS) {
-  const creditDisplay = viewer?.creditDisplay;
-  if (!creditDisplay || typeof creditDisplay.addStaticCredit !== 'function') {
-    return;
-  }
-  for (const { html } of credits) {
-    // showOnScreen=false → lives in the expandable "Data attribution" popover,
-    // not the on-globe credit line.
-    creditDisplay.addStaticCredit(new Cesium.Credit(html, false));
-  }
+  if (!viewer) return;
+  for (const credit of credits) addDataCredit(viewer, credit);
 }

@@ -71,7 +71,8 @@ export function normalizeReadsbAircraft(row, snapshotTimeMs) {
     ellipsoidAltitudeM: geoFt == null ? null : geoFt * 0.3048,
     onGround: cleanText(row.alt_baro).toLowerCase() === 'ground',
     speedMps: speedKts == null ? null : speedKts * 0.514444,
-    courseDeg: finite(row.track),
+    // No track (parked, slow): the true heading, where the nose points.
+    courseDeg: finite(row.track) ?? finite(row.true_heading),
     verticalRateMps: rateFtMin == null ? null : rateFtMin * 0.00508,
     category: row.category ?? null,
     typeCode: cleanText(row.t),
@@ -108,6 +109,11 @@ export function openSkySnapshot(
       const statuses = payload?.emergencyByIcao;
       if (record && statuses && Object.hasOwn(statuses, record.id))
         record.emergency = cleanText(statuses[record.id]).toLowerCase() || null;
+      // A state vector has no type field; a feed that knows the airframe's
+      // ICAO type designator sends it alongside, by ICAO address.
+      const types = payload?.typeByIcao;
+      if (record && types && Object.hasOwn(types, record.id))
+        record.typeCode = cleanText(types[record.id]).toUpperCase() || null;
       return record;
     },
     'OpenSky',

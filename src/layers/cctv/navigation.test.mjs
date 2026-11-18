@@ -8,19 +8,11 @@ function fixture() {
     { camera: { id: 'west', lat: 40, lon: -120 } },
     { camera: { id: 'east', lat: 40, lon: -100 } },
   ];
-  const state = {
-    _records: records,
-    _viewer: {
-      camera: {
-        positionCartographic: {
-          latitude: (40 * Math.PI) / 180,
-          longitude: (-101 * Math.PI) / 180,
-        },
-      },
-    },
-  };
+  const state = { _records: records };
+  const eye = { pose: { lat: 40, lon: -101 } };
   const parts = {
     model: {
+      eyePose: () => eye.pose,
       haversineKm(lat1, lon1, lat2, lon2) {
         return Math.hypot(lat1 - lat2, lon1 - lon2);
       },
@@ -40,7 +32,7 @@ function fixture() {
     parts,
     source: {},
   });
-  return { state, navigation, selected };
+  return { state, eye, navigation, selected };
 }
 
 test('nearest camera can be resolved from an explicit WGS84 target', () => {
@@ -69,9 +61,9 @@ test('invalid target coordinates fail closed', () => {
 });
 
 test('opening camera keeps viewer-nearest and first-record fallback', () => {
-  const { state, navigation } = fixture();
+  const { state, eye, navigation } = fixture();
   assert.equal(navigation.openingCameraId(), 'east');
-  state._viewer = null;
+  eye.pose = null;
   assert.equal(navigation.openingCameraId(), 'west');
   state._records = [];
   assert.equal(navigation.openingCameraId(), null);

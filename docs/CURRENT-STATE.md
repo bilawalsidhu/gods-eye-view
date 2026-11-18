@@ -1,5 +1,33 @@
 # God's Eye View Current State
 
+An aircraft (civil or military) faces its reported ground track, else its
+true heading (readsb `true_heading`). With neither, it faces the way its own
+fixes went (`courseFromFixes`, `src/data/courseFromFixes.js`): the course runs
+from an anchor fix to the newest once they are 30 m apart, and the anchor then
+moves on, so frequent fixes of a slow aircraft add up while position noise on
+a parked one never makes a course. A fix that is not a second newer (a repeat,
+or an older position from another feed) and one reported slower than 2 m/s
+give no course and keep the last; an aircraft with no course at all faces
+north.
+
+While anything moves (a layer in motion, the camera, a followed contact), the
+globe draws at the display's own refresh rate; there is no fixed 60 FPS cap.
+The render governor (`src/renderGovernor.js`) caps a parked scene at
+`IDLE_FRAME_RATE` (60) ticks a second while nothing holds the loop, because
+Cesium still runs the clock, data sources and update listeners on every
+animation frame even when it skips the draw, and lifts the cap while anything
+does: the frame port tells it when the loop's first hold is taken and its last
+released, its own holds (animated visual styles) included. The viewer starts
+at that cap until the governor is installed. Through the idle
+render governor, the camera port holds continuous render from `moveStart` to `moveEnd`, and samples its
+pose every 250 ms in between, so a camera drifting by rounding errors (no
+`moveEnd`) is released after half a second at rest and held again if it moves. The world clock holds continuous render while
+it plays away from the live edge (not while it steps or waits for data), so
+playback draws at the display's rate too. Waits that used to count frames (a followed contact's first
+position, a shared follow view) count drawn time
+through `src/time/frameWait.js`, at most 100 ms a frame, so they last the same
+at any refresh rate and a background tab does not use them up.
+
 Docker Compose mounts the checkout with the shared SELinux `:z` label so
 containers can read it on enforcing SELinux hosts. The separate image-owned
 `node_modules` volume and loopback-only port publishing remain unchanged.
@@ -76,7 +104,7 @@ does nothing, wherever it starts. Rotation drags that start on the planet, and
 zoom, are unchanged. How much of the frame shows the planet's surface is
 measured by casting a 32×18 grid of view rays at the ellipsoid; while the scope
 mask is on (the default) only the rays inside its keyhole count, since the mask
-hides or dims the rest. Voice tilt and in-place turns of a free 3D camera above
+hides or dims the rest. Voice tilt and in-place turns of a free camera above
 1,000 km stop when about a tenth of the frame still shows the surface (or about
 as much as it showed when it started), never less than about 1% of the visible
 frame, and a view that already shows less only keeps or gains what it has. A
@@ -107,7 +135,7 @@ Views with more surface than that, such as the oblique orbital Director shots,
 are left as they are, and so are tracked or locked cameras, a camera flight in
 progress, a Director scene while it plays (holds included), a pointer held
 down on the globe (a drag held still; with several fingers down, until the
-last is released) and the 2D and Columbus modes; a check a flight, scene or
+last is released); a check a flight, scene or
 held pointer defers runs once it ends. A release outside the window that the
 page never sees counts as given once the window loses focus, the page is
 hidden, the canvas loses the pointer's capture, or the pointer moves with no
@@ -117,6 +145,11 @@ its surface without a camera move (a resize, or turning the scope on) is left as
 it is until the next move. A voice turn requested while the camera is tracked is
 judged by the pose voice's release of the follow camera will leave, before that
 release, so a refused turn keeps the tracking.
+
+The app draws only the 3D globe: the renderer it draws through has no 2D or
+Columbus view. Voice tilt, in-place turns and the move-end recovery above are
+written for that globe alone and carry no check for the other scene modes,
+which in Cesium's 2D and Columbus views made them do nothing.
 
 Analyst region queries resolve unique Natural Earth names offline without
 geocoding, so Gold Coast and Ivory Coast name the West African natural regions.
@@ -166,6 +199,49 @@ approximations. Four great-circle copies remain for a follow-up:
 across the antimeridian, so they cannot use the strict ±180 check as-is, and
 `src/sources/adsbRecords.js` and `server/providers/common/geo.js` keep their own
 implementations.
+
+## Shipwrecks — EMODnet and Wikidata
+
+The Events group includes **Shipwrecks** (`shipwrecks`, share-link token `01`),
+off by default. `/api/shipwrecks` downloads EMODnet Human Activities'
+`emodnet:heritageshipwrecks` WFS layer (about 7,000 wrecks in European waters
+compiled from SHOM, Ireland's National Monuments Service, Historic England and
+the Oxford Roman Economy Project; CC BY 4.0) and a Wikidata SPARQL query for
+shipwreck items with a coordinate and at least one Wikipedia article (about
+1,450 worldwide; CC0). A source that answered well is asked again after 24 hours;
+one that failed is asked again after 15 minutes. Each source keeps its own last
+good records: a source that fails, answers with nothing usable, or answers with
+less than half of its last good set keeps serving its earlier records as stale
+for up to seven days, and never removes the other source's wrecks. When the
+page cannot refresh, the wrecks it shows are marked stale, and it removes them
+once even the newest source is past seven days, counted from the ages the
+proxy reported (so the page and server clocks are never compared; a wreck
+both sources list is one record, so nothing is removed per source). EMODnet rows the portal took from
+wrecksite.eu are skipped (that site is not openly licensed). A Wikidata wreck
+with the same name within 3 km of an EMODnet wreck is merged into one record
+that keeps the article link and takes EMODnet's year, sinking text, depth and
+position accuracy. Only ship columns are read: EMODnet's long histories
+(`ship_char`, `obj_desc`) are not. Sinking, cargo and description text that
+refers to a person by a title or role (Mr, captain, master, owner, crew,
+"reported by", …) is dropped whole by a keyword filter; a bare name with no
+such word can still pass. Deaths appear only as a Wikidata count.
+
+The globe draws a round marker with a hull and mast per wreck, all in one
+billboard collection, ground-clamped with the depth test off and the horizon
+cull GhostMaps uses, sized by deaths (a bigger toll draws on top) and coloured
+by era (a legend under the row): before 1900 (ancient wrecks dated only by
+period count here), 1900–1945, after 1945, and date unknown. A period filter
+under the row picks a start year and an end year side by side (two pickers
+over the years that have a wreck; a reversed pair is stored swapped); undated
+wrecks show only when every year is selected. The filter is session-only (not
+in the share link). Clicking a marker opens a `stateless` card: deaths and
+survivors first, then the sinking date or year (or the archaeological dating)
+and waters, vessel type, what happened, least depth and its quality, how well
+the position is known, period notes or the Wikidata description, cargo or
+finds, protected status and source.
+Clicking the card opens the Wikipedia article (else the Wikidata item), the
+wreck's own web page when EMODnet lists one, else EMODnet's portal. Voice does
+not toggle this layer yet (prompt budget, as for the airspace layer).
 
 ## Wildlife Sightings — iNaturalist and Acartia
 
@@ -322,6 +398,30 @@ The source factories are exported at `layers/directions/source` and
 `layers/recent-imagery/source`. Configuration is applied at construction time;
 this does not introduce live source replacement.
 
+Application catalog composition also accepts an optional `placement`, a
+host-supplied placement provider (`src/data/placementProvider.js`): an object
+whose `layer(kind)` returns, for `aircraft`, `military`, `vessels`, `transit`
+or `rail`, either null or `{ place(id, wallMs), observe?(id, fix),
+forget?(id) }`. While live, each of those layers tells it every fix it accepts
+(time, position, the height it draws the fix at, reported speed, course and
+ground state) and draws a contact where `place` puts it: position, height
+(the layer's own when none is given), course and speed. A null answer, a
+provider that throws, a kind it leaves out, or no provider at all keeps the
+layer's own motion, unchanged; following the world clock, the layers never
+ask it. A tracked aircraft or military aircraft the provider places keeps its
+trail joined to it: the trail runs up to the time read off its own reports
+where the aircraft is drawn, not the layer's display delay, so it neither
+stops short of the aircraft nor runs on ahead of it, and it is drawn from the
+first report behind the aircraft. Transit and rail vehicles a provider places are advanced every frame
+in view while their placed position changes; one it holds still lets the
+render loop idle and is asked again each second, moving on once its placement
+does. A placed transit vehicle is drawn at its placed point, and a placed
+train where it is placed rather than on its bound railway line. Live vessels
+a provider places move on between refreshes: redrawn in place every frame,
+with the next frame asked for as soon as the fastest drawn vessel will have
+moved half a pixel on screen, at least once a second while the provider places
+any drawn vessel, and none once the layer is off.
+
 Application catalog composition accepts an optional `streetLevelProviders` list.
 An explicit list replaces the default Mapillary provider; an empty list removes
 all imagery providers. Without that option, Mapillary is registered only when
@@ -340,6 +440,381 @@ The custom switch field is bounded to 256 characters;
 provider registration rejects compositions that cannot fit rather than truncating
 identities. A malformed or duplicate entry invalidates the complete custom-switch
 field. Existing whole-link size limits still apply.
+
+## Data Library — October 21, 2026
+
+DATA LAYERS keeps its curated core layers; everything else lives in the Data
+Library, opened from **Browse data library** at the foot of the panel. An entry
+is a manifest in `src/library/entries/` that points at a live upstream its
+provider hosts — a query API, a provider-hosted static file or a tile endpoint.
+Nothing an entry describes is bundled, so a self-hosted instance serves every
+entry without hosting data. Manifests are validated strictly when
+`src/library/catalog.js` loads (unknown fields are errors), so an invalid entry
+fails the unit suite. Authoring guide: [DATA-LIBRARY.md](DATA-LIBRARY.md).
+
+Three kinds ship. A `dataset` (GeoJSON, GeoJSON Lines, CSV with lat/lon
+columns, a JSON record list read from `source.records` with named or guessed
+lat/lon fields, or a paged ArcGIS FeatureServer query) renders through the same
+GeoJSON layer as Datacenters and Dams, with the manifest's label, up to two
+card fields and an optional `rank` field that orders a capped set and feeds the
+layer's level-of-detail priority (0–600, below the named/unnamed gap). A capped
+dataset reads PARTIAL. A dataset with `source.view` is view-bounded,
+for layers too large to load whole (FEMA USA Structures: ~135 million
+footprints): below `view.maxAltitudeM` it queries ArcGIS for what intersects a
+window around the point the camera looks at (half the camera height each way,
+330 m – 5.5 km, clipped to the visible rectangle), one page per view after the
+camera settles, replacing the previous set only when the new one is ready and
+aborting a superseded request; above it the row reads "zoom in to load this
+layer" and nothing is fetched. Footprints are ground-clamped polygons (draped on
+Google 3D tiles too), without outlines. Zoom to layer lands straight above the
+manifest's `view.sample` area at 60 % of the altitude limit. View-bounded
+entries are ArcGIS or GeoParquet, and browser-direct, in this build.
+
+`geoparquet` datasets are read in the browser with `hyparquet` (with `fzstd`
+for ZSTD), imported lazily on first use; only the columns an entry uses are
+decoded, and WKB geometry arrives as GeoJSON. A partitioned set
+(`source.partitions`: an S3 ListObjectsV2 `listUrl` and a `keyBase`, both on the
+source host) must be view-bounded. Its index — each file's GeoParquet footer
+bbox, read with one range request per file — comes from `/api/library/index/<id>`
+(built once per `cacheSeconds` and shared), or is built in the browser and kept
+in `gev:library:index:<id>` on a static build. Footer bboxes can be stretched
+by stray geocodes, so candidates are ranked by how much of each file's bbox
+the view covers, read in parallel batches of four (up to eight per view)
+until a batch has features in view, and each file read once teaches its real
+extent (the box holding 98 % of its points, `gev:library:extent:<id>`), so
+later views skip files that do not cover them. The last four decoded files
+stay in memory. `display.colorBy` colours each feature by a field's value (a
+dotted path such as `categories.0.title` is flattened into the feature's
+`__gevColorKey`): view-bounded layers draw 6 px dots or filled polygons, other
+datasets keep the GeoJSON layer's stems, cards and level of detail with a
+per-feature colour (`featureColor` in `localGeojsonCore.js`). Values sharing a
+`colorBy.labels` label form one legend group (coal, gas and oil are "Fossil");
+values the manifest does not colour draw in `display.color` and count as
+Other. The row legend lists each group with its count (in view, or in the
+loaded set), one item per line as Fire Perimeters' does. Status-like fields
+(GDACS and PortWatch alert levels, NWS severity, bridge condition) use the
+fixed status palette (good #0ca30c, warning #fab219, serious #ec835a,
+critical #d03b3b); categorical ones (fuel, EONET category, building
+occupancy) use at most four hues that pass all-pairs colour-vision checks on
+the dark globe, plus a neutral Other. Tile layers carry a static
+`display.legend` copied from the provider's own scale (GBIF classic.poly,
+JRC occurrence, Macrostrat's ICS period colours). Aerial photo layers (IGN, GSI
+photos, swisstopo SWISSIMAGE) set `display.outline`: their covered countries'
+borders draw as a thin white ground-clamped line, so the imagery's edge is
+plain, with a "Coverage outline" legend item. Borders come from Natural
+Earth's 1:50m admin-0 countries (public domain, fetched live once per page and
+credited); `countries` draws every part (Japan's islands, Liechtenstein beside
+Switzerland), `coverage` only the parts inside `coverage.bbox` (metropolitan
+France). A failed border fetch costs only the
+outline. The same layers set `display.aerial`: they drape above every other
+imagery layer and raise themselves again whenever another drape is added, so a
+basemap or weather overlay switched on later goes underneath. Each is
+`source.bounded` (tiles requested inside `coverage.bbox` only) and names its
+provider's no-imagery fill in `display.noDataColor`, drawn transparent through
+Cesium's colour-to-alpha (max channel distance 0.02): measured fills are
+swisstopo white, IGN's flat ocean blue (#0a3b59) and GSI's ocean grey
+(#343434). Without both, a white fill covered the whole globe. A 4xx tile
+answer counts as "no imagery here", never as a tile error. IGN's overseas
+departments are outside its single bbox and are not shown. The aerial set now holds 60
+entries: 57 imported from the Open Imagery Register (national programmes in
+Belgium (Wallonia), Germany, Estonia, Spain, Poland, Portugal, Australia's
+NSW, and 49 US services: NAIP plus state, county and city programmes) plus
+IGN, GSI and SWISSIMAGE, each with an `imagery`
+block (type, published resolution, true ortho, years flown, refresh) that
+Browse shows as a spec list. Tiles take `xyz` (with `{reverseY}` for TMS) or
+`bbox` templates (`{bbox-epsg-3857}`: WMS GetMap and ArcGIS export, filled
+by Cesium in the browser and by the proxy from z/x/y). Sub-national entries
+draw a `bbox` rectangle outline without fetching the country borders. 35
+entries whose licence the register gives only as "see publisher terms" are
+operator opt-in. Norway comes from Kartverket's open
+services (CC BY 4.0, "© Kartverket"; its zoom 12–20 Geovekst data may be shown
+in live services but not copied): the topographic, greyscale, raster-topo and
+nautical-chart caches (`xyz`), and WMS hillshade, DTM colour relief, sea depths
+(from zoom 11, Kartverket's 16-class depth legend), county and municipality
+boundaries, and the cadastre (from zoom 14). Norge i bilder needs
+authentication and is not included. `mapterhorn-terrain` is the first
+`source.encoding: terrarium` entry: Mapterhorn's global 512 px terrain-RGB
+tiles are decoded per tile in the browser (`src/library/relief.js`) into
+shaded relief with a six-class elevation legend in metres. A `tiles` entry (`{z}/{x}/{y}` template) drapes on the
+active imagery host — the globe, or the Google 3D tileset — and follows map
+stack switches; with no host it shows the existing "choose a globe map"
+guidance, and its row reads DRAPED rather than a count. A `pack` describes an
+existing host-layer source pack (today the opt-in CCTV packs): it is
+informational in Browse, names the host's own switch (`CCTV_NYC_ENABLED=1` and
+so on) and offers no Add. The `provider` kind from the RFC is refused by the
+validator until it ships.
+
+Entries register their layer only when a viewer adds them, after the core
+catalog is sealed: `LayerLifecycle.registerLibraryLayer` accepts only ids in
+the `lib-<entry id>` namespace and only after `finalizeRegistrations`, and
+`unregisterLibraryLayer` destroys them. Library layers never enter
+`LAYER_STATE_REGISTRY` or the core token ledger. The panel groups them under a
+**Library** heading after every core group and rebuilds its rows on a
+`registrations` activity. Add switches the layer on; Remove destroys it.
+A library layer's row carries two icon chips, on or off (the panel shows
+row controls for an off layer only for Data Library rows, whose chips are
+marked `whileOff`): **Zoom to layer**
+(`zoom_in_map`) flies to the extent of the loaded features, or a tiles entry's
+declared coverage, taking the shorter way round the antimeridian and showing the
+whole globe for world-scale sets; **Remove from Data Layers** (`delete`)
+removes the entry. Zoom on a layer that is off switches it on first (a
+dataset only knows its extent once loaded). Zoom runs as an immediate
+navigation (`layer`), so Cockpit
+refuses it with its own message and the current follow owner is released first;
+reduced motion flies instantly. Icon chips (`chipGroup.js` `icon`/`action`) use
+their label as accessible name and tooltip and carry no `aria-pressed`.
+
+This browser's selection persists in `gev:library:v1` (`{ added, on }`), written
+only for explicit (user, voice, tool) changes, like core layer state, so a
+Context session's temporary changes are not remembered. Share links carry the
+switched-on entries as `lib=<t>.<t>` with the permanent two-character tokens in
+`src/library/ledger.json` (append-only; packs take none). A link's entries join
+the viewer's library and, as for core layers, the link alone decides what is
+on. Unknown tokens are skipped. The live hash follows the existing
+initial-restore suppression.
+
+Browser-direct entries are fetched without cookies or a referrer, redirects
+refused, bodies capped while streaming. Proxied entries go through
+`/api/library` (`server/providers/library.js`): `/catalog` reports each entry's
+availability and reason (`operator-opt-in`, `operator-disabled`, `key-missing`)
+without secrets; `/data/<id>` and `/tile/<id>/<z>/<x>/<y>` reach only the
+manifest's fixed upstream (the browser names an id, never a URL), refuse
+redirects and off-manifest hosts, cap dataset bodies at the manifest's
+`maxBytes` (≤ 32 MiB) and tiles at 2 MiB of `image/png|jpeg|webp`, cache per the
+manifest's `cacheSeconds` (60 s – 24 h; at most 512 tiles), serve the last good
+dataset as stale on failure, rate-limit per client, and never return upstream
+text. A keyed entry must be proxied; its key comes from the server environment
+through the key registry and its routes use the strict cross-site gate, while
+keyless routes use the keyless gate so they work behind a reverse proxy.
+Operators opt entries in with `GEV_LIBRARY_ENABLE` and remove them with
+`GEV_LIBRARY_DISABLE`. A static build with no server still serves every
+browser-direct, non-opt-in entry; proxied ones say they need the app's server.
+The proxy is a fetch handler (`createLibraryHandler`, exported as
+`gods-eye-view/sources/library`) that the dev server mounts behind its gates.
+Another server can mount it with `listed` (hide entries: the catalog marks them
+`listed: false` and Browse leaves them out) and `proxied` (route browser-direct
+entries through it: the catalog marks them `fetch: "proxied"`). A routed
+view-bounded entry asks for its box snapped to a power-of-two grid
+(`libraryViewBox`, `?bbox=` on `/data/<id>`); GeoParquet entries are read on the
+server then. Tile, data and complete index answers carry `public,
+max-age=<cacheSeconds>` (`private` when keyed). `createApplicationTools`
+takes `library.fetchTile` and `library.fetchData` so an application can fetch
+library tiles and proxied datasets through its own cache.
+
+The Browse dialog is a `dialog[data-panel-surface]`: modal, labelled, search
+focused on open, Escape and backdrop dismiss and return focus to Browse, and it
+closes when clean view, recording or Cockpit hides the panels. Its surface is
+frosted glass (a lighter `--glass-bg` than the rails, a 22 px backdrop blur
+clipped to the theme's frame, a barely dimmed backdrop), so the globe shows
+through without the HUD text behind it competing. An added entry that is on
+offers ZOOM, which closes the dialog and flies to it. Above the intro, four
+stat tiles summarise the library: Datasets (every entry, broken down by kind),
+Themes (how many distinct themes the entries cover), Added (and how many are on
+the map), and Map features (features loaded by dataset layers that are on;
+tiles have no count).
+They refresh with the dialog and once a second while it is open, so counts
+land as datasets finish loading. The line beside **REMOVE ALL** answers the
+filter ("Showing 2 of 8"). **REMOVE ALL** removes every added entry; its first
+press arms a confirm for four seconds. It lists
+addable entries first, then entries this instance would need to switch on, then
+packs, with kind, status, opt-in or key badges, provider, coverage and a licence
+link, and filters by text, theme and "only what this instance serves".
+Archived entries are hidden unless added. An entry's attribution and licence are
+registered in the Data attribution popover while it is in use.
+
+Seeds: NASA EONET open events (GeoJSON, browser-direct), EIA US power plants
+≥ 100 MW (ArcGIS, browser-direct, ranked by capacity), Smithsonian GVP Holocene
+volcanoes (WFS GeoJSON, proxied — the upstream sends no CORS headers), NASA
+Black Marble 2016 night lights (tiles), and the NYC,
+Lithuania and FL511 CCTV packs. Added from the Ask dataset registry (its live,
+mappable sources that are not core layers): the WRI Global Power Plant Database
+(provider-hosted CSV, the 10,000 largest of ~35,000 by capacity, so it reads
+PARTIAL), NWS active alerts that carry their own polygon (zone-wide alerts have
+no geometry and are dropped), NOAA CO-OPS tide stations (JSON records), and IMF
+PortWatch chokepoints and port disruptions (ArcGIS, operator opt-in until the
+reuse terms are confirmed, as Ask holds them in hosted mode). FEMA/ORNL USA
+Structures (CC BY 4.0) is the first view-bounded entry; its service refuses a
+query page smaller than its own 2,000 records, so the probe asks for a full
+page. Addresscloud's EPC ratings for England and Wales (Source Cooperative,
+read from `s3.us-west-2.amazonaws.com/us-west-2.opendata.source.coop`, 344
+local-authority GeoParquet files, OGL v3.0) are the first partitioned
+GeoParquet entry, coloured by band A–G with the official EPC colours. From an
+open/freemium registry review (commercial sources excluded): GDACS disaster
+alerts; the National Bridge Inventory (view-bounded, coloured Good/Fair/Poor);
+EPA Superfund sites and Toxics Release Inventory facilities (view-bounded); and
+tile overlays for Macrostrat geology, GBIF biodiversity density, USGS
+topographic and hydrography maps, IGN (France) aerial photos, BKG
+TopPlusOpen, GSI Japan map and photos and JRC surface water occurrence.
+Entries whose licence or provider pages no longer resolve (404 or unreachable
+host, checked 2026-11-12) were removed: OpenSeaMap seamarks, EMODnet
+bathymetry, SEDAC GPW population density, PDOK, basemap.at, Geneva SITG,
+ICGC Catalunya, Luxembourg, Vlaanderen, Minnesota and Bangor aerial photos. `npm run library:check` validates manifests,
+the ledger (append-only with `--base-ref`, run in CI on pull requests) and the
+generated DATA_SOURCES.md section; `npm run library:probe` hits every upstream
+once; `npm run qa:data-library` is the browser gate (fixture-backed).
+
+Shares: the compact `/share/<code>` link carries the switched-on entries in
+field 29 (docs/SHARE-LINK-FORMAT.md), so Copy Link keeps them, and a share
+opened later in the same tab (pasted address, Back/Forward) restores them too.
+Any share decides what is on, as for core layers: one with no library entry
+on switches the recipient's stored ones off and leaves them listed. A tile
+entry whose coverage needs more than 256 tiles at its minimum zoom (Norway's
+cadastre from z14, sea depths from z11) is hidden below that scale through
+Cesium's `minimumTerrainLevel`, so zoomed out it requests nothing. EPC
+partitions learn two extents (`gev:library:extent:v2:`): every point's box
+rules a partition out, the 98 % box only ranks it, so homes at a partition's
+edge are found on later visits; the v1 trimmed-only key is dropped. A
+partition index whose footers keep failing after two retries is
+`complete: false`: neither the server nor the browser keeps it as whole, a
+complete earlier index is served instead, and it is rebuilt after five
+minutes. A view that leaves partitions touching it unread is PARTIAL. Listing
+pages and footer reads are size-capped and ranges are validated. The Browse dialog is a Vue view (src/ui/views/panels/DataLibraryDialog.vue
+and DataLibraryCard.vue, teleported to the body from LayerPanelsView) over the
+`gev-data-library` Pinia store; src/ui/libraryBrowser.js is its framework-free
+owner (open state, filters, the rows they show, Remove all) and the text
+helpers the view renders, so every label follows the locale. Only the modal
+open/close and focus moves are imperative.
+
+## Stories — November 13, 2026
+
+A Stories button (top right, `#hStories`) opens Explore: a feed of stories
+over GEV's own globe with their pins, then a Story screen with a
+timeline, chapters and context. Every GEV page loads only what the
+closed state needs: the boot shell (`src/stories/boot.js`), the store,
+`StoriesView.vue` with the Stories button, first-visit popup and
+back-to-story toast, and their styles (`stories-entry.css`). The screens
+(`ExploreScreen.vue`, `StoryScreen.vue` and their parts), their styles
+(`stories.css`), the story data (`storyMeta.js`, `catalog.js`) and the
+controller are separate chunks fetched together on first open, on a
+`?stories=` / `?story=` link, or on Back or Forward into Stories; a failed
+fetch is reported and the next attempt tries again. Stories keeps its place
+in the query, not the share-state hash, with one history entry per screen;
+Close steps back over those entries, so Back afterwards does not reopen it,
+and share links carry the Stories screen and place. Explore links use
+`stories=explore` and optionally `selectedStory`. Player links use `story`
+and optionally `storyTime` in milliseconds, opening paused at that time.
+GEV's share link keeps
+`history.state` when it rewrites the hash, so Stories' entries survive.
+
+Every story is a GEV scene, played on the person's own globe through
+`SceneDirector`, with its labels, embedded media, A/B imagery split (marked
+`data-globe-overlay`) and data-pack cards kept while the rest of GEV is
+hidden. Explore lists the scenes the person saved to Stories from AUTHORING
+first (`SceneDirector.storyScenes()`, refreshed on every `stories-changed`),
+then the person's other scenes with a shot as drafts
+(`SceneDirector.draftScenes()`, marked DRAFT), then the
+scenes GEV ships with a camera path while they are in the project
+(`SceneDirector.hasScene`). Zero-shot drafts can be reopened or deleted
+from the scene selector in AUTHORING after a reload. A saved scene brings the card image and topics
+picked for it in AUTHORING; the topic chips use AUTHORING's tag names and
+order. Explore opens at country level
+(2,500 km) over the first story and, while idle, flies on to the next story
+every few seconds, for a minute after the last touch (never with a story
+picked or with reduced motion). The start view and a picked story's place
+(at an angle, −60°) are framed in the middle of the map Explore leaves
+visible (`.ex-map`: beside the feed on a wide screen, above the sheet on a
+phone), not of the whole canvas; a flight that lands after that area has
+moved makes one short correction. Stories reaches the globe only
+through the renderer's ports (`src/render/rendererOf.js`): its flights,
+pose and Close's restore go through the camera port, and after each landing
+a continuous-render hold keeps the globe drawing only until the globe port
+reports the base settled (at most 10 s). Each story's pin, in the
+world overlay's label style (`src/overlays/worldOverlayTokens.js`), is placed
+from the query port's projection in the frame port's `postRender`, on every
+drawn frame, written straight to the pin's transform, and hidden behind the
+globe (`query.isOccluded`); the pins ask for no frames of their own. Card
+images are drawn from the keyless Esri World Imagery tiles around the
+story's place (`src/stories/thumbs.js`: the same Web Mercator tiles, from
+the same host, that GEV's Esri map draws, read as images) unless the scene
+has its own; with any other map stack than Esri Satellite
+(`mapStackController.getActiveId()`) the card shows its placeholder, and a
+card drawn from Esri earlier is dropped. AUTHORING captures thumbnails only
+on a ready Esri World Imagery stack and embeds the imagery credit in the
+exported image. A shot
+tied to an anchor rather than a place pins the whole-globe view.
+
+A shipped story's context comes from what GEV knows about it
+(`src/stories/catalog.js`): what it shows, the place each shot goes, and,
+for each layer it turns on, what the layer shows and the data sources
+DATA_SOURCES.md lists for it. The Nepal story carries the event pack's own
+facts and sources (Vantor imagery and the GeoPera reconstruction, CC BY-NC
+4.0), and its key moments are the chapters that show them. Topic chips and
+region choices are the ones the listed stories carry. Closing Stories after
+a story played puts AUTHORING's own selection back;
+Open in GEV leaves the story's scene selected there. Entering Stories
+cancels in-flight Authoring work before it captures the view it will
+restore. Dragging the timeline previews the time, and releasing
+it seeks the globe once. Play after a pause, a seek or a paused link goes on
+from that exact moment (`SceneDirector.startScene` with `fromProgress`), even
+inside a shot or its final quarter-second: the camera, the hold, the scene
+clock and the layers' reveals carry on from there (a clip that moment falls in
+starts again from its beginning, and the hold waits for it, with the
+timeline held at the shot's end meanwhile). A scene that has actually ended replays from the
+beginning.
+
+Opening Stories claims the camera through the shared navigation policy, so
+orbit, a tracked contact or a flight end, and Cockpit refuses with the
+policy's own toast ("Exit cockpit to open Stories"). Those owners are not
+started again on Close: the camera and the world clock (`src/time/worldClock.js`:
+live, or the time it showed, playing on as if never paused) come back, a
+follow or orbit does not. While Stories is open it owns the keyboard (`src/stories/keyboard.js`):
+a key pressed in Stories stops at its root, and a key pressed anywhere else
+stops at the window, so none of GEV's document-level shortcuts act behind it,
+except on a playing GEV scene's own on-globe controls (`data-globe-overlay`);
+the capture-phase listeners (hold Space to talk, a surface's Tab trap, the
+wildlife card's Escape) check `body.stories-mode` themselves. "Open Stories"
+works from voice or typed AI chat. Entering Stories ends active or pending
+microphone capture and blocks microphone starts while Stories owns the
+globe. Stories shows a notice when it turns off an active or connecting
+voice session. A typed reply can finish after opening Stories. Globe tool calls
+are refused while `stories-mode` is set ("Close Stories first").
+
+The address bar names only the story while Stories is open. Stories holds
+hash writes (`ShareLinkManager.holdWrites`) and saves a snapshot of the live
+globe, including when it opens from a story link without a hash.
+Close dismisses the Stories screens and keeps the keyboard and microphone
+guards until the previous view is back. The director is waited
+on until idle (`SceneDirector.whenIdle`: no run and no pending LOAD, seek or
+interaction; at most 15 s). When the 15 s run out, the scene's layer cleanup
+still under way is revoked (`SceneDirector.revokeSceneRelease`) before
+anything is put back, so it cannot turn off a layer Close restores. The camera and world clock are put back (a clock
+nothing moved while Stories was open, with no jump and the same mode and
+rate, is left alone), unless a
+camera owner took over during the wait (a drag on the globe, a layer's
+focus). History steps back over Stories' entries; once that lands (or after
+2 s if it never does), the saved share state is re-applied directly
+(`ShareLinkManager.restore`, since the share link skips a hash it already
+knows) and the share link writes the live view again. Back out of Stories
+re-applies it the same way, and Back to Explore from a story re-applies it
+once the scene has torn down, with the address still naming only Stories.
+"Open in GEV" (GEV scene stories only) closes the
+same way but keeps the place and look: nothing is put back, the scene and its
+current shot are selected (`SceneDirector.selectShot`) and the Scenes panel
+opens for authoring; Back then goes to the page before Stories. A Close or
+open made while a traversal is landing runs once it has landed; a second Back
+to Explore is ignored. Reopening Stories while a closed GEV scene is still
+tearing down keeps the view from before Stories as the one Close restores.
+Inside an inline embed Stories is not offered: the URL and history are the
+host's.
+
+The Stories button sits left of whatever holds GEV's top-right corner: the
+ACTIVE STYLE readout (`#style-indicator`), or an element marked with
+`data-stories-corner` (with or beside the readout; one added after Stories
+mounts is found within 20 s). On GEV's phone layout,
+where neither shows, it is icon-only under the corner-actions column
+(`#corner-actions`), aligned with its right edge. The first-visit popup
+is a labelled region that does not take focus. The story page's rail offers
+Open in GEV and Share only. Share on Explore reopens the list with the same
+shipped story selected. A story link opens paused at the shared
+point on its timeline. A scene of the person's own (saved or draft)
+shows as theirs ("You") and has no Share: the project lives on this device,
+so a link to it would open nothing elsewhere; a link to a story that is not
+here opens Explore and says so. GEV's own credit line stays on screen throughout, inside the
+Stories map while a scene plays (`creditPlacement` in
+`src/stories/format.js`): `stories.css` places the renderer's own credit
+display (`#cesium-credits`) and the application's credit line
+(`#gev-credits`, `src/ui/creditsView.js`, with its list opening above it)
+alike, and exempts both from the rule that hides GEV's chrome.
 
 ## Utilities panel — October 29, 2026
 
@@ -360,6 +835,187 @@ closes it). Voice `show_data_layers_menu` for Directions opens Utilities, the
 panel that holds its row, and `set_panel_open` reaches it as
 `utilities-panel` or by "utilities", "draw", "drawing" or "import". On a phone
 it sits collapsed in the Layers sheet under Data Layers.
+
+## The Visual panel — November 14, 2026
+
+Visual (`#pp-toggles`, `src/ui/views/panels/DisplayPanel.vue`) is headed
+VISUAL, has the edge switch in its header like the other side panels, and is
+grouped from the top: Look, the six style presets with their 1–6 keys, and
+Map source, the map source chips (`VisualPresets.vue`); Overlay, the HUD,
+detection, style parameters, 3D aircraft, Scope and Clean UI; Effects,
+Celestial, Bloom and Sharpen; and Reset to default at the foot. Each control
+is a card (`src/ui/styles/visual-panel.css`) whose header row ends in an
+on/off pill worded in the current language (Clean UI, an action, has none;
+the buttons carry their state as `aria-pressed`). Under the Cyber HUD the
+cards keep Cyber's own red skin. The presets and chips call the
+same Display store actions as the dock's Visual Presets tray, which stays on
+desktop and phone as before, along with Location; voice `Visual Presets`
+still opens that tray. On a phone the More sheet shows that tray right above
+Visual, so Visual leaves out its own presets and chips there. In Cockpit,
+the groups that Cockpit's Display popover takes leave the panel as before and
+keep their own styling there.
+
+Scope has an Opacity slider (`#scope-opacity-slider`, 50–100%, default 100%;
+`SCOPE_OPACITY_MIN_PCT` in `src/ui/visualSettings.js`, since a fainter mask
+reads as Scope off while labels still fade outside the keyhole)
+that fades the whole mask (`setScopeMaskOpacity` in `src/scopeMask.js`, the
+canvas's CSS opacity) without repainting it or changing the altitude
+terminus; it is disabled while Scope is off and keeps its value. Share links
+carry it as `sco` in the long form and field 30 in the compact form, written
+only below 100%, so links made before it keep their codes and open at full
+opacity, and a link without it sets the opacity back to 100%; a link asking
+for less than 50% opens at 50%. Scenes do not
+save it: a scene shot leaves the opacity as it is.
+
+Reset to default (`resetVisual` in `src/ui/displayBindings.js`) brings back
+the out-of-the-box look: the Normal style, the first-run post defaults
+(bloom off, sharpen on at 49%, the HUD shown, Dense detection at 75%
+with its fade and outside opacity, the celestial ring off), Elastic
+allocation, Scope on at 100% feather and 100% opacity, and 3D aircraft on in
+Proximity. The HUD layout follows the Normal style, as choosing it does: the
+Tactical HUD, except that the Cyber HUD stays Cyber. Inside Contacts, which
+lends detection for the session, the reset's detection becomes what leaving
+Contacts puts back and what a share link carries. It leaves the map source, the pinned scope terminus, Sonar's
+settings, other styles' parameters, the layers and the panels alone.
+
+With Scope off the side rails, open panels and the dock's trays carry a soft
+drop shadow and the rails' labels and icons a text shadow
+(`src/ui/styles/scope-off-shadows.css`), so their edges hold against bright
+imagery.
+
+## Side rails and the screen edge — November 14, 2026
+
+Visual (`#pp-toggles`, the display settings, rail item `palette`) is the last
+panel of the left column, after Data Layers, Utilities and Authoring, and
+opens from the left rail like them (`PanelLayoutController`, falling back to
+the right column in a host without a left stack). Context leads the right
+column, followed by CCTV, Street Level and the other right panels. An open
+Context or CCTV panel takes the column's full height; the other right panels
+keep the content-sized layout and its hysteresis band. With nothing open, a
+rail's icons and their names show as two glass pieces side by side; once a
+panel opens, the icons stay in place and a highlight slides to the open one.
+
+Each collapsible panel header has an edge switch (`UiPanelEdge.vue`,
+`src/ui/panelEdge.js`): it moves that side's panels over their rail to the
+screen edge, with the rail as a row of icons above the open panel, and back.
+The choice is per side, kept in `localStorage` (`gev.panelEdge`), and applies
+on the desktop shell only: phones and Cockpit keep their own layouts and do
+not show the switch.
+
+Scrolling the wheel at a screen edge (`src/ui/railEdgeScroll.js`, from the
+edge to just past the rail, at most 84 px) steps that side's rail to its next
+or previous panel instead of zooming the globe, wrapping round at either end.
+One gesture is one step, trackpad coasting included, with at least half a
+second between steps; a step that comes too soon is held until then and is
+dropped if the pointer leaves the strip. Panels, controls, dialogs and the
+world timeline in the strip keep their own wheel. The strip is off on phones
+and touch screens, while the rails are hidden (clean view, recording), and it
+follows the rails' sides in a right-to-left language. On a phone, Visual is in
+the More sheet with the dock's Visual Presets, as before.
+
+## Context panel — November 16, 2026
+
+Context leads with one card for whatever is picked. A click on anything a
+layer can identify (`src/ui/entityContextBridge.js`, through
+`src/data/pickedContext.js`) opens its card (`src/ui/stores/entityCard.js`,
+`src/ui/views/panels/EntityCard.vue`): the item's facts from its record, a
+route with progress for a flight, an altitude graph, the weather, local
+time and news where it is, and the flights, vessels, hazards and warnings
+within the radius the panel sets (25 to 2,500 km). Aircraft, satellites and
+vessels are followed as they are picked; the card says Following only while
+the camera follows the card's own item, and closing the card lets go.
+Aircraft and satellites offer Enter Cockpit and Enter orbital view; transit
+vehicles show their motion and fleet. A camera's card shows its latest frame
+from the CCTV panel.
+
+With nothing picked, the panel describes the view
+(`src/ui/views/panels/ViewContext.vue`): the place under the middle of the
+screen and the towns around it from the Wikidata cities pack, the height,
+the local solar time and daylight, what is in view per layer with live
+counts and breakdowns, and the same weather and hazards. A search field in
+the header narrows every list. Expanded, Context becomes a full-height
+column at the right edge (the left edge right to left) and the map credits
+stop short of it.
+
+The Contacts and Space Missions modes and the Radio strip stay in the
+panel's main tab, below the card. When Contacts follows the aircraft the
+card shows, its list sits inside the card. Turning Radio or Launches on
+opens Context. The Properties tab holds the Labels and 3D aircraft
+settings from Visual while a layer they act on is on.
+
+Context does its reading only while its panel is open. Weather and news
+come through the regional brief service; earthquakes, tropical storms and
+fire perimeters come from the same feeds as their layers, cached for five
+minutes; satellite fire hits only while the FIRMS layer is on.
+
+The card's top tile previews what is picked. A flight shows its
+Planespotters photo once the flights layer has looked one up for the plane
+it tracks, its route on a small globe (origin to destination, flown part
+solid, the plane on it), its fleet model turning with callouts of what can
+be worked out about the flight, and the view ahead from its cockpit with
+speed and altitude tapes; the model and the cockpit view take turns. A
+vessel shows its Open Vessel Photos photo, a satellite the ground beneath it
+from Esri World Imagery with its altitude and speed graphed. The globe, model
+and cockpit view are drawn by the renderer through its `cardPreviews`
+application hook (`src/render/cesium/cardPreviews.js`), each in a small scene
+of its own that frees its graphics context as it closes; the model comes from
+the fleet set loaded at startup, so opening a card fetches no model.
+
+## Wikidata cities pack — November 15, 2026
+
+`src/data/local_data/wikidata_cities/cities.json` bundles 31,827 settlements of
+15,000 people or more from Wikidata (CC0, 1.6 MB): name, position, population,
+country and Wikidata id. `src/data/wikidataCities.js` reads it on the first
+lookup and answers `nearestCity` (the largest city within 12 km, else the
+nearest within 60 km), `citiesAround`, `findPlace` ("Paris, France", or the
+nearest namesake within 150 km of the view, else the largest) and
+`countryName`. Names match without case or accents ("lodz" finds Łódź). The
+app never calls Wikidata; `scripts/build-wikidata-cities.mjs` rebuilds the
+pack and fails if well-known cities are missing or a known grouping such as
+the New York metropolitan area gets in. Nothing shows names from it yet; the
+Context panel is its first reader. Sources and licence: `DATA_SOURCES.md`.
+
+## Data Layers finder and section index — November 15, 2026
+
+The Data Layers header has a search button and a filter button
+(`src/ui/views/panels/LayerFinder.vue`). Search opens a field under the
+header that matches each layer's name on screen and its English name; Escape
+closes it and leaves the panel open. The filter is a small popover with two
+groups, Status (All layers, On, Off: whether the layer is enabled) and
+Category (the list's groups, kept by their key, so a language change keeps
+the choice). The arrows, Home and End move through it and Escape closes it.
+Rows and groups that are left out hide; chips under the header show the
+active filters and clear them, and "No layers match" says when nothing is
+left. Neither the search nor the filter is saved or put in share links. A
+voice request that points at a hidden layer clears the finder first
+(`gev:layer-finder-clear`).
+
+A column of ticks down the list's inline end
+(`src/ui/views/panels/LayerSectionIndex.vue`) has one tick per group still
+shown; hovering or focusing a tick names its group beside it, on whichever
+side has room, and clicking scrolls the list there. The tick for the group in
+view is lit. Phones do not show it.
+
+## Cockpit side panels — November 14, 2026
+
+On the desktop, the cockpit's side panels match the main page's
+(`src/ui/styles/cockpit-panels.css`). The left rail shows Data Layers only:
+Authoring, Utilities and Visual, with their panels, are hidden, since the
+cockpit's own Display panel stands in for Visual. Display and Radio
+(`CockpitUtilityControls.vue`) become a right rail of two icons with their
+names beside them, and each opens one panel at a time beside the rail, with a
+header and a "−" to close it. The rail's buttons are disclosures
+(`aria-expanded`, `aria-controls`) and go through the `toggleCockpitUtility`
+action (`src/ui/radioBindings.js`); closing a panel gives focus back to the
+rail. Both rails start at the same height: the left one in CSS, and Display
+and Radio through the cockpit layout pass, whose floor
+(`COCKPIT_UTILITY_MIN_TOP_PX` / `_RATIO` in `src/ui/cockpitPresentation.js`)
+matches it, so an open panel still stops short of the briefing. Contact and
+Live Signals are shorter, in the same glass, with the briefing's rows and
+weather tiles tightened; Regional News stays a briefing page. In a right-to-left language, the rail keeps its
+physical side as the cockpit's other windows do. The Cyber HUD and the phone
+keep their own cockpit layouts, with the Display and Radio launchers as
+before, and edge mode does not apply in the cockpit.
 
 ## God's Eye View in conversations — October 2, 2026
 
@@ -453,6 +1109,8 @@ Display's native Scope checkbox defaults ON with feather at 100%, adjustable
 from 0–200%. OFF disables the slider while retaining its value. HUD layout
 changes preserve both settings; share links and scenes restore them. The
 historical missing-`scf` fallback remains 35%; explicit 0% keeps the hard edge.
+Its Opacity slider (0–100%, default 100%) fades the mask; share links
+restore it (`sco`), scenes do not (see The Visual panel).
 
 With Scope OFF, Tactical and Minimal add text-sized black backplates
 at 70% opacity behind telemetry, vertical metadata and scene chrome. Original
@@ -573,9 +1231,10 @@ resources and subscriptions. The globe relief helper is enabled with Wind and
 released when Wind is disabled. It uses terrain vertex normals
 for view-directed shading, falling back to global globe-curvature shading when
 normals are unavailable; the fallback does not show local hillshade. Neither mode
-adds elevation data or represents sunlight. Relief declines to replace an
-existing globe material, restores the prior empty material only while still
-owning it, and leaves later owners intact.
+adds elevation data or represents sunlight. Relief is the globe port's
+`hillshade` surface shading: the renderer never replaces a globe material
+someone else holds (it waits until that one is gone), gives the globe back
+when Wind is disabled, and leaves later owners intact.
 Source acquisition retains deadlines, body budgets, disconnect cancellation,
 per-model/field singleflight caching and one-minute failure backoff. Application
 catalog construction owns each instance.
@@ -599,7 +1258,9 @@ other map content draws over the shells, and shells are not pickable. A
 map-source change tears down one renderer and restages the shown observation on
 the other. A map without an imagery host pauses history while metadata refresh
 continues, then resumes when a host returns.
-Globe tiled products use 256 px tiles to maximum level 6. The tile proxy accepts
+Globe tiled products use 256 px tiles to maximum level 6, or to the level a
+feed that supplies its own tiles names for the product (`frameMaximumLevel`,
+0–12; any other answer keeps 6). The tile proxy accepts
 size=256 (default), 512 or 1024 and keys cached bytes by size, retaining the
 24-hour immutable response and eight upstream slots. The image proxy serves every
 product as one whole-extent PNG at its advertised bounds, up to 4096×2048 for
@@ -641,7 +1302,11 @@ open latest.
 Global infrared fetches one capped 4 MiB, 2048×1024 mosaic per frame and decodes
 and processes it before staging. Globe hosts crop that canvas into 256 px tiles
 to maximum level 3 on a geographic 2×1 root grid bounded to the manifest extent,
-avoiding request-dependent contrast seams.
+avoiding request-dependent contrast seams. On globe hosts, a feed that supplies
+tiles and names a level for global infrared instead has it drawn from its tiles
+to that level,
+each tile given the same display transfer as regional infrared tiles, and no
+mosaic is read.
 On globe hosts, regional infrared retains network tiles and processes each
 decoded tile once; shells process each whole frame once.
 Exact-time tile and image responses are immutable for 24 hours; manifests and
@@ -767,13 +1432,13 @@ Consult the linked official advisory for safety decisions.
 
 Voice and HUD snapshots reuse the existing feedState classifier. Analyst follow-ups retain their original data provenance; current-view results append provenance without replacing legacy fields. HUD context and deterministic telemetry include non-nominal feed state.
 
-Analyst records come on demand from each layer's `getAnalystRecords`: flights, military, local ADS-B, vessels, satellites, launches, earthquakes, FIRMS (VIIRS and MODIS, with a `sensor` field), fire perimeters, cyclones, transit, bikeshare, ALPR cameras, mapped installations, datacenters and dams. `analyst_query` counts the whole loaded set (up to 250,000 records per layer; past that `coverage.records` reports `returned`, `total` and `truncated: true` and the result carries `complete: false`). Ranking keeps a top-k and scans in 20,000-row slices that yield to the page and stop when superseded. It refuses unknown fields, operators, units that do not convert (`altitudeM(ft)` converts), wrong-typed values, invalid centres, unknown scope kinds and sort fields with `code` and `allowed`, refuses a follow-up with no previous answer (`NO_RESULT_CONTEXT`) or naming other layers than that answer (`FOLLOW_UP_MISMATCH`), and tells `LAYER_OFF`, `NOT_READY` and `FEED_UNAVAILABLE` apart from a real zero; when only some layers can answer the result is `partial` with `unanswered` ids. The Contacts-window path applies the same filters, ranking and item shape to one immutable panel snapshot. Each aircraft layer retains at most 20,000 rows; reaching that bound sets `complete: false` and the spoken/card count becomes “At least”, never an exact claim. A superseded query never replaces follow-up memory, while sibling analyst calls from one assistant response do not cancel one another. Items carry `lat`/`lon`; the feed window (earthquakes and FIRMS: last 24 h), the precise scope and any caveat sit in `display`, which is on-screen detail rather than something the model recites. "In view" is still a radius around the view centre, not the visible footprint. Satellite distance is ground distance.
+Analyst records come on demand from each layer's `getAnalystRecords`: flights, military, local ADS-B, vessels, satellites, launches, earthquakes, FIRMS (VIIRS and MODIS, with a `sensor` field), fire perimeters, cyclones, transit, bikeshare, ALPR cameras, mapped installations, datacenters and dams. `analyst_query` counts the whole loaded set (up to 250,000 records per layer; past that `coverage.records` reports `returned`, `total` and `truncated: true` and the result carries `complete: false`). Ranking keeps a top-k and scans in 20,000-row slices that yield to the page and stop when superseded. It refuses unknown fields, operators, units that do not convert (`altitudeM(ft)` converts), wrong-typed values, invalid centres, unknown scope kinds and sort fields with `code` and `allowed`, refuses a follow-up with no previous answer (`NO_RESULT_CONTEXT`) or naming other layers than that answer (`FOLLOW_UP_MISMATCH`), and tells `LAYER_OFF`, `NOT_READY` and `FEED_UNAVAILABLE` apart from a real zero; when only some layers can answer the result is `partial` with `unanswered` ids. The Contacts-window path applies the same filters, ranking and item shape to one immutable panel snapshot. Each aircraft layer retains at most 20,000 rows; reaching that bound sets `complete: false` and the spoken/card count becomes “At least”, never an exact claim. A superseded query never replaces follow-up memory, while sibling analyst calls from one assistant response do not cancel one another. Items carry `lat`/`lon`; the feed window (earthquakes and FIRMS: last 24 h, or for FIRMS the 24 hours to a snapshot's `at`), the precise scope and any caveat sit in `display`, which is on-screen detail rather than something the model recites. "In view" is still a radius around the view centre, not the visible footprint. Satellite distance is ground distance.
 
 Keyless terrain tiles retry when Re:Earth throttles them. The browser fetches
 `terrain.reearth.land/cesium-mesh/ellipsoid/{z}/{x}/{y}.terrain` directly; no
 proxy in this repository sees those requests (`/api/terrain/heights` is the
 separate point-height endpoint), and the upstream edge answers zoom-out bursts
-with HTTP 429 under load. `src/maps/terrain.js` hands Cesium a `Resource`
+with HTTP 429 under load. `src/render/cesium/mapTerrain.js` hands Cesium a `Resource`
 whose retry policy (`src/maps/terrainRetry.js`) every derived tile fetch
 inherits: 429, 502, 503 and 504 replies retry up to three times, 750 ms
 doubling to a 15 s cap, with every retry waiting behind one shared cooldown
@@ -812,7 +1477,7 @@ Native `<select>` controls declare a dark colour scheme and explicit option
 colours, so the browser-painted option list matches the panel it drops out of.
 The scheme is declared on the controls rather than on the document root, so
 hand-tuned scrollbar and text-input skins are unchanged. Applies to the HUD
-layout, Authoring, CCTV camera, Radio filter and Draw colour menus.
+layout, CCTV camera, Radio filter and Draw colour menus.
 
 Vessel snapshot completeness is separate from freshness. A current snapshot with
 rejected or duplicate records shows PARTIAL with accepted/received counts; stale
@@ -1042,8 +1707,9 @@ holds; stale tick callbacks cannot publish into a replacement. Registered pack
 rules own presentation overrides and Nepal map fallback without changing saved
 shots or content. Scene-document validation and legacy migration now have separate
 owners. Invalid imports preserve the current project; unreadable saved projects
-are protected from fallback writes. Version 6 is the export format, with
-zero pitch, low camera heights, scope and detection edits preserved. See [the document contract](SCENE-DOCUMENT.md);
+are protected from fallback writes. Version 7 adds Scenes' optional Stories
+metadata (accepted from version 6, which early Stories builds wrote) and reads
+prior project files, including version 6 drafts, with zero pitch, low camera heights, scope and detection edits preserved. See [the document contract](SCENE-DOCUMENT.md);
 see [Director](DIRECTOR.md) for camera, pack, action and sharing support.
 
 Search framing and annotations request semantic map features from an explicit source. The Overpass adapter owns bounded queries, member/tag decoding and request deadlines; callers retain candidate ranking, outline caching, deferred retries and scene placement. Empty, unavailable, transient and throttled outcomes remain distinct; a data reply is refused only for its `remark`, never for text in element tags. Traffic sources return road records and installation sources return mapped records with freshness/saturation metadata, so their layers no longer decode upstream elements. ALPR already normalizes its records in the source. Traffic uses OpenFreeMap roads with optional matched TomTom congestion; ALPR uses an hourly OpenStreetMap extract. Keyless installations use military-area tiles. Detailed feature queries require operator-configured Overpass.
@@ -1092,9 +1758,9 @@ Source factories have dedicated `layers/<family>/source` exports. ALPR and earth
 
 Voice controls bind to a protocol-independent session factory. The default WebRTC adapter preserves the existing Realtime connection, push-to-talk, cost controls and radio handoff. Session subscriptions expose state, transcript, action call/progress/result, interruption, completion and turn-metrics events; stopping or replacing a session cancels pending actions. An active session's normal Stop publishes one idle transition, including adapters that emit their own terminal state; a restart triggered by that transition keeps ownership of its new startup state. Alternate adapters can use the same controls and action runner.
 
-The standalone app offers OpenAI and Gemini Live through the **AI Provider** setting, shared by voice and typed chat. Gemini keeps its permanent API key on the local server and mints a short-lived, single-use credential with server-owned instructions and the standalone action catalog. Its native WebSocket adapter supports open microphone and push-to-talk input, streaming audio, captions and the existing action runner. In push-to-talk, a tool call that arrives with no input, reply or tool result outstanding is answered with a failure and never runs, and neither does any other call in the reply it starts; open-microphone turns start on Gemini's server-side activity detection, which reports no boundary to check. Switching providers ends the old conversation and releases its microphone and connection; only the input mode carries over. Gemini uses bounded shutdown draining and explicit manual restart, without automatic reconnection or a promise of uninterrupted session duration. Hosts that do not opt into the provider facade retain their existing default or custom adapter.
+The standalone app offers OpenAI and Gemini Live through the **AI Provider** setting, shared by voice and typed chat. Gemini keeps its permanent API key on the local server and mints a short-lived, single-use credential with server-owned instructions and the standalone action catalog. With no Gemini key the token route answers `503` with code `API_KEY_MISSING`, and the voice control says `Add a Gemini API key in Provider Settings` without the microphone-permission hint. Voice status and error messages keep the message as given on the session's `state` event (`sourceDetail`, English catalog text when it is the app's own, with `sourceParams` for its placeholders), beside the worded `detail`, so the voice control words them again after a language change. Typed-chat errors and the chat panel are worded once. Its native WebSocket adapter supports open microphone and push-to-talk input, streaming audio, captions and the existing action runner. In push-to-talk, a tool call that arrives with no input, reply or tool result outstanding is answered with a failure and never runs, and neither does any other call in the reply it starts; open-microphone turns start on Gemini's server-side activity detection, which reports no boundary to check. Switching providers ends the old conversation and releases its microphone and connection; only the input mode carries over. Gemini uses bounded shutdown draining and explicit manual restart, without automatic reconnection or a promise of uninterrupted session duration. Hosts that do not opt into the provider facade retain their existing default or custom adapter.
 
-Voice action argument schemas have one portable owner under `src/voice/actionSchemas.js`. The Realtime provider builds 33 tools using separate description-only metadata; a session is offered 32 of them unless `OVERPASS_UPSTREAMS` is set, which adds `osm_query` and its one prompt sentence (`server/providers/openai/tools.js`). Description customization cannot replace argument types, enum values or required fields.
+Voice action argument schemas have one portable owner under `src/voice/actionSchemas.js`. The Realtime provider builds 35 tools using separate description-only metadata; a session is offered 34 of them unless `OVERPASS_UPSTREAMS` is set, which adds `osm_query` and its one prompt sentence (`server/providers/openai/tools.js`). Description customization cannot replace argument types, enum values or required fields.
 
 Voice areas live in a store owned by the action runner for the page (`src/data/areaStore.js`); the model gets an `areaId`, a rounded bounding box and a summary, never geometry. `resolve_area` (`src/voice/areaActions.js`, `src/data/areaResolver.js`) checks the store, bundled Natural Earth regions, then bundled countries and states by name — a name several prominent units share returns up to four candidates unless the view is inside exactly one — and then the annotation outline ladder (`resolveAnnotationTarget`: bundled counties, Census places and neighborhoods, the guarded `/api/geocode/outline`, and Overpass only when configured). Administrative geometry is stored only when its source identity agrees with the requested unit, by name or by a form the bundled matcher reads as that unit at its level ("State of Texas", "Province of Bagmati", "USA", "UK"; not "Great Britain" or "Korea"); stale, mismatched, synthesized or otherwise unverified administrative boundaries are refused rather than relabelled. Clarification IDs use the bounded `ne:<kind>:<slug>` grammar and are accepted only from the current resolver's candidate memory. A lookup past 8 s answers `AREA_TIMEOUT` and keeps filling the caches. `around=true` asks the same ladder for the grounds enclosing a landmark (Nominatim, then the OpenFreeMap area holding it) and otherwise stores a 250 m buffer marked approximate. `analyst_query` scopes add `area`, `drawn` (newest draw-tool outline) and `annotation` (newest or named outline); region scopes use the same resolver within 3 s. Drawn outlines are a simplified copy (≤1,200 vertices); counting reads the stored geometry (`src/data/areaGeometry.js`). `find_imagery` (`src/voice/imageryActions.js`) sets the Recent Imagery box from an area, the view or the turn's pointer snapshot and pins the best acquisition; any hand change to the panel or explicit layer OFF while it searches ends the request (`DISPLACED`) without pinning or success narration. `osm_query` asks `/api/osm/features` for one curated preset in a bounded box; the route answers `OVERPASS_NOT_CONFIGURED` without an operator Overpass. Results go to the session-only `osm-places` layer and become the analyst's last answer; a list capped at its limit stays incomplete in follow-ups, which keep its "listed the first N" caveat and report counts as floors. An explicit OSM Places OFF while the provider is pending aborts the work and prevents re-enable, result, credit and follow-up-memory commits. The voice answer deadline also aborts the client provider request, so the caller does not leave a timed-out request without a cancellation owner. The server's whole search (22 s across every configured endpoint, with Overpass told 20 s) ends before that 25 s deadline, because a browser that stops waiting cancels the upstream query and leaves nothing cached for a retry.
 
@@ -1148,7 +1814,9 @@ unchanged.
 Polled layer refreshes and the HUD's camera readout pause while the page is
 hidden. An app embedded inline in a panel keeps both running, because the
 panel's host can report the page as hidden while it is on screen. This is the
-same rule the render loop follows (`keepPanelRendering` in `app/embed.js`).
+same rule the render loop follows (`keepPanelRendering` in
+`render/cesium/panelRendering.js`, which the Cesium plugin hands the
+application and the application scene hands the embed views).
 
 Application scene setup owns request services, terrain/floor caches and annotation
 lookup state. Controls, layers and voice share those owners, and cancellation
@@ -1308,15 +1976,19 @@ The view pass reruns while the camera moves, paced by its own cost. The camera
 picker lists the cameras in view, active camera first, and closes with the
 count of cameras outside the view.
 
-Traffic owns its rendered-surface observer only while enabled, removes it on disable/destroy, and caches surface identity without allocating on unchanged frames.
+Traffic owns its rendered-surface observer only while enabled, removes it on disable/destroy, and rebuilds no cached heights on frames where the surface identity is unchanged. Its dots and heat-lines are two renderer draw sets, it animates on the frame port's preRender, and it follows the camera through the camera port at its own 5% threshold rather than the shared `percentageChanged` ledger. The surface identity is the globe port's `surfaceVersion()` and tile readiness its `isSettled('surface')`, so the layer no longer reaches Cesium. Heat-lines are always asked for draped: where the Cesium renderer cannot drape (no depth textures) its draw port draws them (and every other draped line) over the surface, in their colour where the surface hides them and hidden past the horizon, recolouring a line in place when only its colour changes, rather than the layer dropping them.
 
 Traffic and bikeshare expose factories through `./layers/traffic` and
 `./layers/bikeshare`. Traffic separates road requests, ingestion, animation,
 flow matching, styling, viewport lifecycle and development timing. Each source
 owns its decoded flow cache; cancelled bodies cannot refill it. Bikeshare
 separates its city registry, station source, parsing, rendering, selection and
-proximity lifecycle. Existing standalone sources, live/simulated labels, road
-budgets, station availability and polling behavior are retained.
+proximity lifecycle; its station dots and selected-station highlight are two
+renderer draw sets and it no longer reaches Cesium, so a caller handing it a
+Cesium viewer, with no renderer bound, loads the
+`./render/cesium/unbound` export once first. Existing standalone sources,
+live/simulated labels, road budgets, station availability and polling behavior
+are retained.
 
 Installations and proximity context now expose `./layers/installations` and
 `./layers/awareness` factories. Each owns its records, selection, presentation,
@@ -1335,7 +2007,17 @@ a fresh winning record. Dense removal clears only its own provenance, and a
 fresh core rebuild or lifecycle reset replaces the corresponding ownership.
 Source adapters retain the existing CelesTrak and Launch Library
 endpoints; standalone entries provide scene services and the satellite dependency.
+The satellites layer draws through the renderer's draw port and no longer
+reaches Cesium: the dots are one point set moved in a single write a frame, the
+tracked satellite's dot a set of its own drawn where the follow camera framed
+it, and the orbit rings a line set dimmed behind the globe and turned with the
+Earth each second. A caller handing it a Cesium viewer, with no
+renderer bound, loads the `./render/cesium/unbound` export once first.
 The mission factory separates paths, replay, camera, panel, overlays and placement.
+Its markers, lines, live rings and pad zone are renderer draw sets, and it
+follows a mission through the camera port, so a caller handing it a Cesium
+viewer, with no renderer bound, loads the
+`./render/cesium/unbound` export once first.
 Launch Library pad coordinates retain unknown values: missing fields use the
 reported location coordinates when available, and launches without a known pad
 position stay off the map. Genuine zero coordinates remain valid. Undisclosed
@@ -1356,12 +2038,40 @@ and scene services. Disable and teardown cancel pending refreshes; malformed
 snapshots preserve the last good display. Refresh restoration keeps selection
 identity without announcing a new user selection. Source/label, LOD thresholds,
 card limits, fire identities, altitude placement and analyst records are retained.
+The layer draws its fire glows through the renderer's draw port and no longer
+reaches Cesium; a caller handing it a Cesium viewer, with no
+renderer bound, loads the `./render/cesium/unbound` export once first.
 
 Earthquake rendering is exposed through `./layers/earthquakes`. The layer owns
-its entities and request lifecycle; the application supplies the overlay host
-and snapshot source. The standalone adapter keeps the existing USGS daily feed,
+its renderer draw set and request lifecycle and no longer reaches Cesium; the
+application supplies the overlay host and snapshot source. A caller handing
+it a Cesium viewer, with no renderer bound, loads the
+`./render/cesium/unbound` export once first. `depthColor` returns a renderer
+colour `[r, g, b, a]` and `depthAccent` its CSS. The standalone adapter keeps the existing USGS daily feed,
 M2.5+ filtering, static discs, magnitude labels and analyst records. Disabling or
-destroying the layer cancels pending work and ignores late results.
+destroying the layer cancels pending work and ignores late results. While on,
+the layer registers its quakes of magnitude 6 and up
+(`EARTHQUAKE_MARK_MAGNITUDE`) with the world clock as timeline marks, spanning
+only their own times, and none while off; the map still draws every M2.5+
+quake. Each mark is labelled with the magnitude as the map shows it and the
+feed's place, cut to 40 characters (`earthquakeMarkLabel` in
+`src/layers/earthquakes/model.js`: `M6.4 · 113 km SSE of Lata, Solomon
+Islands`, or `M6.4` with no place).
+
+Air quality (`./layers/air-quality`) draws its station discs as one renderer
+draw set of ground-clamped fills and reads the view through the camera port; it
+no longer reaches Cesium, so a caller handing it a Cesium viewer,
+with no renderer bound, loads the `./render/cesium/unbound` export once
+first.
+
+Cockpit (`./ui/cockpit`) flies the camera through the camera port on the frame
+port's `preUpdate`, with the shared geo maths, and no longer loads the Cesium
+camera factory: a caller handing it a Cesium viewer, with no
+renderer bound, loads the `./render/cesium/unbound` export once first, or its
+controller throws naming it. Whether the aircraft it flies still draws comes
+from its `trackedEntityDrawn` service (the shell asks the entity's record,
+and the application scene's `viewerDrawsEntity` for an entity of the viewer's
+own); without one, Cockpit takes the aircraft as drawn.
 
 ## Rendered-mesh floor readings — November 9, 2026
 
@@ -1387,12 +2097,26 @@ directly under a deck or a roof overhang reads the structure above it, and a
 vehicle between readings takes the nearest one, so its floor steps where the
 nearest reading changes.
 
+The sampler and the aircraft ground snap (`src/services/groundSnap.js`) reach
+the renderer only through its ports: the camera's `pose()` for the probe
+height gate, the globe's `isGlobeVisible()` (the sampler runs only with
+the globe hidden) and `isSettled('surface')` (sampler) and
+`isSettled('tiles')` with `isSettled('surface')` (snap) for whether the tiles
+have streamed, and the query
+port's heights, seeing through the caller's draw sets by id. Cockpit's ground
+probe names the tracked contact's icon and model sets, which the flights and
+military layers keep on its entity record (`groundSets`).
+
 ## Vessel components and sources
 
 `src/data/aisLiveVessels.js` assembles `createVesselLayer` from the
 `./layers/vessels` package entry. The factory owns feed lifecycle, keyed records,
 rendering, selection, trails and cards in separate components. The standalone
 entry supplies its AISStream source, scene services and existing row limits.
+Its ship icons are one renderer icon draw set (held motion, course rotation,
+focus emphasis, horizon cull) and the entry no longer reaches Cesium, so a
+caller handing it a Cesium viewer, with no renderer bound,
+loads the `./render/cesium/unbound` export once first.
 
 Incomplete observations retain missing keyed vessels for at most five minutes
 since their last accepted receipt, within the renderer's row budget (plus the
@@ -1440,9 +2164,53 @@ Applications supply the existing floor/snap, geoid, picking, sprite, camera,
 trail, focus, readout, context, aircraft presentation and render services.
 The factory never constructs a second application registry. Configure a source
 before initialization; replacing it while initialized is rejected. Model loads
-use the supplied asset resolver, including the preload path. Enrichment receives
+use the supplied asset resolver, including the up-front fleet set load. Enrichment receives
 an abort signal and cannot update a later lifecycle after destruction. Existing
 camera, terrain floor, trail, selection and measured model-size policies remain.
+
+A tracked civil or military aircraft's trail (`src/data/trailContinuity.js`) lifts
+the pen, drawing nothing, between two points more than 48 minutes or over 1,500 kt
+apart (a parked aircraft within 0.1 nm keeps one line for up to three hours) and at a
+waypoint with no altitude; a ground waypoint is drawn on the ground. The head joins the
+aircraft only within 150 km. Each trail keeps up to 2,000 reports, a full day of history
+at one fix per minute plus the live session; past that the oldest go first. The renderer
+(`src/data/trailRenderer.js`) freezes every chunk of 128 points except the newest into
+static geometry, so a long trail costs about as much per frame as a short one;
+`scripts/qa-trail-freeze.mjs` checks that a freeze never shows a blank frame.
+A trail holds the aircraft's reports and nothing else, in time order: what the icon was
+drawn at between them is never kept, so a late report cannot leave a kink. Between two
+reports that are one flight and both carry a track, the icon is drawn along, and the
+trail drawn through, one curve (`src/data/fixCurve.js`): a biarc, two constant-rate
+turns sent to the renderer as contract `arc` segments, passing through both reports and
+leaving each along its reported track, so the icon sits on its trail with no offset.
+Pairs with no track, slower than 40 m/s, or with a track more than 75° off the line
+between them are joined straight. The trail samples the curve at least every degree of
+turn. History from before tracking started, and the backfill, run report to report the
+same way.
+The trail never runs past the icon or through its 3D model, and the head runs from the
+newest kept point outside the model to the icon (to the model's tail when the model is
+the visual). A contact with no new report coasts straight on along its reported track for 5 minutes
+past its last real report (no turn: a turn rate measured over earlier reports outlives
+the turn), at no more than 1,500 kt and never below known ground, then stops;
+one that
+went quiet on the ground, or within 150 m of a known ground floor, holds at its last
+report and draws no head (with the ground unknown, a low barometric
+altitude alone does not hold it). The hold-or-coast choice is made once per report (`staleHoldsForFix`
+in `src/data/motionModel.js`), and the forward fix built when a repeated position carries
+new speed or course follows the same rules and is never a trail report. A live report
+with no altitude breaks the line and leaves no point at an invented height, and so does
+such a report seeded from position history when tracking starts.
+
+A contact that misses an update is stale from the first miss: it is drawn with the
+45%-alpha stale fade (`STALE_ALPHA`), the tracked billboard and 3D model included, and the
+tracked label reads STALE. For the tracked aircraft a poll that re-sends a fix no newer
+than the last one is a miss too. Once its coast has ended, or it holds at its last report
+after a miss, it stands still, dimmed, and the label reads SIGNAL LOST · <time since its
+last report>, in seconds under a minute and minutes after (`_trackedStaleCue` in each
+flight layer's `tracking.js`). The tracked aircraft is kept, so the follow camera keeps its
+target, until 10 minutes after its newest fix (`TRACKED_RETENTION_MS`): 5 minutes coasting,
+then 5 stopped as SIGNAL LOST. Untracked aircraft keep their missed-poll limits. A report
+that arrives later eases the aircraft onto it.
 
 The tracked-aircraft descriptor both flight layers hand to the cockpit carries
 `verticalRateMps` beside `velocityMps` and `track`. Civil records store the rate as
@@ -1462,7 +2230,7 @@ wins, with ADS-B taking a tie. GEV treats `minfuel` and `lifeguard` as prioritie
 
 Civil and military fleet billboards, 3D models and Cockpit dots turn red for
 emergencies and repaint when the broadcast changes. Priorities retain normal
-colors; tracked map colors keep their existing selection treatment. The Cockpit
+colors; tracking never recolours a contact, so a tracked emergency stays red. The Cockpit
 meta line names the squawk or ADS-B status (only emergencies are red), replacing
 COURSE ALIGNED while a status is present.
 
@@ -1500,6 +2268,85 @@ messages; arbitrary HTTP response bodies are not surfaced as diagnostics.
 Sources receive cancellation signals and check them after body parsing. The
 layer's existing lifecycle and selection guards continue to reject late work.
 
+### Following the world clock
+
+A source may declare a timeline: it can answer a snapshot at a given time.
+`source.timeline` is `{ coverage(), stepMs, spanMs?, subscribe? }`, validated by
+`readSnapshotTimeline` (`src/sources/live/contract.js`): `coverage()` returns
+the span `{ start, end }` in epoch ms it can answer, or null while it does not
+know yet; `stepMs` is the spacing of its snapshots; the optional
+`subscribe(listener)` tells of a change in coverage. Flights, Military Flights
+and AIS Vessels follow the world clock only while their source declares one
+(`src/time/snapshotTimeline.js`); with none they never follow it, and every
+request, timing and display stays as it is live.
+
+While such a layer is on it follows the clock and registers the source's
+coverage on the timeline. At the live edge it polls as it always has. Away
+from it the layer stops polling and asks for `getSnapshot({ ...query, atMs })`
+at the step at or before the clock's time; a request at the live edge carries
+no `atMs`. A seek, the time going backwards or leaving live is a jump (the
+clock's `getState().jumps` counts seeks and returns to live, not play): what
+loads is dropped, play holds while the snapshot loads, and the snapshot then
+stands in for every contact. A contact it lacks is gone at once; a tracked or
+selected contact it lacks is released, and one it has starts its trail afresh,
+whose track request carries `atMs` and draws only points at or before it.
+Playing, the layer stays a snapshot ahead of the time, and play does not pass a
+snapshot still loading for more than 8 seconds. Those snapshots apply as polls
+do, so contacts move on smoothly: aircraft are drawn at the clock's time
+rather than behind it, and vessels between two fixes move along the great
+circle, never past the newer one. Drawn vessels move again once the fastest
+of them would have moved half a pixel on screen at the speed it last moved,
+at least once a second, and at once when the camera moves or changes height
+by a tenth of its height or the view zooms, with frames asked for as for
+placed live vessels; vessels out of view move on a share of them each frame,
+each within 250 ms, and one that comes into view is moved to the time first. Records, absences and the Layers panel's age
+are judged at the clock's time. Outside the coverage the layer shows no
+contacts and loads nothing; while the coverage is unknown it loads nothing and
+clears nothing. A snapshot that fails clears the time and is asked again after
+5 seconds; one the source drops for a newer request (an `AbortError`) is no
+failure, and nothing is cleared. A layer has one snapshot loading at a time:
+the older is aborted before a newer starts. Moving the view while vessels follow the clock asks for the new
+area at the same time. Back at live the layer polls at once and keeps the
+contacts it shows until that live snapshot answers; it then stands in for every
+contact. A contact it has keeps its icon and model: an aircraft eases from
+where it is drawn onto its live path (unless that is farther than a jump would
+be, 5 km; a placed aircraft over a recovery's time, nose along the way, and a
+new answer while that ease runs eases on from where it is then), and a vessel
+moves to its live fix. A contact it lacks is judged as a live poll judges any
+absence, as last seen at its newest fix rather than when it was loaded: a
+partial snapshot keeps only those fixed within five minutes, the tracked
+aircraft stays only while its newest fix is under ten minutes old and it has
+not landed, the selected vessel is held as a live refresh holds it, and the
+rest go at once (no missed-poll grace); the tracked aircraft's trail goes on. A live poll already out when
+the clock comes back to live is the one that takes over. A live snapshot that fails, or that brings no
+vessels, clears the layer; one dropped for a newer poll clears nothing.
+
+A timeline may also declare `spanMs`: each record of a snapshot at a time then
+carries `fixes`, `{ atMs, lat, lon, altitudeM? }` in time order, its own track
+from `spanMs` before the time to `spanMs` after it
+(`src/time/timelineFixes.js`). The layer places each contact on its fixes at
+the clock's time, so a seek or a move back that stays within the fixes the
+loaded snapshots carry is no jump: nothing is cleared, play does not wait,
+and contacts move to the time smoothly. The snapshot at a step before the
+newest loaded is asked for once and then stands in for every contact: it
+brings back any that had left after it and drops those not there yet, while
+those it has keep their place, as their fixes put them. Paused, a time nearing
+the end of the fixes after the newest asks for the snapshot there. A contact is not drawn more than a minute before its first
+fix, as it was not there yet. Each contact keeps at most 240 fixes, at least
+20 seconds apart, and the loaded snapshot times span at most 20 minutes.
+Playing on with fixes, the layer asks for the next step 4 seconds of play
+ahead at the clock's rate (at least a step; at 60x, 4 minutes ahead), and play
+holds only a minute short of where the newest snapshot's fixes end (as far as
+nine in ten of its records' fixes reach, at most the declared span; the minute
+at most half of it), not at the step still loading. An aircraft keeps the fixes it holds
+when the next snapshot's run reaches back over them: only the last of them,
+made again from the new run, and the fixes past it are made and added.
+
+A snapshot at `atMs` describes the world as it stood then: `observedAtMs` is
+at or before `atMs`, no record is observed later than `atMs`, freshness and
+staleness are judged against `atMs`, `atMs` is echoed back, and a vessel
+snapshot reports `transportStatus: 'live'`.
+
 ## State and action outcomes
 
 Share preferences, place lookups and Scene playback expose immutable snapshots
@@ -1533,18 +2380,71 @@ Scene controls own creation/deletion prompts, panel listeners, shot rows, playba
 and keyboard cancellation. The director supplies project reads and explicit
 editing/playback actions while retaining persistence, camera and layer sequencing.
 Shot selection updates the highlight without replacing the row, preserving
-native double-click rename. Replacing rows revokes their old listeners. Disposal stops controls immediately;
+native double-click rename. A click anywhere on a shot row (its number, title or
+summary line), or Enter or Space on its title, goes to the shot: it is selected
+and loaded (`SceneDirector.loadShot`: its look, layers and camera), so the row
+has no separate LOAD button. Each row's up and down arrows swap the shot with
+its neighbour (`SceneDirector.moveShot`, saved with the project and published as
+`shot-moved`); they are disabled at the ends and while the scene plays, and,
+like DEL, never load the shot. Shot rows show no thumbnail: a shot keeps no
+picture of its view, only the scene's Stories card does. Replacing rows revokes
+their old listeners. Disposal stops controls immediately;
 late file and failed-action completions cannot update removed presentation.
 
 The panel is titled Authoring and is laid out in four labelled steps: SCENE
-(picker on its own row, NEW SCENE, DELETE), SHOTS (+ CAPTURE SHOT, UPDATE SHOT,
-the numbered shot list and a select/rename hint), PREVIEW (PLAY, STOP, NEXT) and
-SAVE & SHARE (EXPORT, IMPORT, RUN LOG, then the EDIT DETAILS / SHARE SCENE row).
+(picker on its own row listing every scene in the project, NEW SCENE, DELETE),
+SHOTS (+ CAPTURE SHOT, UPDATE SHOT, the numbered shot list and a go-to/rename
+hint), PREVIEW (PLAY, STOP, NEXT) and SAVE & SHARE (a row of Stories tag chips;
+the thumbnail preview, CAPTURE THUMBNAIL and SAVE TO STORIES on one row; then
+EXPORT, IMPORT, RUN LOG, then the EDIT DETAILS / SHARE SCENE row). On load the
+project's first scene and its first shot are selected, and deleting the
+selected scene selects the first scene again. Stories' "Open in GEV" selects a
+scene and shot through `SceneDirector.selectShot`, and the picker follows.
+With no scene at all (an imported empty project), CAPTURE SHOT asks for a name
+as NEW SCENE does, creates the scene and captures into it; the director's
+`captureShot()` names it "Scene N" itself. An IMPORT keeps the scene being
+edited when the file still has it, else selects the file's first scene that is
+not a built-in one, else its first scene. Playback still moves the selection to
+the shot it plays, as before.
+SAVE TO STORIES marks the scene as published to the Stories page and then reads
+REMOVE FROM STORIES, which clears the mark; the status line confirms either.
+The mark is the scene's `stories: true` field, saved with the project and kept
+through reload, EXPORT and IMPORT; projects without it load unchanged. The
+director's `setSceneInStories(sceneId, on)` sets or clears it (refusing a scene
+without shots) and `storyScenes()` lists the marked scenes that have shots, in
+project order, as `{ id, title, camera, shotCount, thumb, tags }` with the
+first shot's camera. Every change to that list (the mark, a scene or its last
+shot deleted, a shot captured into a marked scene or its first shot updated, a
+marked scene's thumbnail or tags changed, an import) publishes
+`stories-changed`.
+Deleting a marked scene's last shot clears its mark.
+THUMBNAIL keeps the globe as it is drawn now as the scene's Stories
+card image: it asks the renderer's frame port for a render and reads the
+renderer's canvas inside that frame's `postRender` (the WebGL canvas does
+not preserve its drawing buffer; `captureStoryThumb` is handed the frame
+port and canvas, so the scene document's module stays renderer-free),
+centre-crops it to 16:9, scales it to 320 × 180 and stores a JPEG data URL
+(quality 0.82, lowered only if the image would pass the limit) as the scene's
+`storyThumb`, shown as a 64 × 36 preview beside the button; the status line
+reads "Thumbnail captured". The tag chips (Floods, Wildfires, Storms,
+Earthquakes, Flights, Maritime, Space, Conflict, Infrastructure, Climate,
+from `STORY_TAGS` in `src/scenes/storyTags.js`, shown translated) are toggle
+buttons with `aria-pressed`; a scene keeps up to five as `storyTags` (English
+keys), and once it has five the other chips are disabled. Both fields are
+optional and validated by the scene document (`storyThumb` a base64 JPEG or
+PNG data URL of at most 300,000 characters, the one text allowed past the
+usual 65,536 characters; `storyTags` up to five different keys from `STORY_TAGS`), and
+are kept through save, reload, EXPORT, IMPORT and the shared scene JSON. Share
+links never carry scene documents, so neither reaches a URL. `storyScenes()`
+reports them as `thumb` (`''` when none was captured) and `tags`.
 Every button in the step rows has a tooltip, and the status line is a polite
 live region. Outside playback a button that would do nothing is disabled:
-DELETE and CAPTURE SHOT without a scene, UPDATE SHOT without a selected shot,
-PLAY and NEXT when no scene in the project has a shot (both continue into the
-following scenes). During playback the authoring and file actions stay disabled
+DELETE, THUMBNAIL, the tag chips and SAVE TO STORIES without a scene,
+UPDATE SHOT without a selected shot, SAVE TO STORIES when the scene has no
+shots, PLAY and NEXT without a scene or when no scene in the project has a shot
+(both continue into the following scenes), EDIT DETAILS without a selected shot
+and SHARE SCENE without a scene. EXPORT stays available, since it writes the
+whole project. During playback the authoring and file actions stay disabled
 and STOP is enabled, as before; RUN LOG follows the last run, and EDIT DETAILS /
 SHARE SCENE keep their own checks. PLAY uses the `scene|PLAY` catalog entry,
 apart from the radio's PLAY.
@@ -1710,10 +2610,13 @@ hidden; tilted past the Earth's limb neither the sensor nor the swath
 reads. A swath is confirmed only on the operator's, an agency's (ESA's
 eoPortal included) or an academic page for its platform. From
 16×, with flat imagery on the globe (not Google 3D tiles) and the view at
-nadir, every 2 s the view asks the base imagery layer for the tiles it will
-need 5 to 20 s ahead along the ground track (`prefetchImageryAhead` in
-`src/ui/cockpitOrbitalView.js`), so the browser has them cached when the
-view arrives. The level is the one Cesium will draw there
+nadir, every 2 s the Cesium renderer asks the base imagery layer for the
+tiles the view will need 5 to 20 s ahead along the ground track, so the
+browser has them cached when the view arrives. The renderer works this from
+its own camera (`preloadImageryAhead` in
+`src/render/cesium/imageryLookAhead.js`): a vertical field of view as narrow
+as an orbital view's at 16× for the camera's height, a look straight down,
+and the camera's own motion over the ground, which gives the track. The level is the one Cesium will draw there
 (`imageryLevelForView` in `src/cockpitOrbital.js`, following Cesium's own
 choice: the terrain level whose error spans at most the globe's maximum
 screen-space error, then the imagery level whose texels are nearest that
@@ -1723,7 +2626,7 @@ at the lowest priority, so a request is declined while the imagery server's
 slots are taken by the tiles on screen and is the first dropped when the
 scheduler is full (a declined or dropped tile is asked for again later, one that failed to load is not); it remembers the last 512 tiles asked for and does not ask
 for those again, starts over on another base map (cancelling the old map's
-pending requests), and cancels the requests still pending on exit. Across the track it samples the centre line, a third
+pending requests), and when the view widens (below 16× or on exit) cancels the requests still pending and forgets the tiles asked for. Across the track it samples the centre line, a third
 out and the frame's edges. While tilted off nadir the view looks away from
 the track, and with the world clock more than a minute from now (paused or
 played back) it will not pass where the look-ahead points, so nothing is
@@ -1762,7 +2665,7 @@ time. TRACK ACQUIRED stays first. Then:
   left out (the satellites layer's bounded `getNearestPositions`, measured
   from the satellite itself), with their bearing from the top of the frame
   and distance. A row (`Ride …`) rides that satellite. While there is a
-  satellite ridden before this one, a RETURN · *name* row goes back to it; if
+  satellite ridden before this one, a RETURN · _name_ row goes back to it; if
   that satellite has left the catalogue it is dropped and RETURN offers the
   one before. Riding stays in orbit: the satellites layer tracks the new
   satellite (`trackById`), the Cockpit takes the camera back at once and
@@ -1855,6 +2758,83 @@ the subject (tracking stopped, Satellites off) or tracking another target
 ends the view without refocusing. `src/ui/cockpitOrbitalView.test.mjs`
 covers entry, camera, zoom, look, HUD and exit.
 
+### Application subjects
+
+An application can add its own first-person subjects beside the aircraft,
+vessel and satellite: `services.cockpitSubjects` to `createApplicationControls`,
+a list of subject providers (`src/cockpitSubjectProviders.js`, checked once by
+the coordinator; a malformed one, or one with a member that throws when read,
+is left out with a warning and the rest are kept). A provider names
+its layer, an entry face and labels in the page's language, and supplies four
+operations: `candidate()` (what entry would ride now), `hold(id)`,
+`read(nowMs, ctx)` (a camera frame each update) and `hud(frame, ctx)` (a HUD
+view model), with `release(id, {restore})` on exit. Entry needs the provider's
+layer on, no Context change in flight and the provider's own
+`isEntryAllowed(candidate)`; voice stays aircraft-only and is refused, with
+the reason, while a provider's view is in use.
+
+The built-in kinds keep their fixed entry order (a tracked aircraft, then the
+tracked satellite, then the selected vessel), so without providers entry is
+unchanged. A provider's candidate takes entry only when it was selected after
+every built-in subject present, by when the Cockpit first saw it or saw it
+selected again (its `selectedAt` changing): a train picked after an aircraft
+was tracked takes entry, and an aircraft tracked after it takes it back.
+Providers' candidates are ordered most recently selected first, then by
+priority; one first seen together with a built-in subject comes after it. The
+first in that order decides alone: when its gate is shut there is no entry
+rather than the next subject's.
+
+A frame places the eye `eye.upM` above `heightM` (the shared floor where the
+frame gives none, or where it last stood while that floor is cold; with
+neither, the camera stays where it is and the HUD reads ACQUIRING SURFACE for
+at most `COCKPIT_GROUND_WAIT_TIMEOUT_MS`, after which the view ends and the
+subject is released: no height stands in for a floor never read), slews toward `headingDeg` at the provider's rate, and may
+turn off the floor clamps (`groundClamp: false`, for a subject inside a
+structure) or keep the anchor exactly on the subject (`anchor: 'exact'`, for a
+layer that already moves it smoothly; a frame with no `speedMps` is always
+exact, since an inertial anchor runs on at the frame's speed); `cameraIntervalMs: 0` updates the
+camera every rendered frame. A frame that is null, malformed or for another
+subject ends the view (`restoreTracking: false`), as an aircraft tracked
+meanwhile and the provider's layer turning off do; the exit control asks the
+provider to restore its subject. The generic HUD shows the provider's kicker,
+title, meta line, speed with its unit and tag, readout cards, always-visible
+source rows, banner, route card and Live Signals rows, a veil that darkens the
+picture under the HUD (with passing light streaks, which stop under reduced
+motion), arrow-key look-around when the provider asks for it, and a progress
+line along the bottom edge (`src/cockpitProgress.js`: close ticks merge,
+labels never overlap). Core translates none of the provider's text: a host
+words it for the page's language (`gods-eye-view/i18n`:
+`getLocale`, `onLocaleChange`). Its entry face, labels and look may be
+functions, read again when they are shown and on a change of language, as the
+HUD view is.
+
+The Rail layer offers a read API for such a view: `getSelectedTrain()` and
+`getCockpitSubject()` (a snapshot of the train: where it is along its line,
+which way it runs (`pathBinding.js` learns it), its rail height, speed as
+reported or derived, position source, feed credit and stops, and
+`selectedAtMs`, when the user last selected it by a click or `focusTrain`,
+even again; null after a deselection and for a train only a hold selected),
+`setCockpitSubject(key)` (its marker, 3D model and card hidden, the selection kept, its
+feed held, clicks and Escape left to the view; the held copy stays the one
+drawn of its train while held, another feed's copy hidden, and it keeps
+moving, still selected, when its category is turned off) and
+`focusTrain(key)` (false for a train the layer does not draw); its pure path
+module is exported as `gods-eye-view/layers/rail/paths`. That export
+and these read APIs are experimental and may change without notice. A snapshot read again while nothing in it changed is
+the one read before, and its `path.line` is a frozen copy. Transit
+offers the same for a vehicle (`getSelectedVehicle`, `getCockpitSubject`,
+`setCockpitSubject`, `focusVehicle`): a held vehicle keeps playing when it is
+out of the camera's view, and its sprite, 3D model, card, trail and detection
+box are hidden; released, it is out of play until a visibility sweep finds it in
+view. Its snapshot's `position.groundHeightM` is the floor where playback draws
+it (the drawn marker's height while it is placed, else its segment's two
+reports' floors at the playback fraction), not the newest report's, and null while that floor is unknown. Rail's `path.direction` is the
+way the drawn train runs: once playback has placed it, a report that runs back
+turns it only when playback reaches that report. `docs/APPLICATION.md` (Cockpit subjects) shows a minimal provider. `src/ui/cockpitSubjectView.test.mjs`,
+`src/cockpitSubjectProviders.test.mjs`, `src/cockpitProgress.test.mjs`,
+`src/layers/rail/cockpitSubject.test.mjs` and the Transit lifecycle tests
+cover them.
+
 ## Context coordination
 
 Context controls own Contacts/Space Missions state, entry and exit transactions,
@@ -1871,8 +2851,21 @@ Frame loading, calibration editing and status display have separate modules;
 providers, camera placement and navigation policy retain their existing owners.
 Changing cameras invalidates old image callbacks and cancels an unfinished
 calibration edit. Failed refreshes preserve settled pixels for the same camera,
-while a newly selected camera never shows the prior camera's image. Disposal
+while a newly selected camera never shows the prior camera's image. A frame is
+shown without a fade once it is decoded (or after one second if its decode never
+settles), so a new camera's preview is blank only while its frame loads. Disposal
 releases listeners, subscriptions, image handlers, summary timers and chip-hide timers.
+
+The panel opens when a camera becomes active and collapses when the layer is
+switched off, from its own switch or anywhere else. The panel chrome applies
+the collapse, so a panel the desktop accordion only folded has its saved and
+shared state closed too. Clear selected data layers and Context isolation
+(Contacts, Space Missions) switch the layer off without the user asking: the
+panel and its share preference stay as they are, and the layer comes back to an
+open panel. Only the switch-off isolation makes counts (`suspendsLayer`, true
+while `_clearLayersOutsideContextMode` switches the layer off): the user
+switching CCTV off inside Contacts closes the panel as anywhere else. A panel opened by hand while the layer is off stays open, and its
+meta line reads the catalog count, not the last active camera.
 
 The CCTV layer control `focusNearestToPoint(lat, lon, options)` selects the
 nearest catalog camera to a valid WGS84 point and optionally flies to it.
@@ -1892,6 +2885,14 @@ marker placement, audio playback and camera policy stay with their existing
 owners. Tuner calculations have a pure entry, with existing layer exports
 preserved. Destruction removes listeners and state subscriptions before ending
 tuning; a delayed Enable result cannot reveal or refocus removed controls.
+
+The stations, their clusters and the selected marker draw through the
+renderer's draw port, and the layer no longer reaches Cesium. Stations drawn
+too close together on screen stand behind one cluster dot, grouped as the
+default renderer's entity clustering grouped them (`geo/screenCluster.js`,
+42 px, three or more), reclustered as the camera moves and when the filter
+changes. A caller handing the layer a Cesium viewer, with no
+renderer bound, loads the `./render/cesium/unbound` export once first.
 
 ## Giroc / Webcam Romania CCTV source pack
 
@@ -1978,6 +2979,7 @@ video; camera poses use the existing low-confidence heading prior.
 
 The CCTV catalog includes Taiwan national freeway cameras from the Freeway Bureau, MOTC. The app first reads the daily MOTC 2.0 CCTV.xml table with a keyless HTTPS request, a 15-second deadline, a 6 MiB response cap, and the shared 15-minute cache. If that catalog is unreachable and no last-good source list exists, the loader uses the Highway Bureau’s public provincial-road CCTV XML feed at https://cctv-maintain.thb.gov.tw/opendataCCTVs.xml. The fallback is capped by the same Taiwan source limit and hourly retry backoff; its MJPEG feeds are restricted to the eight cctv-ss01 through cctv-ss08.thb.gov.tw HTTPS servers. The frame proxy returns one bounded JPEG from each stream, not an unbounded video response. The Highway Bureau open-data page states XML downloads are free and asks users to attribute the source; the app credits Highway Bureau, MOTC. These are provincial-road cameras, not a replacement for the national freeway cameras. CCTV_TAIWAN_ENABLED=0 disables both feeds; CCTV_TAIWAN_MAX_SOURCES sets the shared cap (default 600, bounded to 1–2000), and CCTV_TAIWAN_URL overrides the Freeway Bureau table URL.
 Gate: src/data/cctvTaiwan.test.mjs and src/data/cctvProxy.test.mjs.
+
 ## DriveBC CCTV source pack
 
 The CCTV catalog adds DriveBC highway cameras for British Columbia alongside the
@@ -2040,7 +3042,7 @@ and a Denver coordinate underground. Search now resolves the application's
 ground-floor elevation (bounded wait, same ellipsoidal datum) before framing and
 warms the cell; after landing, `src/cameraGroundGuard.js` samples the rendered
 surface under the target and the camera once tiles stream in and lifts the eye
-to 120 m clearance, holding heading and pitch. Navigation ownership changes (Director, tracking, keyboard/UI controls and direct camera flights), layer/app teardown, and pointer/wheel gestures cancel the check and remove its listeners. `scripts/qa-context-arrivals.mjs` types Camp Mabry
+to 120 m clearance, holding heading and pitch. Navigation ownership changes (Director, tracking, keyboard/UI controls), any other caller moving the camera or starting a flight before a retry, layer/app teardown, and pointer/wheel gestures cancel the check and remove its listeners; the guard compares the pose it started on rather than wrapping camera methods. `scripts/qa-context-arrivals.mjs` types Camp Mabry
 and a Denver coordinate and requires at least 60 m clearance.
 
 ## Layer panel ownership
@@ -2055,10 +3057,11 @@ provides its confirmed toggle, taxa presets and fixed-order, nonempty legend.
 
 ## Sky background
 
-`src/sky/starrySky.js` fills Cesium's `Scene#skyBox` slot with 9,096 Yale
+`src/render/cesium/starrySky.js` fills Cesium's `Scene#skyBox` slot with 9,096 Yale
 Bright Star Catalogue stars and a soft ESO/S. Brunier Milky Way. Both layers
 rotate from ICRF/J2000 into the Earth-fixed frame at the scene clock, with
-a TEME fallback while Cesium's IAU 2006 tables load. Bundled assets and
+a TEME fallback while Cesium's IAU 2006 tables load. The precise rotation reaches
+Cesium-free code (the celestial ring) through `src/sky/icrf.js`. Bundled assets and
 their provenance are documented in `src/data/local_data/sky/README.md`.
 
 Anime fades out the Milky Way with its style intensity to avoid cel-shaded
@@ -2068,8 +3071,9 @@ is validated against Cesium 1.138.0 and must be revalidated on upgrades.
 
 `scripts/qa-anime-sky.mjs` checks asset readiness, visible Normal sky and
 Anime band coverage against a Vite dev server.
-`scripts/qa-sky-model-lighting.mjs` compares a lit `airplane.glb` against
-black and white environment maps in isolated scenes.
+`scripts/qa-sky-model-lighting.mjs` compares a lit fleet airliner
+(`public/models/fleet/aircraft/a320.glb`) against black and white environment
+maps in isolated scenes.
 
 ## Model atmosphere on Apple Metal
 
@@ -2090,6 +3094,53 @@ future driver fix restores the effect with no code change; iOS/iPadOS platform
 detection is the backstop for when no probe context can be created. Applied
 during viewer construction, before any tile builds a draw command.
 
+## Render failure notice
+
+When the globe stops drawing, the scene chrome says so instead of leaving a
+black globe behind working controls. `installRenderFailureNotice()`
+(`src/render/cesium/renderFailure.js`) listens for Cesium's `renderError` and the canvas'
+`webglcontextlost`, logs the error, and publishes a notice that
+`RenderFailure.vue` shows as an alert dialog with focus on its first action.
+The app's viewer uses `showRenderLoopErrors: false`, so Cesium's dead-end
+"Rendering has stopped" panel no longer appears; `applicationViewerOptions()`
+keeps it by default for other callers.
+
+- **Retry** restarts the render loop. The notice stays until a frame starts
+  and ends without an error: Cesium raises `postRender` after a failed frame
+  too.
+- **Reload**, after a lost context, reloads the page; the address keeps the
+  view.
+- **Reset view** opens `appRootUrl()`, without the hash or `/share/<code>`
+  path; the query, such as `?lang=`, is kept.
+
+Pitfalls:
+
+- An error thrown outside Scene's error handling (a frame listener, `onTick`,
+  a resize) stops the loop without a `renderError`. The notice wraps the
+  widget's `render()` and `resize()` and raises it as one, once even with
+  `rethrowRenderErrors`.
+- A throwing listener leaves its Cesium event mid-raise, with listener changes
+  only queued. The wrapper finishes those raises first (`finishRaise()` over
+  `frameEvents()`), so a layer turned off or on meanwhile behaves.
+- A render error marks the loop stopped while its next frame is still queued.
+  The wrapper keeps the loop marked running, so a Retry or a shown tab
+  (`src/app/tools.js`) before that frame starts no second loop.
+- After a lost context, later render errors are only logged, so the notice
+  keeps saying why. The listener neither prevents nor restores the loss.
+- When the globe draws again, focus goes back where it was, or to the globe's
+  canvas, which the map's keys read as the map; the canvas is focusable only
+  until focus leaves or the globe is pressed. Focus the user moved stays put.
+- The notice sits above floating panels such as the Québec camera viewer, and
+  its buttons are 44 px tall on touch screens.
+
+An inline conversation panel never reloads or navigates its host's page: it
+offers Retry after a render error only, and no notice after a lost context,
+where the panel runtime's own notice applies (`src/app/globePanelRuntime.js`).
+Its timer (`keepPanelRendering()`) draws only while the render loop is on and
+logs nothing itself, so each render error is logged once, by the notice. An
+error a timer frame throws is caught there: it has already been raised as a
+render error.
+
 ## Map Source control ownership
 
 Map Source controls own chip listeners, source-state subscriptions and selection
@@ -2101,11 +3152,14 @@ remain unchanged.
 
 ## Visual effects ownership
 
-VisualEffects owns style-stage creation, crossfades, animation scheduling, bloom
-and sharpen. Display supplies actions and renders settings; effect execution has
-no DOM dependency. Existing presets and the 500 ms transition remain unchanged.
-Stopping the controller revokes animation before asynchronous UI teardown; final
-destruction removes its stages and restores the borrowed bloom configuration.
+VisualEffects keeps the records of the styles, their crossfades, bloom and
+sharpen, and drives them through the renderer's effects port: it defines each
+preset there as a style, and the renderer runs the passes and animates the
+animated ones. Display supplies actions and renders settings; effect execution
+has no DOM dependency. Existing presets and the 500 ms transition remain
+unchanged. Stopping the controller revokes animation before asynchronous UI
+teardown; final destruction removes its styles and turns bloom and sharpen off,
+and the renderer restores the scene's bloom configuration when it goes.
 Snow is no longer a visual preset. A share link that names it, in either the
 long or compact form, opens on Normal and drops the Snow shader parameters. A
 view passed to embed mode or `show_in_gods_eye_view`, and a saved scene shot,
@@ -2160,8 +3214,8 @@ retain their specialized ownership. Browser acceptance:
 
 ## Ordinary action buttons
 
-Scene panel actions, shot LOAD/DEL actions, the EDIT DETAILS / SHARE SCENE
-bar and one-shot CCTV actions use the shared `gev-action-button` surface in
+Scene panel actions, shot move-up/move-down/DEL actions, the EDIT DETAILS /
+SHARE SCENE bar and one-shot CCTV actions use the shared `gev-action-button` surface in
 `ui/styles/action-button.css`, with default/danger variants and
 default/compact sizes, drawn by the scene panels view (`LayerPanelsView.vue`,
 `SceneShotList.vue`) and the CCTV panel. Feature
@@ -2198,8 +3252,13 @@ Browser acceptance: `QA_BASE_URL=http://127.0.0.1:4173 node scripts/qa-segmented
 
 `ui/input` supplies the bubbling application shortcut listener and generated
 shader-parameter rows. Number/style keys, H/O/V/F/D/C actions, native form-control
-typing and Escape behavior retain their existing mappings. Capture-phase
-surfaces continue to arbitrate their own keyboard events first.
+typing and Escape behavior retain their existing mappings. A shortcut key held
+with Cmd, Ctrl or Alt runs no shortcut, so the browser's own chord (Cmd+C to
+copy, Cmd+F to find, Cmd+1 to switch tab) does not also toggle CCTV, the layers
+panel or a style; Shift does not count, and Escape dismisses search either way.
+The Q/W/E/R/T keys of an expanded city's points of interest follow the same
+rule.
+Capture-phase surfaces continue to arbitrate their own keyboard events first.
 
 The UI facade retains shader values, share-restore authority, render requests,
 search dismissal, visibility and Cockpit portal policy. Parameter rows preserve
@@ -2338,6 +3397,11 @@ catalogued systems). The chip stays ON. A loading or failed Bike Share city
 shows its own text. Leaving coverage clears the last-update time. The voice
 analyst gets the same English notes; both translate them through
 `translateStatusMessage` (`src/ui/statusText.js`).
+Above its gate Bike Share also marks every covered city on the globe: a
+green, white-ringed dot per registry system, 5 km up so terrain never hides
+it, shown only while the layer is on and stations are not drawn. Clicking one
+flies straight down into the city from 20 km, an explicit camera action like
+the other camera controls (`attachShellServices({ runNavigation })`).
 
 ## Places and CCTV request bounds
 
@@ -2451,8 +3515,9 @@ Overpass query validation, geometry simplification, disk caching and upstream
 transport now have separate modules; military-installation search reuses that
 transport. Regional briefing combines separate place, news and weather sources,
 while weather effects uses only the weather source.
-GDELT compact dates that do not name a real calendar instant keep the article
-with an unknown publication time. Existing process-scoped
+GDELT compact dates that do not name a real calendar instant normalize to an
+unknown publication time, and the 24-hour regional-news window then drops the
+article. Existing process-scoped
 caches, rate limits, stale fallbacks and route ordering are preserved.
 
 Local voice has separate HUD-summary, debug-log and Realtime-token handlers,
@@ -2843,6 +3908,15 @@ stays in view or tracked; an answer, found or not, and a permanent refusal
 stay final for the session. A route belongs to the callsign it was looked up
 for, so a callsign change drops the old route. See `DATA_SOURCES.md`.
 
+A selected vessel gets a photo the same way. The browser asks Open Vessel
+Photos for it by MMSI (`fetchOpenVesselPhoto` in
+`src/sources/live/standalone.js`, read by `src/data/openVesselPhoto.js`), once
+per MMSI (`src/layers/vessels/photos.js`), and the CONTACTS view shows it under
+the vessel's name and MMSI ("NAME · MMSI 366999709") with the photographer,
+the photo's open licence and a link to the vessel's page. A vessel without an
+MMSI is never looked up; a miss stays final for the session, and a failed
+lookup is asked again after five minutes.
+
 `gods-eye-view/server/providers/live` is a Node-only entry for the existing
 plugins and shared request helpers. Importing it starts no sockets or timers.
 The existing aircraft normalizer is separately available through the portable
@@ -2917,7 +3991,16 @@ reporting are unchanged.
 The FIRMS proxy requests VIIRS NOAA-20, VIIRS NOAA-21 and MODIS NRT (Terra and
 Aqua). It skips VIIRS Suomi NPP, which NASA stopped delivering on 2026-11-02.
 
+`/api/firms` answers the trailing 24 hours to now, and the Active Fires row
+reads `NASA FIRMS · LIVE · updated …`. A source may instead answer the 24 hours
+to a set time, naming its end as `at` (epoch ms): the row then reads
+`NASA FIRMS · 24 h to MM-DD HH:MM UTC`, `getStats()` reports `at`, and
+`get_active_fires` says "in the 24 hours to" that time and reports it as
+`window_end`, and card and detail ages count back from that time instead of
+now. The dev proxy never sets `at`.
+
 The FIRMS CSV parser rejects impossible acquisition calendar dates before the proxy filters records to the trailing 24 hours, while retaining valid UTC acquisition times.
+FIRMS ages round to whole hours before choosing a unit, so a 47.6-hour age reads "2d", not "48h"; with detections filtered to 24 hours, this shows mostly in the `STALE · cached {age}` stats line.
 The `get_active_fires` tool reports acquisition times as UTC ISO timestamps,
 including zero-padded hours and minutes; missing or invalid dates and times
 remain `null`, including impossible calendar dates from a custom source.
@@ -2957,9 +4040,14 @@ which embeds the MAP_KEY.
   windows reuse the active load. Disabling or returning Contacts to passive mode
   clears its anchor; passive refreshes cannot reclaim it. Background repaints
   refresh context records without publishing a new selection.
-  Installation tiles decode only the `landuse` layer. Reloads keep the Cesium
-  entities of sites whose geometry is unchanged, so outlines and fills do not
-  blink. While Contacts has a subject, the layer loads a window around it
+  Installation tiles decode only the `landuse` layer. The site dots, the
+  selected site's dot (a set of its own, so selecting one redraws no other),
+  their ground outlines and the selected site's fill are renderer draw sets;
+  reloads keep the drawn items of sites whose geometry is unchanged, so
+  outlines and fills do not blink. The layer no longer reaches
+  Cesium; a caller handing it a Cesium viewer, with no
+  renderer bound, loads the `./render/cesium/unbound` export once first.
+  While Contacts has a subject, the layer loads a window around it
   instead of the camera view (100 km half-width at mid latitudes, shrinking so
   it fits 16 z9 tiles), moves it only after the subject travels 20 km, and
   ignores camera `moveEnd`; clearing the subject returns to the viewport. The
@@ -3009,10 +4097,10 @@ which embeds the MAP_KEY.
 > a layer that needs no key, already holds one, or names a key the registry does
 > not recognise. The earthquakes half
 > still delivers in full. The shared loading reducer now treats an explicitly
-> declared missing optional key as a configured terminal state rather than a
-> failed multi-layer mission, so the global chip completes without showing
-> `LOAD FAILED`. A genuine lifecycle or fetch failure still retains failure
-> priority.
+> declared missing optional key as its own terminal state rather than a
+> failed multi-layer mission, so the global chip ends `KEY REQUIRED` (amber)
+> instead of `LOAD FAILED`, on the first load and on every refresh. A genuine
+> lifecycle or fetch failure still retains failure priority.
 >
 > **Acceptance changed with that ruling (2026-08-23).** `qa-firstrun` no longer
 > asserts "a keyless Environmental never shows a failure chip" — that stopped
@@ -3116,9 +4204,12 @@ which embeds the MAP_KEY.
 > so a turned-off layer's entities stayed reachable (Data Centers kept 116
 > MiB). `src/sceneCommandRelease.js`, installed in `src/app/tools.js`,
 > requests one frame through `governorRequestRender` after every layer
-> disable and then trims those arrays. It reads private Cesium fields;
-> `src/sceneCommandRelease.test.mjs` pins them and fails if Cesium renames
-> them or changes which passes it truncates.
+> disable and then has `src/render/cesium/sceneCommandRelease.js` (handed
+> handed over by the Cesium plugin through `src/app/scene.js`) trim those
+> arrays. It reads private Cesium
+> fields through `src/render/cesium/internals.js`;
+> `src/render/cesium/sceneCommandRelease.test.mjs` pins them and fails if
+> Cesium renames them or changes which passes it truncates.
 
 > **2026-08-08 — performance waves 1+2:** the app idles via an explicit render
 > governor (`src/renderGovernor.js` — hold/release from every per-frame
@@ -3231,20 +4322,22 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   24.09 m aft (70 % of the model's rendered envelope, so inside it), 2.22 m
 >   below centre (6 %), and 2e-9 m off the centreline.
 > - **The tracked trail attaches to REAL HULL, aft and below (2026-08-23):**
->   `MODEL_TRAIL_ANCHOR_NATIVE` (`src/data/modelVisualAnchor.js`) holds, per GLB
->   and in RAW glTF coordinates (see the transform-chain entry below), the point
->   of the hull's CENTRELINE PROFILE (its y = 0 slice) closest to the aft-belly
->   AABB corner. It is NOT the corner: a bounding-box corner is empty
->   space, 4.80 m off the nearest triangle on `airplane.glb` and 6.14 m on
->   `jet.glb`, so the trail ended in mid air beside the aircraft. The head segment
+>   `FLEET_TRAIL_ANCHORS` (`src/data/fleetTrailAnchors.js`, generated by
+>   `scripts/measure-fleet-trail-anchors.mjs`) holds, per fleet aircraft and
+>   helicopter model and in RAW glTF coordinates (see the transform-chain entry
+>   below), the point of the hull's CENTRELINE PROFILE (its centreline slice)
+>   closest to the aft-belly AABB corner. It is NOT the corner: a bounding-box
+>   corner is empty space (4.80 m off the nearest triangle on the airliner
+>   asset this was first measured on, 6.14 m on the jet), so the trail ended in
+>   mid air beside the aircraft. The head segment
 >   is drawn from a point behind the aircraft to this anchor, so the anchor must
 >   stay aft (83–96 % of each aft extreme) or the segment enters at the tail and
->   stops inside the fuselage. `modelScale.test.mjs` reads the POSITION BUFFERS —
+>   stops inside the fuselage. `fleetModels.test.mjs` reads the POSITION BUFFERS —
 >   real vertices and triangles, because accessor min/max cannot tell a corner
 >   from a surface — and re-derives on-hull, aft, lowest-at-its-station,
 >   on-centreline, and the construction itself. Re-measure, never re-guess.
 > - **The trail anchor rides CESIUM'S transform chain, not a hand-rolled one
->   (2026-08-23 regression fix):** `MODEL_TRAIL_ANCHOR_NATIVE` stores RAW
+>   (2026-08-23 regression fix):** `FLEET_TRAIL_ANCHORS` stores RAW
 >   glTF coordinates and `modelAnchorWorld()` assembles
 >   `modelMatrix × components.transform × axisCorrection` — the same chain
 >   `ModelSceneGraph` renders with, built from Cesium's own exported
@@ -3279,7 +4372,7 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   ENVELOPE, and between them the drawn start slides along the segment so the
 >   visible length grows CONTINUOUSLY from zero. Three earlier cuts are recorded
 >   because their shape matters: testing segment LENGTH against the radius HID
->   real trail (58 m aft of `airplane.glb`'s 34.41 m envelope gives a 33.98 m
+>   real trail (58 m aft of an airliner's 34.41 m envelope gives a 33.98 m
 >   segment, suppressed, though ~23.6 m of it is open air); CLIPPING at the
 >   envelope and keeping only what lay outside stopped a moving trail visibly
 >   SHORT of the aircraft, since a bounding sphere encloses a lot of empty space
@@ -3511,6 +4604,42 @@ isCurrent })` gates BOTH halves of the map-stack switch, which is its only
 >   eye level before detection sees it, so ground-backed labels only reappear
 >   once the camera clears the ellipsoid. Rendered proof:
 >   `scripts/qa-cockpit-plates.mjs`.
+> - **Street vehicles behind geometry lose their bracket and callout
+>   (2026-11-09):** a contact a layer marks `depthTested: true` (only Street
+>   Traffic does) is tested against the depth the scene drew, and is left out
+>   of the overlay while a building, 3D tile, terrain or any other drawn
+>   surface stands in front of it by more than a margin: 3 m, or what a 2 m
+>   rise above the vehicle on its line of sight takes when the camera looks
+>   down on it, and above 3 m never more than 2% of its range (2% applies
+>   outright at grazing angles or when the camera looks up). A flat
+>   2% let walls, awnings and trees 10 to 20 m in front of a street 1 km away
+>   pass as the road. That includes vehicles the road data routes through
+>   tunnels. Every other layer
+>   is untouched: aircraft, vessels and satellites draw their markers over the
+>   scene on purpose and keep their labels over it. The test runs on the GPU
+>   (`src/render/cesium/sceneOcclusionProbe.js`): one occlusion query per contact,
+>   repeated every 100 to 200 ms, answered a frame or two later, with nothing
+>   read back from the GPU and so no stall. A contact hides as soon as a
+>   "hidden" answer arrives and returns 600 ms after its last one, which keeps
+>   a contact on a silhouette edge from blinking; a callout whose contact goes
+>   behind something is dropped at once rather than faded out on the facade.
+>   A contact new to the view, or back in it after longer than a retest
+>   interval, is held back until its first answer (at most 400 ms, longer
+>   when a crowded view stretches the retest pace), so orbiting a city does
+>   not flash a bracket for each vehicle that swings into frame behind a
+>   building. A callout placed beside a visible vehicle can still overlap a
+>   facade; that is where the callout was placed, not the vehicle being
+>   behind it. These times run on painted frames,
+>   so a hidden tab or an idle scene does not expire them.
+>   Do not swap this for `scene.pickPosition` per contact or for a depth
+>   read-back: both wait on the GPU process (measured 0.2 to 1.4 ms per pick,
+>   and 1.5 to 25 ms per `getBufferSubData` even behind a signalled sync
+>   object). With no pick depth (2D or Columbus view, depth picking off) or
+>   after a failed self-check, nothing is hidden and
+>   `getDetectionDiagnostics().surfaceDepthMode` reads `off`; a WebGL 1
+>   context reads depth back synchronously about 8 times a second and reads
+>   `sync`. The renderer internals this relies on are listed, with the engine
+>   version they were checked against, in `readSceneDepthSource`.
 > - **Required attribution has two named keep-out rules (2026-08-20):** the
 >   Google/Cesium credit line must stay visible in every state, and below 900px
 >   two surfaces used to paint over it — the command dock's popover tray (any
@@ -3663,12 +4792,13 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   specific error or availability state. The shared presentation is delayed to
 >   avoid flashes, visible outside the rails, and retained in
 >   Cockpit. One continuous overlapping load interval retains the strongest
->   terminal outcome (`failed`, then `cancelled`, then `complete`) until every
->   participant settles, so a later success cannot mask an earlier failure.
->   A participating producer's terminal error, unavailable status, or
->   key-required state also outranks generic completion without requiring a
+>   terminal outcome (`failed`, then `key required`, then `cancelled`, then
+>   `complete`) until every participant settles, so a later success cannot
+>   mask an earlier failure. A participating producer's terminal error or
+>   unavailable status also outranks generic completion without requiring a
 >   separate manager failure event; AIS first-connect expiry therefore ends as
->   `LOAD FAILED`, not `LOAD COMPLETE`.
+>   `LOAD FAILED`, not `LOAD COMPLETE`. A producer whose only problem is a
+>   missing provider key (`stats.keyRequired`) ends the batch `KEY REQUIRED`.
 >   Slow disable work is labeled as turning live data off rather than
 >   as a completed load. Street Traffic's dedicated sync chip shows genuine
 >   work and one bounded completion; steady TomTom coverage, including 0%, does
@@ -3732,6 +4862,10 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   The title and loading logos use a blue 10 px outer-eye stroke with a
 >   translucent slate fill, while the globe-and-cage gaze travels up to 34 SVG
 >   units toward the pointer for clearer feedback at the compact title size.
+>   The title logo is a button, "Back to live at the starting view": the world
+>   clock goes live and the camera flies to the view the app started from (the
+>   host's `homeView`, else its `startView`, else the whole planet), letting go
+>   of whatever it follows as Reset Globe does (`returnToStart()`).
 > - **Context, Cockpit, and Radio interaction contract:** explicit Contacts,
 >   Space Missions, and successful Cockpit actions reveal the Context panel, while
 >   restoration and replay preserve its prior collapsed state. Contacts uses the
@@ -3807,9 +4941,10 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   at 45% of their normal presentation opacity to reduce visor clutter; callouts,
 >   density, allocation, fade, and Outside tuning are unchanged and normal bracket
 >   opacity returns on exit. AIR presentation follows the same retained 3D mode:
->   Proximity uses 150/185 km and All uses 400/450 km. With 3D off, in-range
->   contacts remain rotating 2D silhouettes; with 3D on, ready admitted models
->   take over under the Cockpit cap of 60. Loading/capped contacts remain 2D,
+>   Proximity uses 150/185 km and All uses 400/450 km for the AIR silhouettes
+>   (`COCKPIT_AIR_*`). With 3D off, in-range contacts remain rotating 2D
+>   silhouettes; with 3D on, ready admitted models take over within 3 km under
+>   the Cockpit cap of 60. Loading/capped contacts remain 2D,
 >   out-of-range contacts use rotation-free dots, and exit restores map treatment.
 >   Its Radio popover exposes compact power,
 >   transport, station, and volume controls. Cockpit Previous/Next changes the
@@ -3925,18 +5060,22 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   it, and narrow screens retain Cesium's surface with an internal
 >   scroller. The title, close control, links, and persistent Google/Cesium line
 >   remain unchanged and visible.
-> - **Distant-aircraft recession:** both civilian and military billboard fleets
+> - **Distant-aircraft recession:** both civilian and military icon sets
 >   retain their locked class/ground scale and `NearFarScalar`, then multiply a
->   limb-relative taper in the existing ~12 Hz tick. The taper is 1 below 0.5×
+>   limb-relative taper. The sets say so themselves (`SetSpec.recede`, with
+>   the tuning as its parameters, sent again when the tuning changes), and the
+>   renderer works the taper out each frame from `render/recession`. The
+>   taper is 1 below 0.5×
 >   geometric limb distance and smoothsteps to 0.45 scale plus a 0.35 alpha-haze
 >   factor at the limb. That treatment eases continuously back to identity from
 >   3,500–4,500 km camera height, avoiding a globe-view threshold pop. These
 >   values, the start ratio, blend band, composed floor, and write epsilon remain
 >   runtime tunings. No aircraft is count-culled or made fully transparent.
->   Focus emphasis and limb haze multiply at one deadband-gated write site, and
->   their product is clamped to 0.20 before freshness alpha is applied. Ambient
->   fleet models receive that same composed alpha; class/ground/cockpit repaints
->   preserve the current limb scale instead of dropping it for a tick.
+>   Focus emphasis and limb haze multiply, and their product is clamped to
+>   0.20 before freshness alpha is applied. Ambient fleet models receive that
+>   same composed alpha, worked out on each fleet tick from the camera then
+>   and written again once it moves by more than 0.005; their set itself does
+>   not recede. Under the IR boost they draw at full alpha.
 > - **Focus-aware contact de-emphasis:** civilian/military aircraft and
 >   satellites publish the selected target's padded screen bounds and camera
 >   distance from the same per-frame position cache already consumed by their
@@ -4023,10 +5162,13 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   untracking, so a stationary slow press on a plane still selects it. Escape
 >   still releases tracking in place. The 200 px feel needs close-range field
 >   verification; fleet model sizing remains unchanged.
-> - **Deterministic sprite stacking:** contact collections reassert the stable
->   bottom-to-top order CCTV, FIRMS, bikeshare, AIS, military, then civilian
->   flights after every relevant layer init/enable and immediately after FIRMS
->   lazily registers its detection sprites. Always-visible contact
+> - **Deterministic sprite stacking:** contact sets are made at draw orders
+>   (`SetSpec.drawOrder`, from `spriteDrawOrder`) that stack them bottom to
+>   top as CCTV, FIRMS, bikeshare, transit, directions, AIS, military, then
+>   civilian flights on top, whichever layer was turned on first; picks
+>   name the topmost first. The orders are negative, so every overlay at the
+>   default order (selection highlights, route endpoints, the tracked plane)
+>   still draws over all of them. Always-visible contact
 >   depth settings are unchanged. Cesium OIT weighted blending may soften strict
 >   alpha layering on some GPUs, so the ordering remains a real-browser check.
 > - **Deterministic card stacking:** CCTV, FIRMS, vessel, and tracked-target
@@ -4183,8 +5325,14 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   celestial ring, annotations SVG, missions frame tick, and traffic).
 > - **World-label accounting:** All intended label/card migrations use the
 >   shared host. The former native `LabelGraphics` exception for cable reference
->   labels was retired on 2026-08-18; cable text may render over tile geometry,
->   so **zero native world-label creation sites remain**. The mission replay DOM vehicle, awareness
+>   labels was retired on 2026-08-18; cable text may render over tile geometry.
+>   The Directions A/B letters (`directions-markers` source) and data-pack media
+>   labels (a pooled `data-pack-labels:<n>` source per pack resource, through
+>   the pack handle's `label`) moved to the host on 2026-11-04, and
+>   `src/noCesiumLabels.test.mjs` no longer keeps an allow-list, so **zero
+>   native world-label creation sites remain**. A media pack shown without an
+>   `overlayHost` fails to load rather than drawing a native label. The mission
+>   replay DOM vehicle, awareness
 >   compass, annotation SVG callouts, and host-owned detection isolation target
 >   are explicit exceptions; the awareness ring and cockpit contact pips are
 >   non-text out-of-scope surfaces. Annotation callout text, geometry, leaders,
@@ -4229,10 +5377,10 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   Cesium entity carries no label graphic.
 > - **Phase 5 ISS and tracked-satellite labels:** The ISS path and large red
 >   point remain native, while persistent `ISS` text is a one-entry moving
->   ambient-label host source. Its getter reads the already-propagated point
->   cache, preserving the 1 Hz fleet epoch and eliminating the former second ISS
+>   ambient-label host source. Its getter reads the point's own position, which
+>   moves every frame, eliminating the former second ISS
 >   propagation. Satellite tracking continues to publish exactly one protected
->   tracked-lane card through `gevLabelModel` and `_trackedDisplayCached`; the
+>   tracked-lane card through its entity record's `labelModel` and `_trackedDisplayCached`; the
 >   tracked entity is point-only. Tracking ISS suppresses the ambient entry and
 >   untracking restores it, preventing duplicate ISS text. Disable, orbit-text
 >   preference changes, catalog rebuild, and destroy clear/hide the source.
@@ -4247,15 +5395,18 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 > - **Phase 5 tracked civil aircraft label:** A tracked flight's Cesium entity
 >   is a billboard-only camera target with no native label. The flight source
 >   retains callsign/registration fallback, flight-level/altitude, speed, stale
->   state, airline/type, and plausible-route formatting in `gevLabelModel`; the
+>   state, airline/type, and plausible-route formatting in the entity record's `labelModel`; the
 >   one protected tracked-lane host card renders that complete model. Its
 >   position getter reads only `_trackedDisplayCached`, the same authoritative
 >   Cartesian already consumed by the tracked visual and camera, and never
 >   advances dead reckoning from the host frame.
 > - **Scheduled route plausibility:** Aircraft route labels and selected-route
 >   context reject the distant backwards, forwards and antipodal extensions of
->   an airport pair's great circle. The existing 130 km endpoint admission and
->   200 km cross-track tolerance remain; a projected fix outside the finite
+>   an airport pair's great circle. The existing 130 km endpoint admission
+>   remains; the cross-track tolerance is 200 km or 15% of the route's length,
+>   whichever is larger (JFK–SFO allows 623 km, as airways and winds take a
+>   coast-to-coast flight several hundred kilometres off the great circle); a
+>   projected fix outside the finite
 >   origin-to-destination minor arc also has a generous 200 km extension at
 >   either end. Missing coordinates and coincident or antipodal endpoint pairs
 >   retain their loose, unjudgeable behavior; vertical-trend checks are unchanged.
@@ -4354,8 +5505,11 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 > - **Tracked-readout ownership:** `trackedReadout.js` is now a presentation-model
 >   bridge only; it owns no canvas, projection, post-render listener, layout,
 >   keyhole fade, or paint path. Civilian flights, military flights, satellites,
->   and mapped installations write explicit `gevLabelModel` objects and expose
->   `gevDisplayPosition` getters backed by their layer-owned frame/display cache.
+>   and mapped installations write explicit `labelModel` objects and
+>   `displayPosition` getters, backed by their layer-owned frame/display cache,
+>   into the app's entity records (`src/data/entityRecords.js`), never onto the
+>   Cesium entity. A layer's private per-entity state goes in its own store from
+>   `createEntityStore()` (ALPR markers: `src/layers/alpr/markerState.js`).
 >   Selected AIS vessels continue using the vessel source's protected selected
 >   card, so they do not create a duplicate tracked readout. The host registers
 >   the active readout in the protected tracked lane with a zero ambient quota;
@@ -4416,8 +5570,9 @@ activeCameraCardEnabled: true })` may publish it through the retained
 > - **Flights 3D/cockpit hardening:** the destination-direction cue is an
 >   inline SVG rather than a remotely loaded Material Icons ligature, so a
 >   blocked or late font can no longer expand the literal word `navigation`
->   across the cockpit. The grounded `airplane.glb` belly offset is calibrated
->   to the current asset's measured Y-up bounds (`0.063` native units).
+>   across the cockpit. A grounded aircraft stands its fleet model's scaled
+>   clearance (the catalog's `clearance`, measured below the model's origin)
+>   above the ground.
 >   Contact Previous/Next and Live Signals aircraft handoffs now
 >   re-seed the first-person camera anchor at the selected flight immediately;
 >   bounded feed-correction smoothing remains scoped to the same aircraft.
@@ -4644,7 +5799,9 @@ test:track` 43 tracking invariants · headless QA harnesses under
 
 ### Interface localization (October 2026)
 
-Shipped locales: **en** (source and fallback), **ar**, **de**, **es**, **fr**, **it**, **ja**, **pt** (Brazilian Portuguese), **ru**, **uk**, **zh-CN** and **zh-Hant**. The code lives in
+Shipped locales: **en** (source and fallback), **ar**, **de**, **es**, **fr**, **he**,
+**it**, **ja**, **pt** (Brazilian Portuguese), **ru**, **sv**, **uk**, **zh-CN** and
+**zh-Hant**. The code lives in
 `src/i18n/`. How to mark UI text: [`docs/I18N.md`](./I18N.md); translator workflow:
 [`docs/TRANSLATORS.md`](./TRANSLATORS.md).
 
@@ -4658,23 +5815,31 @@ Shipped locales: **en** (source and fallback), **ar**, **de**, **es**, **fr**, *
   `navigator.languages` → English. Any `pt` tag (`pt-BR`, `pt-PT`) selects `pt`. Chinese tags default to `zh-CN`; Traditional Chinese tags
   select `zh-Hant`. Explicit `Hans` selects `zh-CN` regardless of region. `?lang=` is not stored, and share links drop
   it, so a recipient keeps their own language. The globe picker in the
-  bottom-right corner (bottom-left in Arabic) (`src/ui/localePicker.js`) stores the choice, drops
+  bottom-right corner (bottom-left in Arabic and Hebrew)
+  (`src/ui/localePicker.js`) stores the choice, drops
   `?lang=` (keeps it only when storage is blocked) and switches in place:
   views re-render, code that published translated text words it again through
   `onLocaleChange`, and `<html lang>`/`dir` and the page's `data-i18n` markup
   follow. Nothing is lost; a toast already on screen keeps its words.
-- **Right to left.** Arabic (`ar`) is in `RTL_LOCALES`, so `<html dir="rtl">`:
-  the title, style indicator, both panel stacks and their icon rails swap
-  sides through logical properties (`inset-inline-*`, `margin-inline-*`), the
-  dock and corner row reverse their order, and `src/ui/styles/rtl.css` holds
-  the rest: no letter-spacing on Arabic text, Noto Sans Arabic in the font
-  stacks, the intel HUD kept as a left-to-right instrument overlay, FM seek
-  and the radio dial kept left to right. Intl formatters get `ar-u-nu-latn`,
-  so numbers and dates keep Western digits.
+  An application that offers the language elsewhere (a menu) uses the
+  `./i18n` entry (`src/i18n/page.js`): `startPageLocale` at boot,
+  `followPageLocale` for the markup and `switchLocale`, which does what a
+  picker choice does, with `localePicker: false`.
+- **Right to left.** Arabic (`ar`) and Hebrew (`he`) are in `RTL_LOCALES`, so
+  `<html dir="rtl">`: the title, style indicator, both panel stacks and their
+  icon rails swap sides through logical properties (`inset-inline-*`,
+  `margin-inline-*`), the dock and corner row reverse their order, and
+  `src/ui/styles/rtl.css` holds the rest: no letter-spacing on Arabic and
+  Hebrew text, Noto Sans Arabic and Noto Sans Hebrew in the font stacks, the
+  intel HUD kept as a left-to-right instrument overlay, FM seek and the radio
+  dial kept left to right. Intl formatters get `ar-u-nu-latn`, so numbers and
+  dates keep Western digits.
 - **Gate.** `npm run i18n` (and `src/i18n/catalog.test.mjs` under `npm test`)
   extracts every message and fails on missing, empty, unused,
   placeholder-mismatched, still-English (plural forms included) or
-  wrongly-shaped plural entries.
+  wrongly-shaped plural entries. `zh-Hant` is generated from `zh-CN`
+  (`npm run i18n -- --zh-hant`: OpenCC `s2tw` through `opencc-js`, then a
+  fixed list of character corrections), and the gate fails when it differs.
 - **Not translated by design:** layer ids, share-link and hash parameters, API
   fields, voice tool schemas, provider names, feed data (callsigns, vessel and
   station names) and attribution.
@@ -4719,42 +5884,50 @@ nearby place—always use station selection. Unqualified “turn on/start the ra
 requests use Play; a qualified Play-shaped tool call is normalized to Select so
 its criteria cannot be silently ignored.
 
-| Layer                                | Source                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | File                                                                      | Proxy                                                                                                   | Update Interval                                                                                                             |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Live Flights ✈️                      | OpenSky Network; bounded adsb.lol regional fallback                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `src/data/flights.js`                                                     | `/api/flights` (OAuth + fallback)                                                                       | 30s                                                                                                                         |
-| Military Flights 🎖️                  | adsb.lol /v2/mil                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `src/data/militaryFlights.js`                                             | `/api/military`                                                                                         | 15s                                                                                                                         |
-| Live AIS Vessels 🚢                  | AISStream websocket                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `src/data/aisLiveVessels.js`                                              | `/api/vessels`                                                                                          | 60s (+800ms visibility pass)                                                                                                |
-| Mapped Installations ⌖               | OpenFreeMap military areas; optional configured Overpass names and Google Places search                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `src/data/militaryInstallations.js`                                       | OpenFreeMap tiles, `/api/military-installations`, `/api/google/text-search`                             | viewport-driven; transient errors back off, missing capability switches to tiles                                            |
-| Earthquakes                          | USGS                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `src/data/earthquakes.js`                                                 | —                                                                                                       | 60s                                                                                                                         |
-| Air quality                          | ECCC MSC GeoMet OGC API (AQHI, Canada only)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `src/layers/airQuality/`                                                  | —                                                                                                       | 20 min readings, 12 h station catalog                                                                                       |
-| Satellites                           | CelesTrak TLE + SATCAT; bundled UCS pack (purpose)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `src/data/satellites.js`                                                  | `/api/celestrak` + `/api/celestrak-satcat`                                                              | 120s                                                                                                                        |
-| Space Missions (30d)                 | Launch Library 2 + CelesTrak                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `src/data/rocketLaunches.js`                                              | `/api/launches` + `/api/celestrak/active`                                                               | 5 min                                                                                                                       |
-| Traffic                              | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `src/data/traffic.js`                                                     | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow                                                | viewport-driven; capped tile cache                                                                                          |
-| CCTV                                 | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Iceland (Vegagerðin / IRCA) + Hong Kong Transport Department + FL511 (FL, opt-in) + Freeway Bureau, MOTC (Taiwan) + Houston TranStar (opt-in) + Autostrada del Brennero (IT, A22 stills) + Street View fallback | `src/data/cctv.js`                                                        | `/api/cctv`                                                                                             | 10s (active)                                                                                                                |
-| Radio                                | Radio Browser (public-domain station directory)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `src/data/radio.js`                                                       | `/api/radio/stations`, `/api/radio/click/:uuid`                                                         | 45 min directory refresh                                                                                                    |
-| Transit 🚌                           | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `src/layers/transit/` via `src/app/layers/transit.js`                     | `/api/transit`                                                                                          | 15s (poll + delayed playback)                                                                                               |
-| Bikeshare 🚲                         | GBFS (Lyft + BCycle + Social Bicycles + PBSC incl. Bike Share Toronto, Bike Itaú (Brazil), Bicing (Barcelona) and seven other Spanish cities + Urban Sharing, Entur, JCDecaux (Lillestrøm, Valencia, Seville) + nextbike (AMBici))                                                                                                                                                                                                                                                                                                                                           | `src/data/bikeshare.js`                                                   | `/api/gbfs`                                                                                             | 60s                                                                                                                         |
-| Directions 🧭                        | OSRM on FOSSGIS servers (OpenStreetMap)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `src/data/directions.js`                                                  | `/api/route` (`steps=1`)                                                                                | on placement / mode change                                                                                                  |
-| Datacenters ▣                        | OSM extract (bundled)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `src/data/infrastructure.js`                                              | —                                                                                                       | static                                                                                                                      |
-| Dams ▰                               | OpenInfraMap/OSM extract (bundled)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `src/data/infrastructure.js`                                              | —                                                                                                       | static                                                                                                                      |
-| Submarine Cables ◠                   | TeleGeography public map (bundled)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `src/data/telegeographySubmarineCables.js`                                | —                                                                                                       | static                                                                                                                      |
-| FIRMS Active Fires ▲                 | NASA FIRMS live (VIIRS ×2 NRT + MODIS NRT, trailing 24h)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `src/data/firmsHeatmap.js`                                                | `/api/firms` (`FIRMS_MAP_KEY`)                                                                          | 10 min (proxy TTL 30 min)                                                                                                   |
-| Street Level 📷                      | Mapillary street-level imagery (vector tiles, Graph API, MapillaryJS)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `src/layers/streetLevel/` via `src/app/layers/streetLevel.js`             | `/api/mapillary/status`, `/api/mapillary/tiles/coverage/{z}/{x}/{y}` (`MAPILLARY_CLIENT_TOKEN`)         | camera-driven (320 ms debounce, ≤9 tiles, server memory cache 24 h)                                                         |
-| Wind 🌬                               | NOAA GFS 10 m wind (keyless, 0.25°→1° grid; animated particles)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `src/data/wind.js`                                                        | `/api/wind`                                                                                             | 1 h (forecast cycle)                                                                                                        |
-| GNSS Integrity 📡 (`gnss-integrity`) | adsb.lol point snapshot, low navigation accuracy binned per 0.5° cell (GEV NIC/NACp threshold + gpsjam.org formula and bands, keyless, ODbL)                                                                                                                                                                                                                                                                                                                                                                                                                                 | `src/layers/gnss/` via `src/app/layers/gnss.js`                           | `/api/gnss-integrity`                                                                                   | camera-driven (600 ms debounce, minimum 2.5 s between reads) + 60s poll (server cache 60 s; 30 min rolling window)          |
-| S2 GhostMaps 👻 (`s2-ghostmaps`)     | S2 Underground's public GhostMaps repository on GitHub (KMZ intel products, keyless, CC BY-NC-SA 4.0)                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `src/layers/ghostMaps/` via `src/app/layers/ghostMaps.js`                 | `/api/ghostmaps/catalog`, `/api/ghostmaps/events` (server-sent events), `/api/ghostmaps/file/{product}` | branch head checked every 15 s; new commits pushed to the page; 5 min catalog backstop                                      |
-| Sea Marks ⚓ (`sea-marks`)           | OpenSeaMap seamark raster tiles (keyless; CC BY-SA 2.0 tiles, OSM data ODbL)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `src/data/osmOverlays.js`                                                 | — (browser-direct tiles)                                                                                | on view (Cesium tile requests; no polling)                                                                                  |
-| Ski Pistes ⛷ (`ski-pistes`)          | OpenSnowMap piste raster tiles (keyless; CC BY-SA tiles, OSM data ODbL; no bulk download)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `src/data/osmOverlays.js`                                                 | — (browser-direct tiles)                                                                                | on view (Cesium tile requests; no polling)                                                                                  |
-| Fire Perimeters 🔥                   | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links                                                                                                                                                                                                                                                                                                                                                                                          | `src/layers/perimeters/` via `src/app/layers/perimeters.js`               | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*`                                               | 5 min (server caches: catalog 1 h; publication 30 min)                                                                      |
-| Prohibited & Restricted Airspace 🚫  | FAA Special Use Airspace prohibited (P) and restricted (R) zones (keyless FeatureServer, simplified geometry)                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `src/layers/droneAirspace/` via `src/app/layers/droneAirspace.js`         | `/api/drone-airspace`                                                                                   | 1 h (server cache 1 h; stale-on-error)                                                                                      |
-| Wildlife Sightings 🦉                | iNaturalist wildlife observed within 48 h (whales 7 d), per view; Acartia Salish Sea marine mammal coverage (keyless)                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `src/layers/wildlifeSightings/` via `src/app/layers/wildlifeSightings.js` | `/api/inaturalist/observations`, `/api/inaturalist/grid`, `/api/acartia/sightings`                      | camera moveEnd (600 ms debounce; enable settles 300 ms) + 5 min (observations 5 / 10 min; tiles 15 min; stale ≤ 1 h / 24 h) |
+| Layer                                | Source                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | File                                                                                                                                                      | Proxy                                                                                                                        | Update Interval                                                                                                             |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Live Flights ✈️                      | OpenSky Network; bounded adsb.lol regional fallback                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `src/data/flights.js`                                                                                                                                     | `/api/flights` (OAuth + fallback)                                                                                            | 30s                                                                                                                         |
+| Military Flights 🎖️                  | adsb.lol /v2/mil                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `src/data/militaryFlights.js`                                                                                                                             | `/api/military`                                                                                                              | 15s                                                                                                                         |
+| Live AIS Vessels 🚢                  | AISStream websocket                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `src/data/aisLiveVessels.js`                                                                                                                              | `/api/vessels`                                                                                                               | 60s (+800ms visibility pass)                                                                                                |
+| Mapped Installations ⌖               | OpenFreeMap military areas; optional configured Overpass names and Google Places search                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `src/data/militaryInstallations.js`                                                                                                                       | OpenFreeMap tiles, `/api/military-installations`, `/api/google/text-search`                                                  | viewport-driven; transient errors back off, missing capability switches to tiles                                            |
+| Earthquakes                          | USGS                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `src/data/earthquakes.js`                                                                                                                                 | —                                                                                                                            | 60s                                                                                                                         |
+| Air quality                          | ECCC MSC GeoMet OGC API (AQHI, Canada only)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `src/layers/airQuality/`                                                                                                                                  | —                                                                                                                            | 20 min readings, 12 h station catalog                                                                                       |
+| Satellites                           | CelesTrak TLE + SATCAT; bundled UCS pack (purpose)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `src/data/satellites.js`                                                                                                                                  | `/api/celestrak` + `/api/celestrak-satcat`                                                                                   | 120s                                                                                                                        |
+| Space Missions (30d)                 | Launch Library 2 + CelesTrak                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `src/data/rocketLaunches.js`                                                                                                                              | `/api/launches` + `/api/celestrak/active`                                                                                    | 5 min                                                                                                                       |
+| Traffic                              | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `src/data/traffic.js`                                                                                                                                     | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow                                                                     | viewport-driven; capped tile cache                                                                                          |
+| CCTV                                 | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS, Kartverket ground heights) + King County (WA) Open Data + WSDOT (WA) Open Data + NYC DOT TMC (opt-in) + City of Toronto RESCU + Catalonia (Servei Català de Trànsit) + Iceland (Vegagerðin / IRCA) + Hong Kong Transport Department + FL511 (FL, opt-in) + Freeway Bureau, MOTC (Taiwan) + Houston TranStar (opt-in) + Autostrada del Brennero (IT, A22 stills) + Street View fallback | `src/data/cctv.js`                                                                                                                                        | `/api/cctv`                                                                                                                  | 10s (active)                                                                                                                |
+| Radio                                | Radio Browser (public-domain station directory)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `src/data/radio.js`                                                                                                                                       | `/api/radio/stations`, `/api/radio/click/:uuid`                                                                              | 45 min directory refresh                                                                                                    |
+| Transit 🚌                           | Operator GTFS-Realtime VehiclePositions (53 keyless feeds, 50 regions, `src/data/transitFeeds.js`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js`                                                                                                     | `/api/transit`                                                                                                               | 15s (poll + delayed playback)                                                                                               |
+| Rail 🚆                              | Live operator train positions (GPS, or station reports for Irish Rail) and trip updates, trains only, with opt-in route packs built from static GTFS (30 keyless feeds, all on, 28 out of the box; `src/data/railFeeds.js`)                                                                                                                                                                                                                                                                                                                                                                                | `src/layers/rail/` via `src/app/layers/rail.js`                                                                                                           | `/api/rail`                                                                                                                  | 15s (poll + delayed playback)                                                                                               |
+| Bikeshare 🚲                         | GBFS (Lyft + BCycle + Social Bicycles + PBSC incl. Bike Share Toronto, Bike Itaú (Brazil), Bicing (Barcelona) and seven other Spanish cities + Urban Sharing, Entur, JCDecaux (Lillestrøm, Valencia, Seville) + nextbike (AMBici))                                                                                                                                                                                                                                                                                                                                                                         | `src/data/bikeshare.js`                                                                                                                                   | `/api/gbfs`                                                                                                                  | 60s                                                                                                                         |
+| Directions 🧭                        | OSRM on FOSSGIS servers (OpenStreetMap)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `src/data/directions.js`                                                                                                                                  | `/api/route` (`steps=1`)                                                                                                     | on placement / mode change                                                                                                  |
+| Datacenters ▣                        | OSM extract (bundled)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `src/data/infrastructure.js`                                                                                                                              | —                                                                                                                            | static                                                                                                                      |
+| Dams ▰                               | OpenInfraMap/OSM extract (bundled)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `src/data/infrastructure.js`                                                                                                                              | —                                                                                                                            | static                                                                                                                      |
+| Submarine Cables ◠                   | TeleGeography public map (bundled)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `src/data/telegeographySubmarineCables.js`                                                                                                                | —                                                                                                                            | static                                                                                                                      |
+| FIRMS Active Fires ▲                 | NASA FIRMS live (VIIRS ×2 NRT + MODIS NRT, trailing 24h)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `src/data/firmsHeatmap.js`                                                                                                                                | `/api/firms` (`FIRMS_MAP_KEY`)                                                                                               | 10 min (proxy TTL 30 min)                                                                                                   |
+| Street Level 📷                      | Mapillary street-level imagery (vector tiles, Graph API, MapillaryJS)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `src/layers/streetLevel/` via `src/app/layers/streetLevel.js`                                                                                             | `/api/mapillary/status`, `/api/mapillary/tiles/coverage/{z}/{x}/{y}` (`MAPILLARY_CLIENT_TOKEN`)                              | camera-driven (320 ms debounce, ≤9 tiles, server memory cache 24 h)                                                         |
+| Wind 🌬                               | NOAA GFS 10 m wind (keyless, 0.25°→1° grid; animated particles)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `src/data/wind.js`                                                                                                                                        | `/api/wind`                                                                                                                  | 1 h (forecast cycle)                                                                                                        |
+| GNSS Integrity 📡 (`gnss-integrity`) | adsb.lol point snapshot, low navigation accuracy binned per H3 res-4 hexagon (GEV NIC/NACp threshold + gpsjam.org grid, formula and bands, keyless, ODbL)                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `src/layers/gnss/` via `src/app/layers/gnss.js`                                                                                                           | `/api/gnss-integrity`                                                                                                        | camera-driven (600 ms debounce, minimum 2.5 s between reads) + 60s poll (server cache 60 s; 30 min rolling window)          |
+| S2 GhostMaps 👻 (`s2-ghostmaps`)     | S2 Underground's public GhostMaps repository on GitHub (KMZ intel products, keyless, CC BY-NC-SA 4.0)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `src/layers/ghostMaps/` via `src/app/layers/ghostMaps.js`                                                                                                 | `/api/ghostmaps/catalog`, `/api/ghostmaps/events` (server-sent events), `/api/ghostmaps/file/{product}`                      | branch head checked every 15 s; new commits pushed to the page; 5 min catalog backstop                                      |
+| Sea Marks ⚓ (`sea-marks`)           | OpenSeaMap seamark raster tiles (keyless; CC BY-SA 2.0 tiles, OSM data ODbL)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `src/data/osmOverlays.js`                                                                                                                                 | — (browser-direct tiles)                                                                                                     | on view (Cesium tile requests; no polling)                                                                                  |
+| Ski Pistes ⛷ (`ski-pistes`)          | OpenSnowMap piste raster tiles (keyless; CC BY-SA tiles, OSM data ODbL; no bulk download)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `src/data/osmOverlays.js`                                                                                                                                 | — (browser-direct tiles)                                                                                                     | on view (Cesium tile requests; no polling)                                                                                  |
+| Fire Perimeters 🔥                   | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links                                                                                                                                                                                                                                                                                                                                                                                                                        | `src/layers/perimeters/` via `src/app/layers/perimeters.js`                                                                                               | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*`                                                                    | 5 min (server caches: catalog 1 h; publication 30 min)                                                                      |
+| Prohibited & Restricted Airspace 🚫  | FAA Special Use Airspace prohibited (P) and restricted (R) zones (keyless FeatureServer, simplified geometry)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `src/layers/droneAirspace/` via `src/app/layers/droneAirspace.js`                                                                                         | `/api/drone-airspace`                                                                                                        | 1 h (server cache 1 h; stale-on-error)                                                                                      |
+| Shipwrecks ⚓ (`shipwrecks`)         | EMODnet Human Activities heritage shipwrecks (European waters, keyless WFS, CC BY 4.0) and Wikidata (notable wrecks worldwide, keyless, CC0)                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `src/layers/shipwrecks/` via `src/app/layers/shipwrecks.js`                                                                                               | `/api/shipwrecks`                                                                                                            | 6 h page check; server refresh once a day (stale-on-error up to 7 days)                                                     |
+| News ◆ (`news`)                      | The last 24 h of reports in two sections, Conflicts and Local, with hotspots, outlines and disputed areas: from a news server (`GEV_NEWS_ORIGIN`), else Core's own reading of GDELT 2.0 events (no key), Liveuamap (`LIVEUAMAP_API_KEY`) and World News API (`WORLDNEWSAPI_KEY`)                                                                                                                                                                                                                                                                                                                           | `src/layers/news/` via `src/app/layers/news.js`; panel `src/ui/newsPanel.js`, `src/ui/news/`; server `server/providers/news.js`, `server/providers/news/` | `/api/news/hotspots`, `/api/news/feed`, `/api/news/outline` (forwarded to `GEV_NEWS_ORIGIN` when set, else answered by Core) | 2 min map refresh; Local re-read when the camera settles 0.8 s in a new half-degree cell below 3,000 km                     |
+| Wildlife Sightings 🦉                | iNaturalist wildlife observed within 48 h (whales 7 d), per view; Acartia Salish Sea marine mammal coverage (keyless)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `src/layers/wildlifeSightings/` via `src/app/layers/wildlifeSightings.js`                                                                                 | `/api/inaturalist/observations`, `/api/inaturalist/grid`, `/api/acartia/sightings`                                           | camera moveEnd (600 ms debounce; enable settles 300 ms) + 5 min (observations 5 / 10 min; tiles 15 min; stale ≤ 1 h / 24 h) |
 
 GNSS Integrity samples a 250 nm circle around the Earth point under the screen
 centre. Camera reads debounce for 600 ms with a monotonic 2.5 s minimum gap;
 nearby views share whole-degree cache keys, and a minute poll refreshes data.
 Counts and bands cover visited views over 30 minutes, including regions now off
-screen. Non-pickable ground primitives preserve Street Level and perimeter
-selection. The legend describes a low-accuracy score, not the raw aircraft share;
+screen. Cells are H3 resolution-4 hexagons, gpsjam.org's grid, keyed by their H3
+index (`gnssCellKey`) and drawn from `cellToBoundary` (via `h3-js`) as clamped
+polygons in one shapes set of the draw port, redrawn only when a cell or band changes; a cell across the
+antimeridian is drawn with its longitudes unwrapped around its centre. As on
+gpsjam.org there is no minimum aircraft count: every cell with an aircraft is
+shown, and the one-aircraft discount is the only small-sample guard.
+Non-pickable ground primitives preserve Street Level and perimeter selection. The legend describes a low-accuracy score, not the raw aircraft share;
 `getStats().levels` exposes nominal, medium and high counts separately.
 
 Transient source failures keep activation enabled and show unavailable/degraded
@@ -5077,6 +6250,111 @@ core's lookups alone. The MCP globe panel allows the meta-catalogue and the
 three biggest instances; a picture on another instance shows only in the
 app.
 
+**"Show me X on Street View."** `show_street_level` (voice and typed;
+`src/voice/gevActions.js`) is one call whose stages fail separately
+(`location`, `view`, `map`, `provider`, `layer`, `key`, `imagery`):
+
+- **Key first.** A keyless source explains itself and changes nothing, as a
+  chip does.
+- **Place.** A name, coordinates, a pointed spot or a numbered item: it flies
+  there at street framing and waits for arrival. With no place it looks at the
+  ground under the screen centre, as OPEN does (`aim: 'screen-centre'`,
+  `armed: false`: sky refuses, and a link's armed point is not used and is kept
+  until a photo opens). Coordinates off the globe are refused.
+- **Map and source.** It switches to the map the source needs (Google Street
+  View: Google 3D), lights the source through `setLayerParams`, one at a time
+  and kept like a chip click (origin `voice`; a link runs the action with
+  origin `programmatic`, so it never writes the recipient's saved layer state),
+  turns the layer on and calls `openNearest`. `provider` is `google` for
+  "Street View", `mapillary`, `kartaview` or `panoramax` by name, else the lit
+  source.
+- **Hidden panel.** Cockpit, clean view, recording or scene playback end it at
+  `view`, before the flight and after every await; embed mode's own clean view
+  is exempt, since the photo is lifted over the globe.
+- **Superseded.** After every await (flight, map switch, layer on, lookup) a
+  newer turn, a shell navigation stamp (`_navigationGeneration`, re-taken where
+  its own flight lands) or a press or wheel on the globe stops it
+  (`superseded: true`). The same checks run before a found photo loads
+  (`proceed`), so nothing billed loads for a request that was given up. A
+  lookup given up leaves the panel as it was when the request kept the photo's
+  source; one that had switched the source off closes that source's photo with
+  it. A photo that opened after either is closed again.
+- **Replacing a photo.** An open photo stays up while the new request looks
+  (`openNearest` `replace: true`; the viewer is replaced, not closed, so EXPAND
+  stays, also across sources through `holdViewer`, which holds only the action's
+  own switch-off of the photo's source: a source switched by hand meanwhile
+  still stops the load) and closes if nothing opens, so a place with no imagery
+  shows its own error; a link that only arms closes it at once. A replacement
+  from another source drops the old photo's details, and the request's error or
+  armed OPEN outlives the old viewer. A replacement stops a playing Mapillary
+  sequence.
+- **Outcome.** `noImagery` marks an empty result, `imageryError` a source or
+  viewer failure and `aim: 'sky'` a sky centre (from `street.nearestOutcome`);
+  an empty result names a narrowing 360°/flat or SINCE filter the source
+  honours, as `filter`. Every photo the action opens reveals the panel, also
+  one the user had collapsed.
+- **Search.** A source without a coverage layer searches up to 250 m
+  (`NEAREST_RADIUS_MAX_M`; Google honours it); clicks keep 50 m. Mapillary
+  asks for 100 photos within 50 m, its API's most (the API returns them
+  unordered and cuts at the limit), and gives up after 12 s, body included
+  (`NEAREST_TIMEOUT_MS`).
+- **Phone.** The panel sits in the Cameras tab sheet: a photo that opens, or a
+  link that arms, opens the sheet and scrolls the panel into view
+  (`revealPanel`, which does nothing above 720px).
+
+The layer also exposes `requiredMapStack(id)` and `providerStatus(id)` for
+callers that decide before the panel lists a source, and `holdViewer()`. A
+caller's abort is honoured through the viewer's mount and
+load, and only the lookup that still owns the panel changes its spinner or
+error.
+
+Views carry the request as `street_level` (`src/view/index.js`): a source and
+a point, which defaults to where the camera looks (below 20 km, at a pitch
+steeper than -5° and within 10 km ahead; else the camera's own point); half a
+point is not mixed with the camera's: both coordinates come from that default. A `google` source brings `map: photoreal` and refuses
+another map; `street_level` does not combine with `follow`.
+`show_in_gods_eye_view`, and the embedded app for a posted view with no
+point, measure the view's altitude from the terrain under the camera
+(`groundedLookAt` with the terrain heights service) before taking the look-at
+point, and keep the view's own estimate without a terrain answer (the embedded
+app waits 2 s for one). Links carry
+`sl=<source>,<lat>,<lon>`; the globe panel applies views through the action,
+and a plain link runs it once restored (one shot: the rewritten hash drops
+`sl`). A link that follows an entity ignores `sl`.
+
+- **Billing gate.** A plain link never loads a photo from a source that bills
+  every load (`billedPerImage`; Google): the action runs with
+  `autoOpen: false` and arms the layer (`armNearest`: the link's point and
+  radius, for the next OPEN press only, and only while the ground under the
+  screen centre is within 1 km of it (`ARMED_REACH_M`) or cannot be picked; a
+  sky centre refuses; any other lookup, open, close, disable, the source
+  switched off or its map leaving drops it), opens the panel and shows a toast
+  pointing at OPEN GOOGLE STREET VIEW. A link whose source has no working
+  key here changes nothing and says so in a toast (not in a frame).
+- **Who may open.** Posted views, and the panel page's own link (inline embed)
+  for a tool result issued in the last 5 minutes, open the photo:
+  `show_in_gods_eye_view` stamps a street-level result `issued_at`, every
+  `gev:view` the panel posts carries `fresh`, and the inline app applies a
+  view without it with `autoOpen: false` (a framing page's posted views still
+  open). `?embed=1` on a published link only arms, without the panel nudge or
+  toast.
+- **Who owns the camera.** A link's photo step is skipped when a newer link
+  superseded its restore, when its restore flight never landed
+  (`share.camera !== 'applied'`: the visitor dragged or searched), or after
+  any navigation since the generation that flight owned (`navigationToken` on
+  the settled result), also while its layers still load. A link pasted into
+  the open tab runs its step after its restore settles
+  (`gev:share-navigation-restore-settled`).
+- **Embed.** The rail is hidden, so an open photo moves to an overlay on the
+  globe (`sl-viewer-wrap-embed`) and back when it closes; Esc closes it (in
+  full screen, Esc leaves full screen first). EXPAND stays under embed mode's
+  clean view; cockpit, recording and scene playback hide the overlay. Loading
+  errors render inside the overlay, and inside the viewer while EXPAND is on.
+  A posted view whose photo step fails before the imagery stage closes the
+  earlier photo before its camera flies; one the user overtook (a click on the
+  map, a newer request) leaves their photo and camera alone; one that found a
+  photo it could not load keeps that error.
+
 Street Level has two browser gates. `npm run qa:street-level -- --url <server>`
 runs against real Mapillary and needs `MAPILLARY_CLIENT_TOKEN`. `npm run
 qa:street-level:fixtures -- --url <server>` answers every Mapillary request
@@ -5135,13 +6413,14 @@ the same navigation authority as every other camera destination.
 given; re-arming for the other endpoint reuses that lease rather than asking
 for a second claim, and every release names the lease, so a superseded instance
 can never free the claim its replacement holds. The claim is held until
-the click that uses it has finished being dispatched — every layer binds its
-own handler to the same canvas and they all run inside one browser event, so a
-claim dropped the instant the endpoint is placed would hand the rest of that
-same click to the ambient handlers bound after this one. It is returned on the
-next tick after placement, and immediately on cancel, Escape, CLEAR, disable
-and destroy; if another tool already holds it nothing is armed and the row says
-so. Maneuver-dot selection is an ordinary ambient handler and yields while any
+the click that uses it has finished being dispatched: the input dispatcher
+checks the claim once per click, before any subscriber runs, but DOM canvas
+listeners (the evidence cards) still see the same browser event afterwards, so
+a claim dropped the instant the endpoint is placed would hand them that click.
+It is returned on the next tick after placement, and immediately on cancel, Escape, CLEAR, disable
+and destroy. The newest claim takes over: arming takes the pointer from a tool
+holding it, which is told and turns itself off, and a newer tool taking it
+disarms the layer as Escape would. Maneuver-dot selection is an ordinary ambient handler and yields while any
 tool holds the pointer. FLY runs through the UI shell's immediate-navigation
 facade — the same camera authority validated voice destinations use — and is
 handed the shared ground-floor read and corridor warm, so the dolly does not
@@ -5161,7 +6440,14 @@ service's usage policy states; past a bounded queue the answer is a 429 with a
 `Retry-After` rather than a queue that grows until everything times out. The
 upstream host is pinned and a redirect is refused rather than followed, and a
 rate limit from the routing service is reported as one instead of as "no route
-found". `src/data/routeSteps.js` turns OSRM maneuver type / modifier / exit /
+found". Upstream failure statuses except 400 and 429, network failures, and
+unreadable, oversized or non-JSON bodies return `502 routing service unavailable`.
+Voice hears `Routing service unavailable (HTTP 502)`; Directions shows
+`Routing unavailable (HTTP 502)`. OSRM 400 responses or successful responses
+without a usable route return "no route found". The 12 s upstream budget includes
+queue time: expiry before dispatch returns 429 "routing busy" when the queue slot
+opens; expiry during the upstream request returns 502.
+`src/data/routeSteps.js` turns OSRM maneuver type / modifier / exit /
 road name into one plain-English sentence per decision, folding
 `exit roundabout` steps into the roundabout they leave, and caps one route at
 200 maneuvers — a route with more is reported as cut off, in the row summary
@@ -5183,16 +6469,38 @@ answered yet opens nothing rather than a card hanging at sea level. The cells
 are re-read for up to 90 seconds, which outlasts a cold terrain round trip;
 reroute, CLEAR and disable cancel that.
 Transit is off by default, and share links use token `j`. The movement panel order
-places Transit directly after Street Traffic and before Bike Share. Cameras and
+places Transit directly after Street Traffic and before Rail. Cameras and
 utilities retain their own groups. The layer polls
 registered feeds near the camera every 15 seconds, below a 3,000 km altitude
-gate. Forty-nine keyless regions are available: Boston, Austin, Minneapolis–St Paul,
-Helsinki, the Netherlands, Norway, South East Queensland, Rio de Janeiro
+gate. Fifty keyless regions are available: Boston, Austin, Minneapolis–St Paul,
+Helsinki, the Netherlands, Norway, South East Queensland, Cairns, Rio de Janeiro
 (municipal buses and the Mobi-Rio BRT, two feeds), Szczecin, the Lisbon Metropolitan Area and the city of Lisbon, Prague and Central Bohemia, Warsaw, Kraków (buses and trams, two feeds), Poznań, Gdańsk, Rzeszów, Vilnius, Bucharest, Cluj-Napoca, Iași, Rome, Turin, Venice (buses and waterbuses, two feeds), Bordeaux, Montpellier, Rouen, Toulon, Le Havre, Tours, Málaga, Sendai, Johor Bahru, Kota Bharu, Adelaide, Atlanta, Denver, Edmonton, Halifax, Victoria, and nine in
 Ontario — Toronto (TTC surface vehicles; the subway publishes no
 positions), MiWay, Hamilton HSR, Durham Region, YRT/Viva, Guelph,
 Burlington, Barrie and Kingston. Mode silhouettes
-identify buses, trams, subways, trains, ferries and unclassified vehicles.
+identify buses, trolleybuses, trams, cable cars, subways, monorails, trains,
+funiculars, gondolas (aerial lifts), ferries and unclassified vehicles.
+
+A vehicle's mode comes from, in order: the feed's fleet-number hint
+(`vehicleMode`, which knows a bus standing in on a streetcar route); the feed's
+correction for a route its own routes.txt mistypes (`routeCorrections`: Le
+Havre's funicular `8-FUNI`, which LiA's routes.txt types as a bus); the GTFS
+`route_type` of its route, when its record carries one as `routeType` (basic
+0–12 or extended 100–1799, each extended type taken as the basic mode it is a
+kind of: 200 coach is a bus, 101 high-speed is rail, 405 is a monorail); the
+feed's route-id hint (`routeMode`); and the feed's default (`transitModeFor`,
+`src/data/transitFeeds.js`). The GTFS-Realtime decoder carries no route type, so
+a record from the bundled proxy is classified by the hints alone. Route hints
+read from each operator's routes.txt cover Prague's trolleybus lines and Petřín
+funicular, and Bucharest, Cluj-Napoca and Turin's trams, trolleybuses and metro
+lines (and Turin's Sassi–Superga rack tramway, typed a funicular in its
+routes.txt). Route-id hints also cover TransLink's rail, Gold Coast light rail
+and ferries, and Adelaide Metro's trains, trams and SeaLink ferry; their other
+routes stay buses by default. Le Havre's funicular is a correction, not read from routes.txt: its
+route hint and its correction both say funicular. Vilnius publishes no route ids in its positions, so
+its trolleybuses read as buses. TransLink labels drop the GTFS version and
+Cairns's `C` prefix (`C123-33` reads as route 123). Retained history classifies
+its epochs the same way, so a trail joins the live vehicle.
 
 Retained transit history uses the same outlier quarantine as live observations and
 preserves the active live bracket. Rejected reports do not publish route or mode
@@ -5255,9 +6563,13 @@ visual inspection.
 **Appearance.** Normal fleet frames are 20 px, growing to 30 px on selection;
 CRT, NVG, thermal and noir frames are 26/39 px. Source rasters are 48/96 px before padding.
 External halos are 1/1.5 px in normal, 1.25/1.25 px in CRT and 2/2 px in sensors, calculated from the
-final unpadded display size. Six modes, two sizes and three profiles cap the
-raster cache at 36 variants. Normal mode colours are bus `#5EF08A`, tram
-`#FFC24A`, subway `#FF4538`, rail `#D9A6FF`, ferry `#5FD6FF`, and unknown
+final unpadded display size. Each mode has an outline with a front (a nose, a
+bow or a chamfered cab) for a vehicle with a known course and a symmetric
+outline for one without, which would otherwise sit at rotation 0 and point
+north; a vehicle switches to the pointed glyph when a course arrives. Eleven modes, two sizes, three
+profiles and the two outlines cap the raster cache at 132 variants. Normal mode colours are bus `#5EF08A`,
+trolleybus `#B6F04A`, tram `#FFC24A`, cable car `#FF8F4A`, subway `#FF4538`, monorail `#FF6FB8`, rail
+`#D9A6FF`, funicular `#E8C98A`, gondola `#7FA8FF`, ferry `#5FD6FF`, and unknown
 `#D8DDE5`. Selection keeps the mode colour. Sensors reuse each normal silhouette's exact
 outer path, filled opaque white without interior panel lines, with an opaque
 `#05080C` halo. Only the external padding grows; the unpadded silhouette remains
@@ -5306,11 +6618,27 @@ synchronizes visible playback before its next frame.
 Playback reserves numeric scratch before the first sample, including unknown
 heights, and reuses caller-owned sample and segment storage.
 
-**Scene work.** Stationary and animated billboards use separate, adjacent
-collections above CCTV and Bikeshare. Traffic, Bikeshare and Transit share camera
-sensitivity claims; the original sensitivity returns after the last release.
-Visibility checks combine the camera frustum and ellipsoid occlusion at no more
-than 4 Hz; missing map bounds do not admit the globe's far side. Camera arrivals
+**Scene work.** Stationary and animated vehicles are two draw-port icon sets
+(`transit:<n>:still` and `transit:<n>:moving`), made at adjacent draw orders
+from the sprite order (`spriteDrawOrder`), above CCTV and Bikeshare. Each marker
+is a plain record (position, show, image, size, colour, rotation); a frame
+writes the changed ones to their set in one batched upsert, markers taken out
+in one task go in one removal, and a marker that starts or stops moving moves
+between the sets. The renderer moves and turns an icon without restyling it.
+Rotation is computed in screen space through the query port's projection
+(`perspectiveCourseRotation`), as before. Clicks read the draw-port hit. The
+layer no longer reaches Cesium, so a caller handing it a Cesium viewer,
+with no renderer bound, loads the `./render/cesium/unbound` export
+once first. Transit listens to the camera port at its own `changed` threshold
+(0.05); the port measures each listener separately, so no layer changes
+another's camera trigger.
+Visibility checks combine the camera port's frustum and the query port's
+ellipsoid occlusion at no more than 4 Hz; missing map bounds do not admit the
+globe's far side. Whether the globe is the bare ellipsoid is asked of the
+height service at the camera's subpoint each time the globe's surface
+changes; the answer comes asynchronously, the last one holds until then, and
+floors are read again when it flips.
+Camera arrivals
 rebuild an unprepared or cold marker corridor during that visibility sweep,
 adopt a loaded surface, and update both heightPending and surfaceReady diagnostics.
 A resolved display sample clears its pending-height gate without waiting for a poll. Frame work
@@ -5341,7 +6669,8 @@ it does not establish Google 3D acceptance.
 The full run samples completed frames at 1920×1080 CSS pixels, records DPR, and
 measures moving fleets of 800 and 3,000 vehicles with 128 fixes each and DETECT
 on. Street/metro targets are respectively: transit frame CPU p95 ≤1/4 ms, frame
-interval p95 ≤20/25 ms, billboard uploads ≤256 KiB/1 MiB per frame, and retained
+interval p95 ≤20/25 ms, billboard uploads ≤256 KiB/1 MiB per frame (counted by
+`src/render/cesium/uploadProbe.js` for the two marker sets), and retained
 heap growth ≤24/48 MiB. The 3,000-vehicle CPU budget is 4 ms (recorded browser
 measurement 3.4 ms); the 800-vehicle budget stays at 1 ms (measured 0.9 ms).
 Transit-authored frame allocation is ≤8 KiB/frame at both fleets, attributed
@@ -5404,6 +6733,279 @@ responses and decoding, caches successful snapshots, and backs off after failed
 refreshes. A 304 confirms contact without appending history. Missing vehicles
 are removed after two missed polls; reports older than ten minutes and feeds
 silent for five minutes are removed. Credits appear when the feed is used.
+
+**Rail.** Rail is off by default, and share links use token `02`, with five
+boolean options for its categories: `t` (urban), `l` (local), `r`
+(regional), `n` (national) and `i` (international), all on by default. It sits
+in the Movement panel directly after Transit and before Bike Share. The layer
+lives in `src/layers/rail/` and is built by `src/app/layers/rail.js`; feeds are
+registered in `src/data/railFeeds.js`.
+
+Every train shown is live: it is where its operator last reported it, by GPS
+or, for Irish Rail, by the station or timing point the signalling last
+reported. No train is placed or moved from a timetable, and a feed whose live
+positions fail shows as unavailable while its trains age out as any quiet
+train does. Below a 3,000 km altitude gate (with 150 km hysteresis), the layer
+polls every 15 seconds each listed feed whose coverage circle contains the
+centre of the view; a feed already polled stays active 40 km past its edge. A
+feed's trip updates are polled every 30 seconds while one of its trains is
+selected and its schedule pack is loaded. The registry lists 30 feeds, all
+switched on and all keyless: every realtime feed and every static timetable
+is published for anyone to fetch, so no feed needs a key, an account or a
+registration, and no rail request carries a credential.
+
+**Opt-in packs.** Live feeds work out of the box, and nothing is downloaded
+when the app starts. A path pack and a schedule pack, built only when someone
+runs `scripts/build-rail-paths.mjs` for a feed (Packs below), are an extra for
+its live trains: the operator's own route lines, stop names, the next stop
+and, from the trip updates, the delays at each stop. Renfe long and medium
+distance and KTMB, whose vehicles name no route, are classified from the
+pack's routes (`railFeedNeedsSchedulePack`), so `/api/rail/feeds` lists them
+only once `<id>.schedule.json` is in the pack directory (`publicRailCatalog`).
+The server checks that the file exists, never reading it for this, and keeps
+each answer for 60 seconds; the catalog itself is sent with `max-age=300`. So
+a host that has built nothing shows 28 feeds, in 22 regions, and the other two
+appear as their packs are built. The browser reads the catalog once per layer
+instance; until it answers, or while it fails (asked again after 30 s,
+doubling to 10 minutes), only the feeds that need no pack are polled. A feed
+the catalog lists without live positions is never polled.
+
+Five enabled feeds publish no licence for their train positions and are used
+on the basis their entries record, which is never a licence and never
+credited as one: MARC on what its publication says, and METRO light rail on
+the basis the Transit layer uses for the same file. Tri-Rail and Charlotte's
+LYNX are used without a published licence by project owner decision of
+2026-11-10. The fifth is Irish Rail, whose train positions publish no licence
+while its NTA timetable is CC BY 4.0. The
+Montpellier tram's GTFS is ODbL, so the packs built from it are ODbL too: a
+deployer who serves them publicly makes them subject to the same licence,
+offered under it with the attribution kept, and France's national access
+point adds that a re-shared derived database must be published on
+transport.data.gouv.fr in its original format.
+
+By position source, 29 feeds publish live GPS. 13 are in the US: Metro-North,
+LIRR, MBTA, SEPTA Regional Rail and trolleys, MARC, Tri-Rail, RTD, CapMetro,
+METRO, Charlotte's LYNX, the Seattle Streetcar and Cincinnati's Connector. Three are in Australia: Citytrain, G:link and Adelaide Metro. The
+remaining 13 are GRT ION in Canada, VR in Finland, Renfe long and medium
+distance and Cercanías in Spain, the four Entur operators in Norway (SJ Nord
+through SIRI VM), KTMB in Malaysia, the Bordeaux and Montpellier trams in
+France, and the Manyōsen and Toyama trams in Japan. Irish Rail publishes the
+station or timing point the signalling last reported.
+
+22 feeds register trip updates; on a feed whose pack is built their delays
+reach the selected train's stops. Irish Rail and SJ Nord publish none, but
+each train's report states its delay: with the pack built, that delay moves
+the train's stops and the run its report is matched to, in the browser and,
+for Irish Rail's train codes, on the server, so a late train is not shown
+past a stop it has not reached. `DATA_SOURCES.md` lists every feed, one row
+each, with its licence, terms and attribution.
+
+**Proxy.** `GET /api/rail/feeds` returns the public catalog of listed feeds,
+`GET /api/rail/trains/<feedId>` one feed's snapshot,
+`GET /api/rail/updates/<feedId>` its trip updates, and
+`GET /api/rail/paths/<feedId>` and `GET /api/rail/schedule/<feedId>` its path
+and schedule packs once built (`src/sources/railService.js`,
+`src/data/railProxy.js`, served in development and preview by
+`server/providers/rail.js`, which reads the packs from `.cache/rail-paths/` or
+`RAIL_PATHS_DIR`). The request policy is the Transit proxy's: a memory cache
+with single-flight refresh (15 s, or the feed's own poll interval; 30 s for
+trip updates, or the feed's own), serve-stale for up to 10 minutes after a
+failure (an empty or header-less GTFS-Realtime reply is refused as unreadable
+and counts as one: stale, or 502 without a snapshot), per-feed and global
+admission limits, the failure cooldown ladder, redirects followed hop by hop
+only on the feed's own https origin, and an 8 MiB body cap unless a feed sets
+its own, at most 64 MiB. A feed whose positions or trip updates can be read
+only with its schedule pack (routes taken from the pack) answers
+503 "Rail schedule unavailable" (`X-Rail-Backoff: schedule`, never cached)
+whenever every record it sent was dropped, rather than an empty list: the
+pack is missing or refused, or names none of the trips the feed runs now (a
+stale pack: Renfe's trip ids carry their date). The server refuses a schedule
+pack, as it does one it cannot read, when it is of another format version or
+another feed, or once the last run it holds has arrived (its window has
+ended), and reads it again after five minutes. A feed that needs
+its pack to be listed is served only once that pack is built: until then
+`/trains` and `/updates` answer 503 "Rail schedule unavailable"
+(`X-Rail-Backoff: schedule`) without contacting the operator. Without a
+`hasSchedulePack` probe, the server asks `schedulePackVersion` or
+`readSchedulePack` (null: not built); with neither, no such feed is listed.
+Only a missing pack is 404: a pack that cannot be read answers 503 with
+`Retry-After: 60`. A pack is sent `no-cache` with an ETag from its file's
+modification time and size, and a request whose If-None-Match names it is
+answered 304 without reading the file: a feed's path and schedule packs pair
+by `builtAt`, so a browser never keeps one of them past a rebuild. The browser asks again for a path or schedule pack after
+30 s, doubling to 10 minutes. LIRR and Metro-North, whose positions and trip
+updates are one document, are fetched once per freshness window for both.
+Each feed's classifier runs on every decoded vehicle; only trains leave the
+server, each tagged with a `category` (`transit`, `local`, `regional`,
+`national`, `international`) and a `mode` (`rail`, `metro`, `tram`).
+Everything else, buses in a mixed feed included, is dropped and counted as
+`dropped`. There is no disk cache and no history.
+
+**Packs.** `scripts/build-rail-paths.mjs` builds, for each feed it is given
+that has a static GTFS (29 of the 30), a path pack (`<id>.json`: the
+operator's track shapes) and a schedule pack (`<id>.schedule.json`: routes,
+stops, stop patterns, run-time profiles and the service dates of a window) into `--out`, else `RAIL_PATHS_DIR` when the build's own environment sets it (the folder the server reads), else `.cache/rail-paths/`, which is gitignored. A
+build names its feeds (`--feed <id>`, repeatable) or passes `--all` for every
+enabled feed (many downloads and a long run); a bare run exits 1, and
+`--help` prints the usage. A build in which any feed fails exits 2 once the
+others are built (1 stays for a build that cannot start: a bad argument, or
+another build holding the lock). `--out` may not be `src/` or `public/` or a
+folder inside them. The window is four service dates by default (yesterday,
+today and the next two days), 1 to 14 with `--days`, starting at `--from`.
+`--local-gtfs <id>=<zip>` builds a feed from a zip already on disk instead of
+downloading it, a copy of the GTFS the feed publishes; the zip is only read,
+and the packs record its file name, not its path. The server serves a pack of
+up to 24 MiB, passed through as bytes from a 64 MiB in-memory read cache keyed
+by the file's modification time and size (`server/providers/rail.js`), and
+answers a larger one with 503 "Rail paths too large" or "Rail schedule too
+large". The build refuses to write a pack over that cap (the feed counts as
+failed and its previous packs stay), and a pack whose trips fall under a fifth
+of the pack it would replace, or to none, which reads as an upstream fault,
+unless `--force` is given. A feed's two packs are written together: to
+temporary names, then renamed into place, the path pack first, only once both
+are written; with `--no-schedule` the feed's old schedule pack, whose patterns
+index the old path pack, is deleted, and a feed named only through its
+schedule pack (Renfe long and medium distance, KTMB) is refused and counts
+as failed. A lock file in the `--out` folder
+(`.build-rail-paths.lock`) makes a second build there refuse to start. A
+schedule pack records the `builtAt` of the path pack its shape indices refer
+to (`pathsBuiltAt`); where the two no longer match, its shape indices are not
+used. Every download is open and made over https only (a redirect to plain
+http is refused), capped in size and time, with the script's User-Agent and
+any identifying header the operator asks for (`staticHeaders`). Shapes are
+taken at face value: the operator's `shapes.txt` as published; nothing is
+redrawn from other map data, and no line is drawn where the operator
+publishes none. A shape with a gap of more than 5 km between two points is a
+chord, not track, and is dropped; a trip without a usable shape gets none, and
+its train moves between reports in straight lines. A feed's
+`staticRouteTypes` lists the route types it keeps when its classifier accepts
+every route of a mode-specific feed. A frequency-based trip
+(`frequencies.txt`) becomes one run per departure, `<trip_id>@<HH:MM:SS>`, on
+its template's stops and run times. A stop the GTFS gives no coordinates,
+which some feeds write as (0, 0), is left out of the run with its times, so no
+line is drawn to it; a run needs two located stops. The Toyama tram has no
+static GTFS registered, so it has no packs and its trains move in straight
+lines between reports.
+
+**Duplicates across feeds.** Where loaded feeds carry the same train,
+`src/layers/rail/dedupe.js` draws it once. Copies from different feeds match
+by train number within 100 km of each other. A train number is three or more
+digits, or a shorter number after a long-distance product (EC, ECE, EN, ICE,
+NJ, RJ, RJX, TGV; not IC, where a short number names a line); a trip id that
+is an operator prefix and a number, or a headsign that is a bare number, is
+read too, and numbers that differ are different trains. A short line name
+(S1, RB 1, U6) names a line many trains run: copies on different lines are
+different trains, and copies on one line match only in the same category
+within 15 km, the nearest pairs first. The copy drawn is scored by its
+position source (live GPS, then station reports), then by its line (bound to
+its operator's shape in a built pack, then without one). A drawn copy stays
+until another scores strictly higher, and the comparison runs once per poll,
+never per frame.
+
+**Ukraine.** No train is placed in Ukraine, a safety rule
+(`src/data/railNoPositions.js`: its recognised borders as mapped in
+OpenStreetMap, via geoBoundaries, simplified to about 50 m, and stop ids that
+name the country). The path build leaves out every run with a stop there: a
+stop whose id names Ukraine or whose position is inside its borders, either
+being enough, so an id naming another country does not keep a stop that
+lies inside. The proxy drops every live position inside it, for every feed.
+
+**Categories and markers.** Each train is a disc in its category colour (urban
+`#FF7A59`, local `#F2D04B`, regional `#7BE495`, national `#5AB8FF`,
+international `#C58BFF`) with a white glyph for its mode: a train front, a tram
+with a pantograph, or an "M" for metro. The layer row shows one chip per
+category, which hides or shows that category, and a colour legend with live
+counts for the categories present. On photorealistic tiles a train's height
+is sampled from the rendered mesh at points on its own line
+(about every 55 m, for trains within 8 km of a camera at most 5 km above the
+ground there, and only once the tiles in view have loaded), where the draped
+line is the track bed or the deck. A reading more than 25 m under or 80 m over
+the floor there is a coarse tile and is dropped; a kept one is read again
+after 30 s, and the new reading replaces it when the camera is no higher than
+it was, or once the old one is five minutes old. Elsewhere it stands on the
+shared ground floor that Transit and aircraft use, and on a floor cell not
+sampled yet it keeps a neighbouring cell's floor or its last one. Only a train
+with no floor yet, or a stop of the selected trip, stands on the ellipsoid,
+and only until its cell is warm: the stops are read again every second until
+they stand on a floor. Rail warms those floor cells on one shared budget that
+refills at 1,200 cells a minute and holds at most 320, so no minute spends
+more than 1,520 cells (about 24 of the 90 requests of 64 points that
+`/api/terrain/heights` allows a client each minute), and only under trains
+within 30 km of the camera and at the selected trip's stops, the selected
+train and its stops first and then the nearest, in one batch a second, so a
+view full of trains cannot use up the limit every layer shares. Its drawn
+height changes no faster than 5% of the distance it moves (plus 0.5 m/s while
+it stands), so a roof or overpass sampled under it is a bump, not a jump, and
+a followed train rides smoothly; it snaps when a better height replaces a
+fallback (a real floor, or any floor replacing the ellipsoid) and after a jump
+of more than 2 km.
+
+**Playback, lines and cards.** Trains use the Transit layer's delayed
+playback between reports, so a train glides at 1× behind real time rather
+than jumping. Between reports they move along the line in the feed's path
+pack where there is one, else in straight lines. A loaded feed's faint
+network is drawn in full below 150 km and not at all above 200 km. A feed
+out of use for ten minutes gives back its network, path pack and schedule
+pack; they load again when it is next used. The selected train's line, its
+operator's shape from the path pack, is drawn ahead of it and, fainter,
+behind it. Clicking a train opens a card titled with its route or headsign,
+with at most six lines under it: category, mode, feed and region; displayed
+motion and position source ("Live GPS" or "Estimated from station reports");
+the next and previous stops with their times and delays where the schedule
+pack gives them; report age (marked "feed time" when the feed stamps the
+header rather than the train) and display delay; reported speed and heading;
+the last reported stop status where no stops are known; and the vehicle id.
+Metro trains are shown at street level, as in Transit, and the card says so.
+
+**Camera.** Selecting a moving train gives it the camera as selecting an
+aircraft does: Cesium's tracked entity rides on the train's marker, framed
+2.5 km out and 35° down along the camera's heading (`WORLD_FOCUS_FRAMING.train`),
+and a drag or a zoom orbits or zooms around the train. A train counts as
+moving while it glides between reports, waits at a stop with its departure
+already reported, or waits for its next report after its last two moved it
+at least 15 m. Any other train (parked, known from one report, or not heard
+from for 90 seconds) gets one fly-to with the same framing, as a vessel does;
+in the Cockpit that fly-to is refused with "Exit cockpit to fly to a train".
+The follow lets go, leaving the camera where it is, when the train is
+deselected (a click on anything else, Escape, its category hidden, the train
+leaving its feed, the layer turned off) or another train is selected, which
+takes the camera in turn. An aircraft or satellite tracked by another layer
+clears the selection too; a navigation that only releases the follow camera
+(a search, a fly-to) keeps the train selected. When the duplicate filter moves
+the selection to another feed's copy of the train, the follow stays and
+glides to the new copy over 1.2 seconds.
+
+**The selected train from far out.** While a train is selected its feed stays
+polled at any altitude and wherever the camera looks, so the train, its line
+and its stops stay on the map from orbit. While nothing else would keep that
+feed loaded, it carries the selected train alone: its other trains and its
+faint network go as they would with the feed. On the far side of the globe
+the selected train and its stop dots are hidden. Deselecting returns the feed
+to the usual rules.
+
+**Limits.** A train a feed stops listing for two polls is removed, as is any
+report older than ten minutes; a train without its own timestamp is aged from
+the snapshot's fetch time, so a frozen feed empties rather than showing old
+trains as live. A feed whose operator has not answered for 90 seconds reads as
+stale, and its trains are removed after five minutes. The layer holds at most
+5,000 trains drawn (a copy hidden as another feed's does not count); past that
+the layer row reads PARTIAL. Rail is not voice-controllable yet: it is listed in
+`VOICE_OFF_LAYERS` for prompt budget, and the "trains" alias still names
+Transit. Credits appear when a feed's trains are shown.
+
+**Upkeep.**
+
+- Packs cover a fixed window of service dates, so they are rebuilt before it
+  runs out: daily at the default four days, or weekly with `--all --days 7`
+  from a `--from` date that starts the coming week. The window and build time
+  of a pack are in its `window` and `builtAt` fields.
+- After a rebuild, the server picks up the new pack within a minute: it
+  checks each schedule pack's file time and size once a minute and rebuilds
+  what it reads from a changed pack (a host with its own `readSchedulePack`
+  and no `schedulePackVersion` keeps it up to an hour). A feed whose
+  first pack was just built is listed within a minute; a browser that has
+  read the catalog sees it after a reload, once its five-minute cache has
+  passed.
 
 `src/data/militaryAwareness.js` remains registered internally as the Contacts
 coordinator, but it is not a user-visible Data Layers entry. Its visible entry
@@ -5706,7 +7308,7 @@ silently demoting every later lookup for the session.
 
 - The internal Context coordinator is available in every visual style. Its dedicated right-side `CONTEXT` chooser exposes the neutral shell; the coordinator is not duplicated in Data Layers and does not enable a live-data dependency until a mode is selected.
 - The expanded `CONTEXT` view offers mutually exclusive `CONTACTS` and `SPACE MISSIONS` modes. Selecting `CONTACTS` enables the context-owned Flights, Military Flights, AIS Vessels, and Mapped Installations dependencies only when they are not already user-enabled; selecting `SPACE MISSIONS` enables the recent-launch layer and its Satellite dependency. `CONTACTS` cycles the nearest supported contact of whatever type is selected. Satellites are deliberately excluded from those Awareness cohorts and keep their own tracking UX. Selecting the active mode again returns to the neutral chooser and releases only mode-owned dependencies.
-- If a civilian or military aircraft is already tracked when `CONTACTS` becomes operational, that source-owned track is adopted as the Context subject before nearest-contact autofocus. Context rechecks the tracker after its dependencies settle, so a newer selection wins, while an explicit clear during activation prevents fallback from silently selecting a replacement. Cockpit entry remains unavailable until that Context transaction has settled, so its camera takeover cannot clear Cesium tracking before adoption. Adoption does not recreate tracking or transfer camera ownership; it initializes the normal 250 km ring, history, proximity results, and Cockpit Previous/Next state for the original aircraft.
+- If a civilian or military aircraft is already tracked when `CONTACTS` becomes operational, that source-owned track is adopted as the Context subject before nearest-contact autofocus. Context rechecks the tracker after its dependencies settle, so a newer selection wins, while an explicit clear during activation prevents fallback from silently selecting a replacement. Cockpit entry remains unavailable until that Context transaction has settled, so its camera takeover cannot clear Cesium tracking before adoption. Adoption does not recreate tracking or transfer camera ownership; it initializes the normal 250 km ring, history, proximity results, and Cockpit Previous/Next state for the original aircraft. With no tracked aircraft, an AIS vessel already selected (the vessel layer's `getSelectedInfo()`) becomes the subject, at activation and again when a deferred dependency settles, exactly as a vessel selected while `CONTACTS` is on; no nearest flight is picked and the camera is not moved.
 - `SEARCH NEARBY SITES` retains the bounded OSM results and makes one user-initiated, view-biased Google Maps Places text search for “military installation.” Google results are source-stamped, deduplicated against OSM by rounded location/name, and remain mapped context rather than operational claims. If Places is unavailable or the API is not enabled for the supplied key, OSM context remains available. A view across the antimeridian is searched around its own centre, with a radius from its real width.
 - The Context header holds only its title and collapse control. It no longer carries a Radio shortcut or a compact Radio player: Radio is the `RADIO` section inside the panel, with its own disclosure and the single `ENABLE` power control. Cockpit keeps its own compact Radio utility.
 - Context is set for reading in every theme: mode, standby and action labels are 10 px, and the panel draws no glow halo. Outside Cyber, the two modes form one segmented control, the standby guidance is plain left-aligned text rather than a dashed placeholder, and the panel's section titles share the side panels' dock-label colour. Cyber keeps its separately framed mode buttons, its red panel titles, and in layout-focus a framed, centred standby card over its radar art.
@@ -5717,7 +7319,7 @@ silently demoting every later lookup for the session.
 - On activation it focuses the nearest currently observed aircraft across the civilian and military feeds, with military winning an exact distance tie; if none are available, it focuses an observed AIS vessel. The aircraft search is deliberately uncapped and one refresh-tick retry handles initially empty feeds. This is an attention-priority navigation shortcut, not a high-risk, affiliation, or threat classification.
 - A selected aircraft, AIS vessel, or mapped installation gets a 250 km **context window** with nearby cohort counts, nearest examples, source labels, and stale/unavailable reasons. It emits `NEARBY` or `UNKNOWN`; no detection, engagement, affiliation, or sensor-activity conclusion is calculated.
 - Contacts rows and the Cockpit Contact counts name each cohort's provider: the source of the last snapshot, marked `FALLBACK` or `STALE` as its layer row would be. A poll in flight keeps the mark, where the layer row shows `LOADING`. A flight snapshot from the adsb.lol regional fallback reads `adsb.lol · FALLBACK`, not `OpenSky`.
-- The window's edge is drawn on the globe as a 250 km range ring: a 4 px polyline with a 2 px Context-blue core inside a 1 px dark halo on each side, 2.5 km above the ellipsoid (`AWARENESS_RANGE_RING_STYLE` in `src/layers/awareness/policy.js`). The halo keeps it legible over bright desert and snow, dark ocean and forest, and under the FLIR, NVG and CRT styles, where the earlier 1 px ellipse outline disappeared. It is a polyline because WebGL draws ellipse outlines at 1 px whatever width is asked for, drawn as an unpickable primitive rather than an entity so a click or tap on its edge reaches the contact underneath (headless viewers without a primitive collection get a static entity instead); it is rebuilt when the subject moves. Three dim sonar pulses (3 px with a 1 px dark outline, same colours, at most 60% opacity) grow slowly from the subject at constant speed, one every 3 s and each taking 9 s, and arrive at the ring at about a third of that. Behind each pulse a radial gradient in the same blue fades inward over 35% of the radius. One unpickable 250 km disc draws both the pulse lines and the gradient, its shader reading the pulse radii and opacities each frame, so a click or tap near a pulse still reaches the contact underneath; the disc follows the subject by a model-matrix rotation and is rebuilt only after the subject moves 20 km, and not at all while the pulses rest. While the camera is below the disc's 2.5 km height, where it would sweep across the sky, the pulses rest: the disc is hidden and there is no ring flash, no echo and no frame request. Terrain or 3D tiles higher than 2.5 km (the Alps, Andes, Rockies) still cut through the disc and the ring when seen from above, as the ring alone already did; the height check uses the camera's height above the ellipsoid, not above the ground. While pulses run, the ring dims to 40% and flashes to full strength as each pulse reaches it, fading over 1.8 s. As a pulse front crosses a flight, military aircraft or AIS vessel, the detection overlay draws a second bracket around that contact's own bracket, in the pulse blue on the default detection style and in the style's own line colour under NVG, FLIR and CRT, which spreads outward as it fades over 1.4 s (`AWARENESS_RANGE_ECHO`, read through `src/awarenessEcho.js`; no layer's icon is restyled, and mapped installations have no detection bracket). Pulses are born 5 km out, so the subject itself and anything nearer never echo. Pulses run for 9 s (three ring flashes) after a selection or a camera move, fading in and out over 1.2 s, then rest: the ring stays on screen at full strength, the pulses, gradient and echoes are hidden, and nothing asks for frames, so a parked Contacts view is quiet again. Only a camera move within 1.5 s of the user handling the map (pointer, wheel or touch on the Cesium canvas, which covers a drag's inertia, and a drag or touch begun there keeps counting until its last finger or button lifts, even outside the canvas, unless the window loses focus or the page is hidden first; keys typed elsewhere do not count, nor does input while Cesium's camera controls are off, as in the cockpit view, and a gesture still pending when the cockpit or another owner takes the camera is dropped) wakes them; a moving subject and the app's own camera moves (a tracked aircraft, the cockpit view, an orbit, a fly-to) do not, since they move on every refresh. While they run they never hold continuous rendering: each drawn frame arms one render request 80 ms later (the Cyber sonar cadence, `CYBER_SONAR_RENDER_INTERVAL_MS`), so they repaint at about 12.5 fps and never beat the detection lane's 80 ms gate. Under `prefers-reduced-motion`, or in a scene without primitives or preRender and postRender hooks, there are no pulses or echoes and the ring stays on screen; changing the preference mid-session rebuilds the ring. The ring follows a moving subject once it has moved 250 m.
+- The window's edge is drawn on the globe as a 250 km range ring: a 4 px polyline whose outer 1 px, half a pixel on each side, is a dark halo around a 3 px Context-blue core, 2.5 km above the ellipsoid (`AWARENESS_RANGE_RING_STYLE` in `src/layers/awareness/policy.js`). The halo keeps it legible over bright desert and snow, dark ocean and forest, and under the FLIR, NVG and CRT styles, where the earlier 1 px ellipse outline disappeared. It is one outlined line in an unpickable draw-port line set (`src/layers/awareness/rangeRing.js`), so a click or tap on its edge reaches the contact underneath; the halo is the line's own outline, so the translucent core and halo never darken where they meet; it moves when the subject moves. Three dim sonar pulses (3 px with a dark edge half a pixel wide on each side, same colours, at most 60% opacity), each an outlined line in the same set, grow slowly from the subject at constant speed, one every 3 s and each taking 9 s, and arrive at the ring at about a third of that. Behind each pulse a radial gradient in the same blue fades inward over 35% of the radius: one unpickable flat ellipse 2.5 km up with 270 km semi-axes, filled with a 256-pixel canvas painted with the band (two canvases in turn, each under a new key). The ellipse stands until the subject has moved 20 km from where it was built, the canvas keeping the band concentric with the subject meanwhile, and not at all while the pulses rest. Fronts and band are fixed in the world, so they step every 80 ms however many frames are drawn and look the same whether the camera moves or not; crossing the 2.5 km rim height shows or hides them at once. While the camera is below the band's 2.5 km height, where it would sweep across the sky, the pulses rest: the band and fronts are hidden and there is no ring flash, no echo and no frame request. Terrain or 3D tiles higher than 2.5 km (the Alps, Andes, Rockies) still cut through the band and the ring when seen from above, as the ring alone already did; the height check uses the camera's height above the ellipsoid, not above the ground. While pulses run, the ring dims to 40% and flashes to full strength as each pulse reaches it, fading over 1.8 s. As a pulse front crosses a flight, military aircraft or AIS vessel, the detection overlay draws a second bracket around that contact's own bracket, in the pulse blue on the default detection style and in the style's own line colour under NVG, FLIR and CRT, which spreads outward as it fades over 1.4 s (`AWARENESS_RANGE_ECHO`, read through `src/awarenessEcho.js`; no layer's icon is restyled, and mapped installations have no detection bracket). Pulses are born 5 km out, so the subject itself and anything nearer never echo. Pulses run for 9 s (three ring flashes) after a selection or a camera move, fading in and out over 1.2 s, then rest: the ring stays on screen at full strength, the pulses, gradient and echoes are hidden, and nothing asks for frames, so a parked Contacts view is quiet again. Only a camera move within 1.5 s of the user handling the map (pointer, wheel or touch on the Cesium canvas, which covers a drag's inertia, and a drag or touch begun there keeps counting until its last finger or button lifts, even outside the canvas, unless the window loses focus or the page is hidden first; keys typed elsewhere do not count, nor does input while Cesium's camera controls are off, as in the cockpit view, and a gesture still pending when the cockpit or another owner takes the camera is dropped) wakes them; a moving subject and the app's own camera moves (a tracked aircraft, the cockpit view, an orbit, a fly-to) do not, since they move on every refresh. While they run they never hold continuous rendering: each drawn frame arms one step 80 ms later (the Cyber sonar cadence, `CYBER_SONAR_RENDER_INTERVAL_MS`) whose changes ask for the frame that draws them, so a parked view repaints at about 12.5 fps, one frame a step, and never beats the detection lane's 80 ms gate. Under `prefers-reduced-motion`, or on a renderer without frame hooks, there are no pulses or echoes and the ring stays on screen; changing the preference mid-session rebuilds the ring. The ring follows a moving subject once it has moved 250 m.
 - For a selected live aircraft or vessel, the context window refreshes from the existing tracker/feed position every 750 ms, so nearest distances and cohort counts follow the subject without introducing a duplicate poll loop.
 - Aircraft cohort membership uses every locally loaded, selectable contact inside the 250 km window, including a plane hidden only by horizon culling or because its 3D model owns the visual. Counts and navigation therefore do not change with the current camera angle or billboard/model handoff.
 - Nearby examples in the context panel are focus controls: they use their owning layer's existing selection/tracking path, then frame that contact. Static-installation distances use ellipsoidal surface distance so the count matches the ground-projected context disk.
@@ -5733,11 +7335,11 @@ silently demoting every later lookup for the session.
 
 ### Motion & Symbology Correctness (June 10, 2026)
 
-- **Flights (commercial + military)** render one poll interval behind real time (30s/15s) and interpolate between two known feed-stamped fixes (OpenSky `time_position`; adsb.lol `receipt − seen_pos`). The display latency is an intentional product decision — do not "fix" it away. The fleet dead-reckons at ~12Hz (1m² write gating); a contact already hidden behind the horizon whose last position still is re-reckons on a staggered one-in-13-ticks rotation (about once a second) instead, so the worldwide feed's ~13k contacts no longer cost a full pass when well under 1% are on screen. Anything that position puts in view, and any contact with a fleet model, takes the full pass immediately, and hidden-inclusive proximity queries read positions at most about a second old; aircraft get a 3-poll grace period (faded icon) before removal. When a position epoch pauses, both layers coast for at least 60 seconds of contact grace with an absolute five-minute ceiling. Source backoff marks each contact and the cockpit `STALE`; the cockpit then holds the exact layer position instead of continuing inertial flight. Repeated-position kinematic changes create a forward-only synthetic fix rather than mutating history, and grounded history is lifted only when no owned 3D model already controls its datum. A nominally successful worldwide OpenSky response whose own snapshot epoch is more than two minutes old prefers the existing 250-nm viewport-scoped adsb.lol fallback and labels the source/coverage accordingly when that upstream is available. If the fallback is also unavailable, the layer's freshness/error fields use the source epoch—never the cache receipt time—so the UI reports an old snapshot rather than “just now.”
-- **World-space headings at every angle** (`src/data/iconOrientation.js`): aircraft/vessel icon rotation uses the camera right/up basis per tick (alignedAxis always ZERO), which is exact at screen center and for orthographic/nadir views and remains stable through >180° tracked orbits. Perspective rays vary across the viewport, so off-center contacts at oblique pitch can diverge from an exact finite-difference window projection; a regression test pins that known regime, and field evidence decides whether to adopt exact projection with the basis method as fallback. Fleet rotations refresh on camera-pose change; tracked entities per frame. Billboards are horizon-culled via a shared EllipsoidalOccluder.
+- **Flights (commercial + military)** render behind real time and interpolate between two known feed-stamped fixes (OpenSky `time_position`; adsb.lol `receipt − seen_pos`). The delay (`src/data/displayDelay.js`) follows how late the feed is: the 90th percentile of the newest 256 lags (a report's receipt time less the same contact's previous report time) plus 5 s, never under the layer's floor (30 s civil, 15 s military) nor over five minutes, so the anonymous OpenSky feed, whose reports arrive about 90 s old every 30 s, draws about two minutes behind. Before 16 lags, first reports' ages plus a poll interval stand in. The delay moves toward that aim by at most 0.2 s per second up and 0.05 s per second down (an aim within 2 s leaves it be), and takes it at once only while nothing is drawn; deliveries following the world clock, or replacing the world at another time, leave it alone and draw with no delay. Every consumer (icons, the renderer's live motion clock, labels, HUD, detection, the tracked camera and trail) reads the one delay. When a newer report puts a moving contact elsewhere than it is drawn (it was coasting past its newest report), it eases onto the new path over at least 3 s, at most 30% faster than its speed and within 20 s, from where it would have been that frame; more than 5 km off, it jumps. The display latency is an intentional product decision — do not "fix" it away. The whole fleet dead-reckons at ~12Hz (1m² write gating); aircraft get a 3-poll grace period (faded icon) before removal, except the tracked aircraft, which is kept until 10 minutes after its newest fix. When a position epoch pauses, both layers coast for five minutes on the last speed and heading (at most 1,500 kt), then stop dimmed as SIGNAL LOST; contacts on or near known ground hold instead. Source backoff marks each contact and the cockpit `STALE` and dims the tracked aircraft, as a missed update does; the cockpit then holds the exact layer position instead of continuing inertial flight. Repeated-position kinematic changes create a forward-only synthetic fix rather than mutating history, and grounded history is lifted only when no owned 3D model already controls its datum. A nominally successful worldwide OpenSky response whose own snapshot epoch is more than two minutes old prefers the existing 250-nm viewport-scoped adsb.lol fallback and labels the source/coverage accordingly when that upstream is available. If the fallback is also unavailable, the layer's freshness/error fields use the source epoch—never the cache receipt time—so the UI reports an old snapshot rather than “just now.”
+- **World-space headings at every angle** (`src/data/screenRotation.js`; the scene-reading helpers in `src/render/cesium/iconOrientation.js`): aircraft/vessel icon rotation uses the camera right/up basis per tick (alignedAxis always ZERO), which is exact at screen center and for orthographic/nadir views and remains stable through >180° tracked orbits. Perspective rays vary across the viewport, so off-center contacts at oblique pitch can diverge from an exact finite-difference window projection; a regression test pins that known regime, and field evidence decides whether to adopt exact projection with the basis method as fallback. Fleet rotations refresh on camera-pose change; tracked entities per frame. Billboards are horizon-culled via a shared EllipsoidalOccluder.
 - **Military/OpenSky reconciliation** (`src/data/militaryRegistry.js`): known-military ICAOs render amber in the flights layer (60s self-poll of the cached mil endpoint when the military layer is off) and are suppressed there while the military layer renders them.
 - **Satellites**: core catalog from CelesTrak's stations, visual, GPS, GLONASS, Galileo, GEO, resource, weather, planet, SAR and science groups, tracking lands ~726km out via `viewFrom` (tracked entity owns a point graphic so the tracking camera engages), rings realign via primitive modelMatrix (no per-second rebuild flicker), optional `setParams({catalog:'dense'})` Starlink mode.
-- **Satellite classes** (`src/layers/satellites/classes.js`): every satellite is filed under one of six classes, each with its own point colour, legend swatch and toggle: STATIONS (warm white), IMAGING (cyan), TELECOM (violet; communications and navigation, so GPS, GLONASS, Galileo and BeiDou read as one family), STARLINK (dim slate), PROBES (muted blue-gray) and DEBRIS (receding brown-gray). That module is the single source of truth for class, label and colour, so the dot, the card and the legend swatch cannot disagree. Two deliberate palette rules: no class may sit in the 40–48° amber band, which is the app-wide known-military convention; and STARLINK stays far below PROBES in Rec.601 luminance so the dense shell stays separable when NVG/FLIR collapse the scene to one channel. The ISS keeps its long-standing red hero dot rather than the STATIONS colour — it carries a permanent name label and its card still reads `STATIONS · ISS`; it is a station whichever group ingested it, so a stations-feed outage cannot refile it. `src/data/satelliteClass.js` keeps the group-based labels beneath the classes: the constellation subtype and a group's own label for a satellite with no class.
+- **Satellite classes** (`src/layers/satellites/classes.js`): every satellite is filed under one of six classes, each with its own point colour, legend swatch and toggle: STATIONS (warm white), IMAGING (cyan), TELECOM (violet; communications and navigation, so GPS, GLONASS, Galileo and BeiDou read as one family), STARLINK (dim slate), PROBES (muted blue-gray) and DEBRIS (receding brown-gray). That module is the single source of truth for class, label and colour, so the dot, the card and the legend swatch cannot disagree. Two deliberate palette rules: no class may sit in the 40–48° amber band, which is the app-wide known-military convention; and STARLINK stays far below PROBES in Rec.601 luminance so the dense shell stays separable when NVG/FLIR collapse the scene to one channel. The ISS keeps its long-standing red hero dot rather than the STATIONS colour — it carries a permanent name label and its card still reads `STATIONS · ISS`; it is a station whichever group ingested it, so a stations-feed outage cannot refile it. `src/data/satelliteClass.js` keeps the group-based labels beneath the classes: the constellation subtype and a group's own label for a satellite with no class. The tracked satellite's dot keeps that colour too: tracking draws it larger (14 px), white-outlined and over everything, never in another colour (`_addTrackedEntity`, `src/layers/satellites/rendering.js`).
 - Class is also a **text field**, not just a color: `TELECOM · GPS` / `STARLINK` / `STATIONS · ISS` leads the tracked card's detail block and replaces the raw CelesTrak tag on the detection-overlay label. Because that canvas composites above the post-FX chain, the class stays readable in NVG/FLIR after the in-scene dot colors are flattened.
 - The satellites row in DATA LAYERS carries per-layer sub-controls (`DataLayerManager._syncRowControls`, the first consumer of the optional `getRowControls()` layer hook): one chip per class (the STARLINK chip exposes the existing `catalog` param), a swatch legend with live per-class counts, and an info line while SATCAT is stale or unavailable (`Classes may lag: SATCAT is a cached copy` / `Classes may lag: SATCAT unavailable`). Default is the sparse core catalog. The chips are stateless — each declares the params to apply and the manager owns the write — so the Space Missions capture/restore path over the same param stays authoritative. Controls stay hidden while the layer is off. An explicit CORE or DENSE choice participates in versioned local and share-link state; temporary Space Missions overrides do not.
 - **Class toggles** (`src/layers/satellites/classes.js`): the layer row carries one chip per class — STATIONS, IMAGING, TELECOM (communications and navigation), PROBES (science, technology development and demonstration, unknown purpose) and DEBRIS (rocket bodies, fragments, unknown objects launched before last year and dead payloads) on by default, so the layer shows what it did before classes; STARLINK off, as DENSE was. Points of a hidden class stay built and are only hidden, so a toggle needs no reload; hidden classes are left out of the detection overlay, the voice/framing position lists and analyst answers (the tracked satellite still answers), and the legend keys only the classes on screen. The class comes, strongest evidence first, from CelesTrak SATCAT (object type and operational status, fetched per group through `/api/celestrak-satcat/<group>`, cached a day by the proxy; the layer keeps a current read six hours rather than asking on every five-minute update), the bundled UCS Satellite Database pack (UCS-Satellite-Database 5-1-2023: operator, owner country and purpose; `src/data/local_data/ucs_satellites/`), name patterns for satellites launched after May 2023, and finally the CelesTrak groups the TLE came in (a mission group such as `weather` before the orbit group `geo`; a UCS purpose of "Unknown" counts as none). Only crewed stations and the craft that visit them, by name, are STATIONS: the CubeSats CelesTrak's stations group also carries after their deployment from the ISS are classed like any other satellite. A payload whose SATCAT record gives no status, with no UCS record and no recognisable name, that launched 20 or more years ago (SATCAT's launch date, else the TLE designator's year) is presumed dead and filed as debris; without a SATCAT record (a failed read) nothing is presumed. To cover imaging launched after the UCS snapshot the core catalog also reads CelesTrak's `resource`, `weather`, `planet`, `sar` and `science` groups. Debris can be tracked but is never ridden: the orbital entry gate (`orbitEntryAllowed`) refuses it, so no ORBIT entry is offered and double-click does nothing for it. Retired stations and the shuttles have re-entered and have no orbit to show. An explicit class choice is kept in local and share-link state as the `classes` option, one letter per class shown (`sitpd`: stations, imaging, telecom, probes, debris; `0`: none; `src/data/satelliteClassMask.js`), and the layer takes those letters back through `setParams({classes})`; STARLINK maps to the existing `catalog: 'dense'` param instead.
@@ -5772,6 +7374,10 @@ silently demoting every later lookup for the session.
   far cap, retargeting the existing video/canvas texture pipeline. Stills are drawn at their source aspect, centered on the placeholder dark (`#01070c`), instead of being stretched to the 16:9 canvas. Manual calibration only —
   auto-calibration and the drape mesh pipeline are deleted. A one-shot activation obstruction
   probe (`pickFromRay` on camera activation, clamping the plane short of the first hit) remains;
+  a hit at or beyond the camera's range counts as a miss, and on a globe map the plane also clamps
+  short of the globe's terrain along the axis (flat ground at the mount's ground when terrain is
+  missed or met beyond the range), whichever is nearer, so it never stands at the full range there
+  (about a kilometre wide and hundreds of metres up);
   ground placement is superseded by the shared-floor v3 behavior below. Calibration persists to
   `godsEyeView.cctv.calibration.v2` (wiped clean, no v1 import); a panel-only CAL badge shows
   `CALIBRATED`/`CURATED`/`RAW PRIOR` (no in-world tint). Panel is titled "CCTV" (not "CCTV
@@ -5864,13 +7470,13 @@ silently demoting every later lookup for the session.
   `activeCameraCardEnabled` presentation option can publish the retained
   protected-card path. Disable tears the tier down completely.
   Coverage/viewshed semantics unchanged.
-- **Satellites**: orbit rings rotate about Earth's Z by ΔGMST every ~1s (exact inertial→ECEF compensation; no SGP4 re-runs); the tracked satellite propagates per frame with one shared epoch for dot/label/camera. Verified: ISS holds <1km perpendicular to its ring while tracked. Pass prediction (`src/data/satellitePass.js`; `getNextSatellitePass`, `getNextIssPass`) scans at 20s, bisects rise/set to ~0.2s, fits the peak with a parabola, and marks a pass visible when the satellite is outside a cylindrical Earth shadow while the observer's Sun is at or below −6°. `next_iss_pass` preserves its geometric-pass ordering and appends visibility metadata. General `next_satellite_pass` accepts a loaded NORAD ID or unambiguous name, searches 24 hours and optionally requires estimated visibility. These estimates do not account for weather or satellite brightness.
+- **Satellites**: every point moves every frame. Each satellite's SGP4 sample (position, velocity, gravity and its rate of change; `src/layers/satellites/motion.js`) is reckoned forward or back to the world time and turned into the Earth-fixed frame, so points glide at any play speed instead of stepping once a second. Core satellites take a fresh sample every second, or as soon as the world time is 30 s from their sample (fast play, a seek), which keeps every point within about 10 m of SGP4; Starlink extras are sampled round-robin, more per frame the faster time plays, and a point more than two minutes from its sample waits for the next one. Hidden points are not moved until shown. Orbit rings rotate about Earth's Z by ΔGMST every ~1s (exact inertial→ECEF compensation; no SGP4 re-runs); the tracked satellite propagates per frame with one shared epoch for dot/label/camera. Verified: ISS holds <1km perpendicular to its ring while tracked. Pass prediction (`src/data/satellitePass.js`; `getNextSatellitePass`, `getNextIssPass`) scans at 20s, bisects rise/set to ~0.2s, fits the peak with a parabola, and marks a pass visible when the satellite is outside a cylindrical Earth shadow while the observer's Sun is at or below −6°. `next_iss_pass` preserves its geometric-pass ordering and appends visibility metadata. General `next_satellite_pass` accepts a loaded NORAD ID or unambiguous name, searches 24 hours and optionally requires estimated visibility. These estimates do not account for weather or satellite brightness.
 - **Space Missions (30d)**: recent launches render as bounded shared-host, horizon-occluded mission markers using Launch Library 2 v2.3 detailed records. Enabling the layer selects the unified right-side Context panel's Space Missions mode and enables the required satellite layer. Before applying its temporary dense/hidden Satellite mode, Space Missions snapshots the complete standalone Satellite parameter set and exact enabled-layer set. Disabling Space Missions from either Context or the left Data Layers rail restores those parameters and the exact prior enabled state, so a Satellite layer that was already on stays on while a mode-owned dependency returns off; enabling Satellites by itself remains independent. Selecting a mission isolates its launch-to-orbit transfer and dashed satellite orbit, fills that same panel with navigation/details, and animates a small phase-colored marker along the exact displayed Cartesian samples. Marker hit testing drill-picks through photorealistic tiles so the depth-test-free tactical dot remains reliably selectable; its text is non-interactive shared-host presentation. The selected pad is the camera's zoom pivot: the overview remains centered on its launch site, wheel zoom approaches that site instead of drifting elsewhere, and camera pitch progressively changes from global nadir to an oblique close 3D view. Its protected shared-host callout remains visible and expands to include both mission and launch-site names. `FOCUS` flies directly to a 12 km oblique frame around the selected launch site and retains the same anchored zoom/orbit behavior. `REPLAY ASCENT` resets the selected marker at the pad, frames it from an oblique third-person angle, and follows it through the mission-specific compressed ascent directly into one orbital lap at the default `1×` rate. A live `0.25×`–`4×` slider changes ascent and orbit playback speed; adjusting it mid-replay preserves the current path position and historical mission timestamp. Re-entry/recovery cannot be inserted into replay. At orbit insertion the camera smoothly pulls back over the first fifth of the orbital replay and pitches to a globe-scale nadir view while continuing to target the moving replay point. Replay Cancel, mission navigation, deselection, layer disable, and data refresh all release camera ownership. Reconstructed paths are one continuous 128-sample geodetic curve: horizontal departure begins near zero while altitude rises quickly, then the climb progressively bends toward insertion without the former hard 120 km corner. Unmatched orbit fallbacks are smooth planar inclined rings rather than longitude/latitude ground-track curves. The panel lists disclosed payload names, types, operators/manufacturers, mass, multiplicity, and destination when supplied; an empty LL2 payload collection is shown as `CLASSIFIED / MULTI-PAYLOAD`. Launcher, spacecraft, and recoverable payload stages appear in a compact stage table with serial/flight/reuse details, recovery outcome/type, destination, and final coordinates when those records exist; an empty recovery collection omits the section. Stage recoveries with confirmed coordinates use those coordinates; return-to-launch-site records use the pad; downrange-only records receive an explicitly labeled estimated endpoint along the ascent azimuth. Available endpoints render as static 2 px dashed descent/recovery paths with a fixed final-position dot and an estimated atmospheric-interface segment when applicable. The ascent is geodetically densified above the ellipsoid toward the orbit's nearest insertion point, then rendered with `ArcType.NONE`, so it neither cuts through Earth nor separates from the marker. Because LL2 does not normally supply continuous ascent telemetry, pad-to-insertion paths without upstream trajectory samples are labeled `RECONSTRUCTED ESTIMATE` / `ASCENT ESTIMATE`; only supplied trajectory samples receive the replay wording. Selected-orbit framing fits the complete ring, rear-side linework uses normal scene depth occlusion, and current distance, speed, and callout data come only from a launch-year-validated satellite match. Both the loaded-catalog and active-TLE lookups read the launch year from the TLE international designator through one parser (`src/sources/tle.js`); a blank or malformed designator is an unknown year, which skips the year check rather than rejecting the match. Speed is the magnitude of the SGP4 inertial velocity vector at the same propagation epoch as position, displayed in km/s with km/h available as hover detail. Unavailable operator, site, launch-time, orbit, current-altitude, and speed values omit their detail rows instead of reserving panel space with placeholders. Newly launched payloads absent from the core operational groups use CelesTrak's cached active TLE feed as a lookup-only fallback; weak constellation-name matches are rejected. The replay callout maps compressed animation progress onto Launch Library's mission-relative timeline, showing the historical UTC date/time at the marker's current path position; unavailable timelines remain explicit. Matched live satellite positions propagate at one-second cadence and use a distinct green dot/callout with the current UTC date/time.
   When no mission is selected, the Context panel presents a scrollable newest-first roster of every launch in the rolling window, including the smaller 5 px operator-colored marker, provider, and launch date. Hovering or keyboard-focusing a row shows four compact cyan corner brackets on both that roster row and its corresponding globe dot, rotates the globe at the current zoom to center it, and gives its label declutter priority without selecting it; the globe label remains unbracketed. Selecting a roster row invokes the same mission isolation and full-orbit framing as clicking its globe marker. The replay vehicle is one screen-space SVG/CSS HUD overlay rather than separate Cesium billboard, label, and reticle graphics. It is hidden during ordinary Focus and manual close views, where the standard selected launch-site label remains visible, and exists only while ascent replay is active. Its fixed pixel scale is shared by ascent and insertion, so camera range never resizes the rocket on screen before the phase boundary. Generic Launch Library pad names are reduced to their identifying suffix, and replay timestamps use a cyan state title over unprefixed white UTC date/time values. `REPLAY ASCENT` holds the unframed cyan/white rocket at the pad for a real-time `T−10` countdown, transitions through `LIFTOFF`, and attaches six tapered cyan/white ellipse waves directly below it from liftoff through insertion to convey thrust without adding scene geometry. While replay is active, the single start button is replaced by compact Play, Pause, and Cancel icon controls. Pause freezes countdown or mission time, vehicle/stage positions, camera target, labels, and thrust-wave animation; Play resumes from that exact frame, and Cancel releases replay camera ownership. The rocket and thrust group rotates from the path's live screen-space tangent, so its nose follows the visible ascent curve while the adjacent text remains upright. The camera begins as a close oblique launch chase, then smoothly widens between roughly 120 and 420 km vehicle altitude into a higher oblique context view that keeps the moving rocket targeted while exposing the ascent bend and orbit connection. At insertion the rocket/thrust glyph is replaced by the fixed-size cyan orbit dot, which the camera follows through the existing globe-scale orbit pullback. The chase camera limits per-frame yaw changes across heading wraps so it cannot abruptly cross in front of the vehicle and make ascent read in reverse; the replay-speed slider affects mission playback but not countdown duration.
   Mission world text has no native `LabelGraphics`: overview launch markers publish at most 48 ambient candidates for a 24-winner budget, while selecting a mission clears that overview source and publishes its launch-site callout, stage re-entry annotations, live/estimated payload-position readout, and orbit annotation as protected selected-lane entries. The source retains the exact former strings and colors. Static anchors reuse the Cartesian values used to build their mission geometry; the moving payload entry reads the layer's per-frame live-position cache; catalog-backed orbit annotation positions are cached in the same one-second matrix update that realigns the orbit primitive. Keyhole edge fade, horizon culling, final collision placement, and UI exclusion are owned by the shared host. Deselect restores the bounded overview, and refresh, disable, and destroy replace or clear both mission sources.
   A selected mission renders its orbit as four repeating tactical sectors, each containing one prominent cyan dot followed by one hundred thin translucent dashes. The bright dots act as orbit anchors while the subdued dash field remains depth-tested against the globe and is shown only for the selected mission.
   Close selected-pad views add one static 500 m-radius cyan launch-zone ring with a low-opacity translucent fill over the sampled photoreal launch-site surface. The single scene primitive is created only for the visible selected site and is otherwise dormant. It appears during Focus, sufficiently close manual zoom, and the replay countdown, but is suppressed above 120 km camera altitude, beyond 180 km direct camera-to-pad range, for unselected missions, and whenever Space Missions is inactive. Focus establishes a launch-site-centered camera transform once; subsequent manual heading and pitch changes remain centered on that site without an automated per-frame correction. Surface mission markers and labels use an additional conservative globe-limb margin before the exact ellipsoid occluder boundary, preventing near-horizon visibility from alternating between frames.
-- **AIS vessels**: chevron symbology (naval cyan base, type tints), world-space headings, MMSI-keyed reconciliation (selection survives refreshes; pinned 3 refreshes with STALE marker when absent), detection-overlay integration (`type: 'SEA'`; a vessel's callout fades by the painted opacity of its own ambient card, so a card dropped by budget, collisions or UI chrome, or faded at the keyhole rim, leaves the callout readable), contextStore registration for voice Q&A. Empty-space clicks, id-less photorealistic-tile picks, and Escape dismiss the vessel card/HUD/context and clear its trail; picks owned by another layer (including `gev-trail:*`) and raw vessel-record picks without a live MMSI key are no-ops for vessel selection. Click and key handlers detach while the layer is disabled and reinstall on enable. Selecting another vessel replaces the selection and trail, and reconciliation clears a trail if its owning vessel is evicted.
+- **AIS vessels**: hull sprites by vessel kind, tinted by type (see the map sprites entry below), world-space headings, MMSI-keyed reconciliation (selection survives refreshes; pinned 3 refreshes with STALE marker when absent), detection-overlay integration (`type: 'SEA'`; a vessel's callout fades by the painted opacity of its own ambient card, so a card dropped by budget, collisions or UI chrome, or faded at the keyhole rim, leaves the callout readable), contextStore registration for voice Q&A. Empty-space clicks, id-less photorealistic-tile picks, and Escape dismiss the vessel card/HUD/context and clear its trail; picks owned by another layer (including `gev-trail:*`) and raw vessel-record picks without a live MMSI key are no-ops for vessel selection. Click and key handlers detach while the layer is disabled and reinstall on enable. Selecting another vessel replaces the selection and trail, and reconciliation clears a trail if its owning vessel is evicted.
 - **Track trails**: server accumulates per-MMSI ring buffers (`/api/vessels/track?mmsi=`, Float32+Uint32, 64 samples, 30s/25m thinning); aircraft backfill proxies `/api/flights/track` (OAuth, own credit bucket). Military aircraft keep only their locally accumulated trails: `/api/military/track` validates the hex, then answers `503 history_unavailable` without an upstream request.
 - Shared `src/data/pickRegistry.js` stops the two flight layers' click handlers from fighting over the camera.
 
@@ -6127,9 +7733,9 @@ and unreachable upstream (502/504) separately from road geometry.
 
 `GEV MIC` button (bottom UI) starts an OpenAI Realtime session over WebRTC:
 
-- **Token flow**: browser fetches a short-lived client secret from `/api/realtime/token`; the Vite middleware uses `OPENAI_API_KEY` by default, or the signed-in local ChatGPT/Codex OAuth access token when OAuth was explicitly selected in Provider Settings, and posts the full session config (instructions, tool schemas, VAD, truncation) to `api.openai.com/v1/realtime/client_secrets`. Both long-lived credentials stay server-side; OAuth minting is loopback-only. SDP exchange goes directly to `api.openai.com/v1/realtime/calls` with the ephemeral token.
+- **Token flow**: browser fetches a short-lived client secret from `/api/realtime/token`; the Vite middleware uses `OPENAI_API_KEY` by default, or the signed-in local ChatGPT/Codex OAuth access token when OAuth was explicitly selected in Provider Settings, and posts the full session config (instructions, tool schemas, VAD, truncation) to `api.openai.com/v1/realtime/client_secrets`. Both long-lived credentials stay server-side; OAuth minting is loopback-only. SDP exchange goes directly to `api.openai.com/v1/realtime/calls` with the ephemeral token. With no OpenAI key the token route answers `503` with code `API_KEY_MISSING`, and the voice control shows `Needs OPENAI_API_KEY — add it in Provider Settings` in the interface language, reworded on a language change, without the microphone-permission hint.
 - **Session defaults** (env-tunable): model `gpt-realtime-2` (or `gpt-realtime-2.1-mini` when the MINI tier is selected — see the model-tier entry below), voice `marin`, reasoning effort `low`, semantic VAD with low eagerness, no response interruption, context window truncated to ~3,000 post-instruction tokens with 0.5 retention ratio — the conversational window stays short because map state is fetched live per turn.
-- **Thirty tools** (argument schemas in `src/voice/actionSchemas.js`, served with their descriptions by `server/providers/openai/tools.js`, executed client-side in `src/voice/gevActions.js`): `fly_to_location`, `select_nearest_aircraft`, `adjust_camera_zoom`, `zoom_to_globe`, `set_layer_visibility`, `show_data_layers_menu`, `set_panel_open`, `set_visual_style`, `get_entity_context`, `get_current_view_state`, `set_hud`, `set_cyber_sonar`, `set_detection`, `set_map_stack`, `set_post_processing`, `control_scene`, `control_cctv`, `set_context_mode`, `control_cockpit`, `control_radio`, `track_entity`, `stop_tracking`, `frame_overhead`, `annotate_map`, `clear_annotations`, `move_camera`, `fly_route`, `analyst_query`, `next_iss_pass`, and `next_satellite_pass`.
+- **Thirty-five tools** (thirty-four in a session without `OVERPASS_UPSTREAMS`, which adds `osm_query`; argument schemas in `src/voice/actionSchemas.js`, served with their descriptions by `server/providers/openai/tools.js`, executed client-side in `src/voice/gevActions.js`): `fly_to_location`, `select_nearest_aircraft`, `show_street_level`, `adjust_camera_zoom`, `zoom_to_globe`, `set_layer_visibility`, `show_data_layers_menu`, `set_panel_open`, `set_voice_inactivity_timeout`, `set_visual_style`, `get_entity_context`, `get_current_view_state`, `set_hud`, `set_cyber_sonar`, `set_detection`, `set_map_stack`, `set_post_processing`, `control_scene`, `control_cctv`, `set_context_mode`, `control_cockpit`, `control_radio`, `track_entity`, `stop_tracking`, `frame_overhead`, `annotate_map`, `clear_annotations`, `move_camera`, `fly_route`, `analyst_query`, `resolve_area`, `find_imagery`, `osm_query`, `next_iss_pass`, and `next_satellite_pass`.
 
 > **Reading `npm test` totals:** the count depends on the Node major. The two
 > GC-bracketed allocation microbenchmarks (`src/data/focusAllocations.test.mjs`
@@ -6167,6 +7773,7 @@ and unreachable upstream (502/504) separately from road geometry.
 - **Reliability**: tool-call dedupe (2.5s window across call/item/args keys); response-create queueing that respects active responses and defers follow-ups when the user starts speaking; per-tool follow-up instructions so the agent confirms only what actually happened (zoom confirms only on `ok=true`).
 - **Aircraft identity honesty:** “What is this aircraft?” reads callsign, operator, registration, type, and route only from the selected contact context. Missing operator, route, or type enrichment is named explicitly rather than silently omitted or inferred from the callsign.
 - **Diagnostics**: every client/server event is posted to `/api/realtime/debug-log` and appended to `.gev-logs/realtime-conversations.jsonl` (gitignored) with secret/image redaction; last 30 errors persist in `localStorage` (`gev-realtime-errors`); `window.__gevVoiceCommands.getDiagnostics()` in the console.
+  - **Visual-context escalation** (OpenAI Realtime): when a response's last tool result is a `get_entity_context` answer, a tool output from that response was sent and the data channel is open, it logs one `viewport_context.decision` with `contextId`, `send` and `reason`, plus `viewScale` and, when `send` is true, `kind` (`viewport` or `crop`). Decision reasons: `structured-identity-sufficient` (structured context made an image unnecessary), `view-scale-not-local`, `structured-identity-missing` (requests a viewport), `pointer-crop-eligible` (a pointer answer with no identity; requests a crop, and the crop checks below decide whether one is sent), `pointer-identity-present` and `pointer-missing`. A send decision is followed by exactly one outcome with the same `contextId` and `kind`: `viewport_context.result` (`sent`, `data-channel-send-failed`), logged as soon as the send returns, or `viewport_context.skipped`. Pointer-crop skips are `pointer-not-fresh` (no snapshot, or a stale one), `pointer-not-ground`, `pointer-off-screen`, `pointer-scale-not-useful` (zoomed out past `local` or `city`), `pointer-already-requested` (the most recently requested snapshot again: already sent, still being captured, or an earlier attempt for it threw), `pointer-expired`, `pointer-pose-unknown` and `pose-changed`; dropped captures are `capture-unavailable`, `session-reset`, `superseded` (a newer request or turn), `channel-lost` and `frame-stale`; a step that throws before an outcome closes the pair with `error`, and the caller then logs `viewport_context.failed`. Direct calls to the crop or image senders log their skips with a null `contextId`. Decision and outcome are separate records, so the debug-log rate limit can drop one half of a pair. Payloads are static codes only, never image data, tool payloads or user text, and other tool results log nothing here. Gemini Live uses a different gate in `geminiSession.js` (no pointer crop, a 1 s throttle), which is not instrumented.
 - **Counting semantics ("near")** — a CONTRACT; new count-bearing tool work inherits it. Three honest numbers exist for one question: the Contacts cohort (250 km around the subject, what the panel shows), `analyst_query`'s count of _currently-loaded_ records for the requested scope, and the layer-wide loaded total in `coverage.layersQueried[].total`. They diverge legitimately — the flights layer loads by viewport, so after a camera dive the loaded set can hold a fraction of the cohort (field case: panel 42, analyst 8). The contract:
   1. **Contacts ACTIVE** → "near / nearby / how many aircraft" means the **Contacts window** — the panel's numbers, spoken verbatim. Mechanism: `contactsWindow` (`{centeredOn, radiusKm, flights, military, vessels, complete}`), carried by both `analyst_query` and `get_current_view_state`, derived by `contactsWindowFromSnapshot()` from the same snapshot the panel renders so the two cannot drift. Voice filtering and follow-up memory use that immutable snapshot too. A cohort whose feed cannot answer reports `'unknown'`, never a confident zero; a cohort at the 20,000-row retention bound reports a lower bound.
   2. **Contacts OFF** → "nearby" means **in view**; "near \<place\>" means a radius around that place. A radius query with Contacts active and no explicit centre is centred on the **active contact**, not the camera.
@@ -6381,8 +7988,8 @@ request viewbox and continues searching without that geographic preference.
 
 - UTILITIES ▸ **Draw** turns the globe into a whiteboard drawn by hand. Pick a shape (icon buttons for Area, Line and Pin) and a colour swatch for the next shape, click the vertices on the real world, and finish. **Keyboard contract, live only while Draw is on and never while you are typing in another field:** Enter finishes the shape (as does a double-click, and the two cannot both submit it — the session is replaced before the annotate call is awaited); Backspace removes the last vertex; Esc cancels the shape in progress, and a second Esc — Esc on an empty session — leaves draw mode. **Clear** wipes the board (the shape in progress and every placed mark), so removing marks does not require the console or the microphone.
 - **Drawn shapes are listed under Draw like Import's files** (`src/ui/views/panels/DrawMarkList.vue`, rows worded by `presentDrawMarks` in `src/annotations/drawMarks.js`): one row per hand-drawn mark (`manual: true`; voice marks are not listed) with its colour swatch, its name, and show/hide, fly-to and remove. The draw tool publishes the rows with the rest of its controls and answers the row actions (`renameDrawMark`, `recolorDrawMark`, `toggleDrawMark`, `flyToDrawMark`, `removeDrawMark`) through the display store; it republishes on the engine's `onChange`, so a voice clear or an expiry updates the list. Rows are keyed and updated in place: a board change never takes a name being typed (the field keeps its draft while focused) or the button under a click. The name is saved on Enter or on leaving the field, once; Esc restores it, before anything else and with the row's colours open too. Both keep focus in the field, so neither drops it to the page or leaves Draw. The swatch opens the five colours right after it (shown at the end of the row), with the current colour focused; the arrows, Home and End try another, and a click or Esc closes them and returns focus to the swatch. Both colour groups (the next shape's and a row's) are one `DrawSwatches` radio group with a single tab stop, coloured from `DRAW_COLOR_CSS`; on touch screens each dot answers a 24 px target. An unnamed shape shows its kind, and an unnamed line its length; a renamed line keeps its length (`Ridge walk — 950 m`). **Hidden** keeps a mark on the board at alpha 0, and the world renderer takes every one of its entities out (`show = false`), so no material that keeps its own colour (the line's flowing stroke) still paints it; the screen renderer does not project a hidden callout, so it cannot push a visible label aside; `fly_route` skips a hidden route; and with every mark hidden the annotations render hold is released. **Fly to** is an immediate navigation (`runImmediateNavigation('drawing', …)`), like Import's: Cockpit refuses it and a running orbit, follow or track lets go first. A line is framed by its whole path, across the antimeridian too.
-- Runtime entry: `createApplicationTools` (`src/app/tools.js`, behind the `src/standalone/tools.js` shim) calls `initDrawTool({ viewer, annotations, navigation, publish, connect, markActions })` after `initAnnotations` and defers its `destroy()`, so disposing the shell returns every DOM listener, the Cesium handler, the preview data source, the borrowed click actions and the `window.__gevDrawTool` handle. Its controls are Vue views in the UTILITIES panel (`DrawControls.vue`, `DrawMarkList.vue`) that render what the tool publishes to the display store and call its actions. That handle (`setActive`, `setShape`, `addVertex(lon, lat)`, `finish`, `cancel`, `clearAll`, `marks`, `setColor`, `diagnostics`) is the no-mouse test seam.
-- **The pointer, for an application's own tool.** `createApplicationTools` also returns `pointer` (`data/inputOwnership.js`): `claim(owner)` takes the pointer as Draw does and returns its lease, or `null` while another tool holds it; `release(lease)` gives it back; `isFree()` lets the application's own click handlers yield, as the layers' do. An owner without a name in `pointerOwnerNames.js` is named by its id when another tool reports who holds the pointer.
+- Runtime entry: `createApplicationTools` (`src/app/tools.js`, behind the `src/standalone/tools.js` shim) calls `initDrawTool({ viewer, annotations, navigation, publish, connect, markActions })` after `initAnnotations` and defers its `destroy()`, so disposing the shell returns every DOM listener, the pointer subscriptions, the preview draw sets, the borrowed click actions and the `window.__gevDrawTool` handle. The live preview (a dashed rubber band, dashed behind the surface too through the line's `depthFail` style, and a dot per vertex) is two sets on the renderer's draw port, so the tool no longer reaches Cesium; the rubber band follows each move's `pickPosition`, the dispatcher's sensor-corrected pick-buffer point, as clicks do. Its controls are Vue views in the UTILITIES panel (`DrawControls.vue`, `DrawMarkList.vue`) that render what the tool publishes to the display store and call its actions. That handle (`setActive`, `setShape`, `addVertex(lon, lat)`, `finish`, `cancel`, `clearAll`, `marks`, `setColor`, `diagnostics`) is the no-mouse test seam.
+- **The pointer, for any other tool.** `createApplicationTools` also returns `pointer` (`data/inputOwnership.js`): `claim(owner, { onLost })` takes the pointer as Draw does, from any tool holding it, and returns its lease; `onLost` is called once when a newer claim takes it, and the tool turns itself off there; `release(lease)` gives it back; `isFree()` lets the application's own click handlers yield, as the layers' do.
 - **Row actions are an application's own.** `createApplicationTools({ drawMarkActions })` hands `initDrawTool` buttons for drawn areas' and lines' rows; the standalone shell passes none, so the open-source build shows no new button and makes no new request. Each action (`drawMarkActions` in `src/annotations/drawMarks.js`) is `{ id, icon, label(name), shapes: ['area', 'line'], accepts?(geometry, shape), run({ id, shape, name, title, geometry }) }`: the icon a Material Symbols name, the label worded by the application, `name` the person's own and `title` the row's (the name, else `Area` or `Line · 950 m`), the geometry `drawMarkGeometry`'s `[lon, lat]` `Polygon` (closed; a `MultiPolygon` for an area handle with several parts) or `LineString`, longitudes wrapped into [-180, 180]. A pin, and a shape that crosses the antimeridian or has a part that cannot be given whole, has no geometry and is offered nothing. Malformed actions and repeated ids are dropped once, at construction. What `run` returns or resolves to is a note under the row (`role=status`; past 200 characters it is cut at a word with an ellipsis); the row is busy (`aria-disabled`, no second press) until it settles, a rejection or a throw clears the note and is logged (so an action words its own refusals and resolves with them), and a shape's note goes with the shape, so a late answer never lands on a removed one.
 - Contract: a finished shape is submitted through the SAME `annotationEngine.annotate()` the voice agent uses, with geometry supplied and `manual: true` (`type: area` + `ring`, `type: route` + `path`, `type: pin` + coordinates). `resolveSpec` short-circuits manual specs (`resolveManualSpec`) so no geocoder, Places or Overpass call is made. A drawn area is a real (not synthesized) outline and drapes solid; a drawn line is a `route` with `mode: 'manual'`, labelled with its length and never a travel time; a pin is a point. Drawn marks therefore render with the whiteboard look, persist, appear in `.list()`, and clear with `clear_annotations` / `.clear()`. A drawn shape is never merged with another as a duplicate: every one is drawn on purpose, and every one is unnamed until its row names it, so two pins dropped close together are two pins.
 - **A vertex is a lon/lat, and the mark is DRAPED.** Clicks are picked through `pickWorldFromScreen` — one of two scene helpers the annotation resolver factory (`src/annotations/resolver.js`) exposes alongside `sampleGroundHeight`, so the app has ONE depth-aware pick cascade rather than a second written beside it — which returns the height the pick landed on as well as the coordinate, so the live preview hangs on the roof or hillside under the pointer instead of sinking to sea level. The world renderer draws areas and routes with `clampToGround`, so the height is dropped at finish in one place (`finishSpec`) rather than being carried downstream and discarded silently: what you get is the outline you drew, lying on the surface beneath it.
@@ -6392,12 +7999,23 @@ request viewbox and continues searching without that geographic preference.
 - **Measurements and centres are computed on unwrapped longitudes** (`unwrapLongitudes` / `wrapLongitude` in `drawMode.js`, used by `ringAreaM2`, `ringCentroid` and the engine's manual-area anchor). A ~50,000 m² rectangle straddling the antimeridian reads its 0.002° width as 359.998° under raw arithmetic: it measured thousands of square kilometres and anchored on the Greenwich meridian, half a world from the shape. Path length was already safe — haversine is periodic in the longitude delta — and a test pins that so a "fix" cannot break it.
 - **Bounds.** One shape holds at most `MAX_VERTICES` = 512 points; two clicks within 0.5 m are one vertex (that is what makes a double-click finish without leaving a stray point); a vertex that is not a finite on-globe coordinate is refused. A shape that encloses nothing is refused rather than placed: three collinear points are not an area and a line under a metre long is not a line, and the hint says which.
 - Drawn-area measures round before choosing m², ha or km², so 9,999.6 m² displays as `1.0 ha`, not `10000 m²`, and 999,960 m² as `1.00 km²`, not `100.0 ha`.
-- Pointer ownership: while a session is open the tool holds the single pointer claim (`claimPointer('draw')`, `src/data/inputOwnership.js`) and **every** ambient scene selection handler — the shared tracking click gesture behind flights, military and CCTV, plus vessels, satellites, launches, fires, installations, bikeshare, radio, submarine cables, the bundled GeoJSON layers and the CCTV calibration gizmo — returns before picking. A vertex over an aircraft is a vertex, not a selection.
-- **The claim is a LEASE.** `claimPointer(owner)` returns an opaque token or `null`; `releasePointer(lease)` takes that token. A second claim fails even under the same owner name, because two live instances of one tool — an old one mid-teardown and its replacement — are two owners; releasing by name let the old instance free the claim its successor was holding, and every layer started selecting through the live session's vertices. A superseded lease now releases nothing.
-- **Cesium's own click actions are borrowed too.** The Viewer binds a selecting LEFT_CLICK and a tracking LEFT_DOUBLE_CLICK on its own handler, outside every layer and therefore outside the shared claim — guarding the layers alone still left a drawn vertex selecting the entity under it. Both are removed for the session and restored, as the same function objects, when it ends or the tool is destroyed.
+- Pointer ownership: while a session is open the tool holds the single pointer claim (`claimPointer('draw')`, `src/data/inputOwnership.js`), and the scene's input dispatcher (`src/input/dispatcher.js`) hands its clicks, moves and double clicks to the draw tool's leased subscriptions only: **every** ambient subscriber — flights, military, CCTV and its calibration gizmo, vessels, satellites, launches, fires, installations, bikeshare, radio, submarine cables, the bundled GeoJSON layers — is skipped for that event before anything is picked. A vertex over an aircraft is a vertex, not a selection.
+- The input dispatcher no longer reaches Cesium. It takes its pointer events from the renderer's input port (`findInput`, `src/render/rendererOf.js`) and its picks, drills and ground points from the query port, with positions as plain `{x, y}`. A click's hits are the contract's `Hit`; something drawn outside the draw port is a `Hit` with `set: ''` that the Cesium adapter names (`src/render/cesium/nativeClick.js`), which also hangs the engine's own picks on `event.native` (`pick`, `pickWindow`, `drill`, through the follow helper) for layers still bound to them. The adapter's pick reuses the query port's pass for the same pixel, window and frame, so an empty click still costs one pick pass; a sky click makes no depth pass unless a globe tile is on its ray. A touch tap's contact search drills Cesium's own picks, eight deep, so something drawn outside the draw port still stops it or is found by it.
+- **The claim is a LEASE, and the newest claim takes over.** `claimPointer(owner, { onLost })` returns an opaque token; `releasePointer(lease)` takes that token. A second claim, even under the same owner name, ends the lease out, and its holder's `onLost` is called once, after the new lease holds the pointer: Draw turns off as if toggled off (the half-drawn shape and preview go, the stock clicks come back), the imagery box cancels, and Directions disarms. Two live instances of one tool — an old one mid-teardown and its replacement — are two owners, so the replacement wins; releasing by name let the old instance free the claim its successor was holding, and every layer started selecting through the live session's vertices. A superseded lease releases nothing. This is the renderer contract's rule (`input.claimPointer`), and the two are one: each scene's input dispatcher bridges its renderer's input port (`bridgePointer`), so the port holds a lease while a tool holds the pointer (the port is not free), and a claim made on the port itself takes over from the tool like any newer claim. That lease takes no press itself: the dispatcher decides who hears each event when it arrives, as each layer's own handler used to (a click reaches ambient selection only if no tool holds the pointer then, and a tool's subscribers only while its lease is current), and Cesium's own select and double-click follow run unless the tool holds them off (`suppressStockClicks`: Draw and the imagery box do, Directions does not).
+- **Cesium's own click actions are suppressed too.** The Viewer binds a selecting LEFT_CLICK and a tracking LEFT_DOUBLE_CLICK on its own handler, outside every layer and therefore outside the shared claim — guarding the layers alone still left a drawn vertex selecting the entity under it. The tool takes the dispatcher's `suppressStockClicks()` hold for the session; both actions come back, as the same function objects, when the last hold is released (the imagery box takes the same hold).
 - **Enter belongs to whatever has the keyboard.** The finish key is taken only from the canvas and the page body. With a control focused — Clear, a shape button — Enter activates that control, as a keyboard user expects; it does not quietly finish the shape.
 - Pure half: `src/annotations/drawMode.js` (session, minimum vertices, double-click de-dup at 0.5 m, vertex ceiling, degenerate-geometry refusal, ring closing, dateline-safe length/area/centroid, hint text). Regression surface: `src/annotations/drawMode.test.mjs` and `src/data/inputOwnership.test.mjs` (pure), `src/annotations/drawToolBehaviour.test.mjs` (the tool driven against DOM and viewer doubles — leases, borrowed input actions, teardown, the Enter key, preview heights), `src/annotations/drawTool.test.mjs` (structural: where files live, which ids the markup carries, what the docs may claim), and the rendered harness `scripts/qa-draw-tool.mjs`.
 - The annotation tree is a declared ownership group: `./annotations` → `src/annotations/index.js` in `package.json`, with its module graph listed in `scripts/package-boundaries.json`, so an annotation module reaching outside that graph is a gate failure rather than a surprise in a layer's bundle. `drawMode.js`, `drawTool.js` and their tests are in `scripts/format-scope.json`.
+
+### News (November 2026)
+
+- **What it shows.** Events ▸ **News**: the last 24 hours only, or the fewer hours a server names. Zoomed out, one beacon per hotspot with its count for the window and its trend, and a breathing beacon per developing situation (still under reduced motion). Below 2,500 km (7,500 km with a hotspot chosen), the hotspot outlines with disputed areas dotted and named, and every placed report as a ground-clamped marker: fill is severity (0 grey no physical event, 1 yellow minor, 2 orange significant, 3 red major), the icon is the category, the rim is attestation (solid confirmed, dashed claim, thin single), size grows with sources and the marker fades over the day. Colour never marks a side. Up to ten picture cards (physical events with two or more sources, major or pressing) stand over their markers without overlapping. An app built on Core may draw the picture cards itself: `createApplicationCatalog({ newsOptions: { pictureCards } })` calls `pictureCards(cards, { selectedId })` on each redraw with one card per event on the map that has a picture, single source or not, at every height (zoomed out, where a hotspot stands as one beacon, its reports' pictures still come), most severe then newest first (`{ id, title, lat, lon, publishedAt, severity, color, image, video, credit }`, at the marker), and the selected report's id or null (its own card still stands at its marker); with no cards when the layer turns off; the layer then paints none of its own, and a click on one is `setParams({ reportId, focus: true })`. A selected report's card reads "Source: host ↗" and opens the article.
+- **Time.** The layer reads its time from the world clock (`worldClock.timeFor('news')`, passed as `now` in `src/app/constructCatalog.js`): report ages, the 24-hour window, "today", fading and the pressing and card rules all count from it. Core does not follow the clock for the layer, so this is the wall clock and nothing changes. A host whose news source can answer a past time may follow it for `news`; the layer then shows that time's news as it was then, with ages counted from the timeline.
+- **Panel.** The right-rail NEWS panel (`src/ui/newsPanel.js`, `src/ui/news/`) has a time window at the top (the server's 24 h, or 12, 6, 3 or 1 h; the hotspot counts are read for the chosen window) and two sections. **Conflicts**: hotspot chips with counts, a severity floor (significant and above by default), a category filter, the chosen event, and a continuous feed, newest first. **Local**, while the camera is below 3,000 km: every report in the area at the view centre, newest first, named at the top ("News from …") and outlined on the globe, which then shows those reports instead of the hotspots' news; at sea, reports within 500 km. A disputed area of the bundled list (11, see `src/data/local_data/natural_earth/README.md`), or a territory Natural Earth gives no country code (Somaliland, Northern Cyprus and others), is named as itself and read from no country's outlets; elsewhere Natural Earth's default country lines apply. Each card shows the publisher's picture when the event has one (hotlinked, no referrer, publisher credited), the headline (a model's English headline marked as such), a mono meta line (severity marker, category, place, sources, age), who reported it, attestation and media chips, and the service it came through ("via GDELT Project"). Open, a card plays the post's clip on request. A click flies the camera straight down from 150 km and selects the report.
+- **Notices.** A section whose key the server lacks says "{provider} key required" and names the variable; a refused key says "{provider} refused its key"; a spent daily allowance says "{provider} limit reached for today". The other section keeps working.
+- **Source.** `sources.news` (`createNewsSource`, export `./layers/news/source`) reads same-origin `/api/news/*` with a 15 s timeout, a 4 MiB cap and record-by-record validation; `newsQueryAllowed` lets a host admit exactly the client's requests. Core's local server (`server/providers/news.js`) forwards only those GET requests to `GEV_NEWS_ORIGIN` when it is set.
+- **Built-in backend.** With `GEV_NEWS_ORIGIN` unset, Core answers the same routes itself (`server/providers/news/keyed.js`). **Conflicts** needs no key: the last 24 h of GDELT 2.0 event exports (15-minute files on `data.gdeltproject.org`, about 100 KB each), physical violence only (CAMEO roots 18–20), one report per story with copies of one agency story merged, placed at GDELT's location for it (a town the article's words name beats a bare country). Titles are the article's page title from GDELT's GKG export of the same quarter hour (about 6 MB each) for the newest 3 h, else the words of the article's address; GDELT's actor coding is never shown. With `LIVEUAMAP_API_KEY`, Liveuamap's mapped items stand beside GDELT's. **Local** reads World News API (`WORLDNEWSAPI_KEY`) by the source country at the view centre, once per country every 30 minutes (about 1.5 points a read, at most `WORLDNEWSAPI_DAILY_READS` reads a day, default 30), plus the Conflicts reports placed inside the area. A country's own stories keep World News API's category (politics, business, else other) and no severity: the rules read fighting and crises, and everyday headlines mislead them. Areas come from the bundled Natural Earth countries and disputed areas (`server/providers/news/areas.js`). Conflicts' categories, relevance and severity are bundled rules (`categorize.js`); a news server may replace them. A read with nothing current to serve (GDELT's, Liveuamap's or a country's) is waited for at most 10 s, under the client's 15 s timeout, and goes on past that for the next refresh. Meanwhile GDELT serves the exports read so far and Conflicts serves GDELT without Liveuamap; Local in a country answers unavailable (502) until its outlets' read lands, and serves them without the Conflicts reports while those are missing. A section left with nothing answers unavailable, and a refused key stays refused. A country's World News API news is kept for at most 1 hour and then deleted; a request that never reached World News API is not counted against the day's reads. A story with neither a page title nor words in its address is minor (GDELT's code alone), so it is not listed under Conflicts, and the hotspot counts leave minor reports out. The routes sit behind the cross-site gate for key-spending routes (`sameSiteGated`), a request line that is no URL answers 400, and a news server's 503 key states (`no_key`, `key_rejected`, `key_quota`) and `news_not_configured` are relayed as they are.
+- **State.** Share/restore token `00`, enabled-only. Voice is off for this layer (`VOICE_OFF_LAYERS`).
 
 ### S2 GhostMaps (October 2026)
 
@@ -6409,14 +8027,14 @@ request viewbox and continues searching without that geographic preference.
   - Only a new head costs REST calls: one recursive tree and one commit. An optional `GITHUB_TOKEN` raises the REST limit.
   - After an upstream outage, a successful branch-head check clears the error and pushes a recovered catalog even when the commit is unchanged. Cached products stay in place; subsequent healthy unchanged checks stay silent.
   - The new catalog goes to `.gev-cache/ghostmaps/catalog.json` and to every open page over server-sent events (`/api/ghostmaps/events`, 25 s heartbeat, at most 64 subscribers). Default products are downloaded at once.
-  - The layer reloads only products whose blob changed. The new edition's data source is added before the old one is removed. A product that leaves the catalog leaves the globe.
+  - The layer reloads only products whose blob changed. The new edition's draw sets are added before the old ones are removed. A product that leaves the catalog leaves the globe.
   - The row reads `LIVE` while the stream is open. A five-minute catalog read is the backstop.
 - **Files.** `/api/ghostmaps/file/{product}` serves only catalog products. Files are downloaded by commit-pinned raw URLs, so a CDN cannot return an older edition. They are cached on disk by blob sha, and blobs no current product uses are pruned. A request whose `?v=` names the current blob is `immutable`. Repository paths never reach the page.
 - **Source ownership.** The application catalog receives `sources['s2-ghostmaps']` through the shared source contracts; an omitted or null source stays unavailable without opening a stream or fetching. The standalone source factory supplies the same-origin implementation and accepts replacements. Packed-image URLs are released on cancelled or failed product construction, and remain owned by a successfully loaded product until it is removed.
 - **Voice and locales.** S2 can be toggled through its registered id and aliases. The model already sees the S2 GhostMaps brand in the id, and compact alias-hint separators keep the complete voice prompt within its existing 52,000-character limit; accepted aliases are unchanged. The row and reports are translated in Spanish, Russian and Simplified Chinese.
-- **Rendering.** The page parses the KMZ with the import module's zip, KMZ and XML helpers into one `CustomDataSource` per product.
-  - Points become ground-clamped billboards with the depth test off, so they never sink into terrain or 3D tiles. Because the Google 3D map hides the globe, nothing else would stop far-side pins drawing through the planet. Pins are therefore horizon-culled with Street Level's `createHorizonCull` before their first frame and again whenever the camera moves.
-  - Lines and polygon outlines are ground-clamped polylines.
+- **Rendering.** The page parses the KMZ with the import module's zip, KMZ and XML helpers into renderer draw sets (icons, lines and shapes) per product edition. The layer no longer reaches Cesium, so a caller handing it a Cesium viewer, with no renderer bound, loads the `./render/cesium/unbound` export once first.
+  - Points become ground-clamped icons with the depth test off, so they never sink into terrain or 3D tiles. Because the Google 3D map hides the globe, nothing else would stop far-side pins drawing through the planet. Pins are therefore horizon-culled with Street Level's `createHorizonCull` before their first frame and again whenever the camera moves.
+  - Lines and polygon outlines are ground-clamped lines; polygon fills are ground-clamped shapes.
   - Styles, StyleMaps and inline styles are honoured. Icons come only from images packed in the same KMZ and at most 512 KB. Anything else uses a per-product round marker.
   - Network links, overlays, models and remote hrefs are never followed. Hidden placemarks are skipped. Bounds are 20,000 placemarks and 250,000 positions per product.
 - **Reports.** Clicking a marker opens a card with the product, folder, edition date and the placemark's report fields. `src/layers/ghostMaps/records.js` reads ArcGIS popup tables as text only: `<Null>` and internal fields are dropped and values are capped. Description markup is never inserted into the page. The first `http(s)` research link opens from the card. The card is `stateless`, so it comes and goes with the click, as CCTV cards do. It is also `horizonCull`ed, so it hides when its marker turns behind the planet. Picks are registered under `s2-ghostmaps`.
@@ -6425,14 +8043,15 @@ request viewbox and continues searching without that geographic preference.
 ### Import Your Own Files (October 2026)
 
 - UTILITIES ▸ **Import** reads GeoJSON (`.geojson`/`.json`), KML, KMZ and GPX from the picker or a file drop anywhere in the app. Each file gets show/hide, Fly-to and Remove controls. GeoJSON and GPX use the row's color; KML/KMZ retain their styles and show a hatched swatch. The file bytes remain on the device for the page session. Rendered overlays can appear in map screenshots sent through voice or other existing screenshot tools.
-- **Ground and height.** GeoJSON XYZ coordinates become ground footprints. KML ground lines/rings are tessellated; static recorded tracks preserve their original vertices, segment gaps and explicit altitude modes. KML with absolute/relative altitude keeps that meaning. Ground pins resolve in batches of 256 against loaded terrain and, in the nearby camera footprint on photoreal maps, `clampToHeightMostDetailed`, then draw in one owned native BillboardCollection per file, with static positions and no per-frame point Entity visualizer or clamping callbacks. Point metadata remains in `dataSource.importedEntities` for framing/style inspection; non-point geometry stays in the normal source collection. Pin collections mount only after source admission, follow file show/hide, and are destroyed on removal. Settled camera/map-source changes and completed terrain loads refresh visible files through the same serial queue; distant points retain their latest available height. No detailed worldwide terrain sweep is started. Nearby mesh sampling can add requests/time; configured photoreal providers require separate validation. The depth test is disabled for ground pins, matching Draw's marker visibility policy.
+- **Ground and height.** GeoJSON XYZ coordinates become ground footprints. KML ground lines/rings are tessellated; static recorded tracks preserve their original vertices, segment gaps and explicit altitude modes. KML with absolute/relative altitude keeps that meaning. Ground pins resolve in batches of 256 through the height service: the loaded terrain's height (0 on the bare ellipsoid, whose coarse tiles can sag far below it) and, in the nearby camera footprint on photoreal maps, the mesh height (`clampBatch`). They then draw as static icons in the file's own draw sets (pins, lines and shapes), with no per-frame clamping callbacks. GeoJSON lines and polygon edges follow rhumb lines, split into steps of at most half a degree. Each file's sets mount only after admission, follow its show/hide, and are removed with it. Settled camera/map-source changes and completed terrain loads refresh visible files through the same serial queue; distant points retain their latest available height. No detailed worldwide terrain sweep is started. Nearby mesh sampling can add requests/time; configured photoreal providers require separate validation. The depth test is disabled for ground pins, matching Draw's marker visibility policy.
 - **Navigation.** Row Fly-to uses `runImmediateNavigation('file', …)`; Cockpit can refuse it and existing follow/track ownership is released first. Automatic Fly-to is stamped when a batch is submitted and reasserted before flying. Pointer/wheel gestures and newer navigation supersede it, including time spent in the queue. Framing uses every finite visible point/path/polygon-hole/wall vertex plus rotated overlay bounds, with viewport-aware range and a nadir view. The target uses available terrain/cached ground height and the ground guard on arrival. Empty footprints never fall back to deferred `viewer.flyTo`.
-- **Clock.** Imports expose no source clock and no entity availability. KML times/view metadata are removed before loading; recorded tracks become static lines. GPX segments remain separate and GPX times are ignored. The shared clock stays unchanged.
-- **Input handling.** Coordinates and GeoJSON geometry types are checked before Cesium allocation. Only short plain names reach GeoJSON property bags; file IDs, custom CRS and styling properties are removed. KML feature/geometry IDs are removed while Style/StyleMap references remain. Local style references are trimmed, incomplete style pairs removed, hidden-folder flags normalized to the import's show control, and unsupported prototype-named elements removed. UTF-16 BOMs and common KML namespace export defects are handled. Empty drawable content is refused. A loader failure or timeout does not hold the next file indefinitely; teardown aborts pending waits.
-- **References and images.** File-authored remote links/icons/styles, network links, models and screen/photo overlays are removed. Packed KMZ and embedded PNG/JPEG/GIF/WebP/BMP images remain local; decoded dimensions are checked before image decoding against a total 16-megapixel and 8,192-pixel-side budget per file. Blocked IconStyle images fall back to local pins; authored empty icons remain empty. Colored overlays without an Icon survive; overlays with a removed external image are dropped. Metadata, native labels and descriptions are removed, and generated pins share one lossless image URL per canvas.
+- **Clock.** Imports keep no clock and no time ranges: everything in a file draws at all times. KML times/view metadata are removed before loading; recorded tracks become static lines. GPX segments remain separate and GPX times are ignored. The shared clock stays unchanged.
+- **Input handling.** Coordinates and GeoJSON geometry types are checked before anything is drawn. Only short plain names reach GeoJSON property bags; file IDs, custom CRS and styling properties are removed. KML feature/geometry IDs are removed while Style/StyleMap references remain. Local style references are trimmed, incomplete style pairs removed, hidden-folder flags normalized to the import's show control, and unsupported prototype-named elements removed. UTF-16 BOMs and common KML namespace export defects are handled. Empty drawable content is refused. A loader failure or timeout does not hold the next file indefinitely; teardown aborts pending waits.
+- **References and images.** File-authored remote links/icons/styles, network links, models and screen/photo overlays are removed. Packed KMZ and embedded PNG/JPEG/GIF/WebP/BMP images remain local; decoded dimensions are checked before image decoding against a total 16-megapixel and 8,192-pixel-side budget per file. Blocked IconStyle images fall back to local pins; authored empty icons remain empty. Colored overlays without an Icon survive; overlays with a removed external image are dropped. Metadata, labels and descriptions are removed; only a short plain name reaches a drawn item. The default pins are shared SVG images.
 - **Bounds.** File size ≤50 MiB; inflated KMZ ≤120 MiB; ≤20,000 entities (including multipart children and Folder containers); ≤250,000 positions; ≤2,000 normalized style definitions and distinct image links; ≤12 files per session. Exact repeated styles share definitions without changing inheritance or inline overrides. Files of 20–30 MB fit the byte budget, subject to geometry/image limits. Refusals name a reason and batches continue; with multiple failures the hint shows the first reason.
-- **Lifecycle and keyboard.** `createApplicationTools` wires `initGeoFileImport` with viewer, navigation, ground services and map-source subscription. Destroy aborts pending work, unsubscribes, removes data sources, revokes blob URLs, removes document/canvas listeners and releases `window.__gevGeoImport`. List rebuilds retain keyboard focus; removing a row hands focus to the next row, else the previous row, else Import.
-- **Validation.** `node scripts/qa-geo-import.mjs` covers all four formats and real painted show/hide. Run `node scripts/qa-geo-import-regressions.mjs` against both dev and preview for XYZ/track heights, failure recovery, namespace/BOM support, portrait framing and panel drops. `node scripts/qa-geo-import-large.mjs [--file /absolute/path/sample.kml] [--expect-local-pins]` checks a 27.6 MB repeated-style file, native style/image equivalence, large-file painted output and frame times. It records the WebGL renderer; software-rendered runs do not establish GPU performance. Unit tests live beside the data/controller/framing modules.
+- **Code layout.** `src/data/geoFileImport.js` reads, bounds and sanitizes the files. `src/data/geoImportFeatures.js` turns the sanitized KML or GeoJSON into plain features (pins, lines, walls, polygons and ground overlays) with the styles Cesium's KML and GeoJSON loaders gave them: icon, scale, colour, heading and hot spot; line and polygon colours and widths; extruded or clamped geometry. `src/data/geoImportPins.js` draws those features through the renderer's draw port (`drawOf`), settles ground pins through the height service and frames the file for Fly-to. None of the three reaches Cesium, so the Cesium allow-list is empty. `src/data/geoImportShared.js` holds the error, limits, deadline and feature names they use.
+- **Lifecycle and keyboard.** `createApplicationTools` wires `initGeoFileImport` with viewer, navigation, ground services and map-source subscription. Destroy aborts pending work, unsubscribes, removes each file's draw sets, revokes blob URLs, removes document/canvas listeners and releases `window.__gevGeoImport`. List rebuilds retain keyboard focus; removing a row hands focus to the next row, else the previous row, else Import.
+- **Validation.** `node scripts/qa-geo-import.mjs` covers all four formats and real painted show/hide. Run `node scripts/qa-geo-import-regressions.mjs` against both dev and preview for XYZ/track heights, failure recovery, namespace/BOM support, portrait framing and panel drops. `node scripts/qa-geo-import-large.mjs [--file /absolute/path/sample.kml] [--expect-local-pins]` checks a 27.6 MB repeated-style file, that what the import draws matches Cesium's own `KmlDataSource` reading of the same file (positions, scale, heading, colours, widths, fills), large-file painted output and frame times. The QA scripts read what a file drew through `window.__gevGeoImport.drawn(id)`. It records the WebGL renderer; software-rendered runs do not establish GPU performance. Unit tests live beside the data/controller/framing modules.
 
 ### Recent Imagery (September 2026)
 
@@ -6447,7 +8066,7 @@ pins and share links already supply complete boxes.
 - DATA ▸ **Recent Imagery** (`recent-imagery`, `src/layers/recentImagery/`) lists the last 30 UTC days of imagery for a selected box and drapes the days you pick: HLS S30 (Sentinel-2) and L30 (Landsat 8/9) at 30 m, and the VIIRS NOAA-21 daily overview at 250 m. Keyless and browser-direct: NASA CMR for which days have HLS granules in the box (`catalog.js`, both collections concurrently, paged with `CMR-Search-After` up to 2,000 records each, `truncated` against CMR `hits`), GIBS WMTS for tiles, Worldview Snapshots for thumbnails and exports. Worldview's `Data-Present` header is the only availability signal: GIBS answers an empty tile with HTTP 200, and the JPEG overview would drape black, so a day confirmed empty never drapes.
 - **Box.** SELECT BOX (`src/ui/imageryBoxTool.js`) claims the pointer like Draw, borrows the stock click actions and freezes the camera only mid-drag; USE VIEW takes the camera rectangle; `boxFromPinAt` grows a 10 km box. Boxes must be ≤ 1,000 km a side, on one side of the dateline and inside the Web-Mercator limit (`validateBox`). A refusal (`boxError`, including the tool's own via `reportBoxRefusal`) stays at the top of the panel until a box succeeds; a view over the cap is refused with its size, never shrunk. An oversized box or view (`Box is … km wide · limit 1,000 km`, `View is … wide · …`) sets the hint to `Zoom in or draw a smaller box` and enables ZOOM IN: `zoomToFit()` flies top-down (1.2 s) to the refused box's centre, or the ground under the canvas centre for a view, at the height whose view is about 400 km wide for the canvas aspect and the camera's vertical FOV (`fitViewHeightM`, clamped 5–400 km), and returns that height.
 - **Modes, pins and the preview.** The mode is explicit: `image` (one pinned day, slot `a`), `basemap` (that day on the left of a swipe, the basemap on the right: slot `a` splits LEFT and there is no second layer) and `ab` (day `a` left, day `b` right). `setAssignment(slot, key | null)` / `toggleAssignment(slot, key)` pin and unpin; a day is in one slot at most (pinning it in the other slot moves it) and an empty day cannot be pinned. `setMode()` keeps both pins; `b` only drapes in `ab`. While the mode's first empty slot exists the focused day previews in it: a click at once, arrow keys after 250 ms of quiet (`FOCUS_DEBOUNCE_MS`, one timer, last day wins); an unprobed day is followed and previews when its probe says present, an empty or unknown day never drapes and the previous preview stays. A pin change drops the preview until focus moves again, and unpinning takes that layer off at once. `rankLatest` picks START HERE coverage first (a present HLS day whose footprints cover the box, or have none, beats a newer sliver), then newest with all granules ≤ 20% known cloud, then newest; slivers only as `partial`; else the newest non-empty VIIRS day; it is focused and previewed after each search when nothing is pinned. Escape clears the preview (`clearPreview()`), then cancels the box tool, then blurs — with SELECT BOX armed too, through the tool's `onEscape` interceptor wired in `createApplicationTools`. Pins, mode, box and split changes made in the panel are published with `adoptLayerParams`, never while a share link is being applied.
-- **Rendering.** `rendering.js` owns at most two GIBS layers on the host `src/maps/imageryHost.js` resolves: `viewer.imageryLayers` while the globe shows, the photoreal tileset's `imageryLayers` while it is hidden, or none (the panel says so). Layers are rebuilt on a new host, never re-parented. `MapSourceController.subscribe()` fires after every settled stack switch (silent switches and fallbacks included) and the layer rebinds on it. Tile requests pass a six-slot semaphore of our own (Cesium's global limits are untouched). Under `requestRenderMode` a deferred tile needs a later frame, but a deferral must never request one itself or a stalled tile keeps the scene rendering every frame: a request that finds the semaphore full asks for nothing (the settling request asks for one frame), and a tile Cesium itself deferred goes through one coalesced 250 ms retry. Thumbnails: three fetches at once, sixteen decoded images, least-recently-used where a `get` read is never a use; eviction keeps the probe result. The strip's visible window is probed around the focused card; the pinned and previewed days are probed wherever they sit, at the focused card's priority, so a pin restored or assigned off-screen still drapes.
+- **Rendering.** `rendering.js` owns at most two GIBS layers on the host `src/maps/imageryHost.js` resolves: the globe port's imagery while the globe shows, the shown photoreal tileset while it is hidden, or none (the panel says so). Layers are rebuilt on a new host, never re-parented. `MapSourceController.subscribe()` fires after every settled stack switch (silent switches and fallbacks included) and the layer rebinds on it. Tile requests pass a six-slot semaphore of our own (Cesium's global limits are untouched). Under `requestRenderMode` a deferred tile needs a later frame, but a deferral must never request one itself or a stalled tile keeps the scene rendering every frame: a request that finds the semaphore full asks for nothing (the settling request asks for one frame), and a tile Cesium itself deferred goes through one coalesced 250 ms retry. Thumbnails: three fetches at once, sixteen decoded images, least-recently-used where a `get` read is never a use; eviction keeps the probe result. The strip's visible window is probed around the focused card; the pinned and previewed days are probed wherever they sit, at the focused card's priority, so a pin restored or assigned off-screen still drapes.
 - **Esri surface and the swipe.** While any image is on the map (a preview included) the layer holds the map lease (`acquireImageryComparison`, owner `recent-imagery`, `esri-if-photoreal`): on Google 3D the map switches to Esri, because 30 m pixels over 3D buildings do not read, and Cesium's split only works on the globe. The lease is handed back, and Google 3D restored unless the operator changed maps meanwhile, when the last image leaves the map or the layer is disabled; the notice line says so while it holds. While a day is shown the imagery keeps Esri: a manual switch that lands on Google 3D is answered at once with a new lease under the same policy (`keepEsri`), the notice reads `Imagery stays on Esri · CLEAR to use Google 3D`, and the divider never suspends because of a map switch. It re-leases once per switch generation and only for a manual one (`MapSourceController#getSwitchOrigin()` is `manual` for an outside `setStack`, `automatic` for the controller's own fallback or recovery), never for the lease's own switch and never while releasing, so CLEAR and disable still return to Google 3D; a lease another owner holds stays refused. When Esri fails and the controller falls back to Google 3D on its own, the layer lets the lease go without restoring anything, both days drape on the tileset without a swipe and the guidance reads `Esri map unavailable · no swipe`; only the next manual switch to Google 3D takes Esri again, so a failing Esri map is never retried in a loop. Switching between globe stacks (Esri, OSM, Bing) only rebinds. On a tileset host both images drape without a swipe. The split control (`createImagerySplit`, labels A / B, or IMAGE / BASEMAP) exists only while a swipe is live, recentres on every new comparison (not while scrubbing the second day), except once for a split restored from a link. There is no keyboard shortcut (Space is the app's push-to-talk): SWAP (`#ri-swap`, in the controls row, its slot reserved and the button disabled while no swipe is live) trades the two sides, A to the right and B to the left, or the image to the right of the basemap, and a second click restores; the hint reads `Drag the divider · SWAP trades sides`. The swap is not in the share link, and every new comparison starts unswapped. One opacity applies to both drapes. Another owner holding the lease is reported and the images still drape.
 - **Panel.** `#recent-imagery-panel` is rail markup in the Context view (`src/ui/views/ContextView.vue`) beside `#weather-panel`, registered in `PanelLayoutController`, `PanelChrome` and the share panel state (`ui` token `i`), hidden while the layer is off and opened on first appearance unless a stored or shared collapse choice exists (`dataset.collapsedPreference`). `LayerPanel.attachRecentImagery(factory)` mounts the readout (`createRecentImageryPanel` in `src/ui/recentImagery.js`) into its `data-rail-scroller` body, as the weather readout is mounted. The body is a fixed stack in which no block changes height and no control moves in any state: `#ri-actions` (SELECT BOX · USE VIEW · CLEAR, rail-card actions), `#ri-notice` (one line: `#ri-notice-text` with the refusal, error, CLEAR notice or the Esri note, and `#ri-zoom-in` in a fixed slot at its right end, reserved unless an oversized box or view can be fitted), `#ri-strip` (day cards newest first: thumbnail, date, sensor, cloud, START HERE, PREVIEW, and a SHOW chip or A and B chips; ← → Home End move, S / A / B pin, Enter previews), `#ri-hint` (one line: the next step), `#ri-selection` (`#ri-mode` IMAGE · VS BASEMAP · A / B, then `#ri-slot-a` and `#ri-slot-b` with `#ri-unpin-a` / `#ri-unpin-b` kept in place when empty), `#ri-controls` (`#ri-opacity`, EXPORT / EXPORT A and EXPORT B) and `#ri-details`, a collapsed rail card holding the focused day's acquisition, coverage and granules, catalog notes, the empty-days toggle and the imagery credit. Absent controls are reserved (invisible), never removed. Every render preserves the body's `scrollTop`; opening DETAILS then scrolls its card into view once.
 - **Share links.** Layer options (token `1`): box edges as integers at degrees × 100000, pins `a` and `b` as compact days (`S20260918`), `m` mode (0 image, 1 basemap, 2 A / B), `p` split percent (share-link only: never stored locally) and `v` for the daily overview. Row chips: `MORE DETAIL · 30 m` (on) and `DAILY OVERVIEW · 250 m` (off).
@@ -6455,18 +8074,20 @@ pins and share links already supply complete boxes.
 
 ### 3D Aircraft + Tracking (June 2026)
 
-- **The TRACKED contact's 2D↔3D handoff is DEFAULT behaviour (2026-08-19), driven by camera distance alone.** It does NOT consult the DISPLAY-rail `3D` toggle, which continues to own the FLEET (the un-instanced draw-call budget stays the operator's decision). Policy lives in `src/data/trackedModelRegime.js` and is shared by both layers: enter below `TRACKED_MODEL_ENTER_ALT_M` = 150,000 m and hand back to the billboard only above `TRACKED_MODEL_EXIT_ALT_M` = 172,500 m. **The swap distance was set by playtesting on 2026-08-20:** a first pass at 1,000,000 m switched too early; 2D reads correctly at ~600 km and the handoff belongs at ~150 km. **Consequence, recorded on purpose:** the tracked contact now enters 3D NEARER than the FLEET does (`MODEL_ALT_CEIL_M` = 800,000 m, unchanged), so with the DISPLAY-rail `3D` toggle on, 150–800 km draws surrounding contacts as models while the selected one is still a glyph. Nothing double-draws (the fleet pass skips the tracked icao) and aligning the two is a fleet-side decision, deliberately out of scope. **The two thresholds are asymmetric on purpose:** a single threshold makes a tracked orbit sitting ON the boundary strobe billboard↔model as the camera's altitude wobbles across it. Do not collapse them. The latch is scoped per selection, so a new target re-evaluates against the ENTER ceiling rather than inheriting the previous target's exit band. Exactly ONE model is involved; it loads on demand when the regime opens, is HIDDEN (not released) on regime exit so re-entry has no load gap, and is released by the existing teardown on deselect/re-track/destroy. Cockpit and TR-3B suppression are unchanged. **Two invariants around it:** (a) the hysteresis latch AND the load-failure latch are per-selection state cleared by `_resetTrackedSelectionState()` in the tracking lifecycle (deselect / re-track / cross-layer / init / destroy) — the predicate's icao-change guard is defence only, since it needs a drawn frame while nothing is selected and the render governor's idle mode does not promise one; (b) on-demand loading is bounded at 3 attempts per selection with a 1.5 s backoff and one console warning naming the asset — the driver runs every `scene.preUpdate`, so an unbounded catch means a missing GLB spins load→reject at frame rate. The billboard stays the visual throughout a failed load.
-- **Grounded 3D handoff is terrain-validity gated (2026-08-23).** A ready civilian or military glTF does not own the visual until `groundSnap` (`src/data/groundSnap.js`) can answer with a MEASURED photoreal-surface height. On success the layer writes `height + the model's measured belly offset` before revealing the model. Cache movement is measured on the WGS84 surface, not across altitude, so a stationary contact keeps its snap through poll-time vertical-datum changes. Model existence or GPU readiness alone never suppresses the billboard floor, and ordinary zoom/style/deselect transitions preserve a valid snap cache. **Two states, and the difference is the whole design.** COLD — nothing has ever resolved for this icao (tiles still streaming on first sight, sample failure, backoff after a first miss): there is no evidence of where the ground is, `heightFor` returns null, the model stays hidden and the depth-test-free 2D billboard remains opaque and floored. WARM — a snap resolved and then a >`MOVE_INVALIDATE_M` (50 m) taxi move stopped it answering directly: the measurement is DEMOTED to a bounded last-known rather than deleted, and it keeps answering while the resample is outstanding, so a taxiing aircraft does not pop 3D→2D→3D across a 2–30 s retry backoff. The bound is `HELD_SNAP_MAX_DRIFT_M` = 250 m from the spot the value was measured at, past which the hold is dropped rather than stretched and the contact is COLD again. It is spatial with no timer beside it (ground under a contact that has not moved does not change; what invalidates the value is the contact MOVING) and deliberately a quarter of the billboard chain's `HELD_FLOOR_MAX_DRIFT_KM` — that hold only ever RAISES a sprite, while a held snap IS the model's placement, so its error shows in both directions. A fresh sample releases the hold, and so does a ground flip (which already calls `forget`). **A loading model is HIDDEN, never zero-scaled:** admission sets `show = false` (Cesium's default is `true`, and an unplaced primitive would claim the visual at the identity matrix), and ownership is `ready && show` — Cesium 1.138's `Model.update` has no `show` guard, so hiding a primitive costs its load nothing.
+- **The TRACKED contact draws as a model exactly when the fleet would.** `_trackedModelRegimeActive` (`src/layers/flights/tracking.js`, `src/layers/military/tracking.js`) asks the fleet's own rule: the DISPLAY-rail `3D` toggle on, the camera below the fleet ceiling, and a place in the fleet pass's nearest-first cap (`_trackedModelEligible`), so selecting a contact changes neither its colour nor its form or size. Cockpit and TR-3B suppression are unchanged. While a contact is selected its FLEET model stays loaded but hidden (`_keepTrackedFleetModel`, `src/data/aircraftModelLayer.js`): it draws the contact only until the tracked model is ready, and the fleet pass keeps it placed where the icon is (admitting one if the contact was an icon when selected and comes within range). Deselecting hands the contact back in the same frame (`_handBackDeselected`): to that fleet model when it is loaded, else to the icon, so a contact drawn as a model never flashes its icon while a new fleet model loads. The tracked model loads on demand from the fleet set's bytes; on-demand loading is bounded at 3 attempts per selection with a 1.5 s backoff and one console warning naming the asset (the driver runs every `scene.preUpdate`, so an unbounded catch would spin load→reject at frame rate), and the load-failure budget is per-selection state cleared by `_resetTrackedSelectionState()` on deselect / re-track / cross-layer / init / destroy. The icon stays the visual throughout a failed load.
+- **Grounded 3D handoff is terrain-validity gated (2026-08-23).** A ready civilian or military glTF does not own the visual until `groundSnap` (`src/data/groundSnap.js`) can answer with a MEASURED photoreal-surface height. On success the layer writes `height + the model's measured belly offset` before revealing the model. Cache movement is measured on the WGS84 surface, not across altitude, so a stationary contact keeps its snap through poll-time vertical-datum changes. Model existence or GPU readiness alone never suppresses the billboard floor, and ordinary zoom/style/deselect transitions preserve a valid snap cache. **Two states, and the difference is the whole design.** COLD — nothing has ever resolved for this icao (tiles still streaming on first sight, sample failure, backoff after a first miss): there is no evidence of where the ground is, `heightFor` returns null, the model stays hidden and the depth-test-free 2D billboard remains opaque and floored. Tiles still streaming is not a miss: no sample is taken, so it earns no retry backoff, and the first fleet tick after the tiles settle samples (2026-11-15); only a sample that finds no ground backs off (2 s, doubling to 30 s). WARM — a snap resolved and then a >`MOVE_INVALIDATE_M` (50 m) taxi move stopped it answering directly: the measurement is DEMOTED to a bounded last-known rather than deleted, and it keeps answering while the resample is outstanding, so a taxiing aircraft does not pop 3D→2D→3D across a 2–30 s retry backoff. The bound is `HELD_SNAP_MAX_DRIFT_M` = 250 m from the spot the value was measured at, past which the hold is dropped rather than stretched and the contact is COLD again. It is spatial with no timer beside it (ground under a contact that has not moved does not change; what invalidates the value is the contact MOVING) and deliberately a quarter of the billboard chain's `HELD_FLOOR_MAX_DRIFT_KM` — that hold only ever RAISES a sprite, while a held snap IS the model's placement, so its error shows in both directions. A fresh sample releases the hold, and so does a ground flip (which already calls `forget`). **A loading model is HIDDEN, never zero-scaled:** admission sets `show = false` (Cesium's default is `true`, and an unplaced primitive would claim the visual at the identity matrix), and ownership is `ready && show` — Cesium 1.138's `Model.update` has no `show` guard, so hiding a primitive costs its load nothing.
 - **Ground-snap clock rollback recovery.** If the wall clock moves before the
   sampling-window start, ground snap opens a new window while retaining the
   normal four-samples-per-250-ms budget. Retry timestamps more than the maximum
   30-second backoff ahead of the current clock are ignored. A smaller rollback
   can retain a bounded retry delay of up to 30 seconds.
-- Commercial and military aircraft use the same high-level FLEET model regime: 2D billboards when zoomed out, optional glTF models when closer, controlled by the DISPLAY rail `3D` toggle and `Proximity` / `All` modes. Since 2026-08-16 (Hangar fleet) models are PER-CLASS: real CC-BY GLBs for light/bizjet/turboprop/widebody/helicopter/uav (`CLASS_MODEL_REAL` in `src/data/aircraftClass.js` — meters-baked, scale 1, per-model belly/radius; provenance in `public/models/README.md`), the shared `airplane.glb` for the remaining civilian classes, and the military layer maps weight classes (real GLBs / 747 heavies / `jet.glb` fastjets, per-model heading offsets, flat amber or emergency red). Textured civilians carry a HEAVY tint, not a light one: `MODEL_COLOR_BLEND_AMOUNT` is `0.94` in BOTH layers under Cesium's `ColorBlendMode.MIX`, so the class colour supplies 94% of the surface and the asset's own texture ~6%. The visual direction is clean light silhouettes with only a weak diffuse contribution from the approved textures, so liveries deliberately do NOT read. IR boost raises the blend to a full `1.0`. Under NVG/FLIR (map preset or Cockpit vision) models render unlit flat-white at full alpha and scene fog is disabled (fog otherwise blacks out distant models with the globe hidden); state restores on exit.
-- **Aircraft models skip Cesium's dynamic environment map (2026-10-24).** Flights, Military Flights and Local ADS-B pass `environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS` (`{ enabled: false }`, `src/data/aircraftModelLighting.js`) to every drawn model. Otherwise each `Model` renders the sky around it and reads it back from the GPU (`readPixels`) when it is first placed, and again whenever it moves more than 1 km, the scene's atmosphere settings change, or (under sunlight dynamic lighting) an hour of scene time passes (`DynamicEnvironmentMapManager`, Cesium 1.138). With the class colour supplying 94% of the surface, the models are lit from Cesium's default spherical harmonics instead, with no specular environment map, so the sky's model-lighting cube map no longer reaches aircraft. `src/data/aircraftModelLighting.test.mjs` pins the option at every drawn model call; the two preload calls only warm the glTF cache and are never drawn.
+- Commercial and military aircraft use the same high-level FLEET model regime: an aircraft draws as its glTF model only within 3 km of the camera (eye to aircraft: `MODEL_ADD_M` = 3,000 m, kept to `MODEL_KEEP_M` = 3,600 m so a contact on the edge does not flicker) and as its icon farther away, controlled by the DISPLAY rail `3D` toggle and `Proximity` / `All` modes. Both modes use the same radius and differ by their caps (`MODEL_MAX` 150, `MODEL_MAX_ALL` 350). Models are drawn at their true size, with no minimum pixel size. The fleet ceiling (`MODEL_ALT_CEIL_M`, 33,600 m) is the highest contact the layers draw (`MODEL_HIGHEST_CONTACT_M`, 30 km) plus the keep radius: above it no contact can be within range, so the eligibility pass is skipped; below it only the distance decides. Every model is one of the project's procedural fleet models (`public/models/fleet/`, MIT, 122 GLBs, about 2 MB in all; `public/models/README.md`), chosen per aircraft by `aircraftModelSpec` (`src/data/fleetModels.js`): the first of its ICAO type's callsign rules in `types.json` (`aircraft_callsign`) its callsign matches, else its type's entry, else the model of its `classifyAircraft` class for a type the map lacks, else its ADS-B emitter category's, else the default airliner. It is drawn LIFE SIZE: the type's published length over the model's built length (`src/layers/flights/modelSpec.js`, shared by Flights, Military Flights and Local ADS-B), and a grounded aircraft stands the model's scaled clearance above the ground. An airport ground vehicle (feed type `ZVEH`) is a fire truck (`FIRE…`), pushback tug (`PUSH…`, `TUG…`), van (`DEICER…`, `SQUID…`, `SQB…`) or else a car by its callsign, and a ground station (`GRND`) is an 11.8 m radio mast; these models (catalog category `other`) are drawn at their built size, and such a contact with no altitude stands on the ground instead of at the airborne default (`src/layers/flights/records.js`). `classifyAircraft` still picks the 2D icons (see the map sprites entry below). The whole set loads once, up front, when a layer that draws it starts (`loadFleetModelSet`, which logs `[Fleet] N/122 models (X MB) loaded in N ms`); models are built from those bytes, never fetched mid-session, and an aircraft stays its billboard until the set has loaded. Every aircraft model draws its mesh's own colours (`aircraftModelBlend`, `src/data/aircraftModelLighting.js`): Cesium's `ColorBlendMode.HIGHLIGHT` with white, in Flights, Military Flights and Local ADS-B alike; the emergency red is mixed in at 30% (`AIRCRAFT_MODEL_TINT_MIX`, `MIX`), so the paint still shows: multiplying by a saturated tint zeroed the channels it lacks, and drew a red helicopter followed in cyan black and a white Cessna flat cyan. Tracking never recolours a model or an icon: the tracked contact draws in the colours it has untracked, and only its alpha changes (faded while stale, clear while its model draws it; `trackedIconColor`, `src/data/trackedAircraftIcon.js`). IR boost draws them flat white (`MIX` at `1.0`). Under NVG/FLIR (map preset or Cockpit vision) models render unlit flat-white at full alpha and scene fog is disabled (fog otherwise blacks out distant models with the globe hidden); state restores on exit.
+- **Map sprites.** Every far-away contact is a white sprite on the 96-unit, nose-up frame of `src/data/aircraftIcons.js`, tinted when it is drawn, so one icon-atlas slot serves every colour. Sprites are the far level of detail: the handoff to 3D models is unchanged, and no sprite is sized by the contact's length (each layer keeps its own size rules: aircraft ×0.8 on the ground and larger when tracked, vessels by speed). **Aircraft** keep their class glyphs, and every class draws at one size: there is no per-class scale in Flights, Military Flights or Local ADS-B, and each glyph is fitted so its farthest edge sits 44 units from the centre of the 96-unit frame (`BODY_HALF_EXTENT`, re-measured from the rasters by `src/data/aircraftIcons.test.mjs`), so a light aircraft is as big as a quadjet and is told apart by shape. `classifyAircraft` (`src/data/aircraftClass.js`) has two classes that are not aircraft, each with a label: `vehicle` (Airport vehicle: feed type `ZVEH`, ADS-B emitter category `C1` or `C2`, OpenSky category 16 or 17), one van-shaped sprite for every kind, tinted orange amber (`VEHICLE_TINT_CSS`, `#FF8F1F`, apart from the military `#FFB800`), and `station` (Ground station / obstacle: type `GRND`, or the point, cluster and line obstacles of emitter `C3` to `C5` and OpenSky 18 to 20), a radio mast drawn upright, also when tracked. Both are known from a contact's first fix: Flights classes every contact by the feed's own ICAO type when the feed sends one (a readsb row's `t`, or the `typeByIcao` map an `/api/flights` answer may send beside its state vectors, by ICAO address, as the regional adsb.lol fallback does), and a looked-up type replaces it once the airframe lookup answers (`src/layers/flights/records.js`); a surface emitter category keeps only a ground type (`ZVEH`, `GRND`) from the feed. A feed's `ZVEH` holds only for a contact that drives: one reported airborne, or faster than 40 m/s (`VEHICLE_MAX_SPEED_MPS`; a test transponder, a drone), is classed as any other aircraft. A `GRND` station is fixed and stands on the ground whatever height its reports carry. Flights keeps a feed's emitter category string (`"C1"`) as well as OpenSky's integer one; Local ADS-B classes it by its emitter category. The **helicopter** is a top-down body under a four-blade rotor drawn in three frames 30° apart (`aircraftIcon('helicopter', px, frame)`); four blades repeat every 90°, so the loop is seamless. `rotorFrame` (`src/data/rotorFrames.js`) steps the frames at 10 a second from a phase hashed from the contact's id, so helicopters flying together do not change in step, and holds the middle frame (blades as an X) on the ground. The Flights and Military Flights layers keep the airborne helicopters drawn as their glyph in a map and, on each fleet pass (about 12 a second), write new images only for those in the camera's view, above the horizon and shown, whose frame changed (`_turnRotors`, `src/data/aircraftIconLayer.js`); one judged out of view is not judged again until its frame steps on. The tracked one's billboard is given its new images, and the still frame as soon as it lands. With no airborne helicopter on the map the pass does nothing. Local ADS-B redraws its markers each frame and picks the frame as it does. **Vessels** are drawn as the white hull of their kind (`vesselKind`, `src/data/vesselTypes.js`, by AIS type code or text family: cargo 70–79, tanker 80–89, passenger and ferry 60–69, high-speed 40–49, fishing 30, tug, pilot and service 31, 32, 50, 52–54, sailing 36, pleasure 37, military, law enforcement and rescue 35, 55, 51, and other), bow up and turned with course (`src/data/vesselSprites.js`), tinted by the kind's colour (`VESSEL_KIND_STYLES`, shared with the vessel card's accent; sailing `#b49cff`, pleasure `#ff6f61`, military and law `#a9bccb` and high-speed `#c6ff3d` are their own), in the same colour while selected. **Aids to navigation** are one buoy sprite, upright, never turned and with no halo.
+- Fleet models with moving parts are posed live (`ModelItem.parts`, capability `modelParts`), by the rules in `src/data/modelPartDrivers.js`, read from each model's part table (`fleetPartTable`, `src/data/fleetModels.js`). Aircraft and helicopters (Flights, Military Flights, Local ADS-B): fans, propellers and rotors turn while airborne or taxiing faster than 1 m/s; the landing gear is down on the ground, comes down between 750 and 600 m above the ground when descending faster than 1 m/s, and otherwise is down below 100 m and up above 300 m; gear doors open over the first quarter of the gear's travel; flaps follow the gear in the air and are up on the ground. Height above the ground is the render altitude over the cached ground floor; where no ground height is known (always for Local ADS-B), the gear is down while the aircraft descends faster than 1 m/s, slower than 85 m/s, below 5,000 m, and up otherwise. Vessels: the radar sweeps while under way (over 0.5 m/s). Transit and rail: wheels roll at the speed drawn, and doors open while stopped at a stop. A model without parts, or a renderer without `modelParts`, draws the model whole, at rest. The bundled fleet set (`public/models/fleet/`) has no part tables yet, so it draws as before.
+- Vessels, Transit and Rail draw fleet models under the same DISPLAY rail `3D` toggle, at the same altitude ceiling, caps and 3 km add/keep radii as the aircraft, at true size (`FLEET_MODEL_POLICY`, `src/layers/flights/policy.js`; `createFleetModelLayer`, `src/data/fleetModelInstances.js`). A vessel's model follows its AIS ship type and is drawn at its reported length and beam (AIS static dimensions A+B and C+D, now carried on vessel rows as `length` and `beam`), standing at the sea surface, heading by true heading then course. An aid to navigation is not a hull: a vessel record whose type names a buoy, beacon, mark, RACON or light, or whose MMSI is an aid-to-navigation station's (`99MIDxxxx`), is `isAidToNavigation` (`src/data/vesselTypes.js`) and is drawn as the set's `buoys` model of the IALA mark its type names (`aidToNavigationModel`, `src/data/fleetModels.js`: cardinal N/E/S/W, port or starboard hand, preferred channel by its side, safe water, isolated danger, special mark; a beacon, light, light vessel, RACON or reference point with no mark of its own is the special mark), else a red can (`DEFAULT_AID_MODEL`), at its built size and facing north whatever heading it reports. A type is an aid's when it is one of the 32 kinds an aid report names or uses a word for one (buoy, beacon, cardinal, safe water, RACON, lighthouse and so on); a vessel that works on aids (`Buoy Tender`, `Buoy Layer`) is not one. Its icon is the buoy sprite, tinted bone white (`AID_TO_NAVIGATION_STYLE`, `src/data/vesselLabels.js`), upright and never turned, and its card, selected card and HUD readout (`src/layers/vessels/cards.js`) show its kind alone, whole, in that colour: no speed or heading, since a fixed mark has neither. AISStream subscribes to `AidsToNavigationReport` (message 21) by default, and the server names each report's aid type code (0 to 31) as its kind (`aidToNavigationTypeName`: `20` is `Cardinal Mark N`) rather than reading it as a ship type, and its name runs on into the report's `NameExtension`. A virtual aid (the report's `VirtualAtoN` flag: a mark broadcast where nothing physical stands) carries `virtual: true` on its row, and on its vessel source record (the live-source contract's `virtual`, `src/sources/live/contract.js`, false unless a source says true; any source may set it). It keeps its buoy sprite but never gets a model (`vesselModelSpec` returns null for it, and the vessel layer gathers no model item for it), and its card and readout add `VIRTUAL` after its kind. `aisStreamRows` (`server/providers/vessels/ais-store.js`) puts every vessel ahead of every aid, so a capped request (the layer asks for 12,000 rows) never gives up a ship for a buoy. The `vessels_in_area` tool (and the brief built on it) counts ships only: it leaves aids out of its rows, counts, breakdowns and speed stats. A transit vehicle's model follows its route's GTFS `route_type` when its record carries one and that type is a kind of the vehicle's mode (`types.json` `transit.route_types`: 200 a coach, 101 a high-speed set, 106 a regional DMU, 710 a double-decker), else its layer mode (`transit.modes`: bus, trolleybus, tram, cable car, subway, monorail, rail, funicular, gondola or ferry; a vehicle of `unknown` mode keeps its icon); a fleet hint that overrules the route (a bus on a tram route) leaves the type unused. A monorail and a gondola are raised by their `transit.elevation` lifts. A train's model follows its rail category and mode (rail, metro or tram). The bundled GTFS-Realtime proxy carries no route type, so its vehicles draw their mode's model; a source that adds `routeType` reaches the finer ones. Both stand on the road or rail top they are drawn on, without the 1.5 m `GROUND_FLOOR_LIFT_M` their icons carry, and are painted in their mode or category colour where the model's `_TINT` attribute marks it. A vessel model is clipped at its waterline (one clipping plane per model, at the model origin's horizontal plane), so its hull below the water never shows through a plain globe, which Cesium does not depth-test models against. Under the NVG/FLIR styles (the Flights `irBoost` parameter) these models render unlit flat white, as aircraft models do. Each vehicle's icon stays the visual until its model is loaded, ready and placed; a model is picked as its icon is, and a vehicle drawn as its model keeps its selection card and its place in the detection overlay.
+- **Aircraft models skip Cesium's dynamic environment map (2026-10-24).** Flights, Military Flights and Local ADS-B pass `environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS` (`{ enabled: false }`, `src/data/aircraftModelLighting.js`) to every drawn model. Otherwise each `Model` renders the sky around it and reads it back from the GPU (`readPixels`) when it is first placed, and again whenever it moves more than 1 km, the scene's atmosphere settings change, or (under sunlight dynamic lighting) an hour of scene time passes (`DynamicEnvironmentMapManager`, Cesium 1.138). The models are lit from Cesium's default spherical harmonics instead, with no specular environment map, so the sky's model-lighting cube map no longer reaches aircraft. `src/data/aircraftModelLighting.test.mjs` pins the option at every drawn model call; every model is built from the fleet set loaded up front, so there is no separate preload.
 - The DISPLAY-rail `3D` toggle is the user-facing activation path for both aircraft layers. Their small approved GLBs build their render resources without Cesium's frame-spread job queue, preventing continuous Photorealistic 3D Tiles streaming from starving model readiness; model caps, tracking, camera, and fallback billboards are unchanged.
-- **The `3D` toggle DEFAULTS ON in `proximity` on a first run.** Proximity is itself the budget — models appear only below `MODEL_ALT_CEIL_M` and only for the nearest `MODEL_MAX` in view — so the default costs nothing at globe scale, and `all` remains a deliberate opt-in. A fresh boot runs NO layer-state restoration (`LayerStateCoordinator.start()` returns early with neither a share payload nor stored state), so four independent initializers decide what a first-run operator sees and must agree: `booleanOption('models3d', 'e', true)` in `src/data/layerState.js`, `_models3dEnabled = true` in BOTH flight layers, `this._models3dEnabled = true` in `src/ui/aircraftDisplay.js`, and the `active` / `visible` classes on `#models3d-toggle` / `#models3d-mode-row` in `index.html`. All four are pinned together in `src/data/layerState.test.mjs`. Explicit state still wins: because the codec omits default-valued options, `models3d: false` is now what travels in a link (`lo=…f.e.0`) and restores OFF at both aircraft layers. **Consequence for returning users:** a stored `gev:layer-state:v2` blob is a FULL options snapshot, so a session that wrote one before this change carries `models3d:false` and keeps 3D off until the operator flips it (or clears the key) — the durable snapshot is treated as the recipient's own state, by design.
-- **Consequence of the flip on the recorded tracked/fleet inversion:** the 150–800 km band where surrounding contacts draw as models while the SELECTED one is still a glyph is now what an operator sees WITHOUT arming anything. The inversion itself is unchanged and still deliberate (see `src/data/trackedModelRegime.js`); only its reachability changed.
+- **The `3D` toggle DEFAULTS ON in `proximity` on a first run.** Proximity is itself the budget — models appear only within 3 km of the camera and only for the nearest `MODEL_MAX` — so the default costs nothing at globe scale, and `all` remains a deliberate opt-in. A fresh boot runs NO layer-state restoration (`LayerStateCoordinator.start()` returns early with neither a share payload nor stored state), so four independent initializers decide what a first-run operator sees and must agree: `booleanOption('models3d', 'e', true)` in `src/data/layerState.js`, `_models3dEnabled = true` in BOTH flight layers, `this._models3dEnabled = true` in `src/ui/aircraftDisplay.js`, and the `active` / `visible` classes on `#models3d-toggle` / `#models3d-mode-row` in `index.html`. All four are pinned together in `src/data/layerState.test.mjs`. Explicit state still wins: because the codec omits default-valued options, `models3d: false` is now what travels in a link (`lo=…f.e.0`) and restores OFF at both aircraft layers. **Consequence for returning users:** a stored `gev:layer-state:v2` blob is a FULL options snapshot, so a session that wrote one before this change carries `models3d:false` and keeps 3D off until the operator flips it (or clears the key) — the durable snapshot is treated as the recipient's own state, by design.
 - Civilian and military 2D aircraft use the established distance scale: `3×` near
   the camera and a `0.5×` floor from 8,000 km outward. A standard 20 px ambient
   icon therefore remains about 10 px at globe altitude while retaining the
@@ -6475,7 +8096,7 @@ pins and share links already supply complete boxes.
 - Fleet model eligibility is distance-based with on-screen priority and hard caps (`MODEL_MAX`, `MODEL_MAX_ALL`) to avoid draw-call explosions. Each model owns its own `modelMatrix`; shared scratch matrices are forbidden because they caused stacking/flicker.
 - Tracked aircraft use standalone model primitives driven from the already-settled dead-reckoned display position, while the tracked Cesium entity remains billboard-backed so `viewer.trackedEntity` always has a ready bounding sphere.
 - Flights and military layers mirror the same tracking invariants: no warm-up freeze/jump, altitude-scaled framing, trail head glued to the displayed plane, no pull-out when switching targets, and no cross-layer orphan when switching between commercial and military tracks.
-- Regression surface: `npm run test:track` drives the real app headless with synthetic aircraft feeds and asserts the tracking invariants without depending on live OpenSky/adsb data. Arrival-rotation checks observe the settle frame and then the first reveal frame, each within a 500 ms wall-clock budget that sits inside the one-second idle fallback, rather than assuming the 80 ms fleet cadence fits inside four rendered frames; an incorrect first orientation fails immediately. Only an inconclusive timeout is retried (once); a timeout keeps every angle it measured (the settle frame before a reveal timeout, and the late frame itself, which is read before the deadline check), so a measured wrong angle fails without retry. `src/data/trackedModelRegime.test.mjs` pins the tracked contact's threshold math, the enter/exit asymmetry, and the default-on / cockpit / TR-3B / deselect wiring in both layers.
+- Regression surface: `npm run test:track` drives the real app headless with synthetic aircraft feeds and asserts the tracking invariants without depending on live OpenSky/adsb data. The harness reads what the app draws through its own seams: what the camera follows through `src/data/followed.js`, icons from the draw port's icon sets as the renderer holds them, and models by their `{set, id}` pick ids. Arrival-rotation checks read the drawn rows' course (the icon sets turn each icon along it on the GPU every frame, so there is no CPU rotation pass to repair a stale nose) and observe the settle frame and then the first reveal frame, each within a 500 ms wall-clock budget; an incorrect first orientation fails immediately. Only an inconclusive timeout is retried (once); a timeout keeps every angle it measured (the settle frame before a reveal timeout, and the late frame itself, which is read before the deadline check), so a measured wrong angle fails without retry. `src/data/trackedModelRegime.test.mjs` pins the tracked contact's threshold math, the enter/exit asymmetry, and the default-on / cockpit / TR-3B / deselect wiring in both layers.
 
 ### TR-3B conversion Easter egg (August 2026)
 
@@ -6558,7 +8179,7 @@ apply to `public/` assets or built-preview serving.
 - `/api/google/text-search` keeps the Google key server-side for view-biased Places recovery used by annotation resolution.
 - `/api/overpass` is bounded by body/response caps, per-client/global rate limits, concurrency limits, operator-configured upstreams, in-flight dedupe, cache bounds, and static validation that every selector is spatially bounded.
 - `/api/military-installations` uses an independent limiter with the same 90-per-client/300-global one-minute bounds, so viewport installation refreshes never consume `/api/overpass` annotation capacity.
-- `/api/route` proxies bounded OSRM route requests for annotation routes, with profile allowlisting, distance caps, response caps, caching, and sanitized "no route found" errors.
+- `/api/route` proxies bounded OSRM route requests for annotation routes, with profile allowlisting, distance caps, response caps, caching, and sanitized "no route found" errors; routing outages return 502.
 - `/api/flights`, `/api/military`, and `/api/route` answer `405 Method Not Allowed` with `Allow: GET` to anything but `GET`, before rate limiting and any upstream call.
 - `/api/flights` negotiates gzip. The cached global snapshot and the regional adsb.lol fallback are each gzipped once per refresh (about 860 KB becomes about 250 KB). Clients that offer gzip get that frame; other clients, and bodies under 1 KiB or that gzip cannot shrink, get identity bytes. Both answers carry `Vary: Accept-Encoding`. Uncached bodies, such as auth failures, are never sent under a cached frame's encoding.
 - Track endpoints: `/api/vessels/track?mmsi=` (server-accumulated ring buffers; sub-route handled before the rows snapshot), `/api/flights/track?icao24=` (OAuth, 60s cache, sanitized errors, independent OpenSky credit bucket), `/api/military/track?hex=` (400 for an invalid hex, otherwise `503 history_unavailable` with `Retry-After: 1800` and `Cache-Control: no-store`, no upstream request; military tracking uses its locally accumulated trail).
@@ -6656,11 +8277,11 @@ apply to `public/` assets or built-preview serving.
   The ship bridge and the orbital view have their own own-layer gates
   (`bridgeEntryAllowed`, `orbitEntryAllowed`; see
   [Ship bridge view](#ship-bridge-view) and [Orbital view](#orbital-view)).
-- **Aircraft cockpit view:** selecting a commercial or military aircraft reveals a `COCKPIT` action once that aircraft's own layer is on; Contacts is not required. The action shows in Contacts (`#cockpit-entry`) and under the Intel HUD's bottom-right readout (`#cockpit-entry-readout`, with the HUD on, in its Tactical and Cyber layouts), so entry needs no Contacts panel. Turning off the ridden aircraft's layer ends the view (the layer clears its tracking). When an air feed the surrounding picture uses is off, the Cockpit says so instead of blocking: Live Signals leads with `MILITARY FEED OFF · PARTIAL PICTURE` or `FLIGHTS FEED OFF · PARTIAL PICTURE`, and the Contact card shows that line in place of its inputs status, so a partial picture is never presented as complete. `control_cockpit` refuses entry with `entryBlockedReason` `contacts-starting` (a Context change in flight), `subject-layer-off` (the aircraft's layer, or with none tracked any aircraft layer, is off) or `no-tracked-aircraft`. Cockpit mode temporarily releases Cesium's orbit-follow transform and drives a first-person camera from the tracked aircraft's existing smoothed display position and course. Its concave helmet-visor HUD shows callsign, UTC time, coordinates, curved roll/pitch guides, and a seven-division heading tape. Ambient commercial and military AIR contacts use a Cockpit near/far band selected by the shared Display 3D mode: Proximity admits at 150 km and retains to 185 km; All admits at 400 km and retains to 450 km. The shared 3D toggle now applies in Cockpit: Off keeps in-range contacts as rotating 2D aircraft silhouettes, while On lets a ready admitted glTF take over without a drawing gap. The Cockpit model cap remains 60 and can only lower the map budget; in-range contacts that are capped or still loading remain 2D silhouettes instead of degrading to out-of-range dots. Contacts outside the selected band use small rotation-free cyan-white pips for civilian aircraft and amber pips for military. The pilot's own airframe is not drawn in first person, and exiting clears the Cockpit band and restores normal map silhouettes/models. The normal left accordion remains available for Layers and Authoring and keeps the same 26vh HUD-aligned anchor used in map mode, independent of whether the bottom-left Contact card is expanded or collapsed; the right-rail CCTV and Context chooser are hidden to avoid duplicating or overlapping the cockpit presentation. When the intelligence HUD is enabled, its classification, scene summary, collection/orbit metadata, coordinates, and imaging-status text remain visible as reduced peripheral cockpit telemetry; the optical center and flight instruments stay clear, and turning the HUD off still hides it. Ground speed, exact heading, and rendered altitude form one compact lower-center instrument cluster, keeping the horizon and peripheral view open. A second live altitude tape hugs the inside-right visor rim: its rail and nine moving ticks are derived from the same responsive keyhole radius, remain 20 px inside the circular edge even on wide displays, fade deeply at both vertical ends, and move continuously behind a fixed current-altitude pointer; its interval tightens automatically near the surface and it is suppressed on narrow screens. Cockpit mode also has a weather-backed transparent volumetric-cloud pass derived from the supplied FBM/domain-warped R&D shader. It renders at no more than 520×320, uses 24 ray steps/three FBM octaves at 12 FPS, is clipped to the visor, fails clear when Open-Meteo is unavailable, and stops its animation completely on cockpit exit. It does not restore the prior CPU weather canvases, precipitation, scene fog, or any map-mode effect. When Contacts is active for the tracked aircraft, the compact `CONTACT` rail adds the 250 km subject window, four cohort counts, nearest observed/mapped example with relative bearing and distance, freshness, explicit uncertainty, and Previous and Next controls plus its own collapse control. The mirrored right rail is a three-page **cockpit briefing carousel**: source-backed live signals, location-matched regional headlines, and physical-region/current-weather context from bundled Natural Earth polygons and Open-Meteo. It is manual-first: Previous, Next, and direct page controls are always available, and the visible `CYCLE OFF` / `CYCLE ON` control starts or stops the nine-second page cycle. The cycle pauses on hover or keyboard focus and stops while collapsed, hidden, or outside cockpit mode; live signal data continues refreshing either way. Empty news matches and unavailable news use compact text states rather than reserving an empty media frame; partial local data remains explicit. Article links open their original publisher, and no headline is treated as verified risk intelligence. On desktop both cockpit rails use the same width and share a bottom-aligned safe baseline in opposite corners above the peripheral MGRS/GSD/time telemetry, leaving both that text and the lower-center instrument cluster readable. They collapse independently to slim tabs without stopping live data updates. Narrow screens use separated top/bottom fallbacks. Empty-space globe clicks are inert while cockpit owns the camera; `Escape` or `EXIT COCKPIT` explicitly exits and restores the same tracked entity and standard follow camera. Unknown feeds remain unknown, selection loss still exits safely without inventing a replacement track, and the cockpit never presents the summary as threat scoring or an all-clear. This is a desktop first-person presentation, not a WebXR session.
+- **Aircraft cockpit view:** selecting a commercial or military aircraft reveals a `COCKPIT` action once that aircraft's own layer is on; Contacts is not required. The action shows in Contacts (`#cockpit-entry`) and under the Intel HUD's bottom-right readout (`#cockpit-entry-readout`, with the HUD on, in its Tactical and Cyber layouts), so entry needs no Contacts panel. Turning off the ridden aircraft's layer ends the view (the layer clears its tracking). When an air feed the surrounding picture uses is off, the Cockpit says so instead of blocking: Live Signals leads with `MILITARY FEED OFF · PARTIAL PICTURE` or `FLIGHTS FEED OFF · PARTIAL PICTURE`, and the Contact card shows that line in place of its inputs status, so a partial picture is never presented as complete. `control_cockpit` refuses entry with `entryBlockedReason` `contacts-starting` (a Context change in flight), `subject-layer-off` (the aircraft's layer, or with none tracked any aircraft layer, is off) or `no-tracked-aircraft`. Cockpit mode temporarily releases Cesium's orbit-follow transform and drives a first-person camera from the tracked aircraft's existing smoothed display position and course. Its concave helmet-visor HUD shows callsign, UTC time, coordinates, curved roll/pitch guides, and a seven-division heading tape. Ambient commercial and military AIR contacts use a Cockpit near/far band selected by the shared Display 3D mode: Proximity admits at 150 km and retains to 185 km; All admits at 400 km and retains to 450 km. The shared 3D toggle now applies in Cockpit: Off keeps in-range contacts as rotating 2D aircraft silhouettes, while On lets a ready admitted glTF take over without a drawing gap. The Cockpit model cap remains 60 and can only lower the map budget; in-range contacts that are capped or still loading remain 2D silhouettes instead of degrading to out-of-range dots. Contacts outside the selected band use small rotation-free cyan-white pips for civilian aircraft and amber pips for military. The pilot's own airframe is not drawn in first person, and exiting clears the Cockpit band and restores normal map silhouettes/models. The normal left accordion remains available for Layers and Authoring and keeps the same 26vh HUD-aligned anchor used in map mode, independent of whether the bottom-left Contact card is expanded or collapsed; the right-rail CCTV and Context chooser are hidden to avoid duplicating or overlapping the cockpit presentation. When the intelligence HUD is enabled, its classification, scene summary, collection/orbit metadata, coordinates, and imaging-status text remain visible as reduced peripheral cockpit telemetry; the optical center and flight instruments stay clear, and turning the HUD off still hides it. Ground speed, exact heading, and rendered altitude form one compact lower-center instrument cluster, keeping the horizon and peripheral view open. A second live altitude tape hugs the inside-right visor rim: its rail and nine moving ticks are derived from the same responsive keyhole radius, remain 20 px inside the circular edge even on wide displays, fade deeply at both vertical ends, and move continuously behind a fixed current-altitude pointer; its interval tightens automatically near the surface and it is suppressed on narrow screens. Cockpit mode also has a weather-backed transparent volumetric-cloud pass derived from the supplied FBM/domain-warped R&D shader. It renders at no more than 520×320, uses 24 ray steps/three FBM octaves at 12 FPS, is clipped to the visor, fails clear when Open-Meteo is unavailable, and stops its animation completely on cockpit exit. It does not restore the prior CPU weather canvases, precipitation, scene fog, or any map-mode effect. When Contacts is active for the tracked aircraft, the compact `CONTACT` rail adds the 250 km subject window, four cohort counts, nearest observed/mapped example with relative bearing and distance, freshness, explicit uncertainty, and Previous and Next controls plus its own collapse control. The mirrored right rail is a three-page **cockpit briefing carousel**: source-backed live signals, location-matched regional headlines, and physical-region/current-weather context from bundled Natural Earth polygons and Open-Meteo. It is manual-first: Previous, Next, and direct page controls are always available, and the visible `CYCLE OFF` / `CYCLE ON` control starts or stops the nine-second page cycle. The cycle pauses on hover or keyboard focus and stops while collapsed, hidden, or outside cockpit mode; live signal data continues refreshing either way. Regional News holds its list to the last 24 hours (`newsWindowHours` in the brief; the client drops anything older or undated even if a server sends it) and shows four distinct states: fresh results with no banner and a `{SOURCE} · LAST 24 H` footer; earlier results kept after a failed refresh under `CACHED · REFRESH FAILED` with the cached age in the footer; `NO NEWS IN THE LAST 24 H` when a source answered with nothing recent; and `REGIONAL NEWS UNAVAILABLE` when there is no place or no source answered, which clears the list only when there was nothing to keep. The footer follows that state across page changes. These are compact text states rather than an empty media frame; partial local data remains explicit. Article links open their original publisher, and no headline is treated as verified risk intelligence. On desktop both cockpit rails use the same width and share a bottom-aligned safe baseline in opposite corners above the peripheral MGRS/GSD/time telemetry, leaving both that text and the lower-center instrument cluster readable. They collapse independently to slim tabs without stopping live data updates. Narrow screens use separated top/bottom fallbacks. Empty-space globe clicks are inert while cockpit owns the camera; `Escape` or `EXIT COCKPIT` explicitly exits and restores the same tracked entity and standard follow camera. Unknown feeds remain unknown, selection loss still exits safely without inventing a replacement track, and the cockpit never presents the summary as threat scoring or an all-clear. This is a desktop first-person presentation, not a WebXR session.
 - **Cockpit left-panel clearance:** the Cockpit Contact card and peripheral HUD participate in the adaptive left accordion's live obstacle measurements, including live viewport-height changes. Expanding Layers or Authoring keeps the active panel in the available upper-left corridor with internal scrolling; it does not cover the Contact card, lower Cockpit controls, or Cesium credit line. Outside Cockpit the hidden card does not alter the normal corridor.
 - **Cockpit Context scope:** the 250 km radius applies to the air/sea proximity cohorts. Installation counts come only from the currently loaded viewport and are labeled `CURRENT VIEWPORT ONLY` in the cockpit as well as the normal Context panel; neither surface presents them as a complete 250 km installation survey.
 - **Cockpit camera anchor:** first-person mode does not write feed-boundary corrections directly into the camera. A cockpit-only inertial anchor advances from the selected aircraft's displayed course and speed, then converges toward the authoritative delayed track with correction capped below forward motion. The displayed kinematics are derived from the same consecutive fix segment as the rendered position, with raw feed speed/course used only as fallback; a transient zero/missing feed speed therefore cannot freeze a visibly moving aircraft after layer enable or a map/cockpit handoff. Rendered altitude continues to come from that interpolated track position. Late ADS-B fixes and short render stalls can remove drift without accelerating or reversing the view. Camera placement runs before scene update/culling at a bounded 20 Hz so a moving cockpit does not force Photoreal 3D Tiles to retraverse on every display frame; textual instruments update at 10 Hz and context/layout work at 4 Hz. Every far Cockpit contact pip shares one stable Cesium texture-atlas entry and skips unused screen-projected course calculations, while only in-range 2D aircraft silhouettes pay the screen-projected rotation cost; ambient glTF collections are hidden/retained rather than synchronously destroyed at cockpit entry, and context rails lay out only on explicit content/state changes and viewport resize. The deliberate 15/30-second layer interpolation delays and per-Cesium-frame position caches remain unchanged.
-- **Cockpit route, vision, and view controls:** visible on-screen `COCKPIT`, `RESET`, and `EXIT COCKPIT` controls are the way in and out; Cockpit claims no `C` shortcut, so `C` keeps toggling CCTV, also inside a first-person view. RESET uses the same canonical globe route as the map and voice actions, exits Cockpit, and releases its camera ownership rather than exposing the hidden map-style top action. When the tracked commercial flight has a plausible ADSBDB route, the top of the right briefing rail shows a compact `FROM → TO` airport strip and the visor shows a centered estimated-destination chevron with its relative bearing; its destination label rounds to whole degrees in 000–359, wrapping rounded north to 000° while the chevron continues to use the relative bearing independently of label rounding; absent or implausible route data hides the strip and cue rather than guessing. The cockpit-local vision control is an interactive `PREV / CURRENT / NEXT` carousel over `NORMAL`, `CRT`, `NVG`, `FLIR`, `ANIME`, and `NOIR`; its previous/next actions wrap, and activating the current value advances to the next style. Cockpit enters on the active map preset, so a Cyber FLIR map opens Cockpit on FLIR while Normal remains a distinct option instead of producing a second FLIR entry. Cockpit choices temporarily activate the existing Cesium post-process stages, while exiting Cockpit through either EXIT or RESET restores the pre-entry map style. The regional-news page uses a free Google News RSS locality query first, with the existing GDELT query retained only as a fail-soft fallback; linked headlines remain reporting, not verified incidents or risk intelligence.
+- **Cockpit route, vision, and view controls:** visible on-screen `COCKPIT`, `RESET`, and `EXIT COCKPIT` controls are the way in and out; Cockpit claims no `C` shortcut, so `C` keeps toggling CCTV, also inside a first-person view. RESET uses the same canonical globe route as the map and voice actions, exits Cockpit, and releases its camera ownership rather than exposing the hidden map-style top action. When the tracked commercial flight has a plausible ADSBDB route, the top of the right briefing rail shows a compact `FROM → TO` airport strip and the visor shows a centered estimated-destination chevron with its relative bearing; its destination label rounds to whole degrees in 000–359, wrapping rounded north to 000° while the chevron continues to use the relative bearing independently of label rounding; absent or implausible route data hides the strip and cue rather than guessing. The cockpit-local vision control is an interactive `PREV / CURRENT / NEXT` carousel over `NORMAL`, `CRT`, `NVG`, `FLIR`, `ANIME`, and `NOIR`; its previous/next actions wrap, and activating the current value advances to the next style. Cockpit enters on the active map preset, so a Cyber FLIR map opens Cockpit on FLIR while Normal remains a distinct option instead of producing a second FLIR entry. Cockpit choices temporarily activate the existing Cesium post-process stages, while exiting Cockpit through either EXIT or RESET restores the pre-entry map style. The regional-news page uses a free Google News RSS locality query for the last day (`when:1d`) first, with the existing GDELT query (24 h timespan) retained only as a fail-soft fallback; both keep only articles published in the last 24 hours, newest first; linked headlines remain reporting, not verified incidents or risk intelligence.
 - Cockpit wind-direction labels wrap after rounding to whole degrees, so a direction of 359.5° displays as `N · 0°` rather than `N · 360°`.
 - The transit, ALPR, vessel, CCTV, Local ADS-B, flight and military context, awareness, Cockpit and Street Level heading readouts, and the query tools' vessel `course_deg` and `heading_deg`, aircraft `course_deg`, transit `bearing_deg`, camera `heading_deg` and satellite `rise_azimuth_deg` and `azimuth_deg`, round through `roundHeadingDegrees` in `src/data/headingDegrees.js` (whole degrees 0–359, `null` when not finite, so each caller keeps its own placeholder); `normalizeHeading` lives there too and `cockpitMath.js` re-exports it. The Cockpit's `TRACK ACQUIRED` signal uses `formatHeadingReadout`, so a 359.6° track reads `COURSE 000°`.
 - **Cockpit missing observations:** missing local weather observations remain unknown rather than being converted to zero or clear skies, in the briefing and in the cloud effects; a missing temperature drops the whole local weather record, including its wind and condition.
@@ -6763,6 +8384,76 @@ easier to meet (detection is now on more often), but does not create it.
 - **3D aircraft models: `ON`, mode `proximity`** — see the 3D Aircraft section
   above and the DISPLAY-rail entry below (was `OFF`).
 - Style shader starting params: CRT/NVG/FLIR pixelation `1.2` (just above the native `1.0` floor); thermal/FLIR ships an optional Ironbow "Predator" palette (`palette` uniform, default `0` = accurate grayscale).
+
+## Renderer contract
+
+`src/render/contract/` types the renderer contract, version `0`: nine ports
+(frame, globe, draw, camera, query, input, effects, credits and quality),
+plus the renderer itself. `PORTS` lists every member at run time, and
+`contract.test.mjs` keeps that list and the types in step.
+`src/render/stub/` is a renderer that draws nothing, with the default
+camera's exact maths. `src/render/conformance/` is the suite: logic checks
+in Node, plus camera traces recorded from Cesium's own `Camera` into
+`goldens/camera.json`. It also holds the reference scenes, whose views are
+checked against `goldens/visual/` on the `/dev/conformance/` page.
+`npm run qa:conformance` runs the logic checks on the Cesium renderer in
+headless Chromium, in CI too. After `destroy()` the Cesium renderer's
+handles do nothing, and `renderOnce` and `capture` reject. See
+[RENDERER-CONTRACT.md](RENDERER-CONTRACT.md).
+
+### The application and its renderer
+
+The application starts on whichever `RendererPlugin` it is given
+(`createStandaloneApplication({ renderer })`), and on Cesium when none is.
+`src/app/scene.js` loads the Cesium adapter (`src/render/cesium/application.js`)
+only then, with `import()`; the standalone page starts that load as it
+starts, beside its own setup. Outside `src/render/` no code reaches a
+renderer's own objects: the record of files that still did,
+`src/render/viewerAccessAllowList.json`, is empty.
+
+- What every layer and tool is handed is the scene object
+  (`createSceneHost`), bound to the renderer: its container, and whether it
+  is destroyed. Everything else goes through the renderer's ports.
+- What a renderer's own plugin adds beside the contract (stale draw-command
+  trims, inline panel drawing, the zoom-out guard, its own map engine, the
+  detection overlay's occlusion probe, what QA scripts read) it hands through `src/render/applicationHooks.js`; the
+  application uses each where given and does without where not.
+  Renderer-only startup (Cesium's free-look limit, credit keyboard access)
+  runs in that plugin's `create`.
+- The map stacks switch through the plugin's map engine, else the globe
+  port (`src/maps/globeEngine.js`): Esri and OSM as `xyz` imagery, Cesium
+  ion imagery as `world` imagery, terrain as `world` terrain, or the
+  ellipsoid where no keyless terrain is offered, and photoreal as the port's
+  photoreal base. A photoreal base that fails to come back leaves the globe
+  shown.
+- The renderer follows its container's size (`Renderer.resize`, from a
+  `ResizeObserver`).
+- The credits: the Cesium renderer's plugin says it shows them in a display
+  of its own (`ownCreditDisplay`; `#cesium-credits`), which it keeps. On the
+  stub, the application shows what the credits port lists in its own line
+  at the bottom left (`#gev-credits`, `src/ui/creditsView.js`): the inline
+  credits on the line, the rest (the layers' data credits among them) in
+  the "Data attribution" list it opens, a keyboard button with Escape to
+  close.
+
+`npm run qa:stub-boot` boots the whole application on the stub with only
+the contract's required members (`dev/stub-app/main.js`, served in place of
+`src/main.js` on the application's own page), headless. It fails if
+the credits line is not shown or its list is empty, if Cesium's code is
+requested (the one stylesheet `vite-plugin-cesium` links
+into every page is reported), on any page or console error, or if a data
+layer (flights, military aircraft, transit, traffic, CCTV, AIS vessels,
+weather radar and satellite, wind, satellites, FIRMS, wildlife, shipwrecks,
+news) fails to turn on or off. A
+feed's failed response (no key, no network) is reported, not failed;
+`--strict` also fails a layer that drew nothing, and `--all-capabilities`
+gives the stub every capability. CI runs it in the browser job.
+
+`src/geo/` (export `./geo`) is the Cesium-free maths: WGS84, ECEF and
+geodetic conversions, surface normals and east-north-up frames, as plain
+`{x, y, z}` objects. It follows Cesium's formulas step for step, and
+`geo.test.mjs` checks it against Cesium. The stub renderer's maths is built
+on it.
 
 ## Operational Notes
 
@@ -7020,8 +8711,9 @@ easier to meet (detection is now on more often), but does not create it.
   Every failed read cancels its body and aborts its owned request, including
   declared and streaming byte-cap failures.
 - Development captures opened with `?trafficDebug=1` mint an interaction anchor
-  from the exact `camera.changed` event that arms each debounced load, then emit
-  scheduling-correlated User Timing entries for production `response.json`, road
+  from the exact camera-port `changed` event that arms each debounced load,
+  then emit scheduling-correlated User Timing entries for production
+  `response.json`, road
   parse, dot construction, heat-line rebuild, and next-post-render
   boundaries. Every trace is paired with the exact camera-change that scheduled
   its load; mismatches are counted drops. Cesium's `moveEnd` remains a diagnostic
@@ -7047,7 +8739,7 @@ The Space Missions roster prioritizes data-rich records using available mission,
 When no live catalog track is available, the mission view marks the approximate orbital ring as `PROJECTED ORBIT` in purple and renders the ascent-to-insertion transfer in green; catalog-backed satellite orbits remain cyan.
 
 The replay vehicle is a smaller solid cyan silhouette without the former orange flame; its initial pad anchor uses photoreal terrain, globe height, or launch elevation fallback so it remains above the surface during tile loading. Replay begins at a close launch-complex range so pad detail remains visible before the camera widens into the ascent context view. Its initial camera heading is perpendicular to the ascent/orbit direction for a profile view, then eases into tangent tracking. Small screen-space reprojection changes are damped for the animated marker on both ascent and orbit, while large camera or phase changes snap to the authoritative path position.
-Space Missions keeps the Satellite layer available for catalog/TLE matching but suppresses its standalone fleet points and orbit rings. While those visuals are hidden, their per-frame dense propagation, one-second core point-buffer rewrite, and one-second orbit-matrix rotation are suspended; selected mission telemetry continues to propagate independently. The selected mission's live or estimated satellite marker uses fractional wall-clock time, so it moves continuously rather than creating a once-per-second position discontinuity and one-frame photoreal globe LOD pulse.
+Space Missions keeps the Satellite layer available for catalog/TLE matching but suppresses its standalone fleet points and orbit rings. While those visuals are hidden, their sampling, per-frame point moves, and one-second orbit-matrix rotation are suspended; selected mission telemetry continues to propagate independently. The selected mission's live or estimated satellite marker uses fractional wall-clock time, so it moves continuously rather than creating a once-per-second position discontinuity and one-frame photoreal globe LOD pulse.
 
 During ascent replay, the camera, Cesium callbacks, and HTML vehicle overlay share one replay sample per rendered frame. The tracked overlay is projected directly from that shared position instead of applying a second screen-space lag filter, preventing the vehicle and globe from repeatedly advancing and snapping back.
 
@@ -7220,8 +8912,8 @@ on purpose:
 - **Class.** Each aircraft is classified with `aircraftClass.js` from its
   ADS-B emitter category (dump1090 strings: `A1` light, `A3` large, `A7`
   rotorcraft; set A/B/C/D = type code 4/3/2/1) and, once known, its adsbdb
-  ICAO type. Silhouette and per-class scale come from `aircraftIcons.js`
-  (×0.8 on the ground), tinted magenta.
+  ICAO type. The silhouette comes from `aircraftIcons.js`, at the one
+  size every class draws at (×0.8 on the ground), tinted magenta.
 - **3D.** The DISPLAY rail's 3D toggle and its proximity/all mode apply: the
   layer reads the Flights layer's `models3d` params and uses the same ceiling,
   caps, add/keep radii, visible-first eligibility
@@ -7356,6 +9048,36 @@ request HTTPS tiles even on HTTP localhost, with the existing Content Security
 Policy unchanged. Ion attribution and Bing's per-tile credits are preserved;
 other ion imagery assets continue through the SDK's standard ion factory.
 
+The catalog, the default registry and the controller are Cesium-free: they
+reach the map sources, and the scene operations a switch makes (imagery
+layers, terrain, the globe's visibility, the photoreal base), through the
+scene's map engine (`mapEngineFor` in `src/maps/engine.js`). Every renderer,
+Cesium included, switches through its globe port (`src/maps/globeEngine.js`),
+unless its plugin hands the application a map engine of its own
+(`src/render/applicationHooks.js`):
+
+- Esri World Imagery as `xyz` imagery to its deepest level (23); Esri's "Map
+  data not yet available" picture is answered as a missing tile, so the
+  parent's imagery stays, and a refused tile counts toward the fallback to
+  OSM. OSM as `xyz` imagery to level 19.
+- Cesium ion's world imagery as `world` imagery; on Cesium that is Bing
+  through ion, its tiles over HTTPS on any page, with ion's credits
+  (`src/render/cesium/mapImagery.js`).
+- Photoreal as the port's photoreal base, by the same routes as ever (the
+  Google key, else Google's session tokens, else the ion copy;
+  `src/render/cesium/google3d.js`). Turned off, Cesium's globe port keeps the
+  tileset hidden, and the same spec shows it again without loading it anew.
+  `window.__godsEyeView.tileset` is that Cesium tileset, shown or hidden.
+- World terrain through ion, or without an ion token Re:Earth's keyless
+  terrain as `quantizedMesh` terrain at its URL (`src/maps/keylessTerrain.js`);
+  while the keyless terrain does not answer, the ellipsoid stands in and the
+  map stack tries it again behind it. A renderer without the `terrain`
+  capability keeps the ellipsoid.
+
+A viewer with no renderer bound gets the Cesium engine
+(`src/render/cesium/mapEngine.js`), with the other unbound ports, from the
+package's `./render/cesium/unbound` export.
+
 The controller accepts other source registries without adding provider branches.
 Each instance caches source construction, ignores superseded scene changes and
 releases imagery layers/listeners on replacement. Destroy invalidates pending
@@ -7389,24 +9111,68 @@ Wind supports selectable GFS/IFS models with persisted model choice. Each fetch 
 Weather combines the GFS/ECMWF surface forecast with three observation layers:
 NOAA Rain radar (CONUS), Satellite clouds (regional GOES or slower global infrared),
 and 15-minute lightning density (Americas and Pacific). One transient observed
-clock drives all enabled observation rows. Earlier/Later use the sorted union of
-non-suspended products' advertised times; each product selects its nearest frame
-at or before the requested UTC time, never a future frame or an interpolation.
+clock moves all enabled observation rows with the world clock; the world
+timeline is the only time control. Each product's advertised times span time on
+that timeline but are not marks on it: the timeline marks only events (launches,
+and earthquakes of magnitude 6 and up while that layer is on), so its arrow keys
+step to those, or along the track where there are none. A mark may carry a
+label (a launch's mission name, cut to 27 characters in capitals as the mission
+index shows names; an earthquake's magnitude and place). Marks merge on their
+whole label; one longer than 60 characters (graphemes, so an emoji is never
+split) then shows cut, ending in `…`, and a label is never wider than the
+track. A zoom or
+a pan clears a hovered label. The pointer within
+6 px of a tick shows its label over the track, and a tap there goes to the
+mark's time exactly; a tap elsewhere goes to the time under it and a drag
+scrubs. With the handle on a mark, its label follows the time in the handle's
+`aria-valuetext` and shows over the track while the handle has focus. The
+coverage contract is in [APPLICATION.md](./APPLICATION.md). A weather row's `step`
+param goes to the previous or next weather frame. Each product selects its
+nearest frame at or before the world time, never a future frame or an
+interpolation.
 The maximum gap is 30 minutes for radar, regional infrared and lightning, and
-3 hours for hourly global infrared. A missing eligible frame hides that product
+3 hours for hourly global infrared, but never less than one and a half of the
+feed's median frame spacing over its latest frames, so a regional feed whose
+frames come an hour apart holds each for 90 minutes; the latest frame reads late
+after the same floor (20 minutes for radar and regional infrared, 45 for
+lightning, 4 hours for global infrared). A missing eligible frame hides that product
 and reports the gap; rows show actual displayed UTC time with synced/nearest labels.
 Manifest rollover preserves the requested history time, even when frames expire.
 
-Latest follows each product's own newest frame, so its timestamps can differ.
-Playback advances two seconds after all products settle, wraps, and stops with
-fewer than two union times or when all products are suspended. Hidden documents,
-reduced motion and unavailable imagery hosts suspend products. Re-enabling or
+Live follows each product's own newest frame, so its timestamps can differ.
+The timeline's Play runs the world clock at the chosen speed and stops at each
+product's next frame until that frame loads (for at most eight seconds), so
+every frame shows. Hidden documents, reduced motion and unavailable imagery
+hosts suspend products. Re-enabling or
 restoring a host joins the retained history target. The wind row explicitly says
-“Forecast · does not follow history” while the observed clock is in history mode.
-The catalog exposes `weatherClock` and destroys it with its lifetime signal.
+“Forecast · does not follow history” while the observed clock is in history mode,
+unless a host follows the world clock for `wind` (`weatherClock.follows('wind')`):
+its source then follows the timeline and the row says nothing of it. In history
+mode, frame ages and the “Source observations delayed” status are measured from
+the timeline time rather than the wall clock, and the timeline readout shows the
+time alone; live, they count from now as before.
+The Weather panel's frame time shows the newest frame and its age while live
+(each product's newest, suspended products included), and the timeline time
+alone at a past time.
+The catalog exposes `weatherClock` and destroys it with its lifetime signal. It
+has no time controls of its own: `weatherClock.world` is the world clock it
+follows, where time moves. A weather row's `play`, `latest` and `step` params
+move that world clock as the timeline does: `play` runs at the speed chosen on
+the timeline (the world clock keeps its rate while paused and live, and the
+timeline's speed selector shows the clock's rate, or the nearest offered speed
+for a rate a host set), from the start of the covered time when live or at its
+end, and does nothing while every product the row shows is suspended or while
+there is no covered time. A weather layer built without a
+shared clock builds one of its own on the page's world clock when first
+enabled (`createWeatherClock({ shared: false })`) and keeps it for its
+lifetime; destroying it leaves the world's time where it is, and enabling it
+after that does nothing, and only the last
+shared weather clock destroyed sends the world live. Neither has a frame replay
+of its own.
 
-Source, opacity, coverage navigation and transport controls live in the WEATHER
-panel's cards and timeline, not in the rows. The viewer clock is untouched.
+Source, opacity and coverage navigation live in the WEATHER panel's cards, not
+in the rows; the panel shows the frame time and has no time controls. The
+viewer clock is untouched.
 Observation layers are off by default; share/persist includes appearance and product, while history
 is transient and shared links open latest. Rendering retains the previous frame
 when an incoming frame fails; no eligible historical frame instead hides imagery.
@@ -7470,7 +9236,7 @@ when their footprints touch or contain one another, never across a seam toleranc
 
 ### Shared native dropdowns and numeric fields
 
-- Scene and CCTV selects share the default `gev-field` surface. HUD layout
+- CCTV selects use the default `gev-field` surface. HUD layout
   retains compact density; Draw's colour is a row of swatches, not a select. Radio filter, tuner gain and FM frequency
   use the same base while retaining their feature-specific skins and layout.
 - The CCTV inline number editor is rendered by its pose chip component with

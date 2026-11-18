@@ -1,4 +1,9 @@
-import { AMBER_TRANSPARENT, TRACKED_ICON_COLOR } from './policy.js';
+import { trackedIconColor } from '../../data/trackedAircraftIcon.js';
+import { createModelRecord } from '../../data/modelRecord.js';
+import {
+  aircraftIconTestSeams,
+  createContactIcons,
+} from '../../data/aircraftIconLayer.js';
 
 export function createTesting({
   flightState,
@@ -7,6 +12,8 @@ export function createTesting({
   layer,
   resolveAsset,
 }) {
+  const { _seedIconForTest, _iconForTest, _setIconForTest } =
+    aircraftIconTestSeams(flightState, parts, 'military');
   /**
    * Seed only the mutable state needed to exercise tracked-card refreshes through
    * the production military poll reconciler. Tests still call
@@ -15,34 +22,66 @@ export function createTesting({
    * @param {string} state.icao24
    * @param {object} state.entity
    * @param {object} state.meta
-   * @param {object} state.billboard
-   * @param {object} state.billboardCollection
+   * @param {{position?: {x: number, y: number, z: number}, show?: boolean}} [state.icon]
+   *   Where the contact's icon is held, and whether it is shown.
+   * @param {{show?: boolean}} [state.iconLayer] Layer visibility.
    * @param {object} state.viewer
    * @param {Array<Object>} [state.history=[]]
    * @param {boolean} [state.tracked=true]
    * @param {Iterable<[string, object]>} [state.models=[]] - Fleet 3D models keyed
-   *   by icao24, for the billboard-hidden/model-shown handoff state.
+   *   by icao24, for the icon-hidden/model-shown handoff state: each object
+   *   becomes the contact's model record (`ready`, `show`, and a placement
+   *   `modelMatrix` when given), so the test reads what the layer writes back.
+   * @param {object|null} [state.draw] A draw port the layer's model sets are
+   *   made on (a test double); none keeps the records only.
    */
+
+  /** Turn a test's model fields into the contact's model record, in place. */
+  function _modelRecordForTest(fields, meta) {
+    const spec = parts.rendering._modelSpec(meta);
+    const base = createModelRecord({
+      specKey: parts.rendering._specKeyFor(meta),
+      bellyM: spec.bellyM,
+      scale: spec.scale,
+    });
+    for (const key of Object.keys(base))
+      if (!(key in fields)) fields[key] = base[key];
+    fields.ready = fields.ready === true;
+    fields.show = fields.show ?? true;
+    if (fields.modelMatrix) {
+      fields.matrix = Float64Array.from(fields.modelMatrix);
+      fields.position = {
+        x: fields.matrix[12],
+        y: fields.matrix[13],
+        z: fields.matrix[14],
+      };
+      fields.placed = true;
+    }
+    return fields;
+  }
 
   function _setTrackedMilitaryRefreshStateForTest({
     icao24,
     entity,
     meta,
-    billboard,
-    billboardCollection,
+    icon,
+    iconLayer,
     viewer,
     history = [],
     tracked = true,
     models = [],
-    modelCollection = null,
+    draw = null,
+    trackedModelEligible = true,
   }) {
     flightState._viewer = viewer;
-    flightState._modelCollection = modelCollection;
-    flightState._billboardCollection = billboardCollection;
-    flightState._billboards = new Map([[icao24, billboard]]);
-    flightState._cullPositions.clear();
+    parts.rendering._disposeModelSets();
+    if (draw) parts.rendering._createModelSets(viewer, { draw });
+    flightState._icons = createContactIcons();
+    flightState._icons.show = iconLayer?.show ?? true;
+    _seedIconForTest(icao24, icon, tracked);
     flightState._models.clear();
-    for (const [key, model] of models) flightState._models.set(key, model);
+    for (const [key, model] of models)
+      flightState._models.set(key, _modelRecordForTest(model, meta));
     flightState._detectionObjects = new Map();
     flightState.records.data = new Map([[icao24, meta]]);
     flightState._positionHistory = new Map([[icao24, history]]);
@@ -52,12 +91,17 @@ export function createTesting({
     flightState._trackedIcao = tracked ? icao24 : null;
     flightState._trackedEntity = tracked ? entity : null;
     flightState._trackedModel = null;
+    // Whether the fleet's model rule gives the tracked contact a model (the
+    // fleet pass keeps it): a model unless the test says otherwise.
+    flightState._trackedModelEligible = tracked && trackedModelEligible;
+    // `null`: as a selection seeds it (from the contact's fleet model).
+    if (trackedModelEligible === null)
+      parts.tracking._resetTrackedSelectionState();
     parts.tracking._cancelPendingTrackingRestore();
-    flightState._trackedModelLoading = false;
-    // NOTE: deliberately does NOT reset the per-selection latches. They are
-    // production state owned by the tracking lifecycle (_resetTrackedSelectionState),
-    // and clearing them here would mask exactly the deselect→re-track hole this
-    // seam is used to test.
+    // NOTE: deliberately does NOT reset the load-failure budget. It is
+    // production state owned by the tracking lifecycle
+    // (_resetTrackedSelectionState), and clearing it here would mask exactly
+    // the deselect→re-track hole this seam is used to test.
     flightState.feed._backoff = false;
     flightState.feed._retryAt = 0;
   }
@@ -83,10 +127,10 @@ export function createTesting({
   function _addMilitaryTrackingCandidateForTest({
     icao24,
     meta,
-    billboard,
+    icon,
     history = [],
   }) {
-    flightState._billboards.set(icao24, billboard);
+    _seedIconForTest(icao24, icon, false);
     flightState.records.data.set(icao24, meta);
     flightState._positionHistory.set(icao24, history);
   }
@@ -109,16 +153,15 @@ export function createTesting({
     parts.tracking._applyCockpitState({ active, subjectId });
   }
 
-  /** Evaluate the TRACKED contact's zoom regime through the production predicate.
-   *  The decision is latch-bearing (default-on, hysteretic, cockpit/TR-3B-suppressed)
-   *  and otherwise only observable through a live scene, so tests drive it here. */
+  /** Evaluate whether the TRACKED contact draws as its model, through the
+   *  production predicate (the fleet's rule; cockpit/TR-3B-suppressed). */
 
   function _trackedModelRegimeActiveForTest() {
     return parts.tracking._trackedModelRegimeActive();
   }
 
   /** Run one frame of the production tracked-model driver (normally a
-   *  `scene.preUpdate` listener) so tests can pin its bounded load retries. */
+   *  `preUpdate` listener). */
 
   function _updateTrackedModelForTest() {
     return parts.rendering._updateTrackedModel();
@@ -127,29 +170,62 @@ export function createTesting({
   /** Evaluate the production tracked-billboard handoff colour for focused tests. */
 
   function _trackedBillboardColorForTest() {
-    return parts.rendering._modelOwnsVisual(flightState._trackedIcao)
-      ? AMBER_TRANSPARENT
-      : TRACKED_ICON_COLOR;
+    const icao24 = flightState._trackedIcao;
+    const color = parts.rendering._fleetBillboardColor(icao24);
+    return parts.rendering._modelOwnsVisual(icao24)
+      ? trackedIconColor(color, 0)
+      : color;
   }
 
-  /** Drive the exact fleet billboard-to-model handoff used by `_fleetTick`. */
+  /** Drive the exact fleet icon-to-model handoff used by `_fleetTick`. */
 
   function _driveFleetModelHandoffForTest({ icao24, position, course = 0 }) {
     return parts.rendering._driveFleetModelHandoff(
       icao24,
       flightState._models.get(icao24),
-      flightState._billboards.get(icao24),
       position,
       course,
     );
   }
 
-  /** Exercise the exact asynchronous fleet loader and return its admitted model. */
+  /** Exercise the exact fleet admission and return the admitted model's record. */
 
-  async function _ensureFleetModelForTest(icao24) {
-    await parts.rendering._ensureModel(icao24);
-    return flightState._models.get(icao24) || null;
+  function _ensureFleetModelForTest(icao24) {
+    parts.rendering._ensureModel(icao24);
+    return flightState._models.get(icao24) ?? null;
   }
+
+  /** How the tracked billboard is drawn (`_trackedBillboardLook`,
+   *  `_trackedSprite`, `_trackedIconColor`) next to how the contact's fleet
+   *  icon is (`_fleetLook`, `_fleetBillboardColor`). */
+
+  function _trackedIconLookForTest(icao24) {
+    return {
+      tracked: {
+        ...parts.tracking._trackedBillboardLook(),
+        sprite: parts.tracking._trackedSprite(icao24),
+        color: parts.tracking._trackedIconColor(),
+      },
+      fleet: {
+        ...parts.icons._fleetLook(icao24),
+        color: parts.rendering._fleetBillboardColor(icao24),
+      },
+    };
+  }
+
+  /** The tracked model's record, or null. */
+
+  function _trackedModelForTest() {
+    return flightState._trackedModel;
+  }
+
+  /** The fleet and tracked model sets' ids, or null without sets. */
+
+  function _modelSetIdsForTest() {
+    const [fleet, tracked] = parts.rendering._modelSetIds();
+    return fleet ? { fleet, tracked } : null;
+  }
+
   return {
     _setTrackedMilitaryRefreshStateForTest,
     _setMilitaryTrackingRefreshOutcomeForTest,
@@ -161,6 +237,11 @@ export function createTesting({
     _updateTrackedModelForTest,
     _trackedBillboardColorForTest,
     _driveFleetModelHandoffForTest,
+    _iconForTest,
+    _setIconForTest,
     _ensureFleetModelForTest,
+    _trackedModelForTest,
+    _trackedIconLookForTest,
+    _modelSetIdsForTest,
   };
 }

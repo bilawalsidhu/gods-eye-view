@@ -206,6 +206,71 @@ export function createCyberSonarSampler(
   };
 }
 
+// The contact tint: a cool grey outside the sector, warm inside it, each
+// mixed in at this strength over the contact's own colour.
+const CYBER_SONAR_DIM_RGB = [0.62, 0.68, 0.72];
+const CYBER_SONAR_LIT_RGB = [1, 0.84, 0.84];
+const CYBER_SONAR_TINT_STRENGTH = 0.72;
+/** How far toward the warm tint contacts sit while the sweep is off. */
+const CYBER_SONAR_NEUTRAL_COVERAGE = 0.46;
+
+const hexOf = (rgb) =>
+  `#${rgb
+    .map((c) =>
+      Math.round(clamp01(c) * 255)
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`;
+
+/**
+ * The renderer's screen modulation sector for the Cyber contact sweep over
+ * a `width` x `height` CSS-pixel map: the same band `createCyberSonarSampler`
+ * samples. Not sweeping (Sonar OFF, reduced motion), a radius of 0 holds
+ * every contact at the neutral level the sweep rests at.
+ * @param {number} width
+ * @param {number} height
+ * @param {number} nowMs
+ * @param {{sweeping?: boolean, root?: object}} [options]
+ * @returns {import('./render/contract/effects').ModulationSector}
+ */
+export function cyberSonarSector(
+  width,
+  height,
+  nowMs,
+  { sweeping = true, root = globalThis.document?.documentElement } = {},
+) {
+  const settings = readCyberSonarSettings(root);
+  const floor = settings.opacity / 100;
+  const center = { x: width / 2, y: height / 2 };
+  const widthRad = (settings.sector * Math.PI) / 180;
+  if (!sweeping) {
+    const coverage = floor >= 0.9999 ? 1 : CYBER_SONAR_NEUTRAL_COVERAGE;
+    return {
+      center,
+      angle: 0,
+      width: widthRad,
+      radius: 0,
+      floor: floor + (1 - floor) * CYBER_SONAR_NEUTRAL_COVERAGE,
+      strength: CYBER_SONAR_TINT_STRENGTH,
+      color: hexOf(
+        CYBER_SONAR_DIM_RGB.map(
+          (c, i) => c + (CYBER_SONAR_LIT_RGB[i] - c) * coverage,
+        ),
+      ),
+    };
+  }
+  return {
+    center,
+    angle: (cyberSonarAngleDeg(nowMs) * Math.PI) / 180,
+    width: widthRad,
+    radius: (Math.min(width * 0.4, height * 0.52) * settings.range) / 100,
+    floor,
+    strength: CYBER_SONAR_TINT_STRENGTH,
+    color: hexOf(CYBER_SONAR_LIT_RGB),
+  };
+}
+
 /** Remaining delay before the next contact-projection refresh is due. */
 export function cyberSonarFrameDelay(
   lastPaintAt,

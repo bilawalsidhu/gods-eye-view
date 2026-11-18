@@ -8,6 +8,7 @@
  */
 
 import { t, msg } from './i18n/index.js';
+import { canvasOf } from './render/rendererOf.js';
 
 export const NAVIGATION_AUTHORITY_EVENT = 'gev:navigation-authority-taken';
 
@@ -25,19 +26,27 @@ const COCKPIT_REFUSALS = Object.freeze({
   fire: msg('Exit cockpit to fly to a fire'),
   sighting: msg('Exit cockpit to fly to a sighting'),
   'sighting-area': msg('Exit cockpit to fly to a sighting area'),
+  train: msg('Exit cockpit to fly to a train'),
   route: msg('Exit cockpit to fly to a route'),
   file: msg('Exit cockpit to fly to a file'),
+  layer: msg('Exit cockpit to fly to a layer'),
   drawing: msg('Exit cockpit to fly to a drawing'),
   scene: msg('Exit cockpit to fly to a scene'),
   // Radar, satellite and lightning fly to the layer's coverage area (their
   // «View coverage» button); the cyclone layer flies to the selected storm.
   weather: msg('Exit cockpit to view weather coverage'),
   cyclone: msg('Exit cockpit to fly to a cyclone'),
+  // The News panel's cards and the news layer's hotspots fly to the event.
+  news: msg('Exit cockpit to fly to a news report'),
+  // A covered city's marker on Bike Share flies down into the city.
+  'bike share': msg('Exit cockpit to fly to a bike share city'),
   // Voice track_entity (TRACKABLE_FAMILIES kinds in gevActions.js) and
   // frame_overhead, which frames the contacts around the current view.
   aircraft: msg('Exit cockpit to fly to an aircraft'),
   satellite: msg('Exit cockpit to fly to a satellite'),
   frame: msg('Exit cockpit to frame contacts'),
+  // Opening Stories (src/stories/controller.js) takes the camera.
+  stories: msg('Exit cockpit to open Stories'),
 });
 
 /** The destination nouns with their own Cockpit refusal (for tests). */
@@ -52,8 +61,8 @@ function cockpitRefusal(noun) {
 /**
  * Announce that a layer-owned camera flight is taking navigation authority.
  *
- * Aircraft focus reaches the stamp for free: it assigns `viewer.trackedEntity`,
- * and the UI stamps on `trackedEntityChanged`. Vessel and installation focus
+ * Aircraft focus reaches the stamp for free: the camera follows the aircraft,
+ * and the UI stamps when what it follows changes. Vessel and installation focus
  * fly the camera WITHOUT ever setting a tracked entity, so they have no such
  * seam — an earlier deferred geocode would still match the generation it
  * captured and could resolve on top of the new Context focus. This is that
@@ -178,4 +187,38 @@ export function reassertNavigationHandoff({
   }
   release?.();
   return true;
+}
+
+/** Gestures on the globe that take the camera from a pending request. */
+const CAMERA_GESTURES = ['pointerdown', 'wheel'];
+
+/**
+ * Whether the camera is still a request's: a navigation the shell stamps (a
+ * search, the assistant, a link) or a press or wheel on the globe hands it to
+ * someone else. `claim()` takes the navigation stamped so far as the
+ * request's (its own flight); a gesture is never forgiven. `stop()` removes
+ * the gesture listeners.
+ */
+export function watchCameraOwner(viewer, navigation) {
+  let generation = navigation?._navigationGeneration;
+  const canvas = canvasOf(viewer);
+  let taken = false;
+  const onGesture = () => {
+    taken = true;
+  };
+  for (const type of CAMERA_GESTURES)
+    canvas?.addEventListener?.(type, onGesture, { passive: true });
+  return {
+    claim: () => {
+      generation = navigation?._navigationGeneration;
+    },
+    taken: () =>
+      taken ||
+      (Number.isFinite(generation) &&
+        navigation._navigationGeneration !== generation),
+    stop: () => {
+      for (const type of CAMERA_GESTURES)
+        canvas?.removeEventListener?.(type, onGesture);
+    },
+  };
 }

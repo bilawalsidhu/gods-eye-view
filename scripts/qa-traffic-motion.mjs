@@ -158,9 +158,13 @@ try {
           (window.__motion.holdStart === null
             ? ''
             : ` | camera stopped +${((now - window.__motion.holdStart) / 1000).toFixed(1)}s`);
+        // A layer dot is its draw item (`pos`, hidden only when `show` is
+        // false); a collection's point is Cesium's.
         const visit = (id, roadId, point) => {
-          if (!point.show) return;
-          const s = scene.cartesianToCanvasCoordinates(point.position);
+          if (point.show === false) return;
+          const s = scene.cartesianToCanvasCoordinates(
+            point.pos ?? point.position,
+          );
           if (s && s.x >= 0 && s.y >= 0 && s.x <= 1280 && s.y <= 800)
             points.set(id, { x: s.x, y: s.y, roadId });
         };
@@ -168,7 +172,7 @@ try {
           offRoad = 0;
         if (!baseline && layer.visitMotionDots) {
           layer.visitMotionDots((id, roadId, point, road) => {
-            if (point.show) {
+            if (point.show !== false) {
               const p = road?.roadProperties;
               const allowed = road?.directFlow
                 ? [
@@ -195,7 +199,7 @@ try {
                   p?.brunnel !== 'tunnel';
               if (!allowed) offRoad++;
             }
-            if (point.show) n++;
+            if (point.show !== false) n++;
             visit(id, roadId, point);
           });
         } else {

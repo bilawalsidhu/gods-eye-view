@@ -27,10 +27,18 @@ export function bindRadioControls() {
     this.store?.publishUtility({ ...this._cockpitDisclosure });
     if (displayOpen) this.actions.revealStyleParameters();
     if (!expanded && returnFocus) {
-      (kind === 'display'
-        ? this._cockpitDisplayToggleBtn
-        : this._cockpitRadioToggleBtn
-      )?.focus({ preventScroll: true });
+      // The desktop cockpit hides the launchers' toggles behind its rail, so
+      // focus goes to whichever of the two is shown.
+      const toggle =
+        kind === 'display'
+          ? this._cockpitDisplayToggleBtn
+          : this._cockpitRadioToggleBtn;
+      const railItem = toggle?.ownerDocument?.querySelector?.(
+        `[data-cockpit-rail-item="${kind}"]`,
+      );
+      (toggle?.getClientRects?.().length ? toggle : railItem || toggle)?.focus({
+        preventScroll: true,
+      });
     }
     if (
       !displayOpen &&
@@ -444,6 +452,16 @@ export function bindRadioControls() {
       ),
     toggleCockpitRadio: () =>
       setCockpitDisclosure('radio', !this._cockpitDisclosureOpen('radio')),
+    /**
+     * Open or close the cockpit's Display or Radio panel; opening one closes
+     * the other.
+     * @param {'display'|'radio'} kind
+     * @param {{ returnFocus?: boolean }} [options]
+     */
+    toggleCockpitUtility: (kind, { returnFocus = false } = {}) => {
+      const open = !this._cockpitDisclosureOpen(kind);
+      setCockpitDisclosure(kind, open, { returnFocus: !open && returnFocus });
+    },
     /**
      * @param {string} filter
      * @returns {string} The station tag the filter shows afterwards.
