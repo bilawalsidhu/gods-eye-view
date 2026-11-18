@@ -283,6 +283,10 @@ export class FlightRecords {
     // within GROUND_FLOOR_CLAMP_RADIUS_KM of the viewer — the only ones
     // whose burial is visible. Cells warm in one batch after the loop.
     // Airborne only (grounded planes keep the surface-cache path above).
+    // The ground under the contact in its render height's reference, where
+    // the warm cache knows it: the surface it stands on, or the floor under a
+    // low contact near the view. A landing is judged above it.
+    let groundM = onGround ? surfaceM : null;
     if (
       !onGround &&
       renderAltitudeM < GROUND_FLOOR_WARM_MAX_ALT_M &&
@@ -291,10 +295,8 @@ export class FlightRecords {
           approxDistanceKm(viewerLatDeg, viewerLonDeg, lat, lon) <=
             GROUND_FLOOR_CLAMP_RADIUS_KM))
     ) {
-      renderAltitudeM = floorAltitudeM(
-        renderAltitudeM,
-        cachedGroundFloor(lat, lon),
-      );
+      groundM = cachedGroundFloor(lat, lon);
+      renderAltitudeM = floorAltitudeM(renderAltitudeM, groundM);
       floorWarmPoints.push({ lat, lon });
     }
 
@@ -334,6 +336,7 @@ export class FlightRecords {
       geoAltitudeM,
       renderAltitudeM,
       renderAltitudeInvented,
+      groundM: Number.isFinite(groundM) ? groundM : null,
       onGround,
       // Round 7: sticky airborne history — the landed fast-cull only
       // applies to contacts that actually flew this session.

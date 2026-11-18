@@ -1821,9 +1821,7 @@
   "Export failed · {error}": "Ошибка экспорта · {error}",
   "← → preview · A or B pins the focused day": "← → просмотр · A или B закрепляет выбранный день",
   "← → preview the other side · A or B pins it": "← → просмотр другой стороны · A или B закрепляет её",
-  "LOAD": "ЗАГРУЗИТЬ",
   "No shots yet. Use CAPTURE SHOT to save current look.": "Кадров пока нет. Нажмите «СДЕЛАТЬ КАДР», чтобы сохранить текущий вид.",
-  "Double-click to rename": "Дважды щёлкните, чтобы переименовать",
   "Shot name": "Название кадра",
   "RETRYING ALPR CAMERAS": "ПОВТОРНАЯ ЗАГРУЗКА КАМЕР ALPR",
   "FETCHING ALPR CAMERAS": "ЗАГРУЗКА КАМЕР ALPR",
@@ -3316,7 +3314,6 @@
   "+ CAPTURE SHOT": "+ СДЕЛАТЬ КАДР",
   "Add the current view, style and layers as the next shot": "Добавить текущий вид, стиль и слои следующим кадром",
   "Replace the selected shot with the current view": "Заменить выбранный кадр текущим видом",
-  "Click a shot to select it, double-click to rename.": "Щёлкните кадр, чтобы выбрать его, дважды — чтобы переименовать.",
   "scene|PLAY": "ПУСК",
   "Stop playback (Esc)": "Остановить воспроизведение (Esc)",
   "SAVE & SHARE": "СОХРАНЕНИЕ И ОБМЕН",
@@ -4341,5 +4338,11 @@
   "KT": "УЗ",
   "Course to {code}: {course}": "Курс на {code}: {course}",
   "Over {place}": "Над: {place}",
-  "Below": "Под спутником"
+  "Below": "Под спутником",
+  "Go to this shot. Double-click to rename.": "Перейти к этому кадру. Дважды щёлкните, чтобы переименовать.",
+  "Move up": "Переместить вверх",
+  "Move down": "Переместить вниз",
+  "Click a shot to go to it, double-click to rename.": "Щёлкните кадр, чтобы перейти к нему, дважды — чтобы переименовать.",
+  "Back to live at the starting view": "Вернуться в прямой эфир в начальном виде",
+  "Exit cockpit to fly to a bike share city": "Выйдите из кабины, чтобы перелететь в город с прокатом велосипедов"
 }

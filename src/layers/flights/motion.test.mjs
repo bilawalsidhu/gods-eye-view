@@ -399,14 +399,20 @@ test('an aircraft fix is told to the placement live, with its drawn height', () 
     'aircraft',
   );
   const state = { timeline: { active: () => false } };
-  const meta = { rawLat: 1, rawLon: 2, renderAltitudeM: 300, onGround: false };
+  const meta = {
+    rawLat: 1,
+    rawLon: 2,
+    renderAltitudeM: 300,
+    groundM: 1656,
+    onGround: false,
+  };
   observeLiveAircraft(state, placement, 'abc123', 5000, meta, 80, 270);
   observeLiveAircraft(
     state,
     placement,
     'abc123',
     6000,
-    { ...meta, renderAltitudeInvented: true, onGround: true },
+    { ...meta, renderAltitudeInvented: true, groundM: null, onGround: true },
     null,
     undefined,
   );
@@ -421,12 +427,15 @@ test('an aircraft fix is told to the placement live, with its drawn height', () 
       lat: 1,
       lon: 2,
       altitudeM: 300,
+      groundM: 1656,
       speedMps: 80,
       courseDeg: 270,
       headingDeg: NaN,
       onGround: false,
     },
   ]);
+  // Where the layer does not know the ground, it says so.
+  assert.ok(Number.isNaN(told[1][1].groundM));
   assert.ok(Number.isNaN(told[1][1].altitudeM));
   assert.ok(Number.isNaN(told[1][1].speedMps));
   assert.ok(Number.isNaN(told[1][1].courseDeg));

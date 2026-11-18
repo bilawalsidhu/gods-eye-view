@@ -2318,9 +2318,7 @@
   "SPARSE": "РІДКО",
   "BALANCED": "ПОМІРНО",
   "No shots yet. Use CAPTURE SHOT to save current look.": "Кадрів поки немає. Натисніть «ЗНЯТИ КАДР», щоб зберегти поточний вигляд.",
-  "Double-click to rename": "Двічі клацніть, щоб перейменувати",
   "Shot name": "Назва кадру",
-  "LOAD": "ЗАВАНТАЖИТИ",
   "DEL": "ВИДАЛ.",
   "{duration}s + {hold}s": "{duration} с + {hold} с",
   "Choose files": "Вибрати файли",
@@ -3308,7 +3306,6 @@
   "+ CAPTURE SHOT": "+ ЗНЯТИ КАДР",
   "Add the current view, style and layers as the next shot": "Додати поточний вигляд, стиль і шари як наступний кадр",
   "Replace the selected shot with the current view": "Замінити вибраний кадр поточним виглядом",
-  "Click a shot to select it, double-click to rename.": "Клацніть кадр, щоб вибрати його, двічі — щоб перейменувати.",
   "Play from this scene through the rest of the project": "Відтворити від цієї сцени до кінця проєкту",
   "Stop playback (Esc)": "Зупинити відтворення (Esc)",
   "Play the shot after the selected one, moving on to the next scene when needed": "Відтворити кадр після вибраного, за потреби перейшовши до наступної сцени",
@@ -4341,5 +4338,11 @@
   "KT": "ВУЗ",
   "Course to {code}: {course}": "Курс на {code}: {course}",
   "Over {place}": "Над: {place}",
-  "Below": "Під супутником"
+  "Below": "Під супутником",
+  "Go to this shot. Double-click to rename.": "Перейти до цього кадру. Двічі клацніть, щоб перейменувати.",
+  "Move up": "Перемістити вгору",
+  "Move down": "Перемістити вниз",
+  "Click a shot to go to it, double-click to rename.": "Клацніть кадр, щоб перейти до нього, двічі — щоб перейменувати.",
+  "Back to live at the starting view": "Повернутися до прямого ефіру в початковому вигляді",
+  "Exit cockpit to fly to a bike share city": "Вийдіть із кабіни, щоб перелетіти до міста з прокатом велосипедів"
 }

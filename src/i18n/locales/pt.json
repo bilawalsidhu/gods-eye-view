@@ -2276,9 +2276,7 @@
   "SPARSE": "ESPARSO",
   "BALANCED": "EQUILIBRADO",
   "No shots yet. Use CAPTURE SHOT to save current look.": "Ainda não há planos. Use CAPTURAR PLANO para salvar o visual atual.",
-  "Double-click to rename": "Clique duplo para renomear",
   "Shot name": "Nome do plano",
-  "LOAD": "CARREGAR",
   "DEL": "EXCL.",
   "{duration}s + {hold}s": "{duration} s + {hold} s",
   "Choose files": "Escolher arquivos",
@@ -3214,7 +3212,6 @@
   "+ CAPTURE SHOT": "+ CAPTURAR PLANO",
   "Add the current view, style and layers as the next shot": "Adicionar a vista, o estilo e as camadas atuais como próximo plano",
   "Replace the selected shot with the current view": "Substituir o plano selecionado pela vista atual",
-  "Click a shot to select it, double-click to rename.": "Clique em um plano para selecioná-lo e clique duas vezes para renomeá-lo.",
   "Play from this scene through the rest of the project": "Reproduzir desta cena até o fim do projeto",
   "Stop playback (Esc)": "Parar a reprodução (Esc)",
   "Play the shot after the selected one, moving on to the next scene when needed": "Reproduzir o plano após o selecionado, passando à próxima cena se necessário",
@@ -4238,5 +4235,11 @@
   "KT": "KT",
   "Course to {code}: {course}": "Rumo para {code}: {course}",
   "Over {place}": "Sobre {place}",
-  "Below": "Abaixo"
+  "Below": "Abaixo",
+  "Go to this shot. Double-click to rename.": "Ir para este plano. Clique duplo para renomear.",
+  "Move up": "Mover para cima",
+  "Move down": "Mover para baixo",
+  "Click a shot to go to it, double-click to rename.": "Clique em um plano para ir até ele e clique duas vezes para renomeá-lo.",
+  "Back to live at the starting view": "Voltar ao vivo na vista inicial",
+  "Exit cockpit to fly to a bike share city": "Saia do cockpit para voar até uma cidade com bicicletas compartilhadas"
 }

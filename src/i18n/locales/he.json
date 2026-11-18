@@ -2356,7 +2356,6 @@
   "+ CAPTURE SHOT": "+ לכידת שוט",
   "Replace the selected shot with the current view": "החלפת השוט הנבחר בתצוגה הנוכחית",
   "UPDATE SHOT": "עדכון שוט",
-  "Click a shot to select it, double-click to rename.": "לחץ על שוט לבחירתו, לחיצה כפולה לשינוי שם.",
   "Play from this scene through the rest of the project": "נגינה מהסצנה הזאת ועד סוף הפרויקט",
   "Stop playback (Esc)": "עצירת ההשמעה (Esc)",
   "STOP": "עצירה",
@@ -2400,9 +2399,7 @@
   "ACTIVE STYLE": "הסגנון הפעיל",
   "ORBIT": "הקפה",
   "No shots yet. Use CAPTURE SHOT to save current look.": "אין עדיין שוטים. השתמש בלכידת שוט כדי לשמור את המראה הנוכחי.",
-  "Double-click to rename": "לחיצה כפולה לשינוי שם",
   "Shot name": "שם השוט",
-  "LOAD": "טעינה",
   "DEL": "מחיקה",
   "MISSION CONTROL · FIRST LAUNCH": "חדר בקרה · שיגור ראשון",
   "Choose your first view": "בחירת התצוגה הראשונה",
@@ -4238,5 +4235,11 @@
   "KT": "KT",
   "Course to {code}: {course}": "כיוון אל {code}: {course}",
   "Over {place}": "מעל {place}",
-  "Below": "מתחת"
+  "Below": "מתחת",
+  "Go to this shot. Double-click to rename.": "מעבר לשוט הזה. לחיצה כפולה לשינוי שם.",
+  "Move up": "הזזה למעלה",
+  "Move down": "הזזה למטה",
+  "Click a shot to go to it, double-click to rename.": "לחץ על שוט כדי לעבור אליו, לחיצה כפולה לשינוי שם.",
+  "Back to live at the starting view": "חזרה לשידור החי בתצוגת הפתיחה",
+  "Exit cockpit to fly to a bike share city": "צא מתא הטייס כדי לטוס לעיר עם שיתוף אופניים"
 }
