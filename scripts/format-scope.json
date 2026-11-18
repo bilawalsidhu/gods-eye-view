@@ -1586,5 +1586,7 @@
   "scripts/build-wikidata-cities.mjs",
   "src/search/placeSuggestions.test.mjs",
   "scripts/wikidataPlaceTiles.mjs",
-  "src/tooling/wikidataPlaceTiles.test.mjs"
+  "src/tooling/wikidataPlaceTiles.test.mjs",
+  "src/ui/omnibarIntent.test.mjs",
+  "src/ui/omnibarRows.test.mjs"
 ]
