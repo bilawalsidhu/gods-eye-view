@@ -256,6 +256,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
     const camera = findCamera(viewer);
     if (typeof camera?.visiblePoints !== 'function') return true;
     const placed = record?.frustumPositions;
+    if (!placed) return true;
     const points = _scratchPoints;
     points.length = 0;
     if (record?.position) points.push(record.position);

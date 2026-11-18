@@ -448,6 +448,10 @@ test('what cannot be judged counts as visible', () => {
   const flat = lookingDown();
   flat.scene.mode = Cesium.SceneMode.SCENE2D;
   assert.equal(framesFor(flat).projectionInView(record), true);
-  const noGeometry = { camera: { id: 'plane' }, projection: record.projection };
+  const noGeometry = {
+    camera: { id: 'plane' },
+    projection: record.projection,
+    position: point(180, 0, 20),
+  };
   assert.equal(framesFor(lookingDown()).projectionInView(noGeometry), true);
 });
