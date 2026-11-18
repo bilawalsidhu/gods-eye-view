@@ -372,9 +372,13 @@ const strip = computed(() => {
   return all.length ? { title, chips: all } : null;
 });
 
-/** Fly to a place by its coordinates, as a looked-up place row does. */
-async function goTo({ name, latitude, longitude }) {
-  if (runner.value) return settled(await runner.value('fly_to_location', { latitude, longitude, query: name }));
+/**
+ * Fly to a place by its coordinates, as a looked-up place row does. Only the
+ * coordinates go: with its name, "Paris, Texas" would fly to the city
+ * preset Paris.
+ */
+async function goTo({ latitude, longitude }) {
+  if (runner.value) return settled(await runner.value('fly_to_location', { latitude, longitude }));
   const location = locationStore.controls;
   if (!location || location.destroyed) throw new Error();
   await location.search(`${latitude}, ${longitude}`);
@@ -820,7 +824,8 @@ async function choose(item, { viaKey = false } = {}) {
     else if (item.kind === 'count-show' || item.kind === 'place') {
       const { coords, place } = item;
       if (coords && runner.value) {
-        if (!settled(await runner.value('fly_to_location', { ...coords, query: place }))) return;
+        // The coordinates alone: a name would win over them (see goTo).
+        if (!settled(await runner.value('fly_to_location', { ...coords }))) return;
       } else {
         const location = locationStore.controls;
         if (!location || location.destroyed) throw new Error();
