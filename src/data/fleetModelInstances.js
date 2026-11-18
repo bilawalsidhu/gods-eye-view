@@ -111,8 +111,9 @@ let instances = 0;
  * @param {object} options.viewer The scene host.
  * @param {() => object|null} [options.display] `{models3d, models3dMode,
  *   irBoost}`.
- * @param {object} options.policy `{altitudeCeilingM, minimumPixelSize,
- *   cap, capAll, addM, addAllM, keepM, keepAllM, intervalMs}`.
+ * @param {object} options.policy `{altitudeCeilingM, cap, capAll, addM,
+ *   keepM, intervalMs}`: both 3D modes share the add/keep radii and differ
+ *   by their caps. Models are drawn at their true size.
  * @param {(url: string) => string} [options.resolveAsset]
  * @param {boolean} [options.waterline] Clip each model at its waterline.
  * @param {(item: object, table: object) => object|undefined} [options.partState]
@@ -207,8 +208,7 @@ export function createFleetModelLayer({
   function refreshEligibility(items, prefs, eye) {
     const all = prefs.models3dMode === 'all';
     const cap = all ? policy.capAll : policy.cap;
-    const addM = all ? policy.addAllM : policy.addM;
-    const keepM = all ? policy.keepAllM : policy.keepM;
+    const { addM, keepM } = policy;
     const candidates = [];
     for (const [id, item] of items) {
       if (!item.position || item.show === false || !item.spec?.url) continue;
@@ -261,7 +261,6 @@ export function createFleetModelLayer({
       ...(fleetAxisScale(item.spec)
         ? { axisScale: fleetAxisScale(item.spec) }
         : {}),
-      minPixelSize: policy.minimumPixelSize,
       environmentMap: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS.enabled,
       ...(boost
         ? {
