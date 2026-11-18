@@ -70,6 +70,8 @@ const GLOBE_CAPABILITIES = [
 export function cesiumCapabilities(scene, only) {
   const all = [
     'models',
+    // Moving parts posed in a custom shader per posed model (`drawModels.js`).
+    'modelParts',
     // Cesium scatters drawn models through the atmosphere wherever the
     // scene draws fog (its models' atmosphere stage).
     'modelAtmosphere',

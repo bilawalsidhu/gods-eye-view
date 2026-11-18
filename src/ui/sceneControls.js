@@ -48,6 +48,8 @@ export class SceneControls {
         this.run('renameShot', sceneId, shotId, title),
       load: (sceneId, shotId) => this.run('load', sceneId, shotId),
       remove: (sceneId, shotId) => this.deleteShot(sceneId, shotId),
+      move: (sceneId, shotId, index) =>
+        this.run('moveShot', sceneId, shotId, index),
       create: () => this.createScene(),
       deleteScene: () => this.deleteSelectedScene(),
       stories: () => this.run('stories'),
@@ -110,6 +112,7 @@ export class SceneControls {
         'shot-captured',
         'shot-updated',
         'shot-renamed',
+        'shot-moved',
         'shot-deleted',
         'project-imported',
       ].includes(type)

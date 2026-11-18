@@ -48,6 +48,10 @@ import { overlayHost } from './layers/overlayHost.js';
  * Attach scene tools, rendering listeners and the application debug handle.
  * `scene` is what `createApplicationScene` returns; its `trimStaleCommands`
  * runs after each layer disable (a scene without one keeps that memory).
+ * `library.fetchTile` and `library.fetchData` fetch the Data Library's tiles
+ * and proxied datasets in place of the defaults (`createLibrarySource`).
+ * `library.requireCatalog` offers only what the server's library catalog
+ * names, and nothing while it does not answer.
  */
 export function createApplicationTools({
   scene,
@@ -60,6 +64,7 @@ export function createApplicationTools({
   onSceneDirector,
   sceneDataPacks,
   drawMarkActions = [],
+  library = {},
   signal,
   defer,
 }) {
@@ -158,6 +163,11 @@ export function createApplicationTools({
     mapStackController,
     shareLink: styleManager.shareLinkManager,
     requestRender: governorRequestRender,
+    // An application's own tile and dataset fetches, when it keeps them in
+    // its own cache.
+    fetchTile: library.fetchTile ?? null,
+    fetchData: library.fetchData ?? null,
+    requireCatalog: library.requireCatalog === true,
     // Zoom to layer: an immediate navigation, so Cockpit can refuse it and
     // the current follow owner is released first (as for imported files).
     zoomTo: (extent) =>

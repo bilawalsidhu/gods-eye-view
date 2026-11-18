@@ -13,8 +13,8 @@
  *   B1 ingest     : both layers ingest the synthetic planes
  *   B2 billboards : every fleet billboard carries EXACTLY the expected
  *                   per-class glyph (image data-URI === aircraftIcon(klass),
- *                   imported from src) and per-class scale (flights:
- *                   CLASS_SCALE_2D; military: 0.7 × CLASS_SCALE_2D)
+ *                   imported from src) and one scale for every class
+ *                   (flights: 1; military: 0.7)
  *   B3 models     : with 3D on, fleet Cesium.Model.scale === the life-size
  *                   scale of the fleet model the aircraft's type or category
  *                   selects (aircraftModelSpec) per icao; tracked too
@@ -33,7 +33,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
 import { stubPlanespotters } from './qa-photo-stub.mjs';
-import { classifyAircraft, CLASS_SCALE_2D } from '../src/data/aircraftClass.js';
+import { classifyAircraft } from '../src/data/aircraftClass.js';
 import { aircraftModelSpec } from '../src/data/fleetModels.js';
 // Every aircraft draws its fleet model life size: its type's length over the
 // model's built length, chosen by type code (military) or category (flights).
@@ -381,14 +381,14 @@ async function main() {
     for (const [id, klass] of expectedFlights) {
       const bb = bbById.get(id);
       const wantImg = aircraftIcon(klass);
-      const wantScale = CLASS_SCALE_2D[klass] || 1;
+      const wantScale = 1;
       if (!bb || bb.image !== wantImg) glyphBad.push(`${id}(${klass})${bb ? ':wrong-image' : ':missing'}`);
       if (bb && Math.abs(bb.scale - wantScale) > 1e-9) scaleBad.push(`${id}: ${bb.scale} != ${wantScale}`);
     }
     for (const [id, klass] of expectedMilitary) {
       const bb = bbById.get(id);
       const wantImg = aircraftIcon(klass);
-      const wantScale = MIL_BILLBOARD_SCALE * (CLASS_SCALE_2D[klass] || 1);
+      const wantScale = MIL_BILLBOARD_SCALE;
       if (!bb || bb.image !== wantImg) glyphBad.push(`${id}(${klass})${bb ? ':wrong-image' : ':missing'}`);
       if (bb && Math.abs(bb.scale - wantScale) > 1e-9) scaleBad.push(`${id}: ${bb.scale} != ${wantScale}`);
     }

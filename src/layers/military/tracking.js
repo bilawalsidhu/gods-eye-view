@@ -15,6 +15,7 @@ import {
   createTrackedAircraftIcon,
   isOtherTrackedIconSet,
   trackedContactHolder,
+  trackedIconColor,
 } from '../../data/trackedAircraftIcon.js';
 import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
 import { julianToEpochMs } from '../../geo/julian.js';
@@ -27,13 +28,15 @@ import {
 } from '../../data/trackingClickGesture.js';
 import { inputFor } from '../../input/dispatcher.js';
 import {
+  COCKPIT_AIR_ALL_ADD_M,
+  COCKPIT_AIR_ALL_KEEP_M,
+  COCKPIT_AIR_PROX_ADD_M,
+  COCKPIT_AIR_PROX_KEEP_M,
   TRAIL_MAX_POINTS,
   displayDelayMs,
   followsClock,
   STALE_ALPHA,
   TRAIL_COLOR,
-  AMBER_TRANSPARENT,
-  TRACKED_ICON_COLOR,
 } from './policy.js';
 import {
   drawTrailSegments,
@@ -45,6 +48,7 @@ import {
   trailBodySegments,
   trailHeadCurvePoints,
   trailHeadStartFix,
+  trailTimeAt,
 } from '../../data/trailContinuity.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 import { entityRecord } from '../../data/entityRecords.js';
@@ -59,11 +63,6 @@ function aircraftPickId(hit) {
   if (!hit.set) return hit.id || undefined;
   return isOtherTrackedIconSet(hit.set, 'military') ? undefined : hit.id;
 }
-
-const STALE_TRACKED_COLOR = Object.freeze([
-  ...TRACKED_ICON_COLOR.slice(0, 3),
-  STALE_ALPHA,
-]);
 
 export function createTracking({
   flightState,
@@ -212,11 +211,13 @@ export function createTracking({
       );
       distancesSquared.push([icao24, distanceSquared(eye, position)]);
     }
+    // The AIR band follows the 3D mode, not the 3D model radius.
+    const all = flightState._models3dMode === 'all';
     const next = nextCockpitNearContacts(
       previous,
       distancesSquared,
-      parts.rendering._modelAddDistM(),
-      parts.rendering._modelKeepDistM(),
+      all ? COCKPIT_AIR_ALL_ADD_M : COCKPIT_AIR_PROX_ADD_M,
+      all ? COCKPIT_AIR_ALL_KEEP_M : COCKPIT_AIR_PROX_KEEP_M,
     );
     flightState._cockpitNearContacts = next;
     for (const icao24 of previous)
@@ -306,14 +307,18 @@ export function createTracking({
     return { text: '', dimmed: false };
   }
 
-  /** The tracked billboard's colour: amber, faded while stale, clear while the 3D model is the visual. */
+  /** The tracked billboard's colour: the contact's own fleet colour (tracking
+   *  never recolours it), faded while stale, clear while the 3D model is the
+   *  visual. */
 
   function _trackedIconColor() {
-    if (parts.rendering._modelOwnsVisual(flightState._trackedIcao))
-      return AMBER_TRANSPARENT;
-    return _trackedStaleCue(flightState._trackedIcao).dimmed
-      ? STALE_TRACKED_COLOR
-      : TRACKED_ICON_COLOR;
+    const icao24 = flightState._trackedIcao;
+    const color = parts.rendering._fleetBillboardColor(icao24);
+    if (parts.rendering._modelOwnsVisual(icao24))
+      return trackedIconColor(color, 0);
+    return _trackedStaleCue(icao24).dimmed
+      ? trackedIconColor(color, STALE_ALPHA)
+      : color;
   }
 
   /**
@@ -404,10 +409,7 @@ export function createTracking({
       width: look.size[0],
       height: look.size[1],
       get scale() {
-        return parts.rendering._fleetBillboardScale(
-          icao24,
-          flightState.records.data.get(icao24)?.klass,
-        );
+        return parts.rendering._fleetBillboardScale(icao24);
       },
       scaleByDistance: look.scaleByDistance,
     };
@@ -611,12 +613,46 @@ export function createTracking({
     );
   }
 
-  /** Reports at or before the time the aircraft is drawn (now − the display delay). */
+  /** Reports at or before the time the aircraft is drawn (`_trailDisplayMs`). */
 
   function _trailBodyCountNow() {
-    return trailBodyCount(
+    return trailBodyCount(flightState._trailFixes, _trailDisplayMs());
+  }
+
+  /**
+   * The time on its trail at which a host-supplied placement draws the
+   * aircraft, read off the trail where it is drawn (`trailTimeAt`): such a
+   * placement draws at a delay of its own, not this layer's. NaN when this
+   * layer's own motion draws it, or the trail has no pair to read.
+   * @returns {number} Epoch ms or NaN.
+   */
+  function _placedTrailMs() {
+    if (!parts.motion._trackedPlaced?.()) return NaN;
+    return trailTimeAt(
       flightState._trailFixes,
-      flightState.now() - displayDelayMs(flightState),
+      parts.motion._trackedDisplayCached(),
+    );
+  }
+
+  /**
+   * The time the trail runs up to: the time the aircraft is drawn at, now −
+   * the display delay, or where a placement draws it. Otherwise the trail
+   * ends short of a placed aircraft, or runs on ahead of it.
+   * @returns {number} Epoch ms.
+   */
+  function _trailDisplayMs() {
+    const placedMs = _placedTrailMs();
+    return Number.isFinite(placedMs)
+      ? placedMs
+      : flightState.now() - displayDelayMs(flightState);
+  }
+
+  /** Whether the trail holds no report behind the aircraft yet: this
+   *  layer's own motion draws it before its oldest fix. Never for an
+   *  aircraft a placement draws: its trail is read where it is drawn. */
+  function _trailWarmingUp() {
+    return (
+      !Number.isFinite(_placedTrailMs()) && parts.motion._isTrackWarmingUp()
     );
   }
 
@@ -633,7 +669,7 @@ export function createTracking({
     if (
       !flightState._trackedIcao ||
       !flightState._trailFixes.length ||
-      parts.motion._isTrackWarmingUp()
+      _trailWarmingUp()
     )
       return [];
     const head =
@@ -661,7 +697,7 @@ export function createTracking({
       trailHeadCurvePoints(
         flightState._trailFixes,
         flightState._trailBodyCount,
-        flightState.now() - displayDelayMs(flightState),
+        _trailDisplayMs(),
       ),
       end,
       parts.motion._trackedModelCenterWorld(),
@@ -926,10 +962,11 @@ export function createTracking({
     flightState._trackedIcao = null;
     // Hand the contact back to its icon only now, once it no longer reads as
     // tracked (the settle plans it as a fleet contact).
-    if (flightState._icons?.has(clearedIcao)) {
-      flightState._icons.setShown(clearedIcao, true);
+    // Its fleet model, kept loaded while it was selected, takes it back in
+    // this frame; the icon shows only when there is no loaded one.
+    parts.rendering._handBackDeselected(clearedIcao);
+    if (flightState._icons?.has(clearedIcao))
       parts.icons._settleIcon(clearedIcao, { fromCourseDeg: trackedCourseDeg });
-    }
     parts.icons._applyIconPresentation(clearedIcao);
     clearTrackedSubjectContext('military');
     _emitAwarenessEvent('gev:awareness-subject-cleared', {
@@ -1044,14 +1081,13 @@ export function createTracking({
       imageLod: _trackedBillboardLook().imageLod,
       sprite,
       position: getTrackedPosition,
-      // Solid amber when the billboard is the visual (zoomed out, 3D off, or model still loading);
-      // transparent once the tracked model is actually up (ready + shown).
-      // Amber (faded while stale), transparent once the tracked model is the visual.
+      // Its own colour (faded while stale) when the billboard is the visual (zoomed out, 3D off,
+      // or model still loading); transparent once the tracked model is actually up (ready + shown).
       color: _trackedIconColor,
       // Screen-projected rotation, evaluated per frame on the camera's own
       // axes, so it stays exact through a tracked orbit. The tracked target
       // must never vanish into tile geometry — tracking a taxiing plane at
-      // street level would otherwise bury the amber icon inside the runway
+      // street level would otherwise bury the icon inside the runway
       // skin, so it draws over depth like the fleet icon set; its
       // shared-host tracked card is top-composited separately.
       rotation: () => {
@@ -1059,6 +1095,8 @@ export function createTracking({
         const pos = getTrackedPosition();
         if (!tracked || !pos || !flightState._viewer)
           return flightState._lastTrackedRotation;
+        // A ground station's mast stands upright.
+        if (tracked.klass === 'station') return 0;
         const projected = courseScreenRotation(
           _pose(),
           pos,

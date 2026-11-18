@@ -216,7 +216,13 @@ test('cyclone readout retains advisory, position, intensity, geometry, coverage,
   assert.equal(f.find((n) => n.className === 'rail-card-ramp').hidden, true);
   view.destroy();
 });
-test('identical updates write nothing and status keeps its line through loading and empty text', () => {
+test('identical updates write nothing and status keeps its line through loading and empty text', (t) => {
+  // Ages read in whole minutes: a real clock crossing a minute between the two
+  // updates would rightly rewrite them.
+  t.mock.timers.enable({
+    apis: ['Date'],
+    now: Date.parse('2026-09-22T01:17:00Z'),
+  });
   const f = fixture();
   const view = createWeatherPanel(f);
   for (const entries of [

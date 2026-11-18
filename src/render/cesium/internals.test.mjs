@@ -12,6 +12,7 @@ import {
   closeRenderLoopLatch,
   commandExtents,
   creditDisplayContents,
+  customShaderTexture,
   defaultView,
   globeTilesDrawn,
   lastRenderTime,
@@ -70,6 +71,7 @@ test('every private field the app reaches is still declared by the installed Ces
     [ENGINE, 'Scene/CreditDisplay.js', '_currentFrameCredits'],
     [ENGINE, 'Scene/CreditDisplay.js', '_currentCesiumCredit'],
     [ENGINE, 'Scene/Material.js', '_textures'],
+    [ENGINE, 'Scene/Model/CustomShader.js', '_textureManager'],
   ];
   const missing = fields.filter(
     ([root, file, field]) =>
@@ -279,6 +281,18 @@ test('private Cesium fields are reached only through internals.js', () => {
         if (cesiumPrivate.has(name)) offenders.push(`${file} ._${name}`);
   }
   assert.deepEqual([...new Set(offenders)], []);
+});
+
+test('customShaderTexture reads the texture a custom shader made for a uniform', () => {
+  const texture = {};
+  const shader = {
+    _textureManager: {
+      getTexture: (name) => (name === 'u_a' ? texture : undefined),
+    },
+  };
+  assert.equal(customShaderTexture(shader, 'u_a'), texture);
+  assert.equal(customShaderTexture(shader, 'u_b'), undefined);
+  assert.equal(customShaderTexture(undefined, 'u_a'), undefined);
 });
 
 test('trimGlobeTiles empties the globe cache of what the frame did not draw', () => {

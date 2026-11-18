@@ -158,6 +158,15 @@ export class LayerBindings {
       });
       this._weatherShellModules.push(news);
     }
+    // Bike share flies into a covered city from its marker the same way.
+    const bikeshare = this._dataManager?.layers?.get('bikeshare')?.module;
+    if (typeof bikeshare?.attachShellServices === 'function') {
+      bikeshare.attachShellServices({
+        runNavigation: (navigate) =>
+          this.runImmediateNavigation('bike share', navigate),
+      });
+      this._weatherShellModules.push(bikeshare);
+    }
   }
 
   _persistAwarenessSelection(event, cleared = false) {

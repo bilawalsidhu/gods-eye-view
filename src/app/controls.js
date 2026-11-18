@@ -8,6 +8,9 @@ import { useDisplayStore } from '../ui/stores/display.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
 import { t } from '../i18n/index.js';
 
+/** Where the camera starts unless a host gives a `startView`. */
+export { START_VIEW };
+
 /**
  * Construct the existing controls and camera presentation. `initialShareCode`
  * opens a share code (the `<code>` of `/share/<code>`) at start-up, for a host
@@ -15,6 +18,9 @@ import { t } from '../i18n/index.js';
  * picker, for a host that offers its own language choice (`switchLocale` from
  * the `./i18n` entry). `startView` is where the camera starts (the whole
  * planet by default; a host may pass a city); a shared view flies from there.
+ * `homeView` is where the title's logo goes back to (with the clock live): the
+ * start view unless given, for a host whose `startView` only carries a view
+ * across a rebuild.
  * `services.cockpitSubjects` adds the application's own first-person subjects
  * to the Cockpit (src/cockpitSubjectProviders.js).
  */
@@ -29,6 +35,7 @@ export function createApplicationControls({
   initialShareCode = null,
   localePicker = true,
   startView = START_VIEW,
+  homeView = startView,
 }) {
   // Every boot starts from the same view, before share restoration flies on.
   applyStartView(viewer, startView);
@@ -51,6 +58,7 @@ export function createApplicationControls({
     // A share code to open at start-up instead of the page's address.
     initialShareCode,
     localePicker,
+    homeView,
   });
   defer(() => styleManager.orbitController.stop());
   defer(() => styleManager.hud.destroy());
