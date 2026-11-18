@@ -173,14 +173,16 @@ export function createRailCockpitSubject({
 
   /**
    * Which way the train runs along its shape: as its binding learnt it from
-   * successive reports, else from its drawn course against the line's
-   * bearing there; 0 while neither tells.
+   * successive reports, else from its reported bearing against the line's
+   * bearing there; 0 while neither tells. Not the drawn course: until the
+   * binding tells, the train has not moved past GPS jitter, and a course
+   * drawn between such reports is that jitter.
    */
   function directionOf(entry) {
     const binding = entry.path;
     if (binding.direction === 1 || binding.direction === -1)
       return binding.direction;
-    const course = finiteOrNull(entry.courseDeg);
+    const course = finiteOrNull(entry.record?.bearing);
     const point = pointAtS(binding.path, binding.drawS, scratch);
     if (course === null || !Number.isFinite(point?.bearingDeg)) return 0;
     const turn = Math.abs(((course - point.bearingDeg + 540) % 360) - 180);
@@ -205,11 +207,12 @@ export function createRailCockpitSubject({
       finiteOrNull(drawn?.lat) ?? finiteOrNull(sample?.lat) ?? record.lat;
     position.longitude =
       finiteOrNull(drawn?.lon) ?? finiteOrNull(sample?.lon) ?? record.lon;
-    // Quality 0 is the ellipsoid a train is drawn on while no floor is
-    // known: no height, so a view waits for the surface.
+    const quality = Number.isFinite(drawn?.q) ? drawn.q : 0;
+    // Quality 0: no floor known here, so no height; a view waits for the
+    // surface.
     position.railHeightM =
-      Number.isFinite(drawn?.h) && drawn.q > 0 ? drawn.h - liftM : null;
-    position.heightQuality = Number.isFinite(drawn?.q) ? drawn.q : 0;
+      quality > 0 && Number.isFinite(drawn.h) ? drawn.h - liftM : null;
+    position.heightQuality = quality;
     position.atMs = finiteOrNull(drawn?.at);
 
     let path = null;

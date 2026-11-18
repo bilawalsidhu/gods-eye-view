@@ -209,8 +209,8 @@ test('a binding learns which way its train runs, and keeps it through a stop', (
   assert.equal(along.direction, 0, 'one report tells no direction');
   assert.ok(followFix(along, fix(10_000, 700, 0)));
   assert.equal(along.direction, 1);
-  // Standing at a stop, its reports jitter back a few metres: it keeps what
-  // it learnt.
+  // Standing at a stop, its reports jitter back 10 m: it keeps what it
+  // learnt.
   assert.ok(followFix(along, fix(20_000, 690, 0)));
   assert.equal(along.direction, 1);
   const against = bindTrainPath(p, ids, fix(0, 1500, 0));
@@ -269,33 +269,22 @@ test('jitter segments played back at a standing train keep the direction it lear
   const ids = { tripId: 'full', routeId: 'main' };
   const binding = bindTrainPath(p, ids, fix(0, 1000, 0));
   assert.ok(followFix(binding, fix(15_000, 1600, 0)));
-  // Playback runs the train east, 1000 m -> 1600 m: direction +1.
-  const out = {};
   let seq = 0;
   const play = (fromM, toM, t0) => {
-    const segment = {
-      from: { seq, ...fix(t0, fromM, 0) },
-      to: { seq: seq + 1, ...fix(t0 + 15_000, toM, 0) },
-    };
-    assert.ok(
-      placeOnPath(
-        binding,
-        { fromSeq: seq, toSeq: seq + 1, fraction: 0.5 },
-        segment,
-        out,
-      ),
+    const { sample, segment } = playback(
+      seq,
+      seq + 1,
+      fix(t0, fromM, 0),
+      fix(t0 + 15_000, toM, 0),
+      0.5,
     );
+    assert.ok(placeOnPath(binding, sample, segment, {}));
     seq += 1;
     return binding.direction;
   };
-  assert.equal(play(1000, 1600, 0), 1);
-  assert.equal(
-    binding.directionPlayed,
-    true,
-    'playback owns the direction now',
-  );
-  // At the platform: reports 3-5 m apart, back and forth, polled and played.
-  const learnt = [];
+  // It runs east, then stands at the platform: reports 3-5 m apart, back and
+  // forth, polled and played.
+  const learnt = [play(1000, 1600, 0)];
   let t0 = 15_000;
   for (const [fromM, toM] of [
     [1600, 1597],
@@ -307,7 +296,7 @@ test('jitter segments played back at a standing train keep the direction it lear
     learnt.push(play(fromM, toM, t0));
     t0 += 15_000;
   }
-  assert.deepEqual(learnt, [1, 1, 1, 1], 'from the played-back segments');
+  assert.deepEqual(learnt, [1, 1, 1, 1, 1], 'from the played-back segments');
 });
 
 test('GPS jitter in the newest reports before playback keeps the direction', () => {

@@ -151,6 +151,39 @@ test('a train drawn on an unknown floor reports no rail height', async (t) => {
   );
 });
 
+test('a train on a known floor at sea level reports a rail height of 0 m', async (t) => {
+  const app = await onTheLine(t, {
+    ground: { ...WARM_GROUND, cachedGroundFloor: () => 0 },
+  });
+  app.parts().selection.selectTrain(T1);
+  const { position } = app.layer.getSelectedTrain();
+  assert.ok(position.heightQuality > 0, 'the floor is known');
+  assert.equal(position.railHeightM, 0, 'a height, not none');
+});
+
+test('a train first seen standing takes no direction from its GPS jitter', async (t) => {
+  // Neither reports 13 m apart nor the course drawn between them say which way
+  // it runs; an operator's bearing does.
+  const app = harness(t, { paths: { 'mbta-rail': PACK }, at: BOSTON });
+  let jitterM = 0;
+  app.feeds.set('mbta-rail', () => [
+    train('T1', LAT, LON0 + (1000 + jitterM) / KX),
+    train('T2', LAT, LON0 + (3000 + jitterM) / KX, { bearing: 270 }),
+  ]);
+  await app.enable();
+  const seen = [];
+  for (const next of [13, 0, 13, 0, 13, 0]) {
+    jitterM = next;
+    app.run(RAIL_POLL_MS);
+    await app.poll();
+    app.parts().selection.selectTrain(T1);
+    const standing = app.layer.getSelectedTrain().path.direction;
+    app.parts().selection.selectTrain(T2);
+    seen.push([standing, app.layer.getSelectedTrain().path.direction]);
+  }
+  assert.deepEqual(seen, Array(6).fill([0, -1]));
+});
+
 test('a snapshot read again while nothing changed is the one read before', async (t) => {
   let list = stopList('Alpha', 'Bravo', 'Charlie');
   const app = await onTheLine(t, {

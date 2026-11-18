@@ -1225,7 +1225,6 @@ export function createRendering({ state, services, parts }) {
     setNameOf,
     markerShown,
     markDirty,
-    setShown,
     flushMarkers,
     removeMarker,
     watchCamera,

@@ -2769,7 +2769,7 @@ HUD view is.
 The Rail layer offers a read API for such a view: `getSelectedTrain()` and
 `getCockpitSubject()` (a snapshot of the train: where it is along its line,
 which way it runs (`pathBinding.js` learns it), its rail height (null while
-no floor is known and it is drawn on the ellipsoid), speed as reported or
+no floor is known), speed as reported or
 derived, position source, feed credit and stops, and
 `selectedAtMs`, when the user last selected it by a click or `focusTrain`,
 even again; null after a deselection and for a train only a hold selected),
@@ -2789,15 +2789,17 @@ view. Turning the layer off ends the hold. Its snapshot's
 `position.groundHeightM` is the floor where playback draws it (the drawn
 marker's height while it is placed, else its segment's two reports' floors at
 the playback fraction), not the newest report's, and null while that floor is
-unknown, also far above the ground, where such a vehicle is drawn on the
-ellipsoid. Rail's `path.direction` is the way the drawn train runs: once
-playback has placed it, a report that runs back turns it only when playback
-reaches that report. A train turns once it is 15 m back from the farthest point
-it reached, however slowly it backs, so a standing train's GPS jitter keeps the
-direction it had. `docs/APPLICATION.md` (Cockpit subjects) shows a minimal provider. `src/ui/cockpitSubjectView.test.mjs`,
+unknown, also while the camera is too high for the layer to sample the ground
+and such a vehicle is drawn on the ellipsoid. Rail's `path.direction` is the
+way the drawn train runs: once playback has placed it, a report that runs back
+turns it only when playback starts the segment to that report. A train turns
+once it has backed away from the farthest point it reached by more than a
+standing train's GPS jitter, however slowly it backs, so that jitter keeps the
+direction it had. `docs/APPLICATION.md` (Cockpit subjects) shows a minimal
+provider. `src/ui/cockpitSubjectView.test.mjs`,
 `src/cockpitSubjectProviders.test.mjs`, `src/cockpitProgress.test.mjs`,
-`src/layers/rail/cockpitSubject.test.mjs` and the Transit lifecycle tests
-cover them.
+`src/layers/rail/cockpitSubject.test.mjs`, `src/layers/rail/pathBinding.test.mjs`
+and the Transit lifecycle tests cover them.
 
 ## Context coordination
 
