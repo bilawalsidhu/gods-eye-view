@@ -4284,13 +4284,16 @@ export function portChecks() {
           ok(pickedAt(armAt(forward)), 'and stays ahead');
         }
 
-        await show(
+        // A spinning part asks for frames for as long as it spins, so the
+        // scene never settles; wait for frames to be drawn instead.
+        set.upsert([
           model('m', {
             spin: { pod: 90 },
             deploy: { pod: 1, missing: 1 },
             poses: { pod: { highlight: true }, missing: { hidden: true } },
           }),
-        );
+        ]);
+        await drawn(h, r, 3);
         if (picks) ok(pickedAt(pos), 'spinning and highlighted, where it is');
         await show(model('m'));
         if (picks) ok(pickedAt(pos), 'back at rest');
