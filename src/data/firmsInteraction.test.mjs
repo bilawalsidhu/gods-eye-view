@@ -649,6 +649,16 @@ test('far zoom drapes one heatmap and the hand-off cross-fades it with the marke
     assert.equal(added[0].alpha, 0.5);
     assert.equal(glow(1).alpha, 0.5, 'rebuilt markers get the fade');
 
+    // An application drawing the detections in their place hides both.
+    h.layer.setMarkerStandIn({ hitTest: () => null });
+    assert.equal(added[0].show, false, 'a stand-in hides the heatmap');
+    assert.equal(markers().show, false, 'and the markers');
+    h.layer._renderLodForTest('global');
+    assert.equal(added[0].show, false, 'through a rebuild too');
+    h.layer.setMarkerStandIn(null);
+    assert.equal(added[0].show, true);
+    assert.equal(markers().show, true);
+
     h.layer.disable();
     assert.equal(added[0].show, false, 'disable hides the heatmap');
 
@@ -658,5 +668,84 @@ test('far zoom drapes one heatmap and the hand-off cross-fades it with the marke
   } finally {
     h.cleanup();
     restoreDocument();
+  }
+});
+
+test('a click on a fire an application draws in place of the markers selects it as a marker click does', () => {
+  const fire = makeFire();
+  const other = makeFire({ index: 8, lat: 31.2, lon: -97.9, frp: 40 });
+  // The application's records come from the same source, adapted on their own.
+  let answer = { ...fire };
+  const asked = [];
+  const h = harness({ fires: [fire, other], picked: glowPick('firms-8') });
+  try {
+    h.layer.setMarkerStandIn({
+      hitTest: (screen) => {
+        asked.push(screen);
+        return answer;
+      },
+    });
+    assert.equal(h.icons().show, false, 'the glows are hidden');
+    h.published.length = 0;
+    h.click();
+    assert.deepEqual(asked, [{ x: 400, y: 300 }]);
+    assert.equal(h.requests.length, 1, 'the camera moves as for a marker');
+    assert.equal(h.requests[0].kind, 'fire');
+    assert.equal(
+      h.requests[0].id,
+      fireDetectionKey(fire),
+      'the stand-in decides, not the hidden glow under the click',
+    );
+    assert.equal(h.layer.getSelectedInfo().id, fireDetectionKey(fire));
+    assert.equal(getSelectedEntityContext().label, 'Fire · FRP 1520 MW');
+    assert.deepEqual(
+      h.published.map((entry) => entry.id),
+      [`selected-fire:${fireDetectionKey(fire)}`],
+      "only the selected fire's card shows",
+    );
+
+    // Nothing of the application's under the click: empty space.
+    answer = null;
+    h.click();
+    assert.equal(h.requests.length, 1, 'no camera move');
+    assert.equal(h.layer.getSelectedInfo(), null, 'the selection is cleared');
+  } finally {
+    h.cleanup();
+  }
+});
+
+test('a stand-in hit on a fire the layer does not show selects nothing', () => {
+  const fire = makeFire();
+  const h = harness({ fires: [fire] });
+  try {
+    h.layer.setMarkerStandIn({
+      hitTest: () => makeFire({ lat: 12.5, lon: 40.1 }),
+    });
+    h.click();
+    assert.equal(h.requests.length, 0);
+    assert.equal(h.layer.getSelectedInfo(), null);
+  } finally {
+    h.cleanup();
+  }
+});
+
+test('taking the stand-in away brings the markers and their cards back and keeps the selection', () => {
+  const fire = makeFire();
+  const h = harness({
+    fires: [fire],
+    // Near enough for the markers rather than the heatmap.
+    cameraPosition: Cesium.Cartesian3.fromDegrees(fire.lon, fire.lat, 500_000),
+  });
+  try {
+    h.layer.setMarkerStandIn({ hitTest: () => fire });
+    assert.equal(h.icons().show, false);
+    h.click();
+    h.layer.setMarkerStandIn(null);
+    assert.equal(h.icons().show, true);
+    assert.equal(h.layer.getSelectedInfo().id, fireDetectionKey(fire));
+    const ids = h.published.map((entry) => entry.id);
+    assert.ok(ids.includes(`selected-fire:${fireDetectionKey(fire)}`));
+  } finally {
+    h.cleanup();
   }
 });
