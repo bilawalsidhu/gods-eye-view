@@ -54,6 +54,8 @@ function safeLocalStorage() {
  *   (`createLibrarySource`).
  * @param {boolean} [options.requireCatalog] Offer only what the server's
  *   catalog names, nothing while it does not answer; it is asked again later.
+ * @param {typeof fetch} [options.fetchImpl] Asks the library server (its
+ *   catalog) in place of the page's fetch (`createLibrarySource`).
  */
 export function createDataLibrary({
   entries = LIBRARY_ENTRIES,
@@ -70,9 +72,11 @@ export function createDataLibrary({
   fetchTile = null,
   fetchData = null,
   requireCatalog = false,
+  fetchImpl = undefined,
   source = createLibrarySource({
     entries,
     storage,
+    fetchImpl,
     fetchTile,
     fetchData,
     requireCatalog,

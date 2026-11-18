@@ -862,3 +862,31 @@ test('a required catalog that does not answer offers nothing and is asked again 
   assert.ok(calls.every((url) => url === '/api/library/catalog'));
   library.destroy();
 });
+
+test("the library asks its catalog with the application's own fetch", async (t) => {
+  const manager = sealedManager(t);
+  const calls = [];
+  const library = createDataLibrary({
+    entries,
+    ledger,
+    dataManager: manager,
+    services: {},
+    storage: memoryStorage(null),
+    initialHash: '',
+    requireCatalog: true,
+    fetchImpl: async (url) => {
+      calls.push(String(url));
+      return Response.json({
+        entries: [{ id: 'night-lights', available: true, reason: null }],
+      });
+    },
+    setTimer: () => {},
+    clearTimer: () => {},
+  });
+  await library.start();
+  assert.deepEqual(calls, ['/api/library/catalog']);
+  assert.deepEqual(
+    library.list().map(({ entry }) => entry.id),
+    ['night-lights'],
+  );
+});
