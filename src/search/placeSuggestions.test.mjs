@@ -385,3 +385,45 @@ test('two houses on one street are two suggestions, asked once', async () => {
   assert.deepEqual(second, first);
   assert.equal(sent, 1);
 });
+
+test('streets named for keys, tokens and codes, and ZIP+4 after a state, are places', () => {
+  for (const line of [
+    'Secret Key Lake',
+    'Access Token Road',
+    'Api Key Lane',
+    'GATE CODE LANE',
+    'SECURITY CODE PLAZA',
+    'OTP Bank',
+    'MFA BOSTON',
+    'Auth Code ABCD Street',
+    'California 90210-1234',
+    'Austin Texas 78701-1234',
+    'Cambridge MA. 02139-4307',
+    '12, 10115 Berlin',
+  ])
+    assert.equal(mayBePrivate(line), false, line);
+  for (const line of [
+    'gate code: abcd',
+    'PIN A7B2',
+    'PIN is A7B2',
+    'OTP-ABCDEF',
+    'OTP – ABCDEF',
+    'login code ab-12-cd',
+    'auth_token=abc',
+  ])
+    assert.equal(mayBePrivate(line), true, line);
+});
+
+test('the same text asked again while its request is out is sent once', async () => {
+  let sent = 0;
+  const service = createPlaceSuggester({
+    endpoint: 'https://fixture.test/api/',
+    fetchImpl: async () => {
+      sent++;
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      return Response.json({ features: [] });
+    },
+  });
+  await Promise.all([service.suggest('Paris'), service.suggest('Paris')]);
+  assert.equal(sent, 1);
+});

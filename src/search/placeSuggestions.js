@@ -87,6 +87,12 @@ function foldLine(text) {
     .replace(/(?![0-9])\p{Nd}/gu, '0');
 }
 
+/** A US ZIP+4 after a state's code or name, as an address writes it. */
+const US_ZIP4 = new RegExp(
+  String.raw`(?<=(?:^|\s)(?:[a-z]{2}|[a-z]\.[a-z]|Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|Florida|Georgia|Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Mass|Michigan|Minnesota|Mississippi|Missouri|Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|Tennessee|Texas|Utah|Vermont|Virginia|Washington|West Virginia|Wisconsin|Wyoming|Puerto Rico)\.?,?\s)\d{5}-\d{4}\b`,
+  'giu',
+);
+
 /**
  * Why a line may be private: 'number' when only a long run of digits makes
  * it so, 'other' for anything else, or null.
@@ -138,8 +144,9 @@ function privacyReason(text) {
       ? line
       : line
           .replace(
-            // A street word before ("030 12345" is a phone number).
-            /(?<=\p{L}\.?\s)\d{1,4}[a-z]?,?\s+\d{5}(?:-\d{3})?(?=\s+\p{L}|$)/giu,
+            // After a street word, or before the city ("12, 10115 Berlin");
+            // "030 12345" alone is a phone number.
+            /(?<=\p{L}\.?\s)\d{1,4}[a-z]?,?\s+\d{5}(?:-\d{3})?(?=\s+\p{L}|$)|(?<=^|\s)\d{1,4}[a-z]?,?\s+\d{5}(?:-\d{3})?(?=\s+\p{L})/giu,
             ' ',
           )
           // Other postcodes after a street's house number and before the city (a
@@ -151,9 +158,10 @@ function privacyReason(text) {
             /(?<=\p{L}\.?\s)\d{1,4}[a-z]?(?:,\s*\d{4}(?:-\d{3})?|,?\s+(?:\d{2}-\d{3}|\d{3} \d{2}|\d{6}))(?=\s+\p{L})/giu,
             ' x ',
           )
-          // ZIP+4 after a state's two letters ("DC 20500-0003"), not after
-          // any word ("Alice 12345-6789").
-          .replace(/(?<=(?:^|\s)\p{L}{2},?\s)\d{5}-\d{4}\b/gu, ' x ')
+          // ZIP+4 after a state ("DC 20500-0003", "MA. 02139-4307",
+          // "California 90210-1234"), not after any word ("Alice
+          // 12345-6789").
+          .replace(US_ZIP4, ' x ')
           .replace(/\b\d{5}-\d{3}\b/g, ' x ')
           .replace(
             /〒\s?\d{3}-\d{4}|\b\d{3}-\d{4}(?=\s*[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}])/gu,
@@ -176,7 +184,9 @@ function privacyReason(text) {
     /(?<!\p{L})(?:contraseña|passwort|kennwort|mot de passe|senha|parola d'ordine|lösenord|пароль|пароля|密码|密碼|パスワード|비밀번호|סיסמה|كلمة (?:السر|المرور))(?!\p{L})\s*[:=#]?\s*\S/iu.test(
       line,
     ) ||
-    /\b(?:api[ _-]?key|access[ _-]?token|secret[ _-]?key|auth[ _-]?token|client[ _-]?secret)(?:\s*[:=]\s*|\s+)\S{4,}/i.test(
+    // After ":" or "=" any value ("auth_token=abc"); after a space a long
+    // one, so "Secret Key Lake" and "Access Token Road" stay places.
+    /\b(?:api[ _-]?key|(?:access|auth|refresh|id)[ _-]?token|secret[ _-]?key|client[ _-]?secret)(?:\s*[:=]\s*\S|\s+\S{6,})/i.test(
       line,
     ) ||
     /\b(?:token|secret|api[ _-]?key|key|pass)\s*[:=]\s*\S/i.test(line) ||
@@ -191,7 +201,9 @@ function privacyReason(text) {
     // A code of letters too, after a label that can only be a code
     // ("OTP: ABCDEF", "verification code ABCDEF", "PIN: A7B2"); "Pin Oak"
     // has no colon and stays a place.
-    /\b(?:pin|otp|2fa|mfa|cvv|cvc)\s*[:=#]\s*[a-z0-9]/i.test(line) ||
+    /\b(?:pin|otp|2fa|mfa|cvv|cvc|(?:door|access|gate|alarm|entry|security|verification|one-time|auth|login) code)\s*(?:[:=#]|\s[-–—]\s|-)\s*[a-z0-9]/i.test(
+      line,
+    ) ||
     codeAfterLabel(line)
   )
     return 'other';
@@ -213,18 +225,20 @@ function privacyReason(text) {
 }
 
 /**
- * A code of letters after a label that can only be a code, without a colon
- * ("verification code ABCDEF", "otp 7GH2K"): written in capitals or holding
- * a digit, so "Gate Code Lane" stays a street.
+ * A code after a label that can only be a code, without a colon ("PIN
+ * A7B2", "verification code ABCDEF", "otp 7GH2K"): holding a digit, or in
+ * capitals after a label that is not, and ending the line. "Gate Code Lane",
+ * "GATE CODE LANE", "OTP Bank" and "Auth Code ABCD Street" stay places.
  */
 function codeAfterLabel(line) {
   const match =
-    /\b(?:otp|2fa|mfa|(?:door|access|gate|alarm|entry|security|verification|one-time|auth|login) code)(?:\s+is)?\s*[:=#]?\s*([a-z0-9]{4,})\b/i.exec(
+    /\b((?:pin|cvv|cvc|otp|2fa|mfa|(?:door|access|gate|alarm|entry|security|verification|one-time|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{3,})\s*[.!]?\s*$/i.exec(
       line,
     );
   if (!match) return false;
-  const value = match[1];
-  return /\d/.test(value) || value === value.toUpperCase();
+  const [, label, value] = match;
+  if (/\d/.test(value)) return true;
+  return value === value.toUpperCase() && label !== label.toUpperCase();
 }
 
 /**
@@ -262,13 +276,20 @@ const CACHE_LIMIT = 200;
  * The spacing, the pause and the cache, shared by every suggester in the tab:
  * a search box that is put up again starts from where the last one left off.
  */
-const shared = { nextRequestAt: 0, pausedUntil: 0, cache: new Map() };
+const shared = {
+  nextRequestAt: 0,
+  pausedUntil: 0,
+  cache: new Map(),
+  /** Requests on their way, by cache key: the same text asked again waits. */
+  pending: new Map(),
+};
 
 /** Forget the shared spacing, pause and cache (tests). */
 export function resetPlaceSuggestions() {
   shared.nextRequestAt = 0;
   shared.pausedUntil = 0;
   shared.cache.clear();
+  shared.pending.clear();
 }
 
 /** List Photon candidates while typing. The submitted search owns navigation. */
@@ -295,100 +316,117 @@ export function createPlaceSuggester({
       const key = `${endpoint ?? ''}|${limit}|${language}|${text.toLowerCase()}`;
       if (cache.has(key)) return cache.get(key);
 
-      // Concurrent callers recheck the gap after waking before sending.
-      while (shared.nextRequestAt > Date.now()) {
-        let timer;
-        const pause = new Promise((resolve) => {
-          timer = setTimeout(resolve, shared.nextRequestAt - Date.now());
-        });
+      // The same text already on its way is that request's answer, unless
+      // its caller cancels it: then this one asks for itself.
+      const inFlight = shared.pending.get(key);
+      if (inFlight)
         try {
-          await waitForSignal(pause, signal);
-        } finally {
-          clearTimeout(timer);
+          return await waitForSignal(inFlight, signal);
+        } catch {
+          signal?.throwIfAborted();
         }
-      }
-      signal?.throwIfAborted();
-      // The same text asked again while this one waited is answered now.
-      if (cache.has(key)) return cache.get(key);
-      if (Date.now() < shared.pausedUntil) return [];
-      const url = new URL(photonSearchUrl(text, { endpoint, limit }));
-      if (['en', 'de', 'fr', 'it'].includes(language))
-        url.searchParams.set('lang', language);
-
-      shared.nextRequestAt = Date.now() + MIN_GAP_MS;
-      let features;
-      try {
-        features = await requestWithDeadline(
-          async (requestSignal) => {
-            const response = await fetchImpl(url, { signal: requestSignal });
-            requestSignal.throwIfAborted();
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
-            return data?.features;
-          },
-          { signal, timeoutMs: TIMEOUT_MS },
-        );
-      } catch (error) {
+      const ask = async () => {
+        // Concurrent callers recheck the gap after waking before sending.
+        while (shared.nextRequestAt > Date.now()) {
+          let timer;
+          const pause = new Promise((resolve) => {
+            timer = setTimeout(resolve, shared.nextRequestAt - Date.now());
+          });
+          try {
+            await waitForSignal(pause, signal);
+          } finally {
+            clearTimeout(timer);
+          }
+        }
         signal?.throwIfAborted();
-        // A refusal, a timeout or a failed request (a refusal sent without
-        // CORS headers arrives as one) all hold suggestions off a while.
-        void error;
-        shared.pausedUntil = Date.now() + PAUSE_AFTER_REFUSAL_MS;
-        return [];
-      }
-      signal?.throwIfAborted();
-      if (!Array.isArray(features)) return [];
+        // The same text asked again while this one waited is answered now.
+        if (cache.has(key)) return cache.get(key);
+        if (Date.now() < shared.pausedUntil) return [];
+        const url = new URL(photonSearchUrl(text, { endpoint, limit }));
+        if (['en', 'de', 'fr', 'it'].includes(language))
+          url.searchParams.set('lang', language);
 
-      const seen = new Set();
-      const places = [];
-      for (const feature of features) {
-        const normalized = normalizePhotonFeature(feature);
-        if (!normalized) continue;
-        const {
-          city,
-          state,
-          country,
-          countrycode: countryCode,
-          osm_value: osmType,
-          type,
-          street,
-          housenumber: houseNumber,
-        } = feature.properties ?? {};
-        // A house has no name of its own: its street and number are its
-        // name, so two houses on one street stay two places.
-        const address = street
-          ? [houseNumber, street].filter(Boolean).join(' ')
-          : '';
-        const name = normalized.name || address || city || state || country;
-        if (!name) continue;
-        const detail = [...new Set([city, state, country])]
-          .filter((part) => part && part !== name)
-          .join(', ');
-        const id = `${name}|${detail}`;
-        if (seen.has(id)) continue;
-        seen.add(id);
-        const { southwest, northeast } = normalized.viewport ?? {};
-        places.push({
-          name,
-          detail,
-          latitude: normalized.lat,
-          longitude: normalized.lng,
-          type: (osmType === 'administrative' ? type : osmType || type) || '',
-          state: state || null,
-          country: country || null,
-          countryCode: /^[a-z]{2}$/i.test(countryCode ?? '')
-            ? countryCode.toUpperCase()
-            : null,
-          extent: southwest
-            ? [southwest.lng, northeast.lat, northeast.lng, southwest.lat]
-            : null,
-        });
-        if (places.length >= limit) break;
-      }
+        shared.nextRequestAt = Date.now() + MIN_GAP_MS;
+        let features;
+        try {
+          features = await requestWithDeadline(
+            async (requestSignal) => {
+              const response = await fetchImpl(url, { signal: requestSignal });
+              requestSignal.throwIfAborted();
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              const data = await response.json();
+              return data?.features;
+            },
+            { signal, timeoutMs: TIMEOUT_MS },
+          );
+        } catch (error) {
+          signal?.throwIfAborted();
+          // A refusal, a timeout or a failed request (a refusal sent without
+          // CORS headers arrives as one) all hold suggestions off a while.
+          void error;
+          shared.pausedUntil = Date.now() + PAUSE_AFTER_REFUSAL_MS;
+          return [];
+        }
+        signal?.throwIfAborted();
+        if (!Array.isArray(features)) return [];
 
-      cache.set(key, places);
-      if (cache.size > CACHE_LIMIT) cache.delete(cache.keys().next().value);
-      return places;
+        const seen = new Set();
+        const places = [];
+        for (const feature of features) {
+          const normalized = normalizePhotonFeature(feature);
+          if (!normalized) continue;
+          const {
+            city,
+            state,
+            country,
+            countrycode: countryCode,
+            osm_value: osmType,
+            type,
+            street,
+            housenumber: houseNumber,
+          } = feature.properties ?? {};
+          // A house has no name of its own: its street and number are its
+          // name, so two houses on one street stay two places.
+          const address =
+            street && houseNumber ? `${houseNumber} ${street}` : '';
+          const name = normalized.name || address || city || state || country;
+          if (!name) continue;
+          const detail = [...new Set([city, state, country])]
+            .filter((part) => part && part !== name)
+            .join(', ');
+          const id = `${name}|${detail}`;
+          if (seen.has(id)) continue;
+          seen.add(id);
+          const { southwest, northeast } = normalized.viewport ?? {};
+          places.push({
+            name,
+            detail,
+            latitude: normalized.lat,
+            longitude: normalized.lng,
+            type: (osmType === 'administrative' ? type : osmType || type) || '',
+            state: state || null,
+            country: country || null,
+            countryCode: /^[a-z]{2}$/i.test(countryCode ?? '')
+              ? countryCode.toUpperCase()
+              : null,
+            extent: southwest
+              ? [southwest.lng, northeast.lat, northeast.lng, southwest.lat]
+              : null,
+          });
+          if (places.length >= limit) break;
+        }
+
+        cache.set(key, places);
+        if (cache.size > CACHE_LIMIT) cache.delete(cache.keys().next().value);
+        return places;
+      };
+      const asking = ask();
+      shared.pending.set(key, asking);
+      try {
+        return await asking;
+      } finally {
+        if (shared.pending.get(key) === asking) shared.pending.delete(key);
+      }
     },
   };
 }
