@@ -54,7 +54,15 @@ export function pushCockpitSignal(
   { inPlace = false } = {},
 ) {
   if (!title || !detail) return;
-  const signature = `${title}|${detail}|${target?.layerId || ''}|${target?.id || ''}`;
+  // Each field on its own, so no title and detail read as another pair; an
+  // in-place row also changes with its tone alone.
+  const signature = JSON.stringify([
+    title,
+    detail,
+    target?.layerId || '',
+    target?.id || '',
+    inPlace ? tone : '',
+  ]);
   // A locale change words the signal again where it stands.
   const shown =
     this.rewordingSignals || inPlace

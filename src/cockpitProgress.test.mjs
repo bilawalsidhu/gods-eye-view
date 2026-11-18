@@ -159,3 +159,22 @@ test('a CJK stop name gets the width its full-width glyphs need', () => {
   assert.equal(estimateProgressLabelPx({ text: 'CENTRAL' }), 7 * 6.4 + 8);
   assert.equal(estimateProgressLabelPx({ text: 'ｶﾀｶﾅ' }), 4 * 6.4 + 8);
 });
+
+test('emoji and other astral glyphs in a progress label get at least 1 em each', () => {
+  // About 1 em in 10 px type, 0.06 em apart.
+  const emPx = 10 + 0.6;
+  for (const [text, needPx] of [
+    ['🚉🚆🚇🚋', 4 * emPx],
+    ['🚆'.repeat(8), 8 * emPx],
+    // Supplementary kana, outside the full-width ranges.
+    ['𛀁𛀂', 2 * emPx],
+    // Mixed: four emoji, a space and two full-width glyphs.
+    ['🚆🚇🚌🚕 乗換', 4 * emPx + 6.4 + 2 * emPx],
+  ]) {
+    const givenPx = estimateProgressLabelPx({ text, detail: '' });
+    assert.ok(
+      givenPx >= needPx + 8,
+      `${text}: ${givenPx} px given, about ${needPx} px needed`,
+    );
+  }
+});

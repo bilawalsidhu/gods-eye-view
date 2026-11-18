@@ -459,7 +459,10 @@ function updateSubject(nowMs) {
  *   Aircraft pass none and look along the heading at the profile pitch.
  */
 function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
-  if (!this.cockpitAnchorValid) {
+  // The update that first sets the anchor stands it on the target: the time
+  // before it (an entry, a floor wait) moved nothing, so it has no step.
+  const anchoring = !this.cockpitAnchorValid;
+  if (anchoring) {
     this.cockpitAnchor = clone(target);
     this.cockpitAnchorValid = true;
     this.subjectLiftM = null;
@@ -485,7 +488,7 @@ function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
     : 0;
 
   const groundClamp = info.groundClamp !== false;
-  if (info.stale || info.anchor === 'exact') {
+  if (anchoring || info.stale || info.anchor === 'exact') {
     // A feed backoff has no authoritative velocity epoch to advance from.
     // Hold the cockpit on the exact layer-rendered position so the camera
     // cannot coast away while the icon correctly remains fixed.

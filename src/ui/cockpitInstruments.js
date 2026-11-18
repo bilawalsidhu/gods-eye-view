@@ -256,24 +256,23 @@ function updateSubjectHud(info, nowMs, forceContext) {
     this.updateLocalPosition(info);
     this.maybeRefreshRegionalBrief(info);
     this.showContextCard(false);
-    const keys = new Set();
+    const keys = new Set(hud.signals.map(({ id }) => `subject:${id}`));
+    // Rows the view no longer lists leave first, so new ones take their
+    // places rather than push a listed one (or TRACK ACQUIRED) off.
+    for (const key of this.subjectSignalKeys ?? [])
+      if (!keys.has(key)) this.dropCockpitSignal(key);
+    this.subjectSignalKeys = keys;
     // The view's rows are its current signals: each changes where it stands,
     // so a changing one (an ETA) never pushes a steady one off the list.
-    for (const signal of hud.signals) {
-      const key = `subject:${signal.id}`;
-      keys.add(key);
+    for (const signal of hud.signals)
       this.pushCockpitSignal(
-        key,
+        `subject:${signal.id}`,
         SUBJECT_SIGNAL_TONES[signal.tone] ?? 'info',
         signal.title,
         signal.detail || signal.title,
         null,
         { inPlace: true },
       );
-    }
-    for (const key of this.subjectSignalKeys ?? [])
-      if (!keys.has(key)) this.dropCockpitSignal(key);
-    this.subjectSignalKeys = keys;
   }
 }
 

@@ -30,27 +30,25 @@ const TONE_RANK = Object.freeze([
 const stronger = (a, b) =>
   TONE_RANK.indexOf(b) > TONE_RANK.indexOf(a) ? b : a;
 
-/**
- * Full-width glyphs (CJK ideographs and punctuation, kana, Hangul, full-width
- * forms), each about 1 em wide.
- */
+/** Full-width glyphs (CJK, kana, Hangul, full-width forms): about 1 em each. */
 const WIDE_GLYPH =
   /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꥠ-꥿가-힣豈-﫿︰-﹏＀-｠￠-￦\u{20000}-\u{3fffd}]/u;
 
-/** One line's width in the label's 10 px type, 0.06 em apart (px). */
+/**
+ * One line's width (px) in `.cockpit-progress-label` type (cockpitSubject.css:
+ * 10 px, 0.06 em spacing): 10.6 px a full-width glyph and 6.4 px each UTF-16
+ * unit of any other, so an emoji or other astral glyph gets 12.8 px.
+ */
 function lineWidthPx(line) {
   let wide = 0;
   let narrow = 0;
   for (const glyph of String(line ?? ''))
     if (WIDE_GLYPH.test(glyph)) wide += 1;
-    else narrow += 1;
+    else narrow += glyph.length;
   return wide * 10.6 + narrow * 6.4;
 }
 
-/**
- * A label's width estimate (px): its longer line, a full-width glyph at
- * 10.6 px and any other at 6.4 px.
- */
+/** A label's width estimate (px): its longer line and 8 px of padding. */
 export function estimateProgressLabelPx(label) {
   return Math.max(lineWidthPx(label?.text), lineWidthPx(label?.detail)) + 8;
 }

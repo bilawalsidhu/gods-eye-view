@@ -625,6 +625,55 @@ test('an inertial subject drawn at 5 frames a second stays near its target', asy
   );
 });
 
+for (const [intervalMs, waitMs] of [
+  [0, 1000],
+  [500, 2000],
+]) {
+  test(`an inertial subject's first camera update after a ${waitMs} ms floor wait (interval ${intervalMs} ms) stands on it`, async (t) => {
+    const startMs = 10_000;
+    const clock = manualClock(t, startMs);
+    const SPEED_MPS = 30;
+    const mPerDegLon = 111_320 * Math.cos(Cesium.Math.toRadians(LAT));
+    const eastOf = () =>
+      LON + (SPEED_MPS * (performance.now() - startMs)) / 1000 / mPerDegLon;
+    const ride = subjectProvider({ cameraIntervalMs: intervalMs });
+    const base = ride.subject.frame;
+    ride.subject.frame = () => ({
+      ...base,
+      heightM: null,
+      longitude: eastOf(),
+      speedMps: SPEED_MPS,
+      anchor: 'inertial',
+      eye: { ...base.eye, forwardM: 0 },
+    });
+    const { cockpit, shots, setFloor } = fixture(t, { providers: [ride] });
+    setFloor(undefined);
+    cockpit.syncEntry();
+    assert.equal(cockpit.enter(), true);
+    const before = shots.length;
+    const stepMs = intervalMs || 100;
+    for (let waited = stepMs; waited < waitMs; waited += stepMs) {
+      clock.advance(stepMs);
+      cockpit.update();
+    }
+    assert.equal(
+      shots.length,
+      before,
+      'no camera update while the floor is cold',
+    );
+    setFloor(FLOOR_M);
+    clock.advance(stepMs);
+    cockpit.update();
+    const shot = Cesium.Cartographic.fromCartesian(shots[before].destination);
+    const leadM =
+      (Cesium.Math.toDegrees(shot.longitude) - eastOf()) * mPerDegLon;
+    assert.ok(
+      Math.abs(leadM) < 1,
+      `the first camera update leads the subject by ${leadM.toFixed(2)} m`,
+    );
+  });
+}
+
 test('an exact anchor sits on the subject, wherever the frame moves it', async (t) => {
   const clock = manualClock(t, 10_000);
   const ride = subjectProvider();
@@ -1371,5 +1420,65 @@ test('a signal still listed stays in Live Signals while another one changes', as
       .filter((key) => key.startsWith('subject:'))
       .sort(),
     ['subject:doors', 'subject:eta'],
+  );
+});
+
+test('a Live Signals row whose tone alone changes takes the new tone', async (t) => {
+  const clock = manualClock(t, 10_000);
+  const ride = subjectProvider();
+  const { cockpit } = fixture(t, { providers: [ride] });
+  delete cockpit.pushCockpitSignal;
+  delete cockpit.dropCockpitSignal;
+  const hudWith = (tone) => ({
+    ...HUD,
+    signals: [
+      { id: 'doors', tone, title: 'DOORS', detail: 'door fault, car 2' },
+    ],
+  });
+  const doorsTone = () =>
+    cockpit.signalItems.find((row) => row.key === 'subject:doors').tone;
+  ride.subject.hud = hudWith('normal');
+  cockpit.syncEntry();
+  assert.equal(cockpit.enter(), true);
+  const tones = [doorsTone()];
+  for (const tone of ['warning', 'normal']) {
+    ride.subject.hud = hudWith(tone);
+    clock.advance(1000);
+    cockpit.update();
+    tones.push(doorsTone());
+  }
+  assert.deepEqual(tones, ['info', 'warning', 'info']);
+});
+
+test('rows a HUD view replaces leave before new ones push a listed one off', async (t) => {
+  const clock = manualClock(t, 10_000);
+  const ride = subjectProvider();
+  const { cockpit } = fixture(t, { providers: [ride] });
+  delete cockpit.pushCockpitSignal;
+  delete cockpit.dropCockpitSignal;
+  const row = (id, tone) => ({
+    id,
+    tone,
+    title: id.toUpperCase(),
+    detail: `row ${id}`,
+  });
+  ride.subject.hud = {
+    ...HUD,
+    signals: [row('w', 'warning'), row('a'), row('b'), row('c')],
+  };
+  cockpit.syncEntry();
+  assert.equal(cockpit.enter(), true);
+  assert.ok(cockpit.signalItems.some((item) => item.key === 'track'));
+  ride.subject.hud = {
+    ...HUD,
+    signals: [row('w', 'warning'), row('a'), row('d'), row('e')],
+  };
+  clock.advance(1000);
+  cockpit.update();
+  const keys = cockpit.signalItems.map((item) => item.key);
+  assert.deepEqual(
+    [...keys].sort(),
+    ['subject:a', 'subject:d', 'subject:e', 'subject:w', 'track'],
+    `rows right after the change: ${keys.join(', ')}`,
   );
 });
