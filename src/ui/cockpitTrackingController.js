@@ -516,7 +516,10 @@ function enterSubject(provider) {
   this.surfaceAcquiring = false;
   this.surfaceFallback = false;
   this.cockpitAnchorValid = false;
-  this.subjectHeightM = null;
+  // The entry frame's height, if any, stands in for a cold floor
+  // (updateSubject).
+  this.subjectHeightM = frame.heightM;
+  this.subjectHeightFromEntry = true;
   this.lookRestPitchDeg = provider.look?.restPitchDeg ?? null;
   this.resetLook({ immediate: true });
   this.active = true;
