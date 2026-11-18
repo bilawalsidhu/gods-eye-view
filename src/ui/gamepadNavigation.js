@@ -1,6 +1,15 @@
+import { findCamera, findFrame } from '../render/rendererOf.js';
 import { STYLE_KEYS } from './applicationShortcuts.js';
 
 const noop = () => {};
+
+function getCamera(host) {
+  return findCamera(host) ?? (host && Reflect.get(host, 'camera')) ?? null;
+}
+
+function getFrame(host) {
+  return findFrame(host) ?? (host && Reflect.get(host, 'scene')) ?? null;
+}
 
 const DEFAULT_DEADZONE = 0.15;
 const DEFAULT_ROTATE_SPEED = 1.4; // radians/sec
@@ -122,18 +131,18 @@ export function createGamepadNavigation({
       case 0: // Button A / Cross: Toggle HUD
         actions.toggleHud?.();
         break;
-      case 1: // Button B / Circle: Cancel Flight (if active) / Clean View
-        if (
-          (viewer?.camera?._currentFlight || viewer?.camera?._flight) &&
-          typeof viewer?.camera?.cancelFlight === 'function'
-        ) {
-          viewer.camera.cancelFlight();
+      case 1: {
+        // Button B / Circle: Cancel Flight (if active) / Clean View
+        const camera = getCamera(viewer);
+        if (camera?.flying) {
+          camera.cancelFlight();
         } else if (typeof actions.toggleCleanView === 'function') {
           actions.toggleCleanView();
-        } else if (typeof viewer?.camera?.cancelFlight === 'function') {
-          viewer.camera.cancelFlight();
+        } else if (typeof camera?.cancelFlight === 'function') {
+          camera.cancelFlight();
         }
         break;
+      }
       case 2: // Button X / Square: Toggle Orbit
         actions.toggleOrbit?.();
         break;
@@ -191,7 +200,7 @@ export function createGamepadNavigation({
     // Handle edge-triggered buttons
     handleButtonEdges(gamepad);
 
-    const camera = viewer?.camera;
+    const camera = getCamera(viewer);
     if (!camera) return;
 
     const axes = gamepad.axes || [];
@@ -237,11 +246,18 @@ export function createGamepadNavigation({
         isMoving = true;
         holdRender('gamepad-navigation');
       }
-      viewer?.scene?.requestRender?.();
+      const frame = getFrame(viewer);
+      if (typeof frame?.requestRender === 'function') {
+        frame.requestRender('gamepad-navigation');
+      }
 
       // Height-scaled motion rates
-      const height = Number.isFinite(camera.positionCartographic?.height)
-        ? Math.max(10, camera.positionCartographic.height)
+      const poseHeight =
+        typeof camera.pose === 'function' ? camera.pose()?.height : undefined;
+      const cartoHeight = camera.positionCartographic?.height;
+      const rawHeight = Number.isFinite(poseHeight) ? poseHeight : cartoHeight;
+      const height = Number.isFinite(rawHeight)
+        ? Math.max(10, rawHeight)
         : 1000;
 
       const moveStep = Math.max(10, height * moveFactor) * dt;
@@ -274,14 +290,26 @@ export function createGamepadNavigation({
     }
   }
 
-  // Hook scene.preUpdate (or fallback to preRender) so stick input is evaluated
-  // continuously even when Cesium is idling in requestRenderMode (#1000, #1010).
+  // Hook frame on preUpdate (or fallback to scene preRender) so stick input is evaluated
+  // continuously even when idling in requestRenderMode (#1000, #1010).
   let removeTickListener = null;
-  const tickTarget = viewer?.scene?.preUpdate ?? viewer?.scene?.preRender;
-  if (tickTarget?.addEventListener) {
-    removeTickListener = tickTarget.addEventListener(() => {
+  const frame = findFrame(viewer);
+  if (frame && typeof frame.on === 'function') {
+    removeTickListener = frame.on('preUpdate', () => {
       poll();
     });
+  } else {
+    const rawScene = viewer && Reflect.get(viewer, 'scene');
+    const tickTarget =
+      rawScene &&
+      (Reflect.get(rawScene, 'preUpdate') ??
+        Reflect.get(rawScene, 'preRender'));
+    if (tickTarget?.addEventListener) {
+      const unsub = tickTarget.addEventListener(() => {
+        poll();
+      });
+      removeTickListener = typeof unsub === 'function' ? unsub : null;
+    }
   }
 
   return {
@@ -301,8 +329,7 @@ export function createGamepadNavigation({
       }
       if (typeof removeTickListener === 'function') {
         removeTickListener();
-      } else if (removeTickListener) {
-        tickTarget?.removeEventListener?.(removeTickListener);
+        removeTickListener = null;
       }
       if (isMoving) {
         isMoving = false;
