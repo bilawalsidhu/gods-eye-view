@@ -196,6 +196,20 @@ test('aircraft are found by exactly one identifier across feeds', async () => {
   );
 });
 
+test('find_aircraft keeps padded ICAO callsigns distinct from IATA aliases', async () => {
+  const aircraft = feed([
+    record('aaa111', 51.5, -0.1, { callsign: 'BAW0123' }),
+    record('bbb222', 51.6, -0.2, { callsign: 'BAW123' }),
+  ]);
+  const catalog = composeCatalog({ tools: coreTools, services: { aircraft } });
+  const exact = await catalog.call('find_aircraft', { callsign: 'BAW0123' });
+  const alias = await catalog.call('find_aircraft', { callsign: 'BA0123' });
+  assert.deepEqual(
+    [exact, alias].map((result) => result.data.rows.map((row) => row.id)),
+    [['aaa111'], ['bbb222']],
+  );
+});
+
 test('tracks are ordered and thinned to 200 points', async () => {
   const start = Date.UTC(2026, 0, 1);
   const track = Array.from({ length: 450 }, (_, index) => ({
