@@ -608,3 +608,75 @@ test('a route answer for a callsign the plane no longer flies is dropped', async
   assert.equal(meta.routeCallsign, 'UAL10');
   flightState.lifetime.abort();
 });
+
+test("a type lookup overrides the feed's type and fills the type name", async () => {
+  const queries = [];
+  const source = {
+    getEnrichment(query) {
+      queries.push(query);
+      return Promise.resolve({
+        found: true,
+        typeCode: 'B738',
+        typeName: 'Boeing 737-800',
+        registration: 'N123AB',
+      });
+    },
+  };
+  const flightState = createFlightState({ source, services: services() });
+  const view = {
+    viewerLatDeg: null,
+    viewerLonDeg: null,
+    trackedId: null,
+    floorWarmPoints: [],
+  };
+  const { meta } = flightState.records.receive(
+    {
+      id: 'abc123',
+      reference: 'abc123',
+      longitude: -77,
+      latitude: 39,
+      callsign: 'TEST1',
+      baroAltitudeM: 1000,
+      typeCode: 'EC45',
+    },
+    view,
+  );
+  assert.equal(meta.klass, 'helicopter', 'classed by the feed type at once');
+  const restyled = [];
+  const synced = [];
+  const enrichment = createEnrichment({
+    flightState,
+    services: enrichServices(),
+    parts: {
+      icons: { _applyIconPresentation: (id) => restyled.push(id) },
+      rendering: { _syncModelToClass: (id) => synced.push(id) },
+    },
+  });
+  // A present feed type does not skip the lookup.
+  enrichment._requestTypeEnrichment('abc123', true);
+  await new Promise((done) => setImmediate(done));
+  assert.deepEqual(queries, [{ kind: 'type', id: 'abc123' }]);
+  const looked = flightState.records.data.get('abc123');
+  assert.equal(looked.typeCode, 'B738');
+  assert.equal(looked.typeName, 'Boeing 737-800');
+  assert.equal(looked.registration, 'N123AB');
+  assert.equal(looked.klass, 'airliner');
+  assert.deepEqual(restyled, ['abc123']);
+  assert.deepEqual(synced, ['abc123']);
+  // The next poll's feed type no longer wins.
+  const next = flightState.records.receive(
+    {
+      id: 'abc123',
+      reference: 'abc123',
+      longitude: -77,
+      latitude: 39,
+      callsign: 'TEST1',
+      baroAltitudeM: 1000,
+      typeCode: 'EC45',
+    },
+    view,
+  ).meta;
+  assert.equal(next.typeCode, 'B738');
+  assert.equal(next.klass, 'airliner');
+  flightState.lifetime.abort();
+});

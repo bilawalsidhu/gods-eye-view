@@ -298,14 +298,14 @@ test('a ground vehicle or station with no altitude stands on the ground; an airc
   assert.equal(mast.onGround, true);
   assert.equal(mast.typeCode, 'GRND');
   // An airliner with no altitude keeps the airborne default, and its feed
-  // type still waits for the airframe lookup.
+  // type from the first fix.
   const plane = store.receive(
     observation({ id: 'p1', typeCode: 'A320', ...noAltitude }),
     view(),
   ).meta;
   assert.equal(plane.onGround, false);
   assert.equal(plane.altitude, 10000);
-  assert.equal(plane.typeCode, null);
+  assert.equal(plane.typeCode, 'A320');
   // A vehicle reporting an altitude is placed by it.
   const reported = store.receive(
     observation({ id: 'v2', typeCode: 'ZVEH', baroAltitudeM: 12 }),
@@ -326,7 +326,7 @@ test('a ground vehicle or station with no altitude stands on the ground; an airc
     view(),
   ).meta;
   assert.equal(earlyPlane.onGround, false);
-  assert.equal(earlyPlane.typeCode, null);
+  assert.equal(earlyPlane.typeCode, 'A320');
 });
 
 test('airport vehicles and ground stations take their class from the first fix', () => {
@@ -344,11 +344,60 @@ test('airport vehicles and ground stations take their class from the first fix',
     assert.equal(klass({ id: 'v4', category: 'C2' }), 'vehicle');
     assert.equal(klass({ id: 'm1', typeCode: 'GRND' }), 'station');
     assert.equal(klass({ id: 'm2', category: 'C4' }), 'station');
-    // An aircraft's feed type still waits for the airframe lookup.
+    // An aircraft's feed type outranks its emitter category.
     assert.equal(
       klass({ id: 'p1', typeCode: 'A320', category: 'A7' }),
-      'helicopter',
+      'airliner',
     );
+  }
+});
+
+test("an aircraft's feed type classes it from the first fix, until a lookup answers", () => {
+  for (const store of [records(), records(() => fleetSet)]) {
+    // A helicopter whose feed names its type, with an airliner-like category.
+    const first = store.receive(
+      observation({
+        id: 'h1',
+        callsign: 'NHC47',
+        typeCode: 'ec45',
+        category: 'A3',
+      }),
+      view(),
+    ).meta;
+    assert.equal(first.typeCode, 'EC45');
+    assert.equal(first.klass, 'helicopter');
+    assert.equal(first.typeLookedUp, false);
+    // A later row without the type keeps it.
+    const quiet = store.receive(
+      observation({ id: 'h1', callsign: 'NHC47', category: 'A3' }),
+      view(),
+    ).meta;
+    assert.equal(quiet.klass, 'helicopter');
+    assert.equal(quiet.typeCode, 'EC45');
+    // A looked-up type outranks the feed's on every later poll and reset.
+    quiet.typeCode = 'EC35';
+    quiet.typeLookedUp = true;
+    quiet.typeName = 'Airbus Helicopters H135';
+    const after = store.receive(
+      observation({ id: 'h1', callsign: 'NHC47', typeCode: 'B738' }),
+      view(),
+    ).meta;
+    assert.equal(after.typeCode, 'EC35');
+    assert.equal(after.typeName, 'Airbus Helicopters H135');
+    assert.equal(after.klass, 'helicopter');
+    store.reset();
+    const again = store.receive(
+      observation({ id: 'h1', callsign: 'NHC47', typeCode: 'B738' }),
+      view(),
+    ).meta;
+    assert.equal(again.typeCode, 'EC35');
+    // No type anywhere: the emitter category classes it.
+    const bare = store.receive(
+      observation({ id: 'h2', category: 'A7' }),
+      view(),
+    ).meta;
+    assert.equal(bare.typeCode, null);
+    assert.equal(bare.klass, 'helicopter');
   }
 });
 
