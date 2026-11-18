@@ -5942,7 +5942,7 @@ MLAT-positioned GPS loss, derived-field exclusions and the NIC 0 exception.
 anchors, recovery, keyboard and mobile states; emergency repainting is covered
 by `scripts/qa-emergency-squawk.mjs`. Both accept `--timeout-ms` for slow boot.
 
-Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. A stale snapshot is served for at most 24 hours; the layer row then reads STALE, dated by that snapshot's fetch, and `get_fire_perimeters` returns `stale` and `retrieved_at` with "(data may be stale)" in its summary. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
+Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. A stale snapshot is served for at most 24 hours; the layer row then reads STALE, dated by that snapshot's fetch, and `get_fire_perimeters` returns `stale` and `retrieved_at` with "(data may be stale)" in its summary. Unchanged snapshots retain geometry; turning the layer off clears its fills, fire lines and incident facts, so turning it on again draws from a fresh read; link checks cancel on disable or selection change, and the row legend shows reported containment.
 
 The incident card rounds the WFIGS size to whole acres, except under one acre,
 where it keeps the reported hundredths: a 0.25-acre fire reads `0.25 ac`, not
