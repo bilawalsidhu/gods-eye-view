@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { PbfWriter } from 'pbf';
 import {
   TRANSIT_BACKOFF_LADDER_MS,
+  TRANSIT_FEED_FORMATS,
   TRANSIT_PROXY_STALE_MAX_MS,
   TRANSIT_PROXY_TTL_MS,
   TransitFeedShapeError,
@@ -12,6 +13,7 @@ import {
   repairVehicleTimestamps,
   resolveTransitRoute,
   transitCacheState,
+  transitFeedFormat,
   transitFeedTtlMs,
   transitRedirectDecision,
   transitResponseHeaders,
@@ -417,4 +419,51 @@ test('a feed refreshMs stretches its fresh window, never shortens it', () => {
   const entry = { at: now - 20_000 };
   assert.equal(transitCacheState(entry, now), 'stale');
   assert.equal(transitCacheState(entry, now, transitFeedTtlMs(johor)), 'fresh');
+});
+
+test('a feed declaring the NGSI v2 format is decoded as JSON entities, under the same snapshot rules', () => {
+  const porto = getTransitFeed('stcp-porto');
+  assert.equal(transitFeedFormat(porto), TRANSIT_FEED_FORMATS['ngsi-v2']);
+  assert.equal(transitUpstreamHeaders(porto).Accept, 'application/json');
+  assert.match(
+    transitUpstreamHeaders(getTransitFeed('mbta')).Accept,
+    /^application\/x-protobuf/,
+    'a feed that declares nothing is still GTFS-RT',
+  );
+  const body = new TextEncoder().encode(
+    JSON.stringify([
+      {
+        id: 'urn:ngsi-ld:Vehicle:porto:stcp:bus:3466',
+        type: 'Vehicle',
+        fleetVehicleId: { type: 'Text', value: '3466' },
+        location: {
+          type: 'geo:json',
+          value: { type: 'Point', coordinates: [-8.66, 41.15] },
+        },
+        bearing: { type: 'Number', value: 262 },
+        speed: { type: 'Number', value: 9.4 },
+        annotations: { type: 'Array', value: ['stcp:route:200'] },
+      },
+    ]),
+  );
+  const snapshot = buildTransitSnapshot(porto, body, 1_762_558_100_000);
+  assert.equal(snapshot.feedId, 'stcp-porto');
+  assert.equal(snapshot.count, 1);
+  const [bus] = snapshot.vehicles;
+  assert.equal(bus.routeId, '200');
+  assert.equal(bus.speedMps, 9.4, 'NGSI speeds are m/s and left alone');
+  assert.equal(bus.timestamp, 1_762_558_100, 'no fix time falls back to fetch');
+  assert.equal(bus.timestampSource, 'fetch');
+  assert.throws(
+    () => buildTransitSnapshot(porto, new TextEncoder().encode('{}'), 1),
+    (error) => !(error instanceof TransitFeedShapeError),
+    'a broken body is an outage, so the stale snapshot can still ship',
+  );
+});
+
+test('an unknown declared format is refused, never guessed', () => {
+  const feed = { ...getTransitFeed('mbta'), format: 'siri-vm' };
+  assert.throws(() => transitFeedFormat(feed), /unknown transit feed format/);
+  assert.throws(() => buildTransitSnapshot(feed, new Uint8Array(), 1));
+  assert.throws(() => transitFeedFormat({ ...feed, format: 'constructor' }));
 });
