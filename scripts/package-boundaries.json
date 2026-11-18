@@ -287,7 +287,9 @@
       "src/data/vesselTypes.js",
       "src/data/fleetModels.js",
       "src/render/modelParts.js",
-      "src/ui/views/panels/AircraftModelHero.vue"
+      "src/ui/views/panels/AircraftModelHero.vue",
+      "src/data/retryableLoad.js",
+      "src/data/local_data/wikidata_places/files.js"
     ],
     "external": ["vue", "pinia", "vue-i18n"]
   },
