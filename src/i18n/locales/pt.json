@@ -3405,6 +3405,8 @@
   "Source: {value}": "Fonte: {value}",
   "Click the card to open EMODnet ↗": "Clique no cartão para abrir o EMODnet ↗",
   "Click the card to open the source ↗": "Clique no cartão para abrir a fonte ↗",
+  "Open the source for {title}, {details}": "Abrir a fonte de {title}, {details}",
+  "Focus earthquake {title}, {details}": "Focar terremoto {title}, {details}",
   "Wikidata unavailable; showing EMODnet only": "Wikidata indisponível; mostrando só o EMODnet",
   "EMODnet unavailable; showing Wikidata only": "EMODnet indisponível; mostrando só o Wikidata",
   "Shipwrecks unavailable": "Naufrágios indisponíveis",

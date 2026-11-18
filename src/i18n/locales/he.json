@@ -3531,6 +3531,8 @@
   "Click the card to open EMODnet ↗": "לחץ על הכרטיס כדי לפתוח את EMODnet ↗",
   "Click the card to open the article ↗": "לחץ על הכרטיס כדי לפתוח את הערך ↗",
   "Click the card to open the source ↗": "לחץ על הכרטיס כדי לפתוח את המקור ↗",
+  "Open the source for {title}, {details}": "פתיחת המקור של {title}, {details}",
+  "Focus earthquake {title}, {details}": "התמקדות ברעידת האדמה {title}, {details}",
   "All years": "כל השנים",
   "Period": "תקופה",
   "From": "מ-",

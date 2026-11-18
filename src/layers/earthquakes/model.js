@@ -23,6 +23,12 @@ export const EARTHQUAKE_MARK_MAGNITUDE = 6;
 
 /** The longest place a timeline mark's label carries, ellipsis and all. */
 const MARK_PLACE_LENGTH = 40;
+/**
+ * The longest place line the detail card shows, ellipsis and all, so a long
+ * place or translation keeps the card inside a phone's width. The card's
+ * accessible name carries the whole place.
+ */
+const CARD_PLACE_LENGTH = 48;
 
 /** A magnitude as the map's labels show it: `M6.4`. */
 export const earthquakeMagnitudeTitle = (magnitude) =>
@@ -163,43 +169,77 @@ const oneDecimal = (value) => String(Math.round(value * 10) / 10);
  * @param {(text: string, values?: object) => string} [text.t] Translator.
  * @param {(time: number) => string} [text.formatTime] An event time.
  * @param {(value: number) => string} [text.formatDepth] A depth in km.
+ * @param {boolean} [text.canOpen] Whether a link can be opened here (an
+ *   opener is injected); without one the card offers no link to click.
  * @returns {{title: string, details: string[], link: string|null,
- *   accessibilityLabel: string}}
+ *   accessibilityLabel: string}} `accessibilityLabel` names the card's
+ *   action, with its details: opening the source, or focusing the quake.
  */
 export function describeEarthquake(
   event,
-  { t = english, formatTime = utcMinute, formatDepth = oneDecimal } = {},
+  {
+    t = english,
+    formatTime = utcMinute,
+    formatDepth = oneDecimal,
+    canOpen = true,
+  } = {},
 ) {
   const details = [];
+  // What the card says, spoken: depth, the whole place, and the time.
+  const spoken = [];
   // Severity at a glance, right under the title: the class meter, then
   // where in the crust it broke.
   const glance = [earthquakeSeverityMeter(event?.mag)];
   if (Number.isFinite(event?.depthKm)) {
-    glance.push(
-      `${earthquakeDepthBandName(event.depthKm, t)} · ${t('{km} km deep', {
-        km: formatDepth(event.depthKm),
-      })}`,
-    );
+    const depth = `${earthquakeDepthBandName(event.depthKm, t)} · ${t(
+      '{km} km deep',
+      { km: formatDepth(event.depthKm) },
+    )}`;
+    glance.push(depth);
+    spoken.push(depth);
   }
   details.push(glance.join('  '));
   const place =
     typeof event?.place === 'string'
       ? event.place.replace(/\s+/g, ' ').trim()
       : '';
-  if (place) details.push(place);
-  if (Number.isFinite(event?.time)) details.push(formatTime(event.time));
-  details.push(t('Source: {value}', { value: 'USGS' }));
+  if (place) {
+    // Cut by characters, not UTF-16 units, so a pair is never split.
+    const chars = Array.from(place);
+    details.push(
+      chars.length > CARD_PLACE_LENGTH
+        ? `${chars
+            .slice(0, CARD_PLACE_LENGTH - 1)
+            .join('')
+            .trimEnd()}…`
+        : place,
+    );
+    spoken.push(place);
+  }
+  if (Number.isFinite(event?.time)) {
+    const time = formatTime(event.time);
+    details.push(time);
+    spoken.push(time);
+  }
+  const source = t('Source: {value}', { value: 'USGS' });
+  details.push(source);
+  // The source closes the spoken details, so they are never empty.
+  spoken.push(source);
   const link = earthquakeEventLink(event?.usgsId);
-  if (link) details.push(t('Click the card to open the source ↗'));
+  const opens = Boolean(link) && canOpen;
+  if (opens) details.push(t('Click the card to open the source ↗'));
   const title = `${earthquakeMagnitudeTitle(event?.mag)} · ${earthquakeSeverityName(
     event?.mag,
     t,
   )}`;
+  const summary = { title, details: spoken.join(', ') };
   return {
     title,
     details,
     link,
-    accessibilityLabel: t('Open the source for {title}', { title }),
+    accessibilityLabel: opens
+      ? t('Open the source for {title}, {details}', summary)
+      : t('Focus earthquake {title}, {details}', summary),
   };
 }
 

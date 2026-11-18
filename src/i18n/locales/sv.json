@@ -3244,6 +3244,8 @@
   "Click the card to open EMODnet ↗": "Klicka på kortet för att öppna EMODnet ↗",
   "Click the card to open the article ↗": "Klicka på kortet för att öppna artikeln ↗",
   "Click the card to open the source ↗": "Klicka på kortet för att öppna källan ↗",
+  "Open the source for {title}, {details}": "Öppna källan för {title}, {details}",
+  "Focus earthquake {title}, {details}": "Fokusera på jordbävningen {title}, {details}",
   "All years": "Alla år",
   "Period": "Period",
   "From": "Från",

@@ -74,6 +74,15 @@ const reducedMotion = () => {
   }
 };
 
+/** How often the rings re-read the ground height under the quake. */
+const HEIGHT_READ_INTERVAL_MS = 500;
+/**
+ * A ground height the rings accept, in metres: the Dead Sea shore to above
+ * Everest. Anything else is a bad sample (a hit on something drawn above
+ * the ground, or a broken tile), and the rings stay where they are.
+ */
+const groundHeightOk = (h) => Number.isFinite(h) && h >= -500 && h <= 9000;
+
 /**
  * The selected earthquake's contour lines, painted on the world overlay:
  * wavy closed lines, shaped by the quake's id (earthquakeContourShape), run
@@ -220,9 +229,32 @@ export function createEarthquakeRipples({
     );
   }
 
+  /**
+   * Re-read the ground height under the quake, at most twice a second while
+   * painting: the ground loads and refines as the camera comes in, and the
+   * rings move onto it once it differs by more than a metre.
+   */
+  function settleHeight() {
+    if (!target.heightAt) return;
+    const at = now();
+    if (at - target.heightReadAt < HEIGHT_READ_INTERVAL_MS) return;
+    target.heightReadAt = at;
+    let height = null;
+    try {
+      height = target.heightAt();
+    } catch {
+      height = null;
+    }
+    if (!groundHeightOk(height) || Math.abs(height - target.heightM) <= 1)
+      return;
+    target.heightM = height;
+    target.center = fromDegrees(target.lon, target.lat, height);
+  }
+
   function paint(frame) {
     if (!target) return;
     const { ctx } = frame;
+    settleHeight();
     const center = target.center;
     onScreen = false;
     if (frame.occluder?.isPointVisible?.(center) === false) return;
@@ -309,7 +341,7 @@ export function createEarthquakeRipples({
 
   /**
    * Run the contour lines around one quake, replacing any other.
-   * @param {{id: string, lon: number, lat: number, radiusM: number, color: string}} next
+   * @param {{id: string, lon: number, lat: number, heightM?: number, heightAt?: () => number|null, radiusM: number, color: string}} next
    * @param {{restart?: boolean}} [options] `restart: false` updates the
    *   same quake in place (a feed refresh) without running it again.
    */
@@ -336,7 +368,19 @@ export function createEarthquakeRipples({
     }
     target = {
       id: next.id,
-      center: fromDegrees(next.lon, next.lat),
+      // On the ground the disc is draped on: the height known now, then
+      // re-read while painting (see `settleHeight`), since a label's fly-to
+      // starts from far away, before that ground has loaded.
+      lon: next.lon,
+      lat: next.lat,
+      heightM: groundHeightOk(next.heightM) ? next.heightM : 0,
+      heightAt: typeof next.heightAt === 'function' ? next.heightAt : null,
+      heightReadAt: -Infinity,
+      center: fromDegrees(
+        next.lon,
+        next.lat,
+        groundHeightOk(next.heightM) ? next.heightM : 0,
+      ),
       radiusM: next.radiusM,
       color: next.color || 'rgb(255,165,0)',
       shape: earthquakeContourShape(next.id),

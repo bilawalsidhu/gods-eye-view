@@ -136,8 +136,8 @@ test('world clicks respect the painted top card and registered card backgrounds'
   };
   const services = {
     sprites: {},
-    focus: {},
-    render: {},
+    focus: { onFocusTargetAppear: () => noop },
+    render: { releaseContinuousRender: noop },
     picking,
     activation: { activateCctvCameraFromWorldClick: (id) => actions.push(id) },
   };
@@ -152,6 +152,7 @@ test('world clicks respect the painted top card and registered card backgrounds'
     picking.unregisterPickOwner('test-trails');
     picking.unregisterPickOwner('test-planes');
     picking.unregisterPickOwner('test-tracking');
+    picking.unregisterPickOwner('test-exact');
     picking.unregisterCardBackground('area-fixture');
   });
   await lifecycle.methods.init(viewer);
@@ -214,6 +215,13 @@ test('world clicks respect the painted top card and registered card backgrounds'
   // A coarse tap whose touch contact is an aircraft (a layer that acts on
   // nearby contacts) is the aircraft's, even under a live CCTV card.
   const previousMatch = globalThis.matchMedia;
+  const restoreMatch = () => {
+    if (previousMatch) globalThis.matchMedia = previousMatch;
+    else delete globalThis.matchMedia;
+  };
+  // Restored below for the fine-pointer clicks that follow; here too, so a
+  // failing assertion cannot leave the coarse pointer for later tests.
+  t.after(restoreMatch);
   globalThis.matchMedia = () => ({ matches: true });
   picking.registerPickOwner('test-planes', (id) => id === 'plane:1', {
     expanded: true,
@@ -230,8 +238,7 @@ test('world clicks respect the painted top card and registered card backgrounds'
   drilled = [];
   click(null, [ownCard], ['cam-1']);
   picking.unregisterPickOwner('test-planes');
-  if (previousMatch) globalThis.matchMedia = previousMatch;
-  else delete globalThis.matchMedia;
+  restoreMatch();
   // The live card reads the owners that acted when the click resolved, so it
   // yields to the aircraft even though tracking made it passive meanwhile.
   picking.registerPickOwner('test-tracking', (id) => id === 'plane:9', {
@@ -253,4 +260,28 @@ test('world clicks respect the painted top card and registered card backgrounds'
     [foreignCard, ownCard],
     ['cam-1'],
   );
+  // CCTV takes only clean clicks, so for a long press or a drag its cameras
+  // act for nobody: a card painted over one keeps that tap.
+  // Enable's own work is beside the point here: only its registration.
+  Object.assign(parts.cards, {
+    refreshAmbientCards: noop,
+    startCardFrameLoop: noop,
+  });
+  parts.frames = { refreshProjectionImage: noop };
+  Object.assign(parts.geometryQueue, { startGeometryLoadQueue: noop });
+  parts.navigation = { openingCameraId: () => 'cam-1' };
+  Object.assign(parts.projection, {
+    ensureProjectionRuntime: noop,
+    startProjectionLoop: noop,
+  });
+  state._cctvOverlayHost.setVisible ??= noop;
+  lifecycle.methods.enable();
+  t.after(() => picking.unregisterPickOwner('cctv'));
+  const acted = (gesture) =>
+    picking.isActedOnByOtherLayer('earthquakes', 'cam-1', {
+      click: { gesture },
+    });
+  assert.equal(acted({ travelPx: 0, durationMs: 80 }), true, 'a clean click');
+  assert.equal(acted({ travelPx: 0, durationMs: 900 }), false, 'a long press');
+  assert.equal(acted({ travelPx: 20, durationMs: 80 }), false, 'a drag');
 });

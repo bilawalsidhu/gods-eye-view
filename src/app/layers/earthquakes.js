@@ -7,6 +7,7 @@ import * as context from '../../data/contextStore.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
 import { requestWorldFocus } from '../../worldFocus.js';
 import { createEarthquakeRipples } from './earthquakeRipples.js';
+import { heightsOf } from '../../queries/heights.js';
 import { formatDate, formatNumber, t } from '../../i18n/index.js';
 
 const EVENT_TIME = Object.freeze({
@@ -40,6 +41,9 @@ export function createApplicationEarthquakes(options) {
     openExternal: (url) => window.open(url, '_blank', 'noopener,noreferrer'),
     focus: { requestWorldFocus },
     ripples: createEarthquakeRipples(),
+    // The loaded ground (terrain or tiles) the clamped disc is draped on.
+    groundHeight: (viewer, lon, lat) =>
+      viewer ? heightsOf(viewer).now({ lon, lat }) : null,
     text: earthquakeCardText,
     ...options,
   });

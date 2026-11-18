@@ -18,8 +18,9 @@ export const WORLD_FOCUS_FRAMING = Object.freeze({
   // A stopped train's one fly-to, and the frame a moving train is followed
   // in (src/layers/rail/follow.js): the train and the track either side.
   train: Object.freeze({ radiusM: 200, rangeM: 2500, pitchDeg: -35 }),
-  // A clicked quake's magnitude label: its disc (2^M km across, so about
-  // 11 km at M2.5 and 128 km at M6) and the ground around it.
+  // A clicked quake's magnitude label: its disc (2^M km in radius, so about
+  // 6 km at M2.5 and 64 km at M6) and the ground around it. A larger quake
+  // passes its own radius and range (never less than these).
   earthquake: Object.freeze({ radiusM: 20000, rangeM: 220000, pitchDeg: -45 }),
   'sighting-area': Object.freeze({
     radiusM: 11000,
@@ -115,13 +116,20 @@ export function flyToWorldTarget(viewer, target = {}) {
     target.durationSec > 0
       ? target.durationSec
       : WORLD_CLICK_FOCUS_DURATION_SEC;
+  // A target may ask for more room than its kind's framing (a large quake's
+  // disc), never less.
+  const atLeast = (value, floor) =>
+    Number.isFinite(value) && value > floor ? value : floor;
   camera.flyToBounds(
-    { center: target.position, radius: framing.radiusM },
+    {
+      center: target.position,
+      radius: atLeast(target.radiusM, framing.radiusM),
+    },
     {
       offset: {
         heading,
         pitch: toRadians(framing.pitchDeg),
-        range: framing.rangeM,
+        range: atLeast(target.rangeM, framing.rangeM),
       },
       durationS: duration,
       easing: 'cubicInOut',

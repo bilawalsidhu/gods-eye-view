@@ -3245,6 +3245,8 @@
   "Source: {value}": "出典：{value}",
   "Click the card to open EMODnet ↗": "カードをクリックしてEMODnetを開く ↗",
   "Click the card to open the source ↗": "カードをクリックして出典を開く ↗",
+  "Open the source for {title}, {details}": "{title}のソースを開く（{details}）",
+  "Focus earthquake {title}, {details}": "地震{title}にフォーカス（{details}）",
   "Wikidata unavailable; showing EMODnet only": "Wikidataを利用できません。EMODnetのみ表示しています",
   "EMODnet unavailable; showing Wikidata only": "EMODnetを利用できません。Wikidataのみ表示しています",
   "Shipwrecks unavailable": "難破船データを利用できません",

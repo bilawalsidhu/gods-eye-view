@@ -206,6 +206,29 @@ test('fires frame wider than vessels — a fire is read by its surroundings', ()
   );
 });
 
+// A large quake's disc does not fit the earthquake framing, so the target
+// asks for more room; it never gets less than the framing.
+test('a target can widen its framing, never narrow it', () => {
+  const fly = (extra) => {
+    const camera = stubCamera();
+    flyToWorldTarget(bindFakeCesiumCamera({ camera }), {
+      kind: 'earthquake',
+      id: 'earthquake:us1',
+      position: POSITION,
+      ...extra,
+    });
+    return camera.calls.flights[0];
+  };
+  const m72 = fly({ radiusM: 147000, rangeM: 514000 });
+  assert.equal(m72.sphere.radius, 147000);
+  assert.equal(m72.options.offset.range, 514000);
+  const m3 = fly({ radiusM: 8000, rangeM: 28000 });
+  assert.equal(m3.sphere.radius, WORLD_FOCUS_FRAMING.earthquake.radiusM);
+  assert.equal(m3.options.offset.range, WORLD_FOCUS_FRAMING.earthquake.rangeM);
+  const bad = fly({ radiusM: NaN, rangeM: -1 });
+  assert.equal(bad.options.offset.range, WORLD_FOCUS_FRAMING.earthquake.rangeM);
+});
+
 test('every framing is a real oblique standoff, not a nadir or an inside-out sphere', () => {
   const kinds = Object.keys(WORLD_FOCUS_FRAMING);
   assert.deepEqual(kinds.sort(), [

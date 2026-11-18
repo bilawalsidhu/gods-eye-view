@@ -39,7 +39,12 @@ const quake = (id, extra = {}) => ({
 /** A layer whose globe clicks, card hits and context store the test drives. */
 function harness(
   rows,
-  { context = null, ripples = null, input: inputFactory = null } = {},
+  {
+    context = null,
+    ripples = null,
+    groundHeight = null,
+    input: inputFactory = null,
+  } = {},
 ) {
   let snapshot = rows;
   const handlers = [];
@@ -95,6 +100,7 @@ function harness(
     picking,
     context,
     ripples,
+    groundHeight,
     pointer: { isPointerFree: () => true },
     openExternal: (url) => opened.push(url),
     focus: {
@@ -179,7 +185,10 @@ test('clicking a quake disc shows its detail card; empty map clears it', async (
     'Click the card to open the source ↗',
   ]);
   assert.equal(card.interactive, true);
-  assert.equal(card.accessibilityLabel, 'Open the source for M4.1 · Light');
+  assert.equal(
+    card.accessibilityLabel,
+    'Open the source for M4.1 · Light, Intermediate · 112.4 km deep, 42 km W of Fixture, Alaska, 2026-11-13 15:37 UTC, Source: USGS',
+  );
   assert.equal(h.visible.get(EARTHQUAKE_CARD_SOURCE_ID), true);
 
   h.click(null);
@@ -209,10 +218,16 @@ test('a quake with no USGS id gets a card with no link', async () => {
   h.clickDisc('event-1');
   const [card] = h.lastCard();
   assert.equal(card.interactive, true, 'hit-testable, so a click keeps it');
-  assert.equal(card.activate, undefined);
-  assert.equal(card.accessibilityLabel, undefined, 'no action to offer');
   assert.ok(!card.details.some((line) => line.includes('Click the card')));
+  // No source to open: a click on the card flies to the quake instead.
   h.clickCard(card.id);
+  assert.deepEqual(h.opened, []);
+  assert.equal(h.focused.length, 1);
+  // Its keyboard action does the same, so it still has a place in the
+  // action list.
+  assert.match(card.accessibilityLabel, /^Focus earthquake M2\.5 · Minor, /);
+  assert.equal(card.activate(), true);
+  assert.equal(h.focused.length, 2);
   assert.deepEqual(h.opened, []);
   assert.equal(h.lastCard()[0].id, card.id, 'the card stays');
   h.layer.destroy();
@@ -360,6 +375,24 @@ test('describeEarthquake translates through the given formatters', () => {
   assert.equal(bare.title, 'M3.0 · Minor');
   assert.deepEqual(bare.details, ['■□□□□□', 'Source: USGS']);
   assert.equal(bare.link, null);
+  assert.equal(
+    bare.accessibilityLabel,
+    'Focus earthquake M3.0 · Minor, Source: USGS',
+  );
+  // A place cut short never splits a character made of a surrogate pair.
+  const emoji = describeEarthquake(quake('ak9', { place: '🌋'.repeat(60) }));
+  assert.equal(Array.from(emoji.details[1]).length, 48);
+  assert.ok(!/[\uD800-\uDBFF]…$/.test(emoji.details[1]));
+  // A long place is cut short on the card; the accessible name keeps it all.
+  const long = 'A very long place name '.repeat(4).trim();
+  const wide = describeEarthquake(quake('ak9', { place: long }));
+  assert.equal(Array.from(wide.details[1]).length, 48);
+  assert.ok(wide.details[1].endsWith('…'));
+  assert.ok(wide.accessibilityLabel.includes(long));
+  // With no opener to follow a link, the card does not offer one.
+  const closed = describeEarthquake(quake('ak9'), { canOpen: false });
+  assert.ok(!closed.details.some((line) => line.includes('Click the card')));
+  assert.match(closed.accessibilityLabel, /^Focus earthquake /);
 });
 
 test('severity follows the USGS magnitude classes; depth bands the disc colours', () => {
@@ -418,6 +451,9 @@ test('clicking a magnitude label selects the quake and flies to it', async () =>
   assert.ok(
     Math.hypot(detail.position.x, detail.position.y, detail.position.z) > 6e6,
   );
+  // The whole disc in view: radius and range scale with the magnitude.
+  assert.equal(detail.radiusM, 32000);
+  assert.equal(detail.rangeM, 32000 * 3.5);
 
   // The keyboard path does the same.
   assert.equal(
@@ -470,21 +506,34 @@ test('the selected quake runs contour rings to its disc edge; clearing stops the
     hide: () => calls.push(['hide']),
     dispose: () => calls.push(['dispose']),
   };
+  // The ground the disc is draped on: the rings are drawn at its height.
+  const heights = [];
   const h = harness(
     [quake('ak1', { mag: 5, depthKm: 10 }), quake('ak2', { mag: 3 })],
-    { ripples },
+    {
+      ripples,
+      groundHeight: (viewer, lon, lat) => {
+        heights.push([lon, lat]);
+        return lon === -153.3 ? 1840 : null;
+      },
+    },
   );
   h.layer.enable(h.viewer);
   await h.layer.update(h.viewer);
   h.clickDisc('ak1');
   const shown = calls.findLast(([kind]) => kind === 'show')[1];
-  assert.deepEqual(shown, {
+  const { heightAt, ...rest } = shown;
+  assert.deepEqual(rest, {
     id: 'ak1',
     lon: -153.3,
     lat: 60,
+    heightM: 1840,
     radiusM: 32000,
     color: 'rgb(255,0,0)',
   });
+  assert.deepEqual(heights.at(-1), [-153.3, 60]);
+  // The painter can read the ground again as it loads (a label's fly-to).
+  assert.equal(heightAt(), 1840);
   assert.equal(
     h.discs().items.get('earthquake:ak1').geometry.semiMajor,
     shown.radiusM,
@@ -1053,4 +1102,82 @@ test('coarse FIRMS near-misses leave quake overlays actionable; exact fire hits 
     h.layer.destroy();
     input?.destroy();
   }
+});
+
+// A tap that drifts more than the tracking click travel is ignored by the
+// aircraft layers, so a quake card painted beside an aircraft keeps it.
+test('a quake card keeps a dragged tap beside an aircraft that declines it', async (t) => {
+  const previous = globalThis.matchMedia;
+  globalThis.matchMedia = () => ({ matches: true });
+  t.after(() => {
+    if (previous) globalThis.matchMedia = previous;
+    else delete globalThis.matchMedia;
+  });
+  const plane = { set: 'flights:1', id: 'plane-9' };
+  let sceneHit = null;
+  let nearby = null;
+  let input;
+  const h = harness([quake('ak1')], {
+    input(viewer) {
+      viewer.scene = {
+        pick: () => (sceneHit ? { id: sceneHit } : null),
+        drillPick: () => (nearby ? [{ id: nearby }] : []),
+      };
+      input = fakeInput(viewer);
+      return input.input;
+    },
+  });
+  picking.registerPickOwner('test-plane', (id) => id === plane.id, {
+    expanded: true,
+    declinesClick: (click) => (click?.gesture?.travelPx ?? 0) > 6,
+  });
+  t.after(() => {
+    picking.unregisterPickOwner('test-plane');
+    h.layer.destroy();
+    input?.destroy();
+  });
+  h.layer.enable(h.viewer);
+  await h.layer.update(h.viewer);
+  sceneHit = { set: h.discs().spec.id, id: 'earthquake:ak1' };
+  input.click();
+  const card = h.lastCard()[0];
+  h.overlayHits.set(EARTHQUAKE_CARD_SOURCE_ID, {
+    sourceId: EARTHQUAKE_CARD_SOURCE_ID,
+    entryId: card.id,
+  });
+  sceneHit = null;
+  nearby = plane;
+  // A still tap: the aircraft acts on its contact, so the card yields.
+  input.tap({ x: 10, y: 10 });
+  assert.deepEqual(h.opened, []);
+  // A tap that drifts 10 px: the aircraft ignores it, so the card opens.
+  input.down({ x: 10, y: 10 });
+  input.move({ x: 20, y: 10 }, { x: 10, y: 10 });
+  input.up({ x: 20, y: 10 });
+  input.click({ x: 20, y: 10 });
+  assert.equal(h.opened.length, 1, 'the card keeps the dragged tap');
+});
+
+// A refresh that no longer carries the selected quake evicts it, as other
+// feeds report; a click on empty map is a deliberate clear.
+test('a quake that ages out of the feed is cleared as evicted', async () => {
+  const clears = [];
+  const context = {
+    registerEntityContext: (record) => ({ ...record, id: record.id }),
+    selectEntityContext() {},
+    clearSelectedEntityContextForLayer: (layerId, options) =>
+      clears.push([layerId, options?.evicted === true]),
+    getContextStore: () => ({ entities: new Map() }),
+  };
+  const h = harness([quake('ak1'), quake('ak2')], { context });
+  h.layer.enable(h.viewer);
+  await h.layer.update(h.viewer);
+  h.clickDisc('ak1');
+  h.setRows([quake('ak2')]);
+  await h.layer.update(h.viewer);
+  assert.deepEqual(clears.at(-1), ['earthquakes', true], 'aged out: evicted');
+  h.clickDisc('ak2');
+  h.click(null);
+  assert.deepEqual(clears.at(-1), ['earthquakes', false], 'empty map');
+  h.layer.destroy();
 });

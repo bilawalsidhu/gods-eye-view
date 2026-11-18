@@ -1,3 +1,4 @@
+import { isTrackingSelectionGesture } from '../../data/trackingClickGesture.js';
 import { findCamera, findFrame } from '../../render/rendererOf.js';
 import { loadFleetModelSet } from '../../data/fleetModels.js';
 import { forgetPlacedAircraft } from './placed.js';
@@ -141,6 +142,11 @@ export function createLifecycle({
           passive: (pickedId) =>
             Boolean(flightState._trackedIcao) &&
             pickedId === flightState._trackedIcao,
+          // The click handler ignores a dragged tap and any tap in cockpit
+          // mode, so a card over the aircraft keeps that tap.
+          declinesClick: (click) =>
+            !isTrackingSelectionGesture(click?.gesture) ||
+            Boolean(document.body?.classList.contains('cockpit-mode')),
         },
       );
       const frame = findFrame(viewer);

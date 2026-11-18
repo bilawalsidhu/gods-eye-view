@@ -3245,6 +3245,8 @@
   "Source: {value}": "来源：{value}",
   "Click the card to open EMODnet ↗": "点击卡片打开 EMODnet ↗",
   "Click the card to open the source ↗": "点击卡片打开来源 ↗",
+  "Open the source for {title}, {details}": "打开 {title} 的来源，{details}",
+  "Focus earthquake {title}, {details}": "聚焦地震 {title}，{details}",
   "Wikidata unavailable; showing EMODnet only": "Wikidata 不可用；仅显示 EMODnet",
   "EMODnet unavailable; showing Wikidata only": "EMODnet 不可用；仅显示 Wikidata",
   "Shipwrecks unavailable": "沉船数据不可用",

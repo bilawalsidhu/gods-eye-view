@@ -2047,14 +2047,20 @@ Clicking a quake's disc selects it; clicking its magnitude label (what a far
 view can hit) also flies the camera there through the world-focus request
 (`earthquake` framing in `src/worldFocus.js`). The selected quake shows a card
 (`describeEarthquake`): magnitude and USGS class (`M5.5 · Moderate`), a
-six-step class meter with the depth band, place, UTC time and source; with a
-USGS event id the card opens that event's page. The selection is also the
+six-step class meter with the depth band, place (cut to 48 characters; the
+card's accessible name carries all of it), UTC time and source; with a USGS
+event id the card opens that event's page, and without one a click or its
+keyboard action flies to the quake. The selection is also the
 shared context selection, so "what's selected" answers with it. Its disc is
 painted with a gradient fading to the outer circle and wavy contour lines
-(shaped by the quake's id, never crossing) under the labels. The package takes
-clicks, picking, context, focus, the opener, the painter and the translator by
-injection (`src/app/layers/earthquakes.js`); without input and picking it draws
-and takes no clicks, and its labels stay non-interactive.
+(shaped by the quake's id, never crossing) under the labels, drawn at the
+ground height the disc is draped on (read again, at most twice a second, while
+they paint, as the ground loads under a label's fly-to). A label's
+fly-to frames the whole disc, scaling its range from the disc's radius above
+the M6 framing. The package takes clicks, picking, context, focus, the ground
+height, the opener, the painter and the translator by injection
+(`src/app/layers/earthquakes.js`); without input and picking it draws and takes
+no clicks, and its labels stay non-interactive.
 On a coarse pointer, a nearby FIRMS or CCTV icon that requires an exact hit
 does not swallow a quake card or label tap, or a tap on a vessel's own card.
 Owners that pick nearby contacts register as `expanded` pick owners: flights,
@@ -2069,13 +2075,19 @@ touch contact stays theirs even when the window names another item. Fire and
 CCTV cards in turn
 yield to a touch contact whose layer acts on it. The aircraft a layer already
 tracks and Street Level's position marker are passive picks, since a click on
-either does nothing. The pick registry records which owners act on a click's
-exact hit and touch contact when the click first reads them
-(`rememberClickPickActions`), and every layer asks that record for the rest of
+either does nothing, and the aircraft layers decline a tap that drifts past
+the click travel or comes in cockpit mode (`declinesClick`), as CCTV declines
+any click that is not clean, so a card over them keeps that tap. The pick
+registry records which owners act on a click's exact hit and touch contact
+when the click first reads them (`rememberClickPickActions`), and every layer
+asks that record for the rest of
 the click, so an aircraft that starts tracking during the click does not leave
 it to a later card handler as well. Fire, CCTV and vessel cards, like the
 quake's, act over a passive owner's pick (a flight trail, the directions
-route); with no card there, that pick still leaves a selection alone. Context
+route); with no card there, that pick still leaves a selection alone. The
+Bhote Koshi trigger-record callout (`src/data/bhoteKoshiLocator.js`) opens its
+source on a click, as its keyboard action does, and yields in the same way: to
+a drag, and to a layer that acts on its exact pick or touch contact. Context
 (`src/ui/entityContextBridge.js`) names what a click identifies, except under a
 world-overlay card or label when the item's owner does not act on that hit
 (`cardKeepsClick` in `src/data/pickedContext.js`): a passive route, or a fire

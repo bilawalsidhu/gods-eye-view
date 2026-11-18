@@ -3485,6 +3485,8 @@
   "Source: {value}": "Джерело: {value}",
   "Click the card to open EMODnet ↗": "Клацніть картку, щоб відкрити EMODnet ↗",
   "Click the card to open the source ↗": "Клацніть картку, щоб відкрити джерело ↗",
+  "Open the source for {title}, {details}": "Відкрити джерело: {title}, {details}",
+  "Focus earthquake {title}, {details}": "Фокус на землетрусі {title}, {details}",
   "Wikidata unavailable; showing EMODnet only": "Wikidata недоступна; показано лише EMODnet",
   "EMODnet unavailable; showing Wikidata only": "EMODnet недоступний; показано лише Wikidata",
   "Shipwrecks unavailable": "Дані про затонулі судна недоступні",

@@ -1,7 +1,11 @@
 import {
   clearOverlaySource,
+  hitTestWorldOverlay,
   setOverlayEntries,
 } from '../overlays/worldOverlay.js';
+import { inputFor } from '../input/dispatcher.js';
+import { isActedOnByOtherLayer, resolvePickId } from './pickRegistry.js';
+import { isTrackingSelectionGesture } from './trackingClickGesture.js';
 import { governorRequestRender } from '../renderGovernor.js';
 import { drawOf, findCamera } from '../render/rendererOf.js';
 import { hexColor } from '../render/color.js';
@@ -279,8 +283,12 @@ export function createBhoteKoshiLocatorLayer({
   cancelFrame = (handle) => cancelAnimationFrame(handle),
   scheduleDelay = (callback, delayMs) => setTimeout(callback, delayMs),
   cancelDelay = (handle) => clearTimeout(handle),
+  input = inputFor,
+  hitTest = hitTestWorldOverlay,
 } = {}) {
   let _viewer = null;
+  // The globe click that opens an actionable callout of ours on top.
+  let _removeClick = null;
   const _serial = ++layerSerial;
   // Whether the layer draws: from enable until it is let go.
   let _drawing = false;
@@ -1107,6 +1115,7 @@ export function createBhoteKoshiLocatorLayer({
     renderPresentation();
     registerDynamicCredit(viewer, BHOTE_KOSHI_LOCATOR_CREDIT);
     showOsmCredit(viewer, BHOTE_KOSHI_LOCATOR_LAYER_ID);
+    installCalloutClick(viewer);
     requestRender('bhote-koshi-locator-callout');
 
     try {
@@ -1141,8 +1150,52 @@ export function createBhoteKoshiLocatorLayer({
     }
   }
 
+  /**
+   * An actionable callout of ours (the trigger record's) is a card painted
+   * over the globe: a click on it opens its source, as its keyboard action
+   * does. Like the other cards, it leaves a drag alone and yields to a layer
+   * that acts on what is under it (an aircraft, a vessel): its exact pick, or
+   * a coarse tap's touch contact whose layer acts on nearby contacts.
+   */
+  function installCalloutClick(viewer) {
+    if (_removeClick) return;
+    let clicks = null;
+    try {
+      clicks = input?.(viewer) ?? null;
+    } catch {
+      clicks = null;
+    }
+    _removeClick =
+      clicks?.onClick?.((event) => {
+        if (!_enabled || !isTrackingSelectionGesture(event.gesture)) return;
+        const top = hitTest?.(event.screenPosition?.x, event.screenPosition?.y);
+        if (top?.sourceId !== BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID) return;
+        const exactId = resolvePickId(event.topHit ?? null);
+        if (
+          exactId &&
+          isActedOnByOtherLayer(BHOTE_KOSHI_LOCATOR_LAYER_ID, exactId, {
+            click: event,
+          })
+        )
+          return;
+        const contactId = resolvePickId(event.hit ?? null);
+        if (
+          contactId &&
+          contactId !== exactId &&
+          isActedOnByOtherLayer(BHOTE_KOSHI_LOCATOR_LAYER_ID, contactId, {
+            expanded: true,
+            click: event,
+          })
+        )
+          return;
+        if (typeof top.entry?.activate === 'function') top.entry.activate();
+      }) ?? null;
+  }
+
   async function disable() {
     hideOsmCredit(_viewer, BHOTE_KOSHI_LOCATOR_LAYER_ID);
+    _removeClick?.();
+    _removeClick = null;
     _enabled = false;
     _boundaryReady = false;
     _boundaryResolved = false;

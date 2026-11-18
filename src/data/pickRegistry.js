@@ -35,6 +35,12 @@ const _owners = new Map();
 const _passive = new Map();
 /** Owners whose click handlers also select nearby contacts. */
 const _expanded = new Set();
+/**
+ * Owners whose click handlers act on none of their picks for some clicks
+ * (aircraft layers ignore a dragged tap, or any tap in cockpit mode).
+ * @type {Map<string, (click: object) => boolean>}
+ */
+const _declines = new Map();
 /** @type {WeakMap<object, Map<string, [string, boolean][]>>} */
 const clickActions = new WeakMap();
 /**
@@ -64,20 +70,25 @@ export function resolvePickId(hit) {
  * @param {string} layerId - Owning layer id (e.g. 'flights').
  * @param {(pickedId: string) => boolean} predicate - Returns true when the
  *   picked primitive/entity id belongs to this layer.
- * @param {{passive?: boolean | ((pickedId: string) => boolean), expanded?: boolean}} [options]
+ * @param {{passive?: boolean | ((pickedId: string) => boolean), expanded?: boolean, declinesClick?: (click: object) => boolean}} [options]
  *   `passive`: the layer never acts on a click on these picks (all of them,
  *   or those the predicate names). See {@link isActedOnByOtherLayer}.
  *   `expanded`: preserve precedence for handlers that select nearby contacts,
  *   through the shared contact hit or their own pick window.
+ *   `declinesClick`: true for a click the layer's handler ignores whatever it
+ *   picked (a dragged tap); for that click its picks act for nobody.
  * @returns {void}
  */
 export function registerPickOwner(
   layerId,
   predicate,
-  { passive, expanded = false } = {},
+  { passive, expanded = false, declinesClick } = {},
 ) {
   if (!layerId || typeof predicate !== 'function') return;
   _owners.set(layerId, predicate);
+  if (typeof declinesClick === 'function')
+    _declines.set(layerId, declinesClick);
+  else _declines.delete(layerId);
   if (expanded) _expanded.add(layerId);
   else _expanded.delete(layerId);
   if (passive === true || typeof passive === 'function')
@@ -93,6 +104,7 @@ export function registerPickOwner(
 export function unregisterPickOwner(layerId) {
   _owners.delete(layerId);
   _expanded.delete(layerId);
+  _declines.delete(layerId);
   _passive.delete(layerId);
 }
 
@@ -132,11 +144,16 @@ export function isOwnedByOtherLayer(layerId, pickedId) {
   return false;
 }
 
-/** @param {string} pickedId @returns {Generator<[string, boolean]>} */
-function* actingPickOwners(pickedId) {
+/**
+ * @param {string} pickedId
+ * @param {object} [click] The click being arbitrated, if any.
+ * @returns {Generator<[string, boolean]>}
+ */
+function* actingPickOwners(pickedId, click) {
   for (const [ownerId, predicate] of _owners) {
     try {
       if (!predicate(pickedId)) continue;
+      if (click && _declines.get(ownerId)?.(click)) continue;
       const passive = _passive.get(ownerId);
       if (passive === true) continue;
       if (typeof passive === 'function' && passive(pickedId)) continue;
@@ -159,7 +176,7 @@ export function rememberClickPickActions(click, hit) {
   let actions = clickActions.get(click);
   if (!actions) clickActions.set(click, (actions = new Map()));
   if (!actions.has(pickedId)) {
-    actions.set(pickedId, [...actingPickOwners(pickedId)]);
+    actions.set(pickedId, [...actingPickOwners(pickedId, click)]);
   }
 }
 
@@ -181,7 +198,7 @@ export function isActedOnByOtherLayer(
 ) {
   if (!pickedId) return false;
   const owners =
-    clickActions.get(click)?.get(pickedId) ?? actingPickOwners(pickedId);
+    clickActions.get(click)?.get(pickedId) ?? actingPickOwners(pickedId, click);
   for (const [ownerId, selectsNearby] of owners) {
     if (ownerId !== layerId && (!expanded || selectsNearby)) return true;
   }

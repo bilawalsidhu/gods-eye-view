@@ -11,6 +11,7 @@ import {
 import { BHOTE_KOSHI_FLOOD_PATH } from './bhoteKoshiFloodPath.js';
 import * as Cesium from 'cesium';
 import { setLocale } from '../i18n/index.js';
+import { registerPickOwner, unregisterPickOwner } from './pickRegistry.js';
 import { SceneDirector } from '../scenes/director.js';
 import { createPlaybackClock } from '../director/clock.js';
 import { createDefaultScenePacks } from '../scenes/packs/defaults.js';
@@ -1048,4 +1049,89 @@ test('Bhote Koshi locator layers draw sets of their own, and halos only as they 
   assert.equal(viewer._test.live().length, 3, 'the other layer keeps its sets');
   assert.equal(await second.disable(), true);
   assert.equal(viewer._test.live().length, 0);
+});
+
+// The trigger record's callout is an actionable card: the layers under it
+// stand aside for it, so a click on it opens its source, as its keyboard
+// action does; anything else on top is left alone.
+test('a click on the locator callout runs its action', async () => {
+  const viewer = viewerFixture();
+  let onClick = null;
+  let top = null;
+  const activated = [];
+  const layer = createBhoteKoshiLocatorLayer({
+    overlayHost: overlayHostFixture(),
+    requestRender() {},
+    ...nonRunningAnimation(),
+    input: () => ({
+      onClick(callback) {
+        onClick = callback;
+        return () => {
+          onClick = null;
+        };
+      },
+    }),
+    hitTest: () => top,
+  });
+  await layer.init(viewer);
+  await layer.enable(viewer);
+  const click = (extra = {}) =>
+    onClick?.({
+      screenPosition: { x: 5, y: 5 },
+      gesture: { travelPx: 0, durationMs: 80 },
+      topHit: null,
+      hit: null,
+      ...extra,
+    });
+  top = {
+    sourceId: BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID,
+    entryId: 'bhote-koshi-trigger-record-callout',
+    entry: { activate: () => activated.push('trigger') },
+  };
+  click();
+  assert.deepEqual(activated, ['trigger']);
+  top = {
+    sourceId: 'earthquake-card',
+    entry: { activate: () => activated.push('other') },
+  };
+  click();
+  assert.deepEqual(activated, ['trigger'], 'another layer on top is its own');
+  // A drag that ends on it is not a click on it.
+  top = {
+    sourceId: BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID,
+    entry: { activate: () => activated.push('trigger') },
+  };
+  click({ gesture: { travelPx: 30, durationMs: 80 } });
+  assert.deepEqual(activated, ['trigger'], 'a drag does not open it');
+  // An aircraft under it is that layer's click, exact or a touch contact.
+  registerPickOwner('test-planes', (id) => id === 'plane:1', {
+    expanded: true,
+  });
+  try {
+    const plane = { set: 'planes:1', id: 'plane:1' };
+    click({ topHit: plane, hit: plane });
+    click({ topHit: null, hit: plane });
+    assert.deepEqual(activated, ['trigger'], 'the aircraft takes it');
+  } finally {
+    unregisterPickOwner('test-planes');
+  }
+  // A layer that acts only on exact hits does not take a touch contact, and
+  // one that ignores this click (a long press on a camera) takes nothing: the
+  // callout keeps both.
+  registerPickOwner('test-cameras', (id) => id === 'cam:1', {
+    declinesClick: (event) => (event?.gesture?.durationMs ?? 0) > 400,
+  });
+  try {
+    const cam = { set: 'cams:1', id: 'cam:1' };
+    click({ topHit: null, hit: cam });
+    assert.equal(activated.length, 2, 'a near miss of an exact-only camera');
+    click({ topHit: cam, hit: cam, gesture: { travelPx: 0, durationMs: 900 } });
+    assert.equal(activated.length, 3, 'a long press the camera ignores');
+    click({ topHit: cam, hit: cam });
+    assert.equal(activated.length, 3, 'a clean click on the camera is its own');
+  } finally {
+    unregisterPickOwner('test-cameras');
+  }
+  await layer.disable();
+  assert.equal(onClick, null, 'disable removes the click handler');
 });

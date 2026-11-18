@@ -5,6 +5,7 @@ import { viewshedColors, cameraHue } from '../../data/cctvViewshed.js';
 import { CCTV_OVERLAY_SOURCE_ID } from '../../data/cctvCards.js';
 import { GIZMO_ID_PREFIX } from '../../data/cctvGizmo.js';
 import { inputFor } from '../../input/dispatcher.js';
+import { isTrackingClickGesture } from '../../data/trackingClickGesture.js';
 import {
   GROUND_PRIOR_INIT_WAIT_MS,
   CALIBRATION_RANGE_FLOOR_M,
@@ -509,19 +510,26 @@ export function createLifecycle({
       layerState._lastUpdate = Date.now();
       // Pick-ownership (H2): camera icons use the camera id directly;
       // coverage polyline entities use `cctv-<cameraId>-<role>` entity ids.
-      registerPickOwner('cctv', (pickedId) => {
-        if (layerState._recordById.has(pickedId)) return true;
-        if (
-          typeof pickedId === 'string' &&
-          pickedId.startsWith(GIZMO_ID_PREFIX)
-        )
-          return true;
-        const coverage =
-          /^cctv-(.+)-(?:ray-tl|ray-tr|ray-br|ray-bl|cap|plane|plane-label)$/.exec(
-            pickedId,
-          );
-        return Boolean(coverage && layerState._recordById.has(coverage[1]));
-      });
+      registerPickOwner(
+        'cctv',
+        (pickedId) => {
+          if (layerState._recordById.has(pickedId)) return true;
+          if (
+            typeof pickedId === 'string' &&
+            pickedId.startsWith(GIZMO_ID_PREFIX)
+          )
+            return true;
+          const coverage =
+            /^cctv-(.+)-(?:ray-tl|ray-tr|ray-br|ray-bl|cap|plane|plane-label)$/.exec(
+              pickedId,
+            );
+          return Boolean(coverage && layerState._recordById.has(coverage[1]));
+        },
+        // The world click handler takes only clean clicks (see
+        // `bindCctvWorldClickGesture`), so a card over a camera keeps any
+        // other tap.
+        { declinesClick: (click) => !isTrackingClickGesture(click?.gesture) },
+      );
       if (!layerState._activeCameraId && layerState._records.length) {
         layerState._activeCameraId = parts.navigation.openingCameraId();
         layerState._autoHopSuspended = false;

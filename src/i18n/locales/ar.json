@@ -3645,6 +3645,8 @@
   "Source: {value}": "المصدر: {value}",
   "Click the card to open EMODnet ↗": "انقر على البطاقة لفتح EMODnet ↗",
   "Click the card to open the source ↗": "انقر على البطاقة لفتح المصدر ↗",
+  "Open the source for {title}, {details}": "فتح مصدر «{title}»، {details}",
+  "Focus earthquake {title}, {details}": "التركيز على الزلزال {title}، {details}",
   "Wikidata unavailable; showing EMODnet only": "Wikidata غير متاح؛ يُعرض EMODnet فقط",
   "EMODnet unavailable; showing Wikidata only": "EMODnet غير متاح؛ يُعرض Wikidata فقط",
   "Shipwrecks unavailable": "بيانات حطام السفن غير متاحة",

@@ -51,10 +51,12 @@ function recordingPicking() {
   };
 }
 
-function withDocument(t) {
+function withDocument(t, { cockpit = () => false } = {}) {
   const previous = globalThis.document;
   globalThis.document = {
-    body: { classList: { contains: () => false } },
+    body: {
+      classList: { contains: (name) => name === 'cockpit-mode' && cockpit() },
+    },
     addEventListener() {},
     removeEventListener() {},
   };
@@ -73,7 +75,8 @@ for (const [name, layerId, create] of [
   ['military', 'military', createMilitaryLifecycle],
 ]) {
   test(`${name} registers its aircraft as acting on nearby touch hits`, (t) => {
-    withDocument(t);
+    let cockpit = false;
+    withDocument(t, { cockpit: () => cockpit });
     const { registered, services } = recordingPicking();
     const flightState = stub({
       _icons: { show: false, has: (id) => id === `${name}-1` },
@@ -92,6 +95,18 @@ for (const [name, layerId, create] of [
     lifecycle.enable({});
     assert.equal(registered.get(layerId)?.expanded, true);
     assert.equal(actsOnNearbyHit(`${name}-1`), true);
+    // The handler ignores a dragged tap and any tap in cockpit mode, so the
+    // aircraft acts on neither click.
+    const nearby = (gesture) =>
+      picking.isActedOnByOtherLayer('earthquakes', `${name}-1`, {
+        expanded: true,
+        click: { gesture },
+      });
+    assert.equal(nearby({ travelPx: 0, durationMs: 80 }), true, 'a tap');
+    assert.equal(nearby({ travelPx: 12, durationMs: 80 }), false, 'a drag');
+    cockpit = true;
+    assert.equal(nearby({ travelPx: 0, durationMs: 80 }), false, 'cockpit');
+    cockpit = false;
     // A click on the aircraft already tracked is ignored, so it is passive.
     flightState._trackedIcao = `${name}-1`;
     assert.equal(actsOnNearbyHit(`${name}-1`), false);

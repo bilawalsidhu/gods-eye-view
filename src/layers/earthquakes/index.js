@@ -35,6 +35,8 @@ export const EARTHQUAKES_LAYER_ID = 'earthquakes';
 export const EARTHQUAKE_CARD_SOURCE_ID = 'earthquake-card';
 /** A disc's item id is this prefix and the event's stable id. */
 const PICK_PREFIX = 'earthquake:';
+/** Fly-to range per metre of disc radius: 220 km frames an M6 (64 km). */
+const EARTHQUAKE_FOCUS_RANGE_PER_RADIUS = 3.5;
 /** The selected quake's flat fill, faint under the painted gradient. */
 const SELECTED_DISC_ALPHA = 0.04;
 const CARD_HOST_OPTIONS = Object.freeze({
@@ -73,8 +75,12 @@ let instances = 0;
  * @param {{requestWorldFocus: (detail: object) => boolean}} [options.focus]
  *   The camera transfer a clicked magnitude label asks for.
  * @param {{show: (target: {id: string, lon: number, lat: number,
- *   radiusM: number, color: string}) => void, hide: () => void}} [options.ripples]
+ *   heightM?: number, heightAt?: () => number|null, radiusM: number,
+ *   color: string}) => void, hide: () => void}} [options.ripples]
  *   The selected quake's animated contour rings.
+ * @param {(viewer: object, lon: number, lat: number) => number|null} [options.groundHeight]
+ *   The loaded ground height under a point, so the rings sit on the disc
+ *   that is draped there; null (or no service) draws them at sea level.
  * @param {object} [options.text] Card formatters (see describeEarthquake).
  */
 export function createEarthquakesLayer({
@@ -87,6 +93,7 @@ export function createEarthquakesLayer({
   openExternal = null,
   focus = null,
   ripples = null,
+  groundHeight = null,
   text = undefined,
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
@@ -189,12 +196,14 @@ export function createEarthquakesLayer({
   function publishCard({ user = false } = {}) {
     const event = _selectedId ? _eventById.get(_selectedId) : null;
     if (!_enabled || !event) {
-      clearSelection();
+      // A refresh that no longer carries the selected quake evicts it, as
+      // other feeds report; anything else is a deliberate clear.
+      clearSelection({ evicted: _enabled && Boolean(_selectedId) && !user });
       return;
     }
     const { title, details, link, accessibilityLabel } = describeEarthquake(
       event,
-      text,
+      { ...text, canOpen: Boolean(openExternal) },
     );
     _selectedLink = link && openExternal ? link : null;
     const card = {
@@ -222,6 +231,12 @@ export function createEarthquakesLayer({
         openExternal(target);
         return true;
       };
+    } else if (focus?.requestWorldFocus) {
+      // No source to open: the card's keyboard action flies to its quake,
+      // as a fire card's focuses its fire, so it stays in the action list.
+      const stableId = event.stableId;
+      card.accessibilityLabel = accessibilityLabel;
+      card.activate = () => selectAndFocus(stableId);
     }
     _selectedCardId = card.id;
     overlayHost.setEntries(
@@ -232,11 +247,22 @@ export function createEarthquakesLayer({
     overlayHost.setVisible(EARTHQUAKE_CARD_SOURCE_ID, true);
     publishContext(event, user);
     fadeDisc(event.stableId);
+    let heightM = null;
+    try {
+      heightM = groundHeight?.(_viewer, event.lon, event.lat) ?? null;
+    } catch {
+      heightM = null;
+    }
     ripples?.show?.(
       {
         id: event.stableId,
         lon: event.lon,
         lat: event.lat,
+        heightM: Number.isFinite(heightM) ? heightM : 0,
+        // Read again as the ground loads: a label's fly-to starts far away.
+        heightAt: groundHeight
+          ? () => groundHeight(_viewer, event.lon, event.lat)
+          : null,
         radiusM: earthquakeDiscRadiusM(event.mag),
         color: depthAccent(event.depthKm || 0),
       },
@@ -284,10 +310,12 @@ export function createEarthquakesLayer({
     }
   }
 
-  function clearContext() {
+  function clearContext({ evicted = false } = {}) {
     if (!context || !_contextId) return;
     try {
-      context.clearSelectedEntityContextForLayer(EARTHQUAKES_LAYER_ID);
+      context.clearSelectedEntityContextForLayer(EARTHQUAKES_LAYER_ID, {
+        evicted,
+      });
       context.getContextStore().entities.delete(_contextId);
     } catch {
       // store unavailable: nothing to clean
@@ -295,12 +323,12 @@ export function createEarthquakesLayer({
     _contextId = null;
   }
 
-  function clearSelection() {
+  function clearSelection({ evicted = false } = {}) {
     const had = _selectedId || _selectedCardId;
     _selectedId = null;
     _selectedCardId = null;
     _selectedLink = null;
-    clearContext();
+    clearContext({ evicted });
     ripples?.hide?.();
     fadeDisc(null);
     if (had)
@@ -362,7 +390,11 @@ export function createEarthquakesLayer({
         sourceId: EARTHQUAKE_CARD_SOURCE_ID,
       });
       if (cardHit && cardHit.entryId === _selectedCardId) {
+        // The card's action, as its keyboard action: open the source, or
+        // with none, fly to the quake.
         if (_selectedLink) openExternal(_selectedLink);
+        else if (focus?.requestWorldFocus && _selectedId)
+          selectAndFocus(_selectedId);
         return;
       }
       // A magnitude label is what a far view (the whole globe) can click:
@@ -399,6 +431,11 @@ export function createEarthquakesLayer({
       id: `${PICK_PREFIX}${stableId}`,
       label: earthquakeMagnitudeTitle(event.mag),
       position: fromDegrees(event.lon, event.lat),
+      // The whole disc in view: the framing's range fits an M6 disc, so a
+      // larger one scales it (the framing stays the floor).
+      radiusM: earthquakeDiscRadiusM(event.mag),
+      rangeM:
+        earthquakeDiscRadiusM(event.mag) * EARTHQUAKE_FOCUS_RANGE_PER_RADIUS,
     });
     return true;
   }

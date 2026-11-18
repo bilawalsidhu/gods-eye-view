@@ -418,3 +418,35 @@ test('a refresh of the same quake does not run a settled selection again', () =>
   assert.equal(h.frames.size, 1);
   h.ripples.dispose();
 });
+
+// The rings sit on the ground the disc is draped on. A label's fly-to starts
+// far away, before that ground loads, so the painter reads the height again
+// while it paints and moves the rings onto it.
+test('the rings move onto the ground height once it loads', () => {
+  const h = harness();
+  let ground = null;
+  h.ripples.show({ ...target, heightM: 0, heightAt: () => ground });
+  h.advance(600);
+  const [lane] = h.lanes;
+  lane.painter(h.frame());
+  const atSea = h.fills.at(-1).transform;
+  h.fills.length = 0;
+  ground = 4000;
+  h.advance(600);
+  lane.painter(h.frame());
+  const onGround = h.fills.at(-1).transform;
+  assert.notDeepEqual(onGround, atSea, 'the centre moved up onto the ground');
+  // A change of a metre or less, or an impossible height, leaves them put.
+  for (const next of [4000.5, 25000, -2000]) {
+    ground = next;
+    h.advance(600);
+    lane.painter(h.frame());
+    assert.deepEqual(h.fills.at(-1).transform, onGround, String(next));
+  }
+  // Reads are bounded: a second paint within the interval does not ask again.
+  let reads = 0;
+  h.ripples.show({ ...target, id: 'ak2', heightAt: () => (reads++, 4000) });
+  lane.painter(h.frame());
+  lane.painter(h.frame());
+  assert.equal(reads, 1);
+});
