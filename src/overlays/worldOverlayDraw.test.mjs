@@ -506,6 +506,33 @@ test('variant measurement and all six painters remain renderer-local', () => {
   assert.ok(trackLayout.w >= 'CAMERA 12 · LIVE'.length * 6);
 });
 
+test('detail and selected cards paint no accent bar down their left edge', () => {
+  // The accent belongs to the leader, the anchor dot and the selected border.
+  for (const [variant, paint] of [
+    ['card', paintCard],
+    ['selected', paintSelected],
+  ]) {
+    const ctx = mockContext();
+    const entry = {
+      title: 'DATA CENTER',
+      details: ['OPENSTREETMAP'],
+      accent: '#6be8ff',
+      variant,
+    };
+    const layout = measureOverlayEntry(ctx, entry);
+    paint(ctx, entry, {
+      rect: { x: 40, y: 40, w: layout.w, h: layout.h },
+      anchor: { x: 20, y: 90 },
+      leader: { x1: 20, y1: 90, x2: 40, y2: 60 },
+    });
+    assert.deepEqual(
+      ctx.calls.filter(([name]) => name === 'fillRect'),
+      [],
+      `${variant} card`,
+    );
+  }
+});
+
 test('thumbnail painter preserves the shipped CCTV 104x77 geometry and drawing coordinates', () => {
   const ctx = mockContext();
   const frameSlot = createFrameSlot();

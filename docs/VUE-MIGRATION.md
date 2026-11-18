@@ -274,7 +274,14 @@ a feature supplying only its accent.
    the application shell publishes to the `gev-world-overlay-actions` store
    and answers with `activateWorldOverlayAction()`; the module needs no Vue
    for the portable transit entry, and its card and detection canvases stay
-   painting surfaces it draws on, like the Cesium canvas), the Global
+   painting surfaces it draws on, like the Cesium canvas), the selected and
+   tracked map cards (`WorldOverlayCards` in the scene chrome draws them as
+   elements from the list the world overlay presents through
+   `subscribeWorldOverlayCards()`, which the application shell publishes to
+   the `gev-world-overlay-cards` store; the overlay still solves each card's
+   place and paints its leader, and writes every frame's positions straight
+   to the elements, so a camera move re-renders nothing; without a presenter
+   the overlay paints these cards on its canvas), the Global
    Context compass and contact bearings (`AwarenessDirection` teleports into
    the globe container what the awareness layer presents through
    `subscribeDirectionOverlay()`, which the application shell publishes to
