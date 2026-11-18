@@ -18,3 +18,4 @@
 *.glb binary
 *.wav binary
 *.pbf binary
+*.bin binary

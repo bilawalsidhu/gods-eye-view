@@ -42,13 +42,20 @@ export function wrapLon(lon) {
 /**
  * Pack per-cell states into 2-bit cells, 4 per byte, LSB-first.
  *
- * @param {Uint8Array} states - One state (0..3) per cell, row-major.
+ * @param {Uint8Array} states - One state per cell, row-major: MASK_WATER,
+ *   MASK_LAND or MASK_COASTAL.
  * @returns {Uint8Array} ceil(states.length / 4) packed bytes.
+ * @throws {RangeError} On any other state: masking a stray 4 to its low two
+ *   bits would pack it as water, and 3 is reserved.
  */
 export function packMaskStates(states) {
   const packed = new Uint8Array(Math.ceil(states.length / 4));
   for (let i = 0; i < states.length; i += 1) {
-    packed[i >> 2] |= (states[i] & 0b11) << ((i & 3) * 2);
+    const state = states[i];
+    if (state !== MASK_WATER && state !== MASK_LAND && state !== MASK_COASTAL) {
+      throw new RangeError(`mask state ${state} at cell ${i} is not 0, 1 or 2`);
+    }
+    packed[i >> 2] |= state << ((i & 3) * 2);
   }
   return packed;
 }
@@ -140,11 +147,14 @@ export function decodeMaskBuffer(buffer) {
  * @param {number} lat - Degrees in the WGS84 range [-90, 90]; +90 clamps
  *   into the top row.
  * @param {number} lon - Degrees, any range (wrapped).
- * @returns {number} MASK_WATER | MASK_LAND | MASK_COASTAL (3 reserved).
+ * @returns {number} MASK_WATER | MASK_LAND | MASK_COASTAL.
  *   A non-finite lat or lon, or a finite lat outside [-90, 90], reads as
  *   MASK_COASTAL — never trusted as land or water — rather than indexing NaN
  *   into a silent MASK_WATER or clamping an off-globe latitude into a real
- *   polar cell. Longitude is wrapped, not range-gated.
+ *   polar cell. Longitude is wrapped, not range-gated. A cell that cannot be
+ *   read fails closed the same way: the reserved state 3, and a byte that is
+ *   not there (`data` detached by a transfer to a worker, or shorter than
+ *   the grid), where `undefined >> n` would otherwise read as water.
  */
 export function maskStateAt(mask, lat, lon) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return MASK_COASTAL;
@@ -158,5 +168,8 @@ export function maskStateAt(mask, lat, lon) {
     Math.max(0, Math.floor(((lat + 90) * mask.height) / 180)),
   );
   const idx = row * mask.width + col;
-  return (mask.data[idx >> 2] >> ((idx & 3) * 2)) & 0b11;
+  const byte = mask.data[idx >> 2];
+  if (byte === undefined) return MASK_COASTAL;
+  const state = (byte >> ((idx & 3) * 2)) & 0b11;
+  return state === 3 ? MASK_COASTAL : state;
 }

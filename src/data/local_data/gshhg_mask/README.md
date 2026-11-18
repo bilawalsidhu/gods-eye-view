@@ -20,6 +20,10 @@ High-resolution Geography), intermediate resolution `gshhs_i.b` extracted from
 pinned by `src/data/landSeaMask.test.mjs`). Cell counts over the 2880×1440
 grid: 2,692,026 water, 1,328,492 land, 126,682 coastal-mixed, 0 reserved.
 
+**Modified work:** `land-sea-mask.bin` is not GSHHG data as distributed. It
+is a raster derived from GSHHG v2.3.7 by the God's Eye View contributors on
+2026-11-17, by the transform below.
+
 **License:** LGPL-3.0-or-later (Wessel & Smith, GSHHG — see DATA_SOURCES.md
 for the credit line). `LICENSE.TXT` and `COPYING.LESSERv3` in this
 folder are GSHHG's copyright and permission notice and the LGPL text it refers

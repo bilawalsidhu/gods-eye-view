@@ -618,7 +618,10 @@ on (no `renderer.id`, no engine type, no engine object's presence).
   (`ownCreditDisplay`; otherwise the application's own line,
   `src/ui/creditsView.js`, shows the credits port's list), and what QA
   scripts read from `window.__godsEyeView` (Cesium's viewer there, for the
-  scripts that drive it). Each is optional, none is a contract member, and
+  scripts that drive it), and its own engine (`engine`, whose `kind` names
+  it: Cesium's is `{kind: 'cesium', viewer}`) for an application that draws
+  with that engine directly beside the contract, only with engines whose
+  kind it knows, adding, updating and removing what it draws. Each is optional, none is a contract member, and
   a renderer without them runs the application without that behaviour.
 - **What the renderer should do is in the ports**, each through the
   application's own code: outward zooms stop at a whole-Earth view that
