@@ -2,6 +2,7 @@ import { Readable } from 'node:stream';
 import { hashSeed, escapeXml, pinnedCameraUrl } from './normalize.js';
 import {
   A22_IMAGE_ORIGIN,
+  BAYERN_IMAGE_ORIGIN,
   CALGARY_IMAGE_ORIGIN,
   CCTV_FRAME_FETCH_TIMEOUT_MS,
   CCTV_FRAME_MAX_BODY_BYTES,
@@ -537,6 +538,7 @@ for (const prefix of [
   KING_COUNTY_IMAGE_ORIGIN,
   WSDOT_IMAGE_ORIGIN,
   A22_IMAGE_ORIGIN,
+  BAYERN_IMAGE_ORIGIN,
   TRIPCHECK_IMAGE_ORIGIN,
   MLIT_RIVER_IMAGE_ORIGIN,
   ...TAIWAN_HIGHWAY_IMAGE_ORIGINS,
