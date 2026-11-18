@@ -4834,6 +4834,10 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   The title and loading logos use a blue 10 px outer-eye stroke with a
 >   translucent slate fill, while the globe-and-cage gaze travels up to 34 SVG
 >   units toward the pointer for clearer feedback at the compact title size.
+>   The title logo is a button, "Back to live at the starting view": the world
+>   clock goes live and the camera flies to the view the app started from (the
+>   host's `homeView`, else its `startView`, else the whole planet), letting go
+>   of whatever it follows as Reset Globe does (`returnToStart()`).
 > - **Context, Cockpit, and Radio interaction contract:** explicit Contacts,
 >   Space Missions, and successful Cockpit actions reveal the Context panel, while
 >   restoration and replay preserve its prior collapsed state. Contacts uses the
