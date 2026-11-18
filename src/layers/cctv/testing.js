@@ -91,6 +91,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
    * @param {'off'|'on'|'viewshed'} [options.coverageMode='on'] Coverage mode.
    * @param {boolean} [options.showProjection=false] Projection visibility.
    * @param {Map<string, Object>} [options.healthById] Health rows by camera id.
+   * @param {Function} [options.registerPaintLane] Receives the count painter.
    * @returns {void}
    */
 
@@ -103,6 +104,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
     showProjection = false,
     healthById = new Map(),
     openingCameraProvisional = false,
+    registerPaintLane,
   } = {}) {
     layerState._viewer = viewer;
     layerState._records = Array.isArray(records) ? records : [];
@@ -132,10 +134,12 @@ export function createTesting({ state: layerState, services, parts, source }) {
     // A real book (over a set that draws nothing): every record gets its
     // icon as init adds it.
     layerState._icons = createIconBook(testIconSet());
-    layerState._counts = createCountMarkers({
-      ...testIconSet(),
-      id: 'cctv:test:counts',
-    });
+    layerState._counts?.dispose();
+    layerState._counts = createCountMarkers(
+      registerPaintLane,
+      'cctv:test:counts',
+      parts.rendering.refreshHorizonCulling,
+    );
     for (const record of layerState._records)
       if (record?.camera?.id) parts.rendering.addCameraIcon(record);
   }
@@ -155,7 +159,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
     for (const runtime of layerState._projectionEntities)
       if (runtime?.plane) planes[runtime.plane.id] = runtime.plane;
     return {
-      counts: layerState._counts?.book,
+      counts: layerState._counts,
       gizmo: layerState._gizmo?.partsForTest() ?? {},
       coverage,
       planes,

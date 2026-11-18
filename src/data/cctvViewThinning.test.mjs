@@ -10,7 +10,6 @@ import { DEFAULT_FOCUS_DEEMPHASIS_PARAMS } from './focusDeemphasis.js';
 import { fakeCameraPort } from '../testSupport/fakeCameraPort.mjs';
 import cctvLayer, {
   _cctvIconsForTest,
-  _extractPickedCameraIdForTest,
   bindCctvWorldClickGesture,
   applyCctvFocusDeemphasis,
   reopenNearestCamera,
@@ -90,27 +89,113 @@ function viewerAt(heightM, lonDeg = 0, flights = []) {
 
 /** The renderers bound for the running test, let go when it ends. */
 const bindings = [];
-const paintedLabels = new Map();
+let painter;
+let paintRequests;
+let measured;
+let glyphWidth;
+let ctx;
+const fonts = new EventTarget();
+
+function seedCoverage(options) {
+  _setCctvCoverageStateForTest({
+    ...options,
+    registerPaintLane(_lane, paint) {
+      painter = paint;
+      return {
+        requestPaint() {
+          paintRequests++;
+        },
+        setActive() {},
+        unregister() {},
+      };
+    },
+  });
+}
+
 beforeEach(() => {
+  paintRequests = 0;
+  measured = 0;
+  glyphWidth = 8;
   globalThis.document = {
+    fonts,
     createElement: () => ({
       getContext: () => ({
-        beginPath() {},
-        arc() {},
-        roundRect() {},
-        measureText: (text) => ({ width: text.length * 15 }),
-        fill() {},
-        stroke() {},
-        fillText(text, x, y, maxWidth) {
-          paintedLabels.set(text, maxWidth ?? Infinity);
+        measureText(text) {
+          measured++;
+          return { width: text.length * glyphWidth };
         },
       }),
     }),
   };
+  let savedState;
+  ctx = {
+    font: 'initial',
+    globalAlpha: 1,
+    fillStyle: 'initial',
+    strokeStyle: 'initial',
+    textAlign: 'start',
+    textBaseline: 'top',
+    lineWidth: 1,
+    labels: [],
+    shapes: [],
+    save() {
+      savedState = { ...this };
+    },
+    restore() {
+      Object.assign(this, savedState);
+    },
+    beginPath() {},
+    fill() {},
+    stroke() {},
+    roundRect(...args) {
+      this.shapes.push(args);
+    },
+    fillText(text, x, y) {
+      this.labels.push({
+        text,
+        x,
+        y,
+        alpha: this.globalAlpha,
+        font: this.font,
+      });
+    },
+  };
 });
 
+/** Reproject on each paint in CSS pixels, as the host does. */
+function paint(overrides = {}) {
+  ctx.labels.length = ctx.shapes.length = 0;
+  painter({
+    ctx,
+    width: WIDTH,
+    height: HEIGHT,
+    dpr: 2,
+    viewProjectionMatrix: new Float64Array([
+      0,
+      0,
+      0,
+      0,
+      2 / (30 * WIDTH),
+      0,
+      0,
+      0,
+      0,
+      2 / (30 * HEIGHT),
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+    ]),
+    occluder: { isPointVisible: () => true },
+    overlapsHardUi: () => false,
+    ...overrides,
+  });
+  return ctx.labels;
+}
+
 afterEach(() => {
-  paintedLabels.clear();
   delete globalThis.document;
   for (const unbind of bindings.splice(0)) unbind();
 });
@@ -131,36 +216,38 @@ const CLUSTER = [
   [0.2, 0],
 ];
 
-/** Count billboards the layer currently shows. */
+/** Groups from the latest view pass. */
 function markers() {
-  const book = cctvLayer._cctvDrawnForTest().counts;
-  return book.show
-    ? book
-        .ids()
-        .map(book.item)
-        .filter((item) => item.show)
-    : [];
+  return cctvLayer._cctvDrawnForTest().counts.markers;
 }
 
-/** Send a clean count-marker click through the layer's world click handler. */
+/** Click the CSS position of the painted count with a camera underneath it. */
 function clickMarker(marker) {
-  const set = cctvLayer._cctvDrawnForTest().counts.setId;
-  const hit = { set, id: marker.id, meta: marker.meta };
-  assert.equal(_extractPickedCameraIdForTest(hit), null);
-  const click = bindCctvWorldClickGesture({ onClick: (fn) => fn }, () => {
-    assert.fail('a count click reached activation or empty-click deselection');
+  const { x, y } = paint().find((label) => label.text === marker.text);
+  const hit = { set: _cctvIconsForTest().setId, id: 'cam-0' };
+  let fallback;
+  const click = bindCctvWorldClickGesture({ onClick: (fn) => fn }, (event) => {
+    fallback = event.drawHit;
   });
-  click({ drawHit: hit, gesture: { travelPx: 0, durationMs: 20 } });
+  const gesture = { travelPx: 0, durationMs: 20 };
+  click({ drawHit: hit, screenPosition: { x, y }, gesture });
+  assert.equal(fallback, undefined);
+  click({
+    drawHit: hit,
+    screenPosition: { x: x + marker.width / 2 + 1, y },
+    gesture,
+  });
+  assert.equal(fallback, hit);
 }
 
 test('a crowded cell shows its count and a singleton keeps its icon', () => {
   const { records } = recordsAt(CLUSTER);
-  _setCctvCoverageStateForTest({ viewer: viewerAt(20_000), records });
+  seedCoverage({ viewer: viewerAt(20_000), records });
   assert.equal(refreshHorizonCulling(), true);
   assert.deepEqual(shownIds(records), ['cam-3']);
   assert.deepEqual(_viewRecordIdsForTest(), ['cam-3']);
   assert.deepEqual(
-    markers().map((item) => item.meta.count),
+    markers().map((item) => item.cell.count),
     [3],
   );
   assert.deepEqual(
@@ -171,7 +258,7 @@ test('a crowded cell shows its count and a singleton keeps its icon', () => {
 
 test('a pan keeps the same winners, and an unchanged view keeps its list', () => {
   const { records } = recordsAt(CLUSTER);
-  _setCctvCoverageStateForTest({
+  seedCoverage({
     viewer: viewerAt(20_000),
     records,
   });
@@ -180,7 +267,7 @@ test('a pan keeps the same winners, and an unchanged view keeps its list', () =>
   const list = _viewRecordIdsForTest();
   // A pan of a few to some 40 px (a pixel is about 30 m from 20 km up).
   for (const shiftM of [90, 330, 600, 1110]) {
-    _setCctvCoverageStateForTest({
+    seedCoverage({
       viewer: viewerAt(20_000, shiftM / 111_320),
       records,
     });
@@ -191,7 +278,7 @@ test('a pan keeps the same winners, and an unchanged view keeps its list', () =>
       `pan by ${shiftM} m`,
     );
   }
-  _setCctvCoverageStateForTest({ viewer: viewerAt(20_000), records });
+  seedCoverage({ viewer: viewerAt(20_000), records });
   refreshHorizonCulling();
   assert.equal(refreshHorizonCulling(), false, 'the same view changes nothing');
   assert.deepEqual(_viewRecordIdsForTest(), list);
@@ -200,7 +287,7 @@ test('a pan keeps the same winners, and an unchanged view keeps its list', () =>
 test('a small zoom within one cell size keeps the same winners', () => {
   const { records } = recordsAt(CLUSTER);
   const shownAt = (heightM) => {
-    _setCctvCoverageStateForTest({
+    seedCoverage({
       viewer: viewerAt(heightM),
       records,
     });
@@ -217,7 +304,7 @@ test('the picker prefers the healthy camera and the marker stays at the mean', (
   // Whichever camera the id order would pick, the healthy one must win.
   let first;
   for (const id of ['cam-0', 'cam-1']) {
-    _setCctvCoverageStateForTest({
+    seedCoverage({
       viewer: viewerAt(20_000),
       records,
       healthById: new Map([[id, { status: 'ok' }]]),
@@ -239,14 +326,14 @@ test('the picker prefers the healthy camera and the marker stays at the mean', (
 test('the active camera always shows, even in a crowded cell', () => {
   const { records } = recordsAt(CLUSTER.slice(0, 3));
   for (const active of records) {
-    _setCctvCoverageStateForTest({
+    seedCoverage({
       viewer: viewerAt(20_000),
       records,
       activeCameraId: active.camera.id,
     });
     refreshHorizonCulling();
     assert.deepEqual(
-      markers().map((item) => item.meta.count),
+      markers().map((item) => item.cell.count),
       [2],
     );
     const icons = _cctvIconsForTest();
@@ -264,7 +351,7 @@ test('close up, every camera near the screen shows and far-off ones hide', () =>
     [0.0001, 0],
     [0.01, 0],
   ]);
-  _setCctvCoverageStateForTest({
+  seedCoverage({
     viewer: viewerAt(300),
     records,
   });
@@ -274,7 +361,7 @@ test('close up, every camera near the screen shows and far-off ones hide', () =>
 
 test('a disabled layer skips the view pass', () => {
   const { records } = recordsAt(CLUSTER);
-  _setCctvCoverageStateForTest({
+  seedCoverage({
     viewer: viewerAt(20_000),
     records,
     enabled: false,
@@ -285,7 +372,7 @@ test('a disabled layer skips the view pass', () => {
 
 test('UI state builds the full camera list only when it is read', () => {
   const { records } = recordsAt(CLUSTER.slice(0, 2));
-  _setCctvCoverageStateForTest({
+  seedCoverage({
     viewer: viewerAt(300),
     records,
   });
@@ -322,7 +409,7 @@ test('the camera picker lists the view, with the active camera first', () => {
     [0.01, 0],
     [0.0002, 0],
   ]);
-  _setCctvCoverageStateForTest({
+  seedCoverage({
     viewer: viewerAt(300),
     records,
     activeCameraId: 'cam-1',
@@ -344,10 +431,10 @@ test('panning a cell across the padded screen edge keeps its full count', () => 
     [0.29, 0],
   ]);
   for (const lon of [0.015, 0]) {
-    _setCctvCoverageStateForTest({ viewer: viewerAt(20_000, lon), records });
+    seedCoverage({ viewer: viewerAt(20_000, lon), records });
     refreshHorizonCulling();
     assert.deepEqual(
-      markers().map((item) => item.meta.count),
+      markers().map((item) => item.cell.count),
       [3],
     );
     if (lon === 0)
@@ -377,10 +464,10 @@ test('only members on the near side of the horizon count', () => {
       query: { project: () => ({ x: 400, y: 300 }) },
     }),
   );
-  _setCctvCoverageStateForTest({ viewer, records });
+  seedCoverage({ viewer, records });
   refreshHorizonCulling();
   assert.deepEqual(
-    markers().map((item) => item.meta.count),
+    markers().map((item) => item.cell.count),
     [2],
   );
 });
@@ -390,7 +477,7 @@ test('co-located cameras separate below the minimum cell size', () => {
     [0, 0],
     [0, 0],
   ]);
-  _setCctvCoverageStateForTest({ viewer: viewerAt(300), records });
+  seedCoverage({ viewer: viewerAt(300), records });
   refreshHorizonCulling();
   assert.deepEqual(shownIds(records), ['cam-0', 'cam-1']);
   assert.deepEqual(markers(), []);
@@ -404,7 +491,7 @@ test('a count click frames its members and preserves an explicit camera choice',
       [spread, 0],
       [0.2, 0],
     ]);
-    _setCctvCoverageStateForTest({
+    seedCoverage({
       viewer: viewerAt(20_000, 0, flights),
       records,
       activeCameraId: 'cam-2',
@@ -430,7 +517,7 @@ test('a count click frames its members and preserves an explicit camera choice',
     );
     assert.equal(reopenNearestCamera(), false);
     assert.equal(cctvLayer.getUIState().activeCameraId, 'cam-2');
-    _setCctvCoverageStateForTest({
+    seedCoverage({
       viewer: destination,
       records,
       activeCameraId: 'cam-2',
@@ -443,11 +530,13 @@ test('a count click frames its members and preserves an explicit camera choice',
 
 test('disabling the layer hides its counts', () => {
   const { records } = recordsAt(CLUSTER);
-  _setCctvCoverageStateForTest({ viewer: viewerAt(20_000), records });
+  seedCoverage({ viewer: viewerAt(20_000), records });
   refreshHorizonCulling();
   assert.equal(markers().length, 1);
+  const [label] = paint();
   cctvLayer.disable();
-  assert.deepEqual(markers(), []);
+  assert.deepEqual(paint(), []);
+  assert.equal(cctvLayer._cctvDrawnForTest().counts.pickedCell(label), null);
 });
 
 test('coverage leaves grouped neighbors and returns when their icons separate', () => {
@@ -459,7 +548,7 @@ test('coverage leaves grouped neighbors and returns when their icons separate', 
   // Lines already materialised at close zoom.
   for (const record of records) record.coverageEntities = [{ show: true }];
   const viewer = viewerAt(20_000);
-  _setCctvCoverageStateForTest({ viewer, records, activeCameraId: 'cam-0' });
+  seedCoverage({ viewer, records, activeCameraId: 'cam-0' });
   refreshCoverageStyles();
   refreshHorizonCulling();
   assert.deepEqual(
@@ -478,7 +567,7 @@ test('coverage leaves grouped neighbors and returns when their icons separate', 
 
 test('count markers share the camera focus fade and recover on release', () => {
   const { records } = recordsAt(CLUSTER);
-  _setCctvCoverageStateForTest({ viewer: viewerAt(20_000), records });
+  seedCoverage({ viewer: viewerAt(20_000), records });
   refreshHorizonCulling();
   const target = {
     screenRect: { left: 40, top: 40, right: 60, bottom: 60 },
@@ -499,10 +588,10 @@ test('count markers share the camera focus fade and recover on release', () => {
   };
   tick(0, target);
   tick(params.attackMs + 1, target);
-  assert.equal(markers()[0].focus, params.dimFloor);
+  assert.equal(paint()[0].alpha, params.dimFloor);
   tick(params.attackMs + 2, null);
   tick(params.attackMs + params.releaseMs + 3, null);
-  assert.equal(markers()[0].focus, 1);
+  assert.equal(paint()[0].alpha, 1);
 });
 
 test('overlapping cells merge at their weighted centre and keep every camera in the flight bounds', () => {
@@ -524,7 +613,7 @@ test('overlapping cells merge at their weighted centre and keep every camera in 
     [0, records],
     [0.003, [...records].reverse()],
   ]) {
-    _setCctvCoverageStateForTest({
+    seedCoverage({
       viewer: viewerAt(20_000, pan, flights),
       records: order,
       activeCameraId: 'cam-7',
@@ -534,21 +623,21 @@ test('overlapping cells merge at their weighted centre and keep every camera in 
     const shown = markers();
     assert.deepEqual(shownIds(records), ['cam-7', 'cam-8']);
     assert.equal(
-      shown.reduce((sum, m) => sum + m.meta.count, 0),
+      shown.reduce((sum, m) => sum + m.cell.count, 0),
       7,
     );
     assert.deepEqual(
-      shown.map((m) => m.meta.count).sort((a, b) => a - b),
+      shown.map((m) => m.cell.count).sort((a, b) => a - b),
       [2, 5],
     );
-    const merged = shown.find((m) => m.meta.count === 5);
+    const merged = shown.find((m) => m.cell.count === 5);
     assert.ok(
       Cesium.Cartesian3.distance(
         merged.pos,
         Cesium.Cartesian3.fromDegrees(0.0008, 0, 10),
       ) < 0.01,
     );
-    const positions = shown.map((m) => [m.id, m.pos]);
+    const positions = shown.map((m) => [m.cell.key, m.pos]);
     if (previous) assert.deepEqual(positions, previous);
     previous = positions;
     clickMarker(merged);
@@ -569,7 +658,7 @@ test('overlapping cells merge at their weighted centre and keep every camera in 
   }
 });
 
-test('long localized labels use their measured width on the canvas and billboard', () => {
+test('the overlay paints short counts as circles and long localized labels as pills', () => {
   const locale = getLocale();
   try {
     setLocale('ru');
@@ -578,25 +667,38 @@ test('long localized labels use their measured width on the canvas and billboard
       [0.06, 0],
       [0.06, 0],
     ]);
-    _setCctvCoverageStateForTest({ viewer: viewerAt(20_000), records });
+    seedCoverage({ viewer: viewerAt(20_000), records });
     refreshHorizonCulling();
-    const short = markers().find((m) => m.meta.count === 2);
-    const long = markers().find((m) => m.meta.count === 1300);
-    assert.equal(short.image.canvas.width, short.image.canvas.height);
-    assert.ok(long.image.canvas.width > long.image.canvas.height);
-    assert.equal(long.size[1], short.size[1]);
-    assert.equal(
-      long.size[0] / long.size[1],
-      long.image.canvas.width / long.image.canvas.height,
-    );
+    const short = markers().find((m) => m.cell.count === 2);
+    const long = markers().find((m) => m.cell.count === 1300);
+    const measurements = measured;
+    assert.equal(measurements, 1);
+    const labels = paint();
+    refreshHorizonCulling();
+    assert.equal(measured, measurements);
     const text = new Intl.NumberFormat('ru', { notation: 'compact' }).format(
       1300,
     );
-    assert.ok(paintedLabels.get(text) >= text.length * 15);
-    assert.ok(
-      long.image.canvas.width > text.length * 15,
-      'the digits have padding',
-    );
+    assert.equal(labels.length, 2);
+    assert.equal(ctx.shapes.length, labels.length);
+    const [sx, sy, sw, sh] =
+      ctx.shapes[labels.findIndex((l) => l.text === '2')];
+    const [lx, ly, lw, lh] =
+      ctx.shapes[labels.findIndex((l) => l.text === text)];
+    assert.equal(sw, sh);
+    assert.ok(lw > text.length * glyphWidth);
+    assert.equal(lh, sh);
+    // The four-pixel outer stroke extends two pixels on each side of the path.
+    assert.equal(sw + 4, short.width);
+    assert.equal(lw + 4, long.width);
+    assert.equal(sy + sh / 2, HEIGHT / 2);
+    assert.equal(ly + lh / 2, HEIGHT / 2);
+    assert.ok(Math.abs(sx + sw / 2 - (WIDTH / 2 + short.pos.y / 30)) < 1e-9);
+    assert.ok(Math.abs(lx + lw / 2 - (WIDTH / 2 + long.pos.y / 30)) < 1e-9);
+    assert.match(labels[0].font, /JetBrains Mono/);
+    assert.equal(ctx.font, 'initial');
+    assert.equal(ctx.fillStyle, 'initial');
+    assert.equal(ctx.lineWidth, 1);
   } finally {
     setLocale(locale);
   }
@@ -613,9 +715,9 @@ test('a wider localized pill merges a horizontal neighbor beyond the circle diam
         [0.008, 0],
         [0.008, 0],
       ]);
-      _setCctvCoverageStateForTest({ viewer: viewerAt(20_000), records });
+      seedCoverage({ viewer: viewerAt(20_000), records });
       refreshHorizonCulling();
-      return markers().map((m) => m.meta.count);
+      return markers().map((m) => m.cell.count);
     };
     assert.deepEqual(at(2), [2, 2]);
     assert.deepEqual(at(1300), [1302]);
@@ -635,10 +737,95 @@ test('a merged centre can pick up a third count marker', () => {
     [0, -0.0126],
     [0, -0.0126],
   ]);
-  _setCctvCoverageStateForTest({ viewer: viewerAt(20_000), records });
+  seedCoverage({ viewer: viewerAt(20_000), records });
   refreshHorizonCulling();
   assert.deepEqual(
-    markers().map((m) => m.meta.count),
+    markers().map((m) => m.cell.count),
     [6],
   );
+});
+
+test('each paint follows the overlay projection, horizon and hard HUD exclusions', () => {
+  const { records } = recordsAt([
+    [-0.001, 0],
+    [-0.001, 0],
+    [0.001, 0],
+    [0.001, 0],
+  ]);
+  seedCoverage({ viewer: viewerAt(20_000), records });
+  refreshHorizonCulling();
+  const counts = cctvLayer._cctvDrawnForTest().counts;
+  assert.ok(paintRequests > 0);
+  const requests = paintRequests;
+  const widths = measured;
+  assert.deepEqual(
+    paint().map(({ text, x, y }) => [text, x, y]),
+    [['4', 400, 300]],
+  );
+  const first = { x: 400, y: 300 };
+  assert.equal(counts.pickedCell(first).count, 4);
+  const at = (x) => {
+    const matrix = new Float64Array(16);
+    matrix[12] = (2 * x) / WIDTH - 1;
+    matrix[15] = 1;
+    return { viewProjectionMatrix: matrix };
+  };
+  assert.equal(paint(at(100))[0].x, 100);
+  assert.equal(counts.pickedCell(first), null);
+  assert.deepEqual(paint(at(-100)), []);
+  assert.deepEqual(paint({ occluder: { isPointVisible: () => false } }), []);
+  assert.deepEqual(paint({ overlapsHardUi: () => true }), []);
+  assert.equal(counts.pickedCell(first), null);
+  refreshHorizonCulling();
+  assert.equal(measured, widths);
+  assert.equal(paintRequests, requests);
+});
+
+test('loaded font metrics remerge visible cells without waiting for a move', () => {
+  const locale = getLocale();
+  try {
+    setLocale('ru');
+    glyphWidth = 3;
+    const { records } = recordsAt([
+      ...Array(1300).fill([-0.009, 0]),
+      [0.009, 0],
+      [0.009, 0],
+    ]);
+    seedCoverage({ viewer: viewerAt(20_000), records });
+    refreshHorizonCulling();
+    assert.equal(markers().length, 2);
+    glyphWidth = 12;
+    fonts.dispatchEvent(new Event('loadingdone'));
+    assert.deepEqual(
+      markers().map((m) => m.cell.count),
+      [1302],
+    );
+    assert.equal(paint().length, 1);
+  } finally {
+    setLocale(locale);
+  }
+});
+
+test('hits follow paint order and keep the last painted group until the overlay clears', () => {
+  const { records } = recordsAt([
+    [0, 0],
+    [0, 0],
+    [0.05, 0],
+    [0.05, 0],
+    [0.05, 0],
+  ]);
+  seedCoverage({ viewer: viewerAt(20_000), records });
+  refreshHorizonCulling();
+  const point = { x: WIDTH / 2, y: HEIGHT / 2 };
+  const matrix = new Float64Array(16);
+  matrix[15] = 1;
+  const labels = paint({ viewProjectionMatrix: matrix });
+  const counts = cctvLayer._cctvDrawnForTest().counts;
+  assert.equal(labels.length, 2);
+  const top = counts.pickedCell(point);
+  assert.equal(String(top.count), labels.at(-1).text);
+  counts.update([], () => null);
+  assert.equal(counts.pickedCell(point), top);
+  assert.deepEqual(paint(), []);
+  assert.equal(counts.pickedCell(point), null);
 });

@@ -72,7 +72,9 @@ test('a count click preserves the provisional opening pick until the view settle
       _viewer: viewer,
       _openingCameraProvisional: true,
       _activeCameraId: 'opening',
-      _counts: { pickedCell: () => cell },
+      _counts: {
+        pickedCell: (point) => (point?.x === 14 && point.y === 26 ? cell : null),
+      },
     };
     const parts = {};
     parts.navigation = createNavigation({ state, parts });
@@ -87,7 +89,13 @@ test('a count click preserves the provisional opening pick until the view settle
         assert.fail('a count click reached activation or deselection');
       },
     );
-    click({ drawHit: {}, gesture: { travelPx: 0, durationMs: 20 } });
+    click({
+      screenPosition: { x: 14, y: 26 },
+      get drawHit() {
+        assert.fail('the camera underneath was picked');
+      },
+      gesture: { travelPx: 0, durationMs: 20 },
+    });
     assert.equal(flights.length, 1);
     assert.equal(state._activeCameraId, 'opening');
     assert.equal(state._openingCameraProvisional, true);

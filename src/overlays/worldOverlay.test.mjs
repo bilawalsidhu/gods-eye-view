@@ -1514,9 +1514,14 @@ test('a placement is only ever kept under chrome that composites ABOVE the host'
   const paintedUnder = (occluders) => {
     const env = installMockEnvironment({ width: 400, height: 300, dpr: 1, occluders });
     initWorldOverlay(env.viewer);
+    let hardUi;
+    registerWorldOverlayPaintLane('ambient-label', (frame) => {
+      hardUi = frame.overlapsHardUi({ x: 180, y: 130, w: 40, h: 40 });
+    }, { id: 'anchored-label', active: true });
     setOverlayEntries('ambient', [selectedEntry('CONTACT')]);
     env.postRender.raise();
     const { paintedCount } = getWorldOverlayDiagnostics();
+    assert.equal(hardUi, paintedCount === 0);
     env.cleanup();
     return paintedCount;
   };

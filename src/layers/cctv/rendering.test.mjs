@@ -120,28 +120,46 @@ test('the icons go with the viewer that drew them, whichever tears down', () => 
   const one = bindFakeDraw(first);
   const two = bindFakeDraw(second);
   const state = { _viewer: first };
+  const lanes = [];
+  const overlays = {
+    registerWorldOverlayPaintLane(name, paint, options) {
+      const lane = {
+        name,
+        paint,
+        options,
+        unregister() {
+          this.disposed = true;
+        },
+      };
+      lanes.push(lane);
+      return lane;
+    },
+  };
   const { createCameraIcons, destroyCameraIcons } = createRendering({
     state,
-    services: { focus: {} },
+    services: { focus: {}, overlays },
     parts: {},
     source: {},
   });
   try {
     const old = createCameraIcons(first);
-    const oldCounts = state._counts.book.setId;
+    assert.equal(one.draw.sets.size, 1);
+    assert.equal(lanes[0].name, 'ambient-label');
+    assert.equal(lanes[0].options.target, 'shared');
+    assert.equal(lanes[0].options.active, false);
     state._viewer = second;
     const current = createCameraIcons(second);
     assert.notEqual(old, current);
     assert.equal(one.draw.sets.get(old).disposed, true, 'a re-init lets go');
     assert.equal(two.draw.sets.get(current).disposed, false);
-    assert.equal(one.draw.sets.get(oldCounts).disposed, true);
-    const counts = two.draw.set(state._counts.book.setId);
-    assert.equal(counts.spec.horizonCull, true);
+    assert.equal(lanes[0].disposed, true);
+    lanes[0].paint({});
 
     destroyCameraIcons();
     assert.equal(two.draw.sets.get(current).disposed, true);
     assert.equal(state._icons, null);
-    assert.equal(counts.disposed, true);
+    assert.equal(lanes[1].disposed, true);
+    lanes[1].paint({});
     assert.equal(state._counts, null);
   } finally {
     one.unbind();
@@ -378,6 +396,38 @@ test('a pose with no perspective field of view is projected by the renderer', ()
     assert.deepEqual(asked.sort(), [0, 1000]);
     assert.equal(set.items.get('on').show, true);
     assert.equal(set.items.get('off').show, false);
+  } finally {
+    unbind();
+  }
+});
+
+test('hover picks the underlying camera only outside a painted count', () => {
+  const viewer = {};
+  const icon = { set: 'icons', id: 'camera' };
+  let picks = 0;
+  const unbind = bindRenderer(viewer, {
+    query: {
+      pick() {
+        picks++;
+        return icon;
+      },
+    },
+  });
+  try {
+    const state = {
+      _viewer: viewer,
+      _counts: { pickedCell: ({ x }) => (x <= 17 ? {} : null) },
+      _icons: { setId: icon.set, has: () => true },
+      _recordById: new Map([[icon.id, {}]]),
+    };
+    const rendering = createRendering({
+      state,
+      services: { focus: {} },
+      parts: {},
+    });
+    assert.equal(rendering.pickCameraIdAt({ x: 17, y: 0 }), null);
+    assert.equal(picks, 0);
+    assert.equal(rendering.pickCameraIdAt({ x: 18, y: 0 }), icon.id);
   } finally {
     unbind();
   }

@@ -42,7 +42,8 @@ export function createSelection({
     return input.onClick((event) => {
       if (!isTrackingClickGesture(event.gesture)) return;
       const cell =
-        layerState._enabled && layerState._counts?.pickedCell(event.drawHit);
+        layerState._enabled &&
+        layerState._counts?.pickedCell(event.screenPosition);
       if (cell) {
         parts.navigation.zoomToCell(cell);
         return;

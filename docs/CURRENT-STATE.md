@@ -1953,7 +1953,8 @@ accepts forwarding headers, so cameras work behind a reverse proxy; a forwarded
 request skips the key-bearing Street View fallback and gets the placeholder.
 
 The CCTV layer draws only the cameras on or near the screen. Zoomed out, a
-ground cell containing multiple cameras shows a cyan count at their centre.
+ground cell containing multiple cameras shows a cyan count at their centre,
+drawn on the world overlay at the same resolution as camera callouts.
 The count includes cameras beyond the screen edge and excludes cameras beyond
 the horizon. Counts that would overlap on screen merge into one that carries
 their sum. Clicking a count zooms to its group. Single cameras keep their icons,

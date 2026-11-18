@@ -13,6 +13,7 @@ import {
   IDLE_COVERAGE_EDGE_MUTED,
   ACTIVE_COVERAGE_EDGE_DEPTHFAIL,
   IDLE_COVERAGE_COLOR,
+  COUNT_MARKER_PX,
   VIEW_CELL_PX,
   VIEW_ICON_MARGIN,
   VIEW_MIN_CELL_M,
@@ -142,12 +143,9 @@ export function createRendering({
     set.setColumns?.({ ids: [] });
     layerState._icons = createIconBook(set);
     layerState._counts = createCountMarkers(
-      drawOf(viewer).icons({
-        id: `cctv:${iconSets}:counts`,
-        horizonCull: true,
-        show: false,
-        drawOrder: services.sprites?.spriteDrawOrder?.('cctv') ?? 0,
-      }),
+      services.overlays?.registerWorldOverlayPaintLane,
+      `cctv:${iconSets}:counts`,
+      refreshHorizonCulling,
     );
     return set.id;
   }
@@ -156,7 +154,7 @@ export function createRendering({
   function destroyCameraIcons() {
     layerState._icons?.dispose();
     layerState._icons = null;
-    layerState._counts?.book.dispose();
+    layerState._counts?.dispose();
     layerState._counts = null;
   }
 
@@ -288,38 +286,52 @@ export function createRendering({
     let writes = 0;
     let transitioning = false;
     let activeCount = 0;
-    /** Advance one icon or count billboard on the shared focus clock. */
-    function apply(book, id, position) {
-      const item = book?.item(id);
-      if (!item) return;
-      const scale = item.scale ?? 1;
-      // CCTV never publishes a tracked focus target, so every icon is ambient.
-      const focus = advanceSpriteFocus(item.meta, {
-        // Keep hidden icons in the state/release pass so the active count cannot
-        // drop while a stale dim alpha remains waiting to reappear.
-        screenPosition:
-          item.show === false || !position ? null : screenPositionFor(position),
+    /** A changed focus factor for a camera icon or a painted count. */
+    function changedFocus(owner, position, shown, width, height, current) {
+      const focus = advanceSpriteFocus(owner, {
+        screenPosition: shown && position ? screenPositionFor(position) : null,
         cameraDistance: position ? cameraDistanceFor(position) : Number.NaN,
         nowMs,
         target,
         params,
-        spriteHalfWidthPx: item.size[0] * scale * 0.5,
-        spriteHalfHeightPx: item.size[1] * scale * 0.5,
+        spriteHalfWidthPx: width / 2,
+        spriteHalfHeightPx: height / 2,
       });
       transitioning ||= focus.transitioning;
-      if (focus.active) activeCount += 1;
-      // Order-independent narrow amendment to always-visible icons: CCTV
-      // contacts retain a non-zero floor while yielding near the tracked target.
-      if (focusAlphaNeedsWrite(book.focus(id), focus.factor, params)) {
-        book.setFocus(id, focus.factor);
-        writes += 1;
-      }
+      if (focus.active) activeCount++;
+      if (!focusAlphaNeedsWrite(current, focus.factor, params)) return null;
+      writes++;
+      return focus.factor;
     }
-    for (const record of records || [])
-      apply(icons, record.camera?.id, record.position);
-    const counts = layerState._counts?.book;
-    for (const id of counts?.ids() ?? [])
-      apply(counts, id, counts.item(id).pos);
+    for (const record of records || []) {
+      const id = record.camera?.id;
+      const item = icons?.item(id);
+      if (!item) continue;
+      const scale = item.scale ?? 1;
+      const factor = changedFocus(
+        item.meta,
+        record.position,
+        item.show !== false,
+        item.size[0] * scale,
+        item.size[1] * scale,
+        icons.focus(id),
+      );
+      if (factor !== null) icons.setFocus(id, factor);
+    }
+    const counts = layerState._counts;
+    const iconWrites = writes;
+    for (const marker of counts?.markers ?? []) {
+      const factor = changedFocus(
+        marker,
+        marker.pos,
+        true,
+        marker.width,
+        COUNT_MARKER_PX,
+        marker.focus,
+      );
+      if (factor !== null) marker.focus = factor;
+    }
+    if (writes > iconWrites) counts.requestPaint();
     return { writes, transitioning, activeCount, ran: true };
   }
 
@@ -567,7 +579,7 @@ export function createRendering({
     );
     parts.projection.clearProjectionOverlay();
     if (layerState._icons) layerState._icons.show = false;
-    if (layerState._counts) layerState._counts.book.show = false;
+    layerState._counts?.hide();
     parts.projection.pauseInactiveProjectionFeeds(null);
   }
 
@@ -911,6 +923,7 @@ export function createRendering({
    * @returns {string|null}
    */
   function pickCameraIdAt(position) {
+    if (layerState._counts?.pickedCell(position)) return null;
     let hit = null;
     try {
       hit = findQuery(layerState._viewer)?.pick(position.x, position.y) ?? null;
