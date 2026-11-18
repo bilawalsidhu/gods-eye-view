@@ -336,15 +336,17 @@ export function createTracking({
    * @param {{x: number, y: number, z: number}} position - The report's ECEF position.
    * @param {number} [epochMs] - The report's time; defaults to the tracked
    *   aircraft's newest position-history fix, which every caller has just pushed.
-   * @param {{nullAltitude?: boolean, track?: number}} [options] - `nullAltitude`:
+   * @param {{nullAltitude?: boolean, track?: number, estimated?: boolean}} [options] - `nullAltitude`:
    *   the report had no altitude, so its position is not kept and the line
-   *   breaks there; `track`: its reported track, which the line leaves it along.
+   *   breaks there; `track`: its reported track, which the line leaves it along;
+   *   `estimated`: the feed estimated it, so it stands in only until the next
+   *   received report.
    */
 
   function _appendTrailFix(
     position,
     epochMs,
-    { nullAltitude = false, track = undefined } = {},
+    { nullAltitude = false, track = undefined, estimated = false } = {},
   ) {
     const history = flightState._positionHistory.get(flightState._trackedIcao);
     const timeMs = Number.isFinite(epochMs)
@@ -355,7 +357,7 @@ export function createTracking({
       position,
       timeMs,
       TRAIL_MAX_POINTS,
-      { nullAltitude, track },
+      { nullAltitude, track, estimated },
     );
     _refreshTrailDisplay();
   }

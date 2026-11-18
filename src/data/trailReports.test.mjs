@@ -109,6 +109,35 @@ test('a report with no altitude keeps no position and breaks the line', () => {
   assert.equal(trailBodySegments(fixes, fixes.length).length, 2);
 });
 
+test('an estimated report stands in only until the next received one', () => {
+  // Out of receiver range a feed carries the aircraft on its last course; the
+  // next received report is 900 m off that line. The guesses go, so the line
+  // runs received report to received report.
+  const fixes = [];
+  insertTrailFix(fixes, at(0, 0), 0, LIMIT);
+  insertTrailFix(fixes, at(1_500, 0), 15 * SEC, LIMIT, { estimated: true });
+  insertTrailFix(fixes, at(3_000, 0), 30 * SEC, LIMIT, { estimated: true });
+  assert.equal(fixes.length, 3);
+  assert.equal(fixes[2].estimated, true);
+  insertTrailFix(fixes, at(4_500, -900), 45 * SEC, LIMIT);
+  assert.deepEqual(
+    fixes.map((fix) => [fix.timeMs, fix.estimated === true]),
+    [
+      [0, false],
+      [45 * SEC, false],
+    ],
+  );
+  // 45 s and 4.6 km apart: still one path, joined.
+  assert.equal(fixes[1].breakBefore, false);
+  // A received report a sweep late, older than the guesses, takes them out too.
+  insertTrailFix(fixes, at(6_000, -900), 60 * SEC, LIMIT, { estimated: true });
+  insertTrailFix(fixes, at(5_000, -900), 50 * SEC, LIMIT);
+  assert.deepEqual(
+    fixes.map((fix) => fix.timeMs),
+    [0, 45 * SEC, 50 * SEC],
+  );
+});
+
 test('a report arriving late goes in time order and the curve stays smooth', () => {
   const fixes = [];
   for (const t of [0, 30, 15, 45])
