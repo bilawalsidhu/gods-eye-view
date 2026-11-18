@@ -19,5 +19,8 @@ export function normalizeFlightIdentity(value) {
     .toUpperCase();
   const match = /^([A-Z]{2,3})[ -]*(\d{1,4}[A-Z]?)$/.exec(text);
   if (!match) return text;
-  return `${AIRLINES[match[1]] || match[1]}${match[2].replace(/^0+(?=\d)/, '')}`;
+  const [, designator, number] = match;
+  if (/^0+[A-Z]?$/.test(number)) return text;
+  if (designator.length === 3) return designator + number;
+  return `${AIRLINES[designator] || designator}${number.replace(/^0+(?=\d)/, '')}`;
 }
