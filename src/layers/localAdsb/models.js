@@ -8,18 +8,21 @@ import {
   sub,
 } from '../../geo/vector.js';
 import { aircraftLayerModelSpec } from '../flights/modelSpec.js';
-import { fleetModelSet, loadFleetModelSet } from '../../data/fleetModels.js';
+import {
+  fleetModelSet,
+  fleetPartTable,
+  loadFleetModelSet,
+} from '../../data/fleetModels.js';
+import { aircraftLayerPartState } from '../../data/modelPartDrivers.js';
+import { KNOT_MPS } from '../../data/units.js';
 import {
   FLEET_DR_INTERVAL_MS,
-  MODEL_ALL_ADD_M,
-  MODEL_ALL_KEEP_M,
+  MODEL_ADD_M,
   MODEL_ALT_CEIL_M,
   MODEL_HEADING_OFFSET_DEG,
+  MODEL_KEEP_M,
   MODEL_MAX,
   MODEL_MAX_ALL,
-  MODEL_MIN_PX,
-  MODEL_PROX_ADD_M,
-  MODEL_PROX_KEEP_M,
 } from '../flights/policy.js';
 import {
   AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
@@ -165,6 +168,36 @@ export function createLocalAdsbModels({
     }
   }
 
+  /**
+   * The moving parts an aircraft's model is posed with, from its record
+   * (`aircraftLayerPartState`). The receiver knows no ground height, so its gear
+   * follows the approach rule by its reported altitude, climb and speed. An
+   * airport vehicle is a road vehicle (`groundVehiclePartState`): its wheels
+   * roll with its speed.
+   */
+  function partsOf(marker, spec) {
+    const table = fleetPartTable(fleetModelSet(), spec.model);
+    if (!table) return undefined;
+    const record = marker.record ?? {};
+    const finite = (v) => (Number.isFinite(v) ? v : null);
+    const speedMps =
+      finite(record.groundSpeedKt) === null
+        ? null
+        : record.groundSpeedKt * KNOT_MPS;
+    return aircraftLayerPartState(table, {
+      klass: marker.klass,
+      onGround: marker.onGround === true,
+      heightAboveGroundM: null,
+      altitudeM:
+        finite(record.altitudeFt) === null ? null : record.altitudeFt * 0.3048,
+      verticalRateMps:
+        finite(record.verticalRateFpm) === null
+          ? null
+          : (record.verticalRateFpm * 0.3048) / 60,
+      speedMps,
+    });
+  }
+
   function regime(preferences, pose) {
     if (!preferences?.models3d) return false;
     return pose.height < MODEL_ALT_CEIL_M;
@@ -173,19 +206,17 @@ export function createLocalAdsbModels({
   function refreshEligibility(markers, preferences, pose) {
     const all = preferences.models3dMode === 'all';
     const cap = all ? MODEL_MAX_ALL : MODEL_MAX;
-    const addM = all ? MODEL_ALL_ADD_M : MODEL_PROX_ADD_M;
-    const keepM = all ? MODEL_ALL_KEEP_M : MODEL_PROX_KEEP_M;
     const candidates = [];
     for (const [id, marker] of markers) {
       if (!marker.position) continue;
       const distanceSq = distanceSquared(pose.position, marker.position);
-      if (distanceSq > keepM * keepM) continue;
+      if (distanceSq > MODEL_KEEP_M * MODEL_KEEP_M) continue;
       candidates.push([id, distanceSq, inView(pose, marker.position)]);
     }
     candidates.sort((a, b) => a[1] - b[1]);
     eligible = selectModelEligible(candidates, {
       cap,
-      addDistSq: addM * addM,
+      addDistSq: MODEL_ADD_M * MODEL_ADD_M,
       isModeled: (id) => models.has(id),
     });
     release([...models.keys()].filter((id) => !eligible.has(id)));
@@ -246,6 +277,7 @@ export function createLocalAdsbModels({
         const gltf = fleetModelSet()?.bytes?.get(spec.model);
         noteAsset(record, url, spec.bellyM);
         const position = placement(id, marker);
+        const parts = partsOf(marker, spec);
         const shown =
           Boolean(position) && horizon.isPointVisible(marker.position);
         items.push({
@@ -263,11 +295,11 @@ export function createLocalAdsbModels({
             roll: 0,
           },
           scale: spec.scale,
-          minPixelSize: MODEL_MIN_PX,
           // The mesh's own colours (white, multiplied).
           tint: WHITE,
           colorBlend: aircraftModelBlend(false),
           environmentMap: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS.enabled,
+          ...(parts ? { parts } : {}),
           show: shown,
         });
         if (shown && record.ready) marker.modelOwnsVisual = true;

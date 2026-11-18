@@ -21,6 +21,18 @@ export function createLifecycle({
 
   const methods = {
     /**
+     * The shell's services: `runNavigation(navigate)` runs a covered city's
+     * flight as an explicit camera action, as the other camera controls are.
+     * @param {{ runNavigation?: Function }|null} shellServices
+     */
+    attachShellServices(shellServices) {
+      layerState._runNavigation =
+        typeof shellServices?.runNavigation === 'function'
+          ? shellServices.runNavigation
+          : null;
+    },
+
+    /**
      * Initialize the bikeshare layer. Makes the station draw sets on the
      * viewer's renderer (`drawOf`), resets all internal state, and installs
      * the click handler. Called once during app bootstrap. Given a Cesium
@@ -81,8 +93,11 @@ export function createLifecycle({
       );
       parts.selection._installClickHandler(viewer);
       // Pick-ownership (H2): station point ids are string render-map keys.
-      registerPickOwner('bikeshare', (pickedId) =>
-        layerState._stationRenderMap.has(pickedId),
+      registerPickOwner(
+        'bikeshare',
+        (pickedId) =>
+          layerState._stationRenderMap.has(pickedId) ||
+          parts.selection.coverageCityOf(pickedId) !== null,
       );
 
       if (!layerState._cameraChangedOff) {
@@ -124,6 +139,7 @@ export function createLifecycle({
       parts.viewport.deactivateAllCities();
       layerState._cityRuntime.clear();
       if (layerState._stationSet) layerState._stationSet.show = false;
+      parts.viewport.showCoverage(false);
       layerState._count = 0;
       layerState._loading = false;
       layerState._loadingOps = 0;

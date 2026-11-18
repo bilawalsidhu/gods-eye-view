@@ -1869,6 +1869,43 @@ test('Scene snapshots are immutable and editing outcomes retain the affected sho
   } finally { restore(); }
 });
 
+test('moveShot reorders a scene, saves it and publishes shot-moved; not past the ends, not while playing', async () => {
+  const { director, restore } = makeDirector();
+  try {
+    director._activeRun = null;
+    const seen = [];
+    director.subscribe(({ change }) => { if (change) seen.push(change); });
+    const order = () => director._project.scenes[0].shots.map(({ id }) => id);
+    const saved = () =>
+      JSON.parse(localStorage.getItem('godsEyeView.sceneProject.v2'))
+        .scenes[0].shots.map(({ id }) => id);
+
+    assert.equal(director.moveShot('scene-1', 'shot-b', 0), true);
+    assert.deepEqual(order(), ['shot-b', 'shot-a']);
+    assert.deepEqual(saved(), ['shot-b', 'shot-a']);
+    const moved = seen.find(({ type }) => type === 'shot-moved');
+    assert.equal(moved.shot.id, 'shot-b');
+    assert.equal(moved.index, 0);
+
+    // The view's action is the same edit.
+    seen.length = 0;
+    director._controls.actions.moveShot('scene-1', 'shot-b', 1);
+    assert.deepEqual(order(), ['shot-a', 'shot-b']);
+    assert.deepEqual(seen.map(({ type }) => type), ['shot-moved']);
+
+    // Past an end it stays at the end; at its place, unknown, or playing, nothing moves.
+    assert.equal(director.moveShot('scene-1', 'shot-b', 5), false);
+    assert.equal(director.moveShot('scene-1', 'shot-a', -1), false);
+    assert.equal(director.moveShot('scene-1', 'missing', 0), false);
+    assert.equal(director.moveShot('scene-1', 'shot-a', 0.5), false);
+    director._running = true;
+    assert.equal(director.moveShot('scene-1', 'shot-b', 0), false);
+    director._running = false;
+    assert.deepEqual(order(), ['shot-a', 'shot-b']);
+    await director.destroy();
+  } finally { restore(); }
+});
+
 test('Scene load outcomes exclude superseded and disposed completions', async () => {
   const { director, styleManager, restore } = makeDirector();
   try {

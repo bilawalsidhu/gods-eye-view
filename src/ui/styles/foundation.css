@@ -632,6 +632,23 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   filter: drop-shadow(0 0 12px rgba(0, 246, 255, 0.5));
 }
 
+/* The logo is a button: back to live at the start view. */
+#title-bar button.title-logo {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+#title-bar button.title-logo:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
 #title-bar .title-logo::before,
 #title-bar .title-logo::after {
   --radio-broadcast-opacity: 0.28;

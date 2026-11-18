@@ -67,6 +67,55 @@ export function libraryTileUrl(template, z, x, y) {
     .replaceAll('{y}', String(y));
 }
 
+/** The finest and coarsest grid a proxied view box snaps to, in degrees. */
+const VIEW_GRID_MIN_DEG = 2 ** -10;
+const VIEW_GRID_MAX_DEG = 1;
+
+/**
+ * The box a view-bounded entry asks a proxy for: the camera's box snapped
+ * out to a grid of two cells a side, the cell the smallest power of two
+ * (degrees) at least as large as the box. Nearby views name the same box,
+ * so a proxy and the caches in front of it see few distinct requests, and
+ * each box always holds the box it came from.
+ * @param {number[]} box `[west, south, east, north]` in degrees.
+ * @returns {number[]|null} The snapped box, or null for one too large.
+ */
+export function libraryViewBox([west, south, east, north]) {
+  const span = Math.max(east - west, north - south);
+  if (!(span > 0)) return null;
+  let cell = VIEW_GRID_MIN_DEG;
+  while (cell < span) cell *= 2;
+  if (cell > VIEW_GRID_MAX_DEG) return null;
+  const left = Math.floor(west / cell) * cell;
+  const bottom = Math.floor(south / cell) * cell;
+  return [left, bottom, left + 2 * cell, bottom + 2 * cell];
+}
+
+/**
+ * Parse a proxied view box (`west,south,east,north`) as
+ * {@link libraryViewBox} writes it: two grid cells a side, on the grid, and
+ * written exactly as `String` writes its numbers, so every box has one
+ * spelling.
+ * @param {string|null} text
+ * @returns {number[]|null}
+ */
+export function parseLibraryViewBox(text) {
+  if (typeof text !== 'string' || text.length > 128) return null;
+  const box = text.split(',').map(Number);
+  if (box.length !== 4 || !box.every(Number.isFinite)) return null;
+  if (box.join(',') !== text) return null;
+  const [west, south, east, north] = box;
+  const cell = (east - west) / 2;
+  if (north - south !== 2 * cell) return null;
+  if (!(cell >= VIEW_GRID_MIN_DEG && cell <= VIEW_GRID_MAX_DEG)) return null;
+  if (2 ** Math.round(Math.log2(cell)) !== cell) return null;
+  if (!Number.isInteger(west / cell) || !Number.isInteger(south / cell))
+    return null;
+  if (west < -180 - 2 * cell || east > 180 + 2 * cell) return null;
+  if (south < -90 - 2 * cell || north > 90 + 2 * cell) return null;
+  return box;
+}
+
 /** How the browser reaches the upstream. */
 export const FETCH_MODES = Object.freeze(['browser-direct', 'proxied']);
 
@@ -338,7 +387,8 @@ function checkSource(entry, errors) {
         `source.view needs maxAltitudeM (${MIN_VIEW_ALTITUDE_M}–${MAX_VIEW_ALTITUDE_M}) and an optional sample bbox`,
       );
     // View-bounded loading queries the camera's box; this build does that
-    // for ArcGIS layers and partitioned GeoParquet, fetched by the browser.
+    // for ArcGIS layers and partitioned GeoParquet, fetched by the browser
+    // (or, when a server routes the entry, by its proxy).
     if (
       !['arcgis', 'geoparquet'].includes(source.format) ||
       source.fetch !== 'browser-direct'

@@ -345,6 +345,7 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
 }
 
 .scene-shot-row {
+  cursor: pointer;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 9px;
   padding: 8px 10px;
@@ -398,6 +399,11 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
   color: var(--scene-quiet);
 }
 
+.scene-shot-label:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .scene-shot-row.active .scene-shot-label::before {
   color: var(--accent);
 }
@@ -422,7 +428,18 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
 
 .scene-shot-actions {
   display: flex;
+  align-items: center;
   gap: 6px;
+}
+
+/* Up and down: the glyph as tall as DEL's word. */
+.scene-shot-move {
+  padding: 3px 4px;
+}
+
+.scene-shot-move .ui-icon {
+  display: block;
+  line-height: 1;
 }
 
 .scene-progress {

@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 
-import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
+import { VEHICLE_TINT_CSS } from '../../data/aircraftClass.js';
 import { layerFeedState } from '../../data/feedState.js';
 import { aircraftIcon } from '../../data/aircraftIcons.js';
+import { ROTOR_STILL_FRAME, rotorFrame } from '../../data/rotorFrames.js';
 import {
   createLocalAdsbLayer,
   HEARD_BY_RECEIVER,
@@ -196,13 +197,14 @@ function fakeFeeds(initial = {}) {
   };
 }
 
-/** A viewer whose camera looks down on (0°, 0°) from 50 km. */
+/** A viewer whose camera looks down on (0°, 0°) from 2 km: within the 3 km
+ *  model radius of an aircraft there on the ground or at 10,000 ft. */
 function modelViewer() {
   return fakeViewer(
     { scene: {} },
     {
-      height: 50_000,
-      position: { x: 6_378_137 + 50_000, y: 0, z: 0 },
+      height: 2_000,
+      position: { x: 6_378_137 + 2_000, y: 0, z: 0 },
       direction: { x: -1, y: 0, z: 0 },
     },
   );
@@ -238,7 +240,7 @@ test('enabling Local ADS-B asks the shared tuner for 1090 MHz; disabling leaves 
   );
 });
 
-test('local aircraft use their class silhouette and scale in magenta', async (t) => {
+test('local aircraft use their class silhouette at one size in magenta', async (t) => {
   const receiver = fakeReceiver({ mode: 'adsb', connected: true });
   const clock = { now: 100_000 };
   const { layer, draw, calls } = await enabledLayer(receiver, clock);
@@ -265,8 +267,17 @@ test('local aircraft use their class silhouette and scale in magenta', async (t)
   assert.equal(typeof readEntityRecord(carrier)?.displayPosition, 'function');
 
   const heli = () => iconOf(draw, 'local-adsb:a0b702');
-  assert.equal(heli().image, aircraftIcon('helicopter'));
-  assert.equal(heli().scale, CLASS_SCALE_2D.helicopter);
+  // Airborne, its rotor turns: the frame of its own phase at the layer's time.
+  assert.equal(
+    heli().image,
+    aircraftIcon(
+      'helicopter',
+      undefined,
+      rotorFrame('local-adsb:a0b702', clock.now),
+    ),
+  );
+  assert.equal(heli().scale, 1, 'every class draws at one size');
+  assert.equal(icon.scale, heli().scale);
   assert.deepEqual(
     heli().color,
     MAGENTA,
@@ -285,16 +296,46 @@ test('local aircraft use their class silhouette and scale in magenta', async (t)
         icao: 'a0b702',
         category: 'A7',
         onGround: true,
+        groundSpeedKt: 0,
         lastPositionAt: 100_500,
       }),
     ],
   });
   await layer.update();
-  assert.equal(heli().scale, CLASS_SCALE_2D.helicopter * 0.8);
+  assert.equal(heli().scale, 0.8);
+  // Parked on the ground its rotor holds still.
+  assert.equal(
+    heli().image,
+    aircraftIcon('helicopter', undefined, ROTOR_STILL_FRAME),
+  );
 
   const [detectable] = layer.getDetectableObjects();
   assert.equal(detectable.sourceId, 'a0b702');
   assert.equal(detectable.type, 'AIR');
+});
+
+test('local airport vehicles draw the amber vehicle sprite, ground stations the upright mast', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const { layer, draw } = await enabledLayer(receiver, clock);
+  t.after(() => layer.destroy());
+  receiver.set({
+    aircraft: [
+      record({ icao: 'a0c001', category: 'C1', trackDeg: 90 }),
+      record({ icao: 'a0c002', category: 'C2', trackDeg: 90 }),
+      record({ icao: 'a0c003', category: 'C3', trackDeg: 90 }),
+    ],
+  });
+  await layer.update();
+  for (const id of ['a0c001', 'a0c002']) {
+    const icon = iconOf(draw, `local-adsb:${id}`);
+    assert.equal(icon.image, aircraftIcon('vehicle'), id);
+    assert.deepEqual(icon.color, hexColor(VEHICLE_TINT_CSS), id);
+  }
+  const mast = iconOf(draw, 'local-adsb:a0c003');
+  assert.equal(mast.image, aircraftIcon('station'));
+  assert.deepEqual(mast.color, MAGENTA);
+  assert.equal(mast.rotation, 0, 'upright whatever its track');
 });
 
 test('the heading slews toward a new track instead of snapping', async (t) => {

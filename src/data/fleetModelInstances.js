@@ -1,6 +1,6 @@
 import { selectModelEligible } from './modelEligibility.js';
 import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from './aircraftModelLighting.js';
-import { fleetModelSet } from './fleetModels.js';
+import { fleetModelSet, fleetPartTable } from './fleetModels.js';
 import { findCamera, findDraw } from '../render/rendererOf.js';
 import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
 import { horizonFrom } from '../geo/horizon.js';
@@ -111,10 +111,15 @@ let instances = 0;
  * @param {object} options.viewer The scene host.
  * @param {() => object|null} [options.display] `{models3d, models3dMode,
  *   irBoost}`.
- * @param {object} options.policy `{altitudeCeilingM, minimumPixelSize,
- *   cap, capAll, addM, addAllM, keepM, keepAllM, intervalMs}`.
+ * @param {object} options.policy `{altitudeCeilingM, cap, capAll, addM,
+ *   keepM, intervalMs}`: both 3D modes share the add/keep radii and differ
+ *   by their caps. Models are drawn at their true size.
  * @param {(url: string) => string} [options.resolveAsset]
  * @param {boolean} [options.waterline] Clip each model at its waterline.
+ * @param {(item: object, table: object) => object|undefined} [options.partState]
+ *   The moving parts a vehicle's model is posed with (`ModelItem.parts`),
+ *   from its item and its model's part table (`modelPartDrivers.js`); asked
+ *   only for a model that has a part table.
  * @param {object} [options.draw] Stands in for the viewer's draw port (tests).
  * @returns {object}
  */
@@ -124,6 +129,7 @@ export function createFleetModelLayer({
   policy,
   waterline = false,
   resolveAsset = (url) => url,
+  partState = null,
   draw,
 }) {
   const port = draw ?? findDraw(viewer);
@@ -202,8 +208,7 @@ export function createFleetModelLayer({
   function refreshEligibility(items, prefs, eye) {
     const all = prefs.models3dMode === 'all';
     const cap = all ? policy.capAll : policy.cap;
-    const addM = all ? policy.addAllM : policy.addM;
-    const keepM = all ? policy.keepAllM : policy.keepM;
+    const { addM, keepM } = policy;
     const candidates = [];
     for (const [id, item] of items) {
       if (!item.position || item.show === false || !item.spec?.url) continue;
@@ -230,8 +235,15 @@ export function createFleetModelLayer({
     return fromDegrees(at.lon, at.lat, at.height + lift);
   }
 
+  /** The part state an item's model is posed with, or undefined. */
+  function partsOf(item) {
+    if (!partState) return undefined;
+    const table = fleetPartTable(fleetModelSet(), item.spec?.model);
+    return table ? partState(item, table) : undefined;
+  }
+
   /** The draw item for an admitted model, as the set draws it, at `at`. */
-  function itemOf(id, record, item, show, boost, at = placement(item)) {
+  function itemOf(id, record, item, show, boost, at, parts) {
     const mask = item.spec.tinted && !boost ? fleetColor(item.tint) : null;
     return {
       id,
@@ -249,7 +261,6 @@ export function createFleetModelLayer({
       ...(fleetAxisScale(item.spec)
         ? { axisScale: fleetAxisScale(item.spec) }
         : {}),
-      minPixelSize: policy.minimumPixelSize,
       environmentMap: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS.enabled,
       ...(boost
         ? {
@@ -260,6 +271,7 @@ export function createFleetModelLayer({
         : { shading: 'pbr' }),
       ...(mask ? { maskColor: mask } : {}),
       ...(waterline ? { clip: 'belowOrigin' } : {}),
+      ...(parts ? { parts } : {}),
       meta: item.pickId ?? id,
       show,
     };
@@ -276,6 +288,8 @@ export function createFleetModelLayer({
     const heading = item.headingDeg || 0;
     const mask = item.spec.tinted && !boost ? fleetColor(item.tint) : null;
     const meta = item.pickId ?? id;
+    const parts = partsOf(item);
+    const partsKey = parts ? JSON.stringify(parts) : '';
     const sent = record.sent;
     if (
       sent !== null &&
@@ -287,7 +301,8 @@ export function createFleetModelLayer({
       sameColor(sent.mask, mask) &&
       sent.boost === boost &&
       sent.show === show &&
-      sent.meta === meta
+      sent.meta === meta &&
+      sent.partsKey === partsKey
     )
       return null;
     const next = (record.sent ??= {});
@@ -301,7 +316,8 @@ export function createFleetModelLayer({
     next.boost = boost;
     next.show = show;
     next.meta = meta;
-    return itemOf(id, record, item, show, boost, at);
+    next.partsKey = partsKey;
+    return itemOf(id, record, item, show, boost, at, parts);
   }
 
   return {

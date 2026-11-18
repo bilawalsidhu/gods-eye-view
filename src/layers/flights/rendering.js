@@ -2,13 +2,12 @@ import {
   aircraftLayerModelSpec,
   aircraftModelSpecCacheKey,
 } from './modelSpec.js';
-import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import { isEmergency } from '../../data/aircraftEmergency.js';
 import {
   MIL_TINT,
   EMERGENCY_TINT,
+  VEHICLE_TINT,
   FLEET_TINT,
-  TRACKED_CYAN,
   GROUND_SCALE,
   COCKPIT_CIVILIAN_COLOR,
 } from './policy.js';
@@ -32,14 +31,16 @@ export function createRendering({
   }
 
   /** Fleet (untracked) billboard tint: red while broadcasting an emergency,
-   *  amber for known-military, white otherwise.
-   *  Ground traffic gets NO special tint (owner verdict 2026-07-03 field test). */
+   *  orange amber for an airport vehicle, amber for known-military, white
+   *  otherwise. Grounded aircraft get NO special tint (owner verdict
+   *  2026-07-03 field test). */
 
   function _fleetBillboardColor(
     icao24,
     info = flightState.records.data.get(icao24),
   ) {
     if (_isEmergency(icao24, info)) return EMERGENCY_TINT;
+    if (info?.klass === 'vehicle') return VEHICLE_TINT;
     return isMilitaryIcao(icao24) ? MIL_TINT : FLEET_TINT;
   }
 
@@ -53,13 +54,10 @@ export function createRendering({
     return isMilitaryIcao(icao24) ? MIL_TINT : COCKPIT_CIVILIAN_COLOR;
   }
 
-  /** Fleet billboard scale: per-class scale, ×GROUND_SCALE while grounded. */
+  /** Fleet billboard scale: one size for every class, ×GROUND_SCALE while grounded. */
 
-  function _fleetBillboardScale(icao24, klass) {
-    return (
-      (CLASS_SCALE_2D[klass] || 1) *
-      (flightState.records.data.get(icao24)?.onGround ? GROUND_SCALE : 1)
-    );
+  function _fleetBillboardScale(icao24) {
+    return flightState.records.data.get(icao24)?.onGround ? GROUND_SCALE : 1;
   }
 
   /** The fleet model an aircraft draws with, by its type and emitter category. */
@@ -82,11 +80,10 @@ export function createRendering({
   const _iconKind = (icao24, klass) =>
     tr3bIconKind(icao24, klass, { hot: flightState._irBoost });
 
-  /** Model colour: the mesh's own (white), tinted cyan while tracked and red
-   *  while broadcasting an emergency. */
+  /** Model colour: the mesh's own (white), tinted red while broadcasting an
+   *  emergency. Tracking never recolours it. */
 
   function _modelColor(icao24) {
-    if (icao24 === flightState._trackedIcao) return TRACKED_CYAN;
     return _isEmergency(icao24) ? EMERGENCY_TINT : policy.MODEL_WHITE;
   }
 

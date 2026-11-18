@@ -34,6 +34,7 @@ export const CAPABILITIES = Object.freeze([
   'columns',
   'motionSegments',
   'models',
+  'modelParts',
   'quads',
   'meshes',
   'fields',
