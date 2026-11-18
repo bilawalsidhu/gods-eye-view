@@ -452,6 +452,8 @@ export function createMotion({
     const sameTrack =
       flightState._drReconcileValid && flightState._drReconcileIcao === icao24;
     const raw = _deadReckon(icao24, flightState._scratchDrRaw);
+    flightState._cachedDRPlaced =
+      Boolean(raw) && flightState._drSpeedPlaced === true;
     flightState._cachedDRCourse = flightState._drCourseDeg;
     flightState._cachedDRSpeedMps = flightState._drSpeedMps;
     flightState._cachedDRHold = flightState._drCourseHold;
@@ -596,6 +598,16 @@ export function createMotion({
    *  re-run the dead-reckon on a fresh sample and double-advance the reconciliation → the label jitters
    *  against the now-stable plane (the model's jitter fix, resurfacing in the labels). Returns null when
    *  there's no valid fix for the tracked aircraft, so callers fall back to the icon position. */
+
+  /** Whether a host-supplied placement placed the tracked aircraft where
+   *  `_trackedDisplayCached` holds it this frame, rather than this layer's
+   *  own motion at its display delay. */
+
+  function _trackedPlaced() {
+    return (
+      _trackedDisplayCached() !== null && flightState._cachedDRPlaced === true
+    );
+  }
 
   function _trackedDisplayCached() {
     return flightState._drReconcileValid &&
@@ -1217,6 +1229,7 @@ export function createMotion({
     _trackedFocusSizePx,
     _trackedDisplayPosition,
     _trackedDisplayCached,
+    _trackedPlaced,
     _trackedVisualCached,
     _trackedModelCenterWorld,
     _trackedModelEnvelopeM,

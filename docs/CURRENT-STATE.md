@@ -408,7 +408,11 @@ ground state) and draws a contact where `place` puts it: position, height
 (the layer's own when none is given), course and speed. A null answer, a
 provider that throws, a kind it leaves out, or no provider at all keeps the
 layer's own motion, unchanged; following the world clock, the layers never
-ask it. Transit and rail vehicles a provider places are advanced every frame
+ask it. A tracked aircraft or military aircraft the provider places keeps its
+trail joined to it: the trail runs up to the time read off its own reports
+where the aircraft is drawn, not the layer's display delay, so it neither
+stops short of the aircraft nor runs on ahead of it, and it is drawn from the
+first report behind the aircraft. Transit and rail vehicles a provider places are advanced every frame
 in view while their placed position changes; one it holds still lets the
 render loop idle and is asked again each second, moving on once its placement
 does. A placed transit vehicle is drawn at its placed point, and a placed

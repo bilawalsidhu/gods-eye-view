@@ -49,6 +49,7 @@ import {
   trailBodySegments,
   trailHeadCurvePoints,
   trailHeadStartFix,
+  trailTimeAt,
 } from '../../data/trailContinuity.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 import { entityRecord } from '../../data/entityRecords.js';
@@ -393,12 +394,46 @@ export function createTracking({
     );
   }
 
-  /** Reports at or before the time the aircraft is drawn (now − the display delay). */
+  /** Reports at or before the time the aircraft is drawn (`_trailDisplayMs`). */
 
   function _trailBodyCountNow() {
-    return trailBodyCount(
+    return trailBodyCount(flightState._trailFixes, _trailDisplayMs());
+  }
+
+  /**
+   * The time on its trail at which a host-supplied placement draws the
+   * aircraft, read off the trail where it is drawn (`trailTimeAt`): such a
+   * placement draws at a delay of its own, not this layer's. NaN when this
+   * layer's own motion draws it, or the trail has no pair to read.
+   * @returns {number} Epoch ms or NaN.
+   */
+  function _placedTrailMs() {
+    if (!parts.motion._trackedPlaced?.()) return NaN;
+    return trailTimeAt(
       flightState._trailFixes,
-      flightState.now() - displayDelayMs(flightState),
+      parts.motion._trackedDisplayCached(),
+    );
+  }
+
+  /**
+   * The time the trail runs up to: the time the aircraft is drawn at, now −
+   * the display delay, or where a placement draws it. Otherwise the trail
+   * ends short of a placed aircraft, or runs on ahead of it.
+   * @returns {number} Epoch ms.
+   */
+  function _trailDisplayMs() {
+    const placedMs = _placedTrailMs();
+    return Number.isFinite(placedMs)
+      ? placedMs
+      : flightState.now() - displayDelayMs(flightState);
+  }
+
+  /** Whether the trail holds no report behind the aircraft yet: this
+   *  layer's own motion draws it before its oldest fix. Never for an
+   *  aircraft a placement draws: its trail is read where it is drawn. */
+  function _trailWarmingUp() {
+    return (
+      !Number.isFinite(_placedTrailMs()) && parts.motion._isTrackWarmingUp()
     );
   }
 
@@ -415,7 +450,7 @@ export function createTracking({
     if (
       !flightState._trackedIcao ||
       !flightState._trailFixes.length ||
-      parts.motion._isTrackWarmingUp()
+      _trailWarmingUp()
     )
       return [];
     const head =
@@ -438,7 +473,7 @@ export function createTracking({
       trailHeadCurvePoints(
         flightState._trailFixes,
         flightState._trailBodyCount,
-        flightState.now() - displayDelayMs(flightState),
+        _trailDisplayMs(),
       ),
       head,
       parts.motion._trackedModelCenterWorld(),
