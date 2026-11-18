@@ -22,6 +22,7 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'radio-panel' },
   { id: 'scene-panel' },
   { id: 'global-context-panel' },
+  { id: 'space-missions-panel' },
   { id: 'pp-toggles' },
   { id: 'param-slider-panel' },
 ]);
@@ -48,6 +49,7 @@ const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
   'utilities-panel',
   'pp-toggles',
   'global-context-panel',
+  'space-missions-panel',
   'radio-panel',
 ]);
 

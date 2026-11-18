@@ -503,19 +503,13 @@ export const COMMANDS = Object.freeze([
       name: 'Visual',
     },
   ),
-  cmd(
-    'open-context',
-    msg('Open Context'),
-    'context missions panel open',
-    'radar',
-    {
-      kind: 'panel',
-      action: 'open',
-      side: 'right',
-      item: 'global-context-panel',
-      name: 'Context',
-    },
-  ),
+  cmd('open-context', msg('Open Context'), 'context panel open', 'radar', {
+    kind: 'panel',
+    action: 'open',
+    side: 'right',
+    item: 'global-context-panel',
+    name: 'Context',
+  }),
   cmd('reset', msg('Reset view'), 'home start over reset camera', 'public', {
     kind: 'camera',
     act: 'reset',

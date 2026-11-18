@@ -62,6 +62,8 @@ import { applyLocaleChoice } from './localePicker.js';
 import { PanelNavigation } from './panelNavigation.js';
 import { applicationPinia, createUiRuntime } from './vueRuntime.js';
 import { useContextStore } from './stores/context.js';
+import { useSpaceMissionsStore } from './stores/spaceMissions.js';
+import { SpaceMissionsControls } from './spaceMissionsControls.js';
 import { useMissionReplayStore } from './stores/missionReplay.js';
 import { useCelestialRingStore } from './stores/celestialRing.js';
 import { icrfToFixedAxes } from '../sky/icrf.js';
@@ -326,6 +328,7 @@ export class StyleManager extends ShellFacade {
       readControls: () => ({
         hud: this.hud,
         _contextControls: this._contextControls,
+        _spaceMissionsControls: this._spaceMissionsControls,
         _cctvControls: this._cctvControls,
         _radioControls: this._radioControls,
         _streetLevelControls: this._streetLevelControls,
@@ -689,6 +692,7 @@ export class StyleManager extends ShellFacade {
     this._initStreetLevelPanel();
     this._initWildlifeSightingCard();
     this._initGlobalContextPanel();
+    this._initSpaceMissionsPanel();
     this._initLocationBar();
     this._initMobileShell();
     this._initShareButton();
@@ -1025,17 +1029,12 @@ export class StyleManager extends ShellFacade {
   }
 
   _initGlobalContextPanel() {
-    const {
-      radioLayer,
-      militaryInstallationsLayer,
-      militaryAwarenessLayer,
-      rocketLaunchesLayer,
-    } = this.services;
+    const { radioLayer, militaryInstallationsLayer, militaryAwarenessLayer } =
+      this.services;
     const contextStore = useContextStore(applicationPinia());
     this._contextControls = new ContextControls({
       elements: {
         _globalContextFlightsBtn: this._globalContextFlightsBtn,
-        _globalContextMissionsBtn: this._globalContextMissionsBtn,
         _installationsSearchBtn: this._installationsSearchBtn,
       },
       installations: militaryInstallationsLayer,
@@ -1071,13 +1070,24 @@ export class StyleManager extends ShellFacade {
       militaryAwarenessLayer?.subscribeDirectionOverlay?.((view) =>
         awarenessDirectionStore.publish(view),
       );
+  }
+
+  _initSpaceMissionsPanel() {
+    const { rocketLaunchesLayer } = this.services;
     // The Space Missions layer publishes its roster and selected mission.
-    contextStore.connectMissions(rocketLaunchesLayer);
-    this._missionsPanelUnsubscribe?.();
-    contextStore.publishMissions(null);
-    this._missionsPanelUnsubscribe = rocketLaunchesLayer?.subscribePanel?.(
-      (view) => contextStore.publishMissions(view),
-    );
+    this._spaceMissionsControls?.destroy();
+    this._spaceMissionsControls = new SpaceMissionsControls({
+      layer: rocketLaunchesLayer,
+      store: useSpaceMissionsStore(applicationPinia()),
+      actions: {
+        setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
+        isCockpitActive: () => Boolean(this.cockpitView?.active),
+        // After the panel has rendered as shown: the phone shell will not
+        // open the Missions sheet over a hidden panel.
+        revealPanel: () =>
+          nextTick(() => this.revealPanel('space-missions-panel')),
+      },
+    });
     // And its replay vehicle overlay, which the scene chrome renders.
     const missionReplayStore = useMissionReplayStore(applicationPinia());
     this._missionReplayUnsubscribe?.();
@@ -1955,16 +1965,14 @@ export class StyleManager extends ShellFacade {
     this._awarenessDirectionUnsubscribe?.();
     this._awarenessDirectionUnsubscribe = null;
     useAwarenessDirectionStore(applicationPinia()).publish(null);
-    this._missionsPanelUnsubscribe?.();
-    this._missionsPanelUnsubscribe = null;
+    this._spaceMissionsControls?.destroy();
+    this._spaceMissionsControls = null;
     this._missionReplayUnsubscribe?.();
     this._missionReplayUnsubscribe = null;
     useMissionReplayStore(applicationPinia()).publish(null);
     const contextStore = useContextStore(applicationPinia());
     contextStore.connectAwareness(null);
     contextStore.publishAwareness(null);
-    contextStore.connectMissions(null);
-    contextStore.publishMissions(null);
     this._cockpitCoordinator.stop();
     this._visualSettings.stop();
     this.shareLinkManager?.destroy();

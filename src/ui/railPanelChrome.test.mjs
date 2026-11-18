@@ -164,6 +164,17 @@ test('the default theme geometry change leaves the base gutters alone', () => {
   assert.match(display?.body || '', /font-size:\s*12px/);
 });
 
+test('Data Layers, Context and Space Missions share the 14px side gutters', () => {
+  const gutters = rules.find(
+    ({ selector, body }) =>
+      /:is\(\s*\.data-panel-inner,\s*\.global-context-panel-inner,\s*\.space-missions-panel-inner\s*\)$/.test(
+        selector,
+      ) && /padding-left:\s*14px/.test(body),
+  );
+  assert.ok(gutters, 'one rule sets the shared gutters');
+  assert.match(gutters.body, /padding-right:\s*14px/);
+});
+
 test('rail titles and dock labels share one set of label tokens', () => {
   // command-dock-trays.css sets the dock's label type; earlier dock rules
   // for the same selector are overridden by it.

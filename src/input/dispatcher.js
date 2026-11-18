@@ -190,6 +190,9 @@ function topHitOf(hit, foreign) {
  * @typedef {object} InputDispatcher
  * @property {(fn: (event: ClickEvent) => void) => () => void} onClick
  *   Ambient click subscription. Returns its unsubscribe.
+ * @property {(fn: (event: ClickEvent) => boolean) => () => void} onOverlayClick
+ *   Hit-test a painted overlay before ambient clicks. Return true after
+ *   handling its topmost target to stop delivery to the geometry beneath it.
  * @property {(type: 'down'|'move'|'up'|'click'|'dblclick', fn: Function, options?: {lease?: object|(() => object|null)}) => () => void} onPointer
  *   Raw pointer subscription: `click` gets the {@link ClickEvent}, the others
  *   `{position}` (`move`: `{startPosition, endPosition, pickPosition}`, its
@@ -267,6 +270,7 @@ function createDispatcher(viewer, { query: givenQuery, ...portOptions } = {}) {
   const queryOf = () => givenQuery ?? findQuery(viewer);
   /** @type {Array<{fn: Function}>} */
   const clickSubscribers = [];
+  const overlayClicks = new Set();
   /** @type {Record<string, Array<{fn: Function, lease: object|null}>>} */
   const pointerSubscribers = Object.fromEntries(
     POINTER_TYPES.map((type) => [type, []]),
@@ -333,6 +337,15 @@ function createDispatcher(viewer, { query: givenQuery, ...portOptions } = {}) {
         xy(ev.position),
         ev.gesture ?? { travelPx: 0, durationMs: 0 },
       );
+      if (ambient) {
+        for (const handle of [...overlayClicks]) {
+          try {
+            if (handle(event) === true) return;
+          } catch (error) {
+            console.error('Pointer input handler failed', error);
+          }
+        }
+      }
       run(pointerSubscribers.click, ambient, event);
       if (ambient) run(clickSubscribers, true, event);
     },
@@ -355,6 +368,12 @@ function createDispatcher(viewer, { query: givenQuery, ...portOptions } = {}) {
   const self = {
     onClick(fn) {
       return subscribe(clickSubscribers, { fn, lease: null });
+    },
+
+    onOverlayClick(fn) {
+      if (destroyed) return () => {};
+      overlayClicks.add(fn);
+      return () => overlayClicks.delete(fn);
     },
 
     onPointer(type, fn, { lease = null } = {}) {
@@ -395,7 +414,7 @@ function createDispatcher(viewer, { query: givenQuery, ...portOptions } = {}) {
     subscriberCount() {
       return POINTER_TYPES.reduce(
         (sum, type) => sum + pointerSubscribers[type].length,
-        clickSubscribers.length,
+        clickSubscribers.length + overlayClicks.size,
       );
     },
 
@@ -404,6 +423,7 @@ function createDispatcher(viewer, { query: givenQuery, ...portOptions } = {}) {
       destroyed = true;
       if (dispatchers.get(viewer) === self) dispatchers.delete(viewer);
       clickSubscribers.length = 0;
+      overlayClicks.clear();
       for (const type of POINTER_TYPES) pointerSubscribers[type].length = 0;
       for (const off of offPort) off();
       bridge.off();

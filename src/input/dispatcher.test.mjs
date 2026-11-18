@@ -129,6 +129,37 @@ test('a click nobody reads is never picked', (t) => {
   assert.equal(h.calls.pick, 0);
 });
 
+test('a painted overlay can claim a click before its underlying owner', (t) => {
+  registerPickOwner('satellites', (id) => id === '25544');
+  t.after(() => unregisterPickOwner('satellites'));
+  const h = harness({ pick: () => ({ id: '25544' }) });
+  t.after(() => h.input.destroy());
+  const clicks = [];
+
+  h.input.onClick((event) => clicks.push(event.ownerId));
+  const offOverlay = h.input.onOverlayClick(({ screenPosition }) => {
+    if (screenPosition.x !== 10) return false;
+    clicks.push('mission label');
+    return true;
+  });
+  h.input.onPointer('click', () => clicks.push('ambient pointer'));
+
+  h.click();
+  assert.deepEqual(clicks, ['mission label']);
+  assert.equal(h.calls.pick, 0);
+
+  h.click(11, 10);
+  offOverlay();
+  h.click();
+  assert.deepEqual(clicks, [
+    'mission label',
+    'ambient pointer',
+    'satellites',
+    'ambient pointer',
+    'satellites',
+  ]);
+});
+
 test('the gesture carries summed travel and press time', (t) => {
   const h = harness();
   t.after(() => h.input.destroy());

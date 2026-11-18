@@ -4742,7 +4742,7 @@ test('a lost cross-mode switch reports every mode field in the shared vocabulary
     styleManager,
     dataManager: { layers: new Map(), getAll: () => [] },
   });
-  const result = await runner('set_context_mode', { mode: 'space-missions' });
+  const result = await runner('set_context_mode', { mode: 'contacts' });
   assert.equal(result.mode, 'off');
   assert.equal(result.modeInternal, null);
   assert.equal(
@@ -4758,6 +4758,137 @@ test('a lost cross-mode switch reports every mode field in the shared vocabulary
     /"(mode|priorMode|entering)":"flights"/,
     'no model-readable mode field may carry the internal id',
   );
+});
+
+/** A runner over one Space Missions layer whose switch answers `enable`. */
+function spaceMissionsVoiceRig({
+  enable = true,
+  cockpit = false,
+  missionsOn = false,
+  contextMode = null,
+} = {}) {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const calls = { setEnabled: [], panels: [], contextModes: [], waits: 0 };
+  let satellitesOn = true;
+  const missions = {
+    id: 'rocket-launches',
+    name: 'Space Missions (30d)',
+    async waitForSatelliteIntents() {
+      calls.waits += 1;
+      missionsOn = false;
+      return true;
+    },
+  };
+  const dataManager = {
+    layers: new Map([
+      ['rocket-launches', { module: missions }],
+      ['satellites', { module: { id: 'satellites', name: 'Satellites' } }],
+    ]),
+    getAll: () => [
+      { id: 'rocket-launches', name: missions.name, enabled: missionsOn },
+      { id: 'satellites', name: 'Satellites', enabled: satellitesOn },
+    ],
+    isEnabled: (id) => (id === 'rocket-launches' ? missionsOn : satellitesOn),
+    async setEnabled(id, enabled, options) {
+      calls.setEnabled.push([id, enabled, options?.origin]);
+      if (id === 'rocket-launches') missionsOn = enable && enabled;
+      else satellitesOn = enabled;
+      return id === 'rocket-launches' ? enable || !enabled : true;
+    },
+  };
+  const styleManager = {
+    getContextModeState: () => ({
+      mode: contextMode,
+      active: Boolean(contextMode),
+    }),
+    getCockpitState: () => ({ active: cockpit }),
+    setPanelCollapsed: (...args) => calls.panels.push(args),
+    async setContextMode(mode) {
+      calls.contextModes.push(mode);
+      return { ok: true, mode };
+    },
+  };
+  const runner = createGevActionRunner({
+    viewer: {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: { moveEnd: { addEventListener() {} } },
+    },
+    styleManager,
+    dataManager,
+  });
+  return { calls, runner };
+}
+
+test('set_context_mode space-missions switches the layer on and opens its panel', async () => {
+  for (const mode of ['space-missions', 'missions', 'space mission']) {
+    const { calls, runner } = spaceMissionsVoiceRig();
+    const result = await runner('set_context_mode', { mode });
+    assert.equal(result.ok, true, mode);
+    assert.equal(result.action, 'set_context_mode');
+    assert.equal(result.mode, 'space-missions');
+    assert.equal(result.layerId, 'rocket-launches');
+    assert.deepEqual(calls.contextModes, [], 'Space Missions is not a Context mode');
+    assert.deepEqual(calls.setEnabled, [['rocket-launches', true, 'voice']]);
+    assert.deepEqual(calls.panels, [
+      ['space-missions-panel', false, { explicit: true }],
+    ]);
+  }
+});
+
+test('set_context_mode off leaves Space Missions when no Context mode is on', async () => {
+  const { calls, runner } = spaceMissionsVoiceRig({ missionsOn: true });
+  const result = await runner('set_context_mode', { mode: 'off' });
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, 'off');
+  assert.deepEqual(calls.setEnabled, [['rocket-launches', false, 'voice']]);
+  assert.deepEqual(calls.contextModes, [], 'Context is not asked to change');
+});
+
+test('set_context_mode off still ends Contacts first and leaves Space Missions on', async () => {
+  const { calls, runner } = spaceMissionsVoiceRig({
+    missionsOn: true,
+    contextMode: 'flights',
+  });
+  await runner('set_context_mode', { mode: 'off' });
+  assert.deepEqual(calls.contextModes, [null]);
+  assert.deepEqual(calls.setEnabled, []);
+});
+
+test('set_context_mode space-missions leaves the panel shut under the Cockpit', async () => {
+  const { calls, runner } = spaceMissionsVoiceRig({ cockpit: true });
+  const result = await runner('set_context_mode', { mode: 'space-missions' });
+  assert.equal(result.ok, true, 'the layer still switches on');
+  assert.deepEqual(calls.setEnabled, [['rocket-launches', true, 'voice']]);
+  assert.deepEqual(
+    calls.panels,
+    [],
+    'no panel write while the Cockpit owns the screen',
+  );
+});
+
+test('a Space Missions start that fails opens no panel and says so', async () => {
+  const { calls, runner } = spaceMissionsVoiceRig({ enable: false });
+  const result = await runner('set_context_mode', { mode: 'space-missions' });
+  assert.equal(result.ok, false);
+  assert.equal(result.action, 'set_context_mode');
+  assert.match(result.error, /Could not enable/);
+  assert.deepEqual(calls.panels, []);
+  assert.deepEqual(calls.contextModes, []);
+});
+
+test('a voice Satellites OFF waits for Space Missions to finish reacting', async () => {
+  const { calls, runner } = spaceMissionsVoiceRig();
+  const result = await runner('set_layer_visibility', {
+    layerId: 'satellites',
+    enabled: false,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(calls.waits, 1);
 });
 
 test('an absent secondary mode stays absent instead of claiming to be off', async () => {
@@ -7478,6 +7609,91 @@ test('set_panel_open accepts the Authoring name for the scene panel', async () =
     assert.equal(result.panelId, 'scene-panel');
   }
   assert.deepEqual(calls.at(-1), ['scene-panel', false, { explicit: true }]);
+});
+
+test('set_panel_open reaches the Space Missions panel by its id or name', async () => {
+  const calls = [];
+  const runner = createGevActionRunner({
+    viewer: {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: {
+        moveEnd: { addEventListener() {} },
+        positionWC: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 1000),
+      },
+    },
+    styleManager: {
+      setPanelCollapsed: (...args) => calls.push(args),
+    },
+    dataManager: {
+      layers: new Map(),
+      isEnabled: () => false,
+      getAll: () => [],
+    },
+  });
+  for (const panel of ['space-missions-panel', 'space missions panel']) {
+    const result = await runner('set_panel_open', {
+      panelId: panel,
+      open: false,
+    });
+    assert.equal(result.panelId, 'space-missions-panel', panel);
+  }
+  assert.deepEqual(calls.at(-1), [
+    'space-missions-panel',
+    true,
+    { explicit: true },
+  ]);
+});
+
+test('set_panel_open opens the Space Missions panel only while its layer is on', async () => {
+  const calls = [];
+  let missionsOn = false;
+  let starting = false;
+  const runner = createGevActionRunner({
+    viewer: {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: {
+        moveEnd: { addEventListener() {} },
+        positionWC: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 1000),
+      },
+    },
+    styleManager: {
+      setPanelCollapsed: (...args) => calls.push(args),
+    },
+    dataManager: {
+      layers: new Map(),
+      isEnabled: (id) => id === 'rocket-launches' && missionsOn,
+      isEffectivelyEnabled: (id) =>
+        id === 'rocket-launches' && (missionsOn || starting),
+      getAll: () => [],
+    },
+  });
+  const refused = await runner('set_panel_open', {
+    panelId: 'space-missions-panel',
+    open: true,
+  });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.applied, false);
+  assert.match(refused.say, /Turn on Space Missions first/);
+  assert.deepEqual(calls, [], 'no right-rail panel is folded for nothing');
+  starting = true;
+  const early = await runner('set_panel_open', {
+    panelId: 'space-missions-panel',
+    open: true,
+  });
+  assert.equal(early.ok, false);
+  assert.match(early.say, /still starting/);
+  assert.deepEqual(calls, []);
+  missionsOn = true;
+  const opened = await runner('set_panel_open', {
+    panelId: 'space-missions-panel',
+    open: true,
+  });
+  assert.equal(opened.ok, true);
+  assert.deepEqual(calls, [
+    ['space-missions-panel', false, { explicit: true }],
+  ]);
 });
 
 test('set_panel_open reaches the Utilities panel by its name, Draw or Import', async () => {
