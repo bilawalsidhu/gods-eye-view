@@ -14,12 +14,22 @@
  * - `viewerDrawsEntity(entity)`: whether an entity is one the renderer draws
  *   itself (Cockpit asks whether the aircraft it flies still draws).
  * - `qaHandles`: values QA scripts read from `window.__godsEyeView`.
+ * - `engine`: the renderer's own engine, for an application that draws with
+ *   it directly beside the contract: `kind` names it (`'cesium'`, with
+ *   `viewer`, Cesium's `Viewer`). An application draws only with engines
+ *   whose kind it knows; what it draws there is its own to add, update and
+ *   remove.
  * - `ownCreditDisplay`: true when the renderer shows its credits in a
  *   display of its own; otherwise the application shows what its credits
  *   port lists (`src/ui/creditsView.js`).
  * - `renderFailureNotice({allowReload, store})`: a recoverable notice,
  *   published to `store`, when the renderer stops drawing
  *   (`src/render/cesium/renderFailure.js`); returns its removal.
+ * - `cardPreviews`: the Context card's previews of a picked aircraft (its
+ *   model turning, its route on a small globe, the view from its cockpit),
+ *   each drawn into an element the card gives it
+ *   (`src/render/cesium/cardPreviews.js`); without it the card shows its
+ *   photo and figures only.
  *
  * A plugin hands them as its `applicationHooks(renderer)`
  * (`ApplicationHooks`, `contract/renderer.d.ts`); the application scene

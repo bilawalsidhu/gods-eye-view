@@ -222,9 +222,14 @@ export function createPanel({ state: layerState, parts }) {
     ensurePanel();
     layerState.panelRenders += 1;
     const { subject, cohorts } = layerState.results;
+    const windowLabel = t('{distance} FLIGHT / VESSEL WINDOW', {
+      distance: presentAwarenessDistance(AWARENESS_RADIUS_M),
+    });
     publish({
       kind: 'results',
-      subject: `${subject.label} · ${t('{distance} FLIGHT / VESSEL WINDOW', { distance: presentAwarenessDistance(AWARENESS_RADIUS_M) })}`,
+      subject: `${subject.label} · ${windowLabel}`,
+      subjectIdentity: { layerId: subject.layerId, id: subject.id },
+      subjectLabel: subject.label,
       subjectNames: presentNames(subject.memberNames),
       photo: presentPhoto(subject),
       navigation: presentNavigation(),

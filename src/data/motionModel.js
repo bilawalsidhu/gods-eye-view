@@ -127,19 +127,27 @@ export function courseSlewCapDps(speedMps, maxDps, minDps = COURSE_MIN_DPS) {
  * fixes still describe clear movement. The delayed renderer already derives a
  * matching segment speed and course from those fixes, so tracking and cockpit
  * consumers should prefer that pair over stale poll fields.
+ *
+ * A host-supplied placement's speed (`derivedFromPlacement`) is how fast the
+ * marker is drawn, not how fast the aircraft goes: a placement waiting for its
+ * fixes to catch up stands still at 0. The reported ground speed is shown
+ * then, and the placement's only when nothing is reported.
  */
 export function displayedKinematics({
   derivedSpeedMps,
   derivedTrackDeg,
   reportedSpeedMps,
   reportedTrackDeg,
+  derivedFromPlacement = false,
 } = {}) {
+  const reported = Number.isFinite(reportedSpeedMps);
   return {
-    speedMps: Number.isFinite(derivedSpeedMps)
-      ? Math.max(0, derivedSpeedMps)
-      : Number.isFinite(reportedSpeedMps)
-        ? Math.max(0, reportedSpeedMps)
-        : null,
+    speedMps:
+      Number.isFinite(derivedSpeedMps) && !(derivedFromPlacement && reported)
+        ? Math.max(0, derivedSpeedMps)
+        : reported
+          ? Math.max(0, reportedSpeedMps)
+          : null,
     trackDeg: Number.isFinite(derivedTrackDeg)
       ? derivedTrackDeg
       : Number.isFinite(reportedTrackDeg)

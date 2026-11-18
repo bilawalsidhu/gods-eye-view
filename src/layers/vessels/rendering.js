@@ -16,6 +16,7 @@ import {
   findCamera,
   findFrame,
   findQuery,
+  rendererOf,
 } from '../../render/rendererOf.js';
 import { poseSignature } from '../../render/camera/poseSignature.js';
 import { createVesselIconBook } from './iconBook.js';
@@ -29,7 +30,12 @@ import {
   CARD_MIN_SEP_PX,
   followsClock,
 } from './policy.js';
-import { fixesMove, vesselPositionAt } from './motion.js';
+import {
+  fixesMove,
+  greatCircleAt,
+  vesselPositionAt,
+  vesselSpanAt,
+} from './motion.js';
 import { TIMELINE_UNSEEN_MS } from '../../time/timelineFixes.js';
 import {
   fleetModelSet,
@@ -37,7 +43,11 @@ import {
   vesselModelSpec,
 } from '../../data/fleetModels.js';
 import { createFleetModelLayer } from '../../data/fleetModelInstances.js';
-import { isAidToNavigation } from '../../data/vesselTypes.js';
+import { vesselPartState } from '../../data/modelPartDrivers.js';
+import { isAidToNavigation, vesselKind } from '../../data/vesselTypes.js';
+import { aidSprite, vesselSprite } from '../../data/vesselSprites.js';
+import { cssColor } from '../../render/color.js';
+import { KNOT_MPS } from '../../data/units.js';
 
 /** A moving vessel's next frame is asked for once it would move this far on
  * screen (pixels), so it glides when it moves visibly and the scene idles
@@ -49,10 +59,13 @@ const PLACEMENT_FRAME_MS = 1000;
  * ms), so one that comes into view is judged where it is. */
 const HIDDEN_FOLLOW_MS = 250;
 
-/** The ship artwork's own raster size (px). */
+/** A vessel or aid sprite's drawn size before its scale (CSS px). */
 const SHIP_ICON_PX = 32;
 
 let instances = 0;
+
+/** Tint by CSS colour: a handful of type colours. */
+const tints = new Map();
 
 /** How often the vessels near enough for a model are gathered again (wall ms). */
 const MODEL_CANDIDATES_MS = 500;
@@ -67,6 +80,11 @@ const CAMERA_STEP_FLOOR_M = 100;
 
 /** Scratch for where a moved vessel was drawn. */
 const _movedFrom = vec();
+
+/** The longest piece (metres) of the track between two fixes an icon is
+ * drawn along as one straight line on the renderer's clock: at 10 km the
+ * line runs under 2 m inside the great circle the layer reads it on. */
+const SEGMENT_PIECE_M = 10000;
 
 export function createRendering({
   vesselState,
@@ -83,9 +101,25 @@ export function createRendering({
     return visualRecords.get(record) || record;
   }
 
-  /** Where a record's icon is drawn: its row holds at the visual position. */
+  /** Where a record's icon is drawn: its row holds at the visual position
+   * (brought up to the time drawn while the renderer moves the icons). */
   function iconPosition(record) {
+    readVesselNow(record);
     return getVisual(record).position;
+  }
+
+  /**
+   * Where a record's icon is drawn now, for a reader of many vessels at
+   * once: while the renderer moves the icons, its segment at the world time
+   * (a new position each call); else the visual position, as iconPosition.
+   */
+  function drawnPositionNow(record) {
+    const visual = getVisual(record);
+    if (!segmentsOn() || !visual.position) return visual.position;
+    return (
+      state.icons?.position(visual.iconId, vesselState.worldNow()) ??
+      visual.position
+    );
   }
 
   function prepareRecordVisual(record) {
@@ -172,7 +206,9 @@ export function createRendering({
     fromDegreesInto(lon, lat, heightM - VESSEL_LIFT_M, visual.waterline);
     visual.drawnLat = lat;
     visual.drawnLon = lon;
-    syncRecordIcon(record);
+    // Moving on the renderer's clock, its icon is where it is already.
+    if (segmentsOn()) visual.cullPosition = liftedForHorizon(visual.position);
+    else syncRecordIcon(record);
   }
 
   // Reused projection buffers for the card pass, grown to the candidates.
@@ -226,6 +262,9 @@ export function createRendering({
   function ensureCollections(viewer) {
     ensureModels(viewer);
     if (!viewer || state.icons) return;
+    const capabilities = rendererOf(viewer)?.capabilities ?? null;
+    iconMotion = capabilities?.has('motionSegments') === true;
+    segmentsWere = segmentsOn();
     const set = drawOf(viewer).icons({
       id: `ais-vessels:${++instances}`,
       // Translucent, as its billboards were: overlapping chevrons keep
@@ -233,18 +272,118 @@ export function createRendering({
       blend: 'translucent',
       horizonCull: true,
       drawOrder: spriteDrawOrder?.('ais') ?? 0,
+      ...(iconMotion ? { motionClock: motionClock(segmentsWere) } : null),
     });
     // Columns of no rows put the set's host in the scene now, rather than
     // with its first vessel.
     set.setColumns?.({ ids: [] });
-    state.icons = createVesselIconBook(set);
+    iconSet = set;
+    state.icons = createVesselIconBook(set, { capabilities });
     state.icons.show = state.feed.enabled;
+  }
+
+  // The icon draw set, and whether its renderer moves icons along motion
+  // segments on its own clock.
+  let iconSet = null;
+  let iconMotion = false;
+  // Whether the icons last moved on the renderer's clock.
+  let segmentsWere = false;
+  // The record drawn under each icon id, for replanning an id.
+  const iconRecords = new Map();
+  // From when (world ms) each planned icon's motion holds: one planned
+  // after the time drawn is planned again when the time moves back.
+  const planFrom = new Map();
+  // The world time the icons were last checked against.
+  let replannedAtMs = -Infinity;
+
+  /**
+   * Whether vessel icons move on the renderer's clock: following the world
+   * clock, each is drawn along its track between two fixes as a segment the
+   * renderer moves every frame on the scene's time, and the layer writes an
+   * icon only when its segment runs out, rather than moving every drawn
+   * icon each frame. Live, a host placement moves them as before.
+   */
+  function segmentsOn() {
+    return iconMotion && followsClock(vesselState);
+  }
+
+  /** The set's motion clock: the scene's time while following the clock. */
+  const motionClock = (scene) =>
+    scene ? { kind: 'scene' } : { kind: 'live', delayMs: 0 };
+
+  /**
+   * The segment a vessel's icon moves along at world time `atMs`: the piece
+   * of its track between two fixes the time is in (at most SEGMENT_PIECE_M
+   * long), or where it holds; with when it runs out and from when it holds.
+   * Null for a vessel the clock does not move: it holds where it is drawn.
+   */
+  function planMotion(record, atMs) {
+    if (!record.motion && !fixesMove(record.fixes)) return null;
+    const span = vesselSpanAt(record, atMs);
+    if (!span) return null;
+    if (span.kind === 'hold') {
+      // Before its first fix it is drawn from TIMELINE_UNSEEN_MS ahead of
+      // it (seenYet): drawn again when the time crosses that.
+      let { fromMs, untilMs } = span;
+      const shownFromMs = record.fixes?.[0]?.atMs - TIMELINE_UNSEEN_MS;
+      if (fromMs === -Infinity && shownFromMs < untilMs) {
+        if (atMs < shownFromMs) untilMs = shownFromMs;
+        else fromMs = shownFromMs;
+      }
+      return {
+        motion: null,
+        pos: anchorAt(span.lat, span.lon),
+        expiresAt: untilMs,
+        validFrom: fromMs,
+      };
+    }
+    const n = Math.max(1, Math.ceil(span.metres / SEGMENT_PIECE_M));
+    const spanMs = span.t1 - span.t0;
+    const pieceEnd = (i) => (i === n ? span.t1 : span.t0 + (spanMs * i) / n);
+    let k = Math.min(
+      n - 1,
+      Math.max(0, Math.floor(((atMs - span.t0) / spanMs) * n)),
+    );
+    // A time on a piece's end belongs to the next piece, whatever rounding
+    // says, so a segment is never drawn already run out.
+    while (k < n - 1 && pieceEnd(k + 1) <= atMs) k += 1;
+    while (k > 0 && pieceEnd(k) > atMs) k -= 1;
+    const t0 = pieceEnd(k);
+    const t1 = pieceEnd(k + 1);
+    const at = (i) =>
+      i === 0
+        ? { lat: span.lat0, lon: span.lon0 }
+        : i === n
+          ? { lat: span.lat1, lon: span.lon1 }
+          : greatCircleAt(span.lat0, span.lon0, span.lat1, span.lon1, i / n);
+    const a = at(k);
+    const b = at(k + 1);
+    const to = anchorAt(b.lat, b.lon);
+    const courseDeg = vesselCourseDeg(record);
+    return {
+      motion: {
+        kind: 'lerp',
+        from: anchorAt(a.lat, a.lon),
+        to,
+        t0,
+        t1,
+        course0Deg: courseDeg,
+        courseSlopeDeg: 0,
+      },
+      pos: to,
+      expiresAt: t1,
+      validFrom: t0,
+    };
   }
 
   /** Let the icon draw set go (the layer is destroyed). */
   function disposeCollections() {
     state.icons?.dispose();
     state.icons = null;
+    iconSet = null;
+    iconRecords.clear();
+    planFrom.clear();
+    replannedAtMs = -Infinity;
   }
 
   /** Whether the Cockpit's bridge camera rides this record's ship. */
@@ -272,24 +411,32 @@ export function createRendering({
 
   /** The icon item a record draws, as it now is. */
   function iconItem(record, visual) {
-    const selected = record === state.selectedRecord;
+    const aid = isAidToNavigation(record);
     const courseDeg = vesselCourseDeg(record);
     // Following the clock, not there yet at the time drawn.
     visual.seen = seenYet(record);
+    const plan = segmentsOn()
+      ? planMotion(record, vesselState.worldNow())
+      : null;
+    visual.plan = plan;
     return {
       id: visual.iconId,
       // Hidden while the bridge camera rides it, its model draws it, or it
       // is not there yet.
       show: !isCockpitSubject(record) && !visual.modelOwnsVisual && visual.seen,
-      pos: visual.position,
-      image: shipIcon(record, selected),
+      pos: plan?.pos ?? visual.position,
+      image: shipIcon(record),
       size: [SHIP_ICON_PX, SHIP_ICON_PX],
-      // Selection changes the colour only, never the size.
+      // Tinted by type; selection changes neither the colour nor the size.
+      color: shipTint(record),
       scale: shipScale(record),
-      rotationMode: 'course',
-      // Held on course; `course` for renderers without motion segments.
+      // An aid's buoy stands upright on screen; a vessel turns with course.
+      rotationMode: aid ? 'screen' : 'course',
+      rotation: 0,
+      // Held on course, or along its track on the renderer's clock;
+      // `course` for renderers without motion segments.
       course: courseDeg,
-      motion: { kind: 'hold', courseDeg },
+      motion: plan?.motion ?? { kind: 'hold', courseDeg },
       focus: state.icons?.focus(visual.iconId) ?? 1,
       disableDepthTest: Infinity,
       meta: visual.meta,
@@ -308,7 +455,8 @@ export function createRendering({
     const visual = getVisual(record);
     // The pick meta, and the key of the vessel's focus emphasis.
     visual.meta = { layer: 'ais-live-vessels', id: visual.iconId };
-    state.icons.put({ ...iconItem(record, visual), focus: 1 });
+    iconRecords.set(visual.iconId, record);
+    putIcon(visual, { ...iconItem(record, visual), focus: 1 });
     if (visual.position)
       visual.cullPosition = liftedForHorizon(visual.position);
     visual.visible = isVisible(visual.cullPosition, occluder, record);
@@ -325,8 +473,21 @@ export function createRendering({
   function syncRecordIcon(record) {
     const visual = getVisual(record);
     if (!state.icons?.has(visual.iconId) || !visual.position) return;
-    state.icons.put(iconItem(record, visual));
+    putIcon(visual, iconItem(record, visual));
     visual.cullPosition = liftedForHorizon(visual.position);
+  }
+
+  /** Draw a vessel's icon item, with when its segment runs out while the
+   * icons move on the renderer's clock. */
+  function putIcon(visual, item) {
+    if (!segmentsOn()) {
+      planFrom.delete(item.id);
+      state.icons.put(item, { expiresAt: null });
+      return;
+    }
+    const plan = visual.plan;
+    planFrom.set(item.id, plan?.validFrom ?? -Infinity);
+    state.icons.put(item, { expiresAt: plan?.expiresAt ?? Infinity });
   }
 
   /**
@@ -341,6 +502,8 @@ export function createRendering({
     if (!icons?.has(visual.iconId)) return;
     forgetSpriteFocus(icons.item(visual.iconId).meta);
     icons.remove(visual.iconId);
+    iconRecords.delete(visual.iconId);
+    planFrom.delete(visual.iconId);
   }
 
   function shipScale(record) {
@@ -366,40 +529,33 @@ export function createRendering({
   }
 
   /**
-   * Build (and cache) a chevron/delta-wing SVG data URL tinted for the vessel.
-   * The shape points north (up) so the row's course maps directly to heading.
-   * An aid to navigation, which has no heading, is a ringed disc instead.
-   * One icon is generated per color+variant and shares one atlas slot.
-   * @param {Object} record - Vessel record (drives per-type tint).
-   * @param {boolean} selected - True for the white/brighter selected variant.
+   * The sprite a vessel is drawn as: the white hull of its kind
+   * (`vesselKind`), bow up so the row's course turns it to its heading, or
+   * for an aid to navigation the buoy. The layer tints it
+   * (`shipTint`), so each shape takes one icon-atlas slot.
+   * @param {Object} record - Vessel record.
    * @returns {string} SVG data URL.
    */
 
-  function shipIcon(record, selected) {
-    const aid = isAidToNavigation(record);
-    const cssColor = selected
-      ? '#ffffff'
-      : aid
-        ? AID_TO_NAVIGATION_STYLE.css
-        : vesselTypeCss(record.type);
-    const key = `${cssColor}:${selected ? 'selected' : 'normal'}:${aid ? 'aid' : 'ship'}`;
-    if (vesselState.shipIconCache.has(key))
-      return vesselState.shipIconCache.get(key);
+  function shipIcon(record) {
+    return isAidToNavigation(record)
+      ? aidSprite()
+      : vesselSprite(vesselKind(record.type));
+  }
 
-    const stroke = selected ? 'rgba(6,26,32,0.95)' : 'rgba(4,18,24,0.9)';
-    const strokeWidth = selected ? 1.1 : 0.7;
-    const shape = aid
-      ? `<circle r="8" fill="${cssColor}" stroke="${stroke}" stroke-width="${strokeWidth * 2}"/>
-      <circle r="3" fill="${stroke}"/>`
-      : `<path d="M0,-14 L11,10 L4,7 L0,14 L-4,7 L-11,10 Z" fill="${cssColor}" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linejoin="round"/>`;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-    <g transform="translate(16,16)">
-      ${shape}
-    </g>
-  </svg>`;
-    const icon = 'data:image/svg+xml;base64,' + btoa(svg);
-    vesselState.shipIconCache.set(key, icon);
-    return icon;
+  /**
+   * A vessel's tint, `[r, g, b, a]`: its type's colour (vesselLabels.js,
+   * shared with its card), an aid's bone white.
+   * @param {Object} record - Vessel record.
+   */
+
+  function shipTint(record) {
+    const css = isAidToNavigation(record)
+      ? AID_TO_NAVIGATION_STYLE.css
+      : vesselTypeCss(record.type);
+    let tint = tints.get(css);
+    if (!tint) tints.set(css, (tint = Object.freeze(cssColor(css))));
+    return tint;
   }
 
   // Under the DISPLAY rail's 3D toggle, vessels near the camera are drawn as
@@ -425,6 +581,13 @@ export function createRendering({
       resolveAsset: fleet.resolveAsset,
       // A hull below the waterline would show through a plain globe.
       waterline: true,
+      // Its radar sweeps while it is under way (speed in knots).
+      partState: (item, table) =>
+        vesselPartState(table, {
+          speedMps: Number.isFinite(item.record?.speed)
+            ? item.record.speed * KNOT_MPS
+            : null,
+        }),
     });
   }
 
@@ -461,11 +624,7 @@ export function createRendering({
       ? findCamera(state.viewer)?.pose()?.position
       : null;
     if (!eye) return;
-    const policy = services.fleet.policy;
-    const keepM =
-      services.fleet.display?.()?.models3dMode === 'all'
-        ? policy.keepAllM
-        : policy.keepM;
+    const keepM = services.fleet.policy.keepM;
     const limitSq = keepM * keepM * 1.44;
     for (const record of state.records.all) {
       const waterline = getVisual(record).waterline;
@@ -548,7 +707,8 @@ export function createRendering({
     state.preRenderRemover =
       findFrame(viewer)?.on('preRender', () => {
         if (state.feed.enabled) {
-          if (followsClock(vesselState)) followClockPositions();
+          syncSegments();
+          if (followsClock(vesselState)) followClock();
           else if (services.placement) followPlacements();
         }
         updateVisibility();
@@ -569,6 +729,102 @@ export function createRendering({
   let clockPassAtMs = null;
   // Whether the last pass left drawn vessels short of its world time.
   let drawnBehind = false;
+  /** One world-clock pass: icons on the renderer's clock when it moves
+   * them, else moved by the layer. */
+  function followClock() {
+    syncSegments();
+    if (segmentsOn()) followClockSegments();
+    else followClockPositions();
+  }
+
+  /**
+   * Once a frame: when the icons start or stop moving on the renderer's
+   * clock (the layer starts or stops following the world clock), put the
+   * set on that clock and draw every icon again, along its segment or held.
+   */
+  function syncSegments() {
+    const on = segmentsOn();
+    if (on === segmentsWere) return;
+    segmentsWere = on;
+    iconSet?.setOptions?.({ motionClock: motionClock(on) });
+    // Leaving the clock, each icon holds where its segment last drew it;
+    // one a live update has drawn since (no world time drawn) stays there.
+    const lastAtMs = on ? -Infinity : replannedAtMs;
+    replannedAtMs = -Infinity;
+    for (const record of state.records.all) {
+      const drawnAtMs = visualRecords.get(record)?.drawnAtMs;
+      if (
+        lastAtMs > -Infinity &&
+        Number.isFinite(drawnAtMs) &&
+        catchUpVisual(record, lastAtMs)
+      )
+        continue;
+      syncRecordIcon(record);
+    }
+  }
+
+  // The vessels drawn with a card (and the selected one): their cards are
+  // anchored at where the layer reads them, so it reads them every frame.
+  const carded = new Set();
+
+  /**
+   * As the world clock plays with the icons on the renderer's clock: the
+   * renderer moves each icon along its segment, and the layer draws again
+   * only those whose segment ran out (or, the time moved back, started after
+   * it). Where the layer reads a vessel (its cards, picks, the horizon, its
+   * model) moves on by itself: every frame for the vessels drawn with a
+   * card or a model and the one the bridge camera rides, and for the rest a
+   * share of them each pass, so each moves at least every HIDDEN_FOLLOW_MS.
+   */
+  function followClockSegments() {
+    const atMs = vesselState.worldNow();
+    if (atMs < replannedAtMs)
+      for (const [id, from] of planFrom) if (from > atMs) replanIcon(id, atMs);
+    replannedAtMs = atMs;
+    for (const id of state.icons?.due(atMs) ?? []) replanIcon(id, atMs);
+    for (const record of carded) catchUpVisual(record, atMs);
+    for (const item of modelItems.values()) catchUpVisual(item.record, atMs);
+    const ridden = state.cockpitSubjectId
+      ? state.records.byId.get(state.cockpitSubjectId)
+      : null;
+    if (ridden) catchUpVisual(ridden, atMs);
+    const all = state.records.all;
+    const wallMs = performance.now();
+    const sinceMs =
+      hiddenFollowedAtWallMs === null
+        ? HIDDEN_FOLLOW_MS
+        : wallMs - hiddenFollowedAtWallMs;
+    const share = Math.min(
+      all.length,
+      Math.ceil((all.length * Math.max(0, sinceMs)) / HIDDEN_FOLLOW_MS),
+    );
+    if (share > 0) hiddenFollowedAtWallMs = wallMs;
+    for (let k = 0; k < share; k += 1) {
+      if (hiddenCursor >= all.length) hiddenCursor = 0;
+      const record = all[hiddenCursor];
+      if (visualRecords.get(record)?.position) catchUpVisual(record, atMs);
+      else followRecord(record, atMs, false, motionPass);
+      hiddenCursor += 1;
+    }
+  }
+
+  /**
+   * Bring where the layer reads a vessel up to the world time, for a reader
+   * that needs it where it is drawn now (the detection overlay): while the
+   * icons move on the renderer's clock, only some are read every frame.
+   */
+  function readVesselNow(record) {
+    if (segmentsOn()) catchUpVisual(record, vesselState.worldNow());
+  }
+
+  /** Draw an icon's vessel again where it is at `atMs`. */
+  function replanIcon(id, atMs) {
+    const record = iconRecords.get(id);
+    if (!record) return;
+    catchUpVisual(record, atMs);
+    syncRecordIcon(record);
+  }
+
   function followClockPositions() {
     const atMs = vesselState.worldNow();
     const wallMs = performance.now();
@@ -1039,7 +1295,7 @@ export function createRendering({
       const visual = getVisual(record);
       const id = visual?.iconId;
       const item = icons?.item(id);
-      const position = visual?.position;
+      const position = item ? drawnPositionNow(record) : visual?.position;
       if (!item || !position) continue;
       const sprite = item.meta;
       // Most of a worldwide feed sits behind the horizon. A hidden icon with
@@ -1121,6 +1377,8 @@ export function createRendering({
       ? [components.cards.buildSelectedVesselCard(selected)]
       : [];
     const maxLabels = labelRowLimit();
+    carded.clear();
+    if (selectedCarded) carded.add(selected);
 
     if (!query || !records.length || maxLabels <= 0) {
       state.activeLabelCount = entries.length;
@@ -1183,6 +1441,7 @@ export function createRendering({
         continue;
       accepted.push({ x: candidate.x, y: candidate.y });
       entries.push(components.cards.buildVesselCard(candidate.record));
+      carded.add(candidate.record);
     }
     state.activeLabelCount = entries.length;
     publishVesselOverlayEntries(entries);
@@ -1273,6 +1532,7 @@ export function createRendering({
   return {
     getVisual,
     iconPosition,
+    drawnPositionNow,
     forgetClockStep,
     prepareRecordVisual,
     anchorPosition,
@@ -1292,7 +1552,10 @@ export function createRendering({
     cancelTrailingVisibilityPass,
     cancelPlacementFrame,
     followPlacements,
+    followClock,
     followClockPositions,
+    readVesselNow,
+    syncSegments,
     applyVesselFocusDeemphasis,
     makeOccluder,
     isVisible,

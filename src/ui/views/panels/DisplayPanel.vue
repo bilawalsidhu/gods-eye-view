@@ -6,6 +6,7 @@ import { vPanelState } from '../../rail/panelState.js';
 import { vClassToggle } from '../../rail/classToggle.js';
 import PanelCollapseButton from '../../rail/PanelCollapseButton.vue';
 import UiPanelEdge from '../../kit/UiPanelEdge.vue';
+import { availableTabs, tabTarget } from '../../contextLayerTabs.js';
 import UiSegmented from '../../kit/UiSegmented.vue';
 import UiSlider from '../../kit/UiSlider.js';
 import { useDisplayStore } from '../../stores/display.js';
@@ -20,6 +21,11 @@ import VisualPresets from './VisualPresets.vue';
 // Draw and Import live in UTILITIES (LayerPanelsView).
 const display = useDisplayStore();
 const { view, models3d, parameters, cockpitPortal, groups, sky } = storeToRefs(display);
+// Cockpit takes these controls first; otherwise, while a layer they act on is
+// on, they move into that layer's tab in Context.
+const inContext = (id) => availableTabs.value.some((tab) => tab.id === id);
+const detectionTarget = computed(() => cockpitPortal.value?.detection ?? (inContext('labels') ? tabTarget('labels') : null));
+const modelsTarget = computed(() => cockpitPortal.value?.models3d ?? (inContext('aircraft') ? tabTarget('aircraft') : null));
 // A control's change goes to its owner (DisplayBindings).
 const act = (name, ...args) => display.act(name, ...args);
 const pct = (value) => `${value}%`;
@@ -122,7 +128,7 @@ const allocationOptions = computed(() => [
     </div>
   </div>
   </Teleport>
-  <Teleport :to="cockpitPortal?.detection ?? 'body'" :disabled="!cockpitPortal?.detection">
+  <Teleport :to="detectionTarget ?? 'body'" :disabled="!detectionTarget">
   <div class="pp-toggle-group">
     <UiButton class="pp-toggle-btn" :class="{ active: detectButton?.active, panoptic: detectButton?.panoptic }" :pressed="detectButton?.pressed ?? false" id="detection-toggle" @click="act('cycleDetection')" :title="t('Detection Overlay (D)')" :aria-label="detectButton?.ariaLabel ?? t('Detection overlay')">
       <span class="pp-icon">&#x25A3;</span>
@@ -160,7 +166,7 @@ const allocationOptions = computed(() => [
     <div id="param-sliders"><StyleParameterRows v-if="parameters" :key="parameters.style" :rows="parameters.rows" :on-input="(name, value) => act('setStyleParameter', name, value)" /></div>
   </div>
   </Teleport>
-  <Teleport :to="cockpitPortal?.models3d ?? 'body'" :disabled="!cockpitPortal?.models3d">
+  <Teleport :to="modelsTarget ?? 'body'" :disabled="!modelsTarget">
   <div class="pp-toggle-group">
     <!-- 3D aircraft is DEFAULT-ON in Proximity (owner directive 2026-08-22), so the
          button ships lit and the mode row ships open — the same markup-carries-the-default

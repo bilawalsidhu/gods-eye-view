@@ -190,6 +190,23 @@ test('a built frame port counts holds per reason, times out a wait, and settles 
   unbind();
 });
 
+test('a built frame port says when its first hold is taken and its last released', () => {
+  const viewer = fakeViewer();
+  viewer.useDefaultRenderLoop = false;
+  const frame = frameOf(viewer);
+  const heard = [];
+  const off = frame.onHeldChange((held) => heard.push(held));
+  const a = frame.holdContinuous('spin');
+  const b = frame.holdContinuous('glow');
+  a();
+  assert.deepEqual(heard, [true], 'once for the first hold');
+  b();
+  assert.deepEqual(heard, [true, false], 'once for the last release');
+  off();
+  frame.holdContinuous('spin')();
+  assert.deepEqual(heard, [true, false], 'nothing once off');
+});
+
 test('renderNow throws the error Cesium raises on renderError', () => {
   const listeners = new Set();
   const failure = new Error('worker failed');

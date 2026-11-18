@@ -109,6 +109,11 @@ export function openSkySnapshot(
       const statuses = payload?.emergencyByIcao;
       if (record && statuses && Object.hasOwn(statuses, record.id))
         record.emergency = cleanText(statuses[record.id]).toLowerCase() || null;
+      // A state vector has no type field; a feed that knows the airframe's
+      // ICAO type designator sends it alongside, by ICAO address.
+      const types = payload?.typeByIcao;
+      if (record && types && Object.hasOwn(types, record.id))
+        record.typeCode = cleanText(types[record.id]).toUpperCase() || null;
       return record;
     },
     'OpenSky',

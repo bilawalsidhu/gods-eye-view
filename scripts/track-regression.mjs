@@ -1453,9 +1453,9 @@ async function main() {
 
     // NOTE: we do NOT manually reposition the camera. Tracking follows the
     // plane with a calibrated viewFrom, so the follow camera lands
-    // in the few-km band (altitude*1.1+2500, clamped 3–30 km) — far below the
-    // MODEL_ALT_CEIL_M = 800 km ceiling, so _modelRegimeActive() is true and the
-    // standalone tracked model renders. That's the exact path the invariants
+    // in the few-km band (altitude*1.1+2500, clamped 3–30 km) — below the
+    // MODEL_ALT_CEIL_M ceiling, so _modelRegimeActive() is true; the checks below
+    // zoom in to within the 3 km model range so the standalone tracked model renders. That's the exact path the invariants
     // protect, so we exercise it rather than a synthetic setView.
 
     // ============================================================
@@ -1518,16 +1518,34 @@ async function main() {
         // is "tracked model not up yet", not a match.
         return bestD < 1000 * 1000 ? best : null;
       };
+      // Models draw only within 3 km of the camera, and the follow camera
+      // frames a cruising plane from farther out: zoom in on the followed
+      // plane until it is within `metres`. Returns the distance reached.
+      window.__qaFollowWithin = async function (metres) {
+        const v = window.__godsEyeView.viewer;
+        for (let i = 0; i < 20; i++) {
+          const followed = window.__qaFollowed();
+          const t = typeof followed?.displayPosition === 'function' ? followed.displayPosition() : null;
+          if (!t) return null;
+          const c = v.camera.positionWC;
+          const d = Math.hypot(c.x - t.x, c.y - t.y, c.z - t.z);
+          if (d <= metres) return d;
+          v.camera.zoomIn(d - metres * 0.8);
+          await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        }
+        return null;
+      };
     });
 
-    // Track a synthetic commercial plane. Tracking follows it with a
-    // viewFrom, so the follow camera lands in the few-km band and the standalone
-    // 3D model renders (model regime active below the 800 km ceiling).
+    // Track a synthetic commercial plane, then zoom the follow camera to
+    // within 2 km of it: models draw only within 3 km, so the standalone 3D
+    // model renders there.
     const trackedIcao = SYNTH.flights[0].icao;
     await evalPage((icao) => {
       window.__godsEyeView.dataManager.layers.get('flights').module.trackById(icao);
     }, trackedIcao);
-    await sleep(1500); // let the follow camera settle + the GLB load kick off
+    await sleep(1500); // let the follow camera settle
+    await evalPage(() => window.__qaFollowWithin(2000));
 
     // Wait until the tracked Cesium.Model primitive exists, is ready & shown.
     const modelUp = await page.waitForFunction((icao) => {
@@ -1845,7 +1863,8 @@ async function main() {
     await evalPage((icao) => {
       window.__godsEyeView.dataManager.layers.get('flights').module.trackById(icao);
     }, h1Icao);
-    await sleep(1500); // follow camera settles; tracked GLB load kicks off
+    await sleep(1500); // follow camera settles
+    await evalPage(() => window.__qaFollowWithin(2000)); // within the 3 km model range
 
     // (i) The tracked standalone model must expose its pick id (= the icao).
     const h1ModelUp = await page.waitForFunction((icao) => {
@@ -2498,10 +2517,11 @@ async function main() {
       const milBB = findBB('bbb177');
       if (!flBB || !milBB) return { error: `ground billboards missing (fl=${!!flBB} mil=${!!milBB})` };
       const radius = (pos) => Math.hypot(pos.x, pos.y, pos.z);
-      // Park the camera 8 km radially above the flights plane (both in view nadir-ish).
+      // Park the camera 2 km radially above the flights plane (both in view
+      // nadir-ish, both within the 3 km model range).
       const p = flBB.position;
       const r = Math.hypot(p.x, p.y, p.z);
-      const k = (r + 8000) / r;
+      const k = (r + 2000) / r;
       v.camera.cancelFlight();
       v.camera.setView({
         destination: { x: p.x * k, y: p.y * k, z: p.z * k },
@@ -3279,8 +3299,8 @@ async function main() {
       // these pins with it rather than stranding them on stale numbers.
       const reg = await import(`${window.__gevQaSourceBase || '/src'}/layers/flights/policy.js`);
       window.__dfRegime = {
-        enter: reg.MODEL_PROX_ADD_M,
-        exit: reg.MODEL_PROX_KEEP_M,
+        enter: reg.MODEL_ADD_M,
+        exit: reg.MODEL_KEEP_M,
       };
       // Zooming while following is safe: the tracked-camera framer positions
       // the camera ONCE per selection and is deliberately read-only on normal
@@ -3976,7 +3996,7 @@ async function main() {
         // Hand the camera back to the CLOSE follow range before releasing. The
         // LOADING scenario below needs BOTH an active tracked regime and a
         // fleet model for this contact, and the fleet only admits models within
-        // MODEL_PROX_ADD_M of the camera — parking just inside the enter
+        // MODEL_ADD_M of the camera — parking just inside the enter
         // ceiling satisfies the regime but sits outside that add radius, which
         // silently starved the fleet half into a skip.
         await window.__dfZoomBelow(belowH + 500);

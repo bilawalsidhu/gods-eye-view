@@ -1,13 +1,14 @@
 # Scene document format
 
-Authoring exports a UTF-8 JSON project. Version 5 adds [data packs](DIRECTOR-DATA-PACKS.md)
-and is the write format. Versions 1, 2, 3, 4 and unversioned legacy files migrate on
-import without converting their existing shots into authored moves. Unknown versions or unsupported fields are rejected with
-a field path before the current project, selection or saved bytes change.
+Authoring exports a UTF-8 JSON project. Version 7 records Stories metadata.
+Versions 1 through 6 and unversioned legacy files migrate on import, including
+version 6 projects written by early Stories builds. Existing shots keep their
+camera behavior. Unknown versions or unsupported fields are rejected with a
+field path before the current project, selection or saved bytes change.
 
 ```json
 {
-  "version": 5,
+  "version": 7,
   "scenes": [{
     "id": "my-scene",
     "title": "My scene",
@@ -33,6 +34,9 @@ Each scene requires a `shots` array; optional fields are `id`, `title`,
 `releaseLayerIds`, `appliedShotPacks` and version-4 `anchors`. A pack marker has `id`, optional numeric
 `version` and `shotBindings` (original shot title to saved shot ID). These markers
 retain the editor's existing pack-update and rename behavior.
+From version 6 (written by early Stories builds), scenes may include `stories`
+(true when saved to Stories), `storyThumb` (a JPEG or PNG data URL of at most
+300,000 characters) and `storyTags` (up to five supported topic keys).
 
 Shots accept `id`, `title`, `durationSec`, `holdSec`, `camera`, `visual`, `layers`,
 `sourcePackId`, `sourcePackVersion` and version-4 `move`. Scene IDs are unique within the project;
@@ -75,8 +79,8 @@ UTF-8 size before JSON decoding; the file importer also checks file size before
 reading it. Migration/defaults live separately in `src/scenes/project.js`.
 
 Limits are 5 MiB, 256 scenes, 10,000 total shots, 10,000 entries per collection,
-24 levels of nesting, 200,000 visited values, 65,536 characters per JSON string,
-256 characters per field/ID, and 4,096 characters per title. Numeric values must
+24 levels of nesting, 200,000 visited values, 65,536 characters per JSON string
+(300,000 for a Stories thumbnail), 256 characters per field/ID, and 4,096 characters per title. Numeric values must
 be finite. Camera limits are latitude ±90, longitude ±180, altitude −12,000 to
 1 billion meters, heading/roll ±360 and pitch ±90; durations/holds are at most
 86,400 seconds. Post-processing values are bounded and normalized to the existing

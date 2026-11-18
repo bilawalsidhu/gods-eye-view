@@ -445,6 +445,8 @@ export function createTracking({ state: layerState, services, parts, source }) {
 
     layerState._trackedEntity = parts.rendering._addTrackedEntity({
       position: trackedPosition,
+      // Its own dot's colour: tracking never recolours a satellite.
+      color: parts.controls._pointStyleFor(noradId, sat.group).color,
       viewFrom,
     });
     entityRecord(layerState._trackedEntity).selectionOrigin = origin;

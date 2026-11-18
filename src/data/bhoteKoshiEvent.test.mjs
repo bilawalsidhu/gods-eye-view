@@ -34,7 +34,7 @@ import {
   usesProviderEmbeddedEvidence,
   visibleSegmentCount,
 } from './bhoteKoshiEvent.js';
-import { SCENE_RECIPES } from '../scenes/recipes.js';
+import { SCENE_RECIPES, getSceneAppendRecipeById } from '../scenes/recipes.js';
 import { LayerLifecycle } from './lifecycle.js';
 import { createBhoteKoshiEmbeddedMedia } from './bhoteKoshiEmbeddedMedia.js';
 import { SceneDirector } from '../scenes/director.js';
@@ -413,6 +413,180 @@ test('trimmed scene media holds through provider startup, playback and fade, the
     await layer.destroy();
     globalThis.document = previous.document; globalThis.window = previous.window;
   }
+});
+
+test('scene media plays again when a run goes on from a seek inside its hold, unless the seek was past the clip', async () => {
+  const previous = { document: globalThis.document, window: globalThis.window,
+    requestAnimationFrame: globalThis.requestAnimationFrame,
+    cancelAnimationFrame: globalThis.cancelAnimationFrame };
+  installEventDom();
+  globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
+  // The reveal's frames are not driven here; only that it starts.
+  let frames = 0;
+  globalThis.requestAnimationFrame = () => ++frames;
+  globalThis.cancelAnimationFrame = () => {};
+  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
+  let plays = 0;
+  const layer = createBhoteKoshiEventLayer({
+    eventLoader: async () => event,
+    imagerySpecFactory: async (url) => ({ url }),
+    terrainSampler: async (_viewer, observations) => observations.map(() => ({ height: 800 })),
+    mediaLoader: async () => { throw Object.assign(new Error('No bundled clip'), { name: 'AbortError' }); },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+    renderHost: { request() {}, hold() {}, release() {} },
+    embeddedMediaFactory: () => ({ warm: () => true, show: () => true, play() { plays++; }, pause() {},
+      getPlaybackState: () => ({ phase: 'playing' }), hide() {}, destroy() {} }),
+  });
+  const controls = { evidenceMediaAutoplay: true, mediaPlaybackHoldSec: 4, cameraSettled: true,
+    deferEvidenceUntilCameraSettled: true };
+  const params = (sceneControls) => ({ presentation: 'scene-beat', sceneSurface: 'evidence-beat',
+    beatId: 'mailung-bazzar', sceneContext: { sceneId: 'scene', shotId: 'shot', holdSec: 7.65 }, sceneControls });
+  const seek = (holdElapsedSec) => ({ ...controls,
+    timelineSeek: { cameraProgress: 1, holdElapsedSec, holdDurationSec: 7.65, flightDurationSec: 2 } });
+  try {
+    const viewer = eventViewer();
+    await layer.init(viewer);
+    layer.setSceneMediaPlayback({ sceneId: 'scene', shotId: 'shot', token: { cancelled: false } });
+    // A seek 1 s into the hold shows that moment and plays nothing.
+    layer.setParams(params(seek(1)), { origin: 'scene' });
+    await layer.enable(viewer, { origin: 'scene' });
+    assert.equal(plays, 0);
+    assert.equal(layer.getSceneShotMediaHold('mailung-bazzar'), null);
+    // The run goes on from there: the clip starts again and holds the shot.
+    const framesBefore = frames;
+    layer.setParams(params(controls), { origin: 'scene' });
+    assert.ok(frames > framesBefore, 'the reveal runs again');
+    assert.ok(plays > 0, 'the clip plays');
+    assert.equal(layer.getSceneShotMediaHold('mailung-bazzar').pending, true);
+    // A seek after the clip goes on without it.
+    layer.setParams(params(seek(6)), { origin: 'scene' });
+    const before = plays;
+    layer.setParams(params(controls), { origin: 'scene' });
+    assert.equal(plays, before, 'the clip already played');
+    assert.equal(layer.getSceneShotMediaHold('mailung-bazzar').pending, false);
+  } finally { await layer.destroy(); Object.assign(globalThis, previous); }
+});
+
+test('a run going on from a seek in Timure’s hold resumes its evidence sequence from that point', async () => {
+  const keys = ['document', 'window', 'performance', 'requestAnimationFrame', 'cancelAnimationFrame'];
+  const previous = Object.fromEntries(keys.map((key) => [key, globalThis[key]]));
+  installEventDom();
+  let now = 1000;
+  let nextFrame = 0;
+  const frames = new Map();
+  globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
+  globalThis.performance = { now: () => now };
+  globalThis.requestAnimationFrame = (callback) => { frames.set(++nextFrame, callback); return nextFrame; };
+  globalThis.cancelAnimationFrame = (id) => frames.delete(id);
+  const frame = (ms) => {
+    now += ms;
+    const callback = frames.get(nextFrame);
+    frames.delete(nextFrame);
+    callback?.(now);
+  };
+  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
+  const layer = createBhoteKoshiEventLayer({
+    eventLoader: async () => event,
+    imagerySpecFactory: async (url) => ({ url }),
+    terrainSampler: async () => null,
+    mediaLoader: async () => { throw Object.assign(new Error('fixture'), { name: 'AbortError' }); },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+    renderHost: { request() {}, hold() {}, release() {} },
+    embeddedMediaFactory: () => ({ warm: () => true, show: () => true, play() {}, pause() {},
+      getPlaybackState: () => ({ phase: 'completed' }), hide() {}, destroy() {} }),
+  });
+  const recipe = getSceneAppendRecipeById('bhote-koshi-nepal-evidence-pack');
+  const controls = { ...recipe.runtimeControlsByBeat['timure-cluster'], cameraSettled: true };
+  assert.equal(controls.evidenceSequence, true);
+  assert.equal(controls.evidencePathDuringCamera, true);
+  const params = (sceneControls) => ({ presentation: 'scene-beat', sceneSurface: 'evidence-beat',
+    beatId: 'timure-cluster', sceneControls });
+  // The sequence waits out the 6 s clip and its 0.65 s exit, then runs 12 s:
+  // 8 s into the hold it is 1.35 s along.
+  const seek = { ...controls,
+    timelineSeek: { cameraProgress: 1, holdElapsedSec: 8, holdDurationSec: 12, flightDurationSec: 2 } };
+  const at = (holdElapsedSec) => {
+    layer.setParams(params({ ...seek, timelineSeek: { ...seek.timelineSeek, holdElapsedSec } }),
+      { origin: 'scene' });
+    return layer.getPlaybackState().progress;
+  };
+  try {
+    const viewer = eventViewer();
+    await layer.init(viewer);
+    layer.setParams(params(seek), { origin: 'scene' });
+    await layer.enable(viewer, { origin: 'scene' });
+    // Where the sequence starts and ends, and where the seek puts it.
+    const start = at(0);
+    const end = at(30);
+    const atSeek = at(8);
+    assert.ok(start < atSeek && atSeek < end, `the seek shows the sequence partway (${start} < ${atSeek} < ${end})`);
+    // The run goes on: the sequence carries on from that point, not 0 or its end.
+    layer.setParams(params(controls), { origin: 'scene' });
+    assert.ok(Math.abs(layer.getPlaybackState().progress - atSeek) < 1e-9, 'it starts where the seek stood');
+    frame(1000);
+    const later = layer.getPlaybackState().progress;
+    assert.ok(atSeek < later && later < end, `and moves on from there (${atSeek} < ${later} < ${end})`);
+  } finally { await layer.destroy(); Object.assign(globalThis, previous); }
+});
+
+test('a run going on from a seek in Gyirong’s hold plays its restarted clip out before the next shot', async () => {
+  const previous = { document: globalThis.document, window: globalThis.window,
+    requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame };
+  installEventDom();
+  globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
+  globalThis.requestAnimationFrame = () => 1;
+  globalThis.cancelAnimationFrame = () => {};
+  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
+  let plays = 0;
+  const layer = createBhoteKoshiEventLayer({
+    eventLoader: async () => event,
+    imagerySpecFactory: async (url) => ({ url }),
+    terrainSampler: async (_viewer, observations) => observations.map(() => ({ height: 800 })),
+    mediaLoader: async () => { throw Object.assign(new Error('No bundled clip'), { name: 'AbortError' }); },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+    renderHost: { request() {}, hold() {}, release() {} },
+    embeddedMediaFactory: () => ({ warm: () => true, show: () => true, play() { plays++; }, pause() {},
+      getPlaybackState: () => ({ phase: 'playing' }), hide() {}, destroy() {} }),
+  });
+  const recipe = getSceneAppendRecipeById('bhote-koshi-nepal-evidence-pack');
+  const controls = { ...recipe.runtimeControlsByBeat['gyirong-border-gate'], cameraSettled: true };
+  const params = (sceneControls) => ({ presentation: 'scene-beat', sceneSurface: 'evidence-beat',
+    beatId: 'gyirong-border-gate', sceneContext: { sceneId: 'scene', shotId: 'shot', holdSec: 9.15 }, sceneControls });
+  const token = { cancelled: false, signal: new AbortController().signal };
+  const hold = async (resume) => {
+    const waits = [];
+    await SceneDirector.prototype._holdShot.call({
+      _layerStatesForShot: () => ({ [layer.id]: { enabled: true, params: params(controls) } }),
+      dataManager: { layers: new Map([[layer.id, { module: layer }]]) },
+      _effectiveShotHoldSec: () => 9.15,
+      _sleep: async (ms) => waits.push(ms),
+      stopScene: () => assert.fail('no timeout'),
+    }, { id: 'scene' }, { id: 'shot' }, token, resume);
+    return waits;
+  };
+  try {
+    const viewer = eventViewer();
+    await layer.init(viewer);
+    layer.setSceneMediaPlayback({ sceneId: 'scene', shotId: 'shot', token });
+    // 5 s into the 9.15 s hold, inside the 6 s clip, which has no media gate.
+    const resume = { holdElapsedSec: 5, holdDurationSec: 9.15 };
+    layer.setParams(params({ ...controls, timelineSeek: { cameraProgress: 1, ...resume, flightDurationSec: 2 } }),
+      { origin: 'scene' });
+    await layer.enable(viewer, { origin: 'scene' });
+    assert.equal(layer.getSceneShotMediaHold('gyirong-border-gate'), null, 'the clip is not trimmed');
+    layer.setParams(params(controls), { origin: 'scene' });
+    assert.ok(plays > 0, 'the clip starts again');
+    assert.equal(layer.sceneShotRestartsMedia('gyirong-border-gate'), true);
+    assert.deepEqual(await hold(resume), [9150], 'the hold plays out as from its start, not 4.15 s');
+    // A seek after the clip: only the rest of the hold.
+    const late = { holdElapsedSec: 8, holdDurationSec: 9.15 };
+    layer.setParams(params({ ...controls, timelineSeek: { cameraProgress: 1, ...late, flightDurationSec: 2 } }),
+      { origin: 'scene' });
+    layer.setParams(params(controls), { origin: 'scene' });
+    assert.equal(layer.sceneShotRestartsMedia('gyirong-border-gate'), false);
+    const [rest] = await hold(late);
+    assert.ok(Math.abs(rest - 1150) < 1e-6, String(rest));
+  } finally { await layer.destroy(); Object.assign(globalThis, previous); }
 });
 
 test('Pinokio source-card fallback selects authored Director dwell, not an impossible player hold', async () => {

@@ -5,10 +5,10 @@ import { bindRenderer, drawOf, findDraw } from '../rendererOf.js';
 import {
   createCesiumDraw,
   FEW_LOOSE_LINES,
-  LONG_SETTLE_FRAMES,
+  LONG_SETTLE_MS,
   MOVING_SHAPES,
   revealUniform,
-  SETTLE_FRAMES,
+  SETTLE_MS,
   unboundDrawPart,
 } from './draw.js';
 import { drawHitOf } from './drawHit.js';
@@ -93,6 +93,19 @@ test('nothing to draw into, no port', () => {
 });
 
 /** A draw port over a fake scene, with its frame hooks. */
+/**
+ * Settling waits are timed. A test that settles times them by `frameClock`
+ * (`timeFrames`), which each fake frame moves on by `FRAME_MS`.
+ */
+const FRAME_MS = 20;
+const SETTLE_FRAMES = SETTLE_MS / FRAME_MS;
+const LONG_SETTLE_FRAMES = LONG_SETTLE_MS / FRAME_MS;
+const frameClock = { ms: 0 };
+function timeFrames(t) {
+  frameClock.ms = 0;
+  t.mock.method(performance, 'now', () => frameClock.ms);
+}
+
 function drawOver(scene = fakeScene()) {
   const viewer = { scene };
   const draw = drawOf(viewer);
@@ -100,6 +113,7 @@ function drawOver(scene = fakeScene()) {
     scene,
     draw,
     frame() {
+      frameClock.ms += FRAME_MS;
       scene.preRender.raiseEvent();
       scene.postRender.raiseEvent();
     },
@@ -2978,8 +2992,9 @@ function settlingSet(id = 'stems') {
   };
 }
 
-test('unchanged solid 3D lines settle into a static batch, changed there in place', () =>
+test('unchanged solid 3D lines settle into a static batch, changed there in place', (t) =>
   withImageClasses(() => {
+    timeFrames(t);
     const s = settlingSet();
     const { set, frame } = s;
     const stem = settleStem;
@@ -3114,8 +3129,24 @@ test('unchanged solid 3D lines settle into a static batch, changed there in plac
     set.dispose();
   }));
 
-test('many lines left beside a static batch settle as soon as they are unchanged', () =>
+test('lines settle after the same time at any refresh rate', (t) =>
   withImageClasses(() => {
+    timeFrames(t);
+    const s = settlingSet();
+    s.set.set([settleStem('a', 100)]);
+    const host = s.host();
+    // Two frames are enough when they are half a second apart.
+    frameClock.ms = SETTLE_MS - FRAME_MS - 1;
+    s.frame();
+    assert.equal(host.length, 1, 'not before the time');
+    s.frame();
+    assert.equal(host.length, 2, 'building once it has passed');
+    s.set.dispose();
+  }));
+
+test('many lines left beside a static batch settle as soon as they are unchanged', (t) =>
+  withImageClasses(() => {
+    timeFrames(t);
     const s = settlingSet();
     const { set } = s;
     const stems = (height) =>
@@ -3134,8 +3165,9 @@ test('many lines left beside a static batch settle as soon as they are unchanged
     set.dispose();
   }));
 
-test('an outlined solid line draws one outline material, recoloured in place, and never settles', () =>
+test('an outlined solid line draws one outline material, recoloured in place, and never settles', (t) =>
   withImageClasses(() => {
+    timeFrames(t);
     const s = settlingSet();
     const outlined = (core, halo) =>
       settleStem('ring', 100, {
@@ -3177,8 +3209,9 @@ test('an outlined solid line draws one outline material, recoloured in place, an
     s.set.dispose();
   }));
 
-test('a line that moves by as many points is written into the points it draws; by more, it takes new ones', () =>
+test('a line that moves by as many points is written into the points it draws; by more, it takes new ones', (t) =>
   withImageClasses(() => {
+    timeFrames(t);
     const s = settlingSet();
     const style = {
       kind: 'solid',
@@ -3232,8 +3265,9 @@ test('a line that moves by as many points is written into the points it draws; b
     s.set.dispose();
   }));
 
-test('a line under half a pixel wide, which the collection does not draw, never settles', () =>
+test('a line under half a pixel wide, which the collection does not draw, never settles', (t) =>
   withImageClasses(() => {
+    timeFrames(t);
     const s = settlingSet();
     s.set.set([
       settleStem('thin', 100, { widthPx: 0.25 }),
@@ -3248,8 +3282,9 @@ test('a line under half a pixel wide, which the collection does not draw, never 
     s.set.dispose();
   }));
 
-test('a settling line set keeps what was drawn, not the item a caller changes in place', () =>
+test('a settling line set keeps what was drawn, not the item a caller changes in place', (t) =>
   withImageClasses(() => {
+    timeFrames(t);
     const s = settlingSet();
     const { set } = s;
     const a = settleStem('a', 100);
@@ -3276,8 +3311,9 @@ test('a settling line set keeps what was drawn, not the item a caller changes in
     set.dispose();
   }));
 
-test('a settling line set rebuilt or gone while its batch builds, or after the viewer went, lets the batch go', () =>
+test('a settling line set rebuilt or gone while its batch builds, or after the viewer went, lets the batch go', (t) =>
   withImageClasses(() => {
+    timeFrames(t);
     const s = settlingSet();
     const { set } = s;
     set.set([settleStem('a', 100), settleStem('b', 200)]);
@@ -3308,17 +3344,22 @@ test('a settling line set rebuilt or gone while its batch builds, or after the v
     set.dispose();
   }));
 
-test('a static batch that fails to build is reported once, and its lines stay in the collection', () =>
+test('a static batch that fails to build is reported once, and its lines stay in the collection', (t) =>
   withImageClasses(() => {
+    timeFrames(t);
     const scene = fakeScene();
     const reported = [];
     const part = createCesiumDraw({
       scene,
       report: (error) => reported.push(error),
     });
+    const afterFrame = () => {
+      frameClock.ms += FRAME_MS;
+      part.afterRender();
+    };
     const set = part.port.lines({ id: 'failing' });
     set.set([settleStem('a', 100)]);
-    for (let i = 0; i < SETTLE_FRAMES; i++) part.afterRender();
+    for (let i = 0; i < SETTLE_FRAMES; i++) afterFrame();
     const host = scene.added[0];
     const batch = host.get(1);
     assert.ok(batch, 'building');
@@ -3326,11 +3367,11 @@ test('a static batch that fails to build is reported once, and its lines stay in
     // batch keeps the error rather than throw it every frame.
     batch.update({ passes: { render: true }, mode: Cesium.SceneMode.SCENE3D });
     assert.ok(batch.failed, 'kept');
-    part.afterRender();
+    afterFrame();
     assert.deepEqual(reported, [batch.failed]);
     assert.equal(host.length, 1, 'the build is gone');
     assert.equal(host.get(0).length, 1, 'the collection draws the line');
-    for (let i = 0; i < SETTLE_FRAMES * 2; i++) part.afterRender();
+    for (let i = 0; i < SETTLE_FRAMES * 2; i++) afterFrame();
     assert.equal(host.length, 1, 'it settles no more');
     assert.equal(reported.length, 1);
     set.dispose();
@@ -7482,8 +7523,9 @@ test('an inertial line with a depth-fail style draws behind the surface too, tur
     set.dispose();
   }));
 
-test('a pattern line draws its image along it, repeated, and an inertial line turns with the sky', () =>
+test('a pattern line draws its image along it, repeated, and an inertial line turns with the sky', (t) =>
   withImageClasses(() => {
+    timeFrames(t);
     const { scene, draw, frame } = drawOver();
     const set = draw.lines({ id: 'orbit-rings' });
     const ring = [
@@ -7777,8 +7819,9 @@ const firstGround = (host) => {
   return null;
 };
 
-test('moved clamped fills go back into a rebuilt batch once they have been still for a while', () =>
+test('moved clamped fills go back into a rebuilt batch once they have been still for a while', (t) =>
   withTerrainHeights(() => {
+    timeFrames(t);
     const { scene, draw, frame } = drawOver();
     const set = draw.shapes({ id: 'settling' });
     set.set([groundBox('a', 1), groundBox('b', 2)]);

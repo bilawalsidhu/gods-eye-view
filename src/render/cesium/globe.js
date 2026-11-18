@@ -59,7 +59,15 @@ async function terrainProvider(spec, { worldDataToken }) {
       throw new TypeError('Quantized-mesh terrain needs its url');
     // Busy hosts are asked again as the keyless terrain is
     // (`terrainRetry.js`); every tile's resource inherits the policy.
-    const policy = createTerrainRetryPolicy();
+    const policy = createTerrainRetryPolicy({
+      // One line per cooldown window, not per tile: a burst throttles dozens.
+      onThrottle: ({ statusCode, delayMs, inWindow }) => {
+        if (inWindow === 1)
+          console.warn(
+            `[MapStack] terrain answered ${statusCode}; retrying throttled tiles after ${Math.round(delayMs)} ms`,
+          );
+      },
+    });
     const resource = new Cesium.Resource({
       url: spec.url,
       retryCallback: policy.retryCallback,
@@ -104,6 +112,19 @@ czm_material czm_getMaterial(czm_materialInput materialInput)
 /** The last `surfaceVersion` any globe port handed out. */
 let surfaceVersions = 0;
 
+/** Each scene's photoreal tileset as a globe port holds it, shown or hidden. */
+const photorealTilesets = new WeakMap();
+
+/**
+ * The Cesium photoreal tileset a globe port over `scene` holds: shown, or
+ * hidden and kept to show again; null when it holds none. For QA scripts.
+ * @param {object} scene
+ * @returns {object | null}
+ */
+export function cesiumPhotorealOf(scene) {
+  return photorealTilesets.get(scene)?.() ?? null;
+}
+
 /**
  * @param {object} widget A Cesium `CesiumWidget` or `Viewer`.
  * @param {{capabilities: ReadonlySet<string>,
@@ -111,7 +132,8 @@ let surfaceVersions = 0;
  *   report?: (error: unknown) => void,
  *   credits?: import('../contract/credits').CreditsPort | null,
  *   credentials?: {googleApiKey?: string, googleTokens?: () => Promise<string>,
- *     worldDataToken?: string}}} options
+ *     worldDataToken?: string},
+ *   loadPhotoreal?: typeof loadPhotorealisticTileset}} options
  * @returns {{port: import('../contract/globe').GlobePort, dispose: () => void}}
  */
 export function createCesiumGlobe(
@@ -122,6 +144,8 @@ export function createCesiumGlobe(
     report = uncaught,
     credits = null,
     credentials = {},
+    // Tests load their own.
+    loadPhotoreal = loadPhotorealisticTileset,
   },
 ) {
   const scene = widget.scene;
@@ -130,9 +154,17 @@ export function createCesiumGlobe(
 
   // --- Base ------------------------------------------------------------------
 
-  /** The photoreal tileset this port loaded, if any. */
+  /** The photoreal tileset this port loaded, if any, and its spec. */
   let photoreal = null;
+  let photorealSpec = null;
   let photorealStatus = { route: 'none' };
+  /**
+   * The photoreal tileset last turned off, kept hidden with the spec and
+   * status it loaded with: that same spec shows it again at once, without
+   * loading it anew (Google counts each load).
+   */
+  let parked = null;
+  photorealTilesets.set(scene, () => photoreal ?? parked?.tileset ?? null);
   let photorealGen = 0;
   let terrainGen = 0;
   let baseGen = 0;
@@ -178,31 +210,74 @@ export function createCesiumGlobe(
     worldDataToken: () => credentials.worldDataToken,
   });
 
-  function removePhotoreal() {
-    if (!photoreal) return;
-    const tileset = photoreal;
-    photoreal = null;
-    // The layers draped on it move off before it takes them with it.
-    imagery.sync();
+  function destroyTileset(tileset) {
     if (!tileset.isDestroyed() && !scene.primitives.remove(tileset))
       tileset.destroy();
   }
 
+  function removePhotoreal() {
+    if (!photoreal) return;
+    const tileset = photoreal;
+    photoreal = null;
+    photorealSpec = null;
+    // The layers draped on it move off before it takes them with it.
+    imagery.sync();
+    destroyTileset(tileset);
+  }
+
+  /** Hide the photoreal tileset, kept for its spec to show again. */
+  function parkPhotoreal() {
+    if (!photoreal) return;
+    if (parked) destroyTileset(parked.tileset);
+    parked = {
+      spec: photorealSpec,
+      status: photorealStatus,
+      tileset: photoreal,
+    };
+    photoreal.show = false;
+    photoreal = null;
+    photorealSpec = null;
+    imagery.sync();
+  }
+
+  /** Show the parked tileset again when `spec` is the one it loaded with. */
+  function unparkPhotoreal(spec) {
+    const kept = parked;
+    if (!kept || kept.spec !== spec || kept.tileset.isDestroyed()) return null;
+    parked = null;
+    removePhotoreal();
+    photoreal = kept.tileset;
+    photorealSpec = spec;
+    photoreal.show = true;
+    photorealStatus = kept.status;
+    imagery.sync();
+    requestRender('base');
+    return photorealStatus;
+  }
+
   async function setPhotoreal(spec) {
     const gen = ++photorealGen;
-    removePhotoreal();
-    photorealStatus = { route: 'none' };
     if (!spec || !can('photoreal')) {
+      if (spec) removePhotoreal();
+      else parkPhotoreal();
       photorealStatus = { route: 'none' };
       requestRender('base');
       return photorealStatus;
     }
+    const shown = unparkPhotoreal(spec);
+    if (shown) return shown;
+    removePhotoreal();
+    if (parked) {
+      destroyTileset(parked.tileset);
+      parked = null;
+    }
+    photorealStatus = { route: 'none' };
     // The spec's own route first: its key, else its tokens, else the
     // renderer's credentials.
     const googleApiKey =
       spec.key ?? (spec.token ? '' : (credentials.googleApiKey ?? ''));
     const token = spec.token ?? credentials.googleTokens;
-    const result = await loadPhotorealisticTileset(Cesium, {
+    const result = await loadPhotoreal(Cesium, {
       googleApiKey,
       // A renewal names the token it replaces.
       googleTokens: token ? { token: (options) => token(options) } : null,
@@ -224,6 +299,7 @@ export function createCesiumGlobe(
       };
     } else {
       photoreal = scene.primitives.add(result.tileset);
+      photorealSpec = spec;
       photorealStatus = { route: ROUTES[result.route] ?? 'google' };
     }
     imagery.sync();
@@ -616,6 +692,10 @@ export function createCesiumGlobe(
       if (disposed) return;
       disposed = true;
       photorealGen += 1;
+      if (parked) {
+        destroyTileset(parked.tileset);
+        parked = null;
+      }
       terrainGen += 1;
       baseGen += 1;
       baseLoad?.abort();

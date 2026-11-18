@@ -43,6 +43,7 @@ import {
   transitModelSpec,
 } from '../../data/fleetModels.js';
 import { createFleetModelLayer } from '../../data/fleetModelInstances.js';
+import { groundVehiclePartState } from '../../data/modelPartDrivers.js';
 
 /** Layers built so far, so each one's draw sets have ids of their own. */
 let instances = 0;
@@ -944,6 +945,25 @@ export function createRendering({ state, services, parts }) {
       display: fleet.display,
       policy: fleet.policy,
       resolveAsset: fleet.resolveAsset,
+      partState: vehiclePartState,
+    });
+  }
+
+  /**
+   * Wheels rolling at the speed it is drawn moving at (else its reported
+   * one), doors open while it stands at a stop.
+   */
+  function vehiclePartState(item, table) {
+    const entry = item.entry;
+    const drawn = entry?.sample?.segmentSpeedMps;
+    const reported = entry?.record?.speedMps;
+    return groundVehiclePartState(table, {
+      speedMps: Number.isFinite(drawn)
+        ? drawn
+        : Number.isFinite(reported)
+          ? reported
+          : null,
+      atStop: entry?.record?.status === 'STOPPED_AT',
     });
   }
 
