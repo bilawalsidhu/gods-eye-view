@@ -4329,7 +4329,7 @@
   "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · 第 {number} 號警報 · 發布於 {time}",
   "NOAA SWPC solar wind": "NOAA SWPC 太陽風",
   "extrapolated": "外推",
-  "Solar wind feed unavailable": "太陽風資料來源無法使用",
+  "Solar wind feed unavailable": "太陽風數據源不可用",
   "Field lines not re-traced · previous lines kept": "磁力線未重新追蹤 · 保留先前的磁力線",
   "Magnetosphere": "磁層"
 }
