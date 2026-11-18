@@ -4138,5 +4138,15 @@
   "Move down": "Flytta ned",
   "Click a shot to go to it, double-click to rename.": "Klicka på en tagning för att gå till den, dubbelklicka för att byta namn.",
   "Back to live at the starting view": "Tillbaka till live i startvyn",
-  "Exit cockpit to fly to a bike share city": "Lämna cockpit för att flyga till en stad med lånecyklar"
+  "Exit cockpit to fly to a bike share city": "Lämna cockpit för att flyga till en stad med lånecyklar",
+  "Units: metric": "Enheter: metriska",
+  "Units: imperial": "Enheter: imperiska",
+  "Switch to metric units (°C, km, m, km/h)": "Byt till metriska enheter (°C, km, m, km/h)",
+  "Switch to imperial units (°F, mi, ft, mph)": "Byt till imperiska enheter (°F, mi, ft, mph)",
+  "{n} mi": "{n} mi",
+  "{n} mph": "{n} mph",
+  "{value} MPH": "{value} MPH",
+  "mi": "mi",
+  "mm": "mm",
+  "unit of length|in": "in"
 }

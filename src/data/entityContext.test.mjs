@@ -504,3 +504,20 @@ test('a card shows the photo its layer looked up: the tracked airliner, the sele
     'CC BY 4.0',
   );
 });
+
+test('the imperial system converts lengths and road speeds, never aviation units', () => {
+  const imperial = { system: 'imperial' };
+  assert.equal(formatFact('altitudeM', 10_000, imperial).value, '32,808 ft');
+  assert.equal(formatFact('altitudeM', 408_000, imperial).value, '254 mi');
+  assert.equal(formatFact('altitudeM', 408_000).value, '408 km');
+  assert.equal(
+    formatFact('speedMps', 10, { kind: 'vehicle', ...imperial }).value,
+    '22 mph',
+  );
+  assert.equal(formatFact('speedMps', 100, imperial).value, '194 kt');
+  assert.equal(formatFact('windKt', 30, imperial).value, '30 kt');
+  assert.equal(formatFact('pressureHpa', 1009, imperial).value, '1,009 hPa');
+  assert.equal(formatFact('depthKm', 10, imperial).value, '6.2 mi');
+  assert.equal(formatFact('lengthM', 100, imperial).value, '328 ft');
+  assert.equal(formatFact('lengthM', 100).value, '100 m');
+});

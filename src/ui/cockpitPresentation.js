@@ -6,6 +6,7 @@ import {
   roundHeadingDegrees,
 } from '../data/headingDegrees.js';
 import { kilometreDigits } from '../data/distanceFormat.js';
+import { METRES_PER_MILE, usesImperial } from '../units.js';
 
 export const COCKPIT_HEADING_SLEW_DPS = 28;
 
@@ -120,9 +121,20 @@ export function formatCockpitCoordinate(value, positive, negative) {
 
 /**
  * A contact distance such as `4.2 KM` / `44 KM` in the active language
- * (`4,2 КМ`): one decimal under 10 km, whole kilometres beyond.
+ * (`4,2 КМ`): one decimal under 10 km, whole kilometres beyond. Miles in the
+ * imperial system (src/units.js), by the same rule.
  */
 export function formatCockpitDistance(distanceM) {
+  if (usesImperial()) {
+    const miles = distanceM / METRES_PER_MILE;
+    const mileDigits = Math.round(miles * 10) < 100 ? 1 : 0;
+    return cockpitUnitCase(
+      formatQuantity(miles, 'mi', {
+        minimumFractionDigits: mileDigits,
+        maximumFractionDigits: mileDigits,
+      }),
+    );
+  }
   const digits = kilometreDigits(distanceM);
   const distance = formatQuantity(distanceM / 1000, 'km', {
     minimumFractionDigits: digits,

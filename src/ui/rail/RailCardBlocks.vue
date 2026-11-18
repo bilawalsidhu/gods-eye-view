@@ -38,7 +38,7 @@ function legendView(legend) {
   const visible = colors.length >= 2 && colors.length === legend.colors.length;
   const zeroVisible =
     visible &&
-    legend.units === '°C' &&
+    (legend.units === '°C' || legend.units === '°F') &&
     Number.isInteger(legend.zeroIndex) &&
     legend.zeroIndex >= 0 &&
     legend.zeroIndex < colors.length;

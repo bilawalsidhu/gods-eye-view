@@ -6,6 +6,7 @@
  */
 import { formatNumber, getLocale, t } from './i18n/index.js';
 import { unitLabel } from './ui/unitLabels.js';
+import { METRES_PER_MILE, usesImperial } from './units.js';
 import { localizePlaceName } from './ui/placeNames.js';
 
 /**
@@ -41,7 +42,9 @@ export const LOCALIZED_LOCALITY = Object.freeze({
     t('NEAR {poi} ({city}) {distance}', {
       poi: poi.toLocaleUpperCase(getLocale()),
       city: localizePlaceName(city).toLocaleUpperCase(getLocale()),
-      distance: hudQuantity(Math.round(distKm), 'km'),
+      distance: usesImperial()
+        ? hudQuantity(Math.round((distKm * 1000) / METRES_PER_MILE), 'mi')
+        : hudQuantity(Math.round(distKm), 'km'),
     }),
   sector: ({ latDeg, lonDeg }) =>
     t('SECTOR {lat} {lon}', {

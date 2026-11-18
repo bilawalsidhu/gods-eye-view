@@ -4241,5 +4241,15 @@
   "Move down": "הזזה למטה",
   "Click a shot to go to it, double-click to rename.": "לחץ על שוט כדי לעבור אליו, לחיצה כפולה לשינוי שם.",
   "Back to live at the starting view": "חזרה לשידור החי בתצוגת הפתיחה",
-  "Exit cockpit to fly to a bike share city": "צא מתא הטייס כדי לטוס לעיר עם שיתוף אופניים"
+  "Exit cockpit to fly to a bike share city": "צא מתא הטייס כדי לטוס לעיר עם שיתוף אופניים",
+  "Units: metric": "יחידות: מטריות",
+  "Units: imperial": "יחידות: אימפריאליות",
+  "Switch to metric units (°C, km, m, km/h)": "מעבר ליחידות מטריות (°C, km, m, km/h)",
+  "Switch to imperial units (°F, mi, ft, mph)": "מעבר ליחידות אימפריאליות (°F, mi, ft, mph)",
+  "{n} mi": "{n} mi",
+  "{n} mph": "{n} mph",
+  "{value} MPH": "{value} מייל לשעה",
+  "mi": "mi",
+  "mm": "מ״מ",
+  "unit of length|in": "in"
 }

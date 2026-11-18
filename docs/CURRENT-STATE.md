@@ -5849,6 +5849,38 @@ Shipped locales: **en** (source and fallback), **ar**, **de**, **es**, **fr**, *
   `data-i18n-runtime`, or `// i18n-ignore: <reason>`. `src/tools/` is skipped:
   it writes for AI clients, not the page.
 
+### Measurement units
+
+The page reads in **metric** (°C, km, m, km/h, mm) or **imperial** (°F, mi,
+ft, mph, in). The ruler button in the bottom-right corner row, beside the
+language picker (`src/ui/views/panels/UnitSystemToggle.vue`), shows the
+system in use as `°C` or `°F`; one press switches and keeps the choice for the
+next visit (`gev:units:v1`). Metric is the default, and metric text reads
+exactly as it did before the switch existed.
+
+- **State.** `src/units.js` holds the choice (`getUnitSystem`,
+  `setUnitSystem`, `onUnitSystemChange`) and the conversion constants. Like the
+  locale, it is a plain value until `src/ui/unitSystem.js` binds it to a Vue
+  ref, so a view that formats a quantity while rendering follows a switch
+  without a listener.
+- **Formatting.** `src/ui/unitLabels.js` adds `formatTemperature`,
+  `formatDistance`, `formatRoadSpeed`, `formatHeight` and
+  `formatPrecipitation`; `distanceParts` and `formatDistanceText`
+  (`src/data/distanceFormat.js`) give feet below 1,000 ft, then miles, in the
+  imperial system, so directions, awareness, annotations and route steps
+  follow it. Entity facts (`formatFact`) take a `system` option.
+- **What converts:** weather (temperature, feels-like, wind, visibility, rain),
+  the wind layer's temperature legend and readings, its speed unit until a
+  units chip is chosen, entity-card and context distances, HUD altitude, view
+  window and locality distance, camera and satellite altitude graphs,
+  satellite altitude, cockpit contact distance, context radius and eye height,
+  voice result-card distances.
+- **What does not:** aviation and marine units (feet and knots for aircraft,
+  knots and hPa for storms, NM on the cockpit radar), imagery resolution in
+  metres, readings written for AI tools and share-link parameters. Text
+  already drawn on the globe or in a card that is not a Vue view (a measurement
+  label, the cockpit briefing) keeps its units until it is drawn again.
+
 ## Canonical Docs Order
 
 Use docs in this order when details conflict:

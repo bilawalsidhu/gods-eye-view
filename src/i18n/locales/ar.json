@@ -4550,5 +4550,15 @@
   "Move down": "نقل لأسفل",
   "Click a shot to go to it, double-click to rename.": "انقر على لقطة للانتقال إليها، وانقر عليها نقرًا مزدوجًا لإعادة تسميتها.",
   "Back to live at the starting view": "العودة إلى البث المباشر في العرض الأولي",
-  "Exit cockpit to fly to a bike share city": "اخرج من قمرة القيادة للانتقال إلى مدينة بها مشاركة دراجات"
+  "Exit cockpit to fly to a bike share city": "اخرج من قمرة القيادة للانتقال إلى مدينة بها مشاركة دراجات",
+  "Units: metric": "الوحدات: مترية",
+  "Units: imperial": "الوحدات: إمبراطورية",
+  "Switch to metric units (°C, km, m, km/h)": "التبديل إلى الوحدات المترية (°C، كم، م، كم/س)",
+  "Switch to imperial units (°F, mi, ft, mph)": "التبديل إلى الوحدات الإمبراطورية (°F، ميل، قدم، ميل/س)",
+  "{n} mi": "{n} ميل",
+  "{n} mph": "{n} ميل/س",
+  "{value} MPH": "{value} ميل/س",
+  "mi": "ميل",
+  "mm": "مم",
+  "unit of length|in": "بوصة"
 }

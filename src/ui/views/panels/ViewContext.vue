@@ -11,6 +11,8 @@ import { entityKind } from '../../../data/entityContext.js';
 import SpotConditions from './SpotConditions.vue';
 import SunDial from './SunDial.vue';
 import AltitudeGraph from './AltitudeGraph.vue';
+import { formatDistance } from '../../unitLabels.js';
+import { usesImperial } from '../../../units.js';
 
 // What the Context panel shows while nothing is picked: where the camera is
 // looking (place, region, local solar time, daylight, how wide the view is),
@@ -271,8 +273,11 @@ function turnOn(layer) {
   setTimeout(() => tick.value++, 1500);
 }
 
+// Metric text stays as it was; the imperial system converts (src/units.js).
 const distance = (km) =>
-  km < 1
+  usesImperial()
+    ? formatDistance(km * 1000, { system: 'imperial' })
+    : km < 1
     ? t('{n} m', { n: formatNumber(Math.round(km * 1000)) })
     : t('{n} km', { n: formatNumber(km < 10 ? Number(km.toFixed(1)) : Math.round(km)) });
 </script>

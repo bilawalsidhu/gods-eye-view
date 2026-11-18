@@ -4344,5 +4344,15 @@
   "Move down": "Перемістити вниз",
   "Click a shot to go to it, double-click to rename.": "Клацніть кадр, щоб перейти до нього, двічі — щоб перейменувати.",
   "Back to live at the starting view": "Повернутися до прямого ефіру в початковому вигляді",
-  "Exit cockpit to fly to a bike share city": "Вийдіть із кабіни, щоб перелетіти до міста з прокатом велосипедів"
+  "Exit cockpit to fly to a bike share city": "Вийдіть із кабіни, щоб перелетіти до міста з прокатом велосипедів",
+  "Units: metric": "Одиниці: метричні",
+  "Units: imperial": "Одиниці: імперські",
+  "Switch to metric units (°C, km, m, km/h)": "Перейти на метричні одиниці (°C, км, м, км/год)",
+  "Switch to imperial units (°F, mi, ft, mph)": "Перейти на імперські одиниці (°F, миль, фт, миль/год)",
+  "{n} mi": "{n} миль",
+  "{n} mph": "{n} миль/год",
+  "{value} MPH": "{value} МИЛЬ/ГОД",
+  "mi": "миль",
+  "mm": "мм",
+  "unit of length|in": "дюйм"
 }

@@ -1,7 +1,16 @@
 import { formatNumber, getLocale, isolate, msg, t } from '../i18n/index.js';
+import { distanceParts } from '../data/distanceFormat.js';
+import {
+  FEET_PER_METRE,
+  MM_PER_INCH,
+  MPH_PER_KPH,
+  celsiusToFahrenheit,
+  usesImperial,
+} from '../units.js';
 
 // Unit ids stay English in data, params and AI-tool readings; only the label
-// shown on the page is translated. dBZ and °C read the same in every language.
+// shown on the page is translated. dBZ, °C and °F read the same in every
+// language.
 const UNIT_LABELS = Object.freeze({
   'km/h': msg('km/h'),
   'm/s': msg('m/s'),
@@ -10,6 +19,8 @@ const UNIT_LABELS = Object.freeze({
   kt: msg('kt'),
   kts: msg('kts'),
   ft: msg('ft'),
+  mi: msg('mi'),
+  mm: msg('mm'),
   km: msg('km'),
   m: msg('m'),
   h: msg('h'),
@@ -20,6 +31,8 @@ const UNIT_LABELS = Object.freeze({
 
 /** The display label for a unit id; unknown units pass through unchanged. */
 export function unitLabel(unit) {
+  // "in" alone is also the preposition, so the unit has its own entry.
+  if (unit === 'in') return t('in', { context: 'unit of length' });
   return Object.hasOwn(UNIT_LABELS, unit) ? t(UNIT_LABELS[unit]) : unit || '';
 }
 
@@ -75,4 +88,70 @@ export function formatScaleRange(low, high, units, verbatim = false) {
   const unit = verbatim ? units || '' : unitLabel(units);
   const range = `${formatScaleLabel(low)} — ${formatScaleLabel(high)}`;
   return unit ? `${range}\u00a0${isolate(unit)}` : range;
+}
+
+// Quantities in the page's unit system (src/units.js). Each reads the system
+// as it formats, so a view that calls one while rendering follows a switch.
+// Readings for AI tools and share links keep their metric source values.
+
+/** `21 °C` / `70 °F` from degrees Celsius; whole degrees unless `options` say. */
+export function formatTemperature(celsius, options) {
+  if (!Number.isFinite(celsius)) return '';
+  return usesImperial()
+    ? formatQuantity(
+        celsiusToFahrenheit(celsius),
+        '°F',
+        wholeByDefault(options),
+      )
+    : formatQuantity(celsius, '°C', wholeByDefault(options));
+}
+
+/** A temperature in the page's system without its unit: 21 / 70. */
+export function temperatureValue(celsius) {
+  if (!Number.isFinite(celsius)) return null;
+  return Math.round(usesImperial() ? celsiusToFahrenheit(celsius) : celsius);
+}
+
+/** `850 m` / `4.6 km`, or `920 ft` / `2.9 mi`: see distanceParts. */
+export function formatDistance(meters, options) {
+  const parts = distanceParts(meters, options);
+  if (!parts) return '';
+  return formatQuantity(parts.value, parts.unit, {
+    minimumFractionDigits: parts.digits,
+    maximumFractionDigits: parts.digits,
+  });
+}
+
+/** A ground speed: `42 km/h` / `26 mph`, whole by default. */
+export function formatRoadSpeed(kph, options) {
+  if (!Number.isFinite(kph)) return '';
+  return usesImperial()
+    ? formatQuantity(kph * MPH_PER_KPH, 'mph', wholeByDefault(options))
+    : formatQuantity(kph, 'km/h', wholeByDefault(options));
+}
+
+/** A height or elevation: `120 m` / `394 ft`, whole by default. */
+export function formatHeight(meters, options) {
+  if (!Number.isFinite(meters)) return '';
+  return usesImperial()
+    ? formatQuantity(meters * FEET_PER_METRE, 'ft', wholeByDefault(options))
+    : formatQuantity(meters, 'm', wholeByDefault(options));
+}
+
+/** Rain or snow depth: `1.2 mm` / `0.05 in`. */
+export function formatPrecipitation(mm) {
+  if (!Number.isFinite(mm)) return '';
+  return usesImperial()
+    ? formatQuantity(mm / MM_PER_INCH, 'in', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    : formatQuantity(mm, 'mm', {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      });
+}
+
+function wholeByDefault(options) {
+  return { maximumFractionDigits: 0, ...options };
 }

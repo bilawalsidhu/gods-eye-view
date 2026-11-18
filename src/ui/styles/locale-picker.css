@@ -27,8 +27,10 @@
   display: flex;
 }
 
-/* Same HUD frame as #key-setup-chip, so the two read as one group. */
-.locale-picker-button {
+/* Same HUD frame as #key-setup-chip, so the row reads as one group. The
+   metric / imperial switch (UnitSystemToggle.vue) wears the same frame. */
+.locale-picker-button,
+.unit-system-button {
   display: flex;
   align-items: center;
   gap: 0.35rem;
@@ -60,7 +62,9 @@
 
 .locale-picker-button:hover,
 .locale-picker-button:focus-visible,
-.locale-picker.is-open .locale-picker-button {
+.locale-picker.is-open .locale-picker-button,
+.unit-system-button:hover,
+.unit-system-button:focus-visible {
   background: linear-gradient(
     145deg,
     rgba(14, 38, 51, 0.95),
@@ -71,11 +75,14 @@
 }
 
 .locale-picker-button:hover,
-.locale-picker-button:focus-visible {
+.locale-picker-button:focus-visible,
+.unit-system-button:hover,
+.unit-system-button:focus-visible {
   transform: translateY(-1px);
 }
 
-.locale-picker-globe {
+.locale-picker-globe,
+.unit-system-icon {
   flex: none;
   width: 0.95rem;
   height: 0.95rem;
@@ -277,6 +284,16 @@ body.cockpit-mode .cockpit-position-readout {
   }
 
   .locale-picker-button {
+    padding-inline: 0.5rem;
+  }
+
+  /* Phone: the units switch keeps its °C / °F and drops the ruler. */
+  .unit-system-icon {
+    display: none;
+  }
+
+  .unit-system-button {
+    justify-content: center;
     padding-inline: 0.5rem;
   }
 

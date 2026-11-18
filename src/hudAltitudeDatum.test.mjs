@@ -138,8 +138,11 @@ test('the corner ALT readout prints the MSL height, never the ellipsoidal one', 
     true,
     'the ALT readout must convert the camera height before printing it',
   );
+  // Metres or, in the imperial system, feet: both from altMslM.
   assert.equal(
-    has(/`ALT: \$\{Math\.round\(altMslM\)\}m/),
+    has(/`\$\{Math\.round\(altMslM\)\}m`/) &&
+      has(/`\$\{Math\.round\(altMslM \* FEET_PER_METRE\)\}ft`/) &&
+      has(/`ALT: \$\{altReadout\}/),
     true,
     'the #hud-alt line must print altMslM',
   );

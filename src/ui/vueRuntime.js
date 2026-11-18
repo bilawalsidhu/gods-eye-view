@@ -1,6 +1,7 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import { applicationI18n } from './i18n.js';
+import { applicationUnitSystem } from './unitSystem.js';
 
 let pagePinia = null;
 
@@ -21,6 +22,8 @@ export function applicationPinia() {
  * @returns {{pinia: import('pinia').Pinia, mount: Function, destroy: Function}}
  */
 export function createUiRuntime({ pinia = createPinia() } = {}) {
+  // Views that format quantities follow the unit system from their first render.
+  applicationUnitSystem();
   const apps = new Set();
   return {
     pinia,

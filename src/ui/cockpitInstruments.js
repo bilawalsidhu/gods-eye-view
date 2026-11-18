@@ -30,6 +30,7 @@ import {
 } from './cockpitPresentation.js';
 import { createVisionState } from './cockpitInstrumentState.js';
 import { unitLabel } from './unitLabels.js';
+import { FEET_PER_METRE, usesImperial } from '../units.js';
 import {
   VESSEL_BRIDGE_PITCH_DEG,
   vesselCameraProfile,
@@ -461,7 +462,10 @@ function updateVesselHud(info, nowMs, forceContext) {
   view.meta.text = t('{vesselType} · {feedState} · EYE {height}', {
     vesselType: info.typeLabel || t('VESSEL'),
     feedState: info.stale ? t('STALE FEED') : t('LIVE AIS'),
-    height: `${formatNumber(Math.round(eyeHeightM))} ${cockpitUnitCase(unitLabel('m'))}`,
+    // Feet in the imperial system (src/units.js).
+    height: usesImperial()
+      ? `${formatNumber(Math.round(eyeHeightM * FEET_PER_METRE))} ${cockpitUnitCase(unitLabel('ft'))}`
+      : `${formatNumber(Math.round(eyeHeightM))} ${cockpitUnitCase(unitLabel('m'))}`,
   });
   view.meta.emergency = false;
   view.layer = info.layerId;

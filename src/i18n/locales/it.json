@@ -4241,5 +4241,15 @@
   "Move down": "Sposta giù",
   "Click a shot to go to it, double-click to rename.": "Fai clic su uno scatto per andarci, doppio clic per rinominarlo.",
   "Back to live at the starting view": "Torna alla diretta nella vista iniziale",
-  "Exit cockpit to fly to a bike share city": "Esci dalla cabina per volare verso una città con bike sharing"
+  "Exit cockpit to fly to a bike share city": "Esci dalla cabina per volare verso una città con bike sharing",
+  "Units: metric": "Unità: metriche",
+  "Units: imperial": "Unità: imperiali",
+  "Switch to metric units (°C, km, m, km/h)": "Passa alle unità metriche (°C, km, m, km/h)",
+  "Switch to imperial units (°F, mi, ft, mph)": "Passa alle unità imperiali (°F, mi, ft, mph)",
+  "{n} mi": "{n} mi",
+  "{n} mph": "{n} mph",
+  "{value} MPH": "{value} MPH",
+  "mi": "mi",
+  "mm": "mm",
+  "unit of length|in": "in"
 }

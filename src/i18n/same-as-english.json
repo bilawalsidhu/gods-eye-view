@@ -296,7 +296,13 @@
     "{n} mm",
     "Route",
     "3D",
-    "KT"
+    "KT",
+    "{n} mi",
+    "{n} mph",
+    "{value} MPH",
+    "mi",
+    "mm",
+    "unit of length|in"
   ],
   "es": [
     "1 min/s",
@@ -490,7 +496,13 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "{n} mi",
+    "{n} mph",
+    "{value} MPH",
+    "mi",
+    "mm",
+    "unit of length|in"
   ],
   "fr": [
     "1 min/s",
@@ -748,7 +760,12 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "{n} mi",
+    "{n} mph",
+    "{value} MPH",
+    "mi",
+    "mm"
   ],
   "it": [
     "1 min/s",
@@ -982,7 +999,13 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "{n} mi",
+    "{n} mph",
+    "{value} MPH",
+    "mi",
+    "mm",
+    "unit of length|in"
   ],
   "ja": [
     "1090 MHz",
@@ -1066,7 +1089,12 @@
     "{n} hPa",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "{n} mi",
+    "{n} mph",
+    "mi",
+    "mm",
+    "unit of length|in"
   ],
   "pt": [
     "1 min/s",
@@ -1260,7 +1288,13 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "{n} mi",
+    "{n} mph",
+    "{value} MPH",
+    "mi",
+    "mm",
+    "unit of length|in"
   ],
   "ru": [
     "1900–1945",
@@ -1498,7 +1532,13 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "{n} mi",
+    "{n} mph",
+    "{value} MPH",
+    "mi",
+    "mm",
+    "unit of length|in"
   ],
   "uk": [
     "1900–1945",
@@ -1622,7 +1662,10 @@
     "{n} MW",
     "{n}%",
     "{n} hPa",
-    "3D"
+    "3D",
+    "{n} mi",
+    "{n} mph",
+    "mi"
   ],
   "zh-Hant": [
     "1090 MHz",
@@ -1707,7 +1750,10 @@
     "{n} MW",
     "{n}%",
     "{n} hPa",
-    "3D"
+    "3D",
+    "{n} mi",
+    "{n} mph",
+    "mi"
   ],
   "he": [
     "{speed} kn",
@@ -1824,6 +1870,10 @@
     "{n} hPa",
     "{kind} {name}",
     "3D",
-    "KT"
+    "KT",
+    "{n} mi",
+    "{n} mph",
+    "mi",
+    "unit of length|in"
   ]
 }

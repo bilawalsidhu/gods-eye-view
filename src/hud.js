@@ -31,6 +31,7 @@ const hudTime = worldTimeFor('hud');
 const skyTime = worldTimeFor('sky');
 import { composeLocalityTag } from './hudLocality.js';
 import { hudQuantity, LOCALIZED_LOCALITY } from './hudLocalityFormat.js';
+import { FEET_PER_METRE, METRES_PER_MILE, usesImperial } from './units.js';
 import {
   ellipsoidalToMslDisplayM,
   ensureGeoidReady,
@@ -563,7 +564,10 @@ export class IntelHUD {
     const altMslM = ellipsoidalToMslDisplayM(altM, geoidN);
     const sunEl = this._estimateSunElevation(latDeg, lonDeg);
     // i18n-ignore: sensor codes
-    readouts.alt = `ALT: ${Math.round(altMslM)}m   SUN: ${sunEl.toFixed(1)}° EL`;
+    const altReadout = usesImperial()
+      ? `${Math.round(altMslM * FEET_PER_METRE)}ft`
+      : `${Math.round(altMslM)}m`;
+    readouts.alt = `ALT: ${altReadout}   SUN: ${sunEl.toFixed(1)}° EL`;
 
     // Collection timestamp
     const now = new Date(hudTime());
@@ -808,12 +812,20 @@ export class IntelHUD {
     const altDisplayM = Number.isFinite(m.altMslM) ? m.altMslM : m.altM;
     // Display only: the AI summary request carries its own context, so this
     // line is built in the active language.
-    const altTag =
-      altDisplayM >= 1000
+    // The imperial system (src/units.js) reads feet, then miles.
+    const imperial = usesImperial();
+    const altFeet = altDisplayM * FEET_PER_METRE;
+    const altTag = imperial
+      ? altFeet >= 5280
+        ? hudQuantity(altDisplayM / METRES_PER_MILE, 'mi', 1)
+        : hudQuantity(Math.round(altFeet), 'ft')
+      : altDisplayM >= 1000
         ? hudQuantity(altDisplayM / 1000, 'km', 1)
         : hudQuantity(Math.round(altDisplayM), 'm');
+    const windowSpan = (km) =>
+      Math.max(1, Math.round(imperial ? (km * 1000) / METRES_PER_MILE : km));
     const winTag = window
-      ? `${hudQuantity(Math.max(1, Math.round(window.widthKm)), '')}x${hudQuantity(Math.max(1, Math.round(window.heightKm)), 'km')}`
+      ? `${hudQuantity(windowSpan(window.widthKm), '')}x${hudQuantity(windowSpan(window.heightKm), imperial ? 'mi' : 'km')}`
       : t('N/A');
     // NEAR the nearest catalogued POI at metro range; otherwise the lat/lon sector.
     const localityTag = composeLocalityTag(

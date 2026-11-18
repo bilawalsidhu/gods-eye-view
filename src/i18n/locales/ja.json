@@ -4035,5 +4035,15 @@
   "Move down": "下へ移動",
   "Click a shot to go to it, double-click to rename.": "ショットをクリックしてそこへ移動、ダブルクリックで名前を変更します。",
   "Back to live at the starting view": "ライブに戻り、最初の表示へ",
-  "Exit cockpit to fly to a bike share city": "シェアサイクルのある都市へ移動するにはコックピットを終了してください"
+  "Exit cockpit to fly to a bike share city": "シェアサイクルのある都市へ移動するにはコックピットを終了してください",
+  "Units: metric": "単位：メートル法",
+  "Units: imperial": "単位：ヤード・ポンド法",
+  "Switch to metric units (°C, km, m, km/h)": "メートル法の単位に切り替え（°C、km、m、km/h）",
+  "Switch to imperial units (°F, mi, ft, mph)": "ヤード・ポンド法の単位に切り替え（°F、mi、ft、mph）",
+  "{n} mi": "{n} mi",
+  "{n} mph": "{n} mph",
+  "{value} MPH": "{value} mph",
+  "mi": "mi",
+  "mm": "mm",
+  "unit of length|in": "in"
 }

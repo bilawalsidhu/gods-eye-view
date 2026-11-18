@@ -31,6 +31,7 @@ import { layerNameForId, sourceLabel } from '../ui/layerNames.js';
 import { localizePlaceName } from '../ui/placeNames.js';
 import { translateStatusMessage } from '../ui/statusText.js';
 import { formatQuantity } from '../ui/unitLabels.js';
+import { METRES_PER_MILE, usesImperial } from '../units.js';
 
 /** Split "a; b" caveat text into separate notes. */
 function notesOf(...values) {
@@ -153,7 +154,14 @@ function shownCount(count, noun) {
   }
 }
 
-const shownRadius = (km) => formatQuantity(Number(km), 'km');
+// Miles in the imperial system (src/units.js).
+const shownRadius = (km) =>
+  usesImperial()
+    ? formatQuantity(
+        Math.round((Number(km) * 10_000) / METRES_PER_MILE) / 10,
+        'mi',
+      )
+    : formatQuantity(Number(km), 'km');
 
 const FIXED_SCOPES = new Map(
   [msg('anywhere in the loaded data'), msg('in view')].map((text) => [

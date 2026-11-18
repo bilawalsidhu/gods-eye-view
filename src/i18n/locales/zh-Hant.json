@@ -4035,5 +4035,15 @@
   "Move down": "下移",
   "Click a shot to go to it, double-click to rename.": "單擊鏡頭即可轉到該鏡頭，雙擊可重命名。",
   "Back to live at the starting view": "回到實時並返回初始視圖",
-  "Exit cockpit to fly to a bike share city": "退出駕駛艙以飛往有共享單車的城市"
+  "Exit cockpit to fly to a bike share city": "退出駕駛艙以飛往有共享單車的城市",
+  "Units: metric": "單位：公制",
+  "Units: imperial": "單位：英制",
+  "Switch to metric units (°C, km, m, km/h)": "切換到公制單位（°C、km、m、km/h）",
+  "Switch to imperial units (°F, mi, ft, mph)": "切換到英制單位（°F、mi、ft、mph）",
+  "{n} mi": "{n} mi",
+  "{n} mph": "{n} mph",
+  "{value} MPH": "{value} mph",
+  "mi": "mi",
+  "mm": "毫米",
+  "unit of length|in": "英寸"
 }
