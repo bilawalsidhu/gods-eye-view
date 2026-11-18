@@ -3382,6 +3382,11 @@ catalogued systems). The chip stays ON. A loading or failed Bike Share city
 shows its own text. Leaving coverage clears the last-update time. The voice
 analyst gets the same English notes; both translate them through
 `translateStatusMessage` (`src/ui/statusText.js`).
+Above its gate Bike Share also marks every covered city on the globe: a
+green, white-ringed dot per registry system, 5 km up so terrain never hides
+it, shown only while the layer is on and stations are not drawn. Clicking one
+flies straight down into the city from 20 km, an explicit camera action like
+the other camera controls (`attachShellServices({ runNavigation })`).
 
 ## Places and CCTV request bounds
 
