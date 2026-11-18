@@ -68,10 +68,25 @@ const RIGHT_STACK_OBSTACLE_SELECTOR = [
   '#world-timeline',
 ].join(', ');
 /** True when a mutation adds or removes the Stories card (`#hPop`). */
+const OPENING_STORIES = 'first-run-opening-stories';
+/**
+ * True when a mutation can show or hide the Stories card (`#hPop`): the card
+ * itself coming or going, or the welcome that hides it (`#first-run-launcher`,
+ * and the body class it sets while BROWSE STORIES loads) ending.
+ */
 function movesStoriesCard(record) {
+  if (record.type === 'attributes')
+    return (
+      (record.oldValue || '').split(/\s+/).includes(OPENING_STORIES) !==
+      record.target.classList.contains(OPENING_STORIES)
+    );
   for (const list of [record.addedNodes, record.removedNodes])
     for (const node of list)
-      if (node.id === 'hPop' || node.querySelector?.('#hPop')) return true;
+      if (
+        ['hPop', 'first-run-launcher'].includes(node.id) ||
+        node.querySelector?.('#hPop, #first-run-launcher')
+      )
+        return true;
   return false;
 }
 
@@ -276,6 +291,18 @@ export class PanelLayoutController {
           subtree: true,
           childList: true,
         });
+        const welcomeHost = document.querySelector('[data-gev-view="welcome"]');
+        if (welcomeHost)
+          this._storiesCardObserver.observe(welcomeHost, {
+            subtree: true,
+            childList: true,
+          });
+        if (document.body)
+          this._storiesCardObserver.observe(document.body, {
+            attributes: true,
+            attributeFilter: ['class'],
+            attributeOldValue: true,
+          });
         this._storiesCardShownHandler = (event) => {
           if (event.target?.id === 'hPop') this._scheduleRightPanelLayout();
         };
