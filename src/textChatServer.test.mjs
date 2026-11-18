@@ -830,6 +830,58 @@ test('OPENAI_CHAT_BASE_URL sends typed chat to a server of your own', async (t) 
   assert.equal(seen[0].body.max_tokens, 4096);
   assert.equal(seen[0].body.tools[0].function.name, 'fly_to');
 
+  // Ollama's own reply shape, as qwen3:14b sends it: an empty content, its
+  // reasoning in a field of its own, and an `index` on each tool call.
+  const ollamaReply = {
+    id: 'chatcmpl-720',
+    object: 'chat.completion',
+    model: 'qwen3:14b',
+    system_fingerprint: 'fp_ollama',
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: 'assistant',
+          content: '',
+          reasoning: 'The user wants Paris.',
+          tool_calls: [
+            {
+              id: 'call_tbd74k1n',
+              index: 0,
+              type: 'function',
+              function: { name: 'fly_to', arguments: '{"lat":48.85}' },
+            },
+          ],
+        },
+        finish_reason: 'tool_calls',
+      },
+    ],
+    usage: {
+      prompt_tokens: 12400,
+      prompt_tokens_details: { cached_tokens: 0 },
+      completion_tokens: 109,
+      total_tokens: 12509,
+    },
+  };
+  const real = await fixture(
+    t,
+    providers.openai,
+    async () => Response.json(ollamaReply),
+    { environment, resolveApiKey: undefined },
+  );
+  const realResponse = await real.send();
+  const realBody = await realResponse.json();
+  assert.equal(realResponse.status, 200, 'Ollama tool calls are accepted');
+  assert.equal(realBody.content.content, null);
+  assert.deepEqual(realBody.content.tool_calls, [
+    {
+      id: 'call_tbd74k1n',
+      type: 'function',
+      function: { name: 'fly_to', arguments: '{"lat":48.85}' },
+    },
+  ]);
+  assert.equal(realBody.content.reasoning, undefined, 'reasoning is not kept');
+
   // A malformed address is refused, never guessed at.
   const broken = await fixture(t, providers.openai, undefined, {
     environment: { OPENAI_CHAT_BASE_URL: 'ollama.lan:11434' },

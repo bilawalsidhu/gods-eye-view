@@ -106,6 +106,21 @@ export function chatApiKey(environment = process.env) {
   return own || environment.OPENAI_API_KEY;
 }
 
+/**
+ * A tool call with only the fields history keeps. Servers add their own
+ * (Ollama numbers each call with `index`); the shape check refuses any field
+ * it does not know, so extras are dropped here rather than failing the reply.
+ * Anything that is not a call object passes through for the check to refuse.
+ */
+function callFields(call) {
+  if (!object(call) || !object(call.function)) return call;
+  return {
+    id: call.id,
+    type: call.type,
+    function: { name: call.function.name, arguments: call.function.arguments },
+  };
+}
+
 /** A model's private reasoning, which some local servers leave in the reply. */
 const THINKING = /^\s*<think>[\s\S]*?<\/think>\s*/;
 
@@ -225,7 +240,9 @@ export function createOpenAiChatHandler({
       const content = {
         role: raw.role,
         content: text || null,
-        ...(raw.tool_calls?.length ? { tool_calls: raw.tool_calls } : {}),
+        ...(raw.tool_calls?.length
+          ? { tool_calls: raw.tool_calls.map(callFields) }
+          : {}),
       };
       if (
         !assistantShape(content) ||
