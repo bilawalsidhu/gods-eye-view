@@ -425,6 +425,7 @@ The [Bhote Koshi event pack](public/events/bhote-koshi-2026/README.md), under `p
 | **Natural Earth disputed areas** (11 of the source's 99 features, hand-picked; [list](src/data/local_data/natural_earth/README.md#disputed-areas-disputed_areasjson)) | `natural_earth/` | **Public domain** | ✅ (no restrictions) | "Made with Natural Earth" (courtesy credit — not legally required) |
 | **Natural Earth populated places** (7,342 points: name, position, rank)     | `natural_earth/`                  | **Public domain**                                                                                         | ✅ (no restrictions)                             | "Made with Natural Earth" (courtesy credit — not legally required)          |
 | **Wikidata cities** (31,827 settlements of 15,000 people or more: name, position, population, country) | `wikidata_cities/` | **CC0 1.0** (public domain dedication) | ✅ (no restrictions) | "City, town and village names from Wikidata (CC0)" (courtesy credit — not legally required) |
+| **Wikidata places** (137,662 settlements of 1,000 to 14,999 people, none in the cities pack, in 732 tiles of 5°: name, position, population, country) | `wikidata_places/` | **CC0 1.0** (public domain dedication) | ✅ (no restrictions) | "City, town and village names from Wikidata (CC0)" (courtesy credit — not legally required) |
 | **US Census Bureau counties** (3,235 county polygons)                       | `us_census_counties/`             | **Public domain**                                                                                         | ✅ (no restrictions)                             | "U.S. Census Bureau" (courtesy — not legally required)                      |
 | **US Census Bureau places** (32,629 city, town and CDP polygons)            | `us_census_places/`               | **Public domain**                                                                                         | ✅ (no restrictions)                             | "U.S. Census Bureau" (courtesy — not legally required)                      |
 | **Who's On First neighborhoods** (61,441 polygons)                          | `wof_neighborhoods/`              | Per source: CC BY, ODC-By, Open Government licences, CC0, PDDL, public domain (folder `ATTRIBUTION.md`)   | ✅ (attribution)                                 | "Neighborhood boundaries: Who's On First and contributors"; per-source credits in the folder |
@@ -537,6 +538,24 @@ unless they are also a living city. Names match without accents ("Sao Paulo" fin
 CC0; credited "City, town and village names from Wikidata (CC0)" as a courtesy once a name from
 the pack is shown. Rebuild: `node scripts/build-wikidata-cities.mjs`; provenance in the folder
 README. The app never calls Wikidata itself.
+
+### Wikidata places (`wikidata_places/`)
+
+Smaller settlements below the cities pack's cut-off: 137,662 places of 1,000 to 14,999 people
+that Wikidata states a population and coordinates for, read once from the Wikidata Query Service
+(built 2026-11-11), with the same columns as the cities pack. Items the cities pack already holds
+(1,084 with another stated population of 15,000 or more) are left out, and so are 1,272 second
+listings of one place (same name and country within 3 km). A lookup also prefers a city of the
+same name within 3 km over a smaller listing. They are split into 732
+tiles of 5 x 5 degrees (7,122,797 bytes of JSON, about 7.1 MB, with the index) named by their south-west corner, with an index of row counts.
+Nothing loads with the app: the Omnibar's "places near" strip, the places under a selected item
+and a small place found by name near the view read the index once and then only the tiles a
+lookup touches. CC0; credited "City, town and village names from Wikidata (CC0)" as a courtesy
+once a name from the packs is shown. Rebuild:
+`node scripts/build-wikidata-cities.mjs --tiles --min-population 1000 --max-population 15000`;
+the script that wrote the shipped tiles was not kept, and only the step from rows to files is
+checked offline (provenance and limits in the folder README). The app never calls Wikidata
+itself.
 
 ### Sky background (`sky/`)
 
