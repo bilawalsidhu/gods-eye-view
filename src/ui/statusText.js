@@ -242,10 +242,8 @@ const STATUS_PIECE_PATTERNS = [
   ],
 ];
 
-// Mapped Installations feedback (installationFeedback in
-// data/installationFeedback.js): getStats().statusMessage is English data, and
-// the Layers panel, the toast, the awareness panel and the voice card's analyst
-// note show it through here. Keep these in step with that helper.
+// Shapes of installationFeedback() (data/installationFeedback.js), which stays
+// English for the analyst. Keep them in step with its wording.
 const MAPPED_SITE_PATTERNS = [
   [
     /^(.+) — retrying in (\d+)s$/,
@@ -289,7 +287,7 @@ const MAPPED_SITE_PATTERNS = [
   ],
 ];
 
-// Every status piece shape, in matching order.
+// First match wins.
 const STATUS_SHAPES = [...STATUS_PIECE_PATTERNS, ...MAPPED_SITE_PATTERNS];
 
 /** A status piece by its shape in the UI language, or null. */

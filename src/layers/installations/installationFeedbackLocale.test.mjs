@@ -1,6 +1,4 @@
-// getStats().statusMessage is English data (it is also the analyst's empty
-// note to the model); the displays show it in the UI language through
-// translateStatusPiece (ui/statusText.js).
+// statusMessage stays English (the analyst's empty note); displays translate it.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setLocale, t, tn, translateKnown } from '../../i18n/index.js';
@@ -26,8 +24,7 @@ function inLocale(locale, run) {
   }
 }
 
-// Each layer state, the English statusMessage it reports, and how the UI
-// shows it. A retry a minute out reads "60s" (rounded up).
+// A retry a minute out reads "60s" (rounded up).
 const cases = [
   [
     { status: 'empty', lastUpdate: 1 },

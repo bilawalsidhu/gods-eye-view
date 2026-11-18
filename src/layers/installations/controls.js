@@ -259,8 +259,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         retryAt: layerState.retryAt,
         retrying: layerState.loading && Boolean(layerState.failureReason),
         failureReason: layerState.failureReason,
-        // English data: it is also the analyst's empty note to the model.
-        // Displays translate it by its shape (ui/statusText.js).
+        // English: the analyst reads it as is; displays translate it.
         statusMessage: installationFeedback({
           ...layerState,
           count: layerState.lastUpdate ? mappedCount : undefined,
