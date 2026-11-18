@@ -1,4 +1,4 @@
-const STYLE_KEYS = Object.freeze({
+export const STYLE_KEYS = Object.freeze({
   1: 'normal',
   2: 'retro',
   3: 'surveillance',
