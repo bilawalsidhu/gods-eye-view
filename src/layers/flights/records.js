@@ -92,11 +92,11 @@ export class FlightRecords {
       originCountry: origin_country,
       longitude: lon,
       latitude: lat,
-      baroAltitudeM: baro_alt,
+      baroAltitudeM: reportedBaroAlt,
       onGround: on_ground,
       speedMps: velocity,
       courseDeg: true_track,
-      ellipsoidAltitudeM: geo_alt,
+      ellipsoidAltitudeM: reportedGeoAlt,
       category,
       verticalRateMps: vertical_rate,
     } = observation;
@@ -126,15 +126,30 @@ export class FlightRecords {
     const feedType = cleanType(observation.typeCode);
     // A surface category keeps only a feed's ground type: a C1 contact whose
     // feed names an airliner type stays a vehicle.
+    // A feed's ground type holds only for a contact that behaves as one: an
+    // airport vehicle reported airborne, or faster than a vehicle drives (a
+    // test transponder, a drone), is classed as any other aircraft.
+    const driving =
+      !(Number.isFinite(velocity) && velocity > VEHICLE_MAX_SPEED_MPS) &&
+      (on_ground === true ||
+        (!Number.isFinite(reportedBaroAlt) &&
+          !Number.isFinite(reportedGeoAlt)));
     const keepFeedType =
       Boolean(feedType) &&
+      (feedType !== 'ZVEH' || driving) &&
       (!groundCategory(category) || GROUND_FEED_TYPES.has(feedType));
+    // A ground station is fixed: it stands on the ground whatever height its
+    // reports carry, as if they carried none.
+    const station = keepFeedType && feedType === 'GRND';
+    const baro_alt = station ? null : reportedBaroAlt;
+    const geo_alt = station ? null : reportedGeoAlt;
     const typeLookedUp = airframe?.typeLookedUp === true;
     const typeCode = typeLookedUp
       ? airframe.typeCode
       : ((keepFeedType ? feedType : null) ?? airframe?.typeCode ?? null);
     const onGround =
       on_ground === true ||
+      station ||
       (!Number.isFinite(baro_alt) &&
         !Number.isFinite(geo_alt) &&
         groundModel(typeCode));
@@ -485,6 +500,8 @@ function cleanType(value) {
 
 /** The types a feed gives airport vehicles (ZVEH) and ground stations (GRND). */
 const GROUND_FEED_TYPES = new Set(['ZVEH', 'GRND']);
+/** The fastest an airport vehicle drives, m/s (144 km/h); faster, it is no vehicle. */
+const VEHICLE_MAX_SPEED_MPS = 40;
 
 /** Per loaded fleet model set: whether a type, category and callsign rule draw a ground model. */
 const groundModelCaches = new WeakMap();
