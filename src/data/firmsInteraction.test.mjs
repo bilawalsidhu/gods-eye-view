@@ -25,6 +25,8 @@ import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
 import { fakeGlobePort } from '../testSupport/fakeGlobePort.mjs';
 import { bindRenderer } from '../render/rendererOf.js';
 import { HEAT_REBUILD_MS } from '../layers/firms/policy.js';
+import { registerStyleStages } from '../styles/styleStages.js';
+import { sensorPickPosition } from '../input/sensorPick.js';
 
 const LAYER_SOURCE = readLayerSource(
   path.join(path.dirname(fileURLToPath(import.meta.url)), 'firmsHeatmap.js'),
@@ -747,5 +749,57 @@ test('taking the stand-in away brings the markers and their cards back and keeps
     assert.ok(ids.includes(`selected-fire:${fireDetectionKey(fire)}`));
   } finally {
     h.cleanup();
+  }
+});
+
+test('the stand-in is asked where a marker is picked: the click as the sensor style draws it', () => {
+  const fire = makeFire();
+  const asked = [];
+  const h = harness({ fires: [fire] });
+  try {
+    registerStyleStages(h.viewer.scene, {
+      surveillance: {
+        enabled: true,
+        uniforms: { intensity: 1, pixelation: 4 },
+      },
+    });
+    h.layer.setMarkerStandIn({
+      hitTest: (screen) => {
+        asked.push(screen);
+        return fire;
+      },
+    });
+    h.click();
+    const expected = sensorPickPosition(
+      h.viewer.scene,
+      { x: 400, y: 300 },
+      h.viewer.scene.canvas,
+    );
+    assert.notDeepEqual([expected.x, expected.y], [400, 300]);
+    assert.deepEqual([asked[0].x, asked[0].y], [expected.x, expected.y]);
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("a sibling layer's item over a stand-in fire wins the click", () => {
+  const fire = makeFire();
+  let asked = 0;
+  registerPickOwner('flights', (pickedId) => pickedId === 'a1b2c3');
+  const h = harness({ fires: [fire], picked: { id: 'a1b2c3' } });
+  try {
+    h.layer.setMarkerStandIn({
+      hitTest: () => {
+        asked++;
+        return fire;
+      },
+    });
+    h.click();
+    assert.equal(asked, 0, 'the stand-in is not asked');
+    assert.equal(h.requests.length, 0, 'no camera move');
+    assert.equal(h.layer.getSelectedInfo(), null);
+  } finally {
+    h.cleanup();
+    unregisterPickOwner('flights');
   }
 });

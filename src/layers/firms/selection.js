@@ -35,19 +35,23 @@ export function createSelection({
     const input = inputFor(layerState._viewer);
     layerState._clickSubscription = input.onClick((event) => {
       const picked = event.topHit;
+      const pickedId = picked ? resolvePickId(picked) : null;
+      // A pick that belongs to a sibling layer (e.g. an aircraft) is not
+      // "empty space" — leave the selection alone and let that layer handle it.
+      const otherLayer = Boolean(pickedId && isOwnedByOtherLayer(id, pickedId));
+      // The stand-in is asked where markers are picked: the click corrected
+      // for the sensor style (`event.position`), and only when no sibling
+      // layer's item is on top, as a marker under that item would not be hit.
       const fire = layerState._standIn
-        ? standInFire(event.screenPosition)
+        ? otherLayer
+          ? null
+          : standInFire(event.position ?? event.screenPosition)
         : pickedFire(event.drawHit);
       if (fire) {
         selectAndFocusFire(fire);
         return;
       }
-      // A pick that belongs to a sibling layer (e.g. an aircraft) is not
-      // "empty space" — leave the selection alone and let that layer handle it.
-      if (picked) {
-        const pickedId = resolvePickId(picked);
-        if (pickedId && isOwnedByOtherLayer(id, pickedId)) return;
-      }
+      if (otherLayer) return;
       const cardHit = overlayHost.hitTest?.(
         event.screenPosition?.x,
         event.screenPosition?.y,
