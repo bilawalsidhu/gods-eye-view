@@ -727,3 +727,114 @@ test('OpenAI chat schemas drop only the patterns Chat Completions refuses', () =
     },
   );
 });
+
+test('OPENAI_CHAT_BASE_URL sends typed chat to a server of your own', async (t) => {
+  const { chatApiKey, chatEndpoint } =
+    await import('../server/providers/openai/chat.js');
+  assert.deepEqual(chatEndpoint({}), {
+    url: 'https://api.openai.com/v1/chat/completions',
+    local: false,
+  });
+  assert.deepEqual(
+    chatEndpoint({ OPENAI_CHAT_BASE_URL: ' http://ollama.lan:11434/v1/ ' }),
+    { url: 'http://ollama.lan:11434/v1/chat/completions', local: true },
+  );
+  for (const bad of [
+    'ollama.lan:11434',
+    'file:///etc/passwd',
+    'http://user:pass@ollama.lan/v1',
+    'http://ollama.lan/v1?key=1',
+    'http://ollama.lan/v1#x',
+  ])
+    assert.deepEqual(chatEndpoint({ OPENAI_CHAT_BASE_URL: bad }), {
+      invalid: true,
+    });
+  // The OpenAI key never leaves for a server of your own.
+  assert.equal(chatApiKey({ OPENAI_API_KEY: 'sk-real' }), 'sk-real');
+  assert.equal(
+    chatApiKey({ OPENAI_API_KEY: 'sk-real', OPENAI_CHAT_API_KEY: 'sk-chat' }),
+    'sk-chat',
+  );
+  assert.equal(
+    chatApiKey({
+      OPENAI_API_KEY: 'sk-real',
+      OPENAI_CHAT_BASE_URL: 'http://ollama.lan:11434/v1',
+    }),
+    'local',
+  );
+  assert.equal(
+    chatApiKey({
+      OPENAI_API_KEY: 'sk-real',
+      OPENAI_CHAT_BASE_URL: 'http://vllm.lan/v1',
+      OPENAI_CHAT_API_KEY: 'token',
+    }),
+    'token',
+  );
+
+  // End to end against a stand-in for Ollama's /v1/chat/completions.
+  const seen = [];
+  const ollama = http.createServer(async (req, res) => {
+    let text = '';
+    for await (const chunk of req) text += chunk;
+    seen.push({
+      url: req.url,
+      authorization: req.headers.authorization,
+      body: JSON.parse(text),
+    });
+    res.setHeader('Content-Type', 'application/json');
+    res.end(
+      JSON.stringify({
+        id: 'chatcmpl-1',
+        object: 'chat.completion',
+        model: 'qwen3:14b',
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: '<think>The user wants Paris.</think>\n\nFlying there.',
+            },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 9, completion_tokens: 4, total_tokens: 13 },
+      }),
+    );
+  });
+  ollama.listen(0, '127.0.0.1');
+  await once(ollama, 'listening');
+  t.after(() => new Promise((resolve) => ollama.close(resolve)));
+  const environment = {
+    OPENAI_API_KEY: 'sk-must-not-leak',
+    OPENAI_CHAT_BASE_URL: `http://127.0.0.1:${ollama.address().port}/v1`,
+    OPENAI_CHAT_MODEL: 'qwen3:14b',
+    GEV_PREFER_CODEX_OAUTH: 'true',
+  };
+  const f = await fixture(t, providers.openai, (...args) => fetch(...args), {
+    environment,
+    resolveApiKey: undefined,
+    resolveChatModel: () => 'qwen3:14b',
+  });
+  const response = await f.send();
+  const body = await response.json();
+  assert.equal(response.status, 200, 'the ChatGPT OAuth lock does not apply');
+  assert.equal(
+    body.content.content,
+    'Flying there.',
+    'private reasoning dropped',
+  );
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].url, '/v1/chat/completions');
+  assert.equal(seen[0].authorization, 'Bearer local');
+  assert.equal(seen[0].body.model, 'qwen3:14b');
+  assert.equal(seen[0].body.max_tokens, 4096);
+  assert.equal(seen[0].body.tools[0].function.name, 'fly_to');
+
+  // A malformed address is refused, never guessed at.
+  const broken = await fixture(t, providers.openai, undefined, {
+    environment: { OPENAI_CHAT_BASE_URL: 'ollama.lan:11434' },
+    resolveApiKey: undefined,
+  });
+  assert.equal((await broken.send()).status, 503);
+  assert.equal(broken.calls.length, 0);
+});
