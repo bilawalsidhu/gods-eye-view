@@ -3619,7 +3619,7 @@ re-measures nor resizes the rails. The attribution line stays complete in
 clean view: it wraps inside the screen, clear of the eye. Escape leaves clean
 view (not while typing in a form control), and a held V toggles once. The eye
 is hidden in Cockpit, Scene playback, recording and embeds. Its labels are
-translated (es, ru).
+available in the shipped locale catalogs.
 
 ## Shared control CSS ownership
 
