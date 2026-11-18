@@ -331,6 +331,15 @@ body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
   #intel-hud[data-variant='tactical'] .hud-bottom-right {
     bottom: 3.375rem;
   }
+  /* Right to left the attribution row takes the bottom right: the readout
+     clears two lines of it (rail-split.css). */
+  @media (min-width: 1200px) {
+    &:where(html[dir='rtl'] *)
+      #intel-hud[data-variant='tactical']
+      .hud-bottom-right {
+      bottom: calc(3.375rem + 1.5rem);
+    }
+  }
   #intel-hud:is([data-variant='tactical'], [data-variant='minimal'])
     .hud-bottom-left {
     bottom: var(--omnibar-coordinates-bottom);

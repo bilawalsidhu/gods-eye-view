@@ -540,8 +540,15 @@ body:not(.ui-clean-view):not(.recording-mode):has(
   /* Right to left, the corner row sits at the bottom left
      (locale-picker.css), so the attribution row takes the bottom right.
      Expanded Context places it itself (context-dock.css). */
+  /* The Minimal HUD's placement above names #intel-hud too: matched here,
+     so right to left wins over it. */
   html[dir='rtl']
     body:not(.context-docked):not(.ui-clean-view):not(.recording-mode)
+    :is(#cesium-credits, #gev-credits),
+  html[dir='rtl']
+    body:not(.context-docked):not(.ui-clean-view):not(.recording-mode):has(
+      #intel-hud[data-variant='minimal'].active
+    )
     :is(#cesium-credits, #gev-credits) {
     right: 1.5rem;
     left: auto;

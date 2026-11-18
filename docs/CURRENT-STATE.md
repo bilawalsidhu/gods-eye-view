@@ -1172,7 +1172,8 @@ Up baseline (bottom right when the page runs right to left, where the corner
 row moves to the bottom left). A credit line too long for the space before the
 corner row wraps upward instead of running under it. The Tactical bottom-right
 readout (GSD / ALT / AIS) sits 8px above the Power Up row and the Tactical and
-Minimal coordinates start level with it. The World Timeline is 44rem narrower
+Minimal coordinates start level with it; right to left, where the attribution
+row is under it, the readout sits 1.5rem higher and clears two lines of it. The World Timeline is 44rem narrower
 than the screen there, so it sits between the corners and they stay put while
 it shows. Toasts keep 12px above the raised dock, and the chat and voice panel
 height budgets subtract its rise. Below 1200px the dock reaches the bottom
@@ -1184,7 +1185,8 @@ readout also keeps 8px above the Power Up row. The left rail treats the
 centered World Timeline and voice control as obstacles only where they reach a
 laid-out panel, not the stack's transparent gutter. Known limit, unchanged
 from main: below 1200px with the World Timeline showing, the Tactical
-bottom-right readout does not rise with the bar and can touch the dock.
+bottom-right readout does not rise with the bar and can touch the dock, and a
+credit line longer than the screen does not wrap.
 
 Wind appears in the Weather group before Audio. The surface-weather prototype
 uses keyless NOAA GFS or ECMWF IFS forecasts on an approximately 1° display grid.

@@ -337,8 +337,8 @@ a feature supplying only its accent.
    records surface by surface; [Building UI](../CONTRIBUTING.md#building-ui)
    now requires the pattern for new UI. The page-level markup tests read
    `renderApplicationHtml()`, the real views rendered on the server, and new
-   tests mount components; three tests still read a `.vue` file's source
-   (`cyberTheme`, `panelStorageDocs`, `geoFileImport`). The views translate with `t()`
+   tests mount components; two tests still read a `.vue` file's source
+   (`panelStorageDocs`, `geoFileImport`). The views translate with `t()`
    while rendering, and vue-i18n holds the locale they read; the attribute
    translation pass is left for static page markup (the loading screen and a
    host's own markup). An explicit API for hosts to register panels and rail items is

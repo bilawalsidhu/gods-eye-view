@@ -484,14 +484,20 @@ test('the desktop bottom row: credits on the Power Up baseline, the dock lifted,
       `\\{\\s*bottom: calc\\(2vh \\+ 5rem \\+ ${lift}\\);\\s*width: auto !important;\\s*max-width: calc\\(100vw - 3rem\\);\\s*white-space: nowrap;`,
     ),
   );
-  // Right to left the corner row is at the bottom left, so the row moves right.
+  // Right to left the corner row is at the bottom left, so the row moves
+  // right, with the Minimal HUD too (its placement names #intel-hud).
   assert.match(
     trayWide,
-    /html\[dir='rtl'\]\s*body:not\(\.context-docked\):not\(\.ui-clean-view\):not\(\.recording-mode\)\s*:is\(#cesium-credits, #gev-credits\) \{\s*right: 1\.5rem;\s*left: auto;/,
+    /html\[dir='rtl'\]\s*body:not\(\.context-docked\):not\(\.ui-clean-view\):not\(\.recording-mode\)\s*:is\(#cesium-credits, #gev-credits\),\s*html\[dir='rtl'\]\s*body:not\(\.context-docked\):not\(\.ui-clean-view\):not\(\.recording-mode\):has\(\s*#intel-hud\[data-variant='minimal'\]\.active\s*\)\s*:is\(#cesium-credits, #gev-credits\) \{\s*right: 1\.5rem;\s*left: auto;/,
   );
   assert.match(
     trayWide,
     /#cesium-credits\s*\.cesium-widget-credits \{\s*right: 0;\s*left: auto;/,
+  );
+  // There the readout clears two lines of the row under it.
+  assert.match(
+    read('./styles/omnibar-dock.css'),
+    /html\[dir='rtl'\] \*\)\s*#intel-hud\[data-variant='tactical'\]\s*\.hud-bottom-right \{\s*bottom: calc\(3\.375rem \+ 1\.5rem\);/,
   );
   const locale = read('./styles/locale-picker.css');
   assert.match(locale, /#corner-actions \{[^}]*inset-inline-end: 0\.9rem;/);

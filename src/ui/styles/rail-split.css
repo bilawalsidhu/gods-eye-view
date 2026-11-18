@@ -127,6 +127,12 @@
     bottom: 3.375rem;
   }
 
+  /* Right to left the attribution row takes the bottom right
+     (command-dock-trays.css): the readout clears two lines of it. */
+  html[dir='rtl'] #intel-hud[data-variant='tactical'] .hud-bottom-right {
+    bottom: calc(3.375rem + 1.5rem);
+  }
+
   #intel-hud:is([data-variant='tactical'], [data-variant='minimal'])
     .hud-bottom-left,
   :root[data-scope-mask='off']
