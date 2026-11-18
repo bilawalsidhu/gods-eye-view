@@ -162,8 +162,8 @@ test('a train on a known floor at sea level reports a rail height of 0 m', async
 });
 
 test('a train first seen standing takes no direction from its GPS jitter', async (t) => {
-  // Neither reports 13 m apart nor the course drawn between them say which way
-  // it runs; an operator's bearing does.
+  // Reports 13 m apart, and the course drawn between them, do not tell which
+  // way it runs; an operator's bearing does.
   const app = harness(t, { paths: { 'mbta-rail': PACK }, at: BOSTON });
   let jitterM = 0;
   app.feeds.set('mbta-rail', () => [
@@ -182,6 +182,46 @@ test('a train first seen standing takes no direction from its GPS jitter', async
     seen.push([standing, app.layer.getSelectedTrain().path.direction]);
   }
   assert.deepEqual(seen, Array(6).fill([0, -1]));
+});
+
+test('a standing train keeps its operator’s bearing through reports that leave it out', async (t) => {
+  const app = harness(t, { paths: { 'mbta-rail': PACK }, at: BOSTON });
+  let bearing = 270;
+  app.feeds.set('mbta-rail', () => [
+    train('T1', LAT, LON0 + 1000 / KX, { bearing }),
+  ]);
+  await app.enable();
+  const seen = [];
+  for (const next of [270, 270, 270, null, null, null]) {
+    bearing = next;
+    app.run(RAIL_POLL_MS);
+    await app.poll();
+    app.parts().selection.selectTrain(T1);
+    seen.push(app.layer.getSelectedTrain().path.direction);
+  }
+  assert.deepEqual(seen, Array(6).fill(-1));
+});
+
+test('a train bound standing, its line late, runs the way its earlier reports went', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  const paths = { 'mbta-rail': 503 };
+  const app = harness(t, { paths, at: BOSTON });
+  let eastM = 1600;
+  app.feeds.set('mbta-rail', () => [train('T1', LAT, LON0 + eastM / KX)]);
+  await app.enable();
+  // No line yet: it runs 300 m west, with no bearing, and stands.
+  for (const next of [1500, 1400, 1300, 1300, 1300, 1300, 1300, 1300]) {
+    eastM = next;
+    app.run(RAIL_POLL_MS);
+    await app.poll();
+  }
+  assert.equal(app.entry(T1).path, null, 'not bound yet');
+  paths['mbta-rail'] = PACK;
+  const slot = app.state()._pathPacks.get('mbta-rail');
+  app.run(Math.max(0, slot.retryAt - Date.now()));
+  await app.poll();
+  app.parts().selection.selectTrain(T1);
+  assert.equal(app.layer.getSelectedTrain().path.direction, -1);
 });
 
 test('a snapshot read again while nothing changed is the one read before', async (t) => {

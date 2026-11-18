@@ -957,7 +957,10 @@ test('disable aborts in-flight work and a response that lands late is ignored', 
   assert.equal(app.vehicles().length, 1);
 });
 
-/** A bus at `place.lat`, read on each poll, polled once and settled; its entry. */
+/**
+ * Serves one bus at `place.lat` (read on every poll), enables the layer and
+ * polls once; returns its entry.
+ */
 async function oneBus(app, place = { lat: 42.36 }) {
   app.serve('mbta', () => ({
     status: 200,
@@ -984,7 +987,6 @@ test('a held vehicle with no floor yet tells its view no height', async (t) => {
 });
 
 test('with the camera above the height gate, a held vehicle drawn on the ellipsoid tells its view no height', async (t) => {
-  // There a vehicle with no floor is drawn on the ellipsoid, which is no floor.
   const app = harness(t, { altitude: 100_000, floorAt: () => undefined });
   const entry = await oneBus(app);
   assert.ok(app.layer.setCockpitSubject(entry.key) !== false);
@@ -4928,7 +4930,7 @@ test('a held vehicle hides, keeps moving out of view, and lets go when it goes',
   assert.equal(app.layer.getCockpitSubject(), null);
 });
 
-test('turning Transit off ends a hold; on again, the vehicle shows and clicks and Escape select it', async (t) => {
+test('turning Transit off ends a hold; on again, the vehicle shows, a click selects it and Escape deselects it', async (t) => {
   const app = harness(t);
   const key = await busRunningNorth(app);
   assert.equal(app.layer.setCockpitSubject(key), true);
@@ -4948,6 +4950,8 @@ test('turning Transit off ends a hold; on again, the vehicle shows and clicks an
   const [entry] = app.vehicles();
   app.frame();
   assert.equal(entry.marker.show, true, 'the vehicle is drawn, not held');
+  const icon = app.markers('still').get(key) ?? app.markers('moving').get(key);
+  assert.equal(icon?.show, true, 'and so is its icon in the set');
   app.viewer.scene.pick = () => app.pickOf(entry);
   app.input.click(new Cesium.Cartesian2(500, 400));
   assert.equal(app.state()._selectedKey, key, 'a click selects it');
@@ -5034,10 +5038,59 @@ test('a hold moved to another vehicle lets the first go out of view', async (t) 
   assert.equal(first.marker.show, false, 'and not drawn out of view');
 });
 
+test('a vehicle in view let go of a hold goes on from its own clock', async (t) => {
+  // Held, it played on; let go, the sweep that finds it in view does not
+  // set its clock again, though the feed's lag has grown since.
+  for (const next of ['mbta:b', null]) {
+    await t.test(`the hold moves to ${next}`, async (t) => {
+      const app = harness(t, { floorAt: () => 5 });
+      let fixAt = Date.now() - AGE_MS;
+      let north = 42.36;
+      app.serve('mbta', () => ({
+        status: 200,
+        body: snapshot(
+          'mbta',
+          'MBTA',
+          [
+            vehicle('a', north, -71.06, fixAt / 1000),
+            vehicle('b', 42.37, -71.05, reported()),
+          ],
+          { fetchedAt: Date.now() },
+        ),
+      }));
+      app.layer.enable(app.viewer);
+      await app.layer.update();
+      app.settle();
+      const a = app.vehicles().find((e) => e.key === 'mbta:a');
+      app.layer.setCockpitSubject(a.key);
+      for (let poll = 1; poll <= 5; poll += 1) {
+        fixAt += TRANSIT_POLL_MS;
+        north += 0.001;
+        app.run(TRANSIT_POLL_MS);
+        await app.layer.update();
+      }
+      // One late poll: the lag the feed earns grows.
+      app.run(TRANSIT_POLL_MS + 10_000);
+      fixAt += TRANSIT_POLL_MS;
+      north += 0.001;
+      await app.layer.update();
+      app.run(3_000);
+      const beforeT = a.track.displayT;
+      const beforeLat = lat(a);
+      app.layer.setCockpitSubject(next);
+      app.advance(250);
+      app.settle();
+      assert.equal(app.state()._visible.has(a), true, 'A is in view');
+      assert.ok(a.track.displayT >= beforeT, 'its clock did not go back');
+      assert.ok(lat(a) >= beforeLat, 'nor did it move back');
+    });
+  }
+});
+
 test('holding a vehicle out of view tells its view at once the floor it stands on', async (t) => {
   // Out of view a vehicle plays on but its marker is not moved: the hold
-  // places it, so its view reads neither the floor where it was last drawn
-  // nor nothing.
+  // places it, so its view reads the floor it is on now, not the old one or
+  // null.
   const app = harness(t, { floorAt: (lat) => (lat > 42.3625 ? 100 : 10) });
   for (const [lat, floorM] of [
     [42.361, 10],
@@ -5046,22 +5099,8 @@ test('holding a vehicle out of view tells its view at once the floor it stands o
     [42.364, 100],
   ])
     app.ground._warm.set(app.ground._key(lat, -71.06), floorM);
-  let lat = 42.36;
-  app.serve('mbta', () => ({
-    status: 200,
-    body: snapshot(
-      'mbta',
-      'MBTA',
-      [vehicle('bus-1', lat, -71.06, reported())],
-      {
-        fetchedAt: Date.now(),
-      },
-    ),
-  }));
-  app.layer.enable(app.viewer);
-  await app.layer.update();
-  app.settle();
-  const [entry] = app.vehicles();
+  const place = { lat: 42.36 };
+  const entry = await oneBus(app, place);
   const drawnM = () =>
     Cesium.Cartographic.fromCartesian(entry.marker.position).height;
   assert.ok(Math.abs(drawnM() - 11.5) < 1, 'drawn on the low ground');
@@ -5071,7 +5110,7 @@ test('holding a vehicle out of view tells its view at once the floor it stands o
   assert.equal(app.state()._visible.has(entry), false, 'out of view');
   // Unseen, it drives up the hill and stands there.
   for (const next of [42.361, 42.362, 42.363, 42.364, 42.364, 42.364]) {
-    lat = next;
+    place.lat = next;
     app.run(TRANSIT_POLL_MS);
     await app.layer.update();
   }

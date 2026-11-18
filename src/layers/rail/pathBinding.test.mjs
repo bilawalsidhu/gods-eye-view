@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { FIX_FLAGS } from '../../data/contactPlayback.js';
 import { createRailPathPack } from '../../data/railPaths.js';
 import {
   PATH_OFF_TRACK_M,
@@ -264,53 +265,41 @@ test('a report that runs back turns the drawn train only when playback does', ()
   assert.equal(binding.direction, -1);
 });
 
-test('jitter segments played back at a standing train keep the direction it learnt', () => {
-  const p = pack();
-  const ids = { tripId: 'full', routeId: 'main' };
-  const binding = bindTrainPath(p, ids, fix(0, 1000, 0));
-  assert.ok(followFix(binding, fix(15_000, 1600, 0)));
-  let seq = 0;
-  const play = (fromM, toM, t0) => {
-    const { sample, segment } = playback(
-      seq,
-      seq + 1,
-      fix(t0, fromM, 0),
-      fix(t0 + 15_000, toM, 0),
-      0.5,
+test('a jump to a corrected position in a new playback epoch is no reversal', () => {
+  const binding = bindTrainPath(
+    pack(),
+    { tripId: 'full', routeId: 'main' },
+    fix(0, 1000, 0),
+  );
+  const play = (seq, from, to) =>
+    placeOnPath(
+      binding,
+      { fromSeq: seq, toSeq: seq + 1, fraction: 0.5 },
+      { from: { seq, ...from }, to: { seq: seq + 1, ...to } },
+      {},
     );
-    assert.ok(placeOnPath(binding, sample, segment, {}));
-    seq += 1;
-    return binding.direction;
-  };
-  // It runs east, then stands at the platform: reports 3-5 m apart, back and
-  // forth, polled and played.
-  const learnt = [play(1000, 1600, 0)];
-  let t0 = 15_000;
-  for (const [fromM, toM] of [
-    [1600, 1597],
-    [1597, 1600],
-    [1600, 1596],
-    [1596, 1601],
-  ]) {
-    assert.ok(followFix(binding, fix(t0 + 15_000, toM, 0)));
-    learnt.push(play(fromM, toM, t0));
-    t0 += 15_000;
-  }
-  assert.deepEqual(learnt, [1, 1, 1, 1, 1], 'from the played-back segments');
-});
-
-test('GPS jitter in the newest reports before playback keeps the direction', () => {
-  const p = pack();
-  const ids = { tripId: 'full', routeId: 'main' };
-  const binding = bindTrainPath(p, ids, fix(0, 1000, 0));
-  assert.ok(followFix(binding, fix(15_000, 1600, 0)));
+  assert.ok(play(0, fix(0, 1000, 0), fix(60_000, 1600, 0)));
   assert.equal(binding.direction, 1);
-  const learnt = [];
-  [1597, 1600, 1596, 1601].forEach((eastM, i) => {
-    assert.ok(followFix(binding, fix(30_000 + i * 15_000, eastM, 0)));
-    learnt.push(binding.direction);
-  });
-  assert.deepEqual(learnt, [1, 1, 1, 1], 'from the newest reports');
+  // The source puts it back at 1400 m: a new epoch whose first report is a
+  // break, and no segment is played from 1600 m to there.
+  const epoch = { epoch: 1 };
+  assert.ok(
+    play(
+      5,
+      { ...fix(70_000, 1400, 0), ...epoch, flags: FIX_FLAGS.BREAK },
+      { ...fix(85_000, 1400, 0), ...epoch },
+    ),
+  );
+  assert.equal(binding.direction, 1, 'standing there, it keeps its way');
+  // From there, a real move back still turns it.
+  assert.ok(
+    play(
+      6,
+      { ...fix(85_000, 1400, 0), ...epoch },
+      { ...fix(100_000, 1380, 0), ...epoch },
+    ),
+  );
+  assert.equal(binding.direction, -1);
 });
 
 /** The direction after each played segment, `[fromM, toM]` 15 s apart. */
@@ -351,6 +340,30 @@ test('a train that moves under 15 m a report still tells its direction', () => {
   );
 });
 
+test('a train turns 15 m back from where it ran to, not 14.9 m', () => {
+  const p = pack();
+  const ids = { tripId: 'full', routeId: 'main' };
+  for (const [backM, want, label] of [
+    [1100, -1, '15 m back'],
+    [1100.1, 1, '14.9 m back'],
+  ]) {
+    const reports = bindTrainPath(p, ids, fix(0, 1000, 0));
+    const learnt = [1115, backM].map((eastM, i) => {
+      assert.ok(followFix(reports, fix((i + 1) * 15_000, eastM, 0)));
+      return reports.direction;
+    });
+    assert.deepEqual(learnt, [1, want], `${label}, from the newest reports`);
+    assert.deepEqual(
+      playDirections(bindTrainPath(p, ids, fix(0, 1000, 0)), [
+        [1000, 1115],
+        [1115, backM],
+      ]),
+      [1, want],
+      `${label}, from the played-back segments`,
+    );
+  }
+});
+
 test('GPS jitter of up to 14 m at a standing train keeps its direction', () => {
   const p = pack();
   const ids = { tripId: 'full', routeId: 'main' };
@@ -371,5 +384,28 @@ test('GPS jitter of up to 14 m at a standing train keeps its direction', () => {
     ]),
     [1, 1, 1, 1, 1],
     'from the played-back segments',
+  );
+
+  // On both sides of where it stopped: 8 m either way, 16 m from end to end.
+  const both = bindTrainPath(p, ids, fix(0, 600, 0));
+  assert.deepEqual(
+    [1000, 1008, 1000, 992, 1000, 1008].map((eastM, i) => {
+      assert.ok(followFix(both, fix((i + 1) * 15_000, eastM, 0)));
+      return both.direction;
+    }),
+    [1, 1, 1, 1, 1, 1],
+    'both sides, from the newest reports',
+  );
+  assert.deepEqual(
+    playDirections(bindTrainPath(p, ids, fix(0, 600, 0)), [
+      [600, 1000],
+      [1000, 1008],
+      [1008, 1000],
+      [1000, 992],
+      [992, 1000],
+      [1000, 1008],
+    ]),
+    [1, 1, 1, 1, 1, 1],
+    'both sides, from the played-back segments',
   );
 });

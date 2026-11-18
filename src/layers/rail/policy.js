@@ -295,9 +295,6 @@ export function playbackModeFor(railMode) {
       : 'rail';
 }
 
-/** Two reports closer than this are one place: a parked train's jitter (m). */
-export const FOLLOW_MIN_MOVE_M = DIRECTION_MIN_M;
-
 const lastFix = {};
 const priorFix = {};
 
@@ -334,7 +331,7 @@ export function railTrainFollowable(entry) {
     sample.nextMotionT > sample.displayT
   )
     return true;
-  return lastReportsApartM(entry.track) >= FOLLOW_MIN_MOVE_M;
+  return lastReportsApartM(entry.track) >= DIRECTION_MIN_M;
 }
 
 /**

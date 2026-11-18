@@ -83,11 +83,9 @@ export function createTransitCockpitSubject({ state, parts, services }) {
    * lift: the drawn marker's height while the frame pass places it (in view,
    * or held), which near the ground follows the terrain between reports;
    * else its segment's two reports' floors at the playback fraction. Null
-   * while either floor is unknown, as on cold terrain, so a view waits for
-   * the surface: with the camera above HEIGHT_SAMPLE_MAX_ALTITUDE_M such a
-   * marker is drawn on the ellipsoid, which is no floor. Not
-   * `entry.heightM`, the floor at the newest report, which playback has not
-   * reached yet.
+   * while either of those two floors is unknown, as on cold terrain, so a
+   * view waits for the surface. Not `entry.heightM`, the floor at the newest
+   * report, which playback has not reached yet.
    */
   function drawnFloorOf(entry) {
     const segment = entry.segment;
@@ -188,10 +186,14 @@ export function createTransitCockpitSubject({ state, parts, services }) {
     state._detectRevision += 1;
   }
 
-  /** A vehicle let go of is out of play until a sweep finds it in view. */
+  /**
+   * A vehicle let go of is out of play until a sweep finds it in view. It
+   * played on while held, so that sweep keeps its clock (rendering.js).
+   */
   function release(entry) {
     if (!entry) return;
     state._visible.delete(entry);
+    entry.releasedFromHold = true;
     parts.rendering.requestVisibility();
     repaint(entry);
   }

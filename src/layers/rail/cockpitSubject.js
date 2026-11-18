@@ -173,16 +173,15 @@ export function createRailCockpitSubject({
 
   /**
    * Which way the train runs along its shape: as its binding learnt it from
-   * successive reports, else from its reported bearing against the line's
-   * bearing there; 0 while neither tells. Not the drawn course: until the
-   * binding tells, the train has not moved past GPS jitter, and a course
-   * drawn between such reports is that jitter.
+   * successive reports, else from its operator's last reported bearing
+   * against the line's bearing there; 0 while neither tells. Not the drawn
+   * course: before the binding tells, that course is GPS jitter.
    */
   function directionOf(entry) {
     const binding = entry.path;
     if (binding.direction === 1 || binding.direction === -1)
       return binding.direction;
-    const course = finiteOrNull(entry.record?.bearing);
+    const course = finiteOrNull(binding.bearingDeg);
     const point = pointAtS(binding.path, binding.drawS, scratch);
     if (course === null || !Number.isFinite(point?.bearingDeg)) return 0;
     const turn = Math.abs(((course - point.bearingDeg + 540) % 360) - 180);

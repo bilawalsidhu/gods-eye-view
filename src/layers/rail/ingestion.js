@@ -23,7 +23,12 @@ import {
   railTrainKey,
   trainReportTimeMs,
 } from './policy.js';
-import { bindTrainPath, followFix, rebindTrainPath } from './pathBinding.js';
+import {
+  bindTrainPath,
+  followFix,
+  rebindTrainPath,
+  recallDirection,
+} from './pathBinding.js';
 import { scheduleRetryDelayMs } from './schedules.js';
 import { createDuplicateFilter } from './dedupe.js';
 
@@ -220,6 +225,23 @@ export function createIngestion({ state, services, parts, source }) {
     entry.path = rebindTrainPath(pack, ids, entry.path, fix);
   }
 
+  /**
+   * A track's reports before `newest`, newest first, back to the start of
+   * its run of playback (a new epoch or a break).
+   */
+  function earlierFixes(track, newest) {
+    const fixes = [];
+    let later = newest;
+    for (let i = track.count - 2; i >= 0; i--) {
+      if (later.flags & FIX_FLAGS.BREAK) break;
+      const fix = readFix(track, i);
+      if (fix.epoch !== later.epoch) break;
+      fixes.push(fix);
+      later = fix;
+    }
+    return fixes;
+  }
+
   /** Bind the trains a feed already shows once its pack arrives. */
   function bindFeedTrains(feedId) {
     const newest = {};
@@ -228,6 +250,9 @@ export function createIngestion({ state, services, parts, source }) {
       if (!entry.track?.count) continue;
       readFix(entry.track, entry.track.count - 1, newest);
       followPath(entry, entry.record, newest);
+      // It may have run, and stopped, before its line came.
+      if (entry.path)
+        recallDirection(entry.path, earlierFixes(entry.track, newest));
       parts.rendering.schedulePlayback(entry);
     }
     governorRequestRender('rail-paths');

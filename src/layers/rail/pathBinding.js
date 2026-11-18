@@ -1,3 +1,4 @@
+import { FIX_FLAGS } from '../../data/contactPlayback.js';
 import { pointAtS, projectOnPath } from '../../data/railPaths.js';
 
 /**
@@ -48,32 +49,19 @@ export function pathWindowM(dtMs) {
 }
 
 /**
- * Arc a train must move before that says which way it runs (m): a standing
- * train's GPS jitter, back and forth, stays within it.
+ * Arc a train must move before it tells which way it runs (m); a standing
+ * train's GPS jitter stays within it.
  */
 export const DIRECTION_MIN_M = 15;
 
 /**
- * Track one more arc position of a train. `turn.s` is the farthest arc it
- * has reached the way it runs (where it was first seen while that is
- * unknown); it turns once it is DIRECTION_MIN_M or more back from there,
- * however small each step.
- * @param {number} direction +1, -1 or 0.
- * @param {{s: number}} turn Updated in place.
- * @param {number} s
- * @returns {number} The direction now.
+ * The direction after one more arc position `s`: once `s` is DIRECTION_MIN_M
+ * or more from `turn.s`, the sign of that move, and `turn.s` moves to `s`.
  */
 function steer(direction, turn, s) {
   if (!Number.isFinite(s)) return direction;
-  if (!Number.isFinite(turn.s)) {
-    turn.s = s;
-    return direction;
-  }
+  if (!Number.isFinite(turn.s)) turn.s = s;
   const step = s - turn.s;
-  if (direction && step * direction >= 0) {
-    turn.s = s;
-    return direction;
-  }
   if (Math.abs(step) < DIRECTION_MIN_M) return direction;
   turn.s = s;
   return Math.sign(step);
@@ -86,17 +74,19 @@ function createBinding(shapeIndex, path, via, s, fix) {
     via,
     /**
      * Which way the drawn train runs along the shape: +1 along it, -1
-     * against it, 0 until two reports or a playback segment tell. Kept until
-     * a rebind, and while the train stands. Once a playback segment has told
-     * it (`directionPlayed`), only playback changes it: the newest reports
-     * run ahead of the drawn train, so a reversal they show turns it when
-     * playback reaches it.
+     * against it, 0 until it has moved DIRECTION_MIN_M (steer, or
+     * recallDirection). Kept until a rebind, and while the train stands.
+     * Once a playback segment has told it (`directionPlayed`), only playback
+     * changes it: the newest reports run ahead of the drawn train, so a
+     * reversal they show turns it when playback reaches it.
      */
     direction: 0,
     directionPlayed: false,
-    /** How far the reports and the played segments have run (steer). */
+    /** steer() turn points: one for the reports, one for the played segments. */
     reportTurn: { s },
     playTurn: { s: NaN },
+    /** The newest operator bearing its reports gave (deg), NaN before one. */
+    bearingDeg: Number.isFinite(fix.bearingDeg) ? fix.bearingDeg : NaN,
     /** Arc and time of the newest report. */
     fixS: s,
     fixT: fix.t,
@@ -149,7 +139,7 @@ function bestRouteShape(pack, routeId, fix, accept) {
  *
  * @param {object} pack From createRailPathPack.
  * @param {{tripId?: string, routeId?: string}} ids
- * @param {{t: number, lat: number, lon: number}} fix The newest report.
+ * @param {{t: number, lat: number, lon: number, bearingDeg?: number}} fix The newest report.
  * @returns {object|null} A binding, or null to keep straight-line motion.
  */
 export function bindTrainPath(pack, { tripId, routeId } = {}, fix) {
@@ -171,7 +161,7 @@ export function bindTrainPath(pack, { tripId, routeId } = {}, fix) {
 /**
  * Follow a new report on the bound shape.
  * @param {object} binding
- * @param {{t: number, lat: number, lon: number}} fix
+ * @param {{t: number, lat: number, lon: number, bearingDeg?: number}} fix
  * @returns {boolean} False when the report lies off the line: the binding is wrong.
  */
 export function followFix(binding, fix) {
@@ -186,6 +176,7 @@ export function followFix(binding, fix) {
   if (!hit || hit.offsetM > PATH_OFF_TRACK_M) return false;
   if (!binding.directionPlayed)
     binding.direction = steer(binding.direction, binding.reportTurn, hit.s);
+  if (Number.isFinite(fix.bearingDeg)) binding.bearingDeg = fix.bearingDeg;
   binding.fixS = hit.s;
   binding.fixT = fix.t;
   binding.fixLat = fix.lat;
@@ -214,6 +205,32 @@ export function rebindTrainPath(pack, { routeId } = {}, binding, fix) {
     : null;
 }
 
+/**
+ * Which way a train just bound standing ran before: the newest of its
+ * earlier reports (newest first) DIRECTION_MIN_M or more along the line
+ * from its newest one tells. Stops at the first report off the line.
+ * @param {object} binding Just made, from the newest report.
+ * @param {Array<{t: number, lat: number, lon: number}>} earlier
+ */
+export function recallDirection(binding, earlier) {
+  if (!binding || binding.direction) return;
+  for (const fix of earlier) {
+    const hit = projectOnPath(
+      binding.path,
+      fix.lat,
+      fix.lon,
+      binding.fixS,
+      pathWindowM(binding.fixT - fix.t),
+    );
+    if (!hit || hit.offsetM > PATH_OFF_TRACK_M) return;
+    const step = binding.fixS - hit.s;
+    if (Math.abs(step) >= DIRECTION_MIN_M) {
+      binding.direction = Math.sign(step);
+      return;
+    }
+  }
+}
+
 /** Project one playback report, near the last drawn arc when that is useful. */
 function projectReport(binding, fix, hintS, hintT) {
   const path = binding.path;
@@ -236,7 +253,7 @@ function projectReport(binding, fix, hintS, hintT) {
  *
  * @param {object} binding
  * @param {{fromSeq: number, toSeq: number, fraction: number}} sample Playback sample.
- * @param {{from: {seq:number, t:number, lat:number, lon:number},
+ * @param {{from: {seq:number, t:number, lat:number, lon:number, flags?:number},
  *   to: {seq:number, t:number, lat:number, lon:number}}} segment The sample's two reports.
  * @param {{lat?: number, lon?: number, bearingDeg?: number}} out
  * @returns {boolean} False when the train should stay on its straight-line point.
@@ -279,6 +296,8 @@ export function placeOnPath(binding, sample, segment, out) {
     cache.ok = Number.isFinite(sFrom) && Number.isFinite(sTo);
     if (cache.ok) {
       const turn = binding.playTurn;
+      // A break is a corrected position, not a move: steer on from there.
+      if (from.flags & FIX_FLAGS.BREAK) turn.s = sFrom;
       binding.direction = steer(binding.direction, turn, sFrom);
       binding.direction = steer(binding.direction, turn, sTo);
       if (binding.direction) binding.directionPlayed = true;
