@@ -364,6 +364,13 @@ export const DATA_CREDITS = [
       'fetched on view, at most every ten minutes per camera',
   },
   {
+    key: 'mndot-cctv',
+    html:
+      'Traffic camera stills (Minnesota): ' +
+      '<a href="https://www.dot.state.mn.us/" target="_blank" rel="noopener">Minnesota Department of Transportation (MnDOT)</a>, ' +
+      'public camera data from the MnDOT IRIS system',
+  },
+  {
     key: 'calgary-cctv',
     html:
       'Traffic cameras (Calgary): contains information licensed under the ' +
