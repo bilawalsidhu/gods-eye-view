@@ -474,20 +474,21 @@ export function createTurbulenceLayer({
           ],
           settings: [
             {
+              // English labels fit the 56px English label column (weather.css).
               id: 'severity',
-              label: t('Severity'),
+              label: t('Level'),
               chips: settingChips('severity', severityLabel),
             },
             {
               id: 'altitude',
-              label: t('Altitude'),
+              label: t('Height'),
               chips: settingChips('altitude', (key) =>
                 key === 'low' ? t('Below FL180') : t('FL180 and above'),
               ),
             },
             {
               id: 'sources',
-              label: t('Sources'),
+              label: t('Type'),
               chips: settingChips('sources', (key) =>
                 key === 'forecasts'
                   ? t('Forecasts')

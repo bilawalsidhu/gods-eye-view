@@ -391,6 +391,10 @@ test('readout: counts, three setting groups, a categorical legend, the disclaime
     controls.summary.settings.map((s) => s.id),
     ['severity', 'altitude', 'sources'],
   );
+  // The English label column is 56px (weather.css, held by
+  // english-css-parity.test.mjs): about six letter-spaced capitals.
+  for (const { label } of controls.summary.settings)
+    assert.ok(label.length <= 6, `"${label}" fits the English label column`);
   assert.match(controls.summary.detail, /21:00/);
   assert.match(
     controls.summary.lines[0].text,
