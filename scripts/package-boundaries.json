@@ -1129,7 +1129,8 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
-      "src/ui/layerNames.js"
+      "src/ui/layerNames.js",
+      "src/ui/statusText.js"
     ],
     "external": []
   },
@@ -3110,7 +3111,8 @@
       "src/loadingFeedback.js",
       "src/data/installationFeedback.js",
       "src/ui/layerNames.js",
-      "src/render/cesium/zoomOutGuard.js"
+      "src/render/cesium/zoomOutGuard.js",
+      "src/ui/statusText.js"
     ],
     "external": ["cesium", "kdbush"]
   },
