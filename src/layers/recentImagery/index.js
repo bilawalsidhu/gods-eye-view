@@ -580,7 +580,7 @@ export function createRecentImageryLayer({
         firstVisible: _visible.first,
         lastVisible: _visible.last,
         extra: 2,
-      }) || [],
+      }),
     );
     for (const key of new Set([
       _assigned.a,
@@ -593,7 +593,7 @@ export function createRecentImageryLayer({
       thumbnails.request(candidate, _box, 0);
       wanted.add(candidate.key);
     }
-    thumbnails.retain?.(wanted);
+    thumbnails.retain(wanted);
   }
 
   function resetCatalog() {

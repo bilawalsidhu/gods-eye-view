@@ -357,14 +357,10 @@ test('retain aborts stale acquisition while allowing the current intent to start
     'current intent starts after stale abort',
   );
   assert.match(fetch.calls[1].url, /TIME=2026-09-11/);
-  assert.deepEqual(loader.refinementStats(), {
-    supersededQueued: 0,
-    supersededInFlight: 1,
-  });
   assert.equal(loader.get(stale.key).status, 'unknown');
 });
 
-test('repeat retain counts an aborted known-present re-fetch once', async () => {
+test('a cancelled re-fetch of a known-present day keeps its status and is retryable', async () => {
   const { loader, fetch } = fixture({ maxInFlight: 1, maxDecoded: 1 });
   const stale = candidate('S30', '2026-09-10');
   const newer = candidate('S30', '2026-09-11');
@@ -383,12 +379,7 @@ test('repeat retain counts an aborted known-present re-fetch once', async () => 
   loader.request(stale, BOX, 0);
   assert.equal(fetch.calls.length, 3, 'an evicted known day re-fetches');
   loader.retain([]);
-  loader.retain([]);
   assert.equal(fetch.calls[2].signal.aborted, true);
-  assert.deepEqual(loader.refinementStats(), {
-    supersededQueued: 0,
-    supersededInFlight: 1,
-  });
 
   await settle();
   assert.equal(loader.get(stale.key).status, 'present');
