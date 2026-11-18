@@ -258,6 +258,6 @@ export function createBrowserViteConfig({
         mapillaryToken ?? '',
       ),
     },
-    build: { chunkSizeWarningLimit: 1500 },
+    build: { chunkSizeWarningLimit: 1500, manifest: true },
   };
 }
