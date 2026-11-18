@@ -197,13 +197,14 @@ function fakeFeeds(initial = {}) {
   };
 }
 
-/** A viewer whose camera looks down on (0°, 0°) from 50 km. */
+/** A viewer whose camera looks down on (0°, 0°) from 2 km: within the 3 km
+ *  model radius of an aircraft there on the ground or at 10,000 ft. */
 function modelViewer() {
   return fakeViewer(
     { scene: {} },
     {
-      height: 50_000,
-      position: { x: 6_378_137 + 50_000, y: 0, z: 0 },
+      height: 2_000,
+      position: { x: 6_378_137 + 2_000, y: 0, z: 0 },
       direction: { x: -1, y: 0, z: 0 },
     },
   );

@@ -156,7 +156,11 @@ export function createEnrichment({
       (data) => {
         const meta = flightState.records.data.get(icao24);
         if (!meta) return; // evicted while the lookup was in flight
-        meta.typeCode = data.typeCode || meta.typeCode;
+        // A looked-up type outranks the feed's own from now on.
+        if (data.typeCode) {
+          meta.typeCode = data.typeCode;
+          meta.typeLookedUp = true;
+        }
         meta.typeName = data.typeName || meta.typeName;
         meta.registration = data.registration || meta.registration;
         if (meta.typeCode) {

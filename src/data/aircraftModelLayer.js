@@ -226,10 +226,10 @@ export function createAircraftModels({
     return sets ? [sets.fleet.id, sets.tracked.id] : [];
   }
 
-  /** The FLEET's 3D-model regime: models3d enabled AND the camera zoomed in past the altitude
-   *  ceiling. Since 2026-08-22 the toggle DEFAULTS ON in `proximity`, which is itself the
-   *  budget: models only appear below MODEL_ALT_CEIL_M and only for the nearest MODEL_MAX in
-   *  view. The toggle still OWNS the fleet — an operator who wants every in-view plane arms
+  /** The FLEET's 3D-model regime: models3d enabled AND the camera below the altitude ceiling,
+   *  above which no contact can be within the model radius. Since 2026-08-22 the toggle DEFAULTS
+   *  ON in `proximity`, which is itself the budget: models only appear within MODEL_ADD_M of the
+   *  camera and only for the nearest MODEL_MAX. The toggle still OWNS the fleet — an operator who wants every in-view plane arms
    *  `all`, and one who wants none turns 3D off — this predicate is unchanged. The TRACKED
    *  contact routes through here too (`_trackedModelRegimeActive`), with its place in the
    *  fleet's cap, so selecting a contact never changes its form. */
@@ -255,20 +255,17 @@ export function createAircraftModels({
       : mapCap;
   }
 
-  /** Active ADD radius (m) — new planes inside this range get a model. Mode-aware: 'all' reaches far. */
+  /** ADD radius (m) — new planes inside this range get a model. Both modes
+   *  share it; they differ by their caps. */
 
   function _modelAddDistM() {
-    return state._models3dMode === 'all'
-      ? policy.MODEL_ALL_ADD_M
-      : policy.MODEL_PROX_ADD_M;
+    return policy.MODEL_ADD_M;
   }
 
-  /** Active KEEP radius (m) — a modeled plane keeps its model out to here (hysteresis vs ADD). */
+  /** KEEP radius (m) — a modeled plane keeps its model out to here (hysteresis vs ADD). */
 
   function _modelKeepDistM() {
-    return state._models3dMode === 'all'
-      ? policy.MODEL_ALL_KEEP_M
-      : policy.MODEL_PROX_KEEP_M;
+    return policy.MODEL_KEEP_M;
   }
 
   /** What a grounded model's ground sample sees through: the vertical sample
@@ -405,7 +402,7 @@ export function createAircraftModels({
       tint: record.tint ?? WHITE,
       // The mesh's own colours, tinted while tracked or in an emergency;
       // the IR boost draws it flat white.
-      colorBlend: aircraftModelBlend(state._irBoost === true),
+      colorBlend: aircraftModelBlend(state._irBoost === true, record.tint),
       environmentMap: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS.enabled,
       ...(record.parts ? { parts: record.parts } : {}),
       show: record.show,
@@ -616,12 +613,11 @@ export function createAircraftModels({
     state._lastFleetTickMs = 0;
   }
 
-  /** Admit a fleet model for an aircraft; the icon shows until it is ready. */
+  /** Admit a fleet model for an aircraft; the icon shows until it is ready.
+   *  The selected aircraft's is admitted too, and kept loaded but hidden
+   *  while its tracked model draws it (`_keepTrackedFleetModel`). */
 
   function _ensureModel(icao24) {
-    // Never model the TRACKED aircraft — it owns a separate entity billboard, and the fleet
-    // tick skips it, so a model here would be orphaned + double-rendered.
-    if (icao24 === state._trackedIcao) return;
     onModelEligible(icao24);
     if (state._models.has(icao24)) return;
     // Without model sets (the renderer draws none) the icon stays.
@@ -636,7 +632,6 @@ export function createAircraftModels({
       specKey: _specKeyFor(meta), // type-change sync compares against this
       bellyM: spec.bellyM,
       scale: spec.scale,
-      minPixelSize: policy.MODEL_MIN_PX,
     });
     record.url = resolveAsset(spec.url);
     record.gltf = _gltfOf(spec);
@@ -727,12 +722,104 @@ export function createAircraftModels({
     );
   }
 
-  /** A fleet model still drawing the tracked contact (it was a model when
-   *  it was selected) lets go once the tracked model draws, or once the
-   *  contact is no longer drawn as a model at all. */
+  /** The tracked contact's fleet model lets go once the contact is no
+   *  longer drawn as a model at all (out of range, 3D off, cockpit). */
   function _releaseTrackedFleetModel() {
     if (state._trackedIcao && state._models.has(state._trackedIcao))
       _releaseModel(state._trackedIcao);
+  }
+
+  /** The tracked contact's fleet model (it was a model when it was
+   *  selected, or was admitted since) stops drawing once the tracked model
+   *  draws, or while the tracked icon carries the contact, but stays loaded:
+   *  deselecting hands the contact straight back to it
+   *  (`_handBackDeselected`), with no load and no icon in between. */
+  function _hideTrackedFleetModel() {
+    const icao24 = state._trackedIcao;
+    const record = icao24 ? state._models.get(icao24) : null;
+    if (!record?.show) return;
+    showModel(record, false);
+    _send(state._modelSets?.fleet, icao24, record, _modelSpec(_metaOf(icao24)));
+  }
+
+  /** Keep the tracked contact's fleet model loaded and placed where its icon
+   *  is, one fleet tick at a time, so it is ready to take the contact back
+   *  the moment it is deselected. It never shows here: it draws the contact
+   *  only while the tracked model loads, as it did before the selection. */
+  function _keepTrackedFleetModel(icao24, position, course, out) {
+    _ensureModel(icao24);
+    const record = state._models.get(icao24);
+    if (!record) return;
+    const meta = _metaOf(icao24);
+    const set = state._modelSets?.fleet ?? null;
+    _retryFailedFleetModel(set, icao24, record);
+    const displayPos = _modelDisplayPosition(icao24, position);
+    if (displayPos) placeModel(record, displayPos, _modelHeading(course, meta));
+    else showModel(record, false); // nowhere safe to draw it
+    _send(set, icao24, record, _modelSpec(meta), out);
+  }
+
+  /**
+   * Hand a contact just deselected back to the fleet in the same frame: to
+   * its fleet model when one is loaded (kept while it was selected), placed
+   * where its icon is and shown, else to its icon. Runs once the contact no
+   * longer reads as tracked.
+   * @param {string} icao24
+   */
+  function _handBackDeselected(icao24) {
+    const icons = state._icons;
+    const record = state._models.get(icao24);
+    if (!icons?.has(icao24)) {
+      if (record) _releaseModel(icao24);
+      return;
+    }
+    if (!record) {
+      icons.setShown(icao24, true);
+      return;
+    }
+    const pose = _pose();
+    if (!pose || !_modelRegimeActive(pose) || isTr3b(icao24)) {
+      _releaseModel(icao24); // the icon takes it back
+      return;
+    }
+    const t = parts.icons._displayMs();
+    const position = icons.position(icao24, t);
+    _driveFleetModelHandoff(
+      icao24,
+      record,
+      position,
+      icons.course(icao24, t),
+      () =>
+        _treatFleetModel(
+          icao24,
+          record,
+          distance(pose.position, position),
+          pose,
+        ),
+    );
+  }
+
+  /** A fleet model's tint and alpha this tick: the contact's colour, faded
+   *  as its icon is (focus, recession), or the IR boost's full-strength
+   *  white. */
+  function _treatFleetModel(icao24, record, cameraDistanceM, pose) {
+    const icons = state._icons;
+    _treat(record, {
+      // IR boost must survive the per-tick treatment write — otherwise
+      // any alpha change would repaint the ordinary tint over the hot
+      // white. Boosted models also skip the recession fade: hot targets
+      // stay full-strength at any range (icons keep their normal
+      // fade — full-opacity glyph walls read as overwhelming).
+      base: state._irBoost ? WHITE : rgba(_modelColor(icao24)),
+      alpha: state._irBoost
+        ? 1
+        : aircraftTreatmentAlpha({
+            baseAlpha: icons.alpha(icao24),
+            focusFactor: icons.focus(icao24),
+            cameraDistanceM,
+            cameraHeightM: pose.height,
+          }),
+    });
   }
 
   /** Per-frame driver for the standalone tracked model. Runs every preUpdate (not the 80 ms fleet
@@ -741,7 +828,7 @@ export function createAircraftModels({
    *  in, can never stall or freeze the centering (the old model-graphic-on-entity failure mode).
    *
    *  The model draws exactly as the fleet would draw this contact: the same
-   *  asset at the same scale and `minPixelSize` (`MODEL_MIN_PX`), only its
+   *  asset at the same scale (its true size), only its
    *  tint the tracked colour; whether it draws at all is the fleet's rule too
    *  (`_trackedModelRegimeActive`). Selecting a contact changes its colour,
    *  never its size or form. */
@@ -768,7 +855,7 @@ export function createAircraftModels({
       parts.icons._iconPosition(state._trackedIcao);
     if (!pos) {
       _hideTrackedModel();
-      _releaseTrackedFleetModel();
+      _hideTrackedFleetModel();
       return;
     }
     const icao24 = state._trackedIcao;
@@ -780,14 +867,13 @@ export function createAircraftModels({
       // The icon carries it: after the load budget is spent, or until the
       // fleet model set has loaded.
       if (!_trackedModelLoadAllowed() || !spec.url) {
-        _releaseTrackedFleetModel();
+        _hideTrackedFleetModel();
         return;
       }
       const record = createModelRecord({
         specKey: _specKeyFor(meta), // type-change sync compares against this
         bellyM: spec.bellyM,
         scale: spec.scale,
-        minPixelSize: policy.MODEL_MIN_PX,
       });
       record.id = icao24;
       record.url = resolveAsset(spec.url);
@@ -809,7 +895,7 @@ export function createAircraftModels({
     const displayPos = _modelDisplayPosition(icao24, pos);
     if (!displayPos) {
       _hideTrackedModel(); // no ground evidence → the icon carries it
-      _releaseTrackedFleetModel();
+      _hideTrackedFleetModel();
       return;
     }
     placeModel(
@@ -820,7 +906,7 @@ export function createAircraftModels({
     _poseParts(record, meta, spec);
     showModel(record, record.ready);
     _send(state._modelSets.tracked, icao24, record, spec);
-    if (record.ready) _releaseTrackedFleetModel();
+    if (record.ready) _hideTrackedFleetModel();
   }
 
   /**
@@ -979,8 +1065,6 @@ export function createAircraftModels({
     const items = pendingItems;
     for (const icao24 of modelEligible) {
       if (isTr3b(icao24)) continue;
-      // The tracked contact's model is `_updateTrackedModel`'s.
-      if (icao24 === state._trackedIcao) continue;
       if (!icons.has(icao24)) continue;
       const position = icons.position(icao24, t);
       if (
@@ -1003,6 +1087,17 @@ export function createAircraftModels({
         }
         continue;
       }
+      // The tracked contact draws as `_updateTrackedModel` says; its fleet
+      // model is only kept ready for when it is deselected.
+      if (icao24 === state._trackedIcao) {
+        _keepTrackedFleetModel(
+          icao24,
+          position,
+          icons.course(icao24, t),
+          items,
+        );
+        continue;
+      }
       _ensureModel(icao24);
       const record = state._models.get(icao24);
       const cameraDistanceM = distance(camPos, position);
@@ -1011,24 +1106,7 @@ export function createAircraftModels({
         record,
         position,
         icons.course(icao24, t),
-        () => {
-          _treat(record, {
-            // IR boost must survive the per-tick treatment write — otherwise
-            // any alpha change would repaint the ordinary tint over the hot
-            // white. Boosted models also skip the recession fade: hot targets
-            // stay full-strength at any range (icons keep their normal
-            // fade — full-opacity glyph walls read as overwhelming).
-            base: state._irBoost ? WHITE : rgba(_modelColor(icao24)),
-            alpha: state._irBoost
-              ? 1
-              : aircraftTreatmentAlpha({
-                  baseAlpha: icons.alpha(icao24),
-                  focusFactor: icons.focus(icao24),
-                  cameraDistanceM,
-                  cameraHeightM: pose.height,
-                }),
-          });
-        },
+        () => _treatFleetModel(icao24, record, cameraDistanceM, pose),
         items,
       );
     }
@@ -1056,6 +1134,7 @@ export function createAircraftModels({
     _releaseModels,
     _showReleasedIcon,
     _releaseTrackedModel,
+    _handBackDeselected,
     _updateTrackedModel,
     _fleetTick,
   };

@@ -4050,6 +4050,93 @@ export function portChecks() {
       { capability: 'models', bareSky: true },
     ),
     check(
+      'draw.models.paint',
+      'a lit model draws its vertex paint (`COLOR_0`) under the sun, stays readable with the sun below the horizon, and a tint mixed in keeps the paint',
+      async (h, r) => {
+        if (h.pixels === false)
+          return { skip: 'this harness reads no drawn pixels' };
+        // Austin at 13:00 local (sun about 80° up) and at 03:00 (about 32° below).
+        const DAY = Date.parse('2026-06-21T18:00:00Z');
+        const NIGHT = Date.parse('2026-06-21T08:00:00Z');
+        r.frame.setTime(DAY);
+        await overAustin(h, r, 200);
+        const set = r.draw.models({ id: 'conf:models.paint' });
+        const ready = [];
+        set.on('ready', (id) => ready.push(id));
+        const pos = h.toEcef({ ...AUSTIN, height: 0 });
+        const model = (extra = {}) => ({
+          id: 'm',
+          pos,
+          url: 'conformance:painted-model.glb',
+          // Red paint, as a fleet model's livery: a white material, its
+          // colour per vertex.
+          gltf: partsModelGlb({ paint: [0.8, 0.05, 0.05] }),
+          orientation: { heading: 0, pitch: 0, roll: 0 },
+          environmentMap: false,
+          tint: '#ffffff',
+          colorBlend: { mode: 'highlight' },
+          ...extra,
+        });
+        try {
+          set.set([model()]);
+          for (let i = 0; i < 600 && !ready.length; i++) await drawn(h, r, 1);
+          deepEqual(ready, ['m'], 'ready');
+          const s = r.query.project(pos);
+          ok(s, 'the model projects');
+          // The mean colour of a patch on the model's top, seen from above.
+          const mean = async (time) => {
+            r.frame.setTime(time);
+            await drawn(h, r, 3);
+            await settled(r);
+            r.frame.setTime(time);
+            r.frame.renderNow();
+            const image = r.readPixels({
+              crop: {
+                x: Math.round(s.x) - 4,
+                y: Math.round(s.y) - 4,
+                width: 9,
+                height: 9,
+              },
+            });
+            const sum = [0, 0, 0];
+            for (let i = 0; i < image.data.length; i += 4)
+              for (let c = 0; c < 3; c++) sum[c] += image.data[i + c];
+            return sum.map((v) => Math.round(v / (image.data.length / 4)));
+          };
+          const day = await mean(DAY);
+          ok(
+            day[0] > 100 && day[0] > 2 * day[1] && day[0] > 2 * day[2],
+            `in daylight, its red paint: ${day}`,
+          );
+          const night = await mean(NIGHT);
+          ok(
+            night[0] >= 30 && night[0] > 2 * night[1],
+            `with the sun below the horizon, still its paint, not black: ${night}`,
+          );
+          ok(
+            night[0] < day[0],
+            `darker at night than by day: ${night}, ${day}`,
+          );
+          // A tint with no red, as a tracked cyan: mixed in, the paint shows.
+          set.upsert([
+            model({
+              tint: '#00ffff',
+              colorBlend: { mode: 'mix', amount: 0.3 },
+            }),
+          ]);
+          const tinted = await mean(DAY);
+          ok(
+            tinted[0] > 60 && tinted[1] > day[1] + 30,
+            `a cyan tint mixed in at 0.3 keeps the red paint and adds its colour: ${tinted}`,
+          );
+          deepEqual(ready, ['m'], 'never loaded again');
+        } finally {
+          set.dispose();
+        }
+      },
+      { capability: 'models', bareSky: true },
+    ),
+    check(
       'draw.models.bytes',
       'a model given its bytes is drawn from them, its url never fetched',
       async (h, r) => {

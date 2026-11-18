@@ -108,15 +108,19 @@ const CUBES = [
  * The model's GLB bytes. Its mesh node is scaled by `scale`, turned
  * `turnDeg` about its vertical and moved by `translation`; the mesh is
  * built in that node's own frame, so the model it draws is the same
- * whatever the node's transform.
+ * whatever the node's transform. `paint` (RGB, 0..1) is every vertex's
+ * colour (`COLOR_0`) over a white material, as the fleet models carry
+ * their paint; without it the model has no vertex colours.
  * @param {{scale?: number, turnDeg?: number,
- *   translation?: [number, number, number]}} [node]
+ *   translation?: [number, number, number],
+ *   paint?: [number, number, number]}} [node]
  * @returns {Uint8Array}
  */
 export function partsModelGlb({
   scale = 10,
   turnDeg = 0,
   translation = [0, 0, 0],
+  paint,
 } = {}) {
   const a = (turnDeg * Math.PI) / 180;
   const c = Math.cos(a);
@@ -139,7 +143,13 @@ export function partsModelGlb({
   const parts = new Uint8Array(count * 4);
   mesh.parts.forEach((part, i) => (parts[i * 4] = part));
   const indices = new Uint16Array(mesh.indices);
+  // Normalised bytes, RGBA: four to a vertex, on its 4-byte boundary.
+  const colors = paint ? new Uint8Array(count * 4) : null;
+  if (colors)
+    for (let i = 0; i < count; i++)
+      colors.set([...paint.map((c) => Math.round(c * 255)), 255], i * 4);
   const chunks = [positions, normals, parts, indices];
+  if (colors) chunks.push(colors);
   const offsets = [];
   let length = 0;
   for (const chunk of chunks) {
@@ -177,7 +187,12 @@ export function partsModelGlb({
       {
         primitives: [
           {
-            attributes: { POSITION: 0, NORMAL: 1, _PART: 2 },
+            attributes: {
+              POSITION: 0,
+              NORMAL: 1,
+              _PART: 2,
+              ...(colors ? { COLOR_0: 4 } : {}),
+            },
             indices: 3,
             material: 0,
           },
@@ -220,6 +235,17 @@ export function partsModelGlb({
         byteLength: indices.byteLength,
         target: 34963,
       },
+      ...(colors
+        ? [
+            {
+              buffer: 0,
+              byteOffset: offsets[4],
+              byteLength: colors.byteLength,
+              byteStride: 4,
+              target: 34962,
+            },
+          ]
+        : []),
     ],
     accessors: [
       {
@@ -238,6 +264,17 @@ export function partsModelGlb({
         count: indices.length,
         type: 'SCALAR',
       },
+      ...(colors
+        ? [
+            {
+              bufferView: 4,
+              componentType: 5121,
+              normalized: true,
+              count,
+              type: 'VEC4',
+            },
+          ]
+        : []),
     ],
   };
   let text = new TextEncoder().encode(JSON.stringify(json));

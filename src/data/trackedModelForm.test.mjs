@@ -1176,16 +1176,108 @@ for (const fixture of LAYERS) {
 
       viewer.draw.ready(modelSet(fixture, viewer, 'tracked').spec.id, ICAO);
       fixture.driveTrackedModel();
-      assert.equal(
-        fixture.ensureFleetModel(ICAO),
-        null,
-        'once the tracked model draws, the fleet model lets go',
-      );
+      const kept = fixture.ensureFleetModel(ICAO);
+      assert.ok(kept, 'once the tracked model draws, the fleet model is kept');
+      assert.equal(kept.ready, true, 'loaded');
+      assert.equal(kept.show, false, 'but hidden: one model draws the contact');
       assert.equal(
         fixture.trackedBillboardColor()[3],
         0,
         'the tracked model is the visual',
       );
+    } finally {
+      fixture.layer.setParams({ models3d: false });
+      fixture.layer.stopTracking();
+    }
+  });
+
+  test(`${fixture.name}: deselecting hands the contact straight back to its loaded fleet model, with no icon flash`, () => {
+    clearTr3bRegistry();
+    try {
+      fixture.layer.setParams({ models3d: true });
+      const viewer = viewerAtHeight(30_000);
+      const position = Cesium.Cartesian3.fromDegrees(-97.71, 30.21, 10_668);
+      const icon = fixture.seed({
+        viewer,
+        models: [
+          [
+            ICAO,
+            {
+              ready: true,
+              show: true,
+              modelMatrix: Cesium.Matrix4.fromTranslation(position),
+            },
+          ],
+        ],
+        trackedModelEligible: null,
+      });
+      fixture.driveTrackedModel();
+      viewer.draw.ready(modelSet(fixture, viewer, 'tracked').spec.id, ICAO);
+      fixture.driveTrackedModel();
+      assert.equal(
+        fixture.trackedModel().ready,
+        true,
+        'the tracked model draws',
+      );
+      icon.show = false; // as selecting it hides it
+
+      fixture.layer.stopTracking();
+      const fleetItem = modelSet(fixture, viewer, 'fleet').items.get(ICAO);
+      assert.equal(
+        fleetItem?.show,
+        true,
+        'the kept fleet model draws the contact in the same frame',
+      );
+      assert.equal(icon.show, false, 'and its icon never shows');
+      assert.equal(
+        modelSet(fixture, viewer, 'tracked').items.has(ICAO),
+        false,
+        'the tracked model is gone',
+      );
+    } finally {
+      fixture.layer.setParams({ models3d: false });
+      fixture.layer.stopTracking();
+    }
+  });
+
+  test(`${fixture.name}: deselecting shows the icon only when no fleet model is loaded`, () => {
+    clearTr3bRegistry();
+    try {
+      fixture.layer.setParams({ models3d: true });
+      const viewer = viewerAtHeight(30_000);
+      // Selected as an icon: no fleet model at all.
+      let icon = fixture.seed({
+        viewer,
+        models: [],
+        trackedModelEligible: null,
+      });
+      fixture.layer.stopTracking();
+      assert.equal(icon.show, true, 'no fleet model: the icon');
+
+      // A fleet model still loading when it is deselected.
+      icon = fixture.seed({
+        viewer,
+        models: [[ICAO, { ready: false, show: false }]],
+        trackedModelEligible: null,
+      });
+      fixture.layer.stopTracking();
+      assert.equal(icon.show, true, 'a fleet model not loaded yet: the icon');
+      assert.notEqual(
+        modelSet(fixture, viewer, 'fleet').items.get(ICAO)?.show,
+        true,
+        'and the model stays hidden until it loads',
+      );
+
+      // 3D turned off meanwhile: the icon, and the fleet model goes.
+      icon = fixture.seed({
+        viewer,
+        models: [[ICAO, { ready: true, show: false }]],
+        trackedModelEligible: null,
+      });
+      fixture.layer.setParams({ models3d: false });
+      fixture.layer.stopTracking();
+      assert.equal(icon.show, true, '3D off: the icon');
+      assert.equal(fixture.ensureFleetModel(ICAO), null, 'no fleet model kept');
     } finally {
       fixture.layer.setParams({ models3d: false });
       fixture.layer.stopTracking();

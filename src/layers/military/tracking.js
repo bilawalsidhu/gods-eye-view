@@ -27,6 +27,10 @@ import {
 } from '../../data/trackingClickGesture.js';
 import { inputFor } from '../../input/dispatcher.js';
 import {
+  COCKPIT_AIR_ALL_ADD_M,
+  COCKPIT_AIR_ALL_KEEP_M,
+  COCKPIT_AIR_PROX_ADD_M,
+  COCKPIT_AIR_PROX_KEEP_M,
   TRAIL_MAX_POINTS,
   displayDelayMs,
   followsClock,
@@ -45,6 +49,7 @@ import {
   trailBodySegments,
   trailHeadCurvePoints,
   trailHeadStartFix,
+  trailTimeAt,
 } from '../../data/trailContinuity.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 import { entityRecord } from '../../data/entityRecords.js';
@@ -212,11 +217,13 @@ export function createTracking({
       );
       distancesSquared.push([icao24, distanceSquared(eye, position)]);
     }
+    // The AIR band follows the 3D mode, not the 3D model radius.
+    const all = flightState._models3dMode === 'all';
     const next = nextCockpitNearContacts(
       previous,
       distancesSquared,
-      parts.rendering._modelAddDistM(),
-      parts.rendering._modelKeepDistM(),
+      all ? COCKPIT_AIR_ALL_ADD_M : COCKPIT_AIR_PROX_ADD_M,
+      all ? COCKPIT_AIR_ALL_KEEP_M : COCKPIT_AIR_PROX_KEEP_M,
     );
     flightState._cockpitNearContacts = next;
     for (const icao24 of previous)
@@ -608,12 +615,46 @@ export function createTracking({
     );
   }
 
-  /** Reports at or before the time the aircraft is drawn (now − the display delay). */
+  /** Reports at or before the time the aircraft is drawn (`_trailDisplayMs`). */
 
   function _trailBodyCountNow() {
-    return trailBodyCount(
+    return trailBodyCount(flightState._trailFixes, _trailDisplayMs());
+  }
+
+  /**
+   * The time on its trail at which a host-supplied placement draws the
+   * aircraft, read off the trail where it is drawn (`trailTimeAt`): such a
+   * placement draws at a delay of its own, not this layer's. NaN when this
+   * layer's own motion draws it, or the trail has no pair to read.
+   * @returns {number} Epoch ms or NaN.
+   */
+  function _placedTrailMs() {
+    if (!parts.motion._trackedPlaced?.()) return NaN;
+    return trailTimeAt(
       flightState._trailFixes,
-      flightState.now() - displayDelayMs(flightState),
+      parts.motion._trackedDisplayCached(),
+    );
+  }
+
+  /**
+   * The time the trail runs up to: the time the aircraft is drawn at, now −
+   * the display delay, or where a placement draws it. Otherwise the trail
+   * ends short of a placed aircraft, or runs on ahead of it.
+   * @returns {number} Epoch ms.
+   */
+  function _trailDisplayMs() {
+    const placedMs = _placedTrailMs();
+    return Number.isFinite(placedMs)
+      ? placedMs
+      : flightState.now() - displayDelayMs(flightState);
+  }
+
+  /** Whether the trail holds no report behind the aircraft yet: this
+   *  layer's own motion draws it before its oldest fix. Never for an
+   *  aircraft a placement draws: its trail is read where it is drawn. */
+  function _trailWarmingUp() {
+    return (
+      !Number.isFinite(_placedTrailMs()) && parts.motion._isTrackWarmingUp()
     );
   }
 
@@ -630,7 +671,7 @@ export function createTracking({
     if (
       !flightState._trackedIcao ||
       !flightState._trailFixes.length ||
-      parts.motion._isTrackWarmingUp()
+      _trailWarmingUp()
     )
       return [];
     const head =
@@ -658,7 +699,7 @@ export function createTracking({
       trailHeadCurvePoints(
         flightState._trailFixes,
         flightState._trailBodyCount,
-        flightState.now() - displayDelayMs(flightState),
+        _trailDisplayMs(),
       ),
       end,
       parts.motion._trackedModelCenterWorld(),
@@ -923,10 +964,11 @@ export function createTracking({
     flightState._trackedIcao = null;
     // Hand the contact back to its icon only now, once it no longer reads as
     // tracked (the settle plans it as a fleet contact).
-    if (flightState._icons?.has(clearedIcao)) {
-      flightState._icons.setShown(clearedIcao, true);
+    // Its fleet model, kept loaded while it was selected, takes it back in
+    // this frame; the icon shows only when there is no loaded one.
+    parts.rendering._handBackDeselected(clearedIcao);
+    if (flightState._icons?.has(clearedIcao))
       parts.icons._settleIcon(clearedIcao, { fromCourseDeg: trackedCourseDeg });
-    }
     parts.icons._applyIconPresentation(clearedIcao);
     clearTrackedSubjectContext('military');
     _emitAwarenessEvent('gev:awareness-subject-cleared', {

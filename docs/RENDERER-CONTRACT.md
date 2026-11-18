@@ -318,6 +318,9 @@ opaque command and before the translucent pass, which blends
 order-independently and would undo the addition; ground commands keep their
 pass and stencil and only blend differently. The checks `draw.sets.blend`
 (points, icons, lines, shapes) and `draw.models.blend` read the pixels.
+`draw.models.paint` reads a lit model's vertex paint (`COLOR_0`) at a fixed
+sun: its colour by day, still its colour (not black) with the sun below the
+horizon, and its paint kept under a tint mixed in.
 
 A model item may bring its glTF bytes (`gltf`): the renderer builds it from
 them and never fetches its `url`, which stays the model's identity, so a
