@@ -7,4 +7,4 @@
   restore. From 1200px wide the command dock and World Timeline sit 74px up,
   the map attribution sits on the Power Up baseline, and the coordinates start
   level with the bottom-right readout instead of overlapping the attribution
-  and Power Up (manjunath22466, #0).
+  and Power Up (manjunath22466, samehkhamis, #1825).
