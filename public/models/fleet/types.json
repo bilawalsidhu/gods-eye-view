@@ -2033,5 +2033,199 @@
    "monorail": 6.0,
    "gondola": 20.0
   }
+ },
+ "rockets": {
+  "configurations": {
+   "Falcon 9": [
+    "falcon9",
+    70.0
+   ],
+   "Falcon 9 Block 5": [
+    "falcon9",
+    70.0
+   ],
+   "Falcon 9 v1.2": [
+    "falcon9",
+    70.0
+   ],
+   "Falcon Heavy": [
+    "falcon_heavy",
+    70.0
+   ],
+   "Starship": [
+    "starship",
+    123.3
+   ],
+   "Starship V2": [
+    "starship",
+    123.3
+   ],
+   "Starship V3": [
+    "starship",
+    124.4
+   ],
+   "Electron": [
+    "electron",
+    18.0
+   ],
+   "New Glenn": [
+    "new_glenn",
+    98.0
+   ],
+   "Ariane 62": [
+    "ariane62",
+    56.0
+   ],
+   "Ariane 64": [
+    "ariane64",
+    62.0
+   ],
+   "Soyuz 2.1a": [
+    "soyuz",
+    46.3
+   ],
+   "Soyuz 2.1b": [
+    "soyuz",
+    46.3
+   ],
+   "Soyuz-2.1a": [
+    "soyuz",
+    46.3
+   ],
+   "Soyuz-2.1b": [
+    "soyuz",
+    46.3
+   ],
+   "Soyuz-FG": [
+    "soyuz",
+    46.3
+   ],
+   "Soyuz ST-B": [
+    "soyuz",
+    46.3
+   ],
+   "Soyuz 2.1v": [
+    "generic_medium",
+    44.0
+   ],
+   "Long March 5": [
+    "long_march5",
+    57.0
+   ],
+   "Long March 5B": [
+    "long_march5",
+    53.7
+   ],
+   "Space Launch System (SLS)": [
+    "sls",
+    98.1
+   ],
+   "SLS Block 1": [
+    "sls",
+    98.1
+   ],
+   "SLS Block 1B": [
+    "sls",
+    111.3
+   ],
+   "H3": [
+    "h3",
+    57.0
+   ],
+   "H3-22": [
+    "h3",
+    57.0
+   ],
+   "H3-24": [
+    "h3",
+    57.0
+   ],
+   "H3-30": [
+    "h3",
+    57.0
+   ],
+   "Vulcan": [
+    "vulcan",
+    61.6
+   ],
+   "Vulcan VC0S": [
+    "vulcan",
+    61.6
+   ],
+   "Vulcan VC2S": [
+    "vulcan",
+    61.6
+   ],
+   "Vulcan VC4L": [
+    "vulcan",
+    67.3
+   ],
+   "Vulcan VC6L": [
+    "vulcan",
+    67.3
+   ]
+  },
+  "families": {
+   "Falcon": [
+    "falcon9",
+    70.0
+   ],
+   "Starship": [
+    "starship",
+    123.3
+   ],
+   "Electron": [
+    "electron",
+    18.0
+   ],
+   "New Glenn": [
+    "new_glenn",
+    98.0
+   ],
+   "Ariane": [
+    "ariane62",
+    56.0
+   ],
+   "Soyuz": [
+    "soyuz",
+    46.3
+   ],
+   "Long March 5": [
+    "long_march5",
+    57.0
+   ],
+   "SLS": [
+    "sls",
+    98.1
+   ],
+   "H3": [
+    "h3",
+    57.0
+   ],
+   "Vulcan": [
+    "vulcan",
+    61.6
+   ]
+  },
+  "classes": [
+   {
+    "max_leo_kg": 2000,
+    "model": "generic_small",
+    "height": 20.0
+   },
+   {
+    "max_leo_kg": 20000,
+    "model": "generic_medium",
+    "height": 50.0
+   },
+   {
+    "model": "generic_heavy",
+    "height": 70.0
+   }
+  ],
+  "default_rocket": [
+   "generic_medium",
+   50.0
+  ]
  }
 }

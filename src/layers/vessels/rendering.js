@@ -43,7 +43,11 @@ import {
   vesselModelSpec,
 } from '../../data/fleetModels.js';
 import { createFleetModelLayer } from '../../data/fleetModelInstances.js';
-import { isAidToNavigation } from '../../data/vesselTypes.js';
+import { vesselPartState } from '../../data/modelPartDrivers.js';
+import { isAidToNavigation, vesselKind } from '../../data/vesselTypes.js';
+import { aidSprite, vesselSprite } from '../../data/vesselSprites.js';
+import { cssColor } from '../../render/color.js';
+import { KNOT_MPS } from '../../data/units.js';
 
 /** A moving vessel's next frame is asked for once it would move this far on
  * screen (pixels), so it glides when it moves visibly and the scene idles
@@ -55,10 +59,13 @@ const PLACEMENT_FRAME_MS = 1000;
  * ms), so one that comes into view is judged where it is. */
 const HIDDEN_FOLLOW_MS = 250;
 
-/** The ship artwork's own raster size (px). */
+/** A vessel or aid sprite's drawn size before its scale (CSS px). */
 const SHIP_ICON_PX = 32;
 
 let instances = 0;
+
+/** Tint by CSS colour: a handful of type colours. */
+const tints = new Map();
 
 /** How often the vessels near enough for a model are gathered again (wall ms). */
 const MODEL_CANDIDATES_MS = 500;
@@ -404,7 +411,7 @@ export function createRendering({
 
   /** The icon item a record draws, as it now is. */
   function iconItem(record, visual) {
-    const selected = record === state.selectedRecord;
+    const aid = isAidToNavigation(record);
     const courseDeg = vesselCourseDeg(record);
     // Following the clock, not there yet at the time drawn.
     visual.seen = seenYet(record);
@@ -418,11 +425,14 @@ export function createRendering({
       // is not there yet.
       show: !isCockpitSubject(record) && !visual.modelOwnsVisual && visual.seen,
       pos: plan?.pos ?? visual.position,
-      image: shipIcon(record, selected),
+      image: shipIcon(record),
       size: [SHIP_ICON_PX, SHIP_ICON_PX],
-      // Selection changes the colour only, never the size.
+      // Tinted by type; selection changes neither the colour nor the size.
+      color: shipTint(record),
       scale: shipScale(record),
-      rotationMode: 'course',
+      // An aid's buoy stands upright on screen; a vessel turns with course.
+      rotationMode: aid ? 'screen' : 'course',
+      rotation: 0,
       // Held on course, or along its track on the renderer's clock;
       // `course` for renderers without motion segments.
       course: courseDeg,
@@ -519,40 +529,33 @@ export function createRendering({
   }
 
   /**
-   * Build (and cache) a chevron/delta-wing SVG data URL tinted for the vessel.
-   * The shape points north (up) so the row's course maps directly to heading.
-   * An aid to navigation, which has no heading, is a ringed disc instead.
-   * One icon is generated per color+variant and shares one atlas slot.
-   * @param {Object} record - Vessel record (drives per-type tint).
-   * @param {boolean} selected - True for the white/brighter selected variant.
+   * The sprite a vessel is drawn as: the white hull of its kind
+   * (`vesselKind`), bow up so the row's course turns it to its heading, or
+   * for an aid to navigation the buoy. The layer tints it
+   * (`shipTint`), so each shape takes one icon-atlas slot.
+   * @param {Object} record - Vessel record.
    * @returns {string} SVG data URL.
    */
 
-  function shipIcon(record, selected) {
-    const aid = isAidToNavigation(record);
-    const cssColor = selected
-      ? '#ffffff'
-      : aid
-        ? AID_TO_NAVIGATION_STYLE.css
-        : vesselTypeCss(record.type);
-    const key = `${cssColor}:${selected ? 'selected' : 'normal'}:${aid ? 'aid' : 'ship'}`;
-    if (vesselState.shipIconCache.has(key))
-      return vesselState.shipIconCache.get(key);
+  function shipIcon(record) {
+    return isAidToNavigation(record)
+      ? aidSprite()
+      : vesselSprite(vesselKind(record.type));
+  }
 
-    const stroke = selected ? 'rgba(6,26,32,0.95)' : 'rgba(4,18,24,0.9)';
-    const strokeWidth = selected ? 1.1 : 0.7;
-    const shape = aid
-      ? `<circle r="8" fill="${cssColor}" stroke="${stroke}" stroke-width="${strokeWidth * 2}"/>
-      <circle r="3" fill="${stroke}"/>`
-      : `<path d="M0,-14 L11,10 L4,7 L0,14 L-4,7 L-11,10 Z" fill="${cssColor}" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linejoin="round"/>`;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-    <g transform="translate(16,16)">
-      ${shape}
-    </g>
-  </svg>`;
-    const icon = 'data:image/svg+xml;base64,' + btoa(svg);
-    vesselState.shipIconCache.set(key, icon);
-    return icon;
+  /**
+   * A vessel's tint, `[r, g, b, a]`: its type's colour (vesselLabels.js,
+   * shared with its card), an aid's bone white.
+   * @param {Object} record - Vessel record.
+   */
+
+  function shipTint(record) {
+    const css = isAidToNavigation(record)
+      ? AID_TO_NAVIGATION_STYLE.css
+      : vesselTypeCss(record.type);
+    let tint = tints.get(css);
+    if (!tint) tints.set(css, (tint = Object.freeze(cssColor(css))));
+    return tint;
   }
 
   // Under the DISPLAY rail's 3D toggle, vessels near the camera are drawn as
@@ -578,6 +581,13 @@ export function createRendering({
       resolveAsset: fleet.resolveAsset,
       // A hull below the waterline would show through a plain globe.
       waterline: true,
+      // Its radar sweeps while it is under way (speed in knots).
+      partState: (item, table) =>
+        vesselPartState(table, {
+          speedMps: Number.isFinite(item.record?.speed)
+            ? item.record.speed * KNOT_MPS
+            : null,
+        }),
     });
   }
 
@@ -614,11 +624,7 @@ export function createRendering({
       ? findCamera(state.viewer)?.pose()?.position
       : null;
     if (!eye) return;
-    const policy = services.fleet.policy;
-    const keepM =
-      services.fleet.display?.()?.models3dMode === 'all'
-        ? policy.keepAllM
-        : policy.keepM;
+    const keepM = services.fleet.policy.keepM;
     const limitSq = keepM * keepM * 1.44;
     for (const record of state.records.all) {
       const waterline = getVisual(record).waterline;

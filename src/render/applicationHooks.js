@@ -14,6 +14,11 @@
  * - `viewerDrawsEntity(entity)`: whether an entity is one the renderer draws
  *   itself (Cockpit asks whether the aircraft it flies still draws).
  * - `qaHandles`: values QA scripts read from `window.__godsEyeView`.
+ * - `engine`: the renderer's own engine, for an application that draws with
+ *   it directly beside the contract: `kind` names it (`'cesium'`, with
+ *   `viewer`, Cesium's `Viewer`). An application draws only with engines
+ *   whose kind it knows; what it draws there is its own to add, update and
+ *   remove.
  * - `ownCreditDisplay`: true when the renderer shows its credits in a
  *   display of its own; otherwise the application shows what its credits
  *   port lists (`src/ui/creditsView.js`).

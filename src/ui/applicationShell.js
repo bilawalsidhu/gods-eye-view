@@ -106,6 +106,9 @@ export class StyleManager extends ShellFacade {
    * @param {object} [options]
    * @param {boolean} [options.localePicker=true] - false removes the language
    *   picker, for a host that offers its own language choice.
+   * @param {{lon: number, lat: number, height: number, heading?: number,
+   *   pitch?: number}|null} [options.homeView] - where the title's logo goes
+   *   back to (degrees): the view the app started from.
    */
   constructor(
     viewer,
@@ -116,6 +119,7 @@ export class StyleManager extends ShellFacade {
       requestServices,
       initialShareCode = null,
       localePicker = true,
+      homeView = null,
     } = {},
   ) {
     super();
@@ -341,6 +345,7 @@ export class StyleManager extends ShellFacade {
     this._locationNavigation = new LocationNavigation({
       viewer,
       placeSearch,
+      homeView,
       navigation: this._navigation,
       readCockpit: () => this.cockpitView,
       services: {
@@ -1717,7 +1722,12 @@ export class StyleManager extends ShellFacade {
     const store = useGlobeActionsStore(applicationPinia());
     if (this._resetToken) store.detach(this._resetToken);
     this._resetToken = controls
-      ? store.connect({ reset: () => controls.reset() })
+      ? store.connect({
+          reset: () => controls.reset(),
+          home: () => {
+            if (!this._disposed) void this.returnToStart();
+          },
+        })
       : null;
     // A reset under way as the controls are replaced stays on the buttons.
     if (this._resetToken && this._globeResetting != null)
