@@ -50,6 +50,8 @@ import { overlayHost } from './layers/overlayHost.js';
  * runs after each layer disable (a scene without one keeps that memory).
  * `library.fetchTile` and `library.fetchData` fetch the Data Library's tiles
  * and proxied datasets in place of the defaults (`createLibrarySource`).
+ * `library.fetchImpl` asks the library server (its catalog) in place of the
+ * page's fetch, for a server that wants the application's own credentials.
  * `library.requireCatalog` offers only what the server's library catalog
  * names, and nothing while it does not answer.
  */
@@ -165,6 +167,7 @@ export function createApplicationTools({
     requestRender: governorRequestRender,
     // An application's own tile and dataset fetches, when it keeps them in
     // its own cache.
+    fetchImpl: library.fetchImpl ?? undefined,
     fetchTile: library.fetchTile ?? null,
     fetchData: library.fetchData ?? null,
     requireCatalog: library.requireCatalog === true,
