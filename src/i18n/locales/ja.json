@@ -4032,5 +4032,6 @@
   "KT": "KT",
   "Course to {code}: {course}": "{code}への針路: {course}",
   "Over {place}": "{place}上空",
-  "Below": "直下"
+  "Below": "直下",
+  "Back to live at the starting view": "ライブに戻り、最初の表示へ"
 }
