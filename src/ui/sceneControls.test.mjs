@@ -98,6 +98,7 @@ function fixture() {
       'download',
       'load',
       'deleteShot',
+      'moveShot',
     ].map((name) => [
       name,
       (...args) => {
@@ -219,22 +220,30 @@ test('Scene controls dispatch panel and shot-row actions, and rows outlive repub
     await nextTick();
     const row = f.elements.shots.children[0];
     const label = f.label();
-    const load = row.children[0].children[1].children[0];
+    const [up, down, del] = row.children[0].children[1].children;
     f.elements.capture.click();
     f.elements.start.click();
+    // A click on the row goes to the shot: selected and loaded.
     label.click();
     label.dispatchEvent(new Event('dblclick'));
     await nextTick();
     label.children[0].value = 'Renamed';
+    // A click in the name being typed goes nowhere.
+    label.children[0].click();
     label.children[0].dispatchEvent(new Event('blur'));
-    load.click();
     assert.deepEqual(f.calls, [
       ['capture'],
       ['start', 'scene-a'],
       ['selectShot', 'shot-a'],
-      ['renameShot', 'scene-a', 'shot-a', 'Renamed'],
       ['load', 'scene-a', 'shot-a'],
+      ['renameShot', 'scene-a', 'shot-a', 'Renamed'],
     ]);
+    // A lone shot has nowhere to move; the buttons never load it.
+    assert.equal(up.disabled, true);
+    assert.equal(down.disabled, true);
+    window.confirm = () => false;
+    del.click();
+    assert.equal(f.calls.length, 5);
     f.owner.renderShotList();
     await nextTick();
     assertSameNode(f.elements.shots.children[0], row);
@@ -246,10 +255,75 @@ test('Scene controls dispatch panel and shot-row actions, and rows outlive repub
     f.owner.destroy();
     await nextTick();
     f.label().click();
-    assert.deepEqual(f.calls.at(-1), ['selectShot', 'shot-a']);
+    assert.deepEqual(f.calls.slice(-2), [
+      ['selectShot', 'shot-a'],
+      ['load', 'scene-a', 'shot-a'],
+    ]);
     newer.destroy();
     await nextTick();
     assert.equal(f.elements.shots.children.length, 0);
+  } finally {
+    f.restore();
+  }
+});
+
+test('a shot row goes to its shot from the keyboard, and its up and down buttons swap it with a neighbour', async () => {
+  const f = fixture();
+  try {
+    f.state.scenes[0].shots.push(
+      { id: 'shot-b', title: 'Shot B', durationSec: 4, holdSec: 0 },
+      { id: 'shot-c', title: 'Shot C', durationSec: 4, holdSec: 0 },
+    );
+    f.owner.renderShotList();
+    await nextTick();
+    const rows = () => [...f.elements.shots.children];
+    const buttons = (index) => rows()[index].querySelectorAll('button');
+    const label = (index) => rows()[index].querySelector('.scene-shot-label');
+
+    // The title is the row's keyboard control, described by its summary.
+    const second = label(1);
+    assert.equal(second.getAttribute('role'), 'button');
+    assert.equal(second.getAttribute('tabindex'), '0');
+    const meta = document.getElementById(
+      second.getAttribute('aria-describedby'),
+    );
+    assert.ok(meta.classList.contains('scene-shot-meta'));
+    for (const key of ['Enter', ' '])
+      second.dispatchEvent(
+        Object.assign(new Event('keydown', { bubbles: true }), { key }),
+      );
+    second.dispatchEvent(
+      Object.assign(new Event('keydown', { bubbles: true }), { key: 'a' }),
+    );
+    assert.deepEqual(f.calls, [
+      ['selectShot', 'shot-b'],
+      ['load', 'scene-a', 'shot-b'],
+      ['selectShot', 'shot-b'],
+      ['load', 'scene-a', 'shot-b'],
+    ]);
+
+    // Up and down, labelled, disabled at the ends; neither loads the shot.
+    f.calls.length = 0;
+    const [firstUp, firstDown] = buttons(0);
+    assert.equal(firstUp.getAttribute('aria-label'), 'Move up');
+    assert.equal(firstDown.getAttribute('aria-label'), 'Move down');
+    assert.equal(firstUp.disabled, true);
+    assert.equal(firstDown.disabled, false);
+    assert.equal(buttons(2)[1].disabled, true);
+    assert.equal(buttons(2)[0].disabled, false);
+    buttons(1)[0].click();
+    buttons(1)[1].click();
+    assert.deepEqual(f.calls, [
+      ['moveShot', 'scene-a', 'shot-b', 0],
+      ['moveShot', 'scene-a', 'shot-b', 2],
+    ]);
+
+    // Not while the scene plays.
+    f.state.running = true;
+    f.owner.setButtons(true);
+    await nextTick();
+    assert.ok(rows().every((_, index) => buttons(index)[0].disabled));
+    assert.ok(rows().every((_, index) => buttons(index)[1].disabled));
   } finally {
     f.restore();
   }

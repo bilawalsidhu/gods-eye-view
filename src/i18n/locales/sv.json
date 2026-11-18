@@ -2438,9 +2438,7 @@
   "Delete scene \"{scene}\" and all shots?": "Radera scenen ”{scene}” och alla tagningar?",
   "Stopped (Esc)": "Stoppad (Esc)",
   "No shots yet. Use CAPTURE SHOT to save current look.": "Inga tagningar än. Använd SPARA TAGNING för att spara nuvarande vy.",
-  "Double-click to rename": "Dubbelklicka för att byta namn",
   "Shot name": "Namn på tagning",
-  "LOAD": "LADDA",
   "{duration}s + {hold}s": "{duration} s + {hold} s",
   "Choose files": "Välj filer",
   "{count} files selected": {
@@ -3044,7 +3042,6 @@
   "+ CAPTURE SHOT": "+ SPARA TAGNING",
   "Add the current view, style and layers as the next shot": "Lägg till aktuell vy, stil och lager som nästa tagning",
   "Replace the selected shot with the current view": "Ersätt vald tagning med aktuell vy",
-  "Click a shot to select it, double-click to rename.": "Klicka på en tagning för att välja den, dubbelklicka för att byta namn.",
   "Play from this scene through the rest of the project": "Spela upp från den här scenen genom resten av projektet",
   "Stop playback (Esc)": "Stoppa uppspelningen (Esc)",
   "Play the shot after the selected one, moving on to the next scene when needed": "Spela upp tagningen efter den valda och gå vidare till nästa scen vid behov",
@@ -4136,6 +4133,10 @@
   "Course to {code}: {course}": "Kurs mot {code}: {course}",
   "Over {place}": "Över {place}",
   "Below": "Nedanför",
+  "Go to this shot. Double-click to rename.": "Gå till den här tagningen. Dubbelklicka för att byta namn.",
+  "Move up": "Flytta upp",
+  "Move down": "Flytta ned",
+  "Click a shot to go to it, double-click to rename.": "Klicka på en tagning för att gå till den, dubbelklicka för att byta namn.",
   "Back to live at the starting view": "Tillbaka till live i startvyn",
   "Exit cockpit to fly to a bike share city": "Lämna cockpit för att flyga till en stad med lånecyklar"
 }

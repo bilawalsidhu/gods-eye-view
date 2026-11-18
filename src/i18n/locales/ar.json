@@ -2691,9 +2691,7 @@
   "Delete scene \"{scene}\" and all shots?": "حذف المشهد «{scene}» وكل لقطاته؟",
   "Stopped (Esc)": "متوقف (Esc)",
   "No shots yet. Use CAPTURE SHOT to save current look.": "لا لقطات بعد. استخدم «التقاط لقطة» لحفظ المنظر الحالي.",
-  "Double-click to rename": "انقر نقرًا مزدوجًا لإعادة التسمية",
   "Shot name": "اسم اللقطة",
-  "LOAD": "تحميل",
   "{duration}s + {hold}s": "{duration} ث + {hold} ث",
   "Choose files": "اختيار ملفات",
   "{count} files selected": {
@@ -3450,7 +3448,6 @@
   "Add the current view, style and layers as the next shot": "إضافة العرض الحالي والنمط والطبقات كلقطة تالية",
   "+ CAPTURE SHOT": "+ التقاط لقطة",
   "Replace the selected shot with the current view": "استبدال اللقطة المحددة بالعرض الحالي",
-  "Click a shot to select it, double-click to rename.": "انقر على لقطة لتحديدها، وانقر عليها نقرًا مزدوجًا لإعادة تسميتها.",
   "Play from this scene through the rest of the project": "تشغيل من هذا المشهد حتى نهاية المشروع",
   "Stop playback (Esc)": "إيقاف التشغيل (Esc)",
   "Play the shot after the selected one, moving on to the next scene when needed": "تشغيل اللقطة التي تلي المحددة، مع الانتقال إلى المشهد التالي عند الحاجة",
@@ -4548,6 +4545,10 @@
   "Course to {code}: {course}": "المسار إلى {code}: {course}",
   "Over {place}": "فوق {place}",
   "Below": "في الأسفل",
+  "Go to this shot. Double-click to rename.": "انتقل إلى هذه اللقطة. انقر نقرًا مزدوجًا لإعادة التسمية.",
+  "Move up": "نقل لأعلى",
+  "Move down": "نقل لأسفل",
+  "Click a shot to go to it, double-click to rename.": "انقر على لقطة للانتقال إليها، وانقر عليها نقرًا مزدوجًا لإعادة تسميتها.",
   "Back to live at the starting view": "العودة إلى البث المباشر في العرض الأولي",
   "Exit cockpit to fly to a bike share city": "اخرج من قمرة القيادة للانتقال إلى مدينة بها مشاركة دراجات"
 }
