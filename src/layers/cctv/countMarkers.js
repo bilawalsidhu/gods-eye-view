@@ -24,15 +24,34 @@ export function createCountMarkers(set) {
     const canvas = document.createElement('canvas');
     const size = COUNT_MARKER_PX * 2;
     const ctx = canvas.getContext('2d');
-    const font = 'bold 26px sans-serif';
+    const font = 'bold 24px sans-serif';
     ctx.font = font;
-    canvas.width = Math.max(size, Math.ceil(ctx.measureText(text).width) + 24);
+    // A two-pixel ring survives the halving to screen size, and the clear
+    // margin leaves its outer edge room to antialias inside the sprite.
+    const ring = 4;
+    const margin = 4;
+    const inset = margin + ring / 2;
+    // Up to three digits sit inside the circle; a longer label gets a pill
+    // with room for its rounded ends.
+    const textWidth = Math.ceil(ctx.measureText(text).width);
+    const fitsCircle = textWidth <= size - 2 * (margin + ring) - 4;
+    canvas.width = fitsCircle ? size : textWidth + 2 * (margin + ring + 12);
     canvas.height = size;
     ctx.beginPath();
-    ctx.roundRect(2, 2, canvas.width - 4, size - 4, size / 2 - 2);
+    ctx.roundRect(
+      inset,
+      inset,
+      canvas.width - 2 * inset,
+      size - 2 * inset,
+      size / 2 - inset,
+    );
+    // A dark rim outside the ring keeps it off bright ground.
+    ctx.lineWidth = ring + 4;
+    ctx.strokeStyle = 'rgba(8, 14, 20, 0.85)';
+    ctx.stroke();
     ctx.fillStyle = '#0e1720';
     ctx.fill();
-    ctx.lineWidth = 3;
+    ctx.lineWidth = ring;
     ctx.strokeStyle = '#75e7ff';
     ctx.stroke();
     ctx.fillStyle = ctx.strokeStyle;
