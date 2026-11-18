@@ -13,4 +13,4 @@
   Satellites off request made after Space Missions was switched on ends it
   and keeps Satellites off afterwards; scene, story, preset and other
   programmatic Satellites changes leave Space Missions running
-  (manjunath22466, #2).
+  (manjunath22466, samehkhamis, #1826).
