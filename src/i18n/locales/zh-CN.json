@@ -2161,9 +2161,7 @@
   "SPARSE": "稀疏",
   "BALANCED": "均衡",
   "No shots yet. Use CAPTURE SHOT to save current look.": "暂无镜头。使用“保存镜头”保存当前视角及设置。",
-  "Double-click to rename": "双击重命名",
   "Shot name": "镜头名称",
-  "LOAD": "加载",
   "DEL": "删除",
   "{duration}s + {hold}s": "{duration} 秒 + {hold} 秒",
   "Choose files": "选择文件",
@@ -3073,7 +3071,6 @@
   "+ CAPTURE SHOT": "+ 保存镜头",
   "Add the current view, style and layers as the next shot": "将当前视角、样式和图层添加为下一个镜头",
   "Replace the selected shot with the current view": "用当前视角替换所选镜头",
-  "Click a shot to select it, double-click to rename.": "单击镜头即可选中，双击可重命名。",
   "scene|PLAY": "播放",
   "Stop playback (Esc)": "停止播放（Esc）",
   "SAVE & SHARE": "保存与分享",
@@ -4032,5 +4029,9 @@
   "KT": "kt",
   "Course to {code}: {course}": "前往 {code} 的航向：{course}",
   "Over {place}": "{place}上空",
-  "Below": "下方"
+  "Below": "下方",
+  "Go to this shot. Double-click to rename.": "转到此镜头。双击重命名。",
+  "Move up": "上移",
+  "Move down": "下移",
+  "Click a shot to go to it, double-click to rename.": "单击镜头即可转到该镜头，双击可重命名。"
 }
