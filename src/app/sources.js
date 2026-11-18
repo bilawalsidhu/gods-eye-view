@@ -11,6 +11,7 @@ import { configureSatelliteSource } from '../data/satellites.js';
 import { configureLaunchSource } from '../data/rocketLaunches.js';
 import { configureFirmsSource } from '../data/firmsHeatmap.js';
 import { configureWindSource } from '../data/wind.js';
+import { configureOceanCurrentsSource } from '../data/oceanCurrents.js';
 import { configureMilitaryRegistrySource } from '../data/militaryRegistry.js';
 const configure = {
   alpr: configureAlprSource,
@@ -23,6 +24,7 @@ const configure = {
   launches: configureLaunchSource,
   firms: configureFirmsSource,
   wind: configureWindSource,
+  oceanCurrents: configureOceanCurrentsSource,
 };
 /** Configure sources before any registration or state restoration starts. */
 export function configureApplicationSources({

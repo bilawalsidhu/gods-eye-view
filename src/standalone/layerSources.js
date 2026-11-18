@@ -19,6 +19,7 @@ import { createAlprTileSource } from '../layers/alpr/source.js';
 import { createWeatherSource } from '../layers/weather/source.js';
 import { createCycloneSource } from '../layers/cyclones/source.js';
 import { createWindSource } from '../layers/wind/source.js';
+import { createOceanCurrentsSource } from '../layers/oceanCurrents/source.js';
 import { createFirmsSource } from '../layers/firms/source.js';
 import { createGhostMapsSource } from '../layers/ghostMaps/source.js';
 import { createNewsSource } from '../layers/news/source.js';
@@ -70,6 +71,7 @@ export function createStandaloneLayerSources(
     news: createNewsSource(),
     shipwrecks: createShipwrecksSource(),
     wind: createWindSource(),
+    oceanCurrents: createOceanCurrentsSource(),
     weather: createWeatherSource(),
     cyclones: createCycloneSource(),
     mapillary: createMapillarySource({

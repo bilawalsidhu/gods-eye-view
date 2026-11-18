@@ -556,7 +556,31 @@ export type FieldSpec =
       rectangle: GeoRect;
       pathBudget: number;
       steps: number;
-      style: { color: Color; widthPx: number; speedFactor?: number };
+      style: {
+        color: Color;
+        widthPx: number;
+        speedFactor?: number;
+        /**
+         * Tints each whole path by the speed at its seed: `stops` (five
+         * colours, slow to fast) multiply `color`, read at
+         * `min(1, speed / maxMs) ** gamma` (`gamma` 1 when omitted).
+         * Omitted or null: no tint.
+         */
+        ramp?: {
+          stops: readonly Color[];
+          maxMs: number;
+          gamma?: number;
+        } | null;
+      };
+      /**
+       * A sample equal to this in `u` or `v` is missing: no path is seeded
+       * on it or runs through it.
+       */
+      noData?: number;
+      /** Seconds of flow one path step covers; 1800 when omitted. */
+      stepSeconds?: number;
+      /** Paths end where the flow is slower than this, m/s; 0.15 when omitted. */
+      calmMs?: number;
       /** Draw height, metres; omitted drapes on the surface. */
       heightM?: number;
       /** 0..1, changeable without a rebuild (fade by height). */

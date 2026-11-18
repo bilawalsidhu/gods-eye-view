@@ -96,6 +96,7 @@ const PANEL_GROUPS = [
     ids: [
       'air-quality',
       'wind',
+      'ocean-currents',
       'weather-radar',
       'weather-satellite',
       'weather-lightning',
@@ -671,6 +672,7 @@ export class LayerPanel {
             layer.enabled &&
             [
               'wind',
+              'ocean-currents',
               'weather-radar',
               'weather-satellite',
               'weather-lightning',

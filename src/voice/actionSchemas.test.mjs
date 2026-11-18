@@ -60,7 +60,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // absolute with its -45 default, with steps sent as a direction.
     // show_street_level (map, source, photo) adds one tool.
     // open_stories adds the Stories Explore entry action.
-    '5a2deb65bef5db8fa49ee55dd66efb884e7c3ba97dbdcaad3fada087170d2225',
+    // Ocean Currents (HYCOM / CoastWatch / HF radar) extends the manifest.
+    '16e610ba271ad29989ded42aeb1e85b736d090eccdb9caa0e4d19137691c5a5c',
   );
 });
 

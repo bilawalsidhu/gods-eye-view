@@ -211,13 +211,15 @@ const field = () => ({
 test('the spec reads back as the wind grid it came from', () => {
   const { u, v, ...rest } = windGridOf(SPEC);
   const { u: gu, v: gv, ...want } = grid();
-  assert.deepEqual(rest, want);
+  assert.deepEqual(rest, { ...want, periodic: true, noData: undefined });
   assert.deepEqual([...u], [...gu]);
   const regional = windGridOf({
     ...SPEC,
     rectangle: { west: -100, south: 20, east: -70, north: 50 },
   });
   assert.equal(regional.dx, 10, 'a regional grid does not wrap');
+  assert.equal(regional.periodic, false, 'and is never read outside itself');
+  assert.equal(windGridOf({ ...SPEC, noData: -9999 }).noData, -9999);
   assert.equal(regional.dy, 15);
   const across = windGridOf({
     ...SPEC,
@@ -567,4 +569,123 @@ test('real Cesium sphere culling hides the far hemisphere and a sky-facing view'
   h.render();
   assert.equal(field.diagnostics().visibleCells, 0);
   field.dispose();
+});
+
+test('a ramp tints each path by its seed speed; without one every stop is white', () => {
+  const plain = harness();
+  plain.make();
+  const bare = [...plain.members][0];
+  for (let i = 0; i < 5; i++)
+    assert.deepEqual(
+      bare.appearance.material.uniforms[`rampStop${i}`],
+      new Cartesian3(1, 1, 1),
+      'white stops leave the colour as it was',
+    );
+  assert.equal(bare.appearance.material.uniforms.rampGamma, 1);
+  assert.ok(bare.appearance.material.source.includes('fieldRamp(pow('));
+  assert.ok(
+    bare.appearance.vertexShaderSource.includes(
+      'v_fieldSpeed = czm_batchTable_fieldSpeed(batchId)',
+    ),
+  );
+
+  const h = harness();
+  const stops = ['#000000', '#404040', '#808080', '#c0c0c0', '#ffffff'];
+  const field = h.make({
+    style: { ...SPEC.style, ramp: { stops, maxMs: 30, gamma: 0.5 } },
+  });
+  const { uniforms } = [...h.members][0].appearance.material;
+  assert.equal(uniforms.rampGamma, 0.5);
+  assert.deepEqual(uniforms.rampStop0, new Cartesian3(0, 0, 0));
+  assert.deepEqual(uniforms.rampStop4, new Cartesian3(1, 1, 1));
+  const baked = new Map(bakeWindStreamlines(grid()).map((p) => [p.seed, p]));
+  const instances = [...h.members].flatMap((p) => p.geometryInstances);
+  assert.ok(instances.length > 0);
+  for (const instance of instances) {
+    const path = baked.get(instance.attributes.windSeed.value[0]);
+    assert.equal(
+      instance.attributes.fieldSpeed.value[0],
+      Math.min(1, path.speed / 30),
+      'the speed at the seed over the ramp maximum, at most 1',
+    );
+  }
+  // A new ramp builds again; the same one, or another colour, does not.
+  const before = [...h.members][0];
+  field.update({
+    style: { ramp: { stops: [...stops], maxMs: 30, gamma: 0.5 } },
+  });
+  field.update({ style: { color: '#ffffff' } });
+  assert.equal([...h.members][0], before, 'not rebuilt');
+  field.update({ style: { ramp: { stops, maxMs: 10, gamma: 0.5 } } });
+  assert.notEqual([...h.members][0], before, 'rebuilt for a new ramp');
+  for (const instance of [...h.members].flatMap((p) => p.geometryInstances))
+    assert.equal(
+      instance.attributes.fieldSpeed.value[0],
+      Math.min(1, baked.get(instance.attributes.windSeed.value[0]).speed / 10),
+    );
+  field.dispose();
+
+  for (const ramp of [
+    { stops: stops.slice(0, 4), maxMs: 30 },
+    { stops, maxMs: 0 },
+    { stops, maxMs: 30, gamma: 0 },
+  ])
+    assert.throws(
+      () => harness().make({ style: { ...SPEC.style, ramp } }),
+      /ramp/,
+    );
+});
+
+test("missing samples, the calm cutoff and the step are the tracer's", () => {
+  // A 10 x 10 grid over 30..39 N, 75..66 W at 0.1 m/s east: calm for wind.
+  const n = 100;
+  const u = new Float32Array(n).fill(0.1);
+  const v = new Float32Array(n);
+  const rectangle = { west: -75, south: 30, east: -66, north: 39 };
+  const slow = { u, v, width: 10, height: 10, rectangle, pathBudget: 200 };
+  assert.throws(
+    () => harness().make(slow),
+    /no wind streamlines/,
+    'below the default 0.15 m/s cutoff nothing is traced',
+  );
+  const h = harness();
+  h.make({ ...slow, calmMs: 0.02, stepSeconds: 36000 });
+  const want = bakeWindStreamlines(
+    { ...windGridOf({ ...SPEC, ...slow }) },
+    { count: 200, calmCutoffMs: 0.02, stepSeconds: 36000, bounds: rectangle },
+  );
+  const instances = [...h.members].flatMap((p) => p.geometryInstances);
+  assert.ok(want.length > 50, `${want.length} paths`);
+  assert.equal(instances.length, want.length);
+
+  // Row 4 (35 N) is missing: no path holds a point within a cell of it.
+  const gapU = Float32Array.from(u);
+  const gapV = new Float32Array(n).fill(0.1);
+  for (let i = 0; i < 10; i++) gapU[4 * 10 + i] = gapV[4 * 10 + i] = -9999;
+  const g = harness();
+  g.make({
+    ...slow,
+    u: gapU,
+    v: gapV,
+    noData: -9999,
+    calmMs: 0.02,
+    stepSeconds: 36000,
+  });
+  const gapPaths = bakeWindStreamlines(
+    windGridOf({ ...SPEC, ...slow, u: gapU, v: gapV, noData: -9999 }),
+    { count: 200, calmCutoffMs: 0.02, stepSeconds: 36000, bounds: rectangle },
+  );
+  assert.equal(
+    [...g.members].flatMap((p) => p.geometryInstances).length,
+    gapPaths.length,
+  );
+  assert.ok(gapPaths.length > 0);
+  for (const path of gapPaths)
+    for (const [, lat] of path.coordinates)
+      assert.ok(lat <= 34 || lat >= 36, `lat ${lat} is beside a missing row`);
+
+  // More seeds than the wind's own limit, when the budget asks for them.
+  const dense = harness();
+  const many = dense.make({ pathBudget: 9000 });
+  assert.ok(many.diagnostics().pathCount > 7200);
 });

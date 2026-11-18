@@ -7,6 +7,8 @@ import WeatherReadout from './weather/WeatherReadout.vue';
 // Keyed by the page's Weather panel, which outlives remounted controls.
 const appearedPanels = new WeakSet();
 const openPanels = new WeakMap();
+// Ocean currents sit last: OBSERVED slices the three nowCOAST products out of
+// positions 2 to 4, so the new card must not shift them.
 const ORDER = [
   'weather-cyclones',
   'wind',
@@ -14,6 +16,7 @@ const ORDER = [
   'weather-satellite',
   'weather-lightning',
   'air-quality',
+  'ocean-currents',
 ];
 const OBSERVED = new Set(ORDER.slice(2, 5));
 const utc = (time) =>
@@ -176,6 +179,8 @@ export function createWeatherPanel({
         // Unless its source follows the timeline, wind stays at the live edge.
         if (state.mode === 'history' && !clock?.follows?.(id))
           detail = t('{detail} · Does not follow history', { detail });
+      } else if (id === 'ocean-currents') {
+        detail = summary.detail;
       }
       const lines = [
         { id: 'time', text: detail, muted: true },

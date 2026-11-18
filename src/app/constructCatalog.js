@@ -5,6 +5,7 @@ import { NEWS_LAYER_ID } from '../layers/news/model.js';
 import { createWeatherLayer } from '../layers/weather/index.js';
 import { createApplicationCyclones } from './layers/cyclones.js';
 import { createWindLayer } from '../layers/wind/index.js';
+import { createOceanCurrentsLayer } from '../layers/oceanCurrents/index.js';
 import { createLayerCatalog } from './catalog.js';
 import { layerPlacement } from '../data/placementProvider.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
@@ -197,6 +198,10 @@ export function createApplicationCatalog({
           installations,
         }),
         createWindLayer({ feed: sources.wind, clock: weatherClock }),
+        createOceanCurrentsLayer({
+          feed: sources.oceanCurrents,
+          clock: weatherClock,
+        }),
         createWeatherLayer({
           feed: sources.weather,
           id: 'weather-radar',

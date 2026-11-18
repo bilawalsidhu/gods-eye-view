@@ -19,7 +19,15 @@
  *   second, asking for the frames it needs; `paused` holds it where it is
  *   and raises the ghost. `alpha` scales everything, and 0 draws nothing.
  * - Without `heightM` the paths are drawn at the ellipsoid's surface.
- * - Any change but `alpha`, `paused` and `style` traces the paths again.
+ * - `noData` marks missing samples: no path is seeded on one or runs
+ *   through one, and a grid over part of the globe is never read outside
+ *   itself. `stepSeconds` and `calmMs` are the tracer's step and its calm
+ *   cutoff (1800 s and 0.15 m/s by default).
+ * - `style.ramp` tints each whole path by the speed at its seed: its five
+ *   `stops` (slow to fast) multiply the colour, read at
+ *   `min(1, speed / maxMs) ** gamma`. Without one nothing is tinted.
+ * - Any change but `alpha`, `paused` and `style` traces the paths again,
+ *   as does a new `style.ramp`.
  * - Scenes not in 3D refuse the field, as does a grid no path runs through.
  */
 import * as Cesium from 'cesium';
@@ -40,6 +48,16 @@ const STEP_SECONDS = 0.032;
 // of s identifies a path; its fractional part follows the wind.
 const FLOW_MATERIAL = `
 in float v_windFacing;
+in float v_fieldSpeed;
+vec3 fieldRamp(float t)
+{
+    float p = clamp(t, 0.0, 1.0) * 4.0;
+    vec3 c = mix(rampStop0, rampStop1, clamp(p, 0.0, 1.0));
+    c = mix(c, rampStop2, clamp(p - 1.0, 0.0, 1.0));
+    c = mix(c, rampStop3, clamp(p - 2.0, 0.0, 1.0));
+    c = mix(c, rampStop4, clamp(p - 3.0, 0.0, 1.0));
+    return c;
+}
 czm_material czm_getMaterial(czm_materialInput materialInput)
 {
     czm_material material = czm_getDefaultMaterial(materialInput);
@@ -52,12 +70,47 @@ czm_material czm_getMaterial(czm_materialInput materialInput)
     float ends = smoothstep(0.0, 0.055, along) * (1.0 - smoothstep(0.945, 1.0, along));
     float edge = 1.0 - smoothstep(0.26, 0.5, abs(materialInput.st.t - 0.5));
     float horizon = smoothstep(0.0, 0.065, v_windFacing);
-    material.diffuse = mix(baseColor.rgb, vec3(0.91, 0.99, 1.0), tip);
+    material.diffuse = mix(baseColor.rgb, vec3(0.91, 0.99, 1.0), tip) * fieldRamp(pow(v_fieldSpeed, rampGamma));
     material.alpha = (ghostAlpha + 0.64 * tail + 0.16 * tip) * ends * edge * horizon * heightFade;
     return material;
 }`;
 
 const DEFAULT_COLOR = '#80c9e6';
+const RAMP_STOPS = 5;
+const WHITE = [1, 1, 1];
+
+/**
+ * A spec's `style.ramp` as the material reads it: five RGB stops, the speed
+ * the ramp ends at and its exponent. Without a ramp every stop is white, so
+ * the colour is the style's own.
+ */
+function rampOf(C, ramp) {
+  if (ramp == null)
+    return { stops: Array(RAMP_STOPS).fill(WHITE), maxMs: 1, gamma: 1 };
+  if (!Array.isArray(ramp.stops) || ramp.stops.length !== RAMP_STOPS)
+    throw new TypeError(`a streamline ramp takes ${RAMP_STOPS} stops`);
+  if (!(ramp.maxMs > 0))
+    throw new RangeError('a streamline ramp ends at a speed above 0');
+  const gamma = ramp.gamma ?? 1;
+  if (!(gamma > 0))
+    throw new RangeError("a streamline ramp's gamma is above 0");
+  return {
+    stops: ramp.stops.map((stop) => {
+      const color = toColor(C, stop);
+      return [color.red, color.green, color.blue];
+    }),
+    maxMs: ramp.maxMs,
+    gamma,
+  };
+}
+const sameRamp = (a, b) =>
+  a === b ||
+  (a != null &&
+    b != null &&
+    a.maxMs === b.maxMs &&
+    (a.gamma ?? 1) === (b.gamma ?? 1) &&
+    a.stops?.length === b.stops?.length &&
+    a.stops.every((stop, i) => String(stop) === String(b.stops[i])));
 
 /** A contract colour as Cesium's; one Cesium cannot read is the default. */
 function toColor(C, color) {
@@ -89,6 +142,9 @@ export function windGridOf(spec) {
     la1: north,
     dx: span / (wraps ? spec.width : spec.width - 1),
     dy: (north - south) / (spec.height - 1),
+    // A grid over part of the globe is never read outside itself.
+    periodic: wraps,
+    noData: spec.noData,
   };
 }
 
@@ -187,9 +243,15 @@ export function createWindStreamlines({
         : current.rectangle.east;
     const bounds =
       east - west >= 360 - 1e-9 ? null : { west, south, east, north };
+    const ramp = rampOf(C, current.style?.ramp);
     const paths = bakeWindStreamlines(grid, {
       count: current.pathBudget,
+      // The budget is the caller's: a sparse field may ask for more seeds
+      // than the wind's own limit.
+      maxCount: current.pathBudget,
       steps: current.steps,
+      stepSeconds: current.stepSeconds,
+      calmCutoffMs: current.calmMs,
       bounds,
     });
     // A grid no path runs through is refused, so its caller can draw it
@@ -206,6 +268,13 @@ export function createWindStreamlines({
           heightFade: 0,
           tipSpeed: TIP_SPEED,
           baseColor: toColor(C, DEFAULT_COLOR),
+          rampGamma: ramp.gamma,
+          ...Object.fromEntries(
+            ramp.stops.map(([r, g, b], i) => [
+              `rampStop${i}`,
+              new C.Cartesian3(r, g, b),
+            ]),
+          ),
         },
         source: FLOW_MATERIAL,
       },
@@ -227,9 +296,9 @@ export function createWindStreamlines({
       'v_st.s = st.s * 0.999 + czm_batchTable_windSeed(batchId);',
     );
     const vertexShaderSource =
-      `out float v_windFacing;\n${seededSource}`.replace(
+      `out float v_windFacing;\nout float v_fieldSpeed;\n${seededSource}`.replace(
         /void\s+main\s*\(\s*\)\s*\{/,
-        `void main() {\nvec3 windWorld = (czm_model * vec4(position3DHigh + position3DLow, 1.0)).xyz;\nv_windFacing = dot(normalize(windWorld), normalize(czm_viewerPositionWC - windWorld));\n`,
+        `void main() {\nvec3 windWorld = (czm_model * vec4(position3DHigh + position3DLow, 1.0)).xyz;\nv_windFacing = dot(normalize(windWorld), normalize(czm_viewerPositionWC - windWorld));\nv_fieldSpeed = czm_batchTable_fieldSpeed(batchId);\n`,
       );
     // EllipsoidalOccluder only tests points: a sphere occluder with an
     // inscribed Earth sphere, whether or not the globe shows.
@@ -263,6 +332,11 @@ export function createWindStreamlines({
               componentDatatype: C.ComponentDatatype.FLOAT,
               componentsPerAttribute: 1,
               value: [path.seed],
+            }),
+            fieldSpeed: new C.GeometryInstanceAttribute({
+              componentDatatype: C.ComponentDatatype.FLOAT,
+              componentsPerAttribute: 1,
+              value: [Math.max(0, Math.min(1, path.speed / ramp.maxMs))],
             }),
           },
         });
@@ -414,16 +488,28 @@ export function createWindStreamlines({
       if (patch.kind !== undefined && patch.kind !== 'windStreamlines')
         throw new TypeError('a field keeps its kind');
       const retrace =
-        ['u', 'v', 'width', 'height', 'pathBudget', 'steps', 'heightM'].some(
-          (key) => key in patch && patch[key] !== current[key],
-        ) ||
+        [
+          'u',
+          'v',
+          'width',
+          'height',
+          'pathBudget',
+          'steps',
+          'heightM',
+          'noData',
+          'stepSeconds',
+          'calmMs',
+        ].some((key) => key in patch && patch[key] !== current[key]) ||
         (patch.rectangle !== undefined &&
           ['west', 'south', 'east', 'north'].some(
             (edge) => patch.rectangle[edge] !== current.rectangle?.[edge],
           ));
       const restroke =
-        patch.style?.widthPx !== undefined &&
-        patch.style.widthPx !== current.style?.widthPx;
+        (patch.style?.widthPx !== undefined &&
+          patch.style.widthPx !== current.style?.widthPx) ||
+        (patch.style !== undefined &&
+          'ramp' in patch.style &&
+          !sameRamp(patch.style.ramp, current.style?.ramp));
       current = {
         ...current,
         ...patch,

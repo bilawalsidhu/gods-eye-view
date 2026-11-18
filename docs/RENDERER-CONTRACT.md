@@ -98,7 +98,11 @@ optional:
   points, the first column at `rectangle.west` and the first row at
   `rectangle.north`, rows running south. Over the whole globe its paths
   wrap east and west; over part of it they seed inside the rectangle,
-  equal-area, and stop at its edges.
+  equal-area, and stop at its edges. `windStreamlines` also takes, all
+  optional, `noData` (samples that are missing: no path starts on or crosses
+  one), `stepSeconds` and `calmMs` (the tracer's step and calm cutoff) and
+  `style.ramp` (five stops that tint each path by the speed at its seed). A
+  field that names none of them draws as before.
 - `ModulationSector` gains `radius` and `floor` and says what it modulates:
   icons, points and models dimmed toward `floor` outside the band, the map,
   lines and shapes as they are, picks unchanged. Its pass is named
