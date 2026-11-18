@@ -515,3 +515,38 @@ test('a contact reported with no course faces the way its newer fixes went', () 
   taxi(30.188, 20);
   assert.equal(course(), 0);
 });
+
+test('a low contact near the view carries the ground under it; others carry none', () => {
+  const store = new FlightRecords({
+    geoidHeight: () => 40,
+    cachedGroundFloor: () => 1656,
+    floorAltitudeM: (altitude, ground) =>
+      Math.max(altitude, ground ?? -Infinity),
+    fleetModels: () => null,
+  });
+  const denver = { latitude: 39.85, longitude: -104.67 };
+  const near = { ...view(), viewerLatDeg: 39.8, viewerLonDeg: -104.7 };
+  // Landing at Denver: 1,900 m above the ellipsoid over 1,656 m ground.
+  const landing = store.receive(
+    observation({ id: 'l1', ...denver, ellipsoidAltitudeM: 1900 }),
+    near,
+  ).meta;
+  assert.equal(landing.groundM, 1656);
+  // At cruise the ground is not read.
+  const cruise = store.receive(
+    observation({
+      id: 'c1',
+      ...denver,
+      ellipsoidAltitudeM: 11000,
+      baroAltitudeM: 11000,
+    }),
+    near,
+  ).meta;
+  assert.equal(cruise.groundM, null);
+  // Nor without a view to be near.
+  const away = store.receive(
+    observation({ id: 'a1', ...denver, ellipsoidAltitudeM: 1900 }),
+    view(),
+  ).meta;
+  assert.equal(away.groundM, null);
+});
