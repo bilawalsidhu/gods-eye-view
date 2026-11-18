@@ -2425,6 +2425,8 @@
       "src/render/cesium/mapImagery.js",
       "src/render/cesium/mapTerrain.js",
       "src/render/cesium/google3d.js",
+      "src/sources/serverKeys.js",
+      "src/sources/appBaseUrl.js",
       "src/render/cesium/internals.js",
       "src/render/cesium/controlledCamera.js",
       "src/render/cesium/common.js",
@@ -2528,6 +2530,8 @@
   "render-cesium-unbound": {
     "exports": ["./render/cesium/unbound"],
     "modules": [
+      "src/sources/serverKeys.js",
+      "src/sources/appBaseUrl.js",
       "src/render/stub/viewRectangle.js",
       "src/render/stub/math.js",
       "src/render/cesium/unbound.js",
