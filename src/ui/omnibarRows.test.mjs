@@ -564,3 +564,40 @@ test('the rows the parser and the Enter rule agree on come from one place', () =
   });
   assert.equal(rows[0].source, 'photon');
 });
+
+test('coordinates named as the place are flown to, never refused or looked up', () => {
+  const omnibar = createOmnibar({ layers: layers() });
+  for (const text of [
+    'go to 30.27, -97.74',
+    'go to 48.85 2.35',
+    'go to 14R PU 2090 4906',
+  ]) {
+    const { rows, defaultIndex } = omnibar.rows(text);
+    assert.equal(rows[defaultIndex]?.kind, 'place', text);
+    assert.match(rows[defaultIndex].label, /°[NS] .*°[EW]/, text);
+    assert.equal(omnibar.placeQuery(text), null, text);
+  }
+  const { rows, defaultIndex } = omnibar.rows(
+    'show flights near 30.27, -97.74',
+  );
+  assert.equal(rows[defaultIndex].kind, 'plan');
+  assert.equal(omnibar.placeQuery('show flights near 30.27, -97.74'), null);
+  // A card number is still no spot.
+  assert.equal(omnibar.rows('go to 4111 1111 1111 1111').defaultIndex, -1);
+  assert.equal(omnibar.placeQuery('go to ,'), null);
+});
+
+test('only a layer in or near a place is counted, never a name', () => {
+  const omnibar = createOmnibar({
+    layers: [...layers(), { id: 'ships', name: 'Ships', enabled: false }],
+  });
+  assert.ok(omnibar.countRequest('flights over Texas'));
+  assert.ok(omnibar.countRequest('quakes above M5 in Japan'));
+  for (const text of [
+    'Ship Bottom',
+    'Radio City Music Hall',
+    'radio settings',
+    'show me how to turn off flights',
+  ])
+    assert.equal(omnibar.countRequest(text), null, text);
+});

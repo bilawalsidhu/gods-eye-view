@@ -787,6 +787,23 @@ export function coordinateTarget(text) {
   return { ...point, kind: grid ? 'MGRS' : t('Coordinates') };
 }
 
+/**
+ * The coordinates a line names as its place ("go to 30.27, -97.74", "flights
+ * near 48.85 2.35"), as typed, or null.
+ */
+function placeCoordinates(text, parsed) {
+  const place = parsed.steps.find((step) => step.kind === 'place')?.place;
+  if (!place || !coordinateTarget(place)) return null;
+  const at = text.toLowerCase().indexOf(place.toLowerCase());
+  return at < 0 ? null : text.slice(at, at + place.length);
+}
+
+/** The line without the coordinates it names, for the privacy rules. */
+function withoutCoordinates(text, parsed) {
+  const coordinates = placeCoordinates(text, parsed);
+  return coordinates ? text.replace(coordinates, ' ').trim() : text;
+}
+
 function coordinateRow(target, text) {
   const where = `${Math.abs(target.lat).toFixed(4)}°${target.lat >= 0 ? 'N' : 'S'} ${Math.abs(target.lon).toFixed(4)}°${target.lon >= 0 ? 'E' : 'W'}`;
   return {
@@ -1412,19 +1429,26 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
         defaultIndex: enterDefault(ordered, line, parsed, enterContext),
       };
     };
-    const target = coordinateTarget(line);
+    const coordinates = placeCoordinates(text, parsed);
+    const onlyPlace = parsed.steps.length === 1 && coordinates;
+    const target =
+      coordinateTarget(line) ??
+      (onlyPlace ? coordinateTarget(coordinates) : null);
     // Coordinates are a spot, not a secret; nothing about them leaves the
     // app unless GEV is asked.
     if (target)
       return finish([
-        coordinateRow(target, line),
+        coordinateRow(target, onlyPlace ? coordinates : line),
         ...(mayBePrivate(text) ? [] : [askRow(text)]),
       ]);
+    // Coordinates named as a line's place ("flights near 30.27, -97.74") are
+    // no secret either: the rest of the line is what the rules read.
+    const privateText = withoutCoordinates(text, parsed);
     // Text that may be private (an email address, a card, phone, SSN or
     // account number, a password or key) is never offered to the place
     // service, the place search or GEV: only things already loaded on the
     // map may match it.
-    if (mayBePrivate(text))
+    if (mayBePrivate(privateText))
       return finish([
         ...withEntities([], line, context.entities),
         // An address may look like a number to keep; a bare number never
@@ -1500,7 +1524,11 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
     if (switchRows(line, askRow(text))) return null;
     const { parsed } = read(line);
     if (parsed.question || parsed.sentence) return null;
+    // Coordinates are flown to as they are, never looked up as a name.
+    if (placeCoordinates(text, parsed)) return null;
     const place = parsed.steps.find((step) => step.kind === 'place');
+    // "go to ,": punctuation names no place.
+    if (place && !/[\p{L}\p{N}]/u.test(place.place)) return null;
     // A line of commands with no place in it ("night vision", "zoom in").
     if (parsed.steps.length && !place) return null;
     // After "go to … , noir" the place read is the one to look up.
@@ -1524,6 +1552,10 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
     const layer = parsed.steps.find((step) => step.kind === 'layer');
     const place = parsed.steps.find((step) => step.kind === 'place');
     if (!layer || !place || layer.enabled === false) return null;
+    // Only a layer counted in or near a place ("flights over Texas"): a
+    // line that may be one name ("Ship Bottom", "Satellite Beach") or asks
+    // for something else ("radio settings") is no count.
+    if (parsed.ambiguous || parsed.placeFrom !== 'near') return null;
     return { layer: layer.layer, minMagnitude };
   }
 
