@@ -57,6 +57,9 @@ const RIGHT_STACK_OBSTACLE_SELECTOR = [
   '#intel-hud .hud-right-edge',
   '#cockpit-context',
   '#cockpit-signal-stream',
+  // The "NEW: GEV Stories" card under the Stories button: panels start below
+  // it while it is up, so its buttons never sit over a panel's controls.
+  '#hPop',
   '#cesium-credits .cesium-credit-logoContainer',
   '#cesium-credits .cesium-credit-textContainer',
   '#gev-credits',
@@ -64,6 +67,14 @@ const RIGHT_STACK_OBSTACLE_SELECTOR = [
   '#gev-voice-control',
   '#world-timeline',
 ].join(', ');
+/** True when a mutation adds or removes the Stories card (`#hPop`). */
+function movesStoriesCard(record) {
+  for (const list of [record.addedNodes, record.removedNodes])
+    for (const node of list)
+      if (node.id === 'hPop' || node.querySelector?.('#hPop')) return true;
+  return false;
+}
+
 export class PanelLayoutController {
   constructor({
     readHud,
@@ -92,6 +103,7 @@ export class PanelLayoutController {
     this._rightStackPreferredPanelId = null;
     this._rightStackReconsiderAutoCollapse = false;
     this._rightStackResizeObserver = null;
+    this._storiesCardObserver = null;
     this._cockpitLayoutFrame = null;
     this._cockpitLayoutTimer = null;
     this._leftPanelStack = document.getElementById('left-panel-stack');
@@ -246,6 +258,18 @@ export class PanelLayoutController {
         attributes: true,
         attributeFilter: ['class', 'hidden', 'data-variant'],
       });
+      // The Stories card comes and goes inside the Stories view; only its
+      // arrival or departure moves the rail, not the view's other changes.
+      const storiesHost = document.getElementById('gev-stories-host');
+      if (storiesHost) {
+        this._storiesCardObserver = new MutationObserver((records) => {
+          if (records.some(movesStoriesCard)) this._scheduleRightPanelLayout();
+        });
+        this._storiesCardObserver.observe(storiesHost, {
+          subtree: true,
+          childList: true,
+        });
+      }
       const hud = document.getElementById('intel-hud');
       if (hud) {
         this._rightStackMutationObserver.observe(hud, {
@@ -464,6 +488,7 @@ export class PanelLayoutController {
       '_leftStackMutationObserver',
       '_rightStackResizeObserver',
       '_rightStackMutationObserver',
+      '_storiesCardObserver',
     ]) {
       this[field]?.disconnect();
       this[field] = null;

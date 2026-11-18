@@ -252,6 +252,7 @@ test('ar and he mark every Omnibar string alike with a right-to-left mark', asyn
   // U+200F, so the punctuation stays with the right-to-left text before it.
   const sources = await Promise.all(
     [
+      './views/panels/Omnibar.vue',
       './views/panels/VoiceVisualizer.vue',
       './omnibarIntent.js',
       './omnibarRows.js',

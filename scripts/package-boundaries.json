@@ -289,7 +289,23 @@
       "src/render/modelParts.js",
       "src/ui/views/panels/AircraftModelHero.vue",
       "src/data/retryableLoad.js",
-      "src/data/local_data/wikidata_places/files.js"
+      "src/data/local_data/wikidata_places/files.js",
+      "src/ui/views/panels/Omnibar.vue",
+      "src/exclusiveSurfaces.js",
+      "src/geoDistance.js",
+      "src/ui/omnibarGuide.js",
+      "src/cityPois.js",
+      "src/search/photonSetting.js",
+      "src/sources/requestDeadline.js",
+      "src/ui/omnibarEnter.js",
+      "src/ui/omnibarIntent.js",
+      "src/data/placeNames.js",
+      "src/search/plusCode.js",
+      "src/keylessGeocoder.js",
+      "src/ui/omnibarRows.js",
+      "src/search/gridReference.js",
+      "src/search/coordinateParser.js",
+      "src/search/placeSuggestions.js"
     ],
     "external": ["vue", "pinia", "vue-i18n"]
   },
@@ -1657,7 +1673,8 @@
       "src/ui/entityContextBridge.js",
       "src/data/trackingClickGesture.js",
       "src/ui/stores/sceneSharing.js",
-      "src/maps/attribution.js"
+      "src/maps/attribution.js",
+      "src/data/dataCredits.js"
     ],
     "external": [
       "cesium",

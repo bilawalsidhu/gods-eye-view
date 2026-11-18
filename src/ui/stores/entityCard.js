@@ -6,6 +6,7 @@ import {
   describeEntity,
   layerBreakdown,
   nearbyByKind,
+  nearbyEntities,
   layerMatches,
   searchEntities,
   viewSummary,
@@ -204,6 +205,10 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     return nearbyByKind(shell.value?.dataManager?.(), { lat, lon }, options);
   }
 
+  function nearbySelected() {
+    return nearbyEntities(dataManager(), card.value);
+  }
+
   /** Whether a card's layer is known to the layer manager and switched off. */
   function layerOff(layerId) {
     const dm = dataManager();
@@ -333,6 +338,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     following,
     search,
     nearbyGroups,
+    nearbySelected,
     alertsAt,
     liveLayers,
     breakdown,

@@ -4467,5 +4467,30 @@
     "other": "Показати {what} · {place} ({count} об’єкта)"
   },
   "Go there": "Перейти туди",
-  "Open draw options": "Відкрити параметри малювання"
+  "Open draw options": "Відкрити параметри малювання",
+  "{what} in {place}: {count} items": {
+    "one": "{what} · {place}: {count} об’єкт",
+    "few": "{what} · {place}: {count} об’єкти",
+    "many": "{what} · {place}: {count} об’єктів",
+    "other": "{what} · {place}: {count} об’єкта"
+  },
+  "{count} items in view": {
+    "one": "{count} об’єкт у полі зору",
+    "few": "{count} об’єкти у полі зору",
+    "many": "{count} об’єктів у полі зору",
+    "other": "{count} об’єкта у полі зору"
+  },
+  "Selected · near {name}": "Вибране · поблизу {name}",
+  "Near {name}": "Поблизу {name}",
+  "Stop drawing": "Припинити малювання",
+  "{place} · landmarks": "{place} · визначні місця",
+  "In {place}": "Місця в {place}",
+  "Near {place}": "Поблизу {place}",
+  "Unable to complete this action: {reason}": "Не вдалося виконати цю дію: {reason}",
+  "Unable to complete this action. Please try again.": "Не вдалося виконати цю дію. Спробуйте ще раз.",
+  "{layer} M{mag}+": "{layer} з магнітудою від {mag}",
+  "Search places, layers and things on the map, or ask GEV": "Шукайте місця, шари й об’єкти на карті або запитайте GEV",
+  "Search places, layers, flights… or ask GEV  ·  > for commands": "Шукайте місця, шари, рейси… або запитайте GEV · > для команд",
+  "No matching command": "Відповідної команди не знайдено",
+  "Looks private, so nothing is searched or sent": "Схоже на особисті дані, тому нічого не шукається й не надсилається"
 }

@@ -4155,5 +4155,24 @@
     "other": "{place}の{what}を表示（{count}件）"
   },
   "Go there": "その場所に移動",
-  "Open draw options": "描画オプションを開く"
+  "Open draw options": "描画オプションを開く",
+  "{what} in {place}: {count} items": {
+    "other": "{place}の{what}：{count}件"
+  },
+  "{count} items in view": {
+    "other": "{count}件表示中"
+  },
+  "Selected · near {name}": "選択中 · {name}の周辺",
+  "Near {name}": "{name}の周辺",
+  "Stop drawing": "描画を終了",
+  "{place} · landmarks": "{place} · 名所",
+  "In {place}": "{place}の範囲内",
+  "Near {place}": "{place}の周辺",
+  "Unable to complete this action: {reason}": "この操作を完了できませんでした：{reason}",
+  "Unable to complete this action. Please try again.": "この操作を完了できませんでした。もう一度お試しください。",
+  "{layer} M{mag}+": "{layer}（M{mag}以上）",
+  "Search places, layers and things on the map, or ask GEV": "場所、レイヤー、マップ上の対象を検索するか、GEVに質問",
+  "Search places, layers, flights… or ask GEV  ·  > for commands": "場所、レイヤー、航空便を検索… またはGEVに質問 · > でコマンド",
+  "No matching command": "一致するコマンドがありません",
+  "Looks private, so nothing is searched or sent": "個人情報の可能性があるため、検索も送信もしません"
 }

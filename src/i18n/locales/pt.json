@@ -4363,5 +4363,28 @@
     "other": "Mostrar {what} em {place} ({count} itens)"
   },
   "Go there": "Ir até lá",
-  "Open draw options": "Abrir opções de desenho"
+  "Open draw options": "Abrir opções de desenho",
+  "{what} in {place}: {count} items": {
+    "one": "{what} em {place}: {count} item",
+    "many": "{what} em {place}: {count} de itens",
+    "other": "{what} em {place}: {count} itens"
+  },
+  "{count} items in view": {
+    "one": "{count} item à vista",
+    "many": "{count} de itens à vista",
+    "other": "{count} itens à vista"
+  },
+  "Selected · near {name}": "Seleção · perto de {name}",
+  "Near {name}": "Perto de {name}",
+  "Stop drawing": "Parar de desenhar",
+  "{place} · landmarks": "{place} · pontos de interesse",
+  "In {place}": "Em {place}",
+  "Near {place}": "Perto de {place}",
+  "Unable to complete this action: {reason}": "Não foi possível concluir esta ação: {reason}",
+  "Unable to complete this action. Please try again.": "Não foi possível concluir esta ação. Tente novamente.",
+  "{layer} M{mag}+": "{layer} de magnitude {mag} ou mais",
+  "Search places, layers and things on the map, or ask GEV": "Busque lugares, camadas e elementos no mapa ou pergunte ao GEV",
+  "Search places, layers, flights… or ask GEV  ·  > for commands": "Busque lugares, camadas, voos… ou pergunte ao GEV · > para comandos",
+  "No matching command": "Nenhum comando correspondente",
+  "Looks private, so nothing is searched or sent": "Parece privado, por isso nada é pesquisado nem enviado"
 }

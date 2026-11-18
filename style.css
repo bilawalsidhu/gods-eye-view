@@ -61,4 +61,6 @@
 @import './src/ui/styles/ai-chat.css';
 @import './src/ui/styles/scope-off-shadows.css';
 @import './src/ui/styles/stories-entry.css';
+@import './src/ui/styles/omnibar-dock.css';
+@import './src/ui/styles/guide.css';
 @import './src/ui/styles/cyber.css';

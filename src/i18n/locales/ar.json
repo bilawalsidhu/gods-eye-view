@@ -4675,5 +4675,34 @@
     "other": "عرض {what} في {place} ({count} عنصر)"
   },
   "Go there": "انتقل إلى هناك",
-  "Open draw options": "فتح خيارات الرسم"
+  "Open draw options": "فتح خيارات الرسم",
+  "{what} in {place}: {count} items": {
+    "zero": "{what} في {place}: ‏{count} عنصر",
+    "one": "{what} في {place}: ‏{count} عنصر",
+    "two": "{what} في {place}: ‏{count} عنصران",
+    "few": "{what} في {place}: ‏{count} عناصر",
+    "many": "{what} في {place}: ‏{count} عنصرًا",
+    "other": "{what} في {place}: ‏{count} عنصر"
+  },
+  "{count} items in view": {
+    "zero": "{count} عنصر في العرض",
+    "one": "{count} عنصر في العرض",
+    "two": "{count} عنصران في العرض",
+    "few": "{count} عناصر في العرض",
+    "many": "{count} عنصرًا في العرض",
+    "other": "{count} عنصر في العرض"
+  },
+  "Selected · near {name}": "محدّد · قرب {name}",
+  "Near {name}": "بالقرب من {name}",
+  "Stop drawing": "إيقاف الرسم",
+  "{place} · landmarks": "{place} · معالم",
+  "In {place}": "داخل {place}",
+  "Near {place}": "بالقرب من {place}",
+  "Unable to complete this action: {reason}": "تعذر إكمال هذا الإجراء: ‏{reason}",
+  "Unable to complete this action. Please try again.": "تعذر إكمال هذا الإجراء. يرجى المحاولة مرة أخرى.",
+  "{layer} M{mag}+": "{layer} بقوة M{mag} فأكثر",
+  "Search places, layers and things on the map, or ask GEV": "ابحث عن أماكن وطبقات وعناصر على الخريطة، أو اسأل GEV",
+  "Search places, layers, flights… or ask GEV  ·  > for commands": "ابحث عن أماكن وطبقات ورحلات جوية… أو اسأل GEV · > للأوامر",
+  "No matching command": "لا يوجد أمر مطابق",
+  "Looks private, so nothing is searched or sent": "يبدو خاصًا، لذا لا يُبحث عنه ولا يُرسل"
 }

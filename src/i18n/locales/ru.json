@@ -4467,5 +4467,30 @@
     "other": "Показать {what} · {place} ({count} объекта)"
   },
   "Go there": "Перейти туда",
-  "Open draw options": "Открыть параметры рисования"
+  "Open draw options": "Открыть параметры рисования",
+  "{what} in {place}: {count} items": {
+    "one": "{what} · {place}: {count} объект",
+    "few": "{what} · {place}: {count} объекта",
+    "many": "{what} · {place}: {count} объектов",
+    "other": "{what} · {place}: {count} объекта"
+  },
+  "{count} items in view": {
+    "one": "{count} объект в поле зрения",
+    "few": "{count} объекта в поле зрения",
+    "many": "{count} объектов в поле зрения",
+    "other": "{count} объекта в поле зрения"
+  },
+  "Selected · near {name}": "Выбрано · рядом с {name}",
+  "Near {name}": "Рядом с {name}",
+  "Stop drawing": "Завершить рисование",
+  "{place} · landmarks": "{place} · достопримечательности",
+  "In {place}": "Места в {place}",
+  "Near {place}": "Рядом с {place}",
+  "Unable to complete this action: {reason}": "Не удалось выполнить действие: {reason}",
+  "Unable to complete this action. Please try again.": "Не удалось выполнить действие. Попробуйте ещё раз.",
+  "{layer} M{mag}+": "{layer} с магнитудой от {mag}",
+  "Search places, layers and things on the map, or ask GEV": "Ищите места, слои и объекты на карте или спросите GEV",
+  "Search places, layers, flights… or ask GEV  ·  > for commands": "Ищите места, слои, рейсы… или спросите GEV · > для команд",
+  "No matching command": "Подходящая команда не найдена",
+  "Looks private, so nothing is searched or sent": "Похоже на личные данные, поэтому ничего не ищется и не отправляется"
 }
