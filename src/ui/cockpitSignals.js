@@ -43,8 +43,9 @@ export function publishCockpitSignals() {
  * Log a signal as the newest row, unless its key last said the same.
  * @param {{inPlace?: boolean}} [options] `inPlace`: a status row, such as a
  *   provider's, that changes where it stands rather than log a new row, so a
- *   changing ETA never pushes a steady warning off the list; it keeps the
- *   time it first appeared, and comes back if newer rows pushed it off.
+ *   changing ETA never pushes a steady warning off the list; it keeps its
+ *   time while it stays listed, and one pushed off comes back as the newest
+ *   row.
  */
 export function pushCockpitSignal(
   key,
@@ -55,8 +56,8 @@ export function pushCockpitSignal(
   { inPlace = false } = {},
 ) {
   if (!title || !detail) return;
-  // Each field on its own, so no title and detail read as another pair; an
-  // in-place row also changes with its tone alone.
+  // JSON keeps the fields apart: joined with `|`, a title or detail holding a
+  // `|` read as another pair. An in-place row also changes with its tone alone.
   const signature = JSON.stringify([
     title,
     detail,

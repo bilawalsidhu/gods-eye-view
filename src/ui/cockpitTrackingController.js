@@ -516,9 +516,10 @@ function enterSubject(provider) {
   this.surfaceAcquiring = false;
   this.surfaceFallback = false;
   this.cockpitAnchorValid = false;
-  // A height the entry frame gave is where the eye stands until a later frame
-  // or the warmed floor gives another.
+  // The entry frame's height, if any, stands in for a cold floor
+  // (updateSubject).
   this.subjectHeightM = frame.heightM;
+  this.subjectHeightFromEntry = true;
   this.lookRestPitchDeg = provider.look?.restPitchDeg ?? null;
   this.resetLook({ immediate: true });
   this.active = true;

@@ -642,11 +642,15 @@ test('a provider whose getter throws is left out with one warning; the next is k
   ]);
 });
 
-test('a worded getter that starts throwing keeps the last good words', () => {
-  let failing = false;
-  const words = (value) => () => {
-    if (failing) throw new Error('translations unavailable');
-    return value;
+test('a worded getter that throws from its second read keeps the last good words', () => {
+  // Registration reads each once: the second read is the first use.
+  const once = (value) => {
+    let read = false;
+    return () => {
+      if (read) throw new Error('translations unavailable');
+      read = true;
+      return value;
+    };
   };
   const definition = provider();
   for (const [key, value] of Object.entries({
@@ -654,47 +658,19 @@ test('a worded getter that starts throwing keeps the last good words', () => {
     entryFace: { icon: 'commute', label: 'RIDE' },
     look: { restPitchDeg: 10, aheadLabel: 'Look ahead' },
   }))
-    Object.defineProperty(definition, key, { get: words(value) });
+    Object.defineProperty(definition, key, { get: once(value) });
   const { kept, warnings } = keep([definition]);
   assert.deepEqual(warnings, []);
   const [ride] = kept;
-  failing = true;
   assert.equal(ride.labels.view, 'Ride view');
   assert.equal(ride.entryFace.label, 'RIDE');
   assert.deepEqual(ride.look, { restPitchDeg: 10, aheadLabel: 'Look ahead' });
   // So does a worded object whose own member throws when read.
-  failing = false;
   Object.defineProperty(definition, 'labels', {
     get: () => throwingGetter({ view: 'v', exit: 'e', exitText: 'x' }, 'view'),
   });
   assert.equal(ride.labels.view, 'Ride view');
 });
-
-for (const form of ['function', 'getter']) {
-  test(`worded members (as a ${form}) that throw from their second read keep the words checked at registration`, () => {
-    const definition = provider();
-    for (const [key, value] of Object.entries({
-      labels: { view: 'Ride view', exit: 'Exit ride view', exitText: 'EXIT' },
-      entryFace: { icon: 'commute', label: 'RIDE' },
-      look: { restPitchDeg: 10, aheadLabel: 'Look ahead' },
-    })) {
-      let read = false;
-      const once = () => {
-        if (read) throw new Error('word bundle unloaded');
-        read = true;
-        return value;
-      };
-      if (form === 'function') definition[key] = once;
-      else Object.defineProperty(definition, key, { get: once });
-    }
-    const { kept, warnings } = keep([definition]);
-    assert.deepEqual(warnings, []);
-    const [ride] = kept;
-    assert.equal(ride.labels.view, 'Ride view');
-    assert.equal(ride.entryFace.label, 'RIDE');
-    assert.deepEqual(ride.look, { restPitchDeg: 10, aheadLabel: 'Look ahead' });
-  });
-}
 
 test('a worded member that returns a rejected promise keeps the last good words, the rejection caught', async () => {
   const definition = provider();

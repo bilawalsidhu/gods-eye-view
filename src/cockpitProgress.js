@@ -30,31 +30,40 @@ const TONE_RANK = Object.freeze([
 const stronger = (a, b) =>
   TONE_RANK.indexOf(b) > TONE_RANK.indexOf(a) ? b : a;
 
-/**
- * Full-width glyphs in the BMP (CJK, kana, Hangul, full-width forms): about
- * 1 em each. Astral ones (CJK extensions, emoji) are wide enough as any
- * other two UTF-16 units (lineWidthPx).
- */
-const WIDE_GLYPH =
-  /[\u1100-\u115F\u2E80-\u303E\u3041-\u33FF\u3400-\u4DBF\u4E00-\u9FFF\uA960-\uA97F\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6]/;
+/** Full-width glyphs in the BMP: CJK, kana, Hangul, full-width forms. */
+const WIDE_GLYPHS =
+  /[\u1100-\u115F\u2E80-\u303E\u3041-\u33FF\u3400-\u4DBF\u4E00-\u9FFF\uA960-\uA97F\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6]/g;
+
+/** What a full-width glyph and any other UTF-16 unit take in a title (px). */
+const TITLE_PX = Object.freeze({ wide: 10.6, narrow: 6.4 });
+/** The same in a detail line (px). */
+const DETAIL_PX = Object.freeze({
+  wide: 10 / 1.2 + 0.6,
+  narrow: 5.8 / 1.2 + 0.6,
+});
 
 /**
  * One line's width (px) in `.cockpit-progress-label` type (cockpitSubject.css:
- * 10 px, 0.06 em spacing): 10.6 px a full-width glyph and 6.4 px each UTF-16
- * unit of any other, so an emoji or other astral glyph gets 12.8 px.
+ * 10 px, 0.06 em spacing) at the glyph widths `px`: about 1 em a full-width
+ * glyph and 0.58 em each UTF-16 unit of any other, so an astral glyph (an
+ * emoji, a CJK extension) counts as two and an emoji in the BMP (☕) as one,
+ * narrower than it is drawn. The detail line's `<small>` is 1/1.2 the size;
+ * the 0.6 px spacing it inherits is not scaled.
  */
-function lineWidthPx(line) {
-  let wide = 0;
-  let narrow = 0;
-  for (const glyph of String(line ?? ''))
-    if (WIDE_GLYPH.test(glyph)) wide += 1;
-    else narrow += glyph.length;
-  return wide * 10.6 + narrow * 6.4;
+function lineWidthPx(line, px) {
+  const text = String(line ?? '');
+  const wide = text.match(WIDE_GLYPHS)?.length ?? 0;
+  return wide * px.wide + (text.length - wide) * px.narrow;
 }
 
-/** A label's width estimate (px): its longer line and 8 px of padding. */
+/** A label's width estimate (px): its wider line and 8 px of padding. */
 export function estimateProgressLabelPx(label) {
-  return Math.max(lineWidthPx(label?.text), lineWidthPx(label?.detail)) + 8;
+  return (
+    Math.max(
+      lineWidthPx(label?.text, TITLE_PX),
+      lineWidthPx(label?.detail, DETAIL_PX),
+    ) + 8
+  );
 }
 
 /**

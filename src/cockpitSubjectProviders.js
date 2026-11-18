@@ -117,32 +117,27 @@ function lookOf(raw) {
   });
 }
 
+/** Promises worded members gave, each one's rejection caught once. */
+const caughtWords = new WeakSet();
+
 /**
- * A worded member's `value` normalized: the value, or what it returns when it
- * is a function called on `provider` (so it can follow the page's language);
- * null when it is malformed or a read throws. Reading what it gives runs
- * provider code too (a getter), so it is guarded as the call is; a promise is
- * malformed, and its rejection is caught rather than left unhandled.
+ * A worded member as `read()` gives it, normalized: called on `provider`
+ * when it is a function (so it can follow the page's language); null when it
+ * is malformed (a promise too) or provider code throws.
  */
-function worded(provider, value, normalize) {
+function worded(provider, read, normalize) {
   try {
+    const value = read();
     const words = typeof value === 'function' ? value.call(provider) : value;
     if (typeof words?.then === 'function') {
-      Promise.resolve(words).catch(() => {});
+      if (!caughtWords.has(words)) {
+        caughtWords.add(words);
+        Promise.resolve(words).catch(() => {});
+      }
       return null;
     }
     return normalize(words) ?? null;
   } catch {
-    return null;
-  }
-}
-
-/** A provider's worded member `key` as it reads now (see `worded`). */
-function wordedNow(provider, key, normalize) {
-  try {
-    return worded(provider, provider[key], normalize);
-  } catch {
-    // A getter for the member threw.
     return null;
   }
 }
@@ -185,13 +180,13 @@ function refusal(provider, kinds) {
  * @returns {{face: object, labels: object, look: ?object}|string}
  */
 function checkedWords(provider) {
-  const face = wordedNow(provider, 'entryFace', faceOf);
+  const face = worded(provider, () => provider.entryFace, faceOf);
   if (!face) return 'malformed entry face';
-  const labels = wordedNow(provider, 'labels', labelsOf);
+  const labels = worded(provider, () => provider.labels, labelsOf);
   if (!labels) return 'labels need view, exit and exitText';
   const lookValue = provider.look;
   if (lookValue == null) return { face, labels, look: null };
-  const look = worded(provider, lookValue, lookOf);
+  const look = worded(provider, () => lookValue, lookOf);
   return look ? { face, labels, look } : 'look needs an aheadLabel';
 }
 
@@ -273,8 +268,6 @@ export function cockpitSubjectProviders(
  * seeded with the worded members `checkedWords` read.
  */
 function keptProvider(provider, order, words) {
-  // Worded members are read again on each use (see above); the last good
-  // read stands in for one that is malformed or throws.
   let { face, labels, look } = words;
   // Look stays on or off, at its rest pitch, as read at registration.
   const restPitchDeg = look?.restPitchDeg ?? 0;
@@ -284,16 +277,16 @@ function keptProvider(provider, order, words) {
     priority: finite(provider.priority) ? provider.priority : 0,
     order,
     get entryFace() {
-      face = wordedNow(provider, 'entryFace', faceOf) ?? face;
+      face = worded(provider, () => provider.entryFace, faceOf) ?? face;
       return face;
     },
     get labels() {
-      labels = wordedNow(provider, 'labels', labelsOf) ?? labels;
+      labels = worded(provider, () => provider.labels, labelsOf) ?? labels;
       return labels;
     },
     get look() {
       if (!look) return null;
-      const now = wordedNow(provider, 'look', lookOf);
+      const now = worded(provider, () => provider.look, lookOf);
       if (now)
         look = Object.freeze({ restPitchDeg, aheadLabel: now.aheadLabel });
       return look;
@@ -363,11 +356,11 @@ function candidateOf(raw) {
  * a position that is not finite, an eye with no valid `upM` (0..1000), or a
  * read of it that throws (a getter runs provider code).
  * A `heightM` that is not finite or lies outside
- * COCKPIT_SUBJECT_MIN_HEIGHT_M..COCKPIT_SUBJECT_MAX_HEIGHT_M reads as null:
- * the eye then stands on the shared floor, or at the last height a frame gave,
- * the entry frame's included, while that is cold. The anchor is `'inertial'` by default for a frame with a valid
- * speed, and `'exact'` when asked for or with no speed. An id is compared
- * with `heldId` trimmed, as `cockpitSubjectCandidate` trims it.
+ * COCKPIT_SUBJECT_MIN_HEIGHT_M..COCKPIT_SUBJECT_MAX_HEIGHT_M reads as null,
+ * for the eye to stand on the shared floor (ui/cockpitCamera.js). The anchor
+ * is `'inertial'` by default for a frame with a valid speed, and `'exact'`
+ * when asked for or with no speed. An id is compared with `heldId` trimmed,
+ * as `cockpitSubjectCandidate` trims it.
  * @param {unknown} raw What `read()` returned.
  * @param {string} heldId The subject the view holds.
  * @returns {object|null} `{id, name, latitude, longitude, heightM, headingDeg,
@@ -384,51 +377,57 @@ export function cockpitSubjectFrame(raw, heldId) {
 }
 
 function frameOf(raw, heldId) {
-  if (!isObject(raw) || typeof raw.id !== 'string' || raw.id.trim() !== heldId)
-    return null;
-  const latitude = raw.latitude;
-  const longitude = raw.longitude;
+  if (!isObject(raw)) return null;
+  // Each field read once: a getter on the frame runs provider code.
+  const {
+    id,
+    name,
+    latitude,
+    longitude,
+    heightM,
+    headingDeg: rawHeadingDeg,
+    courseDeg,
+    speedMps: rawSpeedMps,
+    stale,
+    groundClamp,
+    anchor,
+    eye: rawEye,
+  } = raw;
+  if (typeof id !== 'string' || id.trim() !== heldId) return null;
   if (!finite(latitude) || !finite(longitude) || Math.abs(latitude) > 90)
     return null;
-  const eye = isObject(raw.eye) ? raw.eye : null;
-  if (!eye || !finite(eye.upM) || eye.upM < 0 || eye.upM > 1000) return null;
+  if (!isObject(rawEye)) return null;
+  const { upM, forwardM, pitchDeg, minClearanceM } = rawEye;
+  if (!finite(upM) || upM < 0 || upM > 1000) return null;
   const heading = (value) =>
     finite(value) ? ((value % 360) + 360) % 360 : null;
-  const headingDeg = heading(raw.headingDeg);
-  // Each read once: a getter on the frame runs provider code.
-  const rawSpeedMps = raw.speedMps;
+  const headingDeg = heading(rawHeadingDeg);
   const speedMps = finite(rawSpeedMps) && rawSpeedMps >= 0 ? rawSpeedMps : null;
-  const rawHeightM = raw.heightM;
   return {
     id: heldId,
-    name: cockpitSubjectText(raw.name, 64) || cockpitSubjectText(heldId, 64),
+    name: cockpitSubjectText(name, 64) || cockpitSubjectText(heldId, 64),
     latitude,
     longitude: ((((longitude + 180) % 360) + 360) % 360) - 180,
     heightM:
-      finite(rawHeightM) &&
-      rawHeightM >= COCKPIT_SUBJECT_MIN_HEIGHT_M &&
-      rawHeightM <= COCKPIT_SUBJECT_MAX_HEIGHT_M
-        ? rawHeightM
+      finite(heightM) &&
+      heightM >= COCKPIT_SUBJECT_MIN_HEIGHT_M &&
+      heightM <= COCKPIT_SUBJECT_MAX_HEIGHT_M
+        ? heightM
         : null,
     headingDeg,
-    courseDeg: heading(raw.courseDeg) ?? headingDeg,
+    courseDeg: heading(courseDeg) ?? headingDeg,
     speedMps,
-    stale: raw.stale === true,
-    groundClamp: raw.groundClamp !== false,
+    stale: stale === true,
+    groundClamp: groundClamp !== false,
     // An inertial anchor runs on at the frame's speed; with none it would
     // close on a moving subject at the correction's floor and fall behind.
-    anchor: raw.anchor === 'exact' || speedMps === null ? 'exact' : 'inertial',
+    anchor: anchor === 'exact' || speedMps === null ? 'exact' : 'inertial',
     eye: {
-      upM: eye.upM,
-      forwardM:
-        finite(eye.forwardM) && Math.abs(eye.forwardM) <= 500
-          ? eye.forwardM
-          : 0,
-      pitchDeg: finite(eye.pitchDeg) ? clamp(eye.pitchDeg, -90, 90) : 0,
+      upM,
+      forwardM: finite(forwardM) && Math.abs(forwardM) <= 500 ? forwardM : 0,
+      pitchDeg: finite(pitchDeg) ? clamp(pitchDeg, -90, 90) : 0,
       minClearanceM:
-        finite(eye.minClearanceM) && eye.minClearanceM >= 0
-          ? eye.minClearanceM
-          : 0,
+        finite(minClearanceM) && minClearanceM >= 0 ? minClearanceM : 0,
     },
   };
 }

@@ -495,6 +495,38 @@ test('Cockpit places the eye at its aircraft as the Cesium maths did', async () 
   }
 });
 
+test("a live aircraft's first Cockpit update stands the anchor on it", async () => {
+  const Cesium = await import('cesium');
+  const env = environment();
+  try {
+    const target = Cesium.Cartesian3.fromDegrees(-97.67, 30.19, 1200);
+    const info = {
+      icao24: 'abc123',
+      layerId: 'flights',
+      track: 72,
+      velocityMps: 200,
+      latitude: 30.19,
+      longitude: -97.67,
+      onGround: false,
+      stale: false,
+    };
+    const { owner, views } = cockpitOver({ info, target });
+    // Entry was a while ago: the step would carry the anchor 20 m ahead.
+    owner.update();
+    const expected = cesiumCockpitEye(Cesium, {
+      target,
+      info: { ...info, stale: true },
+      heading: 72,
+      dtSec: 0,
+      liftM: 0,
+    });
+    near(views[0].destination, expected.eye, 1e-6, 'first live eye');
+    owner.dispose();
+  } finally {
+    env.restore();
+  }
+});
+
 test('a grounded Cockpit probes the mesh from the camera and keeps the eye above the floor', async () => {
   const Cesium = await import('cesium');
   const env = environment();

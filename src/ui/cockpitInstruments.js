@@ -262,7 +262,6 @@ function updateSubjectHud(info, nowMs, forceContext) {
     for (const key of this.subjectSignalKeys ?? [])
       if (!keys.has(key)) this.dropCockpitSignal(key);
     this.subjectSignalKeys = keys;
-    // The view's rows are its current signals, each changed in place.
     for (const signal of hud.signals)
       this.pushCockpitSignal(
         `subject:${signal.id}`,

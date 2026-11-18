@@ -181,3 +181,23 @@ test('emoji and other astral glyphs in a progress label get at least 1 em each',
     );
   }
 });
+
+test('a label is as wide as its wider line, its smaller detail line included', () => {
+  // The detail line's <small> is 1/1.2 of 10 px; its 0.6 px spacing is not.
+  const detailEmPx = 10 / 1.2 + 0.6;
+  const detail = '中央駅前'; // 4 full-width glyphs
+  const givenPx = estimateProgressLabelPx({ text: 'GATE', detail });
+  assert.ok(
+    givenPx > estimateProgressLabelPx({ text: 'GATE', detail: '' }),
+    'the wider detail line widens the label',
+  );
+  assert.ok(
+    givenPx >= detail.length * detailEmPx + 8,
+    `${givenPx} px given, about ${detail.length * detailEmPx} px needed`,
+  );
+  // A line takes less room as the smaller detail than as the title.
+  assert.ok(
+    estimateProgressLabelPx({ text: 'A', detail: 'CENTRAL STATION' }) <
+      estimateProgressLabelPx({ text: 'CENTRAL STATION', detail: '' }),
+  );
+});

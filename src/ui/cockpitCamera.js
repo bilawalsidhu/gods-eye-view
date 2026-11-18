@@ -357,6 +357,7 @@ function updateSubject(nowMs) {
   }
   this.lastSubjectFrame = frame;
   let heightM = frame.heightM;
+  let held = false;
   if (heightM === null) {
     this.services.warmGroundFloor?.([
       { lat: frame.latitude, lon: frame.longitude },
@@ -366,8 +367,10 @@ function updateSubject(nowMs) {
       frame.longitude,
     );
     // A frame with no height stands on the shared floor; while that is cold
-    // it keeps the last height it had, the entry frame's included.
-    heightM = Number.isFinite(floorM) ? floorM : this.subjectHeightM;
+    // the eye keeps the last height it stood at (a frame's or the floor's),
+    // at first the entry frame's.
+    held = !Number.isFinite(floorM);
+    heightM = held ? this.subjectHeightM : floorM;
   }
   if (!Number.isFinite(heightM)) {
     // Nothing to stand on yet, from the first frame: the camera stays where
@@ -399,6 +402,14 @@ function updateSubject(nowMs) {
   }
   this.surfaceWaitStartedMs = 0;
   this.surfaceAcquiring = false;
+  if (!held) {
+    // The first height to replace the entry frame's places the anchor
+    // anew: an inertial one would close on it only at the horizontal
+    // correction's rate.
+    if (this.subjectHeightFromEntry && heightM !== this.subjectHeightM)
+      this.cockpitAnchorValid = false;
+    this.subjectHeightFromEntry = false;
+  }
   this.subjectHeightM = heightM;
   const target = fromDegrees(frame.longitude, frame.latitude, heightM);
   const dtSec = cockpitSubjectStepSec(nowMs - this.lastFrameMs, intervalMs);
@@ -461,11 +472,11 @@ function updateSubject(nowMs) {
  *   Aircraft pass none and look along the heading at the profile pitch.
  */
 function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
-  // The update that first sets the anchor stands it on the target: the time
-  // before it (an entry, a floor wait) moved nothing, so it has no step.
+  // An update that sets the anchor stands it on the target with no step:
+  // the first one (the time before it, an entry or a floor wait, moved
+  // nothing), and a subject's whose height replaced its entry frame's.
   const anchoring = !this.cockpitAnchorValid;
   if (anchoring) {
-    this.cockpitAnchor = clone(target);
     this.cockpitAnchorValid = true;
     this.subjectLiftM = null;
   }
