@@ -1,0 +1,193 @@
+/* Bridge radar internals (src/ui/views/panels/CockpitRadar.vue). The
+   Cockpit view places and sizes the console; the radar fills it, with a
+   square scope as large as the smaller side allows. */
+.cockpit-radar {
+  --radar-line: color-mix(
+    in srgb,
+    var(--cockpit-accent, #00dcff) 34%,
+    transparent
+  );
+  --radar-faint: color-mix(
+    in srgb,
+    var(--cockpit-accent, #00dcff) 16%,
+    transparent
+  );
+  --radar-readout-height: 22px;
+  container-type: size;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  color: rgba(244, 251, 255, 0.82);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+.cockpit-radar[hidden] {
+  display: none;
+}
+.cockpit-radar-scope {
+  position: relative;
+  flex: none;
+  width: min(100cqw, calc(100cqh - var(--radar-readout-height) - 4px));
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid var(--radar-line);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(0, 24, 32, 0.72) 0%,
+    rgba(0, 9, 14, 0.82) 100%
+  );
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.5);
+}
+.cockpit-radar-ring,
+.cockpit-radar-sweep,
+.cockpit-radar-own,
+.cockpit-radar-contact {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+}
+.cockpit-radar-ring {
+  border: 1px solid var(--radar-faint);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+.cockpit-radar-tick {
+  position: absolute;
+  inset: 0;
+}
+.cockpit-radar-tick::before {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 1px;
+  height: 5px;
+  background: var(--radar-line);
+  content: '';
+}
+.cockpit-radar-tick-major::before {
+  height: 8px;
+  background: color-mix(
+    in srgb,
+    var(--cockpit-accent, #00dcff) 62%,
+    transparent
+  );
+}
+.cockpit-radar-sweep {
+  width: 100%;
+  height: 100%;
+  margin: -50% 0 0 -50%;
+  border-radius: 50%;
+  /* The bright edge leads clockwise; the trail fades behind it. */
+  background: conic-gradient(
+    transparent 0deg 270deg,
+    color-mix(in srgb, var(--cockpit-accent, #00dcff) 4%, transparent) 300deg,
+    color-mix(in srgb, var(--cockpit-accent, #00dcff) 26%, transparent) 357deg,
+    color-mix(in srgb, var(--cockpit-accent, #00dcff) 70%, transparent) 360deg
+  );
+  will-change: transform;
+}
+.cockpit-radar-heading-line {
+  position: absolute;
+  bottom: 50%;
+  left: 50%;
+  width: 1px;
+  height: 50%;
+  background: color-mix(
+    in srgb,
+    var(--cockpit-accent, #00dcff) 72%,
+    transparent
+  );
+}
+.cockpit-radar-own {
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border: 1px solid var(--cockpit-accent, #00dcff);
+  border-radius: 1px;
+  background: rgba(0, 9, 14, 0.9);
+}
+.cockpit-radar-contact {
+  --radar-contact-color: #9fb3c8;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  background: var(--radar-contact-color);
+  box-shadow: 0 0 4px var(--radar-contact-color);
+  will-change: opacity;
+}
+.cockpit-radar-contact-stale {
+  border: 1px solid var(--radar-contact-color);
+  background: transparent;
+  box-shadow: none;
+}
+/* A course vector starts at the mark's centre and points along the course. */
+.cockpit-radar-vector {
+  position: absolute;
+  bottom: 50%;
+  left: 50%;
+  width: 1px;
+  height: 9px;
+  margin-left: -0.5px;
+  background: var(--radar-contact-color);
+  transform-origin: 50% 100%;
+}
+.cockpit-radar-own-vector {
+  height: 14px;
+  background: #f4fbff;
+}
+.cockpit-radar-readout {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--radar-readout-height);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.cockpit-radar-range {
+  flex: none;
+  min-width: 44px;
+  height: 20px;
+  padding: 0 6px;
+  border: 1px solid var(--radar-line);
+  border-radius: 2px;
+  background: rgba(0, 7, 12, 0.6);
+  color: #f4fbff;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.cockpit-radar-range:hover,
+.cockpit-radar-range:focus-visible {
+  border-color: var(--cockpit-accent, #00dcff);
+  color: #fff;
+  outline: none;
+}
+.cockpit-radar-rings,
+.cockpit-radar-count {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cockpit-radar-count {
+  color: var(--cockpit-accent, #00dcff);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit-radar-sweep {
+    display: none;
+  }
+}

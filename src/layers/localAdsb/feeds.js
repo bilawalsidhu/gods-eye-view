@@ -5,12 +5,12 @@ import {
 
 /** Same-origin route served by `server/providers/local-receivers.js`. */
 export const LOCAL_RECEIVERS_URL = '/api/local-receivers/aircraft';
-export const LOCAL_RECEIVER_POLL_MS = 1_000;
+const LOCAL_RECEIVER_POLL_MS = 1_000;
 /**
  * Browser-side deadline for one route request, body included. The server
  * bounds each upstream read at 2 s; this bounds the browser-to-server leg.
  */
-export const LOCAL_RECEIVER_REQUEST_TIMEOUT_MS = 5_000;
+const LOCAL_RECEIVER_REQUEST_TIMEOUT_MS = 5_000;
 
 function abortError() {
   const error = new Error('Local receiver request aborted');

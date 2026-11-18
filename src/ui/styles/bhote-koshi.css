@@ -106,8 +106,6 @@
   min-height: 0;
   overflow: hidden;
   background: #03080d;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(107, 232, 255, 0.36) transparent;
 }
 
 .bhote-embedded-callout.is-youtube {
@@ -518,14 +516,15 @@ html:not([lang='en']) .bhote-event-story-current strong {
   -webkit-line-clamp: 2;
 }
 
-/* Phase / time / sources run long in translation: allow a second line. */
+/* Phase / time / sources / imagery note run long in translation: allow up to
+   three lines so the last status is not cut off. */
 html:not([lang='en']) .bhote-event-story-current small {
   display: -webkit-box;
   margin-top: 3px;
   text-overflow: clip;
   white-space: normal;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
 }
 
 .bhote-event-actions {

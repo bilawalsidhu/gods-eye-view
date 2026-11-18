@@ -11,6 +11,7 @@ import createViteConfig, {
   validMilitaryInstallationBox,
   validRegionalPoint,
 } from '../../vite.config.js';
+import { fetchRegionalNews } from '../../server/providers/regional/news.js';
 
 test('missing Google place context is a quiet keyless capability, not a 503', () => {
   assert.deepEqual(keylessGooglePlacesResponse(undefined), {
@@ -112,4 +113,51 @@ test('regional brief treats an all-source outage as total failure', () => {
     weather: null,
     news: { status: 'unavailable' },
   }), true);
+});
+
+test('local regional news asks for the last day, drops old and undated items, newest first', async (t) => {
+  const realFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = realFetch; });
+  const urls = [];
+  let rss;
+  let gdelt;
+  globalThis.fetch = async (url) => {
+    urls.push(new URL(String(url)));
+    const answer = String(url).includes('news.google') ? rss : gdelt;
+    return typeof answer === 'function' ? answer() : answer.clone();
+  };
+  const at = (hours) => new Date(Date.now() - hours * 3_600_000).toUTCString();
+  const item = (title, date) =>
+    `<item><title>${title}</title><link>https://news.example/${title}</link>${date ? `<pubDate>${date}</pubDate>` : ''}</item>`;
+  rss = new Response(`<rss><channel>${[
+    item('old', at(4 * 24)),
+    item('undated', null),
+    item('day', at(20)),
+    item('hour', at(1)),
+  ].join('')}</channel></rss>`);
+  const place = { locality: 'Austin' };
+  const ready = await fetchRegionalNews(place);
+  assert.equal(urls[0].searchParams.get('q'), 'Austin when:1d');
+  assert.equal(ready.status, 'ready');
+  assert.deepEqual(ready.articles.map((row) => row.title), ['hour', 'day']);
+
+  // Nothing recent in RSS: GDELT is asked for the same 24 h window.
+  rss = new Response(`<rss><channel>${item('old', at(30))}</channel></rss>`);
+  gdelt = Response.json({ articles: [] });
+  urls.length = 0;
+  const empty = await fetchRegionalNews(place);
+  assert.equal(urls[1].searchParams.get('timespan'), '24h');
+  assert.deepEqual(empty, { status: 'empty', query: 'Austin', articles: [], source: 'GDELT fallback' });
+
+  // RSS answered with nothing recent and GDELT failed: still a true empty.
+  rss = new Response('<rss><channel></channel></rss>');
+  gdelt = () => Promise.reject(new TypeError('network'));
+  assert.equal((await fetchRegionalNews(place)).status, 'empty');
+
+  // Neither source answered, or no place: unavailable.
+  rss = () => Promise.resolve(new Response('busy', { status: 503 }));
+  const failed = await fetchRegionalNews(place);
+  assert.equal(failed.status, 'unavailable');
+  assert.deepEqual(failed.articles, []);
+  assert.equal((await fetchRegionalNews(null)).status, 'unavailable');
 });

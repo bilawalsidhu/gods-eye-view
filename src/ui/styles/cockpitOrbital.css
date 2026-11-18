@@ -1,0 +1,550 @@
+/* Orbital view HUD (src/ui/views/panels/CockpitOrbital.vue). The section
+   covers the picture it is placed over: the reticle sits on its centre, the
+   readout top-left and the optics bottom-centre. Square-cornered like the
+   bridge view. The Cockpit controller publishes the zoom step's blur as
+   --cockpit-orbital-blur and its lock tick as a reticle class. */
+.cockpit-orbital {
+  --orbital-line: color-mix(
+    in srgb,
+    var(--cockpit-accent, #00dcff) 42%,
+    transparent
+  );
+  --orbital-faint: color-mix(
+    in srgb,
+    var(--cockpit-accent, #00dcff) 18%,
+    transparent
+  );
+  --orbital-reticle-size: min(38vmin, 320px);
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: rgba(244, 251, 255, 0.86);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+}
+.cockpit-orbital[hidden] {
+  display: none;
+}
+
+/* Focus pull: blurs the picture beneath only while a step is in flight. */
+.cockpit-orbital-lens {
+  position: absolute;
+  inset: 0;
+}
+.cockpit-orbital-focusing .cockpit-orbital-lens {
+  backdrop-filter: blur(var(--cockpit-orbital-blur, 0px));
+  -webkit-backdrop-filter: blur(var(--cockpit-orbital-blur, 0px));
+}
+
+.cockpit-orbital-reticle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--orbital-reticle-size);
+  height: var(--orbital-reticle-size);
+  transform: translate(-50%, -50%);
+}
+.cockpit-orbital-bracket {
+  position: absolute;
+  width: 18%;
+  height: 18%;
+  border: 0 solid var(--orbital-line);
+  transition:
+    border-color 160ms ease-out,
+    transform 160ms ease-out;
+}
+.cockpit-orbital-bracket-tl {
+  top: 0;
+  left: 0;
+  border-top-width: 1px;
+  border-left-width: 1px;
+}
+.cockpit-orbital-bracket-tr {
+  top: 0;
+  right: 0;
+  border-top-width: 1px;
+  border-right-width: 1px;
+}
+.cockpit-orbital-bracket-bl {
+  bottom: 0;
+  left: 0;
+  border-bottom-width: 1px;
+  border-left-width: 1px;
+}
+.cockpit-orbital-bracket-br {
+  right: 0;
+  bottom: 0;
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+}
+/* Nadir cross: a gapped plus, so the sub-satellite point stays visible. */
+.cockpit-orbital-cross {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 28px;
+  transform: translate(-50%, -50%);
+  background:
+    linear-gradient(var(--orbital-line), var(--orbital-line)) left center / 10px
+      1px no-repeat,
+    linear-gradient(var(--orbital-line), var(--orbital-line)) right center /
+      10px 1px no-repeat,
+    linear-gradient(var(--orbital-line), var(--orbital-line)) center top / 1px
+      10px no-repeat,
+    linear-gradient(var(--orbital-line), var(--orbital-line)) center bottom /
+      1px 10px no-repeat;
+}
+/* North on the frame: the pointer spans the reticle and turns about its
+   centre, carrying the tick (and, track-up, an N) round the rim. */
+.cockpit-orbital-north-pointer {
+  position: absolute;
+  inset: 0;
+}
+.cockpit-orbital-north-letter {
+  position: absolute;
+  top: -26px;
+  left: 50%;
+  color: var(--cockpit-accent, #00dcff);
+  font-weight: 700;
+  transform: translateX(-50%);
+}
+/* North sits at the top of a north-up frame. */
+.cockpit-orbital-north-tick {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 1px;
+  height: 7px;
+  background: var(--cockpit-accent, #00dcff);
+}
+.cockpit-orbital-reticle-lock .cockpit-orbital-bracket {
+  border-color: var(--cockpit-accent, #00dcff);
+  animation: cockpit-orbital-lock 220ms ease-out;
+}
+.cockpit-orbital-reticle-lock .cockpit-orbital-cross {
+  --orbital-line: var(--cockpit-accent, #00dcff);
+}
+@keyframes cockpit-orbital-lock {
+  0% {
+    transform: scale(1.12);
+    opacity: 0.4;
+  }
+  60% {
+    transform: scale(0.97);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Bottom-left, where the aircraft Contact card sits (hidden in orbit): clear
+   of the Intel HUD's top-left classification block and above its MGRS and
+   coordinate lines. */
+.cockpit-orbital-readout {
+  position: absolute;
+  bottom: clamp(150px, 19vh, 190px);
+  left: clamp(16px, 4vw, 48px);
+  max-width: min(320px, calc(100% - 32px));
+  padding: 8px 10px;
+  border: 1px solid var(--orbital-faint);
+  border-radius: 2px;
+  background: rgba(0, 9, 14, 0.62);
+}
+.cockpit-orbital-readout p,
+.cockpit-orbital-data,
+.cockpit-orbital-data dd {
+  margin: 0;
+}
+.cockpit-orbital-kicker {
+  color: var(--cockpit-accent, #00dcff);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+.cockpit-orbital-name {
+  margin-top: 4px;
+  overflow: hidden;
+  color: #f4fbff;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit-orbital-class {
+  margin-top: 2px;
+  color: rgba(244, 251, 255, 0.66);
+}
+
+/* The name with its owner's flag (or text badge) in front. */
+.cockpit-orbital-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  margin-top: 4px;
+}
+.cockpit-orbital-title .cockpit-orbital-name {
+  min-width: 0;
+  margin-top: 0;
+}
+.cockpit-orbital-flag {
+  flex: none;
+  box-sizing: content-box;
+  width: 20px;
+  height: 15px;
+  border: 1px solid var(--orbital-faint);
+  border-radius: 1px;
+  background-repeat: no-repeat;
+  /* Only the flag's own cell: the sheet's neighbours stay out from under
+     the border. */
+  background-clip: content-box;
+}
+.cockpit-orbital-owner-badge {
+  flex: none;
+  max-width: 96px;
+  overflow: hidden;
+  padding: 1px 4px;
+  border: 1px solid var(--orbital-line);
+  border-radius: 2px;
+  color: var(--cockpit-accent, #00dcff);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit-orbital-operator {
+  margin-top: 2px;
+  overflow: hidden;
+  color: #f4fbff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* NORAD · COSPAR · epoch, and the element set on request. */
+.cockpit-orbital-ident {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  color: rgba(244, 251, 255, 0.66);
+  font-variant-numeric: tabular-nums;
+}
+/* Wraps between its parts rather than truncating, so the epoch and the
+   element set's age always show in full. */
+.cockpit-orbital-ident-text {
+  min-width: 0;
+}
+.cockpit-orbital-ident-part {
+  white-space: nowrap;
+}
+.cockpit-orbital-tle-toggle {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid var(--orbital-line);
+  border-radius: 2px;
+  background: rgba(0, 7, 12, 0.6);
+  color: #f4fbff;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.cockpit-orbital-tle-toggle[aria-expanded='true'],
+.cockpit-orbital-tle-toggle:hover,
+.cockpit-orbital-tle-toggle:focus-visible {
+  border-color: var(--cockpit-accent, #00dcff);
+  color: #fff;
+  outline: none;
+}
+/* 69 characters a line: small enough to fit the card, and selectable. */
+.cockpit-orbital-tle {
+  margin: 6px 0 0;
+  padding: 5px 6px;
+  overflow-x: auto;
+  border: 1px solid var(--orbital-faint);
+  border-radius: 2px;
+  background: rgba(0, 4, 8, 0.7);
+  color: #f4fbff;
+  font: 8px/1.5 var(--font-mono);
+  letter-spacing: 0;
+  white-space: pre;
+  user-select: text;
+  pointer-events: auto;
+}
+
+/* Under the vision selector (topline top + its ~38px height + a gap), on
+   the centre line the reticle keeps clear below; the Intel HUD blocks and
+   Display/Radio sit at the sides. */
+.cockpit-orbital-over {
+  position: absolute;
+  top: calc(clamp(18px, 3vh, 34px) + 50px);
+  left: 50%;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  max-width: min(560px, calc(100% - 32px));
+  margin: 0;
+  padding: 4px 10px;
+  border: 1px solid var(--orbital-faint);
+  border-radius: 2px;
+  background: rgba(0, 9, 14, 0.62);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.cockpit-orbital-over span {
+  flex: none;
+  color: var(--cockpit-accent, #00dcff);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+.cockpit-orbital-over strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #f4fbff;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+}
+.cockpit-orbital-data {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+.cockpit-orbital-datum {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cockpit-orbital-datum dt {
+  color: rgba(244, 251, 255, 0.56);
+}
+.cockpit-orbital-datum dd {
+  color: #f4fbff;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+.cockpit-orbital-north {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 1px 5px;
+  border: 1px solid var(--orbital-line);
+  border-radius: 2px;
+  color: var(--cockpit-accent, #00dcff);
+  font-weight: 700;
+}
+
+/* Above RESET / EXIT ORBIT: #view-switcher sits at clamp(128px, 15vh, 150px)
+   less its -95px margin, and its buttons are about 30px tall. */
+.cockpit-orbital-optics {
+  position: absolute;
+  bottom: calc(clamp(128px, 15vh, 150px) - 95px + 44px);
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--orbital-faint);
+  border-radius: 2px;
+  background: rgba(0, 9, 14, 0.62);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+/* With a sensor's swath and step the strip is longer: it may wrap on a
+   narrow screen rather than run off it. */
+@media (max-width: 720px) {
+  .cockpit-orbital-optics {
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: calc(100vw - 32px);
+  }
+}
+.cockpit-orbital-zoom-button {
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--orbital-line);
+  border-radius: 2px;
+  background: rgba(0, 7, 12, 0.6);
+  color: #f4fbff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.cockpit-orbital-zoom-button:hover:not(:disabled),
+.cockpit-orbital-zoom-button:focus-visible {
+  border-color: var(--cockpit-accent, #00dcff);
+  color: #fff;
+  outline: none;
+}
+.cockpit-orbital-zoom-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.cockpit-orbital-zoom {
+  min-width: 64px;
+  color: var(--cockpit-accent, #00dcff);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-align: center;
+}
+.cockpit-orbital-swath {
+  padding-inline: 4px 2px;
+  border-inline-start: 1px solid var(--orbital-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 560px) {
+  .cockpit-orbital-readout {
+    max-width: calc(100% - 32px);
+  }
+  .cockpit-orbital-name {
+    font-size: 13px;
+  }
+  /* The phone shell lifts RESET / EXIT ORBIT (its row ends ~106px up) and
+     sets the DISPLAY / RADIO row above it (to ~194px up). The optics wrap to
+     two rows and sit above that row, where the zoom buttons can be tapped;
+     the card sits above the optics. */
+  .cockpit-orbital-optics {
+    bottom: 200px;
+  }
+  .cockpit-orbital-readout {
+    bottom: 284px;
+  }
+}
+
+/* A short window: the card stops below the left rail (DATA LAYERS,
+   UTILITIES, which end ~340px down) and scrolls its own content, the TLE
+   block included, instead of running into the rail. */
+@media (max-height: 760px) and (min-width: 561px) {
+  .cockpit-orbital-readout {
+    max-height: max(120px, calc(100vh - clamp(150px, 19vh, 190px) - 350px));
+    overflow-y: auto;
+  }
+}
+
+/* An instant cut: no focus pull and no lock motion. */
+@media (prefers-reduced-motion: reduce) {
+  .cockpit-orbital-focusing .cockpit-orbital-lens {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .cockpit-orbital-bracket {
+    transition: none;
+  }
+  .cockpit-orbital-reticle-lock .cockpit-orbital-bracket {
+    animation: none;
+  }
+}
+
+/* Off-nadir look: the tilt readout and the way back, tucked under the
+   readout card at the side of the picture. Shown only while tilted. */
+.cockpit-orbital-look {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--orbital-faint);
+}
+.cockpit-orbital-look-readout {
+  color: var(--cockpit-accent, #00dcff);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.cockpit-orbital-nadir {
+  padding: 3px 8px;
+  border: 1px solid var(--orbital-line);
+  border-radius: 2px;
+  background: rgba(0, 7, 12, 0.6);
+  color: #f4fbff;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.cockpit-orbital-nadir:hover,
+.cockpit-orbital-nadir:focus-visible {
+  border-color: var(--cockpit-accent, #00dcff);
+  color: #fff;
+  outline: none;
+}
+
+/* The Cockpit HUD in orbit (#cockpit-hud[data-subject='satellite']): the
+   orbital readout names the satellite, so the topline keeps only the
+   vision selector, and panels and buttons stay square like the bridge. */
+#cockpit-hud[data-subject='satellite'] .cockpit-topline > div:first-child {
+  visibility: hidden;
+}
+:root[data-ui-theme='cyber'] #cockpit-hud[data-subject='satellite']::before {
+  clip-path: none;
+}
+:root:not([data-ui-theme='cyber']) body.cockpit-orbit {
+  --panel-radius: 2px;
+  --btn-radius: 2px;
+}
+#cockpit-hud[data-subject='satellite']
+  :is(
+    .cockpit-vision-controls,
+    .cockpit-vision-controls button,
+    .cockpit-card-actions button,
+    .cockpit-utility-glyph,
+    .cockpit-radio-transport button,
+    #cockpit-brief-auto
+  ) {
+  border-radius: 2px;
+}
+body.cockpit-orbit #view-switcher button {
+  border-radius: 2px;
+}
+
+/* The imaging sensor's narrowest swath, to scale across the view's width. The
+   view is track-up, so the swath runs top to bottom along the ground track. */
+.cockpit-orbital-sensor-strip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  min-width: 2px;
+  border-inline: 1px dashed var(--orbital-line);
+  background: color-mix(
+    in srgb,
+    var(--cockpit-accent, #00dcff) 6%,
+    transparent
+  );
+  transform: translateX(-50%);
+}
+.cockpit-orbital-sensor-swath {
+  color: var(--cockpit-accent, #00dcff);
+}
+.cockpit-orbital-sensor-step {
+  padding: 3px 8px;
+  border: 1px solid var(--orbital-line);
+  border-radius: 2px;
+  background: rgba(0, 7, 12, 0.6);
+  color: #f4fbff;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.cockpit-orbital-sensor-step:hover,
+.cockpit-orbital-sensor-step:focus-visible {
+  border-color: var(--cockpit-accent, #00dcff);
+  color: #fff;
+  outline: none;
+}

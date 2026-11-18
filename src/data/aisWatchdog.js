@@ -46,28 +46,8 @@ export const AIS_WATCHDOG_DEFAULTS = Object.freeze({
   authProbeMs: 3_600_000,
 });
 
-/**
- * Statuses reported to the browser. 'missing-key' and 'unsupported' keep their
- * pre-watchdog meaning so a keyless install still reads as "feature off".
- */
-export const AIS_WATCHDOG_STATUSES = Object.freeze([
-  'idle',
-  'missing-key',
-  'unsupported',
-  'connecting',
-  'live',
-  'stale',
-  'reconnecting',
-  'down',
-  'auth-failed',
-]);
-
 /** Failure classes. Only 'transport' is allowed to walk the fast ladder. */
-export const AIS_FAILURE_KINDS = Object.freeze([
-  'transport',
-  'auth',
-  'rate-limit',
-]);
+const AIS_FAILURE_KINDS = Object.freeze(['transport', 'auth', 'rate-limit']);
 
 /** Statuses that must not flip back to a hopeful 'connecting' on a retry. */
 const QUIET_TERMINAL = new Set(['down', 'auth-failed']);

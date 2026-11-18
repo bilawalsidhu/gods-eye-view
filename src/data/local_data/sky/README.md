@@ -1,6 +1,7 @@
 # Sky background
 
-Catalogue stars over a soft Milky Way, drawn by `src/sky/starrySky.js` in
+Catalogue stars over a soft Milky Way, exported Cesium-free by `src/sky/index.js`
+(`gods-eye-view/sky`) and drawn on Cesium by `src/render/cesium/starrySky.js` in
 place of Cesium's blocky Tycho-2 sky box.
 
 | File | Content | Size |

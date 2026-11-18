@@ -9,6 +9,13 @@ export const MICROPHONE_VISUALIZER_GATE = 0.12;
 
 export const ASSISTANT_VISUALIZER_GATE = 0.04;
 
+/** Stories takes keyboard and microphone ownership away from voice. */
+export function isStoriesOpen() {
+  return (
+    globalThis.document?.body?.classList?.contains?.('stories-mode') ?? false
+  );
+}
+
 /**
  * Returns whether a keyboard event represents the hold-Space voice shortcut.
  * @param {KeyboardEvent|object|null} event
@@ -171,17 +178,4 @@ export function gateVoiceVisualizerLevel(level, threshold) {
     : 0;
   if (cleanLevel <= cleanThreshold) return 0;
   return (cleanLevel - cleanThreshold) / (1 - cleanThreshold);
-}
-
-/**
- * Restores the CSS-owned standby baseline for every visualizer bar.
- * @param {Iterable<HTMLElement>|null|undefined} bars
- * @returns {void}
- */
-export function resetVoiceVisualizerBars(bars) {
-  if (!bars) return;
-  for (const bar of bars) {
-    bar.style.removeProperty('--audio-level');
-    bar.style.removeProperty('--audio-opacity');
-  }
 }

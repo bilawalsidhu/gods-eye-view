@@ -182,14 +182,17 @@ export function tomtomProxy() {
         });
         res.end(JSON.stringify(obj));
       };
-      const sendTile = (buf, cacheStatus) => {
+      // x-tomtom-fetched-at is when the proxy fetched the tile (ms since the
+      // epoch), so a client handed a STALE-* copy can say how old it is.
+      const sendTile = (entry, cacheStatus) => {
         if (res.headersSent) return;
         res.writeHead(200, {
           'Content-Type': 'application/x-protobuf',
           'Cache-Control': 'no-store',
           'x-tomtom-cache': cacheStatus,
+          'x-tomtom-fetched-at': String(Math.round(entry.at)),
         });
-        res.end(buf);
+        res.end(entry.buf);
       };
 
       try {
@@ -235,14 +238,14 @@ export function tomtomProxy() {
         }
         // Fresh cache hit — never counts against the budget.
         if (entry && now - entry.at < TILE_TTL_MS) {
-          sendTile(entry.buf, 'HIT');
+          sendTile(entry, 'HIT');
           return;
         }
 
         // Budget governor: over the soft cap, last-good data beats a dead layer.
         if (isTomTomOverBudget(currentBudget(), dailyBudgetLimit())) {
           if (entry) {
-            sendTile(entry.buf, 'STALE-BUDGET');
+            sendTile(entry, 'STALE-BUDGET');
           } else {
             sendJson(429, { error: 'budget' });
           }
@@ -271,9 +274,9 @@ export function tomtomProxy() {
         }
         const fresh = await inflight.get(key);
         if (fresh) {
-          sendTile(fresh.buf, 'MISS');
+          sendTile(fresh, 'MISS');
         } else if (entry) {
-          sendTile(entry.buf, 'STALE-ERROR'); // upstream down — stale beats empty
+          sendTile(entry, 'STALE-ERROR'); // upstream down — stale beats empty
         } else {
           sendJson(502, { error: 'upstream' });
         }

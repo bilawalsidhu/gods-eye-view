@@ -3,7 +3,7 @@ import { decodeWindGribMessage } from './decode.js';
 import { resampleWeatherSnapshot, weatherScalarMetadata } from './grid.js';
 
 /** Keyless ECMWF Open Data root for real-time IFS forecasts. */
-export const IFS_BASE = 'https://data.ecmwf.int/forecasts';
+const IFS_BASE = 'https://data.ecmwf.int/forecasts';
 
 /**
  * Select the latest IFS cycle that should be available.

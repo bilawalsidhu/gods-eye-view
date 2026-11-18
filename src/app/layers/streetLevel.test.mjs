@@ -72,3 +72,17 @@ test('the defaults are Mapillary (given its source), Street View, KartaView and 
   // Without the application's Street Level source there are none.
   assert.deepEqual(createApplicationStreetLevel({}).providerIds, []);
 });
+
+test('every built-in provider is exported, so hosts can choose their own list', async () => {
+  const google = await import('gods-eye-view/layers/street-level/google');
+  const kartaview = await import('gods-eye-view/layers/street-level/kartaview');
+  const panoramax = await import('gods-eye-view/layers/street-level/panoramax');
+  const layer = createApplicationStreetLevel({
+    providers: [
+      google.createGoogleProvider({ getApiKey: () => null }),
+      kartaview.createKartaViewProvider(),
+      panoramax.createPanoramaxProvider(),
+    ],
+  });
+  assert.deepEqual(layer.providerIds, ['google', 'kartaview', 'panoramax']);
+});

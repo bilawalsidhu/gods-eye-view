@@ -9,6 +9,8 @@ import {
 } from '../../server/providers/space/launch-library.js';
 import { keySetupStatus } from '../keySetupCore.mjs';
 import { initKeySetup } from '../keySetup.js';
+import { createPinia } from 'pinia';
+import { useProviderSettingsStore } from '../ui/stores/providerSettings.js';
 
 test('LL2 requests from the same UTC minute share a cache key without mutating callers', () => {
   const first = new Date('2026-10-17T16:20:00.001Z');
@@ -57,60 +59,31 @@ test('LL2 headers identify the app and preserve optional server-only authorizati
 });
 
 test('actual setup rendering distinguishes optional paid LL2 from unrelated free keys', async () => {
-  const created = [];
-  const node = () => {
-    const value = {
-      dataset: {},
-      children: [],
-      append(...children) {
-        this.children.push(...children);
-      },
-      querySelector() {
-        return null;
-      },
-      querySelectorAll() {
-        return [];
-      },
-      addEventListener() {},
-      removeEventListener() {},
-      setAttribute() {},
-      remove() {},
-    };
-    created.push(value);
-    return value;
-  };
-  const rows = node();
-  const root = node();
-  root.querySelector = (selector) =>
-    selector === '[data-key-setup-rows]' ? rows : null;
-  const chip = node();
+  const store = useProviderSettingsStore(createPinia());
   const status = keySetupStatus({});
   status.keys = status.keys.filter((key) =>
     ['launch-library', 'mapillary'].includes(key.id),
   );
   const setup = await initKeySetup({
     documentRef: {
-      getElementById: (id) => (id === 'key-setup-chip' ? chip : root),
-      createElement: node,
+      getElementById: (id) => (id === 'key-setup' ? { dataset: {} } : null),
       addEventListener() {},
       removeEventListener() {},
     },
+    store,
     fetchImpl: async () => ({ ok: true, json: async () => status }),
   });
   assert.ok(setup);
   try {
-    const ll2 = rows.children.find(
-      (row) => row.dataset.keyId === 'launch-library',
+    const row = (id) => store.view.rows.find((key) => key.id === id);
+    const ll2 = row('launch-library');
+    assert.match(ll2.tierTitle, /optional paid token/i);
+    assert.match(ll2.unlocks, /leave blank/i);
+    assert.match(ll2.unlocks, /no key/i);
+    assert.equal(
+      row('mapillary').tierTitle,
+      'Free key — register, paste, done',
     );
-    const free = rows.children.find((row) => row.dataset.keyId === 'mapillary');
-    const tier = (row) =>
-      row.children[0].children.find(
-        (child) => child.className === 'key-setup-tier',
-      );
-    assert.match(tier(ll2).title, /optional paid token/i);
-    assert.match(ll2.children[1].textContent, /leave blank/i);
-    assert.match(ll2.children[1].textContent, /no key/i);
-    assert.equal(tier(free).title, 'Free key — register, paste, done');
     const serialized = JSON.stringify(status);
     assert.ok(!serialized.includes('owned-fixture-token'));
   } finally {

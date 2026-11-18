@@ -1,6 +1,6 @@
 /** Decoded coverage tiles kept, and for how long. */
-export const TILE_CACHE_SIZE = 24;
-export const TILE_CACHE_TTL_MS = 10 * 60_000;
+const TILE_CACHE_SIZE = 24;
+const TILE_CACHE_TTL_MS = 10 * 60_000;
 
 /** Least-recently-used map: reading an entry renews it. */
 export function createLru(limit) {

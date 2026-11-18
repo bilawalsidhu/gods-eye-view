@@ -7,10 +7,9 @@ import { readCappedResponseText } from '../common/http.js';
  *   own credit bucket, 4 credits per call on the free tier). OAuth via the
  *   shared coalesced token. 60s per-icao cache; 404/429 forwarded so the
  *   client can fall back to its accumulated trail silently.
- * /api/military/track?hex=<hex> — adsb.lol tar1090 readsb trace
- *   (undocumented but live; no browser CORS, hence this proxy). Up to ~24h
- *   of real history per aircraft. Treat as best-effort; data is ODbL —
- *   credit "adsb.lol (ODbL)" in the UI.
+ * /api/military/track?hex=<hex> — compatibility refusal for the retired,
+ *   undocumented ADSB.lol trace route. The standalone military source uses
+ *   locally accumulated trails; provider-supplied history remains optional.
  */
 export function trackBackfillProxies() {
   const TRACK_CACHE_MS = 60000;
@@ -107,10 +106,16 @@ export function trackBackfillProxies() {
           );
           return;
         }
-        await proxyJson(
-          res,
-          `lol:${hex}`,
-          `https://adsb.lol/data/traces/${hex.slice(-2)}/trace_full_${hex}.json`,
+        res.statusCode = 503;
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('Retry-After', '1800');
+        res.end(
+          JSON.stringify({
+            error:
+              'Military history unavailable; locally accumulated trails remain available',
+            code: 'history_unavailable',
+          }),
         );
       } catch (error) {
         res.statusCode = 502;

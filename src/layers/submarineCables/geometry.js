@@ -33,7 +33,7 @@ export function featureReference(feature) {
   };
 }
 
-export function coordsFromProperty(value) {
+function coordsFromProperty(value) {
   if (!Array.isArray(value) || value.length < 2) return null;
   const lon = Number(value[0]);
   const lat = Number(value[1]);
@@ -41,7 +41,7 @@ export function coordsFromProperty(value) {
   return [lon, lat];
 }
 
-export function coordsFromPoint(value) {
+function coordsFromPoint(value) {
   if (!Array.isArray(value) || value.length < 2) return null;
   const lon = Number(value[0]);
   const lat = Number(value[1]);
@@ -49,7 +49,7 @@ export function coordsFromPoint(value) {
   return [lon, lat];
 }
 
-export function collectLonLat(value, out) {
+function collectLonLat(value, out) {
   if (!Array.isArray(value)) return;
   if (typeof value[0] === 'number' && typeof value[1] === 'number') {
     const lon = Number(value[0]);
@@ -76,4 +76,44 @@ export function normalizeFeatures(json, kind) {
       id: String(id),
     };
   });
+}
+
+/**
+ * A GeoJSON geometry's drawable parts, as GeoJSON sources have always been
+ * drawn: each line string, point and polygon on its own (multi-geometries
+ * and collections split into their members). Coordinates stay
+ * `[lon, lat, height?]` degrees.
+ * @returns {{lines: number[][][], points: number[][], polygons: number[][][][]}}
+ */
+export function geometryParts(
+  geometry,
+  out = { lines: [], points: [], polygons: [] },
+) {
+  if (!geometry) return out;
+  const coords = geometry.coordinates;
+  switch (geometry.type) {
+    case 'Point':
+      out.points.push(coords);
+      break;
+    case 'MultiPoint':
+      for (const point of coords) out.points.push(point);
+      break;
+    case 'LineString':
+      out.lines.push(coords);
+      break;
+    case 'MultiLineString':
+      for (const line of coords) out.lines.push(line);
+      break;
+    case 'Polygon':
+      out.polygons.push(coords);
+      break;
+    case 'MultiPolygon':
+      for (const polygon of coords) out.polygons.push(polygon);
+      break;
+    case 'GeometryCollection':
+      for (const member of geometry.geometries ?? [])
+        geometryParts(member, out);
+      break;
+  }
+  return out;
 }

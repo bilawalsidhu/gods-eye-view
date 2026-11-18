@@ -70,7 +70,7 @@ const cases = [
 
 // Transit's coverage text when nothing is in view (transit/queries.js).
 const transitCoverage = [
-  'transit: Fly below 3,000 km to a covered region',
+  'transit: Fly below 2,850 km to a covered region',
   'transit: No feed here yet · 12 regions available',
 ];
 

@@ -1,7 +1,7 @@
 import { countWords, findHedges } from './speechLint.js';
 
 /** Quiet period after the last audio or response before a turn is closed. */
-export const TURN_SETTLE_MS = 2500;
+const TURN_SETTLE_MS = 2500;
 
 /**
  * Per-turn latency and speech spans for one voice session.

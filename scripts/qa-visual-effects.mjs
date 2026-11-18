@@ -80,7 +80,6 @@ try {
     'thermal',
     'anime',
     'noir',
-    'snow',
     'normal',
   ]) {
     await page.evaluate(
@@ -170,7 +169,7 @@ try {
         result.bloom.intensityPct === 98 &&
         snapshot.bloom.intensity === 98 &&
         manager._visualEffects.bloomIntensity === 98 &&
-        manager._bloomStage.enabled
+        window.__godsEyeView.viewer.scene.postProcessStages.bloom.enabled
       );
     }),
   );
@@ -184,7 +183,11 @@ try {
         result.sharpen.intensityPct === 61 &&
         manager.getVisualState().sharpen.intensity === 61 &&
         manager._visualEffects.sharpenIntensity === 0.61 &&
-        Math.abs(manager._sharpenStage.uniforms.amount - 1.32) < 1e-9
+        Math.abs(
+          window.__godsEyeView.viewer.scene.postProcessStages.getStageByName(
+            'effects_sharpen',
+          ).uniforms.amount - 1.32,
+        ) < 1e-9
       );
     }),
   );
@@ -200,9 +203,10 @@ try {
     const manager = window.__godsEyeView.styleManager;
     const effects = manager._visualEffects;
     manager.setStyle('retro');
-    const owned = [...Object.values(effects.stages), effects.sharpenStage];
-    const collection = manager.viewer.scene.postProcessStages;
-    const previousBloom = effects.previousBloom;
+    const collection = window.__godsEyeView.viewer.scene.postProcessStages;
+    const owned = Object.keys(effects.stages).map((name) =>
+      collection.getStageByName(`effects_style_${name}`),
+    );
     const pending = manager.dispose();
     const stoppedBeforeAwait =
       effects.stopped &&
@@ -211,12 +215,15 @@ try {
     await pending;
     return {
       stoppedBeforeAwait,
-      removed: owned.every((stage) => !collection.contains(stage)),
-      restored:
-        effects.bloomStage.enabled === previousBloom.enabled &&
-        Object.entries(previousBloom.uniforms).every(
-          ([name, value]) => effects.bloomStage.uniforms[name] === value,
+      removed:
+        owned.every(Boolean) &&
+        Object.keys(effects.stages).every(
+          (name) => !collection.getStageByName(`effects_style_${name}`),
         ),
+      // The renderer gives the scene's bloom back when it goes.
+      restored:
+        !collection.bloom.enabled &&
+        !collection.getStageByName('effects_sharpen')?.enabled,
     };
   });
   check(
@@ -224,7 +231,7 @@ try {
     teardown.stoppedBeforeAwait,
   );
   check(
-    'UI teardown removes owned stages and restores borrowed bloom',
+    'UI teardown removes its styles and turns bloom and sharpen off',
     teardown.removed && teardown.restored,
   );
   check(

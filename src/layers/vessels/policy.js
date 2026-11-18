@@ -1,8 +1,3 @@
-export {
-  PARTIAL_RETENTION_MS,
-  SELECTED_PIN_REFRESHES,
-  AIS_FIRST_CONNECT_LABEL,
-} from './recordPolicy.js';
 import { VESSEL_LABEL_GRID_PX } from '../../data/vesselLabels.js';
 import { msg } from '../../i18n/index.js';
 
@@ -57,6 +52,17 @@ export const TRAIL_MAX_POINTS = 400;
 /** Minimum movement (m) before a reconcile refresh appends a new trail point. */
 
 export const TRAIL_MIN_MOVE_M = 25;
+
+/** Longest head (m) drawn from the trail's last drawn fix to the vessel: a
+ * farther vessel (the clock jumped past the fixes the trail holds) keeps no
+ * head until its fixes arrive. */
+
+export const TRAIL_HEAD_MAX_M = 20000;
+
+/** Whether the layer shows the world clock's time instead of the live feed:
+ *  its source declares a timeline and the clock is away from live. */
+export const followsClock = (vesselState) =>
+  vesselState.timeline?.active() === true;
 
 export const DEFAULT_AIS_RUNTIME = Object.freeze({
   now: () => Date.now(),

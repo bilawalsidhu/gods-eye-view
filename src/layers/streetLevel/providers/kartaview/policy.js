@@ -14,7 +14,7 @@ export const KARTAVIEW_LABEL = 'KARTAVIEW';
  */
 export const KARTAVIEW_API_HOST = 'https://api.kartaview.org';
 /** KartaView's image proxy: resizes a photo given its base64url address. */
-export const KARTAVIEW_CDN_HOST = 'https://cdn.kartaview.org';
+const KARTAVIEW_CDN_HOST = 'https://cdn.kartaview.org';
 
 /** Stable id prefixes for picked primitives; every one starts with `kv:`. */
 export const PICK_PREFIX = Object.freeze({
@@ -140,8 +140,6 @@ export const MASK_SLOW_MESSAGE = msg(
 export const FILTERED_OUT_MESSAGE = msg(
   'None of KartaView’s photos here pass the imagery filter',
 );
-/** Under the SINCE slider while KartaView is lit. */
-export const SINCE_NOTE = '(by upload date)';
 
 /** The UTC calendar day of `ms`, as KartaView's startDate reads it. */
 function utcDay(ms) {
@@ -224,9 +222,32 @@ export function kartaViewTimeMs(value) {
       String(value ?? ''),
     );
   if (!match) return null;
-  const [, y, mo, d, h = '0', mi = '0', s = '0'] = match;
-  if (Number(y) < 1990) return null;
-  const ms = Date.UTC(+y, +mo - 1, +d, +h, +mi, +s);
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hours = Number(match[4] ?? 0);
+  const minutes = Number(match[5] ?? 0);
+  const seconds = Number(match[6] ?? 0);
+  if (year < 1990) return null;
+  if (
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    hours > 23 ||
+    minutes > 59 ||
+    seconds > 59
+  )
+    return null;
+  // Date.UTC rolls 31 February into March. A photo would then pass or fail
+  // the day filter on the wrong calendar day, so an impossible date is unknown.
+  const ms = Date.UTC(year, month - 1, day, hours, minutes, seconds);
+  const parsed = new Date(ms);
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  )
+    return null;
   return Number.isFinite(ms) ? ms : null;
 }
 

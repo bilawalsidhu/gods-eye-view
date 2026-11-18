@@ -1,5 +1,14 @@
-import * as Cesium from 'cesium';
-import { horizonOccluder } from '../../data/iconOrientation.js';
+import { cssColor } from '../../render/color.js';
+import {
+  canvasOf,
+  drawOf,
+  findCamera,
+  findQuery,
+} from '../../render/rendererOf.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { horizonFrom } from '../../geo/horizon.js';
+import { distance } from '../../geo/vector.js';
+import { clusterScreenPoints } from '../../geo/screenCluster.js';
 import {
   MARKER_LIFT_M,
   RADIO_PREFIX,
@@ -10,6 +19,68 @@ import {
   RADIO_OVERLAY_SOURCE_OPTIONS,
   DEFAULT_RADIO_FILTER,
 } from './policy.js';
+
+/** Draw sets made so far, by every Radio layer: set ids unique to each. */
+let instances = 0;
+
+/** Where a station's dot shows: from the ground out to the globe view. */
+const DISPLAY_RANGE = Object.freeze([
+  0,
+  RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M,
+]);
+const STATION_SCALE_BY_DISTANCE = Object.freeze({
+  near: 100_000,
+  nearValue: 1.15,
+  far: 12_000_000,
+  farValue: 1,
+});
+const BRACKET_SCALE_BY_DISTANCE = Object.freeze({
+  near: 100_000,
+  nearValue: 1,
+  far: 12_000_000,
+  farValue: 0.72,
+});
+const STATION_PIXEL_SIZE = 13;
+const STATION_OUTLINE = cssColor('#071b25');
+const BLACK = Object.freeze([0, 0, 0, 1]);
+/** Stations' screen clustering, as the stations' data source clustered them. */
+const CLUSTER_PIXEL_RANGE = 42;
+const CLUSTER_MINIMUM_SIZE = 3;
+
+/** A CSS colour with another alpha. */
+function withAlpha(css, alpha) {
+  const [r, g, b] = cssColor(css) ?? [1, 1, 1];
+  return [r, g, b, alpha];
+}
+
+/**
+ * A station id from ordinary, selected, or cluster pick shapes: a pick id,
+ * a renderer pick's `{set, id}`, or a list of them.
+ * @param {object|null|undefined} picked A scene pick result.
+ * @returns {string|null}
+ */
+export function radioStationIdFromPick(picked) {
+  const pending = [picked?.id, picked?.primitive?.id];
+  const seen = new Set();
+  while (pending.length) {
+    const value = pending.shift();
+    if (typeof value === 'string' || typeof value === 'number') {
+      const id = String(value);
+      if (id.startsWith(`${RADIO_PREFIX}selected:`))
+        return id.slice(`${RADIO_PREFIX}selected:`.length);
+      if (id.startsWith(RADIO_PREFIX)) return id.slice(RADIO_PREFIX.length);
+      continue;
+    }
+    if (!value || typeof value !== 'object' || seen.has(value)) continue;
+    seen.add(value);
+    if (Array.isArray(value)) pending.push(...value);
+    else {
+      pending.push(value.id);
+      if (value.primitive) pending.push(value.primitive.id);
+    }
+  }
+  return null;
+}
 
 export function createRendering({
   state: layerState,
@@ -22,23 +93,92 @@ export function createRendering({
     services.overlays;
   const { governorRequestRender } = services.render;
 
+  /**
+   * The layer's draw sets (made with `installDataSource`): the station
+   * dots, the cluster dots that stand in for stations drawn too close
+   * together, and the selected station's dot and bracket.
+   */
+  let sets = null;
+  /** The camera subscription that clusters the stations again as it moves. */
+  let offCameraChanged = null;
+  /** What the last clustering pass leaves for the next. */
+  let clusterState = null;
+  /**
+   * The clusters drawn now, each `{position, stationIds}` with its seed
+   * station first, and the stations they hold.
+   */
+  let clusters = [];
+  let clusteredIds = new Set();
+  /**
+   * The stations the last clustering pass left on their own, or null before
+   * one: a station it passed over (past the horizon or behind the eye) is
+   * hidden until the next, as the default renderer's clustering hid it.
+   */
+  let singleIds = null;
+  /** Each station dot's drawn show, by station id. */
+  const drawnShow = new Map();
+  /** The selected station's items while it has them, and whether shown. */
+  let selection = null;
+
   function markerPosition(station, liftM = MARKER_LIFT_M) {
     const floor = cachedGroundFloor(station.lat, station.lon);
-    return Cesium.Cartesian3.fromDegrees(
+    return fromDegrees(
       station.lon,
       station.lat,
       (Number.isFinite(floor) ? floor : 0) + liftM,
     );
   }
 
+  /** The eye's pose, or null without a camera. */
+  const pose = () => findCamera(layerState._viewer)?.pose() ?? null;
+
+  /** A station's dot item, shown or not. */
+  function stationItem(record, show) {
+    const markerColor = parts.model.radioCategoryColor(
+      parts.model.radioStationCategoryId(record.station),
+    );
+    return {
+      id: `${RADIO_PREFIX}${record.station.id}`,
+      pos: record.position,
+      pixelSize: STATION_PIXEL_SIZE,
+      color: withAlpha(markerColor, 0.86),
+      outlineColor: STATION_OUTLINE,
+      outlineWidth: 1,
+      disableDepthTest: Infinity,
+      scaleByDistance: STATION_SCALE_BY_DISTANCE,
+      displayRange: DISPLAY_RANGE,
+      show,
+    };
+  }
+
+  /**
+   * Draw each station dot that is visible and not standing in a cluster,
+   * writing only the dots whose show changed.
+   */
+  function syncStationShows() {
+    if (!sets) return false;
+    const changed = [];
+    for (const record of layerState._renderById.values()) {
+      const show =
+        record.visible &&
+        (singleIds
+          ? singleIds.has(record.station.id)
+          : !clusteredIds.has(record.station.id));
+      if (drawnShow.get(record.station.id) === show) continue;
+      drawnShow.set(record.station.id, show);
+      changed.push(stationItem(record, show));
+    }
+    if (changed.length) sets.stations.upsert(changed);
+    return changed.length > 0;
+  }
+
   function updateSelectionEntity() {
-    if (layerState._selectedEntity && layerState._viewer)
-      layerState._viewer.entities.remove(layerState._selectedEntity);
-    layerState._selectedEntity = null;
+    removeSelectionEntity();
     const station = parts.queries.selectedPresentationStation();
     if (
       !parts.interaction.radioPresentationAllowed() ||
       !layerState._viewer ||
+      !sets ||
       !station
     ) {
       scheduleRadioOverlayPublish();
@@ -47,41 +187,122 @@ export function createRendering({
     const selectionColor = parts.model.radioCategoryColor(
       parts.model.radioStationCategoryId(station),
     );
-    const bracketImage = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(parts.labels.radioSelectionBracketSvg(selectionColor))}`;
-
-    layerState._selectedEntity = layerState._viewer.entities.add({
-      id: `${RADIO_PREFIX}selected:${station.id}`,
-      position: markerPosition(station, SELECTED_LIFT_M),
-      point: {
+    const id = `${RADIO_PREFIX}selected:${station.id}`;
+    const position = markerPosition(station, SELECTED_LIFT_M);
+    selection = {
+      position,
+      shown: true,
+      dot: {
+        id,
+        pos: position,
         pixelSize: 14,
-        color: Cesium.Color.fromCssColorString(selectionColor),
-        outlineColor: Cesium.Color.BLACK,
+        color: cssColor(selectionColor),
+        outlineColor: BLACK,
         outlineWidth: 2,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
-          0,
-          RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M,
-        ),
+        disableDepthTest: Infinity,
+        displayRange: DISPLAY_RANGE,
       },
-      billboard: {
-        image: bracketImage,
-        width: 40,
-        height: 40,
-        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-        verticalOrigin: Cesium.VerticalOrigin.CENTER,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
-          0,
-          RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M,
-        ),
-        scaleByDistance: new Cesium.NearFarScalar(100_000, 1, 12_000_000, 0.72),
+      bracket: {
+        id,
+        pos: position,
+        image: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(parts.labels.radioSelectionBracketSvg(selectionColor))}`,
+        size: [40, 40],
+        disableDepthTest: Infinity,
+        displayRange: DISPLAY_RANGE,
+        scaleByDistance: BRACKET_SCALE_BY_DISTANCE,
       },
-    });
+    };
+    sets.selectedDot.set([selection.dot]);
+    sets.selectedBracket.set([selection.bracket]);
     scheduleRadioOverlayPublish();
   }
 
-  function clusterPointCollection() {
-    return layerState._dataSource?.clustering?._clusterPointCollection || null;
+  /** Show or hide the selected station's dot and bracket. */
+  function showSelection(shown) {
+    if (!selection || selection.shown === shown) return false;
+    selection.shown = shown;
+    sets.selectedDot.upsert([{ ...selection.dot, show: shown }]);
+    sets.selectedBracket.upsert([{ ...selection.bracket, show: shown }]);
+    return true;
+  }
+
+  /**
+   * Cluster the visible stations on screen, as the stations' data source
+   * clustered them (`geo/screenCluster.js`), draw each cluster as a dot
+   * sized by its count and coloured by its stations' category, and hide the
+   * stations it holds.
+   */
+  function clusterStations() {
+    if (!sets) return;
+    const query = findQuery(layerState._viewer);
+    const eye = pose();
+    const points = [];
+    if (query && eye) {
+      const horizon = horizonFrom(eye.position);
+      for (const record of layerState._renderById.values()) {
+        if (!record.visible || !horizon.isPointVisible(record.position))
+          continue;
+        const screen = query.project(record.position);
+        if (!screen) continue;
+        points.push({
+          id: record.station.id,
+          position: record.position,
+          screen,
+          pixelSize: STATION_PIXEL_SIZE,
+        });
+      }
+    }
+    const viewHeight = canvasOf(layerState._viewer)?.clientHeight ?? 0;
+    const result = clusterScreenPoints({
+      points,
+      pixelRange: CLUSTER_PIXEL_RANGE,
+      minimumClusterSize: CLUSTER_MINIMUM_SIZE,
+      viewHeight,
+      eyeHeight: eye?.height ?? Number.POSITIVE_INFINITY,
+      previous: clusterState,
+      project: (position) => query.project(position),
+      isOccluded: (position) =>
+        !horizonFrom(eye.position).isPointVisible(position),
+    });
+    clusterState = result.state;
+    clusters = result.clusters.map(({ position, ids }) => ({
+      position,
+      stationIds: ids,
+    }));
+    clusteredIds = new Set(clusters.flatMap((cluster) => cluster.stationIds));
+    singleIds = query && eye ? new Set(result.single) : null;
+    sets.clusters.set(clusters.map(clusterItem));
+    syncStationShows();
+    scheduleRadioOverlayPublish();
+  }
+
+  /** A cluster's dot: its seed station's id, so a click plays that one. */
+  function clusterItem(cluster) {
+    const clusteredStations = [];
+    for (const stationId of cluster.stationIds) {
+      const station = layerState._renderById.get(stationId)?.station;
+      if (station) clusteredStations.push(station);
+    }
+    const clusterCategory = parts.model.radioClusterCategoryId(
+      clusteredStations,
+      layerState._filter,
+    );
+    return {
+      id: `${RADIO_PREFIX}${cluster.stationIds[0]}`,
+      pos: cluster.position,
+      pixelSize: Math.min(26, 12 + Math.log2(cluster.stationIds.length) * 1.6),
+      color: withAlpha(parts.model.radioCategoryColor(clusterCategory), 0.9),
+      outlineColor: BLACK,
+      outlineWidth: 2,
+      disableDepthTest: Infinity,
+      displayRange: DISPLAY_RANGE,
+      meta: { stationIds: cluster.stationIds },
+    };
+  }
+
+  /** The clusters drawn now: `{position, stationIds}`, seed first. */
+  function stationClusters() {
+    return clusters;
   }
 
   function publishRadioOverlayEntries() {
@@ -107,18 +328,9 @@ export function createRendering({
 
     const clusterCandidates = [];
     const clusteredStationIds = new Set();
-    const points = clusterPointCollection();
-    for (let index = 0; index < (points?.length || 0); index += 1) {
-      const point = points.get(index);
-      if (
-        !point?.show ||
-        !point.position ||
-        !Array.isArray(point.id) ||
-        point.id.length < 3
-      )
-        continue;
-      const stationIds = point.id
-        .map((entity) => String(entity?.id || '').slice(RADIO_PREFIX.length))
+    for (const cluster of clusters) {
+      if (cluster.stationIds.length < 3) continue;
+      const stationIds = cluster.stationIds
         .filter((id) => {
           const station = layerState._stationById.get(id);
           return (
@@ -142,7 +354,7 @@ export function createRendering({
       clusterCandidates.push({
         id: `${stationIds[0]}:${stationIds.at(-1)}:${stationIds.length}`,
         stationIds,
-        point,
+        point: cluster,
         text: parts.model.radioClusterBadgeText(category, stationIds.length),
         accent: parts.model.radioCategoryColor(category),
         stationCount: stationIds.length,
@@ -164,11 +376,10 @@ export function createRendering({
       if (clusterEntry) entries.push(clusterEntry);
     }
 
-    const cameraPosition = layerState._viewer?.camera?.positionWC;
+    const eye = pose();
+    const cameraPosition = eye?.position ?? null;
     const singletonAllowance = Math.min(
-      parts.clustering.radioSingletonLabelLimit(
-        layerState._viewer?.camera?.positionCartographic?.height,
-      ),
+      parts.clustering.radioSingletonLabelLimit(eye?.height),
       Math.max(
         0,
         RADIO_OVERLAY_COHORT_LIMIT - selectedClusterCandidates.length,
@@ -178,14 +389,14 @@ export function createRendering({
       [...layerState._renderById.values()]
         .filter(
           (record) =>
-            record.entity?.show &&
+            record.visible &&
             record.station?.id !== station?.id &&
             !clusteredStationIds.has(record.station?.id),
         )
         .map((record) => ({
           ...record,
           distanceM: cameraPosition
-            ? Cesium.Cartesian3.distance(cameraPosition, record.position)
+            ? distance(cameraPosition, record.position)
             : Number.POSITIVE_INFINITY,
         })),
       singletonAllowance,
@@ -243,8 +454,9 @@ export function createRendering({
   }
 
   function updateRenderVisibility({ force = true } = {}) {
-    if (!layerState._viewer || !layerState._dataSource) return;
-    const cameraPosition = layerState._viewer.camera?.positionWC;
+    if (!layerState._viewer || !sets) return;
+    const eye = pose();
+    const cameraPosition = eye?.position ?? null;
     if (
       !force &&
       !parts.navigation.radioCameraPositionChanged(
@@ -257,26 +469,31 @@ export function createRendering({
       ? { x: cameraPosition.x, y: cameraPosition.y, z: cameraPosition.z }
       : null;
     layerState._horizonScanCount += 1;
-    const occluder = horizonOccluder(layerState._viewer.camera);
-    let visibilityChanged = false;
-    for (const [id, record] of layerState._renderById) {
+    // With no eye, as with no camera before, nothing is hidden by a horizon.
+    const visibleFrom = cameraPosition
+      ? horizonFrom(cameraPosition)
+      : { isPointVisible: () => true };
+    let shownChanged = false;
+    for (const record of layerState._renderById.values()) {
       const matches = parts.categories.stationMatchesRadioCategory(
         record.station,
         layerState._filter,
       );
-      const visible = matches && occluder.isPointVisible(record.position);
-      if (record.entity.show !== visible) visibilityChanged = true;
-      record.entity.show = visible;
+      const visible = matches && visibleFrom.isPointVisible(record.position);
+      if (visible !== record.visible) shownChanged = true;
+      record.visible = visible;
     }
-    if (layerState._selectedEntity) {
-      const position = layerState._selectedEntity.position?.getValue?.(
-        Cesium.JulianDate.now(),
-      );
-      const selectedVisible = !position || occluder.isPointVisible(position);
-      if (layerState._selectedEntity.show !== selectedVisible)
-        visibilityChanged = true;
-      layerState._selectedEntity.show = selectedVisible;
-    }
+    // A station shown or hidden clusters the stations again, as the default
+    // renderer's clustering did whenever one of its entities came or went.
+    let visibilityChanged = false;
+    if (shownChanged && sets.stations.show) {
+      clusterStations();
+      visibilityChanged = true;
+    } else visibilityChanged = syncStationShows();
+    if (selection)
+      visibilityChanged =
+        showSelection(visibleFrom.isPointVisible(selection.position)) ||
+        visibilityChanged;
     scheduleRadioOverlayPublish();
     // The horizon timer can commit AFTER the camera settles and the governor
     // parks the scene — a changed show flag needs one frame. (perf wave 2 fix)
@@ -295,11 +512,7 @@ export function createRendering({
     layerState._stationById = new Map(
       stations.map((station) => [station.id, station]),
     );
-    layerState._categories = Object.freeze(
-      parts.categories
-        .buildRadioCategories(stations)
-        .map((category) => Object.freeze(category)),
-    );
+    parts.presentation.buildCategories();
     if (
       layerState._filter === DEFAULT_RADIO_FILTER &&
       !parts.categories.filterRadioStations(stations, DEFAULT_RADIO_FILTER)
@@ -316,96 +529,103 @@ export function createRendering({
       layerState._selectedId = null;
     }
 
-    if (layerState._dataSource) layerState._dataSource.entities.removeAll();
     layerState._renderById.clear();
+    drawnShow.clear();
+    clusteredIds = new Set();
+    singleIds = null;
+    const items = [];
     for (const station of stations) {
-      const position = markerPosition(station);
-      const markerColor = parts.model.radioCategoryColor(
-        parts.model.radioStationCategoryId(station),
-      );
-      const entity = layerState._dataSource.entities.add({
-        id: `${RADIO_PREFIX}${station.id}`,
-        position,
-        point: {
-          pixelSize: 13,
-          color: Cesium.Color.fromCssColorString(markerColor).withAlpha(0.86),
-          outlineColor: Cesium.Color.fromCssColorString('#071b25'),
-          outlineWidth: 1,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          scaleByDistance: new Cesium.NearFarScalar(
-            100_000,
-            1.15,
-            12_000_000,
-            1,
-          ),
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
-            0,
-            RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M,
-          ),
-        },
-      });
-      layerState._renderById.set(station.id, { station, entity, position });
+      const record = { station, position: markerPosition(station) };
+      // Shown until the horizon pass below says otherwise.
+      record.visible = true;
+      layerState._renderById.set(station.id, record);
+      drawnShow.set(station.id, true);
+      items.push(stationItem(record, true));
     }
+    sets?.stations.set(items);
     updateSelectionEntity();
     updateRenderVisibility();
+    clusterStations();
   }
 
-  function installClusterStyling() {
-    if (!layerState._dataSource || layerState._removeClusterListener) return;
-    const clustering = layerState._dataSource.clustering;
-    clustering.enabled = true;
-    clustering.pixelRange = 42;
-    clustering.minimumClusterSize = 3;
-    clustering.clusterPoints = true;
-    clustering.clusterLabels = false;
-    clustering.clusterBillboards = false;
-    layerState._removeClusterListener =
-      clustering.clusterEvent.addEventListener((clusteredEntities, cluster) => {
-        const clusteredStations = [];
-        for (const entity of clusteredEntities) {
-          const stationId = String(entity.id || '').slice(RADIO_PREFIX.length);
-          const station = layerState._renderById.get(stationId)?.station;
-          if (station) clusteredStations.push(station);
-        }
-        const clusterCategory = parts.model.radioClusterCategoryId(
-          clusteredStations,
-          layerState._filter,
-        );
-        const clusterColor = Cesium.Color.fromCssColorString(
-          parts.model.radioCategoryColor(clusterCategory),
-        );
-        // Cesium assigns the entity-id array only to the generated cluster label.
-        // Mirror it to the visible point so clicking either part of the callout
-        // resolves the first station and remains a direct playback gesture.
-        cluster.point.id = clusteredEntities;
-        cluster.billboard.id = clusteredEntities;
-        cluster.label.show = false;
-        cluster.label.text = '';
-        cluster.point.show = true;
-        cluster.point.pixelSize = Math.min(
-          26,
-          12 + Math.log2(clusteredEntities.length) * 1.6,
-        );
-        cluster.point.color = clusterColor.withAlpha(0.9);
-        cluster.point.outlineColor = Cesium.Color.BLACK;
-        cluster.point.outlineWidth = 2;
-        cluster.point.disableDepthTestDistance = Number.POSITIVE_INFINITY;
-        cluster.point.distanceDisplayCondition =
-          new Cesium.DistanceDisplayCondition(
-            0,
-            RADIO_GLOBE_INTERACTION_MAX_DISTANCE_M,
-          );
-        scheduleRadioOverlayPublish();
-      });
+  /**
+   * Make the stations' draw sets on the viewer's renderer (`drawOf`), once,
+   * and cluster the stations again whenever the camera moves enough.
+   * @param {object} viewer
+   */
+  function installDataSource(viewer) {
+    if (sets) return;
+    const draw = drawOf(viewer);
+    const prefix = `radio:${++instances}`;
+    sets = {
+      stations: draw.points({ id: `${prefix}:stations` }),
+      clusters: draw.points({ id: `${prefix}:clusters` }),
+      selectedDot: draw.points({ id: `${prefix}:selected` }),
+      selectedBracket: draw.icons({ id: `${prefix}:selected-bracket` }),
+    };
+    offCameraChanged =
+      findCamera(viewer)?.on('changed', () => {
+        if (sets?.stations.show) clusterStations();
+      }) ?? null;
   }
+
+  /** Stop clustering and let the stations' draw sets go. */
+  function removeDataSource() {
+    offCameraChanged?.();
+    offCameraChanged = null;
+    if (sets) for (const set of Object.values(sets)) set.dispose();
+    sets = null;
+    selection = null;
+    clusterState = null;
+    clusters = [];
+    clusteredIds = new Set();
+    singleIds = null;
+    drawnShow.clear();
+  }
+
+  /** Show or hide the stations and their clusters. */
+  function setStationsShown(shown) {
+    if (!sets) return;
+    const was = sets.stations.show;
+    sets.stations.show = shown;
+    sets.clusters.show = shown;
+    // Hidden, the stations leave nothing for a later pass to keep, as the
+    // default renderer's clustering kept nothing of a hidden source.
+    if (!shown) clusterState = null;
+    if (shown && !was) clusterStations();
+  }
+
+  /** Take the selected station's dot and bracket down, if it has them. */
+  function removeSelectionEntity() {
+    if (!selection) return;
+    selection = null;
+    sets?.selectedDot.clear();
+    sets?.selectedBracket.clear();
+  }
+
+  /**
+   * Cluster the stations again now: a filter change hides or shows
+   * stations, which the camera's next move would otherwise wait for.
+   */
+  function reclusterStations() {
+    if (!sets) return;
+    clusterStations();
+    governorRequestRender('radio-recluster');
+  }
+
   return {
+    radioStationIdFromPick,
+    installDataSource,
+    removeDataSource,
+    setStationsShown,
+    removeSelectionEntity,
+    reclusterStations,
     markerPosition,
     updateSelectionEntity,
-    clusterPointCollection,
+    stationClusters,
     publishRadioOverlayEntries,
     scheduleRadioOverlayPublish,
     updateRenderVisibility,
     reconcileStations,
-    installClusterStyling,
   };
 }
