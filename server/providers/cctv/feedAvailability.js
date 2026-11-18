@@ -115,11 +115,8 @@ export function createFeedAvailability({
       const tmp = `${file}.tmp`;
       await fsp.writeFile(tmp, body);
       await fsp.rename(tmp, file);
-    } catch (error) {
-      console.warn(
-        '[CCTV] feed availability persist failed:',
-        error?.message || error,
-      );
+    } catch {
+      console.warn('[CCTV] feed availability persist failed');
     }
   }
 

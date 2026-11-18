@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {
@@ -13,6 +14,21 @@ import {
 } from './feedAvailability.js';
 
 // Cameras with no public picture are served location-only.
+
+test('persistence warnings never print exception content', async (t) => {
+  const secret = 'synthetic-secret-ABC123';
+  const messages = [];
+  t.mock.method(console, 'warn', (...args) => messages.push(args.join(' ')));
+  t.mock.method(fsp, 'writeFile', async () => {
+    throw new Error(secret);
+  });
+  const a = createFeedAvailability({
+    file: path.join(os.tmpdir(), 'fake-cctv-state.json'),
+  });
+  await a.persistNow();
+  assert.equal(messages.length, 1);
+  assert.ok(!messages.join('\n').includes(secret));
+});
 
 test('two consecutive failed frames mark a camera; a success clears it', () => {
   const a = createFeedAvailability();
