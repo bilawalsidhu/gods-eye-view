@@ -3,4 +3,4 @@
   amber in Military Flights), a selected vessel or aid to navigation keeps its
   type colour instead of turning white, and a tracked satellite's dot keeps
   its class colour instead of turning yellow. An emergency stays red while
-  tracked (samehkhamis, #1796).
+  tracked (samehkhamis, #1797).
