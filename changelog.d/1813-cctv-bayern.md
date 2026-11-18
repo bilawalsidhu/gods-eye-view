@@ -5,4 +5,4 @@
   is registered. BayernInfo publishes no reuse licence for the images and
   documents the feed only through the Mobilithek, so the pack is off by default
   and loads only when an operator confirms the terms and sets
-  `CCTV_BAYERN_ENABLED=1` (Herr-Enklo, #0000).
+  `CCTV_BAYERN_ENABLED=1` (Herr-Enklo, #1813).
