@@ -614,6 +614,7 @@
   "src/layers/cctv/ingestion.js",
   "src/layers/cctv/hover.js",
   "src/layers/cctv/navigation.js",
+  "src/layers/cctv/navigation.test.mjs",
   "src/layers/cctv/index.js",
   "src/layers/cctv/model.js",
   "src/layers/cctv/geometryQueue.js",
@@ -862,6 +863,7 @@
   "src/data/rioRouteNames.js",
   "src/data/transitFeeds.js",
   "src/data/transitFeeds.test.mjs",
+  "src/data/transitFeedsAustralia.test.mjs",
   "src/data/transitProxy.js",
   "src/data/transitProxy.test.mjs",
   "src/data/gtfsRealtime.js",
@@ -1581,5 +1583,8 @@
   "src/ui/layerFinder.test.mjs",
   "src/data/wikidataCities.js",
   "src/data/wikidataCities.test.mjs",
-  "scripts/build-wikidata-cities.mjs"
+  "scripts/build-wikidata-cities.mjs",
+  "src/search/placeSuggestions.test.mjs",
+  "scripts/wikidataPlaceTiles.mjs",
+  "src/tooling/wikidataPlaceTiles.test.mjs"
 ]

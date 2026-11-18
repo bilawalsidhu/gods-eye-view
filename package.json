@@ -293,6 +293,7 @@
     "./sources/reference": "./src/sources/reference.js",
     "./layers/submarine-cables/source": "./src/layers/submarineCables/bundledSource.js",
     "./sources/http-body": "./src/sources/httpBody.js",
+    "./sources/library": "./src/library/proxy.js",
     "./sources/overpass": "./src/sources/overpass.js",
     "./search/nominatim": "./src/search/nominatim.js",
     "./sources/nominatim": "./src/sources/nominatim.js",
