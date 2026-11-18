@@ -43,6 +43,13 @@ test('displayedKinematics preserves a derived stop and falls back when unavailab
   }), { speedMps: 80, trackDeg: 180 });
 });
 
+test('displayedKinematics shows the reported speed over a placement standing still', () => {
+  const placed = { derivedSpeedMps: 0, derivedTrackDeg: 90, derivedFromPlacement: true };
+  assert.deepEqual(displayedKinematics({ ...placed, reportedSpeedMps: 230, reportedTrackDeg: 88 }),
+    { speedMps: 230, trackDeg: 90 });
+  assert.deepEqual(displayedKinematics(placed), { speedMps: 0, trackDeg: 90 });
+});
+
 test('stale coasting follows last source contact without allowing indefinite drift', () => {
   const fix = 1_000_000;
   assert.equal(staleCoastLimitSeconds({ fixEpochMs: fix }), 60);

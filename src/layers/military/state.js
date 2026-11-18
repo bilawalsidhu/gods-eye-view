@@ -230,6 +230,12 @@ export function createFlightState({ source, services }) {
 
   flightState._drSpeedMps = null;
 
+  /** Sibling scratch: whether `_drSpeedMps` is a host-supplied placement's,
+   *  the speed it is drawn at (0 while it waits for its fixes), for motion
+   *  only; panels show the reported ground speed (`displayedKinematics`). */
+
+  flightState._drSpeedPlaced = false;
+
   flightState._drCourseHold = false;
 
   /** Set by `_deadReckon`: following the clock, the time drawn is well
