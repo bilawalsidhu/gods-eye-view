@@ -19,6 +19,7 @@ import { RAIL_SELECTED_OVERLAY_SOURCE_ID } from './policy.js';
 import { publicRailCatalog } from '../../data/railFeeds.js';
 import { pointAtS } from '../../data/railPaths.js';
 import { fleetModelFakes } from '../../testSupport/fleetModelFakes.mjs';
+import { PLACED_WAKE_MS } from '../transit/movement.js';
 
 const M_PER_DEG = 111_320;
 const LAT = 42.36;
@@ -63,6 +64,13 @@ async function onTheLine(t, options = {}) {
   }
   return app;
 }
+
+/** Whether the selected train's route line is drawn: its live set's `show`. */
+const routeShown = (app) =>
+  [...app.draw.sets.values()].find(
+    (set) =>
+      !set.disposed && set.kind === 'lines' && /:route:\d+$/.test(set.spec.id),
+  )?.show;
 
 const T1 = railTrainKey('mbta-rail', 'T1');
 const T2 = railTrainKey('mbta-rail', 'T2');
@@ -199,7 +207,7 @@ test('a held train hides its marker and card and keeps the selection', async (t)
   assert.equal(app.entry(T1).marker.show, false);
   assert.equal(app.entry(T2).marker.show, true);
   // From inside the train its selected line would run under the eye.
-  assert.equal(app.state()._route.primitive.show, false, 'no line');
+  assert.equal(routeShown(app), false, 'no line');
   assert.deepEqual(
     app.overlayEntries.get(RAIL_SELECTED_OVERLAY_SOURCE_ID) ?? [],
     [],
@@ -221,7 +229,7 @@ test('a held train hides its marker and card and keeps the selection', async (t)
   assert.equal(app.layer.getCockpitSubject(), null);
   app.run(1000);
   assert.equal(app.entry(T1).marker.show, true);
-  assert.equal(app.state()._route.primitive.show, true, 'the line is back');
+  assert.equal(routeShown(app), true, 'the line is back');
   assert.equal(
     (app.overlayEntries.get(RAIL_SELECTED_OVERLAY_SOURCE_ID) ?? []).length,
     1,
@@ -230,11 +238,13 @@ test('a held train hides its marker and card and keeps the selection', async (t)
 });
 
 test('a held train draws no 3D model either; let go, its model draws again', async (t) => {
-  const models = await fleetModelFakes(t);
+  const models = await fleetModelFakes();
   const app = await onTheLine(t, { fleet: models.fleet, altitude: 1_000 });
+  models.watch(app.draw);
   // A model's load answers off the frame; the next frames place it.
   const frames = async () => {
     app.run(500);
+    models.load();
     await app.settle();
     app.run(500);
   };
@@ -353,7 +363,7 @@ test('a held train keeps the selection and moves, hidden, when its category is t
   assert.equal(app.layer.getCockpitSubject()?.key, T1);
   assert.equal(app.entry(T1).marker.show, false);
   assert.equal(app.entry(T2).marker.show, false, 'its category is hidden');
-  assert.equal(app.state()._route.primitive.show, false, 'no line');
+  assert.equal(routeShown(app), false, 'no line');
   assert.deepEqual(
     app.overlayEntries.get(RAIL_SELECTED_OVERLAY_SOURCE_ID) ?? [],
     [],
@@ -501,4 +511,32 @@ test('turning the layer off ends the hold', async (t) => {
   assert.equal(app.state()._cockpitSubjectKey, null);
   assert.equal(app.state()._cockpitLostFeedId, null);
   assert.equal(app.layer.getCockpitSubject(), null);
+});
+
+test('a train a placement holds still stops animating, and moves on when the placement does', async (t) => {
+  let spot = { lat: LAT, lon: LON0 + 3000 / KX };
+  const app = await onTheLine(t, {
+    placement: {
+      layer: () => ({
+        place: (id) => (id === T1 ? { ...spot, speedMps: 0 } : null),
+      }),
+    },
+  });
+  app.run(1_000);
+  const entry = app.entry(T1);
+  assert.equal(entry.placed, true);
+  assert.equal(app.state()._moving.has(entry), false, 'parked: not animating');
+  assert.notEqual(entry.wakeTimer, null, 'a wake asks the placement again');
+  assert.ok(app.state()._moving.has(app.entry(T2)), 'its own motion runs on');
+
+  spot = { lat: LAT, lon: spot.lon + 10 / KX };
+  t.mock.timers.tick(PLACED_WAKE_MS);
+  assert.ok(app.state()._moving.has(entry), 'moving again');
+  for (let i = 0; i < 3; i += 1) {
+    spot = { lat: LAT, lon: spot.lon + 1 / KX };
+    app.run(250);
+    assert.ok(app.state()._moving.has(entry), 'while it moves');
+  }
+  app.run(250);
+  assert.equal(app.state()._moving.has(entry), false, 'stopped again');
 });

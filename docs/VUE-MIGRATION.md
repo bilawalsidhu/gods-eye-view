@@ -153,9 +153,9 @@ a feature supplying only its accent.
    `t()`, which follows the locale as the view renders; the views carry no
    `data-i18n*` markers, which `npm run i18n` rejects in a template. Shared builders become components first and
    keep their imperative entry points until their owners are components:
-   the rail cards, card blocks and timeline (`src/ui/rail/`) render through
-   Vue's synchronous `render()` behind `createRailCards()`,
-   `createRailCardBlocks()` and `createRailTimeline()`. Order: Scenes (done: `SceneOptions` and
+   the rail cards and card blocks (`src/ui/rail/`) render through
+   Vue's synchronous `render()` behind `createRailCards()` and
+   `createRailCardBlocks()`. Order: Scenes (done: `SceneOptions` and
    `SceneShotList` over the `gev-scenes` store; the panel's buttons, status
    line, progress bar and the runtime chip render the panel SceneControls
    presents there, and the buttons and file chooser call its actions), Weather (done: the owner

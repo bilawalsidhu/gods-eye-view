@@ -1,7 +1,7 @@
 import { DOT_FADE_MS } from './retention.js';
 import { flowBucket, flowSpeedScale } from '../../data/trafficFlowStyle.js';
-import { presetDotOutline } from '../../data/trafficPresetStyle.js';
-import * as Cesium from 'cesium';
+import { lerpInto } from '../../geo/vector.js';
+import { findFrame } from '../../render/rendererOf.js';
 import { queuePlatoons, locateAlongRoad } from '../../data/trafficQueue.js';
 import {
   SPEED_MPS,
@@ -10,8 +10,6 @@ import {
   CREEP_MOVE_MS,
   CREEP_STOP_MS,
   CREEP_BURST,
-  HEAT_JAM_BASE_ALPHA,
-  HEAT_JAM_PULSE_ALPHA,
 } from './policy.js';
 
 export function createAnimation({
@@ -20,21 +18,27 @@ export function createAnimation({
   parts,
   source,
 }) {
+  /** The dots' point items, gathered once a frame for one upsert. */
+  const frameItems = [];
+
+  /**
+   * Send every dot's point item to the draw set: the set moves and
+   * restyles the points it has, and adds the new ones, in place.
+   */
+  function flushDots() {
+    const dots = layerState._dots;
+    frameItems.length = dots.length;
+    for (let i = 0; i < dots.length; i++) frameItems[i] = dots[i].point;
+    layerState._dotSet?.upsert(frameItems);
+  }
+
   function syncRenderDemand() {
-    // Hidden dots (`dots` off) need no frames. Lines need them only while
-    // their asynchronous geometry builds (or old lines wait to be retired),
-    // and the heat-line prototype's jam batch while it pulses.
-    const lines = [
-      layerState._heatJamPrim,
-      layerState._heatSlowPrim,
-      layerState._heatFreePrim,
-    ].filter(Boolean);
+    // Hidden dots (`dots` off) need no frames; lines need them only while
+    // the heat-line prototype's jam lines pulse.
     const needed = Boolean(
       layerState._enabled &&
       ((layerState._showDots !== false && layerState._dots.length) ||
-        (layerState._heatJamPrim && !layerState._showLines) ||
-        layerState._heatRetired?.length ||
-        lines.some((primitive) => !primitive.ready)),
+        parts.rendering.heatPulsing?.()),
     );
     // Height easing only runs in a held frame. Settle it before releasing, so
     // a population emptied mid-correction cannot report loading forever.
@@ -44,7 +48,7 @@ export function createAnimation({
     if (needed) {
       layerState._lastAnimTime = 0;
       services.render.holdContinuousRender('traffic');
-      layerState._viewer?.scene?.requestRender?.();
+      findFrame(layerState._viewer)?.requestRender('traffic');
     } else services.render.releaseContinuousRender('traffic');
   }
 
@@ -55,7 +59,7 @@ export function createAnimation({
    * randomized speed (base +/-30%), and given a direction (alternating
    * forward/backward to simulate two-way traffic).
    *
-   * @param {{waypoints:Cesium.Cartesian3[], segmentDist:number[], type:string, coords:number[][]}} road
+   * @param {{waypoints:Array<{x:number, y:number, z:number}>, segmentDist:number[], type:string, coords:number[][]}} road
    *   Parsed road object with pre-computed waypoints.
    * @param {number} altitude      - Camera altitude (used if budgetCount is null).
    * @param {number|null} [budgetCount=null] - Pre-allocated dot count. Falls back
@@ -85,20 +89,8 @@ export function createAnimation({
       parts.style.baseDotSize(road.type, bucket) +
       (bucket === 'jam' ? 1 : 0) +
       parts.style.activeSizeDelta(bucket);
-    const flowColor = bucket ? layerState._activeBucketColors[bucket] : null;
     // Dark-halo outline under styled presets (null = shipped no-outline).
-    const outlineSpec =
-      bucket && layerState._presetDots === 'on'
-        ? presetDotOutline(layerState._stylePreset, bucket)
-        : null;
-    const outlineColor = outlineSpec
-      ? new Cesium.Color(
-          outlineSpec.rgba[0] / 255,
-          outlineSpec.rgba[1] / 255,
-          outlineSpec.rgba[2] / 255,
-          outlineSpec.rgba[3],
-        )
-      : null;
+    const outline = bucket ? parts.style.outlineOf(bucket) : null;
     const flowSpeed = flow ? flowSpeedScale(flow.level) : 1;
     const now = Date.now();
 
@@ -122,8 +114,9 @@ export function createAnimation({
       }
     }
 
+    const spawned = [];
     for (let i = 0; i < count; i++) {
-      if (layerState._dots.length >= MAX_DOTS) return;
+      if (layerState._dots.length >= MAX_DOTS) break;
 
       // Random start position: pick a random segment and offset within it —
       // unless this is a queued jam dot with a platoon placement.
@@ -149,43 +142,44 @@ export function createAnimation({
             ? 1
             : -1;
 
-      // Compute initial Cartesian3 position via linear interpolation
-      Cesium.Cartesian3.lerp(
-        road.waypoints[segIdx],
-        road.waypoints[segIdx + 1],
-        t,
-        layerState._scratchLerp,
-      );
-
       // Grounded traffic respects building/terrain occlusion. The former
       // depth override made distant roads look like vehicles crossing roofs.
       const jamProminent = bucket === 'jam' && parts.style.jamDensityOn();
       const id = layerState._nextDotId++;
-      const point = layerState._pointCollection.add({
-        position: Cesium.Cartesian3.clone(layerState._scratchLerp),
+      // The dot's point item, kept and changed in place: its draw id stays
+      // while the dot's vehicle identity (`id`) is renewed at each recycle.
+      const point = {
+        id: `dot:${id}`,
+        // Its initial position, by linear interpolation.
+        pos: lerpInto(road.waypoints[segIdx], road.waypoints[segIdx + 1], t, {
+          x: 0,
+          y: 0,
+          z: 0,
+        }),
         pixelSize,
         // No flow data → today's exact simulated white.
-        color: flowColor || Cesium.Color.WHITE.withAlpha(0.85),
-        scaleByDistance: new Cesium.NearFarScalar(
-          100,
-          1.5,
-          layerState._fadeScaleFar,
-          jamProminent ? JAM_DOT_FAR_SCALE : 0.3,
-        ),
-        translucencyByDistance: new Cesium.NearFarScalar(
-          100,
-          1.0,
-          layerState._fadeTransFar,
-          0.0,
-        ),
+        color: parts.style.dotColor(bucket),
+        // Frozen, as the colours are: the draw port then tells them
+        // unchanged by identity when the dots move each frame.
+        scaleByDistance: Object.freeze({
+          near: 100,
+          nearValue: 1.5,
+          far: layerState._fadeScaleFar,
+          farValue: jamProminent ? JAM_DOT_FAR_SCALE : 0.3,
+        }),
+        fadeByDistance: Object.freeze({
+          near: 100,
+          nearValue: 1.0,
+          far: layerState._fadeTransFar,
+          farValue: 0.0,
+        }),
         // Respect the sampled mesh at every viewing distance.
-        disableDepthTestDistance: 0,
-        // Preset dark halo (spread only when present — the keyless/normal
-        // path passes the exact shipped option set).
-        ...(outlineSpec
-          ? { outlineColor, outlineWidth: outlineSpec.width }
-          : {}),
-      });
+        disableDepthTest: 0,
+        // Preset dark halo (only when present — the keyless/normal path
+        // passes the shipped look).
+        ...outline,
+      };
+      spawned.push(point);
       layerState._bucketCounts[bucket || 'sim'] += 1;
 
       layerState._motion.added++;
@@ -216,6 +210,8 @@ export function createAnimation({
             : null,
       });
     }
+    // Drawn at once, as they join; each frame moves them on.
+    if (spawned.length) layerState._dotSet?.upsert(spawned);
     syncRenderDemand();
   }
 
@@ -235,7 +231,6 @@ export function createAnimation({
    */
 
   function animate() {
-    parts.rendering.retireHeatLines?.();
     syncRenderDemand();
     if (!layerState._renderHeld) return;
     const now = Date.now();
@@ -317,24 +312,17 @@ export function createAnimation({
         if (now < dot.stoppedUntil) break;
       }
 
-      // Lerp between pre-computed Cartesian3 waypoints (no trig needed).
-      // Pass the scratch directly: PointPrimitive's position setter clones the
-      // value into its own storage (and skips the VBO dirty flag when equal), so
-      // the extra defensive clone here allocated 360–720k Cartesian3/s of pure
-      // garbage across 6000 dots. (perf item 5)
+      // Lerp between pre-computed ECEF waypoints (no trig needed), into the
+      // point item's own position: the draw set copies it.
       const a = dot.waypoints[dot.segIdx];
       const b = dot.waypoints[dot.segIdx + 1];
-      Cesium.Cartesian3.lerp(a, b, dot.t, layerState._scratchLerp);
-      dot.point.position = layerState._scratchLerp;
+      lerpInto(a, b, dot.t, dot.point.pos);
     }
+    flushDots();
 
-    // Jam heat-lines throb (~1.6 s period) — one shared material uniform for
-    // the whole jam batch, no geometry rebuild. Null outside live heatline
-    // mode; the steady flow lines (`lines` toggle) never pulse.
-    if (layerState._heatJamPrim?.appearance && !layerState._showLines) {
-      layerState._heatJamPrim.appearance.material.uniforms.color.alpha =
-        HEAT_JAM_BASE_ALPHA + HEAT_JAM_PULSE_ALPHA * Math.sin(now / 260);
-    }
+    // Jam heat-lines throb (~1.6 s period); none outside live heatline mode,
+    // and the steady flow lines (`lines` toggle) never pulse.
+    parts.rendering.pulseHeatLines?.(now);
 
     layerState._animFrame++;
   }
@@ -365,7 +353,7 @@ export function createAnimation({
     services.credits?.hideOsmCredit?.(layerState._viewer, 'traffic');
     parts.retention.clear();
     if (layerState._dots.length) layerState._motion.rebuilds++;
-    if (layerState._pointCollection) layerState._pointCollection.removeAll();
+    layerState._dotSet?.clear();
     parts.rendering.removeHeatLines();
     layerState._dots = [];
     layerState._roads = [];
@@ -380,5 +368,6 @@ export function createAnimation({
     maybeStopLight,
     clearDots,
     syncRenderDemand,
+    flushDots,
   };
 }

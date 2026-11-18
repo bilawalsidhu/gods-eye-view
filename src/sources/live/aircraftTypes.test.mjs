@@ -52,6 +52,7 @@ test('untyped aircraft get type, name and registration; a feed type is kept', as
   assert.deepEqual(records[0], {
     id: 'a1b2c3',
     typeCode: 'B738',
+    typeSource: 'database',
     typeName: 'BOEING 737-800',
     registration: 'N123AB',
   });

@@ -1,5 +1,6 @@
-import * as Cesium from 'cesium';
 import { VESSEL_FOCUS_RADIUS_M } from './policy.js';
+import { cameraOf, findCamera } from '../../render/rendererOf.js';
+import { clone, distance } from '../../geo/index.js';
 
 export function createFocus({ state: layerState, services, parts, source }) {
   const flightsLayer = services.flights;
@@ -45,9 +46,9 @@ export function createFocus({ state: layerState, services, parts, source }) {
     )
       return true;
     announceNavigationAuthority('context-vessel-focus');
-    layerState.viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(vessel.position, VESSEL_FOCUS_RADIUS_M),
-      { duration: 1.4 },
+    cameraOf(layerState.viewer).flyToBounds(
+      { center: vessel.position, radius: VESSEL_FOCUS_RADIUS_M },
+      { durationS: 1.4 },
     );
     return true;
   }
@@ -74,7 +75,7 @@ export function createFocus({ state: layerState, services, parts, source }) {
       layerId,
       id: String(known.id || known.mmsi),
       label: known.label || known.name || known.callsign || String(id),
-      position: Cesium.Cartesian3.clone(known.position),
+      position: clone(known.position),
     });
     return true;
   }
@@ -106,13 +107,13 @@ export function createFocus({ state: layerState, services, parts, source }) {
   /**
    * Pick the observed candidate closest to the current view. This is intentionally
    * a navigation preference, not a risk, capability, or affiliation calculation.
-   * @param {Array<{position: Cesium.Cartesian3}>} candidates Observed candidates.
+   * @param {Array<{position: {x: number, y: number, z: number}}>} candidates Observed candidates.
    * @returns {Object|null} The best currently observable candidate.
    */
 
   function closestToCurrentView(candidates) {
     if (!Array.isArray(candidates) || !candidates.length) return null;
-    const cameraPosition = layerState.viewer?.camera?.positionWC;
+    const cameraPosition = findCamera(layerState.viewer)?.pose()?.position;
     if (!cameraPosition)
       return candidates.find((candidate) => candidate?.position) || null;
 
@@ -120,13 +121,10 @@ export function createFocus({ state: layerState, services, parts, source }) {
     let closestDistance = Infinity;
     for (const candidate of candidates) {
       if (!candidate?.position) continue;
-      const distance = Cesium.Cartesian3.distance(
-        cameraPosition,
-        candidate.position,
-      );
-      if (Number.isFinite(distance) && distance < closestDistance) {
+      const metres = distance(cameraPosition, candidate.position);
+      if (Number.isFinite(metres) && metres < closestDistance) {
         closest = candidate;
-        closestDistance = distance;
+        closestDistance = metres;
       }
     }
     return closest;
@@ -180,9 +178,9 @@ export function createFocus({ state: layerState, services, parts, source }) {
     announceNavigationAuthority('context-vessel-autofocus', {
       cancelPendingSelection: false,
     });
-    layerState.viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(vessel.position, VESSEL_FOCUS_RADIUS_M),
-      { duration: 1.6 },
+    cameraOf(layerState.viewer).flyToBounds(
+      { center: vessel.position, radius: VESSEL_FOCUS_RADIUS_M },
+      { durationS: 1.6 },
     );
     return true;
   }

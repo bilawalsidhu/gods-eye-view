@@ -6,7 +6,6 @@ import {
 
 export { snapWildlifeBox } from './bounds.js';
 
-const degrees = (radians) => (radians * 180) / Math.PI;
 const cleanDegree = (value) => Math.round(value * 1e8) / 1e8;
 
 function validBox(box) {
@@ -44,17 +43,13 @@ export function boxIntersects(a, b) {
 }
 
 /** Split a local camera rectangle into noncrossing observation query boxes. */
-export function wildlifeViewportBoxes(viewer) {
-  const camera = viewer?.camera;
-  if (typeof camera?.computeViewRectangle !== 'function') return null;
-  const rectangle = camera.computeViewRectangle(
-    viewer?.scene?.globe?.ellipsoid,
-  );
+export function wildlifeViewportBoxes(rectangle) {
+  // `rectangle`: the camera's view rectangle in degrees, or null.
   if (!rectangle) return null;
   const box = Object.fromEntries(
     ['south', 'west', 'north', 'east'].map((key) => [
       key,
-      cleanDegree(degrees(rectangle[key])),
+      cleanDegree(rectangle[key]),
     ]),
   );
   if (!validBox(box) || box.north <= box.south) return null;

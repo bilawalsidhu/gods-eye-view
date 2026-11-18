@@ -1,10 +1,20 @@
 import assert from 'node:assert/strict';
+import { bindRenderer } from '../render/rendererOf.js';
+import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';
 import test from 'node:test';
 import {
   RealtimeViewport,
   pointerCropRect,
   renderFreshPointerFrame,
 } from './realtimeViewport.js';
+
+
+/** A viewer over `scene` whose renderer's frame port is the scene's own loop. */
+function framed(scene) {
+  const viewer = { scene };
+  bindRenderer(viewer, { frame: fakeSceneFrame(viewer) });
+  return viewer;
+}
 
 test('crop: a square around the pointer, clamped inside the canvas, in buffer pixels', () => {
   assert.deepEqual(
@@ -110,7 +120,7 @@ test('crop: a slow render gets one bounded fresh-frame recovery request', async 
         if (requests === 2) queueMicrotask(() => listener?.());
       },
     };
-    assert.equal(await renderFreshPointerFrame({ scene }), true);
+    assert.equal(await renderFreshPointerFrame(framed(scene)), true);
     assert.equal(requests, 2, 'only the pointer path retries once');
     assert.equal(listener, null, 'the successful listener is removed');
   } finally {
@@ -129,7 +139,7 @@ test('crop: a hidden document never starts the recovery request', async () => {
         requests += 1;
       },
     };
-    assert.equal(await renderFreshPointerFrame({ scene }), false);
+    assert.equal(await renderFreshPointerFrame(framed(scene)), false);
     assert.equal(requests, 0);
   } finally {
     globalThis.document = originalDocument;

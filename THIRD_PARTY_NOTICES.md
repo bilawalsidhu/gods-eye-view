@@ -2,7 +2,8 @@
 
 The project depends on third-party npm packages whose own licenses apply. This
 file records the packages added for the browser-local SDR feature, the
-Street Level viewer and the Data Library's GeoParquet reader; the complete resolved dependency inventory remains in
+Street Level viewer, the Data Library's GeoParquet reader and the GNSS Integrity
+layer's hexagon grid; the complete resolved dependency inventory remains in
 `package-lock.json`.
 
 ## Web RTL-SDR
@@ -60,3 +61,20 @@ Street Level viewer and the Data Library's GeoParquet reader; the complete resol
 - Author: Copyright (c) 2020 Arjun Barrett
 - Source: <https://github.com/101arrowz/fzstd>
 - License: MIT
+
+## kdbush
+
+- Package: `kdbush` 4.0.2 (the screen index that groups points drawn too
+  close together into clusters)
+- Author: Copyright (c) 2018, Vladimir Agafonkin
+- Source: <https://github.com/mourner/kdbush>
+- License: ISC
+
+## H3 (h3-js)
+
+- Package: `h3-js` 4.4.0 (the GNSS Integrity layer's H3 hexagon cells)
+- Author: Copyright 2017-2021 Uber Technologies, Inc. (includes the H3 C
+  library 4.4.1, compiled to JavaScript)
+- Source: <https://github.com/uber/h3-js>
+- License: Apache License 2.0
+- License text: <https://www.apache.org/licenses/LICENSE-2.0>

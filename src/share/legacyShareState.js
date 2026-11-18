@@ -43,6 +43,7 @@ export const LEGACY_SHARE_STATE_KEYS = Object.freeze([
   'celestialRing',
   'scopeEnabled',
   'scopeFeatherPct',
+  'scopeOpacityPct',
   'scopeTerminusPct',
   'mapStack',
   'layerState',

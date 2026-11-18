@@ -103,6 +103,7 @@ export function createAircraftTypeLookup({
         const entry = known.get(record.id);
         if (!entry) continue;
         record.typeCode = entry[0];
+        record.typeSource = 'database';
         record.registration ??= entry[1];
         record.typeName ??= entry[2];
       }

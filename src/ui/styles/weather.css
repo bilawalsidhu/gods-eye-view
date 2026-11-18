@@ -56,8 +56,7 @@
 }
 /* Card typography follows the layer rows and app tokens. */
 .weather-readout,
-.rail-card,
-.rail-timeline {
+.rail-card {
   min-width: 0;
   color: var(--text-dim);
   font: 9px/1.45 var(--font-mono);
@@ -128,7 +127,7 @@
   text-align: right;
 }
 .rail-card-line,
-.rail-timeline-readout {
+.weather-frame-time {
   font-family: var(--font-mono);
   font-size: 9px;
   letter-spacing: 0.5px;
@@ -188,54 +187,13 @@ html:not([lang='en']) .weather-card [data-line-id='status'] {
   letter-spacing: 0.5px;
 }
 .rail-card [hidden],
-.weather-timeline-block[hidden],
+.weather-frame-time[hidden],
 .weather-observed-group[hidden] {
   display: none !important;
 }
-.rail-timeline {
+.weather-frame-time {
   padding: 5px;
   border-bottom: 1px solid var(--weather-card-border);
-}
-.rail-timeline-track {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 3px 8px;
-  margin-top: 6px;
-}
-.rail-timeline-track input {
-  min-width: 0;
-  width: 100%;
-  margin: 0;
-}
-.rail-timeline-endpoints {
-  display: flex;
-  grid-column: 2;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 3px 8px;
-  font: 8px/1.45 var(--font-mono);
-  font-variant-numeric: tabular-nums;
-}
-.rail-timeline-endpoints span {
-  white-space: nowrap;
-}
-.rail-timeline-endpoints span:last-child {
-  margin-left: auto;
-}
-.rail-timeline-controls .data-toggle-chip {
-  flex: 0 0 auto;
-}
-.rail-timeline-controls {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
-}
-.rail-timeline-readout {
-  flex: 1 1 auto;
-  min-width: 0;
   overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);

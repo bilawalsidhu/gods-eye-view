@@ -4,7 +4,6 @@ import {
   aircraftModelSpec,
   fleetModelSet,
 } from '../../data/fleetModels.js';
-import { MODEL_COLOR_BLEND_AMOUNT } from './policy.js';
 
 /**
  * What an aircraft draws with before the fleet model set has loaded: no
@@ -22,7 +21,6 @@ export const UNLOADED_AIRCRAFT_MODEL_SPEC = Object.freeze({
   bellyM: 0,
   elevationM: 0,
   tinted: false,
-  blendAmount: MODEL_COLOR_BLEND_AMOUNT,
   visualCenterNative: Object.freeze([0, 0, 0]),
   trailAnchorNative: Object.freeze([0, 0, 0]),
   key: 'unloaded',
@@ -58,7 +56,6 @@ export function aircraftLayerModelSpec(aircraft, set = fleetModelSet()) {
     layerSpec = Object.freeze({
       ...spec,
       bellyM: spec.clearanceM,
-      blendAmount: MODEL_COLOR_BLEND_AMOUNT,
     });
     cache.set(key, layerSpec);
   }

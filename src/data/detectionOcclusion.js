@@ -9,9 +9,10 @@
  * The fix compares each such contact with what the renderer actually drew: if
  * the drawn surface along the contact's ray is nearer than the contact by more
  * than a small margin, something stands in front of it and its bracket and
- * callout are not drawn. `sceneOcclusionProbe.js` runs that comparison on the
- * GPU, against the frame's own depth, and hands back a yes or no per contact a
- * frame or two later without ever waiting on the GPU. This file holds the
+ * callout are not drawn. The renderer's occlusion test (`query.occlusionTest`;
+ * the GPU probe is `src/render/occlusion/depthProbe.js`) runs that comparison
+ * on the GPU, against the frame's own depth, and hands back a yes or no per
+ * contact a frame or two later without ever waiting on the GPU. This file holds the
  * arithmetic both sides share and the per-contact memory of the answers.
  *
  * Only contacts that opt in with `depthTested: true` are tested: the ones whose
@@ -119,9 +120,12 @@ export function unpackDepth(bytes, offset) {
  */
 export function depthToViewDistance(depth, near, far, logDepth) {
   if (!(depth > 0) || !(depth < 1)) return Number.NaN;
-  if (!(near > 0) || !(far > near)) return Number.NaN;
+  if (!(near >= 0) || !(far > near)) return Number.NaN;
   if (logDepth)
     return near + Math.pow(2, depth * Math.log2(far - near + 1)) - 1;
+  // Standard depth needs a near plane in front of the eye; log depth does not
+  // (it can be written with none, as log2(1 + d) / log2(far + 1)).
+  if (!(near > 0)) return Number.NaN;
   return (near * far) / (far - depth * (far - near));
 }
 
@@ -185,7 +189,7 @@ export function projectContact(view, tanHalfFovX, tanHalfFovY, position, out) {
 
 /**
  * One frame of depth read back to memory, with the camera it was drawn from.
- * Only the synchronous fallback uses this (see `sceneOcclusionProbe.js`); the
+ * Only the synchronous fallback uses this (see `src/render/occlusion/depthProbe.js`); the
  * normal path never copies depth off the GPU.
  *
  * `bytes` holds `frustums.length` stacked images of `width` x `height` RGBA8

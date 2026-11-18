@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { followedOf } from '../data/followed.js';
 import { getOverlayPaintRect } from '../overlays/worldOverlay.js';
 import {
   getActiveTrackedReadoutId,
@@ -8,6 +8,15 @@ import { t } from '../i18n/index.js';
 import { nextTick } from 'vue';
 import { useScreenAnnotationsStore } from '../ui/stores/screenAnnotations.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
+import { heightsOf } from '../queries/heights.js';
+import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
+import { distance } from '../geo/vector.js';
+import {
+  canvasOf as sceneCanvasOf,
+  findCamera,
+  findFrame,
+  findQuery,
+} from '../render/rendererOf.js';
 
 /** A label whose detailed outline could not be resolved. */
 function outlineUnavailableLabel(label) {
@@ -78,11 +87,13 @@ export function createScreenAnnotationRenderer(
   const arrowMarkers = new Map();
   let viewBox = null;
 
-  const scene = viewer.scene;
-  const occluder = new Cesium.EllipsoidalOccluder(
-    Cesium.Ellipsoid.WGS84,
-    scene.camera.positionWC,
-  );
+  // The eye this frame is projected from (the camera port's pose), and the
+  // query port and canvas it is projected through, read once per pass.
+  let pose = null;
+  let passQuery = null;
+  let passCanvas = null;
+  // The renderer's canvas; a viewer with no renderer bound, its own.
+  const canvasOf = () => sceneCanvasOf(viewer);
   const records = new Map(); // anno.id -> { key, anno, group, parts }
   const leaving = new Map(); // key -> a removed mark's record while it fades out
   const byKey = new Map(); // key -> record, live or fading
@@ -91,8 +102,6 @@ export function createScreenAnnotationRenderer(
   let published = '';
   // Only the renderer whose board the store shows may change or remove it.
   const shown = () => store.board?.owner === owner;
-  const scratch = new Cesium.Cartesian2();
-  const scratchDir = new Cesium.Cartesian3();
   // Per-point ground height cache. Marks must sit on the real surface, not at
   // sea level — otherwise in elevated cities (Austin ~150 m) they project
   // underground and parallax sinks them at oblique angles. Sampled once the
@@ -121,7 +130,7 @@ export function createScreenAnnotationRenderer(
   // Re-project every annotation each rendered frame so marks stay glued to the
   // world. postRender runs after the camera/tiles update, so positions are exact.
   const onPostRender = () => projectAll();
-  scene.postRender.addEventListener(onPostRender);
+  const removePostRender = findFrame(viewer)?.on('postRender', onPostRender);
 
   function color(anno) {
     return PALETTE[anno.color] || PALETTE.primary;
@@ -141,15 +150,12 @@ export function createScreenAnnotationRenderer(
       return cached.h;
     }
     try {
-      if (
-        scene.clampToHeightSupported &&
-        typeof scene.clampToHeight === 'function'
-      ) {
-        const c = scene.clampToHeight(
-          Cesium.Cartesian3.fromDegrees(lon, lat, 0),
-        );
+      const heights = heightsOf(viewer);
+      if (heights.supported().clamp) {
+        // A miss is tiles not ready.
+        const c = heights.clampNow(fromDegrees(lon, lat, 0));
         if (c) {
-          const h = Cesium.Cartographic.fromCartesian(c).height;
+          const h = toLonLatH(c)?.height;
           if (Number.isFinite(h) && h > -430 && h < 9000) {
             heightCache.set(key, { h, settled: true, gen: projGen });
             trimHeightCache();
@@ -278,7 +284,7 @@ export function createScreenAnnotationRenderer(
     }
 
     // Record the mark BEFORE it reaches the board, then unwind on any throw
-    // from here down (projectAll reaches into Cesium and can fail on a lost
+    // from here down (projectAll reaches into the renderer and can fail on a lost
     // context). Previously a throw past the insert left an ORPHANED mark: the
     // engine's rollback only deletes its own map entry, so the next annotate
     // of the same geometry stacked a fresh mark on top of the corpse.
@@ -363,26 +369,27 @@ export function createScreenAnnotationRenderer(
     // Anchor at the real surface height (cached + validated), so marks sit on
     // the ground/building instead of at sea level. The settle-once cache keeps
     // it stable (no per-frame jitter that earlier broke nearby projections).
-    const world = Cesium.Cartesian3.fromDegrees(
-      lon,
-      lat,
-      groundHeight(lon, lat),
-    );
+    const world = fromDegrees(lon, lat, groundHeight(lon, lat));
+    if (!pose) return null;
     // Reject points behind the camera (they produce wrapped/extreme coords).
-    Cesium.Cartesian3.subtract(world, scene.camera.positionWC, scratchDir);
-    if (Cesium.Cartesian3.dot(scratchDir, scene.camera.directionWC) <= 0)
+    const eye = pose.position;
+    const look = pose.direction;
+    if (
+      (world.x - eye.x) * look.x +
+        (world.y - eye.y) * look.y +
+        (world.z - eye.z) * look.z <=
+      0
+    )
       return null;
     // Reject points beyond the globe horizon.
-    if (!occluder.isPointVisible(world)) return null;
-    const win = Cesium.SceneTransforms.worldToWindowCoordinates(
-      scene,
-      world,
-      scratch,
-    );
+    const query = passQuery;
+    if (!query || query.isOccluded(world)) return null;
+    const win = query.project(world);
     if (!win || !Number.isFinite(win.x) || !Number.isFinite(win.y)) return null;
     // Reject absurd off-screen projections (anchor not in view).
-    const w = scene.canvas.clientWidth || scene.canvas.width;
-    const h = scene.canvas.clientHeight || scene.canvas.height;
+    const canvas = passCanvas;
+    const w = canvas.clientWidth || canvas.width;
+    const h = canvas.clientHeight || canvas.height;
     if (
       !allowOffscreen &&
       (win.x < -w || win.x > 2 * w || win.y < -h || win.y > 2 * h)
@@ -399,9 +406,13 @@ export function createScreenAnnotationRenderer(
   // from the host's ACTUAL painted rectangle after final layout; the billboard extent
   // is unioned for aircraft/satellites that also own a native tracked graphic.
   const TRACKED_BBOX_MARGIN = 8; // px buffer added around the footprint
-  const TRACKED_FADE_EASE = 0.22; // per-frame ease toward hidden(0) / visible(1)
+  // Ease toward hidden(0) / visible(1): this share of the gap closes in one
+  // 60 Hz frame (about 200 ms to settle), scaled by elapsed time so the fade
+  // takes as long at any refresh rate.
+  const TRACKED_FADE_EASE = 0.22;
+  const TRACKED_FADE_FRAME_MS = 1000 / 60;
+  let trackedFadeAtMs = -Infinity;
   const TRACKED_HYSTERESIS_PX = 18; // dead-band so the overlap test can't flip-flop
-  const _scratchTrackedWin = new Cesium.Cartesian2();
 
   // Evaluate a NearFarScalar (billboard scaleByDistance) at a camera distance.
   function nearFarValue(nfs, dist) {
@@ -422,32 +433,23 @@ export function createScreenAnnotationRenderer(
     let top = painted?.y;
     let bottom = painted ? painted.y + painted.h : undefined;
 
-    const ent = viewer.trackedEntity;
-    const now = Cesium.JulianDate.now();
+    const followed = followedOf(viewer);
+    const displayPosition = followed?.displayPosition;
     const world =
-      typeof ent?.gevDisplayPosition === 'function'
-        ? ent.gevDisplayPosition()
-        : null;
-    const win = world
-      ? Cesium.SceneTransforms.worldToWindowCoordinates(
-          scene,
-          world,
-          _scratchTrackedWin,
-        )
-      : null;
+      typeof displayPosition === 'function' ? displayPosition() : null;
+    const win = world ? (passQuery?.project(world) ?? null) : null;
 
-    // Billboard box — centered on the anchor, magnified by scaleByDistance.
-    const bb = ent?.billboard;
-    if (bb && win && Number.isFinite(win.x) && Number.isFinite(win.y)) {
-      const baseW = bb.width?.getValue?.(now) ?? 28;
-      const baseH = bb.height?.getValue?.(now) ?? 28;
+    // Billboard box — centered on the anchor, magnified by scaleByDistance, from
+    // the size the tracking layer recorded for its sprite.
+    const sprite = followed?.sprite;
+    if (sprite && win && Number.isFinite(win.x) && Number.isFinite(win.y)) {
+      const baseW = sprite.width ?? 28;
+      const baseH = sprite.height ?? 28;
       let scale = 1;
-      const sbd = bb.scaleByDistance?.getValue?.(now);
-      if (sbd)
-        scale = nearFarValue(
-          sbd,
-          Cesium.Cartesian3.distance(scene.camera.positionWC, world),
-        );
+      const sbd = sprite.scaleByDistance;
+      // No eye to measure from: the sprite's own size.
+      if (sbd && pose)
+        scale = nearFarValue(sbd, distance(pose.position, world));
       const hw = (baseW * scale) / 2;
       const hh = (baseH * scale) / 2;
       const bbLeft = win.x - hw;
@@ -476,14 +478,17 @@ export function createScreenAnnotationRenderer(
       return;
     }
     projGen += 1; // new frame: entries touched below are "hot" and survive trimming
+    pose = findCamera(viewer)?.pose() ?? null;
+    passQuery = findQuery(viewer);
+    passCanvas = canvasOf();
     const trackedRect = trackedEntityRect();
-    occluder.cameraPosition = scene.camera.positionWC;
-    const h = scene.canvas.clientHeight || scene.canvas.height;
-    const w = scene.canvas.clientWidth || scene.canvas.width;
+    const canvas = passCanvas;
+    const h = canvas.clientHeight || canvas.height;
+    const w = canvas.clientWidth || canvas.width;
     viewBox = `0 0 ${w} ${h}`;
     // Shrink point-marker geometry as the camera pulls back (declutter the blob).
     const mScale = markScale(
-      viewer.camera.positionCartographic?.height ?? 1000,
+      Number.isFinite(pose?.height) ? pose.height : 1000,
     );
 
     for (const rec of records.values()) {
@@ -677,6 +682,14 @@ export function createScreenAnnotationRenderer(
   // safe and not jarring.
   function fadeTracked(trackedRect) {
     if (!shown()) return;
+    const nowMs = performance.now();
+    // A gap longer than a slow frame means the fade was not running (nothing
+    // followed): it starts again as from one 60 Hz frame.
+    const gapMs = nowMs - trackedFadeAtMs;
+    const stepMs = gapMs >= 0 && gapMs <= 100 ? gapMs : TRACKED_FADE_FRAME_MS;
+    trackedFadeAtMs = nowMs;
+    const ease =
+      1 - Math.pow(1 - TRACKED_FADE_EASE, stepMs / TRACKED_FADE_FRAME_MS);
     let changed = false;
     for (const rec of records.values()) {
       const { anno, group } = rec;
@@ -705,10 +718,10 @@ export function createScreenAnnotationRenderer(
         }
       }
       const target = overlapping ? 0 : 1;
-      const next = cur + (target - cur) * TRACKED_FADE_EASE;
+      const next = cur + (target - cur) * ease;
       rec._trackedFade = Math.abs(next - target) < 0.02 ? target : next;
       // The base alpha applies unless faded. (The CSS `transition: opacity` was
-      // removed from .gev-anno so this per-frame JS ease is the ONLY easing —
+      // removed from .gev-anno so this JS ease is the ONLY easing —
       // previously the two fought and produced an opacity oscillation.)
       const opacity = String(
         (anno.alpha ?? 1) * (rec._trackedFade !== 1 ? rec._trackedFade : 1),
@@ -821,7 +834,7 @@ export function createScreenAnnotationRenderer(
 
   function destroy() {
     try {
-      scene.postRender.removeEventListener(onPostRender);
+      removePostRender?.();
     } catch {
       /* torn down */
     }

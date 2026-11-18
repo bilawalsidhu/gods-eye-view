@@ -279,10 +279,28 @@ test('SATCAT CSV parses, quoted commas included, keyed by NORAD id', () => {
   assert.equal(parseSatcatCsv('').size, 0);
 });
 
+/**
+ * A rendering part that keeps what it is told to show: the dots and rings
+ * by NORAD id, as the layer's own rendering part holds them.
+ */
+function recordingRendering(state) {
+  const rings = new Map();
+  return {
+    rings,
+    _setPointShown(noradId, show) {
+      const point = state._points.get(noradId);
+      if (point) point.show = show;
+    },
+    _setPointsShown() {},
+    _setOrbitPathShown(noradId, show) {
+      if (state._orbitPaths.has(noradId)) rings.set(noradId, show);
+    },
+  };
+}
+
 test('turning Stations off takes the ISS ring and label with its point', async () => {
   const { createControls } = await import('./controls.js');
   let overlaySyncs = 0;
-  const ring = { primitive: { show: true } };
   const state = {
     _enabled: true,
     _params: {
@@ -292,23 +310,27 @@ test('turning Stations off takes the ISS ring and label with its point', async (
     },
     _catalog: new Map([[25544, { satelliteClass: 'stations' }]]),
     _points: new Map([[25544, { show: true }]]),
-    _orbitPaths: new Map([[25544, ring]]),
+    _orbitPaths: new Map([[25544, {}]]),
     _detectionObjects: new Map(),
     _trackedNorad: null,
   };
+  const rendering = recordingRendering(state);
   const controls = createControls({
     state,
     services: { layerState: { isExplicitLayerStateOrigin: () => false } },
-    parts: { labels: { _syncIssOverlay: () => (overlaySyncs += 1) } },
+    parts: {
+      labels: { _syncIssOverlay: () => (overlaySyncs += 1) },
+      rendering,
+    },
     source: {},
   });
   controls._applyClassVisibility();
   assert.equal(state._points.get(25544).show, false);
-  assert.equal(ring.primitive.show, false, 'the ring goes with the class');
+  assert.equal(rendering.rings.get(25544), false, 'the ring goes with the class');
   assert.ok(overlaySyncs >= 1, 'the label is re-synced');
   state._params.classes = { ...DEFAULT_SATELLITE_CLASSES };
   controls._applyClassVisibility();
-  assert.equal(ring.primitive.show, true, 'and comes back with it');
+  assert.equal(rendering.rings.get(25544), true, 'and comes back with it');
 });
 
 test('a failed Starlink load hides the core catalog Starlink points again', async () => {
@@ -375,18 +397,17 @@ test('every ingested group names the class its unnamed members fall back to', ()
 
 test('enabling the layer leaves a hidden Stations class without its ISS ring', async () => {
   const { createLifecycle } = await import('./lifecycle.js');
-  const iss = { primitive: { show: false } };
-  const other = { primitive: { show: false } };
   let issVisible = false;
   const state = {
     _params: { showPoints: true, showOrbits: true },
     _orbitPaths: new Map([
-      [25544, iss],
-      [90001, other],
+      [25544, {}],
+      [90001, {}],
     ]),
     _points: new Map(),
     coverageChanged() {},
   };
+  const rendering = recordingRendering(state);
   const { methods } = createLifecycle({
     state,
     services: {
@@ -402,15 +423,15 @@ test('enabling the layer leaves a hidden Stations class without its ISS ring', a
       labels: { _syncIssOverlay() {} },
       interaction: { _installClickHandler() {} },
       tracking: { _applyPendingTrackingRestore() {} },
-      rendering: {},
+      rendering,
     },
   });
   methods.enable(null);
-  assert.equal(iss.primitive.show, false, 'the ISS ring follows its class');
-  assert.equal(other.primitive.show, true, 'other rings follow showOrbits');
+  assert.equal(rendering.rings.get(25544), false, 'the ISS ring follows its class');
+  assert.equal(rendering.rings.get(90001), true, 'other rings follow showOrbits');
   issVisible = true;
   methods.enable(null);
-  assert.equal(iss.primitive.show, true);
+  assert.equal(rendering.rings.get(25544), true);
 });
 
 test('a mission group outranks an orbit group, and an Unknown UCS purpose is no evidence', () => {
@@ -442,7 +463,6 @@ test('a mission group outranks an orbit group, and an Unknown UCS purpose is no 
 
 test('a tracked ISS keeps its ring while Stations is hidden', async () => {
   const { createControls } = await import('./controls.js');
-  const ring = { primitive: { show: true } };
   const state = {
     _enabled: true,
     _params: {
@@ -452,22 +472,23 @@ test('a tracked ISS keeps its ring while Stations is hidden', async () => {
     },
     _catalog: new Map([[25544, { satelliteClass: 'stations' }]]),
     _points: new Map([[25544, { show: true }]]),
-    _orbitPaths: new Map([[25544, ring]]),
+    _orbitPaths: new Map([[25544, {}]]),
     _detectionObjects: new Map(),
     _trackedNorad: null,
   };
+  const rendering = recordingRendering(state);
   const controls = createControls({
     state,
     services: { layerState: { isExplicitLayerStateOrigin: () => false } },
-    parts: { labels: { _syncIssOverlay() {} } },
+    parts: { labels: { _syncIssOverlay() {} }, rendering },
     source: {},
   });
   controls._syncIssOrbit();
-  assert.equal(ring.primitive.show, false);
+  assert.equal(rendering.rings.get(25544), false);
   state._trackedNorad = 25544;
   controls._syncIssOrbit();
-  assert.equal(ring.primitive.show, true, 'tracked, it keeps its ring');
+  assert.equal(rendering.rings.get(25544), true, 'tracked, it keeps its ring');
   state._params.showOrbits = false;
   controls._syncIssOrbit();
-  assert.equal(ring.primitive.show, false, 'orbits off still hides it');
+  assert.equal(rendering.rings.get(25544), false, 'orbits off still hides it');
 });

@@ -1,3 +1,6 @@
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
+import { fakeGlobePort } from '../testSupport/fakeGlobePort.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
@@ -31,7 +34,7 @@ import {
   usesProviderEmbeddedEvidence,
   visibleSegmentCount,
 } from './bhoteKoshiEvent.js';
-import { SCENE_RECIPES } from '../scenes/recipes.js';
+import { SCENE_RECIPES, getSceneAppendRecipeById } from '../scenes/recipes.js';
 import { LayerLifecycle } from './lifecycle.js';
 import { createBhoteKoshiEmbeddedMedia } from './bhoteKoshiEmbeddedMedia.js';
 import { SceneDirector } from '../scenes/director.js';
@@ -231,16 +234,27 @@ function installEventDom() {
   return { body, removedProperties };
 }
 
-function eventViewer(splitPosition = 0.37) {
-  const imagery = [];
-  const removedImagery = [];
-  const dataSources = [];
-  const removedDataSources = [];
+/**
+ * A viewer with fake draw and globe ports bound, under the Cesium camera
+ * port over a fake camera. `_test` reads what the event draws: its imagery
+ * layers (`imagery`, `removedImagery`), its flood sets (`floodSets`, live
+ * or not) and a flood item by id (`flood`); `scene.splitPosition` is the
+ * globe's split.
+ */
+function eventViewer(splitPosition = 0.37, ports = {}) {
+  const draw = fakeDrawPort();
+  const globe = fakeGlobePort();
+  globe.imagery.setSplit(splitPosition);
   const canvas = new FakeElement('canvas');
   const cameraLooks = [];
   const cameraTransforms = [];
-  return {
-    scene: { splitPosition, canvas },
+  const floodSets = () => [...draw.sets.values()].filter(({ spec }) => spec.id.startsWith(`${BHOTE_KOSHI_LAYER_ID}:`));
+  const liveFloodSets = () => floodSets().filter((set) => !set.disposed);
+  const viewer = {
+    scene: {
+      get splitPosition() { return globe.imagery.getSplit(); },
+      canvas,
+    },
     camera: {
       cancelFlight() {},
       lookAt(target, offset) {
@@ -251,28 +265,38 @@ function eventViewer(splitPosition = 0.37) {
       },
       lookAtTransform(transform) { cameraTransforms.push(transform); },
     },
-    imageryLayers: {
-      addImageryProvider(provider) {
-        const layer = { provider };
-        imagery.push(layer);
-        return layer;
-      },
-      remove(layer) { removedImagery.push(layer); },
-    },
-    dataSources: {
-      add(source) { dataSources.push(source); },
-      remove(source) { removedDataSources.push(source); },
-    },
     _test: {
-      imagery,
-      removedImagery,
-      dataSources,
-      removedDataSources,
+      draw,
+      globe,
+      imagery: globe.added,
+      get removedImagery() { return globe.added.filter((layer) => layer.removed); },
+      floodSets,
+      liveFloodSets,
+      /** The live flood item with this id, or undefined. */
+      flood(id) {
+        for (const set of liveFloodSets()) if (set.items.has(id)) return set.items.get(id);
+        return undefined;
+      },
+      /** Reads the flood item with this id as it is drawn now: whether it shows, its positions or position. */
+      floodView(id) {
+        const view = viewer._test;
+        return {
+          get show() { return view.floodShows(id); },
+          get positions() { return view.flood(id)?.positions; },
+          get position() { return view.flood(id)?.pos; },
+        };
+      },
+      /** Whether the flood item with this id is drawn showing. */
+      floodShows(id) {
+        for (const set of liveFloodSets()) if (set.items.has(id)) return set.items.get(id).show !== false;
+        return false;
+      },
       canvas,
       cameraLooks,
       cameraTransforms,
     },
   };
+  return bindFakeCesiumCamera(viewer, { draw, globe, ...ports });
 }
 
 test('public lifecycle restores Nepal scene ownership without forwarding origin to enable', async () => {
@@ -293,7 +317,7 @@ test('public lifecycle restores Nepal scene ownership without forwarding origin 
         const mapCalls = [];
         const layer = createBhoteKoshiEventLayer({
           eventLoader: async () => event,
-          imageryProviderFactory: async (url) => ({ url }),
+          imagerySpecFactory: async (url) => ({ url }),
           terrainSampler: async (_viewer, observations) => observations.map(() => ({ height: 800 })),
           mediaLoader: async () => { const error = new Error('No bundled clip'); error.name = 'AbortError'; throw error; },
           overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
@@ -316,16 +340,11 @@ test('public lifecycle restores Nepal scene ownership without forwarding origin 
           assert.equal(layer.getPlaybackState().enabled, true);
           assert.deepEqual(mapCalls, [], `${initialMap}/${origin}: preserve the shot map`);
           assert.equal(activeMap, initialMap);
-          const floodSource = viewer._test.dataSources.at(-1);
-          for (const id of ['bhote-koshi-flood-halo', 'bhote-koshi-flood-core']) {
-            const line = floodSource.entities.getById(id).polyline;
-            assert.equal(line.clampToGround.getValue(), true, 'dynamic trail follows the rendered surface');
-            assert.equal(line.classificationType.getValue(), initialMap === 'photoreal'
-              ? Cesium.ClassificationType.BOTH : Cesium.ClassificationType.TERRAIN);
-            assert.equal(line.depthFailMaterial, undefined, 'do not rely on unsupported dynamic depth-fail rendering');
-          }
-          assert.equal(floodSource.entities.getById('bhote-koshi-surge-front').point.heightReference.getValue(),
-            Cesium.HeightReference.CLAMP_TO_GROUND);
+          const floodSets = viewer._test.liveFloodSets();
+          assert.deepEqual(floodSets.map(({ kind }) => kind), ['lines', 'points']);
+          assert.ok(floodSets.every(({ spec }) => spec.pickable === false));
+          assert.equal(floodSets[1].spec.clampTo, 'both', 'the surge front clamps to the ground');
+          assert.ok(floodSets.every(({ items }) => items.size === 0), 'a panel-only shot draws no flood');
           assert.deepEqual(viewer._test.cameraLooks, [], 'enable must not focus the corridor');
           assert.deepEqual(timers, [], 'enable must not schedule independent playback');
           assert.equal(layer.getPlaybackState().playing, false);
@@ -355,7 +374,7 @@ test('trimmed scene media holds through provider startup, playback and fade, the
   const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imagerySpecFactory: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => observations.map(() => ({ height: 800 })),
     mediaLoader: async () => { const error = new Error('No bundled clip'); error.name = 'AbortError'; throw error; },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
@@ -396,6 +415,180 @@ test('trimmed scene media holds through provider startup, playback and fade, the
   }
 });
 
+test('scene media plays again when a run goes on from a seek inside its hold, unless the seek was past the clip', async () => {
+  const previous = { document: globalThis.document, window: globalThis.window,
+    requestAnimationFrame: globalThis.requestAnimationFrame,
+    cancelAnimationFrame: globalThis.cancelAnimationFrame };
+  installEventDom();
+  globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
+  // The reveal's frames are not driven here; only that it starts.
+  let frames = 0;
+  globalThis.requestAnimationFrame = () => ++frames;
+  globalThis.cancelAnimationFrame = () => {};
+  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
+  let plays = 0;
+  const layer = createBhoteKoshiEventLayer({
+    eventLoader: async () => event,
+    imagerySpecFactory: async (url) => ({ url }),
+    terrainSampler: async (_viewer, observations) => observations.map(() => ({ height: 800 })),
+    mediaLoader: async () => { throw Object.assign(new Error('No bundled clip'), { name: 'AbortError' }); },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+    renderHost: { request() {}, hold() {}, release() {} },
+    embeddedMediaFactory: () => ({ warm: () => true, show: () => true, play() { plays++; }, pause() {},
+      getPlaybackState: () => ({ phase: 'playing' }), hide() {}, destroy() {} }),
+  });
+  const controls = { evidenceMediaAutoplay: true, mediaPlaybackHoldSec: 4, cameraSettled: true,
+    deferEvidenceUntilCameraSettled: true };
+  const params = (sceneControls) => ({ presentation: 'scene-beat', sceneSurface: 'evidence-beat',
+    beatId: 'mailung-bazzar', sceneContext: { sceneId: 'scene', shotId: 'shot', holdSec: 7.65 }, sceneControls });
+  const seek = (holdElapsedSec) => ({ ...controls,
+    timelineSeek: { cameraProgress: 1, holdElapsedSec, holdDurationSec: 7.65, flightDurationSec: 2 } });
+  try {
+    const viewer = eventViewer();
+    await layer.init(viewer);
+    layer.setSceneMediaPlayback({ sceneId: 'scene', shotId: 'shot', token: { cancelled: false } });
+    // A seek 1 s into the hold shows that moment and plays nothing.
+    layer.setParams(params(seek(1)), { origin: 'scene' });
+    await layer.enable(viewer, { origin: 'scene' });
+    assert.equal(plays, 0);
+    assert.equal(layer.getSceneShotMediaHold('mailung-bazzar'), null);
+    // The run goes on from there: the clip starts again and holds the shot.
+    const framesBefore = frames;
+    layer.setParams(params(controls), { origin: 'scene' });
+    assert.ok(frames > framesBefore, 'the reveal runs again');
+    assert.ok(plays > 0, 'the clip plays');
+    assert.equal(layer.getSceneShotMediaHold('mailung-bazzar').pending, true);
+    // A seek after the clip goes on without it.
+    layer.setParams(params(seek(6)), { origin: 'scene' });
+    const before = plays;
+    layer.setParams(params(controls), { origin: 'scene' });
+    assert.equal(plays, before, 'the clip already played');
+    assert.equal(layer.getSceneShotMediaHold('mailung-bazzar').pending, false);
+  } finally { await layer.destroy(); Object.assign(globalThis, previous); }
+});
+
+test('a run going on from a seek in Timure’s hold resumes its evidence sequence from that point', async () => {
+  const keys = ['document', 'window', 'performance', 'requestAnimationFrame', 'cancelAnimationFrame'];
+  const previous = Object.fromEntries(keys.map((key) => [key, globalThis[key]]));
+  installEventDom();
+  let now = 1000;
+  let nextFrame = 0;
+  const frames = new Map();
+  globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
+  globalThis.performance = { now: () => now };
+  globalThis.requestAnimationFrame = (callback) => { frames.set(++nextFrame, callback); return nextFrame; };
+  globalThis.cancelAnimationFrame = (id) => frames.delete(id);
+  const frame = (ms) => {
+    now += ms;
+    const callback = frames.get(nextFrame);
+    frames.delete(nextFrame);
+    callback?.(now);
+  };
+  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
+  const layer = createBhoteKoshiEventLayer({
+    eventLoader: async () => event,
+    imagerySpecFactory: async (url) => ({ url }),
+    terrainSampler: async () => null,
+    mediaLoader: async () => { throw Object.assign(new Error('fixture'), { name: 'AbortError' }); },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+    renderHost: { request() {}, hold() {}, release() {} },
+    embeddedMediaFactory: () => ({ warm: () => true, show: () => true, play() {}, pause() {},
+      getPlaybackState: () => ({ phase: 'completed' }), hide() {}, destroy() {} }),
+  });
+  const recipe = getSceneAppendRecipeById('bhote-koshi-nepal-evidence-pack');
+  const controls = { ...recipe.runtimeControlsByBeat['timure-cluster'], cameraSettled: true };
+  assert.equal(controls.evidenceSequence, true);
+  assert.equal(controls.evidencePathDuringCamera, true);
+  const params = (sceneControls) => ({ presentation: 'scene-beat', sceneSurface: 'evidence-beat',
+    beatId: 'timure-cluster', sceneControls });
+  // The sequence waits out the 6 s clip and its 0.65 s exit, then runs 12 s:
+  // 8 s into the hold it is 1.35 s along.
+  const seek = { ...controls,
+    timelineSeek: { cameraProgress: 1, holdElapsedSec: 8, holdDurationSec: 12, flightDurationSec: 2 } };
+  const at = (holdElapsedSec) => {
+    layer.setParams(params({ ...seek, timelineSeek: { ...seek.timelineSeek, holdElapsedSec } }),
+      { origin: 'scene' });
+    return layer.getPlaybackState().progress;
+  };
+  try {
+    const viewer = eventViewer();
+    await layer.init(viewer);
+    layer.setParams(params(seek), { origin: 'scene' });
+    await layer.enable(viewer, { origin: 'scene' });
+    // Where the sequence starts and ends, and where the seek puts it.
+    const start = at(0);
+    const end = at(30);
+    const atSeek = at(8);
+    assert.ok(start < atSeek && atSeek < end, `the seek shows the sequence partway (${start} < ${atSeek} < ${end})`);
+    // The run goes on: the sequence carries on from that point, not 0 or its end.
+    layer.setParams(params(controls), { origin: 'scene' });
+    assert.ok(Math.abs(layer.getPlaybackState().progress - atSeek) < 1e-9, 'it starts where the seek stood');
+    frame(1000);
+    const later = layer.getPlaybackState().progress;
+    assert.ok(atSeek < later && later < end, `and moves on from there (${atSeek} < ${later} < ${end})`);
+  } finally { await layer.destroy(); Object.assign(globalThis, previous); }
+});
+
+test('a run going on from a seek in Gyirong’s hold plays its restarted clip out before the next shot', async () => {
+  const previous = { document: globalThis.document, window: globalThis.window,
+    requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame };
+  installEventDom();
+  globalThis.window = { setTimeout: () => 1, clearTimeout() {} };
+  globalThis.requestAnimationFrame = () => 1;
+  globalThis.cancelAnimationFrame = () => {};
+  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
+  let plays = 0;
+  const layer = createBhoteKoshiEventLayer({
+    eventLoader: async () => event,
+    imagerySpecFactory: async (url) => ({ url }),
+    terrainSampler: async (_viewer, observations) => observations.map(() => ({ height: 800 })),
+    mediaLoader: async () => { throw Object.assign(new Error('No bundled clip'), { name: 'AbortError' }); },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+    renderHost: { request() {}, hold() {}, release() {} },
+    embeddedMediaFactory: () => ({ warm: () => true, show: () => true, play() { plays++; }, pause() {},
+      getPlaybackState: () => ({ phase: 'playing' }), hide() {}, destroy() {} }),
+  });
+  const recipe = getSceneAppendRecipeById('bhote-koshi-nepal-evidence-pack');
+  const controls = { ...recipe.runtimeControlsByBeat['gyirong-border-gate'], cameraSettled: true };
+  const params = (sceneControls) => ({ presentation: 'scene-beat', sceneSurface: 'evidence-beat',
+    beatId: 'gyirong-border-gate', sceneContext: { sceneId: 'scene', shotId: 'shot', holdSec: 9.15 }, sceneControls });
+  const token = { cancelled: false, signal: new AbortController().signal };
+  const hold = async (resume) => {
+    const waits = [];
+    await SceneDirector.prototype._holdShot.call({
+      _layerStatesForShot: () => ({ [layer.id]: { enabled: true, params: params(controls) } }),
+      dataManager: { layers: new Map([[layer.id, { module: layer }]]) },
+      _effectiveShotHoldSec: () => 9.15,
+      _sleep: async (ms) => waits.push(ms),
+      stopScene: () => assert.fail('no timeout'),
+    }, { id: 'scene' }, { id: 'shot' }, token, resume);
+    return waits;
+  };
+  try {
+    const viewer = eventViewer();
+    await layer.init(viewer);
+    layer.setSceneMediaPlayback({ sceneId: 'scene', shotId: 'shot', token });
+    // 5 s into the 9.15 s hold, inside the 6 s clip, which has no media gate.
+    const resume = { holdElapsedSec: 5, holdDurationSec: 9.15 };
+    layer.setParams(params({ ...controls, timelineSeek: { cameraProgress: 1, ...resume, flightDurationSec: 2 } }),
+      { origin: 'scene' });
+    await layer.enable(viewer, { origin: 'scene' });
+    assert.equal(layer.getSceneShotMediaHold('gyirong-border-gate'), null, 'the clip is not trimmed');
+    layer.setParams(params(controls), { origin: 'scene' });
+    assert.ok(plays > 0, 'the clip starts again');
+    assert.equal(layer.sceneShotRestartsMedia('gyirong-border-gate'), true);
+    assert.deepEqual(await hold(resume), [9150], 'the hold plays out as from its start, not 4.15 s');
+    // A seek after the clip: only the rest of the hold.
+    const late = { holdElapsedSec: 8, holdDurationSec: 9.15 };
+    layer.setParams(params({ ...controls, timelineSeek: { cameraProgress: 1, ...late, flightDurationSec: 2 } }),
+      { origin: 'scene' });
+    layer.setParams(params(controls), { origin: 'scene' });
+    assert.equal(layer.sceneShotRestartsMedia('gyirong-border-gate'), false);
+    const [rest] = await hold(late);
+    assert.ok(Math.abs(rest - 1150) < 1e-6, String(rest));
+  } finally { await layer.destroy(); Object.assign(globalThis, previous); }
+});
+
 test('Pinokio source-card fallback selects authored Director dwell, not an impossible player hold', async () => {
   const previous = { document: globalThis.document, window: globalThis.window };
   installEventDom();
@@ -403,7 +596,7 @@ test('Pinokio source-card fallback selects authored Director dwell, not an impos
   const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async url => ({ url }),
+    imagerySpecFactory: async url => ({ url }),
     terrainSampler: async (_viewer, observations) => observations.map(() => ({ height: 800 })),
     mediaLoader: async () => { throw Object.assign(new Error('No bundled clip'), { name: 'AbortError' }); },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
@@ -448,7 +641,7 @@ test('saved autoplay controls cannot authorize media; live shot ownership is can
   const event = JSON.parse(await readFile(eventUrl, 'utf8'));
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async url => ({ url }),
+    imagerySpecFactory: async url => ({ url }),
     terrainSampler: async (_viewer, observations) => observations.map(() => ({ height: 800 })),
     mediaLoader: async () => { throw Object.assign(new Error('No bundled clip'), { name: 'AbortError' }); },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
@@ -838,12 +1031,10 @@ test('Bhote Koshi failed direct enable restores the prior map and shared split',
   let generation = 7;
   const viewer = {
     scene: { splitPosition: 0.37 },
-    imageryLayers: { remove() {} },
-    dataSources: { remove() {} },
   };
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async () => { throw new Error('fixture image failure'); },
+    imagerySpecFactory: async () => { throw new Error('fixture image failure'); },
     overlayHost: {
       setEntries() {},
       setVisible(id, visible) { overlayCalls.push(['visible', id, visible]); },
@@ -946,7 +1137,7 @@ test('Bhote Koshi disable preserves an operator-selected map and tears down ever
   const renderCalls = [];
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imagerySpecFactory: async (url) => ({ url }),
     overlayHost: {
       setEntries() {},
       setVisible(id, visible) { overlayCalls.push(['visible', id, visible]); },
@@ -971,7 +1162,7 @@ test('Bhote Koshi disable preserves an operator-selected map and tears down ever
   try {
     assert.equal(await layer.enable(viewer, { origin: 'scene' }), true);
     assert.equal(viewer._test.imagery.length, 2);
-    assert.equal(viewer._test.dataSources.length, 1);
+    assert.equal(viewer._test.floodSets().length, 2);
     assert.ok(eventPanel());
     assert.ok(eventSplit());
 
@@ -981,7 +1172,7 @@ test('Bhote Koshi disable preserves an operator-selected map and tears down ever
 
     assert.deepEqual(mapCalls, ['esri-imagery']);
     assert.equal(viewer._test.removedImagery.length, 2);
-    assert.equal(viewer._test.removedDataSources.length, 1);
+    assert.equal(viewer._test.liveFloodSets().length, 0, 'its flood sets let go');
     assert.equal(eventPanel(), undefined);
     assert.equal(eventSplit(), undefined);
     assert.equal(viewer.scene.splitPosition, 0.37);
@@ -1013,7 +1204,7 @@ test('Bhote Koshi disable stops active playback and releases its global render h
   const viewer = eventViewer();
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imagerySpecFactory: async (url) => ({ url }),
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
     renderHost: {
       request() {},
@@ -1071,7 +1262,7 @@ test('Bhote Koshi passive restores do not start off-screen playback', async () =
   const viewer = eventViewer();
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imagerySpecFactory: async (url) => ({ url }),
     embeddedMediaFactory: () => ({ show() {}, hide() {}, pause() {}, destroy() {} }),
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
     renderHost: { request() {}, hold() {}, release() {} },
@@ -1120,7 +1311,7 @@ test('Bhote Koshi standalone Scene keeps its Esri cinematic contract', async () 
   const mapCalls = [];
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imagerySpecFactory: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -1195,7 +1386,7 @@ test('Bhote Koshi scene beats preserve photoreal and never take camera ownership
   const overlayVisibility = [];
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imagerySpecFactory: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -1375,7 +1566,7 @@ test('Bhote Koshi scene beats preserve photoreal and never take camera ownership
       'bhote-koshi-flood-core',
       'bhote-koshi-surge-front',
     ]) {
-      assert.equal(viewer._test.dataSources[0].entities.getById(id).show, false);
+      assert.equal(viewer._test.floodShows(id), false);
     }
     panel.querySelector('[data-action="play"]').dispatch('click');
     await Promise.resolve();
@@ -1464,9 +1655,7 @@ test('Bhote Koshi scene beats preserve photoreal and never take camera ownership
       assert.ok(entries
         .filter((entry) => entry.id.startsWith('evidence-breadcrumb-'))
         .every((entry) => entry.position() == null));
-      assert.equal(viewer._test.dataSources.filter((source) => (
-        !viewer._test.removedDataSources.includes(source)
-      )).length, 1, 'surface transitions leave exactly one active event surface');
+      assert.equal(viewer._test.liveFloodSets().length, 2, 'surface transitions leave exactly one active event surface');
       assert.equal(viewer._test.cameraLooks.length, 0, 'consecutive beats never write the camera');
     }
     panel.querySelector('[data-action="open-source"]').dispatch('click');
@@ -1485,7 +1674,7 @@ test('Bhote Koshi scene beats preserve photoreal and never take camera ownership
       'disable revokes the pending real-time scene-clock scrub frame',
     );
     assert.deepEqual(mapCalls, []);
-    assert.equal(viewer._test.removedDataSources.length, viewer._test.dataSources.length);
+    assert.equal(viewer._test.liveFloodSets().length, 0);
   } finally {
     globalThis.document = originalDocument;
     globalThis.window = originalWindow;
@@ -1506,7 +1695,7 @@ test('Nepal hybrid comparison preserves native split and terrain-clamped flood t
   const comparisonCalls = [];
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imagerySpecFactory: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -1540,17 +1729,17 @@ test('Nepal hybrid comparison preserves native split and terrain-clamped flood t
     assert.equal(viewer._test.imagery.length, 2);
     assert.ok(viewer._test.imagery.every((imageryLayer) => imageryLayer.show === true));
     assert.equal(viewer.scene.splitPosition, 0.5);
-    assert.equal(viewer._test.imagery[0].splitDirection, Cesium.SplitDirection.LEFT);
-    assert.equal(viewer._test.imagery[1].splitDirection, Cesium.SplitDirection.RIGHT);
+    assert.equal(viewer._test.imagery[0].split, 'left');
+    assert.equal(viewer._test.imagery[1].split, 'right');
+    assert.ok(viewer._test.imagery.every((imageryLayer) => imageryLayer.alpha === 0.96 && imageryLayer.drapeOn === 'surface'));
     layer.setParams({ split: 0.25 });
     assert.equal(viewer.scene.splitPosition, 0.25);
-    const flood = viewer._test.dataSources[0].entities.getById('bhote-koshi-flood-core');
-    const surge = viewer._test.dataSources[0].entities.getById('bhote-koshi-surge-front');
-    assert.equal(flood.polyline.clampToGround.getValue(), true);
-    assert.equal(
-      surge.point.heightReference.getValue(),
-      Cesium.HeightReference.CLAMP_TO_GROUND,
-    );
+    const flood = viewer._test.flood('bhote-koshi-flood-core');
+    const surge = viewer._test.flood('bhote-koshi-surge-front');
+    assert.equal(flood.mode, 'draped');
+    assert.equal(flood.clampTo, 'terrain', 'the comparison surface is terrain');
+    assert.equal(surge.height, 'clampGround');
+    assert.equal(surge.disableDepthTest, 0);
 
     layer.setParams({
       presentation: 'scene-beat',
@@ -1561,9 +1750,12 @@ test('Nepal hybrid comparison preserves native split and terrain-clamped flood t
     assert.ok(viewer._test.imagery.every((imageryLayer) => imageryLayer.show === false));
     assert.equal(comparisonCalls.at(-1), null);
 
-    const tileFlood = viewer._test.dataSources.at(-1).entities.getById('bhote-koshi-flood-core');
-    assert.equal(tileFlood.polyline.clampToGround.getValue(), true);
-    assert.equal(tileFlood.polyline.classificationType.getValue(), Cesium.ClassificationType.BOTH);
+    assert.equal(viewer._test.flood('bhote-koshi-flood-core'), undefined, 'drawn anew on the tiles as the event plays');
+    layer.setParams({ progress: 0.6 }, { origin: 'scene' });
+    const tileFlood = viewer._test.flood('bhote-koshi-flood-core');
+    assert.equal(tileFlood.mode, 'draped');
+    assert.equal(tileFlood.clampTo, 'both', 'photoreal drapes it on tiles too');
+    assert.equal(viewer._test.flood('bhote-koshi-surge-front').disableDepthTest, Number.POSITIVE_INFINITY);
 
     await layer.disable();
     assert.equal(viewer._test.removedImagery.length, 2);
@@ -1650,7 +1842,7 @@ test('Bhote Koshi publishes the evidence spine once and scrubs through cards and
   const publications = [];
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imagerySpecFactory: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -1747,7 +1939,7 @@ test('Bhote Koshi keeps one local fallback video active and unloads it on beat c
   };
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imagerySpecFactory: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -1848,7 +2040,7 @@ test('Upper Valley Collapse autoplays its muted local fallback without starting 
   };
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imagerySpecFactory: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -1924,7 +2116,7 @@ test('Debris-Dammed Lake card opens its source and is armed for approved local v
   let activeCard = null;
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imagerySpecFactory: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -2015,7 +2207,7 @@ test('Nepal evidence shots resume the standalone callout and flood sequence from
   const releases = [];
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imagerySpecFactory: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -2073,8 +2265,8 @@ test('Nepal evidence shots resume the standalone callout and flood sequence from
     layer.setSceneMediaPlayback({ sceneId: 'scene', shotId: 'shot', token: { cancelled: false } });
     await layer.enable(viewer, { origin: 'scene' });
     const card = entries.find(({ id }) => id === 'evidence-card-gyirong-border-gate');
-    const flood = viewer._test.dataSources[0].entities.getById('bhote-koshi-flood-core');
-    const surge = viewer._test.dataSources[0].entities.getById('bhote-koshi-surge-front');
+    const flood = viewer._test.floodView('bhote-koshi-flood-core');
+    const surge = viewer._test.floodView('bhote-koshi-surge-front');
     assert.equal(card.position(), null, 'the evidence card is absent during the camera flight');
     assert.equal(flood.show, false);
     assert.equal(surge.show, false);
@@ -2186,7 +2378,7 @@ test('Bhote Koshi beat controls keep cards, flood, camera, and panel on the one 
   const publications = [];
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imagerySpecFactory: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -2239,8 +2431,8 @@ test('Bhote Koshi beat controls keep cards, flood, camera, and panel on the one 
       panel.querySelector('[data-role="beat-meta"]').textContent,
       'PROPAGATION / TIME UNVERIFIED / 5 SOURCES',
     );
-    const flood = viewer._test.dataSources[0].entities.getById('bhote-koshi-flood-core');
-    assert.ok(flood.polyline.positions.getValue().length > 1);
+    const flood = viewer._test.floodView('bhote-koshi-flood-core');
+    assert.ok(flood.positions.length > 1);
     assert.equal(
       body.children.some((element) => element.id === 'bhote-koshi-story-strap'),
       false,
@@ -2306,7 +2498,7 @@ test('Bhote Koshi repeated event frames republish no panel and churn no camera',
   const viewer = eventViewer();
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imagerySpecFactory: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -2336,7 +2528,10 @@ test('Bhote Koshi repeated event frames republish no panel and churn no camera',
     const panelStore = useBhoteKoshiPanelStore(applicationPinia());
     const published = panelStore.panel;
     const cameraLookCount = viewer._test.cameraLooks.length;
+    const floodWrites = () => viewer._test.liveFloodSets().map(({ writes }) => writes);
+    const drawnWrites = floodWrites();
     for (let index = 0; index < 20; index += 1) progress.dispatch('input');
+    assert.deepEqual(floodWrites(), drawnWrites, 'unchanged frames draw no flood again');
 
     assert.ok(panelStore.panel === published, 'unchanged frames do not republish the panel');
     assert.equal(
@@ -2389,7 +2584,7 @@ test('Bhote Koshi cinematic camera stays synchronized through pause and determin
   const viewer = eventViewer();
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imagerySpecFactory: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -2470,7 +2665,7 @@ test('Bhote Koshi replay restores cinematic ownership unless the operator releas
   const viewer = eventViewer();
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imagerySpecFactory: async (url) => ({ url }),
     terrainSampler: async (_viewer, observations) => (
       observations.map((observation) => ({ height: observation.fallbackElevationM }))
     ),
@@ -2552,7 +2747,7 @@ test('Bhote Koshi closes a poster that resolves after disable', async () => {
   const poster = { closed: false, close() { this.closed = true; } };
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imagerySpecFactory: async (url) => ({ url }),
     terrainSampler: async () => [{ height: 2800 }],
     mediaLoader: async (url) => {
       assert.equal(url, '/events/bhote-koshi-2026/evidence-09.jpg');
@@ -2592,13 +2787,15 @@ test('every sourced shot grows its tail with its head, keeps its own card, and c
   globalThis.performance = { now: () => now };
   globalThis.requestAnimationFrame = (callback) => { frames.set(++nextFrame, callback); return nextFrame; };
   globalThis.cancelAnimationFrame = (id) => frames.delete(id);
-  const viewer = eventViewer();
   let heightSamples = 0;
-  viewer.scene.sampleHeight = () => { heightSamples++; return 1500; };
+  let surfaceHeight = 1500;
+  const viewer = eventViewer(0.37, {
+    query: { sampleHeightNow: () => { heightSamples++; return surfaceHeight; } },
+  });
   let entries = [];
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imagerySpecFactory: async (url) => ({ url }),
     terrainSampler: async () => null,
     mediaLoader: async () => { throw Object.assign(new Error('fixture'), { name: 'AbortError' }); },
     overlayHost: { setEntries(_id, value) { entries = value; }, setVisible() {}, clearSource() {} },
@@ -2618,23 +2815,23 @@ test('every sourced shot grows its tail with its head, keeps its own card, and c
   try {
     layer.setParams(params(SOURCE_PATH_BEAT_IDS[0], false));
     await layer.enable(viewer, { origin: 'scene' });
-    const source = viewer._test.dataSources.at(-1);
-    const flood = source.entities.getById('bhote-koshi-flood-core');
-    const surge = source.entities.getById('bhote-koshi-surge-front');
+    const flood = viewer._test.floodView('bhote-koshi-flood-core');
+    const surge = viewer._test.floodView('bhote-koshi-surge-front');
     for (const id of SOURCE_PATH_BEAT_IDS) {
       layer.setParams(params(id, false));
       assert.equal(flood.show, false, `${id}: hide the previous route during flight`);
       assert.equal(surge.show, false);
       layer.setParams(params(id, true));
       const sampleCount = heightSamples;
+      assert.ok(sampleCount > 0, 'surface heights are sampled while preparing the shot');
       let previousLength = 0;
       for (const elapsed of [400, 1800, 4000]) {
         advance(elapsed);
-        const points = flood.polyline.positions.getValue();
+        const points = flood.positions;
         assert.ok(points.length >= previousLength);
         assert.equal(flood.show, true);
         assert.equal(surge.show, true);
-        assert.ok(Cesium.Cartesian3.equals(points.at(-1), surge.position.getValue()), `${id}: tail must reach head in every frame`);
+        assert.ok(Cesium.Cartesian3.equals(points.at(-1), surge.position), `${id}: tail must reach head in every frame`);
         previousLength = points.length;
       }
       assert.equal(heightSamples, sampleCount, 'do not resample geometry during motion');
@@ -2649,28 +2846,27 @@ test('every sourced shot grows its tail with its head, keeps its own card, and c
     assert.equal(flood.show, false, 'new shot clears its tail before the first animation frame');
     assert.equal(surge.show, false);
     advance(1800);
-    const headBeforeSync = Cesium.Cartesian3.clone(surge.position.getValue());
+    const headBeforeSync = Cesium.Cartesian3.clone(surge.position);
     const frameBeforeSync = nextFrame;
     layer.setParams(params('dhunche', true));
     assert.equal(nextFrame, frameBeforeSync, 'repeated settled notification does not restart the reveal');
-    assert.ok(Cesium.Cartesian3.equals(headBeforeSync, surge.position.getValue()));
+    assert.ok(Cesium.Cartesian3.equals(headBeforeSync, surge.position));
     advance(2200);
-    assert.ok(!Cesium.Cartesian3.equals(headBeforeSync, surge.position.getValue()));
+    assert.ok(!Cesium.Cartesian3.equals(headBeforeSync, surge.position));
     // The comparison exit can expose coarse photogrammetry samples a kilometre
     // above the river. Dhunche's schematic profile must not dive through them.
-    viewer.scene.sampleHeight = () => { heightSamples++; return 2703; };
-    viewer.scene.globe = { getHeight: () => 0 };
+    surfaceHeight = 2703;
     layer.setParams(params('dhunche', false, 'source', 'source'));
     const samplesBeforeProfile = heightSamples;
     layer.setParams(params('dhunche', true, 'source', 'source'));
     for (const elapsed of [40, 400, 1800, 4000]) {
       advance(elapsed);
-      const points = flood.polyline.positions.getValue();
+      const points = flood.positions;
       for (const position of points) {
         const height = Cesium.Cartographic.fromCartesian(position).height;
         assert.ok(height >= 1307 && height <= 1332, `source profile stays near river elevation, got ${height}`);
       }
-      assert.ok(Cesium.Cartesian3.equals(points.at(-1), surge.position.getValue()));
+      assert.ok(Cesium.Cartesian3.equals(points.at(-1), surge.position));
     }
     assert.equal(heightSamples, samplesBeforeProfile, 'source elevation does not sample the changing mesh');
     layer.setParams(params('charaudi', false, 'none'));
@@ -2700,7 +2896,7 @@ test('media-led upper-valley shots retain only their upstream prefix during came
   const viewer = eventViewer();
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async url => ({ url }),
+    imagerySpecFactory: async url => ({ url }),
     terrainSampler: async () => null,
     mediaLoader: async () => { throw Object.assign(new Error('fixture'), { name: 'AbortError' }); },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
@@ -2725,12 +2921,11 @@ test('media-led upper-valley shots retain only their upstream prefix during came
   try {
     layer.setParams(params('debris-dammed-lake', false));
     await layer.enable(viewer, { origin: 'scene' });
-    const source = viewer._test.dataSources.at(-1);
-    const flood = source.entities.getById('bhote-koshi-flood-core');
-    const surge = source.entities.getById('bhote-koshi-surge-front');
+    const flood = viewer._test.floodView('bhote-koshi-flood-core');
+    const surge = viewer._test.floodView('bhote-koshi-surge-front');
     layer.setParams(params('debris-dammed-lake', true));
     finishReveal();
-    const lakeTail = flood.polyline.positions.getValue().map(point => Cesium.Cartesian3.clone(point));
+    const lakeTail = flood.positions.map(({ x, y, z }) => ({ x, y, z }));
     assert.ok(lakeTail.length > 1);
     const origin = Cesium.Cartographic.fromCartesian(lakeTail[0]);
     assert.ok(Math.abs(Cesium.Math.toDegrees(origin.longitude) - 85.48476) < 1e-6);
@@ -2738,16 +2933,16 @@ test('media-led upper-valley shots retain only their upstream prefix during came
       'the rendered trail starts at the lake reach, not the earlier trigger reach');
     layer.setParams(params('second-landslide', false));
     assert.equal(flood.show, true, 'lake trail survives departure before the next camera settles');
-    assert.deepEqual(flood.polyline.positions.getValue(), lakeTail, 'retain the prefix without revealing the next segment');
-    assert.ok(Cesium.Cartesian3.equals(surge.position.getValue(), lakeTail.at(-1)));
+    assert.deepEqual(flood.positions, lakeTail, 'retain the prefix without revealing the next segment');
+    assert.ok(Cesium.Cartesian3.equals(surge.position, lakeTail.at(-1)));
     layer.setParams(params('second-landslide', true));
-    assert.deepEqual(flood.polyline.positions.getValue(), lakeTail, 'arrival does not clear the prefix');
+    assert.deepEqual(flood.positions, lakeTail, 'arrival does not clear the prefix');
     finishReveal();
-    assert.ok(flood.polyline.positions.getValue().length > lakeTail.length);
+    assert.ok(flood.positions.length > lakeTail.length);
     layer.setParams(params('debris-dammed-lake', false));
     assert.equal(flood.show, false, 'backward replay trims future segments instead of retaining stale history');
     layer.setParams(params('second-landslide', false));
-    assert.deepEqual(flood.polyline.positions.getValue(), lakeTail, 'direct load reconstructs the same prefix');
+    assert.deepEqual(flood.positions, lakeTail, 'direct load reconstructs the same prefix');
     layer.setParams(params('second-landslide', false, { evidencePathPersistent: false }));
     assert.equal(flood.show, false, 'nonpersistent shots retain their arrival gate');
     for (const beatId of ['devighat-taadi-khola-bridge', 'charaudi', 'final-view']) {
@@ -2756,13 +2951,13 @@ test('media-led upper-valley shots retain only their upstream prefix during came
         evidencePathDuringMedia: false, evidenceMediaAutoplay: beatId !== 'final-view',
       };
       layer.setParams(params(beatId, false, historyControls));
-      const completedTail = [...flood.polyline.positions.getValue()];
+      const completedTail = [...flood.positions];
       assert.ok(completedTail.length > 100, `${beatId}: direct load reconstructs full sourced history`);
       layer.setParams(params(beatId, true, historyControls));
-      assert.deepEqual(flood.polyline.positions.getValue(), completedTail,
+      assert.deepEqual(flood.positions, completedTail,
         `${beatId}: arrival must not reset the completed history`);
       finishReveal();
-      assert.deepEqual(flood.polyline.positions.getValue(), completedTail,
+      assert.deepEqual(flood.positions, completedTail,
         `${beatId}: media/card reveal must not erase or regrow completed history`);
     }
     await layer.disable();
@@ -2798,7 +2993,7 @@ test('camera-led Nepal flood motion preserves its prefix and stays ahead of shot
   const viewer = eventViewer();
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
-    imageryProviderFactory: async (url) => ({ url }),
+    imagerySpecFactory: async (url) => ({ url }),
     terrainSampler: async () => null,
     mediaLoader: async () => { throw Object.assign(new Error('fixture'), { name: 'AbortError' }); },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
@@ -2840,44 +3035,42 @@ test('camera-led Nepal flood motion preserves its prefix and stays ahead of shot
       evidenceSequence: true,
     }));
     await layer.enable(viewer, { origin: 'scene' });
-    let source = viewer._test.dataSources.at(-1);
-    let flood = source.entities.getById('bhote-koshi-flood-core');
-    let surge = source.entities.getById('bhote-koshi-surge-front');
-    const timureStart = flood.polyline.positions.getValue().length;
+    let flood = viewer._test.floodView('bhote-koshi-flood-core');
+    let surge = viewer._test.floodView('bhote-koshi-surge-front');
+    const timureStart = flood.positions.length;
     assert.ok(timureStart > 1, 'the completed Border Gate prefix is already visible during travel');
     assert.equal(surge.show, true);
     advance(420);
-    const earlyTimureLength = flood.polyline.positions.getValue().length;
+    const earlyTimureLength = flood.positions.length;
     assert.ok(earlyTimureLength > timureStart,
       'the trail leads during the opening tenth of camera travel instead of waiting for arrival');
     advance(2880);
-    const timureEnd = flood.polyline.positions.getValue().length;
+    const timureEnd = flood.positions.length;
     assert.ok(timureEnd > timureStart);
     assert.equal(flood.show, true, 'the completed tail remains visible at the next point');
-    assert.ok(Cesium.Cartesian3.equals(flood.polyline.positions.getValue().at(-1), surge.position.getValue()));
+    assert.ok(Cesium.Cartesian3.equals(flood.positions.at(-1), surge.position));
 
     layer.setParams(params('syabru-besi', 'comparison', travel(2), {
       evidenceSequence: true,
     }));
-    assert.ok(flood.polyline.positions.getValue().length >= timureEnd,
+    assert.ok(flood.positions.length >= timureEnd,
       'the Timure segment remains painted when Syabru travel starts');
     advance(3300);
     assert.equal(surge.show, true, 'the amber head remains visible at comparison completion');
-    assert.ok(Cesium.Cartesian3.equals(flood.polyline.positions.getValue().at(-1), surge.position.getValue()));
+    assert.ok(Cesium.Cartesian3.equals(flood.positions.at(-1), surge.position));
 
     layer.setParams(params('dhunche', 'source', travel(3), {
       evidencePathHistory: true,
       evidencePathElevation: 'source',
       evidenceHoldCard: true,
     }));
-    source = viewer._test.dataSources.at(-1);
-    flood = source.entities.getById('bhote-koshi-flood-core');
-    surge = source.entities.getById('bhote-koshi-surge-front');
-    const dhuncheStart = flood.polyline.positions.getValue().length;
+    flood = viewer._test.floodView('bhote-koshi-flood-core');
+    surge = viewer._test.floodView('bhote-koshi-surge-front');
+    const dhuncheStart = flood.positions.length;
     assert.ok(dhuncheStart >= event.reconstruction.corridor.length,
       'the comparison corridor survives the transition onto Google photogrammetry');
     advance(3300);
-    const dhuncheEnd = flood.polyline.positions.getValue().length;
+    const dhuncheEnd = flood.positions.length;
     assert.ok(dhuncheEnd > dhuncheStart);
     assert.equal(surge.show, true);
 
@@ -2886,11 +3079,11 @@ test('camera-led Nepal flood motion preserves its prefix and stays ahead of shot
       evidencePathElevation: 'source',
       evidenceHoldCard: true,
     }));
-    assert.ok(flood.polyline.positions.getValue().length >= dhuncheEnd,
+    assert.ok(flood.positions.length >= dhuncheEnd,
       'the completed Dhunche segment never disappears');
     advance(900);
-    const frozenHead = Cesium.Cartesian3.clone(surge.position.getValue());
-    const frozenLength = flood.polyline.positions.getValue().length;
+    const frozenHead = Cesium.Cartesian3.clone(surge.position);
+    const frozenLength = flood.positions.length;
     layer.setParams(params('mailung-upper-trishuli', 'source', travel(4, 4.2, {
       active: false, cancelled: true,
     }), {
@@ -2899,8 +3092,8 @@ test('camera-led Nepal flood motion preserves its prefix and stays ahead of shot
       evidenceHoldCard: true,
     }));
     assert.equal(frames.size, 0, 'cancelling camera travel revokes the path animation frame');
-    assert.equal(flood.polyline.positions.getValue().length, frozenLength);
-    assert.ok(Cesium.Cartesian3.equals(surge.position.getValue(), frozenHead));
+    assert.equal(flood.positions.length, frozenLength);
+    assert.ok(Cesium.Cartesian3.equals(surge.position, frozenHead));
     assert.ok(holds.includes('bhote-koshi-scene-path-travel'));
     assert.ok(releases.includes('bhote-koshi-scene-path-travel'));
 
@@ -2912,16 +3105,16 @@ test('camera-led Nepal flood motion preserves its prefix and stays ahead of shot
         evidencePathElevation: 'source',
         evidenceHoldCard: true,
       }));
-      const startLength = flood.polyline.positions.getValue().length;
+      const startLength = flood.positions.length;
       assert.ok(startLength >= previousCompleteLength,
         `${beatId} retains every completed upstream segment while travel begins`);
       advance(3300);
-      const completeLength = flood.polyline.positions.getValue().length;
+      const completeLength = flood.positions.length;
       assert.ok(completeLength > startLength, `${beatId} grows its own segment during travel`);
       assert.equal(flood.show, true);
       assert.equal(surge.show, true);
       assert.ok(Cesium.Cartesian3.equals(
-        flood.polyline.positions.getValue().at(-1), surge.position.getValue(),
+        flood.positions.at(-1), surge.position,
       ));
       previousCompleteLength = completeLength;
     }
@@ -2940,20 +3133,20 @@ test('camera-led Nepal flood motion preserves its prefix and stays ahead of shot
       evidencePathElevation: 'source',
       evidenceHoldCard: true,
     }));
-    assert.ok(flood.polyline.positions.getValue().length > dhuncheEnd,
+    assert.ok(flood.positions.length > dhuncheEnd,
       'a direct Bidur load reconstructs its complete upstream prefix');
     advance(3300);
-    assert.equal(flood.polyline.positions.getValue().length, bidurCompleteLength);
+    assert.equal(flood.positions.length, bidurCompleteLength);
 
     layer.setParams(params('dhunche', 'source', travel(travelId++), {
       evidencePathHistory: true,
       evidencePathElevation: 'source',
       evidenceHoldCard: true,
     }));
-    assert.ok(flood.polyline.positions.getValue().length < bidurCompleteLength,
+    assert.ok(flood.positions.length < bidurCompleteLength,
       'backward navigation trims unsupported downstream history immediately');
     advance(3300);
-    assert.equal(flood.polyline.positions.getValue().length, dhuncheEnd);
+    assert.equal(flood.positions.length, dhuncheEnd);
 
     // The deadline is independent of RAF, so a throttled render loop still
     // completes the active segment before the camera's longer flight ends.
@@ -2967,7 +3160,7 @@ test('camera-led Nepal flood motion preserves its prefix and stays ahead of shot
     now += deadlineEntry[1].delay;
     deadlineEntry[1].callback();
     assert.equal(frames.size, 0, 'the deadline cancels a stalled animation frame');
-    assert.ok(flood.polyline.positions.getValue().length > dhuncheEnd);
+    assert.ok(flood.positions.length > dhuncheEnd);
 
     layer.setParams({
       presentation: 'scene-beat', sceneSurface: 'evidence-beat', beatId: 'charaudi',
@@ -2990,5 +3183,142 @@ test('Bhote Koshi corridor remains ordered downstream and inside the imagery rec
     assert.ok(point.lon >= west && point.lon <= east);
     assert.ok(point.lat >= south && point.lat <= north);
     priorChainage = point.chainageM;
+  }
+});
+
+test('an evidence point whose terrain sample misses sits at its fallback elevation, not sea level', async () => {
+  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
+  const originalDocument = globalThis.document;
+  const originalWindow = globalThis.window;
+  installEventDom();
+  globalThis.window = { setTimeout: () => 71, clearTimeout() {} };
+  const viewer = eventViewer();
+  const publications = [];
+  const layer = createBhoteKoshiEventLayer({
+    eventLoader: async () => event,
+    imagerySpecFactory: async (url) => ({ url }),
+    terrainSampler: async (_viewer, observations) => observations.map(() => ({ height: null })),
+    mediaLoader: async () => {
+      const error = new Error('fixture media intentionally unavailable');
+      error.name = 'AbortError';
+      throw error;
+    },
+    overlayHost: { setEntries(_source, entries) { publications.push(entries); }, setVisible() {}, clearSource() {} },
+    renderHost: { request() {}, hold() {}, release() {} },
+  });
+  try {
+    layer.setParams({
+      presentation: 'scene-beat',
+      sceneSurface: 'evidence-beat',
+      beatId: 'gyirong-border-gate',
+    }, { origin: 'scene' });
+    await layer.enable(viewer, { origin: 'scene' });
+    const card = publications.at(-1).find((entry) => entry.id === 'evidence-card-gyirong-border-gate');
+    const fallback = event.evidenceSpine.find(({ id }) => id === 'gyirong-border-gate').fallbackElevationM;
+    assert.ok(fallback > 100, 'the fixture has a real fallback elevation');
+    const height = Cesium.Cartographic.fromCartesian(card.position()).height;
+    assert.ok(Math.abs(height - (fallback + 18)) < 1, `card at ${height} m`);
+    await layer.disable();
+  } finally {
+    await layer.destroy();
+    globalThis.document = originalDocument;
+    globalThis.window = originalWindow;
+  }
+});
+
+for (const [source, expected] of [['terrain', 'sampled'], ['ellipsoid', 'fallback']]) {
+  test(`the default terrain sampler places an evidence point at a ${source} answer's ${expected} height`, async () => {
+    const event = JSON.parse(await readFile(eventUrl, 'utf8'));
+    const originalDocument = globalThis.document;
+    const originalWindow = globalThis.window;
+    installEventDom();
+    globalThis.window = { setTimeout: () => 71, clearTimeout() {} };
+    const asked = [];
+    const query = {
+      async sampleHeight(points, options) {
+        asked.push(options);
+        return points.map(() => ({ height: 1234, source, confidence: 1, lod: 'finest' }));
+      },
+    };
+    const viewer = eventViewer(0.37, { query });
+    const publications = [];
+    const layer = createBhoteKoshiEventLayer({
+      eventLoader: async () => event,
+      imagerySpecFactory: async (url) => ({ url }),
+      mediaLoader: async () => {
+        const error = new Error('fixture media intentionally unavailable');
+        error.name = 'AbortError';
+        throw error;
+      },
+      overlayHost: { setEntries(_source, entries) { publications.push(entries); }, setVisible() {}, clearSource() {} },
+      renderHost: { request() {}, hold() {}, release() {} },
+    });
+    try {
+      layer.setParams({
+        presentation: 'scene-beat',
+        sceneSurface: 'evidence-beat',
+        beatId: 'gyirong-border-gate',
+      }, { origin: 'scene' });
+      await layer.enable(viewer, { origin: 'scene' });
+      assert.deepEqual(asked, [{ against: 'terrain', mostDetailed: true }]);
+      const card = publications.at(-1).find((entry) => entry.id === 'evidence-card-gyirong-border-gate');
+      const fallback = event.evidenceSpine.find(({ id }) => id === 'gyirong-border-gate').fallbackElevationM;
+      const height = Cesium.Cartographic.fromCartesian(card.position()).height;
+      const want = (expected === 'sampled' ? 1234 : fallback) + 18;
+      assert.ok(Math.abs(height - want) < 1, `card at ${height} m, not ${want} m`);
+      await layer.disable();
+    } finally {
+      await layer.destroy();
+      globalThis.document = originalDocument;
+      globalThis.window = originalWindow;
+    }
+  });
+}
+
+test('an event image that fails to load takes the comparison down, not the event', async (t) => {
+  const event = JSON.parse(await readFile(eventUrl, 'utf8'));
+  const originalDocument = globalThis.document;
+  const originalWindow = globalThis.window;
+  installEventDom();
+  globalThis.window = { setTimeout: () => 71, clearTimeout() {} };
+  const warn = t.mock.method(console, 'warn', () => {});
+  const viewer = eventViewer();
+  const renders = [];
+  const layer = createBhoteKoshiEventLayer({
+    eventLoader: async () => event,
+    embeddedMediaFactory: () => ({ show() {}, hide() {}, pause() {}, destroy() {} }),
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+    renderHost: { request(reason) { renders.push(reason); }, hold() {}, release() {} },
+  });
+  try {
+    layer.setParams({ progress: 0.4 }, { origin: 'local-restore' });
+    assert.equal(await layer.enable(viewer), true);
+    const [before, after] = viewer._test.imagery;
+    assert.equal(before.spec.kind, 'single-image', 'the default spec is one image');
+    assert.deepEqual(Object.keys(before.spec.rectangle).sort(), ['east', 'north', 'south', 'west']);
+    assert.equal(before.spec.credit.text, 'Vantor WorldView Open Data · CC BY-NC 4.0');
+    assert.deepEqual(viewer._test.globe.layers, [before, after], 'the pair goes on top, before under after');
+    assert.equal(eventSplit().view.hidden, false);
+    assert.equal(eventPanel().querySelector('[data-role="imagery-comparison"]').hidden, false);
+
+    after.fail({ tile: { x: 0, y: 0, level: 0 }, status: 404 });
+    assert.ok(before.removed && after.removed, 'neither image is left to compare');
+    assert.equal(eventSplit().view.hidden, true);
+    assert.equal(eventPanel().querySelector('[data-role="imagery-comparison"]').hidden, true);
+    assert.equal(layer.getPlaybackState().enabled, true, 'the event itself stays on');
+    assert.ok(renders.includes('bhote-koshi-imagery-failed'));
+    assert.equal(warn.mock.callCount(), 1);
+    before.fail({ tile: { x: 0, y: 0, level: 0 } });
+    assert.equal(warn.mock.callCount(), 1, 'a removed layer reports nothing more');
+
+    await layer.disable();
+    assert.equal(await layer.enable(viewer), true);
+    assert.equal(viewer._test.globe.layers.length, 2, 'the next enable tries the images again');
+    assert.equal(eventSplit().view.hidden, false);
+    await layer.disable();
+  } finally {
+    await layer.destroy();
+    globalThis.document = originalDocument;
+    globalThis.window = originalWindow;
   }
 });

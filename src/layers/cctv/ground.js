@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { findGlobe } from '../../render/rendererOf.js';
 import {
   SUPPORT_KEYS,
   planeSupportPoints,
@@ -13,7 +14,7 @@ export function createGround({ state: layerState, services, parts, source }) {
   const { resolveEllipsoidalGround } = services.terrain;
 
   /**
-   * Task 5 (height-datum fix): maps the scene's `globe.show` flag to the surface
+   * Task 5 (height-datum fix): maps whether the renderer shows the globe to the surface
    * regime key the per-camera ground cache is keyed by (spec §2 "cache by
    * surface regime", collapsed to two keys — ion World Terrain and Re:Earth
    * globe terrain get the same handling):
@@ -26,7 +27,8 @@ export function createGround({ state: layerState, services, parts, source }) {
    * Only an explicit `false` (the photoreal stack hides the globe) selects
    * `google-3d`; undefined/null (no viewer / torn down) must fall to the regime
    * that never touches the scene. Pure — exported for the unit suite.
-   * @param {boolean|undefined|null} globeShow - `viewer.scene.globe.show`.
+   * @param {boolean|undefined|null} globeShow - Whether the renderer shows the
+   *   globe (`globe.isGlobeVisible()`).
    * @returns {'google-3d'|'terrain-globe'}
    */
 
@@ -36,15 +38,15 @@ export function createGround({ state: layerState, services, parts, source }) {
 
   /**
    * Task 5: the surface regime the scene is CURRENTLY rendering, derived live
-   * from `globe.show` (mapStackController's `_activatePhotoreal` /
-   * `_activateGlobeStack` flip exactly this flag). Reading scene state directly
+   * from whether the renderer shows the globe (mapStackController's
+   * `_activatePhotoreal` / `_activateGlobeStack` flip exactly this). Reading it live
    * — rather than caching the map-stack id — means the regime is correct even
    * for stack changes this module never got an event for.
    * @returns {'google-3d'|'terrain-globe'}
    */
 
   function currentSurfaceRegime() {
-    return surfaceRegimeKey(layerState._viewer?.scene?.globe?.show);
+    return surfaceRegimeKey(findGlobe(layerState._viewer)?.isGlobeVisible?.());
   }
 
   /**
@@ -231,14 +233,16 @@ export function createGround({ state: layerState, services, parts, source }) {
       // stall a large one.
       if (!record.frustumGeometry) {
         if (record.position) {
-          Cesium.Cartesian3.fromDegrees(
+          // In place: the record keeps its position object.
+          const { x, y, z } = fromDegrees(
             record.camera.lon,
             record.camera.lat,
             record.camera.absoluteHeightM,
-            undefined,
-            record.position,
           );
-          if (record.billboard) record.billboard.position = record.position;
+          record.position.x = x;
+          record.position.y = y;
+          record.position.z = z;
+          parts.rendering.moveCameraIcon(record);
           moved += 1;
         }
         continue;

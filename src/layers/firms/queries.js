@@ -278,7 +278,8 @@ export function createQueries({
      * layer's greedy declutter as the SELECTOR and the shared overlay remains
      * the renderer. Walks the FRP-sorted index so the strongest fires come first.
      * @param {{maxCount?: number}} [options]
-     * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string}>}
+     * @returns {Array<{position: {x: number, y: number, z: number}, id: string, type: string}>}
+     *   Positions are ECEF.
      */
     getDetectableObjects(options = {}) {
       if (!layerState._enabled || !layerState._firesByFrp.length) return [];
@@ -333,9 +334,9 @@ export function createQueries({
       components.rendering.applyHandoffFade();
     },
 
-    /** Test seam: entities drawn by the layer's data source. */
+    /** Test seam: shapes drawn in the layer's own set (none: the heat is imagery). */
     _entityCountForTest() {
-      return layerState._dataSource?.entities?.values?.length ?? 0;
+      return layerState._cells?.size() ?? 0;
     },
 
     /** Test seam that binds the production click path and indexes. */
@@ -350,13 +351,13 @@ export function createQueries({
       layerState._totalCount = fires.length;
       layerState._pickIndexById.clear();
       layerState._labelLodDistance = 1e7;
+      components.rendering.ensureDetectionCollections();
       layerState._labelCandidates = fires.map((fire) => {
         layerState._pickIndexById.set(`firms-${fire.index}`, fire);
         return { fire, position: components.model.firePosition(fire) };
       });
       components.cards.rebuildAmbientLabels();
       components.selection.installClickHandler();
-      return layerState._clickHandler;
     },
   };
 

@@ -248,7 +248,8 @@ export function normalizeDump1090Aircraft(json, nowMs, { band = '1090' } = {}) {
       lon: hasPosition ? position.lon : null,
       altitudeFt: altitude,
       groundSpeedKt: finiteOrNull(entry.gs),
-      trackDeg: normalizeTrack(entry.track),
+      // No track (parked, slow): the true heading, where the nose points.
+      trackDeg: normalizeTrack(entry.track ?? entry.true_heading),
       verticalRateFpm: readAdsbVerticalRateFpm(entry),
       lastPositionAt: hasPosition
         ? receivedAt - Math.max(0, seenPosS) * 1000
