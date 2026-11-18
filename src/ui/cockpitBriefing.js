@@ -1,5 +1,7 @@
 /** Regional briefing requests, pages and rotation for the Cockpit controller. */
 import { formatNumber, t, msg } from '../i18n/index.js';
+import { MPH_PER_KPH, usesImperial } from '../units.js';
+import { temperatureValue } from './unitLabels.js';
 import {
   COCKPIT_BRIEF_ROTATE_MS,
   COCKPIT_REGIONAL_REFRESH_MS,
@@ -358,10 +360,12 @@ export function renderRegionalBrief(payload, info) {
     place: placeLabel.toUpperCase(),
     coordinates: localCoordinates(info),
     temperature: Number.isFinite(weather?.temperatureC)
-      ? `${Math.round(weather.temperatureC)}°C`
+      ? `${temperatureValue(weather.temperatureC)}${usesImperial() ? '°F' : '°C'}`
       : '—',
     wind: Number.isFinite(weather?.windKph)
-      ? t('{value} KM/H', { value: Math.round(weather.windKph) })
+      ? usesImperial()
+        ? t('{value} MPH', { value: Math.round(weather.windKph * MPH_PER_KPH) })
+        : t('{value} KM/H', { value: Math.round(weather.windKph) })
       : '—',
     windDirection: formatCockpitWindDirection(weather?.windDirectionDeg),
     condition: conditionKey ? t(conditionKey) : condition,

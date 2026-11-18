@@ -4467,5 +4467,15 @@
     "other": "Показати {what} · {place} ({count} об’єкта)"
   },
   "Go there": "Перейти туди",
-  "Open draw options": "Відкрити параметри малювання"
+  "Open draw options": "Відкрити параметри малювання",
+  "Units: metric": "Одиниці: метричні",
+  "Units: imperial": "Одиниці: імперські",
+  "Switch to metric units (°C, km, m, km/h)": "Перейти на метричні одиниці (°C, км, м, км/год)",
+  "Switch to imperial units (°F, mi, ft, mph)": "Перейти на імперські одиниці (°F, миль, фт, миль/год)",
+  "{n} mi": "{n} миль",
+  "{n} mph": "{n} миль/год",
+  "{value} MPH": "{value} МИЛЬ/ГОД",
+  "mi": "миль",
+  "mm": "мм",
+  "unit of length|in": "дюйм"
 }

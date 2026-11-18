@@ -4259,5 +4259,15 @@
     "other": "{what} in der Region {place} anzeigen ({count} Elemente)"
   },
   "Go there": "Dorthin wechseln",
-  "Open draw options": "Zeichenoptionen öffnen"
+  "Open draw options": "Zeichenoptionen öffnen",
+  "Units: metric": "Einheiten: metrisch",
+  "Units: imperial": "Einheiten: imperial",
+  "Switch to metric units (°C, km, m, km/h)": "Zu metrischen Einheiten wechseln (°C, km, m, km/h)",
+  "Switch to imperial units (°F, mi, ft, mph)": "Zu imperialen Einheiten wechseln (°F, mi, ft, mph)",
+  "{n} mi": "{n} mi",
+  "{n} mph": "{n} mph",
+  "{value} MPH": "{value} MPH",
+  "mi": "mi",
+  "mm": "mm",
+  "unit of length|in": "in"
 }

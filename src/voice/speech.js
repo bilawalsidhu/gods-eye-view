@@ -40,6 +40,7 @@ import {
 import { localizePlaceName } from '../ui/placeNames.js';
 import { CITY_POIS } from '../cityPois.js';
 import { formatQuantity } from '../ui/unitLabels.js';
+import { METRES_PER_MILE, usesImperial } from '../units.js';
 
 const LAYER_NOUNS = Object.freeze({
   flights: 'aircraft',
@@ -138,7 +139,11 @@ function kilometers(km) {
 /** The card's distance, in the active language: "2,5 км". */
 function shownKm(km) {
   const value = roundedKm(km);
-  return value === null ? null : formatQuantity(value, 'km');
+  if (value === null) return null;
+  // Miles in the imperial system (src/units.js); the spoken English keeps km.
+  return usesImperial()
+    ? formatQuantity(roundedKm((value * 1000) / METRES_PER_MILE), 'mi')
+    : formatQuantity(value, 'km');
 }
 
 /** Sources as the card lists them. */

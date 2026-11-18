@@ -8,6 +8,7 @@ import { vStatusText } from '../rail/statusText.js';
 import { useLocaleStore } from '../stores/locale.js';
 import { useProviderSettingsStore } from '../stores/providerSettings.js';
 import LocalePicker from './panels/LocalePicker.vue';
+import UnitSystemToggle from './panels/UnitSystemToggle.vue';
 
 const { picker } = storeToRefs(useLocaleStore());
 // The key setup owner (src/keySetup.js) presents the chip, the dialog and its
@@ -52,8 +53,9 @@ const removeTitle = (title) =>
        /api/setup/status is not there to answer (prod builds, LAN visitors).
        Rows are rendered from that payload, so the key registry lives in
        src/keySetupCore.mjs alone. -->
-  <!-- Bottom-right HUD row: the POWER UP chip (while keys are missing) and
-       the language picker, once the shell publishes it. -->
+  <!-- Bottom-right HUD row: the POWER UP chip (while keys are missing), the
+       metric / imperial switch, and the language picker, once the shell
+       publishes it. -->
   <div id="corner-actions">
     <Teleport v-if="available" :to="cyber ? '#top-center-actions' : 'body'" :disabled="!cyber">
       <button id="key-setup-chip" type="button" :hidden="!chip || chip.hidden" aria-haspopup="dialog" aria-controls="key-setup" :title="chip?.title" :aria-label="chip?.title" @click="controls?.open()">
@@ -61,6 +63,7 @@ const removeTitle = (title) =>
         <span data-key-setup-chip-label>{{ chip ? chip.label : t('POWER UP') }}</span>
       </button>
     </Teleport>
+    <UnitSystemToggle />
     <LocalePicker v-if="picker" :key="picker.current" :current="picker.current" :on-select="picker.onSelect" :focus="picker.focus" />
   </div>
   <aside v-if="available" id="key-setup" role="dialog" aria-labelledby="key-setup-title" aria-describedby="key-setup-description" :hidden="dialog.hidden" v-class-toggle="{ visible: dialog.visible }" :data-ready="view?.ready ? 'true' : undefined" @transitionend="controls?.transitionEnd()">

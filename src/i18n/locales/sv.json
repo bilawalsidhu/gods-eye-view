@@ -4259,5 +4259,15 @@
     "other": "Visa {what} i {place} ({count} objekt)"
   },
   "Go there": "Gå dit",
-  "Open draw options": "Öppna ritalternativ"
+  "Open draw options": "Öppna ritalternativ",
+  "Units: metric": "Enheter: metriska",
+  "Units: imperial": "Enheter: imperiska",
+  "Switch to metric units (°C, km, m, km/h)": "Byt till metriska enheter (°C, km, m, km/h)",
+  "Switch to imperial units (°F, mi, ft, mph)": "Byt till imperiska enheter (°F, mi, ft, mph)",
+  "{n} mi": "{n} mi",
+  "{n} mph": "{n} mph",
+  "{value} MPH": "{value} MPH",
+  "mi": "mi",
+  "mm": "mm",
+  "unit of length|in": "in"
 }

@@ -4675,5 +4675,15 @@
     "other": "عرض {what} في {place} ({count} عنصر)"
   },
   "Go there": "انتقل إلى هناك",
-  "Open draw options": "فتح خيارات الرسم"
+  "Open draw options": "فتح خيارات الرسم",
+  "Units: metric": "الوحدات: مترية",
+  "Units: imperial": "الوحدات: إمبراطورية",
+  "Switch to metric units (°C, km, m, km/h)": "التبديل إلى الوحدات المترية (°C، كم، م، كم/س)",
+  "Switch to imperial units (°F, mi, ft, mph)": "التبديل إلى الوحدات الإمبراطورية (°F، ميل، قدم، ميل/س)",
+  "{n} mi": "{n} ميل",
+  "{n} mph": "{n} ميل/س",
+  "{value} MPH": "{value} ميل/س",
+  "mi": "ميل",
+  "mm": "مم",
+  "unit of length|in": "بوصة"
 }

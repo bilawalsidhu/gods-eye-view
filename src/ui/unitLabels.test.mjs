@@ -55,3 +55,48 @@ test('Japanese unit words follow the number directly; symbols keep the space', (
     setLocale('en');
   }
 });
+
+test('quantities follow the page unit system; metric reads as before', async () => {
+  const { setUnitSystem } = await import('../units.js');
+  const {
+    formatDistance,
+    formatHeight,
+    formatPrecipitation,
+    formatRoadSpeed,
+    formatTemperature,
+    temperatureValue,
+  } = await import('./unitLabels.js');
+  setLocale('en');
+  const nb = ' ';
+  try {
+    setUnitSystem('metric');
+    assert.equal(formatTemperature(21.6), `22${nb}°C`);
+    assert.equal(temperatureValue(21.6), 22);
+    assert.equal(formatDistance(850), `850${nb}m`);
+    assert.equal(formatDistance(4600), `4.6${nb}km`);
+    assert.equal(formatRoadSpeed(42), `42${nb}km/h`);
+    assert.equal(formatHeight(120), `120${nb}m`);
+    assert.equal(formatPrecipitation(1.24), `1.2${nb}mm`);
+
+    setUnitSystem('imperial');
+    assert.equal(formatTemperature(21.6), `71${nb}°F`);
+    assert.equal(formatTemperature(-40), `-40${nb}°F`);
+    assert.equal(temperatureValue(0), 32);
+    assert.equal(formatDistance(250), `820${nb}ft`);
+    assert.equal(formatDistance(4600), `2.9${nb}mi`);
+    assert.equal(formatRoadSpeed(42), `26${nb}mph`);
+    assert.equal(formatHeight(120), `394${nb}ft`);
+    assert.equal(formatPrecipitation(25.4), `1.00${nb}in`);
+    assert.equal(unitLabel('mi'), 'mi');
+    assert.equal(unitLabel('in'), 'in');
+
+    setLocale('ru');
+    assert.equal(formatDistance(4600), `2,9${nb}миль`);
+    assert.equal(unitLabel('in'), 'дюйм', 'the unit, not the preposition');
+  } finally {
+    setUnitSystem('metric');
+    setLocale('en');
+  }
+  assert.equal(formatTemperature(Number.NaN), '');
+  assert.equal(formatDistance(-1), '');
+});

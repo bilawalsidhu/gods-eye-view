@@ -5,6 +5,7 @@ import { fromDegreesInto } from '../../geo/ellipsoid.js';
 import { clone, scale } from '../../geo/vector.js';
 import { t } from '../../i18n/index.js';
 import { formatQuantity, unitLabel } from '../../ui/unitLabels.js';
+import { METRES_PER_MILE, usesImperial } from '../../units.js';
 import {
   ISS_NORAD,
   CONTEXT_REFRESH_INTERVAL_MS,
@@ -358,9 +359,13 @@ export function createTracking({ state: layerState, services, parts, source }) {
       layerState._trackedFrameGeo?.altitude ?? fallbackAltitudeM;
     // The card is display only (the voice context slot keeps its own English
     // copy), so the altitude unit and the companions line follow the language.
+    // Miles in the imperial system (src/units.js).
+    const imperial = usesImperial();
     const altitudeText = Number.isFinite(altitudeM)
-      ? formatQuantity(Math.round(altitudeM / 1000), 'km')
-      : `?\u00a0${unitLabel('km')}`;
+      ? imperial
+        ? formatQuantity(Math.round(altitudeM / METRES_PER_MILE), 'mi')
+        : formatQuantity(Math.round(altitudeM / 1000), 'km')
+      : `?\u00a0${unitLabel(imperial ? 'mi' : 'km')}`;
     const detail = `${altitudeText} · NORAD ${layerState._trackedNorad}`;
     // Class leads the detail block: it is what tells the operator WHAT they are
     // looking at, and it stays readable under the IR styles that flatten the

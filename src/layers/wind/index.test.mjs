@@ -475,3 +475,46 @@ test('wind whose source follows the timeline drops the note that it does not fol
   layer.destroy();
   clock.destroy();
 });
+
+test('the imperial system reads mph and °F until a units chip is chosen', async () => {
+  const { setUnitSystem } = await import('../../units.js');
+  setUnitSystem('imperial');
+  const { layer } = harness({
+    getSnapshot: async (args) =>
+      complete(
+        args.model,
+        args.overlay === 'temperature'
+          ? {
+              scalar: {
+                kind: 'temperature',
+                units: '°C',
+                values: new Float32Array(4).fill(20),
+              },
+            }
+          : {},
+      ),
+  });
+  try {
+    await layer.update();
+    assert.equal(layer.getParams().units, 'mph');
+    layer.setParams({ overlay: 'temperature' });
+    await Promise.resolve();
+    await Promise.resolve();
+    const controls = layer.getRowControls();
+    assert.equal(controls.summary.units, '°F');
+    assert.equal(controls.legend[0].label, '-40', '-40 °C is -40 °F');
+    assert.equal(controls.legend.at(-1).label, '122+', '50 °C is 122 °F');
+
+    setUnitSystem('metric');
+    assert.equal(layer.getParams().units, 'km/h', 'an unchosen speed unit follows');
+    assert.equal(layer.getRowControls().summary.units, '°C');
+
+    layer.setParams({ units: 'mph' });
+    setUnitSystem('imperial');
+    setUnitSystem('metric');
+    assert.equal(layer.getParams().units, 'mph', 'a chosen chip stays');
+  } finally {
+    setUnitSystem('metric');
+    layer.destroy();
+  }
+});

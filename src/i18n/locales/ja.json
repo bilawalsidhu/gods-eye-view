@@ -4155,5 +4155,15 @@
     "other": "{place}の{what}を表示（{count}件）"
   },
   "Go there": "その場所に移動",
-  "Open draw options": "描画オプションを開く"
+  "Open draw options": "描画オプションを開く",
+  "Units: metric": "単位：メートル法",
+  "Units: imperial": "単位：ヤード・ポンド法",
+  "Switch to metric units (°C, km, m, km/h)": "メートル法の単位に切り替え（°C、km、m、km/h）",
+  "Switch to imperial units (°F, mi, ft, mph)": "ヤード・ポンド法の単位に切り替え（°F、mi、ft、mph）",
+  "{n} mi": "{n} mi",
+  "{n} mph": "{n} mph",
+  "{value} MPH": "{value} mph",
+  "mi": "mi",
+  "mm": "mm",
+  "unit of length|in": "in"
 }

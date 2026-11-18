@@ -4467,5 +4467,15 @@
     "other": "Показать {what} · {place} ({count} объекта)"
   },
   "Go there": "Перейти туда",
-  "Open draw options": "Открыть параметры рисования"
+  "Open draw options": "Открыть параметры рисования",
+  "Units: metric": "Единицы: метрические",
+  "Units: imperial": "Единицы: имперские",
+  "Switch to metric units (°C, km, m, km/h)": "Перейти на метрические единицы (°C, км, м, км/ч)",
+  "Switch to imperial units (°F, mi, ft, mph)": "Перейти на имперские единицы (°F, миль, фт, миль/ч)",
+  "{n} mi": "{n} миль",
+  "{n} mph": "{n} миль/ч",
+  "{value} MPH": "{value} МИЛЬ/Ч",
+  "mi": "миль",
+  "mm": "мм",
+  "unit of length|in": "дюйм"
 }

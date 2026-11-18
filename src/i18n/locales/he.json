@@ -4363,5 +4363,15 @@
     "other": "הצגת {what} ב{place} ({count} פריטים)"
   },
   "Go there": "מעבר למקום",
-  "Open draw options": "פתיחת אפשרויות הציור"
+  "Open draw options": "פתיחת אפשרויות הציור",
+  "Units: metric": "יחידות: מטריות",
+  "Units: imperial": "יחידות: אימפריאליות",
+  "Switch to metric units (°C, km, m, km/h)": "מעבר ליחידות מטריות (°C, km, m, km/h)",
+  "Switch to imperial units (°F, mi, ft, mph)": "מעבר ליחידות אימפריאליות (°F, mi, ft, mph)",
+  "{n} mi": "{n} mi",
+  "{n} mph": "{n} mph",
+  "{value} MPH": "{value} מייל לשעה",
+  "mi": "mi",
+  "mm": "מ״מ",
+  "unit of length|in": "in"
 }

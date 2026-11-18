@@ -10,6 +10,11 @@ import { createWindInspectionMarker } from './inspectionMarker.js';
 import { canvasOf, findQuery } from '../../render/rendererOf.js';
 import { t, msg, translateKnown } from '../../i18n/index.js';
 import { unitLabel } from '../../ui/unitLabels.js';
+import {
+  celsiusToFahrenheit,
+  onUnitSystemChange,
+  usesImperial,
+} from '../../units.js';
 
 /** Format a forecast timestamp explicitly in UTC. */
 export function formatWindValidTime(value) {
@@ -70,7 +75,10 @@ export function createWindLayer({
   let model = 'gfs';
   let overlay = 'none';
   let paused = false;
-  let units = 'km/h';
+  // Wind speed follows the page's unit system until a units chip is chosen.
+  const systemSpeedUnits = () => (usesImperial() ? 'mph' : 'km/h');
+  let units = systemSpeedUnits();
+  let unitsChosen = false;
   let reading = null;
   let inspectionMarker = null;
   let sampledPosition = null;
@@ -106,6 +114,13 @@ export function createWindLayer({
   let rowControlsListener = null;
   const notify = () => rowControlsListener?.();
   const unsubscribeClock = clock?.subscribe(notify);
+  const unsubscribeUnits = onUnitSystemChange(() => {
+    if (!unitsChosen && units !== systemSpeedUnits()) {
+      units = systemSpeedUnits();
+      reading = formatWindReading(reading, units);
+    }
+    notify();
+  });
   const layer = {
     id: 'wind',
     name: 'Wind',
@@ -212,6 +227,7 @@ export function createWindLayer({
       const unitsChanged =
         Object.hasOwn(WIND_UNITS, params.units) && params.units !== units;
       if (unitsChanged) units = params.units;
+      if (Object.hasOwn(WIND_UNITS, params.units)) unitsChosen = true;
       if (modelChanged) model = params.model;
       if (overlayChanged) overlay = params.overlay;
       rendering?.setOptions?.({ overlay, paused });
@@ -292,12 +308,19 @@ export function createWindLayer({
         ? overlay
         : 'speed';
       const spec = WIND_FIELDS[kind];
-      const legendUnit = kind === 'speed' ? units : spec.units;
+      // Temperature reads in °F in the imperial system; the field stays °C.
+      const fahrenheit = kind === 'temperature' && usesImperial();
+      const legendUnit =
+        kind === 'speed' ? units : fahrenheit ? '°F' : spec.units;
       const legend = spec.stops.map((color, index) => {
         const value =
           spec.min + ((spec.max - spec.min) * index) / (spec.stops.length - 1);
         const display = Math.round(
-          kind === 'speed' ? value * WIND_UNITS[units] : value,
+          kind === 'speed'
+            ? value * WIND_UNITS[units]
+            : fahrenheit
+              ? celsiusToFahrenheit(value)
+              : value,
         );
         return {
           color,
@@ -436,6 +459,7 @@ export function createWindLayer({
     destroy() {
       layer.disable();
       unsubscribeClock?.();
+      unsubscribeUnits();
       rendering?.destroy();
       rendering = null;
       imageryHost = null;

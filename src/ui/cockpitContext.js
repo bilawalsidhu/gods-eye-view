@@ -3,6 +3,7 @@ import { toLonLatH } from '../geo/index.js';
 import { formatNumber, t, tn } from '../i18n/index.js';
 import { sourceStatusLabel } from './layerNames.js';
 import { unitLabel } from './unitLabels.js';
+import { METRES_PER_MILE, usesImperial } from '../units.js';
 import {
   bearingBetweenCoordinates,
   formatCockpitContextScope,
@@ -19,7 +20,10 @@ const LOCALIZED_CONTEXT_SCOPE = Object.freeze({
   window: ({ label, radiusKm }) =>
     t('{label} · {radius} AIR/SEA WINDOW', {
       label,
-      radius: `${radiusKm === null ? '—' : formatNumber(radiusKm)}\u00a0${cockpitUnitCase(unitLabel('km'))}`,
+      // Miles in the imperial system (src/units.js).
+      radius: usesImperial()
+        ? `${radiusKm === null ? '—' : formatNumber(Math.round((radiusKm * 1000) / METRES_PER_MILE))}\u00a0${cockpitUnitCase(unitLabel('mi'))}`
+        : `${radiusKm === null ? '—' : formatNumber(radiusKm)}\u00a0${cockpitUnitCase(unitLabel('km'))}`,
     }),
   installations: ({ scope, coverage }) =>
     t('{scope} · INSTALLATIONS {coverage}', { scope, coverage }),

@@ -2,6 +2,7 @@ import { getContextStore } from './contextStore.js';
 import { msg } from '../i18n/marker.js';
 import { AIRCRAFT_CLASS_LABELS } from './aircraftClass.js';
 import { aircraftEmergency } from './aircraftEmergency.js';
+import { FEET_PER_METRE, METRES_PER_MILE, getUnitSystem } from '../units.js';
 
 /**
  * One way to read any thing on the map, whichever layer holds it.
@@ -505,7 +506,7 @@ function shipTypeName(code) {
 export function formatFact(
   field,
   value,
-  { nowMs = Date.now(), kind = '' } = {},
+  { nowMs = Date.now(), kind = '', system = getUnitSystem() } = {},
 ) {
   if (field === 'shipType' && shipTypeName(value)) {
     const name = shipTypeName(value);
@@ -539,16 +540,25 @@ export function formatFact(
         }),
         words: { date: number },
       };
-    // Aviation altitudes read in feet; orbits in kilometres.
+    // Aviation altitudes read in feet in both systems; orbits in kilometres,
+    // or miles in the imperial system. Lengths and road speeds convert the
+    // same way below; knots, hectopascals and ft/min never do.
+    const imperial = system === 'imperial';
+    const kilometres = (km, digits) =>
+      imperial
+        ? figure((km * 1000) / METRES_PER_MILE, digits, msg('{n} mi'), '{n} mi')
+        : figure(km, digits, msg('{n} km'), '{n} km');
     if (field === 'altitudeM')
       return number >= 100_000
-        ? figure(number / 1000, 0, msg('{n} km'), '{n} km')
+        ? kilometres(number / 1000, 0)
         : figure(number * 3.28084, 0, msg('{n} ft'), '{n} ft');
     // Orbital speeds read in km/s, road and rail in km/h, the rest in knots.
     if (field === 'speedMps' && number >= 2000)
       return figure(number / 1000, 2, msg('{n} km/s'), '{n} km/s');
     if (field === 'speedMps' && kind === 'vehicle')
-      return figure(number * 3.6, 0, msg('{n} km/h'), '{n} km/h');
+      return imperial
+        ? figure(number * 2.2369362921, 0, msg('{n} mph'), '{n} mph')
+        : figure(number * 3.6, 0, msg('{n} km/h'), '{n} km/h');
     if (field === 'speedMps')
       return figure(number * 1.94384, 0, msg('{n} kt'), '{n} kt');
     if (field === 'speedKts') return figure(number, 1, msg('{n} kt'), '{n} kt');
@@ -556,7 +566,7 @@ export function formatFact(
       return figure(number * 196.85, 0, msg('{n} ft/min'), '{n} ft/min');
     if (/^(heading|courseDeg)$/.test(field))
       return figure(number, 0, msg('{n}°'), '{n}°');
-    if (field === 'depthKm') return figure(number, 1, msg('{n} km'), '{n} km');
+    if (field === 'depthKm') return kilometres(number, 1);
     if (field === 'magnitude') return figure(number, 1, msg('M {n}'), 'M {n}');
     if (field === 'frp') return figure(number, 1, msg('{n} MW'), '{n} MW');
     if (field === 'confidence' && number <= 1)
@@ -566,8 +576,11 @@ export function formatFact(
     if (/Hpa$/.test(field)) return figure(number, 0, msg('{n} hPa'), '{n} hPa');
     if (field === 'acres')
       return figure(number, 0, msg('{n} acres'), '{n} acres');
-    if (/Km$/.test(field)) return figure(number, 1, msg('{n} km'), '{n} km');
-    if (/M$/.test(field)) return figure(number, 0, msg('{n} m'), '{n} m');
+    if (/Km$/.test(field)) return kilometres(number, 1);
+    if (/M$/.test(field))
+      return imperial
+        ? figure(number * FEET_PER_METRE, 0, msg('{n} ft'), '{n} ft')
+        : figure(number, 0, msg('{n} m'), '{n} m');
     // A bare number: only its digits follow the language.
     return figure(number, 2, '{n}', '{n}');
   }

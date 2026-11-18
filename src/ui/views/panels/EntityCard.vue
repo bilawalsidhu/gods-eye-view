@@ -14,6 +14,8 @@ import { useCctvStore } from '../../stores/cctv.js';
 import SpotConditions from './SpotConditions.vue';
 import { shownLayerName } from '../../layerNames.js';
 import { countryName, nearestCity } from '../../../data/wikidataCities.js';
+import { formatDistance } from '../../unitLabels.js';
+import { usesImperial } from '../../../units.js';
 
 // The Context panel's card for one thing on the map: what it is, its facts,
 // links, actions, and what else is near it. It reads from the entity card
@@ -73,8 +75,11 @@ const position = computed(() => {
   return `${lat}  ${lon}`;
 });
 
+// Metric text stays as it was; the imperial system converts (src/units.js).
 const distance = (km) =>
-  km < 1
+  usesImperial()
+    ? formatDistance(km * 1000, { system: 'imperial' })
+    : km < 1
     ? t('{n} m', { n: formatNumber(Math.round(km * 1000)) })
     : t('{n} km', { n: formatNumber(km < 10 ? Number(km.toFixed(1)) : Math.round(km)) });
 

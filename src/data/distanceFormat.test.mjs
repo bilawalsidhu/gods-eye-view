@@ -48,3 +48,50 @@ test('kilometres come back rounded, so toFixed and Intl agree', () => {
   assert.equal(formatDistanceText(1450), '1.5 km');
   assert.equal(formatDistanceText(1150), '1.2 km');
 });
+
+test('the imperial system reads feet below 1,000 ft, then miles', () => {
+  const imperial = { system: 'imperial' };
+  assert.equal(formatDistanceText(0, imperial), '0 ft');
+  assert.equal(formatDistanceText(100, imperial), '328 ft');
+  assert.equal(
+    formatDistanceText(304.7, imperial),
+    '0.2 mi',
+    '999.7 ft rounds to 1,000',
+  );
+  assert.equal(formatDistanceText(304.5, imperial), '999 ft');
+  assert.equal(formatDistanceText(305, imperial), '0.2 mi');
+  assert.equal(formatDistanceText(1609.344, imperial), '1.0 mi');
+  assert.equal(formatDistanceText(16_000, imperial), '9.9 mi');
+  assert.equal(formatDistanceText(16_090, imperial), '10 mi');
+  assert.equal(formatDistanceText(160_934.4, imperial), '100 mi');
+  assert.equal(
+    formatDistanceText(100, { ...imperial, metreStep: 10 }),
+    '330 ft',
+  );
+  assert.deepEqual(distanceParts(5000, imperial), {
+    value: 3.1,
+    unit: 'mi',
+    digits: 1,
+  });
+});
+
+test('largeOnly keeps kilometres or miles below one', () => {
+  assert.equal(formatDistanceText(400, { largeOnly: true }), '0.4 km');
+  assert.equal(
+    formatDistanceText(400, { largeOnly: true, system: 'imperial' }),
+    '0.2 mi',
+  );
+  assert.equal(formatDistanceText(25_000, { largeOnly: true }), '25 km');
+  assert.equal(
+    formatDistanceText(25_000, { largeOnly: true, system: 'imperial' }),
+    '16 mi',
+  );
+});
+
+test('metric output is unchanged by the system option', () => {
+  for (const meters of [0, 12, 999.4, 999.6, 4600, 9950, 123_456])
+    assert.equal(
+      formatDistanceText(meters, { system: 'metric' }),
+      formatDistanceText(meters),
+    );
+});

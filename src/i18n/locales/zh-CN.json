@@ -4155,5 +4155,15 @@
     "other": "显示{place}的{what}（{count} 个）"
   },
   "Go there": "前往该地点",
-  "Open draw options": "打开绘制选项"
+  "Open draw options": "打开绘制选项",
+  "Units: metric": "单位：公制",
+  "Units: imperial": "单位：英制",
+  "Switch to metric units (°C, km, m, km/h)": "切换到公制单位（°C、km、m、km/h）",
+  "Switch to imperial units (°F, mi, ft, mph)": "切换到英制单位（°F、mi、ft、mph）",
+  "{n} mi": "{n} mi",
+  "{n} mph": "{n} mph",
+  "{value} MPH": "{value} mph",
+  "mi": "mi",
+  "mm": "毫米",
+  "unit of length|in": "英寸"
 }

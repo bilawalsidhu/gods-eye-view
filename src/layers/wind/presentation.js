@@ -1,6 +1,10 @@
 import { formatWindSpeed, WIND_UNITS } from './inspection.js';
 import { formatNumber, formatUtcDayMonth, t } from '../../i18n/index.js';
-import { formatQuantity, unitLabel } from '../../ui/unitLabels.js';
+import {
+  formatQuantity,
+  formatTemperature,
+  unitLabel,
+} from '../../ui/unitLabels.js';
 
 /** Reformat a captured sample; changing units never samples the map again. */
 export function formatWindReading(reading, units) {
@@ -37,13 +41,19 @@ function displaySpeed(speed, units) {
   });
 }
 
-/** "1012.4 hPa" / "-3.0 °C" from the English reading, in the active language. */
+/** "1012.4 hPa" / "-3.0 °C" (or "26.6 °F") from the English reading, in the active language. */
 function displayScalar(reading) {
   if (reading.scalarKind === 'speed' && Number.isFinite(reading.speed))
     return displaySpeed(reading.speed, reading.units);
   const match = /^(-?\d+(?:\.\d+)?) (°C|hPa)$/.exec(reading.scalarValue);
   if (!match) return reading.scalarValue;
   const decimals = match[1].split('.')[1]?.length || 0;
+  // The reading stays °C for AI tools; a person sees the page's system.
+  if (match[2] === '°C')
+    return formatTemperature(Number(match[1]), {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
   return formatQuantity(Number(match[1]), match[2], {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,

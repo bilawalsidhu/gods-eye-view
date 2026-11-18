@@ -4363,5 +4363,15 @@
     "other": "Mostrar {what} en {place} ({count} elementos)"
   },
   "Go there": "Ir allí",
-  "Open draw options": "Abrir opciones de dibujo"
+  "Open draw options": "Abrir opciones de dibujo",
+  "Units: metric": "Unidades: métricas",
+  "Units: imperial": "Unidades: imperiales",
+  "Switch to metric units (°C, km, m, km/h)": "Cambiar a unidades métricas (°C, km, m, km/h)",
+  "Switch to imperial units (°F, mi, ft, mph)": "Cambiar a unidades imperiales (°F, mi, ft, mph)",
+  "{n} mi": "{n} mi",
+  "{n} mph": "{n} mph",
+  "{value} MPH": "{value} MPH",
+  "mi": "mi",
+  "mm": "mm",
+  "unit of length|in": "in"
 }

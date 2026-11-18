@@ -9,6 +9,8 @@ import UiSlider from '../../kit/UiSlider.js';
 import { sayWords, useEntityCardStore } from '../../stores/entityCard.js';
 import { useOmnibarStore } from '../../stores/omnibar.js';
 import { shownLayerName } from '../../layerNames.js';
+import { formatDistance, formatPrecipitation, formatRoadSpeed, temperatureValue } from '../../unitLabels.js';
+import { usesImperial } from '../../../units.js';
 
 // Conditions around one spot. For the view when nothing is picked: the
 // weather there now, natural hazards near it (earthquakes, tropical storms,
@@ -45,7 +47,11 @@ let readingHazards = 0;
 let settle = null;
 
 const radiusKm = contextRadiusKm;
-const radiusText = computed(() => t('{n} km', { n: formatNumber(radiusKm.value) }));
+// Metric text stays as it was; the imperial system converts (src/units.js).
+const imperialDistance = (meters) => formatDistance(meters, { largeOnly: true, system: 'imperial' });
+const radiusText = computed(() =>
+  usesImperial() ? imperialDistance(radiusKm.value * 1000) : t('{n} km', { n: formatNumber(radiusKm.value) }),
+);
 const radiusIndex = computed(() => Math.max(0, CONTEXT_RADIUS_STEPS.indexOf(radiusKm.value)));
 const pickRadius = (index) => setContextRadiusKm(CONTEXT_RADIUS_STEPS[index]);
 
@@ -161,7 +167,7 @@ const weatherFacts = computed(() => {
   if (!now) return [];
   const facts = [];
   if (Number.isFinite(now.windKph)) {
-    const speed = t('{n} km/h', { n: formatNumber(round(now.windKph)) });
+    const speed = usesImperial() ? formatRoadSpeed(now.windKph) : t('{n} km/h', { n: formatNumber(round(now.windKph)) });
     facts.push({
       label: t('Wind'),
       value: Number.isFinite(now.windDirectionDeg) ? t('{speed} {direction}', { speed, direction: t(compassName(now.windDirectionDeg)) }) : speed,
@@ -171,14 +177,18 @@ const weatherFacts = computed(() => {
   if (Number.isFinite(now.visibilityM))
     facts.push({
       label: t('Visibility'),
-      value: t('{n} km', {
-        n: formatNumber(now.visibilityM >= 10_000 ? round(now.visibilityM / 1000) : Number((now.visibilityM / 1000).toFixed(1))),
-      }),
+      value: usesImperial()
+        ? imperialDistance(now.visibilityM)
+        : t('{n} km', {
+            n: formatNumber(now.visibilityM >= 10_000 ? round(now.visibilityM / 1000) : Number((now.visibilityM / 1000).toFixed(1))),
+          }),
     });
   if (Number.isFinite(now.precipitationMm))
     facts.push({
       label: t('Rain'),
-      value: t('{n} mm', { n: formatNumber(now.precipitationMm, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }),
+      value: usesImperial()
+        ? formatPrecipitation(now.precipitationMm)
+        : t('{n} mm', { n: formatNumber(now.precipitationMm, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }),
     });
   return facts;
 });
@@ -188,7 +198,10 @@ const articles = computed(() =>
 );
 
 const distance = (km) =>
-  t('{n} km', { n: km < 10 ? formatNumber(km, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : formatNumber(Math.round(km)) });
+  usesImperial()
+    ? imperialDistance(km * 1000)
+    : t('{n} km', { n: km < 10 ? formatNumber(km, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : formatNumber(Math.round(km)) });
+const temperature = (celsius) => `${temperatureValue(celsius)}${usesImperial() ? '°F' : '°C'}`;
 function ago(ms) {
   if (!Number.isFinite(ms)) return '';
   const minutes = Math.max(0, Math.round((Date.now() - ms) / 60_000));
@@ -267,8 +280,8 @@ const sources = computed(() => {
         <template v-if="weather">
           <span class="material-symbols-outlined spot-conditions__weather-icon" aria-hidden="true">{{ look.icon }}</span>
           <div class="spot-conditions__weather-now">
-            <strong>{{ round(weather.temperatureC) }}°C</strong>
-            <span>{{ t(look.label) }}<template v-if="Number.isFinite(weather.apparentTemperatureC)"> · {{ t('feels {n}°', { n: round(weather.apparentTemperatureC) }) }}</template></span>
+            <strong>{{ temperature(weather.temperatureC) }}</strong>
+            <span>{{ t(look.label) }}<template v-if="Number.isFinite(weather.apparentTemperatureC)"> · {{ t('feels {n}°', { n: temperatureValue(weather.apparentTemperatureC) }) }}</template></span>
           </div>
         </template>
         <p v-else class="spot-conditions__loading spot-conditions__weather-wait">{{ loading ? t('Reading conditions here…') : t('No weather reading here.') }}</p>
@@ -386,8 +399,8 @@ const sources = computed(() => {
         <template v-if="weather">
           <span class="material-symbols-outlined spot-conditions__weather-icon" aria-hidden="true">{{ look.icon }}</span>
           <div class="spot-conditions__weather-now">
-            <strong>{{ round(weather.temperatureC) }}°C</strong>
-            <span>{{ t(look.label) }}<template v-if="Number.isFinite(weather.apparentTemperatureC)"> · {{ t('feels {n}°', { n: round(weather.apparentTemperatureC) }) }}</template></span>
+            <strong>{{ temperature(weather.temperatureC) }}</strong>
+            <span>{{ t(look.label) }}<template v-if="Number.isFinite(weather.apparentTemperatureC)"> · {{ t('feels {n}°', { n: temperatureValue(weather.apparentTemperatureC) }) }}</template></span>
           </div>
         </template>
         <p v-else class="spot-conditions__loading spot-conditions__weather-wait">{{ loading ? t('Reading conditions here…') : t('No weather reading here.') }}</p>

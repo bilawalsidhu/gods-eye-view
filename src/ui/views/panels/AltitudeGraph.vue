@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { formatNumber, t } from '../../../i18n/index.js';
+import { FEET_PER_METRE, METRES_PER_MILE, usesImperial } from '../../../units.js';
 
 // A figure as a filled graph (an aircraft's altitude, the camera's height, a
 // satellite's altitude and speed):
@@ -53,7 +54,22 @@ const SHOW = {
   km: (m) => t('{n} km', { n: number(Math.round(m / 100) / 10) }),
   'km/s': (m) => t('{n} km/s', { n: formatNumber(m / 1000, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }),
 };
-const shown = (m) => (SHOW[props.unit] || ((value) => t('{n} ft', { n: number(feet(value)) })))(m);
+// The imperial system (src/units.js): the camera reads in feet and miles, a
+// satellite's height in miles and its speed in mph. Aircraft read in feet in
+// both systems.
+const miles = (m) => m / METRES_PER_MILE;
+const IMPERIAL = {
+  metric: (m) =>
+    m * FEET_PER_METRE < 1000
+      ? t('{n} ft', { n: number(Math.round(m * FEET_PER_METRE)) })
+      : miles(m) >= 100
+        ? t('{n} mi', { n: number(Math.round(miles(m))) })
+        : t('{n} mi', { n: formatNumber(miles(m), { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }),
+  km: (m) => t('{n} mi', { n: number(Math.round(miles(m) * 10) / 10) }),
+  'km/s': (m) => t('{n} mph', { n: formatNumber(Math.round(miles(m) * 3600)) }),
+};
+const shown = (m) =>
+  ((usesImperial() && IMPERIAL[props.unit]) || SHOW[props.unit] || ((value) => t('{n} ft', { n: number(feet(value)) })))(m);
 /** The least each scale spans, so a steady figure still reads as a line. */
 const LEAST = { feet: MIN_RANGE_M, km: 2000, 'km/s': 20 };
 
