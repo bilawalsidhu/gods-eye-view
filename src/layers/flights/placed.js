@@ -61,6 +61,7 @@ export function placeLiveAircraft(
   history,
   out,
 ) {
+  flightState._drSpeedPlaced = false;
   if (!placement || followsClock(flightState)) return false;
   const placed = placeAircraftAt(
     placement,
@@ -73,6 +74,7 @@ export function placeLiveAircraft(
   if (!placed) return false;
   flightState._drCourseDeg = placed.courseDeg;
   flightState._drSpeedMps = placed.speedMps;
+  flightState._drSpeedPlaced = true;
   flightState._drCourseHold = placed.speedMps < COURSE_HOLD_SPEED_MPS;
   flightState._drExtrapolating = placed.extrapolating;
   return true;

@@ -998,11 +998,7 @@ export function createRendering({ state, services, parts }) {
     if (now - modelCandidatesAtMs >= MODEL_CANDIDATES_MS) {
       modelCandidatesAtMs = now;
       const eye = cameraPose()?.position;
-      const policy = services.fleet.policy;
-      const keepM =
-        services.fleet.display?.()?.models3dMode === 'all'
-          ? policy.keepAllM
-          : policy.keepM;
+      const keepM = services.fleet.policy.keepM;
       const limitSq = keepM * keepM * 1.44;
       if (eye)
         for (const entry of state._trains.values()) {

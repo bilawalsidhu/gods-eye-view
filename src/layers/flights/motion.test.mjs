@@ -4,6 +4,8 @@ import * as Cesium from 'cesium';
 import { createMotion } from './motion.js';
 import { arcOffsetEnu } from '../../data/motionModel.js';
 import { createMotion as createMilitaryMotion } from '../military/motion.js';
+import { createQueries } from './queries.js';
+import { createQueries as createMilitaryQueries } from '../military/queries.js';
 import { layerPlacement } from '../../data/placementProvider.js';
 import { observeLiveAircraft } from './placed.js';
 
@@ -248,18 +250,77 @@ const declining = (asked) =>
   );
 
 // Each kind's record carries only its own kinematics fields.
-for (const [name, create, record] of [
+for (const [name, create, record, queriesOf] of [
   [
     'civil',
     createMotion,
     { velocity: 100, true_track: 90, renderAltitudeM: 1234 },
+    createQueries,
   ],
   [
     'military',
     createMilitaryMotion,
     { speedMps: 100, track: 90, renderAltitudeM: 1234 },
+    createMilitaryQueries,
   ],
 ]) {
+  test(`${name} aircraft waiting where a placement holds them still show their reported speed`, () => {
+    // Drawn standing (speed 0) while its fixes catch up: the aircraft has
+    // not stopped, and the panels say what it reports.
+    const placement = layerPlacement(
+      {
+        layer: () => ({
+          place: () => ({
+            lat: 30.5,
+            lon: -96.5,
+            altitudeM: 2000,
+            courseDeg: 90,
+            speedMps: 0,
+            extrapolating: false,
+          }),
+        }),
+      },
+      'aircraft',
+    );
+    const { flightState, motion, start } = placedScenario(
+      create,
+      placement,
+      record,
+    );
+    flightState.now = () => start + 2000;
+    flightState.feed = {};
+    flightState.records.missingPolls = new Map();
+    const describe = (kinematics) => {
+      flightState.records.data.set('abc123', { ...record, ...kinematics });
+      return queriesOf({
+        flightState,
+        services: {
+          aircraftPresentation: {
+            tr3bTypeLabel: (_, label) => label,
+            tr3bAircraftClass: () => null,
+          },
+          labels: { formatFlightLevel: String },
+          militaryRegistry: {},
+          focus: {},
+          recession: {},
+        },
+        parts: {
+          motion,
+          icons: { _iconPosition: () => null },
+          tracking: { _routeIsPlausible: () => false },
+          testing: {},
+        },
+      })._describeFlight('abc123');
+    };
+    const waiting = describe({});
+    assert.equal(flightState._drSpeedMps, 0);
+    assert.equal(waiting.velocityMps, 100);
+    // Nothing reported: the speed it is drawn at.
+    const unreported =
+      name === 'civil' ? { velocity: undefined } : { speedMps: undefined };
+    assert.equal(describe(unreported).velocityMps, 0);
+  });
+
   test(`${name} aircraft move as before without a placement or with one that places nothing`, () => {
     const own = placedScenario(create, null, record).drawn;
     const asked = [];
