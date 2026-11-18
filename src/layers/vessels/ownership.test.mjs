@@ -600,6 +600,29 @@ test('an aid to navigation is drawn as the upright buoy, a vessel as its kind’
   assert.deepEqual(sail.size, buoy.size);
 });
 
+test('selecting a vessel or an aid never changes its colour', async () => {
+  const aid = {
+    ...observation('993672002'),
+    mmsi: '993672002',
+    type: 'Port Hand Mark',
+    speedMps: 0,
+  };
+  const ship = { ...observation('366999004'), type: 'Cargo' };
+  const { layer, icons } = setup({
+    async getSnapshot() {
+      return snapshot([aid, ship]);
+    },
+  });
+  await layer.update();
+  for (const [id, css] of [
+    ['366999004', VESSEL_KIND_STYLES.cargo.css],
+    ['993672002', AID_TO_NAVIGATION_STYLE.css],
+  ]) {
+    assert.equal(layer.selectById(id), true);
+    assert.deepEqual(icons.item(id).color, cssColor(css), id);
+  }
+});
+
 test('a virtual aid to navigation keeps its buoy and its virtual flag', async () => {
   const aid = {
     ...observation('993672009'),

@@ -1321,10 +1321,11 @@ for (const fixture of LAYERS) {
         fleetItem.minPixelSize,
         'the same minimum pixel size',
       );
-      assert.notDeepEqual(
-        trackedItem.tint,
-        fleetItem.tint,
-        'only the colour differs',
+      assert.deepEqual(trackedItem.tint, fleetItem.tint, 'the same colour');
+      assert.deepEqual(
+        trackedItem.colorBlend,
+        fleetItem.colorBlend,
+        'the same colour blend',
       );
     } finally {
       fixture.layer.setParams({ models3d: false });
@@ -1355,6 +1356,7 @@ for (const fixture of LAYERS) {
         fleet.scaleByDistance,
         'the same scale by distance',
       );
+      assert.deepEqual(tracked.color, fleet.color, 'the same colour');
       // A landing changes the fleet icon's scale, and the tracked one's with it.
       fixture.seed({ viewer, onGround: true });
       const grounded = fixture.trackedIconLook(ICAO);

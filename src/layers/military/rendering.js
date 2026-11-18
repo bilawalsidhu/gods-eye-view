@@ -8,7 +8,6 @@ import {
   BILLBOARD_SCALE,
   GROUND_SCALE,
   MIL_ICON_COLOR,
-  TRACKED_ICON_COLOR,
   EMERGENCY_ICON_COLOR,
   MODEL_WHITE,
 } from './policy.js';
@@ -56,11 +55,10 @@ export function createRendering({
   const _iconKind = (icao24, klass) =>
     tr3bIconKind(icao24, klass, { hot: flightState._irBoost });
 
-  /** Model colour: the mesh's own (white), tinted amber while tracked and red
-   *  while broadcasting an emergency. */
+  /** Model colour: the mesh's own (white), tinted red while broadcasting an
+   *  emergency. Tracking never recolours it. */
 
   function _modelColor(icao24) {
-    if (icao24 === flightState._trackedIcao) return TRACKED_ICON_COLOR;
     const info = flightState.records.data.get(icao24);
     return isEmergency(info?.emergency) ? EMERGENCY_ICON_COLOR : MODEL_WHITE;
   }

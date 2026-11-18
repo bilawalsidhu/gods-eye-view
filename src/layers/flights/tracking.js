@@ -15,6 +15,7 @@ import {
   createTrackedAircraftIcon,
   isOtherTrackedIconSet,
   trackedContactHolder,
+  trackedIconColor,
 } from '../../data/trackedAircraftIcon.js';
 import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
 import { julianToEpochMs } from '../../geo/julian.js';
@@ -34,8 +35,6 @@ import {
   COCKPIT_AIR_PROX_KEEP_M,
   TRAIL_MAX_POINTS,
   TRAIL_COLOR,
-  CYAN_TRANSPARENT,
-  TRACKED_CYAN,
   STALE_ALPHA,
   displayDelayMs,
   followsClock,
@@ -65,8 +64,6 @@ function aircraftPickId(hit) {
   if (!hit.set) return hit.id || undefined;
   return isOtherTrackedIconSet(hit.set, 'flights') ? undefined : hit.id;
 }
-
-const STALE_CYAN = Object.freeze([...TRACKED_CYAN.slice(0, 3), STALE_ALPHA]);
 
 export function createTracking({
   flightState,
@@ -855,14 +852,18 @@ export function createTracking({
     return { text: '', dimmed: false };
   }
 
-  /** The tracked billboard's colour: cyan, faded while stale, clear while the 3D model is the visual. */
+  /** The tracked billboard's colour: the contact's own fleet colour (tracking
+   *  never recolours it), faded while stale, clear while the 3D model is the
+   *  visual. */
 
   function _trackedIconColor() {
-    if (parts.rendering._modelOwnsVisual(flightState._trackedIcao))
-      return CYAN_TRANSPARENT;
-    return _trackedStaleCue(flightState._trackedIcao).dimmed
-      ? STALE_CYAN
-      : TRACKED_CYAN;
+    const icao24 = flightState._trackedIcao;
+    const color = parts.rendering._fleetBillboardColor(icao24);
+    if (parts.rendering._modelOwnsVisual(icao24))
+      return trackedIconColor(color, 0);
+    return _trackedStaleCue(icao24).dimmed
+      ? trackedIconColor(color, STALE_ALPHA)
+      : color;
   }
 
   /**
@@ -1117,13 +1118,13 @@ export function createTracking({
       imageLod: _trackedBillboardLook().imageLod,
       sprite,
       position: getTrackedPosition,
-      // Solid cyan (faded while stale) when the billboard is the visual (zoomed out, 3D off,
+      // Its own colour (faded while stale) when the billboard is the visual (zoomed out, 3D off,
       // or model still loading); transparent once the tracked model is actually up.
       color: _trackedIconColor,
       // Screen-projected rotation, evaluated per frame on the camera's own
       // axes, so it stays exact through a tracked orbit. The tracked target
       // must never vanish into tile geometry — tracking a taxiing plane at
-      // street level would otherwise bury the cyan icon inside the runway
+      // street level would otherwise bury the icon inside the runway
       // skin, so it draws over depth like the fleet icon set; its
       // shared-host tracked card is top-composited separately.
       rotation: () => {
