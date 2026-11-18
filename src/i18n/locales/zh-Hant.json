@@ -4327,7 +4327,7 @@
   "Active cyclone advisories and warnings": "生效的氣旋公告和警報",
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "在地圖上選擇風暴，或在列表中選擇風暴以選中它並移動鏡頭。點擊地圖空白處可取消選擇。NOAA NHC/CPHC 公告和 JTWC 警報。NHC 的預報不確定範圍表示中心預報路徑的不確定性，而不是風暴大小或整個危險區域。JTWC 的 34 節風危險區是 34 節風可能到達的範圍，並按路徑預報誤差加寬；它不是預報不確定範圍。預報點標籤是數據源的預報時效（小時），不是根據發布時間計算的時刻。幾何形狀貼合地表；高度不是氣象高度。請以官方公告或區域警報中心為準。",
   "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · 第 {number} 號警報 · 發布於 {time}",
-  "Clean view: hide the controls": "簡潔檢視：隱藏控制項",
-  "Exit clean view: show the controls": "結束簡潔檢視：顯示控制項",
+  "Clean view: hide the controls": "簡潔視圖：隱藏控件",
+  "Exit clean view: show the controls": "退出簡潔視圖：顯示控件",
   "{label} (V)": "{label} (V)"
 }
