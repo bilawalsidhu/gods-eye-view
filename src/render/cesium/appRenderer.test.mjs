@@ -156,6 +156,8 @@ test('the plugin wraps the viewer it is given, behind the accessor only', async 
   );
   assert.equal(hooks.ownCreditDisplay, true, 'Cesium shows its own credits');
   assert.equal(hooks.qaHandles.viewer, viewer, 'QA scripts read the viewer');
+  assert.equal(hooks.engine.kind, 'cesium', 'the engine says what it is');
+  assert.equal(hooks.engine.viewer, viewer, 'an application may draw with it');
   assert.equal(hooks.viewerDrawsEntity({ own: true }), true);
   assert.equal(hooks.viewerDrawsEntity({}), false);
   assert.equal(typeof hooks.trimStaleCommands, 'function');
