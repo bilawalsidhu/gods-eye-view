@@ -1,3 +1,4 @@
+import { createCountMarkers } from './countMarkers.js';
 import { createIconBook } from '../../render/motion/iconBook.js';
 
 /** A draw set that draws nothing, for the icon book the tests read. */
@@ -123,12 +124,18 @@ export function createTesting({ state: layerState, services, parts, source }) {
     layerState._showProjection = !!showProjection;
     layerState._healthById = healthById;
     layerState._viewRecords = [];
+    layerState._pickerRecords = [];
     layerState._cameraIndexCache = null;
     layerState._coverageVisibleIds = new Set();
     layerState._neighborCountCache = null;
+    layerState._coverageCohort = null;
     // A real book (over a set that draws nothing): every record gets its
     // icon as init adds it.
     layerState._icons = createIconBook(testIconSet());
+    layerState._counts = createCountMarkers({
+      ...testIconSet(),
+      id: 'cctv:test:counts',
+    });
     for (const record of layerState._records)
       if (record?.camera?.id) parts.rendering.addCameraIcon(record);
   }
@@ -148,6 +155,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
     for (const runtime of layerState._projectionEntities)
       if (runtime?.plane) planes[runtime.plane.id] = runtime.plane;
     return {
+      counts: layerState._counts?.book,
       gizmo: layerState._gizmo?.partsForTest() ?? {},
       coverage,
       planes,

@@ -319,7 +319,7 @@ export function createPresentation({
    */
 
   function cameraIndex() {
-    const view = layerState._viewRecords;
+    const view = layerState._pickerRecords;
     const active = parts.selection.getActiveRecord();
     const cached = layerState._cameraIndexCache;
     if (cached?.view === view && cached.active === active) return cached.list;

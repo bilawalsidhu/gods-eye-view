@@ -41,6 +41,12 @@ export function createSelection({
   function bindCctvWorldClickGesture(input, onClick) {
     return input.onClick((event) => {
       if (!isTrackingClickGesture(event.gesture)) return;
+      const cell =
+        layerState._enabled && layerState._counts?.pickedCell(event.drawHit);
+      if (cell) {
+        parts.navigation.zoomToCell(cell);
+        return;
+      }
       onClick(event);
     });
   }
@@ -139,11 +145,11 @@ export function createSelection({
     // is looking at ever asks.
     void parts.ground.resolveFootprintGround(record);
     record.activationDone = true;
-    parts.rendering.refreshCoverageStyles();
     // The active camera's icon always shows; the previously active one
     // competes for its cell again. Its coverage neighbours join the working
     // set and are queued for grounding.
     parts.rendering.refreshHorizonCulling();
+    parts.rendering.refreshCoverageStyles();
     parts.geometryQueue.enqueueViewGeometry();
     // The newly active camera leaves the ambient ring (its monitor plane takes
     // over); the freed slot re-fills on this same pass.

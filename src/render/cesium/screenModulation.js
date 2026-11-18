@@ -485,6 +485,13 @@ export function createCesiumScreenModulation(scene, { frame, onChange }) {
                   ? 'icon'
                   : null;
           if (!kind || !native.shaderProgram || !native.uniformMap) continue;
+          // Aggregate billboards occupy their own collection and represent groups.
+          if (
+            kind === 'billboard' &&
+            native.owner.length &&
+            native.owner.get(0).id?.meta?.aggregate === true
+          )
+            continue;
           const source = native.shaderProgram;
           // Label backgrounds are non-SDF billboard batches. The version-tested
           // engine pick association distinguishes them without enumerating

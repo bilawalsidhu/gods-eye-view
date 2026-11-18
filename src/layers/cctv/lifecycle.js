@@ -163,9 +163,11 @@ export function createLifecycle({
     layerState._records = [];
     layerState._recordById = new Map();
     layerState._viewRecords = [];
+    layerState._pickerRecords = [];
     layerState._cameraIndexCache = null;
     layerState._coverageVisibleIds = new Set();
     layerState._neighborCountCache = null;
+    layerState._coverageCohort = null;
     layerState._viewUnpublished = false;
     layerState._viewPose = null;
     layerState._viewMotionPass = null;
@@ -386,6 +388,7 @@ export function createLifecycle({
       parts.rendering.refreshHorizonCulling();
 
       const input = inputFor(layerState._viewer);
+      layerState._clickSubscription?.();
       const unsubscribeClick = parts.selection.bindCctvWorldClickGesture(
         input,
         (event) => {
@@ -536,6 +539,7 @@ export function createLifecycle({
       parts.rendering.hideCctvVisuals();
       // Nothing is in view while the layer is off.
       layerState._viewRecords = [];
+      layerState._pickerRecords = [];
       layerState._cameraIndexCache = null;
       parts.presentation.notifyListeners();
     },

@@ -606,3 +606,19 @@ test('disposal does not overwrite a successor update owner', () => {
   assert.equal(f.primitives.update, successor);
   f.primitives.destroy();
 });
+
+test('aggregate markers keep their native billboard command during a contact sweep', () => {
+  const owner = new Cesium.BillboardCollection();
+  owner.add({ id: { meta: { aggregate: true } } });
+  const command = { owner, uniformMap: {}, shaderProgram: {} };
+  const f = fixture({ commands: [command] });
+  try {
+    f.part.set(sweep());
+    assert.equal(f.draw()[0], command);
+    assert.equal(f.part.stats.supported, true);
+  } finally {
+    f.part.dispose();
+    owner.destroy();
+    f.primitives.destroy();
+  }
+});

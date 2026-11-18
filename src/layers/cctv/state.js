@@ -15,6 +15,7 @@ export function createState({ services }) {
 
   /** The catalog's camera icons: the icon book over their draw set. */
   layerState._icons = null;
+  layerState._counts = null;
 
   layerState._records = [];
 
@@ -95,10 +96,13 @@ export function createState({ services }) {
   // work over these, not the whole catalog.
 
   layerState._viewRecords = [];
+  // Includes a health-ranked representative for each visible group.
+  layerState._pickerRecords = [];
 
   // Coverage ids refreshCoverageStyles last drew: part of the geometry
   // working set even when their icons are thinned out.
 
+  layerState._coverageCohort = null;
   layerState._coverageVisibleIds = new Set();
 
   // View pass triggers besides camera settle: an interval while the camera

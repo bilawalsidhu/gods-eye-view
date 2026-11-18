@@ -71,6 +71,15 @@ export const VIEW_CELL_PX = 40;
 
 export const VIEW_MIN_CELL_M = 60;
 
+// Diameter of a grouped camera marker in CSS pixels.
+export const COUNT_MARKER_PX = 34;
+
+// Separation of two circular counts, including a four-pixel gap between rings.
+export const COUNT_MERGE_DISTANCE_PX = COUNT_MARKER_PX + 4;
+
+// Recheck moved centres and wider labels while bounding work on motion ticks.
+export const COUNT_MERGE_PASSES = 3;
+
 // Icons this far past the screen edge (fraction of its size) still show, so
 // a pan does not reveal empty ground before the next view pass.
 

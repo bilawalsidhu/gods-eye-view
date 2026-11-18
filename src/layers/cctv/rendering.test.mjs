@@ -128,15 +128,21 @@ test('the icons go with the viewer that drew them, whichever tears down', () => 
   });
   try {
     const old = createCameraIcons(first);
+    const oldCounts = state._counts.book.setId;
     state._viewer = second;
     const current = createCameraIcons(second);
     assert.notEqual(old, current);
     assert.equal(one.draw.sets.get(old).disposed, true, 'a re-init lets go');
     assert.equal(two.draw.sets.get(current).disposed, false);
+    assert.equal(one.draw.sets.get(oldCounts).disposed, true);
+    const counts = two.draw.set(state._counts.book.setId);
+    assert.equal(counts.spec.horizonCull, true);
 
     destroyCameraIcons();
     assert.equal(two.draw.sets.get(current).disposed, true);
     assert.equal(state._icons, null);
+    assert.equal(counts.disposed, true);
+    assert.equal(state._counts, null);
   } finally {
     one.unbind();
     two.unbind();

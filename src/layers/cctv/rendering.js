@@ -1,3 +1,5 @@
+import { createCountMarkers } from './countMarkers.js';
+import { addCellCamera, createCameraCell } from '../../data/cctvCellCounts.js';
 import { isHeadingEstimated } from './headingConfidence.js';
 import {
   ACTIVE_CAMERA_COLOR,
@@ -139,6 +141,14 @@ export function createRendering({
     // with its first camera.
     set.setColumns?.({ ids: [] });
     layerState._icons = createIconBook(set);
+    layerState._counts = createCountMarkers(
+      drawOf(viewer).icons({
+        id: `cctv:${iconSets}:counts`,
+        horizonCull: true,
+        show: false,
+        drawOrder: services.sprites?.spriteDrawOrder?.('cctv') ?? 0,
+      }),
+    );
     return set.id;
   }
 
@@ -146,6 +156,8 @@ export function createRendering({
   function destroyCameraIcons() {
     layerState._icons?.dispose();
     layerState._icons = null;
+    layerState._counts?.book.dispose();
+    layerState._counts = null;
   }
 
   /** The icon item a camera record draws, idle and shown, at its position. */
@@ -223,7 +235,7 @@ export function createRendering({
 
   /**
    * Focus modulation rides the layer's existing animation loop; no additional
-   * scene listener is installed. Only camera-icon alpha changes here — coverage
+   * scene listener is installed. Camera and count icons share the fade. Coverage
    * geometry and monitor-plane styling retain their established cadence.
    */
 
@@ -276,11 +288,10 @@ export function createRendering({
     let writes = 0;
     let transitioning = false;
     let activeCount = 0;
-    for (const record of records || []) {
-      const id = record.camera?.id;
-      const item = icons?.item(id);
-      if (!item) continue;
-      const position = record.position;
+    /** Advance one icon or count billboard on the shared focus clock. */
+    function apply(book, id, position) {
+      const item = book?.item(id);
+      if (!item) return;
       const scale = item.scale ?? 1;
       // CCTV never publishes a tracked focus target, so every icon is ambient.
       const focus = advanceSpriteFocus(item.meta, {
@@ -299,34 +310,23 @@ export function createRendering({
       if (focus.active) activeCount += 1;
       // Order-independent narrow amendment to always-visible icons: CCTV
       // contacts retain a non-zero floor while yielding near the tracked target.
-      if (focusAlphaNeedsWrite(icons.focus(id), focus.factor, params)) {
-        icons.setFocus(id, focus.factor);
+      if (focusAlphaNeedsWrite(book.focus(id), focus.factor, params)) {
+        book.setFocus(id, focus.factor);
         writes += 1;
       }
     }
+    for (const record of records || [])
+      apply(icons, record.camera?.id, record.position);
+    const counts = layerState._counts?.book;
+    for (const id of counts?.ids() ?? [])
+      apply(counts, id, counts.item(id).pos);
     return { writes, transitioning, activeCount, ran: true };
   }
 
   /**
-   * Updates visual styles (colors, widths, visibility) for all camera icons,
-   * coverage polylines, viewshed volumes, and projection entities based on which
-   * camera is active, whether the layer is enabled, and the current
-   * coverage-mode/projection toggle states.
-   */
-  /**
-   * Field-test fix (2026-07-06): horizon-culls camera icons on the CPU as the
-   * icon shader does on the GPU. With the globe hidden (Google-3D
-   * regime) nothing writes far-side depth and the icons are always-on-top, so
-   * the shown set (cards, geometry, the picker) must not include London's
-   * cluster from a US viewpoint.
-   *
-   * The same pass thins the view so a large catalog stays readable and cheap:
-   * icons well off screen hide, and each camera competes for a world-anchored
-   * cell sized to VIEW_CELL_PX at its distance (healthiest first, then a stable
-   * id order). The active camera shows whenever it is above the horizon
-   * and near the screen, even in a crowded cell. The shown records become
-   * `_viewRecords`, the working set for geometry, cards and the camera picker;
-   * the array keeps its identity while the shown set is unchanged.
+   * Group horizon-visible mounts by ground cell. Every cell with a member
+   * near the screen contributes a representative to the picker. Singletons
+   * and the active camera also enter the icon, geometry and card working set.
    *
    * Runs on camera settle, throttled during motion, on resize, enable and
    * activation changes — never per frame.
@@ -365,7 +365,9 @@ export function createRendering({
     const project = screenProjector(pose, width, height);
     const pass = (layerState._viewPassId = (layerState._viewPassId || 0) + 1);
     const shown = [];
+    const picker = [];
     const cells = new Map();
+    const visibleCells = [];
     for (const record of layerState._records) {
       const position = record.position;
       if (!position) continue;
@@ -381,12 +383,12 @@ export function createRendering({
       )
         continue;
       const screen = project(position);
-      if (
-        !screen ||
-        !(screen.x >= minX && screen.x <= maxX) ||
-        !(screen.y >= minY && screen.y <= maxY)
-      )
-        continue;
+      const nearScreen =
+        screen &&
+        screen.x >= minX &&
+        screen.x <= maxX &&
+        screen.y >= minY &&
+        screen.y <= maxY;
       const dx = position.x - viewer.x;
       const dy = position.y - viewer.y;
       const dz = position.z - viewer.z;
@@ -395,21 +397,53 @@ export function createRendering({
         metresPerPixelPerMetre *
         Math.sqrt(dx * dx + dy * dy + dz * dz);
       if (record.camera.id === activeId || !(cellM >= VIEW_MIN_CELL_M)) {
-        record.viewPass = pass;
+        if (!nearScreen) continue;
+        record.viewPass = record.pickerPass = pass;
         shown.push(record);
+        picker.push(record);
         continue;
       }
       const key = worldCellKey(record, cellM);
+      let cell = cells.get(key);
+      if (!cell) {
+        cell = createCameraCell(key);
+        cells.set(key, cell);
+      }
+      addCellCamera(cell, record.camera);
+      record.viewCell = cell;
+      if (!nearScreen) continue;
+      // The picker ranks only candidates that were in its padded viewport.
+      if (!cell.winner) visibleCells.push(cell);
       const rank = viewRank(record);
-      const holder = cells.get(key);
-      if (!holder || rank < holder.rank) cells.set(key, { record, rank });
+      if (rank < cell.rank) {
+        cell.winner = record;
+        cell.rank = rank;
+      }
     }
-    for (const { record } of cells.values()) {
-      record.viewPass = pass;
-      shown.push(record);
+    for (const cell of visibleCells) {
+      const record = cell.winner;
+      picker.push(record);
+      record.pickerPass = pass;
+      if (cell.count === 1) {
+        record.viewPass = pass;
+        shown.push(record);
+      }
     }
+    layerState._counts?.update(visibleCells, project);
     const writes = [];
+    let coverageChanged = false;
+    let cardsChanged = false;
     for (const record of layerState._records) {
+      const cell = record.viewCell;
+      record.viewCell = null;
+      const grouped = Boolean(cell?.winner && cell.count > 1);
+      if (grouped !== !!record.viewGrouped) {
+        const id = record.camera.id;
+        coverageChanged ||= layerState._coverageCohort?.has(id);
+        cardsChanged ||=
+          layerState._cardIds?.has(id) || layerState._hoverCardId === id;
+      }
+      record.viewGrouped = grouped;
       const item = patchedCameraIcon(record.camera.id, {
         show: record.viewPass === pass,
       });
@@ -421,7 +455,14 @@ export function createRendering({
       previous.length !== shown.length ||
       previous.some((record) => record.viewPass !== pass);
     if (changed) layerState._viewRecords = shown;
-    return changed;
+    const oldPicker = layerState._pickerRecords ?? [];
+    const pickerChanged =
+      picker.length !== oldPicker.length ||
+      oldPicker.some((record) => record.pickerPass !== pass);
+    if (pickerChanged) layerState._pickerRecords = picker;
+    if (coverageChanged) refreshCoverageStyles();
+    if (cardsChanged) parts.cards.pushAmbientCardEntries();
+    return changed || pickerChanged;
   }
 
   /**
@@ -526,6 +567,7 @@ export function createRendering({
     );
     parts.projection.clearProjectionOverlay();
     if (layerState._icons) layerState._icons.show = false;
+    if (layerState._counts) layerState._counts.book.show = false;
     parts.projection.pauseInactiveProjectionFeeds(null);
   }
 
@@ -535,8 +577,12 @@ export function createRendering({
     const activeRecord = parts.selection.getActiveRecord();
     parts.geometry.ensureActiveCoverageEntities(activeRecord);
     const activeId = activeRecord?.camera.id || null;
-    const coverageVisible =
-      parts.geometry.buildCoverageVisibleSet(activeRecord);
+    const cohort = parts.geometry.buildCoverageVisibleSet(activeRecord);
+    layerState._coverageCohort = cohort;
+    const coverageVisible = new Set();
+    for (const id of cohort) {
+      if (!layerState._recordById.get(id)?.viewGrouped) coverageVisible.add(id);
+    }
     // Drawn coverage needs geometry too (geometryQueue's working set).
     layerState._coverageVisibleIds = coverageVisible;
     const coverageOn = layerState._coverageMode !== 'off';

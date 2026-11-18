@@ -1,6 +1,7 @@
 import { isFollowing } from '../../data/followed.js';
-import { CCTV_FOCUS_RESULT } from './policy.js';
-import { cameraOf } from '../../render/rendererOf.js';
+import { cellBounds } from '../../data/cctvCellCounts.js';
+import { CCTV_FOCUS_RESULT, VIEW_CELL_PX, VIEW_MIN_CELL_M } from './policy.js';
+import { cameraOf, canvasOf } from '../../render/rendererOf.js';
 
 export function createNavigation({
   state: layerState,
@@ -104,6 +105,27 @@ export function createNavigation({
     return CCTV_FOCUS_RESULT.FOCUSED;
   }
 
+  /** Frame a group's padded bounds from above, including coincident mounts. */
+  function zoomToCell(cell) {
+    const viewer = layerState._viewer;
+    const camera = cameraOf(viewer);
+    const pose = camera.pose();
+    const tanHalfY = Math.tan((pose.fovy || Math.PI / 3) / 2);
+    const canvas = canvasOf(viewer);
+    const height = canvas?.clientHeight || canvas?.height || 1;
+    const halfFov = Math.atan(tanHalfY * Math.min(1, pose.aspectRatio || 1));
+    const bounds = cellBounds(cell);
+    // A tight group lands comfortably inside the individual-icon level.
+    const closeRange =
+      (VIEW_MIN_CELL_M * height) / (4 * VIEW_CELL_PX * tanHalfY);
+    const range = Math.max(closeRange, bounds.radius / Math.sin(halfFov));
+    camera.flyToBounds(bounds, {
+      offset: { heading: 0, pitch: -Math.PI / 2, range },
+      durationS: 1.2,
+      easing: 'cubicInOut',
+    });
+  }
+
   function focusCamera(cameraId, duration = 2.2) {
     return focusCctvRecord(
       layerState._viewer,
@@ -179,6 +201,7 @@ export function createNavigation({
     openingCameraId,
     reopenNearestCamera,
     focusCctvRecord,
+    zoomToCell,
     focusCamera,
     maybeAutoHop,
     cctvCycleIndex,

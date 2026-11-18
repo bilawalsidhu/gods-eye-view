@@ -1952,14 +1952,18 @@ directory. Every `/api/cctv` route refuses cross-site browser requests but
 accepts forwarding headers, so cameras work behind a reverse proxy; a forwarded
 request skips the key-bearing Street View fallback and gets the placeholder.
 
-The CCTV layer draws only the cameras on or near the screen. Zoomed out, it
-keeps one camera per ground cell sized to the view, preferring a healthy feed,
-and the cells are anchored to the ground so a pan keeps the same cameras. The
-active camera always shows. Ground placement and coverage geometry load only
-for the cameras in view, with at most two attempts per camera and view regime.
-The view pass reruns while the camera moves, paced by its own cost. The camera
-picker lists the cameras in view, active camera first, and closes with the
-count of cameras outside the view.
+The CCTV layer draws only the cameras on or near the screen. Zoomed out, a
+ground cell containing multiple cameras shows a cyan count at their centre.
+The count includes cameras beyond the screen edge and excludes cameras beyond
+the horizon. Counts that would overlap on screen merge into one that carries
+their sum. Clicking a count zooms to its group. Single cameras keep their icons,
+and the active camera has its own icon and is excluded from the count. Close
+up, even co-located cameras show individually. Ambient cards and coverage
+attach to individual cameras. Ground placement has at most two attempts per
+camera and view regime. The view pass reruns while the camera moves, paced by
+its own cost. The camera picker lists the active camera first, keeps one
+representative per visible cell, preferring healthy feeds, and closes with
+the count of cameras outside the view.
 
 Traffic owns its rendered-surface observer only while enabled, removes it on disable/destroy, and rebuilds no cached heights on frames where the surface identity is unchanged. Its dots and heat-lines are two renderer draw sets, it animates on the frame port's preRender, and it follows the camera through the camera port at its own 5% threshold rather than the shared `percentageChanged` ledger. The surface identity is the globe port's `surfaceVersion()` and tile readiness its `isSettled('surface')`, so the layer no longer reaches Cesium. Heat-lines are always asked for draped: where the Cesium renderer cannot drape (no depth textures) its draw port draws them (and every other draped line) over the surface, in their colour where the surface hides them and hidden past the horizon, recolouring a line in place when only its colour changes, rather than the layer dropping them.
 
