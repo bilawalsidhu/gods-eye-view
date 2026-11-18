@@ -340,6 +340,28 @@ function decodeSharedOpenFreeMapTile(bytes, z, x, y) {
   };
 }
 
+export const OPENFREEMAP_TILEJSON_URL = 'https://tiles.openfreemap.org/planet';
+
+/**
+ * The TileJSON address the page was built with. `setting` is the build's
+ * validated `OPENFREEMAP_TILEJSON_URL`: an absolute https URL, or a path on
+ * the page's own origin, resolved against `base` (the page's origin by
+ * default). Without a setting the public OpenFreeMap TileJSON is used. The
+ * result is always absolute so the source can derive the origin its tiles
+ * must share.
+ *
+ * @param {string|undefined} [setting]
+ * @param {string|undefined} [base]
+ * @returns {string}
+ */
+export function openFreeMapTileJsonUrl(
+  setting = import.meta.env?.OPENFREEMAP_TILEJSON_URL,
+  base = globalThis.location?.origin,
+) {
+  if (!setting) return OPENFREEMAP_TILEJSON_URL;
+  return new URL(setting, base).href;
+}
+
 /**
  * Construct an immutable-version road/military tile source without starting I/O.
  *
@@ -352,6 +374,7 @@ function decodeSharedOpenFreeMapTile(bytes, z, x, y) {
 export function createOpenFreeMapSource(options = {}) {
   const {
     projection = null,
+    tileJsonUrl = OPENFREEMAP_TILEJSON_URL,
     decode,
     sharedDecodedCache,
     selectDecoded,
@@ -363,7 +386,7 @@ export function createOpenFreeMapSource(options = {}) {
   // (8 MiB) are charged 64 MiB together, the budget of the single OpenFreeMap
   // source traffic and installations shared before; charges are estimates.
   return createVectorTileSource({
-    tileJsonUrl: 'https://tiles.openfreemap.org/planet',
+    tileJsonUrl,
     decode: shared
       ? decodeSharedOpenFreeMapTile
       : decode || decodeOpenFreeMapTile,

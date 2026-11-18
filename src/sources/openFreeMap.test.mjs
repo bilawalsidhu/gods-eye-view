@@ -8,6 +8,7 @@ import {
   clipTileLine,
   createOpenFreeMapSource,
   estimateOpenFreeMapProjectionBytes,
+  openFreeMapTileJsonUrl,
 } from './openFreeMap.js';
 import {
   createSharedDecodedTileCache,
@@ -417,4 +418,34 @@ test('a mirror that serves the default host TileJSON verbatim fails loudly', asy
     tileJsonUrl: 'http://127.0.0.1:12348/planet',
   });
   await assert.rejects(source.getMetadata(), { retryable: false });
+});
+
+test('the TileJSON setting resolves to an absolute address and unset keeps the public one', () => {
+  const publicTileJson = 'https://tiles.openfreemap.org/planet';
+  for (const unset of [undefined, null, ''])
+    assert.equal(openFreeMapTileJsonUrl(unset), publicTileJson);
+  assert.equal(
+    openFreeMapTileJsonUrl('https://tiles.example.test/planet'),
+    'https://tiles.example.test/planet',
+  );
+  assert.equal(
+    openFreeMapTileJsonUrl('/tiles/planet', 'https://globe.example.test/app/'),
+    'https://globe.example.test/tiles/planet',
+  );
+  assert.throws(() => openFreeMapTileJsonUrl('/tiles/planet', undefined));
+});
+
+test('a source built without an address asks for the public TileJSON, and an explicit undefined does not blank it', async () => {
+  for (const options of [{}, { tileJsonUrl: undefined }]) {
+    const urls = [];
+    const source = createOpenFreeMapSource({
+      ...options,
+      fetchImpl: async (url) => {
+        urls.push(url);
+        throw new Error('stop after the TileJSON request');
+      },
+    });
+    await source.getMetadata().catch(() => {});
+    assert.deepEqual(urls, ['https://tiles.openfreemap.org/planet']);
+  }
 });

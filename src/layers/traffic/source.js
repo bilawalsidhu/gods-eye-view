@@ -11,7 +11,10 @@ import { phaseTiming } from '../../sources/phaseTiming.js';
 import { createFlowTileSource } from './flowSource.js';
 import { tileToBBox, tilesForBounds } from '../../data/tomtomTiles.js';
 import { clipTileLine } from '../../sources/openFreeMap.js';
-import { createOpenFreeMapSource } from '../../sources/openFreeMap.js';
+import {
+  createOpenFreeMapSource,
+  openFreeMapTileJsonUrl,
+} from '../../sources/openFreeMap.js';
 import { validTileBounds } from '../../sources/vectorTiles.js';
 export { normalizeOverpassRoads } from '../../sources/overpassRoads.js';
 
@@ -95,8 +98,10 @@ export function roadRequestError(status, cause) {
 export function createTrafficSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
   tileFetchImpl = (...args) => globalThis.fetch(...args),
+  tileJsonUrl = openFreeMapTileJsonUrl(),
   mapTiles = createOpenFreeMapSource({
     fetchImpl: tileFetchImpl,
+    tileJsonUrl,
     selectDecoded: ({ roads }) => ({ roads }),
   }),
   roadModes,
