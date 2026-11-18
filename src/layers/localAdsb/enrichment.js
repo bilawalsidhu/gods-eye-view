@@ -24,7 +24,8 @@ export function localAdsbClass(record, meta = null) {
   const category = record?.category || null;
   return {
     klass: classifyAircraft({ typeCode, category }),
-    evidence: Boolean(typeCode) || /^(?:A[1-7]|B1)$/.test(category || ''),
+    evidence:
+      Boolean(typeCode) || /^(?:A[1-7]|B1|C[1-5])$/.test(category || ''),
   };
 }
 

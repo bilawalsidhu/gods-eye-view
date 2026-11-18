@@ -46,7 +46,13 @@ function alongTrackKm(position, origin, destination) {
 }
 
 const NEAR_ENDPOINT_KM = 130;
+/** Least allowed distance off the great circle, and how far past either
+ *  endpoint the plane may be along it. */
 const CROSS_TRACK_KM = 200;
+/** On a long route the allowed distance off the great circle grows to this
+ *  share of its length: airways and winds take a coast-to-coast flight several
+ *  hundred kilometres off it (JFK–SFO: 623 km). */
+const CROSS_TRACK_ROUTE_FRACTION = 0.15;
 const LOW_ALT_M = 3700; // ~12 000 ft
 const VERT_TREND_MPS = 2; // ~400 fpm
 const LOCAL_AIRPORT_KM = 150;
@@ -90,6 +96,9 @@ export function routePlausible({
     // existing loose check when the segment cannot be judged reliably.
     const segmentKnown =
       routeKm > 0.001 && routeKm < Math.PI * EARTH_RADIUS_KM - 0.001;
+    const corridorKm = segmentKnown
+      ? Math.max(CROSS_TRACK_KM, CROSS_TRACK_ROUTE_FRACTION * routeKm)
+      : CROSS_TRACK_KM;
     geomOk =
       Math.abs(
         crossTrackKm(
@@ -100,7 +109,7 @@ export function routePlausible({
           destination.lat,
           destination.lon,
         ),
-      ) < CROSS_TRACK_KM &&
+      ) < corridorKm &&
       (!segmentKnown ||
         (segmentAlongKm >= -CROSS_TRACK_KM &&
           segmentAlongKm <= routeKm + CROSS_TRACK_KM));

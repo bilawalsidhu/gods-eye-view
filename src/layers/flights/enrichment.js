@@ -1,7 +1,9 @@
 import { classifyAircraft } from '../../data/aircraftClass.js';
-import { horizonOccluder } from '../../data/iconOrientation.js';
+import { findCamera } from '../../render/rendererOf.js';
+import { frustumPlanes, sphereOutside } from '../../geo/frustum.js';
+import { horizonFrom } from '../../geo/horizon.js';
+import { distanceSquared, vec } from '../../geo/vector.js';
 import { parsePlanespottersPhoto } from '../../data/planespottersPhoto.js';
-import * as Cesium from 'cesium';
 import {
   ENRICH_MAX_INFLIGHT,
   ENRICH_DISPATCH_GAP_MS,
@@ -11,6 +13,9 @@ import {
   ENRICH_AMBIENT_PER_SWEEP,
   ENRICH_RETRY_COOLDOWN_MS,
 } from './policy.js';
+
+/** A contact counts as on screen while a sphere this big around it is (m). */
+const AMBIENT_CULL_RADIUS_M = 1;
 
 export function createEnrichment({
   flightState,
@@ -151,7 +156,11 @@ export function createEnrichment({
       (data) => {
         const meta = flightState.records.data.get(icao24);
         if (!meta) return; // evicted while the lookup was in flight
-        meta.typeCode = data.typeCode || meta.typeCode;
+        // A looked-up type outranks the feed's own from now on.
+        if (data.typeCode) {
+          meta.typeCode = data.typeCode;
+          meta.typeLookedUp = true;
+        }
         meta.typeName = data.typeName || meta.typeName;
         meta.registration = data.registration || meta.registration;
         if (meta.typeCode) {
@@ -161,13 +170,11 @@ export function createEnrichment({
           });
           if (klass !== meta.klass) {
             meta.klass = klass;
-            const bb = flightState._billboards.get(icao24);
-            if (bb)
-              parts.rendering._applyFleetBillboardPresentation(icao24, bb);
-            // Hangar fleet: the class's GLB/scale may have changed — resync the
-            // live model, any in-flight load, and the tracked standalone model.
-            parts.rendering._syncModelToClass(icao24);
+            parts.icons._applyIconPresentation(icao24);
           }
+          // The type picks the fleet model and its length — resync the live
+          // model, any in-flight load, and the tracked standalone model.
+          parts.rendering._syncModelToClass(icao24);
         }
         if (icao24 === flightState._trackedIcao && flightState._trackedEntity)
           parts.tracking._updateTrackedLabelModel(icao24);
@@ -282,40 +289,31 @@ export function createEnrichment({
     if (
       flightState._enrichAmbientBudget <= 0 ||
       !flightState._viewer ||
-      !flightState._billboardCollection ||
-      !flightState._billboardCollection.show
+      !flightState._icons?.show
     )
       return;
     try {
-      const camera = flightState._viewer.camera;
-      const camPos = camera.positionWC;
-      const occluder = horizonOccluder(camera);
-      const cull = camera.frustum.computeCullingVolume(
-        camPos,
-        camera.directionWC,
-        camera.upWC,
-      );
+      // What is on screen, from the camera's pose: past the limb or outside
+      // the view frustum is not looked at.
+      const pose = findCamera(flightState._viewer)?.pose();
+      if (!pose) return;
+      const camPos = pose.position;
+      const occluder = horizonFrom(camPos);
+      const planes = frustumPlanes(pose);
+      const position = vec();
       const cand = [];
-      for (const [icao24, bb] of flightState._billboards) {
+      const icons = flightState._icons;
+      const t = parts.icons._displayMs();
+      for (const icao24 of icons.ids()) {
         // Answered, queued, negative this session, or cooling down after a
         // failure: never spend a token on it.
         if (_enrichHeld(`t:${icao24}`)) continue;
         if (!/^[0-9a-f]{6}$/i.test(icao24)) continue; // adsbdb keys are 6-char hex only
         if (flightState.records.data.get(icao24)?.onGround) continue; // ground traffic never spends ambient budget (click-to-enrich still works)
-        if (!bb.position || !occluder.isPointVisible(bb.position)) continue; // beyond the limb
-        Cesium.Cartesian3.clone(
-          bb.position,
-          flightState._scratchModelBS.center,
-        );
-        if (
-          cull.computeVisibility(flightState._scratchModelBS) ===
-          Cesium.Intersect.OUTSIDE
-        )
-          continue; // off-screen
-        cand.push([
-          icao24,
-          Cesium.Cartesian3.distanceSquared(camPos, bb.position),
-        ]);
+        if (!icons.position(icao24, t, position)) continue;
+        if (!occluder.isPointVisible(position)) continue; // beyond the limb
+        if (sphereOutside(planes, position, AMBIENT_CULL_RADIUS_M)) continue; // off-screen
+        cand.push([icao24, distanceSquared(camPos, position)]);
       }
       cand.sort((a, b) => a[1] - b[1]); // nearest first — what the user is looking at resolves first
       const n = Math.min(

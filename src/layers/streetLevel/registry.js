@@ -20,6 +20,7 @@ export function filtersOf(provider) {
  * @property {boolean} [groundClick]   No coverage: a ground click at street zoom opens its nearest image.
  * @property {string} [requiresMapStack]   Usable only on this map stack.
  * @property {boolean} [defaultOn]     Default true; the first that defaults on is lit.
+ * @property {boolean} [billedPerImage]   Every image load costs the key's owner: a link never opens one without a click.
  * @property {() => boolean} [keyReady] False when its key is missing now; the
  *   first keyless provider is lit instead of a default that cannot draw.
  * @property {{kind: 'view-cone', color: string}} [marker]   Default: GEV's pin.
@@ -29,7 +30,7 @@ export function filtersOf(provider) {
  * @property {(context: ProviderContext) => ProviderInstance} create
  *
  * @typedef {object} ProviderContext   Handed to `create()` once by the core.
- * @property {object} services         Scene services: picking, input, render, sprites, scenePick (ground clicks need it).
+ * @property {object} services         Scene services: picking, input, render (a `scenePick` given is not read).
  * @property {() => {pano: string, sinceMs: number|null}} getFilter   Filter resolved against now; read it on every use so "since N days" keeps up.
  * @property {() => boolean} isActive  Layer enabled and this provider switched on.
  * @property {() => void} notify       Ask the core to publish a new UI snapshot.
@@ -50,7 +51,7 @@ export function filtersOf(provider) {
  * @property {(sequenceId: string) => Promise<void>} [selectSequence]
  * @property {() => void} [clearSequence]
  * @property {() => {selectedId: string|null, images: number, loading: boolean, error?: string|null}} [sequenceStats]
- * @property {(point: {lat: number, lon: number}, options?: {signal?: AbortSignal}) => Promise<string|null>} [nearestImage]   For ground clicks and `openNearest`; an aborted lookup gives up (it may reject with an AbortError).
+ * @property {(point: {lat: number, lon: number}, options?: {signal?: AbortSignal, radiusM?: number}) => Promise<string|null>} [nearestImage]   For ground clicks and `openNearest`; an aborted lookup gives up (it may reject with an AbortError). `radiusM` asks for a wider search than NEAREST_RADIUS_M; a provider that cannot search wider ignores it.
  * @property {ViewerAdapter} viewer
  *
  * @typedef {object} ViewerAdapter

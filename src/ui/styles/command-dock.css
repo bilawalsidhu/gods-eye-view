@@ -220,10 +220,24 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
   bottom: calc(2vh + 7rem + var(--world-timeline-lift, 0px));
 }
 
+body:not(.ui-clean-view):not(.recording-mode) #gev-credits {
+  bottom: calc(2vh + 7rem + var(--world-timeline-lift, 0px));
+}
+
 body:not(.ui-clean-view):not(.recording-mode):has(
     #intel-hud[data-variant='minimal'].active
   )
   #cesium-credits {
+  right: 36px;
+  left: auto;
+  width: min(340px, calc(100vw - 72px)) !important;
+  text-align: right;
+}
+
+body:not(.ui-clean-view):not(.recording-mode):has(
+    #intel-hud[data-variant='minimal'].active
+  )
+  #gev-credits {
   right: 36px;
   left: auto;
   width: min(340px, calc(100vw - 72px)) !important;
@@ -239,6 +253,13 @@ body.recording-mode #command-dock {
 
 body.ui-clean-view #cesium-credits,
 body.recording-mode #cesium-credits {
+  right: auto;
+  bottom: 36px;
+  left: 36px;
+}
+
+body.ui-clean-view #gev-credits,
+body.recording-mode #gev-credits {
   right: auto;
   bottom: 36px;
   left: 36px;
@@ -276,6 +297,10 @@ body.recording-mode #cesium-credits {
   }
 
   body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
+    bottom: calc(2vh + 9.5rem + var(--world-timeline-lift, 0px));
+  }
+
+  body:not(.ui-clean-view):not(.recording-mode) #gev-credits {
     bottom: calc(2vh + 9.5rem + var(--world-timeline-lift, 0px));
   }
 

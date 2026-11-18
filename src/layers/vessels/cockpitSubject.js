@@ -99,7 +99,7 @@ function finiteOrNull(value) {
  * @returns {object|null} Subject info, or null without a usable fix.
  */
 export function vesselCockpitInfo(record) {
-  if (!record?.mmsi) return null;
+  if (!record?.id) return null;
   const latitude = Number(record.lat);
   const longitude = Number(record.lon);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
@@ -111,9 +111,9 @@ export function vesselCockpitInfo(record) {
   return {
     kind: 'vessel',
     layerId: VESSEL_COCKPIT_LAYER_ID,
-    id: String(record.mmsi),
-    mmsi: String(record.mmsi),
-    name: String(record.name || record.mmsi),
+    id: String(record.id),
+    mmsi: String(record.mmsi || ''),
+    name: String(record.name || record.mmsi || record.id),
     type: String(record.type || ''),
     typeLabel: displayVesselType(record.type),
     destination: String(record.destination || '').trim(),

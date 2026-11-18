@@ -590,14 +590,9 @@ async function main() {
      *
      *   KEYED   — both datasets must actually arrive, and a failure banner in
      *             that state is a real defect, so the chip IS asserted.
-     *   KEYLESS — only the LAYER ROW is asserted: FIRMS reports KEY REQUIRED,
-     *             which is the honest surface a keyless visitor is judged on.
-     *             The GLOBAL chip is deliberately NOT asserted in either
-     *             direction here: it has no key-required terminal state and
-     *             folds that row into a misleading LOAD FAILED. That
-     *             aggregation is a defect in the shared state machine
-     *             (`src/loadingFeedback.js`), LEDGERED post-launch — it is not
-     *             a desirable outcome and not this tile's contract.
+     *   KEYLESS — the LAYER ROW reports KEY REQUIRED, and the GLOBAL chip
+     *             never says LOAD FAILED: a missing key ends the batch
+     *             KEY REQUIRED (`src/loadingFeedback.js`).
      */
     const keyless = state.firmsError === 'KEY REQUIRED';
     console.log(`  \x1b[2m   FIRMS key state: ${keyless ? 'KEYLESS' : 'KEYED'} `
@@ -612,6 +607,12 @@ async function main() {
         'KEYLESS: the quakes half of the tile still delivers in full',
         (state.counts.earthquakes ?? 0) > 0,
         `${state.counts.earthquakes} quakes`,
+      );
+      const keylessChip = await readLoadingChip(page);
+      record(
+        'KEYLESS: the global chip never says LOAD FAILED for a missing key',
+        !keylessChip.some((entry) => /LOAD FAILED/i.test(entry)),
+        keylessChip.join(' → ') || 'no chip',
       );
     } else {
       record(

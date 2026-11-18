@@ -1,0 +1,65 @@
+{
+  "id": "fema-usa-structures",
+  "kind": "dataset",
+  "family": "infrastructure",
+  "title": "US building footprints (FEMA USA Structures)",
+  "provider": "FEMA / ORNL",
+  "description": "Footprints of every US structure over 450 sq ft, about 135 million, with occupancy class. Loads the buildings in view once you zoom in below 4 km.",
+  "icon": "▦",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US", "PR", "GU", "VI", "AS", "MP"]
+  },
+  "source": {
+    "format": "arcgis",
+    "url": "https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/USA_Structures_View/FeatureServer/0",
+    "query": {
+      "outFields": "OCC_CLS,PRIM_OCC,HEIGHT,SQFEET"
+    },
+    "fetch": "browser-direct",
+    "view": {
+      "maxAltitudeM": 4000,
+      "sample": [-77.04, 38.885, -77.02, 38.9]
+    },
+    "cacheSeconds": 86400,
+    "maxBytes": 8388608,
+    "maxFeatures": 2000,
+    "maxPages": 1
+  },
+  "display": {
+    "color": "#a0aec0",
+    "label": "PRIM_OCC",
+    "fields": ["OCC_CLS", "HEIGHT"],
+    "colorBy": {
+      "field": "OCC_CLS",
+      "colors": {
+        "Residential": "#3987e5",
+        "Commercial": "#c98500",
+        "Industrial": "#d55181",
+        "Utility and Misc": "#d55181",
+        "Government": "#008300",
+        "Education": "#008300",
+        "Assembly": "#008300"
+      },
+      "labels": {
+        "Residential": "Residential",
+        "Commercial": "Commercial",
+        "Industrial": "Industrial and utility",
+        "Utility and Misc": "Industrial and utility",
+        "Government": "Public (government, education, assembly)",
+        "Education": "Public (government, education, assembly)",
+        "Assembly": "Public (government, education, assembly)"
+      }
+    }
+  },
+  "licence": {
+    "name": "CC BY 4.0",
+    "url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "attribution": {
+    "text": "FEMA Response Geospatial Office and Oak Ridge National Laboratory — USA Structures",
+    "url": "https://www.arcgis.com/home/item.html?id=0ec8512ad21e4bb987d7e848d14e7e24"
+  },
+  "status": "community",
+  "reviewed": "2026-10-22"
+}

@@ -11,6 +11,9 @@ export const STREET_LEVEL_LAYER_ID = 'street-level';
  */
 export const CLICK_PICK_WINDOW_PX = 9;
 
+/** Draw-set ids of Street Level's lines, cones and marker start with this. */
+export const STREET_LEVEL_SET_PREFIX = 'street-level:';
+
 /** Pick id of the viewer position marker; the core owns it, not a provider. */
 export const POSITION_PICK_ID = 'sl:pos';
 
@@ -39,6 +42,14 @@ export const FILTER_DEFAULT = Object.freeze({ pano: 'all', sinceDays: 0 });
 
 /** Nearest-image search radius in metres. */
 export const NEAREST_RADIUS_M = 50;
+
+/**
+ * Widest nearest-image radius a caller may ask for, in metres. A geocoded
+ * landmark sits at its centroid, often further than 50 m from the nearest
+ * street; providers that can search wider (Google) honour it, the rest keep
+ * their own cap.
+ */
+export const NEAREST_RADIUS_MAX_M = 250;
 
 /** The Google 3D map stack: Street View may be shown only on it. */
 export const GOOGLE_3D_MAP_STACK_ID = 'photoreal';

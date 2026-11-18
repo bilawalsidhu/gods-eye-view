@@ -72,6 +72,14 @@ class UpstreamRateLimitError extends Error {
   }
 }
 
+/** Thrown when the routing service failed or sent no JSON; answered as 502. */
+class UpstreamUnavailableError extends Error {
+  constructor() {
+    super('routing service unavailable');
+    this.name = 'UpstreamUnavailableError';
+  }
+}
+
 /**
  * Run one outbound request no sooner than the shared gate allows.
  * @template T
@@ -167,18 +175,26 @@ async function fetchRoute({
     `${base.replace(/\/$/, '')}/route/v1/${osrmProfile}/${coords}` +
     `?overview=full&geometries=geojson&alternatives=false&steps=${withSteps ? 'true' : 'false'}`;
   const controller = new AbortController();
+  // The 12 s budget includes queue wait, so Directions (15 s) hears back.
   const timer = setTimeout(() => controller.abort(), 12000);
   let osrm;
   try {
-    const upstreamRes = await throughUpstreamGate(() =>
-      fetchImpl(upstream, {
-        signal: controller.signal,
-        // The endpoint is configured above; a redirect is the one way out of
-        // it, so it is refused rather than followed.
-        redirect: 'error',
-        headers: { 'User-Agent': 'gods-eye-view/dev (local)' },
-      }),
-    );
+    const upstreamRes = await throughUpstreamGate(async () => {
+      // Expiry before dispatch reflects our backlog, not an upstream outage.
+      if (controller.signal.aborted)
+        throw new RouteBusyError(_upstreamIntervalMs);
+      try {
+        return await fetchImpl(upstream, {
+          signal: controller.signal,
+          // The endpoint is configured above; a redirect is the one way out of
+          // it, so it is refused rather than followed.
+          redirect: 'error',
+          headers: { 'User-Agent': 'gods-eye-view/dev (local)' },
+        });
+      } catch {
+        throw new UpstreamUnavailableError();
+      }
+    });
     if (upstreamRes.status === 429) {
       await cancelBody(upstreamRes);
       const retryAfter = Number(upstreamRes.headers.get('retry-after'));
@@ -186,20 +202,28 @@ async function fetchRoute({
         Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 5,
       );
     }
-    if (!upstreamRes.ok) {
+    // OSRM answers 400 for a route it cannot find; other failures are outages.
+    if (upstreamRes.status === 400) {
       await cancelBody(upstreamRes);
       return { payload: null, error: 'no route found' };
+    }
+    if (!upstreamRes.ok) {
+      await cancelBody(upstreamRes);
+      throw new UpstreamUnavailableError();
     }
     const ctype = upstreamRes.headers.get('content-type') || '';
     if (!ctype.includes('json')) {
       await cancelBody(upstreamRes);
-      return { payload: null, error: 'no route found' };
+      throw new UpstreamUnavailableError();
     }
-    const text = await readResponseTextCapped(
-      upstreamRes,
-      ROUTE_MAX_RESPONSE_BYTES,
-    );
-    osrm = JSON.parse(text);
+    // Read and parse failures are outages; later ones stay "route proxy error".
+    try {
+      osrm = JSON.parse(
+        await readResponseTextCapped(upstreamRes, ROUTE_MAX_RESPONSE_BYTES),
+      );
+    } catch {
+      throw new UpstreamUnavailableError();
+    }
   } finally {
     clearTimeout(timer);
   }
@@ -354,6 +378,11 @@ export function installRouteMiddleware(
             'routing service is rate limited',
             upstreamError.retryAfterSec,
           );
+        }
+        if (upstreamError instanceof UpstreamUnavailableError) {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: upstreamError.message }));
+          return;
         }
         throw upstreamError;
       }

@@ -105,6 +105,16 @@ test('a server’s cached shape falls back to its small thumbnail when the large
   }
 });
 
+test('a photo that names no photographer is still a photo, uncredited', () => {
+  for (const photographer of ['', '   ', 42, undefined]) {
+    assert.deepEqual(
+      parsePlanespottersPhoto(photo({ photographer })),
+      { ...PHOTO, photographer: '' },
+      String(photographer),
+    );
+  }
+});
+
 test('no photo, junk, and missing fields are "no photo"', () => {
   for (const payload of [
     { photos: [] },
@@ -114,9 +124,6 @@ test('no photo, junk, and missing fields are "no photo"', () => {
     'nope',
     { photos: 'nope' },
     { photos: [null] },
-    photo({ photographer: '' }),
-    photo({ photographer: '   ' }),
-    photo({ photographer: 42 }),
     photo({ link: '' }),
     photo({ thumbnail: null, thumbnail_large: null }),
   ]) {

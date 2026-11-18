@@ -99,6 +99,7 @@ export function syncContextLayout() {
   let safeBottom = window.innerHeight - 24;
   for (const selector of [
     '#cesium-credits',
+    '#gev-credits',
     '#command-dock',
     '#view-switcher',
   ]) {

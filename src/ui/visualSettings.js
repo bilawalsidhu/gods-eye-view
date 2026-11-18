@@ -6,6 +6,12 @@ import { applicationPinia } from './vueRuntime.js';
 import { onLocaleChange, t } from '../i18n/index.js';
 import { UiLifetime } from './uiLifetime.js';
 import {
+  findEffects,
+  findFrame,
+  findGlobe,
+  releaseUnboundEffects,
+} from '../render/rendererOf.js';
+import {
   VisualEffects,
   STYLES,
   GLOBAL_POST_DEFAULTS,
@@ -46,6 +52,13 @@ import { cyberVisualDefaultsForHudTransition } from '../hudLayouts.js';
 const DETECTION_ALLOCATION_STORAGE_KEY = 'gev:detection-allocation:v1';
 
 /** Own visual preferences, detection overrides and display-control state. */
+/**
+ * The faintest the Scope mask goes. Below about half, the view reads as if
+ * Scope were off while labels still fade outside the keyhole and the HUD gets
+ * no backplates, so the slider stops here.
+ */
+export const SCOPE_OPACITY_MIN_PCT = 50;
+
 export class VisualSettings {
   async restoreShareState(state) {
     const { setScopeTerminusOverride, clampScopeTerminusPct } = this.services;
@@ -66,6 +79,7 @@ export class VisualSettings {
       celestialRing,
       scopeEnabled,
       scopeFeatherPct,
+      scopeOpacityPct,
       scopeTerminusPct,
       mapStack,
       panelState,
@@ -133,7 +147,12 @@ export class VisualSettings {
         focus: false,
       });
     }
-    this._setScope({ enabled: scopeEnabled, featherPct: scopeFeatherPct });
+    this._setScope({
+      enabled: scopeEnabled,
+      featherPct: scopeFeatherPct,
+      opacityPct:
+        typeof scopeOpacityPct === 'number' ? scopeOpacityPct : undefined,
+    });
     // null restores the altitude-adaptive ramp; a number pins the terminus
     // (clamped to the supported 94..100 band, same as the `sce` hash key).
     if (scopeTerminusPct === null) setScopeTerminusOverride(null);
@@ -195,7 +214,9 @@ export class VisualSettings {
       setStyleParameter: (name, value) => this.setStyleParameter(name, value),
     });
     this._visualEffects = new VisualEffects({
+      effects: findEffects(viewer),
       viewer,
+      sky: () => findGlobe(viewer)?.sky,
       requestRender: services.governorRequestRender,
       holdRender: services.holdContinuousRender,
       releaseRender: services.releaseContinuousRender,
@@ -219,6 +240,7 @@ export class VisualSettings {
     // What the Scope and Celestial controls show; null until first set.
     this._scopeEnabledShown = null;
     this._scopeFeatherShown = null;
+    this._scopeOpacityShown = null;
     this._celestialShown = null;
     this.activeStyle = 'normal';
     this._preCyberStyle = null;
@@ -348,6 +370,20 @@ export class VisualSettings {
     this._syncShareState();
   }
 
+  /**
+   * While Contacts holds detection, make the detection shown now the state
+   * leaving Contacts puts back (and a share link carries): the user chose it,
+   * as with Reset in Visual. Nothing changes outside Contacts.
+   */
+  adoptDetectionAsRestore() {
+    if (!this._contactsDetectionRestore) return;
+    const state = this.getDetectionState();
+    this._contactsDetectionRestore = {
+      mode: state.detectionMode,
+      densityPct: state.densityPct,
+    };
+  }
+
   _setCockpitVision(mode, active, { revealParameters = false } = {}) {
     const next = active ? normalizeCockpitVisionMode(mode) : 'optical';
     if (!this.stages) return;
@@ -422,17 +458,17 @@ export class VisualSettings {
     // (owner cockpit-FLIR field rounds, 2026-08-16). IR sensors see through
     // haze, so the boost styles simply turn fog off; the prior state restores
     // on exit. Transition-guarded so repeated syncs don't clobber the saved value.
-    const scene = this.viewer?.scene;
-    if (scene?.fog && irBoost !== this._irBoostActive) {
+    // The globe's sky draws the fog; setting it asks for a frame.
+    const sky = findGlobe(this.viewer)?.sky;
+    if (sky && irBoost !== this._irBoostActive) {
       this._irBoostActive = irBoost;
       if (irBoost) {
-        this._irFogWasEnabled = scene.fog.enabled;
-        scene.fog.enabled = false;
+        this._irFogWasEnabled = sky.get().fog;
+        sky.set({ fog: false });
       } else if (this._irFogWasEnabled != null) {
-        scene.fog.enabled = this._irFogWasEnabled;
+        sky.set({ fog: this._irFogWasEnabled });
         this._irFogWasEnabled = null;
       }
-      scene.requestRender?.();
     }
   }
 
@@ -479,6 +515,7 @@ export class VisualSettings {
       scope: {
         enabled: this._scopeEnabledShown,
         featherPct: this._scopeFeatherShown,
+        opacityPct: this._scopeOpacityShown ?? 100,
       },
       celestial: this._celestialShown,
     };
@@ -488,7 +525,15 @@ export class VisualSettings {
    * Apply the Scope mask and show it on its controls; a field that is not
    * given stays as it is. `apply: false` only shows the mask's state.
    */
-  _setScope({ enabled, featherPct } = {}, { apply = true } = {}) {
+  _setScope({ enabled, featherPct, opacityPct } = {}, { apply = true } = {}) {
+    if (Number.isFinite(opacityPct)) {
+      const pct = Math.max(
+        SCOPE_OPACITY_MIN_PCT,
+        Math.min(100, Math.round(opacityPct)),
+      );
+      if (apply) this.services.setScopeMaskOpacity?.(pct / 100);
+      this._scopeOpacityShown = pct;
+    }
     if (typeof enabled === 'boolean') {
       if (apply) this.services.setScopeMaskEnabled(enabled);
       this._scopeEnabledShown = enabled;
@@ -621,7 +666,7 @@ export class VisualSettings {
       fadeRatio: this._detectionFadePct / 100,
       outsideOpacity: this._detectionOutsidePct / 100,
     });
-    this.viewer.scene.requestRender?.();
+    findFrame(this.viewer)?.requestRender('detection-tuning');
   }
 
   _setDetectionAllocation(strategy, { syncShare = true, persist = true } = {}) {
@@ -819,7 +864,11 @@ export class VisualSettings {
     if (det.mode) this._setDetectionMode(String(det.mode).toUpperCase());
   }
 
-  _applyGlobalPostDefaults() {
+  /**
+   * @param {{keepHudVariant?: boolean}} [options] `keepHudVariant` leaves the
+   *   HUD layout to the style, as choosing a style does (Visual's reset).
+   */
+  _applyGlobalPostDefaults({ keepHudVariant = false } = {}) {
     const defaults = GLOBAL_POST_DEFAULTS;
     if (typeof defaults.bloom?.intensity === 'number') {
       this._setBloomIntensity(clampBloomIntensity(defaults.bloom.intensity), {
@@ -838,7 +887,7 @@ export class VisualSettings {
       this._setSharpenEnabled(defaults.sharpen.enabled);
     }
 
-    if (defaults.hudVariant) {
+    if (defaults.hudVariant && !keepHudVariant) {
       this._setHudVariant(defaults.hudVariant);
     }
     if (typeof defaults.hudVisible === 'boolean') {
@@ -883,6 +932,7 @@ export class VisualSettings {
       getDetectionTuning,
       isScopeMaskEnabled,
       getScopeMaskFeather,
+      getScopeMaskOpacity,
       getScopeTerminusOverride,
     } = this.services;
     const detection = this._shareableDetectionState();
@@ -903,6 +953,7 @@ export class VisualSettings {
         celestialRingEnabled: this.celestialRingEnabled,
         scopeEnabled: isScopeMaskEnabled(),
         scopeFeatherPct: Math.round(getScopeMaskFeather() * 100),
+        scopeOpacityPct: Math.round((getScopeMaskOpacity?.() ?? 1) * 100),
         // null when adaptive — the share layer omits `sce` entirely in that case.
         scopeTerminusPct:
           getScopeTerminusOverride() == null
@@ -1608,8 +1659,9 @@ export class VisualSettings {
   }
   releaseIrBoost() {
     if (!this._irBoostActive) return;
-    if (this._irFogWasEnabled != null && this.viewer?.scene?.fog)
-      this.viewer.scene.fog.enabled = this._irFogWasEnabled;
+    const sky = findGlobe(this.viewer)?.sky;
+    if (this._irFogWasEnabled != null && sky)
+      sky.set({ fog: this._irFogWasEnabled });
     this._dataManager?.setLayerParams('flights', { irBoost: false });
     this._dataManager?.setLayerParams('military', { irBoost: false });
     this._irBoostActive = false;
@@ -1619,5 +1671,7 @@ export class VisualSettings {
     this.stop();
     this.releaseIrBoost();
     this._visualEffects.destroy();
+    // On a viewer with no renderer bound, its bloom comes back as it was.
+    releaseUnboundEffects(this.viewer, this._visualEffects.effects);
   }
 }

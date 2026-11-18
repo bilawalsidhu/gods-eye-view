@@ -1,0 +1,342 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import * as Cesium from 'cesium';
+import {
+  copyInto,
+  distance,
+  distanceSquared,
+  eastNorthUp,
+  ellipsoidOf,
+  fromDegrees,
+  fromDegreesInto,
+  geodeticSurfaceNormal,
+  lerpInto,
+  offsetEllipsoid,
+  rayEllipsoid,
+  scaleToGeodeticSurface,
+  toCartographicRadians,
+  toDegrees,
+  toLonLatH,
+  toRadians,
+} from './index.js';
+
+/** A seeded generator, so a failure names a reproducible point. */
+function random(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 2 ** 32;
+  };
+}
+
+function points(count = 500) {
+  const next = random(20261105);
+  const out = [
+    { lon: 0, lat: 90, height: 0 },
+    { lon: 0, lat: -90, height: 1000 },
+    { lon: 180, lat: 0, height: -400 },
+    { lon: -97.7431, lat: 30.2672, height: 150 },
+  ];
+  // Each height band gets its share: near the ground, low orbit, far out.
+  const bands = [
+    [-500, 1e4],
+    [1e4, 1e6],
+    [1e6, 4e7],
+  ];
+  for (let i = 0; i < count; i++) {
+    const [lo, hi] = bands[i % bands.length];
+    out.push({
+      lon: next() * 360 - 180,
+      lat: next() * 180 - 90,
+      height: lo + next() * (hi - lo),
+    });
+  }
+  return out;
+}
+
+const close = (actual, expected, tolerance, message) =>
+  assert.ok(
+    Math.abs(actual - expected) <= tolerance,
+    `${message}: ${actual} vs ${expected} (± ${tolerance})`,
+  );
+const closeVec = (a, b, tolerance, message) => {
+  close(a.x, b.x, tolerance, `${message} x`);
+  close(a.y, b.y, tolerance, `${message} y`);
+  close(a.z, b.z, tolerance, `${message} z`);
+};
+
+test("angle conversions are bit for bit the default renderer's", () => {
+  for (const p of points()) {
+    assert.equal(toRadians(p.lon), Cesium.Math.toRadians(p.lon));
+    assert.equal(toDegrees(p.lat / 57), Cesium.Math.toDegrees(p.lat / 57));
+  }
+});
+
+test('geodetic to ECEF matches the default renderer', () => {
+  for (const p of points()) {
+    const ours = fromDegrees(p.lon, p.lat, p.height);
+    const theirs = Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height);
+    closeVec(ours, theirs, 0, `${p.lon},${p.lat},${p.height}`);
+  }
+});
+
+test('geodetic to ECEF in place gives the same bits, into the object given', () => {
+  const out = { x: 0, y: 0, z: 0 };
+  const cartesian = new Cesium.Cartesian3();
+  for (const p of points()) {
+    const at = `${p.lon},${p.lat},${p.height}`;
+    assert.equal(fromDegreesInto(p.lon, p.lat, p.height, out), out, at);
+    assert.deepEqual(
+      { ...out },
+      { ...fromDegrees(p.lon, p.lat, p.height) },
+      at,
+    );
+    assert.equal(
+      fromDegreesInto(p.lon, p.lat, p.height, cartesian),
+      cartesian,
+      at,
+    );
+    assert.ok(
+      Cesium.Cartesian3.equals(
+        cartesian,
+        Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height),
+      ),
+      at,
+    );
+  }
+  fromDegreesInto(10, 20, undefined, out);
+  assert.deepEqual({ ...out }, { ...fromDegrees(10, 20) });
+});
+
+test('ECEF to geodetic matches the default renderer', () => {
+  for (const p of points()) {
+    const ecef = Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height);
+    const ours = toCartographicRadians(ecef);
+    const theirs = Cesium.Cartographic.fromCartesian(ecef);
+    const where = `${p.lon},${p.lat},${p.height}`;
+    // Longitude is undefined at a pole.
+    if (Math.abs(p.lat) < 89.999)
+      close(ours.lon, theirs.longitude, 1e-12, `${where} lon`);
+    close(ours.lat, theirs.latitude, 1e-12, `${where} lat`);
+    close(ours.height, theirs.height, 1e-6, `${where} height`);
+  }
+  // Inside the Earth: within the centre cutoff (the first four) and between
+  // it and the surface (the last).
+  for (const p of [
+    { x: 1e6, y: 0, z: 0 },
+    { x: 1, y: 2, z: 3 },
+    { x: -2e5, y: 3e5, z: 1e5 },
+    { x: 1e6, y: 1e6, z: 5e5 },
+    { x: 2e6, y: 1.5e6, z: 1.5e6 },
+  ]) {
+    const ours = toCartographicRadians(p);
+    const theirs = Cesium.Cartographic.fromCartesian(
+      new Cesium.Cartesian3(p.x, p.y, p.z),
+    );
+    const where = `${p.x},${p.y},${p.z}`;
+    close(ours.lon, theirs.longitude, 1e-12, `${where} lon`);
+    close(ours.lat, theirs.latitude, 1e-12, `${where} lat`);
+    close(ours.height, theirs.height, 1e-6, `${where} height`);
+  }
+  for (const p of [
+    { x: NaN, y: 0, z: 0 },
+    { x: 7e6, y: NaN, z: 0 },
+    { x: 7e6, y: 0, z: NaN },
+  ]) {
+    const nan = toLonLatH(p);
+    assert.ok(
+      Number.isNaN(nan.lon) &&
+        Number.isNaN(nan.lat) &&
+        Number.isNaN(nan.height),
+      JSON.stringify(nan),
+    );
+  }
+  assert.equal(toCartographicRadians({ x: 0, y: 0, z: 0 }), null);
+  assert.equal(
+    Cesium.Cartographic.fromCartesian(Cesium.Cartesian3.ZERO),
+    undefined,
+  );
+  const deg = toLonLatH(fromDegrees(-97.7431, 30.2672, 150));
+  close(deg.lon, -97.7431, 1e-9, 'degrees lon');
+  close(deg.lat, 30.2672, 1e-9, 'degrees lat');
+  close(deg.height, 150, 1e-6, 'degrees height');
+});
+
+test('surface normals and projection match the default renderer', () => {
+  for (const p of points()) {
+    const ecef = Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height);
+    const where = `${p.lon},${p.lat},${p.height}`;
+    closeVec(
+      geodeticSurfaceNormal(ecef),
+      Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(ecef),
+      1e-15,
+      `${where} normal`,
+    );
+    closeVec(
+      scaleToGeodeticSurface(ecef),
+      Cesium.Ellipsoid.WGS84.scaleToGeodeticSurface(ecef),
+      1e-6,
+      `${where} surface`,
+    );
+  }
+});
+
+test('east-north-up frames match the default renderer', () => {
+  const column = (m, i) => ({ x: m[i * 4], y: m[i * 4 + 1], z: m[i * 4 + 2] });
+  const origins = [
+    ...points(200).map((p) =>
+      Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height),
+    ),
+    // Exactly on the axis, where east is chosen by convention.
+    new Cesium.Cartesian3(0, 0, 6356752.3142451793),
+    new Cesium.Cartesian3(0, 0, -7000000),
+  ];
+  for (const origin of origins) {
+    const m = Cesium.Matrix4.toArray(
+      Cesium.Transforms.eastNorthUpToFixedFrame(origin),
+    );
+    const ours = eastNorthUp(origin);
+    const where = `${origin.x},${origin.y},${origin.z}`;
+    closeVec(ours.x, column(m, 0), 1e-12, `${where} east`);
+    closeVec(ours.y, column(m, 1), 1e-12, `${where} north`);
+    closeVec(ours.z, column(m, 2), 1e-12, `${where} up`);
+    closeVec(ours.origin, column(m, 3), 0, `${where} origin`);
+  }
+});
+
+test('a ray meets the ellipsoid where Cesium picks it', () => {
+  const rand = random(7);
+  let misses = 0;
+  for (let i = 0; i < 200; i++) {
+    const origin = new Cesium.Cartesian3(
+      (rand() - 0.5) * 4e7,
+      (rand() - 0.5) * 4e7,
+      (rand() - 0.5) * 4e7,
+    );
+    const toward = new Cesium.Cartesian3(
+      (rand() - 0.5) * 2.4e7,
+      (rand() - 0.5) * 2.4e7,
+      (rand() - 0.5) * 2.4e7,
+    );
+    const direction = Cesium.Cartesian3.normalize(
+      Cesium.Cartesian3.subtract(toward, origin, new Cesium.Cartesian3()),
+      new Cesium.Cartesian3(),
+    );
+    const ray = new Cesium.Ray(origin, direction);
+    // As `camera.pickEllipsoid` takes the hit.
+    const span = Cesium.IntersectionTests.rayEllipsoid(
+      ray,
+      Cesium.Ellipsoid.WGS84,
+    );
+    const ours = rayEllipsoid({ origin, direction });
+    if (!span) {
+      misses += 1;
+      assert.equal(ours, null);
+      continue;
+    }
+    const expected = Cesium.Ray.getPoint(
+      ray,
+      span.start > 0 ? span.start : span.stop,
+    );
+    assert.ok(ours, 'a hit');
+    assert.ok(distance(ours, expected) < 1e-3, `ray ${i}`);
+  }
+  assert.ok(misses > 0 && misses < 200, 'hits and misses both tried');
+});
+
+test('in-place vector helpers match the default renderer bit for bit', () => {
+  const a = fromDegrees(-97.7431, 30.2672, 151.25);
+  const b = fromDegrees(-97.7402, 30.2691, 180.5);
+  const ca = new Cesium.Cartesian3(a.x, a.y, a.z);
+  const cb = new Cesium.Cartesian3(b.x, b.y, b.z);
+  assert.equal(
+    distanceSquared(a, b),
+    Cesium.Cartesian3.distanceSquared(ca, cb),
+  );
+  assert.equal(
+    Math.sqrt(distanceSquared(a, b)),
+    Cesium.Cartesian3.distance(ca, cb),
+  );
+  for (const t of [0, 0.137, 0.5, 1]) {
+    const out = { x: 0, y: 0, z: 0 };
+    assert.equal(lerpInto(a, b, t, out), out);
+    assert.deepEqual(
+      { ...out },
+      { ...Cesium.Cartesian3.lerp(ca, cb, t, new Cesium.Cartesian3()) },
+    );
+  }
+  const into = { x: 1, y: 2, z: 3 };
+  assert.equal(copyInto(a, into), into);
+  assert.deepEqual(into, { x: a.x, y: a.y, z: a.z });
+  // In place: lerping a point toward a target writes over it safely.
+  const p = { ...a };
+  lerpInto(p, b, 0.25, p);
+  assert.deepEqual(
+    { ...p },
+    { ...Cesium.Cartesian3.lerp(ca, cb, 0.25, new Cesium.Cartesian3()) },
+  );
+});
+
+test('on another ellipsoid, rays and geodetic positions match the default renderer’s', () => {
+  const rand = random(7);
+  for (const metres of [1600, -1000, 30]) {
+    const ours = offsetEllipsoid(metres);
+    const theirs = new Cesium.Ellipsoid(
+      Cesium.Ellipsoid.WGS84.radii.x + metres,
+      Cesium.Ellipsoid.WGS84.radii.y + metres,
+      Cesium.Ellipsoid.WGS84.radii.z + metres,
+    );
+    for (let i = 0; i < 200; i++) {
+      const origin = Cesium.Cartesian3.fromDegrees(
+        rand() * 360 - 180,
+        rand() * 170 - 85,
+        100 + rand() * 2e5,
+      );
+      const target = Cesium.Cartesian3.fromDegrees(
+        rand() * 360 - 180,
+        rand() * 170 - 85,
+      );
+      const direction = Cesium.Cartesian3.normalize(
+        Cesium.Cartesian3.subtract(target, origin, new Cesium.Cartesian3()),
+        new Cesium.Cartesian3(),
+      );
+      const ray = new Cesium.Ray(origin, direction);
+      const span = Cesium.IntersectionTests.rayEllipsoid(ray, theirs);
+      const hit = rayEllipsoid({ origin, direction }, ours);
+      if (!span) {
+        assert.equal(hit, null);
+        continue;
+      }
+      const expected = Cesium.Ray.getPoint(
+        ray,
+        span.start > 0 ? span.start : span.stop,
+      );
+      assert.ok(distance(hit, expected) < 1e-3, `ray ${i} at ${metres} m`);
+      const carto = Cesium.Cartographic.fromCartesian(expected, theirs);
+      const deg = toLonLatH(expected, ours);
+      assert.ok(Math.abs(deg.lon - toDegrees(carto.longitude)) < 1e-9);
+      assert.ok(Math.abs(deg.lat - toDegrees(carto.latitude)) < 1e-9);
+      assert.ok(Math.abs(deg.height - carto.height) < 1e-3);
+    }
+  }
+});
+
+test('an ellipsoid argument that is not one (a map index) means WGS84', () => {
+  const p = fromDegrees(10, 20, 30);
+  assert.deepEqual(toLonLatH(p, 1), toLonLatH(p));
+  assert.deepEqual(
+    rayEllipsoid(
+      { origin: { x: 1e7, y: 0, z: 0 }, direction: { x: -1, y: 0, z: 0 } },
+      0,
+    ),
+    rayEllipsoid({
+      origin: { x: 1e7, y: 0, z: 0 },
+      direction: { x: -1, y: 0, z: 0 },
+    }),
+  );
+  assert.deepEqual(ellipsoidOf({ x: 1, y: 2, z: 4 }).oneOverRadiiSquared, {
+    x: 1,
+    y: 0.25,
+    z: 0.0625,
+  });
+});

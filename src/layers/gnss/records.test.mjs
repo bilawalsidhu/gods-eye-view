@@ -1,12 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { getResolution, isPentagon, isValidCell } from 'h3-js';
 import {
   accumulateGnssObservations,
   binGnssCells,
   GNSS_CLASSIFIER,
+  GNSS_H3_RESOLUTION,
+  GNSS_HIGH_PERCENT,
+  GNSS_MEDIUM_PERCENT,
   GNSS_PROVENANCE,
   GNSS_WINDOW_MS,
   gnssCellKey,
+  gnssCellRing,
   gnssIntegrityLevel,
   gnssProvenance,
   normalizeGnssAircraft,
@@ -117,13 +122,87 @@ test('low NIC, low NACp or a readsb GPS-loss flag each mark an aircraft degraded
   );
 });
 
-test('cell keys are stable half-degree bins, clamped at the poles and antimeridian', () => {
-  assert.equal(gnssCellKey(50.1, 19.9), gnssCellKey(50.4, 19.6));
-  assert.notEqual(gnssCellKey(50.1, 19.9), gnssCellKey(50.6, 19.9));
-  assert.equal(gnssCellKey(90, 180), gnssCellKey(89.9, 179.9));
-  assert.equal(gnssCellKey(-90, -180), '0:0');
-  // Just south-west of the origin falls in the last cell before 0°, not cell 0.
-  assert.equal(gnssCellKey(-0.1, -0.1), '179:359');
+test('cell keys are the H3 resolution-4 cells gpsjam.org uses', () => {
+  assert.equal(GNSS_H3_RESOLUTION, 4);
+  // Kraków: a known lat/lon lands in its known res-4 hexagon.
+  assert.equal(gnssCellKey(50.1, 19.9), '841e2e7ffffffff');
+  assert.equal(getResolution(gnssCellKey(50.1, 19.9)), 4);
+  // Nearby points share the hexagon; a point ~50 km north does not.
+  assert.equal(gnssCellKey(50.1, 19.9), gnssCellKey(50.12, 19.95));
+  assert.notEqual(gnssCellKey(50.1, 19.9), gnssCellKey(50.55, 19.9));
+  // The poles and both sides of the antimeridian still key valid cells.
+  for (const [lat, lon] of [
+    [90, 180],
+    [-90, -180],
+    [0, 179.99],
+    [0, -179.99],
+  ]) {
+    const key = gnssCellKey(lat, lon);
+    assert.ok(isValidCell(key), `${lat},${lon} → ${key}`);
+    assert.equal(getResolution(key), 4);
+  }
+});
+
+const cellAt = (lat, lon) => {
+  const store = new Map();
+  accumulateGnssObservations(
+    store,
+    [{ hex: 'c1', lat, lon, degraded: false }],
+    0,
+  );
+  return binGnssCells(store)[0];
+};
+
+test('a cell carries its H3 centre and hexagon boundary', () => {
+  const cell = cellAt(50.1, 19.9);
+  assert.equal(cell.id, '841e2e7ffffffff');
+  assert.ok(Math.abs(cell.lat - 50.17184) < 1e-4);
+  assert.ok(Math.abs(cell.lon - 20.12566) < 1e-4);
+  assert.equal(cell.boundary.length, 6);
+  for (const { lat, lon } of cell.boundary) {
+    // Res-4 hexagons are about 45 km across.
+    assert.ok(Math.abs(lat - cell.lat) < 0.4, `lat ${lat}`);
+    assert.ok(Math.abs(lon - cell.lon) < 0.6, `lon ${lon}`);
+  }
+  for (const key of ['south', 'west', 'north', 'east'])
+    assert.equal(key in cell, false, `no rectangle field ${key}`);
+  assert.deepEqual(
+    gnssCellRing(cell),
+    cell.boundary.flatMap(({ lat, lon }) => [lon, lat]),
+  );
+});
+
+test('a cell across the antimeridian is drawn as one narrow polygon', () => {
+  for (const lon of [179.99, -179.99]) {
+    const cell = cellAt(0, lon);
+    const lons = cell.boundary.map((vertex) => vertex.lon);
+    assert.ok(
+      Math.max(...lons) - Math.min(...lons) > 300,
+      'the raw boundary straddles ±180°',
+    );
+    const drawn = gnssCellRing(cell).filter((_, index) => index % 2 === 0);
+    const width = Math.max(...drawn) - Math.min(...drawn);
+    assert.ok(width < 1, `drawn width ${width}° stays narrow`);
+    for (const value of drawn) assert.ok(Math.abs(value - cell.lon) < 1);
+  }
+});
+
+test('pentagon and polar cells give closed rings', () => {
+  // 8408001ffffffff is one of the twelve res-4 pentagons.
+  const pentagon = cellAt(64.7, 10.5);
+  assert.ok(isPentagon(pentagon.id));
+  assert.equal(pentagon.boundary.length, 5);
+  assert.equal(gnssCellRing(pentagon).length, 10);
+  for (const lat of [89.99, -89.99]) {
+    const polar = cellAt(lat, 10);
+    assert.ok(polar.boundary.length >= 6);
+    for (const vertex of polar.boundary)
+      assert.ok(Math.abs(vertex.lat) > 89 && Math.abs(vertex.lat) <= 90);
+    // Unwrapped longitudes stay within half a turn of the centre.
+    gnssCellRing(polar)
+      .filter((_, index) => index % 2 === 0)
+      .forEach((value) => assert.ok(Math.abs(value - polar.lon) <= 180));
+  }
 });
 
 test('integrity level follows the gpsjam.org published cell formula and bands', () => {
@@ -156,8 +235,8 @@ test('the primary state is a navigation-integrity anomaly; interference is only 
     store,
     [
       { hex: 'h1', lat: 10.1, lon: 10.1, degraded: true },
-      { hex: 'h2', lat: 10.2, lon: 10.2, degraded: true },
-      { hex: 'h3', lat: 10.3, lon: 10.3, degraded: false },
+      { hex: 'h2', lat: 10.11, lon: 10.11, degraded: true },
+      { hex: 'h3', lat: 10.12, lon: 10.12, degraded: false },
     ],
     0,
   );
@@ -182,14 +261,14 @@ test('provenance separates the GEV classifier from the gpsjam aggregation and th
     id: 'gpsjam-cell-bands',
     formula: '100 * max(0, bad - 1) / total',
     bands: [2, 10],
+    grid: 'h3',
+    h3Resolution: 4,
     source: 'https://gpsjam.org/faq',
     definedBy: 'gpsjam.org',
   });
   assert.deepEqual(GNSS_PROVENANCE.window, {
     minutes: 30,
     scope: 'visited-view',
-    cellDeg: 0.5,
-    minAircraft: 3,
     definedBy: 'GEV',
   });
   assert.equal(GNSS_PROVENANCE.state.id, 'navigation-integrity-anomaly');
@@ -225,14 +304,13 @@ test('observations count each aircraft once per cell and expire after the window
   assert.equal(cell.aircraft, 3);
   assert.equal(cell.degraded, 1);
   assert.equal(cell.level, 'low');
-  assert.deepEqual(
-    [cell.south, cell.west, cell.north, cell.east],
-    [50, 20, 50.5, 20.5],
-  );
+  assert.equal(cell.id, gnssCellKey(50.2, 20.1));
 
   accumulateGnssObservations(store, [], 1200, { windowMs: 1000 });
   assert.equal(store.size, 1);
-  assert.deepEqual(binGnssCells(store), []);
+  [cell] = binGnssCells(store);
+  assert.equal(cell.aircraft, 1, 'only a1, seen inside the window, remains');
+  assert.equal(cell.degraded, 0);
 });
 
 const MIN = 60_000;
@@ -396,20 +474,64 @@ test('rows without finite coordinates never key a cell', () => {
   assert.equal(store.size, 0);
 });
 
-test('cells below the minimum aircraft count are withheld', () => {
+test('every cell with an aircraft is shown, as on gpsjam.org; only the bad − 1 discount guards small samples', () => {
   const store = new Map();
   accumulateGnssObservations(
     store,
-    [
-      { hex: 'b1', lat: 10.1, lon: 10.1, degraded: true },
-      { hex: 'b2', lat: 10.2, lon: 10.2, degraded: true },
-    ],
+    [{ hex: 'b1', lat: 10.1, lon: 10.1, degraded: true }],
     0,
   );
-  assert.deepEqual(binGnssCells(store), []);
-  const [cell] = binGnssCells(store, { minAircraft: 2 });
+  let [cell] = binGnssCells(store);
+  assert.equal(cell.aircraft, 1);
+  assert.equal(cell.level, 'low', 'one bad aircraft is discounted');
+  assert.equal(cell.percentDegraded, 0);
+  accumulateGnssObservations(
+    store,
+    [{ hex: 'b2', lat: 10.12, lon: 10.12, degraded: true }],
+    0,
+  );
+  [cell] = binGnssCells(store);
+  assert.equal(cell.aircraft, 2);
   assert.equal(cell.level, 'high');
   assert.equal(cell.percentDegraded, 50);
+});
+
+test('the gpsjam bands are unchanged by the hex grid', () => {
+  assert.equal(GNSS_MEDIUM_PERCENT, 2);
+  assert.equal(GNSS_HIGH_PERCENT, 10);
+  // [total, bad] → level, at and either side of both band edges.
+  for (const [total, bad, level] of [
+    [100, 0, 'low'],
+    [100, 1, 'low'],
+    [100, 2, 'low'],
+    [100, 3, 'medium'],
+    [50, 2, 'medium'],
+    [100, 11, 'medium'],
+    [100, 12, 'high'],
+    [10, 2, 'medium'],
+    [10, 3, 'high'],
+  ])
+    assert.equal(
+      gnssIntegrityLevel(total, bad).level,
+      level,
+      `${bad}/${total}`,
+    );
+  // Binned cells band the same way: 3 bad of 10 in one hexagon is high.
+  const store = new Map();
+  accumulateGnssObservations(
+    store,
+    Array.from({ length: 10 }, (_, index) => ({
+      hex: `h${index}`,
+      lat: 50.1,
+      lon: 19.9,
+      degraded: index < 3,
+    })),
+    0,
+  );
+  const [cell] = binGnssCells(store);
+  assert.equal(cell.id, '841e2e7ffffffff');
+  assert.equal(cell.level, 'high');
+  assert.equal(cell.percentDegraded, 20);
 });
 
 test('MLAT GPS-loss evidence uses the last good GNSS location and ignores MLAT NIC', () => {

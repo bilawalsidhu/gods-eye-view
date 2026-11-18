@@ -1,6 +1,7 @@
 <script setup>
 import RailChips from '../rail/RailChips.vue';
 import RailRowList from '../rail/RailRowList.vue';
+import RowRange from './RowRange.vue';
 import RowSlider from './RowSlider.vue';
 import RowSwitch from './RowSwitch.vue';
 import RowText from './RowText.vue';
@@ -15,14 +16,17 @@ defineProps({
   onChip: { type: Function, default: () => {} },
   onListItem: { type: Function, default: () => {} },
   onSlider: { type: Function, default: () => {} },
+  onRange: { type: Function, default: () => {} },
 });
 </script>
 
 <template>
   <template v-for="item in items" :key="item.key"
-    ><h3 v-if="item.heading" class="data-layer-group-heading">{{
-      item.heading
-    }}</h3
+    ><h3
+      v-if="item.heading"
+      class="data-layer-group-heading"
+      :data-group="item.key"
+      >{{ item.heading }}</h3
     ><div
       v-else
       class="data-toggle-row"
@@ -31,6 +35,7 @@ defineProps({
       }"
       :data-layer-id="item.id"
       :data-layer-name="item.englishName"
+      :data-library-entry="item.libraryEntry || undefined"
       ><div class="data-toggle-top"
         ><div class="data-toggle-left"
           ><span class="data-icon" aria-hidden="true">{{ item.icon }}</span
@@ -67,6 +72,13 @@ defineProps({
             :slider="item.controls.slider"
             :on-input="
               (value) => onSlider(item.id, item.controls.slider.id, value)
+            "
+          /><RowRange
+            v-if="item.controls.range"
+            :range="item.controls.range"
+            :on-select="
+              (end, value) =>
+                onRange(item.id, item.controls.range.id, end, value)
             "
           /><span
             v-for="(entry, index) in item.controls.legend"

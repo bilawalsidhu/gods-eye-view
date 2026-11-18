@@ -1,6 +1,6 @@
 import { satelliteClassText } from '../../data/satelliteClass.js';
 import { decodeSatelliteClassMask } from '../../data/satelliteClassMask.js';
-import * as Cesium from 'cesium';
+import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
 import { t } from '../../i18n/index.js';
 import {
   DEFAULT_SATELLITE_CLASSES,
@@ -17,7 +17,7 @@ export function createControls({ state: layerState, services, parts, source }) {
    * Resolve the canonical point style for a satellite.
    * @param {number} noradId NORAD catalog number.
    * @param {string|undefined} group Catalog group tag (see CATALOG_GROUPS / 'dense').
-   * @returns {{ pixelSize: number, color: Cesium.Color, outlineColor: Cesium.Color, outlineWidth: number }}
+   * @returns {{ pixelSize: number, color: number[], outlineColor: number[], outlineWidth: number }}
    */
 
   function _pointStyleFor(noradId, group) {
@@ -52,10 +52,10 @@ export function createControls({ state: layerState, services, parts, source }) {
    * The ISS's ring and label go with its class.
    */
   function _applyClassVisibility() {
-    for (const [noradId, point] of layerState._points) {
+    for (const noradId of layerState._points.keys()) {
       if (noradId === layerState._trackedNorad) continue;
       if (layerState._cockpitHiddenPoints?.has(noradId)) continue;
-      point.show = _classVisible(noradId);
+      parts.rendering._setPointShown(noradId, _classVisible(noradId));
     }
     _syncIssOrbit();
     parts.labels?._syncIssOverlay?.();
@@ -78,8 +78,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
   /** Show or hide the ISS's ring by _issOrbitVisible, if it is built. */
   function _syncIssOrbit() {
-    const issPath = layerState._orbitPaths.get(ISS_NORAD);
-    if (issPath) issPath.primitive.show = _issOrbitVisible();
+    parts.rendering._setOrbitPathShown(ISS_NORAD, _issOrbitVisible());
   }
 
   /**
@@ -220,8 +219,7 @@ export function createControls({ state: layerState, services, parts, source }) {
     refreshInterval: 5 * 60 * 1000,
 
     getDetectableObjects(options = {}) {
-      if (!layerState._pointCollection || !layerState._pointCollection.show)
-        return [];
+      if (!parts.rendering._pointsShown()) return [];
       // Dense extras are points-only: excluded from the detection overlay.
       const eligibleCount = Math.max(
         1,
@@ -236,7 +234,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
       const result = [];
       let idx = 0;
-      for (const [noradId, point] of layerState._points) {
+      for (const noradId of layerState._points.keys()) {
         if (
           layerState._denseIds.length > 0 &&
           layerState._catalog.get(noradId)?.group === 'dense'
@@ -245,7 +243,8 @@ export function createControls({ state: layerState, services, parts, source }) {
         const shouldTake = (idx - start) % stride === 0;
         idx++;
         if (!shouldTake) continue;
-        if (!point.position) continue;
+        const position = parts.rendering._pointPosition(noradId);
+        if (!position) continue;
         const isTracked = noradId === layerState._trackedNorad;
         // A hidden class is not on screen, so nothing is bracketed on it.
         if (!isTracked && !_classVisible(noradId)) continue;
@@ -274,7 +273,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         object.klass = satelliteClassText(cat?.satelliteClass, cat?.group, {
           isIss: noradId === ISS_NORAD,
         });
-        object.position = point.position;
+        object.position = position;
         object.skipLabel = isTracked;
         result.push(object);
         if (result.length >= maxCount) break;
@@ -286,7 +285,7 @@ export function createControls({ state: layerState, services, parts, source }) {
      * Find a satellite by exact NORAD id (numeric string) or case-insensitive
      * name substring. Position is freshly propagated via SGP4.
      * @param {string|number} query NORAD id or partial name.
-     * @returns {{ noradId: number, name: string, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number }|null}
+     * @returns {{ noradId: number, name: string, position: {x: number, y: number, z: number}, latitude: number, longitude: number, altitudeM: number }|null}
      */
     findByQuery(query) {
       if (
@@ -323,11 +322,7 @@ export function createControls({ state: layerState, services, parts, source }) {
       return {
         noradId,
         name: sat.name.trim(),
-        position: Cesium.Cartesian3.fromDegrees(
-          pos.longitude,
-          pos.latitude,
-          pos.altitude,
-        ),
+        position: fromDegrees(pos.longitude, pos.latitude, pos.altitude),
         latitude: pos.latitude,
         longitude: pos.longitude,
         altitudeM: pos.altitude,
@@ -338,7 +333,7 @@ export function createControls({ state: layerState, services, parts, source }) {
      * Get positions of currently rendered satellites from per-point state
      * (no SGP4 re-propagation).
      * @param {number} [maxCount=300] Maximum entries to return.
-     * @returns {Array<{ id: number, label: string, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number }>}
+     * @returns {Array<{ id: number, label: string, position: {x: number, y: number, z: number}, latitude: number, longitude: number, altitudeM: number }>}
      */
     getAllPositions(maxCount = 300) {
       const result = [];
@@ -346,9 +341,10 @@ export function createControls({ state: layerState, services, parts, source }) {
       const cap =
         Number.isFinite(maxCount) && maxCount > 0 ? Math.floor(maxCount) : 300;
 
-      for (const [noradId, point] of layerState._points) {
+      for (const noradId of layerState._points.keys()) {
         if (result.length >= cap) break;
-        if (!point.position) continue;
+        const position = parts.rendering._pointPosition(noradId);
+        if (!position) continue;
         if (!_classVisible(noradId)) continue;
         // Dense extras are points-only — keep voice/framing lists to the core catalog.
         if (
@@ -356,15 +352,15 @@ export function createControls({ state: layerState, services, parts, source }) {
           layerState._catalog.get(noradId)?.group === 'dense'
         )
           continue;
-        const carto = Cesium.Cartographic.fromCartesian(point.position);
+        const carto = toLonLatH(position);
         if (!carto) continue;
         const sat = layerState._catalog.get(noradId);
         result.push({
           id: noradId,
           label: sat ? sat.name.trim() : String(noradId),
-          position: point.position,
-          latitude: Cesium.Math.toDegrees(carto.latitude),
-          longitude: Cesium.Math.toDegrees(carto.longitude),
+          position,
+          latitude: carto.lat,
+          longitude: carto.lon,
           altitudeM: carto.height,
         });
       }
@@ -376,12 +372,12 @@ export function createControls({ state: layerState, services, parts, source }) {
      * state (no SGP4 re-propagation): a bounded pass that keeps only the
      * nearest `maxCount`, and reads latitude and longitude for those alone.
      * Dense extras are left out, as in `getAllPositions`.
-     * @param {Cesium.Cartesian3} center Earth-fixed position.
+     * @param {{x: number, y: number, z: number}} center Earth-fixed position.
      * @param {number} [maxCount=8] Most entries to return.
      * @param {{excludeIds?: Array<number|string>,
      *   excludeClasses?: Array<string>}} [options] Satellites, and classes
      *   (e.g. 'debris'), to leave out.
-     * @returns {Array<{ id: number, label: string, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number, satelliteClass: string|null, distanceM: number }>}
+     * @returns {Array<{ id: number, label: string, position: {x: number, y: number, z: number}, latitude: number, longitude: number, altitudeM: number, satelliteClass: string|null, distanceM: number }>}
      */
     getNearestPositions(
       center,
@@ -400,8 +396,8 @@ export function createControls({ state: layerState, services, parts, source }) {
       const excluded = new Set(excludeIds.map(String));
       const classes = new Set(excludeClasses);
       const dense = layerState._denseIds.length > 0;
-      for (const [noradId, point] of layerState._points) {
-        const p = point.position;
+      for (const noradId of layerState._points.keys()) {
+        const p = parts.rendering._pointPosition(noradId);
         if (!p || excluded.has(String(noradId))) continue;
         if (!_classVisible(noradId)) continue;
         const sat = layerState._catalog.get(noradId);
@@ -416,20 +412,20 @@ export function createControls({ state: layerState, services, parts, source }) {
         // Insertion into a short sorted list: no copy or sort of the rest.
         let at = nearest.length;
         while (at > 0 && nearest[at - 1].distanceSq > distanceSq) at -= 1;
-        nearest.splice(at, 0, { noradId, point, sat, distanceSq });
+        nearest.splice(at, 0, { noradId, p, sat, distanceSq });
         if (nearest.length > cap) nearest.pop();
       }
       const result = [];
-      for (const { noradId, point, sat, distanceSq } of nearest) {
-        const carto = Cesium.Cartographic.fromCartesian(point.position);
-        if (!carto) continue;
+      for (const { noradId, p, sat, distanceSq } of nearest) {
+        const geo = toLonLatH(p);
+        if (!geo) continue;
         result.push({
           id: noradId,
           label: sat ? sat.name.trim() : String(noradId),
-          position: point.position,
-          latitude: Cesium.Math.toDegrees(carto.latitude),
-          longitude: Cesium.Math.toDegrees(carto.longitude),
-          altitudeM: carto.height,
+          position: { x: p.x, y: p.y, z: p.z },
+          latitude: geo.lat,
+          longitude: geo.lon,
+          altitudeM: geo.height,
           satelliteClass: sat?.satelliteClass ?? null,
           distanceM: Math.sqrt(distanceSq),
         });
@@ -618,22 +614,25 @@ export function createControls({ state: layerState, services, parts, source }) {
       }
       if (params.showPoints !== undefined) {
         layerState._params.showPoints = params.showPoints !== false;
-        if (layerState._pointCollection)
-          layerState._pointCollection.show = satelliteVisualsVisible(
+        parts.rendering._setPointsShown(
+          satelliteVisualsVisible(
             layerState._enabled,
             layerState._params.showPoints,
-          );
+          ),
+        );
       }
       if (params.showOrbits !== undefined) {
         layerState._params.showOrbits = params.showOrbits !== false;
-        for (const [noradId, path] of layerState._orbitPaths)
-          path.primitive.show =
+        for (const noradId of layerState._orbitPaths.keys())
+          parts.rendering._setOrbitPathShown(
+            noradId,
             noradId === ISS_NORAD
               ? _issOrbitVisible()
               : satelliteVisualsVisible(
                   layerState._enabled,
                   layerState._params.showOrbits,
-                );
+                ),
+          );
         parts.labels._syncIssOverlay();
       }
       if (catalogChanged && catalog === 'dense') {

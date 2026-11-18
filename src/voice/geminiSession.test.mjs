@@ -4,6 +4,7 @@ import { geminiSocketUrl } from './geminiSession.js';
 import { createVoiceSession } from './session.js';
 import { createPointerTracker } from './pointerContext.js';
 import { withToolCatalog } from './gevRealtime.js';
+import { setLocale, t } from '../i18n/index.js';
 import {
   harness,
   tick,
@@ -3637,4 +3638,74 @@ test('cancelling a queued globe reset also skips its dependent rotation', async 
     blocker.resolve({ ok: true });
     h.c.stop();
   }
+});
+
+test('a missing server key reaches the error state flagged, other token failures do not', async () => {
+  for (const [body, missingKey] of [
+    [
+      {
+        error: 'Add a Gemini API key in Provider Settings',
+        code: 'API_KEY_MISSING',
+      },
+      true,
+    ],
+    [{ error: 'Gemini quota is unavailable. Try again later.' }, undefined],
+  ]) {
+    const h = harness({
+      fetchImpl: async () => Response.json(body, { status: 503 }),
+    });
+    await h.c.start();
+    const error = h.events
+      .filter((event) => event.type === 'state' && event.state === 'error')
+      .at(-1);
+    assert.equal(error?.detail, body.error);
+    assert.equal(error?.missingKey, missingKey);
+    assert.equal(h.sockets.length, 0);
+  }
+});
+
+test('an error keeps its English catalog text beside the worded detail', async (t2) => {
+  t2.after(() => setLocale('en'));
+  setLocale('es');
+  const h = harness({
+    fetchImpl: async () =>
+      Response.json(
+        { error: 'Gemini quota is unavailable. Try again later.' },
+        { status: 503 },
+      ),
+  });
+  await h.c.start();
+  const error = h.events
+    .filter((event) => event.type === 'state' && event.state === 'error')
+    .at(-1);
+  assert.equal(
+    error.sourceDetail,
+    'Gemini quota is unavailable. Try again later.',
+  );
+  assert.equal(
+    error.detail,
+    t('Gemini quota is unavailable. Try again later.'),
+  );
+  assert.notEqual(error.detail, error.sourceDetail);
+});
+
+test('a token failure without a message keeps its status for the next language', async (t2) => {
+  t2.after(() => setLocale('en'));
+  setLocale('es');
+  const h = harness({
+    fetchImpl: async () => Response.json({}, { status: 502 }),
+  });
+  await h.c.start();
+  const error = h.events
+    .filter((event) => event.type === 'state' && event.state === 'error')
+    .at(-1);
+  assert.equal(
+    error.sourceDetail,
+    'Gemini token request failed (HTTP {status})',
+  );
+  assert.deepEqual(error.sourceParams, { status: 502 });
+  assert.equal(
+    error.detail,
+    t('Gemini token request failed (HTTP {status})', { status: 502 }),
+  );
 });

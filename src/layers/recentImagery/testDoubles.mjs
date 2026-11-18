@@ -3,6 +3,11 @@
  * responses, and the Cesium/viewer/document fakes the box tool needs.
  */
 import { thumbnailOrder } from './model.js';
+import {
+  FAKE_EVENT_TYPES as EVENT_TYPES,
+  FakeScreenSpaceEventHandler,
+  fakeInput,
+} from '../../input/testDoubles.mjs';
 
 export const BOX = Object.freeze({
   west: -97.8,
@@ -60,40 +65,11 @@ export function response({
   };
 }
 
-const EVENT_TYPES = {
-  LEFT_DOWN: 'down',
-  MOUSE_MOVE: 'move',
-  LEFT_UP: 'up',
-  LEFT_CLICK: 'click',
-  LEFT_DOUBLE_CLICK: 'dblclick',
-};
-
 /**
  * Cesium, viewer and document fakes for `initImageryBoxTool`. The canvas is
  * 1000 × 500 px mapped linearly onto 0.2° near Austin; y < 40 px is sky.
  */
 export function boxToolFakes() {
-  const handlers = [];
-  class ScreenSpaceEventHandler {
-    constructor(canvas) {
-      this.canvas = canvas;
-      this.actions = new Map();
-      this.destroyed = false;
-      handlers.push(this);
-    }
-    setInputAction(fn, type) {
-      this.actions.set(type, fn);
-    }
-    getInputAction(type) {
-      return this.actions.get(type);
-    }
-    removeInputAction(type) {
-      this.actions.delete(type);
-    }
-    destroy() {
-      this.destroyed = true;
-    }
-  }
   class CustomDataSource {
     constructor(name) {
       this.name = name;
@@ -107,8 +83,6 @@ export function boxToolFakes() {
   }
   const color = { withAlpha: (alpha) => ({ alpha }) };
   const cesium = {
-    ScreenSpaceEventHandler,
-    ScreenSpaceEventType: EVENT_TYPES,
     CustomDataSource,
     CallbackProperty: class {},
     PolylineDashMaterialProperty: class {},
@@ -118,7 +92,7 @@ export function boxToolFakes() {
     Cartesian3: { fromDegreesArray: (values) => values },
   };
 
-  const stock = new ScreenSpaceEventHandler('stock');
+  const stock = new FakeScreenSpaceEventHandler();
   const originalClick = () => 'select';
   const originalDouble = () => 'track';
   stock.setInputAction(originalClick, EVENT_TYPES.LEFT_CLICK);
@@ -126,6 +100,9 @@ export function boxToolFakes() {
   const sources = [];
   const viewer = {
     renders: 0,
+    get canvas() {
+      return this.scene.canvas;
+    },
     scene: {
       canvas: { clientWidth: 1000, clientHeight: 500 },
       screenSpaceCameraController: { enableInputs: true },
@@ -159,13 +136,13 @@ export function boxToolFakes() {
     },
   };
 
+  const input = fakeInput(viewer);
+
   const pickWorld = (_viewer, nx, ny) =>
     ny * 500 < 40 ? null : { lon: -97.9 + nx * 0.2, lat: 30.4 - ny * 0.2 };
-  /** The live (non-stock) canvas handler, if the tool has one bound. */
-  const handler = () =>
-    handlers.find((h) => h.canvas !== 'stock' && !h.destroyed) || null;
-  const fire = (type, event) =>
-    handler()?.actions.get(EVENT_TYPES[type])?.(event);
+  /** Whether the tool has pointer input bound on the scene's dispatcher. */
+  const bound = () => input.input.subscriberCount() > 0;
+  const fire = (type, event) => input.handler.fire(EVENT_TYPES[type], event);
   /** Dispatch a keydown to the tool's document listener. */
   const key = (name) => {
     const event = {
@@ -187,7 +164,9 @@ export function boxToolFakes() {
     viewer,
     documentRef,
     pickWorld,
-    handler,
+    input: input.input,
+    stockEnabled: input.stockEnabled,
+    bound,
     fire,
     key,
     types: EVENT_TYPES,
@@ -238,10 +217,14 @@ export function fakeRenderer() {
   const owned = { a: null, b: null };
   let host = { kind: 'none' };
   let peak = 0;
+  /** Every host the renderer was bound to, as given. */
+  const hosts = [];
   return {
     calls,
+    hosts,
     rebind(next) {
       calls.push(['rebind', next.kind]);
+      hosts.push(next);
       host = next;
       for (const slot of ['a', 'b'])
         if (owned[slot]) owned[slot] = { ...owned[slot], kind: next.kind };

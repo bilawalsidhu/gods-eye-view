@@ -1,191 +1,240 @@
-import * as Cesium from 'cesium';
-import { horizonOccluder } from '../../data/iconOrientation.js';
 import { selectModelEligible } from '../../data/modelEligibility.js';
-import { civilAircraftModelSpec } from '../flights/modelSpec.js';
+import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
+import { horizonFrom } from '../../geo/horizon.js';
+import {
+  distanceSquared,
+  dot,
+  RADIANS_PER_DEGREE,
+  sub,
+} from '../../geo/vector.js';
+import { aircraftLayerModelSpec } from '../flights/modelSpec.js';
+import {
+  fleetModelSet,
+  fleetPartTable,
+  loadFleetModelSet,
+} from '../../data/fleetModels.js';
+import { aircraftLayerPartState } from '../../data/modelPartDrivers.js';
+import { KNOT_MPS } from '../../data/units.js';
 import {
   FLEET_DR_INTERVAL_MS,
-  MODEL_ALL_ADD_M,
-  MODEL_ALL_KEEP_M,
+  MODEL_ADD_M,
   MODEL_ALT_CEIL_M,
   MODEL_HEADING_OFFSET_DEG,
+  MODEL_KEEP_M,
   MODEL_MAX,
   MODEL_MAX_ALL,
-  MODEL_MIN_PX,
-  MODEL_PROX_ADD_M,
-  MODEL_PROX_KEEP_M,
 } from '../flights/policy.js';
-import { AIRCRAFT_ENVIRONMENT_MAP_OPTIONS } from '../../data/aircraftModelLighting.js';
+import {
+  AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
+  aircraftModelBlend,
+} from '../../data/aircraftModelLighting.js';
 
-const specKey = (spec) => `${spec.url}@${spec.scale}`;
+const WHITE = Object.freeze([1, 1, 1, 1]);
+
+/** Whether `point` is inside the eye's view cone (`pose`), a metre's slack. */
+function inView(pose, point) {
+  const v = sub(point, pose.position);
+  const depth = dot(v, pose.direction);
+  if (depth < -1) return false;
+  const tanY = Math.tan(pose.fovy / 2);
+  const tanX = tanY * pose.aspectRatio;
+  return (
+    Math.abs(dot(v, pose.right)) <= Math.max(0, depth) * tanX + 1 &&
+    Math.abs(dot(v, pose.up)) <= Math.max(0, depth) * tanY + 1
+  );
+}
+
+/** The fleet model an aircraft draws with: its adsbdb type, else its emitter category. */
+const specOf = (marker) =>
+  aircraftLayerModelSpec({
+    typeCode: marker?.typeCode,
+    category: marker?.category,
+    callsign: marker?.record?.callsign,
+  });
 
 /**
- * 3D models for Local ADS-B aircraft under the DISPLAY rail's 3D toggle.
+ * 3D models for Local ADS-B aircraft under the DISPLAY rail's 3D toggle,
+ * drawn as one `models` set of the renderer's draw port.
  *
  * Mirrors the public Flights fleet: models only below the altitude ceiling,
  * the same proximity/all caps and add/keep radii, the same visible-first
- * eligibility (`selectModelEligible`), the same per-class asset and scale
- * (`civilAircraftModelSpec`) and the same tint path (a MIX colour blend, here
- * magenta, as Flights tints military amber). Each model owns its matrix. A
- * billboard stays the visual until its model is loaded AND placed; a grounded
- * aircraft's model rides the one-shot ground snap plus the class belly
- * offset, and without a resolved ground it stays a billboard.
+ * eligibility (`selectModelEligible`), the same fleet model per type, life
+ * size (`aircraftLayerModelSpec`) and the same colours: the mesh's own
+ * (`aircraftModelBlend`). A billboard stays the
+ * visual until its model is ready (the set's `ready`) AND placed; a grounded
+ * aircraft's model rides the one-shot ground snap plus the model's clearance,
+ * and without a resolved ground it stays a billboard. Models move and turn in
+ * place each frame; only a type change loads another model. Every fleet
+ * model loads once, up front, when the layer starts (`loadFleetModelSet`),
+ * and models are drawn from those bytes.
  * @param {object} options
- * @param {object} options.viewer Cesium viewer.
- * @param {Cesium.Color} options.color Model tint.
+ * @param {object} options.viewer The viewer the layer draws on; the ground
+ *   snap samples through it.
+ * @param {object} options.draw Draw port (`drawOf(viewer)`).
+ * @param {object} options.camera Camera port (`findCamera(viewer)`).
+ * @param {string} options.setId The models set's id.
+ * @param {string[]} [options.seeThrough] The layer's other set ids ground
+ *   samples see through (its markers).
  * @param {(url: string) => string} options.resolveAsset
  * @param {object|null} [options.groundSnap] `createGroundSnap()` instance.
- * @param {(options: object) => Promise<object>} [options.loadModel]
- * @returns {object}
+ * @returns {object|null} Null where the renderer draws no models.
  */
 export function createLocalAdsbModels({
   viewer,
-  color,
+  draw,
+  camera,
+  setId,
+  seeThrough = [],
   resolveAsset,
   groundSnap = null,
-  loadModel = (options) => Cesium.Model.fromGltfAsync(options),
 }) {
-  const collection = new Cesium.PrimitiveCollection();
-  viewer.scene.primitives.add(collection);
-  /** @type {Map<string, object>} id -> admitted model */
+  if (typeof draw?.models !== 'function' || !camera) return null;
+  void loadFleetModelSet({ resolveAsset }).catch(() => {
+    /* aircraft stay billboards */
+  });
+  const set = draw.models({ id: setId, show: false });
+  /** What ground samples see through, by set id (with every set not drawn as ground). */
+  const groundSets = [setId, ...seeThrough];
+  /**
+   * id -> admitted model. `bellyM` is the offset of the model drawn;
+   * `nextBellyM` a new asset's, taken once that model is ready (the old one
+   * draws, at its own offset, until then). `sentUrl` is the asset last
+   * asked for, `drawnUrl` the one whose model is ready.
+   * @type {Map<string, {bellyM: number,
+   *   nextBellyM: number|null, sentUrl: string|null,
+   *   drawnUrl: string|null, ready: boolean}>}
+   */
   const models = new Map();
-  /** @type {Map<string, number>} id -> generation of an in-flight load */
-  const pending = new Map();
-  let generation = 0;
   let destroyed = false;
   let lastEligibilityAt = 0;
   let eligible = new Set();
-  const scratchHpr = new Cesium.HeadingPitchRoll();
-  const scratchSphere = new Cesium.BoundingSphere(Cesium.Cartesian3.ZERO, 1);
-  const scratchCarto = new Cesium.Cartographic();
-  const scratchGround = new Cesium.Cartesian3();
+  const offReady = set.on('ready', (id) => {
+    const record = models.get(id);
+    if (!record) return;
+    record.ready = true;
+    record.drawnUrl = record.sentUrl;
+    if (record.nextBellyM !== null) {
+      record.bellyM = record.nextBellyM;
+      record.nextBellyM = null;
+    }
+  });
 
-  function release(id) {
-    pending.delete(id);
-    const model = models.get(id);
-    if (!model) return;
-    models.delete(id);
-    if (!collection.isDestroyed()) collection.remove(model);
-    groundSnap?.forget?.(id);
+  function release(ids) {
+    const gone = [];
+    for (const id of ids) {
+      if (!models.delete(id)) continue;
+      gone.push(id);
+      groundSnap?.forget?.(id);
+    }
+    if (gone.length && !destroyed) set.remove(gone);
   }
 
   function releaseAll() {
-    for (const id of [...models.keys()]) release(id);
-    pending.clear();
-    generation += 1;
+    for (const id of models.keys()) groundSnap?.forget?.(id);
+    if (models.size && !destroyed) set.clear();
+    models.clear();
   }
 
-  async function ensure(id, marker, cap) {
-    const spec = civilAircraftModelSpec(marker.klass);
-    const key = specKey(spec);
-    const current = models.get(id);
-    if (current && current._gevSpecKey === key) return;
-    if (current) release(id);
-    if (pending.has(id) || models.size + pending.size >= cap) return;
-    const loadGeneration = generation;
-    pending.set(id, loadGeneration);
-    let model;
-    try {
-      model = await loadModel({
-        url: resolveAsset(spec.url),
-        asynchronous: false,
-        environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS,
-        minimumPixelSize: MODEL_MIN_PX,
-        scale: spec.scale,
-        color,
-        colorBlendMode: Cesium.ColorBlendMode.MIX,
-        colorBlendAmount: spec.blendAmount,
-        id,
-      });
-    } catch {
-      if (pending.get(id) === loadGeneration) pending.delete(id);
-      return;
-    }
-    const stale =
-      destroyed ||
-      pending.get(id) !== loadGeneration ||
-      generation !== loadGeneration ||
-      !eligible.has(id) ||
-      models.has(id) ||
-      specKey(civilAircraftModelSpec(marker.klass)) !== key;
-    if (pending.get(id) === loadGeneration) pending.delete(id);
-    if (stale) {
-      model.destroy?.();
-      return;
-    }
-    model.id = id;
-    model._gevSpecKey = key;
-    model._gevBellyM = spec.bellyM;
-    // Admitted, not yet the visual: placement turns it on.
-    model.show = false;
-    collection.add(model);
-    models.set(id, model);
+  /**
+   * Admit a model for `id`. One admitted keeps its slot through a type
+   * change: the frame pass asks for the new model, loaded in place. Until
+   * the fleet model set has loaded the aircraft stays a billboard.
+   */
+  function admit(id, marker, cap) {
+    if (models.has(id) || models.size >= cap) return;
+    const spec = specOf(marker);
+    if (!spec.url) return;
+    models.set(id, {
+      bellyM: spec.bellyM,
+      nextBellyM: null,
+      sentUrl: null,
+      drawnUrl: null,
+      ready: false,
+    });
   }
 
-  function regime(preferences) {
+  /**
+   * The asset `record` is about to ask for: the same model (a scale-only
+   * class change, or none) takes the offset now; another waits for its
+   * model's `ready`.
+   */
+  function noteAsset(record, url, bellyM) {
+    record.sentUrl = url;
+    if (!record.ready || url === record.drawnUrl) {
+      record.bellyM = bellyM;
+      record.nextBellyM = null;
+    } else {
+      record.nextBellyM = bellyM;
+    }
+  }
+
+  /**
+   * The moving parts an aircraft's model is posed with, from its record
+   * (`aircraftLayerPartState`). The receiver knows no ground height, so its gear
+   * follows the approach rule by its reported altitude, climb and speed. An
+   * airport vehicle is a road vehicle (`groundVehiclePartState`): its wheels
+   * roll with its speed.
+   */
+  function partsOf(marker, spec) {
+    const table = fleetPartTable(fleetModelSet(), spec.model);
+    if (!table) return undefined;
+    const record = marker.record ?? {};
+    const finite = (v) => (Number.isFinite(v) ? v : null);
+    const speedMps =
+      finite(record.groundSpeedKt) === null
+        ? null
+        : record.groundSpeedKt * KNOT_MPS;
+    return aircraftLayerPartState(table, {
+      klass: marker.klass,
+      onGround: marker.onGround === true,
+      heightAboveGroundM: null,
+      altitudeM:
+        finite(record.altitudeFt) === null ? null : record.altitudeFt * 0.3048,
+      verticalRateMps:
+        finite(record.verticalRateFpm) === null
+          ? null
+          : (record.verticalRateFpm * 0.3048) / 60,
+      speedMps,
+    });
+  }
+
+  function regime(preferences, pose) {
     if (!preferences?.models3d) return false;
-    const height = viewer.camera?.positionCartographic?.height ?? Infinity;
-    return height < MODEL_ALT_CEIL_M;
+    return pose.height < MODEL_ALT_CEIL_M;
   }
 
-  function refreshEligibility(markers, preferences) {
+  function refreshEligibility(markers, preferences, pose) {
     const all = preferences.models3dMode === 'all';
     const cap = all ? MODEL_MAX_ALL : MODEL_MAX;
-    const addM = all ? MODEL_ALL_ADD_M : MODEL_PROX_ADD_M;
-    const keepM = all ? MODEL_ALL_KEEP_M : MODEL_PROX_KEEP_M;
-    const camera = viewer.camera;
-    const cameraPosition = camera.positionWC;
-    const cull = camera.frustum.computeCullingVolume(
-      cameraPosition,
-      camera.directionWC,
-      camera.upWC,
-    );
     const candidates = [];
     for (const [id, marker] of markers) {
       if (!marker.position) continue;
-      const distanceSq = Cesium.Cartesian3.distanceSquared(
-        cameraPosition,
-        marker.position,
-      );
-      if (distanceSq > keepM * keepM) continue;
-      Cesium.Cartesian3.clone(marker.position, scratchSphere.center);
-      candidates.push([
-        id,
-        distanceSq,
-        cull.computeVisibility(scratchSphere) !== Cesium.Intersect.OUTSIDE,
-      ]);
+      const distanceSq = distanceSquared(pose.position, marker.position);
+      if (distanceSq > MODEL_KEEP_M * MODEL_KEEP_M) continue;
+      candidates.push([id, distanceSq, inView(pose, marker.position)]);
     }
     candidates.sort((a, b) => a[1] - b[1]);
     eligible = selectModelEligible(candidates, {
       cap,
-      addDistSq: addM * addM,
+      addDistSq: MODEL_ADD_M * MODEL_ADD_M,
       isModeled: (id) => models.has(id),
     });
-    for (const id of [...models.keys(), ...pending.keys()])
-      if (!eligible.has(id)) release(id);
-    for (const id of eligible) void ensure(id, markers.get(id), cap);
+    release([...models.keys()].filter((id) => !eligible.has(id)));
+    for (const id of eligible) admit(id, markers.get(id), cap);
   }
 
   function placement(id, marker) {
     if (!marker.onGround) return marker.position;
-    const model = models.get(id);
-    // The vertical sample must hit the tile skin, not this aircraft's own
-    // billboard or model.
-    const height = groundSnap?.heightFor?.(viewer, id, marker.position, () =>
-      [marker.entity, model].filter(Boolean),
-    );
+    const record = models.get(id);
+    // Height samples see through the draw sets (this set and the markers):
+    // the vertical sample hits the tile skin, not this aircraft.
+    const height = groundSnap?.heightFor?.(viewer, id, marker.position, {
+      sets: groundSets,
+    });
     if (!Number.isFinite(height)) return null;
-    const carto = Cesium.Cartographic.fromCartesian(
-      marker.position,
-      Cesium.Ellipsoid.WGS84,
-      scratchCarto,
-    );
-    return Cesium.Cartesian3.fromRadians(
-      carto.longitude,
-      carto.latitude,
-      height + (model?._gevBellyM || 0),
-      Cesium.Ellipsoid.WGS84,
-      scratchGround,
-    );
+    const at = toLonLatH(marker.position);
+    if (!at) return null;
+    return fromDegrees(at.lon, at.lat, height + (record?.bellyM || 0));
   }
 
   return {
@@ -199,70 +248,78 @@ export function createLocalAdsbModels({
      * every admitted model and hand each marker's visual to its model only
      * once the model is ready and placed.
      * @param {Map<string, object>} markers Layer markers (position, courseDeg,
-     *   klass, onGround); `modelOwnsVisual` is written back.
+     *   typeCode, category, onGround); `modelOwnsVisual` is written back.
      * @param {object} preferences `{ models3d, models3dMode }`.
      * @param {number} nowMs
      */
     frame(markers, preferences, nowMs) {
       if (destroyed) return;
-      if (!regime(preferences)) {
-        if (models.size || pending.size) releaseAll();
+      const pose = camera.pose();
+      if (!regime(preferences, pose)) {
+        if (models.size) releaseAll();
         eligible = new Set();
         for (const marker of markers.values()) marker.modelOwnsVisual = false;
         return;
       }
       if (nowMs - lastEligibilityAt >= FLEET_DR_INTERVAL_MS) {
         lastEligibilityAt = nowMs;
-        refreshEligibility(markers, preferences);
+        refreshEligibility(markers, preferences, pose);
       }
-      const occluder = horizonOccluder(viewer.camera);
+      const horizon = horizonFrom(pose.position);
+      const items = [];
       for (const [id, marker] of markers) {
-        const model = models.get(id);
+        const record = models.get(id);
         marker.modelOwnsVisual = false;
-        if (!model || !marker.position) continue;
+        if (!record || !marker.position) continue;
+        const spec = specOf(marker);
+        if (!spec.url) continue;
+        const url = resolveAsset(spec.url);
+        const gltf = fleetModelSet()?.bytes?.get(spec.model);
+        noteAsset(record, url, spec.bellyM);
         const position = placement(id, marker);
-        if (!position || !occluder.isPointVisible(marker.position)) {
-          model.show = false;
-          continue;
-        }
-        scratchHpr.heading = Cesium.Math.toRadians(
-          (marker.courseDeg || 0) + MODEL_HEADING_OFFSET_DEG,
-        );
-        scratchHpr.pitch = 0;
-        scratchHpr.roll = 0;
-        Cesium.Transforms.headingPitchRollToFixedFrame(
-          position,
-          scratchHpr,
-          Cesium.Ellipsoid.WGS84,
-          undefined,
-          model.modelMatrix,
-        );
-        if (!model.ready) {
-          model.show = false;
-          continue;
-        }
-        model.show = true;
-        marker.modelOwnsVisual = true;
+        const parts = partsOf(marker, spec);
+        const shown =
+          Boolean(position) && horizon.isPointVisible(marker.position);
+        items.push({
+          id,
+          // Unplaced, it waits hidden where it last was (or at the marker).
+          pos: position ?? marker.position,
+          url,
+          // Built from the bytes loaded up front: never fetched mid-session.
+          ...(gltf ? { gltf } : {}),
+          orientation: {
+            heading:
+              ((marker.courseDeg || 0) + MODEL_HEADING_OFFSET_DEG) *
+              RADIANS_PER_DEGREE,
+            pitch: 0,
+            roll: 0,
+          },
+          scale: spec.scale,
+          // The mesh's own colours (white, multiplied).
+          tint: WHITE,
+          colorBlend: aircraftModelBlend(false),
+          environmentMap: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS.enabled,
+          ...(parts ? { parts } : {}),
+          show: shown,
+        });
+        if (shown && record.ready) marker.modelOwnsVisual = true;
       }
-      for (const id of [...models.keys()]) if (!markers.has(id)) release(id);
+      if (items.length) set.upsert(items);
+      release([...models.keys()].filter((id) => !markers.has(id)));
     },
 
     /**
-     * Drop the model, and any load still in flight, of every aircraft that
-     * is no longer a marker. The layer calls this whenever markers expire:
-     * the per-frame pass does not run once the last marker is gone.
+     * Drop the model of every aircraft that is no longer a marker. The
+     * layer calls this whenever markers expire: the per-frame pass does not
+     * run once the last marker is gone.
      * @param {Map<string, object>|Set<string>} live Current marker ids.
      */
     retain(live) {
       if (destroyed) return;
-      let dropped = false;
-      for (const id of [...models.keys(), ...pending.keys()]) {
-        if (live.has(id)) continue;
-        release(id);
-        eligible.delete(id);
-        dropped = true;
-      }
-      if (dropped) eligible = new Set(eligible);
+      const gone = [...models.keys()].filter((id) => !live.has(id));
+      if (!gone.length) return;
+      release(gone);
+      eligible = new Set([...eligible].filter((id) => live.has(id)));
     },
 
     /** Drop every model (3D off, layer disabled). */
@@ -273,12 +330,23 @@ export function createLocalAdsbModels({
       return models.size;
     },
 
+    /** The models set's id, for picks and height queries. */
+    setId,
+
+    /** Whether the set draws (with the layer). */
+    get show() {
+      return set.show;
+    },
+    set show(value) {
+      if (!destroyed) set.show = value;
+    },
+
     destroy() {
-      destroyed = true;
       releaseAll();
+      destroyed = true;
+      offReady();
       groundSnap?.clear?.();
-      if (!viewer.isDestroyed?.() && !collection.isDestroyed())
-        viewer.scene.primitives.remove(collection);
+      set.dispose();
     },
   };
 }

@@ -1,0 +1,47 @@
+{
+  "id": "mt-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Montana Statewide Imagery (2023)",
+  "provider": "Montana State Library (MSDI)",
+  "description": "Aerial orthophotos: Statewide coverage of Montana.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-116.0637, 44.3115, -103.9988, 49.064]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://gisservice.mt.gov/arcgis/rest/services/MSDI_Framework/NAIP_2023/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "60 cm (NAIP)",
+    "resolutionM": 0.6,
+    "trueOrtho": false,
+    "vintage": "2023–present",
+    "updateCycle": "NAIP 2-year cycle",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Public domain — Montana State Library open data",
+    "url": "https://msl.mt.gov/geoinfo/"
+  },
+  "attribution": {
+    "text": "Montana State Library",
+    "url": "https://msl.mt.gov/geoinfo/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

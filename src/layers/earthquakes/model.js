@@ -1,19 +1,89 @@
-import * as Cesium from 'cesium';
 export const EARTHQUAKE_OVERLAY_SOURCE_ID = 'earthquakes';
 export const EARTHQUAKE_OVERLAY_COHORT_LIMIT = 96;
 export const EARTHQUAKE_OVERLAY_COLLISION_CAPACITY = 48;
 
+// The depth bands' colours: CSS red, orange and yellow, as the renderer's
+// colour tuples (`[r, g, b, a]`, 0..1) and as CSS for the labels' accent.
+const SHALLOW = Object.freeze({ rgba: [1, 0, 0, 1], css: 'rgb(255,0,0)' });
+const INTERMEDIATE = Object.freeze({
+  rgba: [1, 165 / 255, 0, 1],
+  css: 'rgb(255,165,0)',
+});
+const DEEP = Object.freeze({ rgba: [1, 1, 0, 1], css: 'rgb(255,255,0)' });
+
+const depthBand = (depthKm) =>
+  depthKm < 70 ? SHALLOW : depthKm < 300 ? INTERMEDIATE : DEEP;
+
 /**
- * Color by depth:
+ * The smallest magnitude the timeline marks. Most quakes are small shakes;
+ * M6 and up come about once every two days worldwide, so each is an event
+ * worth stepping to. The map still draws every quake.
+ */
+export const EARTHQUAKE_MARK_MAGNITUDE = 6;
+
+/** The longest place a timeline mark's label carries, ellipsis and all. */
+const MARK_PLACE_LENGTH = 40;
+
+/** A magnitude as the map's labels show it: `M6.4`. */
+export const earthquakeMagnitudeTitle = (magnitude) =>
+  `M${Number(magnitude).toFixed(1)}`;
+
+/**
+ * A strong quake's timeline label: its magnitude and, where the feed names
+ * one, its place, cut short (`M6.4 · 113 km SSE of Lata, Solomon Islands`).
+ * @param {{mag: number, place?: string | null}} event
+ * @returns {string}
+ */
+export function earthquakeMarkLabel({ mag, place }) {
+  const title = earthquakeMagnitudeTitle(mag);
+  const where =
+    typeof place === 'string' ? place.replace(/\s+/g, ' ').trim() : '';
+  if (!where) return title;
+  const short =
+    where.length > MARK_PLACE_LENGTH
+      ? `${where.slice(0, MARK_PLACE_LENGTH - 1).trimEnd()}…`
+      : where;
+  return `${title} · ${short}`;
+}
+
+/**
+ * The time a world clock's timeline can show for `events` (`{mag, time,
+ * place?, usgsId?}`, time in ms): the span of the quakes of
+ * EARTHQUAKE_MARK_MAGNITUDE and up, each one a mark labelled with its
+ * magnitude and place, or null with none, so the layer never stretches the
+ * timeline past what its feed covers.
+ * @returns {{start: number, end: number, marks: Array<{time: number, label: string, id?: string, kind: string}>} | null}
+ */
+export function earthquakeCoverage(events) {
+  const marks = events
+    .filter(
+      ({ mag, time }) =>
+        mag >= EARTHQUAKE_MARK_MAGNITUDE && Number.isFinite(time),
+    )
+    .map((event) => ({
+      time: event.time,
+      label: earthquakeMarkLabel(event),
+      ...(event.usgsId ? { id: String(event.usgsId) } : {}),
+      kind: 'earthquake',
+    }))
+    .sort((a, b) => a.time - b.time);
+  return marks.length
+    ? { start: marks[0].time, end: marks.at(-1).time, marks }
+    : null;
+}
+
+/**
+ * Color by depth, as a renderer colour `[r, g, b, a]` (0..1):
  *  - Shallow (<70km): Red
  *  - Intermediate (70-300km): Orange
  *  - Deep (>300km): Yellow
  */
 export function depthColor(depthKm) {
-  if (depthKm < 70) return Cesium.Color.RED;
-  if (depthKm < 300) return Cesium.Color.ORANGE;
-  return Cesium.Color.YELLOW;
+  return [...depthBand(depthKm).rgba];
 }
+
+/** The depth band's colour as CSS, for the magnitude label's accent. */
+export const depthAccent = (depthKm) => depthBand(depthKm).css;
 
 /**
  * Build the source-owned presentation for one ambient magnitude label.
@@ -21,7 +91,8 @@ export function depthColor(depthKm) {
  * shared renderer.
  * @param {object} input
  * @param {string} input.id Stable USGS or deterministic fallback id.
- * @param {Cesium.Cartesian3} input.position Ground anchor shared with the pulse.
+ * @param {{x: number, y: number, z: number}} input.position ECEF ground
+ *   anchor, shared with the disc.
  * @param {number} input.magnitude USGS magnitude.
  * @param {string} input.accent Source-owned depth-band color.
  * @returns {object}
@@ -37,7 +108,7 @@ export function createEarthquakeOverlayEntry({
     id: String(id),
     position,
     variant: 'label',
-    title: `M${mag.toFixed(1)}`,
+    title: earthquakeMagnitudeTitle(mag),
     accent,
     priority: Math.round(mag * 1000),
     collisionGroup: 'ambient-label',
