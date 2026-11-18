@@ -1,0 +1,48 @@
+{
+  "id": "bismarck-mandan-nd",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Bismarck–Mandan, North Dakota Aerial Photography",
+  "provider": "North Dakota GIS Hub",
+  "description": "Aerial orthophotos: Bismarck–Mandan, North Dakota jurisdiction.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-101.0948, 46.6527, -100.5815, 46.9844]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://ndgishub.nd.gov/arcgis/rest/services/Imagery/AerialImage_BisMan_2023/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 11,
+    "maxZoom": 20,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "sub-foot to 1 ft (local program)",
+    "resolutionM": 0.15,
+    "trueOrtho": false,
+    "vintage": "2023–present",
+    "updateCycle": "Local flight cycle (typically annual to 3-yearly)",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Local government open data — see publisher terms",
+    "url": "https://www.gis.nd.gov/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "95West Aerial Mapping",
+    "url": "https://www.gis.nd.gov/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

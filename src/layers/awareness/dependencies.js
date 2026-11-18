@@ -17,9 +17,23 @@ export function createDependencies({
       parts.subject.refreshSelectedSubject(true);
       return;
     }
+    if (adoptSelectedVessel()) return;
     if (layerState.autoFocusRetryPending) {
       layerState.autoFocusRetryPending = !parts.focus.focusAttentionTarget();
     }
+  }
+
+  /**
+   * Take the selected AIS vessel as the subject, as its selection would have
+   * had Contacts been on. A followed flight is checked first by the callers.
+   * @returns {boolean} Whether a vessel became the subject.
+   */
+  function adoptSelectedVessel() {
+    const vessel = parts.subject.currentSelectedVesselSubject?.();
+    if (!vessel) return false;
+    layerState.autoFocusRetryPending = false;
+    parts.subject.selectSubject(vessel);
+    return Boolean(layerState.subject);
   }
 
   async function enableDependencies(activationId = layerState.activationId) {
@@ -104,6 +118,7 @@ export function createDependencies({
     const initialTrackedSubject = parts.subject.currentTrackedFlightSubject();
     if (initialTrackedSubject)
       parts.subject.selectSubject(initialTrackedSubject);
+    else adoptSelectedVessel();
     return enableDependencies(activationId)
       .then(() => {
         if (
@@ -121,6 +136,7 @@ export function createDependencies({
           parts.subject.selectSubject(layerState.subject);
           return;
         }
+        if (adoptSelectedVessel()) return;
         if (layerState.autoFocusAttempted) return;
         layerState.autoFocusRetryPending = !parts.focus.focusAttentionTarget();
       })

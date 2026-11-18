@@ -6,6 +6,7 @@ import { setLocale } from '../i18n/index.js';
 import { createWeatherPanel } from './weatherPanel.js';
 import { railDocumentFixture as railFixture } from './railTestFixture.mjs';
 import { createAirQualityLayer } from '../layers/airQuality/index.js';
+import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 const ticks = ['2026-09-22T01:00:00Z', '2026-09-22T01:05:00Z'];
 const wind = {
   id: 'wind',
@@ -54,10 +55,6 @@ function fixture() {
       listeners.add(fn);
       return () => listeners.delete(fn);
     },
-    setTarget: (tick) => calls.push(['target', tick]),
-    latest: () => calls.push(['latest']),
-    togglePlay: () => calls.push(['play']),
-    step: (n) => calls.push(['step', n]),
   };
   return {
     ...f,
@@ -74,39 +71,55 @@ function fixture() {
     },
   };
 }
-const timelineHost = (f) =>
-  f.find((n) => n.className === 'weather-timeline-block');
+const frameTime = (f) => f.find((n) => n.className === 'weather-frame-time');
 const card = (f, id) => f.find((n) => n.dataset.cardId === id);
 const line = (f, id, name) =>
   f.find((n) => n.dataset.lineId === name, card(f, id));
-test('timeline stays visible with any observed product; native preview and transport use the clock', (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
+test('the frame time shows with any observed product; the panel has no time controls of its own', (t) => {
+  t.mock.timers.enable({
+    apis: ['Date'],
+    now: Date.parse('2026-09-22T01:17:00Z'),
+  });
   const f = fixture();
   const view = createWeatherPanel(f);
   view.update([wind]);
-  assert.equal(timelineHost(f).hidden, true);
+  assert.equal(frameTime(f).hidden, true);
   view.update([wind, radar]);
-  assert.equal(timelineHost(f).hidden, false);
-  f.state({ timeline: [ticks[0]] });
-  assert.equal(timelineHost(f).hidden, false);
-  assert.equal(f.find((n) => n.tagName === 'INPUT').disabled, true);
-  f.state({ timeline: [] });
-  assert.equal(timelineHost(f).hidden, false);
-  f.state({ timeline: ticks });
-  assert.equal(timelineHost(f).hidden, false);
-  const slider = f.find((n) => n.tagName === 'INPUT');
-  slider.value = '0';
-  slider.dispatchEvent(new Event('input'));
-  assert.deepEqual(f.calls, []);
-  slider.dispatchEvent(new Event('change'));
-  assert.deepEqual(f.calls, [['target', ticks[0]]]);
-  f.find((n) => n.textContent === 'Latest' && n.tagName === 'BUTTON').click();
-  f.find((n) => n.textContent === 'Play').click();
-  assert.deepEqual(f.calls.slice(1), [['latest'], ['play']]);
-  slider.dispatchEvent(new Event('input'));
-  view.update([wind]);
-  t.mock.timers.tick(150);
-  assert.equal(f.calls.length, 3, 'hiding cancels pending drag');
+  assert.equal(frameTime(f).hidden, false);
+  assert.equal(frameTime(f).textContent, '01:05 UTC · 12 min ago');
+  f.state({
+    timeline: [ticks[0]],
+    products: [{ id: radar.id, shown: ticks[0], selected: ticks[0] }],
+  });
+  assert.equal(frameTime(f).textContent, '01:00 UTC · 17 min ago');
+  f.state({ timeline: [], products: [] });
+  assert.equal(frameTime(f).hidden, true);
+  // Suspended products (reduced motion, a hidden page) leave the timeline;
+  // live, their newest frame still shows.
+  f.state({
+    timeline: [],
+    products: [
+      { id: radar.id, shown: ticks[1], selected: ticks[1], suspended: true },
+      {
+        id: 'weather-lightning',
+        shown: null,
+        selected: ticks[0],
+        suspended: true,
+      },
+    ],
+  });
+  assert.equal(frameTime(f).hidden, false);
+  assert.equal(frameTime(f).textContent, '01:05 UTC · 12 min ago');
+  f.state({ timeline: ticks, mode: 'history', target: ticks[0] });
+  assert.equal(frameTime(f).textContent, '01:00 UTC');
+  assert.equal(
+    f.find((n) => n.tagName === 'INPUT'),
+    null,
+  );
+  assert.equal(
+    f.find((n) => ['Play', 'Latest'].includes(n.textContent)),
+    null,
+  );
   view.destroy();
   assert.equal(f.listeners.size, 0);
 });
@@ -179,7 +192,7 @@ test('cyclone readout retains advisory, position, intensity, geometry, coverage,
     ],
   };
   view.update([cyclone]);
-  assert.equal(timelineHost(f).hidden, true);
+  assert.equal(frameTime(f).hidden, true);
   assert.match(
     line(f, cyclone.id, 'time').textContent,
     /JULIO.*Hurricane.*Advisory 10.*UTC/,
@@ -203,7 +216,13 @@ test('cyclone readout retains advisory, position, intensity, geometry, coverage,
   assert.equal(f.find((n) => n.className === 'rail-card-ramp').hidden, true);
   view.destroy();
 });
-test('identical updates write nothing and status keeps its line through loading and empty text', () => {
+test('identical updates write nothing and status keeps its line through loading and empty text', (t) => {
+  // Ages read in whole minutes: a real clock crossing a minute between the two
+  // updates would rightly rewrite them.
+  t.mock.timers.enable({
+    apis: ['Date'],
+    now: Date.parse('2026-09-22T01:17:00Z'),
+  });
   const f = fixture();
   const view = createWeatherPanel(f);
   for (const entries of [
@@ -410,7 +429,7 @@ test('cyclones lead, and observed history owns one bordered group with only acti
     group.children[1].textContent,
     'Rain radar · Satellite clouds · Lightning density',
   );
-  assertSameNode(group.children[2], timelineHost(f));
+  assertSameNode(group.children[2], frameTime(f));
   assert.deepEqual(
     [...group.children[3].children].map((n) => n.dataset.cardId),
     ['weather-radar', 'weather-satellite', 'weather-lightning'],
@@ -505,9 +524,10 @@ test('compact lines show observation age, forecast validity, storm selection or 
     'Forecast · valid 09-22 01:00 UTC',
   );
   f.state({ mode: 'history', target: ticks[1] });
+  // At a past time a frame's age counts from the timeline time.
   assert.equal(
     compact(radar.id).textContent,
-    '09-22 01:05 UTC · 8m ago · synced',
+    '09-22 01:05 UTC · 0m ago · synced',
   );
   assert.equal(
     compact(wind.id).textContent,
@@ -522,7 +542,7 @@ test('compact lines show observation age, forecast validity, storm selection or 
   });
   assert.equal(
     compact(radar.id).textContent,
-    '09-22 01:00 UTC · 13m ago · nearest',
+    '09-22 01:00 UTC · 5m ago · nearest',
   );
   clickHeader(f, wind.id);
   assert.equal(
@@ -672,13 +692,8 @@ test('history time keeps the hour whatever the length of the localized date', ()
       const f = fixture();
       const view = createWeatherPanel(f);
       view.update([wind, radar]);
-      const ends = f.find((n) => n.className === 'rail-timeline-endpoints');
-      assert.deepEqual(
-        [...ends.children].map((n) => n.textContent),
-        ['01:00 UTC', '01:05 UTC'],
-        locale,
-      );
       f.state({ mode: 'history', target: ticks[1] });
+      assert.equal(frameTime(f).textContent, '01:05 UTC', locale);
       assert.match(
         line(f, radar.id, 'time').textContent,
         /(^|[^\d:])01:05 UTC/,
@@ -725,7 +740,9 @@ test('air-quality readout renders its band legend, Canada coverage and worst-fir
     },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
-  layer.init({ dataSources: { add() {}, remove() {} } });
+  const viewer = {};
+  bindFakeDraw(viewer);
+  layer.init(viewer);
   layer.enable();
   await layer.update();
   const f = fixture();
@@ -783,4 +800,44 @@ test('source-supplied legend units are shown as given; catalog units are transla
   } finally {
     setLocale('en');
   }
+});
+
+test('at a past time, frame ages count from the timeline time, not now, and the frame time is that time', (t) => {
+  t.mock.timers.enable({
+    apis: ['Date'],
+    now: Date.parse('2032-01-01T00:00:00Z'),
+  });
+  const f = fixture();
+  const view = createWeatherPanel(f);
+  view.update([radar]);
+  f.state({
+    mode: 'history',
+    target: '2026-09-22T01:20:00Z',
+    products: [{ id: radar.id, shown: ticks[1], selected: ticks[1] }],
+  });
+  assert.equal(
+    line(f, radar.id, 'time').textContent,
+    '09-22 01:05 UTC · 15m ago · nearest',
+  );
+  // The panel's frame time is the timeline time alone, with no age.
+  assert.equal(frameTime(f).textContent, '01:20 UTC');
+  view.destroy();
+});
+
+test('the wind card notes it stays live only while its source does not follow the timeline', () => {
+  const f = fixture();
+  const following = new Set();
+  f.clock.follows = (id) => following.has(id);
+  const view = createWeatherPanel(f);
+  view.update([wind, radar]);
+  f.state({ mode: 'history', target: ticks[1] });
+  assert.match(line(f, 'wind', 'time').textContent, /Does not follow history/);
+  following.add('wind');
+  f.state({ target: ticks[0] });
+  assert.match(line(f, 'wind', 'time').textContent, /^Forecast · valid /);
+  assert.doesNotMatch(
+    line(f, 'wind', 'time').textContent,
+    /Does not follow history/,
+  );
+  view.destroy();
 });

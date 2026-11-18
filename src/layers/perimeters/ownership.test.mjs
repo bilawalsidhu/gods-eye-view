@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createFirePerimetersLayer } from './index.js';
+import { fakeInput } from '../../input/testDoubles.mjs';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
+
+// The fills set of the layer the last harness made: perimeter picks name it.
+let fillsSetId = null;
+/** A Cesium pick of a perimeter's fill, as the draw port makes it. */
+const perimeterPick = (id) => ({ id: { set: fillsSetId, id } });
+const liveSet = (draw, suffix) =>
+  [...draw.sets.values()].find(
+    (record) => !record.disposed && record.spec.id.endsWith(suffix),
+  );
 
 function harness(
   source,
@@ -14,20 +25,16 @@ function harness(
     }),
   } = {},
 ) {
-  const sources = [];
   const overlay = { entries: new Map(), visible: null };
-  const clicks = { handler: null, destroyed: 0 };
   const owners = new Map();
   const opened = [];
-  const viewer = {
-    scene: { pick },
-    dataSources: {
-      add(value) {
-        sources.push(value);
-      },
-      remove(value) {
-        sources.splice(sources.indexOf(value), 1);
-      },
+  const viewer = { scene: { pick } };
+  const { draw } = bindFakeDraw(viewer);
+  const input = fakeInput(viewer);
+  const clicks = {
+    handler: (click) => input.click(click.position),
+    get destroyed() {
+      return input.input.subscriberCount() === 0 ? 1 : 0;
     },
   };
   const layer = createFirePerimetersLayer({
@@ -44,23 +51,14 @@ function harness(
       },
       hitTest: (x, y, options) => cardHit(x, y, options),
     },
-    screenSpaceEventHandlerFactory: () => ({
-      setInputAction(callback) {
-        clicks.handler = callback;
-      },
-      destroy() {
-        clicks.destroyed += 1;
-        clicks.handler = null;
-      },
-    }),
+    inputFor: () => input.input,
     picking: {
-      resolvePickId: (picked) => picked?.id ?? null,
+      resolvePickId: (picked) => picked?.id?.id ?? picked?.id ?? null,
       isOwnedByOtherLayer: (layerId, pickedId) =>
         String(pickedId).startsWith('other-layer:'),
       registerPickOwner: (layerId, predicate) => owners.set(layerId, predicate),
       unregisterPickOwner: (layerId) => owners.delete(layerId),
     },
-    pointer: { isPointerFree: () => true },
     inciwebSource: inciwebIndex
       ? { getIndex: async () => inciwebIndex }
       : { getIndex: async () => [] },
@@ -69,7 +67,18 @@ function harness(
   });
   layer.init(viewer);
   layer.enable(viewer);
-  return { layer, viewer, sources, overlay, clicks, owners, opened };
+  fillsSetId = liveSet(draw, ':fills').spec.id;
+  return {
+    layer,
+    viewer,
+    draw,
+    fills: () => liveSet(draw, ':fills'),
+    lines: () => liveSet(draw, ':lines'),
+    overlay,
+    clicks,
+    owners,
+    opened,
+  };
 }
 
 const ring = [
@@ -97,22 +106,82 @@ const row = {
   polygons: [[ring]],
 };
 
-test('each perimeter polygon renders as one filled entity with its fire line', async () => {
+test('each perimeter polygon draws as one clamped fill with its draped fire line', async () => {
+  const hole = [
+    [-108.08, 35.22],
+    [-108.02, 35.22],
+    [-108.02, 35.25],
+    [-108.08, 35.22],
+  ];
   const h = harness({
     getSnapshot: async () => [
-      row,
-      { ...row, stableId: 'other', polygons: [[ring], [ring]] },
+      { ...row, polygons: [[ring, hole]] },
+      {
+        ...row,
+        stableId: 'other',
+        containedPct: 100,
+        polygons: [[ring], [ring]],
+      },
     ],
   });
+  assert.equal(h.fills().show, true);
+  assert.equal(h.lines().show, true);
   assert.equal(await h.layer.update(h.viewer), true);
-  const entities = h.sources[0].entities.values;
-  assert.equal(entities.length, 3);
-  assert.equal(entities[0].id, 'fire-perimeter:2026-NMGNF-000123:0');
-  assert.ok(entities[0].polygon, 'perimeter fill missing');
-  assert.ok(entities[0].polyline, 'fire line missing');
-  assert.equal(entities[1].id, 'fire-perimeter:other:0');
-  assert.equal(entities[2].id, 'fire-perimeter:other:1');
+  const ids = [
+    'fire-perimeter:2026-NMGNF-000123:0',
+    'fire-perimeter:other:0',
+    'fire-perimeter:other:1',
+  ];
+  assert.deepEqual([...h.fills().items.keys()], ids);
+  assert.deepEqual([...h.lines().items.keys()], ids);
+  const fill = h.fills().items.get(ids[0]);
+  assert.equal(fill.height, 'clampGround');
+  assert.deepEqual(fill.fill, [1, 122 / 255, 0, 0.25]);
+  assert.equal(fill.geometry.kind, 'polygon');
+  assert.equal(fill.geometry.rings.length, 2, 'the hole stays');
+  assert.deepEqual(fill.geometry.rings[0][1], { lon: -108.0, lat: 35.2 });
+  const line = h.lines().items.get(ids[0]);
+  assert.equal(line.mode, 'draped');
+  assert.equal(line.widthPx, 2);
+  assert.deepEqual(line.style, {
+    kind: 'solid',
+    color: [1, 122 / 255, 0, 0.9],
+  });
+  assert.equal(line.positions.length, ring.length, 'the exterior ring only');
+  assert.ok(Number.isFinite(line.positions[0].x), 'lines take ECEF');
+  assert.deepEqual(h.fills().items.get(ids[1]).fill, [
+    139 / 255,
+    195 / 255,
+    74 / 255,
+    0.25,
+  ]);
   assert.equal(h.layer.getStats().count, 2);
+  h.layer.disable();
+  assert.equal(h.fills().show, false);
+  assert.equal(h.lines().show, false);
+  h.layer.destroy();
+  assert.equal(h.fills(), undefined, 'destroy disposes the sets');
+  assert.equal(h.lines(), undefined);
+});
+
+test("a pick selects only an item of the layer's own sets", async () => {
+  let pickResult = null;
+  const h = harness(
+    { getSnapshot: async () => [row] },
+    { pick: () => pickResult },
+  );
+  await h.layer.update(h.viewer);
+  pickResult = {
+    id: { set: 'someone-else', id: 'fire-perimeter:2026-NMGNF-000123:0' },
+  };
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(h.overlay.entries.get('fire-perimeters')?.length ?? 0, 0);
+  // The fire line picks as its perimeter, as the one entity used to.
+  pickResult = {
+    id: { set: h.lines().spec.id, id: 'fire-perimeter:2026-NMGNF-000123:0' },
+  };
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(h.overlay.entries.get('fire-perimeters').length, 1);
 });
 
 test('late refresh cannot publish after disable or destroy', async () => {
@@ -153,7 +222,7 @@ test('clicking a perimeter publishes its incident card; empty space clears it', 
   // overlay cards inert anywhere over a perimeter.
   assert.equal(h.owners.size, 0);
 
-  pickResult = { id: 'fire-perimeter:2026-NMGNF-000123:0' };
+  pickResult = perimeterPick('fire-perimeter:2026-NMGNF-000123:0');
   h.clicks.handler({ position: { x: 10, y: 10 } });
   const entries = h.overlay.entries.get('fire-perimeters');
   assert.equal(entries.length, 1);
@@ -177,7 +246,7 @@ test('clicking a perimeter publishes its incident card; empty space clears it', 
 test('disable removes the click handler, pick ownership, and any card', async () => {
   const h = harness(
     { getSnapshot: async () => [row] },
-    { pick: () => ({ id: 'fire-perimeter:2026-NMGNF-000123:0' }) },
+    { pick: () => perimeterPick('fire-perimeter:2026-NMGNF-000123:0') },
   );
   await h.layer.update(h.viewer);
   h.clicks.handler({ position: { x: 10, y: 10 } });
@@ -191,7 +260,7 @@ test('a refresh that drops the selected incident also drops its card', async () 
   let rows = [row];
   const h = harness(
     { getSnapshot: async () => rows },
-    { pick: () => ({ id: 'fire-perimeter:2026-NMGNF-000123:0' }) },
+    { pick: () => perimeterPick('fire-perimeter:2026-NMGNF-000123:0') },
   );
   await h.layer.update(h.viewer);
   h.clicks.handler({ position: { x: 10, y: 10 } });
@@ -220,9 +289,8 @@ test('a matched incident card carries the InciWeb line and click-through', async
   );
   await h.layer.update(h.viewer);
   // Select via a perimeter pick.
-  h.viewer.scene.pick = () => ({
-    id: 'fire-perimeter:2026-NMGNF-000123:0',
-  });
+  h.viewer.scene.pick = () =>
+    perimeterPick('fire-perimeter:2026-NMGNF-000123:0');
   h.clicks.handler({ position: { x: 10, y: 10 } });
   // The card publishes immediately; the link line lands once the
   // publication's currency is validated.
@@ -248,7 +316,7 @@ test('an unmatched incident renders no InciWeb line and card clicks stay inert',
   const h = harness(
     { getSnapshot: async () => [row] },
     {
-      pick: () => ({ id: 'fire-perimeter:2026-NMGNF-000123:0' }),
+      pick: () => perimeterPick('fire-perimeter:2026-NMGNF-000123:0'),
       inciwebIndex: [],
       cardHit: () => cardHitResult,
     },
@@ -271,7 +339,7 @@ test('a complex member resolves to its complex page from the catalog', async () 
   const h = harness(
     { getSnapshot: async () => [row] },
     {
-      pick: () => ({ id: 'fire-perimeter:2026-NMGNF-000123:0' }),
+      pick: () => perimeterPick('fire-perimeter:2026-NMGNF-000123:0'),
       inciwebIndex: [
         {
           // Same state as the member fire: the state filter applies to
@@ -312,7 +380,7 @@ test('a stale or unverifiable publication yields no link', async () => {
     const h = harness(
       { getSnapshot: async () => [row] },
       {
-        pick: () => ({ id: 'fire-perimeter:2026-NMGNF-000123:0' }),
+        pick: () => perimeterPick('fire-perimeter:2026-NMGNF-000123:0'),
         inciwebIndex,
         publication,
       },
@@ -331,20 +399,16 @@ test('a stale or unverifiable publication yields no link', async () => {
   }
 });
 
-test('a hanging InciWeb index fetch never blocks the perimeter refresh', async () => {
+test('a hanging InciWeb index fetch never blocks the perimeter refresh', async (t) => {
   const h = harness({ getSnapshot: async () => [row] }, { inciwebIndex: null });
   // Replace the index source with one that never resolves.
   h.layer.destroy(h.viewer);
   const hanging = harness({ getSnapshot: async () => [row] });
   hanging.layer.destroy(hanging.viewer);
-  const sources = [];
-  const viewer = {
-    scene: { pick: () => null },
-    dataSources: {
-      add: (v) => sources.push(v),
-      remove: (v) => sources.splice(sources.indexOf(v), 1),
-    },
-  };
+  const viewer = { scene: { pick: () => null } };
+  bindFakeDraw(viewer);
+  const input = fakeInput(viewer);
+  t.after(() => input.destroy());
   const layer = createFirePerimetersLayer({
     source: { getSnapshot: async () => [row] },
     overlayHost: {
@@ -377,7 +441,7 @@ test('a hanging InciWeb index fetch never blocks the perimeter refresh', async (
   layer.destroy(viewer);
 });
 
-test('an InciWeb outage never breaks the perimeter refresh', async () => {
+test('an InciWeb outage never breaks the perimeter refresh', async (t) => {
   const h = harness({ getSnapshot: async () => [row] });
   const failing = createFirePerimetersLayer({
     source: { getSnapshot: async () => [row] },
@@ -405,10 +469,10 @@ test('an InciWeb outage never breaks the perimeter refresh', async () => {
     },
     openExternal: () => {},
   });
-  const viewer = {
-    scene: { pick: () => null },
-    dataSources: { add() {}, remove() {} },
-  };
+  const viewer = { scene: { pick: () => null } };
+  bindFakeDraw(viewer);
+  const failingInput = fakeInput(viewer);
+  t.after(() => failingInput.destroy());
   failing.init(viewer);
   failing.enable(viewer);
   assert.equal(await failing.update(viewer), true);
@@ -438,40 +502,33 @@ test('analyst records expose incident facts without geometry payloads', async ()
   assert.equal('polygons' in records[0], false);
 });
 
-test('unchanged snapshots retain entity identity even if source ordering changes', async () => {
+test('unchanged snapshots draw nothing again even if source ordering changes', async () => {
   let rows = [row, { ...row, stableId: 'other' }];
   const h = harness({ getSnapshot: async () => rows });
   await h.layer.update();
-  const original = [...h.sources[0].entities.values];
-  let removals = 0;
-  const entities = h.sources[0].entities;
-  const removeAll = entities.removeAll.bind(entities);
-  entities.removeAll = () => {
-    removals++;
-    removeAll();
-  };
+  const writes = () => [h.fills().writes, h.lines().writes];
+  assert.deepEqual(writes(), [1, 1]);
   rows = [...rows].reverse();
   await h.layer.update();
-  assert.equal(removals, 0);
-  assert.equal(entities.values[0], original[0]);
+  assert.deepEqual(writes(), [1, 1]);
   rows = rows.map((value) => ({
     ...value,
     updatedTime: value.updatedTime + 1,
   }));
   await h.layer.update();
-  assert.equal(removals, 1);
-  assert.notEqual(entities.values[0], original[0]);
+  assert.deepEqual(writes(), [2, 2]);
   rows = rows.map((value) => ({ ...value, containedPct: 100 }));
   await h.layer.update();
-  assert.equal(
-    removals,
-    2,
+  assert.deepEqual(
+    writes(),
+    [3, 3],
     'incident facts can change without a new polygon timestamp',
   );
   assert.equal(h.layer.getRowControls().legend[3].count, 2);
   rows = [];
   await h.layer.update();
-  assert.equal(entities.values.length, 0);
+  assert.equal(h.fills().items.size, 0);
+  assert.equal(h.lines().items.size, 0);
   h.layer.destroy();
 });
 
@@ -516,7 +573,7 @@ test('containment legend uses the existing thresholds, colours and incident coun
 for (const action of ['disable', 'destroy', 'selection']) {
   test(`incident-link verification aborts on ${action} and ignores late completion`, async () => {
     let finish, signal;
-    let pick = { id: `fire-perimeter:${row.stableId}:0` };
+    let pickId = `fire-perimeter:${row.stableId}:0`;
     const h = harness(
       {
         getSnapshot: async () => [
@@ -525,7 +582,7 @@ for (const action of ['disable', 'destroy', 'selection']) {
         ],
       },
       {
-        pick: () => pick,
+        pick: () => perimeterPick(pickId),
         inciwebIndex: [
           { incident_id: '123', incident_title: row.name, tau: 'nm' },
         ],
@@ -541,7 +598,7 @@ for (const action of ['disable', 'destroy', 'selection']) {
     h.clicks.handler({ position: { x: 1, y: 1 } });
     assert.equal(signal.aborted, false);
     if (action === 'selection') {
-      pick = { id: 'fire-perimeter:other:0' };
+      pickId = 'fire-perimeter:other:0';
       h.clicks.handler({ position: { x: 1, y: 1 } });
     } else h.layer[action]();
     assert.equal(signal.aborted, true);

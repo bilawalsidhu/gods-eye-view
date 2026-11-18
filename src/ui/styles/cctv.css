@@ -250,8 +250,11 @@ html:not([lang='en']) .cctv-controls .scene-btn {
   height: auto;
   object-fit: contain;
   display: block;
+  /* No fade: a camera change hides the old frame at once (never its pixels
+     under the new camera) and shows the new one as soon as it is decoded. A
+     180 ms fade-in after every arriving frame made each camera click linger
+     on black. */
   opacity: 0;
-  transition: opacity 180ms ease;
 }
 
 #cctv-video {
