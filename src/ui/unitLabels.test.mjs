@@ -44,3 +44,14 @@ test('other languages get their decimal separator and no digit grouping', () => 
     setLocale('en');
   }
 });
+
+test('Japanese unit words follow the number directly; symbols keep the space', () => {
+  try {
+    setLocale('ja');
+    assert.equal(formatQuantity(5, 'min'), '5分');
+    assert.equal(formatQuantity(1, 'h'), '1時間');
+    assert.equal(formatQuantity(95, 'kt'), '95\u00a0kt');
+  } finally {
+    setLocale('en');
+  }
+});

@@ -1,72 +1,125 @@
 import { phaseTiming } from '../../sources/phaseTiming.js';
-import * as Cesium from 'cesium';
 import { DOT_HEIGHT_OFFSET, MAX_WAYPOINTS_PER_ROAD } from './policy.js';
-
-function surfaceTilesReady(scene) {
-  if (scene.globe?.show) return scene.globe.tilesLoaded !== false;
-  let found = false;
-  for (let i = 0; i < (scene.primitives?.length || 0); i++) {
-    const primitive = scene.primitives.get(i);
-    if (!primitive.show || typeof primitive.tilesLoaded !== 'boolean') continue;
-    found = true;
-    if (!primitive.tilesLoaded) return false;
-  }
-  return found;
+import { heightsOf } from '../../queries/heights.js';
+import { fromDegreesInto, toLonLatH } from '../../geo/ellipsoid.js';
+import { distanceSquared } from '../../geo/vector.js';
+import {
+  canvasOf,
+  findCamera,
+  findFrame,
+  findGlobe,
+  findQuery,
+} from '../../render/rendererOf.js';
+/**
+ * What heights are sampled against now: the globe port's surface identity,
+ * which changes when the base, terrain or photoreal route is swapped or the
+ * globe is shown or hidden, and never on camera moves or tile loads. A
+ * renderer without one (`surfaceIdentity`) names a single surface (0), so
+ * cached heights live as long as the layer's cache.
+ * @param {object|undefined} viewer
+ * @returns {number}
+ */
+export function trafficSurfaceKey(viewer) {
+  return findGlobe(viewer)?.surfaceVersion?.() ?? 0;
 }
+
+/**
+ * Whether the drawn surface has loaded what is in view: the globe's terrain
+ * while it is shown, otherwise the shown 3D tiles (false with neither).
+ * @param {object|undefined} viewer
+ */
+function surfaceTilesReady(viewer) {
+  return findGlobe(viewer)?.isSettled('surface') === true;
+}
+
+/** Whether the globe surface is drawn (else tiles alone are). */
+const globeShown = (viewer) => findGlobe(viewer)?.isGlobeVisible?.() === true;
+
+/** The camera's view and projection now, when the renderer reports them. */
+function cameraMatrices(viewer) {
+  const camera = findCamera(viewer);
+  return typeof camera?.matrices === 'function'
+    ? (camera.matrices() ?? null)
+    : null;
+}
+
+const sameMatrix = (a, b) =>
+  a.length === b.length && a.every((value, i) => value === b[i]);
 
 const renderedFrames = new WeakMap();
 /** Observe completed frames only while an enabled traffic consumer owns them. */
-export function observeTrafficSurface(scene) {
-  if (!scene.postRender?.addEventListener || !scene.camera?.viewMatrix)
-    return () => {};
-  let frame = renderedFrames.get(scene);
-  if (!frame) {
-    frame = {
-      view: new Cesium.Matrix4(),
-      projection: new Cesium.Matrix4(),
-      owners: 0,
-    };
-    renderedFrames.set(scene, frame);
-    frame.remove = scene.postRender.addEventListener(() => {
-      Cesium.Matrix4.clone(scene.camera.viewMatrix, frame.view);
-      Cesium.Matrix4.clone(
-        scene.camera.frustum.projectionMatrix,
-        frame.projection,
-      );
-      frame.surface = trafficSurfaceKey(scene);
-      frame.ready = surfaceTilesReady(scene);
+export function observeTrafficSurface(viewer) {
+  const frame = findFrame(viewer);
+  if (!frame || !cameraMatrices(viewer)) return () => {};
+  let rendered = renderedFrames.get(viewer);
+  if (!rendered) {
+    rendered = { view: null, projection: null, owners: 0 };
+    renderedFrames.set(viewer, rendered);
+    rendered.remove = frame.on('postRender', () => {
+      const matrices = cameraMatrices(viewer);
+      rendered.view = matrices?.view ?? null;
+      rendered.projection = matrices?.projection ?? null;
+      rendered.surface = trafficSurfaceKey(viewer);
+      rendered.ready = surfaceTilesReady(viewer);
     });
   }
-  frame.owners++;
+  rendered.owners++;
   let released = false;
   return () => {
     if (released) return;
     released = true;
-    if (--frame.owners === 0) {
-      frame.remove();
-      renderedFrames.delete(scene);
+    if (--rendered.owners === 0) {
+      rendered.remove();
+      renderedFrames.delete(viewer);
     }
   };
 }
 
-function currentRenderedFrame(scene) {
-  if (!scene.postRender?.addEventListener || !scene.camera?.viewMatrix)
-    return { ready: surfaceTilesReady(scene) };
-  const frame = renderedFrames.get(scene);
-  return frame &&
-    frame.surface === trafficSurfaceKey(scene) &&
-    Cesium.Matrix4.equals(frame.view, scene.camera.viewMatrix) &&
-    Cesium.Matrix4.equals(
-      frame.projection,
-      scene.camera.frustum.projectionMatrix,
-    )
+/**
+ * The completed frame drawn from the camera as it is now, of the surface
+ * drawn now; null when the camera has moved or the surface changed since.
+ * Without a frame port or camera matrices, the surface's readiness alone.
+ */
+function currentRenderedFrame(viewer) {
+  if (!findFrame(viewer)) return { ready: surfaceTilesReady(viewer) };
+  const matrices = cameraMatrices(viewer);
+  if (!matrices) return { ready: surfaceTilesReady(viewer) };
+  const frame = renderedFrames.get(viewer);
+  return frame?.view &&
+    frame.surface === trafficSurfaceKey(viewer) &&
+    sameMatrix(frame.view, matrices.view) &&
+    sameMatrix(frame.projection, matrices.projection)
     ? frame
     : null;
 }
 
+/**
+ * Whether the frame being drawn has its surface loaded, read while it
+ * finishes (from a frame-port `postRender` listener). It answers what the
+ * rendered-frame observer is recording for this same frame, which a frame
+ * listener may run before.
+ */
+export function drawnSurfaceReady(viewer) {
+  return surfaceTilesReady(viewer);
+}
+
 /** Only a completed render of this camera can certify cached surface heights. */
-export function trafficSurfaceReady(scene) {
-  return currentRenderedFrame(scene)?.ready === true;
+export function trafficSurfaceReady(viewer) {
+  return currentRenderedFrame(viewer)?.ready === true;
+}
+
+/**
+ * The surface reads here over what `viewer` draws, through its renderer's
+ * ports.
+ * @param {object|undefined} viewer
+ */
+export function viewerRoadSurface(viewer) {
+  return {
+    drawnReady: () => drawnSurfaceReady(viewer),
+    ready: () => trafficSurfaceReady(viewer),
+    prepare: (roads, ...rest) => prepareRoadSurfaces(roads, viewer, ...rest),
+    loadedHeight: (location) => loadedSurfaceHeight(viewer, location),
+  };
 }
 
 /** Preserve bends and insert height samples at most 150 m apart, splitting long roads. */
@@ -137,108 +190,75 @@ const validHeight = (height) =>
   Number.isFinite(height) && Math.abs(height) <= 9000;
 
 /**
+ * One loaded-surface height at a point, for the view-height estimate road
+ * selection starts from: terrain while the globe is shown, otherwise what is
+ * drawn where the renderer can sample it (draw sets, the layer's own dots
+ * among them, are seen through). Undefined when it cannot say.
+ * @param {object|undefined} viewer
+ * @param {{lon: number, lat: number}} location Degrees.
+ * @returns {number|null|undefined}
+ */
+export function loadedSurfaceHeight(viewer, location) {
+  if (!viewer) return undefined;
+  const heights = heightsOf(viewer);
+  return globeShown(viewer)
+    ? heights.now(location, { against: 'terrain' })
+    : heights.supported().surface
+      ? heights.now(location)
+      : undefined;
+}
+
+/**
  * Reuse the rendered depth buffer instead of drawing a new pick frustum per
  * station. Iteration corrects the projection's height estimate. A depth hit
  * is accepted only at this road coordinate (2 m), never on a foreground roof
- * or hillside projected onto a different geographic point. Translucent traffic
- * is absent from Cesium's default pickPosition depth pass.
+ * or hillside projected onto a different geographic point. The query port's
+ * depth pick answers against tiles and terrain, never the translucent dots.
+ * `rendered` is the completed frame of this camera, as `prepareRoadSurfaces`
+ * read it for its current slice.
  */
-export function renderedRoadHeight(scene, lon, lat, estimate) {
-  if (
-    !scene.pickPositionSupported ||
-    scene.pickTranslucentDepth ||
-    !currentRenderedFrame(scene) ||
-    !scene.canvas?.clientWidth ||
-    !scene.frameState
-  )
-    return undefined;
+export function renderedRoadHeight(
+  viewer,
+  lon,
+  lat,
+  estimate,
+  rendered = currentRenderedFrame(viewer),
+) {
+  const query = findQuery(viewer);
+  const canvas = canvasOf(viewer);
+  if (!query || !rendered || !canvas?.clientWidth) return undefined;
   let height = validHeight(estimate) ? estimate : 0;
-  const point = new Cesium.Cartesian3();
-  const screen = new Cesium.Cartesian2();
+  const point = { x: 0, y: 0, z: 0 };
   for (let attempt = 0; attempt < 4; attempt++) {
-    Cesium.Cartesian3.fromDegrees(lon, lat, height, undefined, point);
+    fromDegreesInto(lon, lat, height, point);
+    const screen = query.project(point);
     if (
-      !Cesium.SceneTransforms.worldToWindowCoordinates(scene, point, screen) ||
-      screen.x < 0 ||
-      screen.y < 0 ||
-      screen.x >= scene.canvas.clientWidth ||
-      screen.y >= scene.canvas.clientHeight
+      !screen ||
+      !(screen.x >= 0) ||
+      !(screen.y >= 0) ||
+      screen.x >= canvas.clientWidth ||
+      screen.y >= canvas.clientHeight
     )
       return undefined;
     let hit;
     try {
-      hit = scene.pickPosition(screen);
+      hit = query.pickPosition(screen.x, screen.y);
     } catch {
       return undefined;
     }
     if (!hit) return undefined;
-    const location = Cesium.Cartographic.fromCartesian(hit);
+    const location = toLonLatH(hit);
     if (!location || !validHeight(location.height)) return undefined;
-    const dx =
-      (Cesium.Math.toDegrees(location.longitude) - lon) *
-      Math.cos((lat * Math.PI) / 180) *
-      111320;
-    const dy = (Cesium.Math.toDegrees(location.latitude) - lat) * 111320;
+    const dx = (location.lon - lon) * Math.cos((lat * Math.PI) / 180) * 111320;
+    const dy = (location.lat - lat) * 111320;
     if (Math.hypot(dx, dy) <= 2) return location.height;
     height = location.height;
   }
   return undefined;
 }
 
-// Per-scene, coordinate-keyed LRU. Never writes raw samples into shared ground floors.
+// Per-viewer, coordinate-keyed LRU. Never writes raw samples into shared ground floors.
 const sceneCaches = new WeakMap();
-
-// Stable ids for the objects heights are sampled from (tilesets, terrain).
-const surfaceIds = new WeakMap();
-let nextSurfaceId = 1;
-const surfaceId = (object) => {
-  if (!object || typeof object !== 'object') return 0;
-  if (!surfaceIds.has(object)) surfaceIds.set(object, nextSurfaceId++);
-  return surfaceIds.get(object);
-};
-
-/**
- * Name what heights are sampled against: the terrain provider when the globe
- * is shown, otherwise the set of visible 3D tilesets. A map-provider switch
- * changes it and invalidates every cached height.
- */
-const surfaceKeys = new WeakMap();
-export function trafficSurfaceKey(scene) {
-  let state = surfaceKeys.get(scene);
-  if (!state) {
-    state = { globe: null, terrain: null, tiles: [], key: '' };
-    surfaceKeys.set(scene, state);
-  }
-  const globe = Boolean(scene.globe?.show);
-  const terrain = globe ? scene.globe.terrainProvider : null;
-  let changed = state.globe !== globe || state.terrain !== terrain;
-  let count = 0;
-  if (!globe) {
-    for (let i = 0; i < (scene.primitives?.length || 0); i++) {
-      const primitive = scene.primitives.get(i);
-      if (!primitive?.show || typeof primitive.tilesLoaded !== 'boolean')
-        continue;
-      if (state.tiles[count] !== primitive) {
-        state.tiles[count] = primitive;
-        changed = true;
-      }
-      count++;
-    }
-  }
-  if (count !== state.tiles.length) {
-    state.tiles.length = count;
-    changed = true;
-  }
-  if (changed) {
-    state.globe = globe;
-    state.terrain = terrain;
-    // Allocate only when the actual map surface changes, never per frame.
-    state.key = globe
-      ? `globe:${surfaceId(terrain)}`
-      : `tiles:${state.tiles.map(surfaceId).join(',')}`;
-  }
-  return state.key;
-}
 
 /**
  * Level-of-detail band for a point seen from the camera: log2 of the
@@ -263,29 +283,26 @@ const nextSlice = (hasSurface) =>
 /** Prepare only admitted roads in bounded slices; locally missing surfaces defer that road. */
 export async function prepareRoadSurfaces(
   roads,
-  scene,
+  viewer,
   ground,
-  excluded,
   signal,
   { onReady, onMetrics, frameBudgetMs = 12, revalidate = false } = {},
 ) {
   // Cached heights are only as good as the surface and detail they came
   // from: a provider switch drops them all, and a point now seen from a
   // closer band than its sample is re-sampled against the finer mesh.
-  const surface = trafficSurfaceKey(scene);
-  let cache = sceneCaches.get(scene);
+  const surface = trafficSurfaceKey(viewer);
+  let cache = sceneCaches.get(viewer);
   if (!cache || cache.surface !== surface) {
     cache = { surface, heights: new Map() };
-    sceneCaches.set(scene, cache);
+    sceneCaches.set(viewer, cache);
   }
-  const cameraCarto = scene.camera?.positionCartographic;
-  const cameraLon = cameraCarto
-    ? Cesium.Math.toDegrees(cameraCarto.longitude)
-    : 0;
-  const cameraLat = cameraCarto
-    ? Cesium.Math.toDegrees(cameraCarto.latitude)
-    : 0;
-  const cameraHeight = cameraCarto ? cameraCarto.height : NaN;
+  const eye = findCamera(viewer)?.pose()?.position;
+  const cameraAt = eye ? toLonLatH(eye) : null;
+  const cameraLon = cameraAt ? cameraAt.lon : 0;
+  const cameraLat = cameraAt ? cameraAt.lat : 0;
+  const cameraHeight = cameraAt ? cameraAt.height : NaN;
+  const heights = heightsOf(viewer);
   const start = performance.now();
   const metrics = {
     sampleCount: 0,
@@ -297,20 +314,28 @@ export async function prepareRoadSurfaces(
     maxSliceMs: 0,
   };
   let sliceStart = performance.now();
-  const carto = new Cesium.Cartographic();
+  // What the view holds can only change between slices (no frame draws
+  // within one), so each slice reads it once.
+  let rendered, settled, globe;
+  const readView = () => {
+    rendered = currentRenderedFrame(viewer);
+    settled = rendered?.ready === true;
+    globe = globeShown(viewer);
+  };
+  readView();
+  const location = { lon: 0, lat: 0 };
   const ready = [],
     pending = [];
   for (const road of roads) {
     let resolved = true;
     let settledRoad = true;
     const { indices, distances } = roadHeightStations(road.coords);
-    const heights = new Array(road.coords.length);
+    const stationHeights = new Array(road.coords.length);
     for (const i of indices) {
       signal?.throwIfAborted();
       const [lon, lat] = road.coords[i];
       const key = `${lon.toFixed(6)},${lat.toFixed(6)}`;
       const cached = cache.heights.get(key);
-      const settled = trafficSurfaceReady(scene);
       const band = detailBand(cameraLon, cameraLat, cameraHeight, lon, lat);
       let height =
         cached &&
@@ -326,37 +351,25 @@ export async function prepareRoadSurfaces(
         cache.heights.set(key, cached);
       } else {
         if (!settled) settledRoad = false;
-        carto.longitude = Cesium.Math.toRadians(lon);
-        carto.latitude = Cesium.Math.toRadians(lat);
-        carto.height = 0;
+        location.lon = lon;
+        location.lat = lat;
         const floor = ground?.cachedGroundFloor?.(lat, lon);
         let sampled;
-        // sampleHeight reads the locally rendered mesh, not unresolved/offscreen
-        // tiles. Global tilesLoaded can stay false while this street is usable.
-        if (scene.globe?.show) sampled = scene.globe.getHeight?.(carto);
+        // A height now reads the locally rendered mesh, not unresolved or
+        // offscreen tiles. Global readiness can stay false while this street
+        // is usable.
+        if (globe) sampled = heights.now(location, { against: 'terrain' });
         else {
-          const estimate = Cesium.Cartographic.fromCartesian(
-            road.waypoints[i],
-          )?.height;
-          sampled = renderedRoadHeight(scene, lon, lat, estimate);
+          const estimate = toLonLatH(road.waypoints[i])?.height;
+          sampled = renderedRoadHeight(viewer, lon, lat, estimate, rendered);
           if (validHeight(sampled)) metrics.depthHits++;
         }
-        if (
-          !scene.globe?.show &&
-          !validHeight(sampled) &&
-          scene.sampleHeightSupported
-        ) {
+        if (!globe && !validHeight(sampled) && heights.supported().surface) {
           const sampleStart = performance.now();
           metrics.sampleCount++;
-          const shown = (excluded || []).filter((p) => p?.show);
-          for (const primitive of shown) primitive.show = false;
-          try {
-            sampled = scene.sampleHeight(carto, excluded);
-          } catch {
-            /* local mesh missing */
-          } finally {
-            for (const primitive of shown) primitive.show = true;
-          }
+          // A miss is the local mesh still missing. Draw sets, the dots
+          // among them, are seen through.
+          sampled = heights.now(location);
           metrics.sampleMs += performance.now() - sampleStart;
         }
         // A shared floor is a safe provisional waypoint, but not permission to
@@ -382,13 +395,14 @@ export async function prepareRoadSurfaces(
             cache.heights.delete(cache.heights.keys().next().value);
         }
       }
-      heights[i] = height;
+      stationHeights[i] = height;
       const elapsed = performance.now() - sliceStart;
       if (elapsed >= frameBudgetMs) {
         metrics.maxSliceMs = Math.max(metrics.maxSliceMs, elapsed);
         // Before the first local mesh exists, give its tile/worker tasks the
         // normal queue priority instead of repeatedly probing an empty scene.
         await nextSlice(metrics.cacheHits + metrics.depthHits > 0);
+        readView();
         sliceStart = performance.now();
       }
     }
@@ -399,22 +413,21 @@ export async function prepareRoadSurfaces(
         b = indices[station];
       const span = distances[b] - distances[a];
       const t = span > 0 ? (distances[i] - distances[a]) / span : 0;
-      const height = heights[a] + (heights[b] - heights[a]) * t;
+      const height =
+        stationHeights[a] + (stationHeights[b] - stationHeights[a]) * t;
       const [lon, lat] = road.coords[i];
       const floor = ground?.cachedGroundFloor?.(lat, lon);
-      Cesium.Cartesian3.fromDegrees(
+      fromDegreesInto(
         lon,
         lat,
         (validHeight(floor) ? Math.max(height, floor) : height) +
           DOT_HEIGHT_OFFSET,
-        undefined,
         road.waypoints[i],
       );
     }
     for (let i = 0; i < road.segmentDist.length; i++)
-      road.segmentDist[i] = Cesium.Cartesian3.distance(
-        road.waypoints[i],
-        road.waypoints[i + 1],
+      road.segmentDist[i] = Math.sqrt(
+        distanceSquared(road.waypoints[i], road.waypoints[i + 1]),
       );
     road.surfaceReady = resolved;
     road.surfaceSettled = settledRoad;

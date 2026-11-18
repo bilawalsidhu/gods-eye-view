@@ -22,13 +22,16 @@ registerHooks({
     const source = url.includes('/library?')
       ? 'const lib = await globalThis.__gevMapillaryLibrary();\n' +
         'export const Viewer = lib.Viewer;\n' +
-        'export const RenderMode = lib.RenderMode;\n'
+        'export const RenderMode = lib.RenderMode;\n' +
+        'export const GraphDataProvider = lib.GraphDataProvider;\n'
       : 'export default {};\n';
     return { format: 'module', shortCircuit: true, source };
   },
 });
-const { createMapillaryViewer } =
+const { createMapillaryViewer, graphEndpointUrl } =
   await import('./providers/mapillary/viewer.js');
+const { createMapillarySource } =
+  await import('./providers/mapillary/source.js');
 
 /**
  * A viewer host over `adapter`. `marker` records where the position marker
@@ -345,7 +348,7 @@ function fakeLibrary() {
   }
   globalThis.__gevMapillaryLibrary = async () => {
     await gate.promise;
-    return { Viewer, RenderMode: {} };
+    return { Viewer, RenderMode: {}, GraphDataProvider: FakeGraphDataProvider };
   };
   return { gate, viewers };
 }
@@ -554,6 +557,51 @@ test('an adapter that can frame but says this image has no frame offers no FIT /
   assert.equal(state.street.renderModes, true, 'a flat image can be framed');
 });
 
+test('a caller that withdraws while the viewer is still mounting gets no photo', async () => {
+  const gate = deferred();
+  const adapter = fakeAdapter({ gate });
+  const { state, host } = harness(adapter);
+  const controller = new AbortController();
+  const pending = host.open('mapillary', 'a', { signal: controller.signal });
+  assert.equal(state.street.open, true, 'opening');
+  controller.abort(); // the library is still loading
+  gate.resolve();
+  assert.equal(await pending, false);
+  assert.deepEqual(adapter.calls.open, [], 'the image was never opened');
+  assert.equal(state.street.open, false, 'the photo is closed');
+  assert.equal(state.street.loading, false, 'no stuck spinner');
+  assert.equal(state.street.imageId, null);
+});
+
+test('a caller that withdraws while the photo is loading gets it closed', async () => {
+  const openGate = deferred();
+  const adapter = fakeAdapter({ openGate });
+  const { state, host } = harness(adapter);
+  const controller = new AbortController();
+  const pending = host.open('mapillary', 'a', { signal: controller.signal });
+  await settle();
+  assert.deepEqual(adapter.calls.open, ['a'], 'loading');
+  controller.abort();
+  openGate.resolve();
+  assert.equal(await pending, false);
+  assert.equal(state.street.open, false, 'the withdrawn photo is closed');
+  assert.equal(state.street.imageId, null);
+  // An already-withdrawn request asks nothing at all.
+  const done = new AbortController();
+  done.abort();
+  assert.equal(
+    await host.open('mapillary', 'b', { signal: done.signal }),
+    false,
+  );
+  assert.deepEqual(adapter.calls.open, ['a']);
+  // A signal that never fires changes nothing.
+  assert.equal(
+    await host.open('mapillary', 'c', { signal: new AbortController().signal }),
+    true,
+  );
+  assert.equal(state.street.imageId, 'c');
+});
+
 test('a pose’s licence reaches the caption state, and a closed viewer forgets it', async () => {
   const { state, host, google } = twoProviders();
   await host.open('google', 'g-1');
@@ -564,4 +612,53 @@ test('a pose’s licence reaches the caption state, and a closed viewer forgets 
   google.emitPose('g-1', { providerId: 'google', license: 'CC0' });
   host.close();
   assert.equal(state.street.license, null);
+});
+
+/** MapillaryJS 4's Graph provider, recording what it was built with. */
+class FakeGraphDataProvider {
+  constructor(options = {}) {
+    this.options = options;
+  }
+}
+
+test('without a Graph endpoint the viewer gets the client token, as before', async () => {
+  const library = fakeLibrary();
+  library.gate.resolve();
+  const adapter = createMapillaryViewer({ source: { token: 't' } });
+  await adapter.mount({});
+  const [viewer] = library.viewers.instances;
+  assert.equal(viewer.options.accessToken, 't');
+  assert.equal(viewer.options.dataProvider, undefined);
+});
+
+test("with a Graph endpoint the viewer uses MapillaryJS's Graph provider there, without a token", async () => {
+  const library = fakeLibrary();
+  library.gate.resolve();
+  const source = createMapillarySource({
+    graphEndpoint: 'https://app.example/api/mapillary/graph',
+    fetchImpl: async () => {
+      throw new Error('the viewer does not use the source transport');
+    },
+  });
+  const adapter = createMapillaryViewer({ source });
+  await adapter.mount({});
+  const [viewer] = library.viewers.instances;
+  assert.equal(viewer.options.accessToken, undefined);
+  const provider = viewer.options.dataProvider;
+  assert.ok(provider instanceof FakeGraphDataProvider);
+  assert.deepEqual(provider.options, {
+    endpoint: 'https://app.example/api/mapillary/graph/',
+  });
+});
+
+test('a relative Graph endpoint resolves against the page, with one trailing slash', () => {
+  assert.equal(
+    graphEndpointUrl({ graphEndpoint: '/api/mapillary/graph' }),
+    'http://localhost/api/mapillary/graph/',
+  );
+  assert.equal(
+    graphEndpointUrl({ graphEndpoint: '/api/mapillary/graph//' }),
+    'http://localhost/api/mapillary/graph/',
+  );
+  assert.equal(graphEndpointUrl({ token: 't' }), '');
 });

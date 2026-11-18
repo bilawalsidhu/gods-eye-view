@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWindLayer, formatWindValidTime, windStats } from './index.js';
+import { useWindInspectionStore } from '../../ui/stores/windInspection.js';
+import { applicationPinia } from '../../ui/vueRuntime.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { bindRenderer } from '../../render/rendererOf.js';
 
 const snapshot = (model) => ({
   model,
@@ -97,7 +101,7 @@ const complete = (model, extra = {}) => ({
 });
 test('local appearance and units reuse the loaded field; optional scalar requests remain separate', async () => {
   const requests = [];
-  const { layer, calls } = harness({
+  const { layer } = harness({
     getSnapshot: async (args) => {
       requests.push(args);
       return complete(
@@ -302,33 +306,38 @@ test('weather summary describes the selected forecast and count remains numeric'
 });
 
 test('sample stays fixed across model, field and unit changes; dismissal and disable clear marker', async () => {
-  const nodes = [];
+  // The marker the scene chrome renders, as the wind layer presents it.
+  const marker = () => useWindInspectionStore(applicationPinia()).marker;
   let listener;
   let samples = 0;
   const container = {
-    ownerDocument: { createElement: () => ({ style: {}, setAttribute() {}, remove() { nodes.splice(nodes.indexOf(this), 1); } }) },
-    appendChild(node) { nodes.push(node); },
+    ownerDocument: {},
     getBoundingClientRect: () => ({ left: 0, top: 0 }),
   };
+  let center = fromDegrees(0, 0);
   const viewer = {
     container,
-    camera: { positionWC: {}, pickEllipsoid: () => { samples++; return { longitude: 0, latitude: 0 }; } },
+    get canvas() {
+      return this.scene?.canvas;
+    },
     scene: {
-      mode: 3,
       canvas: { clientWidth: 800, clientHeight: 600, getBoundingClientRect: () => ({ left: 0, top: 0 }) },
-      cartesianToCanvasCoordinates: () => ({ x: 400, y: 300 }),
-      postRender: { addEventListener(fn) { listener = fn; return () => { listener = null; }; } },
-      requestRender() {},
     },
   };
+  bindRenderer(viewer, {
+    query: {
+      pickEllipsoid: () => { samples++; return center; },
+      project: () => ({ x: 400, y: 300 }),
+      isOccluded: () => false,
+    },
+    frame: {
+      on(phase, fn) { listener = fn; return () => { listener = null; }; },
+      requestRender() {},
+    },
+  });
   const rendering = Object.fromEntries(['attach', 'start', 'stop', 'clear', 'destroy', 'setField'].map(name => [name, () => {}]));
   const layer = createWindLayer({
     feed: { getSnapshot: async ({ model }) => complete(model) },
-    cesium: {
-      Cartesian2: class {}, Ellipsoid: { WGS84: {} }, SceneMode: { SCENE3D: 3 },
-      Cartographic: { fromCartesian: point => point }, Math: { toDegrees: value => value },
-      EllipsoidalOccluder: class { isPointVisible() { return true; } },
-    },
     createRendering: () => rendering,
 
   });
@@ -338,9 +347,9 @@ test('sample stays fixed across model, field and unit changes; dismissal and dis
   layer.setParams({ inspect: true });
   const captured = layer.getRowControls().summary.reading;
   assert.equal(samples, 1);
-  const retained = nodes[0];
+  const retained = marker().owner;
   layer.setParams({ units: 'mph' });
-  assert.equal(nodes[0], retained);
+  assert.ok(marker().owner === retained);
   const changed = layer.getRowControls().summary.reading;
   assert.equal(changed.speed, captured.speed);
   assert.equal(changed.coordinates, captured.coordinates);
@@ -348,9 +357,9 @@ test('sample stays fixed across model, field and unit changes; dismissal and dis
   assert.equal(samples, 1, 'units do not resample');
   assert.equal(layer.getRowControls().summary.result.id, 'reading');
   assert.deepEqual(layer.getRowControls().summary.settings.map(({ label }) => label), ['MODEL', 'FIELD', 'UNITS', 'MOTION']);
-  assert.equal(nodes.length, 1);
+  assert.ok(marker());
   assert.equal(typeof listener, 'function');
-  viewer.camera.pickEllipsoid = () => { samples++; return { longitude: 70, latitude: 20 }; };
+  center = fromDegrees(70, 20);
   layer.setParams({ overlay: 'speed' });
   assert.equal(layer.getRowControls().summary.reading.coordinates, captured.coordinates);
   layer.setParams({ model: 'ifs' });
@@ -368,9 +377,9 @@ test('sample stays fixed across model, field and unit changes; dismissal and dis
   assert.equal(samples, 2, 'the next explicit read samples the new center');
   for (const change of [() => layer.setParams({ inspect: false }), () => layer.disable()]) {
     layer.setParams({ inspect: true });
-    assert.equal(nodes.length, 1);
+    assert.ok(marker());
     change();
-    assert.equal(nodes.length, 0);
+    assert.equal(marker(), null);
     assert.equal(layer.getRowControls().summary.reading, null);
     assert.equal(layer.getRowControls().summary.result, null);
     assert.equal(listener, null);
@@ -381,20 +390,24 @@ test('sample stays fixed across model, field and unit changes; dismissal and dis
 test('observed history labels wind as a forecast without changing its data or parameters', async () => {
   const { createWeatherClock } = await import('../weather/clock.js');
   const clock = createWeatherClock();
+  const { world } = clock;
   const layer = createWindLayer({ feed: { getSnapshot: async () => snapshot('gfs') }, clock });
   let changes = 0;
   layer.setRowControlsListener(() => changes++);
   const params = layer.getParams();
-  await clock.setTarget('2026-09-14T12:00:00.000Z');
+  world.seek(Date.parse('2026-09-14T12:00:00.000Z'));
+  await Promise.resolve();
   assert.equal(layer.getRowControls().summary.status, null, 'history does not mask source status');
   assert.ok(changes > 0);
   assert.match(layer.getRowControls().info, /Forecast · does not follow history/);
   assert.deepEqual(layer.getParams(), params);
-  await clock.latest();
+  world.goLive();
+  await Promise.resolve();
   assert.equal(layer.getRowControls().summary.status, null);
   layer.destroy();
   const before = changes;
-  await clock.setTarget('2026-09-14T12:00:00.000Z');
+  world.seek(Date.parse('2026-09-14T12:00:00.000Z'));
+  await Promise.resolve();
   assert.equal(changes, before);
   clock.destroy();
 });
@@ -411,4 +424,54 @@ test('wind unit chips appear only alongside a speed legend, including canvas tra
   imageryError = 'Unavailable'; assert.deepEqual(unitChips(), []); imageryError = null;
   for (const overlay of ['pressure', 'temperature', 'none']) { layer.setParams({ overlay }); assert.deepEqual(unitChips(), []); }
   layer.destroy();
+});
+
+test('a parameter replacement during manager enable does not roll the layer back', async () => {
+  const { LayerLifecycle } = await import('../../data/lifecycle.js');
+  const pending = [];
+  const rendering = Object.fromEntries(
+    ['attach', 'start', 'stop', 'clear', 'destroy', 'setField'].map((name) => [
+      name,
+      () => {},
+    ]),
+  );
+  const layer = createWindLayer({
+    feed: {
+      getSnapshot: (args) =>
+        new Promise((resolve) => pending.push({ ...args, resolve })),
+    },
+    createRendering: () => rendering,
+  });
+  const manager = new LayerLifecycle({ container: {} });
+  manager.register(layer);
+  const enabled = manager.setEnabled('wind', true);
+  for (let i = 0; i < 20 && !pending.length; i++) await Promise.resolve();
+  layer.setParams({ model: 'ifs' });
+  await Promise.resolve();
+  pending[0].resolve(snapshot('gfs'));
+  assert.equal(await enabled, true);
+  assert.equal(manager.isEnabled('wind'), true);
+  assert.equal(layer.getStats().loading, true);
+  pending[1].resolve(snapshot('ifs'));
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  assert.equal(layer.getStats().model, 'IFS');
+  assert.equal(layer.getStats().count, 4);
+  await manager.destroyAll();
+});
+
+test('wind whose source follows the timeline drops the note that it does not follow the timeline', async () => {
+  const { createWeatherClock } = await import('../weather/clock.js');
+  const { createWorldClock } = await import('../../time/worldClock.js');
+  const world = createWorldClock();
+  const clock = createWeatherClock({ world });
+  const layer = createWindLayer({ feed: { getSnapshot: async () => snapshot('gfs') }, clock });
+  world.follow('wind');
+  world.seek(Date.parse('2026-09-14T12:00:00.000Z'));
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  assert.equal(clock.getState().mode, 'history');
+  assert.doesNotMatch(layer.getRowControls().info, /does not follow history/);
+  world.follow('wind', false);
+  assert.match(layer.getRowControls().info, /Forecast · does not follow history/);
+  layer.destroy();
+  clock.destroy();
 });

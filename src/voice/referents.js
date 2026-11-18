@@ -4,8 +4,8 @@
  *
  * The registry mirrors what the voice card shows: a result replaces the list
  * when the card displays it with numbered rows (see resultDisplay.js, which
- * both the card and this registry read — analyst items included, in the
- * order the model reads them in the tool output).
+ * both the card and this registry read — analyst items and OSM places
+ * included, in the order the model reads them in the tool output).
  *
  * Session-scoped: the voice commands clear it when a session ends.
  */
@@ -23,10 +23,17 @@ function finite(value) {
 
 function normalize(entry, index) {
   if (!entry || typeof entry !== 'object') return null;
-  // Identity is the canonical key (transponder hex, MMSI, NORAD id); a
+  // Identity is the canonical key (transponder hex, vessel id, NORAD id); a
   // display `id` such as a callsign is only a label, and two contacts can
-  // share one.
-  const id = entry.icao24 ?? entry.mmsi ?? entry.noradId ?? entry.id ?? null;
+  // share one. Vessels can share an MMSI too, so a vessel's key is its
+  // `vesselId` when the row names one.
+  const id =
+    entry.icao24 ??
+    entry.vesselId ??
+    entry.mmsi ??
+    entry.noradId ??
+    entry.id ??
+    null;
   const label = String(
     entry.label ?? entry.callsign ?? entry.name ?? entry.id ?? id ?? '',
   ).trim();
@@ -76,7 +83,7 @@ export function createReferentRegistry({ max = MAX_DISPLAYED_REFERENTS } = {}) {
         return false;
       const shown = presentResult(name, result);
       const entries = shown?.referents || [];
-      // A new result set (a count) replaces the list even
+      // A new result set (a count, a place search) replaces the list even
       // when it is empty: "the second one" never reaches an older answer.
       if (!entries.length && !shown?.resultSet) return false;
       list = normalizeReferents(entries, max);

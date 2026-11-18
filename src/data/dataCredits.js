@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import { creditFromMarkup } from '../render/creditMarkup.js';
+import { findCredits } from '../render/rendererOf.js';
 
 /**
  * Per-layer data attribution registered into Cesium's credit display.
@@ -34,7 +35,29 @@ export const OPENMAPTILES_CREDIT = {
   html: 'Vector tiles: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>',
 };
 
+/** Conditional Salish Sea coverage; registered when its sightings first render. */
+export const ACARTIA_CREDIT = Object.freeze({
+  key: 'acartia',
+  html:
+    'Wildlife sightings: <a href="https://acartia.io" target="_blank" rel="noopener">Acartia</a> (CC BY 4.0; each provider credited per sighting) · ' +
+    '<a href="https://www.bewhalewise.org" target="_blank" rel="noopener">Be Whale Wise</a>',
+});
+
 const osmDisplays = new WeakMap();
+
+/** The short inline OSM credits, as the renderer's credits port takes them. */
+const OSM_INLINE_CREDITS = Object.freeze({
+  osm: Object.freeze({
+    text: '© OpenStreetMap',
+    href: 'https://www.openstreetmap.org/copyright',
+    inline: true,
+  }),
+  tiles: Object.freeze({
+    text: '© OpenMapTiles',
+    href: 'https://openmaptiles.org',
+    inline: true,
+  }),
+});
 
 function updateOsmDisplay(viewer, state) {
   const osm = state.owners.size > 0;
@@ -44,37 +67,27 @@ function updateOsmDisplay(viewer, state) {
     ['osm', osm],
     ['tiles', tiles],
   ]) {
-    if (state[key].visible === visible) continue;
-    state[key].visible = visible;
-    viewer.creditDisplay[visible ? 'addStaticCredit' : 'removeStaticCredit'](
-      state[key].credit,
-    );
-    viewer.scene?.requestRender?.();
+    if (Boolean(state.offs[key]) === visible) continue;
+    if (visible) {
+      // Looked up each time: a renderer bound later takes over.
+      const credits = findCredits(viewer);
+      if (credits) state.offs[key] = credits.addStatic(OSM_INLINE_CREDITS[key]);
+    } else {
+      state.offs[key]();
+      state.offs[key] = null;
+    }
   }
 }
 
-/** Keep one short inline credit while an OSM display owner has visible data. */
+/**
+ * Keep one short inline credit, through the renderer's credits port, while
+ * an OSM display owner has visible data.
+ */
 export function showOsmCredit(viewer, owner, { openMapTiles = false } = {}) {
-  if (!viewer?.creditDisplay?.addStaticCredit || !owner) return false;
+  if (!owner || !findCredits(viewer)) return false;
   let state = osmDisplays.get(viewer);
   if (!state) {
-    state = {
-      owners: new Map(),
-      osm: {
-        visible: false,
-        credit: new Cesium.Credit(
-          '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>',
-          true,
-        ),
-      },
-      tiles: {
-        visible: false,
-        credit: new Cesium.Credit(
-          '<a href="https://openmaptiles.org" target="_blank" rel="noopener">© OpenMapTiles</a>',
-          true,
-        ),
-      },
-    };
+    state = { owners: new Map(), offs: { osm: null, tiles: null } };
     osmDisplays.set(viewer, state);
   }
   if (state.owners.get(owner) === openMapTiles) return false;
@@ -127,6 +140,20 @@ export const DATA_CREDITS = [
       'explicit permission of David J Taylor, Edinburgh',
   },
   {
+    key: 'planespotters',
+    html:
+      'Aircraft photos: ' +
+      '<a href="https://www.planespotters.net" target="_blank" rel="noopener">Planespotters.net</a> ' +
+      '· each photo is © its photographer, credited beside it',
+  },
+  {
+    key: 'openvesselphotos',
+    html:
+      'Vessel photos: ' +
+      '<a href="https://openvesselphotos.org" target="_blank" rel="noopener">Open Vessel Photos</a> ' +
+      "· each photo keeps its author's open licence, credited beside it",
+  },
+  {
     key: 'aisstream',
     html:
       'Live vessels (AIS): ' +
@@ -135,9 +162,22 @@ export const DATA_CREDITS = [
   {
     key: 'celestrak',
     html:
-      'Satellites (TLEs): CelesTrak ' +
+      'Satellites (TLEs and SATCAT): CelesTrak ' +
       '(<a href="https://celestrak.org" target="_blank" rel="noopener">celestrak.org</a>), ' +
       'Dr. T.S. Kelso',
+  },
+  {
+    key: 'ucs-satellite-database',
+    html:
+      'Satellite operators and purposes: ' +
+      '<a href="https://www.ucsusa.org/satellite_database" target="_blank" rel="noopener">UCS Satellite Database</a> ' +
+      '(UCS-Satellite-Database 5-1-2023), Union of Concerned Scientists',
+  },
+  {
+    key: 'imaging-sensors',
+    html:
+      'Imaging sensor swaths: operator and agency specifications, ' +
+      'cited per platform',
   },
   {
     key: 'launch-library-2',
@@ -149,6 +189,20 @@ export const DATA_CREDITS = [
   {
     key: 'usgs',
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
+  },
+  {
+    key: 'openseamap',
+    html:
+      'Sea marks overlay: ' +
+      '<a href="https://www.openseamap.org" target="_blank" rel="noopener">© OpenSeaMap contributors</a> (CC BY-SA 2.0) · ' +
+      'Data © OpenStreetMap contributors (ODbL)',
+  },
+  {
+    key: 'opensnowmap',
+    html:
+      'Ski pistes overlay: ' +
+      '<a href="https://www.opensnowmap.org" target="_blank" rel="noopener">© www.opensnowmap.org</a> (CC BY-SA) · ' +
+      'Data © OpenStreetMap contributors (ODbL)',
   },
   {
     key: 'nasa-gibs',
@@ -166,6 +220,17 @@ export const DATA_CREDITS = [
       '<a href="https://data-nifc.opendata.arcgis.com/" target="_blank" rel="noopener">National Interagency Fire Center (WFIGS)</a>' +
       ' · Incident information: ' +
       '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
+  },
+  {
+    key: 'faa-sua',
+    html:
+      'Prohibited & restricted airspace: ' +
+      '<a href="https://adds-faa.opendata.arcgis.com/" target="_blank" rel="noopener">FAA Special Use Airspace</a>' +
+      ' (prohibited and restricted zones; informational only)',
+  },
+  {
+    key: 'inaturalist',
+    html: 'Wildlife sightings: <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a> contributors (licences per record; photos credited on each card)',
   },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
@@ -259,6 +324,46 @@ export const DATA_CREDITS = [
       '<a href="https://eismoinfo.lt/" target="_blank" rel="noopener">Via Lietuva / Eismoinfo</a>; periodically updated images',
   },
   {
+    key: 'taiwan-cctv',
+    html:
+      'Freeway camera stills (Taiwan): ' +
+      '<a href="https://www.freeway.gov.tw/" target="_blank" rel="noopener">Freeway Bureau, MOTC</a>, ' +
+      'CCTV static data (MOTC 2.0), released under the ' +
+      '<a href="https://data.gov.tw/license" target="_blank" rel="noopener">Open Government Data License, Taiwan (Version 1.0)</a>',
+  },
+  {
+    key: 'ottawa-cctv',
+    html:
+      'Traffic cameras (Ottawa, with an access certificate): ' +
+      '<a href="https://traffic.ottawa.ca/en/traffic-map-data-lists-and-resources/about-the-data" target="_blank" rel="noopener">City of Ottawa Traffic Camera Images API</a>',
+  },
+  {
+    key: 'quebec-cctv',
+    html:
+      'Camera locations (Québec): Ministère des Transports et de la Mobilité durable via ' +
+      '<a href="https://www.donneesquebec.ca/" target="_blank" rel="noopener">Données Québec</a> ' +
+      '(<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>); ' +
+      'Montréal camera locations © OpenStreetMap contributors (ODbL). ' +
+      'Video (when enabled) and linked webcam pages stay with ' +
+      '<a href="https://www.quebec511.info/" target="_blank" rel="noopener">Québec 511</a> and each operator, under their own terms',
+  },
+  {
+    key: 'tripcheck-cctv',
+    html:
+      'Road camera stills (Oregon): camera courtesy of ODOT, via ' +
+      '<a href="https://www.tripcheck.com/" target="_blank" rel="noopener">TripCheck</a>; ' +
+      'partner cameras (counties, cities, Caltrans, WSDOT) are named in the camera label',
+  },
+  {
+    key: 'mlit-river-cctv',
+    html:
+      'River camera stills (Japan): 出典：国土交通省 ' +
+      '<a href="https://www.river.go.jp/" target="_blank" rel="noopener">川の防災情報</a> ' +
+      '(Ministry of Land, Infrastructure, Transport and Tourism; ' +
+      '<a href="https://www.river.go.jp/kawabou/kwb_apend/html/caution.html" target="_blank" rel="noopener">terms</a>), ' +
+      'fetched on view, at most every ten minutes per camera',
+  },
+  {
     key: 'calgary-cctv',
     html:
       'Traffic cameras (Calgary): contains information licensed under the ' +
@@ -281,6 +386,15 @@ export const DATA_CREDITS = [
       '(Ajuntament de Barcelona, Ajuntament de Terrassa), each named in the CCTV panel',
   },
   {
+    key: 'iceland-cctv',
+    html:
+      'CCTV cameras &amp; frames (Iceland): road camera images, fetched live, from the ' +
+      '<a href="https://www.vegagerdin.is/" target="_blank" rel="noopener">Icelandic Road and Coastal Administration (Vegagerðin)</a> — ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> ' +
+      '(<a href="https://www.vegagerdin.is/vegagerdin/gagnasafn/vefthjonustur/terms-and-conditions" target="_blank" rel="noopener">terms</a>); ' +
+      'no endorsement by IRCA is implied',
+  },
+  {
     key: 'kingcounty-cctv',
     html:
       'CCTV cameras &amp; frames (King County, WA): King County Road Services — ' +
@@ -288,6 +402,29 @@ export const DATA_CREDITS = [
       'per the ' +
       '<a href="https://kingcounty.gov/en/dept/kcit/data-information-services/gis-center/about/terms-conditions-copyrights" target="_blank" rel="noopener">KCGIS Center terms</a>. ' +
       'Partner-city cameras hosted on the county image handler (e.g. Newcastle) name their owner in the CCTV panel.',
+  },
+  {
+    key: 'houston-cctv',
+    html:
+      'CCTV cameras &amp; frames (Houston, when enabled): ' +
+      '<a href="https://traffic.houstontranstar.org/cctv/transtar/" target="_blank" rel="noopener">Houston TranStar</a>. ' +
+      "Copying, distributing or framing its images needs TxDOT's written permission under the " +
+      '<a href="https://traffic.houstontranstar.org/disclaimer.aspx" target="_blank" rel="noopener">TranStar Content Usage terms</a>',
+  },
+  {
+    key: 'hk-cctv',
+    html:
+      'Traffic snapshot cameras (Hong Kong): ' +
+      '<a href="https://data.gov.hk/en-data/dataset/hk-td-tis_2-traffic-snapshot-images" target="_blank" rel="noopener">Transport Department / DATA.GOV.HK</a> ' +
+      '(<a href="https://data.gov.hk/en/terms-and-conditions" target="_blank" rel="noopener">Terms of Use</a> — attribution required)',
+  },
+  {
+    key: 'webcamromania-cctv',
+    html:
+      'Giroc camera (when configured): ' +
+      '<a href="https://webcamromania.ro/webcam-orase/webcam-giroc/" target="_blank" rel="noopener">Webcam Romania</a>. ' +
+      'Video rights remain with the camera operator; ' +
+      '<a href="https://webcamromania.ro/termeni-si-conditii/" target="_blank" rel="noopener">provider terms</a> apply.',
   },
   {
     key: 'vegvesen-cctv',
@@ -327,6 +464,13 @@ export const DATA_CREDITS = [
   {
     key: 'panoramax',
     html: 'Street Level: imagery © <a href="https://panoramax.fr" target="_blank" rel="noopener">Panoramax</a> contributors, licence per picture',
+  },
+  {
+    key: 'a22-cctv',
+    html:
+      'Motorway webcams (A22 Brennero–Modena): images © ' +
+      '<a href="https://www.autobrennero.it/" target="_blank" rel="noopener">Autostrada del Brennero S.p.A.</a>, ' +
+      'camera list via the <a href="https://opendatahub.com/" target="_blank" rel="noopener">Open Data Hub</a> (NOI Techpark)',
   },
   {
     key: 'gbfs',
@@ -372,6 +516,10 @@ export const DATA_CREDITS = [
     html: 'Transit vehicles: operator GTFS-Realtime feeds (each operator is credited below when its vehicles are shown)',
   },
   {
+    key: 'rail-gtfs-rt',
+    html: 'Trains: operator realtime feeds (each operator is credited below when its trains are shown)',
+  },
+  {
     key: 'radio-browser',
     html:
       'Internet-radio station directory: ' +
@@ -415,6 +563,13 @@ export const DATA_CREDITS = [
   },
   // ── Bundled snapshots ───────────────────────────────────────────
   {
+    key: 'sky-background',
+    html:
+      'Stars: <a href="https://cdsarc.cds.unistra.fr/viz-bin/cat/V/50" target="_blank" rel="noopener">Yale Bright Star Catalogue</a> ' +
+      '(Hoffleit &amp; Warren, via CDS). Milky Way: <a href="https://www.eso.org/public/images/eso0932a/" target="_blank" rel="noopener">ESO/S. Brunier</a> ' +
+      '(<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; stars removed, blurred and reprojected)',
+  },
+  {
     key: 'dams',
     html: 'Dams: Open Infrastructure Map',
   },
@@ -432,6 +587,46 @@ export const DATA_CREDITS = [
       'from NASA’s Fire Information for Resource Management System ' +
       '(<a href="https://earthdata.nasa.gov/firms" target="_blank" rel="noopener">earthdata.nasa.gov/firms</a>), ' +
       'part of NASA’s Earth Observing System Data and Information System (EOSDIS)',
+  },
+  {
+    key: 's2-ghostmaps',
+    html:
+      'S2 GhostMaps intel products: S2 Underground © by S2A1, ' +
+      '<a href="https://github.com/s2underground/GhostMaps" target="_blank" rel="noopener">github.com/s2underground/GhostMaps</a>, ' +
+      'licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>. ' +
+      'Shown as published; reports are S2 assessments, not verified fact.',
+  },
+  {
+    key: 'news',
+    html:
+      'News: every report is credited to its own publisher and links to the original article; ' +
+      'pictures are the publishers’ own, shown from their sites with the publisher named. ' +
+      'Places, categories, severity and English headlines are derived automatically, by ' +
+      'bundled rules, the news provider or the configured news server, and can be wrong.',
+  },
+  {
+    // GDELT's terms ask for a citation and a link.
+    key: 'gdelt-news',
+    html:
+      'News, Conflicts without a news server: events and page titles from the ' +
+      '<a href="https://www.gdeltproject.org/" target="_blank" rel="noopener">GDELT Project</a> ' +
+      '(GDELT 2.0 events and GKG; places and categories are machine-coded)',
+  },
+  {
+    // World News API's free plan asks for a visible "World News API" link to
+    // its site; always listed, so a free-plan key is never shown without it.
+    key: 'worldnewsapi',
+    html:
+      'News, Local without a news server: headlines from ' +
+      '<a href="https://worldnewsapi.com/" target="_blank" rel="noopener">World News API</a>',
+  },
+  {
+    key: 'shipwrecks',
+    html:
+      'Shipwrecks (Europe): <a href="https://emodnet.ec.europa.eu/en/human-activities" target="_blank" rel="noopener">EMODnet Human Activities</a> ' +
+      '(data originator AND-International, compiled from SHOM, Ireland&rsquo;s National Monuments Service, Historic England and the Oxford Roman Economy Project), ' +
+      'licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>' +
+      ' · Shipwrecks (worldwide): <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0)',
   },
   {
     key: 'drivebc-cctv',
@@ -499,6 +694,15 @@ export const TOMTOM_CREDIT = {
     '<a href="https://www.tomtom.com" target="_blank" rel="noopener">TomTom</a>',
 };
 
+/** Registered when the News layer shows a Liveuamap report (only with
+ * LIVEUAMAP_API_KEY set and no news server). */
+export const LIVEUAMAP_CREDIT = {
+  key: 'liveuamap',
+  html:
+    'News, Conflicts: mapped reports from ' +
+    '<a href="https://liveuamap.com/" target="_blank" rel="noopener">Liveuamap</a>',
+};
+
 /** Registered when the first Natural Earth region or state/province outline
  * resolves (public domain — no attribution required; credited as a courtesy). */
 export const NATURAL_EARTH_CREDIT = {
@@ -508,33 +712,96 @@ export const NATURAL_EARTH_CREDIT = {
     '<a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a> (public domain)',
 };
 
-/** Registered when the first bundled US county outline resolves (public
- * domain — credited as a courtesy). */
+/** Registered when a name from the bundled Wikidata places packs is first
+ * shown (CC0 — no attribution required; credited as a courtesy). */
+export const WIKIDATA_PLACES_CREDIT = {
+  key: 'wikidata-places',
+  html:
+    'City, town and village names from ' +
+    '<a href="https://www.wikidata.org" target="_blank" rel="noopener">Wikidata</a> (CC0)',
+};
+
+/** Registered when the first bundled US county or place outline resolves
+ * (public domain — credited as a courtesy). */
 export const US_CENSUS_CREDIT = {
   key: 'us-census-counties',
   html:
-    'US county boundaries from the ' +
+    'US county and place boundaries from the ' +
     '<a href="https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html" target="_blank" rel="noopener">U.S. Census Bureau</a> (public domain)',
+};
+
+/** Registered when the first bundled Who's On First neighborhood outline
+ * resolves. The link leads to the pack's per-source credits and licences and
+ * says how the boundaries were modified. */
+export const WOF_CREDIT = {
+  key: 'wof-neighborhoods',
+  html:
+    'Neighborhood boundaries: ' +
+    '<a href="https://whosonfirst.org/docs/licenses/" target="_blank" rel="noopener">Who\'s On First</a> and contributors, simplified (' +
+    '<a href="https://github.com/bilawalsidhu/gods-eye-view/blob/main/src/data/local_data/wof_neighborhoods/ATTRIBUTION.md" target="_blank" rel="noopener">sources and licences</a>)',
+};
+
+/** Registered when a voice place search (a configured Overpass) first shows places. */
+export const OSM_PLACES_CREDIT = {
+  key: 'osm-places',
+  html:
+    'Places found by voice: ' +
+    '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
+    '(ODbL 1.0)',
 };
 
 /**
  * Per-feed transit credit, registered the first time that feed's vehicles
  * render (see `src/data/transitFeeds.js` for the license of each).
- * @param {{ id: string, attribution: string, license: string, licenseUrl: string }} feed
+ *
+ * Two optional registry fields serve licences that ask for more than a name:
+ * `sourceUrl` links the attribution to the publisher (Warsaw asks for a link
+ * to its API), and `creditDated` adds the UTC date of the data, from the feed
+ * header or else the fetch time (Warsaw and Poznań ask for the download or
+ * update date). A dated credit is keyed by its date, so a new day registers a
+ * new line instead of keeping yesterday's.
+ * @param {{ id: string, attribution: string, license: string, licenseUrl: string,
+ *   sourceUrl?: string, creditDated?: boolean }} feed
+ * @param {{ feedTimestamp?: number|null, fetchedAt?: number|null }} [snapshot]
+ *   `feedTimestamp` in epoch seconds, `fetchedAt` in epoch ms.
  * @returns {{ key: string, html: string }}
  */
-export function transitFeedCredit(feed) {
+export function transitFeedCredit(feed, snapshot = null) {
   const escape = (text) =>
     String(text)
       .replaceAll('&', '&amp;')
       .replaceAll('<', '&lt;')
       .replaceAll('>', '&gt;')
       .replaceAll('"', '&quot;');
+  const source = feed.sourceUrl
+    ? `<a href="${escape(feed.sourceUrl)}" target="_blank" rel="noopener">${escape(feed.attribution)}</a>`
+    : escape(feed.attribution);
+  const dataMs = Number.isFinite(snapshot?.feedTimestamp)
+    ? snapshot.feedTimestamp * 1000
+    : snapshot?.fetchedAt;
+  const date =
+    feed.creditDated === true && Number.isFinite(dataMs) && dataMs > 0
+      ? new Date(dataMs).toISOString().slice(0, 10)
+      : null;
   return {
-    key: `transit-${feed.id}`,
+    key: date ? `transit-${feed.id}-${date}` : `transit-${feed.id}`,
     html:
-      `Transit (${escape(feed.attribution)}): ` +
+      `Transit (${source}${date ? `, data of ${date}` : ''}): ` +
       `<a href="${escape(feed.licenseUrl)}" target="_blank" rel="noopener">${escape(feed.license)}</a>`,
+  };
+}
+
+/**
+ * Per-feed rail credit, registered the first time that feed's trains render
+ * (see `src/data/railFeeds.js` for the licence of each).
+ * @param {{ id: string, attribution: string, license: string, licenseUrl: string }} feed
+ * @returns {{ key: string, html: string }}
+ */
+export function railFeedCredit(feed) {
+  const transit = transitFeedCredit(feed);
+  return {
+    key: `rail-${feed.id}`,
+    html: transit.html.replace(/^Transit \(/, 'Trains ('),
   };
 }
 
@@ -557,43 +824,84 @@ export const BHOTE_KOSHI_LOCATOR_CREDIT = {
     '(CC BY-NC 4.0)',
 };
 
+/** A link, its whole element. */
+const LINK = /<a\b(?:[^>"']|"[^"]*"|'[^']*')*>[\s\S]*?<\/a\s*>/gi;
+/**
+ * The separators text between two links can break at; it breaks at its
+ * last. A semicolon ending a character reference is not one. A full stop
+ * after an abbreviation reads as one, so keep "Dr." and "e.g." out of the
+ * text between links.
+ */
+const SEPARATOR = /\s*(?:[,·—–]|(?<!&#?\w+);)\s*|\.\s+|\s+(?=\()/g;
+
+/**
+ * A credit's markup as the renderer's credits, one link each: the
+ * contract's credit carries one link, so markup with several becomes one
+ * credit per link, shown together in order. The text between two links
+ * breaks at its last separator (a comma, semicolon, dot or dash, a full
+ * stop, or before an opening bracket); closing brackets right after a link
+ * stay with it, and a break's comma, semicolon, dot or dash is dropped.
+ * @param {string} html
+ * @returns {import('../render/contract/credits').Credit[]}
+ */
+export function creditsFromMarkup(html) {
+  const markup = String(html);
+  const pieces = [''];
+  let at = 0;
+  for (const link of markup.matchAll(LINK)) {
+    let gap = markup.slice(at, link.index);
+    if (at > 0) {
+      const close = /^[)\]]*/.exec(gap)[0];
+      gap = gap.slice(close.length);
+      const cut = [...gap.matchAll(SEPARATOR)].at(-1);
+      const before = cut ? gap.slice(0, cut.index) : '';
+      const stop = cut && cut[0].trimStart().startsWith('.') ? '.' : '';
+      pieces[pieces.length - 1] += close + before + stop;
+      pieces.push(cut ? gap.slice(cut.index + cut[0].length) : gap);
+    } else pieces[0] += gap;
+    pieces[pieces.length - 1] += link[0];
+    at = link.index + link[0].length;
+  }
+  pieces[pieces.length - 1] += markup.slice(at);
+  return pieces
+    .map((piece) => ({ ...creditFromMarkup(piece), inline: false }))
+    .filter((credit) => credit.text);
+}
+
+/** Add a data credit to the attribution list through the renderer. */
+function addDataCredit(viewer, credit) {
+  const credits = findCredits(viewer);
+  if (!credits) return false;
+  for (const one of creditsFromMarkup(credit.html)) credits.addStatic(one);
+  return true;
+}
+
 /** @type {Set<string>} Keys of dynamic credits already registered this session. */
 const _dynamicCreditKeys = new Set();
 
 /**
  * Register a conditional credit at the moment its data source activates.
- * Idempotent per `credit.key`; lands in the same "Data attribution" popover
- * as the static credits (showOnScreen=false).
- * @param {Cesium.Viewer} viewer — the initialized Cesium viewer
+ * Idempotent per `credit.key`; lands in the same "Data attribution" list
+ * as the static credits, through the renderer's credits port.
+ * @param {object} viewer — the scene object the renderer is bound to
  * @param {{ key: string, html: string }} credit — e.g. `TOMTOM_CREDIT`
  * @returns {boolean} True when the credit is (now) registered.
  */
 export function registerDynamicCredit(viewer, credit) {
-  const creditDisplay = viewer?.creditDisplay;
-  if (!creditDisplay || typeof creditDisplay.addStaticCredit !== 'function') {
-    return false;
-  }
-  if (!credit?.key || !credit?.html) return false;
-  if (_dynamicCreditKeys.has(credit.key)) return true;
-  creditDisplay.addStaticCredit(new Cesium.Credit(credit.html, false));
+  if (!viewer || !credit?.key || !credit?.html) return false;
+  if (_dynamicCreditKeys.has(credit.key)) return Boolean(findCredits(viewer));
+  if (!addDataCredit(viewer, credit)) return false;
   _dynamicCreditKeys.add(credit.key);
   return true;
 }
 
 /**
- * Register every per-layer data credit into the viewer's credit display.
- * Idempotent: safe to call once at init. Credits are static and always
- * present in the "Data attribution" popover.
- * @param {Cesium.Viewer} viewer — the initialized Cesium viewer
+ * Register every per-layer data credit through the renderer's credits
+ * port. Safe to call once at init. Credits are static and always present
+ * in the "Data attribution" list, not on the map's credit line.
+ * @param {object} viewer — the scene object the renderer is bound to
  */
 export function registerDataCredits(viewer, credits = DATA_CREDITS) {
-  const creditDisplay = viewer?.creditDisplay;
-  if (!creditDisplay || typeof creditDisplay.addStaticCredit !== 'function') {
-    return;
-  }
-  for (const { html } of credits) {
-    // showOnScreen=false → lives in the expandable "Data attribution" popover,
-    // not the on-globe credit line.
-    creditDisplay.addStaticCredit(new Cesium.Credit(html, false));
-  }
+  if (!viewer) return;
+  for (const credit of credits) addDataCredit(viewer, credit);
 }

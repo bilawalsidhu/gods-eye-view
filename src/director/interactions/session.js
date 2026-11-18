@@ -6,6 +6,13 @@ export function createInteractionSession({ execute, changed = () => {} }) {
     selected = null;
   let actions = new Map();
   const state = () => ({ active, busy, selected, count: actions.size });
+  function notify() {
+    try {
+      changed(state());
+    } catch (error) {
+      console.warn('[Scenes] Interaction session observer failed:', error);
+    }
+  }
   function clear() {
     active = false;
     busy = false;
@@ -13,7 +20,7 @@ export function createInteractionSession({ execute, changed = () => {} }) {
     actions.clear();
     controller?.abort();
     controller = null;
-    changed(state());
+    notify();
   }
   return {
     clear,
@@ -22,7 +29,7 @@ export function createInteractionSession({ execute, changed = () => {} }) {
       clear();
       actions = new Map(items.map((item) => [item.id, item]));
       active = !!actions.size;
-      changed(state());
+      notify();
     },
     async dispatch(id) {
       const item = actions.get(id);
@@ -31,7 +38,7 @@ export function createInteractionSession({ execute, changed = () => {} }) {
       controller = current;
       busy = true;
       selected = id;
-      changed(state());
+      notify();
       let abort;
       try {
         const cancelled = new Promise((resolve) => {
@@ -53,7 +60,7 @@ export function createInteractionSession({ execute, changed = () => {} }) {
         if (controller === current) {
           busy = false;
           controller = null;
-          changed(state());
+          notify();
         }
       }
     },

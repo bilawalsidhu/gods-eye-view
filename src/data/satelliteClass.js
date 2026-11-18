@@ -1,23 +1,23 @@
 /**
- * Satellite classification — CelesTrak source group → operator-legible class.
+ * Satellite labels and colours by CelesTrak source group, beneath the six
+ * classes.
  *
- * The catalog already tags every satellite with the CelesTrak group it was
- * ingested from (`CATALOG_GROUPS` in satellites.js), so classification is a
- * pure lookup: no extra fetch, no heuristics, no per-frame work. This module is
- * the single source of truth for the class a satellite belongs to, the label
- * shown on its card, and the point color it renders in — the render path, the
- * tracked card, and the row legend all read the same table, so a palette edit
- * can never leave one surface disagreeing with another.
+ * The class a satellite is filed under (STATIONS, IMAGING, TELECOM,
+ * STARLINK, PROBES or DEBRIS) is decided in src/layers/satellites/classes.js
+ * from SATCAT, the UCS database, names and the group, and that module owns
+ * each class's colour, legend label and toggle. This module keeps the
+ * group-based layer: the constellation subtype a card adds to the class
+ * (`TELECOM · GPS`, `STATIONS · ISS`; satelliteClassText), the group's own
+ * label for a satellite with no class (satelliteClassLabel), and the colour
+ * per group (satelliteClassColor), which the layer's base point styles use
+ * where a satellite has no class (src/layers/satellites/policy.js).
  *
- * Deliberately Cesium-free: colors are CSS hex strings that satellites.js
- * converts once at module load. That keeps this file unit-testable and lets the
- * legend swatches reuse the exact same strings the points are drawn with.
- *
- * Class order below is the legend order: crewed first (the objects people look
- * for), then the constellations users can actually name, then the grab-bag.
+ * Deliberately Cesium-free: colors are CSS hex strings that the layer
+ * converts once at module load, so this file stays unit-testable.
  */
 
 import { t, msg } from '../i18n/index.js';
+import { SATELLITE_CLASS_DISPLAY } from '../layers/satellites/classes.js';
 
 /**
  * Class registry: the point color of each class. The card and legend text is
@@ -167,50 +167,25 @@ export function satelliteClassLabel(
 }
 
 /**
- * Tally satellites into a class → count record.
- * Split from the legend builder so the counting rule stays independent of how
- * the legend is presented. Entries may be bare group tags, or `{ group, isIss }`
- * descriptors when the caller can identify the ISS — the tally classifies
- * through satelliteClassOf, so the legend and the card always agree.
- * @param {Iterable<string|undefined|null|{group?: string, isIss?: boolean}>} entries
- *   One entry per satellite.
- * @returns {Record<string, number>} Class key → count.
+ * The class a satellite shows on its card, label, overlay and orbital
+ * readout: its class (src/layers/satellites/classes.js) with the CelesTrak group's
+ * subtype where one says more ("TELECOM · GPS", "STATIONS · ISS"). A subtype
+ * that only repeats the class ("STARLINK · STARLINK") is dropped. Without a
+ * class the group's label stands (satelliteClassLabel).
+ * @param {string|null|undefined} satelliteClass Six-class id.
+ * @param {string|undefined|null} group CelesTrak group tag.
+ * @param {{ isIss?: boolean, localize?: boolean }} [options] As for
+ *   satelliteClassLabel.
+ * @returns {string} Display label.
  */
-export function tallySatelliteClasses(entries) {
-  const counts = Object.create(null);
-  for (const entry of entries || []) {
-    const descriptor =
-      entry && typeof entry === 'object' ? entry : { group: entry };
-    const { klass } = satelliteClassOf(descriptor.group, {
-      isIss: descriptor.isIss,
-    });
-    counts[klass] = (counts[klass] || 0) + 1;
-  }
-  return counts;
-}
-
-/**
- * Build the layer-row legend from a class tally.
- * Classes with no members are omitted so the legend never advertises a class
- * that is not on screen (COMMS only appears once DENSE is on).
- * @param {Record<string, number>} counts Class key → count (see tallySatelliteClasses).
- * @returns {Array<{ klass: string, label: string, color: string, blurb: string, count: number }>}
- *   Present classes in legend order.
- */
-export function satelliteClassLegend(counts) {
-  const result = [];
-  for (const klass of SATELLITE_CLASS_ORDER) {
-    const count = counts?.[klass];
-    if (!(count > 0)) continue;
-    const spec = SATELLITE_CLASSES[klass];
-    const display = CLASS_DISPLAY_KEYS[klass];
-    result.push({
-      klass,
-      label: t(display.label),
-      color: spec.color,
-      blurb: t(display.blurb),
-      count,
-    });
-  }
-  return result;
+export function satelliteClassText(
+  satelliteClass,
+  group,
+  { isIss = false, localize = true } = {},
+) {
+  const display = SATELLITE_CLASS_DISPLAY[satelliteClass];
+  if (!display) return satelliteClassLabel(group, { isIss, localize });
+  const base = localize ? t(display.label) : display.label;
+  const { subtype } = satelliteClassOf(group, { isIss });
+  return subtype && subtype !== display.label ? `${base} · ${subtype}` : base;
 }

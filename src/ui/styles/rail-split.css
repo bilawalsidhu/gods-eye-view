@@ -1,0 +1,282 @@
+/* The left rail's icons keep their places whether or not a panel is open;
+   only the highlight moves to the open one. */
+
+/* With nothing open, the icons and their names split into two glass panels
+   side by side: the plain icon rail, and a name panel beside it with one row
+   per icon. A name is part of its button, so clicking it opens that panel. */
+.gev-panel-rail--left .ui-rail--expanded {
+  position: relative;
+  border-radius: calc(var(--btn-radius) + 4px);
+}
+
+.gev-panel-rail--left .ui-rail--expanded .ui-rail__item {
+  width: 32px;
+  border-radius: var(--btn-radius);
+}
+
+.gev-panel-rail--left .ui-rail--expanded::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: calc(100% + 6px);
+  width: 170px;
+  border: 1px solid var(--glass-border);
+  border-radius: calc(var(--btn-radius) + 4px);
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  pointer-events: none;
+}
+
+.gev-panel-rail--left .ui-rail--expanded .ui-rail__label {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  /* Past the rail's padding and border, the 6px gap, and the name panel's
+     border and inner padding. */
+  left: calc(100% + 24px);
+  display: flex;
+  align-items: center;
+  max-width: 150px;
+  margin: 0;
+}
+
+.gev-panel-rail--left .ui-rail--expanded .ui-rail__item:hover .ui-rail__label {
+  color: var(--text-primary);
+}
+
+/* The column rises to sit just under the HUD readout instead of leaving a
+   gap above it, with or without a panel open, so opening one doesn't move
+   the rail down. */
+#left-panel-stack {
+  top: calc(
+    var(--left-stack-safe-top, var(--left-stack-top)) +
+      var(--panel-rail-lift, 0px)
+  );
+}
+
+/* The right rail splits the same way with nothing open, mirrored: the icon
+   rail stays on the screen edge and the name panel sits to its left. */
+.gev-panel-rail--right .ui-rail--expanded {
+  position: relative;
+  border-radius: calc(var(--btn-radius) + 4px);
+}
+
+.gev-panel-rail--right .ui-rail--expanded .ui-rail__item {
+  width: 32px;
+  border-radius: var(--btn-radius);
+}
+
+.gev-panel-rail--right .ui-rail--expanded::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  right: calc(100% + 6px);
+  width: 170px;
+  border: 1px solid var(--glass-border);
+  border-radius: calc(var(--btn-radius) + 4px);
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  pointer-events: none;
+}
+
+.gev-panel-rail--right .ui-rail--expanded .ui-rail__label {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  /* From the button's left edge back past the rail's padding and border,
+     the 6px gap and the 170px name panel, to the panel's inner padding. */
+  left: -168px;
+  display: flex;
+  align-items: center;
+  max-width: 150px;
+  margin: 0;
+}
+
+.gev-panel-rail--right .ui-rail--expanded .ui-rail__item:hover .ui-rail__label {
+  color: var(--text-primary);
+}
+
+/* In clean view the screen-edge gutters stay empty: the HUD's vertical edge
+   readouts (ONA / COLL on the left, BAND / BITS / LVL on the right) are not
+   shown. Cyber lays its HUD out differently and keeps them. */
+:root:not([data-ui-theme='cyber']) body.ui-clean-view #intel-hud .hud-edge {
+  display: none !important;
+}
+
+/* The bottom-right readout (GSD / ALT / AIS) has one more line than the
+   bottom-left one (MGRS / coordinates); it drops by that line so the two
+   corners start level. */
+#intel-hud[data-variant='tactical'] .hud-bottom-right {
+  bottom: calc(2vh + 6.5rem - 26px);
+}
+
+@media (min-width: 1200px) {
+  #intel-hud[data-variant='tactical'] .hud-bottom-right {
+    bottom: calc(4.2rem - 26px);
+  }
+}
+
+/* ── Contrast: rails and name panels read clearly over dark space as well
+   as bright imagery. ── */
+:is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail {
+  background: rgba(16, 20, 28, 0.82) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+:is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail--expanded::after {
+  background: rgba(16, 20, 28, 0.82) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+:is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail__item {
+  color: rgba(225, 236, 242, 0.88);
+}
+
+:is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail__label {
+  color: rgba(225, 236, 242, 0.82) !important;
+}
+
+:is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail__item:hover {
+  color: #fff;
+}
+
+/* The open item takes the accent colour; its highlight is the rail's shared
+   one, which slides to it. The button carries no fill of its own: as a rail
+   folds its labelled pills to icons, a fill on the shrinking button would
+   read as the highlight stretching. */
+:is(.gev-panel-rail--left, .gev-panel-rail--right)
+  .ui-rail__item.ui-rail__item--on {
+  color: #00d4ff !important;
+}
+
+:is(.gev-panel-rail--left, .gev-panel-rail--right)
+  .ui-rail:not(.ui-rail--glide)
+  .ui-rail__item.ui-rail__item--on {
+  background: none;
+  border-color: transparent;
+}
+
+:is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail::before {
+  background: rgba(0, 212, 255, 0.15);
+  border-color: rgba(0, 212, 255, 0.28);
+}
+
+/* ── The open icon is its own island ──
+   With a panel open, the rail's glass is drawn in pieces behind its icons:
+   one piece for the open icon, and one for each run of icons above and below
+   it. The icons keep their places, open or not; the spacing between them is
+   what leaves room for the break. */
+:is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail {
+  gap: 12px;
+}
+
+:is(
+    body:not(.panels-edge-left) .gev-panel-rail--left,
+    body:not(.panels-edge-right) .gev-panel-rail--right
+  )
+  .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on) {
+  background: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:is(
+    body:not(.panels-edge-left) .gev-panel-rail--left,
+    body:not(.panels-edge-right) .gev-panel-rail--right
+  )
+  .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on)
+  > .ui-tooltip::before {
+  position: absolute;
+  inset: -6px -5px;
+  z-index: -1;
+  background: rgba(16, 20, 28, 0.82);
+  border: solid rgba(255, 255, 255, 0.14);
+  border-width: 0 1px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  content: '';
+  pointer-events: none;
+}
+
+/* The ends of the rail. */
+:is(
+    body:not(.panels-edge-left) .gev-panel-rail--left,
+    body:not(.panels-edge-right) .gev-panel-rail--right
+  )
+  .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on)
+  > .ui-tooltip:first-child::before {
+  top: -5px;
+  border-top-width: 1px;
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+}
+
+:is(
+    body:not(.panels-edge-left) .gev-panel-rail--left,
+    body:not(.panels-edge-right) .gev-panel-rail--right
+  )
+  .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on)
+  > .ui-tooltip:last-child::before {
+  bottom: -5px;
+  border-bottom-width: 1px;
+  border-bottom-left-radius: 14px;
+  border-bottom-right-radius: 14px;
+}
+
+/* The runs stop short of the open icon. */
+:is(
+    body:not(.panels-edge-left) .gev-panel-rail--left,
+    body:not(.panels-edge-right) .gev-panel-rail--right
+  )
+  .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on)
+  > .ui-tooltip:has(+ .ui-tooltip > .ui-rail__item--on)::before {
+  bottom: -1px;
+  border-bottom-width: 1px;
+  border-bottom-left-radius: 14px;
+  border-bottom-right-radius: 14px;
+}
+
+:is(
+    body:not(.panels-edge-left) .gev-panel-rail--left,
+    body:not(.panels-edge-right) .gev-panel-rail--right
+  )
+  .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on)
+  > .ui-tooltip:has(> .ui-rail__item--on)
+  + .ui-tooltip::before {
+  top: -1px;
+  border-top-width: 1px;
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+}
+
+/* The open icon's own piece. */
+:is(
+    body:not(.panels-edge-left) .gev-panel-rail--left,
+    body:not(.panels-edge-right) .gev-panel-rail--right
+  )
+  .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on)
+  > .ui-tooltip:has(> .ui-rail__item--on)::before {
+  inset: -4px -5px;
+  border-width: 1px;
+  border-radius: 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+/* The side rails fold their labels away at once when a panel opens, and back
+   when it closes: easing the labels' width made every button visibly
+   stretch and shrink. Only their fade eases. */
+:is(.gev-panel-rail--left, .gev-panel-rail--right) .ui-rail__label {
+  transition: opacity var(--transition-fast);
+}

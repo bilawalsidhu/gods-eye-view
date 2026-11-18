@@ -1,3 +1,4 @@
+import { captureQaScreenshot } from './qa-chrome.mjs';
 import { getRegisteredTransitFeed } from '../src/data/transitFeeds.js';
 
 // Not registered or active: camera discovery and live polls never own this feed.
@@ -145,11 +146,7 @@ export async function runFleetBudgets({
     // The retained delta is conservative: it includes concurrent page growth.
     const retained = await cdp.send('Runtime.getHeapUsage');
     // Timing/upload acceptance runs without the allocation profiler attached.
-    const trace = await page.evaluate(() =>
-      window.__godsEyeView.dataManager.layers
-        .get('transit')
-        .module._measureTransitFramesForTest(8000),
-    );
+    const trace = await page.evaluate(measureTransitFrames, 8000);
     await page.evaluate(() =>
       window.__godsEyeView.dataManager.layers
         .get('transit')
@@ -165,11 +162,7 @@ export async function runFleetBudgets({
       page,
       `${count} budget visibility before allocation trace`,
     );
-    const allocationTrace = await page.evaluate(() =>
-      window.__godsEyeView.dataManager.layers
-        .get('transit')
-        .module._measureTransitFramesForTest(6000),
-    );
+    const allocationTrace = await page.evaluate(measureTransitFrames, 6000);
     const { profile } = await cdp.send('HeapProfiler.stopSampling');
     const allocations = allocationTotals(profile);
     const retainedBytes = retained.usedSize - before.usedSize;
@@ -219,7 +212,7 @@ export async function runFleetBudgets({
         allocations.layerFrameBytes / allocationTrace.rows.length <= 8192,
       `${allocations.layerFrameBytes / allocationTrace.rows.length} transit-authored bytes/frame; whole frame ${allocations.frameBytes / allocationTrace.rows.length}; top three ${JSON.stringify(details.topAllocatorsPerFrame)}; collected objects included. Full profile saved.`,
     );
-    await page.screenshot({
+    await captureQaScreenshot(page, {
       path: `${shots}/${tag}-fleet-${count}.jpg`,
       type: 'jpeg',
       quality: 85,
@@ -360,13 +353,23 @@ export async function runBostonMatrix({
       const modes = await page.evaluate(() => {
         const layer =
           window.__godsEyeView.dataManager.layers.get('transit').module;
+        // The billboards the draw port drew for the markers, by key.
+        const scene = window.__godsEyeView.viewer.scene;
+        const setIds = layer._transitSetIdsForTest();
+        const drawn = new Map();
+        for (let i = 0; i < scene.primitives.length; i++) {
+          const host = scene.primitives.get(i);
+          if (!setIds.includes(host?.drawSetId)) continue;
+          for (let j = 0; j < host.length; j++)
+            drawn.set(host.get(j)?.id?.id, host.get(j));
+        }
         return [...layer._transitStateForTest()._vehicles.values()].map(
           (e) => ({
             key: e.key,
             route: e.record.routeId,
             image: e.marker.image,
-            width: e.marker.width,
-            color: e.marker.color.toCssHexString(),
+            width: drawn.get(e.key)?.width ?? null,
+            color: drawn.get(e.key)?.color.toCssHexString() ?? null,
           }),
         );
       });
@@ -392,7 +395,7 @@ export async function runBostonMatrix({
         JSON.stringify({ pixels, contrast }),
         { unexercised: pixels.length < 6 },
       );
-      await page.screenshot({
+      await captureQaScreenshot(page, {
         path: `${shots}/${tag}-matrix-${background.name}-${look.name}-fleet.jpg`,
         type: 'jpeg',
         quality: 90,
@@ -407,7 +410,7 @@ export async function runBostonMatrix({
           target.key,
         );
         await wait(500);
-        await page.screenshot({
+        await captureQaScreenshot(page, {
           path: `${shots}/${tag}-matrix-${background.name}-${look.name}-${target.route}-selected.jpg`,
           type: 'jpeg',
           quality: 90,
@@ -417,21 +420,35 @@ export async function runBostonMatrix({
             window.__godsEyeView.dataManager.layers.get('transit').module;
           layer._transitPartsForTest().selection.clearSelection();
           const e = layer._transitStateForTest()._vehicles.get(key);
+          // The billboard the draw port drew for it: the last under its key,
+          // as the fleet sample above reads it (the fleet-models set draws
+          // one under the same key first).
+          const scene = window.__godsEyeView.viewer.scene;
+          const setIds = layer._transitSetIdsForTest();
+          let drawn = null;
+          for (let i = 0; i < scene.primitives.length; i++) {
+            const host = scene.primitives.get(i);
+            if (!setIds.includes(host?.drawSetId)) continue;
+            for (let j = 0; j < host.length; j++)
+              if (host.get(j)?.id?.id === key) drawn = host.get(j);
+          }
           return {
+            drawn: Boolean(drawn),
             image: e.marker.image,
-            width: e.marker.width,
-            color: e.marker.color.toCssHexString(),
+            width: drawn?.width ?? null,
+            color: drawn?.color.toCssHexString() ?? null,
           };
         }, target.key);
         check(
           `Boston ${background.name}/${look.name}/${target.route}: deselect restores fleet styling`,
-          restored.image === target.image &&
+          restored.drawn &&
+            restored.image === target.image &&
             restored.width === target.width &&
             restored.color === target.color,
         );
       }
       await wait(300);
-      await page.screenshot({
+      await captureQaScreenshot(page, {
         path: `${shots}/${tag}-matrix-${background.name}-${look.name}-restored.jpg`,
         type: 'jpeg',
         quality: 90,
@@ -579,7 +596,7 @@ export async function runBostonLive({
       JSON.stringify(selection),
       { unexercised: !target },
     );
-    await page.screenshot({
+    await captureQaScreenshot(page, {
       path: `${shots}/${tag}-boston-live-${view.name}.jpg`,
       type: 'jpeg',
       quality: 90,
@@ -726,6 +743,15 @@ export async function runTrailVisibility({
       bodyUploadMax = 0,
       frames = 0;
     const headCpu = [];
+    // The Cesium primitives drawing one of the trail's draw-port sets: one,
+    // or while a rebuild builds, the retiring one and its replacement.
+    const hostsOf = (set) => {
+      const hosts = [];
+      for (let i = 0; set && i < scene.primitives.length; i++)
+        if (scene.primitives.get(i).drawSetId === set.id)
+          hosts.push(scene.primitives.get(i));
+      return hosts;
+    };
     const wrap = (primitive, kind) => {
       if (!primitive || wrapped.has(primitive)) return;
       const update = primitive.update;
@@ -766,8 +792,8 @@ export async function runTrailVisibility({
     const pre = scene.preRender.addEventListener(() => {
       headBytes = bodyBytes = 0;
       const trail = parts.trails.diagnostics();
-      wrap(trail?.body, 'body');
-      wrap(trail?.headPrimitive || trail?.head?._polylineCollection, 'head');
+      for (const host of hostsOf(trail?.body)) wrap(host, 'body');
+      for (const host of hostsOf(trail?.headLines)) wrap(host, 'head');
     });
     const post = scene.postRender.addEventListener(() => {
       frames++;
@@ -806,6 +832,26 @@ export async function runTrailVisibility({
     const trail = parts.trails.diagnostics();
     if (!entry || !trail)
       return { ...setup, present: 0, reason: 'selection disappeared' };
+    // The Cesium primitives drawing one of the trail's draw-port sets: one,
+    // or while a rebuild builds, the retiring one and its replacement.
+    const hostsOf = (set) => {
+      const hosts = [];
+      for (let i = 0; set && i < scene.primitives.length; i++)
+        if (scene.primitives.get(i).drawSetId === set.id)
+          hosts.push(scene.primitives.get(i));
+      return hosts;
+    };
+    // Each part of a set's primitive, for readiness and height exclusion.
+    const partsOf = (set) => {
+      const out = [];
+      for (const host of hostsOf(set))
+        for (let i = 0; i < host.length; i++) out.push(host.get(i));
+      return out;
+    };
+    // One host (no rebuild under way) whose parts have all built.
+    const drawnReady = (set) =>
+      hostsOf(set).length === 1 &&
+      partsOf(set).every((part) => part.ready !== false);
     const { setRate } = await import('/src/data/contactPlayback.js');
     setRate(entry.track, 0, {
       wallNowMs: Date.now(),
@@ -818,8 +864,8 @@ export async function runTrailVisibility({
       app.tileset?.show !== false &&
       app.tileset?.tilesLoaded === true &&
       (scene.globe?.show === false || scene.globe?.tilesLoaded === true) &&
-      trail.body?.ready === true &&
-      (!trail.headPrimitive || trail.headPrimitive.ready === true);
+      drawnReady(trail.body) &&
+      (!trail.headLines?.show || drawnReady(trail.headLines));
     // Require sustained readiness after freezing playback, before projecting
     // onto the refined surface. Repeated captures still check pixel stability.
     const tilesReady = await new Promise((resolve) => {
@@ -854,7 +900,18 @@ export async function runTrailVisibility({
     if (points.length < 2)
       return { ...setup, present: 0, reason: 'no completed path' };
     const C = scene.camera.positionCartographic.constructor;
-    const V = entry.marker.position.constructor;
+    // Marker positions are plain records; the camera's eye is a Cartesian3.
+    const V = scene.camera.positionWC.constructor;
+    // The billboard the draw port drew for the marker, seen through.
+    const setIds = layer._transitSetIdsForTest();
+    const markerBillboards = [];
+    for (let i = 0; i < scene.primitives.length; i++) {
+      const host = scene.primitives.get(i);
+      if (!setIds.includes(host?.drawSetId)) continue;
+      for (let j = 0; j < host.length; j++)
+        if (host.get(j)?.id?.id === entry.key)
+          markerBillboards.push(host.get(j));
+    }
     const lengths = [0];
     for (let i = 1; i < points.length; i++)
       lengths.push(lengths.at(-1) + V.distance(points[i - 1], points[i]));
@@ -874,10 +931,11 @@ export async function runTrailVisibility({
         new V(),
       );
       const cart = C.fromCartesian(p);
-      const height = scene.sampleHeight(
-        cart,
-        [entry.marker, trail.body, trail.headPrimitive].filter(Boolean),
-      );
+      const height = scene.sampleHeight(cart, [
+        ...markerBillboards,
+        ...partsOf(trail.body),
+        ...partsOf(trail.headLines),
+      ]);
       if (Number.isFinite(height)) cart.height = height;
       const surface = C.toCartesian(cart);
       const q = mul(
@@ -942,13 +1000,12 @@ export async function runTrailVisibility({
       });
     const bodyShow = trail.body?.show,
       headShow = trail.head?.show,
-      headPrimitiveShow = trail.headPrimitive?.show,
+      headLinesShow = trail.headLines?.show,
       backingShow = trail.backing?.show;
     let showTrail = false;
     const applyVisibility = () => {
       if (trail.body) trail.body.show = showTrail && bodyShow;
-      if (trail.headPrimitive)
-        trail.headPrimitive.show = showTrail && headPrimitiveShow;
+      if (trail.headLines) trail.headLines.show = showTrail && headLinesShow;
       if (trail.head) trail.head.show = showTrail && headShow;
       if (trail.backing) trail.backing.show = showTrail && backingShow;
     };
@@ -965,13 +1022,13 @@ export async function runTrailVisibility({
         const current = parts.trails.diagnostics();
         captureReady &&=
           ready() &&
-          current?.body === trail.body &&
-          current?.headPrimitive === trail.headPrimitive;
+          current?.rebuilds === trail.rebuilds &&
+          current?.headRebuilds === trail.headRebuilds;
       }
     } finally {
       removeVisibility();
       if (trail.body) trail.body.show = bodyShow;
-      if (trail.headPrimitive) trail.headPrimitive.show = headPrimitiveShow;
+      if (trail.headLines) trail.headLines.show = headLinesShow;
       if (trail.head) trail.head.show = headShow;
       if (trail.backing) trail.backing.show = backingShow;
       await frame();
@@ -993,7 +1050,7 @@ export async function runTrailVisibility({
       tilesReady: captureReady,
       elapsedDisplayMs: entry.sample.displayT - setup.startDisplayT,
       movedMetres: Math.abs(entry.sample.lat - setup.startLat) * 111320,
-      body: trail.body?.constructor.name,
+      body: hostsOf(trail.body)[0]?.constructor.name,
       headStrategy: trail.headStrategy || 'PolylineCollection',
       headRebuilds: trail.headRebuilds ?? null,
     };
@@ -1010,7 +1067,7 @@ export async function runTrailVisibility({
     stable: pixels.stable[i],
     eligible: pixels.eligible[i],
   }));
-  await page.screenshot({
+  await captureQaScreenshot(page, {
     path: `${shots}/${tag}-${altitude}m-trail-visible.jpg`,
     type: 'jpeg',
     quality: 95,
@@ -1046,4 +1103,25 @@ export async function runTrailVisibility({
       .module._transitPartsForTest()
       .selection.clearSelection(),
   );
+}
+
+/**
+ * The transit frame probe over the bytes the renderer uploads for the
+ * layer's marker sets (the Cesium renderer's upload probe), in the page.
+ * @param {number} durationMs
+ */
+async function measureTransitFrames(durationMs) {
+  const { countDrawSetUploads } =
+    await import('/src/render/cesium/uploadProbe.js');
+  const app = window.__godsEyeView;
+  const layer = app.dataManager.layers.get('transit').module;
+  const uploads = countDrawSetUploads(
+    app.viewer,
+    layer._transitSetIdsForTest(),
+  );
+  try {
+    return await layer._measureTransitFramesForTest(durationMs, uploads);
+  } finally {
+    uploads.stop();
+  }
 }

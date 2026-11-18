@@ -2,7 +2,8 @@ export const LAYER_ID = 'military-installations';
 
 export const REQUEST_DEBOUNCE_MS = 180;
 
-export const MAX_VIEWPORT_DEGREES = 10;
+/** How far the view moves before the layer looks again (camera `changed`). */
+export const CAMERA_CHANGED_THRESHOLD = 0.01;
 
 export const MAX_RENDERED = 700;
 

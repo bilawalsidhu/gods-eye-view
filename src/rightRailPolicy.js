@@ -1,5 +1,3 @@
-export { shouldHideCollapsedRightPanels } from './ui/panelRailGeometry.js';
-
 const GLOBAL_CONTEXT_EXPLICIT_ACTIONS = new Set([
   'contacts',
   'space-missions',

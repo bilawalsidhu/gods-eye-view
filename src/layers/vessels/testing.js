@@ -1,4 +1,5 @@
 import { DEFAULT_AIS_RUNTIME } from './policy.js';
+import { createVesselIconBook } from './iconBook.js';
 
 export function createTesting({
   vesselState,
@@ -11,16 +12,16 @@ export function createTesting({
   const aisLiveVesselsLayer = layer;
 
   /**
-   * Bind the production interaction callbacks to mockable viewer/handler
-   * surfaces. Test-only seam; behavior is shared with installInteraction().
+   * Bind the production interaction callbacks to a mockable viewer. Clicks
+   * come through the viewer's input dispatcher (src/input/testDoubles.mjs).
+   * Test-only seam; behavior is shared with installInteraction().
    * @param {Object} viewer - Viewer-like object with scene.pick().
-   * @param {Object} handler - Handler-like object with setInputAction().
    * @param {Object} keyTarget - EventTarget-like object with add/removeEventListener().
    * @returns {void}
    */
 
-  function _bindVesselInteractionForTest(viewer, handler, keyTarget) {
-    components.selection.bindVesselInteraction(viewer, handler, keyTarget);
+  function _bindVesselInteractionForTest(viewer, keyTarget) {
+    components.selection.bindVesselInteraction(viewer, keyTarget);
   }
 
   /**
@@ -32,6 +33,11 @@ export function createTesting({
   function _setVesselStateForTest(options = {}) {
     components.lifecycle.resetState();
     const records = Array.isArray(options.records) ? options.records : [];
+    // A test record that names no id is keyed by its MMSI, as an AIS feed's
+    // own rows are (see normalizeVessel).
+    for (const record of [...records, options.selectedRecord])
+      if (record && typeof record === 'object' && record.id === undefined)
+        record.id = String(record.mmsi || '').trim();
     state.viewer = options.viewer || null;
     state.feed.enabled = options.enabled !== false;
     state.feed.loaded = options.loaded === true;
@@ -42,18 +48,21 @@ export function createTesting({
     state.feed.lastUpdate = options.lastUpdate ?? null;
     state.records.all = records;
     state.feed.count = records.length;
-    state.records.byMmsi = new Map(
+    state.records.byId = new Map(
       records
-        .filter((record) => record?.mmsi)
-        .map((record) => [record.mmsi, record]),
+        .filter((record) => record?.id)
+        .map((record) => [record.id, record]),
     );
     state.selectedRecord = options.selectedRecord || null;
-    state.billboardCollection = options.billboardCollection || { remove() {} };
+    // `icons: null` leaves the layer to make its own draw set.
+    state.icons =
+      options.icons === null ? null : options.icons || createVesselIconBook();
     state.trail = options.trail || null;
-    state.trailMmsi = options.trailMmsi || null;
+    state.trailId = options.trailId || null;
     state.trailPositions = Array.isArray(options.trailPositions)
       ? [...options.trailPositions]
       : [];
+    state.trailTimes = state.trailPositions.map(() => Number.NaN);
     state.feed.transportStatus = options.transportStatus || null;
     state.feed.lastMessageAt = options.lastMessageAt ?? null;
     state.feed.rawRowCount = Number.isFinite(options.rawRowCount)
@@ -65,7 +74,6 @@ export function createTesting({
     state.feed.firstConnectPhase = options.firstConnectPhase || 'idle';
     state.feed.firstConnectStartedAt = options.firstConnectStartedAt ?? null;
     state.feed.firstConnectDeadline = options.firstConnectDeadline ?? null;
-    state.interactionHandlerFactory = options.interactionHandlerFactory || null;
     state.interactionKeyTarget = options.interactionKeyTarget || null;
   }
 
@@ -141,8 +149,8 @@ export function createTesting({
       lastMessageAt: state.feed.lastMessageAt,
       rawRowCount: state.feed.rawRowCount,
       acceptedRowCount: state.feed.acceptedRowCount,
-      selectedMmsi: state.selectedRecord?.mmsi || null,
-      trailMmsi: state.trailMmsi,
+      selectedId: state.selectedRecord?.id || null,
+      trailId: state.trailId,
       trailPositionCount: state.trailPositions.length,
       sessionId: state.feed.sessionId,
       firstConnectPhase: state.feed.firstConnectPhase,
@@ -151,22 +159,87 @@ export function createTesting({
     };
   }
 
+  /** Run one preRender visibility/focus pass. Test-only seam. */
+
+  function _runVisibilityPassForTest(force = false) {
+    components.rendering.updateVisibility(force);
+  }
+
+  /** Draw a record's visual where it stands now. Test-only seam. */
+
+  function _prepareVesselVisualForTest(record) {
+    return components.rendering.prepareRecordVisual(record);
+  }
+
+  /** A record's visual (the record itself before it has one). Test-only seam. */
+
+  function _vesselVisualForTest(record) {
+    return components.rendering.getVisual(record);
+  }
+
+  /** Run one live placement pass (a host-supplied placement). Test-only seam. */
+
+  function _runPlacementPassForTest() {
+    components.rendering.followPlacements();
+  }
+
+  /**
+   * Run what one live frame runs (not following the clock): settle whether
+   * icons move on the renderer's clock, then the placement pass. Test-only
+   * seam.
+   */
+
+  function _runLiveFrameForTest() {
+    components.rendering.syncSegments();
+    components.rendering.followPlacements();
+  }
+
+  /** Run one world-clock pass at world time `atMs`. Test-only seam. */
+
+  function _runClockPassForTest(atMs) {
+    vesselState.worldNow = () => atMs;
+    components.rendering.followClock();
+  }
+
+  /**
+   * Follow the world clock, standing at world time `atMs`; `null` goes back
+   * to live. Test-only seam.
+   */
+
+  function _followClockForTest(atMs) {
+    vesselState.timeline = { active: () => atMs !== null };
+    vesselState.worldNow = () => atMs ?? 0;
+  }
+
+  /** True while a trailing visibility frame is scheduled. Test-only seam. */
+
+  function _hasTrailingVisibilityPassForTest() {
+    return state.trailingVisibilityTimer !== null;
+  }
+
   /**
    * Read lifecycle ownership state without exposing the mutable state object.
    * Test-only seam.
-   * @returns {{trailMmsi: string|null, trailPositionCount: number, vesselCount: number}}
+   * @returns {{trailId: string|null, trailPositionCount: number, vesselCount: number}}
    */
 
   function _getVesselStateForTest() {
     return {
-      trailMmsi: state.trailMmsi,
+      trailId: state.trailId,
       trailPositionCount: state.trailPositions.length,
-      vesselCount: state.records.byMmsi.size,
+      vesselCount: state.records.byId.size,
     };
+  }
+
+  /** The layer's record for a vessel id, or null. Test-only seam. */
+
+  function _vesselRecordForTest(id) {
+    return state.records.byId.get(id) ?? null;
   }
   return {
     _bindVesselInteractionForTest,
     _setVesselStateForTest,
+    _followClockForTest,
     _setVesselOverlayHostForTest,
     _updateVesselCardsForTest,
     _reconcileVesselsForTest,
@@ -176,5 +249,13 @@ export function createTesting({
     _setAisRuntimeForTest,
     _getVesselFeedStateForTest,
     _getVesselStateForTest,
+    _vesselRecordForTest,
+    _runVisibilityPassForTest,
+    _prepareVesselVisualForTest,
+    _vesselVisualForTest,
+    _runPlacementPassForTest,
+    _runClockPassForTest,
+    _runLiveFrameForTest,
+    _hasTrailingVisibilityPassForTest,
   };
 }

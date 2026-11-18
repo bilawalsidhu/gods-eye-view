@@ -18,11 +18,11 @@ function el() {
 
 function render(audioError) {
   globalThis.document = { getElementById: () => null, activeElement: null };
+  let shown = null;
   const host = {
     destroyed: false,
     _radioPanel: el(),
-    _radioPlaybackState: el(),
-    _syncContextRadioLauncherState() {},
+    store: { publish: (view) => (shown = view), publishTuner() {} },
     actions: {
       getLifecycle: () => null,
       preservePanelStateDuringClear: () => false,
@@ -38,7 +38,7 @@ function render(audioError) {
     stationCount: 1,
     volume: 1,
   });
-  return host._radioPlaybackState.textContent;
+  return shown.playback.text;
 }
 
 const PLAYBACK_ERRORS = [

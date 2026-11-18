@@ -1,446 +1,748 @@
-import * as Cesium from 'cesium';
+import { recordWorkSlice } from '../sources/phaseTiming.js';
+import { ringCentroid } from '../sources/featureGeometry.js';
 import { showOsmCredit, hideOsmCredit } from '../data/dataCredits.js';
+import { fromDegrees } from '../geo/ellipsoid.js';
+import {
+  drawOf,
+  findCamera,
+  findFrame,
+  frameOf,
+} from '../render/rendererOf.js';
+import { heightsOf } from '../queries/heights.js';
 
 /**
  * World-space annotation renderer (Direction A).
  *
- * Draws annotations as native Cesium entities anchored to lon/lat. Because they
- * live in the 3D scene they track the camera, sit at the right depth, and are
- * occluded by the photoreal buildings the way a real marker would be.
+ * Draws annotations through the renderer's draw port, anchored to lon/lat.
+ * Because they live in the 3D scene they track the camera, sit at the right
+ * depth, and are occluded by the photoreal buildings the way a real marker
+ * would be.
  *
  * IMPORTANT — drawing on Google Photorealistic 3D Tiles:
- *   The Cesium globe is hidden, so there is no terrain to clamp to. Ground
- *   geometry (areas, rings, connectors) is draped onto the photoreal tiles with
- *   `classificationType: CESIUM_3D_TILE`; points clamp to the tile
- *   surface with `heightReference: CLAMP_TO_GROUND` (which requires the tileset
- *   to have `enableCollision = true`, set in initAnnotations). This keeps marks
- *   sitting ON the world instead of buried at sea level.
+ *   The globe is hidden, so there is no terrain to clamp to. Ground geometry
+ *   (areas, rings, connectors) is draped onto the photoreal tiles and the
+ *   terrain alike (`clampTo: 'both'`); points clamp to the surface. This
+ *   keeps marks sitting ON the world instead of buried at sea level.
  *
- * Live alpha (fade in/out) and pulsing are driven by CallbackProperty so they
- * animate every render without the engine touching them per frame.
+ * Fades follow the mark's alpha: the engine calls `sync` as it changes, and
+ * each mark's items take their new colours where they are. Pulsing fills
+ * are a declarative pulse the renderer runs; target rings follow the
+ * camera's height, read before each frame, and are sent again at the radius
+ * it gives when that changes.
+ *
+ * Each mark draws into sets of its own, so adding or removing one leaves
+ * the others' geometry alone.
  *
  * Renderer contract (shared with the screen-space renderer):
  *   add(anno) / remove(anno) / sync(map) / destroy()
  */
 
+/** Each palette colour as `r, g, b`, 0..1. */
 const PALETTE = {
-  primary: '#8be9ff',
-  amber: '#ffb547',
-  cyan: '#39d0ff',
-  green: '#5dff9f',
-  red: '#ff6b6b',
+  primary: rgb('#8be9ff'),
+  amber: rgb('#ffb547'),
+  cyan: rgb('#39d0ff'),
+  green: rgb('#5dff9f'),
+  red: rgb('#ff6b6b'),
 };
+const WHITE = [1, 1, 1];
 
 /**
- * What a draped mark is allowed to paint onto.
- *
- * This was CESIUM_3D_TILE, which is right with Google's photoreal tiles under
- * the camera and wrong everywhere else: on a keyless boot (Esri or OSM imagery
- * on Cesium's own globe) there are no 3D tiles to classify against, so every
- * area fill, area outline, route and arrow rendered to nothing. The labels
- * showed and the geometry did not, which reads as a broken feature rather than
- * an unsupported surface — and it hit spoken annotations exactly as hard as
- * hand-drawn ones.
- *
- * BOTH paints onto terrain AND onto 3D tiles, so one value covers both worlds.
+ * What a draped mark is allowed to paint onto: terrain AND 3D tiles, so one
+ * value covers a keyless boot (imagery on the globe, no tiles) and the
+ * photoreal world alike. Tiles alone rendered every area, route and arrow to
+ * nothing on a keyless boot.
  */
-const CLASSIFY = Cesium.ClassificationType.BOTH;
-const CLAMP = Cesium.HeightReference.CLAMP_TO_GROUND;
+const CLAMP_TO = 'both';
+
+/**
+ * The pulse of a pulsing fill: its alpha swings between 60% and all of its
+ * own, a sine of about 0.8 Hz on the wall clock.
+ */
+const PULSE_MS = (2 * Math.PI) / 0.005;
+const PULSE_LOW = 0.6;
+
+/** Target rings: 3% of the camera's height, between 14 m and 170 m. */
+const RING_RADIUS = Object.freeze({ factor: 0.03, min: 14, max: 170 });
+
+/** Relative change of the ring radius under which rings are not redrawn. */
+const RING_RESIZE = 1e-3;
+
+/**
+ * A target ring's radius, metres, for a camera `height` metres above the
+ * ellipsoid; 1000 m stands in for a height the camera cannot give.
+ * @param {number} height
+ */
+export function ringRadiusAt(height) {
+  const h = Number.isFinite(height) ? height : 1000;
+  return Math.max(
+    RING_RADIUS.min,
+    Math.min(RING_RADIUS.max, h * RING_RADIUS.factor),
+  );
+}
+
+/**
+ * Each renderer's sets have ids of their own, unique across copies of this
+ * module on one viewer too.
+ */
+let rendererSeq = 0;
+const MODULE_TOKEN = Math.random().toString(36).slice(2, 8);
 
 export function createWorldAnnotationRenderer(viewer) {
-  const dataSource = new Cesium.CustomDataSource('gev-annotations');
-  viewer.dataSources.add(dataSource);
+  const draw = drawOf(viewer);
+  const instance = `${MODULE_TOKEN}${(rendererSeq += 1)}`;
+  let markSeq = 0;
   const osmAnnotations = new Set();
+  // Every mark with sets on the globe, so sync() can take a hidden one out.
+  const drawn = new Set();
+  const pendingGround = new Map();
+  const groundQueue = [];
+  let offGroundFrame = null;
+  let destroyed = false;
+  // Marks with a target ring, and the radius they are drawn at.
+  const ringed = new Set();
+  let offRingFrame = null;
+  let ringRadius = ringRadiusAt(cameraHeight());
 
-  // Register the GevRouteFlow fabric once so Cesium's Material.fromType() can build the
-  // material the route pipeline renders. The animated `time` uniform is read straight
-  // from performance.now() inside FlowMaterialProperty.getValue (which Cesium calls each
-  // rendered frame with the live uniforms object), so the dashes flow with no extra
-  // per-frame bookkeeping.
-  ensureFlowFabricRegistered();
-
-  function colorFor(anno) {
-    return Cesium.Color.fromCssColorString(
-      PALETTE[anno.color] || PALETTE.primary,
-    );
-  }
-
-  // Target-ring radius (meters) scaled to camera height so it reads at any
-  // altitude. Read once per frame for BOTH ellipse axes — camera height is
-  // constant within a frame, so semiMajor === semiMinor always holds.
-  function ringRadius() {
-    const h = viewer.camera.positionCartographic?.height ?? 1000;
-    return Math.max(14, Math.min(170, h * 0.03));
-  }
-
-  // A live color that follows the annotation's fade alpha and an optional pulse.
-  function liveColor(anno, base, { alpha = 0.9, pulse = false } = {}) {
-    return new Cesium.CallbackProperty(() => {
-      const a = (anno.alpha ?? 1) * alpha * (pulse ? pulseFactor() : 1);
-      return base.withAlpha(Math.max(0, Math.min(1, a)));
-    }, false);
-  }
-
-  function add(anno) {
-    const base = colorFor(anno);
-    // Published to the mark BEFORE anything is added, and mutated in place as
-    // each entity lands: a mid-add failure (bad geometry, lost context) must
-    // leave the entities that DID land visible to remove(), or the rollback
-    // path cannot reach them and they stay on the globe forever.
-    const entities = [];
-    anno._entities = entities;
-
-    if (
-      anno.ring &&
-      anno.ring.length >= 3 &&
-      anno.footprintKind === 'building'
-    ) {
-      // Single building → the PRIMARY highlight is an extruded CLASSIFICATION
-      // volume that tints the real photogrammetry mesh (dome, walls, roof —
-      // everything inside the column) amber and pulses. A flat footprint
-      // extrusion is only 2.5D and misses domes; classification colors the
-      // actual tiles. A faint wireframe cage rides on top as a secondary cue.
-      const buffered = bufferRing(anno.ring, 3);
-      const positions = Cesium.Cartesian3.fromDegreesArray(buffered.flat());
-      const groundH =
-        sampleGroundOutside(viewer.scene, anno.ring) ??
-        (Number.isFinite(anno.anchor.height)
-          ? anno.anchor.height - (anno.buildingHeight || 25)
-          : 0);
-      const baseH = groundH - 3;
-      // Tall headroom is free: classification only colors where tiles exist, so
-      // empty air above the roof isn't tinted — this just guarantees we cover
-      // under-tagged building heights.
-      const topH = groundH + Math.max(18, anno.buildingHeight || 25) + 24;
-      // 1) Classification volume — tints the mesh amber, pulsing.
-      entities.push(
-        dataSource.entities.add({
-          polygon: {
-            hierarchy: new Cesium.PolygonHierarchy(positions),
-            height: baseH,
-            extrudedHeight: topH,
-            perPositionHeight: false,
-            classificationType: CLASSIFY,
-            material: new Cesium.ColorMaterialProperty(
-              liveColor(anno, base, { alpha: 0.45, pulse: true }),
-            ),
-          },
-        }),
-      );
-      // 2) Faint, SIMPLIFIED wireframe cage — secondary, lower opacity. Decimate
-      // the footprint so the extruded outline draws ~14 clean verticals, not one
-      // per (often 100+) ring vertex.
-      const cagePositions = Cesium.Cartesian3.fromDegreesArray(
-        decimateRing(buffered, 14).flat(),
-      );
-      entities.push(
-        dataSource.entities.add({
-          polygon: {
-            hierarchy: new Cesium.PolygonHierarchy(cagePositions),
-            height: baseH,
-            extrudedHeight: topH,
-            perPositionHeight: false,
-            fill: false,
-            outline: true,
-            outlineColor: liveColor(anno, base, { alpha: 0.32, pulse: true }),
-          },
-        }),
-      );
-      // 3) Crisp draped base outline so the footprint reads on the ground.
-      entities.push(
-        dataSource.entities.add({
-          polyline: {
-            positions,
-            width: 3,
-            material: new Cesium.PolylineGlowMaterialProperty({
-              glowPower: 0.25,
-              color: liveColor(anno, base, { alpha: 0.7 }),
-            }),
-            clampToGround: true,
-            classificationType: CLASSIFY,
-          },
-        }),
-      );
-    } else if (anno.ring && anno.ring.length >= 3) {
-      // Larger area (district / compound / park / state) → flat fill draped on
-      // the tiles + a glowing outline. Draping is right here: you can't extrude
-      // a whole neighbourhood, and the GIS overlay shows the boundary clearly.
-      // A multi-part outline (`anno.polygons`: Hawaii's islands, Berlin as a
-      // hole in Brandenburg) draws every part with its holes. All parts share
-      // ONE fill and ONE line material, so Cesium batches the whole mark into a
-      // ground primitive per kind instead of one per island.
-      const parts =
-        Array.isArray(anno.polygons) && anno.polygons.length
-          ? anno.polygons
-          : [[anno.ring]];
-      const fillMaterial = new Cesium.ColorMaterialProperty(
-        // Synthesized (approximate) areas get a fainter fill so they don't read as solid.
-        liveColor(anno, base, {
-          alpha: anno.synthesized ? 0.1 : 0.2,
-          pulse: true,
-        }),
-      );
-      // Synthesized → DASHED outline (signals "approximate, not an authoritative
-      // boundary", research §8.4/§8.6); real footprints → solid glow.
-      const lineMaterial = anno.synthesized
-        ? new Cesium.PolylineDashMaterialProperty({
-            color: liveColor(anno, base, { alpha: 0.95 }),
-            dashLength: 24,
-          })
-        : new Cesium.PolylineGlowMaterialProperty({
-            glowPower: 0.35,
-            color: liveColor(anno, base, { alpha: 1 }),
-          });
-      for (const [outer, ...holes] of parts) {
-        if (!Array.isArray(outer) || outer.length < 3) continue;
-        const rings = [outer, ...holes.filter((h) => h?.length >= 3)];
-        entities.push(
-          dataSource.entities.add({
-            polygon: {
-              hierarchy: new Cesium.PolygonHierarchy(
-                Cesium.Cartesian3.fromDegreesArray(outer.flat()),
-                rings
-                  .slice(1)
-                  .map(
-                    (hole) =>
-                      new Cesium.PolygonHierarchy(
-                        Cesium.Cartesian3.fromDegreesArray(hole.flat()),
-                      ),
-                  ),
-              ),
-              material: fillMaterial,
-              classificationType: CLASSIFY,
-            },
-          }),
-        );
-        for (const ring of rings) {
-          entities.push(
-            dataSource.entities.add({
-              polyline: {
-                positions: Cesium.Cartesian3.fromDegreesArray(
-                  closedRing(ring).flat(),
-                ),
-                width: 6,
-                material: lineMaterial,
-                clampToGround: true,
-                classificationType: CLASSIFY,
-              },
-            }),
-          );
-        }
-      }
-    } else if (
-      anno.type === 'route' &&
-      Array.isArray(anno.path) &&
-      anno.path.length >= 2
-    ) {
-      // A real path (street-following) draped on the 3D tiles, with dashes that
-      // FLOW toward the destination (custom st.s + time material; works on the
-      // clamped/classified ground polyline).
-      const positions = Cesium.Cartesian3.fromDegreesArray(
-        anno.path.flatMap((p) => [p.lon, p.lat]),
-      );
-      entities.push(
-        dataSource.entities.add({
-          polyline: {
-            positions,
-            width: 9,
-            material: new FlowMaterialProperty(
-              PALETTE[anno.color] || PALETTE.primary,
-            ),
-            clampToGround: true,
-            classificationType: CLASSIFY,
-          },
-        }),
-      );
-      osmAnnotations.add(anno);
-      showOsmCredit(viewer, anno);
-    } else if (anno.type === 'arrow' && anno.to) {
-      // Connector draped across the ground from origin to destination.
-      const positions = [
-        Cesium.Cartesian3.fromDegrees(anno.anchor.lon, anno.anchor.lat),
-        Cesium.Cartesian3.fromDegrees(anno.to.lon, anno.to.lat),
-      ];
-      entities.push(
-        dataSource.entities.add({
-          polyline: {
-            positions,
-            width: 16,
-            material: new Cesium.PolylineArrowMaterialProperty(
-              liveColor(anno, base, { alpha: 0.95 }),
-            ),
-            clampToGround: true,
-            classificationType: CLASSIFY,
-          },
-        }),
-      );
-    } else {
-      // pin / highlight / label — a camera-proportional target ring + a marker.
-      if (anno.type !== 'label') {
-        // Radius scales with camera height so the ring reads at any altitude.
-        // semiMajor === semiMinor is required AND must hold every frame, so both
-        // axes read the SAME ringRadius() (camera height is constant per frame).
-        entities.push(
-          dataSource.entities.add({
-            position: Cesium.Cartesian3.fromDegrees(
-              anno.anchor.lon,
-              anno.anchor.lat,
-            ),
-            ellipse: {
-              semiMajorAxis: new Cesium.CallbackProperty(ringRadius, false),
-              semiMinorAxis: new Cesium.CallbackProperty(ringRadius, false),
-              material: new Cesium.ColorMaterialProperty(
-                liveColor(anno, base, { alpha: 0.38, pulse: true }),
-              ),
-              outline: false,
-              classificationType: CLASSIFY,
-            },
-          }),
-        );
-      }
-      entities.push(pointMarker(anno, base));
+  /** The camera's height above the ellipsoid, or NaN when it has none. */
+  function cameraHeight() {
+    try {
+      return findCamera(viewer)?.pose().height ?? Number.NaN;
+    } catch {
+      return Number.NaN;
     }
   }
 
-  // Captions belong to the hybrid renderer's screen-space callouts.
-  function pointMarker(anno, base) {
-    return dataSource.entities.add({
-      position: Cesium.Cartesian3.fromDegrees(anno.anchor.lon, anno.anchor.lat),
-      point: {
-        pixelSize: anno.type === 'label' ? 8 : 14,
-        color: liveColor(anno, base, { alpha: 1 }),
-        outlineColor: liveColor(anno, Cesium.Color.WHITE, { alpha: 0.95 }),
-        outlineWidth: 3,
-        heightReference: CLAMP,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
+  /** The current ring radius, for the items that draw rings. */
+  const ringRadiusNow = () => ringRadius;
+
+  /**
+   * Before each frame: when the camera's height gives the rings another
+   * radius, every shown mark's ring is sent again at it. A hidden mark's
+   * ring catches up when it shows (`sync`).
+   */
+  function followRings() {
+    const radius = ringRadiusAt(cameraHeight());
+    if (Math.abs(radius - ringRadius) <= RING_RESIZE * ringRadius) return;
+    ringRadius = radius;
+    for (const anno of ringed) if (!anno.hidden) resizeRing(anno);
+  }
+
+  /** Send a mark's ring again at the current radius, when it differs. */
+  function resizeRing(anno) {
+    const was = anno._drawn;
+    const set = anno._draw?.shapes;
+    if (!was?.ring || !set || was.ringRadius === ringRadius) return;
+    was.ringRadius = ringRadius;
+    set.upsert([was.ring(was.alpha)]);
+  }
+
+  /**
+   * Keep the ring frame listener while any mark has a ring. A host with no
+   * frame port draws its rings at the radius they were added with.
+   */
+  function watchRings() {
+    if (ringed.size && !offRingFrame)
+      offRingFrame = findFrame(viewer)?.on('preRender', followRings) ?? null;
+    else if (!ringed.size && offRingFrame) {
+      offRingFrame();
+      offRingFrame = null;
+    }
+  }
+
+  const requestRender = () => frameOf(viewer).requestRender('annotations');
+
+  function sampleBuilding(anno, options) {
+    pendingGround.get(anno)?.finish('cancelled');
+    return new Promise((resolve, reject) => {
+      const queuedAt = performance.now();
+      // The 2 s budget starts when this task reaches the head of the queue, so
+      // waiting behind other buildings on a slow device never spends it.
+      let started = null;
+      const workTrace = options.workTrace;
+      if (workTrace) workTrace.samplerStart = queuedAt;
+      let groundDetailSlots = 0;
+      let groundDetailReady = true;
+      if (workTrace) {
+        try {
+          workTrace.groundDetailDropped = 0;
+        } catch {
+          groundDetailReady = false;
+        }
+      }
+      const task = {
+        anno,
+        points: groundProbePositions(anno.ring),
+        samples: [],
+        index: 0,
+      };
+      const timing = {
+        workMs: 0,
+        maxSliceMs: 0,
+        lastSliceMs: 0,
+        probes: 0,
+        queuedMs: 0,
+        deadlineMs: null,
+      };
+      task.current = () =>
+        !destroyed &&
+        !options.signal?.aborted &&
+        pendingGround.get(anno) === task &&
+        (options.isCurrent?.() ?? true);
+      task.begin = () => {
+        if (started !== null) return;
+        started = performance.now();
+        timing.queuedMs = started - queuedAt;
+        timing.deadlineMs = started + 2000;
+        if (workTrace) workTrace.samplerHeadAt = started;
+        task.timer = setTimeout(() => task.finish('timeout'), 2000);
+        // A task promoted outside a frame (its predecessor timed out or was
+        // cancelled) still needs frames in request-render mode.
+        try {
+          requestRender();
+        } catch {
+          /* the enqueue path reports render failures */
+        }
+      };
+      task.finish = (status, error) => {
+        if (pendingGround.get(anno) !== task) return;
+        pendingGround.delete(anno);
+        const position = groundQueue.indexOf(task);
+        groundQueue.splice(position, 1);
+        clearTimeout(task.timer);
+        if (position === 0) groundQueue[0]?.begin();
+        options.signal?.removeEventListener('abort', task.abort);
+        if (!groundQueue.length && offGroundFrame) {
+          offGroundFrame();
+          offGroundFrame = null;
+        }
+        timing.elapsedMs = performance.now() - (started ?? queuedAt);
+        if (workTrace) {
+          workTrace.probes = timing.probes;
+          workTrace.samplerStatus = status;
+        }
+        if (error) reject(error);
+        else resolve({ status, timing });
+      };
+      task.abort = () => task.finish('cancelled');
+      task.step = () => {
+        const workStart = workTrace ? performance.now() : 0;
+        // Nested call/commit wall-time only; the original parent remains the gate.
+        const detail =
+          workTrace && groundDetailSlots++ < 8
+            ? {
+                index: task.index,
+                status: groundDetailReady ? 'recorded' : 'missing',
+                clampStart: null,
+                clampEnd: null,
+                clampResult: 'not-run',
+                commitStart: null,
+                commitEnd: null,
+                commitStatus: 'not-run',
+              }
+            : undefined;
+        const note = detail
+          ? (key) => {
+              try {
+                const at = performance.now();
+                if (Number.isFinite(at)) detail[key] = at;
+                else detail.status = 'missing';
+              } catch {
+                detail.status = 'missing';
+              }
+            }
+          : null;
+        if (workTrace && !detail) {
+          try {
+            workTrace.groundDetailDropped += 1;
+          } catch {
+            // Missing attribution must not change the sampler outcome.
+          }
+        }
+        try {
+          if (!task.current()) return task.finish('cancelled');
+          if (performance.now() - started >= 2000)
+            return task.finish('timeout');
+          const sliceStart = performance.now();
+          let error;
+          try {
+            // Without depth support the surface answers nothing: the
+            // probes are skipped, and the fallback height is taken.
+            if (heightsOf(viewer).supported().surface) {
+              const [lon, lat] = task.points[task.index++];
+              timing.probes += 1;
+              try {
+                let h;
+                note?.('clampStart');
+                try {
+                  // The surface under the probe: the drawn tiles or terrain,
+                  // never a mark (no draw set is in height queries).
+                  h = heightsOf(viewer).now({ lon, lat });
+                  if (detail)
+                    detail.clampResult = Number.isFinite(h) ? 'hit' : 'missed';
+                } finally {
+                  note?.('clampEnd');
+                }
+                if (Number.isFinite(h) && h > -430 && h < 9000)
+                  task.samples.push(h);
+              } catch {
+                /* surface not ready: preserve the existing sample filter */
+              }
+            } else task.index = task.points.length;
+            if (performance.now() - started >= 2000) {
+              task.finish('timeout');
+              return;
+            }
+            if (!task.current()) return task.finish('cancelled');
+            if (task.index === task.points.length) {
+              if (detail) detail.commitStatus = 'attempted';
+              note?.('commitStart');
+              task.samples.sort((a, b) => a - b);
+              const ground = task.samples.length
+                ? task.samples[Math.floor(task.samples.length * 0.3)]
+                : null;
+              add(anno, {
+                sampledGroundHeight: ground,
+                isCurrent: task.current,
+              });
+              if (performance.now() >= timing.deadlineMs) {
+                task.finish('timeout');
+                remove(anno);
+                return;
+              }
+            }
+          } catch (caught) {
+            error = caught;
+          } finally {
+            timing.lastSliceMs = performance.now() - sliceStart;
+            timing.workMs += timing.lastSliceMs;
+            timing.maxSliceMs = Math.max(timing.maxSliceMs, timing.lastSliceMs);
+          }
+          if (error) {
+            task.finish('failed', error);
+            try {
+              remove(anno);
+            } catch {
+              /* retain the original commit error */
+            }
+          } else if (task.index === task.points.length)
+            task.finish('installed');
+        } finally {
+          // Commit includes sort/selection/add/deadline/finish or rollback,
+          // including intervening bookkeeping; it is not exclusive draw cost.
+          if (detail?.commitStatus === 'attempted') note('commitEnd');
+          if (workTrace)
+            recordWorkSlice(
+              workTrace,
+              'ground-step',
+              workStart,
+              undefined,
+              detail,
+            );
+        }
+      };
+      pendingGround.set(anno, task);
+      groundQueue.push(task);
+      if (groundQueue[0] === task) task.begin();
+      options.signal?.addEventListener('abort', task.abort, { once: true });
+      if (!task.current()) return task.finish('cancelled');
+      try {
+        if (!offGroundFrame)
+          offGroundFrame = frameOf(viewer).on('postRender', onGroundFrame);
+        requestRender();
+      } catch (error) {
+        task.finish('failed', error);
+      }
     });
   }
 
-  function remove(anno) {
-    hideOsmCredit(viewer, anno);
-    osmAnnotations.delete(anno);
-    if (!anno?._entities) return;
-    for (const entity of anno._entities) {
-      try {
-        dataSource.entities.remove(entity);
-      } catch {
-        /* already gone */
-      }
+  function onGroundFrame() {
+    // One building probe TOTAL, not one per mark. Other renderers have their own work.
+    const task = groundQueue[0];
+    try {
+      task?.step();
+      if (groundQueue.length) requestRender();
+    } catch (error) {
+      for (const pending of [...groundQueue]) pending.finish('failed', error);
     }
-    anno._entities = null;
+  }
+  /**
+   * The mark's draw sets, made on first use: shapes (fills, volumes, rings),
+   * lines (outlines, routes, arrows) and points (markers).
+   */
+  function setsOf(anno) {
+    if (!anno._draw) {
+      markSeq += 1;
+      const prefix = `annotations:${instance}:${markSeq}`;
+      anno._draw = { prefix, shapes: null, lines: null, points: null };
+    }
+    return anno._draw;
   }
 
+  function setOf(anno, kind) {
+    const sets = setsOf(anno);
+    if (!sets[kind]) {
+      sets[kind] = draw[kind]({
+        id: `${sets.prefix}:${kind}`,
+        clampTo: CLAMP_TO,
+        show: !anno.hidden,
+      });
+    }
+    return sets[kind];
+  }
+
+  function add(anno, options = {}) {
+    // A destroyed renderer draws nothing more.
+    if (destroyed) return;
+    // Published to the mark BEFORE anything is drawn: a mid-add failure (bad
+    // geometry, lost context) must leave the sets that DID land visible to
+    // remove(), or the rollback path cannot reach them and they stay on the
+    // globe forever.
+    drawn.add(anno);
+
+    if (
+      anno.ring?.length >= 3 &&
+      anno.footprintKind === 'building' &&
+      !Object.hasOwn(options, 'sampledGroundHeight')
+    ) {
+      return sampleBuilding(anno, options);
+    }
+
+    // Rings not yet followed take the camera's height now.
+    if (!offRingFrame) ringRadius = ringRadiusAt(cameraHeight());
+    const items = itemsOf(anno, options, ringRadiusNow);
+    anno._drawn = {
+      alpha: alphaOf(anno),
+      items,
+      ring: items.ring,
+      ringRadius,
+    };
+    if (items.ring) ringed.add(anno);
+    else ringed.delete(anno);
+    watchRings();
+    const current = () => options.isCurrent?.() ?? true;
+    const building = anno.footprintKind === 'building';
+    for (const kind of ['shapes', 'lines', 'points']) {
+      if (!items[kind].length) {
+        // Added again as another kind: what it drew before goes.
+        disposeSet(anno, kind);
+        continue;
+      }
+      if (building && !current()) throw new Error('Building install cancelled');
+      setOf(anno, kind).set(items[kind].map((item) => item(anno._drawn.alpha)));
+      if (building && !current()) {
+        clearSets(anno);
+        throw new Error('Building install cancelled');
+      }
+    }
+    if (anno.type === 'route' && items.lines.length) {
+      osmAnnotations.add(anno);
+      showOsmCredit(viewer, anno);
+    }
+    if (
+      (items.shapes.length || items.lines.length || items.points.length) &&
+      anno.ring?.length >= 3 &&
+      !anno.synthesized &&
+      (anno.outlineCredit === 'tiles' || anno.outlineCredit === 'osm') &&
+      current()
+    ) {
+      // The actual world proxy owns both geometry and credit, including rollback.
+      osmAnnotations.add(anno);
+      showOsmCredit(viewer, anno, {
+        openMapTiles: anno.outlineCredit === 'tiles',
+      });
+    }
+  }
+
+  function disposeSet(anno, kind) {
+    const sets = anno?._draw;
+    if (!sets?.[kind]) return;
+    try {
+      sets[kind].dispose();
+    } catch {
+      /* already gone */
+    }
+    sets[kind] = null;
+  }
+
+  function clearSets(anno) {
+    for (const kind of ['shapes', 'lines', 'points']) disposeSet(anno, kind);
+  }
+
+  function remove(anno) {
+    pendingGround.get(anno)?.finish('cancelled');
+    hideOsmCredit(viewer, anno);
+    osmAnnotations.delete(anno);
+    drawn.delete(anno);
+    ringed.delete(anno);
+    watchRings();
+    clearSets(anno);
+    if (anno) {
+      anno._draw = null;
+      anno._drawn = null;
+    }
+  }
+
+  /**
+   * A hidden mark is taken out whole (its sets hidden), so no fill, line or
+   * pick can still show it; a mark whose alpha moved (fading in or out)
+   * takes its new colours in place.
+   */
   function sync() {
-    // No-op: CallbackProperty drives per-frame alpha/pulse animation.
+    for (const anno of drawn) {
+      const sets = anno._draw;
+      if (!sets) continue;
+      const show = !anno.hidden;
+      for (const kind of ['shapes', 'lines', 'points'])
+        if (sets[kind] && sets[kind].show !== show) sets[kind].show = show;
+      const was = anno._drawn;
+      const alpha = alphaOf(anno);
+      if (!was || was.alpha === alpha) {
+        // Shown again: its ring catches up with the camera.
+        if (show) resizeRing(anno);
+        continue;
+      }
+      was.alpha = alpha;
+      was.ringRadius = ringRadius;
+      for (const kind of ['shapes', 'lines', 'points'])
+        if (sets[kind] && was.items[kind].length)
+          sets[kind].upsert(was.items[kind].map((item) => item(alpha)));
+    }
   }
 
   function destroy() {
+    destroyed = true;
+    for (const task of [...pendingGround.values()]) task.finish('cancelled');
     for (const anno of osmAnnotations) hideOsmCredit(viewer, anno);
     osmAnnotations.clear();
-    try {
-      viewer.dataSources.remove(dataSource, true);
-    } catch {
-      /* scene torn down */
+    ringed.clear();
+    watchRings();
+    for (const anno of drawn) {
+      clearSets(anno);
+      anno._draw = null;
+      anno._drawn = null;
     }
+    drawn.clear();
   }
 
   return { add, remove, sync, destroy };
 }
 
-function pulseFactor() {
-  // 0.6 .. 1.0 sinusoid at ~0.8 Hz
-  return 0.8 + 0.2 * Math.sin(performance.now() * 0.005);
-}
+/** A mark's alpha as drawn, 0..1. */
+const alphaOf = (anno) => Math.max(0, Math.min(1, anno.alpha ?? 1));
 
-/**
- * A custom Fabric polyline material whose dashes flow toward the destination.
- * `materialInput.st.s` is the along-line coordinate (0 = origin, 1 = destination),
- * so `fract(s*repeat - time*speed)` scrolls the pattern toward the end. Works on
- * a clamped/classified ground polyline (PolylineMaterialAppearance supports it).
- */
-function makeRouteFlowMaterial(colorCss) {
-  return new Cesium.Material({
-    fabric: {
-      type: 'GevRouteFlow',
-      uniforms: {
-        color: Cesium.Color.fromCssColorString(colorCss).withAlpha(0.95),
-        time: 0.0,
-        repeat: 64.0, // dash cells along the whole route
-        duty: 0.46, // fraction of each cell that is "on"
-        speed: 0.55, // cells per second toward the destination
-      },
-      source: `
-        czm_material czm_getMaterial(czm_materialInput materialInput) {
-          czm_material m = czm_getDefaultMaterial(materialInput);
-          float s = materialInput.st.s;                  // 0 origin -> 1 dest
-          float flow = fract(s * repeat - time * speed); // scroll toward dest
-          float on = smoothstep(duty + 0.08, duty - 0.08, flow);
-          // keep a faint baseline so the whole route stays readable between dashes
-          float a = max(on, 0.18);
-          m.diffuse = color.rgb;
-          m.emission = color.rgb * on * 0.9;             // glow on the lit cells
-          m.alpha = color.a * a;
-          return m;
-        }`,
-    },
-  });
-}
+/** `[r, g, b, a]` for a palette colour at `alpha`. */
+const colour = (base, alpha) => [base[0], base[1], base[2], alpha];
 
-let _flowFabricRegistered = false;
-/** Register the GevRouteFlow fabric ONCE so Cesium's `Material.fromType('GevRouteFlow')`
- *  can build the material the render pipeline uses. Constructing one Material with the
- *  fabric caches it under its type name. */
-export function ensureFlowFabricRegistered() {
-  if (_flowFabricRegistered) return;
-  makeRouteFlowMaterial('#ffffff'); // side effect: registers the 'GevRouteFlow' type
-  _flowFabricRegistered = true;
-}
-
-/**
- * MaterialProperty for the animated route. Cesium builds the rendered Material once
- * from getType() (our registered GevRouteFlow fabric), then EACH FRAME calls
- * getValue(time, material.uniforms) and uses whatever we write INTO that uniforms
- * object — it ignores the return value. So getValue writes color/time/repeat/duty/
- * speed straight onto `result` (the live uniforms). Writing the animated `time` here
- * is what actually makes the dashes flow on the GPU. (The prior versions either
- * returned a standalone Material Cesium never rendered, or treated `result` as a
- * Material — both left the real uniforms untouched, so nothing animated.)
- */
-export function FlowMaterialProperty(colorCss) {
-  this._color = Cesium.Color.fromCssColorString(colorCss).withAlpha(0.95);
-  this._definitionChanged = new Cesium.Event();
-}
-Object.defineProperties(FlowMaterialProperty.prototype, {
-  isConstant: {
-    get() {
-      return false;
-    },
-  }, // re-evaluated each frame → it animates
-  definitionChanged: {
-    get() {
-      return this._definitionChanged;
-    },
-  },
+/** A fill or outline that pulses about `alpha`. */
+const pulse = (alpha) => ({
+  property: 'alpha',
+  from: alpha * PULSE_LOW,
+  to: alpha,
+  periodMs: PULSE_MS,
 });
-FlowMaterialProperty.prototype.getType = function getType() {
-  return 'GevRouteFlow';
-};
-FlowMaterialProperty.prototype.getValue = function getValue(time, result) {
-  // `result` IS the live uniforms object Cesium renders — write into it directly.
-  // `time` is read straight from the wall clock so the dashes flow every rendered
-  // frame (the scene renders continuously; no requestRenderMode here).
-  if (!Cesium.defined(result)) result = {};
-  result.color = this._color;
-  result.time = performance.now() / 1000; // the per-frame animated value
-  result.repeat = 64.0;
-  result.duty = 0.46;
-  result.speed = 0.55;
-  return result;
-};
-FlowMaterialProperty.prototype.equals = function equals(other) {
-  return this === other;
-};
+
+/**
+ * What a mark draws, as item makers by kind, each taking the mark's alpha:
+ * built once per add, called again on each fade step. `ring` is the target
+ * ring's maker among the shapes, drawn at `ringRadiusNow()`.
+ */
+function itemsOf(anno, options, ringRadiusNow) {
+  const base = PALETTE[anno.color] || PALETTE.primary;
+  const shapes = [];
+  const lines = [];
+  const points = [];
+  const meta = { annotation: anno.id };
+  let ring = null;
+  const draped = (id, positions, widthPx, style) => (alpha) => ({
+    id,
+    positions,
+    widthPx,
+    mode: 'draped',
+    clampTo: CLAMP_TO,
+    style: style(alpha),
+    meta,
+  });
+  if (anno.ring?.length >= 3 && anno.footprintKind === 'building') {
+    // Single building → the PRIMARY highlight is a translucent extruded
+    // column round the building that pulses, from just under its ground to
+    // well over its roof, with a faint wireframe cage on it as a secondary
+    // cue and a crisp draped base outline.
+    const parts =
+      Array.isArray(anno.polygons) && anno.polygons.length
+        ? anno.polygons
+        : [[anno.ring]];
+    const groundH =
+      options.sampledGroundHeight ??
+      (Number.isFinite(anno.anchor.height)
+        ? anno.anchor.height - (anno.buildingHeight || 25)
+        : 0);
+    const baseH = groundH - 3;
+    // Tall headroom so under-tagged building heights are covered too.
+    const topH = groundH + Math.max(18, anno.buildingHeight || 25) + 24;
+    const at = (ring) =>
+      ring.map(([lon, lat]) => ({ lon, lat, height: baseH }));
+    parts.forEach(([outer, ...holes], p) => {
+      const buffered = bufferRing(outer, 3);
+      // Built once: a fade step only changes colours.
+      const volume = { kind: 'polygon', rings: [buffered, ...holes].map(at) };
+      shapes.push((alpha) => ({
+        id: `volume:${p}`,
+        geometry: volume,
+        fill: colour(base, 0.45 * alpha),
+        animate: pulse(0.45 * alpha),
+        extrudeHeight: topH,
+        height: 'absolute',
+        meta,
+      }));
+      // Faint, SIMPLIFIED wireframe cage: the footprint decimated so the
+      // extruded outline draws ~14 clean verticals, not one per (often
+      // 100+) ring vertex.
+      const cage = {
+        kind: 'polygon',
+        rings: [at(decimateRing(buffered, 14))],
+      };
+      shapes.push((alpha) => ({
+        id: `cage:${p}`,
+        geometry: cage,
+        outline: colour(base, 0.32 * alpha),
+        outlineOnly: true,
+        animate: pulse(0.32 * alpha),
+        extrudeHeight: topH,
+        height: 'absolute',
+        meta,
+      }));
+      [outer, ...holes].forEach((ring, r) =>
+        lines.push(
+          draped(`base:${p}:${r}`, ecefOf(closedRing(ring)), 3, (alpha) => ({
+            kind: 'glow',
+            color: colour(base, 0.7 * alpha),
+            power: 0.25,
+          })),
+        ),
+      );
+    });
+  } else if (anno.ring?.length >= 3) {
+    // Larger area (district / compound / park / state) → flat fill draped on
+    // the tiles + a glowing outline. Draping is right here: you can't extrude
+    // a whole neighbourhood, and the GIS overlay shows the boundary clearly.
+    // A multi-part outline (`anno.polygons`: Hawaii's islands, Berlin as a
+    // hole in Brandenburg) draws every part with its holes.
+    const parts =
+      Array.isArray(anno.polygons) && anno.polygons.length
+        ? anno.polygons
+        : [[anno.ring]];
+    // Synthesized (approximate) areas get a fainter fill so they don't read
+    // as solid, and a DASHED outline (signals "approximate, not an
+    // authoritative boundary", research §8.4/§8.6); real footprints a solid
+    // glow.
+    const fillAlpha = anno.synthesized ? 0.1 : 0.2;
+    const style = anno.synthesized
+      ? (alpha) => ({
+          kind: 'dash',
+          color: colour(base, 0.95 * alpha),
+          length: 24,
+        })
+      : (alpha) => ({ kind: 'glow', color: colour(base, alpha), power: 0.35 });
+    parts.forEach(([outer, ...holes], p) => {
+      if (!Array.isArray(outer) || outer.length < 3) return;
+      const rings = [outer, ...holes.filter((h) => h?.length >= 3)];
+      const area = {
+        kind: 'polygon',
+        rings: rings.map((ring) => ring.map(([lon, lat]) => ({ lon, lat }))),
+      };
+      shapes.push((alpha) => ({
+        id: `fill:${p}`,
+        geometry: area,
+        fill: colour(base, fillAlpha * alpha),
+        animate: pulse(fillAlpha * alpha),
+        height: 'clampGround',
+        clampTo: CLAMP_TO,
+        meta,
+      }));
+      rings.forEach((ring, r) =>
+        lines.push(
+          draped(`outline:${p}:${r}`, ecefOf(closedRing(ring)), 6, style),
+        ),
+      );
+    });
+  } else if (
+    anno.type === 'route' &&
+    Array.isArray(anno.path) &&
+    anno.path.length >= 2
+  ) {
+    // A real path (street-following) draped on the surface, with dashes that
+    // FLOW toward the destination.
+    lines.push(
+      draped(
+        'route',
+        anno.path.map((p) => fromDegrees(p.lon, p.lat, 0)),
+        9,
+        (alpha) => ({
+          kind: 'flow',
+          color: colour(base, 0.95 * alpha),
+          repeat: 64,
+          duty: 0.46,
+          speed: 0.55,
+        }),
+      ),
+    );
+  } else if (anno.type === 'arrow' && anno.to) {
+    // Connector draped across the ground from origin to destination.
+    lines.push(
+      draped(
+        'arrow',
+        [
+          fromDegrees(anno.anchor.lon, anno.anchor.lat, 0),
+          fromDegrees(anno.to.lon, anno.to.lat, 0),
+        ],
+        16,
+        (alpha) => ({ kind: 'arrow', color: colour(base, 0.95 * alpha) }),
+      ),
+    );
+  } else {
+    // pin / highlight / label — a camera-proportional target ring + a marker.
+    const pos = { lon: anno.anchor.lon, lat: anno.anchor.lat };
+    if (anno.type !== 'label') {
+      ring = (alpha) => ({
+        id: 'ring',
+        geometry: {
+          kind: 'ellipse',
+          center: pos,
+          semiMajor: ringRadiusNow(),
+          semiMinor: ringRadiusNow(),
+        },
+        fill: colour(base, 0.38 * alpha),
+        animate: pulse(0.38 * alpha),
+        height: 'clampGround',
+        clampTo: CLAMP_TO,
+        meta,
+      });
+      shapes.push(ring);
+    }
+    // Captions belong to the hybrid renderer's screen-space callouts.
+    points.push((alpha) => ({
+      id: 'marker',
+      pos,
+      height: 'clampGround',
+      pixelSize: anno.type === 'label' ? 8 : 14,
+      color: colour(base, alpha),
+      outlineColor: colour(WHITE, 0.95 * alpha),
+      outlineWidth: 3,
+      disableDepthTest: Number.POSITIVE_INFINITY,
+      meta,
+    }));
+  }
+  return { shapes, lines, points, ring };
+}
+
+/** `[lon, lat]` pairs as ECEF positions on the ellipsoid. */
+const ecefOf = (ring) => ring.map(([lon, lat]) => fromDegrees(lon, lat, 0));
+
+function rgb(css) {
+  const n = parseInt(css.slice(1), 16);
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+}
 
 /** The ring with its first vertex repeated at the end, so an outline closes. */
 function closedRing(ring) {
@@ -458,27 +760,13 @@ function decimateRing(ring, n) {
 }
 
 /**
- * Sample the ground height (m) just OUTSIDE a building footprint. Sampling at
- * the centroid would clamp onto the roof, so we probe several points beyond the
- * footprint radius and take a low percentile (≈ ground). Returns null if the
- * tiles under those points aren't loaded yet.
+ * The original eight outside-footprint probes. Keep their coordinates and order
+ * while scheduling the expensive scene picks across rendered frames.
  */
-function sampleGroundOutside(scene, ring) {
-  if (
-    !scene?.clampToHeightSupported ||
-    typeof scene.clampToHeight !== 'function'
-  )
-    return null;
-  let clon = 0;
-  let clat = 0;
-  for (const [lon, lat] of ring) {
-    clon += lon;
-    clat += lat;
-  }
-  clon /= ring.length;
-  clat /= ring.length;
+function groundProbePositions(ring) {
+  const { lon: clon, lat: clat } = ringCentroid(ring);
   const latS = 111320;
-  const lonS = latS * Math.cos(Cesium.Math.toRadians(clat));
+  const lonS = latS * Math.cos((clat * Math.PI) / 180);
   let maxR = 0;
   for (const [lon, lat] of ring) {
     maxR = Math.max(maxR, Math.hypot((lon - clon) * lonS, (lat - clat) * latS));
@@ -494,23 +782,11 @@ function sampleGroundOutside(scene, ring) {
     [0.7, -0.7],
     [-0.7, 0.7],
   ];
-  const samples = [];
-  for (const [dx, dy] of dirs) {
+  return dirs.map(([dx, dy]) => {
     const lon = clon + (dx * out) / lonS;
     const lat = clat + (dy * out) / latS;
-    try {
-      const c = scene.clampToHeight(Cesium.Cartesian3.fromDegrees(lon, lat, 0));
-      if (c) {
-        const h = Cesium.Cartographic.fromCartesian(c).height;
-        if (Number.isFinite(h) && h > -430 && h < 9000) samples.push(h);
-      }
-    } catch {
-      /* tile not ready */
-    }
-  }
-  if (!samples.length) return null;
-  samples.sort((a, b) => a - b);
-  return samples[Math.floor(samples.length * 0.3)];
+    return [lon, lat];
+  });
 }
 
 /**
@@ -528,7 +804,7 @@ function bufferRing(ring, meters) {
   clon /= ring.length;
   clat /= ring.length;
   const latScale = 111320;
-  const lonScale = latScale * Math.cos(Cesium.Math.toRadians(clat));
+  const lonScale = latScale * Math.cos((clat * Math.PI) / 180);
   return ring.map(([lon, lat]) => {
     const dx = (lon - clon) * lonScale;
     const dy = (lat - clat) * latScale;

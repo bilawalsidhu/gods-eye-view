@@ -1,5 +1,6 @@
 /** Own panel collapsed-state preferences and the one-time layout-reset notice. */
 import { t } from '../i18n/index.js';
+import { readPanelState } from './rail/panelState.js';
 /** Versioned localStorage namespace prefix to invalidate stale panel layouts. */
 const PANEL_LAYOUT_STORAGE_VERSION = 'v6';
 /**
@@ -14,8 +15,9 @@ const RETIRED_PANEL_KEY_PREFIXES = [
   `godsEyeView.${PANEL_POSITION_STORAGE_VERSION}.panelFloatHintShown`,
 ];
 export class PanelPositionControls {
-  constructor({ syncPanelCollapseButton, showToast }) {
-    this._syncPanelCollapseButton = syncPanelCollapseButton;
+  constructor({ presentPanel, shownPanel = readPanelState, showToast }) {
+    this._presentPanel = presentPanel;
+    this._shownPanel = shownPanel;
     this._showToast = showToast;
   }
 
@@ -55,7 +57,7 @@ export class PanelPositionControls {
   _restorePanelCollapsedState(panelId, { allowStored = true } = {}) {
     const panelEl = document.getElementById(panelId);
     if (!panelEl) return;
-    let collapsed = panelEl.classList.contains('collapsed');
+    let collapsed = this._shownPanel(panelEl).collapsed;
     let stored = null;
     if (allowStored) {
       try {
@@ -75,7 +77,7 @@ export class PanelPositionControls {
     // first-run mission card for the one first impression there is. A stored
     // choice still wins in both directions, so anyone who opens it keeps it.
     if (panelId === 'pp-toggles' && stored === null) collapsed = true;
-    panelEl.classList.toggle('collapsed', collapsed);
+    this._presentPanel(panelEl, { collapsed });
     // Bodies that expand themselves on first appearance must not override a
     // choice the user (or a share link) already made.
     if (panelEl.dataset)
@@ -84,7 +86,6 @@ export class PanelPositionControls {
         : stored === null
           ? 'default'
           : 'stored';
-    this._syncPanelCollapseButton(panelEl);
   }
 
   _savePanelCollapsedState(panelId, collapsed) {

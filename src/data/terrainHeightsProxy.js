@@ -107,7 +107,10 @@ export function terrainRetryAfterMs(value, nowMs = Date.now()) {
 /**
  * Fetch one upstream chunk with jittered exponential backoff. Network errors,
  * 429, and 5xx retry; other HTTP failures and malformed successes fail fast.
- * Retry sleeps and retry attempts share a 10s budget after attempt one.
+ * Retry sleeps and retry attempts share a 10s budget after attempt one. A
+ * Retry-After longer than the budget left ends the retries at once: sleeping
+ * out the budget cannot reach the time the upstream asked for, and it would
+ * delay the caller's own back-off (the proxy's 429 pause) by up to 10 s.
  *
  * Dependencies are injectable for deterministic offline tests.
  * @param {Array<[number, number]>} points
@@ -145,6 +148,7 @@ export async function fetchTerrainChunkWithRetry(
       const res = await fetchImpl(url, signal ? { signal } : {});
       if (!res.ok) {
         const error = new Error(`HTTP ${res.status}`);
+        error.status = res.status;
         error.retryable = res.status === 429 || res.status >= 500;
         error.retryAfter = res.headers?.get?.('retry-after') ?? null;
         throw error;
@@ -167,6 +171,7 @@ export async function fetchTerrainChunkWithRetry(
       if (remaining <= 0) break;
 
       const retryAfterMs = terrainRetryAfterMs(error?.retryAfter, now());
+      if (retryAfterMs != null && retryAfterMs > remaining) break;
       const backoffMs = Math.round(
         350 * 2 ** attempt * (0.75 + random() * 0.5),
       );
@@ -185,7 +190,8 @@ export async function fetchTerrainChunkWithRetry(
  * Resolve a requested point batch against a per-point cache and a missing-only
  * fetcher. Results are reconstructed by canonical key in exact request order,
  * including duplicates. Stale values remain eligible only when refresh fails.
- * If any position has no real height, return 502 with no fabricated result.
+ * If any position has no real height, return 502 with no fabricated result;
+ * the body's `partial` lists the real heights it has, null for the rest.
  *
  * @param {object} options
  * @param {Array<[number, number]>} options.points
@@ -233,6 +239,9 @@ export async function resolveTerrainHeightRequest({
       for (let i = 0; i < missing.length; i += 1) {
         const result = fetched[i];
         if (validTerrainResult(result)) {
+          // Re-insert rather than overwrite: a Map keeps an existing key in
+          // its old position, and the proxy evicts from the front.
+          cache.delete(missing[i].key);
           cache.set(missing[i].key, { at: fetchedAt, result });
           cacheChanged = true;
         } else if (absentTerrainDatum(result)) {
@@ -261,11 +270,19 @@ export async function resolveTerrainHeightRequest({
     return entry && validTerrainResult(entry.result) ? entry.result : null;
   });
   if (results.some((result) => result == null)) {
+    // The real heights this request does have, null elsewhere, so the page
+    // keeps them and uses its geoid only for the rest. Named `partial`, not
+    // `results`, so no reader mistakes it for a complete answer; left out when
+    // no point has a height.
+    const partial = results.some((result) => result != null)
+      ? { partial: results }
+      : {};
     return {
       status: 502,
       body: {
         error:
           'terrain heights fetch failed and no cache available for every point',
+        ...partial,
       },
       cacheChanged,
       upstreamError,

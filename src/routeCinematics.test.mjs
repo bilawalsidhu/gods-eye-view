@@ -7,6 +7,8 @@
  * the mesh, it flattens under prefers-reduced-motion, and it stops the instant
  * anything interrupts it.
  */
+import { bindFakeCesiumCamera } from './testSupport/fakeCameraPort.mjs';
+import { bindRenderer } from './render/rendererOf.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
@@ -99,19 +101,24 @@ function createTickableViewer({ heightM = 700 } = {}) {
       if (orientation && Number.isFinite(orientation.pitch)) camera.pitch = orientation.pitch;
     },
   };
-  const viewer = {
+  const viewer = bindFakeCesiumCamera({
     trackedEntity: undefined,
-    clock: { onTick: { addEventListener: (fn) => { listeners.push(fn); return () => {}; } } },
     scene: {
       canvas: { addEventListener() {}, removeEventListener() {} },
-      tweens: [],
       requestRender() {},
-      // A live app has a rendered surface under the route; the mesh probe reads
-      // it, so these flights start immediately rather than arming.
-      sampleHeight: () => 0,
     },
     camera,
-  };
+  }, {
+    // A live app has a rendered surface under the route; the mesh probe reads
+    // it, so these flights start immediately rather than arming.
+    query: { sampleHeightNow: () => 0 },
+    frame: {
+      on: (phase, fn) => {
+        if (phase === 'preUpdate') listeners.push(fn);
+        return () => {};
+      },
+    },
+  });
   return {
     viewer,
     setViews,
@@ -561,12 +568,17 @@ test('the rendered mesh answers when the DEM never will — once, and only once'
 test('probeMeshFloorM reports COVERAGE, not just a height', () => {
   assert.deepEqual(probeMeshFloorM(null, [{ lat: 1, lon: 1 }]),
     { heightM: Number.NaN, sampled: 0, requested: 1 }, 'no scene, no reading');
-  assert.deepEqual(probeMeshFloorM({ sampleHeight: () => 120 }, []),
+  const surface = (sampleHeightNow) => {
+    const viewer = {};
+    bindRenderer(viewer, { query: { sampleHeightNow } });
+    return viewer;
+  };
+  assert.deepEqual(probeMeshFloorM(surface(() => 120), []),
     { heightM: Number.NaN, sampled: 0, requested: 0 }, 'no cells, no reading');
   // Cells whose tiles are not streamed contribute NOTHING — silence must never
   // be mistaken for flat ground, which is why the caller gets a count.
   const partial = probeMeshFloorM(
-    { sampleHeight: (c) => (c.longitude > 0 ? 340 : undefined) },
+    surface((point) => (point.lon > 0 ? 340 : null)),
     [{ lat: 1, lon: 1 }, { lat: 1, lon: -1 }],
   );
   assert.equal(partial.heightM, 340, 'the probe takes the HIGHEST surface it saw');
@@ -1077,4 +1089,46 @@ test('a new viewer lifetime drops the previous view-target getter', () => {
   assert.equal(asked, askedBefore, 'the old getter was never called again');
   interruptCameraMotion('test-cleanup');
   second.restore();
+});
+
+test('a route hidden from Draw is not flown; the newest visible one is', () => {
+  const viewer = createTickableViewer();
+  initCameraVerbs(viewer.viewer, () => null);
+  const route = (label, hidden) => ({
+    type: 'route',
+    label,
+    hidden,
+    path: TWO_TURN_ROUTE.map(([lon, lat]) => ({ lon, lat, height: 0 })),
+  });
+  const onlyHidden = flyRoute([route('hidden walk', true)]);
+  assert.equal(onlyHidden.ok, false, 'a board of hidden routes has none to fly');
+  const started = flyRoute([route('shown walk', false), route('hidden walk', true)]);
+  assert.equal(started.ok, true);
+  assert.match(JSON.stringify(started), /shown walk/, 'the visible route is flown');
+  interruptCameraMotion?.('test');
+});
+
+test('a frame port bound after the verbs started runs the next motion', () => {
+  // A viewer with no renderer yet, so no frame port to listen to.
+  const viewer = {
+    canvas: { addEventListener() {}, removeEventListener() {} },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+  };
+  try {
+    initCameraVerbs(viewer);
+    const listeners = [];
+    bindRenderer(viewer, {
+      frame: {
+        on: (phase, fn) => {
+          if (phase === 'preUpdate') listeners.push(fn);
+          return () => listeners.splice(listeners.indexOf(fn), 1);
+        },
+      },
+    });
+    assert.equal(listeners.length, 0, 'nothing listens before a motion');
+    assert.equal(moveCamera({ motion: 'rotate', direction: 'left' }).ok, true);
+    assert.equal(listeners.length, 1, 'the motion runs on the bound port');
+  } finally {
+    interruptCameraMotion('test-cleanup');
+  }
 });
