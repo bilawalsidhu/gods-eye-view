@@ -4106,10 +4106,31 @@ which embeds the MAP_KEY.
   points to restrictions, quota, or connectivity. These hints do not expose keys.
 
 > **2026-08-23 — first-run mission launcher** (`src/firstRunExperience.js`,
-> `#first-run-launcher`, styles at the tail of `style.css`). After startup
-> settles, a fresh session gets one card offering **Live Contacts · Space
-> Missions · Environmental · Explore manually**. No layer and no optional API
-> call happens until a tile is clicked. The right-hand DISPLAY rail
+> `#first-run-launcher`, styles in `src/ui/styles/first-run.css`). After startup
+> settles, a fresh session gets three steps: mode introduction, a starting
+> mission, then quick tips and links. God mode is available; Analyst is
+> marked coming soon. **Space Missions · Environmental · Explore
+> manually** are the starting choices, with Explore selected by default; Live
+> Contacts is no longer offered as a starting mission (its Context tab is
+> unchanged). The footer status line stays empty until a mission reports
+> progress or an error; the old voice tip is gone. While the card is up, a
+> click-through backdrop tints the globe behind it (`.first-run-backdrop`, a
+> 28% dark tint with no blur); it never takes input, so the card stays
+> non-modal. The last step links out to the GitHub repository and
+> Halfpixel's channels (YouTube, X, Instagram, LinkedIn, bilawal.ai,
+> halfpixel.ai); each opens in a new tab with `rel="noopener noreferrer"`, and
+> the addresses live in `FIRST_RUN_LINKS` (`src/firstRunCopy.js`). The GEV
+> Stories card's BROWSE STORIES button closes the card (a session dismissal,
+> like Skip) and opens the in-app Stories Explore view, keeping the Stories
+> announcement hidden while Stories loads. Next and Back preserve that selection without starting
+> a mission. Only **Enter God mode** runs it; Back is inert while it is loading.
+> Step changes focus the main action, announce the new heading separately from
+> mission progress, and refresh the scrolling affordance after the transition. Repeated Enter keys,
+> double-clicks and activation during a step transition cannot launch a mission.
+> No layer and no optional API call happens until the final action is clicked.
+> The Stories announcement waits, from startup until onboarding closes, without
+> marking it seen.
+> The right-hand DISPLAY rail
 > (`pp-toggles`) now starts **collapsed** on a first run rather than expanded —
 > a stored collapse state still wins, as before.
 >
@@ -4157,26 +4178,28 @@ which embeds the MAP_KEY.
 > `localStorage['gev:first-run-mission:v1'] === 'suppressed'`, written **only**
 > by the "Don't show this again" checkbox → the per-session
 > `sessionStorage['gev:first-run-mission-session:v1'] === 'dismissed'`, written
-> by **every** close path (mission, Explore, ESC, the footer dismiss button). So
+> by **every** close path (a mission or Explore from ENTER GOD MODE, ESC, the
+> header Skip button, BROWSE STORIES). So
 > it returns each fresh browser session until the visitor ticks the box; clearing
 > storage un-ticks it, which is accepted. Both stores fail open — an unreadable
 > store still shows the launcher rather than silently swallowing first launch.
 >
-> **The footer dismiss button is the keyboardless ESC.** Phones and tablets have
-> no ESC key, so the footer hint is a `data-first-run-dismiss` button that calls
+> **The header Skip button is the keyboardless ESC.** Phones and tablets have
+> no ESC key, so the header action is a `data-first-run-dismiss` button that calls
 > the same `dismiss()` as ESC. It stays visible at every width (phones used to
-> hide it, leaving a mission as the only way out) and reads DISMISS on a
-> `(hover: none) and (pointer: coarse)` screen, "ESC to dismiss" otherwise. Its
-> 44px touch target is a `::before` outside the layout, so the footer row keeps
+> hide it, leaving a mission as the only way out) and reads SKIP on a
+> `(hover: none) and (pointer: coarse)` screen, "SKIP · ESC" otherwise. Its
+> 44px touch target is a `::before` outside the layout, so the header row keeps
 > its one-line height.
 >
 > **What a mission may persist (do not "simplify" this).** Layer enablement is
 > durable in this app (`gev:layer-state:v2`, written by
 > `LayerStateCoordinator._commitExplicit` only for origin `user`/`voice`/`tool`).
 > A mission enables **its own** layers at `origin: 'user'` — durable, exactly as
-> clicking those rows is, because picking the mission _is_ that choice. The two
-> Context missions also expand the Context panel, as the visible tabs do; the
-> globe missions open no panel. Everything else is off limits: detection
+> clicking those rows is, because picking the mission _is_ that choice. Space
+> Missions switches on its layer, which opens its own Space Missions panel; no
+> mission enters a Context mode or opens the Context panel, and the globe
+> missions open no panel. Everything else is off limits: detection
 > mode/density, `gev:detection-allocation:v1`, 3D models, feather, and above all
 > `_detectionUserOverridden` — setting that flag means "the operator hand-edited
 > detection" and would silently disable the CRT/NVG/FLIR auto-preset contract for
