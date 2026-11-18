@@ -14,6 +14,8 @@ import PanelCollapseButton from './rail/PanelCollapseButton.vue';
 import RailPanel from './rail/RailPanel.vue';
 import UiPanel from './kit/UiPanel.vue';
 import { usePanelChromeStore } from './stores/panelChrome.js';
+import { useDisplayStore } from './stores/display.js';
+import { DisplayBindings } from './displayBindings.js';
 import CommandDockView from './views/CommandDockView.vue';
 
 function mount(t, component) {
@@ -461,4 +463,47 @@ test('the accordion closes peers through the real store, and opens them again', 
   settleSideAccordion({ panels, enabled: false, onCollapse });
   assert.equal(panels[0].className, '');
   chrome.destroy();
+});
+
+test('F collapses Data Layers like its button and keeps its rail entry', (t) => {
+  document.body.innerHTML = `
+    <div id="data-panel" class="active"><button class="panel-collapse-btn" data-collapse-target="data-panel"></button></div>`;
+  const panel = document.getElementById('data-panel');
+  const store = usePanelChromeStore(createPinia());
+  const chrome = panelChrome(store);
+  followPanelState(store, 'data-panel', panel);
+  chrome._disclosurePanelIds = new Set(['data-panel']);
+  const bindings = new DisplayBindings({
+    viewer: null,
+    services: { isScopeMaskEnabled: () => false, cycleDetectionMode() {} },
+    elements: { _locationSearch: document.createElement('input') },
+    operations: {
+      _setScope() {},
+      _togglePanel: (panelId) => chrome._togglePanel(panelId),
+    },
+    readState: () => ({}),
+    claimDetection() {},
+    displayStore: useDisplayStore(createPinia()),
+  });
+  bindings._initUI();
+  t.after(() => {
+    bindings.destroy();
+    chrome.destroy();
+  });
+  const press = (init = {}) =>
+    document.body.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'f', bubbles: true, ...init }),
+    );
+
+  press();
+  assert.equal(store.panels['data-panel']?.collapsed, true);
+  assert.ok(panel.classList.contains('collapsed'));
+  // `active` is what keeps Data Layers in the rail.
+  assert.ok(panel.classList.contains('active'));
+  press({ metaKey: true });
+  assert.equal(store.panels['data-panel'].collapsed, true, 'Cmd+F is not ours');
+  press();
+  assert.equal(store.panels['data-panel'].collapsed, false);
+  assert.ok(!panel.classList.contains('collapsed'));
+  assert.ok(panel.classList.contains('active'));
 });
