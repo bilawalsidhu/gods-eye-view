@@ -110,11 +110,12 @@ export class FlightRecords {
     // The airframe's facts: this record's, or those kept across a reset.
     const airframe = prevMeta ?? this.airframes.get(icao24);
     this.airframes.delete(icao24);
-    // A ground vehicle or ground station (a feed's ZVEH or GRND: a model
-    // built standing, catalog category `other`) takes the feed's own type,
-    // which no airframe lookup knows; every other aircraft keeps waiting for
-    // its looked-up type. With no altitude at all it stands on the ground,
-    // where it is, instead of at the airborne default.
+    // The feed's own ICAO type classes the contact and picks its model from
+    // the first fix; a looked-up type outranks it once one has answered.
+    // A ground vehicle or ground station (a feed's ZVEH or GRND) is known
+    // from its feed type alone, which no airframe lookup knows. With no
+    // altitude at all, a contact drawn with a model built standing is on the
+    // ground, where it is, instead of at the airborne default.
     const groundModel = (typeCode) =>
       drawnAsGroundModel(
         this.fleetModels(),
@@ -122,15 +123,16 @@ export class FlightRecords {
         category,
         stickyText(callsign, prevMeta?.callsign),
       );
-    const feedType = observation.typeCode || null;
-    // The feed's type is kept for what it names itself, not for a surface
-    // category: a C1 contact whose feed names an airliner type stays a vehicle.
+    const feedType = cleanType(observation.typeCode);
+    // A surface category keeps only a feed's ground type: a C1 contact whose
+    // feed names an airliner type stays a vehicle.
     const keepFeedType =
       Boolean(feedType) &&
-      (groundCategory(category)
-        ? GROUND_FEED_TYPES.has(feedType.trim().toUpperCase())
-        : groundModel(feedType));
-    const typeCode = airframe?.typeCode ?? (keepFeedType ? feedType : null);
+      (!groundCategory(category) || GROUND_FEED_TYPES.has(feedType));
+    const typeLookedUp = airframe?.typeLookedUp === true;
+    const typeCode = typeLookedUp
+      ? airframe.typeCode
+      : ((keepFeedType ? feedType : null) ?? airframe?.typeCode ?? null);
     const onGround =
       on_ground === true ||
       (!Number.isFinite(baro_alt) &&
@@ -331,8 +333,8 @@ export class FlightRecords {
       ),
       courseAnchor: course.anchor,
       category: cat,
-      // An adsbdb-enriched type code outranks the coarse OpenSky category;
-      // a feed's own ground type (ZVEH, GRND) classes it from the first fix.
+      // A type code (the feed's, or a looked-up one) outranks the coarse
+      // emitter category, from the first fix.
       klass: classifyAircraft({ typeCode, category: cat }),
       turnRateDps: prevMeta?.turnRateDps || 0,
       verticalRate: stickyNumber(vertical_rate, prevMeta?.verticalRate, null),
@@ -366,8 +368,9 @@ export class FlightRecords {
         null,
       ),
       // adsbdb enrichment — written by the enrichment callbacks, carried
-      // across polls; a ground vehicle's or station's from the feed:
+      // across polls; the type is the feed's own until a lookup answers:
       typeCode,
+      typeLookedUp,
       typeName: airframe?.typeName ?? null,
       registration: airframe?.registration ?? null,
       airline: routeHeld ? (airframe.airline ?? null) : null,
@@ -432,6 +435,7 @@ export class FlightRecords {
     for (const [id, meta] of this.data) {
       this.airframes.set(id, {
         typeCode: meta.typeCode,
+        typeLookedUp: meta.typeLookedUp,
         typeName: meta.typeName,
         registration: meta.registration,
         airline: meta.airline,
@@ -471,6 +475,12 @@ function stickyCategory(next, prev) {
   const text = typeof next === 'string' ? next.trim().toUpperCase() : '';
   if (EMITTER_CATEGORY.test(text)) return text;
   return prev ?? null;
+}
+
+/** A feed's ICAO type designator, upper case, or null. */
+function cleanType(value) {
+  const text = typeof value === 'string' ? value.trim().toUpperCase() : '';
+  return text || null;
 }
 
 /** The types a feed gives airport vehicles (ZVEH) and ground stations (GRND). */
