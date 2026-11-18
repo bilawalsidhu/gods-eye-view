@@ -772,3 +772,29 @@ test('every shipped entry kind registers, view-bounded datasets included', async
   assert.equal(module.getDiagnostics().tooHigh, true);
   assert.equal(await library.add('nasa-black-marble'), true);
 });
+
+test('an entry the server does not list is neither shown nor added', async (t) => {
+  const manager = sealedManager(t);
+  const library = createDataLibrary({
+    entries,
+    ledger,
+    dataManager: manager,
+    services: {},
+    storage: memoryStorage(),
+    initialHash: '',
+    source: source({
+      'sea-marks': {
+        available: false,
+        reason: 'operator-disabled',
+        listed: false,
+      },
+    }),
+  });
+  await library.start();
+  assert.deepEqual(
+    library.list().map(({ entry }) => entry.id),
+    ['night-lights', 'fixture-pack'],
+  );
+  assert.equal(library.summary().entries, 2);
+  assert.equal(await library.add('sea-marks'), false);
+});

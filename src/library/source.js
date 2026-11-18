@@ -4,12 +4,13 @@
  *
  * Browser-direct entries are fetched from their upstream without cookies or
  * a referrer; proxied entries go through `/api/library`, which names entries
- * by id only. A static build with no server still serves every browser-direct
- * entry that is not operator opt-in.
+ * by id only. A server may hide entries and route browser-direct ones through
+ * itself; its catalog route says which. A static build with no server still
+ * serves every browser-direct entry that is not operator opt-in.
  */
 import { loadLibraryDataset, boundLibraryFeatures } from './formats.js';
 import { readResponseTextCapped } from '../sources/httpBody.js';
-import { BBOX_TOKEN } from './manifest.js';
+import { BBOX_TOKEN, libraryViewBox } from './manifest.js';
 
 /** Partitions read per view before giving up, in parallel batches. */
 const MAX_PARTITION_READS_PER_VIEW = 8;
@@ -151,23 +152,36 @@ export function staticLibraryAvailability(entries) {
 }
 
 /**
- * @param {{ entries: object[], fetchImpl?: typeof fetch, base?: string }} options
+ * @param {object} options
+ * @param {object[]} options.entries
+ * @param {typeof fetch} [options.fetchImpl]
+ * @param {string|null} [options.base] The library server's path; null for
+ *   none (a server reading upstream itself).
+ * @param {Storage|null} [options.storage] Where partition indexes and
+ *   learned extents are kept between visits (the page's localStorage); none
+ *   by default.
+ * @param {(request: { entry: object, tile: object, url: string, signal: AbortSignal }) => Promise<import('../render/contract/globe').TileFetch>} [options.fetchTile]
+ *   Fetches a tiles entry's tile in place of the renderer (the imagery
+ *   spec's `fetchTile`): for a host that keeps tiles in its own cache.
+ * @param {(request: { entry: object, url: string, signal?: AbortSignal }) => Promise<Response>} [options.fetchData]
+ *   Fetches a proxied dataset's answer from the library server in place of
+ *   `fetchImpl`.
  */
 export function createLibrarySource({
   entries,
   fetchImpl = (...args) => globalThis.fetch(...args),
   base = LIBRARY_API_BASE,
-  storage = (() => {
-    try {
-      return globalThis.localStorage ?? null;
-    } catch {
-      return null;
-    }
-  })(),
+  fetchTile = null,
+  fetchData = null,
+  storage = null,
   now = () => Date.now(),
   loadParquet = () => import('./parquet.js'),
 }) {
   const known = new Set(entries.map(({ id }) => id));
+  /** Entries the library server routes through itself (its catalog says). */
+  const routed = new Set();
+  const isProxied = (entry) =>
+    entry.source.fetch === 'proxied' || routed.has(entry.id);
   const indexes = new Map();
   const partitionCache = new Map();
 
@@ -209,11 +223,12 @@ export function createLibrarySource({
           : null;
       let partial = null;
       try {
-        const response = await fetchImpl(
-          `${base}/index/${encodeURIComponent(entry.id)}`,
-          { headers: { Accept: 'application/json' } },
-        );
-        if (response.ok) {
+        const response = base
+          ? await fetchImpl(`${base}/index/${encodeURIComponent(entry.id)}`, {
+              headers: { Accept: 'application/json' },
+            })
+          : null;
+        if (response?.ok) {
           const body = await response.json();
           if (Array.isArray(body?.partitions)) {
             if (body.complete !== false)
@@ -366,6 +381,11 @@ export function createLibrarySource({
    * @returns {Promise<{ server: boolean, availability: Map<string, { available: boolean, reason: string|null }> }>}
    */
   async function getAvailability({ signal } = {}) {
+    if (!base)
+      return {
+        server: false,
+        availability: staticLibraryAvailability(entries),
+      };
     try {
       const response = await fetchImpl(`${base}/catalog`, {
         signal,
@@ -374,12 +394,20 @@ export function createLibrarySource({
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const body = await response.json();
       const availability = staticLibraryAvailability(entries);
+      routed.clear();
       for (const row of Array.isArray(body?.entries) ? body.entries : []) {
         if (!known.has(row?.id)) continue;
+        // An entry the server does not list is not offered at all.
+        const listed = row.listed !== false;
+        const available = listed && row.available === true;
         availability.set(row.id, {
-          available: row.available === true,
-          reason: row.available === true ? null : String(row.reason || ''),
+          available,
+          reason: available
+            ? null
+            : String(row.reason || (listed ? '' : 'operator-disabled')),
+          ...(listed ? {} : { listed: false }),
         });
+        if (listed && row.fetch === 'proxied') routed.add(row.id);
       }
       return { server: true, availability };
     } catch (error) {
@@ -399,6 +427,35 @@ export function createLibrarySource({
    * @returns {Promise<{ features: object[], truncated: boolean }>}
    */
   async function loadDataset(entry, { signal, bbox = null } = {}) {
+    if (isProxied(entry)) {
+      // A view-bounded entry asks for its snapped box (`libraryViewBox`),
+      // so nearby views share one answer.
+      let query = '';
+      if (entry.source.view) {
+        const box = bbox && libraryViewBox(bbox);
+        if (!box) return { features: [], truncated: false };
+        query = `?bbox=${box.join(',')}`;
+      }
+      const url = `${base}/data/${encodeURIComponent(entry.id)}${query}`;
+      const response = fetchData
+        ? await fetchData({ entry, url, signal })
+        : await fetchImpl(url, {
+            signal,
+            headers: { Accept: 'application/json' },
+          });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const body = await response.json();
+      // The server already bounded the set; bound again so a page never
+      // trusts more than its manifest allows.
+      const bounded = boundLibraryFeatures(body?.features || [], {
+        maxFeatures: entry.source.maxFeatures,
+        display: entry.display,
+      });
+      return {
+        features: bounded.features,
+        truncated: Boolean(body?.truncated) || bounded.truncated,
+      };
+    }
     if (entry.source.format === 'geoparquet') {
       if (entry.source.partitions) {
         if (!bbox) return { features: [], truncated: false };
@@ -416,24 +473,6 @@ export function createLibrarySource({
         { maxFeatures: entry.source.maxFeatures, display: entry.display },
       );
       return { features: bounded.features, truncated: bounded.truncated };
-    }
-    if (entry.source.fetch === 'proxied') {
-      const response = await fetchImpl(
-        `${base}/data/${encodeURIComponent(entry.id)}`,
-        { signal, headers: { Accept: 'application/json' } },
-      );
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const body = await response.json();
-      // The server already bounded the set; bound again so a page never
-      // trusts more than its manifest allows.
-      const bounded = boundLibraryFeatures(body?.features || [], {
-        maxFeatures: entry.source.maxFeatures,
-        display: entry.display,
-      });
-      return {
-        features: bounded.features,
-        truncated: Boolean(body?.truncated) || bounded.truncated,
-      };
     }
     const collection = await loadLibraryDataset(
       entry,
@@ -461,7 +500,7 @@ export function createLibrarySource({
 
   /** The tile URL template the imagery provider requests. */
   function tileTemplate(entry) {
-    if (entry.source.fetch === 'proxied')
+    if (isProxied(entry))
       return `${base}/tile/${encodeURIComponent(entry.id)}/{z}/{x}/{y}`;
     // Cesium fills a tile's projected corners itself.
     return entry.source.url.replaceAll(
@@ -470,5 +509,14 @@ export function createLibrarySource({
     );
   }
 
-  return { getAvailability, loadDataset, tileTemplate };
+  /**
+   * The imagery spec's `fetchTile` for a tiles entry: the host's, told which
+   * entry asks; null to let the renderer fetch.
+   */
+  function tileFetch(entry) {
+    if (typeof fetchTile !== 'function') return null;
+    return (request) => fetchTile({ ...request, entry });
+  }
+
+  return { getAvailability, loadDataset, tileTemplate, tileFetch };
 }

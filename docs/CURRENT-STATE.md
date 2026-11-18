@@ -589,6 +589,17 @@ keyless routes use the keyless gate so they work behind a reverse proxy.
 Operators opt entries in with `GEV_LIBRARY_ENABLE` and remove them with
 `GEV_LIBRARY_DISABLE`. A static build with no server still serves every
 browser-direct, non-opt-in entry; proxied ones say they need the app's server.
+The proxy is a fetch handler (`createLibraryHandler`, exported as
+`gods-eye-view/sources/library`) that the dev server mounts behind its gates.
+Another server can mount it with `listed` (hide entries: the catalog marks them
+`listed: false` and Browse leaves them out) and `proxied` (route browser-direct
+entries through it: the catalog marks them `fetch: "proxied"`). A routed
+view-bounded entry asks for its box snapped to a power-of-two grid
+(`libraryViewBox`, `?bbox=` on `/data/<id>`); GeoParquet entries are read on the
+server then. Tile, data and complete index answers carry `public,
+max-age=<cacheSeconds>` (`private` when keyed). `createApplicationTools`
+takes `library.fetchTile` and `library.fetchData` so an application can fetch
+library tiles and proxied datasets through its own cache.
 
 The Browse dialog is a `dialog[data-panel-surface]`: modal, labelled, search
 focused on open, Escape and backdrop dismiss and return focus to Browse, and it

@@ -167,6 +167,30 @@ code. It reaches only the manifest's host, refuses redirects, caps bodies,
 caches per `cacheSeconds` and never returns upstream error text. The browser
 names an entry id, never a URL, so the proxy cannot be pointed anywhere else.
 
+## Serving the library from another server
+
+The proxy is also a fetch handler, `createLibraryHandler` from
+`gods-eye-view/sources/library` (`src/library/proxy.js`): a `Request` in, a
+`Response` out, for a server other than the dev server (a Worker, say). Its
+options decide what the server offers:
+
+- `listed(entry)` false hides an entry: `/catalog` marks it `listed: false`,
+  Browse leaves it out entirely, and no route serves it.
+- `proxied(entry)` true routes a `browser-direct` entry through the handler:
+  `/catalog` marks it `fetch: "proxied"` and the browser asks the server for
+  its tiles and data. A view-bounded entry then asks `/data/<id>?bbox=…` for
+  the camera's box snapped out to a power-of-two grid (`libraryViewBox`), so
+  nearby views share one answer; any other box is refused.
+- `keep: false` keeps nothing in the process's memory, for a server with a
+  shared cache in front. Answers carry `Cache-Control: public,
+  max-age=<cacheSeconds>` (`private` for a keyed entry).
+
+Same-site gates and rate limits stay with the server that mounts it. An
+application can also fetch the library's tiles and proxied datasets itself,
+to keep them in its own cache: `createApplicationTools({ library: { fetchTile,
+fetchData } })`. `fetchTile` is the imagery spec's tile fetch, told which
+entry asks; `fetchData` answers a proxied dataset URL.
+
 ## Operator switches
 
 | Variable | Effect |

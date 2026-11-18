@@ -44,6 +44,10 @@ function safeLocalStorage() {
  * @param {(reason: string) => void} [options.requestRender]
  * @param {(extent: object) => boolean} [options.zoomTo] Fly to an extent
  *   through the shell's navigation authority; false when refused.
+ * @param {Function} [options.fetchTile] A tiles entry's tile fetch in place
+ *   of the renderer's (`createLibrarySource`).
+ * @param {Function} [options.fetchData] A proxied dataset's fetch
+ *   (`createLibrarySource`).
  */
 export function createDataLibrary({
   entries = LIBRARY_ENTRIES,
@@ -57,7 +61,9 @@ export function createDataLibrary({
   requestRender = () => {},
   zoomTo = null,
   storage = safeLocalStorage(),
-  source = createLibrarySource({ entries }),
+  fetchTile = null,
+  fetchData = null,
+  source = createLibrarySource({ entries, storage, fetchTile, fetchData }),
 }) {
   if (!dataManager?.registerLibraryLayer)
     throw new TypeError('A sealed layer manager is required');
@@ -460,7 +466,11 @@ export function createDataLibrary({
    * @returns {Array<{ entry: object, available: boolean, reason: string|null, added: boolean, on: boolean, busy: boolean }>}
    */
   function list() {
-    return entries.map((entry) => {
+    // An entry this instance's server does not list is not shown at all.
+    const shown = entries.filter(
+      (entry) => availability.get(entry.id)?.listed !== false,
+    );
+    return shown.map((entry) => {
       const state = availability.get(entry.id) || {
         available: false,
         reason: started ? 'server-unavailable' : null,
