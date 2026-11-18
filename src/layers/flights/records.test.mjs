@@ -310,6 +310,7 @@ test('a ground vehicle or station with no altitude stands on the ground; an airc
     observation({
       id: 'v1',
       typeCode: 'ZVEH',
+      speedMps: 8,
       callsign: 'FIRE 2',
       ...noAltitude,
     }),
@@ -333,17 +334,44 @@ test('a ground vehicle or station with no altitude stands on the ground; an airc
   assert.equal(plane.onGround, false);
   assert.equal(plane.altitude, 10000);
   assert.equal(plane.typeCode, 'A320');
-  // A vehicle reporting an altitude is placed by it.
+  // An "airport vehicle" reported airborne is no vehicle (a drone, a test
+  // transponder): it is placed by its altitude and classed as an aircraft.
   const reported = store.receive(
-    observation({ id: 'v2', typeCode: 'ZVEH', baroAltitudeM: 12 }),
+    observation({ id: 'v2', typeCode: 'ZVEH', baroAltitudeM: 762 }),
     view(),
   ).meta;
   assert.equal(reported.onGround, false);
+  assert.equal(reported.typeCode, null);
+  assert.notEqual(reported.klass, 'vehicle');
+  // Nor is one on the ground faster than a vehicle drives.
+  const fast = store.receive(
+    observation({
+      id: 'v4',
+      typeCode: 'ZVEH',
+      onGround: true,
+      speedMps: 77,
+      ...noAltitude,
+    }),
+    view(),
+  ).meta;
+  assert.notEqual(fast.klass, 'vehicle');
+  // A ground station stands on the ground whatever height it reports.
+  const high = store.receive(
+    observation({ id: 'm2', typeCode: 'GRND', baroAltitudeM: 11880 }),
+    view(),
+  ).meta;
+  assert.equal(high.onGround, true);
+  assert.equal(high.klass, 'station');
+  assert.equal(high.altitude, 0);
+  assert.ok(
+    !(high.renderAltitudeM > 1000),
+    `drawn at ${high.renderAltitudeM} m`,
+  );
   // Before the model set loads, the feed's ground types already count: an
   // airport vehicle is never drawn as an aircraft first.
   const early = records();
   const unloaded = early.receive(
-    observation({ id: 'v3', typeCode: 'ZVEH', ...noAltitude }),
+    observation({ id: 'v3', typeCode: 'ZVEH', speedMps: 8, ...noAltitude }),
     view(),
   ).meta;
   assert.equal(unloaded.onGround, true);
@@ -362,9 +390,11 @@ test('airport vehicles and ground stations take their class from the first fix',
     const klass = (fields) =>
       store.receive(observation({ callsign: '', ...fields }), view()).meta
         .klass;
-    assert.equal(klass({ id: 'v1', typeCode: 'ZVEH' }), 'vehicle');
+    // An airport vehicle reports itself on the ground, at a vehicle's speed.
+    const driving = { onGround: true, speedMps: 8 };
+    assert.equal(klass({ id: 'v1', typeCode: 'ZVEH', ...driving }), 'vehicle');
     assert.equal(
-      klass({ id: 'v2', typeCode: 'ZVEH', callsign: 'FIRE 2' }),
+      klass({ id: 'v2', typeCode: 'ZVEH', callsign: 'FIRE 2', ...driving }),
       'vehicle',
     );
     assert.equal(klass({ id: 'v3', category: 'C1' }), 'vehicle');
