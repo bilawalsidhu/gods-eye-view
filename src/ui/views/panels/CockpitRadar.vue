@@ -118,9 +118,11 @@ const ringFractions = computed(() =>
     ? radar.value.ringsNm.map((ring) => ring / radar.value.rangeNm)
     : [],
 );
+// The spacing is a fraction at the shorter ranges (0.75, 1.5 NM), which
+// Intl.PluralRules gives a form of its own: ru «0,75 МОР. МИЛИ».
 const ringLabel = computed(() =>
   radar.value?.ringsNm.length
-    ? t('RINGS {spacing} NM', {
+    ? tn(radar.value.ringsNm[0], 'RINGS {spacing} NM', 'RINGS {spacing} NM', {
         spacing: formatNumber(radar.value.ringsNm[0]),
       })
     : '',

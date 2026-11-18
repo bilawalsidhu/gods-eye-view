@@ -21,7 +21,10 @@ export const ARRIVAL_MAX_ATTEMPTS = 2;
  * The settle deadline starts when moveEnd is forced, before its rotation
  * baseline; the reveal deadline restarts at the settle frame, which is where
  * the contact is hidden. `read` snapshots visibility and rotation error
- * against the current position.
+ * against the current position. A hidden sample carrying `revealStartsNow`
+ * (a frame drew the contact hidden and it was just shown again) restarts the
+ * reveal's clock and deadline there: the frames spent drawing it hidden are
+ * the probe's setup, reported as `hiddenMs`, not part of the reveal.
  */
 export function observeArrivalRotation({
   scene,
@@ -37,6 +40,9 @@ export function observeArrivalRotation({
     let phaseStartedAt = startedAt;
     let moveEnd = null;
     let moveEndMs = null;
+    // Where the reveal is measured from: the settle frame, or the frame a
+    // `revealStartsNow` sample marks.
+    let revealFromMs = null;
     let revealFrames = 0;
     let done = false;
     let remove;
@@ -85,12 +91,17 @@ export function observeArrivalRotation({
         if (moveEnd === null) {
           moveEnd = sample;
           moveEndMs = elapsedMs;
+          revealFromMs = elapsedMs;
           phaseStartedAt = at;
           armDeadline();
           startReveal();
         } else {
           revealFrames++;
-          if (sample.shown) {
+          if (!sample.shown && sample.revealStartsNow) {
+            revealFromMs = elapsedMs;
+            phaseStartedAt = at;
+            armDeadline();
+          } else if (sample.shown) {
             // Keep the FIRST visible result, including a wrong angle. Never
             // wait for a subsequent tick to repair a failed reveal.
             finish({
@@ -99,7 +110,8 @@ export function observeArrivalRotation({
               shown: sample.shown,
               flipFrame: revealFrames,
               moveEndMs,
-              revealMs: elapsedMs - moveEndMs,
+              revealMs: elapsedMs - revealFromMs,
+              hiddenMs: revealFromMs - moveEndMs,
               elapsedMs,
             });
             return;

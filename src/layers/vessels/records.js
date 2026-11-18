@@ -1,27 +1,47 @@
 import {
+  mergeTimelineRuns,
+  readTimelineFixes,
+} from '../../time/timelineFixes.js';
+import {
   PARTIAL_RETENTION_MS,
   SELECTED_PIN_REFRESHES,
 } from './recordPolicy.js';
 
-/** Normalize AIS display fields without allocating scene resources. */
+/**
+ * Normalize AIS display fields without allocating scene resources. `id` is the
+ * vessel's key, the stable id its source gives; a row that names none (an
+ * AIS feed's own rows) is keyed by its MMSI. `mmsi` is only an attribute,
+ * shown when known: vessels can share one. A row with neither is unkeyed.
+ */
 export function normalizeVessel(row) {
   const lat = Number(row.lat);
   const lon = Number(row.lon);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const mmsi = String(row.mmsi || '').trim();
+  const id = String(row.id ?? mmsi).trim();
   return {
     lat,
     lon,
-    name: String(row.name || row.mmsi || 'VESSEL'),
-    mmsi: String(row.mmsi || '').trim(),
-    reference: row.reference ?? String(row.mmsi || '').trim(),
+    name: String(row.name || mmsi || 'VESSEL'),
+    id,
+    mmsi,
+    reference: row.reference ?? id,
     imo: String(row.imo || ''),
     type: String(row.type || ''),
     destination: String(row.destination || ''),
+    // Hull length and beam (metres), null when unreported.
+    length: positiveNumber(row.length),
+    beam: positiveNumber(row.beam),
     speed: finiteNumber(row.speed),
     course: finiteNumber(row.course),
     heading: finiteNumber(row.heading),
+    // A virtual aid to navigation: a mark with nothing physical there.
+    virtual: row.virtual === true,
     lastPositionUtc: String(row.last_position_UTC || ''),
     lastPositionEpoch: finiteNumber(row.last_position_epoch),
+    // Its own track around the time, from a snapshot at a time (see
+    // src/time/timelineFixes.js); null when the row carries none.
+    fixes: readTimelineFixes(row.fixes),
     missedRefreshes: 0,
   };
 }
@@ -38,23 +58,68 @@ function stampFix(record, receivedAtMs, feedLatestEpoch) {
   record.fixFeedEpoch = feedLatestEpoch;
 }
 
+function positiveNumber(value) {
+  const number = finiteNumber(value);
+  return number !== null && number > 0 ? number : null;
+}
+
 function finiteNumber(value) {
   if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
 
+/**
+ * The move from a record's fix to the next row's, when the fix moves on in
+ * time; otherwise the move it was making, if the row repeats its fix.
+ */
+function motionBetween(record, next) {
+  const fromEpoch = record.lastPositionEpoch;
+  const toEpoch = next.lastPositionEpoch;
+  if (fromEpoch === toEpoch) return record.motion ?? null;
+  if (!Number.isFinite(fromEpoch) || !Number.isFinite(toEpoch)) return null;
+  if (!(toEpoch > fromEpoch)) return null;
+  return {
+    fromLat: record.lat,
+    fromLon: record.lon,
+    fromMs: fromEpoch * 1000,
+    toLat: next.lat,
+    toLon: next.lon,
+    toMs: toEpoch * 1000,
+  };
+}
+
 /** Own stable vessel records and bounded incomplete/selected retention. */
 export class VesselRecords {
   constructor({ now = () => Date.now() } = {}) {
     this.now = now;
-    this.byMmsi = new Map();
+    this.byId = new Map();
     this.unkeyed = [];
     this.all = [];
   }
+  /**
+   * Fold a refresh into the records. Following the world clock (`follow`),
+   * a vessel whose fix moves on keeps where it moved from, so it can be drawn
+   * between the two (see motion.js). `replace`: the rows are the world at
+   * another time (the clock jumped), so they stand in for every vessel: one
+   * they lack is gone at once, selected or not, and none moves from where it
+   * was at the time the clock left. `handover`: the first live rows after the
+   * clock came back to live: a vessel they have moves to its live fix, not
+   * from where it was at the time the clock left; one they lack is judged
+   * as any live refresh judges it (a partial refresh, the selected vessel),
+   * by how old its newest fix is rather than when it was loaded, and holds
+   * at its last position meanwhile.
+   */
   reconcile(
     rows,
-    { complete = true, selectedRecord = null, cap = Infinity },
+    {
+      complete = true,
+      selectedRecord = null,
+      cap = Infinity,
+      replace = false,
+      handover = false,
+      follow = false,
+    },
     effects,
   ) {
     const receivedAtMs = this.now();
@@ -78,23 +143,39 @@ export class VesselRecords {
       if (!next) continue;
       next.receivedAtMs = receivedAtMs;
       stampFix(next, receivedAtMs, feedLatestEpoch);
-      if (!next.mmsi) {
+      if (!next.id) {
         effects.add(next);
         this.unkeyed.push(next);
         continue;
       }
-      if (seen.has(next.mmsi)) continue;
-      seen.add(next.mmsi);
-      const record = this.byMmsi.get(next.mmsi);
+      if (seen.has(next.id)) continue;
+      seen.add(next.id);
+      const record = this.byId.get(next.id);
       if (record) {
-        const before = effects.beforeUpdate(record);
         // A feed re-serving a cached row repeats its fix: the fix keeps the
         // time it was first received, so it goes on ageing.
         if (next.lastPositionEpoch !== record.lastPositionEpoch) {
           record.fixReceivedAtMs = next.fixReceivedAtMs;
           record.fixFeedEpoch = next.fixFeedEpoch;
         }
+        if (replace || handover) {
+          record.motion = null;
+          record.fixes = next.fixes;
+        } else if (follow) {
+          record.motion = motionBetween(record, next);
+          // Without fixes now, it is placed by its record, not by fixes
+          // that end before it.
+          record.fixes = next.fixes
+            ? mergeTimelineRuns(
+                record.fixes ?? [],
+                next.fixes,
+                (fix) => fix.atMs,
+                (next.lastPositionEpoch ?? 0) * 1000,
+              )
+            : null;
+        } else record.fixes = null;
         record.reference = next.reference;
+        record.mmsi = next.mmsi;
         record.receivedAtMs = next.receivedAtMs;
         record.lat = next.lat;
         record.lon = next.lon;
@@ -102,21 +183,37 @@ export class VesselRecords {
         record.imo = next.imo;
         record.type = next.type;
         record.destination = next.destination;
+        record.length = next.length;
+        record.beam = next.beam;
         record.speed = next.speed;
         record.course = next.course;
         record.heading = next.heading;
+        record.virtual = next.virtual;
         record.lastPositionUtc = next.lastPositionUtc;
         record.lastPositionEpoch = next.lastPositionEpoch;
         record.missedRefreshes = 0;
 
-        effects.updated(record, before);
+        effects.updated(record);
       } else {
         effects.add(next);
-        this.byMmsi.set(next.mmsi, next);
+        this.byId.set(next.id, next);
       }
     }
-    for (const [mmsi, record] of this.byMmsi) {
-      if (seen.has(mmsi)) continue;
+    for (const [id, record] of this.byId) {
+      if (seen.has(id)) continue;
+      if (handover) {
+        record.motion = null;
+        record.fixes = null;
+        // Loaded for another time: last seen at its newest fix.
+        const fixMs = finiteNumber(record.lastPositionEpoch);
+        if (fixMs !== null) record.receivedAtMs = fixMs * 1000;
+      }
+      if (replace) {
+        effects.remove(record, record === selectedRecord);
+        this.byId.delete(id);
+        effects.removed(id);
+        continue;
+      }
       if (
         !complete &&
         Number.isFinite(record.receivedAtMs) &&
@@ -137,18 +234,18 @@ export class VesselRecords {
       }
       // Selection teardown still sees the record before its store entry is removed.
       effects.remove(record, record === selectedRecord);
-      this.byMmsi.delete(mmsi);
-      effects.removed(mmsi);
+      this.byId.delete(id);
+      effects.removed(id);
     }
-    if (this.byMmsi.size + this.unkeyed.length > cap) {
-      for (const [mmsi, record] of this.byMmsi) {
-        if (this.byMmsi.size + this.unkeyed.length <= cap) break;
-        if (seen.has(mmsi) || record === selectedRecord) continue;
+    if (this.byId.size + this.unkeyed.length > cap) {
+      for (const [id, record] of this.byId) {
+        if (this.byId.size + this.unkeyed.length <= cap) break;
+        if (seen.has(id) || record === selectedRecord) continue;
         effects.remove(record, false);
-        this.byMmsi.delete(mmsi);
-        effects.removed(mmsi);
+        this.byId.delete(id);
+        effects.removed(id);
       }
     }
-    this.all = [...this.byMmsi.values(), ...this.unkeyed];
+    this.all = [...this.byId.values(), ...this.unkeyed];
   }
 }

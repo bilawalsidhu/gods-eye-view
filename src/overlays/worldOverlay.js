@@ -1,6 +1,5 @@
 import { WORLD_OVERLAY_OCCLUDER_SELECTORS } from './worldOverlayChrome.js';
 export { WORLD_OVERLAY_OCCLUDER_SELECTORS } from './worldOverlayChrome.js';
-import * as Cesium from 'cesium';
 import {
   createCyberSonarSampler,
   isCyberContactSonarActive as isCyberSonarActive,
@@ -25,6 +24,12 @@ import {
 } from './worldOverlayDraw.js';
 import { WORLD_OVERLAY_STYLE } from './worldOverlayTokens.js';
 import { t } from '../i18n/index.js';
+import {
+  canvasOf,
+  findCamera,
+  findFrame,
+  findQuery,
+} from '../render/rendererOf.js';
 
 /**
  * @module worldOverlay
@@ -80,7 +85,8 @@ const PAINT_LANE_INDEX = new Map(
  * @typedef {object} WorldOverlayEntry
  * @property {string} id Stable identity within the source.
  * @property {string} source Owning source id.
- * @property {Cesium.Cartesian3|function():Cesium.Cartesian3} position
+ * @property {{x: number, y: number, z: number}|function():{x: number, y: number, z: number}} position
+ *   ECEF metres.
  * @property {'label'|'track'|'card'|'thumbnail'|'selected'|'tracked'} variant
  * @property {string} [accessibilityLabel] Accessible name for an actionable card.
  * @property {function():*} [activate] Keyboard/assistive activation callback.
@@ -99,8 +105,22 @@ const PAINT_LANE_INDEX = new Map(
  *   reported only on membership changes. The borrowed Set is read-only.
  */
 
-/** @type {Cesium.Viewer|null} */
+/**
+ * The scene object the host was given (a viewer): its `container` and
+ * `canvas` place and size the overlay, and the renderer's ports drawing it
+ * project, cull and drive the frames.
+ * @type {object|null}
+ */
 let _viewer = null;
+/** @type {import('../render/contract/camera').CameraPort|null} */
+let _camera = null;
+/** @type {import('../render/contract/frame').FramePort|null} */
+let _frame = null;
+/** @type {import('../render/contract/query').QueryPort|null} */
+let _query = null;
+/** The eye this frame, ECEF metres, and its height above the ellipsoid. */
+const _eye = { x: 0, y: 0, z: 0 };
+let _eyeHeight = Number.NaN;
 /** @type {HTMLElement|null} */
 let _root = null;
 /** @type {HTMLCanvasElement|null} */
@@ -173,13 +193,30 @@ const _domains = new Map();
 const _domainList = [];
 /** @type {Map<string, object>} */
 const _records = new Map();
-const _scratchViewProjection = new Cesium.Matrix4();
+/**
+ * A record's ECEF position. A class, not a literal: its fields take doubles
+ * from the first write in place, which keeps the projection pass from
+ * allocating per candidate.
+ */
+class Position {
+  constructor() {
+    this.x = 0.0;
+    this.y = 0.0;
+    this.z = 0.0;
+  }
+}
+/** Column-major projection × view, this frame. */
+const _scratchViewProjection = new Float64Array(16);
 const _viewProjectionScalars = {};
 const _viewport = { width: 0, height: 0 };
+/**
+ * The horizon test handed to custom paint lanes and used by the projection
+ * pass: the renderer's own (`query.isOccluded`), from this frame's eye.
+ */
+const _horizon = Object.freeze({
+  isPointVisible: (position) => !_query?.isOccluded(position),
+});
 let _occluder = null;
-let _occluderCameraX = Number.NaN;
-let _occluderCameraY = Number.NaN;
-let _occluderCameraZ = Number.NaN;
 /** Cached keyhole geometry, versioned by both its box and shared tuning. */
 let _keyhole = null;
 let _keyholeWidth = -1;
@@ -202,6 +239,8 @@ const _customPaintFrame = {
   viewProjectionMatrix: _scratchViewProjection,
   viewProjection: _viewProjectionScalars,
   cameraPosition: null,
+  /** The eye's height above the ellipsoid (m), from the camera port's pose. */
+  cameraHeight: Number.NaN,
   occluder: null,
   keyhole: null,
   uiRects: _uiOcclusionRects,
@@ -212,6 +251,10 @@ const _paintQueue = [];
 const _paintItemPool = [];
 const _paintRectPool = [];
 const _paintRectByKey = new Map();
+/** @type {Map<string, Map<string, object>>} This frame's paint items by source and entry id. */
+const _queuedItemBySource = new Map();
+/** Index rows that stop painting are dropped this many frames apart. */
+const QUEUED_ITEM_PRUNE_FRAMES = 600;
 const _hitRects = [];
 const _paintedBySource = Object.create(null);
 const _paintedSourceKeys = [];
@@ -358,12 +401,12 @@ export function paintLaneForOverlayEntry(entry = {}) {
  *   invoked once rather than once per validated component;
  * - a throwing accessor is contained here — it degrades that one entry to
  *   "no cull anchor" instead of aborting normalization for the whole source;
- * - the components are copied into a fresh Cartesian3, so a caller mutating
+ * - the components are copied into a fresh vector, so a caller mutating
  *   or recycling its own vector after publishing cannot feed NaN (or a moved
  *   point) to the per-frame occluder.
  *
  * @param {object} entry - Raw source entry.
- * @returns {?Cesium.Cartesian3} Host-owned lifted anchor, or null.
+ * @returns {?{x: number, y: number, z: number}} Host-owned lifted anchor, or null.
  */
 function snapshotCullPosition(entry) {
   let candidate;
@@ -376,7 +419,7 @@ function snapshotCullPosition(entry) {
   const { x, y, z } = candidate;
   if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z))
     return null;
-  return new Cesium.Cartesian3(x, y, z);
+  return { x, y, z };
 }
 
 export function normalizeOverlayEntry(sourceId, entry) {
@@ -831,6 +874,11 @@ function getOrCreateSource(sourceId, options = {}) {
   return source;
 }
 
+/** Ask the renderer for a frame, for the overlay to paint again. */
+function requestOverlayRender() {
+  _frame?.requestRender('world-overlay');
+}
+
 function invalidateHost({ solve = true, layout = false } = {}) {
   if (solve) _solveDirty = true;
   if (layout) _occludersDirty = true;
@@ -838,7 +886,7 @@ function invalidateHost({ solve = true, layout = false } = {}) {
   _paintRectCount = 0;
   _hitRectCount = 0;
   _paintRectByKey.clear();
-  _viewer?.scene?.requestRender?.();
+  requestOverlayRender();
 }
 
 function inertPaintLaneHandle() {
@@ -1043,6 +1091,32 @@ export function getOverlayPaintRect(sourceId, entryId) {
 }
 
 /**
+ * Opacity an entry paints with this frame, or 0 when it is not queued or the
+ * yield-collision pass hid it. Custom lanes may call it before later lanes
+ * publish paint rects. Leaves out the Cyber sonar fade.
+ * @param {string} sourceId
+ * @param {string} entryId
+ * @returns {number}
+ */
+export function getQueuedOverlayEntryAlpha(sourceId, entryId) {
+  if (_destroyed) return 0;
+  const item = _queuedItemBySource.get(sourceId)?.get(entryId);
+  // Pooled items are reassigned every frame: check the frame and the entry.
+  if (!item || item.stamp !== _frameStamp) return 0;
+  // Declutter has already run when custom lanes call this.
+  if (item.collisionHidden) return 0;
+  const record = item.record;
+  if (record.entry.id !== entryId || record.entry.source !== sourceId) return 0;
+  return (
+    record.sourceAlpha *
+    item.temporalAlpha *
+    record.distanceAlpha *
+    record.altitudeAlpha *
+    (_keyhole ? entryKeyholeAlpha(record.entry, item.placement, _keyhole) : 1)
+  );
+}
+
+/**
  * Resolve the topmost interactive world-overlay entry at CSS-pixel coords.
  * @param {number} x
  * @param {number} y
@@ -1233,11 +1307,11 @@ function ensureOverlayDom() {
   // ignored.
   if (!_actions)
     presentActions({ owner: {}, items: [], status: '', announced: 0 });
-  _ctx = _canvas.getContext('2d', { alpha: true, desynchronized: true });
-  _detectionCtx = _detectionSurface.getContext('2d', {
-    alpha: true,
-    desynchronized: true,
-  });
+  // Synchronized contexts: on a desynchronized one Chrome can present an
+  // earlier buffer after a frame that only clears, so cards that left stay
+  // on screen until something paints over them.
+  _ctx = _canvas.getContext('2d', { alpha: true });
+  _detectionCtx = _detectionSurface.getContext('2d', { alpha: true });
 }
 
 function sizeCanvasSurface(canvas, ctx, width, height, dpr) {
@@ -1263,15 +1337,11 @@ function sizeCanvasSurface(canvas, ctx, width, height, dpr) {
  * that actually has paint work.
  */
 function ensureCanvasSize() {
-  if (!_canvas || !_viewer?.canvas) return false;
-  const width = Math.max(
-    0,
-    Math.round(Number(_viewer.canvas.clientWidth) || 0),
-  );
-  const height = Math.max(
-    0,
-    Math.round(Number(_viewer.canvas.clientHeight) || 0),
-  );
+  // The renderer's canvas; a viewer with no renderer bound, its own.
+  const sceneCanvas = canvasOf(_viewer);
+  if (!_canvas || !sceneCanvas) return false;
+  const width = Math.max(0, Math.round(Number(sceneCanvas.clientWidth) || 0));
+  const height = Math.max(0, Math.round(Number(sceneCanvas.clientHeight) || 0));
   const dpr = Math.max(1, Number(globalThis.window?.devicePixelRatio) || 1);
   const changed =
     _canvas.width !== Math.round(width * dpr) ||
@@ -1396,7 +1466,7 @@ function refreshUiOccluders(timestamp, force = false) {
       _occluderRefreshTimer = setTimeout(
         () => {
           _occluderRefreshTimer = null;
-          _viewer?.scene?.requestRender?.();
+          requestOverlayRender();
         },
         Math.max(0, OCCLUDER_REFRESH_MS - elapsed),
       );
@@ -1639,13 +1709,23 @@ function overlayHasPaintWork(timestamp = nowMs()) {
   return false;
 }
 
+/** `out = a × b`, 4 × 4 column-major. */
+function multiplyMatrices(a, b, out) {
+  for (let column = 0; column < 4; column++) {
+    const b0 = b[column * 4];
+    const b1 = b[column * 4 + 1];
+    const b2 = b[column * 4 + 2];
+    const b3 = b[column * 4 + 3];
+    for (let row = 0; row < 4; row++)
+      out[column * 4 + row] =
+        a[row] * b0 + a[4 + row] * b1 + a[8 + row] * b2 + a[12 + row] * b3;
+  }
+  return out;
+}
+
 function prepareProjectionMatrix() {
-  const camera = _viewer.camera;
-  const matrix = Cesium.Matrix4.multiply(
-    camera.frustum.projectionMatrix,
-    camera.viewMatrix,
-    _scratchViewProjection,
-  );
+  const { view, projection } = _camera.matrices();
+  const matrix = multiplyMatrices(projection, view, _scratchViewProjection);
   _viewProjectionScalars.m0 = matrix[0];
   _viewProjectionScalars.m1 = matrix[1];
   _viewProjectionScalars.m3 = matrix[3];
@@ -1663,17 +1743,11 @@ function prepareProjectionMatrix() {
 
 function prepareCustomPaintFrame(timestamp, keyhole) {
   const viewProjection = prepareProjectionMatrix();
-  const camera = _viewer.camera.positionWC;
-  if (
-    camera.x !== _occluderCameraX ||
-    camera.y !== _occluderCameraY ||
-    camera.z !== _occluderCameraZ
-  ) {
-    _occluder.cameraPosition = camera;
-    _occluderCameraX = camera.x;
-    _occluderCameraY = camera.y;
-    _occluderCameraZ = camera.z;
-  }
+  const pose = _camera.pose();
+  _eye.x = pose.position.x;
+  _eye.y = pose.position.y;
+  _eye.z = pose.position.z;
+  _eyeHeight = pose.height;
   _customPaintFrame.canvas = _canvas;
   _customPaintFrame.surface = _canvas;
   _customPaintFrame.ctx = _ctx;
@@ -1681,7 +1755,8 @@ function prepareCustomPaintFrame(timestamp, keyhole) {
   _customPaintFrame.height = _canvasHeight;
   _customPaintFrame.dpr = _canvasDpr;
   _customPaintFrame.timestamp = timestamp;
-  _customPaintFrame.cameraPosition = camera;
+  _customPaintFrame.cameraPosition = _eye;
+  _customPaintFrame.cameraHeight = _eyeHeight;
   _customPaintFrame.occluder = _occluder;
   _customPaintFrame.keyhole = keyhole;
   _customPaintFrame.uiRectCount = _uiOcclusionRects.length;
@@ -1695,7 +1770,7 @@ function getProjectionRecord(entry) {
     record = {
       key: entry._overlayKey,
       entry,
-      position: new Cesium.Cartesian3(),
+      position: new Position(),
       screen: { x: 0, y: 0 },
       layout: entry._overlayLayout,
       placements: [],
@@ -1879,7 +1954,7 @@ function snapshotAndProject(entry, source, viewProjection, keyhole) {
   // scalar steps stay local: the range is computed inline, and the common
   // "no far limit" fade policy resolves without calling out at all. Both are
   // exact restatements of `Cartesian3.distance` / `distanceFade`.
-  const cameraPosition = _viewer.camera.positionWC;
+  const cameraPosition = _eye;
   const rangeX = cameraPosition.x - record.position.x;
   const rangeY = cameraPosition.y - record.position.y;
   const rangeZ = cameraPosition.z - record.position.z;
@@ -1892,10 +1967,26 @@ function snapshotAndProject(entry, source, viewProjection, keyhole) {
         ? 1
         : 0
       : distanceFade(distance, record.distanceOptions);
-  const cameraAltitude = _viewer.camera.positionCartographic?.height;
-  record.paintScale = entry.distanceScale
-    ? distanceScale(distance, entry.distanceScale)
-    : 1;
+  const cameraAltitude = _eyeHeight;
+  // The distance curve is local for the same reason as the altitude curve
+  // below: through a helper the engine may not inline, its result is boxed.
+  // `entry.distanceScale` was normalized when the entry was registered.
+  const scaleCurve = entry.distanceScale;
+  if (!scaleCurve || !Number.isFinite(distance)) {
+    record.paintScale = 1;
+  } else if (
+    distance <= scaleCurve.near ||
+    scaleCurve.far === scaleCurve.near
+  ) {
+    record.paintScale = scaleCurve.nearValue;
+  } else if (distance >= scaleCurve.far) {
+    record.paintScale = scaleCurve.farValue;
+  } else {
+    record.paintScale =
+      scaleCurve.nearValue +
+      (scaleCurve.farValue - scaleCurve.nearValue) *
+        ((distance - scaleCurve.near) / (scaleCurve.far - scaleCurve.near));
+  }
   // Keep the source-configurable piecewise curve local to the projection hot
   // path. Passing its five doubles through a non-inlined helper boxed them for
   // every thumbnail candidate and broke the shared 154 B/candidate gate.
@@ -2223,7 +2314,34 @@ function addPaintItem(record, placement, temporalAlpha, selected) {
   item.zIndex = record.entry.zIndex;
   item.key = record.key;
   item.collisionHidden = false;
+  item.stamp = _frameStamp;
   _paintQueue[_paintCount++] = item;
+  // Keyed by source and id, not `record.key`, so a lookup builds no string.
+  // Also holds cards fading out after they left `_records`.
+  let bySource = _queuedItemBySource.get(record.entry.source);
+  if (!bySource) {
+    bySource = new Map();
+    _queuedItemBySource.set(record.entry.source, bySource);
+  }
+  bySource.set(record.entry.id, item);
+}
+
+/** Drop index rows for entries that stopped painting (bounded, not per frame). */
+function pruneQueuedItemIndex() {
+  for (const [sourceId, bySource] of _queuedItemBySource) {
+    for (const [entryId, item] of bySource) {
+      // A pooled item that now paints another entry keeps a fresh stamp.
+      const entry = item.record.entry;
+      if (
+        item.stamp !== _frameStamp ||
+        entry.id !== entryId ||
+        entry.source !== sourceId
+      ) {
+        bySource.delete(entryId);
+      }
+    }
+    if (bySource.size === 0) _queuedItemBySource.delete(sourceId);
+  }
 }
 
 function sourceCanPaint(sourceId) {
@@ -2295,6 +2413,7 @@ function solveDomains(timestamp) {
     solveRevision += domain.arbiter.solveRevision;
   }
   _paintQueue.length = _paintCount;
+  if (_frameStamp % QUEUED_ITEM_PRUNE_FRAMES === 0) pruneQueuedItemIndex();
   _solveDirty = false;
   _diagnostics.solveMs = solveMs;
   _diagnostics.selectedCount = selectedCount;
@@ -2423,24 +2542,26 @@ function paintCustomLane(lane) {
   }
 }
 
+/** Keyhole edge fade of one placed entry (1 for entries that do not fade). */
+function entryKeyholeAlpha(entry, placement, keyhole) {
+  if (entry.edgeFade !== 'keyhole') return 1;
+  const keyholeX = placement.centerX - keyhole.centerX;
+  const keyholeY = placement.centerY - keyhole.centerY;
+  return keyholeX * keyholeX + keyholeY * keyholeY <=
+    keyhole.radius * keyhole.radius
+    ? 1
+    : keyholeLabelAlphaFromGeometry(
+        placement.centerX,
+        placement.centerY,
+        keyhole,
+      );
+}
+
 function paintEntryItem(item, keyhole, sonar) {
   if (item.collisionHidden) return;
   const { record, placement } = item;
   const entry = record.entry;
-  let keyholeAlpha = 1;
-  if (entry.edgeFade === 'keyhole') {
-    const keyholeX = placement.centerX - keyhole.centerX;
-    const keyholeY = placement.centerY - keyhole.centerY;
-    keyholeAlpha =
-      keyholeX * keyholeX + keyholeY * keyholeY <=
-      keyhole.radius * keyhole.radius
-        ? 1
-        : keyholeLabelAlphaFromGeometry(
-            placement.centerX,
-            placement.centerY,
-            keyhole,
-          );
-  }
+  const keyholeAlpha = entryKeyholeAlpha(entry, placement, keyhole);
   // All five channels are normalized at their source. Keep the multiply on
   // the hot paint path so its intermediate doubles remain unboxed; the pure
   // `combinedOverlayAlpha` export still specifies/tests the same binding.
@@ -2703,13 +2824,12 @@ function drawWorldOverlay() {
   if (_paintRectCount > 0 && isCyberSonarActive()) {
     _sonarRenderTimer = setTimeout(() => {
       _sonarRenderTimer = null;
-      if (!_destroyed && isCyberSonarActive())
-        _viewer?.scene?.requestRender?.();
+      if (!_destroyed && isCyberSonarActive()) requestOverlayRender();
     }, CYBER_SONAR_RENDER_INTERVAL_MS);
   }
   const animationsRemaining =
     activeFadeCount(timestamp) + activeLeaderAnimationCount(timestamp);
-  if (animationsRemaining > 0) _viewer.scene.requestRender?.();
+  if (animationsRemaining > 0) requestOverlayRender();
 }
 
 function createDevFacade() {
@@ -2719,36 +2839,36 @@ function createDevFacade() {
 
 /**
  * Initialize the singleton host. Repeated calls for the same viewer are no-op.
- * @param {Cesium.Viewer} viewer
+ * @param {object} viewer The scene object a renderer draws (its `container`
+ *   and `canvas` place the overlay); the renderer's camera, frame and query
+ *   ports project, cull and drive it.
  */
 export function initWorldOverlay(viewer) {
-  if (!viewer?.scene?.postRender?.addEventListener) {
+  const camera = viewer ? findCamera(viewer) : null;
+  const frame = viewer ? findFrame(viewer) : null;
+  const query = viewer ? findQuery(viewer) : null;
+  if (!camera || !frame || !query) {
     throw new TypeError(
-      'initWorldOverlay requires a Cesium viewer with scene.postRender',
+      'initWorldOverlay requires a viewer with a renderer (camera, frame and query ports)',
     );
   }
   if (_viewer === viewer && _canvas && _removePostRender) return;
   if (_viewer) destroyWorldOverlay();
   _destroyed = false;
   _viewer = viewer;
+  _camera = camera;
+  _frame = frame;
+  _query = query;
   ensureOverlayDom();
-  _occluder = new Cesium.EllipsoidalOccluder(
-    Cesium.Ellipsoid.WGS84,
-    viewer.camera?.positionWC || new Cesium.Cartesian3(),
-  );
+  _occluder = _horizon;
   _cockpitActive = !!document.body?.classList?.contains('cockpit-mode');
   _cockpitModeHandler = (event) => {
     _cockpitActive = event?.detail?.active === true;
     invalidateHost();
   };
   window.addEventListener('gev:cockpit-mode-changed', _cockpitModeHandler);
-  _removePostRender =
-    viewer.scene.postRender.addEventListener(drawWorldOverlay);
-  if (viewer.camera?.moveEnd?.addEventListener) {
-    _removeMoveEnd = viewer.camera.moveEnd.addEventListener(() =>
-      invalidateHost(),
-    );
-  }
+  _removePostRender = frame.on('postRender', () => drawWorldOverlay());
+  _removeMoveEnd = camera.on('moveEnd', () => invalidateHost());
   installUiOccluderObservers();
   // The backing store and the occluder inventory are both deferred to the
   // first frame with real paint work: a dormant host must not hold a
@@ -2829,6 +2949,7 @@ export function destroyWorldOverlay() {
   _accessibleActivatorByKey.clear();
   _accessibilitySignature = '';
   _paintRectByKey.clear();
+  _queuedItemBySource.clear();
   _paintCount = 0;
   _paintRectCount = 0;
   _hitRectCount = 0;
@@ -2843,9 +2964,13 @@ export function destroyWorldOverlay() {
   _detectionSurface = null;
   _detectionCtx = null;
   _occluder = null;
-  _occluderCameraX = Number.NaN;
-  _occluderCameraY = Number.NaN;
-  _occluderCameraZ = Number.NaN;
+  _camera = null;
+  _frame = null;
+  _query = null;
+  _eye.x = 0;
+  _eye.y = 0;
+  _eye.z = 0;
+  _eyeHeight = Number.NaN;
   _keyhole = null;
   _keyholeWidth = -1;
   _keyholeHeight = -1;
@@ -2873,6 +2998,7 @@ export function destroyWorldOverlay() {
   _customPaintFrame.dpr = 1;
   _customPaintFrame.timestamp = 0;
   _customPaintFrame.cameraPosition = null;
+  _customPaintFrame.cameraHeight = Number.NaN;
   _customPaintFrame.occluder = null;
   _customPaintFrame.keyhole = null;
   _customPaintFrame.uiRectCount = 0;

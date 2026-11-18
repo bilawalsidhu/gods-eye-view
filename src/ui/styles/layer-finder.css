@@ -1,0 +1,206 @@
+/* ── Data Layers search and filter ── */
+.layer-finder__btn {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: rgba(206, 232, 239, 0.65);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.layer-finder__btn .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.layer-finder__btn:hover,
+.layer-finder__btn:focus-visible {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.layer-finder__btn.active {
+  color: #36dcff;
+  background: rgba(54, 220, 255, 0.12);
+  border-color: rgba(54, 220, 255, 0.45);
+}
+
+.layer-finder__filter {
+  position: relative;
+  display: inline-flex;
+}
+
+.layer-finder__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  min-width: 140px;
+  padding: 4px;
+  background: rgba(16, 20, 28, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+
+.layer-finder__menu button {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.55rem;
+  color: rgba(225, 236, 242, 0.85);
+  font-size: 0.72rem;
+  text-align: start;
+  background: none;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.layer-finder__menu button .material-symbols-outlined {
+  font-size: 14px;
+  color: rgba(199, 214, 222, 0.6);
+}
+
+.layer-finder__menu button:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.layer-finder__menu button.active,
+.layer-finder__menu button.active .material-symbols-outlined {
+  color: #7af0ff;
+}
+
+.layer-finder__bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.2rem 0 0.5rem;
+}
+
+.layer-finder__field {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0.55rem;
+  height: 30px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(54, 220, 255, 0.3);
+  border-radius: 8px;
+}
+
+.layer-finder__field .material-symbols-outlined {
+  color: rgba(199, 214, 222, 0.6);
+  font-size: 15px;
+}
+
+.layer-finder__field input {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: rgba(236, 244, 248, 0.95);
+  font-size: 0.75rem;
+  background: none;
+  border: 0;
+  outline: none;
+}
+
+/* Focus shows on the field's frame, as a soft ring, in place of the hard
+   keyboard outline round the bare input. */
+.layer-finder__field input:focus,
+.layer-finder__field input:focus-visible {
+  outline: none !important;
+  box-shadow: none;
+}
+
+.layer-finder__field:focus-within {
+  border-color: rgba(54, 220, 255, 0.7);
+  box-shadow: 0 0 0 3px rgba(54, 220, 255, 0.1);
+}
+
+.layer-finder__chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.25rem;
+  height: 26px;
+  padding: 0 0.5rem;
+  color: #7af0ff;
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.1rem;
+  text-transform: uppercase;
+  background: rgba(54, 220, 255, 0.12);
+  border: 1px solid rgba(54, 220, 255, 0.45);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.layer-finder__chip .material-symbols-outlined {
+  font-size: 12px;
+}
+
+/* Rows and group headings the search or filter leaves out. */
+#data-toggles .is-filtered {
+  display: none !important;
+}
+
+.layer-finder__empty {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 0.6rem 0.5rem;
+  color: rgba(199, 214, 222, 0.5);
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+.layer-finder__menu {
+  max-height: 60vh;
+  box-sizing: border-box;
+  overflow-y: auto;
+  min-width: 170px;
+}
+
+.layer-finder__menu-head {
+  padding: 0.45rem 0.55rem 0.2rem;
+  color: rgba(199, 214, 222, 0.5);
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.14rem;
+  text-transform: uppercase;
+}
+
+/* Each group of options lays out as part of the menu's grid. */
+.layer-finder__menu > span {
+  display: contents;
+}
+
+.layer-finder__menu > span + span > .layer-finder__menu-head {
+  margin-top: 0.2rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Several chips can show at once. */
+.layer-finder__bar {
+  flex-wrap: wrap;
+}
+
+/* Chips sized like the rows' ON/OFF switches: small and square. */
+.layer-finder__chip {
+  height: 20px;
+  gap: 0.2rem;
+  padding: 0 6px 0 8px;
+  font-size: 9px;
+  letter-spacing: 0.08rem;
+  border-radius: 4px;
+}
+
+.layer-finder__chip .material-symbols-outlined {
+  font-size: 11px;
+}

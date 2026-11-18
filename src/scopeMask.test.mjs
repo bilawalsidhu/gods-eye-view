@@ -19,6 +19,8 @@ import {
   SCOPE_TERMINUS_MAX_PCT,
   SCOPE_FEATHER_RATIO_DEFAULT,
   getScopeMaskFeather,
+  setScopeMaskOpacity,
+  getScopeMaskOpacity,
   SCOPE_OUTSIDE_ALPHA,
   SCOPE_TERMINUS_ALPHA_NEAR,
   SCOPE_TERMINUS_FAR_M,
@@ -27,6 +29,7 @@ import {
   _resetScopeMaskForTest,
 } from './scopeMask.js';
 import { KEYHOLE_OUTER_RADIUS } from './celestialRing.js';
+import { bindFakeCesiumScene } from './testSupport/fakeCesiumScene.mjs';
 import { SCOPE_FEATHER_RATIO_MAX, clampScopeFeatherPct } from './scopeMaskPolicy.js';
 
 beforeEach(() => _resetScopeMaskForTest());
@@ -199,6 +202,37 @@ test('scope appearance follows direct state changes and install/destroy lifecycl
     setScopeMaskEnabled(false);
     _resetScopeMaskForTest();
     assert.equal(dom.documentElement.dataset.scopeMask, undefined, 'test reset clears the marker');
+  } finally {
+    destroyScopeMask();
+    dom.restore();
+  }
+});
+
+test('scope opacity fades the painted mask without repainting it', () => {
+  const dom = stubScopeMaskDom();
+  try {
+    assert.equal(getScopeMaskOpacity(), 1, 'full by default');
+    setScopeMaskOpacity(0.4);
+    installScopeMask({ container: dom.container });
+    assert.equal(dom.canvas.style.opacity, '0.4', 'a choice made before install applies');
+    const paints = { ...dom.ops };
+    const terminus = getScopeTerminusAlpha();
+    setScopeMaskOpacity(0.25);
+    assert.equal(dom.canvas.style.opacity, '0.25');
+    assert.deepEqual(dom.ops, paints, 'the mask is not repainted');
+    assert.equal(getScopeTerminusAlpha(), terminus, 'the terminus is its own setting');
+    setScopeMaskOpacity(3);
+    assert.equal(getScopeMaskOpacity(), 1);
+    setScopeMaskOpacity(-1);
+    assert.equal(getScopeMaskOpacity(), 0);
+    setScopeMaskOpacity('soft');
+    assert.equal(getScopeMaskOpacity(), 1, 'not a number is full');
+    setScopeMaskOpacity(0.5);
+    destroyScopeMask();
+    installScopeMask({ container: dom.container });
+    assert.equal(dom.canvas.style.opacity, '0.5', 'reinstall keeps it');
+    _resetScopeMaskForTest();
+    assert.equal(getScopeMaskOpacity(), 1, 'test reset restores full');
   } finally {
     destroyScopeMask();
     dom.restore();
@@ -412,7 +446,10 @@ test('one quantum is the smallest step that can repaint', () => {
 // ~8 Hz through the altitude band and draw() performed the full backing-store
 // resize + clear BEFORE checking whether the scope was even enabled.
 
-/** A viewer stub with the two camera signals the terminus sampler listens on. */
+/**
+ * A viewer stub with the two camera signals the terminus sampler listens on,
+ * read through the renderer's frame and camera ports as the app's are.
+ */
 function stubScopeViewer(container, heightM) {
   const preRenderListeners = new Set();
   const moveEndListeners = new Set();
@@ -421,12 +458,14 @@ function stubScopeViewer(container, heightM) {
     set.add(listener);
     return () => set.delete(listener);
   };
+  const viewer = {
+    container,
+    scene: { preRender: { addEventListener: addTo(preRenderListeners) } },
+    camera: { positionCartographic, moveEnd: { addEventListener: addTo(moveEndListeners) } },
+  };
+  bindFakeCesiumScene(viewer);
   return {
-    viewer: {
-      container,
-      scene: { preRender: { addEventListener: addTo(preRenderListeners) } },
-      camera: { positionCartographic, moveEnd: { addEventListener: addTo(moveEndListeners) } },
-    },
+    viewer,
     setHeight(next) { positionCartographic.height = next; },
     raisePreRender(times = 1) {
       for (let i = 0; i < times; i += 1) for (const fn of [...preRenderListeners]) fn();

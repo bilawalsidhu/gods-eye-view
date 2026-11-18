@@ -3,11 +3,14 @@
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { createPinia } from 'pinia';
 import { createApp, nextTick } from 'vue';
 import { setLocale } from '../i18n/index.js';
 import { createBriefState } from './cockpitBriefPages.js';
 import {
+  maybeRefreshRegionalBrief,
   publishBriefView,
   renderRegionalBrief,
   renderRegionalBriefStatus,
@@ -88,10 +91,7 @@ test('pages, the cycle toggle and the source follow the controller', async (t) =
   await nextTick();
   assert.equal(text('#cockpit-brief-kicker'), 'REGIONAL NEWS');
   assert.equal(text('#cockpit-brief-position'), '2 / 3');
-  assert.equal(
-    text('#cockpit-brief-source'),
-    'GOOGLE NEWS RSS · LOCATION QUERY · RECENT',
-  );
+  assert.equal(text('#cockpit-brief-source'), 'GOOGLE NEWS RSS · LAST 24 H');
   assert.deepEqual(visiblePages(), ['news']);
   assert.deepEqual(current(), ['false', 'true', 'false']);
   assert.equal($('#cockpit-signal-stream').dataset.briefPage, 'news');
@@ -129,7 +129,8 @@ test('regional news and local conditions render what the region returned', async
         url: `https://example.com/${index}`,
         title: `Story ${index}`,
         domain: 'example.com',
-        publishedAt: new Date().toISOString(),
+        // Newest first is the shown order, so Story 0 is the newest.
+        publishedAt: new Date(Date.now() - index * 60_000).toISOString(),
       })),
       weather: {
         temperatureC: 21.6,
@@ -159,7 +160,7 @@ test('regional news and local conditions render what the region returned', async
   assert.equal(text('#cockpit-local-condition'), 'RAIN');
   assert.equal(text('#cockpit-local-cloud'), 'CLOUD 40%');
   assert.equal(text('#cockpit-local-precipitation'), '1.3');
-  assert.equal(text('#cockpit-brief-source'), 'WIRE · LOCATION QUERY');
+  assert.equal(text('#cockpit-brief-source'), 'WIRE · LAST 24 H');
   assert.equal($('#cockpit-signal-stream').dataset.regionalStatus, 'ok');
   renderRegionalBriefStatus.call(owner, 'unavailable', {});
   await nextTick();
@@ -170,11 +171,15 @@ test('regional news and local conditions render what the region returned', async
   assert.equal(text('#cockpit-local-coordinates'), 'POSITION UNAVAILABLE');
 });
 
+// One time for every story: newest-first order then keeps the order a test
+// lists them in. A clock read per story could tick between two of them and
+// swap them.
+const STORY_PUBLISHED_AT = new Date().toISOString();
 const story = (id, url = `https://example.com/${id}`) => ({
   url,
   title: `Story ${id}`,
   domain: 'example.com',
-  publishedAt: new Date().toISOString(),
+  publishedAt: STORY_PUBLISHED_AT,
 });
 
 test('a refreshed news list keeps a focused story on its own link', async (t) => {
@@ -210,26 +215,293 @@ test('a refreshed news list keeps a focused story on its own link', async (t) =>
   assert.equal($('#cockpit-news-list').textContent.includes('Story y'), true);
 });
 
-test('the news source names the feed only while it is current on page 2', async (t) => {
+// This contract changed on purpose: the footer used to fall back to a
+// static "· RECENT" on every page change, which promised nothing. It now
+// follows the news state and names the window it holds articles to.
+test('the news footer follows the news state across page changes, not a static RECENT', async (t) => {
   const { text, owner } = fixture(t);
   showBriefPage.call(owner, 1);
-  renderRegionalBrief.call(owner, { newsSource: 'wire', articles: [] }, INFO);
+  renderRegionalBrief.call(
+    owner,
+    {
+      newsStatus: 'ready',
+      newsSource: 'wire',
+      newsWindowHours: 24,
+      articles: [story('a')],
+    },
+    INFO,
+  );
   await nextTick();
-  assert.equal(text('#cockpit-brief-source'), 'WIRE · LOCATION QUERY');
+  assert.equal(text('#cockpit-brief-source'), 'WIRE · LAST 24 H');
+  showBriefPage.call(owner, 2);
+  showBriefPage.call(owner, 1);
+  await nextTick();
+  assert.equal(text('#cockpit-brief-source'), 'WIRE · LAST 24 H');
+  showBriefPage.call(owner, 0);
+  renderRegionalBrief.call(
+    owner,
+    {
+      newsStatus: 'ready',
+      newsSource: 'wire',
+      newsWindowHours: 12,
+      articles: [story('a')],
+    },
+    INFO,
+  );
+  await nextTick();
+  // Off page 2 the footer is the current page's.
+  assert.equal(
+    text('#cockpit-brief-source'),
+    'SOURCE-BACKED EVENTS · NO SYNTHETIC NEWS',
+  );
+  showBriefPage.call(owner, 1);
+  await nextTick();
+  assert.equal(text('#cockpit-brief-source'), 'WIRE · LAST 12 H');
+});
+
+test('the news banner is hidden by the stylesheet, not only by the attribute', async (t) => {
+  // happy-dom applies no author CSS by itself, so `hidden` alone proves
+  // nothing: `.cockpit-brief-status { display: grid }` used to beat it.
+  const css = readFileSync(
+    fileURLToPath(new URL('./styles/cockpit.css', import.meta.url)),
+    'utf8',
+  );
+  assert.match(
+    css,
+    /\.cockpit-brief-status\[hidden\]\s*\{\s*display:\s*none;?\s*\}/,
+  );
+  const { $, owner } = fixture(t);
+  const style = document.head.appendChild(document.createElement('style'));
+  t.after(() => style.remove());
+  style.textContent = css;
+  showBriefPage.call(owner, 1);
+  renderRegionalBrief.call(
+    owner,
+    { newsStatus: 'ready', articles: [story('a')] },
+    INFO,
+  );
+  await nextTick();
+  const banner = $('#cockpit-news-status');
+  assert.equal(banner.hidden, true);
+  assert.equal(getComputedStyle(banner).display, 'none');
+  renderRegionalBrief.call(owner, { newsStatus: 'empty', articles: [] }, INFO);
+  await nextTick();
+  assert.equal(getComputedStyle(banner).display, 'grid');
+});
+
+const hoursAgo = (hours) =>
+  new Date(Date.now() - hours * 3_600_000).toISOString();
+
+test('ready, cached, empty and unavailable each label the news differently', async (t) => {
+  const { $, text, owner } = fixture(t);
+  showBriefPage.call(owner, 1);
+  const rows = () =>
+    [...document.querySelectorAll('#cockpit-news-list strong')].map(
+      (row) => row.textContent,
+    );
+  const banner = () => ({
+    hidden: $('#cockpit-news-status').hidden,
+    state: $('#cockpit-news-status').dataset.state,
+    text: text('#cockpit-news-status'),
+  });
+  const ready = {
+    status: 'ready',
+    newsStatus: 'ready',
+    newsSource: 'Google News RSS',
+    newsWindowHours: 24,
+    newsFetchedAt: hoursAgo(0.5),
+    articles: [story('a'), story('b')],
+  };
+  renderRegionalBrief.call(owner, ready, INFO);
+  await nextTick();
+  assert.equal(banner().hidden, true);
+  assert.equal(banner().state, 'ready');
+  assert.deepEqual(rows(), ['Story a', 'Story b']);
+  assert.equal(text('#cockpit-brief-source'), 'GOOGLE NEWS RSS · LAST 24 H');
+
+  // The local proxy's stale answer is a refresh that failed.
+  renderRegionalBrief.call(owner, { ...ready, status: 'stale' }, INFO);
+  await nextTick();
+  assert.deepEqual(banner(), {
+    hidden: false,
+    state: 'cached',
+    text: 'CACHED · REFRESH FAILED',
+  });
+  assert.deepEqual(rows(), ['Story a', 'Story b']);
+  assert.equal(
+    text('#cockpit-brief-source'),
+    'GOOGLE NEWS RSS · CACHED 30M AGO',
+  );
+
+  renderRegionalBrief.call(
+    owner,
+    {
+      ...ready,
+      newsStatus: 'empty',
+      newsSource: 'Google News RSS',
+      articles: [],
+    },
+    INFO,
+  );
+  await nextTick();
+  assert.deepEqual(banner(), {
+    hidden: false,
+    state: 'empty',
+    text: 'NO NEWS IN THE LAST 24 H',
+  });
+  assert.deepEqual(rows(), []);
+
+  renderRegionalBrief.call(
+    owner,
+    { ...ready, newsStatus: 'unavailable', newsSource: null, articles: [] },
+    INFO,
+  );
+  await nextTick();
+  assert.deepEqual(banner(), {
+    hidden: false,
+    state: 'unavailable',
+    text: 'REGIONAL NEWS UNAVAILABLE',
+  });
+  assert.deepEqual(rows(), []);
+});
+
+test('articles outside the window are dropped even when a server sends them', async (t) => {
+  const { $, text, owner } = fixture(t);
+  showBriefPage.call(owner, 1);
+  const dated = (id, publishedAt) => ({ ...story(id), publishedAt });
+  // The reported case: 4, 104, 215 and 165 days old under "RECENT".
+  renderRegionalBrief.call(
+    owner,
+    {
+      newsStatus: 'ready',
+      articles: [
+        dated('old', hoursAgo(4 * 24)),
+        dated('older', hoursAgo(104 * 24)),
+        dated('undated', null),
+        dated('one', hoursAgo(20)),
+        dated('two', hoursAgo(2)),
+      ],
+    },
+    INFO,
+  );
+  await nextTick();
+  assert.deepEqual(
+    [...document.querySelectorAll('#cockpit-news-list strong')].map(
+      (row) => row.textContent,
+    ),
+    ['Story two', 'Story one'],
+  );
+  assert.equal($('#cockpit-news-status').hidden, true);
+  renderRegionalBrief.call(
+    owner,
+    { newsStatus: 'ready', articles: [dated('old', hoursAgo(25))] },
+    INFO,
+  );
+  await nextTick();
+  assert.equal(document.querySelectorAll('#cockpit-news-list li').length, 0);
+  assert.equal(text('#cockpit-news-status'), 'NO NEWS IN THE LAST 24 H');
+});
+
+test('a failed refresh keeps the earlier articles as cached, and clears only when there are none', async (t) => {
+  const { $, text, owner } = fixture(t);
+  const answers = [];
+  Object.assign(owner, {
+    active: true,
+    regionalBriefSubjectId: null,
+    regionalBriefAbort: null,
+    regionalBriefRequestToken: 0,
+    regionalBriefFetchedAt: 0,
+    regionalBrief: null,
+    renderRegionalBrief,
+    renderRegionalBriefStatus,
+  });
+  owner.services = {
+    ...owner.services,
+    regionalDistanceM: () => 0,
+    fetchRegionalBrief: () => answers.shift()(),
+  };
+  const refresh = async (answer, info = { ...INFO, icao24: 'abc123' }) => {
+    answers.push(answer);
+    owner.regionalBriefFetchedAt = 0;
+    maybeRefreshRegionalBrief.call(owner, info);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+  };
+  const rows = () => document.querySelectorAll('#cockpit-news-list li').length;
+  showBriefPage.call(owner, 1);
+
+  // No earlier brief: an error clears and says unavailable.
+  await refresh(() => Promise.reject(new Error('503')));
+  assert.equal($('#cockpit-news-status').dataset.state, 'unavailable');
+  assert.equal(text('#cockpit-news-status'), 'REGIONAL NEWS UNAVAILABLE');
+  assert.equal(rows(), 0);
+
+  const fetchedAt = hoursAgo(1);
+  await refresh(() =>
+    Promise.resolve({
+      status: 'ready',
+      newsStatus: 'ready',
+      newsSource: 'Google News RSS',
+      newsWindowHours: 24,
+      newsFetchedAt: fetchedAt,
+      articles: [story('a'), story('b')],
+    }),
+  );
+  assert.equal($('#cockpit-news-status').hidden, true);
+  assert.equal(rows(), 2);
+
+  // A network failure keeps the rows and says so, with their age.
+  await refresh(() => Promise.reject(new TypeError('Failed to fetch')));
+  assert.equal($('#cockpit-news-status').hidden, false);
+  assert.equal(text('#cockpit-news-status'), 'CACHED · REFRESH FAILED');
+  assert.equal(rows(), 2);
+  assert.equal(
+    text('#cockpit-brief-source'),
+    'GOOGLE NEWS RSS · CACHED 1H AGO',
+  );
   showBriefPage.call(owner, 2);
   showBriefPage.call(owner, 1);
   await nextTick();
   assert.equal(
     text('#cockpit-brief-source'),
-    'GOOGLE NEWS RSS · LOCATION QUERY · RECENT',
+    'GOOGLE NEWS RSS · CACHED 1H AGO',
   );
-  showBriefPage.call(owner, 0);
-  renderRegionalBrief.call(owner, { newsSource: 'wire', articles: [] }, INFO);
-  await nextTick();
-  assert.equal(
-    text('#cockpit-brief-source'),
-    'SOURCE-BACKED EVENTS · NO SYNTHETIC NEWS',
+
+  // So does a brief whose news read failed while weather answered.
+  await refresh(() =>
+    Promise.resolve({
+      status: 'partial',
+      newsStatus: 'unavailable',
+      articles: [],
+    }),
   );
+  assert.equal(text('#cockpit-news-status'), 'CACHED · REFRESH FAILED');
+  assert.equal(rows(), 2);
+
+  // A successful refresh clears the cached label; a true empty clears rows.
+  await refresh(() =>
+    Promise.resolve({
+      status: 'ready',
+      newsStatus: 'empty',
+      newsSource: 'Google News RSS',
+      articles: [],
+    }),
+  );
+  assert.equal(text('#cockpit-news-status'), 'NO NEWS IN THE LAST 24 H');
+  assert.equal(rows(), 0);
+  assert.equal(text('#cockpit-brief-source'), 'GOOGLE NEWS RSS · LAST 24 H');
+
+  // Another aircraft never inherits the last one's rows.
+  await refresh(() =>
+    Promise.resolve({ newsStatus: 'ready', articles: [story('c')] }),
+  );
+  assert.equal(rows(), 1);
+  await refresh(() => Promise.reject(new Error('503')), {
+    ...INFO,
+    icao24: 'def456',
+  });
+  assert.equal(text('#cockpit-news-status'), 'REGIONAL NEWS UNAVAILABLE');
+  assert.equal(rows(), 0);
 });
 
 test('an unchanged position publishes nothing new', (t) => {
@@ -278,7 +550,10 @@ test('the card and its toggle render the collapse the controller presents', asyn
   await nextTick();
   assert.equal(card.dataset.collapsed, 'true');
   assert.equal(toggle.getAttribute('aria-expanded'), 'false');
-  assert.equal(toggle.getAttribute('aria-label'), 'Expand cockpit briefing panel');
+  assert.equal(
+    toggle.getAttribute('aria-label'),
+    'Expand cockpit briefing panel',
+  );
   assert.equal(toggle.title, 'Expand briefing panel');
   assert.equal(toggle.textContent.trim(), 'right_panel_open');
   assert.equal(owner.signalUserCollapsed, true);
@@ -286,4 +561,76 @@ test('the card and its toggle render the collapse the controller presents', asyn
   await nextTick();
   assert.equal(card.dataset.collapsed, 'false');
   assert.equal(toggle.textContent.trim(), 'right_panel_close');
+});
+
+test("a refresh that fails after a move never shows the last location's brief as current", async (t) => {
+  const { $, text, owner } = fixture(t);
+  const answers = [];
+  Object.assign(owner, {
+    active: true,
+    regionalBriefSubjectId: null,
+    regionalBriefAbort: null,
+    regionalBriefRequestToken: 0,
+    regionalBriefFetchedAt: 0,
+    regionalBrief: null,
+    renderRegionalBrief,
+    renderRegionalBriefStatus,
+  });
+  owner.services = {
+    ...owner.services,
+    // One degree of latitude stands for a move past the refresh distance.
+    regionalDistanceM: (from, to) =>
+      from ? Math.abs(from.latitude - to.latitude) * 111_000 : Infinity,
+    fetchRegionalBrief: () => answers.shift()(),
+  };
+  const refresh = async (answer, latitude) => {
+    answers.push(answer);
+    owner.regionalBriefFetchedAt = 0;
+    maybeRefreshRegionalBrief.call(owner, {
+      ...INFO,
+      icao24: 'abc123',
+      latitude,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTick();
+  };
+  const rows = () => document.querySelectorAll('#cockpit-news-list li').length;
+  const here = () =>
+    Promise.resolve({
+      status: 'ready',
+      newsStatus: 'ready',
+      newsSource: 'Google News RSS',
+      newsWindowHours: 24,
+      newsFetchedAt: hoursAgo(1),
+      articles: [story('a'), story('b')],
+    });
+  showBriefPage.call(owner, 1);
+
+  await refresh(here, 40);
+  assert.equal(rows(), 2);
+  // The same place: a failed refresh keeps the rows as cached.
+  await refresh(() => Promise.reject(new TypeError('Failed to fetch')), 40);
+  assert.equal(text('#cockpit-news-status'), 'CACHED · REFRESH FAILED');
+  assert.equal(rows(), 2);
+  // Elsewhere: the brief is unavailable, as it was before there was a cache.
+  await refresh(() => Promise.reject(new TypeError('Failed to fetch')), 45);
+  assert.equal($('#cockpit-news-status').dataset.state, 'unavailable');
+  assert.equal(rows(), 0);
+  // Nor is it held, for a language change to show again.
+  assert.equal(owner.regionalBrief, null);
+
+  // Nor does a brief there whose news read failed borrow the last place's rows.
+  await refresh(here, 40);
+  assert.equal(rows(), 2);
+  await refresh(
+    () =>
+      Promise.resolve({
+        status: 'partial',
+        newsStatus: 'unavailable',
+        articles: [],
+      }),
+    45,
+  );
+  assert.equal($('#cockpit-news-status').dataset.state, 'unavailable');
+  assert.equal(rows(), 0);
 });

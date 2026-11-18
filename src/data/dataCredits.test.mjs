@@ -1,6 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DATA_CREDITS, NYC_DOT_DISCLAIMER } from './dataCredits.js';
+import {
+  DATA_CREDITS,
+  LIVEUAMAP_CREDIT,
+  NYC_DOT_DISCLAIMER,
+  transitFeedCredit,
+} from './dataCredits.js';
+import { getTransitFeed } from './transitFeeds.js';
+import { bindFakeCesiumCredits } from '../testSupport/fakeCreditsPort.mjs';
 
 test('every credit carries a unique key and some markup to render', () => {
   const keys = DATA_CREDITS.map((entry) => entry.key);
@@ -36,6 +43,20 @@ test('adsbdb is credited and carries its published route-data restriction', () =
   assert.match(credit.html, /PlaneBase/);
   assert.match(credit.html, /Guillaume Michel/);
   assert.match(credit.html, /href="https:\/\/www\.adsbdb\.com"/);
+});
+
+test('Planespotters is credited with a plain followable link', () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'planespotters');
+  assert.ok(credit, 'the tracked aircraft photos come from Planespotters');
+  assert.match(credit.html, /href="https:\/\/www\.planespotters\.net"/);
+  assert.doesNotMatch(credit.html, /nofollow/);
+});
+
+test('Open Vessel Photos is credited with a plain followable link', () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'openvesselphotos');
+  assert.ok(credit, 'the selected vessel photos come from Open Vessel Photos');
+  assert.match(credit.html, /href="https:\/\/openvesselphotos\.org"/);
+  assert.doesNotMatch(credit.html, /nofollow/);
 });
 
 test('the UCS Satellite Database is acknowledged with its version and webpage', () => {
@@ -83,13 +104,13 @@ test('inline OSM attribution persists until its last display owner leaves', asyn
   const { showOsmCredit, hideOsmCredit } = await import('./dataCredits.js');
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const visible = new Set();
-  const viewer = {
+  const viewer = bindFakeCesiumCredits({
     creditDisplay: {
       addStaticCredit: (c) => visible.add(c),
       removeStaticCredit: (c) => visible.delete(c),
     },
     scene: { requestRender() {} },
-  };
+  });
   assert.equal(showOsmCredit(viewer, 'alpr'), true);
   assert.equal(showOsmCredit(viewer, 'alpr'), false);
   assert.equal(visible.size, 1);
@@ -123,13 +144,13 @@ test('tile attribution follows source changes and viewers have independent owner
   const { showOsmCredit, hideOsmCredit } = await import('./dataCredits.js');
   const create = () => {
     const credits = new Set();
-    return {
+    return bindFakeCesiumCredits({
       credits,
       creditDisplay: {
         addStaticCredit: (c) => credits.add(c),
         removeStaticCredit: (c) => credits.delete(c),
       },
-    };
+    });
   };
   const a = create(),
     b = create();
@@ -177,6 +198,129 @@ test('every Street Level imagery source is in the attribution lightbox', () => {
     );
 });
 
+test('a credit with several links becomes one credit per link, in order', async () => {
+  const {
+    creditsFromMarkup,
+    OSM_CREDIT,
+    OPENMAPTILES_CREDIT,
+    WOF_CREDIT,
+    BHOTE_KOSHI_CREDIT,
+  } = await import('./dataCredits.js');
+  const html = (key) => DATA_CREDITS.find((entry) => entry.key === key).html;
+  const read = (markup) =>
+    creditsFromMarkup(markup).map(({ text, href }) => [text, href]);
+  assert.deepEqual(read(OSM_CREDIT.html), [
+    [
+      'Map and place data © OpenStreetMap contributors',
+      'https://www.openstreetmap.org/copyright',
+    ],
+    ['(ODbL)', 'https://opendatacommons.org/licenses/odbl/1-0/'],
+  ]);
+  assert.deepEqual(read(OPENMAPTILES_CREDIT.html), [
+    ['Vector tiles: OpenFreeMap', 'https://openfreemap.org'],
+    ['© OpenMapTiles', 'https://openmaptiles.org'],
+  ]);
+  assert.deepEqual(read(html('nasa-gibs'))[1], [
+    'HLS product page',
+    'https://lpdaac.usgs.gov/products/hlss30v002/',
+  ]);
+  assert.deepEqual(read(html('wfigs')), [
+    [
+      'Wildfire perimeters: National Interagency Fire Center (WFIGS)',
+      'https://data-nifc.opendata.arcgis.com/',
+    ],
+    ['Incident information: InciWeb', 'https://inciweb.wildfire.gov/'],
+  ]);
+  assert.deepEqual(read(html('eccc-aqhi')), [
+    [
+      'Air quality (AQHI): Environment and Climate Change Canada — MSC GeoMet (eccc-msc.github.io/open-data)',
+      'https://eccc-msc.github.io/open-data/',
+    ],
+    [
+      'ECCC Data Servers End-use Licence',
+      'https://eccc-msc.github.io/open-data/licence/readme_en/',
+    ],
+  ]);
+  assert.deepEqual(
+    read(BHOTE_KOSHI_CREDIT.html)[1][0].slice(0, 15),
+    'and GeoPera (CC',
+  );
+  assert.deepEqual(
+    read(WOF_CREDIT.html).map(([text]) => text),
+    [
+      "Neighborhood boundaries: Who's On First and contributors, simplified",
+      '(sources and licences)',
+    ],
+  );
+  const link = (text) => `<a href="https://example.org">${text}</a>`;
+  assert.deepEqual(
+    read(`${link('A')} by Hoffleit &amp; Warren ${link('B')}`).map(
+      ([text]) => text,
+    ),
+    ['A', 'by Hoffleit & Warren B'],
+    'a character reference is not a separator',
+  );
+  assert.deepEqual(read(html('usgs')), [
+    ['Earthquakes: Data courtesy of the U.S. Geological Survey', undefined],
+  ]);
+  for (const entry of DATA_CREDITS) {
+    const credits = creditsFromMarkup(entry.html);
+    const links = entry.html.match(/<a\b/g)?.length ?? 0;
+    assert.equal(credits.length, Math.max(links, 1), entry.key);
+    assert.ok(
+      credits.every((credit) => credit.inline === false),
+      `${entry.key} belongs in the attribution list`,
+    );
+  }
+});
+
+test('data credits go through the renderer to the attribution list', async () => {
+  const { registerDataCredits, registerDynamicCredit, TOMTOM_CREDIT } =
+    await import('./dataCredits.js');
+  const shown = [];
+  const viewer = bindFakeCesiumCredits({
+    creditDisplay: {
+      addStaticCredit: (c) => shown.push(c),
+      removeStaticCredit() {},
+    },
+  });
+  const credits = DATA_CREDITS.filter((entry) =>
+    ['openstreetmap', 'usgs'].includes(entry.key),
+  );
+  registerDataCredits(viewer, credits);
+  assert.equal(shown.length, 3);
+  assert.ok(shown.every((credit) => !credit.showOnScreen));
+  const odbl = shown.find((credit) => credit.html.includes('opendatacommons'));
+  assert.match(odbl.html, /href="https:\/\/opendatacommons.org/);
+  // As the source wrote it: only the licence's name is the link.
+  assert.match(odbl.html, /\(<a [^>]*>ODbL<\/a>\)/);
+  assert.equal(registerDynamicCredit(viewer, TOMTOM_CREDIT), true);
+  assert.equal(registerDynamicCredit(viewer, TOMTOM_CREDIT), true);
+  assert.equal(shown.length, 4, 'a dynamic credit is added once');
+  assert.match(shown[3].html, /Traffic flow data © <a [^>]*>TomTom<\/a>/);
+  assert.equal(registerDynamicCredit({}, { key: 'none', html: 'x' }), false);
+});
+
+test('the News layer credits its built-in sources', () => {
+  const credit = (key) => DATA_CREDITS.find((entry) => entry.key === key);
+  // GDELT's terms ask for a citation and a link.
+  assert.match(
+    credit('gdelt-news').html,
+    /href="https:\/\/www\.gdeltproject\.org\/"[^>]*>GDELT Project</,
+  );
+  // World News API's free plan asks for this exact link.
+  assert.match(
+    credit('worldnewsapi').html,
+    /<a href="https:\/\/worldnewsapi\.com\/"[^>]*>World News API<\/a>/,
+  );
+  assert.match(LIVEUAMAP_CREDIT.html, />Liveuamap</);
+  assert.ok(
+    !DATA_CREDITS.some((entry) => entry.key === LIVEUAMAP_CREDIT.key),
+    'Liveuamap is credited only once its key is in use',
+  );
+  assert.doesNotMatch(credit('news').html, /No single provider/);
+});
+
 test('the PR #1506 camera packs are credited with their sources and terms', () => {
   const html = (key) => DATA_CREDITS.find((entry) => entry.key === key)?.html;
   assert.match(html('ottawa-cctv') || '', /traffic\.ottawa\.ca/);
@@ -189,4 +333,34 @@ test('the PR #1506 camera packs are credited with their sources and terms', () =
     html('mlit-river-cctv') || '',
     /href="https:\/\/www\.river\.go\.jp\//,
   );
+});
+
+test('Warsaw and Poznań credits carry the data date their licences ask for', () => {
+  const warsaw = getTransitFeed('ztm-warszawa');
+  // 2026-11-09T06:00:00Z as a GTFS-RT header timestamp (seconds).
+  const credit = transitFeedCredit(warsaw, { feedTimestamp: 1_794_204_000 });
+  assert.match(credit.html, /, data of 2026-11-09\)/);
+  assert.match(credit.html, /href="http:\/\/api\.um\.warszawa\.pl"/);
+  assert.equal(credit.key, 'transit-ztm-warszawa-2026-11-09');
+  // Without a feed timestamp the fetch time is the download date.
+  const poznan = transitFeedCredit(getTransitFeed('ztm-poznan'), {
+    feedTimestamp: null,
+    fetchedAt: Date.UTC(2026, 10, 10, 12),
+  });
+  assert.match(poznan.html, /data of 2026-11-10/);
+  // Undated feeds keep one credit line for the session.
+  const mbta = transitFeedCredit(getTransitFeed('mbta'), {
+    feedTimestamp: 1_794_204_000,
+  });
+  assert.equal(mbta.key, 'transit-mbta');
+  assert.doesNotMatch(mbta.html, /data of/);
+});
+
+test('the always-on rail credit names live feeds only, never timetables', () => {
+  // Every train shown is where its operator reported it; none is placed
+  // from a timetable.
+  const rail = DATA_CREDITS.find((entry) => entry.key === 'rail-gtfs-rt');
+  assert.ok(rail);
+  assert.match(rail.html, /realtime feeds/);
+  assert.doesNotMatch(rail.html, /timetable|placed from/i);
 });

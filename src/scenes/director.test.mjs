@@ -1,3 +1,5 @@
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import { rendererOf } from '../render/rendererOf.js';
 import { readShellSource } from '../testSupport/readShellSource.mjs';
 import { useStatusStore } from '../ui/stores/status.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
@@ -18,8 +20,17 @@ import test from 'node:test';
 
 import { LayerLifecycle } from '../data/lifecycle.js';
 import { SceneDirector } from './director.js';
+import {
+  stringifySceneDocument,
+  validateSceneDocument,
+} from '../director/document.js';
 import { SCENE_TRACKING_PARAM_KEYS } from './scenePolicy.js';
-import { SCENE_RECIPES, getSceneAppendRecipeById } from './recipes.js';
+import {
+  SCENE_APPEND_RECIPES,
+  SCENE_RECIPES,
+  getSceneAppendRecipeById,
+} from './recipes.js';
+import { STORY_TAGS } from './storyTags.js';
 
 const NEPAL_ORIGINAL_SHOT_TITLES = [
   'Global Incident Context',
@@ -501,10 +512,13 @@ test('refused same-shot seek rollback keeps a manual toggle still in flight', as
   }
 });
 
-test('same-shot seeking keeps the shortcut when declared visibility is unchanged', async () => {
-  const { director, dataManager, styleManager, restore } = makeDirector();
+test('reopening the same shot reapplies its look while ordinary seeks reuse it', async () => {
+  const project = structuredClone(PROJECT_FIXTURE);
+  project.scenes[0].shots[0].visual.style = 'retro';
+  const { director, dataManager, styleManager, restore } = makeDirector({ project });
   try {
     await director.loadShot('scene-1', 'shot-a', { flyDuration: 0 });
+    await styleManager.applyVisualState({ style: 'normal' });
     await dataManager.setEnabled('satellites', true);
     dataManager.setEnabledCalls.length = 0;
     const visualCalls = styleManager.visualCalls.length;
@@ -513,6 +527,13 @@ test('same-shot seeking keeps the shortcut when declared visibility is unchanged
     assert.deepEqual(dataManager.setEnabledCalls, []);
     assert.equal(styleManager.visualCalls.length, visualCalls);
     assert.equal(director.getPlaybackTimingState().snapshot.sceneProgress, 0.25);
+
+    assert.equal(await director.seekScene('scene-1', 0.25, { reloadShot: true }), true);
+    assert.equal(styleManager.visualCalls.length, visualCalls + 1);
+    assert.equal(styleManager.visualStates.at(-1).style, 'retro');
+    const { sceneProgress, seeking } = director.getPlaybackTimingState().snapshot;
+    assert.equal(sceneProgress, 0.25);
+    assert.equal(seeking, true);
   } finally {
     await director.destroy();
     restore();
@@ -699,6 +720,33 @@ test('installed v12 Nepal pack inserts ten points without replacing renamed came
   } finally { upgraded.restore(); }
 });
 
+
+test('startup selects the first scene after upgrading a later scene’s shot pack', () => {
+  const first = makeDirector({ project: nepalProjectFixture() });
+  let legacy;
+  const recipe = getSceneAppendRecipeById('bhote-koshi-nepal-evidence-pack');
+  try {
+    first.director.appendShotPack('scene-1', recipe.id);
+    legacy = structuredClone(first.director._project);
+    const scene = legacy.scenes[0];
+    scene.id = 'nepal';
+    scene.shots = scene.shots.filter((shot) => !shot.sourcePackId
+      || recipe.previousRequiredSourcePackBeatIds.includes(shot.layers['bhote-koshi-2026'].params.beatId));
+    scene.appliedShotPacks[0].version = 12;
+    const ids = new Set(scene.shots.map(({ id }) => id));
+    scene.appliedShotPacks[0].shotBindings = Object.fromEntries(
+      Object.entries(scene.appliedShotPacks[0].shotBindings).filter(([, id]) => ids.has(id)));
+    // An ordinary scene comes first; the pack to upgrade is in the second.
+    legacy.scenes.unshift(structuredClone(PROJECT_FIXTURE.scenes[0]));
+  } finally { first.restore(); }
+  const upgraded = makeDirector({ project: legacy });
+  try {
+    const { director } = upgraded;
+    assert.equal(director._project.scenes[1].appliedShotPacks[0].version, 18, 'the pack was upgraded');
+    assert.equal(director._selectedSceneId, 'scene-1');
+    assert.equal(director._selectedShotId, 'shot-a');
+  } finally { upgraded.restore(); }
+});
 
 test('a legacy three-shot Nepal browser project bootstraps to the current 25-shot sequence', () => {
   const project = legacyThreeShotNepalProjectFixture();
@@ -1072,7 +1120,7 @@ function fakeViewer() {
   const flights = [];
   const views = [];
   let cancelled = 0;
-  return {
+  return bindFakeCesiumCamera({
     flights,
     views,
     get cancelledFlights() { return cancelled; },
@@ -1086,7 +1134,7 @@ function fakeViewer() {
       },
       cancelFlight() { cancelled++; },
     },
-  };
+  });
 }
 
 /** Yield enough turns for the director's pending awaits to advance. */
@@ -1776,7 +1824,7 @@ test('destroy drains cancelled LOAD work before its viewer can be discarded', as
   t.after(restore);
   let finishVisual;
   const dataManager = fakeDataManager();
-  const viewer = { camera: { cancelFlight() {} } };
+  const viewer = bindFakeCesiumCamera({ camera: { cancelFlight() {} } });
   const director = new SceneDirector(viewer, {
     applyVisualState: () => new Promise((resolve) => { finishVisual = resolve; }),
   }, dataManager);
@@ -1797,6 +1845,7 @@ test('Scene snapshots are immutable and editing outcomes retain the affected sho
   const { director, restore } = makeDirector();
   try {
     director._activeRun = null;
+    director.selectShot('scene-1');
     const seen = [];
     const unsubscribe = director.subscribe((notification) => seen.push(notification));
     assert.equal(seen[0].initial, true);
@@ -1816,6 +1865,43 @@ test('Scene snapshots are immutable and editing outcomes retain the affected sho
     const count = seen.length;
     director.captureShot();
     assert.equal(seen.length, count);
+    await director.destroy();
+  } finally { restore(); }
+});
+
+test('moveShot reorders a scene, saves it and publishes shot-moved; not past the ends, not while playing', async () => {
+  const { director, restore } = makeDirector();
+  try {
+    director._activeRun = null;
+    const seen = [];
+    director.subscribe(({ change }) => { if (change) seen.push(change); });
+    const order = () => director._project.scenes[0].shots.map(({ id }) => id);
+    const saved = () =>
+      JSON.parse(localStorage.getItem('godsEyeView.sceneProject.v2'))
+        .scenes[0].shots.map(({ id }) => id);
+
+    assert.equal(director.moveShot('scene-1', 'shot-b', 0), true);
+    assert.deepEqual(order(), ['shot-b', 'shot-a']);
+    assert.deepEqual(saved(), ['shot-b', 'shot-a']);
+    const moved = seen.find(({ type }) => type === 'shot-moved');
+    assert.equal(moved.shot.id, 'shot-b');
+    assert.equal(moved.index, 0);
+
+    // The view's action is the same edit.
+    seen.length = 0;
+    director._controls.actions.moveShot('scene-1', 'shot-b', 1);
+    assert.deepEqual(order(), ['shot-a', 'shot-b']);
+    assert.deepEqual(seen.map(({ type }) => type), ['shot-moved']);
+
+    // Past an end it stays at the end; at its place, unknown, or playing, nothing moves.
+    assert.equal(director.moveShot('scene-1', 'shot-b', 5), false);
+    assert.equal(director.moveShot('scene-1', 'shot-a', -1), false);
+    assert.equal(director.moveShot('scene-1', 'missing', 0), false);
+    assert.equal(director.moveShot('scene-1', 'shot-a', 0.5), false);
+    director._running = true;
+    assert.equal(director.moveShot('scene-1', 'shot-b', 0), false);
+    director._running = false;
+    assert.deepEqual(order(), ['shot-a', 'shot-b']);
     await director.destroy();
   } finally { restore(); }
 });
@@ -1889,7 +1975,7 @@ test('unsupported stored documents cannot be overwritten by fallback edits', asy
     assert.equal(localStorage.getItem('godsEyeView.sceneProject.v2'), saved);
     await director.importProjectFile({ name: 'valid.json', text: async () => JSON.stringify(PROJECT_FIXTURE) });
     assert.equal(director._storageReadError, null);
-    assert.equal(JSON.parse(localStorage.getItem('godsEyeView.sceneProject.v2')).version, 6);
+    assert.equal(JSON.parse(localStorage.getItem('godsEyeView.sceneProject.v2')).version, 7);
   } finally { restore(); }
 });
 
@@ -2016,6 +2102,203 @@ test('startScene resolves its result, resumes after a shot without a scene id, a
   } finally { await director.destroy(); restore(); }
 });
 
+test('a revoked scene release turns no further layer off', async () => {
+  const project = structuredClone(PROJECT_FIXTURE);
+  project.scenes[0].releaseLayerIds = ['flights', 'traffic'];
+  const { director, dataManager, restore } = makeDirector({ project });
+  try {
+    const calls = [];
+    let finishFirst;
+    dataManager.setEnabled = (id, enabled, { signal }) => {
+      calls.push({ id, enabled, signal });
+      // The first layer's disable hangs, as a stuck teardown does.
+      return new Promise((resolve) => {
+        finishFirst = resolve;
+      });
+    };
+    const releasing = director._releaseSceneLayers(director._project.scenes[0]);
+    await settle();
+    assert.deepEqual(calls.map(({ id }) => id), ['flights']);
+    director.revokeSceneRelease();
+    assert.equal(calls[0].signal.aborted, true, 'the disable under way is aborted');
+    finishFirst(true);
+    assert.equal(await releasing, false);
+    assert.deepEqual(
+      calls.map(({ id }) => id),
+      ['flights'],
+      'the next layer is never turned off',
+    );
+    // A release started afterwards has its say again.
+    dataManager.setEnabled = async (id, enabled, { signal }) => {
+      calls.push({ id, enabled, signal });
+      return true;
+    };
+    assert.equal(await director._releaseSceneLayers(director._project.scenes[0]), true);
+    assert.deepEqual(calls.slice(1).map(({ id }) => id), ['flights', 'traffic']);
+  } finally { await director.destroy(); restore(); }
+});
+
+test('a revocation also covers the release a stopped run reaches later', async () => {
+  const project = structuredClone(PROJECT_FIXTURE);
+  project.scenes[0].releaseLayerIds = ['flights'];
+  const { director, styleManager, dataManager, restore } = makeDirector({ project });
+  try {
+    // The run's visual phase hangs and ignores Stop, as a stuck teardown does.
+    let settlePhase;
+    styleManager.applyVisualState = () =>
+      new Promise((resolve) => {
+        settlePhase = resolve;
+      });
+    const run = director.startScene('scene-1', { single: true, preview: true });
+    await settle();
+    assert.ok(settlePhase, 'the run is waiting in its phase');
+    director.stopScene();
+    director.revokeSceneRelease();
+    const after = dataManager.setEnabledCalls.length;
+    settlePhase(true);
+    await run;
+    const late = dataManager.setEnabledCalls
+      .slice(after)
+      .filter(({ enabled, signal }) => !enabled && !signal?.aborted);
+    assert.deepEqual(late, [], 'no layer is turned off after the revoke');
+    // A run started afterwards releases its layers again.
+    styleManager.applyVisualState = async () => true;
+    await director.startScene('scene-1', { single: true, preview: true });
+    assert.ok(
+      dataManager.setEnabledCalls.some(
+        ({ id, enabled, signal }) => id === 'flights' && !enabled && !signal?.aborted,
+      ),
+    );
+  } finally { await director.destroy(); restore(); }
+});
+
+test('a hold resumed partway waits for a clip that starts again, else only its rest', async () => {
+  const hold = async (pendingReads) => {
+    let reads = 0;
+    const module = {
+      getSceneShotMediaHold: () => ({ pending: reads++ < pendingReads, maxWaitMs: 20000 }),
+      sceneShotRestartsMedia: () => pendingReads > 0,
+    };
+    const waits = [];
+    await SceneDirector.prototype._holdShot.call(
+      {
+        _layerStatesForShot: () => ({ media: { enabled: true, params: { beatId: 'b' } } }),
+        dataManager: { layers: new Map([['media', { module }]]) },
+        _effectiveShotHoldSec: () => 3,
+        _sleep: async (ms) => waits.push(ms),
+        stopScene: () => assert.fail('no timeout'),
+      },
+      { id: 'scene' },
+      { id: 'shot' },
+      { cancelled: false },
+      { holdElapsedSec: 1, holdDurationSec: 3 },
+    );
+    return waits;
+  };
+  // The clip plays again: the hold polls until it is done, as any hold does.
+  const polls = await hold(4);
+  assert.ok(polls.length && polls.every((ms) => ms === 70), String(polls));
+  // The moment was past the clip: only the rest of the hold.
+  assert.deepEqual(await hold(0), [2000]);
+});
+
+/** Drive frame-by-frame camera motion headlessly for one test. */
+function installAnimationFrames() {
+  const original = globalThis.requestAnimationFrame;
+  const originalCancel = globalThis.cancelAnimationFrame;
+  globalThis.requestAnimationFrame = (callback) => setTimeout(callback, 16);
+  globalThis.cancelAnimationFrame = (handle) => clearTimeout(handle);
+  return () => {
+    globalThis.requestAnimationFrame = original;
+    globalThis.cancelAnimationFrame = originalCancel;
+  };
+}
+
+test('a run resumed inside a flight goes on from that point of the path and clock', async () => {
+  const { director, viewer, restore } = makeDirector();
+  const restoreFrames = installAnimationFrames();
+  const clock = [];
+  director.subscribeSceneClock((snap) => clock.push(snap));
+  const poses = [];
+  const setView = director._setCameraView.bind(director);
+  director._setCameraView = (pose) => {
+    poses.push(pose);
+    return setView(pose);
+  };
+  try {
+    // 0.75 of a 0.4 s scene: halfway along shot B's 0.2 s flight.
+    const run = director.startScene('scene-1', {
+      single: true,
+      fromProgress: 0.75,
+      preview: false,
+    });
+    await settle(40);
+    const first = clock.find((snap) => snap.running);
+    assert.equal(first.shotId, 'shot-b', 'starts in the shot that moment is in');
+    assert.ok(Math.abs(first.sceneElapsedSec - 0.3) < 1e-9, 'the clock starts at the moment');
+    // The first frame is the seek's own framing, halfway from A to B.
+    assert.ok(poses.length, 'the camera is driven from where it is');
+    assert.ok(Math.abs(poses[0].lat - -10) < 0.5, 'halfway from A to B');
+    assert.deepEqual(await run, { started: true, shots: 1 });
+    assert.equal(poses.at(-1).lat, -30, 'and ends on shot B');
+    assert.equal(viewer.flights.length, 0, 'no fresh flight from the shot start');
+    assert.equal(director._lastRun.wasCancelled, false);
+  } finally { await director.destroy(); restoreFrames(); restore(); }
+});
+
+test('a run resumed inside a hold plays its layers on from the seek’s state and waits only the rest of it', async () => {
+  const project = structuredClone(PROJECT_FIXTURE);
+  project.scenes[0].shots[0].holdSec = 0.6;
+  const { director, viewer, restore } = makeDirector({ project });
+  const layerCalls = [];
+  const layerStates = director._layerStatesForShot.bind(director);
+  director._layerStatesForShot = (scene, shot, options) => {
+    layerCalls.push({ shot, options });
+    return layerStates(scene, shot, options);
+  };
+  const clock = [];
+  director.subscribeSceneClock((snap) => clock.push(snap));
+  const poses = [];
+  const setView = director._setCameraView.bind(director);
+  director._setCameraView = (pose) => {
+    poses.push(pose);
+    return setView(pose);
+  };
+  const sleeps = [];
+  const sleep = director._sleep.bind(director);
+  director._sleep = (ms, token) => {
+    sleeps.push(ms);
+    return sleep(ms, token);
+  };
+  try {
+    // Shot A is 0.2 s of flight and 0.6 s of hold; the scene is 1 s long.
+    // 0.6 of it is 0.4 s into A's hold, with 0.2 s of it left.
+    const result = await director.startScene('scene-1', {
+      single: true,
+      fromProgress: 0.6,
+      preview: false,
+    });
+    assert.deepEqual(result, { started: true, shots: 2 });
+    const first = clock.find((snap) => snap.running);
+    assert.equal(first.shotId, 'shot-a');
+    assert.ok(Math.abs(first.sceneElapsedSec - 0.6) < 1e-9);
+    assert.ok(Math.abs(sleeps[0] - 200) < 1e-6, 'only the rest of the hold');
+    // Shot A's camera is placed at its end; only shot B flies.
+    assert.equal(poses[0].lat, 10);
+    assert.equal(viewer.flights.length, 1);
+    const seekStates = layerCalls.filter(({ options }) => options?.sceneSeek);
+    assert.equal(seekStates.length, 1, 'shot A’s layers are given the moment');
+    assert.equal(seekStates[0].shot.id, 'shot-a');
+    assert.ok(Math.abs(seekStates[0].options.sceneSeek.holdElapsedSec - 0.4) < 1e-9);
+    // Then they play on from that moment: shot A settles without the seek.
+    const after = layerCalls.slice(layerCalls.indexOf(seekStates[0]) + 1);
+    const played = after.find(({ shot }) => shot.id === 'shot-a');
+    assert.ok(played, 'shot A’s layers go back to running playback');
+    assert.equal(played.options.cameraSettled, true);
+    assert.equal(played.options.sceneSeek, undefined);
+  } finally { await director.destroy(); restore(); }
+});
+
 test('a caught run failure resolves as run-failed, not success (#971)', async () => {
   const { director, styleManager, restore } = makeDirector();
   const warn = console.warn;
@@ -2027,4 +2310,675 @@ test('a caught run failure resolves as run-failed, not success (#971)', async ()
       { started: false, reason: 'run-failed' },
     );
   } finally { console.warn = warn; await director.destroy(); restore(); }
+});
+test('listShots gives a scene its shots in order, each starting where the last ends', () => {
+  const { director, restore } = makeDirector();
+  try {
+    const scene = director._project.scenes[0];
+    const shots = director.listShots(scene.id);
+    assert.deepEqual(
+      shots.map((s) => s.id),
+      scene.shots.map((s) => s.id),
+    );
+    assert.equal(shots[0].startSec, 0);
+    for (let i = 1; i < shots.length; i++)
+      assert.equal(
+        shots[i].startSec,
+        shots[i - 1].startSec + shots[i - 1].durationSec,
+      );
+    assert.ok(shots.every((s) => typeof s.title === 'string' && s.title));
+    assert.deepEqual(director.listShots('no-such-scene'), []);
+  } finally {
+    restore();
+  }
+});
+
+test('selectShot selects a scene and shot for authoring, falling back to the first shot', () => {
+  const { director, restore } = makeDirector();
+  try {
+    const scene = director._project.scenes.at(-1);
+    const last = scene.shots.at(-1);
+    assert.equal(director.selectShot(scene.id, last.id), true);
+    assert.equal(director._selectedSceneId, scene.id);
+    assert.equal(director._selectedShotId, last.id);
+    assert.equal(director.selectShot(scene.id, 'no-such-shot'), true);
+    assert.equal(director._selectedShotId, scene.shots[0].id);
+    assert.equal(director.selectShot('no-such-scene'), false);
+    assert.deepEqual(director.selection(), {
+      sceneId: scene.id,
+      shotId: scene.shots[0].id,
+    });
+    assert.equal(director.hasScene(scene.id), true);
+    assert.equal(director.hasScene('no-such-scene'), false);
+    // No scene id changes nothing.
+    assert.equal(director.selectShot(null), false);
+    assert.equal(director._selectedSceneId, scene.id);
+  } finally {
+    restore();
+  }
+});
+
+test('whenIdle waits for tracked work, including work started while waiting', async () => {
+  const { director, restore } = makeDirector();
+  try {
+    let first;
+    let second;
+    director._trackWork(new Promise((resolve) => (first = resolve)));
+    let idle = false;
+    const waiting = director.whenIdle().then(() => (idle = true));
+    await settle();
+    director._trackWork(new Promise((resolve) => (second = resolve)));
+    first();
+    await settle();
+    assert.equal(idle, false, 'the later work is still pending');
+    second();
+    await waiting;
+    assert.equal(idle, true);
+  } finally {
+    restore();
+  }
+});
+
+/** Record the change types a director publishes. */
+function recordChanges(director) {
+  const types = [];
+  director.subscribe(({ change }) => {
+    if (change?.type) types.push(change.type);
+  });
+  return types;
+}
+
+const savedProject = () =>
+  JSON.parse(localStorage.getItem('godsEyeView.sceneProject.v2'));
+
+test('setSceneInStories saves the flag, publishes, and storyScenes lists the scene', () => {
+  const { director, restore } = makeDirector();
+  try {
+    const changes = recordChanges(director);
+    const scene = director._project.scenes[0];
+    assert.deepEqual(director.storyScenes(), []);
+    assert.equal(director.setSceneInStories(scene.id, true), true);
+    assert.equal(savedProject().scenes[0].stories, true);
+    assert.ok(changes.includes('stories-changed'));
+    assert.deepEqual(director.storyScenes(), [
+      {
+        id: scene.id,
+        title: 'Fixture Scene',
+        camera: {
+          lat: 10,
+          lon: 20,
+          alt: 500000,
+          heading: 0,
+          pitch: -40,
+          roll: 0,
+        },
+        shotCount: 2,
+        thumb: '',
+        tags: [],
+      },
+    ]);
+    // The camera is a copy; editing it leaves the project alone.
+    director.storyScenes()[0].camera.lat = 0;
+    assert.equal(scene.shots[0].camera.lat, 10);
+
+    changes.length = 0;
+    assert.equal(director.setSceneInStories(scene.id, false), true);
+    assert.equal(Object.hasOwn(savedProject().scenes[0], 'stories'), false);
+    assert.deepEqual(changes, ['stories-changed']);
+    assert.deepEqual(director.storyScenes(), []);
+    assert.equal(director.setSceneInStories('no-such-scene', true), false);
+  } finally {
+    restore();
+  }
+});
+
+test('draftScenes lists the person’s own scenes with shots that are not on the Stories page', () => {
+  const { director, restore } = makeDirector();
+  try {
+    const scene = director._project.scenes[0];
+    // The fixture scene is the person's own: a draft until saved.
+    assert.deepEqual(
+      director.draftScenes().map(({ id }) => id),
+      [scene.id],
+    );
+    director.setSceneInStories(scene.id, true);
+    assert.deepEqual(director.draftScenes(), [], 'saved: no longer a draft');
+    director.setSceneInStories(scene.id, false);
+    // A built-in scene is never a draft.
+    scene.id = 'flights-radar';
+    assert.deepEqual(director.draftScenes(), []);
+  } finally {
+    restore();
+  }
+});
+
+test('a scene without shots cannot be saved to Stories', () => {
+  const project = structuredClone(PROJECT_FIXTURE);
+  project.scenes.push({ id: 'empty', title: 'Empty', shots: [] });
+  const { director, restore } = makeDirector({ project });
+  try {
+    const changes = recordChanges(director);
+    assert.equal(director.setSceneInStories('empty', true), false);
+    assert.equal(Object.hasOwn(director._project.scenes[1], 'stories'), false);
+    assert.equal(changes.includes('stories-changed'), false);
+    // Taking it off is always allowed.
+    assert.equal(director.setSceneInStories('empty', false), true);
+  } finally {
+    restore();
+  }
+});
+
+test('the Stories flag survives a reload and an export/import round trip', async () => {
+  const project = structuredClone(PROJECT_FIXTURE);
+  project.scenes.push({
+    id: 'scene-2',
+    title: 'Second',
+    shots: PROJECT_FIXTURE.scenes[0].shots.map((shot) => ({
+      ...structuredClone(shot),
+      id: `${shot.id}-2`,
+    })),
+  });
+  const first = makeDirector({ project });
+  let saved;
+  try {
+    first.director.setSceneInStories('scene-2', true);
+    saved = localStorage.getItem('godsEyeView.sceneProject.v2');
+  } finally {
+    first.restore();
+  }
+  const { director, restore } = makeDirector({
+    storage: { 'godsEyeView.sceneProject.v2': saved },
+  });
+  try {
+    assert.deepEqual(
+      director.storyScenes().map((s) => s.id),
+      ['scene-2'],
+    );
+    const exported = stringifySceneDocument(director._project);
+    director.setSceneInStories('scene-2', false);
+    const changes = recordChanges(director);
+    assert.equal(
+      await director.importProjectFile({
+        name: 'scenes.json',
+        text: async () => exported,
+      }),
+      true,
+    );
+    assert.ok(changes.includes('stories-changed'));
+    assert.deepEqual(
+      director.storyScenes().map((s) => s.id),
+      ['scene-2'],
+    );
+    assert.equal(savedProject().scenes[1].stories, true);
+    assert.equal(Object.hasOwn(savedProject().scenes[0], 'stories'), false);
+  } finally {
+    restore();
+  }
+});
+
+test('projects saved before the Stories flag still load, and a malformed flag is refused', async () => {
+  const { director, restore } = makeDirector();
+  try {
+    assert.equal(Object.hasOwn(director._project.scenes[0], 'stories'), false);
+    const project = { ...structuredClone(PROJECT_FIXTURE), version: 7 };
+    project.scenes[0].stories = 'yes';
+    const before = director._project;
+    await director.importProjectFile({
+      name: 'bad.json',
+      text: async () => JSON.stringify(project),
+    });
+    assert.equal(director._project, before);
+    assert.match(director._presentation.status, /stories: expected true/);
+  } finally {
+    restore();
+  }
+});
+
+test('deleting a scene or its last shot in Stories publishes stories-changed', () => {
+  const project = structuredClone(PROJECT_FIXTURE);
+  project.scenes.push({
+    id: 'scene-2',
+    title: 'Second',
+    shots: [
+      { ...structuredClone(PROJECT_FIXTURE.scenes[0].shots[0]), id: 'only' },
+    ],
+  });
+  const { director, restore } = makeDirector({ project });
+  try {
+    director.setSceneInStories('scene-1', true);
+    director.setSceneInStories('scene-2', true);
+    const changes = recordChanges(director);
+    director.deleteShot('scene-2', 'only');
+    assert.ok(changes.includes('stories-changed'));
+    assert.equal(Object.hasOwn(director._project.scenes[1], 'stories'), false);
+    assert.deepEqual(
+      director.storyScenes().map((s) => s.id),
+      ['scene-1'],
+    );
+
+    changes.length = 0;
+    director.selectShot('scene-1');
+    director._deleteSelectedScene();
+    assert.ok(changes.includes('scene-deleted'));
+    assert.ok(changes.includes('stories-changed'));
+    assert.deepEqual(director.storyScenes(), []);
+  } finally {
+    restore();
+  }
+});
+
+test('authoring selects the first scene and shot on load, with or without a saved project', () => {
+  for (const options of [{}, { storage: {} }]) {
+    const { director, restore } = makeDirector(options);
+    try {
+      const [first] = director._project.scenes;
+      assert.ok(first, 'the project has scenes');
+      assert.equal(director._selectedSceneId, first.id);
+      assert.equal(director._selectedShotId, first.shots[0]?.id ?? null);
+      director._selectedSceneId = 'gone';
+      director._renderSceneSelect();
+      assert.equal(
+        director._selectedSceneId,
+        first.id,
+        'a missing scene falls back to the first scene',
+      );
+    } finally {
+      restore();
+    }
+  }
+});
+
+test('capture with no scene starts a new scene and captures into it', () => {
+  const { director, restore } = makeDirector();
+  try {
+    // An imported empty project leaves nothing selected.
+    director._selectedSceneId = null;
+    director._selectedShotId = null;
+    const changes = recordChanges(director);
+    const before = director._project.scenes.length;
+    director.captureShot();
+    assert.equal(director._project.scenes.length, before + 1);
+    const scene = director._project.scenes.at(-1);
+    assert.equal(scene.title, `Scene ${before + 1}`);
+    assert.equal(director._selectedSceneId, scene.id);
+    assert.equal(scene.shots.length, 1);
+    assert.equal(director._selectedShotId, scene.shots[0].id);
+    assert.deepEqual(
+      changes.filter((type) =>
+        ['scene-created', 'shot-captured'].includes(type),
+      ),
+      ['scene-created', 'shot-captured'],
+    );
+    assert.equal(savedProject().scenes.at(-1).shots.length, 1);
+  } finally {
+    restore();
+  }
+});
+
+test('capture with no scene and no camera creates nothing', () => {
+  const { director, styleManager, restore } = makeDirector();
+  try {
+    styleManager.getCameraState = () => null;
+    director._selectedSceneId = null;
+    const before = director._project.scenes.length;
+    director.captureShot();
+    assert.equal(director._project.scenes.length, before);
+    assert.equal(director._selectedSceneId, null);
+  } finally {
+    restore();
+  }
+});
+
+test('deleting the current scene selects the first scene', () => {
+  const project = structuredClone(PROJECT_FIXTURE);
+  project.scenes.push({ id: 'scene-2', title: 'Second', shots: [] });
+  const { director, restore } = makeDirector({ project });
+  try {
+    director.selectShot('scene-2');
+    director._deleteSelectedScene();
+    assert.equal(director._selectedSceneId, 'scene-1');
+    assert.equal(director._selectedShotId, 'shot-a');
+    assert.deepEqual(
+      director._project.scenes.map(({ id }) => id),
+      ['scene-1'],
+    );
+  } finally {
+    restore();
+  }
+});
+
+test('an import keeps the current scene, else picks a non-built-in scene, else the first', async () => {
+  const { director, restore } = makeDirector();
+  try {
+    const exported = stringifySceneDocument(director._project);
+    const file = { name: 'scenes.json', text: async () => exported };
+    assert.equal(await director.importProjectFile(file), true);
+    assert.equal(director._selectedSceneId, 'scene-1', 'the authored scene');
+    const builtIn = JSON.stringify({
+      version: 6,
+      scenes: [
+        {
+          ...structuredClone(PROJECT_FIXTURE.scenes[0]),
+          id: SCENE_RECIPES[0].id,
+        },
+      ],
+    });
+    assert.equal(
+      await director.importProjectFile({
+        name: 'b.json',
+        text: async () => builtIn,
+      }),
+      true,
+    );
+    assert.equal(
+      director._selectedSceneId,
+      SCENE_RECIPES[0].id,
+      'a built-in scene only when there is nothing else',
+    );
+    // An appended pack's scene is built in too, as Stories' drafts count it.
+    const [pack] = SCENE_APPEND_RECIPES;
+    const withPack = JSON.stringify({
+      version: 6,
+      scenes: [
+        { ...structuredClone(PROJECT_FIXTURE.scenes[0]), id: pack.id },
+        { ...structuredClone(PROJECT_FIXTURE.scenes[0]), id: 'mine' },
+      ],
+    });
+    director._selectedSceneId = null;
+    assert.equal(
+      await director.importProjectFile({
+        name: 'c.json',
+        text: async () => withPack,
+      }),
+      true,
+    );
+    assert.equal(director._selectedSceneId, 'mine');
+    assert.deepEqual(director.draftScenes().map(({ id }) => id), ['mine']);
+  } finally {
+    restore();
+  }
+});
+
+const THUMB = 'data:image/jpeg;base64,/9j/AAAA';
+
+test('story thumbnail and tags are saved, listed and announced for a scene in Stories', () => {
+  const { director, restore } = makeDirector();
+  try {
+    const changes = recordChanges(director);
+    assert.equal(director.setSceneStoryThumb('scene-1', THUMB), true);
+    assert.equal(
+      director.setSceneStoryTags('scene-1', ['Floods', 'Climate']),
+      true,
+    );
+    assert.equal(savedProject().scenes[0].storyThumb, THUMB);
+    assert.deepEqual(savedProject().scenes[0].storyTags, ['Floods', 'Climate']);
+    assert.equal(
+      changes.filter((type) => type === 'story-details-changed').length,
+      2,
+    );
+    assert.equal(
+      changes.includes('stories-changed'),
+      false,
+      'not in Stories yet',
+    );
+
+    director.setSceneInStories('scene-1', true);
+    assert.equal(director.storyScenes()[0].thumb, THUMB);
+    assert.deepEqual(director.storyScenes()[0].tags, ['Floods', 'Climate']);
+    director.storyScenes()[0].tags.push('Space');
+    assert.deepEqual(director._project.scenes[0].storyTags, [
+      'Floods',
+      'Climate',
+    ]);
+
+    changes.length = 0;
+    director.setSceneStoryThumb('scene-1', 'data:image/png;base64,AAAA');
+    assert.ok(changes.includes('stories-changed'));
+    changes.length = 0;
+    director.selectShot('scene-1');
+    director._toggleSelectedSceneTag('Floods');
+    assert.ok(changes.includes('stories-changed'));
+    assert.deepEqual(director.storyScenes()[0].tags, ['Climate']);
+    director._toggleSelectedSceneTag('Climate');
+    assert.equal(
+      Object.hasOwn(director._project.scenes[0], 'storyTags'),
+      false,
+    );
+    assert.deepEqual(director.storyScenes()[0].tags, []);
+
+    // Unknown tags, more than five, or no such scene are refused.
+    assert.equal(director.setSceneStoryTags('scene-1', ['Nope']), false);
+    assert.equal(
+      director.setSceneStoryTags('scene-1', STORY_TAGS.slice(0, 6)),
+      false,
+    );
+    assert.equal(director.setSceneStoryTags('no-such-scene', []), false);
+    assert.equal(director.setSceneStoryThumb('no-such-scene', THUMB), false);
+    director.setSceneStoryTags('scene-1', STORY_TAGS.slice(0, 5));
+    director._toggleSelectedSceneTag(STORY_TAGS[5]);
+    assert.equal(director._project.scenes[0].storyTags.length, 5);
+  } finally {
+    restore();
+  }
+});
+
+test('an invalid thumbnail is not kept and the save error is shown', () => {
+  const { director, restore } = makeDirector();
+  try {
+    // A thumbnail may pass the usual 65,536-character text limit.
+    const large = `data:image/jpeg;base64,${'A'.repeat(200000)}`;
+    assert.equal(director.setSceneStoryThumb('scene-1', large), true);
+    assert.equal(savedProject().scenes[0].storyThumb, large);
+    director.setSceneStoryThumb('scene-1', THUMB);
+    assert.equal(
+      director.setSceneStoryThumb('scene-1', 'https://example.com/a.jpg'),
+      false,
+    );
+    assert.equal(director._project.scenes[0].storyThumb, THUMB);
+    assert.match(director._presentation.status, /Scene not saved/);
+  } finally {
+    restore();
+  }
+});
+
+test('SAVE TO STORIES and tags that cannot be saved roll back and show the save error', () => {
+  const warn = console.warn;
+  console.warn = () => {};
+  const { director, storage, restore } = makeDirector();
+  const changes = recordChanges(director);
+  try {
+    director.setSceneStoryTags('scene-1', ['Storms']);
+    storage.full = true;
+    changes.length = 0;
+
+    assert.equal(director.setSceneInStories('scene-1', true), false);
+    assert.equal(Object.hasOwn(director._project.scenes[0], 'stories'), false);
+    assert.deepEqual(director.storyScenes(), []);
+    assert.match(director._presentation.status, /^Scene not saved/);
+
+    assert.equal(director.setSceneStoryTags('scene-1', ['Floods', 'Storms']), false);
+    assert.deepEqual(director._project.scenes[0].storyTags, ['Storms']);
+    assert.equal(director.setSceneStoryTags('scene-1', []), false);
+    assert.deepEqual(director._project.scenes[0].storyTags, ['Storms']);
+    assert.deepEqual(
+      changes.filter((type) => type !== 'status-changed'),
+      [],
+      'only the save error is announced',
+    );
+
+    // Taking a scene off Stories rolls back the same way.
+    storage.full = false;
+    assert.equal(director.setSceneInStories('scene-1', true), true);
+    storage.full = true;
+    assert.equal(director.setSceneInStories('scene-1', false), false);
+    assert.equal(director._project.scenes[0].stories, true);
+
+    // The panel's toggle reports no success either.
+    director._selectedSceneId = 'scene-1';
+    director._toggleSelectedSceneInStories();
+    assert.equal(director._project.scenes[0].stories, true);
+    assert.match(director._presentation.status, /^Scene not saved/);
+  } finally { console.warn = warn; restore(); }
+});
+
+test('story thumbnail and tags survive a reload and an export/import round trip', async () => {
+  const first = makeDirector();
+  let saved;
+  try {
+    first.director.setSceneStoryThumb('scene-1', THUMB);
+    first.director.setSceneStoryTags('scene-1', ['Storms']);
+    // Draft builds wrote the same optional Stories fields in version 6.
+    saved = JSON.stringify({ ...savedProject(), version: 6 });
+  } finally {
+    first.restore();
+  }
+  const { director, restore } = makeDirector({
+    storage: { 'godsEyeView.sceneProject.v2': saved },
+  });
+  try {
+    const scene = director._project.scenes.find(({ id }) => id === 'scene-1');
+    assert.equal(scene.storyThumb, THUMB);
+    assert.deepEqual(scene.storyTags, ['Storms']);
+    const exported = stringifySceneDocument(director._project);
+    assert.equal(JSON.parse(exported).version, 7);
+    director.setSceneStoryTags('scene-1', []);
+    director.setSceneStoryThumb('scene-1', 'data:image/png;base64,AAAA');
+    assert.equal(
+      await director.importProjectFile({
+        name: 'scenes.json',
+        text: async () => exported,
+      }),
+      true,
+    );
+    assert.equal(director._project.scenes[0].storyThumb, THUMB);
+    assert.deepEqual(director._project.scenes[0].storyTags, ['Storms']);
+    assert.equal(savedProject().scenes[0].storyThumb, THUMB);
+  } finally {
+    restore();
+  }
+});
+
+test('Stories fields are refused before document version 6, like other new fields', () => {
+  for (const [field, value] of [
+    ['stories', true],
+    ['storyThumb', THUMB],
+    ['storyTags', ['Storms']],
+  ]) {
+    const project = { ...structuredClone(PROJECT_FIXTURE), version: 5 };
+    project.scenes[0][field] = value;
+    assert.throws(
+      () => validateSceneDocument(project),
+      new RegExp(`scenes\\[0\\]\\.${field}`),
+      field,
+    );
+    validateSceneDocument({ ...project, version: 6 });
+    validateSceneDocument({ ...project, version: 7 });
+  }
+});
+
+test('imports with a malformed thumbnail or tags are refused', async () => {
+  const { director, restore } = makeDirector();
+  try {
+    const before = director._project;
+    for (const [field, value, reason] of [
+      [
+        'storyThumb',
+        'data:image/gif;base64,AAAA',
+        /storyThumb: expected a JPEG or PNG data URL/,
+      ],
+      [
+        'storyThumb',
+        `data:image/jpeg;base64,${'A'.repeat(300000)}`,
+        /storyThumb/,
+      ],
+      [
+        'storyTags',
+        ['Floods', 'Floods'],
+        /storyTags: expected at most 5 different Stories tags/,
+      ],
+      ['storyTags', ['Volcanoes'], /storyTags/],
+      ['storyTags', STORY_TAGS.slice(0, 6), /storyTags/],
+    ]) {
+      const project = { ...structuredClone(PROJECT_FIXTURE), version: 7 };
+      project.scenes[0][field] = value;
+      await director.importProjectFile({
+        name: 'bad.json',
+        text: async () => JSON.stringify(project),
+      });
+      assert.equal(director._project, before, field);
+      assert.match(director._presentation.status, reason);
+    }
+  } finally {
+    restore();
+  }
+});
+
+test('THUMBNAIL stores only a credited Esri frame on the selected scene', async () => {
+  const { director, viewer, styleManager, restore } = makeDirector();
+  const createElement = document.createElement;
+  try {
+    assert.equal(
+      await director.captureSceneThumb(),
+      false,
+      'no scene, no capture',
+    );
+    director.selectShot('scene-1');
+    let activeId = 'photoreal';
+    styleManager.mapStackController = {
+      getState: () => ({ activeId, status: 'ready' }),
+    };
+    // The renderer's frame port: postRender runs on the frame it is asked for.
+    const listeners = new Set();
+    const renderer = rendererOf(viewer);
+    viewer.canvas = { width: 640, height: 360 };
+    renderer.credits = {
+      list: () => [{ text: 'Powered by Esri — Source: Esri and Maxar' }],
+    };
+    renderer.frame = {
+      on(phase, listener) {
+        assert.equal(phase, 'postRender');
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      requestRender() {},
+    };
+    const frame = () => [...listeners].forEach((listener) => listener());
+    const credit = [];
+    document.createElement = () => ({
+      getContext: () => ({
+        drawImage() {},
+        fillRect() {},
+        fillText: (line) => credit.push(line),
+      }),
+      toDataURL: () => THUMB,
+    });
+    assert.equal(await director.captureSceneThumb(), false);
+    assert.equal(listeners.size, 0);
+    activeId = 'esri-imagery';
+    const capturing = director.captureSceneThumb();
+    frame();
+    assert.equal(await capturing, true);
+    assert.ok(credit.some((line) => /Esri/.test(line)));
+    assert.equal(director._project.scenes[0].storyThumb, THUMB);
+    assert.equal(director._presentation.status, 'Thumbnail captured');
+
+    const switching = director.captureSceneThumb();
+    activeId = 'photoreal';
+    credit.length = 0;
+    frame();
+    assert.equal(await switching, false);
+    assert.deepEqual(credit, []);
+    assert.equal(director._project.scenes[0].storyThumb, THUMB);
+
+    activeId = 'esri-imagery';
+    delete renderer.frame;
+    assert.equal(await director.captureSceneThumb(), false);
+    assert.equal(
+      director._presentation.status,
+      'Thumbnail could not be captured',
+    );
+  } finally {
+    document.createElement = createElement;
+    restore();
+  }
 });
