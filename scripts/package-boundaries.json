@@ -3282,6 +3282,7 @@
       "src/data/cctvCards.js",
       "src/data/cctvGizmo.js",
       "src/data/cctvLod.js",
+      "src/data/cameraFraming.js",
       "src/data/cctvCellCounts.js",
       "src/layers/cctv/countMarkers.js",
       "src/data/cctvViewshed.js",

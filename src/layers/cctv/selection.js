@@ -1,3 +1,4 @@
+import { CCTV_OVERLAY_SOURCE_ID } from '../../data/cctvCards.js';
 import { isTrackingClickGesture } from '../../data/trackingClickGesture.js';
 
 export function createSelection({
@@ -7,7 +8,7 @@ export function createSelection({
   source,
 }) {
   const { CCTV_ACTIVATION_RESULT } = services.activation;
-  const { resolvePickId } = services.picking;
+  const { resolvePickId, findPickOwner } = services.picking;
 
   /**
    * Returns the camera record for the currently active camera. A stale ID falls
@@ -29,6 +30,23 @@ export function createSelection({
     return fallback;
   }
 
+  /** A card painted above the count, or another layer's object, owns the click. */
+  function countYields(event) {
+    const { x, y } = event.screenPosition;
+    if (
+      layerState._cctvOverlayHost?.hitTest(x, y, {
+        sourceId: CCTV_OVERLAY_SOURCE_ID,
+      })?.entryId
+    )
+      return true;
+    const top = event.topHit;
+    if (!top) return false;
+    const drawHit = event.drawHit;
+    if (drawHit) return !parts.rendering.extractPickedCameraId(drawHit);
+    const id = resolvePickId(top);
+    return id !== null && findPickOwner?.(id) !== 'cctv';
+  }
+
   /**
    * Bind CCTV activation to clean taps. Drag-like and long-press gestures do
    * not reach camera activation or focus dispatch.
@@ -44,7 +62,7 @@ export function createSelection({
       const cell =
         layerState._enabled &&
         layerState._counts?.pickedCell(event.screenPosition);
-      if (cell) {
+      if (cell && !countYields(event)) {
         parts.navigation.zoomToCell(cell);
         return;
       }
@@ -146,9 +164,9 @@ export function createSelection({
     // is looking at ever asks.
     void parts.ground.resolveFootprintGround(record);
     record.activationDone = true;
-    // The active camera's icon always shows; the previously active one
-    // competes for its cell again. Its coverage neighbours join the working
-    // set and are queued for grounding.
+    // The active icon always shows and the previous one rejoins its cell.
+    // Restyle coverage after the view pass sets grouping. Its coverage
+    // neighbours join the working set and are queued for grounding.
     parts.rendering.refreshHorizonCulling();
     parts.rendering.refreshCoverageStyles();
     parts.geometryQueue.enqueueViewGeometry();

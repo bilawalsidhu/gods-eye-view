@@ -153,6 +153,7 @@ test('the icons go with the viewer that drew them, whichever tears down', () => 
         name,
         paint,
         options,
+        setActive() {},
         unregister() {
           this.disposed = true;
         },

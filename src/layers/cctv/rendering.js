@@ -4,6 +4,9 @@ import { isHeadingEstimated } from './headingConfidence.js';
 import {
   ACTIVE_CAMERA_COLOR,
   CAMERA_ICON,
+  CAMERA_ICON_PX,
+  COUNT_MERGE_GAP_PX,
+  VIEW_SITE_M,
   IDLE_CAMERA_ICON,
   IDLE_CAMERA_COLOR,
   LIVE_CAMERA_COLOR,
@@ -30,11 +33,16 @@ import {
   findQuery,
 } from '../../render/rendererOf.js';
 import { heightsOf } from '../../queries/heights.js';
-import { fromDegrees, WGS84 } from '../../geo/ellipsoid.js';
+import {
+  fromDegrees,
+  fromDegreesInto,
+  toLonLatH,
+  WGS84,
+} from '../../geo/ellipsoid.js';
 import { eastNorthUp } from '../../geo/frames.js';
 import { poseProjector } from '../../geo/frustum.js';
 import { horizonFrom } from '../../geo/horizon.js';
-import { distance } from '../../geo/vector.js';
+import { add, distance, dot, scale, sub } from '../../geo/vector.js';
 
 const IDLE_ICON_STYLE = { image: IDLE_CAMERA_ICON, color: IDLE_CAMERA_COLOR };
 const ACTIVE_ICON_STYLE = { image: CAMERA_ICON, color: ACTIVE_CAMERA_COLOR };
@@ -56,12 +64,6 @@ const samePoint = (a, b) =>
 /** Degrees to radians. */
 const toRadians = (degrees) => (degrees * Math.PI) / 180;
 
-/**
- * The camera icon's drawn size (px). Its SVG is 48 px (policy.js): 1.25×
- * near scale on a 2× display draws it at 60 device px, so it is rasterised
- * past the drawn size to stay sharp there.
- */
-const CAMERA_ICON_PX = 24;
 const CAMERA_SCALE_BY_DISTANCE = Object.freeze({
   near: 350,
   nearValue: 1.25,
@@ -153,6 +155,7 @@ export function createRendering({
       services.overlays?.registerWorldOverlayPaintLane,
       `cctv:${iconSets}:counts`,
       refreshHorizonCulling,
+      services.overlays?.keyholeAlpha,
     );
     return set.id;
   }
@@ -170,7 +173,7 @@ export function createRendering({
     const id = record.camera.id;
     return {
       id,
-      pos: copyPoint(record.position),
+      pos: copyPoint(record.spreadPosition ?? record.position),
       ...cameraIconStyleFor(record),
       size: [CAMERA_ICON_PX, CAMERA_ICON_PX],
       scale: 1,
@@ -211,14 +214,18 @@ export function createRendering({
   function moveCameraIcon(record) {
     const icons = layerState._icons;
     if (!icons || !record.position) return;
+    // A camera drawn beside its mount mates keeps its offset from the mount.
+    if (record.spreadOffset)
+      record.spreadPosition = add(record.position, record.spreadOffset);
+    const pos = record.spreadPosition ?? record.position;
     const item = icons.item(record.camera.id);
     // A camera whose icon waited for a position is drawn now.
     if (!item) {
       icons.put(cameraIconItem(record));
       return;
     }
-    if (samePoint(item.pos, record.position)) return;
-    icons.put({ ...item, pos: copyPoint(record.position) });
+    if (samePoint(item.pos, pos)) return;
+    icons.put({ ...item, pos: copyPoint(pos) });
   }
 
   /** Select the sprite and tint together when a camera changes state. */
@@ -235,7 +242,10 @@ export function createRendering({
     focusPassIsNeeded,
     advanceSpriteFocus,
     focusAlphaNeedsWrite,
+    nearFarScalarValueAtDistance,
   } = services.focus;
+  const iconScaleAt = (range) =>
+    nearFarScalarValueAtDistance?.(CAMERA_SCALE_BY_DISTANCE, range) ?? 1;
 
   /**
    * Focus modulation rides the layer's existing animation loop; no additional
@@ -292,9 +302,14 @@ export function createRendering({
     let writes = 0;
     let transitioning = false;
     let activeCount = 0;
-    /** A changed focus factor for a camera icon or a painted count. */
+    /**
+     * A changed focus factor for an icon or count. CCTV publishes no tracked
+     * focus target, so every icon is ambient.
+     */
     function changedFocus(owner, position, shown, width, height, current) {
       const focus = advanceSpriteFocus(owner, {
+        // Keep hidden owners in the active count until their dim alpha clears,
+        // so the focus pass keeps running while they recover.
         screenPosition: shown && position ? screenPositionFor(position) : null,
         cameraDistance: position ? cameraDistanceFor(position) : Number.NaN,
         nowMs,
@@ -342,13 +357,16 @@ export function createRendering({
   }
 
   /**
-   * Group horizon-visible mounts by ground cell. Every cell with a member
-   * near the screen contributes a representative to the picker. Singletons
-   * and the active camera also enter the icon, geometry and card working set.
+   * Cull far-side cameras on the CPU because the hidden globe writes no depth.
+   * Group the rest by ground cell. _viewRecords holds the active camera and
+   * every nearby icon outside a count for geometry and cards. Cells smaller
+   * than VIEW_MIN_CELL_M do not form groups. _pickerRecords adds the
+   * best-ranked camera of each visible cell. Both arrays keep their identity
+   * while their contents are unchanged.
    *
    * Runs on camera settle, throttled during motion, on resize, enable and
    * activation changes — never per frame.
-   * @returns {boolean} Whether the shown set changed.
+   * @returns {boolean} Whether the shown set or the picker list changed.
    */
 
   function refreshHorizonCulling() {
@@ -386,15 +404,26 @@ export function createRendering({
     const picker = [];
     const cells = new Map();
     const visibleCells = [];
-    // The terrain the globe draws, where it is the surface (not on the
-    // photoreal stack) and loaded: null elsewhere.
+    // Drawn terrain where the globe is the surface. The photoreal stack has
+    // no reader, and unloaded tiles return a non-finite height.
     const heights = heightsOf(layerState._viewer);
+    const globe = findGlobe(layerState._viewer);
     const groundHeight =
-      findQuery(layerState._viewer) &&
-      findGlobe(layerState._viewer)?.isGlobeVisible?.() === true
+      findQuery(layerState._viewer) && globe?.isGlobeVisible?.() === true
         ? (lon, lat) => heights.now({ lon, lat }, { against: 'terrain' })
         : null;
+    const surface = globe?.surfaceVersion?.() ?? 0;
+    const terrainSettled = globe?.isSettled?.('terrain') ?? true;
     let groundReads = groundHeight ? VIEW_GROUND_READS : 0;
+    let offscreenReads = groundReads / 2;
+    let eyeGround;
+    const column = { x: 0, y: 0, z: 0 };
+    const inReadWindow = (s) =>
+      s &&
+      s.x >= -width &&
+      s.x <= 2 * width &&
+      s.y >= -height &&
+      s.y <= 2 * height;
     const regrounded = [];
     for (const record of layerState._records) {
       const position = record.position;
@@ -412,39 +441,66 @@ export function createRendering({
         continue;
       let screen = project(position);
       let range = distance(position, viewer);
-      // A camera the height batch never answered for (no prior, or the
-      // geoid fallback a failed chunk leaves) sits near sea level, which can
-      // be kilometres under the terrain: it would project to the wrong
-      // place, drift as the view moves and measure too far for its cell.
-      // Anywhere near the screen, it takes the drawn terrain.
+      // Missing, unresolved and fallback priors can put a mount kilometres
+      // below the terrain, shifting its projection and inflating its cell.
+      // Read nearby mounts again from under half the range, on finer terrain
+      // after loading, or on a different surface.
       const prior = record.groundPrior;
       const drawn = prior?.source === 'drawn-terrain';
+      const unanswered =
+        !Number.isFinite(prior?.ellipsoid) || prior.source === 'geoid-fallback';
       if (
         groundReads > 0 &&
-        (!prior ||
-          prior.source === 'geoid-fallback' ||
-          (drawn && prior.rangeM > 2 * range)) &&
-        screen &&
-        screen.x >= -width &&
-        screen.x <= 2 * width &&
-        screen.y >= -height &&
-        screen.y <= 2 * height
+        !record.regroundPending &&
+        (unanswered ||
+          (drawn &&
+            (prior.rangeM > 2 * range ||
+              prior.surface !== surface ||
+              (!prior.settled && terrainSettled))))
       ) {
-        groundReads--;
-        const ground = groundHeight(record.camera.lon, record.camera.lat);
-        if (Number.isFinite(ground)) {
-          if (drawn && Math.abs(ground - prior.ellipsoid) < 1) {
-            prior.rangeM = range;
-          } else if (record.frustumGeometry) {
-            // Recomputing geometry writes draw sets: after this pass.
-            regrounded.push([record, ground, range]);
-          } else if (
-            parts.ground.adoptDrawnGround(record, ground, range) === 'moved'
-          ) {
-            screen = project(position);
-            range = distance(position, viewer);
+        let probe = inReadWindow(screen) ? screen : null;
+        if (!probe && unanswered) {
+          // Its height is a guess. Try the ground under the eye instead.
+          if (eyeGround === undefined) {
+            const eye = toLonLatH(viewer);
+            eyeGround = eye ? (groundHeight(eye.lon, eye.lat) ?? null) : null;
+            groundReads--;
+          }
+          if (Number.isFinite(eyeGround)) {
+            fromDegreesInto(
+              record.camera.lon,
+              record.camera.lat,
+              eyeGround + (record.camera.mountHeightM || 0),
+              column,
+            );
+            const at = project(column);
+            if (inReadWindow(at)) probe = at;
           }
         }
+        const onScreen =
+          probe &&
+          probe.x >= 0 &&
+          probe.x <= width &&
+          probe.y >= 0 &&
+          probe.y <= height;
+        if (probe && groundReads > 0 && (onScreen || offscreenReads > 0)) {
+          groundReads--;
+          if (!onScreen) offscreenReads--;
+          const ground = groundHeight(record.camera.lon, record.camera.lat);
+          if (Number.isFinite(ground)) {
+            const read = { rangeM: range, surface, settled: terrainSettled };
+            if (drawn && Math.abs(ground - prior.ellipsoid) < 1)
+              Object.assign(prior, read);
+            else if (record.frustumGeometry) {
+              // Recomputing geometry writes draw sets after this pass.
+              record.regroundPending = true;
+              regrounded.push([record, ground, read]);
+            } else parts.ground.adoptDrawnGround(record, ground, read);
+          }
+        }
+        // The probe reuses the projector's result, and the mount may have moved.
+        screen = project(position);
+        range = distance(position, viewer);
       }
       const nearScreen =
         screen &&
@@ -453,11 +509,23 @@ export function createRendering({
         screen.y >= minY &&
         screen.y <= maxY;
       const cellM = VIEW_CELL_PX * metresPerPixelPerMetre * range;
-      if (record.camera.id === activeId || !(cellM >= VIEW_MIN_CELL_M)) {
+      if (record.camera.id === activeId) {
         if (!nearScreen) continue;
         record.viewPass = record.pickerPass = pass;
         shown.push(record);
         picker.push(record);
+        continue;
+      }
+      if (!(cellM >= VIEW_MIN_CELL_M)) {
+        if (!nearScreen) continue;
+        // Too close to group, but a count beside it can still take it in.
+        const cell = createCameraCell(`near:${record.camera.id}`);
+        addCellCamera(cell, record.camera);
+        cell.iconPx = CAMERA_ICON_PX * iconScaleAt(range);
+        cell.winner = record;
+        cell.rank = 0;
+        record.viewCell = cell;
+        visibleCells.push(cell);
         continue;
       }
       const key = worldCellKey(record, cellM);
@@ -467,6 +535,7 @@ export function createRendering({
         cells.set(key, cell);
       }
       addCellCamera(cell, record.camera);
+      if (cell.count === 1) cell.iconPx = CAMERA_ICON_PX * iconScaleAt(range);
       record.viewCell = cell;
       if (!nearScreen) continue;
       // The picker ranks only candidates that were in its padded viewport.
@@ -491,6 +560,7 @@ export function createRendering({
       }
     }
     spreadSharedMounts(shown, pose, metresPerPixelPerMetre, pass);
+    clearActiveOfCounts(project, pose, metresPerPixelPerMetre, pass);
     const writes = [];
     let coverageChanged = false;
     let cardsChanged = false;
@@ -514,6 +584,7 @@ export function createRendering({
           fields.pos = copyPoint(record.spreadPosition);
       } else if (record.spreadPosition) {
         // No longer beside a mount mate: back onto its own position.
+        record.spreadOffset = null;
         record.spreadPosition = null;
         fields.pos = copyPoint(record.position);
       }
@@ -543,10 +614,11 @@ export function createRendering({
    */
   function reground(entries) {
     let changed = false;
-    for (const [record, ground, range] of entries)
+    for (const [record, ground, read] of entries) {
+      record.regroundPending = false;
       changed =
-        parts.ground.adoptDrawnGround(record, ground, range) !== null ||
-        changed;
+        parts.ground.adoptDrawnGround(record, ground, read) !== null || changed;
+    }
     if (!changed) return;
     if (refreshHorizonCulling()) parts.geometryQueue.enqueueViewGeometry();
     parts.presentation.notifyListeners();
@@ -554,7 +626,7 @@ export function createRendering({
 
   /**
    * Cameras on one mount would draw as one icon with several callouts. Among
-   * the cameras shown, those that share a point to about a metre get draw
+   * the cameras shown, those within VIEW_SITE_M horizontally get draw
    * positions side by side along the screen's horizontal, in id order,
    * `VIEW_SITE_SPREAD_PX` apart at the distance they are seen from. The
    * record's own position is untouched: geometry and cards keep the mount.
@@ -562,15 +634,31 @@ export function createRendering({
   function spreadSharedMounts(shown, pose, metresPerPixelPerMetre, pass) {
     const { right, direction, position: eye } = pose;
     if (!right || !direction || shown.length < 2) return;
-    const mounts = new Map();
+    const grid = new Map();
+    const mounts = [];
+    const axes = eastNorthUp(eye);
     for (const record of shown) {
-      const { lat, lon } = record.camera;
-      const key = `${Math.round(lat * 1e5)}:${Math.round(lon * 1e5)}`;
-      const mates = mounts.get(key);
-      if (mates) mates.push(record);
-      else mounts.set(key, [record]);
+      // Sea-level coordinates compare horizontal distance across longitude
+      // and latitude boundaries, including the antimeridian.
+      const p = fromDegrees(record.camera.lon, record.camera.lat, 0);
+      const col = Math.floor(dot(p, axes.x) / VIEW_SITE_M);
+      const row = Math.floor(dot(p, axes.y) / VIEW_SITE_M);
+      let mount;
+      for (let i = col - 1; !mount && i <= col + 1; i++)
+        for (let j = row - 1; !mount && j <= row + 1; j++)
+          mount = grid
+            .get(`${i}:${j}`)
+            ?.find((site) => distance(p, site.p) <= VIEW_SITE_M);
+      if (!mount) {
+        mount = { p, mates: [] };
+        mounts.push(mount);
+        const key = `${col}:${row}`;
+        if (!grid.has(key)) grid.set(key, []);
+        grid.get(key).push(mount);
+      }
+      mount.mates.push(record);
     }
-    for (const mates of mounts.values()) {
+    for (const { mates } of mounts) {
       if (mates.length < 2) continue;
       mates.sort((a, b) => a.camera.id.localeCompare(b.camera.id));
       for (let i = 0; i < mates.length; i++) {
@@ -586,14 +674,61 @@ export function createRendering({
           VIEW_SITE_SPREAD_PX *
           metresPerPixelPerMetre *
           depth;
-        record.spreadPosition = {
-          x: p.x + right.x * metres,
-          y: p.y + right.y * metres,
-          z: p.z + right.z * metres,
-        };
+        record.spreadOffset = scale(right, metres);
+        record.spreadPosition = add(p, record.spreadOffset);
         record.spreadPass = pass;
       }
     }
+  }
+
+  /** Move the active camera's icon beside any count marker that would cover it. */
+  function clearActiveOfCounts(project, pose, metresPerPixelPerMetre, pass) {
+    if (!layerState._activeCameraId) return;
+    const record = layerState._recordById.get(layerState._activeCameraId);
+    const markers = layerState._counts?.markers;
+    if (
+      record?.viewPass !== pass ||
+      !markers?.length ||
+      !pose.right ||
+      !pose.direction
+    )
+      return;
+    const spread = record.spreadPass === pass;
+    const p = spread ? record.spreadPosition : record.position;
+    const screen = project(p);
+    if (!screen) return;
+    const { x, y } = screen;
+    const half =
+      (CAMERA_ICON_PX * 1.25 * iconScaleAt(distance(p, pose.position))) / 2;
+    const spans = [];
+    for (const marker of markers) {
+      const at = project(marker.pos);
+      if (
+        !at ||
+        Math.abs(y - at.y) >= marker.height / 2 + half + COUNT_MERGE_GAP_PX
+      )
+        continue;
+      const reach = marker.width / 2 + half + COUNT_MERGE_GAP_PX;
+      spans.push([at.x - reach, at.x + reach]);
+    }
+    // Leave the entire overlapping interval, including an adjacent count.
+    spans.sort((a, b) => a[0] - b[0]);
+    let left = Infinity,
+      right = -Infinity;
+    for (const [start, end] of spans) {
+      if (start >= right) {
+        if (left < x && x < right) break;
+        left = start;
+        right = end;
+      } else right = Math.max(right, end);
+    }
+    if (!(left < x && x < right)) return;
+    const shift = x - left < right - x ? left - x : right - x;
+    const depth = dot(sub(p, pose.position), pose.direction);
+    const offset = scale(pose.right, shift * metresPerPixelPerMetre * depth);
+    record.spreadOffset = spread ? add(record.spreadOffset, offset) : offset;
+    record.spreadPosition = add(record.position, record.spreadOffset);
+    record.spreadPass = pass;
   }
 
   /**

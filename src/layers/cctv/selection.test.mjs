@@ -1,3 +1,4 @@
+import * as picking from '../../data/pickRegistry.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CCTV_ACTIVATION_RESULT } from '../../cctvFocusRequest.js';
@@ -101,5 +102,51 @@ test('a count click preserves the provisional opening pick until the view settle
     assert.equal(state._openingCameraProvisional, true);
   } finally {
     unbind();
+  }
+});
+
+test("a count click yields to a card above it and to another layer's object, not to a CCTV icon", () => {
+  let zooms = 0,
+    clicks = 0;
+  const selection = createSelection({
+    services: { activation: {}, picking },
+    state: {
+      _enabled: true,
+      _counts: { pickedCell: () => ({}) },
+      _cctvOverlayHost: {
+        hitTest: (x) => (x === 14 ? { entryId: 'cam-1' } : null),
+      },
+    },
+    parts: {
+      navigation: { zoomToCell: () => zooms++ },
+      rendering: {
+        extractPickedCameraId: (hit) =>
+          hit?.set === 'cctv-icons' ? hit.id : null,
+      },
+    },
+  });
+  const click = selection.bindCctvWorldClickGesture(
+    { onClick: (fn) => fn },
+    () => clicks++,
+  );
+  picking.registerPickOwner('cctv', (id) => id.startsWith('cam-'));
+  try {
+    for (const [x, topHit, expected] of [
+      [14, null, [0, 1]],
+      [20, { set: 'flights', id: 'abc' }, [0, 2]],
+      [20, { set: 'cctv-icons', id: 'cam-2' }, [1, 2]],
+      [20, null, [2, 2]],
+      [20, { set: 'flights', id: 'cam-2' }, [2, 3]],
+    ]) {
+      click({
+        screenPosition: { x, y: 26 },
+        topHit,
+        drawHit: topHit,
+        gesture: { travelPx: 0, durationMs: 20 },
+      });
+      assert.deepEqual([zooms, clicks], expected);
+    }
+  } finally {
+    picking.unregisterPickOwner('cctv');
   }
 });

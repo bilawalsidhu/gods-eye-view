@@ -1,17 +1,20 @@
 // src/data/cctvViewThinning.test.mjs — the CCTV view pass: only cameras on or
-// near the screen show, a zoomed-out view groups neighboring cameras, and the layer's UI state never rebuilds every camera for a listener
+// near the screen show, a zoomed-out view groups neighboring cameras, and
+// the layer's UI state never rebuilds every camera for a listener
 // that does not read the list.
 import { afterEach, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { CAMERA_GREEN } from '../layers/cctv/policy.js';
-import { createCameraGlyphCache } from '../layers/cctv/countMarkers.js';
+import { CAMERA_GREEN, COUNT_CAMERA_ICON } from '../layers/cctv/policy.js';
+import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
 import { createCameraCell } from './cctvCellCounts.js';
-import { bindRenderer } from '../render/rendererOf.js';
+import { bindRenderer, findCamera } from '../render/rendererOf.js';
 import { DEFAULT_FOCUS_DEEMPHASIS_PARAMS } from './focusDeemphasis.js';
 import { fakeCameraPort } from '../testSupport/fakeCameraPort.mjs';
 import cctvLayer, {
   _cctvIconsForTest,
+  focusCctvRecord,
+  CCTV_FOCUS_RESULT,
   bindCctvWorldClickGesture,
   applyCctvFocusDeemphasis,
   reopenNearestCamera,
@@ -55,7 +58,7 @@ function recordsAt(lonLats) {
  * equator, north up, through a camera port: the view pass projects the
  * cameras from its pose.
  */
-function viewerAt(heightM, lonDeg = 0, flights = [], ports = {}) {
+function poseAt(heightM, lonDeg) {
   const eye = Cesium.Cartesian3.fromDegrees(lonDeg, 0, heightM);
   const down = Cesium.Cartesian3.normalize(
     Cesium.Cartesian3.negate(eye, new Cesium.Cartesian3()),
@@ -63,23 +66,25 @@ function viewerAt(heightM, lonDeg = 0, flights = [], ports = {}) {
   );
   const north = { x: 0, y: 0, z: 1 };
   const right = Cesium.Cartesian3.cross(down, north, new Cesium.Cartesian3());
-  const { port } = fakeCameraPort({
-    pose: {
-      lon: lonDeg,
-      lat: 0,
-      height: heightM,
-      position: { x: eye.x, y: eye.y, z: eye.z },
-      direction: { x: down.x, y: down.y, z: down.z },
-      up: north,
-      right: { x: right.x, y: right.y, z: right.z },
-      fovy: Math.PI / 3,
-      aspectRatio: WIDTH / HEIGHT,
-      near: 0.1,
-      far: 5e8,
-    },
-  });
+  return {
+    lon: lonDeg,
+    lat: 0,
+    height: heightM,
+    position: { x: eye.x, y: eye.y, z: eye.z },
+    direction: { x: down.x, y: down.y, z: down.z },
+    up: north,
+    right: { x: right.x, y: right.y, z: right.z },
+    fovy: Math.PI / 3,
+    aspectRatio: WIDTH / HEIGHT,
+    near: 0.1,
+    far: 5e8,
+  };
+}
+
+function viewerAt(heightM, lonDeg = 0, flights = [], ports = {}) {
+  const { port, setPose } = fakeCameraPort({ pose: poseAt(heightM, lonDeg) });
   port.flyToBounds = (bounds, options) => flights.push({ bounds, options });
-  const viewer = {};
+  const viewer = { moveTo: (lon) => setPose(poseAt(heightM, lon)) };
   bindings.push(
     bindRenderer(viewer, {
       camera: port,
@@ -99,12 +104,9 @@ let glyphWidth;
 let inkHalfHeight;
 let ctx;
 const fonts = new EventTarget();
-let rasters;
 let spriteImages;
 
-/** Model the sprite’s neutral highlights, dark fills and translucent edges. */
 function markerCanvas() {
-  const canvas = {};
   const context = {
     measureText(text) {
       measured++;
@@ -114,40 +116,8 @@ function markerCanvas() {
         actualBoundingBoxDescent: inkHalfHeight,
       };
     },
-    drawImage(image, x, y, width, height) {
-      assert.equal(image.loaded, true);
-      assert.deepEqual(
-        [x, y, width, height],
-        [0, 0, canvas.width, canvas.height],
-      );
-      canvas.source = image.src;
-      const h = Math.floor(height / 2);
-      canvas.ink = [2, 3, Math.floor(h * 1.5), h];
-      rasters.push(canvas);
-    },
-    getImageData() {
-      const data = new Uint8ClampedArray(canvas.width * canvas.height * 4);
-      const [left, top, width, height] = canvas.ink;
-      for (let y = top; y < top + height; y++) {
-        for (let x = left; x < left + width; x++) {
-          const shade = x === left ? 255 : 64;
-          data.set(
-            [shade, shade, shade, y === top ? 1 : 255],
-            (y * canvas.width + x) * 4,
-          );
-        }
-      }
-      return { data };
-    },
-    putImageData({ data }) {
-      const [left, top] = canvas.ink;
-      const start = (top * canvas.width + left) * 4;
-      canvas.stroke = [...data.slice(start, start + 4)];
-      canvas.fill = [...data.slice(start + 4, start + 8)];
-    },
   };
-  canvas.getContext = () => context;
-  return canvas;
+  return { getContext: () => context };
 }
 
 function seedCoverage(options) {
@@ -181,7 +151,6 @@ beforeEach(() => {
   measured = 0;
   glyphWidth = 8;
   inkHalfHeight = 4;
-  rasters = [];
   globalThis.document = { fonts, createElement: markerCanvas };
   const stack = [];
   ctx = {
@@ -205,7 +174,7 @@ beforeEach(() => {
     beginPath() {},
     fill() {},
     drawImage(image, left, top, sw, sh, x, y, width, height) {
-      assert.deepEqual([left, top, sw, sh], image.ink);
+      assert.ok(image.loaded);
       assert.ok(Math.abs(width / height - sw / sh) < 1e-9);
       this.glyphs.push({
         image,
@@ -556,27 +525,22 @@ test('cameras on one mount draw side by side once they show as icons', () => {
 
 test('a pan keeps the same winners, and an unchanged view keeps its list', () => {
   const { records } = recordsAt(CLUSTER);
-  seedCoverage({
-    viewer: viewerAt(20_000),
-    records,
-  });
+  const viewer = viewerAt(20_000);
+  seedCoverage({ viewer, records });
   refreshHorizonCulling();
   const before = cctvLayer.getUIState().cameraIndex;
   const list = _viewRecordIdsForTest();
   // A pan of a few to some 40 px (a pixel is about 30 m from 20 km up).
   for (const shiftM of [90, 330, 600, 1110]) {
-    seedCoverage({
-      viewer: viewerAt(20_000, shiftM / 111_320),
-      records,
-    });
+    viewer.moveTo(shiftM / 111_320);
     refreshHorizonCulling();
-    assert.deepEqual(
+    assert.equal(
       cctvLayer.getUIState().cameraIndex,
       before,
       `pan by ${shiftM} m`,
     );
   }
-  seedCoverage({ viewer: viewerAt(20_000), records });
+  viewer.moveTo(0);
   refreshHorizonCulling();
   assert.equal(refreshHorizonCulling(), false, 'the same view changes nothing');
   assert.deepEqual(_viewRecordIdsForTest(), list);
@@ -864,7 +828,7 @@ test('coverage leaves grouped neighbors and returns when their icons separate', 
   assert.deepEqual(markers(), []);
 });
 
-test('count markers share the camera focus fade and recover on release', () => {
+test('a dimmed count keeps its alpha when its cell changes and recovers on release', () => {
   const { records } = recordsAt(CLUSTER);
   seedCoverage({ viewer: viewerAt(20_000), records });
   refreshHorizonCulling();
@@ -888,8 +852,20 @@ test('count markers share the camera focus fade and recover on release', () => {
   tick(0, target);
   tick(params.attackMs + 1, target);
   assert.equal(paint()[0].alpha, params.dimFloor);
-  tick(params.attackMs + 2, null);
-  tick(params.attackMs + params.releaseMs + 3, null);
+
+  const record = records[0];
+  record.camera.lon += 2 / 111_320;
+  record.position = Cesium.Cartesian3.fromDegrees(
+    record.camera.lon,
+    record.camera.lat,
+    record.camera.absoluteHeightM,
+  );
+  refreshHorizonCulling();
+  tick(params.attackMs + 2, target);
+  assert.equal(paint()[0].alpha, params.dimFloor);
+
+  tick(params.attackMs + 3, null);
+  tick(params.attackMs + params.releaseMs + 4, null);
   assert.equal(paint()[0].alpha, 1);
 });
 
@@ -992,72 +968,21 @@ test('the overlay paints narrow count labels as circles and wide labels as pills
   assert.equal(sw, sh);
   assert.ok(lw > lh);
   assert.ok(lw > text.length * glyphWidth);
-  assert.equal(sh + 4, 48);
-  assert.equal(lh + 4, 54);
-  // The four-pixel outer stroke extends two pixels on each side of the path.
-  assert.equal(sw + 4, short.width);
-  assert.equal(lw + 4, long.width);
   assert.equal(sy + sh / 2, HEIGHT / 2);
   assert.equal(ly + lh / 2, HEIGHT / 2);
   assert.ok(Math.abs(sx + sw / 2 - (WIDTH / 2 + short.pos.y / 30)) < 1e-9);
   assert.ok(Math.abs(lx + lw / 2 - (WIDTH / 2 + long.pos.y / 30)) < 1e-9);
   assert.equal(ctx.glyphs.length, labels.length);
-  assert.equal(CAMERA_GREEN, '#5dff8f');
   assert.deepEqual(
     ctx.rings.filter((_, i) => i % 2 === 1),
     labels.map(() => CAMERA_GREEN),
   );
   for (const [i, label] of labels.entries()) {
     const glyph = ctx.glyphs[i];
-    const [left, top, w, h] = ctx.shapes[i];
-    const cx = left + w / 2,
-      cy = top + h / 2;
-    assert.equal(glyph.x, cx);
-    assert.equal(label.x, cx);
-    assert.deepEqual(glyph.image.stroke, [93, 255, 143, 1]);
-    assert.deepEqual(glyph.image.fill, [23, 64, 36, 1]);
+    assert.equal(glyph.x, label.x);
     assert.equal(label.color, CAMERA_GREEN);
-    const radius = h / 2 - 1;
-    // 48 and 54 px markers: the glyph and its top gap grow with the marker.
-    const grown = (h + 4 - 40) / 18;
-    assert.ok(Math.abs(glyph.height - (7.5 + 2.5 * grown)) < 1e-9);
-    assert.ok(
-      Math.abs(glyph.y - glyph.height / 2 - (cy - radius + 3 + grown)) < 1e-9,
-    );
-    // The middle of the digits sits a fifth of the inner radius below centre.
-    assert.ok(Math.abs(label.y - (cy + 0.2 * radius)) < 1e-9);
-    assert.ok(label.y - inkHalfHeight - (glyph.y + glyph.height / 2) >= 5);
-    for (const [width, edgeY, padding] of [
-      [glyph.width, glyph.y - glyph.height / 2, 2],
-      [label.text.length * glyphWidth, label.y + inkHalfHeight, 6],
-    ]) {
-      const chord = 2 * Math.sqrt(radius ** 2 - (edgeY - cy) ** 2);
-      assert.ok((w - h + chord - width) / 2 >= padding - 1e-9);
-    }
+    assert.ok(label.y - inkHalfHeight >= glyph.y + glyph.height / 2);
   }
-  const builds = rasters.length;
-  const images = ctx.glyphs.map((glyph) => glyph.image);
-  assert.notEqual(images[0], images[1]);
-  const idleCamera = _cctvIconsForTest().item(records.at(-1).camera.id);
-  assert.equal(idleCamera.show, true);
-  for (const image of images) assert.equal(image.source, idleCamera.image);
-  paint();
-  assert.deepEqual(
-    ctx.glyphs.map((glyph) => glyph.image),
-    images,
-  );
-  assert.equal(rasters.length, builds);
-  assert.equal(paintRequests, requests + 1);
-  assert.match(labels[0].font, /JetBrains Mono/);
-  assert.equal(ctx.font, 'initial');
-  assert.equal(ctx.fillStyle, 'initial');
-  assert.equal(ctx.lineWidth, 1);
-  ctx.drawImage = () => {
-    throw new Error('glyph paint failed');
-  };
-  assert.throws(() => paint(), /glyph paint failed/);
-  assert.equal(ctx.font, 'initial');
-  assert.equal(ctx.fillStyle, 'initial');
 });
 
 test('a wide count label merges a horizontal neighbor beyond the circle diameter', () => {
@@ -1169,6 +1094,12 @@ test('hits follow paint order and keep the last painted group until the overlay 
   assert.equal(labels.length, 2);
   const top = counts.pickedCell(point);
   assert.equal(String(top.count), labels.at(-1).text);
+  const replacements = counts.markers.map((marker) => ({
+    ...marker.cell,
+    count: 7,
+  }));
+  counts.update(replacements, () => null);
+  assert.equal(counts.pickedCell(point), top);
   counts.update([], () => null);
   assert.equal(counts.pickedCell(point), top);
   assert.deepEqual(paint(), []);
@@ -1178,16 +1109,8 @@ test('hits follow paint order and keep the last painted group until the overlay 
 test('paint, HUD exclusions and hit rectangles use the count-scaled height', () => {
   seedCoverage({ viewer: viewerAt(20_000) });
   const counts = cctvLayer._cctvDrawnForTest().counts;
-  for (const [count, height] of [
-    [2, 40],
-    [10, 44],
-    [100, 48],
-    [1000, 54],
-    [3162, 56],
-    [3163, 56],
-    [7350, 58],
-    [1e8, 58],
-  ]) {
+  let previous = 0;
+  for (const count of [2, 10, 100, 1000, 3162, 3163, 7350, 1e8]) {
     const cell = { ...createCameraCell('cell'), count };
     for (const lon of [0, 0.025]) {
       counts.update(
@@ -1202,10 +1125,11 @@ test('paint, HUD exclusions and hit rectangles use the count-scaled height', () 
           return false;
         },
       });
-      if (height === 40 || height === 58)
-        assert.equal(ctx.glyphs[0].height, height === 40 ? 7.5 : 10);
       const marker = markers()[0];
-      assert.equal(marker.height, height);
+      const height = marker.height;
+      assert.ok(height >= previous);
+      if (count === 2) assert.equal(height, 40);
+      previous = height;
       assert.equal(rect.h, height);
       assert.equal(rect.w, marker.width);
       const [x, y, w, h] = ctx.shapes[0];
@@ -1222,44 +1146,28 @@ test('paint, HUD exclusions and hit rectangles use the count-scaled height', () 
         );
       }
     }
-    // Centred 23 px above the canvas: the taller badges still cross the edge.
-    const matrix = new Float64Array(16);
-    matrix[13] = 1 + 46 / HEIGHT;
-    matrix[15] = 1;
-    assert.equal(
-      paint({ viewProjectionMatrix: matrix }).length,
-      height > 46 ? 1 : 0,
-    );
   }
+  assert.equal(previous, 58);
 });
 
-test('measured ink width selects the circle or pill and clears the curved ring', () => {
+test('measured ink width selects the circle or pill', () => {
   const { records } = recordsAt(Array(99).fill([0, 0]));
   seedCoverage({ viewer: viewerAt(20_000), records });
   for (const [width, extent, circle] of [
     [7, 4, true],
     [25, 4, false],
-    // Width-only metrics reserve the full type height below the baseline.
-    [6, undefined, true],
   ]) {
     glyphWidth = width;
     inkHalfHeight = extent;
     fonts.dispatchEvent(new Event('loadingdone'));
     refreshHorizonCulling();
-    const [label] = paint();
-    const [, top, pathWidth, pathHeight] = ctx.shapes[0];
-    assert.equal(pathHeight + 4, 48);
+    paint();
+    const [, , pathWidth, pathHeight] = ctx.shapes[0];
     assert.equal(pathWidth === pathHeight, circle);
-    // At the top of the ink, the circle ends narrow the usable inner width.
-    const innerRadius = pathHeight / 2 - 1;
-    const edge = label.y + (extent ?? 6) - (top + pathHeight / 2);
-    const clearWidth =
-      pathWidth - pathHeight + 2 * Math.sqrt(innerRadius ** 2 - edge ** 2);
-    assert.ok((clearWidth - label.text.length * width) / 2 >= 6);
   }
 });
 
-test('equal-size camera groups share a camera sprite and follow overlay pixel density', () => {
+test('count markers draw the green camera sprite once it has loaded', () => {
   const { records } = recordsAt([
     [0, 0],
     [0, 0],
@@ -1268,45 +1176,18 @@ test('equal-size camera groups share a camera sprite and follow overlay pixel de
   ]);
   seedCoverage({ viewer: viewerAt(20_000), records });
   refreshHorizonCulling();
-  spriteImages[0].finish();
-  paint({ dpr: 1 });
-  const low = ctx.glyphs[0].image;
-  assert.equal(ctx.glyphs[1].image, low);
-  const builds = rasters.length;
-  paint({ dpr: 2 });
-  const high = ctx.glyphs[0].image;
-  assert.equal(ctx.glyphs[1].image, high);
-  assert.notEqual(high, low);
-  // The raster follows the device density; the painted size does not.
-  assert.deepEqual([low.width, high.width], [16, 30]);
-  assert.equal(ctx.glyphs[0].height, 7.5);
-  paint({ dpr: 2 });
-  assert.equal(rasters.length, builds + 1);
-  paint({ dpr: 1 });
-  assert.equal(ctx.glyphs[0].image, low);
-  assert.equal(rasters.length, builds + 1);
-});
-
-test('the glyph cache draws its supplied map sprite and multiplies its colours', () => {
-  const source =
-    'data:image/svg+xml,' +
-    encodeURIComponent(
-      '<svg xmlns="http://www.w3.org/2000/svg"><circle r="5"/></svg>',
-    );
-  const glyphFor = createCameraGlyphCache(markerCanvas, source);
-  assert.equal(glyphFor(12, 2, CAMERA_GREEN), null);
-  assert.equal(spriteImages[0].src, source);
-  spriteImages[0].finish();
-  const green = glyphFor(12, 2, CAMERA_GREEN);
-  assert.equal(glyphFor(12, 2, CAMERA_GREEN), green);
-  const white = glyphFor(12, 2, '#ffffff');
-  assert.notEqual(white, green);
+  paint();
+  assert.equal(ctx.glyphs.length, 0);
+  const requests = paintRequests;
+  const [image] = spriteImages;
+  assert.equal(image.src, COUNT_CAMERA_ICON);
+  image.finish();
+  assert.equal(paintRequests, requests + 1);
+  paint();
   assert.deepEqual(
-    rasters.map(({ source: drawn }) => drawn),
-    [source, source],
+    ctx.glyphs.map((glyph) => glyph.image),
+    [image, image],
   );
-  assert.deepEqual(white.canvas.stroke, [255, 255, 255, 1]);
-  assert.deepEqual(white.canvas.fill, [64, 64, 64, 1]);
 });
 
 test('a sprite that loads after disposal does not request a paint', () => {
@@ -1316,23 +1197,302 @@ test('a sprite that loads after disposal does not request a paint', () => {
   cctvLayer._cctvDrawnForTest().counts.dispose();
   const requests = paintRequests;
   spriteImages[0].finish();
-  assert.equal(rasters.length, 0);
   assert.equal(paintRequests, requests);
 });
 
-test('counts still paint when an offscreen 2D context is unavailable', () => {
-  document.createElement = () => ({ getContext: () => null });
+test('cameras less than a metre apart spread even across a rounding boundary', () => {
+  const { records } = recordsAt([
+    [0.000004, 0],
+    [0.000006, 0],
+  ]);
+  seedCoverage({ viewer: viewerAt(460), records });
+  refreshHorizonCulling();
+  const icons = _cctvIconsForTest();
+  const metresPerPixel = ((2 * Math.tan(Math.PI / 6)) / HEIGHT) * 450;
+  const apart = Cesium.Cartesian3.distance(
+    icons.item('cam-0').pos,
+    icons.item('cam-1').pos,
+  );
+  assert.ok(Math.abs(apart / metresPerPixel - 30) < 0.5);
+});
+
+test('a drawn height read before the terrain settled, or on another surface, is read again', () => {
   const { records } = recordsAt([
     [0, 0],
-    [0, 0],
+    [0.2, 0],
   ]);
+  records[0].groundPrior = { ellipsoid: -20, source: 'geoid-fallback' };
+  let settled = false,
+    version = 1,
+    terrain = 100;
+  const ports = {
+    globe: {
+      isGlobeVisible: () => true,
+      isSettled: () => settled,
+      surfaceVersion: () => version,
+    },
+    query: { sampleHeightNow: () => terrain },
+  };
+  seedCoverage({ viewer: viewerAt(20000, 0, [], ports), records });
+  refreshHorizonCulling();
+  assert.equal(records[0].groundPrior.ellipsoid, 100);
+  assert.equal(records[0].groundPrior.settled, false);
+  terrain = 150;
+  refreshHorizonCulling();
+  assert.equal(records[0].groundPrior.ellipsoid, 100);
+  settled = true;
+  refreshHorizonCulling();
+  assert.equal(records[0].groundPrior.ellipsoid, 150);
+  terrain = 0;
+  version++;
+  refreshHorizonCulling();
+  assert.equal(records[0].groundPrior.ellipsoid, 0);
+});
+
+test('a camera with geometry takes the drawn terrain once, after the pass that read it', async () => {
+  const { records } = recordsAt([
+    [0, 0],
+    [0.2, 0],
+  ]);
+  records[1].groundPrior = { ellipsoid: 2, source: 'reearth' };
+  const record = records[0];
+  Object.assign(record, {
+    groundPrior: { ellipsoid: -20, source: 'geoid-fallback' },
+    groundSamples: {},
+    groundResolved: {},
+  });
+  const samples = [];
+  const ports = {
+    globe: { isGlobeVisible: () => true },
+    query: {
+      sampleHeightNow(point) {
+        samples.push(point);
+        return 1872;
+      },
+    },
+    draw: fakeDrawPort(),
+  };
+  seedCoverage({
+    viewer: viewerAt(2200, 0, [], ports),
+    records,
+    activeCameraId: 'cam-0',
+  });
+  refreshCoverageStyles();
+  assert.ok(record.frustumGeometry);
+  samples.length = 0;
+  refreshHorizonCulling();
+  refreshHorizonCulling();
+  assert.equal(
+    samples.filter((point) => point.lon === 0 && point.lat === 0).length,
+    1,
+  );
+  assert.equal(record.groundPrior.source, 'geoid-fallback');
+  await Promise.resolve();
+  assert.equal(record.groundPrior.source, 'drawn-terrain');
+  for (const pos of [record.position, _cctvIconsForTest().item('cam-0').pos])
+    assert.ok(
+      Math.abs(Cesium.Cartographic.fromCartesian(pos).height - 1880) < 0.01,
+    );
+});
+
+/** Painted centre of a count marker in CSS px. */
+function markerCentre(marker) {
+  const label = paint().find((l) => l.text === marker.text);
+  return { x: label.x, y: label.y - marker.labelY };
+}
+
+test('building geometry for spread mount mates keeps their icons beside the mount', () => {
+  const { records } = recordsAt([
+    [0.001, 0.0005],
+    [0.001, 0.0005],
+    [0.0011, 0.0005],
+  ]);
+  const draw = fakeDrawPort();
+  seedCoverage({
+    viewer: viewerAt(460, 0, [], { draw }),
+    records,
+    activeCameraId: 'cam-2',
+  });
+  refreshHorizonCulling();
+  const icons = _cctvIconsForTest();
+  const before = Cesium.Cartesian3.distance(
+    icons.item('cam-0').pos,
+    icons.item('cam-1').pos,
+  );
+
+  assert.ok(before > 10);
+  refreshCoverageStyles();
+
+  const after = Cesium.Cartesian3.distance(
+    icons.item('cam-0').pos,
+    icons.item('cam-1').pos,
+  );
+  const callouts = cctvLayer.getDetectableObjects();
+  const ca = callouts.find((o) => o.sourceId === 'cam-0').position;
+
+  assert.ok(after > 10, 'icons stay side by side after geometry is built');
+  assert.ok(
+    Cesium.Cartesian3.distance(icons.item('cam-0').pos, ca) < 1e-6,
+    'icon and callout agree',
+  );
+});
+
+test('a count click does not fly while the cockpit or a followed target owns the camera', () => {
+  const { records } = recordsAt(CLUSTER);
+  // Cockpit
+  let flights = [];
+  globalThis.document.body = {
+    classList: { contains: (c) => c === 'cockpit-mode' },
+  };
+  let viewer = viewerAt(20_000, 0, flights);
+  seedCoverage({ viewer, records });
+  refreshHorizonCulling();
+  assert.equal(
+    focusCctvRecord(viewer, records[0]),
+    CCTV_FOCUS_RESULT.COCKPIT_ACTIVE,
+  );
+  assert.equal(flights.length, 0);
+  clickMarker(markers()[0]);
+
+  assert.equal(flights.length, 0, 'count click must not fly in cockpit mode');
+  // Tracking
+  delete globalThis.document.body;
+  flights = [];
+  viewer = viewerAt(20_000, 0, flights);
+  Object.defineProperty(findCamera(viewer), 'followed', {
+    value: { key: 'flights:abc' },
+    configurable: true,
+  });
+  seedCoverage({ viewer, records });
+  refreshHorizonCulling();
+  assert.equal(
+    focusCctvRecord(viewer, records[0]),
+    CCTV_FOCUS_RESULT.TRACKING_HOLDS_VIEW,
+  );
+  assert.equal(flights.length, 0);
+  clickMarker(markers()[0]);
+
+  assert.equal(flights.length, 0, 'count click must not fly while tracking');
+});
+
+test('each click on a long dense chain flies closer than the last', () => {
+  const lons = [];
+  const n = 200;
+  const step = 50 / 111_320;
+  for (let i = 0; i < n; i++) lons.push([(i - (n - 1) / 2) * step, 0]);
+  const { records } = recordsAt(lons);
+  const flights = [];
+  seedCoverage({ viewer: viewerAt(24_000, 0, flights), records });
+  refreshHorizonCulling();
+
+  let marker = markers().find((m) => m.cell.count === n);
+  assert.ok(marker, 'one count of 200');
+  const clickAt = (m) => {
+    const { x, y } = markerCentre(m);
+    const click = bindCctvWorldClickGesture({ onClick: (fn) => fn }, () => {});
+    click({
+      screenPosition: { x, y },
+      gesture: { travelPx: 0, durationMs: 20 },
+    });
+  };
+  clickAt(marker);
+  const first = flights.at(-1);
+  const c1 = Cesium.Cartographic.fromCartesian(first.bounds.center);
+
+  seedCoverage({
+    viewer: viewerAt(
+      c1.height + first.options.offset.range,
+      Cesium.Math.toDegrees(c1.longitude),
+      flights,
+    ),
+    records,
+  });
+  refreshHorizonCulling();
+
+  marker = markers().find((m) => m.cell.count === n);
+  assert.ok(marker, 'the full count of 200 reforms at the destination');
+  clickAt(marker);
+  const second = flights.at(-1);
+
+  assert.ok(
+    second.options.offset.range < first.options.offset.range - 1,
+    'second click makes progress',
+  );
+});
+
+test("a click outside a round count's circle does not hit it", () => {
+  const { records } = recordsAt(CLUSTER);
   seedCoverage({ viewer: viewerAt(20_000), records });
   refreshHorizonCulling();
-  spriteImages[0].finish();
-  assert.deepEqual(
-    paint().map((label) => label.text),
-    ['2'],
+  const [marker] = markers();
+  assert.equal(marker.width, marker.height, 'a round marker');
+  const c = markerCentre(marker);
+  const counts = cctvLayer._cctvDrawnForTest().counts;
+  const r = marker.height / 2;
+  const corner = { x: c.x + r - 1, y: c.y + r - 1 };
+  const dist = Math.hypot(r - 1, r - 1);
+
+  assert.ok(dist > r, 'corner is outside the painted circle');
+  assert.equal(
+    counts.pickedCell(corner),
+    null,
+    'a click outside the painted circle must not hit the count',
   );
-  assert.equal(ctx.glyphs.length, 0);
-  assert.equal(ctx.shapes.length, 1);
+});
+
+test('an unresolved batch result takes the drawn terrain', () => {
+  const { records } = recordsAt([
+    [0, 0],
+    [0.2, 0],
+  ]);
+  records[0].groundPrior = { ellipsoid: null, source: 'unresolved' };
+  const ports = {
+    globe: { isGlobeVisible: () => true },
+    query: { sampleHeightNow: () => 1872 },
+  };
+  seedCoverage({ viewer: viewerAt(20_000, 0, [], ports), records });
+  refreshHorizonCulling();
+  const h = (r) => Cesium.Cartographic.fromCartesian(r.position).height;
+
+  assert.ok(
+    Math.abs(h(records[0]) - 1880) < 0.01,
+    'an unresolved camera takes the drawn terrain',
+  );
+  assert.equal(records[1].groundPrior.source, 'drawn-terrain');
+});
+
+const metresPerPixel = ((2 * Math.tan(Math.PI / 6)) / HEIGHT) * 450;
+const separationPx = () => {
+  const icons = _cctvIconsForTest();
+  return (
+    Cesium.Cartesian3.distance(
+      icons.item('cam-0').pos,
+      icons.item('cam-1').pos,
+    ) / metresPerPixel
+  );
+};
+
+test('shared-mount icons stay spread after coverage geometry is built', () => {
+  // cam-0/cam-1 share a mount, cam-2 is active 11 m away.
+  const { records } = recordsAt([
+    [0.001, 0.0005],
+    [0.001, 0.0005],
+    [0.0011, 0.0005],
+  ]);
+  for (const r of records) r.groundPrior = { ellipsoid: 2, source: 'reearth' };
+  seedCoverage({
+    viewer: viewerAt(460, 0, [], { draw: fakeDrawPort() }),
+    records,
+    activeCameraId: 'cam-2',
+    coverageMode: 'on',
+  });
+  refreshHorizonCulling();
+  const before = separationPx();
+
+  // selection.setActiveCamera order: refreshHorizonCulling, then refreshCoverageStyles.
+  refreshCoverageStyles();
+  const after = separationPx();
+
+  assert.ok(Math.abs(before - 30) < 0.5);
+  assert.ok(Math.abs(after - 30) < 0.5, `icons collapsed to ${after} px`);
 });

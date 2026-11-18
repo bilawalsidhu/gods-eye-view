@@ -87,6 +87,7 @@ import {
   ACTIVE_CAMERA_COLOR,
   CAMERA_ICON,
   IDLE_CAMERA_COLOR,
+  IDLE_CAMERA_ICON,
   LIVE_CAMERA_COLOR,
 } from '../layers/cctv/policy.js';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
@@ -387,9 +388,8 @@ test('camera icons are violet for video feeds, green for stills, amber when acti
     assert.equal(icons.item(activeVideo.camera.id).scale, 1.25);
     assert.equal(icons.item(idleVideo.camera.id).scale, 1);
     const image = (record) => icons.item(record.camera.id).image;
-    assert.deepEqual(IDLE_CAMERA_COLOR, [93 / 255, 1, 143 / 255, 1]);
     const idleImage = image(idleStill);
-    assert.match(atob(idleImage.split(',')[1]), /stroke="#fff"/);
+    assert.equal(idleImage, IDLE_CAMERA_ICON);
     assert.equal(image(activeVideo), CAMERA_ICON);
     assert.equal(image(idleVideo), CAMERA_ICON);
     idleStill.camera.feedType = 'hls';

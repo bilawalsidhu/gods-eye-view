@@ -7,113 +7,65 @@ import {
 import { WORLD_OVERLAY_STYLE } from '../../overlays/worldOverlayTokens.js';
 import {
   CAMERA_GREEN,
-  IDLE_CAMERA_ICON,
-  COUNT_BASE_PX,
-  COUNT_PX_PER_DECADE,
-  COUNT_MIN_HEIGHT_PX,
-  COUNT_MAX_HEIGHT_PX,
-  COUNT_TEXT_PADDING_PX,
-  COUNT_GLYPH_MIN_PX,
-  COUNT_GLYPH_MAX_PX,
-  COUNT_GLYPH_TOP_MIN_PX,
-  COUNT_GLYPH_TOP_MAX_PX,
-  COUNT_GLYPH_PADDING_PX,
-  COUNT_LABEL_DROP,
+  COUNT_CAMERA_ICON,
+  CAMERA_ICON_PX,
   COUNT_MERGE_GAP_PX,
-  COUNT_SINGLE_ICON_PX,
-  COUNT_MERGE_PASSES,
 } from './policy.js';
+import { liftedForHorizon } from '../../geo/horizon.js';
 
+// Diameter at one camera before applying the size limits, in CSS pixels.
+const COUNT_BASE_PX = 38;
+
+// Extra diameter for each tenfold increase in camera count.
+const COUNT_PX_PER_DECADE = 5;
+
+// Minimum height of a count marker in CSS pixels.
+const COUNT_MIN_HEIGHT_PX = 40;
+
+// Maximum height of a count marker in CSS pixels.
+const COUNT_MAX_HEIGHT_PX = 58;
+
+// Clear fill between the count and the inside of the ring, in CSS pixels.
+const COUNT_TEXT_PADDING_PX = 6;
+
+// Height of the camera glyph in the smallest and the largest marker.
+const COUNT_GLYPH_MIN_PX = 7.5;
+const COUNT_GLYPH_MAX_PX = 10;
+
+// Clear fill above the glyph in the smallest and the largest marker.
+const COUNT_GLYPH_TOP_MIN_PX = 3;
+const COUNT_GLYPH_TOP_MAX_PX = 4;
+
+// Clear fill between the glyph's top corners and the inside of the ring.
+const COUNT_GLYPH_PADDING_PX = 2;
+
+// The middle of the digits sits this share of the inner radius below the
+// marker's centre, which leaves the glyph clear of the count.
+const COUNT_LABEL_DROP = 0.2;
+
+// Merge passes per view. A merged centre and wider label can reach a further
+// marker. The cap bounds work on motion ticks.
+const COUNT_MERGE_PASSES = 3;
 const FONT = WORLD_OVERLAY_STYLE.fontTitle;
 // Reserve the camera's landscape slot even while the map sprite is loading.
 const GLYPH_ASPECT = 1.5;
 const RING_PX = 2;
 const RIM_PX = 1;
 const STROKE_INSET = RIM_PX + RING_PX / 2;
-const SINGLE_ICON = Object.freeze({
-  width: COUNT_SINGLE_ICON_PX,
-  height: COUNT_SINGLE_ICON_PX,
-});
-
-/** Apply the billboard's RGB tint to the sprite and find its painted bounds. */
-function rasterizeGlyph(canvas, image, size, dpr, color) {
-  if (!canvas) return null;
-  // The artwork occupies just over half the height of the square SVG viewport.
-  const side = 2 * Math.ceil(size * dpr);
-  canvas.width = canvas.height = side;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return null;
-  ctx.drawImage(image, 0, 0, side, side);
-  const pixels = ctx.getImageData(0, 0, side, side);
-  const { data } = pixels;
-  const rgb = Number.parseInt(color.slice(1), 16);
-  const red = (rgb >> 16) / 255;
-  const green = ((rgb >> 8) & 255) / 255;
-  const blue = (rgb & 255) / 255;
-  let left = side,
-    top = side,
-    right = -1,
-    bottom = -1;
-  for (let y = 0; y < side; y++) {
-    for (let x = 0; x < side; x++) {
-      const i = (y * side + x) * 4;
-      if (!data[i + 3]) continue;
-      data[i] *= red;
-      data[i + 1] *= green;
-      data[i + 2] *= blue;
-      left = Math.min(left, x);
-      right = Math.max(right, x);
-      top = Math.min(top, y);
-      bottom = y;
-    }
-  }
-  if (right < 0) return null;
-  ctx.putImageData(pixels, 0, 0);
-  const width = right - left + 1;
-  const height = bottom - top + 1;
-  const scale = Math.min(size / height, (size * GLYPH_ASPECT) / width);
-  return {
-    canvas,
-    left,
-    top,
-    width,
-    height,
-    drawWidth: width * scale,
-    drawHeight: height * scale,
-  };
-}
-
-/** Load the map artwork once, then share each tinted device-density raster. */
-export function createCameraGlyphCache(createCanvas, source, onLoad) {
-  const glyphs = new Map();
-  let image;
-  let ready = false;
-  return (size, dpr, color) => {
-    if (!image && typeof Image !== 'undefined') {
-      image = new Image();
-      image.onload = () => {
-        ready = true;
-        onLoad?.();
-      };
-      image.src = source;
-    }
-    if (!ready) return null;
-    const key = `${size}:${dpr}:${color}`;
-    if (!glyphs.has(key)) {
-      glyphs.set(key, rasterizeGlyph(createCanvas(), image, size, dpr, color));
-    }
-    return glyphs.get(key);
-  };
-}
+// Painted bounds of the camera art, scaled from its viewBox to source pixels.
+const GLYPH_SOURCE = [3.4, 13.4, 28.1, 19.5].map((v) => (v * 48) / 36);
+const GLYPH_SOURCE_ASPECT = 28.1 / 19.5;
 
 /** Merged camera groups and their last painted hit rectangles in CSS pixels. */
 export function createCountMarkers(
   registerPaintLane,
   id,
   refreshView,
-  createCanvas = () => globalThis.document?.createElement('canvas'),
+  keyholeAlpha,
 ) {
-  let dpr = Math.max(1, Number(globalThis.window?.devicePixelRatio) || 1);
+  let hardUi = null;
+  let sprite = null;
+  let spriteReady = false;
   const markers = [];
   const hits = [];
   const textMetrics = new Map();
@@ -125,15 +77,15 @@ export function createCountMarkers(
     active: false,
     target: 'shared',
   });
-  const glyphFor = createCameraGlyphCache(
-    createCanvas,
-    IDLE_CAMERA_ICON,
-    () => {
-      if (!markers.length) return;
-      refreshGlyphs();
-      lane?.requestPaint();
-    },
-  );
+  function loadSprite() {
+    if (sprite || typeof Image === 'undefined') return;
+    sprite = new Image();
+    sprite.onload = () => {
+      spriteReady = true;
+      if (markers.length) lane?.requestPaint();
+    };
+    sprite.src = COUNT_CAMERA_ICON;
+  }
   fonts?.addEventListener?.('loadingdone', fontsLoaded);
 
   /** Font changes can widen a pill enough to merge it with its neighbor. */
@@ -149,14 +101,12 @@ export function createCountMarkers(
     const text = formatCameraCount(count);
     let metrics = textMetrics.get(text);
     if (!metrics) {
-      measureCtx ??= createCanvas()?.getContext('2d');
-      if (measureCtx) {
-        measureCtx.font = FONT;
-        measureCtx.textBaseline = 'middle';
-        metrics = measureCtx.measureText(text);
-      } else {
-        metrics = { width: text.length * 8 };
-      }
+      measureCtx ??= globalThis.document
+        .createElement('canvas')
+        .getContext('2d');
+      measureCtx.font = FONT;
+      measureCtx.textBaseline = 'middle';
+      metrics = measureCtx.measureText(text);
       textMetrics.set(text, metrics);
     }
     const diameter = COUNT_BASE_PX + COUNT_PX_PER_DECADE * Math.log10(count);
@@ -175,9 +125,8 @@ export function createCountMarkers(
       COUNT_GLYPH_TOP_MIN_PX +
       (COUNT_GLYPH_TOP_MAX_PX - COUNT_GLYPH_TOP_MIN_PX) * grown -
       radius;
-    // Width-only metrics use half the 12 px type size on each side of the baseline.
-    const ascent = metrics.actualBoundingBoxAscent ?? 6;
-    const descent = metrics.actualBoundingBoxDescent ?? 6;
+    const ascent = metrics.actualBoundingBoxAscent;
+    const descent = metrics.actualBoundingBoxDescent;
     const labelY = COUNT_LABEL_DROP * radius + (ascent - descent) / 2;
     // Each row must clear the ring at the edge where the circle is narrowest.
     const chordAt = (y) => 2 * Math.sqrt(Math.max(0, radius ** 2 - y ** 2));
@@ -204,14 +153,18 @@ export function createCountMarkers(
 
   /**
    * Reuse marker slots in ground-key order, and invalidate only changed frames.
-   * `groundHeight(lon, lat)` answers the drawn terrain height in metres, or
-   * null where it is not loaded; with it a count stands on the ground it
-   * marks whatever heights its cameras hold.
+   * `groundHeight(lon, lat)` gives the drawn terrain in metres, or a non-finite
+   * value where it has not loaded. A count stands on that ground when available
+   * and otherwise uses its cameras' mean mount height.
    */
   function update(cells, project, groundHeight = null) {
     // Lone cameras take part so that one beside a count joins it.
     let visible = cells.slice().sort((a, b) => a.key.localeCompare(b.key));
-    const footprint = (count) => (count > 1 ? sizeFor(count) : SINGLE_ICON);
+    const footprint = (count, cell) => {
+      if (count > 1) return sizeFor(count);
+      const px = cell.iconPx ?? CAMERA_ICON_PX;
+      return { width: px, height: px };
+    };
     /** A lone camera keeps its icon's own position; a count goes to ground. */
     const ground = (list) => {
       if (!groundHeight) return;
@@ -224,7 +177,9 @@ export function createCountMarkers(
     };
     for (
       let pass = 0;
-      pass < COUNT_MERGE_PASSES && visible.length > 1;
+      pass < COUNT_MERGE_PASSES &&
+      visible.length > 1 &&
+      visible.some((cell) => cell.count > 1);
       pass++
     ) {
       ground(visible);
@@ -246,7 +201,7 @@ export function createCountMarkers(
     let changed = visible.length !== markers.length;
     for (let i = 0; i < visible.length; i++) {
       const cell = visible[i];
-      const marker = markers[i] ?? (markers[i] = { focus: 1 });
+      const marker = (markers[i] ??= { focus: 1 });
       const last = marker.cell;
       const size = sizeFor(cell.count);
       if (
@@ -258,16 +213,23 @@ export function createCountMarkers(
         last.groundM !== cell.groundM
       ) {
         marker.pos = cellCenter(cell);
+        marker.cullPos = liftedForHorizon(marker.pos);
+        marker.hudHidden = undefined;
         changed = true;
-      } else if (
-        last.west !== cell.west ||
-        last.east !== cell.east ||
-        last.south !== cell.south ||
-        last.north !== cell.north ||
-        last.low !== cell.low ||
-        last.high !== cell.high
-      ) {
-        changed = true;
+      }
+      // A count hidden by the HUD leaves its lone cameras visible as icons.
+      if (hardUi && cell.lone?.length) {
+        const at = project(marker.pos);
+        if (
+          at &&
+          hardUi({
+            x: at.x - size.width / 2,
+            y: at.y - size.height / 2,
+            w: size.width,
+            h: size.height,
+          })
+        )
+          for (const lone of cell.lone) lone.absorbed = false;
       }
       changed ||=
         size.text !== marker.text ||
@@ -276,24 +238,19 @@ export function createCountMarkers(
         size.labelY !== marker.labelY;
       marker.cell = cell;
       Object.assign(marker, size);
-      marker.glyph = glyphFor(size.glyphHeight, dpr, CAMERA_GREEN);
       // Paint never grows the hit buffer, even when a pan reveals every group.
       hits[i] ??= {};
     }
     markers.length = visible.length;
+    if (markers.length) loadSprite();
     // Keep the last frame pickable until the host clears its pixels.
     lane?.setActive(markers.length > 0 || hitCount > 0);
     if (changed) lane?.requestPaint();
   }
 
-  /** Attach the raster for the current overlay density to each visible group. */
-  function refreshGlyphs() {
-    for (const marker of markers)
-      marker.glyph = glyphFor(marker.glyphHeight, dpr, CAMERA_GREEN);
-  }
-
   /** Draw at device density using the host's CSS-pixel transform and projection. */
   function paint(frame) {
+    hardUi = frame.overlapsHardUi ?? hardUi;
     if (!markers.length) {
       // Deactivating invalidates the host, so finish the shared frame first.
       if (hitCount) queueMicrotask(deactivateIfEmpty);
@@ -302,10 +259,7 @@ export function createCountMarkers(
     }
     hitCount = 0;
     const { ctx, occluder, viewProjectionMatrix: m } = frame;
-    if (dpr !== frame.dpr) {
-      dpr = frame.dpr;
-      refreshGlyphs();
-    }
+    let refresh = false;
     ctx.save();
     try {
       ctx.font = FONT;
@@ -316,7 +270,7 @@ export function createCountMarkers(
         const { height } = marker;
         const { x: px, y: py, z: pz } = marker.pos;
         const w = m[3] * px + m[7] * py + m[11] * pz + m[15];
-        if (!(w > 0) || (occluder && !occluder.isPointVisible(marker.pos)))
+        if (!(w > 0) || (occluder && !occluder.isPointVisible(marker.cullPos)))
           continue;
         const x =
           (0.5 + (0.5 * (m[0] * px + m[4] * py + m[8] * pz + m[12])) / w) *
@@ -333,11 +287,22 @@ export function createCountMarkers(
           rect.x >= frame.width ||
           rect.y >= frame.height ||
           rect.x + rect.w <= 0 ||
-          rect.y + rect.h <= 0 ||
-          frame.overlapsHardUi(rect)
+          rect.y + rect.h <= 0
         )
           continue;
-        ctx.globalAlpha = marker.focus;
+        const hidden = Boolean(hardUi?.(rect));
+        if (marker.hudHidden !== hidden) {
+          marker.hudHidden = hidden;
+          // A first frame or moving HUD can change which lone icons must show.
+          refresh ||= marker.cell.lone?.some(
+            (cell) => cell.absorbed === hidden,
+          );
+        }
+        if (hidden) continue;
+        const fade =
+          frame.keyhole && keyholeAlpha ? keyholeAlpha(x, y, frame.keyhole) : 1;
+        if (!(fade > 0)) continue;
+        ctx.globalAlpha = marker.focus * fade;
         ctx.beginPath();
         ctx.roundRect(
           rect.x + STROKE_INSET,
@@ -355,18 +320,15 @@ export function createCountMarkers(
         ctx.lineWidth = RING_PX;
         ctx.stroke();
         ctx.fillStyle = CAMERA_GREEN;
-        const glyph = marker.glyph;
-        if (glyph) {
+        if (spriteReady) {
+          const width = marker.glyphHeight * GLYPH_SOURCE_ASPECT;
           ctx.drawImage(
-            glyph.canvas,
-            glyph.left,
-            glyph.top,
-            glyph.width,
-            glyph.height,
-            x - glyph.drawWidth / 2,
-            y + marker.glyphBottom - glyph.drawHeight,
-            glyph.drawWidth,
-            glyph.drawHeight,
+            sprite,
+            ...GLYPH_SOURCE,
+            x - width / 2,
+            y + marker.glyphBottom - marker.glyphHeight,
+            width,
+            marker.glyphHeight,
           );
         }
         ctx.fillText(marker.text, x, y + marker.labelY);
@@ -376,6 +338,7 @@ export function createCountMarkers(
     } finally {
       ctx.restore();
     }
+    if (refresh) queueMicrotask(refreshView);
   }
 
   /** Resolve the topmost group actually painted at this screen position. */
@@ -383,13 +346,14 @@ export function createCountMarkers(
     if (!point) return null;
     for (let i = hitCount - 1; i >= 0; i--) {
       const rect = hits[i];
-      if (
-        point.x >= rect.x &&
-        point.x <= rect.x + rect.w &&
-        point.y >= rect.y &&
-        point.y <= rect.y + rect.h
-      )
-        return rect.cell;
+      const radius = rect.h / 2;
+      // Distance from the pill's horizontal centre segment.
+      const dx = Math.max(
+        0,
+        Math.abs(point.x - (rect.x + rect.w / 2)) - (rect.w - rect.h) / 2,
+      );
+      const dy = point.y - (rect.y + radius);
+      if (dx * dx + dy * dy <= radius * radius) return rect.cell;
     }
     return null;
   }
@@ -407,7 +371,7 @@ export function createCountMarkers(
 
   /** Unhook this viewer's painter and its font listener. */
   function dispose() {
-    markers.length = hits.length = hitCount = 0;
+    hide();
     fonts?.removeEventListener?.('loadingdone', fontsLoaded);
     lane?.unregister();
   }

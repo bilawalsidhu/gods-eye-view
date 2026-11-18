@@ -1,6 +1,6 @@
 import { fromDegrees } from '../geo/ellipsoid.js';
 
-/** Exact camera counts below a thousand, then rounded thousands with a K suffix. */
+/** Exact below 1,000, then K with one decimal below 10K. Uses Latin digits in every locale. */
 export function formatCameraCount(count) {
   if (count < 1000) return String(count);
   const thousands =
@@ -43,10 +43,12 @@ export function addCellCamera(cell, camera) {
   cell.high = Math.max(cell.high, height);
 }
 
+const wrapLongitude = (lon) => ((((lon + 180) % 360) + 360) % 360) - 180;
+
 /** Mean longitude and latitude of a cell's mounts, in degrees. */
 export function cellLonLat(cell) {
   return {
-    lon: cell.lonSum / (1e7 * cell.count),
+    lon: wrapLongitude(cell.lonSum / (1e7 * cell.count)),
     lat: cell.latSum / (1e7 * cell.count),
   };
 }
@@ -68,57 +70,62 @@ export function cellCenter(cell) {
   );
 }
 
-/** A padded sphere around the group's geographic rectangle and mount heights. */
+/** A padded sphere over the rectangle and every mount, centred at groundM
+ * when set, otherwise at the mid mount height. */
 export function cellBounds(cell) {
   const lat = (cell.north + cell.south) / 2;
-  const lon = (cell.east + cell.west) / 2;
+  const lon = wrapLongitude((cell.east + cell.west) / 2);
   const height = Number.isFinite(cell.groundM)
     ? cell.groundM
     : (cell.high + cell.low) / 2;
   // The parallel nearest the equator bounds the width of every row.
   const parallel = (Math.max(0, cell.south, -cell.north) * Math.PI) / 180;
-  // Half the diagonal plus 20% padding on every side.
-  const radius =
-    0.6 *
+  const halfWidth =
+    0.5 *
     Math.hypot(
       (cell.east - cell.west) * 111_320 * Math.cos(parallel),
       (cell.north - cell.south) * 111_320,
-      cell.high - cell.low,
     );
+  const vertical = Math.max(cell.high - height, height - cell.low);
+  const radius = 1.2 * Math.hypot(halfWidth, vertical);
   return { center: fromDegrees(lon, lat, height), radius: Math.max(1, radius) };
 }
 
 /** Add a whole ground cell to a marker, retaining the sums for a weighted mean. */
 function addCell(target, cell) {
+  // Across the antimeridian a cell joins on the side of the group's mean.
+  const shift = target.count
+    ? 360 *
+      Math.round(
+        (target.lonSum / target.count - cell.lonSum / cell.count) / 3.6e9,
+      )
+    : 0;
   target.count += cell.count;
   target.latSum += cell.latSum;
-  target.lonSum += cell.lonSum;
+  target.lonSum += cell.lonSum + shift * 1e7 * cell.count;
   target.heightSum += cell.heightSum;
   target.south = Math.min(target.south, cell.south);
   target.north = Math.max(target.north, cell.north);
-  target.west = Math.min(target.west, cell.west);
-  target.east = Math.max(target.east, cell.east);
+  target.west = Math.min(target.west, cell.west + shift);
+  target.east = Math.max(target.east, cell.east + shift);
   target.low = Math.min(target.low, cell.low);
   target.high = Math.max(target.high, cell.high);
 }
 
-/** Claim the touching pills in this marker's bucket and its eight neighbors. */
-function collectNeighbors(marker, grid, members, gap) {
+/** Visit the touching pills in this marker's bucket and its eight neighbors. */
+function visitNeighbors(marker, grid, gap, visit) {
   for (let col = -1; col <= 1; col++) {
     for (let row = -1; row <= 1; row++) {
       const bucket = grid.get(`${marker.col + col},${marker.row + row}`);
       if (!bucket) continue;
       for (const other of bucket) {
-        // Lone cameras join a count beside them, never each other.
-        if (marker.cell.count === 1 && other.cell.count === 1) continue;
         // Distance between the horizontal centre segments of the two pills.
         const extra = marker.halfSegment + other.halfSegment;
         const dx = Math.max(0, Math.abs(marker.x - other.x) - extra);
         const dy = marker.y - other.y;
         const reach = marker.radius + other.radius + gap;
         if (dx * dx + dy * dy >= reach * reach) continue;
-        bucket.delete(other);
-        members.push(other);
+        visit(other, dx * dx + dy * dy, reach);
       }
     }
   }
@@ -128,7 +135,8 @@ function collectNeighbors(marker, grid, members, gap) {
  * Merge connected groups of overlapping horizontal pills. Each marker occupies
  * one grid bucket. Even the widest pill can only touch its eight neighbors.
  * A cell with one camera takes the footprint `sizeFor(1)` gives its icon and
- * joins a count it touches; two such cells alone stay apart.
+ * joins the nearest count it touches. Lone cameras never join each other
+ * or bridge two counts.
  * Ground cells stay intact for the camera picker and individual-icon pass.
  */
 export function mergeCountCells(cells, project, sizeFor, gap) {
@@ -136,7 +144,7 @@ export function mergeCountCells(cells, project, sizeFor, gap) {
   let rowHeight = 0;
   const markers = cells.map((cell) => {
     const screen = project(cellCenter(cell));
-    const { width, height } = sizeFor(cell.count);
+    const { width, height } = sizeFor(cell.count, cell);
     columnWidth = Math.max(columnWidth, width + gap);
     rowHeight = Math.max(rowHeight, height + gap);
     // The view projector reuses its result object.
@@ -156,29 +164,57 @@ export function mergeCountCells(cells, project, sizeFor, gap) {
     const key = `${marker.col},${marker.row}`;
     if (!grid.has(key)) grid.set(key, new Set());
     marker.bucket = grid.get(key);
-    marker.bucket.add(marker);
+    if (marker.cell.count > 1) marker.bucket.add(marker);
+  }
+
+  for (const marker of markers) {
+    if (marker.cell.count !== 1 || !marker.bucket) continue;
+    let best = Infinity;
+    visitNeighbors(marker, grid, gap, (other, distanceSquared, reach) => {
+      const clearance = Math.sqrt(distanceSquared) - reach;
+      if (clearance < best) {
+        best = clearance;
+        marker.nearest = other;
+      }
+    });
+  }
+
+  // Only counts were candidates for nearest. Now they can claim lone cameras.
+  for (const marker of markers)
+    if (marker.cell.count === 1) marker.bucket?.add(marker);
+
+  const members = [];
+  for (const seed of markers) {
+    if (seed.cell.count === 1 || !seed.bucket?.delete(seed)) continue;
+    members.length = 0;
+    members.push(seed);
+    for (const marker of members) {
+      if (marker.cell.count === 1) continue;
+      visitNeighbors(marker, grid, gap, (other) => {
+        if (other.cell.count === 1 && other.nearest !== marker) return;
+        other.bucket.delete(other);
+        members.push(other);
+      });
+    }
+    if (members.length === 1) {
+      seed.result = seed.cell;
+    } else {
+      const group = createCameraCell(seed.cell.key);
+      group.lone = [];
+      for (const { cell } of members) {
+        addCell(group, cell);
+        if (cell.count === 1) group.lone.push(cell);
+        else if (cell.lone) group.lone.push(...cell.lone);
+      }
+      seed.result = group;
+    }
   }
 
   const groups = [];
-  const members = [];
-  for (const seed of markers) {
-    if (!seed.bucket) {
-      groups.push(seed.cell);
-      continue;
-    }
-    if (!seed.bucket.delete(seed)) continue;
-    members.length = 0;
-    members.push(seed);
-    for (let i = 0; i < members.length; i++)
-      collectNeighbors(members[i], grid, members, gap);
-
-    if (members.length === 1) {
-      groups.push(seed.cell);
-    } else {
-      const group = createCameraCell(seed.cell.key);
-      for (const member of members) addCell(group, member.cell);
-      groups.push(group);
-    }
+  for (const marker of markers) {
+    if (marker.result) groups.push(marker.result);
+    else if (!marker.bucket || marker.bucket.has(marker))
+      groups.push(marker.cell);
   }
   return groups;
 }

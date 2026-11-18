@@ -1,4 +1,4 @@
-import { fromDegrees } from '../../geo/ellipsoid.js';
+import { fromDegreesInto } from '../../geo/ellipsoid.js';
 import { findGlobe } from '../../render/rendererOf.js';
 import {
   SUPPORT_KEYS,
@@ -233,6 +233,12 @@ export function createGround({ state: layerState, services, parts, source }) {
     // Stale-record guard: init() may have re-run (destroy/init cycle) while
     // the batch was in flight — only touch records still live in the map.
     if (layerState._recordById.get(record.camera.id) !== record) return null;
+    // The drawn terrain beats a fallback. Only a real batch answer replaces it.
+    if (
+      prior.source === 'geoid-fallback' &&
+      record.groundPrior?.source === 'drawn-terrain'
+    )
+      return null;
     record.groundPrior = prior;
     // Keep the cheap pre-enable altitude consistent for records whose
     // geometry hasn't been applied yet (applyFrustumGeometry overwrites it).
@@ -247,14 +253,12 @@ export function createGround({ state: layerState, services, parts, source }) {
     if (!record.frustumGeometry) {
       if (!record.position) return null;
       // In place: the record keeps its position object.
-      const { x, y, z } = fromDegrees(
+      fromDegreesInto(
         record.camera.lon,
         record.camera.lat,
         record.camera.absoluteHeightM,
+        record.position,
       );
-      record.position.x = x;
-      record.position.y = y;
-      record.position.z = z;
       parts.rendering.moveCameraIcon(record);
       return 'moved';
     }
@@ -274,19 +278,17 @@ export function createGround({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * A camera the height batch never answered for (a failed or rate-limited
-   * chunk leaves it on the catalog's fabricated ground) takes the terrain
-   * the globe draws under it as its prior, so that it stands on the surface
-   * the user sees. `rangeM` is how far the eye was when the terrain was
-   * read: a closer look reads finer terrain and replaces it, and so does a
-   * batch answer that arrives later.
+   * Applies drawn terrain as a drawn-terrain prior. The read records the eye
+   * distance (rangeM), globe surface version (surface) and whether terrain
+   * loading had finished (settled). Reading from under half that range or
+   * receiving a later Re:Earth answer replaces the height.
    * @returns {'moved'|'applied'|null} As `applyGroundPrior`.
    */
-  function adoptDrawnGround(record, heightM, rangeM) {
+  function adoptDrawnGround(record, heightM, read) {
     return applyGroundPrior(record, {
       ellipsoid: heightM,
       source: 'drawn-terrain',
-      rangeM,
+      ...read,
     });
   }
 

@@ -1,6 +1,6 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { distance, dot } from '../../geo/vector.js';
-import { canvasOf, findCamera } from '../../render/rendererOf.js';
+import { canvasOf, findCamera, findGlobe } from '../../render/rendererOf.js';
 import { viewshedColors, cameraHue } from '../../data/cctvViewshed.js';
 import { CCTV_OVERLAY_SOURCE_ID } from '../../data/cctvCards.js';
 import { GIZMO_ID_PREFIX } from '../../data/cctvGizmo.js';
@@ -103,6 +103,30 @@ export function createLifecycle({
    * listeners to its camera; one against the same viewer keeps them.
    */
   function attachViewListeners() {
+    const globe = findGlobe(layerState._viewer);
+    if (layerState._surfaceListenerGlobe !== globe) {
+      layerState._surfaceListener?.();
+      layerState._surfaceListener = null;
+      layerState._surfaceListenerGlobe = globe;
+    }
+    if (!layerState._surfaceListener && globe?.on) {
+      // Refresh drawn heights when terrain finishes loading or the surface changes.
+      let version = globe.surfaceVersion?.();
+      let terrainPending = globe.isSettled?.('terrain') === false ? 1 : 0;
+      layerState._surfaceListener = globe.on('progress', (progress) => {
+        const next = globe.surfaceVersion?.();
+        const loaded = progress?.terrainPending === 0 && terrainPending !== 0;
+        const swapped = next !== version;
+        version = next;
+        terrainPending = progress?.terrainPending ?? terrainPending;
+        if (
+          (loaded || swapped) &&
+          layerState._enabled &&
+          !layerState._cameraMoving
+        )
+          settleView();
+      });
+    }
     const viewCamera = findCamera(layerState._viewer);
     if (
       layerState._viewListenerCamera &&
@@ -140,6 +164,9 @@ export function createLifecycle({
 
   /** Drop the move listeners; nothing reports the end of a move after it. */
   function detachViewListeners() {
+    layerState._surfaceListener?.();
+    layerState._surfaceListener = null;
+    layerState._surfaceListenerGlobe = null;
     layerState._horizonCullListener?.();
     layerState._horizonCullListener = null;
     layerState._moveStartListener?.();
@@ -287,9 +314,8 @@ export function createLifecycle({
           coverageEntities: [],
           projection: null,
           // Task 5 (height-datum fix): regime-aware ground resolution state.
-          //   groundPrior     — { ellipsoid, source } from the Re:Earth batch
-          //     (null until a late batch lands). The prior applies in EVERY
-          //     regime and is the terrain-globe resolution outright.
+          //   groundPrior — { ellipsoid, source } from the Re:Earth batch, or
+          //     drawn-terrain with its read conditions for an unanswered camera.
           //   groundResolved  — PER-REGIME one-shot latch (regime key →
           //     boolean): true once this record's resolution completed for that
           //     regime; such records are excluded from the completion pass so
