@@ -7814,6 +7814,290 @@ and unreachable upstream (502/504) separately from road geometry.
 - `partial` is a feed state of its own, ranked between `fallback` and `nominal`, so one partial layer, or partial plus nominal, reads partial, not off or nominal (HUD, voice view state, `analyst_query`, `brief`, the agent world packet). Its narration note says coverage is incomplete rather than not live.
 - A summary asked for before the camera starts moving never paints over the next view: `moveStart` marks the summary dirty and bumps its revision, as `moveEnd` does, aborts the request in flight and stops a reply still typing; neither a reply nor a fallback line (on an error, the 5 s timeout, the abort, or a failed context build) paints once the revision has moved. A dropped request forgets its signature and a timeout counts as a failure, so the next 15 s tick asks again even over the same place. An interrupted typewriter reply also forgets its signature; fully displayed answers remain reusable.
 
+### Omnibar
+
+The desktop Omnibar sits above the footer with the existing mic and chat
+buttons on either side. Suggestions open upward; the phone field stays at
+the top and opens downward. While voice is on, the desktop field shows
+three audio traces in place of the search text and icon. The thinking dots
+sit on the field's top edge. World Time appears immediately above the dock
+and hides while suggestions, chat, or voice settings are visible. `/`
+focuses search from outside a text field, as do Cmd+K on macOS and Ctrl+K
+elsewhere (Ctrl+K on macOS is left alone); none of them takes focus from an
+open modal dialog or from inside a dialog such as the guide. While voice is
+on, the suggestions give way to the waveform but an error stays shown. The map credits stay on the
+Power Up row in the ordinary desktop layout, and the two lower tactical HUD
+readouts start at the same height.
+
+Pending owner decision: in the desktop Omnibar layout
+(`src/ui/styles/omnibar-dock.css`) the legacy Location and Visual trays of
+the command dock are hidden (`#command-dock > :is(#location-bar,
+#control-panel)`), as is the tactical and minimal HUD's mode readout
+(`.hud-readout:has(> #hud-mode)`). Search moves to the Omnibar and presets to
+the Visual rail; the phone shell and exclusive modes keep their layouts.
+
+The field offers places, latitude/longitude and grid coordinates, named map
+entities, and layer controls. The strip can show cities and landmarks,
+nearby small places from the bundled Wikidata packs, selected items and
+drawing shapes. The cities of a state or country are those inside its
+extent and in its country (by the ISO code Photon returns); with only one of
+the two known, that one decides. Selecting a
+guided result highlights the existing app controls. "Show me how", "how do
+I …" and "how to …" find a walk by the words people use: a layer's name
+("how to turn on flights"), or a feature's (`FEATURE_TOPICS` in
+`src/ui/omnibarRows.js`): the style or look ("change the map style"), the
+map underneath ("change the map", "switch to OpenStreetMap"), the HUD,
+north or the compass, tilt, the globe or a reset ("get back to the globe"),
+sharing, clearing all layers, and drawing and measuring ("how to measure
+distance": open Utilities, press Draw, pick Line for a distance or Area for
+its size). A leading `>` opens the
+command menu; use it for exact layer commands such as `> show flights`.
+
+The rows come from one pure pipeline, `createOmnibar` in
+`src/ui/omnibarRows.js`: the line is normalised once (`normalizeLine` in
+`src/ui/omnibarIntent.js`, through `readLine` in `src/ui/omnibarRows.js`:
+full-width forms folded, curly apostrophes made straight, a closing full
+stop or "!" dropped (an initial's kept, as in "Washington D.C."), and a
+"please" before or after a request dropped, never one in a name ("Please
+Touch Museum", "Pretty Please")), read once (`parseOmnibar`), turned into
+rows, and ordered by the Enter rule; the same reader decides what may go
+to Photon and what is a count request. A whole line searched as a place is
+searched as typed ("Paris, Texas.", "Yahoo!"). The
+component (`Omnibar.vue`) supplies the layers, Photon's answers, the map's
+items and the selection, and runs the chosen row; the strip of chips under
+the field (landmarks, cities of a region, villages, recent places, draw
+shapes) is built in the component from the same normalised line. What Enter does with no
+row chosen follows one rule, in `src/ui/omnibarEnter.js` (`enterDefault`),
+pinned by an input-to-outcome table in `src/ui/omnibarRows.test.mjs` and
+by the mounted table in `src/ui/commandDock.test.mjs`. Only the first row can be the default; an
+empty field and a bare `>` have none; the pointer never chooses a row
+(hovering then pressing Enter runs the default, a click runs the row), and
+the arrow keys choose any row. Enter performs an action (a plan, a layer
+switch, a command, Ask GEV) only when the line asks for it outright:
+
+- the action's own clause starts with a verb from the one list
+  (`ACTION_VERB` in `src/ui/omnibarIntent.js`, read in any letter case by
+  `hasActionVerb`): show, hide, turn, switch, toggle, enable, disable, add,
+  remove, display (with something after it), play, start, open, close,
+  enter, listen, tune, mute, unmute, follow, track, draw, measure, share,
+  copy, reset, silence, pause, "nearest plane" and the like, or a clause
+  ending in "on" or "off" ("radio off"). A style, map, camera move, HUD or
+  layer followed by "on" or "off" reads as that switch ("noir off" and
+  "turn off noir" go back to the normal style, "orbit off" stops the camera,
+  "osm off" runs nothing), never as a place called "off"; words that also start names count
+  only alone or before what they act on ("clear the map", "zoom in",
+  "tilt", "orbit", "stop the radio", "kill the radio", "face north"). Verbs
+  are read per clause, so a verb inside a place's name asks for nothing
+  ("radio near Clear Lake", "radio in Show Low", "radio near Stop,
+  Arkansas" search the place). A layer is asked for only by a switch (show,
+  display, add, enable, turn or switch on, hide, remove, disable, turn or
+  switch off) right before its word: "Show Low radio" and "Kill Devil Hills
+  radio" name places, and a verb with a name left beside its keywords asks
+  for nothing else in its clause ("Show Low noir", "Start Point noir",
+  "Track Hill noir"). A clause joined to a "go to"
+  clause by "and" or "then" counts as asked ("go to Paris, Texas and
+  noir");
+- or it is a command's exact label, alone or after `>` ("North up", "Noir",
+  "> Clear all layers"). A command row runs on nothing else: a bare switch
+  verb ("hide", "turn off", "disable") only lists what it could switch;
+- or a data layer's whole shown name or synonym alone, which names that
+  layer as a command's label does ("flights", "earthquakes", "Satellite");
+- or, for Ask GEV, it is a real question: it ends with "?" (full-width
+  "？" and Arabic "؟" too), has a word of two letters or more, and has a
+  question's form (below), or two words in a
+  non-Latin script; or five Han, Kana or Hangul characters ("what?", "??",
+  "N Y?", "New York?", "Truth or Consequences?" and "東京都？" are not:
+  Ask GEV is offered first and Enter runs nothing; small talk such as "what's up" or "how's it going" is never one); or, without "?", it
+  starts with
+  what/where/when/who/why/how/which followed by is, are, was, do, does,
+  did, can, could, should, would, will, 's, many, much, far, long or to,
+  then has a word about something ("what is here", "how far is paris"; not
+  "what is", "how to", "who is it"), and is not written as a name (three
+  words or more, each capitalised: "Where Is My Mind"). A line starting
+  with an auxiliary and a pronoun or determiner (is it, can you, do it…)
+  asks only with "?": without it, Ask GEV is offered first and Enter runs
+  nothing ("can you show me", "is it raining in tokyo"), and with a capital
+  after its first two words it is a name and searches the place ("Can You
+  Imagine", "Do it Best Hardware"). "Can Tho City" and "Is Kinabalu Park"
+  are places. A line
+  with a comma and no "?" is a place ("Why, Arizona"), never a question.
+  Any other line, small talk and question words included ("why", "help",
+  "what cheer", "List"), still offers the place row first, with Ask GEV
+  after it.
+
+A whole layer name with a place after near, in, around, over, across or
+above ("flights near Tokyo", "earthquakes above m5 in japan") asks outright
+too; after "of" or "at" the line may be a name and the whole line is
+offered as a place first ("Planes of Fame Air Museum", "Boats at Sea"). Keywords without a
+verb ask for nothing, however many clauses they fill ("New York City
+noir", "Fire and Rain", "noir and cctv near austin, north up"): with a
+place after near or in that place is searched, and otherwise the whole
+line is offered as a place first ("Storm Lake and Spencer", "Thermal and
+Indio"), the plan after it. Draw opens on Enter only for "draw" itself or a
+draw verb with something to draw ("draw a line"; not "Draw Bridge"), and a
+guided walk found by forgiving a typo, or on a line written as a title
+("How To Train Your Dragon"), is offered, never run. A switch verb before
+a capitalised name that names no layer is a place ("Remove Island",
+"Toggle Inn"). A
+layer row runs only when the line names that layer before any other, by a
+whole word of its shown or English name (never its id, and not a word of
+kind such as local, global, live, world, new, open, data, map, view or
+level) or a synonym, with a plural "s" allowed from four letters
+("flights" yes; "a", "display", "Local", "Global", "new" no). "show
+flights" with Live Flights already on offers Live Flights, which then
+switches nothing; Military Flights, which also has the word, is only
+offered after it. Words about a layer after a switch are no place ("show radio
+stations", "show flights here"); without the switch the line may be a name
+("Train Station"). A line of more than six words left over as a
+place (ten with a number in it), or of more than eight words that asks for
+nothing outright, is a sentence (pasted text, a remark): it is never sent to
+Photon, Ask GEV is offered, and so is a row that searches the whole line as a
+place when picked ("San Miguel de las Piedras Primera Sección"); Enter runs
+neither. A word that is
+both a bundled place's name and, alone, a command, style or layer word
+(`PLACE_WORDS` in `src/ui/omnibarEnter.js`: Bike, Hurricane, Normal, Rain,
+Ski, Street, Thermal) searches the place first and offers the switch
+second. The list comes from sweeping every bundled name (139,502), alone
+and with " radio" and " noir" after it, through the mounted Omnibar; after
+it, none defaults to anything but a place. A test samples about 2,000 of
+them. Some actions need more: sound (the Radio layer and command),
+clearing the map, closing panels and the cockpit need a verb or their exact
+label ("turn on radio", "close all panels", "enter cockpit"; not "radio near
+tokyo" or "Radio, Tokyo"), and the microphone, sharing the view, resetting
+it and the globe view need their exact label ("Talk to GEV", "Share this
+view", "Reset view", "Globe view"; not "mic", "share", "home" or "start
+over").
+Otherwise the place row is the default and moves first ("Thermal,
+California", "radio near tokyo" searches Tokyo), and any plan or command is
+offered after it; a line with neither ("hi", "NY", "?") runs nothing. "hide everything near tokyo" clears the layers and flies to
+Tokyo. Following needs a callsign or ICAO address (letters and a digit), a
+nine-digit MMSI or the name of something loaded on the map, so "Track
+Hill" and "Track 29" are places; "nearest plane" counts alone or before a
+place ("Nearest Plane Crash Site" is a name), and "goto" only with a place
+after it ("Goto" is a town). A row chosen with the arrow keys is kept by its key while rows
+arrive above it, and the default comes back if it goes away. After a row
+runs with Enter, the field empties and keeps focus for the next line on
+desktop; a tapped or clicked row lets go of it, and on the phone shell any
+row does (so the keyboard does not stay over the map), and so do Ask GEV, the mic, the cockpit, following, a guided
+walk, and any row while drawing is on (the draw tool reads Enter, Backspace
+and Esc). Escape closes the list, and on an empty, closed field lets go of
+it, so the app's own keys work again. While voice
+is on, the list is closed (not expanded) and Enter runs nothing. Text that
+may be private is never looked up or searched while typed or on Enter: only
+things already loaded on the map may match it, locally, and when only a
+long run of digits makes it look private and it has words (an address can:
+"Москва, ул. Тверская, д. 13, 125009") one row searches it as a place only
+when picked (see below).
+
+After "go to" (or "fly to" and the like) the rest of the clause, and a
+following part after a comma that has no verb, is the place, read before
+any keyword in it: "go to Thermal, California" only searches there. A
+request ending that clause is peeled off and offered as a plan after the
+place: "in", "with" or "at" and a style, map or layer ("go to tokyo in
+noir", "go to London with flights"), a switch and a layer ("go to tokyo show
+flights"), or a comma part that is exactly a style, map, camera move or
+layer ("go to Tokyo, north up"). A line with one keyword and no verb beside
+the rest of a name ("Tilt Cove", "tokyo traffic", "Hurricane, Utah") offers
+the whole line as a place first and the plan second. Further places joined
+with "and" are offered as their own rows. Things loaded on the map that
+match the line are offered too: a callsign, tail number or transponder
+code puts them first, and otherwise the place row keeps the top, so
+"Hamburg" goes to the city before the ship HAMBURG. An unrecognized explicit command
+stays in search. Questions can be sent through Ask GEV, which uses the
+existing typed chat.
+
+Han, Hangul and Kana names are looked up from two characters (東京), others
+from three.
+
+Plans run step by step, and a layer step reads the layer's state when it
+runs, not when the line was read. A step the app refuses (an action
+answering `ok: false`, a layer switch answering `false`, a globe action no
+connected owner answers, a panel to open with no rail button) stops the
+plan and shows the same error under the field as a single action, with
+the action's own short spoken reason (`say`) when it gives one and the
+interface is in English (the runner speaks English, so other languages
+get the translated message alone); a flight cancelled by a newer
+one stops the plan quietly. A running plan is superseded, and none of its
+later steps run, when the field's text changes, another row or chip is
+chosen, Escape is pressed, the field is reset after a finished choice, or the
+Omnibar unmounts. Focus leaving the field (a click on the map, the mic, the
+search shortcut) does not cancel it. The guide's placement check pauses
+while the tab is hidden.
+A place search on its own runs through Location and shares its cancellation
+and errors, keeping the separate Location draft intact.
+
+While typing, a short line (six words or fewer, no `?`, not a command,
+coordinates, a hex code, a callsign such as UAL2110 or N123AB, and nothing
+that may be private) is sent to
+Photon for place suggestions: at most one request every 500 ms per tab,
+and none for a minute after a refusal. Photon is the keyless geocoder the
+place search already uses; a submitted search is not part of this spacing.
+A line that may be one name ("Satellite Beach") is looked up whole. While
+its suggestions show, or a recent-place chip that came from them, the
+OpenStreetMap credit shows too; recent chips from the bundled packs credit
+Wikidata. Private text, by `mayBePrivate` in
+`src/search/placeSuggestions.js`, is never sent to Photon, offered as a
+place, searched or sent to GEV; only things already loaded on the map may
+match it, locally. The line is read after NFKC, so full-width letters,
+digits and "＠" count, and digits of any script count as digits. It is
+any line with: an "@" with something right on both sides, ending a word,
+starting a lowercase handle ("@jdoe"), or spaced before a domain ("john @
+gmail.com") (an email address or a handle, also while it is typed; spaced, as in "Nanjampeta @
+Chandambylu", it is part of a name); seven digits or more with nothing but spaces,
+punctuation, symbols or format characters between them (a phone, card,
+SSN or account number or its start: "+1 415 555", "4111 1111", "123 45
+6789", "123456789", "4111.1111.1111.1111", "123–45–6789"; a street address's house number
+and its postcode are read apart: five digits, or between the street and
+the city "00-950", "111 21", "125009", "1100-053", or four digits after a
+comma ("Straße 120, 1070 Wien"); and so are a US ZIP+4 after a word,
+a Brazilian CEP, a Japanese postcode after "〒" or before the address, and
+digits on either side of "#", so "Hauptstrasse 12 10115 Berlin", "DC
+20500-0003", "〒100-0001 東京都千代田区" and "Calle 100 # 19-61" are places,
+while a seven-digit postcode alone such as "Tel Aviv 6100000" still reads
+as private); a phone number written with dots; two letters, two
+digits and ten more letters or digits (an IBAN's shape); "password",
+"passcode", "passwd", "ssn", "pw", "pwd" or "bearer" followed by anything,
+"token", "secret", "api key", "key" or "pass" followed by ":" or "=", a
+door, access, gate, alarm, entry or security code followed by a digit, "api
+key", "access token" or "secret key" followed by a word of six characters
+or more, the word for "password" in the interface's languages
+(contraseña, Passwort, mot de passe, пароль…) followed by anything, or "pin"
+(also "pin code", "pin number", "pin is") followed by a digit; a word
+starting `sk_`, `sk-`, `rk_`, `pk_live`, `ghp_` or a Slack token's `xoxb-` and the like (any case) or
+`AIza`, `eyJ` or `AKIA`; or a word that may be a password or key, with letters and digits mixed
+within one run (a number beside a word, as in "Yanino-1", "2-chōme" or
+"Route-66", is a name): eight characters or more, six or more with four
+letters and a digit ("hunter22", "Area51"), or six or more with letters,
+digits and a symbol ("Tr0ub4dor&3"). The password words match whole words
+only ("Sachsenhausen" is a place). Over the bundled names (139,502), five
+read as private: two with stray digits ("Maliga0N", "Jerónim67") and three
+with number lists or codes. When the text may be private the field says
+so ("Looks private, so nothing is searched or sent"), and a line whose
+only private sign is an address-sized run of digits (no group over six
+digits, nine at most in all, counted as they fold, and no word such as
+card, code, key, phone or account beside them, in English and some other
+European languages; compounds such as "Kreditkartennummer" and words in
+other scripts are not read), with words beside it, gets a row
+to search it as a place on purpose ("Search … as a place anyway"), which
+runs the ordinary place search and its online services only when picked; a
+bare number, an email or handle, a password, key, code or IBAN gets none.
+A nine-digit number or a short phone number written with no such word
+still gets the row: only picking it sends anything. One-time and verification codes,
+OTP, 2FA, MFA, CVV and CVC values, "card ending" digits, passphrases,
+recovery or seed phrases, "my secret is …" and an email spelled out ("john
+at example dot com") are private too. Text that parses as coordinates or a
+grid reference is not private. A place's name is six words at most, or ten
+when it has a number in it (an address: "1600 Pennsylvania Ave NW
+Washington DC 20500"). The places you go to from the Omnibar (the last 20:
+name, position and where the name came from) are kept in this browser's
+`localStorage` under `gev:omnibar:recent-places` for the strip; nothing
+clears them but the browser's own site data. Setting `PHOTON_URL`
+empty turns the suggestions off along with it. Small places come from the
+bundled Wikidata packs and are never looked up online; a small place with
+the name of a city within 3 km in the same country is that city, and only
+the city is listed. At most 64 detail tiles are kept in memory, the least
+recently used dropped first.
+
 ### Place-search providers
 
 Coordinate input requires exactly two nonempty components; extra comma or semicolon separators decline to geocoding rather than silently choosing a location.

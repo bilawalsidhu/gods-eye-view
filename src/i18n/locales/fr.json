@@ -4363,5 +4363,28 @@
     "other": "Afficher {what} dans la zone de {place} ({count} éléments)"
   },
   "Go there": "Y aller",
-  "Open draw options": "Ouvrir les options de dessin"
+  "Open draw options": "Ouvrir les options de dessin",
+  "{what} in {place}: {count} items": {
+    "one": "{what} dans la zone de {place} : {count} élément",
+    "many": "{what} dans la zone de {place} : {count} d’éléments",
+    "other": "{what} dans la zone de {place} : {count} éléments"
+  },
+  "{count} items in view": {
+    "one": "{count} élément visible",
+    "many": "{count} d’éléments visibles",
+    "other": "{count} éléments visibles"
+  },
+  "Selected · near {name}": "Sélection · près de {name}",
+  "Near {name}": "Près de {name}",
+  "Stop drawing": "Arrêter le dessin",
+  "{place} · landmarks": "{place} · points d’intérêt",
+  "In {place}": "Dans la zone de {place}",
+  "Near {place}": "Près de {place}",
+  "Unable to complete this action: {reason}": "Impossible de terminer cette action : {reason}",
+  "Unable to complete this action. Please try again.": "Impossible de terminer cette action. Veuillez réessayer.",
+  "{layer} M{mag}+": "{layer} de magnitude {mag} ou plus",
+  "Search places, layers and things on the map, or ask GEV": "Recherchez des lieux, des couches et des éléments sur la carte, ou interrogez GEV",
+  "Search places, layers, flights… or ask GEV  ·  > for commands": "Recherchez des lieux, des couches, des vols… ou interrogez GEV · > pour les commandes",
+  "No matching command": "Aucune commande correspondante",
+  "Looks private, so nothing is searched or sent": "Semble privé, donc rien n’est recherché ni envoyé"
 }

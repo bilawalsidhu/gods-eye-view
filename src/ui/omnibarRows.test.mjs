@@ -148,16 +148,15 @@ const OUTCOMES = [
   ['remove island', 'nothing'],
   ['show noir and show cctv', 'style(noir) + layer(cctv,on)'],
   // a name with "?" is offered to GEV,
-  // never sent; a question's form or four words are.
+  // never sent; a question's form is.
   ['New York?', 'nothing'],
   ['Truth or Consequences?', 'nothing'],
+  ['Ho Chi Minh City?', 'nothing'],
+  ['Santa Cruz de la Sierra?', 'nothing'],
   ['東京都？', 'nothing'],
   ['東京はどこ？', 'ask(東京はどこ？)'],
   ['is it far?', 'ask(is it far?)'],
-  [
-    'how about the weather in paris today?',
-    'ask(how about the weather in paris today?)',
-  ],
+  ['how about the weather in paris today?', 'nothing'],
   ['123–45–6789', 'nothing'],
   ['what is 4111–1111–1111–1111?', 'nothing'],
   // a switch with its place after "in" asks;

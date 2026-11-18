@@ -232,6 +232,38 @@ test('left corridor respects a lower obstacle but ignores an obstacle hidden by 
   assert.equal(Number(f.stack.dataset.safeBottomPct), 65.47);
 });
 
+test('a centered timeline only shortens the corridor when it reaches the visible panel', () => {
+  const f = fixture('left');
+  f.stack.rect.width = 360;
+  f.stack.rect.right = f.stack.rect.left + 360;
+  f.expand(f.first, 850);
+  const timeline = element('world-timeline', { top: 650, left: 320 });
+  f.options.obstacles = [timeline];
+  f.run();
+  const clear = Number(f.stack.dataset.safeBottomPct);
+  timeline.rect.left = 280;
+  f.run();
+  assert(clear > 85);
+  assert(Number(f.stack.dataset.safeBottomPct) < 73);
+});
+
+test('Data Layers extends to the HUD even if its list is currently short', () => {
+  const f = fixture('left');
+  f.first.id = 'data-panel';
+  f.options.documentRef.getElementById = (id) =>
+    id === 'gev-omnibar' ? {} : null;
+  f.expand(f.first, 250);
+  f.options.obstacles = [element('hud', { top: 760, height: 45 })];
+  f.run();
+  assert.equal(f.stack.dataset.layoutMode, 'focus');
+  assert(Number(f.stack.dataset.safeBottomPct) > 80);
+  assert(
+    parseFloat(
+      f.first.style.getPropertyValue('--left-panel-allocated-height'),
+    ) > 500,
+  );
+});
+
 for (const side of ['left', 'right']) {
   test(`${side} mobile layout releases desktop height/position styles and labels`, () => {
     const f = fixture(side, { mobile: true });

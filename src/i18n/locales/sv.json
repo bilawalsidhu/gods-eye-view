@@ -4259,5 +4259,26 @@
     "other": "Visa {what} i {place} ({count} objekt)"
   },
   "Go there": "Gå dit",
-  "Open draw options": "Öppna ritalternativ"
+  "Open draw options": "Öppna ritalternativ",
+  "{what} in {place}: {count} items": {
+    "one": "{what} i {place}: {count} objekt",
+    "other": "{what} i {place}: {count} objekt"
+  },
+  "{count} items in view": {
+    "one": "{count} objekt i vyn",
+    "other": "{count} objekt i vyn"
+  },
+  "Selected · near {name}": "Valt objekt · nära {name}",
+  "Near {name}": "Nära {name}",
+  "Stop drawing": "Sluta rita",
+  "{place} · landmarks": "{place} · sevärdheter",
+  "In {place}": "I {place}",
+  "Near {place}": "Nära {place}",
+  "Unable to complete this action: {reason}": "Det gick inte att slutföra åtgärden: {reason}",
+  "Unable to complete this action. Please try again.": "Det gick inte att slutföra åtgärden. Försök igen.",
+  "{layer} M{mag}+": "{layer} med magnitud {mag} eller högre",
+  "Search places, layers and things on the map, or ask GEV": "Sök efter platser, lager och objekt på kartan eller fråga GEV",
+  "Search places, layers, flights… or ask GEV  ·  > for commands": "Sök efter platser, lager, flyg… eller fråga GEV · > för kommandon",
+  "No matching command": "Inget matchande kommando",
+  "Looks private, so nothing is searched or sent": "Ser privat ut, så inget söks eller skickas"
 }

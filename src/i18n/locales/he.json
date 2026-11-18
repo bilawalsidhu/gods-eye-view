@@ -4363,5 +4363,28 @@
     "other": "הצגת {what} ב{place} ({count} פריטים)"
   },
   "Go there": "מעבר למקום",
-  "Open draw options": "פתיחת אפשרויות הציור"
+  "Open draw options": "פתיחת אפשרויות הציור",
+  "{what} in {place}: {count} items": {
+    "one": "{what} ב{place}: ‏{count} פריט",
+    "two": "{what} ב{place}: ‏{count} פריטים",
+    "other": "{what} ב{place}: ‏{count} פריטים"
+  },
+  "{count} items in view": {
+    "one": "{count} פריט בתצוגה",
+    "two": "{count} פריטים בתצוגה",
+    "other": "{count} פריטים בתצוגה"
+  },
+  "Selected · near {name}": "נבחר · ליד {name}",
+  "Near {name}": "ליד {name}",
+  "Stop drawing": "הפסקת הציור",
+  "{place} · landmarks": "{place} · אתרים בולטים",
+  "In {place}": "בתוך {place}",
+  "Near {place}": "בסביבת {place}",
+  "Unable to complete this action: {reason}": "לא ניתן להשלים את הפעולה: ‏{reason}",
+  "Unable to complete this action. Please try again.": "לא ניתן להשלים את הפעולה. נסו שוב.",
+  "{layer} M{mag}+": "{layer} בעוצמה M{mag} ומעלה",
+  "Search places, layers and things on the map, or ask GEV": "חפשו מקומות, שכבות ופריטים במפה, או שאלו את GEV",
+  "Search places, layers, flights… or ask GEV  ·  > for commands": "חיפוש מקומות, שכבות וטיסות… או שאלה ל‑GEV · > לפקודות",
+  "No matching command": "אין פקודה תואמת",
+  "Looks private, so nothing is searched or sent": "נראה פרטי, ולכן שום דבר לא מחופש או נשלח"
 }

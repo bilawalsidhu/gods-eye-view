@@ -78,6 +78,12 @@ import { useCockpitStore } from './stores/cockpit.js';
 import { useGlobeActionsStore } from './stores/globeActions.js';
 import { useRecordingStore } from './stores/recording.js';
 import { onPlacePacksLoadingChange } from '../data/placeBelow.js';
+import {
+  hideOsmCredit,
+  registerDynamicCredit,
+  showOsmCredit,
+  WIKIDATA_PLACES_CREDIT,
+} from '../data/dataCredits.js';
 import { withPlacePacks } from './placePacksLoading.js';
 import { preloadOwnerFlags } from './ownerFlag.js';
 
@@ -182,6 +188,14 @@ export class StyleManager extends ShellFacade {
       layers: () => this._dataManager?.getAll?.() || [],
       setLayer: (id, enabled) =>
         this._dataManager?.setEnabled(id, enabled, { origin: 'user' }),
+      // The Omnibar shows names from the bundled Wikidata packs.
+      creditPlaces: () =>
+        registerDynamicCredit(this.viewer, WIKIDATA_PLACES_CREDIT),
+      // Photon's suggestions are OpenStreetMap data: credited while shown.
+      creditSuggestions: (shown) =>
+        shown
+          ? showOsmCredit(this.viewer, 'omnibar')
+          : hideOsmCredit(this.viewer, 'omnibar'),
     });
     // Scrolling at a screen edge steps through that side's rail panels.
     this._removeRailEdgeScroll = installRailEdgeScroll();

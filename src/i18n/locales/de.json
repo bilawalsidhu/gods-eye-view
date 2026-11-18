@@ -4259,5 +4259,26 @@
     "other": "{what} in der Region {place} anzeigen ({count} Elemente)"
   },
   "Go there": "Dorthin wechseln",
-  "Open draw options": "Zeichenoptionen öffnen"
+  "Open draw options": "Zeichenoptionen öffnen",
+  "{what} in {place}: {count} items": {
+    "one": "{what} in der Region {place}: {count} Element",
+    "other": "{what} in der Region {place}: {count} Elemente"
+  },
+  "{count} items in view": {
+    "one": "{count} Element im Blick",
+    "other": "{count} Elemente im Blick"
+  },
+  "Selected · near {name}": "Auswahl · nahe {name}",
+  "Near {name}": "Nahe {name}",
+  "Stop drawing": "Zeichnen beenden",
+  "{place} · landmarks": "{place} · Sehenswürdigkeiten",
+  "In {place}": "In der Region {place}",
+  "Near {place}": "Nahe {place}",
+  "Unable to complete this action: {reason}": "Diese Aktion konnte nicht abgeschlossen werden: {reason}",
+  "Unable to complete this action. Please try again.": "Diese Aktion konnte nicht abgeschlossen werden. Bitte versuche es erneut.",
+  "{layer} M{mag}+": "{layer} ab Magnitude {mag}",
+  "Search places, layers and things on the map, or ask GEV": "Suche Orte, Ebenen und Kartenelemente oder frage GEV",
+  "Search places, layers, flights… or ask GEV  ·  > for commands": "Orte, Ebenen, Flüge suchen… oder GEV fragen · > für Befehle",
+  "No matching command": "Kein passender Befehl",
+  "Looks private, so nothing is searched or sent": "Sieht privat aus, daher wird nichts gesucht oder gesendet"
 }

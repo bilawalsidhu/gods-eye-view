@@ -4155,5 +4155,24 @@
     "other": "顯示{place}的{what}（{count} 個）"
   },
   "Go there": "前往該地點",
-  "Open draw options": "打開繪製選項"
+  "Open draw options": "打開繪製選項",
+  "{what} in {place}: {count} items": {
+    "other": "{place}的{what}：{count} 個"
+  },
+  "{count} items in view": {
+    "other": "視野內 {count} 個"
+  },
+  "Selected · near {name}": "已選中 · {name}附近",
+  "Near {name}": "{name}附近",
+  "Stop drawing": "停止繪製",
+  "{place} · landmarks": "{place} · 地標",
+  "In {place}": "{place}境內",
+  "Near {place}": "{place}附近",
+  "Unable to complete this action: {reason}": "無法完成此操作：{reason}",
+  "Unable to complete this action. Please try again.": "無法完成此操作。請重試。",
+  "{layer} M{mag}+": "{layer}（震級 M{mag} 及以上）",
+  "Search places, layers and things on the map, or ask GEV": "搜索地點、圖層和地圖上的對象，或向 GEV 提問",
+  "Search places, layers, flights… or ask GEV  ·  > for commands": "搜索地點、圖層、航班… 或問 GEV · > 輸入命令",
+  "No matching command": "沒有匹配的命令",
+  "Looks private, so nothing is searched or sent": "疑似隱私信息，因此不會搜索或發送"
 }
