@@ -178,16 +178,14 @@ voice follow-ups match on them and bikeshare uses the raw station name as its
 ID. The text is still untrusted: normalization does not prevent prompt
 injection.
 
-Screen annotations skip hidden records and, before surface sampling, reject an
-unsettled anchor only when its whole accepted height range (-430 to 9000 m) is
-behind the camera or below the globe horizon; a settled height is tested as the
-actual point. Anchors outside the conservative frustum do not sample and still
-project at their cached or zero height, without the horizon test that this
-stand-in height cannot decide, so a partly visible arrow keeps its connector.
-Unresolved visible heights share a 32-sample budget per projection pass (each
-board change and each rendered frame runs one), served oldest-refused first,
-retry at most once per second per anchor, and retain no extra timer or
-listener. Validated heights remain settled in the bounded cache.
+`src/annotations/screenAnnotationRenderer.js` does not sample the surface
+height under an anchor whose whole accepted height range (-430 to 9000 m) is
+behind the camera or below the globe horizon; such an anchor is hidden. A lone
+point whose range lies outside one plane of the view frustum is not sampled
+either. Points of arrows, routes and areas are sampled even outside the view,
+so the visible part of a mark runs to their real height. Until sampled, a point
+is projected at 0 m. At most 32 samples run per `projectAll()` pass,
+oldest-refused first, and each anchor retries a miss at most once a second.
 
 Terrain height requests accept at most 64 points, matching the browser service's
 existing batch size and one bounded upstream chunk. Larger requests return HTTP

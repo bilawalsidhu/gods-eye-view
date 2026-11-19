@@ -9,9 +9,9 @@ import { nextTick } from 'vue';
 import { useScreenAnnotationsStore } from '../ui/stores/screenAnnotations.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
 import { heightsOf } from '../queries/heights.js';
-import { fromDegrees, fromDegreesInto, toLonLatH } from '../geo/ellipsoid.js';
-import { frustumPlanes, sphereOutside } from '../geo/frustum.js';
-import { distance } from '../geo/vector.js';
+import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
+import { viewPlanes } from '../geo/frustum.js';
+import { distance, dot } from '../geo/vector.js';
 import {
   canvasOf as sceneCanvasOf,
   findCamera,
@@ -88,11 +88,12 @@ export function createScreenAnnotationRenderer(
   const arrowMarkers = new Map();
   let viewBox = null;
 
-  // The eye this frame is projected from (the camera port's pose), and the
-  // query port and canvas it is projected through, read once per pass.
+  // Read the camera pose, query port, canvas and view-frustum planes once
+  // per projection pass.
   let pose = null;
   let passQuery = null;
   let passCanvas = null;
+  let cullingPlanes = null;
   // The renderer's canvas; a viewer with no renderer bound, its own.
   const canvasOf = () => sceneCanvasOf(viewer);
   const records = new Map(); // anno.id -> { key, anno, group, parts }
@@ -115,15 +116,12 @@ export function createScreenAnnotationRenderer(
   const MAX_SURFACE_HEIGHT = 9000;
   const HEIGHT_SAMPLE_BUDGET = 32; // clampNow calls per projection pass
   const HEIGHT_RETRY_MS = 1000; // minimum interval between misses per anchor
-  let cullingPlanes = null; // the pass's view frustum (`frustumPlanes`)
-  const HEIGHT_BOUNDS_RADIUS = 9500; // m about the 0 m point: every accepted height
-  const heightBoundsCenter = { x: 0, y: 0, z: 0 };
   // Fair sampling: keys refused by an exhausted budget queue in arrival order,
   // and each pass reserves budget for the oldest queued keys first, so a fixed
   // iteration order cannot starve anchors beyond the first budget's worth.
-  let heightQueue = new Set(); // keys refused in earlier passes, oldest first
-  let heightReserved = new Set(); // queued keys this pass serves first
-  let heightRefused = new Set(); // keys refused during this pass
+  const heightQueue = new Set();
+  const heightReserved = new Set(); // queued keys this pass serves first
+  const heightRefused = new Set(); // keys refused during this pass
   let heightBudget = HEIGHT_SAMPLE_BUDGET; // unreserved slots left this pass
   let projGen = 0; // bumped each projection frame; entries used this frame are "hot"
   function trimHeightCache() {
@@ -161,12 +159,11 @@ export function createScreenAnnotationRenderer(
     return `${lon.toFixed(5)},${lat.toFixed(5)}`;
   }
 
-  // Best-effort surface height under a coordinate (clamps onto the 3D tiles).
-  // Returns 0 until the tile loads, then caches the validated height.
-  // canSample=false returns the cached height (or 0) without surface sampling.
+  // Best-effort surface height under a coordinate (clamps onto the 3D tiles):
+  // the validated height once the tile loads, null until then.
   // `key` and `cached` are the caller's cache lookup for this coordinate.
-  function groundHeight(lon, lat, key, cached, canSample = true) {
-    if (cached && cached.settled) {
+  function groundHeight(lon, lat, key, cached) {
+    if (cached?.settled) {
       // Mark hot for this frame + bump to most-recently-used so heights for live
       // marks survive eviction while places we've navigated away from age out.
       cached.gen = projGen;
@@ -175,18 +172,17 @@ export function createScreenAnnotationRenderer(
       return cached.h;
     }
     const now = Date.now();
-    if (cached && (!canSample || now < cached.nextAttempt)) {
+    if (cached && now < cached.nextAttempt) {
       cached.gen = projGen;
-      return cached.h;
+      return null;
     }
-    if (!canSample) return 0;
     if (heightReserved.has(key)) {
       heightReserved.delete(key);
     } else if (heightBudget > 0) {
       heightBudget--;
     } else {
       heightRefused.add(key);
-      return cached?.h || 0;
+      return null;
     }
     try {
       const heights = heightsOf(viewer);
@@ -209,15 +205,13 @@ export function createScreenAnnotationRenderer(
     } catch {
       /* tiles not ready */
     }
-    const fallback = cached ? cached.h : 0;
     heightCache.set(key, {
-      h: fallback,
       settled: false,
       gen: projGen,
       nextAttempt: now + HEIGHT_RETRY_MS,
     });
     trimHeightCache();
-    return fallback;
+    return null;
   }
 
   function add(anno) {
@@ -413,49 +407,35 @@ export function createScreenAnnotationRenderer(
     // Area-type updates route through the hybrid proxy only.
   }
 
-  function project(lon, lat, allowOffscreen = false) {
+  // The window position of a point at its surface height (0 m until that is
+  // sampled), or null when it is not in view. A point of an arrow, route or
+  // area (`connector`) is sampled even outside the view, so the part of the
+  // mark that is in view runs to the real height of the part that is not.
+  function project(lon, lat, allowOffscreen = false, connector = false) {
+    if (!pose) return null;
     // Anchor at the real surface height (cached + validated), so marks sit on
     // the ground/building instead of at sea level. The settle-once cache keeps
     // it stable (no per-frame jitter that earlier broke nearby projections).
-    // A settled height is tested as the actual point below. An unknown height
-    // is rejected before GPU-backed surface sampling only when the whole
-    // accepted height range is proven hidden by one constraint.
     const key = heightKey(lon, lat);
     const cached = heightCache.get(key);
-    let height;
-    let horizonTest = true;
-    if (cached?.settled) {
-      height = groundHeight(lon, lat, key, cached);
-    } else {
-      if (heightRangeHidden(lon, lat)) return null;
-      // The frustum restricts sampling only; an endpoint outside it still
-      // projects (at its cached or zero height, without the horizon test)
-      // so a partly visible arrow, route or ring keeps its on-screen
-      // connector and label.
-      fromDegreesInto(lon, lat, 0, heightBoundsCenter);
-      const inFrustum =
-        !cullingPlanes ||
-        !sphereOutside(cullingPlanes, heightBoundsCenter, HEIGHT_BOUNDS_RADIUS);
-      height = groundHeight(lon, lat, key, cached, inFrustum);
-      horizonTest = inFrustum;
+    let sample = true;
+    if (!cached?.settled) {
+      // Unsettled: before sampling, cull only if the whole height range is hidden.
+      const low = fromDegrees(lon, lat, MIN_SURFACE_HEIGHT);
+      const high = fromDegrees(lon, lat, MAX_SURFACE_HEIGHT);
+      if (heightRangeHidden(low, high)) return null;
+      // A lone point outside the view is not sampled; the entry keeps its
+      // retry time.
+      sample = connector || !rangeOutsideView(low, high);
+      if (!sample && cached) cached.gen = projGen;
     }
-    const world = fromDegrees(lon, lat, height);
-    if (!pose) return null;
+    const height = sample ? groundHeight(lon, lat, key, cached) : null;
+    const world = fromDegrees(lon, lat, height ?? 0);
     // Reject points behind the camera (they produce wrapped/extreme coords).
-    const eye = pose.position;
-    const look = pose.direction;
-    if (
-      (world.x - eye.x) * look.x +
-        (world.y - eye.y) * look.y +
-        (world.z - eye.z) * look.z <=
-      0
-    )
-      return null;
-    // Reject points beyond the globe horizon. An unsampled stand-in height
-    // outside the frustum cannot decide it: the range test above found no
-    // proof that the real height is hidden.
+    if (behindEye(world)) return null;
+    // Reject points beyond the globe horizon.
     const query = passQuery;
-    if (!query || (horizonTest && query.isOccluded(world))) return null;
+    if (!query || query.isOccluded(world)) return null;
     const win = query.project(world);
     if (!win || !Number.isFinite(win.x) || !Number.isFinite(win.y)) return null;
     // Reject absurd off-screen projections (anchor not in view).
@@ -474,20 +454,30 @@ export function createScreenAnnotationRenderer(
   // region (behind the camera plane; the occluder's cone beyond the horizon
   // plane) is convex. So when both height-range endpoints fail the SAME test,
   // every intermediate height fails it too. Mixed failures prove nothing.
-  // With no pose (no eye to test from) nothing is proven hidden.
-  function heightRangeHidden(lon, lat) {
-    if (!pose) return false;
-    const low = fromDegrees(lon, lat, MIN_SURFACE_HEIGHT);
-    const high = fromDegrees(lon, lat, MAX_SURFACE_HEIGHT);
+  function heightRangeHidden(low, high) {
+    if (behindEye(low) && behindEye(high)) return true;
+    return Boolean(passQuery?.isOccluded(low) && passQuery.isOccluded(high));
+  }
+
+  // Whether the height range lies wholly outside one view-frustum plane, so
+  // no accepted height under the point is in view.
+  function rangeOutsideView(low, high) {
+    if (!cullingPlanes) return false;
+    for (const { normal, w } of cullingPlanes)
+      if (dot(normal, low) + w < 0 && dot(normal, high) + w < 0) return true;
+    return false;
+  }
+
+  // Whether `point` is on or behind the camera plane (needs a pose).
+  function behindEye(point) {
     const eye = pose.position;
     const look = pose.direction;
-    const behind = (point) =>
+    return (
       (point.x - eye.x) * look.x +
         (point.y - eye.y) * look.y +
         (point.z - eye.z) * look.z <=
-      0;
-    if (behind(low) && behind(high)) return true;
-    return Boolean(passQuery?.isOccluded(low) && passQuery.isOccluded(high));
+      0
+    );
   }
 
   // Tracked-entity z-order: the tracked aircraft is a Cesium billboard in the
@@ -569,23 +559,16 @@ export function createScreenAnnotationRenderer(
       publish();
       return;
     }
-    // Serve the oldest refused keys first; the rest of the budget is open.
-    heightReserved = new Set();
+    heightReserved.clear();
     for (const key of heightQueue) {
       if (heightReserved.size >= HEIGHT_SAMPLE_BUDGET) break;
       heightReserved.add(key);
     }
     heightBudget = HEIGHT_SAMPLE_BUDGET - heightReserved.size;
-    heightRefused = new Set();
+    heightRefused.clear();
     projGen += 1; // new frame: entries touched below are "hot" and survive trimming
     pose = findCamera(viewer)?.pose() ?? null;
-    // A pose with no perspective frustum culls nothing.
-    cullingPlanes =
-      Number.isFinite(pose?.fovy) &&
-      Number.isFinite(pose.aspectRatio) &&
-      Number.isFinite(pose.near)
-        ? frustumPlanes(pose)
-        : null;
+    cullingPlanes = viewPlanes(pose);
     passQuery = findQuery(viewer);
     passCanvas = canvasOf();
     const trackedRect = trackedEntityRect();
@@ -622,7 +605,9 @@ export function createScreenAnnotationRenderer(
         const polygons = anno.polygons?.length ? anno.polygons : [[anno.ring]];
         for (const polygon of polygons) {
           const projectedRings = polygon.map((ring) =>
-            ring.map(([lon, lat]) => project(lon, lat, polygon.length > 1)),
+            ring.map(([lon, lat]) =>
+              project(lon, lat, polygon.length > 1, true),
+            ),
           );
           // Keep the historical visible-outer projection, but never fill over
           // an unprojectable hole or hide another independently visible part.
@@ -656,8 +641,8 @@ export function createScreenAnnotationRenderer(
           group.display = 'none';
         }
       } else if (anno.type === 'arrow' && parts.path) {
-        const a = project(anno.anchor.lon, anno.anchor.lat);
-        const b = project(anno.to.lon, anno.to.lat);
+        const a = project(anno.anchor.lon, anno.anchor.lat, false, true);
+        const b = project(anno.to.lon, anno.to.lat, false, true);
         if (a && b) {
           // gentle arc so the connector reads as a drawn gesture, not a ruler line
           const mx = (a.x + b.x) / 2;
@@ -682,7 +667,9 @@ export function createScreenAnnotationRenderer(
           group.display = 'none';
         }
       } else if (anno.type === 'route' && parts.poly) {
-        const projected = anno.path.map((pt) => project(pt.lon, pt.lat));
+        const projected = anno.path.map((pt) =>
+          project(pt.lon, pt.lat, false, true),
+        );
         const pts = [];
         for (const p of projected) {
           if (p) pts.push(`${p.x.toFixed(1)},${p.y.toFixed(1)}`);
@@ -746,11 +733,9 @@ export function createScreenAnnotationRenderer(
     }
     // Still-refused queued keys keep their place; new refusals join the back.
     // Keys no longer requesting a sample (settled, culled, removed) drop out.
-    const nextQueue = new Set();
     for (const key of heightQueue)
-      if (heightRefused.has(key)) nextQueue.add(key);
-    for (const key of heightRefused) nextQueue.add(key);
-    heightQueue = nextQueue;
+      if (!heightRefused.has(key)) heightQueue.delete(key);
+    for (const key of heightRefused) heightQueue.add(key);
 
     // Keep clustered callouts readable.
     const placed = [];
