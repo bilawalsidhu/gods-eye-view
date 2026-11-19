@@ -23,8 +23,14 @@ export function createLifecycle({
   source,
 }) {
   const { activateCctvCameraFromWorldClick } = services.activation;
-  const { resolvePickId, registerPickOwner, unregisterPickOwner, clickCard } =
-    services.picking;
+  const {
+    resolvePickId,
+    registerPickOwner,
+    unregisterPickOwner,
+    clickCard,
+    registerClickClaim,
+    unregisterClickClaim,
+  } = services.picking;
   const { onFocusTargetAppear } = services.focus;
   const { releaseContinuousRender } = services.render;
 
@@ -510,6 +516,7 @@ export function createLifecycle({
           );
         return Boolean(coverage && layerState._recordById.has(coverage[1]));
       });
+      registerClickClaim?.('cctv', parts.selection.countClickCard);
       if (!layerState._activeCameraId && layerState._records.length) {
         layerState._activeCameraId = parts.navigation.openingCameraId();
         layerState._autoHopSuspended = false;
@@ -546,6 +553,7 @@ export function createLifecycle({
       services.credits?.hideOsmCredit?.(layerState._viewer, 'cctv');
       layerState._enabled = false;
       unregisterPickOwner('cctv');
+      unregisterClickClaim?.('cctv');
       // ADJUST mode does not survive a layer toggle — predictable re-entry.
       layerState._calibrationMode = false;
       releaseContinuousRender('cctv-adjust');
@@ -580,6 +588,7 @@ export function createLifecycle({
           parts.cards.handleVisibilityChange,
         );
       unregisterPickOwner('cctv');
+      unregisterClickClaim?.('cctv');
       if (layerState._mapStackListener && typeof window !== 'undefined') {
         window.removeEventListener(
           'gev:map-stack-changed',

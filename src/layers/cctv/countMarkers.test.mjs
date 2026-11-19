@@ -126,6 +126,25 @@ test('a lone camera clear of the HUD keeps its icon when the count beside it is 
   }
 });
 
+test('a count stays visible when a lone camera would move it under the HUD', async () => {
+  const cells = [cellAt('a', 200, 2), cellAt('b', 234, 1)];
+  const hud = { overlapsHardUi: (rect) => rect.x + rect.w > 225 };
+  const m = counts(() => m.update(cells, project));
+  paint(hud);
+  m.update(cells, project);
+  assert.equal(paint(hud)[0]?.text, '2');
+  assert.equal(cells[1].absorbed, false);
+  await Promise.resolve();
+  paint(hud);
+  await Promise.resolve();
+
+  paint();
+  await Promise.resolve();
+  assert.equal(cells[1].absorbed, true);
+  assert.equal(paint()[0]?.text, '3');
+  m.dispose();
+});
+
 test('counts fade with the Scope keyhole like the callouts', () => {
   const m = counts(undefined, (_x, _y, keyhole) => keyhole.alpha);
   m.update([cellAt('a', 400, 2)], project);

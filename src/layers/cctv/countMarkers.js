@@ -3,6 +3,7 @@ import {
   cellLonLat,
   formatCameraCount,
   mergeCountCells,
+  withoutLoneCameras,
 } from '../../data/cctvCellCounts.js';
 import { WORLD_OVERLAY_STYLE } from '../../overlays/worldOverlayTokens.js';
 import {
@@ -200,7 +201,27 @@ export function createCountMarkers(
     ground(visible);
     let changed = visible.length !== markers.length;
     for (let i = 0; i < visible.length; i++) {
-      const cell = visible[i];
+      let cell = visible[i];
+      // If the merged count is under the HUD, restore the count and its lone icons.
+      if (hardUi && cell.lone?.length) {
+        const at = project(cellCenter(cell));
+        const { width, height } = sizeFor(cell.count);
+        const rect = at && {
+          x: at.x - width / 2,
+          y: at.y - height / 2,
+          w: width,
+          h: height,
+        };
+        if (rect && hardUi(rect)) {
+          for (const lone of cell.lone) lone.absorbed = false;
+          const core = withoutLoneCameras(cell);
+          if (core) {
+            core.releasedAt = rect;
+            ground([core]);
+            cell = core;
+          }
+        }
+      }
       const marker = (markers[i] ??= { focus: 1 });
       const last = marker.cell;
       const size = sizeFor(cell.count);
@@ -216,20 +237,6 @@ export function createCountMarkers(
         marker.cullPos = liftedForHorizon(marker.pos);
         marker.hudHidden = undefined;
         changed = true;
-      }
-      // A count hidden by the HUD leaves its lone cameras visible as icons.
-      if (hardUi && cell.lone?.length) {
-        const at = project(marker.pos);
-        if (
-          at &&
-          hardUi({
-            x: at.x - size.width / 2,
-            y: at.y - size.height / 2,
-            w: size.width,
-            h: size.height,
-          })
-        )
-          for (const lone of cell.lone) lone.absorbed = false;
       }
       changed ||=
         size.text !== marker.text ||
@@ -267,6 +274,8 @@ export function createCountMarkers(
       ctx.textBaseline = 'middle';
       for (let i = 0; i < markers.length; i++) {
         const marker = markers[i];
+        // The core can stay visible while the HUD uncovers the merged count.
+        if (marker.cell.releasedAt) refresh ||= !hardUi(marker.cell.releasedAt);
         const { height } = marker;
         const { x: px, y: py, z: pz } = marker.pos;
         const w = m[3] * px + m[7] * py + m[11] * pz + m[15];
@@ -291,12 +300,14 @@ export function createCountMarkers(
         )
           continue;
         const hidden = Boolean(hardUi?.(rect));
-        if (marker.hudHidden !== hidden) {
+        const previous = marker.hudHidden;
+        if (previous !== hidden) {
           marker.hudHidden = hidden;
-          // A first frame or moving HUD can change which lone icons must show.
-          refresh ||= marker.cell.lone?.some(
-            (cell) => cell.absorbed === hidden,
-          );
+          // The active icon steps aside only for visible counts.
+          refresh ||=
+            hidden ||
+            previous !== undefined ||
+            marker.cell.lone?.some((cell) => cell.absorbed === hidden);
         }
         if (hidden) continue;
         const fade =

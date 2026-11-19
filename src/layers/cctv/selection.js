@@ -1,4 +1,7 @@
-import { CCTV_OVERLAY_SOURCE_ID } from '../../data/cctvCards.js';
+import {
+  CCTV_COUNT_CARD_SOURCE_ID,
+  CCTV_OVERLAY_SOURCE_ID,
+} from '../../data/cctvCards.js';
 import { isTrackingClickGesture } from '../../data/trackingClickGesture.js';
 
 export function createSelection({
@@ -8,7 +11,8 @@ export function createSelection({
   source,
 }) {
   const { CCTV_ACTIVATION_RESULT } = services.activation;
-  const { resolvePickId, findPickOwner } = services.picking;
+  const { resolvePickId, findPickOwner, isUnderOtherCard } = services.picking;
+  const OWN_CARD_SOURCES = [CCTV_OVERLAY_SOURCE_ID, CCTV_COUNT_CARD_SOURCE_ID];
 
   /**
    * Returns the camera record for the currently active camera. A stale ID falls
@@ -30,21 +34,42 @@ export function createSelection({
     return fallback;
   }
 
-  /** A card painted above the count, or another layer's object, owns the click. */
-  function countYields(event) {
-    const { x, y } = event.screenPosition;
-    if (
-      layerState._cctvOverlayHost?.hitTest(x, y, {
-        sourceId: CCTV_OVERLAY_SOURCE_ID,
-      })?.entryId
-    )
-      return true;
+  /** Whether another layer's scene object owns the click at this count. */
+  function sceneTakesCountClick(event) {
     const top = event.topHit;
     if (!top) return false;
     const drawHit = event.drawHit;
     if (drawHit) return !parts.rendering.extractPickedCameraId(drawHit);
     const id = resolvePickId(top);
     return id !== null && findPickOwner?.(id) !== 'cctv';
+  }
+
+  /** Leave other layers' cards to the caller since clickCard also calls this. */
+  function clickedCount(event) {
+    if (
+      !isTrackingClickGesture(event.gesture) ||
+      !layerState._enabled ||
+      event.overlay
+    )
+      return null;
+    const cell = layerState._counts?.pickedCell(event.screenPosition);
+    if (!cell) return null;
+    const { x, y } = event.screenPosition;
+    if (
+      layerState._cctvOverlayHost?.hitTest(x, y, {
+        sourceId: CCTV_OVERLAY_SOURCE_ID,
+      })?.entryId
+    )
+      return null;
+    return sceneTakesCountClick(event) ? null : cell;
+  }
+
+  /** The count marker as the card on top of a click it takes, for every layer's clickCard. */
+  function countClickCard(event) {
+    const cell = clickedCount(event);
+    return cell
+      ? { sourceId: CCTV_COUNT_CARD_SOURCE_ID, entryId: String(cell.key ?? '') }
+      : null;
   }
 
   /**
@@ -59,10 +84,9 @@ export function createSelection({
   function bindCctvWorldClickGesture(input, onClick) {
     return input.onClick((event) => {
       if (!isTrackingClickGesture(event.gesture)) return;
-      const cell =
-        layerState._enabled &&
-        layerState._counts?.pickedCell(event.screenPosition);
-      if (cell && !countYields(event)) {
+      const cell = clickedCount(event);
+      // Another layer's card or label painted above the count takes the click.
+      if (cell && !isUnderOtherCard?.(event, OWN_CARD_SOURCES)) {
         parts.navigation.zoomToCell(cell);
         return;
       }
@@ -243,6 +267,7 @@ export function createSelection({
   return {
     getActiveRecord,
     bindCctvWorldClickGesture,
+    countClickCard,
     setActiveCamera,
     deactivateActiveCamera,
     cctvEmptyClickDeselects,

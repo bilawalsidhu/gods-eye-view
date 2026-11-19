@@ -546,6 +546,17 @@ export function createRendering({
         cell.rank = rank;
       }
     }
+    // Check each mount mate against counts where its icon will be drawn.
+    const lone = visibleCells.filter((cell) => cell.count === 1);
+    spreadSharedMounts(
+      shown.concat(lone.map((cell) => cell.winner)),
+      pose,
+      metresPerPixelPerMetre,
+      pass,
+    );
+    for (const cell of lone)
+      cell.offsetPx =
+        cell.winner.spreadPass === pass ? cell.winner.spreadPx : 0;
     // A count stands on the drawn terrain too: its cell may be too far for
     // its cameras to have been read. Marks each lone camera that a count
     // marker beside it has taken in.
@@ -559,7 +570,6 @@ export function createRendering({
         shown.push(record);
       }
     }
-    spreadSharedMounts(shown, pose, metresPerPixelPerMetre, pass);
     clearActiveOfCounts(project, pose, metresPerPixelPerMetre, pass);
     const writes = [];
     let coverageChanged = false;
@@ -626,10 +636,10 @@ export function createRendering({
 
   /**
    * Cameras on one mount would draw as one icon with several callouts. Among
-   * the cameras shown, those within VIEW_SITE_M horizontally get draw
-   * positions side by side along the screen's horizontal, in id order,
-   * `VIEW_SITE_SPREAD_PX` apart at the distance they are seen from. The
-   * record's own position is untouched: geometry and cards keep the mount.
+   * icon candidates, those within VIEW_SITE_M horizontally get draw positions
+   * side by side in id order, `VIEW_SITE_SPREAD_PX` apart on screen. A mate
+   * absorbed by a count keeps its place in the row. Geometry and cards stay
+   * on the mount.
    */
   function spreadSharedMounts(shown, pose, metresPerPixelPerMetre, pass) {
     const { right, direction, position: eye } = pose;
@@ -669,11 +679,9 @@ export function createRendering({
           (p.x - eye.x) * direction.x +
           (p.y - eye.y) * direction.y +
           (p.z - eye.z) * direction.z;
-        const metres =
-          (i - (mates.length - 1) / 2) *
-          VIEW_SITE_SPREAD_PX *
-          metresPerPixelPerMetre *
-          depth;
+        const px = (i - (mates.length - 1) / 2) * VIEW_SITE_SPREAD_PX;
+        record.spreadPx = px;
+        const metres = px * metresPerPixelPerMetre * depth;
         record.spreadOffset = scale(right, metres);
         record.spreadPosition = add(p, record.spreadOffset);
         record.spreadPass = pass;
@@ -681,7 +689,7 @@ export function createRendering({
     }
   }
 
-  /** Move the active camera's icon beside any count marker that would cover it. */
+  /** Only counts visible outside the HUD push the active icon aside. */
   function clearActiveOfCounts(project, pose, metresPerPixelPerMetre, pass) {
     if (!layerState._activeCameraId) return;
     const record = layerState._recordById.get(layerState._activeCameraId);
@@ -702,6 +710,7 @@ export function createRendering({
       (CAMERA_ICON_PX * 1.25 * iconScaleAt(distance(p, pose.position))) / 2;
     const spans = [];
     for (const marker of markers) {
+      if (marker.hudHidden) continue;
       const at = project(marker.pos);
       if (
         !at ||

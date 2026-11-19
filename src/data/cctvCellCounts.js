@@ -136,7 +136,8 @@ function visitNeighbors(marker, grid, gap, visit) {
  * one grid bucket. Even the widest pill can only touch its eight neighbors.
  * A cell with one camera takes the footprint `sizeFor(1)` gives its icon and
  * joins the nearest count it touches. Lone cameras never join each other
- * or bridge two counts.
+ * or bridge two counts. A spread icon's `offsetPx` shifts its footprint sideways.
+ * A merged group lists its ground cells in `parts`.
  * Ground cells stay intact for the camera picker and individual-icon pass.
  */
 export function mergeCountCells(cells, project, sizeFor, gap) {
@@ -150,7 +151,7 @@ export function mergeCountCells(cells, project, sizeFor, gap) {
     // The view projector reuses its result object.
     return {
       cell,
-      x: screen?.x,
+      x: screen ? screen.x + (cell.offsetPx ?? 0) : undefined,
       y: screen?.y,
       halfSegment: (width - height) / 2,
       radius: height / 2,
@@ -201,8 +202,10 @@ export function mergeCountCells(cells, project, sizeFor, gap) {
     } else {
       const group = createCameraCell(seed.cell.key);
       group.lone = [];
+      group.parts = [];
       for (const { cell } of members) {
         addCell(group, cell);
+        group.parts.push(...(cell.parts ?? [cell]));
         if (cell.count === 1) group.lone.push(cell);
         else if (cell.lone) group.lone.push(...cell.lone);
       }
@@ -217,4 +220,14 @@ export function mergeCountCells(cells, project, sizeFor, gap) {
       groups.push(marker.cell);
   }
   return groups;
+}
+
+/** Rebuild a group's count under its original key, excluding lone cameras. */
+export function withoutLoneCameras(group) {
+  const counts = (group.parts ?? []).filter((cell) => cell.count > 1);
+  if (!counts.length) return null;
+  const core = createCameraCell(group.key);
+  core.parts = counts;
+  for (const cell of counts) addCell(core, cell);
+  return core;
 }

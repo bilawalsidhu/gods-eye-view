@@ -1998,10 +1998,13 @@ middle. The marker grows with the count and paints on the world overlay at
 callout resolution. The count covers the whole cell up to the horizon, including
 its off-screen cameras. Overlapping markers merge and add their counts. A lone
 camera whose icon would touch a marker joins the nearest one, unless the HUD
-hides that marker. The active camera keeps its own icon beside any marker that
-would cover it and stays out of the count. A click on a marker zooms in on its
-group, at least halving the distance each time. The view stays put while the
-cockpit or a tracked object holds it. Ambient cards and coverage attach only to
+hides the merged marker. In that case the lone camera keeps its icon and the
+count stays where it was before the merge. The active camera keeps its own icon
+beside any marker that would cover it and stays out of the count. A click on a
+marker zooms in on its group, at least halving the distance each time. If halving
+would leave the group wider than the frame, the view zooms in on the group's
+ground cell nearest the eye. The cockpit or a tracked object holds the view
+in place. Ambient cards and coverage attach only to
 cameras drawn as icons. On a globe map a marker stands on the drawn terrain. A
 camera the height batch never answered for takes the drawn terrain as its ground
 once it is near the screen. It reads that height again from much closer, once
@@ -2131,7 +2134,10 @@ trail, a route. A layer under another layer's card or label
 (`isUnderOtherCard`) does nothing: it neither acts on its item there nor
 treats the click as empty space, so a tracked aircraft stays tracked and a
 selection stays selected. Context (`src/ui/entityContextBridge.js`) names
-nothing under a card. With no card on top, the scene rules are unchanged.
+nothing under a card. A layer can claim a target it paints outside the overlay's
+entries (`registerClickClaim`) where no card or label is on top. A CCTV count
+claims each click that zooms to it, so a tracked aircraft stays tracked.
+With no card or claim on top, the scene rules are unchanged.
 World-overlay hit rectangles are what is painted on screen until the next
 paint: an overlay change (a click subscriber publishing its selection card)
 no longer clears them mid-click, and a paint that draws nothing clears them

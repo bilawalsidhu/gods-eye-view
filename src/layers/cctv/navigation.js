@@ -1,7 +1,7 @@
 import { distance } from '../../geo/vector.js';
 import { rangeForBoundingSphere } from '../../data/cameraFraming.js';
 import { isFollowing } from '../../data/followed.js';
-import { cellBounds } from '../../data/cctvCellCounts.js';
+import { cellBounds, cellCenter } from '../../data/cctvCellCounts.js';
 import { CCTV_FOCUS_RESULT, VIEW_CELL_PX, VIEW_MIN_CELL_M } from './policy.js';
 import { cameraOf, canvasOf } from '../../render/rendererOf.js';
 
@@ -131,6 +131,20 @@ export function createNavigation({
     return CCTV_FOCUS_RESULT.FOCUSED;
   }
 
+  /** The ground cell of a group nearest the eye, or the group itself if unmerged. */
+  function nearestPart(cell, eye) {
+    let nearest = cell;
+    let best = Infinity;
+    for (const part of cell.parts ?? []) {
+      const d = distance(eye, cellCenter(part));
+      if (d < best) {
+        best = d;
+        nearest = part;
+      }
+    }
+    return nearest;
+  }
+
   /** Frame a group's padded bounds from above, including coincident mounts. */
   function zoomToCell(cell) {
     const viewer = layerState._viewer;
@@ -140,18 +154,23 @@ export function createNavigation({
     const tanHalfY = Math.tan((pose.fovy || Math.PI / 3) / 2);
     const canvas = canvasOf(viewer);
     const height = canvas?.clientHeight || canvas?.height || 1;
-    const bounds = cellBounds(cell);
     // Half the range where cells stop grouping, so even coincident mounts split.
     const closeRange =
       (VIEW_MIN_CELL_M * height) / (4 * VIEW_CELL_PX * tanHalfY);
+    const fitRange = (bounds) =>
+      Math.max(closeRange, rangeForBoundingSphere(viewer, bounds.radius));
     // Approach long groups in halves so every click gets closer.
-    const halfway = pose.position
-      ? distance(pose.position, bounds.center) / 2
-      : Infinity;
-    const range = Math.min(
-      halfway,
-      Math.max(closeRange, rangeForBoundingSphere(viewer, bounds.radius)),
-    );
+    const halfway = (bounds) =>
+      pose.position ? distance(pose.position, bounds.center) / 2 : Infinity;
+    let bounds = cellBounds(cell);
+    const fit = fitRange(bounds);
+    let range = Math.min(halfway(bounds), fit);
+    // If the group exceeds the narrower side of the frame, approach its nearest part.
+    const tanHalf = tanHalfY * Math.min(1, pose.aspectRatio || 1);
+    if (range < fit && range * tanHalf < bounds.radius) {
+      bounds = cellBounds(nearestPart(cell, pose.position));
+      range = Math.min(halfway(bounds), fitRange(bounds));
+    }
     camera.flyToBounds(bounds, {
       offset: { heading: 0, pitch: -Math.PI / 2, range },
       durationS: 1.2,

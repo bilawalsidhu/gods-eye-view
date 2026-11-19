@@ -22,11 +22,12 @@ export function createGround({ state: layerState, services, parts, source }) {
    *  - `google-3d`     — photoreal stack: globe hidden, the visible Google 3D
    *                      tileset IS the surface → one-shot scene sampling refines.
    *  - `terrain-globe` — any globe stack: the Re:Earth point-height prior IS the
-   *                      resolution (zero scene queries).
+   *                      resolution. A camera the batch left unanswered takes the
+   *                      drawn terrain from the view pass (`adoptDrawnGround`).
    *
    * Only an explicit `false` (the photoreal stack hides the globe) selects
    * `google-3d`; undefined/null (no viewer / torn down) must fall to the regime
-   * that never touches the scene. Pure — exported for the unit suite.
+   * that never samples the scene's tiles. Pure — exported for the unit suite.
    * @param {boolean|undefined|null} globeShow - Whether the renderer shows the
    *   globe (`globe.isGlobeVisible()`).
    * @returns {'google-3d'|'terrain-globe'}

@@ -86,6 +86,8 @@ const RETRY_BASE_MS = 15_000;
 const RETRY_MAX_MS = 5 * 60 * 1000;
 
 export const CCTV_OVERLAY_SOURCE_ID = 'cctv';
+/** The source a CCTV count marker takes clicks as. */
+export const CCTV_COUNT_CARD_SOURCE_ID = 'cctv-count';
 export const CCTV_THUMBNAIL_ALTITUDE_SCALE = Object.freeze({
   fullEnd: CCTV_CARD_SCALE_FULL_M,
   midEnd: CCTV_CARD_SCALE_MID_M,

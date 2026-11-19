@@ -1,4 +1,5 @@
 import * as picking from '../../data/pickRegistry.js';
+import { CCTV_COUNT_CARD_SOURCE_ID } from '../../data/cctvCards.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CCTV_ACTIVATION_RESULT } from '../../cctvFocusRequest.js';
@@ -148,5 +149,65 @@ test("a count click yields to a card above it and to another layer's object, not
     }
   } finally {
     picking.unregisterPickOwner('cctv');
+  }
+});
+
+test('a count click is the card on top for every layer, unless the count yields', () => {
+  let zooms = 0;
+  let clicks = 0;
+  const selection = createSelection({
+    services: { activation: {}, picking },
+    state: {
+      _enabled: true,
+      _counts: { pickedCell: (p) => (p?.x === 20 ? { key: 'g' } : null) },
+      _cctvOverlayHost: { hitTest: () => null },
+    },
+    parts: {
+      navigation: { zoomToCell: () => zooms++ },
+      rendering: {
+        extractPickedCameraId: (hit) =>
+          hit?.set === 'cctv-icons' ? hit.id : null,
+      },
+    },
+  });
+  const click = selection.bindCctvWorldClickGesture(
+    { onClick: (fn) => fn },
+    () => clicks++,
+  );
+  const event = (topHit = null, x = 20, durationMs = 20) => ({
+    screenPosition: { x, y: 26 },
+    topHit,
+    drawHit: topHit,
+    gesture: { travelPx: 0, durationMs },
+  });
+  picking.registerClickClaim('cctv', selection.countClickCard);
+  try {
+    const aircraftFirst = event();
+    assert.equal(picking.isUnderOtherCard(aircraftFirst), true);
+    assert.deepEqual(picking.clickCard(aircraftFirst), {
+      sourceId: CCTV_COUNT_CARD_SOURCE_ID,
+      entryId: 'g',
+    });
+    click(aircraftFirst);
+    assert.deepEqual([zooms, clicks], [1, 0]);
+
+    const cctvFirst = event();
+    click(cctvFirst);
+    assert.equal(picking.isUnderOtherCard(cctvFirst), true);
+    assert.deepEqual([zooms, clicks], [2, 0]);
+
+    for (const [e, claimed, expected] of [
+      [event({ set: 'flights', id: 'abc' }), false, [2, 1]],
+      [event({ set: 'cctv-icons', id: 'cam-2' }), true, [3, 1]],
+      [event(null, 20, 1000), false, [3, 1]],
+      [event(null, 60), false, [3, 2]],
+      [{ ...event(), overlay: true }, false, [3, 3]],
+    ]) {
+      assert.equal(picking.isUnderOtherCard(e), claimed);
+      click(e);
+      assert.deepEqual([zooms, clicks], expected);
+    }
+  } finally {
+    picking.unregisterClickClaim('cctv');
   }
 });

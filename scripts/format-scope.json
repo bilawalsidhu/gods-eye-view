@@ -662,6 +662,8 @@
   "src/layers/cctv/source.test.mjs",
   "src/layers/cctv/frames.test.mjs",
   "src/layers/cctv/countMarkers.test.mjs",
+  "src/layers/cctv/count_click_overlay.test.mjs",
+  "src/layers/cctv/count_click_framing.test.mjs",
   "src/layers/cctv/ground.test.mjs",
   "src/layers/cctv/rendering.test.mjs",
   "src/data/alprCameras.js",
