@@ -768,7 +768,10 @@ test('markup, startup ordering and accessibility remain pinned', async () => {
     html,
     /data-first-run-status[^>]*role="status"[^>]*aria-live="polite"/,
   );
-  assert.match(html, /<input type="checkbox" data-first-run-suppress\s*\/?>/);
+  assert.match(
+    html,
+    /<input type="checkbox" class="ui-checkbox__input" data-first-run-suppress\s*\/?>/,
+  );
 
   assert.match(startup, /styleManager\.initialRestorePromise/);
   assert.ok(
