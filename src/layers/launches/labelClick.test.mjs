@@ -118,11 +118,15 @@ const label = (
   entryId,
 });
 
-test('a mission label click focuses its launch and stops the click there', (t) => {
-  const r = rig(t, { overlayHit: label('launch:L2') });
+test('a mission label click focuses its launch and covers the geometry beneath', (t) => {
+  const r = rig(t, { overlayHit: label('launch:L2'), geometryLaunchId: 'L1' });
   r.click();
-  assert.deepEqual(r.focused, ['L2']);
-  assert.equal(r.ambient.length, 0, 'the layers beneath do not see it');
+  assert.deepEqual(r.focused, ['L2'], 'the mission beneath is not picked');
+  // Other layers still hear it, to close their cards or clear selection,
+  // as a click on the label rather than on the geometry beneath.
+  assert.equal(r.ambient.length, 1);
+  assert.equal(r.ambient[0].overlay, true);
+  assert.equal(r.ambient[0].drawHit, null);
 
   r.setHit(label('launch:L1', ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID));
   r.click();
@@ -156,7 +160,8 @@ test('a throwing globe-pick listener does not stop the pick', (t) => {
   r.click();
   assert.deepEqual(r.focused, ['L1']);
   assert.deepEqual(heard, ['L1']);
-  assert.equal(r.ambient.length, 0);
+  assert.equal(r.ambient.length, 1);
+  assert.equal(r.ambient[0].overlay, true);
 });
 
 test('a mission label for an unknown launch falls through to other layers', (t) => {
