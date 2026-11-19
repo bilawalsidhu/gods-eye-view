@@ -946,7 +946,7 @@ test('the card closes without a keyboard: the ESC hint is a button, kept on phon
   );
   assert.match(
     header,
-    /<button type="button" class="first-run-dismiss" data-first-run-dismiss>/,
+    /<button type="button" class="[^"]*\bfirst-run-dismiss\b[^"]*" data-first-run-dismiss>/,
   );
   assert.match(header, />SKIP · ESC</);
   assert.match(header, />SKIP</);

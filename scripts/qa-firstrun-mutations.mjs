@@ -444,14 +444,14 @@ const MUTATIONS = [
   {
     defect: 'a mission tile is dropped from the menu',
     file: 'html',
-    from: '          <button type="button" data-first-run-start="space-missions"',
-    to: '      <button type="button" data-first-run-start-disabled="space-missions"',
+    from: '          <UiButton data-first-run-start="space-missions"',
+    to: '      <UiButton data-first-run-start-disabled="space-missions"',
   },
   {
     defect: "the menu order stops matching the owner's",
     file: 'html',
-    from: '<button type="button" data-first-run-start="environmental"',
-    to: '<button type="button" data-first-run-start="zzz-environmental"',
+    from: '<UiButton data-first-run-start="environmental"',
+    to: '<UiButton data-first-run-start="zzz-environmental"',
   },
   {
     defect: 'the "don\'t show again" checkbox loses its hook',
