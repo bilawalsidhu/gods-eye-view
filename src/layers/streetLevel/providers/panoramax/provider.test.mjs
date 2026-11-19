@@ -284,7 +284,7 @@ async function mounted(sourceOptions, contextOptions) {
   const env = setup(sourceOptions, contextOptions);
   const poses = [];
   env.instance.viewer.onPose((pose) => poses.push(pose.imageId));
-  const host = fakeHost();
+  const host = fakeHost(env.instance.viewer);
   await env.instance.viewer.mount(host);
   const [, , prev, next] = host.children[0].children;
   return { ...env, poses, prev, next };
@@ -320,7 +320,7 @@ test('one lookup for a picture asked twice at once', async () => {
     await gate;
     return getItem(id);
   };
-  const host = fakeHost();
+  const host = fakeHost(instance.viewer);
   await instance.viewer.mount(host);
   const first = instance.viewer.open('s-0');
   const second = instance.viewer.open('s-0');
@@ -985,7 +985,7 @@ test('after a GPU reset the viewer draws the same picture itself, leaving the co
   const { context, actions } = fakeContext();
   const instance = definition.create(context);
   actions.instance = instance;
-  const host = fakeHost();
+  const host = fakeHost(instance.viewer);
   await instance.viewer.mount(host);
   const poses = [];
   instance.viewer.onPose((pose) => poses.push(pose.imageId));

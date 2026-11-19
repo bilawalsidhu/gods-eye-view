@@ -703,6 +703,42 @@ export function createStreetLevelLayer({
     attachViewerHost(element) {
       parts.viewerHost.attach(element);
     },
+    /**
+     * Receive every presentation of the photo viewer the providers whose
+     * photos are plain files (KartaView, Panoramax) mount in the viewer
+     * host, starting with the current one; null while none is mounted. A
+     * view draws it (see photoViewer.js); with nobody subscribed, those
+     * providers' photos cannot open.
+     * @param {(view: ?object) => void} listener
+     * @returns {() => void} Unsubscribe.
+     */
+    subscribePhotoViewer(listener) {
+      // Each mounted viewer's presentation, the latest mount last.
+      const shown = new Map();
+      let ready = false;
+      let last;
+      const publish = () => {
+        const next = [...shown.values()].at(-1) ?? null;
+        if (!ready || next === last) return;
+        last = next;
+        listener(next);
+      };
+      const unsubscribes = [];
+      for (const [id, entry] of state.providers) {
+        const unsubscribe = entry.instance.viewer?.subscribeView?.((view) => {
+          shown.delete(id);
+          if (view) shown.set(id, view);
+          publish();
+        });
+        if (typeof unsubscribe === 'function') unsubscribes.push(unsubscribe);
+      }
+      ready = true;
+      publish();
+      if (last === undefined) listener((last = null));
+      return () => {
+        for (const unsubscribe of unsubscribes.splice(0)) unsubscribe();
+      };
+    },
     setProviderEnabled,
     openImage,
     /**

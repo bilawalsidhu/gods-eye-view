@@ -56,7 +56,7 @@ function setup() {
     pending.get(url).reject(new Error('gone'));
     pending.delete(url);
   };
-  return { viewer, loads, images, release, fail, host: fakeHost() };
+  return { viewer, loads, images, release, fail, host: fakeHost(viewer) };
 }
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -146,7 +146,7 @@ test('Esc: the docked viewer offers it to the provider first; expanded, it is th
     onEscape: () => ++asked > 0,
     load: async (url) => ({ src: url }),
   });
-  const host = fakeHost();
+  const host = fakeHost(viewer);
   await viewer.mount(host);
   const root = host.children[0];
   const press = () => {
@@ -195,7 +195,7 @@ test('a sharp panorama still downloading when another photo opens is aborted', a
   });
   t.after(() => delete globalThis.devicePixelRatio);
   globalThis.devicePixelRatio = 1;
-  const host = fakeHost();
+  const host = fakeHost(viewer);
   await viewer.mount(host);
   parts(host).canvas.clientWidth = 1800;
   await viewer.open('a');
@@ -235,7 +235,7 @@ test('a lost WebGL context while the first panorama loads releases its bitmap', 
       };
     },
   });
-  const host = fakeHost();
+  const host = fakeHost(viewer);
   await viewer.mount(host);
   const opening = viewer.open('a');
   assert.ok(await until(() => land !== null), 'the panorama is loading');
@@ -262,7 +262,7 @@ test('docked, Esc anywhere in the viewer’s box (toolbar, caption) is offered t
     onEscape: () => ++asked > 0,
     load: async (url) => ({ src: url }),
   });
-  const host = fakeHost();
+  const host = fakeHost(viewer);
   const wrap = fakeHost();
   host.closest = (selector) => (selector === '.sl-viewer-wrap' ? wrap : null);
   await viewer.mount(host);
@@ -363,7 +363,7 @@ function heldViewer() {
     pending.get(url).resolve({ src: url });
     pending.delete(url);
   };
-  return { viewer, pending, signals, loads, release, host: fakeHost() };
+  return { viewer, pending, signals, loads, release, host: fakeHost(viewer) };
 }
 
 test('a new open, a close or an unmount stops the downloads of the open before it', async () => {
@@ -439,7 +439,6 @@ test('a resize while another photo opens does not upgrade the photo still shown'
 });
 
 test('a panorama is always decoded at a bounded size', async () => {
-  const env = heldViewer();
   const options = [];
   const viewer = createPhotoViewer({
     providerId: 'test',
@@ -461,7 +460,7 @@ test('a panorama is always decoded at a bounded size', async () => {
       destroy() {},
     }),
   });
-  await viewer.mount(env.host);
+  await viewer.mount(fakeHost(viewer));
   await viewer.open('a');
   // SOURCES' panoFirst names no size: the viewer still bounds it.
   assert.deepEqual(options[0].resize, [2048, 1024]);
@@ -549,7 +548,7 @@ test('a browser without :fullscreen / :popover-open (Safari < 16.4) still opens 
     onEscape: () => ++asked > 0,
     load: async (url) => ({ src: url }),
   });
-  const host = fakeHost();
+  const host = fakeHost(viewer);
   await viewer.mount(host);
   const root = host.children[0];
   // Safari 16.0–16.3: neither pseudo-class parses, so closest() throws.
@@ -570,4 +569,61 @@ test('a browser without :fullscreen / :popover-open (Safari < 16.4) still opens 
   event.stopPropagation = () => {};
   assert.doesNotThrow(() => root.fire('keydown', event), 'Esc does not throw');
   assert.equal(asked, 1, 'Esc reaches the provider');
+});
+
+test('a panorama reopened after a lost context waits for the view’s fresh canvas', async () => {
+  const canvases = [];
+  const reopened = [];
+  const viewer = createPhotoViewer({
+    providerId: 'test',
+    name: 'Test',
+    sources: SOURCES,
+    getPhoto: async (id) => PHOTOS[id],
+    step: async () => null,
+    onStep() {},
+    onReopen: (id) => reopened.push(id),
+    load: async (url) => ({ src: url }),
+    createRenderer: (canvas) => {
+      canvases.push(canvas);
+      return {
+        setImage() {},
+        setView() {},
+        getView: () => ({ yaw: 0, pitch: 0, fov: 80 }),
+        resize() {},
+        clear() {},
+        destroy() {},
+      };
+    },
+  });
+  // A view that draws a replacement canvas a while after it is asked.
+  let shown = null;
+  let late = null;
+  viewer.subscribeView((view) => {
+    if (view && !shown) {
+      for (const name of ['root', 'picture', 'prev', 'next'])
+        view.actions.attach(name, { name, clientWidth: 400 });
+      view.actions.attach('canvas', { name: 'canvas 0', clientWidth: 400 });
+    } else if (view && view.canvasKey !== shown.canvasKey)
+      late = () =>
+        view.actions.attach('canvas', {
+          name: `canvas ${view.canvasKey}`,
+          clientWidth: 400,
+        });
+    shown = view;
+  });
+  await viewer.mount({});
+  await viewer.open('a');
+  assert.equal(shown.kind, 'pano');
+  shown.actions.contextLost({ preventDefault() {} });
+  assert.deepEqual(reopened, ['a']);
+  const opening = viewer.open('a');
+  await tick();
+  assert.equal(canvases.length, 1, 'no renderer without a canvas');
+  late();
+  await opening;
+  assert.deepEqual(
+    canvases.map((canvas) => canvas.name),
+    ['canvas 0', 'canvas 1'],
+  );
+  assert.equal(shown.kind, 'pano', 'not the front view');
 });

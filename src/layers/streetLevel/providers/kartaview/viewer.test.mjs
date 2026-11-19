@@ -148,7 +148,7 @@ function setup({
   });
   const poses = [];
   viewer.onPose((pose) => poses.push(pose));
-  const host = fakeHost();
+  const host = fakeHost(viewer);
   return {
     viewer,
     poses,
@@ -498,7 +498,7 @@ test('a WebGL failure only lasts until the viewer is mounted again', async () =>
       return renderer;
     },
   });
-  const host = fakeHost();
+  const host = fakeHost(viewer);
   await viewer.mount(host);
   await viewer.open('pano1');
   assert.equal(parts(host).picture.hidden, false, 'front view');
@@ -589,7 +589,7 @@ function heldSetup({ slowSteps = false } = {}) {
   });
   const poses = [];
   viewer.onPose((pose) => poses.push(pose.imageId));
-  const host = fakeHost();
+  const host = fakeHost(viewer);
   /** Let the load showing `what` (e.g. 'a@1280') finish. */
   const release = async (what) => {
     assert.ok(
@@ -798,7 +798,7 @@ function heldPanoSetup(held) {
   });
   const poses = [];
   viewer.onPose((pose) => poses.push(pose));
-  return { viewer, renderers, stepped, poses, host: fakeHost(), release };
+  return { viewer, renderers, stepped, poses, host: fakeHost(viewer), release };
 }
 
 const pano2Preview = Buffer.from(

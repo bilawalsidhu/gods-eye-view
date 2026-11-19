@@ -190,7 +190,7 @@ test('the nearest photo is the closest within 50 m, and opening it asks nothing 
   });
   const id = await instance.nearestImage({ lat: 42.3314, lon: -83.0458 });
   assert.equal(id, 'near');
-  const host = fakeHost();
+  const host = fakeHost(instance.viewer);
   await instance.viewer.mount(host);
   await instance.viewer.open(id);
   assert.deepEqual(source.calls.photo, [], 'the lookup filled the cache');
@@ -285,7 +285,7 @@ const press = async (button, opened) => {
 
 async function mounted(sourceOptions, contextOptions) {
   const env = setup(sourceOptions, contextOptions);
-  const host = fakeHost();
+  const host = fakeHost(env.instance.viewer);
   await env.instance.viewer.mount(host);
   const poses = [];
   env.instance.viewer.onPose((pose) => poses.push(pose.imageId));
@@ -970,7 +970,7 @@ test('after a GPU reset the photo is drawn again by the viewer, not through the 
   context.actions.reportError = (message) => errors.push(message);
   const instance = definition.create(context);
   actions.instance = instance;
-  const host = fakeHost();
+  const host = fakeHost(instance.viewer);
   await instance.viewer.mount(host);
   const poses = [];
   instance.viewer.onPose((pose) => poses.push(pose.imageId));
@@ -1010,7 +1010,7 @@ test('the marker is KartaView’s own cone, and it points along the drive, not a
       photos: page.photos.map((record) => ({ ...record, heading: '200' })),
     };
   };
-  const host = fakeHost();
+  const host = fakeHost(env.instance.viewer);
   await env.instance.viewer.mount(host);
   const bearings = [];
   env.instance.viewer.onPose((pose) => bearings.push(pose.bearing));
@@ -1101,7 +1101,7 @@ test('a sequence page that lands while a lost GPU context recovers still draws i
   const instance = definition.create(context);
   actions.instance = instance;
   const cones = await withCones(t, { instance });
-  const host = fakeHost();
+  const host = fakeHost(instance.viewer);
   await instance.viewer.mount(host);
   await instance.viewer.open('p-0');
   // › to the next panorama; the GPU resets while it loads.
