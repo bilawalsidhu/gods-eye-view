@@ -237,6 +237,7 @@ export class PanelLayoutController {
         this._recentImageryPanel,
         this._streetLevelPanel,
         globalContextPanel,
+        document.getElementById('space-missions-panel'),
         document.getElementById('radio-panel'),
       ]) {
         if (panel) this._rightStackResizeObserver.observe(panel);

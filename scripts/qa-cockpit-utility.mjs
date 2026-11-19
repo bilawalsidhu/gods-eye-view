@@ -193,41 +193,74 @@ try {
   });
   const contactMissionHandoff = await page.evaluate(async () => {
     const { styleManager, dataManager } = window.__godsEyeView;
+    // Launch Library is not contacted: the layer's own work is stubbed so the
+    // check covers only how Space Missions sits beside Context.
+    const stubMissions = (rocketEntry) => {
+      const original = {
+        initialized: rocketEntry.initialized,
+        lifecycleState: rocketEntry.lifecycleState,
+        init: rocketEntry.module.init,
+        enable: rocketEntry.module.enable,
+        update: rocketEntry.module.update,
+        disable: rocketEntry.module.disable,
+      };
+      rocketEntry.initialized = true;
+      rocketEntry.module.init = async () => true;
+      rocketEntry.module.enable = async () => true;
+      rocketEntry.module.update = async () => true;
+      rocketEntry.module.disable = async () => true;
+      return () => {
+        rocketEntry.initialized = original.initialized;
+        rocketEntry.lifecycleState = original.lifecycleState;
+        rocketEntry.module.init = original.init;
+        rocketEntry.module.enable = original.enable;
+        rocketEntry.module.update = original.update;
+        rocketEntry.module.disable = original.disable;
+      };
+    };
     const originalShowToast = styleManager._showToast;
     const toasts = [];
     styleManager._showToast = (message) => { toasts.push(String(message)); };
+    const restoreMissions = stubMissions(dataManager.layers.get('rocket-launches'));
     try {
       if (styleManager._contextControls._contextMode) await styleManager._contextControls._selectContextMode(null);
       const contactsResult = await styleManager._contextControls._selectContextMode('flights');
-      const missionResult = await styleManager._contextControls._selectContextMode('space-missions');
-      const switched = {
+      const missionResult = await dataManager.setEnabled('rocket-launches', true, { origin: 'user' });
+      await styleManager._waitForContextLayerSettlement();
+      const together = {
         contactsResult,
         missionResult,
         mode: styleManager._contextControls._contextMode,
         missionsEnabled: dataManager.isEnabled('rocket-launches'),
         toasts: [...toasts],
       };
+      const missionOff = await dataManager.setEnabled('rocket-launches', false, { origin: 'user' });
+      await styleManager._waitForContextLayerSettlement();
+      const modeAfterMissions = styleManager._contextControls._contextMode;
       const exitResult = await styleManager._contextControls._selectContextMode(null);
       return {
-        ...switched,
+        ...together,
+        missionOff,
+        modeAfterMissions,
         exitResult,
         modeAfterExit: styleManager._contextControls._contextMode,
-        missionsOffAfterExit: !dataManager.isEffectivelyEnabled('rocket-launches'),
       };
     } finally {
+      restoreMissions();
       styleManager._showToast = originalShowToast;
     }
   });
   check(
-    'Contacts hands off to Space Missions on the first request without a failure toast',
+    'Space Missions runs beside Contacts, and switching it off leaves Contacts on',
     contactMissionHandoff.contactsResult === true
       && contactMissionHandoff.missionResult === true
-      && contactMissionHandoff.mode === 'space-missions'
+      && contactMissionHandoff.mode === 'flights'
       && contactMissionHandoff.missionsEnabled
       && contactMissionHandoff.toasts?.length === 0
+      && contactMissionHandoff.missionOff === true
+      && contactMissionHandoff.modeAfterMissions === 'flights'
       && contactMissionHandoff.exitResult === true
-      && contactMissionHandoff.modeAfterExit === null
-      && contactMissionHandoff.missionsOffAfterExit,
+      && contactMissionHandoff.modeAfterExit === null,
     JSON.stringify(contactMissionHandoff),
   );
   const cancelledMissionEntry = await page.evaluate(async () => {
@@ -330,7 +363,7 @@ try {
     }
   });
   check(
-    'cancelled direct Space Missions entry restores its exact isolated sibling state',
+    'a cancelled Space Missions start leaves its sibling layer on and opens no Context session',
     cancelledMissionEntry.exercised
       && cancelledMissionEntry.transitionResult === false
       && !cancelledMissionEntry.timedOut
@@ -341,214 +374,45 @@ try {
     JSON.stringify(cancelledMissionEntry),
   );
   check(
-    'successful Space Missions cancellation rollback stays silent',
+    'a cancelled Space Missions start stays silent',
     cancelledMissionEntry.exercised && cancelledMissionEntry.toasts?.length === 0,
     JSON.stringify(cancelledMissionEntry.toasts || []),
   );
-  const replacementMissionEntry = await page.evaluate(async () => {
-    const styleManager = window.__godsEyeView.styleManager;
-    const dataManager = window.__godsEyeView.dataManager;
-    const rocketEntry = dataManager.layers.get('rocket-launches');
-    if (!rocketEntry || dataManager.isEffectivelyEnabled('rocket-launches')) {
-      return { exercised: false, reason: 'Space Missions was not in a clean OFF state' };
-    }
-    const siblingId = 'qa-cockpit-replacement-sibling';
-    window.__gevQaRegisterLayer(dataManager, {
-      id: siblingId,
-      name: 'QA replacement sibling',
-      icon: 'science',
-      source: 'QA',
-      updateInterval: -1,
-      async init() { return true; },
-      async enable() { return true; },
-      async update() { return true; },
-      async disable() { return true; },
-      async destroy() {},
-      getStats() { return { count: 1, status: 'live' }; },
-    });
-    await dataManager.setEnabled(siblingId, true, { origin: 'programmatic' });
-    const original = {
-      siblingInitialized: dataManager.layers.get(siblingId)?.initialized,
-      initialized: rocketEntry.initialized,
-      lifecycleState: rocketEntry.lifecycleState,
-      init: rocketEntry.module.init,
-      enable: rocketEntry.module.enable,
-      update: rocketEntry.module.update,
-      disable: rocketEntry.module.disable,
-      showToast: styleManager._showToast,
-    };
-    let firstUpdate = true;
-    let releaseUpdate;
-    let markUpdateStarted;
-    const updateStarted = new Promise((resolve) => { markUpdateStarted = resolve; });
-    const updateGate = new Promise((resolve) => { releaseUpdate = resolve; });
-    const toasts = [];
-    rocketEntry.initialized = true;
-    rocketEntry.module.enable = async () => true;
-    rocketEntry.module.update = async () => {
-      if (!firstUpdate) return true;
-      firstUpdate = false;
-      markUpdateStarted();
-      await updateGate;
-      return true;
-    };
-    rocketEntry.module.disable = async () => true;
-    styleManager._showToast = (message) => { toasts.push(String(message)); };
-    try {
-      const entry = styleManager._contextControls._selectContextMode('space-missions');
-      await updateStarted;
-      const replacement = dataManager.setEnabled('rocket-launches', true, { origin: 'programmatic' });
-      releaseUpdate();
-      const [entryResult, replacementResult] = await Promise.all([entry, replacement]);
-      const committed = {
-        entryResult,
-        replacementResult,
-        mode: styleManager._contextControls._contextMode,
-        entering: styleManager._contextControls._contextModeEntering,
-        snapshotRetained: Boolean(styleManager._contextControls._contextSessionSnapshot),
-        siblingIsolated: !dataManager.isEffectivelyEnabled(siblingId),
-        missionEnabled: dataManager.isEnabled('rocket-launches'),
-        missionEffective: dataManager.isEffectivelyEnabled('rocket-launches'),
-        toasts: [...toasts],
-      };
-      const exitResult = await styleManager._contextControls._selectContextMode(null);
-      return {
-        exercised: true,
-        ...committed,
-        exitResult,
-        siblingRestored: dataManager.isEnabled(siblingId),
-        missionRestoredOff: !dataManager.isEffectivelyEnabled('rocket-launches'),
-      };
-    } finally {
-      styleManager._showToast = original.showToast;
-      rocketEntry.module.init = original.init;
-      rocketEntry.module.enable = original.enable;
-      rocketEntry.module.update = original.update;
-      rocketEntry.module.disable = original.disable;
-      rocketEntry.initialized = original.initialized;
-      rocketEntry.lifecycleState = original.lifecycleState;
-      await dataManager.setEnabled(siblingId, false, { origin: 'programmatic' });
-      await window.__gevQaUnregisterLayer(dataManager, siblingId);
-    }
-  });
-  check(
-    'right-rail Space Missions adopts a newer authoritative ON without stale restoration',
-    replacementMissionEntry.exercised
-      && replacementMissionEntry.entryResult === true
-      && replacementMissionEntry.replacementResult === true
-      && replacementMissionEntry.mode === 'space-missions'
-      && replacementMissionEntry.entering === null
-      && replacementMissionEntry.snapshotRetained
-      && replacementMissionEntry.siblingIsolated
-      && replacementMissionEntry.missionEnabled
-      && replacementMissionEntry.missionEffective
-      && replacementMissionEntry.toasts?.length === 0
-      && replacementMissionEntry.exitResult === true
-      && replacementMissionEntry.siblingRestored
-      && replacementMissionEntry.missionRestoredOff,
-    JSON.stringify(replacementMissionEntry),
-  );
-  const supersededMissionEntry = await page.evaluate(async () => {
-    const styleManager = window.__godsEyeView.styleManager;
-    const dataManager = window.__godsEyeView.dataManager;
-    const rocketEntry = dataManager.layers.get('rocket-launches');
-    if (!rocketEntry || dataManager.isEffectivelyEnabled('rocket-launches')) {
-      return { exercised: false, reason: 'Space Missions was not in a clean OFF state' };
-    }
-    const siblingId = 'qa-cockpit-superseded-sibling';
-    window.__gevQaRegisterLayer(dataManager, {
-      id: siblingId,
-      name: 'QA superseded sibling',
-      icon: 'science',
-      source: 'QA',
-      updateInterval: -1,
-      async init() { return true; },
-      async enable() { return true; },
-      async update() { return true; },
-      async disable() { return true; },
-      async destroy() {},
-      getStats() { return { count: 1, status: 'live' }; },
-    });
-    await dataManager.setEnabled(siblingId, true, { origin: 'programmatic' });
-    const original = {
-      initialized: rocketEntry.initialized,
-      lifecycleState: rocketEntry.lifecycleState,
-      init: rocketEntry.module.init,
-      enable: rocketEntry.module.enable,
-      update: rocketEntry.module.update,
-      disable: rocketEntry.module.disable,
-      showToast: styleManager._showToast,
-    };
-    let releaseUpdate;
-    let markUpdateStarted;
-    const updateStarted = new Promise((resolve) => { markUpdateStarted = resolve; });
-    const updateGate = new Promise((resolve) => { releaseUpdate = resolve; });
-    const toasts = [];
-    rocketEntry.initialized = true;
-    rocketEntry.module.enable = async () => true;
-    rocketEntry.module.update = async () => {
-      markUpdateStarted();
-      await updateGate;
-      return true;
-    };
-    rocketEntry.module.disable = async () => true;
-    styleManager._showToast = (message) => { toasts.push(String(message)); };
-    try {
-      const entry = styleManager._runUserFacingContextAction(
-        (notificationToken) => styleManager._contextControls._selectContextMode(
-          'space-missions',
-          { notificationToken },
-        ),
-        'Space Missions could not complete the requested transition; try again',
-      );
-      await updateStarted;
-      const supersedingOff = dataManager.setEnabled('rocket-launches', false, {
-        origin: 'programmatic',
-      });
-      releaseUpdate();
-      const [entryResult, offResult] = await Promise.all([entry, supersedingOff]);
-      return {
-        exercised: true,
-        entryResult,
-        offResult,
-        mode: styleManager._contextControls._contextMode,
-        entering: styleManager._contextControls._contextModeEntering,
-        snapshotRetained: Boolean(styleManager._contextControls._contextSessionSnapshot),
-        siblingRestored: dataManager.isEnabled(siblingId),
-        missionEffective: dataManager.isEffectivelyEnabled('rocket-launches'),
-        toasts,
-      };
-    } finally {
-      styleManager._showToast = original.showToast;
-      rocketEntry.module.init = original.init;
-      rocketEntry.module.enable = original.enable;
-      rocketEntry.module.update = original.update;
-      rocketEntry.module.disable = original.disable;
-      rocketEntry.initialized = original.initialized;
-      rocketEntry.lifecycleState = original.lifecycleState;
-      await dataManager.setEnabled(siblingId, false, { origin: 'programmatic' });
-      await window.__gevQaUnregisterLayer(dataManager, siblingId);
-    }
-  });
-  check(
-    'right-rail Space Missions superseded by OFF restores exactly without a failure toast',
-    supersededMissionEntry.exercised
-      && supersededMissionEntry.entryResult === null
-      && supersededMissionEntry.mode === null
-      && supersededMissionEntry.entering === null
-      && !supersededMissionEntry.snapshotRetained
-      && supersededMissionEntry.siblingRestored
-      && !supersededMissionEntry.missionEffective
-      && supersededMissionEntry.toasts?.length === 0,
-    JSON.stringify(supersededMissionEntry),
-  );
-  const voiceMissionEntry = await page.evaluate(async () => {
+  const ordinaryMissionLayer = await page.evaluate(async () => {
     const { dataManager, styleManager } = window.__godsEyeView;
-    const siblingId = '__qa_voice_context_sibling__';
     const rocketEntry = dataManager.layers.get('rocket-launches');
+    if (!rocketEntry || dataManager.isEffectivelyEnabled('rocket-launches')) {
+      return { exercised: false, reason: 'Space Missions was not in a clean OFF state' };
+    }
+    // Launch Library is not contacted: the layer's own work is stubbed so the
+    // check covers only how Space Missions sits beside Context.
+    const stubMissions = (rocketEntry) => {
+      const original = {
+        initialized: rocketEntry.initialized,
+        lifecycleState: rocketEntry.lifecycleState,
+        init: rocketEntry.module.init,
+        enable: rocketEntry.module.enable,
+        update: rocketEntry.module.update,
+        disable: rocketEntry.module.disable,
+      };
+      rocketEntry.initialized = true;
+      rocketEntry.module.init = async () => true;
+      rocketEntry.module.enable = async () => true;
+      rocketEntry.module.update = async () => true;
+      rocketEntry.module.disable = async () => true;
+      return () => {
+        rocketEntry.initialized = original.initialized;
+        rocketEntry.lifecycleState = original.lifecycleState;
+        rocketEntry.module.init = original.init;
+        rocketEntry.module.enable = original.enable;
+        rocketEntry.module.update = original.update;
+        rocketEntry.module.disable = original.disable;
+      };
+    };
+    const siblingId = '__qa_space_missions_sibling__';
     window.__gevQaRegisterLayer(dataManager, {
       id: siblingId,
-      name: 'QA voice Context sibling',
+      name: 'QA Space Missions sibling',
       icon: 'science',
       source: 'QA',
       updateInterval: -1,
@@ -559,94 +423,48 @@ try {
       async destroy() {},
       getStats() { return { count: 1, status: 'live' }; },
     });
-    const original = {
-      initialized: rocketEntry.initialized,
-      lifecycleState: rocketEntry.lifecycleState,
-      init: rocketEntry.module.init,
-      enable: rocketEntry.module.enable,
-      update: rocketEntry.module.update,
-      disable: rocketEntry.module.disable,
-    };
-    const siblingLayerEntry = dataManager.layers.get(siblingId);
-    siblingLayerEntry.initialized = true;
     await dataManager.setEnabled(siblingId, true, { origin: 'programmatic' });
-    rocketEntry.initialized = true;
-    rocketEntry.module.init = async () => true;
-    rocketEntry.module.enable = async () => true;
-    rocketEntry.module.update = async () => true;
-    rocketEntry.module.disable = async () => true;
+    const restoreMissions = stubMissions(rocketEntry);
     try {
-      const voiceOn = await dataManager.setEnabled('rocket-launches', true, { origin: 'voice' });
-      await new Promise((resolve) => setTimeout(resolve, 80));
-      const voiceState = {
-        voiceOn,
-        mode: styleManager._contextControls._contextMode,
-        entering: styleManager._contextControls._contextModeEntering,
-        snapshotRetained: Boolean(styleManager._contextControls._contextSessionSnapshot),
-        siblingIsolated: !dataManager.isEffectivelyEnabled(siblingId),
-      };
-      const snapshotBeforeOff = [...(styleManager._contextControls._contextSessionSnapshot?.enabledLayerIds || [])];
-      const voiceOff = await dataManager.setEnabled('rocket-launches', false, { origin: 'voice' });
-      const reactionCountAfterOff = styleManager._contextControls._contextLayerReactionPromises.size;
-      await styleManager._waitForContextLayerSettlement();
-      const restoredSiblingEntry = dataManager.layers.get(siblingId);
-      const voiceExit = {
-        voiceOff,
-        snapshotBeforeOff,
-        reactionCountAfterOff,
-        mode: styleManager._contextControls._contextMode,
-        entering: styleManager._contextControls._contextModeEntering,
-        snapshotRetained: Boolean(styleManager._contextControls._contextSessionSnapshot),
-        siblingRestored: dataManager.isEffectivelyEnabled(siblingId),
-        siblingEnabled: restoredSiblingEntry?.enabled,
-        siblingLifecycle: restoredSiblingEntry?.lifecycleState,
-        restoreActive: Boolean(styleManager._contextControls._contextRestoreState),
-      };
-
-      await dataManager.setEnabled('rocket-launches', true, { origin: 'programmatic' });
-      await new Promise((resolve) => setTimeout(resolve, 40));
-      const internalState = {
-        mode: styleManager._contextControls._contextMode,
-        entering: styleManager._contextControls._contextModeEntering,
-        snapshotRetained: Boolean(styleManager._contextControls._contextSessionSnapshot),
-        missionEnabled: dataManager.isEffectivelyEnabled('rocket-launches'),
-      };
-      await dataManager.setEnabled('rocket-launches', false, { origin: 'programmatic' });
-      return { exercised: true, voiceState, voiceExit, internalState };
+      const results = {};
+      for (const origin of ['user', 'voice', 'programmatic']) {
+        const on = await dataManager.setEnabled('rocket-launches', true, { origin });
+        await styleManager._waitForContextLayerSettlement();
+        const during = {
+          on,
+          mode: styleManager._contextControls._contextMode,
+          snapshot: Boolean(styleManager._contextControls._contextSessionSnapshot),
+          siblingOn: dataManager.isEffectivelyEnabled(siblingId),
+        };
+        const off = await dataManager.setEnabled('rocket-launches', false, { origin });
+        await styleManager._waitForContextLayerSettlement();
+        results[origin] = {
+          ...during,
+          off,
+          siblingOnAfter: dataManager.isEffectivelyEnabled(siblingId),
+          snapshotAfter: Boolean(styleManager._contextControls._contextSessionSnapshot),
+        };
+      }
+      return { exercised: true, results };
     } finally {
-      rocketEntry.module.init = original.init;
-      rocketEntry.module.enable = original.enable;
-      rocketEntry.module.update = original.update;
-      rocketEntry.module.disable = original.disable;
-      rocketEntry.initialized = original.initialized;
-      rocketEntry.lifecycleState = original.lifecycleState;
+      restoreMissions();
       await dataManager.setEnabled(siblingId, false, { origin: 'programmatic' });
-      siblingLayerEntry.initialized = original.siblingInitialized;
       await window.__gevQaUnregisterLayer(dataManager, siblingId);
     }
   });
   check(
-    'voice Space Missions uses the same Context snapshot and exact-restore transaction as UI entry',
-    voiceMissionEntry.exercised
-      && voiceMissionEntry.voiceState?.voiceOn
-      && voiceMissionEntry.voiceState.mode === 'space-missions'
-      && voiceMissionEntry.voiceState.entering === null
-      && voiceMissionEntry.voiceState.snapshotRetained
-      && voiceMissionEntry.voiceState.siblingIsolated
-      && voiceMissionEntry.voiceExit?.voiceOff
-      && voiceMissionEntry.voiceExit.mode === null
-      && voiceMissionEntry.voiceExit.entering === null
-      && !voiceMissionEntry.voiceExit.snapshotRetained
-      && voiceMissionEntry.voiceExit.siblingRestored,
-    JSON.stringify(voiceMissionEntry),
-  );
-  check(
-    'internal programmatic Space Missions activation does not create a user Context session',
-    voiceMissionEntry.internalState?.missionEnabled
-      && voiceMissionEntry.internalState.mode === null
-      && voiceMissionEntry.internalState.entering === null
-      && !voiceMissionEntry.internalState.snapshotRetained,
-    JSON.stringify(voiceMissionEntry),
+    'Space Missions is an ordinary layer: no Context session, no isolation, from any origin',
+    ordinaryMissionLayer.exercised
+      && Object.values(ordinaryMissionLayer.results || {}).length === 3
+      && Object.values(ordinaryMissionLayer.results).every((entry) =>
+        entry.on === true
+        && entry.mode === null
+        && !entry.snapshot
+        && entry.siblingOn
+        && entry.off === true
+        && entry.siblingOnAfter
+        && !entry.snapshotAfter),
+    JSON.stringify(ordinaryMissionLayer),
   );
   await page.evaluate(() => window.__godsEyeView.dataManager.setEnabled(
     'flights',

@@ -307,8 +307,8 @@ const MUTATIONS = [
   {
     defect: 'a cancelled globe flight fails the whole mission',
     file: 'module',
-    from: '    .catch(() => null);',
-    to: '    .catch(() => { throw new Error("flight failed"); });',
+    from: '          .catch(() => null)\n      : null;',
+    to: '          .catch(() => { throw new Error("flight failed"); })\n      : null;',
   },
   {
     defect: 'Explore manually quietly runs a mission instead of nothing',

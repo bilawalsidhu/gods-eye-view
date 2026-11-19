@@ -935,10 +935,10 @@ the header narrows every list. Expanded, Context becomes a full-height
 column at the right edge (the left edge right to left) and the map credits
 stop short of it.
 
-The Contacts and Space Missions modes and the Radio strip stay in the
-panel's main tab, below the card. When Contacts follows the aircraft the
-card shows, its list sits inside the card. Turning Radio or Launches on
-opens Context. The Properties tab holds the Labels and 3D aircraft
+The Contacts mode and the Radio strip stay in the panel's main tab, below
+the card. When Contacts follows the aircraft the card shows, its list sits
+inside the card. Turning Radio on opens Context. Space Missions is not part
+of Context: turning it on opens its own Space Missions panel. The Properties tab holds the Labels and 3D aircraft
 settings from Visual while a layer they act on is on.
 
 Context does its reading only while its panel is open. Weather and news
@@ -2861,12 +2861,22 @@ them.
 
 ## Context coordination
 
-Context controls own Contacts/Space Missions state, entry and exit transactions,
-layer snapshots and restoration. The application supplies the existing manager,
+Context controls own Contacts state, entry and exit transactions, layer
+snapshots and restoration. Space Missions is an ordinary layer outside this
+owner: the launches layer keeps its own Satellites dependency
+(`src/layers/launches/satelliteIntents.js`), and `SpaceMissionsControls`
+(`src/ui/spaceMissionsControls.js`) connects it to its panel and store. The application supplies the existing manager,
 installations search and camera/panel actions. Tab listeners and pending
 presentation work stop during disposal; layer restoration retains its existing
 compensation and latest-intent rules. Clear Selected Layers shares this owner,
 so an older restore cannot replay over a newer Clear action.
+
+Contacts leaves Satellites on. Contacts is being removed, so no new Contacts
+behavior is added here. Only an explicit user or voice Satellites OFF requested
+after Space Missions ON ends Space Missions. A scene, story, preset or other
+programmatic Satellites OFF leaves Space Missions running: an automatic change
+must not undo the user’s explicit choice, and the mission lifecycle remains
+independent of Satellites.
 
 ## Camera panel ownership
 
@@ -2884,7 +2894,7 @@ The panel opens when a camera becomes active and collapses when the layer is
 switched off, from its own switch or anywhere else. The panel chrome applies
 the collapse, so a panel the desktop accordion only folded has its saved and
 shared state closed too. Clear selected data layers and Context isolation
-(Contacts, Space Missions) switch the layer off without the user asking: the
+(Contacts) switch the layer off without the user asking: the
 panel and its share preference stay as they are, and the layer comes back to an
 open panel. Only the switch-off isolation makes counts (`suspendsLayer`, true
 while `_clearLayersOutsideContextMode` switches the layer off): the user
@@ -3356,8 +3366,7 @@ and military aircraft and vessels share this rule; fine pointers stay exact.
 
 Manually opening Context with a tracked civilian or military aircraft enters
 the existing Contacts mode when Context is off. Contacts adopts that aircraft
-without restarting its tracking; an active or entering Space Missions mode is
-left alone. Programmatic sheet changes and closing the tab do not activate a mode.
+without restarting its tracking. Programmatic sheet changes and closing the tab do not activate a mode.
 
 Sheets borrow panels. Opening one expands its panels without persisting them or
 claiming a user choice, and share links keep reporting each borrowed panel's
@@ -3840,9 +3849,9 @@ they do not reduce the materialized entity count or establish an FPS gain.
 - Display controls and shader-parameter sliders show keyboard focus in both
   the map panel and Cockpit Display. Arrow keys retain native range adjustment.
   The enabled CCTV camera dropdown shows keyboard focus as well.
-- Tab reaches both Contacts and Space Missions in sequence in every Context
-  state. Left/Right arrows also switch them; the focused tab has a distinct ring
-  even when selected.
+- Tab reaches the Contacts control in Context and the separate Space Missions
+  rail button when launches are enabled. Both keep a visible focus ring when
+  active.
 - Keyboard focus on a Space Missions roster item uses the same temporary globe
   rotation and mission-marker highlight as pointer hover. Focus alone does not
   select the mission; Enter or Space performs selection. Keyboard and pointer
@@ -4546,16 +4555,10 @@ a number`, exactly `(0,0,0)` returns undefined, and a near-center value such
 >   cannot slip through by not matching the older spelling. CCTV's
 >   `selectedCameraId` is the one recorded keep: it raises a monitor plane and
 >   never writes `viewer.trackedEntity` or the camera.
->   (4) An **isolating Context mode is exited before a shot's layers apply**.
->   Space Missions refuses every enable outside its replay bundle, so with it
->   left dirty all five recipes were refused (or, for Orbital Watch, composed
->   over a replay they never declared). The verdict is read off the shared guard
->   (`contextLayerEnableBlockReason`), not a mode name, so a future isolating
->   mode is covered — the probe id `SCENE_EXCLUSIVITY_PROBE_LAYER_ID` is
->   reserved by a test against the real layer registry. The exit itself is the
->   ordinary `setContextMode('off')` exact-restore path and is deliberately NOT
->   abortable: leaving the mode IS the restore to the operator's pre-mode state,
->   and tearing that transaction in half would strand Context. A refused
+>   (4) Playback leaves every Context mode alone. No mode isolates the globe
+>   any more (Space Missions is an ordinary layer), so the former exit of an
+>   isolating mode before a shot's layers apply, and its probe layer id, were
+>   removed with it. A refused
 >   `setEnabled` is surfaced in the status line and a `shot_layers_refused`
 >   telemetry event instead of being reported as success. **Mixed accepted /
 >   refused layers are reported honestly, not rolled back** — a shot whose
@@ -4876,10 +4879,10 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   selected manager-owned data layers, including an active Context choice,
 >   while retaining visual, HUD, map, and panel settings. A disabled layer may
 >   still release camera work that it owns through its normal teardown.
->   Direct Data Layers entry into Space Missions excludes the new mission ON
->   intent from its pre-entry snapshot. Its OFF control therefore leaves Space
->   Missions off and restores Satellites to their exact pre-entry visibility
->   and parameter state.
+>   Space Missions is an ordinary layer and opens no Context session. Its OFF
+>   control leaves Space Missions off and restores Satellites to their
+>   pre-mission visibility and parameter state, keeping an explicit Satellites
+>   action taken while it ran.
 >   The title and loading logos use a blue 10 px outer-eye stroke with a
 >   translucent slate fill, while the globe-and-cage gaze travels up to 34 SVG
 >   units toward the pointer for clearer feedback at the compact title size.
@@ -4887,11 +4890,12 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   clock goes live and the camera flies to the view the app started from (the
 >   host's `homeView`, else its `startView`, else the whole planet), letting go
 >   of whatever it follows as Reset Globe does (`returnToStart()`).
-> - **Context, Cockpit, and Radio interaction contract:** explicit Contacts,
->   Space Missions, and successful Cockpit actions reveal the Context panel, while
->   restoration and replay preserve its prior collapsed state. Contacts uses the
->   dedicated right-side chooser; the underlying Global Context coordinator is
->   registered for lifecycle and restoration but is not duplicated in Data Layers.
+> - **Context, Cockpit, and Radio interaction contract:** explicit Contacts and
+>   Radio actions and successful Cockpit actions can reveal Context. Contacts
+>   uses the dedicated right-side chooser. Space Missions has its own rail
+>   button and panel while launches are enabled.
+>   Mission teardown clears the selection shown in the panel before restoring
+>   the Satellites layer, so a failed restore leaves no stale mission details.
 >   Inside Cockpit, the focused summary card is titled Contact in both visible
 >   copy and its accessible control labels.
 >   The top-center Cockpit vision cycle is the fixed, duplicate-free sequence
@@ -5585,9 +5589,10 @@ activeCameraCardEnabled: true })` may publish it through the retained
 >   pitch/heading instruments, altitude/speed tapes, and the signal window.
 >   Topline vision and exit controls retain the highest in-cockpit layer.
 > - **Space Missions dependency shutdown:** disabling a mission dependency or
->   leaving the mode closes mission context and restores the exact pre-entry
->   Satellite enabled state and presentation parameters. Restored parameters
->   never re-show primitives while the Satellite layer is disabled.
+>   switching Space Missions off restores the pre-mission Satellite enabled
+>   state and presentation parameters, except that an explicit Satellites action
+>   taken while it ran is kept. Restored parameters never re-show primitives
+>   while the Satellite layer is disabled.
 > - **Flights 3D/cockpit hardening:** the destination-direction cue is an
 >   inline SVG rather than a remotely loaded Material Icons ligature, so a
 >   blocked or late font can no longer expand the literal word `navigation`
@@ -5628,17 +5633,13 @@ activeCameraCardEnabled: true })` may publish it through the retained
 >   only for the synchronous selection window, history survives same-layer
 >   reselection, and NEXT availability uses the same UNKNOWN-cohort gate as the
 >   navigation action. Contacts entry does not wait for unrelated serialized
->   layer teardown; Space Missions waits for every incompatible live/current
->   layer to settle off before replay data starts. A rejected teardown keeps
->   that layer authoritatively enabled, restores any siblings already stopped,
->   and aborts replay entry; the isolation
->   guard remains active until Rocket Launches finishes enabling. Manually enabling
+>   layer teardown. (Space Missions isolation, which waited for incompatible
+>   layers to settle off, was later removed: Space Missions is now an ordinary
+>   layer.) Manually enabling
 >   another Data Layer is additive in both an active mode and the neutral shell:
 >   it does not exit Context, and the added layer joins the pre-entry snapshot
 >   when the session is eventually restored. Manually disabling a required mode
 >   dependency still exits and restores that union.
->   While Space Missions is active, direct incompatible enables are refused
->   before initialization or polling and explain that the mode must be exited.
 >   User entry alone owns the pre-entry snapshot; programmatic dependencies do
 >   not replace it, and rapid re-entry snapshots the pending settled restore
 >   target rather than partial manager state.
@@ -5694,10 +5695,8 @@ activeCameraCardEnabled: true })` may publish it through the retained
 >   enabled-layer set and every runtime parameter it changes, then clears
 >   unrelated active Data Layers. Mode switches, required-dependency disables, direct
 >   disable, and teardown restore that pre-entry state before control leaves
->   Context. Directly switching between Flights and Space Missions remains
->   supported without losing the original snapshot. Contacts waits for the
->   dependency releases it owns before restoring that snapshot, so the first
->   Space Missions selection completes without a stale teardown superseding it.
+>   Context. Contacts waits for the dependency releases it owns before
+>   restoring that snapshot.
 > - **Space Mission horizon occlusion:** mission dots and hover reticles apply
 >   their surface-anchor horizon state before Cesium draws or picks the frame,
 >   while shared-host labels use the same hidden-globe horizon contract. Rear-side
@@ -6419,9 +6418,9 @@ start where the label would round to 10.0 km, so a 9.96 km route displays as
 **Keys needed: none.** Directions works on a keyless boot, and the layer is off
 until the operator turns it on.
 
-**Context behavior.** Directions is not a Context layer: neither Contacts nor
-Space Missions reads it, depends on it, or lists it as a companion. It is
-therefore one of the layers an exclusive Context mode switches off on entry
+**Context behavior.** Directions is not a Context layer: Contacts does not
+read it, depend on it, or list it as a companion. It is therefore one of the
+layers the exclusive Contacts mode switches off on entry
 (`_clearLayersOutsideContextMode`) and restores on exit, like every other
 non-participating layer — the route and both endpoints are cleared with it, and
 placing them again is the way back. Cockpit does not touch the layer either,
@@ -6747,8 +6746,8 @@ Required empty or unexercised checks fail acceptance. The passing final line is
 cannot claim full acceptance.
 
 **Lifecycle and proxy.** Contacts temporarily disables Transit and restores its
-prior state on exit; Space Missions refuses enablement while isolating replay
-data. Cockpit does not need Contacts and does not independently enable Transit.
+prior state on exit; Space Missions, an ordinary layer, leaves Transit as it
+is. Cockpit does not need Contacts and does not independently enable Transit.
 The proxy fetches registered URLs only, validates redirect origins, bounds
 responses and decoding, caches successful snapshots, and backs off after failed
 refreshes. A 304 confirms contact without appending history. Missing vehicles
@@ -7328,14 +7327,14 @@ silently demoting every later lookup for the session.
 ### Context / Contacts coordinator (July 2026)
 
 - The internal Context coordinator is available in every visual style. Its dedicated right-side `CONTEXT` chooser exposes the neutral shell; the coordinator is not duplicated in Data Layers and does not enable a live-data dependency until a mode is selected.
-- The expanded `CONTEXT` view offers mutually exclusive `CONTACTS` and `SPACE MISSIONS` modes. Selecting `CONTACTS` enables the context-owned Flights, Military Flights, AIS Vessels, and Mapped Installations dependencies only when they are not already user-enabled; selecting `SPACE MISSIONS` enables the recent-launch layer and its Satellite dependency. `CONTACTS` cycles the nearest supported contact of whatever type is selected. Satellites are deliberately excluded from those Awareness cohorts and keep their own tracking UX. Selecting the active mode again returns to the neutral chooser and releases only mode-owned dependencies.
+- The expanded `CONTEXT` view offers the `CONTACTS` mode. Selecting `CONTACTS` enables the context-owned Flights, Military Flights, AIS Vessels, and Mapped Installations dependencies only when they are not already user-enabled. Space Missions is not a Context mode: it is the ordinary recent-launch layer with its own panel, and it runs beside Contacts. `CONTACTS` cycles the nearest supported contact of whatever type is selected. Satellites are deliberately excluded from those Awareness cohorts and keep their own tracking UX. Selecting the active mode again returns to the neutral chooser and releases only mode-owned dependencies.
 - If a civilian or military aircraft is already tracked when `CONTACTS` becomes operational, that source-owned track is adopted as the Context subject before nearest-contact autofocus. Context rechecks the tracker after its dependencies settle, so a newer selection wins, while an explicit clear during activation prevents fallback from silently selecting a replacement. Cockpit entry remains unavailable until that Context transaction has settled, so its camera takeover cannot clear Cesium tracking before adoption. Adoption does not recreate tracking or transfer camera ownership; it initializes the normal 250 km ring, history, proximity results, and Cockpit Previous/Next state for the original aircraft. With no tracked aircraft, an AIS vessel already selected (the vessel layer's `getSelectedInfo()`) becomes the subject, at activation and again when a deferred dependency settles, exactly as a vessel selected while `CONTACTS` is on; no nearest flight is picked and the camera is not moved.
 - `SEARCH NEARBY SITES` retains the bounded OSM results and makes one user-initiated, view-biased Google Maps Places text search for “military installation.” Google results are source-stamped, deduplicated against OSM by rounded location/name, and remain mapped context rather than operational claims. If Places is unavailable or the API is not enabled for the supplied key, OSM context remains available. A view across the antimeridian is searched around its own centre, with a radius from its real width.
 - The Context header holds only its title and collapse control. It no longer carries a Radio shortcut or a compact Radio player: Radio is the `RADIO` section inside the panel, with its own disclosure and the single `ENABLE` power control. Cockpit keeps its own compact Radio utility.
 - Context is set for reading in every theme: mode, standby and action labels are 10 px, and the panel draws no glow halo. The two modes form one segmented control, the standby guidance is plain left-aligned text rather than a dashed placeholder, and the panel's section titles share the side panels' dock-label colour.
 - The expanded desktop header omits the redundant `ON` label; the active mode button carries state. Expanded Contact results also omit the duplicate `GLOBAL CONTEXT` / `CONTEXT ONLY` status row and begin with the selected subject and its 250 km scope. Global Context does not fabricate a selected-entity model preview: the provisional hand-authored aircraft wireframe was removed because it was not geometry extracted from the selected entity's actual asset.
 - Dependency ownership is reversible: disabling Global Context releases only dependencies it enabled, while user-enabled layers remain on. This also removes the Military-layer suppression handoff when Global Context owned Military, allowing an already-enabled civilian Flights layer to resume its normal mixed rendering. If OpenSky is unavailable and has no last-good cache, Flights requests a capped 250 nm adsb.lol point snapshot around the current view anchor and labels that provenance explicitly; it never relabels military-feed rows as civilian data. If both inputs fail, Flights remains `UNKNOWN`.
-- Space Missions is replay-isolated: Rocket Launches and Satellites are the only Data Layers permitted while the mode is active. Direct UI and voice entry capture the same pre-entry snapshot; internal dependency and restoration enables do not create a user-owned Context session. Entry waits for incompatible layers to shut down, direct incompatible enables are blocked before lifecycle work, and the entry gate remains active through the complete Rocket Launches enable. That enable includes the first mission-index load: an HTTP error, timeout, network failure or malformed payload before any index has loaded fails the enable, so Context rolls back to the pre-entry layers instead of committing an empty, isolating mode; the camera returns to its pre-entry view unless navigation took it, and a toast says the mission index could not load. A valid empty index still enters, and a refresh failure after an index loaded keeps its records and the mode. Exiting cancels the layer's own camera flights but never one navigation started. A newer same-target ON request takes ownership of the pending entry without releasing its isolation snapshot, including when it arrives while the prior request is awaiting the adoption guard. A caller abort, resource cancellation, newer OFF, or layer teardown waits for exact manager settlement and restores that snapshot without resurrecting Rocket Launches. If an abort lands after only part of a restore settles, Context completes the same exact target without the stale caller signal and then replays newer explicit layer intent. Dedicated Voice Context cancellation reports a stable cancelled result plus the current Context state; generic layer visibility additionally exposes manager phase, reason, successor, and lifecycle details. Once an exact voice visibility intent commits, a newer voice turn cannot relabel it as cancelled while Context settlement completes; pre-commit aborts remain cancellable and final lifecycle mismatches remain failures. Clear Selected Layers reserves its complete captured OFF set before sequential teardown; a newer absolute request of any origin supersedes only its layer reservation and remains authoritative. A rejected layer teardown retains the truthful enabled state, rolls already-stopped siblings back to the captured pre-entry set, and aborts replay; rapid exit/re-entry serializes the full Satellite enabled-state and parameter restore before a new snapshot is taken. Contacts remains additive and restores user-enabled layers normally.
+- Space Missions is an ordinary layer, not a Context mode. It neither isolates the globe nor refuses other layers, opens no Context session, and runs beside Contacts. Turning it on enables its Satellites dependency in the temporary dense/hidden mode and turning it off restores Satellites' exact prior visibility and parameters; an explicit Satellites action taken while it runs (by the person or by voice) is kept through that restore, and such a Satellites OFF asked for after the newest Space Missions ON ends Space Missions (request order, not settle order, decides; `src/layers/launches/satelliteIntents.js`). A scene, story, preset or other programmatic Satellites change does neither (owner decision). Contacts leaves Satellites as it is. The first mission-index load is part of the enable: an HTTP error, timeout, network failure or malformed payload before any index has loaded fails the enable, the camera returns to its pre-entry view unless navigation took it, and a toast says the mission index could not load. A valid empty index still enables, and a refresh failure after an index loaded keeps its records. Turning the layer on by hand, choosing it at first run, asking for it by voice (`set_context_mode` still accepts `space-missions` and switches the layer), or picking a mission on the globe opens the Space Missions panel; on desktop, opening it closes Context and the other right-rail panels, and opening Context closes it. Voice `set_panel_open` refuses to open the panel while the layer is off and says to turn Space Missions on first.
 - Enabled Data Layer controls report normalized feed health on the button (`LOADING`, `DEGRADED`, `STALE`, `FALLBACK`, or `UNAVAILABLE`) while the metadata line retains the source and reason. A partial CelesTrak group failure keeps the usable catalog and reports `DEGRADED`; a total outage keeps last-good catalog data visible but reports `UNAVAILABLE`.
 - On activation it focuses the nearest currently observed aircraft across the civilian and military feeds, with military winning an exact distance tie; if none are available, it focuses an observed AIS vessel. The aircraft search is deliberately uncapped and one refresh-tick retry handles initially empty feeds. This is an attention-priority navigation shortcut, not a high-risk, affiliation, or threat classification.
 - A selected aircraft, AIS vessel, or mapped installation gets a 250 km **context window** with nearby cohort counts, nearest examples, source labels, and stale/unavailable reasons. It emits `NEARBY` or `UNKNOWN`; no detection, engagement, affiliation, or sensor-activity conclusion is calculated.
@@ -7492,8 +7491,8 @@ silently demoting every later lookup for the session.
   protected-card path. Disable tears the tier down completely.
   Coverage/viewshed semantics unchanged.
 - **Satellites**: every point moves every frame. Each satellite's SGP4 sample (position, velocity, gravity and its rate of change; `src/layers/satellites/motion.js`) is reckoned forward or back to the world time and turned into the Earth-fixed frame, so points glide at any play speed instead of stepping once a second. Core satellites take a fresh sample every second, or as soon as the world time is 30 s from their sample (fast play, a seek), which keeps every point within about 10 m of SGP4; Starlink extras are sampled round-robin, more per frame the faster time plays, and a point more than two minutes from its sample waits for the next one. Hidden points are not moved until shown. Orbit rings rotate about Earth's Z by ΔGMST every ~1s (exact inertial→ECEF compensation; no SGP4 re-runs); the tracked satellite propagates per frame with one shared epoch for dot/label/camera. Verified: ISS holds <1km perpendicular to its ring while tracked. Pass prediction (`src/data/satellitePass.js`; `getNextSatellitePass`, `getNextIssPass`) scans at 20s, bisects rise/set to ~0.2s, fits the peak with a parabola, and marks a pass visible when the satellite is outside a cylindrical Earth shadow while the observer's Sun is at or below −6°. `next_iss_pass` preserves its geometric-pass ordering and appends visibility metadata. General `next_satellite_pass` accepts a loaded NORAD ID or unambiguous name, searches 24 hours and optionally requires estimated visibility. These estimates do not account for weather or satellite brightness.
-- **Space Missions (30d)**: recent launches render as bounded shared-host, horizon-occluded mission markers using Launch Library 2 v2.3 detailed records. Enabling the layer selects the unified right-side Context panel's Space Missions mode and enables the required satellite layer. Before applying its temporary dense/hidden Satellite mode, Space Missions snapshots the complete standalone Satellite parameter set and exact enabled-layer set. Disabling Space Missions from either Context or the left Data Layers rail restores those parameters and the exact prior enabled state, so a Satellite layer that was already on stays on while a mode-owned dependency returns off; enabling Satellites by itself remains independent. Selecting a mission isolates its launch-to-orbit transfer and dashed satellite orbit, fills that same panel with navigation/details, and animates a small phase-colored marker along the exact displayed Cartesian samples. Marker hit testing drill-picks through photorealistic tiles so the depth-test-free tactical dot remains reliably selectable; its text is non-interactive shared-host presentation. The selected pad is the camera's zoom pivot: the overview remains centered on its launch site, wheel zoom approaches that site instead of drifting elsewhere, and camera pitch progressively changes from global nadir to an oblique close 3D view. Its protected shared-host callout remains visible and expands to include both mission and launch-site names. `FOCUS` flies directly to a 12 km oblique frame around the selected launch site and retains the same anchored zoom/orbit behavior. `REPLAY ASCENT` resets the selected marker at the pad, frames it from an oblique third-person angle, and follows it through the mission-specific compressed ascent directly into one orbital lap at the default `1×` rate. A live `0.25×`–`4×` slider changes ascent and orbit playback speed; adjusting it mid-replay preserves the current path position and historical mission timestamp. Re-entry/recovery cannot be inserted into replay. At orbit insertion the camera smoothly pulls back over the first fifth of the orbital replay and pitches to a globe-scale nadir view while continuing to target the moving replay point. Replay Cancel, mission navigation, deselection, layer disable, and data refresh all release camera ownership. Reconstructed paths are one continuous 128-sample geodetic curve: horizontal departure begins near zero while altitude rises quickly, then the climb progressively bends toward insertion without the former hard 120 km corner. Unmatched orbit fallbacks are smooth planar inclined rings rather than longitude/latitude ground-track curves. The panel lists disclosed payload names, types, operators/manufacturers, mass, multiplicity, and destination when supplied; an empty LL2 payload collection is shown as `CLASSIFIED / MULTI-PAYLOAD`. Launcher, spacecraft, and recoverable payload stages appear in a compact stage table with serial/flight/reuse details, recovery outcome/type, destination, and final coordinates when those records exist; an empty recovery collection omits the section. Stage recoveries with confirmed coordinates use those coordinates; return-to-launch-site records use the pad; downrange-only records receive an explicitly labeled estimated endpoint along the ascent azimuth. Available endpoints render as static 2 px dashed descent/recovery paths with a fixed final-position dot and an estimated atmospheric-interface segment when applicable. The ascent is geodetically densified above the ellipsoid toward the orbit's nearest insertion point, then rendered with `ArcType.NONE`, so it neither cuts through Earth nor separates from the marker. Because LL2 does not normally supply continuous ascent telemetry, pad-to-insertion paths without upstream trajectory samples are labeled `RECONSTRUCTED ESTIMATE` / `ASCENT ESTIMATE`; only supplied trajectory samples receive the replay wording. Selected-orbit framing fits the complete ring, rear-side linework uses normal scene depth occlusion, and current distance, speed, and callout data come only from a launch-year-validated satellite match. Both the loaded-catalog and active-TLE lookups read the launch year from the TLE international designator through one parser (`src/sources/tle.js`); a blank or malformed designator is an unknown year, which skips the year check rather than rejecting the match. Speed is the magnitude of the SGP4 inertial velocity vector at the same propagation epoch as position, displayed in km/s with km/h available as hover detail. Unavailable operator, site, launch-time, orbit, current-altitude, and speed values omit their detail rows instead of reserving panel space with placeholders. Newly launched payloads absent from the core operational groups use CelesTrak's cached active TLE feed as a lookup-only fallback; weak constellation-name matches are rejected. The replay callout maps compressed animation progress onto Launch Library's mission-relative timeline, showing the historical UTC date/time at the marker's current path position; unavailable timelines remain explicit. Matched live satellite positions propagate at one-second cadence and use a distinct green dot/callout with the current UTC date/time.
-  When no mission is selected, the Context panel presents a scrollable newest-first roster of every launch in the rolling window, including the smaller 5 px operator-colored marker, provider, and launch date. Hovering or keyboard-focusing a row shows four compact cyan corner brackets on both that roster row and its corresponding globe dot, rotates the globe at the current zoom to center it, and gives its label declutter priority without selecting it; the globe label remains unbracketed. Selecting a roster row invokes the same mission isolation and full-orbit framing as clicking its globe marker. The replay vehicle is one screen-space SVG/CSS HUD overlay rather than separate Cesium billboard, label, and reticle graphics. It is hidden during ordinary Focus and manual close views, where the standard selected launch-site label remains visible, and exists only while ascent replay is active. Its fixed pixel scale is shared by ascent and insertion, so camera range never resizes the rocket on screen before the phase boundary. Generic Launch Library pad names are reduced to their identifying suffix, and replay timestamps use a cyan state title over unprefixed white UTC date/time values. `REPLAY ASCENT` holds the unframed cyan/white rocket at the pad for a real-time `T−10` countdown, transitions through `LIFTOFF`, and attaches six tapered cyan/white ellipse waves directly below it from liftoff through insertion to convey thrust without adding scene geometry. While replay is active, the single start button is replaced by compact Play, Pause, and Cancel icon controls. Pause freezes countdown or mission time, vehicle/stage positions, camera target, labels, and thrust-wave animation; Play resumes from that exact frame, and Cancel releases replay camera ownership. The rocket and thrust group rotates from the path's live screen-space tangent, so its nose follows the visible ascent curve while the adjacent text remains upright. The camera begins as a close oblique launch chase, then smoothly widens between roughly 120 and 420 km vehicle altitude into a higher oblique context view that keeps the moving rocket targeted while exposing the ascent bend and orbit connection. At insertion the rocket/thrust glyph is replaced by the fixed-size cyan orbit dot, which the camera follows through the existing globe-scale orbit pullback. The chase camera limits per-frame yaw changes across heading wraps so it cannot abruptly cross in front of the vehicle and make ascent read in reverse; the replay-speed slider affects mission playback but not countdown duration.
+- **Space Missions (30d)**: recent launches render as bounded shared-host, horizon-occluded mission markers using Launch Library 2 v2.3 detailed records. Enabling the layer reveals its own right-rail button and roster and enables the required satellite layer; it does not touch Context. Before applying its temporary dense/hidden Satellite mode, Space Missions snapshots the complete standalone Satellite parameter set and exact enabled-layer set. Disabling Space Missions from Data Layers hides its rail button and panel and restores those parameters and the exact prior enabled state, so a Satellite layer that was already on stays on while a mode-owned dependency returns off; enabling Satellites by itself remains independent. An explicit user or voice Satellites OFF requested after Space Missions ON exits Space Missions, including after returning from Stories; scene, story, preset and other programmatic Satellites changes do not. The controls under the Space Missions row cycle through available launches. Selecting a mission isolates its launch-to-orbit transfer and dashed satellite orbit, fills the Space Missions panel with details, navigation, and replay controls, and animates a small phase-colored marker along the exact displayed Cartesian samples. Marker hit testing drill-picks through photorealistic tiles so the depth-test-free tactical dot remains reliably selectable. Clicking the launch name on the globe selects and focuses the same mission as its dot. The selected pad is the camera's zoom pivot: the overview remains centered on its launch site, wheel zoom approaches that site instead of drifting elsewhere, and camera pitch progressively changes from global nadir to an oblique close 3D view. Its protected shared-host callout remains visible and expands to include both mission and launch-site names. `FOCUS` flies directly to a 12 km oblique frame around the selected launch site and retains the same anchored zoom/orbit behavior. `REPLAY ASCENT` resets the selected marker at the pad, frames it from an oblique third-person angle, and follows it through the mission-specific compressed ascent directly into one orbital lap at the default `1×` rate. A live `0.25×`–`4×` slider changes ascent and orbit playback speed; adjusting it mid-replay preserves the current path position and historical mission timestamp. Re-entry/recovery cannot be inserted into replay. At orbit insertion the camera smoothly pulls back over the first fifth of the orbital replay and pitches to a globe-scale nadir view while continuing to target the moving replay point. Replay Cancel, mission navigation, deselection, layer disable, and data refresh all release camera ownership. Reconstructed paths are one continuous 128-sample geodetic curve: horizontal departure begins near zero while altitude rises quickly, then the climb progressively bends toward insertion without the former hard 120 km corner. Unmatched orbit fallbacks are smooth planar inclined rings rather than longitude/latitude ground-track curves. The panel lists disclosed payload names, types, operators/manufacturers, mass, multiplicity, and destination when supplied; an empty LL2 payload collection is shown as `CLASSIFIED / MULTI-PAYLOAD`. Launcher, spacecraft, and recoverable payload stages appear in a compact stage table with serial/flight/reuse details, recovery outcome/type, destination, and final coordinates when those records exist; an empty recovery collection omits the section. Stage recoveries with confirmed coordinates use those coordinates; return-to-launch-site records use the pad; downrange-only records receive an explicitly labeled estimated endpoint along the ascent azimuth. Available endpoints render as static 2 px dashed descent/recovery paths with a fixed final-position dot and an estimated atmospheric-interface segment when applicable. The ascent is geodetically densified above the ellipsoid toward the orbit's nearest insertion point, then rendered with `ArcType.NONE`, so it neither cuts through Earth nor separates from the marker. Because LL2 does not normally supply continuous ascent telemetry, pad-to-insertion paths without upstream trajectory samples are labeled `RECONSTRUCTED ESTIMATE` / `ASCENT ESTIMATE`; only supplied trajectory samples receive the replay wording. Selected-orbit framing fits the complete ring, rear-side linework uses normal scene depth occlusion, and current distance, speed, and callout data come only from a launch-year-validated satellite match. Both the loaded-catalog and active-TLE lookups read the launch year from the TLE international designator through one parser (`src/sources/tle.js`); a blank or malformed designator is an unknown year, which skips the year check rather than rejecting the match. Speed is the magnitude of the SGP4 inertial velocity vector at the same propagation epoch as position, displayed in km/s with km/h available as hover detail. Unavailable operator, site, launch-time, orbit, current-altitude, and speed values omit their detail rows instead of reserving panel space with placeholders. Newly launched payloads absent from the core operational groups use CelesTrak's cached active TLE feed as a lookup-only fallback; weak constellation-name matches are rejected. The replay callout maps compressed animation progress onto Launch Library's mission-relative timeline, showing the historical UTC date/time at the marker's current path position; unavailable timelines remain explicit. Matched live satellite positions propagate at one-second cadence and use a distinct green dot/callout with the current UTC date/time.
+  When no mission is selected, the Space Missions panel presents a scrollable newest-first roster of every launch in the rolling window, including the smaller 5 px operator-colored marker, provider, and launch date. Hovering or keyboard-focusing a row shows four compact cyan corner brackets on both that roster row and its corresponding globe dot, rotates the globe at the current zoom to center it, and gives its label declutter priority without selecting it; the globe label remains unbracketed. Selecting a roster row invokes the same mission isolation and full-orbit framing as clicking its globe marker. The replay vehicle is one screen-space SVG/CSS HUD overlay rather than separate Cesium billboard, label, and reticle graphics. It is hidden during ordinary Focus and manual close views, where the standard selected launch-site label remains visible, and exists only while ascent replay is active. Its fixed pixel scale is shared by ascent and insertion, so camera range never resizes the rocket on screen before the phase boundary. Generic Launch Library pad names are reduced to their identifying suffix, and replay timestamps use a cyan state title over unprefixed white UTC date/time values. `REPLAY ASCENT` holds the unframed cyan/white rocket at the pad for a real-time `T−10` countdown, transitions through `LIFTOFF`, and attaches six tapered cyan/white ellipse waves directly below it from liftoff through insertion to convey thrust without adding scene geometry. While replay is active, the single start button is replaced by compact Play, Pause, and Cancel icon controls. Pause freezes countdown or mission time, vehicle/stage positions, camera target, labels, and thrust-wave animation; Play resumes from that exact frame, and Cancel releases replay camera ownership. The rocket and thrust group rotates from the path's live screen-space tangent, so its nose follows the visible ascent curve while the adjacent text remains upright. The camera begins as a close oblique launch chase, then smoothly widens between roughly 120 and 420 km vehicle altitude into a higher oblique context view that keeps the moving rocket targeted while exposing the ascent bend and orbit connection. At insertion the rocket/thrust glyph is replaced by the fixed-size cyan orbit dot, which the camera follows through the existing globe-scale orbit pullback. The chase camera limits per-frame yaw changes across heading wraps so it cannot abruptly cross in front of the vehicle and make ascent read in reverse; the replay-speed slider affects mission playback but not countdown duration.
   Mission world text has no native `LabelGraphics`: overview launch markers publish at most 48 ambient candidates for a 24-winner budget, while selecting a mission clears that overview source and publishes its launch-site callout, stage re-entry annotations, live/estimated payload-position readout, and orbit annotation as protected selected-lane entries. The source retains the exact former strings and colors. Static anchors reuse the Cartesian values used to build their mission geometry; the moving payload entry reads the layer's per-frame live-position cache; catalog-backed orbit annotation positions are cached in the same one-second matrix update that realigns the orbit primitive. Keyhole edge fade, horizon culling, final collision placement, and UI exclusion are owned by the shared host. Deselect restores the bounded overview, and refresh, disable, and destroy replace or clear both mission sources.
   A selected mission renders its orbit as four repeating tactical sectors, each containing one prominent cyan dot followed by one hundred thin translucent dashes. The bright dots act as orbit anchors while the subdued dash field remains depth-tested against the globe and is shown only for the selected mission.
   Close selected-pad views add one static 500 m-radius cyan launch-zone ring with a low-opacity translucent fill over the sampled photoreal launch-site surface. The single scene primitive is created only for the visible selected site and is otherwise dormant. It appears during Focus, sufficiently close manual zoom, and the replay countdown, but is suppressed above 120 km camera altitude, beyond 180 km direct camera-to-pad range, for unselected missions, and whenever Space Missions is inactive. Focus establishes a launch-site-centered camera transform once; subsequent manual heading and pitch changes remain centered on that site without an automated per-frame correction. Surface mission markers and labels use an additional conservative globe-limb margin before the exact ellipsoid occluder boundary, preventing near-horizon visibility from alternating between frames.

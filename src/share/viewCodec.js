@@ -191,6 +191,13 @@ export const SHARE_VIEW_PANELS = freezeAll([
     pinnable: false,
     collapsed: false,
   },
+  {
+    number: 11,
+    id: 'space-missions-panel',
+    token: 'n',
+    pinnable: false,
+    collapsed: true,
+  },
 ]);
 const PANEL_BY_NUMBER = new Map(SHARE_VIEW_PANELS.map((p) => [p.number, p]));
 const PANEL_BY_ID = new Map(SHARE_VIEW_PANELS.map((p) => [p.id, p]));

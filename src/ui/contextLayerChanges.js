@@ -1,28 +1,16 @@
 import { t, translateKnown } from '../i18n/index.js';
 import {
-  SPACE_MISSIONS_LAYER_BLOCK_REASON,
-  isExplicitUserIntentOrigin,
-  parseContextLayerBlockReason,
   recordContextRestoreExplicitChange,
   recordContextSessionUserChange,
   shouldExitContextForLayerChange,
-  spaceMissionEntryCancellationDisposition,
 } from '../contextModePolicy.js';
-import { localizeLayerName } from './layerNames.js';
-import { spaceMissionsIndexFailure } from './contextActions.js';
 
 /**
  * A blocked-visibility reason in the UI language. Reasons stay English (voice
- * and tools read them): the Space Missions refusal is rebuilt with the layer
- * name localized, a known sentence is looked up, anything else passes.
+ * and tools read them): a known sentence is looked up, anything else passes.
  */
 export function localizeVisibilityBlockReason(reason) {
   if (typeof reason !== 'string' || !reason) return reason;
-  const blocked = parseContextLayerBlockReason(reason);
-  if (blocked)
-    return t(SPACE_MISSIONS_LAYER_BLOCK_REASON, {
-      layer: localizeLayerName(blocked.layer),
-    });
   return translateKnown(reason);
 }
 
@@ -40,73 +28,11 @@ export function _handleContextLayerChange(change) {
     this.actions.refreshRadio();
   }
   if (change?.type === 'visibility-transition') return;
-  // The effective mode must be read BEFORE the entering flag is cleared:
-  // the entry layer's own enable event is the one that clears it, and the
-  // session bookkeeping below needs to know a mode was being entered.
+  // A mode still being entered counts for the session bookkeeping below.
   const effectiveContextMode = this._contextModeEntering || this._contextMode;
   if (change?.type === 'visibility-cancelled') {
-    const cancellationDisposition = spaceMissionEntryCancellationDisposition({
-      change,
-    });
-    if (
-      this._contextModeDeferredEntryIntent?.layerId === change.layerId &&
-      this._contextModeDeferredEntryIntent.intentEpoch === change.intentEpoch
-    ) {
-      if (cancellationDisposition !== 'replacement') {
-        this._contextModeDeferredEntryIntent = null;
-      }
-    }
-    if (cancellationDisposition === 'replacement') {
-      this._contextModeEntering = 'space-missions';
-      const entryIntent = this._contextModeEntryIntent;
-      if (
-        entryIntent?.generation === this._contextModeGeneration &&
-        entryIntent.layerId === change.layerId &&
-        entryIntent.intentEpoch === change.intentEpoch
-      ) {
-        this._contextModeReplacementIntent = {
-          generation: entryIntent.generation,
-          layerId: change.layerId,
-          intentEpoch: change.successorIntentEpoch,
-        };
-      }
-    } else if (cancellationDisposition === 'restore') {
-      this._contextModeEntering = null;
-      this._contextModeEntryIntent = null;
-      this._contextModeReplacementIntent = null;
-      if (this._contextSessionSnapshot && !this._contextModeChanging) {
-        this._contextMode = null;
-        void this._trackContextLayerReaction(
-          this._runUserFacingContextAction(
-            async (notificationToken) => {
-              await this._restoreContextSessionAfterLayerSettles(
-                change.layerId,
-                {
-                  notificationToken,
-                },
-              );
-              return true;
-            },
-            'Space Missions cancellation could not restore the previous layer state', // i18n-ignore: English message; the toast shows localizedMessage
-            {
-              localizedMessage: t(
-                'Space Missions cancellation could not restore the previous layer state',
-              ),
-            },
-          ),
-        );
-      }
-    }
     this._syncContextModeButtons();
     return;
-  }
-  if (
-    change?.layerId === 'rocket-launches' &&
-    ['visibility', 'visibility-blocked', 'visibility-failed'].includes(
-      change.type,
-    )
-  ) {
-    this._contextModeEntering = null;
   }
   if (change?.type === 'visibility-blocked') {
     if (
@@ -121,10 +47,13 @@ export function _handleContextLayerChange(change) {
     return;
   }
   if (change?.type === 'visibility-failed') {
+    // A layer may name why its own start failed (Space Missions: the
+    // mission index never loaded).
     const failureMessage =
-      (change.layerId === 'rocket-launches' &&
-        change.enabled &&
-        spaceMissionsIndexFailure(this._dataManager)) ||
+      (change.enabled &&
+        this._dataManager?.layers
+          ?.get(change.layerId)
+          ?.module?.enableFailureMessage?.()) ||
       t('{layerId} could not {action} cleanly', {
         layerId: change.layerId,
         action: change.enabled ? t('start') : t('stop'),
@@ -134,7 +63,7 @@ export function _handleContextLayerChange(change) {
     // notification for this queue to settle, then reconcile the complete
     // snapshot, including an uncertain failed shell.
     const needsDeferredShellRestore =
-      ['military-awareness', 'rocket-launches'].includes(change.layerId) &&
+      change.layerId === 'military-awareness' &&
       change.enabled &&
       this._contextSessionSnapshot &&
       !this._contextModeChanging;
@@ -212,26 +141,6 @@ export function _handleContextLayerChange(change) {
           ),
         );
       }
-    } else if (change.layerId === 'rocket-launches') {
-      const ownsContextEntry =
-        isExplicitUserIntentOrigin(change.origin, change.layerId) ||
-        this._contextMode === 'space-missions' ||
-        effectiveContextMode === 'space-missions';
-      if (!ownsContextEntry) return;
-      this._contextMode = change.enabled
-        ? 'space-missions'
-        : this._contextMode === 'space-missions'
-          ? null
-          : this._contextMode;
-      if (change.enabled) {
-        this._syncContextModeButtons();
-      } else if (this._contextSessionSnapshot) {
-        void this._trackContextLayerReaction(
-          this._runUserFacingContextAction((notificationToken) =>
-            this._deactivateContextForLayerChange({ notificationToken }),
-          ),
-        );
-      }
     } else if (
       this._contextMode === 'flights' &&
       [
@@ -254,23 +163,26 @@ export function _handleContextLayerChange(change) {
     change.enabled &&
     change.origin === 'user' &&
     !this.cockpitView?.active &&
-    (change.layerId === 'radio' || change.layerId === 'rocket-launches')
+    change.layerId === 'radio'
   ) {
-    // Context's panel shows its main tab for them (ContextView listens).
     globalThis.dispatchEvent?.(new Event('gev:context-show-view'));
     this.actions.setPanelCollapsed('global-context-panel', false, {
       explicit: true,
     });
-    if (change.layerId === 'radio')
-      this.actions.setPanelCollapsed('radio-panel', false, { explicit: true });
+    this.actions.setPanelCollapsed('radio-panel', false, { explicit: true });
   }
+  finishContextLayerChange(this);
+}
+
+/** The checks every settled layer change ends with. */
+function finishContextLayerChange(controls) {
   // Turning off the layer the view rides ends it; every other layer may be
   // turned on or off freely during a session.
-  const riddenLayerId = this.cockpitView?.active
-    ? this.cockpitView.readSubjectLayerId?.()
+  const riddenLayerId = controls.cockpitView?.active
+    ? controls.cockpitView.readSubjectLayerId?.()
     : null;
-  if (riddenLayerId && !this._dataManager?.isEnabled(riddenLayerId)) {
-    this.cockpitView.exit({ restoreTracking: false });
+  if (riddenLayerId && !controls._dataManager?.isEnabled(riddenLayerId)) {
+    controls.cockpitView.exit({ restoreTracking: false });
   }
-  this._syncContextModeButtons();
+  controls._syncContextModeButtons();
 }

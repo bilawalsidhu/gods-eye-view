@@ -2,6 +2,10 @@ import { isPointerFree } from '../../data/inputOwnership.js';
 import { inputFor } from '../../input/dispatcher.js';
 import { canvasOf, findCamera, findFrame } from '../../render/rendererOf.js';
 import { worldClock } from '../../time/worldClock.js';
+import {
+  ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID,
+  ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID,
+} from './policy.js';
 
 const HOVER_PICK_INTERVAL_MS = 120;
 
@@ -150,6 +154,22 @@ function restoreCameraView(viewer, view, landedView) {
 /** The longest name a timeline mark carries, as in the mission index. */
 const MARK_LABEL_LENGTH = 27;
 
+/** Whether the cockpit view is on. */
+function cockpitActive() {
+  return Boolean(
+    globalThis.document?.body?.classList?.contains?.('cockpit-mode'),
+  );
+}
+
+function markerLaunchId(hit) {
+  if (
+    hit?.sourceId !== ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID &&
+    hit?.sourceId !== ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID
+  )
+    return null;
+  return hit.entryId.startsWith('launch:') ? hit.entryId.slice(7) : null;
+}
+
 export function createLifecycle({
   state: layerState,
   services,
@@ -157,6 +177,25 @@ export function createLifecycle({
   source,
 }) {
   const { holdContinuousRender, releaseContinuousRender } = services.render;
+  const overlayAt = (position) =>
+    services.overlays?.hitTestWorldOverlay?.(position?.x, position?.y);
+  const missionsShown = () =>
+    layerState._enabled && parts.rendering.missionsShown();
+  const focusLaunch = (id) => {
+    if (!id) return false;
+    const launch = layerState._launches.find((entry) => entry.id === id);
+    if (!launch) return false;
+    parts.selection.setSelectedMission(launch.id);
+    parts.selection.focusMission(launch);
+    for (const listener of [...layerState._globePickListeners]) {
+      try {
+        listener(launch.id);
+      } catch (error) {
+        console.warn('[Data:RocketLaunches] globe pick listener failed', error);
+      }
+    }
+    return true;
+  };
   let hover = null;
   // While on, the launches loaded span the time from the first to the last,
   // each one a mark labelled with its mission's name (the launch's where it
@@ -204,25 +243,38 @@ export function createLifecycle({
       layerState._orbitMatches = 0;
       parts.overlays.clearMissionOverlaySources();
       const input = inputFor(viewer);
+      const overlayClicks = new WeakSet();
+      const unsubscribeLabelClick = input.onOverlayClick((event) => {
+        // The cockpit reads ambient clicks; a mission label must not take them.
+        if (!missionsShown() || cockpitActive()) return false;
+        const hit = overlayAt(event.screenPosition);
+        if (!hit) return false;
+        // Capture the painted hit before other handlers can invalidate the
+        // overlay. An unrelated label keeps the click above mission geometry.
+        overlayClicks.add(event);
+        return focusLaunch(markerLaunchId(hit));
+      });
       const unsubscribeClick = input.onClick((event) => {
-        if (!layerState._enabled || !parts.rendering.missionsShown()) return;
-        // The click's pick position (CSS px), as the click picked it.
-        const launchId = parts.rendering.launchIdFromPicks(
-          parts.rendering.missionHitsAt(event.position, 12),
-        );
-        if (!launchId) return;
-        parts.selection.setSelectedMission(launchId);
-        parts.selection.focusMission(
-          layerState._launches.find((launch) => launch.id === launchId),
+        if (!missionsShown() || overlayClicks.has(event)) return;
+        focusLaunch(
+          parts.rendering.launchIdFromPicks(
+            parts.rendering.missionHitsAt(event.position, 12),
+          ),
         );
       });
       hover = createLaunchHover({
         viewer,
-        enabled: () => layerState._enabled && parts.rendering.missionsShown(),
-        launchAt: parts.rendering.launchMarkerAt,
+        enabled: missionsShown,
+        launchAt(position) {
+          const hit = overlayAt(position);
+          return hit
+            ? Boolean(markerLaunchId(hit))
+            : parts.rendering.launchMarkerAt(position);
+        },
       });
       const unsubscribeHover = input.onPointer('move', hover.move);
       layerState._inputSubscription = () => {
+        unsubscribeLabelClick();
         unsubscribeClick();
         unsubscribeHover();
       };
@@ -321,8 +373,8 @@ export function createLifecycle({
       parts.overlays.hideReplayVehicleOverlay();
       layerState._selectedLaunchId = null;
       parts.overlays.clearMissionOverlaySources();
-      await parts.ingestion.restoreSatelliteDependency();
       parts.panel.renderMissionPanel();
+      await parts.ingestion.restoreSatelliteDependency();
       layerState.coverageChanged();
     },
 
@@ -336,14 +388,22 @@ export function createLifecycle({
       layerState._enabled = false;
       layerState._lifecycleToken++;
       layerState._updateDirty = false;
-      await parts.ingestion.restoreSatelliteDependency();
+      // A failed Satellites restore still tears everything else down; the
+      // failure is reported once teardown is complete.
+      let restoreError = null;
+      try {
+        await parts.ingestion.restoreSatelliteDependency();
+      } catch (error) {
+        restoreError = error;
+      }
+      layerState._inputSubscription?.();
+      layerState._inputSubscription = null;
+      parts.satelliteIntents.connect(null);
       parts.panel.clearMissionRosterHover();
       parts.replay.stopMissionReplay();
       layerState._cameraReleased = true;
       parts.selection.stopMissionZoomAnchor();
       parts.ingestion.clearPostTleRetry();
-      layerState._inputSubscription?.();
-      layerState._inputSubscription = null;
       if (layerState._declutterHandler) layerState._declutterHandler();
       layerState._declutterHandler = null;
       parts.launchPad.destroyLaunchPadZonePrimitive();
@@ -370,6 +430,7 @@ export function createLifecycle({
       layerState._satelliteStateBeforeMission = null;
       layerState._satelliteActivationPromise = null;
       layerState._dataManager = null;
+      if (restoreError) throw restoreError;
     },
   };
 

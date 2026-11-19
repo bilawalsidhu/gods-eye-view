@@ -549,7 +549,7 @@ function missionSpy({
         calls.contextModes.push(mode);
         return contextOk
           ? { ok: true, mode }
-          : { ok: false, failedLayerIds: ['rocket-launches'] };
+          : { ok: false, failedLayerIds: ['military-awareness'] };
       },
       setLayerEnabled: async (layerId) => {
         calls.layerIds.push(layerId);
@@ -582,19 +582,32 @@ test('the menu is the four owner-ordered missions', () => {
   );
 });
 
-test('Live Contacts and Space Missions go through the one setContextMode facade', async () => {
-  for (const [choice, mode] of [
-    ['contacts', 'contacts'],
-    ['space-missions', 'space-missions'],
-  ]) {
-    const spy = missionSpy();
-    const outcome = await runFirstRunChoice(choice, spy.deps);
-    assert.equal(outcome.ok, true);
-    assert.deepEqual(spy.calls.contextModes, [mode]);
-    // A Context mission owns no layers and no camera of its own — the facade does.
-    assert.deepEqual(spy.calls.layerIds, []);
-    assert.equal(spy.calls.globeFlights, 0);
-  }
+test('Live Contacts goes through the one setContextMode facade', async () => {
+  const spy = missionSpy();
+  const outcome = await runFirstRunChoice('contacts', spy.deps);
+  assert.equal(outcome.ok, true);
+  assert.deepEqual(spy.calls.contextModes, ['contacts']);
+  // A Context mission owns no layers and no camera of its own — the facade does.
+  assert.deepEqual(spy.calls.layerIds, []);
+  assert.equal(spy.calls.globeFlights, 0);
+});
+
+test('Space Missions switches on its layer like a row click, without a flight', async () => {
+  const spy = missionSpy();
+  const outcome = await runFirstRunChoice('space-missions', spy.deps);
+  assert.equal(outcome.ok, true);
+  assert.deepEqual(
+    spy.calls.contextModes,
+    [],
+    'Space Missions is not a Context mode',
+  );
+  assert.deepEqual(spy.calls.layerIds, ['rocket-launches']);
+  assert.equal(spy.calls.globeFlights, 0, 'the layer frames the globe itself');
+
+  const refused = missionSpy({ layerResult: () => false });
+  const failed = await runFirstRunChoice('space-missions', refused.deps);
+  assert.equal(failed.ok, false);
+  assert.deepEqual(failed.failedLayerIds, ['rocket-launches']);
 });
 
 test('Environmental enables BOTH its feeds and pulls out to the globe', async () => {
@@ -682,9 +695,9 @@ test('Explore manually touches nothing at all, and an unknown choice is inert', 
 
 test('a failed Context mission reports the layers the facade named', async () => {
   const spy = missionSpy({ contextOk: false });
-  const outcome = await runFirstRunChoice('space-missions', spy.deps);
+  const outcome = await runFirstRunChoice('contacts', spy.deps);
   assert.equal(outcome.ok, false);
-  assert.deepEqual(outcome.result.failedLayerIds, ['rocket-launches']);
+  assert.deepEqual(outcome.result.failedLayerIds, ['military-awareness']);
 });
 
 test('the fires/quakes tile name is switchable from one constant', () => {
@@ -736,7 +749,8 @@ test('no mission writes a preference the visitor did not choose by picking it', 
   }
 
   // The only durable panel write is the Context reveal, and only on the Context
-  // missions — the globe missions open no panel at all.
+  // mission — the globe missions open no panel at all, and Space Missions'
+  // panel opens the way its layer row's switch opens it.
   const panelWrites = code.match(/setPanelCollapsed/g) || [];
   assert.equal(
     panelWrites.length,
@@ -1033,6 +1047,11 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   delete camera.pitchDeg;
   camera.direction.description =
     'Required for pan/tilt/rotate; orbit/rotate_globe default right.';
+  // The Space Missions panel is a later, separate set_panel_open target.
+  const panels = legacyTools.find((tool) => tool.name === 'set_panel_open')
+    .parameters.properties.panelId;
+  assert.ok(panels.enum.includes('space-missions-panel'));
+  panels.enum = panels.enum.filter((id) => id !== 'space-missions-panel');
   const block = JSON.stringify(legacyTools);
   // Re-derived for the voice layer manifest (generated layer enums, alias and
   // field hints), point-and-ask's pointer/referent arguments and the prompt

@@ -1827,6 +1827,44 @@ export class LayerLifecycle {
     await entry.toggleChain.catch(() => {});
   }
 
+  /**
+   * Wait until a layer's lifecycle queue is idle, following any request that
+   * joins it while waiting, but no longer than `timeoutMs` or `signal` allows.
+   * @param {string} layerId Layer id.
+   * @param {{signal?: AbortSignal, timeoutMs?: number}} [options]
+   * @returns {Promise<boolean>} true once idle; false on timeout or abort.
+   */
+  async waitForLayerIdle(layerId, { signal, timeoutMs = 30000 } = {}) {
+    const entry = this.layers.get(layerId);
+    if (!entry) return true;
+    if (signal?.aborted) return false;
+    let timer = null;
+    let onAbort = null;
+    const givenUp = new Promise((resolve) => {
+      timer = setTimeout(() => resolve(false), timeoutMs);
+      onAbort = () => resolve(false);
+      signal?.addEventListener('abort', onAbort, { once: true });
+    });
+    try {
+      let pending;
+      do {
+        pending = entry.toggleChain;
+        const idle = await Promise.race([
+          pending.then(
+            () => true,
+            () => true,
+          ),
+          givenUp,
+        ]);
+        if (!idle) return false;
+      } while (pending !== entry.toggleChain);
+      return true;
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+    }
+  }
+
   _reserveLayerParamsIntent(layerId, params, origin = 'programmatic') {
     const entry = this.layers.get(layerId);
     if (

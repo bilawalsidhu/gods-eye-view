@@ -83,6 +83,12 @@ const PANEL_NAMES = [
   [/display( panel)?|visual( panel)?/, 'left', 'pp-toggles', msg('Visual')],
   [/cctv panel|cameras? panel/, 'right', 'cctv-panel', msg('CCTV')],
   [/street ?level panel/, 'right', 'street-level-panel', msg('Street Level')],
+  [
+    /(space )?missions? panel/,
+    'right',
+    'space-missions-panel',
+    msg('Space Missions'),
+  ],
   [/context( panel)?/, 'right', 'global-context-panel', msg('Context')],
 ];
 const CLOSE = /\b(collapse|close|hide|minimi[sz]e|dismiss|shut|fold)\b/;

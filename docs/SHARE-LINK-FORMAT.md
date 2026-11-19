@@ -282,6 +282,7 @@ reserved: a decoder ignores that entry, as for collapsed 0.
 | 8   | `global-context-panel` | `g`             | collapsed           |
 | 9   | `pp-toggles`           | `p`             | collapsed           |
 | 10  | `param-slider-panel`   | `m`             | expanded            |
+| 11  | `space-missions-panel` | `n`             | collapsed           |
 
 ### Style parameters (field 27)
 

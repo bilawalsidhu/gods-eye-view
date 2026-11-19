@@ -708,6 +708,43 @@ test('panels: only differences from the frozen layout are written', () => {
   );
 });
 
+test('panels: the Space Missions panel round-trips, and older links keep its default', () => {
+  const open = {
+    specs: [{ id: 'space-missions-panel', collapsed: false, pinned: null }],
+  };
+  const hash = assertRoundTrip({ panelState: open });
+  const specs = decodeOk(hash).state.panelState.specs;
+  assert.deepEqual(
+    specs.find((spec) => spec.id === 'space-missions-panel'),
+    { id: 'space-missions-panel', collapsed: false, pinned: null },
+  );
+  // A link that names only an older panel reads Space Missions as collapsed.
+  const older = decodeOk(
+    encodeShareView({
+      panelState: {
+        specs: [{ id: 'cctv-panel', collapsed: false, pinned: null }],
+      },
+    }),
+  ).state.panelState;
+  assert.equal(
+    older.specs.some((spec) => spec.id === 'space-missions-panel'),
+    false,
+    'an older link has no opinion about the panel',
+  );
+  const panel = SHARE_VIEW_PANELS.find((p) => p.id === 'space-missions-panel');
+  assert.equal(panel.collapsed, true);
+  assert.equal(
+    new Set(SHARE_VIEW_PANELS.map((p) => p.token)).size,
+    SHARE_VIEW_PANELS.length,
+    'panel tokens are unique',
+  );
+  assert.equal(
+    new Set(SHARE_VIEW_PANELS.map((p) => p.number)).size,
+    SHARE_VIEW_PANELS.length,
+    'panel numbers are unique',
+  );
+});
+
 test('a place view opens at its camera; a thing view also names what to follow', () => {
   const place = decodeOk(encodeShareView({ lat: 1, lon: 2 })).state;
   assert.deepEqual(place.view, { kind: 'place' });
@@ -889,7 +926,7 @@ test('unknown fields inside a thing view, codes and bits are skipped too', () =>
     10,
     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
   ); // layer 160
-  writer.bytesField(12, new WireWriter().varint(11 * 16 + 4 + 1).finish()); // panel 11
+  writer.bytesField(12, new WireWriter().varint(12 * 16 + 4 + 1).finish()); // panel 12
   writer.uintField(14, 99); // style code 99
   writer.bytesField(13, thing.finish());
   const result = decodeOk(hashOf(writer.finish()));
@@ -909,7 +946,7 @@ test('unknown fields inside a thing view, codes and bits are skipped too', () =>
       ['enum:style', 99],
       ['flags', 32],
       ['layer', 160],
-      ['panel', 11],
+      ['panel', 12],
       ['thing', 20],
     ],
   );

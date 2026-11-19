@@ -2,13 +2,13 @@
 import { storeToRefs } from 'pinia';
 import { onBeforeUpdate, onUpdated, ref } from 'vue';
 import { t } from '../../../i18n/index.js';
-import { useContextStore } from '../../stores/context.js';
+import { useSpaceMissionsStore } from '../../stores/spaceMissions.js';
 import UiEmpty from '../../kit/UiEmpty.vue';
 
 // The Space Missions roster. The launches layer presents it; until it does,
 // the list shows its loading line. Hover and keyboard focus drive the
 // layer's preview, and a click selects the mission.
-const { missionRoster: roster, missionsLayer: layer } = storeToRefs(useContextStore());
+const { roster, layer } = storeToRefs(useSpaceMissionsStore());
 const root = ref(null);
 
 const CONTINUATION = '[data-mission-roster-focus-continuation]';
