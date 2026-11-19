@@ -454,10 +454,10 @@ const MUTATIONS = [
     to: '<button type="button" data-first-run-start="zzz-environmental"',
   },
   {
-    defect: 'the "don\'t show again" checkbox is removed',
+    defect: 'the "don\'t show again" checkbox loses its hook',
     file: 'html',
-    from: '<input type="checkbox" data-first-run-suppress @change="onSuppress" />',
-    to: '<span data-first-run-suppress-removed></span>',
+    from: '<UiCheckbox class="first-run-suppress" :input-attrs="suppressBoxAttrs" @change="onSuppress">',
+    to: '<UiCheckbox class="first-run-suppress" @change="onSuppress">',
   },
   {
     defect: 'the status line stops being a polite live region',
