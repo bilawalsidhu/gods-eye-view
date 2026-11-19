@@ -96,8 +96,16 @@ header's search and expand, the imported files' row actions and the rail
 chips' icons), the glyphs are `UiIcon`s with `:size="null"`, so the site
 rules still size them. Core's pressable chips and pills (the rail cards'
 chips and action chips, Recent Imagery's day chips, SWAP and ZOOM IN, map
-sources, cities and places, and the view context's place and layer chips)
-are `UiButton`s too; the key setup chip is still a plain button. `UiChip`
+sources, cities and places, the view context's place and layer chips and
+the key setup chip) are `UiButton`s too. `UiChip` is a non-interactive
+label chip, used by the voice card.
+header's search and expand, Draw, Import, the imported files' and drawn
+shapes' row actions and the rail chips' icons), the glyphs are `UiIcon`s
+with `:size="null"`, so the site rules still size them. Core's pressable
+chips and pills (the rail cards' chips and action chips, Recent Imagery's
+day chips, SWAP and ZOOM IN, map sources, cities and places, and the view
+context's place and layer chips) are `UiButton`s too; the key setup chip
+is still a plain button. `UiChip`
 is a non-interactive label chip, used by the voice card.
 The welcome card's buttons (SKIP, the three start tiles, BROWSE STORIES,
 BACK and the main NEXT / ENTER GOD MODE action) are ghost `UiButton`s:
@@ -191,6 +199,51 @@ while a query is typed. The Filter button opens a disclosure and carries
 a `UiIcon` with `:size="null"`, so `layer-finder.css` still sizes them
 (`src/ui/kit/layerFinderControls.test.mjs` pins it); the search field's
 magnifier is `UiSearchField`'s own span.
+The Space Missions panel's buttons (a mission's roster row, FOCUS,
+REPLAY ASCENT, the replay's pause, PREV, NEXT and SHOW ALL / DESELECT),
+the Contacts panel's (PREV, FOCUS, NEXT and a contact's row), the Radio
+panel's (Enable, PREV, PLAY, NEXT and STOP), the RTL-SDR card's (Connect,
+Locate, Change device, FM, ADS-B, Tune and the two seeks) and the key
+setup's (the POWER UP chip, a key's REMOVE, the voice auth toggle and
+SAVE KEYS) are ghost `UiButton`s. Radio's Enable and the card's Connect,
+FM and ADS-B are pressed toggles with `active`; PLAY and Locate keep
+their own `active` class without `aria-pressed`, since their words say
+what they will do or have done. The chip's bolt is a `UiIcon` with
+`:size="null"`, so provider-settings.css still sizes it
+(`src/ui/kit/missionsRadioControls.test.mjs` pins it). The card's FM
+frequency stays a native number field, which the kit has no control for,
+and the replay's pause, the roster's chevron and the compass arrows are
+text characters, not Material symbols.
+Utilities' Draw and Import are on the kit. Draw (a pressed toggle with
+`active`), Clear and Import are ghost `UiButton`s, their glyphs `UiIcon`s
+with `pp-icon` and `:size="null"`. Draw's five colour swatches, in the
+toolbar and in a drawn shape's row, are ghost `UiButton`s with
+`role="radio"`: they say they are chosen with `aria-checked` and their own
+`active` class, never `aria-pressed`. A drawn shape's row (its swatch,
+show/hide, the application's row actions and fly to, beside its remove
+`UiCloseButton`) is on the kit too, its glyphs `UiIcon`s with
+`:size="null"`, so `controls.css` still sizes them; show/hide says what it
+does in its name (Show …, Hide …) rather than being pressed. The Street
+Level panel's controls already were kit controls; its EXPAND ⤢ ⤡ and its
+errors' ⚠ are text characters and stay text
+(`src/ui/kit/drawControls.test.mjs` pins it).
+The AI chat panel's and the voice control's buttons are ghost
+`UiButton`s: the chat's Settings, quick prompts, attachment removes,
+Attach layer, Attach a file, Expand conversation, command suggestions,
+Expand chat, Add attachment and Send (a submit button that turns into
+Stop reply), and the voice control's Open AI chat, Back to chat, Back to
+voice, its Preview and Settings tabs and the error tray's DISMISS, beside
+the tier button, the mic and the dock and minimize buttons, which already
+were. The tier button and dock are pressed toggles; the mic is one only
+while its owner has a state for it; the tabs keep `role="tab"` and
+`aria-selected`. DISMISS is a text button, not a cross, so it is not a
+`UiCloseButton`. The Settings and tab glyphs are `UiIcon`s with
+`:size="null"`, so voice-cost.css and voice-card.css still size them
+(`src/ui/kit/chatVoiceControls.test.mjs` pins it). The chat bubble,
+globe, attach, send and stop, expand and Back glyphs stay inline SVG,
+since no Material symbol the page loads draws them the same, and the
+message box, file picker and inactivity minutes stay native fields, which
+the kit has none of. The voice modules build no controls in script.
 The small surfaces' buttons are ghost `UiButton`s: the locale picker's
 button, the phone tab bar's tabs, the globe actions' Clear, Share, Reset
 and north-up compass, the imagery divider's handle, the scene sharing
