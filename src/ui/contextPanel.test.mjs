@@ -58,7 +58,10 @@ test('before ContextControls renders, the switch shows its initial markup', (t) 
   );
   assert.equal(panel.hasAttribute('data-context-mode'), false);
   const tab = $('global-context-flights-btn');
-  assert.equal(tab.className, 'context-mode-button');
+  assert.equal(
+    tab.className,
+    'ui-button ui-focus ui-button--ghost ui-button--accent context-mode-button',
+  );
   assert.equal(tab.getAttribute('aria-selected'), 'false');
   assert.equal(tab.getAttribute('tabindex'), '0');
   assert.equal(tab.hasAttribute('aria-busy'), false);
