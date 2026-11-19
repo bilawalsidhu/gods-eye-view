@@ -211,8 +211,12 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
       async (source) => !!(await fetchTxdotSnapshot(source.snapshotUrl))?.ok,
     )
       .then((verdicts) => {
+        // A fixed line only, like the failure below: the verdict map is keyed
+        // by the operator's own group key (`txdot:<cityId>`), and a city id is
+        // free-form text that may carry a secret. Nothing from the map is
+        // logged — not its keys, not its values.
         if (Object.keys(verdicts).length)
-          console.log('[CCTV] feed group probe:', JSON.stringify(verdicts));
+          console.log('[CCTV] feed group probe completed');
       })
       // A fixed line only: the failure can carry an upstream URL, a key or a
       // stack, and none of that belongs in the log.
