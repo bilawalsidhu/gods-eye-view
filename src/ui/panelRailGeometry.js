@@ -139,9 +139,9 @@ export function bandBesideMidpointObstacles({
   };
   const roomAbove = above.bottom - above.top;
   const roomBelow = below.bottom - below.top;
-  const least = Math.max(minimum, Number.EPSILON);
-  if (roomBelow > roomAbove && roomBelow >= least) return below;
-  return roomAbove >= least ? above : null;
+  const fits = (room) => room > 0 && room >= minimum;
+  if (roomBelow > roomAbove && fits(roomBelow)) return below;
+  return fits(roomAbove) ? above : null;
 }
 
 /**
