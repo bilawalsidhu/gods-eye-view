@@ -36,10 +36,12 @@ function scene(t) {
     ],
   };
   const viewer = { scene: {} };
+  const flights = [];
   const { draw, unbind } = bindFakeDraw(viewer, {
     camera: {
       pose: () => ({ position: { x: 2e7, y: 0, z: 0 } }),
       on: () => () => {},
+      flyTo: (...args) => flights.push(args),
     },
   });
   t.after(unbind);
@@ -88,7 +90,7 @@ function scene(t) {
       path: item(`rocket-trajectory:${launch.id}:0`).show,
     };
   };
-  return { state, rendering, launch, syncs, shown, draw };
+  return { state, rendering, launch, syncs, shown, draw, parts, flights };
 }
 
 test('live shows every launch in the window, lifted off or not', (t) => {
@@ -126,4 +128,22 @@ test('the live orbit rings turn at the frame time, not the wall clock', (t) => {
     record.spec.id.endsWith(':orbits'),
   );
   assert.deepEqual(orbits.spec.motionClock, { kind: 'scene' });
+});
+
+test('in the cockpit a chosen mission is not flown to', (t) => {
+  const { launch, parts, flights } = scene(t);
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: {
+      body: { classList: { contains: (name) => name === 'cockpit-mode' } },
+    },
+  });
+  try {
+    parts.selection.focusMission(launch);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'document', previous);
+    else delete globalThis.document;
+  }
+  assert.deepEqual(flights, [], 'the cockpit keeps the camera');
 });
