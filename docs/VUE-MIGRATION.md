@@ -84,8 +84,8 @@ adapter is gone.
 `UiButton` adds `pressedClass`, Core's class on a pressed toggle (most use
 `active`); its pressed classes toggle through `classList`, so a class other
 code adds (a voice highlight) survives a press. Not every pressed toggle in
-the views is one yet: the context view,
-the Stories screens and a few panel buttons still hand-write theirs, and
+the views is one yet: the context view and a few panel buttons still
+hand-write theirs, and
 Bhote Koshi's cinematic button and the tilt-map button have owners that
 write their state into the DOM. Core's
 pressable chips and pills (rail card chips, map sources, cities and places)
@@ -99,6 +99,18 @@ tile, tip, Stories and arrow glyphs are `UiIcon`s with `:size="null"`, so
 first-run.css still sizes them (`src/ui/kit/welcomeControls.test.mjs` pins
 it). God mode's preview globe and callouts stay inline SVG drawings, and
 its outbound links stay links.
+Every button in the Stories views (the Stories entry and its popup and
+toast, Explore, the Story screen, its header, rail, timeline and context
+panel) is a ghost `UiButton`. Explore's topic chips and map pins, the
+Story screen's Context button and the timeline's Expand map are pressed
+toggles, with no pressed class since their skins read `aria-pressed`;
+Explore's story cards are `role="button"` elements and keep their own
+`aria-pressed`. Their glyphs are inline SVG drawn for Stories, which no
+Material symbol the page loads draws the same, so they stay SVG; the two
+search fields keep their own markup, since `UiSearchField`'s Material
+magnifier would replace their SVG one, and their clear buttons, which draw
+an SVG cross, are ghost `UiButton`s rather than `UiCloseButton`s
+(`src/ui/kit/storiesControls.test.mjs` pins it).
 The Omnibar's mic (a pressed toggle with `active`) and its suggestion
 strip's chips (options, so `aria-current` rather than `pressed`) are
 ghost `UiButton`s, and its search, row and chip glyphs are `UiIcon`s with
@@ -152,9 +164,12 @@ empty rows stay a paragraph and table cells.
 `UiCloseButton` is a `UiButton` with a fixed glyph, a required `label` and
 no tip unless the site passes a `title`; attributes and classes pass through,
 so each site keeps its id, feature class and look. Every close, dismiss and
-clear button in the views is one (`src/ui/kit/closeButtons.test.mjs` pins
-it); Street Level's and the space mission's keep `bare`, since their skins
-set their own padding and border, and so does the credits list's. The
+clear button in the views that draws a cross is one
+(`src/ui/kit/closeButtons.test.mjs` pins it) except Story Explore's two
+search clears, whose SVG cross is neither of its glyphs; the Story context
+sheet's Close is a text button, a plain `UiButton`. Street Level's and the
+space mission's keep `bare`, since their skins set their own padding and
+border, and so does the credits list's. The
 Quebec CCTV overlay's close is one too, and so is the Omnibar guide's,
 which keeps its feature class and tip.
 `UiSearchField` takes `v-model`, a required `label` (the input's
@@ -181,9 +196,10 @@ a refused change. Attributes and classes go to the label; `inputId` and
 `inputAttrs` (such as `aria-describedby` or a data hook) to the box. The
 Visual panel's Scope, sky and application toggles, the voice and chat
 preferences, the Data Library's filter and the welcome card's box are
-`UiCheckbox`es (`src/ui/kit/checkboxes.test.mjs` pins it); Story Explore's
-filters are not converted yet. Its kit rule holds the centred row the
-checkbox-only labels drew, moved rather than copied.
+`UiCheckbox`es, and so are Story Explore's filter options, whose label
+keeps its `fopt` class (`src/ui/kit/checkboxes.test.mjs` pins it). Its kit
+rule holds the centred row the checkbox-only labels drew, moved rather than
+copied.
 `UiDialog` is a native `<dialog>` its owner opens and closes with `open`:
 true opens it with `showModal()` (on mount, for one mounted open), false
 closes it, and unmounting closes it. Each change is applied once the content

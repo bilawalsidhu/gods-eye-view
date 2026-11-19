@@ -23,6 +23,7 @@ import StoriesHeader from './StoriesHeader.vue';
 import StoryTimeline from './StoryTimeline.vue';
 import StoryContext from './StoryContext.vue';
 import StoryRail from './StoryRail.vue';
+import UiButton from '../../kit/UiButton.vue';
 
 /**
  * One story (prototype `.scr-story`): a GEV scene playing on GEV's Cesium
@@ -155,6 +156,7 @@ function onCardKey(e) {
   if (e.key === 'ArrowRight') setPage(page.value + 1);
   else if (e.key === 'ArrowLeft') setPage(page.value - 1);
 }
+// Minimise and Expand are UiButtons; each root is the button.
 const minBtn = ref(null);
 const miniBtn = ref(null);
 function setCardMin(on) {
@@ -352,10 +354,9 @@ watch([k, page], () => nextTick(sizeCard));
         </div>
         <ol class="ch-list">
           <li v-for="(c, i) in story.chapters" :key="c.id">
-            <button
+            <UiButton
               class="ch-item"
               :class="{ done: i < k }"
-              type="button"
               :aria-current="i === k ? 'step' : undefined"
               @click="goChapter(i)"
             >
@@ -363,7 +364,7 @@ watch([k, page], () => nextTick(sizeCard));
               ><span
                 ><b>{{ chTitle(c) }}</b></span
               >
-            </button>
+            </UiButton>
           </li>
         </ol>
       </aside>
@@ -445,16 +446,15 @@ watch([k, page], () => nextTick(sizeCard));
                 </div>
               </section>
             </div>
-            <button
+            <UiButton
               id="pgMin"
               ref="minBtn"
               class="pg-min"
-              type="button"
               :aria-label="t('Minimise card')"
               :aria-expanded="!cardMin"
               @click.stop="
                 setCardMin(true);
-                nextTick(() => miniBtn?.focus());
+                nextTick(() => miniBtn?.$el?.focus());
               "
             >
               <svg
@@ -467,17 +467,16 @@ watch([k, page], () => nextTick(sizeCard));
               >
                 <path d="M6 15l6-6 6 6" />
               </svg>
-            </button>
-            <button
+            </UiButton>
+            <UiButton
               id="pgMini"
               ref="miniBtn"
               class="pg-mini"
-              type="button"
               :aria-label="t('Expand card')"
               @click.stop="
                 setCardMin(false);
                 cardPeek();
-                nextTick(() => minBtn?.focus());
+                nextTick(() => minBtn?.$el?.focus());
               "
             >
               <b>{{ k + 1 }}/{{ story.chapters.length }}</b
@@ -492,25 +491,24 @@ watch([k, page], () => nextTick(sizeCard));
               >
                 <path d="M6 9l6 6 6-6" />
               </svg>
-            </button>
+            </UiButton>
             <div
               id="pgDots"
               class="pg-dots"
               role="group"
               :aria-label="t('Card pages')"
             >
-              <button
+              <UiButton
                 v-for="(lbl, i) in [
                   t('Chapter'),
                   t('On the map'),
                   t('Right now'),
                 ]"
                 :key="i"
-                type="button"
                 :aria-label="lbl"
                 :aria-current="String(i === page)"
                 @click="setPage(i)"
-              ></button>
+              ></UiButton>
             </div>
           </div>
 
@@ -532,9 +530,8 @@ watch([k, page], () => nextTick(sizeCard));
             id="ovPlay"
             class="ov ov-play"
           >
-            <button
+            <UiButton
               id="btnBigPlay"
-              type="button"
               :aria-label="t('Play story')"
               @click="bigPlayClick"
             >
@@ -543,13 +540,12 @@ watch([k, page], () => nextTick(sizeCard));
                   d="M8 5.7v12.6c0 .9 1 1.4 1.7.9l9.7-6.3a1.1 1.1 0 0 0 0-1.8L9.7 4.8C9 4.3 8 4.8 8 5.7Z"
                 />
               </svg>
-            </button>
+            </UiButton>
           </div>
-          <button
+          <UiButton
             id="btnCtx"
             class="ov ov-ctxbtn tbtn"
-            type="button"
-            :aria-pressed="ctxOpen"
+            :pressed="ctxOpen"
             @click="ctxOpen = !ctxOpen"
           >
             <svg
@@ -562,7 +558,7 @@ watch([k, page], () => nextTick(sizeCard));
               <path d="M14 4v16" />
             </svg>
             <span>{{ t('Context') }}</span>
-          </button>
+          </UiButton>
           <div v-if="hint" id="ovHint" class="ov ov-hint glass">{{ hint }}</div>
           <StoryRail />
         </div>
