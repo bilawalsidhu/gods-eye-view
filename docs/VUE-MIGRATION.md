@@ -108,8 +108,9 @@ no tip unless the site passes a `title`; attributes and classes pass through,
 so each site keeps its id, feature class and look. Every close, dismiss and
 clear button in the views is one (`src/ui/kit/closeButtons.test.mjs` pins
 it); Street Level's and the space mission's keep `bare`, since their skins
-set their own padding and border. The close buttons built in script (credits, the
-Quebec CCTV overlay, the guide) are not converted yet.
+set their own padding and border. The Omnibar guide's close is one too,
+keeping its feature class and tip. The close buttons built in script
+(credits, the Quebec CCTV overlay) are not converted yet.
 `UiSearchField` takes `v-model`, a required `label` (the input's
 accessible name), `placeholder` and `tag` (`div`, given `role="search"` by
 the site, or `label`); attributes and classes go to the frame, and
@@ -290,7 +291,11 @@ a feature supplying only its accent.
    `gev-location` store, and the search field keeps its listeners; beside
    the voice control, the dock teleports each voice pointer reticle to the
    body where its `PointerReticle` presents it in the `gev-pointer-reticle`
-   store), the phone shell (`PhoneTabBar` renders the tabs and open sheet the shell
+   store; `startGuide()` renders the Omnibar's guided walk, `OmnibarGuide`,
+   synchronously from the view it computes for each step, teleported to the
+   end of the body, and keeps every decision and word, focus and its return,
+   Escape, the entrance replay, and the callout's and spotlight rings' place
+   each frame), the phone shell (`PhoneTabBar` renders the tabs and open sheet the shell
    publishes to the `gev-display` store, teleporting the tab bar and sheet
    backdrop to the end of the page from the first publish until the shell
    is destroyed; the shell takes their clicks from the document), the

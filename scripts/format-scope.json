@@ -1624,6 +1624,7 @@
   "src/tooling/wikidataPlaceTiles.test.mjs",
   "src/ui/omnibarIntent.test.mjs",
   "src/ui/omnibarRows.test.mjs",
+  "src/ui/omnibarGuide.test.mjs",
   "src/ui/styles/omnibar-dock.css",
   "src/ui/styles/guide.css",
   "src/ui/commandDock.test.mjs",
