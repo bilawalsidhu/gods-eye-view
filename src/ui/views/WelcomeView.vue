@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia';
 import { nextTick, ref, watch } from 'vue';
 import { msg, t } from '../../i18n/index.js';
 import { FIRST_RUN_LINKS, environmentalLabel } from '../../firstRunCopy.js';
+import UiCheckbox from '../kit/UiCheckbox.vue';
 import { useFirstRunStore } from '../stores/firstRun.js';
 import { useStoriesStore } from '../stores/stories.js';
 
@@ -24,6 +25,9 @@ function selectStart(choice) {
 
 // Three short steps instead of one dense card: mode, where to start, then the
 // three things worth knowing. Back and Next move between them; Skip closes.
+// The suppress box's hook, as one object, so the box is not rendered again
+// with every render of the welcome.
+const suppressBoxAttrs = { 'data-first-run-suppress': '' };
 const STEPS = 3;
 const step = ref(1);
 const direction = ref('forward');
@@ -291,10 +295,9 @@ function onSuppress(event) {
      </Transition>
     </div>
     <div class="first-run-footer">
-      <label class="first-run-suppress">
-        <input type="checkbox" data-first-run-suppress @change="onSuppress" />
+      <UiCheckbox class="first-run-suppress" :input-attrs="suppressBoxAttrs" @change="onSuppress">
         <span>{{ t('Don\'t show this again') }}</span>
-      </label>
+      </UiCheckbox>
       <!-- The status line: empty until a mission reports progress or an
            error. It sits in the footer row, so it never changes the card's
            height. -->

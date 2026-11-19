@@ -11,6 +11,7 @@ import UiSegmented from '../../kit/UiSegmented.vue';
 import UiSlider from '../../kit/UiSlider.js';
 import { useDisplayStore } from '../../stores/display.js';
 import UiButton from '../../kit/UiButton.vue';
+import UiCheckbox from '../../kit/UiCheckbox.vue';
 import UiSelect from '../../kit/UiSelect.js';
 import { StyleParameterRows } from '../../styleParameters.js';
 import VisualPresets from './VisualPresets.vue';
@@ -182,11 +183,10 @@ const allocationOptions = computed(() => [
   </div>
   </Teleport>
   <div class="pp-toggle-group">
-    <label class="pp-toggle-btn pp-scope-toggle" :title="t('Scope — the circular viewport mask')">
+    <UiCheckbox class="pp-toggle-btn pp-scope-toggle" :title="t('Scope — the circular viewport mask')" input-id="scope-toggle" trailing :model-value="scopeOn" @update:model-value="act('setScopeEnabled', $event)">
       <span class="pp-icon material-symbols-outlined" aria-hidden="true">adjust</span>
       <span class="pp-label">{{ t('Scope') }}</span>
-      <input type="checkbox" id="scope-toggle" @change="act('setScopeEnabled', $event.target.checked)" :checked="scopeOn" />
-    </label>
+    </UiCheckbox>
     <div class="pp-slider-row visible" id="scope-slider-row">
       <span class="pp-slider-mini-label">{{ t('Feather') }}</span>
       <UiSlider class="pp-slider" id="scope-feather-slider" @update:model-value="act('setScopeFeather', $event)" min="0" max="200" :model-value="scopeFeather" :disabled="!scopeOn" :aria-label="t('Scope edge feather')" :title="t('Scope edge feather as a percentage of the keyhole radius')" />
@@ -211,11 +211,10 @@ const allocationOptions = computed(() => [
   </div>
   <!-- Sky: only where the renderer has a sky to set. -->
   <div v-if="sky" class="pp-toggle-group" id="sky-group">
-    <label v-for="row in skyRows" :key="row.key" class="pp-toggle-btn pp-scope-toggle" :id="`sky-${row.key}-row`">
+    <UiCheckbox v-for="row in skyRows" :key="row.key" class="pp-toggle-btn pp-scope-toggle" :id="`sky-${row.key}-row`" :input-id="`sky-${row.key}-toggle`" trailing :model-value="sky.switches[row.key]" @update:model-value="act('setSkySwitch', row.key, $event)">
       <span class="pp-icon material-symbols-outlined" aria-hidden="true">{{ row.icon }}</span>
       <span class="pp-label">{{ row.label }}</span>
-      <input type="checkbox" :id="`sky-${row.key}-toggle`" @change="act('setSkySwitch', row.key, $event.target.checked)" :checked="sky.switches[row.key]" />
-    </label>
+    </UiCheckbox>
     <div class="pp-slider-row visible" id="sky-milkyway-row">
       <span class="pp-slider-mini-label">{{ t('Milky Way') }}</span>
       <UiSlider class="pp-slider" id="sky-milkyway-slider" @update:model-value="act('setSkyMilkyWay', $event)" min="0" max="100" :model-value="sky.milkyWay" :aria-label="t('Milky Way')" />
@@ -225,11 +224,10 @@ const allocationOptions = computed(() => [
   <!-- Groups the application adds (store `publishGroup`). -->
   <div v-for="group in groups" :key="group.id" class="pp-toggle-group" :id="`${group.id}-group`">
     <template v-for="row in group.rows" :key="row.id">
-      <label v-if="row.kind === 'toggle'" class="pp-toggle-btn pp-scope-toggle" :title="row.title">
+      <UiCheckbox v-if="row.kind === 'toggle'" class="pp-toggle-btn pp-scope-toggle" :title="row.title" :input-id="`${group.id}-${row.id}-toggle`" trailing :model-value="row.checked" @update:model-value="row.onChange?.($event)">
         <span v-if="row.icon" class="pp-icon material-symbols-outlined" aria-hidden="true">{{ row.icon }}</span>
         <span class="pp-label">{{ row.label }}</span>
-        <input type="checkbox" :id="`${group.id}-${row.id}-toggle`" @change="row.onChange?.($event.target.checked)" :checked="row.checked" />
-      </label>
+      </UiCheckbox>
       <div v-else-if="row.kind === 'note'" class="pp-slider-row visible" :id="`${group.id}-${row.id}`">
         <span class="pp-slider-mini-label">{{ row.text }}</span>
       </div>

@@ -9,6 +9,8 @@ import VoiceVisualizer from './VoiceVisualizer.vue';
 import ChatPanel from './ChatPanel.vue';
 import PanelLayoutButtons from './PanelLayoutButtons.vue';
 import UiButton from '../../kit/UiButton.vue';
+import UiCheckbox from '../../kit/UiCheckbox.vue';
+import UiCloseButton from '../../kit/UiCloseButton.vue';
 import UiSelect from '../../kit/UiSelect.js';
 
 // The voice control in the command dock, as its presenter
@@ -18,16 +20,9 @@ defineProps({ view: { type: Object, required: true } });
 const { controls } = storeToRefs(useVoiceStore());
 const emit = (name, ...args) => controls.value?.emit(name, ...args);
 
-// A value the owner may restore after a refused change; written on every
-// render, as the owner's own writes were.
-const vChecked = {
-  mounted(el, { value }) {
-    el.checked = value;
-  },
-  updated(el, { value }) {
-    if (el.checked !== value) el.checked = value;
-  },
-};
+// The Voice Preview box's note, as one object, so the panel's other renders
+// do not render the box again.
+const previewBoxAttrs = { 'aria-describedby': 'gev-voice-preview-note' };
 // The minutes field holds a draft until it changes: write it only when its
 // owner does, not on every render (the waveform renders each frame).
 const vOwnedValue = {
@@ -107,7 +102,7 @@ const frameStyle = (panel) => ({
             <button id="gev-voice-settings-tab" class="gev-voice-panel-tab" type="button" role="tab" :aria-label="t('Settings')" :title="t('Settings')" :aria-selected="String(view.voicePanel.selected === 'settings')" :tabindex="view.voicePanel.selected === 'settings' ? 0 : -1" aria-controls="gev-voice-settings-panel" @click="emit('tab', 1)" @keydown="emit('tab-keydown', 1, $event)"><span class="material-symbols-outlined gev-voice-panel-tab-icon" aria-hidden="true">settings</span></button>
           </div>
           <PanelLayoutButtons :docked="view.layout.docked" :minimized="view.voicePanel.minimized" @dock="emit('layout-dock')" @minimize="emit('voice-minimize')" />
-          <button id="gev-voice-settings-close" type="button" :aria-label="t('Close voice panel')" @click="emit('settings-close')">×</button>
+          <UiCloseButton id="gev-voice-settings-close" :label="t('Close voice panel')" @click="emit('settings-close')" />
         </div>
         <div class="gev-voice-mini" role="group" :aria-label="t('Latest voice exchange')">
           <p :hidden="!view.mini.user"><span class="gev-voice-mini-who">{{ t('YOU') }}</span><span id="gev-voice-mini-user">{{ view.mini.user }}</span></p>
@@ -126,11 +121,11 @@ const frameStyle = (panel) => ({
             </label>
             <p class="gev-voice-settings-note">{{ t('The selected AI provider is shared by voice and chat.') }}</p>
             <div id="gev-settings-chat">
-              <label class="gev-voice-preference gev-voice-preference-toggle"><input id="gev-chat-quick" type="checkbox" v-checked="view.chat.quickChecked" @change="emit('chat-quick-change', $event.target.checked)" /><span>{{ t('Show quick commands') }}</span></label>
+              <UiCheckbox class="gev-voice-preference gev-voice-preference-toggle" input-id="gev-chat-quick" restore :model-value="view.chat.quickChecked" @update:model-value="emit('chat-quick-change', $event)"><span>{{ t('Show quick commands') }}</span></UiCheckbox>
               <p>{{ t('Chat replies are silent. No microphone access is needed.') }}</p>
             </div>
             <div id="gev-settings-voice">
-            <label class="gev-voice-preference gev-voice-preference-toggle"><input id="gev-voice-preview-enabled" type="checkbox" aria-describedby="gev-voice-preview-note" v-checked="view.preferences.previewChecked" @change="emit('preview-change', $event.target.checked)" /><span>{{ t('Show Voice Preview') }}</span></label>
+            <UiCheckbox class="gev-voice-preference gev-voice-preference-toggle" input-id="gev-voice-preview-enabled" :input-attrs="previewBoxAttrs" restore :model-value="view.preferences.previewChecked" @update:model-value="emit('preview-change', $event)"><span>{{ t('Show Voice Preview') }}</span></UiCheckbox>
             <p id="gev-voice-preview-note" class="gev-voice-settings-note">{{ view.preferences.previewNote }}</p>
             <div class="gev-voice-timeout-group">
             <label class="gev-voice-preference gev-voice-setting-title" for="gev-voice-timeout-select">{{ t('Voice inactivity timeout') }}</label>

@@ -190,20 +190,17 @@
   letter-spacing: 0.06rem;
 }
 
+/* Shares close-button.css: no padding, border or background, a pointer. */
 .gev-guide-close {
   display: grid;
   place-items: center;
   width: 20px;
   height: 20px;
   margin: -2px -4px 0 0;
-  padding: 0;
   color: rgba(214, 220, 226, 0.55);
   font-size: 0.95rem;
   line-height: 1;
-  background: none;
-  border: 0;
   border-radius: 5px;
-  cursor: pointer;
 }
 
 .gev-guide-close:hover,

@@ -1,0 +1,13 @@
+/* Core's close, dismiss and clear buttons draw a bare glyph: no padding,
+ * border or background of their own, and a pointer. The kit's
+ * UiCloseButton wears it as .ui-close-button; the guide's close button,
+ * built in script, shares the rule. It selects one class and loads before
+ * the feature stylesheets, so each feature rule still sets its size, colour,
+ * hover and any surface (a border, a chip, a tinted square). */
+.ui-close-button,
+.gev-guide-close {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}

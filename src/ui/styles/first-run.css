@@ -1576,8 +1576,6 @@ a.first-run-link-card:focus-visible .first-run-link-badge {
 }
 
 .first-run-suppress {
-  display: flex;
-  align-items: center;
   gap: 0.4rem;
   color: rgba(199, 225, 231, 0.66);
   text-transform: none;

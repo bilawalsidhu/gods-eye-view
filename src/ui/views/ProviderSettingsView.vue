@@ -8,6 +8,7 @@ import { vStatusText } from '../rail/statusText.js';
 import { useLocaleStore } from '../stores/locale.js';
 import { useProviderSettingsStore } from '../stores/providerSettings.js';
 import LocalePicker from './panels/LocalePicker.vue';
+import UiCloseButton from '../kit/UiCloseButton.vue';
 
 const { picker } = storeToRefs(useLocaleStore());
 // The key setup owner (src/keySetup.js) presents the chip, the dialog and its
@@ -48,9 +49,7 @@ const removeTitle = (title) =>
     <div class="key-setup-scanline" aria-hidden="true"></div>
     <header class="key-setup-header">
       <span class="key-setup-kicker">{{ t('GROUND STATION · PROVIDER SETTINGS') }}</span>
-      <button type="button" class="key-setup-close" data-key-setup-close :aria-label="t('Close key setup')" @click="controls?.close()">
-        <span class="material-symbols-outlined" aria-hidden="true">close</span>
-      </button>
+      <UiCloseButton class="key-setup-close" glyph="icon" data-key-setup-close :label="t('Close key setup')" @click="controls?.close()" />
     </header>
     <h2 id="key-setup-title">{{ t('Power up the globe') }}</h2>
     <p id="key-setup-description">{{ t('The globe already flies keyless. Every key below switches on another real feed — paste one and it\'s saved into this app\'s local configuration, then the server restarts itself. Server-side keys stay on this machine; Google Maps and Cesium ion run in the browser and must be provider-restricted. Keys you configured elsewhere are shown but never touched.') }}</p>

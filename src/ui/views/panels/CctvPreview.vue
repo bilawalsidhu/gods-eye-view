@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia';
 import { t } from '../../../i18n/index.js';
 import { useCctvStore } from '../../stores/cctv.js';
 import { usePanelChromeStore } from '../../stores/panelChrome.js';
+import UiCloseButton from '../../kit/UiCloseButton.vue';
 
 // A selected camera's card: a thumbnail of its latest frame, a few facts,
 // and a button that opens the full CCTV panel. The frame and facts come from
@@ -78,9 +79,7 @@ function openPanel() {
             <span class="material-symbols-outlined" aria-hidden="true">videocam</span>
             <strong>{{ name || t('Camera view') }}</strong>
             <span v-if="sourceBadge?.label" class="cctv-popup__badge">{{ sourceBadge.label }}</span>
-            <button type="button" class="cctv-popup__close" :aria-label="t('Close')" @click="big = false">
-              <span class="material-symbols-outlined" aria-hidden="true">close</span>
-            </button>
+            <UiCloseButton class="cctv-popup__close" glyph="icon" :label="t('Close')" @click="big = false" />
           </header>
           <img :src="src" :alt="name || t('Camera frame')" />
           <figcaption v-if="facts.length">

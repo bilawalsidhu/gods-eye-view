@@ -79,7 +79,7 @@ function selectMapSource(chip) {
         <span class="panel-divider"></span>
       </button>
       <div id="control-panel-popover" class="dock-popover-content">
-      <UiButton variant="icon" class="dock-pin-btn" data-pin-target="control-panel" :label="t('Pin visual presets')" :title="t('Keep visual presets open')" :pressed="!!panels['control-panel']?.pinned" @click="pin($event, 'control-panel')"><img src="/pin.svg" alt="" /></UiButton>
+      <UiButton class="dock-pin-btn" data-pin-target="control-panel" :label="t('Pin visual presets')" :title="t('Keep visual presets open')" :pressed="!!panels['control-panel']?.pinned" @click="pin($event, 'control-panel')"><img src="/pin.svg" alt="" /></UiButton>
       <div id="style-buttons" class="button-grid">
         <button class="style-btn active" data-style="normal" @click="display.act('setStyle', 'normal')" v-class-toggle="{ ...(style && { active: style.name === 'normal' }) }" :title="t('Show the globe without a visual filter.')">
           <span class="btn-icon">◯</span>
@@ -144,7 +144,7 @@ function selectMapSource(chip) {
         <div id="location-mini-poi" class="location-mini-poi">{{ loc ? loc.status.poi : t('Landmark: --') }}</div>
       </div>
       <div id="location-bar-popover" class="dock-popover-content">
-        <UiButton variant="icon" class="dock-pin-btn" data-pin-target="location-bar" :label="t('Pin location tray')" :title="t('Keep location tray open')" :pressed="!!panels['location-bar']?.pinned" @click="pin($event, 'location-bar')"><img src="/pin.svg" alt="" /></UiButton>
+        <UiButton class="dock-pin-btn" data-pin-target="location-bar" :label="t('Pin location tray')" :title="t('Keep location tray open')" :pressed="!!panels['location-bar']?.pinned" @click="pin($event, 'location-bar')"><img src="/pin.svg" alt="" /></UiButton>
         <div id="poi-row" class="poi-row-container" v-class-toggle="{ expanded: !!loc?.poisExpanded }"><UiButton v-for="poi in loc?.pois" :key="`${loc.poiCity}:${poi.index}`" class="poi-pill" :pressed="Boolean(poi.active)" pressed-class="active" :data-poi-index="poi.index" @click="locationControls?.choosePoi(poi.index)"><span class="poi-pill-key">{{ poi.key }}</span><span class="poi-pill-name">{{ poi.name }}</span></UiButton></div>
         <div class="location-bar-divider" id="location-bar-divider" v-class-toggle="{ visible: !!loc?.poisExpanded }"></div>
         <div class="location-city-row">
