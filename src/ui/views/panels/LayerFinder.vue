@@ -22,6 +22,7 @@ const finder = {
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref, watch, computed } from 'vue';
 import { msg, t } from '../../../i18n/index.js';
+import UiSearchField from '../../kit/UiSearchField.vue';
 
 // Search and filter for the Data Layers list. The rows are rendered elsewhere
 // (LayerRows), so this works on the list as it stands: it marks rows that
@@ -246,10 +247,7 @@ if (props.part === 'buttons') {
     </span>
   </template>
   <div v-else-if="searching || narrowed" class="layer-finder__bar">
-    <label v-if="searching" class="layer-finder__field">
-      <span class="material-symbols-outlined" aria-hidden="true">search</span>
-      <input id="layer-finder-input" v-model="query" type="search" :placeholder="t('Search layers…')" :aria-label="t('Search layers')" @keydown.esc.stop.prevent="closeSearch" />
-    </label>
+    <UiSearchField v-if="searching" v-model="query" tag="label" class="layer-finder__field" input-id="layer-finder-input" :label="t('Search layers')" :placeholder="t('Search layers…')" @escape="(event) => { event.preventDefault(); closeSearch(); }" />
     <button v-if="show !== 'all'" type="button" class="layer-finder__chip" @click="show = 'all'">
       {{ show === 'on' ? t('On') : t('Off') }}<span class="material-symbols-outlined" aria-hidden="true">close</span>
     </button>
