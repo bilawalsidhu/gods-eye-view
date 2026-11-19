@@ -5594,7 +5594,9 @@ activeCameraCardEnabled: true })` may publish it through the retained
 >   taken while it ran is kept. Restored parameters never re-show primitives
 >   while the Satellite layer is disabled. When Satellites is still busy after
 >   the 30 s limit, the restore changes nothing and keeps the saved state, so
->   switching Space Missions off again finishes it.
+>   switching Space Missions off again finishes it. While Space Missions goes
+>   off, its panel's roster and controls select, focus, preview and replay
+>   nothing, so no camera move starts that nothing would end.
 > - **Flights 3D/cockpit hardening:** the destination-direction cue is an
 >   inline SVG rather than a remotely loaded Material Icons ligature, so a
 >   blocked or late font can no longer expand the literal word `navigation`
