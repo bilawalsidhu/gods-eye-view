@@ -49,6 +49,8 @@ const GLOBE_CAPABILITIES = [
   'imageHooks',
   // Timed imagery: a layer a frame, prefetched unseen (`imagery.js`).
   'imageryFrames',
+  // Timed imagery handed over as finished images (`imageryFrames.js`).
+  'imageryDecoded',
   'surfaceIdentity',
   'surfaceShading',
   // A MapLibre style's vector tiles, painted as imagery (`vectorBase.js`).
