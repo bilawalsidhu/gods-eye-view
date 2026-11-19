@@ -1266,6 +1266,56 @@ test('empty auto VIIRS re-requests a cancelled successor', async () => {
   assert.deepEqual(f.drapes(), { a: `${next}|none`, b: null });
 });
 
+test('with empty days shown, an off-screen successor is probed once the visible days return empty', async () => {
+  const f = fixture();
+  const days = dailyViirs();
+  f.layer.setSources({ hls: false });
+  f.layer.setShowUnavailable(true);
+  f.layer.setVisibleRange(0, 5);
+  await f.ready(days);
+  const offscreen = days.findIndex(
+    ({ key }) => !f.thumbnails.requested.includes(key),
+  );
+  assert.ok(offscreen > 5, 'the first unrequested day is off-screen');
+  for (const { key } of days.slice(0, offscreen)) {
+    assert.equal(f.diag().following, key);
+    f.thumbnails.probe(key, 'empty');
+  }
+  const successor = days[offscreen].key;
+  assert.equal(f.diag().following, successor);
+  assert.equal(f.snap().focus.key, successor);
+  assert.deepEqual(f.thumbnails.requests.at(-1), [successor, 0]);
+  assert.ok(f.thumbnails.retained.at(-1).includes(successor));
+  f.thumbnails.probe(successor, 'present');
+  assert.equal(f.snap().preview.key, successor);
+  assert.deepEqual(f.drapes(), { a: `${successor}|none`, b: null });
+});
+
+test('a pick still being probed or debounced survives a late empty result for the automatic preview', async () => {
+  const f = fixture();
+  await f.ready([CANDIDATES[0], CANDIDATES[1], CANDIDATES[3]]);
+  assert.equal(f.snap().preview.key, S18);
+  assert.equal(f.layer.preview(V15), false);
+  assert.equal(f.diag().following, V15);
+  f.thumbnails.probe(S18, 'empty');
+  assert.equal(f.diag().following, V15, 'the pick is kept');
+  assert.equal(f.snap().focus.key, V15);
+  f.thumbnails.probe(V21, 'present');
+  f.thumbnails.probe(V15, 'present');
+  assert.equal(f.snap().preview.key, V15);
+  assert.deepEqual(f.drapes(), { a: `${V15}|none`, b: null });
+  // An arrow-key pick waiting out the debounce is kept too.
+  const g = fixture();
+  await g.ready();
+  g.thumbnails.setStatus(V15, 'present');
+  g.layer.focus(3);
+  assert.equal(g.diag().pending, V15);
+  g.thumbnails.probe(S18, 'empty');
+  assert.equal(g.owned().a, null, 'no other day drapes meanwhile');
+  g.timers.flush();
+  assert.equal(g.snap().preview.key, V15);
+});
+
 test('restored pins outside the visible strip window are probed and swipe once present', async () => {
   const f = fixture();
   const days = dailyViirs();

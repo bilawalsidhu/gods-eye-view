@@ -320,7 +320,9 @@ export function createRecentImageryLayer({
       _previewKey = null;
       _auto = null;
       changed = true;
-      if (wasAuto) autoPreview(preview.key);
+      // A day the user picked meanwhile, still being probed or debounced,
+      // takes the slot instead of the next ranked day.
+      if (wasAuto && !_followKey && !_pending) autoPreview(preview.key);
     }
     // A followed day that turns out empty is dropped; an automatic one hands
     // over to the next ranked day.
