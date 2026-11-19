@@ -19,6 +19,8 @@ import { useDisplayStore } from '../ui/stores/display.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
+import { createReplayController } from '../replay/controller.js';
+import { createReplayPanel } from '../ui/replayPanel.js';
 import { createDataLibrary } from '../library/controller.js';
 import { flyToLibraryExtent } from '../library/camera.js';
 import { createLibraryBrowser } from '../ui/libraryBrowser.js';
@@ -247,6 +249,17 @@ export function createApplicationTools({
       imageryBoxTool?.destroy();
     });
   }
+  // Recorded-history replay: shown in its rail panel only when the local
+  // recorder (server/recorder, GEV_RECORDER=1) holds history.
+  const replay = createReplayController({ viewer, dataManager });
+  const replayPanel = createReplayPanel({
+    container: document.getElementById('replay-panel-body'),
+    controller: replay,
+  });
+  defer(() => {
+    replayPanel?.destroy();
+    replay.destroy();
+  });
   if (startChrome)
     defer(startChrome({ loadingScreen, styleManager, dataManager, signal }));
   // Idle render governor: the loop draws on demand whenever nothing animates

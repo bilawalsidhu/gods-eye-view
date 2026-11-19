@@ -295,7 +295,8 @@
     "{n} mm",
     "Route",
     "3D",
-    "KT"
+    "KT",
+    "SAT"
   ],
   "es": [
     "1 min/s",
@@ -489,7 +490,8 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "{contact}: {status} (squawk {squawk})"
   ],
   "fr": [
     "1 min/s",
@@ -746,7 +748,11 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "AIR",
+    "SAT",
+    "{count} contacts",
+    "{count} points"
   ],
   "it": [
     "1 min/s",
@@ -979,7 +985,9 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "SAT",
+    "{contact}: {status} (squawk {squawk})"
   ],
   "ja": [
     "1090 MHz",
@@ -1257,7 +1265,10 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "SAT",
+    "{contact}: {status} (squawk {squawk})",
+    "Backups"
   ],
   "ru": [
     "1900–1945",
@@ -1494,7 +1505,8 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "DISK"
   ],
   "uk": [
     "1900–1945",

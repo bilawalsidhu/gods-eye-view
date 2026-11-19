@@ -11,6 +11,7 @@ import {
   createGlobePanelResource,
   panelRuntime,
 } from '../../src/tools/panel.js';
+import { historyTools } from '../recorder/tools.js';
 import { createMcpServer } from '../../src/tools/mcp/index.js';
 import { DEFAULT_API_BASE, createLocalToolServices } from './services.js';
 
@@ -40,7 +41,7 @@ export function createLocalMcpServer({
   return createMcpServer({
     catalog: catalogForSurface(
       composeCatalog({
-        tools: coreTools,
+        tools: [...coreTools, ...historyTools], // GEV recorder tools
         services: createLocalToolServices({ apiBase, fetchImpl, panelKey }),
       }),
       'mcp',
