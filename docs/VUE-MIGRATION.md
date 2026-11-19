@@ -108,8 +108,8 @@ no tip unless the site passes a `title`; attributes and classes pass through,
 so each site keeps its id, feature class and look. Every close, dismiss and
 clear button in the views is one (`src/ui/kit/closeButtons.test.mjs` pins
 it); Street Level's and the space mission's keep `bare`, since their skins
-keep the browser's padding. The close buttons built in script (credits, the
-Quebec CCTV overlay, the guide) are not converted yet.
+keep the browser's padding. The close buttons built in script (credits and
+the guide) are not converted yet.
 `UiSearchField` takes `v-model`, a required `label` (the input's
 accessible name), `placeholder` and `tag` (`div`, given `role="search"` by
 the site, or `label`); attributes and classes go to the frame, and
@@ -244,8 +244,13 @@ a feature supplying only its accent.
    the whole panel from the `gev-cctv` store, including the camera picker,
    the inline pose editor, the frame preview, source badge and typed
    summary; `CctvControls` keeps its listeners, the frame requests and the
-   live video surface), Layers (done: `LayerPanel` presents each row and
-   renders `LayerRows` synchronously; keyed chips and list items keep focus
+   live video surface; `QuebecCctvOverlay` teleports the Québec 511 player
+   and its map preview to the end of the body, rendered synchronously by
+   `createQuebecCctvOverlay()` from the view it computes, as the rail cards
+   are; the owner keeps every decision and the parts the template never
+   binds: each video's source, playback and refresh timer, the window's drag
+   and the marker's per-frame visibility and place), Layers (done:
+   `LayerPanel` presents each row and renders `LayerRows` synchronously; keyed chips and list items keep focus
    through the refresh their own click triggers, and clicks re-read the live
    descriptor before acting), Display (in progress: `DisplayPanel` renders
    the HUD, Sonar, Scope, Celestial, detection, bloom, sharpen and the
