@@ -54,8 +54,10 @@ function onCancel(event) {
   event.preventDefault();
   emit('dismiss');
 }
+// The browser queues its close event, so one from an earlier close can land
+// after the dialog has been opened again; only a dialog still shut reports it.
 function onClose() {
-  if (!unmounting && props.open) emit('browserClose');
+  if (!unmounting && props.open && !element.value?.open) emit('browserClose');
 }
 function onClick(event) {
   if (props.backdropDismiss && event.target === event.currentTarget)

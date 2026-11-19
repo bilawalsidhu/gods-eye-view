@@ -77,15 +77,32 @@ test('a dialog mounted open opens modal on mount; unmounting closes it', async (
 });
 
 test('the open state follows the content: opened comes after it renders', async () => {
-  const { wrapper } = dialog();
+  // The content changes in the same update that opens the dialog, so an
+  // opened emitted before that update renders would see the old words.
+  const { h } = await import('vue');
   let seen;
-  await wrapper.setProps({
-    open: true,
-    onOpened: () => {
-      seen = wrapper.element.querySelector('.content')?.textContent;
+  const Host = {
+    props: { open: Boolean, words: String },
+    setup(props) {
+      return () =>
+        h(
+          UiDialog,
+          {
+            open: props.open,
+            onOpened: () => {
+              seen = document.querySelector('dialog .content')?.textContent;
+            },
+          },
+          () => h('p', { class: 'content' }, props.words),
+        );
     },
+  };
+  const wrapper = mount(Host, {
+    attachTo: document.body,
+    props: { open: false, words: 'Before' },
   });
-  assert.equal(seen, 'Words');
+  await wrapper.setProps({ open: true, words: 'After' });
+  assert.equal(seen, 'After');
   wrapper.unmount();
 });
 
@@ -113,6 +130,17 @@ test('a close the browser made while open is reported once; the owner’s is not
   events.length = 0;
   await wrapper.setProps({ open: false });
   assert.deepEqual(events, ['closed', 'hidden'], 'no browserClose');
+  wrapper.unmount();
+});
+
+test('a late close event from an earlier close is not reported once open again', async () => {
+  const { wrapper, events } = dialog({ open: true });
+  await wrapper.setProps({ open: false });
+  await wrapper.setProps({ open: true });
+  events.length = 0;
+  // The browser's queued close event from the first close lands now.
+  wrapper.element.dispatchEvent(new Event('close'));
+  assert.deepEqual(events, [], 'no browserClose');
   wrapper.unmount();
 });
 

@@ -42,7 +42,7 @@ const chooserStyle = (focused) => ({ padding: '3px 9px', border: '1px solid #397
 </script>
 
 <template>
-  <UiDialog open data-director-dialog class="director-sharing-dialog" :aria-label="view.title" :style="dialogStyle" @dismiss="controls?.cancel()">
+  <UiDialog open data-director-dialog class="director-sharing-dialog" :aria-label="view.title" :style="dialogStyle" @dismiss="controls?.cancel()" @browser-close="controls?.cancel()">
     <h2 style="margin-bottom: 12px">{{ view.title }}</h2>
     <div>
       <template v-for="item in bodyItems" :key="item.id">
