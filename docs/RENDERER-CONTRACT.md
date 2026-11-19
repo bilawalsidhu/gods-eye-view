@@ -82,8 +82,12 @@ optional:
   while it places a world pose. A share link's follow offset is
   re-expressed in it, satellites included.
 - `camera.visiblePoints(points, horizonMarginM)` (capability `pointVisibility`)
-  conservatively reports whether a point set may be visible; `null` means the
-  renderer cannot determine visibility and callers should fail open.
+  is whether any of the points may be on screen: `false` only when their
+  bounding sphere is outside the view or all of them are below the horizon
+  of the WGS84 ellipsoid shrunk by `horizonMarginM` metres; `null` when it
+  cannot tell (not a 3D scene, an empty point set, or a non-finite point or
+  camera vector), and callers count that as visible. Supply a finite,
+  nonnegative margin smaller than the shortest WGS84 radius.
 - `globe.surfaceVersion()` (capability `surfaceIdentity`) is a number that
   changes whenever what surface heights answer against changes (base,
   terrain or photoreal route swapped, the globe shown or hidden) and never

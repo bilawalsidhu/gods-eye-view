@@ -485,7 +485,7 @@ export function createCesiumPorts(
           : {}),
       });
   const cameraPort = cameraPart.port;
-  if (controlled && capabilities.has('pointVisibility'))
+  if (capabilities.has('pointVisibility'))
     cameraPort.visiblePoints = createPointsVisibility(scene, camera);
   measureCameraChanged = cameraPart.measureChanged ?? null;
   const effectsPart = createCesiumEffects(scene, {

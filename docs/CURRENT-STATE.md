@@ -1976,16 +1976,14 @@ The view pass reruns while the camera moves, paced by its own cost. The camera
 picker lists the cameras in view, active camera first, and closes with the
 count of cameras outside the view.
 
-The active camera's pictures follow what can be seen. The monitor plane on the
-globe stops fetching its still every 10 s while the sphere around the camera
-mount and the plane is outside the view, or all of its points are below the
-horizon of the WGS84 ellipsoid shrunk by 200 m (a 2D or Columbus scene always
-counts as visible), and fetches again on the first refresh tick after it
-returns; activating or calibrating a camera always fetches. The panel's still
-preview is requested only while the tab is visible and the panel is expanded
-(on phones, also while the Cameras sheet is open), and the panel asks for the
-current picture when it is shown again. The panel's live video follows the same
-rule.
+The active camera's pictures follow what can be seen. The monitor plane skips
+its 10 s still while the renderer reports it off screen or below the horizon,
+and fetches on the first refresh tick after it is back. Activating or
+calibrating a camera bypasses visibility and the usual refresh interval, but
+still waits for an in-flight request and the provider's minimum interval.
+The panel's still and live video run only while the tab is visible and the
+panel is open (on phones, the Cameras sheet). The still also loads while
+Context shows the camera's card (on phones, the Context sheet).
 
 Traffic owns its rendered-surface observer only while enabled, removes it on disable/destroy, and rebuilds no cached heights on frames where the surface identity is unchanged. Its dots and heat-lines are two renderer draw sets, it animates on the frame port's preRender, and it follows the camera through the camera port at its own 5% threshold rather than the shared `percentageChanged` ledger. The surface identity is the globe port's `surfaceVersion()` and tile readiness its `isSettled('surface')`, so the layer no longer reaches Cesium. Heat-lines are always asked for draped: where the Cesium renderer cannot drape (no depth textures) its draw port draws them (and every other draped line) over the surface, in their colour where the surface hides them and hidden past the horizon, recolouring a line in place when only its colour changes, rather than the layer dropping them.
 

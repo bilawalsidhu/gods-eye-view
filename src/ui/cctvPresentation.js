@@ -4,6 +4,15 @@ import { cctvSourceLabelText, cctvSourceMessageText } from './cctvFrames.js';
 import { createCctvVideoSurface } from './cctvVideo.js';
 import { presentCctvCalibration } from './cctvCalibration.js';
 import { roundHeadingDegrees } from '../data/headingDegrees.js';
+import {
+  MOBILE_SHELL_CLASS,
+  MOBILE_SHEET_ATTR,
+  sheetForPanelId,
+} from './mobileSheets.js';
+
+const CAMERAS_SHEET = sheetForPanelId('cctv-panel');
+const CONTEXT_SHEET = sheetForPanelId('global-context-panel');
+
 export function _calBadgeLabel(badge) {
   switch (badge) {
     case 'calibrated':
@@ -274,19 +283,21 @@ export function _renderCctvState(state) {
   const liveIntent =
     enabled && !!activeCamera?.isVideo && !activeCamera?.browserMediaUrl;
   this.store.setLive(liveIntent);
-  // A background tab or a collapsed panel shows nothing, so neither plays the
-  // video nor fetches the still; the observer and the visibilitychange listener
-  // render again when the panel is shown.
-  // On phones the panel also belongs to one sheet: the shell hides it unless
-  // data-mobile-sheet is 'cameras'.
-  const body = typeof document !== 'undefined' ? document.body : null;
-  const sheetClosed =
-    !!body?.classList?.contains('mobile-shell') &&
-    body.getAttribute('data-mobile-sheet') !== 'cameras';
+  // A background tab, a collapsed panel or a closed phone sheet shows no
+  // picture; the observers and visibilitychange render again on showing.
+  const body = globalThis.document?.body;
+  const phone = body?.classList.contains(MOBILE_SHELL_CLASS);
+  const sheet = body?.getAttribute(MOBILE_SHEET_ATTR);
+  const tabShown = !!body && !document.hidden;
   const panelShown =
-    !(typeof document !== 'undefined' && document.hidden) &&
-    !this._cctvPanel?.classList?.contains('collapsed') &&
-    !sheetClosed;
+    tabShown &&
+    !this._cctvPanel?.classList.contains('collapsed') &&
+    (!phone || sheet === CAMERAS_SHEET);
+  // Context's camera card shows the same still.
+  const cardShown =
+    tabShown &&
+    this.store.previewCards > 0 &&
+    (!phone || sheet === CONTEXT_SHEET);
   if (this._cctvVideo) {
     const visible = liveIntent && panelShown;
     if (!visible || this._cctvVideoCameraId !== activeId) {
@@ -313,7 +324,7 @@ export function _renderCctvState(state) {
     // immediate so navigation never waits on the prior camera's request.
     if (
       nextSrc &&
-      panelShown &&
+      (panelShown || cardShown) &&
       (cameraChanged || (!frameLoading && this._frame.currentSrc !== nextSrc))
     ) {
       this._queueCctvFrame(nextSrc, nextCameraId, cameraChanged);

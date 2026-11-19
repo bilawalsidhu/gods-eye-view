@@ -1,3 +1,5 @@
+import { watch } from 'vue';
+import { MOBILE_SHEET_ATTR } from './mobileSheets.js';
 import {
   EMPTY_CCTV_FRAME,
   _clearCctvFrame,
@@ -86,11 +88,14 @@ export class CctvControls {
           attributeFilter: ['class', 'hidden'],
         });
       // On phones the panel is on screen only while the Cameras sheet is open.
-      if (typeof document !== 'undefined' && document.body)
-        this._videoVisibilityObserver.observe(document.body, {
-          attributes: true,
-          attributeFilter: ['class', 'data-mobile-sheet'],
-        });
+      this._videoVisibilityObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class', MOBILE_SHEET_ATTR],
+      });
+      this._offPreviewCards = watch(
+        () => this.store.previewCards,
+        () => this._renderCctvState(this._cctvState),
+      );
       this.listen(document, 'visibilitychange', () =>
         this._renderCctvState(this._cctvState),
       );
@@ -163,6 +168,7 @@ export class CctvControls {
     this._quebecCctvOverlay?.dispose();
     this._cctvVideoSurface?.stop();
     this._videoVisibilityObserver?.disconnect();
+    this._offPreviewCards?.();
     this._actionGeneration++;
     this.listeners.abort();
     this._cctvUnsubscribe?.();

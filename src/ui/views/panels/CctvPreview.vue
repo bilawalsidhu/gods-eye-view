@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { t } from '../../../i18n/index.js';
 import { useCctvStore } from '../../stores/cctv.js';
@@ -13,7 +13,8 @@ const props = defineProps({
   cameraId: { type: String, default: '' },
 });
 
-const { view, frame, sourceBadge } = storeToRefs(useCctvStore());
+const cctv = useCctvStore();
+const { view, frame, sourceBadge } = storeToRefs(cctv);
 const chrome = usePanelChromeStore();
 const { panels } = storeToRefs(chrome);
 
@@ -54,7 +55,11 @@ watch(big, (open) => {
   if (open) document.addEventListener('keydown', onKey);
   else document.removeEventListener('keydown', onKey);
 });
-onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
+onMounted(() => cctv.showPreviewCard(true));
+onBeforeUnmount(() => {
+  cctv.showPreviewCard(false);
+  document.removeEventListener('keydown', onKey);
+});
 
 function openPanel() {
   if (panels.value['cctv-panel']?.collapsed !== false) chrome.act('toggle', 'cctv-panel');

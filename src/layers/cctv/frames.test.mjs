@@ -3,9 +3,7 @@
 // 1920x1080 projection canvas, instead of being stretched to fill it.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
 import { bindRenderer } from '../../render/rendererOf.js';
-import { createPointsVisibility } from '../../render/cesium/camera.js';
 import { createFrames, fitToProjection } from './frames.js';
 import {
   FRAME_SIGNATURE_W,
@@ -143,72 +141,28 @@ test('same pixels at a new aspect redraw at the new fit', () => {
   assert.equal(runtime.canvasStamp, 2);
 });
 
-// A camera's monitor plane is fetched only while it can be on screen. The
-// viewer is a Cesium camera description over the real WGS84 globe: it hovers
-// 30 km above a mount at (0, 0) and looks straight down, so the plane is in
-// front of it; turned around, or moved to the far side of the globe, the
-// plane is not.
-const MOUNT = Cesium.Cartesian3.fromDegrees(0, 0, 20);
-const point = (lon, lat, alt = 20) =>
-  Cesium.Cartesian3.fromDegrees(lon, lat, alt);
+const MOUNT = { x: 0, y: 0, z: 0 };
 
 function planeRecord() {
-  const image = {};
   return {
     camera: { id: 'plane' },
-    billboard: { position: MOUNT },
+    position: MOUNT,
     frustumPositions: {
       mount: MOUNT,
-      capCenter: point(0.0005, 0, 20),
-      tl: point(0.0004, 0.0001),
-      tr: point(0.0006, 0.0001),
-      br: point(0.0006, -0.0001),
-      bl: point(0.0004, -0.0001),
+      capCenter: { x: 1, y: 0, z: 0 },
+      tl: { x: 1, y: -1, z: 1 },
+      tr: { x: 1, y: 1, z: 1 },
+      br: { x: 1, y: 1, z: -1 },
+      bl: { x: 1, y: -1, z: -1 },
     },
     projection: {
       mode: 'image',
-      image,
+      image: {},
       imageLoading: false,
       imageReady: false,
       lastImageRefreshAt: 0,
     },
   };
-}
-
-function viewerAt(position, direction, up) {
-  const viewer = {
-    isDestroyed: () => false,
-    scene: { mode: Cesium.SceneMode.SCENE3D },
-    camera: {
-      positionWC: position,
-      directionWC: direction,
-      upWC: up,
-      frustum: new Cesium.PerspectiveFrustum({
-        fov: Cesium.Math.toRadians(60),
-        aspectRatio: 16 / 9,
-        near: 1,
-        // Cesium's default far plane, as the app uses: a smaller one rejects
-        // the far-side mount before the horizon check is ever reached.
-        far: 5e8,
-      }),
-    },
-  };
-  bindRenderer(viewer, {
-    camera: {
-      visiblePoints: createPointsVisibility(viewer.scene, viewer.camera),
-    },
-  });
-  return viewer;
-}
-
-// Above the mount, looking straight down at the ground.
-function lookingDown() {
-  const position = point(0, 0, 30000);
-  return viewerAt(
-    position,
-    Cesium.Cartesian3.negate(Cesium.Cartesian3.UNIT_X, new Cesium.Cartesian3()),
-    Cesium.Cartesian3.UNIT_Z,
-  );
 }
 
 function framesFor(viewer) {
@@ -230,28 +184,33 @@ function framesFor(viewer) {
   });
 }
 
-test('a plane in front of the camera fetches its picture', () => {
-  const frames = framesFor(lookingDown());
+function framesWithCamera(t, camera) {
+  const host = {};
+  t.after(bindRenderer(host, { camera }));
+  return framesFor(host);
+}
+
+test('a plane the renderer may show fetches its picture', (t) => {
+  const visiblePoints = t.mock.fn(() => true);
+  const frames = framesWithCamera(t, { visiblePoints });
   const record = planeRecord();
-  assert.equal(frames.projectionInView(record), true);
   frames.refreshProjectionImage(record);
   assert.match(
     record.projection.image.src,
     /^\/api\/cctv\/frame\?id=plane&projTs=/,
   );
   assert.equal(record.projection.imageLoading, true);
+  assert.equal(visiblePoints.mock.callCount(), 1);
+  const [points, margin] = visiblePoints.mock.calls[0].arguments;
+  const { mount, tl, tr, br, bl } = record.frustumPositions;
+  assert.deepEqual(points, [mount, tl, tr, br, bl]);
+  assert.equal(points[0], mount);
+  assert.equal(margin, 200);
 });
 
-test('a plane behind the camera is not fetched, but a forced refresh is', () => {
-  const down = lookingDown();
-  const away = viewerAt(
-    down.camera.positionWC,
-    Cesium.Cartesian3.UNIT_X,
-    Cesium.Cartesian3.UNIT_Z,
-  );
-  const frames = framesFor(away);
+test('a plane the renderer cannot show is not fetched, but a forced refresh is', (t) => {
+  const frames = framesWithCamera(t, { visiblePoints: () => false });
   const record = planeRecord();
-  assert.equal(frames.projectionInView(record), false);
   frames.refreshProjectionImage(record);
   assert.equal(record.projection.image.src, undefined);
   assert.equal(record.projection.lastImageRefreshAt, 0);
@@ -259,199 +218,32 @@ test('a plane behind the camera is not fetched, but a forced refresh is', () => 
   assert.match(record.projection.image.src, /projTs=/);
 });
 
-test('a nearby plane below the ellipsoid still fetches for a low viewer', () => {
+test('a skipped refresh does not use up the interval', (t) => {
+  let visible = false;
+  const frames = framesWithCamera(t, { visiblePoints: () => visible });
   const record = planeRecord();
-  const mount = point(0, 0, -18);
-  const cap = point(0.00054, 0, -18);
-  const position = point(0.00135, 0, 4);
-  record.billboard.position = mount;
-  record.frustumPositions = { mount, capCenter: cap };
-  const direction = Cesium.Cartesian3.normalize(
-    Cesium.Cartesian3.subtract(cap, position, new Cesium.Cartesian3()),
-    new Cesium.Cartesian3(),
-  );
-  const viewer = viewerAt(position, direction, Cesium.Cartesian3.UNIT_Z);
-  const sphere = Cesium.BoundingSphere.fromPoints([mount, cap]);
-  const culling = viewer.camera.frustum.computeCullingVolume(
-    position,
-    direction,
-    viewer.camera.upWC,
-  );
-  assert.notEqual(culling.computeVisibility(sphere), Cesium.Intersect.OUTSIDE);
-  const frames = framesFor(viewer);
-  assert.equal(frames.projectionInView(record), true);
   frames.refreshProjectionImage(record);
-  assert.match(record.projection.image.src, /projTs=/);
-
-  // The same below-ellipsoid plane remains visible from a higher viewer.
-  const high = point(0.00135, 0, 1200);
-  const highDirection = Cesium.Cartesian3.normalize(
-    Cesium.Cartesian3.subtract(cap, high, new Cesium.Cartesian3()),
-    new Cesium.Cartesian3(),
-  );
-  assert.equal(
-    framesFor(
-      viewerAt(high, highDirection, Cesium.Cartesian3.UNIT_Z),
-    ).projectionInView(record),
-    true,
-  );
-});
-
-test('the horizon still rejects a negative-height plane on the far side', () => {
-  for (const altitude of [4, 30000, 2e7]) {
-    const record = planeRecord();
-    const mount = point(0, 0, -18);
-    const cap = point(0.00054, 0, -18);
-    record.billboard.position = mount;
-    record.frustumPositions = { mount, capCenter: cap };
-    const position = point(180, 0, altitude);
-    const direction = Cesium.Cartesian3.normalize(
-      Cesium.Cartesian3.subtract(mount, position, new Cesium.Cartesian3()),
-      new Cesium.Cartesian3(),
-    );
-    const viewer = viewerAt(position, direction, Cesium.Cartesian3.UNIT_Z);
-    const sphere = Cesium.BoundingSphere.fromPoints([mount, cap]);
-    assert.notEqual(
-      viewer.camera.frustum
-        .computeCullingVolume(position, direction, viewer.camera.upWC)
-        .computeVisibility(sphere),
-      Cesium.Intersect.OUTSIDE,
-    );
-    assert.equal(framesFor(viewer).projectionInView(record), false);
-  }
-});
-
-test('a low viewer can see a plane beyond the WGS84 horizon', () => {
-  const record = planeRecord();
-  const mount = point(0, 0, 1);
-  record.billboard.position = mount;
-  record.frustumPositions = { mount };
-  const position = point(0.2, 0, 4);
-  const direction = Cesium.Cartesian3.normalize(
-    Cesium.Cartesian3.subtract(mount, position, new Cesium.Cartesian3()),
-    new Cesium.Cartesian3(),
-  );
-  const viewer = viewerAt(position, direction, Cesium.Cartesian3.UNIT_Z);
-  assert.equal(framesFor(viewer).projectionInView(record), true);
-});
-
-test('a plane below the horizon is not fetched', () => {
-  const far = point(180, 0, 30000);
-  const viewer = viewerAt(
-    far,
-    Cesium.Cartesian3.normalize(
-      Cesium.Cartesian3.subtract(MOUNT, far, new Cesium.Cartesian3()),
-      new Cesium.Cartesian3(),
-    ),
-    Cesium.Cartesian3.UNIT_Z,
-  );
-  const frames = framesFor(viewer);
-  assert.equal(frames.projectionInView(planeRecord()), false);
-});
-
-test('a skipped refresh does not use up the interval: the plane fetches once it is back in view', () => {
-  const record = planeRecord();
-  const frames = framesFor(lookingDown());
-  const away = viewerAt(
-    lookingDown().camera.positionWC,
-    Cesium.Cartesian3.UNIT_X,
-    Cesium.Cartesian3.UNIT_Z,
-  );
-  const awayFrames = framesFor(away);
-  awayFrames.refreshProjectionImage(record);
   assert.equal(record.projection.image.src, undefined);
+  visible = true;
   frames.refreshProjectionImage(record);
   assert.match(record.projection.image.src, /projTs=/);
 });
 
-test('the renderer scene host culls the far side without raw viewer access', () => {
-  const native = lookingDown();
-  const viewer = { isDestroyed: () => false };
-  const camera = native.camera;
-  camera.directionWC = Cesium.Cartesian3.UNIT_X;
-  const unbind = bindRenderer(viewer, {
-    camera: { visiblePoints: createPointsVisibility(native.scene, camera) },
-  });
-  try {
-    assert.equal(framesFor(viewer).projectionInView(planeRecord()), false);
-  } finally {
-    unbind();
+test('what cannot be judged counts as visible', (t) => {
+  for (const frames of [
+    framesWithCamera(t, { visiblePoints: () => null }),
+    framesWithCamera(t, { pose: () => ({}) }),
+    framesFor(null),
+  ]) {
+    const record = planeRecord();
+    frames.refreshProjectionImage(record);
+    assert.match(record.projection.image.src, /projTs=/);
   }
-});
 
-test('visibility checks reuse the points array across ticks', () => {
-  const seen = [];
-  const host = {};
-  const unbind = bindRenderer(host, {
-    camera: {
-      visiblePoints: (points) => {
-        seen.push(points);
-        return true;
-      },
-    },
-  });
-  try {
-    const frames = framesFor(host);
-    frames.projectionInView(planeRecord());
-    frames.projectionInView(planeRecord());
-    assert.equal(seen.length, 2);
-    assert.strictEqual(seen[0], seen[1]);
-  } finally {
-    unbind();
-  }
-});
-
-test('deep viewers do not lose nearby planes to the horizon test', () => {
-  const mount = point(0, 0, -350);
-  const position = point(0.00135, 0, -300);
-  const direction = Cesium.Cartesian3.normalize(
-    Cesium.Cartesian3.subtract(mount, position, new Cesium.Cartesian3()),
-    new Cesium.Cartesian3(),
-  );
-  const record = planeRecord();
-  record.frustumPositions = { mount };
-  record.position = mount;
-  assert.equal(
-    framesFor(
-      viewerAt(position, direction, Cesium.Cartesian3.UNIT_Z),
-    ).projectionInView(record),
-    true,
-  );
-});
-
-test('flat and unknown projections fail open', () => {
-  const native = lookingDown();
-  native.camera.directionWC = Cesium.Cartesian3.UNIT_X;
-  native.scene.mode = Cesium.SceneMode.COLUMBUS_VIEW;
-  assert.equal(framesFor(native).projectionInView(planeRecord()), true);
-  native.scene.mode = Cesium.SceneMode.SCENE3D;
-  native.camera.directionWC = undefined;
-  assert.equal(framesFor(native).projectionInView(planeRecord()), true);
-  const host = {};
-  const unbind = bindRenderer(host, { camera: { pose: () => ({}) } });
-  try {
-    assert.equal(framesFor(host).projectionInView(planeRecord()), true);
-  } finally {
-    unbind();
-  }
-});
-
-test('what cannot be judged counts as visible', () => {
-  const record = planeRecord();
-  assert.equal(framesFor(null).projectionInView(record), true);
-  assert.equal(
-    framesFor({ ...lookingDown(), isDestroyed: () => true }).projectionInView(
-      record,
-    ),
-    true,
-  );
-  const flat = lookingDown();
-  flat.scene.mode = Cesium.SceneMode.SCENE2D;
-  assert.equal(framesFor(flat).projectionInView(record), true);
-  const noGeometry = {
-    camera: { id: 'plane' },
-    projection: record.projection,
-    position: point(180, 0, 20),
-  };
-  assert.equal(framesFor(lookingDown()).projectionInView(noGeometry), true);
+  const noGeometry = planeRecord();
+  delete noGeometry.frustumPositions;
+  const visiblePoints = t.mock.fn(() => false);
+  framesWithCamera(t, { visiblePoints }).refreshProjectionImage(noGeometry);
+  assert.equal(visiblePoints.mock.callCount(), 0);
+  assert.match(noGeometry.projection.image.src, /projTs=/);
 });

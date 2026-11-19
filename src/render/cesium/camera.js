@@ -86,6 +86,9 @@ function sameMatrix(array, matrix) {
   return true;
 }
 
+const finiteVector = (v) =>
+  !!v && Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);
+
 /** Conservative globe/frustum visibility; null means unknown. */
 export function createPointsVisibility(scene, camera) {
   const visibilitySphere = new Cesium.BoundingSphere();
@@ -93,47 +96,20 @@ export function createPointsVisibility(scene, camera) {
   let visibilityEllipsoid = null;
   let visibilityOccluder = null;
   return function visiblePoints(points, marginM) {
-    if (
-      scene.mode !== Cesium.SceneMode.SCENE3D ||
-      !points?.length ||
-      !Number.isFinite(marginM) ||
-      marginM < 0 ||
-      typeof camera.frustum?.computeCullingVolume !== 'function'
-    )
-      return null;
-    const radii = Cesium.Ellipsoid.WGS84.radii;
-    if (marginM >= Math.min(radii.x, radii.y, radii.z)) return null;
     const eye = camera.positionWC;
-    if (
-      !eye ||
-      !Number.isFinite(eye.x) ||
-      !Number.isFinite(eye.y) ||
-      !Number.isFinite(eye.z)
-    )
-      return null;
     const direction = camera.directionWC;
     const up = camera.upWC;
     if (
-      !direction ||
-      !up ||
-      !Number.isFinite(direction.x) ||
-      !Number.isFinite(direction.y) ||
-      !Number.isFinite(direction.z) ||
-      !Number.isFinite(up.x) ||
-      !Number.isFinite(up.y) ||
-      !Number.isFinite(up.z)
+      scene.mode !== Cesium.SceneMode.SCENE3D ||
+      !points?.length ||
+      !finiteVector(eye) ||
+      !finiteVector(direction) ||
+      !finiteVector(up) ||
+      !points.every(finiteVector)
     )
       return null;
-    for (const p of points) {
-      if (
-        !p ||
-        !Number.isFinite(p.x) ||
-        !Number.isFinite(p.y) ||
-        !Number.isFinite(p.z)
-      )
-        return null;
-    }
     if (visibilityMargin !== marginM) {
+      const radii = Cesium.Ellipsoid.WGS84.radii;
       visibilityMargin = marginM;
       visibilityEllipsoid = new Cesium.Ellipsoid(
         radii.x - marginM,
@@ -143,6 +119,7 @@ export function createPointsVisibility(scene, camera) {
       visibilityOccluder = new Cesium.EllipsoidalOccluder(visibilityEllipsoid);
     }
     const inverse = visibilityEllipsoid.oneOverRadii;
+    // Inside the ellipsoid Cesium's occluder hides nearby points; judge by the frustum alone.
     const outside =
       Math.hypot(eye.x * inverse.x, eye.y * inverse.y, eye.z * inverse.z) >= 1;
     if (outside) {
@@ -156,11 +133,7 @@ export function createPointsVisibility(scene, camera) {
       }
       if (!visible) return false;
     }
-    const culling = camera.frustum.computeCullingVolume(
-      eye,
-      camera.directionWC,
-      camera.upWC,
-    );
+    const culling = camera.frustum.computeCullingVolume(eye, direction, up);
     return (
       culling.computeVisibility(
         Cesium.BoundingSphere.fromPoints(points, visibilitySphere),
@@ -752,8 +725,6 @@ export function createCesiumCamera({
   });
   // Cesium keeps the eye in `camera.transform`: a tracked entity's frame, a
   // `lookAt` target's, or the identity.
-  if (!capabilities || capabilities.has('pointVisibility'))
-    cameraPort.visiblePoints = createPointsVisibility(scene, camera);
   if (!capabilities || capabilities.has('followFrame'))
     cameraPort.followFrame = () => {
       if (!lastFollowFrame || !sameMatrix(lastFollowFrame, camera.transform))
