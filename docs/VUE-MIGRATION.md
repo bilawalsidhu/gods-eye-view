@@ -97,6 +97,14 @@ tile, tip, Stories and arrow glyphs are `UiIcon`s with `:size="null"`, so
 first-run.css still sizes them (`src/ui/kit/welcomeControls.test.mjs` pins
 it). God mode's preview globe and callouts stay inline SVG drawings, and
 its outbound links stay links.
+The Omnibar's mic (a pressed toggle with `active`) and its suggestion
+strip's chips (options, so `aria-current` rather than `pressed`) are
+ghost `UiButton`s, and its search, row and chip glyphs are `UiIcon`s with
+`:size="null"`, so its own rules still size them
+(`src/ui/kit/omnibarControls.test.mjs` pins it). The mic's and the chat
+row's glyphs stay inline SVG, since no Material symbol the page loads
+draws them, and its field is its own combobox rather than a
+`UiSearchField`.
 `UiSelect` renders the bare native select (Core's labels sit outside it or
 come as an `aria-label`) with `v-model`, `options` and `disabled`;
 options that carry their own attributes come through the slot, a caller's
@@ -116,9 +124,9 @@ no tip unless the site passes a `title`; attributes and classes pass through,
 so each site keeps its id, feature class and look. Every close, dismiss and
 clear button in the views is one (`src/ui/kit/closeButtons.test.mjs` pins
 it); Street Level's and the space mission's keep `bare`, since their skins
-set their own padding and border, and so does the credits list's. The close
-buttons built in script (the Quebec CCTV overlay, the guide) are not
-converted yet.
+set their own padding and border, and so does the credits list's. The
+Quebec CCTV overlay's close is one too, and so is the Omnibar guide's,
+which keeps its feature class and tip.
 `UiSearchField` takes `v-model`, a required `label` (the input's
 accessible name), `placeholder` and `tag` (`div`, given `role="search"` by
 the site, or `label`); attributes and classes go to the frame, and
@@ -259,8 +267,13 @@ once passes the locale itself as a prop or key, as the credits line does.
    the whole panel from the `gev-cctv` store, including the camera picker,
    the inline pose editor, the frame preview, source badge and typed
    summary; `CctvControls` keeps its listeners, the frame requests and the
-   live video surface), Layers (done: `LayerPanel` presents each row and
-   renders `LayerRows` synchronously; keyed chips and list items keep focus
+   live video surface; `QuebecCctvOverlay` teleports the Québec 511 player
+   and its map preview to the end of the body, rendered synchronously by
+   `createQuebecCctvOverlay()` from the view it computes, as the rail cards
+   are; the owner keeps every decision and the parts the template never
+   binds: each video's source, playback and refresh timer, the window's drag
+   and the marker's per-frame visibility and place), Layers (done:
+   `LayerPanel` presents each row and renders `LayerRows` synchronously; keyed chips and list items keep focus
    through the refresh their own click triggers, and clicks re-read the live
    descriptor before acting), Display (in progress: `DisplayPanel` renders
    the HUD, Sonar, Scope, Celestial, detection, bloom, sharpen and the
@@ -305,7 +318,11 @@ once passes the locale itself as a prop or key, as the credits line does.
    `gev-location` store, and the search field keeps its listeners; beside
    the voice control, the dock teleports each voice pointer reticle to the
    body where its `PointerReticle` presents it in the `gev-pointer-reticle`
-   store), the phone shell (`PhoneTabBar` renders the tabs and open sheet the shell
+   store; `startGuide()` renders the Omnibar's guided walk, `OmnibarGuide`,
+   synchronously from the view it computes for each step, teleported to the
+   end of the body, and keeps every decision and word, focus and its return,
+   Escape, the entrance replay, and the callout's and spotlight rings' place
+   each frame), the phone shell (`PhoneTabBar` renders the tabs and open sheet the shell
    publishes to the `gev-display` store, teleporting the tab bar and sheet
    backdrop to the end of the page from the first publish until the shell
    is destroyed; the shell takes their clicks from the document), the
