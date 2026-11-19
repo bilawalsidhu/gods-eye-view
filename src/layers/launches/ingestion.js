@@ -1,4 +1,8 @@
-import { MAX_POST_TLE_RETRIES, POST_TLE_RETRY_DELAY_MS } from './policy.js';
+import {
+  MAX_POST_TLE_RETRIES,
+  POST_TLE_RETRY_DELAY_MS,
+  cockpitActive,
+} from './policy.js';
 
 /**
  * Let pending Satellites work finish, including requests that join it while
@@ -108,7 +112,7 @@ export function createIngestion({
 
   async function captureSatelliteDependency() {
     const manager = layerState._dataManager;
-    if (!manager || layerState._satelliteStateBeforeMission) return;
+    if (!manager) return;
     const token = layerState._lifecycleToken;
     // Let a pending Satellites action finish before reserving dependency ON.
     // A successful explicit OFF can cancel this mission entry while we wait.
@@ -127,12 +131,24 @@ export function createIngestion({
         !manager.isEffectivelyEnabled('rocket-launches'))
     )
       return;
-    layerState._satelliteStateBeforeMission = {
-      enabled: manager.isEnabled('satellites'),
-      params: parts.policyHelpers.satelliteParamsAfterSpaceMissions(
-        manager.getLayerParams('satellites'),
-      ),
-    };
+    // A saved state kept by a restore that could not finish (Satellites was
+    // busy) is still the one from before the mission: keep it, and switch
+    // Satellites on for the mission again. A Satellites switch the person
+    // made since (restoreVisibility false) settled its visibility, so it
+    // is taken as it is now; its params are still the saved ones.
+    const kept = layerState._satelliteStateBeforeMission;
+    if (kept?.restoreVisibility === false)
+      layerState._satelliteStateBeforeMission = {
+        enabled: manager.isEnabled('satellites'),
+        params: kept.params,
+      };
+    else if (!kept)
+      layerState._satelliteStateBeforeMission = {
+        enabled: manager.isEnabled('satellites'),
+        params: parts.policyHelpers.satelliteParamsAfterSpaceMissions(
+          manager.getLayerParams('satellites'),
+        ),
+      };
     manager.setLayerParams(
       'satellites',
       parts.policyHelpers.satelliteParamsForSpaceMissions(
@@ -179,18 +195,21 @@ export function createIngestion({
       layerState._satelliteStateBeforeMission !== snapshot
     )
       return;
+    // An accepted Satellites action owns visibility through mission teardown.
+    const restoreVisibility = snapshot.restoreVisibility !== false;
+    // Satellites is still busy: change nothing and keep the saved state, so
+    // turning Space Missions off again can finish the restore.
+    if (restoreVisibility && !idle)
+      throw new Error(
+        'Space Missions could not restore the satellites layer: it did not settle',
+      );
     layerState._satelliteStateBeforeMission = null;
     layerState._satelliteActivationPromise = null;
     manager.setLayerParams(
       'satellites',
       parts.policyHelpers.satelliteParamsAfterSpaceMissions(snapshot.params),
     );
-    // An accepted Satellites action owns visibility through mission teardown.
-    if (snapshot.restoreVisibility === false) return;
-    if (!idle)
-      throw new Error(
-        'Space Missions could not restore the satellites layer: it did not settle',
-      );
+    if (!restoreVisibility) return;
     const restored = await manager.setEnabled('satellites', snapshot.enabled);
     if (
       restored === false ||
@@ -249,7 +268,9 @@ export function createIngestion({
         parts.selection.setSelectedMission(null, false);
       } else {
         parts.selection.setSelectedMission(layerState._selectedLaunchId, true);
-        if (layerState._focusAfterActiveLookup) {
+        // The cockpit holds the camera: a mission picked there is not flown
+        // to when its orbit arrives.
+        if (layerState._focusAfterActiveLookup && !cockpitActive()) {
           parts.selection.focusMission(
             launches.find(
               (launch) => launch.id === layerState._selectedLaunchId,

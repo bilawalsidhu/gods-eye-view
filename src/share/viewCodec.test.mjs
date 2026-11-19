@@ -348,6 +348,7 @@ test('every registered field round-trips at once', () => {
     bloomVersion: 1,
     sharpenIntensity: 65,
     hudVariant: 'operator',
+    hudSonar: true,
     hudVisible: false,
     detectionMode: 'SPARSE',
     detectionDensity: 100,
@@ -449,6 +450,28 @@ test('links made with a retired HUD layout still decode to its name', () => {
   }
 });
 
+test('Sonar beside the Minimal layout is flag bit 5; links made before it keep their meaning', () => {
+  const minimal = { ...createDefaultShareViewState(), hudVariant: 'minimal' };
+  const plain = encodeShareView(minimal);
+  // Off is the default, so a view without Sonar costs nothing for it.
+  assert.equal(encodeShareView({ ...minimal, hudSonar: false }), plain);
+  const withSonar = assertRoundTrip({ ...minimal, hudSonar: true });
+  assert.notEqual(withSonar, plain);
+  const decoded = decodeOk(withSonar).state;
+  assert.equal(decoded.hudVariant, 'minimal');
+  assert.equal(decoded.hudSonar, true);
+  assert.equal(decodeOk(plain).state.hudSonar, false);
+  // Tactical with Sonar is still the Cyber code alone.
+  const cyber = { ...createDefaultShareViewState(), hudVariant: 'cyber' };
+  assert.equal(decodeOk(encodeShareView(cyber)).state.hudSonar, false);
+  // A link made before the bit (thermal, Cyber, Scope off) decodes as it did:
+  // Cyber without the bit, which the app opens as Tactical with Sonar on.
+  const before = decodeOk('ARD-7j4YuxMguBcoUEgQcAOAAQPIASPQAWGa').state;
+  assert.equal(before.hudVariant, 'cyber');
+  assert.equal(before.hudSonar, false);
+  assert.equal(encodeShareView(before), 'ARD-7j4YuxMguBcoUEgQcAOAAQPIASPQAWGa');
+});
+
 test('defaults travel as frozen meanings that match today’s app defaults', () => {
   const defaults = createDefaultShareViewState();
   // When an app default moves, these tests should be updated to document the
@@ -535,6 +558,7 @@ test('the field registry is well formed and permanent', () => {
       [2, 'hudVisible', BY_STYLE],
       [3, 'celestialRing', BY_STYLE],
       [4, 'scopeEnabled', true],
+      [5, 'hudSonar', false],
     ],
   );
   // The style-applied defaults are frozen meanings too. If the app's style
@@ -921,7 +945,7 @@ test('unknown fields inside a thing view, codes and bits are skipped too', () =>
   thing.textField(20, 'cockpit'); // a future thing field
   const writer = new WireWriter();
   writer.bytes.push(1);
-  writer.sintField(2, 100000).uintField(9, 0b100001); // flag bit 5 unknown
+  writer.sintField(2, 100000).uintField(9, 0b1000001); // flag bit 6 unknown
   writer.bytesField(
     10,
     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
@@ -944,7 +968,7 @@ test('unknown fields inside a thing view, codes and bits are skipped too', () =>
     result.unknownFields.map((u) => [u.scope, u.field ?? u.code]),
     [
       ['enum:style', 99],
-      ['flags', 32],
+      ['flags', 64],
       ['layer', 160],
       ['panel', 12],
       ['thing', 20],

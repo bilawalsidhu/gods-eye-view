@@ -11,7 +11,11 @@ import {
   toRadians,
   vec,
 } from '../../geo/vector.js';
-import { MISSION_GLOBE_VIEW_RANGE_M, MISSION_FOCUS_RANGE_M } from './policy.js';
+import {
+  MISSION_GLOBE_VIEW_RANGE_M,
+  MISSION_FOCUS_RANGE_M,
+  cockpitActive,
+} from './policy.js';
 import { cameraOf, canvasOf, findCamera } from '../../render/rendererOf.js';
 
 export function createSelection({
@@ -122,6 +126,9 @@ export function createSelection({
 
   function focusMission(launch) {
     if (!layerState._viewer || !launch || !layerState._enabled) return;
+    // The cockpit holds the camera: a mission chosen there, by its label,
+    // its dot or the layer row's arrows, is selected without flying to it.
+    if (cockpitActive()) return;
     stopMissionZoomAnchor();
     parts.rendering.selectLaunchEntity(launch.id);
     const camera = cameraOf(layerState._viewer);

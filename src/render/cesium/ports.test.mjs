@@ -28,6 +28,7 @@ test('capabilities follow what the scene supports', () => {
     'splitSwipe',
     'imageHooks',
     'imageryFrames',
+    'imageryDecoded',
     'surfaceIdentity',
     'surfaceShading',
     'vectorBase',

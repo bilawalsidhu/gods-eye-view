@@ -623,6 +623,153 @@ test('a Satellites enable that never settles still lets mission disable complete
     stuck.resolve();
   }
   await f.settle();
+  // The saved Satellites state was kept: turning Space Missions off again
+  // once Satellites settles gives back the Satellites it turned on.
+  assert.equal(f.manager.isEnabled('satellites'), true);
+  await f.manager.setEnabled('rocket-launches', false, { origin: 'user' });
+  await f.settle();
+  assert.equal(f.manager.isEnabled('rocket-launches'), false);
+  assert.equal(f.manager.isEnabled('satellites'), false);
+});
+
+test('Space Missions turned on again after a busy restore switches Satellites on', async (t) => {
+  const f = await fixture(t);
+  f.upstream.status = 200;
+  assert.equal(
+    await f.manager.setEnabled('rocket-launches', true, { origin: 'user' }),
+    true,
+  );
+  await f.settle();
+  f.state.satelliteSettleTimeoutMs = 50;
+  const satellites = f.manager.layers.get('satellites').module;
+  const enable = satellites.enable;
+  const stuck = Promise.withResolvers();
+  satellites.enable = () => stuck.promise;
+  try {
+    await f.manager.setEnabled('satellites', false);
+    void f.manager.setEnabled('satellites', true);
+    await f.manager.setEnabled('rocket-launches', false, { origin: 'user' });
+  } finally {
+    satellites.enable = enable;
+    stuck.resolve();
+  }
+  await f.settle();
+  // Something else switches Satellites off, then Space Missions comes back.
+  await f.manager.setEnabled('satellites', false);
+  await f.settle();
+  assert.equal(f.manager.isEnabled('satellites'), false);
+  assert.equal(
+    await f.manager.setEnabled('rocket-launches', true, { origin: 'user' }),
+    true,
+  );
+  await f.settle();
+  assert.equal(f.manager.isEnabled('satellites'), true);
+  // Its own off still gives back the Satellites from before the first start.
+  await f.manager.setEnabled('rocket-launches', false, { origin: 'user' });
+  await f.settle();
+  assert.equal(f.manager.isEnabled('satellites'), false);
+});
+
+test('a Satellites switch made between missions is what the next mission gives back', async (t) => {
+  const f = await fixture(t);
+  f.upstream.status = 200;
+  assert.equal(
+    await f.manager.setEnabled('rocket-launches', true, { origin: 'user' }),
+    true,
+  );
+  await f.settle();
+  f.state.satelliteSettleTimeoutMs = 50;
+  const satellites = f.manager.layers.get('satellites').module;
+  const enable = satellites.enable;
+  const stuck = Promise.withResolvers();
+  satellites.enable = () => stuck.promise;
+  try {
+    await f.manager.setEnabled('satellites', false);
+    void f.manager.setEnabled('satellites', true);
+    await f.manager.setEnabled('rocket-launches', false, { origin: 'user' });
+  } finally {
+    satellites.enable = enable;
+    stuck.resolve();
+  }
+  await f.settle();
+  // The person switches Satellites on, then something else switches it off.
+  await f.manager.setEnabled('satellites', true, { origin: 'user' });
+  await f.settle();
+  await f.manager.setEnabled('satellites', false);
+  await f.settle();
+  assert.equal(
+    await f.manager.setEnabled('rocket-launches', true, { origin: 'user' }),
+    true,
+  );
+  await f.settle();
+  assert.equal(f.manager.isEnabled('satellites'), true);
+  await f.manager.setEnabled('rocket-launches', false, { origin: 'user' });
+  await f.settle();
+  assert.equal(f.manager.isEnabled('satellites'), false);
+});
+
+test('a Satellites setting changed between missions survives the next one', async (t) => {
+  const f = await fixture(t);
+  f.upstream.status = 200;
+  assert.equal(
+    await f.manager.setEnabled('rocket-launches', true, { origin: 'user' }),
+    true,
+  );
+  await f.settle();
+  f.state.satelliteSettleTimeoutMs = 50;
+  const satellites = f.manager.layers.get('satellites').module;
+  const enable = satellites.enable;
+  const stuck = Promise.withResolvers();
+  satellites.enable = () => stuck.promise;
+  try {
+    await f.manager.setEnabled('satellites', false);
+    void f.manager.setEnabled('satellites', true);
+    await f.manager.setEnabled('rocket-launches', false, { origin: 'user' });
+  } finally {
+    satellites.enable = enable;
+    stuck.resolve();
+  }
+  await f.settle();
+  f.manager.setLayerParams(
+    'satellites',
+    { showOrbits: false },
+    { origin: 'user' },
+  );
+  await f.settle();
+  await f.manager.setEnabled('rocket-launches', true, { origin: 'user' });
+  await f.settle();
+  await f.manager.setEnabled('rocket-launches', false, { origin: 'user' });
+  await f.settle();
+  assert.equal(f.manager.getLayerParams('satellites').showOrbits, false);
+});
+
+test('tracking stopped by a place search during a mission stays stopped after it', async (t) => {
+  const f = await fixture(t);
+  f.upstream.status = 200;
+  assert.equal(
+    await f.manager.setEnabled('rocket-launches', true, { origin: 'user' }),
+    true,
+  );
+  await f.settle();
+  f.manager.setLayerParams(
+    'satellites',
+    { selectedSatTrackingId: 25544 },
+    { origin: 'voice' },
+  );
+  await f.settle();
+  // A place search stops tracking with the tool origin.
+  f.manager.setLayerParams(
+    'satellites',
+    { selectedSatTrackingId: null },
+    { origin: 'tool' },
+  );
+  await f.settle();
+  await f.manager.setEnabled('rocket-launches', false, { origin: 'user' });
+  await f.settle();
+  assert.equal(
+    f.manager.getLayerParams('satellites').selectedSatTrackingId ?? null,
+    null,
+  );
 });
 
 test('a failed Satellites restore still clears the selected mission panel', async (t) => {

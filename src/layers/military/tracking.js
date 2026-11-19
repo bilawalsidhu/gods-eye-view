@@ -86,7 +86,8 @@ export function createTracking({
   const { clearFocusTarget } = services.focus;
   const { FOLLOW_MIN_RANGE_M, SELECTION_FOLLOW_TRANSITION_S, followViewFrom } =
     services.camera;
-  const { resolvePickId, isOwnedByOtherLayer } = services.picking;
+  const { resolvePickId, isOwnedByOtherLayer, isUnderOtherCard } =
+    services.picking;
   /** The tracked contact's billboard (an icon set on the draw port). */
   const trackedIcon = createTrackedAircraftIcon({
     viewer: () => flightState._viewer,
@@ -1229,6 +1230,9 @@ export function createTracking({
       // first-person reference. Empty globe clicks are inert until the user
       // exits with C, Escape, or the dedicated button.
       if (document.body.classList.contains('cockpit-mode')) return;
+      // Another layer's card or label painted on top takes the click: the item
+      // under it does not act, and the click is not empty space either.
+      if (isUnderOtherCard?.(event)) return;
       const picked = event.hit;
 
       if (picked) {

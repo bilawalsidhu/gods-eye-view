@@ -103,3 +103,10 @@ export const TRAJECTORY_STAGE_COLORS = [
   '#ffd166',
   '#60a5fa',
 ];
+
+/** Whether the cockpit view is on; it holds the camera while it is. */
+export function cockpitActive() {
+  return Boolean(
+    globalThis.document?.body?.classList?.contains?.('cockpit-mode'),
+  );
+}

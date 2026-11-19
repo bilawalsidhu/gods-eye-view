@@ -22,6 +22,7 @@ import {
 import { createInfrastructureOverlayEntry } from './infrastructureOverlayEntry.js';
 import { createGeojsonPins } from './geojsonPins.js';
 import { inputFor as defaultInputFor } from '../input/dispatcher.js';
+import { isUnderOtherCard } from './pickRegistry.js';
 import {
   selectInfraLod,
   applyInfraEvictionGrace,
@@ -1114,6 +1115,9 @@ export function createLocalGeoJsonLayer(
               const input = inputFor(viewer);
               _clickSubscription = input.onClick((event) => {
                 if (!_enabled || !_drawn) return;
+                // Another layer's card or label on top takes the click: the
+                // item under it neither acts nor reads as empty space.
+                if (isUnderOtherCard(event)) return;
                 const hit = event.drawHit;
                 if (!hit || !hit.set.startsWith(`${setPrefix}:`)) return;
                 const part = _drawn.parts.get(hit.id);

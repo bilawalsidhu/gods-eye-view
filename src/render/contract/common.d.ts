@@ -165,6 +165,8 @@ export type Capability =
   | 'splitSwipe'
   /** Timed imagery frames with hidden prefetch. */
   | 'imageryFrames'
+  /** Timed imagery the application hands over as finished tile images (`decoded`). */
+  | 'imageryDecoded'
   /** Wind-relief and similar shading of the globe surface. */
   | 'surfaceShading'
   /** A version of what surface heights answer against (`globe.surfaceVersion`). */

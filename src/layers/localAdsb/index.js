@@ -703,6 +703,9 @@ export function createLocalAdsbLayer({
     if (clickSubscription || !viewer) return;
     clickSubscription = inputFor(viewer).onClick((event) => {
       if (!enabled) return;
+      // Another layer's card or label painted on top takes the click: the item
+      // under it does not act, and the click is not empty space either.
+      if (services.picking.isUnderOtherCard?.(event)) return;
       const target = clickTarget(event);
       // Clicking a local aircraft always (re)selects it and republishes its
       // card, including the one already selected: its card may have been

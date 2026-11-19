@@ -528,9 +528,37 @@ body:not(.ui-clean-view):not(.recording-mode):has(
   }
 }
 
+/* Cesium draws the line in an absolutely placed box inside the empty
+   #cesium-credits anchor, so the cap and the wrapping go on that box: from
+   1200px, and in the Omnibar layout at every width, whose attribution row
+   shares the bottom edge with the corner row (omnibar-dock.css). */
+body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
+    .ui-clean-view
+  ):not(.recording-mode):where(
+    :has(#gev-omnibar):has(#command-dock > #gev-voice-control)
+  )
+  #cesium-credits
+  .cesium-widget-credits {
+  width: max-content;
+  max-width: calc(100vw - 1.5rem - 26rem);
+  white-space: normal;
+}
+
+/* Right to left that layout puts the row at the bottom right at every
+   width, so the box hangs from the anchor's right edge. */
+html[dir='rtl']
+  body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
+    .ui-clean-view
+  ):not(.recording-mode):not(.context-docked):where(
+    :has(#gev-omnibar):has(#command-dock > #gev-voice-control)
+  )
+  #cesium-credits
+  .cesium-widget-credits {
+  right: 0;
+  left: auto;
+}
+
 @media (min-width: 1200px) {
-  /* Cesium draws the line in an absolutely placed box inside the empty
-     #cesium-credits anchor, so the cap and the wrapping go on that box. */
   #cesium-credits .cesium-widget-credits {
     width: max-content;
     max-width: calc(100vw - 1.5rem - 26rem);

@@ -73,6 +73,7 @@ export class VisualSettings {
       bloomVersion,
       sharpenIntensity,
       hudVariant,
+      hudSonar,
       hudVisible,
       detectionMode,
       detectionDensity,
@@ -122,7 +123,8 @@ export class VisualSettings {
       this._setSharpenIntensity(sharpenIntensity, { syncShare: false });
     if (typeof bloom === 'boolean') this._setBloomEnabled(bloom);
     if (typeof sharpen === 'boolean') this._setSharpenEnabled(sharpen);
-    if (hudVariant) this._setHudVariant(hudVariant, { restore: true });
+    if (hudVariant)
+      this._setHudVariant(hudVariant, { restore: true, sonar: hudSonar });
     if (typeof hudVisible === 'boolean') {
       this.hud.setMode(hudVisible ? 'on' : 'off');
       this._updateHudButtonState();
@@ -719,15 +721,21 @@ export class VisualSettings {
 
   /**
    * @param {string} variantName Layout, or the removed `cyber` layout.
-   * @param {{restore?: boolean}} [options] A share link, scene or saved view
-   *   is authoritative for Sonar too: it is on only when the state names
-   *   Cyber. Other callers leave Sonar as the viewer set it.
+   * @param {{restore?: boolean, sonar?: boolean}} [options] A share link,
+   *   scene or saved view is authoritative for Sonar too: it is on only when
+   *   the state names Cyber or says `sonar: true`, so a state that does not
+   *   mention Sonar turns it off unless it names Cyber. Other callers leave
+   *   Sonar as the viewer set it.
    */
-  _setHudVariant(variantName, { restore = false } = {}) {
+  _setHudVariant(
+    variantName,
+    { restore = false, sonar: sonarOn = false } = {},
+  ) {
     if (!variantName) return;
     // Cyber was removed; its sonar became a visual style. A state that names
     // Cyber opens in Tactical with Sonar on.
-    const sonar = isLegacySonarHudLayout(variantName);
+    const sonar =
+      isLegacySonarHudLayout(variantName) || (restore && sonarOn === true);
     if (sonar || (restore && isCyberSonarEnabled()))
       this._setCyberSonarEnabled(sonar);
     this.hud.setVariant(variantName);
@@ -761,14 +769,25 @@ export class VisualSettings {
 
   /**
    * The HUD layout a share link or scene shot records. Tactical with Sonar on
-   * is written as the retired Cyber code, which restores exactly that; Minimal
-   * has no such code, so its Sonar stays local.
+   * is written as the retired Cyber code, which restores exactly that and
+   * which older readers understand too.
    */
   _sharedHudVariant() {
     const variant = this.hud.getVariant();
     return variant === 'tactical' && isCyberSonarEnabled()
       ? LEGACY_SONAR_HUD_LAYOUTS[0]
       : variant;
+  }
+
+  /**
+   * Whether a share link or scene shot records Sonar on beside its layout:
+   * only when the layout code does not already say so (Minimal with Sonar),
+   * so a state with Tactical and Sonar stays the Cyber code alone.
+   */
+  _sharedHudSonar() {
+    return (
+      isCyberSonarEnabled() && !isLegacySonarHudLayout(this._sharedHudVariant())
+    );
   }
 
   _setCyberSonarSetting(name, value) {
@@ -919,6 +938,7 @@ export class VisualSettings {
         bloomVersion: BLOOM_SCALE_VERSION,
         sharpenIntensity: this._sharpenPct,
         hudVariant: this._sharedHudVariant(),
+        hudSonar: this._sharedHudSonar(),
         hudVisible: this.hud.visible,
         detectionMode: detection.mode,
         detectionDensity: detection.densityPct,
@@ -1237,6 +1257,9 @@ export class VisualSettings {
       hud: {
         visible: this.hud.visible,
         variant: this._sharedHudVariant(),
+        // Written only when on beside a layout that cannot say it, so a shot
+        // without Sonar or with Tactical and Sonar reads in older builds.
+        ...(this._sharedHudSonar() ? { sonar: true } : {}),
       },
       detection: {
         mode: getDetectionMode(),
@@ -1284,7 +1307,10 @@ export class VisualSettings {
 
     const hudState = state.hud || {};
     if (hudState.variant) {
-      this._setHudVariant(hudState.variant, { restore: true });
+      this._setHudVariant(hudState.variant, {
+        restore: true,
+        sonar: hudState.sonar,
+      });
     }
     if (typeof hudState.visible === 'boolean') {
       this.hud.setMode(hudState.visible ? 'on' : 'off');
