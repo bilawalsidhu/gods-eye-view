@@ -27,13 +27,13 @@ import { normalizeDump1090Aircraft } from '../../src/sources/adsbRecords.js';
  */
 
 export const LOCAL_RECEIVERS_ROUTE = '/api/local-receivers/aircraft';
-export const LOCAL_RECEIVER_FEEDS_ENV = 'LOCAL_RECEIVER_FEEDS';
-export const LOCAL_RECEIVER_BANDS = Object.freeze(['1090', '978']);
-export const LOCAL_RECEIVER_TIMEOUT_MS = 2_000;
-export const LOCAL_RECEIVER_MAX_BODY_BYTES = 2 * 1024 * 1024;
-export const LOCAL_RECEIVER_CACHE_MS = 1_000;
+const LOCAL_RECEIVER_FEEDS_ENV = 'LOCAL_RECEIVER_FEEDS';
+const LOCAL_RECEIVER_BANDS = Object.freeze(['1090', '978']);
+const LOCAL_RECEIVER_TIMEOUT_MS = 2_000;
+const LOCAL_RECEIVER_MAX_BODY_BYTES = 2 * 1024 * 1024;
+const LOCAL_RECEIVER_CACHE_MS = 1_000;
 /** A feed whose own `now` is older than this is reported stale. */
-export const LOCAL_RECEIVER_STALE_MS = 10_000;
+const LOCAL_RECEIVER_STALE_MS = 10_000;
 const MAX_FEEDS = 8;
 const LOG_PREFIX = '[local-receivers]';
 
@@ -139,7 +139,7 @@ class FeedError extends Error {
  * @param {string} address Resolved IP address.
  * @returns {boolean}
  */
-export function isLocalReceiverAddress(address) {
+function isLocalReceiverAddress(address) {
   const value = String(address || '').toLowerCase();
   if (value === '::1') return true;
   const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(value);
@@ -152,7 +152,7 @@ export function isLocalReceiverAddress(address) {
  * @param {typeof dnsLookup} lookupImpl `dns.promises.lookup`-compatible.
  * @returns {Promise<Array<{address:string, family:number}>>}
  */
-export async function resolveLocalReceiverAddresses(hostname, lookupImpl) {
+async function resolveLocalReceiverAddresses(hostname, lookupImpl) {
   let resolved;
   try {
     resolved = await lookupImpl(hostname, { all: true, verbatim: true });
@@ -274,7 +274,7 @@ function fetchLocalReceiverFeed(url, options) {
  * @param {object} options
  * @returns {Promise<object>} Parsed JSON document.
  */
-export async function fetchLocalReceiverDocument(
+async function fetchLocalReceiverDocument(
   url,
   {
     fetchImpl = fetchLocalReceiverFeed,

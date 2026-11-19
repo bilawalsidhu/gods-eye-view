@@ -9,6 +9,7 @@ import {
   transitRouteLabel,
 } from '../../data/transitFeeds.js';
 import { displayMotion, playbackPosition } from './movement.js';
+import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 export const TRANSIT_SELECTED_OVERLAY_SOURCE_ID = 'transit-selected';
 export const TRANSIT_SELECTED_OVERLAY_SOURCE_OPTIONS = Object.freeze({
@@ -34,7 +35,7 @@ export const ACTIVATION_ENTER_ALTITUDE_M = ACTIVATION_ALTITUDE_M - 150_000;
 export const ACTIVATION_EXIT_ALTITUDE_M = ACTIVATION_ALTITUDE_M + 150_000;
 /** Debounce (ms) for camera-change proximity checks. */
 export const CAMERA_DEBOUNCE_MS = 340;
-/** Camera sensitivity this layer asks for while it is enabled. */
+/** The `changed` threshold this layer's camera listener asks for. */
 export const CAMERA_PERCENTAGE_CHANGED = 0.05;
 /** Extra coverage radius (km) granted to a feed that is already active, so it does not flap at the edge. */
 export const RANGE_SLACK_KM = 40;
@@ -80,7 +81,6 @@ export const FLOOR_REREAD_ATTEMPTS = 6;
 // --- Rendering ---
 /** On-screen glyph size in CSS px at the near end of the distance ramp. */
 export const MARKER_PIXEL_SIZE = 20;
-export const SELECTED_PIXEL_SIZE = 30;
 /**
  * How often the fleet's screen-space rotations may be recomputed. Projecting a
  * course into screen space depends on the camera, so a moving camera would
@@ -99,7 +99,7 @@ export const VISIBILITY_REFRESH_MS = 250;
  * on screen. Generous on purpose: a vehicle that crosses the edge mid-glide
  * should already have been moving, not pop into motion at the border.
  */
-export const VIEW_MARGIN_RATIO = 0.6;
+const VIEW_MARGIN_RATIO = 0.6;
 
 /**
  * Whether a vehicle is close enough to the camera's look-at area to be worth
@@ -188,9 +188,14 @@ export const SELECTED_CARD_REFRESH_MS = 250;
 /** Mode palette: distinct at a glance, none reused by flights (white/cyan), military (amber), or vessels. */
 export const TRANSIT_MODE_COLORS = Object.freeze({
   bus: '#5EF08A',
+  trolleybus: '#B6F04A',
   tram: '#FFC24A',
+  cable_tram: '#FF8F4A',
   subway: '#FF4538',
+  monorail: '#FF6FB8',
   rail: '#D9A6FF',
+  funicular: '#E8C98A',
+  aerial_lift: '#7FA8FF',
   ferry: '#5FD6FF',
   unknown: '#D8DDE5',
 });
@@ -407,7 +412,9 @@ export function buildTransitSelectionCopy(
     );
   if (Number.isFinite(record.bearing))
     reportedMotion.push(
-      t('reported hdg {heading}°', { heading: Math.round(record.bearing) }),
+      t('reported hdg {heading}°', {
+        heading: roundHeadingDegrees(record.bearing),
+      }),
     );
   // The operator's own claim, kept as a REPORT rather than as the live state.
   // It describes the moment of the report, which the display may not have
@@ -442,10 +449,12 @@ export function buildTransitSelectionCopy(
       ? entry.sample.latestReportAgeMs
       : vehicleFixAgeMs(record, nowMs, fetchedAtMs)) / 1000,
   );
+  // Seconds through 89s, then whole minutes. Rounding 90s up would skip
+  // "1 min" and call a minute-and-a-half-old report two minutes old.
   const reported =
     ageS < 90
       ? t('Reported {seconds} s ago', { seconds: ageS })
-      : t('Reported {minutes} min ago', { minutes: Math.round(ageS / 60) });
+      : t('Reported {minutes} min ago', { minutes: Math.floor(ageS / 60) });
   // A time the feed did not give for THIS vehicle is labelled, so the card
   // never presents a borrowed or inferred time as the vehicle's own report.
   const ownTime =
@@ -516,24 +525,34 @@ export function createTransitSelectedOverlayEntry(key, position, copy, mode) {
 }
 
 /** Modes that ordinarily run below the street, drawn on the surface above themselves. */
-export const UNDERGROUND_MODES = new Set(['subway']);
+const UNDERGROUND_MODES = new Set(['subway']);
 
 /** The mode in plain words, for a card a person reads rather than scans. */
-export const TRANSIT_MODE_WORD = Object.freeze({
+const TRANSIT_MODE_WORD = Object.freeze({
   bus: msg('Bus'),
+  trolleybus: msg('Trolleybus'),
   tram: msg('Tram'),
+  cable_tram: msg('Cable car'),
   subway: msg('Subway'),
+  monorail: msg('Monorail'),
   rail: msg('Train'),
+  funicular: msg('Funicular'),
+  aerial_lift: msg('Gondola'),
   ferry: msg('Ferry'),
   unknown: msg('Transit vehicle'),
 });
 
 /** Short, fixed-width mode word for the detection card's class field. */
-export const TRANSIT_MODE_ABBR = Object.freeze({
+const TRANSIT_MODE_ABBR = Object.freeze({
   bus: 'BUS',
+  trolleybus: 'TROLLEY',
   tram: 'TRAM',
+  cable_tram: 'CABLE',
   subway: 'METRO',
+  monorail: 'MONO',
   rail: 'RAIL',
+  funicular: 'FUNI',
+  aerial_lift: 'GONDOLA',
   ferry: 'FERRY',
   unknown: 'TRANSIT',
 });
@@ -588,7 +607,7 @@ export function transitDetectionId(record, feed = null) {
 }
 
 /** Longest route text the single-line detection label can carry. */
-export const DETECTION_ID_MAX_CHARS = 14;
+const DETECTION_ID_MAX_CHARS = 14;
 
 /**
  * Cut long route text with an ellipsis, so a reader can see it was cut.
@@ -600,7 +619,7 @@ export const DETECTION_ID_MAX_CHARS = 14;
  * @param {string} text
  * @returns {string} Uppercase, at most DETECTION_ID_MAX_CHARS characters.
  */
-export function elideRouteText(text) {
+function elideRouteText(text) {
   const value = String(text || '').toUpperCase();
   if (value.length <= DETECTION_ID_MAX_CHARS) return value;
   return `${value.slice(0, DETECTION_ID_MAX_CHARS - 1)}\u2026`;
@@ -659,6 +678,6 @@ export function transitDetectionMetric(
  * @param {number} [nowMs]
  * @returns {string}
  */
-export function transitVehicleState(entry, nowMs = Date.now()) {
+function transitVehicleState(entry, nowMs = Date.now()) {
   return displayMotion(entry, nowMs).word;
 }

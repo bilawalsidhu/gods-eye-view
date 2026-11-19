@@ -4,9 +4,18 @@ import { PbfWriter } from 'pbf';
 import {
   layerWriter,
   lineGeometry,
-  lonLatToTileLocal,
   zigzag,
 } from '../layers/streetLevel/providers/mapillary/coverageFixture.mjs';
+
+/** Tile-local [x, y] (0..extent) of a lon/lat inside tile (x, y, z). */
+function lonLatToTileLocal([lon, lat], { x, y, z }, extent = 4096) {
+  const n = 2 ** z;
+  const rad = (lat * Math.PI) / 180;
+  const tx = ((lon + 180) / 360) * n;
+  const ty =
+    ((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * n;
+  return [Math.round((tx - x) * extent), Math.round((ty - y) * extent)];
+}
 
 /**
  * Encode a Panoramax `/api/map/{z}/{x}/{y}.mvt` tile from lon/lat features.

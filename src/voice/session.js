@@ -5,7 +5,12 @@
  * Events: state, transcript, action-call, progress, action-result, interruption,
  * completion, turn-metrics.
  */
-export function createVoiceSession({ createAdapter, runner, signal }) {
+export function createVoiceSession({
+  createAdapter,
+  runner,
+  signal,
+  canStart,
+}) {
   if (typeof createAdapter !== 'function' || typeof runner !== 'function')
     throw new TypeError('Voice requires an adapter factory and action runner');
   const lifetime = new AbortController();
@@ -146,7 +151,12 @@ export function createVoiceSession({ createAdapter, runner, signal }) {
       return () => listeners.delete(listener);
     },
     async start(options) {
-      if (disposed || !['idle', 'error'].includes(state)) return;
+      if (
+        disposed ||
+        !['idle', 'error'].includes(state) ||
+        canStart?.(options) === false
+      )
+        return;
       const attempt = ++startAttempt;
       emit({ type: 'state', state: 'connecting' });
       if (disposed || attempt !== startAttempt) return;
@@ -184,6 +194,10 @@ export function createVoiceSession({ createAdapter, runner, signal }) {
     destroy: () => dispose(),
   };
 }
+
+// Live, or left in error: stopping either returns the session to idle.
+export const isStoppable = (session) =>
+  session.isActive() || session.state === 'error';
 
 function abortError() {
   return new DOMException('Voice action cancelled', 'AbortError');

@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as C from 'cesium';
-import { createNamedMarkers } from './namedMarkers.js';
+import { createNamedMarkers, namedPointId } from './namedMarkers.js';
 import { createLifecycle } from './lifecycle.js';
+import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
+import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
+import { fakeSceneFrame, fakeSceneQuery } from '../../testSupport/fakeCesiumScene.mjs';
 import { createLocalInfrastructureOverlayEntry } from '../../data/localGeojsonCore.js';
 
 function setup(t) {
@@ -16,19 +19,21 @@ function setup(t) {
     setVisible(_id, value) { visible = value; },
   };
   let x = -100;
-  const projections = new Set();
-  t.mock.method(C.SceneTransforms, 'worldToWindowCoordinates', (_scene, _point, scratch) => { projections.add(scratch); scratch.x = x; scratch.y = 300; return scratch; });
-  const camera = { changed: new C.Event(), moveEnd: new C.Event(), positionWC: C.Cartesian3.fromDegrees(0, 0, 1e6), viewMatrix: C.Matrix4.clone(C.Matrix4.IDENTITY) };
+  t.mock.method(C.SceneTransforms, 'worldToWindowCoordinates', () => new C.Cartesian2(x, 300));
+  const camera = { changed: new C.Event(), moveEnd: new C.Event(), positionWC: C.Cartesian3.fromDegrees(0, 0, 1e6), directionWC: new C.Cartesian3(0, 0, -1) };
   const state = { viewer: { camera, dataSources: { add() {}, remove() {} }, scene: { canvas: { clientWidth: 1280, clientHeight: 800 }, preRender: new C.Event(), primitives: { add: (p) => p, remove() {} } } }, enabled: true, contextAnchor: { latitude: 0, longitude: 0 } };
+  const draw = fakeDrawPort();
+  bindFakeCesiumCamera(state.viewer, { draw, query: fakeSceneQuery(state.viewer), frame: fakeSceneFrame(state.viewer) });
   const services = { render: { governorRequestRender() {} }, picking: { registerPickOwner() {}, unregisterPickOwner() {} }, context: { clearSelectedEntityContextForLayer() {} } };
   let loads = 0;
-  const parts = { model: { colorFor: () => C.Color.ORANGE }, rendering: { installationSurfaceHeightM: () => 0, clearRendered() {} }, viewport: { scheduleLoad: () => loads++, clearUnavailableRetry() {} }, selection: { installInteraction() {} }, ingestion: { setInstallationStatus() {} } };
+  const parts = { model: { colorFor: () => [1, 165 / 255, 0, 1] }, rendering: { attach() {}, setShown() {}, detach() {}, installationSurfaceHeightM: () => 0, clearRendered() {} }, viewport: { scheduleLoad: () => loads++, clearUnavailableRetry() {} }, selection: { installInteraction() {} }, ingestion: { setInstallationStatus() {} } };
   const ctx = { state, services, parts, source: {}, overlayHost };
   parts.namedMarkers = createNamedMarkers(ctx);
   const lifecycle = createLifecycle(ctx).methods;
   lifecycle.init(state.viewer); lifecycle.enable();
   const records = [1, 2].map((n) => ({ id: `osm:military:w${n}`, name: `Site ${n}`, namedArea: true, areaM2: 100 / n, latitude: 0, longitude: 0, pointOnly: true }));
-  return { state, camera, get labels() { return labels; }, get options() { return options; }, get visible() { return visible; }, projections, records, markers: parts.namedMarkers, lifecycle, setX: (value) => { x = value; }, publications: () => publications, loads: () => loads };
+  const points = () => [...draw.sets.values()].find((set) => set.kind === 'points' && !set.disposed);
+  return { state, camera, draw, points, get labels() { return labels; }, get options() { return options; }, get visible() { return visible; }, records, markers: parts.namedMarkers, lifecycle, setX: (value) => { x = value; }, publications: () => publications, loads: () => loads };
 }
 
 test('Contacts camera motion reprojects and declutters existing labels without source loads or primitive replacement', (t) => {
@@ -43,10 +48,14 @@ test('Contacts camera motion reprojects and declutters existing labels without s
   assert.equal(h.visible, true);
   assert.equal(h.loads(), 0);
   assert.equal(h.publications(), 3);
-  assert.equal(h.projections.size, 1);
-  h.setX(1400); h.camera.viewMatrix[12] = 1; h.state.viewer.scene.preRender.raiseEvent();
+  const items = [...h.points().items.values()];
+  assert.deepEqual(items.map((item) => [item.id, item.pixelSize, item.outlineWidth, item.disableDepthTest, item.show]), h.records.map((r) => [namedPointId(r.id), 7, 1, Infinity, true]));
+  assert.equal(h.points().spec.horizonCull, true);
+  assert.equal(h.points().show, true);
+  h.setX(1400); h.camera.positionWC = C.Cartesian3.fromDegrees(0, 0, 1.1e6); h.state.viewer.scene.preRender.raiseEvent();
   assert.equal(h.markers.stats().pointsOnScreen, 0, 'small pose changes refresh before render');
   h.lifecycle.disable();
+  assert.equal(h.points().show, false);
   assert.equal(h.camera.changed.numberOfListeners, 1, 'only the viewport listener remains');
   assert.equal(h.state.viewer.scene.preRender.numberOfListeners, 0);
   assert.equal(h.labels.length, 0);
@@ -57,7 +66,7 @@ test('Contacts camera motion reprojects and declutters existing labels without s
   assert.equal(h.publications(), 5);
   h.lifecycle.destroy(h.state.viewer);
   assert.equal(h.camera.changed.numberOfListeners, 0);
-  assert.equal(h.camera.moveEnd.numberOfListeners, 0);
+  assert.equal(h.camera.moveEnd.numberOfListeners, 1, "only the camera port's own");
   assert.equal(h.state.viewer.scene.preRender.numberOfListeners, 0);
 });
 
@@ -83,7 +92,7 @@ test('wide named markers retain primitives until close polygons publish with the
   h.lifecycle.destroy(h.state.viewer);
 });
 
-test('canonical aliases transfer named marker ownership without replacing primitives', (t) => {
+test('canonical aliases transfer named marker ownership without replacing markers or labels', (t) => {
   const h = setup(t);
   h.setX(600);
   const parent = h.records[1];
@@ -103,6 +112,7 @@ test('canonical aliases transfer named marker ownership without replacing primit
       assert.equal(point, originalPoint);
       assert.equal(currentLabel, label);
       assert.equal(point.id.installationId, record.id);
+      assert.deepEqual(h.points().items.get(namedPointId(record.id)).meta, { installationId: record.id });
       assert.equal(currentLabel.id, record.id);
     });
   }
@@ -124,12 +134,11 @@ test('the bounded host cohort ranks wide points and polygon titles by area', (t)
   const first = h.labels[0];
   const publications = h.publications();
   for (let i = 0; i < 100; i++) {
-    h.camera.viewMatrix[12] += 0.01;
+    h.camera.positionWC = C.Cartesian3.fromDegrees(0, 0, 1e6 + i + 1);
     h.state.viewer.scene.preRender.raiseEvent();
   }
   assert.equal(h.labels[0], first);
   assert.equal(h.publications(), publications, 'camera frames never rebuild host entries');
-  assert.equal(h.projections.size, 1, 'point projection reuses scratch storage');
   h.lifecycle.destroy(h.state.viewer);
   assert.equal(h.labels.length, 0);
 });

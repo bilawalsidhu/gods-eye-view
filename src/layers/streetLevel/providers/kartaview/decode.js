@@ -40,7 +40,7 @@ export function tileSegments(payload) {
  * fourfold.
  * @param {Array<Array<[number, number]>>} segments
  * @param {{x: number, y: number, z: number}} address
- * @returns {{sequences: Array<{id: string, parts: Array<Array<[number, number]>>, capturedAt: number, isPano: boolean}>, overview: Array<never>}}
+ * @returns {{sequences: Array<{id: string, parts: Array<Array<[number, number]>>, capturedAt: number, isPano: boolean}>}}
  */
 export function chainSegments(segments, { x, y, z }) {
   const key = ([lon, lat]) => `${lon},${lat}`;
@@ -84,7 +84,7 @@ export function chainSegments(segments, { x, y, z }) {
       isPano: false,
     });
   });
-  return { sequences, overview: [] };
+  return { sequences };
 }
 
 /** Decode a KartaView coverage tile into the shared coverage's line records. */

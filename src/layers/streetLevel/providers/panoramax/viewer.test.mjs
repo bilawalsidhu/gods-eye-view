@@ -160,7 +160,7 @@ test('a 360° picture shows its SD equirectangular image, then HD shrunk to 4,09
   assert.equal(loads.length, 1, 'docked: still SD only');
   const root = canvas.parentNode;
   root.closest = (selector) =>
-    selector.includes('sl-viewer-wrap-expanded') ? {} : null;
+    selector.includes('sl-viewer-wrap:fullscreen') ? {} : null;
   // EXPAND resizes more than once while the panel settles.
   viewer.resize();
   viewer.resize();
@@ -280,7 +280,7 @@ test('a picture whose SD fails falls back to the thumbnail; the original only fo
   // Expanded, the original is worth its megabytes.
   tried.length = 0;
   parts(host).root.closest = (selector) =>
-    selector.includes('sl-viewer-wrap-expanded') ? {} : null;
+    selector.includes('sl-viewer-wrap:fullscreen') ? {} : null;
   await viewer.open('flat');
   assert.deepEqual(tried, [
     PHOTOS.flat.urls.sd,

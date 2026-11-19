@@ -3,17 +3,21 @@
 //   npm run i18n                     check every catalog and find unmarked UI text
 //   npm run i18n -- --prune          also drop entries the code no longer uses
 //   npm run i18n -- --missing ru     print what ru lacks, as JSON to translate
+//   npm run i18n -- --zh-hant        rewrite zh-Hant from zh-CN (see toZhHant)
 //
 // A translation left as the English fails unless src/i18n/same-as-english.json
-// lists it.
+// lists it. zh-Hant is not translated: it is generated from zh-CN, and the
+// check fails when it differs.
 //
 // Messages are the English literals passed to t(), tn() and msg() in src/,
-// plus the markup opted in with data-i18n* in src/ui/templates and index.html.
+// plus the markup opted in with data-i18n* in index.html and the Vue views.
 // It also lists UI text that is not marked at all (see findUnmarked).
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LOCALES_DIR = path.join(ROOT, 'src/i18n/locales');
@@ -119,14 +123,17 @@ export function extractMessages() {
     }
   }
 
-  const markup = trackedFiles('index.html', 'src/ui/templates/*.html');
+  const markup = markupFiles();
   const TAG = /<([a-zA-Z][\w-]*)(\s[^>]*?)\/?>([^<]*)/gs;
   for (const file of markup) {
-    const html = readFileSync(path.join(ROOT, file), 'utf8');
+    const html = readMarkup(file);
     for (const [, tag, attrs, text] of html.matchAll(TAG)) {
       const where = `${file} <${tag}>`;
-      if (/\sdata-i18n(\s|=|$)/.test(attrs))
-        add(normalize(decodeHtml(text)), where);
+      if (/\sdata-i18n(\s|=|$)/.test(attrs)) {
+        const context = attrs.match(/\sdata-i18n-context="([^"]*)"/);
+        const message = normalize(decodeHtml(text));
+        add(context ? `${decodeHtml(context[1])}|${message}` : message, where);
+      }
       for (const [, name] of attrs.matchAll(
         /\sdata-i18n-(title|aria-label|placeholder)\b/g,
       )) {
@@ -153,7 +160,7 @@ const SKIP_TAGS = new Set(['script', 'style', 'svg', 'code', 'pre', 'title']);
 /**
  * User-visible markup text without data-i18n*. Skipped, with everything
  * inside: translate="no" (text that stays as is, as in HTML),
- * data-i18n-runtime (code sets this text through t()), and icons
+ * data-i18n-runtime (page markup whose text code sets through t()), and icons
  * (aria-hidden, Material Symbols).
  */
 export function unmarkedMarkup(file, html) {
@@ -401,9 +408,12 @@ export function unmarkedScript(file, original) {
  */
 export function findUnmarked() {
   const found = [];
-  for (const file of trackedFiles('index.html', 'src/ui/templates/*.html'))
+  for (const file of markupFiles()) {
+    found.push(...unmarkedMarkup(file, readMarkup(file)));
+  }
+  for (const file of trackedFiles('src/**/*.vue'))
     found.push(
-      ...unmarkedMarkup(file, readFileSync(path.join(ROOT, file), 'utf8')),
+      ...markedTemplate(file, readFileSync(path.join(ROOT, file), 'utf8')),
     );
   for (const file of sourceFiles().filter(
     (name) => !NOT_UI.some((pattern) => pattern.test(name)),
@@ -420,9 +430,61 @@ export function findUnmarked() {
   });
 }
 
+/**
+ * data-i18n* in a Vue template: views translate with t() as they render, so
+ * their text follows the locale; the attributes are for static page markup.
+ * Reads the whole single-file component, so lines are the file's own.
+ */
+export function markedTemplate(file, source) {
+  const start = source.indexOf('<template>');
+  if (start === -1) return [];
+  const end = source.lastIndexOf('</template>');
+  // Comments and attribute values are blanked, keeping every offset.
+  const blank = (text) => text.replace(/[^\n]/g, ' ');
+  const template = source
+    .slice(0, end === -1 ? undefined : end)
+    .replace(/<!--[\s\S]*?-->/g, blank);
+  const found = [];
+  const TAG = /<[a-zA-Z][\w-]*((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
+  TAG.lastIndex = start + '<template>'.length;
+  for (let tag; (tag = TAG.exec(template));) {
+    const attrs = tag[1].replace(/"[^"]*"|'[^']*'/g, blank);
+    const offset = tag.index + tag[0].length - 1 - tag[1].length;
+    for (const match of attrs.matchAll(
+      /(?<=\s)(?::|v-bind:)?(data-i18n[\w-]*)(?=[\s=/]|$)/g,
+    ))
+      found.push({
+        where: `${file}:${lineAt(source, offset + match.index)}`,
+        text: `${match[1]}: use t() in a Vue template`,
+      });
+  }
+  return found;
+}
+
+/** Markup checked for unmarked text: the page and its views. */
+function markupFiles() {
+  return trackedFiles('index.html', 'src/ui/views/*.vue');
+}
+
+/**
+ * A file's markup; for a single-file component, its template block without
+ * interpolations, which are code: their t() calls are read with the sources.
+ */
+function readMarkup(file) {
+  const source = readFileSync(path.join(ROOT, file), 'utf8');
+  if (!file.endsWith('.vue')) return source;
+  const start = source.indexOf('<template>');
+  const end = source.lastIndexOf('</template>');
+  if (start === -1) return '';
+  return source
+    .slice(start + '<template>'.length, end)
+    .replace(/\{\{[\s\S]*?\}\}/g, '');
+}
+
 // Text that never reaches the page as UI: tool results and descriptions for
 // AI clients (MCP and the voice model).
-const NOT_UI = [/^src\/tools\//];
+// The conformance suite's check titles are developer output, not UI.
+const NOT_UI = [/^src\/tools\//, /^src\/render\/conformance\//];
 
 function sourceFiles() {
   return trackedFiles(
@@ -430,6 +492,7 @@ function sourceFiles() {
     'src/*.mjs',
     'src/**/*.js',
     'src/**/*.mjs',
+    'src/**/*.vue',
   ).filter(
     (file) =>
       !file.startsWith('src/i18n/') &&
@@ -451,10 +514,11 @@ export function readCatalog(locale) {
   return JSON.parse(readFileSync(catalogPath(locale), 'utf8'));
 }
 
+/** Sorted: git lists untracked files first, and main needs zh-CN before zh-Hant. */
 export function shippedLocales() {
-  return trackedFiles('src/i18n/locales/*.json').map((file) =>
-    path.basename(file, '.json'),
-  );
+  return trackedFiles('src/i18n/locales/*.json')
+    .map((file) => path.basename(file, '.json'))
+    .sort();
 }
 
 /** Messages a locale keeps exactly as in English, on purpose. */
@@ -473,7 +537,9 @@ const blank = (value) => value.trim() === '';
 const hasLetters = (value) => /\p{L}{2}/u.test(value.replace(/\{[^}]*\}/g, ''));
 
 const STILL_ENGLISH = (text, locale) =>
-  `"${text}" is still English: translate it, or list it under "${locale}" in src/i18n/same-as-english.json`;
+  locale === ZH_HANT
+    ? `"${text}" is still English: translate it in ${ZH_HANT_SOURCE} and run ${ZH_HANT_COMMAND}, or list it under "${ZH_HANT}" in src/i18n/same-as-english.json as under "${ZH_HANT_SOURCE}"`
+    : `"${text}" is still English: translate it, or list it under "${locale}" in src/i18n/same-as-english.json`;
 
 /**
  * Compare one catalog with the extracted messages.
@@ -560,15 +626,137 @@ export function missingTemplate(locale, catalog, messages) {
   return out;
 }
 
+// zh-Hant is zh-CN in Traditional characters (docs/translations/zh-Hant.md):
+// the same wording, only the script differs. OpenCC s2tw (opencc-js, cn → tw)
+// converts characters only; s2twp would also swap in Taiwan vocabulary
+// (影片, 伺服器, 載入), which the catalog does not use.
+const ZH_HANT = 'zh-Hant';
+const ZH_HANT_SOURCE = 'zh-CN';
+const ZH_HANT_COMMAND = 'npm run i18n -- --zh-hant';
+
+// Characters s2tw picks wrongly in this text, replaced after the conversion.
+// A pair with a third item applies only to entries whose English key matches it.
+const ZH_HANT_CORRECTIONS = [
+  ['年曆史', '年歷史'],
+  ['下遊', '下游'],
+  // 併道 is merging lanes; elsewhere 並 (and) stays before 道路, 道謝 and the like.
+  ['並道', '併道', /\bmerge\b/i],
+  ['發佈', '發布'],
+  ['公佈', '公布'],
+  ['宣佈', '宣布'],
+  ['控制檯', '控制台'],
+  // 個 after a count ({n} 个中, of {n}), not the literary 箇中.
+  ['箇中', '個中'],
+  // 周 as a week: the time-lapse speed in weeks per second.
+  [' 周/秒', ' 週/秒'],
+];
+
+let s2tw;
+
+// Loaded on first use, so extracting messages needs no node_modules
+// (stale-index.test.mjs); main reports a missing package as a zh-Hant error.
+function converter() {
+  try {
+    s2tw ??= createRequire(import.meta.url)('opencc-js/cn2t').Converter({
+      from: 'cn',
+      to: 'tw',
+    });
+  } catch (error) {
+    if (error.code !== 'MODULE_NOT_FOUND') throw error;
+    throw new Error('opencc-js is not installed: run npm ci', { cause: error });
+  }
+  return s2tw;
+}
+
+export function toZhHant(text, key = '') {
+  return ZH_HANT_CORRECTIONS.reduce(
+    (out, [wrong, right, keys]) =>
+      !keys || keys.test(key) ? out.replaceAll(wrong, right) : out,
+    converter()(text),
+  );
+}
+
+/** The zh-Hant catalog for a zh-CN catalog: the same keys in the same order. */
+export function zhHantCatalog(zhCN) {
+  const convert = (entry, text) => {
+    if (typeof entry === 'string') return toZhHant(entry, text);
+    if (entry && typeof entry === 'object')
+      return Object.fromEntries(
+        Object.entries(entry).map(([category, form]) => [
+          category,
+          convert(form, text),
+        ]),
+      );
+    return entry;
+  };
+  return Object.fromEntries(
+    Object.entries(zhCN).map(([text, entry]) => [text, convert(entry, text)]),
+  );
+}
+
+/**
+ * Where a zh-Hant catalog is not the conversion of the zh-CN one.
+ * @param {Set<string>} [reported] Keys already reported missing from zh-Hant.
+ * @returns {string[]} One error per entry, naming its key.
+ */
+export function checkZhHant(zhCN, zhHant, reported = new Set()) {
+  const expected = zhHantCatalog(zhCN);
+  const fix = `zh-Hant is generated: edit ${ZH_HANT_SOURCE}, then run ${ZH_HANT_COMMAND}`;
+  const errors = [];
+  for (const [text, entry] of Object.entries(expected)) {
+    if (!Object.hasOwn(zhHant, text)) {
+      if (!reported.has(text))
+        errors.push(`"${text}" is in ${ZH_HANT_SOURCE} but not here. ${fix}`);
+    } else if (!isDeepStrictEqual(zhHant[text], entry))
+      errors.push(
+        `"${text}" is ${JSON.stringify(zhHant[text])}, not ${ZH_HANT_SOURCE} converted (${JSON.stringify(entry)}). ${fix}`,
+      );
+  }
+  for (const text of Object.keys(zhHant)) {
+    if (!Object.hasOwn(expected, text))
+      errors.push(`"${text}" is not in ${ZH_HANT_SOURCE}. ${fix}`);
+  }
+  const order = Object.keys(expected);
+  const keys = Object.keys(zhHant);
+  if (!errors.length && keys.length === order.length) {
+    const at = order.findIndex((text, i) => keys[i] !== text);
+    if (at >= 0)
+      errors.push(
+        `entries leave the ${ZH_HANT_SOURCE} order at "${order[at]}": run ${ZH_HANT_COMMAND}`,
+      );
+  }
+  return errors;
+}
+
+const serialize = (catalog) => `${JSON.stringify(catalog, null, 2)}\n`;
+
+export function writeZhHant() {
+  const catalog = zhHantCatalog(readCatalog(ZH_HANT_SOURCE));
+  writeFileSync(catalogPath(ZH_HANT), serialize(catalog));
+  return Object.keys(catalog).length;
+}
+
 function main(args) {
   const messages = extractMessages();
   const missingFor = args.includes('--missing')
     ? args[args.indexOf('--missing') + 1]
     : null;
+  if (missingFor?.toLowerCase() === ZH_HANT.toLowerCase()) {
+    console.error(
+      `${ZH_HANT} is generated, not translated: add the entries to ${ZH_HANT_SOURCE} (npm run i18n -- --missing ${ZH_HANT_SOURCE}), then run ${ZH_HANT_COMMAND}`,
+    );
+    return 1;
+  }
   if (missingFor) {
     const out = missingTemplate(missingFor, readCatalog(missingFor), messages);
     console.log(JSON.stringify(out, null, 2));
     return 0;
+  }
+  if (args.includes('--zh-hant')) {
+    const count = writeZhHant();
+    console.log(
+      `${ZH_HANT}: wrote ${count} entries converted from ${ZH_HANT_SOURCE}`,
+    );
   }
   let failed = false;
   for (const locale of shippedLocales()) {
@@ -578,10 +766,7 @@ function main(args) {
       catalog = Object.fromEntries(
         Object.entries(catalog).filter(([text]) => messages.has(text)),
       );
-      writeFileSync(
-        catalogPath(locale),
-        `${JSON.stringify(catalog, null, 2)}\n`,
-      );
+      writeFileSync(catalogPath(locale), serialize(catalog));
       console.log(`${locale}: pruned ${stale.length} unused entries`);
     } else if (stale.length) {
       failed = true;
@@ -590,11 +775,24 @@ function main(args) {
       );
       for (const text of stale) console.log(`  ${JSON.stringify(text)}`);
     }
+    // shippedLocales() is sorted, so --prune has already pruned zh-CN.
+    const zhCN = locale === ZH_HANT ? readCatalog(ZH_HANT_SOURCE) : null;
+    if (zhCN) {
+      try {
+        errors.push(...checkZhHant(zhCN, catalog, new Set(missing)));
+      } catch (error) {
+        if (error.cause?.code !== 'MODULE_NOT_FOUND') throw error;
+        errors.push(error.message);
+      }
+    }
     if (missing.length) {
       failed = true;
-      console.log(
-        `${locale}: ${missing.length} missing (npm run i18n -- --missing ${locale}):`,
-      );
+      const fill = !zhCN
+        ? `npm run i18n -- --missing ${locale}`
+        : missing.every((text) => Object.hasOwn(zhCN, text))
+          ? `run ${ZH_HANT_COMMAND}`
+          : `add them to ${ZH_HANT_SOURCE}, then ${ZH_HANT_COMMAND}`;
+      console.log(`${locale}: ${missing.length} missing (${fill}):`);
       for (const text of missing)
         console.log(`  ${JSON.stringify(text)}  ${messages.get(text).where}`);
     }

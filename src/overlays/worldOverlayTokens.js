@@ -7,6 +7,10 @@
  */
 
 /** Shared visual tokens used by every world-overlay source. */
+// Map-card fonts: JetBrains Mono has no Arabic or Hebrew glyphs and the
+// generic monospace fallback is a fixed-pitch Arabic face that stretches every
+// word; Arabic falls through to Noto Sans Arabic, Hebrew to Noto Sans Hebrew
+// (both loaded with the page fonts).
 export const WORLD_OVERLAY_STYLE = Object.freeze({
   background: 'rgba(4, 12, 16, 0.82)',
   selectedBackground: 'rgba(5, 18, 24, 0.94)',
@@ -16,13 +20,20 @@ export const WORLD_OVERLAY_STYLE = Object.freeze({
   detail: 'rgba(147, 161, 173, 0.92)',
   leader: 'rgba(147, 213, 228, 0.58)',
   accent: '#6be8ff',
-  fontLabel: '500 10px "JetBrains Mono", monospace',
-  fontTrack: '600 10px "JetBrains Mono", monospace',
-  fontTitle: '600 12px "JetBrains Mono", monospace',
-  fontDetail: '500 10.5px "JetBrains Mono", monospace',
-  fontSelected: '600 13px "JetBrains Mono", monospace',
-  fontTrackedTitle: '600 13px "JetBrains Mono", monospace',
-  fontTrackedDetail: '500 11px "JetBrains Mono", monospace',
+  fontLabel:
+    '500 10px "JetBrains Mono", "Noto Sans Arabic", "Noto Sans Hebrew", monospace',
+  fontTrack:
+    '600 10px "JetBrains Mono", "Noto Sans Arabic", "Noto Sans Hebrew", monospace',
+  fontTitle:
+    '600 12px "JetBrains Mono", "Noto Sans Arabic", "Noto Sans Hebrew", monospace',
+  fontDetail:
+    '500 10.5px "JetBrains Mono", "Noto Sans Arabic", "Noto Sans Hebrew", monospace',
+  fontSelected:
+    '600 13px "JetBrains Mono", "Noto Sans Arabic", "Noto Sans Hebrew", monospace',
+  fontTrackedTitle:
+    '600 13px "JetBrains Mono", "Noto Sans Arabic", "Noto Sans Hebrew", monospace',
+  fontTrackedDetail:
+    '500 11px "JetBrains Mono", "Noto Sans Arabic", "Noto Sans Hebrew", monospace',
   radius: 4,
   anchorDotRadius: 3.2,
   anchorDotStrokeWidth: 1,
@@ -128,9 +139,14 @@ export const DETECTION_THEME_MAP = Object.freeze({
       veh_free: '#00ff66',
       veh_nodata: '#c9c9c9',
       transit_bus: '#5EF08A',
+      transit_trolleybus: '#B6F04A',
       transit_tram: '#FFC24A',
+      transit_cable_tram: '#FF8F4A',
       transit_subway: '#FF4538',
+      transit_monorail: '#FF6FB8',
       transit_rail: '#D9A6FF',
+      transit_funicular: '#E8C98A',
+      transit_aerial_lift: '#7FA8FF',
       transit_ferry: '#5FD6FF',
       transit_unknown: '#D8DDE5',
     },
@@ -158,9 +174,14 @@ export const DETECTION_THEME_MAP = Object.freeze({
       veh_free: '#45d8ff',
       veh_nodata: '#dcdcdc',
       transit_bus: '#5EF08A',
+      transit_trolleybus: '#B6F04A',
       transit_tram: '#FFC24A',
+      transit_cable_tram: '#FF8F4A',
       transit_subway: '#FF4538',
+      transit_monorail: '#FF6FB8',
       transit_rail: '#D9A6FF',
+      transit_funicular: '#E8C98A',
+      transit_aerial_lift: '#7FA8FF',
       transit_ferry: '#5FD6FF',
       transit_unknown: '#D8DDE5',
     },
@@ -188,9 +209,14 @@ export const DETECTION_THEME_MAP = Object.freeze({
       veh_free: '#2ecc71',
       veh_nodata: '#d8d8d8',
       transit_bus: '#5EF08A',
+      transit_trolleybus: '#B6F04A',
       transit_tram: '#FFC24A',
+      transit_cable_tram: '#FF8F4A',
       transit_subway: '#FF4538',
+      transit_monorail: '#FF6FB8',
       transit_rail: '#D9A6FF',
+      transit_funicular: '#E8C98A',
+      transit_aerial_lift: '#7FA8FF',
       transit_ferry: '#5FD6FF',
       transit_unknown: '#D8DDE5',
     },
@@ -218,9 +244,14 @@ export const DETECTION_THEME_MAP = Object.freeze({
       veh_free: '#2ecc71',
       veh_nodata: '#c9c9c9',
       transit_bus: '#5EF08A',
+      transit_trolleybus: '#B6F04A',
       transit_tram: '#FFC24A',
+      transit_cable_tram: '#FF8F4A',
       transit_subway: '#FF4538',
+      transit_monorail: '#FF6FB8',
       transit_rail: '#D9A6FF',
+      transit_funicular: '#E8C98A',
+      transit_aerial_lift: '#7FA8FF',
       transit_ferry: '#5FD6FF',
       transit_unknown: '#D8DDE5',
     },

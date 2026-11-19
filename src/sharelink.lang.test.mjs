@@ -4,7 +4,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ShareLinkManager } from './sharelink.js';
 import { resolveLocale } from './i18n/locale.js';
-import { persistLocaleAndReload } from './i18n/index.js';
+import { persistLocale } from './i18n/index.js';
+import { bindFakeCesiumCamera } from './testSupport/fakeCameraPort.mjs';
 
 function makeManager(href) {
   globalThis.window = { location: { href, hash: new URL(href).hash } };
@@ -18,7 +19,7 @@ function makeManager(href) {
       roll: 0,
     },
   };
-  return new ShareLinkManager(viewer);
+  return new ShareLinkManager(bindFakeCesiumCamera(viewer));
 }
 
 function installClipboard(writeText) {
@@ -53,10 +54,6 @@ test('with storage blocked the language picker keeps the choice in ?lang', () =>
     get href() {
       return href;
     },
-    assign(next) {
-      href = next;
-    },
-    reload() {},
   };
   const history = {
     replaceState: (_s, _t, url) => {
@@ -68,7 +65,7 @@ test('with storage blocked the language picker keeps the choice in ?lang', () =>
       throw new Error('blocked');
     },
   };
-  persistLocaleAndReload('ru', { location, history, storage: blocked });
+  persistLocale('ru', { location, history, storage: blocked });
   // Storage blocked: the choice survives only in ?lang.
   assert.equal(new URL(href).searchParams.get('lang'), 'ru');
 });

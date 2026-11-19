@@ -9,6 +9,9 @@
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-border-hover: rgba(255, 255, 255, 0.15);
   --accent: #00d4ff;
+  /* Every scrolling surface's scrollbar (the kit's .ui-scroll). */
+  --scroll-thumb: rgba(0, 212, 255, 0.46);
+  --scroll-track: rgba(255, 255, 255, 0.06);
   --accent-dim: rgba(0, 212, 255, 0.15);
   --accent-glow: rgba(0, 212, 255, 0.4);
   --text-primary: #e8eaed;
@@ -21,9 +24,17 @@
   --panel-radius: 16px;
   --btn-radius: 10px;
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  /* Label type shared by the command dock and the side panel titles. */
+  --dock-label-color: rgba(206, 232, 239, 0.72);
+  --dock-label-font-size: 0.58rem;
+  --dock-label-font-weight: 500;
+  --dock-label-letter-spacing: 0.13rem;
   --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
-  --left-stack-x: 52px;
-  --right-rail-x: 52px;
+  /* The side stacks clear the 52px edge gutter that holds the vertical HUD
+     readout, plus the floating panel rail (42px) and its 6px gap. */
+  --panel-rail-clearance: 48px;
+  --left-stack-x: calc(52px + var(--panel-rail-clearance));
+  --right-rail-x: calc(52px + var(--panel-rail-clearance));
   --left-stack-top: 26vh;
   --left-stack-gap: 72px;
   --left-collapsed-width: 176px;
@@ -321,6 +332,97 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   color: rgba(232, 234, 237, 0.7);
 }
 
+/* The application's own attribution line (src/ui/creditsView.js), for a
+   renderer without a credit display of its own: the same place and look. */
+#gev-credits {
+  position: fixed;
+  bottom: 36px;
+  left: 36px;
+  z-index: 90;
+  max-width: 90vw;
+  white-space: nowrap;
+  pointer-events: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: rgba(232, 234, 237, 0.55);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+#gev-credits a,
+#gev-credits .gev-credits-expand {
+  color: rgba(232, 234, 237, 0.7);
+}
+#gev-credits .gev-credit-logo {
+  height: 14px;
+  vertical-align: middle;
+}
+#gev-credits .gev-credits-expand {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.gev-credits-panel {
+  position: fixed;
+  bottom: 60px;
+  left: 36px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  width: 470px;
+  max-width: calc(100vw - 2rem);
+  max-height: min(70dvh, 36rem);
+  overflow: hidden;
+  border: 1px solid rgba(232, 234, 237, 0.2);
+  border-radius: 6px;
+  background: rgba(16, 18, 22, 0.94);
+  color: rgba(232, 234, 237, 0.85);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.gev-credits-panel[hidden] {
+  display: none;
+}
+.gev-credits-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 4px 20px;
+}
+.gev-credits-close {
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 18px;
+  cursor: pointer;
+}
+.gev-credits-list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 4px 20px 14px 40px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  line-height: 1.35;
+}
+.gev-credits-list > li {
+  padding-bottom: 5px;
+  overflow-wrap: anywhere;
+}
+.gev-credits-list a {
+  color: rgba(232, 234, 237, 0.85);
+}
+@media (max-width: 575px) {
+  .gev-credits-panel {
+    inset: 0;
+    width: 100%;
+    max-width: none;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+}
+
 /* Cesium's stock attribution lightbox grows with every registered data source.
    Keep the title and close affordance fixed while the complete, unabridged
    credit list wraps and scrolls inside a compact panel. */
@@ -381,7 +483,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   position: fixed;
   right: 36px;
   bottom: 36px;
-  /* Z ladder: panels 100-139, voice pill 150, toast 200, clean-view-exit 300 */
+  /* Z ladder: panels ~100, voice pill 150, toast 200, clean-view-exit 300 */
   z-index: 150;
   display: flex;
   align-items: center;
@@ -492,7 +594,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 #title-bar {
   position: fixed;
   top: 32px;
-  left: 36px;
+  inset-inline-start: 36px;
   z-index: 100;
   pointer-events: none;
   user-select: none;
@@ -501,7 +603,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 #title-bar .title-glow {
   position: absolute;
   top: -20px;
-  left: -20px;
+  inset-inline-start: -20px;
   width: 200px;
   height: 80px;
   background: radial-gradient(ellipse, var(--accent-dim) 0%, transparent 70%);
@@ -528,6 +630,23 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   width: 52px;
   height: auto;
   filter: drop-shadow(0 0 12px rgba(0, 246, 255, 0.5));
+}
+
+/* The logo is a button: back to live at the start view. */
+#title-bar button.title-logo {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+#title-bar button.title-logo:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 8px;
 }
 
 #title-bar .title-logo::before,
@@ -626,11 +745,11 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 #style-indicator {
   position: fixed;
   top: 32px;
-  right: 36px;
+  inset-inline-end: 36px;
   z-index: 100;
   pointer-events: none;
   user-select: none;
-  text-align: right;
+  text-align: end;
 }
 
 #style-indicator .indicator-label {

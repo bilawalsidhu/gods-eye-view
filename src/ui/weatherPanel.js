@@ -1,10 +1,12 @@
+import { h, render as renderVue } from 'vue';
 import { formatUtcDayMonth, t } from '../i18n/index.js';
-import { createRailCards } from './railCards.js';
-import { createRailTimeline, utcClock } from './railTimeline.js';
+import { utcClock } from './rail/utcClock.js';
+import WeatherReadout from './weather/WeatherReadout.vue';
 
 // Remounting controls must not reopen a panel the user already collapsed.
-const appearedDocuments = new WeakSet();
-const openDocuments = new WeakMap();
+// Keyed by the page's Weather panel, which outlives remounted controls.
+const appearedPanels = new WeakSet();
+const openPanels = new WeakMap();
 const ORDER = [
   'weather-cyclones',
   'wind',
@@ -19,11 +21,12 @@ const utc = (time) =>
     ? `${formatUtcDayMonth(time)} ${utcClock(time)}`
     : t('Unavailable');
 const clockTime = (time) => utcClock(time) || t('Unavailable');
-const age = (time) => {
-  const minutes = Math.max(
-    0,
-    Math.floor((Date.now() - Date.parse(time)) / 60_000),
-  );
+// Ages are measured from `nowMs`: the world clock's time at a past time, the
+// wall clock while live.
+const minutesBefore = (time, nowMs = Date.now()) =>
+  Math.max(0, Math.floor((nowMs - Date.parse(time)) / 60_000));
+const age = (time, nowMs) => {
+  const minutes = minutesBefore(time, nowMs);
   return minutes >= 60
     ? t('{hours}h {minutes}m ago', {
         hours: Math.floor(minutes / 60),
@@ -31,12 +34,21 @@ const age = (time) => {
       })
     : t('{minutes}m ago', { minutes });
 };
-const historyTime = (time) =>
-  t('{time} · {minutes} min ago', {
-    time: clockTime(time),
-    minutes: Math.max(0, Math.floor((Date.now() - Date.parse(time)) / 60_000)),
-  });
-const dated = (time) => `${utc(time)} · ${age(time)}`;
+// A frame's time on the timeline: its age while live; at a past time, the
+// clock time alone, as the timeline time is the one it is measured from.
+const historyTime = (time, state) =>
+  state?.mode === 'history'
+    ? clockTime(time)
+    : t('{time} · {minutes} min ago', {
+        time: clockTime(time),
+        minutes: minutesBefore(time),
+      });
+const dated = (time, nowMs) => `${utc(time)} · ${age(time, nowMs)}`;
+/** The time the observed products show: the timeline time, or now while live. */
+const shownNow = (state) =>
+  state?.mode === 'history' && Number.isFinite(Date.parse(state.target))
+    ? Date.parse(state.target)
+    : Date.now();
 const set = (node, key, value) => {
   if (node[key] !== value) node[key] = value;
 };
@@ -69,63 +81,34 @@ export function createWeatherPanel({
 } = {}) {
   const document = container?.ownerDocument;
   if (!document?.createElement) return null;
-  const root = document.createElement('section');
-  root.className = 'weather-readout';
-  root.hidden = true;
-  root.setAttribute('aria-label', t('Active weather'));
-  const timelineHost = document.createElement('div');
-  timelineHost.className = 'weather-timeline-block';
-  timelineHost.hidden = true;
-  const cardsHost = document.createElement('div');
-  cardsHost.className = 'weather-cards';
-  const observedGroup = document.createElement('section');
-  observedGroup.className = 'weather-observed-group';
-  observedGroup.setAttribute('aria-label', t('Observed history'));
-  const heading = document.createElement('h3');
-  heading.className = 'panel-title';
-  heading.textContent = t('Observed history');
-  const scope = document.createElement('div');
-  scope.className = 'weather-observed-scope';
-  const observedCardsHost = document.createElement('div');
-  observedCardsHost.className = 'weather-cards';
-  observedGroup.append(heading, scope, timelineHost, observedCardsHost);
-  root.append(cardsHost, observedGroup);
-  container.appendChild(root);
   const panel = container.closest?.('#weather-panel');
   const count = panel?.querySelector('#weather-panel-count');
   let entries = [];
   let destroyed = false;
   let previousIds = null;
   let hasAppeared = false;
-  let openId = openDocuments.get(document) || null;
+  const page = panel || document;
+  let openId = openPanels.get(page) || null;
   // Open card as last shown; null until cards are on screen.
   let shownOpenId = null;
-  const timeline = createRailTimeline({
-    container: timelineHost,
-    document,
-    sliderClassName: 'weather-timeline',
-    heading: false,
-    onCommit: (tick) => clock?.setTarget(tick),
-    onPreview: historyTime,
-    onStep: (direction) => clock?.step(direction),
-    onLatest: () => clock?.latest(),
-    onPlay: () => clock?.togglePlay(),
-  });
-  const cardOptions = {
-    document,
-    cardClassName: 'weather-card',
-    badgeClassName: 'weather-coverage',
+  const handlers = {
     onParams: (id, params) => setLayerParams(id, params, { origin: 'user' }),
     onOpen: (id) => {
       openId = id;
-      openDocuments.set(document, id);
+      openPanels.set(page, id);
       render();
     },
   };
-  const cards = createRailCards({ ...cardOptions, container: cardsHost });
-  const observedCards = createRailCards({
-    ...cardOptions,
-    container: observedCardsHost,
+  // The readout patches synchronously, so a newly opened card can be measured.
+  const paint = (view) =>
+    renderVue(h(WeatherReadout, { view, ...handlers }), container);
+  paint({
+    hidden: true,
+    observed: false,
+    scope: '',
+    frameTime: '',
+    cards: [],
+    observedCards: [],
   });
   const render = () => {
     if (destroyed) return;
@@ -138,35 +121,30 @@ export function createWeatherPanel({
       .filter(({ summary }) => summary)
       .sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
     const observed = active.filter(({ id }) => OBSERVED.has(id));
-    const showTimeline = observed.length > 0;
-    set(observedGroup, 'hidden', !showTimeline);
+    const showObserved = observed.length > 0;
     const names = {
       'weather-radar': t('Rain radar'),
       'weather-satellite': t('Satellite clouds'),
       'weather-lightning': t('Lightning density'),
     };
-    set(scope, 'textContent', observed.map(({ id }) => names[id]).join(' · '));
-    set(timelineHost, 'hidden', !showTimeline);
-    const index =
-      state.mode === 'latest'
-        ? state.timeline.length - 1
-        : Math.max(
-            0,
-            state.timeline.findLastIndex(
-              (tick) => Date.parse(tick) <= Date.parse(state.target),
-            ),
-          );
-    timeline.update({
-      ticks: state.timeline,
-      index,
-      mode: state.mode,
-      playing: Boolean(state.playing),
-      disabled: !showTimeline || state.timeline.length < 2,
-      readout:
-        state.mode === 'latest'
-          ? t('LATEST · newest per product')
-          : historyTime(state.target),
-    });
+    // While live, the newest frame and its age; at a past time, the timeline
+    // time alone. The world timeline moves the time. Live, each product's
+    // newest frame counts, suspended or not (reduced motion, a hidden page),
+    // as the timeline leaves those out.
+    const newest = () => {
+      const times = (state.products ?? [])
+        .map(({ selected }) => selected)
+        .filter((time) => Number.isFinite(Date.parse(time)))
+        .sort((a, b) => Date.parse(a) - Date.parse(b));
+      return times.at(-1) ?? state.timeline.at(-1);
+    };
+    const shownTime = state.mode === 'latest' ? newest() : state.target;
+    const frameTime =
+      showObserved && shownTime
+        ? state.mode === 'history'
+          ? clockTime(shownTime)
+          : historyTime(shownTime)
+        : '';
     const models = active.map((entry) => {
       const { id, icon, summary, legend = [], list } = entry;
       // Discrete classes (storm geometry, AQHI bands) list swatches, not a ramp.
@@ -183,7 +161,7 @@ export function createWeatherPanel({
               ? t('No frame within {gap} min of {time}', { gap, time })
               : t('No frame within {gap} h of {time}', { gap: gap / 60, time });
         } else if (shown) {
-          detail = dated(shown);
+          detail = dated(shown, shownNow(state));
           if (state.mode === 'history')
             detail =
               Date.parse(shown) === Date.parse(state.target)
@@ -195,7 +173,8 @@ export function createWeatherPanel({
           valid: utc(summary.validTime),
           issued: utc(summary.issuedTime),
         });
-        if (state.mode === 'history')
+        // Unless its source follows the timeline, wind stays at the live edge.
+        if (state.mode === 'history' && !clock?.follows?.(id))
           detail = t('{detail} · Does not follow history', { detail });
       }
       const lines = [
@@ -215,6 +194,7 @@ export function createWeatherPanel({
           colors: legend.map(({ color }) => color),
           labels: legend.map(({ label }) => label),
           units: categorical ? '' : summary.units,
+          ...(summary.unitsVerbatim === true ? { unitsVerbatim: true } : {}),
           zeroIndex: legend.findIndex(({ label }) => label === '0'),
         },
       };
@@ -246,22 +226,27 @@ export function createWeatherPanel({
         blocks,
       };
     });
-    cards.update(models.filter(({ id }) => !OBSERVED.has(id)));
-    observedCards.update(models.filter(({ id }) => OBSERVED.has(id)));
+    const hidden = active.length === 0;
+    paint({
+      hidden,
+      observed: showObserved,
+      scope: observed.map(({ id }) => names[id]).join(' · '),
+      frameTime,
+      cards: models.filter(({ id }) => !OBSERVED.has(id)),
+      observedCards: models.filter(({ id }) => OBSERVED.has(id)),
+    });
     // Only a change of open card moves the scroll position; refreshes leave it.
     if (shownOpenId !== null && openId !== shownOpenId) {
-      const open = [...cardsHost.children, ...observedCardsHost.children].find(
-        (node) => node.dataset?.cardId === openId,
-      );
+      const open = [
+        ...container.querySelectorAll('.weather-cards > [data-card-id]'),
+      ].find((node) => node.dataset.cardId === openId);
       revealCard(container, open);
     }
     shownOpenId = active.length ? openId : null;
-    const hidden = active.length === 0;
-    set(root, 'hidden', hidden);
     if (count) set(count, 'textContent', String(active.length));
     if (panel) set(panel, 'hidden', hidden);
-    if (!hidden && panel && !appearedDocuments.has(document)) {
-      appearedDocuments.add(document);
+    if (!hidden && panel && !appearedPanels.has(panel)) {
+      appearedPanels.add(panel);
       // First appearance opens the panel unless a stored or shared collapse
       // choice exists (marked by the panel chrome when it restored the state).
       const preference = panel.dataset?.collapsedPreference;
@@ -284,7 +269,7 @@ export function createWeatherPanel({
         previousIds && entries.filter(({ id }) => !previousIds.has(id));
       if (hasAppeared && added?.length) {
         openId = added.at(-1).id;
-        openDocuments.set(document, openId);
+        openPanels.set(page, openId);
       } else if (ids.size && !ids.has(openId)) {
         openId =
           (!hasAppeared &&
@@ -303,10 +288,7 @@ export function createWeatherPanel({
     destroy() {
       destroyed = true;
       unsubscribe?.();
-      timeline.destroy();
-      cards.destroy();
-      observedCards.destroy();
-      root.remove();
+      renderVue(null, container);
       if (panel) set(panel, 'hidden', true);
       if (count) set(count, 'textContent', '0');
     },

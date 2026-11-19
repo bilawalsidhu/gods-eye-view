@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 
 /**
  * Mapillary Graph API and image CDN answered from fixtures, covering every
- * request the provider and MapillaryJS make while opening, stepping and
- * closing a photo, so the gate needs no network and no real token.
+ * request the provider and MapillaryJS make while opening and closing a
+ * photo, so the gate needs no network and no real token.
  *
  * No `merge_cc` or `sfm_cluster` means MapillaryJS never asks for a mesh or
  * cluster, and empty S2 cells mean no spatial edges, which the gate does not
@@ -21,7 +21,7 @@ export const PHOTO_LINE = Object.freeze({
   north: 38.591,
 });
 /** Metres between consecutive photos on the line (≥ the 3 m cone thinning). */
-export const PHOTO_SPACING_M = 30;
+const PHOTO_SPACING_M = 30;
 /** Fixture thumbnail host (answered, never reached). */
 export const THUMB_HOST = 'qa-fixture.mapillary.com';
 

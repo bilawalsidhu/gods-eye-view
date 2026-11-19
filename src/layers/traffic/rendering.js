@@ -1,15 +1,21 @@
-import * as Cesium from 'cesium';
 import { flowBucket } from '../../data/trafficFlowStyle.js';
 import { trafficStyleProfile } from '../../data/trafficPresetStyle.js';
 import {
+  FLOW_BUCKET_COLORS,
+  FLOW_LINE_ALPHA,
+  FLOW_LINE_CAP,
+  FLOW_LINE_WIDTH,
   HEAT_LINE_CAP,
   HEAT_JAM_COLOR,
   HEAT_SLOW_COLOR,
   HEAT_LINE_JAM_WIDTH,
   HEAT_JAM_BASE_ALPHA,
+  HEAT_JAM_PULSE_ALPHA,
   HEAT_LINE_SLOW_WIDTH,
   TRAFFIC_TIMING_ENABLED,
 } from './policy.js';
+import { distance } from '../../geo/vector.js';
+import { findCamera } from '../../render/rendererOf.js';
 
 export function createRendering({
   state: layerState,
@@ -34,129 +40,176 @@ export function createRendering({
       : roads;
   }
 
-  /** Remove both heat-line ground primitives from the scene. */
+  /** Take every road line (heat-lines or flow lines) down. */
 
   function removeHeatLines() {
-    if (layerState._heatJamPrim) {
-      layerState._viewer?.scene.groundPrimitives.remove(
-        layerState._heatJamPrim,
-      );
-      layerState._heatJamPrim = null;
+    if (layerState._heatLineCount) {
+      layerState._heatSet?.clear();
+      layerState._heatOverSet?.clear();
     }
-    if (layerState._heatSlowPrim) {
-      layerState._viewer?.scene.groundPrimitives.remove(
-        layerState._heatSlowPrim,
-      );
-      layerState._heatSlowPrim = null;
-    }
+    layerState._heatJam = [];
     layerState._heatLineCount = 0;
+    parts.animation.syncRenderDemand?.();
   }
 
   /**
-   * Rebuild the congestion heat-line underlay (jam-viz heatline prototype):
-   * slow/jam roads drape a corridor line onto the rendered 3D tiles — glowing
-   * pulsing red for jam, faint flat amber for slow — with the dots animating
-   * on top. Two batched GroundPolylinePrimitives (one per bucket) so the jam
-   * batch pulses through one shared material. Capped at HEAT_LINE_CAP (jam
-   * first, longest first); overflow is logged. No-op in sim mode, when the
-   * heatline mode is off, or without ground-primitive support.
+   * Rebuild the road-line underlay drawn from live flow, in one of two looks,
+   * as lines of the layer's heat-line draw set:
+   *
+   * - Flow lines (the `lines` row toggle): every road with flow drapes a
+   *   steady line in its bucket color — green free-flow, amber slow, red
+   *   jam — on the terrain and the 3D tiles alike. Capped at FLOW_LINE_CAP.
+   * - Heat-lines (jam-viz `heatline` prototype): only slow/jam roads, draped
+   *   on the 3D tiles: a glowing red for jam, pulsing together
+   *   (`pulseHeatLines`), and a faint flat amber for slow. Capped at
+   *   HEAT_LINE_CAP.
+   *
+   * Kept roads are jam first, then slow, then free, longest first; overflow
+   * is logged. The set swaps its whole contents at once, so a rebuild never
+   * blinks. No-op in sim mode or when both looks are off. Where the renderer
+   * cannot drape, it draws them over the surface instead (the draw port's
+   * `overlay`).
+   *
+   * One build runs at a time. A city loads in progressive paints, each asking
+   * for a rebuild, and every build drapes up to the cap of polylines
+   * asynchronously. A rebuild asked for while lines are building only replaces
+   * the one waiting, which retireHeatLines starts when the build finishes, so
+   * the scene never holds more than the lines drawn and the lines building.
+   * Turning the lines off is never deferred.
    *
    * @param {Array} roads - Road objects visible in the current render.
    */
 
   function rebuildHeatLines(roads) {
-    removeHeatLines();
     if (
       !layerState._viewer ||
+      !layerState._heatSet ||
       !layerState._liveMode ||
       !parts.style.heatlineOn()
-    )
+    ) {
+      removeHeatLines();
       return;
-    if (layerState._heatSupported === null) {
-      layerState._heatSupported = Cesium.GroundPolylinePrimitive.isSupported(
-        layerState._viewer.scene,
-      );
-      if (!layerState._heatSupported)
-        console.warn(
-          '[Data:Traffic] GroundPolylinePrimitive unsupported — heat-lines disabled',
-        );
     }
-    if (!layerState._heatSupported) return;
-
+    const flowLines = layerState._showLines;
+    const cap = flowLines ? FLOW_LINE_CAP : HEAT_LINE_CAP;
+    const rank = { jam: 0, slow: 1, free: 2 };
     const candidates = [];
     for (const road of roads) {
       const flow = road.flow;
       if (!flow || flow.closure) continue;
       const bucket = flowBucket(flow.level);
-      if (bucket === 'free') continue;
+      if (bucket === 'free' && !flowLines) continue;
       let len = 0;
       for (const d of road.segmentDist) len += d;
       candidates.push({ road, bucket, len });
     }
     candidates.sort((a, b) =>
-      a.bucket === b.bucket ? b.len - a.len : a.bucket === 'jam' ? -1 : 1,
+      a.bucket === b.bucket ? b.len - a.len : rank[a.bucket] - rank[b.bucket],
     );
-    const kept = candidates.slice(0, HEAT_LINE_CAP);
+    const kept = candidates.slice(0, cap);
 
-    const instancesFor = (bucket, width) =>
-      kept
-        .filter((c) => c.bucket === bucket)
-        .map(
-          (c) =>
-            new Cesium.GeometryInstance({
-              geometry: new Cesium.GroundPolylineGeometry({
-                positions: c.road.waypoints,
-                width,
-              }),
-            }),
-        );
-
-    // Mono presets (NVG/FLIR/noir) discard hue — heat-lines re-encode in
-    // luminance like the dots: jam = white glow, slow = faint gray.
-    const monoHeat =
+    // Mono presets (NVG/FLIR/noir) discard hue — lines re-encode in
+    // luminance like the dots: jam = white, slow = gray, free = dim gray.
+    const mono =
       layerState._presetDots === 'on' &&
       trafficStyleProfile(layerState._stylePreset) === 'mono';
-    const jamLineColor = monoHeat ? Cesium.Color.WHITE : HEAT_JAM_COLOR;
-    const slowLineColor = monoHeat
-      ? new Cesium.Color(0.7, 0.7, 0.7, HEAT_SLOW_COLOR.alpha)
-      : HEAT_SLOW_COLOR;
+    const gray = (level, alpha) => [level, level, level, alpha];
+    let styleFor;
+    let widthFor;
+    if (flowLines) {
+      // Lines take the dots' active (preset-aware) colors, steady.
+      const dotColor = (bucket) =>
+        layerState._activeBucketColors?.[bucket] || FLOW_BUCKET_COLORS[bucket];
+      const level = { jam: 1, slow: 0.7, free: 0.45 };
+      const styles = {};
+      for (const bucket of ['jam', 'slow', 'free']) {
+        const rgb = mono
+          ? gray(level[bucket], 1)
+          : dotColor(bucket).slice(0, 3);
+        styles[bucket] = {
+          kind: 'solid',
+          color: [rgb[0], rgb[1], rgb[2], FLOW_LINE_ALPHA],
+        };
+      }
+      styleFor = (bucket) => styles[bucket];
+      widthFor = () => FLOW_LINE_WIDTH;
+    } else {
+      layerState._heatJamRgb = mono ? [1, 1, 1] : HEAT_JAM_COLOR.slice(0, 3);
+      const jamStyle = jamLineStyle(HEAT_JAM_BASE_ALPHA);
+      const slowStyle = {
+        kind: 'solid',
+        color: mono ? gray(0.7, HEAT_SLOW_COLOR[3]) : HEAT_SLOW_COLOR,
+      };
+      styleFor = (bucket) => (bucket === 'jam' ? jamStyle : slowStyle);
+      widthFor = (bucket) =>
+        bucket === 'jam' ? HEAT_LINE_JAM_WIDTH : HEAT_LINE_SLOW_WIDTH;
+    }
 
-    const jamInstances = instancesFor('jam', HEAT_LINE_JAM_WIDTH);
-    if (jamInstances.length) {
-      layerState._heatJamPrim = layerState._viewer.scene.groundPrimitives.add(
-        new Cesium.GroundPolylinePrimitive({
-          geometryInstances: jamInstances,
-          classificationType: Cesium.ClassificationType.CESIUM_3D_TILE,
-          appearance: new Cesium.PolylineMaterialAppearance({
-            material: Cesium.Material.fromType('PolylineGlow', {
-              color: jamLineColor.withAlpha(HEAT_JAM_BASE_ALPHA),
-              glowPower: 0.25,
-            }),
-          }),
-        }),
-      );
+    // Drawn in the order the per-bucket primitives were added: flow lines
+    // free, slow, then jam on top, in one set (in the order of its items);
+    // heat-lines jam, then slow over it, in a set of their own made after
+    // the jam lines' (a set draws its glow lines after its solid ones).
+    const order = flowLines ? ['free', 'slow', 'jam'] : ['jam', 'slow'];
+    const byBucket = { jam: [], slow: [], free: [] };
+    const over = [];
+    const jam = [];
+    for (let i = 0; i < kept.length; i++) {
+      const { road, bucket } = kept[i];
+      const item = {
+        id: `heat:${i}`,
+        // A snapshot of the waypoints, as the renderer's points.
+        positions: road.waypoints.map((p) => ({ x: p.x, y: p.y, z: p.z })),
+        widthPx: widthFor(bucket),
+        mode: 'draped',
+        // Flow lines drape on terrain or tiles; heat-lines on the tiles.
+        clampTo: flowLines ? 'both' : 'tiles',
+        style: styleFor(bucket),
+      };
+      if (bucket === 'slow' && !flowLines && layerState._heatOverSet)
+        over.push(item);
+      else byBucket[bucket].push(item);
+      // The steady flow lines never pulse.
+      if (bucket === 'jam' && !flowLines) jam.push(item);
     }
-    const slowInstances = instancesFor('slow', HEAT_LINE_SLOW_WIDTH);
-    if (slowInstances.length) {
-      layerState._heatSlowPrim = layerState._viewer.scene.groundPrimitives.add(
-        new Cesium.GroundPolylinePrimitive({
-          geometryInstances: slowInstances,
-          classificationType: Cesium.ClassificationType.CESIUM_3D_TILE,
-          appearance: new Cesium.PolylineMaterialAppearance({
-            material: Cesium.Material.fromType('Color', {
-              color: slowLineColor,
-            }),
-          }),
-        }),
-      );
-    }
+    const items = order.flatMap((bucket) => byBucket[bucket]);
+    if (items.length || layerState._heatLineCount)
+      layerState._heatSet.set(items);
+    if (over.length || layerState._heatOverSet?.size())
+      layerState._heatOverSet.set(over);
+    layerState._heatJam = jam;
 
     layerState._heatLineCount = kept.length;
+    parts.animation.syncRenderDemand?.();
     if (candidates.length > kept.length) {
       console.log(
-        `[Data:Traffic] Heat-lines capped at ${HEAT_LINE_CAP} (${candidates.length} congested roads in view)`,
+        `[Data:Traffic] ${flowLines ? 'Flow lines' : 'Heat-lines'} capped at ${cap} (${candidates.length} roads in view)`,
       );
     }
+  }
+
+  /** The jam heat-lines' glow at `alpha`. */
+  const jamLineStyle = (alpha) => ({
+    kind: 'glow',
+    color: [...layerState._heatJamRgb, alpha],
+    power: 0.25,
+  });
+
+  /** Whether jam heat-lines are drawn, which pulse every frame. */
+  const heatPulsing = () => Boolean(layerState._heatJam?.length);
+
+  /**
+   * Throb the jam heat-lines (~1.6 s period): one colour for them all,
+   * each line recoloured where it is, no geometry rebuilt.
+   * @param {number} now - Epoch ms.
+   */
+  function pulseHeatLines(now) {
+    const jam = layerState._heatJam;
+    if (!jam?.length || !layerState._heatSet) return;
+    const style = jamLineStyle(
+      HEAT_JAM_BASE_ALPHA + HEAT_JAM_PULSE_ALPHA * Math.sin(now / 260),
+    );
+    for (const item of jam) item.style = style;
+    layerState._heatSet.upsert(jam);
   }
 
   /**
@@ -200,7 +253,10 @@ export function createRendering({
     // nadir view: oblique pitches put the loaded roads many km away even at
     // low altitude. Probe three roads and stretch the curves accordingly.
     let areaDist = altitude;
-    if (layerState._viewer && filteredRoads.length) {
+    const eye = filteredRoads.length
+      ? findCamera(layerState._viewer)?.pose()?.position
+      : null;
+    if (eye) {
       const probes = [
         filteredRoads[0],
         filteredRoads[Math.floor(filteredRoads.length / 2)],
@@ -208,14 +264,7 @@ export function createRendering({
       ];
       for (const probe of probes) {
         const wp = probe?.waypoints?.[0];
-        if (wp)
-          areaDist = Math.max(
-            areaDist,
-            Cesium.Cartesian3.distance(
-              layerState._viewer.camera.positionWC,
-              wp,
-            ),
-          );
+        if (wp) areaDist = Math.max(areaDist, distance(eye, wp));
       }
     }
     layerState._fadeScaleFar = Math.max(8000, areaDist * 1.5);
@@ -268,7 +317,13 @@ export function createRendering({
           renderMetrics,
         )
       : null;
-    if (!label.includes('tile')) rebuildHeatLines(filteredRoads);
+    // The flow recolor above already rebuilt the lines from every retained
+    // road; without dots to recolor, rebuild them here.
+    if (
+      !label.includes('tile') &&
+      !(layerState._liveMode && layerState._dots.length)
+    )
+      rebuildHeatLines(visibleRoadsForAltitude(layerState._roads, altitude));
     if (state) {
       const heatEnd = parts.timing.trafficTimingMark(
         state,
@@ -310,6 +365,8 @@ export function createRendering({
     }
   }
   return {
+    heatPulsing,
+    pulseHeatLines,
     visibleRoadsForAltitude,
     removeHeatLines,
     rebuildHeatLines,

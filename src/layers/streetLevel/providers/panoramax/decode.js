@@ -3,7 +3,6 @@ import { VectorTile } from '@mapbox/vector-tile';
 import { tileLocalToLonLat } from '../../tileMath.js';
 import {
   DECODE_SLICE_MS,
-  OVERVIEW_BINS_PER_AXIS,
   SIMPLIFY_TOLERANCE_UNITS,
   panoramaxTimeMs,
 } from './policy.js';
@@ -63,16 +62,14 @@ function dayMs(value) {
  * - `sequences` (z7–15): one line per sequence, its parts kept apart so no
  *   segment is drawn across a gap, with its day and camera type; longest
  *   first, so a cap on lines drawn drops the shortest.
- * - `grid` (z0–6): picture-density cells, as overview points binned to at
- *   most OVERVIEW_BINS_PER_AXIS² a tile (a z0 tile holds ~70,000 cells). A
- *   cell has 360° and flat counts but no date.
+ * - `grid` (z0–6, density cells) is not read: nothing is drawn from orbit.
  * - `pictures` (z15) is left for `decodePictures`.
  *
  * In one go; `decodeCoverageTileSliced` gives the page a turn between
  * slices.
  * @param {Uint8Array} bytes
  * @param {{x: number, y: number, z: number}} address
- * @returns {{sequences: Array<{id: string, parts: Array<Array<[number, number]>>, capturedAt: number, isPano: boolean}>, overview: Array<{id: string, lon: number, lat: number, capturedAt: null, isPano: boolean, hasPano: boolean, hasFlat: boolean, weight: number}>}}
+ * @returns {{sequences: Array<{id: string, parts: Array<Array<[number, number]>>, capturedAt: number, isPano: boolean}>}}
  */
 export function decodeCoverageTile(bytes, address) {
   const steps = coverageSteps(bytes, address);
@@ -123,7 +120,7 @@ export async function decodeCoverageTileSliced(
 
 /** The decode, a step a feature (see `decodeCoverageTile`). */
 function* coverageSteps(bytes, address) {
-  const result = { sequences: [], overview: [] };
+  const result = { sequences: [] };
   if (!bytes || !bytes.length) return result;
   const tile = new VectorTile(new PbfReader(bytes));
   const { x, y, z } = address;
@@ -174,56 +171,6 @@ function* coverageSteps(bytes, address) {
     result.sequences = measured.map(({ sequence }) => sequence);
   }
 
-  const grid = tile.layers.grid;
-  if (grid) {
-    const bins = new Map();
-    const size = grid.extent / OVERVIEW_BINS_PER_AXIS;
-    for (let i = 0; i < grid.length; i++) {
-      const feature = grid.feature(i);
-      const props = feature.properties || {};
-      const point = feature.loadGeometry()?.[0]?.[0];
-      if (i % 64 === 63) yield;
-      if (!point) continue;
-      const pano = Number(props.nb_360_pictures) || 0;
-      const flat = Number(props.nb_flat_pictures) || 0;
-      const weight = Number(props.nb_pictures) || pano + flat;
-      if (weight <= 0) continue;
-      const key = `${Math.floor(point.x / size)}:${Math.floor(point.y / size)}`;
-      const bin = bins.get(key);
-      if (!bin) {
-        bins.set(key, { point, weight, pano, flat, top: weight });
-        continue;
-      }
-      // The bin sits on its busiest cell and counts them all.
-      bin.weight += weight;
-      bin.pano += pano;
-      bin.flat += flat;
-      if (weight > bin.top) {
-        bin.top = weight;
-        bin.point = point;
-      }
-    }
-    for (const [key, bin] of bins) {
-      const [lon, lat] = tileLocalToLonLat(
-        bin.point.x,
-        bin.point.y,
-        grid.extent,
-        x,
-        y,
-        z,
-      );
-      result.overview.push({
-        id: `${z}/${x}/${y}/${key}`,
-        lon,
-        lat,
-        capturedAt: null,
-        isPano: bin.pano > bin.flat,
-        hasPano: bin.pano > 0,
-        hasFlat: bin.flat > 0,
-        weight: bin.weight,
-      });
-    }
-  }
   return result;
 }
 

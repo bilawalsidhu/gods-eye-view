@@ -1,0 +1,48 @@
+{
+  "id": "jrc-surface-water",
+  "kind": "tiles",
+  "family": "environment",
+  "title": "Surface water occurrence (JRC)",
+  "provider": "EC JRC",
+  "description": "How often each place was covered by water between 1984 and 2021, from 38 years of Landsat imagery.",
+  "icon": "≋",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "global": true
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://storage.googleapis.com/global-surface-water/tiles2021/occurrence/{z}/{x}/{y}.png",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 0,
+    "maxZoom": 13
+  },
+  "display": {
+    "opacity": 0.85,
+    "legend": [
+      {
+        "label": "Sometimes water (> 0%)",
+        "color": "#ffffff"
+      },
+      {
+        "label": "Half the time (50%)",
+        "color": "#bf7fbf"
+      },
+      {
+        "label": "Always water (100%)",
+        "color": "#0000ff"
+      }
+    ]
+  },
+  "licence": {
+    "name": "Copernicus programme: free, without restriction of use",
+    "url": "https://global-surface-water.appspot.com/download"
+  },
+  "attribution": {
+    "text": "Source: EC JRC/Google — Pekel et al. (2016), Global Surface Water",
+    "url": "https://global-surface-water.appspot.com/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-22"
+}
