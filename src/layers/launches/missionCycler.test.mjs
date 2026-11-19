@@ -177,3 +177,36 @@ test('without a Satellites action the exit restores the pre-mission visibility',
     ['enabled', 'satellites', false],
   ]);
 });
+
+test('a Satellites layer that does not settle keeps the saved state for the next exit', async () => {
+  const r = satelliteRig({ enabledBefore: false });
+  let idle = false;
+  r.state._dataManager.waitForLayerIdle = async () => idle;
+  await assert.rejects(
+    r.ingestion.restoreSatelliteDependency(),
+    /did not settle/,
+  );
+  assert.deepEqual(r.calls, [], 'nothing changes while Satellites is busy');
+  assert.deepEqual(r.state._satelliteStateBeforeMission, {
+    enabled: false,
+    params: { mode: 'before' },
+  });
+
+  // Turning Space Missions off again once Satellites settles finishes it.
+  idle = true;
+  await r.ingestion.restoreSatelliteDependency();
+  assert.deepEqual(r.calls, [
+    ['params', 'satellites', { mode: 'before' }],
+    ['enabled', 'satellites', false],
+  ]);
+  assert.equal(r.state._satelliteStateBeforeMission, null);
+});
+
+test('a Satellites action the person took still gets its parameters back when Satellites is busy', async () => {
+  const r = satelliteRig({ enabledBefore: false });
+  r.state._dataManager.waitForLayerIdle = async () => false;
+  r.state._satelliteStateBeforeMission.restoreVisibility = false;
+  await r.ingestion.restoreSatelliteDependency();
+  assert.deepEqual(r.calls, [['params', 'satellites', { mode: 'before' }]]);
+  assert.equal(r.state._satelliteStateBeforeMission, null);
+});

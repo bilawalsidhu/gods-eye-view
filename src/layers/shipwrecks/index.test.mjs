@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import * as picking from '../../data/pickRegistry.js';
+import { fakeInputUnderLabel } from '../../input/testDoubles.mjs';
 import {
   createShipwrecksLayer,
   markerPixelSize,
@@ -394,6 +395,54 @@ test('the page deadline subtracts the newest available source age from the limit
     'an unavailable source does not count',
   );
   assert.equal(snapshotDeadline({ sources: both }, 0), 7 * DAY, 'defaults');
+});
+
+test("a click on a mission label over the open card never opens the card's link, and keeps the card open", async (t) => {
+  let picked = null;
+  const viewer = { scene: { canvas: {}, pick: () => picked } };
+  bindFakeDraw(viewer);
+  let cardUnder = null;
+  const fake = fakeInputUnderLabel(viewer, {
+    beneath: () =>
+      cardUnder ? { sourceId: 'shipwrecks', entryId: cardUnder } : null,
+  });
+  t.after(() => fake.destroy());
+  const cards = [];
+  const opened = [];
+  const layer = createShipwrecksLayer({
+    source: { getSnapshot: () => Promise.resolve(snapshot([wreck('a')])) },
+    overlayHost: {
+      setEntries: (_source, entries) => cards.push(entries),
+      setVisible() {},
+    },
+    input: () => fake.input,
+    picking,
+    pointer: { isPointerFree: () => true },
+    openExternal: (url) => opened.push(url),
+    now: () => 1,
+  });
+  layer.init(viewer);
+  t.after(() => layer.destroy());
+  layer.enable();
+  await layer.update();
+  picked = { primitive: {}, id: { set: 'shipwrecks:', id: 'shipwreck:a' } };
+  fake.click();
+  const [card] = cards.at(-1);
+  assert.equal(card.id, 'shipwreck-card:a');
+
+  // The open card lies under the label: the click opens nothing, and the
+  // label on top is its own click, so the card stays open.
+  picked = null;
+  cardUnder = card.id;
+  fake.label.over = true;
+  fake.click();
+  assert.deepEqual(opened, [], 'the link beneath the label is not opened');
+  assert.equal(cards.at(-1)[0]?.id, card.id, 'the card stays open');
+
+  // Off the label, a click on the open card opens its link.
+  fake.label.over = false;
+  fake.click();
+  assert.equal(opened.length, 1);
 });
 
 test('a covered selected card and covered markers yield; bare markers select', async () => {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createLifecycle } from './lifecycle.js';
 import { createSelection } from './selection.js';
 import { CCTV_OVERLAY_SOURCE_ID } from '../../data/cctvCards.js';
-import { fakeInput } from '../../input/testDoubles.mjs';
+import { fakeInput, fakeInputUnderLabel } from '../../input/testDoubles.mjs';
 import * as picking from '../../data/pickRegistry.js';
 import { bindRenderer } from '../../render/rendererOf.js';
 import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
@@ -75,6 +75,82 @@ test('the view listeners follow the camera port and let go on teardown', () => {
   lifecycle.detachViewListeners();
   assert.deepEqual(counts(second.camera), [0, 0]);
   assert.equal(state._viewListenerCamera, null);
+});
+
+/** A part whose members are `own`'s, and any other a function that does
+ *  nothing. */
+const inert = (own = {}) =>
+  new Proxy(own, {
+    get: (target, name) => (name in target ? target[name] : () => {}),
+  });
+
+test("a click on a mission label over a camera's card never turns that camera on, and keeps the active one", async (t) => {
+  const { viewer } = viewerWithCamera();
+  viewer.scene = { canvas: {}, pick: () => null };
+  // The card of camera `cam-1` lies under every click, under the label.
+  const fake = fakeInputUnderLabel(viewer, {
+    beneath: () => ({ sourceId: CCTV_OVERLAY_SOURCE_ID, entryId: 'cam-1' }),
+  });
+  t.after(() => fake.destroy());
+  const activated = [];
+  const deactivated = [];
+  const state = {};
+  const lifecycle = createLifecycle({
+    state,
+    services: {
+      activation: {
+        activateCctvCameraFromWorldClick: (id) => activated.push(id),
+      },
+      picking,
+      focus: {},
+      render: {},
+    },
+    parts: {
+      calibration: { loadCalibrationStore: () => new Map() },
+      catalog: {
+        loadCameraSources: async () => [],
+        buildCatalogFromSources: () => [],
+        seedCatalog: () => [],
+      },
+      ground: {
+        resolveGroundPriors: async () => [],
+        currentSurfaceRegime: () => null,
+      },
+      rendering: inert({ refreshHorizonCulling: () => false }),
+      health: { syncHealthState: async () => {} },
+      geometryQueue: inert(),
+      cards: inert(),
+      projection: inert(),
+      presentation: inert(),
+      navigation: inert(),
+      hover: inert(),
+      selection: {
+        // The camera's own gate takes only clean clicks; these are.
+        bindCctvWorldClickGesture: (input, onClick) => input.onClick(onClick),
+        extractPickedCameraId: () => null,
+        cctvEmptyClickDeselects: (picked, { activeCameraId }) =>
+          Boolean(activeCameraId) && picking.resolvePickId(picked) === null,
+        deactivateActiveCamera: () => deactivated.push(state._activeCameraId),
+      },
+    },
+  });
+  // Init's bounded wait for ground heights never runs out here: they are in.
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  await lifecycle.methods.init(viewer);
+  t.after(() => state._clickSubscription?.());
+  state._enabled = true;
+  state._activeCameraId = 'cam-0';
+  state._recordById.set('cam-1', {});
+
+  fake.label.over = true;
+  fake.click();
+  assert.deepEqual(activated, [], 'the camera under the label stays off');
+  assert.deepEqual(deactivated, [], 'the active camera stays on');
+
+  // Off the label, a click on the card turns its camera on.
+  fake.label.over = false;
+  fake.click();
+  assert.deepEqual(activated, ['cam-1']);
 });
 
 test('the card painted on top takes world clicks, whatever is drawn under it', async (t) => {

@@ -16,6 +16,15 @@ function isExplicitOrigin(origin) {
   return origin === 'user' || origin === 'voice';
 }
 
+/**
+ * A setting changed on purpose: by the person, by voice, or by a tool such
+ * as a place search (the layer state's own rule, isExplicitLayerStateOrigin
+ * in src/data/layerState.js).
+ */
+function isDeliberateOrigin(origin) {
+  return isExplicitOrigin(origin) || origin === 'tool';
+}
+
 export function createSatelliteIntents({ state: layerState }) {
   const requestOrder = new Map();
   let sequence = 0;
@@ -93,6 +102,25 @@ export function createSatelliteIntents({ state: layerState }) {
     return stop;
   }
 
+  /**
+   * Keep a Satellites setting changed on purpose while Space Missions holds
+   * its saved state ("show orbits" off, tracking a satellite, or a place
+   * search that stops tracking): it survives the mission teardown, as a
+   * visibility choice does.
+   */
+  function handleParams(change) {
+    if (
+      change?.type !== 'params' ||
+      change.layerId !== 'satellites' ||
+      !isDeliberateOrigin(change.origin)
+    )
+      return;
+    const previous = layerState._satelliteStateBeforeMission;
+    const requested = change.requestedParams;
+    if (!previous || !requested || typeof requested !== 'object') return;
+    previous.params = { ...previous.params, ...requested };
+  }
+
   /** Settle once a Satellites OFF has finished stopping Space Missions. */
   function settled() {
     return pendingStop ?? Promise.resolve(false);
@@ -108,6 +136,7 @@ export function createSatelliteIntents({ state: layerState }) {
       manager.subscribeVisibilityRequests?.(recordRequest) ?? null;
     const unsubscribeChanges =
       manager.subscribe?.((change) => {
+        handleParams(change);
         void handleVisibility(change);
       }) ?? null;
     unsubscribe = () => {
@@ -120,6 +149,7 @@ export function createSatelliteIntents({ state: layerState }) {
     connect,
     settled,
     handleVisibility,
+    handleParams,
     recordRequest,
     offFollowsMissionsEntry,
   };

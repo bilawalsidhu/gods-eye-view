@@ -666,6 +666,7 @@
   "src/layers/alpr/model.js",
   "src/layers/alpr/policy.js",
   "src/layers/alpr/presentation.js",
+  "src/layers/alpr/presentation.test.mjs",
   "src/layers/alpr/visuals.js",
   "src/layers/alpr/overlay.js",
   "src/layers/alpr/overlay.test.mjs",
@@ -1608,7 +1609,8 @@
   "src/ui/styles/omnibar-dock.css",
   "src/ui/styles/guide.css",
   "src/ui/commandDock.test.mjs",
+  "src/layers/firms/selection.test.mjs",
+  "src/layers/vessels/selection.test.mjs",
   "src/layers/bikeshare/selection.test.mjs",
-  "src/layers/satellites/interaction.test.mjs",
-  "src/layers/alpr/presentation.test.mjs"
+  "src/layers/satellites/interaction.test.mjs"
 ]

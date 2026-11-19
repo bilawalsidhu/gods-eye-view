@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createSelection } from './selection.js';
 import { bindWildlifeViewer } from '../../testSupport/wildlifeViewer.mjs';
+import { clickCard } from '../../data/pickRegistry.js';
+import { fakeInputUnderLabel } from '../../input/testDoubles.mjs';
 
 const row = {
   stableId: 'inat:123',
@@ -68,9 +70,11 @@ function fixture(sighting = row, extraServices = {}) {
       }),
       eventTarget: new EventTarget(),
       ...extraServices,
-      // The card on top at a click, as the registry answers from the host.
+      // The card on top at a click, as the registry answers from the host;
+      // a mission label painted over everything comes first.
       picking: {
         clickCard: (c) =>
+          clickCard(c) ??
           overlayHost.hitTest(c.screenPosition?.x, c.screenPosition?.y),
         ...extraServices.picking,
       },
@@ -345,6 +349,44 @@ test('empty clicks and layer removal release the selected row and its overlay', 
   assert.equal(f.state.selectedId, null);
   assert.equal(f.seen.at(-1).value, null);
   assert.equal(f.entries.size, 0);
+});
+
+test("a click on a mission label over a sighting's card never selects the sighting, and keeps the selected one", (t) => {
+  let fake = null;
+  const f = fixture(row, {
+    input: (viewer) => {
+      fake ??= fakeInputUnderLabel(viewer);
+      return fake.input;
+    },
+  });
+  f.selection.install();
+  t.after(() => {
+    f.selection.remove();
+    fake.destroy();
+  });
+  f.selection.refreshAmbient();
+  // The sighting's name card lies under every click.
+  f.hit('wildlife-sightings-labels', 'wildlife-sightings-label:inat:123');
+
+  // Under the label, the card beneath it selects nothing.
+  fake.label.over = true;
+  fake.click();
+  assert.equal(f.state.selectedId, null);
+  assert.equal(f.flights.length, 0);
+
+  // Off the label, a click on the card selects and focuses the sighting.
+  fake.label.over = false;
+  fake.click();
+  assert.equal(f.state.selectedId, row.stableId);
+  assert.equal(f.flights.length, 1);
+
+  // The label on top is its own click: the sighting stays selected, and
+  // the camera is not sent to it again.
+  fake.label.over = true;
+  fake.click();
+  assert.equal(f.state.selectedId, row.stableId, 'the sighting stays');
+  assert.equal(f.state.selectedRow, row);
+  assert.equal(f.flights.length, 1, 'the camera is not sent to the sighting');
 });
 
 test('a tap selects only a sighting exactly under it, not one the touch search found near it', () => {

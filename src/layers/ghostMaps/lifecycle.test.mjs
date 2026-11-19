@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setLocale } from '../../i18n/index.js';
-import { createGhostMapsLayer } from './index.js';
+import { createGhostMapsLayer, GHOSTMAPS_OVERLAY_SOURCE_ID } from './index.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
+import { inputFor } from '../../input/dispatcher.js';
+import { MISSION_LABEL } from '../../input/testDoubles.mjs';
+import { clickCard, setClickCardHitTest } from '../../data/pickRegistry.js';
 import { GHOSTMAPS_PRODUCTS, GHOSTMAPS_LATEST_DROP } from './catalog.js';
 
 function element(localName, children = [], value = '', attributes = {}) {
@@ -671,6 +674,57 @@ test('narrowing to a window the loaded data covers clears a failed wider reload'
   await ageChip(layer, 3).onClick();
   assert.equal(layer.getStats().error, null);
   assert.equal(layer.getStats().count, 1);
+});
+
+test("a click on a mission label over the open card never opens the card's link, and keeps the card open", async (t) => {
+  const cards = [];
+  const opened = [];
+  let cardUnder = null;
+  // A Space Missions label painted over the map: while it is over, it takes
+  // each click and is the card on top; under it may lie our open card.
+  let labelOver = false;
+  setClickCardHitTest(() =>
+    labelOver
+      ? MISSION_LABEL
+      : cardUnder
+        ? { sourceId: GHOSTMAPS_OVERLAY_SOURCE_ID, entryId: cardUnder }
+        : null,
+  );
+  t.after(() => setClickCardHitTest(null));
+  const { layer, viewer, click } = fixture(t, {
+    now: () => Date.UTC(2026, 10, 3, 12),
+    reports: [
+      {
+        name: 'Linked',
+        description:
+          '<table><tr><td>Date</td><td>11/2/2026</td></tr>' +
+          '<tr><td>Source</td><td><a href="https://example.com/report">report</a></td></tr></table>',
+      },
+    ],
+    controls: {
+      overlayHost: { setEntries: (_id, entries) => cards.push(entries) },
+      picking: { resolvePickId: (picked) => picked?.id ?? null, clickCard },
+      openExternal: (url) => opened.push(url),
+    },
+  });
+  inputFor(viewer).onOverlayClick(() => labelOver);
+  await layer.update(viewer);
+  click('ghostmaps:cip:0:0');
+  const [card] = cards.at(-1);
+  assert.equal(card.interactive, true);
+
+  // The open card lies under the label: the click opens nothing, and the
+  // label on top is its own click, so the card stays open.
+  cardUnder = card.id;
+  labelOver = true;
+  click(null);
+  assert.deepEqual(opened, [], 'the link beneath the label is not opened');
+  assert.equal(cards.at(-1)[0]?.id, card.id, 'the card stays open');
+
+  // Off the label, a click on the open card opens its link.
+  labelOver = false;
+  click(null);
+  assert.deepEqual(opened, ['https://example.com/report']);
 });
 
 test('a covered selected card yields while genuine GhostMaps markers still select', async (t) => {
