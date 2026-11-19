@@ -209,7 +209,12 @@ test('a refused Places or Geocoding answer is not kept by the browser', async (t
   t.mock.method(globalThis, 'fetch', async () =>
     Response.json({ status, results: [] }),
   );
-  for (const denied of ['REQUEST_DENIED', 'OVER_QUERY_LIMIT']) {
+  for (const denied of [
+    'REQUEST_DENIED',
+    'OVER_QUERY_LIMIT',
+    'OVER_DAILY_LIMIT',
+    'UNKNOWN_ERROR',
+  ]) {
     status = denied;
     const answer = await request('/api/google/geocode', '?address=Austin');
     assert.equal(answer.statusCode, 200);
@@ -220,6 +225,58 @@ test('a refused Places or Geocoding answer is not kept by the browser', async (t
     status = answered;
     const answer = await request('/api/google/geocode', '?address=Austin');
     assert.equal(answer.headers['cache-control'], 'private, max-age=300');
+  }
+});
+
+const ROUTES = [
+  ['/api/google/nearby-places', '?lat=30&lon=-97'],
+  ['/api/google/text-search', '?q=museum&lat=30&lon=-97'],
+];
+
+const truncated = () =>
+  new Response(
+    new ReadableStream({
+      start(c) {
+        c.enqueue(new TextEncoder().encode('{"places":[{"displayName"'));
+        c.error(new TypeError('terminated'));
+      },
+    }),
+    { status: 200 },
+  );
+
+for (const [name, body] of [
+  ['non-JSON', () => new Response('<html>not json</html>', { status: 200 })],
+  ['cut mid-body', truncated],
+]) {
+  test(`an unreadable Places 200 (${name}) is a failure, not a cached empty answer`, async () => {
+    const request = install((middlewares) =>
+      googlePlacesContextProxy({
+        resolveApiKey: () => 'fixture-server-key',
+        fetchImpl: async () => body(),
+      }).configureServer({ middlewares }),
+    );
+    for (const [route, query] of ROUTES) {
+      const res = await request(route, query);
+      assert.equal(res.statusCode, 502, route);
+      assert.equal(res.headers['cache-control'], 'no-store', route);
+      assert.deepEqual(res.body.places, [], route);
+      assert.ok(res.body.error, route);
+    }
+  });
+}
+
+test('a real empty Places answer ({}) stays cacheable', async () => {
+  const request = install((middlewares) =>
+    googlePlacesContextProxy({
+      resolveApiKey: () => 'fixture-server-key',
+      fetchImpl: async () => Response.json({}),
+    }).configureServer({ middlewares }),
+  );
+  for (const [route, query] of ROUTES) {
+    const res = await request(route, query);
+    assert.equal(res.statusCode, 200, route);
+    assert.equal(res.headers['cache-control'], 'private, max-age=300', route);
+    assert.equal(res.body.error, null, route);
   }
 });
 
