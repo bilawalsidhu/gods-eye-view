@@ -20,7 +20,10 @@ test('the Omnibar hand-writes no button; each is a UiButton', () => {
 
 test('the Omnibar hand-writes no Material glyph; each is a UiIcon', () => {
   assert.deepEqual(template.match(/material-symbols-outlined/g) ?? [], []);
-  assert.equal(template.match(/<UiIcon\b/g)?.length, 3);
+  const icons = template.match(/<UiIcon\b[^>]*>/g) ?? [];
+  assert.equal(icons.length, 3);
+  // Without it the kit writes an 18px size that beats the Omnibar's own rules.
+  for (const icon of icons) assert.match(icon, /:size="null"/);
 });
 
 test('the only inline SVG glyphs are the mic and the chat row bubble', () => {
