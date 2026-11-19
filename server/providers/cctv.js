@@ -205,12 +205,9 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         if (Object.keys(verdicts).length)
           console.log('[CCTV] feed group probe:', JSON.stringify(verdicts));
       })
-      .catch((error) =>
-        console.warn(
-          '[CCTV] feed group probe failed:',
-          error?.message || error,
-        ),
-      )
+      // A fixed line only: the failure can carry an upstream URL, a key or a
+      // stack, and none of that belongs in the log.
+      .catch(() => console.warn('[CCTV] feed group probe failed'))
       .finally(() => {
         feedProbeInflight = null;
       });
