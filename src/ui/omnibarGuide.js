@@ -501,14 +501,16 @@ export function startGuide(steps, { title = '' } = {}) {
       ...handlers,
     });
     renderVue(vnode, host);
-    return vnode.component.exposed;
+    return vnode;
   }
   // Focus returns where it was when the walk ends, if that is still there.
   const returnFocus = doc.activeElement;
-  const elements = paint();
-  const root = elements.root.value;
-  const ring = elements.ring.value;
-  const callout = elements.callout.value;
+  // The elements come from the rendered tree, which is in place as soon as the
+  // render returns; template refs are filled after it, and later still when
+  // the walk starts inside one of Vue's own post-render updates.
+  const root = paint().component.subTree.children[0].el;
+  const ring = root.querySelector(':scope > .gev-guide-ring');
+  const callout = root.querySelector(':scope > .gev-guide-callout');
   const subRings = [];
 
   const live = steps.filter(Boolean);

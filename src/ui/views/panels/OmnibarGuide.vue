@@ -1,5 +1,4 @@
 <script setup>
-import { ref } from 'vue';
 import UiButton from '../../kit/UiButton.vue';
 import UiCloseButton from '../../kit/UiCloseButton.vue';
 
@@ -9,7 +8,7 @@ import UiCloseButton from '../../kit/UiCloseButton.vue';
 // with the `view` it computes for each step and keeps the parts the template
 // never binds: the guide's `visible` class, the callout's entrance replay
 // (its `swap` class), place and side, the ring's and the extra rings' boxes,
-// and focus. The elements those parts need are exposed.
+// and focus. It finds those elements in the rendered tree itself.
 defineProps({
   to: { type: Object, required: true },
   view: { type: Object, required: true },
@@ -19,21 +18,15 @@ defineProps({
   onNext: { type: Function, required: true },
 });
 
-const root = ref(null);
-const ring = ref(null);
-const callout = ref(null);
-defineExpose({ root, ring, callout });
-
 /** A progress segment's attributes: no class at all for one still to come. */
 const dot = (name) => (name ? { class: name } : {});
 </script>
 
 <!-- Only line breaks inside tags: the markup has no whitespace between elements. -->
 <template><Teleport :to="to"
-    ><div ref="root" class="gev-guide"
-      ><div ref="ring" class="gev-guide-ring"><i></i></div
+    ><div class="gev-guide"
+      ><div class="gev-guide-ring"><i></i></div
       ><div
-        ref="callout"
         class="gev-guide-callout"
         role="dialog"
         aria-modal="false"

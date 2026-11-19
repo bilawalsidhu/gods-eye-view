@@ -2,6 +2,7 @@
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createApp, h, onMounted } from 'vue';
 import { startGuide } from './omnibarGuide.js';
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -108,4 +109,28 @@ test('starting another walk ends the one in progress', async (t) => {
   await settle();
   assert.equal(document.querySelectorAll('.gev-guide').length, 1);
   assert.equal($('.gev-guide-text').textContent, 'Second');
+});
+
+test('a walk started while Vue mounts something else still starts and ends', async (t) => {
+  const { target, field } = fixture(t);
+  let stop = null;
+  const app = createApp({
+    setup() {
+      onMounted(() => {
+        stop = startGuide([
+          { targets: () => [target], text: () => 'Press it' },
+        ]);
+      });
+      return () => h('span');
+    },
+  });
+  app.mount(document.body.appendChild(document.createElement('div')));
+  t.after(() => app.unmount());
+  await settle();
+  assert.equal(typeof stop, 'function');
+  assert.equal(document.activeElement, $('.gev-guide-callout'));
+  assert.ok($('.gev-guide').classList.contains('visible'));
+  stop();
+  assert.equal($('.gev-guide'), null);
+  assert.equal(document.activeElement, field);
 });
