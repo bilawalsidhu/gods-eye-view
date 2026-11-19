@@ -1585,6 +1585,8 @@
   "src/ui/creditLineHeight.js",
   "src/ui/creditLineHeight.test.mjs",
   "src/ui/creditsView.test.mjs",
+  "src/ui/credits/CreditsView.vue",
+  "src/ui/credits/CreditItem.vue",
   "src/cockpitSubjectProviders.js",
   "src/cockpitSubjectProviders.test.mjs",
   "src/cockpitProgress.js",
