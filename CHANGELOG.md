@@ -2,6 +2,121 @@
 
 ## [Unreleased]
 
+- A double-click on the map no longer follows or zooms to what is under
+  it. The globe's own double-click did that for some layers' markers and
+  shapes (earthquakes, cyclones, air quality, news, cables, places and
+  others); following something is a click, as for aircraft and ships. The
+  Cockpit's double-click and a drawing's finishing double-click are
+  unchanged (samehkhamis).
+- Aircraft no longer jump ahead or back, and their trails no longer kink,
+  when the feed is late. The civil and military layers draw as far behind
+  real time as their feed is late (the 90th percentile of recent report
+  lags plus 5 s, at least 30 s civil and 15 s military, at most five
+  minutes), so an aircraft is placed between two real reports rather than
+  dead reckoned past them; the delay changes slowly, and the icons, the
+  renderer's live clock, labels, the HUD, detection, the tracked camera and
+  the trail all read the same one. Between two reports an aircraft flies
+  one smooth curve that leaves each report along its track, sent to the
+  renderer as `arc` segments; its trail is its reports joined along that
+  same curve, so the icon always sits on it. A late report a coasting
+  aircraft missed is eased onto, at most 30% faster than it flies; past
+  its newest report an aircraft coasts straight on (samehkhamis).
+- The Display panel has a Sky group on a renderer with a sky to set: the
+  atmosphere, day and night (sun lighting by scene time), the sun, the
+  moon, the stars and the Milky Way's brightness. The choice is kept for the
+  next visit; what is not set stays as the renderer draws it (samehkhamis).
+- The renderer contract no longer ties a renderer's look to the default
+  renderer's: `globe.sky` switches parts of the sky on and off, while how
+  the sky, atmosphere, haze, lighting, tone mapping and exposure look is
+  the renderer's own. `globe.weather`'s `clouds` is the fraction of the sky
+  covered, as observed; clouds are placed by scene time and the wind and
+  shade the ground under them where the sun lights it. New conformance
+  check `globe.weather.sceneTime` (samehkhamis).
+- Selecting an aircraft, a vessel, a train or a transit vehicle no longer
+  makes it bigger: it keeps the size and form it had and changes colour (a
+  transit vehicle only widens its dark ring). A click on an aircraft, a
+  vessel or a train no longer moves the camera to a new framing either: the
+  camera keeps its distance and viewing angle, the contact slides to the
+  centre over one second, and the camera then follows it from there (a
+  vessel, which is never followed, is left centred). A
+  follow target asks for this glide with `transitionS` (renderer contract,
+  conformance check `camera.follow.transition`); without it a follow frames
+  at once, as before. An aircraft chosen by voice, search or a shared link
+  is still framed as before (samehkhamis).
+- The renderer contract's `models` capability draws the procedural fleet
+  models: a model item can carry its glTF bytes (`gltf`, drawn without a
+  fetch), a per-axis stretch (`axisScale`), a colour for its tinted parts
+  (`maskColor`) and a cut below its origin (`clip: 'belowOrigin'`, a hull at
+  the waterline). Aircraft, military, local ADS-B, vessel, transit and rail
+  models are drawn through it (samehkhamis).
+- A tracked aircraft's trail no longer draws a straight line from its track
+  history across a landing or take-off that was not seen: a parked or
+  taxiing aircraft whose history ends in the air (often its previous flight)
+  starts its trail on the ground (samehkhamis).
+- Aircraft from adsb.lol that report no ground track (parked or taxiing
+  slowly) now face their reported true heading instead of north, so parked
+  models line up with their gates (samehkhamis).
+- A renderer can draw weather: the `weather` capability adds `globe.weather`,
+  with clouds, fog, haze, rain and snow (each 0 to 1) and the wind they drift
+  on. `./render/weather` and `./weather/effects` export the shared rules and
+  the strengths of a weather observation. The Cesium renderer does not draw
+  weather (samehkhamis).
+- Groups of toggles, sliders and notes can be added to the Display panel
+  under Effects, with `publishDisplayGroup` from `./ui/display/groups`
+  (samehkhamis).
+- The globe opens at planet level, the whole Earth in view, instead of
+  flying in to Austin. A shared link still flies from
+  there to its view. The `startView` option of `createApplicationControls`
+  starts it somewhere else, a city for instance (longitude, latitude and
+  height, and heading and pitch in degrees) (samehkhamis).
+- An application's own tool can take the pointer as Draw does, and its click
+  handlers can yield while a tool holds it, as the layers' do (`pointer` from
+  `createApplicationTools`) (samehkhamis, #1641).
+- `gods-eye-view/annotations` no longer reaches Cesium: the world annotation
+  renderer draws its areas, building columns, routes, arrows, rings and
+  markers through the renderer's draw port (the Cesium renderer now drapes
+  arrows, draws clamped rings by camera height and pulses shape alpha), and
+  samples a building's ground through the height service. A click on a
+  world mark now hits its draw set (`meta: { annotation: id }`) rather than
+  an entity. A viewer with no renderer bound needs
+  `gods-eye-view/render/cesium/unbound` loaded once first (samehkhamis).
+- `gods-eye-view/application/layers` and `gods-eye-view/standalone/catalog`
+  no longer reach Cesium: the weather shells and the wind layer's colour
+  shell and flow draw through the renderer's `draw.field` (`rasterShell` and
+  `windStreamlines`, which the Cesium renderer now draws), and the wind
+  relief is the globe port's `hillshade` surface shading. The flow animates
+  as before, and still falls back to the canvas where the renderer refuses
+  it. A viewer with no renderer bound needs
+  `gods-eye-view/render/cesium/unbound` loaded once first (samehkhamis).
+- `gods-eye-view/input` no longer reaches Cesium: the dispatcher takes its
+  pointer events from the renderer's input port and its picks from the query
+  port. A click's `hit`, `topHit`, `drawHit` and `drill()` hits, and
+  `pickAt`'s result, are the renderer contract's `Hit`; positions are plain
+  `{ x, y }`; `HANDLER_EVENT_TYPES` is gone. Cesium's own picks stay on
+  `event.native` (and `event.pick` and `event.pickWindow`). A viewer with no
+  renderer bound needs `gods-eye-view/render/cesium/unbound`
+  loaded once first (samehkhamis).
+- `gods-eye-view/application/operations` no longer reaches Cesium: ground
+  snapping and mesh floor sampling ask the renderer's globe, camera and query
+  ports, and see through the caller's draw sets by id (the raw
+  `excludeObjects` option and exclusion callbacks are gone). A viewer with no
+  renderer bound needs `gods-eye-view/render/cesium/unbound`
+  loaded once first, or location framing throws and snaps answer nothing
+  (samehkhamis).
+- `gods-eye-view/layers/traffic` (and `gods-eye-view/application/sources`,
+  which reaches it) no longer reaches Cesium: the layer keys cached road
+  heights by the globe port's `surfaceVersion()` and waits on
+  `isSettled('surface')`. Heat-lines are always asked for draped; a renderer
+  that cannot drape draws them over the surface instead of the layer
+  dropping them. A viewer with no renderer bound needs
+  `gods-eye-view/render/cesium/unbound` loaded once first (samehkhamis).
+- Where the Cesium renderer cannot drape (a WebGL context without depth
+  textures), every draped line now draws over the surface, as the renderer
+  contract asks: along the surface's curve between its positions, in its
+  colour where the surface hides it, hidden past the horizon. Segment colours
+  are dropped (it draws in its style colour) and it runs from its first shown
+  segment to its last (samehkhamis).
+
 ## [0.3.0] — 2026-10-27 — Street Level, On Your Phone, in Your Language
 
 - Show a Street Level view facing 359.5° or more as 0°. The viewer caption
@@ -784,7 +899,7 @@
 
 - Stop one retired bikeshare feed from reporting the whole layer as failed.
   City feeds are fetched independently, but failure was recorded in a single
-  flag that only a successful *activation* cleared — and an already-loaded city
+  flag that only a successful _activation_ cleared — and an already-loaded city
   never activates again. A dead feed re-entering camera range therefore latched
   LOAD FAILED permanently over a map still drawing every other city's stations.
   Failure is now tracked per city: a city that fails beside others still
@@ -1060,7 +1175,7 @@
   photo a click opens, and the cones, by each photo's projection and upload
   date. KartaView's SINCE is the upload date (all its server can filter by);
   a note under the slider says so while KartaView is lit (`sinceBasis:
-  'upload'` in the provider contract).
+'upload'` in the provider contract).
   Mapillary's line coverage and sequence cones are now shared by both
   (`lineCoverage.js`, `sequenceCones.js`).
 
@@ -1638,6 +1753,7 @@
 Add feed provenance to analyst/view answers and HUD context while retaining existing response fields and runner ownership (Matt Van Horn, #347).
 
 Analyst records for loaded satellites, datacenters and dams, with explicit bounded count/rank coverage (Matt Van Horn, #351).
+
 - New Fire Perimeters layer (Events group): live NIFC WFIGS interagency
   wildfire incident perimeters as ground-clamped polygons with a
   containment-colored fire line, refreshed every 5 minutes from the public
@@ -1913,7 +2029,6 @@ This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
 ### Other changes
-
 
 - Add ECMWF IFS model selection to Wind (#464, thanks @beneduzi), with model-scoped forecast-step caches, cancellation of replaced requests, and separate issue/valid timestamps.
 
@@ -2723,4 +2838,3 @@ represent previously published GitHub Releases.
 ## [0.1.0] — 2026-02-09
 
 - Initial project version.
-

@@ -11,11 +11,16 @@
  * Discipline (CCTV-B9b style): scene.sampleHeight forces a synchronous offscreen
  * pick render, so it is NEVER called per frame. Each grounded modeled plane gets
  * ONE successful sample, cached per icao; the cache stops answering directly when
- * the plane moves >MOVE_INVALIDATE_M from the sampled spot (taxiing). Misses (tiles
- * still streaming, OSM fallback with no tileset skin, sample outside loaded
- * geometry) are a retry-later signal with per-icao exponential backoff. A
- * per-window budget stops a freshly modeled airport cluster from firing dozens of
- * pick renders in one fleet tick.
+ * the plane moves >MOVE_INVALIDATE_M from the sampled spot (taxiing). A sample
+ * that misses (OSM fallback with no tileset skin, sample outside loaded
+ * geometry) is a retry-later signal with per-icao exponential backoff. Tiles
+ * still streaming is not a miss: no sample was taken, so it earns no backoff
+ * and the plane asks again on the next tick, sampling as soon as the tiles
+ * settle. Counting it as a miss had every grounded plane in view back off to
+ * RETRY_MAX_MS while the camera moved, then wait out that backoff after the
+ * tiles had loaded, so models replaced icons late and in batches. A per-window
+ * budget stops a freshly modeled airport cluster from firing dozens of pick
+ * renders in one fleet tick.
  *
  * What a caller gets while a sample is outstanding depends on whether this
  * contact has ever HAD one, and the difference is the difference between two
@@ -46,7 +51,10 @@
  * are per-layer, keyed by that layer's icao space).
  */
 
-import * as Cesium from 'cesium';
+import { scaleToGeodeticSurface, toLonLatH } from '../geo/ellipsoid.js';
+import { distanceSquared } from '../geo/vector.js';
+import { heightsOf } from '../queries/heights.js';
+import { findGlobe } from '../render/rendererOf.js';
 
 /** Taxi threshold: a cached snap answers directly for moves up to this far from
  *  the sampled spot (m). Past it the value is demoted to a held last-known and a
@@ -101,7 +109,7 @@ const HELD_SNAP_MAX_DRIFT_M = 250;
  *  alone, and the asymmetry is not tidiness:
  *
  *   - A cell reading LOW against a real sample is the EXPECTED error here, not a
- *     contradiction. Cells are a one-shot first-write latch over ~111 m, the
+ *     contradiction. Cells hold a few point readings over ~111 m, the
  *     borrowed-neighbour path leans to the LOWEST on purpose (`neighborFloorM`),
  *     and `displayFloorHeightM` only ever RAISES — the whole floor chain is
  *     built to under-read rather than to invent. Releasing on that sign would
@@ -121,7 +129,7 @@ const HELD_SNAP_MAX_DRIFT_M = 250;
  *     alternative because it errs UPWARD and stays visible, where a buried model
  *     errs into the terrain and cannot be seen at all. */
 const HELD_SNAP_CONTRADICTION_M = 5;
-/** First retry delay after a miss / tiles-not-ready (ms); doubles per consecutive miss. */
+/** First retry delay after a sample finds no ground (ms); doubles per consecutive miss. */
 const RETRY_BASE_MS = 2000;
 /** Backoff cap (ms) — on the OSM fallback (no tile skin) sampleHeight misses forever. */
 const RETRY_MAX_MS = 30000;
@@ -131,38 +139,32 @@ const SAMPLE_BUDGET_PER_WINDOW = 4;
 const SAMPLE_WINDOW_MS = 250;
 
 /**
- * True when the active photoreal tileset has finished streaming the tiles in
- * view (cctv.js's projectionTilesReady pattern: first Cesium3DTileset found in
- * scene.primitives, duck-typed via its boolean tilesLoaded). Sampling before
- * that both blows the frame budget on forced synchronous loads and produces
- * misses that would burn retry backoff for nothing. With NO tileset present
- * (OSM fallback) this returns true so the sample path is not permanently
- * blocked — the sample just misses and backs off.
- * @param {Cesium.Viewer} viewer
+ * True when the drawn surface has finished streaming what is in view: the
+ * base tiles (the globe port's `tiles` settle kind) and whatever surface
+ * heights answer from (`surface`: the globe's terrain while it is shown,
+ * otherwise every shown 3D tileset, whoever added it). Sampling
+ * before that both blows the frame budget on forced synchronous loads and
+ * produces misses that would burn retry backoff for nothing. With the globe
+ * hidden and NO tiles drawn the sample could only miss, and this says not
+ * ready, which is the same miss and backoff without the probe. False
+ * without a globe port to ask.
+ * @param {object} viewer
  * @returns {boolean}
  */
 function _tilesReady(viewer) {
-  const prims = viewer?.scene?.primitives;
-  if (!prims) return false;
-  for (let i = 0; i < prims.length; i++) {
-    let p = null;
-    try {
-      p = prims.get(i);
-    } catch {
-      continue;
-    }
-    if (p && p.show !== false && typeof p.tilesLoaded === 'boolean') {
-      return p.tilesLoaded === true;
-    }
+  try {
+    const globe = findGlobe(viewer);
+    return globe?.isSettled('tiles') === true && globe.isSettled('surface');
+  } catch {
+    return false; // mid-teardown
   }
-  return true;
 }
 
 /**
  * Create a per-layer ground-snap cache.
  * @returns {{
- *   heightFor: (viewer: Cesium.Viewer, icao: string, pos: Cesium.Cartesian3,
- *               getExclusions?: () => Array<unknown>) => number|null,
+ *   heightFor: (viewer: object, icao: string, pos: {x: number, y: number, z: number},
+ *               exclusions?: {sets: string[]}) => number|null,
  *   forget: (icao: string) => void,
  *   clear: () => void,
  * }}
@@ -170,7 +172,7 @@ function _tilesReady(viewer) {
 export function createGroundSnap({ groundFloor }) {
   const { cachedMeshFloor, meshFloorPreferred, reportValidatedMeshFloorCell } =
     groundFloor;
-  /** @type {Map<string, {h: number|null, samplePos: Cesium.Cartesian3|null,
+  /** @type {Map<string, {h: number|null, samplePos: {x: number, y: number, z: number}|null,
    *  held: boolean, nextRetryMs: number, misses: number}>} Per-icao snap state:
    *  the sampled height and the surface point it was measured at, whether that
    *  pair is still the fresh answer or has been demoted to a bounded last-known
@@ -178,13 +180,6 @@ export function createGroundSnap({ groundFloor }) {
   const entries = new Map();
   let windowStartMs = 0;
   let windowCount = 0;
-  const scratchCarto = new Cesium.Cartographic();
-  const scratchSurfacePos = new Cesium.Cartesian3();
-  /** Separate from `scratchCarto`: the held-evidence check runs on paths that
-   *  return BEFORE the sample writes `scratchCarto`, and on the sampling path it
-   *  must not disturb the cartographic that `reportValidatedMeshFloorCell` reads
-   *  back after the sample lands. */
-  const scratchHeldCarto = new Cesium.Cartographic();
 
   /**
    * The last measurement for a contact whose fresh snap has been demoted — it
@@ -197,15 +192,15 @@ export function createGroundSnap({ groundFloor }) {
    * moved does not change with time, so what invalidates the value is the
    * contact MOVING, which is exactly what this measures.
    *
-   * @param {{h: number|null, samplePos: Cesium.Cartesian3|null, held: boolean}|undefined} entry
-   * @param {Cesium.Cartesian3} surfacePos - Contact's position on the ellipsoid.
+   * @param {{h: number|null, samplePos: {x: number, y: number, z: number}|null, held: boolean}|undefined} entry
+   * @param {{x: number, y: number, z: number}} surfacePos - Contact's position on the ellipsoid (ECEF).
    * @returns {number|null}
    */
   function heldSnapM(entry, surfacePos) {
     if (!entry || !entry.held || entry.h == null || !entry.samplePos)
       return null;
     if (
-      Cesium.Cartesian3.distanceSquared(surfacePos, entry.samplePos) >
+      distanceSquared(surfacePos, entry.samplePos) >
       HELD_SNAP_MAX_DRIFT_M * HELD_SNAP_MAX_DRIFT_M
     ) {
       return dropHold(entry);
@@ -249,20 +244,13 @@ export function createGroundSnap({ groundFloor }) {
    * to answer from a single sample — and borrowing one to DISCARD a real
    * measurement would let a roof cell hide a correctly placed model.
    *
-   * @param {Cesium.Cartesian3} surfacePos - Contact's position on the ellipsoid.
+   * @param {{x: number, y: number, z: number}} surfacePos - Contact's position on the ellipsoid (ECEF).
    * @returns {number|null}
    */
   function freshMeasuredFloorAt(surfacePos) {
-    const carto = Cesium.Cartographic.fromCartesian(
-      surfacePos,
-      Cesium.Ellipsoid.WGS84,
-      scratchHeldCarto,
-    );
-    if (!carto) return null;
-    return cachedMeshFloor(
-      Cesium.Math.toDegrees(carto.latitude),
-      Cesium.Math.toDegrees(carto.longitude),
-    );
+    const at = toLonLatH(surfacePos);
+    if (!at) return null;
+    return cachedMeshFloor(at.lat, at.lon);
   }
 
   /**
@@ -272,27 +260,26 @@ export function createGroundSnap({ groundFloor }) {
    * A contact that HAS resolved once keeps that answer through a resample outage;
    * see `heldSnapM`.
    *
-   * @param {Cesium.Viewer} viewer - Live viewer (sampling + tiles-ready check).
+   * @param {object} viewer - Live viewer (sampling + tiles-ready check).
    * @param {string} icao - Cache key (per-layer icao space).
-   * @param {Cesium.Cartesian3} pos - Current display position. Cache movement
-   *   is measured after projecting this input to the WGS84 ellipsoid, so a
-   *   poll-time altitude/datum change cannot invalidate a stationary snap.
-   * @param {(() => Array<unknown>)|undefined} getExclusions - Lazily builds the
-   *   scene.sampleHeight objectsToExclude list (own billboards/models/entities —
-   *   the vertical pick ray at a plane's OWN lat/lon lands on its icon/model
-   *   otherwise). Only invoked when a sample actually fires.
+   * @param {{x: number, y: number, z: number}} pos - Current display position
+   *   (ECEF). Cache movement is measured after projecting this input to the
+   *   WGS84 ellipsoid, so a poll-time altitude/datum change cannot invalidate
+   *   a stationary snap.
+   * @param {{sets?: string[]}} [exclusions] - The caller's own draw set ids
+   *   (its markers and models). The sample asks the renderer's query port
+   *   (`heightsOf`), which sees through every draw set not drawn as ground
+   *   and these: the vertical ray at a plane's OWN lat/lon would otherwise
+   *   land on its icon or model.
    * @returns {number|null}
    */
-  function heightFor(viewer, icao, pos, getExclusions) {
-    const surfacePos = Cesium.Ellipsoid.WGS84.scaleToGeodeticSurface(
-      pos,
-      scratchSurfacePos,
-    );
+  function heightFor(viewer, icao, pos, exclusions) {
+    const surfacePos = scaleToGeodeticSurface(pos);
     if (!surfacePos) return null;
     const cached = entries.get(icao);
     if (cached && cached.h != null && cached.samplePos && !cached.held) {
       if (
-        Cesium.Cartesian3.distanceSquared(surfacePos, cached.samplePos) <=
+        distanceSquared(surfacePos, cached.samplePos) <=
         MOVE_INVALIDATE_M * MOVE_INVALIDATE_M
       ) {
         return cached.h;
@@ -345,38 +332,27 @@ export function createGroundSnap({ groundFloor }) {
       entries.set(icao, next);
       return heldSnapM(next, surfacePos);
     };
-    if (!_tilesReady(viewer)) return miss();
+    // Tiles still streaming: no sample is taken, so no backoff is earned (as
+    // with the budget above). The next tick asks again, and the first one after
+    // the tiles settle samples.
+    if (!_tilesReady(viewer)) return heldSnapM(entry, surfacePos);
     windowCount += 1;
-    let sampled;
-    try {
-      const carto = Cesium.Cartographic.fromCartesian(
-        pos,
-        Cesium.Ellipsoid.WGS84,
-        scratchCarto,
-      );
-      // sampleHeight throws when unsupported (no depth textures) — that's a miss.
-      sampled = viewer.scene.sampleHeight(
-        carto,
-        getExclusions ? getExclusions() : undefined,
-      );
-    } catch {
-      sampled = undefined;
-    }
+    const at = toLonLatH(pos);
+    const exclude = Array.isArray(exclusions?.sets)
+      ? exclusions.sets
+      : undefined;
+    const sampled = !at ? null : heightsOf(viewer).now(at, { exclude });
     // Same sanity floor as cctv.js's sampleGroundHeight: a hit far below the
     // ellipsoid is pick garbage, not ground.
     if (!Number.isFinite(sampled) || sampled < -150) return miss();
     if (meshFloorPreferred()) {
-      reportValidatedMeshFloorCell(
-        Cesium.Math.toDegrees(scratchCarto.latitude),
-        Cesium.Math.toDegrees(scratchCarto.longitude),
-        sampled,
-      );
+      reportValidatedMeshFloorCell(at.lat, at.lon, sampled);
     }
     // A fresh sample RELEASES any hold: this is a measurement of where the
     // contact is now, and it outranks a memory of where it was.
     entries.set(icao, {
       h: sampled,
-      samplePos: Cesium.Cartesian3.clone(surfacePos),
+      samplePos: surfacePos,
       held: false,
       nextRetryMs: 0,
       misses: 0,

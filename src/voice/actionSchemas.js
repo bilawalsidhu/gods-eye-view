@@ -108,6 +108,36 @@ const schemas = [
     },
   },
   {
+    name: 'show_street_level',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        query: {
+          type: 'string',
+          maxLength: 160,
+        },
+        latitude: {
+          type: 'number',
+          minimum: -90,
+          maximum: 90,
+        },
+        longitude: {
+          type: 'number',
+          minimum: -180,
+          maximum: 180,
+        },
+        provider: {
+          type: 'string',
+          enum: ['google', 'mapillary', 'kartaview', 'panoramax'],
+        },
+        referent: {
+          type: 'integer',
+        },
+      },
+    },
+  },
+  {
     name: 'adjust_camera_zoom',
     parameters: {
       type: 'object',
@@ -181,6 +211,7 @@ const schemas = [
             'utilities-panel',
             'pp-toggles',
             'global-context-panel',
+            'space-missions-panel',
             'weather-panel',
             'recent-imagery-panel',
             'voice-settings',
@@ -398,6 +429,14 @@ const schemas = [
           },
         },
       },
+    },
+  },
+  {
+    name: 'open_stories',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {},
     },
   },
   {
@@ -753,6 +792,7 @@ const schemas = [
           type: 'string',
           enum: ['once', 'continuous'],
         },
+        pitchDeg: { type: 'number' },
       },
       required: ['motion'],
     },

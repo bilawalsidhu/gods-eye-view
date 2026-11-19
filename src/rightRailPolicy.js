@@ -1,8 +1,4 @@
-const GLOBAL_CONTEXT_EXPLICIT_ACTIONS = new Set([
-  'contacts',
-  'space-missions',
-  'cockpit',
-]);
+const GLOBAL_CONTEXT_EXPLICIT_ACTIONS = new Set(['contacts', 'cockpit']);
 
 /**
  * Decide whether a completed action should reveal the Global Context panel.
@@ -14,7 +10,7 @@ const GLOBAL_CONTEXT_EXPLICIT_ACTIONS = new Set([
  * explicit Cockpit action still reveals the context that supports that track.
  *
  * @param {object} input Action outcome and coordination state.
- * @param {'contacts'|'space-missions'|'cockpit'|string} input.action Completed action.
+ * @param {'contacts'|'cockpit'|string} input.action Completed action.
  * @param {boolean} input.explicitUserAction Whether the user directly requested it.
  * @param {boolean} input.succeeded Whether the requested transition completed.
  * @param {boolean} [input.restoring=false] Whether saved/session state is being restored.

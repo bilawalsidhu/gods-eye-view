@@ -202,7 +202,7 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @param {Object} [options={}]
      * @param {number} [options.maxCount] - Maximum number of objects to return.
      * @param {number} [options.seed] - Offset seed for deterministic stride sampling.
-     * @returns {{ position: Cesium.Cartesian3, id: string, type: string }[]}
+     * @returns {{ position: {x: number, y: number, z: number}, id: string, type: string }[]}
      */
     getDetectableObjects(options = {}) {
       // The cameras the view pass shows, not icons it has hidden.
@@ -333,6 +333,25 @@ export function createControls({ state: layerState, services, parts, source }) {
         parts.navigation.focusCamera(nextId, options.durationSec || 1.8);
       }
       return nextId;
+    },
+
+    /**
+     * Selects the camera nearest a WGS84 point and optionally flies to it.
+     * @param {number} lat Latitude in degrees.
+     * @param {number} lon Longitude in degrees.
+     * @param {Object} [options={}]
+     * @param {boolean} [options.focus=true] Whether to fly after selection.
+     * @param {number} [options.durationSec] Fly-to duration in seconds.
+     * @returns {string|null} Camera ID, or null (invalid point, empty catalog).
+     */
+    focusNearestToPoint(lat, lon, options = {}) {
+      const nearest = parts.navigation.nearestCameraIdToPoint(lat, lon);
+      if (!nearest) return null;
+      parts.selection.setActiveCamera(nearest);
+      if (options.focus !== false) {
+        parts.navigation.focusCamera(nearest, options.durationSec || 1.8);
+      }
+      return nearest;
     },
 
     /**
