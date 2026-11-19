@@ -228,13 +228,15 @@ export function panoSizeFor(canvasPixels, fovDeg) {
  * each change,
  * or null while unmounted. A view draws it into `host` (the application's is
  * `StreetLevelPhotoViewer`), forwards its events to `actions` and hands each
- * element back through `actions.attach(name, element)`: the panorama canvas
- * to draw on, the frame and picture to measure, the root and buttons to
- * keep focus. Each mount has its own `mountKey`, and a new `canvasKey` asks
- * for a fresh canvas (a lost WebGL context): neither is ever reused.
- * `actions.supersede()` tells a viewer another one is drawn in its place:
- * it unmounts, and a mount still waiting to be drawn fails as closed.
- * Mounting with no view subscribed fails.
+ * element back through `actions.attach(name, element)` on every draw: the
+ * panorama canvas to draw on, the frame and picture to measure, the root
+ * and buttons to keep focus. A view may draw at once, inside its listener,
+ * or later (Vue draws on a microtask). Each mount has its own `mountKey`,
+ * and a new `canvasKey` asks for a fresh canvas (a lost WebGL context):
+ * neither is ever reused. `actions.supersede()` tells a viewer another one
+ * is drawn in its place: it unmounts, and a mount still waiting to be drawn
+ * fails as closed. Mounting with no view subscribed fails; an open waiting
+ * on a draw when the last view leaves goes on without it.
  *
  * Photos are normalized by the provider: `{id, sequenceId, lon, lat,
  * heading, isPano, capturedAt}` plus whatever its `sources` read.
@@ -284,6 +286,8 @@ export function createPhotoViewer({
   /** Waiting for the view's root (a mount), or its canvas: a fresh one, or the next draw. */
   const rootWaiters = new Set();
   const canvasWaiters = new Set();
+  /** How many times the view has handed the canvas back (once per draw). */
+  let canvasDraws = 0;
   let renderer = null;
   /** WebGL failed once: 360° photos show their front view instead. */
   let rendererFailed = false;
@@ -396,22 +400,28 @@ export function createPhotoViewer({
     waiters.clear();
   }
 
-  /** The panorama canvas once the view has drawn it, or the open stopped. */
-  function canvasReady(signal) {
-    if (canvas || !presented || signal?.aborted) return Promise.resolve();
+  /** A draw of the canvas, or none coming: unmounted, no view, or the open stopped. */
+  function canvasDrawn(drawn, signal) {
+    if (drawn() || !presented || !viewListeners.size || signal?.aborted)
+      return Promise.resolve();
     return new Promise((resolve) => {
       canvasWaiters.add(resolve);
       signal?.addEventListener?.('abort', resolve, { once: true });
     });
   }
 
-  /** The view's next draw (it hands the canvas back each time), or none coming. */
-  function nextDraw(signal) {
-    if (!presented || signal?.aborted) return Promise.resolve();
-    return new Promise((resolve) => {
-      canvasWaiters.add(resolve);
-      signal?.addEventListener?.('abort', resolve, { once: true });
-    });
+  /** The panorama canvas once the view has drawn it, or the open stopped. */
+  function canvasReady(signal) {
+    return canvasDrawn(() => Boolean(canvas), signal);
+  }
+
+  /**
+   * A draw of the canvas after the `count`th (it hands the canvas back each
+   * time), or none coming. A view may draw synchronously, inside the
+   * presentation, before anything waits: counted, that draw is not missed.
+   */
+  function drawnAfter(count, signal) {
+    return canvasDrawn(() => canvasDraws > count, signal);
   }
 
   function syncButtons() {
@@ -667,7 +677,10 @@ export function createPhotoViewer({
         if (presented?.actions !== actions || !element) return;
         ELEMENTS[name]?.(element);
         if (name === 'root') wake(rootWaiters);
-        if (name === 'canvas') wake(canvasWaiters);
+        if (name === 'canvas') {
+          canvasDraws++;
+          wake(canvasWaiters);
+        }
       },
       keydown: current(onKeyDown),
       pointerdown: current(onPointerDown),
@@ -865,9 +878,11 @@ export function createPhotoViewer({
       renderer.setView({ yaw: 0, pitch: 0, fov: PANO_FOV_DEFAULT_DEG });
     photo = target;
     // Shown first: a hidden canvas measures 0 and would be sized 1×1. The
-    // view draws it shown on a microtask, and hands the canvas back then.
+    // view draws it shown, at once or on a microtask, and hands the canvas
+    // back then.
+    const draws = canvasDraws;
     show('pano');
-    await nextDraw(signal);
+    await drawnAfter(draws, signal);
     if (seq !== openSeq || !renderer) {
       image.close?.();
       if (seq !== openSeq) return false;
@@ -1029,7 +1044,11 @@ export function createPhotoViewer({
     subscribeView(listener) {
       viewListeners.add(listener);
       listener(presented);
-      return () => viewListeners.delete(listener);
+      return () => {
+        // The last view went: an open waiting on its draw goes on without.
+        if (viewListeners.delete(listener) && !viewListeners.size)
+          wake(canvasWaiters);
+      };
     },
   };
   return adapter;

@@ -74,10 +74,20 @@ test('the step buttons are not pressed toggles', () => {
   }
 });
 
+/**
+ * `loadImage`, which downloads through an Image of its own that is never on
+ * the page: the one place a `.src` is written.
+ */
+const LOADER = /^export function loadImage\([\s\S]*?^}$/m;
+
 test('the photo viewer is drawn by its view, and its layer needs no Vue', () => {
   const source = read(VIEWER);
+  const loader = source.match(LOADER)?.[0];
+  assert.ok(loader, 'loadImage is found');
+  const rest = source.replace(LOADER, '');
   // No element made, inserted, moved, removed or written: the view does
-  // all of that. (An Image the loader downloads with is not on the page.)
+  // all of that. (The panorama renderer in panorama.js sizes its canvas's
+  // drawing buffer, as WebGL drawing does; nothing here does.)
   for (const write of [
     /createElement/,
     /\b(?:inner|outer)HTML\b/,
@@ -87,9 +97,15 @@ test('the photo viewer is drawn by its view, and its layer needs no Vue', () => 
     /\.(?:set|remove|toggle)Attribute(?:NS)?\(/,
     /\.(?:classList|className|dataset|style)\b/,
     /\.(?:hidden|disabled|textContent|innerText|tabIndex|title|alt)\s*=[^=]/,
+    /\.(?:width|height|ariaLabel|id|value)\s*=[^=]/,
     /from 'vue'|\.vue'/,
   ])
     assert.doesNotMatch(source, write);
+  assert.doesNotMatch(rest, /\.src\s*=[^=]/, 'a .src written on the page');
+  // In loadImage, only on the off-page Image it creates.
+  assert.match(loader, /\bconst image = new Image\(\);/);
+  for (const [write] of loader.matchAll(/[\w$.\]]+\.src\s*=(?!=)/g))
+    assert.match(write, /^image\.src\s*=$/, write);
   const markup = template(VIEW);
   const opening = (name, attribute) =>
     new RegExp(String.raw`<${name}\b${ATTRS}\s${attribute}${ATTRS}>`);

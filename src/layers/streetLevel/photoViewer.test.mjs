@@ -636,3 +636,94 @@ test('a panorama reopened after a lost context waits for the view’s fresh canv
   );
   assert.equal(shown.kind, 'pano', 'not the front view');
 });
+
+/**
+ * A panorama viewer whose sequence goes on both ways (its ‹ › present no
+ * change once shown), drawn by `view` alone, not by the shared fake view.
+ */
+function panoramaViewer() {
+  const images = [];
+  const viewer = createPhotoViewer({
+    providerId: 'test',
+    name: 'Test',
+    sources: SOURCES,
+    getPhoto: async (id) => PHOTOS[id],
+    step: async () => 'b',
+    onStep() {},
+    load: async (url) => ({ src: url }),
+    createRenderer: () => ({
+      setImage: (image) => images.push(image.src),
+      setView() {},
+      getView: () => ({ yaw: 0, pitch: 0, fov: 80 }),
+      resize() {},
+      clear() {},
+      destroy() {},
+    }),
+  });
+  return { viewer, images };
+}
+
+/** Elements a view hands back: what the viewer measures and focuses. */
+const elements = () =>
+  Object.fromEntries(
+    ['root', 'picture', 'canvas', 'prev', 'next'].map((name) => [
+      name,
+      { clientWidth: 400, clientHeight: 250 },
+    ]),
+  );
+
+/** Whether `promise` settles within a few macrotasks. */
+const settles = (promise) =>
+  Promise.race([
+    promise.then(
+      () => true,
+      () => true,
+    ),
+    new Promise((resolve) => setTimeout(() => resolve(false), 50)),
+  ]);
+
+test('a view that draws at once, inside its listener, opens a panorama', async () => {
+  const { viewer, images } = panoramaViewer();
+  const parts = elements();
+  const unsubscribe = viewer.subscribeView((view) => {
+    if (!view) return;
+    for (const [name, element] of Object.entries(parts))
+      view.actions.attach(name, element);
+  });
+  await viewer.mount(fakeHost());
+  assert.equal(await settles(viewer.open('a')), true, 'not left pending');
+  assert.deepEqual(images, ['a-first']);
+  viewer.unmount();
+  unsubscribe();
+});
+
+test('an open waiting on the view’s draw goes on when the view unsubscribes', async () => {
+  const { viewer } = panoramaViewer();
+  const parts = elements();
+  const kinds = [];
+  // Draws the mount, then nothing more.
+  const unsubscribe = viewer.subscribeView((view) => {
+    if (!view) return;
+    kinds.push(view.kind);
+    if (kinds.length > 1) return;
+    for (const [name, element] of Object.entries(parts))
+      view.actions.attach(name, element);
+  });
+  await viewer.mount(fakeHost());
+  const opening = viewer.open('a');
+  assert.ok(await until(() => kinds.includes('pano')), 'waiting on a draw');
+  unsubscribe();
+  assert.equal(await settles(opening), true, 'not left pending');
+  viewer.unmount();
+});
+
+test('the shared fake view draws only the later of two mounts, as the app does', async () => {
+  const one = setup();
+  const two = setup();
+  await one.viewer.mount(one.host);
+  assert.equal(one.host.children.length, 1);
+  await two.viewer.mount(one.host);
+  assert.equal(one.host.children.length, 1, 'one root, not one per viewer');
+  await assert.rejects(one.viewer.open('f'), /not mounted/, 'superseded');
+  two.viewer.unmount();
+});

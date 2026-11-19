@@ -1,4 +1,5 @@
 // DOM stand-ins for the KartaView viewer's tests (no browser in Node).
+import { subscribePhotoViewers } from '../layers/streetLevel/photoViewers.js';
 
 /** A DOM element with what the viewer touches: children, events, attributes. */
 function fakeElement(tag) {
@@ -71,7 +72,45 @@ export function fakeHost(viewer = null) {
 }
 
 /**
- * Draw a photo viewer's presentations with fake elements, as
+ * The one view of the photo viewers given to `drawPhotoViewer`, as the
+ * application has one StreetLevelPhotoViewer: the viewers reach it through
+ * photoViewers.js's picker, as the layer's `subscribePhotoViewer()` does,
+ * so only the mount made last is drawn and the earlier ones are superseded.
+ */
+const shared = {
+  viewers: new Set(),
+  draw: null,
+  unsubscribe: null,
+  generation: 0,
+};
+
+/** Subscribe the view to the viewers it has now, then let the old picker go. */
+function resubscribe() {
+  const previous = shared.unsubscribe;
+  const generation = ++shared.generation;
+  // The new picker first: a viewer is never left without a view.
+  shared.unsubscribe = subscribePhotoViewers([...shared.viewers], (view) => {
+    if (generation === shared.generation) shared.draw(view);
+  });
+  previous?.();
+}
+
+/**
+ * Draw a photo viewer with the shared view, alongside every other viewer
+ * given here (see `shared`).
+ * @returns {() => void} Stop drawing it.
+ */
+export function drawPhotoViewer(viewer) {
+  shared.draw ??= photoView();
+  shared.viewers.add(viewer);
+  resubscribe();
+  return () => {
+    if (shared.viewers.delete(viewer)) resubscribe();
+  };
+}
+
+/**
+ * A view drawing the presentations it is given with fake elements, as
  * StreetLevelPhotoViewer does through Vue: changes made in one tick are
  * drawn once, on a microtask, with their final value; the root (keyed by
  * the mount) holds the picture, the panorama canvas (keyed by its canvas
@@ -79,9 +118,9 @@ export function fakeHost(viewer = null) {
  * is handed back on each draw. A value is written only when the drawn
  * presentation changes it, and the elements' events reach the viewer's
  * actions.
- * @returns {() => void} Stop drawing.
+ * @returns {(view: ?object) => void} Draw this presentation.
  */
-export function drawPhotoViewer(viewer) {
+function photoView() {
   let parts = null;
   let last = null;
   let pending = null;
@@ -162,7 +201,7 @@ export function drawPhotoViewer(viewer) {
     for (const name of ['root', 'picture', 'canvas', 'prev', 'next'])
       view.actions.attach(name, parts[name]);
   };
-  return viewer.subscribeView((view) => {
+  return (view) => {
     pending = view;
     if (queued) return;
     queued = true;
@@ -170,7 +209,7 @@ export function drawPhotoViewer(viewer) {
       queued = false;
       draw(pending);
     });
-  });
+  };
 }
 
 /**
