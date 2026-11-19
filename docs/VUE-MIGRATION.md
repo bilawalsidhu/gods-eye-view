@@ -84,6 +84,15 @@ Home and End), since each of Core's groups keeps its own keyboard policy, and
 once and asks for a change only when it lands on another option. Every
 segmented group in Core is a `UiSegmented`; the old `segmentedControl.js`
 adapter is gone.
+No view hand-writes a control the kit has: every button in an SFC outside
+the kit is a `UiButton`, `UiCloseButton` or another kit control, every
+Material Symbols glyph a `UiIcon`, every checkbox a `UiCheckbox`, every
+select a `UiSelect`, and every range a `UiSlider` except the radio
+tuner's and the world timeline's, for the reasons given below. No module
+outside the kit builds a button, select, field or Material glyph in script
+(`src/ui/kit/viewControls.test.mjs` pins all of it). The native fields
+left are the text, number, password and file inputs the kit has no
+control for, and the search fields whose surfaces this document names.
 `UiButton` adds `pressedClass`, Core's class on a pressed toggle (most use
 `active`); its pressed classes toggle through `classList`, so a class other
 code adds (a voice highlight) survives a press. Every pressed toggle (a
