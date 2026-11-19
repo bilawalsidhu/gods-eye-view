@@ -72,7 +72,11 @@ function settings(store) {
 
 test('before VisualSettings renders, the panel shows its initial markup', (t) => {
   const { $ } = fixture(t);
-  assert.equal($('bloom-toggle').className, 'pp-toggle-btn');
+  // Beside the kit's ui-* classes, the toggle carries only its own.
+  assert.deepEqual(
+    [...$('bloom-toggle').classList].filter((name) => !name.startsWith('ui-')),
+    ['pp-toggle-btn'],
+  );
   assert.equal($('bloom-slider-row').className, 'pp-slider-row');
   assert.equal($('bloom-intensity-slider').value, '0');
   assert.equal($('bloom-intensity-value').textContent, '0%');
@@ -108,7 +112,11 @@ test('bloom and sharpen render their state, slider and readout', async (t) => {
   await nextTick();
   assert.equal($('bloom-toggle').classList.contains('active'), false);
   assert.equal($('bloom-slider-row').classList.contains('visible'), false);
-  assert.equal($('bloom-intensity-value').textContent, '140%', 'the amount stays');
+  assert.equal(
+    $('bloom-intensity-value').textContent,
+    '140%',
+    'the amount stays',
+  );
 });
 
 test('a publish never rewrites a slider the user is dragging', async (t) => {
@@ -234,20 +242,29 @@ test('the HUD and Sonar controls render what VisualSettings shows', async (t) =>
     getVariant: () => variant,
   });
   owner._scheduleAdaptivePanelLayout = () => {};
-  assert.equal($('cyber-sonar-toggle').textContent, 'ON');
-  assert.equal($('cyber-sonar-toggle').getAttribute('aria-pressed'), 'true');
+  // Sonar is opt-in: OFF until the viewer turns it on.
+  assert.equal($('cyber-sonar-toggle').textContent, 'OFF');
+  assert.equal($('cyber-sonar-toggle').getAttribute('aria-pressed'), 'false');
+  assert.equal(
+    [...$('hud-layout-select').options].map((option) => option.value).join(),
+    'tactical,minimal',
+  );
 
   owner._syncHudControls();
   await nextTick();
   assert.equal($('hud-toggle').classList.contains('active'), true);
   assert.equal($('hud-layout-row').classList.contains('visible'), true);
   assert.equal($('hud-layout-select').value, 'minimal');
+  // The toggle shows with the HUD; its sliders wait for Sonar ON.
+  assert.equal($('cyber-sonar-row').classList.contains('visible'), true);
+  assert.equal($('cyber-sonar-rings-row').classList.contains('visible'), false);
 
   visible = false;
   owner._updateHudButtonState();
   await nextTick();
   assert.equal($('hud-toggle').classList.contains('active'), false);
   assert.equal($('hud-layout-row').classList.contains('visible'), false);
+  assert.equal($('cyber-sonar-row').classList.contains('visible'), false);
 
   owner._sonarShown = {
     enabled: false,
@@ -268,6 +285,19 @@ test('the HUD and Sonar controls render what VisualSettings shows', async (t) =>
   assert.equal($('cyber-sonar-range-value').textContent, '90%');
   assert.equal($('cyber-sonar-sector').value, '30');
   assert.equal($('cyber-sonar-sector-value').textContent, '30°');
+
+  visible = true;
+  owner._updateHudButtonState();
+  owner._sonarShown = { ...owner._sonarShown, enabled: true };
+  owner._publishDisplay();
+  await nextTick();
+  assert.equal(toggle.textContent, 'ON');
+  for (const name of ['rings', 'range', 'intensity', 'opacity', 'sector'])
+    assert.equal(
+      $(`cyber-sonar-${name}-row`).classList.contains('visible'),
+      true,
+      name,
+    );
 });
 
 test('Scope and Celestial render what VisualSettings shows', async (t) => {
@@ -314,6 +344,73 @@ test('Scope and Celestial render what VisualSettings shows', async (t) => {
   assert.equal(celestial.title, 'Celestial ring — reveal the full globe');
 });
 
+test('scope opacity renders what VisualSettings shows and sets the mask', async (t) => {
+  const { store, $ } = fixture(t);
+  const { owner } = settings(store);
+  const mask = { opacity: 1 };
+  owner.services = {
+    ...owner.services,
+    setScopeMaskEnabled() {},
+    setScopeMaskOpacity: (value) => (mask.opacity = value),
+  };
+  assert.equal($('scope-opacity-slider').value, '100');
+  assert.equal($('scope-opacity-value').textContent, '100%');
+
+  owner._setScope({ opacityPct: 62.4 });
+  await nextTick();
+  assert.equal(mask.opacity, 0.62);
+  assert.equal($('scope-opacity-slider').value, '62');
+  assert.equal($('scope-opacity-value').textContent, '62%');
+  assert.equal(store.view.scope.opacityPct, 62);
+
+  // No fainter than the floor, where the view would read as Scope off.
+  owner._setScope({ opacityPct: 10 });
+  await nextTick();
+  assert.equal(mask.opacity, 0.5, 'floored');
+  assert.equal($('scope-opacity-value').textContent, '50%');
+  assert.equal($('scope-opacity-slider').min, '50');
+
+  // A value that is not a number changes nothing.
+  owner._setScope({ opacityPct: Number.NaN });
+  await nextTick();
+  assert.equal($('scope-opacity-value').textContent, '50%');
+
+  owner._setScope({ opacityPct: 180 });
+  await nextTick();
+  assert.equal(mask.opacity, 1, 'clamped');
+  assert.equal($('scope-opacity-value').textContent, '100%');
+
+  owner._setScope({ opacityPct: 70 }, { apply: false });
+  await nextTick();
+  assert.equal(mask.opacity, 1, 'only shown');
+  assert.equal($('scope-opacity-value').textContent, '70%');
+
+  owner._setScope({ enabled: false });
+  await nextTick();
+  assert.equal($('scope-opacity-slider').disabled, true, 'off with the scope');
+  assert.equal(store.view.scope.opacityPct, 70, 'kept while off');
+});
+
+test('the Visual panel groups its controls and words its on/off pills', (t) => {
+  const { $ } = fixture(t);
+  const panel = $('pp-toggles');
+  assert.deepEqual(
+    [
+      ...panel.querySelectorAll(
+        '.pp-section-heading, .visual-presets__heading',
+      ),
+    ].map((el) => el.textContent.trim()),
+    ['Look', 'MAP SOURCE 3D', 'Overlay', 'Effects'],
+  );
+  assert.equal(panel.querySelector('.pp-header-label').textContent, 'VISUAL');
+  const body = panel.querySelector('.pp-panel-body');
+  assert.equal(body.style.getPropertyValue('--pp-pill-on'), '"ON"');
+  assert.equal(body.style.getPropertyValue('--pp-pill-off'), '"OFF"');
+  const reset = panel.querySelector('.pp-reset-btn');
+  assert.equal(reset, body.lastElementChild, 'the reset closes the panel');
+  assert.equal(reset.textContent.trim(), 'restart_altReset to default');
+});
+
 test('the 3D aircraft group renders what AircraftDisplay shows', async (t) => {
   const { store, $ } = fixture(t);
   const params = [];
@@ -331,7 +428,10 @@ test('the 3D aircraft group renders what AircraftDisplay shows', async (t) => {
   assert.equal(coreClasses(button), 'pp-toggle-btn active');
   assert.equal(button.getAttribute('aria-pressed'), 'true');
   assert.equal(row.classList.contains('visible'), true);
-  assert.equal($('models3d-mode-proximity').getAttribute('aria-checked'), 'true');
+  assert.equal(
+    $('models3d-mode-proximity').getAttribute('aria-checked'),
+    'true',
+  );
 
   // The button leaves the row to its own sync.
   owner._setModels3dEnabled(false);
@@ -347,7 +447,10 @@ test('the 3D aircraft group renders what AircraftDisplay shows', async (t) => {
   await nextTick();
   assert.equal(all.classList.contains('active'), true);
   assert.equal(all.getAttribute('aria-checked'), 'true');
-  assert.equal($('models3d-mode-proximity').classList.contains('active'), false);
+  assert.equal(
+    $('models3d-mode-proximity').classList.contains('active'),
+    false,
+  );
   assert.deepEqual(params.at(-1), ['military', { models3dMode: 'all' }]);
 
   owner._syncModels3dFromLayerState({
@@ -376,12 +479,18 @@ test('the Draw controls render what the draw tool publishes', async (t) => {
   assert.equal(segment('area').getAttribute('aria-label'), 'Area');
   assert.equal(segment('area').title, 'Area');
   assert.equal(segment('area').textContent, 'pentagon');
-  const swatch = (color) => document.querySelector(`#draw-colors [data-color="${color}"]`);
+  const swatch = (color) =>
+    document.querySelector(`#draw-colors [data-color="${color}"]`);
   assert.equal(swatch('primary').getAttribute('aria-checked'), 'true');
   assert.equal(swatch('amber').getAttribute('aria-label'), 'Amber');
   assert.equal($('draw-hint').textContent, '');
 
-  store.publishDraw({ active: true, shape: 'line', color: 'amber', hint: 'Click to add points.' });
+  store.publishDraw({
+    active: true,
+    shape: 'line',
+    color: 'amber',
+    hint: 'Click to add points.',
+  });
   await nextTick();
   assert.equal(swatch('amber').getAttribute('aria-checked'), 'true');
   assert.equal(swatch('primary').classList.contains('active'), false);
@@ -411,12 +520,11 @@ test('the imported files render what the file import publishes and keep focus', 
   const viewer = {
     container: document.createElement('div'),
     scene: { requestRender() {} },
-    dataSources: { add: async (ds) => ds, remove: () => true },
   };
   const tool = initGeoFileImport({
     viewer,
     load: async (file) => ({
-      dataSource: { show: true },
+      drawing: { show: true, destroy() {} },
       name: file.name,
       format: file.name.endsWith('.kml') ? 'kml' : 'geojson',
       entityCount: 2,
@@ -449,7 +557,7 @@ test('the imported files render what the file import publishes and keep focus', 
   assert.equal(name.textContent, '<b>a</b>.geojson');
   assert.equal(name.children.length, 0, 'the name is text');
   assert.match(name.title, /GEOJSON, 2 map objects$/);
-  assert.equal(toggle.className, 'geo-import-action');
+  assert.ok(toggle.classList.contains('geo-import-action'));
   assert.equal(toggle.getAttribute('type'), 'button');
   assert.equal(toggle.getAttribute('aria-pressed'), 'true');
   assert.equal(toggle.getAttribute('aria-label'), 'Hide <b>a</b>.geojson');
@@ -477,7 +585,10 @@ test('the imported files render what the file import publishes and keep focus', 
   assert.equal(document.activeElement === button(first, 'toggle'), true);
   assert.equal(button(first, 'toggle').getAttribute('aria-pressed'), 'true');
   assert.equal(button(first, 'fly').title, 'Fly to <b>a</b>.geojson');
-  assert.equal(button(first, 'remove').getAttribute('aria-label'), 'Remove <b>a</b>.geojson');
+  assert.equal(
+    button(first, 'remove').getAttribute('aria-label'),
+    'Remove <b>a</b>.geojson',
+  );
 
   await press(button(first, 'remove'));
   assert.equal(rowsNow().length, 1);
@@ -593,7 +704,11 @@ test('VisualSettings publishes a style’s parameters and writes a moved slider�
   assert.equal(store.parameters, null, 'the sliders go with their owner');
   assert.equal($('param-slider-panel').classList.contains('active'), false);
   assert.equal(store.act('setStyleParameter', 'grainAmt', 0.2), undefined);
-  assert.equal(owner.stages.noir.uniforms.grainAmt, 0.3, 'a stopped owner no longer answers');
+  assert.equal(
+    owner.stages.noir.uniforms.grainAmt,
+    0.3,
+    'a stopped owner no longer answers',
+  );
   // An older owner's stop leaves a newer owner's rows.
   const newer = { style: 'noir', rows: [] };
   owner._parameters = { style: 'noir', rows: [] };
@@ -605,10 +720,16 @@ test('VisualSettings publishes a style’s parameters and writes a moved slider�
 test('the four Cockpit groups teleport to the published slots and back to their places', async (t) => {
   const { store, $ } = fixture(t);
   const groupOf = (id) => $(id).closest('.pp-toggle-group') ?? $(id);
-  const ids = ['hud-toggle', 'detection-toggle', 'param-slider-panel', 'models3d-toggle'];
+  const ids = [
+    'hud-toggle',
+    'detection-toggle',
+    'param-slider-panel',
+    'models3d-toggle',
+  ];
   const body = $('pp-toggles').querySelector('.pp-panel-body');
   const order = () =>
-    [...body.children].filter((el) => el.matches('.pp-toggle-group, #param-slider-panel'))
+    [...body.children]
+      .filter((el) => el.matches('.pp-toggle-group, #param-slider-panel'))
       .map((el) => el.id || el.querySelector('[id]')?.id);
   const home = order();
   const popover = document.body.appendChild(document.createElement('div'));
@@ -706,4 +827,45 @@ test('the real portal lays out once the groups have moved and puts back the focu
   portal.setActive(false);
   await nextTick();
   assert.deepEqual(layouts, [true]);
+});
+
+test('a group added to Effects shows its toggles, notes and sliders, and goes', async (t) => {
+  const { store, $ } = fixture(t);
+  const changes = [];
+  store.publishGroup('conditions', {
+    rows: [
+      {
+        kind: 'toggle',
+        id: 'live',
+        icon: 'partly_cloudy_day',
+        label: 'Live',
+        title: 'Live conditions',
+        checked: true,
+        onChange: (on) => changes.push(['live', on]),
+      },
+      { kind: 'note', id: 'status', text: 'Nothing here' },
+      {
+        kind: 'slider',
+        id: 'level',
+        label: 'Level',
+        min: 0,
+        max: 100,
+        value: 40,
+        onChange: (value) => changes.push(['level', value]),
+      },
+    ],
+  });
+  await nextTick();
+  const toggle = $('conditions-live-toggle');
+  assert.ok(toggle, 'its toggle is drawn');
+  assert.equal(toggle.checked, true);
+  assert.equal(toggle.closest('label').title, 'Live conditions');
+  assert.equal($('conditions-status').textContent.trim(), 'Nothing here');
+  assert.equal($('conditions-level-value').textContent.trim(), '40%');
+  toggle.checked = false;
+  toggle.dispatchEvent(new Event('change'));
+  assert.deepEqual(changes, [['live', false]]);
+  store.publishGroup('conditions', null);
+  await nextTick();
+  assert.equal($('conditions-group'), null, 'gone once removed');
 });

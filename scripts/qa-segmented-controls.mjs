@@ -276,35 +276,6 @@ try {
         .every((group) => group.scrollWidth <= group.clientWidth + 1),
     ),
   );
-  const cyber = await page.evaluate(() => {
-    const root = document.documentElement;
-    const previous = root.getAttribute('data-ui-theme');
-    root.setAttribute('data-ui-theme', 'cyber');
-    const selected = [
-      ...document.querySelectorAll('.gev-segment[aria-checked="true"]'),
-    ];
-    // Check the final theme colors, independent of software-GL frame cadence.
-    for (const button of selected)
-      for (const animation of button.getAnimations()) animation.finish();
-    const backgrounds = selected.map(
-      (button) => getComputedStyle(button).backgroundColor,
-    );
-    const radii = [...document.querySelectorAll('.gev-segmented')].map(
-      (group) => getComputedStyle(group).borderRadius,
-    );
-    const consistent =
-      selected.length === 6 &&
-      backgrounds.every((color) => color === backgrounds[0]) &&
-      radii.every((radius) => radius === '1px');
-    if (previous === null) root.removeAttribute('data-ui-theme');
-    else root.setAttribute('data-ui-theme', previous);
-    return { consistent, count: selected.length, backgrounds, radii };
-  });
-  check(
-    'Cyber theme styles every selected segment consistently',
-    cyber.consistent,
-    JSON.stringify(cyber),
-  );
   await page.evaluate(async () => {
     const { dataManager, styleManager } = window.__godsEyeView;
     await dataManager.setEnabled('recent-imagery', true);

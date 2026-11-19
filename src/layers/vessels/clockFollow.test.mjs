@@ -175,3 +175,128 @@ test('a vessel snapshot at a time the source drops for a newer one is no failure
   assert.equal(probe.feed.loading, false);
   assert.deepEqual(probe.applied, []);
 });
+
+test('back at live, the live poll goes out at once even while a snapshot at a time was still loading', async () => {
+  const queries = [];
+  const probe = ingestion({
+    getSnapshot(query, { signal }) {
+      queries.push(query);
+      if (query.atMs === undefined)
+        return Promise.resolve({
+          records: [{ id: '111', latitude: 1, longitude: 2, observedAtMs: 5 }],
+          observedAtMs: 5,
+          freshness: 'current',
+          complete: true,
+          transportStatus: 'live',
+        });
+      // A snapshot at a time answers only when dropped.
+      return new Promise((_, reject) =>
+        signal.addEventListener('abort', () => {
+          const error = new Error('aborted');
+          error.name = 'AbortError';
+          reject(error);
+        }),
+      );
+    },
+  });
+  probe.state.follows = true;
+  const timeline = new AbortController();
+  const atTime = probe.loadAt(5_000, {
+    signal: timeline.signal,
+    replace: true,
+  });
+  // The clock goes back to live: the timeline drops what loads and resumes
+  // the live poll in the same turn.
+  probe.state.follows = false;
+  timeline.abort();
+  const live = probe.loadLivePositions({});
+  await assert.rejects(atTime, { name: 'AbortError' });
+  await live;
+  assert.equal(queries.length, 2);
+  assert.equal(Object.hasOwn(queries[1], 'atMs'), false);
+  assert.equal(probe.applied.at(-1).rows.length, 1);
+});
+
+test('back at live, only the first live vessel rows applied take over; a poll that fails or brings none says so', async () => {
+  let answer = 'rows';
+  const probe = ingestion({
+    async getSnapshot() {
+      if (answer === 'fail') throw new Error('down');
+      return {
+        records:
+          answer === 'rows'
+            ? [{ id: '111', latitude: 1, longitude: 2, observedAtMs: 5 }]
+            : [],
+        observedAtMs: 5,
+        freshness: 'current',
+        complete: true,
+        transportStatus: 'live',
+      };
+    },
+  });
+  assert.equal(await probe.resumeLive({}), true);
+  await probe.methods.update();
+  assert.deepEqual(
+    probe.applied.map(({ options }) => options),
+    [{ complete: true, handover: true }, { complete: true }],
+  );
+  answer = 'none';
+  assert.equal(await probe.resumeLive({}), false);
+  answer = 'fail';
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    assert.equal(await probe.resumeLive({}), false);
+  } finally {
+    console.warn = warn;
+  }
+});
+
+test('back at live while a live poll is already out, that poll takes over and its answer is awaited', async () => {
+  let answer;
+  const probe = ingestion({
+    getSnapshot: () =>
+      new Promise((resolve) => {
+        answer = () =>
+          resolve({
+            records: [
+              { id: '111', latitude: 1, longitude: 2, observedAtMs: 5 },
+            ],
+            observedAtMs: 5,
+            freshness: 'current',
+            complete: true,
+            transportStatus: 'live',
+          });
+      }),
+  });
+  const poll = probe.methods.update();
+  const resumed = probe.resumeLive({});
+  answer();
+  assert.equal(await resumed, true);
+  await poll;
+  assert.deepEqual(
+    probe.applied.map(({ options }) => options),
+    [{ complete: true, handover: true }],
+  );
+});
+
+test('without AbortSignal.any a vessel request still gives up after its timeout', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const any = AbortSignal.any;
+  AbortSignal.any = undefined;
+  try {
+    const probe = ingestion({
+      getSnapshot: (_query, { signal }) =>
+        new Promise((_, reject) =>
+          signal.addEventListener('abort', () => reject(signal.reason)),
+        ),
+    });
+    const resumed = probe.resumeLive({});
+    await Promise.resolve();
+    t.mock.timers.tick(10_000);
+    assert.equal(await resumed, false);
+    assert.equal(probe.feed.loading, false);
+  } finally {
+    AbortSignal.any = any;
+  }
+});

@@ -5,6 +5,8 @@ import { createDataLibrary } from './controller.js';
 import { LIBRARY_ENTRIES, LIBRARY_LEDGER } from './catalog.js';
 import { validateLibraryCatalog } from './manifest.js';
 import { LIBRARY_STORAGE_KEY } from './selection.js';
+import { createLibrarySource } from './source.js';
+import { libraryLayerId } from '../data/libraryLayerIds.js';
 
 const base = {
   family: 'imagery',
@@ -502,7 +504,10 @@ test('entries this instance cannot serve still show as added and can be removed'
   assert.equal(row.added, true);
   assert.equal(library.summary().added, 1);
   assert.equal(await library.remove('night-lights'), true);
-  assert.deepEqual(JSON.parse(storage.store.get(LIBRARY_STORAGE_KEY)).added, []);
+  assert.deepEqual(
+    JSON.parse(storage.store.get(LIBRARY_STORAGE_KEY)).added,
+    [],
+  );
   library.destroy();
 });
 
@@ -530,10 +535,9 @@ test('a layer that fails to tear down stays in the library', async (t) => {
     assert.equal(await library.remove('night-lights'), false);
     assert.equal(await library.reset(), 0);
     assert.equal(manager.layers.has('lib-night-lights'), true);
-    assert.deepEqual(
-      JSON.parse(storage.store.get(LIBRARY_STORAGE_KEY)).added,
-      ['night-lights'],
-    );
+    assert.deepEqual(JSON.parse(storage.store.get(LIBRARY_STORAGE_KEY)).added, [
+      'night-lights',
+    ]);
     assert.equal(
       library.list().find((row) => row.entry.id === 'night-lights').added,
       true,
@@ -771,4 +775,118 @@ test('every shipped entry kind registers, view-bounded datasets included', async
   // No camera to read: the layer waits for one rather than loading.
   assert.equal(module.getDiagnostics().tooHigh, true);
   assert.equal(await library.add('nasa-black-marble'), true);
+});
+
+test('an entry the server does not list is neither shown nor added', async (t) => {
+  const manager = sealedManager(t);
+  const library = createDataLibrary({
+    entries,
+    ledger,
+    dataManager: manager,
+    services: {},
+    storage: memoryStorage(),
+    initialHash: '',
+    source: source({
+      'sea-marks': {
+        available: false,
+        reason: 'operator-disabled',
+        listed: false,
+      },
+    }),
+  });
+  await library.start();
+  assert.deepEqual(
+    library.list().map(({ entry }) => entry.id),
+    ['night-lights', 'fixture-pack'],
+  );
+  assert.equal(library.summary().entries, 2);
+  assert.equal(await library.add('sea-marks'), false);
+});
+
+test('a required catalog that does not answer offers nothing and is asked again later', async (t) => {
+  const manager = sealedManager(t);
+  const calls = [];
+  let catalog = new Response('<html>busy</html>', { status: 503 });
+  const timers = [];
+  const library = createDataLibrary({
+    entries,
+    ledger,
+    dataManager: manager,
+    services: {},
+    storage: memoryStorage(
+      JSON.stringify({ added: ['night-lights'], on: ['night-lights'] }),
+    ),
+    initialHash: '',
+    requireCatalog: true,
+    source: createLibrarySource({
+      entries,
+      storage: null,
+      requireCatalog: true,
+      fetchImpl: async (url) => {
+        calls.push(String(url));
+        return String(url).endsWith('/catalog')
+          ? catalog
+          : new Response('', { status: 500 });
+      },
+    }),
+    setTimer: (run, ms) => timers.push({ run, ms }),
+    clearTimer: () => {},
+  });
+  await library.start();
+  assert.deepEqual(library.list(), []);
+  assert.equal(library.summary().entries, 0);
+  assert.equal(await library.add('night-lights'), false);
+  assert.deepEqual(calls, ['/api/library/catalog']);
+  assert.equal(timers.length, 1);
+  assert.equal(timers[0].ms, 30_000);
+
+  // Still failing: asked again, later still.
+  catalog = new Response('', { status: 429 });
+  await timers[0].run();
+  assert.equal(timers.length, 2);
+  assert.equal(timers[1].ms, 60_000);
+  assert.deepEqual(library.list(), []);
+
+  // Answered: what it names is offered, and the stored selection returns.
+  catalog = Response.json({
+    entries: [{ id: 'night-lights', available: true, reason: null }],
+  });
+  await timers[1].run();
+  assert.equal(timers.length, 2);
+  assert.deepEqual(
+    library.list().map(({ entry }) => entry.id),
+    ['night-lights'],
+  );
+  assert.ok(manager.layers.has(libraryLayerId('night-lights')));
+  // No publisher was ever asked.
+  assert.ok(calls.every((url) => url === '/api/library/catalog'));
+  library.destroy();
+});
+
+test("the library asks its catalog with the application's own fetch", async (t) => {
+  const manager = sealedManager(t);
+  const calls = [];
+  const library = createDataLibrary({
+    entries,
+    ledger,
+    dataManager: manager,
+    services: {},
+    storage: memoryStorage(null),
+    initialHash: '',
+    requireCatalog: true,
+    fetchImpl: async (url) => {
+      calls.push(String(url));
+      return Response.json({
+        entries: [{ id: 'night-lights', available: true, reason: null }],
+      });
+    },
+    setTimer: () => {},
+    clearTimer: () => {},
+  });
+  await library.start();
+  assert.deepEqual(calls, ['/api/library/catalog']);
+  assert.deepEqual(
+    library.list().map(({ entry }) => entry.id),
+    ['night-lights'],
+  );
 });

@@ -116,7 +116,7 @@ try {
       document.getElementById('loading-screen')?.classList.contains('hidden'),
     { timeout: 60000 },
   );
-  await page.click('[data-collapse-target="scene-panel"]');
+  await page.click('[data-rail-item="scene-panel"]');
   const before = await page.evaluate(() =>
     JSON.stringify(window.__godsEyeView.sceneDirector._project),
   );
@@ -304,18 +304,17 @@ try {
           window.__godsEyeView.sceneDirector.getInteractionState().count === 1,
       )),
   );
-  await page.waitForFunction(
-    () => window.__godsEyeView.tileset?.tilesLoaded === true,
-    { timeout: 60000 },
-  );
+  const activeMapReady = () => {
+    const { viewer, mapStackController } = window.__godsEyeView;
+    const tileset = mapStackController.getImageryHostTileset();
+    if (tileset) return tileset.tilesLoaded;
+    return viewer.scene.globe.show && viewer.scene.globe.tilesLoaded;
+  };
+  await page.waitForFunction(activeMapReady, { timeout: 60000 });
   await page.screenshot({ path: path.join(output, 'rendered.png') });
   fs.writeFileSync(
     path.join(output, 'report.json'),
-    JSON.stringify(
-      await page.evaluate(() => ({
-        tilesSettled: window.__godsEyeView.tileset?.tilesLoaded === true,
-      })),
-    ),
+    JSON.stringify({ tilesSettled: await page.evaluate(activeMapReady) }),
   );
   await page.evaluate(() => window.__godsEyeView.sceneDirector.stopScene());
   check(
@@ -368,6 +367,16 @@ try {
   );
   await page.screenshot({ path: path.join(output, 'narrow.png') });
   await page.keyboard.press('Escape');
+  await page.setViewport({ width: 1440, height: 900 });
+  await page.waitForSelector('[data-rail-item="scene-panel"]', {
+    visible: true,
+  });
+  if (
+    await page.$eval('#scene-panel', (panel) =>
+      panel.classList.contains('collapsed'),
+    )
+  )
+    await page.click('[data-rail-item="scene-panel"]');
   const pending = await page.evaluate(async () => {
     const d = window.__godsEyeView.sceneDirector;
     let finish;

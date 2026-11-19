@@ -39,7 +39,7 @@ test('production-transformed sonar defaults retain the document method receiver'
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'document');
   const hud = { classList: { contains: (name) => name === 'active' } };
   const document = {
-    documentElement: { dataset: { uiTheme: 'cyber' } },
+    documentElement: { dataset: { cyberSonar: 'on' } },
     body: { classList: { contains: () => false } },
     getElementById(id) {
       assert.equal(this, document);
@@ -57,7 +57,7 @@ test('production-transformed sonar defaults retain the document method receiver'
     assert.ok(
       Number.isFinite(compiled.createCyberSonarSampler(800, 600).at(400, 300)),
     );
-    document.documentElement.dataset.uiTheme = 'tactical';
+    document.documentElement.dataset.cyberSonar = 'off';
     assert.equal(compiled.isCyberSonarActive(), false);
     assert.equal(compiled.isCyberMapThemeActive(), false);
   } finally {
@@ -139,8 +139,8 @@ test('the sweep brightens contacts inside its sector and dims the remainder', ()
   );
 });
 
-test('the sonar activates only for a visible Cyber map HUD with motion enabled', () => {
-  const root = { dataset: { uiTheme: 'cyber' } };
+test('the sonar activates only while on, over a visible map HUD with motion enabled', () => {
+  const root = { dataset: { cyberSonar: 'on' } };
   const classes = (...values) => ({
     contains: (value) => values.includes(value),
   });
@@ -220,14 +220,18 @@ test('the opacity setting controls every contact floor and preserves brighter la
   );
 });
 
-test('the sonar control defaults on and records explicit operator state', () => {
+test('the sonar control defaults off and records explicit operator state', () => {
   const root = { dataset: {} };
+  assert.equal(isCyberSonarEnabled(root), false);
+  // The removed Cyber theme no longer turns it on.
+  root.dataset.uiTheme = 'cyber';
+  assert.equal(isCyberSonarEnabled(root), false);
+  assert.equal(setCyberSonarEnabled(true, root), true);
+  assert.equal(root.dataset.cyberSonar, 'on');
   assert.equal(isCyberSonarEnabled(root), true);
   assert.equal(setCyberSonarEnabled(false, root), false);
   assert.equal(root.dataset.cyberSonar, 'off');
   assert.equal(isCyberSonarEnabled(root), false);
-  assert.equal(setCyberSonarEnabled(true, root), true);
-  assert.equal(root.dataset.cyberSonar, 'on');
 });
 
 test('real Cesium points and billboards recover after repeated low/high opacity cycles', () => {
@@ -349,10 +353,10 @@ test('the sweep corrects delayed starts and reacquires restarted animations with
   assert.doesNotThrow(() => syncCyberSonarAnimation({}));
 });
 
-test('the selected Cyber theme seeds and releases the compositor sweep phase', () => {
+test('turning Sonar on seeds and releases the compositor sweep phase', () => {
   const values = new Map();
   const root = {
-    dataset: {},
+    dataset: { cyberSonar: 'on' },
     style: {
       setProperty: (name, value) => values.set(name, value),
       removeProperty: (name) => values.delete(name),

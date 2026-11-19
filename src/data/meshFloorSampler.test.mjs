@@ -4,7 +4,7 @@
 // The sampler's acceptance rule was previously covered only through
 // `reportValidatedMeshFloorCell` directly, which proves the gate but not the
 // decision that feeds it. These tests call `sampleMeshFloorCells` with a fake
-// scene whose `sampleHeight` returns exactly what Cesium can return — a number,
+// renderer whose height query returns what a renderer can return — a number,
 // `undefined`, NaN, or a throw — and assert that a cell latches if and only if
 // a REAL DEM prior exists and the sample fits its window.
 //
@@ -21,6 +21,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { sampleMeshFloorCells } from './meshFloorSampler.js';
+import { bindRenderer } from '../render/rendererOf.js';
 import { resolveEllipsoidalGround } from './terrainHeights.js';
 import {
   cachedGroundFloor, cachedMeshFloor, setMeshFloorPreferred,
@@ -46,19 +47,35 @@ async function seedDem(cell, ellipsoid) {
   }
 }
 
-/** A scene the sampler accepts: low camera, one visible tileset reporting
- *  tilesLoaded, and a `sampleHeight` under the test's control. */
-function fakeScene(sampleHeight, { cameraHeightM = 900, tilesLoaded = true, show = true } = {}) {
-  // instanceof-compatible without running Cesium's constructor; `tilesLoaded` is
-  // a prototype getter, so it has to be shadowed with an own data property.
-  const tileset = Object.create(Cesium.Cesium3DTileset.prototype);
-  Object.defineProperty(tileset, 'tilesLoaded', { value: tilesLoaded, configurable: true });
-  Object.defineProperty(tileset, 'show', { value: show, configurable: true });
-  return {
-    sampleHeight,
-    camera: { positionCartographic: { height: cameraHeightM } },
-    primitives: { length: 1, get: () => tileset },
-  };
+/** A viewer the sampler accepts: bound to a renderer with a low camera,
+ *  drawn tiles that have settled, and heights under the test's control
+ *  (`sampleHeight` is handed the point in radians, as a cartographic).
+ *  Clearing `sampleHeightSupported` takes the renderer's `sampleHeight`
+ *  capability away; `asked` records each probe. */
+function fakeScene(
+  sampleHeight,
+  { cameraHeightM = 900, tilesLoaded = true, show = true, globeShown = false } = {},
+) {
+  const viewer = { sampleHeightSupported: true, asked: [] };
+  bindRenderer(viewer, {
+    capabilities: { has: (name) => name === 'sampleHeight' && viewer.sampleHeightSupported },
+    camera: { pose: () => ({ lon: 0, lat: 0, height: cameraHeightM }) },
+    globe: {
+      isGlobeVisible: () => globeShown,
+      // The globe's terrain while it is shown, else the drawn tiles.
+      isSettled: (kind) => kind !== 'surface' || (globeShown || (show && tilesLoaded)),
+    },
+    query: {
+      sampleHeightNow(point, options) {
+        viewer.asked.push({ point: { ...point }, options });
+        return sampleHeight({
+          longitude: Cesium.Math.toRadians(point.lon),
+          latitude: Cesium.Math.toRadians(point.lat),
+        });
+      },
+    },
+  });
+  return viewer;
 }
 
 function reset() {
@@ -115,6 +132,10 @@ test('sampler: a high camera or unloaded tiles produce no records at all', async
   assert.equal(cachedMeshFloor(cell.lat, cell.lon), null, 'coarse LOD under a high camera');
   sampleMeshFloorCells(fakeScene(() => 138.0, { tilesLoaded: false }), [cell], opts);
   assert.equal(cachedMeshFloor(cell.lat, cell.lon), null, 'mid-stream tiles read coarse');
+  sampleMeshFloorCells(fakeScene(() => 138.0, { show: false }), [cell], opts);
+  assert.equal(cachedMeshFloor(cell.lat, cell.lon), null, 'no drawn surface, nothing to read');
+  sampleMeshFloorCells(fakeScene(() => 121.0, { globeShown: true }), [cell], opts);
+  assert.equal(cachedMeshFloor(cell.lat, cell.lon), null, 'the globe is not the mesh');
 });
 
 test('sampler: outside the google-3d regime nothing is sampled at all', () => {
@@ -136,6 +157,38 @@ test('sampler: a cell just across the antimeridian is still near the viewer', ()
   sampleMeshFloorCells(scene, [{ lat: -16.8, lon: -179.999 }], { viewerLat: -16.8, viewerLon: 179.999 });
   sampleMeshFloorCells(scene, [{ lat: -16.81, lon: 179.999 }], { viewerLat: -16.81, viewerLon: -179.999 });
   assert.equal(calls, 2, 'about 200 m apart, so both cells are probed');
+});
+
+test('sampler: a renderer without depth-texture support is never probed', async () => {
+  reset();
+  const cell = nextSite();
+  await seedDem(cell, 120.0);
+  let calls = 0;
+  const scene = fakeScene(() => {
+    calls++;
+    throw new Error('depth textures unsupported');
+  });
+  scene.sampleHeightSupported = false;
+  sampleMeshFloorCells(scene, [cell], { viewerLat: cell.lat, viewerLon: cell.lon });
+  assert.equal(calls, 0);
+  assert.equal(cachedMeshFloor(cell.lat, cell.lon), null);
+});
+
+test('sampler: the probe sees through the caller’s `sets`', async () => {
+  reset();
+  const cell = nextSite();
+  await seedDem(cell, 120.0);
+  const viewer = fakeScene(() => 138.0);
+  const { asked } = viewer;
+  sampleMeshFloorCells(viewer, [cell], {
+    sets: ['flights-models:1', 'flights-icons:1'],
+    viewerLat: cell.lat,
+    viewerLon: cell.lon,
+  });
+  assert.equal(asked.length, 1);
+  assert.deepEqual(asked[0].options.exclude, ['flights-models:1', 'flights-icons:1']);
+  assert.ok(Math.abs(asked[0].point.lat - cell.lat) < 0.05);
+  assert.equal(cachedMeshFloor(cell.lat, cell.lon), 138.0);
 });
 
 test('sampler: the probe goes where the point is, not to the cell centre', async () => {

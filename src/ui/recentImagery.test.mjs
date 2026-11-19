@@ -1,3 +1,4 @@
+import * as Cesium from 'cesium';
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -15,6 +16,8 @@ import {
   response,
   settle,
 } from '../layers/recentImagery/testDoubles.mjs';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import { fakeGlobePort } from '../testSupport/fakeGlobePort.mjs';
 
 const S18 = 'S30:2026-09-18';
 const L16 = 'L30:2026-09-16';
@@ -128,6 +131,8 @@ function fixture({ fetchImpl, controller = fakeController() } = {}) {
     camera: {},
     scene: { canvas: { clientWidth: 1000 }, requestRender() {} },
   };
+  const globe = fakeGlobePort();
+  bindFakeCesiumCamera(viewer, { globe });
   layer.init(viewer);
   layer.attachMapStackController(controller);
   let active = false;
@@ -210,6 +215,7 @@ function fixture({ fetchImpl, controller = fakeController() } = {}) {
     ...dom,
     layer,
     viewer,
+    globe,
     renderer,
     thumbnails,
     catalog,
@@ -801,9 +807,7 @@ test('an oversized box offers ZOOM IN in a fixed slot at the end of the notice l
   const f = fixture();
   const flights = [];
   f.viewer.scene.canvas.clientHeight = 500;
-  f.viewer.scene.ellipsoid = {
-    cartographicToCartesian: (c) => ({ ...c }),
-  };
+  f.viewer.scene.ellipsoid = Cesium.Ellipsoid.WGS84;
   Object.assign(f.viewer.camera, {
     frustum: { fovy: 2 * Math.atan(Math.tan(Math.PI / 6) / 2) },
     flyTo: (options) => flights.push(options),
@@ -835,7 +839,9 @@ test('an oversized box offers ZOOM IN in a fixed slot at the end of the notice l
   assert.equal(flights.length, 1);
   assert.ok(
     Math.abs(
-      flights[0].destination.height - 400_000 / (2 * Math.tan(Math.PI / 6)),
+      Cesium.Ellipsoid.WGS84.cartesianToCartographic(flights[0].destination)
+        .height -
+        400_000 / (2 * Math.tan(Math.PI / 6)),
     ) < 1e-6,
   );
   // Another refusal has nothing to fit; a box that succeeds hides it again.
@@ -876,6 +882,9 @@ test('the divider exists only while a swipe is live, labelled A / B or IMAGE / B
   assert.equal(f.splits.length, 1);
   assert.deepEqual(labels(), ['IMAGE', 'BASEMAP']);
   assert.equal(f.splits[0].options.id, 'recent-imagery-split-line');
+  // The divider moves the globe's split, through the renderer's globe port.
+  f.splits[0].options.scene.splitPosition = 0.3;
+  assert.equal(f.globe.imagery.getSplit(), 0.3);
   assert.deepEqual(swapState(), [false, false, 'false', 'false']);
   assert.deepEqual(directions(), ['left', undefined]);
   // VS BASEMAP: SWAP puts the image right of the basemap, and back.

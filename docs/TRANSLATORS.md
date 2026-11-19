@@ -36,6 +36,8 @@ npm run i18n -- --prune           # drop entries the code no longer uses
 
 Changing English text changes its key: the old translation becomes unused and the new text shows as missing. Translate it and prune.
 
+Do not translate `zh-Hant`: it is generated. Translate `zh-CN`, then run `npm run i18n -- --zh-hant` (see [zh-Hant.md](./translations/zh-Hant.md)).
+
 ## Fixing a translation
 
 Edit `src/i18n/locales/<code>.json` and run `npm run i18n`. To see your change, open the app with `?lang=<code>`.

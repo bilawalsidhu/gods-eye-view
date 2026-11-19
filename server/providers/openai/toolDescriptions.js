@@ -225,7 +225,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   set_cyber_sonar: {
     description:
-      'Adjust Cyber-only sonar controls. Requires the Cyber HUD layout; never switches layout or HUD visibility. Omitted fields stay unchanged. Returns actual settings and separate map/contact sweep activity. A saved setting does not mean the effect is active.',
+      'Adjust the Sonar visual style, which works over any HUD layout. Never switches layout or HUD visibility. Omitted fields stay unchanged. Returns actual settings and separate map/contact sweep activity. A saved setting does not mean the effect is active.',
     $position: 1,
     parameters: {
       properties: {
@@ -308,6 +308,11 @@ export const ACTION_DESCRIPTIONS = {
         },
       },
     },
+  },
+  open_stories: {
+    description:
+      'Open the Stories Explore list on request ("open Stories", "show the story list"). Turns off voice.',
+    $position: 1,
   },
   control_scene: {
     description:
