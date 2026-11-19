@@ -686,7 +686,6 @@ function samplingBoard(t) {
   return useScreenAnnotationsStore(createPinia());
 }
 
-/** The renderer under test, on the given board and scene. */
 function samplingRenderer(store, scene) {
   return createScreenAnnotationRenderer(
     { scene, camera: scene.camera, trackedEntity: null },
@@ -755,6 +754,99 @@ test('an arrow with one endpoint outside a real frustum keeps its visible connec
   assert.match(path.attrs.d, /^M 400\.0 400\.0 Q .* 1100\.0 400\.0$/);
   assert.deepEqual([...new Set(sampled)], [0], 'only the in-frustum endpoint samples');
   renderer.destroy();
+});
+
+// An arrow whose far end lies outside the frustum (so it is not sampled) and
+// beyond the horizon at the 0 m stand-in height, but above it at its real
+// 100 m height, keeps its connector and label.
+test('an arrow whose unsampled far end is past the 0 m horizon keeps its connector', (t) => {
+  const previousRaf = globalThis.requestAnimationFrame;
+  globalThis.requestAnimationFrame = (fn) => {
+    fn();
+    return 1;
+  };
+  t.after(() => {
+    globalThis.requestAnimationFrame = previousRaf;
+  });
+  const W = 800;
+  const H = 800;
+  const half = Cesium.Math.toRadians(30);
+  const frustum = new Cesium.PerspectiveFrustum();
+  frustum.fov = 2 * half;
+  frustum.aspectRatio = 1;
+  frustum.near = 1;
+  frustum.far = 1e8;
+  // 100 m above the ellipsoid at (0, 0), level, looking due east.
+  const camera = {
+    positionWC: Cesium.Cartesian3.fromDegrees(0, 0, 100),
+    directionWC: new Cesium.Cartesian3(0, 1, 0),
+    upWC: new Cesium.Cartesian3(1, 0, 0),
+    positionCartographic: { height: 100 },
+    frustum,
+  };
+  // A real perspective projection matching the frustum above.
+  t.mock.method(Cesium.SceneTransforms, 'worldToWindowCoordinates', (_scene, world, result) => {
+    const right = Cesium.Cartesian3.cross(camera.directionWC, camera.upWC, new Cesium.Cartesian3());
+    const v = Cesium.Cartesian3.subtract(world, camera.positionWC, new Cesium.Cartesian3());
+    const z = Cesium.Cartesian3.dot(v, camera.directionWC);
+    const out = result || new Cesium.Cartesian2();
+    out.x = ((Cesium.Cartesian3.dot(v, right) / z / Math.tan(half) + 1) / 2) * W;
+    out.y = ((1 - Cesium.Cartesian3.dot(v, camera.upWC) / z / Math.tan(half)) / 2) * H;
+    return out;
+  });
+  // Near end 2 km east; far end 56 km away, 50 degrees north of the view axis.
+  const near = { lon: Number((2000 / 111319.49).toFixed(5)), lat: 0 };
+  const bearing = Cesium.Math.toRadians(50);
+  const far = {
+    lon: Number(((56000 * Math.cos(bearing)) / 111319.49).toFixed(5)),
+    lat: Number(((56000 * Math.sin(bearing)) / 110574).toFixed(5)),
+  };
+  const surface = { [near.lon]: 10, [far.lon]: 100 };
+  const postRender = new Cesium.Event();
+  const scene = {
+    camera,
+    canvas: { width: W, height: H },
+    postRender,
+    clampToHeightSupported: true,
+    clampToHeight(world) {
+      const c = Cesium.Cartographic.fromCartesian(world);
+      const h = surface[Number(Cesium.Math.toDegrees(c.longitude).toFixed(5))];
+      return h === undefined ? undefined : Cesium.Cartesian3.fromRadians(c.longitude, c.latitude, h);
+    },
+  };
+
+  // Preconditions: the scenario is the one described above.
+  const occluder = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, camera.positionWC);
+  const farAt = (h) => Cesium.Cartesian3.fromDegrees(far.lon, far.lat, h);
+  assert.equal(occluder.isPointVisible(farAt(100)), true, 'far end above the horizon at 100 m');
+  assert.equal(occluder.isPointVisible(farAt(0)), false, 'far end past the horizon at 0 m');
+  const volume = frustum.computeCullingVolume(camera.positionWC, camera.directionWC, camera.upWC);
+  assert.equal(
+    volume.computeVisibility(new Cesium.BoundingSphere(farAt(0), 9500)),
+    Cesium.Intersect.OUTSIDE,
+    'far end outside the frustum plus the 9.5 km sampling sphere',
+  );
+  const farWin = Cesium.SceneTransforms.worldToWindowCoordinates(scene, farAt(100));
+  assert.ok(farWin.x > -W && farWin.x < 0, 'far end off-screen left, inside [-w, 2w]');
+
+  const store = useScreenAnnotationsStore(createPinia());
+  const renderer = createScreenAnnotationRenderer(
+    { scene, camera, trackedEntity: null },
+    { store, activeTrackedReadoutId: () => null },
+  );
+  t.after(() => renderer.destroy());
+  renderer.add({
+    id: 'long-arrow',
+    type: 'arrow',
+    label: 'Ridge',
+    anchor: near,
+    to: far,
+  });
+  for (let i = 0; i < 3; i++) postRender.raiseEvent();
+  const [mark] = store.board.marks;
+  assert.equal(mark.display, '', 'the arrow stays drawn');
+  const path = mark.children.find((child) => child.attrs.class?.includes('gev-anno-arrow'));
+  assert.match(path.attrs.d, /^M 400\.0 4\d\d\.\d Q /, 'the connector starts at the on-screen end');
 });
 
 test('a low-angle cached roof stays visible when range endpoints fail different tests', (t) => {

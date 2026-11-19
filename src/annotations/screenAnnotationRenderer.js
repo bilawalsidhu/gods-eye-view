@@ -415,13 +415,15 @@ export function createScreenAnnotationRenderer(
     const key = heightKey(lon, lat);
     const cached = heightCache.get(key);
     let height;
+    let horizonTest = true;
     if (cached?.settled) {
       height = groundHeight(lon, lat, key, cached);
     } else {
       if (heightRangeHidden(lon, lat)) return null;
       // The frustum restricts sampling only; an endpoint outside it still
-      // projects (at its cached or zero height) so a partly visible arrow,
-      // route or ring keeps its on-screen connector and label.
+      // projects (at its cached or zero height, without the horizon test)
+      // so a partly visible arrow, route or ring keeps its on-screen
+      // connector and label.
       Cesium.Cartesian3.fromDegrees(
         lon,
         lat,
@@ -433,14 +435,17 @@ export function createScreenAnnotationRenderer(
         cullingVolume?.computeVisibility(heightBounds) !==
         Cesium.Intersect.OUTSIDE;
       height = groundHeight(lon, lat, key, cached, inFrustum);
+      horizonTest = inFrustum;
     }
     const world = Cesium.Cartesian3.fromDegrees(lon, lat, height);
     // Reject points behind the camera (they produce wrapped/extreme coords).
     Cesium.Cartesian3.subtract(world, scene.camera.positionWC, scratchDir);
     if (Cesium.Cartesian3.dot(scratchDir, scene.camera.directionWC) <= 0)
       return null;
-    // Reject points beyond the globe horizon.
-    if (!occluder.isPointVisible(world)) return null;
+    // Reject points beyond the globe horizon. An unsampled stand-in height
+    // outside the frustum cannot decide it: the range test above found no
+    // proof that the real height is hidden.
+    if (horizonTest && !occluder.isPointVisible(world)) return null;
     const win = Cesium.SceneTransforms.worldToWindowCoordinates(
       scene,
       world,
