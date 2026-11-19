@@ -816,6 +816,11 @@ test('"except" leaves Satellites to switch off with Space Missions off', () => {
       ['layer(satellites,off)'],
       text,
     );
+  // After "show" the ending is part of what is asked.
+  assert.equal(
+    omnibar.rows('show me the view from the map', { places: [] }).defaultIndex,
+    -1,
+  );
   // The whole map cleared "from the map" is the same plan, not a place.
   for (const text of [
     'hide everything from the map',

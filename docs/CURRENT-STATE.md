@@ -7976,8 +7976,9 @@ the ones named, on Enter, or says no other layers are on; with a layer to
 keep that is not read, nothing is switched off and only Ask GEV is offered.
 While Space Missions is on, keeping either it or Satellites keeps both,
 since Space Missions draws through Satellites. "remove flights from the
-map" is "remove flights", after any switch or clear verb ("clear everything
-except flights from the map", "hide everything from the map"), a doubled verb ("hide hide everything") is read
+map" is "remove flights", after hide, remove, turn off or clear ("clear
+everything except flights from the map", "hide everything from the map";
+"show me the view from the map" is a question), a doubled verb ("hide hide everything") is read
 once, and a grid reference after "near" is the place ("flights near 14R PU
 2090 4906"). Following needs a callsign or ICAO address (letters and a digit), a
 nine-digit MMSI or the name of something loaded on the map, so "Track
