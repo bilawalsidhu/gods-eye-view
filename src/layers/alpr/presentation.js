@@ -582,9 +582,10 @@ export function createAlprPresentation({ state, services, source }) {
     state.clickSubscription = inputFor(viewer).onClick((event) => {
       if (!state.enabled) return;
       // The painted overlay answers first; the scene is picked only if not.
+      // A click a label painted over both took is on neither.
       const hit = event.drawHit;
       const id =
-        overlay.pick(event.screenPosition) ||
+        (!event.overlay && overlay.pick(event.screenPosition)) ||
         (hit && hit.set === markers.icons?.id ? hit.id : null);
       if (
         id &&

@@ -1348,9 +1348,12 @@ export function createNewsLayer({
     clickOff = inputFor(viewer).onClick((event) => {
       const at = event?.screenPosition;
       if (!enabled || destroyed || !isPointerFree() || !at) return;
-      const card = hitTestOverlay(at.x, at.y, {
-        sourceId: NEWS_OVERLAY_SOURCE_ID,
-      });
+      // A click a label painted over the cards took is not on a card.
+      const card = event.overlay
+        ? null
+        : hitTestOverlay(at.x, at.y, {
+            sourceId: NEWS_OVERLAY_SOURCE_ID,
+          });
       if (card?.entry?.activate) {
         card.entry.activate();
         return;

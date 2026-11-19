@@ -140,3 +140,18 @@ export function fakeInput(viewer, { now } = {}) {
     destroy: () => input.destroy(),
   };
 }
+
+/**
+ * `fakeInput` with a label painted over the map, as a Space Missions label
+ * is: while `label.over` is true the label takes each click, so every click
+ * subscriber hears it as an overlay click (`event.overlay`), and the
+ * geometry beneath it is not picked.
+ * @param {object} viewer
+ * @param {{now?: () => number}} [options]
+ */
+export function fakeInputUnderLabel(viewer, options) {
+  const fake = fakeInput(viewer, options);
+  const label = { over: false };
+  fake.input.onOverlayClick(() => label.over);
+  return { ...fake, label };
+}

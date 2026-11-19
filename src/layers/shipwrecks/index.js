@@ -278,9 +278,12 @@ export function createShipwrecksLayer({
     _clickHandler = clicks.onClick((click) => {
       if (pointer && !pointer.isPointerFree()) return;
       const at = click.screenPosition;
-      const cardHit = overlayHost.hitTest?.(at?.x, at?.y, {
-        sourceId: SHIPWRECKS_OVERLAY_SOURCE_ID,
-      });
+      // A click a label painted over the cards took is not on a card.
+      const cardHit = click.overlay
+        ? null
+        : overlayHost.hitTest?.(at?.x, at?.y, {
+            sourceId: SHIPWRECKS_OVERLAY_SOURCE_ID,
+          });
       if (cardHit && cardHit.entryId === _selectedCardId) {
         if (_selectedLink) openExternal(_selectedLink);
         return;

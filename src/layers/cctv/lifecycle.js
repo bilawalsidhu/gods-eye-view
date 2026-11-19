@@ -411,12 +411,15 @@ export function createLifecycle({
           // painted ambient cards. The cards canvas is pointer-events:none (this
           // handler owns the events), so a click landing on a card's rect selects
           // its camera exactly like a click on the icon. Click positions
-          // and the recorded rects are both CSS px — direct comparison.
-          const cardId = layerState._cctvOverlayHost.hitTest(
-            event.screenPosition.x,
-            event.screenPosition.y,
-            { sourceId: CCTV_OVERLAY_SOURCE_ID },
-          )?.entryId;
+          // and the recorded rects are both CSS px — direct comparison. A
+          // click a label painted over the cards took is not on a card.
+          const cardId = event.overlay
+            ? null
+            : layerState._cctvOverlayHost.hitTest(
+                event.screenPosition.x,
+                event.screenPosition.y,
+                { sourceId: CCTV_OVERLAY_SOURCE_ID },
+              )?.entryId;
           if (cardId && layerState._recordById.has(cardId)) {
             activateCctvCameraFromWorldClick(
               cardId,

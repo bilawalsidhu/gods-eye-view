@@ -483,16 +483,18 @@ export function createSelection({ state, services, parts }) {
       if (!state.enabled || services.pointer?.isPointerFree?.() === false)
         return;
       const at = click.screenPosition;
+      // A click a label painted over the cards took is not on a card.
       const hit =
-        overlay?.hitTest?.(at?.x, at?.y, {
+        !click.overlay &&
+        (overlay?.hitTest?.(at?.x, at?.y, {
           sourceId: WILDLIFE_SELECTED_SOURCE_ID,
         }) ||
-        overlay?.hitTest?.(at?.x, at?.y, {
-          sourceId: WILDLIFE_OVERLAY_SOURCE_ID,
-        }) ||
-        overlay?.hitTest?.(at?.x, at?.y, {
-          sourceId: WILDLIFE_LABEL_SOURCE_ID,
-        });
+          overlay?.hitTest?.(at?.x, at?.y, {
+            sourceId: WILDLIFE_OVERLAY_SOURCE_ID,
+          }) ||
+          overlay?.hitTest?.(at?.x, at?.y, {
+            sourceId: WILDLIFE_LABEL_SOURCE_ID,
+          }));
       if (hit) {
         hit.entry?.activate?.();
         return;

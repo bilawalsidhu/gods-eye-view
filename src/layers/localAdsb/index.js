@@ -8,12 +8,7 @@ import {
 } from '../../data/screenRotation.js';
 import { fromDegreesInto, toLonLatH } from '../../geo/ellipsoid.js';
 import { hexColor } from '../../render/color.js';
-import {
-  drawOf,
-  findCamera,
-  findFrame,
-  findQuery,
-} from '../../render/rendererOf.js';
+import { drawOf, findCamera, findFrame } from '../../render/rendererOf.js';
 import { inputFor } from '../../input/dispatcher.js';
 import { pickRenderAltitudeM } from '../../data/renderAltitude.js';
 import { routePlausible } from '../../data/routePlausible.js';
@@ -682,10 +677,8 @@ export function createLocalAdsbLayer({
     if (ownedElsewhere(topId) && !trail) return 'other';
     let hits = [];
     try {
-      hits =
-        findQuery(viewer)?.drillPick(event.position.x, event.position.y, {
-          limit: CLICK_DRILL_LIMIT,
-        }) ?? [];
+      // The click's own drill: none under a label painted over the map.
+      hits = event.drill(CLICK_DRILL_LIMIT);
     } catch {
       hits = [];
     }

@@ -64,17 +64,19 @@ export function createSelection({
       // Cards are painted on a pointer-events:none canvas, so the scene pick is
       // usually terrain behind the card. Resolve against the host's current
       // actionable hit rectangles before treating the click as empty space.
-      const cardHit = !record
-        ? vesselState._vesselOverlayHost.hitTest?.(
-            event.screenPosition?.x,
-            event.screenPosition?.y,
-            {
-              ...(cycloneBackground
-                ? {}
-                : { sourceId: VESSEL_OVERLAY_SOURCE_ID }),
-            },
-          )
-        : null;
+      // A click a label painted over the cards took is not on a card.
+      const cardHit =
+        !record && !event.overlay
+          ? vesselState._vesselOverlayHost.hitTest?.(
+              event.screenPosition?.x,
+              event.screenPosition?.y,
+              {
+                ...(cycloneBackground
+                  ? {}
+                  : { sourceId: VESSEL_OVERLAY_SOURCE_ID }),
+              },
+            )
+          : null;
       if (cycloneBackground && cardHit?.sourceId !== VESSEL_OVERLAY_SOURCE_ID)
         return;
       if (!record && cardHit) {

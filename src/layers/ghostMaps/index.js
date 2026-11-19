@@ -707,11 +707,14 @@ export function createGhostMapsLayer({
         typeof pickedId === 'string' && pickedId.startsWith(PICK_PREFIX),
     );
     _clickSubscription = inputFor(_viewer).onClick((event) => {
-      const cardHit = overlayHost.hitTest?.(
-        event.screenPosition?.x,
-        event.screenPosition?.y,
-        { sourceId: GHOSTMAPS_OVERLAY_SOURCE_ID },
-      );
+      // A click a label painted over the cards took is not on a card.
+      const cardHit = event.overlay
+        ? null
+        : overlayHost.hitTest?.(
+            event.screenPosition?.x,
+            event.screenPosition?.y,
+            { sourceId: GHOSTMAPS_OVERLAY_SOURCE_ID },
+          );
       if (cardHit && cardHit.entryId === _selectedCardId) {
         if (_selectedLink && openExternal) openExternal(_selectedLink);
         return;

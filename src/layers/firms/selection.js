@@ -46,13 +46,16 @@ export function createSelection({
         const pickedId = resolvePickId(picked);
         if (pickedId && isOwnedByOtherLayer(id, pickedId)) return;
       }
-      const cardHit = overlayHost.hitTest?.(
-        event.screenPosition?.x,
-        event.screenPosition?.y,
-        {
-          sourceId: FIRMS_OVERLAY_SOURCE_ID,
-        },
-      );
+      // A click a label painted over the cards took is not on a card.
+      const cardHit = event.overlay
+        ? null
+        : overlayHost.hitTest?.(
+            event.screenPosition?.x,
+            event.screenPosition?.y,
+            {
+              sourceId: FIRMS_OVERLAY_SOURCE_ID,
+            },
+          );
       if (cardHit) {
         const carded = layerState._fireByCardId.get(cardHit.entryId);
         if (carded) selectAndFocusFire(carded);

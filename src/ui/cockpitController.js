@@ -483,10 +483,12 @@ export class CockpitViewController {
    * A click on the orbital picture: on a mapped point in reach it keeps the
    * camera on that point; anywhere else it ends such a focus.
    * @param {{x: number, y: number}|null|undefined} position
+   * @param {{overlay?: boolean}} [options] `overlay`: a label painted over
+   *   the map took the click, which then only ends a focus.
    * @returns {boolean} True when the click focused a point.
    */
-  onOrbitalClick(position) {
-    return onOrbitalClick.call(this, position);
+  onOrbitalClick(position, options) {
+    return onOrbitalClick.call(this, position, options);
   }
   /**
    * A double-click on the orbital picture: on a mapped ground point it keeps

@@ -1599,5 +1599,7 @@
   "src/ui/omnibarRows.test.mjs",
   "src/ui/styles/omnibar-dock.css",
   "src/ui/styles/guide.css",
-  "src/ui/commandDock.test.mjs"
+  "src/ui/commandDock.test.mjs",
+  "src/layers/firms/selection.test.mjs",
+  "src/layers/vessels/selection.test.mjs"
 ]

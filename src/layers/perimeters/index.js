@@ -218,11 +218,14 @@ export function createFirePerimetersLayer({
     _clickSubscription = inputFor(_viewer).onClick((event) => {
       // A click on the incident card itself opens its InciWeb page (when the
       // incident has one) and never disturbs the selection.
-      const cardHit = overlayHost.hitTest?.(
-        event.screenPosition?.x,
-        event.screenPosition?.y,
-        { sourceId: PERIMETER_OVERLAY_SOURCE_ID },
-      );
+      // A click a label painted over the cards took is not on a card.
+      const cardHit = event.overlay
+        ? null
+        : overlayHost.hitTest?.(
+            event.screenPosition?.x,
+            event.screenPosition?.y,
+            { sourceId: PERIMETER_OVERLAY_SOURCE_ID },
+          );
       if (cardHit && cardHit.entryId === _selectedCardId) {
         if (_selectedLink && openExternal) openExternal(_selectedLink);
         return;

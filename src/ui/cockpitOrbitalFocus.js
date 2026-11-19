@@ -256,13 +256,16 @@ export function onOrbitalDoubleClick(position) {
  * focuses it; any other click ends a focus. A click a tool owns (drawing)
  * is left alone, as is every click outside orbit.
  * @param {{x: number, y: number}|null|undefined} position Canvas position.
+ * @param {{overlay?: boolean}} [options] `overlay`: a label painted over the
+ *   map took the click, so it is on no site and only ends a focus.
  * @returns {boolean} True when the click focused a point.
  */
-export function onOrbitalClick(position) {
+export function onOrbitalClick(position, { overlay = false } = {}) {
   if (!inOrbit(this) || !isPointerFree()) return false;
   if (!Number.isFinite(position?.x) || !Number.isFinite(position?.y))
     return false;
-  const site = siteAt(this, position);
+  // A click a label painted over the map took is on no site.
+  const site = overlay ? null : siteAt(this, position);
   const state = this.orbital;
   if (site) {
     if (state.focus?.key === String(site.id)) return true;
@@ -286,7 +289,9 @@ export function routeSceneClick() {
     // A viewer with no input (headless tools, partial stubs) has no clicks.
     return () => {};
   }
-  return input.onClick((event) => this.onOrbitalClick(event?.position));
+  return input.onClick((event) =>
+    this.onOrbitalClick(event?.position, { overlay: event?.overlay === true }),
+  );
 }
 
 /**
