@@ -9,6 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
 import { cctvProxy } from '../../server/providers/cctv.js';
+import { recordingResponse } from './cctvRecordingResponse.mjs';
 
 const STILL = {
   id: 'still-fixture',
@@ -61,43 +62,6 @@ function upstreamResponse({ status = 200, headers = {}, body = 'payload' }) {
     headers: { get: (name) => store.get(String(name).toLowerCase()) ?? null },
     body: Readable.toWeb(Readable.from([Buffer.from(String(body))])),
   };
-}
-
-/** Collects what a handler wrote, the way a Node ServerResponse would. */
-function recordingResponse() {
-  const chunks = [];
-  let finished;
-  const done = new Promise((resolve) => {
-    finished = resolve;
-  });
-  const res = {
-    statusCode: 0,
-    headers: {},
-    writableEnded: false,
-    body: '',
-    writeHead(status, headers) {
-      res.statusCode = status;
-      res.headers = { ...res.headers, ...headers };
-    },
-    setHeader(name, value) {
-      res.headers[name] = value;
-    },
-    write(chunk) {
-      chunks.push(Buffer.from(chunk));
-      return true;
-    },
-    end(chunk) {
-      if (chunk) chunks.push(Buffer.from(chunk));
-      res.writableEnded = true;
-      res.body = Buffer.concat(chunks).toString('utf8');
-      finished();
-    },
-    on() {},
-    once() {},
-    emit() {},
-    destroy() {},
-  };
-  return { res, done };
 }
 
 /**

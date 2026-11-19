@@ -8,6 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cctvProxy } from '../../server/providers/cctv.js';
+import { recordingResponse } from './cctvRecordingResponse.mjs';
 
 const camera = (id) => ({
   id,
@@ -22,54 +23,16 @@ const PLAYLIST =
 const lease = (index) =>
   `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
 
-/** Collects what a handler wrote, the way a Node ServerResponse would. */
-function recordingResponse() {
-  const chunks = [];
-  let finished;
-  const done = new Promise((resolve) => {
-    finished = resolve;
-  });
-  const res = {
-    statusCode: 0,
-    headers: {},
-    writableEnded: false,
-    body: '',
-    writeHead(status, headers) {
-      res.statusCode = status;
-      res.headers = { ...res.headers, ...headers };
-    },
-    setHeader(name, value) {
-      res.headers[name] = value;
-    },
-    write(chunk) {
-      chunks.push(Buffer.from(chunk));
-      return true;
-    },
-    end(chunk) {
-      if (chunk) chunks.push(Buffer.from(chunk));
-      res.writableEnded = true;
-      res.body = Buffer.concat(chunks).toString('utf8');
-      finished();
-    },
-    on() {},
-    once() {},
-    emit() {},
-    destroy() {},
-  };
-  return { res, done };
-}
-
-/** Mount the provider over two HLS cameras whose upstream always answers. */
+/** Mount the provider over three HLS cameras whose upstream always answers. */
 function mount(t) {
   const before = {
     json: process.env.CCTV_SOURCES_JSON,
     file: process.env.CCTV_SOURCES_FILE,
     austin: process.env.CCTV_FORCE_AUSTIN,
   };
-  process.env.CCTV_SOURCES_JSON = JSON.stringify([
-    camera('cam-a'),
-    camera('cam-b'),
-  ]);
+  process.env.CCTV_SOURCES_JSON = JSON.stringify(
+    ['cam-a', 'cam-b', 'cam-c'].map(camera),
+  );
   process.env.CCTV_SOURCES_FILE = 'absent-source-file.json';
   process.env.CCTV_FORCE_AUSTIN = '0';
   const nativeFetch = globalThis.fetch;
@@ -82,6 +45,7 @@ function mount(t) {
     httpServer: { on: (_event, fn) => closers.push(fn) },
     middlewares: { use: (_route, fn) => (handler = fn) },
   });
+  assert.ok(handler, 'the CCTV provider must mount a middleware');
   t.after(() => {
     for (const fn of closers) fn();
     globalThis.fetch = nativeFetch;
@@ -149,13 +113,34 @@ test('viewers on distinct addresses open, read and release their own leases', as
   }
 });
 
-test('viewers behind one shared address get every session slot', async (t) => {
+test('viewers behind one shared address get every slot, and no more', async (t) => {
   const call = mount(t);
   const shared = '::ffff:172.17.0.1';
-  for (let index = 0; index < 8; index++)
-    await openPlaylist(call, 'cam-a', lease(index), shared);
-  const segment = await openPlaylist(call, 'cam-b', lease(8), shared);
+  const health = async (id) =>
+    JSON.parse((await call('/health', shared)).body).cameras.find(
+      (entry) => entry.id === id,
+    );
+  let segment;
+  for (let index = 0; index < 16; index++)
+    segment = await openPlaylist(
+      call,
+      index < 8 ? 'cam-a' : 'cam-b',
+      lease(index),
+      shared,
+    );
   assert.equal((await call(segment, shared)).statusCode, 200);
+  // A ninth viewer of a full session and a third session are both refused,
+  // without reporting a camera whose upstream is fine as degraded.
+  for (const cameraId of ['cam-a', 'cam-c']) {
+    const refused = await call(`/media/${cameraId}?lease=${lease(16)}`, shared);
+    assert.equal(refused.statusCode, 503, cameraId);
+    assert.equal(refused.headers['Retry-After'], '2');
+  }
+  assert.equal((await health('cam-a')).status, 'ok');
+  assert.equal(await health('cam-c'), undefined);
+  // A released slot is free for the next viewer.
+  await call(`/media/cam-a?lease=${lease(0)}`, shared, 'DELETE');
+  await openPlaylist(call, 'cam-a', lease(16), shared);
 });
 
 test('a lease keeps working after its viewer reconnects from another address', async (t) => {
@@ -163,12 +148,15 @@ test('a lease keeps working after its viewer reconnects from another address', a
   await openPlaylist(call, 'cam-a', lease(0), '192.168.1.20');
   const segment = await openPlaylist(call, 'cam-a', lease(0), '192.168.1.21');
   assert.equal((await call(segment, '192.168.1.21')).statusCode, 200);
+  // A second viewer keeps the session alive, so the 404 below is the released
+  // lease and not a stopped session.
+  const other = await openPlaylist(call, 'cam-a', lease(1), '192.168.1.30');
   const release = await call(
     `/media/cam-a?lease=${lease(0)}`,
     '192.168.1.21',
     'DELETE',
   );
   assert.equal(release.statusCode, 204);
-  // Released from the new address: the same lease can no longer read segments.
   assert.equal((await call(segment, '192.168.1.21')).statusCode, 404);
+  assert.equal((await call(other, '192.168.1.30')).statusCode, 200);
 });

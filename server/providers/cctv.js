@@ -18,7 +18,7 @@ import {
 import { sanitizeCctvRangeHeader } from './cctv/range.js';
 import { admitSameSiteKeyless } from './common/same-site.js';
 import { PROXY_SIGNALS } from '../../src/localRequestGate.mjs';
-import { createHlsPuller } from './cctv/stream.js';
+import { createHlsPuller, HlsCapacityError } from './cctv/stream.js';
 import { isMlitRiverAdjustmentImage } from './cctv/worldCameras.js';
 import { ottawaAuthorizedFrameUrl } from './cctv/ottawa.js';
 import { googleServerApiKey } from './places/google-key.js';
@@ -449,13 +449,16 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
                 'X-CCTV-Session': entry.token,
               });
               res.end(playlist);
-            } catch {
-              setHealth(cameraId, {
-                status: 'degraded',
-                sourceKind: 'fallback',
-                label: source?.provider || 'Configured source',
-                message: 'Live HLS unavailable',
-              });
+            } catch (error) {
+              // A full lease or session budget says nothing about the source:
+              // leave the health its other viewers see untouched.
+              if (!(error instanceof HlsCapacityError))
+                setHealth(cameraId, {
+                  status: 'degraded',
+                  sourceKind: 'fallback',
+                  label: source?.provider || 'Configured source',
+                  message: 'Live HLS unavailable',
+                });
               if (!downstream.closed) {
                 res.writeHead(503, {
                   'Content-Type': 'application/json',
