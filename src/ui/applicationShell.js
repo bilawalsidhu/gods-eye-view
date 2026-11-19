@@ -117,6 +117,8 @@ export class StyleManager extends ShellFacade {
    * @param {{lon: number, lat: number, height: number, heading?: number,
    *   pitch?: number}|null} [options.homeView] - where the title's logo goes
    *   back to (degrees): the view the app started from.
+   * @param {string[]} [options.startLayers] - the layers a bare address (one
+   *   that carries no link) starts with; none by default.
    */
   constructor(
     viewer,
@@ -128,6 +130,7 @@ export class StyleManager extends ShellFacade {
       initialShareCode = null,
       localePicker = true,
       homeView = null,
+      startLayers = [],
     } = {},
   ) {
     super();
@@ -256,6 +259,7 @@ export class StyleManager extends ShellFacade {
       updateFeedback: () => this._updateGlobalLoadingFeedback(),
       applyFollowOffset: (followed, offset) =>
         applyShareFollowOffset(viewer, followed, offset),
+      startLayers,
     });
 
     this._visualSettings = new VisualSettings({
