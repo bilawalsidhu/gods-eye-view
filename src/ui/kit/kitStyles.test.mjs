@@ -165,6 +165,8 @@ test('the kit’s skins load before the feature stylesheets that restyle them', 
     ['.ui-close-button,', '.entity-card__close {'],
     ['.ui-close-button,', '.context-search__clear {'],
     ['.ui-close-button,', '.key-setup-close {'],
+    ['.ui-close-button,', '.cctv-popup__close {'],
+    ['.ui-close-button,', '.view-context__live-off {'],
     ['.ui-close-button,', '.gev-guide-close {'],
   ]) {
     assert.ok(

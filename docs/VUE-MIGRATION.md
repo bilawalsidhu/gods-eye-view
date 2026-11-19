@@ -53,7 +53,7 @@ never copied:
 | `UiButton` `variant="action"` | the action surface (`gev-action-button`); `tone="danger"` hovers red, `size="compact"` is the shot-row footprint (on this variant only) | `src/ui/styles/action-button.css` |
 | `UiButton` `variant="primary"` | the action surface with a group's main-action accent | `src/ui/styles/action-button.css` |
 | `UiButton` `variant="icon"` | the 22px square glyph button of a panel's collapse toggle | `src/ui/styles/controls.css` |
-| `UiCloseButton` | a close, dismiss or clear button: a bare glyph (× with `glyph="times"`, the Material `close` symbol with `glyph="icon"`) with no padding, border or background of its own and a pointer; the site's feature class sets size, colour, hover and any surface, and `bare` leaves the look off for a skin that keeps the browser's padding | `src/ui/styles/close-button.css` |
+| `UiCloseButton` | a close, dismiss or clear button: a bare glyph (× with `glyph="times"`, the Material `close` symbol with `glyph="icon"`) with no padding, border or background of its own and a pointer; the site's feature class sets size, colour, hover and any surface, and `bare` leaves the look off for a skin that sets its own padding and border | `src/ui/styles/close-button.css` |
 | `UiChip` | the read-only chip (a pill of uppercase mono text); `selected` takes the accent | `src/ui/styles/chip.css` |
 | `UiEmpty` | the one-line empty state (dim mono text), its hint on a line below | `src/ui/styles/empty-state.css` |
 | `UiBadge` | the read-only badge (`gev-status-badge`) | `src/ui/styles/status-badge.css` |
@@ -105,7 +105,7 @@ no tip unless the site passes a `title`; attributes and classes pass through,
 so each site keeps its id, feature class and look. Every close, dismiss and
 clear button in the views is one (`src/ui/kit/closeButtons.test.mjs` pins
 it); Street Level's and the space mission's keep `bare`, since their skins
-keep the browser's padding. The close buttons built in script (credits, the
+set their own padding and border. The close buttons built in script (credits, the
 Quebec CCTV overlay, the guide) are not converted yet.
 `UiSlider` keeps the native range input rather than drawing a
 `role="slider"` track, so Core's keyboard, form behaviour and styling stay;
