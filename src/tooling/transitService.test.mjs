@@ -139,3 +139,27 @@ test('snapshot cancellation covers headers and body parsing', async () => {
     );
   }
 });
+
+test('the service POSTs Entur its query and fetches GTFS feeds with a plain GET', async (t) => {
+  const inits = new Map();
+  const service = createTransitService({
+    fetchImpl: async (url, init) => {
+      inits.set(url, init);
+      return url.includes('entur')
+        ? new Response(JSON.stringify({ data: { vehicles: [] } }), {
+            status: 200,
+          })
+        : new Response(null, { status: 503 });
+    },
+  });
+  t.after(service.close);
+  await service.handle(request('/api/transit/vehicles/entur-norway'));
+  await service.handle(request('/api/transit/vehicles/mbta'));
+  const entur = inits.get('https://api.entur.io/realtime/v2/vehicles/graphql');
+  assert.equal(entur.method, 'POST');
+  assert.match(JSON.parse(entur.body).query, /vehicles/);
+  assert.equal(entur.headers['ET-Client-Name'], 'gods-eye-view-transit');
+  const mbta = [...inits].find(([url]) => !url.includes('entur'))[1];
+  assert.equal(mbta.method, undefined);
+  assert.equal(mbta.body, undefined);
+});

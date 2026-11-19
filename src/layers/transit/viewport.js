@@ -4,8 +4,8 @@ import {
   ACTIVATION_EXIT_ALTITUDE_M,
   CAMERA_DEBOUNCE_MS,
   RANGE_SLACK_KM,
-  WIDE_VIEW_ALTITUDE_M,
-  WIDE_VIEW_MAX_SPAN_DEG,
+  WIDE_VIEW_ENTER_ALTITUDE_M,
+  WIDE_VIEW_EXIT_ALTITUDE_M,
   inflateViewBounds,
 } from './policy.js';
 import {
@@ -13,10 +13,22 @@ import {
   transitFeedsInView,
 } from '../../data/transitFeeds.js';
 
+/** Screen points (fractions of width and height) the wide-view footprint picks: corners and edge midpoints. */
+const FOOTPRINT_SAMPLES = Object.freeze([
+  [0, 0],
+  [0.5, 0],
+  [1, 0],
+  [1, 0.5],
+  [1, 1],
+  [0.5, 1],
+  [0, 1],
+  [0, 0.5],
+]);
+
 /**
  * Camera-driven feed activation, only below the altitude gate: a feed is
  * polled when its coverage holds the look-at point, and, in a wide view, when
- * its coverage reaches into the visible rectangle.
+ * its coverage reaches into the ground on screen.
  * @param {object} context
  * @returns {object}
  */
@@ -28,10 +40,17 @@ export function createViewport({ state, services, parts }) {
     return carto && Number.isFinite(carto.height) ? carto.height : Infinity;
   }
 
-  function getCameraCenterLatLon(viewer = state._viewer) {
-    const rect = viewer?.camera?.computeViewRectangle?.(
-      viewer.scene.globe?.ellipsoid,
+  function viewRectangle(viewer = state._viewer) {
+    return (
+      viewer?.camera?.computeViewRectangle?.(viewer.scene.globe?.ellipsoid) ??
+      null
     );
+  }
+
+  function getCameraCenterLatLon(
+    viewer = state._viewer,
+    rect = viewRectangle(viewer),
+  ) {
     if (rect) {
       const center = Cesium.Rectangle.center(rect);
       return {
@@ -50,31 +69,57 @@ export function createViewport({ state, services, parts }) {
   }
 
   /**
-   * The visible rectangle (degrees) of a wide, map-like view, or null for a
-   * close view, a horizon-grazing oblique one or none at all.
+   * The ground on screen, as a rectangle in degrees: the bounds of the
+   * screen's corners and edge midpoints picked on the ellipsoid. Null when
+   * any of them is sky: a view that reaches the horizon shows no bounded
+   * patch of ground and keeps the centre rule.
    */
-  function getWideViewRect(altitude, viewer = state._viewer) {
-    if (!(altitude >= WIDE_VIEW_ALTITUDE_M)) return null;
-    const rect = viewer?.camera?.computeViewRectangle?.(
-      viewer.scene.globe?.ellipsoid,
-    );
-    if (!rect) return null;
-    const view = {
-      south: Cesium.Math.toDegrees(rect.south),
-      north: Cesium.Math.toDegrees(rect.north),
-      west: Cesium.Math.toDegrees(rect.west),
-      east: Cesium.Math.toDegrees(rect.east),
-    };
-    const lonSpan =
-      view.east >= view.west
-        ? view.east - view.west
-        : view.east + 360 - view.west;
+  function getWideViewRect(viewer = state._viewer) {
+    const camera = viewer?.camera;
+    const width = viewer?.scene?.canvas?.clientWidth;
+    const height = viewer?.scene?.canvas?.clientHeight;
     if (
-      view.north - view.south > WIDE_VIEW_MAX_SPAN_DEG.lat ||
-      lonSpan > WIDE_VIEW_MAX_SPAN_DEG.lon
+      typeof camera?.pickEllipsoid !== 'function' ||
+      !(width > 0) ||
+      !(height > 0)
     )
       return null;
-    return view;
+    const ellipsoid = viewer.scene.globe?.ellipsoid ?? Cesium.Ellipsoid.WGS84;
+    const lats = [];
+    const lons = [];
+    for (const [x, y] of FOOTPRINT_SAMPLES) {
+      const hit = camera.pickEllipsoid(
+        new Cesium.Cartesian2(x * width, y * height),
+        ellipsoid,
+      );
+      if (!hit) return null;
+      const carto = ellipsoid.cartesianToCartographic(hit);
+      lats.push(Cesium.Math.toDegrees(carto.latitude));
+      lons.push(Cesium.Math.toDegrees(carto.longitude));
+    }
+    // The narrowest longitude arc holding every sample leaves out the widest
+    // gap between neighbours; west > east when it crosses the antimeridian.
+    lons.sort((a, b) => a - b);
+    let gap = lons[0] + 360 - lons[lons.length - 1];
+    let west = lons[0];
+    let east = lons[lons.length - 1];
+    for (let i = 1; i < lons.length; i++) {
+      if (lons[i] - lons[i - 1] > gap) {
+        gap = lons[i] - lons[i - 1];
+        west = lons[i];
+        east = lons[i - 1];
+      }
+    }
+    let south = Math.min(...lats);
+    let north = Math.max(...lats);
+    // Samples all the way round the globe: the screen holds a pole.
+    if (gap < 180) {
+      west = -180;
+      east = 180;
+      if (south + north > 0) north = 90;
+      else south = -90;
+    }
+    return { south, north, west, east };
   }
 
   function altitudeGateOpen(altitude) {
@@ -82,15 +127,16 @@ export function createViewport({ state, services, parts }) {
     return altitude <= ACTIVATION_ENTER_ALTITUDE_M;
   }
 
+  function wideViewOn(altitude) {
+    if (state._wideView) return altitude >= WIDE_VIEW_EXIT_ALTITUDE_M;
+    return altitude >= WIDE_VIEW_ENTER_ALTITUDE_M;
+  }
+
   /**
    * Refresh the bounds the per-frame pass uses to decide what is worth
    * animating. Cheap, and only on a settled camera — never per frame.
    */
-  function refreshViewBounds() {
-    const viewer = state._viewer;
-    const rect = viewer?.camera?.computeViewRectangle?.(
-      viewer.scene.globe?.ellipsoid,
-    );
+  function refreshViewBounds(rect = viewRectangle()) {
     state._viewBounds = rect
       ? inflateViewBounds({
           south: Cesium.Math.toDegrees(rect.south),
@@ -106,6 +152,7 @@ export function createViewport({ state, services, parts }) {
     state._visibilityDirty = true;
     state._cameraRevision++;
     parts.rendering.requestVisibility();
+    return rect;
   }
 
   function runProximityCheck() {
@@ -115,10 +162,13 @@ export function createViewport({ state, services, parts }) {
     )
       return;
     if (!state._enabled || !state._viewer) return;
-    refreshViewBounds();
+    const rect = refreshViewBounds();
     const altitude = getCameraAltitude();
     state._altitudeGateOpen = altitudeGateOpen(altitude);
-    const center = state._altitudeGateOpen ? getCameraCenterLatLon() : null;
+    state._wideView = state._altitudeGateOpen && wideViewOn(altitude);
+    const center = state._altitudeGateOpen
+      ? getCameraCenterLatLon(state._viewer, rect)
+      : null;
     const desired = new Map();
     if (center) {
       for (const feed of transitFeedsInRange(center.lat, center.lon)) {
@@ -132,7 +182,7 @@ export function createViewport({ state, services, parts }) {
       )) {
         if (state._activeFeeds.has(feed.id)) desired.set(feed.id, feed);
       }
-      const wide = getWideViewRect(altitude);
+      const wide = state._wideView ? getWideViewRect() : null;
       if (wide) {
         for (const feed of transitFeedsInView(wide)) {
           desired.set(feed.id, feed);
@@ -180,6 +230,7 @@ export function createViewport({ state, services, parts }) {
     getCameraCenterLatLon,
     getWideViewRect,
     altitudeGateOpen,
+    wideViewOn,
     runProximityCheck,
     onCameraChanged,
   };

@@ -27,7 +27,7 @@ export const TRANSIT_PROXY_TTL_MS = 15_000;
 export const TRANSIT_PROXY_STALE_MAX_MS = 10 * 60_000;
 /** Upstream fetch timeout. National feeds (Entur ≈ 1.4 MB) need headroom. */
 export const TRANSIT_PROXY_TIMEOUT_MS = 15_000;
-/** Hard cap on upstream bytes: the largest registered feed is well under 1 MB. */
+/** Hard cap on upstream bytes: the largest registered feed, Entur's Vehicles JSON, is about 1.4 MB. */
 export const TRANSIT_PROXY_MAX_BODY_BYTES = 8 * 1024 * 1024;
 /** Redirect hops followed before a feed is declared unreachable. */
 export const TRANSIT_MAX_REDIRECTS = 3;
@@ -51,12 +51,14 @@ export function isTransitRedirectStatus(status) {
 }
 /**
  * Admission window for upstream requests. One browser polls a feed every 15 s
- * (4/min); the allowance leaves room for a second tab and a manual reload, and
- * the global figure bounds what this process can ask of ALL operators at once.
+ * (4/min); the per-feed allowance leaves room for a second tab and a manual
+ * reload. The global figure bounds what this process can ask of all operators
+ * at once: sixteen feeds at 4/min, above the twelve one wide view of the Great
+ * Lakes activates.
  */
 export const TRANSIT_ADMISSION_WINDOW_MS = 60_000;
 export const TRANSIT_ADMISSION_MAX_PER_FEED = 8;
-export const TRANSIT_ADMISSION_MAX_GLOBAL = 40;
+export const TRANSIT_ADMISSION_MAX_GLOBAL = 64;
 /**
  * Cooldown ladder after consecutive upstream failures, in ms. A cold feed that
  * is simply down must not be re-asked once per poll for the whole session: the
@@ -115,13 +117,7 @@ export function transitUpstreamHeaders(feed, validators = null) {
   return {
     'User-Agent':
       'gods-eye-view-transit-proxy/1.0 (+https://github.com/bilawalsidhu/gods-eye-view)',
-    Accept:
-      feed?.format === 'entur-vehicles'
-        ? 'application/json'
-        : 'application/x-protobuf, application/octet-stream;q=0.9, */*;q=0.1',
-    ...(feed?.request?.contentType
-      ? { 'Content-Type': feed.request.contentType }
-      : {}),
+    Accept: 'application/x-protobuf, application/octet-stream;q=0.9, */*;q=0.1',
     'Accept-Encoding': 'gzip',
     ...(validators?.etag ? { 'If-None-Match': validators.etag } : {}),
     ...(validators?.lastModified

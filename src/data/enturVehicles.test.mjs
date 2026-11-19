@@ -76,6 +76,7 @@ test('Entur modes map onto the layer modes', () => {
   assert.equal(enturVehicleMode('RAIL'), 'rail');
   assert.equal(enturVehicleMode('FERRY'), 'ferry');
   assert.equal(enturVehicleMode('AIR'), null);
+  assert.equal(enturVehicleMode('constructor'), null);
   assert.equal(enturVehicleMode(undefined), null);
 });
 
@@ -107,8 +108,22 @@ test('a response decodes to a full snapshot that keeps the newest report per veh
 test('a GraphQL error answer fails the refresh instead of emptying the map', () => {
   assert.throws(
     () =>
-      decodeEnturVehicles(encode({ errors: [{ message: 'rate limited' }] })),
+      decodeEnturVehicles(encode({ errors: [{ message: 'rate\nlimited' }] })),
     /no vehicle list: rate limited/,
+  );
+  const partial = (vehicles) =>
+    decodeEnturVehicles(
+      encode({ data: { vehicles }, errors: [{ message: 'partial' }] }),
+    );
+  assert.throws(
+    () => partial([vehicle(), null, null]),
+    /partial: 1 errors, 2 of 3 records unusable/,
+  );
+  assert.throws(() => partial([vehicle(), null]), /1 of 2 records unusable/);
+  assert.throws(() => partial([]), /0 of 0 records unusable/);
+  assert.equal(
+    partial([vehicle(), null, vehicle({ vehicleId: 'other' })]).vehicles.length,
+    2,
   );
   assert.throws(() => decodeEnturVehicles(new TextEncoder().encode('<html>')));
 });
@@ -117,7 +132,10 @@ test('the Entur feed is fetched from the v2 Vehicles API as a JSON POST', () => 
   const entur = getTransitFeed('entur-norway');
   assert.equal(entur.url, 'https://api.entur.io/realtime/v2/vehicles/graphql');
   assert.equal(entur.request.method, 'POST');
-  assert.ok(JSON.parse(entur.request.body).query.includes('vehicles'));
+  assert.match(
+    JSON.parse(entur.request.body).query,
+    /vehicles\(maxDataAge: "PT10M"\)/,
+  );
   const headers = transitUpstreamHeaders(entur);
   assert.equal(headers.Accept, 'application/json');
   assert.equal(headers['Content-Type'], 'application/json');
@@ -220,7 +238,7 @@ test('a whole-country view of Norway polls Entur though its centre is in Sweden'
 
 test('a coverage circle meets a view rectangle at its edge and across the antimeridian', () => {
   const circle = { lat: 60, lon: 10, radiusKm: 100 };
-  // Inside, ~55 km off the east edge (inside the radius), ~170 km off it.
+  // Inside; ~55 km off the west edge (inside the radius); ~170 km off it.
   assert.ok(
     circleIntersectsViewRect(circle, {
       south: 59,
@@ -267,6 +285,13 @@ test('a coverage circle meets a view rectangle at its edge and across the antime
       { south: -20, north: -15, west: 170, east: -170 },
     ),
     false,
+  );
+  // ~53 km east of a view's east edge at 170W, inside a 100 km radius.
+  assert.ok(
+    circleIntersectsViewRect(
+      { lat: -17, lon: -169.5, radiusKm: 100 },
+      { south: -20, north: -15, west: 170, east: -170 },
+    ),
   );
 });
 

@@ -41,18 +41,15 @@ export const CAMERA_PERCENTAGE_CHANGED = 0.05;
 export const RANGE_SLACK_KM = 40;
 /**
  * Above this camera altitude a feed is also polled when any of its coverage
- * circles reaches into the visible rectangle, not only when it holds the
+ * circles reaches into the ground on screen, not only when it holds the
  * centre of the view. A whole-country view of Norway is centred over Sweden,
- * outside every Entur circle, while the screen is full of Norway.
+ * outside every Entur circle, while the screen is full of Norway. The rule
+ * comes on at the ENTER altitude and goes off at the EXIT one, so a zoom
+ * across 400 km does not flap.
  */
 export const WIDE_VIEW_ALTITUDE_M = 400_000;
-/**
- * A view rectangle wider or taller than this (degrees) is a horizon-grazing
- * oblique view, not a map of what is on screen; it falls back to the centre
- * check so a tilted camera over Europe does not poll every feed on the
- * continent.
- */
-export const WIDE_VIEW_MAX_SPAN_DEG = Object.freeze({ lat: 40, lon: 60 });
+export const WIDE_VIEW_ENTER_ALTITUDE_M = WIDE_VIEW_ALTITUDE_M + 40_000;
+export const WIDE_VIEW_EXIT_ALTITUDE_M = WIDE_VIEW_ALTITUDE_M - 40_000;
 /** Hard cap on rendered vehicles across all active feeds. */
 export const MAX_VEHICLES_TOTAL = 15_000;
 /** A vehicle absent from this many consecutive polls is removed. */

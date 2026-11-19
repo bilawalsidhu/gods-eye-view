@@ -810,6 +810,8 @@
   "src/layers/transit/testing.js",
   "src/layers/transit/viewport.js",
   "src/layers/transit/lifecycle.test.mjs",
+  "src/layers/transit/viewport.realCamera.test.mjs",
+  "src/layers/transit/admission.wideView.test.mjs",
   "scripts/qa-transit.mjs",
   "scripts/qa-transit-heading.mjs",
   "src/tooling/transitProvider.test.mjs",

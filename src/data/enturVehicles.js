@@ -2,11 +2,9 @@
  * @module enturVehicles
  * @description Decoder for Entur's Vehicles GraphQL API (realtime v2).
  *
- * Entur's GTFS-Realtime feed (realtime v1) carries only part of the national
- * fleet: Skyss, Vestfold og Telemark, Innlandet and others publish their
- * positions to the v2 Vehicles API alone. That API answers JSON, so this module
- * turns one response into the same snapshot shape `decodeVehiclePositions`
- * gives the proxy, and the layer never knows which wire format it came from.
+ * Entur's Vehicles API answers JSON; this module turns one response into the
+ * snapshot shape `decodeVehiclePositions` gives the proxy, so the layer never
+ * knows which wire format it came from.
  *
  * The query it answers is `ENTUR_VEHICLES_QUERY` in transitFeeds.js; keep the
  * two in step. Pure: no Node built-ins, shared by the proxy and node:test.
@@ -35,7 +33,9 @@ const ENTUR_MODE = Object.freeze({
  * @returns {string|null} A Transit mode, or null when Entur did not say.
  */
 export function enturVehicleMode(mode) {
-  return typeof mode === 'string' ? ENTUR_MODE[mode] || null : null;
+  return typeof mode === 'string' && Object.hasOwn(ENTUR_MODE, mode)
+    ? ENTUR_MODE[mode]
+    : null;
 }
 
 function text(value) {
@@ -90,26 +90,36 @@ export function normalizeEnturVehicle(vehicle) {
  * @param {Uint8Array|ArrayBuffer} bytes UTF-8 JSON response body.
  * @returns {{ version: null, timestamp: null, incrementality: number,
  *   entityCount: number, truncated: boolean, vehicles: object[] }}
- * @throws {Error} When the body is not a Vehicles API answer.
+ * @throws {Error} When the body is not a Vehicles API answer, or reports errors for half or more of its records.
  */
 export function decodeEnturVehicles(bytes) {
   const body = JSON.parse(new TextDecoder().decode(bytes));
   const list = body?.data?.vehicles;
   if (!Array.isArray(list)) {
-    const reason = body?.errors?.[0]?.message;
     throw new Error(
-      `Entur vehicles response has no vehicle list${reason ? `: ${String(reason).slice(0, 120)}` : ''}`,
+      `Entur vehicles response has no vehicle list${errorReason(body)}`,
     );
   }
+  const errors = Array.isArray(body?.errors) ? body.errors.length : 0;
   const truncated = list.length > GTFS_MAX_ENTITIES;
+  const read = truncated ? list.slice(0, GTFS_MAX_ENTITIES) : list;
   const byId = new Map();
-  for (const vehicle of truncated ? list.slice(0, GTFS_MAX_ENTITIES) : list) {
+  let usable = 0;
+  for (const vehicle of read) {
     const record = normalizeEnturVehicle(vehicle);
     if (!record) continue;
+    usable += 1;
     const existing = byId.get(record.id);
     if (!existing || (record.timestamp ?? 0) >= (existing.timestamp ?? 0)) {
       byId.set(record.id, record);
     }
+  }
+  // GraphQL answers a failed field with null and an `errors` entry. A list that
+  // is mostly such nulls is a failed answer, not a quiet country.
+  if (errors > 0 && usable * 2 <= read.length) {
+    throw new Error(
+      `Entur vehicles response is partial: ${errors} errors, ${read.length - usable} of ${read.length} records unusable${errorReason(body)}`,
+    );
   }
   return {
     version: null,
@@ -119,4 +129,13 @@ export function decodeEnturVehicles(bytes) {
     truncated,
     vehicles: [...byId.values()],
   };
+}
+
+/** The first GraphQL error's message as a log-safe suffix, or ''. */
+function errorReason(body) {
+  const reason = body?.errors?.[0]?.message;
+  if (!reason) return '';
+  return `: ${String(reason)
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ')
+    .slice(0, 120)}`;
 }

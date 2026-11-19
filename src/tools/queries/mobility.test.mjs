@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { composeCatalog, coreTools } from '../index.js';
+import { publicTransitCatalog } from '../../data/transitFeeds.js';
 import { GBFS_CITY_REGISTRY } from '../../layers/bikeshare/registry.js';
 
 const system = (id, city, centerLat, centerLon) => ({
@@ -652,18 +653,10 @@ test('a whole-world bike-share search names every system it skipped', async () =
 });
 
 test('transit feeds with coverage circles are reached only inside them', async () => {
-  const entur = {
-    ...feed,
-    id: 'entur-norway',
-    name: 'Entur',
-    center: { lat: 67.0, lon: 7.0 },
-    loadRadiusKm: 1000,
-    coverage: [
-      { lat: 61.3, lon: 6.5, radiusKm: 380 },
-      { lat: 67.3, lon: 4.5, radiusKm: 600 },
-      { lat: 71.3, lon: 23.0, radiusKm: 340 },
-    ],
-  };
+  const entur = publicTransitCatalog().find(
+    (entry) => entry.id === 'entur-norway',
+  );
+  assert.ok(entur.coverage?.length, 'the catalog carries the coverage circles');
   const source = {
     requested: [],
     async getFeeds() {
@@ -679,7 +672,7 @@ test('transit feeds with coverage circles are reached only inside them', async (
     services: { transit: source, clock },
   });
   const at = (lat, lon) => ({ lat, lon, radius_km: 10 });
-  // Umeå sits inside the extent circle (67.0N 7.0E, 1,000 km), not the coverage.
+  // Umeå sits inside the extent circle, not the coverage.
   const umea = await catalog.call('get_transit_vehicles', {
     area: at(63.83, 20.26),
   });

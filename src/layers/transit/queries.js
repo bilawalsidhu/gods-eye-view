@@ -249,7 +249,7 @@ export function createQueries({ state, parts }) {
           count: 0,
           lastUpdate: state._lastUpdate,
           error: null,
-          source: 'GTFS-RT',
+          source: 'GTFS-RT · Entur',
           status: 'zoom-in',
           // English data (the analyst's empty note to the model); the voice
           // card shows it through NOTE_PATTERNS (voice/resultDisplay.js).
@@ -289,7 +289,7 @@ export function createQueries({ state, parts }) {
             ? `Loading ${active.map((feed) => feed.name).join(', ')}`
             : undefined,
         stale: health.stale,
-        source: 'GTFS-RT',
+        source: 'GTFS-RT · Entur',
         coverage,
         feeds: active.map((feed) => feed.id),
       };

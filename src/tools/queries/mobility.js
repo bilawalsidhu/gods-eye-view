@@ -1,5 +1,6 @@
 /** Bike-share and public transit queries. */
 
+import { deepestCircle } from '../../geoDistance.js';
 import { suggestView } from '../views.js';
 import {
   parseStationInformation,
@@ -36,19 +37,14 @@ function covering(area, entries, circlesOf) {
   const reach = areaRadiusKm(area);
   const reaching = entries
     .map((entry) => {
-      // The circle the area is deepest inside, and how far its centre is.
-      let gap = Infinity;
-      let distance = Infinity;
-      for (const circle of circlesOf(entry)) {
-        const km = distanceKm(center, circle);
-        if (km - circle.radiusKm < gap) {
-          gap = km - circle.radiusKm;
-          distance = km;
-        }
-      }
-      return { entry, gap, distance };
+      const { depthKm, km } = deepestCircle(
+        center,
+        circlesOf(entry),
+        distanceKm,
+      );
+      return { entry, depthKm, distance: km };
     })
-    .filter(({ gap }) => gap <= reach)
+    .filter(({ depthKm }) => -depthKm <= reach)
     .sort((a, b) => a.distance - b.distance)
     .map(({ entry }) => entry);
   return {
@@ -169,7 +165,7 @@ export const getTransitVehicles = defineTool({
   title: 'Transit vehicles',
   description:
     'Live positions of buses, trains and other transit vehicles in an area ' +
-    'from public GTFS-Realtime feeds, optionally for one route.',
+    "from transit operators' public realtime feeds, optionally for one route.",
   inputSchema: {
     type: 'object',
     properties: {

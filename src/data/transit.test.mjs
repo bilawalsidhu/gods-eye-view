@@ -220,6 +220,6 @@ test('the layer accepts a manager handle for out-of-tick panel repaints', () => 
 test('stats before enable are an honest zero, not a fake feed state', () => {
   const stats = transitLayer.getStats();
   assert.equal(stats.count, 0);
-  assert.equal(stats.source, 'GTFS-RT');
+  assert.equal(stats.source, 'GTFS-RT · Entur');
   assert.equal(stats.error, null);
 });

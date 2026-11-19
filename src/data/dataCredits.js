@@ -420,7 +420,7 @@ export const DATA_CREDITS = [
   },
   {
     key: 'gtfs-rt',
-    html: 'Transit vehicles: operator GTFS-Realtime feeds (each operator is credited below when its vehicles are shown)',
+    html: 'Transit vehicles: operator realtime feeds (each operator is credited below when its vehicles are shown)',
   },
   {
     key: 'radio-browser',

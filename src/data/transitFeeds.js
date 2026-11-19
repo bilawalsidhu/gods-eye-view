@@ -1,4 +1,4 @@
-import { greatCircleKm } from '../geoDistance.js';
+import { deepestCircle, greatCircleKm } from '../geoDistance.js';
 import { RIO_ROUTE_NAMES } from './rioRouteNames.js';
 
 /**
@@ -32,9 +32,10 @@ import { RIO_ROUTE_NAMES } from './rioRouteNames.js';
 /**
  * Entur Vehicles API query: every field `decodeEnturVehicles` reads, and
  * nothing more. Lives here so the registry stays free of decoder imports.
+ * `maxDataAge` matches the layer's 10-minute VEHICLE_MAX_FIX_AGE_MS (layers/transit/policy.js).
  */
 export const ENTUR_VEHICLES_QUERY = `{
-  vehicles {
+  vehicles(maxDataAge: "PT10M") {
     vehicleId
     mode
     lastUpdatedEpochSecond
@@ -418,7 +419,7 @@ function rioRouteLabel(routeId) {
  *   coverage?: ReadonlyArray<{lat: number, lon: number, radiusKm: number}>,
  *   url: string, headers?: Record<string, string>,
  *   format?: 'entur-vehicles',
- *   request?: {method: string, contentType: string, body: string},
+ *   request?: {method: string, body: string},
  *   license: string, licenseUrl: string, attribution: string,
  *   defaultMode: string, routeMode?: (routeId: string|null) => string,
  * }>>}
@@ -534,8 +535,8 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     loadRadiusKm: 1000,
     // No one circle holds Norway without Sweden, Finland or the islands to
     // the west: these three reach from Lindesnes to Vardø and Grense
-    // Jakobselv, and every neighbouring city (Lerwick, Östersund, Kiruna,
-    // Karlstad, Uddevalla nearest) stays over 50 km out, past the range
+    // Jakobselv, and the tested neighbouring cities (Lerwick, Östersund,
+    // Kiruna, Karlstad, Uddevalla nearest) stay over 50 km out, past the range
     // slack — a national feed must not poll from next door.
     coverage: Object.freeze([
       Object.freeze({ lat: 61.3, lon: 6.5, radiusKm: 380 }),
@@ -548,12 +549,15 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     format: 'entur-vehicles',
     request: Object.freeze({
       method: 'POST',
-      contentType: 'application/json',
       body: JSON.stringify({ query: ENTUR_VEHICLES_QUERY }),
     }),
-    headers: Object.freeze({ 'ET-Client-Name': 'gods-eye-view-transit' }),
+    headers: Object.freeze({
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'ET-Client-Name': 'gods-eye-view-transit',
+    }),
     license: 'Norwegian Licence for Open Government Data (NLOD)',
-    licenseUrl: 'https://developer.entur.org/pages-intro-authentication',
+    licenseUrl: 'https://data.norge.no/nlod/en/2.0',
     attribution: 'Entur — data under NLOD',
     defaultEnabled: true,
     terms: Object.freeze({
@@ -910,21 +914,17 @@ export function transitFeedsInRange(lat, lon, slackKm = 0) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return [];
   const slack = Math.max(0, slackKm);
   return TRANSIT_ENABLED_FEEDS.map((feed) => {
-    // How far inside its nearest circle's edge the point is (negative: out).
-    let depth = -Infinity;
-    let km = Infinity;
-    for (const circle of coverageCircles(feed)) {
-      const distance = haversineKm(lat, lon, circle.lat, circle.lon);
-      if (circle.radiusKm - distance > depth) {
-        depth = circle.radiusKm - distance;
-        km = distance;
-      }
-    }
-    return { feed, km, depth };
+    const { depthKm, km } = deepestCircle({ lat, lon }, coverageCircles(feed));
+    return { feed, km, depthKm };
   })
-    .filter(({ depth }) => depth + slack >= 0)
+    .filter(({ depthKm }) => depthKm + slack >= 0)
     .sort((a, b) => a.km - b.km)
     .map(({ feed }) => feed);
+}
+
+/** Longitude in [-180, 180). */
+function wrapLon(lon) {
+  return ((((lon + 180) % 360) + 360) % 360) - 180;
 }
 
 /** Longitude `lon` normalised into [west, west + 360). */
@@ -981,9 +981,9 @@ export function circleIntersectsViewRect(circle, rect, slackKm = 0) {
   const reach = circle.radiusKm + Math.max(0, slackKm);
   const edges = [
     (t) => ({ lat: south + (north - south) * t, lon: west }),
-    (t) => ({ lat: south + (north - south) * t, lon: east }),
-    (t) => ({ lat: south, lon: west + (east - west) * t }),
-    (t) => ({ lat: north, lon: west + (east - west) * t }),
+    (t) => ({ lat: south + (north - south) * t, lon: wrapLon(east) }),
+    (t) => ({ lat: south, lon: wrapLon(west + (east - west) * t) }),
+    (t) => ({ lat: north, lon: wrapLon(west + (east - west) * t) }),
   ];
   return edges.some(
     (edgeAt) => edgeDistanceKm(circle.lat, circle.lon, edgeAt) <= reach,
@@ -1006,7 +1006,7 @@ export function transitFeedsInView(rect, slackKm = 0) {
     return [];
   const centerLat = (rect.south + rect.north) / 2;
   const east = rect.east < rect.west ? rect.east + 360 : rect.east;
-  const centerLon = (rect.west + east) / 2;
+  const centerLon = wrapLon((rect.west + east) / 2);
   return TRANSIT_ENABLED_FEEDS.map((feed) => {
     const circles = coverageCircles(feed);
     const hit = circles.some((circle) =>
