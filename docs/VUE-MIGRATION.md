@@ -83,9 +83,11 @@ segmented group in Core is a `UiSegmented`; the old `segmentedControl.js`
 adapter is gone.
 `UiButton` adds `pressedClass`, Core's class on a pressed toggle (most use
 `active`); its pressed classes toggle through `classList`, so a class other
-code adds (a voice highlight) survives a press. Every pressed toggle in the
-views is a `UiButton` except Bhote Koshi's cinematic button and the
-tilt-map button, whose owners still write their state into the DOM. Core's
+code adds (a voice highlight) survives a press. Not every pressed toggle in
+the views is one yet: the entity card, the context view, the Layer Finder,
+the Stories screens and a few panel buttons still hand-write theirs, and
+Bhote Koshi's cinematic button and the tilt-map button have owners that
+write their state into the DOM. Core's
 pressable chips and pills (rail card chips, map sources, cities and places)
 are `UiButton`s too; `UiChip` is a non-interactive label chip, used by
 the voice card.
@@ -105,6 +107,16 @@ ghost `UiButton`s, and its search, row and chip glyphs are `UiIcon`s with
 row's glyphs stay inline SVG, since no Material symbol the page loads
 draws them, and its field is its own combobox rather than a
 `UiSearchField`.
+The Visual panel's buttons (its presets and map sources, HUD, Sonar,
+Detection, 3D, Clean UI, Celestial, Bloom, Sharpen and Reset to default) are
+ghost `UiButton`s. HUD, Sonar, 3D, Celestial, Bloom and Sharpen are
+pressed toggles with `active` as their pressed class; Detection sets its own
+`active` and `panoptic` classes, and Clean UI is not a pressed toggle (its
+owner marks it `active`). The panel's Scope, Celestial,
+sky, application-row and Reset glyphs are `UiIcon`s with `:size="null"`, so
+the panel's rules still size them (`src/ui/kit/visualControls.test.mjs` pins
+it). The toggles' other glyphs (◎ ▣ ✈ □ ✨ 🔍) and the presets' style glyphs
+are text characters, not Material symbols, and stay plain spans.
 `UiSelect` renders the bare native select (Core's labels sit outside it or
 come as an `aria-label`) with `v-model`, `options` and `disabled`;
 options that carry their own attributes come through the slot, a caller's
