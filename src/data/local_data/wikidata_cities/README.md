@@ -40,3 +40,8 @@ well-known cities is missing from the result, or a known grouping gets in.
 **Limits:** populations are whatever Wikidata states and differ in date and
 definition between places (city proper, municipality, urban district). Some
 districts and suburbs appear as their own rows.
+
+**Finding a place by name:** `findPlace` takes the nearest place of the name
+within 150 km of the view, else the largest city of the name. When asked,
+the smaller places of `../wikidata_places` near the view count too, so a
+village in view comes before a bigger namesake far away.

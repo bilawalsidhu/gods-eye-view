@@ -1,8 +1,11 @@
 # Wikidata places detail tiles
 
 Smaller towns and villages, below the cut-off of the cities pack
-(`../wikidata_cities`), for "places nearby" around one picked or named spot. Read by `placesNear` in `src/data/wikidataCities.js`. The app reads
-these files; it does not call Wikidata or any place service for them.
+(`../wikidata_cities`), for "places nearby" around one picked or named spot. Read by `placesNear` in `src/data/wikidataCities.js`, and by `findPlace`
+when asked to look for a small place by name near the view: a place of that
+name in view, or close to it, comes before a bigger city of the name far
+away. The app reads these files; it does not call Wikidata or any place
+service for them.
 
 | File | Contents |
 |------|----------|

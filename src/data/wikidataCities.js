@@ -339,12 +339,13 @@ export async function placesNear(
 const TWIN_KM = 3;
 
 /**
- * The city with this name, or null. A qualifier after a comma that names a
- * country ("Paris, France", "Paris, US") keeps only cities there, and finds
+ * The place with this name, or null. A qualifier after a comma that names a
+ * country ("Paris, France", "Paris, US") keeps only places there, and finds
  * nothing when none is; one that names no country ("Paris, Texas") is
- * ignored. A city of that name within `radiusKm` of `near` (the view) wins,
- * the nearest first, else the largest city of that name anywhere. Omnibar
- * can also ask for a smaller place nearby when the cities pack has no match.
+ * ignored. A place of that name within `radiusKm` of `near` (the view) wins,
+ * the nearest first, else the largest city of that name anywhere. With
+ * `includeSmallPlaces`, the smaller places of the detail tiles near the view
+ * count too: a village in view comes before a far bigger city of its name.
  */
 export async function findPlace(
   name,
@@ -360,20 +361,6 @@ export async function findPlace(
   const cities = (names.get(wanted) || []).filter(
     (row) => !country || row[4] === country,
   );
-  if (!cities.length) {
-    if (!includeSmallPlaces || !near) return null;
-    const nearby = await placesNear(
-      { ...near, radiusKm, limit: Infinity },
-      fetchImpl,
-    );
-    return (
-      nearby.find(
-        (place) =>
-          foldName(place.name) === wanted &&
-          (!country || place.country === country),
-      ) ?? null
-    );
-  }
   if (Number.isFinite(near?.latitude) && Number.isFinite(near?.longitude)) {
     let best = null;
     for (const row of cities) {
@@ -381,7 +368,24 @@ export async function findPlace(
       if (km <= radiusKm && (!best || km < best.distanceKm))
         best = toCity(row, km);
     }
+    if (includeSmallPlaces) {
+      const nearby = await placesNear(
+        {
+          latitude: near.latitude,
+          longitude: near.longitude,
+          radiusKm,
+          limit: Infinity,
+        },
+        fetchImpl,
+      );
+      const small = nearby.find(
+        (place) =>
+          foldName(place.name) === wanted &&
+          (!country || place.country === country),
+      );
+      if (small && (!best || small.distanceKm < best.distanceKm)) best = small;
+    }
     if (best) return best;
   }
-  return toCity(cities[0], 0);
+  return cities.length ? toCity(cities[0], 0) : null;
 }

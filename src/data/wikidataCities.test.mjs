@@ -96,6 +96,55 @@ test('findPlace takes a country qualifier and prefers a namesake in view', async
   );
 });
 
+test('a small place in view comes before a far bigger city of its name', async () => {
+  const module = await import(`./wikidataCities.js?small-${Date.now()}`);
+  // A village called Paris near Austin, in the 30_-100 detail tile.
+  const village = ['Paris', 30.4, -97.6, 1200, 'US', 'Q-village'];
+  const fetchImpl = async (url) => {
+    const file = url.pathname.split('/').at(-1);
+    const body =
+      file === 'cities.json'
+        ? { meta: {}, rows: PARIS }
+        : file === 'index.json'
+          ? { tiles: { '30_-100': 1 } }
+          : { rows: file === '30_-100.json' ? [village] : [] };
+    return { ok: true, json: async () => body };
+  };
+  const find = (name, near) =>
+    module.findPlace(name, { near, includeSmallPlaces: true }, fetchImpl);
+  const austin = { latitude: 30.27, longitude: -97.74 };
+  assert.equal((await find('Paris', austin)).wikidata, 'Q-village');
+  assert.ok((await find('Paris', austin)).distanceKm < 20);
+  // Only when small places are asked for.
+  assert.equal(
+    (await module.findPlace('Paris', { near: austin }, fetchImpl)).wikidata,
+    'Q90',
+  );
+  // A qualifier still decides.
+  assert.equal((await find('Paris, France', austin)).wikidata, 'Q90');
+  // Nowhere near the village: the largest city of the name.
+  assert.equal(
+    (await find('Paris', { latitude: 0, longitude: 0 })).wikidata,
+    'Q90',
+  );
+  assert.equal(
+    (await module.findPlace('Paris', {}, fetchImpl)).wikidata,
+    'Q90',
+  );
+  // Paris, Texas is nearer a view over it than the village is.
+  const texas = { latitude: 33.6, longitude: -95.6 };
+  assert.equal(
+    (
+      await module.findPlace(
+        'Paris',
+        { near: texas, radiusKm: 600, includeSmallPlaces: true },
+        fetchImpl,
+      )
+    ).wikidata,
+    'Q830149',
+  );
+});
+
 test('a circle that reaches a pole spans every longitude', () => {
   assert.equal(lonHalfSpan(89, 150), 180);
   assert.ok(lonHalfSpan(60, 150) < 3);
