@@ -172,6 +172,7 @@ import {
   pinnedCameraUrl,
 } from './normalize.js';
 import { directionToHeading } from '../../../src/data/directionText.js';
+import { readCatalogsTogether } from './catalogPair.js';
 import {
   readResponseBytesCapped,
   readResponseJsonCapped,
@@ -621,6 +622,7 @@ export async function loadOntarioSourcesFromOpenData(
       console.warn(
         `[CCTV] Ontario 511 camera download failed: ${resp.status}${keyHint}`,
       );
+      await resp.body?.cancel().catch(() => {});
       return [];
     }
     const rows = await resp.json();
@@ -1296,47 +1298,18 @@ export function parseTarkteeDatexImages(xml) {
  * @returns {Promise<Array<object>>} Normalized camera source objects.
  */
 export async function loadTarkteeSourcesFromDatex() {
-  // One deadline for both feeds. Whichever read fails first aborts the other,
-  // so a stalled sibling is not waited on until the deadline.
-  const sibling = new AbortController();
-  const signal = AbortSignal.any([
-    sibling.signal,
-    AbortSignal.timeout(TARKTEE_FETCH_TIMEOUT_MS),
-  ]);
-  const readXml = async (url, feed) => {
-    let response;
-    try {
-      response = await fetch(url, {
-        headers: { Accept: 'application/xml,text/xml,*/*' },
-        redirect: 'manual',
-        signal,
-      });
-      signal.throwIfAborted();
-      if (!response.ok) {
-        throw new Error(
-          response.status >= 300 && response.status < 400
-            ? `${feed} catalog redirected; redirects are not followed`
-            : `${feed} download failed: ${response.status}`,
-        );
-      }
-      return await readResponseTextCapped(
-        response,
-        TARKTEE_MAX_CATALOG_BYTES,
-        signal,
-      );
-    } catch (error) {
-      // The join needs both feeds: stop the other one now, and release this
-      // body, including a response that arrived after the other failed.
-      sibling.abort();
-      await response?.body?.cancel().catch(() => {});
-      throw error;
-    }
-  };
   try {
-    const [locXml, imgXml] = await Promise.all([
-      readXml(TARKTEE_LOCATIONS_URL, 'locations'),
-      readXml(TARKTEE_IMAGES_URL, 'images'),
-    ]);
+    const [locXml, imgXml] = await readCatalogsTogether(
+      [
+        { url: TARKTEE_LOCATIONS_URL, label: 'locations' },
+        { url: TARKTEE_IMAGES_URL, label: 'images' },
+      ],
+      {
+        accept: 'application/xml,text/xml,*/*',
+        maxBytes: TARKTEE_MAX_CATALOG_BYTES,
+        timeoutMs: TARKTEE_FETCH_TIMEOUT_MS,
+      },
+    );
     const locations = parseTarkteeDatexLocations(locXml);
     const images = parseTarkteeDatexImages(imgXml);
     if (!locations.size || !images.size) {

@@ -7546,8 +7546,11 @@ silently demoting every later lookup for the session.
   have a 4 MiB per-document limit, enforced against declared length and
   streamed bytes. A failed request, unsuccessful response or body read aborts
   the other feed at once and releases every response body, including one that
-  arrives after the failure. Cameras sharing an image number are deduplicated
-  before the Tarktee pack cap is applied.
+  arrives after the failure. The Lithuania pack reads its two catalogs
+  through the same helper (`readCatalogsTogether`,
+  `server/providers/cctv/catalogPair.js`) with its 15 s deadline. An Ontario
+  error response has its body released. Cameras sharing an image number are
+  deduplicated before the Tarktee pack cap is applied.
 - **CCTV v3 UX — viewshed + calibration gizmo** (built 2026-07-05 and field
   validated 2026-07-21): the COVERAGE toggle is a
   tri-state cycle `OFF → ON → VIEWSHED`; viewshed mode renders each visible camera's frustum

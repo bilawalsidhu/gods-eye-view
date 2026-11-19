@@ -563,6 +563,7 @@
       "server/providers/cctv/groundHeights.js",
       "server/providers/cctv/catalog.js",
       "server/providers/cctv/lithuania.js",
+      "server/providers/cctv/catalogPair.js",
       "server/providers/cctv/taiwan.js",
       "server/providers/cctv/quebec.js",
       "server/providers/cctv/ottawa.js",
