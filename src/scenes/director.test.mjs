@@ -332,7 +332,7 @@ test('same-shot seeking rolls back earlier layers and preserves Context, clock a
     await dataManager.setEnabled('flights', false);
     await dataManager.setEnabled('traffic', false);
     await dataManager.setEnabled('satellites', false);
-    styleManager.contextMode = 'space-missions';
+    styleManager.contextMode = 'flights';
     styleManager.contextExits.length = 0;
     refuse = (id) => id === 'traffic';
     dataManager.setEnabledCalls.length = 0;
@@ -349,7 +349,7 @@ test('same-shot seeking rolls back earlier layers and preserves Context, clock a
     assert.equal(enabled.get('flights'), false, 'first stale layer stays disabled');
     assert.equal(enabled.get('traffic'), false, 'refused second layer stays disabled');
     assert.equal(enabled.get('satellites'), false, 'later stale layer is never written');
-    assert.equal(styleManager.contextMode, 'space-missions');
+    assert.equal(styleManager.contextMode, 'flights');
     assert.deepEqual(styleManager.contextExits, []);
     assert.equal(viewer.views.length, viewsBefore, 'camera stays at the pre-seek pose');
     assert.equal(styleManager.visualCalls.length, visualCalls, 'do not rebuild the shot');
@@ -966,8 +966,6 @@ const REGISTERED = [
   'telegeography-submarine-cables', 'local-firms',
 ];
 
-/** Layers Space Missions permits while it isolates the globe (contextModePolicy). */
-const SPACE_MISSIONS_ALLOWED = new Set(['rocket-launches', 'satellites', 'radio']);
 
 const PROJECT_FIXTURE = {
   version: 3,
@@ -1089,7 +1087,7 @@ function fakeDataManager({ registered = REGISTERED, refuse = () => false } = {})
 }
 
 /** Style manager double covering the camera, visual, and Context facades. */
-function fakeStyleManager({ contextMode = null, exitFails = false } = {}) {
+function fakeStyleManager({ contextMode = null } = {}) {
   const manager = {
     contextMode,
     contextExits: [],
@@ -1107,7 +1105,6 @@ function fakeStyleManager({ contextMode = null, exitFails = false } = {}) {
     getContextModeState: () => ({ mode: manager.contextMode, entering: null }),
     async setContextMode(mode) {
       manager.contextExits.push(mode);
-      if (exitFails) return { ok: false, error: 'transition did not complete' };
       manager.contextMode = null;
       return { ok: true };
     },
@@ -1429,56 +1426,7 @@ test('a shot captured while tracking never re-establishes tracking on playback',
   }
 });
 
-test('a dirty Space Missions state is exited before a recipe applies its layers', async () => {
-  // Space Missions refuses every enable outside its own replay bundle. The old
-  // full-registry walk dismantled it by accident; the sparse policy never does,
-  // so all four Flights Radar enables were refused and reported as success.
-  const style = { contextMode: 'space-missions' };
-  const holder = {};
-  const data = {
-    refuse: (id, on) => on
-      && holder.styleManager?.contextMode === 'space-missions'
-      && !SPACE_MISSIONS_ALLOWED.has(id),
-  };
-  const { director, styleManager, dataManager, restore } = makeDirector({ style, data });
-  holder.styleManager = styleManager;
-  try {
-    const result = await director._applyLayerStates(recipeLayers('flights-radar'));
-
-    assert.deepEqual(styleManager.contextExits, ['off']);
-    assert.equal(styleManager.contextMode, null);
-    assert.deepEqual(result.refused, []);
-    assert.ok(result.applied.includes('flights'));
-    assert.deepEqual(
-      dataManager.setEnabledCalls.filter((call) => call.enabled).map((call) => call.id),
-      ['flights'],
-    );
-  } finally {
-    restore();
-  }
-});
-
-test('Orbital Watch does not compose over a Space Missions replay', async () => {
-  // Orbital Watch declares satellites, which the guard permits — so nothing is
-  // refused and a refusal-only check would pass while rocket-launches stayed
-  // on screen. Playback leaves an isolating mode whether or not it refuses.
-  const { director, styleManager, dataManager, restore } = makeDirector({
-    style: { contextMode: 'space-missions' },
-  });
-  try {
-    await director._applyLayerStates(recipeLayers('orbital-watch'));
-    assert.deepEqual(styleManager.contextExits, ['off']);
-    assert.equal(
-      dataManager.setEnabledCalls.some((call) => call.id === 'rocket-launches'),
-      false,
-      'the recipe never declares rocket-launches; exiting the mode is what clears it',
-    );
-  } finally {
-    restore();
-  }
-});
-
-test('a non-isolating context mode is left alone', async () => {
+test('playback leaves every Context mode alone', async () => {
   for (const contextMode of [null, 'flights']) {
     const { director, styleManager, restore } = makeDirector({ style: { contextMode } });
     try {

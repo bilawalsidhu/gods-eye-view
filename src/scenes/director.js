@@ -36,7 +36,7 @@ import {
   displayShotTitle,
   getSceneAppendRecipeById,
 } from './recipes.js';
-import { sceneLayerPlan, sceneRequiresContextModeExit } from './scenePolicy.js';
+import { sceneLayerPlan } from './scenePolicy.js';
 import { t, tn, msg, onLocaleChange } from '../i18n/index.js';
 import { createSceneDataPacks } from './dataPacks/controller.js';
 import { createSceneInteractions } from './interactions.js';
@@ -1819,7 +1819,7 @@ export class SceneDirector {
       const layerResult = await this._applyLayerStates(
         staleStates,
         this._loadToken(generation, controller.signal, seekGeneration),
-        { stopOnRefusal: true, exitContextMode: false },
+        { stopOnRefusal: true },
       );
       if (this._loadAbort === controller) this._loadAbort = null;
       if (this._seekAbort === controller) this._seekAbort = null;
@@ -2632,13 +2632,9 @@ export class SceneDirector {
    * Only layers the shot declares are touched — see src/scenes/scenePolicy.js
    * for why undeclared layers are left alone.
    *
-   * Two things this pass owes the operator:
-   *  - An isolating Context mode is left FIRST. Space Missions refuses every
-   *    unrelated enable, so a shot applied inside it composes a scene nobody
-   *    authored (see _exitIsolatingContextMode).
-   *  - A refused layer is reported. setEnabled() answers false when a guard
-   *    vetoes the transition; swallowing that answer is how playback came to
-   *    claim success over a scene it never assembled.
+   * A refused layer is reported. setEnabled() answers false when a guard
+   * vetoes the transition; swallowing that answer is how playback came to
+   * claim success over a scene it never assembled.
    *
    * The token's signal is handed to every transition, so a stop or a newer
    * request cancels the layer that is CURRENTLY moving rather than only the
@@ -2659,21 +2655,12 @@ export class SceneDirector {
   async _applyLayerStates(
     targetStates,
     token = null,
-    { stopOnRefusal = false, exitContextMode = true } = {},
+    { stopOnRefusal = false } = {},
   ) {
     const applied = [];
     const refused = [];
     const abort = () => ({ applied, refused, cancelled: true });
     if (token?.cancelled) return abort();
-
-    // Deliberately NOT aborted: leaving an isolating mode IS the restore to
-    // the operator's pre-mode state, which is exactly where a stopped scene
-    // should come to rest. Tearing that transaction in half would strand
-    // Context, so it completes and cancellation is honoured immediately after.
-    if (exitContextMode) {
-      await this._exitIsolatingContextMode();
-      if (token?.cancelled) return abort();
-    }
 
     const signal = token?.signal;
     const registered = new Set(
@@ -2800,53 +2787,6 @@ export class SceneDirector {
   _releaseAuthority() {
     this._releaseAbort ??= new AbortController();
     return this._releaseAbort.signal;
-  }
-
-  /**
-   * Leave a Context mode that isolates the globe, before a shot's layers land.
-   *
-   * Space Missions is the shipped case. It is a destructive-exclusive mode: a
-   * guard refuses every enable outside its own replay bundle, so a recipe that
-   * declares flights/satellites/earthquakes/traffic gets all four refused —
-   * and Orbital Watch, whose satellites the guard does permit, would still
-   * play over the mode's rocket-launches replay it never declared. Either way
-   * the shot is not the composition it describes.
-   *
-   * The old full-registry reconcile dismantled the mode by accident, as part
-   * of forcing every undeclared layer off. Declaring the exit is the honest
-   * version of that: the decision is read off the policy guard itself, so a
-   * future isolating mode is covered without being named here.
-   *
-   * @returns {Promise<boolean>} Whether a mode was exited.
-   */
-  async _exitIsolatingContextMode() {
-    // Older/headless style managers may predate the Context facade.
-    if (typeof this.styleManager?.getContextModeState !== 'function')
-      return false;
-    if (typeof this.styleManager?.setContextMode !== 'function') return false;
-
-    const state = this.styleManager.getContextModeState() || {};
-    // A mode still being entered already owns the guard, so it counts.
-    const mode = state.entering || state.mode || null;
-    if (!sceneRequiresContextModeExit(mode)) return false;
-
-    const result = await this.styleManager.setContextMode('off');
-    if (result && result.ok === false) {
-      console.warn(
-        `[Scenes] Could not exit ${mode}:`,
-        result.error || 'unknown reason',
-      );
-      this._updateStatus(() =>
-        t('Could not exit {mode} — scene layers may be refused', { mode }),
-      );
-      this._logEvent('context_mode_exit_failed', {
-        mode,
-        error: result.error || null,
-      });
-      return false;
-    }
-    this._logEvent('context_mode_exited', { mode });
-    return true;
   }
 
   /**

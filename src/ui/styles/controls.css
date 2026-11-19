@@ -97,7 +97,7 @@
 
 /* A hovered panel sets --rail-label-hover on itself (see below); its own
    header picks it up. Radio sits inside Context and keeps its own colour. */
-:root:not([data-ui-theme='cyber'])
+:root
   :is(#left-panel-stack, #right-context-rail)
   :is(
     .panel-header > .panel-title,
@@ -112,9 +112,8 @@
 }
 
 /* A title never pushes its toggle out of the card: one that does not fit
-   ends in an ellipsis. Cyber draws a marker left of the title, which a clip
-   would cut, and keeps its own header layout. */
-:root:not([data-ui-theme='cyber'])
+   ends in an ellipsis. */
+:root
   :is(#left-panel-stack, #right-context-rail)
   :is(.panel-header > .panel-title, .pp-header-label) {
   min-width: 0;
@@ -126,25 +125,25 @@
    so the header drops it and packs closer. English titles such as Recent
    Imagery then fit whole. Only the rail's own launchers: Radio, nested in
    Context, keeps its divider. */
-:root:not([data-ui-theme='cyber'])
+:root
   :is(#left-panel-stack, #right-context-rail)
   > .panel-collapsible.collapsed
   > [class$='-panel-inner']
   > .panel-header,
-:root:not([data-ui-theme='cyber'])
+:root
   :is(#left-panel-stack, #right-context-rail)
   > #pp-toggles.collapsed
   > .pp-header-row {
   gap: 8px;
 }
 
-:root:not([data-ui-theme='cyber'])
+:root
   :is(#left-panel-stack, #right-context-rail)
   > .panel-collapsible.collapsed
   > [class$='-panel-inner']
   > .panel-header
   > .panel-divider,
-:root:not([data-ui-theme='cyber'])
+:root
   :is(#left-panel-stack, #right-context-rail)
   > #pp-toggles.collapsed
   > .pp-header-row
@@ -152,13 +151,13 @@
   display: none;
 }
 
-:root:not([data-ui-theme='cyber'])
+:root
   :is(#left-panel-stack, #right-context-rail)
   > .panel-collapsible.collapsed
   > [class$='-panel-inner']
   > .panel-header
   > .panel-collapse-btn,
-:root:not([data-ui-theme='cyber'])
+:root
   :is(#left-panel-stack, #right-context-rail)
   > #pp-toggles.collapsed
   > .pp-header-row
@@ -187,6 +186,9 @@ html:not([lang='en']):not(:lang(zh)):not(:lang(ja))
   background: linear-gradient(to right, var(--glass-border), transparent);
 }
 
+/* A panel's collapse toggle, and the kit's square glyph button
+   (UiButton variant="icon"). */
+.ui-button--icon,
 .panel-collapse-btn {
   width: 22px;
   height: 22px;
@@ -206,17 +208,25 @@ html:not([lang='en']):not(:lang(zh)):not(:lang(ja))
     color var(--transition-fast);
 }
 
+/* A pressed kit icon button looks as a hovered one does. */
+.ui-button--icon:hover:not(:disabled),
+.ui-button--icon.ui-button--pressed:not(:disabled),
 .panel-collapse-btn:hover {
   border-color: var(--glass-border-hover);
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.07);
 }
 
+.ui-button--icon:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 /* A side panel answers the pointer as the command dock's trays do: a
    brighter edge and an accent title and toggle. Touch screens have no hover,
    so a tap must not leave a panel lit. */
 @media (hover: hover) and (pointer: fine) {
-  :root:not([data-ui-theme='cyber'])
+  :root
     :is(#left-panel-stack, #right-context-rail)
     :where(
       .data-panel-inner,
@@ -227,13 +237,14 @@ html:not([lang='en']):not(:lang(zh)):not(:lang(ja))
       .recent-imagery-panel-inner,
       .street-level-panel-inner,
       .global-context-panel-inner,
+      .space-missions-panel-inner,
       #pp-toggles:not(.collapsed),
       #pp-toggles.collapsed > .pp-header-row
     ) {
     transition: border-color var(--transition-fast);
   }
 
-  :root:not([data-ui-theme='cyber'])
+  :root
     :is(#left-panel-stack, #right-context-rail)
     :where(
       .data-panel-inner,
@@ -244,6 +255,7 @@ html:not([lang='en']):not(:lang(zh)):not(:lang(ja))
       .recent-imagery-panel-inner,
       .street-level-panel-inner,
       .global-context-panel-inner,
+      .space-missions-panel-inner,
       #pp-toggles:not(.collapsed),
       #pp-toggles.collapsed > .pp-header-row
     ):hover {
@@ -560,14 +572,12 @@ html:not([lang='en']):not(:lang(zh)):not(:lang(ja))
 }
 
 /* Display's title and toggle sit where the other panels' do: 14px of panel
-   padding plus a 4px header inset. The cyber theme sets its own insets. */
-:root:not([data-ui-theme='cyber']) #pp-toggles.collapsed > .pp-header-row {
+   padding plus a 4px header inset. */
+:root #pp-toggles.collapsed > .pp-header-row {
   padding: 8px 18px;
 }
 
-:root:not([data-ui-theme='cyber'])
-  #pp-toggles:not(.collapsed)
-  > .pp-header-row {
+:root #pp-toggles:not(.collapsed) > .pp-header-row {
   padding: 0 10px;
 }
 
@@ -580,10 +590,7 @@ html:not([lang='en']):not(:lang(zh)):not(:lang(ja))
 }
 
 /* In the default theme Display's toggle matches the other panels' 22px. */
-:root:not([data-ui-theme='cyber'])
-  #pp-toggles
-  > .pp-header-row
-  .pp-collapse-btn {
+:root #pp-toggles > .pp-header-row .pp-collapse-btn {
   width: 22px;
   height: 22px;
   font-size: 13px;
@@ -746,14 +753,6 @@ html:not([lang='en']) .pp-slider-row > .pp-slider-mini-label {
   min-width: 200px;
 }
 
-.cyber-sonar-control {
-  display: none;
-}
-
-:root[data-ui-theme='cyber'] .cyber-sonar-control {
-  display: flex;
-}
-
 .cyber-sonar-toggle-row,
 .cyber-sonar-setting {
   min-width: 200px;
@@ -762,10 +761,6 @@ html:not([lang='en']) .pp-slider-row > .pp-slider-mini-label {
 .cyber-sonar-toggle-row .pp-mode-btn:not(.gev-segment) {
   margin-left: auto;
   min-width: 48px;
-}
-
-:root[data-cyber-sonar='off'] .cyber-sonar-setting {
-  display: none;
 }
 
 /* Map Source tiles live with Visual Presets in the bottom command tray. */
@@ -1193,6 +1188,7 @@ body.ui-clean-view #data-panel,
 body.ui-clean-view #cctv-panel,
 body.ui-clean-view #radio-panel,
 body.ui-clean-view #global-context-panel,
+body.ui-clean-view #space-missions-panel,
 body.ui-clean-view #utilities-panel,
 body.ui-clean-view #scene-panel {
   opacity: 0 !important;

@@ -111,7 +111,7 @@ await page.waitForFunction(() => window.__godsEyeView?.viewer && window.__godsEy
   { timeout: 150000 });
 await sleep(12000); // let the boot fly-to settle before pinning
 await page.evaluate(() => {
-  document.querySelector('#first-run-launcher:not([hidden]) [data-first-run-choice="explore"]')?.click();
+  document.querySelector('#first-run-launcher:not([hidden]) [data-first-run-dismiss]')?.click();
 });
 await sleep(600); // let the launcher dismissal finish before taking evidence
 

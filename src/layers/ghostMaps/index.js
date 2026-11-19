@@ -707,13 +707,19 @@ export function createGhostMapsLayer({
         typeof pickedId === 'string' && pickedId.startsWith(PICK_PREFIX),
     );
     _clickSubscription = inputFor(_viewer).onClick((event) => {
-      const cardHit = overlayHost.hitTest?.(
-        event.screenPosition?.x,
-        event.screenPosition?.y,
-        { sourceId: GHOSTMAPS_OVERLAY_SOURCE_ID },
-      );
-      if (cardHit && cardHit.entryId === _selectedCardId) {
-        if (_selectedLink && openExternal) openExternal(_selectedLink);
+      // The card or label painted on top takes the click, read once per
+      // click so every layer agrees: ours opens its source whatever is drawn
+      // under it; another layer's is that layer's click, so the maps under
+      // it do not act and the selection stays.
+      const cardHit = picking.clickCard?.(event) ?? null;
+      if (cardHit) {
+        if (
+          cardHit.sourceId === GHOSTMAPS_OVERLAY_SOURCE_ID &&
+          cardHit.entryId === _selectedCardId &&
+          _selectedLink &&
+          openExternal
+        )
+          openExternal(_selectedLink);
         return;
       }
       const picked = event.topHit;

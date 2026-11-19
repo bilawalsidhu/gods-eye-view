@@ -482,19 +482,13 @@ export function createSelection({ state, services, parts }) {
     state.clickHandler = input.onClick((click) => {
       if (!state.enabled || services.pointer?.isPointerFree?.() === false)
         return;
-      const at = click.screenPosition;
-      const hit =
-        overlay?.hitTest?.(at?.x, at?.y, {
-          sourceId: WILDLIFE_SELECTED_SOURCE_ID,
-        }) ||
-        overlay?.hitTest?.(at?.x, at?.y, {
-          sourceId: WILDLIFE_OVERLAY_SOURCE_ID,
-        }) ||
-        overlay?.hitTest?.(at?.x, at?.y, {
-          sourceId: WILDLIFE_LABEL_SOURCE_ID,
-        });
+      // The card or label painted on top takes the click, read once per
+      // click so every layer agrees: ours acts whatever is drawn under it;
+      // another layer's is that layer's click, so the sightings under it do
+      // not act and the selection stays.
+      const hit = services.picking?.clickCard?.(click) ?? null;
       if (hit) {
-        hit.entry?.activate?.();
+        if (sourceIds.includes(hit.sourceId)) hit.entry?.activate?.();
         return;
       }
       // A sighting icon's item id is its pick id, `wildlife:<stableId>`.

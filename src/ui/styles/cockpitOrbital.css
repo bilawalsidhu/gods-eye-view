@@ -489,10 +489,8 @@
 #cockpit-hud[data-subject='satellite'] .cockpit-topline > div:first-child {
   visibility: hidden;
 }
-:root[data-ui-theme='cyber'] #cockpit-hud[data-subject='satellite']::before {
-  clip-path: none;
-}
-:root:not([data-ui-theme='cyber']) body.cockpit-orbit {
+
+:root body.cockpit-orbit {
   --panel-radius: 2px;
   --btn-radius: 2px;
 }

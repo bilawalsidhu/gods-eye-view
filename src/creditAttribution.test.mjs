@@ -6,6 +6,12 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// The Omnibar's desktop footer (src/ui/styles/omnibar-dock.css) is part of
+// the cascade below like every other stylesheet; its rules carry the
+// Omnibar scope, so they are modelled as a layout of their own.
+const omnibarCss = readStylesheet(
+  path.join(ROOT, 'src/ui/styles/omnibar-dock.css'),
+);
 const css = readStylesheet(path.join(ROOT, 'style.css'));
 
 /*
@@ -125,11 +131,56 @@ function specificity(selector) {
   return [ids, classes, types];
 }
 
-/** Flatten style.css into rules carrying their raw media stack. */
+/** Collapse whitespace and the padding inside brackets of a selector. */
+const tidySelector = (part) =>
+  part
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\(\s+/g, '(')
+    .replace(/\s+\)/g, ')');
+
+/**
+ * A nested selector resolved against its parent rule's selectors, as CSS
+ * nesting does: `&` stands for the parent, and a selector without one is a
+ * descendant of it.
+ */
+function nestSelectors(parents, head) {
+  const own = splitTopLevel(head, ',').map(tidySelector).filter(Boolean);
+  if (!parents) return own;
+  return parents.flatMap((parent) =>
+    own.map((part) =>
+      part.includes('&') ? part.replaceAll('&', parent) : `${parent} ${part}`,
+    ),
+  );
+}
+
+/**
+ * Flatten style.css into rules carrying their raw media stack. Nested style
+ * rules (CSS nesting) and media queries nested in a rule are resolved to
+ * full selectors, so a nested rule is modelled like any other.
+ */
 function flattenRules(source) {
   const src = source.replace(/\/\*[\s\S]*?\*\//g, '');
   const rules = [];
-  const mediaStack = [];
+  // Open blocks, innermost last: media queries and style rules.
+  const stack = [];
+  const mediaStack = () =>
+    stack.filter((frame) => frame.media).map((frame) => frame.media);
+  const parentRule = () =>
+    [...stack].reverse().find((frame) => frame.rule)?.rule || null;
+  const declare = (text) => {
+    const rule = parentRule();
+    const trimmed = text.trim();
+    if (!rule || !trimmed) return;
+    const colon = trimmed.indexOf(':');
+    if (colon < 0) return;
+    const value = trimmed.slice(colon + 1).trim();
+    rule.decls.push({
+      prop: trimmed.slice(0, colon).trim().toLowerCase(),
+      value: value.replace(/\s*!important$/i, '').trim(),
+      important: /!important\s*$/i.test(value),
+    });
+  };
   let index = 0;
   let prelude = '';
   while (index < src.length) {
@@ -137,14 +188,13 @@ function flattenRules(source) {
     if (char === '{') {
       const head = prelude.replace(/\s+/g, ' ').trim();
       prelude = '';
+      index += 1;
       if (head.startsWith('@media')) {
-        mediaStack.push(head.slice('@media'.length).trim());
-        index += 1;
+        stack.push({ media: head.slice('@media'.length).trim() });
         continue;
       }
       if (head.startsWith('@')) {
         let level = 1;
-        index += 1;
         while (index < src.length && level > 0) {
           if (src[index] === '{') level += 1;
           else if (src[index] === '}') level -= 1;
@@ -152,43 +202,34 @@ function flattenRules(source) {
         }
         continue;
       }
-      const close = src.indexOf('}', index);
-      assert.ok(close > index, `unterminated rule block for "${head}"`);
-      const decls = [];
-      for (const raw of src.slice(index + 1, close).split(';')) {
-        const text = raw.trim();
-        if (!text) continue;
-        const colon = text.indexOf(':');
-        if (colon < 0) continue;
-        const value = text.slice(colon + 1).trim();
-        decls.push({
-          prop: text.slice(0, colon).trim().toLowerCase(),
-          value: value.replace(/\s*!important$/i, '').trim(),
-          important: /!important\s*$/i.test(value),
-        });
-      }
-      rules.push({
+      const rule = {
         order: rules.length,
-        media: [...mediaStack],
-        parts: splitTopLevel(head, ',')
-          .map((part) =>
-            part.trim().replace(/\(\s+/g, '(').replace(/\s+\)/g, ')'),
-          )
-          .filter(Boolean),
-        decls,
-      });
-      index = close + 1;
+        media: mediaStack(),
+        parts: nestSelectors(parentRule()?.parts, head),
+        decls: [],
+      };
+      rules.push(rule);
+      stack.push({ rule });
+      continue;
+    }
+    if (char === ';') {
+      declare(prelude);
+      prelude = '';
+      index += 1;
       continue;
     }
     if (char === '}') {
-      mediaStack.pop();
+      // The last declaration of a block may omit its semicolon.
+      declare(prelude);
       prelude = '';
+      stack.pop();
       index += 1;
       continue;
     }
     prelude += char;
     index += 1;
   }
+  assert.equal(stack.length, 0, 'unbalanced braces in style.css');
   return rules;
 }
 
@@ -227,6 +268,29 @@ const RECOGNIZED = new Set([
 ]);
 
 const DOCKED_RAIL = 'body.context-docked #right-context-rail';
+
+// The desktop Omnibar layout: the scope its stylesheet nests every rule in.
+// It applies on the desktop shell (above the 720px phone breakpoint) while
+// the Omnibar and the voice control share the dock; outside it the legacy
+// layout below governs.
+const OMNIBAR_SCOPE =
+  'body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(.ui-clean-view):not(.recording-mode):where(:has(#gev-omnibar):has(#command-dock > #gev-voice-control))';
+const OMNIBAR = Object.freeze({
+  dock: `${OMNIBAR_SCOPE} #command-dock`,
+  credit: `${OMNIBAR_SCOPE} :is(#cesium-credits, #gev-credits)`,
+  minimalCredit: `${OMNIBAR_SCOPE}:has(#intel-hud[data-variant='minimal'].active) :is(#cesium-credits, #gev-credits)`,
+  minimalRail: `${OMNIBAR_SCOPE}:not(.context-docked):has(#intel-hud[data-variant='minimal'].active) #right-context-rail`,
+  trays: `${OMNIBAR_SCOPE} #command-dock > :is(#location-bar, #control-panel)`,
+});
+// What each Omnibar-scope rule may set on a modelled box; the Omnibar
+// clearance test resolves every one of them through the full cascade.
+const OMNIBAR_RECOGNIZED = new Map([
+  [OMNIBAR.dock, new Set(['top', 'bottom', 'height', 'min-height'])],
+  [OMNIBAR.credit, new Set(['bottom'])],
+  [OMNIBAR.minimalCredit, new Set(['bottom'])],
+  [OMNIBAR.minimalRail, new Set(['max-height'])],
+]);
+const OMNIBAR_MIN_WIDTH = 721;
 const ELEMENT_KEYS = [
   '#cesium-credits',
   '#command-dock',
@@ -300,8 +364,11 @@ function ownBoxEntries() {
       // So is Stories, with GEV's chrome stepped aside; storiesCredit.test.mjs
       // pins its attribution placement.
       if (
-        /^body\.stories-mode:not\(#gs-a\):not\(#gs-b\) #(cesium|gev)-credits$/.test(part)
-      ) continue;
+        /^body\.stories-mode:not\(#gs-a\):not\(#gs-b\) #(cesium|gev)-credits$/.test(
+          part,
+        )
+      )
+        continue;
       entries.push({ rule, part });
     }
   }
@@ -372,12 +439,21 @@ function resolve(candidates, prop, width, label) {
 /** Evaluate a length. Anything the model cannot resolve exactly fails loudly. */
 function toPx(value, viewportHeight, where) {
   const trimmed = value.trim();
+  // The larger of its lengths, each resolved the same way.
+  if (/^max\(.*\)$/.test(trimmed))
+    return Math.max(
+      ...splitTopLevel(trimmed.slice(4, -1), ',').map((part) =>
+        toPx(part, viewportHeight, where),
+      ),
+    );
   const inner = /^calc\(/.test(trimmed) ? trimmed.slice(5, -1) : trimmed;
-  assert.doesNotMatch(
-    inner,
-    /\bcalc\(/,
-    `nested calc() in ${where}: "${value}"`,
-  );
+  // A calc() is a whole term of its own, resolved below; nowhere else.
+  for (const term of splitTopLevel(inner, '+'))
+    assert.doesNotMatch(
+      term.trim().replace(/^calc\(.*\)$/, ''),
+      /\bcalc\(/,
+      `nested calc() in ${where}: "${value}"`,
+    );
   assert.doesNotMatch(
     inner,
     /\b(min|max|clamp|env|attr|round|mod)\(/,
@@ -398,6 +474,18 @@ function toPx(value, viewportHeight, where) {
     const term = raw.trim();
     if (!term) continue;
     if (term === '100%') continue; // the tray's own panel height, added separately
+    // A calc() of its own, as a term ("calc(var(--omnibar-credits-clear) +
+    // 2px)" once substituted).
+    if (/^calc\(.*\)$/.test(term)) {
+      total += toPx(term, viewportHeight, where);
+      continue;
+    }
+    // The credit line's own height (src/ui/creditLineHeight.js), at the
+    // height this pin models it at.
+    if (/^var\(--credit-line-height\b/.test(term)) {
+      total += CREDIT_HEIGHT_PX;
+      continue;
+    }
     if (term.startsWith('var(')) {
       const name = term.slice(4, term.lastIndexOf(')')).split(',')[0].trim();
       assert.ok(
@@ -521,6 +609,22 @@ test('the model refuses every cascade construct it cannot resolve', () => {
     // Expanded Context covers the right edge top to bottom; the credit row
     // stops short of it instead (the docked-Context test below).
     if (part === DOCKED_RAIL) continue;
+    if (part.startsWith(OMNIBAR_SCOPE)) {
+      const allowed = OMNIBAR_RECOGNIZED.get(part);
+      for (const decl of guarded) {
+        if (!allowed?.has(decl.prop))
+          complaints.push(
+            `unrecognized Omnibar rule positions a modelled element: "${part}" (${decl.prop})`,
+          );
+        if (decl.important)
+          complaints.push(`!important on ${decl.prop} of "${part}"`);
+      }
+      if (rule.media.length)
+        complaints.push(
+          `media query on Omnibar rule "${part}": ${rule.media.join(' && ')}`,
+        );
+      continue;
+    }
     if (!RECOGNIZED.has(part)) {
       complaints.push(
         `unrecognized selector positions a modelled element: "${part}" (${guarded.map((d) => d.prop).join(', ')})`,
@@ -770,6 +874,152 @@ test('right rail measurement cannot persist into a painted attribution layout', 
 });
 
 // ── Clearance ───────────────────────────────────────────────────────────────
+
+/** A custom property's value as the Omnibar scope declares it. */
+function omnibarVar(name) {
+  const decls = RULES.filter((rule) => rule.parts.includes(OMNIBAR_SCOPE))
+    .flatMap((rule) => rule.decls)
+    .filter((decl) => decl.prop === name);
+  assert.equal(
+    decls.length,
+    1,
+    `${name} is declared once in the Omnibar scope`,
+  );
+  return decls[0].value;
+}
+
+/** A length in the Omnibar layout, with its scope's own custom properties. */
+function omnibarPx(value, viewportHeight, where) {
+  // The scope's properties may name each other ("--omnibar-dock-bottom"
+  // clears "--omnibar-credits-clear"): substitute until none is left.
+  let substituted = value;
+  for (let pass = 0; /var\(--omnibar-/.test(substituted); pass += 1) {
+    assert.ok(
+      pass < 8,
+      `Omnibar properties name each other in a loop: ${value}`,
+    );
+    substituted = substituted.replace(/var\((--omnibar-[\w-]+)\)/g, (_, name) =>
+      omnibarVar(name),
+    );
+  }
+  return toPx(substituted, viewportHeight, where);
+}
+
+test('Omnibar reserves a non-overlapping desktop footer at native credit sizing', () => {
+  // The Omnibar layout resolves through the same cascade as the legacy one:
+  // every legacy rule that could still match competes with the scope's.
+  const trayOpen = [
+    '#command-dock:has(#location-bar:not(.collapsed))',
+    '#command-dock:has(#control-panel:not(.collapsed))',
+  ];
+  assert.equal(
+    omnibarVar('--world-timeline-lift'),
+    '0px',
+    'the Omnibar layout holds the timeline lift at 0',
+  );
+  for (const width of WIDTHS.filter((w) => w >= OMNIBAR_MIN_WIDTH)) {
+    for (const height of HEIGHTS) {
+      for (const minimal of [false, true]) {
+        const dock = resolve(
+          ['#command-dock', ...trayOpen, OMNIBAR.dock],
+          'bottom',
+          width,
+          'Omnibar dock',
+        );
+        assert.equal(
+          dock.part,
+          OMNIBAR.dock,
+          `the Omnibar owns the dock at ${width}px`,
+        );
+        // Its top and height too: a legacy top or height winning here would
+        // move or stretch the dock the clearance below is measured from.
+        for (const [prop, value] of [
+          ['top', 'auto'],
+          ['height', '56px'],
+        ]) {
+          const own = resolve(
+            ['#command-dock', ...trayOpen, OMNIBAR.dock],
+            prop,
+            width,
+            `Omnibar dock ${prop}`,
+          );
+          assert.equal(
+            own.part,
+            OMNIBAR.dock,
+            `the Omnibar owns the dock ${prop} at ${width}px`,
+          );
+          assert.equal(
+            own.decl.value,
+            value,
+            `Omnibar dock ${prop} at ${width}px`,
+          );
+        }
+        const credit = resolve(
+          [
+            ...CREDIT_SELECTORS,
+            OMNIBAR.credit,
+            ...(minimal ? [MINIMAL_HUD_CREDIT, OMNIBAR.minimalCredit] : []),
+          ],
+          'bottom',
+          width,
+          'Omnibar credit',
+        );
+        assert.ok(
+          credit.part.startsWith(OMNIBAR_SCOPE),
+          `the Omnibar owns the credit row at ${width}px`,
+        );
+        const dockBottom = omnibarPx(
+          dock.decl.value,
+          height,
+          'Omnibar dock bottom',
+        );
+        const creditTop =
+          omnibarPx(credit.decl.value, height, 'Omnibar credit bottom') +
+          CREDIT_HEIGHT_PX;
+        assert.ok(
+          dockBottom - creditTop >= MIN_CLEARANCE_PX,
+          `at ${width}x${height}${minimal ? ' (minimal HUD)' : ''} the Omnibar dock (${dockBottom}px) must clear the credit line (${creditTop}px)`,
+        );
+      }
+    }
+  }
+  // No legacy tray opens over the credit: both are hidden in this layout,
+  // and no rule elsewhere forces them back.
+  const trays = RULES.find((rule) => rule.parts.includes(OMNIBAR.trays));
+  assert.ok(trays, 'the Omnibar layout hides the legacy trays');
+  assert.equal(
+    trays.decls.find((decl) => decl.prop === 'display')?.value,
+    'none',
+  );
+  for (const rule of RULES) {
+    for (const part of rule.parts) {
+      if (!/#(location-bar|control-panel)$/.test(lastCompound(part))) continue;
+      assert.ok(
+        !rule.decls.some((decl) => decl.prop === 'display' && decl.important),
+        `"${part}" forces a hidden tray back with !important`,
+      );
+    }
+  }
+  // The minimal-HUD rail cap only shortens the rail, which is anchored at
+  // its top, so it can only add room above the credit.
+  const rail = RULES.find((rule) => rule.parts.includes(OMNIBAR.minimalRail));
+  const cap = rail.decls.find(
+    (decl) => decl.prop === '--omnibar-minimal-rail-height',
+  );
+  assert.match(
+    cap?.value || '',
+    /^min\(\s*var\(--right-stack-max-height, 70vh\),/,
+  );
+  assert.equal(
+    rail.decls.find((decl) => decl.prop === 'max-height')?.value,
+    'var(--omnibar-minimal-rail-height)',
+  );
+  assert.doesNotMatch(
+    omnibarCss,
+    /\.cesium-widget-credits|\.cesium-credit-logoContainer|\.cesium-credit-textContainer/,
+    'the footer uses the original credit text and logo sizing',
+  );
+});
 
 test('every open dock tray clears the required credit at every modelled viewport', () => {
   // Below 900px the tray widens to nearly the viewport and lands on the

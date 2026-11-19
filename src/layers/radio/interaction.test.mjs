@@ -62,3 +62,49 @@ test('a direct hit needs no drill, and another layer’s contact keeps its click
   });
   assert.equal(pickedRadioStationAt(other), null);
 });
+
+// Another layer's card or label painted on top takes the click: no station
+// under it acts, whether radio found it through its window, as the tap's touch
+// contact or as the exact pick. Radio's own card on top is radio's click.
+test("a station under another layer's card does not act", () => {
+  let top = null;
+  const radio = createInteraction({
+    state: {
+      _stationById: new Map([
+        ['kexp', {}],
+        ['kuow', {}],
+      ]),
+    },
+    services: {
+      picking: {
+        resolvePickId: (picked) => picked?.id ?? null,
+        isOwnedByOtherLayer: () => false,
+        // The card on top at a click, as the registry answers from the host.
+        isUnderOtherCard: (_click, own = []) =>
+          Boolean(top) && !own.includes(top.sourceId),
+        registerPickOwner() {},
+        unregisterPickOwner() {},
+      },
+      overlays: { setOverlaySourceVisible() {} },
+    },
+    parts: { rendering: { radioStationIdFromPick } },
+  });
+  const station = hit('radio:kexp');
+  const tap = (contact = null, pick = null) => ({
+    ...clickEvent({ pick, windowHits: [station] }),
+    hit: contact,
+    screenPosition: { x: 5, y: 5 },
+  });
+  assert.equal(radio.pickedRadioStationAt(tap()), 'kexp', 'open map');
+  top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  assert.equal(radio.pickedRadioStationAt(tap()), null, 'window only');
+  assert.equal(radio.pickedRadioStationAt(tap(station)), null, 'contact');
+  assert.equal(
+    radio.pickedRadioStationAt(tap(hit('radio:kuow'))),
+    null,
+    'another contact station',
+  );
+  assert.equal(radio.pickedRadioStationAt(tap(null, station)), null, 'exact');
+  top = { sourceId: 'radio', entryId: 'radio:kexp' };
+  assert.equal(radio.pickedRadioStationAt(tap()), 'kexp', 'our own card');
+});
