@@ -181,12 +181,12 @@ export function createLifecycle({
     services.overlays?.hitTestWorldOverlay?.(position?.x, position?.y);
   const missionsShown = () =>
     layerState._enabled && parts.rendering.missionsShown();
-  const focusLaunch = (id) => {
+  const focusLaunch = (id, { move = true } = {}) => {
     if (!id) return false;
     const launch = layerState._launches.find((entry) => entry.id === id);
     if (!launch) return false;
     parts.selection.setSelectedMission(launch.id);
-    parts.selection.focusMission(launch);
+    if (move) parts.selection.focusMission(launch);
     for (const listener of [...layerState._globePickListeners]) {
       try {
         listener(launch.id);
@@ -245,14 +245,16 @@ export function createLifecycle({
       const input = inputFor(viewer);
       const overlayClicks = new WeakSet();
       const unsubscribeLabelClick = input.onOverlayClick((event) => {
-        // The cockpit reads ambient clicks; a mission label must not take them.
-        if (!missionsShown() || cockpitActive()) return false;
+        if (!missionsShown()) return false;
         const hit = overlayAt(event.screenPosition);
         if (!hit) return false;
         // Capture the painted hit before other handlers can invalidate the
         // overlay. An unrelated label keeps the click above mission geometry.
         overlayClicks.add(event);
-        return focusLaunch(markerLaunchId(hit));
+        // The label is the card on top, so every other layer and the cockpit
+        // leave its click alone. In the cockpit, which holds the camera, it
+        // selects the mission without moving there.
+        return focusLaunch(markerLaunchId(hit), { move: !cockpitActive() });
       });
       const unsubscribeClick = input.onClick((event) => {
         // Another layer's card or label on top is that layer's click, read

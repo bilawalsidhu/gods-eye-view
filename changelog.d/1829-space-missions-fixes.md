@@ -1,6 +1,8 @@
-- Space Missions finishes switching off before anything else runs: a launch
-  hovered while the layer is going off shows no preview, and Satellites
-  keeps the state it was saved with when it is still busy. A click on a
-  mission label reaches every layer as a click on the label, the card on
-  top, so none of them selects, turns on, flies to or opens the link of
-  what lies under the label (manjunath22466, samehkhamis, #1829).
+- Space Missions going off no longer acts on a launch hovered, selected or
+  replayed meanwhile, and Satellites keeps the state it was saved with when
+  it is still busy; a Satellites setting changed during a mission, such as
+  a place search ending tracking, is kept when the mission ends. A click on
+  a mission label is a click on the card on top, so no layer selects, turns
+  on, flies to or opens the link of what lies under it; in the cockpit the
+  label selects its mission without moving the camera (manjunath22466,
+  samehkhamis, #1829).

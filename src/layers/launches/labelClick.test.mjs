@@ -54,6 +54,7 @@ function rig(t, { overlayHit = null, geometryLaunchId = null } = {}) {
   };
   const state = createState({ services });
   const focused = [];
+  const moved = [];
   const restoreFailure = { error: null };
   const parts = {
     panel: stub(),
@@ -63,6 +64,7 @@ function rig(t, { overlayHit = null, geometryLaunchId = null } = {}) {
     orbitRendering: stub(),
     selection: stub({
       setSelectedMission: (id) => focused.push(id),
+      focusMission: (launch) => moved.push(launch.id),
     }),
     satelliteIntents: stub(),
     ingestion: stub({
@@ -97,6 +99,7 @@ function rig(t, { overlayHit = null, geometryLaunchId = null } = {}) {
   });
   return {
     focused,
+    moved,
     ambient,
     state,
     lifecycle,
@@ -122,8 +125,9 @@ test('a mission label click focuses its launch and covers the geometry beneath',
   const r = rig(t, { overlayHit: label('launch:L2'), geometryLaunchId: 'L1' });
   r.click();
   assert.deepEqual(r.focused, ['L2'], 'the mission beneath is not picked');
-  // Other layers still hear it, to close their cards or clear selection,
-  // as a click on the label rather than on the geometry beneath.
+  // Other layers still hear it, as a click on the label rather than on the
+  // geometry beneath; the label is the card on top, so they keep their
+  // selections.
   assert.equal(r.ambient.length, 1);
   assert.equal(r.ambient[0].overlay, true);
   assert.equal(r.ambient[0].drawHit, null);
@@ -164,14 +168,16 @@ test('a throwing globe-pick listener does not stop the pick', (t) => {
   assert.equal(r.ambient[0].overlay, true);
 });
 
-test('a mission label for an unknown launch falls through to other layers', (t) => {
+test('a mission label for an unknown launch selects nothing', (t) => {
   const r = rig(t, {
     overlayHit: label('launch:gone'),
     geometryLaunchId: 'L1',
   });
   r.click();
   assert.deepEqual(r.focused, [], 'nothing is focused');
-  assert.equal(r.ambient.length, 1, 'other layers still get the click');
+  // Other layers hear the click; the label is still the card on top for
+  // them (clickYield.test.mjs), so none acts under it.
+  assert.equal(r.ambient.length, 1);
 });
 
 test("another layer's label keeps the click above mission geometry", (t) => {
@@ -190,7 +196,7 @@ test("another layer's label keeps the click above mission geometry", (t) => {
   assert.deepEqual(r.focused, ['L1']);
 });
 
-test('a mission label leaves the click to the cockpit while it is on', (t) => {
+test('in the cockpit a mission label selects its mission without moving the camera', (t) => {
   const r = rig(t, { overlayHit: label('launch:L2') });
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'document');
   Object.defineProperty(globalThis, 'document', {
@@ -205,8 +211,11 @@ test('a mission label leaves the click to the cockpit while it is on', (t) => {
     if (previous) Object.defineProperty(globalThis, 'document', previous);
     else delete globalThis.document;
   }
-  assert.deepEqual(r.focused, []);
-  assert.equal(r.ambient.length, 1, 'the cockpit click handler gets it');
+  assert.deepEqual(r.focused, ['L2'], 'the mission is selected');
+  assert.deepEqual(r.moved, [], 'the cockpit keeps the camera');
+  // Out of the cockpit the same click moves there too.
+  r.click();
+  assert.deepEqual(r.moved, ['L2']);
 });
 
 test('destroy releases the click handlers when the Satellites restore fails', async (t) => {
