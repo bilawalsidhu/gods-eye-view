@@ -5592,7 +5592,9 @@ activeCameraCardEnabled: true })` may publish it through the retained
 >   switching Space Missions off restores the pre-mission Satellite enabled
 >   state and presentation parameters, except that an explicit Satellites action
 >   taken while it ran is kept. Restored parameters never re-show primitives
->   while the Satellite layer is disabled.
+>   while the Satellite layer is disabled. When Satellites is still busy after
+>   the 30 s limit, the restore changes nothing and keeps the saved state, so
+>   switching Space Missions off again finishes it.
 > - **Flights 3D/cockpit hardening:** the destination-direction cue is an
 >   inline SVG rather than a remotely loaded Material Icons ligature, so a
 >   blocked or late font can no longer expand the literal word `navigation`

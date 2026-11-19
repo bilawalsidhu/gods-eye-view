@@ -623,6 +623,13 @@ test('a Satellites enable that never settles still lets mission disable complete
     stuck.resolve();
   }
   await f.settle();
+  // The saved Satellites state was kept: turning Space Missions off again
+  // once Satellites settles gives back the Satellites it turned on.
+  assert.equal(f.manager.isEnabled('satellites'), true);
+  await f.manager.setEnabled('rocket-launches', false, { origin: 'user' });
+  await f.settle();
+  assert.equal(f.manager.isEnabled('rocket-launches'), false);
+  assert.equal(f.manager.isEnabled('satellites'), false);
 });
 
 test('a failed Satellites restore still clears the selected mission panel', async (t) => {

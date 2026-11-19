@@ -179,18 +179,21 @@ export function createIngestion({
       layerState._satelliteStateBeforeMission !== snapshot
     )
       return;
+    // An accepted Satellites action owns visibility through mission teardown.
+    const restoreVisibility = snapshot.restoreVisibility !== false;
+    // Satellites is still busy: change nothing and keep the saved state, so
+    // turning Space Missions off again can finish the restore.
+    if (restoreVisibility && !idle)
+      throw new Error(
+        'Space Missions could not restore the satellites layer: it did not settle',
+      );
     layerState._satelliteStateBeforeMission = null;
     layerState._satelliteActivationPromise = null;
     manager.setLayerParams(
       'satellites',
       parts.policyHelpers.satelliteParamsAfterSpaceMissions(snapshot.params),
     );
-    // An accepted Satellites action owns visibility through mission teardown.
-    if (snapshot.restoreVisibility === false) return;
-    if (!idle)
-      throw new Error(
-        'Space Missions could not restore the satellites layer: it did not settle',
-      );
+    if (!restoreVisibility) return;
     const restored = await manager.setEnabled('satellites', snapshot.enabled);
     if (
       restored === false ||
