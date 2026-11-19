@@ -176,7 +176,11 @@ Opacity slider (the long form's `sco`). It is written only below 100, so a
 link made before it, which opens at full opacity, keeps its code.
 
 Flag bits (field 9): 0 `bloom`, 1 `sharpen`, 2 `hudVisible`, 3
-`celestialRing` (each defaulting by style), 4 `scopeEnabled` (default on).
+`celestialRing` (each defaulting by style), 4 `scopeEnabled` (default on), 5
+`hudSonar` (default off). `hudSonar` is Sonar on beside a HUD layout whose code
+cannot say so, Minimal (the long form's `hs=1`); Tactical with Sonar stays the
+`cyber` layout code alone. A link made before the bit has it off, and opens
+with Sonar on only when it names `cyber`, as before.
 
 ### Style defaults
 

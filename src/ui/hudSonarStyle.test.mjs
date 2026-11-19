@@ -28,6 +28,13 @@ import { setCyberSonarControls } from './cyberSonarControls.js';
 import { createPinia } from 'pinia';
 import { useDisplayStore } from './stores/display.js';
 import { VisualSettings } from './visualSettings.js';
+import { normalizeShot } from '../scenes/project.js';
+import {
+  SCENE_DOCUMENT_VERSION,
+  validateSceneDocument,
+} from '../director/document.js';
+import { decodeShareView, encodeShareView } from '../share/viewCodec.js';
+import { toLegacyShareState } from '../share/legacyShareState.js';
 import { STYLES } from './visualPresets.js';
 
 const read = (relative) =>
@@ -140,9 +147,10 @@ test('a share link, scene or saved view naming Cyber opens Tactical with Sonar o
   assert.equal(isCyberSonarEnabled(root), true);
 });
 
-test('links and scene shots record Tactical with Sonar as the Cyber code, and only that', (t) => {
-  const { owner, root } = styleOwner(t, 'tactical');
-  Object.assign(owner.services, {
+/** A styleOwner that can also read its share state and scene shot. */
+function sharingOwner(t, initialVariant) {
+  const fixture = styleOwner(t, initialVariant);
+  Object.assign(fixture.owner.services, {
     getDetectionTuning: () => ({ allocationStrategy: 'ELASTIC' }),
     getDetectionMode: () => 'OFF',
     isScopeMaskEnabled: () => true,
@@ -150,18 +158,94 @@ test('links and scene shots record Tactical with Sonar as the Cyber code, and on
     getScopeMaskOpacity: () => 1,
     getScopeTerminusOverride: () => null,
   });
-  owner.readCelestialRing = () => null;
-  const shared = () => owner._readShareState().options.hudVariant;
-  assert.equal(shared(), 'tactical');
+  fixture.owner.readCelestialRing = () => null;
+  return fixture;
+}
+
+test('links and scene shots record Tactical with Sonar as the Cyber code, and only that', (t) => {
+  const { owner, root } = sharingOwner(t, 'tactical');
+  const shared = () => {
+    const { hudVariant, hudSonar } = owner._readShareState().options;
+    return [hudVariant, hudSonar];
+  };
+  const shot = () => owner.getVisualState().hud;
+  assert.deepEqual(shared(), ['tactical', false]);
+  assert.deepEqual(shot(), { visible: true, variant: 'tactical' });
   owner._setCyberSonarEnabled(true);
-  assert.equal(shared(), 'cyber');
-  // Minimal has no code that carries Sonar; it stays local.
+  // Tactical with Sonar is the Cyber code alone, as older readers expect.
+  assert.deepEqual(shared(), ['cyber', false]);
+  assert.deepEqual(shot(), { visible: true, variant: 'cyber' });
+  // Minimal has no such code, so Sonar is carried beside it.
   owner._setHudVariant('minimal');
-  assert.equal(shared(), 'minimal');
-  owner._setHudVariant('tactical');
-  assert.equal(shared(), 'cyber');
+  assert.deepEqual(shared(), ['minimal', true]);
+  assert.deepEqual(shot(), { visible: true, variant: 'minimal', sonar: true });
   owner._setCyberSonarEnabled(false);
-  assert.equal(shared(), 'tactical');
+  assert.deepEqual(shared(), ['minimal', false]);
+  assert.deepEqual(shot(), { visible: true, variant: 'minimal' });
+  owner._setHudVariant('tactical');
+  assert.deepEqual(shared(), ['tactical', false]);
+  assert.equal(isCyberSonarEnabled(root), false);
+});
+
+test('Minimal with Sonar round-trips through a compact link and a scene shot', async (t) => {
+  const { owner, hud, root } = sharingOwner(t, 'minimal');
+  owner._setCyberSonarEnabled(true);
+  const options = owner._readShareState().options;
+  const shot = normalizeShot(
+    JSON.parse(JSON.stringify({ visual: owner.getVisualState() })),
+  );
+  validateSceneDocument({
+    version: SCENE_DOCUMENT_VERSION,
+    scenes: [{ id: 'scene', title: 'Scene', shots: [shot] }],
+  });
+  const code = encodeShareView({
+    hudVariant: options.hudVariant,
+    hudSonar: options.hudSonar,
+  });
+  const link = decodeShareView(code, { nowMs: Date.now() }).state;
+
+  // The viewer is elsewhere: Tactical, Sonar off.
+  owner._setHudVariant('tactical');
+  owner._setCyberSonarEnabled(false);
+  // The HUD fields of the parsed link (the fixture drives no detection).
+  const { hudVariant, hudSonar } = toLegacyShareState(link);
+  assert.deepEqual([hudVariant, hudSonar], ['minimal', true]);
+  await owner.restoreShareState({ hudVariant, hudSonar });
+  assert.equal(hud.getVariant(), 'minimal');
+  assert.equal(isCyberSonarEnabled(root), true);
+
+  owner._setHudVariant('tactical');
+  owner._setCyberSonarEnabled(false);
+  // The saved shot's HUD, as the editor normalized and validated it.
+  assert.deepEqual(shot.visual.hud, {
+    visible: true,
+    variant: 'minimal',
+    sonar: true,
+  });
+  await owner.applyVisualState({ hud: shot.visual.hud });
+  assert.equal(hud.getVariant(), 'minimal');
+  assert.equal(isCyberSonarEnabled(root), true);
+});
+
+test('a link or scene shot that does not mention Sonar restores as before', async (t) => {
+  const { owner, hud, root } = sharingOwner(t, 'minimal');
+  // Made before Sonar was carried: Minimal turns the viewer's Sonar off...
+  setCyberSonarEnabled(true, root);
+  await owner.restoreShareState({ hudVariant: 'minimal' });
+  assert.equal(isCyberSonarEnabled(root), false);
+  setCyberSonarEnabled(true, root);
+  await owner.applyVisualState({ hud: { variant: 'minimal' } });
+  assert.equal(isCyberSonarEnabled(root), false);
+  // ...and Cyber still opens Tactical with Sonar on.
+  await owner.restoreShareState({ hudVariant: 'cyber', hudSonar: false });
+  assert.equal(hud.getVariant(), 'tactical');
+  assert.equal(isCyberSonarEnabled(root), true);
+  owner._setCyberSonarEnabled(false);
+  await owner.applyVisualState({ hud: { variant: 'cyber' } });
+  assert.equal(isCyberSonarEnabled(root), true);
+  // Sonar beside a layout counts only in a restore, not a layout choice.
+  owner._setCyberSonarEnabled(false);
+  owner._setHudVariant('minimal', { sonar: true });
   assert.equal(isCyberSonarEnabled(root), false);
 });
 
@@ -458,8 +542,14 @@ test('the desktop bottom row: credits on the Power Up baseline, the dock lifted,
       const anchor = trays.match(
         /#cesium-credits \{\s*right: auto;\s*bottom: ([\d.]+)rem;\s*left: 1\.5rem;/,
       );
+      // From 1200px, and in the Omnibar layout at every width: a long line
+      // wraps rather than running under the corner row.
       const box = trayWide.match(
-        /\n  #cesium-credits \.cesium-widget-credits \{\s*width: max-content;\s*max-width: calc\(100vw - 1\.5rem - ([\d.]+)rem\);\s*white-space: normal;/,
+        /\n\s*#cesium-credits \.cesium-widget-credits \{\s*width: max-content;\s*max-width: calc\(100vw - 1\.5rem - ([\d.]+)rem\);\s*white-space: normal;/,
+      );
+      assert.match(
+        trays,
+        /:has\(#command-dock > #gev-voice-control\)\s*\)\s*#cesium-credits\s*\.cesium-widget-credits \{\s*width: max-content;\s*max-width: calc\(100vw - 1\.5rem - 26rem\);/,
       );
       return anchor && box && [null, anchor[1], box[1]];
     })(),
@@ -490,14 +580,22 @@ test('the desktop bottom row: credits on the Power Up baseline, the dock lifted,
     trayWide,
     /html\[dir='rtl'\]\s*body:not\(\.context-docked\):not\(\.ui-clean-view\):not\(\.recording-mode\)\s*:is\(#cesium-credits, #gev-credits\),\s*html\[dir='rtl'\]\s*body:not\(\.context-docked\):not\(\.ui-clean-view\):not\(\.recording-mode\):has\(\s*#intel-hud\[data-variant='minimal'\]\.active\s*\)\s*:is\(#cesium-credits, #gev-credits\) \{\s*right: 1\.5rem;\s*left: auto;/,
   );
+  // Its box hangs from the anchor's right edge there, and in the Omnibar
+  // layout at every width; never in clean view or recording, where the
+  // anchor stays on the left.
   assert.match(
     trayWide,
-    /#cesium-credits\s*\.cesium-widget-credits \{\s*right: 0;\s*left: auto;/,
+    /body:not\(\.context-docked\):not\(\.ui-clean-view\):not\(\.recording-mode\)\s*#cesium-credits\s*\.cesium-widget-credits \{\s*right: 0;\s*left: auto;/,
   );
-  // There the readout clears two lines of the row under it.
+  assert.match(
+    trays,
+    /html\[dir='rtl'\]\s*body:not\(\.mobile-shell\)[^{]*:not\(\.recording-mode\):not\(\.context-docked\)[^{]*#cesium-credits\s*\.cesium-widget-credits \{\s*right: 0;\s*left: auto;/,
+  );
+  // There the readout clears the row under it, however many lines it wraps
+  // onto (--credit-line-height).
   assert.match(
     read('./styles/omnibar-dock.css'),
-    /html\[dir='rtl'\] \*\)\s*#intel-hud\[data-variant='tactical'\]\s*\.hud-bottom-right \{\s*bottom: calc\(3\.375rem \+ 1\.5rem\);/,
+    /html\[dir='rtl'\] \*\):not\(\.context-docked\)\s*#intel-hud\[data-variant='tactical'\]\s*\.hud-bottom-right \{\s*bottom: max\(3\.375rem, var\(--omnibar-credits-clear\)\);/,
   );
   const locale = read('./styles/locale-picker.css');
   assert.match(locale, /#corner-actions \{[^}]*inset-inline-end: 0\.9rem;/);
@@ -669,4 +767,21 @@ test('shared panel hooks affect only opted-in rail surfaces without overriding d
     styles,
     /body:is\(\.ui-clean-view, \.recording-mode\)[^{]+\{[^}]*visibility: hidden !important;[^}]*pointer-events: none !important;/,
   );
+});
+
+test('narrow Omnibar corners clear the World Timeline over the dock', () => {
+  const css = read('./styles/omnibar-dock.css');
+  const timeline = css.match(
+    /#world-timeline \{\s*bottom: calc\(var\(--omnibar-dock-bottom\) \+ (\d+)px\);/,
+  );
+  const height = read('./styles/world-timeline.css').match(
+    /#world-timeline \{[^}]*\n {2}height: (\d+)px;/,
+  );
+  const corners = css.match(
+    /&:has\(#world-timeline\) \{\s*--omnibar-coordinates-bottom: max\(\s*calc\(var\(--omnibar-dock-bottom\) \+ (\d+)px \+ (\d+)px \+ (\d+)px\)/,
+  );
+  assert.ok(timeline && height && corners);
+  assert.equal(Number(corners[1]), Number(timeline[1]));
+  assert.equal(Number(corners[2]), Number(height[1]));
+  assert.ok(Number(corners[3]) >= 6);
 });

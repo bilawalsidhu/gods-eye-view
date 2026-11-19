@@ -439,12 +439,21 @@ function resolve(candidates, prop, width, label) {
 /** Evaluate a length. Anything the model cannot resolve exactly fails loudly. */
 function toPx(value, viewportHeight, where) {
   const trimmed = value.trim();
+  // The larger of its lengths, each resolved the same way.
+  if (/^max\(.*\)$/.test(trimmed))
+    return Math.max(
+      ...splitTopLevel(trimmed.slice(4, -1), ',').map((part) =>
+        toPx(part, viewportHeight, where),
+      ),
+    );
   const inner = /^calc\(/.test(trimmed) ? trimmed.slice(5, -1) : trimmed;
-  assert.doesNotMatch(
-    inner,
-    /\bcalc\(/,
-    `nested calc() in ${where}: "${value}"`,
-  );
+  // A calc() is a whole term of its own, resolved below; nowhere else.
+  for (const term of splitTopLevel(inner, '+'))
+    assert.doesNotMatch(
+      term.trim().replace(/^calc\(.*\)$/, ''),
+      /\bcalc\(/,
+      `nested calc() in ${where}: "${value}"`,
+    );
   assert.doesNotMatch(
     inner,
     /\b(min|max|clamp|env|attr|round|mod)\(/,
@@ -465,6 +474,18 @@ function toPx(value, viewportHeight, where) {
     const term = raw.trim();
     if (!term) continue;
     if (term === '100%') continue; // the tray's own panel height, added separately
+    // A calc() of its own, as a term ("calc(var(--omnibar-credits-clear) +
+    // 2px)" once substituted).
+    if (/^calc\(.*\)$/.test(term)) {
+      total += toPx(term, viewportHeight, where);
+      continue;
+    }
+    // The credit line's own height (src/ui/creditLineHeight.js), at the
+    // height this pin models it at.
+    if (/^var\(--credit-line-height\b/.test(term)) {
+      total += CREDIT_HEIGHT_PX;
+      continue;
+    }
     if (term.startsWith('var(')) {
       const name = term.slice(4, term.lastIndexOf(')')).split(',')[0].trim();
       assert.ok(
@@ -859,16 +880,28 @@ function omnibarVar(name) {
   const decls = RULES.filter((rule) => rule.parts.includes(OMNIBAR_SCOPE))
     .flatMap((rule) => rule.decls)
     .filter((decl) => decl.prop === name);
-  assert.equal(decls.length, 1, `${name} is declared once in the Omnibar scope`);
+  assert.equal(
+    decls.length,
+    1,
+    `${name} is declared once in the Omnibar scope`,
+  );
   return decls[0].value;
 }
 
 /** A length in the Omnibar layout, with its scope's own custom properties. */
 function omnibarPx(value, viewportHeight, where) {
-  const substituted = value.replace(
-    /var\((--omnibar-[\w-]+)\)/g,
-    (_, name) => omnibarVar(name),
-  );
+  // The scope's properties may name each other ("--omnibar-dock-bottom"
+  // clears "--omnibar-credits-clear"): substitute until none is left.
+  let substituted = value;
+  for (let pass = 0; /var\(--omnibar-/.test(substituted); pass += 1) {
+    assert.ok(
+      pass < 8,
+      `Omnibar properties name each other in a loop: ${value}`,
+    );
+    substituted = substituted.replace(/var\((--omnibar-[\w-]+)\)/g, (_, name) =>
+      omnibarVar(name),
+    );
+  }
   return toPx(substituted, viewportHeight, where);
 }
 
@@ -893,7 +926,11 @@ test('Omnibar reserves a non-overlapping desktop footer at native credit sizing'
           width,
           'Omnibar dock',
         );
-        assert.equal(dock.part, OMNIBAR.dock, `the Omnibar owns the dock at ${width}px`);
+        assert.equal(
+          dock.part,
+          OMNIBAR.dock,
+          `the Omnibar owns the dock at ${width}px`,
+        );
         // Its top and height too: a legacy top or height winning here would
         // move or stretch the dock the clearance below is measured from.
         for (const [prop, value] of [
@@ -906,8 +943,16 @@ test('Omnibar reserves a non-overlapping desktop footer at native credit sizing'
             width,
             `Omnibar dock ${prop}`,
           );
-          assert.equal(own.part, OMNIBAR.dock, `the Omnibar owns the dock ${prop} at ${width}px`);
-          assert.equal(own.decl.value, value, `Omnibar dock ${prop} at ${width}px`);
+          assert.equal(
+            own.part,
+            OMNIBAR.dock,
+            `the Omnibar owns the dock ${prop} at ${width}px`,
+          );
+          assert.equal(
+            own.decl.value,
+            value,
+            `Omnibar dock ${prop} at ${width}px`,
+          );
         }
         const credit = resolve(
           [
@@ -923,7 +968,11 @@ test('Omnibar reserves a non-overlapping desktop footer at native credit sizing'
           credit.part.startsWith(OMNIBAR_SCOPE),
           `the Omnibar owns the credit row at ${width}px`,
         );
-        const dockBottom = omnibarPx(dock.decl.value, height, 'Omnibar dock bottom');
+        const dockBottom = omnibarPx(
+          dock.decl.value,
+          height,
+          'Omnibar dock bottom',
+        );
         const creditTop =
           omnibarPx(credit.decl.value, height, 'Omnibar credit bottom') +
           CREDIT_HEIGHT_PX;
@@ -938,7 +987,10 @@ test('Omnibar reserves a non-overlapping desktop footer at native credit sizing'
   // and no rule elsewhere forces them back.
   const trays = RULES.find((rule) => rule.parts.includes(OMNIBAR.trays));
   assert.ok(trays, 'the Omnibar layout hides the legacy trays');
-  assert.equal(trays.decls.find((decl) => decl.prop === 'display')?.value, 'none');
+  assert.equal(
+    trays.decls.find((decl) => decl.prop === 'display')?.value,
+    'none',
+  );
   for (const rule of RULES) {
     for (const part of rule.parts) {
       if (!/#(location-bar|control-panel)$/.test(lastCompound(part))) continue;
@@ -951,8 +1003,13 @@ test('Omnibar reserves a non-overlapping desktop footer at native credit sizing'
   // The minimal-HUD rail cap only shortens the rail, which is anchored at
   // its top, so it can only add room above the credit.
   const rail = RULES.find((rule) => rule.parts.includes(OMNIBAR.minimalRail));
-  const cap = rail.decls.find((decl) => decl.prop === '--omnibar-minimal-rail-height');
-  assert.match(cap?.value || '', /^min\(\s*var\(--right-stack-max-height, 70vh\),/);
+  const cap = rail.decls.find(
+    (decl) => decl.prop === '--omnibar-minimal-rail-height',
+  );
+  assert.match(
+    cap?.value || '',
+    /^min\(\s*var\(--right-stack-max-height, 70vh\),/,
+  );
   assert.equal(
     rail.decls.find((decl) => decl.prop === 'max-height')?.value,
     'var(--omnibar-minimal-rail-height)',

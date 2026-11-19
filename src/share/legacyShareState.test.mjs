@@ -146,6 +146,23 @@ test('links from earlier long-form versions keep their historical meaning', () =
   assert.equal(off.layerState.options.flights.models3d, false);
 });
 
+test('Sonar beside the Minimal layout survives the compact form; older links do not name it', () => {
+  const { parsed, state } = assertLegacyRoundTrip(
+    'v=2&lat=10&lon=20&hud=minimal&hs=1',
+  );
+  assert.equal(parsed.hudSonar, true);
+  assert.equal(state.hudVariant, 'minimal');
+  assert.equal(state.hudSonar, true);
+  // Links made before `hs`: Minimal carries no Sonar, Cyber carries it in
+  // its own code.
+  for (const hud of ['minimal', 'cyber']) {
+    const old = assertLegacyRoundTrip(`v=2&lat=10&lon=20&hud=${hud}`);
+    assert.equal(old.parsed.hudSonar, false);
+    assert.equal(old.state.hudVariant, hud);
+    assert.equal(old.state.hudSonar, false);
+  }
+});
+
 test('a tracking selection becomes a thing view and back', () => {
   const flights = assertLegacyRoundTrip('v=2&lat=1&lon=2&l=f&lo=f.t.a1b2c3');
   assert.deepEqual(flights.state.view.entity, {
@@ -232,6 +249,7 @@ function generatedLegacyHash(random) {
     bloomVersion: pick(random, [1, 2]),
     sharpenIntensity: int(0, 100),
     hudVariant: pick(random, HUD_LAYOUTS),
+    hudSonar: random() < 0.5,
     hudVisible: random() < 0.5,
     detectionMode: pick(random, ['OFF', 'SPARSE', 'BALANCED', 'DENSE']),
     detectionDensity: density,
