@@ -3,7 +3,9 @@ import { storeToRefs } from 'pinia';
 import { nextTick, ref, watch } from 'vue';
 import { msg, t } from '../../i18n/index.js';
 import { FIRST_RUN_LINKS, environmentalLabel } from '../../firstRunCopy.js';
+import UiButton from '../kit/UiButton.vue';
 import UiCheckbox from '../kit/UiCheckbox.vue';
+import UiIcon from '../kit/UiIcon.vue';
 import { useFirstRunStore } from '../stores/firstRun.js';
 import { useStoriesStore } from '../stores/stories.js';
 
@@ -165,10 +167,10 @@ function onSuppress(event) {
       <!-- A button, not just a hint: phones and tablets have no ESC key. It
            closes exactly as ESC does, for this session only. Touch screens
            see SKIP; a keyboard sees SKIP · ESC (first-run.css). -->
-      <button type="button" class="first-run-dismiss" data-first-run-dismiss @click="controls?.dismiss()">
+      <UiButton class="first-run-dismiss" data-first-run-dismiss @click="controls?.dismiss()">
         <span class="first-run-dismiss-key">{{ t('SKIP · ESC') }}</span>
         <span class="first-run-dismiss-touch">{{ t('SKIP') }}</span>
-      </button>
+      </UiButton>
     </header>
     <h2 id="first-run-title">{{ t(TITLES[step - 1]) }}</h2>
     <p class="first-run-step-announcement" role="status" aria-live="polite" aria-atomic="true">{{ t(TITLES[step - 1]) }}</p>
@@ -207,22 +209,22 @@ function onSuppress(event) {
       <section class="first-run-section" aria-labelledby="first-run-start-heading">
         <h3 id="first-run-start-heading" class="first-run-section-title">{{ t('Start with') }}</h3>
         <div class="first-run-missions first-run-missions--tiles" role="group" aria-labelledby="first-run-start-heading">
-          <button type="button" data-first-run-start="space-missions" :aria-pressed="String(start === 'space-missions')" :aria-disabled="String(settling || launcher?.busy === 'true')" @click="selectStart('space-missions')">
-            <span class="material-symbols-outlined" aria-hidden="true">rocket_launch</span>
+          <UiButton data-first-run-start="space-missions" :pressed="start === 'space-missions'" :aria-disabled="String(settling || launcher?.busy === 'true')" @click="selectStart('space-missions')">
+            <UiIcon name="rocket_launch" :size="null" />
             <span><strong>{{ t('SPACE MISSIONS') }}</strong><small>{{ t('Launches, spacecraft and orbital context') }}</small></span>
-          </button>
-          <button type="button" data-first-run-start="environmental" :aria-pressed="String(start === 'environmental')" :aria-disabled="String(settling || launcher?.busy === 'true')" @click="selectStart('environmental')">
-            <span class="material-symbols-outlined" aria-hidden="true">local_fire_department</span>
+          </UiButton>
+          <UiButton data-first-run-start="environmental" :pressed="start === 'environmental'" :aria-disabled="String(settling || launcher?.busy === 'true')" @click="selectStart('environmental')">
+            <UiIcon name="local_fire_department" :size="null" />
             <!-- The title is ENVIRONMENTAL_LABEL_CHOICE's label once initialized. -->
             <!-- Subcopy names BOTH feeds this tile turns on, because the launcher
                  optimizes for the fully configured experience (owner ruling,
                  2026-08-23) — see the mission table in src/firstRunExperience.js. -->
             <span><strong data-first-run-environmental-title>{{ launcher?.environmentalTitle ?? environmentalLabel().title }}</strong><small>{{ launcher?.environmentalSub ?? t(ENVIRONMENTAL_SUB) }}</small></span>
-          </button>
-          <button type="button" data-first-run-start="explore" :aria-pressed="String(start === 'explore')" :aria-disabled="String(settling || launcher?.busy === 'true')" @click="selectStart('explore')">
-            <span class="material-symbols-outlined" aria-hidden="true">public</span>
+          </UiButton>
+          <UiButton data-first-run-start="explore" :pressed="start === 'explore'" :aria-disabled="String(settling || launcher?.busy === 'true')" @click="selectStart('explore')">
+            <UiIcon name="public" :size="null" />
             <span><strong>{{ t('EXPLORE MANUALLY') }}</strong><small>{{ t('Begin with a clean globe') }}</small></span>
-          </button>
+          </UiButton>
         </div>
       </section>
 
@@ -230,17 +232,17 @@ function onSuppress(event) {
       <div v-else key="3" class="first-run-step">
       <ul class="first-run-tips">
         <li class="first-run-tip first-run-tip--search">
-          <span class="first-run-tip-art" aria-hidden="true"><span class="material-symbols-outlined">search</span><i class="first-run-tip-caret"></i></span>
+          <span class="first-run-tip-art" aria-hidden="true"><UiIcon name="search" :size="null" /><i class="first-run-tip-caret"></i></span>
           <strong>{{ t('Search places') }}</strong>
           <small>{{ t('Type a place into the search bar.') }}</small>
         </li>
         <li class="first-run-tip first-run-tip--layers">
-          <span class="first-run-tip-art" aria-hidden="true"><span class="material-symbols-outlined">layers</span><i class="first-run-tip-dot"></i></span>
+          <span class="first-run-tip-art" aria-hidden="true"><UiIcon name="layers" :size="null" /><i class="first-run-tip-dot"></i></span>
           <strong>{{ t('Turn on layers') }}</strong>
           <small>{{ t('Turn layers on to see flights, ships, cameras, weather and more.') }}</small>
         </li>
         <li class="first-run-tip first-run-tip--context">
-          <span class="first-run-tip-art" aria-hidden="true"><span class="material-symbols-outlined">my_location</span><i class="first-run-tip-ring"></i></span>
+          <span class="first-run-tip-art" aria-hidden="true"><UiIcon name="my_location" :size="null" /><i class="first-run-tip-ring"></i></span>
           <strong>{{ t('Click anything') }}</strong>
           <small>{{ t('Select a map item to see its details.') }}</small>
         </li>
@@ -248,12 +250,12 @@ function onSuppress(event) {
       <section class="first-run-section" aria-labelledby="first-run-deeper-heading">
         <h3 id="first-run-deeper-heading" class="first-run-section-title">{{ t('Go deeper') }}</h3>
         <div v-if="stories.available" class="first-run-link-card first-run-stories">
-          <div class="first-run-preview first-run-preview--stories" aria-hidden="true"><span class="material-symbols-outlined">movie</span></div>
+          <div class="first-run-preview first-run-preview--stories" aria-hidden="true"><UiIcon name="movie" :size="null" /></div>
           <div class="first-run-link-body">
             <p class="first-run-mode-title"><strong translate="no">GEV Stories</strong> <span class="first-run-tag">{{ t('NEW') }}</span></p>
             <p class="first-run-mode-copy">{{ t('Curated, interactive views of what is happening on Earth. Play one, take over the map whenever you like, then pick the story back up.') }}</p>
           </div>
-          <button type="button" class="first-run-link-button" data-first-run-stories :aria-disabled="String(settling || launcher?.busy === 'true')" @click="openStories">{{ t('BROWSE STORIES') }}</button>
+          <UiButton class="first-run-link-button" data-first-run-stories :aria-disabled="String(settling || launcher?.busy === 'true')" @click="openStories">{{ t('BROWSE STORIES') }}</UiButton>
         </div>
       </section>
 
@@ -304,10 +306,10 @@ function onSuppress(event) {
       <p class="first-run-note" data-first-run-status role="status" aria-live="polite">{{ launcher?.status ?? '' }}</p>
       <!-- The card's main action: God mode, starting where the selected tile
            says (a clean globe by default). -->
-      <button v-if="step > 1" type="button" class="first-run-back" :aria-disabled="String(settling || launcher?.busy === 'true')" @click="go(step - 1, $event)">{{ t('BACK') }}</button>
-      <button type="button" class="first-run-enter" :data-first-run-choice="step === STEPS ? start : undefined" :data-first-run-next="step < STEPS ? '' : undefined" data-first-run-primary aria-describedby="first-run-title first-run-description" @pointerdown="onPrimaryDown" @keydown.enter="onPrimaryKeydown" :aria-disabled="String(settling || launcher?.busy === 'true')" @click="onPrimary">
-        {{ step < STEPS ? t('NEXT') : t('ENTER GOD MODE') }} <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
-      </button>
+      <UiButton v-if="step > 1" class="first-run-back" :aria-disabled="String(settling || launcher?.busy === 'true')" @click="go(step - 1, $event)">{{ t('BACK') }}</UiButton>
+      <UiButton class="first-run-enter" :data-first-run-choice="step === STEPS ? start : undefined" :data-first-run-next="step < STEPS ? '' : undefined" data-first-run-primary aria-describedby="first-run-title first-run-description" @pointerdown="onPrimaryDown" @keydown.enter="onPrimaryKeydown" :aria-disabled="String(settling || launcher?.busy === 'true')" @click="onPrimary">
+        {{ step < STEPS ? t('NEXT') : t('ENTER GOD MODE') }} <UiIcon name="arrow_forward" :size="null" />
+      </UiButton>
     </div>
 
   </aside>
