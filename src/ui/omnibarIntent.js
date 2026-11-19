@@ -304,11 +304,20 @@ export function normalizeLine(text, { isRequest = isPlainRequest } = {}) {
   // map": the map is where every layer is taken from. Not the verb's own
   // "off" ("turn off the screen" is no layer switch), not after "show"
   // ("show me the view from the map" is a question), and after "clear"
-  // only for the whole map.
-  return read.replace(
-    /^((?:turn|switch) off|hide|remove|disable|clear(?= (?:everything|all|every)\b))\s+(\S.*?)\s+(?:from|off) (?:the )?(?:map|globe|screen|view)$/i,
+  // only for the whole map ("clear all flights" would read as a place).
+  const bare = read.replace(
+    /^((?:turn|switch) off|hide|remove|disable|clear)\s+(\S.*?)\s+(?:from|off) (?:the )?(?:map|globe|screen|view)$/i,
     '$1 $2',
   );
+  if (bare === read || !/^clear\b/i.test(bare)) return bare;
+  // "clear" takes the whole map: "clear flights" would read as a place.
+  const lower = bare.toLowerCase();
+  return CLEAR_ALL.test(lower) ||
+    /^clear (?:everything|all|every)\b.*\b(?:except|but|other than|apart from|besides|save for)\b/.test(
+      lower,
+    )
+    ? bare
+    : read;
 }
 
 /** A request by its own words: a verb starting it, or a real question. */

@@ -818,13 +818,19 @@ test('"except" leaves Satellites to switch off with Space Missions off', () => {
     );
   // "clear" takes the ending off only for the whole map: "clear flights
   // from the map" never offers to turn Flights on.
-  assert.ok(
-    !omnibar
-      .rows('clear flights from the map', { places: [] })
-      .rows.some((row) =>
-        (row.steps || []).some((step) => step.kind === 'layer' && step.enabled),
-      ),
-  );
+  for (const text of [
+    'clear flights from the map',
+    'clear all flights from the map',
+  ])
+    assert.ok(
+      !omnibar
+        .rows(text, { places: [] })
+        .rows.some((row) =>
+          (row.steps || []).some(
+            (step) => step.kind === 'layer' && step.enabled,
+          ),
+        ),
+    );
   // After "show" the ending is part of what is asked.
   assert.equal(
     omnibar.rows('show me the view from the map', { places: [] }).defaultIndex,
@@ -834,6 +840,7 @@ test('"except" leaves Satellites to switch off with Space Missions off', () => {
   for (const text of [
     'hide everything from the map',
     'remove all layers from the map',
+    'clear the layers from the map',
   ]) {
     const { rows } = omnibar.rows(text, { places: [] });
     assert.equal(rows[0].kind, 'plan', text);
