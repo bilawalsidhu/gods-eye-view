@@ -152,6 +152,37 @@ test('the card is hidden until initialized, then revealed with its copy', async 
   );
 });
 
+test('a quick second click on NEXT moves on, and never launches', async (t) => {
+  let calls = 0;
+  const { root, frames } = await launch(t, {
+    dataManager: {
+      setEnabled: async () => {
+        calls++;
+        return true;
+      },
+    },
+  });
+  const primary = root.querySelector('[data-first-run-primary]');
+  const press = (detail) => {
+    primary.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    primary.dispatchEvent(new MouseEvent('click', { bubbles: true, detail }));
+  };
+  press(1);
+  await settle(frames);
+  assert.ok(root.querySelector('[data-first-run-start]'), 'on the second step');
+  // The second click of a double click, after the step settled, moves on.
+  press(2);
+  await settle(frames);
+  assert.equal(primary.dataset.firstRunChoice, 'explore', 'on the last step');
+  press(2);
+  await settle(frames);
+  assert.equal(calls, 0);
+  assert.equal(root.dataset.state ?? null, null, 'a double click never starts');
+  press(1);
+  await settle(frames);
+  assert.ok(root.dataset.state, 'a single click starts');
+});
+
 test('a busy mission marks the choices aria-disabled, never disabled', async (t) => {
   let finish;
   let calls = 0;

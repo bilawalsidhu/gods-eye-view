@@ -3392,6 +3392,9 @@ state or inert ancestry; ordinary visible enabled controls retain their order.
 focus shared by the first-run launcher and Provider Settings. Each caller
 activates it while open and deactivates it on dismissal; destruction releases
 keyboard ownership without moving focus. Reopening captures the current opener.
+Tab from a control outside the surface moves into it unless the caller passes
+`claimOutsideFocus: false`, as the first-run launcher does; focus on the page
+body still moves in.
 The launcher retains its hit-test/exclusive-surface arbitration and dismissal
 preferences. Provider Settings retains its existing visibility and save policy.
 Initial focus, transitions and DOM content remain with each screen. This
@@ -4126,7 +4129,10 @@ which embeds the MAP_KEY.
 > a mission. Only **Enter God mode** runs it; Back is inert while it is loading.
 > Step changes focus the main action, announce the new heading separately from
 > mission progress, and refresh the scrolling affordance after the transition. Repeated Enter keys,
-> double-clicks and activation during a step transition cannot launch a mission.
+> double-clicks and activation during a step transition cannot launch a mission; a quick second
+> click on Next still moves to the next step. Tab cycles inside the card, and moves into it from
+> the page only when focus has nowhere else to be: Tab from the search bar or another control
+> follows the page's order.
 > No layer and no optional API call happens until the final action is clicked.
 > The Stories announcement waits, from startup until onboarding closes, without
 > marking it seen.

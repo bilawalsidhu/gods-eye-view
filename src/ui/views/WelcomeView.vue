@@ -41,13 +41,16 @@ let pressedOn = null;
 function onPrimaryDown() {
   pressedOn = settling.value ? null : step.value;
 }
+// A quick second click still moves to the next step, so the button never
+// looks dead; only the launch itself takes a single click, so a double click
+// that began on NEXT never confirms the start it lands on.
 function onPrimary(event) {
-  if (settling.value || event.detail > 1) return;
+  if (settling.value) return;
   const pressed = pressedOn;
   pressedOn = null;
-  if (event.detail === 1 && pressed !== step.value) return;
-  if (step.value < STEPS) go(step.value + 1, event);
-  else controls.value?.choose(start.value);
+  if (event.detail >= 1 && pressed !== step.value) return;
+  if (step.value < STEPS) go(step.value + 1);
+  else if (event.detail <= 1) controls.value?.choose(start.value);
 }
 // GEV Stories opens in place: the card closes as Skip would, then Explore
 // takes the globe. The Stories announcement stays hidden while Stories loads,

@@ -513,6 +513,9 @@ export function initFirstRunExperience({
     isActive: () => !closing && isTopmost(),
     onEscape: () => dismiss(),
     fallbackFocus: () => documentRef.body,
+    // The card sits beside a usable map: Tab from the search bar or any
+    // other control follows the page's order instead of jumping back in.
+    claimOutsideFocus: false,
   });
 
   store.connect({
