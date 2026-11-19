@@ -93,6 +93,13 @@ button, whose state the event layer writes into the attributes its panel
 renders, and Explore's story cards, which are `role="button"` elements,
 not buttons (`src/ui/kit/viewControls.test.mjs` pins it). Where the
 converted buttons draw Material symbols (the tilt-map button, the Context
+header's search and expand, the imported files' row actions and the rail
+chips' icons), the glyphs are `UiIcon`s with `:size="null"`, so the site
+rules still size them. Core's pressable chips and pills (the rail cards'
+chips and action chips, Recent Imagery's day chips, SWAP and ZOOM IN, map
+sources, cities and places, the view context's place and layer chips and
+the key setup chip) are `UiButton`s too. `UiChip` is a non-interactive
+label chip, used by the voice card.
 header's search and expand, Draw, Import, the imported files' and drawn
 shapes' row actions and the rail chips' icons), the glyphs are `UiIcon`s
 with `:size="null"`, so the site rules still size them. Core's pressable
@@ -193,6 +200,21 @@ while a query is typed. The Filter button opens a disclosure and carries
 a `UiIcon` with `:size="null"`, so `layer-finder.css` still sizes them
 (`src/ui/kit/layerFinderControls.test.mjs` pins it); the search field's
 magnifier is `UiSearchField`'s own span.
+The Space Missions panel's buttons (a mission's roster row, FOCUS,
+REPLAY ASCENT, the replay's pause, PREV, NEXT and SHOW ALL / DESELECT),
+the Contacts panel's (PREV, FOCUS, NEXT and a contact's row), the Radio
+panel's (Enable, PREV, PLAY, NEXT and STOP), the RTL-SDR card's (Connect,
+Locate, Change device, FM, ADS-B, Tune and the two seeks) and the key
+setup's (the POWER UP chip, a key's REMOVE, the voice auth toggle and
+SAVE KEYS) are ghost `UiButton`s. Radio's Enable and the card's Connect,
+FM and ADS-B are pressed toggles with `active`; PLAY and Locate keep
+their own `active` class without `aria-pressed`, since their words say
+what they will do or have done. The chip's bolt is a `UiIcon` with
+`:size="null"`, so provider-settings.css still sizes it
+(`src/ui/kit/missionsRadioControls.test.mjs` pins it). The card's FM
+frequency stays a native number field, which the kit has no control for,
+and the replay's pause, the roster's chevron and the compass arrows are
+text characters, not Material symbols.
 Utilities' Draw and Import are on the kit. Draw (a pressed toggle with
 `active`), Clear and Import are ghost `UiButton`s, their glyphs `UiIcon`s
 with `pp-icon` and `:size="null"`. Draw's five colour swatches, in the
