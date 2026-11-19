@@ -522,6 +522,9 @@ export function parseOmnibar(
   const extraPlaces = [];
   let previousHadPlace = false;
   let previousBarePlace = false;
+  // Whether the clause before was a further place ("near Paris and
+  // Trinidad"), which a compound name may go on ("and Tobago").
+  let previousExtraPlace = false;
   let previousGo = false;
   // Whether a request was peeled off a "go to" clause, and how the place
   // was named: after "go to", after "near"/"in", or bare.
@@ -561,6 +564,8 @@ export function parseOmnibar(
     const afterPlaceComma = previousHadPlace && separator === ',';
     // "trinidad and tobago": a bare place joined to a bare place by "and".
     const afterBarePlaceAnd = previousBarePlace && separator === 'and';
+    const afterExtraPlace = previousExtraPlace;
+    previousExtraPlace = false;
     const continuedLayer = previousLayerEnabled;
     const afterGo = previousGo;
     previousGo = false;
@@ -607,10 +612,29 @@ export function parseOmnibar(
         afterPlace &&
         (separator === 'and' || separator === '&') &&
         compoundJoin(place.split(', ').at(-1), value);
-      if (joinsName) place += `${joinsName}${value}`;
-      else if (place && bare && afterBarePlaceAnd) place += ` and ${value}`;
+      if (joinsName) {
+        // The name is whole: a further "and" names another place ("near
+        // Trinidad and Tobago and Barbados").
+        place += `${joinsName}${value}`;
+        previousHadPlace = true;
+        previousBarePlace = false;
+        return;
+      }
+      // "near Paris and Trinidad and Tobago": the further place is whole too.
+      const joinsExtra =
+        afterExtraPlace &&
+        (separator === 'and' || separator === '&') &&
+        compoundJoin(extraPlaces.at(-1), value);
+      if (joinsExtra) {
+        extraPlaces[extraPlaces.length - 1] += `${joinsExtra}${value}`;
+        return;
+      }
+      if (place && bare && afterBarePlaceAnd) place += ` and ${value}`;
       else if (place && !afterPlaceComma) {
-        if (separator === 'and') extraPlaces.push(value);
+        if (separator === 'and') {
+          extraPlaces.push(value);
+          previousExtraPlace = true;
+        }
         return;
       } else if (!place) {
         place = value;

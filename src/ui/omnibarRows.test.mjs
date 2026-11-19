@@ -767,3 +767,59 @@ test('a keyword that begins a name offers no plan to the rest of it', () => {
     );
   }
 });
+
+test('"except" keeps a layer and the one it shows through together', () => {
+  const omnibar = createOmnibar({
+    layers: [
+      { id: 'flights', name: 'Live Flights', enabled: true },
+      { id: 'satellites', name: 'Satellites', enabled: true },
+      { id: 'rocket-launches', name: 'Space Missions', enabled: true },
+    ],
+  });
+  for (const text of [
+    'hide everything except space missions',
+    'hide everything except satellites',
+  ])
+    assert.deepEqual(
+      omnibar.rows(text, { places: [] }).rows[0].steps.map(stepOutcome),
+      ['layer(flights,off)'],
+      text,
+    );
+});
+
+test('"turn off the screen" is no layer switch and no place', () => {
+  for (const text of ['turn off the screen', 'switch off the map'])
+    assert.equal(outcome(text, { on: ['flights'] }), 'nothing', text);
+});
+
+test('a place after a compound country is another place', () => {
+  const omnibar = createOmnibar({ layers: layers() });
+  const places = (text) =>
+    omnibar
+      .rows(text, { places: [] })
+      .rows.filter((row) => row.kind === 'place')
+      .map((row) => row.place.toLowerCase());
+  assert.deepEqual(places('flights near trinidad and tobago and barbados'), [
+    'trinidad and tobago',
+    'barbados',
+  ]);
+  assert.deepEqual(places('flights near Paris and Trinidad and Tobago'), [
+    'paris',
+    'trinidad and tobago',
+  ]);
+});
+
+test('a kind of place written before its name keeps the plan', () => {
+  const omnibar = createOmnibar({ layers: layers() });
+  for (const text of [
+    'earthquakes lake tahoe',
+    'earthquakes mount fuji',
+    'traffic tower bridge',
+  ]) {
+    const { rows } = omnibar.rows(text, { places: [] });
+    assert.ok(
+      rows.some((row) => row.kind === 'plan'),
+      text,
+    );
+  }
+});

@@ -153,11 +153,22 @@ const SETTINGS_FOR =
 const SWITCH =
   /^(turn on|switch on|enable|show|display|add|turn off|switch off|disable|hide|remove|toggle)(?:\s+(.*))?$/;
 const SWITCH_OFF = /^(turn off|switch off|disable|hide|remove)\b/;
-/** "hide everything except …", "turn off all layers but …". */
-/** A word for a kind of place, which a name goes on with ("Fire Island"). */
+/**
+ * A word for a kind of place written after the name it ends ("Fire
+ * Island", "Ship Bottom", "Radio City"), not one written before it ("Lake
+ * Tahoe", "Mount Fuji", "Tower Bridge", "Park City").
+ */
 const NAME_TAIL =
-  /^(?:islands?|isle|city|hall|bottom|lake|river|bay|beach|point|station|park|street|road|mountains?|mount|hills?|valley|falls|springs?|creek|county|town|village|harbou?r|cove|canyon|center|centre|square|tower|bridge|pass|ridge|peak)\b/i;
+  /^(?:islands?|isle|city|hall|bottom|beach|station|street|road|hills?|valley|falls|springs?|creek|county|town|village|harbou?r|cove|canyon|center|centre|square|bridge|ridge|peak)\b(?!\s+of\b)/i;
 
+/**
+ * A layer that shows itself through another, which must stay on with it:
+ * Space Missions draws its missions with Satellites, and switching it off
+ * puts Satellites back as it was before.
+ */
+const SHOWN_THROUGH = new Map([['rocket-launches', ['satellites']]]);
+
+/** "hide everything except …", "turn off all layers but …". */
 const EXCEPT =
   /^(?:turn off|switch off|disable|hide|remove|clear)\s+(?:everything|all(?: the)?(?: other)?(?: layers?)?|every layer)\s+(?:except(?: for)?|but(?: for)?|other than|apart from|besides|save for)\s+(.+)$/;
 // Layers people reach for first, so "turn on" offers these before the rest.
@@ -931,12 +942,6 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
   }
 
   /**
-   * "turn on …", "hide …", "toggle …", alone or with a few letters: the
-   * layers and features that switch that way, never places. Null when the
-   * line is not such a switch, or names nothing to switch and may be a place
-   * ("Show Low, AZ").
-   */
-  /**
    * "hide everything except flights", "turn off all but ships": a plan that
    * switches off every layer that is on but the ones named. Null when the
    * line is not that, or names no layer to keep.
@@ -953,6 +958,13 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
     if (!kept.length) return null;
     if (!kept.every(named)) return [ask];
     const keptIds = new Set(kept.map((layer) => layer.id));
+    // Keeping either of a pair keeps both: switching one off would take the
+    // other with it ("except space missions", "except satellites").
+    for (const [layer, through] of SHOWN_THROUGH) {
+      const on = all().find((entry) => entry.id === layer)?.enabled;
+      if (keptIds.has(layer) || (on && through.some((id) => keptIds.has(id))))
+        for (const id of [layer, ...through]) keptIds.add(id);
+    }
     const steps = all()
       .filter((layer) => layer.enabled && !keptIds.has(layer.id))
       .map((layer) => ({ kind: 'layer', layer, enabled: false }));
@@ -982,14 +994,22 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
     ];
   }
 
+  /**
+   * "turn on …", "hide …", "toggle …", alone or with a few letters: the
+   * layers and features that switch that way, never places. Null when the
+   * line is not such a switch, or names nothing to switch and may be a place
+   * ("Show Low, AZ").
+   */
   function switchRows(line, ask) {
     const excepted = exceptRows(line, ask);
     if (excepted) return excepted;
-    // "remove flights from the map": the map is where every layer is.
-    line = line.replace(
+    // "remove flights from the map": the map is where every layer is. Not
+    // the verb's own "off" ("turn off the screen" is no layer switch).
+    const bare = line.replace(
       /\s+(?:from|off) (?:the )?(?:map|globe|screen|view)$/i,
       '',
     );
+    if (bare !== line && SWITCH.test(bare.toLowerCase())) line = bare;
     const switching = line.toLowerCase().match(SWITCH);
     if (
       !switching ||
