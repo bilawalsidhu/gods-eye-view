@@ -114,6 +114,9 @@ export const SHARE_VIEW_ENUMS = Object.freeze({
     'esri-imagery',
     'osm',
   ]),
+  // Removed layouts keep their index so old links decode: Operator opens in
+  // Tactical. Cyber means Tactical with the Sonar style on; the app still
+  // writes it for that state.
   hudVariant: Object.freeze(['tactical', 'operator', 'minimal', 'cyber']),
   detectionMode: Object.freeze(['OFF', 'SPARSE', 'BALANCED', 'DENSE']),
   detectionAllocation: Object.freeze(['ELASTIC', 'WEIGHTED']),
@@ -187,6 +190,13 @@ export const SHARE_VIEW_PANELS = freezeAll([
     token: 'm',
     pinnable: false,
     collapsed: false,
+  },
+  {
+    number: 11,
+    id: 'space-missions-panel',
+    token: 'n',
+    pinnable: false,
+    collapsed: true,
   },
 ]);
 const PANEL_BY_NUMBER = new Map(SHARE_VIEW_PANELS.map((p) => [p.number, p]));

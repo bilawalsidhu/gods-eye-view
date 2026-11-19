@@ -1,6 +1,6 @@
 <script setup>
 import { storeToRefs } from 'pinia';
-import { computed, onBeforeUnmount, onMounted, shallowRef } from 'vue';
+import { computed } from 'vue';
 import { t } from '../../i18n/index.js';
 import { vClassToggle } from '../rail/classToggle.js';
 import { vFieldValue } from '../rail/fieldValue.js';
@@ -17,23 +17,6 @@ const { view, controls } = storeToRefs(useProviderSettingsStore());
 const available = computed(() => view.value?.available !== false);
 const chip = computed(() => view.value?.chip ?? null);
 const dialog = computed(() => view.value?.dialog ?? { hidden: true, visible: false });
-
-// Cyber puts the chip in the top toolbar; every other theme keeps it first in
-// the corner row, beside the language picker.
-const cyber = shallowRef(false);
-let themeObserver = null;
-onMounted(() => {
-  const theme = document.documentElement;
-  const sync = () => {
-    cyber.value =
-      theme.dataset.uiTheme === 'cyber' &&
-      Boolean(document.getElementById('top-center-actions'));
-  };
-  themeObserver = new MutationObserver(sync);
-  themeObserver.observe(theme, { attributes: true, attributeFilter: ['data-ui-theme'] });
-  sync();
-});
-onBeforeUnmount(() => themeObserver?.disconnect());
 
 // The status line is a live region; vStatusText re-announces repeats.
 const statusText = computed(() => ({
@@ -55,12 +38,10 @@ const removeTitle = (title) =>
   <!-- Bottom-right HUD row: the POWER UP chip (while keys are missing) and
        the language picker, once the shell publishes it. -->
   <div id="corner-actions">
-    <Teleport v-if="available" :to="cyber ? '#top-center-actions' : 'body'" :disabled="!cyber">
-      <button id="key-setup-chip" type="button" :hidden="!chip || chip.hidden" aria-haspopup="dialog" aria-controls="key-setup" :title="chip?.title" :aria-label="chip?.title" @click="controls?.open()">
-        <span class="material-symbols-outlined" aria-hidden="true">bolt</span>
-        <span data-key-setup-chip-label>{{ chip ? chip.label : t('POWER UP') }}</span>
-      </button>
-    </Teleport>
+    <button v-if="available" id="key-setup-chip" type="button" :hidden="!chip || chip.hidden" aria-haspopup="dialog" aria-controls="key-setup" :title="chip?.title" :aria-label="chip?.title" @click="controls?.open()">
+      <span class="material-symbols-outlined" aria-hidden="true">bolt</span>
+      <span data-key-setup-chip-label>{{ chip ? chip.label : t('POWER UP') }}</span>
+    </button>
     <LocalePicker v-if="picker" :key="picker.current" :current="picker.current" :on-select="picker.onSelect" :focus="picker.focus" />
   </div>
   <aside v-if="available" id="key-setup" role="dialog" aria-labelledby="key-setup-title" aria-describedby="key-setup-description" :hidden="dialog.hidden" v-class-toggle="{ visible: dialog.visible }" :data-ready="view?.ready ? 'true' : undefined" @transitionend="controls?.transitionEnd()">

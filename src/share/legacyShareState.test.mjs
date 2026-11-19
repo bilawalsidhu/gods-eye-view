@@ -88,11 +88,12 @@ function assertLegacyRoundTrip(hash) {
   return { parsed, state, encoded };
 }
 
-test('the HAL example survives the round trip and shrinks to 39 characters', () => {
+test('the HAL example survives the round trip and shrinks to 42 characters', () => {
   const { parsed, state, encoded } = assertLegacyRoundTrip(HAL_EXAMPLE_HASH);
   assert.equal(HAL_EXAMPLE_HASH.length, 302);
-  assert.equal(encoded.length, 39);
-  assert.equal(encoded, 'ARCg-SQYrah3ILAJKB4wO1IEAIQAEGIBNMgBC1o');
+  // Its long form predates the Space Missions panel: that entry says nothing.
+  assert.equal(encoded.length, 42);
+  assert.equal(encoded, 'ARCg-SQYrah3ILAJKB4wO1IEAIQAEGIDNLAByAELpA');
   assert.equal(parsed.roll, 360);
   assert.equal(state.roll, 0);
   assert.deepEqual(state.layerState.enabledLayerIds, [

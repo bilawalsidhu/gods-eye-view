@@ -1,5 +1,6 @@
 import { EMERGENCY_TINT_CSS } from '../../data/aircraftEmergency.js';
 import { cssColor } from '../../render/color.js';
+import { VEHICLE_TINT_CSS } from '../../data/aircraftClass.js';
 
 /** A CSS colour as frozen `[r, g, b, a]`, 0..1 (the renderer's `Color`). */
 const rgba = (css, alpha) =>
@@ -12,6 +13,10 @@ export const FOCUS_EVIDENCE_DEV = import.meta.env?.DEV === true;
 /** Amber tint for known-military aircraft rendered by this layer (matches the military layer's icon color). */
 
 export const MIL_TINT = rgba('#FFB800');
+
+/** Amber tint for airport vehicles (type ZVEH, emitter C1/C2), apart from aircraft. */
+
+export const VEHICLE_TINT = rgba(VEHICLE_TINT_CSS);
 
 /** Red tint for aircraft broadcasting an emergency (7500/7600/7700 or ADS-B status). */
 
@@ -39,18 +44,27 @@ export const EMERGENCY_TINT = rgba(EMERGENCY_TINT_CSS);
 export const GROUND_SCALE = 0.8;
 
 // --- 3D model rendering (B3) ---------------------------------------------------------
-// When enabled, aircraft render as 3D glTF models once the camera is below MODEL_ALT_CEIL_M
-// (zoomed in); higher up they stay flat billboards. Eligibility is FRUSTUM-based (on-screen), and
-// the slots go to either the nearest planes ('proximity') or every in-view plane ('all'), each
-// backed by a hard cap so a draw-call explosion can't tank the frame (no instancing yet).
+// When enabled, an aircraft draws as its 3D glTF model only within MODEL_ADD_M of the camera
+// (eye to aircraft); farther away it stays its icon. Models are drawn at their true size, with no
+// minimum pixel size, so a model never balloons past its real extent. Eligibility is distance-based
+// with on-screen priority, and the slots go to either the nearest planes ('proximity') or every
+// in-range plane ('all'): the two modes share the radius and differ by their caps, each a hard
+// bound on the frame cost (every model is its own draw call).
 
-export const MODEL_ALT_CEIL_M = 800000;
-// m: below this camera altitude, draw 3D models (raised so it's easy to trigger)
+export const MODEL_ADD_M = 3000;
+// model NEW planes within 3 km of the camera
 
-export const MODEL_MIN_PX = 24;
-// floor so distant models stay visible WITHOUT ballooning into a giant
-// min-pixel blob (was 54 — far planes at the All radius became white
-// star-bursts); ~matches the 2D icon size so the model↔billboard read is consistent
+export const MODEL_KEEP_M = 3600;
+// KEEP modeled planes out to 3.6 km: the hysteresis band (KEEP > ADD) stops a plane on the edge
+// from releasing and reloading its model as the camera moves (the zoom/pan flicker)
+
+export const MODEL_HIGHEST_CONTACT_M = 30000;
+// m above the ellipsoid: no aircraft the layers draw flies higher (airliners cruise near 12 km,
+// the highest-flying aircraft near 21 km)
+
+export const MODEL_ALT_CEIL_M = MODEL_HIGHEST_CONTACT_M + MODEL_KEEP_M;
+// m: above this camera altitude no contact can be within MODEL_KEEP_M, so no model is
+// considered at all (the eligibility pass is skipped)
 
 // Per-mode caps. Each model is its own draw call (no instancing yet), so these bound the frame cost.
 
@@ -58,29 +72,22 @@ export const MODEL_MAX = 150;
 // 'proximity' cap (the planes immediately around you)
 
 export const MODEL_MAX_ALL = 350;
-// 'all' cap (everything out to ~the horizon)
-// Per-mode ADD / KEEP radii. The two modes differ by RADIUS, not just cap — otherwise they look
-// IDENTICAL whenever fewer than a cap's worth of planes are in range (field bug: Proximity and All
-// rendered the same). 'proximity' = a tight ring; 'all' = roughly to the horizon (state-scale). Each
-// band has hysteresis (KEEP > ADD) so a plane doesn't release+reload its model when it straddles the
-// add edge (the zoom/pan flicker). Beyond ADD a model would force-clamp to minimumPixelSize into a
-// giant floating blob (the old 422 km airport-cluster bug), so far planes stay 2D dots; the cap +
-// on-screen priority then spend the model slots on planes you can actually see.
-
-export const MODEL_PROX_ADD_M = 150000;
-// proximity: model NEW planes within 150 km
-
-export const MODEL_PROX_KEEP_M = 185000;
-// proximity: KEEP modeled planes out to 185 km
+// 'all' cap (every plane in range)
 
 export const COCKPIT_MODEL_MAX = 60;
 // max concurrent GLBs in cockpit (never raises the map cap)
 
-export const MODEL_ALL_ADD_M = 400000;
-// all: model NEW planes within 400 km (~to the horizon)
+// Cockpit's AIR band: contacts within it draw as aircraft silhouettes, beyond
+// it as compact dots. Independent of the 3D model radius; per 3D mode, each
+// with its keep hysteresis.
 
-export const MODEL_ALL_KEEP_M = 450000;
-// all: KEEP modeled planes out to 450 km
+export const COCKPIT_AIR_PROX_ADD_M = 150000;
+
+export const COCKPIT_AIR_PROX_KEEP_M = 185000;
+
+export const COCKPIT_AIR_ALL_ADD_M = 400000;
+
+export const COCKPIT_AIR_ALL_KEEP_M = 450000;
 
 export const MODEL_HEADING_OFFSET_DEG = 180;
 // every fleet model is nose -X: opposite the renderer's heading 0
@@ -88,9 +95,6 @@ export const MODEL_HEADING_OFFSET_DEG = 180;
 /** A model's colour where it draws its mesh's own (`aircraftModelBlend`). */
 export const MODEL_WHITE = rgba('#FFFFFF');
 
-/** The tracked contact's tint, and its billboard once a model takes over. */
-export const TRACKED_CYAN = rgba('#00FFFF');
-export const CYAN_TRANSPARENT = rgba('#00FFFF', 0);
 /** An ordinary fleet contact's tint. */
 export const FLEET_TINT = rgba('#FFFFFF');
 
@@ -201,18 +205,15 @@ export const FLEET_DR_INTERVAL_MS = 80;
 /**
  * The icon-to-model rules the aircraft layers follow, as the Vessels, Transit
  * and Rail layers take them (`createFleetModelLayer`): the same altitude
- * ceiling, minimum pixel size, proximity/all caps, add/keep radii and
- * eligibility cadence, so every layer turns icons into models at one distance.
+ * ceiling, proximity/all caps, add/keep radii and eligibility cadence, so
+ * every layer turns icons into models at one distance, drawn at true size.
  */
 export const FLEET_MODEL_POLICY = Object.freeze({
   altitudeCeilingM: MODEL_ALT_CEIL_M,
-  minimumPixelSize: MODEL_MIN_PX,
   cap: MODEL_MAX,
   capAll: MODEL_MAX_ALL,
-  addM: MODEL_PROX_ADD_M,
-  addAllM: MODEL_ALL_ADD_M,
-  keepM: MODEL_PROX_KEEP_M,
-  keepAllM: MODEL_ALL_KEEP_M,
+  addM: MODEL_ADD_M,
+  keepM: MODEL_KEEP_M,
   intervalMs: FLEET_DR_INTERVAL_MS,
 });
 

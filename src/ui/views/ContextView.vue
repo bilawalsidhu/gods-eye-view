@@ -14,8 +14,7 @@ import AwarenessPanel from './panels/AwarenessPanel.vue';
 import BhoteKoshiPanel from './panels/BhoteKoshiPanel.vue';
 import EntityCard from './panels/EntityCard.vue';
 import ViewContext from './panels/ViewContext.vue';
-import MissionDetail from './panels/MissionDetail.vue';
-import MissionRoster from './panels/MissionRoster.vue';
+import SpaceMissionsPanel from './panels/SpaceMissionsPanel.vue';
 import RadioPanel from './panels/RadioPanel.vue';
 import UiButton from '../kit/UiButton.vue';
 import { cockpitEntryFace } from '../cockpitPresentation.js';
@@ -75,7 +74,7 @@ const setPane = (id) => (el) => {
     if (target instanceof HTMLElement && target.parentElement !== el) el.appendChild(target);
   }
 };
-// Turning Radio or Launches on asks for the main tab, where they show.
+// Turning on Radio reveals the Inspector.
 const showView = () => (activeTab.value = 'view');
 onMounted(() => {
   globalThis.addEventListener?.('gev:context-show-view', showView);
@@ -221,14 +220,10 @@ watch(
             <span class="material-symbols-outlined" aria-hidden="true">radar</span>
             <span>{{ t('CONTACTS') }}</span>
           </button>
-          <button id="global-context-missions-btn" class="context-mode-button" v-class-toggle="{ active: ctx?.missionsActive }" type="button" role="tab" tabindex="0" :aria-selected="String(ctx?.missionsActive ?? false)" :aria-disabled="ctx && String(ctx.busy)" :aria-busy="ctx && String(ctx.busy)" aria-controls="context-missions-view">
-            <span class="material-symbols-outlined" aria-hidden="true">rocket_launch</span>
-            <span>{{ t('SPACE MISSIONS') }}</span>
-          </button>
         </div>
         <div id="context-mode-standby" class="context-mode-standby" :hidden="ctx?.enabled">
           <strong>{{ t('SELECT CONTEXT') }}</strong>
-          <span>{{ t('CONTACTS — nearest planes · vessels · sites') }}<br>{{ t('SPACE MISSIONS — launches & orbital assets') }}</span>
+          <span>{{ t('CONTACTS — nearest planes · vessels · sites') }}</span>
         </div>
         <section id="context-flights-view" class="context-mode-view" role="tabpanel" aria-labelledby="global-context-flights-btn" :hidden="!ctx?.flightsActive">
           <div class="global-context-actions" :aria-label="t('Contact Context actions')">
@@ -241,12 +236,6 @@ watch(
           </div>
           <AwarenessPanel v-if="!contactsMatchCard" />
         </section>
-        <section id="context-missions-view" class="context-mode-view" role="tabpanel" aria-labelledby="global-context-missions-btn" :hidden="!ctx?.missionsActive">
-          <div id="space-mission-panel-host">
-            <MissionRoster />
-            <MissionDetail />
-          </div>
-        </section>
         <div v-if="contextOpen" v-show="activeTab === 'view'" id="context-tab-view" role="tabpanel" aria-labelledby="context-tab-btn-view" :class="{ 'context-searching': contextSearchOpen && contextSearchText.trim() }">
           <EntityCard :with-contacts="contactsMatchCard">
             <AwarenessPanel v-if="contactsMatchCard" compact />
@@ -255,6 +244,7 @@ watch(
         </div>
         </div>
     </RailPanel>
+    <SpaceMissionsPanel />
     <BhoteKoshiPanel />
   </aside>
 

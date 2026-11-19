@@ -418,12 +418,7 @@ body.recording-mode .gev-pointer-reticle {
   text-align: start;
   transform: translateX(-50%);
 }
-:root[data-ui-theme='cyber'] #gev-voice-control .gev-voice-panel {
-  background-color: var(--cyber-panel-surface);
-  background-image: var(--cyber-panel-surface-detail);
-  border-color: var(--glass-border);
-  box-shadow: var(--cyber-panel-shadow);
-}
+
 #gev-voice-control .gev-voice-panel[hidden],
 #gev-voice-control .gev-voice-panel [hidden] {
   display: none;

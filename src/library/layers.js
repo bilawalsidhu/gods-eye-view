@@ -410,9 +410,11 @@ export const LIBRARY_AERIAL_Z = 10;
  * The globe port imagery spec for a tiles entry.
  * @param {object} entry Validated tiles entry.
  * @param {string} url Tile URL template.
+ * @param {import('../render/contract/globe').ImagerySpec['fetchTile']|null} [fetchTile]
+ *   Fetches each tile in place of the renderer (`source.tileFetch`).
  * @returns {import('../render/contract/globe').ImagerySpec}
  */
-export function libraryImagerySpec(entry, url) {
+export function libraryImagerySpec(entry, url, fetchTile = null) {
   const bbox = entry.source.bounded ? entry.coverage.bbox : null;
   const minZoom = entry.source.minZoom ?? 0;
   // A dense entry (`minimumTerrainLevelFor`) is hidden where the view is
@@ -442,6 +444,7 @@ export function libraryImagerySpec(entry, url) {
       : {}),
     ...(entry.display.aerial ? { zOrder: LIBRARY_AERIAL_Z } : {}),
     ...(tileTransform ? { tileTransform } : {}),
+    ...(fetchTile ? { fetchTile } : {}),
   };
 }
 
@@ -563,7 +566,11 @@ export function createLibraryTileLayer(
     if (host.kind === 'tileset') markBaseTileset(tileset);
     try {
       imagery = globe.imagery.add(
-        libraryImagerySpec(entry, source.tileTemplate(entry)),
+        libraryImagerySpec(
+          entry,
+          source.tileTemplate(entry),
+          source.tileFetch?.(entry) ?? null,
+        ),
       );
     } catch (error) {
       // A renderer without tile hooks cannot draw relief or clear the

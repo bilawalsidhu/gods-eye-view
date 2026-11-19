@@ -73,12 +73,15 @@ test('an application subject steps by its interval, never by a long stall', () =
   assert.equal(cockpitSubjectStepSec(16, 0), 0.016);
   assert.equal(cockpitSubjectStepSec(500, 500), 0.5);
   assert.equal(cockpitSubjectStepSec(520, 500), 0.52);
-  // A hidden tab's minutes count as one late update.
-  assert.equal(cockpitSubjectStepSec(60_000, 500), 0.6);
-  assert.equal(cockpitSubjectStepSec(60_000, 0), 0.1);
+  // Slow frames (5 a second) count in full...
+  assert.equal(cockpitSubjectStepSec(200, 50), 0.2);
+  assert.equal(cockpitSubjectStepSec(1000, 0), 1);
+  // ...and a hidden tab's minutes as one late update.
+  assert.equal(cockpitSubjectStepSec(60_000, 500), 1.5);
+  assert.equal(cockpitSubjectStepSec(60_000, 0), 1);
   assert.equal(cockpitSubjectStepSec(-5, 500), 0);
   assert.equal(cockpitSubjectStepSec(Number.NaN, 500), 0);
-  assert.equal(cockpitSubjectStepSec(1000, Number.NaN), 0.1);
+  assert.equal(cockpitSubjectStepSec(1000, Number.NaN), 1);
 });
 
 test('cockpit camera clearance never falls below the rendered ground floor', () => {

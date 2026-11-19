@@ -3,17 +3,17 @@ import { storeToRefs } from 'pinia';
 import { nextTick, ref, watch } from 'vue';
 import { t } from '../../../i18n/index.js';
 import UiSlider from '../../kit/UiSlider.js';
-import { useContextStore } from '../../stores/context.js';
+import { useSpaceMissionsStore } from '../../stores/spaceMissions.js';
 import UiButton from '../../kit/UiButton.vue';
 
-// The selected space mission inside Context. The launches layer presents it
+// The selected space mission. The launches layer presents it
 // and hides the panel while none is selected; the roster beside it hides
 // while it shows. Buttons call the layer's panel commands.
-const { mission: m, missionsLayer: layer } = storeToRefs(useContextStore());
+const { mission: m, layer } = storeToRefs(useSpaceMissionsStore());
 const root = ref(null);
 
-// Each newly presented selection returns the Context panel to the top.
-const SCROLLER = ":root[data-ui-theme='cyber'] .cyber-panel-body, .global-context-panel-inner";
+// Each newly presented selection returns the mission panel to the top.
+const SCROLLER = '.space-missions-panel-inner';
 watch(
   () => m.value?.scrollRequest,
   async (request) => {

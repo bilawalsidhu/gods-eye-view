@@ -153,10 +153,10 @@ function selectMapSource(chip) {
             <button id="search-toggle" class="search-toggle-btn" :title="t('Search any location')" @click="locationControls?.toggleSearch()">
               <span>&#x1F50E;</span>
             </button>
-            <input type="text" id="location-search" v-class-toggle="{ expanded: !!loc?.searchExpanded, searching: !!loc?.searching }" :placeholder="t('Search any location...')" autocomplete="off" spellcheck="false" :aria-label="t('Search location by name or coordinates')" :aria-invalid="loc?.searchError ? 'true' : null" :aria-describedby="loc?.searchError ? 'location-search-error' : null" />
+            <input type="text" id="location-search" v-class-toggle="{ expanded: !!loc?.searchExpanded, searching: !!loc?.searching }" :placeholder="t('Search any location...')" autocomplete="off" spellcheck="false" :aria-label="t('Search location by name or coordinates')" :aria-invalid="loc?.searchOrigin !== 'omnibar' && loc?.searchError ? 'true' : null" :aria-describedby="loc?.searchOrigin !== 'omnibar' && loc?.searchError ? 'location-search-error' : null" />
           </div>
         </div>
-        <p id="location-search-error" class="location-search-error" role="alert">{{ loc?.searchError }}</p>
+        <p id="location-search-error" class="location-search-error" role="alert">{{ loc?.searchOrigin === 'omnibar' ? '' : loc?.searchError }}</p>
       </div>
     </div>
   </div>

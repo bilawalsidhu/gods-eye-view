@@ -238,20 +238,29 @@ test('the HUD and Sonar controls render what VisualSettings shows', async (t) =>
     getVariant: () => variant,
   });
   owner._scheduleAdaptivePanelLayout = () => {};
-  assert.equal($('cyber-sonar-toggle').textContent, 'ON');
-  assert.equal($('cyber-sonar-toggle').getAttribute('aria-pressed'), 'true');
+  // Sonar is opt-in: OFF until the viewer turns it on.
+  assert.equal($('cyber-sonar-toggle').textContent, 'OFF');
+  assert.equal($('cyber-sonar-toggle').getAttribute('aria-pressed'), 'false');
+  assert.equal(
+    [...$('hud-layout-select').options].map((option) => option.value).join(),
+    'tactical,minimal',
+  );
 
   owner._syncHudControls();
   await nextTick();
   assert.equal($('hud-toggle').classList.contains('active'), true);
   assert.equal($('hud-layout-row').classList.contains('visible'), true);
   assert.equal($('hud-layout-select').value, 'minimal');
+  // The toggle shows with the HUD; its sliders wait for Sonar ON.
+  assert.equal($('cyber-sonar-row').classList.contains('visible'), true);
+  assert.equal($('cyber-sonar-rings-row').classList.contains('visible'), false);
 
   visible = false;
   owner._updateHudButtonState();
   await nextTick();
   assert.equal($('hud-toggle').classList.contains('active'), false);
   assert.equal($('hud-layout-row').classList.contains('visible'), false);
+  assert.equal($('cyber-sonar-row').classList.contains('visible'), false);
 
   owner._sonarShown = {
     enabled: false,
@@ -272,6 +281,19 @@ test('the HUD and Sonar controls render what VisualSettings shows', async (t) =>
   assert.equal($('cyber-sonar-range-value').textContent, '90%');
   assert.equal($('cyber-sonar-sector').value, '30');
   assert.equal($('cyber-sonar-sector-value').textContent, '30°');
+
+  visible = true;
+  owner._updateHudButtonState();
+  owner._sonarShown = { ...owner._sonarShown, enabled: true };
+  owner._publishDisplay();
+  await nextTick();
+  assert.equal(toggle.textContent, 'ON');
+  for (const name of ['rings', 'range', 'intensity', 'opacity', 'sector'])
+    assert.equal(
+      $(`cyber-sonar-${name}-row`).classList.contains('visible'),
+      true,
+      name,
+    );
 });
 
 test('Scope and Celestial render what VisualSettings shows', async (t) => {

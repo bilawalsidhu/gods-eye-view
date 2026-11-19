@@ -449,9 +449,10 @@ test('clicking a magnitude label selects the quake and flies to it', async () =>
   assert.ok(
     Math.hypot(detail.position.x, detail.position.y, detail.position.z) > 6e6,
   );
-  // The whole disc in view: radius and range scale with the magnitude.
+  // The whole disc in view: the radius scales with the magnitude; up to M6
+  // the framing's own range fits the disc.
   assert.equal(detail.radiusM, 32000);
-  assert.equal(detail.rangeM, 32000 * 3.5);
+  assert.equal(detail.rangeM, undefined);
 
   // The keyboard path does the same.
   assert.equal(

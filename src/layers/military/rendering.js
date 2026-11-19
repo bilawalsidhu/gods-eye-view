@@ -1,4 +1,3 @@
-import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import {
   aircraftLayerModelSpec,
   aircraftModelSpecCacheKey,
@@ -9,7 +8,6 @@ import {
   BILLBOARD_SCALE,
   GROUND_SCALE,
   MIL_ICON_COLOR,
-  TRACKED_ICON_COLOR,
   EMERGENCY_ICON_COLOR,
   MODEL_WHITE,
 } from './policy.js';
@@ -41,15 +39,11 @@ export function createRendering({
     return spec;
   }
 
-  /** Fleet icon scale: per-class scale, ×GROUND_SCALE while grounded. */
+  /** Fleet icon scale: one size for every class, ×GROUND_SCALE while grounded. */
 
   function _fleetBillboardScale(icao24) {
     const meta = flightState.records.data.get(icao24);
-    return (
-      BILLBOARD_SCALE *
-      (CLASS_SCALE_2D[meta?.klass] || 1) *
-      (meta?.onGround ? GROUND_SCALE : 1)
-    );
+    return BILLBOARD_SCALE * (meta?.onGround ? GROUND_SCALE : 1);
   }
 
   /** Sprite kind for one contact's icon. Identity for every aircraft except
@@ -61,11 +55,10 @@ export function createRendering({
   const _iconKind = (icao24, klass) =>
     tr3bIconKind(icao24, klass, { hot: flightState._irBoost });
 
-  /** Model colour: the mesh's own (white), tinted amber while tracked and red
-   *  while broadcasting an emergency. */
+  /** Model colour: the mesh's own (white), tinted red while broadcasting an
+   *  emergency. Tracking never recolours it. */
 
   function _modelColor(icao24) {
-    if (icao24 === flightState._trackedIcao) return TRACKED_ICON_COLOR;
     const info = flightState.records.data.get(icao24);
     return isEmergency(info?.emergency) ? EMERGENCY_ICON_COLOR : MODEL_WHITE;
   }

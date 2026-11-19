@@ -94,7 +94,7 @@ out vec4 v_pickColor;
 out float v_proxy;
 
 // The row's anchor in clip space before screen offsets, for effects that wrap
-// main() (cyber sonar) and must not change geometry or picks.
+// main() (sonar) and must not change geometry or picks.
 vec4 iconAnchorClip = vec4(0.0, 0.0, 0.0, -1.0);
 
 ${ICON_SEGMENT_GLSL}

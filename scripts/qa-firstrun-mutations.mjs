@@ -276,21 +276,21 @@ const MUTATIONS = [
   },
   {
     defect: 'the tile stops promising the fires it actually turns on',
-    file: 'html',
+    file: 'module',
     from: "  'Live earthquakes and active fires, from USGS and NASA',",
     to: "  'Live earthquakes worldwide, straight from USGS',",
   },
   {
-    defect: 'the owner-authored first-run line is quietly rewritten',
+    defect: 'the maintainer-authored first-run line is quietly rewritten',
     file: 'html',
     from: 'It feels like a forbidden cockpit—then you realize the sources are public and the data is real.',
-    to: "It feels like a forbidden cockpit. It isn't — every feed is public, and every contact is live.",
+    to: 'A live 3D globe of public data. Pick a view to begin.',
   },
   {
     defect: 'the ledgered global-chip defect loses its pointer to the real fix',
     file: 'module',
-    from: '    // means a KEY REQUIRED terminal state in src/loadingFeedback.js, a state',
-    to: '    // (note removed)',
+    from: '    // ends KEY REQUIRED (src/loadingFeedback.js), and the quakes half of the',
+    to: '    // ends KEY REQUIRED, and the quakes half of the',
   },
   {
     defect: 'the globe missions never pull the camera out',
@@ -307,14 +307,14 @@ const MUTATIONS = [
   {
     defect: 'a cancelled globe flight fails the whole mission',
     file: 'module',
-    from: '    .catch(() => null);',
-    to: '    .catch(() => { throw new Error("flight failed"); });',
+    from: '          .catch(() => null)\n      : null;',
+    to: '          .catch(() => { throw new Error("flight failed"); })\n      : null;',
   },
   {
     defect: 'Explore manually quietly runs a mission instead of nothing',
     file: 'module',
     from: "if (mission.kind === 'none') return { ok: true, choice };",
-    to: "if (mission.kind === 'none') return { ok: true, choice, ran: await setContextMode('contacts') };",
+    to: "if (mission.kind === 'none') return { ok: true, choice, ran: await setLayerEnabled('rocket-launches') };",
   },
   {
     defect: 'an unknown choice is treated as a success',
@@ -348,15 +348,14 @@ const MUTATIONS = [
   {
     defect: 'a mission persists a 3D-models choice nobody made',
     file: 'module',
-    from: '      const result = await styleManager.setContextMode(mode);',
-    to: '      styleManager._setModels3dEnabled?.(true);\n          const result = await styleManager.setContextMode(mode);',
+    from: "        setLayerEnabled: (layerId) =>\n          dataManager.setEnabled(layerId, true, { origin: 'user' }),",
+    to: "        setLayerEnabled: (layerId) => {\n          styleManager._setModels3dEnabled?.(true);\n          return dataManager.setEnabled(layerId, true, { origin: 'user' });\n        },",
   },
   {
-    defect:
-      'the Context panel is left collapsed, hiding the mode that just started',
+    defect: 'a mission writes panel chrome nobody chose',
     file: 'module',
-    from: "            styleManager.setPanelCollapsed?.('global-context-panel', false, {\n              explicit: true,\n            });",
-    to: '            // panel reveal removed',
+    from: '        flyToGlobe: () => styleManager.resetToGlobeView(),',
+    to: "        flyToGlobe: () => {\n          styleManager.setPanelCollapsed?.('global-context-panel', false, { explicit: true });\n          return styleManager.resetToGlobeView();\n        },",
   },
   {
     defect:
@@ -371,8 +370,8 @@ const MUTATIONS = [
     defect:
       'disabling the focused tile drops the keyboard to <body> mid-flight',
     file: 'html',
-    from: ':aria-disabled="launcher?.busy ?? undefined" @click="controls?.choose(\'contacts\')"',
-    to: ':disabled="launcher?.busy === \'true\'" @click="controls?.choose(\'contacts\')"',
+    from: ':aria-disabled="String(settling || launcher?.busy === \'true\')" @click="onPrimary"',
+    to: ':disabled="launcher?.busy === \'true\'" @click="onPrimary"',
   },
   {
     defect: 'Tab escapes into an app the visitor has not seen yet',
@@ -421,8 +420,8 @@ const MUTATIONS = [
     defect:
       'the card loses its viewport cap and clips on a short landscape phone',
     file: 'css',
-    from: '  max-height: calc(100dvh - 1.5rem);',
-    to: '  /* cap removed */',
+    from: '  body.mobile-shell #first-run-launcher {\n    bottom: 5.8rem;\n    max-height: calc(100vh - 6.55rem);\n    max-height: calc(100dvh - 6.55rem);\n  }',
+    to: '  body.mobile-shell #first-run-launcher {\n    bottom: 5.8rem;\n    /* cap removed */\n  }',
   },
   {
     defect:
@@ -437,7 +436,7 @@ const MUTATIONS = [
     // those instead and prove nothing about this feature.
     defect: "the launcher's reduced-motion opt-out is dropped",
     file: 'css',
-    from: '  #first-run-launcher,\n  .first-run-choices button,\n  .first-run-arrow {\n    transition: none;\n  }\n  /* Scrolling a tile into view must not animate either. */\n  .first-run-choices {\n    scroll-behavior: auto;\n  }',
+    from: '  #first-run-launcher,\n  .first-run-backdrop,\n  .first-run-back,\n  .first-run-missions button,\n  .first-run-link-card,\n  .first-run-link-button,\n  .first-run-enter {\n    transition: none;\n  }\n  /* Scrolling a tile into view must not animate either. */\n  .first-run-choices {\n    scroll-behavior: auto;\n  }',
     to: '  .first-run-nothing {\n    transition: none;\n  }',
   },
 
@@ -445,14 +444,14 @@ const MUTATIONS = [
   {
     defect: 'a mission tile is dropped from the menu',
     file: 'html',
-    from: '      <button type="button" data-first-run-choice="space-missions"',
-    to: '      <button type="button" data-first-run-choice-disabled="space-missions"',
+    from: '          <button type="button" data-first-run-start="space-missions"',
+    to: '      <button type="button" data-first-run-start-disabled="space-missions"',
   },
   {
     defect: "the menu order stops matching the owner's",
     file: 'html',
-    from: '<button type="button" data-first-run-choice="environmental"',
-    to: '<button type="button" data-first-run-choice="zzz-environmental"',
+    from: '<button type="button" data-first-run-start="environmental"',
+    to: '<button type="button" data-first-run-start="zzz-environmental"',
   },
   {
     defect: 'the "don\'t show again" checkbox is removed',

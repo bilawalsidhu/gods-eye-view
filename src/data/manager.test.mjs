@@ -1503,6 +1503,43 @@ test('waitForLayerSettled defers reconciliation until the captured queue complet
   await mgr.destroyAll();
 });
 
+test('waitForLayerIdle follows queued requests and gives up at its bound', async () => {
+  const mgr = new DataLayerManager({});
+  const gates = [];
+  const layer = makeSlowLayer('satellites', { updateInterval: 0 });
+  layer.module.enable = () => new Promise((resolve) => { gates.push(resolve); });
+  mgr.register(layer.module);
+  assert.equal(await mgr.waitForLayerIdle('satellites'), true, 'idle at once');
+  assert.equal(await mgr.waitForLayerIdle('unknown-layer'), true);
+
+  const first = mgr.setEnabled('satellites', true);
+  while (!gates.length) await new Promise((resolve) => setTimeout(resolve, 1));
+  let idle = null;
+  const waiting = mgr.waitForLayerIdle('satellites', { timeoutMs: 1000 })
+    .then((value) => { idle = value; });
+  // A request that joins the queue while waiting is waited for too.
+  const second = mgr.setEnabled('satellites', false);
+  gates[0]();
+  await Promise.all([first, second, waiting]);
+  assert.equal(idle, true);
+
+  // A queue that never drains returns false at the deadline or on abort.
+  const hung = mgr.setEnabled('satellites', true);
+  assert.equal(await mgr.waitForLayerIdle('satellites', { timeoutMs: 20 }), false);
+  const controller = new AbortController();
+  const aborted = mgr.waitForLayerIdle('satellites', { signal: controller.signal });
+  controller.abort();
+  assert.equal(await aborted, false);
+  assert.equal(
+    await mgr.waitForLayerIdle('satellites', { signal: controller.signal }),
+    false,
+    'an already aborted signal returns at once',
+  );
+  for (const release of gates) release();
+  await hung;
+  await mgr.destroyAll();
+});
+
 test('programmatic Context enables neither create nor replace a restoration snapshot', async () => {
   const mgr = new DataLayerManager({});
   const missions = makeSlowLayer('rocket-launches', { updateInterval: 0 });
@@ -1854,10 +1891,10 @@ test('pre-transition subscribers capture the exact enabled set before user chang
 
 test('absolute Context entry intent is excluded from its own pre-entry restore snapshot', async () => {
   const mgr = new DataLayerManager({});
-  const missions = makeSlowLayer('rocket-launches', { updateInterval: 0 });
-  const satellites = makeSlowLayer('satellites', { updateInterval: 0 });
-  mgr.register(missions.module);
-  mgr.register(satellites.module);
+  const contacts = makeSlowLayer('military-awareness', { updateInterval: 0 });
+  const flights = makeSlowLayer('flights', { updateInterval: 0 });
+  mgr.register(contacts.module);
+  mgr.register(flights.module);
   let snapshot = null;
   mgr.subscribe((change) => {
     if (shouldCaptureContextSession(change)) {
@@ -1869,13 +1906,13 @@ test('absolute Context entry intent is excluded from its own pre-entry restore s
     }
   });
 
-  await mgr.setEnabled('rocket-launches', true, { origin: 'user' });
+  await mgr.setEnabled('military-awareness', true, { origin: 'user' });
   assert.deepEqual([...snapshot], []);
-  await mgr.setEnabled('rocket-launches', false, { origin: 'user' });
+  await mgr.setEnabled('military-awareness', false, { origin: 'user' });
   await mgr.restoreEnabledLayerIds(snapshot, { origin: 'context-restore' });
 
-  assert.equal(mgr.isEnabled('rocket-launches'), false);
-  assert.equal(mgr.isEnabled('satellites'), false);
+  assert.equal(mgr.isEnabled('military-awareness'), false);
+  assert.equal(mgr.isEnabled('flights'), false);
   await mgr.destroyAll();
 });
 

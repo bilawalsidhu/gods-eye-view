@@ -6,7 +6,11 @@ import {
   feedProvenanceEnvelope,
 } from '../data/layerSnapshot.js';
 import { readLayerLifecycleSummary } from './layerSummary.js';
-import { SPEECH_BUILDERS, attachVoiceResult } from './speech.js';
+import {
+  SPEECH_BUILDERS,
+  VIEW_CENTRE_LABEL,
+  attachVoiceResult,
+} from './speech.js';
 import { resolveDeicticArgs } from './deixis.js';
 import { isStoriesOpen } from './realtimeInputPolicy.js';
 export { readLayerLifecycleSummary } from './layerSummary.js';
@@ -134,6 +138,9 @@ const PANEL_ALIASES = new Map([
   ['global context', 'global-context-panel'],
   ['right context', 'global-context-panel'],
   ['context right panel', 'global-context-panel'],
+  ['space missions panel', 'space-missions-panel'],
+  ['missions panel', 'space-missions-panel'],
+  ['mission panel', 'space-missions-panel'],
   ['utilities', 'utilities-panel'],
   ['utilities panel', 'utilities-panel'],
   ['draw', 'utilities-panel'],
@@ -163,6 +170,7 @@ const PANEL_IDS = new Set([
   'cctv-panel',
   'radio-panel',
   'global-context-panel',
+  'space-missions-panel',
   'utilities-panel',
   'scene-panel',
   'pp-toggles',
@@ -603,6 +611,12 @@ export function createGevActionRunner({
             changeOptions,
           );
         }
+        if (layerId === 'satellites') {
+          // A Satellites OFF can end Space Missions, which needs it.
+          await dataManager.layers
+            .get('rocket-launches')
+            ?.module?.waitForSatelliteIntents?.();
+        }
         if (layerId === 'rocket-launches' || layerId === 'satellites') {
           await styleManager?._waitForContextLayerSettlement?.();
         }
@@ -977,6 +991,47 @@ export function createGevActionRunner({
           ...(!applied ? { error: say } : {}),
         };
       }
+      // The Space Missions panel exists only while its layer is on; opening it
+      // otherwise would fold the other right-rail panels for nothing.
+      if (
+        open &&
+        panelId === 'space-missions-panel' &&
+        !dataManager?.isEnabled?.('rocket-launches')
+      ) {
+        const say = dataManager?.isEffectivelyEnabled?.('rocket-launches')
+          ? 'Space Missions is still starting; its panel opens when it is on.'
+          : 'The Space Missions panel shows while Space Missions is on. Turn on Space Missions first.';
+        return {
+          ok: false,
+          action: 'set_panel_open',
+          panelId,
+          open,
+          applied: false,
+          unavailable: true,
+          say,
+          error: say,
+        };
+      }
+      // The Cockpit owns the screen and hides the right rail: the panel is
+      // not opened (or its preference written) under it.
+      if (
+        open &&
+        panelId === 'space-missions-panel' &&
+        styleManager?.getCockpitState?.()?.active
+      ) {
+        const say =
+          'The Space Missions panel opens once you leave the cockpit.';
+        return {
+          ok: false,
+          action: 'set_panel_open',
+          panelId,
+          open,
+          applied: false,
+          unavailable: true,
+          say,
+          error: say,
+        };
+      }
       if (!setPanelOpen(styleManager, panelId, open)) {
         const say = 'There is no panel to open here.';
         return {
@@ -988,6 +1043,9 @@ export function createGevActionRunner({
           error: say,
         };
       }
+      // A phone shows the right rail only as tab sheets: show this one's.
+      if (open && panelId === 'space-missions-panel')
+        styleManager?.revealPanel?.(panelId);
       return { ok: true, action: 'set_panel_open', panelId, open };
     }
 
@@ -1024,6 +1082,54 @@ export function createGevActionRunner({
           cancelled: true,
           error: 'Context request was cancelled before it could run',
           ...cancellationState(),
+        };
+      }
+      if (mode === 'space-missions') {
+        // Space Missions is an ordinary layer with its own panel, not a
+        // Context mode; older phrasings still reach it through this alias.
+        const result = await runGevAction(
+          'set_layer_visibility',
+          { layerId: 'rocket-launches', enabled: true },
+          runOptions,
+        );
+        // Open the panel even when the layer was already on, but never under
+        // the Cockpit, which owns the screen (as the layer's own reveal).
+        if (
+          result?.ok === true &&
+          current() &&
+          !styleManager?.getCockpitState?.()?.active
+        ) {
+          setPanelOpen(styleManager, 'space-missions-panel', true);
+          styleManager?.revealPanel?.('space-missions-panel');
+        }
+        return {
+          ...result,
+          action: 'set_context_mode',
+          mode: 'space-missions',
+        };
+      }
+      const contextState = styleManager.getContextModeState?.() || {};
+      if (
+        mode === 'off' &&
+        !contextState.mode &&
+        !contextState.changing &&
+        !contextState.entering &&
+        !dataManager.isEffectivelyEnabled?.('military-awareness') &&
+        (dataManager.isEffectivelyEnabled?.('rocket-launches') ??
+          dataManager.isEnabled?.('rocket-launches'))
+      ) {
+        // "Exit Space Missions" still arrives as context off. With no Context
+        // mode on, entering or starting (Contacts), Space Missions, on or
+        // still starting, is what is being left: switch its layer off.
+        const result = await runGevAction(
+          'set_layer_visibility',
+          { layerId: 'rocket-launches', enabled: false },
+          runOptions,
+        );
+        return {
+          ...result,
+          action: 'set_context_mode',
+          mode: 'off',
         };
       }
       if (mode && mode !== 'off') {
@@ -1600,7 +1706,7 @@ export function createGevActionRunner({
         return {
           ok: false,
           action: 'set_cyber_sonar',
-          error: 'Cyber sonar controls are unavailable.',
+          error: 'Sonar controls are unavailable.',
         };
       }
       return { action: 'set_cyber_sonar', ...styleManager.setCyberSonar(args) };
@@ -4015,7 +4121,7 @@ async function requestStreetLevel(
     query ||
     (entity ? String(entity.label || entity.id) : '') ||
     (hasCoordinates ? `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` : '') ||
-    'the view centre';
+    VIEW_CENTRE_LABEL;
   atViewCentre = !query && !hasCoordinates && !entity;
   let point = null;
   let location = null;

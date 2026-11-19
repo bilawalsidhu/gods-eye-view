@@ -61,6 +61,7 @@ export function placeLiveAircraft(
   history,
   out,
 ) {
+  flightState._drSpeedPlaced = false;
   if (!placement || followsClock(flightState)) return false;
   const placed = placeAircraftAt(
     placement,
@@ -73,6 +74,7 @@ export function placeLiveAircraft(
   if (!placed) return false;
   flightState._drCourseDeg = placed.courseDeg;
   flightState._drSpeedMps = placed.speedMps;
+  flightState._drSpeedPlaced = true;
   flightState._drCourseHold = placed.speedMps < COURSE_HOLD_SPEED_MPS;
   flightState._drExtrapolating = placed.extrapolating;
   return true;
@@ -93,13 +95,15 @@ export function forgetPlacedAircraft(placement, ids) {
  * Tell the host-supplied placement an aircraft's fix as the layer took it
  * (nothing while the layer follows the world clock): its own time, its
  * position, the height the layer draws it at (NaN when that height is
- * invented), and its reported speed, course and ground state.
+ * invented), the ground under it in that height's reference (NaN where the
+ * layer does not know it), and its reported speed, course and ground state.
  * @param {object} flightState
  * @param {object|null|undefined} placement
  * @param {string} icao24
  * @param {number} fixEpochMs
  * @param {{rawLat: number, rawLon: number, renderAltitudeM: number,
- *   renderAltitudeInvented?: boolean, onGround?: boolean}} meta
+ *   renderAltitudeInvented?: boolean, groundM?: number|null,
+ *   onGround?: boolean}} meta
  * @param {number|null|undefined} speedMps
  * @param {number|null|undefined} courseDeg
  */
@@ -119,6 +123,7 @@ export function observeLiveAircraft(
     lon: meta.rawLon,
     altitudeM:
       meta.renderAltitudeInvented === true ? NaN : meta.renderAltitudeM,
+    groundM: Number.isFinite(meta.groundM) ? meta.groundM : NaN,
     speedMps: Number.isFinite(speedMps) ? speedMps : NaN,
     courseDeg: Number.isFinite(courseDeg) ? courseDeg : NaN,
     headingDeg: NaN,

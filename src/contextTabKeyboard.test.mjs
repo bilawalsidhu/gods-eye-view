@@ -2,7 +2,9 @@ import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 import { _selectContextMode } from './ui/contextTransactions.js';
 import { _initGlobalContextPanel } from './ui/contextBindings.js';
+import { ContextControls } from './ui/contextControls.js';
 import { clearSelectedLayers } from './ui/contextActions.js';
+import { PANEL_RAIL_ITEMS } from './ui/panelRailCatalog.js';
 import { readFileSync as readRadioSource } from 'node:fs';
 const radioBindings = readRadioSource(
   new URL('./ui/radioBindings.js', import.meta.url),
@@ -21,43 +23,24 @@ const html = await renderApplicationHtml(
 );
 const css = readStylesheet(new URL('../style.css', import.meta.url));
 
-test('Contacts and Space Missions both participate in the ordinary Tab sequence', () => {
-  for (const id of [
-    'global-context-flights-btn',
-    'global-context-missions-btn',
-  ]) {
-    const button = html.match(
-      new RegExp(`<button id="${id}"[\\s\\S]*?</button>`),
-    );
-    assert.ok(button, `${id} is missing`);
-    assert.match(button[0], /role="tab"/);
-    assert.match(button[0], /tabindex="0"/);
-  }
-
-  // The view keeps both tabs' tabindex static and never disables them; the
-  // transition itself is covered over happy-dom in ui/contextPanel.test.mjs.
-  for (const id of [
-    'global-context-flights-btn',
-    'global-context-missions-btn',
-  ]) {
-    const tag = contextView.match(new RegExp(`<button id="${id}"[^>]*>`))?.[0];
-    assert.ok(tag, `${id} is missing from the view`);
-    assert.doesNotMatch(tag, /:tabindex|:disabled|\sdisabled/);
-  }
+test('Contacts stays in the keyboard sequence and Space Missions owns its rail item', () => {
+  const button = html.match(
+    /<button id="global-context-flights-btn"[\s\S]*?<\/button>/,
+  )?.[0];
+  assert.ok(button, 'Contacts control is missing');
+  assert.match(button, /role="tab"/);
+  assert.match(button, /tabindex="0"/);
+  const tag = contextView.match(/<button id="global-context-flights-btn"[^>]*>/)?.[0];
+  assert.ok(tag, 'Contacts control is missing from the view');
+  assert.doesNotMatch(tag, /:tabindex|:disabled|\sdisabled/);
+  assert.doesNotMatch(html, /id="global-context-missions-btn"/);
+  assert.match(html, /id="space-missions-panel"[^>]*data-panel-id="space-missions-panel"/);
+  assert.equal(PANEL_RAIL_ITEMS['space-missions-panel'].icon, 'rocket_launch');
 });
 
 test('Context activation and Clear All never native-disable tabs and guard repeated clicks', () => {
-  const init = _initGlobalContextPanel.toString();
   const select = _selectContextMode.toString();
   const clear = clearSelectedLayers.toString();
-  assert.equal(
-    (
-      init.match(
-        /if \(\s*this\.destroyed\s*\|\|\s*this\._contextModeChanging\s*\|\|\s*this\._clearSelectedLayersPromise\s*\)\s*return;/g,
-      ) || []
-    ).length,
-    2,
-  );
   assert.doesNotMatch(
     select,
     /_globalContext(?:Flights|Missions)Btn\.disabled\s*=\s*true/,
@@ -68,17 +51,29 @@ test('Context activation and Clear All never native-disable tabs and guard repea
   );
 });
 
-test('Context tablist retains Left, Right, Home, and End keyboard navigation', () => {
-  const initSource = _initGlobalContextPanel.toString();
-  assert.match(initSource, /event\.key === 'ArrowRight'/);
-  assert.match(initSource, /event\.key === 'ArrowLeft'/);
-  assert.match(initSource, /event\.key === 'Home'/);
-  assert.match(initSource, /event\.key === 'End'/);
-  assert.match(
-    initSource,
-    /contextTabs\[nextIndex\]\.focus\(\{ preventScroll: true \}\)/,
-  );
-  assert.match(initSource, /contextTabs\[nextIndex\]\.click\(\)/);
+test('a Contacts click while Context is busy is ignored', () => {
+  const button = new EventTarget();
+  const controls = new ContextControls({
+    elements: { _globalContextFlightsBtn: button },
+    installations: {},
+    actions: { getCockpit: () => null, claimVisualAuthority() {} },
+  });
+  const runs = [];
+  controls._runUserFacingContextAction = (operation) => {
+    runs.push(operation);
+    return Promise.resolve(false);
+  };
+  const click = () => button.dispatchEvent(new Event('click'));
+  controls._contextModeChanging = true;
+  click();
+  controls._contextModeChanging = false;
+  controls._clearSelectedLayersPromise = Promise.resolve();
+  click();
+  assert.equal(runs.length, 0, 'a transition or Clear All in flight drops it');
+  controls._clearSelectedLayersPromise = null;
+  click();
+  assert.equal(runs.length, 1, 'an idle panel takes the click');
+  controls.stop();
 });
 
 test('Context tabs draw a visible keyboard-focus outline including active tabs', () => {
@@ -102,7 +97,6 @@ test('Context tabs draw a visible keyboard-focus outline including active tabs',
 });
 
 test('Context async action buttons remain focused while busy', () => {
-  const init = _initGlobalContextPanel.toString();
   const radio = radioBindings.slice(
     radioBindings.indexOf('const toggleRadio = async (trigger) => {'),
     radioBindings.indexOf('this._storeToken = this.store?.connect?.('),
@@ -113,6 +107,7 @@ test('Context async action buttons remain focused while busy', () => {
   );
   const clear = clearSelectedLayers.toString();
 
+  const init = _initGlobalContextPanel.toString();
   assert.match(init, /if \(this\._installationsSearchBusy\) return;/);
   assert.doesNotMatch(init, /\.disabled\s*=\s*true/);
   const search = contextView.match(
@@ -220,7 +215,7 @@ test('Context reads as one segmented control with legible type and no halo', () 
   // open Context title legible; no Context-only rule dims it again.
   assert.equal(
     rule(
-      ":root:not([data-ui-theme='cyber']) #global-context-panel:not(.collapsed) .panel-title",
+      ":root #global-context-panel:not(.collapsed) .panel-title",
     ),
     '',
   );

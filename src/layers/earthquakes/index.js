@@ -409,11 +409,13 @@ export function createEarthquakesLayer({
       id: `${PICK_PREFIX}${stableId}`,
       label: earthquakeMagnitudeTitle(event.mag),
       position: fromDegrees(event.lon, event.lat),
-      // The whole disc in view: the framing's range fits an M6 disc, so a
-      // larger one scales it (the framing stays the floor).
+      // The whole disc in view: the framing's range fits an M6 disc, so only
+      // a larger one asks for its own range (the framing stays the floor).
       radiusM: earthquakeDiscRadiusM(event.mag),
       rangeM:
-        earthquakeDiscRadiusM(event.mag) * EARTHQUAKE_FOCUS_RANGE_PER_RADIUS,
+        event.mag > 6
+          ? earthquakeDiscRadiusM(event.mag) * EARTHQUAKE_FOCUS_RANGE_PER_RADIUS
+          : undefined,
     });
     return true;
   }

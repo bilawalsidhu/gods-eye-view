@@ -86,7 +86,7 @@ async function importChosen(event) {
         <UiButton id="scene-update-shot-btn" type="button" :disabled="off('update')" @click="scenes.act('update')" class="gev-action-button scene-btn" :title="t('Replace the selected shot with the current view')">{{ t('UPDATE SHOT') }}</UiButton>
       </div>
       <SceneShotList />
-      <p class="scene-shot-hint">{{ t('Click a shot to select it, double-click to rename.') }}</p>
+      <p class="scene-shot-hint">{{ t('Click a shot to go to it, double-click to rename.') }}</p>
       <p class="scene-step-heading">{{ t('PREVIEW') }}</p>
       <div class="scene-controls">
         <UiButton variant="primary" id="scene-start-btn" type="button" class="gev-action-button scene-btn scene-btn-primary" :title="t('Play from this scene through the rest of the project')" :disabled="off('start')" @click="scenes.act('start')">{{ scene?.playLabel ?? t('PLAY', { context: 'scene' }) }}</UiButton>
