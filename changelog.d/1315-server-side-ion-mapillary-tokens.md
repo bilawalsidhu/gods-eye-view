@@ -25,7 +25,9 @@
   set on the server, or pass `graphEndpoint` to `createMapillarySource` to
   use a Graph proxy of your own that adds the token (Byrd-IT, #1315).
   Refuse Mapillary and ion answers that reflect their configured server token,
-  including common percent, JSON-unicode and base64 encodings.
+  including common percent, JSON-unicode and base64 encodings. An answer that
+  hides the token behind a JSON escape inside a JSON body (the escape of an
+  escape, the form `JSON.stringify` writes) is refused as well.
   A startup failure no longer repeats itself: the error was shown on the
   loading screen and logged to the console, so a failure carrying a credential
   (a key in a URL, a bearer token, a password in a URL's userinfo) put it in
