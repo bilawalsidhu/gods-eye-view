@@ -1290,6 +1290,7 @@
   "src/render/cesium/zoomOutGuard.test.mjs",
   "src/app/controls.test.mjs",
   "scripts/qa-zoom-out-guard.mjs",
+  "scripts/qa-zoom-under-icon.mjs",
   "src/hudSummaryGate.test.mjs",
   "src/hudSummaryLine.test.mjs",
   "src/testSupport/stubMgrs.mjs",
