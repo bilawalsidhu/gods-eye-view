@@ -118,6 +118,7 @@ export function layoutLeftPanelRail({
   let safeTop = baseTop;
   let safeBottom = viewportHeight - baseBottomInset;
   const bottomObstacles = [];
+  const straddling = [];
 
   for (const obstacle of obstacles) {
     if (stack.contains(obstacle)) continue;
@@ -153,7 +154,26 @@ export function layoutLeftPanelRail({
       safeTop = Math.max(safeTop, obstacleBottom);
     } else if (rect.top >= baseTop) {
       bottomObstacles.push({ top: rect.top });
+    } else {
+      straddling.push(rect);
     }
+  }
+  // An obstacle from above the corridor across the midpoint (common in short
+  // windows) still limits it: the panels go on whichever side of it leaves
+  // more room.
+  for (const rect of straddling) {
+    const roomAbove = rect.top - safeGap - obstacleSafeTop;
+    const lowerBottom = resolveLeftStackBottomBoundary({
+      baseBottom: safeBottom,
+      obstacles: bottomObstacles,
+      safeGap,
+    });
+    const roomBelow = lowerBottom - (rect.bottom + safeGap);
+    if (roomBelow > roomAbove) {
+      const obstacleBottom = rect.bottom + safeGap;
+      obstacleSafeTop = Math.max(obstacleSafeTop, obstacleBottom);
+      safeTop = Math.max(safeTop, obstacleBottom);
+    } else bottomObstacles.push({ top: rect.top });
   }
   safeBottom = resolveLeftStackBottomBoundary({
     baseBottom: safeBottom,

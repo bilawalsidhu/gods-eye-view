@@ -219,6 +219,25 @@ test('left corridor respects a lower obstacle but ignores an obstacle hidden by 
   assert.equal(Number(f.stack.dataset.safeBottomPct), 65.47);
 });
 
+test('in a short window the left corridor stays clear of an obstacle across the midpoint', () => {
+  // 480px window, midpoint 240. Neither card is wholly above or below it.
+  const f = fixture('left');
+  f.options.windowRef.innerHeight = 480;
+  const low = element('card', { top: 100, height: 200 });
+  f.options.obstacles = [low];
+  f.run();
+  // More room below the card than above it: the corridor starts under it.
+  assert(Number(f.stack.dataset.safeTopPct) * 4.8 >= 300);
+  assert(Number(f.stack.dataset.safeBottomPct) * 4.8 <= 480);
+
+  const high = element('card', { top: 200, height: 200 });
+  f.options.obstacles = [high];
+  f.run();
+  // More room above it: the corridor ends over it.
+  assert(Number(f.stack.dataset.safeBottomPct) * 4.8 <= 200);
+  assert(Number(f.stack.dataset.safeTopPct) * 4.8 >= 0);
+});
+
 test('a centered timeline only shortens the corridor when it reaches a laid-out panel', () => {
   const f = fixture('left');
   f.stack.rect.width = 360;

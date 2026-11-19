@@ -286,6 +286,58 @@ test('HUD rail layout constrains an oversized panel to the safe corridor', () =>
   assert.equal(layout.constrained, true);
 });
 
+test('HUD rail layout keeps a short window clear of an obstacle across its midpoint', () => {
+  // 480px window: midpoint 240. Each obstacle is neither wholly above nor
+  // wholly below the midpoint, and must still limit the band.
+  const above = resolveHudRailLayout({
+    viewportHeight: 480,
+    panelHeight: 120,
+    laneLeft: 20,
+    laneRight: 340,
+    baseTop: 40,
+    baseBottom: 460,
+    gap: 10,
+    obstacles: [{ left: 0, right: 400, top: 200, bottom: 300 }],
+  });
+  // Room above: 200 - 10 - 40 = 150; below: 460 - 310 = 150. A tie keeps the
+  // band above the obstacle.
+  assert.equal(above.safeTop, 40);
+  assert.equal(above.safeBottom, 190);
+  assert(above.top + Math.min(120, above.maxHeight) <= 190);
+
+  const below = resolveHudRailLayout({
+    viewportHeight: 480,
+    panelHeight: 120,
+    laneLeft: 20,
+    laneRight: 340,
+    baseTop: 40,
+    baseBottom: 460,
+    gap: 10,
+    obstacles: [{ left: 0, right: 400, top: 120, bottom: 260 }],
+  });
+  // Room above: 70; below: 190. The band goes under the obstacle.
+  assert.equal(below.safeTop, 270);
+  assert.equal(below.safeBottom, 460);
+  assert(below.top >= 270);
+});
+
+test('HUD rail layout keeps its zero-height fallback when a straddling obstacle leaves no room', () => {
+  const layout = resolveHudRailLayout({
+    viewportHeight: 480,
+    panelHeight: 120,
+    laneLeft: 20,
+    laneRight: 340,
+    baseTop: 100,
+    baseBottom: 400,
+    gap: 10,
+    obstacles: [{ left: 0, right: 400, top: 80, bottom: 420 }],
+  });
+  assert.equal(layout.maxHeight, 0);
+  assert.equal(layout.constrained, true);
+  assert.equal(layout.safeTop, 100);
+  assert.equal(layout.safeBottom, 100);
+});
+
 test('HUD rail layout can anchor controls to the start of the safe corridor', () => {
   const layout = resolveHudRailLayout({
     viewportHeight: 1000,

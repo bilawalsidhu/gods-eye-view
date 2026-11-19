@@ -1,6 +1,8 @@
 /**
  * Resolve a vertically centered panel slot inside a HUD rail while respecting
- * live rectangles that intersect that rail above or below the viewport center.
+ * live rectangles that intersect that rail. A rectangle above the viewport
+ * center lowers the top, one below it raises the bottom, and one across the
+ * center does whichever leaves the band more room.
  */
 export function resolveHudRailLayout({
   viewportHeight,
@@ -29,6 +31,7 @@ export function resolveHudRailLayout({
   const midpoint = viewportHeight * 0.5;
   let safeTop = Math.max(0, baseTop);
   let safeBottom = Math.min(viewportHeight, baseBottom);
+  const straddling = [];
 
   for (const rect of obstacles) {
     if (
@@ -44,6 +47,15 @@ export function resolveHudRailLayout({
     if (rect.bottom <= midpoint) safeTop = Math.max(safeTop, rect.bottom + gap);
     else if (rect.top >= midpoint)
       safeBottom = Math.min(safeBottom, rect.top - gap);
+    else straddling.push(rect);
+  }
+  // An obstacle across the midpoint (common in short windows) still limits
+  // the band: the band goes on whichever side of it leaves more room.
+  for (const rect of straddling) {
+    const roomAbove = rect.top - gap - safeTop;
+    const roomBelow = safeBottom - (rect.bottom + gap);
+    if (roomBelow > roomAbove) safeTop = Math.max(safeTop, rect.bottom + gap);
+    else safeBottom = Math.min(safeBottom, rect.top - gap);
   }
 
   safeBottom = Math.max(safeTop, safeBottom);
