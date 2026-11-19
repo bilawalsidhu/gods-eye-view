@@ -292,6 +292,13 @@ export function normalizeLine(text, { isRequest = isPlainRequest } = {}) {
     /^((?:turn|switch) (?:on|off)|show|hide|remove|enable|disable|clear|go to|fly to)\s+\1\b/i,
     '$1',
   );
+  // "remove flights from the map", "clear everything except ships from the
+  // map": the map is where every layer is. Not the verb's own "off" ("turn
+  // off the screen" is no layer switch).
+  line = line.replace(
+    /^((?:turn|switch) (?:on|off)|show|display|add|hide|remove|enable|disable|clear|toggle)\s+(\S.*?)\s+(?:from|off) (?:the )?(?:map|globe|screen|view)$/i,
+    '$1 $2',
+  );
   // "please" is dropped only around a request: "Please Touch Museum",
   // "Kindly Lane" and "Pretty Please" are names.
   const polite = line

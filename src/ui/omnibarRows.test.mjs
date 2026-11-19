@@ -805,12 +805,24 @@ test('"except" leaves Satellites to switch off with Space Missions off', () => {
       .rows[0].steps.map(stepOutcome),
     ['layer(flights,off)', 'layer(satellites,off)'],
   );
-  assert.deepEqual(
-    omnibar
-      .rows('hide everything except flights from the map', { places: [] })
-      .rows[0].steps.map(stepOutcome),
-    ['layer(satellites,off)'],
-  );
+  for (const text of [
+    'hide everything except flights from the map',
+    'clear everything except flights from the map',
+  ])
+    assert.deepEqual(
+      omnibar.rows(text, { places: [] }).rows[0].steps.map(stepOutcome),
+      ['layer(satellites,off)'],
+      text,
+    );
+  // The whole map cleared "from the map" is the same plan, not a place.
+  for (const text of [
+    'hide everything from the map',
+    'remove all layers from the map',
+  ]) {
+    const { rows } = omnibar.rows(text, { places: [] });
+    assert.equal(rows[0].kind, 'plan', text);
+    assert.ok(!rows.some((row) => row.kind === 'place'), text);
+  }
 });
 
 test('"turn off the screen" is no layer switch and no place', () => {

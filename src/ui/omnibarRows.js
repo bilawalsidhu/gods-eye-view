@@ -1002,13 +1002,6 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
    * ("Show Low, AZ").
    */
   function switchRows(line, ask) {
-    // "remove flights from the map": the map is where every layer is. Not
-    // the verb's own "off" ("turn off the screen" is no layer switch).
-    const bare = line.replace(
-      /\s+(?:from|off) (?:the )?(?:map|globe|screen|view)$/i,
-      '',
-    );
-    if (bare !== line && SWITCH.test(bare.toLowerCase())) line = bare;
     const excepted = exceptRows(line, ask);
     if (excepted) return excepted;
     const switching = line.toLowerCase().match(SWITCH);
