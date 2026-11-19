@@ -313,7 +313,7 @@ export function normalizeLine(text, { isRequest = isPlainRequest } = {}) {
   // "clear" takes the whole map: "clear flights" would read as a place.
   const lower = bare.toLowerCase();
   return CLEAR_ALL.test(lower) ||
-    /^clear (?:everything|all|every)\b.*\b(?:except|but|other than|apart from|besides|save for)\b/.test(
+    /^clear (?:everything|all(?: the)?(?: other)?(?: layers?)?|every layer) (?:except|but|other than|apart from|besides|save for)\b/.test(
       lower,
     )
     ? bare

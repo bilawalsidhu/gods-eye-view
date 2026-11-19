@@ -821,6 +821,7 @@ test('"except" leaves Satellites to switch off with Space Missions off', () => {
   for (const text of [
     'clear flights from the map',
     'clear all flights from the map',
+    'clear all flights except ships from the map',
   ])
     assert.ok(
       !omnibar
