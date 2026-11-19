@@ -92,6 +92,7 @@ out vec2 v_uv;
 out vec4 v_color;
 out vec4 v_pickColor;
 out float v_proxy;
+out float v_overDepth; // 1: drawn on the near plane, over everything
 
 // The row's anchor in clip space before screen offsets, for effects that wrap
 // main() (sonar) and must not change geometry or picks.
@@ -125,6 +126,7 @@ void main() {
   v_uv = vec2(0.0);
   v_color = vec4(0.0);
   v_proxy = 0.0;
+  v_overDepth = 0.0;
   gl_Position = vec4(0.0, 0.0, 2.0, 1.0); // outside the clip volume: not drawn
 
   float flags = style1.z;
@@ -260,13 +262,9 @@ void main() {
     distanceSq < style3.w * style3.w;
   if (overDepth && zclip >= -1.0 && zclip <= 1.0) {
     gl_Position.z = -gl_Position.w;
+    v_overDepth = 1.0;
 #ifdef LOG_DEPTH
-    // Just past the near plane, not on it: czm_writeLogDepth discards a
-    // fragment at or below 0.9999999, and 1.0 interpolated across the quad
-    // can arrive a rounding step or two under that, dropping the icon for a
-    // frame as it moves (flicker). 1e-4 m past the near plane is still in
-    // front of everything the scene draws.
-    v_depthFromNearPlusOne = 1.0001;
+    v_depthFromNearPlusOne = 1.0;
 #endif
   }
 
@@ -282,6 +280,7 @@ in vec2 v_uv;
 in vec4 v_color;
 in vec4 v_pickColor;
 in float v_proxy;
+in float v_overDepth;
 
 void main() {
   vec4 color = czm_gammaCorrect(texture(u_atlas, v_uv));
@@ -296,7 +295,19 @@ void main() {
 #endif
   out_FragColor = color;
 #ifdef LOG_DEPTH
+#if __VERSION__ == 300 || defined(GL_EXT_frag_depth)
+  // On the near plane: a depth of exactly zero, as a billboard over depth
+  // writes, but without czm_writeLogDepth's near-plane discard (1.0
+  // interpolated across the quad can arrive just under its 0.9999999 cut and
+  // drop the icon for a frame: flicker). Not a hair past the near plane
+  // either: Cesium's pickPosition skips a depth of exactly zero, and a depth
+  // above it reads the icon as a surface at the camera, which stops wheel
+  // zoom whenever one sits under the screen centre.
+  if (v_overDepth > 0.5) gl_FragDepth = 0.0;
+  else czm_writeLogDepth(v_depthFromNearPlusOne);
+#else
   czm_writeLogDepth(v_depthFromNearPlusOne);
+#endif
 #endif
 }
 `;

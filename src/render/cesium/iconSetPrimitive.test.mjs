@@ -12,8 +12,16 @@ Cesium.ContextLimits._maximumAliasedLineWidth = 10;
 function commandsOf(options = {}) {
   const made = [];
   const fromCache = Cesium.ShaderProgram.fromCache;
-  Cesium.ShaderProgram.fromCache = ({ fragmentShaderSource }) => {
-    const program = { defines: fragmentShaderSource.defines, destroy() {} };
+  Cesium.ShaderProgram.fromCache = ({
+    vertexShaderSource,
+    fragmentShaderSource,
+  }) => {
+    const program = {
+      defines: fragmentShaderSource.defines,
+      fragmentSources: fragmentShaderSource.sources,
+      vertexSources: vertexShaderSource.sources,
+      destroy() {},
+    };
     made.push(program);
     return program;
   };
@@ -57,4 +65,15 @@ test('by default the set draws an opaque pass and a translucent one, and draws n
   assert.deepEqual(translucent.shaderProgram.defines, ['TRANSLUCENT']);
   assert.equal(translucent.renderState.depthMask, false);
   assert.equal(primitive.drawsBlend('translucent'), false);
+});
+
+test('an icon over depth writes a depth of exactly zero, so picks and zoom see through it', () => {
+  const { programs } = commandsOf();
+  const fragment = programs[0].fragmentSources.join('\n');
+  const vertex = programs[0].vertexSources.join('\n');
+  // Cesium's pickPosition skips a depth of exactly zero; any depth above it
+  // reads the icon as a surface at the camera and wheel zoom stops there.
+  assert.match(fragment, /if \(v_overDepth > 0\.5\) gl_FragDepth = 0\.0;/);
+  assert.match(vertex, /v_overDepth = 1\.0;/);
+  assert.doesNotMatch(vertex, /v_depthFromNearPlusOne = 1\.0001/);
 });
