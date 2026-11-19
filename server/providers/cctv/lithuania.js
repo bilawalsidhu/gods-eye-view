@@ -84,19 +84,18 @@ export function lithuaniaCameraToSource(row, feature) {
 /** Two bounded requests per shared catalog refresh, no API key required. */
 export async function loadLithuaniaSources() {
   try {
-    const [rows, layers] = (
-      await readCatalogsTogether(
-        [
-          { url: LITHUANIA_CAMERAS_URL, label: 'cameras' },
-          { url: LITHUANIA_LOCATIONS_URL, label: 'locations' },
-        ],
-        {
-          accept: 'application/json',
-          maxBytes: LITHUANIA_MAX_CATALOG_BYTES,
-          timeoutMs: CCTV_SOURCE_FETCH_TIMEOUT_MS,
-        },
-      )
-    ).map((text) => JSON.parse(text));
+    const [rows, layers] = await readCatalogsTogether(
+      [
+        { url: LITHUANIA_CAMERAS_URL, label: 'cameras' },
+        { url: LITHUANIA_LOCATIONS_URL, label: 'locations' },
+      ],
+      {
+        accept: 'application/json',
+        maxBytes: LITHUANIA_MAX_CATALOG_BYTES,
+        timeoutMs: CCTV_SOURCE_FETCH_TIMEOUT_MS,
+        parse: JSON.parse,
+      },
+    );
     if (!Array.isArray(rows) || !Array.isArray(layers)) return [];
     const features = layers.find((layer) => layer?.layer === 'VKR')?.features;
     if (!Array.isArray(features)) return [];
