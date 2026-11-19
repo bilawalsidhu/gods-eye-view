@@ -18,9 +18,6 @@ const REPO_ROOT = path.resolve(SRC_ROOT, '..');
 // The pressed toggles that still hand-write `aria-pressed`, by file: each
 // pattern matches exactly one of the file's tags, and no other tag may.
 const HAND_WRITTEN_PRESSED = {
-  // The cinematic button renders the attributes the Bhote Koshi layer
-  // writes for it, `aria-pressed` among them.
-  'src/ui/views/panels/BhoteKoshiPanel.vue': [/^<button\b[^]*\bcinematic/],
   // Explore's story cards are `role="button"` elements, not buttons.
   'src/ui/views/stories/ExploreScreen.vue': [
     /^<div class="card" role="button"/,
