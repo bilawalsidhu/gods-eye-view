@@ -646,3 +646,27 @@ test('several switches in one line are one plan', () => {
     assert.equal(rows[defaultIndex].kind, 'plan', text);
   }
 });
+
+test('a place named with "and" stays whole, and a place keeps how it was typed', () => {
+  const omnibar = createOmnibar({
+    layers: [{ id: 'flights', name: 'Live Flights', enabled: false }],
+  });
+  const first = (text) => omnibar.rows(text, { places: [] }).rows[0];
+  const plan = first('flights near Trinidad and Tobago');
+  assert.equal(plan.kind, 'plan');
+  assert.equal(plan.steps[0].place, 'trinidad and tobago');
+  assert.equal(
+    first('flights near Bosnia & Herzegovina').steps[0].place,
+    'bosnia and herzegovina',
+  );
+  // Two places joined by "and" are still two.
+  assert.equal(
+    first('flights near Austin and Dallas').steps[0].place,
+    'austin',
+  );
+  // "İstanbul" is searched without a stray combining dot, and labelled as typed.
+  const istanbul = first('show flights in İstanbul');
+  assert.equal(istanbul.steps[0].place, 'istanbul');
+  assert.match(istanbul.label, /^İstanbul /);
+  assert.equal(first('iPhone store').label, 'Go to iPhone store');
+});

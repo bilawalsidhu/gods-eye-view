@@ -22,6 +22,7 @@ import {
   hasActionVerb,
   isPanelText,
   isRealQuestion,
+  asTypedIn,
   isWholeMapClear,
   magnitudeFloor,
   normalizeLine,
@@ -393,12 +394,19 @@ const SMALL_WORDS = new Set([
   'da',
   'des',
 ]);
+/**
+ * A place's name for a row: as typed when it has a capital ("iPhone store",
+ * "McAllen", "İstanbul"), else each word capitalised but the small joining
+ * ones ("santa fe de bogotá" reads "Santa Fe de Bogotá").
+ */
 export const titleCase = (text) =>
-  text.replace(/\S+/g, (word, at) =>
-    at > 0 && SMALL_WORDS.has(word)
-      ? word
-      : word[0].toUpperCase() + word.slice(1),
-  );
+  /\p{Lu}/u.test(text)
+    ? text
+    : text.replace(/\S+/g, (word, at) =>
+        at > 0 && SMALL_WORDS.has(word)
+          ? word
+          : word[0].toUpperCase() + word.slice(1),
+      );
 
 const STYLE_LABELS = {
   noir: msg('Style: Noir'),
@@ -707,7 +715,7 @@ export function matchCommands(text) {
 export function stepLabel(step) {
   switch (step.kind) {
     case 'place':
-      return titleCase(step.place);
+      return titleCase(step.shown ?? step.place);
     case 'layer':
       return step.enabled
         ? t('{layer} on', { layer: step.layer.shown })
@@ -819,12 +827,13 @@ const askRow = (text) => ({
   label: t('Ask GEV: “{query}”', { query: text }),
   hint: t('Opens chat'),
 });
-const placeRow = (place) => ({
+/** `shown`: the place as typed, for the label ("İstanbul", "iPhone store"). */
+const placeRow = (place, shown = place) => ({
   key: `place:${place}`,
   kind: 'place',
   icon: 'location_on',
   place,
-  label: t('Go to {place}', { place: titleCase(place) }),
+  label: t('Go to {place}', { place: titleCase(shown) }),
   hint: t('Place or coordinates'),
 });
 /**
@@ -1049,7 +1058,7 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
       realPlaces.length
         ? realPlaces
         : place.trim().length >= minPlaceChars(place)
-          ? [placeRow(place)]
+          ? [placeRow(place, asTypedIn(text, place))]
           : [];
 
     const titled = writtenAsName(text.split(/\s+/));
@@ -1260,7 +1269,7 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
       ...(placeStep ? placeRows(placeStep.place).slice(0, 2) : []),
       // "near New York and Paris": the plan goes to the first; the others
       // are offered rather than dropped.
-      ...extraPlaces.map((extra) => placeRow(extra)),
+      ...extraPlaces.map((extra) => placeRow(extra, asTypedIn(text, extra))),
       ...steps
         .filter((step) => step.kind === 'layer')
         .map((step) => layerRow(step.layer, step.enabled)),
@@ -1272,7 +1281,7 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
     if (ambiguous)
       return withEntities(
         [
-          placeRow(peeled ? placeStep.place : text),
+          peeled ? placeRow(placeStep.place, placeStep.shown) : placeRow(text),
           plan,
           ...alternatives.filter((row) => row.kind !== 'place'),
           ask,

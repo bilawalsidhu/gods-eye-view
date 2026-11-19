@@ -367,6 +367,66 @@ const GO_TAIL =
 const SEPARATORS =
   /(\s*(?:,|;(?!\s*[-+]?\d)|\+(?!\d)|&|\band then\b|\bthen\b|\band\b|\balso\b)\s*)/;
 
+/**
+ * Places whose own name holds "and" (or "&"), kept whole after "near" or
+ * "in" instead of read as two places: "flights near Trinidad and Tobago".
+ */
+const COMPOUND_PLACES = new Set([
+  'trinidad and tobago',
+  'antigua and barbuda',
+  'bosnia and herzegovina',
+  'saint kitts and nevis',
+  'st kitts and nevis',
+  'st. kitts and nevis',
+  'saint vincent and the grenadines',
+  'st vincent and the grenadines',
+  'st. vincent and the grenadines',
+  'sao tome and principe',
+  'são tomé and príncipe',
+  'turks and caicos',
+  'turks and caicos islands',
+  'wallis and futuna',
+  'saint pierre and miquelon',
+  'heard island and mcdonald islands',
+  'svalbard and jan mayen',
+  'south georgia and the south sandwich islands',
+  'newfoundland and labrador',
+  'jammu and kashmir',
+  'andaman and nicobar islands',
+  'dadra and nagar haveli',
+  'brighton and hove',
+]);
+const isCompoundPlace = (first, second) =>
+  COMPOUND_PLACES.has(`${first} and ${second}`.toLowerCase());
+
+/**
+ * Lower case one character at a time, so the line keeps its length and
+ * "İstanbul" reads "istanbul" (not "i̇stanbul" with a combining dot).
+ */
+function lowerEach(text) {
+  return Array.from(text, (char) =>
+    char === 'İ' ? 'i' : char.toLowerCase().normalize('NFC'),
+  ).join('');
+}
+
+/**
+ * A place as it was typed: "İstanbul", "iPhone store", "McAllen" are kept,
+ * where the line read them in lower case. A place the line put together
+ * ("Trinidad and Tobago" from "Trinidad & Tobago") stays as read.
+ */
+export function asTypedIn(raw, place) {
+  const lowered = lowerEach(raw).replace(/\s+/g, ' ');
+  const spaced = raw.replace(/\s+/g, ' ');
+  if (lowered.length !== spaced.length) return place;
+  const at = lowered.indexOf(place);
+  if (at < 0) return place;
+  const before = lowered[at - 1];
+  const after = lowered[at + place.length];
+  if (/[\p{L}\p{N}]/u.test(before || '') || /[\p{L}\p{N}]/u.test(after || ''))
+    return place;
+  return spaced.slice(at, at + place.length);
+}
+
 function tidy(text) {
   return text.replace(/\s+/g, ' ').trim();
 }
@@ -415,7 +475,7 @@ export function parseOmnibar(
   { isEntity = () => false } = {},
 ) {
   const raw = String(text || '').trim();
-  const line = tidy(raw.toLowerCase()).replace(
+  const line = tidy(lowerEach(raw)).replace(
     /\b(black[- ]and[- ]white|b ?& ?w)\b/g,
     'noir',
   );
@@ -483,6 +543,7 @@ export function parseOmnibar(
   for (let i = 0; i < clauses.length; i += 2) {
     let clause = tidy(clauses[i]);
     const separator = clauses[i - 1]?.trim();
+    const afterPlace = previousHadPlace;
     const afterPlaceComma = previousHadPlace && separator === ',';
     // "trinidad and tobago": a bare place joined to a bare place by "and".
     const afterBarePlaceAnd = previousBarePlace && separator === 'and';
@@ -526,7 +587,14 @@ export function parseOmnibar(
     const addPlace = (value, { bare = false, leftover = false } = {}) => {
       if (!value) return;
       if (leftover) placeClauses.add(i);
-      if (place && bare && afterBarePlaceAnd) place += ` and ${value}`;
+      // "near Trinidad and Tobago", "in Bosnia & Herzegovina": one place.
+      const joinsName =
+        place &&
+        afterPlace &&
+        (separator === 'and' || separator === '&') &&
+        isCompoundPlace(place.split(', ').at(-1), value);
+      if (joinsName) place += ` and ${value}`;
+      else if (place && bare && afterBarePlaceAnd) place += ` and ${value}`;
       else if (place && !afterPlaceComma) {
         if (separator === 'and') extraPlaces.push(value);
         return;
@@ -834,7 +902,13 @@ export function parseOmnibar(
   // Thermal"): no plan runs on Enter; the line may still be a name.
   const unasked = steps.length > 0 && steps.every((step) => !asked.has(step));
   if (place && !placeFrom) placeFrom = placeBare ? 'bare' : 'near';
-  if (place) steps.unshift({ kind: 'place', place });
+  if (place) {
+    const step = { kind: 'place', place };
+    // How the place was typed, for its label only ("İstanbul", "iPhone
+    // store"); kept off the step's fields, which plans compare.
+    Object.defineProperty(step, 'shown', { value: asTypedIn(raw, place) });
+    steps.unshift(step);
+  }
   steps.verb = LAYER_OFF.test(line) || LAYER_ON.test(line) || GO.test(line);
   // Following happens once the camera has settled on the new view.
   steps.sort((a, b) => (a.kind === 'follow') - (b.kind === 'follow'));
