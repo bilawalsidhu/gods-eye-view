@@ -21,10 +21,6 @@ import { createDefaultScenePacks } from '../scenes/packs/defaults.js';
 import { createScenePackRegistry } from '../scenes/packs/registry.js';
 
 const adapter = await import('./blenderCamera.js');
-test('a portable USD camera exporter exists', () => {
-  assert.equal(typeof adapter.sampleSceneCameras, 'function');
-  assert.equal(typeof adapter.exportCameraUsda, 'function');
-});
 
 const origin = { lat: 0, lon: 0, height: 0 };
 const pose = (changes = {}) => ({
@@ -76,6 +72,14 @@ test('cardinal cameras use Blender X right, Y up, negative Z forward', () => {
 
 test('ENU translation uses WGS84 meters and ellipsoid heights', () => {
   near(camera({ alt: 100 }).position, [0, 0, 100]);
+  near(
+    camera(
+      { lat: 39.7, lon: -105, alt: 2600 },
+      { origin: { lat: 39.7, lon: -105, height: 1600 } },
+    ).position,
+    [0, 0, 1000],
+    1e-6,
+  );
   const east = camera({ lon: 0.001 }).position;
   assert.ok(Math.abs(east[0] - 111.3194907876) < 1e-6);
   assert.ok(Math.abs(east[2] + 0.0009714458) < 1e-6);
@@ -107,7 +111,7 @@ test('changed tangent frames and nonzero roll match an independent Cesium Camera
   });
   const inverse = Cesium.Matrix4.inverseTransformation(
     Cesium.Transforms.eastNorthUpToFixedFrame(
-      Cesium.Cartesian3.fromDegrees(anchor.lon, anchor.lat, anchor.height),
+      Cesium.Cartesian3.fromDegrees(anchor.lon, anchor.lat, 0),
     ),
     new Cesium.Matrix4(),
   );
@@ -335,6 +339,43 @@ test('CLI works in paths with spaces and refuses overwrites or invalid projectio
       1,
     );
     assert.equal(existsSync(invalidOutput), false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('CLI accepts a negative latitude passed as --origin <value>', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'gev origin '));
+  try {
+    const script = fileURLToPath(
+      new URL('../../tools/export-blender-camera.mjs', import.meta.url),
+    );
+    const result = spawnSync(
+      process.execPath,
+      [
+        script,
+        '--input',
+        join(directory, 'missing scene.json'),
+        '--output',
+        join(directory, 'cameras.usda'),
+        '--origin',
+        '-33.8568,151.2153,0',
+        '--fps',
+        '30',
+        '--width',
+        '1920',
+        '--height',
+        '1080',
+        '--horizontal-fov-deg',
+        '60',
+      ],
+      { encoding: 'utf8' },
+    );
+    // The input file does not exist, so the run still fails, but only after
+    // argument parsing: the error must be about the input, not about --origin.
+    assert.equal(result.status, 1);
+    assert.doesNotMatch(result.stderr, /ambiguous|--origin/);
+    assert.match(result.stderr, /ENOENT|no such file/i);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

@@ -42,8 +42,9 @@ The exporter supports integer fps or an integer ratio such as `30000/1001`,
 with an effective rate from 1 to 240. Image dimensions are integers from 4 to
 16384, pixels are square, horizontal FOV is 1 to 179 degrees and sensor width
 is 1 to 100 mm. A lens shorter than Blender's 1 mm minimum is rejected.
-Input is bounded to the existing 5 MiB scene-document limit; output is limited
-to 100,000 frames and 64 MiB. Every shot needs at least one sampled frame.
+Input must be a regular file within the existing 5 MiB scene-document limit;
+output is limited to 100,000 frames and 64 MiB. Every shot needs at least one
+sampled frame.
 
 ## Timing and camera semantics
 
@@ -51,10 +52,12 @@ Shot timing is the Director's **runtime** timing, not only the saved
 `durationSec` and `holdSec`. Each shot's length and hold come from
 `shotRuntimeDurationSec` and `effectiveShotHoldSec` in
 `src/scenes/shotPresentation.js` with the installed default scene packs, the
-same functions Director playback and seeking use. Registered pack hold
+same functions Director seeking and scrubbing use. Registered pack hold
 overrides, minimum holds and evidence-sequence durations therefore move later
-shots exactly as they do in the app. Saved shots are never rewritten; each
-camera records both the authored and the runtime hold.
+shots exactly as they do when seeking in the app. Live playback can run longer:
+it flies each shot for at least 0.2 s and can wait for a layer's media to finish
+before the next shot. Saved shots are never rewritten; each camera records both
+the authored and the runtime hold.
 
 Camera poses follow GEV's Director **seek** interpolation. Named anchors and
 explicit `move.from` endpoints resolve through the existing camera owner;
@@ -78,8 +81,9 @@ boundary switches at the first sampled time at or after the boundary.
 ## What the USD stage contains
 
 - Stage metadata `upAxis = "Z"` and `metersPerUnit = 1`. Scene X/Y/Z are
-  east/north/up in meters around `--origin`, so Blender applies no axis or
-  unit conversion.
+  east/north/up in meters around `--origin`, in the geodetic ENU frame (axes
+  from the WGS84 ellipsoid normal at the origin's latitude and longitude), so
+  Blender applies no axis or unit conversion.
 - USD time codes equal frame numbers: `startTimeCode = 1`, `endTimeCode` is the
   last frame, and `timeCodesPerSecond`/`framesPerSecond` hold the effective
   rate. The exact fps ratio is kept as text.
@@ -135,12 +139,15 @@ closer to the origin.
 node --test src/tooling/blenderCamera.test.mjs
 ```
 
-These Node tests run in CI. They cover camera axes against an independent
-Cesium Camera, ENU translation, landscape and portrait lenses, rational fps,
-cuts, anchors and moves, runtime holds from registered packs (including the
-Director's Mailung trim, which plays a 7.65 s hold where 15 s was saved), every
-sample against `sceneSeekState`, the USD stage metadata, lens units and
-per-frame matrices, CLI overwrite and extension refusals, and input limits.
+These Node tests run in CI and compare the export with an independent Cesium
+camera and the Director's `sceneSeekState`.
+
+They do not parse the stage with USD itself; to check that, open it in
+Blender as above or with OpenUSD (`pip install usd-core`):
+
+```sh
+python3 -c "import sys; from pxr import Usd; print(Usd.Stage.Open(sys.argv[1]).GetEndTimeCode())" cameras.usda
+```
 
 Run the repository's normal unit, build, format and boundary checks too. The
 contribution guide additionally requires live tracking/browser checks before

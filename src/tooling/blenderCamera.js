@@ -68,13 +68,17 @@ export function cameraPoseToEnu(pose, origin) {
   );
   if (C.Cartesian3.distance(xyz, anchor) > 100000)
     throw new RangeError('Camera exceeds the 100 km local-origin limit');
+  // Geodetic ENU (as in PROJ): axes from the ellipsoid normal at the origin's
+  // lat/lon, origin raised along it. Cesium's frame at a raised point tilts.
+  const frame = C.Transforms.eastNorthUpToFixedFrame(
+    C.Cartesian3.fromDegrees(origin.lon, origin.lat, 0, C.Ellipsoid.WGS84),
+  );
   const inverse = C.Matrix4.inverseTransformation(
-    C.Transforms.eastNorthUpToFixedFrame(anchor),
+    C.Matrix4.setTranslation(frame, anchor, frame),
     new C.Matrix4(),
   );
   const local = C.Matrix4.multiplyByPoint(inverse, xyz, new C.Cartesian3());
   // Same basis as Cesium Camera.setView3D, including its heading - PI/2 offset.
-  // This is the coordinate math retained from the staged ENU camera prototype.
   const rotation = C.Matrix3.fromQuaternion(
     C.Quaternion.fromHeadingPitchRoll(
       new C.HeadingPitchRoll(
@@ -117,7 +121,7 @@ function identity(value, label) {
   return value;
 }
 
-/** Resolve the flight-plus-hold seconds and holds that Director playback and seeking use.
+/** Resolve the flight-plus-hold seconds and holds that Director seeking uses.
  * Both come from shotPresentation.js, so registered pack overrides, minimum holds and
  * evidence-sequence durations match the app instead of the saved holdSec alone.
  */
@@ -146,7 +150,7 @@ export function sceneRuntimeTiming(
   };
 }
 
-/** Sample one saved scene with Director seek interpolation and runtime playback timing.
+/** Sample one saved scene with Director seek interpolation and runtime seek timing.
  * Projection is explicit because scene documents do not store viewport lenses.
  * Frame 1 samples time zero; the final sample precedes the exclusive end time.
  */
@@ -205,11 +209,10 @@ export function sampleSceneCameras(
     ),
     move: resolveCameraMove(scene, shot),
   }));
-  const shots = scene.shots.map((shot) => {
+  const shots = scene.shots.map((shot, index) => {
     identity(shot.id, 'Shot');
-    const camera = resolveCameraPose(scene, shot.camera);
+    const { target: camera, move } = resolved[index];
     position(camera);
-    const move = resolveCameraMove(scene, shot);
     if (move) position(move.from);
     cameraPoseToEnu(camera, origin);
     if (move) cameraPoseToEnu(move.from, origin);
@@ -340,7 +343,7 @@ export function sampleSceneCameras(
   };
 }
 
-/** Shortest decimal for a finite double, without signed zero or 17-digit noise. */
+/** Round a finite double to 15 significant digits and normalize signed zero. */
 function usdNumber(value) {
   const rounded = Number(value.toPrecision(15));
   return Object.is(rounded, -0) ? '0' : String(rounded);
@@ -378,32 +381,6 @@ function usdMatrix({ position: p, basisColumns: [right, up, back] }) {
 export function cameraSamplesToUsda(samples) {
   const { source, coordinates, camera, timeline, shots, frames } = samples;
   const rate = timeline.fps.numerator / timeline.fps.denominator;
-  const shotTable = shots.map(
-    ({
-      id,
-      title,
-      sourcePackId,
-      sourcePackVersion,
-      startTimeSec,
-      endTimeSec,
-      flightDurationSec,
-      authoredHoldSec,
-      runtimeHoldSec,
-      frameStart,
-      frameEndExclusive,
-    }) => ({
-      id,
-      title,
-      ...(sourcePackId ? { sourcePackId, sourcePackVersion } : {}),
-      startTimeSec,
-      endTimeSec,
-      flightDurationSec,
-      authoredHoldSec,
-      runtimeHoldSec,
-      frameStart,
-      frameEndExclusive,
-    }),
-  );
   const json = (value) => usdString(JSON.stringify(value));
   const out = [
     '#usda 1.0',
@@ -412,7 +389,7 @@ export function cameraSamplesToUsda(samples) {
     `        string gevCamera = ${json(camera)}`,
     `        string gevCoordinates = ${json(coordinates)}`,
     `        string gevSchema = ${usdString(CAMERA_USD_SCHEMA)}`,
-    `        string gevShots = ${json(shotTable)}`,
+    `        string gevShots = ${json(shots)}`,
     `        string gevSource = ${json(source)}`,
     `        string gevTimeline = ${json(timeline)}`,
     '    }',

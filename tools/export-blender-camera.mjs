@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /** Offline scene-to-USD camera CLI. Reads JSON only; never loads .env or a viewer. */
-import { readFile, writeFile, stat } from 'node:fs/promises';
+import { open, writeFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 import {
   parseSceneDocument,
@@ -8,8 +8,41 @@ import {
 } from '../src/director/document.js';
 import { exportCameraUsda } from '../src/tooling/blenderCamera.js';
 
+/** Read a regular file through one descriptor, at most one byte past the scene limit. */
+async function readSceneText(path) {
+  const file = await open(path, 'r');
+  try {
+    if (!(await file.stat()).isFile())
+      throw new Error('input must be a regular file');
+    const buffer = Buffer.alloc(SCENE_DOCUMENT_LIMITS.bytes + 1);
+    let length = 0;
+    while (length < buffer.length) {
+      const { bytesRead } = await file.read(
+        buffer,
+        length,
+        buffer.length - length,
+      );
+      if (!bytesRead) break;
+      length += bytesRead;
+    }
+    if (length > SCENE_DOCUMENT_LIMITS.bytes)
+      throw new Error('Scene exceeds 5 MiB');
+    return buffer.toString('utf8', 0, length);
+  } finally {
+    await file.close();
+  }
+}
+
 try {
+  // parseArgs reads a value starting with "-" as a missing argument, so join a
+  // southern-hemisphere `--origin -33.86,151.21,0` into `--origin=...` first.
+  const args = process.argv.slice(2);
+  for (let i = args.length - 2; i >= 0; i -= 1) {
+    if (args[i] === '--origin' && /^-[\d.]/.test(args[i + 1]))
+      args.splice(i, 2, `--origin=${args[i + 1]}`);
+  }
   const { values } = parseArgs({
+    args,
     options: {
       input: { type: 'string' },
       output: { type: 'string' },
@@ -46,9 +79,7 @@ try {
     const originParts = values.origin.split(',');
     if (originParts.length !== 3 || originParts.some((part) => !part.trim()))
       throw new Error('origin must be lat,lon,ellipsoidHeight');
-    if ((await stat(values.input)).size > SCENE_DOCUMENT_LIMITS.bytes)
-      throw new Error('Scene exceeds 5 MiB');
-    const document = parseSceneDocument(await readFile(values.input, 'utf8'));
+    const document = parseSceneDocument(await readSceneText(values.input));
     const [numerator, denominator = 1] = values.fps.split('/').map(Number);
     const [lat, lon, height] = originParts.map(Number);
     const { usda, samples } = exportCameraUsda(document, {

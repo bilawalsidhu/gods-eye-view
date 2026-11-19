@@ -689,14 +689,8 @@ untouched, and the shot is not rebuilt.
 See [camera directions](DIRECTOR-CAMERA.md).
 
 An opt-in offline [Blender camera bridge](BLENDER-CAMERAS.md) exports a saved
-Director scene as a camera-only USD stage (`.usda`) that Blender imports
-natively: Z-up meters in a local ENU frame around an explicit WGS84 ellipsoid
-origin, one camera per shot with per-frame transforms, lens values in USD's
-tenths of a scene unit and rational fps recorded alongside frame-number time
-codes. It uses Director seek interpolation and the runtime shot timing from
-`shotPresentation.js`, so registered pack holds, minimum holds and
-evidence-sequence durations match playback. Implicit live flyTo paths, imagery
-and geometry are outside this camera-only format.
+Director scene as a camera-only USD stage (`.usda`) with Director seek
+interpolation and runtime shot timing; format, units and limits are in that guide.
 
 Realtime voice composes separate connection, response/tool, Radio handoff, input
 and audio-meter, cost, viewport-context and diagnostic owners. The existing
