@@ -28,7 +28,12 @@ own `.d.ts`:
 - `gods-eye-view/render/recession`: how a set that recedes shrinks and
   fades its items toward the limb;
 - `gods-eye-view/render/windStreamlines`: the wind field's streamlines;
-- `gods-eye-view/geo/screenCluster`: screen-space clustering.
+- `gods-eye-view/geo/screenCluster`: screen-space clustering;
+- `gods-eye-view/fleet`: fleet contacts as the Flights and Vessels layers
+  draw them: the fleet model set and its loader, which model and size an
+  aircraft or a vessel takes, the distances a contact's icon hands over to
+  its model at, how a model is lit, tinted and posed, and the vessel hull
+  sprites.
 
 `src/render/neutralExports.test.mjs` checks that each is declared, that its
 names match what it exports, that it type-checks under strict TypeScript and
@@ -355,6 +360,18 @@ at once for 3 minutes, then loads again. `frameReady`
 names the nearest frame's time once every globe tile drawn shows that
 frame's own imagery (`src/render/cesium/imageryFrames.js`). The checks
 `globe.imagery.frames` and `globe.imagery.video` cover both.
+
+It also draws `decoded` sources (`imageryDecoded`): tiles the application
+makes itself and hands over as finished images. Their slots are times: the
+source's `slotAt` names the slot a time shows and `prefetch` the slots held
+ahead, of which the first `prefetch` (the option, 1 by default) load unseen.
+Each slot is a Cesium imagery layer in the layer's tiling whose tiles are the
+images the source's `tile` answers, asked as `shown` or `prefetch`; a
+deferred tile is asked again on a later frame, a missing one draws its
+parent's, and a slot let go aborts the tiles it still waits on and closes an
+image that arrives after. A time with no slot draws nothing and announces
+nothing; `frameReady` names the slot shown once it is drawn. The check
+`globe.imagery.decoded` covers it.
 
 Every Cesium draw set takes `setColumns` (`columns`): icon sets on the GPU,
 any other as the rows the columns make over the items it holds, each row the

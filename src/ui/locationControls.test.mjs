@@ -108,6 +108,7 @@ test('the tray presents its cities, empty status and no landmarks at first', () 
     searchError: null,
     searchExpanded: false,
     searching: false,
+    searchOrigin: 'dock',
     orbit: null,
   });
   f.controls.highlightCity('b');

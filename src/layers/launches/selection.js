@@ -11,7 +11,11 @@ import {
   toRadians,
   vec,
 } from '../../geo/vector.js';
-import { MISSION_GLOBE_VIEW_RANGE_M, MISSION_FOCUS_RANGE_M } from './policy.js';
+import {
+  MISSION_GLOBE_VIEW_RANGE_M,
+  MISSION_FOCUS_RANGE_M,
+  cockpitActive,
+} from './policy.js';
 import { cameraOf, canvasOf, findCamera } from '../../render/rendererOf.js';
 
 export function createSelection({
@@ -66,6 +70,9 @@ export function createSelection({
   }
 
   function setSelectedMission(launchId, isolate = true) {
+    // Once the layer is going off (its Satellites restore may still be
+    // running) a roster click selects nothing and moves no camera.
+    if (launchId && !layerState._enabled) return;
     if (launchId) parts.panel.clearMissionRosterHover();
     if (
       layerState._replayCameraLaunchId &&
@@ -118,7 +125,10 @@ export function createSelection({
   }
 
   function focusMission(launch) {
-    if (!layerState._viewer || !launch) return;
+    if (!layerState._viewer || !launch || !layerState._enabled) return;
+    // The cockpit holds the camera: a mission chosen there, by its label,
+    // its dot or the layer row's arrows, is selected without flying to it.
+    if (cockpitActive()) return;
     stopMissionZoomAnchor();
     parts.rendering.selectLaunchEntity(launch.id);
     const camera = cameraOf(layerState._viewer);
@@ -163,7 +173,7 @@ export function createSelection({
   }
 
   function focusLaunchSite(launch) {
-    if (!layerState._viewer || !launch) return;
+    if (!layerState._viewer || !launch || !layerState._enabled) return;
     parts.replay.stopMissionReplay();
     stopMissionZoomAnchor();
     parts.rendering.selectLaunchEntity(launch.id);

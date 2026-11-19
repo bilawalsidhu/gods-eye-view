@@ -10,6 +10,7 @@ import AltitudeGraph from './AltitudeGraph.vue';
 import { contextNeedle, contextSearchText, matchesContextSearch } from '../../contextSearch.js';
 import RouteGlobe from './RouteGlobe.vue';
 import CctvPreview from './CctvPreview.vue';
+import UiCloseButton from '../../kit/UiCloseButton.vue';
 import { useCctvStore } from '../../stores/cctv.js';
 import SpotConditions from './SpotConditions.vue';
 import { shownLayerName } from '../../layerNames.js';
@@ -396,9 +397,7 @@ watch(
           <h3 class="entity-card__title">{{ shownTitle }}</h3>
           <span v-if="subtitle" class="entity-card__subtitle">{{ subtitle }}</span>
         </div>
-        <button type="button" class="entity-card__close" :aria-label="t('Close card')" :title="t('Close card')" @click="store.clear()">
-          <span class="material-symbols-outlined" aria-hidden="true">close</span>
-        </button>
+        <UiCloseButton class="entity-card__close" glyph="icon" :label="t('Close card')" :title="t('Close card')" @click="store.clear()" />
       </header>
 
       <div class="entity-card__meta">

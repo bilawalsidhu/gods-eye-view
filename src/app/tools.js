@@ -50,8 +50,11 @@ import { overlayHost } from './layers/overlayHost.js';
  * runs after each layer disable (a scene without one keeps that memory).
  * `library.fetchTile` and `library.fetchData` fetch the Data Library's tiles
  * and proxied datasets in place of the defaults (`createLibrarySource`).
+ * `library.fetchImpl` asks the library server (its catalog) in place of the
+ * page's fetch, for a server that wants the application's own credentials.
  * `library.requireCatalog` offers only what the server's library catalog
- * names, and nothing while it does not answer.
+ * names, and nothing while it does not answer. `library: false` leaves the
+ * Data Library out: no catalog is asked, and no Browse button is drawn.
  */
 export function createApplicationTools({
   scene,
@@ -153,56 +156,60 @@ export function createApplicationTools({
     connect: connectDisplay,
   });
   defer(() => geoFileImport?.destroy());
-  // DATA ▸ Library: entries register their layers only when a viewer adds
-  // them, after the core catalog is sealed. The browser dialog and the
-  // controller share the application lifetime.
-  const dataLibrary = createDataLibrary({
-    dataManager,
-    services: localGeoJsonServices,
-    getTileset: () => tileset,
-    mapStackController,
-    shareLink: styleManager.shareLinkManager,
-    requestRender: governorRequestRender,
-    // An application's own tile and dataset fetches, when it keeps them in
-    // its own cache.
-    fetchTile: library.fetchTile ?? null,
-    fetchData: library.fetchData ?? null,
-    requireCatalog: library.requireCatalog === true,
-    // Zoom to layer: an immediate navigation, so Cockpit can refuse it and
-    // the current follow owner is released first (as for imported files).
-    zoomTo: (extent) =>
-      styleManager.runImmediateNavigation('layer', () =>
-        flyToLibraryExtent(viewer, extent),
-      ) !== false,
-  });
-  defer(() => dataLibrary.destroy());
-  // Browse: the owner presents the dialog through the store; LayerPanelsView
-  // draws the Browse button and the dialog from it.
-  const libraryStore = useDataLibraryStore(applicationPinia());
-  const libraryBrowser = createLibraryBrowser({
-    library: dataLibrary,
-    publish: (view) => libraryStore.publish(view),
-  });
-  libraryStore.connect(libraryBrowser.controls);
-  defer(() => {
-    libraryBrowser.destroy();
-    libraryStore.connect(null);
-  });
-  dataLibrary.start({ signal }).catch((error) => {
-    if (!signal?.aborted) console.warn('[Library] start failed:', error);
-  });
-  // The live gate's handle (scripts/qa-data-library.mjs).
-  const libraryHandle = {
-    library: dataLibrary,
-    browser: libraryBrowser,
-    // What Copy Link would copy.
-    buildShareLink: () => styleManager.shareLinkManager?.buildLink?.() ?? null,
-  };
-  window.__gevDataLibrary = libraryHandle;
-  defer(() => {
-    if (window.__gevDataLibrary === libraryHandle)
-      delete window.__gevDataLibrary;
-  });
+  if (library !== false) {
+    // DATA ▸ Library: entries register their layers only when a viewer adds
+    // them, after the core catalog is sealed. The browser dialog and the
+    // controller share the application lifetime.
+    const dataLibrary = createDataLibrary({
+      dataManager,
+      services: localGeoJsonServices,
+      getTileset: () => tileset,
+      mapStackController,
+      shareLink: styleManager.shareLinkManager,
+      requestRender: governorRequestRender,
+      // An application's own tile and dataset fetches, when it keeps them in
+      // its own cache.
+      fetchImpl: library.fetchImpl ?? undefined,
+      fetchTile: library.fetchTile ?? null,
+      fetchData: library.fetchData ?? null,
+      requireCatalog: library.requireCatalog === true,
+      // Zoom to layer: an immediate navigation, so Cockpit can refuse it and
+      // the current follow owner is released first (as for imported files).
+      zoomTo: (extent) =>
+        styleManager.runImmediateNavigation('layer', () =>
+          flyToLibraryExtent(viewer, extent),
+        ) !== false,
+    });
+    defer(() => dataLibrary.destroy());
+    // Browse: the owner presents the dialog through the store; LayerPanelsView
+    // draws the Browse button and the dialog from it.
+    const libraryStore = useDataLibraryStore(applicationPinia());
+    const libraryBrowser = createLibraryBrowser({
+      library: dataLibrary,
+      publish: (view) => libraryStore.publish(view),
+    });
+    libraryStore.connect(libraryBrowser.controls);
+    defer(() => {
+      libraryBrowser.destroy();
+      libraryStore.connect(null);
+    });
+    dataLibrary.start({ signal }).catch((error) => {
+      if (!signal?.aborted) console.warn('[Library] start failed:', error);
+    });
+    // The live gate's handle (scripts/qa-data-library.mjs).
+    const libraryHandle = {
+      library: dataLibrary,
+      browser: libraryBrowser,
+      // What Copy Link would copy.
+      buildShareLink: () =>
+        styleManager.shareLinkManager?.buildLink?.() ?? null,
+    };
+    window.__gevDataLibrary = libraryHandle;
+    defer(() => {
+      if (window.__gevDataLibrary === libraryHandle)
+        delete window.__gevDataLibrary;
+    });
+  }
   // DATA ▸ Recent Imagery: the box tool claims the pointer like Draw and the
   // panel lives on the right rail, so both belong to the application
   // lifetime. The tileset lets the layer drape while the globe is hidden.

@@ -1,11 +1,14 @@
 import { toRadians } from '../../geo/vector.js';
 import { cameraOf } from '../../render/rendererOf.js';
 
-export function createInteraction({ state, parts, inputFor }) {
+export function createInteraction({ state, parts, inputFor, picking }) {
   function beginInteraction(viewer) {
     if (state._clickSubscription) return;
     state._clickSubscription = inputFor(viewer).onClick((event) => {
       if (!state._enabled) return;
+      // Cable labels are not interactive, so any card or label painted on
+      // top is another layer's, painted over the cable: its click.
+      if (picking?.clickCard?.(event)) return;
       const record = resolvePickRecord(event.drawHit);
       if (!record?.reference) return;
       flyToReference(viewer, record.reference);

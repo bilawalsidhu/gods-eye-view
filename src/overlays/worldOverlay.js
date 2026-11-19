@@ -1,4 +1,5 @@
 import { WORLD_OVERLAY_OCCLUDER_SELECTORS } from './worldOverlayChrome.js';
+import { setClickCardHitTest } from '../data/pickRegistry.js';
 export { WORLD_OVERLAY_OCCLUDER_SELECTORS } from './worldOverlayChrome.js';
 import {
   createCyberSonarSampler,
@@ -884,7 +885,9 @@ function invalidateHost({ solve = true, layout = false } = {}) {
   if (layout) _occludersDirty = true;
   _canvasNeedsClear = true;
   _paintRectCount = 0;
-  _hitRectCount = 0;
+  // Hit rectangles stay what is painted on screen until the next paint
+  // rebuilds them: every click subscriber reads the same overlay, even after
+  // an earlier one republishes entries in that click (a selection card).
   _paintRectByKey.clear();
   requestOverlayRender();
 }
@@ -1093,7 +1096,7 @@ export function getOverlayPaintRect(sourceId, entryId) {
 /**
  * Opacity an entry paints with this frame, or 0 when it is not queued or the
  * yield-collision pass hid it. Custom lanes may call it before later lanes
- * publish paint rects. Leaves out the Cyber sonar fade.
+ * publish paint rects. Leaves out the sonar fade.
  * @param {string} sourceId
  * @param {string} entryId
  * @returns {number}
@@ -2783,10 +2786,9 @@ function drawWorldOverlay() {
     resetFrameDiagnostics();
     _solveDirty = false;
     if (_canvasNeedsClear || _detectionSurfaceNeedsClear) clearCanvas();
-    if (_accessibilitySignature) {
-      _hitRectCount = 0;
-      syncAccessibleActions();
-    }
+    // Nothing is painted now, so nothing can be hit.
+    _hitRectCount = 0;
+    if (_accessibilitySignature) syncAccessibleActions();
     syncPaintVisibility(false);
     return;
   }
@@ -2868,6 +2870,8 @@ export function initWorldOverlay(viewer) {
   };
   window.addEventListener('gev:cockpit-mode-changed', _cockpitModeHandler);
   _removePostRender = frame.on('postRender', () => drawWorldOverlay());
+  // Click handlers read the card painted on top through the pick registry.
+  setClickCardHitTest(hitTestWorldOverlay);
   _removeMoveEnd = camera.on('moveEnd', () => invalidateHost());
   installUiOccluderObservers();
   // The backing store and the occluder inventory are both deferred to the
@@ -2953,6 +2957,7 @@ export function destroyWorldOverlay() {
   _paintCount = 0;
   _paintRectCount = 0;
   _hitRectCount = 0;
+  setClickCardHitTest(null);
   _uiOcclusionRects.length = 0;
   _uiOcclusionRectPool.length = 0;
   _destroyed = hadHost || _destroyed;

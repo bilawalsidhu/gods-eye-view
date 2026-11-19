@@ -11,6 +11,7 @@ import UiSegmented from '../../kit/UiSegmented.vue';
 import UiSlider from '../../kit/UiSlider.js';
 import { useDisplayStore } from '../../stores/display.js';
 import UiButton from '../../kit/UiButton.vue';
+import UiCheckbox from '../../kit/UiCheckbox.vue';
 import UiSelect from '../../kit/UiSelect.js';
 import { StyleParameterRows } from '../../styleParameters.js';
 import VisualPresets from './VisualPresets.vue';
@@ -37,7 +38,7 @@ const pillWords = computed(() => ({
 }));
 const hud = computed(() => view.value?.hud ?? null);
 const sonar = computed(() => view.value?.sonar ?? null);
-const sonarOn = computed(() => sonar.value?.enabled ?? true);
+const sonarOn = computed(() => sonar.value?.enabled ?? false);
 const detection = computed(() => view.value?.detection ?? null);
 const detectButton = computed(() => detection.value?.button ?? null);
 const allocation = computed(() => detection.value?.allocation ?? 'ELASTIC');
@@ -93,35 +94,34 @@ const allocationOptions = computed(() => [
       <UiSelect id="hud-layout-select" class="pp-select gev-field gev-field--compact" :model-value="hud?.variant ?? 'tactical'" @update:model-value="act('setHudLayout', $event)" :aria-label="t('HUD layout')">
         <option value="tactical">{{ t('Tactical') }}</option>
         <option value="minimal">{{ t('Minimal') }}</option>
-        <option value="cyber">{{ t('Cyber') }}</option>
       </UiSelect>
     </div>
-    <div class="pp-slider-row cyber-sonar-control cyber-sonar-toggle-row" id="cyber-sonar-row">
+    <div class="pp-slider-row cyber-sonar-control cyber-sonar-toggle-row" :class="{ visible: hud?.visible }" id="cyber-sonar-row">
       <span class="pp-slider-mini-label">{{ t('Sonar') }}</span>
-      <UiButton class="pp-mode-btn" :pressed="sonarOn" pressed-class="active" id="cyber-sonar-toggle" @click="act('toggleSonar')" :title="t('Cyber sonar contact scanner')" :aria-label="t('Cyber sonar contact scanner')">{{ sonarOn ? t('ON') : t('OFF') }}</UiButton>
+      <UiButton class="pp-mode-btn" :pressed="sonarOn" pressed-class="active" id="cyber-sonar-toggle" @click="act('toggleSonar')" :title="t('Sonar contact scanner')" :aria-label="t('Sonar contact scanner')">{{ sonarOn ? t('ON') : t('OFF') }}</UiButton>
     </div>
-    <output id="cyber-sonar-status" class="cyber-sonar-control" role="status"></output>
-    <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-rings-row">
+    <output id="cyber-sonar-status" class="cyber-sonar-control" role="status" :hidden="!(hud?.visible && sonarOn)"></output>
+    <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" :class="{ visible: hud?.visible && sonarOn }" id="cyber-sonar-rings-row">
       <label class="pp-slider-mini-label" for="cyber-sonar-rings">{{ t('Rings') }}</label>
       <UiSlider class="pp-slider" id="cyber-sonar-rings" @update:model-value="act('setSonarRings', $event)" min="3" max="12" step="1" :model-value="sonar?.rings ?? 8" :aria-label="t('Sonar ring count')" />
       <span class="pp-slider-value" id="cyber-sonar-rings-value">{{ sonar?.rings ?? 8 }}</span>
     </div>
-    <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-range-row">
+    <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" :class="{ visible: hud?.visible && sonarOn }" id="cyber-sonar-range-row">
       <label class="pp-slider-mini-label" for="cyber-sonar-range">{{ t('Range') }}</label>
       <UiSlider class="pp-slider" id="cyber-sonar-range" @update:model-value="act('setSonarRange', $event)" min="60" max="120" step="1" :model-value="sonar?.range ?? 100" :aria-label="t('Sonar ring range')" />
       <span class="pp-slider-value" id="cyber-sonar-range-value">{{ pct(sonar?.range ?? 100) }}</span>
     </div>
-    <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-intensity-row">
+    <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" :class="{ visible: hud?.visible && sonarOn }" id="cyber-sonar-intensity-row">
       <label class="pp-slider-mini-label" for="cyber-sonar-intensity">{{ t('Power') }}</label>
       <UiSlider class="pp-slider" id="cyber-sonar-intensity" @update:model-value="act('setSonarIntensity', $event)" min="0" max="100" step="1" :model-value="sonar?.intensity ?? 70" :aria-label="t('Sonar intensity')" />
       <span class="pp-slider-value" id="cyber-sonar-intensity-value">{{ pct(sonar?.intensity ?? 70) }}</span>
     </div>
-    <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-opacity-row">
+    <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" :class="{ visible: hud?.visible && sonarOn }" id="cyber-sonar-opacity-row">
       <label class="pp-slider-mini-label" for="cyber-sonar-opacity">{{ t('Opacity') }}</label>
-      <UiSlider class="pp-slider" id="cyber-sonar-opacity" @update:model-value="act('setSonarOpacity', $event)" min="35" max="100" step="1" :model-value="sonar?.opacity ?? 84" :aria-label="t('Cyber contact and label opacity')" :title="t('Minimum opacity for map dots, icons, models, brackets, and labels between sonar passes')" />
+      <UiSlider class="pp-slider" id="cyber-sonar-opacity" @update:model-value="act('setSonarOpacity', $event)" min="35" max="100" step="1" :model-value="sonar?.opacity ?? 84" :aria-label="t('Sonar contact and label opacity')" :title="t('Minimum opacity for map dots, icons, models, brackets, and labels between sonar passes')" />
       <span class="pp-slider-value" id="cyber-sonar-opacity-value">{{ pct(sonar?.opacity ?? 84) }}</span>
     </div>
-    <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-sector-row">
+    <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" :class="{ visible: hud?.visible && sonarOn }" id="cyber-sonar-sector-row">
       <label class="pp-slider-mini-label" for="cyber-sonar-sector">{{ t('Sector') }}</label>
       <UiSlider class="pp-slider" id="cyber-sonar-sector" @update:model-value="act('setSonarSector', $event)" min="8" max="60" step="1" :model-value="sonar?.sector ?? 24" :aria-label="t('Sonar sector width')" />
       <span class="pp-slider-value" id="cyber-sonar-sector-value">{{ `${sonar?.sector ?? 24}°` }}</span>
@@ -183,11 +183,10 @@ const allocationOptions = computed(() => [
   </div>
   </Teleport>
   <div class="pp-toggle-group">
-    <label class="pp-toggle-btn pp-scope-toggle" :title="t('Scope — the circular viewport mask')">
+    <UiCheckbox class="pp-toggle-btn pp-scope-toggle" :title="t('Scope — the circular viewport mask')" input-id="scope-toggle" trailing :model-value="scopeOn" @update:model-value="act('setScopeEnabled', $event)">
       <span class="pp-icon material-symbols-outlined" aria-hidden="true">adjust</span>
       <span class="pp-label">{{ t('Scope') }}</span>
-      <input type="checkbox" id="scope-toggle" @change="act('setScopeEnabled', $event.target.checked)" :checked="scopeOn" />
-    </label>
+    </UiCheckbox>
     <div class="pp-slider-row visible" id="scope-slider-row">
       <span class="pp-slider-mini-label">{{ t('Feather') }}</span>
       <UiSlider class="pp-slider" id="scope-feather-slider" @update:model-value="act('setScopeFeather', $event)" min="0" max="200" :model-value="scopeFeather" :disabled="!scopeOn" :aria-label="t('Scope edge feather')" :title="t('Scope edge feather as a percentage of the keyhole radius')" />
@@ -212,11 +211,10 @@ const allocationOptions = computed(() => [
   </div>
   <!-- Sky: only where the renderer has a sky to set. -->
   <div v-if="sky" class="pp-toggle-group" id="sky-group">
-    <label v-for="row in skyRows" :key="row.key" class="pp-toggle-btn pp-scope-toggle" :id="`sky-${row.key}-row`">
+    <UiCheckbox v-for="row in skyRows" :key="row.key" class="pp-toggle-btn pp-scope-toggle" :id="`sky-${row.key}-row`" :input-id="`sky-${row.key}-toggle`" trailing :model-value="sky.switches[row.key]" @update:model-value="act('setSkySwitch', row.key, $event)">
       <span class="pp-icon material-symbols-outlined" aria-hidden="true">{{ row.icon }}</span>
       <span class="pp-label">{{ row.label }}</span>
-      <input type="checkbox" :id="`sky-${row.key}-toggle`" @change="act('setSkySwitch', row.key, $event.target.checked)" :checked="sky.switches[row.key]" />
-    </label>
+    </UiCheckbox>
     <div class="pp-slider-row visible" id="sky-milkyway-row">
       <span class="pp-slider-mini-label">{{ t('Milky Way') }}</span>
       <UiSlider class="pp-slider" id="sky-milkyway-slider" @update:model-value="act('setSkyMilkyWay', $event)" min="0" max="100" :model-value="sky.milkyWay" :aria-label="t('Milky Way')" />
@@ -226,11 +224,10 @@ const allocationOptions = computed(() => [
   <!-- Groups the application adds (store `publishGroup`). -->
   <div v-for="group in groups" :key="group.id" class="pp-toggle-group" :id="`${group.id}-group`">
     <template v-for="row in group.rows" :key="row.id">
-      <label v-if="row.kind === 'toggle'" class="pp-toggle-btn pp-scope-toggle" :title="row.title">
+      <UiCheckbox v-if="row.kind === 'toggle'" class="pp-toggle-btn pp-scope-toggle" :title="row.title" :input-id="`${group.id}-${row.id}-toggle`" trailing :model-value="row.checked" @update:model-value="row.onChange?.($event)">
         <span v-if="row.icon" class="pp-icon material-symbols-outlined" aria-hidden="true">{{ row.icon }}</span>
         <span class="pp-label">{{ row.label }}</span>
-        <input type="checkbox" :id="`${group.id}-${row.id}-toggle`" @change="row.onChange?.($event.target.checked)" :checked="row.checked" />
-      </label>
+      </UiCheckbox>
       <div v-else-if="row.kind === 'note'" class="pp-slider-row visible" :id="`${group.id}-${row.id}`">
         <span class="pp-slider-mini-label">{{ row.text }}</span>
       </div>
