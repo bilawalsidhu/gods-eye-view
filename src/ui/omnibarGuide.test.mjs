@@ -134,3 +134,39 @@ test('a walk started while Vue mounts something else still starts and ends', asy
   assert.equal($('.gev-guide'), null);
   assert.equal(document.activeElement, field);
 });
+
+test('each further target of a step gets its own ring after the callout', async (t) => {
+  const { target } = fixture(t);
+  const more = document.body.appendChild(document.createElement('button'));
+  const box = (left) => () => ({
+    left,
+    top: 20,
+    right: left + 30,
+    bottom: 50,
+    width: 30,
+    height: 30,
+  });
+  target.getBoundingClientRect = box(10);
+  more.getBoundingClientRect = box(100);
+  let targets = [target, more];
+  startGuide([{ targets: () => targets, text: () => 'Press these' }]);
+  const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+  await settle();
+  await frame();
+  const subs = () => [...document.querySelectorAll('.gev-guide-ring--sub')];
+  assert.equal(subs().length, 1);
+  const [sub] = subs();
+  assert.equal(sub.className, 'gev-guide-ring gev-guide-ring--sub');
+  assert.equal(sub.parentElement, $('.gev-guide'));
+  assert.equal(sub.previousElementSibling, $('.gev-guide-callout'));
+  assert.equal(sub.childElementCount, 0);
+  assert.equal(sub.style.opacity, '1');
+  assert.equal(sub.style.left, '96px');
+  assert.equal(sub.style.width, '38px');
+  // A step with fewer targets keeps the ring, faded out.
+  targets = [target];
+  $('.gev-guide-ring').dispatchEvent(new Event('scroll', { bubbles: true }));
+  await frame();
+  assert.deepEqual(subs(), [sub]);
+  assert.equal(sub.style.opacity, '0');
+});
