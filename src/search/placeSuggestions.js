@@ -21,14 +21,16 @@ export const minPlaceChars = (text) => (isCjk(text) ? 2 : 3);
  */
 const MAP_WORDS = new Set(
   (
-    'airport bar beach bike boat bridge bus cafe car castle city coast coffee ' +
-    'country desert east elevator ferry fire flight forest garden harbor ' +
-    'hospital hotel house island lake market moon mountain museum north ' +
-    'ocean office park planet pizza rain river road rocket satellite school ' +
-    'sea ship shop snow south space station storm street sun ' +
-    'swim taxi tower town traffic train truck tunnel valley village ' +
-    'weather west wind world zoo canyon church stadium bank restaurant ' +
-    'map area today tomorrow near'
+    'airport alley arena bar beach bike boat border bridge bus cabin camp ' +
+    'canal canyon capital car castle cave city cliff clinic coast coffee ' +
+    'country cruise dentist desert dune east elevator farm field fire ' +
+    'flight forest gallery garage garden gym harbor hill hospital hotel ' +
+    'island jungle kitchen lake library market meadow moon mountain museum ' +
+    'nation north ocean office opera palace park pizza planet police pond ' +
+    'pool rail rain ranch region ridge river road rocket route school sea ' +
+    'ship shop ski snow soccer south space square stadium street subway sun ' +
+    'swamp taxi tennis tornado tower town traffic train truck tunnel valley ' +
+    'van vessel village volcano wagon weather west wine zoo'
   ).split(' '),
 );
 
@@ -194,7 +196,9 @@ function privacyReason(text) {
   // groups with "::", or five colons or more (a time has two).
   if (
     line.split(' ').some((token) => {
-      const bare = token.replace(/^[[(]+|[\]),.;]+$/g, '').replace(/%\w+$/, '');
+      const bare = token
+        .replace(/^[[(]+|(?<=[^\]),.;])[\]),.;]+$/g, '')
+        .replace(/%\w+$/, '');
       const colons = (bare.match(/:/g) || []).length;
       return (
         /^[0-9a-f:.]+$/i.test(bare) &&
@@ -211,23 +215,23 @@ function privacyReason(text) {
   // Written with commas, numbered ("1. abandon 2. ability") or after a few
   // words ("my seed is …"): twelve of the list's words in a row. The list
   // has many words for places and things on a map, and a phrase is drawn at
-  // random from all of it: twelve with three of those ("coffee, bar,
-  // hotel, museum, park …") is a list of places.
-  let run = 0;
-  let mapWords = 0;
+  // random from all of it: twelve with four of those ("coffee, bar, hotel,
+  // museum, park …") are a list of places, which a phrase is about once in
+  // three hundred.
+  const recent = [];
   for (const token of line.toLowerCase().split(/[\s,;]+/)) {
     const word = token
       .replace(/^\d+[.)]?/, '')
       .replace(/(?<=[a-z])[^a-z]+$/, '');
     if (!word && token) continue;
     if (!isBip39Word(word)) {
-      run = 0;
-      mapWords = 0;
+      recent.length = 0;
       continue;
     }
-    run += 1;
-    if (MAP_WORDS.has(word)) mapWords += 1;
-    if (run >= 12 && mapWords < 3) return 'other';
+    recent.push(MAP_WORDS.has(word));
+    if (recent.length > 12) recent.shift();
+    if (recent.length === 12 && recent.filter(Boolean).length < 4)
+      return 'other';
   }
   // Coordinates and grid references are a spot, not a number to keep: only
   // text the place search itself reads as coordinates, as typed ("١٢٣٤,
@@ -385,7 +389,7 @@ function privacyReason(text) {
 function bearerToken(line) {
   if (/\bauthori[sz]ation\s*:\s*bearer\b\s*\S/i.test(line)) return true;
   for (const match of line.matchAll(/\bbearer\b(\s*[:=#]?\s*)(\S+)/gi)) {
-    const value = match[2].replace(/[,.;:!?)]+$/, '');
+    const value = match[2].replace(/(?<=[^,.;:!?)])[,.;:!?)]+$/, '');
     // Only a word after a space may be a name: "Bearer: island" is a token.
     if (/^\s+$/.test(match[1]) && PLACE_WORDS.test(value)) continue;
     return true;
@@ -410,7 +414,7 @@ function codeAfterLabel(line) {
   // After a label in lower case, any value is a code ("verification code
   // Abc"); after one written as a name, only a value that is not one.
   const coded =
-    /\b((?:otp|2fa|mfa|cvv|cvc|(?:verification|one-time|security|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{2,63})(?:(?:\s*[,;]\s*|\s+)(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.!?]*$/i.exec(
+    /\b((?:otp|2fa|mfa|cvv|cvc|(?:verification|one-time|security|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{2,63})(?:(?:\s*[,;]\s*|\s+-+\s+|\s+)(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.!?]*$/i.exec(
       line,
     );
   if (coded) {
@@ -437,7 +441,7 @@ function codeAfterLabel(line) {
   }
   // A value in mixed case that is no name ("PIN aBcD", "gate code aBcD").
   const mixed =
-    /\b(?:pin|(?:door|access|gate|alarm|entry) code)(?:\s+is)?\s+([a-z0-9-]{4,64})(?:(?:\s*[,;]\s*|\s+)(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.!?]*$/i.exec(
+    /\b(?:pin|(?:door|access|gate|alarm|entry) code)(?:\s+is)?\s+([a-z0-9-]{4,64})(?:(?:\s*[,;]\s*|\s+-+\s+|\s+)(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.!?]*$/i.exec(
       line,
     );
   if (
@@ -448,7 +452,7 @@ function codeAfterLabel(line) {
   )
     return true;
   const match =
-    /\b((?:pin|cvv|cvc|otp|2fa|mfa|(?:door|access|gate|alarm|entry|security|verification|one-time|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{3,63})(?:(?:\s*[,;]\s*|\s+)(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.!?]*$/i.exec(
+    /\b((?:pin|cvv|cvc|otp|2fa|mfa|(?:door|access|gate|alarm|entry|security|verification|one-time|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{3,63})(?:(?:\s*[,;]\s*|\s+-+\s+|\s+)(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.!?]*$/i.exec(
       line,
     );
   if (!match) return false;

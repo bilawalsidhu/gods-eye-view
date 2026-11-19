@@ -470,6 +470,8 @@ test('spelled-out emails, addresses, phrases, codes and short phone numbers stay
     'otp ABCDEF thanks!!',
     'verification code ABCDEF thanks a lot',
     'otp ABCDEF cheers',
+    'otp ab12cd - thanks',
+    'gate code aBcD - thanks',
     'abandon ability able about above absent absorb abstract absurd abuse access accident.',
     'abandon, ability, able, about, above, absent, absorb, abstract, absurd, abuse, access, accident',
     '1. abandon 2. ability 3. able 4. about 5. above 6. absent 7. absorb 8. abstract 9. absurd 10. abuse 11. access 12. accident',
@@ -543,6 +545,7 @@ test('places that only looked private are looked up', () => {
     'coffee, bar, hotel, museum, park, beach, hospital, school, market, bridge, tower, airport',
     '1. beach 2. park 3. museum 4. zoo 5. bridge 6. tower 7. market 8. castle 9. island 10. lake 11. river 12. canyon',
     'show only bus, train, car, truck, ship, boat traffic over city bridge today',
+    'museum, gallery, library, palace, square, alley, canal, garden, hill, cave, farm, field',
     // Questions for the assistant, however many short words they have.
     'can you tell where the most flights are going over texas today',
     'are there any storms near florida right now that might cause delays',
@@ -650,6 +653,8 @@ test('a long line is read quickly', () => {
     ...['a-', 'a.', '1-', 'a ', '//[a:'].map((unit) => unit.repeat(10000)),
     `otp a${'-'.repeat(20000)}!x`,
     `gate code a${'-'.repeat(20000)}!x`,
+    `${','.repeat(20000)}!x`,
+    `bearer x${','.repeat(20000)}z`,
   ]) {
     const started = performance.now();
     mayBePrivate(line);
