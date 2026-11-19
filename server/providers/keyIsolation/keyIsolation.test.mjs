@@ -14,6 +14,7 @@ import {
   buildGraphUpstream,
   createMapillaryGraphHandler,
 } from './mapillaryGraph.js';
+import { containsCredentialEcho } from './credentialEcho.js';
 import {
   ION_SERVER_MANAGED,
   fetchIonCredential,
@@ -383,6 +384,25 @@ test('graph: percent-encoded token echoes from an upstream error are refused', a
   }
 });
 
+test('credential echo: a token behind a JSON-wrapped escape is found', () => {
+  const token = 'synthABC123xyz';
+  // The token with one character escaped, as a JSON body would carry it.
+  const escaped = 'synth\\u0041BC123xyz';
+  const wrapped = JSON.stringify({ message: escaped });
+  assert.equal(containsCredentialEcho(escaped, token), true);
+  assert.equal(
+    containsCredentialEcho(wrapped, token),
+    true,
+    'the JSON-wrapped escape names the token as well',
+  );
+  const clean = JSON.stringify({ message: 'no token here' });
+  assert.equal(
+    containsCredentialEcho(clean, token),
+    false,
+    'a body without the token is not an echo',
+  );
+});
+
 test('graph: selectively escaped and JSON-escaped token echoes are refused', async () => {
   const variants = [
     `M%4cY%7c${'1'.repeat(16)}%7C${'a'.repeat(32)}`,
@@ -422,6 +442,69 @@ test('ion: escaped long-lived token in an endpoint document is refused', async (
     });
     assert.equal(res.status, 502);
   }
+});
+
+test('graph: a token behind a JSON-wrapped escape is refused; other answers still pass', async () => {
+  const token = 'synthABC123xyz';
+  // The token with one character escaped, with every character escaped, and
+  // with an escape and a percent-encoding mixed.
+  const variants = [
+    'synth\\u0041BC123xyz',
+    '\\u0073\\u0079\\u006e\\u0074\\u0068ABC123xyz',
+    'synth\\u0041BC123%78yz',
+  ];
+  for (const variant of variants) {
+    const handler = createMapillaryGraphHandler({
+      env: { MAPILLARY_CLIENT_TOKEN: token },
+      fetchImpl: async () =>
+        response(JSON.stringify({ error: { message: variant } }), 400),
+    });
+    const res = await call(handler, { url: '/images?fields=id' });
+    assert.equal(res.status, 502, variant);
+    assert.deepEqual(res.json(), { error: 'Mapillary answer refused' });
+    assert.ok(!res.text.includes(token), variant);
+    assert.ok(!res.text.includes('\\u0041'), variant);
+  }
+  // An answer that carries no token still passes through with its status.
+  const clean = createMapillaryGraphHandler({
+    env: { MAPILLARY_CLIENT_TOKEN: token },
+    fetchImpl: async () => response({ data: [{ id: '1' }] }),
+  });
+  const ok = await call(clean, { url: '/images?fields=id' });
+  assert.equal(ok.status, 200);
+  assert.deepEqual(ok.json(), { data: [{ id: '1' }] });
+});
+
+test('ion: a token behind a JSON-wrapped escape is refused; other documents still pass', async () => {
+  const token = 'synthIonToken.0123456789';
+  const env = { CESIUM_ION_TOKEN: token };
+  const variants = [
+    'synthIonToken\\u002e0123456789',
+    '\\u0073ynthIonToken.0123456789',
+  ];
+  for (const variant of variants) {
+    const fetchEndpoint = createIonEndpointFetcher({
+      env,
+      fetchImpl: async () => response(JSON.stringify({ accessToken: variant })),
+    });
+    const res = await call(createIonRouteHandler({ env, fetchEndpoint }), {
+      url: '/v1/assets/1/endpoint',
+    });
+    assert.equal(res.status, 502, variant);
+    assert.ok(!res.text.includes(token), variant);
+    assert.ok(!res.text.includes('\\u002e'), variant);
+  }
+  // A document that carries no token is still handed out unchanged.
+  const fetchEndpoint = createIonEndpointFetcher({
+    env,
+    fetchImpl: async () =>
+      response('{"type":"TERRAIN","url":"https://assets.ion.cesium.com/1"}'),
+  });
+  const ok = await call(createIonRouteHandler({ env, fetchEndpoint }), {
+    url: '/v1/assets/1/endpoint',
+  });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.json().type, 'TERRAIN');
 });
 
 test('graph: upstream errors without the token pass through with their status', async () => {
