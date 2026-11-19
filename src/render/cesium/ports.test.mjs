@@ -28,6 +28,7 @@ test('capabilities follow what the scene supports', () => {
     'splitSwipe',
     'imageHooks',
     'imageryFrames',
+    'imageryDecoded',
     'surfaceIdentity',
     'surfaceShading',
     'vectorBase',
@@ -35,6 +36,7 @@ test('capabilities follow what the scene supports', () => {
   const globe = { show: true };
   const draw = [
     'models',
+    'modelParts',
     'modelAtmosphere',
     'modelNodes',
     'quads',

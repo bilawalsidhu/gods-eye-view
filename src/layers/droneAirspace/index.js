@@ -130,12 +130,11 @@ export function createDroneAirspaceLayer({
     // cards inert anywhere over a zone. Unowned, our picks read as
     // "empty space" to siblings — the same contract as fire perimeters.
     _clickSubscription = inputFor(_viewer).onClick((event) => {
-      const cardHit = overlayHost.hitTest?.(
-        event.screenPosition?.x,
-        event.screenPosition?.y,
-        { sourceId: DRONE_AIRSPACE_OVERLAY_SOURCE_ID },
-      );
-      if (cardHit && cardHit.entryId === _selectedCardId) return;
+      // The card or label painted on top takes the click, read once per
+      // click so every layer agrees: this area's shapes are background to
+      // another layer's card or label painted over them, and a click on our
+      // own card leaves the selection as it is.
+      if (picking.clickCard?.(event)) return;
       const picked = event.topHit;
       const zoneId = picked ? pickedZoneId(event.drawHit) : null;
       if (zoneId) {

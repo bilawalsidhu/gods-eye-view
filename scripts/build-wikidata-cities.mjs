@@ -20,13 +20,31 @@
  * request runs at a time, with a pause between requests, and a refusal's
  * Retry-After is honoured.
  *
+ * With `--tiles`, the same query between `--min-population` and
+ * `--max-population` (1,000 and 15,000 by default) builds the detail tiles
+ * instead, and writes only to:
+ *
+ *   src/data/local_data/wikidata_places/
+ *
+ * replacing that folder's tiles, `index.json` and `files.js` (see
+ * scripts/wikidataPlaceTiles.mjs). The checks that well-known cities are
+ * present apply to the cities pack only.
+ *
  * Usage:
  *   node scripts/build-wikidata-cities.mjs [--min-population 15000]
+ *   node scripts/build-wikidata-cities.mjs --tiles [--min-population 1000] [--max-population 15000]
  */
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  keepBuiltIfUnchanged,
+  keepPackBuiltIfUnchanged,
+  placeTileFiles,
+  withoutCities,
+  withoutNearTwins,
+} from './wikidataPlaceTiles.mjs';
 
 const ENDPOINT = 'https://query.wikidata.org/sparql';
 const USER_AGENT =
@@ -37,11 +55,23 @@ const LABEL_BATCH = 400;
 
 const args = process.argv.slice(2);
 const flag = (name) =>
-  args.includes(name) ? Number(args[args.indexOf(name) + 1]) : NaN;
-const minPopulation = flag('--min-population') || 15000;
+  args.includes(name) ? Number(args[args.indexOf(name) + 1]) : undefined;
+const tilesMode = args.includes('--tiles');
+const minPopulation = flag('--min-population') ?? (tilesMode ? 1000 : 15000);
+const maxPopulation =
+  flag('--max-population') ?? (tilesMode ? 15000 : Infinity);
+if (!(maxPopulation > minPopulation))
+  throw new Error('--max-population must be above --min-population');
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const outDir = path.join(root, 'src/data/local_data/wikidata_cities');
+const outDir = path.join(
+  root,
+  tilesMode
+    ? 'src/data/local_data/wikidata_places'
+    : 'src/data/local_data/wikidata_cities',
+);
 
+/** A file's text, or undefined when there is none yet. */
+const readIfThere = (file) => readFile(file, 'utf8').catch(() => undefined);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const qid = (uri) => uri.slice(uri.lastIndexOf('/') + 1);
 
@@ -222,7 +252,7 @@ const grouped = new Set();
 const settled = new Set();
 
 const places = new Map();
-for (const [low, high] of bands(minPopulation, Infinity)) {
+for (const [low, high] of bands(minPopulation, maxPopulation)) {
   console.log(`Population ${low}–${Number.isFinite(high) ? high : '∞'}…`);
   const rows = await bandRows(low, high);
   let kept = 0;
@@ -434,7 +464,7 @@ if (intruders.length) {
     `Groupings got in: ${intruders.map(([id, name]) => `${name} (${id})`).join(', ')}`,
   );
 }
-if (missing.length) {
+if (missing.length && !tilesMode) {
   throw new Error(
     `Expected cities are missing: ${missing.map(([id, name]) => `${name} (${id})`).join(', ')}`,
   );
@@ -450,6 +480,53 @@ const meta = {
 };
 
 await mkdir(outDir, { recursive: true });
+if (tilesMode) {
+  // Places the cities pack already has stay out of the tiles: an item with
+  // one stated population under the cut-off and another over it is in both
+  // query ranges. Build the cities pack first.
+  const citiesFile = path.join(
+    root,
+    'src/data/local_data/wikidata_cities/cities.json',
+  );
+  const cityIds = JSON.parse(await readFile(citiesFile, 'utf8')).rows.map(
+    (row) => row[5],
+  );
+  const outsideCities = withoutCities(rows, cityIds);
+  console.log(
+    `${rows.length - outsideCities.length} places left to the cities pack`,
+  );
+  // One place listed twice nearby under one name keeps its larger listing.
+  const tileRows = withoutNearTwins(outsideCities);
+  console.log(`${outsideCities.length - tileRows.length} near twins left out`);
+  const files = placeTileFiles(tileRows, {
+    ...meta,
+    count: tileRows.length,
+    maxPopulation,
+  });
+  // The new files are all written before tiles from an earlier build that
+  // this one has no rows for go, so a build that stops part way never leaves
+  // an index naming a removed tile.
+  const earlier = new Map();
+  for (const name of await readdir(outDir))
+    if (/^-?\d+_-?\d+\.json$|^index\.json$|^files\.js$/.test(name))
+      earlier.set(name, await readFile(path.join(outDir, name), 'utf8'));
+  keepPackBuiltIfUnchanged(files, earlier);
+  for (const [name, text] of files)
+    await writeFile(path.join(outDir, name), text);
+  for (const name of await readdir(outDir))
+    if (/^-?\d+_-?\d+\.json$/.test(name) && !files.has(name))
+      await rm(path.join(outDir, name));
+  console.log(
+    `Wrote ${tileRows.length} places in ${files.size - 2} tiles to ${path.relative(root, outDir)}`,
+  );
+  process.exit(0);
+}
 const file = path.join(outDir, 'cities.json');
-await writeFile(file, `${JSON.stringify({ meta, rows })}\n`);
+await writeFile(
+  file,
+  keepBuiltIfUnchanged(
+    `${JSON.stringify({ meta, rows })}\n`,
+    await readIfThere(file),
+  ),
+);
 console.log(`Wrote ${rows.length} places to ${path.relative(root, file)}`);

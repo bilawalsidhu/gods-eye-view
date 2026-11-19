@@ -42,7 +42,7 @@ function panelFixture({ id = 'data-panel', nested = false, nestedCollapsed = fal
     disclosure.closest = () => panel;
   }
   const document = { getElementById: (candidate) => candidate === id ? panel : null };
-  const manager = new Function('document', 'getComputedStyle', 'collapsePanelOnEscape', `return {${method('_collapsePanelOnEscape', '_togglePanel')}};`)(document, (el) => ({ visibility: el.visibility ?? 'visible' }), collapsePanelOnEscape);
+  const manager = new Function('document', 'getComputedStyle', 'collapsePanelOnEscape', `return {${method('_collapsePanelOnEscape', '_togglePanel')}, ${method('_railFocusStand', '_setCommandDockPanelPinState')}};`)(document, (el) => ({ visibility: el.visibility ?? 'visible' }), collapsePanelOnEscape);
   manager.setPanelCollapsed = (candidate, value, options) => {
     assert.equal(candidate, id);
     assert.equal(value, true);

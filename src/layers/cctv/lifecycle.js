@@ -23,7 +23,7 @@ export function createLifecycle({
   source,
 }) {
   const { activateCctvCameraFromWorldClick } = services.activation;
-  const { resolvePickId, registerPickOwner, unregisterPickOwner } =
+  const { resolvePickId, registerPickOwner, unregisterPickOwner, clickCard } =
     services.picking;
   const { onFocusTargetAppear } = services.focus;
   const { releaseContinuousRender } = services.render;
@@ -391,6 +391,20 @@ export function createLifecycle({
         (event) => {
           if (!layerState._enabled) return;
           const picked = event.topHit;
+          // The card or label painted on top takes the click, read once per
+          // click so every layer agrees: a live card of ours acts whatever
+          // is drawn under it; another layer's is that layer's click.
+          const top = clickCard?.(event) ?? null;
+          if (top && top.sourceId !== CCTV_OVERLAY_SOURCE_ID) return;
+          if (top) {
+            // A card of ours that is going away is still not the scene.
+            if (layerState._recordById.has(top.entryId))
+              activateCctvCameraFromWorldClick(
+                top.entryId,
+                parts.selection.setActiveCamera,
+              );
+            return;
+          }
           const cameraId = parts.selection.extractPickedCameraId(
             event.drawHit ?? null,
           );
@@ -401,29 +415,11 @@ export function createLifecycle({
             );
             return;
           }
-          // Any identified scene object owns this click even if its layer does not
-          // register a shared pick predicate. This keeps selectable siblings ahead
-          // of an overlapping CCTV card while ID-less globe/terrain/tile surfaces
-          // remain eligible for true empty-space deselection.
-          const pickedId = resolvePickId(picked);
-          if (pickedId !== null) return;
-          // Item A (owner round 2): the scene pick found no camera — try the
-          // painted ambient cards. The cards canvas is pointer-events:none (this
-          // handler owns the events), so a click landing on a card's rect selects
-          // its camera exactly like a click on the icon. Click positions
-          // and the recorded rects are both CSS px — direct comparison.
-          const cardId = layerState._cctvOverlayHost.hitTest(
-            event.screenPosition.x,
-            event.screenPosition.y,
-            { sourceId: CCTV_OVERLAY_SOURCE_ID },
-          )?.entryId;
-          if (cardId && layerState._recordById.has(cardId)) {
-            activateCctvCameraFromWorldClick(
-              cardId,
-              parts.selection.setActiveCamera,
-            );
-            return;
-          }
+          // Any identified scene object owns this click even if its layer
+          // does not register a shared pick predicate. This keeps selectable
+          // siblings ahead of the CCTV selection while ID-less globe, terrain
+          // and tile surfaces remain eligible for empty-space deselection.
+          if (resolvePickId(picked) !== null) return;
           if (
             parts.selection.cctvEmptyClickDeselects(picked, {
               activeCameraId: layerState._activeCameraId,

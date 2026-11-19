@@ -1,4 +1,5 @@
 import { inputFor } from '../../input/dispatcher.js';
+import { clickCard, isUnderOtherCard } from '../../data/pickRegistry.js';
 import { LAYER_ID } from './policy.js';
 
 export function createSelection({
@@ -52,23 +53,22 @@ export function createSelection({
     const input = inputFor(viewer);
     layerState.clickSubscription = input.onClick((event) => {
       if (!layerState.enabled) return;
-      // A site's dot, outline or fill, or a named marker: each draw item
-      // names its installation in its `meta`. Else, only when the click hit
-      // nothing drawn (the map itself), the label box the shared overlay
-      // paints for the site on top there (controls.findAt reads its hit
-      // rects, in CSS px), which is what a click lands on from far out; an
-      // aircraft or vessel drawn over a label keeps its own click.
+      // Another layer's card or label painted on top takes the click: the item
+      // under it does not act, and the click is not empty space either. A
+      // site's own label box is this layer's.
+      if (isUnderOtherCard(event, [LAYER_ID])) return;
+      // The site whose label box is painted on top at the click takes it,
+      // whatever is drawn under it: from far out the click lands on the label,
+      // not the 7 px dot. Else a site's dot, outline or fill, or a named
+      // marker: each draw item names its installation in its `meta`.
+      const card = clickCard(event);
       const hit = event.drawHit;
       const id =
+        (card?.sourceId === LAYER_ID ? card.entryId : null) ??
         (hit?.set === parts.namedMarkers?.setId ||
         parts.rendering.ownsSet(hit?.set)
           ? hit.meta?.installationId
           : null) ??
-        (event.topHit
-          ? null
-          : parts.controls?.methods?.findAt?.(
-              event.screenPosition ?? event.position,
-            )?.id) ??
         null;
       if (id && layerState.recordById.has(id) && id !== layerState.selectedId) {
         selectRecord(id);

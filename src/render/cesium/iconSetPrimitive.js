@@ -94,7 +94,7 @@ out vec4 v_pickColor;
 out float v_proxy;
 
 // The row's anchor in clip space before screen offsets, for effects that wrap
-// main() (cyber sonar) and must not change geometry or picks.
+// main() (sonar) and must not change geometry or picks.
 vec4 iconAnchorClip = vec4(0.0, 0.0, 0.0, -1.0);
 
 ${ICON_SEGMENT_GLSL}
@@ -261,7 +261,12 @@ void main() {
   if (overDepth && zclip >= -1.0 && zclip <= 1.0) {
     gl_Position.z = -gl_Position.w;
 #ifdef LOG_DEPTH
-    v_depthFromNearPlusOne = 1.0;
+    // Just past the near plane, not on it: czm_writeLogDepth discards a
+    // fragment at or below 0.9999999, and 1.0 interpolated across the quad
+    // can arrive a rounding step or two under that, dropping the icon for a
+    // frame as it moves (flicker). 1e-4 m past the near plane is still in
+    // front of everything the scene draws.
+    v_depthFromNearPlusOne = 1.0001;
 #endif
   }
 

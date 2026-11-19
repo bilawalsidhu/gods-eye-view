@@ -157,7 +157,7 @@ test('the edited existing tools changed exactly as intended', () => {
   const panel = byName.get('set_panel_open');
   assert.deepEqual(
     panel.parameters.properties.panelId.enum,
-    ['data-panel', 'location-bar', 'control-panel', 'cctv-panel', 'radio-panel', 'scene-panel', 'utilities-panel', 'pp-toggles', 'global-context-panel', 'weather-panel', 'recent-imagery-panel', 'voice-settings', 'voice-preview', 'provider-settings'],
+    ['data-panel', 'location-bar', 'control-panel', 'cctv-panel', 'radio-panel', 'scene-panel', 'utilities-panel', 'pp-toggles', 'global-context-panel', 'space-missions-panel', 'weather-panel', 'recent-imagery-panel', 'voice-settings', 'voice-preview', 'provider-settings'],
   );
   assert.deepEqual(panel.parameters.required, ['panelId', 'open']);
 
@@ -218,10 +218,10 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((tool) => structuredClone(tool))
     .filter((tool) => tool.name !== 'set_cyber_sonar');
-  // Cyber adds one HUD choice and the sonar tool, and Operator was retired;
-  // retain the existing pin for every legacy field.
+  // Operator and then Cyber were retired (Cyber's sonar became a visual
+  // style with its own tool); retain the existing pin for every legacy field.
   const hudLayout = unchanged.find((tool) => tool.name === 'set_hud').parameters.properties.layout;
-  assert.deepEqual(hudLayout.enum, ['tactical', 'minimal', 'cyber']);
+  assert.deepEqual(hudLayout.enum, ['tactical', 'minimal']);
   hudLayout.enum = ['tactical', 'operator', 'minimal'];
   // Globe rotation adds one motion and clarifies the two affected descriptions.
   // Check those edits explicitly, then keep the legacy pin for every other field.
@@ -353,10 +353,8 @@ test('Radio is nested inside Context with its own disclosure and power controls'
   assert.match(radioControlsSource, /classList\.remove\('radio-broadcasting'\)/);
   assert.match(radioBindings, /this\.radio\.getTunerStations\(750\)/);
   assert.match(radioBindings, /radioTunerPointerPosition\(/);
-  // Only the Cyber skin promotes Radio to a peer panel. Other themes retain
-  // the embedded Context layout; theme round-trip behavior has separate tests.
-  const baseCss = css.replace(readFileSync(new URL('./ui/styles/cyber.css', import.meta.url), 'utf8'), '');
-  assert.doesNotMatch(baseCss, /#right-context-rail\s*>\s*#radio-panel/);
+  // Radio stays embedded in Context; no stylesheet promotes it to a peer panel.
+  assert.doesNotMatch(css, /#right-context-rail\s*>\s*#radio-panel/);
   assert.match(css, /#global-context-panel #radio-panel\.collapsed/);
   assert.doesNotMatch(css, /\.context-radio-/);
   assert.match(css, /#right-context-rail #global-context-panel:not\(\.collapsed\) \.context-mode-view,[\s\S]*?#right-context-rail #global-context-panel:not\(\.collapsed\) #radio-panel\s*\{[\s\S]*?flex: 0 0 auto;/);

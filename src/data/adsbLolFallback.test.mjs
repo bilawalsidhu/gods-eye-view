@@ -61,3 +61,22 @@ test('an aircraft with no track takes its true heading, never its magnetic one',
   assert.equal(at({ mag_heading: 278.44 }), null, 'not magnetic');
   assert.equal(at({}), null, 'none');
 });
+
+test('the point response sends each admitted aircraft type alongside the vectors', () => {
+  const response = normalizeAdsbLolPointResponse({
+    now: 1000,
+    ac: [
+      { hex: 'A1B2C3', lat: 30, lon: -97, t: 'ec45' },
+      { hex: 'A1B2C3', lat: 31, lon: -97, t: 'B738' },
+      { hex: 'D4E5F6', lat: 30, lon: -98 },
+      { hex: 'BAD000', t: 'A320' },
+    ],
+  });
+  assert.equal(response.states.length, 3);
+  assert.deepEqual(response.typeByIcao, { a1b2c3: 'EC45' });
+  const untyped = normalizeAdsbLolPointResponse({
+    now: 1000,
+    ac: [{ hex: 'D4E5F6', lat: 30, lon: -98 }],
+  });
+  assert.equal(Object.hasOwn(untyped, 'typeByIcao'), false);
+});

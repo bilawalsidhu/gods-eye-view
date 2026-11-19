@@ -182,6 +182,12 @@ function topHitOf(hit, foreign) {
  *   when the adapter has none.
  * @property {unknown} pick `native.pick`, for code still bound to the
  *   engine's pick objects that reads it here.
+ * @property {boolean} overlay Whether a painted overlay target took the
+ *   click ({@link InputDispatcher.onOverlayClick}). Its hits then name only
+ *   that target: something drawn outside the draw port, with no id. A
+ *   target the world overlay paints (a Space Missions label) is also the
+ *   card on top for every handler (`clickCard` in src/data/pickRegistry.js),
+ *   so nothing under it acts.
  * @property {(width: number, height: number) => unknown} pickWindow
  *   `native.pickWindow`, the same.
  */
@@ -190,6 +196,11 @@ function topHitOf(hit, foreign) {
  * @typedef {object} InputDispatcher
  * @property {(fn: (event: ClickEvent) => void) => () => void} onClick
  *   Ambient click subscription. Returns its unsubscribe.
+ * @property {(fn: (event: ClickEvent) => boolean) => () => void} onOverlayClick
+ *   Hit-test a painted overlay before ambient clicks. Return true after
+ *   handling its topmost target: the geometry beneath it is not picked, and
+ *   the click subscribers hear the click as one on that target (`overlay`
+ *   true, `topHit` a hit with no set and no id, nothing drilled).
  * @property {(type: 'down'|'move'|'up'|'click'|'dblclick', fn: Function, options?: {lease?: object|(() => object|null)}) => () => void} onPointer
  *   Raw pointer subscription: `click` gets the {@link ClickEvent}, the others
  *   `{position}` (`move`: `{startPosition, endPosition, pickPosition}`, its
@@ -267,6 +278,7 @@ function createDispatcher(viewer, { query: givenQuery, ...portOptions } = {}) {
   const queryOf = () => givenQuery ?? findQuery(viewer);
   /** @type {Array<{fn: Function}>} */
   const clickSubscribers = [];
+  const overlayClicks = new Set();
   /** @type {Record<string, Array<{fn: Function, lease: object|null}>>} */
   const pointerSubscribers = Object.fromEntries(
     POINTER_TYPES.map((type) => [type, []]),
@@ -327,12 +339,26 @@ function createDispatcher(viewer, { query: givenQuery, ...portOptions } = {}) {
     click: (ev) => {
       if (!unmodifiedLeft(ev)) return;
       const ambient = free();
-      const event = createClickEvent(
+      const { event, cover } = createClickEvent(
         viewer,
         queryOf,
         xy(ev.position),
         ev.gesture ?? { travelPx: 0, durationMs: 0 },
       );
+      if (ambient) {
+        for (const handle of [...overlayClicks]) {
+          try {
+            // A handled overlay target hides the geometry beneath it; every
+            // subscriber still hears the click, as a click on that target.
+            if (handle(event) === true) {
+              cover();
+              break;
+            }
+          } catch (error) {
+            console.error('Pointer input handler failed', error);
+          }
+        }
+      }
       run(pointerSubscribers.click, ambient, event);
       if (ambient) run(clickSubscribers, true, event);
     },
@@ -355,6 +381,12 @@ function createDispatcher(viewer, { query: givenQuery, ...portOptions } = {}) {
   const self = {
     onClick(fn) {
       return subscribe(clickSubscribers, { fn, lease: null });
+    },
+
+    onOverlayClick(fn) {
+      if (destroyed) return () => {};
+      overlayClicks.add(fn);
+      return () => overlayClicks.delete(fn);
     },
 
     onPointer(type, fn, { lease = null } = {}) {
@@ -395,7 +427,7 @@ function createDispatcher(viewer, { query: givenQuery, ...portOptions } = {}) {
     subscriberCount() {
       return POINTER_TYPES.reduce(
         (sum, type) => sum + pointerSubscribers[type].length,
-        clickSubscribers.length,
+        clickSubscribers.length + overlayClicks.size,
       );
     },
 
@@ -404,6 +436,7 @@ function createDispatcher(viewer, { query: givenQuery, ...portOptions } = {}) {
       destroyed = true;
       if (dispatchers.get(viewer) === self) dispatchers.delete(viewer);
       clickSubscribers.length = 0;
+      overlayClicks.clear();
       for (const type of POINTER_TYPES) pointerSubscribers[type].length = 0;
       for (const off of offPort) off();
       bridge.off();
@@ -417,6 +450,10 @@ function createDispatcher(viewer, { query: givenQuery, ...portOptions } = {}) {
   return self;
 }
 
+/** What a click handled by a painted overlay target hits: that target,
+ *  drawn outside the draw port and named by no pick id. */
+const OVERLAY_HIT = Object.freeze({ set: '', id: null, surface: false });
+
 /** A drill is run at least this deep and sliced, so callers asking for
  *  different depths on one click share one pass. */
 const DRILL_DEPTH = 16;
@@ -426,7 +463,8 @@ const DRILL_DEPTH = 16;
  * @param {() => import('../render/contract/query').QueryPort|null} queryOf
  * @param {{x: number, y: number}} at Where the click is, CSS pixels.
  * @param {ClickGesture} gesture
- * @returns {ClickEvent}
+ * @returns {{event: ClickEvent, cover: () => void}} The click, and how a
+ *   handled overlay target hides the geometry beneath it from the click.
  */
 function createClickEvent(viewer, queryOf, at, gesture) {
   const position = sensorPickPosition(viewer, at, canvasOf(viewer));
@@ -445,11 +483,25 @@ function createClickEvent(viewer, queryOf, at, gesture) {
   };
   /** @type {Map<string, {limit: number, hits: Hit[]}>} */
   const drills = new Map();
+  let covered = false;
+  const cover = () => {
+    covered = true;
+    memo.clear();
+    drills.clear();
+    memo.set('top', OVERLAY_HIT);
+    memo.set('hit', OVERLAY_HIT);
+    memo.set('id', null);
+    memo.set('ownerId', null);
+    memo.set('native', null);
+  };
 
-  return {
+  const event = {
     screenPosition: at,
     position,
     gesture,
+    get overlay() {
+      return covered;
+    },
     get topHit() {
       return once('top', () => {
         const hit = pick();
@@ -495,6 +547,7 @@ function createClickEvent(viewer, queryOf, at, gesture) {
       return !this.hit;
     },
     windowHit(width, height) {
+      if (covered) return { id: null, drawHit: null, surface: false };
       return once(`windowHit:${width}x${height}`, () => {
         const picked = pick({ width, height });
         void native()?.native.pickWindow(width, height);
@@ -515,7 +568,7 @@ function createClickEvent(viewer, queryOf, at, gesture) {
       // A deeper pass already made holds these. (One that came back short
       // may not hold every hit: it drops what is not a draw-set item.)
       if (done && limit <= done.limit) return done.hits.slice(0, limit);
-      const q = query();
+      const q = covered ? null : query();
       if (!q) return [];
       // Only the default window is shared between layers; round that one up.
       const depth =
@@ -548,4 +601,5 @@ function createClickEvent(viewer, queryOf, at, gesture) {
       return native()?.native.pickWindow(width, height);
     },
   };
+  return { event, cover };
 }

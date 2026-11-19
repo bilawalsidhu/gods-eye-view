@@ -52,6 +52,9 @@ The `many` form is the `other` text with «di» after the number when a noun fol
 | aircraft, plane / flight / military flights   | aereo / volo / voli militari                                 |
 | vessel, ship                                  | nave                                                         |
 | satellite / shell (Starlink) / DENSE          | satellite / shell / DENSO                                    |
+| FOCUS (the held object; the button)           | PUNTAMENTO / FOCUS                                           |
+| CONFIRMED (sightings chip; a landing)         | CONFERMATI / CONFERMATA                                      |
+| CURRENTLY OVER (orbit, before a place name)   | SORVOLO                                                      |
 | SPARSE / BALANCED / DENSE (detection modes)   | RADO / BILANCIATO / DENSO (agree with «overlay»)             |
 | broadband (Starlink shell)                    | a banda larga                                                |
 | VISUAL (CelesTrak group)                      | VISIBILI                                                     |
@@ -79,7 +82,7 @@ The `many` form is the `other` text with «di» after the number when a noun fol
 | briefing / panel / dock                       | briefing / pannello / dock                                   |
 | cockpit                                       | cockpit                                                      |
 | preset / visual preset                        | preset / preset visivo                                       |
-| Tactical / Minimal / Cyber                    | Tattico / Minimale / Cyber                                   |
+| Tactical / Minimal                            | Tattico / Minimale                                           |
 | Scope (circular viewport mask) / keyhole      | scope / foro                                                 |
 | feather / fade                                | sfumatura / dissolvenza                                      |
 | detection overlay                             | overlay di rilevamento                                       |

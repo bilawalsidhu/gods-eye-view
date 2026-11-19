@@ -5,6 +5,7 @@ import {
   createTrackedAircraftIcon,
   isOtherTrackedIconSet,
   trackedContactHolder,
+  trackedIconColor,
 } from './trackedAircraftIcon.js';
 
 /** A viewer double with a fake draw port and a frame port whose preRender the test runs. */
@@ -187,4 +188,14 @@ test("a layer tells another layer's tracked icon set from its own sets", () => {
     false,
   );
   assert.equal(isOtherTrackedIconSet(undefined, 'military'), false);
+});
+
+test('the tracked icon keeps its contact\'s colour; only the alpha changes', () => {
+  const amber = Object.freeze([1, 0.72, 0, 1]);
+  assert.equal(trackedIconColor(amber, 1), amber, 'unchanged at its own alpha');
+  const stale = trackedIconColor(amber, 0.45);
+  assert.deepEqual(stale, [1, 0.72, 0, 0.45]);
+  assert.equal(trackedIconColor(amber, 0.45), stale, 'one array per alpha');
+  assert.ok(Object.isFrozen(stale));
+  assert.deepEqual(trackedIconColor(amber, 0), [1, 0.72, 0, 0]);
 });

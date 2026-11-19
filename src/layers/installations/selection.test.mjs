@@ -7,6 +7,8 @@ import { createRendering } from './rendering.js';
 import { createNamedMarkers, namedPointId } from './namedMarkers.js';
 import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';
 import { fakeInput } from '../../input/testDoubles.mjs';
+import { setClickCardHitTest } from '../../data/pickRegistry.js';
+import { LAYER_ID } from './policy.js';
 
 function harness(t) {
   const previousWindow = globalThis.window;
@@ -186,6 +188,30 @@ test('a click on a named marker point selects its site; again releases it', (t) 
   h.assertSelected(false);
 });
 
+// The card or label painted on top takes the click: a site under another
+// layer's card neither selects nor releases.
+test("another layer's card over a site keeps the click", (t) => {
+  const h = harness(t);
+  let top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  setClickCardHitTest(() => top);
+  t.after(() => setClickCardHitTest(null));
+  const setId = h.parts.namedMarkers.setId;
+  const item = h.draw.set(setId).items.get(namedPointId('base'));
+  const pointPick = { id: { set: setId, id: item.id, meta: item.meta } };
+  h.click(pointPick);
+  h.assertSelected(true);
+  h.click(undefined);
+  h.assertSelected(true);
+  h.state.selectedId = null;
+  context.clearSelectedEntityContextForLayer('military-installations');
+  h.parts.rendering.renderRecords();
+  h.click(pointPick);
+  h.assertSelected(false);
+  top = null;
+  h.click(pointPick);
+  h.assertSelected(true);
+});
+
 test('a click on a site dot or its outline selects the site; another set does not', (t) => {
   const h = harness(t);
   h.state.selectedId = null;
@@ -234,32 +260,33 @@ test('a click on a site dot or its outline selects the site; another set does no
   assert.equal(selectedNow(), false);
 });
 
-test('a click on the map itself reads the label box at the click; a click on something drawn there does not', (t) => {
+test("a click on a site's label box selects it, whatever is drawn under it", (t) => {
   const h = harness(t);
-  let answer = null;
+  h.state.selectedId = null;
+  context.clearSelectedEntityContextForLayer('military-installations');
+  h.parts.rendering.renderRecords();
+  let top = null;
   const asked = [];
-  h.parts.controls = {
-    methods: {
-      findAt(position) {
-        asked.push(position);
-        return answer;
-      },
-    },
-  };
-  // Nothing picked and no label there: the selection is released.
+  setClickCardHitTest((x, y) => {
+    asked.push({ x, y });
+    return top;
+  });
+  t.after(() => setClickCardHitTest(null));
+  // No label at the click and nothing picked: nothing is selected.
   h.click(undefined);
-  assert.equal(asked.length, 1);
-  assert.deepEqual(asked[0], { x: 640, y: 400 }, 'in CSS px, where clicked');
+  assert.deepEqual(
+    asked.at(-1),
+    { x: 640, y: 400 },
+    'in CSS px, where clicked',
+  );
   h.assertSelected(false);
-  // The site's label box at the click selects it.
-  answer = { id: 'base' };
+  // The site's own label box on top selects it; again releases it.
+  top = { sourceId: LAYER_ID, entryId: 'base' };
   h.click(undefined);
-  assert.equal(asked.length, 2);
   h.assertSelected(true);
-  // Something else drawn under the click (an aircraft, a vessel): the label
-  // box is not read, and the site's selection is released as for any other
-  // contact.
-  h.click({ id: 'flight:abc123' });
-  assert.equal(asked.length, 2, 'the label box is not asked');
+  h.click(undefined);
   h.assertSelected(false);
+  // The label painted on top takes the click from an aircraft drawn under it.
+  h.click({ id: 'flight:abc123' });
+  h.assertSelected(true);
 });

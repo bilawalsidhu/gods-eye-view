@@ -516,7 +516,10 @@ function enterSubject(provider) {
   this.surfaceAcquiring = false;
   this.surfaceFallback = false;
   this.cockpitAnchorValid = false;
-  this.subjectHeightM = null;
+  // The entry frame's height, if any, stands in for a cold floor
+  // (updateSubject).
+  this.subjectHeightM = frame.heightM;
+  this.subjectHeightFromEntry = true;
   this.lookRestPitchDeg = provider.look?.restPitchDeg ?? null;
   this.resetLook({ immediate: true });
   this.active = true;
@@ -683,9 +686,11 @@ export function enter({ kind = null } = {}) {
       'track',
       t('TRACK ACQUIRED'),
       // A ship with no true heading is held on its course over ground; one
-      // with neither is named without a direction.
+      // with neither is named without a direction. A ship's course has a
+      // word of its own: pt «RUMO», where an aircraft's is «CURSO».
       info.trackSource === 'course'
         ? t('{label} · COURSE {heading}°', {
+            context: 'vessel',
             label: info.name,
             heading: trackHeading,
           })

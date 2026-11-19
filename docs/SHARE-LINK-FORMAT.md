@@ -134,7 +134,7 @@ probability of about 255 in 256 (many of them already fail as base64url).
 | 13  | thing                        | LEN   | none        | sub-message, see thing views                                          |
 | 14  | `style`                      | enum  | `normal`    | normal, retro, surveillance, thermal, anime, noir, snow (retired)     |
 | 15  | `mapStack`                   | enum  | `photoreal` | photoreal, bing-aerial, bing-labels, esri-imagery, osm                |
-| 16  | `hudVariant`                 | enum  | style       | tactical, operator (retired), minimal, cyber                          |
+| 16  | `hudVariant`                 | enum  | style       | tactical, operator (retired), minimal, cyber (Tactical + Sonar)       |
 | 17  | `bloomIntensity`             | uint  | style       |                                                                       |
 | 18  | `bloomVersion`               | uint  | 2           |                                                                       |
 | 19  | `sharpenIntensity`           | uint  | style       |                                                                       |
@@ -176,7 +176,11 @@ Opacity slider (the long form's `sco`). It is written only below 100, so a
 link made before it, which opens at full opacity, keeps its code.
 
 Flag bits (field 9): 0 `bloom`, 1 `sharpen`, 2 `hudVisible`, 3
-`celestialRing` (each defaulting by style), 4 `scopeEnabled` (default on).
+`celestialRing` (each defaulting by style), 4 `scopeEnabled` (default on), 5
+`hudSonar` (default off). `hudSonar` is Sonar on beside a HUD layout whose code
+cannot say so, Minimal (the long form's `hs=1`); Tactical with Sonar stays the
+`cyber` layout code alone. A link made before the bit has it off, and opens
+with Sonar on only when it names `cyber`, as before.
 
 ### Style defaults
 
@@ -282,6 +286,7 @@ reserved: a decoder ignores that entry, as for collapsed 0.
 | 8   | `global-context-panel` | `g`             | collapsed           |
 | 9   | `pp-toggles`           | `p`             | collapsed           |
 | 10  | `param-slider-panel`   | `m`             | expanded            |
+| 11  | `space-missions-panel` | `n`             | collapsed           |
 
 ### Style parameters (field 27)
 

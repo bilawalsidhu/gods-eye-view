@@ -345,7 +345,7 @@ try {
     (await readScope()).feather === 2,
   );
   await page.click('#scope-toggle');
-  for (const layout of ['minimal', 'cyber', 'tactical']) {
+  for (const layout of ['minimal', 'tactical']) {
     await page.select('#hud-layout-select', layout);
     const state = await readScope();
     check(

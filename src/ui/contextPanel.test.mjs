@@ -22,7 +22,6 @@ function fixture(t) {
   const controls = new ContextControls({
     elements: {
       _globalContextFlightsBtn: $('global-context-flights-btn'),
-      _globalContextMissionsBtn: $('global-context-missions-btn'),
       _installationsSearchBtn: $('installations-search-btn'),
     },
     installations: {},
@@ -58,61 +57,41 @@ test('before ContextControls renders, the switch shows its initial markup', (t) 
     'ui-panel panel-collapsible collapsed ui-panel--collapsed',
   );
   assert.equal(panel.hasAttribute('data-context-mode'), false);
-  for (const id of [
-    'global-context-flights-btn',
-    'global-context-missions-btn',
-  ]) {
-    const tab = $(id);
-    assert.equal(tab.className, 'context-mode-button');
-    assert.equal(tab.getAttribute('aria-selected'), 'false');
-    assert.equal(tab.getAttribute('tabindex'), '0');
-    assert.equal(tab.hasAttribute('aria-busy'), false);
-  }
+  const tab = $('global-context-flights-btn');
+  assert.equal(tab.className, 'context-mode-button');
+  assert.equal(tab.getAttribute('aria-selected'), 'false');
+  assert.equal(tab.getAttribute('tabindex'), '0');
+  assert.equal(tab.hasAttribute('aria-busy'), false);
   assert.equal($('context-mode-standby').hidden, false);
   assert.equal($('context-flights-view').hidden, true);
-  assert.equal($('context-missions-view').hidden, true);
+  assert.equal($('global-context-missions-btn'), null);
+  assert.equal($('context-missions-view'), null);
   assert.equal($('installations-search-btn').hasAttribute('aria-busy'), false);
 });
 
-test('a transition keeps focus and Tab on both tabs until it settles', async (t) => {
+test('a Contacts transition keeps the tab focusable until it settles', async (t) => {
   const { $, controls, sync } = fixture(t);
   const contacts = $('global-context-flights-btn');
-  const missions = $('global-context-missions-btn');
-  missions.focus();
+  contacts.focus();
   controls._contextModeChanging = true;
   await sync();
-  assert.equal(
-    document.activeElement === missions,
-    true,
-    'busy render keeps focus',
-  );
-  for (const tab of [contacts, missions]) {
-    assert.equal(tab.disabled, false);
-    assert.equal(tab.getAttribute('tabindex'), '0');
-    assert.equal(tab.getAttribute('aria-disabled'), 'true');
-    assert.equal(tab.getAttribute('aria-busy'), 'true');
-  }
+  assert.equal(document.activeElement, contacts);
+  assert.equal(contacts.disabled, false);
+  assert.equal(contacts.getAttribute('tabindex'), '0');
+  assert.equal(contacts.getAttribute('aria-disabled'), 'true');
+  assert.equal(contacts.getAttribute('aria-busy'), 'true');
 
   controls._contextModeChanging = false;
-  controls._contextMode = 'space-missions';
+  controls._contextMode = 'flights';
   await sync();
-  assert.equal(
-    document.activeElement === missions,
-    true,
-    'settled render keeps focus',
-  );
-  for (const tab of [contacts, missions]) {
-    assert.equal(tab.disabled, false);
-    assert.equal(tab.getAttribute('aria-disabled'), 'false');
-    assert.equal(tab.getAttribute('aria-busy'), 'false');
-  }
-  assert.equal(missions.classList.contains('active'), true);
-  assert.equal(missions.getAttribute('aria-selected'), 'true');
-  assert.equal(contacts.classList.contains('active'), false);
-  assert.equal(contacts.getAttribute('aria-selected'), 'false');
+  assert.equal(document.activeElement, contacts);
+  assert.equal(contacts.disabled, false);
+  assert.equal(contacts.getAttribute('aria-disabled'), 'false');
+  assert.equal(contacts.getAttribute('aria-busy'), 'false');
+  assert.equal(contacts.classList.contains('active'), true);
+  assert.equal(contacts.getAttribute('aria-selected'), 'true');
   assert.equal($('context-mode-standby').hidden, true);
-  assert.equal($('context-flights-view').hidden, true);
-  assert.equal($('context-missions-view').hidden, false);
+  assert.equal($('context-flights-view').hidden, false);
 });
 
 test('the panel carries the mode beside the classes its chrome writes', async (t) => {

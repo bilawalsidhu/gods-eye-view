@@ -231,8 +231,9 @@ export function createNamedMarkers({ state, services, parts, overlayHost }) {
               accent: COLOR_BY_CLASS[record.class] || '#9ca6b0',
             }),
             // The overlay keeps a hit rect for an interactive entry, so a
-            // click on the label box finds the site (controls.findAt), not
-            // only one on the dot.
+            // click on the label box finds the site (the map click through the
+            // pick registry's card on top, the Cockpit through
+            // controls.findAt), not only one on the dot.
             { interactive: true },
           ),
         };
