@@ -333,9 +333,7 @@ test('setOpacity dims the fill and the outline and 100 % restores them', async (
   assert.equal(lineAlpha([...h.lines().items.values()][0]), 0.9);
 
   h.layer.setOpacity(0.4);
-  assert.ok(
-    Math.abs(fillAlpha([...h.fills().items.values()][0]) - 0.1) < 1e-9,
-  );
+  assert.ok(Math.abs(fillAlpha([...h.fills().items.values()][0]) - 0.1) < 1e-9);
   assert.ok(
     Math.abs(lineAlpha([...h.lines().items.values()][0]) - 0.36) < 1e-9,
   );
