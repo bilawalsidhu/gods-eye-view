@@ -6336,7 +6336,16 @@ caption has no place name (KartaView's is where the drive began) and links to
 the full-size photo through the image proxy, since kartaview.org's photo
 pages fail for signed-out visitors. The viewer itself is `photoViewer.js`,
 shared with Panoramax: each provider hands it a `PhotoSources` table (first
-and sharper flat and panorama URLs, and the caption fields).
+and sharper flat and panorama URLs, and the caption fields). It builds no
+element: it presents the viewer through the layer's
+`subscribePhotoViewer()`, which the application shell publishes to the
+`gev-street-level-photo` store, and `StreetLevelPhotoViewer` draws it in the
+viewer host and hands back the canvas the panorama is drawn on (a fresh one
+after a lost context). Each mount and each canvas has a key of its own, so
+a viewer never draws on another one's elements, and of two viewers
+mounting at once only the later one is drawn (`photoViewers.js`): the
+earlier one's mount closes. Without a subscribed view these photos cannot
+open.
 
 Panoramax (`providers/panoramax/`) is keyless and browser-side: the
 meta-catalogue `api.panoramax.xyz` (CORS open) federates every instance, and

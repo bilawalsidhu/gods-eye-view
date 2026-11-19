@@ -63,6 +63,9 @@ export function filtersOf(provider) {
  * @property {(mode: 'letterbox'|'fill') => void} [setRenderMode]
  * @property {() => boolean} [supportsRenderModes]   False while the image has no frame to fit (a panorama): FIT / FILL hide.
  * @property {(listener: (pose: StreetPose) => void) => () => void} onPose
+ * @property {(listener: (view: ?object) => void) => () => void} [subscribeView]
+ *   An adapter that draws nothing itself presents its viewer here, for the
+ *   layer's `subscribePhotoViewer()` (see photoViewer.js).
  *
  * @typedef {object} StreetPose
  * @property {string} providerId
