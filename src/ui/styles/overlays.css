@@ -329,7 +329,7 @@
 :root[data-scope-mask='off']
   #intel-hud:is([data-variant='minimal'], [data-variant='tactical'])
   .hud-readout,
-:root[data-scope-mask='off']:not([data-ui-theme='cyber']) .scene-text-holdout {
+:root[data-scope-mask='off'] .scene-text-holdout {
   background: rgba(0, 0, 0, 0.7);
   box-shadow: none;
   border-radius: 2px;
@@ -357,9 +357,7 @@
   #intel-hud:is([data-variant='minimal'], [data-variant='tactical'])
   :is(.hud-top-right, .hud-bottom-right)
   .hud-readout,
-:root[data-scope-mask='off']:not([data-ui-theme='cyber'])
-  #style-indicator
-  .scene-text-holdout {
+:root[data-scope-mask='off'] #style-indicator .scene-text-holdout {
   margin-inline-start: auto;
 }
 
@@ -399,9 +397,7 @@
   text-overflow: ellipsis;
 }
 
-:root[data-scope-mask='off']:not([data-ui-theme='cyber'])
-  #title-bar
-  h1::before {
+:root[data-scope-mask='off'] #title-bar h1::before {
   content: '';
   position: absolute;
   inset: -0.12em -6px;
@@ -410,18 +406,16 @@
   background: rgba(0, 0, 0, 0.7);
 }
 
-:root[data-scope-mask='off']:not([data-ui-theme='cyber'])
+:root[data-scope-mask='off']
   :is(#title-bar .subtitle, #style-indicator .indicator-label) {
   color: var(--text-secondary);
 }
 
-:root[data-scope-mask='off']:not([data-ui-theme='cyber']) #title-bar .subtitle {
+:root[data-scope-mask='off'] #title-bar .subtitle {
   margin-top: 8px;
 }
 
-:root[data-scope-mask='off']:not([data-ui-theme='cyber'])
-  #style-indicator
-  .indicator-value {
+:root[data-scope-mask='off'] #style-indicator .indicator-value {
   margin-top: 4px;
 }
 
@@ -431,8 +425,6 @@
   display: none;
 }
 
-:root[data-scope-mask='off']:not([data-ui-theme='cyber'])
-  #title-bar
-  .frame-rate-readout {
+:root[data-scope-mask='off'] #title-bar .frame-rate-readout {
   margin-top: 6px;
 }

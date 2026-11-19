@@ -82,7 +82,7 @@ The `many` form is the `other` text with «di» after the number when a noun fol
 | briefing / panel / dock                       | briefing / pannello / dock                                   |
 | cockpit                                       | cockpit                                                      |
 | preset / visual preset                        | preset / preset visivo                                       |
-| Tactical / Minimal / Cyber                    | Tattico / Minimale / Cyber                                   |
+| Tactical / Minimal                            | Tattico / Minimale                                           |
 | Scope (circular viewport mask) / keyhole      | scope / foro                                                 |
 | feather / fade                                | sfumatura / dissolvenza                                      |
 | detection overlay                             | overlay di rilevamento                                       |

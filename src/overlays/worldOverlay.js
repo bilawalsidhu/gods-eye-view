@@ -1093,7 +1093,7 @@ export function getOverlayPaintRect(sourceId, entryId) {
 /**
  * Opacity an entry paints with this frame, or 0 when it is not queued or the
  * yield-collision pass hid it. Custom lanes may call it before later lanes
- * publish paint rects. Leaves out the Cyber sonar fade.
+ * publish paint rects. Leaves out the sonar fade.
  * @param {string} sourceId
  * @param {string} entryId
  * @returns {number}

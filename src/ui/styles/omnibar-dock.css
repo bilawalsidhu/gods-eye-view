@@ -326,8 +326,19 @@ body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
     :is(#cesium-credits, #gev-credits) {
     bottom: 1rem;
   }
+  /* 8px above the bottom-right corner row (Power Up and the language picker:
+     32px tall, 14px up), as outside the Omnibar layout. */
   #intel-hud[data-variant='tactical'] .hud-bottom-right {
-    bottom: calc(4.2rem - 26px);
+    bottom: 3.375rem;
+  }
+  /* Right to left the attribution row takes the bottom right: the readout
+     clears two lines of it (rail-split.css). */
+  @media (min-width: 1200px) {
+    &:where(html[dir='rtl'] *)
+      #intel-hud[data-variant='tactical']
+      .hud-bottom-right {
+      bottom: calc(3.375rem + 1.5rem);
+    }
   }
   #intel-hud:is([data-variant='tactical'], [data-variant='minimal'])
     .hud-bottom-left {

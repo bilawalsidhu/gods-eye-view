@@ -30,7 +30,7 @@ import { LocationNavigation } from './locationNavigation.js';
 import { bindCameraOrientationControls } from './cameraOrientationControls.js';
 import { createMapSourceControls } from './mapSource.js';
 import { STYLES } from './effects.js';
-import { isHudLayout } from '../hudLayouts.js';
+import { isHudLayout, isLegacySonarHudLayout } from '../hudLayouts.js';
 import {
   getCyberSonarControlState,
   setCyberSonarControls,
@@ -1390,17 +1390,18 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
-   * Switches the HUD layout variant.
+   * Switches the HUD layout variant. The removed Cyber layout is accepted
+   * as an alias: it opens Tactical with the Sonar style on.
    * @param {'tactical'|'minimal'|'cyber'} variantName - Layout variant.
    * @returns {{ok: boolean, layout?: string, visible?: boolean, error?: string}}
    */
   setHudLayout(variantName) {
     const variant = String(variantName ?? '').toLowerCase();
-    if (!isHudLayout(variant)) {
+    if (!isHudLayout(variant) && !isLegacySonarHudLayout(variant)) {
       return { ok: false, error: `Unknown HUD layout: ${variantName}` };
     }
     this.shareLinkManager?.claimRestoreLane?.('visual');
-    this._setHudVariant(variant, { applyVisualDefaults: true });
+    this._setHudVariant(variant);
     return {
       ok: true,
       layout: this.hud.getVariant(),
@@ -1519,7 +1520,7 @@ export class StyleManager extends ShellFacade {
     };
   }
 
-  /** Apply Cyber-only sonar settings through the shared visual controls. */
+  /** Apply sonar visual-style settings through the shared visual controls. */
   setCyberSonar(settings) {
     return setCyberSonarControls(this, settings);
   }
@@ -1655,8 +1656,6 @@ export class StyleManager extends ShellFacade {
    * @param {string} styleName - Target style ('normal'|'retro'|'surveillance'|'thermal'|'anime'|'noir').
    * @param {object} [options]
    * @param {boolean} [options.applyPreset=true] - Whether to apply STYLE_PRESET_DEFAULTS for the new style.
-   * @param {boolean} [options.userInitiated=false] - Whether a direct user preset choice owns the Cyber exit style.
-   * @param {boolean} [options.preserveCyberRestore=false] - Whether an automatic style update keeps the Cyber entry snapshot.
    * @returns {void}
    */
   setStyle(

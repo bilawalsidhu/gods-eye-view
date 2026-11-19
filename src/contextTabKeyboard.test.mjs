@@ -220,7 +220,7 @@ test('Context reads as one segmented control with legible type and no halo', () 
   // open Context title legible; no Context-only rule dims it again.
   assert.equal(
     rule(
-      ":root:not([data-ui-theme='cyber']) #global-context-panel:not(.collapsed) .panel-title",
+      ":root #global-context-panel:not(.collapsed) .panel-title",
     ),
     '',
   );

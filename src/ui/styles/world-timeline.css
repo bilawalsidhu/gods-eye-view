@@ -28,7 +28,8 @@ body.cockpit-mode #world-timeline {
 #world-timeline {
   direction: ltr;
   position: fixed;
-  bottom: 2vh;
+  /* The dock's floor (command-dock.css); the dock rises above the bar. */
+  bottom: 74px;
   left: 50%;
   z-index: 146;
   display: flex;
@@ -309,6 +310,12 @@ body.cockpit-mode #world-timeline {
   outline-offset: 2px;
 }
 
+@media (max-width: 1199px) {
+  #world-timeline {
+    bottom: 2vh;
+  }
+}
+
 @media (max-width: 720px) {
   #world-timeline {
     bottom: 8px;
@@ -347,4 +354,3 @@ body.mobile-shell #world-timeline .world-timeline-speed {
   order: 2;
   height: 32px;
 }
-

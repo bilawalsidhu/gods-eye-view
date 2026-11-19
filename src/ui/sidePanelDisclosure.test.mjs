@@ -4,7 +4,7 @@ import { PanelChrome } from './panelChrome.js';
 import { presentPanelLocally } from '../testSupport/panelState.mjs';
 import { readPanelState } from './rail/panelState.js';
 
-function fixture(theme = 'cyber') {
+function fixture(theme = 'tactical') {
   const nodes = new Map();
   const node = (id, collapsed = true) => {
     const classes = new Set(collapsed ? ['collapsed'] : []);
@@ -49,7 +49,7 @@ function fixture(theme = 'cyber') {
 }
 
 test('explicit opening collapses side peers and claims their restoration lanes in every theme', () => {
-  for (const theme of ['tactical', 'minimal', 'cyber']) {
+  for (const theme of ['tactical', 'minimal']) {
     const f = fixture(theme), prior = globalThis.document;
     globalThis.document = f.doc;
     try {
@@ -86,7 +86,7 @@ test('opening already-expanded Radio reveals Context and closes Display', () => 
 });
 
 test('restored preferences keep every saved panel open for the layout to normalize', () => {
-  for (const theme of ['tactical', 'minimal', 'cyber']) {
+  for (const theme of ['tactical', 'minimal']) {
     const f = fixture(theme), prior = globalThis.document;
     globalThis.document = f.doc;
     try {

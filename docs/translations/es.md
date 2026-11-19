@@ -65,7 +65,6 @@ The `many` form is the `other` text with «de» after the number: «{count} de c
 | detection overlay                             | superposición de detección                                        |
 | pin (Draw tool)                               | marcador                                                          |
 | Bloom / Glow (visual effect)                  | resplandor                                                        |
-| Cyber (HUD layout, effect)                    | Ciber                                                             |
 | heading, course / altitude / ground speed     | rumbo / altitud / velocidad respecto al suelo (short: VEL. SUELO) |
 | HDG / BRG / CRS / FOV / DEST / SPD / RANGE    | HDG / BRG / CRS / FOV / DEST / SPD / RANGE (unchanged)            |
 | PREV / NEXT                                   | ANT. / SIG.                                                       |

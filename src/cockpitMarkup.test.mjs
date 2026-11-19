@@ -595,7 +595,7 @@ test('Cockpit Display portal retains both scroll owners across round trips', () 
   const portal = CockpitDisplayPortal.toString();
   assert.match(
     portal,
-    /this\.standardScrollTop =\s*displayPanelScroller\(standardPanel\)\?\.scrollTop \|\| 0/,
+    /this\.standardScrollTop = standardPanel\?\.scrollTop \|\| 0/,
   );
   assert.match(
     portal,
@@ -603,7 +603,7 @@ test('Cockpit Display portal retains both scroll owners across round trips', () 
   );
   assert.match(
     portal,
-    /if \(!this\.active\)[\s\S]*?this\.standardScrollTop =\s*displayPanelScroller\(standardPanel\)\.scrollTop/,
+    /if \(!this\.active\)[\s\S]*?this\.standardScrollTop = standardPanel\.scrollTop/,
   );
   assert.match(
     portal,
@@ -611,7 +611,7 @@ test('Cockpit Display portal retains both scroll owners across round trips', () 
   );
   assert.match(
     portal,
-    /this\.cockpitPanel\.scrollTop = this\.cockpitScrollTop[\s\S]*?displayPanelScroller\(this\.standardPanel\)\.scrollTop =\s*this\.standardScrollTop/,
+    /this\.cockpitPanel\.scrollTop = this\.cockpitScrollTop[\s\S]*?this\.standardPanel\.scrollTop = this\.standardScrollTop/,
   );
 });
 

@@ -781,8 +781,7 @@ palettes use `--gev-field-background`, `--gev-field-border-color`,
 `--gev-field-color` and `--gev-field-disabled-opacity`. Radio retains its own
 compact density and arrow space. CCTV owns calibration editor width in
 `cctv.css`; the shared inline density does not impose a feature-specific width.
-Cyber supplies a shared-field palette explicitly and keeps its legacy native
-field rules separate, so Radio's palette remains an intentional exception.
+Radio's palette remains an intentional exception.
 
 ### Read-only status badges
 

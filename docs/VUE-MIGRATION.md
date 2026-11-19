@@ -92,8 +92,7 @@ a functional component would not render again.
 
 Controls share one skin, so every panel reads the same. Every scrolling
 surface carries the kit's `.ui-scroll`, which draws the thin
-themed scrollbar from `--scroll-thumb` and `--scroll-track`; the Cyber theme
-sets those two tokens, and Cockpit's HUD windows keep their accent tint. A
+themed scrollbar from `--scroll-thumb` and `--scroll-track`, and Cockpit's HUD windows keep their accent tint. A
 surface without it would draw the platform's light scrollbar, because the
 page declares no dark `color-scheme`. Selects and number fields are
 `.gev-field`, which draws its own chevron in place of the platform's arrow
@@ -338,8 +337,8 @@ a feature supplying only its accent.
    records surface by surface; [Building UI](../CONTRIBUTING.md#building-ui)
    now requires the pattern for new UI. The page-level markup tests read
    `renderApplicationHtml()`, the real views rendered on the server, and new
-   tests mount components; three tests still read a `.vue` file's source
-   (`cyberTheme`, `panelStorageDocs`, `geoFileImport`). The views translate with `t()`
+   tests mount components; two tests still read a `.vue` file's source
+   (`panelStorageDocs`, `geoFileImport`). The views translate with `t()`
    while rendering, and vue-i18n holds the locale they read; the attribute
    translation pass is left for static page markup (the loading screen and a
    host's own markup). An explicit API for hosts to register panels and rail items is
@@ -361,7 +360,7 @@ a feature supplying only its accent.
 - Panels lifted out of a view keep its verbatim markup in
   `src/ui/views/panels/`, which Prettier leaves alone like the views.
 - Visual parity: before/after screenshots of every panel at desktop and phone
-  widths, in the default and Cyber themes, with the rail as the only expected
+  widths, in the default theme, with the rail as the only expected
   difference.
 - Browser QA: the selector-based `scripts/qa-*.mjs` suites keep passing.
 - `npm run format:check`, `npm run check:boundaries`, `npm run i18n` and

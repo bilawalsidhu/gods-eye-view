@@ -998,9 +998,9 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   );
   const hudLayout = legacyTools.find((tool) => tool.name === 'set_hud')
     .parameters.properties.layout;
-  assert.deepEqual(hudLayout.enum, ['tactical', 'minimal', 'cyber']);
-  // Cyber deliberately adds one layout and Operator was retired; first-run
-  // missions still change no tools.
+  assert.deepEqual(hudLayout.enum, ['tactical', 'minimal']);
+  // Operator and then Cyber were retired; first-run missions still change
+  // no tools.
   hudLayout.enum = ['tactical', 'operator', 'minimal'];
   const cameraMotion = legacyTools.find((tool) => tool.name === 'move_camera')
     .parameters.properties.motion;

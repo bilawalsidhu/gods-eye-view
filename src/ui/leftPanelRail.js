@@ -317,21 +317,16 @@ export function layoutLeftPanelRail({
     stack.style.setProperty('--left-stack-safe-bottom', bottomValue);
   }
   // The rail stays where the resting stack puts it; only the panels move.
-  // A theme that pins the stack's top (Cyber) leaves nothing to offset.
-  const topPinned =
-    getComputedStyle(stack)
-      .getPropertyValue?.('--panel-stack-top-pinned')
-      ?.trim() === '1';
   // The stack itself rises by the lift below, by a different amount for a
   // tall panel than at rest; the rail takes up the difference.
   const lift = (top) => Math.min(0, obstacleSafeTop - top);
-  const railOffset = `${(topPinned ? 0 : safeTop + lift(safeTop) - layoutTop - lift(layoutTop)).toFixed(1)}px`;
+  const railOffset = `${(safeTop + lift(safeTop) - layoutTop - lift(layoutTop)).toFixed(1)}px`;
   if (stack.style.getPropertyValue('--panel-rail-offset') !== railOffset) {
     stack.style.setProperty('--panel-rail-offset', railOffset);
   }
   // How far the column can rise before it meets the HUD readout, so the rail
   // and any open panel sit just under it, whether or not a panel is open.
-  const railLift = `${(topPinned ? 0 : lift(layoutTop)).toFixed(1)}px`;
+  const railLift = `${lift(layoutTop).toFixed(1)}px`;
   if (stack.style.getPropertyValue('--panel-rail-lift') !== railLift) {
     stack.style.setProperty('--panel-rail-lift', railLift);
   }
