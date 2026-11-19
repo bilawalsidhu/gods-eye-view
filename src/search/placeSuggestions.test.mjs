@@ -539,6 +539,10 @@ test('places that only looked private are looked up', () => {
     'meet at West Point tomorrow',
     'OTP Bank',
     'GATE CODE LANE',
+    // Lists of places, though every word is on the BIP39 list.
+    'coffee, bar, hotel, museum, park, beach, hospital, school, market, bridge, tower, airport',
+    '1. beach 2. park 3. museum 4. zoo 5. bridge 6. tower 7. market 8. castle 9. island 10. lake 11. river 12. canyon',
+    'show only bus, train, car, truck, ship, boat traffic over city bridge today',
     // Questions for the assistant, however many short words they have.
     'can you tell where the most flights are going over texas today',
     'are there any storms near florida right now that might cause delays',
@@ -642,9 +646,13 @@ test('a line longer than a place name is never sent for suggestions', async () =
 });
 
 test('a long line is read quickly', () => {
-  for (const unit of ['a-', 'a.', '1-', 'a ', '//[a:']) {
+  for (const line of [
+    ...['a-', 'a.', '1-', 'a ', '//[a:'].map((unit) => unit.repeat(10000)),
+    `otp a${'-'.repeat(20000)}!x`,
+    `gate code a${'-'.repeat(20000)}!x`,
+  ]) {
     const started = performance.now();
-    mayBePrivate(unit.repeat(10000));
-    assert.ok(performance.now() - started < 1000, unit);
+    mayBePrivate(line);
+    assert.ok(performance.now() - started < 1000, line.slice(0, 12));
   }
 });
