@@ -268,14 +268,15 @@ test('the left corridor counts cards beside those across the midpoint', () => {
   ];
   f.run();
   assert(Number(f.stack.dataset.safeTopPct) * 4.8 >= 300);
-  // Only a little room above the cards: the corridor stays there rather
-  // than run down through the lower one.
+  // About 25px above the cards is under the least usable room (8% of the
+  // window): they are read as before, the upper card pushing the corridor
+  // down past it rather than into a sliver at the top.
   f.options.obstacles = [
     element('card', { top: 50, height: 150 }),
     element('card', { top: 150, height: 320 }),
   ];
   f.run();
-  assert(Number(f.stack.dataset.safeBottomPct) * 4.8 <= 50);
+  assert(Number(f.stack.dataset.safeTopPct) * 4.8 >= 200);
   // The room above a card is all the panels' to use, above the corridor's
   // usual top (26%) too: 700px window, card 300 to 420, about 263px above
   // against 244 below.

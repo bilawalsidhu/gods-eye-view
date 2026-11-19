@@ -390,6 +390,12 @@ test('HUD rail layout counts obstacles beside those across the midpoint', () => 
   // Neighbours exactly two gaps away leave no room between: one block, 100
   // to 400, and a tie (50px a side) goes above.
   assert.deepEqual(band([[100, 180], [200, 300], [320, 400]]), [40, 90]);
+  // A neighbour exactly two gaps below joins it too: 150 to 300, 110px
+  // above against 150 below.
+  assert.deepEqual(band([[150, 250], [270, 300]]), [310, 460]);
+  // A side under 8% of the window (38.4px) is no room: 30px above, none
+  // below, so the band stays as it is.
+  assert.deepEqual(band([[80, 455]]), [40, 460]);
 });
 
 test('HUD rail layout keeps a band beside a midpoint obstacle inside its own edges', () => {

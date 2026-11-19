@@ -169,6 +169,8 @@ export function layoutLeftPanelRail({
     bottom: safeBottom,
     obstacles: inLane,
     gap: safeGap,
+    // A side thinner than this holds no usable panel.
+    minimum: viewportHeight * 0.08,
   });
   if (beside) {
     obstacleSafeTop = beside.top;

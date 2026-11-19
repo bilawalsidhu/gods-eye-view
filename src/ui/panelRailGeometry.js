@@ -56,6 +56,8 @@ export function resolveHudRailLayout({
     bottom: Math.min(viewportHeight, baseBottom),
     obstacles: inLane,
     gap,
+    // A side thinner than this holds no usable panel.
+    minimum: viewportHeight * 0.08,
   });
   if (beside) ({ top: safeTop, bottom: safeBottom } = beside);
 
@@ -86,6 +88,8 @@ export function resolveHudRailLayout({
  * @param {number} input.bottom The band's lowest bottom.
  * @param {Array<{top: number, bottom: number}>} input.obstacles Rectangles that reach the rail.
  * @param {number} input.gap Space kept between the band and an obstacle.
+ * @param {number} [input.minimum=0] The least room a side needs to count;
+ *   a thinner side is no room at all.
  * @returns {{side: 'above' | 'below', top: number, bottom: number} | null}
  *   Null when nothing crosses the midpoint or neither side has room.
  */
@@ -95,6 +99,7 @@ export function bandBesideMidpointObstacles({
   bottom,
   obstacles,
   gap,
+  minimum = 0,
 }) {
   const crossing = obstacles.filter(
     (rect) => rect.top < midpoint && rect.bottom > midpoint,
@@ -134,8 +139,9 @@ export function bandBesideMidpointObstacles({
   };
   const roomAbove = above.bottom - above.top;
   const roomBelow = below.bottom - below.top;
-  if (roomBelow > roomAbove && roomBelow > 0) return below;
-  return roomAbove > 0 ? above : null;
+  const least = Math.max(minimum, Number.EPSILON);
+  if (roomBelow > roomAbove && roomBelow >= least) return below;
+  return roomAbove >= least ? above : null;
 }
 
 /**
