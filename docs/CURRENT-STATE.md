@@ -8114,9 +8114,9 @@ Street", "Hauptstraße 12".
 A nine-digit number or a short phone number written with no such word
 still gets the row: only picking it sends anything. One-time and verification codes,
 OTP, 2FA, MFA, CVV and CVC values, "card ending" digits, passphrases,
-recovery or seed phrases (twelve to twenty-four short words with none of
-the common words a phrase list lacks, such as "the", "and" or "are", so a
-long question still goes to Ask GEV), "my secret is …", an email spelled
+recovery or seed phrases (twelve to twenty-four words, every one on the
+BIP39 English list in `src/search/bip39Words.js`, so a long question or
+request still goes to Ask GEV), "my secret is …", an email spelled
 out ("john at example dot com", "punto com", or letter by letter), a door,
 alarm or lockbox number ("code 4821"; "zip code 90210" and "area code 415"
 are places), "Authorization: Bearer …", a code in a link (`?code=…`), a

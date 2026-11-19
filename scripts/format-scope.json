@@ -1592,6 +1592,7 @@
   "src/data/wikidataCities.js",
   "src/data/wikidataCities.test.mjs",
   "scripts/build-wikidata-cities.mjs",
+  "src/search/bip39Words.js",
   "src/search/placeSuggestions.test.mjs",
   "scripts/wikidataPlaceTiles.mjs",
   "src/tooling/wikidataPlaceTiles.test.mjs",

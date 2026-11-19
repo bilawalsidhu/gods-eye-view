@@ -307,7 +307,8 @@
       "src/ui/omnibarRows.js",
       "src/search/gridReference.js",
       "src/search/coordinateParser.js",
-      "src/search/placeSuggestions.js"
+      "src/search/placeSuggestions.js",
+      "src/search/bip39Words.js"
     ],
     "external": ["vue", "pinia", "vue-i18n"]
   },

@@ -1,3 +1,4 @@
+import { isBip39Word } from './bip39Words.js';
 import { normalizePhotonFeature, photonSearchUrl } from '../keylessGeocoder.js';
 import { parseCoordinateQuery } from './coordinateParser.js';
 import {
@@ -74,34 +75,12 @@ export function onlyNumbersLookPrivate(text) {
 const suggestMaxWords = (text) => (/\d/.test(text) ? 10 : 8);
 
 /**
- * Common words no wallet's recovery phrase holds (they are not on the BIP39
- * list): a line with one is a sentence, however many short words it has.
- */
-const NOT_SEED_WORDS = new Set([
-  'the',
-  'and',
-  'are',
-  'for',
-  'from',
-  'with',
-  'how',
-  'why',
-  'which',
-  'would',
-  'could',
-  'should',
-  'does',
-  'was',
-  'were',
-  'flights',
-]);
-
-/**
  * "Boise ID 83702", "Coeur d'Alene ID 83814": Idaho's code before a ZIP
  * code, after a town's name (not after "my" or "employee", whose "ID" is an
  * identity number).
  */
-const IDAHO_BEFORE_ZIP = /(\S+)(,?\s)ID(?=\.?,?\s+\d{5}(?:-\d{4})?(?!\S))/gu;
+const IDAHO_BEFORE_ZIP =
+  /(?<!\S)(\S{1,40}?)(,?\s)ID(?=\.?,?\s+\d{5}(?:-\d{4})?(?!\S))/gu;
 const ID_OWNERS =
   /^(?:my|your|our|his|her|their|employee|student|staff|member|user|customer|patient|national|voter|photo|tax|card|the|an?)$/i;
 
@@ -126,7 +105,9 @@ function foldLine(text) {
     .replace(/(?![0-9])\p{Nd}/gu, '0')
     .replace(/\s+/g, ' ')
     .replace(IDAHO_BEFORE_ZIP, (whole, word, gap) =>
-      ID_OWNERS.test(word) ? whole : `${word}${gap}Idaho`,
+      ID_OWNERS.test(word.replace(/\p{P}+$/u, ''))
+        ? whole
+        : `${word}${gap}Idaho`,
     );
 }
 
@@ -184,8 +165,12 @@ function privacyReason(text) {
     )
   )
     return 'other';
-  // An IPv6 host in a link ("https://[::1]/").
-  if (/\[[0-9a-f:.]*:[0-9a-f:.]*:[0-9a-f:.]*\]/i.test(line)) return 'other';
+  // An IPv6 host in a link ("https://[::1]/"), not a time in brackets
+  // ("[12:30:00]").
+  for (const [, host] of line.matchAll(/\/\/\[([0-9a-f:.%\w]+)\]/gi)) {
+    const colons = (host.match(/:/g) || []).length;
+    if (colons >= 2 && (host.includes('::') || colons >= 5)) return 'other';
+  }
   // An IP address ("10.0.0.1").
   if (/(?<![\d.])\d{1,3}(?:\.\d{1,3}){3}(?![\d.])/.test(line)) return 'other';
   // An IPv6 address ("::1", "fe80::1%eth0", "2001:db8:0:0:0:0:2:1"): hex
@@ -203,17 +188,11 @@ function privacyReason(text) {
   )
     return 'other';
   // A wallet's recovery phrase, whole or nearly ("abandon ability able
-  // …"): twelve to twenty-four words of three to eight letters, none a
-  // common word the phrase list lacks ("can you tell where the most …" is
-  // a question). Too long to be sent
-  // for suggestions anyway, it is kept from the assistant too.
+  // …"): twelve to twenty-four words, every one on the BIP39 list ("can you
+  // tell where the most …" is a question). Too long to be sent for
+  // suggestions anyway, it is kept from the assistant too.
   const words = line.trim().toLowerCase().split(/\s+/);
-  if (
-    words.length >= 12 &&
-    words.length <= 24 &&
-    words.every((word) => /^[a-z]{3,8}$/.test(word)) &&
-    !words.some((word) => NOT_SEED_WORDS.has(word))
-  )
+  if (words.length >= 12 && words.length <= 24 && words.every(isBip39Word))
     return 'other';
   // Coordinates and grid references are a spot, not a number to keep: only
   // text the place search itself reads as coordinates, as typed ("١٢٣٤,
@@ -277,7 +256,9 @@ function privacyReason(text) {
     // but a capitalised name is a token, and a social security number has
     // digits.
     bearerToken(line) ||
-    /\bssn\b(?:\s+(?:is|no\.?|number|#))*\s*[:=#]?\s*[\dx*]{3}/i.test(line) ||
+    /\bssn\b(?:\s+(?:is|no\.?|number|#))*\s*[:=#]?\s*(?:\d|[x*]{2})/i.test(
+      line,
+    ) ||
     // The word for "password" in the interface's languages.
     // A whole word only: "Sachsenhausen" holds "senha" but is a place.
     /(?<!\p{L})(?:contraseña|passwort|kennwort|mot de passe|senha|parola d'ordine|lösenord|пароль|пароля|密码|密碼|パスワード|비밀번호|סיסמה|كلمة (?:السر|المرور))(?!\p{L})\s*[:=#]?\s*\S/iu.test(
@@ -325,7 +306,8 @@ function privacyReason(text) {
       line,
     ) ||
     // A UK National Insurance number, spaced ("AB 12 34 56 C").
-    /\b[a-z]{2}\s?\d{2}\s?\d{2}\s?\d{2}\s?[a-d]\b/i.test(line) ||
+    // Spaced in pairs or not at all ("St 123456 A" is an address).
+    /\b[a-z]{2}(?: \d{2} \d{2} \d{2} |\d{6})[a-d]\b/i.test(line) ||
     // "my id is AB12345", "id no. 4471".
     /\bid\s+(?:is|no\.?|number|#)\s*[:=#]?\s*(?=[a-z0-9-]*\d)[a-z0-9-]{4,}/i.test(
       line,
@@ -389,7 +371,7 @@ function codeAfterLabel(line) {
   // After a label in lower case, any value is a code ("verification code
   // Abc"); after one written as a name, only a value that is not one.
   const coded =
-    /\b((?:otp|2fa|mfa|cvv|cvc|(?:verification|one-time|security|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{2,})(?:\s+(?:thanks|thank you|thx|please|pls|ok))?\s*[.!]?\s*$/i.exec(
+    /\b((?:otp|2fa|mfa|cvv|cvc|(?:verification|one-time|security|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{2,})(?:\s+(?:thanks|thank you|thx|please|pls|ok|now))?\s*[.!]?\s*$/i.exec(
       line,
     );
   if (coded) {
@@ -399,15 +381,16 @@ function codeAfterLabel(line) {
     // "otp bank"); after the short labels a code in letters is written in
     // capitals ("otp ABCDEF"), so a lower-case word is a name ("mfa
     // boston").
+    // A CVV is never a name.
+    if (/^cv[vc]\b/i.test(label)) return true;
     const shortLabel = /^(?:otp|2fa|mfa)\b/i.test(label);
     const named =
       PLACE_WORDS.test(value) || (shortLabel && /^\p{Ll}+$/u.test(value));
     if (!labelIsName && !named) return true;
     // After a label written as a name, a value in capitals is a code ("OTP
     // ABCDEF", "Verification code ABC"), one capitalised a name ("OTP
-    // Bank"); a CVV is never a name.
+    // Bank").
     if (labelIsName) {
-      if (/^cv[vc]\b/i.test(label)) return true;
       if (/^\p{Lu}[\p{Lu}\d-]+$/u.test(value) && !PLACE_WORDS.test(value))
         return true;
       if (!/^\p{Lu}(?:\p{Ll}+|\p{Lu}+)$/u.test(value)) return true;
@@ -415,7 +398,7 @@ function codeAfterLabel(line) {
   }
   // A value in mixed case that is no name ("PIN aBcD", "gate code aBcD").
   const mixed =
-    /\b(?:pin|(?:door|access|gate|alarm|entry) code)(?:\s+is)?\s+([a-z0-9-]{4,})\s*[.!]?\s*$/i.exec(
+    /\b(?:pin|(?:door|access|gate|alarm|entry) code)(?:\s+is)?\s+([a-z0-9-]{4,})(?:\s+(?:thanks|thank you|thx|please|pls|ok|now))?\s*[.!]?\s*$/i.exec(
       line,
     );
   if (
@@ -426,7 +409,7 @@ function codeAfterLabel(line) {
   )
     return true;
   const match =
-    /\b((?:pin|cvv|cvc|otp|2fa|mfa|(?:door|access|gate|alarm|entry|security|verification|one-time|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{3,})\s*[.!]?\s*$/i.exec(
+    /\b((?:pin|cvv|cvc|otp|2fa|mfa|(?:door|access|gate|alarm|entry|security|verification|one-time|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{3,})(?:\s+(?:thanks|thank you|thx|please|pls|ok|now))?\s*[.!]?\s*$/i.exec(
       line,
     );
   if (!match) return false;
