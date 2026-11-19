@@ -209,12 +209,17 @@ html:not([lang='en']):not(:lang(zh)):not(:lang(ja))
 }
 
 /* A pressed kit icon button looks as a hovered one does. */
-.ui-button--icon:hover,
-.ui-button--icon.ui-button--pressed,
+.ui-button--icon:hover:not(:disabled),
+.ui-button--icon.ui-button--pressed:not(:disabled),
 .panel-collapse-btn:hover {
   border-color: var(--glass-border-hover);
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.07);
+}
+
+.ui-button--icon:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 /* A side panel answers the pointer as the command dock's trays do: a

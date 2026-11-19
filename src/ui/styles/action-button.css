@@ -24,7 +24,8 @@
   white-space: nowrap;
 }
 
-/* A pressed kit action looks as a hovered one does. */
+/* A pressed kit action looks as a hovered regular one does (a compact one
+   too: its quieter hover below is for an unpressed button). */
 .ui-button--action:hover:not(:disabled),
 .ui-button--primary:hover:not(:disabled),
 .ui-button--action.ui-button--pressed:not(:disabled),
@@ -65,8 +66,9 @@
 }
 
 /* Shot-row actions retain their smaller footprint and quieter hover treatment
-   (size="compact"). */
-.ui-button--compact,
+   (size="compact", on the action variant only: :where keeps the kit
+   selector at one class's weight). */
+.ui-button--compact:where(.ui-button--action),
 .gev-action-button--compact {
   border-radius: 6px;
   font-size: 8px;
@@ -75,14 +77,18 @@
 }
 
 /* A pressed compact action keeps its pressed look under the pointer. */
-.ui-button--compact:hover:not(:disabled):not(.ui-button--pressed),
+.ui-button--compact:where(.ui-button--action):hover:not(:disabled):not(
+    .ui-button--pressed
+  ),
 .gev-action-button--compact:hover:not(:disabled) {
   color: var(--text-primary);
   border-color: var(--glass-border-hover);
   background: rgba(255, 255, 255, 0.05);
 }
 
-.ui-button--compact.ui-button--danger:hover:not(:disabled),
+.ui-button--compact.ui-button--danger:where(.ui-button--action):hover:not(
+    :disabled
+  ),
 .gev-action-button--compact.gev-action-button--danger:hover:not(:disabled) {
   color: #ff7e7e;
   border-color: #ff7e7e;

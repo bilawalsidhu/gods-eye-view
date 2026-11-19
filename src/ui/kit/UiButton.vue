@@ -14,7 +14,10 @@ import { vClassToggle } from '../rail/classToggle.js';
 //   action (action-button.css).
 // - `icon` is the 22px square glyph button of a panel's collapse toggle
 //   (controls.css).
-// A pressed action, primary or icon button looks as a hovered one does. Each
+// A pressed action, primary or icon button looks as a hovered regular one
+// does (a compact action's quieter hover is for an unpressed button); a
+// disabled one dims and ignores hover and press. `size` styles the action
+// variant only. Each
 // resting rule selects one kit class, so a feature class loaded later still
 // wins. Core adds `pressedClass`, its class on a pressed button (most
 // toggles use `active`). The pressed classes toggle through `classList`, so
@@ -31,7 +34,11 @@ const props = defineProps({
       ['ghost', 'action', 'primary', 'icon'].includes(value),
   },
   /** `accent`, or `danger` for an action that destroys or stops. */
-  tone: { type: String, default: 'accent' },
+  tone: {
+    type: String,
+    default: 'accent',
+    validator: (value) => ['accent', 'danger'].includes(value),
+  },
   /** `compact` for an action's smaller footprint. */
   size: {
     type: String,
