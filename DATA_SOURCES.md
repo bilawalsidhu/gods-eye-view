@@ -432,7 +432,7 @@ The [Bhote Koshi event pack](public/events/bhote-koshi-2026/README.md), under `p
 | **Yale Bright Star Catalogue** (9,096 stars, sky background)                | `sky/`                            | **Public domain**                                                                                         | ✅ (no restrictions)                             | "Yale Bright Star Catalogue (Hoffleit & Warren, via CDS)" (courtesy credit) |
 | **ESO Milky Way panorama** (eso0932a, blurred cube map, sky background)     | `sky/`                            | **CC BY 4.0**                                                                                             | ✅ (attribution; changes stated)                 | "ESO/S. Brunier"                                                            |
 | **CCTV ground heights** (3,445 cameras)                                     | `cctv_ground_heights/`            | Precomputed camera placement heights, aligned to work with Google Photorealistic 3D Tiles (folder README) | —                                                | —                                                                           |
-| **CCTV Camera Database** model-enrichment extract v2.26.0 + v2.29.0 (20 camera-model records) | `src/layers/cctv/modelSpecs.js` | **CC0-1.0** (public domain dedication) | ✅ (no restrictions) | "Specs: cctv-database.com" (courtesy — not legally required) |
+| **CCTV Camera Database** model-enrichment extract v2.26.0 + v2.29.0 (20 CCTV and 15 ALPR camera-model records) | `src/layers/cctv/modelSpecs.js`, `src/layers/alpr/modelSpecs.js` | **CC0-1.0** (public domain dedication) | ✅ (no restrictions) | "Specs: cctv-database.com" (courtesy — not legally required) |
 
 ### ⚠️ TeleGeography is bundled but NonCommercial
 
@@ -457,6 +457,17 @@ OpenMapTiles while OpenFreeMap tiles are used; Data attribution retains the full
 commercial use with attribution and applicable database share-alike/access
 obligations; it does not license the application code. Trimmed test-only tile
 fixtures retain their provenance in `src/data/fixtures/README.md`.
+
+A mapped `model` tag that names datasheet hardware adds a spec line to the
+selected card. The specs are 16 CC0-1.0 records from the CCTV Camera Database
+model-enrichment extract (v2.29.0): 15 compiled into
+`src/layers/alpr/modelSpecs.js`, with the bare product codes mappers tag added
+as aliases and the SharpV G3 and SharpX XGA titles naming their variant, plus
+the CCTV layer's Bosch MIC-7522-Z30 record. Nothing is fetched at runtime, and
+an unrecognised tag is never displayed. The default hourly extract does not
+carry `model` yet, so the line appears only with a source that supplies it: an
+Overpass-backed source or a custom adapter whose records include the optional
+`model` field.
 
 ### CCTV Camera Database (`src/layers/cctv/modelSpecs.js`)
 

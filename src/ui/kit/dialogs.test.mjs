@@ -1,7 +1,8 @@
 // Every modal dialog in a Vue view is a UiDialog: no SFC template hand-writes
 // `<dialog>`. Panels drawn as `role="dialog"` (key setup, the welcome
-// launcher, the CCTV popup, Story Explore's filter) and the render failure's
-// `alertdialog` are other controls.
+// launcher, the CCTV popup, Story Explore's filter, the credits, the Omnibar
+// guide's callout) and the render failure's `alertdialog` are other
+// controls.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';

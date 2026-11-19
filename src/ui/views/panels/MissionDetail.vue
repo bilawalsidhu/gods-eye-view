@@ -68,18 +68,18 @@ watch(
       <div class="mission-replay-speed-scale" aria-hidden="true"><span>0.25×</span><span>1×</span><span>4×</span></div>
     </div>
     <div class="mission-action-row">
-      <button type="button" class="mission-focus-button" data-mission-focus @click="layer?.focusSelectedLaunchSite()">{{ t('FOCUS') }}</button>
+      <UiButton class="mission-focus-button" data-mission-focus @click="layer?.focusSelectedLaunchSite()">{{ t('FOCUS') }}</UiButton>
       <UiButton class="mission-replay-button" data-mission-replay :pressed="m?.replay.active ?? false" :title="t('Replay the estimated ascent with a following camera')" :hidden="m && (m.replay.active || !m.replay.available)" :disabled="m && !m.replay.available" @click="layer?.startSelectedReplay()">{{ t('REPLAY ASCENT') }}</UiButton>
       <div class="mission-replay-transport" :class="{ 'is-paused': m?.replay.paused }" data-mission-replay-transport :hidden="!m?.replay.active" :aria-label="m?.replay.transportLabel">
-        <button type="button" data-mission-replay-toggle :title="m ? m.replay.toggleLabel : t('Pause replay')" :aria-label="m ? m.replay.toggleLabel : t('Pause replay')" :disabled="m && !m.replay.active" @click="layer?.toggleReplayPause()">{{ m ? m.replay.toggleText : 'Ⅱ' }}</button>
-        <button type="button" class="cancel" data-mission-replay-cancel :title="t('Cancel replay')" :aria-label="t('Cancel replay')" @click="layer?.cancelReplay()"><span aria-hidden="true">×</span></button>
+        <UiButton data-mission-replay-toggle :title="m ? m.replay.toggleLabel : t('Pause replay')" :aria-label="m ? m.replay.toggleLabel : t('Pause replay')" :disabled="m && !m.replay.active" @click="layer?.toggleReplayPause()">{{ m ? m.replay.toggleText : 'Ⅱ' }}</UiButton>
+        <UiCloseButton class="cancel" data-mission-replay-cancel bare :title="t('Cancel replay')" :label="t('Cancel replay')" @click="layer?.cancelReplay()" />
       </div>
     </div>
     <div class="space-mission-nav">
-      <button type="button" class="mission-nav-button" data-mission-prev :title="t('Previous mission')" :disabled="m?.previousDisabled" @click="layer?.selectPreviousMission()"><span aria-hidden="true">‹</span> {{ t('PREV') }}</button>
+      <UiButton class="mission-nav-button" data-mission-prev :title="t('Previous mission')" :disabled="m?.previousDisabled" @click="layer?.selectPreviousMission()"><span aria-hidden="true">‹</span> {{ t('PREV') }}</UiButton>
       <span class="mission-nav-index" data-mission-index>{{ m ? m.index : '—' }}</span>
-      <button type="button" class="mission-nav-button" data-mission-next :title="t('Next mission')" :disabled="m?.nextDisabled" @click="layer?.selectNextMission()">{{ t('NEXT') }} <span aria-hidden="true">›</span></button>
+      <UiButton class="mission-nav-button" data-mission-next :title="t('Next mission')" :disabled="m?.nextDisabled" @click="layer?.selectNextMission()">{{ t('NEXT') }} <span aria-hidden="true">›</span></UiButton>
     </div>
-    <button type="button" class="panel-layer-toggle" data-mission-show-all @click="layer?.deselectMission()">{{ t('SHOW ALL / DESELECT') }}</button>
+    <UiButton class="panel-layer-toggle" data-mission-show-all @click="layer?.deselectMission()">{{ t('SHOW ALL / DESELECT') }}</UiButton>
   </aside>
 </template>

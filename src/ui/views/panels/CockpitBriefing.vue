@@ -7,6 +7,7 @@ import { useCockpitStore } from '../../stores/cockpit.js';
 import CockpitRoute from './CockpitRoute.vue';
 import CockpitSignalList from './CockpitSignalList.vue';
 import UiButton from '../../kit/UiButton.vue';
+import UiIcon from '../../kit/UiIcon.vue';
 
 // The Cockpit briefing card. The Cockpit controller presents its pages,
 // cycle toggle, regional news and local conditions; until it does, the card
@@ -45,17 +46,17 @@ function leaveSignals() {
         <strong id="cockpit-brief-subtitle">{{ b.subtitle }}</strong>
       </div>
       <nav class="cockpit-card-actions cockpit-brief-actions" :aria-label="t('Cockpit briefing controls')">
-        <button id="cockpit-brief-previous" type="button" :aria-label="t('Previous briefing page')" :title="t('Previous briefing page')">
-          <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
-        </button>
+        <UiButton id="cockpit-brief-previous" :aria-label="t('Previous briefing page')" :title="t('Previous briefing page')">
+          <UiIcon name="chevron_left" :size="null" />
+        </UiButton>
         <span id="cockpit-brief-position" aria-live="polite">{{ b.position }}</span>
-        <button id="cockpit-brief-next" type="button" :aria-label="t('Next briefing page')" :title="t('Next briefing page')">
-          <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
-        </button>
+        <UiButton id="cockpit-brief-next" :aria-label="t('Next briefing page')" :title="t('Next briefing page')">
+          <UiIcon name="chevron_right" :size="null" />
+        </UiButton>
         <UiButton id="cockpit-brief-auto" :aria-label="b.autoLabel" :pressed="Boolean(b.autoRotate)" :title="b.autoHelp">{{ b.autoLabel }}</UiButton>
-        <button id="cockpit-signal-toggle" type="button" :aria-label="collapsed ? t('Expand cockpit briefing panel') : t('Collapse cockpit briefing panel')" :aria-expanded="String(!collapsed)" :title="collapsed ? t('Expand briefing panel') : t('Collapse briefing panel')">
-          <span class="material-symbols-outlined" aria-hidden="true">{{ collapsed ? 'right_panel_open' : 'right_panel_close' }}</span>
-        </button>
+        <UiButton id="cockpit-signal-toggle" :aria-label="collapsed ? t('Expand cockpit briefing panel') : t('Collapse cockpit briefing panel')" :aria-expanded="String(!collapsed)" :title="collapsed ? t('Expand briefing panel') : t('Collapse briefing panel')">
+          <UiIcon :name="collapsed ? 'right_panel_open' : 'right_panel_close'" :size="null" />
+        </UiButton>
       </nav>
     </header>
     <div class="cockpit-brief-stage">
@@ -83,9 +84,9 @@ function leaveSignals() {
     <footer class="cockpit-signal-footer">
       <span id="cockpit-brief-source">{{ b.source }}</span>
       <nav class="cockpit-brief-tabs" :aria-label="t('Cockpit briefing pages')">
-        <button type="button" data-cockpit-brief-index="0" :aria-label="t('Show Live Signals')" :aria-current="String(b.pageIndex === 0)">{{ t('SIG') }}</button>
-        <button type="button" data-cockpit-brief-index="1" :aria-label="t('Show Regional News')" :aria-current="brief ? String(b.pageIndex === 1) : undefined">{{ t('NEWS') }}</button>
-        <button type="button" data-cockpit-brief-index="2" :aria-label="t('Show Local Info')" :aria-current="brief ? String(b.pageIndex === 2) : undefined">{{ t('LOCAL') }}</button>
+        <UiButton data-cockpit-brief-index="0" :aria-label="t('Show Live Signals')" :aria-current="String(b.pageIndex === 0)">{{ t('SIG') }}</UiButton>
+        <UiButton data-cockpit-brief-index="1" :aria-label="t('Show Regional News')" :aria-current="brief ? String(b.pageIndex === 1) : undefined">{{ t('NEWS') }}</UiButton>
+        <UiButton data-cockpit-brief-index="2" :aria-label="t('Show Local Info')" :aria-current="brief ? String(b.pageIndex === 2) : undefined">{{ t('LOCAL') }}</UiButton>
       </nav>
     </footer>
   </aside>

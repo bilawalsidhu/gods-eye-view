@@ -65,6 +65,7 @@ import { useContextStore } from './stores/context.js';
 import { useSpaceMissionsStore } from './stores/spaceMissions.js';
 import { SpaceMissionsControls } from './spaceMissionsControls.js';
 import { useMissionReplayStore } from './stores/missionReplay.js';
+import { useStreetLevelPhotoStore } from './stores/streetLevelPhoto.js';
 import { useCelestialRingStore } from './stores/celestialRing.js';
 import { icrfToFixedAxes } from '../sky/icrf.js';
 import { useWorldOverlayActionsStore } from './stores/worldOverlayActions.js';
@@ -1200,7 +1201,18 @@ export class StyleManager extends ShellFacade {
     const { streetLevelLayer } = this.services;
     this._streetLevelControls?.destroy();
     this._streetLevelControls = null;
+    // The photo viewer (KartaView, Panoramax), which the layer panels draw
+    // into the viewer host. A viewer left by an earlier shell must
+    // not outlive its layer.
+    const streetLevelPhotoStore = useStreetLevelPhotoStore(applicationPinia());
+    this._streetLevelPhotoUnsubscribe?.();
+    this._streetLevelPhotoUnsubscribe = null;
+    streetLevelPhotoStore.publish(null);
     if (!this._streetLevelPanel || !streetLevelLayer) return;
+    this._streetLevelPhotoUnsubscribe =
+      streetLevelLayer.subscribePhotoViewer?.((view) =>
+        streetLevelPhotoStore.publish(view),
+      ) ?? null;
     // Photo framing yields to newer navigation and releases tracking like
     // any deferred flight.
     streetLevelLayer.attachNavigation?.({
@@ -1969,7 +1981,10 @@ export class StyleManager extends ShellFacade {
     this._spaceMissionsControls = null;
     this._missionReplayUnsubscribe?.();
     this._missionReplayUnsubscribe = null;
+    this._streetLevelPhotoUnsubscribe?.();
+    this._streetLevelPhotoUnsubscribe = null;
     useMissionReplayStore(applicationPinia()).publish(null);
+    useStreetLevelPhotoStore(applicationPinia()).publish(null);
     const contextStore = useContextStore(applicationPinia());
     contextStore.connectAwareness(null);
     contextStore.publishAwareness(null);

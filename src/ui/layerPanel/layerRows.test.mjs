@@ -241,7 +241,7 @@ test('a Data Library row names its entry and draws icon action chips', () => {
   assert.equal(element.dataset.libraryEntry, 'nasa-black-marble');
   const button = element.querySelector('[data-chip-id="zoom"]');
   const glyph = button.children[0];
-  assert.equal(glyph.className, 'material-symbols-outlined');
+  assert.ok(glyph.classList.contains('material-symbols-outlined'));
   assert.equal(glyph.textContent, 'zoom_in_map');
   assert.equal(glyph.getAttribute('aria-hidden'), 'true');
   assert.equal(button.getAttribute('aria-label'), 'Zoom to layer');
