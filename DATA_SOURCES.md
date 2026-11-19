@@ -258,7 +258,7 @@ credits it anyway as `SPECS: CCTV-DATABASE.COM` beside any spec line it renders.
 
 ### Bundled OpenStreetMap data
 
-Bundled OSM-derived data is distributed under [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/), separately from the MIT code: [datacenters](src/data/local_data/datacenters/), [dams](src/data/local_data/dams/) (via Open Infrastructure Map), [military names](src/data/local_data/osm_military_names/), and [OSM test fixtures](src/data/fixtures/). Keep © OpenStreetMap contributors and offer modified databases under ODbL.
+Bundled OSM-derived data is distributed under [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/), separately from the MIT code: [datacenters](src/data/local_data/datacenters/), [dams](src/data/local_data/dams/) (from Open Infrastructure Map and the OpenStreetMap API), [military names](src/data/local_data/osm_military_names/), and [OSM test fixtures](src/data/fixtures/). Keep © OpenStreetMap contributors and offer modified databases under ODbL.
 
 ### NASA FIRMS acknowledgement
 
