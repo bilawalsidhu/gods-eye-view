@@ -471,6 +471,7 @@ test('spelled-out emails, addresses, phrases, codes and short phone numbers stay
     'verification code ABCDEF thanks a lot',
     'otp ABCDEF cheers',
     'otp ab12cd - thanks',
+    '(1) abandon (2) ability (3) able (4) about (5) above (6) absent (7) absorb (8) abstract (9) absurd (10) abuse (11) access (12) accident',
     'gate code aBcD - thanks',
     'abandon ability able about above absent absorb abstract absurd abuse access accident.',
     'abandon, ability, able, about, above, absent, absorb, abstract, absurd, abuse, access, accident',

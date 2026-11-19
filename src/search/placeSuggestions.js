@@ -221,7 +221,7 @@ function privacyReason(text) {
   const recent = [];
   for (const token of line.toLowerCase().split(/[\s,;]+/)) {
     const word = token
-      .replace(/^\d+[.)]?/, '')
+      .replace(/^\(?\d+[.)]?/, '')
       .replace(/(?<=[a-z])[^a-z]+$/, '');
     if (!word && token) continue;
     if (!isBip39Word(word)) {
