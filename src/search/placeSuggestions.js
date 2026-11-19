@@ -1,3 +1,4 @@
+import { isBip39Word } from './bip39Words.js';
 import { normalizePhotonFeature, photonSearchUrl } from '../keylessGeocoder.js';
 import { parseCoordinateQuery } from './coordinateParser.js';
 import {
@@ -13,6 +14,31 @@ const CJK =
 export const isCjk = (text) => CJK.test(String(text || ''));
 /** The fewest characters a place name is looked up from. */
 export const minPlaceChars = (text) => (isCjk(text) ? 2 : 3);
+
+/**
+ * Words on the BIP39 list that name places and things on a map, or that a
+ * request about one is made of, for telling a list of places or a request
+ * from a recovery phrase.
+ */
+const MAP_WORDS = new Set(
+  (
+    'airport alley arena bar beach bike boat border bridge bus cabin camp ' +
+    'canal canyon capital car castle cave city cliff clinic coast coffee ' +
+    'country cruise dentist desert dune east elevator farm field fire ' +
+    'flight forest gallery garage garden gym harbor hill hospital hotel ' +
+    'island jungle kitchen lake library market meadow moon mountain museum ' +
+    'nation north ocean office opera palace park pizza planet police pond ' +
+    'pool rail rain ranch region ridge river road rocket route school sea ' +
+    'ship shop ski snow soccer south space square stadium street subway sun ' +
+    'swamp taxi tennis tornado tower town traffic train truck tunnel valley ' +
+    'van vessel village volcano wagon weather west wine zoo ' +
+    // Words a request about a map is made of.
+    'any area around best cheap city close day dinner early find food ' +
+    'fresh good hour live local lunch main minute morning near night now ' +
+    'old open spot that there this time today tomorrow travel trip view ' +
+    'visit walk weekend what when where world'
+  ).split(' '),
+);
 
 /**
  * Text that may hold something private, which is never looked up, offered
@@ -62,9 +88,26 @@ export function onlyNumbersLookPrivate(text) {
     // is ("card 4111 …", "phone +1 415 …", "token 12345678").
     groups.every((group) => group.length <= 6) &&
     groups.join('').length <= 9 &&
+    !/(?<!\d)\d{3}[ .-]\d{4}(?!\d)/.test(line) &&
     !NUMBER_CONTEXT.test(line)
   );
 }
+
+/**
+ * The most words a line sent for place suggestions may have: as many as the
+ * Omnibar reads as a place's name (ten with a number, as an address has).
+ */
+const suggestMaxWords = (text) => (/\d/.test(text) ? 10 : 8);
+
+/**
+ * "Boise ID 83702", "Coeur d'Alene ID 83814": Idaho's code before a ZIP
+ * code, after a town's name (not after "my" or "employee", whose "ID" is an
+ * identity number).
+ */
+const IDAHO_BEFORE_ZIP =
+  /(?<!\S)(\S{1,40}?)(,?\s)ID(?=\.?,?\s+\d{5}(?:-\d{4})?(?!\S))/gu;
+const ID_OWNERS =
+  /^(?:my|your|our|his|her|their|employee|student|staff|member|user|customer|patient|national|voter|photo|tax|card|the|an?)$/i;
 
 /**
  * Words that say a number is an account, a card, a phone or a secret, in the
@@ -84,12 +127,18 @@ function foldLine(text) {
     .normalize('NFKC')
     .replace(/\p{Cf}/gu, '')
     .replace(/[\u2018\u2019]/g, "'")
-    .replace(/(?![0-9])\p{Nd}/gu, '0');
+    .replace(/(?![0-9])\p{Nd}/gu, '0')
+    .replace(/\s+/g, ' ')
+    .replace(IDAHO_BEFORE_ZIP, (whole, word, gap) =>
+      ID_OWNERS.test(word.replace(/\p{P}+$/u, ''))
+        ? whole
+        : `${word}${gap}Idaho`,
+    );
 }
 
 /** A US ZIP+4 after a state's code or name, as an address writes it. */
 const US_ZIP4 = new RegExp(
-  String.raw`(?<=(?:^|\s)(?:[a-z]{2}|[a-z]\.[a-z]|Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|Florida|Georgia|Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Mass|Michigan|Minnesota|Mississippi|Missouri|Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|Tennessee|Texas|Utah|Vermont|Virginia|Washington|West Virginia|Wisconsin|Wyoming|Puerto Rico)\.?,?\s)\d{5}-\d{4}\b`,
+  String.raw`(?<=(?:^|\s)(?:A[KLRZ]|C[AOT]|D[CE]|FL|GA|HI|I[ADLN]|K[SY]|LA|M[ADEINOST]|N[CDEHJMVY]|O[HKR]|PA|PR|RI|S[CD]|T[NX]|UT|V[AT]|W[AIVY]|[a-z]\.[a-z]|Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|Florida|Georgia|Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Mass|Michigan|Minnesota|Mississippi|Missouri|Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|Tennessee|Texas|Utah|Vermont|Virginia|Washington|West Virginia|Wisconsin|Wyoming|Puerto Rico)\.?,?\s)\d{5}-\d{4}\b`,
   'giu',
 );
 
@@ -119,6 +168,80 @@ function privacyReason(text) {
     )
   )
     return 'other';
+  // An email written around a filter: "john(at)gmail.com",
+  // "john[at]gmail[dot]com", "john at gmail dot com".
+  // Also "john at gmail.com" and a "(dot)" or "[dot]" in any of them.
+  // Spaced letter by letter ("j o h n @ g m a i l . c o m").
+  if (
+    /(?:^|\s)(?:\S\s){3,}@\s?(?:\S\s?){2,}/u.test(line) &&
+    /[^@]@[\p{L}\p{N}-]+\.\p{L}{2,}/u.test(line.replace(/\s+/g, ''))
+  )
+    return 'other';
+  if (
+    /[\p{L}\p{N}._%+-]\s*[([{<]\s*at\s*[)\]}>]\s*[\p{L}\p{N}-]/iu.test(line) ||
+    /(?<!\S)\S{1,64}\s+at\s+\S+\s+(?:dot|punto|ponto|period|punkt|[([{<]\s*dot\s*[)\]}>])\s+\p{L}{2,24}\b/iu.test(
+      line,
+    ) ||
+    /(?<!\S)\S{1,64}\s+at\s+[\p{L}\p{N}-]+\s*[([{<]\s*dot\s*[)\]}>]\s*\p{L}{2,24}\b/iu.test(
+      line,
+    ) ||
+    /(?<![\p{L}\p{N}._%+-])[\p{L}\p{N}._%+-]{1,64}\s+at\s+[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\s*\.\s*(?:com|net|org|edu|gov|mil|io|co|me|info|biz|app|dev|ai|[a-z]{2})\b/iu.test(
+      line,
+    )
+  )
+    return 'other';
+  // An IPv6 host in a link ("https://[::1]/"), not a time in brackets
+  // ("[12:30:00]").
+  for (const [, host] of line.matchAll(/\/\/\[([0-9a-f:.%\w]+)\]/gi)) {
+    const colons = (host.match(/:/g) || []).length;
+    if (colons >= 2 && (host.includes('::') || colons >= 5)) return 'other';
+  }
+  // An IP address ("10.0.0.1").
+  if (/(?<![\d.])\d{1,3}(?:\.\d{1,3}){3}(?![\d.])/.test(line)) return 'other';
+  // An IPv6 address ("::1", "fe80::1%eth0", "2001:db8:0:0:0:0:2:1"): hex
+  // groups with "::", or five colons or more (a time has two).
+  if (
+    line.split(' ').some((token) => {
+      const bare = token
+        .replace(/^[[(]+|(?<=[^\]),.;])[\]),.;]+$/g, '')
+        .replace(/%\w+$/, '');
+      const colons = (bare.match(/:/g) || []).length;
+      return (
+        /^[0-9a-f:.]+$/i.test(bare) &&
+        colons >= 2 &&
+        (bare.includes('::') || colons >= 5)
+      );
+    })
+  )
+    return 'other';
+  // A wallet's recovery phrase ("abandon ability able …"): twelve words in
+  // a row on the BIP39 list ("can you tell where the most …" is a
+  // question). Too long to be sent for suggestions anyway, it is kept from
+  // the assistant too.
+  // Written with commas, numbered ("1. abandon 2. ability"), joined by
+  // dashes or slashes, or after a few words ("my seed is …"): twelve of
+  // the list's words in a row. The list has many words for places and for
+  // asking about them, and a phrase is drawn at random from all of it:
+  // twelve with four of those ("coffee, bar, hotel, museum, park …", "find
+  // good food open now near this area") are a list or a request, which a
+  // phrase is about once in a hundred.
+  const recent = [];
+  for (const token of line.toLowerCase().split(/[\s,;|/.\-\u2013\u2014]+/)) {
+    // Numbered ("1.", "(1)", "1:", "#1", "[1]") or quoted words; "and"
+    // before the last word joins it.
+    const word = token
+      .replace(/^["'“”„‚«»‹›‘’([{<#]*\d*[)\]:]?["'“”„‚«»‹›‘’([{<]*/, '')
+      .replace(/(?<=[a-z])[^a-z]+$/, '');
+    if (!word || word === 'and') continue;
+    if (!isBip39Word(word)) {
+      recent.length = 0;
+      continue;
+    }
+    recent.push(MAP_WORDS.has(word));
+    if (recent.length > 12) recent.shift();
+    if (recent.length === 12 && recent.filter(Boolean).length < 4)
+      return 'other';
+  }
   // Coordinates and grid references are a spot, not a number to keep: only
   // text the place search itself reads as coordinates, as typed ("١٢٣٤,
   // ٥٦٧٨" folded would read as a spot, but is not one).
@@ -146,7 +269,7 @@ function privacyReason(text) {
           .replace(
             // After a street word, or before the city ("12, 10115 Berlin");
             // "030 12345" alone is a phone number.
-            /(?<=\p{L}\.?\s)\d{1,4}[a-z]?,?\s+\d{5}(?:-\d{3})?(?=\s+\p{L}|$)|(?<=^|\s)\d{1,4}[a-z]?,?\s+\d{5}(?:-\d{3})?(?=\s+\p{L})/giu,
+            /(?<=\p{L}\.?\s)[1-9]\d{0,3}[a-z]?,?\s+\d{5}(?:-\d{3})?(?=\s+(?!(?:thanks|thank|thx|please|pls|ok|okay|now|asap|call|text)\b)\p{L}|$)|(?<=^|\s)[1-9]\d{0,3}[a-z]?,?\s+\d{5}(?:-\d{3})?(?=\s+(?!(?:thanks|thank|thx|please|pls|ok|okay|now|asap|call|text)\b)\p{L})/giu,
             ' ',
           )
           // Other postcodes after a street's house number and before the city (a
@@ -164,7 +287,7 @@ function privacyReason(text) {
           .replace(US_ZIP4, ' x ')
           .replace(/\b\d{5}-\d{3}\b/g, ' x ')
           .replace(
-            /〒\s?\d{3}-\d{4}|\b\d{3}-\d{4}(?=\s*[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}])/gu,
+            /〒\s?\d{3}-\d{4}|\b\d{3}-\d{4}(?=\s*[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}])|(?<=[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]\s*)\d{3}-\d{4}\b/gu,
             ' x ',
           )
           .replace(/#/g, ' x ')
@@ -176,7 +299,12 @@ function privacyReason(text) {
   // An IBAN.
   if (/\b[a-z]{2}\d{2}(?:\s?[a-z0-9]){10,}/i.test(line)) return 'other';
   if (
-    /\b(?:password|passcode|passwd|ssn|pw|pwd|bearer)\b\s*[:=#]?\s*\S/i.test(
+    /\b(?:password|passcode|passwd|pw|pwd)\b\s*[:=#]?\s*\S/i.test(line) ||
+    // "Bearer Island" and "SSN Station" are places: after "bearer" any value
+    // but a capitalised name is a token, and a social security number has
+    // digits.
+    bearerToken(line) ||
+    /\bssn\b(?:\s+(?:is|are|no\.?|number|#|ending|ends?|in|with|last|four|4|digits))*\s*[:=#]?\s*(?:\d|[x*]{2})/i.test(
       line,
     ) ||
     // The word for "password" in the interface's languages.
@@ -190,11 +318,23 @@ function privacyReason(text) {
       line,
     ) ||
     /\b(?:token|secret|api[ _-]?key|key|pass)\s*[:=]\s*\S/i.test(line) ||
+    // A number on a document or account after its label: "license ABC1234",
+    // "passport X1234567", "plate 7ABC123", "member no. 12345".
+    /\b(?:licen[cs]e|plate|passport|member(?:ship)?|account|acct|policy|ticket|booking|confirmation|ref(?:erence)?)(?:\s+(?:no\.?|number|#|is))*(?:\s*[:=#]\s*|\s+)(?=[a-z0-9-]*\d)[a-z0-9-]{4,}/i.test(
+      line,
+    ) ||
+    // An identity number after "ID" in capitals ("ID AB123"); "Id" and
+    // "id" are words.
+    /\bID(?:\s+(?:no\.?|number|#|is))*(?:\s*[:=#]\s*|\s+)(?=[A-Za-z0-9-]*\d)[A-Za-z0-9-]{4,}/.test(
+      line,
+    ) ||
     /\b(?:my secret is|passphrase|mnemonic|seed phrase|recovery phrase)\b\s*[:=]?\s*\S/i.test(
       line,
     ) ||
     // An email spelled out to slip past a filter: "john at example dot com".
-    /\b\S+\s+at\s+\S+\s+dot\s+(?:com|net|org|edu|gov|io|co)\b/i.test(line) ||
+    /(?<!\S)\S{1,64}\s+at\s+\S+\s+dot\s+(?:com|net|org|edu|gov|io|co)\b/i.test(
+      line,
+    ) ||
     /\b(?:pin|otp|2fa|mfa|cvv|cvc|(?:door|access|gate|alarm|entry|security|verification|one-time|auth|login) code|card ending(?: in)?)(?:\s+(?:code|number|is|no\.?))*\s*[:=#]?\s*\d/i.test(
       line,
     ) ||
@@ -204,7 +344,28 @@ function privacyReason(text) {
     /\b(?:pin|otp|2fa|mfa|cvv|cvc|(?:door|access|gate|alarm|entry|security|verification|one-time|auth|login) code)\s*(?:[:=#]|\s[-–—]\s|-)\s*[a-z0-9]/i.test(
       line,
     ) ||
-    codeAfterLabel(line)
+    codeAfterLabel(line) ||
+    // A door, alarm or lockbox number ("code 4821", "garage code 4821",
+    // "the code to my door is 4821").
+    // A postcode, dialling code or airport code is not one ("zip code
+    // 90210", "area code 415").
+    /\b(?<!\b(?:zip|postal|post|postcode|area|country|dialing|dialling|airport|iata|icao|country)\s)(?:code|alarm|lockbox|lock box|combination|combo|keypad)(?:\s+(?:number|no\.?|is|code|pin))*\s*[:=#]?\s*\d{3,8}\b/i.test(
+      line,
+    ) ||
+    /\b(?<!\b(?:zip|postal|post|area|country|dialing|dialling|airport)\s)code\b.{0,30}?\bis\s*[:=]?\s*\d{3,8}\b/i.test(
+      line,
+    ) ||
+    // A UK National Insurance number, spaced ("AB 12 34 56 C").
+    // Spaced in pairs or not at all ("St 123456 A" is an address).
+    /\b[a-z]{2}(?: \d{2} \d{2} \d{2} |\d{6})[a-d]\b/i.test(line) ||
+    // "my id is AB12345", "id no. 4471".
+    /\bid\s+(?:is|no\.?|number|#)\s*[:=#]?\s*(?=[a-z0-9-]*\d)[a-z0-9-]{4,}/i.test(
+      line,
+    ) ||
+    // A one-time code in a link ("…/callback?code=abcdef").
+    /[?&](?:code|token|access_token|key|sig|signature|auth)=[^&\s]{4,}/i.test(
+      line,
+    )
   )
     return 'other';
   if (
@@ -212,11 +373,17 @@ function privacyReason(text) {
       .split(/\s+/)
       // A key in quotes or brackets ("\"sk-…\"") and a postcode before a
       // comma ("SW1A2AA,") are read without them.
-      .map((token) => token.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ''))
+      .map((token) =>
+        token.replace(/^[^\p{L}\p{N}]+|(?<=[\p{L}\p{N}])[^\p{L}\p{N}]+$/gu, ''),
+      )
       .some(
         (token) =>
-          /^(?:sk[-_]|rk_|pk_live|ghp_|xox[abposr]-)/i.test(token) ||
-          /^(?:AIza|eyJ|AKIA)/.test(token) ||
+          /^(?:sk[-_]|rk_|pk_live|ghp_|gho_|ghu_|ghs_|github_pat_|glpat-|hf_|xox[abposr]-)/i.test(
+            token,
+          ) ||
+          /^SG\.[\w-]{8,}\.[\w-]{8,}$/.test(token) ||
+          /^(?:AIza|eyJ)/.test(token) ||
+          /^AKIA[0-9A-Z]{12,}$/.test(token) ||
           mayBeSecret(token),
       )
   )
@@ -225,20 +392,84 @@ function privacyReason(text) {
 }
 
 /**
+ * A value after "bearer" that is not a word a place's name is made of
+ * ("Bearer Island"); after "Authorization:" any value is a token.
+ */
+function bearerToken(line) {
+  if (/\bauthori[sz]ation\s*:\s*bearer\b\s*\S/i.test(line)) return true;
+  for (const match of line.matchAll(/\bbearer\b(\s*[:=#]?\s*)(\S+)/gi)) {
+    const value = match[2].replace(/(?<=[^,.;:!?)])[,.;:!?)]+$/, '');
+    // Only a word after a space may be a name: "Bearer: island" is a token.
+    if (/^\s+$/.test(match[1]) && PLACE_WORDS.test(value)) continue;
+    return true;
+  }
+  return false;
+}
+
+/** Words a place's name is made of, after a label word ("bearer island"). */
+const PLACE_WORDS =
+  /^(?:island|islands|isle|lake|creek|river|point|bay|mountain|mount|hill|hills|valley|station|road|street|lane|avenue|park|beach|falls|springs?|county|city|town|village|plaza|square|mall|center|centre|tower|building|court|bank)$/i;
+
+/**
  * A code after a label that can only be a code, without a colon ("PIN
  * A7B2", "verification code ABCDEF", "otp 7GH2K"): holding a digit, or in
  * capitals after a label that is not, and ending the line. "Gate Code Lane",
  * "GATE CODE LANE", "OTP Bank" and "Auth Code ABCD Street" stay places.
  */
 function codeAfterLabel(line) {
+  // Labels that only ever name a code take one in lower case too ("otp
+  // abcdef", "cvv abc", "verification code abcdef"); a capitalised word
+  // after them is a name ("OTP Bank", "MFA Boston").
+  // After a label in lower case, any value is a code ("verification code
+  // Abc"); after one written as a name, only a value that is not one.
+  const coded =
+    /\b((?:otp|2fa|mfa|cvv|cvc|(?:verification|one-time|security|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{2,63})(?:(?:\s*[,;]\s*|\s+[-–—]+\s+|\s+)(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.,!?]*$/i.exec(
+      line,
+    );
+  if (coded) {
+    const [, label, value] = coded;
+    const labelIsName = /\p{Lu}/u.test(label);
+    // A word a place's name is made of is no code ("security code plaza",
+    // "otp bank"); after the short labels a code in letters is written in
+    // capitals ("otp ABCDEF"), so a lower-case word is a name ("mfa
+    // boston").
+    // A CVV is never a name.
+    if (/^cv[vc]\b/i.test(label)) return true;
+    const shortLabel = /^(?:otp|2fa|mfa)\b/i.test(label);
+    const named =
+      PLACE_WORDS.test(value) || (shortLabel && /^\p{Ll}+$/u.test(value));
+    if (!labelIsName && !named) return true;
+    // After a label written as a name, a value in capitals is a code ("OTP
+    // ABCDEF", "Verification code ABC"), one capitalised a name ("OTP
+    // Bank").
+    if (labelIsName) {
+      if (/^\p{Lu}[\p{Lu}\d-]+$/u.test(value) && !PLACE_WORDS.test(value))
+        return true;
+      if (!/^\p{Lu}(?:\p{Ll}+|\p{Lu}+)$/u.test(value)) return true;
+    }
+  }
+  // A value in mixed case that is no name ("PIN aBcD", "gate code aBcD").
+  const mixed =
+    /\b(?:pin|(?:door|access|gate|alarm|entry) code)(?:\s+is)?\s+([a-z0-9-]{4,64})(?:(?:\s*[,;]\s*|\s+[-–—]+\s+|\s+)(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.,!?]*$/i.exec(
+      line,
+    );
+  if (
+    mixed &&
+    /\p{Ll}/u.test(mixed[1]) &&
+    /\p{Lu}/u.test(mixed[1]) &&
+    !/^\p{Lu}\p{Ll}+$/u.test(mixed[1])
+  )
+    return true;
   const match =
-    /\b((?:pin|cvv|cvc|otp|2fa|mfa|(?:door|access|gate|alarm|entry|security|verification|one-time|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{3,})\s*[.!]?\s*$/i.exec(
+    /\b((?:pin|cvv|cvc|otp|2fa|mfa|(?:door|access|gate|alarm|entry|security|verification|one-time|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{3,63})(?:(?:\s*[,;]\s*|\s+[-–—]+\s+|\s+)(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.,!?]*$/i.exec(
       line,
     );
   if (!match) return false;
   const [, label, value] = match;
   if (/\d/.test(value)) return true;
-  return value === value.toUpperCase() && label !== label.toUpperCase();
+  // A code in capitals ("PIN ABCD", "GATE CODE ABCD"), but not a word a
+  // place's name is made of ("GATE CODE LANE").
+  return value === value.toUpperCase() && !PLACE_WORDS.test(value);
 }
 
 /**
@@ -292,6 +523,43 @@ export function resetPlaceSuggestions() {
   shared.pending.clear();
 }
 
+/**
+ * Countries that write a house's number before its street ("10 Downing
+ * Street", "12 rue de Rivoli"); elsewhere it follows ("Hauptstraße 12").
+ */
+const NUMBER_FIRST = new Set([
+  'US',
+  'CA',
+  'GB',
+  'IE',
+  'AU',
+  'NZ',
+  'FR',
+  'LU',
+  'MC',
+  'ZA',
+  'IN',
+  'PH',
+  'SG',
+  'MY',
+  'HK',
+  'TH',
+  'LK',
+  'NG',
+  'GH',
+  'KE',
+  'JM',
+  'TT',
+]);
+
+/** A house's number and street as its country writes them, or ''. */
+export function houseAddress({ houseNumber, street, countryCode }) {
+  if (!houseNumber || !street) return '';
+  return NUMBER_FIRST.has(String(countryCode || 'US').toUpperCase())
+    ? `${houseNumber} ${street}`
+    : `${street} ${houseNumber}`;
+}
+
 /** List Photon candidates while typing. The submitted search owns navigation. */
 export function createPlaceSuggester({
   endpoint,
@@ -308,7 +576,14 @@ export function createPlaceSuggester({
       const text = String(query ?? '')
         .trim()
         .slice(0, MAX_QUERY_CHARS);
-      if (!enabled || text.length < minPlaceChars(text) || mayBePrivate(text))
+      // A line longer than a place's name is never sent: a pasted sentence
+      // or phrase is no place, and may be private in ways not read here.
+      if (
+        !enabled ||
+        text.length < minPlaceChars(text) ||
+        text.split(/\s+/).length > suggestMaxWords(text) ||
+        mayBePrivate(text)
+      )
         return [];
       const language = (globalThis.document?.documentElement?.lang || 'en')
         .slice(0, 2)
@@ -384,11 +659,17 @@ export function createPlaceSuggester({
             type,
             street,
             housenumber: houseNumber,
+            locality,
+            district,
           } = feature.properties ?? {};
-          // A house has no name of its own: its street and number are its
-          // name, so two houses on one street stay two places.
-          const address =
-            street && houseNumber ? `${houseNumber} ${street}` : '';
+          // A house has no name of its own: its street (or, without one, its
+          // locality) and number are its name, written in the country's own
+          // order, so two houses on one street stay two places.
+          const address = houseAddress({
+            houseNumber,
+            street: street || locality || district || city,
+            countryCode,
+          });
           const name = normalized.name || address || city || state || country;
           if (!name) continue;
           const detail = [...new Set([city, state, country])]

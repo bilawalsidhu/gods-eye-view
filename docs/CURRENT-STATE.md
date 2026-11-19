@@ -8117,10 +8117,13 @@ while the tab is hidden.
 A place search on its own runs through Location and shares its cancellation
 and errors, keeping the separate Location draft intact.
 
-While typing, a short line (six words or fewer, no `?`, not a command,
+While typing, a short line (six words or fewer, ten with a number in it
+as an address has, no `?`, not a command,
 coordinates, a hex code, a callsign such as UAL2110 or N123AB, and nothing
 that may be private) is sent to
-Photon for place suggestions: at most one request every 500 ms per tab,
+Photon for place suggestions (the suggester itself never sends a line of
+more than eight words, or ten with a number): at most one request every
+500 ms per tab,
 and none for a minute after a refusal. Photon is the keyless geocoder the
 place search already uses; a submitted search is not part of this spacing.
 A line that may be one name ("Satellite Beach") is looked up whole. While
@@ -8134,49 +8137,93 @@ digits and "＠" count, and digits of any script count as digits. It is
 any line with: an "@" with something right on both sides, ending a word,
 starting a lowercase handle ("@jdoe"), or spaced before a domain ("john @
 gmail.com") (an email address or a handle, also while it is typed; spaced, as in "Nanjampeta @
-Chandambylu", it is part of a name); seven digits or more with nothing but spaces,
+Chandambylu", it is part of a name); an email spelled around a filter
+("john(at)gmail.com", "john[at]gmail[dot]com", "john at gmail dot de",
+"john at gmail.com", "john at gmail (dot) com"); an IP address
+("10.0.0.1", "::1", "fe80::1", "https://[::1]/"); a wallet's recovery
+phrase (see below); seven digits or more with nothing but spaces,
 punctuation, symbols or format characters between them (a phone, card,
 SSN or account number or its start: "+1 415 555", "4111 1111", "123 45
 6789", "123456789", "4111.1111.1111.1111", "123–45–6789"; a street address's house number
-and its postcode are read apart: five digits, or between the street and
+and its postcode are read apart (a house number never starts with 0, and
+a polite word such as "thanks" after the digits is not a city): five digits, or between the street and
 the city "00-950", "111 21", "125009", "1100-053", or four digits after a
-comma ("Straße 120, 1070 Wien"); and so are a US ZIP+4 after a word,
-a Brazilian CEP, a Japanese postcode after "〒" or before the address, and
+comma ("Straße 120, 1070 Wien"); and so are a US ZIP+4 after a state's
+code or name ("Alice 12345-6789" and "Jo 12345-6789" stay private),
+a Brazilian CEP, a Japanese postcode after "〒" or next to the address in
+Japanese script ("東京都千代田区100-0001"; after a Latin name, as in
+"Shibuya 150-0002", it reads as a phone number), and
 digits on either side of "#", so "Hauptstrasse 12 10115 Berlin", "DC
 20500-0003", "〒100-0001 東京都千代田区" and "Calle 100 # 19-61" are places,
 while a seven-digit postcode alone such as "Tel Aviv 6100000" still reads
 as private); a phone number written with dots; two letters, two
 digits and ten more letters or digits (an IBAN's shape); "password",
-"passcode", "passwd", "ssn", "pw", "pwd" or "bearer" followed by anything,
-"token", "secret", "api key", "key" or "pass" followed by ":" or "=", a
+"passcode", "passwd", "pw" or "pwd" followed by anything, "bearer"
+followed by anything but a short capitalised name or a place word such as
+island or lake ("Bearer Island", "bearer island" are places),
+"ssn" followed by a digit, also after "ending", "ends in" or "last four"
+("SSN Station" is a place), "token", "secret",
+"api key", "key" or "pass" followed by ":" or "=", a licence, plate,
+passport, membership, account, policy, ticket, booking, confirmation or
+reference number with a digit after its label ("license ABC1234",
+"passport no. 123456"), "ID" in capitals followed by a number ("ID
+AB123"), "otp", "2fa", "mfa", "cvv", "cvc" or a verification, one-time,
+security, auth or login code followed by a code (any value after a label
+in lower case, "verification code Abc", also before "thanks", ", thanks", "cheers" or "thanks a lot"; after a label
+written as a name, any value that is not one: "OTP Bank" and "Security
+Code Plaza" are places), a "pin" or door, access, gate, alarm or entry
+code followed by a value in mixed case ("PIN aBcD"), a
 door, access, gate, alarm, entry or security code followed by a digit, "api
 key", "access token" or "secret key" followed by a word of six characters
 or more, the word for "password" in the interface's languages
 (contraseña, Passwort, mot de passe, пароль…) followed by anything, or "pin"
 (also "pin code", "pin number", "pin is") followed by a digit; a word
-starting `sk_`, `sk-`, `rk_`, `pk_live`, `ghp_` or a Slack token's `xoxb-` and the like (any case) or
-`AIza`, `eyJ` or `AKIA`; or a word that may be a password or key, with letters and digits mixed
+starting `sk_`, `sk-`, `rk_`, `pk_live`, `ghp_`, `github_pat_`, `glpat-`, `hf_`, a SendGrid
+`SG.` key or a Slack token's `xoxb-` and the like (any case) or
+`AIza` or `eyJ`, or an AWS key id (`AKIA` and twelve capitals or digits
+more; "Akiak" is a place); or a word that may be a password or key, with letters and digits mixed
 within one run (a number beside a word, as in "Yanino-1", "2-chōme" or
 "Route-66", is a name): eight characters or more, six or more with four
 letters and a digit ("hunter22", "Area51"), or six or more with letters,
 digits and a symbol ("Tr0ub4dor&3"). The password words match whole words
-only ("Sachsenhausen" is a place). Over the bundled names (139,502), five
-read as private: two with stray digits ("Maliga0N", "Jerónim67") and three
-with number lists or codes. When the text may be private the field says
+only ("Sachsenhausen" is a place). Over the bundled names (139,502), six
+read as private: two with stray digits ("Maliga0N", "Jerónim67"), two
+joined by "@" to a lower-case handle ("Pulipadu @Govardhanagiri") and two
+with number lists or dates. When the text may be private the field says
 so ("Looks private, so nothing is searched or sent"), and a line whose
 only private sign is an address-sized run of digits (no group over six
-digits, nine at most in all, counted as they fold, and no word such as
+digits, nine at most in all, counted as they fold, no three digits
+followed by four as a phone number writes them, and no word such as
 card, code, key, phone or account beside them, in English and some other
 European languages; compounds such as "Kreditkartennummer" and words in
 other scripts are not read), with words beside it, gets a row
 to search it as a place on purpose ("Search … as a place anyway"), which
 runs the ordinary place search and its online services only when picked; a
 bare number, an email or handle, a password, key, code or IBAN gets none.
+A suggested house is named by its number and its street (or, without a
+street, its locality, district or city) in the order its country writes them: "10 Downing
+Street", "Hauptstraße 12".
 A nine-digit number or a short phone number written with no such word
 still gets the row: only picking it sends anything. One-time and verification codes,
 OTP, 2FA, MFA, CVV and CVC values, "card ending" digits, passphrases,
-recovery or seed phrases, "my secret is …" and an email spelled out ("john
-at example dot com") are private too. Text that parses as coordinates or a
+recovery or seed phrases (twelve words in a row on the BIP39 English list
+in `src/search/bip39Words.js`, also with commas, numbered, quoted, joined by
+dashes or slashes, or after "my seed is", so a long question or request
+still goes to Ask GEV; twelve with four words for places or for asking about
+them, such as "park", "airport", "near" or "today", are a list or a request,
+which lets about one phrase in a hundred through), "my secret is …", an email spelled
+out ("john at example dot com", "punto com", or letter by letter), a door,
+alarm or lockbox number ("code 4821"; "zip code 90210" and "area code 415"
+are places), "Authorization: Bearer …", a code in a link (`?code=…`), a
+spaced UK National Insurance number and "my id is …" are private too.
+"Boise ID 83702" names Idaho. Some private text is not caught: a
+passphrase run together as one word (a long place name is one word too),
+a lower-case word after "otp", "2fa" or "mfa" ("mfa boston" is a name;
+"otp ABCDEF" is caught) and a code of lower-case letters after "pin" or
+"gate code" ("PIN ABCD" is caught).
+A Japanese postcode after a Latin name is refused ("Shibuya 150-0002"), and
+so is a name in capitals after a code's label ("MFA BOSTON", which cannot
+be told from "OTP ABCDEF"). Text that parses as coordinates or a
 grid reference is not private. A place's name is six words at most, or ten
 when it has a number in it (an address: "1600 Pennsylvania Ave NW
 Washington DC 20500"). The places picked from the Omnibar's rows and chips that carry a position

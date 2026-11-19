@@ -3,8 +3,10 @@ import test from 'node:test';
 import {
   citiesInRegion,
   createPlaceSuggester,
+  houseAddress,
   inExtent,
   mayBePrivate,
+  onlyNumbersLookPrivate,
   resetPlaceSuggestions,
 } from './placeSuggestions.js';
 
@@ -392,9 +394,11 @@ test('streets named for keys, tokens and codes, and ZIP+4 after a state, are pla
     'Access Token Road',
     'Api Key Lane',
     'GATE CODE LANE',
+    'meet at Central Park [12:30:00]',
+    '10 Main St 123456 A Block',
+    'show every plane over london then show every ship near boston please',
     'SECURITY CODE PLAZA',
     'OTP Bank',
-    'MFA BOSTON',
     'Auth Code ABCD Street',
     'California 90210-1234',
     'Austin Texas 78701-1234',
@@ -402,7 +406,10 @@ test('streets named for keys, tokens and codes, and ZIP+4 after a state, are pla
     '12, 10115 Berlin',
   ])
     assert.equal(mayBePrivate(line), false, line);
+  // All in capitals, a name cannot be told from a code: "MFA BOSTON" is
+  // kept back with "OTP ABCDEF".
   for (const line of [
+    'MFA BOSTON',
     'gate code: abcd',
     'PIN A7B2',
     'PIN is A7B2',
@@ -426,4 +433,241 @@ test('the same text asked again while its request is out is sent once', async ()
   });
   await Promise.all([service.suggest('Paris'), service.suggest('Paris')]);
   assert.equal(sent, 1);
+});
+
+test('spelled-out emails, addresses, phrases, codes and short phone numbers stay private', () => {
+  for (const line of [
+    'john(at)gmail.com',
+    'john[at]gmail[dot]com',
+    'john at gmail dot de',
+    '10.0.0.1',
+    'abandon ability able about above absent absorb abstract absurd abuse access accident',
+    'Abandon ability able about above absent absorb abstract absurd abuse access accident acid',
+    'license ABC1234',
+    'passport X1234567',
+    'plate 7ABC123',
+    'otp ABCDEF',
+    'verification code abcdef',
+    'cvv abc',
+    'Bearer abcdef',
+    'Bearer Abcdefgh',
+    'Authorization: Bearer Xyz',
+    'glpat-abcdef123456',
+    'hf_abcdefghijk',
+    'SG.abcdefghij.klmnopqrstuv',
+    'https://x.com/?code=abcdef',
+    'code 4821',
+    'garage code 4821',
+    'lockbox 4821',
+    'the code to my door is 4821',
+    'AB 12 34 56 C',
+    'my id is AB12345',
+    'ssn ending 1234',
+    'ssn last four 1234',
+    'SSN ends in 6789',
+    'otp ABCDEF, thanks',
+    'pin AbCd, thanks',
+    'otp ABCDEF thanks!!',
+    'verification code ABCDEF thanks a lot',
+    'otp ABCDEF cheers',
+    'otp ab12cd - thanks',
+    'gate code aBcD - thanks,',
+    'gate code aBcD – thanks',
+    '"abandon ability able about above absent absorb abstract absurd abuse access accident"',
+    '“abandon ability able about above absent absorb abstract absurd abuse access accident”',
+    '«abandon ability able about above absent absorb abstract absurd abuse access accident»',
+    '»abandon ability able about above absent absorb abstract absurd abuse access accident«',
+    'abandon-ability-able-about-above-absent-absorb-abstract-absurd-abuse-access-accident',
+    '#1 abandon #2 ability #3 able #4 about #5 above #6 absent #7 absorb #8 abstract #9 absurd #10 abuse #11 access #12 accident',
+    '(1) abandon (2) ability (3) able (4) about (5) above (6) absent (7) absorb (8) abstract (9) absurd (10) abuse (11) access (12) accident',
+    'gate code aBcD - thanks',
+    'abandon ability able about above absent absorb abstract absurd abuse access accident.',
+    'abandon, ability, able, about, above, absent, absorb, abstract, absurd, abuse, access, accident',
+    '1. abandon 2. ability 3. able 4. about 5. above 6. absent 7. absorb 8. abstract 9. absurd 10. abuse 11. access 12. accident',
+    'my seed is abandon ability able about above absent absorb abstract absurd abuse access accident',
+    'My ID 12345',
+    'john at gmail .com',
+    'john at gmail punto com',
+    'john.doe at example period com',
+    'j o h n @ g m a i l . c o m',
+    'ssn is 123456',
+    'ssn: xxx-xx-1234',
+    'Bearer: island',
+    'Bearer=lake',
+    'OTP ABCDEF',
+    'CVV ABC',
+    'Verification code ABC',
+    'PIN ABCD',
+    'passport:123456',
+    'ID:12345',
+    'abandon please abandon abandon abandon abandon abandon abandon abandon abandon abandon abstract',
+    'find abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon',
+    'lockbox number 4821',
+    'lockbox is 4821',
+    'ab 12 34 56 c',
+    'https://[::1]/',
+    'my, ID 12345',
+    'ssn 1',
+    'cvv BANK',
+    'PIN ABCD thanks',
+    'OTP ABCDEF now',
+    'AB123456C',
+    'ssn 123',
+    'Jo 12345-6789',
+    'Joe 1234 12345 thanks',
+    'Mo 0171 12345',
+  ])
+    assert.equal(mayBePrivate(line), true, line);
+  // A phone's three and four digits are not offered as an address.
+  assert.equal(onlyNumbersLookPrivate('is 555 0100 thanks'), false);
+});
+
+test('places that only looked private are looked up', () => {
+  for (const line of [
+    'Akiak',
+    'Bearer Island',
+    'SSN Station',
+    'Bearer Island, Canada',
+    'bearer island',
+    'Washington DC  20500-0003',
+    '東京都千代田区100-0001',
+    'Security Code Plaza',
+    'Idaho Falls',
+    'meet at 12:30:45',
+    'Llanfairpwllgwyngyllgogerychwyrndrobwllllantysiliogogogoch',
+    'llanfairpwllgwyngyll',
+    'Boise ID 83702',
+    'Boise, ID 83702',
+    'Hayden ID 83835-1234',
+    'mfa boston',
+    'otp bank',
+    'security code plaza',
+    'zip code 90210',
+    'area code 415',
+    'Settipalle @ K.Bandarlapalle',
+    'boise ID 83702',
+    "Coeur d'Alene ID 83814",
+    'meet at West Point tomorrow',
+    'OTP Bank',
+    'GATE CODE LANE',
+    // Lists of places, though every word is on the BIP39 list.
+    'coffee, bar, hotel, museum, park, beach, hospital, school, market, bridge, tower, airport',
+    '1. beach 2. park 3. museum 4. zoo 5. bridge 6. tower 7. market 8. castle 9. island 10. lake 11. river 12. canyon',
+    'show only bus, train, car, truck, ship, boat traffic over city bridge today',
+    'museum, gallery, library, palace, square, alley, canal, garden, hill, cave, farm, field',
+    'find any good cheap fresh food open now near this area today',
+    // Questions for the assistant, however many short words they have.
+    'can you tell where the most flights are going over texas today',
+    'are there any storms near florida right now that might cause delays',
+    'OTP Bank',
+    // A long request is not a recovery phrase.
+    'show flights over texas near austin with altitude above thirty thousand feet please',
+    'show fires near austin then show flights above texas with labels please',
+  ])
+    assert.equal(mayBePrivate(line), false, line);
+});
+
+test('a house is named by its number and street in the order its country writes them', async () => {
+  assert.equal(
+    houseAddress({
+      houseNumber: '10',
+      street: 'Downing Street',
+      countryCode: 'gb',
+    }),
+    '10 Downing Street',
+  );
+  assert.equal(
+    houseAddress({
+      houseNumber: '12',
+      street: 'Hauptstraße',
+      countryCode: 'DE',
+    }),
+    'Hauptstraße 12',
+  );
+  assert.equal(houseAddress({ houseNumber: '12', street: '' }), '');
+  // Without a street, a house's number and its locality name it, so two
+  // houses in one hamlet stay two places, not the city twice.
+  const house = (number) => ({
+    geometry: { type: 'Point', coordinates: [11.2, 47.6] },
+    properties: {
+      housenumber: number,
+      locality: 'Mittenwald Au',
+      city: 'Mittenwald',
+      country: 'Germany',
+      countrycode: 'de',
+      osm_value: 'house',
+    },
+  });
+  const service = createPlaceSuggester({
+    endpoint: 'https://fixture.test/api/',
+    fetchImpl: async () =>
+      Response.json({ features: [house('3'), house('5')] }),
+  });
+  assert.deepEqual(
+    (await service.suggest('Mittenwald Au')).map((place) => place.name),
+    ['Mittenwald Au 3', 'Mittenwald Au 5'],
+  );
+});
+
+test('codes, phones, tokens, emails and addresses in further shapes stay private', () => {
+  for (const line of [
+    // A phone's three and four digits after a name, as a postcode can't be
+    // told from it ("Shibuya 150-0002" is refused for that).
+    'Alice 555-0100',
+    'Shibuya 150-0002',
+    `${Array(23).fill('abandon').join(' ')} art`,
+    'Bearer Abcdefghijklmnopqrstuvwxyz',
+    'Bearer Island bearer abcdef',
+    'verification code Abc',
+    'verification code ABC',
+    'verification code abc thanks',
+    'PIN aBcD',
+    'gate code aBcD',
+    'john at gmail.com',
+    'john at gmail (dot) com',
+    'john at gmail [dot] com',
+    'john at gmail dot technology',
+    'passport number 123456',
+    'passport no. 123456',
+    'ID AB123',
+    '::1',
+    'fe80::1',
+    '2001:db8:0:0:0:0:2:1',
+  ])
+    assert.equal(mayBePrivate(line), true, line);
+});
+
+test('a line longer than a place name is never sent for suggestions', async () => {
+  let sent = 0;
+  const service = createPlaceSuggester({
+    endpoint: 'https://fixture.test/api/',
+    fetchImpl: async () => {
+      sent++;
+      return Response.json({ features: [] });
+    },
+  });
+  assert.deepEqual(
+    await service.suggest('one two three four five six seven eight nine'),
+    [],
+  );
+  assert.equal(sent, 0);
+  // An address has more words: as many as the Omnibar reads as a place.
+  await service.suggest('350 Fifth Avenue, New York, NY 10118, United States');
+  assert.equal(sent, 1);
+  await service.suggest('1 2 3 4 5 6 7 8 9 10 11');
+  assert.equal(sent, 1);
+});
+
+test('a long line is read quickly', () => {
+  for (const line of [
+    ...['a-', 'a.', '1-', 'a ', '//[a:'].map((unit) => unit.repeat(10000)),
+    `otp a${'-'.repeat(20000)}!x`,
+    `gate code a${'-'.repeat(20000)}!x`,
+    `${','.repeat(20000)}!x`,
+    `bearer x${','.repeat(20000)}z`,
+  ]) {
+    const started = performance.now();
+    mayBePrivate(line);
+    assert.ok(performance.now() - started < 1000, line.slice(0, 12));
+  }
 });
