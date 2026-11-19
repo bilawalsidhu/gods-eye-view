@@ -89,6 +89,14 @@ tilt-map button, whose owners still write their state into the DOM. Core's
 pressable chips and pills (rail card chips, map sources, cities and places)
 are `UiButton`s too; `UiChip` is a non-interactive label chip, used by
 the voice card.
+The Omnibar's mic (a pressed toggle with `active`) and its suggestion
+strip's chips (options, so `aria-current` rather than `pressed`) are
+ghost `UiButton`s, and its search, row and chip glyphs are `UiIcon`s with
+`:size="null"`, so its own rules still size them
+(`src/ui/kit/omnibarControls.test.mjs` pins it). The mic's and the chat
+row's glyphs stay inline SVG, since no Material symbol the page loads
+draws them, and its field is its own combobox rather than a
+`UiSearchField`.
 `UiSelect` renders the bare native select (Core's labels sit outside it or
 come as an `aria-label`) with `v-model`, `options` and `disabled`;
 options that carry their own attributes come through the slot, a caller's
