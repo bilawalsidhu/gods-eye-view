@@ -90,8 +90,14 @@ test('the ring renders its overlay in the viewer container', async (t) => {
       ['DIV', 'celestial-ring-outline'],
       ['CANVAS', 'celestial-ring-canvas celestial-sun-canvas'],
       ['CANVAS', 'celestial-ring-canvas celestial-moon-canvas'],
-      ['SPAN', 'celestial-marker celestial-sun material-symbols-outlined'],
-      ['SPAN', 'celestial-marker celestial-moon material-symbols-outlined'],
+      [
+        'SPAN',
+        'ui-icon material-symbols-outlined celestial-marker celestial-sun',
+      ],
+      [
+        'SPAN',
+        'ui-icon material-symbols-outlined celestial-marker celestial-moon',
+      ],
     ],
   );
   assert.equal(root.children[0].style.display, 'none');

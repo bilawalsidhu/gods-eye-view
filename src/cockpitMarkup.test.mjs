@@ -194,12 +194,12 @@ test('Cockpit vision cycle exposes every map preset exactly once', () => {
 
 test('Contacts uses the approved radar icon', () => {
   const button = html.match(
-    /<button id="global-context-flights-btn"[\s\S]*?<\/button>/,
+    /<button\b[^>]*\bid="global-context-flights-btn"[\s\S]*?<\/button>/,
   );
   assert.ok(button, 'Contacts button is missing');
   assert.match(
     button[0],
-    /material-symbols-outlined" aria-hidden="true">radar<\/span>/,
+    /material-symbols-outlined"[^>]*aria-hidden="true">radar<\/span>/,
   );
 });
 
@@ -369,11 +369,11 @@ test('Cockpit owns a focused shared Display portal and compact Radio controls', 
   assert.doesNotMatch(html, /data-cockpit-display-slot="presets"/);
   assert.match(
     html,
-    /id="clear-selected-layers"[^>]*aria-label="Clear selected data layers"/,
+    /<button\b(?=[^>]*\bid="clear-selected-layers")[^>]*aria-label="Clear selected data layers"/,
   );
   assert.match(
     html,
-    /id="reset-globe-view"[^>]*aria-label="Reset to full globe view"/,
+    /<button\b(?=[^>]*\bid="reset-globe-view")[^>]*aria-label="Reset to full globe view"/,
   );
   assert.match(
     css,
@@ -1231,7 +1231,7 @@ test('Cockpit Contact navigation omits the redundant Focus camera action', () =>
 
 test('Global Context names its mixed contact cycle without changing the stable mode id', () => {
   const match = html.match(
-    /<button id="global-context-flights-btn"[\s\S]*?<\/button>/,
+    /<button\b[^>]*\bid="global-context-flights-btn"[\s\S]*?<\/button>/,
   );
   assert.ok(match, 'Global Context contacts button is missing');
   assert.match(match[0], />CONTACTS</);

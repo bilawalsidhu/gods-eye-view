@@ -25,12 +25,12 @@ const css = readStylesheet(new URL('../style.css', import.meta.url));
 
 test('Contacts stays in the keyboard sequence and Space Missions owns its rail item', () => {
   const button = html.match(
-    /<button id="global-context-flights-btn"[\s\S]*?<\/button>/,
+    /<button\b[^>]*\bid="global-context-flights-btn"[\s\S]*?<\/button>/,
   )?.[0];
   assert.ok(button, 'Contacts control is missing');
   assert.match(button, /role="tab"/);
   assert.match(button, /tabindex="0"/);
-  const tag = contextView.match(/<button id="global-context-flights-btn"[^>]*>/)?.[0];
+  const tag = contextView.match(/<UiButton id="global-context-flights-btn"[^>]*>/)?.[0];
   assert.ok(tag, 'Contacts control is missing from the view');
   assert.doesNotMatch(tag, /:tabindex|:disabled|\sdisabled/);
   assert.doesNotMatch(html, /id="global-context-missions-btn"/);
@@ -111,7 +111,7 @@ test('Context async action buttons remain focused while busy', () => {
   assert.match(init, /if \(this\._installationsSearchBusy\) return;/);
   assert.doesNotMatch(init, /\.disabled\s*=\s*true/);
   const search = contextView.match(
-    /<button id="installations-search-btn"[^>]*>/,
+    /<UiButton id="installations-search-btn"[^>]*>/,
   )?.[0];
   assert.ok(search, 'nearby sites search is missing');
   assert.doesNotMatch(search, /:disabled|\sdisabled/);
@@ -140,7 +140,7 @@ test('Context async action buttons remain focused while busy', () => {
     'utf8',
   );
   const clearButton = globeActions.match(
-    /<button id="clear-selected-layers"[^>]*>/,
+    /<UiButton id="clear-selected-layers"[^>]*>/,
   )?.[0];
   assert.ok(clearButton, 'Clear selected layers button is missing');
   assert.doesNotMatch(clearButton, /disabled(?!=")|:disabled=/);

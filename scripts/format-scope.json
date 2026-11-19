@@ -1350,6 +1350,8 @@
   "src/ui/kit/welcomeControls.test.mjs",
   "src/ui/kit/omnibarControls.test.mjs",
   "src/ui/kit/storiesControls.test.mjs",
+  "src/ui/kit/smallSurfacesControls.test.mjs",
+  "src/ui/kit/commandDockControls.test.mjs",
   "src/ui/styles/chip.css",
   "src/ui/styles/empty-state.css",
   "src/ui/rail/RailChips.vue",
