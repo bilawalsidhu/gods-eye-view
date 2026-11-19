@@ -982,7 +982,8 @@ test('the launcher keeps focus, restores it, and never disables the focused butt
   // drops the keyboard to <body> and strands the visitor outside the launcher
   // (firstRunLauncherView.test.mjs renders it).
   assert.doesNotMatch(module, /\.disabled = /);
-  // Tab is confined to the launcher, and ESC always releases it.
+  // Tab cycles inside the launcher once focus is in it, and ESC always
+  // releases it.
   const keyboard = fs.readFileSync(
     new URL('./ui/surfaceKeyboard.js', import.meta.url),
     'utf8',

@@ -67,14 +67,14 @@ const RIGHT_STACK_OBSTACLE_SELECTOR = [
   '#gev-voice-control',
   '#world-timeline',
 ].join(', ');
-/** True when a mutation adds or removes the Stories card (`#hPop`). */
+/** The body class the welcome sets while BROWSE STORIES loads. */
 const OPENING_STORIES = 'first-run-opening-stories';
 /**
  * True when a mutation can show or hide the Stories card (`#hPop`): the card
  * itself coming or going, or the welcome that hides it (`#first-run-launcher`,
  * and the body class it sets while BROWSE STORIES loads) ending.
  */
-function movesStoriesCard(record) {
+export function movesStoriesCard(record) {
   if (record.type === 'attributes')
     return (
       (record.oldValue || '').split(/\s+/).includes(OPENING_STORIES) !==
