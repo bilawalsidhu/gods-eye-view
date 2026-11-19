@@ -100,22 +100,35 @@ const kmBetween = (a, b) =>
  * @param {Array<Array>} rows Largest first.
  */
 export function withoutNearTwins(rows) {
-  // Cells of 0.05 degrees (about 5 km), searched with their neighbours.
-  const cell = (lat, lon) => `${Math.floor(lat * 20)}_${Math.floor(lon * 20)}`;
+  // Cells of 0.05 degrees (about 5 km of latitude), searched with their
+  // neighbours. A cell narrows toward the poles, so as many longitude cells
+  // are searched as TWIN_KM spans there, wrapping at the antimeridian.
+  const CELLS = 20;
+  const AROUND = 360 * CELLS;
   const kept = new Map();
   return rows.filter((row) => {
     const name = foldName(row[0]);
-    const [la, lo] = cell(row[1], row[2]).split('_').map(Number);
+    const la = Math.floor(row[1] * CELLS);
+    const lo = Math.floor(row[2] * CELLS);
+    const cos = Math.cos(
+      (Math.min(89.9, Math.abs(row[1]) + 0.1) * Math.PI) / 180,
+    );
+    const span = Math.min(
+      AROUND / 2,
+      Math.ceil((TWIN_KM / (111.32 * cos)) * CELLS) + 1,
+    );
     for (let i = -1; i <= 1; i++)
-      for (let j = -1; j <= 1; j++)
-        for (const other of kept.get(`${la + i}_${lo + j}`) || [])
+      for (let j = -span; j <= span; j++)
+        for (const other of kept.get(
+          `${la + i}_${(((lo + j) % AROUND) + AROUND) % AROUND}`,
+        ) || [])
           if (
             other.name === name &&
             other.row[4] === row[4] &&
             kmBetween(other.row, row) <= TWIN_KM
           )
             return false;
-    const key = `${la}_${lo}`;
+    const key = `${la}_${((lo % AROUND) + AROUND) % AROUND}`;
     if (!kept.has(key)) kept.set(key, []);
     kept.get(key).push({ name, row });
     return true;

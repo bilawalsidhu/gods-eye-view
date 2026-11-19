@@ -62,7 +62,7 @@ export function installEntityContext({
   const voice = useVoiceStore(pinia);
   const cockpitStore = useCockpitStore(pinia);
   const chrome = usePanelChromeStore(pinia);
-  /** Whether Context is open; a closed panel reads nothing. */
+  /** Whether Context is open. (readView also reads while the Omnibar is focused.) */
   const isOpen = () =>
     chrome.panels['global-context-panel']?.collapsed === false;
   const doc = globalThis.document;
@@ -223,7 +223,8 @@ export function installEntityContext({
   // the height. Read when the camera settles, not every frame.
   const readView = () => {
     const port = camera();
-    if (!port || !isOpen()) return;
+    if (!port || (!isOpen() && doc?.activeElement?.id !== 'gev-omnibar-input'))
+      return;
     const pose = port.pose();
     if (![pose.lat, pose.lon, pose.height].every(Number.isFinite)) return;
     const middle = pickWorld?.(viewer, 0.5, 0.5);
@@ -272,6 +273,12 @@ export function installEntityContext({
     listen();
     readView();
   }, 0);
+  // The Omnibar's nearby suggestions also need a fresh center even with
+  // Context closed. Its focus event requests one camera read.
+  const onSearchFocus = (event) => {
+    if (event.target?.id === 'gev-omnibar-input') readView();
+  };
+  doc?.addEventListener('focusin', onSearchFocus);
   // Opening the panel describes the view as it is now.
   let wasOpen = isOpen();
   const offChrome = chrome.$subscribe(() => {
@@ -356,6 +363,7 @@ export function installEntityContext({
     clearTimeout(trailing);
     offFollow();
     offChrome();
+    doc?.removeEventListener('focusin', onSearchFocus);
     clearTimeout(followCheck);
     globalThis.removeEventListener?.('gev:entity-selected', onSelected);
     store.connect(null);

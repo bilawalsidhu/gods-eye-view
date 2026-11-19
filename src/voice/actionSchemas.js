@@ -211,6 +211,7 @@ const schemas = [
             'utilities-panel',
             'pp-toggles',
             'global-context-panel',
+            'space-missions-panel',
             'weather-panel',
             'recent-imagery-panel',
             'voice-settings',

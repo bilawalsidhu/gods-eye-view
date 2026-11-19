@@ -662,8 +662,18 @@ async function main() {
     await open(page, { query: "?welcome=1", errorSink: consoleErrors });
     await pick(page, 'space-missions');
     state = await appState(page);
-    record('SPACE MISSIONS activates its context mode', state.contextMode === 'space-missions',
-      `contextMode=${state.contextMode}`);
+    const missions = await page.evaluate(() => {
+      const panel = document.getElementById('space-missions-panel');
+      return {
+        layerOn: window.__godsEyeView.dataManager.isEffectivelyEnabled('rocket-launches'),
+        panelOpen: !!panel && !panel.hidden && !panel.classList.contains('collapsed'),
+      };
+    });
+    record('SPACE MISSIONS switches its layer on without a Context mode',
+      missions.layerOn && state.contextMode == null,
+      `layerOn=${missions.layerOn} contextMode=${state.contextMode}`);
+    record('SPACE MISSIONS opens its own panel', missions.panelOpen,
+      `panelOpen=${missions.panelOpen}`);
     shots.push(await shoot(page, 'mission-space-missions'));
     });
 

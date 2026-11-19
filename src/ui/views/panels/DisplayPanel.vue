@@ -37,7 +37,7 @@ const pillWords = computed(() => ({
 }));
 const hud = computed(() => view.value?.hud ?? null);
 const sonar = computed(() => view.value?.sonar ?? null);
-const sonarOn = computed(() => sonar.value?.enabled ?? true);
+const sonarOn = computed(() => sonar.value?.enabled ?? false);
 const detection = computed(() => view.value?.detection ?? null);
 const detectButton = computed(() => detection.value?.button ?? null);
 const allocation = computed(() => detection.value?.allocation ?? 'ELASTIC');
@@ -93,35 +93,34 @@ const allocationOptions = computed(() => [
       <UiSelect id="hud-layout-select" class="pp-select gev-field gev-field--compact" :model-value="hud?.variant ?? 'tactical'" @update:model-value="act('setHudLayout', $event)" :aria-label="t('HUD layout')">
         <option value="tactical">{{ t('Tactical') }}</option>
         <option value="minimal">{{ t('Minimal') }}</option>
-        <option value="cyber">{{ t('Cyber') }}</option>
       </UiSelect>
     </div>
-    <div class="pp-slider-row cyber-sonar-control cyber-sonar-toggle-row" id="cyber-sonar-row">
+    <div class="pp-slider-row cyber-sonar-control cyber-sonar-toggle-row" :class="{ visible: hud?.visible }" id="cyber-sonar-row">
       <span class="pp-slider-mini-label">{{ t('Sonar') }}</span>
-      <UiButton class="pp-mode-btn" :pressed="sonarOn" pressed-class="active" id="cyber-sonar-toggle" @click="act('toggleSonar')" :title="t('Cyber sonar contact scanner')" :aria-label="t('Cyber sonar contact scanner')">{{ sonarOn ? t('ON') : t('OFF') }}</UiButton>
+      <UiButton class="pp-mode-btn" :pressed="sonarOn" pressed-class="active" id="cyber-sonar-toggle" @click="act('toggleSonar')" :title="t('Sonar contact scanner')" :aria-label="t('Sonar contact scanner')">{{ sonarOn ? t('ON') : t('OFF') }}</UiButton>
     </div>
-    <output id="cyber-sonar-status" class="cyber-sonar-control" role="status"></output>
-    <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-rings-row">
+    <output id="cyber-sonar-status" class="cyber-sonar-control" role="status" :hidden="!(hud?.visible && sonarOn)"></output>
+    <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" :class="{ visible: hud?.visible && sonarOn }" id="cyber-sonar-rings-row">
       <label class="pp-slider-mini-label" for="cyber-sonar-rings">{{ t('Rings') }}</label>
       <UiSlider class="pp-slider" id="cyber-sonar-rings" @update:model-value="act('setSonarRings', $event)" min="3" max="12" step="1" :model-value="sonar?.rings ?? 8" :aria-label="t('Sonar ring count')" />
       <span class="pp-slider-value" id="cyber-sonar-rings-value">{{ sonar?.rings ?? 8 }}</span>
     </div>
-    <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-range-row">
+    <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" :class="{ visible: hud?.visible && sonarOn }" id="cyber-sonar-range-row">
       <label class="pp-slider-mini-label" for="cyber-sonar-range">{{ t('Range') }}</label>
       <UiSlider class="pp-slider" id="cyber-sonar-range" @update:model-value="act('setSonarRange', $event)" min="60" max="120" step="1" :model-value="sonar?.range ?? 100" :aria-label="t('Sonar ring range')" />
       <span class="pp-slider-value" id="cyber-sonar-range-value">{{ pct(sonar?.range ?? 100) }}</span>
     </div>
-    <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-intensity-row">
+    <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" :class="{ visible: hud?.visible && sonarOn }" id="cyber-sonar-intensity-row">
       <label class="pp-slider-mini-label" for="cyber-sonar-intensity">{{ t('Power') }}</label>
       <UiSlider class="pp-slider" id="cyber-sonar-intensity" @update:model-value="act('setSonarIntensity', $event)" min="0" max="100" step="1" :model-value="sonar?.intensity ?? 70" :aria-label="t('Sonar intensity')" />
       <span class="pp-slider-value" id="cyber-sonar-intensity-value">{{ pct(sonar?.intensity ?? 70) }}</span>
     </div>
-    <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-opacity-row">
+    <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" :class="{ visible: hud?.visible && sonarOn }" id="cyber-sonar-opacity-row">
       <label class="pp-slider-mini-label" for="cyber-sonar-opacity">{{ t('Opacity') }}</label>
-      <UiSlider class="pp-slider" id="cyber-sonar-opacity" @update:model-value="act('setSonarOpacity', $event)" min="35" max="100" step="1" :model-value="sonar?.opacity ?? 84" :aria-label="t('Cyber contact and label opacity')" :title="t('Minimum opacity for map dots, icons, models, brackets, and labels between sonar passes')" />
+      <UiSlider class="pp-slider" id="cyber-sonar-opacity" @update:model-value="act('setSonarOpacity', $event)" min="35" max="100" step="1" :model-value="sonar?.opacity ?? 84" :aria-label="t('Sonar contact and label opacity')" :title="t('Minimum opacity for map dots, icons, models, brackets, and labels between sonar passes')" />
       <span class="pp-slider-value" id="cyber-sonar-opacity-value">{{ pct(sonar?.opacity ?? 84) }}</span>
     </div>
-    <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" id="cyber-sonar-sector-row">
+    <div class="pp-slider-row cyber-sonar-control cyber-sonar-setting" :class="{ visible: hud?.visible && sonarOn }" id="cyber-sonar-sector-row">
       <label class="pp-slider-mini-label" for="cyber-sonar-sector">{{ t('Sector') }}</label>
       <UiSlider class="pp-slider" id="cyber-sonar-sector" @update:model-value="act('setSonarSector', $event)" min="8" max="60" step="1" :model-value="sonar?.sector ?? 24" :aria-label="t('Sonar sector width')" />
       <span class="pp-slider-value" id="cyber-sonar-sector-value">{{ `${sonar?.sector ?? 24}°` }}</span>

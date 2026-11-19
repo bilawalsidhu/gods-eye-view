@@ -66,6 +66,9 @@ export function createSelection({
   }
 
   function setSelectedMission(launchId, isolate = true) {
+    // Once the layer is going off (its Satellites restore may still be
+    // running) a roster click selects nothing and moves no camera.
+    if (launchId && !layerState._enabled) return;
     if (launchId) parts.panel.clearMissionRosterHover();
     if (
       layerState._replayCameraLaunchId &&
@@ -118,7 +121,7 @@ export function createSelection({
   }
 
   function focusMission(launch) {
-    if (!layerState._viewer || !launch) return;
+    if (!layerState._viewer || !launch || !layerState._enabled) return;
     stopMissionZoomAnchor();
     parts.rendering.selectLaunchEntity(launch.id);
     const camera = cameraOf(layerState._viewer);
@@ -163,7 +166,7 @@ export function createSelection({
   }
 
   function focusLaunchSite(launch) {
-    if (!layerState._viewer || !launch) return;
+    if (!layerState._viewer || !launch || !layerState._enabled) return;
     parts.replay.stopMissionReplay();
     stopMissionZoomAnchor();
     parts.rendering.selectLaunchEntity(launch.id);

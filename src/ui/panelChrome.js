@@ -2,7 +2,6 @@ import { UiLifetime } from './uiLifetime.js';
 import { prefersCollapsed, readPanelState } from './rail/panelState.js';
 import { usePanelChromeStore } from './stores/panelChrome.js';
 import { applicationPinia } from './vueRuntime.js';
-import { displayPanelScroller } from './displayPanelScroll.js';
 import { PanelPositionControls } from './panelPositionControls.js';
 import { PanelLayoutController } from './panelLayoutController.js';
 import {
@@ -23,6 +22,7 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'radio-panel' },
   { id: 'scene-panel' },
   { id: 'global-context-panel' },
+  { id: 'space-missions-panel' },
   { id: 'pp-toggles' },
   { id: 'param-slider-panel' },
 ]);
@@ -49,6 +49,7 @@ const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
   'utilities-panel',
   'pp-toggles',
   'global-context-panel',
+  'space-missions-panel',
   'radio-panel',
 ]);
 
@@ -121,7 +122,7 @@ export class PanelChrome {
       readDisplayScrollTop: () =>
         this._displayPortalScrollRestoreOwner === 'standard'
           ? this._standardDisplayScrollTop
-          : displayPanelScroller(this._ppToggles)?.scrollTop || 0,
+          : this._ppToggles?.scrollTop || 0,
     });
   }
   get hud() {

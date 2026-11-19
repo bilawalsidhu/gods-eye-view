@@ -5,11 +5,14 @@ import { markRaw, shallowRef } from 'vue';
  * The top-bar omnibar's link to the shell. The shell connects the actions
  * the omnibar offers: `layers()` lists the data layers as `{id, name,
  * enabled}`, and `setLayer(id, enabled)` turns one on or off as a user click
- * would. Place search runs through the location controls and Ask GEV through
- * the voice controls, so neither is repeated here.
+ * would. `creditPlaces()`, optional, credits the bundled Wikidata place
+ * packs once a name from them is shown, and `creditSuggestions(shown)`,
+ * optional, shows the OpenStreetMap credit while Photon's suggestions are. Place search runs through the
+ * location controls and Ask GEV through the voice controls, so neither is
+ * repeated here.
  */
 export const useOmnibarStore = defineStore('gev-omnibar', () => {
-  /** `{layers(), setLayer(id, enabled)}`, or null while disconnected. */
+  /** `{layers(), setLayer(id, enabled), creditPlaces?()}`, or null while disconnected. */
   const controls = shallowRef(null);
 
   /** @param {?object} next The shell's omnibar actions, or null. */

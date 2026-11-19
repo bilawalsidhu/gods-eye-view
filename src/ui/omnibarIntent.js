@@ -83,6 +83,12 @@ const PANEL_NAMES = [
   [/display( panel)?|visual( panel)?/, 'left', 'pp-toggles', msg('Visual')],
   [/cctv panel|cameras? panel/, 'right', 'cctv-panel', msg('CCTV')],
   [/street ?level panel/, 'right', 'street-level-panel', msg('Street Level')],
+  [
+    /(space )?missions? panel/,
+    'right',
+    'space-missions-panel',
+    msg('Space Missions'),
+  ],
   [/context( panel)?/, 'right', 'global-context-panel', msg('Context')],
 ];
 const CLOSE = /\b(collapse|close|hide|minimi[sz]e|dismiss|shut|fold)\b/;
@@ -185,8 +191,8 @@ const AUX_FORM =
 /**
  * Whether a line is a real question, which Ask GEV may answer on Enter (a
  * billed call):
- *   - one ending with "?" that has two words and two letters or more (or
- *     three Han, Kana or Hangul characters);
+ *   - one ending with "?" that has a question form or two non-Latin words
+ *     with a word of two letters or more, or five Han, Kana or Hangul characters;
  *   - without "?", only a question word's form ("what is here", "how far is
  *     paris") with a word about something after it, and not written as a
  *     name ("Where Is My Mind").
@@ -209,13 +215,12 @@ export function isRealQuestion(text) {
   const words = line.replace(/\?+$/, '').split(/\s+/).filter(Boolean);
   if (line.endsWith('?'))
     // A name with "?" ("New York?", "Truth or Consequences?", "東京都？") is
-    // offered to GEV, not sent: a question's form, or four words or more
-    // (five Han, Kana or Hangul characters, written without spaces; two
-    // words in other non-Latin scripts).
+    // offered to GEV, not sent: a question's form, or five Han, Kana or
+    // Hangul characters written without spaces, or two words in other
+    // non-Latin scripts.
     return (
       ((WH_FORM.test(line) ||
         AUX_FORM.test(line) ||
-        words.length >= 4 ||
         // Question words in other scripts are not read: two words do.
         (words.length >= 2 && !/\p{Script=Latin}/u.test(line))) &&
         words.some((word) => (word.match(/\p{L}/gu) || []).length >= 2)) ||

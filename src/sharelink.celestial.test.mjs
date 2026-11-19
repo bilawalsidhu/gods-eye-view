@@ -246,6 +246,24 @@ test('a collapsed Street Level panel survives the share-link round trip', () => 
   ] });
 });
 
+test('an open Space Missions panel survives the share-link round trip', () => {
+  const manager = makeManager();
+  manager.setPanelStateProvider(() => ({ specs: [
+    { id: 'global-context-panel', collapsed: true },
+    { id: 'space-missions-panel', collapsed: false },
+  ] }));
+  clearTimeout(manager._debounceTimer);
+  manager._updateHash();
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  assert.equal(params.get('ui'), 'g.c.1_n.c.0');
+  const restored = makeManager(`#v=2&lat=10&lon=20&ui=${params.get('ui')}`)
+    .parseInitialHash();
+  assert.deepEqual(restored.panelState, { specs: [
+    { id: 'global-context-panel', collapsed: true, pinned: null },
+    { id: 'space-missions-panel', collapsed: false, pinned: null },
+  ] });
+});
+
 test('camera-only, partial, and malformed panel shares remain valid incoming state', () => {
   const cameraOnly = makeManager('#lat=10&lon=20').parseInitialHash();
   assert.ok(cameraOnly);
@@ -542,6 +560,7 @@ test('every explicit visual UI gesture claims restore authority before it mutate
   const gestureRoutes = [
     ['toggleHud: () => {', 'toggleOrbit: () =>', 'this.hud.toggle()', 'HUD hotkey'],
     ['cycleDetection: () => {', 'toggleCctv: () =>', 'cycleDetectionMode()', 'detection hotkey'],
+    ['toggleSonar:', 'setSonarRings:', 'this._setCyberSonarEnabled(', 'Sonar toggle'],
     ['toggleBloom:', 'setBloomIntensity:', 'this._setBloomEnabled(', 'toggleBloom control'],
     ['setBloomIntensity:', 'toggleSharpen:', 'this._setBloomIntensity(', 'setBloomIntensity control'],
     ['toggleSharpen:', 'setScopeEnabled:', 'this._setSharpenEnabled(', 'toggleSharpen control'],
@@ -595,17 +614,11 @@ test('explicit Context transitions claim the visual restore lane before transiti
 
   assert.match(uiSource, /claimVisualAuthority: \(\) =>\s*this\.shareLinkManager\?\.claimRestoreLane\?\.\('visual'\)/);
   const contextPanel = _initGlobalContextPanel.toString();
-  for (const [start, end, label] of [
-    ["this.listen(this._globalContextFlightsBtn, 'click'", "this.listen(this._globalContextMissionsBtn, 'click'", 'Contacts tab'],
-    ["this.listen(this._globalContextMissionsBtn, 'click'", 'CONTEXT_PANEL_END', 'Space Missions tab'],
-  ]) {
-    const startIndex = contextPanel.indexOf(start);
-    const endIndex = end === 'CONTEXT_PANEL_END'
-      ? contextPanel.length
-      : contextPanel.indexOf(end, startIndex + start.length);
-    assert.ok(startIndex >= 0 && endIndex > startIndex, `${label} route is missing`);
-    assertContextClaimsBefore(contextPanel.slice(startIndex, endIndex), 'this._selectContextMode(', label);
-  }
+  const contacts = contextPanel.slice(
+    contextPanel.indexOf("this.listen(this._globalContextFlightsBtn, 'click'"),
+    contextPanel.indexOf("this.listen(this._installationsSearchBtn, 'click'"),
+  );
+  assertContextClaimsBefore(contacts, 'this._selectContextMode(', 'Contacts tab');
 
   // The voice/tool facade validates the mode first, then transitions.
   const facade = setContextMode.toString();

@@ -1,5 +1,15 @@
 import { MAX_POST_TLE_RETRIES, POST_TLE_RETRY_DELAY_MS } from './policy.js';
 
+/**
+ * Let pending Satellites work finish, including requests that join it while
+ * waiting, so the mission dependency cannot overtake it. Bounded: a
+ * Satellites change that never settles cannot hold missions forever.
+ */
+async function waitForSatelliteVisibility(manager, { signal, timeoutMs }) {
+  if (typeof manager.waitForLayerIdle !== 'function') return true;
+  return manager.waitForLayerIdle('satellites', { signal, timeoutMs });
+}
+
 export function createIngestion({
   state: layerState,
   services,
@@ -97,28 +107,39 @@ export function createIngestion({
   }
 
   async function captureSatelliteDependency() {
-    if (!layerState._dataManager || layerState._satelliteStateBeforeMission)
+    const manager = layerState._dataManager;
+    if (!manager || layerState._satelliteStateBeforeMission) return;
+    const token = layerState._lifecycleToken;
+    // Let a pending Satellites action finish before reserving dependency ON.
+    // A successful explicit OFF can cancel this mission entry while we wait.
+    const idle = await waitForSatelliteVisibility(manager, {
+      signal: layerState._sourceController?.signal,
+      timeoutMs: layerState.satelliteSettleTimeoutMs,
+    });
+    if (token !== layerState._lifecycleToken) return;
+    if (!idle && layerState._enabled)
+      throw new Error(
+        'Space Missions could not start: the satellites layer did not settle',
+      );
+    if (
+      !layerState._enabled ||
+      (manager.layers?.has('rocket-launches') &&
+        !manager.isEffectivelyEnabled('rocket-launches'))
+    )
       return;
     layerState._satelliteStateBeforeMission = {
-      // Effective visibility: a user enable still mid-activation is intent ON —
-      // capturing settled false would restore the user's enable away on exit.
-      enabled:
-        layerState._dataManager.isEffectivelyEnabled?.('satellites') ??
-        layerState._dataManager.isEnabled('satellites'),
+      enabled: manager.isEnabled('satellites'),
       params: parts.policyHelpers.satelliteParamsAfterSpaceMissions(
-        layerState._dataManager.getLayerParams('satellites'),
+        manager.getLayerParams('satellites'),
       ),
     };
-    layerState._dataManager.setLayerParams(
+    manager.setLayerParams(
       'satellites',
       parts.policyHelpers.satelliteParamsForSpaceMissions(
         layerState._satelliteStateBeforeMission.params,
       ),
     );
-    const token = layerState._lifecycleToken;
-    const activation = Promise.resolve(
-      layerState._dataManager.setEnabled('satellites', true),
-    );
+    const activation = Promise.resolve(manager.setEnabled('satellites', true));
     layerState._satelliteActivationPromise = activation;
     try {
       const activated = await activation;
@@ -128,8 +149,7 @@ export function createIngestion({
       if (
         token === layerState._lifecycleToken &&
         layerState._enabled &&
-        (activated === false ||
-          !layerState._dataManager.isEnabled('satellites'))
+        (activated === false || !manager.isEnabled('satellites'))
       ) {
         throw new Error(
           'Space Missions requires the satellites layer, which failed to start',
@@ -146,21 +166,35 @@ export function createIngestion({
   }
 
   async function restoreSatelliteDependency() {
+    const manager = layerState._dataManager;
     const snapshot = layerState._satelliteStateBeforeMission;
-    if (!snapshot || !layerState._dataManager) return;
+    if (!snapshot || !manager) return;
+    // Keep the snapshot available until any explicit Satellites action settles.
+    const token = layerState._lifecycleToken;
+    const idle = await waitForSatelliteVisibility(manager, {
+      timeoutMs: layerState.satelliteSettleTimeoutMs,
+    });
+    if (
+      token !== layerState._lifecycleToken ||
+      layerState._satelliteStateBeforeMission !== snapshot
+    )
+      return;
     layerState._satelliteStateBeforeMission = null;
     layerState._satelliteActivationPromise = null;
-    layerState._dataManager.setLayerParams(
+    manager.setLayerParams(
       'satellites',
       parts.policyHelpers.satelliteParamsAfterSpaceMissions(snapshot.params),
     );
-    const restored = await layerState._dataManager.setEnabled(
-      'satellites',
-      snapshot.enabled,
-    );
+    // An accepted Satellites action owns visibility through mission teardown.
+    if (snapshot.restoreVisibility === false) return;
+    if (!idle)
+      throw new Error(
+        'Space Missions could not restore the satellites layer: it did not settle',
+      );
+    const restored = await manager.setEnabled('satellites', snapshot.enabled);
     if (
       restored === false ||
-      layerState._dataManager.isEnabled('satellites') !== snapshot.enabled
+      manager.isEnabled('satellites') !== snapshot.enabled
     ) {
       throw new Error('Space Missions could not restore the satellites layer');
     }
@@ -230,7 +264,6 @@ export function createIngestion({
     } catch (error) {
       if (layerState._enabled && token === layerState._lifecycleToken) {
         layerState._lastError = error.message;
-        layerState._lastErrorAt = Date.now();
         console.warn('[Data:RocketLaunches] Fetch error:', error);
         // No index yet: fail the enable so Context rolls back.
         // After a loaded index, a failed refresh keeps its records.

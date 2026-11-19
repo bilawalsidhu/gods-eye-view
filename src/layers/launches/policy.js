@@ -2,6 +2,9 @@ import { TWO_PI, toRadians } from '../../geo/vector.js';
 
 export const WINDOW_DAYS = 30;
 
+/** Longest Space Missions waits for pending Satellites work to settle. */
+export const SATELLITE_SETTLE_TIMEOUT_MS = 30000;
+
 export const ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID = 'rocket-missions';
 
 export const ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID =

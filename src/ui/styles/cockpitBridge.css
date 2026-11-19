@@ -15,13 +15,8 @@
       var(--cockpit-radar-label-height) + 14px
   );
 }
-:root[data-ui-theme='cyber'] #cockpit-hud[data-subject='vessel'] {
-  --cockpit-radar-right: 30px;
-}
-:root[data-ui-theme='cyber'] #cockpit-hud[data-subject='vessel']::before {
-  clip-path: none;
-}
-:root:not([data-ui-theme='cyber']) body.cockpit-bridge {
+
+:root body.cockpit-bridge {
   --panel-radius: 2px;
   --btn-radius: 2px;
 }
@@ -252,25 +247,6 @@ body.cockpit-bridge #view-switcher button {
   border-radius: 2px;
   transform: none;
 }
-/* Cyber anchors the card's top from the layout pass; bound its height. */
-:root[data-ui-theme='cyber']
-  #cockpit-hud[data-subject='vessel']
-  .cockpit-signal-window {
-  bottom: auto;
-  max-height: max(
-    44px,
-    min(
-      30vh,
-      280px,
-      calc(
-        100vh - var(--cockpit-signal-top, clamp(255px, 28vh, 300px)) -
-          var(--cockpit-radar-clearance)
-      )
-    )
-  );
-  clip-path: none;
-}
-
 /* The radar console: CockpitRadar fills it, label row included. */
 #cockpit-hud[data-subject='vessel'] .cockpit-radar-console {
   position: absolute;
@@ -296,15 +272,6 @@ body.cockpit-bridge #view-switcher button {
   .cockpit-radar-console:has(> .cockpit-radar[hidden]) {
   display: none;
 }
-:root[data-ui-theme='cyber']
-  #cockpit-hud[data-subject='vessel']
-  .cockpit-radar-console {
-  border-color: rgba(105, 203, 209, 0.34);
-  border-top-color: rgba(196, 84, 84, 0.82);
-  background:
-    linear-gradient(135deg, rgba(105, 203, 209, 0.07), transparent 38%),
-    rgba(8, 23, 27, 0.78);
-}
 
 @media (min-width: 761px) {
   /* The heading tape narrows to stay clear of the console. */
@@ -312,18 +279,6 @@ body.cockpit-bridge #view-switcher button {
     width: min(
       760px,
       72vw,
-      calc(
-        100vw - 2 *
-          (var(--cockpit-radar-right) + var(--cockpit-radar-size) + 24px)
-      )
-    );
-  }
-  :root[data-ui-theme='cyber']
-    #cockpit-hud[data-subject='vessel']
-    .cockpit-compass {
-    width: min(
-      650px,
-      56vw,
       calc(
         100vw - 2 *
           (var(--cockpit-radar-right) + var(--cockpit-radar-size) + 24px)

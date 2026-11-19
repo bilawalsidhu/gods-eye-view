@@ -53,11 +53,12 @@ export const FIRST_RUN_SESSION_KEY = 'gev:first-run-mission-session:v1';
  *   TOUCHED, DURABLE      layer enables for the mission's OWN layers, at
  *                         `origin: 'user'` — identical to clicking those rows.
  *                         Choosing ENVIRONMENTAL *is* choosing those layers.
- *   TOUCHED, DURABLE      the Context panel reveal, but only for the two
- *                         Context missions, exactly as the visible Contacts /
- *                         Space Missions tabs do it. The globe missions open no
- *                         panel at all — nothing there needs explaining, and a
- *                         panel-collapse write is a pref nobody chose.
+ *   TOUCHED, DURABLE      the Context panel reveal, but only for the Contacts
+ *                         mission, exactly as the visible Contacts tab does
+ *                         it. Space Missions opens its own panel the way
+ *                         switching its layer on does. The globe missions open
+ *                         no panel at all — nothing there needs explaining,
+ *                         and a panel-collapse write is a pref nobody chose.
  *   TOUCHED, SESSION      the camera. Never persisted by anything.
  *   NOT TOUCHED           detection mode + density. The reasonable-defaults
  *                         landing owns the DENSE/75 start, and Contacts owns
@@ -75,9 +76,10 @@ export const FIRST_RUN_SESSION_KEY = 'gev:first-run-mission-session:v1';
  *                         `_setModels3dMode`, which default to origin 'user' and
  *                         would persist a 3D choice nobody made.
  *
- * The two Context missions deliberately reuse `styleManager.setContextMode`, the
- * same facade the visible tabs and voice use, so Contacts detection ownership,
- * layer isolation and rollback stay in exactly one place.
+ * The Contacts mission deliberately reuses `styleManager.setContextMode`, the
+ * same facade the visible tab and voice use, so Contacts detection ownership,
+ * layer isolation and rollback stay in exactly one place. Space Missions is an
+ * ordinary layer, switched on like clicking its row.
  */
 
 /** @type {Readonly<Record<string, object>>} */
@@ -88,8 +90,10 @@ export const FIRST_RUN_MISSIONS = Object.freeze({
     busyKey: msg('Starting live contacts…'),
   }),
   'space-missions': Object.freeze({
-    kind: 'context',
-    contextMode: 'space-missions',
+    // An ordinary layer with its own panel: no camera flight, and its panel
+    // opens as it does for a click on its Data Layers row.
+    kind: 'layer',
+    layerIds: Object.freeze(['rocket-launches']),
     busyKey: msg('Opening space missions…'),
   }),
   environmental: Object.freeze({
@@ -265,9 +269,13 @@ export async function runFirstRunChoice(
   // Globe missions: start the pull-out and the layer work together so the
   // camera is already moving while the feeds spin up. The flight is framing,
   // not the mission — a stalled or superseded flight never fails the tile.
-  const flight = Promise.resolve()
-    .then(() => flyToGlobe())
-    .catch(() => null);
+  // Layer missions keep the camera where it is.
+  const flight =
+    mission.kind === 'globe'
+      ? Promise.resolve()
+          .then(() => flyToGlobe())
+          .catch(() => null)
+      : null;
   const outcomes = await Promise.all(
     mission.layerIds.map(async (layerId) => {
       try {
@@ -469,7 +477,7 @@ export function initFirstRunExperience({
             // setContextMode is also a voice/internal facade and deliberately
             // does not decide panel chrome. This first-run click is an explicit
             // visual choice, so reveal the result exactly as the visible
-            // Contacts / Space Missions tabs do.
+            // Contacts tab does.
             styleManager.setPanelCollapsed?.('global-context-panel', false, {
               explicit: true,
             });

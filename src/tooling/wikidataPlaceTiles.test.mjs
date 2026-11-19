@@ -88,3 +88,18 @@ test('one place listed twice nearby keeps its larger listing', () => {
     ['Q1', 'Q3', 'Q4', 'Q5'],
   );
 });
+
+test('twins are found where longitude cells narrow, and across 180°', () => {
+  const rows = [
+    // 1.98 km apart at 70° N, two longitude cells apart.
+    ['Nord', 70, 10.049, 9000, 'NO', 'Q1'],
+    ['Nord', 70, 10.101, 2000, 'NO', 'Q2'],
+    // Either side of the antimeridian, under 2 km apart.
+    ['Kai', -16.5, 179.995, 5000, 'FJ', 'Q3'],
+    ['Kai', -16.5, -179.995, 1000, 'FJ', 'Q4'],
+  ];
+  assert.deepEqual(
+    withoutNearTwins(rows).map((row) => row[5]),
+    ['Q1', 'Q3'],
+  );
+});

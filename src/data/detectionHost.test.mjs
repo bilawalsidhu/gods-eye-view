@@ -941,13 +941,13 @@ test('a Global Context echo bracket is drawn outside its contact bracket and dim
   }
 });
 
-test('under the Cyber sonar sweep an echo is never brighter than its own bracket', () => {
+test('under the sonar sweep an echo is never brighter than its own bracket', () => {
   const env = installEnvironment();
-  // The cyber theme with its HUD open turns the contact sonar on; its sweep
-  // dims brackets it is not passing over.
+  // Sonar on with its HUD open turns the contact sonar on; its sweep dims
+  // brackets it is not passing over.
   env.document.documentElement = {
     // The lowest sweep floor, so dimmed brackets drop a whole alpha band.
-    dataset: { uiTheme: 'cyber', cyberSonarOpacity: '35' },
+    dataset: { cyberSonar: 'on', cyberSonarOpacity: '35' },
     style: { setProperty() {}, removeProperty() {} },
   };
   const hud = env.document.createElement('div');
