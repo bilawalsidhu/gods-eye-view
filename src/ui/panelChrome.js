@@ -205,22 +205,7 @@ export class PanelChrome {
       beforeCollapse: () => {
         if (panelId === 'location-bar') this._closeLocationSearch?.();
       },
-      // A desktop side panel hides entirely once collapsed; its rail item
-      // takes the focus its own disclosure can no longer hold.
-      returnFocusTo: () => {
-        const panel = document.getElementById(panelId);
-        if (!panel?.getClientRects || panel.getClientRects().length > 0)
-          return null;
-        const item = document.querySelector?.(
-          `.ui-rail [data-rail-item="${panelId}"]`,
-        );
-        return item &&
-          !item.disabled &&
-          item.getClientRects().length > 0 &&
-          getComputedStyle(item).visibility === 'visible'
-          ? item
-          : null;
-      },
+      returnFocusTo: () => this._railFocusStand(panelId),
     });
   }
 
@@ -229,9 +214,49 @@ export class PanelChrome {
     if (this._disposed || !this._disclosurePanelIds?.has(panelId)) return;
     const panel = document.getElementById(panelId);
     if (!panel) return;
+    // Opening a panel folds others too (the side accordion, Cockpit's
+    // Contact card): note which open ones hold the focus.
+    const focused = document.activeElement;
+    const holders = [...this._disclosurePanelIds]
+      .map((id) => document.getElementById(id))
+      .filter((el) => el?.contains(focused) && !this._shownPanel(el).collapsed);
+    const cockpit = this.cockpitView;
+    const contactHeld =
+      cockpit?.active &&
+      !cockpit.contextCollapsed &&
+      document.getElementById('cockpit-context')?.contains(focused);
     this.setPanelCollapsed(panelId, !this._shownPanel(panel).collapsed, {
       explicit: true,
     });
+    const stand =
+      contactHeld && cockpit.contextCollapsed
+        ? document.getElementById('cockpit-context-toggle')
+        : holders
+            .filter((el) => this._shownPanel(el).collapsed)
+            .map((el) => this._railFocusStand(el.id))
+            .find(Boolean);
+    stand?.focus({ preventScroll: true });
+  }
+
+  /**
+   * A desktop side panel hides entirely once collapsed; its rail item takes
+   * the focus its own disclosure can no longer hold. Null while the panel or
+   * the item is not shown.
+   * @param {string} panelId Panel element id.
+   */
+  _railFocusStand(panelId) {
+    const panel = document.getElementById(panelId);
+    if (!panel?.getClientRects || panel.getClientRects().length > 0)
+      return null;
+    const item = document.querySelector?.(
+      `.ui-rail [data-rail-item="${panelId}"]`,
+    );
+    return item &&
+      !item.disabled &&
+      item.getClientRects().length > 0 &&
+      getComputedStyle(item).visibility === 'visible'
+      ? item
+      : null;
   }
 
   _setCommandDockPanelPinState(

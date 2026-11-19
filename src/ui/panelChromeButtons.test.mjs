@@ -14,6 +14,8 @@ import PanelCollapseButton from './rail/PanelCollapseButton.vue';
 import RailPanel from './rail/RailPanel.vue';
 import UiPanel from './kit/UiPanel.vue';
 import { usePanelChromeStore } from './stores/panelChrome.js';
+import { useDisplayStore } from './stores/display.js';
+import { DisplayBindings } from './displayBindings.js';
 import CommandDockView from './views/CommandDockView.vue';
 
 function mount(t, component) {
@@ -486,4 +488,165 @@ test('the accordion closes peers through the real store, and opens them again', 
   settleSideAccordion({ panels, enabled: false, onCollapse });
   assert.equal(panels[0].className, '');
   chrome.destroy();
+});
+
+test('F collapses Data Layers like its button and keeps its rail entry', (t) => {
+  document.body.innerHTML = `
+    <nav class="ui-rail"><button data-rail-item="data-panel" style="visibility: visible"></button></nav>
+    <div id="data-panel" class="active"><button class="panel-collapse-btn" data-collapse-target="data-panel"></button></div>`;
+  const panel = document.getElementById('data-panel');
+  const item = document.querySelector('[data-rail-item="data-panel"]');
+  panel.getClientRects = () =>
+    panel.classList.contains('collapsed') ? [] : [{}];
+  item.getClientRects = () => [{}];
+  const store = usePanelChromeStore(createPinia());
+  const chrome = panelChrome(store);
+  followPanelState(store, 'data-panel', panel);
+  chrome._disclosurePanelIds = new Set(['data-panel']);
+  const bindings = new DisplayBindings({
+    viewer: null,
+    services: { isScopeMaskEnabled: () => false, cycleDetectionMode() {} },
+    elements: { _locationSearch: document.createElement('input') },
+    operations: {
+      _setScope() {},
+      _togglePanel: (panelId) => chrome._togglePanel(panelId),
+    },
+    readState: () => ({}),
+    claimDetection() {},
+    displayStore: useDisplayStore(createPinia()),
+  });
+  bindings._initUI();
+  t.after(() => {
+    bindings.destroy();
+    chrome.destroy();
+  });
+  const press = (init = {}) =>
+    document.activeElement.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'f', bubbles: true, ...init }),
+    );
+
+  panel.querySelector('button').focus();
+  press();
+  assert.equal(store.panels['data-panel']?.collapsed, true);
+  assert.ok(document.activeElement === item, 'focus moves to the rail');
+  assert.ok(panel.classList.contains('collapsed'));
+  // `active` is what shows Data Layers at all (layers.css).
+  assert.ok(panel.classList.contains('active'));
+  press({ metaKey: true });
+  assert.equal(store.panels['data-panel'].collapsed, true, 'Cmd+F is not ours');
+  press();
+  assert.equal(store.panels['data-panel'].collapsed, false);
+  assert.ok(!panel.classList.contains('collapsed'));
+  assert.ok(panel.classList.contains('active'));
+});
+
+test('F that folds a focused peer hands the focus to a rail entry', (t) => {
+  document.body.innerHTML = `
+    <nav class="ui-rail">
+      <button data-rail-item="data-panel" style="visibility: visible"></button>
+      <button data-rail-item="pp-toggles" style="visibility: visible"></button>
+    </nav>
+    <div id="left-panel-stack">
+      <div id="data-panel" data-panel-id="data-panel" class="active collapsed"><button class="panel-collapse-btn" data-collapse-target="data-panel"></button></div>
+      <div id="pp-toggles" data-panel-id="pp-toggles"><button class="panel-collapse-btn" data-collapse-target="pp-toggles"></button><button id="crt2">CRT 2</button></div>
+    </div>`;
+  const stack = document.getElementById('left-panel-stack');
+  const store = usePanelChromeStore(createPinia());
+  const chrome = new PanelChrome({
+    elements: { _leftPanelStack: stack },
+    operations: { _showToast() {}, _syncCctvPanelViewport() {} },
+    readHud: () => ({ visible: false, getVariant: () => null }),
+    readCockpit: () => null,
+    readShareLinks: () => null,
+    readInitialShare: () => null,
+    readScrollRestoreOwner: () => null,
+    readDisplayScrollTop: () => 0,
+    store,
+  });
+  for (const id of ['data-panel', 'pp-toggles']) {
+    const panel = document.getElementById(id);
+    panel.getClientRects = () =>
+      panel.classList.contains('collapsed') ? [] : [{}];
+    followPanelState(store, id, panel);
+  }
+  for (const item of document.querySelectorAll('[data-rail-item]'))
+    item.getClientRects = () => [{}];
+  chrome._disclosurePanelIds = new Set(['data-panel', 'pp-toggles']);
+  const bindings = new DisplayBindings({
+    viewer: null,
+    services: { isScopeMaskEnabled: () => false, cycleDetectionMode() {} },
+    elements: { _locationSearch: document.createElement('input') },
+    operations: {
+      _setScope() {},
+      _togglePanel: (panelId) => chrome._togglePanel(panelId),
+    },
+    readState: () => ({}),
+    claimDetection() {},
+    displayStore: useDisplayStore(createPinia()),
+  });
+  bindings._initUI();
+  t.after(() => {
+    bindings.destroy();
+    chrome.destroy();
+  });
+
+  const crt2 = document.getElementById('crt2');
+  crt2.focus();
+  assert.equal(document.activeElement, crt2);
+  crt2.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', bubbles: true }));
+  assert.equal(
+    store.panels['data-panel']?.collapsed,
+    false,
+    'Data Layers opens',
+  );
+  const visual = document.getElementById('pp-toggles');
+  assert.ok(
+    visual.classList.contains('collapsed'),
+    'the accordion folds Visual',
+  );
+  assert.ok(
+    document.activeElement?.matches?.('.ui-rail [data-rail-item]'),
+    `focus lands on a rail entry, not inside the hidden peer (got ${document.activeElement?.id || document.activeElement?.tagName})`,
+  );
+});
+
+test('opening Data Layers in Cockpit hands the focus from the folded Contact card to its toggle', (t) => {
+  document.body.innerHTML = `
+    <div id="left-panel-stack">
+      <div id="data-panel" data-panel-id="data-panel" class="active collapsed"><button class="panel-collapse-btn" data-collapse-target="data-panel"></button></div>
+    </div>
+    <aside id="cockpit-context"><button id="cockpit-context-toggle"></button><button id="cockpit-weather-toggle"></button></aside>`;
+  const store = usePanelChromeStore(createPinia());
+  const cockpit = {
+    active: true,
+    contextCollapsed: false,
+    setContextCollapsed(collapsed) {
+      this.contextCollapsed = collapsed;
+    },
+    setSignalCollapsed() {},
+    scheduleContextLayout() {},
+  };
+  const chrome = new PanelChrome({
+    elements: { _leftPanelStack: document.getElementById('left-panel-stack') },
+    operations: { _showToast() {}, _syncCctvPanelViewport() {} },
+    readHud: () => ({ visible: false, getVariant: () => null }),
+    readCockpit: () => cockpit,
+    readShareLinks: () => null,
+    readInitialShare: () => null,
+    readScrollRestoreOwner: () => null,
+    readDisplayScrollTop: () => 0,
+    store,
+  });
+  t.after(() => chrome.destroy());
+  followPanelState(store, 'data-panel', document.getElementById('data-panel'));
+  chrome._disclosurePanelIds = new Set(['data-panel']);
+  document.getElementById('cockpit-weather-toggle').focus();
+  chrome._togglePanel('data-panel');
+  assert.equal(
+    store.panels['data-panel']?.collapsed,
+    false,
+    'Data Layers opens',
+  );
+  assert.equal(cockpit.contextCollapsed, true, 'Contact folds for it');
+  assert.equal(document.activeElement?.id, 'cockpit-context-toggle');
 });
