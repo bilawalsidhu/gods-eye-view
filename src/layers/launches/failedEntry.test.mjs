@@ -743,6 +743,35 @@ test('a Satellites setting changed between missions survives the next one', asyn
   assert.equal(f.manager.getLayerParams('satellites').showOrbits, false);
 });
 
+test('tracking stopped by a place search during a mission stays stopped after it', async (t) => {
+  const f = await fixture(t);
+  f.upstream.status = 200;
+  assert.equal(
+    await f.manager.setEnabled('rocket-launches', true, { origin: 'user' }),
+    true,
+  );
+  await f.settle();
+  f.manager.setLayerParams(
+    'satellites',
+    { selectedSatTrackingId: 25544 },
+    { origin: 'voice' },
+  );
+  await f.settle();
+  // A place search stops tracking with the tool origin.
+  f.manager.setLayerParams(
+    'satellites',
+    { selectedSatTrackingId: null },
+    { origin: 'tool' },
+  );
+  await f.settle();
+  await f.manager.setEnabled('rocket-launches', false, { origin: 'user' });
+  await f.settle();
+  assert.equal(
+    f.manager.getLayerParams('satellites').selectedSatTrackingId ?? null,
+    null,
+  );
+});
+
 test('a failed Satellites restore still clears the selected mission panel', async (t) => {
   const f = await fixture(t);
   f.upstream.status = 200;

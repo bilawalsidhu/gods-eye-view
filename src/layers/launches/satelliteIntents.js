@@ -16,6 +16,15 @@ function isExplicitOrigin(origin) {
   return origin === 'user' || origin === 'voice';
 }
 
+/**
+ * A setting changed on purpose: by the person, by voice, or by a tool such
+ * as a place search (the layer state's own rule, isExplicitLayerStateOrigin
+ * in src/data/layerState.js).
+ */
+function isDeliberateOrigin(origin) {
+  return isExplicitOrigin(origin) || origin === 'tool';
+}
+
 export function createSatelliteIntents({ state: layerState }) {
   const requestOrder = new Map();
   let sequence = 0;
@@ -94,15 +103,16 @@ export function createSatelliteIntents({ state: layerState }) {
   }
 
   /**
-   * Keep a Satellites setting the person changed while Space Missions holds
-   * its saved state ("show orbits" off): it survives the mission teardown,
-   * as their visibility choice does.
+   * Keep a Satellites setting changed on purpose while Space Missions holds
+   * its saved state ("show orbits" off, tracking a satellite, or a place
+   * search that stops tracking): it survives the mission teardown, as a
+   * visibility choice does.
    */
   function handleParams(change) {
     if (
       change?.type !== 'params' ||
       change.layerId !== 'satellites' ||
-      !isExplicitOrigin(change.origin)
+      !isDeliberateOrigin(change.origin)
     )
       return;
     const previous = layerState._satelliteStateBeforeMission;
