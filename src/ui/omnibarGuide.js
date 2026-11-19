@@ -472,6 +472,9 @@ export function startGuide(steps, { title = '' } = {}) {
     nextLabel: t('Next'),
     nextHidden: false,
     nextQuiet: false,
+    // The extra rings for a step's further targets, after the callout; the
+    // count only grows, and rings a step does not use are faded out.
+    subRings: 0,
     // Announces each step once; the dialog itself is not a live region, so
     // its buttons and progress are not read out on every change.
     status: '',
@@ -511,7 +514,9 @@ export function startGuide(steps, { title = '' } = {}) {
   const root = paint().component.subTree.children[0].el;
   const ring = root.querySelector(':scope > .gev-guide-ring');
   const callout = root.querySelector(':scope > .gev-guide-callout');
-  const subRings = [];
+  // The extra rings, read again from the rendered tree whenever more are
+  // drawn.
+  let subRings = [];
 
   const live = steps.filter(Boolean);
   let index = -1;
@@ -657,11 +662,10 @@ export function startGuide(steps, { title = '' } = {}) {
       width: `${main.width + pad * 2}px`,
       height: `${main.height + pad * 2}px`,
     });
-    while (subRings.length < rest.length) {
-      const sub = doc.createElement('div');
-      sub.className = 'gev-guide-ring gev-guide-ring--sub';
-      root.append(sub);
-      subRings.push(sub);
+    if (subRings.length < rest.length) {
+      view.subRings = rest.length;
+      paint();
+      subRings = [...root.querySelectorAll(':scope > .gev-guide-ring--sub')];
     }
     subRings.forEach((sub, i) => {
       const box = rest[i];
