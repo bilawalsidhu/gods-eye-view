@@ -53,7 +53,7 @@ never copied:
 | `UiButton` `variant="action"` | the action surface (`gev-action-button`); `tone="danger"` hovers red, `size="compact"` is the shot-row footprint (on this variant only) | `src/ui/styles/action-button.css` |
 | `UiButton` `variant="primary"` | the action surface with a group's main-action accent | `src/ui/styles/action-button.css` |
 | `UiButton` `variant="icon"` | the 22px square glyph button of a panel's collapse toggle | `src/ui/styles/controls.css` |
-| `UiCloseButton` | a close, dismiss or clear button: a bare glyph (× with `glyph="times"`, the Material `close` symbol with `glyph="icon"`) with no padding, border or background of its own and a pointer; the site's feature class sets size, colour, hover and any surface, and `bare` leaves the look off for a skin that keeps the browser's padding | `src/ui/styles/close-button.css` |
+| `UiCloseButton` | a close, dismiss or clear button: a bare glyph (× with `glyph="times"`, the Material `close` symbol with `glyph="icon"`) with no padding, border or background of its own and a pointer; the site's feature class sets size, colour, hover and any surface, and `bare` leaves the look off for a skin that sets its own padding and border | `src/ui/styles/close-button.css` |
 | `UiSearchField` | a search field: the Material `search` glyph and a search input in a flex row, the input bare (no border or background, free to shrink); the site's feature classes set the frame's size, surface and focus ring and the input's type and outline, and the browser's own cancel button is left to each skin | `src/ui/styles/search-field.css` |
 | `UiCheckbox` | a checkbox: a label wrapping a native box and its words in a centred flex row; the box keeps each site's size, margin and accent colour, and the site's feature class sets the row's gap, direction and colour | `src/ui/styles/checkbox.css` |
 | `UiDialog` | none: a native modal `<dialog>`; the site's feature class or inline style draws it | — |
@@ -108,8 +108,8 @@ no tip unless the site passes a `title`; attributes and classes pass through,
 so each site keeps its id, feature class and look. Every close, dismiss and
 clear button in the views is one (`src/ui/kit/closeButtons.test.mjs` pins
 it); Street Level's and the space mission's keep `bare`, since their skins
-keep the browser's padding. The close buttons built in script (credits and
-the guide) are not converted yet.
+set their own padding and border, and so does the credits list's. The
+guide's close button, built in script, is not converted yet.
 `UiSearchField` takes `v-model`, a required `label` (the input's
 accessible name), `placeholder` and `tag` (`div`, given `role="search"` by
 the site, or `label`); attributes and classes go to the frame, and
@@ -176,6 +176,12 @@ page declares no dark `color-scheme`. Selects and number fields are
 `.gev-field`, which draws its own chevron in place of the platform's arrow
 and keeps native spinners dark; ranges are `.gev-quantitative-slider`, with
 a feature supplying only its accent.
+
+`t()` is not reactive. Words a view passes to a kit component as a prop
+(`UiCloseButton`'s `label`) follow a locale change on the view's next
+render, but words in a kit component's slot do not: the compiled slot does
+not render the child again. A view whose words must follow the locale at
+once passes the locale itself as a prop or key, as the credits line does.
 
 ## Phases
 
@@ -373,7 +379,14 @@ a feature supplying only its accent.
    choices, DISMISS and "Don't show this again" call the launcher's
    controls; a refused save hands the tick back to the view to revert. The
    launcher still reads the rendered card for its hit test, keyboard trap,
-   focus and overflow measurement), then
+   focus and overflow measurement), the attribution line (for a renderer
+   without its own credit display, `mountCreditsView()` renders
+   `CreditsView` synchronously, as the weather readout is, and the view
+   teleports the line and its "Data attribution" list to the end of the
+   body, where the page's rules select them; the owner keeps the credits
+   shown, the list's open state and its focus, and words the view again
+   when the locale changes; the list's close button is a bare
+   `UiCloseButton`), then
    Cockpit (in progress: `CockpitBriefing` renders the briefing card's
    pages, cycle toggle, regional news and local conditions, and
    `CockpitContext` the Contact card's scope, navigation, counts, nearest
