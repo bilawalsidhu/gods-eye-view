@@ -28,7 +28,10 @@ export function publishCockpitSignals() {
         target: item.target && {
           layerId: item.target.layerId,
           id: item.target.id,
-          label: t('Select flight {title}', { title: item.title }),
+          // Orbit's site and satellite rows name their own action.
+          label:
+            item.target.label ??
+            t('Select flight {title}', { title: item.title }),
         },
       };
     }),
@@ -36,17 +39,42 @@ export function publishCockpitSignals() {
   this.scheduleContextLayout();
 }
 
-export function pushCockpitSignal(key, tone, title, detail, target = null) {
+/**
+ * Log a signal as the newest row, unless its key last said the same.
+ * @param {{inPlace?: boolean}} [options] `inPlace`: a status row, such as a
+ *   provider's, that changes where it stands rather than log a new row, so a
+ *   changing ETA never pushes a steady warning off the list; it keeps its
+ *   time while it stays listed, and one pushed off comes back as the newest
+ *   row.
+ */
+export function pushCockpitSignal(
+  key,
+  tone,
+  title,
+  detail,
+  target = null,
+  { inPlace = false } = {},
+) {
   if (!title || !detail) return;
-  const signature = `${title}|${detail}|${target?.layerId || ''}|${target?.id || ''}`;
-  if (this.signalSignatures.get(key) === signature) return;
-  this.signalSignatures.set(key, signature);
+  // JSON, not a joined string, so a separator inside a title or detail cannot
+  // make two rows match. An in-place row also changes with its tone alone.
+  const signature = JSON.stringify([
+    title,
+    detail,
+    target?.layerId || '',
+    target?.id || '',
+    inPlace ? tone : '',
+  ]);
   // A locale change words the signal again where it stands.
-  const shown = this.rewordingSignals
-    ? this.signalItems.find((item) => item.key === key)
-    : null;
+  const shown =
+    this.rewordingSignals || inPlace
+      ? this.signalItems.find((item) => item.key === key)
+      : null;
+  if (this.signalSignatures.get(key) === signature && (!inPlace || shown))
+    return;
+  this.signalSignatures.set(key, signature);
   if (shown) {
-    Object.assign(shown, { title, detail });
+    Object.assign(shown, { tone, title, detail });
     this.publishCockpitSignals();
     return;
   }
@@ -212,6 +240,14 @@ export function handleSignalClick(event) {
   );
   if (!target) return;
   event.preventDefault();
+  // In orbit the rows are sites and satellites (cockpitOrbitalSignals.js).
+  if (
+    this.handleOrbitalSignalClick?.(
+      target.dataset.signalLayer,
+      target.dataset.signalId,
+    )
+  )
+    return;
   this.services.militaryAwarenessLayer.focusTarget?.(
     target.dataset.signalLayer,
     target.dataset.signalId,

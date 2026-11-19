@@ -10,8 +10,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import flightsLayer, { _setTrackedFlightRefreshStateForTest } from './flights.js';
-import militaryFlightsLayer, { _setTrackedMilitaryRefreshStateForTest } from './militaryFlights.js';
+import flightsLayer, {
+  _iconForTest,
+  _setTrackedFlightRefreshStateForTest,
+} from './flights.js';
+import militaryFlightsLayer, {
+  _iconForTest as _militaryIconForTest,
+  _setTrackedMilitaryRefreshStateForTest,
+} from './militaryFlights.js';
 
 const ICAO = 'abc123';
 const OTHER = 'def456';
@@ -39,12 +45,14 @@ const LAYERS = [
     name: 'commercial',
     layer: flightsLayer,
     visualCenterM: Cesium.Cartesian3.ZERO,
+    // Where the icon is drawn: the seeded position as the GPU encodes it.
+    spritePosition: () => _iconForTest(ICAO).position,
     seed({ billboardShow, models = [] }) {
       _setTrackedFlightRefreshStateForTest({
         icao24: ICAO,
         entity: null,
-        billboard: contactBillboard(billboardShow),
-        billboardCollection: { show: true, remove() {} },
+        icon: contactBillboard(billboardShow),
+        iconLayer: { show: true, remove() {} },
         viewer: contactViewer(),
         tracked: false,
         models,
@@ -61,12 +69,13 @@ const LAYERS = [
     name: 'military',
     layer: militaryFlightsLayer,
     visualCenterM: Cesium.Cartesian3.ZERO,
+    spritePosition: () => _militaryIconForTest(ICAO).position,
     seed({ billboardShow, models = [] }) {
       _setTrackedMilitaryRefreshStateForTest({
         icao24: ICAO,
         entity: null,
-        billboard: contactBillboard(billboardShow),
-        billboardCollection: { show: true, remove() {} },
+        icon: contactBillboard(billboardShow),
+        iconLayer: { show: true, remove() {} },
         viewer: contactViewer(),
         tracked: false,
         models,
@@ -97,7 +106,7 @@ for (const fixture of LAYERS) {
     // The handoff state: the fleet tick hid the sprite and showed the model.
     fixture.seed({
       billboardShow: false,
-      models: [[ICAO, { ready: true, show: true, _gevPlacementReady: true }]],
+      models: [[ICAO, { ready: true, show: true }]],
     });
     assert.ok(
       nearbyIcaos(fixture.layer).includes(ICAO),
@@ -136,7 +145,6 @@ for (const fixture of LAYERS) {
         ready: false,
         show: true,
         scale: 0,
-        _gevPlacementReady: false,
       }]],
     });
     assert.ok(
@@ -150,8 +158,8 @@ for (const fixture of LAYERS) {
     const spritePosition = detectionPosition(fixture.layer);
     assert.ok(spritePosition, 'the 2D sprite publishes a detection candidate');
     assert.ok(
-      Cesium.Cartesian3.equalsEpsilon(spritePosition, contactBillboard(true).position, 0, 1e-6),
-      'the 2D bracket stays welded to the billboard position',
+      Cesium.Cartesian3.equalsEpsilon(spritePosition, fixture.spritePosition(), 0, 1e-6),
+      'the 2D bracket stays welded to the drawn sprite position',
     );
 
     const modelMatrix = Cesium.Matrix4.fromRotationTranslation(MODEL_ROTATION, MODEL_POSITION);
@@ -160,7 +168,6 @@ for (const fixture of LAYERS) {
       models: [[ICAO, {
         ready: true,
         show: true,
-        _gevPlacementReady: true,
         modelMatrix,
         computedScale: COMPUTED_SCALE,
       }]],
@@ -191,14 +198,13 @@ for (const fixture of LAYERS) {
         ready: false,
         show: true,
         scale: 0,
-        _gevPlacementReady: false,
         modelMatrix: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
       }]],
     });
     const loadingPosition = detectionPosition(fixture.layer);
     assert.ok(loadingPosition, 'the billboard remains detectable while its model loads');
     assert.ok(
-      Cesium.Cartesian3.equalsEpsilon(loadingPosition, contactBillboard(true).position, 0, 1e-6),
+      Cesium.Cartesian3.equalsEpsilon(loadingPosition, fixture.spritePosition(), 0, 1e-6),
       'a shown-but-unready zero-scale model cannot steal the detection anchor',
     );
   });

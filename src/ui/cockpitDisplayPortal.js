@@ -1,5 +1,3 @@
-import { displayPanelScroller } from './displayPanelScroll.js';
-
 /**
  * Show the existing Display groups in Cockpit's Display popover while Cockpit
  * is on. The portal publishes the popover's slots; the Display panel
@@ -37,16 +35,13 @@ export class CockpitDisplayPortal {
     this.slots = Object.freeze(
       Object.fromEntries(this.records.map(({ name, slot }) => [name, slot])),
     );
-    this.standardScrollTop =
-      displayPanelScroller(standardPanel)?.scrollTop || 0;
+    this.standardScrollTop = standardPanel?.scrollTop || 0;
     this.cockpitScrollTop = cockpitPanel?.scrollTop || 0;
     const options = { passive: true, signal: this.listeners.signal };
     standardPanel?.addEventListener(
       'scroll',
       () => {
-        if (!this.active)
-          this.standardScrollTop =
-            displayPanelScroller(standardPanel).scrollTop;
+        if (!this.active) this.standardScrollTop = standardPanel.scrollTop;
       },
       { ...options, capture: true },
     );
@@ -98,8 +93,7 @@ export class CockpitDisplayPortal {
       if (nextActive && this.cockpitPanel)
         this.cockpitPanel.scrollTop = this.cockpitScrollTop;
       if (!nextActive && this.standardPanel)
-        displayPanelScroller(this.standardPanel).scrollTop =
-          this.standardScrollTop;
+        this.standardPanel.scrollTop = this.standardScrollTop;
     };
     if (!settle) {
       this.afterRender(() => {
@@ -146,8 +140,7 @@ export class CockpitDisplayPortal {
     this.publish(null);
     const { standardPanel, standardScrollTop } = this;
     this.afterRender(() => {
-      if (standardPanel)
-        displayPanelScroller(standardPanel).scrollTop = standardScrollTop;
+      if (standardPanel) standardPanel.scrollTop = standardScrollTop;
     });
     this.records = [];
     this.restoreOwner = null;

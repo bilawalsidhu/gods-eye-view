@@ -7,13 +7,16 @@
  *     Natural Earth 10m admin-1 states and provinces (public domain).
  *   src/data/local_data/us_census_counties/counties.json
  *     US Census Bureau cartographic boundary counties (public domain).
+ *   src/data/local_data/natural_earth/populated_places.json
+ *     Natural Earth 10m populated places as points, for the orbital view's
+ *     "near <city>" (`src/data/placeBelow.js`; public domain).
  *
  * Both sources are pinned by URL and SHA-256, so a rerun reproduces the packs
  * byte for byte. Downloads are cached outside the repository (default: the
  * system temp directory) and are never committed.
  *
  * Usage:
- *   node scripts/build-admin-packs.mjs [--cache <dir>] [--only countries|admin1|counties]
+ *   node scripts/build-admin-packs.mjs [--cache <dir>] [--only countries|admin1|counties|places]
  *
  * The provenance READMEs beside each pack record these parameters.
  */
@@ -101,6 +104,9 @@ export const PARAMS = Object.freeze({
     elsewhereMinPopulation: 50_000,
     cityStateMaxKm2: 1_000,
   },
+  // Every populated place, kept as a point: name, position and the two
+  // prominence ranks the orbital view picks "near <city>" by.
+  places: { decimals: 3 },
 });
 
 const args = process.argv.slice(2);
@@ -688,6 +694,47 @@ async function buildAdmin1() {
   };
 }
 
+async function buildPlaces() {
+  const params = PARAMS.places;
+  const source = await fetchPinned('places');
+  const factor = 10 ** params.decimals;
+  const round = (value) => Math.round(value * factor) / factor;
+  const places = JSON.parse(source.bytes.toString('utf8'))
+    .features.map((f) => f.properties)
+    .filter(
+      (p) =>
+        p.name &&
+        Number.isFinite(p.latitude) &&
+        Number.isFinite(p.longitude) &&
+        Number.isFinite(p.scalerank),
+    )
+    .map((p) => [
+      p.name,
+      round(p.latitude),
+      round(p.longitude),
+      p.scalerank,
+      Number.isFinite(p.rank_max) ? p.rank_max : 0,
+    ])
+    .sort((a, b) => a[3] - b[3] || b[4] - a[4] || a[0].localeCompare(b[0]));
+  return {
+    meta: {
+      title: 'Natural Earth populated places',
+      source: 'ne_10m_populated_places_simple',
+      url: SOURCES.places.url,
+      sha256: source.digest,
+      commit: NE_COMMIT,
+      license:
+        'Public domain (https://www.naturalearthdata.com/about/terms-of-use/)',
+      schema:
+        'places[]: [name, latitude, longitude, scalerank (0 most prominent .. 10), rank_max (population class, 0..14; higher is larger)]',
+      decimals: params.decimals,
+      curation: params,
+      script: 'scripts/build-admin-packs.mjs',
+    },
+    places,
+  };
+}
+
 async function buildCounties() {
   const params = PARAMS.counties;
   const source = await fetchPinned('counties');
@@ -768,4 +815,13 @@ if (isMain) {
       'src/data/local_data/us_census_counties/counties.json',
       await buildCounties(),
     );
+  if (!only || only === 'places') {
+    const relative = 'src/data/local_data/natural_earth/populated_places.json';
+    const pack = await buildPlaces();
+    const text = JSON.stringify(pack) + '\n';
+    await writeFile(path.join(ROOT, relative), text);
+    console.log(
+      `${relative}: ${pack.places.length} places, ${Buffer.byteLength(text)} bytes`,
+    );
+  }
 }

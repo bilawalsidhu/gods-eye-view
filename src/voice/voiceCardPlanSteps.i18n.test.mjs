@@ -295,10 +295,10 @@ test('area, imagery and OSM card lines are shown in the UI language', () => {
     notDrawn: 'the map was cleared while looking it up',
   };
   const areaLines = inLocale('de', () => presentResult('resolve_area', area).display.lines);
-  assert.ok(areaLines.includes('250 m um das Wahrzeichen'), areaLines.join(' | '));
-  assert.ok(areaLines.includes('Teile: 3'));
-  assert.ok(areaLines.includes('Gezeichnete Teile: 2 von 3'));
-  assert.ok(areaLines.some((line) => line.includes('die Karte wurde während der Suche geleert')));
+  assert.ok(areaLines.includes('250 m um den Ort'), areaLines.join(' | '));
+  assert.ok(areaLines.includes('3 Teile'));
+  assert.ok(areaLines.includes('2 von 3 Teilen gezeichnet'));
+  assert.ok(areaLines.some((line) => line.includes('die Zeichenfläche wurde während der Suche geleert')));
   const osm = {
     ok: true,
     kind: 'hospitals',
@@ -316,7 +316,7 @@ test('area, imagery and OSM card lines are shown in the UI language', () => {
   assert.match(osmCard.title, /\bhospital\b/);
   assert.doesNotMatch(osmCard.title, /hospitals/, 'one place takes the singular');
   assert.equal(presentResult('osm_query', { ...osm, complete: true }).display.title, '1 hospital');
-  assert.ok(osmCard.lines.includes('Zusammengeführte Doppelkartierungen: 2'));
+  assert.ok(osmCard.lines.includes('2 Duplikate zusammengeführt'));
   assert.deepEqual(osmCard.notes, ['die ersten 500 aufgelistet', 'es gibt weitere']);
   const imagery = {
     ok: true,

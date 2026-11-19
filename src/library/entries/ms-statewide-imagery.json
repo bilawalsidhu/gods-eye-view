@@ -1,0 +1,48 @@
+{
+  "id": "ms-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Mississippi Statewide Imagery",
+  "provider": "MARIS",
+  "description": "Aerial orthophotos: Statewide coverage of Mississippi.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-91.66, 30.17, -88.1, 35]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://tiles.arcgis.com/tiles/LLVEmB8Lsae3Um4s/arcgis/rest/services/ms_napp2/MapServer/tile/{z}/{y}/{x}",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 16,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "1 m (NAPP/NAIP)",
+    "resolutionM": 1,
+    "trueOrtho": false,
+    "vintage": "2015–present",
+    "updateCycle": "Periodic",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Open state geodata — attribution requested",
+    "url": "https://www.gis.ms.gov/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "USDA-FSA-APFO",
+    "url": "https://www.gis.ms.gov/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

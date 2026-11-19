@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import { toLonLatH } from '../../geo/ellipsoid.js';
+import { canvasOf, findCamera, findQuery } from '../../render/rendererOf.js';
 import { viewAreaRadiusKm } from './viewArea.js';
 
 /**
@@ -8,26 +9,23 @@ import { viewAreaRadiusKm } from './viewArea.js';
  * vessel.
  */
 export function vesselViewArea(viewer) {
-  const camera = viewer?.camera;
-  const scene = viewer?.scene;
-  const height = camera?.positionCartographic?.height;
-  const radiusKm = viewAreaRadiusKm(height);
+  const pose = findCamera(viewer)?.pose();
+  const radiusKm = viewAreaRadiusKm(pose?.height);
   if (radiusKm == null) return null;
-  let center = camera.positionCartographic;
-  const canvas = scene?.canvas;
+  let { lat, lon } = pose;
+  const canvas = canvasOf(viewer);
   if (canvas?.clientWidth && canvas?.clientHeight) {
     try {
-      const hit = camera.pickEllipsoid(
-        new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2),
-        scene.globe?.ellipsoid,
+      const hit = findQuery(viewer)?.pickEllipsoid(
+        canvas.clientWidth / 2,
+        canvas.clientHeight / 2,
       );
-      if (hit) center = Cesium.Cartographic.fromCartesian(hit);
+      const center = hit ? toLonLatH(hit) : null;
+      if (center) ({ lat, lon } = center);
     } catch {
       /* the camera position stands in */
     }
   }
-  const lat = Cesium.Math.toDegrees(center.latitude);
-  const lon = Cesium.Math.toDegrees(center.longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   return { lat, lon, radiusKm };
 }

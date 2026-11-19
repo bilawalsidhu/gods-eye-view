@@ -1,0 +1,37 @@
+/* Visual in the left column: it takes clicks (the column itself lets them
+   through to the globe) and stays inside the column, scrolling as a whole. */
+#left-panel-stack > #pp-toggles {
+  position: relative;
+  inset: auto;
+  flex: 0 1 var(--left-panel-allocated-height, auto);
+  min-height: 0;
+  max-height: var(--left-panel-allocated-height, 100%);
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
+#left-panel-stack > #pp-toggles.collapsed {
+  display: none;
+}
+
+/* ── Expanded panel width ───────────────────────────────────────────────
+   Data Layers opens 15px wider than it used to (280 → 295px), and that is
+   the narrowest any side panel opens to; wider ones (Context, CCTV,
+   Authoring) keep their own width. */
+:root {
+  --side-panel-min-expanded-width: 295px;
+}
+
+#data-panel,
+#utilities-panel {
+  --panel-expanded-width: var(--side-panel-min-expanded-width);
+}
+
+#left-panel-stack > #pp-toggles:not(.collapsed) {
+  --pp-expanded-width: var(--side-panel-min-expanded-width);
+  width: var(--side-panel-min-expanded-width);
+}
+
+:is(#left-panel-stack, #right-context-rail) > [data-panel-id]:not(.collapsed) {
+  min-width: var(--side-panel-min-expanded-width);
+}

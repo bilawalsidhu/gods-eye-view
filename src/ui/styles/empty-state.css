@@ -1,0 +1,15 @@
+/* A one-line empty state: dim mono text where a list would be. The kit's
+   UiEmpty (.ui-empty) and the news readout's empty and status lines wear it;
+   feature classes loaded later restyle it. */
+.ui-empty,
+.news-readout__empty,
+.news-readout__status {
+  color: var(--text-dim);
+  font: 10px var(--font-mono);
+}
+
+/* The next step (a missing key's), under what it holds back. */
+.ui-empty__hint {
+  display: block;
+  margin-top: 2px;
+}

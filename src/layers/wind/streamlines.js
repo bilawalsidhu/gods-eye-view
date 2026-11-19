@@ -10,8 +10,19 @@ export const WIND_CELL_DEGREES = 30;
 const DEGREE_METERS = 111320;
 const GOLDEN_ANGLE = 137.50776405003785;
 
+/**
+ * Whether a point is inside `bounds` (a rectangle in degrees, east of west;
+ * east may run past 180°), or there are none.
+ */
+function within(bounds, lon, lat) {
+  if (!bounds) return true;
+  if (lat < bounds.south || lat > bounds.north) return false;
+  const span = bounds.east - bounds.west;
+  return (((lon - bounds.west) % 360) + 360) % 360 <= span;
+}
+
 /** One bounded midpoint step. The integration interval is field time, not playback time. */
-function advance(field, point, seconds, scratch) {
+function advance(field, point, seconds, scratch, bounds = null) {
   sampleWind(field, point[0], point[1], scratch);
   if (
     !Number.isFinite(scratch.u + scratch.v) ||
@@ -37,6 +48,7 @@ function advance(field, point, seconds, scratch) {
   const lat = point[1] + (scratch.v * dt) / DEGREE_METERS;
   if (Math.abs(lat) > 88.5 || Math.abs(lon - point[0]) > 180) return null;
   if (Math.abs(lon - point[0]) + Math.abs(lat - point[1]) < 1e-8) return null;
+  if (!within(bounds, lon, lat)) return null;
   return [lon, lat];
 }
 
@@ -44,10 +56,18 @@ function advance(field, point, seconds, scratch) {
  * Bake geographic streamlines once from an immutable forecast snapshot.
  * Equal-area seeds avoid polar overpopulation. Increasing path position always
  * follows the wind; paths stop at the map seam, poles, calm or missing samples.
+ * With `bounds` (a field over part of the globe: degrees, east of west, east
+ * past 180° across the antimeridian), seeds fall inside it, equal-area, and
+ * paths stop at its edges.
  */
 export function bakeWindStreamlines(
   field,
-  { count = WIND_PATH_LIMIT, steps = WIND_PATH_STEPS, stepSeconds = 1800 } = {},
+  {
+    count = WIND_PATH_LIMIT,
+    steps = WIND_PATH_STEPS,
+    stepSeconds = 1800,
+    bounds = null,
+  } = {},
 ) {
   if (
     !field ||
@@ -73,14 +93,18 @@ export function bakeWindStreamlines(
   );
   const paths = [];
   const scratch = { u: 0, v: 0 };
+  const rad = Math.PI / 180;
+  const south = Math.max(-88, bounds ? bounds.south : -88) * rad;
+  const north = Math.min(88, bounds ? bounds.north : 88) * rad;
+  const lonSpan = bounds ? bounds.east - bounds.west : 360;
   for (let seed = 0; seed < budget; seed++) {
-    const lon = normalizeLongitude(seed * GOLDEN_ANGLE);
+    const lon = bounds
+      ? normalizeLongitude(bounds.west + ((seed * GOLDEN_ANGLE) % lonSpan))
+      : normalizeLongitude(seed * GOLDEN_ANGLE);
+    const share = (seed + 0.5) / budget;
     const lat =
-      (Math.asin(
-        (((seed + 0.5) / budget) * 2 - 1) * Math.sin((88 * Math.PI) / 180),
-      ) *
-        180) /
-      Math.PI;
+      Math.asin(Math.sin(south) + share * (Math.sin(north) - Math.sin(south))) /
+      rad;
     const center = [lon, lat];
     sampleWind(field, lon, lat, scratch);
     const speed = Math.hypot(scratch.u, scratch.v);
@@ -93,7 +117,7 @@ export function bakeWindStreamlines(
     ]) {
       let point = center;
       for (let step = 0; step < halfSteps; step++) {
-        point = advance(field, point, direction * interval, scratch);
+        point = advance(field, point, direction * interval, scratch, bounds);
         if (!point) break;
         points.push(point);
       }

@@ -1,0 +1,48 @@
+{
+  "id": "mi-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Michigan Statewide Imagery (2024)",
+  "provider": "MiSAIL / DTMB",
+  "description": "Aerial orthophotos: Statewide coverage of Michigan (preview bounds cover the Lower Peninsula; service covers both peninsulas).",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-86.5, 41.7, -82.41, 45.9]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://imagery.michigan.gov/server/rest/services/Michigan_imagery_2024/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "30 cm – 1 m",
+    "resolutionM": 0.3,
+    "trueOrtho": false,
+    "vintage": "2024–present",
+    "updateCycle": "Rolling",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Open state geodata — attribution requested",
+    "url": "https://gis-michigan.opendata.arcgis.com/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "State of Michigan",
+    "url": "https://gis-michigan.opendata.arcgis.com/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

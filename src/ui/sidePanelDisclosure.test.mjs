@@ -4,7 +4,7 @@ import { PanelChrome } from './panelChrome.js';
 import { presentPanelLocally } from '../testSupport/panelState.mjs';
 import { readPanelState } from './rail/panelState.js';
 
-function fixture(theme = 'cyber') {
+function fixture(theme = 'tactical') {
   const nodes = new Map();
   const node = (id, collapsed = true) => {
     const classes = new Set(collapsed ? ['collapsed'] : []);
@@ -27,7 +27,8 @@ function fixture(theme = 'cyber') {
   for (const panel of left.children) panel.parentElement = left;
   const rail = node('rail');
   const display = node('pp-toggles'), context = node('global-context-panel'), cctv = node('cctv-panel'), radio = node('radio-panel');
-  rail.children = [display, context, cctv];
+  const missions = node('space-missions-panel');
+  rail.children = [display, context, missions, cctv];
   for (const panel of rail.children) panel.parentElement = rail;
   context.children = [radio];
   radio.parentElement = context;
@@ -43,13 +44,13 @@ function fixture(theme = 'cyber') {
     shareLinkManager: { claimRestoreLane: (...args) => claimed.push(args), onPanelStateChange() {} },
   };
   owner.setPanelCollapsed = PanelChrome.prototype.setPanelCollapsed.bind(owner);
-  return { layers, scenes, display, context, cctv, radio, owner, saved, claimed,
+  return { layers, scenes, display, context, missions, cctv, radio, owner, saved, claimed,
     doc: { documentElement: { dataset: { uiTheme: theme } }, getElementById: (id) => nodes.get(id) },
   };
 }
 
 test('explicit opening collapses side peers and claims their restoration lanes in every theme', () => {
-  for (const theme of ['tactical', 'minimal', 'cyber']) {
+  for (const theme of ['tactical', 'minimal']) {
     const f = fixture(theme), prior = globalThis.document;
     globalThis.document = f.doc;
     try {
@@ -71,6 +72,25 @@ test('explicit opening collapses side peers and claims their restoration lanes i
   }
 });
 
+test('the Context and Space Missions panels close each other on desktop', () => {
+  const f = fixture('tactical'), prior = globalThis.document;
+  globalThis.document = f.doc;
+  try {
+    f.owner.setPanelCollapsed('global-context-panel', false, { explicit: true });
+    f.owner.setPanelCollapsed('space-missions-panel', false, { explicit: true });
+    assert.equal(f.missions.classList.contains('collapsed'), false);
+    assert.equal(f.context.classList.contains('collapsed'), true, 'opening Space Missions closes Context');
+    f.owner.setPanelCollapsed('global-context-panel', false, { explicit: true });
+    assert.equal(f.context.classList.contains('collapsed'), false);
+    assert.equal(f.missions.classList.contains('collapsed'), true, 'opening Context closes Space Missions');
+    // Radio lives inside Context, so opening it closes Space Missions too.
+    f.owner.setPanelCollapsed('space-missions-panel', false, { explicit: true });
+    f.owner.setPanelCollapsed('radio-panel', false, { explicit: true });
+    assert.equal(f.context.classList.contains('collapsed'), false);
+    assert.equal(f.missions.classList.contains('collapsed'), true);
+  } finally { globalThis.document = prior; }
+});
+
 test('opening already-expanded Radio reveals Context and closes Display', () => {
   const f = fixture('tactical'), prior = globalThis.document;
   globalThis.document = f.doc;
@@ -86,7 +106,7 @@ test('opening already-expanded Radio reveals Context and closes Display', () => 
 });
 
 test('restored preferences keep every saved panel open for the layout to normalize', () => {
-  for (const theme of ['tactical', 'minimal', 'cyber']) {
+  for (const theme of ['tactical', 'minimal']) {
     const f = fixture(theme), prior = globalThis.document;
     globalThis.document = f.doc;
     try {
