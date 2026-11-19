@@ -260,6 +260,16 @@ targets in its template, as many as `view.subRings` says, rather than
 building them in script; the Omnibar's one other `material-symbols-outlined`
 is a stylesheet selector, and the layer disclosure only names a button in a
 comment (`src/ui/kit/smallSurfacesControls.test.mjs` pins it).
+The Street Level photo viewer of KartaView and Panoramax (the photo, the
+panorama canvas and the ‹ › buttons) is `StreetLevelPhotoViewer`, drawn
+from what the photo viewer presents rather than built in script. Its ‹ and
+› are ghost `UiButton`s, not pressed toggles, whose glyphs are text
+characters; the viewer builds no element, and the street-level layer it
+belongs to needs no Vue (`src/ui/kit/streetLevelPhotoControls.test.mjs`
+pins it). The notice the God's Eye View panel page shows when it loses its
+3D graphics (`#status`, in `src/app/globePanelRuntime.js`) stays built in
+script: that script is sent to the host as source text and runs in the
+host's panel page before the app loads, so it can import nothing.
 The Bhote Koshi reconstruction panel's buttons (previous and next beat,
 Play, Play scene, Cinematic, Full story, Open original, Lower gorge, the
 field reports and Open public map) are ghost `UiButton`s that keep their
@@ -460,7 +470,20 @@ slot whenever its view is drawn.
    (done: `RecentImageryReadout` and its day cards, the same way),
    Street level (done: `StreetLevelPanel` renders the `gev-street-level`
    store that `StreetLevelControls` publishes to; the controls keep their
-   listeners, EXPAND, focus and resizing), CCTV (done: `CctvPanel` renders
+   listeners, EXPAND, focus and resizing; `StreetLevelPhotoViewer`, beside
+   it in the layer panels, teleports into the viewer host the photo viewer
+   KartaView and Panoramax mount there, which `createPhotoViewer()`
+   presents through the layer's `subscribePhotoViewer()` and the
+   application shell publishes to the `gev-street-level-photo` store, so
+   the portable `./layers/street-level` entries need no Vue; the viewer
+   keeps every decision, the photo loading, keys, drag and zoom, and draws
+   its panorama on the canvas the view hands back, a fresh one after a lost
+   WebGL context; each mount and canvas is keyed, so no viewer reuses
+   another's elements, and of two viewers mounting at once only the later
+   is drawn while the earlier one's mount closes; with no view
+   subscribed, as when the layer runs without the application shell, a
+   KartaView or Panoramax photo cannot mount),
+   CCTV (done: `CctvPanel` renders
    the whole panel from the `gev-cctv` store, including the camera picker,
    the inline pose editor, the frame preview, source badge and typed
    summary; `CctvControls` keeps its listeners, the frame requests and the
