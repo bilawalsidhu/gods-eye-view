@@ -122,6 +122,23 @@ magnifier would replace their SVG one, and Explore's two clear buttons,
 which draw an SVG cross, are ghost `UiButton`s rather than
 `UiCloseButton`s (`src/ui/kit/storiesControls.test.mjs` pins it).
 Explore's sort is a `UiSelect`.
+Every button in the Cockpit HUD (`CockpitView` and its panels: the vision
+selector, Look ahead, the view switcher's Reset and Exit, the utility
+strip's launchers, collapse buttons, Radio transport and desktop rail, the
+briefing card's paging, Auto, collapse and page tabs, the Contact card's
+navigation, collapse and Weather, a signal row's target, the orbital
+view's TLE, Nadir, zoom and Sensor, and the bridge radar's range) is a
+ghost `UiButton` that keeps its id and classes, so the Cockpit
+controller's listeners and the cockpit stylesheets still find it. Radio's
+Enable (with `active`), Auto and Weather are pressed toggles; the
+disclosures keep `aria-expanded` and the page tabs `aria-current`. Its
+glyphs (the rim pointers, the reticle, the heading caret, the chevrons and
+panel glyphs, the contact and route arrows) are `UiIcon`s with
+`:size="null"`; the heading caret's rule reads
+`.cockpit-compass .cockpit-heading-caret`, so it still outranks the kit's
+`.ui-icon`, which loads after cockpit.css
+(`src/ui/kit/cockpitControls.test.mjs` pins it). The −, ◀ ▶ and + glyphs
+are text characters and stay text, and the Radio volume is a `UiSlider`.
 The Omnibar's mic (a pressed toggle with `active`) and its suggestion
 strip's chips (options, so `aria-current` rather than `pressed`) are
 ghost `UiButton`s, and its search, row and chip glyphs are `UiIcon`s with

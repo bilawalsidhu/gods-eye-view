@@ -74,10 +74,14 @@ const voiceActions = fs.readFileSync(
 test('Cockpit has one reset action beside its bottom exit path', () => {
   assert.doesNotMatch(html, /id="cockpit-quick-entry"/);
   assert.doesNotMatch(html, /id="cockpit-exit"/);
-  assert.match(
-    html,
-    /id="map-view-switch"[^>]*aria-label="Exit cockpit view"[^>]*aria-keyshortcuts="Escape"[\s\S]*?close_fullscreen[\s\S]*?EXIT COCKPIT/,
+  // The exit button's attributes, in whatever order the button renders them.
+  const exit = html.match(
+    /<button\b(?=[^>]*\sid="map-view-switch")([^>]*)>([\s\S]*?)<\/button>/,
   );
+  assert.ok(exit, 'Cockpit exit is missing');
+  assert.match(exit[1], /\saria-label="Exit cockpit view"/);
+  assert.match(exit[1], /\saria-keyshortcuts="Escape"/);
+  assert.match(exit[2], /close_fullscreen[\s\S]*?EXIT COCKPIT/);
   const topCenterActions = html.match(
     /<nav id="top-center-actions"[\s\S]*?<\/nav>/,
   );
@@ -108,9 +112,18 @@ test('Cockpit has one reset action beside its bottom exit path', () => {
     /id="reset-globe-view"/,
     'map-only reset must stay outside Cockpit',
   );
-  assert.match(
-    viewSwitcher[0],
-    /id="cockpit-reset-globe"[^>]*type="button"[^>]*aria-label="Reset cockpit to full globe view"[^>]*hidden[\s\S]*?public[\s\S]*?RESET[\s\S]*?id="map-view-switch"/,
+  // The reset button's attributes, in whatever order the button renders them.
+  const reset = viewSwitcher[0].match(
+    /<button\b(?=[^>]*\sid="cockpit-reset-globe")([^>]*)>([\s\S]*?)<\/button>/,
+  );
+  assert.ok(reset, 'Cockpit Reset is missing from the view switcher');
+  assert.match(reset[1], /\stype="button"/);
+  assert.match(reset[1], /\saria-label="Reset cockpit to full globe view"/);
+  assert.match(reset[1], /\shidden(?=[\s>=]|$)/);
+  assert.match(reset[2], /public[\s\S]*?RESET/);
+  assert.ok(
+    viewSwitcher[0].indexOf('id="map-view-switch"') > reset.index,
+    'Cockpit Reset must sit before the exit button',
   );
 
   const actions = html.match(
