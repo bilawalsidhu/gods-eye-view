@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { createMilitaryFlightLayer } from './index.js';
 import { createFlightState } from './state.js';
 import { createTracking } from './tracking.js';
+import { fakeInput } from '../../input/testDoubles.mjs';
+import * as picking from '../../data/pickRegistry.js';
 
 function services() {
   const names = [
@@ -293,4 +295,48 @@ test('a military layer without an icon set declines contact refreshes', () => {
   });
   assert.equal(layer.refreshTr3b('abc123'), false);
   assert.equal(layer.trackById('abc123'), false);
+});
+
+// The card or label painted on top takes the click: an aircraft under another
+// layer's card is not even picked, so it is neither tracked nor released.
+test("another layer's card over an aircraft keeps the click", (t) => {
+  const previousDocument = globalThis.document;
+  globalThis.document = Object.assign(new EventTarget(), {
+    body: { classList: { contains: () => false } },
+  });
+  let picks = 0;
+  const viewer = {
+    scene: {
+      canvas: new EventTarget(),
+      pick: () => {
+        picks++;
+        return null;
+      },
+    },
+  };
+  const input = fakeInput(viewer);
+  const flightState = createFlightState({ services: services() });
+  flightState._trackedEntityChangedRemove = () => {};
+  const tracking = createTracking({
+    flightState,
+    services: { ...services(), picking },
+    parts: {},
+    layer: {},
+  });
+  tracking._installClickHandler(viewer);
+  let top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  picking.setClickCardHitTest(() => top);
+  t.after(() => {
+    picking.setClickCardHitTest(null);
+    flightState._clickSubscription?.();
+    input.destroy();
+    flightState.lifetime.abort();
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+  });
+  input.tap({ x: 10, y: 10 });
+  assert.equal(picks, 0, 'covered: the scene under the card is not picked');
+  top = null;
+  input.tap({ x: 10, y: 10 });
+  assert.ok(picks > 0, 'open map: the click reaches the scene');
 });

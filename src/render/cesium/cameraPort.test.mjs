@@ -416,7 +416,16 @@ test('a pose measures heading, pitch and roll as Cesium does, and leaves the cam
     const pitch = camera.pitch;
     const roll = camera.roll;
     assert.equal(pose.heading, heading, `heading ${k}`);
-    assert.ok(Math.abs(pose.pitch - pitch) < 1e-12, `pitch ${k}`);
+    assert.ok(
+      pose.pitch >= -Math.PI / 2 && pose.pitch <= Math.PI / 2,
+      `canonical pitch ${k}`,
+    );
+    // Near vertical, acos amplifies last-bit direction differences. Match
+    // the conformance suite's well-conditioned pitch comparison.
+    assert.ok(
+      Math.abs(Math.sin(pose.pitch) - Math.sin(pitch)) < 1e-12,
+      `pitch ${k}`,
+    );
     const turn = Math.abs(pose.roll - roll);
     assert.ok(Math.min(turn, 2 * Math.PI - turn) < 1e-12, `roll ${k}`);
   }

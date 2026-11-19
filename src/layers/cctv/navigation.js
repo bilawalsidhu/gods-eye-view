@@ -9,14 +9,20 @@ export function createNavigation({
   source,
 }) {
   /**
-   * Finds the camera closest to the viewer's current position.
-   * @returns {string|null} Camera ID of the nearest camera, or null.
+   * Nearest catalog camera to a WGS84 point.
+   * @param {number} lat Latitude in degrees.
+   * @param {number} lon Longitude in degrees.
+   * @returns {string|null} Camera ID, or null (invalid point, empty catalog).
    */
-
-  function nearestCameraIdToViewer() {
-    const pose = parts.model.eyePose();
-    if (!pose || !layerState._records.length) return null;
-    const { lat, lon } = pose;
+  function nearestCameraIdToPoint(lat, lon) {
+    if (
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lon) ||
+      Math.abs(lat) > 90 ||
+      Math.abs(lon) > 180 ||
+      !layerState._records.length
+    )
+      return null;
 
     let best = null;
     for (const record of layerState._records) {
@@ -31,6 +37,16 @@ export function createNavigation({
       }
     }
     return best?.id || null;
+  }
+
+  /**
+   * Finds the camera closest to the viewer's current position.
+   * @returns {string|null} Camera ID of the nearest camera, or null.
+   */
+  function nearestCameraIdToViewer() {
+    const pose = parts.model.eyePose();
+    if (!pose) return null;
+    return nearestCameraIdToPoint(pose.lat, pose.lon);
   }
 
   /**
@@ -175,6 +191,7 @@ export function createNavigation({
     return (((Math.floor(currentIdx) + delta) % total) + total) % total;
   }
   return {
+    nearestCameraIdToPoint,
     nearestCameraIdToViewer,
     openingCameraId,
     reopenNearestCamera,

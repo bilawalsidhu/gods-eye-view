@@ -300,3 +300,17 @@ export function creditDisplayContents(display) {
 export function materialTexture(material, uniform) {
   return material?._textures?.[uniform];
 }
+
+/**
+ * The texture a custom shader holds for a texture uniform, once it has made
+ * it. A custom shader takes a new texture uniform only as a texture it makes
+ * (and the old one it destroys) on its next update; `drawModels.js` writes a
+ * posed model's part matrices into this texture in place instead, each frame
+ * a part spins.
+ * @param {object} shader Cesium CustomShader.
+ * @param {string} uniform The uniform's name.
+ * @returns {object|undefined} Cesium Texture.
+ */
+export function customShaderTexture(shader, uniform) {
+  return shader?._textureManager?.getTexture?.(uniform);
+}

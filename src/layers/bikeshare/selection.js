@@ -1,10 +1,15 @@
 import { t } from '../../i18n/index.js';
 import { inputFor } from '../../input/dispatcher.js';
+import { isUnderOtherCard } from '../../data/pickRegistry.js';
 import {
   BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
   BIKESHARE_SELECTED_OVERLAY_SOURCE_OPTIONS,
   SELECTED_POINT_STYLE,
+  COVERAGE_FLY_HEIGHT_M,
 } from './policy.js';
+import { GBFS_CITY_REGISTRY } from './registry.js';
+import { COVERAGE_ID_PREFIX } from './rendering.js';
+import { cameraOf } from '../../render/rendererOf.js';
 
 export function createSelection({
   state: layerState,
@@ -139,15 +144,59 @@ export function createSelection({
    * @param {object} viewer - The viewer the layer draws on.
    */
 
+  /**
+   * The covered city a marker id names, or null.
+   * @param {unknown} id
+   */
+  function coverageCityOf(id) {
+    if (typeof id !== 'string' || !id.startsWith(COVERAGE_ID_PREFIX))
+      return null;
+    const cityId = id.slice(COVERAGE_ID_PREFIX.length);
+    return GBFS_CITY_REGISTRY.find((city) => city.id === cityId) ?? null;
+  }
+
+  /**
+   * Straight down over a covered city, low enough for its stations, as the
+   * shell's camera action when it gave one.
+   * @param {{ centerLat: number, centerLon: number }} city
+   */
+  function flyIntoCity(city) {
+    const viewer = layerState._viewer;
+    if (!viewer) return;
+    const fly = () =>
+      cameraOf(viewer).flyTo(
+        {
+          lon: city.centerLon,
+          lat: city.centerLat,
+          height: COVERAGE_FLY_HEIGHT_M,
+        },
+        { orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 } },
+      );
+    if (layerState._runNavigation) layerState._runNavigation(fly);
+    else fly();
+  }
+
   function _installClickHandler(viewer) {
     if (layerState._clickSubscription) return;
 
     layerState._clickSubscription = inputFor(viewer).onClick((event) => {
+      // Another layer's card or label painted on top takes the click: the item
+      // under it does not act, and the click is not empty space either.
+      if (isUnderOtherCard(event)) return;
       const hit = event.drawHit;
 
       if (hit) {
         // Clicking the selected highlight itself — ignore (don't deselect).
         if (hit.set === layerState._selectedSet?.id) return;
+
+        // A covered city's marker: fly down into it.
+        if (hit.set === layerState._coverageSet?.id) {
+          const city = coverageCityOf(hit.id);
+          if (city) {
+            flyIntoCity(city);
+            return;
+          }
+        }
 
         // A station dot of this layer's own set
         if (
@@ -183,5 +232,6 @@ export function createSelection({
     _selectStation,
     _installClickHandler,
     _onKeyDown,
+    coverageCityOf,
   };
 }

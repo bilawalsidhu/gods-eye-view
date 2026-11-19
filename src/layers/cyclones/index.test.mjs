@@ -6,7 +6,10 @@ import {
   releasePointer,
   isPointerFree,
 } from '../../data/inputOwnership.js';
-import { isOwnedByOtherLayer } from '../../data/pickRegistry.js';
+import {
+  isOwnedByOtherLayer,
+  setClickCardHitTest,
+} from '../../data/pickRegistry.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
 import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
 
@@ -77,7 +80,7 @@ const deferred = () => {
   return { promise, resolve };
 };
 
-test('map selection yields to pointer owners and owns only its enabled handler', async () => {
+test('map selection yields to pointer owners and owns only its enabled handler', async (t) => {
   const handlers = [],
     // A pick of an item in one of the layer's draw sets, and one of another
     // layer's set: the dispatcher hands each to pickStorm as a draw hit.
@@ -109,11 +112,12 @@ test('map selection yields to pointer owners and owns only its enabled handler',
   const layer = createCyclonesLayer({
     feed: { getSnapshot: async () => snapshot([storm(), storm('ep162026')]) },
     createRendering: () => rendering,
-    hitTestOverlay: () => {
-      overlayTests++;
-      return overlayHit;
-    },
   });
+  setClickCardHitTest(() => {
+    overlayTests++;
+    return overlayHit;
+  });
+  t.after(() => setClickCardHitTest(null));
   const canvas = new EventTarget();
   canvas.getBoundingClientRect = () => ({ left: 100, top: 200 });
   const viewer = {
@@ -180,41 +184,15 @@ test('map selection yields to pointer owners and owns only its enabled handler',
     'foreground AIS card wins before scene picking',
   );
   assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
-  // A native capture runs before an earlier sibling handler clears hit rects.
-  const up = new Event('pointerup');
-  Object.assign(up, { clientX: 110, clientY: 220 });
-  canvas.dispatchEvent(up);
-  overlayHit = null;
+  // Any other layer's card on top takes the click, not only a vessel's.
+  overlayHit = { sourceId: 'cctv', entryId: 'camera:1' };
   handlers[0].click(click);
   assert.equal(
     layer.getDiagnostics().selectedId,
     'ep152026',
-    'captured AIS hit survives synchronous sibling overlay rebuild',
+    'a camera card over the storm keeps the click',
   );
-  // A captured background hit remains background even if a sibling adds a card.
-  canvas.dispatchEvent(up);
-  overlayHit = { sourceId: 'ais-live-vessels', entryId: 'vessel:123' };
-  handlers[0].click(click);
-  assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
-  layer.setParams({ stormId: 'ep152026' });
-  // A new gesture clears an unconsumed release snapshot.
-  canvas.dispatchEvent(up);
-  canvas.dispatchEvent(new Event('pointerdown'));
   overlayHit = null;
-  handlers[0].click(click);
-  assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
-  layer.setParams({ stormId: 'ep152026' });
-  overlayHit = { sourceId: 'ais-live-vessels', entryId: 'vessel:123' };
-  canvas.dispatchEvent(up);
-  overlayHit = null;
-  handlers[0].click({ position: { x: 15, y: 25 } });
-  assert.equal(
-    layer.getDiagnostics().selectedId,
-    'ep162026',
-    'a different click cannot reuse the captured card',
-  );
-  layer.setParams({ stormId: 'ep152026' });
-  overlayHit = { sourceId: 'cctv', entryId: 'camera:1' };
   const before = notices;
   handlers[0].click(click);
   assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
@@ -264,13 +242,12 @@ test('map selection yields to pointer owners and owns only its enabled handler',
   assert.equal(layer.getDiagnostics().selectionActive, false);
   const afterDisable = picks;
   const afterDisableOverlay = overlayTests;
-  canvas.dispatchEvent(up);
+  handlers[0].click(click);
   assert.equal(
     overlayTests,
     afterDisableOverlay,
-    'disable removes native capture listeners',
+    'a disabled layer reads no card',
   );
-  handlers[0].click(click);
   assert.equal(picks, afterDisable, 'queued disabled callback is inert');
   layer.enable();
   await layer.update();
@@ -289,7 +266,7 @@ test('map selection yields to pointer owners and owns only its enabled handler',
   );
   assert.equal(handlers[1].destroyed, true);
 });
-test('a click on a storm card or lead-hour label selects that storm without picking', async () => {
+test('a click on a storm card or lead-hour label selects that storm without picking', async (t) => {
   const handlers = [];
   let picks = 0,
     overlayHit = null,
@@ -309,8 +286,9 @@ test('a click on a storm card or lead-hour label selects that storm without pick
         getDiagnostics: () => ({}),
       };
     },
-    hitTestOverlay: () => overlayHit,
   });
+  setClickCardHitTest(() => overlayHit);
+  t.after(() => setClickCardHitTest(null));
   const canvas = new EventTarget();
   canvas.getBoundingClientRect = () => ({ left: 0, top: 0 });
   const viewer = {
@@ -343,15 +321,11 @@ test('a click on a storm card or lead-hour label selects that storm without pick
   overlayHit = { sourceId: 'weather-cyclones', entryId: 'storm:al019999' };
   handlers[0].click(click);
   assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
-  // The native release snapshot carries the card identity too.
-  const up = new Event('pointerup');
-  Object.assign(up, { clientX: 10, clientY: 20 });
   overlayHit = { sourceId: 'weather-cyclones', entryId: 'storm:ep162026' };
-  canvas.dispatchEvent(up);
-  overlayHit = null;
   handlers[0].click(click);
   assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
   assert.equal(picks, 0, 'card clicks never fall through to the scene');
+  overlayHit = null;
   handlers[0].click(click);
   assert.equal(picks, 1);
   assert.equal(layer.getDiagnostics().selectedId, null, 'empty map clears');

@@ -1,4 +1,5 @@
 import { inputFor } from '../../input/dispatcher.js';
+import { isUnderOtherCard } from '../../data/pickRegistry.js';
 import { LAYER_ID } from './policy.js';
 
 export function createSelection({
@@ -52,6 +53,9 @@ export function createSelection({
     const input = inputFor(viewer);
     layerState.clickSubscription = input.onClick((event) => {
       if (!layerState.enabled) return;
+      // Another layer's card or label painted on top takes the click: the item
+      // under it does not act, and the click is not empty space either.
+      if (isUnderOtherCard(event)) return;
       // A site's dot, outline or fill, or a named marker: each draw item
       // names its installation in its `meta`.
       const hit = event.drawHit;

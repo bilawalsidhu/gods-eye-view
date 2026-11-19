@@ -11,9 +11,21 @@
  * steps a segment): a time is shown by the step nearest it, its offset into
  * the segment's videos in proportion; outside every segment, the nearest
  * segment end is the nearest frame.
+ *
+ * A `decoded` source (`imageryDecoded`) has no list: the slot a time shows
+ * is the source's `slotAt`, the slots held ahead its `prefetch`, and each
+ * slot's tiles are the images its `tile` answers.
  */
 import * as Cesium from 'cesium';
 import { globeTilesDrawn } from './internals.js';
+
+/** A tile the source says is not there: Cesium draws the parent's. */
+export class MissingTile extends Error {
+  constructor() {
+    super('No tile here');
+    this.name = 'MissingTile';
+  }
+}
 
 /** How far apart the times a video segment is seen at are, ms. */
 export const VIDEO_STEP_MS = 250;
@@ -61,6 +73,7 @@ export function framesOf(source) {
     }
     return frames.sort((a, b) => a.time - b.time);
   }
+  if (source?.kind === 'decoded') return [];
   if (source?.kind === 'frames')
     return (source.frames ?? [])
       .filter((f) => Number.isFinite(f?.time) && typeof f?.url === 'string')
@@ -407,4 +420,75 @@ export function layerDrawn(scene, layer) {
       return false;
   }
   return true;
+}
+
+/**
+ * What `ms` shows of a `decoded` source: its slot, as `shownAt` answers for
+ * a list (the slot standing for the index), or null with none.
+ * @returns {{nearest: number, shown: Array<{index: number, weight: number}>}|null}
+ */
+export function decodedShownAt(source, ms) {
+  if (!Number.isFinite(ms)) return null;
+  const slot = source.slotAt(ms);
+  if (!Number.isFinite(slot)) return null;
+  return { nearest: slot, shown: [{ index: slot, weight: 1 }] };
+}
+
+/**
+ * The slots of a `decoded` source to hold for `ms`: the one shown, and the
+ * first `prefetch` of those the source holds ahead (finite, not shown, each
+ * once).
+ * @returns {number[]}
+ */
+export function decodedHeld(source, at, prefetch, ms) {
+  const held = [at.nearest];
+  if (prefetch <= 0 || typeof source.prefetch !== 'function') return held;
+  for (const slot of source.prefetch(ms) ?? []) {
+    if (held.length > prefetch) break;
+    if (Number.isFinite(slot) && !held.includes(slot)) held.push(slot);
+  }
+  return held;
+}
+
+/**
+ * A provider drawing one slot of a `decoded` source: each tile the image
+ * the source answers for it, in the spec's tiling (an `xyz` spec), or one
+ * image over the layer's rectangle (any other). A deferred tile is asked
+ * again on a later frame (`laterFrame`); a missing one draws the parent's.
+ * @param {import('../contract/globe').ImagerySpec} spec
+ * @param {number} slot
+ * @param {Extract<import('../contract/globe').TimedSource, {kind: 'decoded'}>} source
+ * @param {{laterFrame: () => Promise<void>, signals: Set<AbortController>,
+ *   urgency: () => 'shown'|'prefetch'}} ctx
+ */
+export function decodedProvider(spec, slot, source, ctx) {
+  // The same tiling and bounds a video frame's provider draws in.
+  const provider = videoProvider(spec, { url: '', fraction: 0 }, null);
+  provider.requestImage = async (x, y, level) => {
+    const controller = new AbortController();
+    ctx.signals.add(controller);
+    try {
+      for (;;) {
+        const answer = await source.tile({
+          tile: { x, y, level },
+          slot,
+          signal: controller.signal,
+          urgency: ctx.urgency(),
+        });
+        // An image no longer wanted is let go at once.
+        if (controller.signal.aborted) answer?.image?.close?.();
+        controller.signal.throwIfAborted();
+        if (answer?.defer) {
+          await ctx.laterFrame();
+          controller.signal.throwIfAborted();
+          continue;
+        }
+        if (!answer?.image) throw new MissingTile();
+        return answer.image;
+      }
+    } finally {
+      ctx.signals.delete(controller);
+    }
+  };
+  return provider;
 }

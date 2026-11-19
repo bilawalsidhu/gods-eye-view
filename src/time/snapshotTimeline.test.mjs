@@ -3,14 +3,23 @@ import assert from 'node:assert/strict';
 import { createWorldClock } from './worldClock.js';
 import {
   createSnapshotTimeline,
+  SNAPSHOT_HOLD_MARGIN_MS,
+  SNAPSHOT_PREFETCH_MS,
   SNAPSHOT_RETRY_MS,
   SNAPSHOT_WAIT_MS,
+  snapshotAnswer,
 } from './snapshotTimeline.js';
 
 const STEP = 10_000;
 const WALL = Date.UTC(2026, 10, 1, 12);
 
-function harness({ timeline = true, coverage, spanMs } = {}) {
+function harness({
+  timeline = true,
+  coverage,
+  spanMs,
+  stepMs = STEP,
+  live = () => true,
+} = {}) {
   const t = {
     wall: WALL,
     mono: 1_000,
@@ -33,7 +42,7 @@ function harness({ timeline = true, coverage, spanMs } = {}) {
     ...(timeline && {
       timeline: {
         coverage: () => span,
-        stepMs: STEP,
+        stepMs,
         ...(spanMs && { spanMs }),
         subscribe(listener) {
           coverageListeners.add(listener);
@@ -62,7 +71,10 @@ function harness({ timeline = true, coverage, spanMs } = {}) {
         pending.push({ atMs, replace, signal, resolve, reject });
       }),
     clear: () => calls.push({ type: 'clear' }),
-    resumeLive: () => calls.push({ type: 'live' }),
+    resumeLive: () => {
+      calls.push({ type: 'live' });
+      return live();
+    },
     now: () => t.mono,
     ...timers,
   });
@@ -248,7 +260,7 @@ test('outside coverage the layer is cleared and nothing loads; unknown coverage 
   assert.equal(h.coverageListeners.size, 0);
 });
 
-test('back at live the layer is cleared and polls at once', async () => {
+test('back at live the layer polls at once and keeps its contacts for the live snapshot', async () => {
   const h = harness();
   h.follower.start();
   h.clock.seek(WALL - 600_000);
@@ -257,9 +269,70 @@ test('back at live the layer is cleared and polls at once', async () => {
   h.clock.goLive();
   await flush();
   assert.equal(inflight.signal.aborted, true);
-  assert.deepEqual(h.calls.slice(-2), [{ type: 'clear' }, { type: 'live' }]);
+  assert.deepEqual(h.calls.at(-1), { type: 'live' });
+  assert.equal(
+    h.calls.some((call) => call.type === 'clear'),
+    false,
+    'the live snapshot takes the place of the contacts; nothing is cleared',
+  );
   assert.equal(h.follower.active(), false);
   h.follower.stop();
+});
+
+test('back at live, a live snapshot that cannot be had clears the layer', async () => {
+  for (const answer of [
+    () => false,
+    () => Promise.resolve(false),
+    () => Promise.reject(new Error('down')),
+  ]) {
+    const h = harness({ live: answer });
+    h.follower.start();
+    h.clock.seek(WALL - 600_000);
+    await flush();
+    await h.answer();
+    h.clock.goLive();
+    await flush();
+    assert.deepEqual(h.calls.slice(-2), [{ type: 'live' }, { type: 'clear' }]);
+    h.follower.stop();
+  }
+});
+
+test('back at live, a live poll dropped for a newer one, or answered after leaving live, clears nothing', async () => {
+  const dropped = harness({
+    live: () =>
+      Promise.reject(
+        Object.assign(new Error('dropped'), { name: 'AbortError' }),
+      ),
+  });
+  dropped.follower.start();
+  dropped.clock.seek(WALL - 600_000);
+  await flush();
+  await dropped.answer();
+  dropped.clock.goLive();
+  await flush();
+  assert.deepEqual(dropped.calls.at(-1), { type: 'live' });
+  dropped.follower.stop();
+
+  let fail;
+  const late = harness({
+    live: () => new Promise((resolve) => (fail = () => resolve(false))),
+  });
+  late.follower.start();
+  late.clock.seek(WALL - 600_000);
+  await flush();
+  await late.answer();
+  late.clock.goLive();
+  await flush();
+  late.clock.seek(WALL - 1_200_000);
+  await flush();
+  fail();
+  await flush();
+  assert.equal(
+    late.calls.some((call) => call.type === 'clear'),
+    false,
+    'the time shown now is not cleared by the old live answer',
+  );
+  late.follower.stop();
 });
 
 test('a load the source drops for a newer one is no failure: nothing clears, it is asked again', async () => {
@@ -450,8 +523,9 @@ test('a snapshot the loaded fixes do not reach starts the held stretch afresh', 
   h.advance(100);
   h.clock.coverageChanged();
   await flush();
-  // The next step is slow: play goes on without it, far past the fixes.
-  h.advance(2 * STEP);
+  // The next step is slow: play holds near the end of the fixes, then goes
+  // on without it, far past them.
+  h.advance(SPAN);
   h.clock.coverageChanged();
   h.advance(SNAPSHOT_WAIT_MS);
   h.advance(30 * STEP);
@@ -547,4 +621,120 @@ test('a step a move back asked for that fails clears nothing and is asked again 
     replace: true,
   });
   h.follower.stop();
+});
+
+test('with fixes past each snapshot, play holds near their end, not at the step still loading', async () => {
+  const SPAN = 600_000;
+  const h = harness({ spanMs: SPAN });
+  h.follower.start();
+  const at = WALL - 1_800_000;
+  h.clock.seek(at);
+  await flush();
+  await h.answer();
+  h.clock.play();
+  h.advance(100);
+  h.clock.coverageChanged();
+  await flush();
+  assert.deepEqual(loads(h.calls).at(-1), {
+    type: 'load',
+    atMs: at + STEP,
+    replace: false,
+  });
+  // Past the step still loading: the newest snapshot's fixes carry them.
+  h.advance(3 * STEP);
+  h.clock.coverageChanged();
+  assert.ok(h.clock.now() > at + 3 * STEP);
+  assert.equal(h.clock.getState().buffering, false);
+  // Play holds a margin short of the end of those fixes, and waits there.
+  h.advance(SPAN);
+  assert.equal(h.clock.now(), at + SPAN - SNAPSHOT_HOLD_MARGIN_MS);
+  h.clock.coverageChanged();
+  assert.equal(h.clock.getState().buffering, true);
+  await h.answer();
+  assert.equal(h.clock.getState().buffering, false);
+  h.follower.stop();
+});
+
+test('with fixes past each snapshot, a fast play asks for steps well ahead of the time', async () => {
+  const SPAN = 600_000;
+  const RATE = 60;
+  const h = harness({ spanMs: SPAN });
+  h.follower.start();
+  const at = WALL - 1_800_000;
+  h.clock.seek(at);
+  await flush();
+  await h.answer();
+  h.clock.setRate(RATE);
+  h.clock.play();
+  h.advance(100);
+  h.clock.coverageChanged();
+  await flush();
+  // Each step answered asks for the next until they reach far enough ahead.
+  while (h.pending.length) await h.answer();
+  const ahead = RATE * SNAPSHOT_PREFETCH_MS;
+  const newest = loads(h.calls).at(-1).atMs;
+  const time = h.clock.now();
+  assert.ok(newest - time >= ahead, 'steps asked for ahead of the time');
+  assert.ok(newest - time < ahead + STEP, 'and no further');
+  assert.ok(
+    loads(h.calls).every((call, k) => k === 0 || call.replace === false),
+    'each in step with the last, moving contacts on',
+  );
+  h.follower.stop();
+});
+
+test('without fixes past each snapshot, a fast play still asks a step at a time', async () => {
+  const h = harness();
+  h.follower.start();
+  const at = WALL - 1_800_000;
+  h.clock.seek(at);
+  await flush();
+  await h.answer();
+  h.clock.setRate(60);
+  h.clock.play();
+  h.advance(10);
+  h.clock.coverageChanged();
+  await flush();
+  assert.equal(loads(h.calls).at(-1).atMs, at + STEP);
+  await h.answer();
+  assert.equal(h.pending.length, 1);
+  assert.equal(loads(h.calls).at(-1).atMs, at + 2 * STEP);
+  h.follower.stop();
+});
+
+test('play holds short of where the applied snapshot’s fixes actually reach, when that is short of the span', async () => {
+  const SPAN = 600_000;
+  const h = harness({ spanMs: SPAN });
+  h.follower.start();
+  const at = WALL - 1_800_000;
+  h.clock.seek(at);
+  await flush();
+  // Its records' fixes end two minutes after its time, not ten.
+  await h.answer(0, { reachMs: at + 120_000 });
+  h.clock.play();
+  h.advance(100);
+  h.clock.coverageChanged();
+  await flush();
+  h.advance(SPAN);
+  assert.equal(h.clock.now(), at + 120_000 - SNAPSHOT_HOLD_MARGIN_MS);
+  h.follower.stop();
+});
+
+test('a layer answers how far an applied snapshot’s fixes reach', () => {
+  assert.equal(snapshotAnswer({ records: [{ id: 'a' }] }), true);
+  assert.deepEqual(
+    snapshotAnswer({
+      records: [
+        { fixes: [{ atMs: 3 }, { atMs: 9 }] },
+        { fixes: [{ atMs: 12 }, { atMs: 'x' }] },
+        { id: 'b' },
+      ],
+    }),
+    { reachMs: 12 },
+  );
+  // One record reaching far ahead does not stand for the rest.
+  const records = Array.from({ length: 20 }, (_, k) => ({
+    fixes: [{ atMs: k === 0 ? 900 : 100 + k }],
+  }));
+  assert.deepEqual(snapshotAnswer({ records }), { reachMs: 118 });
 });

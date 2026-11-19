@@ -103,7 +103,12 @@ export class VesselRecords {
    * between the two (see motion.js). `replace`: the rows are the world at
    * another time (the clock jumped), so they stand in for every vessel: one
    * they lack is gone at once, selected or not, and none moves from where it
-   * was at the time the clock left.
+   * was at the time the clock left. `handover`: the first live rows after the
+   * clock came back to live: a vessel they have moves to its live fix, not
+   * from where it was at the time the clock left; one they lack is judged
+   * as any live refresh judges it (a partial refresh, the selected vessel),
+   * by how old its newest fix is rather than when it was loaded, and holds
+   * at its last position meanwhile.
    */
   reconcile(
     rows,
@@ -112,6 +117,7 @@ export class VesselRecords {
       selectedRecord = null,
       cap = Infinity,
       replace = false,
+      handover = false,
       follow = false,
     },
     effects,
@@ -152,7 +158,7 @@ export class VesselRecords {
           record.fixReceivedAtMs = next.fixReceivedAtMs;
           record.fixFeedEpoch = next.fixFeedEpoch;
         }
-        if (replace) {
+        if (replace || handover) {
           record.motion = null;
           record.fixes = next.fixes;
         } else if (follow) {
@@ -195,6 +201,13 @@ export class VesselRecords {
     }
     for (const [id, record] of this.byId) {
       if (seen.has(id)) continue;
+      if (handover) {
+        record.motion = null;
+        record.fixes = null;
+        // Loaded for another time: last seen at its newest fix.
+        const fixMs = finiteNumber(record.lastPositionEpoch);
+        if (fixMs !== null) record.receivedAtMs = fixMs * 1000;
+      }
       if (replace) {
         effects.remove(record, record === selectedRecord);
         this.byId.delete(id);

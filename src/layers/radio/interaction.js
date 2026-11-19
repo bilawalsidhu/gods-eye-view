@@ -15,6 +15,7 @@ export function createInteraction({
   const {
     resolvePickId,
     isOwnedByOtherLayer,
+    isUnderOtherCard,
     registerPickOwner,
     unregisterPickOwner,
   } = services.picking;
@@ -29,6 +30,9 @@ export function createInteraction({
    */
   function pickedRadioStationAt(event) {
     if (!event) return null;
+    // Another layer's card or label painted on top is that layer's click,
+    // read once per click so every layer agrees: no station under it acts.
+    if (isUnderOtherCard?.(event, [RADIO_OVERLAY_SOURCE_ID])) return null;
 
     const stationFromPick = (picked) => {
       const stationId = parts.rendering.radioStationIdFromPick(picked);

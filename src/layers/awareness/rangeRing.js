@@ -430,7 +430,7 @@ export function createRangeRing({
    * Run the range pulses again for `activeMs`, after a camera move. Call it
    * during a frame (lifecycle's preRender): that frame's postRender arms the
    * next request, so waking asks for no extra frame of its own. Pulses at
-   * rest start in this frame; running ones keep their Cyber sonar interval,
+   * rest start in this frame; running ones keep their sonar interval,
    * however many frames a drag draws.
    */
   function wakePulses() {
@@ -506,7 +506,7 @@ export function createRangeRing({
     const { lines, band } = setsOn(viewer);
     const frame = findFrame(viewer);
     // A renderer without frame hooks gets the static ring only, as the
-    // Cyber sonar scene does. So does a viewer who prefers reduced motion.
+    // sonar scene does. So does a viewer who prefers reduced motion.
     const animate = Boolean(!reducedMotion && frame?.on);
     // Pulses run from now until `wake.untilMs`, then rest.
     const wake = animate
@@ -681,7 +681,7 @@ export function createRangeRing({
           bandShown = false;
           return;
         }
-        // The soft band is painted at most once a Cyber sonar interval;
+        // The soft band is painted at most once a sonar interval;
         // the fronts, crisp lines, move on every step.
         if (
           bandShown &&
@@ -726,7 +726,7 @@ export function createRangeRing({
       // Whether the camera was below the rim at the last step.
       let wasBelow = belowRim();
       // The fronts and band are fixed in the world: a camera move needs
-      // nothing of them, so they step a Cyber sonar interval apart however
+      // nothing of them, so they step a sonar interval apart however
       // many frames are drawn, and look the same parked or moving. Each
       // frame checks only whether the camera crossed the rim height, which
       // shows or hides them at once. A step asks for the frame that draws
@@ -746,8 +746,8 @@ export function createRangeRing({
           stepRunning(nowMs);
         }
       });
-      // Each drawn frame, whoever asked for it, arms one step a Cyber
-      // sonar interval later, as the Cyber sonar scene does, whose changes
+      // Each drawn frame, whoever asked for it, arms one step a
+      // sonar interval later, as the sonar scene does, whose changes
       // ask for the frame that draws them. Requests never land within
       // 80 ms of a frame, so they cannot beat the detection lane's 80 ms
       // gate, and they stop once the pulses rest.

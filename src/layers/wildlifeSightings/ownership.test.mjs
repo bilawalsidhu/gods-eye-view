@@ -196,8 +196,9 @@ function harness(
       },
       setVisible: (id, value) => overlay.visible.set(id, value),
       clearSource: (id) => overlay.entries.delete(id),
-      hitTest: (_x, _y, { sourceId }) =>
-        cardHit?.sourceId === sourceId ? cardHit : null,
+      // As the host does: unfiltered, the topmost entry.
+      hitTest: (_x, _y, { sourceId } = {}) =>
+        !sourceId || cardHit?.sourceId === sourceId ? cardHit : null,
     },
     input: () => ({
       onClick(fn) {
@@ -220,6 +221,8 @@ function harness(
       unregisterPickOwner: (id) => owners.delete(id),
       resolvePickId: (pick) => pick?.id ?? pick?.primitive?.id,
       isOwnedByOtherLayer: (_layerId, id) => id?.startsWith('other:'),
+      // The card on top at a click, as the registry answers from the host.
+      clickCard: () => cardHit,
     },
     sprites: { spriteDrawOrder: () => -9 },
     render: { governorRequestRender: (reason) => renders.push(reason) },

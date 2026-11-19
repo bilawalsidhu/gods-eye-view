@@ -1,5 +1,3 @@
-import { TRACKED_ICON_COLOR } from '../layers/military/policy.js';
-import { TRACKED_CYAN } from '../layers/flights/policy.js';
 import { createRendering as civilRendering } from '../layers/flights/rendering.js';
 import { createRendering as militaryRendering } from '../layers/military/rendering.js';
 import { createMilitarySnapshotRenderer } from '../layers/military/snapshotRenderer.js';
@@ -463,15 +461,16 @@ test('tint priorities cover normal, priority, emergency, tracking and Cockpit do
     assert.equal(rendering._modelColor('civil'), red);
     if (rendering._cockpitContactColor)
       assert.equal(rendering._cockpitContactColor('civil'), red);
+    // Tracking never recolours: a tracked emergency stays red.
     flightState._trackedIcao = 'civil';
-    assert.equal(
-      rendering._modelColor('civil'),
-      factory === civilRendering ? TRACKED_CYAN : TRACKED_ICON_COLOR,
-    );
+    assert.equal(rendering._modelColor('civil'), red);
     flightState._trackedIcao = null;
     flightState.records.data.set('civil', { emergency: null });
     // An ordinary model draws its mesh's own colours, whatever the billboard's.
     assert.deepEqual([...rendering._modelColor('civil')], [1, 1, 1, 1]);
+    flightState._trackedIcao = 'civil';
+    assert.deepEqual([...rendering._modelColor('civil')], [1, 1, 1, 1]);
+    flightState._trackedIcao = null;
   }
 });
 

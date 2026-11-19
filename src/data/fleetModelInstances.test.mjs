@@ -19,6 +19,7 @@ import {
   vesselModelSpec,
 } from './fleetModels.js';
 import { fetchPublicFile } from '../testSupport/fleetGlb.mjs';
+import { FLEET_MODEL_POLICY } from '../layers/flights/policy.js';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 import { eastNorthUp } from '../geo/frames.js';
 import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
@@ -29,15 +30,11 @@ console.info = () => {};
 const set = await loadFleetModelSet({ fetchImpl: fetchPublicFile });
 console.info = realInfo;
 
+// The layers' own policy (3 km add, about 3.6 km keep), with small caps.
 const POLICY = Object.freeze({
-  altitudeCeilingM: 800_000,
-  minimumPixelSize: 16,
+  ...FLEET_MODEL_POLICY,
   cap: 2,
   capAll: 4,
-  addM: 5_000,
-  addAllM: 20_000,
-  keepM: 6_000,
-  keepAllM: 24_000,
   intervalMs: 80,
 });
 
@@ -117,7 +114,7 @@ test('the icon stays the visual until the model is ready; only the nearest are d
   );
   const near = models.items.get('near');
   assert.equal(near.scale, spec.scale, 'drawn life size');
-  assert.equal(near.minPixelSize, POLICY.minimumPixelSize);
+  assert.equal(near.minPixelSize ?? 0, 0, 'at its true size: no pixel floor');
   assert.equal(near.meta, 'near', 'picked as its vehicle');
   assert.equal(near.show, false, 'hidden until ready');
 
@@ -156,6 +153,38 @@ test('the icon stays the visual until the model is ready; only the nearest are d
   for (const item of items.values()) assert.equal(item.modelOwnsVisual, false);
   layer.destroy();
   assert.equal(models.disposed, true);
+});
+
+test('vehicles draw as models within 3 km in either mode, and keep them to about 3.6 km', () => {
+  // The camera 1 km up: a vehicle `metres` east is sqrt(1 km² + metres²) away.
+  const at = (km) => Math.sqrt(km * km - 1) * 1_000;
+  for (const mode of ['proximity', 'all']) {
+    const { viewer, draw } = fakeViewer();
+    const layer = createFleetModelLayer({
+      viewer,
+      display: () => ({ models3d: true, models3dMode: mode }),
+      policy: POLICY,
+    });
+    const spec = transitModelSpec(set, { mode: 'tram' });
+    const items = new Map([
+      ['in', itemAt(at(2.9), spec, { pickId: 'in' })],
+      ['out', itemAt(at(3.1), spec, { pickId: 'out' })],
+    ]);
+    layer.frame(items, 0);
+    const models = modelSet(draw);
+    assert.deepEqual(
+      [...models.items.keys()],
+      ['in'],
+      `${mode}: 2.9 km, not 3.1 km`,
+    );
+    items.set('in', itemAt(at(3.5), spec, { pickId: 'in' }));
+    layer.frame(items, 100);
+    assert.ok(models.items.has('in'), `${mode}: kept at 3.5 km`);
+    items.set('in', itemAt(at(3.7), spec, { pickId: 'in' }));
+    layer.frame(items, 200);
+    assert.equal(models.items.size, 0, `${mode}: released at 3.7 km`);
+    layer.destroy();
+  }
 });
 
 test('models stay off above the altitude ceiling', () => {

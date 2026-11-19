@@ -3,6 +3,7 @@ import test from 'node:test';
 import { LocationNavigation } from './locationNavigation.js';
 import { LayerBindings } from './layerBindings.js';
 import { bindRenderer } from '../render/rendererOf.js';
+import { worldClock } from '../time/worldClock.js';
 
 function replaceWindow(t, value) {
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
@@ -13,12 +14,13 @@ function replaceWindow(t, value) {
   });
 }
 
-function location(t) {
+function location(t, { homeView = null } = {}) {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   replaceWindow(t, { setTimeout });
   const calls = [];
   let hooks;
   const owner = new LocationNavigation({
+    homeView,
     viewer: { camera: {
       cancelFlight() {}, lookAtTransform() {},
       positionCartographic: { latitude: 0, longitude: 0, height: 20000000 },
@@ -26,7 +28,11 @@ function location(t) {
     services: {
       OrbitController: class { stop() { calls.push('orbit-stop'); } },
       GLOBE_VIEW: { heightM: 20000000 },
-      flyToGlobeView(_viewer, callbacks) { hooks = callbacks; return {}; },
+      flyToGlobeView(_viewer, callbacks) {
+        hooks = callbacks;
+        calls.push(callbacks.view ? `fly ${callbacks.view.lat},${callbacks.view.lon}` : 'fly here');
+        return {};
+      },
       interruptCameraMotion() {},
       militaryAwarenessLayer: {}, satellitesLayer: {}, rocketLaunchesLayer: {},
       trafficLayer: {
@@ -58,6 +64,24 @@ test('shell disposal settles a pending globe reset once and revokes its timeout'
   assert.deepEqual(calls, after);
   assert.equal(calls.filter(c => c === 'resume').length, 1);
   assert.equal((await owner.resetToGlobeView()).cancelled, true);
+});
+
+test('the logo goes live and flies to the home view, replacing a globe reset under way', async (t) => {
+  const { owner, calls, readHooks } = location(t, {
+    homeView: { lon: -82.5, lat: 35, height: 23000000 },
+  });
+  worldClock.seek(Date.now() - 3 * 3600 * 1000);
+  assert.equal(worldClock.isLive(), false);
+  const reset = owner.resetToGlobeView();
+  const home = owner.returnToStart();
+  assert.notEqual(home, reset);
+  assert.equal((await reset).cancelled, true);
+  assert.equal(worldClock.isLive(), true);
+  assert.deepEqual(calls.filter((c) => c.startsWith('fly')), ['fly here', 'fly 35,-82.5']);
+  readHooks().onComplete();
+  assert.equal((await home).cancelled, false);
+  assert.equal((await home).heightKm, 23000);
+  owner.destroy();
 });
 
 test('world jump completion cannot revive navigation after shell disposal', (t) => {
