@@ -93,12 +93,13 @@ button, whose state the event layer writes into the attributes its panel
 renders, and Explore's story cards, which are `role="button"` elements,
 not buttons (`src/ui/kit/viewControls.test.mjs` pins it). Where the
 converted buttons draw Material symbols (the tilt-map button, the Context
-header's search and expand, the imported files' row actions and the rail
-chips' icons), the glyphs are `UiIcon`s with `:size="null"`, so the site
-rules still size them. Core's pressable chips and pills (the rail cards'
-chips and action chips, Recent Imagery's day chips, SWAP and ZOOM IN, map
-sources, cities and places, and the view context's place and layer chips)
-are `UiButton`s too; the key setup chip is still a plain button. `UiChip`
+header's search and expand, Draw, Import, the imported files' and drawn
+shapes' row actions and the rail chips' icons), the glyphs are `UiIcon`s
+with `:size="null"`, so the site rules still size them. Core's pressable
+chips and pills (the rail cards' chips and action chips, Recent Imagery's
+day chips, SWAP and ZOOM IN, map sources, cities and places, and the view
+context's place and layer chips) are `UiButton`s too; the key setup chip
+is still a plain button. `UiChip`
 is a non-interactive label chip, used by the voice card.
 The welcome card's buttons (SKIP, the three start tiles, BROWSE STORIES,
 BACK and the main NEXT / ENTER GOD MODE action) are ghost `UiButton`s:
@@ -192,6 +193,19 @@ while a query is typed. The Filter button opens a disclosure and carries
 a `UiIcon` with `:size="null"`, so `layer-finder.css` still sizes them
 (`src/ui/kit/layerFinderControls.test.mjs` pins it); the search field's
 magnifier is `UiSearchField`'s own span.
+Utilities' Draw and Import are on the kit. Draw (a pressed toggle with
+`active`), Clear and Import are ghost `UiButton`s, their glyphs `UiIcon`s
+with `pp-icon` and `:size="null"`. Draw's five colour swatches, in the
+toolbar and in a drawn shape's row, are ghost `UiButton`s with
+`role="radio"`: they say they are chosen with `aria-checked` and their own
+`active` class, never `aria-pressed`. A drawn shape's row (its swatch,
+show/hide, the application's row actions and fly to, beside its remove
+`UiCloseButton`) is on the kit too, its glyphs `UiIcon`s with
+`:size="null"`, so `controls.css` still sizes them; show/hide says what it
+does in its name (Show …, Hide …) rather than being pressed. The Street
+Level panel's controls already were kit controls; its EXPAND ⤢ ⤡ and its
+errors' ⚠ are text characters and stay text
+(`src/ui/kit/drawControls.test.mjs` pins it).
 The AI chat panel's and the voice control's buttons are ghost
 `UiButton`s: the chat's Settings, quick prompts, attachment removes,
 Attach layer, Attach a file, Expand conversation, command suggestions,
