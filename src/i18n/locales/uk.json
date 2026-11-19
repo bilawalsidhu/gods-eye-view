@@ -4449,6 +4449,7 @@
   "Turn off": "Вимкнути",
   "Command": "Команда",
   "No layers are on": "Немає увімкнених шарів",
+  "No other layers are on": "Інших увімкнених шарів немає",
   "No matching layers": "Відповідних шарів не знайдено",
   "Show me {thing} settings": "Показати налаштування для {thing}",
   "Show me how: {thing}": "Показати як: {thing}",

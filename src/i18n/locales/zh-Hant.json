@@ -4140,6 +4140,7 @@
   "Turn off": "關閉",
   "Command": "命令",
   "No layers are on": "沒有已啟用的圖層",
+  "No other layers are on": "沒有其他已啟用的圖層",
   "No matching layers": "沒有匹配的圖層",
   "Show me {thing} settings": "顯示{thing}的設置",
   "Show me how: {thing}": "查看操作方法：{thing}",

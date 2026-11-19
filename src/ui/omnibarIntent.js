@@ -9,6 +9,7 @@
 // entity comes last.
 
 import { msg } from '../i18n/index.js';
+import { parseCoordinateQuery } from '../search/coordinateParser.js';
 
 /** Visual styles, by the words people use for them. */
 const STYLES = [
@@ -286,6 +287,11 @@ export function normalizeLine(text, { isRequest = isPlainRequest } = {}) {
     .trim();
   const end = /(?<!(?:^|[\s.])\p{L})[.!。]+$/u;
   line = line.replace(end, '');
+  // A verb typed twice ("hide hide everything") is one.
+  line = line.replace(
+    /^((?:turn|switch) (?:on|off)|show|hide|remove|enable|disable|clear|go to|fly to)\s+\1\b/i,
+    '$1',
+  );
   // "please" is dropped only around a request: "Please Touch Museum",
   // "Kindly Lane" and "Pretty Please" are names.
   const polite = line
@@ -293,7 +299,25 @@ export function normalizeLine(text, { isRequest = isPlainRequest } = {}) {
     .replace(/(?:\s*,\s*|\s+)(?:please|pls|plz)$/i, '')
     .replace(end, '')
     .trim();
-  return polite !== line && polite && isRequest(polite) ? polite : line;
+  const read = polite !== line && polite && isRequest(polite) ? polite : line;
+  // "remove flights from the map", "clear everything except ships from the
+  // map": the map is where every layer is taken from. Not the verb's own
+  // "off" ("turn off the screen" is no layer switch), not after "show"
+  // ("show me the view from the map" is a question), and after "clear"
+  // only for the whole map ("clear all flights" would read as a place).
+  const bare = read.replace(
+    /^((?:turn|switch) off|hide|remove|disable|clear)\s+(\S.*?)\s+(?:from|off) (?:the )?(?:map|globe|screen|view)$/i,
+    '$1 $2',
+  );
+  if (bare === read || !/^clear\b/i.test(bare)) return bare;
+  // "clear" takes the whole map: "clear flights" would read as a place.
+  const lower = bare.toLowerCase();
+  return CLEAR_ALL.test(lower) ||
+    /^clear (?:everything|all(?: the)?(?: other)?(?: layers?)?|every layer) (?:except|but|other than|apart from|besides|save for)\b/.test(
+      lower,
+    )
+    ? bare
+    : read;
 }
 
 /** A request by its own words: a verb starting it, or a real question. */
@@ -367,6 +391,74 @@ const GO_TAIL =
 const SEPARATORS =
   /(\s*(?:,|;(?!\s*[-+]?\d)|\+(?!\d)|&|\band then\b|\bthen\b|\band\b|\balso\b)\s*)/;
 
+/**
+ * Places whose own name holds "and" (or "&"), kept whole after "near" or
+ * "in" instead of read as two places: "flights near Trinidad and Tobago".
+ */
+const COMPOUND_PLACES = new Set([
+  'trinidad and tobago',
+  'antigua and barbuda',
+  'bosnia and herzegovina',
+  'saint kitts and nevis',
+  'st kitts and nevis',
+  'st. kitts and nevis',
+  'saint vincent and the grenadines',
+  'st vincent and the grenadines',
+  'st. vincent and the grenadines',
+  'sao tome and principe',
+  'são tomé and príncipe',
+  'turks and caicos',
+  'turks and caicos islands',
+  'wallis and futuna',
+  'saint pierre and miquelon',
+  'heard island and mcdonald islands',
+  'svalbard and jan mayen',
+  'south georgia and the south sandwich islands',
+  'newfoundland and labrador',
+  'jammu and kashmir',
+  'andaman and nicobar islands',
+  'dadra and nagar haveli',
+  'brighton and hove',
+]);
+/**
+ * The joining words of a compound place ("and", or "and the" when "the" was
+ * read off the second part: "Saint Vincent and the Grenadines"), or null.
+ */
+const compoundJoin = (first, second) =>
+  COMPOUND_PLACES.has(`${first} and ${second}`.toLowerCase())
+    ? ' and '
+    : COMPOUND_PLACES.has(`${first} and the ${second}`.toLowerCase())
+      ? ' and the '
+      : null;
+
+/**
+ * Lower case one character at a time, so the line keeps its length and
+ * "İstanbul" reads "istanbul" (not "i̇stanbul" with a combining dot).
+ */
+function lowerEach(text) {
+  return Array.from(text, (char) =>
+    char === 'İ' ? 'i' : char.toLowerCase().normalize('NFC'),
+  ).join('');
+}
+
+/**
+ * A place as it was typed: "İstanbul", "iPhone store", "McAllen" are kept,
+ * where the line read them in lower case. A place the line put together
+ * ("Trinidad and Tobago" from "Trinidad & Tobago") stays as read.
+ */
+export function asTypedIn(raw, place) {
+  const lowered = lowerEach(raw).replace(/\s+/g, ' ');
+  const spaced = raw.replace(/\s+/g, ' ');
+  if (lowered.length !== spaced.length) return place;
+  const at = lowered.indexOf(place);
+  if (at < 0) return place;
+  const before = lowered[at - 1];
+  const after = lowered[at + place.length];
+  if (/[\p{L}\p{N}]/u.test(before || '') || /[\p{L}\p{N}]/u.test(after || ''))
+    return place;
+  return spaced.slice(at, at + place.length);
+}
+
 function tidy(text) {
   return text.replace(/\s+/g, ' ').trim();
 }
@@ -415,7 +507,7 @@ export function parseOmnibar(
   { isEntity = () => false } = {},
 ) {
   const raw = String(text || '').trim();
-  const line = tidy(raw.toLowerCase()).replace(
+  const line = tidy(lowerEach(raw)).replace(
     /\b(black[- ]and[- ]white|b ?& ?w)\b/g,
     'noir',
   );
@@ -448,6 +540,9 @@ export function parseOmnibar(
   const extraPlaces = [];
   let previousHadPlace = false;
   let previousBarePlace = false;
+  // Whether the clause before was a further place ("near Paris and
+  // Trinidad"), which a compound name may go on ("and Tobago").
+  let previousExtraPlace = false;
   let previousGo = false;
   // Whether a request was peeled off a "go to" clause, and how the place
   // was named: after "go to", after "near"/"in", or bare.
@@ -483,9 +578,12 @@ export function parseOmnibar(
   for (let i = 0; i < clauses.length; i += 2) {
     let clause = tidy(clauses[i]);
     const separator = clauses[i - 1]?.trim();
+    const afterPlace = previousHadPlace;
     const afterPlaceComma = previousHadPlace && separator === ',';
     // "trinidad and tobago": a bare place joined to a bare place by "and".
     const afterBarePlaceAnd = previousBarePlace && separator === 'and';
+    const afterExtraPlace = previousExtraPlace;
+    previousExtraPlace = false;
     const continuedLayer = previousLayerEnabled;
     const afterGo = previousGo;
     previousGo = false;
@@ -526,9 +624,35 @@ export function parseOmnibar(
     const addPlace = (value, { bare = false, leftover = false } = {}) => {
       if (!value) return;
       if (leftover) placeClauses.add(i);
+      // "near Trinidad and Tobago", "in Bosnia & Herzegovina": one place.
+      const joinsName =
+        place &&
+        afterPlace &&
+        (separator === 'and' || separator === '&') &&
+        compoundJoin(place.split(', ').at(-1), value);
+      if (joinsName) {
+        // The name is whole: a further "and" names another place ("near
+        // Trinidad and Tobago and Barbados").
+        place += `${joinsName}${value}`;
+        previousHadPlace = true;
+        previousBarePlace = false;
+        return;
+      }
+      // "near Paris and Trinidad and Tobago": the further place is whole too.
+      const joinsExtra =
+        afterExtraPlace &&
+        (separator === 'and' || separator === '&') &&
+        compoundJoin(extraPlaces.at(-1), value);
+      if (joinsExtra) {
+        extraPlaces[extraPlaces.length - 1] += `${joinsExtra}${value}`;
+        return;
+      }
       if (place && bare && afterBarePlaceAnd) place += ` and ${value}`;
       else if (place && !afterPlaceComma) {
-        if (separator === 'and') extraPlaces.push(value);
+        if (separator === 'and') {
+          extraPlaces.push(value);
+          previousExtraPlace = true;
+        }
         return;
       } else if (!place) {
         place = value;
@@ -834,7 +958,18 @@ export function parseOmnibar(
   // Thermal"): no plan runs on Enter; the line may still be a name.
   const unasked = steps.length > 0 && steps.every((step) => !asked.has(step));
   if (place && !placeFrom) placeFrom = placeBare ? 'bare' : 'near';
-  if (place) steps.unshift({ kind: 'place', place });
+  if (place) {
+    // A grid reference is read only as typed ("14R PU 2090 4906"; in lower
+    // case it may be words), so the plan keeps it so.
+    const typed = asTypedIn(raw, place);
+    if (!parseCoordinateQuery(place) && parseCoordinateQuery(typed))
+      place = typed;
+    const step = { kind: 'place', place };
+    // How the place was typed, for its label only ("İstanbul", "iPhone
+    // store"); kept off the step's fields, which plans compare.
+    Object.defineProperty(step, 'shown', { value: asTypedIn(raw, place) });
+    steps.unshift(step);
+  }
   steps.verb = LAYER_OFF.test(line) || LAYER_ON.test(line) || GO.test(line);
   // Following happens once the camera has settled on the new view.
   steps.sort((a, b) => (a.kind === 'follow') - (b.kind === 'follow'));

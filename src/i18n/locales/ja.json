@@ -4140,6 +4140,7 @@
   "Turn off": "オフにする",
   "Command": "コマンド",
   "No layers are on": "オンになっているレイヤーはありません",
+  "No other layers are on": "他にオンになっているレイヤーはありません",
   "No matching layers": "該当するレイヤーはありません",
   "Show me {thing} settings": "{thing}の設定を表示",
   "Show me how: {thing}": "使い方を見る：{thing}",

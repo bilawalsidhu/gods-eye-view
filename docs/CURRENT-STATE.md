@@ -8061,7 +8061,18 @@ over").
 Otherwise the place row is the default and moves first ("Thermal,
 California", "radio near tokyo" searches Tokyo), and any plan or command is
 offered after it; a line with neither ("hi", "NY", "?") runs nothing. "hide everything near tokyo" clears the layers and flies to
-Tokyo. Following needs a callsign or ICAO address (letters and a digit), a
+Tokyo. "hide everything except flights" (or "all but", "other than", with
+"turn off", "clear" or "remove") switches off every layer that is on but
+the ones named, on Enter, or says no other layers are on; with a layer to
+keep that is not read, nothing is switched off and only Ask GEV is offered.
+While Space Missions is on, keeping either it or Satellites keeps both,
+since Space Missions draws through Satellites. "remove flights from the
+map" is "remove flights", after hide, remove,
+turn off, switch off or disable, and after clear only for the whole map
+("clear everything except flights from the map", "clear the layers from
+the map"; "show me the view from the map" is a question), a doubled verb ("hide hide everything") is read
+once, and a grid reference after "near" is the place ("flights near 14R PU
+2090 4906"). Following needs a callsign or ICAO address (letters and a digit), a
 nine-digit MMSI or the name of something loaded on the map, so "Track
 Hill" and "Track 29" are places; "nearest plane" counts alone or before a
 place ("Nearest Plane Crash Site" is a name), and "goto" only with a place
@@ -8089,7 +8100,11 @@ noir", "go to London with flights"), a switch and a layer ("go to tokyo show
 flights"), or a comma part that is exactly a style, map, camera move or
 layer ("go to Tokyo, north up"). A line with one keyword and no verb beside
 the rest of a name ("Tilt Cove", "tokyo traffic", "Hurricane, Utah") offers
-the whole line as a place first and the plan second. Further places joined
+the whole line as a place first and the plan second. When that keyword
+starts the line with no comma after it and the rest is only a word for a
+kind of place ("Fire Island", "Radio City"), it begins the name: the place
+and the layer are offered, and no plan goes to the rest ("earthquakes
+japan" and "traffic city hall" keep their plans). Further places joined
 with "and" are offered as their own rows. Things loaded on the map that
 match the line are offered too: a callsign, tail number or transponder
 code puts them first, and otherwise the place row keeps the top, so

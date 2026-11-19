@@ -22,6 +22,7 @@ import {
   hasActionVerb,
   isPanelText,
   isRealQuestion,
+  asTypedIn,
   isWholeMapClear,
   magnitudeFloor,
   normalizeLine,
@@ -152,6 +153,24 @@ const SETTINGS_FOR =
 const SWITCH =
   /^(turn on|switch on|enable|show|display|add|turn off|switch off|disable|hide|remove|toggle)(?:\s+(.*))?$/;
 const SWITCH_OFF = /^(turn off|switch off|disable|hide|remove)\b/;
+/**
+ * A word for a kind of place, alone: after a keyword it ends a name ("Fire
+ * Island", "Ship Bottom", "Radio City"), and is no place to go to by itself.
+ * Followed by more words it may begin one ("City Hall", "Peak District").
+ */
+const NAME_TAIL =
+  /^(?:islands?|isle|city|hall|bottom|beach|station|street|road|hills?|valley|falls|springs?|creek|county|town|village|harbou?r|cove|canyon|center|centre|square|bridge|ridge|peak)$/i;
+
+/**
+ * A layer that shows itself through another, which must stay on with it:
+ * Space Missions draws its missions with Satellites, and switching it off
+ * puts Satellites back as it was before.
+ */
+const SHOWN_THROUGH = new Map([['rocket-launches', ['satellites']]]);
+
+/** "hide everything except …", "turn off all layers but …". */
+const EXCEPT =
+  /^(?:turn off|switch off|disable|hide|remove|clear)\s+(?:everything|all(?: the)?(?: other)?(?: layers?)?|every layer)\s+(?:except(?: for)?|but(?: for)?|other than|apart from|besides|save for)\s+(.+)$/;
 // Layers people reach for first, so "turn on" offers these before the rest.
 export const POPULAR_LAYERS = [
   'flights',
@@ -393,12 +412,19 @@ const SMALL_WORDS = new Set([
   'da',
   'des',
 ]);
+/**
+ * A place's name for a row: as typed when it has a capital ("iPhone store",
+ * "McAllen", "İstanbul"), else each word capitalised but the small joining
+ * ones ("santa fe de bogotá" reads "Santa Fe de Bogotá").
+ */
 export const titleCase = (text) =>
-  text.replace(/\S+/g, (word, at) =>
-    at > 0 && SMALL_WORDS.has(word)
-      ? word
-      : word[0].toUpperCase() + word.slice(1),
-  );
+  /\p{Lu}/u.test(text)
+    ? text
+    : text.replace(/\S+/g, (word, at) =>
+        at > 0 && SMALL_WORDS.has(word)
+          ? word
+          : word[0].toUpperCase() + word.slice(1),
+      );
 
 const STYLE_LABELS = {
   noir: msg('Style: Noir'),
@@ -707,7 +733,7 @@ export function matchCommands(text) {
 export function stepLabel(step) {
   switch (step.kind) {
     case 'place':
-      return titleCase(step.place);
+      return titleCase(step.shown ?? step.place);
     case 'layer':
       return step.enabled
         ? t('{layer} on', { layer: step.layer.shown })
@@ -819,12 +845,13 @@ const askRow = (text) => ({
   label: t('Ask GEV: “{query}”', { query: text }),
   hint: t('Opens chat'),
 });
-const placeRow = (place) => ({
+/** `shown`: the place as typed, for the label ("İstanbul", "iPhone store"). */
+const placeRow = (place, shown = place) => ({
   key: `place:${place}`,
   kind: 'place',
   icon: 'location_on',
   place,
-  label: t('Go to {place}', { place: titleCase(place) }),
+  label: t('Go to {place}', { place: titleCase(shown) }),
   hint: t('Place or coordinates'),
 });
 /**
@@ -915,12 +942,68 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
   }
 
   /**
+   * "hide everything except flights", "turn off all but ships": a plan that
+   * switches off every layer that is on but the ones named. Null when the
+   * line is not that, or names no layer to keep.
+   */
+  function exceptRows(line, ask) {
+    const match = EXCEPT.exec(line.toLowerCase());
+    if (!match) return null;
+    // Every layer to keep must be one: with a name not read ("flights and
+    // the fog") nothing is switched off, and only GEV is offered.
+    const kept = match[1]
+      .split(/\s*(?:,|\band\b|&)\s*/)
+      .filter(Boolean)
+      .map((term) => matchLayers(term.replace(/^(?:the|my)\s+/, ''))[0]);
+    if (!kept.length) return null;
+    if (!kept.every(named)) return [ask];
+    const keptIds = new Set(kept.map((layer) => layer.id));
+    // Keeping either of a pair keeps both while the first is on: switching
+    // one off would take the other with it ("except space missions",
+    // "except satellites").
+    for (const [layer, through] of SHOWN_THROUGH) {
+      const on = all().find((entry) => entry.id === layer)?.enabled;
+      if (on && (keptIds.has(layer) || through.some((id) => keptIds.has(id))))
+        for (const id of [layer, ...through]) keptIds.add(id);
+    }
+    const steps = all()
+      .filter((layer) => layer.enabled && !keptIds.has(layer.id))
+      .map((layer) => ({ kind: 'layer', layer, enabled: false }));
+    if (!steps.length)
+      return [
+        {
+          key: 'none',
+          kind: 'none',
+          icon: 'layers',
+          label: t('No other layers are on'),
+          hint: '',
+        },
+        ask,
+      ];
+    return [
+      {
+        key: `plan:${JSON.stringify(steps)}`,
+        kind: 'plan',
+        icon: 'bolt',
+        steps,
+        // Asked for in so many words: Enter runs it.
+        asked: true,
+        label: steps.map(stepLabel).join(' · '),
+        hint: t('Do all'),
+      },
+      ask,
+    ];
+  }
+
+  /**
    * "turn on …", "hide …", "toggle …", alone or with a few letters: the
    * layers and features that switch that way, never places. Null when the
    * line is not such a switch, or names nothing to switch and may be a place
    * ("Show Low, AZ").
    */
   function switchRows(line, ask) {
+    const excepted = exceptRows(line, ask);
+    if (excepted) return excepted;
     const switching = line.toLowerCase().match(SWITCH);
     if (
       !switching ||
@@ -1049,7 +1132,7 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
       realPlaces.length
         ? realPlaces
         : place.trim().length >= minPlaceChars(place)
-          ? [placeRow(place)]
+          ? [placeRow(place, asTypedIn(text, place))]
           : [];
 
     const titled = writtenAsName(text.split(/\s+/));
@@ -1260,7 +1343,7 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
       ...(placeStep ? placeRows(placeStep.place).slice(0, 2) : []),
       // "near New York and Paris": the plan goes to the first; the others
       // are offered rather than dropped.
-      ...extraPlaces.map((extra) => placeRow(extra)),
+      ...extraPlaces.map((extra) => placeRow(extra, asTypedIn(text, extra))),
       ...steps
         .filter((step) => step.kind === 'layer')
         .map((step) => layerRow(step.layer, step.enabled)),
@@ -1269,11 +1352,25 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
     // without a verb may be part of the place's name, so the whole line as a
     // place comes first and the plan second. After "go to …" with a request
     // peeled off, the place is the one read ("go to London with flights").
+    // A keyword ahead of the rest of a name ("Fire Island", "Ship Bottom")
+    // begins that name when what is left is only a word for a kind of
+    // place: a fragment, not a place, so no plan goes there. "earthquakes
+    // japan", "traffic city hall", "tokyo traffic" and "Thermal, California"
+    // (a comma parts them) keep their plans.
+    const lower = text.toLowerCase();
+    const fragment =
+      ambiguous &&
+      !peeled &&
+      placeStep &&
+      !/[,;]/.test(text) &&
+      lower.endsWith(placeStep.place.toLowerCase()) &&
+      !lower.startsWith(placeStep.place.toLowerCase()) &&
+      NAME_TAIL.test(placeStep.place);
     if (ambiguous)
       return withEntities(
         [
-          placeRow(peeled ? placeStep.place : text),
-          plan,
+          peeled ? placeRow(placeStep.place, placeStep.shown) : placeRow(text),
+          ...(fragment ? [] : [plan]),
           ...alternatives.filter((row) => row.kind !== 'place'),
           ask,
         ],

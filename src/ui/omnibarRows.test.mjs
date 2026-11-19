@@ -646,3 +646,242 @@ test('several switches in one line are one plan', () => {
     assert.equal(rows[defaultIndex].kind, 'plan', text);
   }
 });
+
+test('a place named with "and" stays whole, and a place keeps how it was typed', () => {
+  const omnibar = createOmnibar({
+    layers: [{ id: 'flights', name: 'Live Flights', enabled: false }],
+  });
+  const first = (text) => omnibar.rows(text, { places: [] }).rows[0];
+  const plan = first('flights near Trinidad and Tobago');
+  assert.equal(plan.kind, 'plan');
+  assert.equal(plan.steps[0].place, 'trinidad and tobago');
+  assert.equal(
+    first('flights near Bosnia & Herzegovina').steps[0].place,
+    'bosnia and herzegovina',
+  );
+  assert.equal(
+    first('flights near Saint Vincent and the Grenadines').steps[0].place,
+    'saint vincent and the grenadines',
+  );
+  // Two places joined by "and" are still two.
+  assert.equal(
+    first('flights near Austin and Dallas').steps[0].place,
+    'austin',
+  );
+  // "İstanbul" is searched without a stray combining dot, and labelled as typed.
+  const istanbul = first('show flights in İstanbul');
+  assert.equal(istanbul.steps[0].place, 'istanbul');
+  assert.match(istanbul.label, /^İstanbul /);
+  assert.equal(first('iPhone store').label, 'Go to iPhone store');
+});
+
+test('"everything except" keeps the layers named and switches off the rest', () => {
+  const omnibar = createOmnibar({
+    layers: layers(['flights', 'radio', 'cctv']),
+  });
+  const first = (text) => omnibar.rows(text, { places: [] }).rows[0];
+  for (const text of [
+    'hide everything except flights',
+    'turn off all but live flights',
+    'clear everything other than flights',
+  ]) {
+    const plan = first(text);
+    assert.equal(plan.kind, 'plan', text);
+    assert.deepEqual(
+      plan.steps.map(stepOutcome),
+      ['layer(radio,off)', 'layer(cctv,off)'],
+      text,
+    );
+  }
+  assert.deepEqual(
+    first('hide everything except flights and the cctv').steps.map(stepOutcome),
+    ['layer(radio,off)'],
+  );
+  // Enter runs it: the line asked for it in so many words.
+  assert.equal(
+    outcome('hide everything except flights', { on: ['flights', 'radio'] }),
+    'layer(radio,off)',
+  );
+  // A layer to keep that is not read switches nothing off.
+  const unread = omnibar.rows('hide everything except flights and the fog', {
+    places: [],
+  });
+  assert.deepEqual(
+    unread.rows.map((row) => row.kind),
+    ['ask'],
+  );
+  assert.equal(unread.defaultIndex, -1);
+  const alone = createOmnibar({ layers: layers(['flights']) });
+  assert.equal(
+    alone.rows('hide everything except flights').rows[0].kind,
+    'none',
+  );
+  // Naming no layer to keep is not this reading.
+  assert.notEqual(first('hide everything except the coast').kind, 'plan');
+});
+
+test('"from the map" and a doubled verb do not change the request', () => {
+  assert.equal(
+    outcome('remove flights from the map', { on: ['flights'] }),
+    'layer(flights,off)',
+  );
+  assert.equal(
+    outcome('hide flights off the globe', { on: ['flights'] }),
+    'layer(flights,off)',
+  );
+  assert.equal(normalizeLine('show show flights'), 'show flights');
+  assert.equal(normalizeLine('turn off turn off flights'), 'turn off flights');
+});
+
+test('a grid reference after "near" is the place', () => {
+  const omnibar = createOmnibar({ layers: layers() });
+  const plan = omnibar.rows('flights near 14R PU 2090 4906', { places: [] })
+    .rows[0];
+  assert.equal(plan.kind, 'plan');
+  assert.equal(plan.steps[0].kind, 'place');
+  assert.match(plan.steps[0].place, /^14R PU 2090 4906$/i);
+});
+
+test('a keyword that begins a name offers no plan to the rest of it', () => {
+  const omnibar = createOmnibar({ layers: layers() });
+  for (const text of ['Radio City', 'Traffic Island', 'radio island']) {
+    const { rows } = omnibar.rows(text, { places: [] });
+    assert.equal(rows[0].kind, 'place', text);
+    assert.ok(!rows.some((row) => row.kind === 'plan'), text);
+    assert.ok(
+      rows.some((row) => row.kind === 'layer'),
+      text,
+    );
+  }
+  // A keyword after the place, or before a place that is no name's
+  // fragment, still offers its plan.
+  for (const text of [
+    'tokyo traffic',
+    'earthquakes japan',
+    'radio London',
+    'traffic city hall',
+    'traffic county cork',
+    'earthquakes valley forge',
+    'traffic road to hana',
+  ]) {
+    const { rows } = omnibar.rows(text, { places: [] });
+    assert.ok(
+      rows.some((row) => row.kind === 'plan'),
+      text,
+    );
+  }
+});
+
+test('"except" keeps a layer and the one it shows through together', () => {
+  const omnibar = createOmnibar({
+    layers: [
+      { id: 'flights', name: 'Live Flights', enabled: true },
+      { id: 'satellites', name: 'Satellites', enabled: true },
+      { id: 'rocket-launches', name: 'Space Missions', enabled: true },
+    ],
+  });
+  for (const text of [
+    'hide everything except space missions',
+    'hide everything except satellites',
+  ])
+    assert.deepEqual(
+      omnibar.rows(text, { places: [] }).rows[0].steps.map(stepOutcome),
+      ['layer(flights,off)'],
+      text,
+    );
+});
+
+test('"except" leaves Satellites to switch off with Space Missions off', () => {
+  const omnibar = createOmnibar({
+    layers: [
+      { id: 'flights', name: 'Live Flights', enabled: true },
+      { id: 'satellites', name: 'Satellites', enabled: true },
+      { id: 'rocket-launches', name: 'Space Missions', enabled: false },
+    ],
+  });
+  assert.deepEqual(
+    omnibar
+      .rows('hide everything except space missions', { places: [] })
+      .rows[0].steps.map(stepOutcome),
+    ['layer(flights,off)', 'layer(satellites,off)'],
+  );
+  for (const text of [
+    'hide everything except flights from the map',
+    'clear everything except flights from the map',
+    'please clear everything except flights from the map',
+    'hide everything except flights from the map, please',
+  ])
+    assert.deepEqual(
+      omnibar.rows(text, { places: [] }).rows[0].steps.map(stepOutcome),
+      ['layer(satellites,off)'],
+      text,
+    );
+  // "clear" takes the ending off only for the whole map: "clear flights
+  // from the map" never offers to turn Flights on.
+  for (const text of [
+    'clear flights from the map',
+    'clear all flights from the map',
+    'clear all flights except ships from the map',
+  ])
+    assert.ok(
+      !omnibar
+        .rows(text, { places: [] })
+        .rows.some((row) =>
+          (row.steps || []).some(
+            (step) => step.kind === 'layer' && step.enabled,
+          ),
+        ),
+    );
+  // After "show" the ending is part of what is asked.
+  assert.equal(
+    omnibar.rows('show me the view from the map', { places: [] }).defaultIndex,
+    -1,
+  );
+  // The whole map cleared "from the map" is the same plan, not a place.
+  for (const text of [
+    'hide everything from the map',
+    'remove all layers from the map',
+    'clear the layers from the map',
+  ]) {
+    const { rows } = omnibar.rows(text, { places: [] });
+    assert.equal(rows[0].kind, 'plan', text);
+    assert.ok(!rows.some((row) => row.kind === 'place'), text);
+  }
+});
+
+test('"turn off the screen" is no layer switch and no place', () => {
+  for (const text of ['turn off the screen', 'switch off the map'])
+    assert.equal(outcome(text, { on: ['flights'] }), 'nothing', text);
+});
+
+test('a place after a compound country is another place', () => {
+  const omnibar = createOmnibar({ layers: layers() });
+  const places = (text) =>
+    omnibar
+      .rows(text, { places: [] })
+      .rows.filter((row) => row.kind === 'place')
+      .map((row) => row.place.toLowerCase());
+  assert.deepEqual(places('flights near trinidad and tobago and barbados'), [
+    'trinidad and tobago',
+    'barbados',
+  ]);
+  assert.deepEqual(places('flights near Paris and Trinidad and Tobago'), [
+    'paris',
+    'trinidad and tobago',
+  ]);
+});
+
+test('a kind of place written before its name keeps the plan', () => {
+  const omnibar = createOmnibar({ layers: layers() });
+  for (const text of [
+    'earthquakes lake tahoe',
+    'earthquakes mount fuji',
+    'traffic tower bridge',
+  ]) {
+    const { rows } = omnibar.rows(text, { places: [] });
+    assert.ok(
+      rows.some((row) => row.kind === 'plan'),
+      text,
+    );
+  }
+});

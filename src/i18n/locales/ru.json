@@ -4449,6 +4449,7 @@
   "Turn off": "Выключить",
   "Command": "Команда",
   "No layers are on": "Нет включённых слоёв",
+  "No other layers are on": "Других включённых слоёв нет",
   "No matching layers": "Подходящие слои не найдены",
   "Show me {thing} settings": "Показать настройки для {thing}",
   "Show me how: {thing}": "Показать как: {thing}",

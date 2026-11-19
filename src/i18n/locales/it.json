@@ -4346,6 +4346,7 @@
   "Turn off": "Disattiva",
   "Command": "Comando",
   "No layers are on": "Nessun livello attivo",
+  "No other layers are on": "Nessun altro livello attivo",
   "No matching layers": "Nessun livello corrispondente",
   "Show me {thing} settings": "Mostrami le impostazioni di {thing}",
   "Show me how: {thing}": "Mostrami come: {thing}",
