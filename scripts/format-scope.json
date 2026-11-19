@@ -1661,5 +1661,10 @@
   "src/layers/firms/selection.test.mjs",
   "src/layers/vessels/selection.test.mjs",
   "src/layers/bikeshare/selection.test.mjs",
-  "src/layers/satellites/interaction.test.mjs"
+  "src/layers/satellites/interaction.test.mjs",
+  "src/layers/cits/brackets.test.mjs",
+  "src/layers/cits/cards.test.mjs",
+  "src/layers/cits/ownership.test.mjs",
+  "src/layers/cits/proxyRoute.test.mjs",
+  "src/layers/cits/relayTiles.test.mjs"
 ]

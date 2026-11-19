@@ -30,6 +30,7 @@ export const CATALOG_SOURCE_CONTRACTS = Object.freeze({
     ],
   ),
   bikeshare: contract(['bikeshare'], ['getStations']),
+  cits: contract(['cits'], ['getState', 'getIntersections']),
   installations: contract(
     ['military-installations'],
     ['getMappedSites', 'searchNearby'],

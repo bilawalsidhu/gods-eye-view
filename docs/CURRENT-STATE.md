@@ -3574,6 +3574,47 @@ normal fallback chain. The existing declared media size ceiling remains 64 MiB.
 camera is refused there with a JSON 404 and is served solely through
 `/api/cctv/frame` and its same-origin, `image/*`-only, size-capped fetch.
 
+## C-ITS layer (OpenTrafficMap)
+
+`cits` (share token `03`) shows C-ITS stations relayed by OpenTrafficMap
+volunteer receivers. `server/providers/cits.js` owns the relay: one demand-driven
+socket per upstream mode, shared by every tab, with the protocol mirror and
+compaction in `server/providers/cits/`. The tiled socket subscribes the union of
+tiles requested in the last 10 s (zoom 9–14, at most 16) and refuses views that
+need coarser tiles with `status: 'zoom-in'`; a socket closes after 60 s without
+demand and reconnects with backoff. `/api/cits/state` returns stations, hazards
+and the intersection-geometry version; `/api/cits/intersections` returns lane
+polylines. Buses, trams, infrastructure and hazards carry details; every other
+vehicle (kinds match case-insensitively; trucks, emergency vehicles and
+stations without a kind included) is an anonymous dot: kind, position, speed
+and report age under an id drawn from a key made for that response alone, in
+random order, so responses cannot be joined into a track by id. The browser
+pools these dots by slot and moves them without gliding; they are never
+selectable, bracketed or handed to detection. DENM hazards come only from
+public stations; a re-broadcast counts only when its originator is a public
+station the relay knows, so a warning a private car originated never shows.
+Vehicle tracks are neither returned nor kept. `CITS_OTM_FULL_STREAM=1` enables the
+`mode=full` mirror of `/ws_ext`; otherwise it answers 403 and the layer hides
+its bandwidth chips. Errors are snake_case codes (`method_not_allowed`,
+`unknown_route`, `invalid_cits_query`, `rate_limited`, `full_stream_disabled`,
+`cits_unavailable`), and each client may make 240 requests a minute (2,400 in
+total) before a 429 with `Retry-After`.
+
+`src/layers/cits/` draws stations as Street Traffic-style point primitives on
+the rendered surface, interpolated between 1.5 s polls, with preset-aware
+colours; DENM corridors as ground glow lines; MAPEM lanes as one ground
+primitive whose per-instance colours follow SPaT phases. Trams get detection
+brackets and two-line cards on a world-overlay paint lane, independent of the
+global detection mode; bus and hazard labels use the overlay host. Clicking a
+tram, bus, traffic light, lane or hazard publishes one `selected` card on the
+`cits-selected` overlay source; an empty-space click clears it, a sibling
+layer's pick leaves it alone, and anonymous vehicles never get one. The layer
+row carries the controls: BRACKETS, stepped VEHICLE / LIGHT / LABEL / BRACKET
+RANGE and DOT SIZE chips, RESET, a colour legend and a kind list with live
+counts that switches kinds and signal lanes on and off. Settings are stored per
+viewer in `localStorage`. Zooming out past the tiled cover reports the
+`zoom-in` guidance status, not an error.
+
 ## GBFS upstream bounds
 
 Station information is normalized in `src/sources/gbfsStations.js` for both the
@@ -6071,6 +6112,7 @@ its criteria cannot be silently ignored.
 | Shipwrecks ⚓ (`shipwrecks`)         | EMODnet Human Activities heritage shipwrecks (European waters, keyless WFS, CC BY 4.0) and Wikidata (notable wrecks worldwide, keyless, CC0)                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `src/layers/shipwrecks/` via `src/app/layers/shipwrecks.js`                                                                                               | `/api/shipwrecks`                                                                                                            | 6 h page check; server refresh once a day (stale-on-error up to 7 days)                                                     |
 | News ◆ (`news`)                      | The last 24 h of reports in two sections, Conflicts and Local, with hotspots, outlines and disputed areas: from a news server (`GEV_NEWS_ORIGIN`), else Core's own reading of GDELT 2.0 events (no key), Liveuamap (`LIVEUAMAP_API_KEY`) and World News API (`WORLDNEWSAPI_KEY`)                                                                                                                                                                                                                                                                                                                           | `src/layers/news/` via `src/app/layers/news.js`; panel `src/ui/newsPanel.js`, `src/ui/news/`; server `server/providers/news.js`, `server/providers/news/` | `/api/news/hotspots`, `/api/news/feed`, `/api/news/outline` (forwarded to `GEV_NEWS_ORIGIN` when set, else answered by Core) | 2 min map refresh; Local re-read when the camera settles 0.8 s in a new half-degree cell below 3,000 km                     |
 | Wildlife Sightings 🦉                | iNaturalist wildlife observed within 48 h (whales 7 d), per view; Acartia Salish Sea marine mammal coverage (keyless)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `src/layers/wildlifeSightings/` via `src/app/layers/wildlifeSightings.js`                                                                                 | `/api/inaturalist/observations`, `/api/inaturalist/grid`, `/api/acartia/sightings`                                           | camera moveEnd (600 ms debounce; enable settles 300 ms) + 5 min (observations 5 / 10 min; tiles 15 min; stale ≤ 1 h / 24 h) |
+| C-ITS Live (V2X) 🚦                  | OpenTrafficMap volunteer C-ITS receivers (keyless; anonymous dots for private vehicles)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `src/layers/cits/` via `src/app/layers/cits.js`                                                                                                           | `/api/cits/state` + `/api/cits/intersections` (WebSocket relay)                                                              | 1.5 s poll of the in-memory mirror                                                                                          |
 
 GNSS Integrity samples a 250 nm circle around the Earth point under the screen
 centre. Camera reads debounce for 600 ms with a monotonic 2.5 s minimum gap;

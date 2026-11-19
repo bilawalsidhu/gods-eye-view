@@ -12,6 +12,7 @@ import { createTransitSource } from '../layers/transit/source.js';
 import { createRailSource } from '../layers/rail/source.js';
 import { createTrafficSource } from '../layers/traffic/source.js';
 import { createBikeshareSource } from '../layers/bikeshare/source.js';
+import { createCitsSource } from '../layers/cits/source.js';
 import { createInstallationSource } from '../layers/installations/source.js';
 import { createSatelliteSource } from '../layers/satellites/source.js';
 import { createLaunchSource } from '../layers/launches/source.js';
@@ -58,6 +59,7 @@ export function createStandaloneLayerSources(
     transit: createTransitSource(),
     rail: createRailSource(),
     bikeshare: createBikeshareSource(),
+    cits: createCitsSource(),
     installations: createInstallationSource({ mapTiles: installationTiles }),
     satellites: createSatelliteSource(),
     launches: createLaunchSource(),

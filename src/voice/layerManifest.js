@@ -484,6 +484,9 @@ export const VOICE_OFF_LAYERS = Object.freeze({
   'wildlife-sightings':
     'community observation layer; no room in the prompt budget',
   rail: 'train layer; no room in the prompt budget, and "trains" still names transit',
+  // Kept off so the Realtime prompt stays under its size budget; private
+  // vehicles are anonymous dots, so there are no analyst records either.
+  cits: 'live V2X stations; toggled from the Data Layers panel',
 });
 
 const TYPE_NAMES = Object.freeze({

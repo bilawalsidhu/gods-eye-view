@@ -5533,7 +5533,12 @@
       "src/data/entityContext.js",
       "src/ui/stores/entityCard.js",
       "src/ui/entityContextBridge.js",
-      "src/render/cesium/cardPreviews.js"
+      "src/render/cesium/cardPreviews.js",
+      "src/app/layers/cits.js",
+      "src/layers/cits/index.js",
+      "src/layers/cits/model.js",
+      "src/layers/cits/source.js",
+      "src/layers/cits/brackets.js"
     ],
     "external": [
       "hls.js",
@@ -6372,7 +6377,12 @@
       "src/data/placementProvider.js",
       "src/data/courseFromFixes.js",
       "src/time/frameWait.js",
-      "src/maps/attribution.js"
+      "src/maps/attribution.js",
+      "src/app/layers/cits.js",
+      "src/layers/cits/index.js",
+      "src/layers/cits/model.js",
+      "src/layers/cits/source.js",
+      "src/layers/cits/brackets.js"
     ],
     "external": [
       "hls.js",
@@ -8448,6 +8458,59 @@
   "rail-paths": {
     "exports": ["./layers/rail/paths"],
     "modules": ["src/data/railPaths.js"],
+    "external": []
+  },
+  "cits": {
+    "exports": ["./layers/cits"],
+    "modules": [
+      "src/layers/cits/index.js",
+      "src/layers/cits/model.js",
+      "src/layers/cits/source.js",
+      "src/layers/cits/brackets.js",
+      "src/data/trafficPresetStyle.js",
+      "src/data/detectionDraw.js",
+      "src/overlays/worldOverlayTokens.js",
+      "src/sources/phaseTiming.js",
+      "src/layers/traffic/policy.js",
+      "src/layers/traffic/surface.js",
+      "src/geo/vector.js",
+      "src/renderGovernor.js",
+      "src/celestialRing.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/es.json",
+      "src/i18n/locales/ru.json",
+      "src/i18n/locales/zh-CN.json",
+      "src/geo/ellipsoid.js",
+      "src/render/rendererOf.js",
+      "src/queries/heights.js",
+      "src/i18n/locales/ar.json",
+      "src/geo/frames.js",
+      "src/i18n/locales/de.json",
+      "src/i18n/locales/fr.json",
+      "src/time/worldClock.js",
+      "src/i18n/locales/he.json",
+      "src/i18n/locales/ja.json",
+      "src/i18n/locales/it.json",
+      "src/i18n/locales/pt.json",
+      "src/render/color.js",
+      "src/i18n/locales/sv.json",
+      "src/i18n/locales/uk.json",
+      "src/i18n/locales/zh-Hant.json",
+      "src/geo/julian.js",
+      "src/geo/celestial.js",
+      "src/data/inputOwnership.js",
+      "src/data/scenePick.js",
+      "src/data/pickRegistry.js",
+      "src/styles/styleStages.js",
+      "src/input/sensorPick.js",
+      "src/input/dispatcher.js"
+    ],
+    "external": ["cesium"]
+  },
+  "cits-source": {
+    "exports": ["./layers/cits/source"],
+    "modules": ["src/layers/cits/source.js"],
     "external": []
   }
 }

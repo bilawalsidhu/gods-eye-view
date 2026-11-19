@@ -134,6 +134,10 @@ const DRAW_FROM_CALLER = new Set([
   // surface (its identity and whether it has loaded) and heights through
   // the camera, globe and query ports.
   './layers/traffic',
+  // Its station dots, MAPEM lanes and hazard corridors draw through
+  // `drawOf`; it takes clicks through the dispatcher and reads the eye,
+  // heights and frames through the ports.
+  './layers/cits',
   // It configures the sources of layers, the traffic layer's among them,
   // that draw and read the surface through the ports alone.
   './application/sources',
