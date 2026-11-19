@@ -130,8 +130,9 @@ test('a collapsed launcher drops its divider so English titles fit whole', () =>
     /margin-left:\s*auto/,
     'the launcher toggle',
   );
-  const button = rules.find(
-    ({ selector }) => selector === '.panel-collapse-btn',
+  // The kit's icon button shares the toggle's rule.
+  const button = rules.find(({ selector }) =>
+    selector.split(', ').includes('.panel-collapse-btn'),
   );
   assert.match(
     button?.body || '',

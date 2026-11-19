@@ -42,9 +42,31 @@ one-panel rule too. Share links continue to record which panels are open.
 are converted. One component
 serves every use of a control, with props for the differences (`UiPanel`'s
 `sideways`, `glow`, `scroll`), rather than a copy per panel. The components
-are styled by the existing stylesheet and custom properties; a kit class such as
-`ui-button--icon` carries no Core style yet, and a converted control keeps
-its own classes beside it. They contain no application state.
+are styled by the existing stylesheet and custom properties, and they contain
+no application state. The kit's own classes wear Core's standard looks, each
+sharing one selector list with the Core skin it comes from, so the rules are
+never copied:
+
+| Kit class | Look | Rules |
+| --- | --- | --- |
+| `UiButton` `variant="ghost"` (default) | none: the caller's classes style it | — |
+| `UiButton` `variant="action"` | the action surface (`gev-action-button`); `tone="danger"` hovers red, `size="compact"` is the shot-row footprint (on this variant only) | `src/ui/styles/action-button.css` |
+| `UiButton` `variant="primary"` | the action surface with a group's main-action accent | `src/ui/styles/action-button.css` |
+| `UiButton` `variant="icon"` | the 22px square glyph button of a panel's collapse toggle | `src/ui/styles/controls.css` |
+| `UiChip` | the read-only chip (a pill of uppercase mono text); `selected` takes the accent | `src/ui/styles/chip.css` |
+| `UiEmpty` | the one-line empty state (dim mono text), its hint on a line below | `src/ui/styles/empty-state.css` |
+| `UiBadge` | the read-only badge (`gev-status-badge`) | `src/ui/styles/status-badge.css` |
+| `UiSegmented` | the segmented control (`gev-segmented`, `gev-segment`) | `src/ui/styles/segmented-control.css` |
+
+A pressed action, primary or icon button looks as a hovered regular one does
+(a compact action's quieter hover is for an unpressed button), and a disabled
+one dims and ignores hover and press. `tone` is `accent` or `danger`, and
+`size` styles the action variant only. Each look's resting rule selects one
+kit class; the button, chip and empty-state skins load before the feature
+stylesheets that restyle them, so a feature class still wins. The badge and
+segmented skins are the stylesheets their Core classes always used. A
+converted control keeps its own classes beside the kit's.
+`src/ui/kit/kitStyles.test.mjs` pins these rules.
 `UiPanel` takes a `title`, slots and `v-model:collapsed`, but its
 `collapsed` drives only the button and `ui-panel--collapsed`: the root's
 `collapsed` class, which hides the body, is drawn at once by `v-panel-state`
@@ -74,8 +96,8 @@ gain) takes `hold`. Every select in the views is a `UiSelect`.
 density variants and colours stay caller classes, and it renders the CCTV
 source and calibration badges and the rail card badges. `UiEmpty` takes
 a `title` and `hint`, but Core's empty states are one line, so the title
-is the text itself rather than a bold heading; the Scene shot list, mission
-roster and imagery strip use it. The locale picker's and the mission tables'
+is the text itself rather than a bold heading; the News feed, Scene shot
+list, mission roster and imagery strip use it. The locale picker's and the mission tables'
 empty rows stay a paragraph and table cells.
 `UiSlider` keeps the native range input rather than drawing a
 `role="slider"` track, so Core's keyboard, form behaviour and styling stay;
