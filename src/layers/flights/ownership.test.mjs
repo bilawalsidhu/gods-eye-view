@@ -4,6 +4,8 @@ import { createCivilFlightLayer } from './index.js';
 import { createFlightState } from './state.js';
 import { createEnrichment } from './enrichment.js';
 import { createTracking } from './tracking.js';
+import { fakeInput } from '../../input/testDoubles.mjs';
+import * as picking from '../../data/pickRegistry.js';
 import { LiveSourceError } from '../../sources/live/contract.js';
 
 function services() {
@@ -68,11 +70,12 @@ test('flight state owns distinct mutable records, scratch objects and floor samp
   for (const key of [
     'records',
     'feed',
-    '_billboards',
+    '_grounded',
+    '_floorPinned',
     '_positionHistory',
     '_displayFloorState',
     '_groundSnap',
-    '_scratchCarto',
+    '_scratchNearbyPos',
     '_models',
     'lifetime',
   ]) {
@@ -162,6 +165,117 @@ test('voice context reads a track that rounds to north as 0°, not 360°', () =>
     tracking._contextSubjectMetadata('abc123').properties.heading,
     '0°',
   );
+});
+
+test('a flight layer without an icon set declines contact refreshes', () => {
+  // Before init and after destroy there are no icon rows: a TR-3B refresh
+  // reports that the layer owns no such contact instead of throwing.
+  const layer = createCivilFlightLayer({
+    source: { label: 'Fixture aircraft', getSnapshot() {} },
+    services: {
+      ...services(),
+      aircraftPresentation: { isTr3b: () => true, tr3bConvertedIds: () => [] },
+    },
+  });
+  assert.equal(layer.refreshTr3b('abc123'), false);
+  assert.equal(layer.trackById('abc123'), false);
+});
+
+test('the tracked trail head is drawn each frame while tracked and stops with the trail', async () => {
+  const Cesium = await import('cesium');
+  const { bindFakeDraw } = await import('../../testSupport/fakeDrawPort.mjs');
+  const trails = await import('../../data/trailRenderer.js');
+  const listeners = new Set();
+  const frame = {
+    on(phase, cb) {
+      const entry = { phase, cb };
+      listeners.add(entry);
+      return () => listeners.delete(entry);
+    },
+  };
+  const tick = () => {
+    for (const { phase, cb } of [...listeners]) if (phase === 'preRender') cb();
+  };
+  const viewer = { isDestroyed: () => false };
+  const { draw, unbind } = bindFakeDraw(viewer, { frame });
+  const at = (lon) => Cesium.Cartesian3.fromDegrees(lon, 0, 1000);
+  // Three reports ten seconds apart, ten minutes ago.
+  const reportAt = (i) => {
+    const epochMs = Date.now() - 600_000 + i * 10_000;
+    return { epochMs, time: Cesium.JulianDate.fromDate(new Date(epochMs)) };
+  };
+  let headLon = 0.03;
+  const flightState = {
+    now: Date.now,
+    _viewer: viewer,
+    _trackedIcao: 'abc123',
+    _trail: null,
+    _trailFixes: [],
+    _trailBackfillToken: 0,
+    _trailHeadOff: null,
+    _cockpitContactMode: false,
+    _positionHistory: new Map([
+      [
+        'abc123',
+        [0, 0.01, 0.02].map((lon, i) => ({
+          ...reportAt(i),
+          position: at(lon),
+        })),
+      ],
+    ]),
+    _scratchWarmupTime: new Cesium.JulianDate(),
+    _scratchTrailHead: new Cesium.Cartesian3(),
+    feed: { _source: {} },
+    records: { data: new Map() },
+    lifetime: new AbortController(),
+  };
+  const supplied = services();
+  supplied.trails = trails;
+  const tracking = createTracking({
+    flightState,
+    services: supplied,
+    parts: {
+      motion: {
+        _isTrackWarmingUp: () => false,
+        _trackedTrailCached: () => at(headLon),
+        _trackedDisplayPosition: () => null,
+        _trackedModelCenterWorld: () => null,
+        _trackedModelEnvelopeM: () => 0,
+      },
+    },
+    layer: {},
+  });
+  try {
+    tracking._startTrail('abc123');
+    assert.equal(listeners.size, 1, 'one frame listener');
+    tick();
+    const set = draw.find('trail:');
+    const head = () => set.items.get(`${[...set.items.keys()][0]}:head`);
+    assert.ok(
+      Cesium.Cartesian3.equals(
+        new Cesium.Cartesian3(...Object.values(head().positions[1])),
+        at(0.03),
+      ),
+    );
+    headLon = 0.04;
+    tick();
+    assert.ok(
+      Cesium.Cartesian3.equalsEpsilon(
+        new Cesium.Cartesian3(...Object.values(head().positions[1])),
+        at(0.04),
+        1e-6,
+      ),
+    );
+    // Tracked again: still one listener.
+    tracking._clearTrail();
+    assert.equal(listeners.size, 0, 'cleared with the trail');
+    tracking._startTrail('abc123');
+    assert.equal(listeners.size, 1);
+    tracking._destroyTrail();
+    assert.equal(listeners.size, 0, 'gone with the trail');
+  } finally {
+    unbind();
+  }
 });
 
 test('the tracked plane’s photo is asked once per hex and lands on its record', async () => {
@@ -494,5 +608,121 @@ test('a route answer for a callsign the plane no longer flies is dropped', async
     destination: { code: 'NEWD' },
   });
   assert.equal(meta.routeCallsign, 'UAL10');
+  flightState.lifetime.abort();
+});
+
+// The card or label painted on top takes the click: an aircraft under another
+// layer's card is not even picked, so it is neither tracked nor released.
+test("another layer's card over an aircraft keeps the click", (t) => {
+  const previousDocument = globalThis.document;
+  globalThis.document = Object.assign(new EventTarget(), {
+    body: { classList: { contains: () => false } },
+  });
+  let picks = 0;
+  const viewer = {
+    scene: {
+      canvas: new EventTarget(),
+      pick: () => {
+        picks++;
+        return null;
+      },
+    },
+  };
+  const input = fakeInput(viewer);
+  const flightState = createFlightState({ services: services() });
+  flightState._trackedEntityChangedRemove = () => {};
+  const tracking = createTracking({
+    flightState,
+    services: { ...services(), picking },
+    parts: {},
+    layer: {},
+  });
+  tracking._installClickHandler(viewer);
+  let top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  picking.setClickCardHitTest(() => top);
+  t.after(() => {
+    picking.setClickCardHitTest(null);
+    flightState._clickSubscription?.();
+    input.destroy();
+    flightState.lifetime.abort();
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+  });
+  input.tap({ x: 10, y: 10 });
+  assert.equal(picks, 0, 'covered: the scene under the card is not picked');
+  top = null;
+  input.tap({ x: 10, y: 10 });
+  assert.ok(picks > 0, 'open map: the click reaches the scene');
+});
+
+test("a type lookup overrides the feed's type and fills the type name", async () => {
+  const queries = [];
+  const source = {
+    getEnrichment(query) {
+      queries.push(query);
+      return Promise.resolve({
+        found: true,
+        typeCode: 'B738',
+        typeName: 'Boeing 737-800',
+        registration: 'N123AB',
+      });
+    },
+  };
+  const flightState = createFlightState({ source, services: services() });
+  const view = {
+    viewerLatDeg: null,
+    viewerLonDeg: null,
+    trackedId: null,
+    floorWarmPoints: [],
+  };
+  const { meta } = flightState.records.receive(
+    {
+      id: 'abc123',
+      reference: 'abc123',
+      longitude: -77,
+      latitude: 39,
+      callsign: 'TEST1',
+      baroAltitudeM: 1000,
+      typeCode: 'EC45',
+    },
+    view,
+  );
+  assert.equal(meta.klass, 'helicopter', 'classed by the feed type at once');
+  const restyled = [];
+  const synced = [];
+  const enrichment = createEnrichment({
+    flightState,
+    services: enrichServices(),
+    parts: {
+      icons: { _applyIconPresentation: (id) => restyled.push(id) },
+      rendering: { _syncModelToClass: (id) => synced.push(id) },
+    },
+  });
+  // A present feed type does not skip the lookup.
+  enrichment._requestTypeEnrichment('abc123', true);
+  await new Promise((done) => setImmediate(done));
+  assert.deepEqual(queries, [{ kind: 'type', id: 'abc123' }]);
+  const looked = flightState.records.data.get('abc123');
+  assert.equal(looked.typeCode, 'B738');
+  assert.equal(looked.typeName, 'Boeing 737-800');
+  assert.equal(looked.registration, 'N123AB');
+  assert.equal(looked.klass, 'airliner');
+  assert.deepEqual(restyled, ['abc123']);
+  assert.deepEqual(synced, ['abc123']);
+  // The next poll's feed type no longer wins.
+  const next = flightState.records.receive(
+    {
+      id: 'abc123',
+      reference: 'abc123',
+      longitude: -77,
+      latitude: 39,
+      callsign: 'TEST1',
+      baroAltitudeM: 1000,
+      typeCode: 'EC45',
+    },
+    view,
+  ).meta;
+  assert.equal(next.typeCode, 'B738');
+  assert.equal(next.klass, 'airliner');
   flightState.lifetime.abort();
 });

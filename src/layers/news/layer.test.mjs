@@ -1,8 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
 import { KEY_SETUP_KEYS } from '../../keySetupCore.mjs';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
+import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
 import { NEWS_KEY_PROVIDERS, createNewsLayer } from './index.js';
+import {
+  findPickOwner,
+  registerPickOwner,
+  setClickCardHitTest,
+  unregisterPickOwner,
+} from '../../data/pickRegistry.js';
+// Registers the shared `gev-trail:` no-op owner, as the app does.
+import '../../data/trailRenderer.js';
+import { getSelectedEntityContext } from '../../data/contextStore.js';
+import {
+  MISSION_LABEL,
+  fakeInputUnderLabel,
+} from '../../input/testDoubles.mjs';
+import { NEWS_OVERLAY_SOURCE_ID } from './model.js';
 
 const NOW = Date.parse('2026-10-28T10:00:00Z');
 const hotspotsPayload = {
@@ -46,7 +62,10 @@ function fixture(
     centre = () => ({ lat: 49, lon: 36 }),
     credits = [],
     now = () => NOW,
+    quality,
     pictureCards,
+    underLabel = false,
+    hitTestOverlay = () => null,
   } = {},
 ) {
   const calls = { feed: [], hotspots: 0, outline: 0 };
@@ -92,26 +111,63 @@ function fixture(
     clearSource: () => entries.push([]),
   };
   const flights = [];
+  // The renderer's camera over (36° E, 49° N) at `height`, its frame and
+  // its draw sets.
+  const cameraPort = fakeCameraPort({
+    pose: { lon: 36, lat: 49, height, position: fromDegrees(36, 49, height) },
+  });
+  cameraPort.port.flyTo = (destination, options = {}) =>
+    flights.push({ destination, ...options });
   const camera = {
-    positionCartographic: { height },
-    positionWC: Cesium.Cartesian3.fromDegrees(36, 49, height),
-    moveEnd: new Cesium.Event(),
-    flyTo: (options) => flights.push(options),
+    setHeight: (next) =>
+      cameraPort.setPose({
+        height: next,
+        position: fromDegrees(36, 49, next),
+      }),
+    moveEnd: () => cameraPort.emit('moveEnd'),
   };
-  const viewer = {
-    camera,
-    scene: { requestRender() {}, preRender: new Cesium.Event() },
-    added: [],
-    dataSources: {
-      add(source) {
-        viewer.added.push(source);
-      },
-      remove() {},
+  const viewer = {};
+  const { draw, unbind } = bindFakeDraw(viewer, {
+    camera: cameraPort.port,
+    frame: { requestRender() {}, on: () => () => {} },
+    ...(quality ? { quality } : {}),
+  });
+  // The items of the layer's draw set named `part` (`points`, `icons`, …).
+  const items = (part) => [
+    ...(draw.find('news:')
+      ? [...draw.sets.values()]
+          .filter((set) => !set.disposed && set.spec.id.endsWith(`:${part}`))
+          .flatMap((set) => [...set.items.values()])
+      : []),
+  ];
+  // The scene's click dispatcher: `click(hit)` clicks over a drawn item.
+  const clickHandlers = new Set();
+  const input = {
+    onClick(fn) {
+      clickHandlers.add(fn);
+      return () => clickHandlers.delete(fn);
     },
   };
+  const click = (topHit) => {
+    for (const fn of [...clickHandlers])
+      fn({ screenPosition: { x: 10, y: 10 }, topHit });
+  };
+  // Or the scene's own dispatcher, with a Space Missions label that may be
+  // painted over the map (`fake.label.over`).
+  let fake = null;
+  if (underLabel) {
+    viewer.scene = { canvas: {}, pick: () => null };
+    fake = fakeInputUnderLabel(viewer);
+  }
+  // The card on top at a click, as the host answers the pick registry: a
+  // mission label painted over the map comes first.
+  setClickCardHitTest((x, y) =>
+    fake?.label.over ? MISSION_LABEL : hitTestOverlay(x, y),
+  );
   const layer = createNewsLayer({
     source,
     overlayHost,
+    inputFor: () => fake?.input ?? input,
     now,
     matchMedia: () => ({ matches: reduced }),
     getViewCentre: () => centre(),
@@ -128,10 +184,24 @@ function fixture(
   layer.attachShellServices({ runNavigation: (navigate) => navigate() });
   t.after(() => {
     layer.destroy();
+    fake?.destroy();
+    setClickCardHitTest(null);
+    unbind();
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;
   });
-  return { layer, viewer, camera, calls, entries, flights };
+  return {
+    layer,
+    viewer,
+    camera,
+    calls,
+    entries,
+    flights,
+    items,
+    click,
+    clickHandlers,
+    fake,
+  };
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -197,10 +267,10 @@ test('choosing a card selects it and flies straight down from 150 km; reduced mo
   await layer.update();
   layer.setParams({ reportId: 'major', focus: true });
   assert.equal(flights.length, 1);
-  assert.equal(flights[0].duration, 0);
-  const at = Cesium.Cartographic.fromCartesian(flights[0].destination);
-  assert.ok(Math.abs(at.height - 150_000) < 1);
-  assert.ok(Math.abs(Cesium.Math.toDegrees(at.latitude) - 50) < 1e-6);
+  assert.equal(flights[0].durationS, 0);
+  const at = flights[0].destination;
+  assert.equal(at.height, 150_000);
+  assert.equal(at.lat, 50);
   const card = entries.at(-1).find((e) => e.id === 'selected-report:major');
   assert.ok(card.details.includes('Source: example.com ↗'));
   // The service the report came through is credited where it shows.
@@ -209,6 +279,17 @@ test('choosing a card selects it and flies straight down from 150 km; reduced mo
   assert.equal(layer.getRowControls().feed.selected.id, 'major');
   layer.setParams({ clear: true });
   assert.equal(layer.getRowControls().feed.selected, null);
+});
+
+test('a selected report carries the point voice projects to find what is in view', async (t) => {
+  const { layer } = fixture(t);
+  layer.enable();
+  await layer.update();
+  layer.setParams({ reportId: 'major' });
+  const record = getSelectedEntityContext();
+  assert.equal(record?.id, 'news-report:major');
+  assert.ok(record.targetPosition, 'a position voice can project');
+  assert.equal(record.targetPosition, record.entity.__localBaseCartesian);
 });
 
 test('the severity floor changes what is shown, not what is read', async (t) => {
@@ -341,7 +422,7 @@ test('Local reads every report once, lists those near the view and takes the map
   let centre = { lat: 49, lon: 36 };
   let fail = false;
   const localReads = [];
-  const { layer, camera, viewer } = fixture(t, {
+  const { layer, camera, items } = fixture(t, {
     height: 1_000_000,
     centre: () => centre,
     source: {
@@ -368,9 +449,8 @@ test('Local reads every report once, lists those near the view and takes the map
     },
   });
   const markers = () =>
-    // The layer adds its outlines' source first, then its markers'.
-    viewer.added[1].entities.values
-      .map((entity) => String(entity.id))
+    [...items('points'), ...items('icons')]
+      .map((item) => String(item.id))
       .filter((id) => /~\d+$/.test(id))
       .map((id) => id.replace(/^.*:/, '').replace(/~\d+$/, ''));
   layer.enable();
@@ -393,7 +473,7 @@ test('Local reads every report once, lists those near the view and takes the map
   assert.deepEqual(markers(), ['broad']);
   // A pan reads nothing more and follows the camera once it settles.
   centre = { lat: 31.5, lon: 34.4 };
-  camera.moveEnd.raiseEvent();
+  camera.moveEnd();
   t.mock.timers.tick(800);
   await Promise.resolve();
   assert.equal(localReads.length, 1);
@@ -403,14 +483,14 @@ test('Local reads every report once, lists those near the view and takes the map
   );
   assert.deepEqual(markers(), ['south']);
   // Up above 3,000 km there is no "near here": the map shows conflicts again.
-  camera.positionCartographic.height = 5_000_000;
-  camera.moveEnd.raiseEvent();
+  camera.setHeight(5_000_000);
+  camera.moveEnd();
   t.mock.timers.tick(800);
   view = layer.getRowControls().feed;
   assert.equal(view.inView.active, false);
   assert.ok(!markers().includes('south'));
   // Back to Conflicts and to Local again with the server failing: it shows.
-  camera.positionCartographic.height = 1_000_000;
+  camera.setHeight(1_000_000);
   layer.setParams({ filters: { section: 'conflicts' } });
   fail = true;
   layer.setParams({ filters: { section: 'local' } });
@@ -432,7 +512,7 @@ test('Local reads the area at the view centre, lists its reports and outlines it
     [37, 50.5],
     [35, 50.5],
   ];
-  const { layer, camera, viewer } = fixture(t, {
+  const { layer, camera, items } = fixture(t, {
     height: 1_000_000,
     centre: () => centre,
     source: {
@@ -468,8 +548,8 @@ test('Local reads the area at the view centre, lists its reports and outlines it
     },
   });
   const outline = () =>
-    viewer.added[0].entities.values.filter((e) =>
-      String(e.id).includes('local:UA'),
+    [...items('outline-fills'), ...items('outline-lines')].filter((item) =>
+      String(item.id).includes('local:UA'),
     );
   layer.enable();
   await layer.update();
@@ -490,18 +570,16 @@ test('Local reads the area at the view centre, lists its reports and outlines it
     ['inside'],
   );
   assert.ok(outline().length > 0);
-  assert.ok(
-    outline().every((e) => e.show && e.polyline.width.getValue() === 1.5),
-  );
+  assert.ok(outline().every((item) => item.show && item.widthPx === 1.5));
   // A pan inside the area reads it again only once the centre leaves it.
   centre = { lat: 50, lon: 36.5 };
-  camera.moveEnd.raiseEvent();
+  camera.moveEnd();
   t.mock.timers.tick(800);
   await flush();
   assert.equal(areaReads.length, 1);
   // At sea: no area, the radius, and the outline hidden.
   centre = { lat: 43, lon: 34 };
-  camera.moveEnd.raiseEvent();
+  camera.moveEnd();
   t.mock.timers.tick(800);
   await flush();
   assert.equal(areaReads.length, 2);
@@ -512,7 +590,7 @@ test('Local reads the area at the view centre, lists its reports and outlines it
   assert.ok(outline().every((e) => !e.show));
   // Conflicts hides the area's outline too.
   centre = { lat: 49, lon: 36 };
-  camera.moveEnd.raiseEvent();
+  camera.moveEnd();
   t.mock.timers.tick(800);
   await flush();
   assert.ok(outline().every((e) => e.show));
@@ -756,7 +834,7 @@ test('a slower area read for where the camera was never lands over the area it c
   });
   const look = async (at) => {
     centre = at;
-    camera.moveEnd.raiseEvent();
+    camera.moveEnd();
     t.mock.timers.tick(800);
     await flush();
   };
@@ -852,7 +930,7 @@ test('a server without the area route keeps Local to the radius and is asked onc
   );
   // The settles that follow do not ask for an area again.
   centre = { lat: 47, lon: 31 };
-  camera.moveEnd.raiseEvent();
+  camera.moveEnd();
   t.mock.timers.tick(800);
   await flush();
   assert.equal(areaReads, 1);
@@ -959,7 +1037,7 @@ test("a country's own news is one badge with a count, not markers piled on its c
     precision: 'country',
     mappable: true,
   };
-  const { layer, viewer } = fixture(t, {
+  const { layer, items } = fixture(t, {
     height: 1_000_000,
     source: {
       getFeed: async () => ({
@@ -973,7 +1051,7 @@ test("a country's own news is one badge with a count, not markers piled on its c
     },
   });
   const ids = () =>
-    viewer.added[1].entities.values.map((entity) => String(entity.id));
+    [...items('points'), ...items('icons')].map((item) => String(item.id));
   layer.enable();
   await layer.update();
   layer.setParams({ filters: { section: 'local' } });
@@ -991,6 +1069,66 @@ test("a country's own news is one badge with a count, not markers piled on its c
   layer.setParams({ reportId: 'own-1' });
   await flush();
   assert.ok(ids().includes('news:report:own-1~0'));
+});
+
+test("a country badge is painted at the scene's pixel ratio, not the device's", async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  // A canvas that paints nothing and names its size in its data URL.
+  const context = new Proxy(
+    {},
+    { get: () => () => ({ width: 0 }), set: () => true },
+  );
+  const originalDocument = globalThis.document;
+  const originalRatio = globalThis.devicePixelRatio;
+  globalThis.document = {
+    createElement: () => ({
+      width: 0,
+      height: 0,
+      getContext: () => context,
+      toDataURL() {
+        return `data:image/png;test,${this.width}`;
+      },
+    }),
+  };
+  globalThis.devicePixelRatio = 3;
+  t.after(() => {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+    if (originalRatio === undefined) delete globalThis.devicePixelRatio;
+    else globalThis.devicePixelRatio = originalRatio;
+  });
+  const anchor = {
+    lat: 49,
+    lon: 36,
+    place: 'Ukraine',
+    precision: 'country',
+    mappable: true,
+  };
+  const { layer, items } = fixture(t, {
+    height: 1_000_000,
+    quality: { get: () => ({ pixelRatio: 2 }) },
+    source: {
+      getFeed: async () => ({
+        reports: [
+          report('own-1', { relevance: 'minor', pins: [anchor] }),
+          report('own-2', { relevance: 'minor', pins: [anchor] }),
+        ],
+        nextBefore: null,
+      }),
+    },
+  });
+  layer.enable();
+  await layer.update();
+  layer.setParams({ filters: { section: 'local' } });
+  await flush();
+  const badge = items('icons').find(
+    (item) => String(item.id) === 'news:country:Ukraine',
+  );
+  assert.ok(badge, 'the badge is an icon');
+  // 34 CSS px at 2 drawing-buffer pixels each: a 68 px disc on an 84 px
+  // canvas (64/52 of it). At the device's 3 it would be 126.
+  assert.equal(badge.image, 'data:image/png;test,84');
+  assert.deepEqual(badge.size, [42, 42]);
 });
 
 test('Local reports are listed an hour at most while they cannot be read again', async (t) => {
@@ -1116,7 +1254,7 @@ test("a slower Local read for the area just left never replaces the current area
   });
   const look = async (at) => {
     centre = at;
-    camera.moveEnd.raiseEvent();
+    camera.moveEnd();
     t.mock.timers.tick(800);
     await flush();
   };
@@ -1145,4 +1283,149 @@ test("a slower Local read for the area just left never replaces the current area
   assert.equal(view.inView.area, 'Ukraine');
   assert.equal(view.inView.loading, false);
   assert.deepEqual(shown(), ['kharkiv']);
+});
+
+test('a click on a marker selects its report, on a beacon chooses its hotspot, on the map clears', async (t) => {
+  const { layer, items, click, clickHandlers, flights } = fixture(t, {
+    height: 500_000,
+  });
+  layer.enable();
+  await layer.update();
+  await flush();
+  const marker = [...items('points'), ...items('icons')].find((item) =>
+    String(item.id).startsWith('news:report:major~'),
+  );
+  assert.ok(marker, 'the report has a marker');
+  // Drawn over terrain, clamped to the ground, at an ECEF position.
+  assert.equal(marker.height, 'clampGround');
+  assert.equal(marker.disableDepthTest, Number.POSITIVE_INFINITY);
+  assert.ok(Number.isFinite(marker.pos.x));
+  click({ set: 'news:1:points', id: marker.id, surface: false });
+  assert.equal(layer.getRowControls().feed.selected.id, 'major');
+  click(null);
+  assert.equal(layer.getRowControls().feed.selected, null);
+  click({ set: 'news:1:boxes', id: 'news:hotspot:ua-ru-war', surface: false });
+  assert.equal(layer.getRowControls().feed.filters.hotspot, 'ua-ru-war');
+  // Choosing the hotspot flies over its box.
+  assert.deepEqual(flights.at(-1).destination, {
+    rect: { west: 22, south: 44, east: 42, north: 56 },
+  });
+  layer.disable();
+  assert.equal(clickHandlers.size, 0);
+});
+
+test("a click on a mission label over a report's card never opens the card, and keeps the report", async (t) => {
+  let activated = 0;
+  const { layer, fake } = fixture(t, {
+    height: 500_000,
+    underLabel: true,
+    // A report's card lies under every click.
+    hitTestOverlay: (_x, _y, { sourceId } = {}) =>
+      !sourceId || sourceId === NEWS_OVERLAY_SOURCE_ID
+        ? {
+            sourceId: NEWS_OVERLAY_SOURCE_ID,
+            entry: { activate: () => activated++ },
+          }
+        : null,
+  });
+  layer.enable();
+  await layer.update();
+  await flush();
+  layer.setParams({ reportId: 'major', pin: 0 });
+  assert.equal(layer.getRowControls().feed.selected.id, 'major');
+
+  fake.label.over = true;
+  fake.click();
+  assert.equal(activated, 0, 'the card beneath the label is not opened');
+  assert.equal(
+    layer.getRowControls().feed.selected.id,
+    'major',
+    'the label on top is its own click: the report stays selected',
+  );
+
+  // Off the label, the same click opens the card.
+  fake.label.over = false;
+  fake.click();
+  assert.equal(activated, 1);
+});
+
+test('a covered news card and pin yield; the top news card acts over a trail or a vessel', async (t) => {
+  let hits = [];
+  const { layer, items, entries, click, flights } = fixture(t, {
+    height: 500_000,
+    hitTestOverlay: (_x, _y, { sourceId } = {}) =>
+      hits.find((hit) => !sourceId || hit.sourceId === sourceId) || null,
+  });
+  layer.enable();
+  await layer.update();
+  await flush();
+  const marker = [...items('points'), ...items('icons')].find((item) =>
+    String(item.id).startsWith('news:report:major~'),
+  );
+  click({ set: 'news:1:points', id: marker.id, surface: false });
+  const card = entries.flat().find((entry) => entry.activate);
+  assert.ok(card, 'an actionable news card was published');
+  let activations = 0;
+  const activate = card.activate;
+  card.activate = () => {
+    activations++;
+    return activate();
+  };
+  hits = [
+    { sourceId: 'earthquakes', entryId: 'quake:cover' },
+    { sourceId: 'news', entry: card },
+  ];
+  const before = layer.getRowControls().feed;
+  const flightCount = flights.length;
+  click(null);
+  assert.equal(activations, 0, 'a covered news card does not activate');
+  assert.equal(layer.getRowControls().feed.selected.id, 'major');
+  assert.deepEqual(layer.getRowControls().feed.filters, before.filters);
+  assert.equal(flights.length, flightCount);
+  // A news pin under another layer's card is that card's click too.
+  layer.setParams({ clear: true });
+  click({ set: 'news:1:points', id: marker.id, surface: false });
+  assert.equal(layer.getRowControls().feed.selected, null, 'covered pin');
+  hits = [];
+  click({ set: 'news:1:points', id: marker.id, surface: false });
+  assert.equal(layer.getRowControls().feed.selected.id, 'major');
+  hits = [{ sourceId: 'news', entry: card }];
+  click(null);
+  assert.equal(activations, 1, 'the unobscured news card acts once');
+  // A flight trail is registered so every layer reads a click on it as a
+  // no-op (src/data/trailRenderer.js). Under the top news card it must not
+  // make the card dead.
+  assert.equal(findPickOwner('gev-trail:fl-a1b2c3:head'), 'trails');
+  click({
+    set: 'trail:1:lines',
+    id: 'gev-trail:fl-a1b2c3:head',
+    surface: false,
+  });
+  assert.equal(activations, 2, 'the news card acts over a flight trail');
+  // Over a vessel (a layer that acts on its pick) the card on top acts too;
+  // the vessel layer stands aside under it, so one click does one thing.
+  registerPickOwner('test-vessels', (id) => id === '353136000');
+  try {
+    click({ set: 'vessels:1', id: '353136000', surface: false });
+    assert.equal(activations, 3, 'the news card acts over a vessel');
+  } finally {
+    unregisterPickOwner('test-vessels');
+  }
+});
+
+test('zoomed out, a hotspot is one beacon; off, nothing draws; destroyed, the sets go', async (t) => {
+  const { layer, items } = fixture(t);
+  assert.deepEqual(items('points'), []);
+  layer.enable();
+  await layer.update();
+  const beacon = items('points').find(
+    (item) => item.id === 'news:hotspot:ua-ru-war',
+  );
+  assert.ok(beacon);
+  assert.equal(beacon.outlineWidth, 2);
+  assert.equal(beacon.color.length, 4);
+  layer.disable();
+  assert.deepEqual(items('points'), []);
+  layer.destroy();
+  assert.deepEqual(items('points'), []);
 });

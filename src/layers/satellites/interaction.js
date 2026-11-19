@@ -1,5 +1,5 @@
-import * as Cesium from 'cesium';
-import { isPointerFree } from '../../data/inputOwnership.js';
+import { inputFor } from '../../input/dispatcher.js';
+import { onFollowChanged } from '../../data/followed.js';
 
 export function createInteraction({
   state: layerState,
@@ -7,7 +7,8 @@ export function createInteraction({
   parts,
   source,
 }) {
-  const { resolvePickId, isOwnedByOtherLayer } = services.picking;
+  const { resolvePickId, isOwnedByOtherLayer, isUnderOtherCard } =
+    services.picking;
 
   function _onKeyDown(e) {
     // The Cockpit owns Escape while it rides the tracked satellite.
@@ -19,58 +20,52 @@ export function createInteraction({
   }
 
   function _installClickHandler(viewer) {
-    if (layerState._clickHandler) return; // already installed
+    if (layerState._clickSubscription) return; // already installed
 
     // Cross-layer untrack (H2, mirror of flights): if ANOTHER layer (flights,
     // military, …) grabs the follow-camera, drop our tracking so the orbit ring /
-    // tracked entity don't orphan — without touching viewer.trackedEntity (the
+    // tracked dot don't orphan — without touching viewer.trackedEntity (the
     // new owner controls it). Guarded so our OWN switch (viewer.trackedEntity
     // briefly undefined mid-_trackSatellite) doesn't self-clear.
     if (!layerState._trackedEntityChangedRemove) {
-      layerState._trackedEntityChangedRemove =
-        viewer.trackedEntityChanged.addEventListener(() => {
+      layerState._trackedEntityChangedRemove = onFollowChanged(
+        viewer,
+        (followed) => {
           if (!layerState._enabled) return;
           if (
             layerState._trackedNorad &&
             layerState._viewer &&
-            layerState._viewer.trackedEntity &&
-            layerState._viewer.trackedEntity !== layerState._trackedEntity
+            followed &&
+            followed !== layerState._followTarget
           ) {
             parts.tracking._clearTracking(true, {
-              origin:
-                layerState._viewer.trackedEntity?.gevSelectionOrigin ||
-                'programmatic',
+              origin: followed.selectionOrigin || 'programmatic',
             });
           }
-        });
+        },
+      );
     }
 
-    layerState._clickHandler = new Cesium.ScreenSpaceEventHandler(
-      viewer.scene.canvas,
-    );
-    layerState._clickHandler.setInputAction((click) => {
-      // A tool owns the pointer (src/data/inputOwnership.js): yield the click.
-      if (!isPointerFree()) return;
+    layerState._clickSubscription = inputFor(viewer).onClick((event) => {
       if (!layerState._enabled) return;
       // The Cockpit camera rides the tracked satellite: a click on the
       // picture below must not untrack it or switch satellites.
       if (parts.cockpit?._cockpitHeld()) return;
-      const picked = viewer.scene.pick(click.position);
+      // Another layer's card or label painted on top takes the click: the item
+      // under it does not act, and the click is not empty space either.
+      if (isUnderOtherCard?.(event)) return;
+      const picked = event.topHit;
+      const hit = event.drawHit;
 
-      if (picked) {
-        // Clicking tracked entity itself — ignore
-        if (picked.id === layerState._trackedEntity) return;
+      // Clicking the tracked satellite's own dot — ignore
+      if (parts.rendering._hitIsTracked(hit)) return;
 
-        // Check if it's a satellite point (id is NORAD catalog number)
-        const prim = picked.primitive;
-        if (prim && prim.id != null) {
-          const noradId = Number(prim.id);
-          if (!isNaN(noradId) && layerState._catalog.has(noradId)) {
-            parts.tracking._cancelPendingTrackingRestore();
-            parts.tracking._trackSatellite(noradId, { origin: 'user' });
-            return;
-          }
-        }
+      // A satellite dot (its item id is the NORAD catalog number)
+      const noradId = parts.rendering._hitPointId(hit);
+      if (noradId !== null && layerState._catalog.has(noradId)) {
+        parts.tracking._cancelPendingTrackingRestore();
+        parts.tracking._trackSatellite(noradId, { origin: 'user' });
+        return;
       }
 
       // A pick that belongs to a sibling layer (plane, vessel, station, CCTV
@@ -86,7 +81,7 @@ export function createInteraction({
         parts.tracking._cancelPendingTrackingRestore();
         parts.tracking._clearTracking(false, { origin: 'user' });
       }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
 
     document.addEventListener('keydown', _onKeyDown);
   }

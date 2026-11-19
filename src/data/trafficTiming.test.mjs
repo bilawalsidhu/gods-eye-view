@@ -231,6 +231,9 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
     setLongitude(longitude);
     viewer = {
       camera,
+      get canvas() {
+        return this.scene?.canvas;
+      },
       scene: {
         canvas: { clientWidth: 0, clientHeight: 0, width: 0, height: 0 },
         preRender,
@@ -238,6 +241,36 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
         primitives: { add: (primitive) => primitive, remove: () => true },
       },
     };
+
+    // The layer reads the camera through the renderer's camera port.
+    const { bindRenderer } = await server.ssrLoadModule('/src/render/rendererOf.js');
+    const degrees = (radians) => radians * 180 / Math.PI;
+    const cameraEvents = { moveEnd, changed };
+    const frameEvents = { preRender, postRender };
+    bindRenderer(viewer, {
+      // The scene's channels, raised by the test as Cesium would.
+      frame: {
+        on: (phase, cb) => frameEvents[phase].addEventListener(cb),
+        requestRender() {},
+      },
+      camera: {
+        on: (event, cb) => cameraEvents[event].addEventListener(cb),
+        pose: () => ({
+          lon: degrees(camera.positionCartographic.longitude),
+          lat: degrees(camera.positionCartographic.latitude),
+          height: camera.positionCartographic.height,
+        }),
+        viewRectangle() {
+          const r = camera.computeViewRectangle();
+          return { west: degrees(r.west), south: degrees(r.south), east: degrees(r.east), north: degrees(r.north) };
+        },
+      },
+      // The dots' and heat-lines' draw sets: timing reads none of what they draw.
+      draw: {
+        points: () => ({ show: false, upsert() {}, remove() {}, clear() {}, dispose() {} }),
+        lines: () => ({ show: true, set() {}, upsert() {}, clear() {}, dispose() {} }),
+      },
+    });
 
     performance.clearMarks();
     performance.clearMeasures();

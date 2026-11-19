@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { toCartographicRadians } from '../../geo/ellipsoid.js';
 import { formatNumber, isolate, onLocaleChange, t } from '../../i18n/index.js';
 import {
   MISSION_CLOSE_VIEW_RANGE_M,
@@ -282,7 +282,7 @@ export function createPanel({ state: layerState, services, parts, source }) {
         return {
           index,
           id: String(launch.id ?? ''),
-          color: parts.model.missionMarkerColor(launch).toCssColorString(),
+          color: parts.model.missionMarkerCss(launch),
           label,
           ariaLabel: t('Select {mission}', { mission: label }),
           provider: launch.provider || t('UNSPECIFIED OPERATOR'),
@@ -321,24 +321,18 @@ export function createPanel({ state: layerState, services, parts, source }) {
     if (
       !layerState._missionPanelReady ||
       !layerState._selectedLaunchId ||
-      !layerState._dataSource
+      !layerState._missionSets
     )
       return;
     const now = performance.now();
     if (!force && now - layerState._lastPanelTelemetryMs < 250) return;
     layerState._lastPanelTelemetryMs = now;
-    const satellite = layerState._dataSource.entities.getById(
-      `rocket-satellite:${layerState._selectedLaunchId}`,
-    );
-    const position = satellite?.position?.getValue(
-      Cesium.JulianDate.now(layerState._declutterTime),
-    );
-    const altitudeM = position
-      ? Cesium.Cartographic.fromCartesian(position)?.height
-      : null;
-    const speedMps = layerState._satelliteTelemetry.get(
+    const telemetry = layerState._satelliteTelemetry.get(
       layerState._selectedLaunchId,
-    )?.speedMps;
+    );
+    const position = telemetry?.position?.();
+    const altitudeM = position ? toCartographicRadians(position)?.height : null;
+    const speedMps = telemetry?.speedMps;
     layerState._missionTelemetry = {
       distance: Number.isFinite(altitudeM)
         ? t('{value} KM', {
@@ -386,14 +380,20 @@ export function createPanel({ state: layerState, services, parts, source }) {
 
   function scheduleMissionRosterPreview(index) {
     const launch = layerState._launches[index];
-    if (!launch || layerState._selectedLaunchId) return;
+    // Once the layer is going off (its Satellites restore may still be
+    // running) hovering or focusing a roster row moves no camera.
+    if (!launch || layerState._selectedLaunchId || !layerState._enabled) return;
     if (layerState._missionRosterHoverTimer)
       clearTimeout(layerState._missionRosterHoverTimer);
     layerState._hoveredRosterLaunchId = launch.id;
     parts.overlays.syncMissionOverlayEntries();
     layerState._missionRosterHoverTimer = setTimeout(() => {
       layerState._missionRosterHoverTimer = null;
-      if (layerState._hoveredRosterLaunchId !== launch.id) return;
+      if (
+        layerState._hoveredRosterLaunchId !== launch.id ||
+        !layerState._enabled
+      )
+        return;
       const currentLaunch = resolveMissionRosterPreviewLaunch(
         layerState._launches,
         launch.id,

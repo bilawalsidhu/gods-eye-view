@@ -339,6 +339,45 @@ try {
     '#cctv-frame',
     (image) => !image.getAttribute('src') && image.dataset.cameraId === '',
   );
+  // The address bar follows the share state after a short delay: wait for the
+  // CCTV panel token (1 collapsed, 0 open) the step expects.
+  const panelState = async (expectedToken) => {
+    const settled = await page
+      .waitForFunction(
+        (token) =>
+          new RegExp(`(?:^|_)v\\.c\\.${token}(?:_|$)`).test(
+            new URLSearchParams(location.hash.slice(1)).get('ui') || '',
+          ),
+        { timeout: 5000 },
+        expectedToken,
+      )
+      .then(
+        () => true,
+        () => false,
+      );
+    return page.evaluate(
+      (shared) => ({
+        collapsed: document
+          .getElementById('cctv-panel')
+          .classList.contains('collapsed'),
+        shared,
+        ui: new URLSearchParams(location.hash.slice(1)).get('ui'),
+      }),
+      settled ? expectedToken : null,
+    );
+  };
+  const closedOnDisable = await panelState('1');
+  check(
+    'disable collapses the panel and its share preference',
+    closedOnDisable.collapsed && closedOnDisable.shared === '1',
+    JSON.stringify(closedOnDisable),
+  );
+  // The switch sits inside the collapsed panel: reopen it from the right rail.
+  await page.click('[data-rail-item="cctv-panel"]');
+  await page.waitForFunction(
+    () =>
+      !document.getElementById('cctv-panel').classList.contains('collapsed'),
+  );
   await page.click('#cctv-enable-btn');
   await page.waitForFunction(
     () =>
@@ -350,6 +389,42 @@ try {
   check(
     'disable clears the preview and re-enable reacquires the camera frame',
     disabledCleanly,
+  );
+  // Contacts switches CCTV off to isolate itself and restores it on the way
+  // out: the open panel and its share preference survive the round trip.
+  const cameraBeforeContacts = await page.evaluate(
+    () =>
+      window.__godsEyeView.styleManager._cctvControls.getState()
+        ?.activeCameraId,
+  );
+  const entered = await page.evaluate(() =>
+    window.__godsEyeView.styleManager.setContextMode('flights'),
+  );
+  await page.waitForFunction(
+    () => !window.__godsEyeView.dataManager.isEnabled('cctv'),
+  );
+  const duringContacts = await panelState('0');
+  await page.evaluate(() =>
+    window.__godsEyeView.styleManager.setContextMode(null),
+  );
+  await page.waitForFunction(() =>
+    window.__godsEyeView.dataManager.isEnabled('cctv'),
+  );
+  const afterContacts = await panelState('0');
+  check(
+    'Contacts isolation keeps the open CCTV panel and restores its camera',
+    entered?.ok === true &&
+      !duringContacts.collapsed &&
+      duringContacts.shared === '0' &&
+      !afterContacts.collapsed &&
+      afterContacts.shared === '0' &&
+      (await page.evaluate(
+        (cameraId) =>
+          window.__godsEyeView.styleManager._cctvControls.getState()
+            ?.activeCameraId === cameraId,
+        cameraBeforeContacts,
+      )),
+    JSON.stringify({ entered, duringContacts, afterContacts }),
   );
   await page.$eval('#cctv-frame', (image) =>
     image.scrollIntoView({ block: 'nearest' }),

@@ -10,6 +10,7 @@ import {
   decodeLayerStateParams,
 } from './data/layerState.js';
 import { LayerStateCoordinator } from './data/layerStateCoordinator.js';
+import { bindFakeCesiumCamera } from './testSupport/fakeCameraPort.mjs';
 
 const SHARE_A = 'v=2&lat=10.0000&lon=20.0000&alt=800&style=nvg&l=e';
 const SHARE_B = 'v=2&lat=48.8584&lon=2.2945&alt=500&style=normal&l=f';
@@ -102,7 +103,7 @@ function fakeViewer() {
 
 test('a hash navigation to a different share restores it and holds URL writes', (t) => {
   const tab = installTab(t, SHARE_A);
-  const manager = new ShareLinkManager(fakeViewer());
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
   const initial = manager.parseInitialHash();
   manager.completeInitialRestore(initial.restoreToken);
   const navigated = [];
@@ -124,7 +125,7 @@ test('a hash navigation to a different share restores it and holds URL writes', 
 
 test("the app's own hash writes never trigger a restore", (t) => {
   installTab(t, SHARE_A);
-  const manager = new ShareLinkManager(fakeViewer());
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
   manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
   let restores = 0;
   manager.watchNavigation(() => {
@@ -140,9 +141,77 @@ test("the app's own hash writes never trigger a restore", (t) => {
   manager.destroy();
 });
 
+test('restore applies a hash even when the address already shows it', (t) => {
+  installTab(t, SHARE_A);
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
+  manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
+  const restored = [];
+  manager.watchNavigation((state) => restored.push(state));
+  // Back landed here already, so the hash is known and a hashchange is ignored.
+  window.dispatchEvent(new Event('hashchange'));
+  assert.equal(restored.length, 0);
+  assert.equal(manager.restore(SHARE_A), true);
+  assert.equal(restored.length, 1);
+  manager.destroy();
+});
+
+test('restore reports a hash that is not a share state as not restored', (t) => {
+  installTab(t, SHARE_A);
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
+  manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
+  const restored = [];
+  manager.watchNavigation((state) => restored.push(state));
+  assert.equal(manager.restore('not-a-share-state'), false);
+  assert.equal(restored.length, 0);
+  // The caller's hashchange fallback is not swallowed as already known.
+  assert.equal(manager._knownHash, null);
+  assert.equal(manager.restore(SHARE_A), true);
+  assert.equal(restored.length, 1);
+  manager.destroy();
+});
+
+test('holding writes first writes a view change still waiting for its debounce', (t) => {
+  installTab(t, SHARE_A);
+  const timers = installManualTimers(t);
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
+  manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
+  const before = window.location.hash;
+  manager._buildHashParams = () => new URLSearchParams('v=2&lat=5');
+  manager._scheduleUpdate();
+  assert.equal(window.location.hash, before, 'still waiting');
+  manager.holdWrites(true);
+  assert.equal(window.location.hash, '#v=2&lat=5', 'written before the hold');
+  manager._buildHashParams = () => new URLSearchParams('v=2&lat=9');
+  assert.equal(manager.snapshotHash(), 'v=2&lat=9');
+  assert.equal(
+    window.location.hash,
+    '#v=2&lat=5',
+    'snapshot leaves the URL alone',
+  );
+  manager._scheduleUpdate();
+  assert.equal(timers.size, 0, 'nothing scheduled while held');
+  manager.destroy();
+});
+
+test('a hash write keeps the state another owner stored on the entry', (t) => {
+  installTab(t, SHARE_A);
+  const written = [];
+  globalThis.history.state = { gevStories: { stories: 'explore', depth: 1 } };
+  const replace = globalThis.history.replaceState;
+  globalThis.history.replaceState = (state, title, next) => {
+    written.push(state);
+    replace(state, title, next);
+  };
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
+  manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
+  manager._updateHash();
+  assert.deepEqual(written, [{ gevStories: { stories: 'explore', depth: 1 } }]);
+  manager.destroy();
+});
+
 test('a non-share hash is ignored and Back/Forward restores each entry once', (t) => {
   const tab = installTab(t, SHARE_A);
-  const manager = new ShareLinkManager(fakeViewer());
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
   manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
   // The app rewrites entry 0 with its own state; Back must return to that.
   manager._updateHash();
@@ -176,7 +245,7 @@ test('a newer navigation supersedes an older restore and its pending write', (t)
   const tab = installTab(t, SHARE_A);
   const timers = installManualTimers(t);
 
-  const manager = new ShareLinkManager(fakeViewer());
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
   manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
   assert.equal(timers.size, 1, 'releasing suppression schedules a write');
   const navigated = [];
@@ -204,7 +273,7 @@ test('a newer navigation supersedes an older restore and its pending write', (t)
 
 test('destroy removes the navigation listeners', (t) => {
   const tab = installTab(t, SHARE_A);
-  const manager = new ShareLinkManager(fakeViewer());
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
   manager.parseInitialHash();
   let restores = 0;
   manager.watchNavigation(() => {
@@ -240,7 +309,7 @@ function restorationHarness(t, initialHash, navigationOverrides = {}) {
 
   const restores = [];
   let navigationGeneration = 0;
-  const manager = new ShareLinkManager(fakeViewer(), {
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()), {
     onRestore: (state) => {
       const gate = deferred();
       restores.push({ state, gate });
@@ -427,22 +496,24 @@ test('the layer coordinator replaces in-flight share layers with the navigated s
 test('a link made away from live carries its world time to the page that opens it', (t) => {
   installTab(t, SHARE_A);
   const worldTime = Date.UTC(2026, 9, 30, 6, 15, 42);
-  const sharer = new ShareLinkManager(fakeViewer(), {
+  const sharer = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()), {
     worldClock: { isLive: () => false, now: () => worldTime + 400 },
   });
   const link = sharer.buildLink({ nowMs: Date.UTC(2026, 10, 1) });
   sharer.destroy();
   const code = new URL(link).pathname.split('/').at(-1);
-  const opener = new ShareLinkManager(fakeViewer(), { initialShareCode: code });
+  const opener = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()), {
+    initialShareCode: code,
+  });
   assert.equal(opener.parseInitialHash().worldTime, worldTime);
   opener.destroy();
 
-  const live = new ShareLinkManager(fakeViewer(), {
+  const live = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()), {
     worldClock: { isLive: () => true, now: () => worldTime },
   });
   const liveCode = new URL(live.buildLink()).pathname.split('/').at(-1);
   live.destroy();
-  const liveOpener = new ShareLinkManager(fakeViewer(), {
+  const liveOpener = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()), {
     initialShareCode: liveCode,
   });
   assert.equal(liveOpener.parseInitialHash().worldTime, null);
@@ -451,20 +522,20 @@ test('a link made away from live carries its world time to the page that opens i
 
 test('a copied link carries the Data Library selection to a clean recipient', (t) => {
   installTab(t, SHARE_A);
-  const sharer = new ShareLinkManager(fakeViewer());
+  const sharer = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
   sharer.setLibraryParamsEncoder((params) => params.set('lib', '03.0a'));
   const code = new URL(sharer.buildLink()).pathname.split('/').at(-1);
   sharer.destroy();
-  const opener = new ShareLinkManager(fakeViewer(), { initialShareCode: code });
+  const opener = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()), { initialShareCode: code });
   assert.deepEqual(opener.parseInitialHash().library, ['03', '0a']);
   assert.deepEqual(opener.initialLibraryTokens, ['03', '0a']);
   opener.destroy();
 
   // A link with every library entry off is a share that switches none on.
-  const none = new ShareLinkManager(fakeViewer());
+  const none = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
   const noneCode = new URL(none.buildLink()).pathname.split('/').at(-1);
   none.destroy();
-  const noneOpener = new ShareLinkManager(fakeViewer(), {
+  const noneOpener = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()), {
     initialShareCode: noneCode,
   });
   noneOpener.parseInitialHash();
@@ -473,7 +544,7 @@ test('a copied link carries the Data Library selection to a clean recipient', (t
 
   // A page opened without a share leaves the library its stored selection.
   installTab(t, '');
-  const plain = new ShareLinkManager(fakeViewer());
+  const plain = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
   plain.parseInitialHash();
   assert.equal(plain.initialLibraryTokens, null);
   plain.destroy();
@@ -481,7 +552,7 @@ test('a copied link carries the Data Library selection to a clean recipient', (t
 
 test('a share navigated to in this tab hands its library tokens over', (t) => {
   const tab = installTab(t, SHARE_A);
-  const manager = new ShareLinkManager(fakeViewer());
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
   manager.parseInitialHash();
   const received = [];
   manager.setLibraryShareListener((tokens) => received.push(tokens));

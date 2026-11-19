@@ -147,3 +147,41 @@ test('vessels are asked for by the area in view, and again only when the view mo
   await ingestion.refreshIfMoved();
   assert.deepEqual(asked.at(-1), { maxRows: 500 });
 });
+
+test('a source refusing for want of a key leaves the feed waiting for its key', async () => {
+  const keyless = Object.assign(new Error('AISSTREAM_API_KEY not set'), {
+    code: 'key-required',
+  });
+  const probe = setup({
+    getSnapshot: async () => {
+      throw keyless;
+    },
+  });
+  await probe.methods.update();
+  assert.equal(probe.feed.transportStatus, 'missing-key');
+  assert.equal(probe.feed.error, 'AISSTREAM_API_KEY not set');
+  const down = setup({
+    getSnapshot: async () => {
+      throw new Error('feed down');
+    },
+  });
+  await down.methods.update();
+  assert.notEqual(down.feed.transportStatus, 'missing-key');
+});
+
+test('a source failing for another reason after a missing key is an outage, not a key to add', async () => {
+  let fail = Object.assign(new Error('AISSTREAM_API_KEY not set'), {
+    code: 'key-required',
+  });
+  const probe = setup({
+    getSnapshot: async () => {
+      throw fail;
+    },
+  });
+  await probe.methods.update();
+  assert.equal(probe.feed.transportStatus, 'missing-key');
+  fail = new Error('feed down');
+  await probe.methods.update();
+  assert.equal(probe.feed.transportStatus, null);
+  assert.equal(probe.feed.error, 'feed down');
+});

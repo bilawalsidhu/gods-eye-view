@@ -1,10 +1,17 @@
 // The selected train's camera and its visibility from far out: a moving train
-// is followed through Cesium's tracked entity (as an aircraft is), any other
+// is followed through the camera port (as an aircraft is), any other
 // train is flown to once, and the selected train's feed stays polled at any
 // distance while the rest of the network hides as before.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+import {
+  FOLLOW_MIN_RANGE_M,
+  followViewFrom,
+  SELECTION_FOLLOW_TRANSITION_S,
+} from '../../data/trackedCamera.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { setClickCardHitTest } from '../../data/pickRegistry.js';
+import { distance } from '../../geo/vector.js';
 import {
   ACTIVATION_EXIT_ALTITUDE_M,
   FOLLOW_HANDOVER_MS,
@@ -140,45 +147,80 @@ test('a train is followed while it moves, and not once it is parked or unheard',
   assert.equal(railTrainFollowable(null), false);
 });
 
-test('selecting a moving train hands Cesium a tracked entity that rides on its marker', async (t) => {
+test('selecting a moving train hands the camera a follow target that rides on its marker', async (t) => {
   const app = harness(t);
   const key = await bringToMotion(app, 'mbta-rail', 'T1', BOSTON);
-  app.viewer.camera.heading = Math.PI / 4;
-  const cancelled = app.viewer.camera.flightsCancelled;
+  app.moveCameraQuietly({ heading: Math.PI / 4 });
+  const cancelled = app.camera.flightsCancelled;
+  const pose = app.camera.pose();
+  const at = { ...app.entry(key).marker.position };
   app.parts().selection.selectAndFocusTrain(key);
 
-  const entity = app.viewer.trackedEntity;
-  assert.ok(entity, 'the camera tracks an entity');
+  const target = app.camera.followed;
+  assert.ok(target, 'the camera follows a target');
   assert.equal(app.focusRequests.length, 0, 'no one-shot fly-to');
-  assert.equal(app.viewer.camera.flightsCancelled, cancelled + 1);
-  // The tracked-frame guard the aircraft use frames it once, from the
-  // train's own framing seen along the camera's heading.
-  assert.equal(app.frames.length, 1);
-  assert.equal(app.frames[0].entity, entity);
-  const viewFrom = entity.viewFrom.getValue(Cesium.JulianDate.now());
-  const expected = railFollowOffset(WORLD_FOCUS_FRAMING.train, Math.PI / 4);
-  assert.ok(Math.abs(viewFrom.x - expected.x) < 1e-6);
-  assert.ok(Math.abs(viewFrom.z - expected.z) < 1e-6);
-  // Transparent and unbounded by anything but a point: the marker stays the
-  // only thing drawn and picked there.
-  assert.equal(entity.point.color.getValue().alpha, 0);
+  assert.equal(app.camera.flightsCancelled, cancelled + 1);
+  // Framed as the aircraft are (once, never closer than their minimum),
+  // from where the camera already is: its distance and angle kept, the train
+  // gliding to the centre.
+  assert.equal(app.follows.length, 1);
+  assert.equal(target.frame, 'enu');
+  assert.equal(target.minRange, FOLLOW_MIN_RANGE_M);
+  assert.equal(target.transitionS, SELECTION_FOLLOW_TRANSITION_S);
+  const expected = followViewFrom(pose, at);
+  assert.ok(Math.abs(target.viewFrom.x - expected.x) < 1e-6);
+  assert.ok(Math.abs(target.viewFrom.y - expected.y) < 1e-6);
+  assert.ok(Math.abs(target.viewFrom.z - expected.z) < 1e-6);
 
-  // The entity stands where the marker is drawn, frame after frame.
+  // The target stands where the marker is drawn, frame after frame.
   const marker = app.entry(key).marker;
   for (let i = 0; i < 4; i += 1) {
     app.run(1_000);
     const shown = app.trackedPosition();
-    assert.ok(
-      Cesium.Cartesian3.distance(shown, marker.position) < 1e-6,
-      'on the marker',
-    );
+    assert.ok(distance(shown, marker.position) < 1e-6, 'on the marker');
+    assert.notEqual(shown, marker.position, 'a copy');
   }
   assert.ok(app.layer.getRouteDisplayStats().follow.tracked);
 
   // Picking the followed train again keeps the follow as it is.
   app.parts().selection.selectAndFocusTrain(key);
-  assert.equal(app.viewer.trackedEntity, entity);
-  assert.equal(app.frames.length, 1);
+  assert.equal(app.camera.followed, target);
+  assert.equal(app.follows.length, 1);
+});
+
+test('a click on a train selects it; a click on the map lets it go', async (t) => {
+  const app = harness(t);
+  const key = await bringToMotion(app, 'mbta-rail', 'T1', BOSTON);
+  const icons = app.drawn('icons');
+  assert.ok(icons.items.has(key), 'the train is drawn as an icon');
+  app.click({ set: icons.spec.id, id: key, surface: false });
+  assert.equal(app.state()._selectedKey, key);
+  assert.ok(app.camera.followed);
+  // Its 3D model names it by its pick meta.
+  app.click(null);
+  assert.equal(app.state()._selectedKey, null);
+  assert.equal(app.camera.followed, null);
+  app.click({ set: 'fleet-models', id: 'm1', meta: key, surface: false });
+  assert.equal(app.state()._selectedKey, key);
+});
+
+// The card or label painted on top takes the click: a train under another
+// layer's card is neither selected nor let go.
+test("another layer's card over a train keeps the click", async (t) => {
+  const app = harness(t);
+  const key = await bringToMotion(app, 'mbta-rail', 'T1', BOSTON);
+  const icons = app.drawn('icons');
+  let top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  setClickCardHitTest(() => top);
+  t.after(() => setClickCardHitTest(null));
+  app.click({ set: icons.spec.id, id: key, surface: false });
+  assert.equal(app.state()._selectedKey ?? null, null, 'covered: not selected');
+  top = null;
+  app.click({ set: icons.spec.id, id: key, surface: false });
+  assert.equal(app.state()._selectedKey, key);
+  top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  app.click(null);
+  assert.equal(app.state()._selectedKey, key, 'covered: kept');
 });
 
 test('a parked train, or one known from a single report, is flown to once', async (t) => {
@@ -187,19 +229,16 @@ test('a parked train, or one known from a single report, is flown to once', asyn
   const parked = railTrainKey('mbta-rail', 'T1-parked');
   assert.equal(railTrainFollowable(app.entry(parked)), false);
   app.parts().selection.selectAndFocusTrain(parked);
-  assert.equal(app.viewer.trackedEntity, undefined);
-  assert.equal(app.frames.length, 0);
+  assert.equal(app.camera.followed, null);
+  assert.equal(app.follows.length, 0);
   assert.equal(app.focusRequests.length, 1);
   const request = app.focusRequests[0];
   assert.equal(request.kind, 'train');
   assert.equal(request.id, parked);
   assert.ok(
-    Cesium.Cartesian3.distance(
-      request.position,
-      app.entry(parked).marker.position,
-    ) < 1e-6,
+    distance(request.position, app.entry(parked).marker.position) < 1e-6,
   );
-  // A copy, never the billboard's own vector.
+  // A copy, never the marker's own vector.
   assert.notEqual(request.position, app.entry(parked).marker.position);
 
   // A second click flies again, as for a vessel.
@@ -216,7 +255,7 @@ test('a parked train, or one known from a single report, is flown to once', asyn
   await app.poll();
   const fresh = railTrainKey('mbta-rail', 'NEW');
   app.parts().selection.selectAndFocusTrain(fresh);
-  assert.equal(app.viewer.trackedEntity, undefined);
+  assert.equal(app.camera.followed, null);
   assert.equal(app.focusRequests.at(-1).id, fresh);
 });
 
@@ -225,7 +264,7 @@ test('inside the Cockpit a moving train is not followed: the shared request refu
   const key = await bringToMotion(app, 'mbta-rail', 'T1', BOSTON);
   app.setCockpit(true);
   app.parts().selection.selectAndFocusTrain(key);
-  assert.equal(app.viewer.trackedEntity, undefined);
+  assert.equal(app.camera.followed, null);
   assert.equal(app.focusRequests.length, 1, 'the request carries the refusal');
   assert.equal(app.state()._selectedKey, key, 'the train is still selected');
 });
@@ -235,35 +274,31 @@ test('deselecting or Escape lets go of the camera where it is', async (t) => {
   const key = await bringToMotion(app, 'mbta-rail', 'T1', BOSTON);
 
   app.parts().selection.selectAndFocusTrain(key);
-  const entity = app.viewer.trackedEntity;
+  assert.ok(app.camera.followed);
   app.parts().selection.clearSelection();
-  assert.equal(app.viewer.trackedEntity, undefined);
-  assert.equal(app.viewer.entities.contains(entity), false);
-  assert.equal(app.frames[0].stopped, true, 'the frame guard is released');
+  assert.equal(app.camera.followed, null);
   assert.equal(app.state()._follow, null);
 
   app.parts().selection.selectAndFocusTrain(key);
-  assert.ok(app.viewer.trackedEntity);
+  assert.ok(app.camera.followed);
   globalThis.document.dispatchEvent(
     Object.assign(new Event('keydown'), { key: 'Escape' }),
   );
   assert.equal(app.state()._selectedKey, null);
-  assert.equal(app.viewer.trackedEntity, undefined);
-  assert.equal(app.viewer.entities.values.length, 0);
+  assert.equal(app.camera.followed, null);
 });
 
 test('orbiting and zooming around the train keep the follow, as for an aircraft', async (t) => {
   const app = harness(t);
   const key = await bringToMotion(app, 'mbta-rail', 'T1', BOSTON);
   app.parts().selection.selectAndFocusTrain(key);
-  const entity = app.viewer.trackedEntity;
-  // Camera input while tracked moves the camera around the target; nothing
-  // here changes the tracked entity, so the follow stays.
+  const target = app.camera.followed;
+  // Camera input while following moves the camera around the target;
+  // nothing here changes what is followed, so the follow stays.
   await app.moveCamera({ altitude: 60_000 });
   app.run(2_000);
   await app.moveCamera({ altitude: 8_000 });
-  assert.equal(app.viewer.trackedEntity, entity);
-  assert.equal(app.frames[0].stopped, false);
+  assert.equal(app.camera.followed, target);
   assert.ok(app.parts().follow.isFollowing(key));
 });
 
@@ -271,30 +306,28 @@ test('another camera owner ends the follow: a tracked aircraft takes the selecti
   const app = harness(t);
   const key = await bringToMotion(app, 'mbta-rail', 'T1', BOSTON);
   app.parts().selection.selectAndFocusTrain(key);
-  const ours = app.viewer.trackedEntity;
 
-  // An aircraft layer tracks its contact.
-  const aircraft = app.viewer.entities.add({
-    position: Cesium.Cartesian3.fromDegrees(-71, 42.3, 3000),
-    point: { pixelSize: 4 },
-  });
-  app.viewer.trackedEntity = aircraft;
-  assert.equal(app.viewer.trackedEntity, aircraft, 'its entity is untouched');
+  // An aircraft layer follows its contact.
+  const aircraft = {
+    key: 'flights:abc123',
+    position: () => fromDegrees(-71, 42.3, 3000),
+    frame: 'enu',
+    viewFrom: { x: 0, y: -1000, z: 500 },
+  };
+  app.camera.follow(aircraft);
+  assert.equal(app.camera.followed, aircraft, 'its follow is untouched');
   assert.equal(app.state()._selectedKey, null);
-  assert.equal(app.viewer.entities.contains(ours), false);
-  assert.equal(app.frames[0].stopped, true);
+  assert.equal(app.state()._follow, null);
 });
 
 test('a navigation that releases the follow camera keeps the train selected', async (t) => {
   const app = harness(t);
   const key = await bringToMotion(app, 'mbta-rail', 'T1', BOSTON);
   app.parts().selection.selectAndFocusTrain(key);
-  const ours = app.viewer.trackedEntity;
   // What the shell's release does before a search or a fly-to.
-  app.viewer.trackedEntity = undefined;
+  app.camera.follow(null);
   assert.equal(app.state()._selectedKey, key);
   assert.equal(app.state()._follow, null);
-  assert.equal(app.viewer.entities.contains(ours), false);
   // Picking the train again takes the camera back.
   app.parts().selection.selectAndFocusTrain(key);
   assert.ok(app.parts().follow.isFollowing(key));
@@ -304,11 +337,10 @@ test('selecting another train hands the camera over with a fresh frame', async (
   const app = harness(t);
   const key = await bringToMotion(app, 'mbta-rail', 'T1', BOSTON);
   app.parts().selection.selectAndFocusTrain(key);
-  const first = app.viewer.trackedEntity;
+  assert.ok(app.camera.followed);
   const parked = railTrainKey('mbta-rail', 'T1-parked');
   app.parts().selection.selectAndFocusTrain(parked);
-  assert.equal(app.viewer.trackedEntity, undefined, 'the follow let go');
-  assert.equal(app.viewer.entities.contains(first), false);
+  assert.equal(app.camera.followed, null, 'the follow let go');
   assert.equal(app.focusRequests.at(-1).id, parked, 'and the new train flew');
 });
 
@@ -325,11 +357,11 @@ test('from orbit the selected train and its feed stay; the other trains go as be
   assert.ok(state._activeFeeds.has('mbta-rail'), 'its feed is still polled');
   assert.ok(app.entry(key)?.marker?.show, 'the selected train is drawn');
   assert.equal(app.entry(parked), undefined, 'the others have gone');
-  assert.ok(app.viewer.trackedEntity, 'and the follow holds');
+  assert.ok(app.camera.followed, 'and the follow holds');
 
   // The feed keeps updating, for this train alone.
   const before = app.requested.length;
-  const position = Cesium.Cartesian3.clone(app.entry(key).marker.position);
+  const position = { ...app.entry(key).marker.position };
   for (let i = 0; i < 3; i += 1) {
     app.run(RAIL_POLL_MS);
     await app.poll();
@@ -337,7 +369,7 @@ test('from orbit the selected train and its feed stay; the other trains go as be
   assert.ok(app.requested.length > before);
   assert.equal(app.entry(parked), undefined);
   assert.ok(
-    Cesium.Cartesian3.distance(position, app.entry(key).marker.position) > 1,
+    distance(position, app.entry(key).marker.position) > 1,
     'it still moves',
   );
   assert.equal(app.layer.getRouteDisplayStats().heldFeed, 'mbta-rail');
@@ -370,24 +402,22 @@ test('far side of the globe: the selected train is hidden behind the Earth', asy
   const app = harness(t);
   const key = await bringToMotion(app, 'mbta-rail', 'T1', BOSTON);
   app.parts().selection.selectAndFocusTrain(key);
-  app.viewer.trackedEntity = undefined; // the camera is free to go round
+  app.camera.follow(null); // the camera is free to go round
   await app.moveCamera({ altitude: ORBITAL_M });
-  app.viewer.scene.mode = Cesium.SceneMode.SCENE3D;
   const marker = app.entry(key).marker;
-  app.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
-    BOSTON.lon,
-    BOSTON.lat,
-    ORBITAL_M,
-  );
+  const drawn = () => app.drawn('icons').items.get(key)?.show;
+  app.moveCameraQuietly({
+    position: fromDegrees(BOSTON.lon, BOSTON.lat, ORBITAL_M),
+  });
   app.run(250);
   assert.equal(marker.show, true, 'seen from above');
-  app.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
-    BOSTON.lon + 180,
-    -BOSTON.lat,
-    ORBITAL_M,
-  );
+  assert.equal(drawn(), true);
+  app.moveCameraQuietly({
+    position: fromDegrees(BOSTON.lon + 180, -BOSTON.lat, ORBITAL_M),
+  });
   app.run(250);
   assert.equal(marker.show, false, 'hidden from the antipode');
+  assert.equal(drawn(), false);
 });
 
 test('the follow glides to the copy another feed now draws, without letting go', async (t) => {
@@ -426,8 +456,8 @@ test('the follow glides to the copy another feed now draws, without letting go',
   }
   assert.ok(railTrainFollowable(app.entry(a)));
   app.parts().selection.selectAndFocusTrain(a);
-  const entity = app.viewer.trackedEntity;
-  assert.ok(entity);
+  const target = app.camera.followed;
+  assert.ok(target);
   const onA = app.trackedPosition();
 
   gpsCopy = true;
@@ -435,20 +465,17 @@ test('the follow glides to the copy another feed now draws, without letting go',
   app.run(RAIL_POLL_MS);
   await app.poll();
   assert.equal(app.state()._selectedKey, b, 'the selection moved');
-  assert.equal(app.viewer.trackedEntity, entity, 'the same follow');
-  assert.equal(app.frames.length, 1, 'no new frame: no jump');
+  assert.equal(app.camera.followed, target, 'the same follow');
+  assert.equal(app.follows.length, 1, 'no new frame: no jump');
   assert.equal(app.focusRequests.length, 0);
   assert.ok(app.parts().follow.isFollowing(b));
   // It starts where it stood, then glides onto the new copy.
   const start = app.trackedPosition();
-  assert.ok(
-    Cesium.Cartesian3.distance(start, onA) < 50,
-    'no jump at the handover',
-  );
+  assert.ok(distance(start, onA) < 50, 'no jump at the handover');
   app.run(FOLLOW_HANDOVER_MS + 250);
   const settled = app.trackedPosition();
   assert.ok(
-    Cesium.Cartesian3.distance(settled, app.entry(b).marker.position) < 1e-6,
+    distance(settled, app.entry(b).marker.position) < 1e-6,
     'on the new copy',
   );
 });

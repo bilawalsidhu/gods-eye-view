@@ -4,6 +4,8 @@ import { storeToRefs } from 'pinia';
 import { useHudStore } from '../stores/hud.js';
 import { useCockpitStore } from '../stores/cockpit.js';
 import { cockpitEntryFace } from '../cockpitPresentation.js';
+import UiButton from '../kit/UiButton.vue';
+import UiIcon from '../kit/UiIcon.vue';
 
 // The readouts, visibility, layout variant and colors IntelHUD publishes.
 const { hud } = storeToRefs(useHudStore());
@@ -17,7 +19,9 @@ const view = computed(() => hud.value ?? EMPTY);
 // answers its clicks.
 const { presence: cockpit } = storeToRefs(useCockpitStore());
 // The entry names the subject it would ride (cockpitEntryFace).
-const entry = computed(() => cockpitEntryFace(cockpit.value?.entryKind));
+const entry = computed(() =>
+  cockpitEntryFace(cockpit.value?.entryKind, cockpit.value?.entryFace),
+);
 </script>
 
 <template>
@@ -54,10 +58,10 @@ const entry = computed(() => cockpitEntryFace(cockpit.value?.entryKind));
         <div class="hud-readout"><div id="hud-gsd">{{ view.gsd }}</div></div>
         <div class="hud-readout"><div id="hud-alt">{{ view.alt }}</div></div>
         <div class="hud-readout"><div id="hud-ais-vessel" :class="['hud-ais-vessel', { active: view.vessel.active }]">{{ view.vessel.text }}</div></div>
-        <button id="cockpit-entry-readout" type="button" :hidden="!cockpit?.entryAvailable">
-          <span class="material-symbols-outlined" aria-hidden="true">{{ entry.icon }}</span>
+        <UiButton id="cockpit-entry-readout" :hidden="!cockpit?.entryAvailable">
+          <UiIcon :name="entry.icon" :size="null" />
           <span>{{ entry.label }}</span>
-        </button>
+        </UiButton>
       </div>
       <div class="hud-bracket">┘</div>
     </div>

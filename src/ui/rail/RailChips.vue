@@ -1,5 +1,6 @@
 <script setup>
 import UiButton from '../kit/UiButton.vue';
+import UiIcon from '../kit/UiIcon.vue';
 
 // Keyed chips shared by rail cards; the owner decides what a click does.
 // An `icon` chip shows a Material Symbol (named in index.html's `icon_names`
@@ -29,11 +30,9 @@ const chipClass = (chip) =>
     :disabled="Boolean(chip.disabled)"
     :aria-busy="String(Boolean(chip.busy))"
     @click="onSelect(chip)"
-    ><span
-      v-if="chip.icon"
-      class="material-symbols-outlined"
-      aria-hidden="true"
-      >{{ chip.icon }}</span
-    ><template v-else>{{ chip.label }}</template></UiButton
+    ><UiIcon v-if="chip.icon" :name="chip.icon" :size="null" /><template
+      v-else
+      >{{ chip.label }}</template
+    ></UiButton
   >
 </template>

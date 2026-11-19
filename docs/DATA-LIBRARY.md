@@ -167,6 +167,53 @@ code. It reaches only the manifest's host, refuses redirects, caps bodies,
 caches per `cacheSeconds` and never returns upstream error text. The browser
 names an entry id, never a URL, so the proxy cannot be pointed anywhere else.
 
+## Serving the library from another server
+
+The proxy is also a fetch handler, `createLibraryHandler` from
+`gods-eye-view/sources/library` (`src/library/proxy.js`): a `Request` in, a
+`Response` out, for a server other than the dev server (a Worker, say). Its
+options decide what the server offers:
+
+- `listed(entry)` false hides an entry: `/catalog` marks it `listed: false`,
+  Browse leaves it out entirely, and no route serves it.
+- `proxied(entry)` true routes a `browser-direct` entry through the handler:
+  `/catalog` marks it `fetch: "proxied"` and the browser asks the server for
+  its tiles and data. A view-bounded entry then asks `/data/<id>?bbox=…` for
+  the camera's box snapped out to a power-of-two grid (`libraryViewBox`), so
+  nearby views share one answer; any other box is refused.
+- `keep: false` keeps nothing in the process's memory, for a server with a
+  shared cache in front. Answers carry `Cache-Control: public,
+  max-age=<cacheSeconds>` (`private` for a keyed entry).
+- `partitionCache` is the map of decoded GeoParquet partitions (at most four
+  are kept); pass one map per process to cap them there.
+- `fetchIndex(entry)` reads a partitioned entry's index, for example the
+  handler's own `/index/<id>` through a shared cache. A `/data` request never
+  builds an index itself: without a complete or partial one it answers 503
+  `index_unavailable`.
+- `subrequestLimit` caps the upstream requests one request may make (a host's
+  per-request limit); a request that would need more answers 503
+  `subrequest_limit` instead.
+
+Every resource has one spelling: tile paths are `/tile/<id>/<z>/<x>/<y>` with
+integers without leading zeros, `x` and `y` below `2^z` and `z` within the
+entry's zoom range; a path with an empty segment or a trailing slash is
+refused; a view box is accepted only in `libraryViewBox`'s exact spelling. A
+shared cache keyed on the path (and a `/data` request's `bbox`) therefore
+holds each answer once.
+
+Same-site gates and rate limits stay with the server that mounts it. An
+application can also fetch the library's tiles and proxied datasets itself,
+to keep them in its own cache: `createApplicationTools({ library: { fetchTile,
+fetchData } })`. `fetchTile` is the imagery spec's tile fetch, told which
+entry asks; `fetchData` answers a proxied dataset URL.
+
+`library: { requireCatalog: true }` makes the server's `/catalog` an
+allowlist: the library offers only what it names, and while it does not
+answer (an error status, a timeout, a page that is not the catalog) it offers
+nothing at all, rather than every entry the browser could fetch itself. It is
+asked again after 30 seconds, then at doubling intervals up to ten minutes,
+and the viewer's saved entries come back once it answers.
+
 ## Operator switches
 
 | Variable | Effect |

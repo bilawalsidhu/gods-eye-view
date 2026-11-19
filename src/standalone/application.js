@@ -2,7 +2,7 @@ import { createStandaloneCatalog } from './catalog.js';
 import { createStandalonePlaceSearch } from './placeSearch.js';
 import { CITY_POIS } from '../cityPois.js';
 import { createApplication } from '../app/application.js';
-import { createStandaloneScene } from './scene.js';
+import { createStandaloneScene, loadDefaultRenderer } from './scene.js';
 import { createStandaloneControls } from './controls.js';
 import { createStandaloneData } from './data.js';
 import { createStandaloneTools } from './tools.js';
@@ -17,8 +17,12 @@ import { createGoogleTokenSource } from '../maps/googleTokens.js';
 // The existing controls and layer catalog contain page-scoped state.
 let constructed = false;
 
-/** Compose the standalone application once per page. Reload to start again. */
+/**
+ * Compose the standalone application once per page. Reload to start again.
+ * `renderer` is the renderer plugin it draws with (default: Cesium).
+ */
 export function createStandaloneApplication({
+  renderer,
   googleApiKey,
   cesiumToken,
   geospatial = {},
@@ -30,6 +34,10 @@ export function createStandaloneApplication({
   if (constructed)
     throw new Error('The standalone application already owns this page');
   constructed = true;
+  // The default renderer starts loading now, beside the page's own setup.
+  // A failed load is the scene's to report, when it asks for the renderer.
+  const rendererPlugin = renderer ?? loadDefaultRenderer();
+  if (!renderer) Promise.resolve(rendererPlugin).catch(() => {});
   // Locale is resolved before any UI initialization so <html lang>/<html dir>
   // and every catalog lookup agree from the first painted frame. Module
   // scripts execute after parsing, so the DOM is ready here: the views
@@ -58,6 +66,8 @@ export function createStandaloneApplication({
       });
       const scene = await createStandaloneScene({
         ...context,
+        // The renderer plugin; the default (Cesium) when none is given.
+        renderer: rendererPlugin,
         googleApiKey,
         // Without a key, Google 3D can still load with tokens from the
         // app's server when it offers them.

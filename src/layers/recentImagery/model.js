@@ -237,6 +237,11 @@ function mapBox(box, fn) {
   });
 }
 
+/** Degrees box from a degrees rectangle (the camera port's `viewRectangle`). */
+export function boxFromDegrees(rectangle) {
+  return mapBox(rectangle, (degrees) => degrees);
+}
+
 /** Degrees box from a radians rectangle (Cesium `Rectangle` shape). */
 export function boxFromRectangle(rectangle) {
   return mapBox(rectangle, (radians) => (Number(radians) * 180) / Math.PI);

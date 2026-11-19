@@ -1,8 +1,8 @@
 // Focused tests for the local-infrastructure analyst-record mapper and snapshot seam.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
 import { localGeoJsonServices } from '../app/localGeojsonServices.js';
+import { bindFakeGroundRenderer } from '../testSupport/fakeGroundRenderer.mjs';
 import {
   createLocalGeoJsonLayer as createLayer,
   mapAnalystRecord,
@@ -109,17 +109,6 @@ test('infra analyst record: output is JSON-safe (no Cesium types leak)', () => {
   assert.equal('position' in r, false);
 });
 
-class MockLayerEvent {
-  constructor() {
-    this.listeners = new Set();
-  }
-
-  addEventListener(listener) {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-}
-
 test('infra getAnalystRecords: enabled layer snapshots loaded stems; disable returns []', async () => {
   const originalFetch = globalThis.fetch;
   const originalWindow = globalThis.window;
@@ -149,36 +138,10 @@ test('infra getAnalystRecords: enabled layer snapshots loaded stems; disable ret
         },
       }),
   });
-  const viewer = {
-    selectedEntity: undefined,
-    dataSources: {
-      add(dataSource) {
-        return dataSource;
-      },
-      remove() {
-        return true;
-      },
-    },
-    camera: {
-      positionWC: Cesium.Cartesian3.fromDegrees(-97.695, 30.205, 100_000),
-      frustum: { fov: Math.PI / 3 },
-      moveEnd: new MockLayerEvent(),
-      flyTo() {},
-    },
-    scene: {
-      canvas: { clientWidth: 800, clientHeight: 600 },
-      preRender: new MockLayerEvent(),
-      sampleHeightSupported: false,
-      sampleHeight() {
-        return undefined;
-      },
-      screenSpaceCameraController: { enableInputs: true },
-      pick() {
-        return null;
-      },
-      requestRender() {},
-    },
-  };
+  const viewer = {};
+  const fake = bindFakeGroundRenderer(viewer, {
+    eye: { lon: -97.695, lat: 30.205, height: 100_000 },
+  });
   const layer = createLocalGeoJsonLayer({
     id: 'local-dams',
     url: '/runtime-dam.geojsonl',
@@ -186,9 +149,9 @@ test('infra getAnalystRecords: enabled layer snapshots loaded stems; disable ret
     color: '#0088ff',
     overlayHost: { setVisible() {}, setEntries() {}, clearSource() {} },
     projectToWindow: () => ({ x: 400, y: 300 }),
-    screenSpaceEventHandlerFactory: () => ({
-      setInputAction() {},
-      destroy() {},
+    inputFor: () => ({
+      onClick: () => () => {},
+      suspendCamera: () => () => {},
     }),
   });
   try {
@@ -227,6 +190,7 @@ test('infra getAnalystRecords: enabled layer snapshots loaded stems; disable ret
       'destroy releases analyst records',
     );
     globalThis.fetch = originalFetch;
+    fake.unbind();
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;
   }

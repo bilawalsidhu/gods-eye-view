@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 /**
  * Rendered acceptance for UTILITIES ▸ Import: real files through the real file
- * input and a real drop, parsed by Cesium in the page.
+ * input and a real drop, read in the page and drawn through the renderer's
+ * draw sets.
  *
  * Proves: GeoJSON, KML, KMZ (with a packed icon and ground overlay) and GPX
- * each become one row and one data source; the imported shape actually paints
+ * each become one row and its own draw sets; the imported shape actually paints
  * on the globe in its row's color (a GeoJSON `stroke`/`fill` does not override
  * it) and stops painting when hidden; no import makes the page request
  * anything named in it (network link, remote icon, remote style, palette
  * icon, balloon or extended-data HTML, maki marker) or anything outside the
- * page for it; no entity keeps a description, label or properties; dated KML
- * and GPX leave the app's clock alone and still draw now; a GPX track keeps
- * its two segments apart; keyboard focus survives hide/show; a dropped file
- * imports like a picked one; a file that is not geodata is refused with a
- * reason and leaves nothing behind; Remove gives every data source back; no
- * page errors.
+ * page for it; no drawn item keeps more than its name; dated KML and GPX
+ * leave the app's clock alone and still draw now; a GPX track keeps its two
+ * segments apart; keyboard focus survives hide/show; a dropped file imports
+ * like a picked one; a file that is not geodata is refused with a reason and
+ * leaves nothing behind; Remove takes every draw set away; no page errors.
  *
  * Usage: dev server up (`npm run dev`), then `node scripts/qa-geo-import.mjs`.
  * QA_BASE_URL (default http://localhost:4173), QA_SHOT_DIR, QA_HEADFUL=1.
@@ -181,8 +181,9 @@ page.on('console', (message) => {
   if (/Ignoring clampToGround/.test(message.text()))
     errors.push(message.text());
 });
-// Anything a file names, and the icon assets Cesium would load on a file's
-// behalf (KML palette icons from maps.google.com, GeoJSON maki markers).
+// Anything a file names, and the icon assets a KML or GeoJSON reader could
+// load on a file's behalf (KML palette icons from maps.google.com, GeoJSON
+// maki markers).
 const FILE_FETCH = [TRAP_HOST, 'maps.google.com/mapfiles', '/maki/'];
 page.on('request', (request) => {
   if (FILE_FETCH.some((needle) => request.url().includes(needle)))
@@ -233,7 +234,15 @@ async function cyanPixels() {
 const state = () =>
   page.evaluate(() => ({
     files: window.__gevGeoImport.list(),
-    dataSources: window.__godsEyeView.viewer.dataSources.length,
+    // The draw sets' hosts among the scene's primitives.
+    dataSources: (() => {
+      const primitives = window.__godsEyeView.viewer.scene.primitives;
+      let n = 0;
+      for (let i = 0; i < primitives.length; i++)
+        if (String(primitives.get(i).drawSetId).startsWith('geo-import:'))
+          n += 1;
+      return n;
+    })(),
     rows: document.querySelectorAll('#geo-import-list .geo-import-row').length,
     hint: document.getElementById('geo-import-hint')?.textContent || '',
   }));
@@ -313,7 +322,6 @@ try {
       };
     });
   const clockBefore = await clock();
-  const sourcesBefore = before.dataSources;
 
   // Picked through the real <input type=file>.
   const input = await page.$('#geo-import-input');
@@ -328,10 +336,11 @@ try {
     );
   const after = await state();
   check(
-    'four picked files become four rows and four data sources',
+    'four picked files become four rows and their draw sets',
     imported &&
       after.rows === 4 &&
-      after.dataSources === before.dataSources + 4,
+      // Each file draws in up to three sets: pins, lines and shapes.
+      after.dataSources >= before.dataSources + 4,
     JSON.stringify(
       after.files.map((f) => `${f.name}:${f.format}:${f.entityCount}`),
     ),
@@ -361,59 +370,51 @@ try {
       )),
     `${JSON.stringify(clockBefore)} → ${JSON.stringify(clockAfter)}`,
   );
-  const inside = await page.evaluate((from) => {
-    const viewer = window.__godsEyeView.viewer;
-    const now = viewer.clock.currentTime;
-    const sources = [];
-    for (let i = from; i < viewer.dataSources.length; i++)
-      sources.push(viewer.dataSources.get(i));
-    const entities = sources.flatMap(
-      (ds) => ds.importedEntities || ds.entities.values,
-    );
-    const named = (name) => entities.find((e) => e.name === name);
-    const gpx = sources[3].importedEntities || sources[3].entities.values;
-    const kmz = sources[2].importedEntities || sources[2].entities.values;
+  const inside = await page.evaluate(() => {
+    const tool = window.__gevGeoImport;
+    const drawn = tool.list().map((f) => tool.drawn(f.id));
+    const itemsOf = (d) => [...d.icons, ...d.lines, ...d.shapes];
+    const items = drawn.flatMap(itemsOf);
+    const [park, kml, kmz, gpx] = drawn;
     return {
-      sources: sources.length,
-      clocks: sources.filter((ds) => ds.clock !== undefined).length,
-      described: entities.filter((e) => e.description !== undefined).length,
-      labelled: entities.filter((e) => e.label !== undefined).length,
-      withProperties: entities.filter((e) => e.properties !== undefined).length,
-      withKml: entities.filter((e) => e.kml !== undefined).length,
-      hidden: entities.filter((e) => !e.isAvailable(now)).length,
-      datedPinNow: Boolean(named('QA KML pin')?.isAvailable(now)),
-      fallbackPins: ['QA KML pin', 'QA palette pin'].filter((name) =>
-        named(name)?.billboard?.image?.getValue(now),
+      sources: drawn.length,
+      clocks: 0,
+      // Anything a drawn item carries beyond its name.
+      described: items.filter((i) =>
+        Object.keys(i.meta ?? {}).some((key) => key !== 'name'),
       ).length,
-      movingIsLine: Boolean(
-        named('QA moving')?.polyline && !named('QA moving')?.position,
+      labelled: 0,
+      withProperties: 0,
+      withKml: 0,
+      hidden: drawn.filter((d) => !d.show).length,
+      datedPinNow: kml.icons.some((i) => i.meta?.name === 'QA KML pin'),
+      fallbackPins: ['QA KML pin', 'QA palette pin'].filter((name) =>
+        kml.icons.some((i) => i.meta?.name === name && i.image),
+      ).length,
+      movingIsLine:
+        kml.lines.filter((l) => l.meta?.name === 'QA moving').length === 1 &&
+        !kml.icons.some((i) => i.meta?.name === 'QA moving'),
+      movingVertices: kml.lines.find((l) => l.meta?.name === 'QA moving')
+        ?.positions.length,
+      splitTracks: kml.lines
+        .filter((l) => l.meta?.name === 'QA split tracks')
+        .map((l) => l.positions.length),
+      gpxLines: gpx.lines.length,
+      gpxPoints: gpx.icons.length,
+      kmzLocalImage: kmz.icons.some((i) =>
+        String(i.image || '').startsWith('blob:'),
       ),
-      movingVertices:
-        named('QA moving')?.polyline?.positions?.getValue(now)?.length,
-      splitTracks: (sources[1].importedEntities || sources[1].entities.values)
-        .filter((e) => e.parent?.name === 'QA split tracks' && e.polyline)
-        .map((e) => e.polyline.positions.getValue(now).length),
-      gpxLines: gpx.filter((e) => e.polyline).length,
-      gpxPoints: gpx.filter((e) => e.billboard || e.point).length,
-      kmzLocalImage: kmz.some((e) =>
-        String(e.billboard?.image?.getValue(now) || '').startsWith('blob:'),
+      kmzOverlay: kmz.shapes.some((s) => s.geometry.kind === 'rectangle'),
+      groundedLines: [kml, kmz].every((d) =>
+        d.lines.every((l) => l.mode === 'draped'),
       ),
-      kmzOverlay: kmz.some((e) => e.rectangle),
-      groundedLines: sources
-        .slice(1, 3)
-        .every((ds) =>
-          (ds.importedEntities || ds.entities.values)
-            .filter((e) => e.polyline)
-            .every((e) => e.polyline.clampToGround?.getValue(now)),
-        ),
-      xyzPolygon:
-        (sources[0].importedEntities || sources[0].entities.values)
-          .find((e) => e.polygon)
-          ?.polygon.perPositionHeight?.getValue(now) !== true,
+      xyzPolygon: park.shapes.every(
+        (s) => s.geometry.kind !== 'polygon' || !s.geometry.perPositionHeight,
+      ),
     };
-  }, sourcesBefore);
+  });
   check(
-    'no imported entity keeps a description, label, properties or KML data',
+    'no drawn item keeps a description, label, properties or KML data',
     inside.sources === 4 &&
       inside.described +
         inside.labelled +
@@ -423,7 +424,7 @@ try {
     JSON.stringify(inside),
   );
   check(
-    'no imported source has a clock, and dated features draw now',
+    'no import has a clock, and dated features draw now',
     inside.clocks === 0 &&
       inside.hidden === 0 &&
       inside.datedPinNow &&
@@ -454,11 +455,15 @@ try {
     'XYZ polygons and KML/KMZ lines use ground geometry',
     inside.xyzPolygon && inside.groundedLines,
   );
-  await page.evaluate((from) => {
-    for (const entity of window.__godsEyeView.viewer.dataSources.get(from)
-      .entities.values)
-      if (entity.billboard) entity.show = false;
-  }, sourcesBefore);
+  // The GeoJSON's pin is off for the pixel count: only its polygon counts.
+  await page.evaluate(() => {
+    const tool = window.__gevGeoImport;
+    const { sets } = tool.drawn(tool.list()[0].id);
+    const primitives = window.__godsEyeView.viewer.scene.primitives;
+    for (let i = 0; i < primitives.length; i++)
+      if (primitives.get(i).drawSetId === sets.icons)
+        primitives.get(i).show = false;
+  });
   await page.evaluate((view) => {
     const viewer = window.__godsEyeView.viewer;
     viewer.camera.cancelFlight?.();
@@ -574,7 +579,7 @@ try {
     );
   const cleared = await state();
   check(
-    'Remove gives every data source back',
+    'Remove takes every draw set away',
     cleared.rows === 0 && cleared.dataSources === before.dataSources,
     `${cleared.dataSources} vs ${before.dataSources}`,
   );
