@@ -89,7 +89,7 @@ export function normalizeAlprNode(el) {
     latitude: el.lat,
     longitude: el.lon,
     operator: textTag(tags.operator),
-    manufacturer: textTag(tags.manufacturer),
+    manufacturer: textTag(tags.manufacturer) ?? textTag(tags.brand),
     // Display-only: resolved against vendored datasheets (see modelSpecs.js).
     model: textTag(tags.model),
     cameraType: textTag(tags['camera:type']),

@@ -1,17 +1,9 @@
 /**
  * @module alprModelSpecs
  *
- * Datasheet specs for the ALPR hardware that OpenStreetMap mappers name.
- *
- * 1,567 mapped ALPR cameras carry a `model` tag (October 2026). This module
- * vendors the records for the models among them that the CCTV Camera Database
- * (https://github.com/ch-bas/cctv-camera-database, CC0-1.0) covers —
- * Motorola Solutions Vigilant, Genetec AutoVu, Axis, Verkada and Bosch MIC,
- * which resolve 408 of those cameras (excluding unversioned SharpV tags) —
- * and resolves a camera's `model` (with its `manufacturer`) through the CCTV
- * layer's matcher. The hourly extract the
- * layer reads by default does not publish `model` yet, so today only an
- * Overpass-backed source shows these specs. Flock Safety publishes no
+ * Datasheet specs for the ALPR hardware that OpenStreetMap `model` tags name,
+ * vendored from the CCTV Camera Database (CC0-1.0) and matched with the CCTV
+ * layer's rules; DATA_SOURCES.md has the provenance. Flock Safety publishes no
  * datasheet resolution, so Flock models stay unresolved; an unknown model
  * never implies anything.
  *
@@ -19,13 +11,15 @@
  * night vision) — never endpoints, operators or what a camera records.
  */
 
-import { createModelSpecLookup } from '../cctv/modelSpecs.js';
+import { createModelSpecLookup, lookupModelSpec } from '../cctv/modelSpecs.js';
 
 /**
- * Verbatim records from the dataset's model-enrichment extract (v2.29.0).
- * Mappers tag the bare product code ("L6Q", "MIC-7522-Z30B") where the
- * datasheet names the product line too ("Vigilant L6Q"), so each record also
- * lists its bare code as an alias.
+ * Records from the dataset's model-enrichment extract (v2.29.0), with the
+ * bare product codes mappers tag ("L6Q") added as aliases where the title
+ * names the product line ("Vigilant L6Q"). A tag without a generation or
+ * variant could name any of them, so the SharpV G3 and SharpX XGA titles
+ * carry theirs. Fields the card does not read (type, url, fov_deg, …) stay as
+ * in the dataset, like the CCTV records.
  */
 const RECORDS = [
   {
@@ -99,11 +93,10 @@ const RECORDS = [
   {
     id: 'genetec-autovu-sharpv',
     brand: 'Genetec',
-    model: 'AutoVu SharpV',
+    model: 'AutoVu SharpV G3',
     type: 'box',
     url: 'https://www.cctv-database.com/camera/genetec-autovu-sharpv/',
     aliases: [
-      'AutoVu SharpV G3',
       'AU-V-WS850-LC-G3-000',
       'AU-V-BS850-LC-G3-0M0',
       'AU-V-BS850-LC-G3-0M1',
@@ -128,7 +121,7 @@ const RECORDS = [
   {
     id: 'genetec-autovu-sharpx',
     brand: 'Genetec',
-    model: 'AutoVu SharpX',
+    model: 'AutoVu SharpX XGA',
     type: 'box',
     url: 'https://www.cctv-database.com/camera/genetec-autovu-sharpx/',
     // i18n-ignore: datasheet label
@@ -229,23 +222,11 @@ const RECORDS = [
     night_vision: { type: 'ir', range_m: 20 },
     environment: ['indoor', 'outdoor'],
   },
-  {
-    id: 'bosch-mic-7522-z30b',
-    brand: 'Bosch',
-    model: 'MIC IP starlight 7100i (MIC-7522-Z30B)',
-    type: 'ptz',
-    url: 'https://www.cctv-database.com/camera/bosch-mic-7522-z30b/',
-    aliases: ['MIC-7522-Z30B'],
-    fov_deg: '2.1-58.3',
-    // i18n-ignore: datasheet label
-    resolution: { mp: 2, w: 1920, h: 1080, label: '1080p HD' },
-    ptz: true,
-    varifocal: true,
-    night_vision: { type: 'color' },
-    environment: ['outdoor'],
-    ndaa_compliant: true,
-  },
+  // The CCTV layer's record: one colour-neutral title for the B/G/W variants.
+  lookupModelSpec('MIC-7522-Z30B', 'Bosch'),
 ];
+
+const lookupDatasheetSpec = createModelSpecLookup(RECORDS);
 
 /**
  * Datasheet record for a mapped ALPR camera's `model` tag. A `manufacturer`
@@ -253,18 +234,17 @@ const RECORDS = [
  * "L6Q" stays unresolved rather than borrowing Motorola's specs.
  * @param {string|null} model - The OSM `model` tag.
  * @param {string|null} [manufacturer] - The OSM `manufacturer` tag.
- * @returns {Object|null} The verbatim spec record, or null when unknown.
+ * @returns {Object|null} The spec record, or null when unknown.
  */
-const lookupDatasheetSpec = createModelSpecLookup(RECORDS);
-
 export function lookupAlprModelSpec(model, manufacturer) {
-  const spec = lookupDatasheetSpec(model, manufacturer);
-  // The dataset's unversioned SharpV label is tied to G3 hardware, but OSM
-  // tags may name G1 or G2. Require an explicit G3 or a G3 part number.
+  // Adapter records arrive unnormalized and the matcher's word trim is
+  // quadratic on long punctuation runs: match only tag-sized strings (the
+  // built-in sources keep 180 characters).
+  if (typeof model !== 'string' || model.length > 180) return null;
   if (
-    spec?.id === 'genetec-autovu-sharpv' &&
-    !/\bg3\b/i.test(String(model || ''))
+    manufacturer != null &&
+    (typeof manufacturer !== 'string' || manufacturer.length > 180)
   )
     return null;
-  return spec;
+  return lookupDatasheetSpec(model, manufacturer);
 }

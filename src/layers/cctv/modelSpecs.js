@@ -456,15 +456,8 @@ const BRAND_ALIASES = {
   Hikvision: ['hiwatch'],
 };
 
-/**
- * Builds a model lookup over a record table, so another layer can resolve its
- * own vendored records with the same matching rules (see lookupModelSpec).
- * @param {Object[]} records - Spec records in this module's shape.
- * @param {Object<string, string[]>} [brandAliases] - Extra manufacturer words
- *   accepted per record brand.
- * @returns {(model: string, manufacturer?: string) => (Object|null)} Lookup.
- */
-export function createModelSpecLookup(records, brandAliases = BRAND_ALIASES) {
+/** A model lookup over `records` with this module's matching rules (see lookupModelSpec). */
+export function createModelSpecLookup(records) {
   /**
    * One entry per record name (model + aliases). `required` is every
    * non-generic word of the name — all must appear in a query, so a
@@ -476,7 +469,7 @@ export function createModelSpecLookup(records, brandAliases = BRAND_ALIASES) {
   const nameIndex = records.flatMap((record) => {
     const brand = new Set([
       ...words(record.brand),
-      ...(brandAliases[record.brand] || []),
+      ...(BRAND_ALIASES[record.brand] || []),
     ]);
     return [record.model, ...(record.aliases || [])].map((name) => {
       const nameWords = words(name);
@@ -610,12 +603,15 @@ export function specFovCapabilityToken(
 
 /**
  * One-line spec summary for HUD meta text.
- * @param {Object} spec - A record from this module.
+ * @param {Object} spec - A spec record (CCTV or ALPR). Resolution falls back
+ *   from label to WxH to NMP.
+ * @param {{withBrand?: boolean}} [options] - `withBrand: false` leaves the
+ *   brand out.
  * @returns {string} e.g. 'Axis Q6135-LE · 1080p · IR 250m · PTZ' ('' for null).
  */
-export function specSummary(spec) {
+export function specSummary(spec, { withBrand = true } = {}) {
   if (!spec) return '';
-  const parts = [`${spec.brand} ${spec.model}`];
+  const parts = [withBrand ? `${spec.brand} ${spec.model}` : spec.model];
   const { label, w, h, mp } = spec.resolution || {};
   if (label) parts.push(label);
   else if (w && h) parts.push(`${w}x${h}`);

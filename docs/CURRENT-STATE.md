@@ -1508,9 +1508,11 @@ Genetec AutoVu, Axis, Verkada, Bosch MIC; 408 of the 1,567 tagged cameras
 in October 2026) gets a `SPEC` line on its card from vendored datasheet records
 (`src/layers/alpr/modelSpecs.js`, matched with the CCTV layer's
 `createModelSpecLookup`). A `manufacturer` naming another maker rejects the
-match, and the raw tag text is never shown. Unversioned `AutoVu SharpV` tags
-cannot choose between G1/G2/G3 datasheets and show no specs. The hourly extract
-has no `model` field yet, so only an Overpass-backed source fills it.
+match, and the raw tag text is never shown.
+Unversioned `AutoVu SharpV` and `AutoVu SharpX` tags show no specs; G1/G2
+tags show the G2 (1280x960) record and G3 tags the G3 record. The default
+hourly extract has no `model` field yet; an Overpass-backed source or a custom
+adapter record's optional `model` fills it.
 The shared overlay paints gradients for at most 64 nearby cameras, promoting the
 selected camera; farther cameras keep native Cesium badges without wedges.
 Native ground-clamped wedges (a ground polyline plus a classification polygon per

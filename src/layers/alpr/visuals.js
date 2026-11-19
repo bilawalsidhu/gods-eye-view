@@ -45,10 +45,7 @@ export function alprDisplayId(record) {
   return `ALPR-${String(record.osmId).slice(-4).padStart(4, '0')}`;
 }
 
-/**
- * Show only supplied metadata, with the actual source named for custom
- * adapters, plus the datasheet summary when the mapped model is known.
- */
+/** Show only supplied metadata, with the actual source named for custom adapters. */
 export function alprLabelDetails(record, source) {
   const sourceName =
     source.attribution?.name || source.label || 'Camera source';
@@ -71,7 +68,13 @@ export function alprLabelDetails(record, source) {
   if (equipment.length) details.push(equipment.join(' · '));
   // Only a datasheet match is shown: the raw OSM `model` text never is.
   const spec = lookupAlprModelSpec(record.model, record.manufacturer);
-  if (spec) details.push(`SPEC ${specSummary(spec).toUpperCase()}`);
+  if (spec) {
+    // The equipment line usually names the maker already; the card does not wrap.
+    const withBrand = !equipment.some((line) =>
+      line.includes(spec.brand.toUpperCase()),
+    );
+    details.push(`SPEC ${specSummary(spec, { withBrand }).toUpperCase()}`);
+  }
   if (sourceName === 'OpenStreetMap') details.push('PUBLIC MAP DATA');
   return details;
 }
