@@ -89,10 +89,16 @@ the kit is a `UiButton`, `UiCloseButton` or another kit control, every
 Material Symbols glyph a `UiIcon`, every checkbox a `UiCheckbox`, every
 select a `UiSelect`, and every range a `UiSlider` except the radio
 tuner's and the world timeline's, for the reasons given below. No module
-outside the kit builds a button, select, field or Material glyph in script
-(`src/ui/kit/viewControls.test.mjs` pins all of it). The native fields
-left are the text, number, password and file inputs the kit has no
-control for, and the search fields whose surfaces this document names.
+outside the kit, and no SFC's script, builds a button, select, field or
+Material glyph in script or writes one as markup in a string, apart from
+the globe panel's standalone page (`src/tools/globePanel.js`), plain HTML
+a host serves with no Vue or kit, whose Expand and Open buttons are
+written as markup (`src/ui/kit/viewControls.test.mjs` pins all of it).
+The native fields left are the text, number, password and file inputs
+and the two text areas (the chat's message box and the scene dialog's
+multiline field) the kit has no control for, and the search fields whose
+surfaces this document names. The scene dialog's single-line field takes
+its type from its caller, which passes text-like types only.
 `UiButton` adds `pressedClass`, Core's class on a pressed toggle (most use
 `active`); its pressed classes toggle through `classList`, so a class other
 code adds (a voice highlight) survives a press. Every pressed toggle (a
