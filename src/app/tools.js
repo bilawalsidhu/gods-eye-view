@@ -9,6 +9,7 @@ import { useStoriesStore } from '../ui/stores/stories.js';
 import { SceneDirector } from '../scenes/director.js';
 import { initAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
+import { initHandControl } from '../handControl/panel.js';
 import {
   claimPointer,
   isPointerFree,
@@ -144,6 +145,15 @@ export function createApplicationTools({
     markActions: drawMarkActions,
   });
   defer(() => drawTool?.destroy());
+  // UTILITIES ▸ Hands: webcam gestures steer the camera; 🤙 toggles the mic.
+  const handControl = initHandControl({
+    viewer,
+    annotations,
+    sceneDirector,
+    publish: (view) => displayStore.publishHands(view),
+    connect: connectDisplay,
+  });
+  defer(() => handControl?.destroy());
   // UTILITIES ▸ Import: the person's own GeoJSON/KML/KMZ/GPX files, each its
   // own data source. They live for the page session, so the application
   // lifetime removes them and the drop listeners on the viewer container.
