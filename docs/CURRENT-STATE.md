@@ -3166,12 +3166,11 @@ or not yet initialized, so a restored value is honoured when it starts.
 The hook is opt-in and implemented by Wind (streamlines through the shader's height
 fade, the 2D canvas fallback through CSS opacity, and the temperature/pressure
 field through its imagery or shell alpha), Fire Perimeters and Drone Airspace
-(the colours of their entities, through `src/layers/sceneOpacity.js`), and the Sea
-Marks and Ski Pistes overlays (imagery alpha). Every other layer, including the
-Weather layers with their own strength control and Recent Imagery, shows no slider.
-Entity layers dim only constant entity colours: textures, time-dynamic colours,
-primitives and the world-overlay labels are left as drawn. Wind's inspection marker is
-also left as drawn.
+(the alpha of their renderer draw-port fills and outlines, through
+`src/layers/sceneOpacity.js`), and the Sea Marks and Ski Pistes overlays (imagery
+alpha). Every other layer, including the Weather layers with their own strength
+control and Recent Imagery, shows no slider. World-overlay labels and Wind's
+inspection marker are left as drawn.
 
 The setting travels as `?lop=<layer-id>:<percent>,…` (`src/data/layerOpacity.js`).
 It is a query parameter of its own: the `#v=2` share codec, layer tokens and existing
