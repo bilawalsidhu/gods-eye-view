@@ -192,6 +192,23 @@ while a query is typed. The Filter button opens a disclosure and carries
 a `UiIcon` with `:size="null"`, so `layer-finder.css` still sizes them
 (`src/ui/kit/layerFinderControls.test.mjs` pins it); the search field's
 magnifier is `UiSearchField`'s own span.
+The AI chat panel's and the voice control's buttons are ghost
+`UiButton`s: the chat's Settings, quick prompts, attachment removes,
+Attach layer, Attach a file, Expand conversation, command suggestions,
+Expand chat, Add attachment and Send (a submit button that turns into
+Stop reply), and the voice control's Open AI chat, Back to chat, Back to
+voice, its Preview and Settings tabs and the error tray's DISMISS, beside
+the tier button, the mic and the dock and minimize buttons, which already
+were. The tier button and dock are pressed toggles; the mic is one only
+while its owner has a state for it; the tabs keep `role="tab"` and
+`aria-selected`. DISMISS is a text button, not a cross, so it is not a
+`UiCloseButton`. The Settings and tab glyphs are `UiIcon`s with
+`:size="null"`, so voice-cost.css and voice-card.css still size them
+(`src/ui/kit/chatVoiceControls.test.mjs` pins it). The chat bubble,
+globe, attach, send and stop, expand and Back glyphs stay inline SVG,
+since no Material symbol the page loads draws them the same, and the
+message box, file picker and inactivity minutes stay native fields, which
+the kit has none of. The voice modules build no controls in script.
 The small surfaces' buttons are ghost `UiButton`s: the locale picker's
 button, the phone tab bar's tabs, the globe actions' Clear, Share, Reset
 and north-up compass, the imagery divider's handle, the scene sharing
