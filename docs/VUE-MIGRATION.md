@@ -97,8 +97,8 @@ header's search and expand, the imported files' row actions and the rail
 chips' icons), the glyphs are `UiIcon`s with `:size="null"`, so the site
 rules still size them. Core's pressable chips and pills (the rail cards'
 chips and action chips, Recent Imagery's day chips, SWAP and ZOOM IN, map
-sources, cities and places) are `UiButton`s too; the view context's place
-and layer chips and the key setup chip are still plain buttons. `UiChip`
+sources, cities and places, and the view context's place and layer chips)
+are `UiButton`s too; the key setup chip is still a plain button. `UiChip`
 is a non-interactive label chip, used by the voice card.
 The welcome card's buttons (SKIP, the three start tiles, BROWSE STORIES,
 BACK and the main NEXT / ENTER GOD MODE action) are ghost `UiButton`s:
@@ -149,6 +149,23 @@ context view shows too). Their glyphs are `UiIcon`s with `:size="null"`,
 so entity-card.css and spot-conditions.css still size them
 (`src/ui/kit/entityCardControls.test.mjs` pins it). Ask GEV's chat bubble
 stays inline SVG, since no Material symbol the page loads draws it.
+The command dock's buttons (the six style buttons, the two tray toggles,
+Location's collapse and the search toggle, beside the pins and pills that
+already were) are ghost `UiButton`s. The style buttons are pressed toggles
+with `active` as their pressed class, so they now carry `aria-pressed`;
+Normal is the pressed one until a style is published. Their glyphs, the
+search 🔎 and the collapse + are text characters, not Material symbols, and
+stay plain text. The Context panel's buttons (its two tabs, Contacts, the
+cockpit entry and SEARCH NEARBY SITES, beside the header's search and
+expand and the TR-3B chip) are ghost `UiButton`s; the tabs and Contacts
+are `role="tab"` controls, chosen through `aria-selected` with their own
+`active` class rather than `pressed`. The view context it shows while
+nothing is picked (a worldwide tile that turns a layer on, an item's row,
+the place and layer chips and Ask GEV) is on the kit too, and the glyphs of
+all three are `UiIcon`s with `:size="null"`, so their site rules still size
+them; an item's motion glyph keeps `role="img"` and its name, with the
+kit's `aria-hidden` taken off (`src/ui/kit/commandDockControls.test.mjs`
+pins it). Ask GEV's chat bubble stays inline SVG.
 The Layer Finder's buttons (Search, Filter, the filter menu's Status and
 Category options and the bar's two clear chips) are ghost `UiButton`s.
 Search and the options are pressed toggles; the options' pressed class is
