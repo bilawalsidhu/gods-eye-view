@@ -2001,14 +2001,33 @@ directory. Every `/api/cctv` route refuses cross-site browser requests but
 accepts forwarding headers, so cameras work behind a reverse proxy; a forwarded
 request skips the key-bearing Street View fallback and gets the placeholder.
 
-The CCTV layer draws only the cameras on or near the screen. Zoomed out, it
-keeps one camera per ground cell sized to the view, preferring a healthy feed,
-and the cells are anchored to the ground so a pan keeps the same cameras. The
-active camera always shows. Ground placement and coverage geometry load only
-for the cameras in view, with at most two attempts per camera and view regime.
-The view pass reruns while the camera moves, paced by its own cost. The camera
-picker lists the cameras in view, active camera first, and closes with the
-count of cameras outside the view.
+The CCTV layer draws only the cameras on or near the screen. Zoomed out, a
+ground cell with two or more cameras shows one marker at their mean position. A
+green camera pictogram sits under its top edge and the count just below its
+middle. The marker grows with the count and paints on the world overlay at
+callout resolution. The count covers the whole cell up to the horizon, including
+its off-screen cameras. Overlapping markers merge and add their counts. A lone
+camera whose icon would touch a marker joins the nearest one, unless the HUD
+hides the merged marker. In that case the lone camera keeps its icon and the
+count stays where it was before the merge. If the marker there would still cover
+the icon, the camera stays in its count when the label fits. The active camera
+keeps its own icon beside any marker that would cover it and stays out of the
+count. A click on a marker zooms in on its group, at least halving the distance
+each time. If halving would leave the group wider or taller than the frame, the
+view zooms in on the nearest of the group's ground cells with two or more
+cameras. The cockpit or a tracked object holds the view in place. Ambient cards
+and coverage attach only to
+cameras drawn as icons. On a globe map a marker stands on the drawn terrain. A
+camera the height batch never answered for takes the drawn terrain as its ground
+once it is near the screen. It reads that height again from much closer, once
+the terrain in view has loaded, or when the terrain source changes. A later
+Re:Earth answer replaces it. A fallback preserves it. Close up every camera
+shows. Cameras on one mount draw side by side and their records keep the mount.
+Ground placement has at most two attempts per camera and view regime. The view
+pass reruns while the camera moves, paced by its own cost, and when the terrain
+in view finishes loading. The camera picker lists the active camera first, then
+one camera per visible cell, preferring healthy feeds. It ends with the count of
+catalog cameras missing from the list.
 
 Traffic owns its rendered-surface observer only while enabled, removes it on disable/destroy, and rebuilds no cached heights on frames where the surface identity is unchanged. Its dots and heat-lines are two renderer draw sets, it animates on the frame port's preRender, and it follows the camera through the camera port at its own 5% threshold rather than the shared `percentageChanged` ledger. The surface identity is the globe port's `surfaceVersion()` and tile readiness its `isSettled('surface')`, so the layer no longer reaches Cesium. Heat-lines are always asked for draped: where the Cesium renderer cannot drape (no depth textures) its draw port draws them (and every other draped line) over the surface, in their colour where the surface hides them and hidden past the horizon, recolouring a line in place when only its colour changes, rather than the layer dropping them.
 
@@ -2127,7 +2146,10 @@ trail, a route. A layer under another layer's card or label
 (`isUnderOtherCard`) does nothing: it neither acts on its item there nor
 treats the click as empty space, so a tracked aircraft stays tracked and a
 selection stays selected. Context (`src/ui/entityContextBridge.js`) names
-nothing under a card. With no card on top, the scene rules are unchanged.
+nothing under a card. A layer can claim a target it paints outside the overlay's
+entries (`registerClickClaim`) where no card or label is on top. A CCTV count
+claims each click that zooms to it, so a tracked aircraft stays tracked.
+With no card or claim on top, the scene rules are unchanged.
 World-overlay hit rectangles are what is painted on screen until the next
 paint: an overlay change (a click subscriber publishing its selection card)
 no longer clears them mid-click, and a paint that draws nothing clears them
@@ -7526,7 +7548,7 @@ silently demoting every later lookup for the session.
   ground clamp now lifts the cap _center_ only so the wireframe stays a true pyramid welded to
   the plane (was a flattened fan / the ~47.5 m divergence — RESOLVED), re-selecting the active
   camera is a no-op (killed a click-flash), and texture swaps gate on canvas content (killed a
-  periodic white flash). Camera icons are cyan for stills, violet for cameras with a video feed, and amber for the active camera. Coverage is now **metro-wide: 250 cameras** (`CCTV_AUSTIN_MAX_SOURCES`
+  periodic white flash). Camera icons are green for stills, violet for cameras with a video feed, and amber for the active camera. Coverage is now **metro-wide: 250 cameras** (`CCTV_AUSTIN_MAX_SOURCES`
   default 36 → 250, hard bound 300), filtered to `camera_status === TURNED_ON` (~815 live of
   1,003 rows). City packs (2026-07-04): Caltrans (districts 4/7/11/3 — SF, LA, San Diego,
   Sacramento; cap 300) and TfL London JamCams (cap 250) join Austin (cap 250) as keyless default
