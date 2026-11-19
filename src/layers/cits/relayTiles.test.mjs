@@ -115,6 +115,16 @@ test('tile fullstatus snapshots enforce the per-tile point cap', () => {
   assert.equal(merged.points.size, CITS_MAX_POINTS_PER_TILE);
   assert.equal(merged.points.has('station-0'), true);
   assert.equal(merged.points.has(`station-${CITS_MAX_POINTS_PER_TILE}`), false);
+
+  // A patch for a station dropped at the cap is skipped, not a resync.
+  const dropped = `station-${CITS_MAX_POINTS_PER_TILE}`;
+  const resync = store.applyDeltaBatch({
+    type: 'tile-delta-batch',
+    deltas: [{ tile: '13/1/1', baseSeq: 1, seq: 2, patchPointIds: [dropped] }],
+    pointPatchesById: { [dropped]: { properties: { speed: 3 } } },
+  });
+  assert.deepEqual(resync, []);
+  assert.equal(store.merged().points.has(dropped), false);
 });
 
 test('compaction drops silent vehicles, keeps fixed stations and dedupes hazards', () => {

@@ -191,6 +191,9 @@ export function createCitsTileStore() {
       entry.points[id] = feature;
     }
     for (const id of delta.patchPointIds || []) {
+      // A full tile drops stations past the cap; a patch for one of them is
+      // expected, not a divergence, and must not trigger a resync loop.
+      if (!entry.points[id] && pointCount >= CITS_MAX_POINTS_PER_TILE) continue;
       const next = applyPointPatch(
         entry.points[id],
         dictionaries.pointPatchesById?.[id],
