@@ -417,9 +417,10 @@ export class ShareRestoration {
       this._layerStateRestorePromise = this._layerStateCoordinator.start({
         shareLayerState: this._initialShareState?.layerState || null,
         shareCreatedAtMs: this._initialShareState?.sharedAtMs ?? null,
-        // Any valid camera/style share isolates recipient-local preferences,
-        // including legacy and malformed-v2 layer payloads.
-        allowLocalState: !this._initialShareState,
+        // A link restores what it carries; a bare address is a clean start
+        // with the default layers. Saved layer choices never come back on
+        // their own, so clearing the address always resets the view.
+        allowLocalState: false,
       });
       if (this._initialShareSelectionSuperseded) {
         this._layerStateCoordinator.cancelPendingShareTracking(
