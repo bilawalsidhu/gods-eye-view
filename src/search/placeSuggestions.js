@@ -423,7 +423,7 @@ function codeAfterLabel(line) {
   // After a label in lower case, any value is a code ("verification code
   // Abc"); after one written as a name, only a value that is not one.
   const coded =
-    /\b((?:otp|2fa|mfa|cvv|cvc|(?:verification|one-time|security|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{2,63})(?:(?:\s*[,;]\s*|\s+[-–—]+\s+|\s+)(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.!?]*$/i.exec(
+    /\b((?:otp|2fa|mfa|cvv|cvc|(?:verification|one-time|security|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{2,63})(?:(?:\s*[,;]\s*|\s+[-–—]+\s+|\s+)(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.,!?]*$/i.exec(
       line,
     );
   if (coded) {
@@ -450,7 +450,7 @@ function codeAfterLabel(line) {
   }
   // A value in mixed case that is no name ("PIN aBcD", "gate code aBcD").
   const mixed =
-    /\b(?:pin|(?:door|access|gate|alarm|entry) code)(?:\s+is)?\s+([a-z0-9-]{4,64})(?:(?:\s*[,;]\s*|\s+[-–—]+\s+|\s+)(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.!?]*$/i.exec(
+    /\b(?:pin|(?:door|access|gate|alarm|entry) code)(?:\s+is)?\s+([a-z0-9-]{4,64})(?:(?:\s*[,;]\s*|\s+[-–—]+\s+|\s+)(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.,!?]*$/i.exec(
       line,
     );
   if (
@@ -461,7 +461,7 @@ function codeAfterLabel(line) {
   )
     return true;
   const match =
-    /\b((?:pin|cvv|cvc|otp|2fa|mfa|(?:door|access|gate|alarm|entry|security|verification|one-time|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{3,63})(?:(?:\s*[,;]\s*|\s+[-–—]+\s+|\s+)(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.!?]*$/i.exec(
+    /\b((?:pin|cvv|cvc|otp|2fa|mfa|(?:door|access|gate|alarm|entry|security|verification|one-time|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{3,63})(?:(?:\s*[,;]\s*|\s+[-–—]+\s+|\s+)(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.,!?]*$/i.exec(
       line,
     );
   if (!match) return false;
