@@ -72,7 +72,11 @@ function settings(store) {
 
 test('before VisualSettings renders, the panel shows its initial markup', (t) => {
   const { $ } = fixture(t);
-  assert.equal($('bloom-toggle').className, 'pp-toggle-btn');
+  // Beside the kit's ui-* classes, the toggle carries only its own.
+  assert.deepEqual(
+    [...$('bloom-toggle').classList].filter((name) => !name.startsWith('ui-')),
+    ['pp-toggle-btn'],
+  );
   assert.equal($('bloom-slider-row').className, 'pp-slider-row');
   assert.equal($('bloom-intensity-slider').value, '0');
   assert.equal($('bloom-intensity-value').textContent, '0%');
@@ -553,7 +557,7 @@ test('the imported files render what the file import publishes and keep focus', 
   assert.equal(name.textContent, '<b>a</b>.geojson');
   assert.equal(name.children.length, 0, 'the name is text');
   assert.match(name.title, /GEOJSON, 2 map objects$/);
-  assert.equal(toggle.className, 'geo-import-action');
+  assert.ok(toggle.classList.contains('geo-import-action'));
   assert.equal(toggle.getAttribute('type'), 'button');
   assert.equal(toggle.getAttribute('aria-pressed'), 'true');
   assert.equal(toggle.getAttribute('aria-label'), 'Hide <b>a</b>.geojson');

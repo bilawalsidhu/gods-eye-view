@@ -13,9 +13,11 @@
 // features (styles, HUD, compass, tilt, globe view, share, clear) have their
 // own. The walk works the same for all of them.
 
+import { h, render as renderVue } from 'vue';
 import { t } from '../i18n/index.js';
 import { EXCLUSIVE_SURFACE_CLASSES } from '../exclusiveSurfaces.js';
 import { LABEL_LAYERS } from './contextLayerTabs.js';
+import OmnibarGuide from './views/panels/OmnibarGuide.vue';
 
 const LEFT_RAIL = '.ui-rail--left .ui-rail__item';
 const RIGHT_RAIL = '.ui-rail--right .ui-rail__item';
@@ -445,43 +447,76 @@ export function startGuide(steps, { title = '' } = {}) {
   active?.stop();
   const doc = globalThis.document;
   if (!doc?.body || screenIsOwned(doc) || !steps?.length) return;
-  const root = doc.createElement('div');
-  root.className = 'gev-guide';
-  root.innerHTML =
-    '<div class="gev-guide-ring"><i></i></div>' +
-    '<div class="gev-guide-callout" role="dialog" aria-modal="false" tabindex="-1" aria-labelledby="gev-guide-title" aria-describedby="gev-guide-text">' +
-    '<div class="gev-guide-head"><p id="gev-guide-title" class="gev-guide-title"></p>' +
-    '<p class="gev-guide-count"></p>' +
-    '<button type="button" class="gev-guide-close"><span aria-hidden="true">×</span></button></div>' +
-    '<ol class="gev-guide-progress" aria-hidden="true"></ol>' +
-    '<div class="gev-guide-body"><p id="gev-guide-text" class="gev-guide-text"></p>' +
-    '<p class="gev-guide-hint"><span class="gev-guide-hint-dot"></span><span></span></p></div>' +
-    '<div class="gev-guide-actions"><p class="gev-guide-keys"><kbd></kbd><span></span></p>' +
-    '<span><button type="button" class="gev-guide-skip" hidden></button>' +
-    '<button type="button" class="gev-guide-offer" hidden></button>' +
-    '<button type="button" class="gev-guide-next"></button></span></div>' +
+  // What the view renders: the owner writes it for each step, then paints.
+  // The view never binds what is set on the elements: the guide's `visible`
+  // class, the callout's entrance replay, place and side, and the rings'
+  // boxes, set per frame.
+  const endLabel = t('End guide');
+  const view = {
+    title: title ? t('Guide · {topic}', { topic: title }) : t('Guide'),
+    endLabel,
+    count: '',
+    step: 0,
+    progress: [],
+    text: '',
+    hint: t('Press the highlighted control'),
+    hintHidden: false,
+    // i18n-ignore: the Escape keycap, matching the keyboard shortcut.
+    keyCap: 'Esc',
+    keyText: t('to end'),
+    keysHidden: false,
+    skipLabel: '',
+    skipHidden: true,
+    offerLabel: '',
+    offerHidden: true,
+    nextLabel: t('Next'),
+    nextHidden: false,
+    nextQuiet: false,
+    // The extra rings for a step's further targets, after the callout; the
+    // count only grows, and rings a step does not use are faded out.
+    subRings: 0,
     // Announces each step once; the dialog itself is not a live region, so
     // its buttons and progress are not read out on every change.
-    '<p class="gev-guide-status" role="status" aria-live="polite"></p></div>';
+    status: '',
+  };
+  const host = doc.createElement('div');
+  const handlers = {
+    onClose: () => stop(),
+    onSkip: () => stop(),
+    // Taking the offer carries the walk on with its steps.
+    onOffer() {
+      if (!current?.offer) return;
+      const extra = current.offer.steps() || [];
+      live.splice(index + 1, live.length, ...extra.filter(Boolean));
+      next();
+    },
+    onNext() {
+      if (current) next();
+    },
+  };
+  let mounted = true;
+  /** Render the view now: the guide goes to the end of the body. */
+  function paint() {
+    if (!mounted) return null;
+    const vnode = h(OmnibarGuide, {
+      to: doc.body,
+      view: { ...view },
+      ...handlers,
+    });
+    renderVue(vnode, host);
+    return vnode;
+  }
   // Focus returns where it was when the walk ends, if that is still there.
   const returnFocus = doc.activeElement;
-  doc.body.append(root);
-  const ring = root.querySelector('.gev-guide-ring');
-  const callout = root.querySelector('.gev-guide-callout');
-  const subRings = [];
-  const endLabel = t('End guide');
-  root.querySelector('.gev-guide-close').setAttribute('aria-label', endLabel);
-  root.querySelector('.gev-guide-close').title = endLabel;
-  // i18n-ignore: the Escape keycap, matching the keyboard shortcut.
-  root.querySelector('.gev-guide-keys kbd').textContent = 'Esc';
-  root.querySelector('.gev-guide-keys span').textContent = t('to end');
-  root.querySelector('.gev-guide-title').textContent = title
-    ? t('Guide · {topic}', { topic: title })
-    : t('Guide');
-  root.querySelector('.gev-guide-next').textContent = t('Next');
-  root.querySelector('.gev-guide-hint span:last-child').textContent = t(
-    'Press the highlighted control',
-  );
+  // The elements come from the rendered tree, which is in place as soon as the
+  // render returns; template refs are filled after it, and later still when
+  // the walk starts inside one of Vue's own post-render updates.
+  const root = paint().component.subTree.children[0].el;
+  const ring = root.querySelector(':scope > .gev-guide-ring');
+  const callout = root.querySelector(':scope > .gev-guide-callout');
+  // The extra rings, read again from the rendered tree whenever more are
+  // drawn.
+  let subRings = [];
 
   const live = steps.filter(Boolean);
   let index = -1;
@@ -503,7 +538,8 @@ export function startGuide(steps, { title = '' } = {}) {
     doc.removeEventListener('click', onClick, true);
     doc.removeEventListener('keydown', onKey, true);
     const hadFocus = root.contains(doc.activeElement);
-    root.remove();
+    mounted = false;
+    renderVue(null, host);
     if (hadFocus && returnFocus?.isConnected) returnFocus.focus?.();
     if (active?.stop === stop) active = null;
   };
@@ -534,41 +570,29 @@ export function startGuide(steps, { title = '' } = {}) {
     // would not be skipped as things stand.
     const total =
       shown + live.slice(index + 1).filter((later) => !later.skip?.()).length;
-    root.querySelector('.gev-guide-count').textContent = `${shown} / ${total}`;
-    const progress = root.querySelector('.gev-guide-progress');
-    progress.replaceChildren(
-      ...Array.from({ length: total }, (_, i) => {
-        const dot = doc.createElement('li');
-        if (i < shown - 1) dot.className = 'done';
-        if (i === shown - 1) dot.className = 'current';
-        return dot;
-      }),
+    view.count = `${shown} / ${total}`;
+    view.step = shown;
+    view.progress = Array.from({ length: total }, (_, i) =>
+      i < shown - 1 ? 'done' : i === shown - 1 ? 'current' : null,
     );
     const text = step.text();
-    root.querySelector('.gev-guide-text').textContent = text;
-    root.querySelector('.gev-guide-status').textContent =
-      `${shown} / ${total}: ${text}`;
+    view.text = text;
+    view.status = `${shown} / ${total}: ${text}`;
     // Steps that point at a control wait for it to be pressed; say so.
     const waits = Boolean(step.targets) && !step.offer;
-    root.querySelector('.gev-guide-hint').hidden = !waits;
-    const offer = root.querySelector('.gev-guide-offer');
-    const skip = root.querySelector('.gev-guide-skip');
-    offer.hidden = !step.offer;
-    skip.hidden = !step.offer;
-    root.querySelector('.gev-guide-keys').hidden = Boolean(step.offer);
+    view.hintHidden = !waits;
+    view.offerHidden = !step.offer;
+    view.skipHidden = !step.offer;
+    view.keysHidden = Boolean(step.offer);
     if (step.offer) {
-      offer.textContent = step.offer.label();
-      skip.textContent = t('Not now');
+      view.offerLabel = step.offer.label();
+      view.skipLabel = t('Not now');
     }
     const last = index === live.length - 1;
-    const nextButton = root.querySelector('.gev-guide-next');
-    nextButton.hidden = Boolean(step.offer);
-    nextButton.textContent = last
-      ? t('Finish')
-      : waits
-        ? t('Skip step')
-        : t('Next');
-    nextButton.classList.toggle('quiet', waits && !last);
+    view.nextHidden = Boolean(step.offer);
+    view.nextLabel = last ? t('Finish') : waits ? t('Skip step') : t('Next');
+    view.nextQuiet = waits && !last;
+    paint();
     // Replay the entrance so each step reads as new.
     callout.classList.remove('swap');
     void callout.offsetWidth;
@@ -597,18 +621,6 @@ export function startGuide(steps, { title = '' } = {}) {
     event.stopPropagation();
     stop();
   }
-  root.querySelector('.gev-guide-skip').addEventListener('click', stop);
-  root.querySelector('.gev-guide-close').addEventListener('click', stop);
-  root.querySelector('.gev-guide-next').addEventListener('click', () => {
-    if (current) next();
-  });
-  // Taking the offer carries the walk on with its steps.
-  root.querySelector('.gev-guide-offer').addEventListener('click', () => {
-    if (!current?.offer) return;
-    const extra = current.offer.steps() || [];
-    live.splice(index + 1, live.length, ...extra.filter(Boolean));
-    next();
-  });
   doc.addEventListener('click', onClick, true);
   doc.addEventListener('keydown', onKey, true);
 
@@ -650,11 +662,10 @@ export function startGuide(steps, { title = '' } = {}) {
       width: `${main.width + pad * 2}px`,
       height: `${main.height + pad * 2}px`,
     });
-    while (subRings.length < rest.length) {
-      const sub = doc.createElement('div');
-      sub.className = 'gev-guide-ring gev-guide-ring--sub';
-      root.append(sub);
-      subRings.push(sub);
+    if (subRings.length < rest.length) {
+      view.subRings = rest.length;
+      paint();
+      subRings = [...root.querySelectorAll(':scope > .gev-guide-ring--sub')];
     }
     subRings.forEach((sub, i) => {
       const box = rest[i];

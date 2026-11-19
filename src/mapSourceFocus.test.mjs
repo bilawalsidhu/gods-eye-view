@@ -110,7 +110,7 @@ function harness({ hidden = false, selected = true, noChips = false } = {}) {
   window.performance = { now: () => now };
   document.defaultView = window;
   const methods = new Function('createHoverDisclosure', 'collapsePanelOnEscape', 'document', 'window', 'clearTimeout', 'performance', 'requestAnimationFrame', 't', 'msg', 'readPanelState',
-    `return ({${shellMethod('_initAutoHoverPanel').toString()},\n${shellMethod('_collapsePanelOnEscape').toString()},\n${shellMethod('setPanelCollapsed').toString()},\n${shellMethod('_presentPanel').toString()},\n${shellMethod('_shownPanel').toString()}});`)(
+    `return ({${shellMethod('_initAutoHoverPanel').toString()},\n${shellMethod('_collapsePanelOnEscape').toString()},\n${shellMethod('_railFocusStand').toString()},\n${shellMethod('setPanelCollapsed').toString()},\n${shellMethod('_presentPanel').toString()},\n${shellMethod('_shownPanel').toString()}});`)(
     createHoverDisclosure, collapsePanelOnEscape, document, window, (id) => timers.delete(id), { now: () => now }, () => {}, t, msg, readPanelState,
   );
   const saves = [];
@@ -294,7 +294,7 @@ test('Location markup provides one named native disclosure linked to its popover
   assert.match(locationToggleMarkup[2], /class="location-toolbar-label"/);
   assert.doesNotMatch(locationToggleMarkup[2], /<button\b/);
   assert.match(locationMarkup.slice(locationToggleMarkup.index + locationToggleMarkup[0].length),
-    /^\s*<button class="panel-collapse-btn" data-collapse-target="location-bar"/);
+    /^\s*<button type="button" class="[^"]*\bpanel-collapse-btn\b[^"]*"[^>]*\sdata-collapse-target="location-bar"/);
   assert.match(locationMarkup, /<div id="location-bar-popover" class="dock-popover-content">/);
 });
 

@@ -220,7 +220,7 @@ test('row buttons hide, show, fly to and remove a file', async () => {
     shapes: [],
   });
   assert.equal(t.tool.list()[0].visible, false);
-  assert.equal(action(rows(t)[0], 'toggle').pressed, 'false');
+  assert.equal(action(rows(t)[0], 'toggle').pressed, false);
   assert.equal(action(rows(t)[0], 'toggle').icon, 'visibility_off');
   assert.equal(action(rows(t)[0], 'toggle').label, 'Show a.gpx');
   glyphClick('fly');

@@ -72,7 +72,7 @@ watch(
       <UiButton class="mission-replay-button" data-mission-replay :pressed="m?.replay.active ?? false" :title="t('Replay the estimated ascent with a following camera')" :hidden="m && (m.replay.active || !m.replay.available)" :disabled="m && !m.replay.available" @click="layer?.startSelectedReplay()">{{ t('REPLAY ASCENT') }}</UiButton>
       <div class="mission-replay-transport" :class="{ 'is-paused': m?.replay.paused }" data-mission-replay-transport :hidden="!m?.replay.active" :aria-label="m?.replay.transportLabel">
         <button type="button" data-mission-replay-toggle :title="m ? m.replay.toggleLabel : t('Pause replay')" :aria-label="m ? m.replay.toggleLabel : t('Pause replay')" :disabled="m && !m.replay.active" @click="layer?.toggleReplayPause()">{{ m ? m.replay.toggleText : 'Ⅱ' }}</button>
-        <button type="button" class="cancel" data-mission-replay-cancel :title="t('Cancel replay')" :aria-label="t('Cancel replay')" @click="layer?.cancelReplay()"><span aria-hidden="true">×</span></button>
+        <UiCloseButton class="cancel" data-mission-replay-cancel bare :title="t('Cancel replay')" :label="t('Cancel replay')" @click="layer?.cancelReplay()" />
       </div>
     </div>
     <div class="space-mission-nav">

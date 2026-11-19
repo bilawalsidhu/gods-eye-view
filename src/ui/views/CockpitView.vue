@@ -17,6 +17,8 @@ import CockpitProgress from './panels/CockpitProgress.vue';
 import CockpitRadar from './panels/CockpitRadar.vue';
 import CockpitRollingValue from './panels/CockpitRollingValue.vue';
 import CockpitUtilityControls from './panels/CockpitUtilityControls.vue';
+import UiButton from '../kit/UiButton.vue';
+import UiIcon from '../kit/UiIcon.vue';
 
 // The Cockpit HUD. The Cockpit controller presents the instruments, the
 // destination arrow and the vision selector on every HUD update; until it
@@ -171,7 +173,7 @@ const tickStyle = (tick) =>
         <span v-for="(tick, index) in hud.speedRim.ticks" :key="index" data-speed-rim-tick :hidden="tick.hidden" :class="{ major: tick.major }" :style="tickStyle(tick)"><b>{{ tick.label }}</b><i></i></span>
       </div>
       <div class="cockpit-altitude-rim-pointer">
-        <span class="material-symbols-outlined">arrow_right</span>
+        <UiIcon name="arrow_right" :size="null" />
         <strong id="cockpit-speed-rim-value">{{ hud.speedRim.value }}</strong>
       </div>
     </div>
@@ -183,7 +185,7 @@ const tickStyle = (tick) =>
       </div>
       <div class="cockpit-altitude-rim-pointer">
         <strong id="cockpit-altitude-rim-value">{{ hud.altitudeRim.value }}</strong>
-        <span class="material-symbols-outlined">arrow_left</span>
+        <UiIcon name="arrow_left" :size="null" />
       </div>
     </div>
     <div class="cockpit-topline">
@@ -193,21 +195,21 @@ const tickStyle = (tick) =>
         <span id="cockpit-aircraft-meta" v-class-toggle="{ emergency: hud.meta.emergency }" class="cockpit-aircraft-meta" :data-tone="generic ? hud.meta.tone : undefined">{{ hud.meta.text }}</span>
       </div>
       <div class="cockpit-vision-controls" role="group" :aria-label="t('Cockpit vision style')">
-        <button id="cockpit-vision-previous" class="cockpit-vision-nav" type="button" :aria-label="t('Previous cockpit vision style')" :title="t('Previous vision style')">
-          <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+        <UiButton id="cockpit-vision-previous" class="cockpit-vision-nav" :aria-label="t('Previous cockpit vision style')" :title="t('Previous vision style')">
+          <UiIcon name="chevron_left" :size="null" />
           <small>{{ t('PREV') }}</small>
-        </button>
-        <button id="cockpit-vision-current" class="cockpit-vision-current" type="button" :data-cockpit-vision="v.mode" :aria-label="visionLabel" :title="visionTitle">
+        </UiButton>
+        <UiButton id="cockpit-vision-current" class="cockpit-vision-current" :data-cockpit-vision="v.mode" :aria-label="visionLabel" :title="visionTitle">
           <small>{{ t('CURRENT') }}</small>
           <strong id="cockpit-vision-current-label" aria-live="polite">{{ v.label }}</strong>
-        </button>
-        <button id="cockpit-vision-next" class="cockpit-vision-nav" type="button" :aria-label="t('Next cockpit vision style')" :title="t('Next vision style')">
+        </UiButton>
+        <UiButton id="cockpit-vision-next" class="cockpit-vision-nav" :aria-label="t('Next cockpit vision style')" :title="t('Next vision style')">
           <small>{{ t('NEXT') }}</small>
-          <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
-        </button>
+          <UiIcon name="chevron_right" :size="null" />
+        </UiButton>
       </div>
     </div>
-    <div v-if="!orbital && !generic" class="cockpit-reticle material-symbols-outlined" aria-hidden="true">my_location</div>
+    <UiIcon v-if="!orbital && !generic" name="my_location" class="cockpit-reticle" :size="null" />
     <!-- A provider's banner: a status that names where the subject is. -->
     <div v-if="generic && hud.banner" class="cockpit-banner" role="status" :data-tone="hud.banner.tone">
       <strong>{{ hud.banner.title }}</strong>
@@ -216,9 +218,9 @@ const tickStyle = (tick) =>
     <!-- A view turned off its rest says where it looks and offers the way back. -->
     <div v-if="looks" class="cockpit-look" :hidden="!look.offset">
       <span id="cockpit-look-readout" class="cockpit-look-readout" aria-live="polite">{{ look.readout }}</span>
-      <button id="cockpit-look-ahead" type="button" class="cockpit-look-ahead" :aria-label="aheadLabel" :title="t('Look ahead (Home or 0)')" aria-keyshortcuts="Home 0">
+      <UiButton id="cockpit-look-ahead" class="cockpit-look-ahead" :aria-label="aheadLabel" :title="t('Look ahead (Home or 0)')" aria-keyshortcuts="Home 0">
         <span>{{ t('LOOK AHEAD') }}</span>
-      </button>
+      </UiButton>
     </div>
     <div v-if="!orbital" class="cockpit-compass" :aria-label="generic ? hudLabel : bridge ? t('Current vessel heading') : t('Current aircraft heading')">
       <div class="cockpit-instrument-row">
@@ -241,7 +243,7 @@ const tickStyle = (tick) =>
           <span class="cockpit-readout-unit">{{ t('FT') }}</span>
         </div>
       </div>
-      <span class="cockpit-heading-caret material-symbols-outlined" aria-hidden="true">arrow_drop_down</span>
+      <UiIcon name="arrow_drop_down" class="cockpit-heading-caret" :size="null" />
       <div class="cockpit-compass-tape" id="cockpit-compass-tape" aria-hidden="true" :style="bridge ? { '--tape-shift': tapeShift } : undefined"><span v-for="division in hud.compass" :key="division.heading ?? division.slot" :class="(division.active ?? division.slot === 0) ? 'active' : ''" :style="{ '--slot': division.slot, '--depth': Math.abs(division.slot) }">{{ division.label }}</span><template v-if="bridge"><i v-if="hud.compassMarkers?.prograde != null" class="cockpit-compass-marker cockpit-compass-prograde" aria-hidden="true" :style="{ '--slot': hud.compassMarkers.prograde }"></i><i v-if="hud.compassMarkers?.retrograde != null" class="cockpit-compass-marker cockpit-compass-retrograde" aria-hidden="true" :style="{ '--slot': hud.compassMarkers.retrograde }"></i></template></div>
     </div>
     <div v-if="!orbital" class="cockpit-position-readout">
@@ -274,13 +276,13 @@ const tickStyle = (tick) =>
   </section>
 
   <nav id="view-switcher" :aria-label="t('View switcher')">
-    <button id="cockpit-reset-globe" type="button" :aria-label="resetBusy ? t('Resetting cockpit to full globe view') : t('Reset cockpit to full globe view')" :title="t('Exit cockpit and return to full globe view')" :hidden="!active" @click="globe.act('reset')">
-      <span class="material-symbols-outlined" aria-hidden="true">public</span>
+    <UiButton id="cockpit-reset-globe" :aria-label="resetBusy ? t('Resetting cockpit to full globe view') : t('Reset cockpit to full globe view')" :title="t('Exit cockpit and return to full globe view')" :hidden="!active" @click="globe.act('reset')">
+      <UiIcon name="public" :size="null" />
       <span>{{ t('RESET') }}</span>
-    </button>
-    <button id="map-view-switch" type="button" :aria-label="exitLabel" aria-keyshortcuts="Escape" :title="exitLabel" :hidden="!active">
-      <span class="material-symbols-outlined" aria-hidden="true">close_fullscreen</span>
+    </UiButton>
+    <UiButton id="map-view-switch" :aria-label="exitLabel" aria-keyshortcuts="Escape" :title="exitLabel" :hidden="!active">
+      <UiIcon name="close_fullscreen" :size="null" />
       <span>{{ exitText }}</span>
-    </button>
+    </UiButton>
   </nav>
 </template>

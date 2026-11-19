@@ -1,5 +1,5 @@
 // Every checkbox in a Vue view is a UiCheckbox: no SFC template hand-writes
-// `<input type="checkbox">`. Story Explore's filters are not converted yet.
+// `<input type="checkbox">`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -8,10 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const SRC_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const REPO_ROOT = path.resolve(SRC_ROOT, '..');
-const NOT_YET = new Set([
-  'src/ui/kit/UiCheckbox.vue',
-  'src/ui/views/stories/ExploreScreen.vue',
-]);
+const NOT_YET = new Set(['src/ui/kit/UiCheckbox.vue']);
 
 /** Every SFC under src. */
 function sfcFiles(directory = SRC_ROOT) {

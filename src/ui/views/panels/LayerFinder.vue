@@ -22,6 +22,8 @@ const finder = {
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref, watch, computed } from 'vue';
 import { msg, t } from '../../../i18n/index.js';
+import UiButton from '../../kit/UiButton.vue';
+import UiIcon from '../../kit/UiIcon.vue';
 import UiSearchField from '../../kit/UiSearchField.vue';
 
 // Search and filter for the Data Layers list. The rows are rendered elsewhere
@@ -185,7 +187,8 @@ async function toggleFilter() {
 }
 function closeFilter({ refocus = false } = {}) {
   filtering.value = false;
-  if (refocus) triggerEl.value?.focus();
+  // The trigger is a UiButton; its root is the button.
+  if (refocus) triggerEl.value?.$el?.focus();
 }
 function onMenuKey(event) {
   if (event.key === 'Escape') {
@@ -223,37 +226,37 @@ if (props.part === 'buttons') {
 
 <template>
   <template v-if="part === 'buttons'">
-    <button id="layer-finder-search-btn" type="button" class="layer-finder__btn" :class="{ active: searching || query }" :aria-pressed="String(searching)" :aria-label="t('Search layers')" :title="t('Search layers')" @click="toggleSearch">
-      <span class="material-symbols-outlined" aria-hidden="true">search</span>
-    </button>
+    <UiButton id="layer-finder-search-btn" class="layer-finder__btn" :class="{ active: searching || query }" :pressed="Boolean(searching)" :aria-label="t('Search layers')" :title="t('Search layers')" @click="toggleSearch">
+      <UiIcon name="search" :size="null" />
+    </UiButton>
     <span ref="filterEl" class="layer-finder__filter">
-      <button ref="triggerEl" type="button" class="layer-finder__btn" :class="{ active: show !== 'all' || category }" :aria-expanded="String(filtering)" aria-controls="layer-finder-menu" :aria-label="t('Filter layers')" :title="t('Filter layers')" @click="toggleFilter">
-        <span class="material-symbols-outlined" aria-hidden="true">filter_list</span>
-      </button>
+      <UiButton ref="triggerEl" class="layer-finder__btn" :class="{ active: show !== 'all' || category }" :aria-expanded="String(filtering)" aria-controls="layer-finder-menu" :aria-label="t('Filter layers')" :title="t('Filter layers')" @click="toggleFilter">
+        <UiIcon name="filter_list" :size="null" />
+      </UiButton>
       <span v-if="filtering" id="layer-finder-menu" ref="menuEl" class="layer-finder__menu" role="group" :aria-label="t('Filter layers')" @keydown="onMenuKey">
         <span role="group" :aria-label="t('Status')">
           <span class="layer-finder__menu-head" aria-hidden="true">{{ t('Status') }}</span>
-          <button v-for="s in SHOWS" :key="s.id" type="button" :aria-pressed="String(show === s.id)" :class="{ active: show === s.id }" @click="show = s.id">
-            <span class="material-symbols-outlined" aria-hidden="true">{{ show === s.id ? 'radio_button_checked' : 'radio_button_unchecked' }}</span>{{ t(s.label) }}
-          </button>
+          <UiButton v-for="s in SHOWS" :key="s.id" :pressed="show === s.id" pressed-class="active" @click="show = s.id">
+            <UiIcon :name="show === s.id ? 'radio_button_checked' : 'radio_button_unchecked'" :size="null" />{{ t(s.label) }}
+          </UiButton>
         </span>
         <span v-if="categories.length" role="group" :aria-label="t('Category')">
           <span class="layer-finder__menu-head" aria-hidden="true">{{ t('Category') }}</span>
-          <button v-for="c in categories" :key="c.key" type="button" :aria-pressed="String(category === c.key)" :class="{ active: category === c.key }" @click="pickCategory(c.key)">
-            <span class="material-symbols-outlined" aria-hidden="true">{{ category === c.key ? 'radio_button_checked' : 'radio_button_unchecked' }}</span>{{ c.label }}
-          </button>
+          <UiButton v-for="c in categories" :key="c.key" :pressed="category === c.key" pressed-class="active" @click="pickCategory(c.key)">
+            <UiIcon :name="category === c.key ? 'radio_button_checked' : 'radio_button_unchecked'" :size="null" />{{ c.label }}
+          </UiButton>
         </span>
       </span>
     </span>
   </template>
   <div v-else-if="searching || narrowed" class="layer-finder__bar">
     <UiSearchField v-if="searching" v-model="query" tag="label" class="layer-finder__field" input-id="layer-finder-input" :label="t('Search layers')" :placeholder="t('Search layers…')" @escape="(event) => { event.preventDefault(); closeSearch(); }" />
-    <button v-if="show !== 'all'" type="button" class="layer-finder__chip" @click="show = 'all'">
-      {{ show === 'on' ? t('On') : t('Off') }}<span class="material-symbols-outlined" aria-hidden="true">close</span>
-    </button>
-    <button v-if="category" type="button" class="layer-finder__chip" @click="category = ''">
-      {{ categoryLabel }}<span class="material-symbols-outlined" aria-hidden="true">close</span>
-    </button>
+    <UiButton v-if="show !== 'all'" class="layer-finder__chip" @click="show = 'all'">
+      {{ show === 'on' ? t('On') : t('Off') }}<UiIcon name="close" :size="null" />
+    </UiButton>
+    <UiButton v-if="category" class="layer-finder__chip" @click="category = ''">
+      {{ categoryLabel }}<UiIcon name="close" :size="null" />
+    </UiButton>
     <p v-if="narrowed && shown === 0" class="layer-finder__empty" role="status">{{ t('No layers match') }}</p>
   </div>
 </template>
