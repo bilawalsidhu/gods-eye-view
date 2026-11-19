@@ -37,9 +37,9 @@ one-panel rule too. Share links continue to record which panels are open.
 ## Component kit
 
 `src/ui/kit/` holds the generic components: `UiRail`, `UiTooltip`, `UiIcon`,
-`UiButton`, `UiPanel`, `UiSegmented`, `UiSlider`, `UiChip`, `UiSelect`,
-`UiBadge` and `UiEmpty` so far, with more joining as the controls they serve
-are converted. One component
+`UiButton`, `UiCloseButton`, `UiPanel`, `UiSegmented`, `UiSlider`, `UiChip`,
+`UiSelect`, `UiSearchField`, `UiBadge` and `UiEmpty` so far, with more
+joining as the controls they serve are converted. One component
 serves every use of a control, with props for the differences (`UiPanel`'s
 `sideways`, `glow`, `scroll`), rather than a copy per panel. The components
 are styled by the existing stylesheet and custom properties, and they contain
@@ -54,6 +54,7 @@ never copied:
 | `UiButton` `variant="primary"` | the action surface with a group's main-action accent | `src/ui/styles/action-button.css` |
 | `UiButton` `variant="icon"` | the 22px square glyph button of a panel's collapse toggle | `src/ui/styles/controls.css` |
 | `UiCloseButton` | a close, dismiss or clear button: a bare glyph (× with `glyph="times"`, the Material `close` symbol with `glyph="icon"`) with no padding, border or background of its own and a pointer; the site's feature class sets size, colour, hover and any surface, and `bare` leaves the look off for a skin that keeps the browser's padding | `src/ui/styles/close-button.css` |
+| `UiSearchField` | a search field: the Material `search` glyph and a search input in a flex row, the input bare (no border or background, free to shrink); the site's feature classes set the frame's size, surface and focus ring and the input's type and outline, and the browser's own cancel button is left to each skin | `src/ui/styles/search-field.css` |
 | `UiChip` | the read-only chip (a pill of uppercase mono text); `selected` takes the accent | `src/ui/styles/chip.css` |
 | `UiEmpty` | the one-line empty state (dim mono text), its hint on a line below | `src/ui/styles/empty-state.css` |
 | `UiBadge` | the read-only badge (`gev-status-badge`) | `src/ui/styles/status-badge.css` |
@@ -107,6 +108,18 @@ clear button in the views is one (`src/ui/kit/closeButtons.test.mjs` pins
 it); Street Level's and the space mission's keep `bare`, since their skins
 keep the browser's padding. The close buttons built in script (credits, the
 Quebec CCTV overlay, the guide) are not converted yet.
+`UiSearchField` takes `v-model`, a required `label` (the input's
+accessible name), `placeholder` and `tag` (`div`, given `role="search"` by
+the site, or `label`); attributes and classes go to the frame, and
+`inputId`, `inputClass`, `autocomplete` and `spellcheck` to the input. With
+`clearLabel` it shows a `UiCloseButton` (`clearClass`, its label as its tip)
+while text is typed, which empties the field and focuses the input again.
+Escape stops at the input and is emitted with its event, so a site that also
+keeps the browser from clearing the field prevents it there; `focus()`
+focuses the input. The Context search and the Layer Finder's are
+`UiSearchField`s; the locale picker's combobox, the Omnibar's location
+field and the Data Library's labelled search are other controls. Its kit rules hold the declarations both search
+skins had in common, moved rather than copied, and load before them.
 `UiSlider` keeps the native range input rather than drawing a
 `role="slider"` track, so Core's keyboard, form behaviour and styling stay;
 it takes `v-model`, `min`, `max`, `step` and `disabled`, emits a

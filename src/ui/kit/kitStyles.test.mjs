@@ -149,6 +149,45 @@ test('UiCloseButton wears the bare glyph look the guide’s close shares', () =>
     assert.match(rule.body, declaration);
 });
 
+test('UiSearchField owns the row and bare input both search skins drew', () => {
+  const frame = ruleWith('.ui-search-field');
+  assert.deepEqual(frame.selectors, ['.ui-search-field']);
+  assert.match(frame.body, /display:\s*flex;/);
+  assert.match(frame.body, /align-items:\s*center;/);
+  const input = ruleWith('.ui-search-field__input');
+  assert.deepEqual(input.selectors, ['.ui-search-field__input']);
+  for (const declaration of [
+    /min-width:\s*0;/,
+    /background:\s*none;/,
+    /border:\s*0;/,
+  ])
+    assert.match(input.body, declaration);
+  // The browser's cancel button is each skin's own: Context hides it, the
+  // Layer Finder keeps it.
+  assert.ok(
+    !all.some((rule) =>
+      rule.selectors.some((s) =>
+        s.startsWith('.ui-search-field__input::-webkit-search-cancel-button'),
+      ),
+    ),
+  );
+  // Each declaration lives once, in the kit's rule.
+  for (const [selector, kit] of [
+    ['.context-search', frame],
+    ['.layer-finder__field', frame],
+    ['.context-search__input', input],
+    ['.layer-finder__field input', input],
+  ]) {
+    const feature = ruleWith(selector);
+    for (const property of kit.body.match(/[\w-]+(?=:)/g))
+      assert.doesNotMatch(
+        feature.body,
+        new RegExp(`(^|[\\s;])${property}:`),
+        `${selector} leaves ${property} to the kit`,
+      );
+  }
+});
+
 test('the kit’s skins load before the feature stylesheets that restyle them', () => {
   const at = (selector) => css.indexOf(selector);
   for (const [kit, feature] of [
@@ -166,6 +205,10 @@ test('the kit’s skins load before the feature stylesheets that restyle them', 
     ['.ui-close-button,', '.context-search__clear {'],
     ['.ui-close-button,', '.key-setup-close {'],
     ['.ui-close-button,', '.gev-guide-close {'],
+    ['.ui-search-field {', '.context-search {'],
+    ['.ui-search-field {', '.layer-finder__field {'],
+    ['.ui-search-field__input {', '.context-search__input {'],
+    ['.ui-search-field__input {', '.layer-finder__field input {'],
   ]) {
     assert.ok(
       at(kit) >= 0 && at(feature) > at(kit),
