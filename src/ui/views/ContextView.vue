@@ -17,6 +17,7 @@ import ViewContext from './panels/ViewContext.vue';
 import SpaceMissionsPanel from './panels/SpaceMissionsPanel.vue';
 import RadioPanel from './panels/RadioPanel.vue';
 import UiButton from '../kit/UiButton.vue';
+import UiCloseButton from '../kit/UiCloseButton.vue';
 import { cockpitEntryFace } from '../cockpitPresentation.js';
 import { LAYER_TABS, TAB_AFFECTS, activeTab, availableTabs, contextReady, enabledLayerIds, setEnabledLayers, tabTarget } from '../contextLayerTabs.js';
 import { shownLayerName } from '../layerNames.js';
@@ -192,9 +193,7 @@ watch(
         <div v-if="contextSearchOpen" class="context-search" role="search">
           <span class="material-symbols-outlined" aria-hidden="true">search</span>
           <input ref="searchInput" v-model="contextSearchText" type="search" class="context-search__input" :placeholder="searchHint" :aria-label="searchHint" autocomplete="off" spellcheck="false" @keydown.esc.stop="closeContextSearch" />
-          <button v-if="contextSearchText" type="button" class="context-search__clear" :aria-label="t('Clear search')" :title="t('Clear search')" @click="contextSearchText = ''; searchInput?.focus()">
-            <span class="material-symbols-outlined" aria-hidden="true">close</span>
-          </button>
+          <UiCloseButton v-if="contextSearchText" class="context-search__clear" glyph="icon" :label="t('Clear search')" :title="t('Clear search')" @click="contextSearchText = ''; searchInput?.focus()" />
         </div>
         <div v-if="availableTabs.length" class="context-tabs" role="tablist" :aria-label="t('Context tabs')">
           <button id="context-tab-btn-view" type="button" role="tab" class="context-tabs__tab" :class="{ active: activeTab === 'view' }" :aria-selected="String(activeTab === 'view')" aria-controls="context-tab-view" :tabindex="activeTab === 'view' ? 0 : -1" @click="activeTab = 'view'" @keydown.left.prevent="switchTab" @keydown.right.prevent="switchTab">

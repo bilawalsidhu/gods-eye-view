@@ -2,6 +2,7 @@
 import { onBeforeUnmount } from 'vue';
 import { t } from '../../i18n/index.js';
 import { formatScaleRange } from '../unitLabels.js';
+import UiCloseButton from '../kit/UiCloseButton.vue';
 import RailCardSetting from './RailCardSetting.vue';
 import RailChips from './RailChips.vue';
 import RailRowList from './RailRowList.vue';
@@ -100,16 +101,13 @@ function legendView(legend) {
       /><template v-else-if="block.type === 'result'"
         ><div class="rail-card-result-header"
           ><span class="panel-title">{{ block.label }}</span
-          ><button
+          ><UiCloseButton
             class="data-toggle-chip"
-            type="button"
             data-action-id="clear"
-            :aria-label="t('Clear reading')"
+            :label="t('Clear reading')"
             :title="t('Clear reading')"
             :hidden="!block.clear"
-            @click="dispatch(block.clear, block)"
-            >×</button
-          ></div
+            @click="dispatch(block.clear, block)" /></div
         ><div class="rail-card-result-lines"
           ><RailCardBlocks
             :blocks="[

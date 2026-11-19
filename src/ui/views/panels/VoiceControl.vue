@@ -9,6 +9,7 @@ import VoiceVisualizer from './VoiceVisualizer.vue';
 import ChatPanel from './ChatPanel.vue';
 import PanelLayoutButtons from './PanelLayoutButtons.vue';
 import UiButton from '../../kit/UiButton.vue';
+import UiCloseButton from '../../kit/UiCloseButton.vue';
 import UiSelect from '../../kit/UiSelect.js';
 
 // The voice control in the command dock, as its presenter
@@ -107,7 +108,7 @@ const frameStyle = (panel) => ({
             <button id="gev-voice-settings-tab" class="gev-voice-panel-tab" type="button" role="tab" :aria-label="t('Settings')" :title="t('Settings')" :aria-selected="String(view.voicePanel.selected === 'settings')" :tabindex="view.voicePanel.selected === 'settings' ? 0 : -1" aria-controls="gev-voice-settings-panel" @click="emit('tab', 1)" @keydown="emit('tab-keydown', 1, $event)"><span class="material-symbols-outlined gev-voice-panel-tab-icon" aria-hidden="true">settings</span></button>
           </div>
           <PanelLayoutButtons :docked="view.layout.docked" :minimized="view.voicePanel.minimized" @dock="emit('layout-dock')" @minimize="emit('voice-minimize')" />
-          <button id="gev-voice-settings-close" type="button" :aria-label="t('Close voice panel')" @click="emit('settings-close')">×</button>
+          <UiCloseButton id="gev-voice-settings-close" :label="t('Close voice panel')" @click="emit('settings-close')" />
         </div>
         <div class="gev-voice-mini" role="group" :aria-label="t('Latest voice exchange')">
           <p :hidden="!view.mini.user"><span class="gev-voice-mini-who">{{ t('YOU') }}</span><span id="gev-voice-mini-user">{{ view.mini.user }}</span></p>
