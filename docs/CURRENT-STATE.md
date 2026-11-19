@@ -93,6 +93,16 @@ settling. Oblique views below 300 km are left alone.
 `QA_BASE_URL=http://localhost:4173 node scripts/qa-zoom-out-guard.mjs` exercises
 the real browser controller at desktop and phone widths with keyless fixtures.
 
+Below 150 km Cesium sizes a wheel or pinch zoom step from the depth it picks at
+the canvas centre. Icons drawn over depth (aircraft, vessels and most markers:
+`disableDepthTest: Infinity`) sit on the near plane and write a depth of
+exactly 0 there (`src/render/cesium/iconSetPrimitive.js`), which that pick
+reads as nothing drawn, so it keeps the ground under the icon. Any depth past
+the near plane would be taken for a surface a near plane's distance from the
+camera, and the zoom would stop while an icon is under the centre.
+`QA_BASE_URL=http://localhost:5173 node scripts/qa-zoom-under-icon.mjs` checks
+this against a dev server (`npm run dev`).
+
 Cesium's free look (Shift+drag, which turns the camera in place) works only
 below 1,000 km. Above that height a few drags could turn the whole planet out of
 frame and leave only stars, so Shift+drag does nothing there. Cesium also turns
