@@ -4420,5 +4420,6 @@
   "Select a map item to see its details.": "Selecione um item do mapa para ver seus detalhes.",
   "Bilawal on {site}": "Bilawal no {site}",
   "Bilawal's website": "Site de Bilawal",
-  "BACK": "VOLTAR"
+  "BACK": "VOLTAR",
+  "The application could not start.": "Não foi possível iniciar o aplicativo."
 }

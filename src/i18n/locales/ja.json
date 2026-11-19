@@ -4208,5 +4208,6 @@
   "Select a map item to see its details.": "地図上の項目を選択すると詳細が表示されます。",
   "Bilawal on {site}": "{site}のBilawal",
   "Bilawal's website": "Bilawalのウェブサイト",
-  "BACK": "戻る"
+  "BACK": "戻る",
+  "The application could not start.": "アプリケーションを開始できませんでした。"
 }

@@ -26,3 +26,11 @@
   use a Graph proxy of your own that adds the token (Byrd-IT, #1315).
   Refuse Mapillary and ion answers that reflect their configured server token,
   including common percent, JSON-unicode and base64 encodings.
+  A startup failure no longer repeats itself: the error was shown on the
+  loading screen and logged to the console, so a failure carrying a credential
+  (a key in a URL, a bearer token, a password in a URL's userinfo) put it in
+  front of whoever opened the page. The loading screen now says only that the
+  application could not start, and the console reports the same without the
+  failure. The promise `application` still rejects, but with a fixed error of
+  its own: the failure is dropped rather than passed on, so its message,
+  stack, cause and serialization cannot carry a credential either.

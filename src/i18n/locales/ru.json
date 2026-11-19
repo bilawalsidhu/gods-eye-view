@@ -4526,5 +4526,6 @@
   "Select a map item to see its details.": "Выберите объект на карте, чтобы увидеть подробности.",
   "Bilawal on {site}": "Билал на {site}",
   "Bilawal's website": "Сайт Билала",
-  "BACK": "НАЗАД"
+  "BACK": "НАЗАД",
+  "The application could not start.": "Не удалось запустить приложение."
 }
