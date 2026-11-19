@@ -1136,8 +1136,12 @@ opt-in visual style over Tactical or Minimal: Display > HUD > Sonar is OFF by
 default, and ON reveals the Rings, Range, Power, Opacity and Sector sliders.
 Share links, scenes and saved views that name Cyber keep its enum code and
 open in Tactical with Sonar on. Links and scene shots record Tactical with
-Sonar on under that same code, and a restored state that names another layout
-turns Sonar off; Minimal has no such code, so its Sonar is not carried.
+Sonar on under that same code, so older builds still read it. Minimal with
+Sonar on is recorded as Minimal plus an explicit Sonar mark: flag bit 5
+(`hudSonar`) of a compact link, `hs=1` in the long form, and `hud.sonar: true`
+in a scene shot. A restored state turns Sonar on when it names Cyber or carries
+that mark, and off otherwise, so a link or shot made before the mark restores
+as it always did.
 An explicit Sonar toggle or validated voice setting takes visual restore
 authority, so a delayed share-link restore cannot undo the newer choice.
 Choosing Reset Visual keeps the HUD layout and the Sonar setting.

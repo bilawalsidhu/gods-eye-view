@@ -28,6 +28,13 @@ import { setCyberSonarControls } from './cyberSonarControls.js';
 import { createPinia } from 'pinia';
 import { useDisplayStore } from './stores/display.js';
 import { VisualSettings } from './visualSettings.js';
+import { normalizeShot } from '../scenes/project.js';
+import {
+  SCENE_DOCUMENT_VERSION,
+  validateSceneDocument,
+} from '../director/document.js';
+import { decodeShareView, encodeShareView } from '../share/viewCodec.js';
+import { toLegacyShareState } from '../share/legacyShareState.js';
 import { STYLES } from './visualPresets.js';
 
 const read = (relative) =>
@@ -140,9 +147,10 @@ test('a share link, scene or saved view naming Cyber opens Tactical with Sonar o
   assert.equal(isCyberSonarEnabled(root), true);
 });
 
-test('links and scene shots record Tactical with Sonar as the Cyber code, and only that', (t) => {
-  const { owner, root } = styleOwner(t, 'tactical');
-  Object.assign(owner.services, {
+/** A styleOwner that can also read its share state and scene shot. */
+function sharingOwner(t, initialVariant) {
+  const fixture = styleOwner(t, initialVariant);
+  Object.assign(fixture.owner.services, {
     getDetectionTuning: () => ({ allocationStrategy: 'ELASTIC' }),
     getDetectionMode: () => 'OFF',
     isScopeMaskEnabled: () => true,
@@ -150,18 +158,94 @@ test('links and scene shots record Tactical with Sonar as the Cyber code, and on
     getScopeMaskOpacity: () => 1,
     getScopeTerminusOverride: () => null,
   });
-  owner.readCelestialRing = () => null;
-  const shared = () => owner._readShareState().options.hudVariant;
-  assert.equal(shared(), 'tactical');
+  fixture.owner.readCelestialRing = () => null;
+  return fixture;
+}
+
+test('links and scene shots record Tactical with Sonar as the Cyber code, and only that', (t) => {
+  const { owner, root } = sharingOwner(t, 'tactical');
+  const shared = () => {
+    const { hudVariant, hudSonar } = owner._readShareState().options;
+    return [hudVariant, hudSonar];
+  };
+  const shot = () => owner.getVisualState().hud;
+  assert.deepEqual(shared(), ['tactical', false]);
+  assert.deepEqual(shot(), { visible: true, variant: 'tactical' });
   owner._setCyberSonarEnabled(true);
-  assert.equal(shared(), 'cyber');
-  // Minimal has no code that carries Sonar; it stays local.
+  // Tactical with Sonar is the Cyber code alone, as older readers expect.
+  assert.deepEqual(shared(), ['cyber', false]);
+  assert.deepEqual(shot(), { visible: true, variant: 'cyber' });
+  // Minimal has no such code, so Sonar is carried beside it.
   owner._setHudVariant('minimal');
-  assert.equal(shared(), 'minimal');
-  owner._setHudVariant('tactical');
-  assert.equal(shared(), 'cyber');
+  assert.deepEqual(shared(), ['minimal', true]);
+  assert.deepEqual(shot(), { visible: true, variant: 'minimal', sonar: true });
   owner._setCyberSonarEnabled(false);
-  assert.equal(shared(), 'tactical');
+  assert.deepEqual(shared(), ['minimal', false]);
+  assert.deepEqual(shot(), { visible: true, variant: 'minimal' });
+  owner._setHudVariant('tactical');
+  assert.deepEqual(shared(), ['tactical', false]);
+  assert.equal(isCyberSonarEnabled(root), false);
+});
+
+test('Minimal with Sonar round-trips through a compact link and a scene shot', async (t) => {
+  const { owner, hud, root } = sharingOwner(t, 'minimal');
+  owner._setCyberSonarEnabled(true);
+  const options = owner._readShareState().options;
+  const shot = normalizeShot(
+    JSON.parse(JSON.stringify({ visual: owner.getVisualState() })),
+  );
+  validateSceneDocument({
+    version: SCENE_DOCUMENT_VERSION,
+    scenes: [{ id: 'scene', title: 'Scene', shots: [shot] }],
+  });
+  const code = encodeShareView({
+    hudVariant: options.hudVariant,
+    hudSonar: options.hudSonar,
+  });
+  const link = decodeShareView(code, { nowMs: Date.now() }).state;
+
+  // The viewer is elsewhere: Tactical, Sonar off.
+  owner._setHudVariant('tactical');
+  owner._setCyberSonarEnabled(false);
+  // The HUD fields of the parsed link (the fixture drives no detection).
+  const { hudVariant, hudSonar } = toLegacyShareState(link);
+  assert.deepEqual([hudVariant, hudSonar], ['minimal', true]);
+  await owner.restoreShareState({ hudVariant, hudSonar });
+  assert.equal(hud.getVariant(), 'minimal');
+  assert.equal(isCyberSonarEnabled(root), true);
+
+  owner._setHudVariant('tactical');
+  owner._setCyberSonarEnabled(false);
+  // The saved shot's HUD, as the editor normalized and validated it.
+  assert.deepEqual(shot.visual.hud, {
+    visible: true,
+    variant: 'minimal',
+    sonar: true,
+  });
+  await owner.applyVisualState({ hud: shot.visual.hud });
+  assert.equal(hud.getVariant(), 'minimal');
+  assert.equal(isCyberSonarEnabled(root), true);
+});
+
+test('a link or scene shot that does not mention Sonar restores as before', async (t) => {
+  const { owner, hud, root } = sharingOwner(t, 'minimal');
+  // Made before Sonar was carried: Minimal turns the viewer's Sonar off...
+  setCyberSonarEnabled(true, root);
+  await owner.restoreShareState({ hudVariant: 'minimal' });
+  assert.equal(isCyberSonarEnabled(root), false);
+  setCyberSonarEnabled(true, root);
+  await owner.applyVisualState({ hud: { variant: 'minimal' } });
+  assert.equal(isCyberSonarEnabled(root), false);
+  // ...and Cyber still opens Tactical with Sonar on.
+  await owner.restoreShareState({ hudVariant: 'cyber', hudSonar: false });
+  assert.equal(hud.getVariant(), 'tactical');
+  assert.equal(isCyberSonarEnabled(root), true);
+  owner._setCyberSonarEnabled(false);
+  await owner.applyVisualState({ hud: { variant: 'cyber' } });
+  assert.equal(isCyberSonarEnabled(root), true);
+  // Sonar beside a layout counts only in a restore, not a layout choice.
+  owner._setCyberSonarEnabled(false);
+  owner._setHudVariant('minimal', { sonar: true });
   assert.equal(isCyberSonarEnabled(root), false);
 });
 
