@@ -89,6 +89,15 @@ tilt-map button, whose owners still write their state into the DOM. Core's
 pressable chips and pills (rail card chips, map sources, cities and places)
 are `UiButton`s too; `UiChip` is a non-interactive label chip, used by
 the voice card.
+The Layer Finder's buttons (Search, Filter, the filter menu's Status and
+Category options and the bar's two clear chips) are ghost `UiButton`s.
+Search and the options are pressed toggles; the options' pressed class is
+`active`, while Search keeps its own `active` binding, which also stays on
+while a query is typed. The Filter button opens a disclosure and carries
+`aria-expanded`, not `aria-pressed`. Every glyph its own template draws is
+a `UiIcon` with `:size="null"`, so `layer-finder.css` still sizes them
+(`src/ui/kit/layerFinderControls.test.mjs` pins it); the search field's
+magnifier is `UiSearchField`'s own span.
 `UiSelect` renders the bare native select (Core's labels sit outside it or
 come as an `aria-label`) with `v-model`, `options` and `disabled`;
 options that carry their own attributes come through the slot, a caller's
