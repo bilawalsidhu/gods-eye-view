@@ -5,6 +5,7 @@ import { worldClock } from '../../time/worldClock.js';
 import {
   ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID,
   ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID,
+  cockpitActive,
 } from './policy.js';
 
 const HOVER_PICK_INTERVAL_MS = 120;
@@ -154,13 +155,6 @@ function restoreCameraView(viewer, view, landedView) {
 /** The longest name a timeline mark carries, as in the mission index. */
 const MARK_LABEL_LENGTH = 27;
 
-/** Whether the cockpit view is on. */
-function cockpitActive() {
-  return Boolean(
-    globalThis.document?.body?.classList?.contains?.('cockpit-mode'),
-  );
-}
-
 function markerLaunchId(hit) {
   if (
     hit?.sourceId !== ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID &&
@@ -252,8 +246,8 @@ export function createLifecycle({
         // overlay. An unrelated label keeps the click above mission geometry.
         overlayClicks.add(event);
         // The label is the card on top, so every other layer and the cockpit
-        // leave its click alone. In the cockpit, which holds the camera, it
-        // selects the mission without moving there.
+        // leave its click alone. In the cockpit, which holds the camera, the
+        // label and the dot select the mission without moving there.
         return focusLaunch(markerLaunchId(hit), { move: !cockpitActive() });
       });
       const unsubscribeClick = input.onClick((event) => {
@@ -269,6 +263,7 @@ export function createLifecycle({
           parts.rendering.launchIdFromPicks(
             parts.rendering.missionHitsAt(event.position, 12),
           ),
+          { move: !cockpitActive() },
         );
       });
       hover = createLaunchHover({

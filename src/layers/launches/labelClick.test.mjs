@@ -196,8 +196,8 @@ test("another layer's label keeps the click above mission geometry", (t) => {
   assert.deepEqual(r.focused, ['L1']);
 });
 
-test('in the cockpit a mission label selects its mission without moving the camera', (t) => {
-  const r = rig(t, { overlayHit: label('launch:L2') });
+test('in the cockpit a mission label or dot selects its mission without moving the camera', (t) => {
+  const r = rig(t, { overlayHit: label('launch:L2'), geometryLaunchId: 'L1' });
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'document');
   Object.defineProperty(globalThis, 'document', {
     configurable: true,
@@ -213,6 +213,23 @@ test('in the cockpit a mission label selects its mission without moving the came
   }
   assert.deepEqual(r.focused, ['L2'], 'the mission is selected');
   assert.deepEqual(r.moved, [], 'the cockpit keeps the camera');
+  // The dot, with no label over it, does the same.
+  r.setHit(null);
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: {
+      body: { classList: { contains: (name) => name === 'cockpit-mode' } },
+    },
+  });
+  try {
+    r.click();
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'document', previous);
+    else delete globalThis.document;
+  }
+  assert.deepEqual(r.focused, ['L2', 'L1']);
+  assert.deepEqual(r.moved, []);
+  r.setHit(label('launch:L2'));
   // Out of the cockpit the same click moves there too.
   r.click();
   assert.deepEqual(r.moved, ['L2']);

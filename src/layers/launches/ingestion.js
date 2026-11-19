@@ -1,4 +1,8 @@
-import { MAX_POST_TLE_RETRIES, POST_TLE_RETRY_DELAY_MS } from './policy.js';
+import {
+  MAX_POST_TLE_RETRIES,
+  POST_TLE_RETRY_DELAY_MS,
+  cockpitActive,
+} from './policy.js';
 
 /**
  * Let pending Satellites work finish, including requests that join it while
@@ -264,7 +268,9 @@ export function createIngestion({
         parts.selection.setSelectedMission(null, false);
       } else {
         parts.selection.setSelectedMission(layerState._selectedLaunchId, true);
-        if (layerState._focusAfterActiveLookup) {
+        // The cockpit holds the camera: a mission picked there is not flown
+        // to when its orbit arrives.
+        if (layerState._focusAfterActiveLookup && !cockpitActive()) {
           parts.selection.focusMission(
             launches.find(
               (launch) => launch.id === layerState._selectedLaunchId,
