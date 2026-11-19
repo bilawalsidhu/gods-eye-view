@@ -89,6 +89,14 @@ tilt-map button, whose owners still write their state into the DOM. Core's
 pressable chips and pills (rail card chips, map sources, cities and places)
 are `UiButton`s too; `UiChip` is a non-interactive label chip, used by
 the voice card.
+The welcome card's buttons (SKIP, the three start tiles, BROWSE STORIES,
+BACK and the main NEXT / ENTER GOD MODE action) are ghost `UiButton`s:
+the start tiles are pressed toggles, and all but SKIP keep `aria-disabled`
+rather than `disabled`, so they stay focusable while the card is busy. Its
+tile, tip, Stories and arrow glyphs are `UiIcon`s with `:size="null"`, so
+first-run.css still sizes them (`src/ui/kit/welcomeControls.test.mjs` pins
+it). God mode's preview globe and callouts stay inline SVG drawings, and
+its outbound links stay links.
 `UiSelect` renders the bare native select (Core's labels sit outside it or
 come as an `aria-label`) with `v-model`, `options` and `disabled`;
 options that carry their own attributes come through the slot, a caller's
