@@ -1,0 +1,23 @@
+$LastChangedDate: 2013-11-24 09:26:07 -1000 (Sun, 24 Nov 2013) $
+$Revision: 594 $
+
+As of GSHHG 2.2.2, GSHHG is distributed under the GNU Lesser General Public
+License (LGPL) version 3 or later. Copies of the The GNU General Public
+License (GPL) and the GNU Lesser General Public License (LGPL) are
+distributed along with the sources. Refer to the files COPYINGv3 and
+COPYING.LESSERv3.
+
+Permission to use, copy, modify, and distribute (with no more than a
+reasonable redistribution fee) this data and its documentation for
+any purpose is hereby granted, provided that the above copyright notice
+appear in all copies, that both that copyright notice and this
+permission notice appear in supporting documentation, and that the name
+of GSHHG not be used in advertising or publicity pertaining to
+distribution of the software without specific, written prior permission.
+ The GSHHG package may be included in a bundled distribution of software
+for which a fee may be charged. The University of Hawaii (UH) and the
+National Oceanic and Atmospheric Administration (NOAA) make no
+representations about the suitability of this software for any purpose. 
+It is provided "as is" without expressed or implied warranty.  It is
+provided with no support and without obligation on the part of UH or
+NOAA, to assist in its use, correction, modification, or enhancement.
