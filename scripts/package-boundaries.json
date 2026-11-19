@@ -5385,6 +5385,7 @@
       "src/ui/kit/UiEmpty.vue",
       "src/ui/kit/UiBadge.vue",
       "src/ui/kit/UiCloseButton.vue",
+      "src/ui/kit/UiCheckbox.vue",
       "src/ui/stores/globeActions.js",
       "src/ui/stores/recording.js",
       "src/ui/i18n.js",
