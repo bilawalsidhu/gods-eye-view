@@ -274,15 +274,13 @@ async function main() {
     const snapshot = () =>
       page.evaluate(async () => {
         const viewer = window.__godsEyeView.viewer;
-        const dots = {};
-        for (const collection of viewer.scene.primitives._primitives)
-          for (const point of collection?._pointPrimitives || [])
-            if (typeof point.id === 'string' && point.id.startsWith('cits:'))
-              dots[point.id] = viewer.scene.cartesianToCanvasCoordinates(
-                point.position,
-              );
+        const { findQuery } = await import('/src/render/rendererOf.js');
         const layer =
           window.__godsEyeView.dataManager.layers.get('cits').module;
+        // The dots as drawn, projected through the renderer's query port.
+        const dots = {};
+        for (const { id, position } of layer.getDiagnostics().dots)
+          dots[id] = findQuery(viewer).project(position);
         const { getOverlayPaintRect, getWorldOverlayDiagnostics } =
           await import('/src/overlays/worldOverlay.js');
         const diagnostics = getWorldOverlayDiagnostics();
@@ -375,10 +373,11 @@ async function main() {
       await sleep(2500);
       const at = (await snapshot()).dots[id];
       const picked = await page.evaluate(
-        ({ x, y }) => {
+        async ({ x, y }) => {
           const viewer = window.__godsEyeView.viewer;
-          const hit = viewer.scene.pick({ x, y });
-          return typeof hit?.id === 'string' ? hit.id : null;
+          const { findQuery } = await import('/src/render/rendererOf.js');
+          const hit = findQuery(viewer).pick(x, y);
+          return !hit?.surface && typeof hit?.id === 'string' ? hit.id : null;
         },
         { x: at.x, y: at.y },
       );
@@ -404,6 +403,13 @@ async function main() {
       '(ii) ANONYMOUS — clicking the car publishes no card',
       state.selectedEntries === 0,
       `${state.selectedEntries} selected entries`,
+    );
+    const contextNamesCar = await page.evaluate(() =>
+      document.body.innerText.includes('cits:anon'),
+    );
+    check(
+      '(ii) ANONYMOUS — the Context card does not open on the car',
+      !contextNamesCar,
     );
 
     await clickStation(tramRecord.lon, tramRecord.lat, tramId);

@@ -1,11 +1,22 @@
-import * as Cesium from 'cesium';
 import {
   presetDotOutline,
   presetDotRgba,
   presetSizeDelta,
 } from '../../data/trafficPresetStyle.js';
 import { t } from '../../i18n/index.js';
-import { renderedRoadHeight } from '../traffic/surface.js';
+import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
+import { clone, distance as distance3, lerpInto } from '../../geo/vector.js';
+import { inputFor as defaultInputFor } from '../../input/dispatcher.js';
+import { cssColor } from '../../render/color.js';
+import {
+  canvasOf,
+  drawOf,
+  findCamera,
+  findFrame,
+  findQuery,
+  frameOf,
+} from '../../render/rendererOf.js';
+import { loadedSurfaceHeight, renderedRoadHeight } from '../traffic/surface.js';
 import { CITS_BRACKET_KINDS, createCitsBracketPainter } from './brackets.js';
 import {
   CITS_BANDWIDTH_MODES,
@@ -58,15 +69,26 @@ const LANE_WIDTH = 3;
 const RENDER_OWNER = 'cits';
 
 const colorCache = new Map();
+/** A palette colour at `alpha`, as a renderer colour (`[r, g, b, a]`). */
 function color(css, alpha = 1) {
   const key = `${css}|${alpha}`;
   let value = colorCache.get(key);
   if (!value) {
-    value = Cesium.Color.fromCssColorString(css).withAlpha(alpha);
+    const [r, g, b] = cssColor(css) || [1, 1, 1];
+    value = Object.freeze([r, g, b, alpha]);
     colorCache.set(key, value);
   }
   return value;
 }
+const DOT_HALO = Object.freeze([0, 0, 0, 0.85]);
+/** An 8-bit `[r, g, b, a]` preset colour (alpha 0..1) as a renderer colour. */
+const rgbaColor = (rgba, alpha = rgba[3]) => [
+  rgba[0] / 255,
+  rgba[1] / 255,
+  rgba[2] / 255,
+  alpha,
+];
+let instances = 0;
 
 /**
  * Live C-ITS (V2X) stations: traffic lights with their signal phase painted
@@ -80,7 +102,7 @@ export function createCitsLayer({
   picking = null,
   pointer = null,
   render = null,
-  screenSpaceEventHandlerFactory = null,
+  inputFor = defaultInputFor,
   overlayLanes = null,
   documentRef = globalThis.document,
   windowRef = globalThis.window,
@@ -88,14 +110,17 @@ export function createCitsLayer({
   if (typeof source?.getState !== 'function')
     throw new TypeError('C-ITS requires a state source');
   let _viewer = null;
-  let _points = null;
-  let _lanePrimitive = null;
+  /** Draw sets: station dots, intersection lanes, hazard corridors. */
+  let _dotSet = null;
+  let _laneSet = null;
+  let _hazardSet = null;
+  let _hazardOverSet = null;
+  /** @type {Map<string, {intersection:string, lane:object, item:object, key:string|null}>} */
   let _laneIds = new Map();
-  let _hazardPrimitives = [];
   let _hazardKey = '';
   let _enabled = false;
   let _request = null;
-  let _clickHandler = null;
+  let _clickSubscription = null;
   let _selectedId = null;
   let _selectedCardKey = '';
   let _controlsListener = null;
@@ -119,8 +144,15 @@ export function createCitsLayer({
   let _bracketsOn = true;
   let _bracketLane = null;
   let _fullStreamAvailable = false;
-  /** @type {Map<string, {point:Cesium.PointPrimitive, record:object, from:Cesium.Cartesian3, to:Cesium.Cartesian3, t0:number}>} */
+  /**
+   * Each dot's point item (`item.pos` is where it is drawn now) and its
+   * glide from `from` to `to`, started at `t0`.
+   * @type {Map<string, {item:object, record:object, from:object, to:object, t0:number, moving:boolean}>}
+   */
   const _dots = new Map();
+  const requestRender = () => findFrame(_viewer)?.requestRender(RENDER_OWNER);
+  const drawSets = () =>
+    [_dotSet, _laneSet, _hazardSet, _hazardOverSet].filter(Boolean);
   const _heights = new Map();
 
   // Per-viewer convenience only; every read and write tolerates no storage.
@@ -149,10 +181,11 @@ export function createCitsLayer({
       : citsMergeSettings(_settings, patch);
     saveSettings();
     for (const dot of _dots.values()) {
-      applyFade(dot.point, dot.record);
-      applyDotStyle(dot.point, dot.record);
+      applyFade(dot.item, dot.record);
+      applyDotStyle(dot.item, dot.record);
     }
-    if (!_settings.lanes && _lanePrimitive) {
+    flushAllDots();
+    if (!_settings.lanes && _laneIds.size) {
       removeLanes();
       _intersections = [];
     }
@@ -162,7 +195,7 @@ export function createCitsLayer({
     );
     notifyControls();
     _bracketLane?.requestPaint();
-    _viewer?.scene.requestRender();
+    requestRender();
     if (groupsChanged && _enabled && !_request) void refresh();
   }
 
@@ -171,28 +204,36 @@ export function createCitsLayer({
     _controlsListener?.();
   }
 
+  /**
+   * Our picks, as the pick registry asks. Anonymous dots are not claimed:
+   * a click on one is empty map to every listener, so nothing (the Context
+   * card included) can select, name or follow a private vehicle.
+   */
   const ownsPick = (id) =>
-    typeof id === 'string' && id.startsWith(CITS_PICK_PREFIX);
+    typeof id === 'string' &&
+    id.startsWith(CITS_PICK_PREFIX) &&
+    !id.startsWith(`${CITS_PICK_PREFIX}anon:`);
 
   // ─── Camera ──────────────────────────────────────────────────────────────
   function cameraAltitude() {
-    return _viewer.camera.positionCartographic?.height ?? Infinity;
+    const height = findCamera(_viewer)?.pose()?.height;
+    return Number.isFinite(height) ? height : Infinity;
   }
 
+  /** The ground under the middle of the view, else the point under the eye. */
   function viewCentre() {
-    const scene = _viewer.scene;
-    const centre = new Cesium.Cartesian2(
-      scene.canvas.clientWidth / 2,
-      scene.canvas.clientHeight / 2,
-    );
-    const hit = _viewer.camera.pickEllipsoid(centre, scene.globe.ellipsoid);
-    const carto = hit
-      ? Cesium.Cartographic.fromCartesian(hit)
-      : _viewer.camera.positionCartographic;
-    return {
-      lon: Cesium.Math.toDegrees(carto.longitude),
-      lat: Cesium.Math.toDegrees(carto.latitude),
-    };
+    const canvas = canvasOf(_viewer);
+    const hit =
+      canvas?.clientWidth > 0
+        ? findQuery(_viewer)?.pickEllipsoid(
+            canvas.clientWidth / 2,
+            canvas.clientHeight / 2,
+          )
+        : null;
+    const ground = hit ? toLonLatH(hit) : null;
+    if (ground) return { lon: ground.lon, lat: ground.lat };
+    const pose = findCamera(_viewer)?.pose();
+    return { lon: pose?.lon ?? 0, lat: pose?.lat ?? 0 };
   }
 
   function nearBounds(height) {
@@ -208,17 +249,15 @@ export function createCitsLayer({
   function requestBounds(height) {
     if (_mode !== 'full')
       return height > CITS_MAX_VIEW_ALTITUDE_M ? null : nearBounds(height);
-    const rect = _viewer.camera.computeViewRectangle(
-      _viewer.scene.globe.ellipsoid,
-    );
+    const rect = findCamera(_viewer)?.viewRectangle();
     // A view across the antimeridian or off the globe: ask for everything.
     const world = { west: -180, south: -85, east: 180, north: 85 };
     if (!rect) return world;
     const box = {
-      west: Cesium.Math.toDegrees(rect.west),
-      south: Cesium.Math.toDegrees(rect.south),
-      east: Cesium.Math.toDegrees(rect.east),
-      north: Cesium.Math.toDegrees(rect.north),
+      west: rect.west,
+      south: rect.south,
+      east: rect.east,
+      north: rect.north,
     };
     return box.west >= box.east || box.south >= box.north ? world : box;
   }
@@ -228,10 +267,9 @@ export function createCitsLayer({
     const key = `${lon.toFixed(4)},${lat.toFixed(4)}`;
     const cached = _heights.get(key);
     if (cached != null) return cached;
-    const scene = _viewer.scene;
-    const estimate =
-      scene.globe.getHeight(Cesium.Cartographic.fromDegrees(lon, lat)) ?? 0;
-    const rendered = renderedRoadHeight(scene, lon, lat, estimate);
+    const loaded = loadedSurfaceHeight(_viewer, { lon, lat });
+    const estimate = Number.isFinite(loaded) ? loaded : 0;
+    const rendered = renderedRoadHeight(_viewer, lon, lat, estimate);
     // Only depth-confirmed heights are final; estimates are retried later.
     if (rendered != null) {
       if (_heights.size > 20_000) _heights.clear();
@@ -241,7 +279,7 @@ export function createCitsLayer({
   }
 
   function dotPosition(lon, lat) {
-    return Cesium.Cartesian3.fromDegrees(
+    return fromDegrees(
       lon,
       lat,
       groundHeight(lon, lat) + CITS_DOT_HEIGHT_OFFSET_M,
@@ -255,12 +293,7 @@ export function createCitsLayer({
       ? presetDotRgba(_stylePreset, style.bucket)
       : null;
     point.color = rgba
-      ? new Cesium.Color(
-          rgba[0] / 255,
-          rgba[1] / 255,
-          rgba[2] / 255,
-          rgba[3] * (record.stale ? 0.35 : 1),
-        )
+      ? rgbaColor(rgba, rgba[3] * (record.stale ? 0.35 : 1))
       : color(style.css, style.alpha);
     point.pixelSize =
       (style.size +
@@ -270,19 +303,15 @@ export function createCitsLayer({
       ? presetDotOutline(_stylePreset, style.bucket)
       : null;
     if (outline) {
-      point.outlineColor = new Cesium.Color(
-        outline.rgba[0] / 255,
-        outline.rgba[1] / 255,
-        outline.rgba[2] / 255,
-        outline.rgba[3],
-      );
+      point.outlineColor = rgbaColor(outline.rgba);
       point.outlineWidth = outline.width;
     } else if (record.kind === 'hazard' || citsIsVehicle(record.kind)) {
       // Street Traffic's preset halo: a dark ring keeps vehicles readable
       // over lanes painted in the same palette.
-      point.outlineColor = Cesium.Color.BLACK.withAlpha(0.85);
+      point.outlineColor = DOT_HALO;
       point.outlineWidth = 2;
     } else {
+      delete point.outlineColor;
       point.outlineWidth = 0;
     }
   }
@@ -296,24 +325,31 @@ export function createCitsLayer({
     const vehicle = citsIsVehicle(record?.kind) || record?.kind === 'hazard';
     const rangeM =
       (vehicle ? _settings.vehicleRangeKm : _settings.fixedRangeKm) * 1000;
-    point.scaleByDistance = new Cesium.NearFarScalar(
-      100,
-      1.5,
-      rangeM,
-      vehicle ? 0.6 : 0.3,
-    );
-    point.translucencyByDistance = new Cesium.NearFarScalar(
-      Math.min(rangeM * 0.7, Math.max(100, rangeM - 2000)),
-      1.0,
-      rangeM,
-      0.0,
-    );
+    point.scaleByDistance = {
+      near: 100,
+      nearValue: 1.5,
+      far: rangeM,
+      farValue: vehicle ? 0.6 : 0.3,
+    };
+    point.fadeByDistance = {
+      near: Math.min(rangeM * 0.7, Math.max(100, rangeM - 2000)),
+      nearValue: 1.0,
+      far: rangeM,
+      farValue: 0.0,
+    };
+  }
+
+  /** Send every dot's item to the draw set, restyled in place. */
+  function flushAllDots() {
+    if (!_dotSet || !_dots.size) return;
+    _dotSet.upsert([..._dots.values()].map((dot) => dot.item));
   }
 
   function restyleAll() {
-    for (const dot of _dots.values()) applyDotStyle(dot.point, dot.record);
+    for (const dot of _dots.values()) applyDotStyle(dot.item, dot.record);
+    flushAllDots();
     paintLanes();
-    _viewer?.scene.requestRender();
+    requestRender();
   }
 
   // ─── Stations ────────────────────────────────────────────────────────────
@@ -334,39 +370,54 @@ export function createCitsLayer({
       const target = dotPosition(record.lon, record.lat);
       let dot = _dots.get(id);
       if (!dot) {
-        const point = _points.add({
+        const item = {
           id,
-          position: target,
+          pos: clone(target),
           // Grounded like Street Traffic: buildings and terrain occlude.
-          disableDepthTestDistance: 0,
-        });
-        applyFade(point, record);
-        dot = { point, record, from: target, to: target, t0: now };
+          disableDepthTest: 0,
+          pixelSize: 1,
+          color: DOT_HALO,
+        };
+        applyFade(item, record);
+        dot = {
+          item,
+          record,
+          from: target,
+          to: target,
+          t0: now,
+          moving: false,
+        };
         _dots.set(id, dot);
       } else if (record.anonymous || !citsIsVehicle(record.kind)) {
         // A pooled slot may now hold another kind with another range.
-        if (dot.record.kind !== record.kind) applyFade(dot.point, record);
+        if (dot.record.kind !== record.kind) applyFade(dot.item, record);
         dot.from = target;
         dot.to = target;
+        dot.moving = false;
         dot.record = record;
-        dot.point.position = target;
+        dot.item.pos = clone(target);
       } else {
         // Glide from wherever the dot is now to the new report.
-        dot.from = Cesium.Cartesian3.clone(dot.point.position);
+        dot.from = clone(dot.item.pos);
         dot.to = target;
         dot.t0 = now;
+        dot.moving = true;
         dot.record = record;
       }
-      applyDotStyle(dot.point, record);
+      applyDotStyle(dot.item, record);
     }
-    for (const [id, dot] of _dots) {
+    const gone = [];
+    for (const [id] of _dots) {
       if (keep.has(id)) continue;
-      _points.remove(dot.point);
+      gone.push(id);
       _dots.delete(id);
     }
+    if (gone.length) _dotSet?.remove(gone);
+    flushAllDots();
   }
 
-  const _scratch = new Cesium.Cartesian3();
+  /** The gliding dots' items, gathered once a frame for one upsert. */
+  const _frameItems = [];
   /**
    * Own brackets show unless switched off. While they do, bracketed kinds are
    * withheld from the global detect mode so no vehicle is boxed twice.
@@ -378,7 +429,6 @@ export function createCitsLayer({
   function installBrackets() {
     if (_bracketLane || typeof overlayLanes?.register !== 'function') return;
     const painter = createCitsBracketPainter({
-      viewer: () => _viewer,
       dots: () => _dots.values(),
       style: () => _stylePreset,
       maxDistance: () => _settings.bracketRangeKm * 1000,
@@ -402,42 +452,28 @@ export function createCitsLayer({
     // Brackets follow moving dots, so the lane repaints with the scene.
     if (bracketsShown()) _bracketLane?.requestPaint();
     const now = performance.now();
+    _frameItems.length = 0;
     for (const dot of _dots.values()) {
-      if (dot.from === dot.to) continue;
+      if (!dot.moving) continue;
       const t = Math.min(1, (now - dot.t0) / POLL_MS);
-      // PointPrimitive's position setter clones, so a scratch is safe.
-      dot.point.position = Cesium.Cartesian3.lerp(
-        dot.from,
-        dot.to,
-        t,
-        _scratch,
-      );
-      if (t >= 1) dot.from = dot.to;
+      // A fresh position each frame: the set may keep the one it was sent.
+      dot.item.pos = lerpInto(dot.from, dot.to, t, { x: 0, y: 0, z: 0 });
+      if (t >= 1) dot.moving = false;
+      _frameItems.push(dot.item);
     }
+    if (_frameItems.length) _dotSet?.upsert(_frameItems);
   }
 
   // ─── Hazard corridors (Street Traffic's heat-lines) ──────────────────────
   function removeHazardPaths() {
-    for (const primitive of _hazardPrimitives)
-      _viewer?.scene.groundPrimitives.remove(primitive);
-    _hazardPrimitives = [];
+    _hazardSet?.clear();
+    _hazardOverSet?.clear();
     _hazardKey = '';
   }
 
-  function hazardPrimitive(instances, css, alpha, glowPower) {
-    return _viewer.scene.groundPrimitives.add(
-      new Cesium.GroundPolylinePrimitive({
-        geometryInstances: instances,
-        classificationType: Cesium.ClassificationType.BOTH,
-        appearance: new Cesium.PolylineMaterialAppearance({
-          material: Cesium.Material.fromType('PolylineGlow', {
-            color: color(css, alpha),
-            glowPower,
-          }),
-        }),
-      }),
-    );
-  }
+  /** ECEF positions along a `[[lon, lat], …]` path, on the ellipsoid. */
+  const pathPositions = (coordinates) =>
+    coordinates.map(([lon, lat]) => fromDegrees(lon, lat, 0));
 
   function renderHazardPaths(hazards, altitude) {
     const visible = altitude <= CITS_HAZARD_PATH_MAX_ALTITUDE_M ? hazards : [];
@@ -445,99 +481,76 @@ export function createCitsLayer({
     if (key === _hazardKey) return;
     removeHazardPaths();
     _hazardKey = key;
-    if (
-      !visible.length ||
-      !Cesium.GroundPolylinePrimitive.isSupported(_viewer.scene)
-    )
-      return;
+    if (!visible.length || !_hazardSet) return;
     const byBucket = { jam: [], slow: [] };
     let count = 0;
     for (const hazard of visible) {
       const bucket = citsHazardBucket(hazard.kind);
       for (const path of hazard.paths.slice(0, 2)) {
-        if (count++ >= HAZARD_PATH_CAP) break;
-        byBucket[bucket].push(
-          new Cesium.GeometryInstance({
-            geometry: new Cesium.GroundPolylineGeometry({
-              positions: Cesium.Cartesian3.fromDegreesArray(path.flat()),
-              width: bucket === 'jam' ? HAZARD_JAM_WIDTH : HAZARD_SLOW_WIDTH,
-            }),
-          }),
-        );
+        if (count >= HAZARD_PATH_CAP) break;
+        const jam = bucket === 'jam';
+        byBucket[bucket].push({
+          id: `hazard:${count++}`,
+          positions: pathPositions(path),
+          widthPx: jam ? HAZARD_JAM_WIDTH : HAZARD_SLOW_WIDTH,
+          mode: 'draped',
+          clampTo: 'both',
+          style: {
+            kind: 'glow',
+            color: color(
+              CITS_BUCKET_CSS[bucket],
+              jam ? HAZARD_JAM_ALPHA : HAZARD_SLOW_ALPHA,
+            ),
+            power: jam ? 0.25 : 0.2,
+          },
+        });
       }
     }
-    if (byBucket.jam.length)
-      _hazardPrimitives.push(
-        hazardPrimitive(
-          byBucket.jam,
-          CITS_BUCKET_CSS.jam,
-          HAZARD_JAM_ALPHA,
-          0.25,
-        ),
-      );
-    if (byBucket.slow.length)
-      _hazardPrimitives.push(
-        hazardPrimitive(
-          byBucket.slow,
-          CITS_BUCKET_CSS.slow,
-          HAZARD_SLOW_ALPHA,
-          0.2,
-        ),
-      );
+    // Slow corridors draw over jam ones, in a set made after theirs.
+    if (byBucket.jam.length) _hazardSet.set(byBucket.jam);
+    if (byBucket.slow.length) _hazardOverSet.set(byBucket.slow);
   }
 
-  // ─── Intersection lanes (per-instance colours, repainted per phase) ──────
+  // ─── Intersection lanes (per-lane colours, repainted per phase) ──────────
   function removeLanes() {
-    if (_lanePrimitive) _viewer?.scene.groundPrimitives.remove(_lanePrimitive);
-    _lanePrimitive = null;
+    _laneSet?.clear();
     _laneIds = new Map();
   }
 
   function buildLanes(intersections) {
     removeLanes();
     _intersections = intersections;
-    if (
-      !intersections.length ||
-      !Cesium.GroundPolylinePrimitive.isSupported(_viewer.scene)
-    )
-      return;
-    const instances = [];
+    if (!intersections.length || !_laneSet) return;
+    const items = [];
     for (const intersection of intersections) {
       for (const lane of intersection.lanes) {
         const id = `${CITS_PICK_PREFIX}lane:${intersection.id}:${lane.id}`;
         const style = citsLaneStyle(lane, null);
-        instances.push(
-          new Cesium.GeometryInstance({
-            id,
-            geometry: new Cesium.GroundPolylineGeometry({
-              positions: Cesium.Cartesian3.fromDegreesArray(
-                lane.coordinates.flat(),
-              ),
-              width: LANE_WIDTH,
-            }),
-            attributes: {
-              color: Cesium.ColorGeometryInstanceAttribute.fromColor(
-                color(style.css, style.alpha),
-              ),
-            },
-          }),
-        );
-        _laneIds.set(id, { intersection: intersection.id, lane, key: null });
+        const item = {
+          id,
+          positions: pathPositions(lane.coordinates),
+          widthPx: LANE_WIDTH,
+          mode: 'draped',
+          clampTo: 'both',
+          style: { kind: 'solid', color: color(style.css, style.alpha) },
+        };
+        items.push(item);
+        _laneIds.set(id, {
+          intersection: intersection.id,
+          lane,
+          item,
+          key: `${style.css}|${style.alpha}`,
+        });
       }
     }
-    _lanePrimitive = _viewer.scene.groundPrimitives.add(
-      new Cesium.GroundPolylinePrimitive({
-        geometryInstances: instances,
-        classificationType: Cesium.ClassificationType.BOTH,
-        appearance: new Cesium.PolylineColorAppearance(),
-      }),
-    );
+    _laneSet.set(items);
   }
 
   function paintLanes() {
-    if (!_lanePrimitive?.ready) return;
+    if (!_laneSet || !_laneIds.size) return;
     const phases = new Map();
-    for (const [id, entry] of _laneIds) {
+    const changed = [];
+    for (const entry of _laneIds.values()) {
       if (!phases.has(entry.intersection)) {
         const spat = _dots.get(`${CITS_PICK_PREFIX}obj:${entry.intersection}`)
           ?.record?.spat;
@@ -551,14 +564,14 @@ export function createCitsLayer({
       const style = citsLaneStyle(entry.lane, phases.get(entry.intersection));
       const key = `${style.css}|${style.alpha}`;
       if (key === entry.key) continue;
-      const attributes = _lanePrimitive.getGeometryInstanceAttributes(id);
-      if (!attributes) continue;
-      attributes.color = Cesium.ColorGeometryInstanceAttribute.toValue(
-        color(style.css, style.alpha),
-        attributes.color,
-      );
+      entry.item.style = {
+        kind: 'solid',
+        color: color(style.css, style.alpha),
+      };
       entry.key = key;
+      changed.push(entry.item);
     }
+    if (changed.length) _laneSet.upsert(changed);
   }
 
   // ─── Labels (world-overlay host) ─────────────────────────────────────────
@@ -585,7 +598,8 @@ export function createCitsLayer({
   function publishLabels(records) {
     if (!overlayHost) return;
     _overlayEntries = [];
-    const camera = _viewer.camera.positionWC;
+    const camera = findCamera(_viewer)?.pose()?.position;
+    if (!camera) return;
     const labelRange = _settings.labelRangeKm * 1000;
     const bracketRange = _settings.bracketRangeKm * 1000;
     {
@@ -595,7 +609,7 @@ export function createCitsLayer({
         const dot = _dots.get(dotId);
         // The selected station carries its name on the selected card.
         if (!dot || dotId === _selectedId) continue;
-        const distance = Cesium.Cartesian3.distance(camera, dot.point.position);
+        const distance = distance3(camera, dot.item.pos);
         if (distance > labelRange) continue;
         const title =
           record.kind === 'hazard'
@@ -673,7 +687,7 @@ export function createCitsLayer({
         {
           ...card,
           // A getter: the host re-projects it each frame while the dot glides.
-          position: () => _dots.get(dotId)?.point.position,
+          position: () => _dots.get(dotId)?.item.pos,
         },
       ],
       SELECTED_CARD_HOST_OPTIONS,
@@ -700,39 +714,43 @@ export function createCitsLayer({
     return dot && !dot.record.anonymous ? pickId : null;
   }
 
+  /** The pick id of a click's draw hit when it is an item of our sets. */
+  function ownDrawHitId(hit) {
+    if (!hit || hit.surface || typeof hit.id !== 'string') return null;
+    const sets = [_dotSet, _laneSet].map((set) => set?.id);
+    return sets.includes(hit.set) ? hit.id : null;
+  }
+
   function installInteraction() {
-    if (!screenSpaceEventHandlerFactory || _clickHandler) return;
+    if (_clickSubscription || !_viewer) return;
     picking?.registerPickOwner(layer.id, ownsPick);
-    _clickHandler = screenSpaceEventHandlerFactory(_viewer);
-    _clickHandler.setInputAction((click) => {
+    _clickSubscription = inputFor(_viewer).onClick((event) => {
       if (!_enabled) return;
       if (pointer && !pointer.isPointerFree()) return;
-      // A click on the selected card itself keeps the selection.
-      const cardHit = overlayHost?.hitTest?.(
-        click.position?.x,
-        click.position?.y,
-        { sourceId: CITS_SELECTED_OVERLAY_SOURCE_ID },
-      );
+      // A card or label painted on top takes the click, the selected card
+      // itself included: it keeps the selection.
+      if (picking?.clickCard?.(event)) return;
+      const at = event.screenPosition || event.position;
+      const cardHit = overlayHost?.hitTest?.(at?.x, at?.y, {
+        sourceId: CITS_SELECTED_OVERLAY_SOURCE_ID,
+      });
       if (cardHit) return;
-      const picked = _viewer.scene.pick(click.position);
-      const pickId = picking
-        ? picking.resolvePickId(picked)
-        : (picked?.id ?? null);
-      const id = selectableId(pickId);
+      const id = selectableId(ownDrawHitId(event.drawHit));
       if (id) {
         select(id);
         return;
       }
       // A sibling layer's pick (an aircraft, a camera) is not empty space:
       // leave the selection alone and let that layer handle it.
+      const pickId = event.id ?? null;
       if (pickId && picking?.isOwnedByOtherLayer(layer.id, pickId)) return;
       select(null);
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
   }
 
   function removeInteraction() {
-    _clickHandler?.destroy();
-    _clickHandler = null;
+    _clickSubscription?.();
+    _clickSubscription = null;
     picking?.unregisterPickOwner(layer.id);
     _selectedId = null;
     _selectedCardKey = '';
@@ -740,7 +758,7 @@ export function createCitsLayer({
   }
 
   function clearScene() {
-    _points?.removeAll();
+    _dotSet?.clear();
     _dots.clear();
     removeLanes();
     removeHazardPaths();
@@ -801,7 +819,7 @@ export function createCitsLayer({
       renderDots(records, performance.now());
       renderHazardPaths(hazards, altitude);
       if (altitude > CITS_LANE_MAX_ALTITUDE_M || !_settings.lanes) {
-        if (_lanePrimitive) removeLanes();
+        if (_laneIds.size) removeLanes();
         _intersections = [];
         _mapsVersion = null;
       } else if (
@@ -824,7 +842,7 @@ export function createCitsLayer({
       notifyControls();
       _lastUpdate = Date.now();
       _lastError = null;
-      _viewer.scene.requestRender();
+      requestRender();
       return true;
     } catch (error) {
       if (request.signal.aborted || !_enabled) return false;
@@ -858,11 +876,26 @@ export function createCitsLayer({
     init(viewer) {
       if (_viewer) throw new Error('C-ITS layer is already initialized');
       _viewer = viewer;
-      _points = new Cesium.PointPrimitiveCollection({
-        blendOption: Cesium.BlendOption.TRANSLUCENT,
+      const draw = drawOf(viewer);
+      const instance = ++instances;
+      _dotSet = draw.points({
+        id: `cits:${instance}:dots`,
+        blend: 'translucent',
+        show: false,
       });
-      _points.show = false;
-      viewer.scene.primitives.add(_points);
+      // Lanes and corridors drape on terrain and tiles, as their ground
+      // polylines classified both.
+      _laneSet = draw.lines({ id: `cits:${instance}:lanes`, clampTo: 'both' });
+      _hazardSet = draw.lines({
+        id: `cits:${instance}:hazards`,
+        clampTo: 'both',
+        pickable: false,
+      });
+      _hazardOverSet = draw.lines({
+        id: `cits:${instance}:hazards-over`,
+        clampTo: 'both',
+        pickable: false,
+      });
       overlayHost?.setVisible(CITS_OVERLAY_SOURCE_ID, false);
       overlayHost?.setVisible(CITS_SELECTED_OVERLAY_SOURCE_ID, false);
       if (windowRef?.addEventListener) {
@@ -879,10 +912,10 @@ export function createCitsLayer({
     enable() {
       _enabled = true;
       _status = 'loading';
-      if (_points) _points.show = true;
+      for (const set of drawSets()) set.show = true;
       overlayHost?.setVisible(CITS_OVERLAY_SOURCE_ID, true);
       overlayHost?.setVisible(CITS_SELECTED_OVERLAY_SOURCE_ID, true);
-      _removePreRender = _viewer.scene.preRender.addEventListener(animate);
+      _removePreRender = frameOf(_viewer).on('preRender', animate);
       render?.holdContinuousRender?.(RENDER_OWNER);
       installInteraction();
       installBrackets();
@@ -899,30 +932,28 @@ export function createCitsLayer({
       removeInteraction();
       removeBrackets();
       clearScene();
-      if (_points) _points.show = false;
+      for (const set of drawSets()) set.show = false;
       overlayHost?.setVisible(CITS_OVERLAY_SOURCE_ID, false);
       overlayHost?.setVisible(CITS_SELECTED_OVERLAY_SOURCE_ID, false);
       _status = 'idle';
-      _viewer?.scene.requestRender();
+      requestRender();
     },
 
     async update() {
-      if (!_enabled || !_points) return false;
+      if (!_enabled || !_dotSet) return false;
       // A slow full-stream response is not cut short by the next tick.
       if (_request) return false;
       return refresh();
     },
 
-    destroy(viewer = _viewer) {
+    destroy() {
       layer.disable();
       if (_styleListener)
         windowRef?.removeEventListener('gev:style-change', _styleListener);
       _styleListener = null;
       _controlsListener = null;
-      if (_points) {
-        viewer?.scene.primitives.remove(_points);
-        _points = null;
-      }
+      for (const set of drawSets()) set.dispose();
+      _dotSet = _laneSet = _hazardSet = _hazardOverSet = null;
       _viewer = null;
     },
 
@@ -939,7 +970,7 @@ export function createCitsLayer({
         if (_lastRecords) publishLabels(_lastRecords);
         notifyControls();
         _bracketLane?.requestPaint();
-        _viewer?.scene.requestRender();
+        requestRender();
       }
       const next = params.bandwidth;
       if (!CITS_BANDWIDTH_MODES.includes(next) || next === _mode) return true;
@@ -1056,6 +1087,32 @@ export function createCitsLayer({
       _controlsListener = typeof fn === 'function' ? fn : null;
     },
 
+    /**
+     * What is drawn, for checks of the running app: the dot set's id and
+     * each dot's id and drawn position (ECEF).
+     */
+    getDiagnostics() {
+      return {
+        dotSet: _dotSet?.id ?? null,
+        dots: [..._dots].map(([id, dot]) => ({ id, position: dot.item.pos })),
+        lanes: _laneIds.size,
+      };
+    },
+
+    /**
+     * A public station by its pick id (a lane names its intersection), for
+     * the Context card: its name and where it is. Null for an anonymous dot.
+     */
+    findByQuery(query) {
+      const record = _dots.get(selectableId(query))?.record;
+      if (!record || record.anonymous) return null;
+      return {
+        name: buildCitsSelectedCard(record, Date.now()).title,
+        latitude: record.lat,
+        longitude: record.lon,
+      };
+    },
+
     /** Vehicle positions for the detection overlay, as Street Traffic. */
     getDetectableObjects({ maxCount = Infinity } = {}) {
       const result = [];
@@ -1064,7 +1121,7 @@ export function createCitsLayer({
         if (!citsIsVehicle(dot.record.kind) || dot.record.anonymous) continue;
         if (bracketsShown() && CITS_BRACKET_KINDS.has(dot.record.kind))
           continue;
-        result.push({ position: dot.point.position, id, type: 'V2X' });
+        result.push({ position: dot.item.pos, id, type: 'V2X' });
       }
       return result;
     },

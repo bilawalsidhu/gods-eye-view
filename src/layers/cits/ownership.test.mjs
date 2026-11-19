@@ -6,6 +6,8 @@ import {
   CITS_SELECTED_OVERLAY_SOURCE_ID,
   createCitsLayer,
 } from './index.js';
+import { fakeInput } from '../../input/testDoubles.mjs';
+import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';
 
 const LON = 15.4425;
 const LAT = 47.0665;
@@ -33,7 +35,6 @@ const car = {
 
 function harness({ state = { status: 'live', objects: [tram, car] } } = {}) {
   const overlay = { entries: new Map(), visible: new Map() };
-  const clicks = { handler: null, destroyed: 0 };
   const owners = new Map();
   let pick = null;
   let altitude = 900;
@@ -46,6 +47,12 @@ function harness({ state = { status: 'live', objects: [tram, car] } } = {}) {
       return Cesium.Cartesian3.fromDegrees(LON, LAT, altitude);
     },
     pickEllipsoid: () => undefined,
+    // Street Traffic's rendered-surface heights read the camera's matrices.
+    viewMatrix: Cesium.Matrix4.IDENTITY,
+    frustum: {
+      fovy: Math.PI / 3,
+      projectionMatrix: Cesium.Matrix4.IDENTITY,
+    },
   };
   const viewer = {
     camera,
@@ -60,6 +67,10 @@ function harness({ state = { status: 'live', objects: [tram, car] } } = {}) {
       requestRender() {},
     },
   };
+  const { draw } = bindFakeCesiumScene(viewer);
+  const input = fakeInput(viewer);
+  /** The dot set's id, once the layer has made it. */
+  let dotSetId = null;
   const source = {
     getState(bounds, { signal }) {
       return new Promise((resolve, reject) => {
@@ -92,34 +103,36 @@ function harness({ state = { status: 'live', objects: [tram, car] } } = {}) {
       unregisterPickOwner: (id) => owners.delete(id),
     },
     pointer: { isPointerFree: () => true },
-    screenSpaceEventHandlerFactory: () => ({
-      setInputAction(callback) {
-        clicks.handler = callback;
-      },
-      destroy() {
-        clicks.destroyed += 1;
-        clicks.handler = null;
-      },
-    }),
+    inputFor: () => input.input,
     windowRef: null,
     documentRef: null,
   });
   layer.init(viewer);
   layer.enable(viewer);
+  dotSetId = [...draw.sets.values()].find((record) =>
+    record.spec.id.endsWith(':dots'),
+  ).spec.id;
   return {
     layer,
+    draw,
     overlay,
-    clicks,
     owners,
     pending,
-    setPick: (id) => (pick = id ? { id } : null),
+    /** Our own dots are draw-set items; anything else a sibling's pick. */
+    setPick: (id) =>
+      (pick = !id
+        ? null
+        : id.startsWith('cits:')
+          ? { id: { set: dotSetId, id } }
+          : { id }),
+    subscribers: () => input.input.subscriberCount(),
     setAltitude: (value) => (altitude = value),
     async refresh() {
       const update = layer.update(viewer);
       pending.shift()?.resolve();
       return update;
     },
-    click: () => clicks.handler?.({ position: { x: 400, y: 300 } }),
+    click: () => input.click({ x: 400, y: 300 }),
   };
 }
 
@@ -175,7 +188,7 @@ test('late refresh cannot publish after disable or destroy', async () => {
   assert.equal(h.overlay.entries.has(CITS_OVERLAY_SOURCE_ID), false);
   assert.equal(h.overlay.entries.has(CITS_SELECTED_OVERLAY_SOURCE_ID), false);
   assert.equal(h.overlay.visible.get(CITS_SELECTED_OVERLAY_SOURCE_ID), false);
-  assert.equal(h.clicks.destroyed, 1);
+  assert.equal(h.subscribers(), 0);
   assert.equal(h.owners.has('cits'), false);
   h.layer.destroy();
   h.layer.destroy();
@@ -213,4 +226,42 @@ test('row controls carry uppercase chips and a kind list with live counts', asyn
   assert.equal(h.layer.getParams().settings.vehicleRangeKm, 120);
   h.layer.setParams({ resetSettings: true });
   assert.equal(h.layer.getParams().settings.vehicleRangeKm, 60);
+});
+
+test('stations draw as point items through the draw port and go with the layer', async () => {
+  const h = harness();
+  await h.refresh();
+  const dots = [...h.draw.sets.values()].find((record) =>
+    record.spec.id.endsWith(':dots'),
+  );
+  assert.equal(dots.kind, 'points');
+  assert.equal(dots.show, true);
+  const tramDot = dots.items.get(`cits:obj:${tram.id}`);
+  assert.ok(tramDot, 'the tram is a point item');
+  assert.equal(tramDot.disableDepthTest, 0);
+  assert.equal(tramDot.color.length, 4);
+  assert.ok(Number.isFinite(tramDot.pos.x));
+  // The anonymous car is pooled by slot, never by its id.
+  assert.ok(dots.items.has('cits:anon:0'));
+  assert.ok(![...dots.items.keys()].some((id) => id.includes(car.id)));
+  h.layer.disable();
+  assert.equal(dots.items.size, 0);
+  assert.equal(dots.show, false);
+  h.layer.destroy();
+  assert.ok(
+    [...h.draw.sets.values()].every((record) => record.disposed),
+    'every draw set is disposed with the layer',
+  );
+});
+
+test('anonymous dots are not claimed, and only public stations are named', async () => {
+  const h = harness();
+  await h.refresh();
+  const owns = h.owners.get('cits');
+  assert.equal(owns(`cits:obj:${tram.id}`), true);
+  assert.equal(owns('cits:anon:0'), false);
+  assert.equal(h.layer.findByQuery('cits:anon:0'), null);
+  const found = h.layer.findByQuery(`cits:obj:${tram.id}`);
+  assert.equal(found.name, 'TRAM · 6 → St. Peter');
+  assert.equal(found.latitude, tram.lat);
 });

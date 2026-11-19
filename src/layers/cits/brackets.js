@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import {
   appendCornerBracket,
   measureLabelCard,
@@ -6,6 +5,7 @@ import {
   rectIntersectsAny,
 } from '../../data/detectionDraw.js';
 import { keyholeLabelAlphaFromGeometry } from '../../celestialRing.js';
+import { distance as distance3 } from '../../geo/vector.js';
 import {
   DETECTION_STYLE,
   DETECTION_THEME_MAP,
@@ -54,26 +54,42 @@ export function citsBracketCard(record, now = Date.now()) {
 }
 
 /**
- * Create the painter for one layer instance.
- * @param {{viewer:function():Cesium.Viewer|null, dots:function():Iterable<{point:Cesium.PointPrimitive, record:object}>, style:function():string, maxDistance?:function():number, selectedRecord?:function():object|null}} deps
+ * An ECEF point in CSS pixels through the paint frame's view-projection
+ * matrix (column-major), into `out`; false when it is behind the eye.
+ */
+function projectInto(frame, p, out) {
+  const m = frame.viewProjectionMatrix;
+  const w = m[3] * p.x + m[7] * p.y + m[11] * p.z + m[15];
+  if (!(w > 0)) return false;
+  out.x =
+    ((m[0] * p.x + m[4] * p.y + m[8] * p.z + m[12]) / w / 2 + 0.5) *
+    frame.width;
+  out.y =
+    (0.5 - (m[1] * p.x + m[5] * p.y + m[9] * p.z + m[13]) / w / 2) *
+    frame.height;
+  return true;
+}
+
+/**
+ * Create the painter for one layer instance. It reads the eye and the
+ * projection from the paint frame the world overlay hands it.
+ * @param {{dots:function():Iterable<{item:{pos:{x:number,y:number,z:number}}, record:object}>, style:function():string, maxDistance?:function():number, selectedRecord?:function():object|null}} deps
  */
 export function createCitsBracketPainter({
-  viewer,
   dots,
   style,
   maxDistance = () => CITS_BRACKET_MAX_DISTANCE_M,
   selectedRecord = () => null,
 }) {
-  const scratch = new Cesium.Cartesian2();
+  const win = { x: 0, y: 0 };
   let charWidth = 0;
 
   return function paint(frame) {
-    const scene = viewer()?.scene;
     const ctx = frame?.ctx;
-    if (!scene || !ctx) return;
+    const camera = frame?.cameraPosition;
+    if (!ctx || !camera || !frame.viewProjectionMatrix) return;
     const width = frame.width;
     const height = frame.height;
-    const camera = scene.camera.positionWC;
     const theme = DETECTION_THEME_MAP[style()] || DETECTION_THEME_MAP._default;
     const tiers = theme.tiers || {};
     const now = Date.now();
@@ -81,18 +97,14 @@ export function createCitsBracketPainter({
     if (!charWidth) charWidth = ctx.measureText('0000000000').width / 10 || 6;
 
     const visible = [];
-    for (const { point, record } of dots()) {
+    for (const { item, record } of dots()) {
       if (!CITS_BRACKET_KINDS.has(record.kind) || record.anonymous) continue;
-      const position = point.position;
-      const distance = Cesium.Cartesian3.distance(camera, position);
+      const position = item.pos;
+      const distance = distance3(camera, position);
       if (distance > maxDistance()) continue;
       if (frame.occluder && !frame.occluder.isPointVisible(position)) continue;
-      const win = Cesium.SceneTransforms.worldToWindowCoordinates(
-        scene,
-        position,
-        scratch,
-      );
-      if (!win || win.x < -40 || win.y < -40) continue;
+      if (!projectInto(frame, position, win)) continue;
+      if (win.x < -40 || win.y < -40) continue;
       if (win.x > width + 40 || win.y > height + 40) continue;
       const alpha = frame.keyhole
         ? keyholeLabelAlphaFromGeometry(win.x, win.y, frame.keyhole)

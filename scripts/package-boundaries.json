@@ -8463,7 +8463,13 @@
       "src/i18n/locales/uk.json",
       "src/i18n/locales/zh-Hant.json",
       "src/geo/julian.js",
-      "src/geo/celestial.js"
+      "src/geo/celestial.js",
+      "src/data/inputOwnership.js",
+      "src/data/scenePick.js",
+      "src/data/pickRegistry.js",
+      "src/styles/styleStages.js",
+      "src/input/sensorPick.js",
+      "src/input/dispatcher.js"
     ],
     "external": ["cesium"]
   },

@@ -1,8 +1,6 @@
-import * as Cesium from 'cesium';
 import { createCitsLayer } from '../../layers/cits/index.js';
 import * as picking from '../../data/pickRegistry.js';
 import * as overlays from '../../overlays/worldOverlay.js';
-import { isPointerFree } from '../../data/inputOwnership.js';
 import * as render from '../../renderGovernor.js';
 
 /** Wire the OpenTrafficMap C-ITS layer to application picking and overlays. */
@@ -17,13 +15,10 @@ export function createApplicationCits(options) {
       hitTest: (...args) => overlays.hitTestWorldOverlay(...args),
     },
     picking,
-    pointer: { isPointerFree },
     render,
     overlayLanes: {
       register: (...args) => overlays.registerWorldOverlayPaintLane(...args),
     },
-    screenSpaceEventHandlerFactory: (viewer) =>
-      new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas),
     ...options,
   });
 }
