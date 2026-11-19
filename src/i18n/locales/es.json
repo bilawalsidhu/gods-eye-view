@@ -4339,6 +4339,7 @@
   "Turn off": "Desactivar",
   "Command": "Comando",
   "No layers are on": "No hay capas activas",
+  "No other layers are on": "No hay otras capas activas",
   "No matching layers": "No se encontraron capas",
   "Show me {thing} settings": "Muéstrame los ajustes de {thing}",
   "Show me how: {thing}": "Muéstrame cómo: {thing}",

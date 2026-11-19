@@ -4648,6 +4648,7 @@
   "Turn off": "إيقاف",
   "Command": "أمر",
   "No layers are on": "لا توجد طبقات مفعّلة",
+  "No other layers are on": "لا توجد طبقات أخرى مفعّلة",
   "No matching layers": "لا توجد طبقات مطابقة",
   "Show me {thing} settings": "عرض إعدادات {thing}",
   "Show me how: {thing}": "طريقة الاستخدام: ‏{thing}",

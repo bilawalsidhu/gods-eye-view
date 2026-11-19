@@ -670,3 +670,76 @@ test('a place named with "and" stays whole, and a place keeps how it was typed',
   assert.match(istanbul.label, /^İstanbul /);
   assert.equal(first('iPhone store').label, 'Go to iPhone store');
 });
+
+test('"everything except" keeps the layers named and switches off the rest', () => {
+  const omnibar = createOmnibar({
+    layers: layers(['flights', 'radio', 'cctv']),
+  });
+  const first = (text) => omnibar.rows(text, { places: [] }).rows[0];
+  for (const text of [
+    'hide everything except flights',
+    'turn off all but live flights',
+    'clear everything other than flights',
+  ]) {
+    const plan = first(text);
+    assert.equal(plan.kind, 'plan', text);
+    assert.deepEqual(
+      plan.steps.map(stepOutcome),
+      ['layer(radio,off)', 'layer(cctv,off)'],
+      text,
+    );
+  }
+  assert.deepEqual(
+    first('hide everything except flights and cctv').steps.map(stepOutcome),
+    ['layer(radio,off)'],
+  );
+  const alone = createOmnibar({ layers: layers(['flights']) });
+  assert.equal(
+    alone.rows('hide everything except flights').rows[0].kind,
+    'none',
+  );
+  // Naming no layer to keep is not this reading.
+  assert.notEqual(first('hide everything except the coast').kind, 'plan');
+});
+
+test('"from the map" and a doubled verb do not change the request', () => {
+  assert.equal(
+    outcome('remove flights from the map', { on: ['flights'] }),
+    'layer(flights,off)',
+  );
+  assert.equal(
+    outcome('hide flights off the globe', { on: ['flights'] }),
+    'layer(flights,off)',
+  );
+  assert.equal(normalizeLine('show show flights'), 'show flights');
+  assert.equal(normalizeLine('turn off turn off flights'), 'turn off flights');
+});
+
+test('a grid reference after "near" is the place', () => {
+  const omnibar = createOmnibar({ layers: layers() });
+  const plan = omnibar.rows('flights near 14R PU 2090 4906', { places: [] })
+    .rows[0];
+  assert.equal(plan.kind, 'plan');
+  assert.equal(plan.steps[0].kind, 'place');
+  assert.match(plan.steps[0].place, /^14R PU 2090 4906$/i);
+});
+
+test('a keyword that begins a name offers no plan to the rest of it', () => {
+  const omnibar = createOmnibar({ layers: layers() });
+  for (const text of [
+    'Radio City Music Hall',
+    'Traffic Island',
+    'radio island',
+  ]) {
+    const { rows } = omnibar.rows(text, { places: [] });
+    assert.equal(rows[0].kind, 'place', text);
+    assert.ok(!rows.some((row) => row.kind === 'plan'), text);
+    assert.ok(
+      rows.some((row) => row.kind === 'layer'),
+      text,
+    );
+  }
+  // A keyword after the place still offers its plan.
+  const { rows } = omnibar.rows('tokyo traffic', { places: [] });
+  assert.ok(rows.some((row) => row.kind === 'plan'));
+});

@@ -935,11 +935,7 @@ function onKeydown(event) {
     if (!items.value.length && !chips.length) return;
     event.preventDefault();
     dismissed.value = false;
-    // When the list opens upward (read bottom-up) the keys follow the
-    // screen: Up moves away from the field.
-    const list = document.getElementById('gev-omnibar-list');
-    const upward = list && getComputedStyle(list).flexDirection === 'column-reverse';
-    const down = (event.key === 'ArrowDown') !== upward;
+    const down = event.key === 'ArrowDown';
     if (inStrip.value) {
       inStrip.value = false;
       active.value = down ? 0 : items.value.length - 1;

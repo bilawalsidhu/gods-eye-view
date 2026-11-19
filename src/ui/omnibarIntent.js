@@ -9,6 +9,7 @@
 // entity comes last.
 
 import { msg } from '../i18n/index.js';
+import { parseCoordinateQuery } from '../search/coordinateParser.js';
 
 /** Visual styles, by the words people use for them. */
 const STYLES = [
@@ -286,6 +287,11 @@ export function normalizeLine(text, { isRequest = isPlainRequest } = {}) {
     .trim();
   const end = /(?<!(?:^|[\s.])\p{L})[.!。]+$/u;
   line = line.replace(end, '');
+  // A verb typed twice ("hide hide everything") is one.
+  line = line.replace(
+    /^((?:turn|switch) (?:on|off)|show|hide|remove|enable|disable|clear|go to|fly to)\s+\1\b/i,
+    '$1',
+  );
   // "please" is dropped only around a request: "Please Touch Museum",
   // "Kindly Lane" and "Pretty Please" are names.
   const polite = line
@@ -903,6 +909,11 @@ export function parseOmnibar(
   const unasked = steps.length > 0 && steps.every((step) => !asked.has(step));
   if (place && !placeFrom) placeFrom = placeBare ? 'bare' : 'near';
   if (place) {
+    // A grid reference is read only as typed ("14R PU 2090 4906"; in lower
+    // case it may be words), so the plan keeps it so.
+    const typed = asTypedIn(raw, place);
+    if (!parseCoordinateQuery(place) && parseCoordinateQuery(typed))
+      place = typed;
     const step = { kind: 'place', place };
     // How the place was typed, for its label only ("İstanbul", "iPhone
     // store"); kept off the step's fields, which plans compare.

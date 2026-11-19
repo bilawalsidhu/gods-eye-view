@@ -153,6 +153,9 @@ const SETTINGS_FOR =
 const SWITCH =
   /^(turn on|switch on|enable|show|display|add|turn off|switch off|disable|hide|remove|toggle)(?:\s+(.*))?$/;
 const SWITCH_OFF = /^(turn off|switch off|disable|hide|remove)\b/;
+/** "hide everything except …", "turn off all layers but …". */
+const EXCEPT =
+  /^(?:turn off|switch off|disable|hide|remove|clear)\s+(?:everything|all(?: the)?(?: other)?(?: layers?)?|every layer)\s+(?:except(?: for)?|but(?: for)?|other than|apart from|besides|save for)\s+(.+)$/;
 // Layers people reach for first, so "turn on" offers these before the rest.
 export const POPULAR_LAYERS = [
   'flights',
@@ -929,7 +932,55 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
    * line is not such a switch, or names nothing to switch and may be a place
    * ("Show Low, AZ").
    */
+  /**
+   * "hide everything except flights", "turn off all but ships": a plan that
+   * switches off every layer that is on but the ones named. Null when the
+   * line is not that, or names no layer to keep.
+   */
+  function exceptRows(line, ask) {
+    const match = EXCEPT.exec(line.toLowerCase());
+    if (!match) return null;
+    const kept = match[1]
+      .split(/\s*(?:,|\band\b|&)\s*/)
+      .map((term) => matchLayers(term)[0])
+      .filter(named);
+    if (!kept.length) return null;
+    const keptIds = new Set(kept.map((layer) => layer.id));
+    const steps = all()
+      .filter((layer) => layer.enabled && !keptIds.has(layer.id))
+      .map((layer) => ({ kind: 'layer', layer, enabled: false }));
+    if (!steps.length)
+      return [
+        {
+          key: 'none',
+          kind: 'none',
+          icon: 'layers',
+          label: t('No other layers are on'),
+          hint: '',
+        },
+        ask,
+      ];
+    return [
+      {
+        key: `plan:${JSON.stringify(steps)}`,
+        kind: 'plan',
+        icon: 'bolt',
+        steps,
+        label: steps.map(stepLabel).join(' · '),
+        hint: t('Do all'),
+      },
+      ask,
+    ];
+  }
+
   function switchRows(line, ask) {
+    const excepted = exceptRows(line, ask);
+    if (excepted) return excepted;
+    // "remove flights from the map": the map is where every layer is.
+    line = line.replace(
+      /\s+(?:from|off) (?:the )?(?:map|globe|screen|view)$/i,
+      '',
+    );
     const switching = line.toLowerCase().match(SWITCH);
     if (
       !switching ||
@@ -1278,11 +1329,23 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
     // without a verb may be part of the place's name, so the whole line as a
     // place comes first and the plan second. After "go to …" with a request
     // peeled off, the place is the one read ("go to London with flights").
+    // A keyword ahead of the rest of a name ("Fire Island", "Ship Bottom",
+    // "Radio City Music Hall") begins that name: the leftover is a fragment,
+    // not a place, so no plan goes there. "tokyo traffic" and "Thermal,
+    // California" (a comma parts them) keep their plans.
+    const lower = text.toLowerCase();
+    const fragment =
+      ambiguous &&
+      !peeled &&
+      placeStep &&
+      !/[,;]/.test(text) &&
+      lower.endsWith(placeStep.place.toLowerCase()) &&
+      !lower.startsWith(placeStep.place.toLowerCase());
     if (ambiguous)
       return withEntities(
         [
           peeled ? placeRow(placeStep.place, placeStep.shown) : placeRow(text),
-          plan,
+          ...(fragment ? [] : [plan]),
           ...alternatives.filter((row) => row.kind !== 'place'),
           ask,
         ],
