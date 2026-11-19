@@ -1,0 +1,58 @@
+{
+  "id": "nasa-eonet-events",
+  "kind": "dataset",
+  "family": "events",
+  "title": "NASA EONET open natural events",
+  "provider": "NASA EONET",
+  "description": "Wildfires, severe storms, volcanoes, sea and lake ice and other natural events NASA's Earth Observatory is tracking now.",
+  "icon": "✦",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "global": true
+  },
+  "source": {
+    "format": "geojson",
+    "url": "https://eonet.gsfc.nasa.gov/api/v3/events/geojson",
+    "query": {
+      "status": "open",
+      "limit": "1000"
+    },
+    "fetch": "browser-direct",
+    "cacheSeconds": 900,
+    "maxFeatures": 2000
+  },
+  "display": {
+    "color": "#a0aec0",
+    "label": "title",
+    "fields": ["date", "magnitudeValue"],
+    "rank": {
+      "field": "date",
+      "order": "desc"
+    },
+    "colorBy": {
+      "field": "categories.0.title",
+      "colors": {
+        "Wildfires": "#c98500",
+        "Severe Storms": "#d55181",
+        "Sea and Lake Ice": "#3987e5",
+        "Volcanoes": "#008300"
+      },
+      "labels": {
+        "Wildfires": "Wildfires",
+        "Severe Storms": "Severe storms",
+        "Sea and Lake Ice": "Sea and lake ice",
+        "Volcanoes": "Volcanoes"
+      }
+    }
+  },
+  "licence": {
+    "name": "NASA data: U.S. public domain; no endorsement implied",
+    "url": "https://www.nasa.gov/nasa-brand-center/images-and-media/"
+  },
+  "attribution": {
+    "text": "NASA Earth Observatory Natural Event Tracker (EONET)",
+    "url": "https://eonet.gsfc.nasa.gov/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-21"
+}

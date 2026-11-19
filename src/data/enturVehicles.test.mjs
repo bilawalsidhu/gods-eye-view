@@ -156,16 +156,19 @@ test('the proxy snapshot for Entur carries the reported mode through', () => {
   assert.equal(snapshot.vehicles[0].timestampSource, 'vehicle');
   const record = snapshot.vehicles[0];
   assert.equal(
-    transitModeFor(entur, record.routeId, record.id, record.mode),
+    transitModeFor(entur, record.routeId, record.id, null, record.mode),
     'ferry',
   );
   assert.equal(
-    transitModeResolved(entur, record.routeId, record.id, record.mode),
+    transitModeResolved(entur, record.routeId, record.id, null, record.mode),
     true,
   );
   // Without a reported mode the route hint still applies.
-  assert.equal(transitModeFor(entur, 'VYG:Line:R10', null, null), 'rail');
-  assert.equal(transitModeFor(entur, 'SKY:Line:465', null, 'unknown'), 'bus');
+  assert.equal(transitModeFor(entur, 'VYG:Line:R10', null, null, null), 'rail');
+  assert.equal(
+    transitModeFor(entur, 'SKY:Line:465', null, null, 'unknown'),
+    'bus',
+  );
 });
 
 test('a reported mode outranks the fleet and route hints', () => {
@@ -175,13 +178,17 @@ test('a reported mode outranks the fleet and route hints', () => {
     routeMode: (route) => (route === '501' ? 'tram' : null),
   };
   // The vehicle's own report wins over both hints.
-  assert.equal(transitModeFor(feed, '501', '4507', 'ferry'), 'ferry');
-  assert.equal(transitModeResolved(feed, null, null, 'ferry'), true);
+  assert.equal(transitModeFor(feed, '501', '4507', null, 'ferry'), 'ferry');
+  assert.equal(transitModeResolved(feed, null, null, null, 'ferry'), true);
+  // It outranks a GTFS route type too, which still settles an unreported one.
+  assert.equal(transitModeFor(feed, '36', '1', 3, 'ferry'), 'ferry');
+  assert.equal(transitModeFor(feed, '36', '1', 0, null), 'tram');
+  assert.equal(transitModeResolved(feed, '36', '1', 0, null), true);
   // Without one, the fleet number, then the route, then the default.
-  assert.equal(transitModeFor(feed, null, '4507', null), 'tram');
-  assert.equal(transitModeFor(feed, '501', '1', 'unknown'), 'tram');
-  assert.equal(transitModeFor(feed, '36', '1', null), 'bus');
-  assert.equal(transitModeResolved(feed, '36', '1', null), false);
+  assert.equal(transitModeFor(feed, null, '4507', null, null), 'tram');
+  assert.equal(transitModeFor(feed, '501', '1', null, 'unknown'), 'tram');
+  assert.equal(transitModeFor(feed, '36', '1', null, null), 'bus');
+  assert.equal(transitModeResolved(feed, '36', '1', null, null), false);
 });
 
 test('Entur covers the whole country, from Lindesnes to Vardø', () => {

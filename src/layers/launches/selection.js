@@ -1,5 +1,22 @@
-import * as Cesium from 'cesium';
-import { MISSION_GLOBE_VIEW_RANGE_M, MISSION_FOCUS_RANGE_M } from './policy.js';
+import { WGS84, fromDegrees } from '../../geo/ellipsoid.js';
+import {
+  PI_OVER_TWO,
+  add,
+  cross,
+  distance,
+  dot,
+  negate,
+  normalize,
+  scale,
+  toRadians,
+  vec,
+} from '../../geo/vector.js';
+import {
+  MISSION_GLOBE_VIEW_RANGE_M,
+  MISSION_FOCUS_RANGE_M,
+  cockpitActive,
+} from './policy.js';
+import { cameraOf, canvasOf, findCamera } from '../../render/rendererOf.js';
 
 export function createSelection({
   state: layerState,
@@ -9,22 +26,23 @@ export function createSelection({
 }) {
   const { getKeyholeGeometry } = services.geometry;
 
-  function focusFullGlobe(viewer, duration = 2.4) {
-    const canvas = viewer?.scene?.canvas;
+  /** @returns {boolean} Whether the flight started. */
+  function focusFullGlobe(viewer, { duration = 2.4, complete, cancel } = {}) {
+    const canvas = canvasOf(viewer);
     const height = canvas?.clientHeight || canvas?.height;
     const width = canvas?.clientWidth || canvas?.width;
-    const cartographic = viewer?.camera?.positionCartographic;
-    const fovy = viewer?.camera?.frustum?.fovy;
+    if (!(width > 0) || !(height > 0)) return;
+    const pose = findCamera(viewer)?.pose();
+    const fovy = pose?.fovy;
     if (
-      !(width > 0) ||
-      !(height > 0) ||
-      !cartographic ||
+      !pose ||
+      !Number.isFinite(pose.lon) ||
       !Number.isFinite(fovy) ||
       fovy <= 0 ||
       fovy >= Math.PI
     )
-      return;
-    const earthRadius = Cesium.Ellipsoid.WGS84.maximumRadius;
+      return false;
+    const earthRadius = WGS84.radii.x;
     const keyholeRadius = getKeyholeGeometry(width, height).radius;
     const targetScreenRadius = keyholeRadius * 0.61;
     const angularRadius = Math.atan(
@@ -32,29 +50,29 @@ export function createSelection({
     );
     const distance = earthRadius / Math.max(Math.sin(angularRadius), 1e-4);
     const altitude = Math.max(earthRadius * 1.55, distance - earthRadius);
-    viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromRadians(
-        cartographic.longitude,
-        cartographic.latitude,
-        altitude,
-      ),
-      orientation: {
-        heading: viewer.camera.heading,
-        pitch: -Cesium.Math.PI_OVER_TWO,
-        roll: 0,
+    const camera = cameraOf(viewer);
+    layerState._cameraReleased = false;
+    camera.flyTo(
+      { lon: pose.lon, lat: pose.lat, height: altitude },
+      {
+        orientation: {
+          heading: pose.heading,
+          pitch: -PI_OVER_TWO,
+          roll: 0,
+        },
+        durationS: duration,
+        easing: 'cubicInOut',
+        onComplete: complete,
+        onCancel: cancel,
       },
-      duration,
-      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-    });
-  }
-
-  function entityLaunchId(entity) {
-    if (!entity?.id || typeof entity.id !== 'string') return null;
-    const match = entity.id.match(/^rocket-[^:]+:([^:]+)/);
-    return match?.[1] || null;
+    );
+    return true;
   }
 
   function setSelectedMission(launchId, isolate = true) {
+    // Once the layer is going off (its Satellites restore may still be
+    // running) a roster click selects nothing and moves no camera.
+    if (launchId && !layerState._enabled) return;
     if (launchId) parts.panel.clearMissionRosterHover();
     if (
       layerState._replayCameraLaunchId &&
@@ -71,15 +89,10 @@ export function createSelection({
     if (launchId) layerState._animationStarts.set(launchId, Date.now());
     if (!launchId && layerState._viewer) {
       stopMissionZoomAnchor();
-      layerState._viewer.selectedEntity = undefined;
+      parts.rendering.selectLaunchEntity(null);
     }
-    if (!layerState._dataSource) return;
-    for (const entity of layerState._dataSource.entities.values) {
-      const relatedId = entityLaunchId(entity);
-      entity.show = launchId
-        ? relatedId === launchId
-        : entity.id.startsWith('rocket-launch:');
-    }
+    if (!layerState._missionSets) return;
+    parts.rendering.isolateMission(launchId);
     parts.orbitRendering.syncMissionOrbitPrimitiveVisibility();
     parts.overlays.syncMissionOverlayEntries();
     parts.panel.renderMissionPanel();
@@ -90,52 +103,41 @@ export function createSelection({
       layerState._missionZoomAnchorRemover();
     layerState._missionZoomAnchorRemover = null;
     layerState._missionZoomAnchorId = null;
-    if (layerState._viewer?.camera && !layerState._replayCameraLaunchId) {
-      layerState._viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
-    }
+    if (!layerState._replayCameraLaunchId)
+      findCamera(layerState._viewer)?.release();
   }
 
   function startMissionZoomAnchor(launch, initialRange) {
     if (!layerState._viewer || !launch || layerState._replayCameraLaunchId)
       return;
     stopMissionZoomAnchor();
-    const target = Cesium.Cartesian3.fromDegrees(launch.lon, launch.lat);
+    const target = fromDegrees(launch.lon, launch.lat);
     const range = Math.max(
       2000,
       Number(initialRange) || MISSION_GLOBE_VIEW_RANGE_M,
     );
     layerState._missionZoomAnchorId = launch.id;
-    layerState._viewer.camera.lookAt(
-      target,
-      new Cesium.HeadingPitchRange(
-        0,
-        parts.camera.missionZoomPitch(range),
-        range,
-      ),
-    );
+    cameraOf(layerState._viewer).lookAt(target, {
+      heading: 0,
+      pitch: parts.camera.missionZoomPitch(range),
+      range,
+    });
   }
 
   function focusMission(launch) {
-    if (!layerState._viewer || !launch) return;
+    if (!layerState._viewer || !launch || !layerState._enabled) return;
+    // The cockpit holds the camera: a mission chosen there, by its label,
+    // its dot or the layer row's arrows, is selected without flying to it.
+    if (cockpitActive()) return;
     stopMissionZoomAnchor();
-    layerState._viewer.selectedEntity = layerState._dataSource.entities.getById(
-      `rocket-launch:${launch.id}`,
-    );
-    const orbitEntity = layerState._dataSource.entities.getById(
-      `rocket-orbit:${launch.id}`,
-    );
-    const orbitPositions = orbitEntity?.polyline?.positions?.getValue(
-      Cesium.JulianDate.now(),
-    );
-    const launchPosition = Cesium.Cartesian3.fromDegrees(
-      launch.lon,
-      launch.lat,
-    );
+    parts.rendering.selectLaunchEntity(launch.id);
+    const camera = cameraOf(layerState._viewer);
+    const orbitPositions = parts.rendering.projectedOrbitPath(launch.id);
+    const launchPosition = fromDegrees(launch.lon, launch.lat);
     let range = 18000000;
     if (orbitPositions?.length > 1) {
-      const canvas = layerState._viewer.scene.canvas;
-      const fovy =
-        layerState._viewer.camera.frustum?.fovy || Cesium.Math.toRadians(60);
+      const canvas = canvasOf(layerState._viewer);
+      const fovy = camera.pose().fovy || toRadians(60);
       const aspect = Math.max(
         0.1,
         (canvas.clientWidth || canvas.width) /
@@ -144,8 +146,7 @@ export function createSelection({
       const fovx = 2 * Math.atan(Math.tan(fovy * 0.5) * aspect);
       const paddedHalfAngle = Math.min(fovy, fovx) * 0.5 * 0.62;
       const orbitExtent = orbitPositions.reduce(
-        (largest, point) =>
-          Math.max(largest, Cesium.Cartesian3.distance(launchPosition, point)),
+        (largest, point) => Math.max(largest, distance(launchPosition, point)),
         0,
       );
       range = Math.max(
@@ -153,45 +154,18 @@ export function createSelection({
         18000000,
       );
     }
-    const targetNormal = Cesium.Cartesian3.normalize(
-      launchPosition,
-      new Cesium.Cartesian3(),
-    );
-    const destination = Cesium.Cartesian3.add(
-      launchPosition,
-      Cesium.Cartesian3.multiplyByScalar(
-        targetNormal,
-        range,
-        new Cesium.Cartesian3(),
-      ),
-      new Cesium.Cartesian3(),
-    );
-    const direction = Cesium.Cartesian3.negate(
-      targetNormal,
-      new Cesium.Cartesian3(),
-    );
-    let right = Cesium.Cartesian3.cross(
-      direction,
-      Cesium.Cartesian3.UNIT_Z,
-      new Cesium.Cartesian3(),
-    );
-    if (Cesium.Cartesian3.magnitudeSquared(right) < 1e-8) {
-      right = Cesium.Cartesian3.cross(
-        direction,
-        Cesium.Cartesian3.UNIT_Y,
-        right,
-      );
-    }
-    Cesium.Cartesian3.normalize(right, right);
-    const up = Cesium.Cartesian3.normalize(
-      Cesium.Cartesian3.cross(right, direction, new Cesium.Cartesian3()),
-      new Cesium.Cartesian3(),
-    );
-    layerState._viewer.camera.flyTo({
-      destination,
+    const targetNormal = normalize(launchPosition);
+    const destination = add(launchPosition, scale(targetNormal, range));
+    const direction = negate(targetNormal);
+    let right = cross(direction, vec(0, 0, 1));
+    if (dot(right, right) < 1e-8) right = cross(direction, vec(0, 1, 0));
+    right = normalize(right);
+    const up = normalize(cross(right, direction));
+    layerState._cameraReleased = false;
+    camera.flyTo(destination, {
       orientation: { direction, up },
-      duration: 1.1,
-      complete: () => {
+      durationS: 1.1,
+      onComplete: () => {
         if (layerState._selectedLaunchId === launch.id)
           startMissionZoomAnchor(launch, range);
       },
@@ -199,27 +173,22 @@ export function createSelection({
   }
 
   function focusLaunchSite(launch) {
-    if (!layerState._viewer || !launch) return;
+    if (!layerState._viewer || !launch || !layerState._enabled) return;
     parts.replay.stopMissionReplay();
     stopMissionZoomAnchor();
-    const launchPosition = Cesium.Cartesian3.fromDegrees(
-      launch.lon,
-      launch.lat,
-    );
-    layerState._viewer.selectedEntity = layerState._dataSource.entities.getById(
-      `rocket-launch:${launch.id}`,
-    );
-    layerState._viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(launchPosition, 0),
+    parts.rendering.selectLaunchEntity(launch.id);
+    layerState._cameraReleased = false;
+    cameraOf(layerState._viewer).flyToBounds(
+      { center: { lon: launch.lon, lat: launch.lat }, radius: 0 },
       {
-        offset: new Cesium.HeadingPitchRange(
-          0,
-          Cesium.Math.toRadians(-42),
-          MISSION_FOCUS_RANGE_M,
-        ),
-        duration: 1.4,
-        easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-        complete: () => {
+        offset: {
+          heading: 0,
+          pitch: toRadians(-42),
+          range: MISSION_FOCUS_RANGE_M,
+        },
+        durationS: 1.4,
+        easing: 'cubicInOut',
+        onComplete: () => {
           if (layerState._selectedLaunchId === launch.id) {
             startMissionZoomAnchor(launch, MISSION_FOCUS_RANGE_M);
           }
@@ -229,7 +198,6 @@ export function createSelection({
   }
   return {
     focusFullGlobe,
-    entityLaunchId,
     setSelectedMission,
     stopMissionZoomAnchor,
     startMissionZoomAnchor,

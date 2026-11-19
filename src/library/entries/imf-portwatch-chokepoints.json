@@ -1,0 +1,39 @@
+{
+  "id": "imf-portwatch-chokepoints",
+  "kind": "dataset",
+  "family": "infrastructure",
+  "title": "Maritime chokepoints (IMF PortWatch)",
+  "provider": "IMF PortWatch",
+  "description": "The 28 maritime chokepoints IMF PortWatch tracks, such as Suez and Hormuz, with their annual vessel transits and top cargo.",
+  "icon": "⧗",
+  "maintainer": "github:asturksever",
+  "coverage": { "global": true },
+  "source": {
+    "format": "arcgis",
+    "url": "https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/PortWatch_chokepoints_database/FeatureServer/0",
+    "query": {
+      "outFields": "portname,vessel_count_total,vessel_count_tanker,industry_top1"
+    },
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "maxFeatures": 100,
+    "maxPages": 1
+  },
+  "display": {
+    "color": "#4fd1c5",
+    "label": "portname",
+    "fields": ["vessel_count_total", "industry_top1"],
+    "rank": { "field": "vessel_count_total", "order": "desc" }
+  },
+  "licence": {
+    "name": "IMF PortWatch terms; attribution required (reuse terms under review)",
+    "url": "https://www.imf.org/external/terms.htm",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "IMF PortWatch (portwatch.imf.org)",
+    "url": "https://portwatch.imf.org/"
+  },
+  "status": "incubating",
+  "reviewed": "2026-10-22"
+}

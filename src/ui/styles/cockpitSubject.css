@@ -1,0 +1,315 @@
+/* An application provider's first-person view
+   (src/cockpitSubjectProviders.js): a window view with the provider's board,
+   sources, banner, darkening veil and progress line. Every rule is scoped to
+   the generic view, so the built-in views keep their own looks. */
+#cockpit-hud[data-generic] {
+  --cockpit-subject-panel: rgba(0, 7, 12, 0.66);
+  --cockpit-subject-live: var(--cockpit-accent);
+  --cockpit-subject-estimate: #c9b6ff;
+  --cockpit-subject-warning: #ffb800;
+  --cockpit-subject-alert: var(--cockpit-emergency);
+  --cockpit-subject-progress-band: 46px;
+}
+#cockpit-hud[data-generic] [data-tone='muted'] {
+  opacity: 0.62;
+}
+#cockpit-hud[data-generic] [data-tone='live'] {
+  color: var(--cockpit-subject-live);
+}
+#cockpit-hud[data-generic] [data-tone='estimate'] {
+  color: var(--cockpit-subject-estimate);
+}
+#cockpit-hud[data-generic] [data-tone='warning'] {
+  color: var(--cockpit-subject-warning);
+}
+#cockpit-hud[data-generic] [data-tone='alert'] {
+  color: var(--cockpit-subject-alert);
+}
+
+/* The veil darkens the picture under the HUD; its streaks are lights
+   passing the window. */
+#cockpit-hud[data-generic] .cockpit-veil {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  pointer-events: none;
+  transition: opacity 0.25s linear;
+}
+#cockpit-hud[data-generic] .cockpit-veil.streaks::before {
+  content: '';
+  position: absolute;
+  inset: 34% -40% 46%;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0 22%,
+    rgba(255, 214, 150, 0.16) 23%,
+    rgba(255, 236, 200, 0.42) 24%,
+    rgba(255, 214, 150, 0.16) 25%,
+    transparent 26% 48%
+  );
+  filter: blur(3px);
+  animation: cockpit-veil-streaks 1.4s linear infinite;
+}
+@keyframes cockpit-veil-streaks {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-26%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #cockpit-hud[data-generic] .cockpit-veil.streaks::before {
+    animation: none;
+  }
+  #cockpit-hud[data-generic] .cockpit-veil {
+    transition: none;
+  }
+}
+
+/* The banner: top centre, below the top line. */
+#cockpit-hud[data-generic] .cockpit-banner {
+  position: absolute;
+  top: clamp(92px, 13vh, 128px);
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  max-width: min(560px, 80vw);
+  padding: 6px 14px;
+  border: 1px solid color-mix(in srgb, var(--cockpit-accent) 56%, transparent);
+  border-radius: 2px;
+  background: var(--cockpit-subject-panel);
+  text-align: center;
+  transform: translateX(-50%);
+}
+#cockpit-hud[data-generic] .cockpit-banner strong {
+  font-size: 15px;
+  letter-spacing: 0.14em;
+}
+#cockpit-hud[data-generic] .cockpit-banner small {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+/* The board: cards on the left, below the page's left rail and the Intel
+   HUD's top corner (both stay on in first person), the sources under them. */
+#cockpit-hud[data-generic] {
+  --cockpit-subject-board-top: max(23rem, 41vh);
+}
+#cockpit-hud[data-generic] .cockpit-board {
+  position: absolute;
+  top: var(--cockpit-subject-board-top);
+  left: clamp(22px, 4vw, 58px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(320px, 30vw);
+  min-width: 220px;
+  max-height: calc(100vh - var(--cockpit-subject-board-top) - 11rem);
+  overflow: hidden;
+}
+#cockpit-hud[data-generic] .cockpit-board-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border-left: 2px solid
+    color-mix(in srgb, var(--cockpit-accent) 72%, transparent);
+  background: var(--cockpit-subject-panel);
+}
+#cockpit-hud[data-generic] .cockpit-board-card small {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  opacity: 0.78;
+}
+#cockpit-hud[data-generic] .cockpit-board-card strong {
+  font-size: 17px;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+#cockpit-hud[data-generic] .cockpit-board-card span {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+#cockpit-hud[data-generic] .cockpit-sources {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 6px 10px;
+  background: rgba(0, 7, 12, 0.5);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+#cockpit-hud[data-generic] .cockpit-sources div {
+  display: flex;
+  gap: 6px;
+}
+#cockpit-hud[data-generic] .cockpit-sources dt {
+  flex: none;
+  min-width: 64px;
+  opacity: 0.7;
+  letter-spacing: 0.14em;
+}
+#cockpit-hud[data-generic] .cockpit-sources dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The speed's tag (live or estimated) sits where a label would. */
+#cockpit-hud[data-generic] .cockpit-speed-tag {
+  font-weight: 700;
+}
+/* With no speed readout the heading still holds the middle of the row. */
+#cockpit-hud[data-generic] .cockpit-heading-value {
+  grid-column: 2;
+}
+#cockpit-hud[data-generic] .cockpit-aircraft-meta[data-tone='warning'],
+#cockpit-hud[data-generic] .cockpit-aircraft-meta[data-tone='alert'] {
+  font-weight: 700;
+}
+
+/* Look-around: the readout and LOOK AHEAD centred under the style switcher,
+   in the sky over the forward view; the bottom corners hold the position
+   readouts. Styled as on a bridge. */
+#cockpit-hud[data-generic] .cockpit-look {
+  position: absolute;
+  top: calc(clamp(22px, 4vh, 42px) + 70px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#cockpit-hud[data-generic] .cockpit-look[hidden] {
+  display: none;
+}
+#cockpit-hud[data-generic] .cockpit-look-readout {
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--cockpit-accent) 46%, transparent);
+  border-radius: 2px;
+  background: rgba(0, 7, 12, 0.62);
+  color: var(--cockpit-accent);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+}
+#cockpit-hud[data-generic] .cockpit-look-ahead {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--cockpit-accent) 64%, transparent);
+  border-radius: 2px;
+  background: rgba(0, 7, 12, 0.78);
+  color: #f4fbff;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  pointer-events: auto;
+}
+#cockpit-hud[data-generic] .cockpit-look-ahead:hover {
+  border-color: var(--cockpit-accent);
+}
+#cockpit-hud[data-generic] .cockpit-look-ahead:focus-visible {
+  outline: 2px solid var(--cockpit-accent);
+  outline-offset: 2px;
+}
+
+/* The progress line takes a band along the bottom edge; the readouts that
+   sit there move up above it. */
+#cockpit-hud[data-generic][data-progress]
+  :is(.cockpit-help, .cockpit-position-readout) {
+  bottom: calc(
+    clamp(22px, 4vh, 42px) + var(--cockpit-subject-progress-band) - 14px
+  );
+}
+#cockpit-hud[data-generic][data-progress] .cockpit-compass {
+  bottom: calc(clamp(44px, 7vh, 72px) + var(--cockpit-subject-progress-band));
+}
+#cockpit-hud[data-generic] .cockpit-progress {
+  position: absolute;
+  right: clamp(22px, 4vw, 58px);
+  bottom: 6px;
+  left: clamp(22px, 4vw, 58px);
+  height: var(--cockpit-subject-progress-band);
+}
+#cockpit-hud[data-generic] .cockpit-progress-line {
+  position: absolute;
+  right: 0;
+  bottom: 8px;
+  left: 0;
+  height: 2px;
+  background: color-mix(in srgb, var(--cockpit-accent) 78%, transparent);
+}
+#cockpit-hud[data-generic] .cockpit-progress-travelled {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: rgba(0, 7, 12, 0.72);
+}
+#cockpit-hud[data-generic] .cockpit-progress-tick {
+  position: absolute;
+  bottom: 5px;
+  width: 2px;
+  height: 8px;
+  margin-left: -1px;
+  background: currentColor;
+}
+#cockpit-hud[data-generic] .cockpit-progress-tick.labelled {
+  height: 12px;
+}
+#cockpit-hud[data-generic] .cockpit-progress-tick.merged {
+  width: 4px;
+  margin-left: -2px;
+}
+#cockpit-hud[data-generic] .cockpit-progress-tick.travelled {
+  opacity: 0.45;
+}
+#cockpit-hud[data-generic] .cockpit-progress-label {
+  position: absolute;
+  bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+#cockpit-hud[data-generic] .cockpit-progress-label[data-align='center'] {
+  align-items: center;
+  text-align: center;
+}
+#cockpit-hud[data-generic] .cockpit-progress-label[data-align='end'] {
+  align-items: flex-end;
+  text-align: end;
+}
+#cockpit-hud[data-generic] .cockpit-progress-label small {
+  opacity: 0.82;
+}
+#cockpit-hud[data-generic] .cockpit-progress-marker {
+  position: absolute;
+  bottom: 4px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border-radius: 50%;
+  background: var(--cockpit-accent);
+  box-shadow: 0 0 10px var(--cockpit-accent);
+}
+#cockpit-hud[data-generic] .cockpit-progress-marker.dwell {
+  background: transparent;
+  border: 2px solid var(--cockpit-accent);
+}
+#cockpit-hud[data-generic] .cockpit-progress-tag {
+  position: absolute;
+  right: 0;
+  bottom: -2px;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  opacity: 0.7;
+}

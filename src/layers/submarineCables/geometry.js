@@ -77,3 +77,43 @@ export function normalizeFeatures(json, kind) {
     };
   });
 }
+
+/**
+ * A GeoJSON geometry's drawable parts, as GeoJSON sources have always been
+ * drawn: each line string, point and polygon on its own (multi-geometries
+ * and collections split into their members). Coordinates stay
+ * `[lon, lat, height?]` degrees.
+ * @returns {{lines: number[][][], points: number[][], polygons: number[][][][]}}
+ */
+export function geometryParts(
+  geometry,
+  out = { lines: [], points: [], polygons: [] },
+) {
+  if (!geometry) return out;
+  const coords = geometry.coordinates;
+  switch (geometry.type) {
+    case 'Point':
+      out.points.push(coords);
+      break;
+    case 'MultiPoint':
+      for (const point of coords) out.points.push(point);
+      break;
+    case 'LineString':
+      out.lines.push(coords);
+      break;
+    case 'MultiLineString':
+      for (const line of coords) out.lines.push(line);
+      break;
+    case 'Polygon':
+      out.polygons.push(coords);
+      break;
+    case 'MultiPolygon':
+      for (const polygon of coords) out.polygons.push(polygon);
+      break;
+    case 'GeometryCollection':
+      for (const member of geometry.geometries ?? [])
+        geometryParts(member, out);
+      break;
+  }
+  return out;
+}

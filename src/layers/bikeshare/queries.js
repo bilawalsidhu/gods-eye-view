@@ -26,24 +26,23 @@ export function createQueries({ state: layerState, services, parts, source }) {
    * @param {Object} [options]
    * @param {number} [options.maxCount] - Maximum number of detectable objects to return.
    * @param {number} [options.seed] - Seed for deterministic stride offset selection.
-   * @returns {Array<{ position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean }>}
+   * @returns {Array<{ position: {x: number, y: number, z: number}, id: string, type: string, skipLabel: boolean }>}
    */
 
   function collectDetectableStations(options = {}) {
     if (
       !layerState._enabled ||
-      !layerState._pointCollection ||
-      !layerState._pointCollection.show ||
+      !layerState._stationSet ||
+      !layerState._stationSet.show ||
       layerState._stationRenderMap.size === 0
     )
       return [];
 
-    // Gather all visible station records (include selected even though its point is hidden)
+    // Gather all station records (the selected one too, though its own dot
+    // is hidden under the highlight)
     const records = [];
     for (const record of layerState._stationRenderMap.values()) {
-      const isSelected = record.key === layerState._selectedKey;
-      if ((!record.point?.show && !isSelected) || !record.point?.position)
-        continue;
+      if (!record.position) continue;
       records.push(record);
     }
     if (records.length === 0) return [];
@@ -60,7 +59,7 @@ export function createQueries({ state: layerState, services, parts, source }) {
     for (let i = start; i < records.length; i += stride) {
       const record = records[i];
       result.push({
-        position: record.point.position,
+        position: record.position,
         sourceId: record.key,
         id: buildDetectionId(record),
         type: 'VEH',

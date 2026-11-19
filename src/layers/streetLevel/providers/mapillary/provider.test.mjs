@@ -9,7 +9,9 @@ import { validateProviders } from '../../registry.js';
 import {
   fakeMapillarySource,
   rayCamera,
+  streetPorts,
 } from '../../../../testSupport/streetLevelFakes.mjs';
+import { bindRenderer } from '../../../../render/rendererOf.js';
 
 function fakeContext(filter = { pano: 'all', sinceMs: null }) {
   const opened = [];
@@ -85,14 +87,6 @@ test('cone thinning across the date line drops images metres apart', () => {
 
 /** A viewer looking straight down on downtown Sacramento from 900 m. */
 function streetViewer() {
-  const collection = () => ({
-    add: (item) => item,
-    remove: () => true,
-    contains: () => false,
-    get length() {
-      return 0;
-    },
-  });
   const event = () => ({ addEventListener: () => () => {} });
   const camera = Object.assign(
     rayCamera({
@@ -105,27 +99,21 @@ function streetViewer() {
     }),
     { changed: event(), moveEnd: event() },
   );
-  return {
+  const viewer = {
     camera,
     scene: {
       canvas: { clientWidth: 100, clientHeight: 100 },
       globe: { show: false, ellipsoid: Cesium.Ellipsoid.WGS84 },
-      primitives: collection(),
-      groundPrimitives: collection(),
       preRender: event(),
       postRender: event(),
       requestRender() {},
     },
   };
+  bindRenderer(viewer, streetPorts(viewer, { camera: true }));
+  return viewer;
 }
 
-test('coverage asks for no tiles before the key status is known, and none without a key', async (t) => {
-  // Skip Cesium's one-time terrain table download for draped lines.
-  t.mock.method(
-    Cesium.GroundPolylinePrimitive,
-    'initializeTerrainHeights',
-    async () => {},
-  );
+test('coverage asks for no tiles before the key status is known, and none without a key', async () => {
   for (const configured of [false, true]) {
     let answer;
     const tiles = [];
@@ -169,4 +157,42 @@ test('a status the server never answers falls back to the bundled token once the
   controller.abort(new Error('timed out'));
   assert.deepEqual(await status, { configured: false });
   assert.equal(instance.coverageStats().keyRequired, true);
+});
+
+/** A graph image record at a point. */
+const imageAt = (id, lon, lat, extra = {}) => ({
+  id,
+  is_pano: false,
+  captured_at: 10,
+  geometry: { type: 'Point', coordinates: [lon, lat] },
+  ...extra,
+});
+
+test('nearestImage opens the closest image that passes the filter, not the first the API returned', async () => {
+  const requests = [];
+  const answer = [
+    imageAt('far', 2.0004, 1), // ~45 m east
+    imageAt('near-pano', 2.00002, 1, { is_pano: true }), // ~2 m, a panorama
+    imageAt('near', 2.00005, 1), // ~5 m east
+    imageAt('mid', 2, 1.0002), // ~22 m north
+  ];
+  const source = fakeMapillarySource({
+    nearestImages: async (query, options) => {
+      requests.push({ query, options });
+      return answer;
+    },
+  });
+  const { signal } = new AbortController();
+  const flat = createMapillaryProvider({ source }).create(
+    fakeContext({ pano: 'flat', sinceMs: null }),
+  );
+  assert.equal(await flat.nearestImage({ lat: 1, lon: 2 }, { signal }), 'near');
+  assert.equal(requests[0].options.signal, signal, 'the core can abort it');
+  assert.deepEqual(requests[0].query, { lat: 1, lon: 2 });
+  const any = createMapillaryProvider({ source }).create(fakeContext());
+  assert.equal(await any.nearestImage({ lat: 1, lon: 2 }), 'near-pano');
+  const tooOld = createMapillaryProvider({ source }).create(
+    fakeContext({ pano: 'all', sinceMs: 100 }),
+  );
+  assert.equal(await tooOld.nearestImage({ lat: 1, lon: 2 }), null);
 });

@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+// The ports the layer reads the camera through, built over the stub viewer
+// below as over a real one.
+import '../../render/cesium/camera.js';
+import '../../render/cesium/query.js';
 import { transitFeedsInView } from '../../data/transitFeeds.js';
 import { createViewport } from './viewport.js';
 
@@ -22,6 +26,8 @@ function realCamera(width, height) {
     preRender: new Cesium.Event(),
     postUpdate: new Cesium.Event(),
     screenSpaceCameraController: { maximumZoomDistance: Infinity },
+    pick: () => undefined,
+    drillPick: () => [],
   };
   const camera = new Cesium.Camera(scene);
   scene.camera = camera;
@@ -66,13 +72,14 @@ function polledFor({ width, height, lat, lon, km, heading = 0, pitch = -90 }) {
   const polled = [];
   const state = {
     _enabled: true,
-    _viewer: { camera, scene },
+    _viewer: { camera, scene, canvas: scene.canvas },
     _altitudeGateOpen: false,
     _activeFeeds: new Map(),
     _inFlight: new Map(),
     _feedStatus: new Map(),
     _generation: 0,
     _cameraRevision: 0,
+    _vehicles: new Map(),
   };
   createViewport({
     state,

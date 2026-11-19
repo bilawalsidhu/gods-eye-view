@@ -3,6 +3,10 @@ import { EventEmitter } from 'node:events';
 import https from 'node:https';
 import { Readable } from 'node:stream';
 import test from 'node:test';
+import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
+// A viewer of the test's own, with no renderer bound: its factories load
+// as the package's `./render/cesium/unbound` export loads them.
+import '../render/cesium/unbound.js';
 import { fetchPinnedRadioResponse } from '../../server/providers/radio/transport.js';
 import {
   createRadioProxyMiddleware,
@@ -760,9 +764,9 @@ test('server structural rejections reach the client diagnostic without discardin
   const viewer = {
     camera: { positionWC: { x: 7_000_000, y: 0, z: 0 } },
     scene: { canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} } },
-    dataSources: { add() {}, remove() {} },
-    entities: { add(entity) { return entity; }, remove() {} },
   };
+  // The stations draw through the renderer's draw port.
+  const { unbind } = bindFakeDraw(viewer);
   radioLayer.destroy();
   try {
     globalThis.fetch = async () => new Response(response.body, {
@@ -782,6 +786,7 @@ test('server structural rejections reach the client diagnostic without discardin
   } finally {
     globalThis.fetch = originalFetch;
     radioLayer.destroy();
+    unbind();
   }
 });
 

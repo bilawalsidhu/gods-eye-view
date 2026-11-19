@@ -60,9 +60,14 @@ const SPRITE_STYLE = Object.freeze({
     outlinePx: 1.25,
     rgbaByMode: Object.freeze({
       bus: Object.freeze([0, 255, 102, 1]),
+      trolleybus: Object.freeze([170, 255, 0, 1]),
       tram: Object.freeze([255, 179, 0, 1]),
+      cable_tram: Object.freeze([255, 120, 0, 1]),
       subway: Object.freeze([255, 59, 48, 1]),
+      monorail: Object.freeze([255, 64, 170, 1]),
       rail: Object.freeze([215, 139, 255, 1]),
+      funicular: Object.freeze([255, 214, 140, 1]),
+      aerial_lift: Object.freeze([90, 140, 255, 1]),
       ferry: Object.freeze([58, 208, 255, 1]),
       unknown: Object.freeze([255, 255, 255, 1]),
     }),
@@ -72,9 +77,14 @@ const SPRITE_STYLE = Object.freeze({
 /** Modes with a bracket tier of their own. */
 const TIER_MODES = Object.freeze([
   'bus',
+  'trolleybus',
   'tram',
+  'cable_tram',
   'subway',
+  'monorail',
   'rail',
+  'funicular',
+  'aerial_lift',
   'ferry',
   'unknown',
 ]);
@@ -128,7 +138,7 @@ export function presetSpriteOutlinePx(styleName, selected = false) {
 
 /**
  * Detection-overlay tier key for a transit mode. Every theme's `tiers`
- * table carries these six, so the bracket colour is per mode in every
+ * table carries one per mode, so the bracket colour is per mode in every
  * preset. Unlike traffic, transit sets its tier keyless as well: the feeds
  * are keyless, and there is no separate keyless experience to keep
  * byte-identical.

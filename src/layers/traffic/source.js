@@ -1,7 +1,10 @@
 import {
   createHybridFill,
   flowSegmentsToRoads,
+  normalizeRoadMode,
+  normalizeRoadModes,
   resolveRoadMode,
+  roadModesSimulate,
   ROAD_SOURCE_LABELS,
 } from './roadModes.js';
 import { phaseTiming } from '../../sources/phaseTiming.js';
@@ -80,7 +83,15 @@ export function roadRequestError(status, cause) {
   });
 }
 
-/** Supply tile-derived road geometry and flow availability without Overpass queries. */
+/**
+ * Supply tile-derived road geometry and flow availability without Overpass queries.
+ *
+ * `roadModes` is the host's offer of road sources (default: all three). The
+ * layer shows a chip per offered mode (none for a single mode) and never
+ * draws one outside it. Without `osm` nothing is simulated: keyless, or with
+ * the traffic service unreachable, requests fail with the reason instead of
+ * drawing white OpenStreetMap dots.
+ */
 export function createTrafficSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
   tileFetchImpl = (...args) => globalThis.fetch(...args),
@@ -88,10 +99,13 @@ export function createTrafficSource({
     fetchImpl: tileFetchImpl,
     selectDecoded: ({ roads }) => ({ roads }),
   }),
+  roadModes,
 } = {}) {
+  const modes = normalizeRoadModes(roadModes);
   const flow = createFlowTileSource({ fetchImpl });
   const api = {
     ...flow,
+    roadModes: modes,
     prefetch: () => mapTiles.getMetadata().catch(() => {}),
     resetFlowTileCache() {
       flow.resetFlowTileCache();
@@ -247,8 +261,8 @@ export function createTrafficSource({
    *
    * @param {{south:number, west:number, north:number, east:number}} box
    * @param {Object} [options]
-   * @param {'tomtom'|'osm'|'hybrid'|null} [options.roadMode] - Requested mode (null = default).
-   * @param {Promise<{segments:Array, hasKey:boolean, error?:string, partial?:boolean}>} [options.flowSnapshot]
+   * @param {'tomtom'|'osm'|'hybrid'|null} [options.roadMode] - Requested mode (null = default; outside `roadModes` = default).
+   * @param {Promise<{segments:Array, hasKey:boolean, error?:string, partial?:boolean, statusUnavailable?:boolean}>} [options.flowSnapshot]
    * @param {() => boolean} [options.liveModeHint] - Key state if the snapshot misses the pass deadline.
    * @param {number} [options.timeoutSec=20] - Pass deadline, also bounding the snapshot wait.
    * @param {(data:Object) => void} [options.onTile] - Incremental snapshots; `replace` resets.
@@ -269,7 +283,16 @@ export function createTrafficSource({
       box.east - box.west > 10
     )
       throw new TypeError('A bounded road viewport is required');
-    if (roadMode === 'osm' || !flowSnapshot)
+    roadMode = normalizeRoadMode(roadMode, modes);
+    if (!roadModesSimulate(modes) && !flowSnapshot)
+      throw new TypeError(
+        'Road selection requires a flow availability snapshot',
+      );
+    if (
+      roadMode === 'osm' ||
+      !flowSnapshot ||
+      (modes.length === 1 && modes[0] === 'osm')
+    )
       return api.requestOsmRoads(box, { ...options, onTile });
     const signal = options.signal;
     const osm = [];
@@ -332,7 +355,13 @@ export function createTrafficSource({
         osmError = error;
       }
     };
-    const osmJob = roadMode === 'tomtom' ? null : loadOsm();
+    // A host without OpenStreetMap waits for the key before fetching fill.
+    const osmJob =
+      roadMode === 'tomtom' ||
+      modes.every((entry) => entry === 'tomtom') ||
+      !roadModesSimulate(modes)
+        ? null
+        : loadOsm();
     osmJob?.catch(() => {});
     // The snapshot waits on the status probe and flow tiles; never let it
     // hold the road pass past its own deadline. A late snapshot counts as a
@@ -357,7 +386,21 @@ export function createTrafficSource({
       throw new TypeError(
         'Road selection requires a flow availability snapshot',
       );
-    mode = resolveRoadMode(roadMode, live.hasKey);
+    mode = resolveRoadMode(roadMode, live.hasKey, modes);
+    // A host without OpenStreetMap never simulates: name why no roads draw.
+    if (!live.hasKey && !roadModesSimulate(modes))
+      throw Object.assign(
+        new RoadRequestError(
+          live.error ||
+            (live.statusUnavailable
+              ? msg(
+                  'TomTom roads unavailable while the traffic service is unreachable',
+                )
+              : msg('TomTom roads need a TomTom key')),
+        ),
+        // A known missing key cannot recover this session; the rest can.
+        { retryable: Boolean(live.error || live.statusUnavailable) },
+      );
     if (mode === 'tomtom' && live.error) throw new RoadRequestError(live.error);
     if (mode !== 'osm') {
       tomtom = flowSegmentsToRoads(live.segments);
@@ -365,7 +408,7 @@ export function createTrafficSource({
       publish(composed(), true);
     }
     if (osmJob) await osmJob;
-    else if (mode === 'osm') await loadOsm();
+    else if (mode !== 'tomtom') await loadOsm();
     signal?.throwIfAborted();
     if (osmError && (mode === 'osm' || !tomtom.length)) throw osmError;
     const data = snapshot(composed(), true);

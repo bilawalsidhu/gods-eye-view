@@ -1,4 +1,7 @@
-import * as Cesium from 'cesium';
+import { rectangleCenter } from '../../geo/rectangle.js';
+import { toLonLatH } from '../../geo/ellipsoid.js';
+import { toDegrees, toRadians } from '../../geo/vector.js';
+import { canvasOf, findCamera, findQuery } from '../../render/rendererOf.js';
 import {
   ACTIVATION_ENTER_ALTITUDE_M,
   ACTIVATION_EXIT_ALTITUDE_M,
@@ -36,35 +39,29 @@ export function createViewport({ state, services, parts }) {
   const { governorRequestRender } = services.render;
 
   function getCameraAltitude(viewer = state._viewer) {
-    const carto = viewer?.camera?.positionCartographic;
-    return carto && Number.isFinite(carto.height) ? carto.height : Infinity;
+    const height = findCamera(viewer)?.pose().height;
+    return Number.isFinite(height) ? height : Infinity;
   }
 
-  function viewRectangle(viewer = state._viewer) {
-    return (
-      viewer?.camera?.computeViewRectangle?.(viewer.scene.globe?.ellipsoid) ??
-      null
-    );
-  }
-
-  function getCameraCenterLatLon(
-    viewer = state._viewer,
-    rect = viewRectangle(viewer),
-  ) {
+  /**
+   * Where the camera looks: its view rectangle's middle (degrees; `rect`
+   * when the caller has read it already), else under the eye.
+   */
+  function getCameraCenterLatLon(viewer = state._viewer, rect) {
+    const camera = findCamera(viewer);
+    if (rect === undefined) rect = camera?.viewRectangle();
     if (rect) {
-      const center = Cesium.Rectangle.center(rect);
-      return {
-        lat: Cesium.Math.toDegrees(center.latitude),
-        lon: Cesium.Math.toDegrees(center.longitude),
-      };
+      const center = rectangleCenter({
+        west: toRadians(rect.west),
+        south: toRadians(rect.south),
+        east: toRadians(rect.east),
+        north: toRadians(rect.north),
+      });
+      return { lat: toDegrees(center.lat), lon: toDegrees(center.lon) };
     }
-    const carto = viewer?.camera?.positionCartographic;
-    if (carto) {
-      return {
-        lat: Cesium.Math.toDegrees(carto.latitude),
-        lon: Cesium.Math.toDegrees(carto.longitude),
-      };
-    }
+    const pose = camera?.pose();
+    if (pose && Number.isFinite(pose.lat) && Number.isFinite(pose.lon))
+      return { lat: pose.lat, lon: pose.lon };
     return null;
   }
 
@@ -75,27 +72,24 @@ export function createViewport({ state, services, parts }) {
    * patch of ground and keeps the centre rule.
    */
   function getWideViewRect(viewer = state._viewer) {
-    const camera = viewer?.camera;
-    const width = viewer?.scene?.canvas?.clientWidth;
-    const height = viewer?.scene?.canvas?.clientHeight;
+    const query = findQuery(viewer);
+    const canvas = canvasOf(viewer);
+    const width = canvas?.clientWidth;
+    const height = canvas?.clientHeight;
     if (
-      typeof camera?.pickEllipsoid !== 'function' ||
+      typeof query?.pickEllipsoid !== 'function' ||
       !(width > 0) ||
       !(height > 0)
     )
       return null;
-    const ellipsoid = viewer.scene.globe?.ellipsoid ?? Cesium.Ellipsoid.WGS84;
     const lats = [];
     const lons = [];
     for (const [x, y] of FOOTPRINT_SAMPLES) {
-      const hit = camera.pickEllipsoid(
-        new Cesium.Cartesian2(x * width, y * height),
-        ellipsoid,
-      );
-      if (!hit) return null;
-      const carto = ellipsoid.cartesianToCartographic(hit);
-      lats.push(Cesium.Math.toDegrees(carto.latitude));
-      lons.push(Cesium.Math.toDegrees(carto.longitude));
+      const hit = query.pickEllipsoid(x * width, y * height);
+      const ground = hit && toLonLatH(hit);
+      if (!ground) return null;
+      lats.push(ground.lat);
+      lons.push(ground.lon);
     }
     // The narrowest longitude arc holding every sample leaves out the widest
     // gap between neighbours; west > east when it crosses the antimeridian.
@@ -136,15 +130,9 @@ export function createViewport({ state, services, parts }) {
    * Refresh the bounds the per-frame pass uses to decide what is worth
    * animating. Cheap, and only on a settled camera — never per frame.
    */
-  function refreshViewBounds(rect = viewRectangle()) {
-    state._viewBounds = rect
-      ? inflateViewBounds({
-          south: Cesium.Math.toDegrees(rect.south),
-          north: Cesium.Math.toDegrees(rect.north),
-          west: Cesium.Math.toDegrees(rect.west),
-          east: Cesium.Math.toDegrees(rect.east),
-        })
-      : null;
+  function refreshViewBounds() {
+    const rect = findCamera(state._viewer)?.viewRectangle() ?? null;
+    state._viewBounds = rect ? inflateViewBounds(rect) : null;
     // The sweep itself is deferred: `marker.show` is a dirty flag, and a drag
     // fires this on every frame, so re-deciding visibility inline would put the
     // whole fleet back into the vertex buffer once a frame — the exact cost
@@ -164,7 +152,9 @@ export function createViewport({ state, services, parts }) {
     if (!state._enabled || !state._viewer) return;
     const rect = refreshViewBounds();
     const altitude = getCameraAltitude();
+    const wasGateOpen = state._altitudeGateOpen;
     state._altitudeGateOpen = altitudeGateOpen(altitude);
+    let changed = state._altitudeGateOpen !== wasGateOpen;
     state._wideView = state._altitudeGateOpen && wideViewOn(altitude);
     const center = state._altitudeGateOpen
       ? getCameraCenterLatLon(state._viewer, rect)
@@ -192,6 +182,10 @@ export function createViewport({ state, services, parts }) {
         }
       }
     }
+    // A vehicle a first-person view rides keeps its feed polled.
+    const held = state._vehicles.get(state._cockpitSubjectKey);
+    if (held && state._activeFeeds.has(held.feedId))
+      desired.set(held.feedId, state._activeFeeds.get(held.feedId));
     for (const feedId of [...state._activeFeeds.keys()]) {
       if (!desired.has(feedId)) {
         state._inFlight.get(feedId)?.controller.abort();
@@ -199,17 +193,23 @@ export function createViewport({ state, services, parts }) {
         state._activeFeeds.delete(feedId);
         state._feedStatus.delete(feedId);
         parts.ingestion.removeFeedVehicles(feedId);
+        changed = true;
       }
     }
+    // Nothing is left on the map to date.
+    if (desired.size === 0) state._lastUpdate = null;
     for (const [feedId, feed] of desired) {
       if (!state._activeFeeds.has(feedId)) {
         state._activeFeeds.set(feedId, feed);
         void parts.ingestion.pollFeed(feed, state._generation);
+        changed = true;
       }
     }
     parts.ingestion.sweepAgedVehicles(Date.now());
     parts.rendering.syncRenderHold();
     governorRequestRender('transit-proximity');
+    // Repaint now: the row follows the camera, the manager tick is 15 s.
+    if (changed) state._dataManager?.refreshLayerStats?.('transit');
   }
 
   function onCameraChanged() {

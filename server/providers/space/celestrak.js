@@ -1,6 +1,9 @@
 import path from 'node:path';
 import { promises as fsp } from 'node:fs';
-import { celestrakTleUrl } from '../../../src/data/spaceProviderRequests.js';
+import {
+  celestrakSatcatUrl,
+  celestrakTleUrl,
+} from '../../../src/data/spaceProviderRequests.js';
 import { providerCooldownMs } from './cooldown.js';
 import { admitSameSiteKeyless } from '../common/same-site.js';
 import { readResponseTextCapped } from '../common/http.js';
@@ -22,84 +25,131 @@ import { readResponseTextCapped } from '../common/http.js';
  * 6 h; on upstream failure the freshest stale copy is served (a stale TLE
  * beats an empty satellites layer). Pattern mirrors openSkyProxy's
  * cache+serve-stale. Adapted from skylight's TleStore (MIT).
+ *
+ * The same plugin serves CelesTrak SATCAT records for the satellites layer's
+ * groups at `/api/celestrak-satcat/<group>` (object type, operational status
+ * and owner, which file each object under a class). The catalog changes
+ * slowly, so SATCAT is cached for a day. CelesTrak throttles the client, not
+ * the endpoint, so a 403 or 429 holds both routes off; any other failure
+ * holds off only the route that failed, so a bad SATCAT answer never stops
+ * TLE refreshes.
  */
 export function celestrakProxy() {
   const TLE_TTL_MS = 6 * 3600_000;
+  const SATCAT_TTL_MS = 24 * 3600_000;
   const CACHE_DIR = path.join(process.cwd(), '.gev-cache');
-  const groups = new Set([
+  /** The satellites layer's core groups (src/layers/satellites/policy.js). */
+  const coreGroups = [
     'stations',
     'visual',
     'gps-ops',
     'glo-ops',
     'galileo',
     'geo',
-    'starlink',
-    // Space Missions (`getActiveTle`) reads the full active catalog.
-    'active',
-  ]);
-  let cooldownUntil = 0;
-  const mem = new Map(); // group -> { at: epochMs, body: string }
-  const inflight = new Map(); // group -> Promise<{at, body}|null>
-
-  const diskPath = (group) => path.join(CACHE_DIR, `celestrak-${group}.json`);
-
-  async function readDisk(group) {
-    try {
-      const parsed = JSON.parse(await fsp.readFile(diskPath(group), 'utf8'));
-      if (typeof parsed?.body === 'string' && Number.isFinite(parsed?.at))
-        return parsed;
-    } catch {
-      /* no disk cache yet */
-    }
-    return null;
-  }
-
-  async function writeDisk(group, entry) {
-    try {
-      await fsp.mkdir(CACHE_DIR, { recursive: true });
-      await fsp.writeFile(diskPath(group), JSON.stringify(entry), 'utf8');
-    } catch (err) {
-      console.warn('[celestrak-proxy] cache write failed');
-    }
-  }
+    'resource',
+    'weather',
+    'planet',
+    'sar',
+    'science',
+  ];
+  const feeds = [
+    {
+      route: '/api/celestrak',
+      ttlMs: TLE_TTL_MS,
+      cacheHeader: 'x-tle-cache',
+      cachedAtHeader: 'X-TLE-Cached-At',
+      diskName: (group) => `celestrak-${group}.json`,
+      upstreamUrl: celestrakTleUrl,
+      groups: new Set([
+        ...coreGroups,
+        'starlink',
+        // Space Missions (`getActiveTle`) reads the full active catalog.
+        'active',
+      ]),
+      // An upstream error page parses to zero TLEs — treat as failure, keep cache.
+      validate: (body) => /^1 /m.test(body),
+      invalid: 'no TLE lines in response',
+    },
+    {
+      route: '/api/celestrak-satcat',
+      ttlMs: SATCAT_TTL_MS,
+      cacheHeader: 'x-satcat-cache',
+      cachedAtHeader: 'X-SATCAT-Cached-At',
+      diskName: (group) => `celestrak-satcat-${group}.json`,
+      upstreamUrl: celestrakSatcatUrl,
+      groups: new Set(coreGroups),
+      // A real answer, even for an empty group, starts with the CSV header.
+      validate: (body) => /^OBJECT_NAME,/.test(body),
+      invalid: 'no SATCAT header in response',
+    },
+  ];
+  // CelesTrak throttling (403/429) is per client, so it holds every feed
+  // off; any other failure holds off only the feed that failed, so a bad
+  // SATCAT answer never blocks the TLEs the layer cannot do without.
+  let hostCooldownUntil = 0;
 
   /** The largest group (`active`) measures ~2.7 MB; this bounds a runaway body. */
   const CELESTRAK_MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 
-  async function fetchUpstream(group) {
-    const url = celestrakTleUrl(group);
-    const signal = AbortSignal.timeout(20000);
-    const res = await fetch(url.toString(), {
-      signal,
-      // CelesTrak 403s bulk groups (e.g. `active`) unless the request carries a
-      // descriptive User-Agent with a contact point.
-      headers: {
-        'User-Agent':
-          'gods-eye-view-celestrak-proxy/1.0 (+https://github.com/bilawalsidhu/gods-eye-view)',
-      },
-    });
-    if (!res.ok) {
-      // Group refreshes run in parallel: a later failure without Retry-After
-      // must never shorten a longer deadline an earlier one already set.
-      cooldownUntil = Math.max(
-        cooldownUntil,
-        Date.now() + providerCooldownMs(res),
-      );
-      void res.body?.cancel().catch(() => {});
-      throw new Error(`HTTP ${res.status}`);
-    }
-    const body = await readResponseTextCapped(
-      res,
-      CELESTRAK_MAX_RESPONSE_BYTES,
-      signal,
-    );
-    // An upstream error page parses to zero TLEs — treat as failure, keep cache.
-    if (!/^1 /m.test(body)) throw new Error('no TLE lines in response');
-    return { at: Date.now(), body };
-  }
+  function createFeedHandler(feed) {
+    let feedCooldownUntil = 0;
+    const cooldownUntil = () => Math.max(hostCooldownUntil, feedCooldownUntil);
+    const mem = new Map(); // group -> { at: epochMs, body: string }
+    const inflight = new Map(); // group -> Promise<{at, body}|null>
+    const diskPath = (group) => path.join(CACHE_DIR, feed.diskName(group));
 
-  const installMiddleware = (server) => {
-    server.middlewares.use('/api/celestrak', async (req, res) => {
+    async function readDisk(group) {
+      try {
+        const parsed = JSON.parse(await fsp.readFile(diskPath(group), 'utf8'));
+        if (typeof parsed?.body === 'string' && Number.isFinite(parsed?.at))
+          return parsed;
+      } catch {
+        /* no disk cache yet */
+      }
+      return null;
+    }
+
+    async function writeDisk(group, entry) {
+      try {
+        await fsp.mkdir(CACHE_DIR, { recursive: true });
+        await fsp.writeFile(diskPath(group), JSON.stringify(entry), 'utf8');
+      } catch (err) {
+        console.warn('[celestrak-proxy] cache write failed');
+      }
+    }
+
+    async function fetchUpstream(group) {
+      const url = feed.upstreamUrl(group);
+      const signal = AbortSignal.timeout(20000);
+      const res = await fetch(url.toString(), {
+        signal,
+        // CelesTrak 403s bulk groups (e.g. `active`) unless the request carries a
+        // descriptive User-Agent with a contact point.
+        headers: {
+          'User-Agent':
+            'gods-eye-view-celestrak-proxy/1.0 (+https://github.com/bilawalsidhu/gods-eye-view)',
+        },
+      });
+      if (!res.ok) {
+        // Group refreshes run in parallel: a later failure without Retry-After
+        // must never shorten a longer deadline an earlier one already set.
+        const until = Date.now() + providerCooldownMs(res);
+        if (res.status === 403 || res.status === 429)
+          hostCooldownUntil = Math.max(hostCooldownUntil, until);
+        else feedCooldownUntil = Math.max(feedCooldownUntil, until);
+        void res.body?.cancel().catch(() => {});
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const body = await readResponseTextCapped(
+        res,
+        CELESTRAK_MAX_RESPONSE_BYTES,
+        signal,
+      );
+      if (!feed.validate(body)) throw new Error(feed.invalid);
+      return { at: Date.now(), body };
+    }
+
+    return async (req, res) => {
       const group = String(req.url || '')
         .replace(/^\//, '')
         .split('?')[0];
@@ -111,7 +161,7 @@ export function celestrakProxy() {
         res.end();
         return;
       }
-      if (!groups.has(group)) {
+      if (!feed.groups.has(group)) {
         res.writeHead(400, { 'Content-Type': 'text/plain' });
         res.end('invalid group');
         return;
@@ -123,15 +173,15 @@ export function celestrakProxy() {
         if (res.headersSent) return;
         res.writeHead(status, {
           'Content-Type': 'text/plain',
-          'x-tle-cache': cacheStatus,
+          [feed.cacheHeader]: cacheStatus,
           'Cache-Control': 'no-store',
           ...(entry
-            ? { 'X-TLE-Cached-At': new Date(entry.at).toISOString() }
+            ? { [feed.cachedAtHeader]: new Date(entry.at).toISOString() }
             : {}),
-          ...(cooldownUntil > 0 && Date.now() < cooldownUntil
+          ...(cooldownUntil() > 0 && Date.now() < cooldownUntil()
             ? {
                 'Retry-After': String(
-                  Math.ceil((cooldownUntil - Date.now()) / 1000),
+                  Math.ceil((cooldownUntil() - Date.now()) / 1000),
                 ),
               }
             : {}),
@@ -145,11 +195,11 @@ export function celestrakProxy() {
           entry = await readDisk(group);
           if (entry) mem.set(group, entry);
         }
-        if (entry && now - entry.at < TLE_TTL_MS) {
+        if (entry && now - entry.at < feed.ttlMs) {
           send(200, entry.body, 'HIT', entry);
           return;
         }
-        if (Date.now() < cooldownUntil) {
+        if (Date.now() < cooldownUntil()) {
           send(
             entry ? 200 : 502,
             entry?.body || 'celestrak upstream cooling down',
@@ -169,8 +219,8 @@ export function celestrakProxy() {
                 return fresh;
               })
               .catch((err) => {
-                if (Date.now() >= cooldownUntil)
-                  cooldownUntil = Date.now() + 60000;
+                if (Date.now() >= feedCooldownUntil)
+                  feedCooldownUntil = Date.now() + 60000;
                 console.warn(
                   '[celestrak-proxy] refresh failed — serving cache if any',
                 );
@@ -191,7 +241,13 @@ export function celestrakProxy() {
         console.error('[celestrak-proxy] request failed');
         send(500, 'celestrak proxy error', 'ERROR');
       }
-    });
+    };
+  }
+
+  const handlers = feeds.map((feed) => [feed.route, createFeedHandler(feed)]);
+  const installMiddleware = (server) => {
+    for (const [route, handler] of handlers)
+      server.middlewares.use(route, handler);
   };
   return {
     name: 'celestrak-proxy',
