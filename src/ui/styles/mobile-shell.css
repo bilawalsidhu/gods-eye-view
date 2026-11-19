@@ -36,7 +36,8 @@ body.mobile-shell #mobile-tab-bar {
   left: 0;
   z-index: 170;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   height: var(--mobile-tab-space);
   padding: 0 max(4px, env(safe-area-inset-right, 0px))
     var(--mobile-bottom-inset) max(4px, env(safe-area-inset-left, 0px));
@@ -62,6 +63,14 @@ body.mobile-shell .mobile-tab {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Long locales clip to one line instead of widening their column. */
+body.mobile-shell .mobile-tab-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 body.mobile-shell .mobile-tab-icon {
   font-size: 24px;
   line-height: 1;
@@ -84,10 +93,10 @@ body.mobile-shell[data-mobile-sheet] #mobile-sheet-backdrop:not([hidden]) {
   background: rgba(0, 0, 0, 0.18);
 }
 
-/* ── Top bar: logo left, globe actions right ───────────────────────────── */
+/* ── Top bar: logo at the start, globe actions at the end ──────────────── */
 body.mobile-shell #title-bar {
   top: calc(var(--mobile-top-inset) + 10px);
-  left: 14px;
+  inset-inline-start: 14px;
 }
 
 body.mobile-shell #title-bar .title-logo {
@@ -101,13 +110,13 @@ body.mobile-shell #title-bar .subtitle {
 
 body.mobile-shell #top-center-actions {
   top: calc(var(--mobile-top-inset) + 10px);
-  right: 12px;
+  inset-inline-start: auto;
+  inset-inline-end: 12px;
 }
 
 /* ── HUD: one compact readout under the top bar ────────────────────────── */
 body.mobile-shell #intel-hud .hud-edge,
 body.mobile-shell #intel-hud .hud-corner,
-body.mobile-shell #intel-hud .hud-top-bar,
 body.mobile-shell #intel-hud .hud-bottom-bar {
   display: none;
 }
@@ -129,7 +138,10 @@ body.mobile-shell #right-context-rail {
 body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack,
 body.mobile-shell[data-mobile-sheet='cameras'] #right-context-rail,
 body.mobile-shell[data-mobile-sheet='context'] #right-context-rail,
-body.mobile-shell[data-mobile-sheet='more'] #right-context-rail {
+body.mobile-shell[data-mobile-sheet='missions'] #right-context-rail,
+/* Visual opens from the left rail on wider screens, so it lives in the left
+   stack and the More sheet is that stack showing Visual alone. */
+body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack {
   position: fixed;
   top: auto;
   right: 0;
@@ -156,9 +168,10 @@ body.mobile-shell[data-mobile-sheet='more'] #right-context-rail {
 
 body.mobile-shell #left-panel-stack > *,
 body.mobile-shell #right-context-rail > *,
-/* Rail rules show expanded Weather and Recent Imagery by id; on phones they
-   belong to the Context sheet only. */
+/* Rail rules show expanded Weather, News and Recent Imagery by id; on phones
+   they belong to the Context sheet only. */
 body.mobile-shell #right-context-rail > #weather-panel,
+body.mobile-shell #right-context-rail > #news-panel,
 body.mobile-shell #right-context-rail > #recent-imagery-panel {
   display: none;
 }
@@ -166,6 +179,9 @@ body.mobile-shell #right-context-rail > #recent-imagery-panel {
 /* Rail-scoped ids so a rail's own hiding rules (for example the Tactical HUD
    hiding collapsed siblings) never take a panel out of an open sheet. */
 body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack > #data-panel,
+body.mobile-shell[data-mobile-sheet='layers']
+  #left-panel-stack
+  > #utilities-panel,
 body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack > #scene-panel,
 body.mobile-shell[data-mobile-sheet='cameras']
   #right-context-rail
@@ -181,8 +197,14 @@ body.mobile-shell[data-mobile-sheet='context']
   > #weather-panel:not([hidden]),
 body.mobile-shell[data-mobile-sheet='context']
   #right-context-rail
+  > #news-panel:not([hidden]),
+body.mobile-shell[data-mobile-sheet='context']
+  #right-context-rail
   > #recent-imagery-panel:not([hidden]),
-body.mobile-shell[data-mobile-sheet='more'] #right-context-rail > #pp-toggles {
+body.mobile-shell[data-mobile-sheet='missions']
+  #right-context-rail
+  > #space-missions-panel:not([hidden]),
+body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #pp-toggles {
   position: relative;
   inset: auto;
   display: block;
@@ -192,12 +214,18 @@ body.mobile-shell[data-mobile-sheet='more'] #right-context-rail > #pp-toggles {
   transform: none;
 }
 
+/* The sheet scrolls: News keeps its height instead of shrinking under the
+   panel below it, as the rail makes it do on a desktop. */
+body.mobile-shell #right-context-rail > #news-panel:not(.collapsed) {
+  flex-shrink: 0;
+}
+
 /* ── Dock: voice floats above the tab bar; search and presets are sheets ─ */
 body.mobile-shell #command-dock {
   /* The dock's tray rules size voice by this basis; a column makes it a height. */
   --dock-voice-width: auto;
   top: auto;
-  bottom: calc(var(--mobile-tab-space) + 10px);
+  bottom: calc(var(--mobile-tab-space) + 10px + var(--world-timeline-lift, 0px));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -377,9 +405,29 @@ body.mobile-shell #command-dock #gev-voice-control {
 body.mobile-shell:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view)
   #cesium-credits {
   right: auto;
-  bottom: calc(var(--mobile-tab-space) + 106px) !important;
+  bottom: calc(var(--mobile-tab-space) + 106px + var(--world-timeline-lift, 0px)) !important;
   left: 10px;
-  max-width: calc(100vw - 20px);
+  /* With the base rule's nowrap the credits run off the right edge, and a
+     max-width alone wrapped them into a narrow column: the line needs wrapping
+     and a real width. The width applies before the 0.8 scale, keeping the
+     scaled line 10px from the right edge, so every credit and "Data
+     attribution" stay on screen. Like the offset above, it must beat the
+     dock's width: auto !important. */
+  width: calc((100vw - 20px) / 0.8) !important;
+  max-width: none !important;
+  white-space: normal;
+  transform-origin: left bottom;
+  scale: 0.8;
+}
+
+body.mobile-shell:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view)
+  #gev-credits {
+  right: auto;
+  bottom: calc(var(--mobile-tab-space) + 106px + var(--world-timeline-lift, 0px)) !important;
+  left: 10px;
+  width: calc((100vw - 20px) / 0.8) !important;
+  max-width: none !important;
+  white-space: normal;
   transform-origin: left bottom;
   scale: 0.8;
 }
@@ -393,15 +441,23 @@ body.mobile-shell[data-mobile-sheet]:not(.recording-mode):not(
   z-index: 166;
 }
 
+body.mobile-shell[data-mobile-sheet]:not(.recording-mode):not(
+    .cockpit-mode
+  ):not(.ui-clean-view)
+  #gev-credits {
+  bottom: calc(var(--mobile-sheet-cover, 0px) + 6px) !important;
+  z-index: 166;
+}
+
 /* The view switcher clears the tab bar and the voice bar, opposite the credit. */
 body.mobile-shell:not(.cockpit-mode) #view-switcher {
   right: 12px;
-  bottom: calc(var(--mobile-tab-space) + 106px);
+  bottom: calc(var(--mobile-tab-space) + 106px + var(--world-timeline-lift, 0px));
 }
 
 body.mobile-shell #corner-actions {
   top: calc(var(--mobile-top-inset) + 60px);
-  right: 12px;
+  inset-inline-end: 12px;
   bottom: auto;
 }
 

@@ -1,5 +1,6 @@
-import * as Cesium from 'cesium';
 import { approxDistanceKm } from '../data/approxDistance.js';
+import { heightsOf } from '../queries/heights.js';
+import { findCamera, findGlobe } from '../render/rendererOf.js';
 
 /** Construct an instance-owned meshFloorSampler service with explicit dependencies. */
 export function createMeshFloorSampler({
@@ -11,6 +12,7 @@ export function createMeshFloorSampler({
     coarseFloorCoord,
     cachedMeshFloor,
     reportValidatedMeshFloorCell,
+    meshFloorPriorReady,
     setMeshFloorPreferred,
     meshFloorPreferred,
     cachedGroundFloor,
@@ -23,13 +25,16 @@ export function createMeshFloorSampler({
   // which sits above the Re:Earth bare-earth DEM (measured ~17 m at the Austin
   // airport apron) — so DEM-floored sprites/trails still buried themselves in
   // the mesh while 3D models (which groundSnap against the mesh) looked right.
-  // This module samples the mesh height ONE-SHOT per coarse cell and reports it
-  // to groundFloor.js, whose cachedGroundFloor() then answers mesh-first.
+  // This module samples the mesh height at the callers' points, a few probes
+  // per coarse cell, and reports them to groundFloor.js, which keeps each
+  // reading that passes its gate at its own point; cachedGroundFloor() then
+  // answers mesh-first, from the reading nearest the asked point.
   //
   // Rationing (the CCTV loading-jitter lesson): scene.sampleHeight forces
   // tile-load prioritization at the probe point, so sampling is (a) gated to
   // cells NEAR the viewer — where tiles are streamed and where an error is
-  // visible at all, (b) capped per call, (c) one-shot per cell for the session,
+  // visible at all, (b) capped per call, (c) at most MAX_PROBES_PER_CELL
+  // readings per cell for the session, each at a point apart from the others,
   // (d) skipped entirely outside the google-3d regime. A returned-undefined
   // probe (tiles not streamed yet) is NOT latched — it retries on a later call.
   //
@@ -49,8 +54,18 @@ export function createMeshFloorSampler({
    *  streamed LOD under a high camera is coarse everywhere, so every probe
    *  would latch junk. */
   const MAX_CAMERA_HEIGHT_M = 25_000;
-  /** @type {Cesium.Cartographic} Scratch for probe coordinates. */
-  const _scratchProbe = new Cesium.Cartographic();
+  /** @constant {number} Readings per cell: a cell is probed at most this
+   *  many times, each at a point apart from the others, and groundFloor keeps
+   *  each reading at its point (a read answers from the nearest one). */
+  const MAX_PROBES_PER_CELL = 8;
+  /** @constant {number} How far apart (degrees, about 17 m) a new probe must
+   *  be from the cell's earlier ones to be worth taking. */
+  const PROBE_APART_DEG = 0.00015;
+  /** @type {Map<string, Array<{lat: number, lon: number}>>} Points probed
+   *  per cell that returned a reading. */
+  const _probedPoints = new Map();
+  /** Scratch for probe coordinates (degrees). */
+  const _scratchProbe = { lon: 0, lat: 0 };
 
   // Regime tracking: mesh cells only apply while the photoreal (google-3d)
   // stack renders. main.js re-dispatches MapStackController.onChange as this
@@ -59,21 +74,22 @@ export function createMeshFloorSampler({
   // bundle, and the subscription is idempotent for the app's lifetime.
 
   /**
-   * True when a VISIBLE 3D tileset in the scene reports its streaming queue
-   * drained (tilesLoaded) — the mirror of cctv.js's projectionTilesReady.
-   * Walks top-level primitives only (a handful; once per poll).
-   * @param {Cesium.Scene} scene
+   * True when the globe is hidden (the google-3d regime draws the mesh
+   * alone) and the drawn 3D tiles have loaded what is in view; false with
+   * the globe shown or no tiles drawn. Asked of the globe port once per poll.
+   * The globe check matters on its own: the regime flag can still say
+   * photoreal while a switch to a globe stack is loading, or after a silent
+   * one, and a probe of the globe there would latch terrain as mesh.
+   * @param {object} viewer
    * @returns {boolean}
    */
-  function _visibleTilesetLoaded(scene) {
+  function _surfaceSettled(viewer) {
     try {
-      const prims = scene.primitives;
-      for (let i = 0; i < prims.length; i++) {
-        const p = prims.get(i);
-        if (p instanceof Cesium.Cesium3DTileset && p.show) {
-          return !!p.tilesLoaded;
-        }
-      }
+      const globe = findGlobe(viewer);
+      return (
+        globe?.isGlobeVisible?.() === false &&
+        globe.isSettled('surface') === true
+      );
     } catch {
       /* mid-teardown */
     }
@@ -82,35 +98,45 @@ export function createMeshFloorSampler({
 
   /**
    * Samples the rendered mesh height for the coarse cells containing `points`,
-   * one-shot per cell, budget-capped, viewer-proximity-gated. Call ONCE per
-   * layer poll (never per contact, never per frame). Synchronous — Cesium's
+   * a few probes per cell, budget-capped, viewer-proximity-gated. Call ONCE per
+   * layer poll (never per contact, never per frame). Synchronous — the renderer's
    * sampleHeight is a CPU-side query against loaded tiles.
    *
-   * @param {Cesium.Scene|undefined} scene - The scene (skipped when absent/torn down).
+   * @param {object|undefined} viewer - The viewer whose renderer draws the
+   *   mesh (skipped when absent/torn down). The probe asks its query port
+   *   (`heightsOf`), which sees through every draw set not drawn as ground.
    * @param {Array<{lat: number, lon: number}>} points - Contact/waypoint coords.
    * @param {object} [options]
-   * @param {Array<object>} [options.excludeObjects] - Own billboards/models to
-   *   exclude from the probe (Cesium matches instances/.primitive/.id — pass
-   *   Billboard and Model instances, NOT collections).
+   * @param {string[]} [options.sets] - The caller's own draw set ids, seen
+   *   through as well.
    * @param {number} [options.viewerLat] @param {number} [options.viewerLon]
    *   Viewer subpoint (computed once by the caller's poll).
    */
   function sampleMeshFloorCells(
-    scene,
+    viewer,
     points,
-    { excludeObjects = [], viewerLat, viewerLon } = {},
+    { sets, viewerLat, viewerLon } = {},
   ) {
     if (!meshFloorPreferred()) return;
-    if (!scene || typeof scene.sampleHeight !== 'function') return;
+    if (!viewer || viewer.isDestroyed?.()) return;
+    const heights = heightsOf(viewer);
+    const exclude = Array.isArray(sets) ? sets : undefined;
+    // Without depth-texture support every probe throws: nothing to latch.
+    if (!heights?.supported().surface) return;
     if (!Array.isArray(points) || !points.length) return;
     // Round-5 hardening (the CCTV projectionTilesReady lesson, ported late):
     // while tiles are MID-STREAM a probe returns coarse-LOD heights — real
     // numbers, wildly wrong — and the one-shot latch made them permanent.
-    // Only sample when the visible Google tileset reports tilesLoaded AND the
+    // Only sample when the drawn tiles report they have settled AND the
     // camera is low enough that the streamed LOD near it is fine-grained.
-    const camH = scene.camera?.positionCartographic?.height;
+    let camH;
+    try {
+      camH = findCamera(viewer)?.pose().height;
+    } catch {
+      return; // mid-teardown
+    }
     if (!Number.isFinite(camH) || camH > MAX_CAMERA_HEIGHT_M) return;
-    if (!_visibleTilesetLoaded(scene)) return;
+    if (!_surfaceSettled(viewer)) return;
     let sampled = 0;
     const attempted = new Set();
     for (const p of points) {
@@ -119,8 +145,21 @@ export function createMeshFloorSampler({
       const cell = coarseFloorCoord(p.lat, p.lon);
       const key = `${cell.lat},${cell.lon}`;
       if (attempted.has(key)) continue;
+      // A cell with a reading is probed again only at a point well apart
+      // from the ones already probed, a few times at most, so the cell's
+      // readings follow where its vehicles actually are.
+      const probes = _probedPoints.get(key);
+      if (
+        cachedMeshFloor(cell.lat, cell.lon) != null &&
+        (probes?.length >= MAX_PROBES_PER_CELL ||
+          probes?.some(
+            (q) =>
+              Math.abs(q.lat - p.lat) < PROBE_APART_DEG &&
+              Math.abs(q.lon - p.lon) < PROBE_APART_DEG,
+          ))
+      )
+        continue;
       attempted.add(key);
-      if (cachedMeshFloor(cell.lat, cell.lon) != null) continue; // one-shot latch
       if (
         Number.isFinite(viewerLat) &&
         Number.isFinite(viewerLon) &&
@@ -129,20 +168,15 @@ export function createMeshFloorSampler({
       ) {
         continue; // too far: tiles not streamed there, probe would be a guaranteed miss
       }
-      let height;
-      try {
-        const carto = Cesium.Cartographic.fromDegrees(
-          cell.lon,
-          cell.lat,
-          0,
-          _scratchProbe,
-        );
-        height = scene.sampleHeight(carto, excludeObjects);
-        sampled += 1;
-      } catch {
-        continue; // scene mid-teardown — try again next poll
-      }
-      if (!Number.isFinite(height)) continue; // tiles not loaded yet — no negative latch
+      // Probe where the caller's point is, not at the cell's centre: a
+      // centre that falls on a roof would lift everything in the cell.
+      _scratchProbe.lon = p.lon;
+      _scratchProbe.lat = p.lat;
+      const height = heights.now(_scratchProbe, { exclude });
+      // A miss counts against the budget whatever its cause: past the support
+      // gate a probe only throws mid-teardown, when every later cell would too.
+      sampled += 1;
+      if (height === null) continue; // tiles not loaded yet — no negative latch
       // Round 5: a REAL Re:Earth prior is REQUIRED before any sample latches.
       //  - A geoid-fallback prior (cached while the proxy was failing) is a
       //    sea-level poison that rejected legitimate samples at elevated
@@ -171,7 +205,23 @@ export function createMeshFloorSampler({
       // feasible and deliberately deferred — see the P2 in
       // the project roadmap, which bundles it with the fly_route probe so
       // one post-launch pass settles rendered-mesh sampling everywhere.
-      reportValidatedMeshFloorCell(cell.lat, cell.lon, height);
+      const accepted = reportValidatedMeshFloorCell(p.lat, p.lon, height);
+      // A spot counts as probed once the gate has judged it against a real
+      // prior: accepted, or refused with the cell's DEM warm. A spot refused
+      // only because the DEM was still cold is tried again later. Each spot is
+      // recorded once, so a cell retried while it has no reading does not fill
+      // its probe allowance with the same spot.
+      if (!accepted && !meshFloorPriorReady(cell.lat, cell.lon)) continue;
+      if (!probes) _probedPoints.set(key, [{ lat: p.lat, lon: p.lon }]);
+      else if (
+        probes.length < MAX_PROBES_PER_CELL &&
+        !probes.some(
+          (q) =>
+            Math.abs(q.lat - p.lat) < PROBE_APART_DEG &&
+            Math.abs(q.lon - p.lon) < PROBE_APART_DEG,
+        )
+      )
+        probes.push({ lat: p.lat, lon: p.lon });
     }
   }
 

@@ -10,6 +10,7 @@ import {
   nextSheet,
   sheetForPanelId,
 } from './mobileShell.js';
+import { withEntityRecord } from '../data/entityRecords.js';
 
 function element(tag, document) {
   const node = new EventTarget();
@@ -114,6 +115,7 @@ function fixture({
   mobile = true,
   expanded = [],
   onTabOpened = () => {},
+  afterPublish,
 } = {}) {
   const document = new EventTarget();
   document.ids = new Map();
@@ -158,6 +160,37 @@ function fixture({
     rails[root].append(panel);
   }
 
+  // Core's dock renders the tab bar and backdrop while the shell publishes;
+  // this applies what it publishes the way that component does.
+  const backdrop = element('div', document);
+  backdrop.id = 'mobile-sheet-backdrop';
+  backdrop.hidden = true;
+  const tabBar = element('nav', document);
+  tabBar.id = 'mobile-tab-bar';
+  for (const { sheet } of MOBILE_TABS) {
+    const button = element('button', document);
+    button.dataset.mobileSheet = sheet;
+    button.setAttribute('aria-expanded', 'false');
+    tabBar.append(button);
+  }
+  document.body.append(backdrop, tabBar);
+  const views = [];
+  const publish = (view) => {
+    views.push(view);
+    if (!view) {
+      backdrop.remove();
+      tabBar.remove();
+      return;
+    }
+    backdrop.hidden = !view.sheet;
+    tabBar.setAttribute('aria-hidden', String(!view.enabled));
+    for (const button of tabBar.children)
+      button.setAttribute(
+        'aria-expanded',
+        String(button.dataset.mobileSheet === view.sheet),
+      );
+  };
+
   const media = new EventTarget();
   media.matches = mobile;
   const calls = [];
@@ -176,6 +209,8 @@ function fixture({
   const shell = initMobileShell({
     documentRef: document,
     onTabOpened,
+    publish,
+    afterPublish,
     matchMedia: () => media,
     MutationObserverImpl: FakeMutationObserver,
     ResizeObserverImpl: null,
@@ -197,7 +232,7 @@ function fixture({
   const press = (sheet) => {
     const event = new Event('click', { cancelable: true });
     Object.defineProperty(event, 'target', { value: tab(sheet) });
-    document.getElementById('mobile-tab-bar').dispatchEvent(event);
+    document.dispatchEvent(event);
   };
   const resize = (matches) => {
     media.matches = matches;
@@ -215,6 +250,7 @@ function fixture({
   return {
     document,
     shell,
+    views,
     calls,
     runFrames,
     closedCount: () => closedCount,
@@ -398,12 +434,55 @@ test('layout settling after a sheet opens is part of opening', () => {
   assert.equal(collapsed('street-level-panel'), false, 'put back as it was');
 });
 
+test('only taps on a tab toggle sheets', () => {
+  const { document, shell, press, tab } = fixture();
+  const click = (target) => {
+    const event = new Event('click', { cancelable: true });
+    Object.defineProperty(event, 'target', { value: target });
+    document.dispatchEvent(event);
+  };
+  press('layers');
+  // While a sheet is open the body carries data-mobile-sheet too, which the
+  // DOM mirrors in its dataset.
+  document.body.dataset.mobileSheet = 'layers';
+  click(document.getElementById('data-panel'));
+  assert.equal(shell.getSheet(), 'layers');
+  click(document.getElementById('mobile-tab-bar'));
+  assert.equal(shell.getSheet(), 'layers');
+  // A tap usually lands on the tab's icon or label.
+  const label = document.createElement('span');
+  tab('more').append(label);
+  click(label);
+  assert.equal(shell.getSheet(), 'more');
+});
+
+test('focus that moved before the tab bar renders stays where it went', () => {
+  const pending = [];
+  const { document, shell, press, tab } = fixture({
+    afterPublish: (callback) => pending.push(callback),
+  });
+  tab('layers').focus();
+  press('layers');
+  const elsewhere = document.getElementById('location-search');
+  press('layers');
+  elsewhere.focus();
+  pending.splice(0).forEach((callback) => callback());
+  assert.equal(document.activeElement === elsewhere, true);
+  press('layers');
+  press('layers');
+  pending.splice(0).forEach((callback) => callback());
+  assert.equal(document.activeElement === tab('layers'), true);
+  assert.equal(shell.getSheet(), null);
+});
+
 test('the backdrop closes the open sheet', () => {
   const { document, shell, press } = fixture();
   press('context');
-  document
-    .getElementById('mobile-sheet-backdrop')
-    .dispatchEvent(new Event('click'));
+  const event = new Event('click');
+  Object.defineProperty(event, 'target', {
+    value: document.getElementById('mobile-sheet-backdrop'),
+  });
+  document.dispatchEvent(event);
   assert.equal(shell.getSheet(), null);
 });
 
@@ -448,11 +527,37 @@ test('desktop widths never see the shell; crossing to desktop restores it', () =
   );
 });
 
+test('the shell publishes whether it is on and which sheet is open', () => {
+  const phone = fixture();
+  assert.deepEqual(phone.views.at(-1), {
+    enabled: true,
+    sheet: null,
+    tabs: MOBILE_TABS,
+  });
+  phone.press('search');
+  assert.deepEqual(phone.views.at(-1), {
+    enabled: true,
+    sheet: 'search',
+    tabs: MOBILE_TABS,
+  });
+  phone.resize(false);
+  assert.deepEqual(phone.views.at(-1), {
+    enabled: false,
+    sheet: null,
+    tabs: MOBILE_TABS,
+  });
+  const desktop = fixture({ mobile: false });
+  assert.deepEqual(desktop.views, [
+    { enabled: false, sheet: null, tabs: MOBILE_TABS },
+  ]);
+});
+
 test('destroy puts panels back and removes the shell', () => {
-  const { document, shell, press, viewport, collapsed } = fixture();
+  const { document, shell, views, press, viewport, collapsed } = fixture();
   press('layers');
   shell.destroy();
   assert.equal(collapsed('data-panel'), true);
+  assert.equal(views.at(-1), null);
   assert.equal(document.getElementById('mobile-tab-bar'), null);
   assert.equal(document.getElementById('mobile-sheet-backdrop'), null);
   assert.equal(document.body.classList.contains('mobile-shell'), false);
@@ -482,7 +587,7 @@ test('the phone shell keeps the required attribution visible', () => {
   };
   const lift = (block) =>
     Number(
-      /bottom: calc\(var\(--mobile-tab-space\) \+ (\d+)px\)/.exec(block)?.[1],
+      /bottom: calc\(var\(--mobile-tab-space\) \+ (\d+)px \+ var\(--world-timeline-lift, 0px\)\)/.exec(block)?.[1],
     );
   const z = (block) => Number(/z-index: (\d+);/.exec(block)?.[1]);
   const idleCredit = rule(
@@ -499,6 +604,16 @@ test('the phone shell keeps the required attribution visible', () => {
     idleCredit,
     /display:\s*none|visibility:\s*hidden|opacity:\s*0/,
   );
+  // A long credit line (map plus outline credits) wraps inside the screen:
+  // it wraps, and the box gets a real width, set before the 0.8 scale, so it
+  // is divided by it.
+  assert.match(idleCredit, /white-space: normal;/);
+  assert.match(
+    idleCredit,
+    /[^-]width: calc\(\(100vw - 20px\) \/ 0\.8\) !important;/,
+  );
+  assert.match(idleCredit, /max-width: none !important;/);
+  assert.match(idleCredit, /scale: 0\.8;/);
   // Open sheet: above everything the sheet covers, drawn above the sheets.
   const sheetCredit = rule(
     'body.mobile-shell[data-mobile-sheet]:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view) #cesium-credits',
@@ -509,7 +624,7 @@ test('the phone shell keeps the required attribution visible', () => {
   );
   const openDock = rule('body.mobile-shell[data-mobile-sheet] #command-dock');
   const railSheet = rule(
-    "body.mobile-shell[data-mobile-sheet='more'] #right-context-rail",
+    "body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack",
   );
   assert.ok(z(sheetCredit) > z(openDock));
   assert.ok(z(sheetCredit) > z(railSheet));
@@ -710,7 +825,7 @@ test('the tab-open callback reports only a successful manual opening', () => {
 test('manual Context opens the existing transaction without disabling the tracked aircraft', async () => {
   const calls = [];
   const tracked = { layerId: 'flights', icao24: 'abc123', callsign: 'EJA225' };
-  const viewer = { trackedEntity: { gevTrackedId: 'flights:abc123' } };
+  const viewer = { trackedEntity: withEntityRecord({}, { trackedId: 'flights:abc123' }) };
   const entity = viewer.trackedEntity;
   const enabled = new Set(['flights', 'weather']);
   const controls = new ContextControls({
@@ -788,12 +903,11 @@ test('manual Context opens the existing transaction without disabling the tracke
   }
 });
 
-test('manual Context respects Space Missions, busy transitions, missing tracks and disposal', async () => {
+test('manual Context respects an active mode, busy transitions, missing tracks and disposal', async () => {
   for (const state of [
-    { mode: 'space-missions' },
     { mode: 'flights' },
     { changing: true },
-    { entering: 'space-missions' },
+    { entering: 'flights' },
     { noTrack: true },
     { disposed: true },
     { sheet: 'layers' },
@@ -862,4 +976,21 @@ test('a slow downward pull is claimed before Android native scroll takes ownersh
   touchEvent(document, 'touchend', panel, { y: 175 });
   assert.equal(shell.getSheet(), null);
   shell.destroy();
+});
+
+test('on phones the News panel shows in the Context sheet only, like Weather', () => {
+  const css = readFileSync(
+    new URL('./styles/mobile-shell.css', import.meta.url),
+    'utf8',
+  );
+  // Hidden by id: the rail's own `#news-panel:not(.collapsed)` rule outranks
+  // the generic `#right-context-rail > *` hiding rule.
+  assert.match(
+    css,
+    /body\.mobile-shell #right-context-rail > #news-panel,\n[^{}]*\{\s*display: none;/,
+  );
+  assert.match(
+    css,
+    /body\.mobile-shell\[data-mobile-sheet='context'\]\s+#right-context-rail\s+> #news-panel:not\(\[hidden\]\),/,
+  );
 });

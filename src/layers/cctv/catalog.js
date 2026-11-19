@@ -237,9 +237,14 @@ export function createCatalog({ state: layerState, services, parts, source }) {
         groundElevationM,
         absoluteHeightM: groundElevationM + mountHeightM,
         pitchDeg,
+        frameRefreshMs: parts.model.safeNumber(source.frameRefreshMs, NaN),
         license: String(source.license || source.licenseNote || ''),
         credit: String(source.credit || ''),
         code: String(source.code || ''),
+        sourceUrl: String(source.sourceUrl || ''),
+        browserMediaUrl: String(source.browserMediaUrl || ''),
+        accuracyM: parts.model.safeNumber(source.accuracyM, NaN),
+        positionSource: String(source.positionSource || ''),
         // Shipped precompute (see server/providers/cctv/groundHeights.js).
         groundHeights:
           source.groundHeights && typeof source.groundHeights === 'object'

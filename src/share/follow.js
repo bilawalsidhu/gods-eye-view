@@ -59,6 +59,12 @@ export const SHARE_VIEW_FOLLOW_OFFSET_DEFAULT = Object.freeze({
   pitch: -35,
 });
 
+/**
+ * The follow range a thing view can carry, in whole metres: 1 to this (the
+ * codec clamps to the same bound).
+ */
+export const SHARE_VIEW_FOLLOW_RANGE_MAX_M = 1e8;
+
 const EARTH_RADIUS_M = 6_371_000;
 const RAD = Math.PI / 180;
 
@@ -113,6 +119,27 @@ function enuBasis(lat, lon) {
 }
 
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+/**
+ * The follow offset that puts the camera at `camera` (lat, lon, alt) while
+ * following an entity at `fix`: the inverse of {@link followCameraFor}, on
+ * the same sphere, in whole metres and degrees. Null when the camera is not
+ * above the entity's local horizontal (a view from below it, or through the
+ * earth, has no follow offset), or is at the entity.
+ */
+export function followOffsetFor(fix, camera) {
+  const at = toEcef(fix.lat, fix.lon, fix.alt);
+  const from = toEcef(camera.lat, camera.lon, camera.alt);
+  const basis = enuBasis(fix.lat, fix.lon);
+  const delta = [0, 1, 2].map((i) => from[i] - at[i]);
+  const local = {
+    east: dot(delta, basis.east),
+    north: dot(delta, basis.north),
+    up: dot(delta, basis.up),
+  };
+  if (!(local.up > 0)) return null;
+  return followOffsetFromEnu(local);
+}
 
 /**
  * Where the camera sits while following an entity at `fix` from `offset`,

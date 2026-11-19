@@ -21,9 +21,12 @@
 // one file that can construct a real IntelHUD.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { hudReadouts } from './testSupport/hudReadouts.mjs';
 import { readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { ensureGeoidReady } from './data/geoid.js';
+import { fakeCameraPort } from './testSupport/fakeCameraPort.mjs';
+import { toDegrees as deg } from './geo/index.js';
 
 const MGRS_STUB_URL = 'gev-test-stub:mgrs';
 registerHooks({
@@ -62,53 +65,33 @@ const SFO_ELLIPSOIDAL_M = -15;
  * text sinks this test reads.
  */
 function installHudEnvironment() {
-  const elements = new Map(
-    [
-      'hud-alt',
-      'hud-summary',
-      'hud-mgrs',
-      'hud-latlon',
-      'hud-bottom-line',
-      'hud-gsd',
-      'hud-coll',
-      'hud-ona',
-      'hud-mode',
-    ].map((id) => [id, { textContent: '' }]),
-  );
+  const { elements, publish, view } = hudReadouts();
   const previousDocument = globalThis.document;
-  const cameraListeners = {};
+  const camera = fakeCameraPort({
+    pose: {
+      pitch: -Math.PI / 2,
+      lat: deg((SFO.latDeg * Math.PI) / 180),
+      lon: deg((SFO.lonDeg * Math.PI) / 180),
+      height: SFO_ELLIPSOIDAL_M,
+    },
+  });
   globalThis.document = {
     getElementById: (id) => elements.get(id) ?? null,
     querySelectorAll: () => [],
     addEventListener() {},
     removeEventListener() {},
   };
-  const viewer = {
-    camera: {
-      pitch: -Math.PI / 2,
-      positionCartographic: {
-        latitude: (SFO.latDeg * Math.PI) / 180,
-        longitude: (SFO.lonDeg * Math.PI) / 180,
-        height: SFO_ELLIPSOIDAL_M,
-      },
-      computeViewRectangle: () => undefined,
-      moveStart: {
-        addEventListener(listener) {
-          cameraListeners.moveStart = listener;
-        },
-        removeEventListener() {},
-      },
-      moveEnd: {
-        addEventListener(listener) {
-          cameraListeners.moveEnd = listener;
-        },
-        removeEventListener() {},
-      },
-    },
+  const viewer = {};
+  const cameraListeners = {
+    moveStart: () => camera.emit('moveStart'),
+    moveEnd: () => camera.emit('moveEnd'),
   };
   return {
     elements,
     viewer,
+    camera,
+    publish,
+    view,
     cameraListeners,
     restore() {
       if (previousDocument === undefined) delete globalThis.document;
@@ -213,7 +196,7 @@ test('a cold tick paints both readouts uncorrected, and resolving flips both in 
   const env = installHudEnvironment();
   let hud;
   try {
-    hud = new IntelHUD(env.viewer);
+    hud = new IntelHUD(env.viewer, { camera: env.camera.port, publish: env.publish });
     const alt = () => env.elements.get('hud-alt').textContent;
     const summary = () => env.elements.get('hud-summary').textContent;
 
@@ -262,12 +245,14 @@ test('the corrected readouts are the MSL datum, not a coincidence of the SFO sig
   const env = installHudEnvironment();
   // London: N is +46 m, so the correction moves the readout DOWN. A sign flip
   // that happens to look right at SFO fails here.
-  env.viewer.camera.positionCartographic.latitude = (51.5072 * Math.PI) / 180;
-  env.viewer.camera.positionCartographic.longitude = (-0.1275 * Math.PI) / 180;
-  env.viewer.camera.positionCartographic.height = 100;
+  env.camera.setPose({
+    lat: deg((51.5072 * Math.PI) / 180),
+    lon: deg((-0.1275 * Math.PI) / 180),
+    height: 100,
+  });
   let hud;
   try {
-    hud = new IntelHUD(env.viewer);
+    hud = new IntelHUD(env.viewer, { camera: env.camera.port, publish: env.publish });
     hud._updateCameraData(); // cold: requests the grid, paints uncorrected
     assert.match(env.elements.get('hud-alt').textContent, /^ALT: 100m/);
     await ensureGeoidReady();
@@ -302,9 +287,9 @@ test('a summary asked for one view is dropped once the camera moves', async () =
   };
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { summaryService });
+    hud = new IntelHUD(env.viewer, { camera: env.camera.port, summaryService, publish: env.publish });
     let place = 'Yellowstone';
-    hud._summaryContext = async () => ({ place });
+    hud._summaryContext = async () => ({ placeLabels: [place] });
     const summary = () => env.elements.get('hud-summary').textContent;
     const settle = () => new Promise((resolve) => setImmediate(resolve));
     hud._updateCameraData();
@@ -330,7 +315,7 @@ test('a summary asked for one view is dropped once the camera moves', async () =
     const moving = hud._updateSummary(false);
     await settle();
     assert.equal(pending.length, 2, 'the move marked the summary dirty');
-    assert.deepEqual(pending[1].context, { place: 'Atlantic' });
+    assert.deepEqual(pending[1].context, { placeLabels: ['Atlantic'] });
     pending[1].reply('North Atlantic Ocean');
     await moving;
     assert.equal(summary(), 'North Atlantic Ocean');
@@ -362,8 +347,8 @@ test('a request the camera leaves paints nothing: aborted, failed, or its contex
   };
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { summaryService });
-    hud._summaryContext = async () => ({ place: 'Yellowstone' });
+    hud = new IntelHUD(env.viewer, { camera: env.camera.port, summaryService, publish: env.publish });
+    hud._summaryContext = async () => ({ placeLabels: ['Yellowstone'] });
     const element = env.elements.get('hud-summary');
     const settle = () => new Promise((resolve) => setImmediate(resolve));
     hud._updateCameraData();
@@ -371,7 +356,7 @@ test('a request the camera leaves paints nothing: aborted, failed, or its contex
     // The move aborts the request in flight, and the abort paints nothing.
     let update = hud._updateSummary(false, true);
     await settle();
-    element.textContent = 'shown before the move';
+    hud._present({ summary: 'shown before the move' });
     env.cameraListeners.moveStart();
     assert.equal(pending[0].signal.aborted, true, 'the request is aborted');
     await update;
@@ -382,7 +367,7 @@ test('a request the camera leaves paints nothing: aborted, failed, or its contex
     ignoreAbort = true;
     update = hud._updateSummary(false, true);
     await settle();
-    element.textContent = 'shown before the move';
+    hud._present({ summary: 'shown before the move' });
     env.cameraListeners.moveStart();
     pending[1].reject(new Error('network'));
     await update;
@@ -393,7 +378,7 @@ test('a request the camera leaves paints nothing: aborted, failed, or its contex
       env.cameraListeners.moveStart();
       throw new Error('view target unavailable');
     };
-    element.textContent = 'shown before the move';
+    hud._present({ summary: 'shown before the move' });
     await hud._updateSummary(false, true);
     assert.equal(element.textContent, 'shown before the move');
   } finally {
@@ -424,8 +409,8 @@ test('a cancelled summary retries the same context but completed answers stay re
   };
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { summaryService });
-    hud._summaryContext = async () => ({ place: 'San Francisco' });
+    hud = new IntelHUD(env.viewer, { camera: env.camera.port, summaryService, publish: env.publish });
+    hud._summaryContext = async () => ({ placeLabels: ['San Francisco'] });
     hud._updateCameraData();
     const settle = () => new Promise((resolve) => setImmediate(resolve));
     const first = hud._updateSummary(false);
@@ -481,9 +466,9 @@ test('after a dropped or timed-out request the next tick asks again, and a move 
   };
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { summaryService });
+    hud = new IntelHUD(env.viewer, { camera: env.camera.port, summaryService, publish: env.publish });
     // The same place before and after: a slow follow camera, a small pan.
-    hud._summaryContext = async () => ({ place: 'Lisboa' });
+    hud._summaryContext = async () => ({ placeLabels: ['Lisboa'] });
     const element = env.elements.get('hud-summary');
     const settle = () => new Promise((resolve) => setImmediate(resolve));
     hud._updateCameraData();
@@ -510,15 +495,17 @@ test('after a dropped or timed-out request the next tick asks again, and a move 
     });
     await update;
 
-    // A reply still typing stops when the camera starts moving.
+    // A reply still typing stops when the camera starts moving, and the
+    // plain line replaces the fragment.
     hud._typeSummary('Canyon Junction Wyoming Yellowstone National Park');
     t.mock.timers.tick(48);
-    const typed = element.textContent;
     env.cameraListeners.moveStart();
+    const plain = element.textContent;
+    assert.equal(plain, hud._composeSummary());
     t.mock.timers.tick(2_000);
     assert.equal(
       element.textContent,
-      typed,
+      plain,
       'no more characters after the move',
     );
   } finally {
@@ -544,8 +531,8 @@ test('a summary interrupted while typing can retry unchanged context', async (t)
   };
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { summaryService });
-    hud._summaryContext = async () => ({ place: 'San Francisco' });
+    hud = new IntelHUD(env.viewer, { camera: env.camera.port, summaryService, publish: env.publish });
+    hud._summaryContext = async () => ({ placeLabels: ['San Francisco'] });
     hud._updateCameraData();
     await hud._updateSummary(true);
     t.mock.timers.tick(48);
@@ -572,6 +559,63 @@ test('a summary interrupted while typing can retry unchanged context', async (t)
     hud?.destroy();
     if (previousWindow === undefined) delete globalThis.window;
     else globalThis.window = previousWindow;
+    env.restore();
+  }
+});
+
+// ── Retired layouts ─────────────────────────────────────────────────────────
+//
+// Share links keep the retired Operator code, so old links still name it. The
+// real HUD, not a caller, is what turns it into the default Tactical layout.
+
+test('a retired Operator layout falls back to Tactical in the live HUD', () => {
+  const env = installHudEnvironment();
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer, { camera: env.camera.port, publish: env.publish });
+    hud.setVariant('minimal');
+    assert.equal(hud.getVariant(), 'minimal');
+    hud.setVariant('operator');
+    assert.equal(hud.getVariant(), 'tactical');
+    assert.equal(env.view().variant, 'tactical');
+  } finally {
+    hud?.destroy();
+    env.restore();
+  }
+});
+
+test('a camera with no position leaves the readouts as they were', () => {
+  const env = installHudEnvironment();
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer, { camera: env.camera.port, publish: env.publish });
+    hud._updateCameraData();
+    const alt = env.elements.get('hud-alt').textContent;
+    const metrics = hud._latestMetrics;
+    env.camera.setPose({ lon: NaN, lat: NaN, height: NaN });
+    hud._updateCameraData();
+    assert.equal(env.elements.get('hud-alt').textContent, alt);
+    assert.equal(hud._latestMetrics, metrics);
+    assert.doesNotMatch(alt, /NaN/);
+  } finally {
+    hud?.destroy();
+    env.restore();
+  }
+});
+
+test('the view window is measured from the camera’s rectangle in degrees', () => {
+  const env = installHudEnvironment();
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer, { camera: env.camera.port, publish: env.publish });
+    assert.equal(hud._viewWindowKm(0), null, 'no rectangle, no window');
+    env.camera.setViewRectangle({ west: -1, south: -0.5, east: 1, north: 0.5 });
+    assert.deepEqual(hud._viewWindowKm(0), { widthKm: 222, heightKm: 111 });
+    // Across the antimeridian: the short way round.
+    env.camera.setViewRectangle({ west: 179, south: 0, east: -179, north: 1 });
+    assert.equal(Math.round(hud._viewWindowKm(60).widthKm), 111);
+  } finally {
+    hud?.destroy();
     env.restore();
   }
 });

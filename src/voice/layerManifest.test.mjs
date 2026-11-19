@@ -9,6 +9,7 @@ import {
   VOICE_TOGGLE_LAYER_IDS,
   VOICE_CONTEXT_LAYER_IDS,
   VOICE_QUERY_LAYER_IDS,
+  voiceLayerAliasHint,
   voiceLayerAliasMap,
 } from './layerManifest.js';
 
@@ -78,6 +79,23 @@ test('tool enums are generated from the manifest', () => {
   assert.ok(panels.includes('weather-panel') && panels.includes('recent-imagery-panel'));
 });
 
+test('the alias hint leaves out names the layer id already spells', () => {
+  const hint = voiceLayerAliasHint();
+  const entries = hint.split(';').map((entry) => entry.split('→'));
+  const flat = (text) => text.toLowerCase().replace(/[\s-]+/g, '');
+  for (const [aliases, id] of entries) {
+    for (const alias of aliases.split('/')) {
+      assert.ok(!flat(id).includes(flat(alias)), `"${alias}" is already spelled by ${id}`);
+    }
+  }
+  const ids = entries.map(([, id]) => id);
+  assert.ok(!ids.includes('local-dams'), 'a layer left with no alias gets no entry');
+  assert.ok(!ids.includes('weather-radar'));
+  assert.match(hint, /(^|;)aqhi→air-quality(;|$)/, 'an alias the id does not spell stays');
+  assert.match(hint, /(^|;)hurricanes→weather-cyclones(;|$)/);
+  assert.match(hint, /(^|;)fires\/wildfires→local-firms(;|$)/);
+});
+
 test('spoken aliases resolve to real layers, keep every legacy phrase and never collide', () => {
   const aliases = voiceLayerAliasMap();
   for (const id of aliases.values()) assert.ok(manifestIds.includes(id), id);
@@ -101,6 +119,7 @@ test('spoken aliases resolve to real layers, keep every legacy phrase and never 
     'weather radar': 'weather-radar', lightning: 'weather-lightning', 'military bases': 'military-installations',
     'recent imagery': 'recent-imagery', 'bike share': 'bikeshare', 'rocket launches': 'rocket-launches',
     'street level': 'street-level', mapillary: 'street-level',
+    'street view': 'street-level',
     wind: 'wind', directions: 'directions', 'fire perimeters': 'fire-perimeters',
     'wildfire perimeters': 'fire-perimeters', 'burn areas': 'fire-perimeters',
   };

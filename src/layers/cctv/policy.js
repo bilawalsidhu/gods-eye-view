@@ -1,7 +1,7 @@
 export { ACTIVE_FRAME_REFRESH_MS } from './sourcePolicy.js';
-import * as Cesium from 'cesium';
 import { CCTV_CARD_FETCH_BURST_SPACING_MS } from '../../data/cctvCards.js';
 import { CCTV_AMBIENT_CARD_MAX } from '../../data/cctvLod.js';
+import { hexColor } from '../../render/color.js';
 
 // ---------------------------------------------------------------------------
 // API endpoints
@@ -59,6 +59,45 @@ export const GEO_TRACKING_BATCH_DELAY_MS = 250;
 export const GEO_PROGRESS_NOTIFY_INTERVAL_MS = 300;
 
 export const GEO_PROGRESS_NOTIFY_BATCH_LIMIT = 10;
+
+// View thinning: camera icons show only on or near the screen, and each
+// camera competes for a world-anchored grid cell sized to about VIEW_CELL_PX
+// at its distance from the viewer (in power-of-two metre steps, so a pan
+// keeps the same winners until a camera's distance crosses a step). Cells
+// smaller than VIEW_MIN_CELL_M do not thin:
+// close up every camera shows, co-located ones included.
+
+export const VIEW_CELL_PX = 40;
+
+export const VIEW_MIN_CELL_M = 60;
+
+// Icons this far past the screen edge (fraction of its size) still show, so
+// a pan does not reveal empty ground before the next view pass.
+
+export const VIEW_ICON_MARGIN = 0.5;
+
+// While the camera moves, the view pass reruns at most this often.
+
+export const VIEW_MOTION_REFRESH_MS = 250;
+// A motion tick is skipped unless the camera moved this fraction of its
+// ellipsoid height, or turned this many degrees, since the last pass.
+
+export const VIEW_MOTION_MIN_MOVE_FRACTION = 0.01;
+
+export const VIEW_MOTION_MIN_TURN_DEG = 0.5;
+
+// Motion passes are spaced at least this many times the last pass's cost, so
+// a large catalog spends at most about a tenth of a long move on them.
+
+export const VIEW_MOTION_COST_FACTOR = 10;
+
+// A view camera's geometry is attempted at most this many times per surface
+// regime (a cold elevation cell can leave the first attempt unresolved); the
+// retry runs this long after the drain that left it unresolved.
+
+export const VIEW_GEOMETRY_ATTEMPTS = 2;
+
+export const VIEW_GEOMETRY_RETRY_MS = 1500;
 
 // Throttle for placeholder repaints — the projection RAF loop must not
 // re-fill a 1080p canvas on every frame while a feed image is still loading.
@@ -140,10 +179,14 @@ export const DEFAULT_CAMERA_CALIBRATION = Object.freeze({
   heightM: 0,
 });
 
-/** Base64-encoded SVG camera icon for billboard rendering. */
+/**
+ * Base64-encoded SVG camera icon for the camera icons. Icons rasterise an
+ * SVG at its own size, so it is 48 px: drawn at 24 px, 1.25× near scale on a
+ * 2× display draws it at 60 device px, and it stays sharp there.
+ */
 
 export const CAMERA_ICON = (() => {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 36 36">
     <defs>
       <linearGradient id="lens" x1="0" y1="0" x2="1" y2="1">
         <stop offset="0%" stop-color="#c9f6ff"/>
@@ -395,44 +438,33 @@ export const CAMERA_SEEDS = [
 ];
 
 // ---------------------------------------------------------------------------
-// Visual style constants
+// Visual style constants: renderer colours, [r, g, b, a] in 0..1
 // ---------------------------------------------------------------------------
 
-export const IDLE_CAMERA_COLOR =
-  Cesium.Color.fromCssColorString('#6be8ff').withAlpha(0.88);
+export const IDLE_CAMERA_COLOR = hexColor('#6be8ff', 0.88);
 
-export const ACTIVE_CAMERA_COLOR =
-  Cesium.Color.fromCssColorString('#ffd97a').withAlpha(0.95);
+export const ACTIVE_CAMERA_COLOR = hexColor('#ffd97a', 0.95);
 
-export const LIVE_CAMERA_COLOR =
-  Cesium.Color.fromCssColorString('#b48cff').withAlpha(0.88);
+export const LIVE_CAMERA_COLOR = hexColor('#b48cff', 0.88);
 
-export const IDLE_COVERAGE_COLOR =
-  Cesium.Color.fromCssColorString('#2fe0ff').withAlpha(0.24);
+export const IDLE_COVERAGE_COLOR = hexColor('#2fe0ff', 0.24);
 
-export const IDLE_COVERAGE_CENTER_MUTED =
-  Cesium.Color.fromCssColorString('#2fe0ff').withAlpha(0.2);
+export const IDLE_COVERAGE_CENTER_MUTED = hexColor('#2fe0ff', 0.2);
 
-export const IDLE_COVERAGE_EDGE_MUTED =
-  Cesium.Color.fromCssColorString('#2fe0ff').withAlpha(0.18);
+export const IDLE_COVERAGE_EDGE_MUTED = hexColor('#2fe0ff', 0.18);
 
-export const ACTIVE_COVERAGE_EDGE =
-  Cesium.Color.fromCssColorString('#8dff87').withAlpha(0.58);
+export const ACTIVE_COVERAGE_EDGE = hexColor('#8dff87', 0.58);
 
-export const ACTIVE_COVERAGE_CENTER =
-  Cesium.Color.fromCssColorString('#d7ff8d').withAlpha(0.82);
+export const ACTIVE_COVERAGE_CENTER = hexColor('#d7ff8d', 0.82);
 
 // H6: dimmer depth-fail materials let the active frustum wireframe read
 // through buildings while in monitor fallback mode.
 
-export const ACTIVE_COVERAGE_EDGE_DEPTHFAIL =
-  Cesium.Color.fromCssColorString('#8dff87').withAlpha(0.18);
+export const ACTIVE_COVERAGE_EDGE_DEPTHFAIL = hexColor('#8dff87', 0.18);
 
-export const ACTIVE_COVERAGE_CENTER_DEPTHFAIL =
-  Cesium.Color.fromCssColorString('#d7ff8d').withAlpha(0.26);
+export const ACTIVE_COVERAGE_CENTER_DEPTHFAIL = hexColor('#d7ff8d', 0.26);
 
-export const PLANE_OUTLINE_COLOR =
-  Cesium.Color.fromCssColorString('#6be8ff').withAlpha(0.55);
+export const PLANE_OUTLINE_COLOR = hexColor('#6be8ff', 0.55);
 
 /**
  * Card budget while the staggered geometry drain is running — the raised

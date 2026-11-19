@@ -18,7 +18,7 @@ import {
 } from './pointerContext.js';
 
 import { shouldPauseRadioForVoice } from './realtimeProtocol.js';
-import { postDebugLog } from './realtimeDiagnostics.js';
+import { missingVoiceKeyText, postDebugLog } from './realtimeDiagnostics.js';
 
 export {
   readStoredVoiceTier,
@@ -54,7 +54,7 @@ export {
 
 import { createRealtimeBackend } from './realtimeBackend.js';
 
-import { t } from '../i18n/index.js';
+import { t, translateKnown } from '../i18n/index.js';
 import { voiceStatusLabel } from './control.js';
 
 // Machine states (dataset.status, CSS); voiceStatusLabel() translates labels.
@@ -101,6 +101,7 @@ export class GevRealtimeController extends RealtimeFacade {
 
       operations: {
         sendRealtimeEvent: (...args) => this.sendRealtimeEvent(...args),
+        debugLog: (...args) => this.debugLog(...args),
       },
     });
     this._diagnostics = new RealtimeDiagnostics({
@@ -157,7 +158,6 @@ export class GevRealtimeController extends RealtimeFacade {
       },
     });
 
-    this.buttonHandler = null;
     this.tierHandler = null;
     this.annotationEventUnsubscribe = null;
 
@@ -379,12 +379,8 @@ export class GevRealtimeController extends RealtimeFacade {
     this._radio.clearPendingPlayback();
     this._viewport.reset();
     this._input.resetSession();
-    if (removeUi && this.ui?.button && this.buttonHandler) {
-      this.ui.button.removeEventListener('click', this.buttonHandler);
-      this.buttonHandler = null;
-    }
-    if (removeUi && this.ui?.tierButton && this.tierHandler) {
-      this.ui.tierButton.removeEventListener('click', this.tierHandler);
+    if (removeUi && this.tierHandler) {
+      this.tierHandler();
       this.tierHandler = null;
     }
     if (removeUi) this._input.detachBindings();
@@ -395,9 +391,7 @@ export class GevRealtimeController extends RealtimeFacade {
       this.annotationEventUnsubscribe = null;
     }
     if (removeUi) this._radio.detachObservers();
-    if (removeUi && this.ui?.root) {
-      this.ui.root.remove();
-    }
+    if (removeUi) this.ui?.remove();
     if (!preserveStatus && !removeUi) {
       this.setStatus('idle', t('Voice off'));
     }
@@ -413,33 +407,56 @@ export class GevRealtimeController extends RealtimeFacade {
     }
   }
 
-  setStatus(status, detail) {
+  /**
+   * @param {string} status
+   * @param {string} [detail]
+   * @param {{missingKey?: boolean}} [options] True when the error is a
+   *   missing server key: it is worded in the current language and shown
+   *   without the microphone hint.
+   */
+  setStatus(status, detail, { missingKey = false } = {}) {
     this.status = status;
-    this.emitSessionEvent({ type: 'state', state: status, detail });
-    this.ui.root.dataset.status = status;
-    if (status === 'error') this.ui.root.classList.remove('error-dismissed');
+    // A detail may be English catalog text (from the helpers this controller
+    // shares with Gemini): it is worded in the current language when shown.
+    this.emitSessionEvent({
+      type: 'state',
+      state: status,
+      detail: translateKnown(detail),
+      ...(typeof detail === 'string' && { sourceDetail: detail }),
+      ...(missingKey && { missingKey: true }),
+    });
+    this.ui.update('root', {
+      status,
+      ...(status === 'error' && { errorDismissed: false }),
+    });
     this.updateVoiceButtonLabel();
     const shownStatus = STATUS_STATES.has(status) ? status : 'idle';
-    this.ui.status.textContent = voiceStatusLabel(shownStatus);
-    const resolvedDetail =
-      status === 'listening' && this.pushToTalkMode
-        ? this.pushToTalkKeyHeld
+    this.ui.update('status', { text: () => voiceStatusLabel(shownStatus) });
+    // Words are given as functions, so a locale change words them again.
+    const holdToTalk = status === 'listening' && this.pushToTalkMode;
+    const held = this.pushToTalkKeyHeld;
+    const resolvedDetail = () =>
+      holdToTalk
+        ? held
           ? t('Release Space to send')
           : t('Hold Space to talk')
-        : detail;
-    const primaryDetail =
+        : translateKnown(detail);
+    const primaryDetail = () =>
       status === 'error'
         ? t('VOICE UNAVAILABLE')
-        : resolvedDetail ||
+        : resolvedDetail() ||
           (status === 'idle' ? t('VOICE STANDBY') : t('VOICE ACTIVE'));
-    this.ui.detail.textContent = primaryDetail;
-    this.ui.detail.title = primaryDetail;
-    if (this.ui.errorDetail) {
-      this.ui.errorDetail.textContent =
+    this.ui.update('detail', { text: primaryDetail, title: primaryDetail });
+    this.ui.update('error', {
+      text: () =>
         status === 'error'
-          ? resolvedDetail || t('Voice session could not be started.')
-          : '';
-    }
+          ? (missingKey && missingVoiceKeyText()) ||
+            resolvedDetail() ||
+            t('Voice session could not be started.')
+          : '',
+      // "Check microphone permission" is wrong advice for a missing key.
+      hint: () => !(status === 'error' && missingKey),
+    });
     if (status === 'idle' || status === 'connecting' || status === 'error') {
       this.setVoiceSpeaker('idle');
     }

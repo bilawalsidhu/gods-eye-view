@@ -32,12 +32,28 @@ import aisLiveVesselsLayer from './aisLiveVessels.js';
 import { registerEntityContext, selectEntityContext } from './contextStore.js';
 import { WORLD_FOCUS_REQUEST_EVENT } from '../worldFocus.js';
 import { ensureGeoidReady, geoidHeight } from './geoid.js';
-import { registerPickOwner, unregisterPickOwner } from './pickRegistry.js';
+import {
+  isUnderOtherCard,
+  registerPickOwner,
+  setClickCardHitTest,
+  unregisterPickOwner,
+} from './pickRegistry.js';
 import { applyVesselOverlayPolicy } from './vesselLabels.js';
+import { fakeInput } from '../input/testDoubles.mjs';
 import { layerFeedState } from './manager.js';
+import {
+  presentSelectedVessel,
+  subscribeSelectedVessel,
+} from '../hudReadouts.js';
+import { createVesselIconBook } from '../layers/vessels/iconBook.js';
+import { bindRenderer } from '../render/rendererOf.js';
+import { entityFollowTarget } from '../data/followed.js';
 
 test('open feed with vessels is healthy (null)', () => {
-  assert.equal(deriveAisFeedError({ status: 'open', lastMessageAt: 1, error: null }, 42), null);
+  assert.equal(
+    deriveAisFeedError({ status: 'open', lastMessageAt: 1, error: null }, 42),
+    null,
+  );
 });
 
 test('open feed without a received message is not a fresh healthy update', () => {
@@ -69,7 +85,10 @@ test('snapshot classification distinguishes raw rows from accepted vessel positi
   assert.equal(snapshot.lastMessageAt, 123);
   assert.equal(snapshot.rawRowCount, 3);
   assert.equal(snapshot.acceptedRowCount, 1);
-  assert.deepEqual(snapshot.acceptedRows.map((row) => row.mmsi), ['valid']);
+  assert.deepEqual(
+    snapshot.acceptedRows.map((row) => row.mmsi),
+    ['valid'],
+  );
   assert.equal(snapshot.error, null);
 });
 
@@ -96,27 +115,45 @@ test('accepted cached rows remain usable while transport reconnects', () => {
 
 test('missing key with no rows surfaces a clean reason', () => {
   assert.equal(
-    deriveAisFeedError({ status: 'missing-key', error: 'AISSTREAM_API_KEY is not set' }, 0),
+    deriveAisFeedError(
+      { status: 'missing-key', error: 'AISSTREAM_API_KEY is not set' },
+      0,
+    ),
     'AISSTREAM_API_KEY not set',
   );
 });
 
 test('socket error with no rows surfaces "feed down"', () => {
-  assert.equal(deriveAisFeedError({ status: 'error', error: 'AISStream websocket error' }, 0), 'feed down');
+  assert.equal(
+    deriveAisFeedError(
+      { status: 'error', error: 'AISStream websocket error' },
+      0,
+    ),
+    'feed down',
+  );
 });
 
 test('closed feed with no rows surfaces "feed disconnected"', () => {
-  assert.equal(deriveAisFeedError({ status: 'closed', error: null }, 0), 'feed disconnected');
+  assert.equal(
+    deriveAisFeedError({ status: 'closed', error: null }, 0),
+    'feed disconnected',
+  );
 });
 
 test('non-open status but rows still flowing is treated as stale, not down (null)', () => {
   // e.g. reconnecting/refreshing while a cached buffer still serves rows.
-  assert.equal(deriveAisFeedError({ status: 'connecting', error: null }, 30), null);
+  assert.equal(
+    deriveAisFeedError({ status: 'connecting', error: null }, 30),
+    null,
+  );
 });
 
 test('unknown status falls back to a generic reason and appends server detail', () => {
   assert.equal(
-    deriveAisFeedError({ status: 'weird-state', error: 'something specific' }, 0),
+    deriveAisFeedError(
+      { status: 'weird-state', error: 'something specific' },
+      0,
+    ),
     'feed unavailable (something specific)',
   );
 });
@@ -131,7 +168,10 @@ test('missing status treated as healthy (older/other payload shapes) (null)', ()
 // degraded feed must stay visible even while cached vessels are still drawn.
 
 test("'live' is the healthy status and reads exactly like the older 'open'", () => {
-  assert.equal(deriveAisFeedError({ status: 'live', lastMessageAt: 1, error: null }, 42), null);
+  assert.equal(
+    deriveAisFeedError({ status: 'live', lastMessageAt: 1, error: null }, 42),
+    null,
+  );
   assert.equal(
     deriveAisFeedError({ status: 'live', lastMessageAt: null, error: null }, 0),
     'awaiting first AIS message…',
@@ -144,7 +184,10 @@ test("'live' is the healthy status and reads exactly like the older 'open'", () 
 
 test('a stale feed is surfaced even though cached vessels are still on screen', () => {
   assert.equal(
-    deriveAisFeedError({ status: 'stale', silentForMs: 184_000, lastMessageAt: 5 }, 4_812),
+    deriveAisFeedError(
+      { status: 'stale', silentForMs: 184_000, lastMessageAt: 5 },
+      4_812,
+    ),
     'feed silent 184s — no AIS data',
   );
 });
@@ -161,7 +204,10 @@ test('reconnecting reports which attempt is in flight, rows or no rows', () => {
     deriveAisFeedError({ status: 'reconnecting', reconnectAttempt: 2 }, 900),
     'reconnecting to feed… (attempt 2)',
   );
-  assert.equal(deriveAisFeedError({ status: 'reconnecting' }, 0), 'reconnecting to feed…');
+  assert.equal(
+    deriveAisFeedError({ status: 'reconnecting' }, 0),
+    'reconnecting to feed…',
+  );
 });
 
 test('DOWN is a visible terminal state, not a silent retry', () => {
@@ -180,15 +226,19 @@ test('a rejected API key reads as actionable, not as a countdown', () => {
   const runtime = makeFakeAisRuntime(1_000_000);
   _setAisRuntimeForTest(runtime.runtime);
   try {
-    _applyAisFeedSnapshotForTest({}, {
-      status: 'auth-failed',
-      reconnectAttempt: 3,
-      nextAttemptAt: 1_000_000 + 3_600_000,
-      refreshing: true,
-      rows: [],
-    });
+    _applyAisFeedSnapshotForTest(
+      {},
+      {
+        status: 'auth-failed',
+        reconnectAttempt: 3,
+        nextAttemptAt: 1_000_000 + 3_600_000,
+        refreshing: true,
+        rows: [],
+      },
+    );
     assert.equal(
-      aisLiveVesselsLayer.getStats().retryInSec, 0,
+      aisLiveVesselsLayer.getStats().retryInSec,
+      0,
       'an hour-long countdown would imply waiting is the fix',
     );
   } finally {
@@ -200,17 +250,23 @@ test('a degraded feed reports its retry countdown to the chip', () => {
   const runtime = makeFakeAisRuntime(1_000_000);
   _setAisRuntimeForTest(runtime.runtime);
   try {
-    _applyAisFeedSnapshotForTest({}, {
-      status: 'reconnecting',
-      reconnectAttempt: 3,
-      nextAttemptAt: 1_060_000, // 60s past the fake clock
-      refreshing: true,
-      rows: [],
-    });
+    _applyAisFeedSnapshotForTest(
+      {},
+      {
+        status: 'reconnecting',
+        reconnectAttempt: 3,
+        nextAttemptAt: 1_060_000, // 60s past the fake clock
+        refreshing: true,
+        rows: [],
+      },
+    );
     assert.equal(aisLiveVesselsLayer.getStats().retryInSec, 60);
 
     // A feed with nothing scheduled must not invent a countdown.
-    _applyAisFeedSnapshotForTest({}, { status: 'live', lastMessageAt: 5, rows: [] });
+    _applyAisFeedSnapshotForTest(
+      {},
+      { status: 'live', lastMessageAt: 5, rows: [] },
+    );
     assert.equal(aisLiveVesselsLayer.getStats().retryInSec, 0);
   } finally {
     _setAisRuntimeForTest(null);
@@ -224,7 +280,11 @@ test('a degraded feed keeps its reason through snapshot classification', () => {
     refreshing: true,
     rows: [{ mmsi: 'cached', lat: 29.7, lon: -95.1 }],
   });
-  assert.equal(snapshot.acceptedRowCount, 1, 'the cached vessel is still drawable');
+  assert.equal(
+    snapshot.acceptedRowCount,
+    1,
+    'the cached vessel is still drawable',
+  );
   assert.equal(snapshot.error, 'feed down — retrying slowly (attempt 5)');
 });
 
@@ -252,7 +312,9 @@ function makeFakeAisRuntime(startMs = 1000) {
   return {
     runtime,
     scheduled,
-    get nowMs() { return nowMs; },
+    get nowMs() {
+      return nowMs;
+    },
     advance(deltaMs) {
       nowMs += deltaMs;
       let fired;
@@ -283,7 +345,7 @@ test('zero accepted rows preserve warm vessel selection, trail, and freshness ti
     records: [record],
     selectedRecord: record,
     trail,
-    trailMmsi: record.mmsi,
+    trailId: record.mmsi,
     trailPositions: [POS],
     loaded: true,
     lastUpdate: 456,
@@ -291,11 +353,14 @@ test('zero accepted rows preserve warm vessel selection, trail, and freshness ti
     lastMessageAt: 123,
   });
   try {
-    const result = _applyAisFeedSnapshotForTest({}, {
-      status: 'open',
-      lastMessageAt: 789,
-      rows: [{ mmsi: 'invalid', lat: 'bad', lon: 4 }],
-    });
+    const result = _applyAisFeedSnapshotForTest(
+      {},
+      {
+        status: 'open',
+        lastMessageAt: 789,
+        rows: [{ mmsi: 'invalid', lat: 'bad', lon: 4 }],
+      },
+    );
     assert.equal(result.reconciled, false);
     assert.deepEqual(_getVesselFeedStateForTest(), {
       count: 1,
@@ -310,8 +375,8 @@ test('zero accepted rows preserve warm vessel selection, trail, and freshness ti
       lastMessageAt: 789,
       rawRowCount: 1,
       acceptedRowCount: 0,
-      selectedMmsi: record.mmsi,
-      trailMmsi: record.mmsi,
+      selectedId: record.mmsi,
+      trailId: record.mmsi,
       trailPositionCount: 1,
       sessionId: _getVesselFeedStateForTest().sessionId,
       firstConnectPhase: 'idle',
@@ -330,11 +395,14 @@ test('open first load stays LOADING for one bounded first-connect grace period',
   _setVesselStateForTest({ viewer: {}, records: [] });
   try {
     _beginAisSessionForTest();
-    const result = _applyAisFeedSnapshotForTest({}, {
-      status: 'open',
-      lastMessageAt: null,
-      rows: [],
-    });
+    const result = _applyAisFeedSnapshotForTest(
+      {},
+      {
+        status: 'open',
+        lastMessageAt: null,
+        rows: [],
+      },
+    );
     assert.equal(result.reconciled, false);
     const feed = _getVesselFeedStateForTest();
     assert.equal(feed.loaded, true);
@@ -378,9 +446,15 @@ test('open and connecting polls do not restart the first-connect deadline', () =
     const initial = _getVesselFeedStateForTest();
     clock.advance(12000);
     _applyAisFeedSnapshotForTest({}, { status: 'connecting', rows: [] });
-    _applyAisFeedSnapshotForTest({}, { status: 'open', lastMessageAt: 9, rows: [] });
+    _applyAisFeedSnapshotForTest(
+      {},
+      { status: 'open', lastMessageAt: 9, rows: [] },
+    );
     const afterPolls = _getVesselFeedStateForTest();
-    assert.equal(afterPolls.firstConnectStartedAt, initial.firstConnectStartedAt);
+    assert.equal(
+      afterPolls.firstConnectStartedAt,
+      initial.firstConnectStartedAt,
+    );
     assert.equal(afterPolls.firstConnectDeadline, initial.firstConnectDeadline);
     assert.equal(clock.activeCount(), 1);
     assert.equal(afterPolls.loading, true);
@@ -397,11 +471,14 @@ test('definitive AIS transport failures end grace immediately', () => {
   _setVesselStateForTest({ viewer: {}, records: [] });
   try {
     _beginAisSessionForTest();
-    _applyAisFeedSnapshotForTest({}, {
-      status: 'missing-key',
-      error: 'AISSTREAM_API_KEY is not set',
-      rows: [],
-    });
+    _applyAisFeedSnapshotForTest(
+      {},
+      {
+        status: 'missing-key',
+        error: 'AISSTREAM_API_KEY is not set',
+        rows: [],
+      },
+    );
     const feed = _getVesselFeedStateForTest();
     assert.equal(feed.loading, false);
     assert.equal(feed.status, 'unavailable');
@@ -418,7 +495,7 @@ test('first accepted position ends grace and warm data survives later open silen
   const clock = makeFakeAisRuntime(7000);
   const record = makeRecord();
   _setAisRuntimeForTest(clock.runtime);
-  _setVesselOverlayHostForTest({
+  useVesselHost({
     setEntries() {},
     setVisible() {},
     clearSource() {},
@@ -426,16 +503,21 @@ test('first accepted position ends grace and warm data survives later open silen
   _setVesselStateForTest({ viewer: {}, records: [record] });
   try {
     _beginAisSessionForTest();
-    const accepted = _applyAisFeedSnapshotForTest({}, {
-      status: 'open',
-      lastMessageAt: 12,
-      rows: [{
-        mmsi: record.mmsi,
-        name: record.name,
-        lat: 51.93,
-        lon: 4.05,
-      }],
-    });
+    const accepted = _applyAisFeedSnapshotForTest(
+      {},
+      {
+        status: 'open',
+        lastMessageAt: 12,
+        rows: [
+          {
+            mmsi: record.mmsi,
+            name: record.name,
+            lat: 51.93,
+            lon: 4.05,
+          },
+        ],
+      },
+    );
     assert.equal(accepted.reconciled, true);
     let feed = _getVesselFeedStateForTest();
     assert.equal(feed.loading, false);
@@ -445,11 +527,14 @@ test('first accepted position ends grace and warm data survives later open silen
     assert.equal(clock.activeCount(), 0);
 
     clock.advance(5000);
-    const silent = _applyAisFeedSnapshotForTest({}, {
-      status: 'open',
-      lastMessageAt: 13,
-      rows: [],
-    });
+    const silent = _applyAisFeedSnapshotForTest(
+      {},
+      {
+        status: 'open',
+        lastMessageAt: 13,
+        rows: [],
+      },
+    );
     assert.equal(silent.reconciled, false);
     feed = _getVesselFeedStateForTest();
     assert.equal(feed.count, 1);
@@ -460,7 +545,7 @@ test('first accepted position ends grace and warm data survives later open silen
     assert.equal(feed.error, 'awaiting usable AIS positions…');
   } finally {
     _setVesselStateForTest({ enabled: false });
-    _setVesselOverlayHostForTest();
+    useVesselHost();
     _setAisRuntimeForTest();
   }
 });
@@ -484,7 +569,10 @@ test('superseded first-connect timer cannot expire its replacement session', () 
     const afterStaleTimer = _getVesselFeedStateForTest();
     assert.equal(afterStaleTimer.sessionId, replacement.sessionId);
     assert.equal(afterStaleTimer.firstConnectPhase, 'loading');
-    assert.equal(afterStaleTimer.firstConnectDeadline, replacement.firstConnectDeadline);
+    assert.equal(
+      afterStaleTimer.firstConnectDeadline,
+      replacement.firstConnectDeadline,
+    );
     assert.equal(afterStaleTimer.error, null);
   } finally {
     _setVesselStateForTest({ enabled: false });
@@ -494,7 +582,9 @@ test('superseded first-connect timer cannot expire its replacement session', () 
 
 function deferredFetchResponse() {
   let resolve;
-  const promise = new Promise((next) => { resolve = next; });
+  const promise = new Promise((next) => {
+    resolve = next;
+  });
   return { promise, resolve };
 }
 
@@ -552,7 +642,12 @@ test('superseded AIS response cannot mutate or finalize a replacement request', 
   const replacement = makeRecord({ name: 'REPLACEMENT' });
   const replacementTrail = makeTrailSpy();
   try {
-    _setVesselStateForTest({ viewer: {}, records: [oldRecord], loaded: true, lastUpdate: 100 });
+    _setVesselStateForTest({
+      viewer: {},
+      records: [oldRecord],
+      loaded: true,
+      lastUpdate: 100,
+    });
     const oldLoad = _loadLivePositionsForTest({});
 
     // Simulate destroy/re-init replacement. The old fetch intentionally ignores abort.
@@ -561,33 +656,39 @@ test('superseded AIS response cannot mutate or finalize a replacement request', 
       records: [replacement],
       selectedRecord: replacement,
       trail: replacementTrail,
-      trailMmsi: replacement.mmsi,
+      trailId: replacement.mmsi,
       trailPositions: [POS],
       loaded: true,
       lastUpdate: 200,
     });
     const replacementLoad = _loadLivePositionsForTest({});
 
-    first.resolve(jsonResponse({
-      status: 'open',
-      lastMessageAt: 1000,
-      rows: [{ mmsi: oldRecord.mmsi, name: 'STALE RESPONSE', lat: 1, lon: 2 }],
-    }));
+    first.resolve(
+      jsonResponse({
+        status: 'open',
+        lastMessageAt: 1000,
+        rows: [
+          { mmsi: oldRecord.mmsi, name: 'STALE RESPONSE', lat: 1, lon: 2 },
+        ],
+      }),
+    );
     await oldLoad;
     let feed = _getVesselFeedStateForTest();
     assert.equal(feed.loading, true, 'old finally must not clear replacement loading ownership');
     assert.equal(feed.lastUpdate, 200, 'old response must not advance replacement freshness');
-    assert.equal(feed.selectedMmsi, replacement.mmsi);
+    assert.equal(feed.selectedId, replacement.mmsi);
 
-    second.resolve(jsonResponse({ status: 'open', lastMessageAt: null, rows: [] }));
+    second.resolve(
+      jsonResponse({ status: 'open', lastMessageAt: null, rows: [] }),
+    );
     await replacementLoad;
     feed = _getVesselFeedStateForTest();
     assert.equal(feed.loading, false);
     assert.equal(feed.lastUpdate, 200);
     assert.equal(feed.error, 'awaiting first AIS message…');
     assert.equal(feed.stale, true);
-    assert.equal(feed.selectedMmsi, replacement.mmsi);
-    assert.equal(feed.trailMmsi, replacement.mmsi);
+    assert.equal(feed.selectedId, replacement.mmsi);
+    assert.equal(feed.trailId, replacement.mmsi);
     assert.equal(replacementTrail.clearCalls, 0);
   } finally {
     globalThis.fetch = priorFetch;
@@ -611,14 +712,21 @@ test('disable and destroy make abort-ignoring AIS responses inert', async () => 
     const disableResponse = deferredFetchResponse();
     globalThis.fetch = () => disableResponse.promise;
     const record = makeRecord();
-    _setVesselStateForTest({ viewer: {}, records: [record], loaded: true, lastUpdate: 300 });
+    _setVesselStateForTest({
+      viewer: {},
+      records: [record],
+      loaded: true,
+      lastUpdate: 300,
+    });
     const disabledLoad = _loadLivePositionsForTest({});
     aisLiveVesselsLayer.disable();
-    disableResponse.resolve(jsonResponse({
-      status: 'open',
-      lastMessageAt: 1000,
-      rows: [{ mmsi: record.mmsi, lat: 1, lon: 2 }],
-    }));
+    disableResponse.resolve(
+      jsonResponse({
+        status: 'open',
+        lastMessageAt: 1000,
+        rows: [{ mmsi: record.mmsi, lat: 1, lon: 2 }],
+      }),
+    );
     await disabledLoad;
     let feed = _getVesselFeedStateForTest();
     assert.equal(feed.lastUpdate, 300);
@@ -627,14 +735,21 @@ test('disable and destroy make abort-ignoring AIS responses inert', async () => 
     const destroyResponse = deferredFetchResponse();
     globalThis.fetch = () => destroyResponse.promise;
     const viewer = { scene: { primitives: { remove() {} } } };
-    _setVesselStateForTest({ viewer, records: [record], loaded: true, lastUpdate: 400 });
+    _setVesselStateForTest({
+      viewer,
+      records: [record],
+      loaded: true,
+      lastUpdate: 400,
+    });
     const destroyedLoad = _loadLivePositionsForTest(viewer);
     aisLiveVesselsLayer.destroy(viewer);
-    destroyResponse.resolve(jsonResponse({
-      status: 'open',
-      lastMessageAt: 2000,
-      rows: [{ mmsi: record.mmsi, lat: 3, lon: 4 }],
-    }));
+    destroyResponse.resolve(
+      jsonResponse({
+        status: 'open',
+        lastMessageAt: 2000,
+        rows: [{ mmsi: record.mmsi, lat: 3, lon: 4 }],
+      }),
+    );
     await destroyedLoad;
     feed = _getVesselFeedStateForTest();
     assert.equal(feed.count, 0);
@@ -651,17 +766,30 @@ test('disable and destroy make abort-ignoring AIS responses inert', async () => 
   }
 });
 
+/** One vessel row in a fresh set, as the layer adds it, plus its record. */
+function focusFixture() {
+  const icons = createVesselIconBook();
+  icons.put({
+    id: '353136000',
+    size: [32, 32],
+    meta: { layer: 'ais-live-vessels', id: '353136000' },
+  });
+  const record = {
+    iconId: '353136000',
+    position: { x: 1, y: 2, z: 3 },
+    visible: true,
+  };
+  return {
+    icons,
+    records: [record],
+    record,
+    focus: () => icons.focus('353136000'),
+  };
+}
+
 test('vessel focus wire animates alpha with deadband and restores after tracking ends', () => {
   let writes = 0;
-  const makeColor = (alpha) => ({ alpha, withAlpha: (next) => makeColor(next) });
-  let color = makeColor(1);
-  const billboard = {
-    position: { x: 1, y: 2, z: 3 },
-    show: true,
-    get color() { return color; },
-    set color(next) { writes += 1; color = next; },
-  };
-  const records = [{ position: billboard.position, billboard }];
+  const { icons, records, focus } = focusFixture();
   const target = {
     screenRect: { left: 40, top: 40, right: 60, bottom: 60 },
     paddingPx: 0,
@@ -681,6 +809,7 @@ test('vessel focus wire animates alpha with deadband and restores after tracking
   const apply = (nowMs, focusTarget) => {
     const result = applyVesselFocusDeemphasis({
       records,
+      icons,
       target: focusTarget,
       previousActiveCount: activeCount,
       nowMs,
@@ -689,34 +818,42 @@ test('vessel focus wire animates alpha with deadband and restores after tracking
       params,
     });
     activeCount = result.activeCount;
+    writes += result.writes;
     return result;
   };
 
   assert.equal(apply(0, target).writes, 0);
   assert.equal(apply(150, target).writes, 1);
-  assert.ok(color.alpha > 0.25 && color.alpha < 1);
-  assert.equal(apply(150, target).writes, 0, 'same timestamp stays inside deadband');
+  assert.ok(focus() > 0.25 && focus() < 1);
+  assert.equal(
+    apply(150, target).writes,
+    0,
+    'same timestamp stays inside deadband',
+  );
   assert.equal(apply(300, target).writes, 1);
-  assert.equal(color.alpha, 0.25);
-  assert.equal(apply(300, null).writes, 0, 'release starts continuously from the floor');
+  assert.equal(focus(), 0.25);
+  assert.equal(
+    apply(300, null).writes,
+    0,
+    'release starts continuously from the floor',
+  );
   assert.equal(apply(600, null).writes, 1);
-  assert.ok(color.alpha > 0.25 && color.alpha < 1);
+  assert.ok(focus() > 0.25 && focus() < 1);
   assert.equal(apply(900, null).writes, 1);
-  assert.equal(color.alpha, 1);
-  assert.equal(apply(901, null).writes, 0, 'settled restoration causes no churn');
+  assert.equal(focus(), 1);
+  assert.equal(
+    apply(901, null).writes,
+    0,
+    'settled restoration causes no churn',
+  );
   assert.equal(writes, 4);
 });
 
 test('vessel focus wire performs no alpha writes when nothing has been tracked', () => {
-  let writes = 0;
-  const billboard = {
-    position: { x: 0, y: 0, z: 0 },
-    show: true,
-    get color() { return { alpha: 1 }; },
-    set color(_next) { writes += 1; },
-  };
+  const { icons, records, focus } = focusFixture();
   const result = applyVesselFocusDeemphasis({
-    records: [{ position: billboard.position, billboard }],
+    records,
+    icons,
     target: null,
     nowMs: 100,
     screenPositionFor: () => ({ x: 50, y: 50 }),
@@ -728,17 +865,11 @@ test('vessel focus wire performs no alpha writes when nothing has been tracked',
     activeCount: 0,
     ran: false,
   });
-  assert.equal(writes, 0);
+  assert.equal(focus(), 1);
 });
 
 test('vessel focus wire restores a hidden sprite before releasing the active pass', () => {
-  const makeColor = (alpha) => ({ alpha, withAlpha: (next) => makeColor(next) });
-  const billboard = {
-    position: { x: 1, y: 2, z: 3 },
-    show: true,
-    color: makeColor(1),
-  };
-  const records = [{ billboard }];
+  const { icons, records, record, focus } = focusFixture();
   const target = {
     screenRect: { left: 40, top: 40, right: 60, bottom: 60 },
     paddingPx: 0,
@@ -752,70 +883,75 @@ test('vessel focus wire restores a hidden sprite before releasing the active pas
     releaseMs: 600,
     writeEpsilon: 0.005,
   };
-  const pass = (nowMs, focusTarget, previousActiveCount) => applyVesselFocusDeemphasis({
-    records,
-    target: focusTarget,
-    previousActiveCount,
-    nowMs,
-    screenPositionFor: () => ({ x: 50, y: 50 }),
-    cameraDistanceFor: () => 1200,
-    params,
-  });
+  const pass = (nowMs, focusTarget, previousActiveCount) =>
+    applyVesselFocusDeemphasis({
+      records,
+      icons,
+      target: focusTarget,
+      previousActiveCount,
+      nowMs,
+      screenPositionFor: () => ({ x: 50, y: 50 }),
+      cameraDistanceFor: () => 1200,
+      params,
+    });
 
   pass(0, target, 0);
   const dimmed = pass(params.attackMs, target, 0);
   assert.equal(dimmed.activeCount, 1);
-  assert.equal(billboard.color.alpha, params.dimFloor);
+  assert.equal(focus(), params.dimFloor);
 
-  billboard.show = false;
+  record.visible = false;
   const releaseStart = pass(params.attackMs, null, dimmed.activeCount);
-  const restored = pass(params.attackMs + params.releaseMs, null, releaseStart.activeCount);
+  const restored = pass(
+    params.attackMs + params.releaseMs,
+    null,
+    releaseStart.activeCount,
+  );
   assert.equal(restored.ran, true);
   assert.equal(restored.activeCount, 0);
   assert.equal(restored.writes, 1);
-  assert.equal(billboard.color.alpha, 1);
+  assert.equal(focus(), 1);
 });
 
 // --- Selection gestures (FB-1) ---------------------------------------------
 
 test('vessel selection: empty-space click requests deselection', () => {
   assert.deepEqual(
-    reduceVesselSelection({ selectedMmsi: '353136000', gesture: 'click' }),
+    reduceVesselSelection({ selectedId: '353136000', gesture: 'click' }),
     { action: 'deselect' },
   );
 });
 
 test('vessel selection: no selection plus empty-space click is a no-op', () => {
   assert.deepEqual(
-    reduceVesselSelection({ selectedMmsi: null, pickedMmsi: null, gesture: 'click' }),
+    reduceVesselSelection({ selectedId: null, pickedId: null, gesture: 'click' }),
     { action: 'none' },
   );
 });
 
 test('vessel selection: Escape deselects only when this layer owns a selection', () => {
   assert.deepEqual(
-    reduceVesselSelection({ selectedMmsi: 353136000, gesture: 'escape' }),
+    reduceVesselSelection({ selectedId: 353136000, gesture: 'escape' }),
     { action: 'deselect' },
   );
-  assert.deepEqual(
-    reduceVesselSelection({ gesture: 'escape' }),
-    { action: 'none' },
-  );
+  assert.deepEqual(reduceVesselSelection({ gesture: 'escape' }), {
+    action: 'none',
+  });
 });
 
 test('vessel selection: another vessel replaces selection; same vessel is a no-op', () => {
   assert.deepEqual(
     reduceVesselSelection({
-      selectedMmsi: '353136000',
-      pickedMmsi: '367123450',
+      selectedId: '353136000',
+      pickedId: '367123450',
       gesture: 'click',
     }),
     { action: 'select' },
   );
   assert.deepEqual(
     reduceVesselSelection({
-      selectedMmsi: '353136000',
-      pickedMmsi: '353136000',
+      selectedId: '353136000',
+      pickedId: '353136000',
       gesture: 'click',
     }),
     { action: 'none' },
@@ -830,8 +966,9 @@ test('vessel selection: another vessel replaces selection; same vessel is a no-o
 
 const POS = Cesium.Cartesian3.fromDegrees(4.05, 51.93, 3);
 
+// Like the layer's records, a vessel with no id of its own is keyed by its MMSI.
 function makeRecord(overrides = {}) {
-  return {
+  const record = {
     name: 'EVER GIVEN',
     mmsi: '353136000',
     type: 'Container Ship',
@@ -842,38 +979,20 @@ function makeRecord(overrides = {}) {
     lastPositionUtc: '',
     missedRefreshes: 0,
     position: POS,
-    billboard: null,
     ...overrides,
   };
+  if (!Object.hasOwn(overrides, 'id')) record.id = record.mmsi;
+  return record;
 }
 
 function makeTrailSpy() {
   return {
     clearCalls: 0,
-    clear() { this.clearCalls += 1; },
+    clear() {
+      this.clearCalls += 1;
+    },
     setPositions() {},
     destroy() {},
-  };
-}
-
-function makeClassList(...initial) {
-  const classes = new Set(initial);
-  return {
-    add(value) { classes.add(value); },
-    remove(value) { classes.delete(value); },
-    contains(value) { return classes.has(value); },
-  };
-}
-
-function makeInteractionHandler() {
-  return {
-    click: null,
-    destroyCalls: 0,
-    setInputAction(callback) { this.click = callback; },
-    destroy() {
-      this.destroyCalls += 1;
-      this.click = null;
-    },
   };
 }
 
@@ -892,11 +1011,18 @@ function makeCesiumEvent() {
     raise() {
       for (const callback of [...listeners]) callback();
     },
-    get listenerCount() { return listeners.size; },
+    get listenerCount() {
+      return listeners.size;
+    },
   };
 }
 
-function installWireHarness(picked, stateOverrides = {}) {
+function installWireHarness(
+  picked,
+  stateOverrides = {},
+  sceneExtras = {},
+  firstClick = null,
+) {
   const hadWindow = Object.hasOwn(globalThis, 'window');
   const hadDocument = Object.hasOwn(globalThis, 'document');
   const priorWindow = globalThis.window;
@@ -917,43 +1043,65 @@ function installWireHarness(picked, stateOverrides = {}) {
       this.removed.push({ type, callback });
       if (this.keydown === callback) this.keydown = null;
     },
-    dispatch(event) { this.keydown?.(event); },
+    dispatch(event) {
+      this.keydown?.(event);
+    },
   };
-  const handler = makeInteractionHandler();
-  const reinstalledHandlers = [];
-  const interactionHandlerFactory = () => {
-    const next = makeInteractionHandler();
-    reinstalledHandlers.push(next);
-    return next;
-  };
-  const trackedEntityChanged = makeCesiumEvent();
   const viewer = {
-    scene: { pick: () => picked },
-    trackedEntity: undefined,
-    trackedEntityChanged,
+    scene: { pick: () => picked, ...sceneExtras },
   };
+  const input = fakeInput(viewer);
+  // A subscriber that runs before the layer's own (an aircraft layer).
+  if (firstClick) input.input.onClick(firstClick);
+  // The camera port other layers follow through, with no pose to read; its
+  // followChanged event counts who listens.
+  const followChanged = makeCesiumEvent();
+  const camera = {
+    pose: () => null,
+    followed: null,
+    follow(target) {
+      this.followed = target;
+      followChanged.raise();
+    },
+    on: (name, callback) =>
+      name === 'followChanged'
+        ? followChanged.addEventListener(callback)
+        : () => {},
+  };
+  const unbindRenderer = bindRenderer(viewer, {
+    camera,
+    get canvas() {
+      return viewer.scene?.canvas;
+    },
+  });
+  const handler = { click: (event) => input.click(event.position) };
   const record = makeRecord();
   const trail = makeTrailSpy();
+  presentSelectedVessel({ text: `AIS: ${record.name}` });
+  let vesselReadout;
+  const stopReadout = subscribeSelectedVessel(
+    (readout) => (vesselReadout = readout),
+  );
   const hud = {
-    textContent: `AIS: ${record.name}`,
-    classList: makeClassList('active'),
+    get readout() {
+      return vesselReadout;
+    },
   };
 
   globalThis.window = windowTarget;
   globalThis.document = {
-    getElementById: (id) => (id === 'hud-ais-vessel' ? hud : null),
+    getElementById: () => null,
   };
   _setVesselStateForTest({
     records: [record],
     selectedRecord: record,
     trail,
-    trailMmsi: record.mmsi,
+    trailId: record.mmsi,
     trailPositions: [POS],
-    interactionHandlerFactory,
     interactionKeyTarget: keyTarget,
     ...stateOverrides,
   });
-  _bindVesselInteractionForTest(viewer, handler, keyTarget);
+  _bindVesselInteractionForTest(viewer, keyTarget);
 
   return {
     handler,
@@ -962,11 +1110,14 @@ function installWireHarness(picked, stateOverrides = {}) {
     trail,
     hud,
     viewer,
+    camera,
+    followChanged,
     windowTarget,
-    reinstalledHandlers,
-    interactionHandlerFactory,
+    input: input.input,
     cleanup() {
+      stopReadout();
       aisLiveVesselsLayer.destroy();
+      unbindRenderer();
       if (hadWindow) globalThis.window = priorWindow;
       else delete globalThis.window;
       if (hadDocument) globalThis.document = priorDocument;
@@ -979,9 +1130,28 @@ test('vessel interaction wire: trail pick does not deselect', () => {
   const harness = installWireHarness({ id: 'gev-trail:71' });
   try {
     harness.handler.click({ position: { x: 10, y: 20 } });
+    assert.equal(
+      aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
+      harness.record.mmsi,
+    );
+    assert.equal(harness.trail.clearCalls, 0);
+    assert.equal(_getVesselStateForTest().trailId, harness.record.mmsi);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test('vessel interaction wire: a click on open water keeps the ship the bridge rides', () => {
+  const harness = installWireHarness({ id: 'gev-trailing-contact' });
+  try {
+    aisLiveVesselsLayer.setCockpitSubject(harness.record.mmsi);
+    harness.handler.click({ position: { x: 10, y: 20 } });
     assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
     assert.equal(harness.trail.clearCalls, 0);
-    assert.equal(_getVesselStateForTest().trailMmsi, harness.record.mmsi);
+    // Released, the same click deselects as it always has.
+    aisLiveVesselsLayer.setCockpitSubject(null);
+    harness.handler.click({ position: { x: 10, y: 20 } });
+    assert.equal(aisLiveVesselsLayer.getSelectedInfo(), null);
   } finally {
     harness.cleanup();
   }
@@ -1003,7 +1173,10 @@ test('vessel interaction wire: flights-owned pick preserves vessel selection', (
   const harness = installWireHarness({ id: 'a1b2c3' });
   try {
     harness.handler.click({ position: { x: 10, y: 20 } });
-    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
+    assert.equal(
+      aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
+      harness.record.mmsi,
+    );
     assert.equal(harness.trail.clearCalls, 0);
   } finally {
     harness.cleanup();
@@ -1023,13 +1196,19 @@ test('vessel touch interaction yields to the first nearby flight behind map tile
   let drills = 0;
   harness.viewer.scene.drillPick = (_position, limit, width, height) => {
     drills++;
-    assert.deepEqual([limit, width, height], [8, 14, 14]);
-    return [tile, { id: 'a1b2c3' }];
+    // The click's shared drill: the 14 px touch window, at least 8 deep.
+    assert.deepEqual([width, height], [14, 14]);
+    assert.ok(limit >= 8);
+    // The flight's icon: a draw-set item.
+    return [tile, { id: { set: 'flights:1', id: 'a1b2c3' } }];
   };
   try {
     harness.handler.click({ position: { x: 10, y: 20 } });
     assert.equal(drills, 1);
-    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
+    assert.equal(
+      aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
+      harness.record.mmsi,
+    );
     assert.equal(harness.trail.clearCalls, 0);
   } finally {
     harness.cleanup();
@@ -1044,7 +1223,10 @@ test('vessel interaction wire: CCTV-owned pick preserves vessel selection', () =
   const harness = installWireHarness({ id: 'atx-cam-3' });
   try {
     harness.handler.click({ position: { x: 10, y: 20 } });
-    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
+    assert.equal(
+      aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
+      harness.record.mmsi,
+    );
     assert.equal(harness.trail.clearCalls, 0);
   } finally {
     harness.cleanup();
@@ -1053,21 +1235,24 @@ test('vessel interaction wire: CCTV-owned pick preserves vessel selection', () =
 });
 
 test('vessel interaction wire: own-layer unkeyed record pick does not deselect', () => {
-  const harness = installWireHarness({ id: makeRecord({ mmsi: undefined }) });
+  // The layer's icon set, drawing the unkeyed row.
+  const icons = createVesselIconBook({
+    id: 'ais-vessels:test',
+    upsert() {},
+    remove() {},
+    dispose() {},
+  });
+  icons.put({ id: 'ais-unkeyed:1', size: [32, 32], meta: {} });
+  const harness = installWireHarness(
+    { id: { set: 'ais-vessels:test', id: 'ais-unkeyed:1' } },
+    { icons },
+  );
   try {
     harness.handler.click({ position: { x: 10, y: 20 } });
-    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
-    assert.equal(harness.trail.clearCalls, 0);
-  } finally {
-    harness.cleanup();
-  }
-});
-
-test('vessel interaction wire: own-shaped evicted record pick does not deselect', () => {
-  const harness = installWireHarness({ id: makeRecord({ mmsi: '999999999' }) });
-  try {
-    harness.handler.click({ position: { x: 10, y: 20 } });
-    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
+    assert.equal(
+      aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
+      harness.record.mmsi,
+    );
     assert.equal(harness.trail.clearCalls, 0);
   } finally {
     harness.cleanup();
@@ -1075,7 +1260,11 @@ test('vessel interaction wire: own-shaped evicted record pick does not deselect'
 });
 
 test('vessel interaction wire: id-less 3D Tiles pick deselects and resets the HUD', () => {
-  const harness = installWireHarness({ primitive: {}, content: {}, featureId: 0 });
+  const harness = installWireHarness({
+    primitive: {},
+    content: {},
+    featureId: 0,
+  });
   const cleared = [];
   try {
     registerEntityContext(harness.record, {
@@ -1084,19 +1273,23 @@ test('vessel interaction wire: id-less 3D Tiles pick deselects and resets the HU
       label: harness.record.name,
     });
     selectEntityContext(harness.record);
-    harness.windowTarget.addEventListener('gev:entity-selection-cleared', (event) => {
-      cleared.push(event.detail);
-    });
+    harness.windowTarget.addEventListener(
+      'gev:entity-selection-cleared',
+      (event) => {
+        cleared.push(event.detail);
+      },
+    );
 
     harness.handler.click({ position: { x: 10, y: 20 } });
 
     assert.equal(aisLiveVesselsLayer.getSelectedInfo(), null);
-    assert.equal(harness.hud.textContent, 'AIS: --');
-    assert.equal(harness.hud.classList.contains('active'), false);
+    assert.equal(harness.hud.readout, null);
     // Clicking away is a deliberate deselect, not the vessel aging out of the
     // feed. Consumers that keep a readout on screen (the Cockpit Contact
     // panel) tear down on 'deliberate' and hold last-known on 'evicted'.
-    assert.deepEqual(cleared, [{ layerId: 'ais-live-vessels', reason: 'deliberate' }]);
+    assert.deepEqual(cleared, [
+      { layerId: 'ais-live-vessels', reason: 'deliberate' },
+    ]);
   } finally {
     harness.cleanup();
   }
@@ -1112,17 +1305,21 @@ test('vessel interaction wire: empty pick deselects and emits gev:entity-selecti
       label: harness.record.name,
     });
     selectEntityContext(harness.record);
-    harness.windowTarget.addEventListener('gev:entity-selection-cleared', (event) => {
-      cleared.push(event.detail);
-    });
+    harness.windowTarget.addEventListener(
+      'gev:entity-selection-cleared',
+      (event) => {
+        cleared.push(event.detail);
+      },
+    );
 
     harness.handler.click({ position: { x: 10, y: 20 } });
 
     assert.equal(aisLiveVesselsLayer.getSelectedInfo(), null);
-    assert.equal(harness.hud.textContent, 'AIS: --');
-    assert.equal(harness.hud.classList.contains('active'), false);
+    assert.equal(harness.hud.readout, null);
     // Empty pick is a deliberate deselect — see the note above.
-    assert.deepEqual(cleared, [{ layerId: 'ais-live-vessels', reason: 'deliberate' }]);
+    assert.deepEqual(cleared, [
+      { layerId: 'ais-live-vessels', reason: 'deliberate' },
+    ]);
   } finally {
     harness.cleanup();
   }
@@ -1133,8 +1330,7 @@ test('vessel interaction wire: Escape deselects the selected vessel', () => {
   try {
     harness.keyTarget.dispatch({ key: 'Escape' });
     assert.equal(aisLiveVesselsLayer.getSelectedInfo(), null);
-    assert.equal(harness.hud.textContent, 'AIS: --');
-    assert.equal(harness.hud.classList.contains('active'), false);
+    assert.equal(harness.hud.readout, null);
   } finally {
     harness.cleanup();
   }
@@ -1143,16 +1339,18 @@ test('vessel interaction wire: Escape deselects the selected vessel', () => {
 test('vessel interaction wire: trackedEntityChanged clears only with tracking and a selection', () => {
   const harness = installWireHarness(undefined);
   try {
-    harness.viewer.trackedEntityChanged.raise();
-    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
+    harness.followChanged.raise();
+    assert.equal(
+      aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
+      harness.record.mmsi,
+    );
     assert.equal(harness.trail.clearCalls, 0);
 
-    harness.viewer.trackedEntity = { id: 'tracked-flight' };
-    harness.viewer.trackedEntityChanged.raise();
+    harness.camera.follow(entityFollowTarget({ id: 'tracked-flight' }, {}));
     assert.equal(aisLiveVesselsLayer.getSelectedInfo(), null);
     assert.equal(harness.trail.clearCalls, 1);
 
-    harness.viewer.trackedEntityChanged.raise();
+    harness.followChanged.raise();
     assert.equal(harness.trail.clearCalls, 1);
   } finally {
     harness.cleanup();
@@ -1165,13 +1363,13 @@ test('vessel interaction lifecycle: destroy removes the exact bound keydown list
     const added = harness.keyTarget.added[0];
     aisLiveVesselsLayer.destroy();
 
-    assert.equal(harness.handler.destroyCalls, 1);
+    assert.equal(harness.input.subscriberCount(), 0);
     assert.equal(harness.keyTarget.removed.length, 1);
     assert.equal(harness.keyTarget.removed[0].type, 'keydown');
     assert.strictEqual(harness.keyTarget.removed[0].callback, added.callback);
     assert.equal(harness.keyTarget.keydown, null);
-    assert.equal(harness.viewer.trackedEntityChanged.removeCalls, 1);
-    assert.equal(harness.viewer.trackedEntityChanged.listenerCount, 0);
+    assert.equal(harness.followChanged.removeCalls, 1);
+    assert.equal(harness.followChanged.listenerCount, 0);
   } finally {
     harness.cleanup();
   }
@@ -1185,27 +1383,28 @@ test('vessel interaction lifecycle: disable detaches input and enable reinstalls
     const disabledKeydown = harness.keyTarget.keydown;
     aisLiveVesselsLayer.disable();
 
-    assert.equal(harness.handler.destroyCalls, 1);
-    assert.equal(harness.handler.click, null);
+    assert.equal(harness.input.subscriberCount(), 0);
     assert.equal(harness.keyTarget.keydown, null);
     assert.equal(harness.keyTarget.removed.length, 1);
     assert.strictEqual(harness.keyTarget.removed[0].callback, disabledKeydown);
-    assert.equal(harness.viewer.trackedEntityChanged.removeCalls, 1);
-    assert.equal(harness.viewer.trackedEntityChanged.listenerCount, 0);
+    assert.equal(harness.followChanged.removeCalls, 1);
+    assert.equal(harness.followChanged.listenerCount, 0);
 
     _setVesselStateForTest({
       records: [harness.record],
       selectedRecord: harness.record,
       enabled: false,
       trail: harness.trail,
-      trailMmsi: harness.record.mmsi,
+      trailId: harness.record.mmsi,
       trailPositions: [POS],
-      interactionHandlerFactory: harness.interactionHandlerFactory,
       interactionKeyTarget: harness.keyTarget,
     });
     disabledClick({ position: { x: 10, y: 20 } });
     disabledKeydown({ key: 'Escape' });
-    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
+    assert.equal(
+      aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
+      harness.record.mmsi,
+    );
 
     globalThis.fetch = async () => ({
       ok: true,
@@ -1213,12 +1412,11 @@ test('vessel interaction lifecycle: disable detaches input and enable reinstalls
     });
     await aisLiveVesselsLayer.enable(harness.viewer);
 
-    assert.equal(harness.reinstalledHandlers.length, 1);
+    assert.equal(harness.input.subscriberCount(), 1);
     assert.equal(harness.keyTarget.added.length, 2);
-    assert.equal(harness.viewer.trackedEntityChanged.addCalls, 2);
-    assert.equal(harness.viewer.trackedEntityChanged.listenerCount, 1);
-    const reinstalled = harness.reinstalledHandlers[0];
-    reinstalled.click({ position: { x: 10, y: 20 } });
+    assert.equal(harness.followChanged.addCalls, 2);
+    assert.equal(harness.followChanged.listenerCount, 1);
+    harness.handler.click({ position: { x: 10, y: 20 } });
     assert.equal(aisLiveVesselsLayer.getSelectedInfo(), null);
 
     assert.equal(aisLiveVesselsLayer.selectById(harness.record.mmsi), true);
@@ -1246,8 +1444,14 @@ test('enable owns one grace timer and disable/re-enable starts a new session', a
     await aisLiveVesselsLayer.enable(harness.viewer);
     const duplicateEnable = _getVesselFeedStateForTest();
     assert.equal(duplicateEnable.sessionId, first.sessionId);
-    assert.equal(duplicateEnable.firstConnectStartedAt, first.firstConnectStartedAt);
-    assert.equal(duplicateEnable.firstConnectDeadline, first.firstConnectDeadline);
+    assert.equal(
+      duplicateEnable.firstConnectStartedAt,
+      first.firstConnectStartedAt,
+    );
+    assert.equal(
+      duplicateEnable.firstConnectDeadline,
+      first.firstConnectDeadline,
+    );
     assert.equal(clock.activeCount(), 1);
 
     aisLiveVesselsLayer.disable();
@@ -1256,11 +1460,44 @@ test('enable owns one grace timer and disable/re-enable starts a new session', a
     const replacement = _getVesselFeedStateForTest();
     assert.notEqual(replacement.sessionId, first.sessionId);
     assert.equal(replacement.firstConnectStartedAt, 25000);
-    assert.equal(replacement.firstConnectDeadline, 25000 + AIS_FIRST_CONNECT_GRACE_MS);
+    assert.equal(
+      replacement.firstConnectDeadline,
+      25000 + AIS_FIRST_CONNECT_GRACE_MS,
+    );
     assert.equal(replacement.firstConnectPhase, 'loading');
     assert.equal(clock.activeCount(), 1);
   } finally {
     globalThis.fetch = priorFetch;
+    harness.cleanup();
+    _setAisRuntimeForTest();
+  }
+});
+
+test('the layer turns on and off when its feed fails', async () => {
+  const harness = installWireHarness(undefined, { enabled: false });
+  const priorFetch = globalThis.fetch;
+  const priorWarn = console.warn;
+  const clock = makeFakeAisRuntime();
+  _setAisRuntimeForTest(clock.runtime);
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 503,
+    json: async () => ({
+      status: 'missing-key',
+      error: 'AISSTREAM_API_KEY is not set',
+    }),
+  });
+  console.warn = () => {};
+  try {
+    // Turning it on succeeds; the failure is shown on the layer.
+    assert.notEqual(await aisLiveVesselsLayer.enable(harness.viewer), false);
+    const feed = _getVesselFeedStateForTest();
+    assert.equal(feed.status, 'unavailable');
+    assert.equal(feed.error, 'AISSTREAM_API_KEY not set');
+    assert.notEqual(aisLiveVesselsLayer.disable(), false);
+  } finally {
+    globalThis.fetch = priorFetch;
+    console.warn = priorWarn;
     harness.cleanup();
     _setAisRuntimeForTest();
   }
@@ -1272,7 +1509,7 @@ test('vessel trail lifecycle: deselect clears the selected-vessel trail', () => 
     aisLiveVesselsLayer.clearSelection();
     assert.equal(harness.trail.clearCalls, 1);
     assert.deepEqual(_getVesselStateForTest(), {
-      trailMmsi: null,
+      trailId: null,
       trailPositionCount: 0,
       vesselCount: 1,
     });
@@ -1287,14 +1524,14 @@ test('vessel trail lifecycle: reconciliation eviction clears an orphaned trail',
   _setVesselStateForTest({
     records: [record],
     trail,
-    trailMmsi: record.mmsi,
+    trailId: record.mmsi,
     trailPositions: [POS],
   });
   try {
     _reconcileVesselsForTest({}, []);
     assert.equal(trail.clearCalls, 1);
     assert.deepEqual(_getVesselStateForTest(), {
-      trailMmsi: null,
+      trailId: null,
       trailPositionCount: 0,
       vesselCount: 0,
     });
@@ -1316,10 +1553,37 @@ test('buildVesselCard: name title + type/speed/heading detail line', () => {
 });
 
 test('buildVesselCard: heading falls back to course; missing parts are omitted', () => {
-  const card = buildVesselCard(makeRecord({ heading: null, type: '', speed: null }));
+  const card = buildVesselCard(
+    makeRecord({ heading: null, type: '', speed: null }),
+  );
   assert.deepEqual(card.details, ['231°']);
-  const bare = buildVesselCard(makeRecord({ heading: null, course: null, type: '', speed: null }));
+  const bare = buildVesselCard(
+    makeRecord({ heading: null, course: null, type: '', speed: null }),
+  );
   assert.deepEqual(bare.details, []);
+});
+
+test('vessel cards read a course that rounds to north as 0°, not 360°', () => {
+  const card = (course) =>
+    buildVesselCard(makeRecord({ heading: null, course })).details[0];
+  assert.equal(card(359.4), 'CONTAINER SHIP · 14.5KT · 359°');
+  assert.equal(card(359.7), 'CONTAINER SHIP · 14.5KT · 0°');
+  assert.equal(
+    buildSelectedVesselCard(makeRecord({ heading: null, course: 359.7 }))
+      .details[0],
+    'CONTAINER SHIP · 14.5KT · 0°',
+  );
+});
+
+test('the vessel HUD reads a course that rounds to north as HDG 0DEG', () => {
+  const harness = installWireHarness(undefined, { selectedRecord: null });
+  try {
+    Object.assign(harness.record, { heading: null, course: 359.7 });
+    assert.equal(aisLiveVesselsLayer.selectById(harness.record.mmsi), true);
+    assert.match(harness.hud.readout.text, /HDG: 0DEG/);
+  } finally {
+    harness.cleanup();
+  }
 });
 
 test('buildVesselCard: unnamed vessels title as MMSI; long names truncate', () => {
@@ -1329,10 +1593,10 @@ test('buildVesselCard: unnamed vessels title as MMSI; long names truncate', () =
   assert.ok(long.title.length <= 26, `title too long: ${long.title.length}`);
 });
 
-test('buildVesselCard: anchors to the billboard position when present', () => {
-  const rendered = { x: 9, y: 9, z: 9 };
-  const card = buildVesselCard(makeRecord({ billboard: { position: rendered } }));
-  assert.equal(card.position, rendered);
+test('buildVesselCard: anchors to the drawn position', () => {
+  const rendered = new Cesium.Cartesian3(9, 9, 9);
+  const card = buildVesselCard(makeRecord({ position: rendered }));
+  assert.deepEqual(card.position, rendered);
 });
 
 test('buildVesselCard: tanker types carry the amber accent', () => {
@@ -1348,16 +1612,27 @@ test('buildVesselCard: numeric AIS type codes read as family names, not digits',
 
 test('cardScreenSeparated: rejects candidates inside the min separation radius', () => {
   const accepted = [{ x: 400, y: 300 }];
-  assert.equal(cardScreenSeparated(accepted, { x: 400 + 149, y: 300 }, 150), false);
-  assert.equal(cardScreenSeparated(accepted, { x: 400 + 151, y: 300 }, 150), true);
-  assert.equal(cardScreenSeparated(accepted, { x: 400, y: 300 + 100 }, 150), false);
+  assert.equal(
+    cardScreenSeparated(accepted, { x: 400 + 149, y: 300 }, 150),
+    false,
+  );
+  assert.equal(
+    cardScreenSeparated(accepted, { x: 400 + 151, y: 300 }, 150),
+    true,
+  );
+  assert.equal(
+    cardScreenSeparated(accepted, { x: 400, y: 300 + 100 }, 150),
+    false,
+  );
   assert.equal(cardScreenSeparated([], { x: 0, y: 0 }, 150), true);
 });
 
 test('buildSelectedVesselCard: full detail card with MMSI + position time', () => {
-  const card = buildSelectedVesselCard(makeRecord({
-    lastPositionUtc: '2026-07-27T11:22:33Z',
-  }));
+  const card = buildSelectedVesselCard(
+    makeRecord({
+      lastPositionUtc: '2026-07-27T11:22:33Z',
+    }),
+  );
   assert.equal(card.selected, true);
   assert.equal(card.id, 'vessel:353136000');
   assert.equal(card.priority, 100000);
@@ -1370,24 +1645,48 @@ test('buildSelectedVesselCard: full detail card with MMSI + position time', () =
 
 test('vessel host publication preserves the shipped grid winner and separation selector', () => {
   const publications = [];
-  const originalProjection = Cesium.SceneTransforms.worldToWindowCoordinates;
-  const makeCandidate = (mmsi, name, x, y, speed = 1) => makeRecord({
-    mmsi,
-    name,
-    speed,
-    position: { x: 1, y: 2, z: 3, screen: { x, y } },
-  });
+  // Where the query port projects each candidate, by its position's x.
+  const screens = new Map();
+  const makeCandidate = (mmsi, name, x, y, speed = 1) => {
+    const key = screens.size + 1;
+    screens.set(key, { x, y });
+    return makeRecord({
+      mmsi,
+      name,
+      speed,
+      position: { x: key, y: 2, z: 3 },
+    });
+  };
   const low = makeCandidate('100', 'VESSEL', 20, 20, 1);
   const winner = makeCandidate('200', 'NAMED WINNER', 40, 30, 16);
   const separated = makeCandidate('300', 'SEPARATED', 400, 300, 3);
-  Cesium.SceneTransforms.worldToWindowCoordinates = (_scene, position) => position.screen;
-  _setVesselOverlayHostForTest({
-    setEntries(sourceId, entries, options) { publications.push({ sourceId, entries, options }); },
+  const viewer = {
+    get canvas() {
+      return this.scene?.canvas;
+    },
+    scene: { canvas: { clientWidth: 1600, clientHeight: 900 } },
+  };
+  const unbind = bindRenderer(viewer, {
+    query: {
+      project: (p) => screens.get(p.x) ?? null,
+      projectMany(source, out) {
+        for (let i = 0; i * 3 < source.length; i++) {
+          const screen = screens.get(source[i * 3]);
+          out[i * 2] = screen ? screen.x : NaN;
+          out[i * 2 + 1] = screen ? screen.y : NaN;
+        }
+      },
+    },
+  });
+  useVesselHost({
+    setEntries(sourceId, entries, options) {
+      publications.push({ sourceId, entries, options });
+    },
     setVisible() {},
     clearSource() {},
   });
   _setVesselStateForTest({
-    viewer: { scene: { canvas: { clientWidth: 1600, clientHeight: 900 } } },
+    viewer,
     records: [low, winner, separated],
   });
   try {
@@ -1401,18 +1700,24 @@ test('vessel host publication preserves the shipped grid winner and separation s
     assert.equal(publications[0].options.cohortLimit, 112);
     assert.equal(publications[0].options.collisionCapacity, 112);
   } finally {
-    Cesium.SceneTransforms.worldToWindowCoordinates = originalProjection;
+    unbind();
     _setVesselStateForTest({ enabled: false });
-    _setVesselOverlayHostForTest();
+    useVesselHost();
   }
 });
 
 test('vessel real layer lifecycle publishes protected selection and leaves no stale host cards', () => {
   const calls = [];
   const host = {
-    setEntries(sourceId, entries, options) { calls.push({ op: 'set', sourceId, entries, options }); },
-    setVisible(sourceId, visible) { calls.push({ op: 'visible', sourceId, visible }); },
-    clearSource(sourceId) { calls.push({ op: 'clear', sourceId }); },
+    setEntries(sourceId, entries, options) {
+      calls.push({ op: 'set', sourceId, entries, options });
+    },
+    setVisible(sourceId, visible) {
+      calls.push({ op: 'visible', sourceId, visible });
+    },
+    clearSource(sourceId) {
+      calls.push({ op: 'clear', sourceId });
+    },
   };
   const hadWindow = Object.hasOwn(globalThis, 'window');
   const priorWindow = globalThis.window;
@@ -1424,12 +1729,16 @@ test('vessel real layer lifecycle publishes protected selection and leaves no st
   globalThis.window.addEventListener('gev:world-request-focus', (event) => {
     focusRequests.push(event.detail);
   });
-  _setVesselOverlayHostForTest(host);
+  useVesselHost(host);
   _setVesselStateForTest({
-    viewer: { scene: { canvas: { clientWidth: 1600, clientHeight: 900 } } },
+    viewer: {
+      get canvas() {
+        return this.scene?.canvas;
+      },
+      scene: { canvas: { clientWidth: 1600, clientHeight: 900 } },
+    },
     records: [record],
     selectedRecord: record,
-    billboardCollection: { show: true, remove() {} },
   });
   try {
     _updateVesselCardsForTest([]);
@@ -1442,16 +1751,26 @@ test('vessel real layer lifecycle publishes protected selection and leaves no st
     assert.equal(publication.entries[0].variant, 'selected');
     assert.equal(publication.entries[0].protected, true);
     assert.equal(publication.entries[0].collisionGroup, 'ambient-card');
-    assert.match(publication.entries[0].accessibilityLabel, /Focus vessel EVER GIVEN, MMSI 353136000/);
+    assert.match(
+      publication.entries[0].accessibilityLabel,
+      /Focus vessel EVER GIVEN, MMSI 353136000/,
+    );
     assert.equal(publication.entries[0].activate(), true);
     assert.equal(focusRequests.length, 1);
     assert.equal(focusRequests[0].id, '353136000');
 
     aisLiveVesselsLayer.disable();
-    assert.ok(calls.some((call) => call.op === 'clear'), 'disable clears host cards');
-    assert.ok(calls.some((call) => call.op === 'visible' && call.visible === false));
+    assert.ok(
+      calls.some((call) => call.op === 'clear'),
+      'disable clears host cards',
+    );
+    assert.ok(
+      calls.some((call) => call.op === 'visible' && call.visible === false),
+    );
 
-    const clearsBeforeDestroy = calls.filter((call) => call.op === 'clear').length;
+    const clearsBeforeDestroy = calls.filter(
+      (call) => call.op === 'clear',
+    ).length;
     aisLiveVesselsLayer.destroy();
     assert.ok(
       calls.filter((call) => call.op === 'clear').length > clearsBeforeDestroy,
@@ -1459,7 +1778,7 @@ test('vessel real layer lifecycle publishes protected selection and leaves no st
     );
   } finally {
     _setVesselStateForTest({ enabled: false });
-    _setVesselOverlayHostForTest();
+    useVesselHost();
     if (hadWindow) globalThis.window = priorWindow;
     else delete globalThis.window;
     globalThis.document = priorDocument;
@@ -1467,14 +1786,16 @@ test('vessel real layer lifecycle publishes protected selection and leaves no st
 });
 
 test('buildSelectedVesselCard: destination line + STALE marker; placeholders for missing data', () => {
-  const card = buildSelectedVesselCard(makeRecord({
-    type: 'Tanker',
-    speed: null,
-    heading: null,
-    course: null,
-    destination: 'ROTTERDAM',
-    missedRefreshes: 2,
-  }));
+  const card = buildSelectedVesselCard(
+    makeRecord({
+      type: 'Tanker',
+      speed: null,
+      heading: null,
+      course: null,
+      destination: 'ROTTERDAM',
+      missedRefreshes: 2,
+    }),
+  );
   assert.deepEqual(card.details, [
     'TANKER · --KT · --°',
     '→ ROTTERDAM',
@@ -1504,23 +1825,34 @@ test('EGM96 N pins the field finding: Rotterdam sea sits ~45 m ABOVE the ellipso
   await ensureGeoidReady();
   const rotterdam = geoidHeight(51.93, 4.05);
   const houston = geoidHeight(29.72, -95.08);
-  assert.ok(rotterdam > 40 && rotterdam < 50, `N(rotterdam) = ${rotterdam}, expected ≈ +45`);
-  assert.ok(houston > -32 && houston < -22, `N(houston) = ${houston}, expected ≈ −27`);
+  assert.ok(
+    rotterdam > 40 && rotterdam < 50,
+    `N(rotterdam) = ${rotterdam}, expected ≈ +45`,
+  );
+  assert.ok(
+    houston > -32 && houston < -22,
+    `N(houston) = ${houston}, expected ≈ −27`,
+  );
 });
 
 // One-click transfer (pre-launch defect #4): clicking a vessel gives it the
 // camera, whether the camera was free or tracking something else. The layer
 // only announces the click — the UI owns the flight (src/worldFocus.js).
 test('vessel interaction wire: selecting a vessel by click requests a camera transfer', () => {
-  const harness = installWireHarness({ id: makeRecord() }, { selectedRecord: null });
+  const harness = installWireHarness(
+    { id: makeRecord().mmsi },
+    { selectedRecord: null },
+  );
   const requests = [];
-  harness.windowTarget.addEventListener(
-    WORLD_FOCUS_REQUEST_EVENT,
-    (event) => requests.push(event.detail),
+  harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
+    requests.push(event.detail),
   );
   try {
     harness.handler.click({ position: { x: 10, y: 20 } });
-    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
+    assert.equal(
+      aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
+      harness.record.mmsi,
+    );
     assert.equal(requests.length, 1);
     assert.equal(requests[0].kind, 'vessel');
     assert.equal(requests[0].id, harness.record.mmsi);
@@ -1530,17 +1862,53 @@ test('vessel interaction wire: selecting a vessel by click requests a camera tra
   }
 });
 
+test('vessel interaction wire: a vessel with an id and no MMSI is selected by click', () => {
+  const idOnly = makeRecord({ id: 'provider-7', mmsi: '', name: 'NO MMSI' });
+  const harness = installWireHarness(
+    { id: idOnly },
+    { records: [idOnly], selectedRecord: null, trailId: null },
+  );
+  const requests = [];
+  harness.windowTarget.addEventListener(
+    WORLD_FOCUS_REQUEST_EVENT,
+    (event) => requests.push(event.detail),
+  );
+  try {
+    harness.handler.click({ position: { x: 10, y: 20 } });
+    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.id, 'provider-7');
+    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, '');
+    assert.equal(requests[0]?.id, 'provider-7');
+    assert.match(harness.hud.readout.text, /MMSI: -- /);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+/**
+ * Hand the vessel layer an overlay host, and answer the pick registry's
+ * card-on-top question from the same host, as the application does.
+ */
+function useVesselHost(host) {
+  _setVesselOverlayHostForTest(host);
+  setClickCardHitTest(host ? (x, y) => host.hitTest(x, y) : null);
+}
+
 /**
  * Overlay-host recorder whose hitTest answers with one card id. The real host
  * only publishes rects for `interactive` entries, so a stub returning a hit is
  * the same contract a painted, actionable card presents.
  */
-function hostWithCardHit(entryId) {
+function hostWithCardHit(entryId, topHit) {
   return {
     setEntries() {},
     setVisible() {},
     clearSource() {},
-    hitTest: () => (entryId ? { sourceId: 'ais-live-vessels', entryId } : null),
+    hitTest: (_x, _y, { sourceId } = {}) =>
+      !sourceId && topHit
+        ? topHit
+        : entryId
+          ? { sourceId: 'ais-live-vessels', entryId }
+          : null,
   };
 }
 
@@ -1548,83 +1916,227 @@ function hostWithCardHit(entryId) {
 // on one picks the TERRAIN behind it — which read as empty space and cleared
 // the selection. A card hit must behave exactly like a sprite hit.
 test('vessel interaction wire: clicking a card selects and transfers, like the sprite', () => {
-  const harness = installWireHarness({ primitive: {}, content: {}, featureId: 0 }, { selectedRecord: null });
-  const requests = [];
-  harness.windowTarget.addEventListener(
-    WORLD_FOCUS_REQUEST_EVENT,
-    (event) => requests.push(event.detail),
+  const harness = installWireHarness(
+    { primitive: {}, content: {}, featureId: 0 },
+    { selectedRecord: null },
   );
-  _setVesselOverlayHostForTest(hostWithCardHit(`vessel:${harness.record.mmsi}`));
+  const requests = [];
+  harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
+    requests.push(event.detail),
+  );
+  useVesselHost(hostWithCardHit(`vessel:${harness.record.mmsi}`));
   try {
     harness.handler.click({ position: { x: 10, y: 20 } });
-    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
+    assert.equal(
+      aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
+      harness.record.mmsi,
+    );
     assert.equal(requests.length, 1);
     assert.equal(requests[0].kind, 'vessel');
     assert.equal(requests[0].id, harness.record.mmsi);
   } finally {
-    _setVesselOverlayHostForTest(null);
+    useVesselHost(null);
     harness.cleanup();
   }
 });
 
 test('vessel interaction wire: clicking the selected vessel card refocuses exactly once', () => {
-  const harness = installWireHarness({ primitive: {}, content: {}, featureId: 0 });
+  const harness = installWireHarness({
+    primitive: {},
+    content: {},
+    featureId: 0,
+  });
   const requests = [];
-  harness.windowTarget.addEventListener(
-    WORLD_FOCUS_REQUEST_EVENT,
-    (event) => requests.push(event.detail),
+  harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
+    requests.push(event.detail),
   );
-  _setVesselOverlayHostForTest(hostWithCardHit(`vessel:${harness.record.mmsi}`));
+  useVesselHost(hostWithCardHit(`vessel:${harness.record.mmsi}`));
   try {
     harness.handler.click({ position: { x: 10, y: 20 } });
-    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
+    assert.equal(
+      aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
+      harness.record.mmsi,
+    );
     assert.equal(requests.length, 1);
     assert.equal(requests[0].id, harness.record.mmsi);
     assert.equal(harness.trail.clearCalls, 0);
   } finally {
-    _setVesselOverlayHostForTest(null);
+    useVesselHost(null);
     harness.cleanup();
+  }
+});
+
+// Another layer's card on top takes the click from the vessel card under it
+// and from a vessel icon under it alike.
+test('vessel interaction wire: a covered card and a covered vessel pick both yield', () => {
+  for (const ownPick of [false, true]) {
+    const harness = installWireHarness(ownPick ? { id: makeRecord().mmsi } : null);
+    const requests = [];
+    harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
+      requests.push(event.detail),
+    );
+    useVesselHost(
+      hostWithCardHit(`vessel:${harness.record.mmsi}`, {
+        sourceId: 'earthquakes', entryId: 'quake:cover',
+      }),
+    );
+    try {
+      harness.handler.click({ position: { x: 10, y: 20 } });
+      assert.equal(requests.length, 0, `own pick: ${ownPick}`);
+      assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
+    } finally {
+      useVesselHost(null);
+      harness.cleanup();
+    }
   }
 });
 
 test('vessel interaction wire: an unknown card id preserves selection and never flies', () => {
-  const harness = installWireHarness({ primitive: {}, content: {}, featureId: 0 });
+  const harness = installWireHarness({
+    primitive: {},
+    content: {},
+    featureId: 0,
+  });
   const requests = [];
-  harness.windowTarget.addEventListener(
-    WORLD_FOCUS_REQUEST_EVENT,
-    (event) => requests.push(event.detail),
+  harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
+    requests.push(event.detail),
   );
   // An evicted vessel's card id resolves to no live record.
-  _setVesselOverlayHostForTest(hostWithCardHit('vessel:999999999'));
+  useVesselHost(hostWithCardHit('vessel:999999999'));
   try {
     harness.handler.click({ position: { x: 10, y: 20 } });
-    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
+    assert.equal(
+      aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
+      harness.record.mmsi,
+    );
     assert.equal(requests.length, 0);
   } finally {
-    _setVesselOverlayHostForTest(null);
+    useVesselHost(null);
     harness.cleanup();
   }
 });
 
-test('vessel interaction wire: a sibling-owned pick wins without selection mutation', () => {
-  // Another layer is already acting on this click; two camera commands is the
-  // worse failure, so the card is not consulted.
+test('vessel interaction wire: the vessel card on top wins over a sibling-owned pick', () => {
+  // The card painted on top takes the click; the sibling (an aircraft)
+  // stands aside under it, so there is one camera command, not two.
   registerPickOwner('flights', (pickedId) => pickedId === 'a1b2c3');
   const harness = installWireHarness({ id: 'a1b2c3' });
   const requests = [];
-  harness.windowTarget.addEventListener(
-    WORLD_FOCUS_REQUEST_EVENT,
-    (event) => requests.push(event.detail),
+  harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
+    requests.push(event.detail),
   );
-  _setVesselOverlayHostForTest(hostWithCardHit(`vessel:${harness.record.mmsi}`));
+  useVesselHost(hostWithCardHit(`vessel:${harness.record.mmsi}`));
   try {
     harness.handler.click({ position: { x: 10, y: 20 } });
-    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
-    assert.equal(requests.length, 0);
+    assert.equal(
+      aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
+      harness.record.mmsi,
+    );
+    assert.equal(requests.length, 1);
   } finally {
-    _setVesselOverlayHostForTest(null);
+    useVesselHost(null);
     harness.cleanup();
     unregisterPickOwner('flights');
+  }
+});
+
+// The aircraft layer runs first. Under the vessel's card it stands aside, so
+// the card takes the click: one action.
+test('vessel interaction wire: a card over an aircraft takes the click; the aircraft does not track', (t) => {
+  let tracked = null;
+  registerPickOwner('test-planes', (pickedId) => pickedId === 'plane:9');
+  t.after(() => unregisterPickOwner('test-planes'));
+  const harness = installWireHarness(
+    { id: 'plane:9' },
+    { selectedRecord: null },
+    {},
+    (event) => {
+      if (isUnderOtherCard(event)) return;
+      if (event.hit?.id === 'plane:9') tracked = 'plane:9';
+    },
+  );
+  const requests = [];
+  harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
+    requests.push(event.detail),
+  );
+  useVesselHost(hostWithCardHit(`vessel:${harness.record.mmsi}`));
+  try {
+    harness.handler.click({ position: { x: 10, y: 20 } });
+    assert.equal(tracked, null, 'the aircraft does not track');
+    assert.equal(requests.length, 1, 'the vessel card acts');
+    assert.equal(
+      aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
+      harness.record.mmsi,
+    );
+  } finally {
+    useVesselHost(null);
+    harness.cleanup();
+  }
+});
+
+// A trail acts for nobody: the vessel's card painted over it still selects,
+// and a bare trail pick stays a no-op that keeps the selection.
+test('vessel interaction wire: a card over a trail selects; a bare trail is a no-op', () => {
+  for (const carded of [true, false]) {
+    const harness = installWireHarness(
+      { id: 'gev-trail:fl-a1b2c3:head' },
+      { selectedRecord: null },
+    );
+    const requests = [];
+    harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
+      requests.push(event.detail),
+    );
+    useVesselHost(
+      hostWithCardHit(carded ? `vessel:${harness.record.mmsi}` : null),
+    );
+    try {
+      harness.handler.click({ position: { x: 10, y: 20 } });
+      assert.equal(requests.length, carded ? 1 : 0, `card: ${carded}`);
+      assert.equal(
+        aisLiveVesselsLayer.getSelectedInfo()?.mmsi ?? null,
+        carded ? harness.record.mmsi : null,
+      );
+    } finally {
+      useVesselHost(null);
+      harness.cleanup();
+    }
+  }
+});
+
+// A coarse tap on the vessel's card over a fire, nearby or exact: the card on
+// top keeps the tap.
+test('vessel interaction wire: the card keeps a tap over a nearby or exact fire', (t) => {
+  const previous = globalThis.matchMedia;
+  globalThis.matchMedia = () => ({ matches: true });
+  t.after(() => {
+    if (previous) globalThis.matchMedia = previous;
+    else delete globalThis.matchMedia;
+  });
+  const fire = 'fire:near-miss';
+  registerPickOwner('test-exact-fires', (pickedId) => pickedId === fire);
+  t.after(() => unregisterPickOwner('test-exact-fires'));
+  for (const exact of [false, true]) {
+    const harness = installWireHarness(
+      exact ? { id: fire } : null,
+      { selectedRecord: null },
+      { drillPick: () => [{ id: fire }] },
+    );
+    const requests = [];
+    harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
+      requests.push(event.detail),
+    );
+    useVesselHost(hostWithCardHit(`vessel:${harness.record.mmsi}`));
+    try {
+      harness.handler.click({ position: { x: 10, y: 20 } });
+      assert.equal(requests.length, 1, `exact fire: ${exact}`);
+      assert.equal(
+        aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
+        harness.record.mmsi,
+      );
+    } finally {
+      useVesselHost(null);
+      harness.cleanup();
+    }
   }
 });
 
@@ -1634,38 +2146,69 @@ for (const card of ['live', 'stale', 'absent', 'covered']) {
     registerPickOwner('weather-cyclones', (pickedId) => pickedId === id);
     const harness = installWireHarness({ id });
     const requests = [];
-    harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) => requests.push(event.detail));
-    const host = hostWithCardHit(card === 'live' ? `vessel:${harness.record.mmsi}` : card === 'stale' ? 'vessel:999999999' : null);
-    if (card === 'covered') host.hitTest = (_x, _y, options) => {
-      assert.equal(options?.sourceId, undefined, 'test topmost host hit, not a covered AIS card');
-      return { sourceId: 'cctv', entryId: 'vessel:999999999' };
-    };
-    _setVesselOverlayHostForTest(host);
+    harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
+      requests.push(event.detail),
+    );
+    const host = hostWithCardHit(
+      card === 'live'
+        ? `vessel:${harness.record.mmsi}`
+        : card === 'stale'
+          ? 'vessel:999999999'
+          : null,
+    );
+    if (card === 'covered')
+      host.hitTest = (_x, _y, options) => {
+        assert.equal(
+          options?.sourceId,
+          undefined,
+          'test topmost host hit, not a covered AIS card',
+        );
+        return { sourceId: 'cctv', entryId: 'vessel:999999999' };
+      };
+    useVesselHost(host);
     try {
       harness.handler.click({ position: { x: 10, y: 20 } });
-      assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
+      assert.equal(
+        aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
+        harness.record.mmsi,
+      );
       assert.equal(requests.length, card === 'live' ? 1 : 0);
     } finally {
-      _setVesselOverlayHostForTest(null);
+      useVesselHost(null);
       harness.cleanup();
       unregisterPickOwner('weather-cyclones');
     }
   });
 }
 
-test('vessel card policy: only MMSI-keyed cards publish a hit rect', () => {
+test('vessel card policy: only keyed cards publish a hit rect', () => {
   const keyed = applyVesselOverlayPolicy(buildVesselCard(makeRecord()));
   assert.equal(keyed.interactive, true);
   const unkeyed = applyVesselOverlayPolicy(buildVesselCard(makeRecord({ mmsi: '' })));
   assert.equal(unkeyed.interactive, false, 'an unkeyed card has no record to select');
+  const idOnly = buildVesselCard(makeRecord({ id: 'provider-7', mmsi: '' }));
+  assert.equal(applyVesselOverlayPolicy(idOnly).interactive, true, 'a source id is a key');
+  assert.equal(idOnly.id, 'vessel:provider-7');
+});
+
+test('vessel cards are keyed by id and show the MMSI only when known', () => {
+  const shared = buildSelectedVesselCard(makeRecord({ id: 'hull-b' }));
+  assert.equal(shared.id, 'vessel:hull-b');
+  assert.equal(shared.actionable, true);
+  assert.match(shared.details.at(-1), /^MMSI 353136000 · /);
+  const unknown = buildSelectedVesselCard(
+    makeRecord({ id: 'provider-7', mmsi: '', name: 'provider-7' }),
+  );
+  assert.equal(unknown.actionable, true);
+  assert.match(unknown.details.at(-1), /^MMSI -- · /);
+  assert.equal(unknown.title, 'VESSEL', 'a name that is only the id is no name');
 });
 
 test('vessel interaction wire: deselecting never moves the camera', () => {
   const harness = installWireHarness({ id: 'gev-empty-space' });
   const requests = [];
-  harness.windowTarget.addEventListener(
-    WORLD_FOCUS_REQUEST_EVENT,
-    (event) => requests.push(event.detail),
+  harness.windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (event) =>
+    requests.push(event.detail),
   );
   try {
     harness.handler.click({ position: { x: 10, y: 20 } });
@@ -1683,14 +2226,24 @@ test('a vessel analyst record carries the MMSI the tracker keys on', () => {
   // selection keys on MMSI. The compact voice payload must carry both, or the
   // analyst → track_entity handoff hands over a name and nothing resolvable.
   const named = mapAnalystRecord({
-    mmsi: '366999123', name: 'EVER GIVEN', lat: 37.8, lon: -122.4, speed: 12, type: 'Cargo',
+    mmsi: '366999123',
+    name: 'EVER GIVEN',
+    lat: 37.8,
+    lon: -122.4,
+    speed: 12,
+    type: 'Cargo',
   });
   assert.equal(named.id, 'EVER GIVEN');
   assert.equal(named.mmsi, '366999123', 'the key rides along with the label');
 
   // A nameless vessel falls back to its MMSI for display; the key is still
   // present in its own field, so the payload never depends on that collapse.
-  const nameless = mapAnalystRecord({ mmsi: '366999124', name: null, lat: 37.9, lon: -122.5 });
+  const nameless = mapAnalystRecord({
+    mmsi: '366999124',
+    name: null,
+    lat: 37.9,
+    lon: -122.5,
+  });
   assert.equal(nameless.id, '366999124');
   assert.equal(nameless.mmsi, '366999124');
 });
@@ -1702,13 +2255,19 @@ test('vessel selection passes the opaque source reference to optional history', 
   aisLiveVesselsLayer.setSource({
     label: 'Test vessel source',
     getSnapshot: async () => ({ records: [] }),
-    getTrack: async (reference, options) => { requests.push({ reference, options }); return { records: [] }; },
+    getTrack: async (reference, options) => {
+      requests.push({ reference, options });
+      return { records: [] };
+    },
   });
-  const harness = installWireHarness(undefined, { selectedRecord: null, trailMmsi: null });
+  const harness = installWireHarness(undefined, {
+    selectedRecord: null,
+    trailId: null,
+  });
   try {
     harness.record.reference = 'opaque:test-reference';
     assert.equal(aisLiveVesselsLayer.selectById(harness.record.mmsi), true);
-    await new Promise(resolve => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
     assert.equal(requests.length, 1);
     assert.equal(requests[0].reference, 'opaque:test-reference');
     assert.ok(requests[0].options.signal instanceof AbortSignal);
@@ -1718,4 +2277,147 @@ test('vessel selection passes the opaque source reference to optional history', 
     _setVesselStateForTest({ enabled: false });
     aisLiveVesselsLayer.setSource(createVesselSource());
   }
+});
+
+test('vessel focus wire skips hidden sprites at rest while a target is tracked', () => {
+  const icons = createVesselIconBook();
+  const records = Array.from({ length: 51 }, (_, i) => {
+    const iconId = String(i);
+    icons.put({ id: iconId, size: [32, 32], meta: { id: iconId } });
+    return { iconId, position: { x: 1, y: 2, z: 3 }, visible: i === 0 };
+  });
+  const focus = (record) => icons.focus(record.iconId);
+  const target = {
+    screenRect: { left: 40, top: 40, right: 60, bottom: 60 },
+    paddingPx: 0,
+    cameraDistance: 1000,
+  };
+  let projected = 0;
+  let measured = 0;
+  const apply = (nowMs) =>
+    applyVesselFocusDeemphasis({
+      records,
+      icons,
+      target,
+      nowMs,
+      screenPositionFor: () => {
+        projected += 1;
+        return { x: 50, y: 50 };
+      },
+      cameraDistanceFor: () => {
+        measured += 1;
+        return 1200;
+      },
+      params: { paddingPx: 0, dimFloor: 0.25, attackMs: 300 },
+    });
+
+  apply(0);
+  const result = apply(300);
+
+  // Only the on-screen sprite pays for projection and distance.
+  assert.equal(projected, 2);
+  assert.equal(measured, 2);
+  assert.equal(focus(records[0]), 0.25);
+  assert.equal(result.activeCount, 1);
+  for (const record of records.slice(1)) assert.equal(focus(record), 1);
+});
+
+test('detection objects name the vessel card their callout gives way to', () => {
+  const vessel = (mmsi, name) => ({
+    name,
+    mmsi,
+    type: 'Cargo',
+    destination: '',
+    speed: 9.5,
+    course: 80,
+    heading: 80,
+    lastPositionUtc: '',
+    missedRefreshes: 0,
+    position: POS,
+    // Drawn and on screen (a record with no visual of its own is its own).
+    visible: true,
+  });
+  const keyed = vessel('200', 'GOLDEN BEAR');
+  const unkeyed = { ...vessel('', 'NO MMSI'), lat: 37.8, lon: -122.4 };
+  _setVesselStateForTest({
+    viewer: {},
+    records: [keyed, unkeyed],
+  });
+  try {
+    const objects = Object.fromEntries(
+      aisLiveVesselsLayer
+        .getDetectableObjects()
+        .map((object) => [object.id, object]),
+    );
+    assert.equal(objects['GOLDEN BEAR'].cardSourceId, 'ais-live-vessels');
+    assert.equal(objects['GOLDEN BEAR'].cardEntryId, 'vessel:200');
+    assert.equal(
+      objects['NO MMSI'].cardEntryId,
+      'vessel:unkeyed:NO MMSI:37.80000:-122.40000',
+      'the same identity the vessel card is published under',
+    );
+    // The ship the bridge camera rides is no object in view.
+    aisLiveVesselsLayer.setCockpitSubject('200');
+    const ids = aisLiveVesselsLayer
+      .getDetectableObjects()
+      .map((object) => object.id);
+    assert.deepEqual(ids, ['NO MMSI']);
+    aisLiveVesselsLayer.setCockpitSubject(null);
+  } finally {
+    _setVesselStateForTest({ enabled: false });
+  }
+});
+
+test('an aid to navigation card shows its kind, never a speed or heading', () => {
+  const aid = makeRecord({
+    name: 'SF APPROACH N',
+    mmsi: '993672001',
+    type: 'Cardinal Mark N',
+    speed: 0,
+    course: 135,
+    heading: 135,
+  });
+  const card = buildVesselCard(aid);
+  assert.deepEqual(card.details, ['CARDINAL MARK N']);
+  assert.equal(card.accent, '217, 210, 192');
+  const selected = buildSelectedVesselCard(aid);
+  assert.equal(selected.details[0], 'CARDINAL MARK N');
+  assert.equal(selected.accent, '217, 210, 192');
+  // Known only by its MMSI, an aid is named as one.
+  const unnamed = buildSelectedVesselCard({ ...aid, type: '' });
+  assert.equal(unnamed.details[0], 'AID TO NAVIGATION');
+  assert.deepEqual(buildVesselCard({ ...aid, type: '' }).details, []);
+});
+
+test('the HUD of a selected aid to navigation shows no speed or heading', () => {
+  const harness = installWireHarness(undefined, { selectedRecord: null });
+  try {
+    Object.assign(harness.record, {
+      type: 'Port hand Mark',
+      speed: 0,
+      heading: 135,
+      course: 135,
+    });
+    assert.equal(aisLiveVesselsLayer.selectById(harness.record.mmsi), true);
+    assert.match(harness.hud.readout.text, /\nPort hand Mark\n/);
+    assert.doesNotMatch(harness.hud.readout.text, /SPD|HDG|KT/);
+    harness.record.virtual = true;
+    aisLiveVesselsLayer.selectById(harness.record.mmsi);
+    assert.match(harness.hud.readout.text, /\nPort hand Mark · VIRTUAL\n/);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test('a virtual aid to navigation card says it is virtual', () => {
+  const aid = makeRecord({
+    mmsi: '993672001',
+    type: 'Isolated danger',
+    virtual: true,
+  });
+  assert.deepEqual(buildVesselCard(aid).details, ['ISOLATED DANGER · VIRTUAL']);
+  assert.equal(
+    buildSelectedVesselCard(aid).details[0],
+    'ISOLATED DANGER · VIRTUAL',
+  );
 });

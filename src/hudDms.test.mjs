@@ -9,7 +9,10 @@
 // hudAltitudeDatum.test.mjs before importing it.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { hudReadouts } from './testSupport/hudReadouts.mjs';
 import { registerHooks } from 'node:module';
+import { fakeCameraPort } from './testSupport/fakeCameraPort.mjs';
+import { toDegrees as deg } from './geo/index.js';
 
 const MGRS_STUB_URL = 'gev-test-stub:mgrs';
 registerHooks({
@@ -56,19 +59,7 @@ test('ordinary values keep their existing format', () => {
 });
 
 test('the telemetry tick paints the carried value into both readouts', () => {
-  const elements = new Map(
-    [
-      'hud-alt',
-      'hud-summary',
-      'hud-mgrs',
-      'hud-latlon',
-      'hud-bottom-line',
-      'hud-gsd',
-      'hud-coll',
-      'hud-ona',
-      'hud-mode',
-    ].map((id) => [id, { textContent: '' }]),
-  );
+  const { elements, publish } = hudReadouts();
   const previousDocument = globalThis.document;
   globalThis.document = {
     getElementById: (id) => elements.get(id) ?? null,
@@ -76,22 +67,19 @@ test('the telemetry tick paints the carried value into both readouts', () => {
     addEventListener() {},
     removeEventListener() {},
   };
-  const viewer = {
-    camera: {
-      pitch: -Math.PI / 2,
-      positionCartographic: {
-        latitude: (37.75 * Math.PI) / 180,
-        longitude: (-122.35 * Math.PI) / 180,
-        height: 1500,
-      },
-      computeViewRectangle: () => undefined,
-      moveStart: { addEventListener() {}, removeEventListener() {} },
-      moveEnd: { addEventListener() {}, removeEventListener() {} },
-    },
-  };
+  const viewer = {};
   let hud;
   try {
-    hud = new IntelHUD(viewer);
+    hud = new IntelHUD(viewer, {
+      publish,
+      camera: fakeCameraPort({
+        pose: {
+          lat: deg((37.75 * Math.PI) / 180),
+          lon: deg((-122.35 * Math.PI) / 180),
+          height: 1500,
+        },
+      }).port,
+    });
     hud._updateCameraData();
     const latlon = elements.get('hud-latlon').textContent;
     const bottom = elements.get('hud-bottom-line').textContent;

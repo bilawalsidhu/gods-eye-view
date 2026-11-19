@@ -1,101 +1,103 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createWindRelief } from './relief.js';
+import { createWindRelief, WIND_RELIEF_STRENGTH } from './relief.js';
 
-function fixture({ material = undefined, normals = true } = {}) {
-  const materials = [];
-  class Material {
-    constructor(options) {
-      this.options = options;
-      this.destroyed = false;
-      materials.push(this);
-    }
-    isDestroyed() {
-      return this.destroyed;
-    }
-    destroy() {
-      assert.equal(this.destroyed, false);
-      this.destroyed = true;
-    }
-  }
-  let renders = 0;
-  const globe = { material, terrainProvider: { hasVertexNormals: normals } };
-  const scene = { globe, requestRender: () => renders++ };
-  const viewer = { scene };
-  const relief = createWindRelief({
-    cesium: { Material },
-    getViewer: () => viewer,
+// A viewer whose globe port records the shading it is asked for.
+function fixture({ shading = true } = {}) {
+  const calls = [];
+  const port = (name) => ({
+    name,
+    ...(shading
+      ? {
+          setSurfaceShading(next) {
+            calls.push([name, next]);
+          },
+        }
+      : {}),
   });
-  return { relief, globe, scene, viewer, materials, renders: () => renders };
+  const ports = new Map();
+  const viewer = { isDestroyed: () => false };
+  ports.set(viewer, port('first'));
+  let current = viewer;
+  const relief = createWindRelief({
+    getViewer: () => current,
+    globeOf: (given) => ports.get(given) ?? null,
+  });
+  return {
+    relief,
+    calls,
+    viewer,
+    ports,
+    port,
+    use: (next) => (current = next),
+  };
 }
 
-test('relief acquires once and restores the exact prior empty material on clear', () => {
-  for (const material of [null, undefined]) {
-    const f = fixture({ material });
-    f.globe.material = material;
-    assert.equal(f.relief.attach(), true);
-    assert.equal(f.relief.attach(), true);
-    assert.equal(f.materials.length, 1);
-    assert.equal(f.globe.material, f.materials[0]);
-    assert.equal(f.relief.getDiagnostics().active, true);
-    f.relief.clear();
-    assert.equal(f.globe.material, material);
-    assert.equal(f.materials[0].destroyed, true);
-    assert.equal(f.renders(), 2);
-    f.relief.clear();
-    assert.equal(f.renders(), 2);
-    assert.equal(f.relief.attach(), true);
-    f.relief.destroy();
-    assert.equal(f.materials[1].destroyed, true);
-    assert.equal(f.relief.attach(), false);
-  }
-});
-
-test('pre-existing and replacement material owners are never overwritten', () => {
-  const other = { name: 'other-owner' };
-  const f = fixture({ material: other });
-  assert.equal(f.relief.attach(), false);
-  assert.equal(f.globe.material, other);
-  assert.equal(f.materials.length, 0);
-  f.globe.material = undefined;
+test('relief asks the globe port for hillshade once and gives it back on clear', () => {
+  const f = fixture();
   assert.equal(f.relief.attach(), true);
-  f.globe.material = other;
-  assert.equal(f.relief.getDiagnostics().reason, 'Globe material replaced');
+  assert.equal(f.relief.attach(), true);
+  assert.deepEqual(f.calls, [
+    ['first', { kind: 'hillshade', strength: WIND_RELIEF_STRENGTH }],
+  ]);
+  assert.equal(WIND_RELIEF_STRENGTH, 0.28);
+  assert.equal(f.relief.getDiagnostics().active, true);
+  assert.equal(f.relief.getDiagnostics().maxOpacity, 0.28);
   f.relief.clear();
-  assert.equal(f.globe.material, other);
-  assert.equal(f.materials[0].destroyed, true);
+  assert.deepEqual(f.calls.at(-1), ['first', null]);
+  f.relief.clear();
+  assert.equal(f.calls.length, 2, 'a second clear asks nothing');
+  assert.equal(f.relief.getDiagnostics().active, false);
+  assert.equal(f.relief.attach(), true);
+  f.relief.destroy();
+  assert.deepEqual(f.calls.at(-1), ['first', null]);
   assert.equal(f.relief.attach(), false);
-  f.relief.destroy();
-  assert.equal(f.globe.material, other);
+  assert.equal(f.relief.getDiagnostics().reason, 'Destroyed');
 });
 
-test('missing terrain normals uses curvature only and upgrades when normals exist', () => {
-  const f = fixture({ normals: false });
-  assert.equal(f.relief.attach(), true);
-  assert.equal(f.relief.getDiagnostics().mode, 'globe curvature');
-  const source = f.materials[0].options.fabric.source;
-  assert.doesNotMatch(source, /normalEC|slope/);
-  assert.match(source, /materialInput.positionToEyeEC/);
-  assert.match(source, /czm_ellipsoidInverseRadii/);
-  f.globe.terrainProvider.hasVertexNormals = true;
-  assert.equal(f.relief.attach(), true);
-  assert.equal(f.materials[0].destroyed, true);
-  assert.equal(f.relief.getDiagnostics().mode, 'terrain relief');
-  assert.match(f.materials[1].options.fabric.source, /materialInput.normalEC/);
-  f.relief.destroy();
-  assert.equal(f.globe.material, undefined);
+test('a globe with no surface shading, or one that refuses it, is reported', () => {
+  const f = fixture({ shading: false });
+  assert.equal(f.relief.attach(), false);
+  assert.equal(f.relief.getDiagnostics().reason, 'Globe material unavailable');
+  const refusing = fixture();
+  const asked = [];
+  refusing.ports.get(refusing.viewer).setSurfaceShading = (next) => {
+    asked.push(next);
+    if (next) throw new TypeError('no hillshade');
+  };
+  assert.equal(refusing.relief.attach(), false);
+  assert.equal(
+    refusing.relief.getDiagnostics().reason,
+    'Relief material unavailable',
+  );
+  assert.equal(refusing.relief.getDiagnostics().active, false);
+  assert.deepEqual(
+    asked.at(-1),
+    null,
+    'a refused request is taken back so it never shows later',
+  );
 });
 
-test('moving to a new viewer releases the old globe and owns only the new one', () => {
+test('moving to a new viewer releases the old globe and shades only the new one', () => {
   const f = fixture();
   f.relief.attach();
-  const old = f.globe;
-  const next = { material: null, terrainProvider: { hasVertexNormals: true } };
-  f.viewer.scene = { globe: next, requestRender() {} };
+  const next = { isDestroyed: () => false };
+  f.ports.set(next, f.port('second'));
+  f.use(next);
   assert.equal(f.relief.attach(), true);
-  assert.equal(old.material, undefined);
-  assert.equal(f.materials[0].destroyed, true);
-  assert.equal(next.material, f.materials[1]);
+  assert.deepEqual(f.calls, [
+    ['first', { kind: 'hillshade', strength: 0.28 }],
+    ['first', null],
+    ['second', { kind: 'hillshade', strength: 0.28 }],
+  ]);
   f.relief.destroy();
-  assert.equal(next.material, null);
+  assert.deepEqual(f.calls.at(-1), ['second', null]);
+});
+
+test('a destroyed viewer is never asked to give the shading back', () => {
+  const f = fixture();
+  f.relief.attach();
+  f.viewer.isDestroyed = () => true;
+  f.relief.clear();
+  assert.equal(f.calls.length, 1);
 });

@@ -18,6 +18,7 @@ import { createHealth } from './health.js';
 import { createControls } from './controls.js';
 import { createIngestion } from './ingestion.js';
 import { createState } from './state.js';
+import { createDrawSets } from './drawSets.js';
 
 /** Construct one layer with its own scene state and supplied application services. */
 export function createCctvLayer({ services, source }) {
@@ -30,6 +31,7 @@ export function createCctvLayer({ services, source }) {
   const state = createState({ services });
   const parts = {};
   const context = { state, services, parts, source };
+  parts.drawSets = createDrawSets(context);
   parts.calibration = createCalibration(context);
   parts.testing = createTesting(context);
   parts.projection = createProjection(context);
@@ -73,6 +75,7 @@ export function createCctvLayer({ services, source }) {
       deriveCalBadge: parts.calibration.deriveCalBadge,
       computeFrustumGeometry: parts.geometry.computeFrustumGeometry,
       activationProbeClampRange: parts.geometry.activationProbeClampRange,
+      flatGroundAxisDistance: parts.geometry.flatGroundAxisDistance,
       frameSignatureFromPixels: parts.frames.frameSignatureFromPixels,
       _createCctvProjectionPlaneForTest:
         parts.testing._createCctvProjectionPlaneForTest,
@@ -91,6 +94,9 @@ export function createCctvLayer({ services, source }) {
       processGeometryBatch: parts.geometryQueue.processGeometryBatch,
       hideCctvRecordVisuals: parts.rendering.hideCctvRecordVisuals,
       refreshCoverageStyles: parts.rendering.refreshCoverageStyles,
+      refreshHorizonCulling: parts.rendering.refreshHorizonCulling,
+      _viewRecordIdsForTest: () =>
+        state._viewRecords.map((record) => record.camera.id),
       clearProbeClampOnDeactivation:
         parts.geometry.clearProbeClampOnDeactivation,
       cctvRecordNeedsActivation: parts.model.cctvRecordNeedsActivation,
@@ -107,8 +113,12 @@ export function createCctvLayer({ services, source }) {
       _extractPickedCameraIdForTest:
         parts.testing._extractPickedCameraIdForTest,
       _setCctvCoverageStateForTest: parts.testing._setCctvCoverageStateForTest,
+      _cctvIconsForTest: parts.testing._cctvIconsForTest,
+      _cctvDrawnForTest: parts.testing._cctvDrawnForTest,
       focusCctvRecord: parts.navigation.focusCctvRecord,
       maybeAutoHop: parts.navigation.maybeAutoHop,
+      openingCameraId: parts.navigation.openingCameraId,
+      reopenNearestCamera: parts.navigation.reopenNearestCamera,
       cctvCycleIndex: parts.navigation.cctvCycleIndex,
     },
   );

@@ -34,7 +34,8 @@ If it's bigger, link to it instead.
 
 <!--
 Which layer-panel group should it sit in? The current groups are in PANEL_GROUPS
-in src/ui/layerPanel.js: Movement, Cameras, Infrastructure, Events, Weather, Utilities.
+in src/ui/layerPanel.js: Movement, Cameras, Infrastructure, Events, Weather, Audio,
+and Utilities (its rows render in the separate UTILITIES panel).
 If none fits, propose a new group and say why.
 -->
 

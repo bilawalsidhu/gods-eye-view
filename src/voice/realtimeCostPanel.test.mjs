@@ -1,13 +1,32 @@
+import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createVoiceControl } from './control.js';
+import { createApp, h, nextTick } from 'vue';
+import { createPinia } from 'pinia';
 import { RealtimeCost } from './realtimeCost.js';
 import { createVoiceCostTracker, resolveVoiceModel } from './voiceCost.js';
-import { installPanelDom } from './panel/testDom.mjs';
+import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
+import { useVoiceStore } from '../ui/stores/voice.js';
+import VoiceControl from '../ui/views/panels/VoiceControl.vue';
+
+const $ = (selector) => document.querySelector(selector);
+// Shown unless it or an ancestor is hidden.
+const visible = (selector) => {
+  const node = $(selector);
+  return Boolean(node) && !node.closest('[hidden]');
+};
 
 function harness(t) {
-  installPanelDom(t);
-  const ui = createVoiceControl({ panel: true });
+  document.body.replaceChildren();
+  const pinia = createPinia();
+  const ui = createTestVoiceUi({ panel: true, pinia });
+  const store = useVoiceStore(pinia);
+  // The dock renders the presented control; this renders only that.
+  const app = createApp({
+    render: () => store.view && h(VoiceControl, { view: store.view }),
+  }).use(pinia);
+  app.mount(document.body.appendChild(document.createElement('div')));
+  t.after(() => app.unmount());
   const stops = [];
   const statuses = [];
   const cost = new RealtimeCost({
@@ -39,62 +58,75 @@ function harness(t) {
   return { cost, ui, stops, statuses, recordThreeDollars };
 }
 
-test('soft cost warning is visible outside closed Settings, while ordinary spend stays inside', (t) => {
+test('soft cost warning is visible outside closed Settings, while ordinary spend stays inside', async (t) => {
   const { cost, ui, recordThreeDollars } = harness(t);
   cost.syncCostUi();
-  assert.equal(ui.voicePanel.hidden, true);
-  assert.equal(ui.costValue.checkVisibility(), false);
-  assert.equal(ui.costWarning.hidden, true);
-  assert.equal(ui.voicePanel.contains(ui.costWarning), false);
-  assert.equal(ui.root.querySelectorAll('#gev-voice-cost-value').length, 1);
+  await nextTick();
+  assert.equal(ui.state.voicePanel.hidden, true);
+  assert.equal($('#gev-voice-panel').hidden, true);
+  assert.equal(visible('#gev-voice-cost-value'), false);
+  assert.equal($('#gev-voice-cost-warning').hidden, true);
+  assert.equal(
+    $('#gev-voice-panel').contains($('#gev-voice-cost-warning')),
+    false,
+  );
+  assert.equal(
+    $('#gev-voice-control').querySelectorAll('#gev-voice-cost-value').length,
+    1,
+  );
 
   recordThreeDollars();
-  assert.equal(ui.costWarning.checkVisibility(), true);
-  assert.equal(ui.costWarning.dataset.level, 'warn');
-  assert.equal(ui.costWarning.textContent, ui.costValue.textContent);
-  assert.equal(ui.costWarning.title, ui.costValue.title);
-  assert.match(ui.costWarning.title, /Warns at/);
+  await nextTick();
+  const warning = $('#gev-voice-cost-warning');
+  const value = $('#gev-voice-cost-value');
+  assert.equal(visible('#gev-voice-cost-warning'), true);
+  assert.equal(warning.dataset.level, 'warn');
+  assert.equal(warning.textContent, value.textContent);
+  assert.equal(warning.title, value.title);
+  assert.match(warning.title, /Warns at/);
   assert.equal(
-    ui.voicePanel.hidden,
+    $('#gev-voice-panel').hidden,
     true,
     'warning never forces Settings open',
   );
 
   cost.prepareSession();
   cost.syncCostUi();
+  await nextTick();
   assert.equal(
-    ui.costWarning.hidden,
+    $('#gev-voice-cost-warning').hidden,
     true,
     'new session clears the old warning',
   );
-  assert.equal(ui.costWarning.textContent, '');
+  assert.equal($('#gev-voice-cost-warning').textContent, '');
 });
 
-test('closed Settings cannot hide the hard cap or suppress its ordinary stop and status', (t) => {
-  const { ui, stops, statuses, recordThreeDollars } = harness(t);
+test('closed Settings cannot hide the hard cap or suppress its ordinary stop and status', async (t) => {
+  const { stops, statuses, recordThreeDollars } = harness(t);
   recordThreeDollars();
   assert.equal(stops.length, 0);
   recordThreeDollars();
-  assert.equal(ui.costWarning.checkVisibility(), true);
-  assert.equal(ui.costWarning.dataset.level, 'cap');
+  await nextTick();
+  assert.equal(visible('#gev-voice-cost-warning'), true);
+  assert.equal($('#gev-voice-cost-warning').dataset.level, 'cap');
   assert.deepEqual(stops, [{ preserveStatus: true }]);
   assert.equal(statuses.at(-1)[0], 'idle');
   assert.match(statuses.at(-1)[1], /Session ended — cost cap/);
 });
 
-test('unknown OAuth cost remains visible outside Settings and clears on a fresh API meter', (t) => {
-  const { cost, ui } = harness(t);
+test('unknown OAuth cost remains visible outside Settings and clears on a fresh API meter', async (t) => {
+  const { cost } = harness(t);
   cost.sessionCloudVoiceAuth = 'oauth';
   cost.syncCostUi();
-  assert.equal(ui.costWarning.checkVisibility(), true);
-  assert.equal(ui.costWarning.dataset.level, 'unknown');
-  assert.equal(ui.costWarning.textContent, 'COST UNKNOWN');
-  assert.match(
-    ui.costWarning.title,
-    /USD cost and the API spend cap are unavailable/,
-  );
-  assert.equal(ui.voicePanel.hidden, true);
+  await nextTick();
+  const warning = $('#gev-voice-cost-warning');
+  assert.equal(visible('#gev-voice-cost-warning'), true);
+  assert.equal(warning.dataset.level, 'unknown');
+  assert.equal(warning.textContent, 'COST UNKNOWN');
+  assert.match(warning.title, /USD cost and the API spend cap are unavailable/);
+  assert.equal($('#gev-voice-panel').hidden, true);
   cost.sessionCloudVoiceAuth = 'api-key';
   cost.syncCostUi();
-  assert.equal(ui.costWarning.hidden, true);
+  await nextTick();
+  assert.equal($('#gev-voice-cost-warning').hidden, true);
 });

@@ -1,5 +1,6 @@
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
 import { msg, t } from '../../i18n/index.js';
+import { findCamera } from '../../render/rendererOf.js';
 import { AIS_FIRST_CONNECT_GRACE_MS, AIS_HEALTHY_STATUSES } from './policy.js';
 
 export function createLifecycle({
@@ -10,8 +11,7 @@ export function createLifecycle({
   options,
 }) {
   const { state } = vesselState;
-  const { restoreSpriteOrder, restoreSpriteOrderOnEnable } = services.sprites;
-  const { holdContinuousRender, releaseContinuousRender } = services.render;
+  const { releaseContinuousRender } = services.render;
   const { ensureGeoidReady } = services.geoid;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
 
@@ -114,25 +114,31 @@ export function createLifecycle({
     state.feed.firstConnectDeadline = null;
     state.feed.firstConnectTimer = null;
     state.feed.abort = null;
-    state.billboardCollection = null;
+    state.icons = null;
+    if (services.placement)
+      for (const id of state.records.byId.keys()) services.placement.forget(id);
     state.records.all = [];
-    state.records.byMmsi = new Map();
+    state.records.byId = new Map();
     state.records.unkeyed = [];
-    state.clickHandler = null;
+    state.clickSubscription = null;
     state.keyTarget = null;
     state.keydownHandler = null;
     state.trackedEntityRemover = null;
-    state.interactionHandlerFactory = null;
     state.interactionKeyTarget = null;
     state.preRenderRemover = null;
+    components.rendering.cancelTrailingVisibilityPass();
     state.lastVisibilityUpdate = 0;
     state.lastFocusUpdate = 0;
     state.activeFocusCount = 0;
     state.activeLabelCount = 0;
     state.selectedRecord = null;
     state.trail = null;
+    state.trailHeadOff?.();
+    state.trailHeadOff = null;
     state.trailPositions = [];
-    state.trailMmsi = null;
+    state.trailTimes = [];
+    state.trailBodyCount = -1;
+    state.trailId = null;
     state.trailBackfillToken = 0;
   }
   const methods = {
@@ -157,14 +163,12 @@ export function createLifecycle({
       );
       components.selection.installInteraction(viewer);
       components.rendering.installRuntime(viewer);
-      restoreSpriteOrder(viewer);
     },
 
     enable(viewer) {
       const wasEnabled = state.feed.enabled;
       state.feed.enabled = true;
       if (!wasEnabled) beginAisSession();
-      holdContinuousRender('ais-vessels'); // per-frame animator (perf wave 2)
       const activeViewer = viewer || state.viewer;
       components.rendering.ensureCollections(activeViewer);
       components.selection.installInteraction(activeViewer);
@@ -187,27 +191,29 @@ export function createLifecycle({
             /* grid failed to load — anchors stay at ellipsoid 0 */
           });
       }
-      // Pick-ownership (H2): vessel picks carry the record OBJECT as their id;
-      // the registry resolver reduces it to the record's mmsi (a string key).
+      // Pick-ownership (H2): a vessel icon's pick id is its row id, the record's id.
       registerPickOwner('ais-live-vessels', (pickedId) =>
-        state.records.byMmsi.has(pickedId),
+        state.records.byId.has(pickedId),
       );
-      restoreSpriteOrderOnEnable('ais', activeViewer);
       // Vessels are asked for by view, so ask again when the view moves away.
       removeViewListener();
-      const moveEnd = activeViewer?.camera?.moveEnd;
-      if (typeof moveEnd?.addEventListener === 'function')
-        state.feed.removeViewListener = moveEnd.addEventListener(() => {
+      const camera = findCamera(activeViewer);
+      if (camera)
+        state.feed.removeViewListener = camera.on('moveEnd', () => {
           components.ingestion.refreshIfMoved(activeViewer);
         });
+      vesselState.timeline?.start();
       return components.ingestion.loadLivePositions(activeViewer);
     },
 
     disable() {
+      vesselState.timeline?.stop();
       removeViewListener();
       state.feed.enabled = false;
       invalidateAisSession();
       releaseContinuousRender('ais-vessels');
+      components.rendering.cancelTrailingVisibilityPass();
+      components.rendering.cancelPlacementFrame();
       unregisterPickOwner('ais-live-vessels');
       components.rendering.setVisible(false);
       vesselState._vesselOverlayHost.clearSource(VESSEL_OVERLAY_SOURCE_ID);
@@ -223,17 +229,18 @@ export function createLifecycle({
     },
 
     destroy(viewer) {
+      vesselState.timeline?.stop();
       removeViewListener();
       const activeViewer = viewer || state.viewer;
       invalidateAisSession();
       releaseContinuousRender('ais-vessels'); // direct-destroy path (perf wave 2 fix)
+      components.rendering.cancelTrailingVisibilityPass();
+      components.rendering.cancelPlacementFrame();
       if (state.feed.abort) state.feed.abort.abort();
       unregisterPickOwner('ais-live-vessels');
       components.selection.clearVesselInspection();
       components.tracking.destroySelectedVesselTrail();
-      if (state.billboardCollection && activeViewer?.scene?.primitives) {
-        activeViewer.scene.primitives.remove(state.billboardCollection);
-      }
+      components.rendering.disposeCollections();
       vesselState._vesselOverlayHost.clearSource(VESSEL_OVERLAY_SOURCE_ID);
       vesselState._vesselOverlayHost.setVisible(
         VESSEL_OVERLAY_SOURCE_ID,
@@ -243,6 +250,7 @@ export function createLifecycle({
       if (state.preRenderRemover) {
         state.preRenderRemover();
       }
+      components.rendering.destroyModels();
       resetState();
     },
   };

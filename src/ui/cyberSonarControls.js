@@ -13,14 +13,23 @@ const SETTING_FIELDS = Object.freeze({
   sectorDeg: ['sector', 8, 60],
 });
 
-/** Read configuration separately from whether map effects can currently run. */
-export function getCyberSonarControlState(doc = globalThis.document) {
+/**
+ * Read configuration separately from whether map effects can currently run.
+ * @param {Document} [doc]
+ * @param {{hudActive?: boolean}} [state] The HUD's visibility from IntelHUD,
+ *   which the view renders only on its next update.
+ */
+export function getCyberSonarControlState(
+  doc = globalThis.document,
+  { hudActive } = {},
+) {
   const root = doc?.documentElement;
   const settings = readCyberSonarSettings(root);
   const options = {
     root,
     body: doc?.body,
     hud: doc?.getElementById?.('intel-hud') ?? null,
+    hudActive,
   };
   return {
     enabled: isCyberSonarEnabled(root),
@@ -29,7 +38,6 @@ export function getCyberSonarControlState(doc = globalThis.document) {
     intensityPct: settings.intensity,
     opacityPct: settings.opacity,
     sectorDeg: settings.sector,
-    cyberSelected: root?.dataset?.uiTheme === 'cyber',
     mapSweepActive: isCyberSonarActive(options),
     contactSweepActive:
       root?.dataset?.cyberSonarGpu === 'supported' &&
@@ -47,13 +55,13 @@ export function setCyberSonarControls(
   const fail = (error) => ({
     ok: false,
     error,
-    sonar: getCyberSonarControlState(doc),
+    sonar: getCyberSonarControlState(doc, { hudActive: owner?.hud?.visible }),
   });
   if (!request || typeof request !== 'object' || Array.isArray(request)) {
-    return fail('Provide Cyber sonar settings as an object.');
+    return fail('Provide sonar settings as an object.');
   }
   const fields = Object.keys(request);
-  if (!fields.length) return fail('Provide at least one Cyber sonar setting.');
+  if (!fields.length) return fail('Provide at least one sonar setting.');
   for (const field of fields) {
     const value = request[field];
     if (field === 'enabled') {
@@ -61,19 +69,14 @@ export function setCyberSonarControls(
       continue;
     }
     if (!Object.hasOwn(SETTING_FIELDS, field)) {
-      return fail('Unknown Cyber sonar setting.');
+      return fail('Unknown sonar setting.');
     }
     const [, min, max] = SETTING_FIELDS[field];
     if (!Number.isInteger(value) || value < min || value > max) {
       return fail(`${field} must be an integer from ${min} to ${max}.`);
     }
   }
-  if (
-    owner.hud?.getVariant?.() !== 'cyber' ||
-    doc?.documentElement?.dataset?.uiTheme !== 'cyber'
-  ) {
-    return fail('Cyber sonar controls require the Cyber HUD layout.');
-  }
+  owner.shareLinkManager?.claimRestoreLane?.('visual');
   for (const [field, [setting]] of Object.entries(SETTING_FIELDS)) {
     if (Object.hasOwn(request, field)) {
       owner._setCyberSonarSetting(setting, request[field]);
@@ -82,5 +85,8 @@ export function setCyberSonarControls(
   if (Object.hasOwn(request, 'enabled')) {
     owner._setCyberSonarEnabled(request.enabled);
   }
-  return { ok: true, sonar: getCyberSonarControlState(doc) };
+  return {
+    ok: true,
+    sonar: getCyberSonarControlState(doc, { hudActive: owner?.hud?.visible }),
+  };
 }

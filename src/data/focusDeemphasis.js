@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { findCamera, findQuery } from '../render/rendererOf.js';
 
 /**
  * Focus-aware sprite treatment shared by the live contact layers.
@@ -30,7 +30,6 @@ export const DEFAULT_FOCUS_DEEMPHASIS_PARAMS = Object.freeze({
 let _params = { ...DEFAULT_FOCUS_DEEMPHASIS_PARAMS };
 let _focusTarget = null;
 const _spriteStates = new WeakMap();
-const _scratchScreen = new Cesium.Cartesian2();
 const _advanceResult = {
   factor: 1,
   changed: false,
@@ -172,47 +171,76 @@ export function resetFocusDeemphasisParams() {
 
 /**
  * Publish a focus target from the exact world position already cached by its
- * tracking/render path. Callers must never re-derive a position here: a second
+ * tracking/render path, through the renderer bound to `viewer`: its query
+ * port projects the position and its camera's pose gives the distance.
+ * Callers must never re-derive a position here: a second
  * propagation/dead-reckoning sample at a different frame phase recreates the
  * tracked-target jitter class this service is designed to avoid.
  *
  * @param {object} input
  * @param {string} input.ownerLayer
  * @param {string|number} input.id
- * @param {Cesium.Scene} input.scene
- * @param {Cesium.Camera} input.camera
- * @param {Cesium.Cartesian3} input.displayPosition Cached display position.
- * @param {number} [input.widthPx=24] Projected visual width before padding.
- * @param {number} [input.heightPx=24] Projected visual height before padding.
+ * @param {object} input.viewer The host the renderer is bound to.
+ * @param {{x: number, y: number, z: number}} input.displayPosition Cached display position.
+ * @param {number} [input.widthPx=24]
+ * @param {number} [input.heightPx=24]
  * @param {Partial<typeof DEFAULT_FOCUS_DEEMPHASIS_PARAMS>} [input.params]
  * @returns {object|null} Published target, or null when it cannot be projected.
  */
-export function publishFocusTargetFromCachedPosition({
+export function publishFocusTargetAt({
   ownerLayer,
   id,
-  scene,
-  camera,
+  viewer,
   displayPosition,
   widthPx = 24,
   heightPx = 24,
   params,
 }) {
+  const query = viewer ? findQuery(viewer) : null;
+  let eye = null;
+  try {
+    eye = viewer ? (findCamera(viewer)?.pose().position ?? null) : null;
+  } catch {
+    eye = null;
+  }
   if (
     !ownerLayer ||
     id === null ||
     id === undefined ||
-    !scene ||
-    !camera ||
+    !query ||
+    !eye ||
     !displayPosition
   ) {
     clearFocusTarget(ownerLayer, id);
     return null;
   }
-  const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
-    scene,
-    displayPosition,
-    _scratchScreen,
-  );
+  return publishFocusRect({
+    ownerLayer,
+    id,
+    screen: query.project(displayPosition),
+    cameraDistance: Math.hypot(
+      displayPosition.x - eye.x,
+      displayPosition.y - eye.y,
+      displayPosition.z - eye.z,
+    ),
+    frameNumber: -1,
+    widthPx,
+    heightPx,
+    params,
+  });
+}
+
+/** Publish the focus rectangle around `screen`, or clear it when there is none. */
+function publishFocusRect({
+  ownerLayer,
+  id,
+  screen,
+  cameraDistance,
+  frameNumber,
+  widthPx,
+  heightPx,
+  params,
+}) {
   if (!screen || !Number.isFinite(screen.x) || !Number.isFinite(screen.y)) {
     clearFocusTarget(ownerLayer, id);
     return null;
@@ -232,11 +260,8 @@ export function publishFocusTargetFromCachedPosition({
       bottom: screen.y + halfHeight + padding,
     },
     paddingPx: padding,
-    cameraDistance: Cesium.Cartesian3.distance(
-      camera.positionWC,
-      displayPosition,
-    ),
-    frameNumber: scene.frameState?.frameNumber ?? -1,
+    cameraDistance,
+    frameNumber,
   };
   if (appeared) {
     for (const listener of _focusAppearListeners) {
@@ -441,68 +466,6 @@ export function advanceSpriteFocus(
 }
 
 /**
- * Project and advance one world-anchored sprite using an owning layer's
- * existing render pass.
- * @param {object} sprite Stable primitive identity.
- * @param {Cesium.Cartesian3} position Current cached/rendered world position.
- * @param {Cesium.Scene} scene
- * @param {Cesium.Camera} camera
- * @param {number} nowMs
- * @param {object|null} [target]
- * @param {Partial<typeof DEFAULT_FOCUS_DEEMPHASIS_PARAMS>} [params]
- * @param {number} [spriteHalfWidthPx=0]
- * @param {number} [spriteHalfHeightPx=spriteHalfWidthPx]
- * @returns {{factor:number, changed:boolean, transitioning:boolean,active:boolean,desired:number}}
- */
-export function advanceProjectedSpriteFocus(
-  sprite,
-  position,
-  scene,
-  camera,
-  nowMs,
-  target = _focusTarget,
-  params,
-  spriteHalfWidthPx = 0,
-  spriteHalfHeightPx = spriteHalfWidthPx,
-) {
-  // Common case: nothing tracked and this sprite holds no dimming state —
-  // advanceSpriteFocus would return identity without reading the projection,
-  // so skip the worldToWindowCoordinates round trip entirely (it was N
-  // wasted projections per fleet tick with nothing tracked). Sprites still
-  // relaxing keep their state entry until fully settled (see the delete at
-  // the transition tail), so they keep projecting until done. (perf item 8)
-  if (!target && !_spriteStates.has(sprite)) {
-    _advanceResult.factor = 1;
-    _advanceResult.changed = false;
-    _advanceResult.transitioning = false;
-    _advanceResult.active = false;
-    _advanceResult.desired = 1;
-    return _advanceResult;
-  }
-  const screen =
-    position && scene
-      ? Cesium.SceneTransforms.worldToWindowCoordinates(
-          scene,
-          position,
-          _scratchScreen,
-        )
-      : null;
-  const cameraDistance =
-    position && camera?.positionWC
-      ? Cesium.Cartesian3.distance(camera.positionWC, position)
-      : Number.NaN;
-  return advanceSpriteFocus(sprite, {
-    screenPosition: screen,
-    cameraDistance,
-    nowMs,
-    target,
-    params,
-    spriteHalfWidthPx,
-    spriteHalfHeightPx,
-  });
-}
-
-/**
  * A gated consumer must keep ticking until every previously dimmed sprite has
  * returned to identity, even when no target remains.
  * @param {object|null} target
@@ -553,6 +516,21 @@ export function advanceFocusEvidenceNowMs(deltaMs) {
   if (_focusEvidenceNowMs === null) return null;
   _focusEvidenceNowMs += Math.max(0, Number.isFinite(deltaMs) ? deltaMs : 0);
   return _focusEvidenceNowMs;
+}
+
+/**
+ * True when a sprite holds no dimming state, or has settled at full emphasis
+ * with nothing pending. Advancing such a sprite without a screen position (a
+ * hidden sprite) changes neither its state nor its alpha, so a layer pass may
+ * skip it.
+ * @param {object} sprite
+ * @returns {boolean}
+ */
+export function spriteFocusAtRest(sprite) {
+  const state = _spriteStates.get(sprite);
+  return (
+    !state || (state.factor === 1 && state.desired === 1 && !state.wasFarther)
+  );
 }
 
 /** Forget state when a primitive is removed from its owning collection. */

@@ -1,7 +1,0 @@
-- Pause periodic network updates in hidden tabs; the overdue update on return restarts the polling schedule, so the next poll follows one interval later even when that update fails (asturksever, #1282).
-- Report and guard browser visibility during Transit QA so hidden-page polling pauses cannot masquerade as playback regressions (asturksever, #1282).
-- Require each live city to supply its own feed vehicles in Transit QA; retained vehicles cannot qualify another city (asturksever, #1282).
-- Bound the Transit card-anchor probe by observed poll coverage instead of a fixed 20-second window (asturksever, #1282).
-- Keep visible-page Transit probes focused through the browser testing API (asturksever, #1282).
-- Add a real-browser regression gate for hidden-tab periodic work, explicit refresh, resume and teardown (asturksever, #1282).
-- Restore minimized test windows before screenshots so native compositor pauses cannot stall browser acceptance (asturksever, #1282).

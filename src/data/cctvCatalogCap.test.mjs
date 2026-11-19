@@ -6,9 +6,12 @@ import {
 } from '../../server/providers/cctv/cap.js';
 import {
   CCTV_MAX_SOURCES_CEILING,
+  CCTV_SHARED_SOURCE_SLOTS,
   CCTV_SOURCE_CACHE_MS,
   DEFAULT_CCTV_MAX_SOURCES,
+  WORLD_CCTV_SOURCE_COUNT,
 } from '../../server/providers/cctv/constants.js';
+import { QUEBEC_CAMERA_SOURCE_COUNT } from '../../server/providers/cctv/quebec.js';
 import { createCctvCatalog } from '../../server/providers/cctv/catalog.js';
 
 const pack = (name, count, prefix = name) => ({
@@ -97,6 +100,68 @@ test('duplicate ids resolve last-pack-wins and count against the winning pack', 
     { name: 'live', offered: 1, kept: 1 },
     { name: 'env', offered: 1, kept: 1 },
   ]);
+});
+
+/** Shared packs plus two reserved ones, shaped like the default catalog. */
+const reservedFixture = () => [
+  ...Array.from({ length: 20 }, (_, i) => pack(`shared${i}`, 250)),
+  { ...pack('quebec', 1120), reservedCount: 1120 },
+  { ...pack('world', 2230), reservedCount: 2230 },
+];
+const keptByName = (packs) =>
+  Object.fromEntries(packs.map(({ name, kept }) => [name, kept]));
+
+test('the default cap is the shared floor plus the reserved Québec and World packs', () => {
+  assert.equal(
+    DEFAULT_CCTV_MAX_SOURCES,
+    CCTV_SHARED_SOURCE_SLOTS +
+      QUEBEC_CAMERA_SOURCE_COUNT +
+      WORLD_CCTV_SOURCE_COUNT,
+  );
+});
+
+test('at the default cap reserved packs are whole and shared packs keep the floor', () => {
+  const { sources, packs } = allocateSourceCap(
+    reservedFixture(),
+    DEFAULT_CCTV_MAX_SOURCES,
+  );
+  const kept = keptByName(packs);
+  assert.equal(sources.length, DEFAULT_CCTV_MAX_SOURCES);
+  assert.equal(kept.quebec, 1120);
+  assert.equal(kept.world, 2230);
+  for (let i = 0; i < 20; i++) assert.equal(kept[`shared${i}`], 200);
+  assert.match(
+    sources[0].id,
+    /^shared0-/,
+    'the first camera stays in a shared pack',
+  );
+});
+
+test('a cap at the shared floor reserves nothing and thins every pack evenly', () => {
+  const { packs } = allocateSourceCap(reservedFixture(), 4000);
+  const kept = keptByName(packs);
+  // 22 lanes share 4,000 round-robin: nobody is wiped out by the reservation.
+  for (const count of Object.values(kept))
+    assert.ok(count >= 181 && count <= 182);
+});
+
+test('a small cap (dev-secure 48) still reaches the shared packs first', () => {
+  const { sources, packs } = allocateSourceCap(reservedFixture(), 48);
+  const kept = keptByName(packs);
+  assert.equal(sources.length, 48);
+  for (let i = 0; i < 20; i++) assert.ok(kept[`shared${i}`] >= 2);
+  assert.match(sources[0].id, /^shared0-/);
+});
+
+test('reservations fill only the room above the floor, round-robin between reserved packs', () => {
+  const { packs } = allocateSourceCap(reservedFixture(), 4100);
+  const kept = keptByName(packs);
+  const shared = Object.entries(kept)
+    .filter(([name]) => name.startsWith('shared'))
+    .reduce((sum, [, count]) => sum + count, 0);
+  // 100 reserved slots split between Québec and World, then 4,000 round-robin.
+  assert.ok(shared >= 4000 - 2 * 182, `shared packs kept ${shared}`);
+  assert.equal(shared + kept.quebec + kept.world, 4100);
 });
 
 test('resolveCatalogCap bounds the env value and falls back to the default', () => {

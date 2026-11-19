@@ -112,12 +112,46 @@ const FEED_ERROR_PATTERNS = [
   ],
 ];
 
+// Directions route failures (layers/directions/index.js), English data with
+// the route proxy's refusal or an HTTP status in them. Ahead of the feed
+// patterns, which would take "Routing failed: rate limited" for a source.
+// The route proxy's refusal texts (server/providers/places/routes.js) show
+// translated; any other text in {error} shows its catalog entry, or as given.
+const ROUTING_REFUSALS = new Set([
+  msg('rate limited'),
+  msg('routing service is rate limited'),
+  msg('route leg too long'),
+  msg('route too long'),
+  msg('routing busy — too many routes at once'),
+  msg('route proxy error'),
+]);
+const routingRefusal = (text) =>
+  ROUTING_REFUSALS.has(text) ? t(text) : translateKnown(text);
+const ROUTING_ERROR_PATTERNS = [
+  [
+    /^Routing unavailable \(HTTP (\d+)\)$/,
+    ([, status]) => t('Routing unavailable (HTTP {status})', { status }),
+  ],
+  [
+    /^Routing failed: (.+)$/,
+    ([, error]) =>
+      t('Routing failed: {error}', { error: routingRefusal(error) }),
+  ],
+  [
+    /^(.+) — try again in a moment$/,
+    ([, error]) =>
+      t('{error} — try again in a moment', { error: routingRefusal(error) }),
+  ],
+];
+
+const ERROR_PATTERNS = [...ROUTING_ERROR_PATTERNS, ...FEED_ERROR_PATTERNS];
+
 /** One error text in the UI language, or null when nothing matches. */
 function feedErrorText(text) {
   if (FEED_ERRORS.has(text)) return t(text);
   const known = translateKnown(text);
   if (known !== text) return known;
-  for (const [pattern, format] of FEED_ERROR_PATTERNS) {
+  for (const [pattern, format] of ERROR_PATTERNS) {
     const match = pattern.exec(text);
     if (match) return format(match);
   }
@@ -208,9 +242,57 @@ const STATUS_PIECE_PATTERNS = [
   ],
 ];
 
+// Shapes of installationFeedback() (data/installationFeedback.js), which stays
+// English for the analyst. Keep them in step with its wording.
+const MAPPED_SITE_PATTERNS = [
+  [
+    /^(.+) — retrying in (\d+)s$/,
+    ([, reason, seconds]) =>
+      t('{reason} — retrying in {seconds}s', {
+        reason: translateKnown(reason),
+        seconds,
+      }),
+  ],
+  [
+    /^(.+) — retry pending$/,
+    ([, reason]) =>
+      t('{reason} — retry pending', { reason: translateKnown(reason) }),
+  ],
+  [/^No mapped sites in view$/, () => t('No mapped sites in view')],
+  [
+    /^(\d+) mapped sites? in view$/,
+    ([, count]) =>
+      tn(
+        Number(count),
+        '{count} mapped site in view',
+        '{count} mapped sites in view',
+      ),
+  ],
+  [
+    /^No mapped sites within (\d+) km of the contact$/,
+    ([, km]) =>
+      t('No mapped sites within {km} km of the contact', {
+        km: formatNumber(Number(km)),
+      }),
+  ],
+  [
+    /^(\d+) mapped sites? within (\d+) km of the contact$/,
+    ([, count, km]) =>
+      tn(
+        Number(count),
+        '{count} mapped site within {km} km of the contact',
+        '{count} mapped sites within {km} km of the contact',
+        { km: formatNumber(Number(km)) },
+      ),
+  ],
+];
+
+// First match wins.
+const STATUS_SHAPES = [...STATUS_PIECE_PATTERNS, ...MAPPED_SITE_PATTERNS];
+
 /** A status piece by its shape in the UI language, or null. */
 function statusPatternText(piece) {
-  for (const [pattern, format] of STATUS_PIECE_PATTERNS) {
+  for (const [pattern, format] of STATUS_SHAPES) {
     const match = pattern.exec(piece);
     if (match) return format(match);
   }
@@ -230,4 +312,65 @@ export function translateStatusLine(text) {
     .split(STATUS_SEPARATOR)
     .map(translateStatusPiece)
     .join(STATUS_SEPARATOR);
+}
+
+/** Thousands separators out of an English number ("3,000" → 3000). */
+const englishNumber = (text) => Number(text.replace(/,/g, ''));
+
+// Coverage notes (transit/queries.js, bikeshare/controls.js). Their " · " is
+// inside one sentence, so they match whole before the line is split.
+const COVERAGE_NOTE_PATTERNS = [
+  [
+    /^Fly below ([\d,]+) km to a covered region$/,
+    ([, km]) =>
+      t('Fly below {km} km to a covered region', {
+        km: formatNumber(englishNumber(km)),
+      }),
+  ],
+  [
+    /^No feed here yet · ([\d,]+) regions available$/,
+    ([, regions]) => {
+      const count = englishNumber(regions);
+      return tn(
+        count,
+        'No feed here yet · {n} region available',
+        'No feed here yet · {n} regions available',
+        { n: formatNumber(count) },
+      );
+    },
+  ],
+  [
+    /^Fly below ([\d,]+) km to a covered city$/,
+    ([, km]) =>
+      t('Fly below {km} km to a covered city', {
+        km: formatNumber(englishNumber(km)),
+      }),
+  ],
+  [
+    /^No bike share here yet · ([\d,]+) systems available$/,
+    ([, systems]) => {
+      const count = englishNumber(systems);
+      return tn(
+        count,
+        'No bike share here yet · {n} system available',
+        'No bike share here yet · {n} systems available',
+        { n: formatNumber(count) },
+      );
+    },
+  ],
+];
+
+/**
+ * A layer's status message in the UI language: its catalog entry, a coverage
+ * note by its shape, or a status line translated piece by piece.
+ */
+export function translateStatusMessage(text) {
+  if (typeof text !== 'string') return text;
+  const known = translateKnown(text);
+  if (known !== text) return known;
+  for (const [pattern, format] of COVERAGE_NOTE_PATTERNS) {
+    const match = pattern.exec(text);
+    if (match) return format(match);
+  }
+  return translateStatusLine(text);
 }

@@ -19,7 +19,10 @@ export async function _runUserFacingContextAction(
       onFailure: (error) => {
         if (this.destroyed) return;
         console.warn('[Context] user-facing transition failed', error);
-        this.showToast(localizedMessage || message);
+        this.showToast(
+          localizedMessage ||
+            (typeof message === 'function' ? message() : message),
+        );
       },
     });
   } finally {
@@ -55,7 +58,6 @@ export function getContextModeState() {
     changing: Boolean(this._contextModeChanging),
     entering: this._contextModeEntering || null,
     canContact: !this._contextMode || this._contextMode === 'flights',
-    canMission: !this._contextMode || this._contextMode === 'space-missions',
     snapshotCaptured: Boolean(this._contextSessionSnapshot),
   };
 }
@@ -111,7 +113,7 @@ export async function setContextMode(
       };
     }
     const canonical = mode === 'contacts' ? 'flights' : mode;
-    if (!['flights', 'space-missions'].includes(canonical)) {
+    if (canonical !== 'flights') {
       return {
         ok: false,
         action: 'set_context_mode',
@@ -206,8 +208,6 @@ export function clearSelectedLayers() {
   this._contextModeChanging = true;
   this._contextMode = null;
   this._contextModeEntering = null;
-  this._contextModeEntryIntent = null;
-  this._contextModeReplacementIntent = null;
   this._contextSessionSnapshot = null;
   this._contextRestoreState = null;
   this._preservePanelStateDuringLayerClear = true;

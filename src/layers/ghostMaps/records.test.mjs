@@ -7,7 +7,82 @@ import {
   kmlColor,
   parseDescriptionFields,
   wrapCardText,
+  ghostMapsEventDate,
+  isGhostMapsEventExpired,
+  parseGhostMapsEventDate,
 } from './records.js';
+
+test('event dates parse ArcGIS calendar dates and timestamps consistently in UTC', () => {
+  for (const [value, iso] of [
+    ['10/28/2026', '2026-10-28T23:59:59.999Z'],
+    ['10/28/2026 6:12:00 PM', '2026-10-28T18:12:00Z'],
+    ['1/17/2026 9:46:41 AM', '2026-01-17T09:46:41Z'],
+    ['10/28/2026 12:00 AM', '2026-10-28T00:00:00Z'],
+    ['10/28/2026 12:00 PM', '2026-10-28T12:00:00Z'],
+    ['2026-10-28', '2026-10-28T23:59:59.999Z'],
+    ['2026-10-28T12:34:56', '2026-10-28T12:34:56Z'],
+    ['2026-10-28T12:34:56.123-04:00', '2026-10-28T16:34:56.123Z'],
+    ['2/29/2024', '2024-02-29T23:59:59.999Z'],
+  ])
+    assert.equal(parseGhostMapsEventDate(value), Date.parse(iso), value);
+  for (const value of [
+    '',
+    '<Null>',
+    'N/A',
+    'unknown',
+    '2/29/2026',
+    '9/31/2026',
+    '2026-02-30',
+    '13/1/2026',
+    '1/0/2026',
+    '10/28/2026 13:00 PM',
+    '2026-10-28T24:00:00Z',
+    '2026-10-28T12:60:00Z',
+  ]) {
+    assert.equal(parseGhostMapsEventDate(value), null, value);
+  }
+});
+
+test('event date fields take precedence over report dates and prose, even after long report tables', () => {
+  const row = (label, value) => `<tr><td>${label}</td><td>${value}</td></tr>`;
+  const html = `<table><tr><td><table>${
+    row('Date Of Report', '11/2/2026') +
+    row('Description', 'Incident mentioned on 11/1/2026') +
+    Array.from({ length: 30 }, (_, i) => row(`Field${i}`, 'value')).join('') +
+    row('Date', '10/30/2026') +
+    row('Date of Event', '10/28/2026')
+  }</table></td></tr></table>`;
+  assert.equal(ghostMapsEventDate(html), Date.UTC(2026, 9, 29) - 1);
+  assert.equal(
+    ghostMapsEventDate(
+      `<table>${row('Date', '&lt;Null&gt;')}${row('Date Of Report', '11/2/2026')}</table>`,
+    ),
+    null,
+  );
+  assert.equal(
+    ghostMapsEventDate(`<table>${row('Date_Of_Event', '10/28/2026')}</table>`),
+    Date.UTC(2026, 9, 29) - 1,
+  );
+  assert.equal(ghostMapsEventDate('Occurred 10/28/2026'), null);
+  assert.equal(
+    ghostMapsEventDate(
+      `<script><table>${row('Date', '1/1/2020')}</table></script>`,
+    ),
+    null,
+  );
+});
+
+test('seven-day expiry keeps the exact boundary, future dates and unknown dates', () => {
+  const at = Date.UTC(2026, 10, 3, 12);
+  assert.equal(isGhostMapsEventExpired(Date.UTC(2026, 9, 27, 12), at), false);
+  assert.equal(
+    isGhostMapsEventExpired(Date.UTC(2026, 9, 27, 12) - 1, at),
+    true,
+  );
+  assert.equal(isGhostMapsEventExpired(Date.UTC(2026, 10, 4), at), false);
+  for (const value of [null, undefined, NaN])
+    assert.equal(isGhostMapsEventExpired(value, at), false);
+});
 
 // The shape ArcGIS Pro writes into every S2 placemark description.
 const ARCGIS = `<html xmlns:fo="http://www.w3.org/1999/XSL/Format"><head>
@@ -26,6 +101,14 @@ const ARCGIS = `<html xmlns:fo="http://www.w3.org/1999/XSL/Format"><head>
 </table></td></tr></table></body><script type="text/javascript">
 function changeImage(a, b) { document.getElementById('x').innerHTML = b; }
 </script></html>`;
+
+test('custom ages change the cutoff and all markers disables expiry', () => {
+  const at = Date.UTC(2026, 10, 3, 12);
+  const event = at - 10 * 86400_000;
+  assert.equal(isGhostMapsEventExpired(event, at, 7), true);
+  assert.equal(isGhostMapsEventExpired(event, at, 14), false);
+  assert.equal(isGhostMapsEventExpired(event, at, null), false);
+});
 
 test('ArcGIS popup tables become plain label/value fields and http links', () => {
   const { fields, links } = parseDescriptionFields(ARCGIS);

@@ -202,25 +202,24 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @param {Object} [options={}]
      * @param {number} [options.maxCount] - Maximum number of objects to return.
      * @param {number} [options.seed] - Offset seed for deterministic stride sampling.
-     * @returns {{ position: Cesium.Cartesian3, id: string, type: string }[]}
+     * @returns {{ position: {x: number, y: number, z: number}, id: string, type: string }[]}
      */
     getDetectableObjects(options = {}) {
-      if (!layerState._enabled || layerState._records.length === 0) return [];
+      // The cameras the view pass shows, not icons it has hidden.
+      const records = layerState._viewRecords;
+      if (!layerState._enabled || records.length === 0) return [];
       const maxCount = Number.isFinite(options.maxCount)
         ? Math.max(1, Math.floor(options.maxCount))
-        : layerState._records.length;
+        : records.length;
       const seed = Number.isFinite(options.seed) ? Math.floor(options.seed) : 0;
-      const stride = Math.max(
-        1,
-        Math.ceil(layerState._records.length / maxCount),
-      );
+      const stride = Math.max(1, Math.ceil(records.length / maxCount));
       const start = seed % stride;
 
       const objects = [];
-      for (let i = start; i < layerState._records.length; i += stride) {
-        const camera = layerState._records[i].camera;
+      for (let i = start; i < records.length; i += stride) {
+        const camera = records[i].camera;
         objects.push({
-          position: layerState._records[i].position,
+          position: records[i].position,
           sourceId: camera.id,
           // Short semantic code where the id is opaque (see cameraDisplayCode).
           id: `CAM-${camera.code || camera.id}`,
@@ -334,6 +333,25 @@ export function createControls({ state: layerState, services, parts, source }) {
         parts.navigation.focusCamera(nextId, options.durationSec || 1.8);
       }
       return nextId;
+    },
+
+    /**
+     * Selects the camera nearest a WGS84 point and optionally flies to it.
+     * @param {number} lat Latitude in degrees.
+     * @param {number} lon Longitude in degrees.
+     * @param {Object} [options={}]
+     * @param {boolean} [options.focus=true] Whether to fly after selection.
+     * @param {number} [options.durationSec] Fly-to duration in seconds.
+     * @returns {string|null} Camera ID, or null (invalid point, empty catalog).
+     */
+    focusNearestToPoint(lat, lon, options = {}) {
+      const nearest = parts.navigation.nearestCameraIdToPoint(lat, lon);
+      if (!nearest) return null;
+      parts.selection.setActiveCamera(nearest);
+      if (options.focus !== false) {
+        parts.navigation.focusCamera(nearest, options.durationSec || 1.8);
+      }
+      return nearest;
     },
 
     /**

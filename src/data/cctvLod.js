@@ -34,6 +34,8 @@ const PROVIDER_STATIC_REFRESH_MS = Object.freeze({
   'ontario 511': 3 * 60 * 1000,
   // TxDOT publishes roughly once a minute; 3 min matches the other highway packs.
   txdot: 3 * 60 * 1000,
+  // TranStar says snapshots update about every 3 minutes.
+  'houston transtar': 3 * 60 * 1000,
   // Digitraffic publishes a new weathercam frame on each station's
   // collectionInterval, 600 s for every station sampled; polling faster only
   // re-fetches the same JPEG.
@@ -42,6 +44,9 @@ const PROVIDER_STATIC_REFRESH_MS = Object.freeze({
   // every 20s showed no change inside 64s but a new frame by ~90-150s later —
   // matches the other highway packs' 3-minute cadence.
   'servei català de trànsit': 3 * 60 * 1000,
+  // Autobrennero (A22) refreshes its stills about once a minute (Last-Modified
+  // tracks the minute); 3 min matches the other highway packs.
+  'autostrada del brennero': 3 * 60 * 1000,
 });
 
 /**
