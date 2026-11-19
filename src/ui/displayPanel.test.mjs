@@ -72,7 +72,11 @@ function settings(store) {
 
 test('before VisualSettings renders, the panel shows its initial markup', (t) => {
   const { $ } = fixture(t);
-  assert.equal($('bloom-toggle').className, 'pp-toggle-btn');
+  // Beside the kit's ui-* classes, the toggle carries only its own.
+  assert.deepEqual(
+    [...$('bloom-toggle').classList].filter((name) => !name.startsWith('ui-')),
+    ['pp-toggle-btn'],
+  );
   assert.equal($('bloom-slider-row').className, 'pp-slider-row');
   assert.equal($('bloom-intensity-slider').value, '0');
   assert.equal($('bloom-intensity-value').textContent, '0%');
