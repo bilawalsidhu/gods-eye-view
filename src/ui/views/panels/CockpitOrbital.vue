@@ -14,6 +14,7 @@ import {
   shownOwnerMark,
 } from '../../ownerFlag.js';
 import { useCockpitStore } from '../../stores/cockpit.js';
+import UiButton from '../../kit/UiButton.vue';
 
 // The orbital view's HUD: a nadir reticle over the picture, the satellite's
 // identity and orbit, and the optical zoom. The Cockpit controller presents
@@ -118,14 +119,15 @@ const sensorStepShown = computed(
 // A focused control that turns off (a zoom button at the end of its range,
 // SENSOR as the view tilts away) hands focus on instead of dropping it to the
 // page. The watchers run before the re-render, while it still has focus.
+// Each ref holds a UiButton, whose element is its `$el`.
 const zoomInButton = ref(null);
 const zoomOutButton = ref(null);
 const sensorButton = ref(null);
 const nadirButton = ref(null);
 const handFocus = (from, to) => {
-  if (!from || document.activeElement !== from) return;
+  if (!from?.$el || document.activeElement !== from.$el) return;
   nextTick(() =>
-    (to() ?? document.getElementById('map-view-switch'))?.focus({
+    (to()?.$el ?? document.getElementById('map-view-switch'))?.focus({
       preventScroll: true,
     }),
   );
@@ -298,7 +300,7 @@ const lensStyle = computed(() => {
         <div v-if="identText" class="cockpit-orbital-ident">
           <!-- Wraps between parts, never inside a date. -->
           <span class="cockpit-orbital-ident-text"><template v-for="(part, index) in identParts" :key="index"><template v-if="index"> · </template><span class="cockpit-orbital-ident-part">{{ part }}</span></template></span>
-          <button v-if="tleText" id="cockpit-orbital-tle-toggle" type="button" class="cockpit-orbital-tle-toggle" :aria-expanded="String(tleOpen)" aria-controls="cockpit-orbital-tle" :aria-label="tleOpen ? t('Hide the two-line element set') : t('Show the two-line element set')" :title="tleOpen ? t('Hide the two-line element set') : t('Show the two-line element set')" @click="tleOpen = !tleOpen">{{ t('TLE') }}</button>
+          <UiButton v-if="tleText" id="cockpit-orbital-tle-toggle" class="cockpit-orbital-tle-toggle" :aria-expanded="String(tleOpen)" aria-controls="cockpit-orbital-tle" :aria-label="tleOpen ? t('Hide the two-line element set') : t('Show the two-line element set')" :title="tleOpen ? t('Hide the two-line element set') : t('Show the two-line element set')" @click="tleOpen = !tleOpen">{{ t('TLE') }}</UiButton>
         </div>
         <pre v-if="tleText" v-show="tleOpen" id="cockpit-orbital-tle" class="cockpit-orbital-tle" :aria-label="t('Two-line element set')">{{ tleText }}</pre>
         <dl class="cockpit-orbital-data">
@@ -319,17 +321,17 @@ const lensStyle = computed(() => {
         <!-- Shown only while the view is tilted off nadir: where it looks and the way back. -->
         <div v-if="look.offset" class="cockpit-orbital-look">
           <span id="cockpit-orbital-look-readout" class="cockpit-orbital-look-readout" :aria-live="look.focus ? 'off' : 'polite'">{{ look.readout }}</span>
-          <button id="cockpit-orbital-nadir" ref="nadirButton" type="button" class="cockpit-orbital-nadir" :aria-label="t('Return the view to nadir')" :title="t('Return to nadir (Home or 0)')" aria-keyshortcuts="Home 0">{{ t('NADIR') }}</button>
+          <UiButton id="cockpit-orbital-nadir" ref="nadirButton" class="cockpit-orbital-nadir" :aria-label="t('Return the view to nadir')" :title="t('Return to nadir (Home or 0)')" aria-keyshortcuts="Home 0">{{ t('NADIR') }}</UiButton>
         </div>
         <p id="cockpit-orbital-focus" class="cockpit-orbital-focus" aria-live="polite">{{ focusText }}</p>
       </div>
       <div class="cockpit-orbital-optics">
-        <button id="cockpit-orbital-zoom-out" ref="zoomOutButton" type="button" class="cockpit-orbital-zoom-button" :disabled="atWidest" :aria-label="t('Zoom out')" :title="t('Zoom out (−)')" aria-keyshortcuts="- _">−</button>
+        <UiButton id="cockpit-orbital-zoom-out" ref="zoomOutButton" class="cockpit-orbital-zoom-button" :disabled="atWidest" :aria-label="t('Zoom out')" :title="t('Zoom out (−)')" aria-keyshortcuts="- _">−</UiButton>
         <span class="cockpit-orbital-zoom" aria-live="polite">{{ zoomText }}</span>
-        <button id="cockpit-orbital-zoom-in" ref="zoomInButton" type="button" class="cockpit-orbital-zoom-button" :disabled="atTightest" :aria-label="t('Zoom in')" :title="t('Zoom in (+)')" aria-keyshortcuts="+ =">+</button>
+        <UiButton id="cockpit-orbital-zoom-in" ref="zoomInButton" class="cockpit-orbital-zoom-button" :disabled="atTightest" :aria-label="t('Zoom in')" :title="t('Zoom in (+)')" aria-keyshortcuts="+ =">+</UiButton>
         <span v-if="swathText" class="cockpit-orbital-swath">{{ swathText }}</span>
         <span v-if="sensorText" class="cockpit-orbital-swath cockpit-orbital-sensor-swath">{{ sensorText }}</span>
-        <button v-if="sensorStepShown" id="cockpit-orbital-sensor" ref="sensorButton" type="button" class="cockpit-orbital-sensor-step" :aria-label="t('Zoom to the imaging sensor swath')" :title="t('Zoom to the imaging sensor swath')">{{ t('SENSOR') }}</button>
+        <UiButton v-if="sensorStepShown" id="cockpit-orbital-sensor" ref="sensorButton" class="cockpit-orbital-sensor-step" :aria-label="t('Zoom to the imaging sensor swath')" :title="t('Zoom to the imaging sensor swath')">{{ t('SENSOR') }}</UiButton>
       </div>
     </template>
   </section>

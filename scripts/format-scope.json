@@ -1350,6 +1350,7 @@
   "src/ui/kit/welcomeControls.test.mjs",
   "src/ui/kit/omnibarControls.test.mjs",
   "src/ui/kit/storiesControls.test.mjs",
+  "src/ui/kit/cockpitControls.test.mjs",
   "src/ui/kit/smallSurfacesControls.test.mjs",
   "src/ui/kit/commandDockControls.test.mjs",
   "src/ui/styles/chip.css",
