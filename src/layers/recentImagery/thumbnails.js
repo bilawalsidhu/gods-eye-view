@@ -19,6 +19,16 @@ const EMPTY = Object.freeze({
   loading: false,
 });
 
+const halfKey = (box) => [box.west, box.south, box.east, box.north].join(',');
+
+/** Keep earlier proof on a re-probe unless the new answer confirms that half empty. */
+function keepProvenHalves(previous, next, empty) {
+  if (!Array.isArray(previous) || !Array.isArray(next) || !Array.isArray(empty))
+    return next;
+  const drop = new Set([...next, ...empty].map(halfKey));
+  return [...next, ...previous.filter((half) => !drop.has(halfKey(half)))];
+}
+
 /**
  * @param {{ fetchImpl?: typeof fetch, maxInFlight?: number, maxDecoded?: number, createObjectUrl?: (blob: Blob) => string, revokeObjectUrl?: (url: string) => void, size?: number }} [options]
  */
@@ -91,8 +101,9 @@ export function createThumbnailLoader({
     let status = 'error';
     let objectUrl = null;
     let acquisitionTime = null;
-    // Halves not confirmed empty; null when no per-half probe is available.
+    // The halves the probe lets this product drape, or null without a per-half probe.
     let availableBoxes = null;
+    let emptyBoxes = null;
     let cancelled = false;
     try {
       const response = await requestThumbnail(entry.candidate, entry.box, {
@@ -106,6 +117,7 @@ export function createThumbnailLoader({
           response.headers?.get?.('Data-Present') ?? '',
         ).toLowerCase();
         availableBoxes = response.presentBoxes ?? null;
+        emptyBoxes = response.emptyBoxes ?? null;
         acquisitionTime = response.headers?.get?.('Acquisition-Time') || null;
         if (present === 'false') {
           status = 'empty';
@@ -134,7 +146,14 @@ export function createThumbnailLoader({
       return;
     }
     // A failed re-fetch of an evicted image keeps what the day proved.
+    // A re-probe drops a half only on a fresh "empty".
     if (status !== 'error' || entry.status !== 'present') {
+      if (status === 'present' && entry.status === 'present')
+        availableBoxes = keepProvenHalves(
+          entry.availableBoxes,
+          availableBoxes,
+          emptyBoxes,
+        );
       entry.status = status;
       entry.acquisitionTime = acquisitionTime;
       entry.availableBoxes = availableBoxes;
@@ -188,6 +207,7 @@ export function createThumbnailLoader({
         status: 'unknown',
         objectUrl: null,
         acquisitionTime: null,
+        availableBoxes: null,
         loading: false,
         controller: null,
         touched: 0,
@@ -251,7 +271,7 @@ export function createThumbnailLoader({
         status: entry.status,
         objectUrl: entry.objectUrl,
         acquisitionTime: entry.acquisitionTime,
-        availableBoxes: entry.availableBoxes ?? null,
+        availableBoxes: entry.availableBoxes,
         loading: entry.loading,
       };
     },

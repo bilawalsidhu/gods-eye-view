@@ -22,7 +22,7 @@ import RecentImageryReadout from './recentImagery/RecentImageryReadout.vue';
 import {
   PRODUCTS,
   hhmm,
-  lonSpanDeg,
+  nonCrossingBoxes,
   wvsSnapshotUrl,
 } from '../layers/recentImagery/model.js';
 import { displayDay, displayMetres } from '../layers/recentImagery/display.js';
@@ -140,6 +140,16 @@ function coverageText(coverage) {
   if (coverage === 'full') return t('full', { context: 'coverage' });
   if (coverage === 'partial') return t('partial', { context: 'coverage' });
   return t('unknown');
+}
+
+/** A present day covers the box only in part when its probe omits a side. */
+function shownCoverage(candidate, box) {
+  const drapes = candidate.thumbnail?.availableBoxes;
+  return candidate.thumbnail?.status === 'present' &&
+    Array.isArray(drapes) &&
+    drapes.length < nonCrossingBoxes(box).length
+    ? 'partial'
+    : candidate.coverage;
 }
 
 function cloudText(candidate) {
@@ -579,7 +589,9 @@ export function createRecentImageryPanel({
           }),
         );
       times.push(
-        t('Coverage {coverage}', { coverage: coverageText(focus.coverage) }),
+        t('Coverage {coverage}', {
+          coverage: coverageText(shownCoverage(focus, snapshot.box)),
+        }),
       );
       lines.push({ id: 'acquired', text: times.join(' · ') });
       (focus.granules || []).forEach((granule, index) => {
@@ -785,7 +797,7 @@ export function createRecentImageryPanel({
     // The snapshot is plate carrée: keep the box's degree aspect, with the
     // longer side at the size limit.
     const size = longerSideKm(snapshot.boxSizeKm) > 25 ? 2048 : 1024;
-    const spanLon = lonSpanDeg(snapshot.box.west, snapshot.box.east) || 1;
+    const spanLon = Math.abs(snapshot.box.east - snapshot.box.west) || 1;
     const spanLat = Math.abs(snapshot.box.north - snapshot.box.south) || 1;
     const width = Math.max(
       1,

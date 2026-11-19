@@ -23,8 +23,6 @@ export const IMAGERY_BOX_POINTER_OWNER = 'recent-imagery-box';
  * @param {{ viewer: object, onBox: (box: object) => void, onCancel?: (reason: string, message?: string, box?: object) => void, onActive?: (active: boolean) => void, onEscape?: () => boolean, cesium?: object, pickWorld?: Function, documentRef?: object }} deps
  *   `onEscape` runs before the tool cancels on Escape; returning `true` claims
  *   the key (it is still consumed) and leaves the tool armed.
- *   A drag whose corners are more than 180 degrees of longitude apart is the
- *   short box across the dateline, returned with west > east.
  * @returns {{ start: () => boolean, cancel: (reason?: string) => void, isActive: () => boolean, destroy: () => Promise<void> } | null}
  */
 export function initImageryBoxTool({

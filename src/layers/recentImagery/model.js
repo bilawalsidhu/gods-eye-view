@@ -72,13 +72,11 @@ export const PRODUCTS = Object.freeze({
 
 const finite = (value) => typeof value === 'number' && Number.isFinite(value);
 const toRadians = (degrees) => (degrees * Math.PI) / 180;
+/** A longitude brought back into ±180 after one step past it. */
+const wrapLon = (value) =>
+  value > 180 ? value - 360 : value < -180 ? value + 360 : value;
 const pad2 = (value) => String(value).padStart(2, '0');
 
-/**
- * Coerce a box to `{ west, south, east, north }` with south ≤ north. West and
- * east are not swapped: west > east is the short arc across the dateline.
- * Null when any edge is nonfinite.
- */
 /** A box edge as a number, or null when it is missing, blank or not numeric. */
 function edgeNumber(value) {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
@@ -87,6 +85,11 @@ function edgeNumber(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+/**
+ * Coerce a box to `{ west, south, east, north }` with south ≤ north. West and
+ * east are not swapped: west > east is the short arc across the dateline.
+ * Null when any edge is nonfinite.
+ */
 function normalizeBox(box) {
   if (!box || typeof box !== 'object') return null;
   const [west, south, east, north] = [
@@ -105,9 +108,10 @@ function normalizeBox(box) {
 }
 
 /**
- * Degrees of longitude from `west` to `east`. A west > east box is the short
- * arc across the antimeridian. A west <= east box is unchanged, even when
- * that span is the long way round.
+ * Degrees of longitude going east from `west` to `east`. A west > east pair
+ * wraps across the antimeridian (`lonSpanDeg(170, -170)` is 20 and
+ * `lonSpanDeg(10, -10)` is 340). A west <= east pair is `east - west`,
+ * even the long way round.
  * @param {number} west Degrees.
  * @param {number} east Degrees.
  * @returns {number}
@@ -119,7 +123,7 @@ export function lonSpanDeg(west, east) {
 /**
  * One or two boxes with west <= east that cover the same area. A dateline
  * box is split at ±180 so each side is a plain rectangle for a draped layer
- * or a Worldview request. An invalid box is [].
+ * or a Worldview request. A box with a missing or nonfinite edge is [].
  * @param {object} box Degrees box.
  * @returns {Array<object>}
  */
@@ -223,10 +227,10 @@ export function fitViewHeightM({ width, height, fovy } = {}) {
 export function boxCentre(box) {
   const normalized = normalizeBox(box);
   if (!normalized) return null;
-  let lon = normalized.west + lonSpanDeg(normalized.west, normalized.east) / 2;
-  if (lon > 180) lon -= 360;
   return {
-    lon,
+    lon: wrapLon(
+      normalized.west + lonSpanDeg(normalized.west, normalized.east) / 2,
+    ),
     lat: (normalized.south + normalized.north) / 2,
   };
 }
@@ -251,8 +255,6 @@ export function boxFromPin(lon, lat, sideKm = PIN_BOX_SIDE_KM) {
   const halfLon = sideKm / 2 / (KM_PER_DEG_LAT * cosLat);
   // A half-width of 90° or more is not a short arc; refuse rather than wrap.
   if (halfLon >= 90) return null;
-  const wrapLon = (value) =>
-    value > 180 ? value - 360 : value < -180 ? value + 360 : value;
   const clampLat = (value) =>
     Math.max(-MERCATOR_LAT_LIMIT, Math.min(MERCATOR_LAT_LIMIT, value));
   const result = validateBox({
@@ -492,12 +494,10 @@ export function coverageFor(candidate, box) {
   // outside the west corner stays put: shifting every value below west would
   // send that corner the long way round and miss a footprint that covers it.
   const crossing = west > east;
-  const project = (lon) => {
-    if (!crossing) return lon;
-    if (lon >= west) return lon;
-    if (lon <= east) return lon + 360;
-    return west - lon <= lon - east ? lon : lon + 360;
-  };
+  const project = (lon) =>
+    crossing && lon < west && (lon <= east || lon - east < west - lon)
+      ? lon + 360
+      : lon;
   const samples = [
     [project(west), south],
     [project(east), south],

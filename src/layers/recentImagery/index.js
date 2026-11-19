@@ -549,8 +549,8 @@ export function createRecentImageryLayer({
             : (slotId === 'a') !== _swapped
               ? 'left'
               : 'right',
-          // Keep every half except those confirmed empty by the probe.
-          availableBoxes: thumbnails.get(candidate.key)?.availableBoxes ?? null,
+          // The halves the probe lets this product drape, unknown before it answers.
+          availableBoxes: thumbnails.get(candidate.key)?.availableBoxes,
         });
       } else {
         renderer.hideSlot(slotId);
@@ -820,7 +820,6 @@ export function createRecentImageryLayer({
         // preview; both change more than the cards, so a full notification
         // follows the thumbnail one.
         const pruned = pruneEmpty();
-        if (pruned) syncRender();
         const followed =
           Boolean(_followKey) &&
           _followKey === _focusKey &&
@@ -832,9 +831,8 @@ export function createRecentImageryLayer({
         const drapesChanged = SLOT_IDS.some(
           (slotId) => (owned[slotId]?.key || null) !== shown[slotId],
         );
-        // The key can stay the same while a new probe changes its boxes.
-        // showSlot itself avoids rebuilding an unchanged drape.
-        if (!pruned && !followed) syncRender();
+        // One render per probe: the key can stay the same while its halves change.
+        if (!followed) syncRender();
         notify('thumbnail');
         if (pruned || followed || drapesChanged) notify();
       });

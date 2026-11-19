@@ -338,9 +338,9 @@ test('coverage of a dateline box uses the short arc, not the long way', () => {
     'one footprint that crosses ±180',
   );
   assert.equal(
-    coverageFor(withRings(ring(178.9, 180.1), ring(-180.1, -178.9)), box),
+    coverageFor(withRings(ring(178.9, 180), ring(-180, -178.9)), box),
     'full',
-    'a pair split at ±180',
+    'a pair split exactly at ±180',
   );
   assert.equal(
     coverageFor(withRings(ring(179, 180)), box),

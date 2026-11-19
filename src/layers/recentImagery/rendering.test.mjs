@@ -5,49 +5,14 @@ import {
   TILE_RETRY_DELAY_MS,
   createRecentImageryRenderer,
 } from './rendering.js';
-import { BOX, manualTimers } from './testDoubles.mjs';
-
-/** A provider whose tile requests stay pending until the test settles them. */
-class UrlTemplateImageryProvider {
-  constructor(options) {
-    this.options = options;
-    this.calls = [];
-    this.pending = [];
-  }
-  requestImage(x, y, level) {
-    this.calls.push([x, y, level]);
-    return new Promise((resolve) => this.pending.push(resolve));
-  }
-}
-
-function fakeCesium(requestImage) {
-  class Provider extends UrlTemplateImageryProvider {}
-  if (requestImage) Provider.prototype.requestImage = requestImage;
-  return {
-    UrlTemplateImageryProvider: Provider,
-    WebMercatorTilingScheme: class {},
-    Rectangle: {
-      fromDegrees: (west, south, east, north) => ({ west, south, east, north }),
-    },
-    SplitDirection: { LEFT: -1, NONE: 0, RIGHT: 1 },
-  };
-}
-
-function fakeCollection() {
-  const layers = [];
-  return {
-    layers,
-    addImageryProvider(provider) {
-      const layer = { provider, alpha: 1, splitDirection: 0 };
-      layers.push(layer);
-      return layer;
-    },
-    remove(layer, destroy) {
-      layers.splice(layers.indexOf(layer), 1);
-      layer.destroyed = destroy;
-    },
-  };
-}
+import { nonCrossingBoxes } from './model.js';
+import {
+  BOX,
+  FIJI_BOX,
+  fakeCesium,
+  fakeCollection,
+  manualTimers,
+} from './testDoubles.mjs';
 
 const S30 = { key: 'S30:2026-09-18', product: 'S30', day: '2026-09-18' };
 const L30 = { key: 'L30:2026-09-16', product: 'L30', day: '2026-09-16' };
@@ -257,43 +222,51 @@ test('a dateline box drapes one layer on each side of ±180 and removes both', (
   assert.equal(globe.layers.length, 0);
 });
 
-test('a dateline provider that fails on the second half adds no layer', () => {
-  let built = 0;
-  const base = fakeCesium();
-  const Provider = base.UrlTemplateImageryProvider;
-  base.UrlTemplateImageryProvider = class extends Provider {
-    constructor(options) {
-      built += 1;
-      if (built === 2) throw new Error('provider failed');
-      super(options);
-    }
-  };
-  const renderer = createRecentImageryRenderer({
-    cesium: base,
-    requestRender: () => {},
-  });
-  const globe = fakeCollection();
-  renderer.rebind({ collection: globe, kind: 'globe' });
-  assert.throws(
-    () =>
-      renderer.showSlot('a', S30, {
-        west: 179,
-        south: 0,
-        east: -179,
-        north: 1,
-      }),
-    /provider failed/,
+test('the renderer drapes only the halves the probe allows, and rebind keeps them', () => {
+  const { renderer, globe } = fixture();
+  const [west, east] = nonCrossingBoxes(FIJI_BOX);
+  assert.equal(
+    renderer.showSlot('a', VIIRS, FIJI_BOX, { availableBoxes: [east] }),
+    true,
   );
-  assert.equal(globe.layers.length, 0);
-  assert.equal(renderer.ownedCount(), 0);
+  assert.deepEqual(
+    globe.layers.map((layer) => layer.provider.options.rectangle),
+    [east],
+  );
+  renderer.showSlot('b', VIIRS, FIJI_BOX, { availableBoxes: [east, west] });
+  assert.equal(globe.layers.length, 3);
+
+  const next = fakeCollection();
+  renderer.rebind({ collection: next, kind: 'globe' });
+  assert.deepEqual(
+    next.layers.map((layer) => layer.provider.options.rectangle),
+    [east, west, east],
+  );
+  renderer.showSlot('a', VIIRS, FIJI_BOX);
+  assert.equal(next.layers.length, 4);
+  renderer.destroy();
+  assert.equal(next.layers.length, 0);
 });
 
-test('a box that is not a box adds no layer and drapes nothing', () => {
-  const { renderer, globe, renders } = fixture();
-  for (const bad of [{ west: NaN, south: 0, east: 1, north: 1 }, { west: 0 }]) {
-    assert.equal(renderer.showSlot('a', S30, bad), false);
+test('no allowed half, or halves of another box, drapes nothing', () => {
+  const { renderer, globe } = fixture();
+  for (const availableBoxes of [[], [BOX]]) {
+    assert.equal(
+      renderer.showSlot('a', VIIRS, FIJI_BOX, { availableBoxes }),
+      false,
+    );
+    assert.equal(globe.layers.length, 0);
   }
+});
+
+test('evidence going from none to empty removes the drape', () => {
+  const { renderer, globe } = fixture();
+  renderer.showSlot('a', VIIRS, FIJI_BOX);
+  assert.equal(globe.layers.length, 2);
+  assert.equal(
+    renderer.showSlot('a', VIIRS, FIJI_BOX, { availableBoxes: [] }),
+    false,
+  );
   assert.equal(globe.layers.length, 0);
-  assert.equal(renderer.ownedCount(), 0);
-  assert.deepEqual(renders, []);
+  renderer.destroy();
 });

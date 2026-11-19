@@ -1,13 +1,12 @@
 /**
  * Draped-imagery renderer for the Recent Imagery layer: at most two slots
  * (slot `a`, left of a swipe; slot `b`, right) on whichever host the map
- * stack offers. A box that crosses the dateline drapes two imagery layers
- * in that slot, one on each side of ±180, each a plain west <= east
- * rectangle (see `nonCrossingBoxes`). Against the
- * basemap slot `a` splits left and slot `b` stays empty. Every layer is
- * removed from the collection that owns it, so a host switch or a replaced
- * image never strands one. Tile requests pass a small semaphore of our own;
- * Cesium's global request limits stay untouched.
+ * stack offers. A dateline box drapes up to two layers in its slot, one each
+ * side of ±180 (see `nonCrossingBoxes`). Against the basemap slot `a` splits
+ * left and slot `b` stays empty. Every layer is removed from the collection
+ * that owns it, so a host switch or a replaced image never strands one.
+ * Tile requests pass a small semaphore of our own. Cesium's global request
+ * limits stay untouched.
  */
 import * as Cesium from 'cesium';
 import { PRODUCTS, gibsTemplate, nonCrossingBoxes } from './model.js';
@@ -29,14 +28,20 @@ function clampAlpha(value) {
 const boxKey = (box) =>
   [box.west, box.south, box.east, box.north].map(Number).join(',');
 
-/** Comparable per-half availability signature; unknown differs from empty. */
-const boxesKey = (list) =>
-  Array.isArray(list)
-    ? list
-        .map((box) => boxKey(box))
-        .sort()
-        .join(';')
-    : 'unknown';
+/** One comparable key for a slot's draped parts. */
+const partsKey = (parts) => parts.map(boxKey).sort().join(';');
+
+/**
+ * Without per-half evidence every part drapes. With evidence, only the parts
+ * it lists drape (the source's drapesOnlyProven decides which those are).
+ * Evidence for another box lists none of them.
+ */
+function drapedParts(box, availableBoxes) {
+  const parts = nonCrossingBoxes(box);
+  if (!Array.isArray(availableBoxes)) return parts;
+  const listed = new Set(availableBoxes.filter(Boolean).map(boxKey));
+  return parts.filter((part) => listed.has(boxKey(part)));
+}
 
 /**
  * Gate a provider's `requestImage` through the semaphore. Returning
@@ -92,7 +97,7 @@ export function createRecentImageryRenderer({
   let host = NO_HOST;
   let destroyed = false;
   const admission = { limit: maxTileRequests, inFlight: 0 };
-  /** @type {Record<'a'|'b', null | { layers: Array<object>, collection: object, candidate: object, box: object, alpha: number, split: string }>} */
+  /** @type {Record<'a'|'b', null | { layers: Array<object>, collection: object, candidate: object, box: object, parts: Array<object>, alpha: number, split: string }>} */
   const owned = { a: null, b: null };
 
   // One timer for both slots: any number of upstream deferrals while it is
@@ -156,36 +161,11 @@ export function createRecentImageryRenderer({
     }
   }
 
-  function mount(slotId, { candidate, box, alpha, split, availableBoxes }) {
-    // [] means "not a box": add no layer rather than drape the raw box.
-    const parts = nonCrossingBoxes(box);
+  function mount(slotId, { candidate, box, alpha, split, parts }) {
     if (!parts.length) return false;
-    // Skip confirmed-empty halves; a failed probe is not proof of emptiness.
-    // No evidence drapes the whole box, as before. Evidence for a different
-    // box leaves the slot empty rather than applying stale availability.
-    const allowed = Array.isArray(availableBoxes)
-      ? parts.filter((part) =>
-          availableBoxes.some((half) => half && boxKey(half) === boxKey(part)),
-        )
-      : parts;
-    if (!allowed.length) return false;
-    // Build every provider before adding any layer, so a throw on the second
-    // half of a dateline box cannot leave the first layer untracked.
-    const providers = allowed.map((part) => createProvider(candidate, part));
-    const layers = [];
-    try {
-      for (const provider of providers)
-        layers.push(host.collection.addImageryProvider(provider));
-    } catch (error) {
-      for (const layer of layers) {
-        try {
-          host.collection.remove(layer, true);
-        } catch {
-          /* the collection is already gone */
-        }
-      }
-      throw error;
-    }
+    const layers = parts.map((part) =>
+      host.collection.addImageryProvider(createProvider(candidate, part)),
+    );
     owned[slotId] = {
       layers,
       collection: host.collection,
@@ -193,7 +173,7 @@ export function createRecentImageryRenderer({
       box,
       alpha,
       split,
-      availableBoxes,
+      parts,
     };
     applyLook(owned[slotId]);
     return true;
@@ -222,12 +202,13 @@ export function createRecentImageryRenderer({
       }
       const current = owned[slotId];
       const look = { alpha: clampAlpha(alpha), split: splitDirection };
+      const parts = drapedParts(box, availableBoxes);
       if (
         current &&
         current.collection === host.collection &&
         current.candidate.key === candidate.key &&
         boxKey(current.box) === boxKey(box) &&
-        boxesKey(current.availableBoxes) === boxesKey(availableBoxes)
+        partsKey(current.parts) === partsKey(parts)
       ) {
         if (current.alpha !== look.alpha || current.split !== look.split) {
           Object.assign(current, look);
@@ -237,7 +218,7 @@ export function createRecentImageryRenderer({
         return true;
       }
       const removed = removeOwned(slotId);
-      if (!mount(slotId, { candidate, box, ...look, availableBoxes })) {
+      if (!mount(slotId, { candidate, box, ...look, parts })) {
         if (removed) requestRender('recent-imagery-hide');
         return false;
       }
@@ -298,7 +279,7 @@ export function createRecentImageryRenderer({
       return out;
     },
 
-    /** Number of slots this renderer owns (never above two). A dateline box uses two imagery layers in its slot. */
+    /** Number of slots this renderer owns (never above two). A dateline box uses up to two imagery layers in its slot. */
     ownedCount() {
       return SLOT_IDS.filter((slotId) => owned[slotId]).length;
     },

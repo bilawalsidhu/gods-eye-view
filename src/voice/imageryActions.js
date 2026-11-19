@@ -20,7 +20,7 @@
 import {
   PRODUCTS,
   boxCentre,
-  lonSpanDeg,
+  boxSideKm,
   rankLatest,
 } from '../layers/recentImagery/model.js';
 import {
@@ -210,14 +210,10 @@ export async function findImagery(
     const [west, south, east, north] = record.bbox;
     // 30 m pixels over a landmark-sized area show a handful of blobs: a small
     // area gets the layer's own 10 km box around its centre instead.
-    // west > east is the short arc across the date line: measure and centre
-    // it with the layer's own helpers, never (west + east) / 2.
-    const small =
-      (north - south) * 111 < 5 &&
-      lonSpanDeg(west, east) *
-        111 *
-        Math.cos((((north + south) / 2) * Math.PI) / 180) <
-        5;
+    // west > east is the short arc across the date line. The layer's helpers
+    // measure and centre it.
+    const { width, height } = boxSideKm({ west, south, east, north });
+    const small = width < 5 && height < 5;
     box = small
       ? { pin: boxCentre({ west, south, east, north }) }
       : { west, south, east, north };

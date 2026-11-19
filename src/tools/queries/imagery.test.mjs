@@ -102,9 +102,10 @@ test('overview fallback, empty results and invalid areas are reported', async ()
     wrapped.call('get_recent_imagery', {
       area: { bbox: [179, 0, -179, 1] },
     }),
-    /snapshot cannot cross the dateline/,
+    /must not cross the dateline/,
   );
   assert.equal(crossing.snapshots.length, 0);
+  assert.equal(crossing.boxes.length, 0);
   await assert.rejects(
     none.call('get_recent_imagery', { area: { bbox: [0, 85.5, 1, 86] } }),
     /±85° latitude/,

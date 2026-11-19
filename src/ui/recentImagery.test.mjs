@@ -4,9 +4,11 @@ import assert from 'node:assert/strict';
 import { assertSameNode } from '../testSupport/domAssert.mjs';
 import { readFileSync } from 'node:fs';
 import { createRecentImageryPanel } from './recentImagery.js';
+import { nonCrossingBoxes } from '../layers/recentImagery/model.js';
 import { createRecentImageryLayer } from '../layers/recentImagery/index.js';
 import {
   BOX,
+  FIJI_BOX,
   fakeCatalog,
   fakeController,
   fakeRenderer,
@@ -1053,6 +1055,20 @@ test('DETAILS is a collapsed rail card holding every note, and the empty-days to
   assert.equal(toggle.textContent, 'HIDE EMPTY DAYS');
   header.click();
   assert.equal(article.dataset.open, 'false');
+});
+
+test('DETAILS shows partial coverage when a present dateline day drapes one half', async () => {
+  const f = fixture();
+  f.layer.enable();
+  f.layer.setBox(FIJI_BOX);
+  f.catalog.resolveLast();
+  await settle();
+  assert.match(f.byId('ri-details').textContent, /Coverage full/);
+  const get = f.thumbnails.get;
+  const [west] = nonCrossingBoxes(FIJI_BOX);
+  f.thumbnails.get = (key) => ({ ...get(key), availableBoxes: [west] });
+  f.thumbnails.probe(f.snap().focus.key, 'present');
+  assert.match(f.byId('ri-details').textContent, /Coverage partial/);
 });
 
 test('the body scroll position survives renders even when DOM mutations reset it', async () => {

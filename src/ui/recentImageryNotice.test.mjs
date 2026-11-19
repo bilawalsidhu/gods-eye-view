@@ -14,14 +14,15 @@ const REFUSALS = [
   'Point the camera at the ground to use the view', // layers/recentImagery/index.js
   'That point cannot anchor a box', // layers/recentImagery/index.js
   ...[
-    { west: 170, south: 10, east: -170, north: 20 }, // too large (dateline arc)
-    { west: 10, south: 80, east: 20, north: 89 }, // polar
-    { west: 10, south: 10, east: 10, north: 20 }, // degenerate
-    { west: 10, south: 10, east: 200, north: 20 }, // longitude range
-    { west: Number.NaN, south: 10, east: 20, north: 20 }, // not finite
-  ].map((box) => {
+    [{ west: 170, south: 10, east: -170, north: 20 }, 'too-large'],
+    [{ west: 10, south: 80, east: 20, north: 89 }, 'polar'],
+    [{ west: 10, south: 10, east: 10, north: 20 }, 'degenerate'],
+    [{ west: 10, south: 10, east: 200, north: 20 }, 'invalid'],
+    [{ west: Number.NaN, south: 10, east: 20, north: 20 }, 'invalid'],
+  ].map(([box, reason]) => {
     const result = validateBox(box);
     assert.equal(result.ok, false);
+    assert.equal(result.reason, reason);
     return result.message;
   }),
 ];
@@ -34,6 +35,13 @@ const SHOWN_EN = new Map([
     'Draw is using the pointer — close it first',
   ],
 ]);
+
+test('a dateline box is measured on its short arc', () => {
+  assert.equal(
+    validateBox({ west: 179, south: 0, east: -179, north: 1 }).ok,
+    true,
+  );
+});
 
 test('en: refusals stay English', () => {
   setLocale('en');

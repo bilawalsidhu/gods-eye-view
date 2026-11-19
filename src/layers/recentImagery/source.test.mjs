@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { manualTimers } from './testDoubles.mjs';
 import { createRecentImagerySource } from './source.js';
 
 test('imagery source routes catalog, thumbnails and tiles through supplied adapters', async () => {
@@ -39,8 +40,7 @@ test('imagery source routes catalog, thumbnails and tiles through supplied adapt
   );
   assert.equal(calls.length, 1);
   assert.equal(calls[0][0], 'https://imagery.example/S30/2026-10-01/256');
-  // Each half is bounded by a controller of its own (a deadline can cancel
-  // one half without the other), but it is chained to the caller's signal.
+  // The fetch gets a private signal chained to the caller's.
   const halfSignal = calls[0][1].signal;
   assert.notEqual(halfSignal, controller.signal);
   assert.equal(halfSignal.aborted, false);
@@ -108,11 +108,17 @@ test('a dateline thumbnail is requested as two non-crossing halves, never as a c
 });
 
 const NARROW_WEST = { west: 179.9, south: 0, east: -179, north: 1 };
+// VIIRS is a JPEG without alpha. S30 (candidate) is a PNG.
+const JPEG_CANDIDATE = { product: 'VIIRS', day: '2026-10-01' };
+const WIDE_BOX = { west: -180, south: 0, east: -179, north: 1 };
+const NARROW_BOX = { west: 179.9, south: 0, east: 180, north: 1 };
+
 const dated = (present, body = 'image') =>
   new Response(body, { headers: { 'Data-Present': present } });
-function halvesSource(answers) {
+function halvesSource(answers, options = {}) {
   const requested = [];
   const source = createRecentImagerySource({
+    ...options,
     thumbnailUrl: ({ box }) =>
       `https://imagery.example/${box.west}/${box.east}`,
     fetchImpl: async (url) => {
@@ -135,6 +141,8 @@ test('a crossing box probes both halves and is present when only the narrow half
   assert.equal(requested.length, 2);
   assert.equal(response.headers.get('Data-Present'), 'true');
   assert.equal(await response.text(), 'narrow');
+  assert.deepEqual(response.presentBoxes, [NARROW_BOX]);
+  assert.deepEqual(response.emptyBoxes, [WIDE_BOX]);
 });
 
 test('a crossing box with data only on the wider half is present and shows the wider side', async () => {
@@ -153,6 +161,8 @@ test('a crossing box is empty only when both halves are confirmed empty', async 
   });
   const response = await source.getThumbnail(candidate, NARROW_WEST);
   assert.equal(response.headers.get('Data-Present'), 'false');
+  assert.deepEqual(response.presentBoxes, []);
+  assert.deepEqual(response.emptyBoxes, [WIDE_BOX, NARROW_BOX]);
 });
 
 test('a crossing box is not called empty when the other half failed', async () => {
@@ -171,7 +181,7 @@ test('a crossing box with both halves present shows the wider half and keeps bot
   });
   const response = await source.getThumbnail(candidate, NARROW_WEST);
   assert.equal(await response.text(), 'wide');
-  assert.equal(response.presentBoxes.length, 2, 'every present half survives');
+  assert.deepEqual(response.presentBoxes, [WIDE_BOX, NARROW_BOX]);
 });
 
 test('a rejected half does not hide data on the other half, and never reads as empty', async () => {
@@ -190,15 +200,6 @@ test('a rejected half does not hide data on the other half, and never reads as e
     /Thumbnail request failed/,
   );
 });
-
-// PR #1540 review (P2): a half whose probe failed or hung must not be
-// draped for a product without alpha. VIIRS is a JPEG, so an empty or
-// unknown half would land on the map as a black rectangle. Only a half
-// Worldview confirmed present (`Data-Present: true`) may be draped for it.
-// PNG products (HLS) keep an unknown half: alpha hides it.
-const JPEG_CANDIDATE = { product: 'VIIRS', day: '2026-10-01' };
-const WIDE_BOX = { west: -180, south: 0, east: -179, north: 1 };
-const NARROW_BOX = { west: 179.9, south: 0, east: 180, north: 1 };
 
 test('a JPEG product drapes only the half Worldview confirmed present: a rejected half is not draped', async () => {
   const { source } = halvesSource({
@@ -273,5 +274,91 @@ test('a PNG product keeps an unknown or failed half: alpha hides it', async () =
     response.presentBoxes,
     [WIDE_BOX, NARROW_BOX],
     'a PNG keeps the unproven half',
+  );
+});
+
+test('synchronous abort inside an abort-ignoring fetch settles immediately', async () => {
+  const controller = new AbortController();
+  const source = createRecentImagerySource({
+    thumbnailUrl: () => 'https://example.invalid/',
+    halfDeadlineMs: 10000,
+    fetchImpl: () => {
+      controller.abort();
+      return new Promise(() => {});
+    },
+  });
+  const outcome = await Promise.race([
+    source
+      .getThumbnail(JPEG_CANDIDATE, NARROW_WEST, { signal: controller.signal })
+      .then(
+        () => 'resolved',
+        (error) => error.name,
+      ),
+    new Promise((resolve) => setTimeout(() => resolve('stalled'), 50)),
+  ]);
+  assert.equal(outcome, 'AbortError');
+});
+
+test('a half whose transport ignores AbortSignal is still bounded by its deadline', async () => {
+  const hang = () => new Promise(() => {});
+  const { source, requested } = halvesSource(
+    { '-180/-179': hang, '179.9/180': hang },
+    { halfDeadlineMs: 10 },
+  );
+  await assert.rejects(source.getThumbnail(JPEG_CANDIDATE, NARROW_WEST), {
+    name: 'TimeoutError',
+  });
+  assert.equal(requested.length, 2);
+});
+
+test("the caller's cancellation rejects at once and stops every half", async () => {
+  const aborted = [];
+  const source = createRecentImagerySource({
+    thumbnailUrl: ({ box }) => String(box.west),
+    fetchImpl: (url, { signal }) => {
+      signal.addEventListener('abort', () => aborted.push(url), { once: true });
+      return new Promise(() => {});
+    },
+  });
+  const controller = new AbortController();
+  const result = source.getThumbnail(JPEG_CANDIDATE, NARROW_WEST, {
+    signal: controller.signal,
+  });
+  controller.abort();
+  await assert.rejects(result, { name: 'AbortError' });
+  assert.deepEqual(aborted, ['-180', '179.9']);
+});
+
+test('a successful probe leaves no deadline timer behind', async () => {
+  const timers = manualTimers();
+  const { source } = halvesSource(
+    { '-180/-179': dated('true'), '179.9/180': dated('false') },
+    timers,
+  );
+  await source.getThumbnail(JPEG_CANDIDATE, NARROW_WEST);
+  assert.equal(timers.armed(), 0);
+  assert.equal(timers.cleared.length, 2);
+});
+
+test('transport rejection does not expose untrusted error details', async () => {
+  const marker = 'synthetic-secret-do-not-expose-ABC123';
+  const source = createRecentImagerySource({
+    thumbnailUrl: () => 'https://example.invalid/',
+    fetchImpl: () => {
+      throw new Error(marker);
+    },
+  });
+  await assert.rejects(
+    source.getThumbnail(JPEG_CANDIDATE, NARROW_WEST),
+    (error) => {
+      assert.equal(error.message, 'Thumbnail request failed');
+      assert.equal(
+        `${error.stack} ${JSON.stringify(error)} ${error.cause}`.includes(
+          marker,
+        ),
+        false,
+      );
+      return true;
+    },
   );
 });

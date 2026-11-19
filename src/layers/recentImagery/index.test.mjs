@@ -1,5 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { until } from '../../testSupport/kartaViewFakes.mjs';
+import { createRecentImagerySource } from './source.js';
+import { createThumbnailLoader } from './thumbnails.js';
+import { createRecentImageryRenderer } from './rendering.js';
+import { nonCrossingBoxes } from './model.js';
 import { NO_IMAGERY_HOST } from '../../maps/imageryHost.js';
 import { acquireImageryComparison } from '../../maps/imageryComparison.js';
 import { MapSourceController } from '../../maps/controller.js';
@@ -15,9 +20,12 @@ import {
 import {
   BOX,
   CANDIDATES,
+  FIJI_BOX,
   boxToolFakes,
   candidate,
   fakeCatalog,
+  fakeCesium,
+  fakeCollection,
   fakeController,
   fakeRenderer,
   fakeThumbnails,
@@ -1411,18 +1419,226 @@ test('a box dragged across the dateline is searched, listed and draped as one bo
   assert.equal(f.snap().boxSizeKm.width < 100, true, 'the short arc, not 360°');
 });
 
-test('thumbnail availability changes refresh an already shown day', async () => {
+test('a new probe of a shown dateline day hands the renderer the halves it now allows', async () => {
   const f = fixture();
   const priorGet = f.thumbnails.get;
-  let boxes = [BOX];
+  const box = { west: 179.8, south: 10, east: -179.8, north: 10.4 };
+  const [west, east] = nonCrossingBoxes(box);
+  let boxes = [west];
   f.thumbnails.get = (key) => ({ ...priorGet(key), availableBoxes: boxes });
-  await f.ready();
+  f.layer.enable();
+  f.layer.setBox(box);
+  f.catalog.resolveLast();
+  await settle();
   f.thumbnails.probeRequested();
   const slot = Object.keys(f.owned()).find((id) => f.owned()[id]);
   assert.ok(slot, 'a day is already on the map');
   const key = f.owned()[slot].key;
-  boxes = [{ ...BOX, east: BOX.west + 1 }];
+  assert.deepEqual(f.owned()[slot].availableBoxes, [west]);
+  boxes = [west, east];
   f.thumbnails.probe(key, 'present');
   assert.deepEqual(f.owned()[slot].availableBoxes, boxes);
   f.layer.destroy();
+});
+
+const sideOf = (url) =>
+  Number(new URL(url).searchParams.get('BBOX').split(',')[1]) > 0
+    ? 'west'
+    : 'east';
+const snapshotAnswer = (present) =>
+  new Response('img', { headers: { 'Data-Present': String(present) } });
+
+function realLayer({
+  fetchImpl,
+  candidates,
+  maxDecoded = 16,
+  halfDeadlineMs = 50,
+}) {
+  const source = createRecentImagerySource({ fetchImpl, halfDeadlineMs });
+  let nextUrl = 0;
+  const loader = createThumbnailLoader({
+    requestThumbnail: source.getThumbnail,
+    createObjectUrl: () => `blob:${++nextUrl}`,
+    revokeObjectUrl: () => {},
+    maxDecoded,
+  });
+  const globe = fakeCollection();
+  const layer = createRecentImageryLayer({
+    catalog: {
+      searchHls: async () => ({ candidates, truncated: false, errors: [] }),
+    },
+    renderer: createRecentImageryRenderer({ cesium: fakeCesium() }),
+    thumbnails: loader,
+    host: () => ({ collection: globe, kind: 'globe' }),
+    now: () => new Date('2026-11-13T15:00:00Z'),
+  });
+  layer.init({ camera: {} });
+  return { layer, loader, globe };
+}
+
+test('a VIIRS dateline day with data on one side drapes only that side through the real layer', async () => {
+  const day = candidate('VIIRS', '2026-11-10');
+  const sides = [];
+  const { layer, loader, globe } = realLayer({
+    candidates: [day],
+    fetchImpl: async (url) => {
+      const side = sideOf(url);
+      sides.push(side);
+      return snapshotAnswer(side === 'east');
+    },
+  });
+  layer.setSources({ viirs: true });
+  layer.enable();
+  assert.equal(layer.setBox(FIJI_BOX), true);
+  // The probe asks about both halves, wider first. The layer drapes the one with data.
+  assert.equal(
+    await until(() => globe.layers.length > 0, { ticks: 2000 }),
+    true,
+  );
+  assert.deepEqual(sides, ['east', 'west']);
+  assert.deepEqual(
+    globe.layers.map((layer) => layer.provider.options.rectangle),
+    [nonCrossingBoxes(FIJI_BOX)[1]],
+  );
+  assert.equal(loader.get(day.key).status, 'present');
+  const snapshot = layer.getSnapshot();
+  assert.equal(snapshot.candidates[0].thumbnail.status, 'present');
+  assert.equal(snapshot.candidates[0].drapable, true);
+  assert.equal(snapshot.auto?.key, day.key);
+  layer.destroy();
+  assert.equal(globe.layers.length, 0);
+});
+
+test('a dateline day both halves confirm empty never drapes and leaves the strip', async () => {
+  const day = candidate('VIIRS', '2026-11-10');
+  const { layer, loader, globe } = realLayer({
+    candidates: [day],
+    fetchImpl: async () => snapshotAnswer(false),
+  });
+  layer.setSources({ viirs: true });
+  layer.enable();
+  layer.setBox(FIJI_BOX);
+  assert.equal(
+    await until(() => loader.get(day.key).status === 'empty', { ticks: 2000 }),
+    true,
+  );
+  assert.equal(globe.layers.length, 0);
+  assert.equal(
+    layer.getSnapshot().candidates.some((c) => c.key === day.key),
+    false,
+    'an empty day leaves the strip',
+  );
+  layer.destroy();
+});
+
+function counting(collection) {
+  const counts = { add: 0, remove: 0 };
+  const add = collection.addImageryProvider.bind(collection);
+  const remove = collection.remove.bind(collection);
+  collection.addImageryProvider = (provider) => {
+    counts.add += 1;
+    return add(provider);
+  };
+  collection.remove = (layer, destroy) => {
+    counts.remove += 1;
+    return remove(layer, destroy);
+  };
+  return counts;
+}
+
+for (const [label, box] of [
+  ['a plain box', { west: -98, south: 30, east: -97, north: 31 }],
+  ['a dateline box', FIJI_BOX],
+]) {
+  test(`an HLS day draped before its probe keeps its layers when the probe confirms ${label}`, async () => {
+    const day = candidate('S30', '2026-11-10');
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const { layer, loader, globe } = realLayer({
+      candidates: [day],
+      halfDeadlineMs: 5000,
+      fetchImpl: async () => {
+        await gate;
+        return snapshotAnswer(true);
+      },
+    });
+    const counts = counting(globe);
+    layer.enable();
+    layer.setBox(box);
+    assert.equal(
+      await until(() => globe.layers.length === nonCrossingBoxes(box).length, {
+        ticks: 2000,
+      }),
+      true,
+    );
+    const before = { ...counts, layers: [...globe.layers] };
+    release();
+    assert.equal(
+      await until(() => loader.get(day.key).status === 'present', {
+        ticks: 2000,
+      }),
+      true,
+    );
+    assert.equal(counts.add, before.add);
+    assert.equal(counts.remove, before.remove);
+    assert.ok(globe.layers.every((layer) => before.layers.includes(layer)));
+    layer.destroy();
+  });
+}
+
+test('a re-probe of a present VIIRS dateline day keeps a half that failed this time', async () => {
+  const day1 = candidate('VIIRS', '2026-11-10');
+  const day2 = candidate('VIIRS', '2026-11-11');
+  let eastCalls = 0;
+  let releaseDay2;
+  const gate = new Promise((resolve) => {
+    releaseDay2 = resolve;
+  });
+  const { layer, loader, globe } = realLayer({
+    candidates: [day2, day1],
+    maxDecoded: 1,
+    halfDeadlineMs: 5000,
+    fetchImpl: async (url) => {
+      if (new URL(url).searchParams.get('TIME') === day2.day) await gate;
+      else if (sideOf(url) === 'east' && ++eastCalls === 2)
+        throw new TypeError('Failed to fetch');
+      return snapshotAnswer(true);
+    },
+  });
+  layer.setSources({ hls: false, viirs: true });
+  layer.enable();
+  layer.setBox(FIJI_BOX);
+  assert.equal(
+    await until(() => loader.get(day1.key).status === 'present', {
+      ticks: 2000,
+    }),
+    true,
+  );
+  assert.equal(loader.get(day1.key).availableBoxes.length, 2);
+  releaseDay2();
+  assert.equal(
+    await until(() => loader.get(day2.key).status === 'present', {
+      ticks: 2000,
+    }),
+    true,
+  );
+  assert.equal(loader.get(day1.key).objectUrl, null);
+  layer.setAssignment('a', day1.key);
+  assert.equal(
+    await until(() => eastCalls === 2 && !loader.get(day1.key).loading, {
+      ticks: 2000,
+    }),
+    true,
+  );
+  assert.equal(loader.get(day1.key).status, 'present');
+  assert.equal(loader.get(day1.key).availableBoxes.length, 2);
+  const [west, east] = nonCrossingBoxes(FIJI_BOX);
+  assert.deepEqual(
+    globe.layers.map((layer) => layer.provider.options.rectangle),
+    [west, east],
+    'a half that failed on the re-probe stays draped',
+  );
+  layer.destroy();
 });

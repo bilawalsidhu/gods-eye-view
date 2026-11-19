@@ -11,6 +11,55 @@ export const BOX = Object.freeze({
   north: 30.3,
 });
 
+export const FIJI_BOX = Object.freeze({
+  west: 179,
+  south: -18,
+  east: -177,
+  north: -17,
+});
+
+/** A provider whose tile requests stay pending until the test settles them. */
+class UrlTemplateImageryProvider {
+  constructor(options) {
+    this.options = options;
+    this.calls = [];
+    this.pending = [];
+  }
+  requestImage(x, y, level) {
+    this.calls.push([x, y, level]);
+    return new Promise((resolve) => this.pending.push(resolve));
+  }
+}
+
+export function fakeCesium(requestImage) {
+  class Provider extends UrlTemplateImageryProvider {}
+  if (requestImage) Provider.prototype.requestImage = requestImage;
+  return {
+    UrlTemplateImageryProvider: Provider,
+    WebMercatorTilingScheme: class {},
+    Rectangle: {
+      fromDegrees: (west, south, east, north) => ({ west, south, east, north }),
+    },
+    SplitDirection: { LEFT: -1, NONE: 0, RIGHT: 1 },
+  };
+}
+
+export function fakeCollection() {
+  const layers = [];
+  return {
+    layers,
+    addImageryProvider(provider) {
+      const layer = { provider, alpha: 1, splitDirection: 0 };
+      layers.push(layer);
+      return layer;
+    },
+    remove(layer, destroy) {
+      layers.splice(layers.indexOf(layer), 1);
+      layer.destroyed = destroy;
+    },
+  };
+}
+
 export const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** Timers that fire only when the test says so. */
