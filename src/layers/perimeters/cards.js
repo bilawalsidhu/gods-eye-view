@@ -159,7 +159,8 @@ export function buildIncidentCard(row, nowMs, { link = null } = {}) {
   // the known cause, behavior and complexity values and the wording around them.
   const facts = [];
   if (Number.isFinite(row.acres)) {
-    const acres = Math.round(row.acres);
+    const acres =
+      row.acres < 1 ? Math.round(row.acres * 100) / 100 : Math.round(row.acres);
     facts.push(
       tn(acres, '{acres} ac', '{acres} ac', { acres: formatNumber(acres) }),
     );

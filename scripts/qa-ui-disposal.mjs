@@ -40,6 +40,8 @@ try {
         cancelable: true,
       }),
     );
+    // The title bar renders the readout on Vue's next flush.
+    await Promise.resolve();
     const fpsReadout = document.querySelector('.frame-rate-readout');
     const fpsWasVisible = fpsReadout && !fpsReadout.hidden;
     const watchObserver = (name) => {
@@ -118,10 +120,18 @@ try {
       if (type === 'resize' && callback === resizeHandler) counts.resize++;
       return removeEventListener.call(this, type, callback, options);
     };
-    const { setSplitFlapText } = await import('/src/splitFlap.js');
+    // Through the owner, so its copy of the label and the store agree.
     const feedbackLabel = document.getElementById('global-loading-label');
-    setSplitFlapText(feedbackLabel, 'CHECKING LIVE DATA');
-    setSplitFlapText(feedbackLabel, 'LOAD COMPLETE');
+    for (const label of ['CHECKING LIVE DATA', 'LOAD COMPLETE']) {
+      ui._feedback._publishLoading({
+        hidden: false,
+        state: 'loading',
+        label,
+        detail: '',
+      });
+      // Vue renders on a microtask; a task later the label shows it.
+      await new Promise((resolve) => setTimeout(resolve));
+    }
     const permanentText =
       feedbackLabel.querySelector('.gev-flap-text')?.firstChild;
     let stateNotifications = 0;
@@ -202,6 +212,7 @@ try {
           feedbackLabel.querySelector('.gev-flap-text')?.firstChild ===
             permanentText &&
           permanentText.data === 'LOAD COMPLETE' &&
+          document.getElementById('global-loading-status').hidden &&
           !feedbackLabel.classList.contains('gev-flap-active') &&
           feedbackLabel.querySelector('.gev-flap-cells')?.childNodes.length ===
             0,
@@ -211,7 +222,9 @@ try {
           ui._lifetime.timers.size === 0 &&
           ui._lifetime.removers.size === 0,
         frameRateReleased:
-          fpsWasVisible && !fpsReadout.isConnected && fpsReadout.hidden,
+          fpsWasVisible &&
+          !fpsReadout.isConnected &&
+          !document.querySelector('.frame-rate-readout'),
         stateStopped: stateNotifications === 0,
         idempotent: once === JSON.stringify(counts),
       };

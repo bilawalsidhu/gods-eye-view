@@ -1,0 +1,34 @@
+{
+  "id": "bkg-topplus-open",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "TopPlusOpen basemap (BKG)",
+  "provider": "BKG",
+  "description": "Germany's federal topographic basemap, detailed for Germany and Europe and generalised worldwide.",
+  "icon": "⛰",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "global": true
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://sgx.geodatenzentrum.de/wmts_topplus_open/tile/1.0.0/web/default/WEBMERCATOR/{z}/{y}/{x}.png",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 0,
+    "maxZoom": 18
+  },
+  "display": {
+    "opacity": 1
+  },
+  "licence": {
+    "name": "Datenlizenz Deutschland – Namensnennung 2.0",
+    "url": "https://www.govdata.de/dl-de/by-2-0"
+  },
+  "attribution": {
+    "text": "© BKG, dl-de/by-2-0",
+    "url": "https://gdz.bkg.bund.de/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-22"
+}

@@ -3,48 +3,45 @@ import {
   hasStructuredViewIdentity,
 } from './realtimeProtocol.js';
 import { cameraPoseKey } from './pointerContext.js';
+import { canvasOf, findFrame, rendererOf } from '../render/rendererOf.js';
 
 /** The live viewer's camera pose identity (Cesium-free read). */
-export function readViewerCameraKey() {
+function readViewerCameraKey() {
   return cameraPoseKey(globalThis.window?.__godsEyeView?.viewer);
 }
 // Viewport-screenshot size guards (M13). The old code clamped WIDTH only, so a
 // tall portrait window produced an oversized capture whose dc.send could throw.
 // Cap total pixels (clamps both dimensions) and drop the image entirely if the
 // encoded data URL is still too big for the data channel.
-export const VIEWPORT_MAX_PIXELS = 1200 * 900;
+const VIEWPORT_MAX_PIXELS = 1200 * 900;
 
 // ~1.08 MP, matches the old 1200px-wide landscape budget
-export const VIEWPORT_MAX_ENCODED_BYTES = 200 * 1024;
+const VIEWPORT_MAX_ENCODED_BYTES = 200 * 1024;
 
 export async function captureViewportImage() {
   const viewer = window.__godsEyeView?.viewer;
-  const source =
-    viewer?.scene?.canvas ||
-    document.querySelector('#cesiumContainer .cesium-widget canvas');
+  const source = canvasOf(viewer);
   if (!source || !source.width || !source.height) return null;
-  // No fresh frame (hidden, or the bounded render wait timed out) → no
-  // capture. The caller labels this image "Current"; a stale preserved
-  // frame would feed the model old entities as current context. (perf
-  // wave 2 fix)
-  const fresh = await renderFreshCesiumFrame(viewer);
-  if (!fresh) return null;
-
   // Clamp BOTH dimensions by a total-pixel budget so tall portrait windows are
   // downscaled too (the old width-only clamp let them through — M13).
-  const { width, height } = computeDownscale(
+  const { width } = computeDownscale(
     source.width,
     source.height,
     VIEWPORT_MAX_PIXELS,
   );
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
+  // No fresh frame (hidden, or the bounded render wait timed out) → no
+  // capture. The caller labels this image "Current"; a stale preserved
+  // frame would feed the model old entities as current context. (perf
+  // wave 2 fix)
+  const pixels = await readFreshFrame(viewer, renderFreshCesiumFrame, {
+    scale: width / (source.clientWidth || source.width),
+  });
+  if (!pixels) return null;
+  const ctx = canvasWith(pixels);
   if (!ctx) return null;
+  const canvas = ctx.canvas;
   try {
-    ctx.drawImage(source, 0, 0, width, height);
-    if (isNearlyBlackFrame(ctx, width, height)) {
+    if (isNearlyBlackFrame(ctx, canvas.width, canvas.height)) {
       console.warn('[GEV Voice] Skipped black Cesium viewport capture');
       return null;
     }
@@ -66,11 +63,48 @@ export async function captureViewportImage() {
 }
 
 /** Side of the point-and-ask crop, in CSS pixels, and its output size. */
-export const POINTER_CROP_SIZE = 512;
+const POINTER_CROP_SIZE = 512;
 /** A pointer snapshot older than this no longer matches the frame. */
-export const POINTER_CROP_MAX_AGE_MS = 20000;
+const POINTER_CROP_MAX_AGE_MS = 20000;
 /** View scales where a crop shows buildings and terrain, not a smear. */
-export const POINTER_CROP_SCALES = new Set(['local', 'city']);
+const POINTER_CROP_SCALES = new Set(['local', 'city']);
+
+/**
+ * Reason-coded explanation of the existing visual escalation policy, for an
+ * entity-context answer on an open channel (the caller checks both).
+ * Pointer crops remain a separate path from full-frame screenshots.
+ * These reasons are static diagnostics, never model-generated claims.
+ */
+export function viewportContextDecision(result) {
+  const viewScale = result?.scene?.basemap?.viewScale ?? null;
+  if (result?.scope === 'pointer') {
+    if (result.selected)
+      return { send: false, reason: 'pointer-identity-present', viewScale };
+    if (!result.pointer)
+      return { send: false, reason: 'pointer-missing', viewScale };
+    // The crop path checks ground, freshness and scale itself, and logs why.
+    return {
+      send: true,
+      kind: 'crop',
+      reason: 'pointer-crop-eligible',
+      viewScale,
+    };
+  }
+  if (!shouldSendViewportImage(viewScale))
+    return { send: false, reason: 'view-scale-not-local', viewScale };
+  if (hasStructuredViewIdentity(result))
+    return {
+      send: false,
+      reason: 'structured-identity-sufficient',
+      viewScale,
+    };
+  return {
+    send: true,
+    kind: 'viewport',
+    reason: 'structured-identity-missing',
+    viewScale,
+  };
+}
 
 /**
  * Square source rectangle around a canvas point, clamped inside the canvas,
@@ -130,36 +164,37 @@ export function pointerCropRect({
  */
 export async function capturePointerCrop(screenPx) {
   const viewer = window.__godsEyeView?.viewer;
-  const source = viewer?.scene?.canvas;
+  const source = canvasOf(viewer);
   if (!source?.width || !source?.height || !screenPx) return null;
-  const fresh = await renderFreshPointerFrame(viewer);
-  if (!fresh) return null;
+  const cssWidth = source.clientWidth || source.width;
+  const cssHeight = source.clientHeight || source.height;
   const rect = pointerCropRect({
     x: screenPx.x,
     y: screenPx.y,
-    cssWidth: source.clientWidth || source.width,
-    cssHeight: source.clientHeight || source.height,
+    cssWidth,
+    cssHeight,
     pixelWidth: source.width,
     pixelHeight: source.height,
   });
   if (!rect) return null;
-  const canvas = document.createElement('canvas');
-  canvas.width = rect.output;
-  canvas.height = rect.output;
-  const ctx = canvas.getContext('2d');
+  // The crop in CSS pixels, as the renderer reads it.
+  const toCssX = cssWidth / source.width;
+  const toCssY = cssHeight / source.height;
+  const crop = {
+    x: rect.sx * toCssX,
+    y: rect.sy * toCssY,
+    width: rect.sw * toCssX,
+    height: rect.sh * toCssY,
+  };
+  const pixels = await readFreshFrame(viewer, renderFreshPointerFrame, {
+    crop,
+    scale: rect.output / crop.width,
+  });
+  if (!pixels) return null;
+  const ctx = squareOf(canvasWith(pixels), rect.output);
   if (!ctx) return null;
+  const canvas = ctx.canvas;
   try {
-    ctx.drawImage(
-      source,
-      rect.sx,
-      rect.sy,
-      rect.sw,
-      rect.sh,
-      0,
-      0,
-      rect.output,
-      rect.output,
-    );
     if (isNearlyBlackFrame(ctx, rect.output, rect.output)) return null;
     ctx.strokeStyle = 'rgba(0, 230, 255, 0.95)';
     ctx.lineWidth = 2;
@@ -183,13 +218,69 @@ export async function capturePointerCrop(screenPx) {
 }
 
 /**
+ * The renderer's pixels of a fresh frame (`readPixels` with `options`), read
+ * in the frame `render` waits for, so they are the frame just drawn on any
+ * renderer; null with no fresh frame, or no renderer to read.
+ * @param {object} viewer
+ * @param {(viewer: object, onFrame: () => void) => Promise<boolean>} render
+ * @param {{crop?: object, scale?: number}} options
+ * @returns {Promise<ImageData|null>}
+ */
+async function readFreshFrame(viewer, render, options) {
+  const renderer = rendererOf(viewer);
+  if (typeof renderer?.readPixels !== 'function') return null;
+  let pixels = null;
+  const fresh = await render(viewer, () => {
+    pixels = renderer.readPixels(options);
+  });
+  return fresh ? pixels : null;
+}
+
+/** A 2D canvas holding `pixels`, or null where none can be made. */
+function canvasWith(pixels) {
+  const canvas = document.createElement('canvas');
+  canvas.width = pixels.width;
+  canvas.height = pixels.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  try {
+    ctx.putImageData(
+      typeof ImageData === 'function' && !(pixels instanceof ImageData)
+        ? new ImageData(pixels.data, pixels.width, pixels.height)
+        : pixels,
+      0,
+      0,
+    );
+  } catch {
+    return null;
+  }
+  return ctx;
+}
+
+/**
+ * `ctx`'s image as a `side` px square: the crop is read at one scale, so a
+ * canvas stretched unevenly reads it a pixel or so off square.
+ */
+function squareOf(ctx, side) {
+  if (!ctx || (ctx.canvas.width === side && ctx.canvas.height === side))
+    return ctx;
+  const canvas = document.createElement('canvas');
+  canvas.width = side;
+  canvas.height = side;
+  const square = canvas.getContext('2d');
+  if (!square) return null;
+  square.drawImage(ctx.canvas, 0, 0, side, side);
+  return square;
+}
+
+/**
  * Pointer crops get one bounded recovery request for a slow render loop.
  * Full-viewport captures intentionally keep their single 400 ms attempt.
  */
-export async function renderFreshPointerFrame(viewer) {
-  if (await renderFreshCesiumFrame(viewer)) return true;
+export async function renderFreshPointerFrame(viewer, onFrame) {
+  if (await renderFreshCesiumFrame(viewer, onFrame)) return true;
   if (typeof document !== 'undefined' && document.hidden) return false;
-  return renderFreshCesiumFrame(viewer);
+  return renderFreshCesiumFrame(viewer, onFrame);
 }
 
 // Scale (w, h) down so w*h <= maxPixels while preserving aspect ratio. Never
@@ -222,15 +313,18 @@ export function estimateDataUrlBytes(dataUrl) {
 }
 
 /**
- * Ensure the canvas holds a CURRENT frame before capture.
+ * Ensure the canvas holds a CURRENT frame before capture. `onFrame` runs
+ * as that frame is drawn (its `postRender`), where a read sees it.
+ * @param {object} viewer
+ * @param {() => void} [onFrame]
  * @returns {Promise<boolean>} true only when a fresh frame was presented —
  *   false while hidden (render loop suspended; a capture would be stale) or
  *   when the bounded wait timed out. Callers must not label a non-fresh
  *   canvas as current. (perf wave 2)
  */
-export async function renderFreshCesiumFrame(viewer) {
-  const scene = viewer?.scene;
-  if (!scene) return false;
+export async function renderFreshCesiumFrame(viewer, onFrame) {
+  const frame = findFrame(viewer);
+  if (!frame) return false;
   // While the document is hidden the render loop is suspended — don't
   // secretly restart rendering for an optional screenshot, and don't pass
   // the stale preserved frame off as current.
@@ -240,8 +334,14 @@ export async function renderFreshCesiumFrame(viewer) {
     // necessarily draw — request a frame and await its postRender (bounded),
     // which also covers the just-became-visible race.
     const rendered = new Promise((resolve) => {
-      const remove = scene.postRender.addEventListener(() => {
+      const remove = frame.on('postRender', () => {
         remove();
+        try {
+          onFrame?.();
+        } catch {
+          resolve(false);
+          return;
+        }
         resolve(true);
       });
       setTimeout(() => {
@@ -249,7 +349,7 @@ export async function renderFreshCesiumFrame(viewer) {
         resolve(false);
       }, 400);
     });
-    scene.requestRender?.();
+    frame.requestRender('voice-capture');
     const fresh = await rendered;
     // A tab switch during the bounded wait invalidates freshness.
     if (typeof document !== 'undefined' && document.hidden) return false;
@@ -259,7 +359,7 @@ export async function renderFreshCesiumFrame(viewer) {
   }
 }
 
-export function isNearlyBlackFrame(ctx, width, height) {
+function isNearlyBlackFrame(ctx, width, height) {
   const sampleWidth = Math.min(48, width);
   const sampleHeight = Math.min(32, height);
   if (!sampleWidth || !sampleHeight) return true;
@@ -299,6 +399,16 @@ export function isBenignViewportDeleteError(payload, pendingDeleteIds = null) {
   return code === 'item_not_found';
 }
 
+/** Pairs one visual-context request's outcome with its decision. */
+function diagnosticsRecord(contextId = null) {
+  return { contextId, logged: false };
+}
+
+function reportOutcome(owner, diag, event, kind, reason) {
+  diag.logged = true;
+  owner.debugLog?.(event, { contextId: diag.contextId, kind, reason });
+}
+
 /** Own the one retained viewport image and bounded pending deletion identities. */
 export class RealtimeViewport {
   constructor({
@@ -319,6 +429,8 @@ export class RealtimeViewport {
     // Bumped by every capture request and every new user turn: only the
     // newest request of the current turn may publish.
     this.captureSeq = 0;
+    // Diagnostics only: pairs each visual-context decision with its outcome.
+    this.contextSeq = 0;
     this.lastPointerCrop = null;
     // What the retained image shows: `{kind:'viewport'|'crop', rect, cameraKey}`.
     // Pixel targeting (screenX/screenY) is read against it.
@@ -330,28 +442,51 @@ export class RealtimeViewport {
     return this.readChannel();
   }
 
+  /**
+   * Escalate an entity-context answer to an image when the gate allows it.
+   * Logs one `viewport_context.decision`, then, for a send decision, exactly
+   * one `.skipped` or `.result` outcome, even when a step throws. Every
+   * event carries the same `contextId` and the image `kind`, so overlapping
+   * requests pair up.
+   */
   async sendVisualContextIfUseful(result) {
+    // Runs after every tool output. Only entity context on an open channel
+    // can escalate, so anything else logs nothing and leaves the shared
+    // debug-log budget alone.
     if (
       result?.action !== 'get_entity_context' ||
       !this.dc ||
       this.dc.readyState !== 'open'
     )
       return false;
-    const viewScale = result.scene?.basemap?.viewScale;
-    // Point-and-ask on bare ground: the crop around the pointer replaces the
-    // whole-frame screenshot, and is pulled only when nothing was named.
-    if (result.scope === 'pointer') {
-      if (result.selected || !result.pointer) return false;
-      return this.sendPointerCrop(this.readPointer(), { viewScale });
+    const contextId = ++this.contextSeq;
+    const decision = viewportContextDecision(result);
+    this.debugLog?.('viewport_context.decision', { contextId, ...decision });
+    if (!decision.send) return false;
+    const diag = diagnosticsRecord(contextId);
+    try {
+      // #837's pointer crop is separate from the full viewport: preserve it.
+      if (decision.kind === 'crop')
+        return await this.sendPointerCrop(this.readPointer(), {
+          viewScale: decision.viewScale,
+          diag,
+        });
+      return await this.sendRetainedImage(
+        () => this.capture(),
+        "Current God's Eye View viewport screenshot. Read any clearly visible street, building, and place labels in the image and combine them with the structured nearbyPlaces, streetLabels, and scene context. Do not invent labels that are not legible.",
+        'client.viewport_context',
+        { kind: 'viewport', diag },
+      );
+    } catch (error) {
+      // The caller logs the error itself; close the pair, then rethrow.
+      if (!diag.logged)
+        this.debugLog?.('viewport_context.skipped', {
+          contextId,
+          kind: decision.kind,
+          reason: 'error',
+        });
+      throw error;
     }
-    if (!shouldSendViewportImage(viewScale)) return false;
-    if (hasStructuredViewIdentity(result)) return false;
-    return this.sendRetainedImage(
-      () => this.capture(),
-      "Current God's Eye View viewport screenshot. Read any clearly visible street, building, and place labels in the image and combine them with the structured nearbyPlaces, streetLabels, and scene context. Do not invent labels that are not legible.",
-      'client.viewport_context',
-      { kind: 'viewport' },
-    );
   }
 
   /** A new user turn: captures still in flight from the last one are dropped. */
@@ -365,27 +500,39 @@ export class RealtimeViewport {
    * @param {object|null} snapshot Fresh pointer snapshot on bare ground.
    * @returns {Promise<boolean>}
    */
-  async sendPointerCrop(snapshot, { viewScale } = {}) {
-    if (!snapshot?.fresh || snapshot.target !== 'ground' || !snapshot.screenPx)
+  async sendPointerCrop(
+    snapshot,
+    { viewScale, diag = diagnosticsRecord() } = {},
+  ) {
+    const skip = (reason) => {
+      reportOutcome(this, diag, 'viewport_context.skipped', 'crop', reason);
       return false;
+    };
+    if (!snapshot?.fresh) return skip('pointer-not-fresh');
+    if (snapshot.target !== 'ground') return skip('pointer-not-ground');
+    if (!snapshot.screenPx) return skip('pointer-off-screen');
     // Too far out, the crop is a smear: every path shares this guard.
-    if (!POINTER_CROP_SCALES.has(viewScale)) return false;
-    if (snapshot === this.lastPointerCrop) return false;
+    if (!POINTER_CROP_SCALES.has(viewScale))
+      return skip('pointer-scale-not-useful');
+    // Set before the capture finishes, so this also covers one in flight.
+    if (snapshot === this.lastPointerCrop)
+      return skip('pointer-already-requested');
     const capturedAt = Number(snapshot.capturedAt) || 0;
-    if (this.now() - capturedAt > POINTER_CROP_MAX_AGE_MS) return false;
+    if (this.now() - capturedAt > POINTER_CROP_MAX_AGE_MS)
+      return skip('pointer-expired');
     // The snapshot's pixels only name its own camera pose.
     const snapshotCameraKey = snapshot.cameraKey;
-    if (!snapshotCameraKey) return false;
+    if (!snapshotCameraKey) return skip('pointer-pose-unknown');
     const samePose = () =>
       snapshotCameraKey === this.readCameraKey() &&
       this.now() - capturedAt <= POINTER_CROP_MAX_AGE_MS;
-    if (!samePose()) return false;
+    if (!samePose()) return skip('pose-changed');
     this.lastPointerCrop = snapshot;
     const sent = await this.sendRetainedImage(
       () => this.capturePointer(snapshot.screenPx),
       "Crop of the map around the user's pointer; the ring marks the exact spot they mean by this or here. Describe only what is clearly visible.",
       'client.pointer_crop',
-      { kind: 'crop', valid: samePose },
+      { kind: 'crop', valid: samePose, diag },
     );
     if (!sent && this.lastPointerCrop === snapshot) this.lastPointerCrop = null;
     return sent;
@@ -393,22 +540,40 @@ export class RealtimeViewport {
 
   /** Capture one image and make it the single retained image in context. */
   async sendRetainedImage(captureImage, text, label, frame = {}) {
-    if (!this.dc || this.dc.readyState !== 'open') return false;
+    const kind = frame.kind || 'viewport';
+    const diag = frame.diag || diagnosticsRecord();
+    const report = (event, reason) =>
+      reportOutcome(this, diag, event, kind, reason);
+    if (!this.dc || this.dc.readyState !== 'open') {
+      report('viewport_context.skipped', 'channel-lost');
+      return false;
+    }
     const generation = this.generation;
     const request = ++this.captureSeq;
     const channel = this.dc;
     const captured = await captureImage();
     const imageUrl =
       typeof captured === 'string' ? captured : captured?.dataUrl || null;
-    if (
-      !imageUrl ||
-      generation !== this.generation ||
-      request !== this.captureSeq ||
-      this.dc !== channel ||
-      channel.readyState !== 'open' ||
-      (typeof frame.valid === 'function' && !frame.valid())
-    )
+    if (!imageUrl) {
+      report('viewport_context.skipped', 'capture-unavailable');
       return false;
+    }
+    // Same guards as before, checked in order so each drop names its cause:
+    // reset() bumps both counters, so a session reset is tested first.
+    const invalidated =
+      generation !== this.generation
+        ? 'session-reset'
+        : request !== this.captureSeq
+          ? 'superseded'
+          : this.dc !== channel || channel.readyState !== 'open'
+            ? 'channel-lost'
+            : typeof frame.valid === 'function' && !frame.valid()
+              ? 'frame-stale'
+              : null;
+    if (invalidated) {
+      report('viewport_context.skipped', invalidated);
+      return false;
+    }
 
     // Keep at most one viewport screenshot in context. Images are the single
     // most expensive item (re-billed every turn they linger), so we proactively
@@ -461,10 +626,16 @@ export class RealtimeViewport {
     // the item we just deleted as null and fall through so the caller still
     // issues queueResponseCreate WITHOUT the image, instead of stranding the turn.
     const sent = this.sendRealtimeEvent(contextEvent, label);
+    // Report before the bookkeeping below, so a later throw cannot turn a
+    // real send into a logged "error".
+    report(
+      'viewport_context.result',
+      sent ? 'sent' : 'data-channel-send-failed',
+    );
     this.lastViewportItemId = sent ? newItemId : null;
     this.retainedFrame = sent
       ? {
-          kind: frame.kind || 'viewport',
+          kind,
           rect: captured?.rect || null,
           cameraKey: this.readCameraKey(),
         }

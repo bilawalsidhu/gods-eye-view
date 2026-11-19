@@ -1,7 +1,6 @@
 import { LayerBindings } from './ui/layerBindings.js';
 import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
 import { readLayerSource } from './testSupport/readLayerSource.mjs';
-import { StyleManager } from './ui/applicationShell.js';
 import { enter as cockpitEnter, navigateContext } from './ui/cockpitTrackingController.js';
 import { CockpitViewController } from './ui/cockpitController.js';
 import assert from 'node:assert/strict';
@@ -43,10 +42,10 @@ function ordered(source, needles, label) {
 test('Cockpit takeover invalidates deferred work before camera cancellation', () => {
   const enter = cockpitEnter.toString();
   ordered(enter, [
-    'if (!info || !entity?.position) return false;',
+    'if (!info || (!vessel && !satellite && !entity?.position)) return false;',
     'this.onCameraTakeover?.();',
-    'this.viewer.camera.cancelFlight();',
-    'this.viewer.trackedEntity = undefined;',
+    'cameraOf(this.viewer).cancelFlight();',
+    'stopFollowing(this.viewer);',
   ], 'Cockpit takeover');
   assert.match(
     ui,
@@ -98,7 +97,7 @@ test('voice Cockpit entry reaches the camera only through stamping seams', () =>
   // The transaction has exactly two camera-owner mutations, and each one
   // stamps:
   //   1. selectedLayer.trackById(id) -> viewer.trackedEntity
-  //        -> viewer.trackedEntityChanged -> _stampNavigation()
+  //        -> onFollowChanged(viewer) -> _stampNavigation()
   //   2. cockpitView.enter() -> onCameraTakeover() -> _stampNavigation()
   const transaction = body(
     cockpitTracking,
@@ -107,7 +106,8 @@ test('voice Cockpit entry reaches the camera only through stamping seams', () =>
   );
   ordered(transaction, [
     /if \(\s*!selectedLayer\.trackById\?\.\(selectedTarget\.id, \{\s*origin: selectionOrigin,?\s*\}\)\s*\) \{/,
-    'if (!entryError) entered = Boolean(cockpitView.enter());',
+    // Aircraft-only: a selected vessel must not stand in for a voice target.
+    "if (!entryError) entered = Boolean(cockpitView.enter({ kind: 'aircraft' }));",
   ], 'Cockpit entry transaction');
   // No direct camera control: every mutation goes through a layer tracker or
   // the cockpit controller, both of which stamp.
@@ -118,7 +118,7 @@ test('voice Cockpit entry reaches the camera only through stamping seams', () =>
   // Seam 1: any tracker handoff stamps, so the adoption step is covered.
   assert.match(
     ui,
-    /viewer\.trackedEntityChanged\.addEventListener\(\s*\(entity\) => \{\s*if \(entity && !this\._disposed\)\s*this\._stampNavigation\(\{\s*cancelPendingSelection: false,?\s*\}\);/,
+    /onFollowChanged\(\s*this\.viewer,\s*\(followed\) => \{\s*if \(followed && !this\._disposed\)\s*this\._stampNavigation\(\{\s*cancelPendingSelection: false,?\s*\}\);/,
     'tracker handoff must stamp',
   );
   // Seam 2 is pinned by "Cockpit takeover invalidates deferred work" above.
@@ -191,10 +191,10 @@ test('accepted navigation releases through PR15-aware ownership before flight', 
     'origin: trackingOrigin',
     'satellitesLayer.stopTracking?.({ origin: trackingOrigin })',
     'rocketLaunchesLayer.releaseCameraOwnership?.()',
-    'this.viewer.trackedEntity = undefined;',
+    'stopFollowing(this.viewer);',
     "interruptCameraMotion('explicit-navigation')",
-    'this.viewer.camera.cancelFlight();',
-    'this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);',
+    'camera?.cancelFlight();',
+    'camera?.release();',
   ], 'follow release');
   assert.match(release, /flightsLayer\.stopTracking\?\.\(\{ origin: trackingOrigin \}\)/);
   assert.match(release, /militaryFlightsLayer\.stopTracking\?\.\(\{ origin: trackingOrigin \}\)/);
@@ -224,11 +224,20 @@ test('validated voice camera destinations share the UI navigation authority faca
     'move camera',
   );
   ordered(move, [
-    "if (!['orbit', 'pan', 'tilt', 'rotate'].includes(motion))",
+    'if (argsError) return argsError;',
     'const start = () => {',
     /const preserveCameraFlight =\s*motion === 'orbit'/,
     'runNavigation(start, { preserveCameraFlight })',
   ], 'move validation before handoff');
+  const moveArgs = body(
+    cameraVerbs,
+    /export function moveCameraArgsError\(args = \{\}\) \{([\s\S]*?)\n\}/,
+    'move camera argument checks',
+  );
+  assert.ok(
+    moveArgs.includes("if (!['orbit', 'pan', 'tilt', 'rotate', 'rotate_globe'].includes(motion))"),
+    'unknown motions are refused before handoff',
+  );
 
   const route = body(
     cameraVerbs,
@@ -262,7 +271,7 @@ test('deferred search releases only after its final authority check', () => {
   assert.match(ui, /begin: \(\) => this\._beginDeferredNavigation\('location'\)/);
   assert.match(ui, /beforeFly: \(generation\) => this\._reassertNavigationHandoff\(generation\)/);
   assert.match(ui, /isCurrent: \(generation\) =>\s*!this\._disposed && generation === this\._navigationGeneration/);
-  assert.match(ui, /change\.type === 'settled'\)\s*this\._settleLocationSearchUi\(change\.generation\)/);
+  assert.match(ui, /change\.type === 'settled'\)\s*this\._settleLocationSearchUi\(change\.generation, \{\s*keepQuery: state\.status === 'missing' \|\| state\.status === 'failed',?\s*\}\)/);
   assert.doesNotMatch(search.slice(0, search.indexOf('await this.search')), /_releaseFollowCamera/);
 });
 
@@ -273,11 +282,11 @@ test('a direct globe gesture retires delayed camera and selection restore only',
   );
   assert.match(
     ui,
-    /viewer\?\.canvas\?\.addEventListener\(\s*'pointerdown',\s*this\._initialShareGestureHandler/,
+    /canvasOf\(this\.viewer\)\?\.addEventListener\(\s*'pointerdown',\s*this\._initialShareGestureHandler/,
   );
   assert.match(
     ui,
-    /viewer\?\.canvas\?\.addEventListener\(\s*'wheel',\s*this\._initialShareGestureHandler/,
+    /canvasOf\(this\.viewer\)\?\.addEventListener\(\s*'wheel',\s*this\._initialShareGestureHandler/,
   );
   assert.match(
     ui,
@@ -354,7 +363,7 @@ test('teardown refuses deferred location work before geocoding begins', () => {
     'if (!query || this.destroyed) return;',
     'const authority = this.begin();',
     'if (authority === false)',
-    'this.input.blur();',
+    'this.input?.blur();',
     'this.onStart?.(authority);',
     'await this.search(query',
   ], 'disposed search refusal');
@@ -384,20 +393,21 @@ test('world-focus listener lifecycle is symmetric and idempotent', () => {
 });
 
 test('vessel and fire layers announce valid clicks and never fly cameras', () => {
-  for (const [label, source] of [['vessels', vessels], ['fires', firms]]) {
+  for (const source of [vessels, firms]) {
     assert.match(source, /requestWorldFocus\(\{/);
     assert.doesNotMatch(source, /camera\.flyTo/);
   }
   const vesselClick = body(
     vessels,
-    /handler\.setInputAction\(\s*\(click\) => \{([\s\S]*?)\n\s*\},\s*Cesium\.ScreenSpaceEventType\.LEFT_CLICK,?\s*\);/,
+    /inputFor\(viewer\)\.onClick\(\(event\) => \{([\s\S]*?)\n    \}\);/,
     'vessel click',
   );
   ordered(vesselClick, [
+    'clickCard?.(event)',
+    'selectAndFocusVessel(carded)',
     "isOwnedByOtherLayer('ais-live-vessels', pickedId)",
-    '_vesselOverlayHost.hitTest?.(',
     'selectAndFocusVessel(record)',
-  ], 'vessel sibling ownership');
+  ], 'vessel card on top, then sibling ownership');
   const vesselFocus = body(
     vessels,
     /function selectAndFocusVessel\(record\) \{([\s\S]*?)\n  \}/,
@@ -406,12 +416,13 @@ test('vessel and fire layers announce valid clicks and never fly cameras', () =>
   assert.match(vesselFocus, /requestWorldFocus\(\{/);
   const fireClick = body(
     firms,
-    /_clickHandler\.setInputAction\(\(click\) => \{([\s\S]*?)\n    \}, Cesium\.ScreenSpaceEventType\.LEFT_CLICK\);/,
+    /input\.onClick\(\(event\) => \{([\s\S]*?)\n    \}\);/,
     'fire click',
   );
   ordered(fireClick, [
-    'isOwnedByOtherLayer(id, pickedId)',
-    'overlayHost.hitTest?.(',
+    'clickCard?.(event)',
     'selectAndFocusFire(carded)',
-  ], 'fire sibling ownership');
+    'isOwnedByOtherLayer(id, pickedId)',
+    'clearFireSelection()',
+  ], 'fire card on top, then sibling ownership');
 });

@@ -1,0 +1,39 @@
+{
+  "id": "amsterdam-traffic-cameras",
+  "kind": "dataset",
+  "family": "cameras",
+  "title": "Amsterdam traffic and ANPR camera positions",
+  "provider": "Gemeente Amsterdam",
+  "description": "Where the City of Amsterdam's traffic and ANPR cameras stand (about 500), from its traffic information systems register. Positions and camera type only: the city publishes no pictures.",
+  "icon": "◉",
+  "maintainer": "github:Maher-Reven",
+  "coverage": { "countries": ["NL"], "bbox": [4.72, 52.27, 5.08, 52.44] },
+  "source": {
+    "format": "geojson",
+    "url": "https://api.data.amsterdam.nl/v1/verkeersinformatiesystemen/verkeersinformatiesystemen/",
+    "query": {
+      "objectSoort": "Camera",
+      "_format": "geojson",
+      "_pageSize": "1000"
+    },
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "maxFeatures": 1000
+  },
+  "display": {
+    "color": "#e53e3e",
+    "label": "standplaats",
+    "fields": ["typeGedetailleerd", "objectnummer"]
+  },
+  "licence": {
+    "name": "Gemeente Amsterdam open data: public unless stated otherwise; no named licence",
+    "url": "https://schemas.data.amsterdam.nl/datasets/verkeersinformatiesystemen/dataset",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "Gemeente Amsterdam, verkeersinformatiesystemen register (entry contributed by @Maher-Reven)",
+    "url": "https://api.data.amsterdam.nl/v1/docs/"
+  },
+  "status": "community",
+  "reviewed": "2026-11-07"
+}

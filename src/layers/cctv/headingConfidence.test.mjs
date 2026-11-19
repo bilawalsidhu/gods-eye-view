@@ -44,6 +44,15 @@ test('HUD token tags a synthetic bearing and rounds the degrees', () => {
   );
 });
 
+test('HUD token reads a bearing that rounds to north as 0°, not 360°', () => {
+  assert.equal(headingHudToken({ headingDeg: 359.4 }), 'HDG 359°');
+  assert.equal(headingHudToken({ headingDeg: 359.6 }), 'HDG 0°');
+  assert.equal(
+    headingHudToken({ headingDeg: 359.5, headingConfidence: 'low' }),
+    'HDG 0° (ESTIMATED)',
+  );
+});
+
 test('HUD token stays untagged for surveyed and calibrated bearings', () => {
   assert.equal(
     headingHudToken({ headingDeg: 67.5, headingConfidence: 'high' }),

@@ -344,14 +344,17 @@ export function createPlayback({ state: layerState, services, parts, source }) {
     }
     if (!parts.interaction.radioPresentationAllowed())
       return Promise.resolve(false);
-    if (!layerState._selectedId) {
+    if (layerState._selectedId) {
+      // Drop a fallback left by a voice step whose playback never started.
+      layerState._playFallbackId = null;
+      layerState._playFallbackFocus = null;
+    } else {
       const ranked = parts.queries.rankedVisibleStations();
       if (!ranked.length) return Promise.resolve(false);
-      layerState._playFallbackId = ranked[1]?.id || null;
-      layerState._playFallbackFocus = false;
       parts.selection.selectRadioStation(ranked[0].id, {
         autoplay: false,
         focus: false,
+        playFallback: { id: ranked[1]?.id || null, focus: false },
       });
     }
     return playSelectedRadio({ origin });

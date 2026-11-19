@@ -15,7 +15,7 @@ export const PANORAMAX_LABEL = 'PANORAMAX';
  */
 export const PANORAMAX_API = 'https://api.panoramax.xyz/api';
 /** The meta-catalogue's web viewer, where the caption link goes. */
-export const PANORAMAX_VIEWER = 'https://api.panoramax.xyz/';
+const PANORAMAX_VIEWER = 'https://api.panoramax.xyz/';
 
 /** Stable id prefixes for picked primitives; every one starts with `pnx:`. */
 export const PICK_PREFIX = Object.freeze({

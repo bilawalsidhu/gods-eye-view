@@ -26,7 +26,7 @@ test('preflight checks memory, in-flight, then disk before consuming limiter quo
   const memoryHit = await resolveOverpassPreflight({
     cacheKey: key,
     memoryCache: new Map([[key, fresh]]),
-    inFlight: new Map([[key, Promise.resolve(joined)]]),
+    inFlight: new Map([[key, Promise.resolve({ source: 'UPSTREAM', payload: joined })]]),
     readDisk: async () => { diskReads += 1; return disk; },
     allowUpstream,
     now: 1000,
@@ -40,7 +40,7 @@ test('preflight checks memory, in-flight, then disk before consuming limiter quo
   const inFlightHit = await resolveOverpassPreflight({
     cacheKey: key,
     memoryCache: new Map([[key, { id: 'stale', status: 200, cachedAt: 0 }]]),
-    inFlight: new Map([[key, Promise.resolve(joined)]]),
+    inFlight: new Map([[key, Promise.resolve({ source: 'UPSTREAM', payload: joined })]]),
     readDisk: async () => { diskReads += 1; return disk; },
     allowUpstream,
     now: 1000,
@@ -51,9 +51,10 @@ test('preflight checks memory, in-flight, then disk before consuming limiter quo
   assert.equal(diskReads, 0, 'in-flight join must short-circuit before disk');
   assert.equal(limiterCalls, 0, 'in-flight join must not consume limiter quota');
 
+  const diskMemory = new Map();
   const diskHit = await resolveOverpassPreflight({
     cacheKey: key,
-    memoryCache: new Map(),
+    memoryCache: diskMemory,
     inFlight: new Map(),
     readDisk: async () => { diskReads += 1; return disk; },
     allowUpstream,
@@ -62,6 +63,8 @@ test('preflight checks memory, in-flight, then disk before consuming limiter quo
   assert.equal(diskHit.payload, disk);
   assert.equal(diskReads, 1);
   assert.equal(limiterCalls, 0, 'disk hit must not consume limiter quota');
+  const publishedDisk = await resolveOverpassPreflight({ cacheKey: key, memoryCache: diskMemory, inFlight: new Map(), now: 1000, readDisk: async () => { throw new Error('disk result was not published'); }, allowUpstream });
+  assert.equal(publishedDisk.source, 'HIT');
 
   const upstreamMiss = await resolveOverpassPreflight({
     cacheKey: key,
@@ -214,3 +217,66 @@ function pointSegDistDeg(p, a, b) {
   const t = c1 / c2;
   return Math.hypot(wx - t * vx, wy - t * vy);
 }
+
+
+test('cold disk lookup is single-flight through upstream publication and quota admission', async () => {
+  const inFlight = new Map();
+  let release;
+  const disk = new Promise((resolve) => { release = resolve; });
+  let reads = 0, admissions = 0, upstreams = 0;
+  const payload = { status: 200, body: '{"elements":[]}' };
+  const options = {
+    cacheKey: 'cold', memoryCache: new Map(), inFlight,
+    readDisk: () => { reads++; return disk; },
+    allowUpstream: () => { admissions++; return true; },
+    loadUpstream: async () => { upstreams++; return payload; },
+  };
+  const pending = Array.from({ length: 4 }, () => resolveOverpassPreflight(options));
+  await Promise.resolve();
+  assert.equal(inFlight.size, 1);
+  release(null);
+  const results = await Promise.all(pending);
+  assert.equal(reads, 1);
+  assert.equal(admissions, 1);
+  assert.equal(upstreams, 1);
+  assert.ok(results.every((result) => result.payload === payload));
+  assert.deepEqual(results.map((result) => result.source), ['UPSTREAM', 'INFLIGHT', 'INFLIGHT', 'INFLIGHT']);
+  assert.equal(inFlight.size, 0);
+  const failed = { ...options, readDisk: async () => { throw new Error('disk failed'); } };
+  const rejected = await Promise.allSettled([resolveOverpassPreflight(failed), resolveOverpassPreflight(failed)]);
+  assert.ok(rejected.every((result) => result.status === 'rejected'));
+  assert.equal(inFlight.size, 0);
+  await resolveOverpassPreflight({ ...options, readDisk: async () => null });
+  assert.equal(upstreams, 2, 'a rejected reservation does not poison the next retry');
+});
+
+test('a joined client retries admission with its own quota after another client is rate limited', async () => {
+  const inFlight = new Map();
+  let release;
+  const disk = new Promise((resolve) => { release = resolve; });
+  let reads = 0, upstreams = 0;
+  const admissions = { a: 0, b: 0, c: 0 };
+  const quota = { a: false, b: true, c: false };
+  const payload = { status: 200, body: '{"elements":[]}' };
+  const client = (name) => resolveOverpassPreflight({
+    cacheKey: 'quota', memoryCache: new Map(), inFlight,
+    readDisk: () => { reads++; return reads === 1 ? disk : null; },
+    allowUpstream: () => { admissions[name]++; return quota[name]; },
+    loadUpstream: async () => { upstreams++; return payload; },
+  });
+  // A (quota exhausted) owns the cold reservation; B (quota available) and
+  // C (quota exhausted) join it while the disk lookup is pending.
+  const pending = [client('a'), client('b'), client('c')];
+  await Promise.resolve();
+  assert.equal(inFlight.size, 1);
+  release(null);
+  const [a, b, c] = await Promise.all(pending);
+  assert.equal(a.source, 'RATE_LIMITED', "A's own quota still rejects A");
+  assert.equal(b.source, 'UPSTREAM', 'B is admitted on its own quota');
+  assert.equal(b.payload, payload);
+  assert.equal(c.source, 'INFLIGHT', "C coalesces onto B's admitted fetch");
+  assert.equal(c.payload, payload);
+  assert.deepEqual(admissions, { a: 1, b: 1, c: 0 });
+  assert.equal(upstreams, 1);
+  assert.equal(inFlight.size, 0);
+});

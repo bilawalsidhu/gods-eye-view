@@ -1,0 +1,48 @@
+{
+  "id": "de-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Delaware Statewide Imagery (2024)",
+  "provider": "Delaware FirstMap",
+  "description": "Aerial orthophotos: Statewide coverage of Delaware.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-75.8081, 38.4498, -75.0334, 39.8439]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://imagery.firstmap.delaware.gov/imagery/rest/services/DE_Imagery_SP/DE_Imagery_2024/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "3–6 in",
+    "resolutionM": 0.1524,
+    "trueOrtho": false,
+    "vintage": "2024–present",
+    "updateCycle": "Roughly every 2 years",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Open state geodata — attribution requested",
+    "url": "https://firstmap.delaware.gov/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "This data is meant for use by requested parties. This data cannot be used without express consent.This data is meant for use by requested parties. This data cannot be used without express consent.",
+    "url": "https://firstmap.delaware.gov/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

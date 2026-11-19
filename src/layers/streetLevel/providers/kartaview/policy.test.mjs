@@ -158,6 +158,10 @@ test('timestamps parse as UTC; years before 1990 and garbage are unknown', () =>
     kartaViewTimeMs('2022-03-21T06:42:59'),
     Date.UTC(2022, 2, 21, 6, 42, 59),
   );
+  assert.equal(kartaViewTimeMs('2022-02-31 12:00:00'), null);
+  assert.equal(kartaViewTimeMs('2022-13-01 00:00:00'), null);
+  assert.equal(kartaViewTimeMs('2022-03-21 25:00:00'), null);
+  assert.equal(kartaViewTimeMs('2022-04-31'), null);
   assert.equal(kartaViewTimeMs('0000-00-00 00:00:00'), null);
   assert.equal(kartaViewTimeMs(''), null);
   assert.equal(kartaViewTimeMs(null), null);

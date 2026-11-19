@@ -86,14 +86,6 @@ function percentile(values, pct) {
   return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * pct) - 1)];
 }
 
-function parseJson(value, fallback) {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-}
-
 function analyzeMembership(samples) {
   let replacements = 0;
   let exposure = 0;
@@ -274,12 +266,6 @@ async function main() {
       () => window.__godsEyeView?.viewer && window.__godsEyeView?.styleManager,
       { timeout: 60000, polling: 100 },
     );
-
-    // flyToAustin schedules its 600 m arrival 500 ms after initialization.
-    // Let that callback start, then cancel it before establishing the global
-    // measurement camera so startup motion cannot invalidate the sample.
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    await page.evaluate(() => window.__godsEyeView.viewer.camera.cancelFlight());
 
     const stateChecks = await page.evaluate((storageKey) => {
       const manager = window.__godsEyeView.styleManager;

@@ -64,7 +64,7 @@ export function toFiniteNumber(value, fallback = NaN) {
  * @param {string} text
  * @returns {string}
  */
-export function normalizeKey(text) {
+function normalizeKey(text) {
   return String(text || '')
     .trim()
     .toLowerCase()
@@ -80,7 +80,7 @@ export function normalizeKey(text) {
  * @param {string} value
  * @returns {{lat:number, lon:number}}
  */
-export function parsePointString(value) {
+function parsePointString(value) {
   const match = String(value || '').match(
     /POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i,
   );
@@ -100,7 +100,7 @@ export function parsePointString(value) {
  * @param {string|object|null} value
  * @returns {{lat:number, lon:number}}
  */
-export function coerceLatLon(value) {
+function coerceLatLon(value) {
   if (!value) return { lat: NaN, lon: NaN };
 
   if (typeof value === 'string') {
@@ -410,6 +410,18 @@ export function isLikelyHongKongCoordinate(lat, lon) {
   );
 }
 
+/** Greater Houston (the Woodlands to Galveston, Katy to Baytown). Farther
+ * TranStar partners (Dallas, Columbus) are out of this city pack. */
+export function isLikelyHoustonCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 29.2 &&
+    lat <= 30.35 &&
+    lon >= -96.05 &&
+    lon <= -94.7
+  );
+}
+
 /** Mainland Norway, with slack for the coast and the Finnmark border. */
 export function isLikelyNorwayCoordinate(lat, lon) {
   return (
@@ -418,6 +430,17 @@ export function isLikelyNorwayCoordinate(lat, lon) {
     lat <= 71.3 &&
     lon >= 4.4 &&
     lon <= 31.3
+  );
+}
+
+/** The A22 corridor, Brenner Pass to Modena, with slack either side. */
+export function isLikelyA22Coordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 44.5 &&
+    lat <= 47.1 &&
+    lon >= 10.5 &&
+    lon <= 11.8
   );
 }
 
@@ -434,6 +457,17 @@ export function isLikelyCataloniaCoordinate(lat, lon) {
     lat <= 42.9 &&
     lon >= 0.0 &&
     lon <= 3.4
+  );
+}
+
+/** Iceland bounding box (mainland and nearby islands, with a margin). */
+export function isLikelyIcelandCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 63.0 &&
+    lat <= 66.7 &&
+    lon >= -25.0 &&
+    lon <= -13.0
   );
 }
 
@@ -616,6 +650,10 @@ export function normalizeSourceItem(item) {
     feedType: normalizeFeedType(item.feedType || item.type || ''),
     url: typeof item.url === 'string' ? item.url : '',
     snapshotUrl: typeof item.snapshotUrl === 'string' ? item.snapshotUrl : '',
+    frameRefreshMs: toFiniteNumber(item.frameRefreshMs),
+    sourceUrl: typeof item.sourceUrl === 'string' ? item.sourceUrl : '',
+    accuracyM: toFiniteNumber(item.accuracyM),
+    positionSource: String(item.positionSource || ''),
     license: String(item.license || item.licenseNote || ''),
     // Per-camera attribution for feeds a partner supplies inside a pack
     // (DriveBC: TransLink, city cameras). Shown beside the provider.
@@ -658,4 +696,39 @@ export function isLikelyTorontoCoordinate(lat, lon) {
     lon >= -79.7 &&
     lon <= -79.1
   );
+}
+
+/**
+ * A camera URL under a pinned directory, by parsed URL rather than string
+ * prefix: the same scheme and exact host as `prefix`, no credentials, the
+ * default port, and a normalized path inside the prefix's directory. Dot
+ * segments (including encoded ones) and backslashes are resolved before the
+ * path is compared, and an encoded slash or backslash is refused.
+ *
+ * @param {string} raw - Camera URL from a catalog or redirect.
+ * @param {string} prefix - Pinned origin and directory, ending in `/`.
+ * @returns {string|null} The normalized URL, or null when it is not pinned.
+ */
+export function pinnedCameraUrl(raw, prefix) {
+  let url;
+  let pin;
+  try {
+    url = new URL(String(raw ?? '').trim());
+    pin = new URL(prefix);
+  } catch {
+    return null;
+  }
+  if (
+    url.protocol !== pin.protocol ||
+    url.hostname !== pin.hostname ||
+    url.username ||
+    url.password ||
+    url.port ||
+    !url.pathname.startsWith(
+      pin.pathname.endsWith('/') ? pin.pathname : `${pin.pathname}/`,
+    ) ||
+    /%2f|%5c/i.test(url.pathname)
+  )
+    return null;
+  return url.href;
 }
