@@ -172,3 +172,37 @@ test('a refused or missing field falls back to the canvas', () => {
   const absent = createWindGpuRendering({ getViewer: () => null });
   assert.equal(absent.supported(), false);
 });
+
+test('opacity scales the streamline fade and survives height changes', () => {
+  const h = harness({ height: 37_500 });
+  h.owner.setField(wind());
+  const [field] = h.fields;
+  assert.equal(field.spec.alpha, 0.5, 'the camera fade is the field alpha');
+
+  h.owner.setOpacity(0.4);
+  assert.deepEqual(field.updates, [{ alpha: 0.2 }], 'the slider dims them');
+
+  h.camera.height = 60_000;
+  assert.equal(h.owner.updateVisibility(), true);
+  assert.deepEqual(
+    field.updates,
+    [{ alpha: 0.2 }, { alpha: 0.4 }],
+    'the camera fade and the slider multiply',
+  );
+  // Diagnostics keep reporting the camera fade, not the product.
+  assert.equal(h.owner.getDiagnostics().heightFade, 1);
+
+  h.owner.setOpacity(Number.NaN);
+  assert.deepEqual(
+    field.updates,
+    [{ alpha: 0.2 }, { alpha: 0.4 }, { alpha: 1 }],
+    'a value that is not a number is full opacity',
+  );
+});
+
+test('a field made after the slider is set starts dimmed', () => {
+  const h = harness({ height: 37_500 });
+  h.owner.setOpacity(0.4);
+  h.owner.setField(wind());
+  assert.equal(h.fields[0].spec.alpha, 0.2);
+});

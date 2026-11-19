@@ -1021,7 +1021,9 @@
       "src/ui/kit/UiIcon.vue",
       "src/ui/rail/fieldValue.js",
       "src/ui/kit/UiSlider.js",
-      "src/ui/kit/UiSegmented.vue"
+      "src/ui/kit/UiSegmented.vue",
+      "src/data/layerOpacity.js",
+      "src/ui/layerPanel/LayerOpacityRow.vue"
     ],
     "external": ["vue"]
   },
@@ -1682,7 +1684,9 @@
       "src/data/trackingClickGesture.js",
       "src/ui/stores/sceneSharing.js",
       "src/maps/attribution.js",
-      "src/data/dataCredits.js"
+      "src/data/dataCredits.js",
+      "src/data/layerOpacity.js",
+      "src/ui/layerPanel/LayerOpacityRow.vue"
     ],
     "external": [
       "cesium",
@@ -5509,7 +5513,11 @@
       "src/data/entityContext.js",
       "src/ui/stores/entityCard.js",
       "src/ui/entityContextBridge.js",
-      "src/render/cesium/cardPreviews.js"
+      "src/render/cesium/cardPreviews.js",
+      "src/data/layerOpacity.js",
+      "src/ui/layerOpacity.js",
+      "src/ui/layerPanel/LayerOpacityRow.vue",
+      "src/layers/sceneOpacity.js"
     ],
     "external": [
       "hls.js",
@@ -6344,7 +6352,8 @@
       "src/data/placementProvider.js",
       "src/data/courseFromFixes.js",
       "src/time/frameWait.js",
-      "src/maps/attribution.js"
+      "src/maps/attribution.js",
+      "src/layers/sceneOpacity.js"
     ],
     "external": [
       "hls.js",
@@ -7715,7 +7724,8 @@
       "src/render/cesium/cameraControls.js",
       "src/render/input/router.js",
       "src/render/cesium/zoomOutGuard.js",
-      "src/render/camera/followTransition.js"
+      "src/render/camera/followTransition.js",
+      "src/layers/sceneOpacity.js"
     ],
     "external": ["cesium"]
   },
@@ -7952,7 +7962,8 @@
       "src/data/pickRegistry.js",
       "src/data/scenePick.js",
       "src/input/sensorPick.js",
-      "src/styles/styleStages.js"
+      "src/styles/styleStages.js",
+      "src/layers/sceneOpacity.js"
     ],
     "external": ["cesium"]
   },

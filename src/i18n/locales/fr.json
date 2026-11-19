@@ -4421,5 +4421,6 @@
   "Select a map item to see its details.": "Sélectionnez un élément de la carte pour voir ses détails.",
   "Bilawal on {site}": "Bilawal sur {site}",
   "Bilawal's website": "Site web de Bilawal",
-  "BACK": "RETOUR"
+  "BACK": "RETOUR",
+  "{name} opacity": "Opacité de {name}"
 }
