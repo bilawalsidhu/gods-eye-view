@@ -4,6 +4,7 @@ import { geminiSocketUrl } from './geminiSession.js';
 import { createVoiceSession } from './session.js';
 import { createPointerTracker } from './pointerContext.js';
 import { withToolCatalog } from './gevRealtime.js';
+import { setLocale, t } from '../i18n/index.js';
 import {
   harness,
   tick,
@@ -1238,6 +1239,34 @@ test('successful stronger Radio stop still invalidates the prepared group', asyn
   await tick();
   assert.equal(h.state.playing, 0);
   assert.equal(h.c.status, 'listening');
+  h.c.stop();
+});
+
+test('Gemini tools of one turn share a reply identity, and a new turn gets another', async () => {
+  const replies = [];
+  const h = harness({
+    runAction: (name, _args, next) => {
+      replies.push([name, next.reply]);
+      return { ok: true, action: name };
+    },
+  });
+  await h.c.start({ pushToTalk: true });
+  h.c.sendTextCommand('Fly to Xyzzyville and pan left');
+  const ws = h.sockets[0];
+  requestTool(ws, 'fly', 'fly_to_location', { query: 'Xyzzyville' });
+  requestTool(ws, 'pan', 'move_camera', { motion: 'pan', direction: 'left' });
+  await h.c.toolQueue;
+  assert.equal(replies.length, 2);
+  assert.ok(replies[0][1], 'a sequentially run call carries its reply');
+  assert.equal(replies[1][1], replies[0][1]);
+  drainRadioReply(h);
+  await tick();
+  assert.equal(h.c.sendTextCommand('Pan left'), true);
+  requestTool(ws, 'pan-2', 'move_camera', { motion: 'pan', direction: 'left' });
+  await h.c.toolQueue;
+  assert.equal(replies.length, 3);
+  assert.ok(replies[2][1]);
+  assert.notEqual(replies[2][1], replies[0][1]);
   h.c.stop();
 });
 
@@ -3609,4 +3638,74 @@ test('cancelling a queued globe reset also skips its dependent rotation', async 
     blocker.resolve({ ok: true });
     h.c.stop();
   }
+});
+
+test('a missing server key reaches the error state flagged, other token failures do not', async () => {
+  for (const [body, missingKey] of [
+    [
+      {
+        error: 'Add a Gemini API key in Provider Settings',
+        code: 'API_KEY_MISSING',
+      },
+      true,
+    ],
+    [{ error: 'Gemini quota is unavailable. Try again later.' }, undefined],
+  ]) {
+    const h = harness({
+      fetchImpl: async () => Response.json(body, { status: 503 }),
+    });
+    await h.c.start();
+    const error = h.events
+      .filter((event) => event.type === 'state' && event.state === 'error')
+      .at(-1);
+    assert.equal(error?.detail, body.error);
+    assert.equal(error?.missingKey, missingKey);
+    assert.equal(h.sockets.length, 0);
+  }
+});
+
+test('an error keeps its English catalog text beside the worded detail', async (t2) => {
+  t2.after(() => setLocale('en'));
+  setLocale('es');
+  const h = harness({
+    fetchImpl: async () =>
+      Response.json(
+        { error: 'Gemini quota is unavailable. Try again later.' },
+        { status: 503 },
+      ),
+  });
+  await h.c.start();
+  const error = h.events
+    .filter((event) => event.type === 'state' && event.state === 'error')
+    .at(-1);
+  assert.equal(
+    error.sourceDetail,
+    'Gemini quota is unavailable. Try again later.',
+  );
+  assert.equal(
+    error.detail,
+    t('Gemini quota is unavailable. Try again later.'),
+  );
+  assert.notEqual(error.detail, error.sourceDetail);
+});
+
+test('a token failure without a message keeps its status for the next language', async (t2) => {
+  t2.after(() => setLocale('en'));
+  setLocale('es');
+  const h = harness({
+    fetchImpl: async () => Response.json({}, { status: 502 }),
+  });
+  await h.c.start();
+  const error = h.events
+    .filter((event) => event.type === 'state' && event.state === 'error')
+    .at(-1);
+  assert.equal(
+    error.sourceDetail,
+    'Gemini token request failed (HTTP {status})',
+  );
+  assert.deepEqual(error.sourceParams, { status: 502 });
+  assert.equal(
+    error.detail,
+    t('Gemini token request failed (HTTP {status})', { status: 502 }),
+  );
 });

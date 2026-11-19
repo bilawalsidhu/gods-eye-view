@@ -1,211 +1,141 @@
-import * as Cesium from 'cesium';
-import { createCyberSonarGpu } from './cyberSonarGpu.js';
+/**
+ * The Cyber contact sweep on the map's markers, through the renderer's
+ * `effects.screenModulation` (`src/render/contract/effects.d.ts`). This
+ * keeps the sweep's clock and settings; the renderer shades the markers.
+ *
+ * Each tick, before the renderer decides whether to draw: a change of the
+ * theme, the sweep, its settings or the map's size sets the sector at once;
+ * while sweeping, the sector moves to the current angle on every tick that
+ * draws anyway, and at least every `CYBER_SONAR_RENDER_INTERVAL_MS` (which
+ * then asks for a frame). Out of the theme the sector is cleared.
+ *
+ * A renderer without the capability, or one that does not list the pass
+ * once a sector is set, leaves markers as they are: the document's
+ * `cyberSonarGpu` says `unsupported`, so the HUD overlays skip their own
+ * sweep too, and the sonar status says so.
+ *
+ * The frame and effects ports are looked up once, when the scene is made:
+ * bind the renderer to the viewer before creating it.
+ */
 import {
-  applyCyberSonarPrimitive,
-  createCyberSonarSampler,
-  isCyberContactThemeActive,
-  isCyberContactSonarActive,
+  CYBER_SONAR_RENDER_INTERVAL_MS,
+  cyberSonarSector,
+  isCyberMapThemeActive,
   isCyberSonarActive,
   readCyberSonarSettings,
-  cyberSonarAngleDeg,
   syncCyberSonarAnimation,
-  CYBER_SONAR_RENDER_INTERVAL_MS,
 } from './cyberSonar.js';
+import { canvasOf, findEffects, findFrame } from './render/rendererOf.js';
 
-const alive = (value) => value && !value.isDestroyed?.();
-const diagnostics = new WeakMap();
-export const getCyberSonarSceneDiagnostics = (viewer) => ({
-  ...diagnostics.get(viewer),
-});
+const UNSUPPORTED_MESSAGE =
+  'Contact GPU unavailable. Native contacts remain visible.';
 
-export function visitCyberSonarModels(primitive, visit, visible = true) {
-  if (!alive(primitive)) return;
-  visible = visible && primitive.show !== false;
-  if (primitive instanceof Cesium.PrimitiveCollection) {
-    for (let i = 0; i < primitive.length; i++)
-      visitCyberSonarModels(primitive.get(i), visit, visible);
-  } else if (primitive instanceof Cesium.Model) {
-    visit(primitive, primitive, 'model', visible && primitive.ready);
-  }
-}
-
-/** Native dots, icons and glyphs use GPU draw-command treatment. Models retain
- * their existing reversible CPU color treatment without walking native records.
+/**
+ * @param {object} viewer The scene object the renderer is bound to.
+ * @param {{subscribe?: Function}} [manager] Layer visibility changes ask
+ *   for a frame, so markers shown or hidden draw with the sweep.
+ * @returns {() => void} Clears the sector and lets go.
  */
 export function createCyberSonarScene(viewer, manager) {
-  const scene = viewer?.scene;
-  if (
-    !scene?.postUpdate?.addEventListener ||
-    !scene?.preRender?.addEventListener
-  )
-    return () => {};
-  const tracked = new Map();
-  const matrix = new Cesium.Matrix4();
-  const position = new Cesium.Cartesian3();
-  let epoch = 0,
-    timer = null,
-    disposed = false;
-  let sampler, width, height, active, count;
-  const stats = { contacts: 0, updateMs: 0, frames: 0 };
-  const root = globalThis.document?.documentElement;
-  const gpu = createCyberSonarGpu(scene, () => ({
-    ...readCyberSonarSettings(),
-    enabled: isCyberContactThemeActive(),
-    active: isCyberContactSonarActive(),
-    angle: cyberSonarAngleDeg(performance.now()),
-  }));
-  stats.gpu = gpu.stats;
-  let gpuSupported = gpu.stats.supported;
-  diagnostics.set(viewer, stats);
-  const restore = (visual, state) => {
-    if (!alive(state.owner)) return;
-    for (const key of state.keys)
-      applyCyberSonarPrimitive(visual, 1, false, undefined, key);
-  };
-  const visit = (visual, owner, kind, visible) => {
-    let state = tracked.get(visual);
-    if (!visible) {
-      if (state) {
-        restore(visual, state);
-        tracked.delete(visual);
-      }
-      return;
-    }
-    let p = visual.position;
-    if (kind === 'model')
-      p = Cesium.Matrix4.getTranslation(visual.modelMatrix, position);
-    else if (
-      p &&
-      owner.modelMatrix &&
-      !Cesium.Matrix4.equals(owner.modelMatrix, Cesium.Matrix4.IDENTITY)
-    )
-      p = Cesium.Matrix4.multiplyByPoint(owner.modelMatrix, p, position);
-    if (!p) return;
-    const w = matrix[3] * p.x + matrix[7] * p.y + matrix[11] * p.z + matrix[15];
-    const x =
-      (matrix[0] * p.x + matrix[4] * p.y + matrix[8] * p.z + matrix[12]) / w;
-    const y =
-      (matrix[1] * p.x + matrix[5] * p.y + matrix[9] * p.z + matrix[13]) / w;
-    if (w <= 0 || Math.abs(x) > 1.1 || Math.abs(y) > 1.1) return;
-    if (!state) {
-      state = {
-        owner,
-        keys:
-          kind === 'label'
-            ? ['fillColor', 'outlineColor', 'backgroundColor']
-            : kind === 'marker' && visual.outlineColor
-              ? ['color', 'outlineColor']
-              : ['color'],
-        epoch,
-      };
-      tracked.set(visual, state);
-    }
-    state.epoch = epoch;
-    const factor = active
-      ? sampler.at((x + 1) * width * 0.5, (1 - y) * height * 0.5)
-      : sampler.neutral;
-    for (const key of state.keys) {
-      if (key === 'outlineColor' && visual.outlineWidth === 0) continue;
-      if (key === 'backgroundColor' && !visual.showBackground) continue;
-      applyCyberSonarPrimitive(
-        visual,
-        kind === 'label' ? sampler.label(factor) : factor,
-        true,
-        sampler,
-        key,
-        kind === 'model',
-      );
-    }
-    count++;
-  };
-  const update = () => {
-    if (disposed) return;
-    if (timer !== null) {
-      clearTimeout(timer);
-      timer = null;
-    }
-    if (!isCyberContactThemeActive()) {
-      for (const [visual, state] of tracked) restore(visual, state);
-      tracked.clear();
-      stats.contacts = 0;
-      stats.updateMs = 0;
-      return;
-    }
-    const started = performance.now();
-    width = scene.canvas.clientWidth;
-    height = scene.canvas.clientHeight;
-    sampler = createCyberSonarSampler(width, height, started);
-    active = isCyberContactSonarActive();
-    Cesium.Matrix4.multiply(
-      scene.camera.frustum.projectionMatrix,
-      scene.camera.viewMatrix,
-      matrix,
-    );
-    epoch++;
-    count = 0;
-    visitCyberSonarModels(scene.primitives, visit);
-    for (const [visual, state] of tracked)
-      if (state.epoch !== epoch) {
-        restore(visual, state);
-        tracked.delete(visual);
-      }
-    stats.contacts = count;
-    stats.updateMs = performance.now() - started;
-    stats.frames++;
-    // No contacts, no scanner-owned render demand. In continuous scenes the
-    // next rendered frame cancels this timer; parked scenes refresh at fleet
-    // cadence. Idle update-only ticks must not continually postpone the timer.
-  };
-  let removeRender;
-  // Aircraft fleet writers run in preRender, while tracked models and entity
-  // visualizers update earlier. Compose AFTER all those owners and BEFORE
-  // Cesium uploads primitive attributes for this draw. Requeue at postUpdate
-  // so writers installed later (enable/re-enable/track) cannot overwrite sonar.
-  // This only reorders one callback; the contact walk runs once per actual draw.
-  const removeUpdate = scene.postUpdate.addEventListener(() => {
-    if (isCyberSonarActive()) syncCyberSonarAnimation();
-    const supportChanged = gpuSupported !== gpu.stats.supported;
-    gpuSupported = gpu.stats.supported;
-    const support = gpu.stats.supported ? 'supported' : 'unsupported';
+  const frame = findFrame(viewer);
+  if (!frame) return () => {};
+  const effects = findEffects(viewer);
+  const doc = globalThis.document;
+  const root = doc?.documentElement;
+  let failed = typeof effects?.screenModulation !== 'function';
+  let current = null;
+  let key = null;
+  let lastSetAt = Number.NEGATIVE_INFINITY;
+  let disposed = false;
+
+  const publish = () => {
+    const support = failed ? 'unsupported' : 'supported';
     if (root?.dataset && root.dataset.cyberSonarGpu !== support)
       root.dataset.cyberSonarGpu = support;
-    // Shader setup runs after preRender's model tint. If it fails while the
-    // scene is parked (including Sonar OFF/reduced motion), draw once more so
-    // the now-unsupported contact path restores models before becoming idle.
-    if (supportChanged) scene.requestRender();
-    const status = globalThis.document?.getElementById?.('cyber-sonar-status');
-    const message = gpu.stats.supported
-      ? ''
-      : 'Contact GPU unavailable. Native contacts remain visible.';
+    const status = doc?.getElementById?.('cyber-sonar-status');
+    const message = failed ? UNSUPPORTED_MESSAGE : '';
     if (status && status.textContent !== message) status.textContent = message;
-    removeRender?.();
-    removeRender = scene.preRender.addEventListener(update);
+  };
+
+  /** The renderer cannot draw the pass: markers stay as they are. */
+  const fail = () => {
+    if (failed) return;
+    failed = true;
+    const had = current;
+    current = null;
+    key = null;
+    if (had) effects.screenModulation(null);
+    publish();
+  };
+
+  const set = (sector, at) => {
+    const had = current;
+    // Before the call: its change listeners read `current`.
+    current = sector;
+    lastSetAt = at;
+    effects.screenModulation(sector);
+    // A first sector set but not listed is unsupported; a pass that stops
+    // later is caught by the change listener.
+    if (
+      sector &&
+      !had &&
+      !effects.diagnostics().passes.includes('screenModulation')
+    )
+      fail();
+  };
+
+  const offTick = frame.on('preUpdate', (t) => {
+    if (disposed) return;
+    // The HUD's own sweep keeps its clock whether or not markers are shaded.
+    const active = isCyberSonarActive();
+    if (active) syncCyberSonarAnimation();
+    if (failed) return;
+    const theme = isCyberMapThemeActive();
+    const sweeping = theme && active;
+    if (!theme) {
+      if (current) set(null, lastSetAt);
+      key = null;
+      return;
+    }
+    const canvas = canvasOf(viewer);
+    // The sector is in CSS pixels.
+    const width = canvas?.clientWidth ?? 0;
+    const height = canvas?.clientHeight ?? 0;
+    const settings = readCyberSonarSettings(root);
+    const next = `${sweeping}|${settings.range}|${settings.opacity}|${settings.sector}|${width}|${height}`;
+    const now = performance.now();
+    if (
+      next === key &&
+      !(
+        sweeping &&
+        (now - lastSetAt >= CYBER_SONAR_RENDER_INTERVAL_MS || t.rendering)
+      )
+    )
+      return;
+    key = next;
+    set(cyberSonarSector(width, height, now, { sweeping, root }), now);
   });
-  const removePostRender = scene.postRender?.addEventListener(() => {
-    if (timer !== null) clearTimeout(timer);
-    timer = null;
-    if (isCyberContactSonarActive() && (count || gpu.stats.visibleCommands))
-      timer = setTimeout(() => {
-        timer = null;
-        if (!disposed && isCyberContactSonarActive()) scene.requestRender();
-      }, CYBER_SONAR_RENDER_INTERVAL_MS);
-  });
+
+  const offChange = failed
+    ? null
+    : effects.on('change', (diagnostics) => {
+        if (current && !diagnostics.passes.includes('screenModulation')) fail();
+      });
+
   const unsubscribe = manager?.subscribe?.((change) => {
-    if (change.type !== 'visibility') return;
-    scene.requestRender();
+    if (change.type === 'visibility') frame.requestRender('cyber-sonar');
   });
+
+  publish();
   return () => {
     if (disposed) return;
     disposed = true;
-    removeUpdate();
-    removeRender?.();
-    removePostRender?.();
-    gpu.destroy();
-    if (root?.dataset) delete root.dataset.cyberSonarGpu;
+    offTick();
+    offChange?.();
     unsubscribe?.();
-    if (timer !== null) clearTimeout(timer);
-    for (const [visual, state] of tracked) restore(visual, state);
-    tracked.clear();
-    diagnostics.delete(viewer);
+    const had = current;
+    current = null;
+    if (had) effects.screenModulation(null);
+    if (root?.dataset) delete root.dataset.cyberSonarGpu;
   };
 }

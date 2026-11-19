@@ -2,9 +2,10 @@
 // card's info line shows them in the UI language, the HTTP form included.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
 import { setLocale } from '../../i18n/index.js';
 import { createGnssIntegrityLayer } from './index.js';
+import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
 async function failedLayer(message) {
   const layer = createGnssIntegrityLayer({
@@ -20,13 +21,9 @@ async function failedLayer(message) {
     now: () => 1_000,
     monotonicNow: () => 1_000,
   });
-  layer.init({
-    camera: { moveEnd: new Cesium.Event(), changed: new Cesium.Event() },
-    scene: {
-      globe: { show: true },
-      groundPrimitives: { add() {}, remove() {} },
-    },
-  });
+  const viewer = { scene: { globe: { show: true } } };
+  bindFakeDraw(viewer, { camera: fakeCameraPort().port });
+  layer.init(viewer);
   layer.enable();
   await layer.update();
   return layer;

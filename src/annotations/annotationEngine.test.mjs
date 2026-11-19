@@ -1,3 +1,4 @@
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import { createStandalonePlaceSearch } from '../standalone/placeSearch.js';
 // Voice-annotation resilience contract tests — pure logic, no network, no browser.
 //
@@ -25,6 +26,7 @@ import {
   installRenderGovernor,
   _resetRenderGovernorForTest,
 } from '../renderGovernor.js';
+import { framePortFor } from '../testSupport/fakeFramePort.mjs';
 
 // A resolver that replays a scripted sequence of outcomes (undefined = transient,
 // null = definitive miss, object = footprint) and counts its invocations.
@@ -43,11 +45,21 @@ function scriptedResolver(outcomes) {
 // Instant fake wait that records the requested backoff delays.
 function fakeWait() {
   const delays = [];
-  const waitFn = async (ms) => { delays.push(ms); };
+  const waitFn = async (ms) => {
+    delays.push(ms);
+  };
   return { waitFn, delays };
 }
 
-const FP = { ring: [[0, 0], [0, 1], [1, 1], [0, 0]], footprintKind: 'area' };
+const FP = {
+  ring: [
+    [0, 0],
+    [0, 1],
+    [1, 1],
+    [0, 0],
+  ],
+  footprintKind: 'area',
+};
 
 function installAnimationFrameStubs(t) {
   const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
@@ -55,9 +67,11 @@ function installAnimationFrameStubs(t) {
   globalThis.requestAnimationFrame = () => 1;
   globalThis.cancelAnimationFrame = () => {};
   t.after(() => {
-    if (originalRequestAnimationFrame === undefined) delete globalThis.requestAnimationFrame;
+    if (originalRequestAnimationFrame === undefined)
+      delete globalThis.requestAnimationFrame;
     else globalThis.requestAnimationFrame = originalRequestAnimationFrame;
-    if (originalCancelAnimationFrame === undefined) delete globalThis.cancelAnimationFrame;
+    if (originalCancelAnimationFrame === undefined)
+      delete globalThis.cancelAnimationFrame;
     else globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
   });
 }
@@ -67,9 +81,15 @@ function fakeRenderer() {
   return {
     calls,
     renderer: {
-      add() { calls.add += 1; },
-      update() { calls.update += 1; },
-      remove() { calls.remove += 1; },
+      add() {
+        calls.add += 1;
+      },
+      update() {
+        calls.update += 1;
+      },
+      remove() {
+        calls.remove += 1;
+      },
       sync() {},
     },
   };
@@ -83,14 +103,19 @@ function httpFailure(status, retryAfter = null) {
   return {
     ok: false,
     status,
-    headers: { get: (name) => (name.toLowerCase() === 'retry-after' ? retryAfter : null) },
+    headers: {
+      get: (name) => (name.toLowerCase() === 'retry-after' ? retryAfter : null),
+    },
   };
 }
 
 test('retry: first-try footprint returns immediately, no retry, no waiting', async () => {
   const { resolve, calls } = scriptedResolver([FP]);
   const { waitFn, delays } = fakeWait();
-  const fp = await resolveOutlineWithRetry(resolve, { delaysMs: [8000, 25000], waitFn });
+  const fp = await resolveOutlineWithRetry(resolve, {
+    delaysMs: [8000, 25000],
+    waitFn,
+  });
   assert.equal(fp, FP);
   assert.equal(calls.count, 1);
   assert.deepEqual(delays, []);
@@ -99,7 +124,10 @@ test('retry: first-try footprint returns immediately, no retry, no waiting', asy
 test('retry: a DEFINITIVE miss (null) is never retried — the honest point stands', async () => {
   const { resolve, calls } = scriptedResolver([null, FP]);
   const { waitFn, delays } = fakeWait();
-  const fp = await resolveOutlineWithRetry(resolve, { delaysMs: [8000, 25000], waitFn });
+  const fp = await resolveOutlineWithRetry(resolve, {
+    delaysMs: [8000, 25000],
+    waitFn,
+  });
   assert.equal(fp, null);
   assert.equal(calls.count, 1);
   assert.deepEqual(delays, []);
@@ -108,7 +136,10 @@ test('retry: a DEFINITIVE miss (null) is never retried — the honest point stan
 test('retry: a TRANSIENT miss (undefined) re-runs after the first backoff and can succeed', async () => {
   const { resolve, calls } = scriptedResolver([undefined, FP]);
   const { waitFn, delays } = fakeWait();
-  const fp = await resolveOutlineWithRetry(resolve, { delaysMs: [8000, 25000], waitFn });
+  const fp = await resolveOutlineWithRetry(resolve, {
+    delaysMs: [8000, 25000],
+    waitFn,
+  });
   assert.equal(fp, FP);
   assert.equal(calls.count, 2);
   assert.deepEqual(delays, [8000]); // waited once, succeeded on attempt 2
@@ -117,16 +148,27 @@ test('retry: a TRANSIENT miss (undefined) re-runs after the first backoff and ca
 test('retry: a transient retry can still conclude with a definitive miss (no third run)', async () => {
   const { resolve, calls } = scriptedResolver([undefined, null]);
   const { waitFn, delays } = fakeWait();
-  const fp = await resolveOutlineWithRetry(resolve, { delaysMs: [8000, 25000], waitFn });
+  const fp = await resolveOutlineWithRetry(resolve, {
+    delaysMs: [8000, 25000],
+    waitFn,
+  });
   assert.equal(fp, null);
   assert.equal(calls.count, 2);
   assert.deepEqual(delays, [8000]);
 });
 
 test('retry: persistent transients exhaust the backoff schedule and give up as transient', async () => {
-  const { resolve, calls } = scriptedResolver([undefined, undefined, undefined, FP]);
+  const { resolve, calls } = scriptedResolver([
+    undefined,
+    undefined,
+    undefined,
+    FP,
+  ]);
   const { waitFn, delays } = fakeWait();
-  const fp = await resolveOutlineWithRetry(resolve, { delaysMs: [8000, 25000], waitFn });
+  const fp = await resolveOutlineWithRetry(resolve, {
+    delaysMs: [8000, 25000],
+    waitFn,
+  });
   assert.equal(fp, undefined); // never found within budget — mark honestly stays a point
   assert.equal(calls.count, 3); // initial + one per backoff entry
   assert.deepEqual(delays, [8000, 25000]);
@@ -138,7 +180,10 @@ test('retry: a stale board (clear/supersede during backoff) stops retrying immed
   let stale = false;
   const fp = await resolveOutlineWithRetry(resolve, {
     delaysMs: [8000, 25000],
-    waitFn: async (ms) => { await waitFn(ms); stale = true; }, // goes stale mid-wait
+    waitFn: async (ms) => {
+      await waitFn(ms);
+      stale = true;
+    }, // goes stale mid-wait
     isStale: () => stale,
   });
   assert.equal(fp, undefined);
@@ -149,7 +194,10 @@ test('retry: a stale board (clear/supersede during backoff) stops retrying immed
 test('retry: a thrown resolver is a definitive miss (no retry), matching the old catch→point path', async () => {
   const { resolve, calls } = scriptedResolver([new Error('boom'), FP]);
   const { waitFn, delays } = fakeWait();
-  const fp = await resolveOutlineWithRetry(resolve, { delaysMs: [8000, 25000], waitFn });
+  const fp = await resolveOutlineWithRetry(resolve, {
+    delaysMs: [8000, 25000],
+    waitFn,
+  });
   assert.equal(fp, null);
   assert.equal(calls.count, 1);
   assert.deepEqual(delays, []);
@@ -171,43 +219,65 @@ test('outline queue: an 8-spec batch keeps at most two FIFO upgrades in flight',
       label: target,
       source: 'fake',
       ring: null,
-      resolveOutline: () => new Promise((resolve) => {
-        started.push(target);
-        inFlight += 1;
-        maxInFlight = Math.max(maxInFlight, inFlight);
-        releases.set(target, () => {
-          inFlight -= 1;
-          resolve({
-            ring: [[index, index], [index + 0.1, index], [index, index + 0.1], [index, index]],
-            footprintKind: 'area',
-            lat: index,
-            lon: index,
-            height: 0,
+      resolveOutline: () =>
+        new Promise((resolve) => {
+          started.push(target);
+          inFlight += 1;
+          maxInFlight = Math.max(maxInFlight, inFlight);
+          releases.set(target, () => {
+            inFlight -= 1;
+            resolve({
+              ring: [
+                [index, index],
+                [index + 0.1, index],
+                [index, index + 0.1],
+                [index, index],
+              ],
+              footprintKind: 'area',
+              lat: index,
+              lon: index,
+              height: 0,
+            });
           });
-        });
-      }),
+        }),
     };
   };
-  const engine = createAnnotationEngine({ viewer: {}, renderer, resolveTarget });
+  const engine = createAnnotationEngine({
+    viewer: {},
+    renderer,
+    resolveTarget,
+  });
   let completed = 0;
-  const allCompleted = new Promise((resolve) => engine.onOutlineEvent(() => {
-    completed += 1;
-    if (completed === 8) resolve();
-  }));
+  const allCompleted = new Promise((resolve) =>
+    engine.onOutlineEvent(() => {
+      completed += 1;
+      if (completed === 8) resolve();
+    }),
+  );
 
-  const result = await engine.annotate(Array.from({ length: 8 }, (_, i) => ({
-    type: 'area',
-    target: `queue-${i}`,
-    footprint: true,
-  })));
+  const result = await engine.annotate(
+    Array.from({ length: 8 }, (_, i) => ({
+      type: 'area',
+      target: `queue-${i}`,
+      footprint: true,
+    })),
+  );
 
   assert.equal(result.drawn, 8);
-  assert.equal(calls.add, 8, 'all point renders land before queued outlines finish');
+  assert.equal(
+    calls.add,
+    8,
+    'all point renders land before queued outlines finish',
+  );
   assert.deepEqual(started, ['queue-0', 'queue-1']);
   for (let next = 2; next < 8; next += 1) {
     releases.get(`queue-${next - 2}`)();
     await flushMicrotasks();
-    assert.equal(started[next], `queue-${next}`, 'queued upgrades start in ask order');
+    assert.equal(
+      started[next],
+      `queue-${next}`,
+      'queued upgrades start in ask order',
+    );
   }
   releases.get('queue-6')();
   releases.get('queue-7')();
@@ -292,7 +362,10 @@ test('retry: HTTP 429 Retry-After 5s gets one ladder-spaced retry; a second 429 
   const originalWindow = globalThis.window;
   const originalFetch = globalThis.fetch;
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 10_000 });
-  globalThis.window = { setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout };
+  globalThis.window = {
+    setTimeout: globalThis.setTimeout,
+    clearTimeout: globalThis.clearTimeout,
+  };
   const requestTimes = [];
   globalThis.fetch = async (url) => {
     // The one-time capability probe is not an outline request.
@@ -323,11 +396,16 @@ test('retry: HTTP 429 Retry-After 5s gets one ladder-spaced retry; a second 429 
       waits.push(ms);
       return new Promise((resolve) => setTimeout(resolve, ms));
     },
-  })
-    .finally(() => { settled = true; });
+  }).finally(() => {
+    settled = true;
+  });
   while (waits.length === 0) await flushMicrotasks();
   assert.equal(requestTimes.length, 1);
-  assert.deepEqual(waits, [8000], 'the 8s ladder floor is longer than Retry-After: 5');
+  assert.deepEqual(
+    waits,
+    [8000],
+    'the 8s ladder floor is longer than Retry-After: 5',
+  );
 
   t.mock.timers.tick(7999);
   await flushMicrotasks();
@@ -342,8 +420,15 @@ test('retry: HTTP 429 Retry-After 5s gets one ladder-spaced retry; a second 429 
   }
 
   assert.equal(requestTimes.length, 2);
-  assert.ok(requestTimes[1] - requestTimes[0] >= 5000, 'Retry-After is a hard minimum');
-  assert.equal(settled, true, 'a second 429 must not schedule the 25s ladder replay');
+  assert.ok(
+    requestTimes[1] - requestTimes[0] >= 5000,
+    'Retry-After is a hard minimum',
+  );
+  assert.equal(
+    settled,
+    true,
+    'a second 429 must not schedule the 25s ladder replay',
+  );
   assert.equal(await pending, undefined);
 });
 
@@ -351,7 +436,10 @@ test('retry: a plain HTTP 500 still exhausts the existing 8s/25s transient ladde
   const originalWindow = globalThis.window;
   const originalFetch = globalThis.fetch;
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 100_000 });
-  globalThis.window = { setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout };
+  globalThis.window = {
+    setTimeout: globalThis.setTimeout,
+    clearTimeout: globalThis.clearTimeout,
+  };
   const requestTimes = [];
   globalThis.fetch = async (url) => {
     if (String(url).endsWith('/status'))
@@ -382,8 +470,9 @@ test('retry: a plain HTTP 500 still exhausts the existing 8s/25s transient ladde
       waits.push(ms);
       return new Promise((resolve) => setTimeout(resolve, ms));
     },
-  })
-    .finally(() => { settled = true; });
+  }).finally(() => {
+    settled = true;
+  });
   while (waits.length === 0) await flushMicrotasks();
   assert.equal(requestTimes.length, 1);
   assert.deepEqual(waits, [8000]);
@@ -400,7 +489,10 @@ test('retry: a plain HTTP 500 still exhausts the existing 8s/25s transient ladde
   await flushMicrotasks();
 
   assert.equal(requestTimes.length, 3);
-  assert.deepEqual(requestTimes.map((at) => at - requestTimes[0]), [0, 8000, 33_000]);
+  assert.deepEqual(
+    requestTimes.map((at) => at - requestTimes[0]),
+    [0, 8000, 33_000],
+  );
   assert.equal(settled, true);
   assert.equal(await pending, undefined);
 });
@@ -415,7 +507,10 @@ test('targetKey: trailing locality qualifiers are stripped so state names dedupe
 });
 
 test('targetKey: lowercases, trims, and keeps comma-free names intact', () => {
-  assert.equal(normalizeTargetKey('  Texas State Capitol  '), 'texas state capitol');
+  assert.equal(
+    normalizeTargetKey('  Texas State Capitol  '),
+    'texas state capitol',
+  );
   assert.equal(normalizeTargetKey('Lady Bird Lake'), 'lady bird lake');
 });
 
@@ -1031,7 +1126,9 @@ test('duplicate-replacement: a renderer throw leaves no phantom mark and no leak
     resolveTarget: async () => ({ ...FIXED_POINT }),
   });
 
-  const first = await engine.annotate([{ type: 'point', target: 'Texas Capitol', label: 'Capitol' }]);
+  const first = await engine.annotate([
+    { type: 'point', target: 'Texas Capitol', label: 'Capitol' },
+  ]);
   assert.equal(first.drawn, 1);
   assert.equal(engine.list().length, 1);
   assert.ok(
@@ -1046,12 +1143,25 @@ test('duplicate-replacement: a renderer throw leaves no phantom mark and no leak
   // branch for a point; see findDuplicate.)
   failAddOnce();
   const second = await engine.annotate([
-    { type: 'point', target: 'Texas Capitol', label: 'Capitol', color: 'amber' },
+    {
+      type: 'point',
+      target: 'Texas Capitol',
+      label: 'Capitol',
+      color: 'amber',
+    },
   ]);
 
-  assert.equal(second.drawn, 0, 'the failed swap is reported as a failure, not a draw');
+  assert.equal(
+    second.drawn,
+    0,
+    'the failed swap is reported as a failure, not a draw',
+  );
   assert.equal(second.failed, 1);
-  assert.equal(engine.list().length, 0, 'no phantom annotation survives the failed swap');
+  assert.equal(
+    engine.list().length,
+    0,
+    'no phantom annotation survives the failed swap',
+  );
   assert.ok(
     !getRenderGovernorDiagnostics().holds.includes('annotations'),
     'the annotations hold must be released — a leak defeats the idle governor permanently',
@@ -1071,10 +1181,16 @@ test('fresh path: a renderer throw is rolled back the same way', async (t) => {
   });
 
   failAddOnce();
-  const result = await engine.annotate([{ type: 'point', target: 'Texas Capitol', label: 'Capitol' }]);
+  const result = await engine.annotate([
+    { type: 'point', target: 'Texas Capitol', label: 'Capitol' },
+  ]);
 
   assert.equal(result.drawn, 0);
-  assert.equal(engine.list().length, 0, 'no phantom annotation from a failed first add');
+  assert.equal(
+    engine.list().length,
+    0,
+    'no phantom annotation from a failed first add',
+  );
   assert.ok(
     !getRenderGovernorDiagnostics().holds.includes('annotations'),
     'a never-rendered mark must not hold continuous render',
@@ -1096,14 +1212,21 @@ function partialStateRendererHarness() {
   let failNextAdd = false;
   return {
     live,
-    failAddOnce() { failNextAdd = true; },
+    failAddOnce() {
+      failNextAdd = true;
+    },
     renderer: {
       add(anno) {
         live.set(anno.id, anno); // partial renderer state exists NOW
-        if (failNextAdd) { failNextAdd = false; throw new Error('WebGL context lost'); }
+        if (failNextAdd) {
+          failNextAdd = false;
+          throw new Error('WebGL context lost');
+        }
       },
       update() {},
-      remove(anno) { live.delete(anno.id); },
+      remove(anno) {
+        live.delete(anno.id);
+      },
       sync() {},
     },
   };
@@ -1122,10 +1245,16 @@ test('fresh path: a throw AFTER partial renderer state leaves nothing on the boa
   });
 
   failAddOnce();
-  const failed = await engine.annotate([{ type: 'point', target: 'Texas Capitol', label: 'Capitol' }]);
+  const failed = await engine.annotate([
+    { type: 'point', target: 'Texas Capitol', label: 'Capitol' },
+  ]);
   assert.equal(failed.drawn, 0);
   assert.equal(engine.list().length, 0, 'no phantom annotation');
-  assert.equal(live.size, 0, 'the rollback must release what the renderer had already created');
+  assert.equal(
+    live.size,
+    0,
+    'the rollback must release what the renderer had already created',
+  );
   assert.ok(
     !getRenderGovernorDiagnostics().holds.includes('annotations'),
     'a never-rendered mark must not hold continuous render',
@@ -1133,9 +1262,15 @@ test('fresh path: a throw AFTER partial renderer state leaves nothing on the boa
 
   // The real cost of an orphan: re-annotating the same place stacks a second
   // mark on top of the one nothing owns.
-  const retry = await engine.annotate([{ type: 'point', target: 'Texas Capitol', label: 'Capitol' }]);
+  const retry = await engine.annotate([
+    { type: 'point', target: 'Texas Capitol', label: 'Capitol' },
+  ]);
   assert.equal(retry.drawn, 1);
-  assert.equal(live.size, 1, 'a re-annotate must draw ONE mark, not stack over an orphan');
+  assert.equal(
+    live.size,
+    1,
+    'a re-annotate must draw ONE mark, not stack over an orphan',
+  );
 });
 
 test('duplicate-replacement: a throw AFTER partial renderer state leaves nothing on the board', async (t) => {
@@ -1150,7 +1285,9 @@ test('duplicate-replacement: a throw AFTER partial renderer state leaves nothing
     resolveTarget: async () => ({ ...FIXED_POINT }),
   });
 
-  const first = await engine.annotate([{ type: 'point', target: 'Texas Capitol', label: 'Capitol' }]);
+  const first = await engine.annotate([
+    { type: 'point', target: 'Texas Capitol', label: 'Capitol' },
+  ]);
   assert.equal(first.drawn, 1);
   assert.equal(live.size, 1);
 
@@ -1158,10 +1295,19 @@ test('duplicate-replacement: a throw AFTER partial renderer state leaves nothing
   // creates its state and then throws.
   failAddOnce();
   const swap = await engine.annotate([
-    { type: 'point', target: 'Texas Capitol', label: 'Capitol', color: 'amber' },
+    {
+      type: 'point',
+      target: 'Texas Capitol',
+      label: 'Capitol',
+      color: 'amber',
+    },
   ]);
   assert.equal(swap.drawn, 0);
-  assert.equal(engine.list().length, 0, 'no phantom annotation survives the failed swap');
+  assert.equal(
+    engine.list().length,
+    0,
+    'no phantom annotation survives the failed swap',
+  );
   assert.equal(live.size, 0, 'and no half-swapped mark survives on the board');
   assert.ok(
     !getRenderGovernorDiagnostics().holds.includes('annotations'),
@@ -1169,23 +1315,38 @@ test('duplicate-replacement: a throw AFTER partial renderer state leaves nothing
   );
 
   const retry = await engine.annotate([
-    { type: 'point', target: 'Texas Capitol', label: 'Capitol', color: 'amber' },
+    {
+      type: 'point',
+      target: 'Texas Capitol',
+      label: 'Capitol',
+      color: 'amber',
+    },
   ]);
   assert.equal(retry.drawn, 1);
-  assert.equal(live.size, 1, 'the recoloured mark redraws once, with no orphan underneath');
+  assert.equal(
+    live.size,
+    1,
+    'the recoloured mark redraws once, with no orphan underneath',
+  );
 });
 
 test('destroy releases the renderer and prevents subsequent annotation work', async (t) => {
   installAnimationFrameStubs(t);
   const { renderer, calls } = fakeRenderer();
   let destroyed = 0;
-  renderer.destroy = () => { destroyed++; };
+  renderer.destroy = () => {
+    destroyed++;
+  };
   const engine = createAnnotationEngine({ viewer: {}, renderer });
-  const drawn = await engine.annotate([{ type: 'pin', longitude: -97.74, latitude: 30.27 }]);
+  const drawn = await engine.annotate([
+    { type: 'pin', longitude: -97.74, latitude: 30.27 },
+  ]);
   assert.equal(drawn.drawn, 1);
   engine.destroy();
   const additions = calls.add;
-  const result = await engine.annotate([{ type: 'pin', target: 'Must not resolve' }]);
+  const result = await engine.annotate([
+    { type: 'pin', target: 'Must not resolve' },
+  ]);
   assert.equal(result.error, 'destroyed');
   assert.equal(calls.add, additions);
   assert.equal(engine.count(), 0);
@@ -1201,10 +1362,13 @@ test('a late annotation resolver cannot redraw after destruction', async (t) => 
   let release;
   let signal;
   const engine = createAnnotationEngine({
-    viewer: {}, renderer,
+    viewer: {},
+    renderer,
     resolveTarget: (options) => {
       signal = options.signal;
-      return new Promise((resolve) => { release = resolve; });
+      return new Promise((resolve) => {
+        release = resolve;
+      });
     },
   });
   const pending = engine.annotate([{ type: 'pin', target: 'Pending place' }]);
@@ -1216,6 +1380,44 @@ test('a late annotation resolver cannot redraw after destruction', async (t) => 
   assert.equal(engine.count(), 0);
 });
 
+test('caller cancellation prevents a late annotation and camera mutation', async (t) => {
+  installAnimationFrameStubs(t);
+  const { renderer, calls } = fakeRenderer();
+  let release;
+  let resolverSignal;
+  let flights = 0;
+  const engine = createAnnotationEngine({
+    viewer: {
+      camera: {
+        flyToBoundingSphere() {
+          flights += 1;
+        },
+      },
+    },
+    renderer,
+    resolveTarget: ({ signal }) => {
+      resolverSignal = signal;
+      return new Promise((resolve) => {
+        release = resolve;
+      });
+    },
+  });
+  const controller = new AbortController();
+  const pending = engine.annotate([{ type: 'pin', target: 'Pending place' }], {
+    flyTo: true,
+    signal: controller.signal,
+    isCurrent: () => !controller.signal.aborted,
+  });
+  controller.abort();
+  assert.equal(resolverSignal.aborted, true);
+  release({ lon: -97.74, lat: 30.27, label: 'Pending place' });
+  const result = await pending;
+  assert.equal(result.aborted, true);
+  assert.equal(calls.add, 0);
+  assert.equal(flights, 0);
+  assert.equal(engine.count(), 0);
+});
+
 test('only an explicit navigation request permits resolving distant annotation targets', async (t) => {
   installAnimationFrameStubs(t);
   _resetRenderGovernorForTest();
@@ -1223,12 +1425,22 @@ test('only an explicit navigation request permits resolving distant annotation t
   const { renderer } = throwingRendererHarness();
   renderer.destroy = () => {};
   const received = [];
-  const engine = createAnnotationEngine({ viewer: {}, renderer,
-    resolveTarget: async (options) => { received.push(options); return null; },
+  const engine = createAnnotationEngine({
+    viewer: {},
+    renderer,
+    resolveTarget: async (options) => {
+      received.push(options);
+      return null;
+    },
   });
   await engine.annotate([{ type: 'point', target: 'Remote landmark' }]);
-  await engine.annotate([{ type: 'point', target: 'Remote landmark' }], { flyTo: true });
-  assert.deepEqual(received.map(options => options.allowDistant), [false, true]);
+  await engine.annotate([{ type: 'point', target: 'Remote landmark' }], {
+    flyTo: true,
+  });
+  assert.deepEqual(
+    received.map((options) => options.allowDistant),
+    [false, true],
+  );
   engine.destroy();
 });
 
@@ -1261,7 +1473,7 @@ test('hand-drawn marks: one mark can be hidden, renamed, recoloured, framed and 
   const { renderer, calls } = fakeRenderer();
   const flights = [];
   const engine = createAnnotationEngine({
-    viewer: { camera: { heading: 0, flyToBoundingSphere: (sphere) => flights.push(sphere) } },
+    viewer: bindFakeCesiumCamera({ camera: { heading: 0, flyToBoundingSphere: (sphere) => flights.push(sphere) } }),
     renderer,
   });
   let changes = 0;
@@ -1330,12 +1542,12 @@ test('hand-drawn marks: remove, hide, clear, expiry and framing have their effec
   const { renderer, calls } = fakeRenderer();
   const flights = [];
   const engine = createAnnotationEngine({
-    viewer: {
+    viewer: bindFakeCesiumCamera({
       camera: {
         heading: 0,
         flyToBoundingSphere: (sphere) => flights.push(sphere),
       },
-    },
+    }),
     renderer,
   });
   let changes = 0;
@@ -1547,7 +1759,7 @@ test('hand-drawn marks: with every mark hidden the scene idles, and showing one 
   _resetRenderGovernorForTest();
   t.after(() => _resetRenderGovernorForTest());
   let renders = 0;
-  installRenderGovernor({ scene: { requestRenderMode: true, requestRender: () => (renders += 1) } });
+  installRenderGovernor(framePortFor({ requestRenderMode: true, requestRender: () => (renders += 1) }));
   const { renderer } = fakeRenderer();
   const engine = createAnnotationEngine({ viewer: {}, renderer });
   await engine.annotate([
@@ -1687,4 +1899,68 @@ test('plain recaption keeps the old mark addressable when its removal throws', a
     'the old route is retried on the next clear',
   );
   assert.equal(engine.count(), 0);
+});
+
+// The camera assist frames a fresh mark only when none of it is in view:
+// off the frustum or behind the globe, as the renderer's camera and query
+// ports see it. A camera that cannot answer leaves the view alone.
+test('camera assist frames marks out of view and leaves visible ones alone', async (t) => {
+  installAnimationFrameStubs(t);
+  const { bindRenderer } = await import('../render/rendererOf.js');
+  const { horizonFrom } = await import('../geo/horizon.js');
+  const viewerOver = (lon, lat, height, { broken = false } = {}) => {
+    const position = Cesium.Cartesian3.fromDegrees(lon, lat, height);
+    const direction = Cesium.Cartesian3.negate(
+      Cesium.Cartesian3.normalize(position, new Cesium.Cartesian3()),
+      new Cesium.Cartesian3(),
+    );
+    const right = Cesium.Cartesian3.normalize(
+      Cesium.Cartesian3.cross(direction, Cesium.Cartesian3.UNIT_Z, new Cesium.Cartesian3()),
+      new Cesium.Cartesian3(),
+    );
+    const up = Cesium.Cartesian3.cross(right, direction, new Cesium.Cartesian3());
+    const view = Cesium.Matrix4.computeView(position, direction, up, right, new Cesium.Matrix4());
+    const frustum = new Cesium.PerspectiveFrustum({
+      fov: Cesium.Math.toRadians(60), aspectRatio: 16 / 9, near: 1, far: 5e7,
+    });
+    const flights = [];
+    const viewer = {};
+    const horizon = horizonFrom(position);
+    bindRenderer(viewer, {
+      camera: {
+        pose: () => ({ heading: 0 }),
+        matrices() {
+          if (broken) throw new Error('no camera');
+          return {
+            view: Float64Array.from(Cesium.Matrix4.toArray(view)),
+            projection: Float64Array.from(Cesium.Matrix4.toArray(frustum.projectionMatrix)),
+          };
+        },
+        flyTo: (...args) => flights.push(['flyTo', ...args]),
+        flyToBounds: (...args) => flights.push(['flyToBounds', ...args]),
+      },
+      query: { isOccluded: (p) => !horizon.isPointVisible(p) },
+    });
+    return { viewer, flights };
+  };
+  const pinAt = async (viewer, lon, lat) => {
+    const engine = createAnnotationEngine({ viewer, renderer: fakeRenderer().renderer });
+    await engine.annotate([{ type: 'pin', manual: true, latitude: lat, longitude: lon }], { persist: true, flyTo: false });
+  };
+
+  const inView = viewerOver(-97.74, 30.27, 9000);
+  await pinAt(inView.viewer, -97.742, 30.268);
+  assert.equal(inView.flights.length, 0, 'a mark in view is left alone');
+
+  const aside = viewerOver(-97.74, 30.27, 9000);
+  await pinAt(aside.viewer, -97.5, 30.6);
+  assert.equal(aside.flights.length, 1, 'a mark off the frustum is framed');
+
+  const behind = viewerOver(60, 30, 9_000_000);
+  await pinAt(behind.viewer, -120, -30);
+  assert.equal(behind.flights.length, 1, 'a mark behind the globe is framed');
+
+  const broken = viewerOver(-97.74, 30.27, 9000, { broken: true });
+  await pinAt(broken.viewer, -97.5, 30.6);
+  assert.equal(broken.flights.length, 0, 'a camera that cannot answer moves nothing');
 });

@@ -17,7 +17,7 @@ import {
   tn,
   translateKnown,
 } from '../i18n/index.js';
-import { createImagerySplit } from './imagerySplit.js';
+import { createImagerySplit, globeSplitTarget } from './imagerySplit.js';
 import RecentImageryReadout from './recentImagery/RecentImageryReadout.vue';
 import {
   PRODUCTS,
@@ -26,7 +26,7 @@ import {
 } from '../layers/recentImagery/model.js';
 import { displayDay, displayMetres } from '../layers/recentImagery/display.js';
 import { formatQuantity } from './unitLabels.js';
-import { pointerOwnerName } from '../data/pointerOwnerNames.js';
+import { canvasOf, findFrame, findGlobe } from '../render/rendererOf.js';
 
 const PANEL_ID = 'recent-imagery-panel';
 const OVERVIEW_MIN_BOX_KM = 25;
@@ -37,6 +37,7 @@ const ESRI_NOTE = msg('Imagery on Esri · Google 3D returns when cleared');
 const LAYER_NOTICES = new Set([
   ESRI_NOTE,
   msg('Box and images cleared'),
+  msg('Search cancelled'),
   msg('Esri map unavailable · no swipe'),
   msg('Swipe needs a globe map'),
   msg('Imagery stays on Esri · CLEAR to use Google 3D'),
@@ -48,7 +49,6 @@ const LAYER_NOTICES = new Set([
 // imageryBoxTool.js); fixed refusals there are msg() text for translateKnown.
 const TOO_LARGE = /^(Box|View) is ([\d,]+) km wide · limit ([\d,]+) km$/;
 const POLAR = /^Imagery stops at ±([\d.]+)° latitude$/;
-const POINTER_BUSY = /^(.+) is using the pointer — close it first$/;
 
 /**
  * The notice line in the UI language: notices and box refusals arrive in
@@ -66,11 +66,6 @@ export function localizeNotice(text) {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       }),
-    });
-  const busy = POINTER_BUSY.exec(text);
-  if (busy)
-    return t('{owner} is using the pointer — close it first', {
-      owner: translateKnown(pointerOwnerName(busy[1])),
     });
   const tooLarge = TOO_LARGE.exec(text);
   if (!tooLarge) return translateKnown(text);
@@ -205,7 +200,7 @@ export function createRecentImageryPanel({
   fetchImpl = globalThis.fetch?.bind(globalThis),
   createObjectUrl = (blob) => URL.createObjectURL(blob),
   revokeObjectUrl = (url) => URL.revokeObjectURL(url),
-  requestRender = () => viewer?.scene?.requestRender?.(),
+  requestRender = () => findFrame(viewer)?.requestRender('recent-imagery'),
 } = {}) {
   const document = container?.ownerDocument;
   if (!document?.createElement || !layer) return null;
@@ -701,7 +696,7 @@ export function createRecentImageryPanel({
     }
     if (!live || split || destroyed) return;
     split = createSplit({
-      scene: viewer?.scene,
+      scene: globeSplitTarget(findGlobe(viewer)),
       initialValue: snapshot.split,
       id: 'recent-imagery-split-line',
       handleClass: 'recent-imagery-split-handle',
@@ -722,7 +717,7 @@ export function createRecentImageryPanel({
           right: rightPercent,
         }),
       getViewportWidth: () =>
-        Number(viewer?.scene?.canvas?.clientWidth) ||
+        Number(canvasOf(viewer)?.clientWidth) ||
         Number(document.documentElement?.clientWidth) ||
         0,
       onChange: (value) => layer.setSplit(value),

@@ -35,9 +35,6 @@ export function readShellElements(document = globalThis.document) {
     _globalContextFlightsBtn: document.getElementById(
       'global-context-flights-btn',
     ),
-    _globalContextMissionsBtn: document.getElementById(
-      'global-context-missions-btn',
-    ),
     _installationsSearchBtn: document.getElementById(
       'installations-search-btn',
     ),

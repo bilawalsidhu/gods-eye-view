@@ -26,10 +26,7 @@ import {
   setSignalCollapsed,
 } from './ui/cockpitLayout.js';
 import { createBriefState } from './ui/cockpitBriefPages.js';
-import {
-  publishBriefView,
-  setBriefAutoRotate,
-} from './ui/cockpitBriefing.js';
+import { publishBriefView, setBriefAutoRotate } from './ui/cockpitBriefing.js';
 import { CockpitDisplayPortal } from './ui/cockpitDisplayPortal.js';
 import { _handleContextLayerChange } from './ui/contextLayerChanges.js';
 import { clearSelectedLayers } from './ui/contextActions.js';
@@ -77,10 +74,14 @@ const voiceActions = fs.readFileSync(
 test('Cockpit has one reset action beside its bottom exit path', () => {
   assert.doesNotMatch(html, /id="cockpit-quick-entry"/);
   assert.doesNotMatch(html, /id="cockpit-exit"/);
-  assert.match(
-    html,
-    /id="map-view-switch"[^>]*aria-label="Exit cockpit view"[^>]*aria-keyshortcuts="Escape C"[\s\S]*?close_fullscreen[\s\S]*?EXIT COCKPIT/,
+  // The exit button's attributes, in whatever order the button renders them.
+  const exit = html.match(
+    /<button\b(?=[^>]*\sid="map-view-switch")([^>]*)>([\s\S]*?)<\/button>/,
   );
+  assert.ok(exit, 'Cockpit exit is missing');
+  assert.match(exit[1], /\saria-label="Exit cockpit view"/);
+  assert.match(exit[1], /\saria-keyshortcuts="Escape"/);
+  assert.match(exit[2], /close_fullscreen[\s\S]*?EXIT COCKPIT/);
   const topCenterActions = html.match(
     /<nav id="top-center-actions"[\s\S]*?<\/nav>/,
   );
@@ -111,9 +112,18 @@ test('Cockpit has one reset action beside its bottom exit path', () => {
     /id="reset-globe-view"/,
     'map-only reset must stay outside Cockpit',
   );
-  assert.match(
-    viewSwitcher[0],
-    /id="cockpit-reset-globe"[^>]*type="button"[^>]*aria-label="Reset cockpit to full globe view"[^>]*hidden[\s\S]*?public[\s\S]*?RESET[\s\S]*?id="map-view-switch"/,
+  // The reset button's attributes, in whatever order the button renders them.
+  const reset = viewSwitcher[0].match(
+    /<button\b(?=[^>]*\sid="cockpit-reset-globe")([^>]*)>([\s\S]*?)<\/button>/,
+  );
+  assert.ok(reset, 'Cockpit Reset is missing from the view switcher');
+  assert.match(reset[1], /\stype="button"/);
+  assert.match(reset[1], /\saria-label="Reset cockpit to full globe view"/);
+  assert.match(reset[1], /\shidden(?=[\s>=]|$)/);
+  assert.match(reset[2], /public[\s\S]*?RESET/);
+  assert.ok(
+    viewSwitcher[0].indexOf('id="map-view-switch"') > reset.index,
+    'Cockpit Reset must sit before the exit button',
   );
 
   const actions = html.match(
@@ -163,7 +173,8 @@ test('Cockpit vision cycle exposes every map preset exactly once', () => {
   assert.match(html, /id="cockpit-vision-current-label"[^>]*>NORMAL<\/strong>/);
   assert.match(
     cockpitEnter.toString(),
-    /this\.setVisionMode\(this\.getInitialVisionMode\(\)\)/,
+    // Orbit alone opens optical (src/ui/cockpitOrbitalView.test.mjs).
+    /this\.setVisionMode\(\s*satellite \? 'optical' : this\.getInitialVisionMode\(\)\s*,?\s*\)/,
     'Cockpit must enter on the mode matching the active map preset',
   );
   assert.match(
@@ -196,12 +207,12 @@ test('Cockpit vision cycle exposes every map preset exactly once', () => {
 
 test('Contacts uses the approved radar icon', () => {
   const button = html.match(
-    /<button id="global-context-flights-btn"[\s\S]*?<\/button>/,
+    /<button\b[^>]*\bid="global-context-flights-btn"[\s\S]*?<\/button>/,
   );
   assert.ok(button, 'Contacts button is missing');
   assert.match(
     button[0],
-    /material-symbols-outlined" aria-hidden="true">radar<\/span>/,
+    /material-symbols-outlined"[^>]*aria-hidden="true">radar<\/span>/,
   );
 });
 
@@ -227,19 +238,17 @@ test('Cockpit Escape handling precedes form-control shortcut suppression and foc
   assert.doesNotMatch(exit, /applyTrackedCameraFrame/);
   assert.match(
     ui,
-    /restoreTrackingFrame: \(entity\) => \{[\s\S]*?gevTrackedId[\s\S]*?flightsLayer\.refocusTrackedById[\s\S]*?militaryFlightsLayer\.refocusTrackedById/,
+    /restoreTrackingFrame: \(entity\) => \{[\s\S]*?readEntityRecord\(entity\)\?\.trackedId[\s\S]*?flightsLayer\.refocusTrackedById[\s\S]*?militaryFlightsLayer\.refocusTrackedById/,
     'Cockpit exit must return camera-frame ownership through the source layer so Contact Focus cannot accumulate a second owner',
   );
 });
 
-test('Cockpit shortcut failures do not leak and open utilities own the first Escape', () => {
+test('open utilities own the first Escape and Cockpit leaves C alone', () => {
   const keydown = cockpitKeyDown.toString();
   assert.ok(keydown, 'Cockpit keyboard handler is missing');
   assert.match(keydown, /if \(this\.isUtilityDisclosureOpen\?\.\(\)\) return;/);
-  assert.match(
-    keydown,
-    /const cockpitAttempt = !!\(\s*this\.readAircraftInfo\(\) && this\.viewer\.trackedEntity\?\.position\s*\);[\s\S]*?event\.preventDefault\(\);[\s\S]*?event\.stopImmediatePropagation\(\);[\s\S]*?!this\.isEntryAllowed\(\)/,
-  );
+  // C is the app-wide CCTV shortcut; Cockpit never claims it.
+  assert.doesNotMatch(keydown, /=== 'c'/);
 });
 
 test('the Contact panel never hides itself out from under its own NEXT button', () => {
@@ -295,14 +304,14 @@ test('the Contact panel never hides itself out from under its own NEXT button', 
   );
 });
 
-test('the cockpit reads its aircraft from the layer that owns Cesium tracking', () => {
+test('the cockpit reads its aircraft from the layer the camera follows', () => {
   const read = readAircraftInfo.toString();
   assert.ok(read, 'readAircraftInfo is missing');
   assert.match(read, /resolveTrackedAircraftInfo\(\{/);
-  assert.match(read, /gevTrackedId/);
-  // In cockpit mode the controller moves the entity off viewer.trackedEntity,
-  // so its own handle is the tracked identity there.
-  assert.match(read, /this\.viewer\?\.trackedEntity \|\| this\.trackedEntity/);
+  assert.match(read, /trackedId: followed\?\.key/);
+  // In cockpit mode the controller stops the camera following, so its own
+  // handle is the tracked identity there.
+  assert.match(read, /followedOf\(this\.viewer\) \|\| this\.trackedFollow/);
 });
 
 test('programmatic Context layer changes cannot bypass explicit expansion policy', () => {
@@ -373,11 +382,11 @@ test('Cockpit owns a focused shared Display portal and compact Radio controls', 
   assert.doesNotMatch(html, /data-cockpit-display-slot="presets"/);
   assert.match(
     html,
-    /id="clear-selected-layers"[^>]*aria-label="Clear selected data layers"/,
+    /<button\b(?=[^>]*\bid="clear-selected-layers")[^>]*aria-label="Clear selected data layers"/,
   );
   assert.match(
     html,
-    /id="reset-globe-view"[^>]*aria-label="Reset to full globe view"/,
+    /<button\b(?=[^>]*\bid="reset-globe-view")[^>]*aria-label="Reset to full globe view"/,
   );
   assert.match(
     css,
@@ -439,13 +448,10 @@ test('Cockpit owns a focused shared Display portal and compact Radio controls', 
     /data-cockpit-launcher="radio"[\s\S]*?id="cockpit-radio-toggle-btn"/,
   );
   const cockpitRadio = html.match(
-    /id="cockpit-radio-panel"[\s\S]*?<\/div>\s*<\/div>\s*<\/aside>/,
+    /id="cockpit-radio-panel"[\s\S]*?<\/div>\s*<\/div>\s*<div class="cockpit-utility-rail/,
   );
   assert.ok(cockpitRadio, 'Cockpit compact Radio controls are missing');
-  assert.doesNotMatch(
-    cockpitRadio[0],
-    /radio-filter|radio-tuner/,
-  );
+  assert.doesNotMatch(cockpitRadio[0], /radio-filter|radio-tuner/);
   assert.match(
     css,
     /\.cockpit-utility-controls[\s\S]*?top:\s*var\(\s*--cockpit-utility-top/,
@@ -531,12 +537,12 @@ test('Cockpit owns a focused shared Display portal and compact Radio controls', 
   );
 });
 
-test('Display orders 3D above Celestial, Clean UI below it, and Parameters below Detection', () => {
+test('Visual orders Parameters below Detection, 3D below them, and Clean UI above the Effects', () => {
   const display = html.match(/id="pp-toggles"[\s\S]*?id="clean-view-exit"/);
   assert.ok(display, 'Display markup is missing');
   assert.match(
     display[0],
-    /id="detection-toggle"[\s\S]*?id="param-slider-panel"[\s\S]*?id="models3d-toggle"[\s\S]*?id="celestial-toggle"[\s\S]*?id="clean-view-toggle"/,
+    /id="detection-toggle"[\s\S]*?id="param-slider-panel"[\s\S]*?id="models3d-toggle"[\s\S]*?id="scope-toggle"[\s\S]*?id="clean-view-toggle"[\s\S]*?class="pp-section-heading">Effects<[\s\S]*?id="celestial-toggle"/,
   );
   assert.equal(
     (html.match(/id="param-slider-panel"/g) || []).length,
@@ -602,7 +608,7 @@ test('Cockpit Display portal retains both scroll owners across round trips', () 
   const portal = CockpitDisplayPortal.toString();
   assert.match(
     portal,
-    /this\.standardScrollTop =\s*displayPanelScroller\(standardPanel\)\?\.scrollTop \|\| 0/,
+    /this\.standardScrollTop = standardPanel\?\.scrollTop \|\| 0/,
   );
   assert.match(
     portal,
@@ -610,7 +616,7 @@ test('Cockpit Display portal retains both scroll owners across round trips', () 
   );
   assert.match(
     portal,
-    /if \(!this\.active\)[\s\S]*?this\.standardScrollTop =\s*displayPanelScroller\(standardPanel\)\.scrollTop/,
+    /if \(!this\.active\)[\s\S]*?this\.standardScrollTop = standardPanel\.scrollTop/,
   );
   assert.match(
     portal,
@@ -618,7 +624,7 @@ test('Cockpit Display portal retains both scroll owners across round trips', () 
   );
   assert.match(
     portal,
-    /this\.cockpitPanel\.scrollTop = this\.cockpitScrollTop[\s\S]*?displayPanelScroller\(this\.standardPanel\)\.scrollTop =\s*this\.standardScrollTop/,
+    /this\.cockpitPanel\.scrollTop = this\.cockpitScrollTop[\s\S]*?this\.standardPanel\.scrollTop = this\.standardScrollTop/,
   );
 });
 
@@ -687,6 +693,7 @@ test('fresh Cockpit entry temporarily collapses map panels and exit restores the
     'scene-panel',
     'pp-toggles',
     'global-context-panel',
+    'space-missions-panel',
     'radio-panel',
   ]) {
     assert.match(
@@ -812,18 +819,27 @@ test('Reset releases Contact camera ownership through its selection-preserving r
   );
   assert.match(ui, /onReset: \(\) => this\.resetToGlobeView\(\)/);
   assert.match(ui, /this\._connectGlobeReset\?\.\(this\._locationControls\)/);
-  assert.match(controls, /reset\(\) \{\s*if \(!this\.destroyed\) return this\.onReset\(\);/);
+  assert.match(
+    controls,
+    /reset\(\) \{\s*if \(!this\.destroyed\) return this\.onReset\(\);/,
+  );
   // Both reset buttons ask the one reset owner.
   const globeActions = fs.readFileSync(
     path.join(ROOT, 'src', 'ui', 'views', 'panels', 'GlobeActions.vue'),
     'utf8',
   );
-  assert.match(globeActions, /id="reset-globe-view"[^>]*@click="act\('reset'\)"/);
+  assert.match(
+    globeActions,
+    /id="reset-globe-view"[^>]*@click="act\('reset'\)"/,
+  );
   const cockpitView = readRadioSource(
     new URL('./ui/views/CockpitView.vue', import.meta.url),
     'utf8',
   );
-  assert.match(cockpitView, /id="cockpit-reset-globe"[^>]*@click="globe\.act\('reset'\)"/);
+  assert.match(
+    cockpitView,
+    /id="cockpit-reset-globe"[^>]*@click="globe\.act\('reset'\)"/,
+  );
   assert.match(
     cockpitEnter.toString(),
     /Object\.assign\(this\.presence, \{\s*active: true,/,
@@ -1171,7 +1187,7 @@ test('cockpit route direction uses self-contained vector artwork, not a font lig
 test('cockpit aircraft handoff invalidates the prior world-position anchor', () => {
   const match = _adoptTrackedEntity.toString();
   assert.ok(match, 'cockpit tracked-entity handoff block is missing');
-  assert.match(match, /this\.viewer\.trackedEntity = undefined;/);
+  assert.match(match, /stopFollowing\(this\.viewer\);/);
   assert.match(match, /this\.cockpitAnchorValid = false;/);
   assert.match(
     match,
@@ -1194,7 +1210,10 @@ test('cockpit summary presents the focused item as Contact', () => {
   const match = html.match(/<aside id="cockpit-context"[\s\S]*?<\/aside>/);
   assert.ok(match, 'cockpit Contact summary is missing');
   assert.match(match[0], /aria-label="Contact cockpit summary"/);
-  assert.match(match[0], /class="cockpit-card-kicker cockpit-context-kicker">CONTACT</);
+  assert.match(
+    match[0],
+    /class="cockpit-card-kicker cockpit-context-kicker">CONTACT</,
+  );
   assert.match(match[0], /aria-label="Contact navigation"/);
   assert.match(
     match[0],
@@ -1225,7 +1244,7 @@ test('Cockpit Contact navigation omits the redundant Focus camera action', () =>
 
 test('Global Context names its mixed contact cycle without changing the stable mode id', () => {
   const match = html.match(
-    /<button id="global-context-flights-btn"[\s\S]*?<\/button>/,
+    /<button\b[^>]*\bid="global-context-flights-btn"[\s\S]*?<\/button>/,
   );
   assert.ok(match, 'Global Context contacts button is missing');
   assert.match(match[0], />CONTACTS</);
@@ -1256,14 +1275,15 @@ test('Global Context uses its dedicated right rail without a duplicate Data Laye
   );
   assert.match(html, /id="global-context-panel"/);
   assert.match(html, /id="global-context-flights-btn"/);
-  assert.match(html, /id="global-context-missions-btn"/);
+  assert.doesNotMatch(html, /id="global-context-missions-btn"/);
+  assert.match(html, /id="space-missions-panel"/);
 });
 
-test('Global Context standby describes both chooser modes', () => {
+test('Global Context standby describes Contacts', () => {
   const match = html.match(/<div id="context-mode-standby"[\s\S]*?<\/div>/);
   assert.ok(match, 'Global Context standby is missing');
   assert.match(match[0], /CONTACTS — nearest planes · vessels · sites/);
-  assert.match(match[0], /SPACE MISSIONS — launches &amp; orbital assets/);
+  assert.doesNotMatch(match[0], /SPACE MISSIONS/);
 });
 
 test('cockpit briefing cycle control keeps its state as the accessible name', () => {
@@ -1306,12 +1326,12 @@ test('voice Cockpit entry honours a requested contact layer before it enters', (
     ui.indexOf("if (normalized === 'exit') {"),
   );
   assert.ok(branch, 'cockpit enter branch is missing');
-  const gateIndex = branch.indexOf('isEntryAllowed?.()');
+  const gateIndex = branch.indexOf('this._cockpitEntryRefusal()');
   const retargetIndex = branch.indexOf('_retargetCockpitEntryLayer(');
   const enterIndex = branch.indexOf('enterCockpitWithTracking({');
   assert.ok(
     gateIndex >= 0,
-    'entry consults the same gate the manual chip uses',
+    'entry refuses on the gate it can check before tracking',
   );
   assert.ok(
     retargetIndex > gateIndex,
@@ -1362,9 +1382,21 @@ test('voice Cockpit entry refuses when the entry gate is shut', () => {
     ui.indexOf("if (normalized === 'enter') {"),
     ui.indexOf("if (normalized === 'exit') {"),
   );
-  assert.match(branch, /if \(!this\.cockpitView\.isEntryAllowed\?\.\(\)\) \{/);
-  assert.match(branch, /Contacts must be active to enter Cockpit/);
-  assert.match(branch, /Contacts is still starting up/);
+  // Contacts is not required: only a Context change in flight or no aircraft
+  // layer to ride shuts the gate before tracking, and the entry itself then
+  // applies the manual chip's gate to the aircraft it rides.
+  assert.match(
+    branch,
+    /const refusal = this\._cockpitEntryRefusal\(\);\s*if \(refusal\) \{/,
+  );
+  assert.doesNotMatch(branch, /Contacts must be active/);
+  const refusal = ui.slice(
+    ui.indexOf('  _cockpitEntryRefusal() {'),
+    ui.indexOf('  getCockpitState() {'),
+  );
+  assert.match(refusal, /Context is still changing/);
+  assert.match(refusal, /No aircraft layer is on/);
+  assert.doesNotMatch(refusal, /[Cc]ontacts/);
 });
 
 test('cockpit state cannot report entryAllowed while already active', () => {
@@ -1382,7 +1414,8 @@ test('cockpit state cannot report entryAllowed while already active', () => {
   );
   assert.match(state, /entryBlockedReason:/, 'and a refusal can be explained');
   assert.match(state, /'contacts-starting'/);
-  assert.match(state, /'contacts-inactive'/);
+  assert.match(state, /'subject-layer-off'/);
+  assert.doesNotMatch(state, /'contacts-inactive'/, 'Contacts is not required');
   assert.match(state, /'no-tracked-aircraft'/);
 });
 
@@ -1396,15 +1429,30 @@ test('Contact folded for one Cockpit left panel comes back only once neither is 
   const previous = globalThis.document;
   const panels = {};
   globalThis.document = { getElementById: (id) => panels[id] ?? null };
-  const panel = (...classes) => ({ classList: { contains: (name) => classes.includes(name) } });
+  const panel = (...classes) => ({
+    classList: { contains: (name) => classes.includes(name) },
+  });
   try {
-    const otherOpen = (id) => PanelChrome.prototype._otherCockpitLeftPanelOpen(id);
+    const otherOpen = (id) =>
+      PanelChrome.prototype._otherCockpitLeftPanelOpen(id);
     panels['data-panel'] = panel('collapsed');
-    assert.equal(otherOpen('utilities-panel'), false, 'Data Layers closed: restore');
+    assert.equal(
+      otherOpen('utilities-panel'),
+      false,
+      'Data Layers closed: restore',
+    );
     panels['data-panel'] = panel('collapsed', 'layout-auto-collapsed');
-    assert.equal(otherOpen('utilities-panel'), true, 'Data Layers comes back: keep Contact folded');
+    assert.equal(
+      otherOpen('utilities-panel'),
+      true,
+      'Data Layers comes back: keep Contact folded',
+    );
     panels['data-panel'] = panel();
-    assert.equal(otherOpen('utilities-panel'), true, 'Data Layers open: keep it folded');
+    assert.equal(
+      otherOpen('utilities-panel'),
+      true,
+      'Data Layers open: keep it folded',
+    );
   } finally {
     globalThis.document = previous;
   }

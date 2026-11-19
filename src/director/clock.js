@@ -258,10 +258,15 @@ class PlaybackClock {
     this._shotProgressTimer = timer;
   }
 
-  startScene(scene, shot, token) {
+  /** Drive the scene clock through one shot, `offsetSec` into it when resuming. */
+  startScene(scene, shot, token, offsetSec = 0) {
     this.stopSceneTimer();
     const generation = this._sceneGeneration;
     const timing = this.timingForShot(scene, shot);
+    const offset = Math.max(
+      0,
+      Math.min(timing.durationSec, Number(offsetSec) || 0),
+    );
     if (
       generation !== this._sceneGeneration ||
       this._destroyed ||
@@ -269,8 +274,8 @@ class PlaybackClock {
       token.signal?.aborted
     )
       return timing;
-    const startedAt = this.now();
-    this.publish(scene, shot, timing.startElapsedSec, {
+    const startedAt = this.now() - offset * 1000;
+    this.publish(scene, shot, timing.startElapsedSec + offset, {
       running: true,
     });
     if (

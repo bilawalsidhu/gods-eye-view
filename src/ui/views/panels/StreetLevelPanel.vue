@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia';
 import { computed, shallowRef, watch } from 'vue';
 import { t } from '../../../i18n/index.js';
 import UiButton from '../../kit/UiButton.vue';
+import UiCloseButton from '../../kit/UiCloseButton.vue';
 import UiSegmented from '../../kit/UiSegmented.vue';
 import RailPanel from '../../rail/RailPanel.vue';
 import RailChips from '../../rail/RailChips.vue';
@@ -13,7 +14,7 @@ import UiSlider from '../../kit/UiSlider.js';
 // Until it renders, the panel shows its initial markup. The viewer element
 // belongs to the layer and EXPAND to the controls.
 const store = useStreetLevelStore();
-const { view, expanded, expandAvailable } = storeToRefs(store);
+const { view, expanded, expandAvailable, embedOverlay } = storeToRefs(store);
 
 const status = computed(
   () =>
@@ -139,9 +140,10 @@ const vThumb = {
             <UiSegmented class="sl-seg" item-class="sl-seg-btn" active-class="is-active" keyboard="radio" :hidden="!viewer.renderModes" :label="t('Image fit')" :options="renderModeOptions" :model-value="viewer.renderMode" @update:model-value="store.act('setRenderMode', $event)" />
           </div>
           <div class="sl-viewer-tools sl-viewer-tools-right">
-            <button id="sl-viewer-close" class="sl-viewer-x" type="button" :title="t('Close the image and deselect it on the map')" :aria-label="t('Close the street-level image')">×</button>
+            <UiCloseButton id="sl-viewer-close" class="sl-viewer-x" bare :title="t('Close the image and deselect it on the map')" :label="t('Close the street-level image')" />
           </div>
         </div>
+        <div id="sl-viewer-error" class="sl-error" role="alert" :hidden="!(embedOverlay || expanded) || !view?.error"><span aria-hidden="true">⚠</span> {{ view?.error || '' }}</div>
         <div class="sl-viewer-stage">
           <div id="sl-viewer-placeholder" class="sl-viewer-placeholder" :hidden="!viewer.loading"></div>
           <div id="sl-viewer" class="sl-viewer" :aria-label="t('Street-level viewer')"></div>
@@ -158,7 +160,7 @@ const vThumb = {
         <span class="cctv-summary-label">{{ t('PROVIDERS') }}</span>
         <div id="sl-provider-chips" class="sl-chips"><RailChips :chips="view ? view.providers : []" /></div>
       </div>
-      <div id="sl-error" class="sl-error" role="alert" :hidden="!view?.error"><span aria-hidden="true">⚠</span> <span id="sl-error-text">{{ view?.error || '' }}</span></div>
+      <div id="sl-error" class="sl-error" role="alert" :hidden="embedOverlay || expanded || !view?.error"><span aria-hidden="true">⚠</span> <span id="sl-error-text">{{ view?.error || '' }}</span></div>
       <!-- A missing key gates the filters only: the chips above stay
            focusable so their tooltip can say how to add the key. -->
       <fieldset id="sl-controls" class="sl-controls" :disabled="Boolean(view?.controlsDisabled)" :hidden="!shows.pano && !shows.since">

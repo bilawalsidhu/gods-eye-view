@@ -1,5 +1,10 @@
 # Test fixtures
 
+- `photon-moscow-search.json` - Photon responses for `Москва`, captured
+  2026-11-05 with and without a proximity bias near the Tajikistan namesake.
+  The fixture is trimmed to the fields the keyless geocoder consumes and is
+  used only by offline search tests. Data from OpenStreetMap contributors,
+  ODbL 1.0 (https://www.openstreetmap.org/copyright).
 - `tomtom-flow-austin-12-935-1686.pbf` — one real TomTom traffic-flow vector
   tile (Mapbox Vector Tile protobuf, layer `"Traffic flow"`), downtown Austin
   z12 x935 y1686, captured 2026-07-16 from

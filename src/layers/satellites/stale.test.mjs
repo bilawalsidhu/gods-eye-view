@@ -1,8 +1,11 @@
+// The click dispatcher's input port over a viewer double: the Cesium adapter's.
+import '../../render/cesium/input.js';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { EventEmitter, once } from 'node:events';
 import test from 'node:test';
 import * as Cesium from 'cesium';
+import { worldClock } from '../../time/worldClock.js';
 import { createSatelliteSource } from './source.js';
 import { createState } from './state.js';
 import { createControls } from './controls.js';
@@ -10,6 +13,9 @@ import { createOrbits } from './orbits.js';
 import { createLabels } from './labels.js';
 import { createTracking } from './tracking.js';
 import { createRendering } from './rendering.js';
+import { bindRenderer } from '../../render/rendererOf.js';
+import { fakeSceneFrame } from '../../testSupport/fakeCesiumScene.mjs';
+import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
 import { createCatalog } from './catalog.js';
 import { createLifecycle } from './lifecycle.js';
 import { createInteraction } from './interaction.js';
@@ -24,7 +30,15 @@ const GROUPS = [
   'galileo',
   'geo',
   'starlink',
+  // Added after Starlink so the fixture ids above keep their numbers.
+  'resource',
+  'weather',
+  'planet',
+  'sar',
+  'science',
 ];
+/** The core catalog's groups, one owned satellite each. */
+const CORE = GROUPS.filter((group) => group !== 'starlink');
 
 function tle(id, invalid = false) {
   // Owned synthetic catalog IDs over one valid element set; never live requests.
@@ -64,7 +78,7 @@ async function fixture(t) {
     fetchImpl: (path, options) =>
       fetch(`http://127.0.0.1:${server.address().port}${path}`, options),
   });
-  // Application host services and native EventTargets; actual Cesium collections,
+  // Application host services and native EventTargets; a fake draw port,
   // input handler, events, SGP4, ingestion and lifecycle run without a WebGL scene.
   const noop = () => {};
   const services = {
@@ -76,7 +90,7 @@ async function fixture(t) {
     layerState: { isExplicitLayerStateOrigin: () => false },
     focus: {
       clearFocusTarget: noop,
-      publishFocusTargetFromCachedPosition: noop,
+      publishFocusTargetAt: noop,
       getFocusTarget: () => null,
     },
     context: {
@@ -115,9 +129,14 @@ async function fixture(t) {
     },
     trackedEntityChanged: new Cesium.Event(),
   };
+  const unbind = bindRenderer(viewer, {
+    frame: fakeSceneFrame(viewer),
+    draw: fakeDrawPort(),
+  });
   await parts.lifecycle.methods.init(viewer);
   t.after(async () => {
-    if (state._pointCollection) parts.lifecycle.methods.destroy(viewer);
+    unbind();
+    if (state._sets) parts.lifecycle.methods.destroy(viewer);
     viewer.scene.primitives.destroy();
     if (previousDocument === undefined) delete globalThis.document;
     else globalThis.document = previousDocument;
@@ -143,10 +162,10 @@ test('stale core records surface through actual HTTP, ingestion and feed state, 
   const f = await fixture(t);
   await f.update();
   assert.equal(f.feed(), 'nominal');
-  assert.equal(f.stats().count, 6);
-  f.policy.stale = new Set(GROUPS.slice(0, 6));
+  assert.equal(f.stats().count, CORE.length);
+  f.policy.stale = new Set(CORE);
   await f.update();
-  assert.equal(f.stats().count, 6);
+  assert.equal(f.stats().count, CORE.length);
   assert.equal(f.stats().stale, true);
   assert.equal(f.feed(), 'stale');
   f.policy.stale = new Set(['visual']);
@@ -163,13 +182,13 @@ test('a stale duplicate cannot taint its earlier fresh winning record', async (t
   f.policy.stale.add('visual');
   f.policy.ids.visual = 25545;
   await f.update();
-  assert.equal(f.stats().count, 5);
+  assert.equal(f.stats().count, CORE.length - 1);
   assert.equal(f.state._catalog.get(25545).group, 'stations');
   assert.equal(f.stats().stale, false);
   assert.equal(f.feed(), 'nominal');
   f.policy.stale = new Set(['stations']);
   await f.update();
-  assert.equal(f.stats().count, 5);
+  assert.equal(f.stats().count, CORE.length - 1);
   assert.equal(
     f.stats().stale,
     true,
@@ -182,7 +201,7 @@ test('invalid stale orbital elements are not admitted as provenance', async (t) 
   f.policy.stale.add('visual');
   f.policy.invalid.add('visual');
   await f.update();
-  assert.equal(f.stats().count, 5);
+  assert.equal(f.stats().count, CORE.length - 1);
   assert.equal(f.state._catalog.has(25546), false);
   assert.equal(f.stats().stale, false);
 });
@@ -194,17 +213,17 @@ test('failed and aborted core refreshes keep provenance of retained records', as
   const priorTime = f.stats().lastUpdate;
   f.policy.status = 503;
   await f.update();
-  assert.equal(f.stats().count, 6);
+  assert.equal(f.stats().count, CORE.length);
   assert.equal(f.stats().stale, true);
   assert.equal(f.stats().status, 'unavailable');
   assert.equal(f.stats().lastUpdate, priorTime);
   f.policy.hold = true;
   const controller = new AbortController();
   const work = f.update({ signal: controller.signal });
-  await f.waitHeld(6);
+  await f.waitHeld(CORE.length);
   controller.abort();
   await assert.rejects(work, { name: 'AbortError' });
-  assert.equal(f.stats().count, 6);
+  assert.equal(f.stats().count, CORE.length);
   assert.equal(f.stats().stale, true);
   assert.equal(f.stats().lastUpdate, priorTime);
   assert.equal(f.state._activeUpdateControllers.size, 0);
@@ -216,11 +235,11 @@ test('dense provenance belongs to its admitted records and clears on removal', a
   f.policy.stale.add('starlink');
   f.state._params.catalog = 'dense';
   assert.equal((await f.parts.catalog._loadDenseCatalog()).status, 'ready');
-  assert.equal(f.stats().count, 7);
+  assert.equal(f.stats().count, CORE.length + 1);
   assert.equal(f.feed(), 'stale');
   f.state._params.catalog = 'core';
   f.parts.catalog._removeDenseCatalog();
-  assert.equal(f.stats().count, 6);
+  assert.equal(f.stats().count, CORE.length);
   assert.equal(f.feed(), 'nominal');
   f.policy.stale = new Set(['stations']);
   await f.update();
@@ -261,13 +280,13 @@ test('cancelling dense replacement preserves admitted stale extras until rebuild
   await f.waitHeld(1);
   controller.abort();
   assert.equal((await work).status, 'cancelled');
-  assert.equal(f.stats().count, 7);
+  assert.equal(f.stats().count, CORE.length + 1);
   assert.equal(f.feed(), 'stale');
   f.policy.hold = false;
   f.policy.stale.clear();
   f.state._params.catalog = 'core';
   await f.update();
-  assert.equal(f.stats().count, 6);
+  assert.equal(f.stats().count, CORE.length);
   assert.equal(f.feed(), 'nominal');
 });
 
@@ -277,7 +296,7 @@ test('destroy aborts an in-flight response and initialization starts with new ow
   await f.update();
   f.policy.hold = true;
   const work = f.update();
-  await f.waitHeld(6);
+  await f.waitHeld(CORE.length);
   const rejected = assert.rejects(work, { name: 'AbortError' });
   f.parts.lifecycle.methods.destroy(f.viewer);
   assert.equal(f.stats().count, 0);
@@ -288,6 +307,31 @@ test('destroy aborts an in-flight response and initialization starts with new ow
   f.policy.hold = false;
   f.policy.stale.clear();
   await f.update();
-  assert.equal(f.stats().count, 6);
+  assert.equal(f.stats().count, CORE.length);
   assert.equal(f.feed(), 'nominal');
+});
+
+test('destroy takes the layer off the world clock, and init puts it back', async (t) => {
+  // Each registration the layer makes, while it stands.
+  const register = worldClock.register;
+  const standing = new Set();
+  worldClock.register = (source) => {
+    standing.add(source);
+    const off = register.call(worldClock, source);
+    return () => {
+      standing.delete(source);
+      off();
+    };
+  };
+  t.after(() => {
+    worldClock.register = register;
+  });
+  const f = await fixture(t);
+  const mine = () =>
+    [...standing].filter(({ id }) => id === 'satellites').length;
+  assert.equal(mine(), 1);
+  f.parts.lifecycle.methods.destroy(f.viewer);
+  assert.equal(mine(), 0);
+  await f.parts.lifecycle.methods.init(f.viewer);
+  assert.equal(mine(), 1);
 });

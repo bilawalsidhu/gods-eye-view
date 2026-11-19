@@ -1,35 +1,33 @@
 /**
- * Limb-relative recession for distant aircraft billboards.
+ * Limb-relative recession for distant aircraft: the tuning the aircraft icon
+ * and model sets recede by (`aircraftRecedeSpec`), and the factors and alpha
+ * those sets draw with, for evidence and checks.
  *
- * This multiplies the billboard's ordinary scale, which Cesium then composes
- * with the locked NearFarScalar. It never edits that scalar, culls a contact,
- * or allows alpha to reach zero.
+ * It multiplies an icon's ordinary scale, which composes with its locked
+ * NearFarScalar. It never edits that scalar, culls a contact, or allows alpha
+ * to reach zero. The maths is the Cesium-free `render/recession.js`,
+ * which the sets drawing aircraft recede by (`SetSpec.recede`).
  */
+import {
+  RECEDE_DEFAULTS,
+  limbDistanceM,
+  recedeFactors,
+  recedeFrame,
+  recedeParams,
+  recededAlpha,
+} from '../render/recession.js';
 
 export const DEFAULT_AIRCRAFT_RECESSION_PARAMS = Object.freeze({
-  startLimbRatio: 0.5,
-  scaleFloor: 0.45,
-  alphaFloor: 0.35,
-  combinedAlphaFloor: 0.2,
-  globeViewBlendStartM: 3_500_000,
-  globeViewBlendEndM: 4_500_000,
-  earthRadiusM: 6_378_137,
+  ...RECEDE_DEFAULTS,
   writeEpsilon: 0.005,
 });
 
 let _params = { ...DEFAULT_AIRCRAFT_RECESSION_PARAMS };
 const _scratchFactors = { scale: 1, alpha: 1, limbRatio: null };
-const _treatmentResult = {
-  scale: 1,
-  alpha: 1,
-  scaleWrites: 0,
-  alphaWrites: 0,
-  factors: _scratchFactors,
-};
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
+const _scratchFrame = { active: false, limbM: 1, strength: 0 };
+// The tuning `_recede` was made from, and the set option made from it.
+let _recedeFor = null;
+let _recede = null;
 
 function resolvedParams(overrides) {
   if (!overrides || overrides === _params) return _params;
@@ -42,47 +40,12 @@ function aircraftRecessionFactorsResolved(
   tuning,
   result,
 ) {
-  if (
-    !Number.isFinite(cameraDistanceM) ||
-    cameraDistanceM < 0 ||
-    !Number.isFinite(cameraHeightM) ||
-    cameraHeightM <= 0 ||
-    cameraHeightM >= tuning.globeViewBlendEndM
-  ) {
-    result.scale = 1;
-    result.alpha = 1;
-    result.limbRatio = null;
-    return result;
-  }
-  const limbDistance = cameraLimbDistanceM(cameraHeightM, tuning.earthRadiusM);
-  if (!Number.isFinite(limbDistance) || limbDistance <= 0) {
-    result.scale = 1;
-    result.alpha = 1;
-    result.limbRatio = null;
-    return result;
-  }
-  const limbRatio = cameraDistanceM / limbDistance;
-  if (limbRatio <= tuning.startLimbRatio) {
-    result.scale = 1;
-    result.alpha = 1;
-    result.limbRatio = limbRatio;
-    return result;
-  }
-
-  const rawT =
-    (limbRatio - tuning.startLimbRatio) / (1 - tuning.startLimbRatio);
-  const t = clamp(rawT, 0, 1);
-  const limbEase = t * t * (3 - 2 * t); // smoothstep: zero slope at both band edges
-  const globeRawT =
-    (cameraHeightM - tuning.globeViewBlendStartM) /
-    (tuning.globeViewBlendEndM - tuning.globeViewBlendStartM);
-  const globeT = clamp(globeRawT, 0, 1);
-  const globeEase = globeT * globeT * (3 - 2 * globeT);
-  const strength = 1 - globeEase;
-  result.scale = 1 + (tuning.scaleFloor - 1) * limbEase * strength;
-  result.alpha = 1 + (tuning.alphaFloor - 1) * limbEase * strength;
-  result.limbRatio = limbRatio;
-  return result;
+  return recedeFactors(
+    cameraDistanceM,
+    recedeFrame(cameraHeightM, tuning, _scratchFrame),
+    tuning,
+    result,
+  );
 }
 
 /**
@@ -91,43 +54,32 @@ function aircraftRecessionFactorsResolved(
  * @returns {typeof DEFAULT_AIRCRAFT_RECESSION_PARAMS}
  */
 export function setAircraftRecessionParams(patch = {}) {
-  const next = { ..._params };
-  if (Number.isFinite(patch.startLimbRatio)) {
-    next.startLimbRatio = clamp(patch.startLimbRatio, 0, 0.99);
-  }
-  if (Number.isFinite(patch.scaleFloor))
-    next.scaleFloor = clamp(patch.scaleFloor, 0.05, 1);
-  if (Number.isFinite(patch.alphaFloor))
-    next.alphaFloor = clamp(patch.alphaFloor, 0.05, 1);
-  if (Number.isFinite(patch.combinedAlphaFloor)) {
-    next.combinedAlphaFloor = clamp(patch.combinedAlphaFloor, 0.05, 1);
-  }
-  if (Number.isFinite(patch.globeViewBlendStartM)) {
-    next.globeViewBlendStartM = Math.max(1, patch.globeViewBlendStartM);
-  }
-  if (Number.isFinite(patch.globeViewBlendEndM)) {
-    next.globeViewBlendEndM = Math.max(
-      next.globeViewBlendStartM + 1,
-      patch.globeViewBlendEndM,
-    );
-  }
   // Backward-compatible evidence override: the former hard threshold now
   // names the identity end of the blend band.
-  if (Number.isFinite(patch.globeViewHeightM)) {
-    next.globeViewBlendEndM = Math.max(
-      next.globeViewBlendStartM + 1,
-      patch.globeViewHeightM,
-    );
-  }
-  if (next.globeViewBlendStartM >= next.globeViewBlendEndM) {
-    next.globeViewBlendStartM = Math.max(1, next.globeViewBlendEndM - 1);
-  }
-  if (Number.isFinite(patch.earthRadiusM))
-    next.earthRadiusM = Math.max(1, patch.earthRadiusM);
+  const given = Number.isFinite(patch.globeViewHeightM)
+    ? { ...patch, globeViewBlendEndM: patch.globeViewHeightM }
+    : patch;
+  const next = {
+    ...recedeParams(given, _params),
+    writeEpsilon: _params.writeEpsilon,
+  };
   if (Number.isFinite(patch.writeEpsilon))
     next.writeEpsilon = Math.max(0, patch.writeEpsilon);
   _params = next;
   return { ..._params };
+}
+
+/**
+ * The tuning as the `recede` of the sets that draw aircraft: the same
+ * object until the tuning changes.
+ * @returns {import('../render/contract/index').RecedeSpec}
+ */
+export function aircraftRecedeSpec() {
+  if (_recedeFor !== _params) {
+    _recedeFor = _params;
+    _recede = Object.freeze(recedeParams(_params));
+  }
+  return _recede;
 }
 
 /** @returns {typeof DEFAULT_AIRCRAFT_RECESSION_PARAMS} Current tuning. */
@@ -148,13 +100,7 @@ export function resetAircraftRecessionParams() {
  * @param {number} [earthRadiusM]
  * @returns {number}
  */
-export function cameraLimbDistanceM(
-  cameraHeightM,
-  earthRadiusM = DEFAULT_AIRCRAFT_RECESSION_PARAMS.earthRadiusM,
-) {
-  if (!Number.isFinite(cameraHeightM) || cameraHeightM <= 0) return Number.NaN;
-  return Math.sqrt(cameraHeightM * (2 * earthRadiusM + cameraHeightM));
-}
+export const cameraLimbDistanceM = limbDistanceM;
 
 /**
  * Pure recession factors for one aircraft.
@@ -178,28 +124,18 @@ export function aircraftRecessionFactors(
 }
 
 /**
- * Production wire helper: compose base scale/alpha, focus emphasis, and limb
- * recession into one deadband-gated billboard write site.
+ * The alpha an aircraft draws with: base × max(combined floor, focus × limb
+ * haze). Icon sets compose the same thing in their shader; models need it here.
  * @param {object} input
- * @param {object} input.billboard
- * @param {number} input.baseScale
  * @param {number} input.baseAlpha
- * @param {{withAlpha:(alpha:number)=>object}} input.baseColor
  * @param {number} input.focusFactor
  * @param {number} input.cameraDistanceM
  * @param {number} input.cameraHeightM
  * @param {Partial<typeof DEFAULT_AIRCRAFT_RECESSION_PARAMS>} [input.params]
- *
- * IMPORTANT: the returned object (including `factors`) is a module-owned
- * mutable singleton. Consume every needed property before the next call;
- * never retain it as a snapshot.
- * @returns {{scale:number,alpha:number,scaleWrites:number,alphaWrites:number,factors:object}}
+ * @returns {number}
  */
-export function applyAircraftBillboardTreatment({
-  billboard,
-  baseScale,
+export function aircraftTreatmentAlpha({
   baseAlpha,
-  baseColor,
   focusFactor,
   cameraDistanceM,
   cameraHeightM,
@@ -212,38 +148,12 @@ export function applyAircraftBillboardTreatment({
     tuning,
     _scratchFactors,
   );
-  const scale = baseScale * factors.scale;
-  const composedTreatment = Math.max(
-    tuning.combinedAlphaFloor,
-    clamp(focusFactor, 0, 1) * factors.alpha,
-  );
-  const alpha = baseAlpha * composedTreatment;
-  let scaleWrites = 0;
-  let alphaWrites = 0;
-  if (
-    !Number.isFinite(billboard.scale) ||
-    Math.abs(billboard.scale - scale) > tuning.writeEpsilon
-  ) {
-    billboard.scale = scale;
-    scaleWrites = 1;
-  }
-  if (
-    !Number.isFinite(billboard.color?.alpha) ||
-    Math.abs(billboard.color.alpha - alpha) > tuning.writeEpsilon
-  ) {
-    billboard.color = baseColor.withAlpha(alpha);
-    alphaWrites = 1;
-  }
-  _treatmentResult.scale = scale;
-  _treatmentResult.alpha = alpha;
-  _treatmentResult.scaleWrites = scaleWrites;
-  _treatmentResult.alphaWrites = alphaWrites;
-  return _treatmentResult;
+  return baseAlpha * recededAlpha(focusFactor, factors.alpha, tuning);
 }
 
 /**
  * Apply layer-owned hue and composed aircraft alpha to an ambient glTF model without
- * disturbing Cesium's existing MIX/colorBlendAmount presentation semantics.
+ * changing the model's colour blend mode or amount.
  * @param {object} input
  * @param {object} input.model
  * @param {{withAlpha:(alpha:number)=>object}} input.baseColor

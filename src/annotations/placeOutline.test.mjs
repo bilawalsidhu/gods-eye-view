@@ -5,11 +5,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { FEATURE_SOURCE_METHODS } from '../sources/featureSource.js';
 import { createAnnotationResolver } from './resolver.js';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import { polygonsContain } from '../data/adminBoundaries.js';
 import { streetFootprint } from './outlineRungs.js';
+import { bindFakeCesiumCredits } from '../testSupport/fakeCreditsPort.mjs';
 
 function viewerAt(lat, lon, height = 20_000) {
-  return {
+  // The resolver reads the camera through the renderer's camera port.
+  return bindFakeCesiumCamera({
     camera: {
       positionCartographic: {
         latitude: (lat * Math.PI) / 180,
@@ -17,7 +20,7 @@ function viewerAt(lat, lon, height = 20_000) {
         height,
       },
     },
-  };
+  });
 }
 
 /** A resolver whose boundary lookups and geocoder record every call. */
@@ -180,10 +183,10 @@ test('a geocoded city or neighborhood upgrades to the bundled outline', async ()
   const credits = [];
   const cancelled = await city.resolve(
     'Austin',
-    {
+    bindFakeCesiumCredits({
       ...viewerAt(39, -100, 5_000_000),
       creditDisplay: { addStaticCredit: (credit) => credits.push(credit) },
-    },
+    }),
     { signal: controller.signal },
   );
   const pending = cancelled.resolveOutline();
@@ -522,6 +525,46 @@ test('a coarse bundled admin-1 city waits for a finer outline', async () => {
     await anchored.resolveOutline(),
     undefined,
     'a nearby anchor outside Paris preserves the transient base, not its coarse polygon',
+  );
+});
+
+test('deferred outlines preserve provider administrative identity metadata', async () => {
+  const overParis = viewerAt(48.8566, 2.3522, 40_000);
+  const ring = square(48.8566, 2.3522, 0.05);
+  const { resolve } = harness(PARIS_PLACE, {
+    outlineRungs: rungsAnswering({
+      ring,
+      kind: 'area',
+      heightM: null,
+      adminArea: 'Île-de-France',
+      adminLevel: 'admin1',
+    }),
+  });
+  const outline = await (await resolve('Paris', overParis)).resolveOutline();
+  assert.equal(outline.adminArea, 'Île-de-France');
+  assert.equal(outline.adminLevel, 'admin1');
+});
+
+test('an explicitly distant area keeps its deferred outline', async () => {
+  const kathmandu = {
+    lat: 27.7172,
+    lng: 85.324,
+    label: 'Kathmandu, Nepal',
+    name: 'Kathmandu',
+    types: ['locality', 'political'],
+  };
+  const ring = square(27.7172, 85.324, 0.05);
+  const { resolve } = harness(kathmandu, {
+    outlineRungs: rungsAnswering({ ring, kind: 'area', heightM: null }),
+  });
+  const resolved = await resolve('Kathmandu', SAN_FRANCISCO, {
+    allowDistant: true,
+  });
+  assert.equal(resolved.source, 'geocode');
+  assert.deepEqual(
+    (await resolved.resolveOutline()).ring,
+    ring,
+    'the deferred centroid gate honors the same explicit distance policy as the anchor',
   );
 });
 

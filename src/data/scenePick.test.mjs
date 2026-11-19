@@ -163,17 +163,23 @@ test('the guard rejects each way Cesium mishandles a degenerate pick', () => {
 });
 
 test('the ground under a click: the rendered surface, else the ellipsoid, never the sky', async () => {
-  const { pickGroundPosition } = await import('./scenePick.js');
+  const { pickGroundPosition } = await import('../input/dispatcher.js');
+  const { bindRenderer } = await import('../render/rendererOf.js');
   const ground = { x: 6378137, y: 0, z: 0 };
   const sky = { x: 500, y: 0, z: 0 };
-  const viewer = (picked, ellipsoid) => ({
-    scene: { pickPositionSupported: true, pickPosition: () => picked },
-    camera: { pickEllipsoid: () => ellipsoid },
-  });
+  // Through the renderer's query port.
+  const viewer = (picked, ellipsoid) => {
+    const host = {};
+    bindRenderer(host, {
+      query: { pickPosition: () => picked, pickEllipsoid: () => ellipsoid },
+    });
+    return host;
+  };
   assert.equal(pickGroundPosition(viewer(ground, null), {}), ground);
   assert.equal(pickGroundPosition(viewer(sky, ground), {}), ground);
   assert.equal(pickGroundPosition(viewer(undefined, undefined), {}), null);
   assert.equal(pickGroundPosition(null, {}), null);
+  assert.equal(pickGroundPosition({}, {}), null, 'no query port');
 });
 
 test('a surface pick is nothing, or Google 3D tile content without an id', async () => {

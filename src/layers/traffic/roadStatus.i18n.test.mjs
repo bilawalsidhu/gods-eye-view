@@ -74,7 +74,23 @@ function roadChips(liveMode) {
     source: { getFlowSessionStats: () => ({}) },
     parts: {},
   });
-  return controls.methods.getRowControls().chips;
+  return controls.methods
+    .getRowControls()
+    .chips.filter((chip) => chip.id.startsWith('roads-'));
+}
+
+function toggleChips() {
+  const state = createState({ services: {} });
+  state._liveMode = true;
+  const controls = createControls({
+    state,
+    services: {},
+    source: { getFlowSessionStats: () => ({}) },
+    parts: {},
+  });
+  return controls.methods
+    .getRowControls()
+    .chips.filter((chip) => !chip.id.startsWith('roads-'));
 }
 
 test('en: road-source chips keep their English labels and titles', () => {
@@ -118,6 +134,31 @@ for (const [locale, hybrid] of [
             /roads only|roads, with|fills the rest|needs a/,
             `${locale}: ${chip.title}`,
           );
+      }
+    } finally {
+      setLocale('en');
+    }
+  });
+}
+
+test('en: the Lines and Dots toggles keep their English labels and titles', () => {
+  setLocale('en');
+  assert.deepEqual(
+    toggleChips().map((chip) => [chip.id, chip.label, chip.title]),
+    [
+      ['lines', 'Lines', 'Road lines colored by live flow: green to red'],
+      ['dots', 'Dots', 'Moving dots colored by live flow'],
+    ],
+  );
+});
+
+for (const locale of ['ru', 'es', 'ja']) {
+  test(`${locale}: the Lines and Dots toggles are translated`, () => {
+    setLocale(locale);
+    try {
+      for (const chip of toggleChips()) {
+        assert.doesNotMatch(chip.label, /^(Lines|Dots)$/, locale);
+        assert.doesNotMatch(chip.title, /colored by live flow/, locale);
       }
     } finally {
       setLocale('en');

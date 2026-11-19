@@ -1,19 +1,5 @@
-import * as Cesium from 'cesium';
-
 export function createState({ services }) {
   const state = {};
-
-  state.DIRECTION_SCRATCH = Array.from(
-    { length: 3 },
-    () => new Cesium.Cartesian3(),
-  );
-
-  state.SUBJECT_CARTOGRAPHIC_SCRATCH = new Cesium.Cartographic();
-
-  state.TARGET_CARTOGRAPHIC_SCRATCH = Array.from(
-    { length: 3 },
-    () => new Cesium.Cartographic(),
-  );
 
   Object.assign(state, {
     viewer: null,
@@ -26,7 +12,11 @@ export function createState({ services }) {
     // layers activate only after Contacts is explicitly selected.
     passive: true,
     ownedDependencies: new Set(),
+    /** Stops following the manager's adoptions (see watchAdoptions). */
+    unwatchAdoptions: null,
     subject: null,
+    /** The tracked flight's photo with the subject it belongs to, or null. */
+    subjectPhoto: null,
     results: null,
     visual: null,
     /** Whether layer views replace the panel's initial markup yet. */
@@ -59,6 +49,10 @@ export function createState({ services }) {
     lastCameraPoseSig: '',
     /** When the pose signature last changed bins (hysteresis anchor). */
     lastCameraPoseChangeMs: 0,
+    /** When the viewer last handled the camera (pointer, wheel, touch, key). */
+    lastCameraInputMs: Number.NEGATIVE_INFINITY,
+    /** Element the camera-input listeners are attached to. */
+    cameraInputTarget: null,
     /** Whether the view currently counts as moving (hysteretic, not per-frame). */
     cameraMoving: false,
     lastEvaluatedPosition: null,

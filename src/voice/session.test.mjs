@@ -429,12 +429,13 @@ test('a late rejection cannot settle a newer turn card', async () => {
   f.session.destroy();
 });
 
-function startReentrancyFixture() {
+function startReentrancyFixture(canStart) {
   let starts = 0;
   let stops = 0;
   const settings = [];
   const session = createVoiceSession({
     runner: async () => ({ ok: true }),
+    canStart,
     createAdapter: ({ emit }) => ({
       async start(options) {
         starts++;
@@ -528,6 +529,28 @@ test('ordinary start forwards caller settings once and remains stoppable', async
   f.session.destroy();
 });
 
+test('start admission rejects microphone use before connecting and allows typed chat', async () => {
+  const f = startReentrancyFixture((options) => options?.textOnly === true);
+  const states = [];
+  f.session.subscribe((event) => {
+    if (event.type === 'state') states.push(event.state);
+  });
+  await f.session.start({ pushToTalk: true });
+  assert.equal(f.starts(), 0);
+  assert.equal(f.session.state, 'idle');
+  assert.equal(states.includes('connecting'), false);
+
+  const settings = { textOnly: true };
+  await f.session.start(settings);
+  assert.equal(f.settings.length, 1);
+  assert.equal(f.settings[0], settings);
+  assert.equal(f.starts(), 1);
+  assert.equal(f.session.state, 'listening');
+  f.session.stop();
+  assert.equal(f.session.state, 'idle');
+  f.session.destroy();
+});
+
 for (const emitsIdle of [false, true]) {
   for (const outcome of ['normal', 'preserveStatus', 'throw']) {
     test(`stop preserves custom adapter contract: emitsIdle=${emitsIdle}, ${outcome}`, async (t) => {
@@ -604,4 +627,99 @@ test('actual default OpenAI adapter stop publishes one common idle', (t) => {
   );
   assert.equal(session.state, 'idle');
   assert.equal(session.adapter.controller.status, 'idle');
+});
+
+test('OpenAI composite starts HTTP chat without Realtime and restores voice keyboard routing', async () => {
+  const events = [];
+  let starts = 0,
+    requests = 0;
+  const controller = {
+    _input: {},
+    _radio: {},
+    isActive: () => true,
+    start: async () => {
+      starts++;
+    },
+    stop: () => {},
+    sendTextCommand: () => 'voice',
+    notifyMapEvent: () => 'voice-event',
+  };
+  const adapter = createRealtimeSession({
+    emit: (e) => events.push(e),
+    runAction: async () => ({ ok: true }),
+    createController: () => controller,
+    fetchImpl: async (url) => {
+      requests++;
+      assert.equal(url, '/api/openai/chat');
+      return Response.json({
+        content: { role: 'assistant', content: 'Hello' },
+        finishReason: 'stop',
+      });
+    },
+  });
+  await adapter.start({ textOnly: true });
+  assert.equal(starts, 0);
+  assert.equal(adapter.getStartOptions().textOnly, true);
+  assert.equal(controller._radio.isActive(), false);
+  assert.equal(adapter.sendText('Hello'), true);
+  for (let i = 0; i < 5; i++)
+    await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(requests, 1);
+  assert.ok(events.some((e) => e.type === 'completion'));
+  adapter.stop();
+  await controller._input.start({ pushToTalk: true });
+  assert.equal(starts, 1);
+  assert.equal(adapter.getStartOptions().textOnly, undefined);
+  assert.equal(adapter.sendText('Hello'), 'voice');
+  adapter.stop();
+});
+
+test('OpenAI composite chat Stop cancels only the reply in progress', async () => {
+  const requests = [];
+  let pendingSignal;
+  const controller = {
+    _input: {},
+    _radio: {},
+    isActive: () => true,
+    start: async () => {},
+    stop: () => {},
+    sendTextCommand: () => 'voice',
+    notifyMapEvent: () => 'voice-event',
+  };
+  const adapter = createRealtimeSession({
+    emit: () => {},
+    runAction: async () => ({ ok: true }),
+    createController: () => controller,
+    fetchImpl: (_url, options) => {
+      requests.push(JSON.parse(options.body));
+      if (requests.length !== 2)
+        return Response.json({
+          content: { role: 'assistant', content: 'Hello' },
+          finishReason: 'stop',
+        });
+      pendingSignal = options.signal;
+      return new Promise(() => {});
+    },
+  });
+  const settle = async () => {
+    for (let i = 0; i < 5; i++)
+      await new Promise((resolve) => setImmediate(resolve));
+  };
+  await adapter.start({ textOnly: true });
+  adapter.sendText('First');
+  await settle();
+  adapter.sendText('Second');
+  await settle();
+  assert.equal(adapter.cancelTurn(), true);
+  assert.equal(pendingSignal.aborted, true);
+  assert.equal(adapter.sendText('Third'), true);
+  await settle();
+  assert.deepEqual(
+    requests[2].messages.map((m) => m.content),
+    ['First', 'Hello', 'Third'],
+  );
+  adapter.stop();
+  await controller._input.start({ pushToTalk: true });
+  assert.equal(adapter.cancelTurn(), false);
+  adapter.stop();
 });

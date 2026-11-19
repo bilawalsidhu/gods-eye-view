@@ -6,6 +6,7 @@ import { createContextState } from '../../cockpitContextState.js';
 import { vClassToggle } from '../../rail/classToggle.js';
 import { useCockpitStore } from '../../stores/cockpit.js';
 import UiButton from '../../kit/UiButton.vue';
+import UiIcon from '../../kit/UiIcon.vue';
 
 // The Cockpit Contact card. The Cockpit controller presents its scope,
 // navigation, cohort counts, nearest contact and weather toggle; until it
@@ -36,26 +37,26 @@ const weatherLabel = computed(() =>
         <strong id="cockpit-context-subject">{{ c.subject }}</strong>
       </div>
       <nav class="cockpit-card-actions cockpit-context-actions" :aria-label="t('Contact navigation')">
-        <button id="cockpit-context-previous" type="button" :disabled="!c.canPrevious" :aria-label="t('Previous — prior visited contact in the 250 km window')" :title="t('Previous — prior visited contact in the 250 km window')">
-          <span class="material-symbols-outlined" aria-hidden="true">skip_previous</span>
-        </button>
-        <button id="cockpit-context-next" type="button" :disabled="!c.canNext" :aria-label="t('Next — nearest unvisited contact in the 250 km window')" :title="t('Next — nearest unvisited contact in the 250 km window')">
-          <span class="material-symbols-outlined" aria-hidden="true">skip_next</span>
-        </button>
-        <button id="cockpit-context-toggle" type="button" :aria-label="collapsed ? t('Expand Contact panel') : t('Collapse Contact panel')" :aria-expanded="String(!collapsed)" :title="collapsed ? t('Expand contact panel') : t('Collapse contact panel')">
-          <span class="material-symbols-outlined" aria-hidden="true">{{ collapsed ? 'chevron_right' : 'chevron_left' }}</span>
-        </button>
+        <UiButton id="cockpit-context-previous" :disabled="!c.canPrevious" :aria-label="t('Previous — prior visited contact in the 250 km window')" :title="t('Previous — prior visited contact in the 250 km window')">
+          <UiIcon name="skip_previous" :size="null" />
+        </UiButton>
+        <UiButton id="cockpit-context-next" :disabled="!c.canNext" :aria-label="t('Next — nearest unvisited contact in the 250 km window')" :title="t('Next — nearest unvisited contact in the 250 km window')">
+          <UiIcon name="skip_next" :size="null" />
+        </UiButton>
+        <UiButton id="cockpit-context-toggle" :aria-label="collapsed ? t('Expand Contact panel') : t('Collapse Contact panel')" :aria-expanded="String(!collapsed)" :title="collapsed ? t('Expand contact panel') : t('Collapse contact panel')">
+          <UiIcon :name="collapsed ? 'chevron_right' : 'chevron_left'" :size="null" />
+        </UiButton>
       </nav>
       <span class="cockpit-context-qualifier">{{ t('CONTEXT ONLY') }}</span>
     </header>
     <div class="cockpit-context-cohorts" role="list" :aria-label="t('Nearby cohort counts')">
-      <div v-class-toggle="{ unknown: c.cohorts.flights.unknown }" role="listitem" data-context-cohort="flights"><span>{{ t('FLT') }}</span><strong>{{ c.cohorts.flights.count }}</strong><small translate="no">OpenSky</small></div>
-      <div v-class-toggle="{ unknown: c.cohorts.military.unknown }" role="listitem" data-context-cohort="military"><span>{{ t('MIL') }}</span><strong>{{ c.cohorts.military.count }}</strong><small translate="no">adsb.lol</small></div>
-      <div v-class-toggle="{ unknown: c.cohorts['ais-live-vessels'].unknown }" role="listitem" data-context-cohort="ais-live-vessels"><span translate="no">AIS</span><strong>{{ c.cohorts['ais-live-vessels'].count }}</strong><small translate="no">AISStream</small></div>
-      <div v-class-toggle="{ unknown: c.cohorts['military-installations'].unknown }" role="listitem" data-context-cohort="military-installations"><span>{{ t('SITE') }}</span><strong>{{ c.cohorts['military-installations'].count }}</strong><small translate="no">OpenStreetMap</small></div>
+      <div v-class-toggle="{ unknown: c.cohorts.flights.unknown }" role="listitem" data-context-cohort="flights"><span>{{ t('FLT') }}</span><strong>{{ c.cohorts.flights.count }}</strong><small translate="no" :title="c.cohorts.flights.source">{{ c.cohorts.flights.source }}</small></div>
+      <div v-class-toggle="{ unknown: c.cohorts.military.unknown }" role="listitem" data-context-cohort="military"><span>{{ t('MIL') }}</span><strong>{{ c.cohorts.military.count }}</strong><small translate="no" :title="c.cohorts.military.source">{{ c.cohorts.military.source }}</small></div>
+      <div v-class-toggle="{ unknown: c.cohorts['ais-live-vessels'].unknown }" role="listitem" data-context-cohort="ais-live-vessels"><span translate="no">AIS</span><strong>{{ c.cohorts['ais-live-vessels'].count }}</strong><small translate="no" :title="c.cohorts['ais-live-vessels'].source">{{ c.cohorts['ais-live-vessels'].source }}</small></div>
+      <div v-class-toggle="{ unknown: c.cohorts['military-installations'].unknown }" role="listitem" data-context-cohort="military-installations"><span>{{ t('SITE') }}</span><strong>{{ c.cohorts['military-installations'].count }}</strong><small translate="no" :title="c.cohorts['military-installations'].source">{{ c.cohorts['military-installations'].source }}</small></div>
     </div>
     <div class="cockpit-context-nearest">
-      <span id="cockpit-context-direction" v-class-toggle="{ unknown: c.direction.unknown }" class="material-symbols-outlined" :style="directionStyle" aria-hidden="true">navigation</span>
+      <UiIcon id="cockpit-context-direction" v-class-toggle="{ unknown: c.direction.unknown }" name="navigation" :size="null" :style="directionStyle" />
       <div>
         <small>{{ t('NEAREST OBSERVED / MAPPED') }}</small>
         <strong id="cockpit-context-nearest-label" :aria-label="c.nearest.ariaLabel ?? undefined">{{ c.nearest.label }}</strong>

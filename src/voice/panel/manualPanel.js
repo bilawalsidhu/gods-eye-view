@@ -64,7 +64,7 @@ export function createManualVoicePanel({
       hidden: ui.state.card.visible,
       text: () => (previewOn ? copy.previewEmpty : copy.previewDisabled),
     });
-    if (restoreFocus) void ui.focus(['settingsButton', 'button']);
+    if (restoreFocus) void ui.focus(['settingsButton', 'chatButton', 'button']);
   };
   const refuse = (reason) => ({
     ok: false,
@@ -79,11 +79,18 @@ export function createManualVoicePanel({
     const transferFocus = changed && holdsFocus(panes[view]);
     open = true;
     view = next;
+    // An explicit request restores a minimized panel; automatic reveals do not.
+    if (!automatic && ui.state.voicePanel.minimized)
+      ui.update('voicePanel', { minimized: false });
     onPresentationIntent?.({ automatic });
     sync();
-    // The tab takes focus once it shows, inside a shown panel.
+    // The view's tab takes focus once it shows, inside a shown panel, or the
+    // next visible control when the tab is hidden: voice Settings show Back
+    // instead, and Preview falls to Settings.
     if (focus || transferFocus)
-      void ui.focus([tabs[next === 'preview' ? 0 : 1]]);
+      void ui.focus(
+        next === 'preview' ? [tabs[0], tabs[1]] : [tabs[1], 'voiceBack'],
+      );
     return { ok: true, changed, ...snapshot() };
   };
   const close = (onlyView) => {
@@ -94,6 +101,9 @@ export function createManualVoicePanel({
       return { ok: true, changed: false, ...snapshot() };
     const changed = open;
     open = false;
+    // A caller's context (Settings opened from chat) ends with the panel.
+    if (ui.state.voicePanel.minimized || ui.state.voicePanel.context)
+      ui.update('voicePanel', { minimized: false, context: null });
     onPresentationIntent?.();
     sync();
     return { ok: true, changed, ...snapshot() };
@@ -110,9 +120,13 @@ export function createManualVoicePanel({
   };
   offs.push(
     ui.on('settings-button', toggleSettings),
+    // Preview has no visible tab; the Settings tab toggles back to it.
     ui.on('tab', (index) =>
-      select(index === 0 ? 'preview' : 'settings', { focus: true }),
+      index === 1 && open && view === 'settings'
+        ? select('preview', { focus: true })
+        : select(index === 0 ? 'preview' : 'settings', { focus: true }),
     ),
+    ui.on('voice-back', () => select('preview', { focus: true })),
     ui.on('tab-keydown', (index, event) => {
       const next =
         event.key === 'Home'
@@ -130,7 +144,10 @@ export function createManualVoicePanel({
     ui.on('panel-keydown', (event) => {
       if (event.key !== 'Escape' || !open) return;
       event.preventDefault();
-      close();
+      // Voice Settings step back to the preview, like chat Settings to chat.
+      if (view === 'settings' && !ui.state.voicePanel.context)
+        select('preview', { focus: true });
+      else close();
     }),
     ui.on('pointerleave', (event) => {
       if (event.pointerType === 'touch') return;

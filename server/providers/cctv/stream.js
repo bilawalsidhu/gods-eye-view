@@ -5,7 +5,9 @@ export const HLS_LIMITS = Object.freeze({
   sessions: 2,
   leasesPerSession: 8,
   playlistBytes: 256 * 1024,
-  segmentBytes: 4 * 1024 * 1024,
+  // High-resolution cameras can exceed 4 MiB in a single ten-second TS segment.
+  // Retained data still shares the independent 24 MiB session budget below.
+  segmentBytes: 8 * 1024 * 1024,
   sessionBytes: 24 * 1024 * 1024,
   segments: 12,
   pollMs: 2000,

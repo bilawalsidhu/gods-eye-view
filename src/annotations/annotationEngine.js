@@ -1,6 +1,9 @@
 import { isUnavailableCapability } from '../sources/capability.js';
 import { defaultGeospatial } from '../search/defaults.js';
-import * as Cesium from 'cesium';
+import { cameraOf, findCamera, findQuery } from '../render/rendererOf.js';
+import { fromDegrees } from '../geo/ellipsoid.js';
+import { sphereFromPoints } from '../geo/sphere.js';
+import { distance, toRadians } from '../geo/vector.js';
 import { greatCircleMeters } from '../geoDistance.js';
 import {
   holdContinuousRender,
@@ -19,11 +22,6 @@ import {
   recordWorkSlice,
 } from '../sources/phaseTiming.js';
 import { formatDistanceText } from '../data/distanceFormat.js';
-
-// Dev convenience: expose the app's Cesium instance for console/preview probing
-// (single shared module instance — avoids dual-Cesium state bugs when testing).
-if (typeof window !== 'undefined' && !window.__CESIUM__)
-  window.__CESIUM__ = Cesium;
 
 /**
  * Annotation engine — the voice agent's "whiteboard" over the 3D world.
@@ -406,6 +404,8 @@ export function createAnnotationEngine({
    * @param {boolean} [opts.clearPrevious]
    * @param {boolean} [opts.persist]  Keep until cleared (default true).
    * @param {boolean} [opts.flyTo]    Frame the first resolved annotation.
+   * @param {AbortSignal} [opts.signal] Caller lifetime for this mutation.
+   * @param {() => boolean} [opts.isCurrent] Whether the caller still owns the board mutation.
    * @returns {Promise<{ok, drawn, failed, ids, results}>}
    */
   async function annotate(requests, opts = {}) {
@@ -426,9 +426,15 @@ export function createAnnotationEngine({
     const persist = opts.persist !== false;
     // Per-call cancellation: bumped/aborted by any later clear() or destroy().
     const controller = new AbortController();
+    const abortFromCaller = () => controller.abort(opts.signal?.reason);
+    opts.signal?.addEventListener?.('abort', abortFromCaller, { once: true });
+    if (opts.signal?.aborted) abortFromCaller();
     retainController(controller);
     const myGen = generation;
-    const superseded = () => myGen !== generation || controller.signal.aborted;
+    const superseded = () =>
+      myGen !== generation ||
+      controller.signal.aborted ||
+      (typeof opts.isCurrent === 'function' && !opts.isCurrent());
 
     const results = [];
     const ids = [];
@@ -847,6 +853,7 @@ export function createAnnotationEngine({
         firstAnchor = annotations.get(ids[0]) || null;
       }
     } finally {
+      opts.signal?.removeEventListener?.('abort', abortFromCaller);
       releaseController(controller);
     }
 
@@ -1520,6 +1527,18 @@ export function createAnnotationEngine({
       // Every part with its holes ([outer, ...holes][]), when the outline has
       // more than the main ring (Hawaii's islands, Berlin inside Brandenburg).
       polygons: resolved.polygons || null,
+      // A voice area handle's id: counting reads the handle's full geometry,
+      // never this drawing (see voice/areaActions.js).
+      areaId:
+        typeof spec?.areaId === 'string' ? spec.areaId.slice(0, 120) : null,
+      // Who made the outline: the draw tool, a voice area handle, or a voice
+      // annotation resolved from a name.
+      origin:
+        spec?.manual === true
+          ? spec.origin === 'area'
+            ? 'area'
+            : 'drawn'
+          : 'voice',
       footprintKind: resolved.footprintKind || null, // 'building' | 'area'
       outlineCredit: resolved.outlineCredit || null,
       buildingHeight: resolved.buildingHeight || null, // meters, for extruded volume
@@ -1696,18 +1715,20 @@ export function createAnnotationEngine({
         frameAnnotation(marks[0]);
         return;
       }
-      const cart = points.map((p) =>
-        Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height || 0),
+      const cart = points.map((p) => fromDegrees(p.lon, p.lat, p.height || 0));
+      const sphere = sphereFromPoints(cart);
+      const camera = cameraOf(viewer);
+      camera.flyToBounds(
+        { center: sphere.center, radius: sphere.radius },
+        {
+          offset: {
+            heading: camera.pose().heading,
+            pitch: toRadians(-35),
+            range: Math.max(900, sphere.radius * 2.6),
+          },
+          durationS: 1.6,
+        },
       );
-      const sphere = Cesium.BoundingSphere.fromPoints(cart);
-      viewer.camera.flyToBoundingSphere(sphere, {
-        offset: new Cesium.HeadingPitchRange(
-          viewer.camera.heading,
-          Cesium.Math.toRadians(-35),
-          Math.max(900, sphere.radius * 2.6),
-        ),
-        duration: 1.6,
-      });
     } catch {
       /* camera assist is best-effort */
     }
@@ -1717,23 +1738,35 @@ export function createAnnotationEngine({
    *  globe. On any API hiccup, report visible — bad data must never move the camera. */
   function isPointOnScreen(p) {
     try {
-      const camera = viewer.camera;
-      const pos = Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height || 0);
-      const cv = camera.frustum.computeCullingVolume(
-        camera.position,
-        camera.direction,
-        camera.up,
-      );
-      if (
-        cv.computeVisibility(new Cesium.BoundingSphere(pos, 1)) ===
-        Cesium.Intersect.OUTSIDE
-      )
-        return false;
-      const occluder = new Cesium.EllipsoidalOccluder(
-        Cesium.Ellipsoid.WGS84,
-        camera.position,
-      );
-      return occluder.isPointVisible(pos);
+      const camera = findCamera(viewer);
+      const query = findQuery(viewer);
+      if (!camera || !query) return true;
+      const pos = fromDegrees(p.lon, p.lat, p.height || 0);
+      // Inside the view frustum: a 1 m sphere at the point is not wholly
+      // outside any of its six planes, read off the view-projection (depth
+      // runs -1..1). An invalid matrix measures no distance and reads as
+      // visible.
+      const { view, projection } = camera.matrices();
+      const m = new Float64Array(16);
+      for (let col = 0; col < 4; col++)
+        for (let row = 0; row < 4; row++) {
+          let sum = 0;
+          for (let k = 0; k < 4; k++)
+            sum += projection[k * 4 + row] * view[col * 4 + k];
+          m[col * 4 + row] = sum;
+        }
+      const at = (row, col) => m[col * 4 + row];
+      for (const [axis, sign] of FRUSTUM_PLANES) {
+        const a = at(3, 0) + sign * at(axis, 0);
+        const b = at(3, 1) + sign * at(axis, 1);
+        const c = at(3, 2) + sign * at(axis, 2);
+        const d = at(3, 3) + sign * at(axis, 3);
+        const distanceM =
+          (a * pos.x + b * pos.y + c * pos.z + d) / Math.hypot(a, b, c);
+        if (distanceM < -1) return false;
+      }
+      // On the near side of the globe.
+      return !query.isOccluded(pos);
     } catch {
       return true;
     }
@@ -1757,22 +1790,23 @@ export function createAnnotationEngine({
               : anno.ring,
           )
         : viewportRange(anno.viewport) || 600;
-      viewer.camera.flyToBoundingSphere(
-        new Cesium.BoundingSphere(
-          Cesium.Cartesian3.fromDegrees(
-            target.lon,
-            target.lat,
-            anno.anchor.height || 0,
-          ),
-          range,
-        ),
+      const camera = cameraOf(viewer);
+      camera.flyToBounds(
         {
-          offset: new Cesium.HeadingPitchRange(
-            viewer.camera.heading,
-            Cesium.Math.toRadians(-35),
-            range * 2.4,
-          ),
-          duration: 1.8,
+          center: {
+            lon: target.lon,
+            lat: target.lat,
+            height: anno.anchor.height || 0,
+          },
+          radius: range,
+        },
+        {
+          offset: {
+            heading: camera.pose().heading,
+            pitch: toRadians(-35),
+            range: range * 2.4,
+          },
+          durationS: 1.8,
         },
       );
     } catch {
@@ -1809,6 +1843,12 @@ export function createAnnotationEngine({
     },
     fadeOutAll,
     count: () => annotations.size,
+    /**
+     * The board generation: advanced by every clear. A caller that resolves
+     * something before drawing captures it first and draws only while it is
+     * unchanged, so a clear during a slow lookup is never undone.
+     */
+    generation: () => generation,
     list: () => Array.from(annotations.values()),
 
     /**
@@ -1978,15 +2018,17 @@ export function createAnnotationEngine({
   }) {
     if (destroyed) return;
     try {
-      viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(lon, lat, height),
-        orientation: {
-          heading: Cesium.Math.toRadians(heading),
-          pitch: Cesium.Math.toRadians(pitch),
-          roll: 0,
+      cameraOf(viewer).flyTo(
+        { lon, lat, height },
+        {
+          orientation: {
+            heading: toRadians(heading),
+            pitch: toRadians(pitch),
+            roll: 0,
+          },
+          durationS: duration,
         },
-        duration,
-      });
+      );
     } catch {
       /* camera flight best-effort */
     }
@@ -2148,13 +2190,23 @@ function pendingAnimation(anno, now) {
 // fly_to_location natural-region heuristic uses (owner field test 2026-07-23).
 const VIEWPORT_ASSIST_RANGE_CAP_M = 120000;
 
+/** The view frustum's planes as `row 3 ± row axis` of the view-projection. */
+const FRUSTUM_PLANES = [
+  [0, 1],
+  [0, -1],
+  [1, 1],
+  [1, -1],
+  [2, 1],
+  [2, -1],
+];
+
 /** flyTo range from a Places viewport box (low/high lat-lng corners), or null. */
 function viewportRange(vp) {
   if (!vp?.low || !vp?.high) return null;
   try {
-    const span = Cesium.Cartesian3.distance(
-      Cesium.Cartesian3.fromDegrees(vp.low.longitude, vp.low.latitude),
-      Cesium.Cartesian3.fromDegrees(vp.high.longitude, vp.high.latitude),
+    const span = distance(
+      fromDegrees(vp.low.longitude, vp.low.latitude),
+      fromDegrees(vp.high.longitude, vp.high.latitude),
     );
     return Number.isFinite(span) && span > 0
       ? Math.max(300, Math.min(span * 0.7, VIEWPORT_ASSIST_RANGE_CAP_M))
@@ -2179,9 +2231,9 @@ function ringRange(ring) {
     if (lon < minLon) minLon = lon;
     if (lon > maxLon) maxLon = lon;
   }
-  const span = Cesium.Cartesian3.distance(
-    Cesium.Cartesian3.fromDegrees(minLon, minLat),
-    Cesium.Cartesian3.fromDegrees(maxLon, maxLat),
+  const span = distance(
+    fromDegrees(minLon, minLat),
+    fromDegrees(maxLon, maxLat),
   );
   return Math.max(300, span * 0.7);
 }
@@ -2200,11 +2252,38 @@ function isManualSpec(spec, type) {
   if (!spec || spec.manual !== true) return false;
   if (type === 'route')
     return Array.isArray(spec.path) && spec.path.length >= 2;
-  if (type === 'area') return Array.isArray(spec.ring) && spec.ring.length >= 3;
+  if (type === 'area')
+    return (
+      (Array.isArray(spec.ring) && spec.ring.length >= 3) ||
+      (spec.origin === 'area' && Array.isArray(spec.polygons))
+    );
   return (
     Number.isFinite(Number(spec.latitude)) &&
     Number.isFinite(Number(spec.longitude))
   );
+}
+
+/**
+ * Parts of a voice area handle, `[[outer, ...holes], …]` of [lon, lat] pairs.
+ * Longitudes may run to ±540 (a part unwrapped across the antimeridian draws
+ * as one shape). Null when no part has a usable outer ring.
+ */
+function areaPolygons(list) {
+  const ringOf = (ring) =>
+    (Array.isArray(ring) ? ring : []).filter(
+      (p) =>
+        Array.isArray(p) &&
+        Number.isFinite(p[0]) &&
+        Number.isFinite(p[1]) &&
+        Math.abs(p[0]) <= 540 &&
+        Math.abs(p[1]) <= 90,
+    );
+  const polygons = (Array.isArray(list) ? list : [])
+    .slice(0, 64)
+    .map((rings) => (Array.isArray(rings) ? rings.map(ringOf) : []))
+    .filter((rings) => rings[0]?.length >= 3)
+    .map(([outer, ...holes]) => [outer, ...holes.filter((h) => h.length >= 3)]);
+  return polygons.length ? polygons : null;
 }
 
 /** [lon, lat] pairs or {lon, lat} objects → [lon, lat] pairs, invalid entries dropped. */
@@ -2253,7 +2332,9 @@ function resolveManualSpec(spec, type, viewer) {
     };
   }
   if (type === 'area') {
-    const ring = manualPairs(spec.ring);
+    const polygons =
+      spec.origin === 'area' ? areaPolygons(spec.polygons) : null;
+    const ring = polygons ? polygons[0][0] : manualPairs(spec.ring);
     if (ring.length < 3)
       throw new Error('a drawn area needs at least 3 points');
     // Averaged through ringCentroid, which unwraps longitudes first: a ring
@@ -2270,9 +2351,11 @@ function resolveManualSpec(spec, type, viewer) {
       lat,
       height: sampleGroundHeight(viewer, lon, lat),
       ring,
+      ...(polygons ? { polygons } : {}),
       footprintKind: 'area',
       buildingHeight: null,
-      synthesized: false,
+      // An approximate area (a buffer around a landmark) draws dashed.
+      synthesized: spec.approximate === true,
       source: 'manual',
     };
   }

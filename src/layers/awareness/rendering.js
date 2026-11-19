@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { t } from '../../i18n/index.js';
 import {
   createCyberSonarSampler,
@@ -10,8 +9,30 @@ import {
   AWARENESS_RADIUS_M,
 } from '../../data/militaryAwarenessEngine.js';
 import { bearingBetweenCoordinates } from '../../cockpitMath.js';
-import { AWARENESS_PAGE_SIZE, CONTEXT_RIM_HEIGHT_M } from './policy.js';
+import { AWARENESS_PAGE_SIZE } from './policy.js';
+import { createRangeRing } from './rangeRing.js';
 import { formatAwarenessDirection } from './presentation.js';
+import { canvasOf, findCamera } from '../../render/rendererOf.js';
+import {
+  PI_OVER_TWO,
+  dot,
+  normalize,
+  sub,
+  toDegrees,
+  toLonLatH,
+  toRadians,
+} from '../../geo/index.js';
+
+// The ring's and the pulses' own arithmetic, for their tests.
+export {
+  AWARENESS_BAND_PIXELS,
+  awarenessPulseLevel,
+  awarenessPulseState,
+  awarenessRangeRingPositions,
+  awarenessRingFlash,
+  paintAwarenessBand,
+  wakeAwarenessPulses,
+} from './rangeRing.js';
 
 export function createRendering({
   state: layerState,
@@ -21,6 +42,12 @@ export function createRendering({
 }) {
   const { getKeyholeGeometry, celestialScreenAngle } = services.geometry;
   const { governorRequestRender } = services.render;
+  /** The range ring with its pulses (`rangeRing.js`). */
+  const rangeRing = createRangeRing({
+    state: layerState,
+    governorRequestRender,
+    redraw: (subject) => renderVisual(subject),
+  });
 
   const CARDINALS = [
     ['N', 0],
@@ -128,7 +155,7 @@ export function createRendering({
       return;
     }
 
-    const canvas = layerState.viewer.scene.canvas;
+    const canvas = canvasOf(layerState.viewer);
     const width = canvas.clientWidth || canvas.width;
     const height = canvas.clientHeight || canvas.height;
     const sonar = isCyberSonarActive()
@@ -146,9 +173,9 @@ export function createRendering({
       120,
       Math.min(geometry.radius - 48, geometry.radius * 0.66),
     );
-    const cameraHeading = layerState.viewer.camera.heading || 0;
-    const headingDeg =
-      (Math.round(Cesium.Math.toDegrees(cameraHeading)) + 360) % 360;
+    const pose = findCamera(layerState.viewer)?.pose();
+    const cameraHeading = pose?.heading || 0;
+    const headingDeg = (Math.round(toDegrees(cameraHeading)) + 360) % 360;
     const ring = {
       left: `${geometry.centerX - compassRadius}px`,
       top: `${geometry.centerY - compassRadius}px`,
@@ -164,8 +191,8 @@ export function createRendering({
       top: `${geometry.centerY - compassRadius + 39}px`,
     };
     const labels = root.labels.map((label) => {
-      const bearing = Cesium.Math.toRadians(label.bearing);
-      const angle = bearing - cameraHeading - Cesium.Math.PI_OVER_TWO;
+      const bearing = toRadians(label.bearing);
+      const angle = bearing - cameraHeading - PI_OVER_TWO;
       const labelRadius = compassRadius - 17;
       return {
         ...label,
@@ -193,19 +220,15 @@ export function createRendering({
         marker.hidden = true;
         continue;
       }
-      const direction = Cesium.Cartesian3.subtract(
-        item.position,
-        layerState.subject.position,
-        layerState.DIRECTION_SCRATCH[index],
-      );
-      if (Cesium.Cartesian3.magnitudeSquared(direction) < 1) {
+      const offset = sub(item.position, layerState.subject.position);
+      if (dot(offset, offset) < 1 || !pose) {
         marker.hidden = true;
         continue;
       }
-      Cesium.Cartesian3.normalize(direction, direction);
+      const direction = normalize(offset);
       const projection = celestialScreenAngle(
-        Cesium.Cartesian3.dot(direction, layerState.viewer.camera.rightWC),
-        Cesium.Cartesian3.dot(direction, layerState.viewer.camera.upWC),
+        dot(direction, pose.right),
+        dot(direction, pose.up),
         layerState.directionAngles[index],
       );
       if (projection.stable)
@@ -233,23 +256,15 @@ export function createRendering({
         transform: `translate(-50%, -50%) translate(${-Math.cos(projection.angle) * 56}px, ${-Math.sin(projection.angle) * 56}px)`,
       };
       const label = formatAwarenessLabel(item);
-      const subjectCartographic = Cesium.Cartographic.fromCartesian(
-        layerState.subject.position,
-        undefined,
-        layerState.SUBJECT_CARTOGRAPHIC_SCRATCH,
-      );
-      const targetCartographic = Cesium.Cartographic.fromCartesian(
-        item.position,
-        undefined,
-        layerState.TARGET_CARTOGRAPHIC_SCRATCH[index],
-      );
+      const subjectLocation = toLonLatH(layerState.subject.position);
+      const targetLocation = toLonLatH(item.position);
       const bearing =
-        subjectCartographic && targetCartographic
+        subjectLocation && targetLocation
           ? bearingBetweenCoordinates(
-              Cesium.Math.toDegrees(subjectCartographic.latitude),
-              Cesium.Math.toDegrees(subjectCartographic.longitude),
-              Cesium.Math.toDegrees(targetCartographic.latitude),
-              Cesium.Math.toDegrees(targetCartographic.longitude),
+              subjectLocation.lat,
+              subjectLocation.lon,
+              targetLocation.lat,
+              targetLocation.lon,
             )
           : null;
       const bearingText = Number.isFinite(bearing)
@@ -271,67 +286,26 @@ export function createRendering({
     presentDirection({ hidden: false, ring, heading, labels, markers });
   }
 
+  /**
+   * Run the range pulses again for `activeMs`, after a camera move. Call it
+   * during a frame (lifecycle's preRender): that frame's postRender arms the
+   * next request, so waking asks for no extra frame of its own.
+   */
+  function wakePulses() {
+    rangeRing.wakePulses();
+  }
+
   function clearVisual() {
-    if (layerState.visual?.entities && layerState.viewer) {
-      for (const entity of layerState.visual.entities)
-        layerState.viewer.entities.remove(entity);
-      // Idle mode renders only on request; a removed ring must not linger.
-      governorRequestRender('awareness-visual');
-    }
-    layerState.visual = null;
+    rangeRing.clearVisual();
+  }
+
+  /** Let the ring's draw sets go, as the layer is destroyed. */
+  function disposeVisual() {
+    rangeRing.disposeVisual();
   }
 
   function renderVisual(subject) {
-    if (!layerState.viewer || !subject?.position) return;
-    const cartographic = Cesium.Cartographic.fromCartesian(subject.position);
-    if (!cartographic) return;
-    const groundCenter = Cesium.Cartesian3.fromRadians(
-      cartographic.longitude,
-      cartographic.latitude,
-      0,
-    );
-    const key = `${subject.layerId}:${subject.id}`;
-    if (layerState.visual?.key === key) {
-      // Large ellipse geometry is more reliable as a ConstantPositionProperty.
-      // Move it only after a meaningful displacement so live tracking does not
-      // churn ten large geometries for sub-pixel motion every 750 ms.
-      if (
-        Cesium.Cartesian3.distance(layerState.visual.center, groundCenter) >=
-        250
-      ) {
-        for (const entity of layerState.visual.entities)
-          entity.position.setValue(groundCenter);
-        Cesium.Cartesian3.clone(groundCenter, layerState.visual.center);
-        // Content actually changed — buy exactly one frame instead of holding.
-        governorRequestRender('awareness-visual');
-      }
-      return;
-    }
-    clearVisual();
-
-    const entities = [];
-
-    entities.push(
-      layerState.viewer.entities.add({
-        position: groundCenter,
-        ellipse: {
-          semiMajorAxis: AWARENESS_RADIUS_M,
-          semiMinorAxis: AWARENESS_RADIUS_M,
-          fill: false,
-          outline: true,
-          outlineColor:
-            Cesium.Color.fromCssColorString('#62b5ff').withAlpha(0.72),
-          height: CONTEXT_RIM_HEIGHT_M,
-        },
-      }),
-    );
-
-    layerState.visual = {
-      key,
-      entities,
-      center: Cesium.Cartesian3.clone(groundCenter),
-    };
-    governorRequestRender('awareness-visual');
+    rangeRing.renderVisual(subject);
   }
   return {
     ensureDirectionOverlay,
@@ -342,6 +316,8 @@ export function createRendering({
     cancelDirectionOverlayUpdate,
     updateDirectionOverlay,
     clearVisual,
+    disposeVisual,
     renderVisual,
+    wakePulses,
   };
 }

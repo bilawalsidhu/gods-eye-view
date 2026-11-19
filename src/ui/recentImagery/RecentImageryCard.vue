@@ -1,5 +1,6 @@
 <script setup>
 import { t } from '../../i18n/index.js';
+import UiButton from '../kit/UiButton.vue';
 
 // One imagery day in the strip. The owner computes every value; clicks reach
 // it through the readout's delegated listener.
@@ -46,21 +47,18 @@ defineProps({
     ><div class="ri-card-sensor">{{ card.sensor }}</div
     ><div class="ri-card-cloud">{{ card.cloud }}</div
     ><div class="ri-card-chips"
-      ><button
+      ><UiButton
         v-for="chip in card.chips"
         :key="chip.slot"
-        type="button"
-        :class="[
-          'data-toggle-chip ri-chip',
-          { active: chip.active, 'is-reserved': chip.reserved },
-        ]"
+        :class="['data-toggle-chip ri-chip', { 'is-reserved': chip.reserved }]"
         tabindex="-1"
         :data-slot="chip.slot"
-        :disabled="chip.disabled"
-        :aria-pressed="String(chip.active)"
+        :disabled="Boolean(chip.disabled)"
+        :pressed="Boolean(chip.active)"
+        pressed-class="active"
         :aria-hidden="String(chip.reserved)"
         :aria-label="chip.ariaLabel"
-        >{{ chip.label }}</button
+        >{{ chip.label }}</UiButton
       ></div
     ></div
   >
