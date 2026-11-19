@@ -4315,5 +4315,9 @@
   "Select a map item to see its details.": "Wähle ein Kartenelement aus, um seine Details zu sehen.",
   "Bilawal on {site}": "Bilawal auf {site}",
   "Bilawal's website": "Bilawals Website",
-  "BACK": "ZURÜCK"
+  "BACK": "ZURÜCK",
+  "Finding it…": "Wird gesucht…",
+  "No reading at this time": "Zu dieser Zeit kein Messwert",
+  "Last reading · {age}": "Letzter Stand · {age}",
+  "Find it": "Finden"
 }
