@@ -1584,6 +1584,9 @@ export function createDirectionsLayer({ services, source }) {
     // yields the moment a tool (this one included) owns the click.
     const offSelect = input.onClick((event) => {
       if (!_enabled) return;
+      // Another layer's card or label painted on top takes the click: the item
+      // under it does not act, and the click is not empty space either.
+      if (services.picking?.isUnderOtherCard?.(event)) return;
       let hit = null;
       try {
         hit = event.drawHit;

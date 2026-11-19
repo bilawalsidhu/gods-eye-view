@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { t } from '../../../i18n/index.js';
 import { useBhoteKoshiPanelStore } from '../../stores/bhoteKoshiPanel.js';
+import UiCloseButton from '../../kit/UiCloseButton.vue';
 import UiSlider from '../../kit/UiSlider.js';
 
 // The Bhote Koshi reconstruction controls, at the end of the context rail,
@@ -19,7 +20,7 @@ const sliderValue = (event, scale) => Number(event.target.value) / scale;
         <div class="bhote-event-kicker">{{ t('EVENT RECONSTRUCTION · 26 AUG 2026') }}</div>
         <div class="bhote-event-title">{{ t('BHOTE KOSHI OUTBURST FLOOD') }}</div>
       </div>
-      <button class="bhote-event-icon-btn" type="button" data-action="close" :title="t('Close event layer')" :aria-label="t('Close event layer')" @click="call('close')">×</button>
+      <UiCloseButton class="bhote-event-icon-btn" data-action="close" :title="t('Close event layer')" :label="t('Close event layer')" @click="call('close')" />
     </div>
     <div class="bhote-event-status-row">
       <span class="bhote-event-status observed" :hidden="panel.refs.observedStatus.hidden">{{ t('OBSERVED IMAGERY') }}</span>

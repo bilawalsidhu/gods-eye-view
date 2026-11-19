@@ -7,6 +7,7 @@ import {
 } from './policy.js';
 import { getRegisteredRailFeed } from '../../data/railFeeds.js';
 import { inputFor } from '../../input/dispatcher.js';
+import { isUnderOtherCard } from '../../data/pickRegistry.js';
 import { t } from '../../i18n/index.js';
 
 /**
@@ -173,6 +174,9 @@ export function createSelection({ state, services, parts }) {
       if (!state._enabled) return;
       // A held train keeps the selection until its view lets it go.
       if (state._cockpitSubjectKey) return;
+      // Another layer's card or label painted on top takes the click: the item
+      // under it does not act, and the click is not empty space either.
+      if (isUnderOtherCard(event)) return;
       const key = trainKeyOf(event.drawHit);
       if (key) selectAndFocusTrain(key);
       else if (state._selectedKey) clearSelection();

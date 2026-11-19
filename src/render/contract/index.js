@@ -23,6 +23,7 @@ export const CAPABILITIES = Object.freeze([
   'imageryOnTiles',
   'splitSwipe',
   'imageryFrames',
+  'imageryDecoded',
   'surfaceShading',
   'surfaceIdentity',
   'imageHooks',

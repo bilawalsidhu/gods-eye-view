@@ -10,6 +10,7 @@ import { shownLayerName } from '../../layerNames.js';
 import { entityKind } from '../../../data/entityContext.js';
 import SpotConditions from './SpotConditions.vue';
 import SunDial from './SunDial.vue';
+import UiCloseButton from '../../kit/UiCloseButton.vue';
 import AltitudeGraph from './AltitudeGraph.vue';
 
 // What the Context panel shows while nothing is picked: where the camera is
@@ -322,9 +323,7 @@ const distance = (km) =>
             </span>
           </span>
           <span class="view-context__live-state" :class="`view-context__live-state--${layer.state.tone}`">{{ layer.state.text }}</span>
-          <button type="button" class="view-context__live-off" :aria-label="t('Turn off {name}', { name: layer.name })" :title="t('Turn off {name}', { name: layer.name })" @click="turnOff(layer)">
-            <span class="material-symbols-outlined" aria-hidden="true">close</span>
-          </button>
+          <UiCloseButton class="view-context__live-off" glyph="icon" :label="t('Turn off {name}', { name: layer.name })" :title="t('Turn off {name}', { name: layer.name })" @click="turnOff(layer)" />
           </div>
           <div v-if="layer.breakdown" class="view-context__split">
             <p class="view-context__split-basis">{{ layer.breakdown.basis }}</p>

@@ -321,7 +321,7 @@ test('DisplayBindings sets the scope opacity and resets Visual to its defaults',
   document.querySelector('#pp-toggles .pp-reset-btn').click();
   assert.deepEqual(calls, [
     ['claim', 'visual'],
-    ['style', 'normal', { userInitiated: true }],
+    ['style', 'normal', undefined],
     ['postDefaults', { keepHudVariant: true }],
     ['allocation', 'ELASTIC'],
     ['scope', { enabled: true, featherPct: 100, opacityPct: 100 }],

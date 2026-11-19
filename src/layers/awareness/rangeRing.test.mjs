@@ -488,7 +488,7 @@ test('pulses ask for a frame 80 ms after each drawn frame instead of holding con
   const { rendering, pulseFrames } = ring;
   const loop = frameLoop(t, ring);
   rendering.renderVisual(flight(3));
-  // A Contacts view repaints at the Cyber sonar cadence, ~12.5 fps, while
+  // A Contacts view repaints at the sonar cadence, ~12.5 fps, while
   // the pulses run, never every display frame.
   assert.equal(pulseFrames(), 0);
   loop.advance(1); // the frame the new ring asked for arms the first request
@@ -972,14 +972,14 @@ test('disabling the layer tears the pulses down completely', (t) => {
   );
 });
 
-test('pulse requests wait 80 ms after any frame, so they cannot beat the Cyber sonar', (t) => {
+test('pulse requests wait 80 ms after any frame, so they cannot beat the sonar', (t) => {
   const ring = ringRendering(t);
   const { rendering, pulseFrames } = ring;
   const loop = frameLoop(t, ring);
   rendering.renderVisual(flight(3));
   loop.advance(1);
   const frames = pulseFrames();
-  // Another owner (the Cyber sonar, a data update) draws 67 ms after ours.
+  // Another owner (the sonar, a data update) draws 67 ms after ours.
   loop.advance(67);
   loop.draw();
   loop.advance(CYBER_SONAR_RENDER_INTERVAL_MS - 1);

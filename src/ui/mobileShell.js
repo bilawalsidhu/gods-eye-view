@@ -36,6 +36,11 @@ export const MOBILE_TABS = Object.freeze([
   Object.freeze({ sheet: 'layers', label: msg('Layers'), icon: 'layers' }),
   Object.freeze({ sheet: 'cameras', label: msg('Cameras'), icon: 'videocam' }),
   Object.freeze({ sheet: 'context', label: msg('Context'), icon: 'radar' }),
+  Object.freeze({
+    sheet: 'missions',
+    label: msg('Space Missions'),
+    icon: 'rocket_launch',
+  }),
   Object.freeze({ sheet: 'search', label: msg('Search'), icon: 'search' }),
   Object.freeze({ sheet: 'more', label: msg('More'), icon: 'more_horiz' }),
 ]);
@@ -129,6 +134,7 @@ export function initMobileShell({
     .map(element)
     .filter(Boolean);
   const dock = element('command-dock');
+  const missionsPanel = element('space-missions-panel');
   const shown = (node) =>
     node && globalThis.getComputedStyle?.(node).display !== 'none';
 
@@ -241,7 +247,9 @@ export function initMobileShell({
   const setSheet = (requested) => {
     swipe = null;
     if (!body.classList.contains(MOBILE_SHELL_CLASS)) return;
-    const sheet = sheetBlocked(body) ? null : requested;
+    const unavailableMissions =
+      requested === 'missions' && missionsPanel?.hidden;
+    const sheet = sheetBlocked(body) || unavailableMissions ? null : requested;
     const previous = currentSheetOf(body);
     if (previous === sheet) return;
     if (!previous) {
@@ -474,9 +482,21 @@ export function initMobileShell({
 
   if (typeof MutationObserverImpl === 'function') {
     const observer = new MutationObserverImpl(() => {
-      if (currentSheetOf(body) && sheetBlocked(body)) setSheet(null);
+      const sheet = currentSheetOf(body);
+      if (!sheet) return;
+      if (sheet === 'missions' && missionsPanel?.hidden) {
+        returnFocus = tabFor('layers') ?? returnFocus;
+        setSheet(null);
+      } else if (sheetBlocked(body)) {
+        setSheet(null);
+      }
     });
     observer.observe(body, { attributes: true, attributeFilter: ['class'] });
+    if (missionsPanel)
+      observer.observe(missionsPanel, {
+        attributes: true,
+        attributeFilter: ['hidden'],
+      });
     removers.push(() => observer.disconnect());
   }
 

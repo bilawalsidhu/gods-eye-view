@@ -10,6 +10,7 @@
  */
 import { fromDegrees } from '../geo/ellipsoid.js';
 import { inputFor } from '../input/dispatcher.js';
+import { isUnderOtherCard } from '../data/pickRegistry.js';
 import { findQuery } from '../render/rendererOf.js';
 import { clampOrbitalLook, easeLook } from '../cockpitLook.js';
 import { ORBITAL_EARTH_RADIUS_M } from '../cockpitOrbital.js';
@@ -286,7 +287,12 @@ export function routeSceneClick() {
     // A viewer with no input (headless tools, partial stubs) has no clicks.
     return () => {};
   }
-  return input.onClick((event) => this.onOrbitalClick(event?.position));
+  return input.onClick((event) => {
+    // Another layer's card or label painted on top takes the click: the site
+    // under it does not focus, and the click does not end a held focus.
+    if (isUnderOtherCard(event)) return;
+    this.onOrbitalClick(event?.position);
+  });
 }
 
 /**

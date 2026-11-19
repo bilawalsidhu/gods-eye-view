@@ -1,7 +1,6 @@
-import { hitTestWorldOverlay } from '../../overlays/worldOverlay.js';
-import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
 import { inputFor } from '../../input/dispatcher.js';
 import {
+  clickCard,
   registerPickOwner,
   unregisterPickOwner,
 } from '../../data/pickRegistry.js';
@@ -79,7 +78,6 @@ const intensityText = (storm) => {
 /** Advisory status and coherent forecast geometry; selected through the shared row list. */
 export function createCyclonesLayer({
   feed,
-  hitTestOverlay = hitTestWorldOverlay,
   overlayHost,
   context = null,
   createRendering = createCycloneRendering,
@@ -97,8 +95,7 @@ export function createCyclonesLayer({
     selectionIntent = 'auto',
     navigationGeneration = 0,
     selectionOwner = null,
-    selectedContextStormId = null,
-    removeClickCapture = null;
+    selectedContextStormId = null;
   let enabled = false,
     loading = false,
     error = null,
@@ -169,75 +166,28 @@ export function createCyclonesLayer({
     rendering?.setSelection(id);
   }
   function installSelection() {
-    const canvas = canvasOf(viewer);
-    if (selectionOwner || !canvas) return;
+    if (selectionOwner || !canvasOf(viewer)) return;
     const owner = {};
     selectionOwner = owner;
-    // Snapshot before sibling bubble listeners can rebuild the overlay hit
-    // rectangles. A vessel selection does that synchronously in the same click.
-    let capturedHit = null;
-    const overlayHit = (x, y) => {
-      const hit = hitTestOverlay(x, y);
-      return { sourceId: hit?.sourceId, entryId: hit?.entryId };
-    };
-    const capture = (event) => {
-      capturedHit = null;
-      const point = event.changedTouches?.[0] || event;
-      if (!Number.isFinite(point.clientX) || !Number.isFinite(point.clientY))
-        return;
-      const rect = canvas.getBoundingClientRect();
-      const x = point.clientX - rect.left,
-        y = point.clientY - rect.top;
-      capturedHit = { x, y, ...overlayHit(x, y) };
-    };
-    const resetCapture = () => {
-      capturedHit = null;
-    };
-    const resetEvents = [
-      'pointerdown',
-      'mousedown',
-      'touchstart',
-      'pointercancel',
-      'touchcancel',
-    ];
-    for (const type of resetEvents)
-      canvas.addEventListener?.(type, resetCapture, { capture: true });
-    const events = ['pointerup', 'mouseup', 'touchend'];
-    for (const type of events)
-      canvas.addEventListener?.(type, capture, { capture: true });
-    removeClickCapture = () => {
-      for (const type of events)
-        canvas.removeEventListener?.(type, capture, { capture: true });
-      for (const type of resetEvents)
-        canvas.removeEventListener?.(type, resetCapture, { capture: true });
-      capturedHit = null;
-    };
     const unsubscribe = inputFor(viewer).onClick((event) => {
-      const nativeHit = capturedHit;
-      capturedHit = null;
       // Ambient selection yields to draw tools and Director (the dispatcher
       // skips a held pointer); it never claims the pointer, camera, or
       // tracking state.
       const position = event.screenPosition;
       if (!enabled || destroyed || selectionOwner !== owner || !position)
         return;
-      // AIS cards paint above the globe on a pointer-events:none canvas. The
-      // vessel handler resolves this same topmost hit before cyclone geometry.
-      const captureMatches =
-        nativeHit &&
-        Math.abs(nativeHit.x - position.x) < 1 &&
-        Math.abs(nativeHit.y - position.y) < 1;
-      const hit = captureMatches
-        ? nativeHit
-        : overlayHit(position.x, position.y);
-      if (hit.sourceId === VESSEL_OVERLAY_SOURCE_ID) return;
+      // The card or label painted on top, as it was when the click landed.
+      const card = clickCard(event);
       // Storm cards and lead-hour labels paint on the same canvas; a click on
       // one selects its storm. An id from a superseded advisory changes nothing.
-      if (hit.sourceId === CYCLONE_OVERLAY_SOURCE_ID) {
-        const id = cycloneStormIdFromEntryId(hit.entryId);
+      if (card?.sourceId === CYCLONE_OVERLAY_SOURCE_ID) {
+        const id = cycloneStormIdFromEntryId(card.entryId);
         if (id) layer.setParams({ stormId: id });
         return;
       }
+      // Another layer's card on top takes the click: the storm under it does
+      // not act, and the click is not empty map either.
+      if (card) return;
       // A storm's own drawing names it; empty map (the globe, or 3D tiles)
       // clears the selection.
       const id = rendering?.pickStorm(event.drawHit);
@@ -249,8 +199,6 @@ export function createCyclonesLayer({
   function removeSelection() {
     const owner = selectionOwner;
     selectionOwner = null;
-    removeClickCapture?.();
-    removeClickCapture = null;
     owner?.unsubscribe?.();
   }
   const layer = {

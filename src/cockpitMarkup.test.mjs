@@ -595,7 +595,7 @@ test('Cockpit Display portal retains both scroll owners across round trips', () 
   const portal = CockpitDisplayPortal.toString();
   assert.match(
     portal,
-    /this\.standardScrollTop =\s*displayPanelScroller\(standardPanel\)\?\.scrollTop \|\| 0/,
+    /this\.standardScrollTop = standardPanel\?\.scrollTop \|\| 0/,
   );
   assert.match(
     portal,
@@ -603,7 +603,7 @@ test('Cockpit Display portal retains both scroll owners across round trips', () 
   );
   assert.match(
     portal,
-    /if \(!this\.active\)[\s\S]*?this\.standardScrollTop =\s*displayPanelScroller\(standardPanel\)\.scrollTop/,
+    /if \(!this\.active\)[\s\S]*?this\.standardScrollTop = standardPanel\.scrollTop/,
   );
   assert.match(
     portal,
@@ -611,7 +611,7 @@ test('Cockpit Display portal retains both scroll owners across round trips', () 
   );
   assert.match(
     portal,
-    /this\.cockpitPanel\.scrollTop = this\.cockpitScrollTop[\s\S]*?displayPanelScroller\(this\.standardPanel\)\.scrollTop =\s*this\.standardScrollTop/,
+    /this\.cockpitPanel\.scrollTop = this\.cockpitScrollTop[\s\S]*?this\.standardPanel\.scrollTop = this\.standardScrollTop/,
   );
 });
 
@@ -680,6 +680,7 @@ test('fresh Cockpit entry temporarily collapses map panels and exit restores the
     'scene-panel',
     'pp-toggles',
     'global-context-panel',
+    'space-missions-panel',
     'radio-panel',
   ]) {
     assert.match(
@@ -1261,14 +1262,15 @@ test('Global Context uses its dedicated right rail without a duplicate Data Laye
   );
   assert.match(html, /id="global-context-panel"/);
   assert.match(html, /id="global-context-flights-btn"/);
-  assert.match(html, /id="global-context-missions-btn"/);
+  assert.doesNotMatch(html, /id="global-context-missions-btn"/);
+  assert.match(html, /id="space-missions-panel"/);
 });
 
-test('Global Context standby describes both chooser modes', () => {
+test('Global Context standby describes Contacts', () => {
   const match = html.match(/<div id="context-mode-standby"[\s\S]*?<\/div>/);
   assert.ok(match, 'Global Context standby is missing');
   assert.match(match[0], /CONTACTS — nearest planes · vessels · sites/);
-  assert.match(match[0], /SPACE MISSIONS — launches &amp; orbital assets/);
+  assert.doesNotMatch(match[0], /SPACE MISSIONS/);
 });
 
 test('cockpit briefing cycle control keeps its state as the accessible name', () => {

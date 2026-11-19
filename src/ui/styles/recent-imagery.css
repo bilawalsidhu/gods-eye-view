@@ -175,7 +175,11 @@
 .recent-imagery-readout .ri-strip.searching {
   opacity: 0.7;
 }
+/* A UiEmpty in the readout's own colour and type, not the shared empty
+   line's (empty-state.css). */
 .recent-imagery-readout .ri-strip-empty {
+  color: inherit;
+  font: inherit;
   flex: 1 0 100%;
   align-self: center;
   text-align: center;

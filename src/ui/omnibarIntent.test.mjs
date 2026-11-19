@@ -123,6 +123,16 @@ test('near-miss lines read as people mean them', () => {
   ]);
   assert.equal(isPanelText('show earthquake data layer'), false);
   assert.equal(read('open data layers')[0].item, 'data-panel');
+  assert.equal(
+    read('open space missions panel')[0].item,
+    'space-missions-panel',
+  );
+  assert.equal(
+    read('close the missions panel')[0].item,
+    'space-missions-panel',
+  );
+  // Without "panel" it is the layer, not its panel.
+  assert.equal(isPanelText('show space missions'), false);
   assert.deepEqual(read('go to trinidad and tobago and show flights'), [
     { kind: 'place', place: 'trinidad and tobago' },
     { kind: 'layer', id: 'flights', enabled: true },
@@ -252,6 +262,7 @@ test('ar and he mark every Omnibar string alike with a right-to-left mark', asyn
   // U+200F, so the punctuation stays with the right-to-left text before it.
   const sources = await Promise.all(
     [
+      './views/panels/Omnibar.vue',
       './views/panels/VoiceVisualizer.vue',
       './omnibarIntent.js',
       './omnibarRows.js',

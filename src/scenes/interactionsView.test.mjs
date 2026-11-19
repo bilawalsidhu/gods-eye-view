@@ -10,6 +10,8 @@ import { createPinia } from 'pinia';
 import { useSceneInteractionsStore } from '../ui/stores/sceneInteractions.js';
 import SceneInteractions from '../ui/views/panels/SceneInteractions.vue';
 import { createSceneInteractions } from './interactions.js';
+import { fakeInput } from '../input/testDoubles.mjs';
+import { setClickCardHitTest } from '../data/pickRegistry.js';
 
 const target = (featureId) => ({ packId: 'qa', featureId });
 const key = (featureId) => JSON.stringify(['qa', featureId]);
@@ -191,4 +193,40 @@ test("an earlier owner leaves a later owner's panel alone", async (t) => {
   $('[data-director-action="fly"]').click();
   await settle();
   assert.equal(later.getState().selected, 'fly');
+});
+
+// The card or label painted on top takes the click: a pack feature under
+// another layer's card is not selected for its actions.
+test("another layer's card over a pack feature keeps the click", async (t) => {
+  document.body.replaceChildren();
+  const container = document.body.appendChild(document.createElement('div'));
+  const canvas = container.appendChild(document.createElement('canvas'));
+  const pinia = createPinia();
+  const app = createApp(SceneInteractions).use(pinia);
+  app.mount(document.body.appendChild(document.createElement('div')));
+  let picked = null;
+  const viewer = { container, scene: { canvas, pick: () => picked } };
+  const input = fakeInput(viewer);
+  const store = useSceneInteractionsStore(pinia);
+  const interactions = createSceneInteractions(viewer, {
+    execute: async () => true,
+    store,
+  });
+  let top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  setClickCardHitTest(() => top);
+  t.after(() => {
+    setClickCardHitTest(null);
+    interactions.destroy();
+    input.destroy();
+    app.unmount();
+  });
+  const feature = { set: 'qa:points', id: 'point' };
+  interactions.activate(SHOT, new Map([[key('point'), feature]]));
+  await nextTick();
+  picked = { id: feature, primitive: {} };
+  input.tap({ x: 10, y: 10 });
+  assert.deepEqual(store.panel?.outlined ?? [], [], 'covered: not selected');
+  top = null;
+  input.tap({ x: 10, y: 10 });
+  assert.deepEqual(store.panel.outlined, ['card', 'fly']);
 });

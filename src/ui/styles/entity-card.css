@@ -83,18 +83,15 @@
   color: #ff9f43;
 }
 
+/* A UiCloseButton: close-button.css draws no padding, border or background. */
 .entity-card__close {
   display: grid;
   flex: none;
   place-items: center;
   width: 1.5rem;
   height: 1.5rem;
-  padding: 0;
   color: rgba(199, 214, 222, 0.6);
-  background: none;
-  border: 0;
   border-radius: 6px;
-  cursor: pointer;
 }
 
 .entity-card__close:hover,
@@ -1119,18 +1116,16 @@
   color: #ff5c6c;
 }
 
+/* A UiCloseButton (close-button.css). */
 .view-context__live-off {
   display: grid;
   flex: none;
   place-items: center;
   width: 22px;
   height: 22px;
-  padding: 0;
   color: rgba(199, 214, 222, 0.5);
-  background: none;
   border: 1px solid transparent;
   border-radius: 6px;
-  cursor: pointer;
 }
 
 .view-context__live-off .material-symbols-outlined {
@@ -1314,18 +1309,16 @@
   border-radius: 999px;
 }
 
+/* A UiCloseButton (close-button.css). */
 .cctv-popup__close {
   display: grid;
   place-items: center;
   width: 28px;
   height: 28px;
   margin-inline-start: auto;
-  padding: 0;
   color: rgba(236, 244, 248, 0.8);
-  background: none;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
-  cursor: pointer;
 }
 
 .cctv-popup__close:hover {

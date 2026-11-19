@@ -110,7 +110,7 @@ function harness({ hidden = false, selected = true, noChips = false } = {}) {
   window.performance = { now: () => now };
   document.defaultView = window;
   const methods = new Function('createHoverDisclosure', 'collapsePanelOnEscape', 'document', 'window', 'clearTimeout', 'performance', 'requestAnimationFrame', 't', 'msg', 'readPanelState',
-    `return ({${shellMethod('_initAutoHoverPanel').toString()},\n${shellMethod('_collapsePanelOnEscape').toString()},\n${shellMethod('setPanelCollapsed').toString()},\n${shellMethod('_presentPanel').toString()},\n${shellMethod('_shownPanel').toString()}});`)(
+    `return ({${shellMethod('_initAutoHoverPanel').toString()},\n${shellMethod('_collapsePanelOnEscape').toString()},\n${shellMethod('_railFocusStand').toString()},\n${shellMethod('setPanelCollapsed').toString()},\n${shellMethod('_presentPanel').toString()},\n${shellMethod('_shownPanel').toString()}});`)(
     createHoverDisclosure, collapsePanelOnEscape, document, window, (id) => timers.delete(id), { now: () => now }, () => {}, t, msg, readPanelState,
   );
   const saves = [];
