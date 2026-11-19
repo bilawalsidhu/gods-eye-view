@@ -220,22 +220,42 @@ test('left corridor respects a lower obstacle but ignores an obstacle hidden by 
 });
 
 test('in a short window the left corridor stays clear of an obstacle across the midpoint', () => {
-  // 480px window, midpoint 240. Neither card is wholly above or below it.
+  // 480px window, midpoint 240.
   const f = fixture('left');
   f.options.windowRef.innerHeight = 480;
-  const low = element('card', { top: 100, height: 200 });
-  f.options.obstacles = [low];
+  f.options.obstacles = [element('card', { top: 100, height: 200 })];
   f.run();
   // More room below the card than above it: the corridor starts under it.
   assert(Number(f.stack.dataset.safeTopPct) * 4.8 >= 300);
-  assert(Number(f.stack.dataset.safeBottomPct) * 4.8 <= 480);
 
-  const high = element('card', { top: 200, height: 200 });
-  f.options.obstacles = [high];
+  // A card starting below the corridor's usual top (26%, 124.8px) that
+  // crosses the midpoint counts the same way: more room below it.
+  f.options.obstacles = [element('card', { top: 130, height: 120 })];
   f.run();
+  assert(Number(f.stack.dataset.safeTopPct) * 4.8 >= 250);
+
   // More room above it: the corridor ends over it.
+  f.options.obstacles = [element('card', { top: 200, height: 250 })];
+  f.run();
   assert(Number(f.stack.dataset.safeBottomPct) * 4.8 <= 200);
-  assert(Number(f.stack.dataset.safeTopPct) * 4.8 >= 0);
+});
+
+test('several cards across the midpoint give the left corridor the same room in any order', () => {
+  const f = fixture('left');
+  f.options.windowRef.innerHeight = 480;
+  const a = element('card', { top: 100, height: 160 });
+  const b = element('card', { top: 110, height: 360 });
+  f.options.obstacles = [a, b];
+  f.run();
+  const first = [f.stack.dataset.safeTopPct, f.stack.dataset.safeBottomPct];
+  f.options.obstacles = [b, a];
+  f.run();
+  assert.deepEqual(
+    [f.stack.dataset.safeTopPct, f.stack.dataset.safeBottomPct],
+    first,
+  );
+  // Together they cover 100 to 470: the corridor ends above them.
+  assert(Number(first[1]) * 4.8 <= 100);
 });
 
 test('a centered timeline only shortens the corridor when it reaches a laid-out panel', () => {

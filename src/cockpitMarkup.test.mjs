@@ -1010,7 +1010,7 @@ test('an expanded Cockpit left panel stays above Contact, HUD, and attribution',
   assert.ok(leftLayout, 'left accordion layout pass is missing');
   assert.match(
     leftLayout,
-    /rect\.top >= baseTop\) \{\s*\n\s*bottomObstacles\.push\(\{ top: rect\.top \}\);/,
+    /\} else \{\s*\n\s*bottomObstacles\.push\(\{ top: rect\.top \}\);\s*\n\s*\}\s*\n\s*\}/,
     'every rendered lower-lane obstacle must constrain the panel corridor',
   );
   assert.match(

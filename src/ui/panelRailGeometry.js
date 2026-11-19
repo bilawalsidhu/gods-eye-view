@@ -2,7 +2,8 @@
  * Resolve a vertically centered panel slot inside a HUD rail while respecting
  * live rectangles that intersect that rail. A rectangle above the viewport
  * center lowers the top, one below it raises the bottom, and one across the
- * center does whichever leaves the band more room.
+ * center puts the band on whichever side of it has more room, or leaves the
+ * band as it is when neither side has any.
  */
 export function resolveHudRailLayout({
   viewportHeight,
@@ -31,7 +32,10 @@ export function resolveHudRailLayout({
   const midpoint = viewportHeight * 0.5;
   let safeTop = Math.max(0, baseTop);
   let safeBottom = Math.min(viewportHeight, baseBottom);
-  const straddling = [];
+  // Every obstacle across the midpoint covers it, so together they cover one
+  // span: from the highest top to the lowest bottom.
+  let spanTop = Infinity;
+  let spanBottom = -Infinity;
 
   for (const rect of obstacles) {
     if (
@@ -47,15 +51,18 @@ export function resolveHudRailLayout({
     if (rect.bottom <= midpoint) safeTop = Math.max(safeTop, rect.bottom + gap);
     else if (rect.top >= midpoint)
       safeBottom = Math.min(safeBottom, rect.top - gap);
-    else straddling.push(rect);
+    else {
+      spanTop = Math.min(spanTop, rect.top);
+      spanBottom = Math.max(spanBottom, rect.bottom);
+    }
   }
-  // An obstacle across the midpoint (common in short windows) still limits
-  // the band: the band goes on whichever side of it leaves more room.
-  for (const rect of straddling) {
-    const roomAbove = rect.top - gap - safeTop;
-    const roomBelow = safeBottom - (rect.bottom + gap);
-    if (roomBelow > roomAbove) safeTop = Math.max(safeTop, rect.bottom + gap);
-    else safeBottom = Math.min(safeBottom, rect.top - gap);
+  // The band goes on whichever side of that span leaves more room, above it
+  // on a tie. With no room on either side the band stays as it is.
+  if (spanBottom > spanTop) {
+    const roomAbove = spanTop - gap - safeTop;
+    const roomBelow = safeBottom - (spanBottom + gap);
+    if (roomBelow > roomAbove && roomBelow > 0) safeTop = spanBottom + gap;
+    else if (roomAbove > 0) safeBottom = spanTop - gap;
   }
 
   safeBottom = Math.max(safeTop, safeBottom);

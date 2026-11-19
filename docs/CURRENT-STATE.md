@@ -1197,11 +1197,11 @@ Cesium's credit box wraps from 1200px, as before; the phone shell, clean
 view, recording and scene playback lay the line out themselves.
 The left rail treats the centered World Timeline and voice control as
 obstacles only where they reach a laid-out panel, not the stack's
-transparent gutter. Both rails keep clear of every obstacle they reach: one
-above the middle of the window pushes the panels down, one below it pulls
-them up, and one across the middle (common in short windows) puts them on
-whichever side of it has more room. When neither side has room, the rails
-keep their usual minimum height rather than overlap it.
+transparent gutter. Obstacles across the middle of the window (common in
+short windows) are taken together, from the highest top to the lowest
+bottom, and both rails put their panels on whichever side of that span has
+more room, above it on a tie, whatever order the obstacles come in. With no
+room on either side the panels keep their place, as before.
 
 Wind appears in the Weather group before Audio. The surface-weather prototype
 uses keyless NOAA GFS or ECMWF IFS forecasts on an approximately 1° display grid.

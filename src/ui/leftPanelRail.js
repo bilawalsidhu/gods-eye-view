@@ -118,7 +118,10 @@ export function layoutLeftPanelRail({
   let safeTop = baseTop;
   let safeBottom = viewportHeight - baseBottomInset;
   const bottomObstacles = [];
-  const straddling = [];
+  // Obstacles across the midpoint all cover it, so together they cover one
+  // span: from the highest top to the lowest bottom.
+  let spanTop = Infinity;
+  let spanBottom = -Infinity;
 
   for (const obstacle of obstacles) {
     if (stack.contains(obstacle)) continue;
@@ -152,28 +155,31 @@ export function layoutLeftPanelRail({
       const obstacleBottom = rect.bottom + safeGap;
       obstacleSafeTop = Math.max(obstacleSafeTop, obstacleBottom);
       safeTop = Math.max(safeTop, obstacleBottom);
-    } else if (rect.top >= baseTop) {
-      bottomObstacles.push({ top: rect.top });
+    } else if (
+      rect.top < viewportHeight * 0.5 &&
+      rect.bottom > viewportHeight * 0.5
+    ) {
+      spanTop = Math.min(spanTop, rect.top);
+      spanBottom = Math.max(spanBottom, rect.bottom);
     } else {
-      straddling.push(rect);
+      bottomObstacles.push({ top: rect.top });
     }
   }
-  // An obstacle from above the corridor across the midpoint (common in short
-  // windows) still limits it: the panels go on whichever side of it leaves
-  // more room.
-  for (const rect of straddling) {
-    const roomAbove = rect.top - safeGap - obstacleSafeTop;
+  // The panels go on whichever side of that span leaves more room (common in
+  // short windows), above it on a tie. With no room on either side the
+  // corridor stays as it is.
+  if (spanBottom > spanTop) {
+    const roomAbove = spanTop - safeGap - obstacleSafeTop;
     const lowerBottom = resolveLeftStackBottomBoundary({
       baseBottom: safeBottom,
       obstacles: bottomObstacles,
       safeGap,
     });
-    const roomBelow = lowerBottom - (rect.bottom + safeGap);
-    if (roomBelow > roomAbove) {
-      const obstacleBottom = rect.bottom + safeGap;
-      obstacleSafeTop = Math.max(obstacleSafeTop, obstacleBottom);
-      safeTop = Math.max(safeTop, obstacleBottom);
-    } else bottomObstacles.push({ top: rect.top });
+    const roomBelow = lowerBottom - (spanBottom + safeGap);
+    if (roomBelow > roomAbove && roomBelow > 0) {
+      obstacleSafeTop = Math.max(obstacleSafeTop, spanBottom + safeGap);
+      safeTop = Math.max(safeTop, spanBottom + safeGap);
+    } else if (roomAbove > 0) bottomObstacles.push({ top: spanTop });
   }
   safeBottom = resolveLeftStackBottomBoundary({
     baseBottom: safeBottom,

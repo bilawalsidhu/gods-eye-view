@@ -321,7 +321,7 @@ test('HUD rail layout keeps a short window clear of an obstacle across its midpo
   assert(below.top >= 270);
 });
 
-test('HUD rail layout keeps its zero-height fallback when a straddling obstacle leaves no room', () => {
+test('HUD rail layout leaves the band as it is when an obstacle across the midpoint leaves no room', () => {
   const layout = resolveHudRailLayout({
     viewportHeight: 480,
     panelHeight: 120,
@@ -332,10 +332,30 @@ test('HUD rail layout keeps its zero-height fallback when a straddling obstacle 
     gap: 10,
     obstacles: [{ left: 0, right: 400, top: 80, bottom: 420 }],
   });
-  assert.equal(layout.maxHeight, 0);
-  assert.equal(layout.constrained, true);
   assert.equal(layout.safeTop, 100);
-  assert.equal(layout.safeBottom, 100);
+  assert.equal(layout.safeBottom, 400);
+});
+
+test('HUD rail layout reads several obstacles across the midpoint the same in any order', () => {
+  const a = { left: 0, right: 400, top: 100, bottom: 260 };
+  const b = { left: 0, right: 400, top: 200, bottom: 470 };
+  const layoutWith = (obstacles) =>
+    resolveHudRailLayout({
+      viewportHeight: 480,
+      panelHeight: 120,
+      laneLeft: 20,
+      laneRight: 340,
+      baseTop: 40,
+      baseBottom: 460,
+      gap: 10,
+      obstacles,
+    });
+  // Together they cover 100 to 470: the only room is above, 40 to 90.
+  for (const layout of [layoutWith([a, b]), layoutWith([b, a])]) {
+    assert.equal(layout.safeTop, 40);
+    assert.equal(layout.safeBottom, 90);
+    assert.equal(layout.maxHeight, 50);
+  }
 });
 
 test('HUD rail layout can anchor controls to the start of the safe corridor', () => {
