@@ -268,14 +268,27 @@ test('the left corridor counts cards beside those across the midpoint', () => {
   ];
   f.run();
   assert(Number(f.stack.dataset.safeTopPct) * 4.8 >= 300);
-  // No room on either side: the cards are read as before, and the corridor
-  // never runs down through the lower one.
+  // Only a little room above the cards: the corridor stays there rather
+  // than run down through the lower one.
   f.options.obstacles = [
     element('card', { top: 50, height: 150 }),
     element('card', { top: 150, height: 320 }),
   ];
   f.run();
-  assert(Number(f.stack.dataset.safeBottomPct) * 4.8 <= 210);
+  assert(Number(f.stack.dataset.safeBottomPct) * 4.8 <= 50);
+  // The room above a card is all the panels' to use, above the corridor's
+  // usual top (26%) too: 700px window, card 300 to 420, about 263px above
+  // against 244 below.
+  f.options.windowRef.innerHeight = 700;
+  f.options.obstacles = [element('card', { top: 300, height: 120 })];
+  f.run();
+  assert(Number(f.stack.dataset.safeBottomPct) * 7 <= 300);
+  assert(Number(f.stack.dataset.safeTopPct) * 7 < 0.26 * 700);
+  // No room on either side: the card is read as before.
+  f.options.windowRef.innerHeight = 480;
+  f.options.obstacles = [element('card', { top: 0, height: 480 })];
+  f.run();
+  assert.equal(Number(f.stack.dataset.safeTopPct), 26);
 });
 
 test('a centered timeline only shortens the corridor when it reaches a laid-out panel', () => {

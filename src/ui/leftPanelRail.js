@@ -115,7 +115,8 @@ export function layoutLeftPanelRail({
   const baseTop = viewportHeight * 0.26;
   const baseBottomInset = viewportHeight * 0.04;
   const safeGap = viewportHeight * 0.012;
-  let obstacleSafeTop = viewportHeight * 0.04;
+  const topInset = viewportHeight * 0.04;
+  let obstacleSafeTop = topInset;
   let safeTop = baseTop;
   let safeBottom = viewportHeight - baseBottomInset;
   const bottomObstacles = [];
@@ -159,18 +160,19 @@ export function layoutLeftPanelRail({
     }
   }
   // Obstacles across the midpoint (common in short windows) put the panels
-  // on whichever side of them has more room; with no room on either side the
+  // on whichever side of them has more room, and the panels may use all of
+  // it, above the corridor's usual top too; with no room on either side the
   // obstacles are read as before.
   const beside = bandBesideMidpointObstacles({
     midpoint: viewportHeight * 0.5,
-    top: viewportHeight * 0.04,
+    top: topInset,
     bottom: safeBottom,
     obstacles: inLane,
     gap: safeGap,
   });
   if (beside) {
     obstacleSafeTop = beside.top;
-    safeTop = Math.max(baseTop, beside.top);
+    safeTop = beside.top;
     bottomObstacles.length = 0;
     bottomObstacles.push({ top: beside.bottom + safeGap });
   }
