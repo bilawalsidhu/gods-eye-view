@@ -38,7 +38,7 @@ function presentation(patch = {}) {
       playSceneButton: record({ textContent: '▶ PLAY SCENE', hidden: true }),
       cinematicButton: record({
         textContent: '◉ CINEMATIC',
-        attributes: { 'aria-pressed': 'false' },
+        pressed: false,
       }),
       storyReplayButton: record({ textContent: '↺ FULL STORY' }),
       corridorButton: record(),
@@ -156,6 +156,10 @@ test('a later presentation updates the controls in place', async (t) => {
     disabled: true,
     attributes: { 'aria-label': 'Play Global context' },
   });
+  next.refs.cinematicButton = record({
+    textContent: '■ RELEASE CAMERA',
+    pressed: true,
+  });
   next.refs.progressInput = record({ value: '250', hidden: true });
   next.refs.imagerySection = record({ hidden: true });
   store.publish(next);
@@ -164,6 +168,9 @@ test('a later presentation updates the controls in place', async (t) => {
   assert.equal(play.textContent, '▶ PLAY SHOT');
   assert.equal(play.disabled, true);
   assert.equal(play.getAttribute('aria-label'), 'Play Global context');
+  const cinematic = $('[data-action="cinematic"]');
+  assert.equal(cinematic.getAttribute('aria-pressed'), 'true');
+  assert.equal(cinematic.textContent, '■ RELEASE CAMERA');
   assert.ok(
     $('#bhote-koshi-event-panel').classList.contains('bhote-event-scene-beat'),
   );

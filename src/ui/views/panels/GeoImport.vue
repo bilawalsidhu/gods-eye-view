@@ -56,16 +56,16 @@ function leave() {
       other.querySelector('button');
     if (target) return target.focus();
   }
-  importButton.value?.focus();
+  importButton.value?.$el.focus();
 }
 </script>
 
 <template>
   <div class="pp-toggle-group" id="geo-import-group">
-    <button ref="importButton" class="pp-toggle-btn" id="geo-import-button" type="button" @click="openPicker" :title="t('Show your own GeoJSON, KML, KMZ or GPX files on the globe (or drop them onto it). File bytes stay on this device; overlays can appear in map screenshots shared with voice.')">
-      <span class="pp-icon material-symbols-outlined" aria-hidden="true">upload_file</span>
+    <UiButton ref="importButton" class="pp-toggle-btn" id="geo-import-button" @click="openPicker" :title="t('Show your own GeoJSON, KML, KMZ or GPX files on the globe (or drop them onto it). File bytes stay on this device; overlays can appear in map screenshots shared with voice.')">
+      <UiIcon class="pp-icon" name="upload_file" :size="null" />
       <span class="pp-label">{{ t('Import') }}</span>
-    </button>
+    </UiButton>
     <input ref="picker" type="file" id="geo-import-input" accept=".geojson,.json,.kml,.kmz,.gpx" multiple hidden @change="pick" :aria-label="t('Choose GeoJSON, KML, KMZ or GPX files')">
     <ul class="geo-import-list" :class="{ visible: listed }" id="geo-import-list" v-focus-safe-children="leave" :aria-label="t('Imported files')"><li v-for="row in rows" :key="row.id" class="geo-import-row" :data-import-id="row.id"><span :class="['geo-import-swatch', { 'own-styles': row.ownStyles }]" :style="row.ownStyles ? null : { background: row.color }"></span><span class="geo-import-name" :title="row.title">{{ row.name }}</span><UiButton v-for="item in row.actions" :key="item.action" class="geo-import-action" :data-action="item.action" :label="item.label" :pressed="item.pressed" @click="display.act(ROW_ACTIONS[item.action], row.id)"><UiIcon :name="item.icon" :size="null" /></UiButton></li></ul>
     <span class="draw-hint geo-import-hint" id="geo-import-hint" aria-live="polite">{{ geoImport?.hint ?? '' }}</span>
