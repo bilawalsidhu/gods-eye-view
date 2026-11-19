@@ -93,6 +93,24 @@ export function createSatelliteIntents({ state: layerState }) {
     return stop;
   }
 
+  /**
+   * Keep a Satellites setting the person changed while Space Missions holds
+   * its saved state ("show orbits" off): it survives the mission teardown,
+   * as their visibility choice does.
+   */
+  function handleParams(change) {
+    if (
+      change?.type !== 'params' ||
+      change.layerId !== 'satellites' ||
+      !isExplicitOrigin(change.origin)
+    )
+      return;
+    const previous = layerState._satelliteStateBeforeMission;
+    const requested = change.requestedParams;
+    if (!previous || !requested || typeof requested !== 'object') return;
+    previous.params = { ...previous.params, ...requested };
+  }
+
   /** Settle once a Satellites OFF has finished stopping Space Missions. */
   function settled() {
     return pendingStop ?? Promise.resolve(false);
@@ -108,6 +126,7 @@ export function createSatelliteIntents({ state: layerState }) {
       manager.subscribeVisibilityRequests?.(recordRequest) ?? null;
     const unsubscribeChanges =
       manager.subscribe?.((change) => {
+        handleParams(change);
         void handleVisibility(change);
       }) ?? null;
     unsubscribe = () => {
@@ -120,6 +139,7 @@ export function createSatelliteIntents({ state: layerState }) {
     connect,
     settled,
     handleVisibility,
+    handleParams,
     recordRequest,
     offFollowsMissionsEntry,
   };
