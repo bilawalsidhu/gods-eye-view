@@ -660,6 +660,7 @@
   "src/layers/alpr/model.js",
   "src/layers/alpr/policy.js",
   "src/layers/alpr/presentation.js",
+  "src/layers/alpr/presentation.test.mjs",
   "src/layers/alpr/visuals.js",
   "src/layers/alpr/overlay.js",
   "src/layers/alpr/overlay.test.mjs",

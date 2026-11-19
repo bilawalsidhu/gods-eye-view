@@ -6,6 +6,8 @@ import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
 import { NEWS_KEY_PROVIDERS, createNewsLayer } from './index.js';
 import { getSelectedEntityContext } from '../../data/contextStore.js';
+import { fakeInputUnderLabel } from '../../input/testDoubles.mjs';
+import { NEWS_OVERLAY_SOURCE_ID } from './model.js';
 
 const NOW = Date.parse('2026-10-28T10:00:00Z');
 const hotspotsPayload = {
@@ -51,6 +53,8 @@ function fixture(
     now = () => NOW,
     quality,
     pictureCards,
+    underLabel = false,
+    hitTestOverlay = () => null,
   } = {},
 ) {
   const calls = { feed: [], hotspots: 0, outline: 0 };
@@ -137,11 +141,18 @@ function fixture(
     for (const fn of [...clickHandlers])
       fn({ screenPosition: { x: 10, y: 10 }, topHit });
   };
+  // Or the scene's own dispatcher, with a label that may be painted over
+  // the map (`fake.label.over`).
+  let fake = null;
+  if (underLabel) {
+    viewer.scene = { canvas: {}, pick: () => null };
+    fake = fakeInputUnderLabel(viewer);
+  }
   const layer = createNewsLayer({
     source,
     overlayHost,
-    inputFor: () => input,
-    hitTestOverlay: () => null,
+    inputFor: () => fake?.input ?? input,
+    hitTestOverlay,
     now,
     matchMedia: () => ({ matches: reduced }),
     getViewCentre: () => centre(),
@@ -158,6 +169,7 @@ function fixture(
   layer.attachShellServices({ runNavigation: (navigate) => navigate() });
   t.after(() => {
     layer.destroy();
+    fake?.destroy();
     unbind();
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;
@@ -172,6 +184,7 @@ function fixture(
     items,
     click,
     clickHandlers,
+    fake,
   };
 }
 
@@ -1283,6 +1296,34 @@ test('a click on a marker selects its report, on a beacon chooses its hotspot, o
   });
   layer.disable();
   assert.equal(clickHandlers.size, 0);
+});
+
+test("a click a label painted over a report's card takes never opens the card, and lets go of the report", async (t) => {
+  let activated = 0;
+  const { layer, fake } = fixture(t, {
+    height: 500_000,
+    underLabel: true,
+    // A report's card lies under every click.
+    hitTestOverlay: (_x, _y, { sourceId }) =>
+      sourceId === NEWS_OVERLAY_SOURCE_ID
+        ? { entry: { activate: () => activated++ } }
+        : null,
+  });
+  layer.enable();
+  await layer.update();
+  await flush();
+  layer.setParams({ reportId: 'major', pin: 0 });
+  assert.equal(layer.getRowControls().feed.selected.id, 'major');
+
+  fake.label.over = true;
+  fake.click();
+  assert.equal(activated, 0, 'the card beneath the label is not opened');
+  assert.equal(layer.getRowControls().feed.selected, null);
+
+  // Off the label, the same click opens the card.
+  fake.label.over = false;
+  fake.click();
+  assert.equal(activated, 1);
 });
 
 test('zoomed out, a hotspot is one beacon; off, nothing draws; destroyed, the sets go', async (t) => {

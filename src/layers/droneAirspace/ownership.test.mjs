@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createDroneAirspaceLayer } from './index.js';
 import { layerFeedState } from '../../data/feedState.js';
-import { fakeInput } from '../../input/testDoubles.mjs';
+import { fakeInputUnderLabel } from '../../input/testDoubles.mjs';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
 // The fills set of the layer the last harness made: zone picks name it.
@@ -19,11 +19,12 @@ function harness(source, { pick = () => null, cardHit = () => null } = {}) {
   const owners = new Map();
   const viewer = { scene: { pick } };
   const { draw } = bindFakeDraw(viewer);
-  const input = fakeInput(viewer);
+  const input = fakeInputUnderLabel(viewer);
   const clicks = {
     handler: (click) => input.click(click.position),
+    // Only the label's own overlay handler is left.
     get destroyed() {
-      return input.input.subscriberCount() === 0 ? 1 : 0;
+      return input.input.subscriberCount() === 1 ? 1 : 0;
     },
   };
   const layer = createDroneAirspaceLayer({
@@ -61,6 +62,8 @@ function harness(source, { pick = () => null, cardHit = () => null } = {}) {
     overlay,
     clicks,
     owners,
+    /** A label painted over the map: while `over`, it takes each click. */
+    label: input.label,
   };
 }
 
@@ -141,6 +144,35 @@ test('clicking a zone publishes its card; empty space clears it', async () => {
   pickResult = null;
   h.clicks.handler({ position: { x: 10, y: 10 } });
   assert.equal(h.overlay.entries.get('drone-airspace')?.length ?? 0, 0);
+});
+
+test('a click a label painted over the open zone card takes closes the card, as a click beside it does', async () => {
+  let pickResult = null;
+  let cardHitResult = null;
+  const h = harness(
+    { getSnapshot: async () => [row] },
+    { pick: () => pickResult, cardHit: () => cardHitResult },
+  );
+  await h.layer.update(h.viewer);
+  pickResult = zonePick('drone-airspace:310:0');
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  const [card] = h.overlay.entries.get('drone-airspace');
+
+  // Off the label, a click on the open card keeps it open.
+  pickResult = null;
+  cardHitResult = { entryId: card.id };
+  h.clicks.handler({ position: { x: 12, y: 12 } });
+  assert.equal(h.overlay.entries.get('drone-airspace')?.length, 1);
+
+  // The open card lies under the label: the click is not on the card.
+  h.label.over = true;
+  h.clicks.handler({ position: { x: 12, y: 12 } });
+  assert.equal(
+    h.overlay.entries.get('drone-airspace')?.length ?? 0,
+    0,
+    'the card is closed',
+  );
+  h.layer.destroy();
 });
 
 test('late refresh cannot publish after disable or destroy', async () => {

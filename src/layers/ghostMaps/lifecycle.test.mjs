@@ -3,6 +3,7 @@ import test from 'node:test';
 import { setLocale } from '../../i18n/index.js';
 import { createGhostMapsLayer } from './index.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
+import { inputFor } from '../../input/dispatcher.js';
 import { GHOSTMAPS_PRODUCTS, GHOSTMAPS_LATEST_DROP } from './catalog.js';
 
 function element(localName, children = [], value = '', attributes = {}) {
@@ -671,4 +672,50 @@ test('narrowing to a window the loaded data covers clears a failed wider reload'
   await ageChip(layer, 3).onClick();
   assert.equal(layer.getStats().error, null);
   assert.equal(layer.getStats().count, 1);
+});
+
+test("a click a label painted over the open card takes never opens the card's link, and closes the card", async (t) => {
+  const cards = [];
+  const opened = [];
+  let cardUnder = null;
+  const { layer, viewer, click } = fixture(t, {
+    now: () => Date.UTC(2026, 10, 3, 12),
+    reports: [
+      {
+        name: 'Linked',
+        description:
+          '<table><tr><td>Date</td><td>11/2/2026</td></tr>' +
+          '<tr><td>Source</td><td><a href="https://example.com/report">report</a></td></tr></table>',
+      },
+    ],
+    controls: {
+      overlayHost: {
+        setEntries: (_id, entries) => cards.push(entries),
+        hitTest: () => (cardUnder ? { entryId: cardUnder } : null),
+      },
+      picking: { resolvePickId: (picked) => picked?.id ?? null },
+      openExternal: (url) => opened.push(url),
+    },
+  });
+  // A label painted over the map, as a Space Missions label is: while it is
+  // over, it takes each click.
+  let labelOver = false;
+  inputFor(viewer).onOverlayClick(() => labelOver);
+  await layer.update(viewer);
+  click('ghostmaps:cip:0:0');
+  const [card] = cards.at(-1);
+  assert.equal(card.interactive, true);
+
+  // The open card lies under the label: the click opens nothing.
+  cardUnder = card.id;
+  labelOver = true;
+  click(null);
+  assert.deepEqual(opened, [], 'the link beneath the label is not opened');
+  assert.deepEqual(cards.at(-1), [], 'the card is closed');
+
+  // Off the label, a click on the open card opens its link.
+  labelOver = false;
+  click('ghostmaps:cip:0:0');
+  click(null);
+  assert.deepEqual(opened, ['https://example.com/report']);
 });

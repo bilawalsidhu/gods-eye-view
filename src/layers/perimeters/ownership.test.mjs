@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createFirePerimetersLayer } from './index.js';
-import { fakeInput } from '../../input/testDoubles.mjs';
+import { fakeInput, fakeInputUnderLabel } from '../../input/testDoubles.mjs';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
 // The fills set of the layer the last harness made: perimeter picks name it.
@@ -30,11 +30,12 @@ function harness(
   const opened = [];
   const viewer = { scene: { pick } };
   const { draw } = bindFakeDraw(viewer);
-  const input = fakeInput(viewer);
+  const input = fakeInputUnderLabel(viewer);
   const clicks = {
     handler: (click) => input.click(click.position),
+    // Only the label's own overlay handler is left.
     get destroyed() {
-      return input.input.subscriberCount() === 0 ? 1 : 0;
+      return input.input.subscriberCount() === 1 ? 1 : 0;
     },
   };
   const layer = createFirePerimetersLayer({
@@ -78,6 +79,8 @@ function harness(
     clicks,
     owners,
     opened,
+    /** A label painted over the map: while `over`, it takes each click. */
+    label: input.label,
   };
 }
 
@@ -309,6 +312,53 @@ test('a matched incident card carries the InciWeb line and click-through', async
     1,
     'opening the link must not clear the selection',
   );
+});
+
+test('a click a label painted over the incident card takes never opens its InciWeb page, and closes the card', async () => {
+  let cardHitResult = null;
+  const h = harness(
+    { getSnapshot: async () => [row] },
+    {
+      pick: () => perimeterPick('fire-perimeter:2026-NMGNF-000123:0'),
+      inciwebIndex: [
+        {
+          incident_id: '329300',
+          tau: 'NMGNF Fixture Fire',
+          incident_title: 'Fixture Fire',
+        },
+      ],
+      cardHit: () => cardHitResult,
+    },
+  );
+  await h.layer.update(h.viewer);
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  await new Promise((done) => setTimeout(done, 0));
+  const [card] = h.overlay.entries.get('fire-perimeters');
+  assert.equal(card.details.at(-1), 'InciWeb ↗ · click card to open');
+
+  // The open card lies under the label: the click opens nothing.
+  cardHitResult = { entryId: card.id };
+  h.viewer.scene.pick = () => null;
+  h.label.over = true;
+  h.clicks.handler({ position: { x: 12, y: 12 } });
+  assert.deepEqual(h.opened, [], 'the page beneath the label is not opened');
+  assert.equal(
+    h.overlay.entries.get('fire-perimeters')?.length ?? 0,
+    0,
+    'the card is closed',
+  );
+
+  // Off the label, a click on the open card opens its page.
+  h.label.over = false;
+  h.viewer.scene.pick = () =>
+    perimeterPick('fire-perimeter:2026-NMGNF-000123:0');
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  await new Promise((done) => setTimeout(done, 0));
+  cardHitResult = { entryId: h.overlay.entries.get('fire-perimeters')[0].id };
+  h.viewer.scene.pick = () => null;
+  h.clicks.handler({ position: { x: 12, y: 12 } });
+  assert.deepEqual(h.opened, ['https://inciweb.wildfire.gov/node/329300']);
+  h.layer.destroy();
 });
 
 test('an unmatched incident renders no InciWeb line and card clicks stay inert', async () => {

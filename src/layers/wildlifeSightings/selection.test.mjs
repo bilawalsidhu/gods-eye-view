@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createSelection } from './selection.js';
 import { bindWildlifeViewer } from '../../testSupport/wildlifeViewer.mjs';
+import { fakeInputUnderLabel } from '../../input/testDoubles.mjs';
 
 const row = {
   stableId: 'inat:123',
@@ -302,6 +303,35 @@ test('empty clicks and layer removal release the selected row and its overlay', 
   assert.equal(f.state.selectedId, null);
   assert.equal(f.seen.at(-1).value, null);
   assert.equal(f.entries.size, 0);
+});
+
+test("a click a label painted over a sighting's card takes never selects the sighting, and lets go of the selected one", (t) => {
+  let fake = null;
+  const f = fixture(row, {
+    input: (viewer) => {
+      fake ??= fakeInputUnderLabel(viewer);
+      return fake.input;
+    },
+  });
+  f.selection.install();
+  t.after(() => {
+    f.selection.remove();
+    fake.destroy();
+  });
+  f.selection.refreshAmbient();
+  // The sighting's name card lies under every click.
+  f.hit('wildlife-sightings-labels', 'wildlife-sightings-label:inat:123');
+
+  // Off the label, a click on the card selects and focuses the sighting.
+  fake.click();
+  assert.equal(f.state.selectedId, row.stableId);
+  assert.equal(f.flights.length, 1);
+
+  fake.label.over = true;
+  fake.click();
+  assert.equal(f.state.selectedId, null, 'the selected sighting is let go');
+  assert.equal(f.state.selectedRow, null);
+  assert.equal(f.flights.length, 1, 'the camera is not sent to the sighting');
 });
 
 test('a tap selects only a sighting exactly under it, not one the touch search found near it', () => {
