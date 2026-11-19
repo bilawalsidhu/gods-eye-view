@@ -89,6 +89,15 @@ tilt-map button, whose owners still write their state into the DOM. Core's
 pressable chips and pills (rail card chips, map sources, cities and places)
 are `UiButton`s too; `UiChip` is a non-interactive label chip, used by
 the voice card.
+The entity card's buttons are ghost `UiButton`s: its four preview buttons
+(Photos, Route, 3D, Cockpit view) are pressed toggles with `active`, Follow
+is one with `entity-card__action--on`, and the cockpit entry, Fly to and
+Ask GEV are plain buttons; so are the camera preview's bigger-view and More
+info buttons and the nearby lists' rows (`SpotConditions`, which the
+context view shows too). Their glyphs are `UiIcon`s with `:size="null"`,
+so entity-card.css and spot-conditions.css still size them
+(`src/ui/kit/entityCardControls.test.mjs` pins it). Ask GEV's chat bubble
+stays inline SVG, since no Material symbol the page loads draws it.
 `UiSelect` renders the bare native select (Core's labels sit outside it or
 come as an `aria-label`) with `v-model`, `options` and `disabled`;
 options that carry their own attributes come through the slot, a caller's

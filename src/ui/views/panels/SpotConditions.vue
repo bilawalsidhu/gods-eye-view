@@ -5,6 +5,8 @@ import { compassName, hazardsNear, regionalBrief, weatherLook } from '../../spot
 import { distanceKm } from '../../../data/entityContext.js';
 import { CONTEXT_RADIUS_STEPS, contextRadiusKm, setContextRadiusKm } from '../../contextRadius.js';
 import { contextNeedle, matchesContextSearch } from '../../contextSearch.js';
+import UiButton from '../../kit/UiButton.vue';
+import UiIcon from '../../kit/UiIcon.vue';
 import UiSlider from '../../kit/UiSlider.js';
 import { sayWords, useEntityCardStore } from '../../stores/entityCard.js';
 import { useOmnibarStore } from '../../stores/omnibar.js';
@@ -265,7 +267,7 @@ const sources = computed(() => {
     <template v-if="entity">
       <div v-if="weather || entity" class="spot-conditions__weather" :class="{ 'spot-conditions__weather--timed': entity }">
         <template v-if="weather">
-          <span class="material-symbols-outlined spot-conditions__weather-icon" aria-hidden="true">{{ look.icon }}</span>
+          <UiIcon class="spot-conditions__weather-icon" :name="look.icon" :size="null" />
           <div class="spot-conditions__weather-now">
             <strong>{{ round(weather.temperatureC) }}°C</strong>
             <span>{{ t(look.label) }}<template v-if="Number.isFinite(weather.apparentTemperatureC)"> · {{ t('feels {n}°', { n: round(weather.apparentTemperatureC) }) }}</template></span>
@@ -298,18 +300,18 @@ const sources = computed(() => {
 
     <div v-for="block in trafficBlocks" v-show="!searching || block.items.length" :key="block.id" class="spot-conditions__block">
       <h4>
-        <span class="material-symbols-outlined" aria-hidden="true">{{ block.icon }}</span>
+        <UiIcon :name="block.icon" :size="null" />
         <span>{{ block.title }}</span>
         <span class="spot-conditions__count">{{ block.count }}</span>
       </h4>
       <ul v-if="block.items.length">
         <li v-for="item in block.items" :key="item.key">
-          <button type="button" @click="store.select(item.identity, { fly: true })">
+          <UiButton @click="store.select(item.identity, { fly: true })">
             <span class="spot-conditions__row-main">
               <span class="spot-conditions__row-title">{{ item.title }}</span>
             </span>
             <span class="spot-conditions__row-meta">{{ distance(item.distanceKm) }}</span>
-          </button>
+          </UiButton>
         </li>
       </ul>
       <p v-else class="spot-conditions__none">{{ block.none }}</p>
@@ -317,14 +319,14 @@ const sources = computed(() => {
 
     <div v-show="!searching || shownHazards.length" class="spot-conditions__block">
       <h4>
-        <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+        <UiIcon name="warning" :size="null" />
         <span>{{ t('Hazards within {radius}', { radius: radiusText }) }}</span>
         <span class="spot-conditions__count" :class="{ 'spot-conditions__count--hot': hazards.length }">{{ loading ? '…' : searching ? shownHazards.length : hazards.length }}</span>
       </h4>
       <ul v-if="shownHazards.length">
         <li v-for="hazard in shownHazards" :key="`${hazard.kind}-${hazard.title}-${hazard.distanceKm}`" :class="`spot-conditions__hazard--${hazard.kind}`">
-          <button type="button" @click="flyTo(hazard)">
-            <span class="material-symbols-outlined" aria-hidden="true">{{ hazard.icon }}</span>
+          <UiButton @click="flyTo(hazard)">
+            <UiIcon :name="hazard.icon" :size="null" />
             <span class="spot-conditions__row-main">
               <span class="spot-conditions__row-title">{{ hazard.title }}</span>
               <span v-if="hazard.detail || hazard.time" class="spot-conditions__row-detail">{{ [hazard.detail, ago(hazard.time)].filter(Boolean).join(' · ') }}</span>
@@ -333,7 +335,7 @@ const sources = computed(() => {
               </span>
             </span>
             <span class="spot-conditions__row-meta">{{ distance(hazard.distanceKm) }} {{ t(hazard.direction) }}</span>
-          </button>
+          </UiButton>
         </li>
       </ul>
       <p v-else-if="!loading" class="spot-conditions__none">{{ t('No earthquakes, tropical storms or wildfires reported within {radius}.', { radius: radiusText }) }}</p>
@@ -341,40 +343,40 @@ const sources = computed(() => {
 
     <div v-if="alerts.length" class="spot-conditions__block">
       <h4>
-        <span class="material-symbols-outlined" aria-hidden="true">emergency_home</span>
+        <UiIcon name="emergency_home" :size="null" />
         <span>{{ t('Broadcast alerts within {radius}', { radius: radiusText }) }}</span>
         <span class="spot-conditions__count spot-conditions__count--hot">{{ alerts.length }}</span>
       </h4>
       <ul>
         <li v-for="alert in alerts" :key="alert.key" class="spot-conditions__hazard--alert">
-          <button type="button" @click="store.select(alert.identity, { fly: true })">
-            <span class="material-symbols-outlined" aria-hidden="true">{{ alert.icon }}</span>
+          <UiButton @click="store.select(alert.identity, { fly: true })">
+            <UiIcon :name="alert.icon" :size="null" />
             <span class="spot-conditions__row-main">
               <span class="spot-conditions__row-title">{{ alert.title }}</span>
               <span class="spot-conditions__row-detail">{{ sayWords(alert.words, alert.text) }}</span>
             </span>
             <span class="spot-conditions__row-meta">{{ distance(alert.distanceKm) }}</span>
-          </button>
+          </UiButton>
         </li>
       </ul>
     </div>
 
     <div v-if="groups?.other.length" class="spot-conditions__block">
       <h4>
-        <span class="material-symbols-outlined" aria-hidden="true">layers</span>
+        <UiIcon name="layers" :size="null" />
         <span>{{ t('Also within {radius}', { radius: radiusText }) }}</span>
         <span class="spot-conditions__count">{{ groups.other.length }}</span>
       </h4>
       <ul>
         <li v-for="item in groups.other" :key="item.key">
-          <button type="button" @click="store.select(item.identity, { fly: true })">
-            <span class="material-symbols-outlined" aria-hidden="true">{{ item.icon }}</span>
+          <UiButton @click="store.select(item.identity, { fly: true })">
+            <UiIcon :name="item.icon" :size="null" />
             <span class="spot-conditions__row-main">
               <span class="spot-conditions__row-title">{{ item.title }}</span>
               <span class="spot-conditions__row-detail">{{ shownLayerName(item.layerName, item.layerId) }}</span>
             </span>
             <span class="spot-conditions__row-meta">{{ distance(item.distanceKm) }}</span>
-          </button>
+          </UiButton>
         </li>
       </ul>
     </div>
@@ -384,7 +386,7 @@ const sources = computed(() => {
       <slot name="before-weather" />
       <div v-if="weather || entity" class="spot-conditions__weather" :class="{ 'spot-conditions__weather--timed': entity }">
         <template v-if="weather">
-          <span class="material-symbols-outlined spot-conditions__weather-icon" aria-hidden="true">{{ look.icon }}</span>
+          <UiIcon class="spot-conditions__weather-icon" :name="look.icon" :size="null" />
           <div class="spot-conditions__weather-now">
             <strong>{{ round(weather.temperatureC) }}°C</strong>
             <span>{{ t(look.label) }}<template v-if="Number.isFinite(weather.apparentTemperatureC)"> · {{ t('feels {n}°', { n: round(weather.apparentTemperatureC) }) }}</template></span>
@@ -407,7 +409,7 @@ const sources = computed(() => {
 
     <div v-if="articles.length" class="spot-conditions__block">
       <h4>
-        <span class="material-symbols-outlined" aria-hidden="true">newspaper</span>
+        <UiIcon name="newspaper" :size="null" />
         <span>{{ t('Local news') }}</span>
         <span v-if="brief?.newsQuery" class="spot-conditions__query">{{ brief.newsQuery }}</span>
       </h4>
