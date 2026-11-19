@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { cpcbObservationTime, normalizeCpcbRecords } from './cpcb.js';
 import { createAirQualitySource } from './source.js';
 import { createAirQualityLayer } from './index.js';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
 const now = Date.parse('2026-10-18T06:30:00Z');
 const row = (patch = {}) => ({
@@ -113,7 +114,9 @@ test('switching provider clears old markers and a late Canadian response cannot 
     source,
     overlayHost: { setEntries() {}, clearSource() {}, setVisible() {} },
   });
-  layer.init({ dataSources: { add() {}, remove() {} } });
+  const viewer = {};
+  bindFakeDraw(viewer);
+  layer.init(viewer);
   layer.enable();
   const pending = layer.update();
   layer.setParams({ provider: 'cpcb' });
@@ -128,6 +131,52 @@ test('switching provider clears old markers and a late Canadian response cannot 
   layer.destroy();
 });
 
+test('late India response cannot replace Canada after switching back', async () => {
+  let releaseIndia;
+  const indiaReadings = normalize([row()]);
+  const canadaReadings = [
+    {
+      ...indiaReadings[0],
+      id: 'eccc:test-station',
+      provider: 'eccc',
+      scale: 'AQHI',
+      value: 3,
+      label: '3',
+    },
+  ];
+  const source = {
+    providers: ['eccc', 'cpcb'],
+    getSnapshot: ({ provider }) =>
+      provider === 'cpcb'
+        ? new Promise((resolve) => {
+            releaseIndia = resolve;
+          })
+        : Promise.resolve(canadaReadings),
+  };
+  const layer = createAirQualityLayer({
+    source,
+    overlayHost: { setEntries() {}, clearSource() {}, setVisible() {} },
+  });
+  const viewer = {};
+  bindFakeDraw(viewer);
+  layer.init(viewer);
+  layer.setParams({ provider: 'cpcb' });
+  layer.enable();
+
+  const pendingIndia = layer.update();
+  assert.equal(typeof releaseIndia, 'function');
+  layer.setParams({ provider: 'eccc' });
+  assert.equal(await layer.update(), true);
+
+  releaseIndia(indiaReadings);
+  assert.equal(await pendingIndia, false);
+  assert.equal(layer.getParams().provider, 'eccc');
+  assert.equal(layer.getStats().count, 1);
+  assert.equal(layer.getAnalystRecords()[0].provider, 'eccc');
+  assert.ok(layer.getRowControls().legend.length > 0);
+  layer.destroy();
+});
+
 test('missing India credentials keep provider controls accessible and error visible', async () => {
   const source = {
     providers: ['eccc', 'cpcb'],
@@ -139,7 +188,9 @@ test('missing India credentials keep provider controls accessible and error visi
     source,
     overlayHost: { setEntries() {}, clearSource() {}, setVisible() {} },
   });
-  layer.init({ dataSources: { add() {}, remove() {} } });
+  const viewer = {};
+  bindFakeDraw(viewer);
+  layer.init(viewer);
   layer.setParams({ provider: 'cpcb' });
   layer.enable();
   assert.equal(await layer.update(), true);

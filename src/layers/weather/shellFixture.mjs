@@ -1,4 +1,6 @@
 import * as Cesium from 'cesium';
+import { createCesiumFields } from '../../render/cesium/drawFields.js';
+import { bindRenderer } from '../../render/rendererOf.js';
 
 /** Test double for the Cesium classes a weather shell constructs. */
 export function createShellCesium({ maximumTextureSize = 0 } = {}) {
@@ -153,4 +155,46 @@ export function renderShells(cesium, scene, count = 4) {
     }
     scene.postRender.emit();
   }
+}
+
+/**
+ * Bind to `viewer` a renderer whose draw port draws raster-shell fields
+ * with the Cesium adapter's code over these doubles, whose camera port reads
+ * the viewer's Cesium-shaped camera double (its view rectangle, `moveEnd`
+ * and height) and whose frame port runs on the scene's own events.
+ * @returns {{fields: object, unbind: () => void}}
+ */
+export function bindShellFields(viewer, cesium) {
+  const scene = viewer.scene;
+  const fields = createCesiumFields({ scene, cesium });
+  const camera = () => viewer.camera ?? scene.camera;
+  const deg = 180 / Math.PI;
+  const unbind = bindRenderer(viewer, {
+    draw: { field: (spec) => fields.field(spec) },
+    camera: {
+      pose: () => ({ height: camera()?.positionCartographic?.height }),
+      viewRectangle() {
+        const rect = camera()?.computeViewRectangle?.();
+        return rect
+          ? {
+              west: rect.west * deg,
+              south: rect.south * deg,
+              east: rect.east * deg,
+              north: rect.north * deg,
+            }
+          : null;
+      },
+      on(event, cb) {
+        if (event !== 'moveEnd') return () => {};
+        return camera()?.moveEnd?.addEventListener(cb) ?? (() => {});
+      },
+    },
+    frame: {
+      on(phase, cb) {
+        return scene[phase]?.addEventListener?.(cb) ?? (() => {});
+      },
+      requestRender: () => scene.requestRender(),
+    },
+  });
+  return { fields, unbind };
 }

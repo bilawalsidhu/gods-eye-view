@@ -1,4 +1,6 @@
+import { bindOverlayPorts } from '../testSupport/fakeOverlayPorts.mjs';
 import { createNamedMarkers } from '../layers/installations/namedMarkers.js';
+import { bindFakeCesiumScene } from '../testSupport/fakeCesiumScene.mjs';
 import { renderApplicationHtml } from '../testSupport/applicationHtml.mjs';
 import { readStylesheet } from '../testSupport/readStylesheet.mjs';
 import test from 'node:test';
@@ -13,6 +15,15 @@ import {
 import { createCctvThumbnailOverlayEntry, createFrameSlot } from '../data/cctvCards.js';
 import { combinedOverlayAlpha } from './worldOverlayDraw.js';
 import {
+  buildWildlifeLabelEntry,
+  buildWildlifeThumbnailEntry,
+  buildWildlifeSelectedLabel,
+  WILDLIFE_OVERLAY_SOURCE_ID,
+  WILDLIFE_OVERLAY_SOURCE_OPTIONS,
+  WILDLIFE_LABEL_SOURCE_ID,
+  WILDLIFE_LABEL_SOURCE_OPTIONS,
+} from '../layers/wildlifeSightings/cards.js';
+import {
   AMBIENT_CARD_COLLISION_CAPACITY,
   WORLD_OVERLAY_OCCLUDER_SELECTORS,
   WORLD_OVERLAY_PAINT_LANES,
@@ -24,6 +35,7 @@ import {
   activateWorldOverlayAction,
   initWorldOverlay,
   subscribeWorldOverlayActions,
+  getQueuedOverlayEntryAlpha,
   isOverlayPointVisible,
   normalizeOverlayEntry,
   paintLaneForOverlayEntry,
@@ -98,6 +110,7 @@ function installMockEnvironment({
 } = {}) {
   const byId = new Map();
   const paintTrace = [];
+  const contextRequests = [];
   const ctx = mockContext('shared', paintTrace);
   const detectionCtx = mockContext('detection', paintTrace);
   const layoutReads = { canvasWidth: 0, canvasHeight: 0, boundingClientRect: 0 };
@@ -172,8 +185,9 @@ function installMockEnvironment({
       return this._rect;
     }
 
-    getContext() {
+    getContext(type, options) {
       if (this.tagName !== 'CANVAS') return null;
+      contextRequests.push({ id: this.id, type, options });
       return this.id === 'world-overlay-detection-surface' ? detectionCtx : ctx;
     }
 
@@ -380,12 +394,15 @@ function installMockEnvironment({
       requestRender() { this.requestRenderCount++; },
     },
   };
+  const ports = bindOverlayPorts(viewer);
 
   return {
     viewer,
+    ports,
     ctx,
     detectionCtx,
     paintTrace,
+    contextRequests,
     document,
     window,
     postRender,
@@ -1177,7 +1194,10 @@ test('custom detection lane receives the shared host frame and paints below ordi
   assert.equal(capturedFrame.dpr, 2);
   assert.equal(capturedFrame.viewProjectionMatrix[0], 1);
   assert.equal(capturedFrame.viewProjection.m0, 1);
-  assert.equal(capturedFrame.cameraPosition, env.viewer.camera.positionWC);
+  assert.deepEqual(
+    { ...capturedFrame.cameraPosition },
+    { x: env.viewer.camera.positionWC.x, y: env.viewer.camera.positionWC.y, z: env.viewer.camera.positionWC.z },
+  );
   assert.ok(capturedFrame.occluder);
   assert.equal(capturedFrame.uiRects.length, capturedFrame.uiRectCount);
   assert.ok(capturedFrame.uiRectCount > 0);
@@ -1210,6 +1230,79 @@ test('custom detection lane receives the shared host frame and paints below ordi
   assert.equal(env.document.getElementById('world-overlay-canvas'), null);
   assert.equal(env.document.getElementById('world-overlay-detection-surface'), null);
   assert.equal(env.postRender.listeners.size, 0);
+  env.cleanup();
+});
+
+test('a detection lane sees which cards this frame will paint before they publish paint rects', () => {
+  // The detection lane paints before the cards publish this frame's paint
+  // rects, so it reads the queued alpha instead.
+  const env = installMockEnvironment({ width: 400, height: 300, dpr: 1 });
+  initWorldOverlay(env.viewer);
+  const seen = [];
+  registerWorldOverlayPaintLane('detection', () => {
+    seen.push({
+      shown: getQueuedOverlayEntryAlpha('cards', 'SHOWN'),
+      hidden: getQueuedOverlayEntryAlpha('hidden-cards', 'HIDDEN'),
+      unknown: getQueuedOverlayEntryAlpha('cards', 'NOT-PUBLISHED'),
+      rect: getOverlayPaintRect('cards', 'SHOWN'),
+    });
+  }, { id: 'detection', active: true, target: 'detection' });
+  setOverlayEntries('cards', [selectedEntry('SHOWN', {
+    position: positionAtScreen(200, 150),
+  })]);
+  setOverlayEntries('hidden-cards', [selectedEntry('HIDDEN', {
+    position: positionAtScreen(100, 100),
+  })]);
+  setOverlaySourceVisible('hidden-cards', false);
+
+  env.postRender.raise();
+  assert.deepEqual(seen[0], { shown: 1, hidden: 0, unknown: 0, rect: null },
+    'the card is queued while its paint rect is still unpublished');
+  assert.ok(getOverlayPaintRect('cards', 'SHOWN'), 'the card did paint after the lane');
+  assert.equal(getOverlayPaintRect('hidden-cards', 'HIDDEN'), null);
+
+  clearOverlaySource('cards');
+  env.postRender.raise();
+  assert.equal(seen[1].shown, 0, 'a card cleared since the last frame is no longer queued');
+  destroyWorldOverlay();
+  assert.equal(getQueuedOverlayEntryAlpha('cards', 'SHOWN'), 0);
+  env.cleanup();
+});
+
+test('a detection lane reads zero for a yielding entry the declutter pass hid this frame', () => {
+  // Declutter runs before custom lanes, so a yielding entry it hid must not
+  // report its full queued alpha to them.
+  const env = installMockEnvironment({ width: 400, height: 300, dpr: 1 });
+  initWorldOverlay(env.viewer);
+  const seen = [];
+  registerWorldOverlayPaintLane('detection', () => {
+    seen.push({
+      winner: getQueuedOverlayEntryAlpha('cards', 'ABOVE'),
+      yielder: getQueuedOverlayEntryAlpha('labels', 'YIELDER'),
+    });
+  }, { id: 'detection', active: true, target: 'detection' });
+  // Two cards take both vertical slots, so a vertical-only yielder has none.
+  const at = positionAtScreen(200, 150);
+  const card = (id, placement) => selectedEntry(id, {
+    position: at,
+    placement,
+    verticalOnly: true,
+    collisionGroup: 'shared-card',
+  });
+  setOverlayEntries('cards', [card('ABOVE', 'above'), card('BELOW', 'below')]);
+  setOverlayEntries('labels', [selectedEntry('YIELDER', {
+    position: at,
+    verticalOnly: true,
+    collisionGroup: 'yielding-label',
+    yieldToCollisionGroup: 'shared-card',
+  })]);
+
+  env.postRender.raise();
+  assert.ok(getOverlayPaintRect('cards', 'ABOVE'), 'the winner painted');
+  assert.equal(getOverlayPaintRect('labels', 'YIELDER'), null, 'the yielder was hidden');
+  assert.ok(seen[0].winner > 0, 'the winner reads its queued alpha');
+  assert.equal(seen[0].yielder, 0, 'the yielder hidden this frame reads zero');
+  destroyWorldOverlay();
   env.cleanup();
 });
 
@@ -1594,6 +1687,171 @@ test('bounded per-source cohorts feed the domain arbiter without universal selec
   assert.equal(diagnostics.candidateCount, 3);
   assert.ok(diagnostics.selectedCount <= 2);
   env.cleanup();
+});
+
+test('wildlife common names use the host ambient collision domain and never paint overlapping labels', (t) => {
+  const env = installMockEnvironment({ width: 1000, height: 600, dpr: 1 });
+  t.after(() => env.cleanup());
+  initWorldOverlay(env.viewer);
+  const entries = [
+    ['hawk', 'Red-tailed Hawk', position()],
+    ['maple', 'Red Maple', position()],
+    ['butterfly', 'Monarch', new Cesium.Cartesian3(-0.6, 0.6, 0)],
+    ['unknown', null, position()],
+  ].map(([stableId, commonName, anchor]) => {
+    const entry = buildWildlifeLabelEntry({ stableId, commonName, iconic: 'Aves' });
+    return entry && { ...entry, position: anchor, horizonCull: false, edgeFade: 'none' };
+  }).filter(Boolean);
+  assert.equal(entries.length, 3, 'unidentified icons never enter the overlay host');
+  setOverlayEntries(WILDLIFE_LABEL_SOURCE_ID, entries, WILDLIFE_LABEL_SOURCE_OPTIONS);
+  env.postRender.raise();
+  env.advanceTime(200);
+  env.postRender.raise();
+  const rects = entries.map((entry) => getOverlayPaintRect(WILDLIFE_LABEL_SOURCE_ID, entry.id)).filter(Boolean);
+  assert.ok(rects.length >= 2 && rects.length <= 3, 'the host places separated names and relocates or drops coincident names');
+  for (let i = 0; i < rects.length; i++) {
+    assert.equal(rects[i].entry.collisionGroup, 'ambient-label');
+    assert.equal(rects[i].entry.protected, false);
+    for (let j = i + 1; j < rects.length; j++) {
+      const a = rects[i], b = rects[j];
+      assert.ok(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
+    }
+  }
+});
+
+const CITY_NOW = Date.parse('2026-11-04T18:00:00Z');
+function citySighting(id, overrides = {}) {
+  return {
+    stableId: id, commonName: `Synthetic city species ${id}`, iconic: 'Aves',
+    observedAt: CITY_NOW - 60_000, quality: 'research', favesCount: 1,
+    photo: {
+      square: 'https://inaturalist-open-data.s3.amazonaws.com/photos/1/square.jpg',
+      licence: 'cc-by', attribution: 'Synthetic Photographer',
+    },
+    ...overrides,
+  };
+}
+function cityLabel(row, x, y, width = 1000, height = 600) {
+  return {
+    ...buildWildlifeLabelEntry(row, { nowMs: CITY_NOW }),
+    position: positionAtScreen(x, y, width, height), horizonCull: false, edgeFade: 'none',
+  };
+}
+function cityCard(row, x, y, width = 1000, height = 600, image = { width: 75, height: 75 }) {
+  return {
+    ...buildWildlifeThumbnailEntry(row, CITY_NOW, { image }),
+    position: positionAtScreen(x, y, width, height), horizonCull: false, edgeFade: 'none',
+    maxDistance: Infinity,
+  };
+}
+function assertDisjointPaint(entries) {
+  const rects = entries.map(([source, entry]) => getOverlayPaintRect(source, entry.id)).filter(Boolean);
+  for (let i = 0; i < rects.length; i++)
+    for (let j = i + 1; j < rects.length; j++) {
+      const a = rects[i], b = rects[j];
+      assert.ok(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y,
+        `${a.entryId} overlaps ${b.entryId}`);
+    }
+  return rects;
+}
+
+test('close-range dense city labels and photo cards never overlap, including frames between camera solves', (t) => {
+  const env = installMockEnvironment({ width: 1000, height: 600, dpr: 1 });
+  t.after(() => env.cleanup());
+  env.viewer.camera.positionCartographic.height = 9000;
+  initWorldOverlay(env.viewer);
+  const labels = Array.from({ length: 150 }, (_, i) =>
+    cityLabel(citySighting(`city:${i}`, { favesCount: 150 - i }), 65 + (i % 30) * 28, 150 + Math.floor(i / 30) * 62));
+  const cards = Array.from({ length: 8 }, (_, i) =>
+    cityCard(citySighting(`photo:${i}`), 140 + (i % 4) * 210, 180 + Math.floor(i / 4) * 240));
+  const all = [...labels.map((e) => [WILDLIFE_LABEL_SOURCE_ID, e]), ...cards.map((e) => [WILDLIFE_OVERLAY_SOURCE_ID, e])];
+  setOverlayEntries(WILDLIFE_LABEL_SOURCE_ID, labels, WILDLIFE_LABEL_SOURCE_OPTIONS);
+  setOverlayEntries(WILDLIFE_OVERLAY_SOURCE_ID, cards, WILDLIFE_OVERLAY_SOURCE_OPTIONS);
+  for (const ms of [0, 75, 125]) {
+    env.advanceTime(ms);
+    env.postRender.raise();
+    assertDisjointPaint(all);
+  }
+  assert.equal(cards.filter((e) => getOverlayPaintRect(WILDLIFE_OVERLAY_SOURCE_ID, e.id)).length, 8);
+  const placedLabels = labels.filter((e) => getOverlayPaintRect(WILDLIFE_LABEL_SOURCE_ID, e.id));
+  assert.ok(placedLabels.length > 5 && placedLabels.length < labels.length, 'label count is capped by the remaining space');
+  // A pan/zoom reprojects sticky placements on every frame before moveEnd.
+  env.viewer.camera.frustum.projectionMatrix[0] = 0.7;
+  env.viewer.camera.frustum.projectionMatrix[5] = 0.8;
+  env.advanceTime(16);
+  env.postRender.raise();
+  assertDisjointPaint(all);
+  env.moveEnd.raise();
+  env.advanceTime(75);
+  env.postRender.raise();
+  assertDisjointPaint(all);
+});
+
+test('labels yield immediately to photo cards, then compete by ambientScore without disturbing the card', (t) => {
+  const env = installMockEnvironment({ width: 400, height: 350, dpr: 1 });
+  t.after(() => env.cleanup());
+  initWorldOverlay(env.viewer);
+  const low = cityLabel(citySighting('low'), 200, 210, 400, 350);
+  const high = cityLabel(citySighting('high', { favesCount: 1000 }), 200, 210, 400, 350);
+  const card = cityCard(citySighting('card', { quality: 'needs_id' }), 200, 210, 400, 350);
+  const all = [[WILDLIFE_LABEL_SOURCE_ID, low], [WILDLIFE_LABEL_SOURCE_ID, high], [WILDLIFE_OVERLAY_SOURCE_ID, card]];
+  setOverlayEntries(WILDLIFE_LABEL_SOURCE_ID, [low, high], WILDLIFE_LABEL_SOURCE_OPTIONS);
+  env.postRender.raise();
+  env.advanceTime(200);
+  env.postRender.raise();
+  assert.equal(assertDisjointPaint(all).length, 2, 'both label slots are initially free');
+  setOverlayEntries(WILDLIFE_OVERLAY_SOURCE_ID, [card], WILDLIFE_OVERLAY_SOURCE_OPTIONS);
+  env.postRender.raise();
+  for (const ms of [1, 74, 125]) {
+    env.advanceTime(ms);
+    env.postRender.raise();
+    assertDisjointPaint(all);
+    assert.ok(getOverlayPaintRect(WILDLIFE_OVERLAY_SOURCE_ID, card.id));
+    assert.ok(getOverlayPaintRect(WILDLIFE_LABEL_SOURCE_ID, high.id));
+    assert.equal(getOverlayPaintRect(WILDLIFE_LABEL_SOURCE_ID, low.id), null);
+  }
+  const before = { ...getOverlayPaintRect(WILDLIFE_OVERLAY_SOURCE_ID, card.id) };
+  const promoted = cityLabel(citySighting('low', { favesCount: 1_000_000 }), 200, 210, 400, 350);
+  setOverlayEntries(WILDLIFE_LABEL_SOURCE_ID, [promoted, high], WILDLIFE_LABEL_SOURCE_OPTIONS);
+  env.postRender.raise();
+  assertDisjointPaint(all);
+  assert.ok(getOverlayPaintRect(WILDLIFE_LABEL_SOURCE_ID, low.id));
+  assert.equal(getOverlayPaintRect(WILDLIFE_LABEL_SOURCE_ID, high.id), null);
+  const after = getOverlayPaintRect(WILDLIFE_OVERLAY_SOURCE_ID, card.id);
+  assert.deepEqual([after.x, after.y, after.w, after.h], [before.x, before.y, before.w, before.h], 'the card retains its sticky placement');
+  const selected = { ...buildWildlifeSelectedLabel(citySighting('selected')), position: card.position, horizonCull: false, edgeFade: 'none' };
+  setOverlayEntries('wildlife-sightings-selected', [selected]);
+  env.postRender.raise();
+  assertDisjointPaint([...all, ['wildlife-sightings-selected', selected]]);
+  // Exit fades still occupy space; labels must wait until the card is gone.
+  setOverlayEntries(WILDLIFE_OVERLAY_SOURCE_ID, [], WILDLIFE_OVERLAY_SOURCE_OPTIONS);
+  for (const ms of [1, 149, 151]) {
+    env.advanceTime(ms);
+    env.postRender.raise();
+    assertDisjointPaint([...all, ['wildlife-sightings-selected', selected]]);
+  }
+});
+
+test('photo visibility reports only painted membership changes, ignoring loading cards and idle frames', (t) => {
+  const env = installMockEnvironment({ width: 400, height: 350, dpr: 1 });
+  t.after(() => env.cleanup());
+  initWorldOverlay(env.viewer);
+  const changes = [];
+  const options = { ...WILDLIFE_OVERLAY_SOURCE_OPTIONS, onVisibilityChange: (ids) => changes.push([...ids]) };
+  const r = citySighting('anchor');
+  setOverlayEntries(WILDLIFE_OVERLAY_SOURCE_ID, [cityCard(r, 200, 210, 400, 350, null)], options);
+  env.postRender.raise();
+  assert.deepEqual(changes, []);
+  setOverlayEntries(WILDLIFE_OVERLAY_SOURCE_ID, [cityCard(r, 200, 210, 400, 350)], options);
+  env.postRender.raise();
+  env.advanceTime(200);
+  env.postRender.raise();
+  assert.deepEqual(changes, [['sighting:anchor']]);
+  for (let i = 0; i < 10; i++) env.postRender.raise();
+  assert.equal(changes.length, 1, 'unchanged visibility emits nothing');
+  setOverlaySourceVisible(WILDLIFE_OVERLAY_SOURCE_ID, false);
+  env.postRender.raise();
+  assert.deepEqual(changes, [['sighting:anchor'], []]);
 });
 
 test('FIRMS and vessels enlarge the ambient-card lane under an explicit aggregate budget', () => {
@@ -2254,14 +2512,21 @@ test('installation titles share persistent card arbitration and retain a bounded
   env.viewer.camera.changed = new Cesium.Event();
   t.mock.method(Cesium.Cartesian3, 'fromDegrees', (lon, lat) => new Cesium.Cartesian3(lon, lat, 0));
   t.mock.method(Cesium.EllipsoidalOccluder.prototype, 'isPointVisible', () => true);
-  t.mock.method(Cesium.SceneTransforms, 'worldToWindowCoordinates', (_scene, _point, scratch) => {
+  t.mock.method(Cesium.SceneTransforms, 'worldToWindowCoordinates', (_scene, _point, scratch = new Cesium.Cartesian2()) => {
     scratch.x = scratch.y = 100; return scratch;
   });
   const state = { enabled: true, viewer: env.viewer, contextAnchor: {} };
+  env.ports.unbind();
+  bindFakeCesiumScene(env.viewer);
   const markers = createNamedMarkers({ state,
     services: { render: { governorRequestRender() {} } },
-    parts: { model: { colorFor: () => Cesium.Color.ORANGE }, rendering: { installationSurfaceHeightM: () => 0 } },
-    overlayHost: { setEntries: setOverlayEntries, clearSource: clearOverlaySource,
+    parts: { model: { colorFor: () => [1, 165 / 255, 0, 1] }, rendering: { installationSurfaceHeightM: () => 0 } },
+    // The markers place titles in ECEF; this camera looks at degrees, as the
+    // mocked fromDegrees above makes them.
+    overlayHost: { setEntries: (id, entries, policy) => setOverlayEntries(id, entries.map((entry) => {
+      const { longitude, latitude } = Cesium.Cartographic.fromCartesian(entry.position);
+      return { ...entry, position: new Cesium.Cartesian3(Cesium.Math.toDegrees(longitude), Cesium.Math.toDegrees(latitude), 0) };
+    }), policy), clearSource: clearOverlaySource,
       setVisible: setOverlaySourceVisible, getDiagnostics: getWorldOverlayDiagnostics },
   });
   initWorldOverlay(env.viewer);
@@ -2314,4 +2579,71 @@ test('promoting an ambient entry to selected paints it once with no fading dupli
     setOverlayEntries('military-installations', [entry]); paint(); env.advanceTime(200);
     assert.equal(paint(), 1, 'deselect restores the ambient card without re-entry cooldown');
   } finally { env.cleanup(); }
+});
+
+test('the queued-card index stays bounded while card identities churn', () => {
+  // The index is internal: capture it through Map.prototype.set, like the
+  // projection-record test.
+  const originalSet = Map.prototype.set;
+  let queuedIndex = null;
+  Map.prototype.set = function captureQueuedIndex(key, value) {
+    if (typeof key === 'string' && key.startsWith('churn-card-')
+      && value && typeof value === 'object' && 'temporalAlpha' in value
+      && 'placement' in value && 'stamp' in value) {
+      queuedIndex = this;
+    }
+    return originalSet.call(this, key, value);
+  };
+  const env = installMockEnvironment({ width: 400, height: 300, dpr: 1 });
+  try {
+    initWorldOverlay(env.viewer);
+    const FRAMES = 1300;
+    for (let frame = 0; frame < FRAMES; frame++) {
+      // One card whose id changes every frame reuses one pooled paint item,
+      // like a vessel cohort republished as the camera moves.
+      setOverlayEntries('cards', [selectedEntry(`churn-card-${frame}`, {
+        position: positionAtScreen(200, 150),
+      })]);
+      env.advanceTime(16);
+      env.postRender.raise();
+      assert.equal(getQueuedOverlayEntryAlpha('cards', `churn-card-${frame}`), 1,
+        'the live card is queued in the frame just painted');
+      if (frame > 0) {
+        assert.equal(getQueuedOverlayEntryAlpha('cards', `churn-card-${frame - 1}`), 0,
+          'a stale row never reports the previous card as queued');
+      }
+    }
+    assert.ok(queuedIndex, 'the queued-card index was never populated');
+    // Rows are pruned every 600 painted frames, so with one new id per frame
+    // the index holds at most one prune window of ids plus the live card.
+    const bound = 600 + 1;
+    assert.ok(
+      queuedIndex.size <= bound,
+      `queued-card index holds ${queuedIndex.size} rows after ${FRAMES} identities (bound ${bound})`,
+    );
+  } finally {
+    Map.prototype.set = originalSet;
+    env.cleanup();
+  }
+});
+
+test('both overlay surfaces draw on synchronized 2D contexts', () => {
+  // A desynchronized context can show an earlier buffer after a frame that
+  // only clears: a card removed from its source stayed on screen until
+  // something painted over it.
+  const env = installMockEnvironment();
+  try {
+    initWorldOverlay(env.viewer);
+    const ids = env.contextRequests.map((request) => request.id).sort();
+    assert.deepEqual(ids, [
+      'world-overlay-canvas',
+      'world-overlay-detection-surface',
+    ]);
+    for (const request of env.contextRequests) {
+      assert.equal(request.type, '2d');
+      assert.notEqual(request.options?.desynchronized, true, request.id);
+    }
+  } finally {
+    env.cleanup();
+  }
 });

@@ -1,10 +1,16 @@
+import { followedOf } from '../data/followed.js';
+import { readEntityRecord } from '../data/entityRecords.js';
 import { nextTick } from 'vue';
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
 import { ShellFacade } from './shellFacade.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
 import { LayerBindings } from './layerBindings.js';
 import { PanelChrome } from './panelChrome.js';
-import { initMobileShell } from './mobileShell.js';
+import {
+  initMobileShell,
+  MOBILE_SHELL_MEDIA_QUERY,
+  sheetForPanelId,
+} from './mobileShell.js';
 import { VisualSettings } from './visualSettings.js';
 import { NavigationController } from './navigationController.js';
 import { ShareRestoration } from './shareRestoration.js';
@@ -17,6 +23,7 @@ import { CockpitCoordinator } from './cockpitCoordinator.js';
 import { ContextControls } from './context.js';
 import { CctvControls } from './cctv.js';
 import { StreetLevelControls } from './streetLevelControls.js';
+import { createWildlifeSightingCard } from './wildlifeSightingCard.js';
 import { RadioControls } from './radio.js';
 import { LocalSdrControls } from './localSdrControls.js';
 import { LocationNavigation } from './locationNavigation.js';
@@ -29,7 +36,10 @@ import {
   setCyberSonarControls,
 } from './cyberSonarControls.js';
 
-import * as Cesium from 'cesium';
+import { toDegrees, toRadians } from '../geo/index.js';
+// A viewer with no renderer bound gets its ports (camera, effects, globe)
+// once its owner has loaded the package's `./render/cesium/unbound` export.
+import { cameraOf, canvasOf, findCamera } from '../render/rendererOf.js';
 
 import { aircraftTrackingTarget } from '../cockpitTracking.js';
 
@@ -54,15 +64,22 @@ import { applicationPinia, createUiRuntime } from './vueRuntime.js';
 import { useContextStore } from './stores/context.js';
 import { useMissionReplayStore } from './stores/missionReplay.js';
 import { useCelestialRingStore } from './stores/celestialRing.js';
+import { icrfToFixedAxes } from '../sky/icrf.js';
 import { useWorldOverlayActionsStore } from './stores/worldOverlayActions.js';
 import { useAwarenessDirectionStore } from './stores/awarenessDirection.js';
 import { useHudStore } from './stores/hud.js';
 import { useDisplayStore } from './stores/display.js';
 import { useLocaleStore } from './stores/locale.js';
 import { useLocationStore } from './stores/location.js';
+import { useOmnibarStore } from './stores/omnibar.js';
+import { installEntityContext } from './entityContextBridge.js';
+import { installRailEdgeScroll } from './railEdgeScroll.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useGlobeActionsStore } from './stores/globeActions.js';
 import { useRecordingStore } from './stores/recording.js';
+import { onPlacePacksLoadingChange } from '../data/placeBelow.js';
+import { withPlacePacks } from './placePacksLoading.js';
+import { preloadOwnerFlags } from './ownerFlag.js';
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -85,10 +102,13 @@ import { useRecordingStore } from './stores/recording.js';
 
 export class StyleManager extends ShellFacade {
   /**
-   * @param {Cesium.Viewer} viewer - The CesiumJS viewer instance.
+   * @param {object} viewer - The scene object the renderer draws.
    * @param {object} [options]
    * @param {boolean} [options.localePicker=true] - false removes the language
-   *   picker, for a host that does not initialize Core's locale.
+   *   picker, for a host that offers its own language choice.
+   * @param {{lon: number, lat: number, height: number, heading?: number,
+   *   pitch?: number}|null} [options.homeView] - where the title's logo goes
+   *   back to (degrees): the view the app started from.
    */
   constructor(
     viewer,
@@ -99,6 +119,7 @@ export class StyleManager extends ShellFacade {
       requestServices,
       initialShareCode = null,
       localePicker = true,
+      homeView = null,
     } = {},
   ) {
     super();
@@ -156,10 +177,34 @@ export class StyleManager extends ShellFacade {
     });
     // Vue views share this runtime and its stores; dispose unmounts them.
     this._ui = createUiRuntime({ pinia: applicationPinia() });
-    this._feedback = new ShellFeedback({
-      readLayers: () => this._dataManager?.getAll?.() || [],
+    // The omnibar and Context list and toggle data layers through the shell.
+    useOmnibarStore(applicationPinia()).connect({
+      layers: () => this._dataManager?.getAll?.() || [],
+      setLayer: (id, enabled) =>
+        this._dataManager?.setEnabled(id, enabled, { origin: 'user' }),
     });
+    // Scrolling at a screen edge steps through that side's rail panels.
+    this._removeRailEdgeScroll = installRailEdgeScroll();
+    this._feedback = new ShellFeedback({
+      readLayers: () => withPlacePacks(this._dataManager?.getAll?.() || []),
+    });
+    // The satellite owner flags load with the app, not on the first ride.
+    preloadOwnerFlags();
+    // The place names under a Cockpit load on its first lookup: the loading
+    // status names them meanwhile.
+    this._offPlacePacks = onPlacePacksLoadingChange(() =>
+      this._updateGlobalLoadingFeedback(),
+    );
     this.viewer = viewer;
+    // A click on anything a layer can identify opens its card in Context.
+    this._removeEntityContext = installEntityContext({
+      viewer,
+      getDataManager: () => this._dataManager,
+      pinia: applicationPinia(),
+      pickWorld: services.pickWorldFromScreen,
+      regionalBrief: services.fetchRegionalBrief,
+      overlayHit: services.hitTestWorldOverlay,
+    });
     this.mapStackController = mapStackController;
     this.placeSearch = placeSearch;
 
@@ -194,8 +239,8 @@ export class StyleManager extends ShellFacade {
         this._showGlobalStatusNotice(message, options),
       feedback: this._feedback,
       updateFeedback: () => this._updateGlobalLoadingFeedback(),
-      applyFollowOffset: (entity, offset) =>
-        applyShareFollowOffset(viewer, entity, offset),
+      applyFollowOffset: (followed, offset) =>
+        applyShareFollowOffset(viewer, followed, offset),
     });
 
     this._visualSettings = new VisualSettings({
@@ -208,6 +253,7 @@ export class StyleManager extends ShellFacade {
         getDetectionTuning: services.getDetectionTuning,
         getKeyholeFadeTuning: services.getKeyholeFadeTuning,
         getScopeMaskFeather: services.getScopeMaskFeather,
+        getScopeMaskOpacity: services.getScopeMaskOpacity,
         getScopeTerminusOverride: services.getScopeTerminusOverride,
         governorRequestRender: services.governorRequestRender,
         holdContinuousRender: services.holdContinuousRender,
@@ -221,6 +267,7 @@ export class StyleManager extends ShellFacade {
         setKeyholeFadeTuning: services.setKeyholeFadeTuning,
         setScopeMaskEnabled: services.setScopeMaskEnabled,
         setScopeMaskFeather: services.setScopeMaskFeather,
+        setScopeMaskOpacity: services.setScopeMaskOpacity,
       },
       elements: {
         _ppToggles: this._ppToggles,
@@ -298,6 +345,7 @@ export class StyleManager extends ShellFacade {
     this._locationNavigation = new LocationNavigation({
       viewer,
       placeSearch,
+      homeView,
       navigation: this._navigation,
       readCockpit: () => this.cockpitView,
       services: {
@@ -360,6 +408,10 @@ export class StyleManager extends ShellFacade {
       services: {
         flightsLayer: services.flightsLayer,
         militaryFlightsLayer: services.militaryFlightsLayer,
+        aisLiveVesselsLayer: services.aisLiveVesselsLayer,
+        satellitesLayer: services.satellitesLayer,
+        // Orbit's Live Signals rows list and focus its mapped sites.
+        militaryInstallationsLayer: services.militaryInstallationsLayer,
         isTr3b: services.isTr3b,
         toggleTr3b: services.toggleTr3b,
         militaryAwarenessLayer: services.militaryAwarenessLayer,
@@ -369,11 +421,28 @@ export class StyleManager extends ShellFacade {
         meshFloorPreferred: services.meshFloorPreferred,
         warmGroundFloor: services.warmGroundFloor,
         sampleMeshFloorCells: services.sampleMeshFloorCells,
+        // Whether the aircraft Cockpit flies still draws: an entity of the
+        // viewer's own (the scene's `viewerDrawsEntity` says), or a tracked
+        // contact whose layer draws it through the draw port and says so in
+        // its entity record.
+        trackedEntityDrawn: (entity) =>
+          services.viewerDrawsEntity?.(entity) === true ||
+          readEntityRecord(entity)?.drawn?.() === true,
         holdContinuousRender: services.holdContinuousRender,
         releaseContinuousRender: services.releaseContinuousRender,
         fetchRegionalBrief: services.fetchRegionalBrief,
         regionalDistanceM: services.regionalDistanceM,
         weatherCodeLabel: services.weatherCodeLabel,
+        // Orbit reads flat Esri imagery: Google 3D tiles stay coarse from
+        // hundreds of kilometres up. The lease puts the map back on exit.
+        acquireOrbitImagery: () =>
+          this.mapStackController?.acquireImageryComparison?.({
+            owner: 'cockpit-orbit',
+            switchPolicy: 'esri-if-photoreal',
+          }) ?? null,
+        // The application's own first-person subjects
+        // (src/cockpitSubjectProviders.js), checked by the coordinator.
+        cockpitSubjects: services.cockpitSubjects,
       },
       elements: {
         _ppToggles: this._ppToggles,
@@ -399,6 +468,10 @@ export class StyleManager extends ShellFacade {
             useCockpitStore(applicationPinia()).publishVision(view),
           signals: (rows) =>
             useCockpitStore(applicationPinia()).publishSignals(rows),
+          radar: (view) =>
+            useCockpitStore(applicationPinia()).publishRadar(view),
+          orbital: (view) =>
+            useCockpitStore(applicationPinia()).publishOrbital(view),
           utilityLayout: (layout) =>
             useCockpitStore(applicationPinia()).publishUtilityLayout(layout),
         },
@@ -427,6 +500,8 @@ export class StyleManager extends ShellFacade {
     this.celestialRing = new CelestialRing(viewer, {
       enabled: false,
       store: useCelestialRingStore(applicationPinia()),
+      // The precise frame, once the sky has loaded its tables.
+      preciseFrameAt: icrfToFixedAxes,
       onAutoDisable: () =>
         this.setCelestialRingEnabled(false, {
           syncShare: !!this.shareLinkManager,
@@ -441,12 +516,17 @@ export class StyleManager extends ShellFacade {
       },
       isNavigationCurrent: (generation) =>
         generation === this._navigationGeneration,
-      cancelOwnedNavigation: () => this.viewer.camera.cancelFlight(),
+      cancelOwnedNavigation: () => cameraOf(this.viewer).cancelFlight(),
       // A host may open a share code without a `/share/<code>` address.
       initialShareCode,
     });
     this.shareLinkManager.setFollowSubjectProvider(({ nowMs }) =>
-      readShareFollowSubject({ viewer: this.viewer, nowMs }),
+      readShareFollowSubject({
+        viewer: this.viewer,
+        nowMs,
+        readSelectedVessel: () =>
+          this.services.aisLiveVesselsLayer?.getSelectedFix?.() ?? null,
+      }),
     );
     this.shareLinkManager.setPanelStateProvider(() =>
       this._buildSharePanelState(),
@@ -553,6 +633,10 @@ export class StyleManager extends ShellFacade {
           this._setDetectionAllocation(...args),
         _setDetectionFade: (...args) => this._setDetectionFade(...args),
         _setScope: (...args) => this._visualSettings._setScope(...args),
+        _applyGlobalPostDefaults: (...args) =>
+          this._applyGlobalPostDefaults(...args),
+        _adoptDetectionAsRestore: () =>
+          this._visualSettings.adoptDetectionAsRestore(),
         setCelestialRingEnabled: (...args) =>
           this.setCelestialRingEnabled(...args),
         _setModels3dEnabled: (...args) => this._setModels3dEnabled(...args),
@@ -589,6 +673,7 @@ export class StyleManager extends ShellFacade {
     this._initRadioPanel();
     this._initCctvPanel();
     this._initStreetLevelPanel();
+    this._initWildlifeSightingCard();
     this._initGlobalContextPanel();
     this._initLocationBar();
     this._initMobileShell();
@@ -728,7 +813,7 @@ export class StyleManager extends ShellFacade {
     this._lifetime.own(
       onLocaleChange(() => nextTick(() => this._sizeDisplayLabelColumn())),
     );
-    // A host that does not initialize Core's locale shows no picker.
+    // A host that offers its own language choice shows no picker.
     if (this._localePickerEnabled === false) return;
     this._publishLocalePicker();
   }
@@ -1012,7 +1097,7 @@ export class StyleManager extends ShellFacade {
         _radioVolumeValue: this._radioVolumeValue,
       },
       radio: radioLayer,
-      canvas: this.viewer?.canvas,
+      canvas: canvasOf(this.viewer) ?? undefined,
       actions: {
         isRegistered: () => this._dataManager?.layers?.has('radio'),
         isEnabled: () => this._dataManager?.isEnabled('radio'),
@@ -1073,6 +1158,19 @@ export class StyleManager extends ShellFacade {
     return this._runExplicitNavigation('camera', () => focus(cameraId));
   }
 
+  /** Keep one compact card anchored to the selected wildlife sighting. */
+  _initWildlifeSightingCard() {
+    this._wildlifeSightingCard?.destroy();
+    this._wildlifeSightingCard = null;
+    const layer = this.services.wildlifeSightingsLayer;
+    if (!layer) return;
+    this._wildlifeSightingCard = createWildlifeSightingCard({
+      layer,
+      ui: this._ui,
+      viewer: this.viewer,
+    });
+  }
+
   /** Compose the Street Level panel controls from its layer and application actions. */
   _initStreetLevelPanel() {
     const { streetLevelLayer } = this.services;
@@ -1098,6 +1196,7 @@ export class StyleManager extends ShellFacade {
           this._dataManager?.setLayerParams('street-level', params, options),
         setPanelCollapsed: (collapsed, options) =>
           this.setPanelCollapsed('street-level-panel', collapsed, options),
+        revealPanel: () => this.revealPanel('street-level-panel'),
         showToast: (message) => this._showToast(message),
         // Lets the panel open for a user, voice or tool switch-on, not a restore.
         subscribeEnableRequests: (listener) =>
@@ -1139,6 +1238,7 @@ export class StyleManager extends ShellFacade {
         _cctvSummary: this._cctvSummary,
       },
       cctv: cctvLayer,
+      viewer: this.viewer,
       actions: {
         isEnabled: () => this._dataManager?.isEnabled('cctv'),
         setParams: (params, options) =>
@@ -1146,6 +1246,11 @@ export class StyleManager extends ShellFacade {
         toggleEnabled: (...args) => this._toggleCctvEnabled(...args),
         runExplicitFocus: (...args) => this._runExplicitCctvFocus(...args),
         setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
+        // Clear selected data layers and Context isolation switch the layer
+        // off without the user asking: the panel keeps its state for both.
+        preservePanelState: () =>
+          this._preservePanelStateDuringLayerClear ||
+          this._contextSuspendsLayer('cctv'),
         showToast: (message) => this._showToast(message),
         syncViewport: () => this._syncCctvPanelViewport(),
       },
@@ -1173,7 +1278,7 @@ export class StyleManager extends ShellFacade {
       setEnabled: (next) =>
         this._dataManager.setEnabled('cctv', next, { origin: 'user' }),
       readOwnership: () => ({
-        trackedEntity: this.viewer?.trackedEntity,
+        followed: followedOf(this.viewer),
         cockpitActive: !!this.cockpitView?.active,
       }),
       shouldFocus: () =>
@@ -1210,6 +1315,20 @@ export class StyleManager extends ShellFacade {
     } = {},
   ) {
     return this._panelChrome.setPanelCollapsed(...arguments);
+  }
+
+  /**
+   * Bring a panel into view on a phone, where the rails show only as tab
+   * sheets: opens the sheet that holds it. Does nothing above 720px.
+   * @param {string} panelId - DOM id of the panel.
+   * @returns {void}
+   */
+  revealPanel(panelId) {
+    const sheet = sheetForPanelId(panelId);
+    if (!globalThis.matchMedia?.(MOBILE_SHELL_MEDIA_QUERY)?.matches) return;
+    if (sheet) this._mobileShell?.setSheet(sheet);
+    // The sheet opens at its top; a panel lower in the rail is scrolled to.
+    document.getElementById(panelId)?.scrollIntoView?.({ block: 'nearest' });
   }
 
   /**
@@ -1318,9 +1437,12 @@ export class StyleManager extends ShellFacade {
       };
     }
     if (!target.available) {
+      // The controller knows why (Google 3D: no Maps key; others: no ion token).
       return {
         ok: false,
-        error: `${target.label} requires a Cesium ion token`,
+        error:
+          target.unavailableReason ||
+          `${target.label} requires a Cesium ion token`,
         activeStack: this.mapStackController.getActiveId(),
       };
     }
@@ -1432,15 +1554,16 @@ export class StyleManager extends ShellFacade {
    * @returns {{lat: number, lon: number, alt: number, heading: number, pitch: number, roll: number}|null}
    */
   getCameraState() {
-    const carto = this.viewer.camera.positionCartographic;
-    if (!carto) return null;
+    const pose = findCamera(this.viewer)?.pose();
+    if (!pose || !Number.isFinite(pose.lat) || !Number.isFinite(pose.lon))
+      return null;
     return {
-      lat: Cesium.Math.toDegrees(carto.latitude),
-      lon: Cesium.Math.toDegrees(carto.longitude),
-      alt: carto.height,
-      heading: Cesium.Math.toDegrees(this.viewer.camera.heading),
-      pitch: Cesium.Math.toDegrees(this.viewer.camera.pitch),
-      roll: Cesium.Math.toDegrees(this.viewer.camera.roll),
+      lat: pose.lat,
+      lon: pose.lon,
+      alt: pose.height,
+      heading: toDegrees(pose.heading),
+      pitch: toDegrees(pose.pitch),
+      roll: toDegrees(pose.roll),
     };
   }
 
@@ -1452,20 +1575,18 @@ export class StyleManager extends ShellFacade {
    */
   applyCameraState(cameraState, duration = 2.8) {
     if (!cameraState) return;
-    this.viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(
-        cameraState.lon,
-        cameraState.lat,
-        cameraState.alt,
-      ),
-      orientation: {
-        heading: Cesium.Math.toRadians(cameraState.heading || 0),
-        pitch: Cesium.Math.toRadians(cameraState.pitch || -35),
-        roll: Cesium.Math.toRadians(cameraState.roll || 0),
+    cameraOf(this.viewer).flyTo(
+      { lon: cameraState.lon, lat: cameraState.lat, height: cameraState.alt },
+      {
+        orientation: {
+          heading: toRadians(cameraState.heading || 0),
+          pitch: toRadians(cameraState.pitch || -35),
+          roll: toRadians(cameraState.roll || 0),
+        },
+        durationS: Math.max(0.2, duration || 0),
+        easing: 'cubicInOut',
       },
-      duration: Math.max(0.2, duration || 0),
-      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-    });
+    );
   }
 
   /**
@@ -1601,7 +1722,12 @@ export class StyleManager extends ShellFacade {
     const store = useGlobeActionsStore(applicationPinia());
     if (this._resetToken) store.detach(this._resetToken);
     this._resetToken = controls
-      ? store.connect({ reset: () => controls.reset() })
+      ? store.connect({
+          reset: () => controls.reset(),
+          home: () => {
+            if (!this._disposed) void this.returnToStart();
+          },
+        })
       : null;
     // A reset under way as the controls are replaced stays on the buttons.
     if (this._resetToken && this._globeResetting != null)
@@ -1717,7 +1843,7 @@ export class StyleManager extends ShellFacade {
    * altitude ceiling, and only the nearest MODEL_MAX in view are admitted, so
    * the default costs nothing at globe scale. `all` is the deliberate opt-in;
    * turning the toggle off returns the fleet to flat billboards. The TRACKED
-   * contact is independent of this toggle (see trackedModelRegime.js).
+   * contact follows the same rule: selecting a contact never changes its form.
    * @returns {void}
    */
 
@@ -1780,6 +1906,9 @@ export class StyleManager extends ShellFacade {
     const { destroyTrackedReadout, destroyWorldOverlay, destroyDetection } =
       this.services;
     if (this._disposed) return;
+    useOmnibarStore(applicationPinia()).connect(null);
+    this._removeRailEdgeScroll?.();
+    this._removeEntityContext?.();
     this._shareRestoration.destroy();
     this._feedback.clearLoadingStatus();
     this._disposed = true;
@@ -1791,8 +1920,10 @@ export class StyleManager extends ShellFacade {
     this._recording.destroy();
     this._mobileShell?.destroy();
     this._panelNavigation?.destroy();
+    this._wildlifeSightingCard?.destroy();
     this._ui.destroy();
     this._panelChrome.destroy();
+    this._offPlacePacks();
     this._feedback.destroy();
 
     this._displayBindings.destroy();

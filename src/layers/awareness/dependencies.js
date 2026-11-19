@@ -17,9 +17,23 @@ export function createDependencies({
       parts.subject.refreshSelectedSubject(true);
       return;
     }
+    if (adoptSelectedVessel()) return;
     if (layerState.autoFocusRetryPending) {
       layerState.autoFocusRetryPending = !parts.focus.focusAttentionTarget();
     }
+  }
+
+  /**
+   * Take the selected AIS vessel as the subject, as its selection would have
+   * had Contacts been on. A followed flight is checked first by the callers.
+   * @returns {boolean} Whether a vessel became the subject.
+   */
+  function adoptSelectedVessel() {
+    const vessel = parts.subject.currentSelectedVesselSubject?.();
+    if (!vessel) return false;
+    layerState.autoFocusRetryPending = false;
+    parts.subject.selectSubject(vessel);
+    return Boolean(layerState.subject);
   }
 
   async function enableDependencies(activationId = layerState.activationId) {
@@ -79,12 +93,32 @@ export function createDependencies({
     });
   }
 
+  /**
+   * Give up a dependency the user adopts. A direct selection, or the Cockpit
+   * riding one of its aircraft, promotes a layer Contacts turned on into the
+   * user's own (`DataLayerManager.adoptLayerVisibility`). Releasing it when
+   * Contacts goes off would tear down that track or Cockpit before the
+   * Context restore could put the layer back.
+   */
+  function relinquishAdoptedDependency(change) {
+    if (change?.type === 'visibility' && change.adopted && change.enabled)
+      layerState.ownedDependencies.delete(change.layerId);
+  }
+
+  /** Follow one manager's adoptions; null stops following. */
+  function watchAdoptions(dataManager) {
+    layerState.unwatchAdoptions?.();
+    layerState.unwatchAdoptions =
+      dataManager?.subscribe?.(relinquishAdoptedDependency) || null;
+  }
+
   function activateOperationalContext() {
     const activationId = ++layerState.activationId;
     layerState.autoFocusRetryPending = false;
     const initialTrackedSubject = parts.subject.currentTrackedFlightSubject();
     if (initialTrackedSubject)
       parts.subject.selectSubject(initialTrackedSubject);
+    else adoptSelectedVessel();
     return enableDependencies(activationId)
       .then(() => {
         if (
@@ -102,6 +136,7 @@ export function createDependencies({
           parts.subject.selectSubject(layerState.subject);
           return;
         }
+        if (adoptSelectedVessel()) return;
         if (layerState.autoFocusAttempted) return;
         layerState.autoFocusRetryPending = !parts.focus.focusAttentionTarget();
       })
@@ -113,6 +148,7 @@ export function createDependencies({
     refreshAfterDeferredDependency,
     enableDependencies,
     releaseOwnedDependencies,
+    watchAdoptions,
     activateOperationalContext,
   };
 }

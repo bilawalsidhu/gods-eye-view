@@ -65,6 +65,28 @@ export const ACTION_DESCRIPTIONS = {
       },
     },
   },
+  show_street_level: {
+    description:
+      'Fly to a place and open its nearest street-level photo; Street View switches to Google 3D (billed). No query: view centre.',
+    $position: 1,
+    parameters: {
+      properties: {
+        query: {
+          description: 'Place or address; "pointer" = under the cursor.',
+          $position: 1,
+        },
+        provider: {
+          description:
+            'google = Street View; others by name; omit: the lit source.',
+          $position: 1,
+        },
+        referent: {
+          description: 'Numbered item n from the last result list.',
+          $position: 1,
+        },
+      },
+    },
+  },
   adjust_camera_zoom: {
     description:
       'Move the current Cesium camera closer to or farther from what it is presently looking at. Use for relative zoom requests without changing location.',
@@ -135,7 +157,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   control_cockpit: {
     description:
-      'Explicit Cockpit requests only: enter from a selected/tracked aircraft (establishes Contacts itself; no set_context_mode), exit, status, or next/previous. Explicit exit-and-show voice: voicePanel preview/settings (Voice Settings), no confirmation.',
+      'Explicit Cockpit requests only: enter from a selected/tracked aircraft (needs only its own Flights/Military layer on, not Contacts; opens Contacts itself, no set_context_mode), exit, status, or next/previous. Explicit exit-and-show voice: voicePanel preview/settings (Voice Settings), no confirmation.',
     $position: 1,
     parameters: {
       properties: {
@@ -286,6 +308,11 @@ export const ACTION_DESCRIPTIONS = {
         },
       },
     },
+  },
+  open_stories: {
+    description:
+      'Open the Stories Explore list on request ("open Stories", "show the story list"). Turns off voice.',
+    $position: 1,
   },
   control_scene: {
     description:
@@ -523,13 +550,17 @@ export const ACTION_DESCRIPTIONS = {
       properties: {
         direction: {
           description:
-            'Required for pan/tilt/rotate; orbit/rotate_globe default right.',
+            'Pan/rotate/tilt steps; orbit/rotate_globe default right.',
           $position: 2,
         },
         mode: {
           description:
             'once = bounded eased nudge; continuous = until stop/manual input. rotate_globe defaults continuous; other motions default once.',
           $position: 2,
+        },
+        pitchDeg: {
+          description: 'Absolute; -45 default, -89 top-down.',
+          $position: 1,
         },
       },
     },

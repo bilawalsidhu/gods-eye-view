@@ -1,4 +1,7 @@
-import { CCTV_SOURCE_FETCH_TIMEOUT_MS } from './constants.js';
+import {
+  CCTV_SOURCE_FETCH_TIMEOUT_MS,
+  TAIWAN_HIGHWAY_IMAGE_ORIGINS,
+} from './constants.js';
 import {
   cameraDisplayCode,
   fallbackHeadingFromId,
@@ -10,6 +13,8 @@ import { readResponseTextCapped } from '../common/http.js';
  * standard, published keyless and refreshed daily (~1,800 cameras). */
 export const TAIWAN_FREEWAY_CCTV_URL =
   'https://tisvcloud.freeway.gov.tw/history/motc20/CCTV.xml';
+export const TAIWAN_HIGHWAY_CCTV_URL =
+  'https://cctv-maintain.thb.gov.tw/opendataCCTVs.xml';
 /** The whole network is ~1.2 MB. */
 export const TAIWAN_MAX_CATALOG_BYTES = 6 * 1024 * 1024;
 const DEFAULT_TAIWAN_MAX_SOURCES = 600;
@@ -35,6 +40,9 @@ const STREAM_TO_FRAME = new Map([
 ]);
 
 const DIRECTIONS = { N: 'N', S: 'S', E: 'E', W: 'W' };
+const TAIWAN_HIGHWAY_CAMERA_HOSTS = new Set(
+  TAIWAN_HIGHWAY_IMAGE_ORIGINS.map((origin) => new URL(origin).hostname),
+);
 
 /** Prioritization anchors, north to south, so a cap keeps the whole island
  * rather than only greater Taipei. */
@@ -211,6 +219,74 @@ export function taiwanCameraToSource(row) {
   };
 }
 
+/**
+ * One Highway Bureau row -> a source whose first MJPEG frame is served as a
+ * snapshot by the existing camera-frame proxy.
+ *
+ * @param {object} row - Output of parseTaiwanCctvXml.
+ * @returns {?object}
+ */
+export function taiwanHighwayCameraToSource(row) {
+  if (!row || typeof row !== 'object') return null;
+  const { lat, lon } = row;
+  if (!isLikelyTaiwanCoordinate(lat, lon)) return null;
+
+  let url;
+  try {
+    url = new URL(String(row.streamUrl ?? ''));
+  } catch {
+    return null;
+  }
+  if (
+    url.protocol !== 'https:' ||
+    url.username ||
+    url.password ||
+    url.port ||
+    url.search ||
+    url.hash ||
+    !TAIWAN_HIGHWAY_CAMERA_HOSTS.has(url.hostname) ||
+    !/^\/[A-Za-z0-9._+~-]{1,100}$/.test(url.pathname) ||
+    url.pathname.includes('..')
+  )
+    return null;
+
+  const rawId = String(row.cctvId ?? '').trim();
+  if (!/^[A-Za-z0-9-]{1,80}$/.test(rawId)) return null;
+  const cameraId = 'tw-thb-' + rawId.toLowerCase();
+  const road = String(row.roadName ?? '').trim();
+  const direction = DIRECTIONS[String(row.direction ?? '').trim()] || '';
+  const mile = String(row.mile ?? '').trim();
+  const section = [row.sectionStart, row.sectionEnd]
+    .map((part) => String(part ?? '').trim())
+    .filter(Boolean)
+    .join('→');
+  const name =
+    (road || mile || section
+      ? [road, direction, mile, section].filter(Boolean).join(' ')
+      : '') || rawId;
+
+  return {
+    id: cameraId,
+    name: name.slice(0, 160),
+    city: 'Taiwan / 臺灣',
+    cityId: 'taiwan',
+    provider: 'Highway Bureau, MOTC',
+    lat,
+    lon,
+    headingDeg: fallbackHeadingFromId(cameraId),
+    headingConfidence: 'low',
+    pitchDeg: -18,
+    fovDeg: 44,
+    rangeM: 145,
+    mountHeightM: 8,
+    feedType: 'mjpeg',
+    url: url.href,
+    snapshotUrl: url.href,
+    sourceKind: 'taiwan-highway-motc',
+    license: 'Highway Bureau, MOTC open data',
+    code: cameraDisplayCode((road + ' ' + mile).trim().toUpperCase() || rawId),
+  };
+}
 let lastGood = null;
 let lastGoodAt = 0;
 let retryAfter = 0;
@@ -235,6 +311,49 @@ function taiwanSourceCap() {
   return Number.isFinite(rawCap)
     ? Math.max(1, Math.min(2000, Math.floor(rawCap)))
     : DEFAULT_TAIWAN_MAX_SOURCES;
+}
+
+/** Fetch the public provincial-road CCTV table as a no-key fallback. */
+async function loadTaiwanHighwaySources() {
+  const signal = AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS);
+  const response = await fetch(TAIWAN_HIGHWAY_CCTV_URL, {
+    headers: { Accept: 'application/xml,text/xml' },
+    redirect: 'manual',
+    signal,
+  });
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => {});
+    throw new Error(
+      response.status >= 300 && response.status < 400
+        ? 'Highway Bureau catalog redirected; redirects are not followed'
+        : 'Highway Bureau catalog HTTP ' + response.status,
+    );
+  }
+  const xml = await readResponseTextCapped(
+    response,
+    TAIWAN_MAX_CATALOG_BYTES,
+    signal,
+  );
+  const cameras = new Map();
+  for (const row of parseTaiwanCctvXml(xml)) {
+    const camera = taiwanHighwayCameraToSource(row);
+    if (camera && !cameras.has(camera.id)) cameras.set(camera.id, camera);
+  }
+  if (!cameras.size)
+    throw new Error('no usable Highway Bureau cameras in the table');
+  const sources = prioritizeSources(
+    [...cameras.values()],
+    taiwanSourceCap(),
+    ANCHORS,
+  );
+  console.log(
+    '[CCTV] Loaded Taiwan Highway Bureau fallback: ' +
+      cameras.size +
+      ' (using ' +
+      sources.length +
+      ')',
+  );
+  return sources;
 }
 
 /**
@@ -262,7 +381,7 @@ export async function loadTaiwanSources() {
       throw new Error(
         response.status >= 300 && response.status < 400
           ? 'catalog redirected; redirects are not followed'
-          : `HTTP ${response.status}`,
+          : 'HTTP ' + response.status,
       );
     }
     const xml = await readResponseTextCapped(
@@ -282,7 +401,11 @@ export async function loadTaiwanSources() {
       ANCHORS,
     );
     console.log(
-      `[CCTV] Loaded Taiwan camera sources: ${cameras.size} (using ${sources.length})`,
+      '[CCTV] Loaded Taiwan camera sources: ' +
+        cameras.size +
+        ' (using ' +
+        sources.length +
+        ')',
     );
     lastGood = sources;
     lastGoodAt = Date.now();
@@ -291,13 +414,37 @@ export async function loadTaiwanSources() {
   } catch (error) {
     retryAfter = Date.now() + TAIWAN_RETRY_AFTER_FAILURE_MS;
     const fallback = fallbackSources();
-    console.warn(
-      `[CCTV] Taiwan camera download failed (${error?.message || error}); ` +
-        (fallback.length
-          ? `serving the last good ${fallback.length} cameras`
-          : 'no Taiwan cameras') +
-        ', next attempt in 1 h',
-    );
-    return fallback;
+    if (fallback.length) {
+      console.warn(
+        '[CCTV] Taiwan Freeway camera download failed (' +
+          (error?.message || error) +
+          '); serving the last good ' +
+          fallback.length +
+          ' cameras, next attempt in 1 h',
+      );
+      return fallback;
+    }
+    try {
+      const sources = await loadTaiwanHighwaySources();
+      lastGood = sources;
+      lastGoodAt = Date.now();
+      console.warn(
+        '[CCTV] Taiwan Freeway camera download failed (' +
+          (error?.message || error) +
+          '); using ' +
+          sources.length +
+          ' Highway Bureau cameras as fallback, next attempt in 1 h',
+      );
+      return sources;
+    } catch (fallbackError) {
+      console.warn(
+        '[CCTV] Taiwan Freeway camera download failed (' +
+          (error?.message || error) +
+          '); Highway Bureau fallback failed (' +
+          (fallbackError?.message || fallbackError) +
+          '); no Taiwan cameras, next attempt in 1 h',
+      );
+      return [];
+    }
   }
 }

@@ -77,6 +77,9 @@ export function cctvSourceLabelText(label) {
   return SOURCE_LABELS[text] ? t(SOURCE_LABELS[text]) : text;
 }
 
+/** Longest wait for a loaded frame's decode before it is shown anyway. */
+export const CCTV_FRAME_DECODE_WAIT_MS = 1000;
+
 /** The preview before any frame: nothing requested, nothing shown. */
 export const EMPTY_CCTV_FRAME = Object.freeze({
   cameraId: '',
@@ -127,7 +130,28 @@ export function _queueCctvFrame(src, cameraId, cameraChanged) {
 
   const preloader = new Image();
   this._cctvFramePreloader = preloader;
-  preloader.onload = () => this._settleCctvFrame(token, src, true);
+  // Settle once the image is decoded, not merely loaded: the panel's <img>
+  // then paints the frame the moment it takes the src, instead of showing
+  // its empty box for the decode.
+  // A decode that rejects after a load still has drawable data, as it was
+  // before decoding was awaited. A decode that never settles (a hidden tab may
+  // hold it until the page draws) shows the loaded frame after
+  // CCTV_FRAME_DECODE_WAIT_MS rather than leaving the preview loading.
+  preloader.onload = () => {
+    if (typeof preloader.decode !== 'function') {
+      this._settleCctvFrame(token, src, true);
+      return;
+    }
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      this._settleCctvFrame(token, src, true);
+    };
+    const timer = setTimeout(settle, CCTV_FRAME_DECODE_WAIT_MS);
+    preloader.decode().then(settle, settle);
+  };
   preloader.onerror = () => this._settleCctvFrame(token, src, false);
   preloader.src = src;
 }

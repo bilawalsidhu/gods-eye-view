@@ -10,6 +10,7 @@ import {
   resolveArea,
 } from '../area.js';
 import { LIMIT_SCHEMA, capRows, countNoun, toBase64 } from '../results.js';
+import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 const FRAME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MAX_FRAME_BYTES = 3 * 1024 * 1024;
@@ -85,7 +86,7 @@ export const findCctvCameras = defineTool({
         provider: text(camera.provider),
         lat: round(camera.lat, 6),
         lon: round(camera.lon, 6),
-        heading_deg: round(camera.headingDeg, 0),
+        heading_deg: roundHeadingDegrees(camera.headingDeg),
         feed_type: text(camera.feedType),
         credit: text(camera.credit),
         distance_km: round(distanceKm(center, camera), 2),

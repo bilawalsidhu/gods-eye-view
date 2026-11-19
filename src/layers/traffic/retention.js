@@ -1,4 +1,10 @@
-import * as Cesium from 'cesium';
+import {
+  copyInto,
+  distanceSquared,
+  equalsEpsilon,
+  lerpInto,
+} from '../../geo/vector.js';
+import { canvasOf, findCamera, findQuery } from '../../render/rendererOf.js';
 import { MAX_DOTS, roadDotBudget } from './policy.js';
 
 export const DOT_CHANGE_BUDGET = 768;
@@ -12,31 +18,41 @@ export function roadIdentity(road) {
 /** Retain one road and its dot population across tile and surface publications. */
 export function createRetention({ state, parts }) {
   const records = new Map();
-  const heightStep = new Cesium.Cartesian3();
-  const screenFrom = new Cesium.Cartesian2();
-  const screenTo = new Cesium.Cartesian2();
-  const eye = new Cesium.Cartesian3();
-  function projectSafely(scene, point, screen) {
-    if (scene.camera.viewMatrix) {
-      Cesium.Matrix4.multiplyByPoint(scene.camera.viewMatrix, point, eye);
-      if (eye.z >= -(scene.camera.frustum?.near || 0)) return false;
+  const heightStep = { x: 0, y: 0, z: 0 };
+  const near = (a, b) =>
+    equalsEpsilon(a.x, b.x, 0.01) &&
+    equalsEpsilon(a.y, b.y, 0.01) &&
+    equalsEpsilon(a.z, b.z, 0.01);
+  const pointDistance = (a, b) => Math.sqrt(distanceSquared(a, b));
+  /**
+   * A point's window position, or null when it is on or behind the near
+   * plane (where a projection folds back onto the screen) or does not
+   * project.
+   */
+  function projectSafely(view, point) {
+    const { pose, query } = view;
+    if (pose) {
+      const { position: eye, direction: d } = pose;
+      const depth =
+        d.x * (point.x - eye.x) +
+        d.y * (point.y - eye.y) +
+        d.z * (point.z - eye.z);
+      if (depth <= (pose.near || 0)) return null;
     }
-    return (
-      Boolean(
-        Cesium.SceneTransforms.worldToWindowCoordinates(scene, point, screen),
-      ) &&
-      Number.isFinite(screen.x) &&
-      Number.isFinite(screen.y)
-    );
+    const screen = query.project(point);
+    return screen && Number.isFinite(screen.x) && Number.isFinite(screen.y)
+      ? screen
+      : null;
   }
-  function nearCanvas(scene, point, screen) {
-    return (
-      projectSafely(scene, point, screen) &&
+  function nearCanvas(view, point) {
+    const screen = projectSafely(view, point);
+    return screen &&
       screen.x >= -100 &&
-      screen.x <= scene.canvas.clientWidth + 100 &&
+      screen.x <= view.width + 100 &&
       screen.y >= -100 &&
-      screen.y <= scene.canvas.clientHeight + 100
-    );
+      screen.y <= view.height + 100
+      ? screen
+      : null;
   }
   let timer = null;
   let altitude = 0;
@@ -52,6 +68,8 @@ export function createRetention({ state, parts }) {
     timer = null;
     if (!state._enabled) return;
     let budget = DOT_CHANGE_BUDGET;
+    // The dots that finished fading out, taken from the draw set at once.
+    const gone = [];
     let pending = false;
     const now = Date.now();
     // Removing a road or reducing density fades only surplus dots. A retained
@@ -68,7 +86,7 @@ export function createRetention({ state, parts }) {
       for (let i = record.dots.length - 1; i >= 0 && budget > 0; i--) {
         const dot = record.dots[i];
         if (!dot.retiring || now - dot.retiring < DOT_FADE_MS) continue;
-        state._pointCollection.remove(dot.point);
+        gone.push(dot.point.id);
         const last = state._dots.pop();
         if (last !== dot) {
           state._dots[dot.index] = last;
@@ -111,6 +129,7 @@ export function createRetention({ state, parts }) {
       if (!record.target && !record.dots.length)
         records.delete(record.road.key);
     }
+    if (gone.length) state._dotSet?.remove(gone);
     refreshCounts();
     state._populationPending = pending;
     if (pending) schedule();
@@ -120,7 +139,7 @@ export function createRetention({ state, parts }) {
     counts.free = counts.slow = counts.jam = counts.sim = 0;
     let count = 0;
     for (const dot of state._dots) {
-      if (!dot.point.show) continue;
+      if (dot.point.show === false) continue;
       counts[dot.bucket || 'sim']++;
       count++;
     }
@@ -139,12 +158,14 @@ export function createRetention({ state, parts }) {
         // so an asynchronous height pass cannot move half a road in one frame.
         const road = {
           ...candidate,
-          waypoints: candidate.waypoints.map((p) => Cesium.Cartesian3.clone(p)),
+          waypoints: candidate.waypoints.map(({ x, y, z }) => ({ x, y, z })),
           segmentDist: candidate.segmentDist.slice(),
           source: candidate,
-          targetWaypoints: candidate.waypoints.map((p) =>
-            Cesium.Cartesian3.clone(p),
-          ),
+          targetWaypoints: candidate.waypoints.map(({ x, y, z }) => ({
+            x,
+            y,
+            z,
+          })),
           heightMoving: false,
         };
         record = { road, dots: [], target: 0, wanted: true };
@@ -154,19 +175,12 @@ export function createRetention({ state, parts }) {
         record.road.flow = candidate.flow;
         record.road.densityWeight = candidate.densityWeight;
         for (let i = 0; i < candidate.waypoints.length; i++) {
-          if (
-            !Cesium.Cartesian3.equalsEpsilon(
-              record.road.targetWaypoints[i],
-              candidate.waypoints[i],
-              0,
-              0.01,
-            )
-          )
+          const target = record.road.targetWaypoints[i];
+          // A waypoint the retained road lacks counts as moved and is not
+          // written, as before.
+          if (!target || !near(target, candidate.waypoints[i]))
             record.road.heightMoving = state._heightPending = true;
-          Cesium.Cartesian3.clone(
-            candidate.waypoints[i],
-            record.road.targetWaypoints[i],
-          );
+          if (target) copyInto(candidate.waypoints[i], target);
         }
       }
       record.wanted = true;
@@ -189,11 +203,27 @@ export function createRetention({ state, parts }) {
     if (!state._dots.length && timer === null) pump();
     else schedule();
   }
+  /**
+   * What height easing reads of the view once a frame: the canvas size, the
+   * query port to project with and the camera pose for the near plane. Null
+   * when nothing can be projected yet.
+   */
+  function frameView() {
+    const viewer = state._viewer;
+    const canvas = canvasOf(viewer);
+    if (!canvas?.clientHeight) return null;
+    const query = findQuery(viewer);
+    if (!query) return null;
+    return {
+      query,
+      pose: findCamera(viewer)?.pose() ?? null,
+      width: canvas.clientWidth,
+      height: canvas.clientHeight,
+    };
+  }
   function easeHeights(dt) {
     const blend = Math.min(1, dt * 12);
-    const scene = state._viewer?.scene;
-    const canProject =
-      scene?.canvas?.clientHeight && scene.camera && scene.frameState;
+    let view;
     state._heightPending = false;
     for (let r = 0; r < state._roads.length; r++) {
       const road = state._roads[r];
@@ -202,25 +232,27 @@ export function createRetention({ state, parts }) {
       for (let i = 0; i < road.waypoints.length; i++) {
         const point = road.waypoints[i],
           target = road.targetWaypoints[i];
-        if (Cesium.Cartesian3.distanceSquared(point, target) < 0.0001)
-          Cesium.Cartesian3.clone(target, point);
+        if (distanceSquared(point, target) < 0.0001) copyInto(target, point);
         else {
-          const visible = canProject && nearCanvas(scene, point, screenFrom);
+          if (view === undefined) view = frameView();
+          const screenFrom = view && nearCanvas(view, point);
+          const visible = Boolean(screenFrom);
           let step = visible
             ? blend
-            : Math.min(
-                blend,
-                (120 * dt) / Cesium.Cartesian3.distance(point, target),
-              );
+            : Math.min(blend, (120 * dt) / pointDistance(point, target));
           if (visible) {
             let safe = false;
             for (let attempt = 0; attempt < 16; attempt++) {
-              Cesium.Cartesian3.lerp(point, target, step, heightStep);
-              if (!projectSafely(scene, heightStep, screenTo)) {
+              lerpInto(point, target, step, heightStep);
+              const screenTo = projectSafely(view, heightStep);
+              if (!screenTo) {
                 step *= 0.5;
                 continue;
               }
-              const pixels = Cesium.Cartesian2.distance(screenFrom, screenTo);
+              const pixels = Math.hypot(
+                screenFrom.x - screenTo.x,
+                screenFrom.y - screenTo.y,
+              );
               if (pixels <= 12) {
                 safe = true;
                 break;
@@ -229,13 +261,13 @@ export function createRetention({ state, parts }) {
             }
             if (!safe) step = 0;
           }
-          state._heightPending ||= !canProject || visible;
-          Cesium.Cartesian3.lerp(point, target, step, point);
+          state._heightPending ||= !view || visible;
+          lerpInto(point, target, step, point);
           moving = true;
         }
       }
       for (let i = 0; i < road.segmentDist.length; i++)
-        road.segmentDist[i] = Cesium.Cartesian3.distance(
+        road.segmentDist[i] = pointDistance(
           road.waypoints[i],
           road.waypoints[i + 1],
         );
@@ -255,9 +287,9 @@ export function createRetention({ state, parts }) {
     for (const road of roads) {
       if (!road.heightMoving) continue;
       for (let i = 0; i < road.waypoints.length; i++)
-        Cesium.Cartesian3.clone(road.targetWaypoints[i], road.waypoints[i]);
+        copyInto(road.targetWaypoints[i], road.waypoints[i]);
       for (let i = 0; i < road.segmentDist.length; i++)
-        road.segmentDist[i] = Cesium.Cartesian3.distance(
+        road.segmentDist[i] = pointDistance(
           road.waypoints[i],
           road.waypoints[i + 1],
         );

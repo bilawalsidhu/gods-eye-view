@@ -50,8 +50,9 @@ export function createIngestion({
     layerState._postTleRetryCount++;
     layerState._retryTimer = setTimeout(() => {
       layerState._retryTimer = null;
+      // A failed retry is already recorded in the layer stats.
       if (layerState._enabled && token === layerState._lifecycleToken)
-        requestMissionUpdate();
+        requestMissionUpdate().catch(() => {});
     }, POST_TLE_RETRY_DELAY_MS);
   }
 
@@ -182,25 +183,30 @@ export function createIngestion({
       if (
         !layerState._enabled ||
         token !== layerState._lifecycleToken ||
-        !layerState._dataSource
+        !layerState._missionSets
       )
         return;
       const activeTleText = layerState._activeTleText;
       if (layerState._replayCameraLaunchId) parts.replay.stopMissionReplay();
       layerState._launches = launches;
       parts.orbitRendering.removeMissionOrbitPrimitives();
-      layerState._dataSource.entities.removeAll();
+      parts.rendering.clearLaunchEntities();
       layerState._missionOverlayRecords.clear();
       layerState._satelliteTelemetry.clear();
       layerState._replayTracks.clear();
       layerState._orbitMatches = 0;
       launches.forEach((launch) =>
-        parts.rendering.addLaunchEntity(launch, activeTleText),
+        parts.rendering.addLaunchEntity(launch, activeTleText, { defer: true }),
       );
+      parts.rendering.flushLaunchEntities();
       layerState._renderedTleText = activeTleText;
       if (layerState._renderedTleText === layerState._activeTleText)
         clearPostTleRetry();
       layerState._count = launches.length;
+      // The roster reads these to tell a loaded empty index from loading.
+      layerState._lastUpdate = Date.now();
+      layerState._lastError = null;
+      layerState._stale = stale === true;
       parts.panel.renderMissionRoster();
       if (
         !layerState._selectedLaunchId ||
@@ -219,13 +225,19 @@ export function createIngestion({
       }
       layerState._focusAfterActiveLookup = false;
       parts.panel.renderMissionPanel();
-      layerState._lastUpdate = Date.now();
-      layerState._lastError = null;
-      layerState._stale = stale === true;
+      layerState.coverageChanged();
+      layerState._entryCameraView = null;
     } catch (error) {
       if (layerState._enabled && token === layerState._lifecycleToken) {
         layerState._lastError = error.message;
+        layerState._lastErrorAt = Date.now();
         console.warn('[Data:RocketLaunches] Fetch error:', error);
+        // No index yet: fail the enable so Context rolls back.
+        // After a loaded index, a failed refresh keeps its records.
+        if (layerState._lastUpdate === null) {
+          parts.panel.renderMissionRoster();
+          throw error;
+        }
       }
     }
   }

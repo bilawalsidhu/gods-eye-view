@@ -1,5 +1,6 @@
 import { applicationServices } from './services/application.js';
-import * as Cesium from 'cesium';
+import { toRadians } from './geo/vector.js';
+import { findCamera } from './render/rendererOf.js';
 import { greatCircleMeters } from './geoDistance.js';
 import {
   deriveWeatherEffectProfile,
@@ -171,6 +172,18 @@ export function cockpitWeatherEnabledFromStoredValue(value) {
 }
 
 /**
+ * Whether the cloud pass runs for a Cockpit subject's layer. Not in orbit:
+ * the pass fades out above 24 km (weatherAltitudeFactors), so a satellite
+ * would pay for it and see nothing. The saved preference is left as it is
+ * for the next aircraft or bridge; cloud cover from orbit is the Weather
+ * layer's.
+ * @param {string|null|undefined} layerId
+ */
+export function cockpitCloudsShowFor(layerId) {
+  return layerId !== 'satellites';
+}
+
+/**
  * Weather-backed volumetric cloud pass that exists only while cockpit mode is
  * active. It owns no Cesium fog/post-process stages and cannot affect map mode.
  */
@@ -207,10 +220,12 @@ class CockpitCloudEffectsController {
     this.enabled = this.readEnabledPreference();
 
     this.onResize = () => this.resize();
+    this.orbit = false;
     this.onCockpitMode = (event) => {
       const active =
         event?.detail?.active ??
         document.body.classList.contains('cockpit-mode');
+      this.orbit = active && !cockpitCloudsShowFor(event?.detail?.layerId);
       if (active && this.enabled) this.start();
       else this.stop();
     };
@@ -327,15 +342,14 @@ class CockpitCloudEffectsController {
   }
 
   cameraPoint() {
-    const cartographic = this.viewer?.camera?.positionCartographic;
-    if (!cartographic) return null;
-    const latitude = Cesium.Math.toDegrees(cartographic.latitude);
-    const longitude = Cesium.Math.toDegrees(cartographic.longitude);
+    const pose = this.viewer ? findCamera(this.viewer)?.pose() : null;
+    if (!pose) return null;
+    const { lat: latitude, lon: longitude } = pose;
     if (![latitude, longitude].every(Number.isFinite)) return null;
     return {
       latitude,
       longitude,
-      altitudeM: Math.max(0, Number(cartographic.height) || 0),
+      altitudeM: Math.max(0, Number(pose.height) || 0),
     };
   }
 
@@ -344,7 +358,8 @@ class CockpitCloudEffectsController {
       this.destroyed ||
       !this.enabled ||
       this.frame !== null ||
-      this.suspended
+      this.suspended ||
+      this.orbit
     )
       return;
     if (!this.gl) {
@@ -528,7 +543,7 @@ class CockpitCloudEffectsController {
   render(timeSec) {
     const gl = this.gl;
     if (!gl || !this.program || !this.locations) return;
-    const windRadians = Cesium.Math.toRadians(this.windDirectionDeg);
+    const windRadians = toRadians(this.windDirectionDeg);
     const windScale = 0.008 + this.windStrength * 0.022;
     gl.useProgram(this.program);
     gl.uniform2f(

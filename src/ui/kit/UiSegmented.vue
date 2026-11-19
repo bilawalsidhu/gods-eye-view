@@ -8,7 +8,8 @@ import { computed } from 'vue';
 // End). Each option may carry `attrs` (an id, data attributes, a tip), and
 // Core's classes sit beside the kit's: `gev-segmented`, `gev-segment` and the
 // selected option's `activeClass`. An option with an `icon` shows the glyph,
-// and its label becomes the button's accessible name and tooltip.
+// and its label becomes the button's accessible name and tooltip, unless its
+// `attrs` carry a tip of their own.
 const props = defineProps({
   modelValue: { type: String, default: undefined },
   /** `{value, label, icon?, disabled?, attrs?}`, labels already translated. */
@@ -119,7 +120,7 @@ function onKey(event) {
       ]"
       :aria-checked="String(option.value === props.modelValue)"
       :aria-label="option.icon ? option.label : undefined"
-      :title="option.icon ? option.label : undefined"
+      :title="option.attrs?.title ?? (option.icon ? option.label : undefined)"
       :disabled="optionOff(option)"
       :tabindex="tabindex(index)"
       @click="choose(index)"

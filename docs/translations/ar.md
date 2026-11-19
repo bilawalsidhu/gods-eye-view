@@ -66,6 +66,7 @@ Every form must keep `{count}`. For one and two, Arabic names the quantity with 
 | call sign                                  | رمز النداء                                                 |
 | vessel, ship                               | سفينة                                                      |
 | satellite                                  | قمر صناعي                                                  |
+| CONFIRMED (sightings chip; a landing)      | مؤكَّدة / مؤكَّد                                           |
 | launch (rocket) / space mission            | إطلاق / مهمة فضائية                                        |
 | contact (tracked object)                   | هدف                                                        |
 | installation, site / mapped                | منشأة، موقع / مرسوم                                        |
