@@ -878,3 +878,42 @@ test('left rail keeps collapsed panels shown beside Cockpit, still one open', ()
   assert.equal(f.stack.classList.contains('layout-exclusive'), false);
   assert.equal(f.first.getAttribute('aria-hidden'), undefined);
 });
+
+test('the right rail is laid out again when the Stories card can appear or go', async () => {
+  const { movesStoriesCard } = await import('./panelLayoutController.js');
+  const node = (id, inner = null) => ({
+    id,
+    querySelector: (selector) =>
+      inner && selector.split(', ').includes(`#${inner}`) ? {} : null,
+  });
+  const childList = (added = [], removed = []) => ({
+    type: 'childList',
+    addedNodes: added,
+    removedNodes: removed,
+  });
+  const bodyClass = (oldValue, now) => ({
+    type: 'attributes',
+    oldValue,
+    target: { classList: { contains: (name) => now.includes(name) } },
+  });
+  // The card itself, or a wrapper holding it, comes or goes.
+  assert.equal(movesStoriesCard(childList([node('hPop')])), true);
+  assert.equal(movesStoriesCard(childList([], [node('', 'hPop')])), true);
+  // The welcome, which hides the card, is removed.
+  assert.equal(
+    movesStoriesCard(childList([], [node('first-run-launcher')])),
+    true,
+  );
+  // Story playback's own changes do not lay the rail out.
+  assert.equal(movesStoriesCard(childList([node('story-frame')])), false);
+  // Only the welcome's loading class coming or going counts.
+  assert.equal(
+    movesStoriesCard(bodyClass('first-run-opening-stories', ['stories-mode'])),
+    true,
+  );
+  assert.equal(
+    movesStoriesCard(bodyClass('', ['first-run-opening-stories'])),
+    true,
+  );
+  assert.equal(movesStoriesCard(bodyClass('a', ['b'])), false);
+});
