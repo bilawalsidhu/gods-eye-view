@@ -92,7 +92,9 @@ export function placeTileFiles(rows, meta) {
 /**
  * A pack file's new text, keeping the earlier build's `meta.built` when
  * nothing else in the file changed, so rebuilding unchanged data leaves the
- * file as it was.
+ * file as it was. A file that does not hold all of its pack's data (the
+ * places index) is passed through this only when the rest of the pack is
+ * unchanged too.
  * @param {string} text The new file, JSON with a `meta.built` stamp.
  * @param {string | undefined} earlier The file as it is now, if there is one.
  */

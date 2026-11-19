@@ -282,7 +282,7 @@ test('a tile that cannot be read leaves the other places and the cities', async 
   assert.ok(near.some((place) => place.longitude > -95));
 });
 
-test('a view of the whole globe reads only the tiles near its centre', async () => {
+test('a lookup asked for the whole globe reads only the tiles near its centre', async () => {
   const { placesNear, PLACE_TILE_KM } =
     await import('./wikidataCities.js?globe');
   const fetched = [];

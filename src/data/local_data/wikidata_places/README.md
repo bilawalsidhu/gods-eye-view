@@ -20,8 +20,9 @@ entry in the index.
 **Loading:** nothing here loads with the app. A lookup reads `files.js` and
 the index once, then only the tiles its search box touches (one for a short
 radius well inside a tile, more near tile edges and for wider searches),
-once each. The search box reaches 500 km at most (`PLACE_TILE_KM`), so a
-view of the whole globe reads only the tiles around its centre: at most one
+once each. A lookup reaches 500 km at most (`PLACE_TILE_KM`; the search box
+asks for 150 km at most), so one asked for a wider radius reads only the
+tiles around its centre: at most one
 tile past the centre's own on each side, a few more columns toward the
 poles, and never all 732. Cities still count to the full radius. At most
 64 tiles are kept in memory, the least recently used
@@ -48,8 +49,8 @@ It writes only to this folder (tiles, `index.json`, `files.js`, through
 `scripts/wikidataPlaceTiles.mjs`) and leaves `../wikidata_cities` alone. It
 runs one query at a time with pauses and takes a long while. The new files
 are all written before tiles that the new build has no rows for are
-removed, and `meta.built` keeps its earlier date when nothing else in
-`index.json` changed.
+removed, and `meta.built` keeps its earlier date when no tile and
+nothing else in `index.json` changed.
 
 **Reproducibility:** the step from rows to files is checked offline:
 `src/tooling/wikidataPlaceTiles.test.mjs` sorts the shipped rows as the

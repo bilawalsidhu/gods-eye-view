@@ -8254,8 +8254,8 @@ the city is listed. A place named in "villages near …" is the nearest of
 that name within 150 km of the view, small places included, so a village in
 view comes before a bigger namesake far away; with none near, the largest
 city of the name. Small places are looked for within 500 km at most, so a
-view zoomed out to the whole globe reads only the detail tiles around its
-centre. At most 64 detail tiles are kept in memory, the least
+lookup asked for a wider radius reads only the detail tiles around its
+centre (the search box asks for 150 km at most). At most 64 detail tiles are kept in memory, the least
 recently used dropped first.
 
 ### Place-search providers

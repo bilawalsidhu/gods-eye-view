@@ -219,10 +219,11 @@ const TILE_DEG = 5;
 const MAX_TILES = 64;
 /**
  * How far out small places are looked for, in km. 500 km is under the 556 km
- * that 5 degrees of latitude span, so the search box reaches at most one tile
- * past the point's own on each side: 3 rows, and 3 columns at the equator
- * (more toward the poles, where tiles narrow). A wider view, out to the whole
- * globe, still reads only those tiles; cities count to its full radius.
+ * that 5 degrees of latitude span, so a lookup's tile box reaches at most one
+ * tile past the point's own on each side: 3 rows, and 3 columns at the
+ * equator (more toward the poles, where tiles narrow). A lookup asked for a
+ * wider radius, up to the whole globe, still reads only those tiles; cities
+ * count to its full radius.
  */
 export const PLACE_TILE_KM = 500;
 const NAMED = /\p{L}/u;
