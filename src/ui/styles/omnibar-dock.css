@@ -368,6 +368,13 @@ body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
       calc(var(--omnibar-dock-bottom) + 56px + 10px),
       var(--omnibar-credits-clear)
     );
+    /* And above the World Timeline (42px tall) over the dock. */
+    &:has(#world-timeline) {
+      --omnibar-coordinates-bottom: max(
+        calc(var(--omnibar-dock-bottom) + 66px + 42px + 10px),
+        var(--omnibar-credits-clear)
+      );
+    }
     #intel-hud[data-variant='tactical'] .hud-bottom-right,
     &:where(html[dir='rtl'] *):not(.context-docked)
       #intel-hud[data-variant='tactical']

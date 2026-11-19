@@ -542,10 +542,14 @@ test('the desktop bottom row: credits on the Power Up baseline, the dock lifted,
       const anchor = trays.match(
         /#cesium-credits \{\s*right: auto;\s*bottom: ([\d.]+)rem;\s*left: 1\.5rem;/,
       );
-      // At every width: a long line wraps rather than running under the
-      // corner row.
-      const box = trays.match(
-        /\n#cesium-credits \.cesium-widget-credits \{\s*width: max-content;\s*max-width: calc\(100vw - 1\.5rem - ([\d.]+)rem\);\s*white-space: normal;/,
+      // From 1200px, and in the Omnibar layout at every width: a long line
+      // wraps rather than running under the corner row.
+      const box = trayWide.match(
+        /\n\s*#cesium-credits \.cesium-widget-credits \{\s*width: max-content;\s*max-width: calc\(100vw - 1\.5rem - ([\d.]+)rem\);\s*white-space: normal;/,
+      );
+      assert.match(
+        trays,
+        /:has\(#command-dock > #gev-voice-control\)\s*\)\s*#cesium-credits\s*\.cesium-widget-credits \{\s*width: max-content;\s*max-width: calc\(100vw - 1\.5rem - 26rem\);/,
       );
       return anchor && box && [null, anchor[1], box[1]];
     })(),
@@ -576,9 +580,16 @@ test('the desktop bottom row: credits on the Power Up baseline, the dock lifted,
     trayWide,
     /html\[dir='rtl'\]\s*body:not\(\.context-docked\):not\(\.ui-clean-view\):not\(\.recording-mode\)\s*:is\(#cesium-credits, #gev-credits\),\s*html\[dir='rtl'\]\s*body:not\(\.context-docked\):not\(\.ui-clean-view\):not\(\.recording-mode\):has\(\s*#intel-hud\[data-variant='minimal'\]\.active\s*\)\s*:is\(#cesium-credits, #gev-credits\) \{\s*right: 1\.5rem;\s*left: auto;/,
   );
+  // Its box hangs from the anchor's right edge there, and in the Omnibar
+  // layout at every width; never in clean view or recording, where the
+  // anchor stays on the left.
+  assert.match(
+    trayWide,
+    /body:not\(\.context-docked\):not\(\.ui-clean-view\):not\(\.recording-mode\)\s*#cesium-credits\s*\.cesium-widget-credits \{\s*right: 0;\s*left: auto;/,
+  );
   assert.match(
     trays,
-    /html\[dir='rtl'\] #cesium-credits \.cesium-widget-credits \{\s*right: 0;\s*left: auto;/,
+    /html\[dir='rtl'\]\s*body:not\(\.mobile-shell\)[^{]*:not\(\.recording-mode\):not\(\.context-docked\)[^{]*#cesium-credits\s*\.cesium-widget-credits \{\s*right: 0;\s*left: auto;/,
   );
   // There the readout clears the row under it, however many lines it wraps
   // onto (--credit-line-height).
@@ -756,4 +767,21 @@ test('shared panel hooks affect only opted-in rail surfaces without overriding d
     styles,
     /body:is\(\.ui-clean-view, \.recording-mode\)[^{]+\{[^}]*visibility: hidden !important;[^}]*pointer-events: none !important;/,
   );
+});
+
+test('narrow Omnibar corners clear the World Timeline over the dock', () => {
+  const css = read('./styles/omnibar-dock.css');
+  const timeline = css.match(
+    /#world-timeline \{\s*bottom: calc\(var\(--omnibar-dock-bottom\) \+ (\d+)px\);/,
+  );
+  const height = read('./styles/world-timeline.css').match(
+    /#world-timeline \{[^}]*\n {2}height: (\d+)px;/,
+  );
+  const corners = css.match(
+    /&:has\(#world-timeline\) \{\s*--omnibar-coordinates-bottom: max\(\s*calc\(var\(--omnibar-dock-bottom\) \+ (\d+)px \+ (\d+)px \+ (\d+)px\)/,
+  );
+  assert.ok(timeline && height && corners);
+  assert.equal(Number(corners[1]), Number(timeline[1]));
+  assert.equal(Number(corners[2]), Number(height[1]));
+  assert.ok(Number(corners[3]) >= 6);
 });

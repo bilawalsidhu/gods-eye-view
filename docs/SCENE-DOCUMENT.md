@@ -59,7 +59,9 @@ Visual fields are `style`, `mapStack`, `styleParams`, `bloom`, `sharpen`, `hud`,
 HUD `sonar: true` is Sonar on beside a layout that cannot say it (Minimal); it
 is written only then, so Tactical with Sonar stays the variant `cyber` and a
 shot without Sonar has no `sonar`. A shot without it opens with Sonar on only
-when its variant is `cyber`.
+when its variant is `cyber`. A build from before `sonar` refuses a project
+that has it, as it refuses any field it does not know; every other project
+still opens there.
 The latter settings were written by Update Shot but previously lost during
 normalization; they now survive import and capture.
 Version-1/2 bloom without an explicit scale version uses the original inverted

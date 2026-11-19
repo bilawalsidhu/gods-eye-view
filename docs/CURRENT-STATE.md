@@ -1192,7 +1192,9 @@ coordinates (and, right to left, the Tactical readout) stay 6px above it
 however many lines it wraps onto, and the dock and World Timeline rise when
 it is taller than their usual clearance. Narrower than 1120px the dock leaves
 no room between the corners, so the coordinates and the readout sit above
-the dock. Cesium's credit box wraps at every width outside that layout too.
+the dock, and above the World Timeline while it shows. Outside that layout
+Cesium's credit box wraps from 1200px, as before; the phone shell, clean
+view, recording and scene playback lay the line out themselves.
 The left rail treats the centered World Timeline and voice control as
 obstacles only where they reach a laid-out panel, not the stack's
 transparent gutter.
