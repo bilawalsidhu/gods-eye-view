@@ -300,6 +300,7 @@
       "src/exclusiveSurfaces.js",
       "src/geoDistance.js",
       "src/ui/omnibarGuide.js",
+      "src/ui/views/panels/OmnibarGuide.vue",
       "src/cityPois.js",
       "src/search/photonSetting.js",
       "src/sources/requestDeadline.js",
