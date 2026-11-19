@@ -88,10 +88,9 @@ adapter is gone.
 `active`); its pressed classes toggle through `classList`, so a class other
 code adds (a voice highlight) survives a press. Every pressed toggle (a
 control with `aria-pressed`) in the views is a `UiButton` with `pressed`
-except two that keep their own `aria-pressed`: Bhote Koshi's cinematic
-button, whose state the event layer writes into the attributes its panel
-renders, and Explore's story cards, which are `role="button"` elements,
-not buttons (`src/ui/kit/viewControls.test.mjs` pins it). Where the
+except Explore's story cards, which keep their own `aria-pressed` since
+they are `role="button"` elements, not buttons
+(`src/ui/kit/viewControls.test.mjs` pins it). Where the
 converted buttons draw Material symbols (the tilt-map button, the Context
 header's search and expand, the imported files' row actions and the rail
 chips' icons), the glyphs are `UiIcon`s with `:size="null"`, so the site
@@ -261,6 +260,26 @@ targets in its template, as many as `view.subRings` says, rather than
 building them in script; the Omnibar's one other `material-symbols-outlined`
 is a stylesheet selector, and the layer disclosure only names a button in a
 comment (`src/ui/kit/smallSurfacesControls.test.mjs` pins it).
+The Bhote Koshi reconstruction panel's buttons (previous and next beat,
+Play, Play scene, Cinematic, Full story, Open original, Lower gorge, the
+field reports and Open public map) are ghost `UiButton`s that keep their
+`data-action` hooks. Cinematic is a pressed toggle with no pressed class,
+since bhote-koshi.css reads its `aria-pressed`: the event layer presents
+its state as the record's `pressed`, which the panel passes to the
+button, instead of writing an `aria-pressed` attribute. The ‹ and ›
+arrows are text characters. The event's embedded media cards (each
+anchored witness clip's frame, leader line, title, status and original
+link, and the hidden YouTube preload) are drawn by
+`BhoteKoshiMediaCards`, which `src/data/bhoteKoshiEmbeddedMedia.js`
+renders into its overlay root with `h()` and `render()` on every change,
+words again on a locale change, and places after each frame; they hold
+no control, and the original link stays a link. The script still builds
+the provider SDKs' script and preconnect tags, the overlay root, and the
+Facebook player node: that node is warmed hidden before its card exists
+and carried, loaded, into the card's player, where the SDK replaces its
+contents, so a template could only rebuild it and reload the player; the
+X post is likewise built by its SDK inside the player
+(`src/ui/kit/bhoteKoshiControls.test.mjs` pins it).
 `UiSelect` renders the bare native select (Core's labels sit outside it or
 come as an `aria-label`) with `v-model`, `options` and `disabled`;
 options that carry their own attributes come through the slot, a caller's
@@ -543,7 +562,8 @@ slot whenever its view is drawn.
    reconstruction panel (`BhoteKoshiPanel`, last in the context rail,
    renders what the event layer publishes to the `gev-bhote-koshi-panel`
    store: each control's text, hidden, disabled, value and attributes as
-   the layer writes them, unchanged frames sending nothing; the rail takes
+   the layer writes them, and the cinematic button's pressed state,
+   unchanged frames sending nothing; the rail takes
    `bhote-event-active` while it shows), the full-globe celestial ring
    (`CelestialRing` teleports into the globe container what `CelestialRing`
    in `src/celestialRing.js` publishes to the `gev-celestial-ring` store and
