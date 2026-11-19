@@ -186,6 +186,9 @@ html:not([lang='en']):not(:lang(zh)):not(:lang(ja))
   background: linear-gradient(to right, var(--glass-border), transparent);
 }
 
+/* A panel's collapse toggle, and the kit's square glyph button
+   (UiButton variant="icon"). */
+.ui-button--icon,
 .panel-collapse-btn {
   width: 22px;
   height: 22px;
@@ -205,6 +208,9 @@ html:not([lang='en']):not(:lang(zh)):not(:lang(ja))
     color var(--transition-fast);
 }
 
+/* A pressed kit icon button looks as a hovered one does. */
+.ui-button--icon:hover,
+.ui-button--icon.ui-button--pressed,
 .panel-collapse-btn:hover {
   border-color: var(--glass-border-hover);
   color: var(--text-primary);
