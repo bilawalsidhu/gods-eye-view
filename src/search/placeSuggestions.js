@@ -230,7 +230,7 @@ function privacyReason(text) {
     // Numbered ("1.", "(1)", "1:", "#1", "[1]") or quoted words; "and"
     // before the last word joins it.
     const word = token
-      .replace(/^["'“”„«‹‘’([{<#]*\d*[)\]:]?["'“”„«‹‘’([{<]*/, '')
+      .replace(/^["'“”„‚«»‹›‘’([{<#]*\d*[)\]:]?["'“”„‚«»‹›‘’([{<]*/, '')
       .replace(/(?<=[a-z])[^a-z]+$/, '');
     if (!word || word === 'and') continue;
     if (!isBip39Word(word)) {

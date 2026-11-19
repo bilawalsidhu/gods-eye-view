@@ -476,6 +476,7 @@ test('spelled-out emails, addresses, phrases, codes and short phone numbers stay
     '"abandon ability able about above absent absorb abstract absurd abuse access accident"',
     '“abandon ability able about above absent absorb abstract absurd abuse access accident”',
     '«abandon ability able about above absent absorb abstract absurd abuse access accident»',
+    '»abandon ability able about above absent absorb abstract absurd abuse access accident«',
     'abandon-ability-able-about-above-absent-absorb-abstract-absurd-abuse-access-accident',
     '#1 abandon #2 ability #3 able #4 about #5 above #6 absent #7 absorb #8 abstract #9 absurd #10 abuse #11 access #12 accident',
     '(1) abandon (2) ability (3) able (4) about (5) above (6) absent (7) absorb (8) abstract (9) absurd (10) abuse (11) access (12) accident',
