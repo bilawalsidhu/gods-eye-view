@@ -1137,16 +1137,25 @@ test('mobile Cockpit prioritizes flight instruments and collision-safe controls'
   assert.match(mobileCockpit[1], /body\.cockpit-mode #intel-hud/);
   assert.match(mobileCockpit[1], /body\.cockpit-mode \.cockpit-context-window/);
   assert.match(mobileCockpit[1], /body\.cockpit-mode \.cockpit-signal-window/);
-  // The collapsed Display/Radio row is centred on the Reset/Exit axis and
-  // anchored above the compass block, not at a fixed offset that covered the
-  // ground speed and altitude readouts; the compass reads the same anchor.
   assert.match(
     mobileCockpit[1],
-    /body\.cockpit-mode \.cockpit-utility-controls \{[\s\S]*?bottom:\s*calc\(var\(--cockpit-compass-bottom\) \+ 182px\);[\s\S]*?left:\s*12px;[\s\S]*?justify-content:\s*center;/,
+    /body\.cockpit-mode \.cockpit-utility-controls \{[^}]*?top:\s*clamp\(\s*72px,\s*calc\(46% - 68px\),\s*calc\(var\(--cockpit-visor-top\) \+ 108px\)\s*\);[^}]*?left:\s*12px;[^}]*?justify-content:\s*center;[^}]*?pointer-events:\s*none;/,
+  );
+  assert.match(
+    mobileCockpit[1],
+    /body\.cockpit-mode \.cockpit-utility-control \{\s*pointer-events:\s*auto;\s*\}/,
   );
   assert.doesNotMatch(mobileCockpit[1], /bottom:\s*152px;/);
-  assert.match(css, /\.cockpit-compass \{[\s\S]*?bottom:\s*var\(--cockpit-compass-bottom\);/);
-  assert.match(css, /--cockpit-compass-bottom:\s*clamp\(44px, 7vh, 72px\);/);
+  assert.match(css, /--cockpit-visor-top:\s*clamp\(62px, 9vh, 90px\);/);
+  assert.match(css, /\.cockpit-visor-shell \{[^}]*?inset:\s*var\(--cockpit-visor-top\)/);
+  assert.match(
+    css,
+    /:root\[data-ui-theme='cyber'\] body\.cockpit-mode \.cockpit-utility-controls \{[^}]*?top:\s*92px !important;[^}]*?width:\s*auto;/,
+  );
+  assert.match(
+    css,
+    /:root\[data-ui-theme='cyber'\]\s+body\.cockpit-mode\s+\.cockpit-utility-control\.is-expanded \{\s*right:\s*auto;\s*\}/,
+  );
   assert.match(
     mobileCockpit[1],
     /body\.cockpit-mode \.cockpit-utility-control\.is-expanded[\s\S]*?top:\s*96px;/,

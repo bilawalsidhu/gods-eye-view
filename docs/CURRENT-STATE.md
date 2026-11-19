@@ -3256,13 +3256,15 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   viewports suppress the legacy layer stack, peripheral HUD, and secondary
 >   Context/briefing panes so the flight instruments and primary controls remain
 >   unobstructed. There the collapsed Display and Radio launchers form one row
->   centred on the Reset/Exit axis; the default theme anchors it above the
->   compass block, clear of the ground speed and altitude telemetry it used to
->   cover, while Cyber keeps the row at the top. `scripts/qa-cockpit-utility.mjs`
->   checks the default row's centring and clearance at 390 and 360 px. Outside
->   Cockpit, Radio starts collapsed while off and lives
->   only in its section inside Context; the detailed panel's normal accordion
->   control owns its disclosure and its Enable/Disable action owns power.
+>   centred on the Reset/Exit axis. The default theme places it between the roll
+>   scale and the reticle, clear of the destination cue and flight readouts.
+>   On short landscape screens it stays on screen below the vision controls.
+>   Cyber keeps the row at the top. `scripts/qa-cockpit-utility.mjs` checks the
+>   default row's centring, clearance and tap targets at 390×844, 360×740,
+>   740×360 and 667×240. Outside Cockpit, Radio starts collapsed while off
+>   and lives only in its section inside Context; the detailed panel's normal
+>   accordion control owns its disclosure and its Enable/Disable action
+>   owns power.
 >   Radio volume in the full and Cockpit surfaces, plus Space Mission
 >   replay speed, use Display / Sharpen's muted 3px rail, circular cyan thumb,
 >   glow, and mono value treatment. Their larger transparent hit areas, keyboard

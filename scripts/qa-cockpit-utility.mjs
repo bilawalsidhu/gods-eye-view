@@ -2321,9 +2321,14 @@ try {
     JSON.stringify(narrowViewActions),
   );
 
-  // The collapsed Display/Radio row on a phone: centred on the Reset/Exit
-  // axis and clear of the ground speed and altitude telemetry it once covered.
-  for (const [width, height] of [[390, 844], [360, 740]]) {
+  // Short screens have no free band between instruments. The launchers still
+  // need to stay on screen, accept taps and clear the vision controls.
+  for (const [width, height, room] of [
+    [390, 844, 'portrait'],
+    [360, 740, 'portrait'],
+    [740, 360, 'landscape'],
+    [667, 240, 'short'],
+  ]) {
     await page.setViewport({ width, height, deviceScaleFactor: 1 });
     const phoneRow = await page.evaluate(async () => {
       const manager = window.__godsEyeView.styleManager;
@@ -2333,19 +2338,41 @@ try {
       manager.cockpitView.syncSignalLayout();
       await new Promise(requestAnimationFrame);
       const rect = (element) => element?.getBoundingClientRect().toJSON() || null;
-      const launchers = [...document.querySelectorAll(
+      const hud = (selector) => document.querySelector(`#cockpit-hud ${selector}`);
+      const route = document.getElementById('cockpit-route-direction');
+      const routeShown = Boolean(route && !route.hidden);
+      const controls = [...document.querySelectorAll(
         '#cockpit-utility-controls .cockpit-utility-control',
-      )].map(rect);
+      )];
       return {
-        launchers,
-        speed: rect(document.querySelector('#cockpit-hud .cockpit-speed')),
-        altitude: rect(document.querySelector('#cockpit-hud .cockpit-altitude')),
+        launchers: controls.map(rect),
+        hits: controls.map((control) => {
+          const glyph = control.querySelector('.cockpit-utility-glyph');
+          const box = glyph?.getBoundingClientRect();
+          const target = box && document.elementFromPoint(
+            box.left + box.width / 2,
+            box.top + box.height / 2,
+          );
+          return Boolean(target && glyph.contains(target));
+        }),
+        speed: rect(hud('.cockpit-speed')),
+        altitude: rect(hud('.cockpit-altitude')),
+        route: routeShown ? rect(route) : null,
+        chevron: routeShown ? rect(route.querySelector('.cockpit-route-chevron')) : null,
+        reticle: rect(hud('.cockpit-reticle')),
+        rollArc: rect(hud('.cockpit-roll-arc')),
+        vision: rect(hud('.cockpit-vision-controls')),
         switcher: rect(document.getElementById('view-switcher')),
         viewport: { width: innerWidth, height: innerHeight },
         // Cyber parks its row at the top; this check is the default theme's.
         theme: document.documentElement.dataset.uiTheme || 'default',
       };
     });
+    const obstacles = {
+      portrait: ['speed', 'altitude', 'route', 'chevron', 'reticle', 'rollArc', 'vision'],
+      landscape: ['speed', 'altitude', 'route', 'chevron', 'reticle', 'vision'],
+      short: ['vision'],
+    }[room];
     const overlaps = (a, b) => Boolean(a && b)
       && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
     const rowLeft = Math.min(...phoneRow.launchers.map((launcher) => launcher.left));
@@ -2354,18 +2381,23 @@ try {
       ? (phoneRow.switcher.left + phoneRow.switcher.right) / 2
       : NaN;
     check(
-      `${width}px Cockpit Display/Radio row is centred and clear of the speed and altitude readouts`,
+      `${width}×${height} Cockpit Display/Radio row is centred, on screen, tappable and clear of ${obstacles.join(', ')}`,
       phoneRow.launchers.length === 2
         && phoneRow.launchers.every((launcher) => launcher.width > 0)
         && phoneRow.theme !== 'cyber'
         && phoneRow.speed?.width > 0
         && phoneRow.altitude?.width > 0
-        && phoneRow.launchers.every((launcher) => (
-          !overlaps(launcher, phoneRow.speed) && !overlaps(launcher, phoneRow.altitude)
+        && phoneRow.hits.length === 2
+        && phoneRow.hits.every(Boolean)
+        && phoneRow.launchers.every((launcher) => obstacles.every(
+          (name) => !overlaps(launcher, phoneRow[name]),
         ))
         && Math.abs((rowLeft + rowRight) / 2 - switcherCentre) <= 2
         && rowLeft >= 0
-        && rowRight <= phoneRow.viewport.width,
+        && rowRight <= phoneRow.viewport.width
+        && phoneRow.launchers.every((launcher) => (
+          launcher.top >= 0 && launcher.bottom <= phoneRow.viewport.height
+        )),
       JSON.stringify(phoneRow),
     );
   }
