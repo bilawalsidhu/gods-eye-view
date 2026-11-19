@@ -3,8 +3,10 @@ import test from 'node:test';
 import {
   citiesInRegion,
   createPlaceSuggester,
+  houseAddress,
   inExtent,
   mayBePrivate,
+  onlyNumbersLookPrivate,
   resetPlaceSuggestions,
 } from './placeSuggestions.js';
 
@@ -426,4 +428,86 @@ test('the same text asked again while its request is out is sent once', async ()
   });
   await Promise.all([service.suggest('Paris'), service.suggest('Paris')]);
   assert.equal(sent, 1);
+});
+
+test('spelled-out emails, addresses, phrases, codes and short phone numbers stay private', () => {
+  for (const line of [
+    'john(at)gmail.com',
+    'john[at]gmail[dot]com',
+    'john at gmail dot de',
+    '10.0.0.1',
+    'abandon ability able about above absent absorb abstract absurd abuse access accident',
+    'correcthorsebatterystaple',
+    'license ABC1234',
+    'passport X1234567',
+    'plate 7ABC123',
+    'otp abcdef',
+    'verification code abcdef',
+    'cvv abc',
+    'Bearer abcdef',
+    'ssn 123',
+    'Jo 12345-6789',
+    'Joe 1234 12345 thanks',
+    'Mo 0171 12345',
+  ])
+    assert.equal(mayBePrivate(line), true, line);
+  // A phone's three and four digits are not offered as an address.
+  assert.equal(onlyNumbersLookPrivate('is 555 0100 thanks'), false);
+});
+
+test('places that only looked private are looked up', () => {
+  for (const line of [
+    'Akiak',
+    'Bearer Island',
+    'SSN Station',
+    'Shibuya 150-0002',
+    'Llanfairpwllgwyngyllgogerychwyrndrobwllllantysiliogogogoch',
+    'OTP Bank',
+    // A long request is not a recovery phrase.
+    'show flights over texas near austin with altitude above thirty thousand feet please',
+    'show fires near austin then show flights above texas with labels please',
+  ])
+    assert.equal(mayBePrivate(line), false, line);
+});
+
+test('a house is named by its number and street in the order its country writes them', async () => {
+  assert.equal(
+    houseAddress({
+      houseNumber: '10',
+      street: 'Downing Street',
+      countryCode: 'gb',
+    }),
+    '10 Downing Street',
+  );
+  assert.equal(
+    houseAddress({
+      houseNumber: '12',
+      street: 'Hauptstraße',
+      countryCode: 'DE',
+    }),
+    'Hauptstraße 12',
+  );
+  assert.equal(houseAddress({ houseNumber: '12', street: '' }), '');
+  // Without a street, a house's number and its locality name it, so two
+  // houses in one hamlet stay two places, not the city twice.
+  const house = (number) => ({
+    geometry: { type: 'Point', coordinates: [11.2, 47.6] },
+    properties: {
+      housenumber: number,
+      locality: 'Mittenwald Au',
+      city: 'Mittenwald',
+      country: 'Germany',
+      countrycode: 'de',
+      osm_value: 'house',
+    },
+  });
+  const service = createPlaceSuggester({
+    endpoint: 'https://fixture.test/api/',
+    fetchImpl: async () =>
+      Response.json({ features: [house('3'), house('5')] }),
+  });
+  assert.deepEqual(
+    (await service.suggest('Mittenwald Au')).map((place) => place.name),
+    ['Mittenwald Au 3', 'Mittenwald Au 5'],
+  );
 });
