@@ -130,8 +130,9 @@ test('a collapsed launcher drops its divider so English titles fit whole', () =>
     /margin-left:\s*auto/,
     'the launcher toggle',
   );
-  const button = rules.find(
-    ({ selector }) => selector === '.panel-collapse-btn',
+  // The kit's icon button shares the toggle's rule.
+  const button = rules.find(({ selector }) =>
+    selector.split(', ').includes('.panel-collapse-btn'),
   );
   assert.match(
     button?.body || '',
@@ -140,7 +141,7 @@ test('a collapsed launcher drops its divider so English titles fit whole', () =>
   );
 });
 
-test('the default theme geometry change leaves cyber gutters alone', () => {
+test('the default theme geometry change leaves the base gutters alone', () => {
   for (const surface of [
     '.data-panel-inner',
     '.utilities-panel-inner',
@@ -162,6 +163,17 @@ test('the default theme geometry change leaves cyber gutters alone', () => {
       selector === '#pp-toggles > .pp-header-row .pp-collapse-btn',
   );
   assert.match(display?.body || '', /font-size:\s*12px/);
+});
+
+test('Data Layers, Context and Space Missions share the 14px side gutters', () => {
+  const gutters = rules.find(
+    ({ selector, body }) =>
+      /:is\(\s*\.data-panel-inner,\s*\.global-context-panel-inner,\s*\.space-missions-panel-inner\s*\)$/.test(
+        selector,
+      ) && /padding-left:\s*14px/.test(body),
+  );
+  assert.ok(gutters, 'one rule sets the shared gutters');
+  assert.match(gutters.body, /padding-right:\s*14px/);
 });
 
 test('rail titles and dock labels share one set of label tokens', () => {
@@ -191,39 +203,6 @@ test('rail titles and dock labels share one set of label tokens', () => {
     rail?.body || '',
     /letter-spacing:\s*min\(var\(--dock-label-letter-spacing\),\s*2\.08px\)/,
   );
-});
-
-test('default theme overrides never reach the cyber theme', () => {
-  const notCyber = ":root:not([data-ui-theme='cyber'])";
-  const padding = rules.find(
-    ({ selector, body }) =>
-      selector.endsWith(
-        ':is(.data-panel-inner, .global-context-panel-inner)',
-      ) && /padding-left:\s*14px/.test(body),
-  );
-  assert.ok(
-    padding?.selector.startsWith(notCyber),
-    'the 14px gutters must skip cyber',
-  );
-  const display = rules.find(
-    ({ selector, body }) =>
-      selector.endsWith('#pp-toggles > .pp-header-row .pp-collapse-btn') &&
-      /font-size:\s*13px/.test(body),
-  );
-  assert.ok(
-    display?.selector.startsWith(notCyber),
-    "Display's 22px toggle must skip cyber",
-  );
-  // Cyber draws its title marker at left: -8px; a clip on the title would cut it.
-  for (const { selector, body } of rules) {
-    if (!/\.panel-title/.test(selector) || !/overflow:\s*hidden/.test(body))
-      continue;
-    if (!/#left-panel-stack|#right-context-rail/.test(selector)) continue;
-    assert.ok(
-      selector.startsWith(notCyber),
-      `${selector} clips the cyber title marker`,
-    );
-  }
 });
 
 test('launcher compaction and header colour stay on the rail panels themselves', () => {

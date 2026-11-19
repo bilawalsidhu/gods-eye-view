@@ -3,17 +3,18 @@ import { storeToRefs } from 'pinia';
 import { nextTick, ref, watch } from 'vue';
 import { t } from '../../../i18n/index.js';
 import UiSlider from '../../kit/UiSlider.js';
-import { useContextStore } from '../../stores/context.js';
+import { useSpaceMissionsStore } from '../../stores/spaceMissions.js';
 import UiButton from '../../kit/UiButton.vue';
+import UiCloseButton from '../../kit/UiCloseButton.vue';
 
-// The selected space mission inside Context. The launches layer presents it
+// The selected space mission. The launches layer presents it
 // and hides the panel while none is selected; the roster beside it hides
 // while it shows. Buttons call the layer's panel commands.
-const { mission: m, missionsLayer: layer } = storeToRefs(useContextStore());
+const { mission: m, layer } = storeToRefs(useSpaceMissionsStore());
 const root = ref(null);
 
-// Each newly presented selection returns the Context panel to the top.
-const SCROLLER = ":root[data-ui-theme='cyber'] .cyber-panel-body, .global-context-panel-inner";
+// Each newly presented selection returns the mission panel to the top.
+const SCROLLER = '.space-missions-panel-inner';
 watch(
   () => m.value?.scrollRequest,
   async (request) => {
@@ -27,7 +28,7 @@ watch(
 
 <template>
   <aside id="space-mission-panel" ref="root" class="context-space-mission-detail" :aria-label="t('Selected Space Mission')" :hidden="!m">
-    <div class="space-mission-view-header"><span>{{ t('SELECTED SPACE MISSION') }}</span><button type="button" data-mission-close :title="t('Show all missions')" :aria-label="t('Deselect mission')" @click="layer?.deselectMission()">×</button></div>
+    <div class="space-mission-view-header"><span>{{ t('SELECTED SPACE MISSION') }}</span><UiCloseButton data-mission-close bare :title="t('Show all missions')" :label="t('Deselect mission')" @click="layer?.deselectMission()" /></div>
     <div class="space-mission-detail">
       <strong data-mission-title>{{ m ? m.title : t('MISSION') }}</strong>
       <span data-mission-field data-mission-provider :hidden="m && !m.provider">{{ m?.provider }}</span>

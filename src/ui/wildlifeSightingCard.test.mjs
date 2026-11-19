@@ -1,7 +1,9 @@
 import '../testSupport/registerDom.mjs';
 import assert from 'node:assert/strict';
-import test from 'node:test';
 import * as Cesium from 'cesium';
+import test from 'node:test';
+import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
+import { bindWildlifeViewer } from '../testSupport/wildlifeViewer.mjs';
 import { nextTick } from 'vue';
 import { readFileSync } from 'node:fs';
 import { getLocale, setLocale, t } from '../i18n/index.js';
@@ -97,9 +99,10 @@ function fixture(
   const changed = events();
   const preRender = events();
   const viewer = {
-    scene: { canvas, preRender, pick: () => picked },
+    scene: { canvas, preRender },
     camera: { moveStart, moveEnd, changed },
   };
+  bindWildlifeViewer(viewer);
   const state = {
     enabled: true,
     destroyed: false,
@@ -111,7 +114,7 @@ function fixture(
     contextIds: new Set(),
     viewer,
   };
-  let picked = null;
+  let picked;
   let hit = null;
   let onClick;
   let clears = 0;
@@ -123,19 +126,22 @@ function fixture(
     state,
     services: {
       now: () => NOW,
-      cesium: { ScreenSpaceEventType: { LEFT_CLICK: 0 } },
       overlayHost: {
         setEntries: (id, entries) => overlays.set(id, entries),
-        hitTest: (_x, _y, { sourceId }) =>
-          hit?.sourceId === sourceId ? hit : null,
+        // As the host does: unfiltered, the topmost entry; filtered, only
+        // an entry of that source.
+        hitTest: (_x, _y, { sourceId } = {}) =>
+          hit && (!sourceId || hit.sourceId === sourceId) ? hit : null,
       },
-      screenSpaceEventHandlerFactory: () => ({
-        setInputAction(fn) {
+      input: () => ({
+        onClick(fn) {
           onClick = fn;
+          return () => (onClick = null);
         },
-        destroy() {},
       }),
       focus: { requestWorldFocus: (value) => flights.push(value) },
+      // The card on top at a click, as the registry answers from the host.
+      picking: { clickCard: () => hit },
     },
     parts: {
       rendering: { refreshSelection() {}, requestRender() {} },
@@ -204,10 +210,8 @@ function fixture(
     staleListener: () => staleListener,
     clears: () => clears,
     async click(kind = 'dot', target = initialRow) {
-      picked =
-        kind === 'icon'
-          ? { primitive: { id: `wildlife:${target.stableId}` } }
-          : { id: `wildlife:${target.stableId}` };
+      // Dots and icons alike are picked by their item id.
+      picked = `wildlife:${target.stableId}`;
       hit =
         kind === 'ambient photo card'
           ? {
@@ -217,7 +221,12 @@ function fixture(
               }),
             }
           : null;
-      onClick({ position: { x: 50, y: 50 } });
+      // What is exactly under the click, as the layer reads it.
+      onClick({
+        screenPosition: { x: 50, y: 50 },
+        topHit: { set: 'wildlife', id: picked },
+        id: picked,
+      });
       await settle();
     },
     async publish(next) {
@@ -309,7 +318,7 @@ test('dot, icon and ambient photo clicks open one contained medium-photo card at
         true,
         'the loaded medium photo is painted inside the card',
       );
-      assert.equal(card.querySelector('[role=status]'), null);
+      assert.equal(card.querySelector('[role=status]') === null, true);
       const style = readFileSync(
         new URL('./views/panels/WildlifeSightingCard.vue', import.meta.url),
         'utf8',
@@ -343,11 +352,11 @@ test('missing, restricted, obscured and Acartia photos all use the same compact 
       const f = fixture(context, { ...row, ...extra });
       await f.click();
       const card = f.cardElement();
-      assert.equal(card.querySelector('img'), null);
-      assert.equal(card.querySelector('[role=status]'), null);
+      assert.equal(card.querySelector('img') === null, true);
+      assert.equal(card.querySelector('[role=status]') === null, true);
       assert.equal(card.querySelector('h2').textContent, row.commonName);
       assert.equal(card.querySelector('i').textContent, row.scientificName);
-      assert.equal(document.querySelector('dialog'), null);
+      assert.equal(document.querySelector('dialog') === null, true);
       if (extra.obscured) {
         assert.doesNotMatch(card.textContent, /ago|Photographer/);
         assert.ok(
@@ -482,38 +491,40 @@ test('a selected dot flies to its true position and its card pans clear of chrom
 test('the camera correction preserves altitude and orientation and honors reduced motion', () => {
   const flights = [];
   const camera = {
-    positionWC: Cesium.Cartesian3.fromDegrees(0, 0, 250_000),
+    positionWC: fromDegrees(0, 0, 250_000),
     positionCartographic: { height: 250_000 },
     heading: 0.2,
     pitch: -1.2,
     roll: 0.1,
-    pickEllipsoid: (p) => Cesium.Cartesian3.fromDegrees(p.x / 100, p.y / 100),
     flyTo: (value) => flights.push(value),
   };
   const viewer = {
     camera,
     scene: {
       canvas: { getBoundingClientRect: () => rect(0, 0, 1200, 900) },
-      globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
     },
   };
+  bindWildlifeViewer(viewer, {
+    query: { pickEllipsoid: (x, y) => fromDegrees(x / 100, y / 100) },
+  });
   for (const reduced of [false, true]) {
     assert.equal(
       panWildlifeSighting(viewer, { x: 10, y: 10 }, { x: 30, y: 50 }, reduced),
       true,
     );
     const flight = flights.at(-1);
-    assert.ok(
-      Math.abs(
-        Cesium.Cartographic.fromCartesian(flight.destination).height - 250_000,
-      ) < 0.001,
-    );
+    assert.ok(Math.abs(toLonLatH(flight.destination).height - 250_000) < 0.001);
     assert.deepEqual(flight.orientation, {
       heading: 0.2,
       pitch: -1.2,
       roll: 0.1,
     });
     assert.equal(flight.duration, reduced ? 0 : 0.22);
+    assert.equal(
+      flight.easingFunction,
+      Cesium.EasingFunction.QUADRATIC_OUT,
+      'eased as before',
+    );
   }
 });
 
@@ -676,7 +687,7 @@ test('date-only and unsafe-link rows remain readable, and no sighting rail or li
     link: 'javascript:alert(1)',
   });
   await f.click();
-  assert.equal(f.cardElement().querySelector('a'), null);
+  assert.equal(f.cardElement().querySelector('a') === null, true);
   assert.equal(
     f.cardElement().querySelector('time').getAttribute('datetime'),
     row.observedOn,

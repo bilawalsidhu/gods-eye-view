@@ -52,18 +52,6 @@ test('the dock trays open from their own wing in right-to-left', () => {
   );
 });
 
-test('the Cyber cockpit keeps Data Layers on the left edge in every language', () => {
-  const body = ruleBody(
-    sheet('cyber.css'),
-    ":root[data-ui-theme='cyber'] body.cockpit-mode #left-panel-stack",
-  );
-  // inset-inline-start would become right: 30px in Arabic and beat
-  // rtl.css's reset, landing the stack on the utility controls.
-  assert.doesNotMatch(body, /inset-inline-start/);
-  assert.match(body, /left: 30px;/);
-  assert.match(body, /right: auto;/);
-});
-
 test('the panel rails stay on the outer side of their stacks in right-to-left', () => {
   const layers = sheet('layers.css');
   // Each rail is placed by its screen-side edge; a physical side would put
@@ -89,11 +77,6 @@ test('the panel rails stay on the outer side of their stacks in right-to-left', 
   assert.match(
     ruleBody(kit, '.ui-tooltip__tip--left'),
     /inset-inline-end: calc\(100% \+ 10px\);/,
-  );
-  // Cyber's right stack keeps its rail clearance on the left edge.
-  assert.match(
-    sheet('rtl.css'),
-    /html\[dir='rtl'\]\[data-ui-theme='cyber'\] #right-context-rail \{\s*right: auto;\s*left: calc\(51px \+ var\(--panel-rail-clearance\)\);/,
   );
 });
 

@@ -1,10 +1,10 @@
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   applyView,
   installViews,
   isEmbedded,
-  keepPanelRendering,
   panelAwareVisibility,
 } from './embed.js';
 import { LayerLifecycle } from '../data/lifecycle.js';
@@ -12,7 +12,7 @@ import { createView, viewToParams } from '../view/index.js';
 
 const fakeViewer = () => {
   const flights = [];
-  return {
+  return bindFakeCesiumCamera({
     flights,
     camera: {
       flyTo(options) {
@@ -20,7 +20,7 @@ const fakeViewer = () => {
         options.complete();
       },
     },
-  };
+  });
 };
 const fakeLayers = (enabled) => ({
   getAll: () =>
@@ -329,6 +329,7 @@ test('an app loaded inline into a panel page talks through its own window', asyn
   globalThis.GEV_EMBED_INLINE = true;
   try {
     assert.equal(isEmbedded({ search: '' }), true);
+    const kept = [];
     const remove = installViews({
       shell: { initialRestorePromise: Promise.resolve() },
       viewer: fakeViewer(),
@@ -336,7 +337,13 @@ test('an app loaded inline into a panel page talks through its own window', asyn
       run: recorder().run,
       location: { search: '', hash: '' },
       windowRef,
+      // The scene's panel rendering, kept on while the views are installed.
+      keepRendering: (options) => {
+        kept.push(options.windowRef === windowRef);
+        return () => kept.push('stopped');
+      },
     });
+    assert.deepEqual(kept, [true]);
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.deepEqual(posted, [{ type: 'gev:ready' }]);
     const event = new Event('message');
@@ -349,6 +356,7 @@ test('an app loaded inline into a panel page talks through its own window', asyn
     assert.equal(posted[1].id, 7);
     assert.equal(posted[1].ok, true);
     remove();
+    assert.deepEqual(kept, [true, 'stopped']);
   } finally {
     delete globalThis.GEV_EMBED_INLINE;
   }
@@ -425,60 +433,6 @@ test('annotations in a link are drawn after it restores, embedded or not', async
   assert.deepEqual(calls, [
     ['annotate_map', { annotations: [{ type: 'pin', target: 'Austin' }] }],
   ]);
-});
-
-test('a panel keeps drawing from a timer while animation frames stop', () => {
-  let clock = 0;
-  let tick = null;
-  let frame = null;
-  const windowRef = {
-    requestAnimationFrame: (fn) => ((frame = fn), 1),
-    cancelAnimationFrame: () => (frame = null),
-    setInterval: (fn) => ((tick = fn), 1),
-    clearInterval: () => (tick = null),
-  };
-  const drawn = [];
-  const viewer = {
-    resize: () => drawn.push('resize'),
-    render: () => drawn.push('render'),
-  };
-  const stop = keepPanelRendering(viewer, { windowRef, now: () => clock });
-  // Frames arrive: the render loop draws, so the timer does nothing.
-  clock = 100;
-  frame();
-  tick();
-  assert.deepEqual(drawn, []);
-  // Frames stop, as in a panel its host reports hidden: the timer draws.
-  clock = 400;
-  tick();
-  assert.deepEqual(drawn, ['resize', 'render']);
-  stop();
-  assert.equal(tick, null);
-  assert.equal(frame, null);
-});
-
-test('a panel stops drawing while its render loop is stopped', () => {
-  let tick = null;
-  const windowRef = {
-    requestAnimationFrame: () => 1,
-    cancelAnimationFrame() {},
-    setInterval: (fn) => ((tick = fn), 1),
-    clearInterval() {},
-  };
-  const drawn = [];
-  const viewer = { resize() {}, render: () => drawn.push('render') };
-  let clock = 0;
-  const stop = keepPanelRendering(viewer, { windowRef, now: () => clock });
-  // Cesium stops its render loop after a render error.
-  viewer.useDefaultRenderLoop = false;
-  clock = 1000;
-  tick();
-  assert.deepEqual(drawn, []);
-  // Retry restarts it, and the timer draws again.
-  viewer.useDefaultRenderLoop = true;
-  tick();
-  assert.deepEqual(drawn, ['render']);
-  stop();
 });
 
 test('a followed aircraft owns the camera, and cockpit view is entered after it', async () => {

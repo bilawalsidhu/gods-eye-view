@@ -16,6 +16,7 @@ import {
 import { displayMotion } from '../transit/movement.js';
 import { FIX_FLAGS, readFix } from '../../data/contactPlayback.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
+import { DIRECTION_MIN_M } from './pathBinding.js';
 import {
   stopClock,
   stopLateMinutes,
@@ -152,7 +153,6 @@ export const TRACK_MAX_GRADE = 0.05;
 export const TRACK_SETTLE_MPS = 0.5;
 export const TRACK_SNAP_M = 2_000;
 export const MARKER_PIXEL_SIZE = 18;
-export const SELECTED_PIXEL_SIZE = 28;
 export const SELECTED_CARD_REFRESH_MS = 250;
 /** While a train is selected, every other train is drawn at this opacity. */
 export const UNSELECTED_TRAIN_ALPHA = 0.35;
@@ -295,9 +295,6 @@ export function playbackModeFor(railMode) {
       : 'rail';
 }
 
-/** Two reports closer than this are one place: a parked train's jitter (m). */
-export const FOLLOW_MIN_MOVE_M = 15;
-
 const lastFix = {};
 const priorFix = {};
 
@@ -334,7 +331,7 @@ export function railTrainFollowable(entry) {
     sample.nextMotionT > sample.displayT
   )
     return true;
-  return lastReportsApartM(entry.track) >= FOLLOW_MIN_MOVE_M;
+  return lastReportsApartM(entry.track) >= DIRECTION_MIN_M;
 }
 
 /**

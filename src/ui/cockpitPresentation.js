@@ -27,9 +27,11 @@ export const COCKPIT_UTILITY_REC_GAP_PX = 12;
 
 export const COCKPIT_UTILITY_SIGNAL_GAP_PX = 8;
 
-export const COCKPIT_UTILITY_MIN_TOP_PX = 96;
+// Display and Radio start where the left rail does (max(206px, 22vh) in
+// cockpit-panels.css), so the two rails' tops line up.
+export const COCKPIT_UTILITY_MIN_TOP_PX = 206;
 
-export const COCKPIT_UTILITY_MIN_TOP_RATIO = 0.12;
+export const COCKPIT_UTILITY_MIN_TOP_RATIO = 0.22;
 
 export const COCKPIT_UTILITY_LAUNCHER_MIN_HEIGHT_PX = 50;
 

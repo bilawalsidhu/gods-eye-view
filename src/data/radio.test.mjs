@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  bindFakeCesiumCamera,
+  fakeCameraPort,
+} from '../testSupport/fakeCameraPort.mjs';
+import { bindRenderer } from '../render/rendererOf.js';
+import { entityFollowTarget, followedOf } from './followed.js';
+import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
+import {
   buildRadioTunerBand,
   buildRadioTunerTicks,
   buildRadioCategories,
@@ -52,6 +59,7 @@ import {
   stationMatchesRadioCategory,
 } from './radio.js';
 import { radioStationRow, withRadioLayer } from '../testSupport/radioLayerHarness.mjs';
+import { withEntityRecord } from './entityRecords.js';
 
 const stations = [
   { id: 'news', tags: ['News', 'Weather Radio', 'air traffic'] },
@@ -399,7 +407,7 @@ test('destroy and re-init reset Radio audio ownership, volume, filter, and telem
 
   radioLayer.destroy();
   try {
-    radioLayer.init(viewer);
+    radioLayer.init(bindFakeCesiumCamera(viewer, { draw: fakeDrawPort() }));
     radioLayer.enable();
     radioLayer.setLifecyclePresentation({
       lifecycleState: 'enabled', enabled: true, uncertain: false,
@@ -424,7 +432,7 @@ test('destroy and re-init reset Radio audio ownership, volume, filter, and telem
     assert.equal(getRadioUIState().volume, 0.8);
     assert.equal(getRadioUIState().effectiveVolume, 0.8);
 
-    radioLayer.init(viewer);
+    radioLayer.init(bindFakeCesiumCamera(viewer, { draw: fakeDrawPort() }));
     assert.equal(audioInstances.length, 2, 're-init creates a clean Audio session');
     const nextState = getRadioUIState();
     for (const eventName of ['playing', 'pause', 'waiting', 'error']) {
@@ -518,7 +526,7 @@ test('late media errors after replacement or Pause cannot mutate the active stat
 
   radioLayer.destroy();
   try {
-    radioLayer.init(viewer);
+    radioLayer.init(bindFakeCesiumCamera(viewer, { draw: fakeDrawPort() }));
     radioLayer.enable();
     await radioLayer.update();
     radioLayer.setLifecyclePresentation({
@@ -648,7 +656,7 @@ test('unusable directory responses preserve warm client state atomically', async
   };
   radioLayer.destroy();
   try {
-    radioLayer.init(viewer);
+    radioLayer.init(bindFakeCesiumCamera(viewer, { draw: fakeDrawPort() }));
     globalThis.fetch = async () => new Response(JSON.stringify({
       stations: [station],
       stale: false,
@@ -762,7 +770,7 @@ test('unusable directory responses preserve warm client state atomically', async
     assert.equal(getRadioUIState().stale, true);
     assert.equal(getRadioUIState().rejectedStationCount, 10_000);
     radioLayer.destroy();
-    radioLayer.init(viewer);
+    radioLayer.init(bindFakeCesiumCamera(viewer, { draw: fakeDrawPort() }));
     assert.equal(getRadioUIState().rejectedStationCount, 0);
     assert.equal(getRadioUIState().degraded, false);
   } finally {
@@ -820,7 +828,7 @@ test('tuner drag keeps one immutable catalog resolution through refresh and rele
 
   radioLayer.destroy();
   try {
-    radioLayer.init(viewer);
+    radioLayer.init(bindFakeCesiumCamera(viewer, { draw: fakeDrawPort() }));
     radioLayer.enable();
     await publish(stationA, 1);
     assert.equal(radioLayer.beginTuning(), true);
@@ -927,7 +935,20 @@ test('failed exact tuner release cannot consume a stale playback fallback', asyn
 test('tuner cancellation restores the frozen start marker after catalog removal', async () => {
   const originalFetch = globalThis.fetch;
   const originalAudio = globalThis.Audio;
-  const selectedEntities = new Map();
+  const draw = fakeDrawPort();
+  // The selected station's dot, from the layer's selected-marker set.
+  const selectedEntities = {
+    record: () =>
+      [...draw.sets.values()].find(
+        (set) => !set.disposed && set.spec.id.endsWith(':selected'),
+      ),
+    get(id) {
+      return this.record()?.items.get(id);
+    },
+    has(id) {
+      return Boolean(this.get(id));
+    },
+  };
   let playCalls = 0;
   let flyToCalls = 0;
   globalThis.Audio = class FakeAudio {
@@ -949,11 +970,6 @@ test('tuner cancellation restores the frozen start marker after catalog removal'
     scene: {
       canvas: { disableRootEvents: true, onwheel: null, addEventListener() {}, removeEventListener() {} },
       requestRender() {},
-    },
-    dataSources: { add() {}, remove() {} },
-    entities: {
-      add(entity) { selectedEntities.set(entity.id, entity); return entity; },
-      remove(entity) { return selectedEntities.delete(entity?.id); },
     },
   };
   const stationA = {
@@ -994,7 +1010,7 @@ test('tuner cancellation restores the frozen start marker after catalog removal'
 
   radioLayer.destroy();
   try {
-    radioLayer.init(viewer);
+    radioLayer.init(bindFakeCesiumCamera(viewer, { draw }));
     radioLayer.enable();
     radioLayer.setLifecyclePresentation({
       lifecycleState: 'enabled', enabled: true, uncertain: false,
@@ -1014,7 +1030,7 @@ test('tuner cancellation restores the frozen start marker after catalog removal'
       assert.equal(radioLayer.cancelTuning(), true);
       const restoredMarker = selectedEntities.get(`radio:selected:${stationA.id}`);
       assert.ok(restoredMarker, 'the frozen start marker remains visible after cancellation');
-      assert.deepEqual(restoredMarker.position, startMarker.position);
+      assert.deepEqual(restoredMarker.pos, startMarker.pos);
       assert.equal(getRadioUIState().tuningRestoredStationId, stationA.id);
       assert.equal(getRadioUIState().tuningActive, false);
       assert.equal(getRadioUIState().selected, null, 'stale marker never becomes playback authority');
@@ -1103,7 +1119,7 @@ test('Radio public tuner, filter, and resume mutations require certain enabled l
 
   radioLayer.destroy();
   try {
-    radioLayer.init(viewer);
+    radioLayer.init(bindFakeCesiumCamera(viewer, { draw: fakeDrawPort() }));
     radioLayer.enable();
     await radioLayer.update();
     radioLayer.setLifecyclePresentation({
@@ -1178,7 +1194,7 @@ test('tuner refuses a degraded fallback that has no accepted catalog generation'
       acceptedGeneration: null,
       updatedAt: new Date().toISOString(),
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    radioLayer.init(viewer);
+    radioLayer.init(bindFakeCesiumCamera(viewer, { draw: fakeDrawPort() }));
     radioLayer.enable();
     await radioLayer.update();
 
@@ -1233,7 +1249,7 @@ test('accepted snapshots allowlist station fields and never regress generation i
 
   radioLayer.destroy();
   try {
-    radioLayer.init(viewer);
+    radioLayer.init(bindFakeCesiumCamera(viewer, { draw: fakeDrawPort() }));
     serve([station], 1);
     radioLayer.enable();
     await radioLayer.update();
@@ -1344,7 +1360,7 @@ test('update abort, destroy, and re-init invalidate the prior session and reset 
       requestSignal = options.signal;
       return new Promise((resolve) => { resolveFetch = resolve; });
     };
-    radioLayer.init(viewer);
+    radioLayer.init(bindFakeCesiumCamera(viewer, { draw: fakeDrawPort() }));
     radioLayer.enable();
     const pending = radioLayer.update();
     assert.equal(getRadioUIState().loading, true);
@@ -1353,7 +1369,7 @@ test('update abort, destroy, and re-init invalidate the prior session and reset 
     assert.equal(getRadioUIState().loading, false);
 
     radioLayer.destroy();
-    radioLayer.init(viewer);
+    radioLayer.init(bindFakeCesiumCamera(viewer, { draw: fakeDrawPort() }));
     const cleanState = getRadioUIState();
     assert.deepEqual({
       enabled: cleanState.enabled,
@@ -1650,15 +1666,24 @@ test('Radio recovery preserves closer altitude and caps extreme full-globe zoom'
 });
 
 test('Radio camera navigation yields to every live tracked-entity owner', () => {
-  const viewer = { camera: {} };
+  const viewer = {};
+  // A camera port that follows: the layers' tracked entities are followed
+  // through it.
+  const { port: camera } = fakeCameraPort();
+  camera.followed = null;
+  camera.follow = (target) => {
+    camera.followed = target;
+  };
+  bindRenderer(viewer, { camera });
   assert.equal(radioCameraNavigationAllowed(viewer), true);
-  for (const gevTrackedId of ['flights:abc123', 'military:def456']) {
-    const trackedEntity = { gevTrackedId };
-    viewer.trackedEntity = trackedEntity;
-    assert.equal(radioCameraNavigationAllowed(viewer), false, gevTrackedId);
-    assert.equal(viewer.trackedEntity, trackedEntity);
+  assert.equal(radioCameraNavigationAllowed({}), false, 'no camera to move');
+  for (const trackedId of ['flights:abc123', 'military:def456']) {
+    const trackedEntity = withEntityRecord({}, { trackedId });
+    camera.follow(entityFollowTarget(trackedEntity, {}));
+    assert.equal(radioCameraNavigationAllowed(viewer), false, trackedId);
+    assert.equal(followedOf(viewer)?.entity, trackedEntity);
   }
-  viewer.trackedEntity = undefined;
+  camera.follow(null);
   assert.equal(radioCameraNavigationAllowed(viewer), true);
   assert.equal(radioCameraNavigationAllowed({ trackedEntity: {} }), false);
   assert.equal(radioCameraNavigationAllowed(null), false);

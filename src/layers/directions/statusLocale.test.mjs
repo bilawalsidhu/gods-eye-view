@@ -20,10 +20,6 @@ const idle = {
 };
 
 const cases = [
-  [
-    { ...idle, pointerBlocked: true },
-    'Another map tool is using clicks — close it, then SET A again',
-  ],
   [{ ...idle, status: 'error' }, 'No route found'],
   [
     { ...idle, status: 'error', error: 'Routing timed out' },
