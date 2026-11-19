@@ -22,7 +22,12 @@ export const ISS_SUN_POSES = Object.freeze([
     sun: unit([0, 0.05, -1]),
     sunlit: true,
   },
-  { id: 'below', label: msg('Below'), sun: unit([0, -1, 0.05]), sunlit: true },
+  {
+    id: 'below',
+    label: msg('Underneath'),
+    sun: unit([0, -1, 0.05]),
+    sunlit: true,
+  },
   {
     id: 'port',
     label: msg('Port side'),

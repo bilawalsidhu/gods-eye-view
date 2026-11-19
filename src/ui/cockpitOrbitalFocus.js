@@ -300,8 +300,9 @@ export function routeSceneClick() {
   }
   return input.onClick((event) => {
     // Another layer's card or label painted on top takes the click: the site
-    // under it does not focus, and the click does not end a held focus.
-    if (isUnderOtherCard(event)) return;
+    // under it does not focus, and the click does not end a held focus. A
+    // site's own label is not another layer's: it focuses that site.
+    if (isUnderOtherCard(event, [SITES_LAYER_ID])) return;
     this.onOrbitalClick(event?.position);
   });
 }

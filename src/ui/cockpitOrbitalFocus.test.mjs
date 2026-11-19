@@ -1395,6 +1395,15 @@ test("a click on a site's label box focuses it, as one on its dot does", async (
   // finds the site there, through the label box the overlay paints.
   assert.equal(sites.findByPick(null), null, 'no draw item at the label');
   assert.equal(sites.findAt(SITES.alpha.labelAt)?.id, SITES.alpha.id);
+  // The overlay reports the label box as the card on top there, as it does
+  // for an interactive entry: the site's own label is not another layer's.
+  const labels = [SITES.alpha.labelAt];
+  setClickCardHitTest((x, y) =>
+    labels.some((at) => at.x === x && at.y === y)
+      ? { sourceId: 'military-installations', entryId: SITES.alpha.id }
+      : null,
+  );
+  t.after(() => setClickCardHitTest(null));
   scene.click(SITES.alpha.labelAt);
   assert.equal(cockpit.orbital.focus.key, SITES.alpha.id);
   assert.equal(handler.stockClicks, 1, 'Cesium still gets the click');

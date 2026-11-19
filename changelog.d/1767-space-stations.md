@@ -36,5 +36,6 @@
   each view is from, and leaving selects the station (Denis Groshev, @ZloyS,
   #1767).
 - Let a click on a mapped installation's label box select the site, as a
-  click on its 7 px dot does: from orbit the label is what a click lands on
-  (Denis Groshev, @ZloyS, #1767).
+  click on its 7 px dot does: from orbit the label is what a click lands on.
+  As with every card on top, the label takes the click from an aircraft or
+  vessel drawn under it (Denis Groshev, @ZloyS, #1767).
