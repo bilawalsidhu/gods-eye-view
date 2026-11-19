@@ -5477,6 +5477,7 @@
       "src/render/applicationHooks.js",
       "src/maps/globeEngine.js",
       "src/render/cesium/viewers.js",
+      "src/ui/creditLineHeight.js",
       "src/ui/creditsView.js",
       "src/data/planespottersPhoto.js",
       "src/maps/keylessTerrain.js",

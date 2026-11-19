@@ -458,8 +458,10 @@ test('the desktop bottom row: credits on the Power Up baseline, the dock lifted,
       const anchor = trays.match(
         /#cesium-credits \{\s*right: auto;\s*bottom: ([\d.]+)rem;\s*left: 1\.5rem;/,
       );
-      const box = trayWide.match(
-        /\n  #cesium-credits \.cesium-widget-credits \{\s*width: max-content;\s*max-width: calc\(100vw - 1\.5rem - ([\d.]+)rem\);\s*white-space: normal;/,
+      // At every width: a long line wraps rather than running under the
+      // corner row.
+      const box = trays.match(
+        /\n#cesium-credits \.cesium-widget-credits \{\s*width: max-content;\s*max-width: calc\(100vw - 1\.5rem - ([\d.]+)rem\);\s*white-space: normal;/,
       );
       return anchor && box && [null, anchor[1], box[1]];
     })(),
@@ -491,13 +493,14 @@ test('the desktop bottom row: credits on the Power Up baseline, the dock lifted,
     /html\[dir='rtl'\]\s*body:not\(\.context-docked\):not\(\.ui-clean-view\):not\(\.recording-mode\)\s*:is\(#cesium-credits, #gev-credits\),\s*html\[dir='rtl'\]\s*body:not\(\.context-docked\):not\(\.ui-clean-view\):not\(\.recording-mode\):has\(\s*#intel-hud\[data-variant='minimal'\]\.active\s*\)\s*:is\(#cesium-credits, #gev-credits\) \{\s*right: 1\.5rem;\s*left: auto;/,
   );
   assert.match(
-    trayWide,
-    /#cesium-credits\s*\.cesium-widget-credits \{\s*right: 0;\s*left: auto;/,
+    trays,
+    /html\[dir='rtl'\] #cesium-credits \.cesium-widget-credits \{\s*right: 0;\s*left: auto;/,
   );
-  // There the readout clears two lines of the row under it.
+  // There the readout clears the row under it, however many lines it wraps
+  // onto (--credit-line-height).
   assert.match(
     read('./styles/omnibar-dock.css'),
-    /html\[dir='rtl'\] \*\)\s*#intel-hud\[data-variant='tactical'\]\s*\.hud-bottom-right \{\s*bottom: calc\(3\.375rem \+ 1\.5rem\);/,
+    /html\[dir='rtl'\] \*\):not\(\.context-docked\)\s*#intel-hud\[data-variant='tactical'\]\s*\.hud-bottom-right \{\s*bottom: max\(3\.375rem, var\(--omnibar-credits-clear\)\);/,
   );
   const locale = read('./styles/locale-picker.css');
   assert.match(locale, /#corner-actions \{[^}]*inset-inline-end: 0\.9rem;/);

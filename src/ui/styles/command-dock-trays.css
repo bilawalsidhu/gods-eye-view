@@ -501,13 +501,16 @@ body:not(.ui-clean-view):not(.recording-mode):has(
 
 /* The coordinate readout shares the bottom-left corner with the attribution
    row below 1200px: it sits clear of the row's 28px logo line, with a 6px gap
-   (from 1200px, rail-split.css). */
-#intel-hud:is([data-variant='tactical'], [data-variant='minimal'])
-  .hud-bottom-left,
-:root[data-scope-mask='off']
-  #intel-hud[data-variant='minimal']
-  .hud-bottom-left {
-  bottom: calc(2vh + 7.125rem + var(--world-timeline-lift, 0px));
+   (from 1200px, rail-split.css). At 980px and below the dock is two rows
+   tall and command-dock.css places it. */
+@media (min-width: 981px) {
+  #intel-hud:is([data-variant='tactical'], [data-variant='minimal'])
+    .hud-bottom-left,
+  :root[data-scope-mask='off']
+    #intel-hud[data-variant='minimal']
+    .hud-bottom-left {
+    bottom: calc(2vh + 7.125rem + var(--world-timeline-lift, 0px));
+  }
 }
 
 @media (max-width: 1199px) {
@@ -528,15 +531,22 @@ body:not(.ui-clean-view):not(.recording-mode):has(
   }
 }
 
-@media (min-width: 1200px) {
-  /* Cesium draws the line in an absolutely placed box inside the empty
-     #cesium-credits anchor, so the cap and the wrapping go on that box. */
-  #cesium-credits .cesium-widget-credits {
-    width: max-content;
-    max-width: calc(100vw - 1.5rem - 26rem);
-    white-space: normal;
-  }
+/* Cesium draws the line in an absolutely placed box inside the empty
+   #cesium-credits anchor, so the cap and the wrapping go on that box, at
+   every width: a long line wraps rather than running under the corner row.
+   Right to left it hangs from the anchor's right edge. */
+#cesium-credits .cesium-widget-credits {
+  width: max-content;
+  max-width: calc(100vw - 1.5rem - 26rem);
+  white-space: normal;
+}
 
+html[dir='rtl'] #cesium-credits .cesium-widget-credits {
+  right: 0;
+  left: auto;
+}
+
+@media (min-width: 1200px) {
   /* Right to left, the corner row sits at the bottom left
      (locale-picker.css), so the attribution row takes the bottom right.
      Expanded Context places it itself (context-dock.css). */
@@ -553,14 +563,6 @@ body:not(.ui-clean-view):not(.recording-mode):has(
     right: 1.5rem;
     left: auto;
     text-align: right;
-  }
-
-  html[dir='rtl']
-    body:not(.context-docked):not(.ui-clean-view):not(.recording-mode)
-    #cesium-credits
-    .cesium-widget-credits {
-    right: 0;
-    left: auto;
   }
 }
 

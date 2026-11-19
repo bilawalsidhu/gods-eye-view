@@ -1181,12 +1181,17 @@ corners, so it keeps to the bottom edge, the attribution row sits above it and
 the coordinates clear the row's logo line. In the desktop Omnibar layout the
 Omnibar's own rules (`src/ui/styles/omnibar-dock.css`) place the dock, the
 World Timeline, the credits and the coordinates; its Tactical bottom-right
-readout also keeps 8px above the Power Up row. The left rail treats the
-centered World Timeline and voice control as obstacles only where they reach a
-laid-out panel, not the stack's transparent gutter. Known limit, unchanged
-from main: below 1200px with the World Timeline showing, the Tactical
-bottom-right readout does not rise with the bar and can touch the dock, and a
-credit line longer than the screen does not wrap.
+readout also keeps 8px above the Power Up row. There the credit line wraps at
+every width, right to left it takes the bottom right at every width, and
+`src/ui/creditLineHeight.js` keeps its height in `--credit-line-height`: the
+coordinates (and, right to left, the Tactical readout) stay 6px above it
+however many lines it wraps onto, and the dock and World Timeline rise when
+it is taller than their usual clearance. Narrower than 1120px the dock leaves
+no room between the corners, so the coordinates and the readout sit above
+the dock. Cesium's credit box wraps at every width outside that layout too.
+The left rail treats the centered World Timeline and voice control as
+obstacles only where they reach a laid-out panel, not the stack's
+transparent gutter.
 
 Wind appears in the Weather group before Audio. The surface-weather prototype
 uses keyless NOAA GFS or ECMWF IFS forecasts on an approximately 1° display grid.
