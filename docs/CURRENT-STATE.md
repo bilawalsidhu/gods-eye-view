@@ -7972,7 +7972,8 @@ California", "radio near tokyo" searches Tokyo), and any plan or command is
 offered after it; a line with neither ("hi", "NY", "?") runs nothing. "hide everything near tokyo" clears the layers and flies to
 Tokyo. "hide everything except flights" (or "all but", "other than", with
 "turn off", "clear" or "remove") switches off every layer that is on but
-the ones named, or says no other layers are on. "remove flights from the
+the ones named, on Enter, or says no other layers are on; with a layer to
+keep that is not read, nothing is switched off and only Ask GEV is offered. "remove flights from the
 map" is "remove flights", a doubled verb ("hide hide everything") is read
 once, and a grid reference after "near" is the place ("flights near 14R PU
 2090 4906"). Following needs a callsign or ICAO address (letters and a digit), a
@@ -8004,9 +8005,10 @@ flights"), or a comma part that is exactly a style, map, camera move or
 layer ("go to Tokyo, north up"). A line with one keyword and no verb beside
 the rest of a name ("Tilt Cove", "tokyo traffic", "Hurricane, Utah") offers
 the whole line as a place first and the plan second. When that keyword
-starts the line with no comma after it ("Fire Island", "Radio City Music
-Hall"), it begins the name: the place and the layer are offered, and no
-plan goes to the rest of the name. Further places joined
+starts the line with no comma after it and the rest starts with a word for
+a kind of place ("Fire Island", "Radio City Music Hall"), it begins the
+name: the place and the layer are offered, and no plan goes to the rest
+("earthquakes japan" keeps its plan). Further places joined
 with "and" are offered as their own rows. Things loaded on the map that
 match the line are offered too: a callsign, tail number or transponder
 code puts them first, and otherwise the place row keeps the top, so

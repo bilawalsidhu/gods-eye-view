@@ -659,6 +659,10 @@ test('a place named with "and" stays whole, and a place keeps how it was typed',
     first('flights near Bosnia & Herzegovina').steps[0].place,
     'bosnia and herzegovina',
   );
+  assert.equal(
+    first('flights near Saint Vincent and the Grenadines').steps[0].place,
+    'saint vincent and the grenadines',
+  );
   // Two places joined by "and" are still two.
   assert.equal(
     first('flights near Austin and Dallas').steps[0].place,
@@ -690,9 +694,23 @@ test('"everything except" keeps the layers named and switches off the rest', () 
     );
   }
   assert.deepEqual(
-    first('hide everything except flights and cctv').steps.map(stepOutcome),
+    first('hide everything except flights and the cctv').steps.map(stepOutcome),
     ['layer(radio,off)'],
   );
+  // Enter runs it: the line asked for it in so many words.
+  assert.equal(
+    outcome('hide everything except flights', { on: ['flights', 'radio'] }),
+    'layer(radio,off)',
+  );
+  // A layer to keep that is not read switches nothing off.
+  const unread = omnibar.rows('hide everything except flights and the fog', {
+    places: [],
+  });
+  assert.deepEqual(
+    unread.rows.map((row) => row.kind),
+    ['ask'],
+  );
+  assert.equal(unread.defaultIndex, -1);
   const alone = createOmnibar({ layers: layers(['flights']) });
   assert.equal(
     alone.rows('hide everything except flights').rows[0].kind,
@@ -739,7 +757,13 @@ test('a keyword that begins a name offers no plan to the rest of it', () => {
       text,
     );
   }
-  // A keyword after the place still offers its plan.
-  const { rows } = omnibar.rows('tokyo traffic', { places: [] });
-  assert.ok(rows.some((row) => row.kind === 'plan'));
+  // A keyword after the place, or before a place that is no name's
+  // fragment, still offers its plan.
+  for (const text of ['tokyo traffic', 'earthquakes japan', 'radio London']) {
+    const { rows } = omnibar.rows(text, { places: [] });
+    assert.ok(
+      rows.some((row) => row.kind === 'plan'),
+      text,
+    );
+  }
 });

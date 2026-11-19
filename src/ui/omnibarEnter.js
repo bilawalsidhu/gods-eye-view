@@ -140,6 +140,9 @@ export function mayRunOnEnter(item, text, parsed, context) {
     case 'open-draw':
       return verb;
     case 'plan':
+      // A plan the whole line asked for in so many words ("hide everything
+      // except flights") runs.
+      if (item.asked) return true;
       // A command row runs on its exact label only; a verb that merely
       // lists it ("hide", "turn off") offers it.
       if (item.command) return Boolean(item.named);

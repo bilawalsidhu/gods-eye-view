@@ -402,8 +402,16 @@ const COMPOUND_PLACES = new Set([
   'dadra and nagar haveli',
   'brighton and hove',
 ]);
-const isCompoundPlace = (first, second) =>
-  COMPOUND_PLACES.has(`${first} and ${second}`.toLowerCase());
+/**
+ * The joining words of a compound place ("and", or "and the" when "the" was
+ * read off the second part: "Saint Vincent and the Grenadines"), or null.
+ */
+const compoundJoin = (first, second) =>
+  COMPOUND_PLACES.has(`${first} and ${second}`.toLowerCase())
+    ? ' and '
+    : COMPOUND_PLACES.has(`${first} and the ${second}`.toLowerCase())
+      ? ' and the '
+      : null;
 
 /**
  * Lower case one character at a time, so the line keeps its length and
@@ -598,8 +606,8 @@ export function parseOmnibar(
         place &&
         afterPlace &&
         (separator === 'and' || separator === '&') &&
-        isCompoundPlace(place.split(', ').at(-1), value);
-      if (joinsName) place += ` and ${value}`;
+        compoundJoin(place.split(', ').at(-1), value);
+      if (joinsName) place += `${joinsName}${value}`;
       else if (place && bare && afterBarePlaceAnd) place += ` and ${value}`;
       else if (place && !afterPlaceComma) {
         if (separator === 'and') extraPlaces.push(value);

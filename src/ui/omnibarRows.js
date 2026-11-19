@@ -154,6 +154,10 @@ const SWITCH =
   /^(turn on|switch on|enable|show|display|add|turn off|switch off|disable|hide|remove|toggle)(?:\s+(.*))?$/;
 const SWITCH_OFF = /^(turn off|switch off|disable|hide|remove)\b/;
 /** "hide everything except …", "turn off all layers but …". */
+/** A word for a kind of place, which a name goes on with ("Fire Island"). */
+const NAME_TAIL =
+  /^(?:islands?|isle|city|hall|bottom|lake|river|bay|beach|point|station|park|street|road|mountains?|mount|hills?|valley|falls|springs?|creek|county|town|village|harbou?r|cove|canyon|center|centre|square|tower|bridge|pass|ridge|peak)\b/i;
+
 const EXCEPT =
   /^(?:turn off|switch off|disable|hide|remove|clear)\s+(?:everything|all(?: the)?(?: other)?(?: layers?)?|every layer)\s+(?:except(?: for)?|but(?: for)?|other than|apart from|besides|save for)\s+(.+)$/;
 // Layers people reach for first, so "turn on" offers these before the rest.
@@ -940,11 +944,14 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
   function exceptRows(line, ask) {
     const match = EXCEPT.exec(line.toLowerCase());
     if (!match) return null;
+    // Every layer to keep must be one: with a name not read ("flights and
+    // the fog") nothing is switched off, and only GEV is offered.
     const kept = match[1]
       .split(/\s*(?:,|\band\b|&)\s*/)
-      .map((term) => matchLayers(term)[0])
-      .filter(named);
+      .filter(Boolean)
+      .map((term) => matchLayers(term.replace(/^(?:the|my)\s+/, ''))[0]);
     if (!kept.length) return null;
+    if (!kept.every(named)) return [ask];
     const keptIds = new Set(kept.map((layer) => layer.id));
     const steps = all()
       .filter((layer) => layer.enabled && !keptIds.has(layer.id))
@@ -966,6 +973,8 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
         kind: 'plan',
         icon: 'bolt',
         steps,
+        // Asked for in so many words: Enter runs it.
+        asked: true,
         label: steps.map(stepLabel).join(' · '),
         hint: t('Do all'),
       },
@@ -1330,8 +1339,9 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
     // place comes first and the plan second. After "go to …" with a request
     // peeled off, the place is the one read ("go to London with flights").
     // A keyword ahead of the rest of a name ("Fire Island", "Ship Bottom",
-    // "Radio City Music Hall") begins that name: the leftover is a fragment,
-    // not a place, so no plan goes there. "tokyo traffic" and "Thermal,
+    // "Radio City Music Hall") begins that name when what is left starts
+    // with a word for a kind of place: a fragment, not a place, so no plan
+    // goes there. "earthquakes japan", "tokyo traffic" and "Thermal,
     // California" (a comma parts them) keep their plans.
     const lower = text.toLowerCase();
     const fragment =
@@ -1340,7 +1350,8 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
       placeStep &&
       !/[,;]/.test(text) &&
       lower.endsWith(placeStep.place.toLowerCase()) &&
-      !lower.startsWith(placeStep.place.toLowerCase());
+      !lower.startsWith(placeStep.place.toLowerCase()) &&
+      NAME_TAIL.test(placeStep.place);
     if (ambiguous)
       return withEntities(
         [
