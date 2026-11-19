@@ -808,6 +808,8 @@ test('"except" leaves Satellites to switch off with Space Missions off', () => {
   for (const text of [
     'hide everything except flights from the map',
     'clear everything except flights from the map',
+    'please clear everything except flights from the map',
+    'hide everything except flights from the map, please',
   ])
     assert.deepEqual(
       omnibar.rows(text, { places: [] }).rows[0].steps.map(stepOutcome),
