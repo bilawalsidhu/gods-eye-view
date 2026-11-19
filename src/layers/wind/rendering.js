@@ -161,6 +161,8 @@ export function createWindRendering({
   let imageryErrorRemove = null;
   // The layer-panel opacity (1 = as drawn); kept across clear and re-attach.
   let opacity = 1;
+  // Preserve the latest camera fade while a camera pose is unavailable.
+  let scalarFade = 1;
   let media = null;
   let removers = [];
   let bounds = null;
@@ -367,22 +369,18 @@ export function createWindRendering({
   function updateImageryFade(height, settled = false) {
     // The tileset shell keeps the quantised move-end fade; globe imagery keeps
     // its smooth per-frame fade.
-    if (
-      (!imagery && !shell) ||
-      !Number.isFinite(height) ||
-      (imageryKind === 'tileset' && !settled)
-    )
-      return;
-    const fade = !gpuActive
-      ? 1
-      : height <= WIND_FIELD_FADE_LOW_METERS
-        ? 0
-        : height >= WIND_FIELD_FADE_HIGH_METERS
-          ? 1
-          : Math.log(height / WIND_FIELD_FADE_LOW_METERS) /
-            WIND_FIELD_LOG_RANGE;
+    if ((!imagery && !shell) || (imageryKind === 'tileset' && !settled)) return;
+    if (!gpuActive) scalarFade = 1;
+    else if (Number.isFinite(height))
+      scalarFade =
+        height <= WIND_FIELD_FADE_LOW_METERS
+          ? 0
+          : height >= WIND_FIELD_FADE_HIGH_METERS
+            ? 1
+            : Math.log(height / WIND_FIELD_FADE_LOW_METERS) /
+              WIND_FIELD_LOG_RANGE;
     // The move-end quantisation applies to the fade, not to the slider.
-    const fadedAlpha = scalarBaseAlpha(1) * fade;
+    const fadedAlpha = scalarBaseAlpha(1) * scalarFade;
     const alpha =
       (gpuActive && imageryKind === 'tileset'
         ? Math.round(fadedAlpha * 10) / 10

@@ -1211,6 +1211,26 @@ test('globe imagery hides without a host and shows again when one returns; a fai
 });
 
 for (const overlay of ['speed', 'temperature']) {
+  test('opacity applies to scalar imagery when camera height is unavailable', () => {
+    const h = harness();
+    h.rendering.attach();
+    h.rendering.setOptions({ overlay });
+    h.rendering.setField({
+      grid: FIELD,
+      u: FIELD.u,
+      v: FIELD.v,
+      scalar: { kind: overlay, units: '°C', values: Float32Array.from([20]) },
+    });
+    h.viewer.scene.camera.positionCartographic.height = Number.NaN;
+    h.rendering.setOpacity(0.4);
+    assert.ok(
+      Math.abs(
+        h.imagery[0].alpha - (overlay === 'temperature' ? 1 : 0.85) * 0.4,
+      ) < 1e-12,
+    );
+    h.rendering.destroy();
+  });
+
   test(`${overlay} globe imagery follows the opacity slider and keeps the camera fade`, () => {
     const gpu = {
       supported: () => true,
