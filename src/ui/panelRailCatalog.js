@@ -7,16 +7,11 @@ export const PANEL_RAIL_HOST_CLASS = 'gev-panel-rail';
 export const PANEL_RAIL_FALLBACK_ICON = 'more_horiz';
 
 /**
- * How each side panel appears on its rail. Labels are the panels' own titles.
- * `shownBy` names a class the panel needs to be shown at all (`f` toggles
- * Data Layers' `active`). `context` is the label's translation context.
+ * How each side panel appears on its rail. Labels are the panels' own titles;
+ * `context` is the label's translation context.
  */
 export const PANEL_RAIL_ITEMS = Object.freeze({
-  'data-panel': {
-    icon: 'layers',
-    label: msg('DATA LAYERS'),
-    shownBy: 'active',
-  },
+  'data-panel': { icon: 'layers', label: msg('DATA LAYERS') },
   'utilities-panel': { icon: 'handyman', label: msg('UTILITIES') },
   'scene-panel': { icon: 'movie', label: msg('AUTHORING') },
   // `context` keeps the panel's name apart from the satellite class of the
