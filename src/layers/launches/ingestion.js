@@ -129,8 +129,16 @@ export function createIngestion({
       return;
     // A saved state kept by a restore that could not finish (Satellites was
     // busy) is still the one from before the mission: keep it, and switch
-    // Satellites on for the mission again.
-    if (!layerState._satelliteStateBeforeMission)
+    // Satellites on for the mission again. A Satellites switch the person
+    // made since (restoreVisibility false) settled its visibility, so it
+    // is taken as it is now; its params are still the saved ones.
+    const kept = layerState._satelliteStateBeforeMission;
+    if (kept?.restoreVisibility === false)
+      layerState._satelliteStateBeforeMission = {
+        enabled: manager.isEnabled('satellites'),
+        params: kept.params,
+      };
+    else if (!kept)
       layerState._satelliteStateBeforeMission = {
         enabled: manager.isEnabled('satellites'),
         params: parts.policyHelpers.satelliteParamsAfterSpaceMissions(
