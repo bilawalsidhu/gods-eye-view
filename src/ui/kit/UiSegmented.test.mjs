@@ -117,3 +117,18 @@ test('a radio group moves from the focused option, an arrows group from the sele
   assert.deepEqual(arrows.emitted('update:modelValue'), [['a']]);
   arrows.unmount();
 });
+
+test("an option's own tip wins; an icon option without one is titled by its label", () => {
+  const wrapper = mountGroup({
+    options: [
+      { value: 'a', label: 'Alpha', attrs: { title: 'Alpha tip' } },
+      { value: 'b', label: 'Beta', icon: 'star' },
+      { value: 'c', label: 'Gamma' },
+    ],
+  });
+  const titles = wrapper
+    .findAll('button')
+    .map((b) => b.attributes('title') ?? null);
+  assert.deepEqual(titles, ['Alpha tip', 'Beta', null]);
+  wrapper.unmount();
+});

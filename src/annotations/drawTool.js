@@ -1,5 +1,5 @@
 /**
- * Manual whiteboard drawing: the Cesium + DOM half.
+ * Manual whiteboard drawing: the scene + DOM half.
  *
  * UTILITIES ▸ Draw turns the globe into a whiteboard you draw on by hand: pick a
  * shape (area, line or pin) and a colour, click the vertices on the real world,
@@ -15,12 +15,13 @@
  *   (`src/data/inputOwnership.js`), and every ambient selection handler yields,
  *   so a vertex clicked on top of an aircraft or a camera is a vertex and
  *   nothing else. It is one claim consulted by all of them, not a list of
- *   exceptions inside each.
+ *   exceptions inside each. Turning Draw on takes the pointer from any tool
+ *   holding it; a newer tool taking it turns Draw off.
  * - Cesium's Viewer binds its OWN left click (select the entity under the
  *   pointer) and double click (track it) on the viewer's handler, outside every
- *   layer and therefore outside the shared claim. Both are borrowed for the
+ *   layer and therefore outside the shared claim. Both are suppressed for the
  *   session and given back on the way out, and `destroy()` gives back every
- *   listener, the Cesium handler, the preview data source and the window
+ *   listener, the pointer subscriptions, the preview draw sets and the window
  *   handle, so the tool can be turned off or the shell disposed without leaving
  *   anything behind.
  *
@@ -30,14 +31,13 @@
  * drapes finished areas and routes onto the surface, so the height is dropped
  * at finish, deliberately and in one place — see `finishSpec` in drawMode.js.
  */
-import * as Cesium from 'cesium';
 import { pickWorldFromScreen } from './annotationResolver.js';
 import {
   claimPointer,
   pointerOwner,
   releasePointer,
 } from '../data/inputOwnership.js';
-import { pointerOwnerName } from '../data/pointerOwnerNames.js';
+import { inputFor } from '../input/dispatcher.js';
 import {
   DRAW_SHAPES,
   MAX_VERTICES,
@@ -50,12 +50,46 @@ import {
   removeLastVertex,
 } from './drawMode.js';
 
-import { DRAW_COLORS, DRAW_COLOR_CSS, presentDrawMarks } from './drawMarks.js';
+import {
+  DRAW_COLORS,
+  DRAW_COLOR_CSS,
+  drawMarkActions,
+  drawMarkActionsFor,
+  drawMarkFallbackName,
+  presentDrawMarks,
+} from './drawMarks.js';
 
-import { onLocaleChange, t, translateKnown } from '../i18n/index.js';
+import { onLocaleChange, t } from '../i18n/index.js';
+import { fromDegrees } from '../geo/index.js';
+import { cssColor } from '../render/color.js';
+import {
+  canvasOf as sceneCanvasOf,
+  drawOf,
+  findFrame,
+} from '../render/rendererOf.js';
+/** The longest note a row action leaves under its row, in characters. */
+const NOTE_MAX = 200;
+/** An action's answer as a row note: trimmed, and cut at a word with an ellipsis. */
+function noteText(text) {
+  if (typeof text !== 'string') return '';
+  const trimmed = text.trim();
+  if (trimmed.length <= NOTE_MAX) return trimmed;
+  const cut = trimmed.slice(0, NOTE_MAX - 1);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > NOTE_MAX / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
+
 /** The id this tool claims the pointer under. */
 const DRAW_POINTER_OWNER = 'draw';
-const PREVIEW_DATA_SOURCE_NAME = 'gev-draw-preview';
+/** Each tool's preview sets get their own ids. */
+let previewSerial = 0;
+/**
+ * Preview sets drawn on each viewer by its live tools, so a tool left
+ * undestroyed beside its replacement shows up in `diagnostics()`.
+ */
+const livePreviewSets = new WeakMap();
+const countPreviewSets = (viewer, delta) =>
+  livePreviewSets.set(viewer, (livePreviewSets.get(viewer) ?? 0) + delta);
 
 const PREVIEW = DRAW_COLOR_CSS;
 
@@ -67,7 +101,10 @@ const PREVIEW = DRAW_COLOR_CSS;
  * through the actions it gives `connect`, which returns their disconnect.
  * A row's fly-to is an immediate navigation through `navigation`, like
  * Import's, so Cockpit can refuse it and a running orbit or follow lets go.
- * @param {{viewer: Cesium.Viewer, annotations: {annotate: Function, clear: Function}, navigation?: object, publish?: Function, connect?: Function}} deps
+ * `markActions` are the application's own buttons on an area's or a line's
+ * row (drawMarks.js `drawMarkActions`); a press runs the action with the
+ * shape's id, kind, name and geometry (drawMarks.js `drawMarkGeometry`).
+ * @param {{viewer: object, annotations: {annotate: Function, clear: Function}, navigation?: object, publish?: Function, connect?: Function, markActions?: object[]}} deps
  * @returns {{destroy: Function}|null}
  */
 export function initDrawTool({
@@ -76,7 +113,12 @@ export function initDrawTool({
   navigation = null,
   publish = () => {},
   connect = () => () => {},
+  markActions = [],
 }) {
+  const rowActions = drawMarkActions(markActions);
+  // What a row action said last on each drawn shape: `{ run, busy, text }`.
+  const notes = new Map();
+  let noteRun = 0;
   // A page without the Draw controls (the Display controls view omitted) has
   // no draw tool.
   if (!viewer || !annotations || !document.getElementById('draw-toggle'))
@@ -88,16 +130,13 @@ export function initDrawTool({
   let shape = 'area';
   let color = 'primary';
   let hint = '';
-  let handler = null;
+  let unbindScene = null;
   let lease = null;
-  let savedDoubleClick = null;
-  let savedSingleClick = null;
   let cursor = null; // last mouse position on the canvas, for the rubber band
   // Bumped by anything that supersedes an in-flight finish: cancelling, clearing
   // the board, leaving draw mode, teardown. An `annotate()` that resolves after
   // one of those must not write its outcome over the newer state.
   let generation = 0;
-  const previewEntities = [];
   // Every DOM listener this tool adds (the session's keydown), so teardown is
   // one loop rather than a list that can fall out of step with the bindings.
   const domListeners = [];
@@ -106,23 +145,40 @@ export function initDrawTool({
     domListeners.push([target, type, listener, options]);
   };
 
-  const dataSource = new Cesium.CustomDataSource(PREVIEW_DATA_SOURCE_NAME);
-  // `add()` resolves on the NEXT tick, so an init-then-immediate-destroy would
-  // remove a source that had not been attached yet and leave the attachment to
-  // land afterwards — a preview data source nobody owns. Chain the removal onto
-  // the attachment instead of racing it.
-  let attaching = Promise.resolve(viewer.dataSources.add(dataSource)).catch(
-    () => null,
-  );
+  // The preview: one dashed rubber band and a dot per vertex, drawn through
+  // the renderer's draw port. Both sets live as long as the tool.
+  const draw = drawOf(viewer);
+  const previewId = `draw-preview:${++previewSerial}`;
+  const previewLines = draw.lines({ id: `${previewId}:line` });
+  const previewPoints = draw.points({ id: `${previewId}:vertices` });
+  countPreviewSets(viewer, 2);
+  let previewReleased = false;
+  const releasePreview = () => {
+    if (previewReleased) return;
+    previewReleased = true;
+    countPreviewSets(viewer, -2);
+    previewLines.dispose();
+    previewPoints.dispose();
+  };
+  /** The canvas the renderer draws in (the viewer's own when none is bound). */
+  const canvasOf = () => sceneCanvasOf(viewer);
+  const requestRender = () => findFrame(viewer)?.requestRender('draw-preview');
+  // Teardown finishes synchronously; `whenSettled()` keeps its promise.
+  const attaching = Promise.resolve();
 
-  const present = () =>
+  const present = () => {
+    const marks = annotations.list?.() || [];
+    // A note goes with its shape.
+    for (const id of notes.keys())
+      if (!marks.some((mark) => mark.id === id)) notes.delete(id);
     publish({
       active,
       shape,
       color,
       hint,
-      marks: presentDrawMarks(annotations.list?.() || []),
+      marks: presentDrawMarks(marks, rowActions, notes),
     });
+  };
   // The hint is kept as the call that words it, so a language switch can
   // word it again.
   let hintText = () => '';
@@ -137,70 +193,71 @@ export function initDrawTool({
 
   // ---- preview ---------------------------------------------------------
   const vertexPositions = () =>
-    session.vertices.map((v) =>
-      Cesium.Cartesian3.fromDegrees(v.lon, v.lat, v.height || 0),
-    );
-  const previewLine = dataSource.entities.add({
-    show: false,
-    polyline: {
-      positions: new Cesium.CallbackProperty(() => {
-        if (!session) return [];
-        const pts = vertexPositions();
-        if (cursor && session.shape !== 'pin') pts.push(cursor);
-        if (session.shape === 'area' && pts.length >= 3) pts.push(pts[0]);
-        return pts;
-      }, false),
-      width: 3,
-      material: new Cesium.PolylineDashMaterialProperty({
-        color: Cesium.Color.fromCssColorString(PREVIEW.primary).withAlpha(0.9),
-        dashLength: 16,
-      }),
-      depthFailMaterial: new Cesium.PolylineDashMaterialProperty({
-        color: Cesium.Color.fromCssColorString(PREVIEW.primary).withAlpha(0.35),
-        dashLength: 16,
-      }),
-      clampToGround: false,
-    },
-  });
-  const syncPreview = () => {
+    session.vertices.map((v) => fromDegrees(v.lon, v.lat, v.height || 0));
+  /** The rubber band, from the vertices to the pointer (and closed for an area). */
+  const syncPreviewLine = () => {
     if (destroyed) return;
-    previewEntities.forEach((e) => dataSource.entities.remove(e));
-    previewEntities.length = 0;
-    if (!session) {
-      previewLine.show = false;
-      setHint(() => drawHint(null));
-      viewer.scene.requestRender();
+    if (!session || session.shape === 'pin') {
+      previewLines.clear();
       return;
     }
-    const stroke = Cesium.Color.fromCssColorString(
-      PREVIEW[color] || PREVIEW.primary,
-    );
-    previewLine.polyline.material = new Cesium.PolylineDashMaterialProperty({
-      color: stroke.withAlpha(0.9),
-      dashLength: 16,
-    });
-    previewLine.show = session.shape !== 'pin';
-    for (const v of session.vertices) {
-      previewEntities.push(
-        dataSource.entities.add({
-          position: Cesium.Cartesian3.fromDegrees(v.lon, v.lat, v.height || 0),
-          point: {
-            pixelSize: 8,
-            color: stroke,
-            outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
-            outlineWidth: 2,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          },
-        }),
-      );
+    const pts = vertexPositions();
+    if (cursor) pts.push(cursor);
+    if (session.shape === 'area' && pts.length >= 3) pts.push(pts[0]);
+    if (pts.length < 2) {
+      previewLines.clear();
+      return;
     }
+    previewLines.upsert([
+      {
+        id: 'band',
+        positions: pts,
+        widthPx: 3,
+        // Along the ellipsoid between vertices, as the entity polyline was.
+        mode: 'geodesic',
+        style: {
+          kind: 'dash',
+          color: withAlpha(cssColor(PREVIEW[color] || PREVIEW.primary), 0.9),
+          length: 16,
+        },
+        // Dashed behind the surface too, as the band in front of it is.
+        depthFail: {
+          kind: 'dash',
+          color: withAlpha(cssColor(PREVIEW.primary), 0.35),
+          length: 16,
+        },
+      },
+    ]);
+  };
+  const syncPreview = () => {
+    if (destroyed) return;
+    if (!session) {
+      previewPoints.clear();
+      previewLines.clear();
+      setHint(() => drawHint(null));
+      requestRender();
+      return;
+    }
+    const stroke = cssColor(PREVIEW[color] || PREVIEW.primary);
+    previewPoints.set(
+      session.vertices.map((v, index) => ({
+        id: String(index),
+        pos: { lon: v.lon, lat: v.lat, height: v.height || 0 },
+        pixelSize: 8,
+        color: stroke,
+        outlineColor: [0, 0, 0, 0.6],
+        outlineWidth: 2,
+        disableDepthTest: Number.POSITIVE_INFINITY,
+      })),
+    );
+    syncPreviewLine();
     setHint(() => drawHint(session));
-    viewer.scene.requestRender();
+    requestRender();
   };
 
   // ---- vertices from clicks --------------------------------------------
   const worldAt = (position) => {
-    const canvas = viewer.scene.canvas;
+    const canvas = canvasOf();
     const w = canvas.clientWidth || canvas.width || 1;
     const h = canvas.clientHeight || canvas.height || 1;
     return pickWorldFromScreen(viewer, position.x / w, position.y / h);
@@ -228,11 +285,12 @@ export function initDrawTool({
   };
   const onMove = (event) => {
     if (!session || session.shape === 'pin' || destroyed) return;
-    const p = worldAt(event.endPosition);
-    cursor = p
-      ? Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height || 0)
-      : null;
-    viewer.scene.requestRender();
+    // The click's own position is sensor-corrected; the rubber band must
+    // follow the same point the click would place.
+    const p = worldAt(event.pickPosition ?? event.endPosition);
+    cursor = p ? fromDegrees(p.lon, p.lat, p.height || 0) : null;
+    syncPreviewLine();
+    requestRender();
   };
 
   // ---- finish / cancel -------------------------------------------------
@@ -312,9 +370,7 @@ export function initDrawTool({
       t.closest('button, a, select, [role="button"], [role="radio"]')
     )
       return false;
-    return (
-      t === document.body || t === viewer.scene.canvas || t.tagName === 'CANVAS'
-    );
+    return t === document.body || t === canvasOf() || t.tagName === 'CANVAS';
   };
   const onKey = (event) => {
     if (!active || destroyed || typingElsewhere(event)) return;
@@ -351,18 +407,15 @@ export function initDrawTool({
   function setActive(next) {
     if (destroyed || next === active) return active;
     if (next) {
-      lease = claimPointer(DRAW_POINTER_OWNER);
-      if (!lease) {
-        // Somebody else is using the pointer — possibly an older instance of
-        // this same tool that has not finished tearing down. Say so instead of
-        // half-starting.
-        setHint(() =>
-          t('{owner} is using the pointer — close it first.', {
-            owner: translateKnown(pointerOwnerName(pointerOwner())),
-          }),
-        );
-        return active;
-      }
+      // The newest claim takes over: a tool holding the pointer is told and
+      // turns itself off, and a newer one turns Draw off as if the person had.
+      const claimed = claimPointer(DRAW_POINTER_OWNER, {
+        onLost: () => {
+          if (lease === claimed) setActive(false);
+        },
+      });
+      if (!claimed) return active;
+      lease = claimed;
     }
     active = next;
     present();
@@ -384,50 +437,29 @@ export function initDrawTool({
   }
 
   function bindSceneHandler() {
-    if (handler) return;
-    handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    handler.setInputAction(onClick, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-    handler.setInputAction(onMove, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-    handler.setInputAction(() => {
-      void finish();
-    }, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
-    // Cesium's Viewer binds BOTH stock click actions on its own handler: the
-    // single click picks an entity into `viewer.selectedEntity`, the double
-    // click tracks it. Neither goes through a layer, so neither can be fixed by
-    // the shared pointer claim — they have to be borrowed outright for the
-    // session and given back on the way out. Borrowing the single click is what
-    // stops a vertex placed on a contact from also selecting it.
-    const stock = viewer.screenSpaceEventHandler;
-    savedSingleClick =
-      stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK) || null;
-    savedDoubleClick =
-      stock.getInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK) ||
-      null;
-    stock.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
-    stock.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+    if (unbindScene) return;
+    const input = inputFor(viewer);
+    const held = { lease: () => lease };
+    const offs = [
+      input.onPointer('click', onClick, held),
+      input.onPointer('move', onMove, held),
+      input.onPointer('dblclick', () => void finish(), held),
+      // Cesium's Viewer binds BOTH stock click actions on its own handler: the
+      // single click picks an entity into `viewer.selectedEntity`, the double
+      // click tracks it. Neither goes through a layer, so neither yields to the
+      // shared pointer claim — they are suppressed for the session and given
+      // back on the way out. Suppressing the single click is what stops a
+      // vertex placed on a contact from also selecting it.
+      input.suppressStockClicks(),
+    ];
+    unbindScene = () => offs.forEach((off) => off());
     listen(document, 'keydown', onKey, true);
   }
 
   function releaseSceneHandler() {
-    if (handler) {
-      handler.destroy();
-      handler = null;
-    }
-    if (savedSingleClick) {
-      viewer.screenSpaceEventHandler.setInputAction(
-        savedSingleClick,
-        Cesium.ScreenSpaceEventType.LEFT_CLICK,
-      );
-      savedSingleClick = null;
-    }
-    if (savedDoubleClick) {
-      viewer.screenSpaceEventHandler.setInputAction(
-        savedDoubleClick,
-        Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
-      );
-      savedDoubleClick = null;
-    }
-    // Drop the keydown listener bound alongside this handler.
+    unbindScene?.();
+    unbindScene = null;
+    // Drop the keydown listener bound alongside the pointer subscriptions.
     for (let i = domListeners.length - 1; i >= 0; i -= 1) {
       const [target, type, listener, options] = domListeners[i];
       if (listener !== onKey) continue;
@@ -448,6 +480,56 @@ export function initDrawTool({
         ) !== false
       );
     return annotations.frame?.(id) ?? false;
+  }
+
+  /**
+   * Run the application's row action `actionId` on drawn shape `id`, if the
+   * shape is still on the board and still offered it. Returns whether it ran.
+   * What the action returns, or resolves to, is the row's note (a measurement,
+   * "saved"): the row is busy until it settles, a newer press or the shape's
+   * removal makes a late answer moot, and a failure clears the note, so an
+   * action words its own refusals and resolves with them.
+   */
+  function runMarkAction(id, actionId) {
+    const mark = (annotations.list?.() || []).find(
+      (entry) => entry.id === id && entry.manual === true,
+    );
+    const offer = drawMarkActionsFor(mark, rowActions);
+    const action = offer.actions.find((entry) => entry.id === actionId);
+    if (!action || notes.get(mark.id)?.busy) return false;
+    const run = ++noteRun;
+    const settle = (text) => {
+      if (destroyed || notes.get(mark.id)?.run !== run) return;
+      notes.set(mark.id, {
+        run,
+        busy: false,
+        text: noteText(text),
+      });
+      present();
+    };
+    const fail = (error) => {
+      console.warn(`[draw] ${actionId} failed`, error);
+      settle('');
+    };
+    notes.set(mark.id, { run, busy: true, text: '' });
+    let answer;
+    try {
+      answer = action.run({
+        id: mark.id,
+        shape: offer.shape,
+        name: mark.name || '',
+        title: mark.name || drawMarkFallbackName(mark),
+        geometry: offer.geometry,
+      });
+    } catch (error) {
+      fail(error);
+      return false;
+    }
+    if (typeof answer?.then === 'function') {
+      present();
+      Promise.resolve(answer).then(settle, fail);
+    } else settle(answer);
+    return true;
   }
 
   /** Draw `next` from now on; an open shape starts over in it. */
@@ -478,6 +560,7 @@ export function initDrawTool({
     },
     flyToDrawMark: flyToMark,
     removeDrawMark: (id) => annotations.remove?.(id),
+    runDrawMarkAction: runMarkAction,
   });
   // The rows follow the board: a shape drawn, renamed, hidden or removed
   // here, by voice or by a clear.
@@ -500,13 +583,15 @@ export function initDrawTool({
     setActive,
     setShape: chooseShape,
     /** The hand-drawn marks the list shows, as its rows. */
-    marks: () => presentDrawMarks(annotations.list?.() || []),
+    marks: () =>
+      presentDrawMarks(annotations.list?.() || [], rowActions, notes),
     setColor(next) {
       color = DRAW_COLORS.includes(next) ? next : 'primary';
       present();
       syncPreview();
     },
     flyToMark,
+    runMarkAction,
     /** Test seam: add a vertex from lon/lat as if it had been clicked. */
     addVertex(lon, lat, height = 0) {
       if (!session) return false;
@@ -523,26 +608,18 @@ export function initDrawTool({
       return {
         active,
         destroyed,
-        sceneHandler: Boolean(handler),
+        sceneHandler: Boolean(unbindScene),
         domListeners: domListeners.length,
-        previewDataSources: countPreviewDataSources(viewer),
-        previewEntities: destroyed ? 0 : dataSource.entities.values.length,
+        // Every live tool's on this viewer: 2 while one tool lives.
+        previewSets: livePreviewSets.get(viewer) ?? 0,
+        previewItems: previewReleased
+          ? 0
+          : previewLines.size() + previewPoints.size(),
         pointerOwner: pointerOwner(),
-        // The viewer's OWN click actions. While a session is open both are
-        // borrowed (absent here); after it closes both are back. A harness can
-        // compare the restored functions by identity with what it captured
-        // before, which is the only way to prove they were given back rather
-        // than replaced.
-        stockSingleClick: Boolean(
-          viewer.screenSpaceEventHandler?.getInputAction?.(
-            Cesium.ScreenSpaceEventType.LEFT_CLICK,
-          ),
-        ),
-        stockDoubleClick: Boolean(
-          viewer.screenSpaceEventHandler?.getInputAction?.(
-            Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
-          ),
-        ),
+        // The viewer's own select and follow, which the input port runs: off
+        // while a session is open, back on after it closes.
+        stockSingleClick: inputFor(viewer).stockEnabled('select'),
+        stockDoubleClick: inputFor(viewer).stockEnabled('dblclickFollow'),
       };
     },
     /** Resolves once every deferred teardown step has run. */
@@ -564,18 +641,7 @@ export function initDrawTool({
       for (const [target, type, listener, options] of domListeners.splice(0)) {
         target.removeEventListener(type, listener, options);
       }
-      previewEntities.length = 0;
-      dataSource.entities.removeAll();
-      // Wait for the pending add() before removing: a destroy() in the same
-      // tick as init would otherwise remove nothing and let the attachment land
-      // behind it.
-      attaching = attaching.then(() => {
-        try {
-          viewer.dataSources.remove(dataSource, true);
-        } catch {
-          /* viewer already disposed — nothing to detach from */
-        }
-      });
+      releasePreview();
       document.body.classList.remove('gev-drawing');
       hint = '';
       present();
@@ -587,13 +653,7 @@ export function initDrawTool({
   return api;
 }
 
-/** How many draw previews are attached — more than one means a leaked tool. */
-function countPreviewDataSources(viewer) {
-  const sources = viewer?.dataSources;
-  if (!sources) return 0;
-  let found = 0;
-  for (let index = 0; index < sources.length; index += 1) {
-    if (sources.get(index)?.name === PREVIEW_DATA_SOURCE_NAME) found += 1;
-  }
-  return found;
+/** `color` at `alpha`. */
+function withAlpha(color, alpha) {
+  return [color[0], color[1], color[2], alpha];
 }

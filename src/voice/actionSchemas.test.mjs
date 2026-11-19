@@ -55,7 +55,15 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Voice geometry adds resolve_area, find_imagery, osm_query, the analyst
     // area scopes and the osm-places layer; natural-region candidates and the
     // tightened area tool wording follow review.
-    'd0c5ad733670972713a54cb10676c42b7c6e78834bfff52b473c0e8a45e742c3',
+    // control_cockpit states the own-layer entry rule (Contacts not required).
+    // move_camera tilt takes an optional pitchDeg angle, described as
+    // absolute with its -45 default, with steps sent as a direction.
+    // show_street_level (map, source, photo) adds one tool.
+    // open_stories adds the Stories Explore entry action.
+    // The Cyber HUD layout leaves set_hud's layout enum (its sonar is a
+    // visual style; set_cyber_sonar is excluded above).
+    // The Space Missions panel adds one panel target.
+    '09abe70ef3a1fc4320e25cff997dd3b04db7e78ff31b8530e17bbbbb8156b4c6',
   );
 });
 
@@ -152,6 +160,8 @@ test('all legacy action arguments are byte-identical after removing the delibera
         'resolve_area',
         'find_imagery',
         'osm_query',
+        'show_street_level',
+        'open_stories',
       ].includes(tool.name),
   );
   // Layer enums are generated from the voice layer manifest and pinned by
@@ -174,6 +184,8 @@ test('all legacy action arguments are byte-identical after removing the delibera
     'stop',
   ]);
   motion.enum = motion.enum.filter((value) => value !== 'rotate_globe');
+  // Tilt to an angle is additive.
+  delete property('move_camera').pitchDeg;
   const panels = property('set_panel_open').panelId;
   panels.enum = panels.enum.filter(
     (id) =>
@@ -184,6 +196,7 @@ test('all legacy action arguments are byte-identical after removing the delibera
         'voice-preview',
         'provider-settings',
         'utilities-panel',
+        'space-missions-panel',
       ].includes(id),
   );
   for (const tool of legacy) {
@@ -218,9 +231,9 @@ test('all legacy action arguments are byte-identical after removing the delibera
     delete center.properties[axis].minimum;
     delete center.properties[axis].maximum;
   }
-  // Cyber adds one HUD layout and Operator was retired.
+  // Operator and then Cyber were retired.
   const hud = property('set_hud').layout;
-  assert.deepEqual(hud.enum, ['tactical', 'minimal', 'cyber']);
+  assert.deepEqual(hud.enum, ['tactical', 'minimal']);
   hud.enum = ['tactical', 'operator', 'minimal'];
   // Snow is retired from set_visual_style; restore it to keep the legacy pin.
   const visualStyle = legacy.find((tool) => tool.name === 'set_visual_style')
@@ -318,4 +331,30 @@ test('direct voice timeout schema accepts None and exact integers, rejects malfo
     assert.equal(validateArgs(tool.parameters, { minutes }).length, 0);
   for (const minutes of [-1, 61, 1.5, '5'])
     assert.ok(validateArgs(tool.parameters, { minutes }).length > 0);
+});
+
+test('tilt accepts an angle with no direction', () => {
+  const schema = GEV_ACTION_SCHEMAS.find(
+    (tool) => tool.name === 'move_camera',
+  ).parameters;
+  assert.deepEqual(validateArgs(schema, { motion: 'tilt', pitchDeg: -45 }), []);
+  assert.deepEqual(validateArgs(schema, { motion: 'tilt' }), []);
+  // No range in the schema (prompt budget): the runner clamps to -89..-5.
+  assert.ok(
+    validateArgs(schema, { motion: 'tilt', pitchDeg: 'steep' }).length > 0,
+  );
+});
+
+test('set_panel_open accepts the Space Missions panel', () => {
+  const schema = GEV_ACTION_SCHEMAS.find(
+    (tool) => tool.name === 'set_panel_open',
+  ).parameters;
+  assert.deepEqual(
+    validateArgs(schema, { panelId: 'space-missions-panel', open: true }),
+    [],
+  );
+  assert.ok(
+    validateArgs(schema, { panelId: 'space-missions', open: true }).length > 0,
+    'the Context mode name is not a panel id',
+  );
 });

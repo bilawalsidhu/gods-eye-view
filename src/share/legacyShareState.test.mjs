@@ -22,6 +22,7 @@ import {
   fromLegacyShareState,
   toLegacyShareState,
 } from './legacyShareState.js';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 
 const DEG = Math.PI / 180;
 
@@ -47,7 +48,7 @@ function parseLegacy(hash) {
   globalThis.window = {
     location: { hash: body, href: `http://localhost/${body}` },
   };
-  const manager = new ShareLinkManager(stubViewer());
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(stubViewer()));
   const parsed = manager.parseInitialHash();
   manager.destroy();
   return parsed;
@@ -87,11 +88,12 @@ function assertLegacyRoundTrip(hash) {
   return { parsed, state, encoded };
 }
 
-test('the HAL example survives the round trip and shrinks to 39 characters', () => {
+test('the HAL example survives the round trip and shrinks to 42 characters', () => {
   const { parsed, state, encoded } = assertLegacyRoundTrip(HAL_EXAMPLE_HASH);
   assert.equal(HAL_EXAMPLE_HASH.length, 302);
-  assert.equal(encoded.length, 39);
-  assert.equal(encoded, 'ARCg-SQYrah3ILAJKB4wO1IEAIQAEGIBNMgBC1o');
+  // Its long form predates the Space Missions panel: that entry says nothing.
+  assert.equal(encoded.length, 42);
+  assert.equal(encoded, 'ARCg-SQYrah3ILAJKB4wO1IEAIQAEGIDNLAByAELpA');
   assert.equal(parsed.roll, 360);
   assert.equal(state.roll, 0);
   assert.deepEqual(state.layerState.enabledLayerIds, [
@@ -142,6 +144,23 @@ test('links from earlier long-form versions keep their historical meaning', () =
   // `l=f` without `e` is a v2 link with 3D models OFF; the codec writes that.
   const off = fromLegacyShareState(parseLegacy('v=2&lat=1&lon=2&l=f'));
   assert.equal(off.layerState.options.flights.models3d, false);
+});
+
+test('Sonar beside the Minimal layout survives the compact form; older links do not name it', () => {
+  const { parsed, state } = assertLegacyRoundTrip(
+    'v=2&lat=10&lon=20&hud=minimal&hs=1',
+  );
+  assert.equal(parsed.hudSonar, true);
+  assert.equal(state.hudVariant, 'minimal');
+  assert.equal(state.hudSonar, true);
+  // Links made before `hs`: Minimal carries no Sonar, Cyber carries it in
+  // its own code.
+  for (const hud of ['minimal', 'cyber']) {
+    const old = assertLegacyRoundTrip(`v=2&lat=10&lon=20&hud=${hud}`);
+    assert.equal(old.parsed.hudSonar, false);
+    assert.equal(old.state.hudVariant, hud);
+    assert.equal(old.state.hudSonar, false);
+  }
 });
 
 test('a tracking selection becomes a thing view and back', () => {
@@ -209,16 +228,18 @@ function generatedLegacyHash(random) {
   const int = (min, max) => min + Math.floor(random() * (max - min + 1));
   globalThis.window = { location: { hash: '', href: 'http://localhost/' } };
   const manager = new ShareLinkManager(
-    stubViewer({
-      position: {
-        latitude: (int(-899999, 899999) / 1e4) * DEG,
-        longitude: (int(-1799999, 1799999) / 1e4) * DEG,
-        height: pick(random, [int(-50, 3000), int(0, 30_000_000)]),
-      },
-      heading: int(0, 359) * DEG + (random() < 0.1 ? 0.99 * DEG : 0),
-      pitch: int(-90, 0) * DEG,
-      roll: pick(random, [0, 359.7 * DEG, int(0, 359) * DEG]),
-    }),
+    bindFakeCesiumCamera(
+      stubViewer({
+        position: {
+          latitude: (int(-899999, 899999) / 1e4) * DEG,
+          longitude: (int(-1799999, 1799999) / 1e4) * DEG,
+          height: pick(random, [int(-50, 3000), int(0, 30_000_000)]),
+        },
+        heading: int(0, 359) * DEG + (random() < 0.1 ? 0.99 * DEG : 0),
+        pitch: int(-90, 0) * DEG,
+        roll: pick(random, [0, 359.7 * DEG, int(0, 359) * DEG]),
+      }),
+    ),
   );
   const style = pick(random, VIEW_STYLES);
   manager.onStyleChange(style);
@@ -228,6 +249,7 @@ function generatedLegacyHash(random) {
     bloomVersion: pick(random, [1, 2]),
     sharpenIntensity: int(0, 100),
     hudVariant: pick(random, HUD_LAYOUTS),
+    hudSonar: random() < 0.5,
     hudVisible: random() < 0.5,
     detectionMode: pick(random, ['OFF', 'SPARSE', 'BALANCED', 'DENSE']),
     detectionDensity: density,
@@ -305,7 +327,7 @@ test('the converter ignores non-objects and restore bookkeeping', () => {
 test('the converter knows every key of the long form’s parsed state', () => {
   // A key the converter does not list would silently drop out of share codes.
   globalThis.window = { location: { hash: '', href: 'http://localhost/' } };
-  const manager = new ShareLinkManager(stubViewer({}));
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(stubViewer({})));
   const parsed = manager._parseShareHash('v=2&lat=1&lon=2');
   assert.deepEqual(
     Object.keys(parsed).sort(),

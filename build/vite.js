@@ -258,6 +258,12 @@ export function createBrowserViteConfig({
         mapillaryToken ?? '',
       ),
     },
-    build: { chunkSizeWarningLimit: 1500 },
+    build: {
+      chunkSizeWarningLimit: 1500,
+      // The places pack's tiles stay files, read only when a lookup touches
+      // them; inlined, the small ones would all load with the first lookup.
+      assetsInlineLimit: (file) =>
+        file.includes('/wikidata_places/') ? false : undefined,
+    },
   };
 }

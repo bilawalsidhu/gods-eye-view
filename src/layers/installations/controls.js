@@ -1,37 +1,14 @@
-import * as Cesium from 'cesium';
-import { describeInstallationFeedback } from '../../data/installationFeedback.js';
+import { installationFeedback } from '../../data/installationFeedback.js';
 import {
   LAYER_ID,
   DISTANCE_PREFILTER_MARGIN_M,
   ANCHOR_REFRESH_M,
 } from './policy.js';
-import { formatNumber, t, tn } from '../../i18n/index.js';
-
-// installationFeedback.js is shared with the HUD (src/loadingFeedback.js) and
-// hands back msg()-marked English plus values; getStats translates them here.
-function localizeInstallationFeedback(feedback) {
-  if (feedback.text !== undefined) {
-    const values = {};
-    if (feedback.reason !== undefined) values.reason = t(feedback.reason);
-    if (feedback.seconds !== undefined) values.seconds = feedback.seconds;
-    return t(feedback.text, values);
-  }
-  const { count, km } = feedback;
-  if (km) {
-    const kmText = formatNumber(km);
-    return count === 0
-      ? t('No mapped sites within {km} km of the contact', { km: kmText })
-      : tn(
-          count,
-          '{count} mapped site within {km} km of the contact',
-          '{count} mapped sites within {km} km of the contact',
-          { km: kmText },
-        );
-  }
-  return count === 0
-    ? t('No mapped sites in view')
-    : tn(count, '{count} mapped site in view', '{count} mapped sites in view');
-}
+import { t } from '../../i18n/index.js';
+import { fromDegrees, toCartographicRadians } from '../../geo/ellipsoid.js';
+import { surfaceDistance } from '../../geo/geodesic.js';
+import { toDegrees, toRadians } from '../../geo/vector.js';
+import { cameraOf } from '../../render/rendererOf.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   const methods = {
@@ -65,7 +42,7 @@ export function createControls({ state: layerState, services, parts, source }) {
      * only area that answers "what is near this contact". The window moves
      * only after the subject travels ANCHOR_REFRESH_M, and cached tiles make
      * that cheap. Passing null returns the layer to viewport loading.
-     * @param {Cesium.Cartesian3|{latitude:number, longitude:number}|null} position
+     * @param {{x:number, y:number, z:number}|{latitude:number, longitude:number}|null} position
      *   Subject position.
      * @returns {boolean} Whether a new load was scheduled.
      */
@@ -78,17 +55,17 @@ export function createControls({ state: layerState, services, parts, source }) {
         )
           next = { latitude: position.latitude, longitude: position.longitude };
         else {
-          const carto = Cesium.Cartographic.fromCartesian(position);
+          const carto = toCartographicRadians(position);
           if (carto)
             next = {
-              latitude: Cesium.Math.toDegrees(carto.latitude),
-              longitude: Cesium.Math.toDegrees(carto.longitude),
+              latitude: toDegrees(carto.lat),
+              longitude: toDegrees(carto.lon),
             };
         }
       }
       // Keep the live centre even when the coarse fetch anchor has not moved.
       layerState.contextPosition = next
-        ? Cesium.Cartesian3.fromDegrees(next.longitude, next.latitude)
+        ? fromDegrees(next.longitude, next.latitude)
         : null;
       const previous = layerState.contextAnchor;
       if (!next) {
@@ -100,8 +77,8 @@ export function createControls({ state: layerState, services, parts, source }) {
       if (
         previous &&
         parts.model.approximateSurfaceDistanceM(
-          Cesium.Math.toRadians(previous.latitude),
-          Cesium.Math.toRadians(previous.longitude),
+          toRadians(previous.latitude),
+          toRadians(previous.longitude),
           next.latitude,
           next.longitude,
         ) < ANCHOR_REFRESH_M
@@ -115,7 +92,7 @@ export function createControls({ state: layerState, services, parts, source }) {
     getNearby(center, rangeM, maxCount = 50) {
       if (!center) return [];
       const range = Number.isFinite(rangeM) ? rangeM : Infinity;
-      const centerCartographic = Cesium.Cartographic.fromCartesian(center);
+      const centerCartographic = toCartographicRadians(center);
       if (!centerCartographic) return [];
       const nearby = [];
       const approximateLimit = Number.isFinite(range)
@@ -125,31 +102,23 @@ export function createControls({ state: layerState, services, parts, source }) {
         if (record.kind !== 'installation') continue;
         if (
           parts.model.approximateSurfaceDistanceM(
-            centerCartographic.latitude,
-            centerCartographic.longitude,
+            centerCartographic.lat,
+            centerCartographic.lon,
             record.latitude,
             record.longitude,
           ) > approximateLimit
         )
           continue;
         // The awareness disk is projected onto the ground. Confirm candidates
-        // with an exact ellipsoidal surface distance and reusable scratch state.
-        layerState.distanceEndpointScratch.longitude = Cesium.Math.toRadians(
-          record.longitude,
-        );
-        layerState.distanceEndpointScratch.latitude = Cesium.Math.toRadians(
-          record.latitude,
-        );
-        layerState.distanceEndpointScratch.height = 0;
-        layerState.distanceGeodesicScratch.setEndPoints(
-          centerCartographic,
-          layerState.distanceEndpointScratch,
-        );
-        const distanceM = layerState.distanceGeodesicScratch.surfaceDistance;
+        // with an exact ellipsoidal surface distance.
+        const distanceM = surfaceDistance(centerCartographic, {
+          lon: toRadians(record.longitude),
+          lat: toRadians(record.latitude),
+        });
         if (!Number.isFinite(distanceM) || distanceM > range) continue;
         nearby.push({
           ...record,
-          position: Cesium.Cartesian3.fromDegrees(
+          position: fromDegrees(
             record.longitude,
             record.latitude,
             parts.rendering.installationSurfaceHeightM(record),
@@ -165,6 +134,44 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
 
     /**
+     * A loaded mapped installation by id, as `getNearby` returns it (with its
+     * drawn `position`), or null while the layer is off or the id is not
+     * loaded. Read-only: nothing is selected.
+     * @param {string} id Source-backed installation id.
+     * @returns {object|null}
+     */
+    getById(id) {
+      if (!layerState.enabled || id === null || id === undefined) return null;
+      const record = layerState.recordById.get(String(id));
+      if (!record || record.kind !== 'installation') return null;
+      return {
+        ...record,
+        position: fromDegrees(
+          record.longitude,
+          record.latitude,
+          parts.rendering.installationSurfaceHeightM(record),
+        ),
+      };
+    },
+
+    /**
+     * The mapped installation a query port's pick landed on: a site's dot,
+     * outline or fill, or a named marker, each naming its installation in
+     * its `meta`, as this layer's own click selection reads them. Null for
+     * anything else.
+     * @param {object|null|undefined} hit A query port `Hit`.
+     * @returns {object|null} As {@link getById}.
+     */
+    findByPick(hit) {
+      const id =
+        hit?.set === parts.namedMarkers?.setId ||
+        parts.rendering.ownsSet(hit?.set)
+          ? hit.meta?.installationId
+          : null;
+      return id ? methods.getById(id) : null;
+    },
+
+    /**
      * Select and frame a mapped installation from another contextual UI.
      * @param {string} id Source-backed installation id.
      * @returns {boolean} True when an available installation was focused.
@@ -175,16 +182,16 @@ export function createControls({ state: layerState, services, parts, source }) {
       // No camera flight without a real selection: a flight plus a stale subject
       // reads as success to Context navigation and strands NEXT on this item.
       if (!parts.selection.selectRecord(record.id)) return false;
-      layerState.viewer.camera.flyToBoundingSphere(
-        new Cesium.BoundingSphere(
-          Cesium.Cartesian3.fromDegrees(
-            record.longitude,
-            record.latitude,
-            parts.rendering.installationSurfaceHeightM(record),
-          ),
-          18000,
-        ),
-        { duration: 1.4 },
+      cameraOf(layerState.viewer).flyToBounds(
+        {
+          center: {
+            lon: record.longitude,
+            lat: record.latitude,
+            height: parts.rendering.installationSurfaceHeightM(record),
+          },
+          radius: 18000,
+        },
+        { durationS: 1.4 },
       );
       return true;
     },
@@ -252,13 +259,12 @@ export function createControls({ state: layerState, services, parts, source }) {
         retryAt: layerState.retryAt,
         retrying: layerState.loading && Boolean(layerState.failureReason),
         failureReason: layerState.failureReason,
-        statusMessage: localizeInstallationFeedback(
-          describeInstallationFeedback({
-            ...layerState,
-            count: layerState.lastUpdate ? mappedCount : undefined,
-            retrying: layerState.loading && Boolean(layerState.failureReason),
-          }),
-        ),
+        // English: the analyst reads it as is; displays translate it.
+        statusMessage: installationFeedback({
+          ...layerState,
+          count: layerState.lastUpdate ? mappedCount : undefined,
+          retrying: layerState.loading && Boolean(layerState.failureReason),
+        }),
         loadingLabel: layerState.loading
           ? t('loading mapped installation context')
           : '',

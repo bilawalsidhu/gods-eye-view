@@ -177,6 +177,19 @@ export async function sampleTransitPixels(page, palette) {
           ];
           const width = canvas.clientWidth;
           const height = canvas.clientHeight;
+          // The billboards the draw port drew for the layer's two sets, by
+          // vehicle key, with the collection drawing each.
+          const drawn = new Map();
+          const setIds = layer._transitSetIdsForTest();
+          for (let i = 0; i < scene.primitives.length; i++) {
+            const host = scene.primitives.get(i);
+            if (!setIds.includes(host?.drawSetId)) continue;
+            for (let j = 0; j < host.length; j++) {
+              const billboard = host.get(j);
+              if (typeof billboard?.id?.id === 'string')
+                drawn.set(billboard.id.id, { billboard, host });
+            }
+          }
           const sprites = [];
           const footprints = [];
           const intersects = (a, b) =>
@@ -256,20 +269,26 @@ export async function sampleTransitPixels(page, palette) {
           };
           for (const entry of state._vehicles.values()) {
             if (!entry.marker || entry.marker.show === false) continue;
-            const p = entry.marker.position;
+            const row = drawn.get(entry.key);
+            if (!row || row.billboard.show === false) {
+              skipped.push({ key: entry.key, reason: 'billboard not drawn' });
+              continue;
+            }
+            const billboard = row.billboard;
+            const p = billboard.position;
             const clip = mul(proj, mul(view, [p.x, p.y, p.z, 1]));
             if (!(clip[3] > 0)) continue;
-            const screen = entry.marker.computeScreenSpacePosition?.(scene) || {
+            const screen = billboard.computeScreenSpacePosition?.(scene) || {
               x: ((clip[0] / clip[3]) * 0.5 + 0.5) * width,
               y: (1 - ((clip[1] / clip[3]) * 0.5 + 0.5)) * height,
             };
-            const rect = entry.marker.constructor.getScreenSpaceBoundingBox?.(
-              entry.marker,
+            const rect = billboard.constructor.getScreenSpaceBoundingBox?.(
+              billboard,
               screen,
             ) || { x: screen.x - 16, y: screen.y - 16, width: 32, height: 32 };
             const { x, y } = screenPoint(screen.x, screen.y);
-            const c = Math.abs(Math.cos(entry.marker.rotation || 0)),
-              sn = Math.abs(Math.sin(entry.marker.rotation || 0));
+            const c = Math.abs(Math.cos(billboard.rotation || 0)),
+              sn = Math.abs(Math.sin(billboard.rotation || 0));
             const w = rect.width * c + rect.height * sn,
               h = rect.height * c + rect.width * sn;
             const footprint = { x: x - w / 2, y: y - h / 2, w, h };
@@ -282,10 +301,7 @@ export async function sampleTransitPixels(page, palette) {
               rect.y + rect.height > height
             )
               reason = 'billboard rectangle outside frame';
-            if (
-              entry.marker.color?.alpha < 0.95 ||
-              entry.markerCollection?.show === false
-            )
+            if (billboard.color?.alpha < 0.95 || row.host.show === false)
               reason = 'billboard not opaque/collection hidden';
             const raster = rasters.get(entry.marker.image);
             if (!raster) reason = 'billboard alpha unavailable';
@@ -351,12 +367,12 @@ export async function sampleTransitPixels(page, palette) {
               bracketX: entry.detectContact?._candidateScreenX ?? screen.x,
               bracketY: entry.detectContact?._candidateScreenY ?? screen.y,
               raster,
-              rotation: entry.marker.rotation || 0,
-              halfW: Number.isFinite(entry.marker.width)
-                ? Math.ceil(entry.marker.width / 2) + 2
+              rotation: billboard.rotation || 0,
+              halfW: Number.isFinite(billboard.width)
+                ? Math.ceil(billboard.width / 2) + 2
                 : 11,
-              halfH: Number.isFinite(entry.marker.height)
-                ? Math.ceil(entry.marker.height / 2) + 2
+              halfH: Number.isFinite(billboard.height)
+                ? Math.ceil(billboard.height / 2) + 2
                 : 7,
             });
           }
@@ -658,12 +674,23 @@ export function readTransitFleetStyle({ key, resetSelection = false } = {}) {
   const entry = key
     ? state._vehicles.get(key)
     : [...state._vehicles.values()].find((e) => e.marker?.show);
-  return entry
+  // The billboard the draw port drew for it, in either of the layer's sets.
+  const scene = window.__godsEyeView.viewer.scene;
+  const setIds = layer._transitSetIdsForTest();
+  let billboard = null;
+  for (let i = 0; entry && !billboard && i < scene.primitives.length; i++) {
+    const host = scene.primitives.get(i);
+    if (!setIds.includes(host?.drawSetId)) continue;
+    for (let j = 0; j < host.length; j++)
+      if (host.get(j)?.id?.id === entry.key) billboard = host.get(j);
+  }
+  // An undrawn marker has no style to compare: no answer.
+  return entry && billboard
     ? {
         key: entry.key,
         selected: state._selectedKey === entry.key,
-        color: entry.marker.color.toCssColorString(),
-        width: entry.marker.width,
+        color: billboard.color.toCssColorString(),
+        width: billboard.width,
         image: entry.marker.image,
       }
     : null;

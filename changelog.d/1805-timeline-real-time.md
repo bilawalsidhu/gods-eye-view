@@ -1,0 +1,1 @@
+- The world timeline's speed control names its real-time speed **Real-time** instead of `1×`, beside `1 min/s`, `1 h/s`, `1 d/s` and `1 wk/s` (Sameh Khamis, @samehkhamis, #1805).

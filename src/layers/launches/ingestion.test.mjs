@@ -1,3 +1,5 @@
+// The click dispatcher's input port over a viewer double: the Cesium adapter's.
+import '../../render/cesium/input.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -6,9 +8,13 @@ import { createLaunchSource } from './source.js';
 import { createState } from './state.js';
 import { createModel } from './model.js';
 import { createIngestion } from './ingestion.js';
+import { createSatelliteIntents } from './satelliteIntents.js';
 import { createControls } from './controls.js';
 import { createLifecycle } from './lifecycle.js';
 import { layerFeedState } from '../../data/feedState.js';
+import { inputFor } from '../../input/dispatcher.js';
+import { bindRenderer } from '../../render/rendererOf.js';
+import { fakeSceneFrame } from '../../testSupport/fakeCesiumScene.mjs';
 
 const noop = () => {};
 
@@ -68,7 +74,7 @@ async function fixture({ legacySource = false } = {}) {
   const state = createState({ services });
   state._enabled = true;
   state._lifecycleToken = 1;
-  state._dataSource = new Cesium.CustomDataSource('owned-qualification');
+  state._missionSets = { show: false, items: [] };
   const canvas = Object.assign(new EventTarget(), {
     disableRootEvents: true,
     onwheel: null,
@@ -78,9 +84,11 @@ async function fixture({ legacySource = false } = {}) {
     dataSources: new Cesium.DataSourceCollection(),
     scene: { canvas, preRender: new Cesium.Event(), drillPick: () => [] },
   };
-  await viewer.dataSources.add(state._dataSource);
+  bindRenderer(viewer, { frame: fakeSceneFrame(viewer) });
   // Only presentation boundaries are inert. Source, normalization, state,
   // ingestion, lifecycle, stats and feed-state policy execute unchanged.
+  // Mission draw sets attached and not let go: the fixture starts with one.
+  let attached = 1;
   const parts = {
     panel: {
       createMissionPanel: noop,
@@ -111,19 +119,36 @@ async function fixture({ legacySource = false } = {}) {
       destroyLaunchPadZonePrimitive: noop,
     },
     rendering: {
-      updateMissionFrame: noop,
-      addLaunchEntity(record) {
-        state._dataSource.entities.add({
-          id: record.id,
-          name: record.name,
-          position: Cesium.Cartesian3.fromDegrees(record.lon, record.lat),
-        });
+      // As the rendering part owns the mission draw sets.
+      attach() {
+        state._missionSets = { show: false, items: [] };
+        attached += 1;
       },
+      detach() {
+        if (state._missionSets) attached -= 1;
+        state._missionSets = null;
+      },
+      updateMissionFrame: noop,
+      missionsShown: () => Boolean(state._missionSets?.show),
+      showMissions(shown) {
+        if (state._missionSets) state._missionSets.show = shown;
+      },
+      clearLaunchEntities: () => {
+        if (state._missionSets) state._missionSets.items = [];
+      },
+      launchIdFromPicks: () => null,
+      missionHitsAt: () => [],
+      launchMarkerAt: () => false,
+      addLaunchEntity(record) {
+        state._missionSets.items.push(record.id);
+      },
+      flushLaunchEntities() {},
     },
   };
   const context = { state, services, parts, source };
   parts.model = createModel(context);
   parts.ingestion = createIngestion(context);
+  parts.satelliteIntents = createSatelliteIntents(context);
   parts.controls = createControls(context);
   parts.lifecycle = createLifecycle(context);
   const current = () => {
@@ -131,7 +156,7 @@ async function fixture({ legacySource = false } = {}) {
     return {
       stats,
       feed: layerFeedState(stats),
-      rendered: state._dataSource?.entities.values.map((x) => x.id) || [],
+      rendered: state._missionSets?.items.slice() || [],
       enabled: state._enabled,
     };
   };
@@ -141,6 +166,7 @@ async function fixture({ legacySource = false } = {}) {
     source,
     current,
     viewer,
+    attachedSets: () => attached,
     init: () => parts.lifecycle.methods.init(viewer),
     update: () => parts.ingestion.methods.update(),
     disable: () => parts.lifecycle.methods.disable(),
@@ -295,20 +321,20 @@ test('destroy followed by actual init starts a clean instance with owned handler
     assert.equal(value.stats.lastUpdate, null);
     assert.equal(value.stats.error, null);
     assert.equal(value.enabled, false);
-    assert.equal(f.viewer.dataSources.length, 1);
+    assert.equal(f.attachedSets(), 1);
     assert.equal(f.viewer.scene.preRender.numberOfListeners, 1);
-    const click = f.state._clickHandler;
-    const move = f.state._moveHandler;
-    assert.ok(click instanceof Cesium.ScreenSpaceEventHandler);
-    assert.ok(move instanceof Cesium.ScreenSpaceEventHandler);
-    assert.equal(
-      typeof click.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK),
-      'function',
-    );
+    const input = inputFor(f.viewer);
+    const before = input.subscriberCount();
+    assert.equal(typeof f.state._inputSubscription, 'function');
     await f.destroy();
-    assert.equal(click.isDestroyed(), true);
-    assert.equal(move.isDestroyed(), true);
-    assert.equal(f.viewer.dataSources.length, 0);
+    assert.equal(f.state._inputSubscription, null);
+    assert.equal(
+      input.subscriberCount(),
+      before - 3,
+      'label click, point click and hover',
+    );
+
+    assert.equal(f.attachedSets(), 0);
     assert.equal(f.viewer.scene.preRender.numberOfListeners, 0);
   } finally {
     await f.close();

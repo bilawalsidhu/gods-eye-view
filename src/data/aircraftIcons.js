@@ -8,9 +8,9 @@
  * width/height 20 (24 tracked) in flights.js / militaryFlights.js, so Cesium
  * DOWN-samples this larger, higher-precision source to the same on-screen
  * footprint — crisp anti-aliased edges instead of an upscaled 32px bitmap. The
- * on-screen size is unchanged and CLASS_SCALE_2D is untouched (no scale
- * compensation needed: the billboard's explicit width/height, not the SVG's,
- * sets the pixel size — the intrinsic SVG size only controls raster fidelity).
+ * on-screen size is unchanged (the billboard's explicit width/height, not the
+ * SVG's, sets the pixel size — the intrinsic SVG size only controls raster
+ * fidelity).
  *
  * All glyphs are nose-up (nose toward -Y at rotation 0; the screen-projected
  * rotation pipeline in iconOrientation.js spins the whole glyph). Fill is white
@@ -23,12 +23,19 @@
  * quadjet/glider use the "bold" chart-symbol redraw; light/fastjet keep the
  * original drawings. Raster fidelity doubled (192px source, same 96 coords).
  *
+ * The helicopter is a top-down body under a four-blade rotor drawn in three
+ * frames (`aircraftIcon('helicopter', px, frame)`, turned by
+ * `rotorFrames.js`). Two kinds are not aircraft: `vehicle`, one sprite for
+ * every airport vehicle, and `station`, a mast for ground stations, drawn
+ * upright.
+ *
  * Silhouette language follows skylight's type-aware glyphs (MIT,
  * https://github.com/cpaczek/skylight): slender fuselages, swept wings for
  * jets, long high-aspect wings for the glider, straight wings + prop discs for
  * props, a rotor disc + tail boom + tail-rotor for the helicopter, and a delta
  * for the fast jet. Each class has a DISTINCT planform so it reads at ~20px by
- * shape, not just by footprint size.
+ * shape alone: every glyph is fitted to the same extent, so none is bigger
+ * than another.
  */
 
 const VIEW = 96;
@@ -130,23 +137,6 @@ const BODIES = {
              L -3,-25 C -3,-29 -2.4,-33 0,-35 Z" fill="white" ${STROKE_BOLD}/>
     <rect x="-10.5" y="32.5" width="21" height="5" rx="1.5" fill="white" ${STROKE_BOLD}/>`,
 
-  // ── Helicopter: a SOLID translucent main-rotor disc (survives downscale as an
-  //    obvious circle, unlike a thin ring) with a bold two-blade cross, a
-  //    teardrop cabin, a tail boom, and a tail rotor. Unmistakable "disc on top"
-  //    silhouette that never reads as a fixed-wing.
-  helicopter: `
-    <circle cx="0" cy="-6" r="31" fill="white" fill-opacity="0.22"/>
-    <g transform="rotate(45 0 -6)">
-      <rect x="-30.5" y="-8.2" width="61" height="4.4" rx="2.2" fill="white" fill-opacity="0.9"/>
-      <rect x="-30.5" y="-8.2" width="61" height="4.4" rx="2.2" fill="white" fill-opacity="0.9" transform="rotate(90 0 -6)"/>
-    </g>
-    <path d="M0,-22 C 8,-20 10.5,-13 10.5,-6 C 10.5,2 7.5,7 0,8.5
-             C -7.5,7 -10.5,2 -10.5,-6 C -10.5,-13 -8,-20 0,-22 Z" fill="white" ${STROKE}/>
-    <path d="M-2.6,8 L 2.6,8 L 1.8,32 L -1.8,32 Z" fill="white" ${STROKE}/>
-    <path d="M-8,27 L 8,27 L 8,30.6 L -8,30.6 Z" fill="white"/>
-    <circle cx="5.6" cy="35" r="6" fill="white" fill-opacity="0.6"/>
-    <circle cx="5.6" cy="35" r="2.1" fill="white"/>`,
-
   // ── Fast jet: sharp delta/cropped-delta with a pointed nose, LERX root
   //    blend, and twin tail fins. Aggressive, all-wing.
   fastjet: `
@@ -160,8 +150,8 @@ const BODIES = {
              L -3,31 L -8,34 L -8,30 L -6,16
              L -27,26 L -27,20 L -5,-8
              C -4.6,-16 -4,-24 -3.5,-30 Z" fill="white" ${STROKE}/>`,
-  // 2026-08-15 Hangar additions: two NEW classes shipped with the real-model
-  // fleet (CLASS_MODEL_REAL). Same contract as the set above: 96×96 nose-up,
+  // 2026-08-15 additions: two NEW classes (bizjet, uav). Same contract as
+  // the set above: 96×96 nose-up,
   // white fill, hairline stroke, tint-safe.
   // Business jet — slender fuselage, modest swept wing, aft engines, T-tail.
   bizjet: `
@@ -236,6 +226,87 @@ const BODIES = {
              L -1.6,30 L -13,36 L -13,32 L -2.1,24
              L -2.3,0 L -43,-2.5 L -43,-7 L -2.4,-12
              L -4.4,-30 C -4.6,-35 -3.6,-40 0,-40 Z" fill="white" ${STROKE}/>`,
+
+  // ── Airport vehicle (type ZVEH, emitter C1/C2): one service van seen from
+  //    above, front up, for every kind (fire truck, tug, car, de-icer). A
+  //    boxy body, a dark windscreen band and a roof light bar; the layer
+  //    tints it amber so it reads apart from aircraft.
+  vehicle: `
+    <path d="M-12,-39 L 12,-39 L 15,-36 L 15,38 L 13,40 L -13,40 L -15,38
+             L -15,-36 Z" fill="white" ${STROKE}/>
+    <path d="M-18.5,-25 h4 v3 h-4 Z M14.5,-25 h4 v3 h-4 Z" fill="white" ${STROKE}/>
+    <path d="M-13,-32 L 13,-32 L 12,-21 L -12,-21 Z" fill="rgba(0,0,0,0.62)"/>
+    <rect x="-10" y="-13" width="20" height="5" rx="1.5" fill="rgba(0,0,0,0.45)"/>`,
+
+  // ── Ground station or obstacle (type GRND, emitter C3–C5): a radio mast
+  //    with two pairs of signal arcs, drawn upright on screen, never turned.
+  station: `
+    <path d="M7.1,-38.4 A 11 11 0 0 1 7.1,-21.6 M-7.1,-38.4 A 11 11 0 0 0 -7.1,-21.6
+             M12.2,-44.6 A 19 19 0 0 1 12.2,-15.4 M-12.2,-44.6 A 19 19 0 0 0 -12.2,-15.4"
+          fill="none" stroke="rgba(0,0,0,0.32)" stroke-width="5" stroke-linecap="round"/>
+    <path d="M7.1,-38.4 A 11 11 0 0 1 7.1,-21.6 M-7.1,-38.4 A 11 11 0 0 0 -7.1,-21.6
+             M12.2,-44.6 A 19 19 0 0 1 12.2,-15.4 M-12.2,-44.6 A 19 19 0 0 0 -12.2,-15.4"
+          fill="none" stroke="white" stroke-width="3.4" stroke-linecap="round"/>
+    <circle cx="0" cy="-30" r="4.5" fill="white" ${STROKE}/>
+    <path d="M-2.5,-25 L 2.5,-25 L 7,34 L 13,34 L 13,38 L -13,38 L -13,34
+             L -7,34 Z" fill="white" ${STROKE}/>`,
+};
+
+/**
+ * The helicopter, seen from above: a cabin, tail boom and tail plane under a
+ * four-blade main rotor. The rotor turns in {@link ROTOR_FRAMES} frames 30°
+ * apart; four blades repeat every 90°, so the third frame steps back onto
+ * the first and the loop is seamless. The middle frame (blades as an X) is
+ * the still one.
+ */
+const HELI_ROTOR_CENTRE_Y = -11.2;
+const HELI_DISC = `<circle cx="0" cy="${HELI_ROTOR_CENTRE_Y}" r="32.8" fill="white" fill-opacity="0.22"/>`;
+const HELI_BODY = `
+    <path d="M0,-33.4 L -2.3,-32.1 L -4.2,-28 L -4.3,-30.6 L -6.2,-30.6
+             L -6.2,0.2 L -4.3,0.2 L -4.2,-3.1 L -1.9,7.9 L -1.7,18.9
+             L -7.4,19.2 L -7.8,24 L -2.9,24.4 L -3.2,35.6 L -1.2,36
+             L 0,34.3 L 1.2,36 L 3.2,35.6 L 2.9,24.4 L 7.8,24 L 7.4,19.2
+             L 1.7,18.9 L 1.9,7.9 L 4.2,-3.1 L 4.3,0.2 L 6.2,0.2 L 6.2,-30.6
+             L 4.3,-30.6 L 4.2,-28 L 2.3,-32.1 Z" fill="white" ${STROKE}/>
+    <circle cx="0" cy="${HELI_ROTOR_CENTRE_Y}" r="3.2" fill="white" ${STROKE}/>`;
+/** Main-rotor blade angle of each frame, degrees clockwise. */
+const ROTOR_ANGLES_DEG = [15, 45, 75];
+/** How many rotor frames the helicopter turns through. */
+export const ROTOR_FRAMES = ROTOR_ANGLES_DEG.length;
+/** The frame a helicopter holds when its rotor does not turn. */
+export const ROTOR_STILL_FRAME = 1;
+
+/** One rotor frame: the disc, two crossed blades at `angle`, the body over them. */
+function helicopterBody(frame) {
+  const angle = ROTOR_ANGLES_DEG[frame] ?? ROTOR_ANGLES_DEG[ROTOR_STILL_FRAME];
+  const blade = (deg) =>
+    `<rect x="-32.2" y="${HELI_ROTOR_CENTRE_Y - 2.2}" width="64.4" height="4.4" rx="2.2" fill="white" fill-opacity="0.92" stroke="rgba(0,0,0,0.25)" stroke-width="0.8" transform="rotate(${deg} 0 ${HELI_ROTOR_CENTRE_Y})"/>`;
+  return `${HELI_DISC}${blade(angle)}${blade(angle + 90)}${HELI_BODY}`;
+}
+
+/**
+ * Every sprite draws at one size. The bodies were drawn at different spans
+ * (a light aircraft's half-extent is 32.8 units, a quadjet's 47), so each is
+ * scaled until its farthest painted edge, stroke included, sits
+ * {@link GLYPH_HALF_EXTENT} units from the centre. Values are each body's
+ * measured half-extent; aircraftIcons.test.mjs re-measures the rasters.
+ */
+const GLYPH_HALF_EXTENT = 44;
+const BODY_HALF_EXTENT = {
+  airliner: 42.7,
+  widebody: 45.7,
+  quadjet: 47.0,
+  turboprop: 40.7,
+  light: 32.8,
+  glider: 46.0,
+  fastjet: 44.7,
+  bizjet: 42.7,
+  uav: 43.7,
+  helicopter: 44.0,
+  vehicle: 40.7,
+  station: 47.1,
+  tr3b: 40.8,
+  tr3bHot: 42.3,
 };
 
 const _iconCache = new Map();
@@ -252,21 +323,39 @@ const _b64 = (s) =>
  *  NEAR the display size lets the browser's SVG AA do the work: crisp AND
  *  smooth. 64 covers the 40–58 px fleet band with ≤1.6× minification. */
 const FLEET_RASTER_PX = 64;
+/** Raster size of the default fleet glyph. */
+export const FLEET_ICON_PX = FLEET_RASTER_PX;
 /** Tracked raster: the tracked billboard is the one SUSTAINED large 2D glyph
  *  (close-zoom fleet flybys hand off to 3D models). Keep the 192 px texture so
  *  it stays crisp at its biggest on-screen sizes. */
 const TRACKED_RASTER_PX = 192;
 
-/** Data URI for a class silhouette (lazily built, cached per kind+size).
- *  Default size serves the fleet; pass `aircraftIcon(kind, TRACKED_ICON_PX)`
- *  (re-exported below) for the tracked billboard. */
+/** Raster size of the tracked glyph and every glyph's near image. */
 export const TRACKED_ICON_PX = TRACKED_RASTER_PX;
-export function aircraftIcon(kind, px = FLEET_RASTER_PX) {
-  const k = BODIES[kind] ? kind : 'airliner';
-  const key = `${k}@${px}`;
+/**
+ * Data URI for a class silhouette (lazily built, cached per kind, size and
+ * frame). The default size serves the fleet; pass
+ * `aircraftIcon(kind, TRACKED_ICON_PX)` for the near image.
+ * @param {string} kind A `classifyAircraft()` class, or a TR-3B kind.
+ * @param {number} [px] Raster size.
+ * @param {number} [frame] A helicopter's rotor frame, 0 to `ROTOR_FRAMES - 1`
+ *   (the still frame by default); other kinds have one image.
+ * @returns {string}
+ */
+export function aircraftIcon(kind, px = FLEET_RASTER_PX, frame) {
+  const heli = kind === 'helicopter';
+  const k = heli || BODIES[kind] ? kind : 'airliner';
+  const f = heli
+    ? Number.isInteger(frame) && frame >= 0 && frame < ROTOR_FRAMES
+      ? frame
+      : ROTOR_STILL_FRAME
+    : 0;
+  const key = `${k}@${px}#${f}`;
   let uri = _iconCache.get(key);
   if (!uri) {
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${px}" height="${px}" viewBox="0 0 ${VIEW} ${VIEW}"><g transform="translate(${C},${C})">${BODIES[k]}</g></svg>`;
+    const body = heli ? helicopterBody(f) : BODIES[k];
+    const fit = +(GLYPH_HALF_EXTENT / BODY_HALF_EXTENT[k]).toFixed(4);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${px}" height="${px}" viewBox="0 0 ${VIEW} ${VIEW}"><g transform="translate(${C},${C}) scale(${fit})">${body}</g></svg>`;
     uri = 'data:image/svg+xml;base64,' + _b64(svg);
     _iconCache.set(key, uri);
   }

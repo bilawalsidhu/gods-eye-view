@@ -1,0 +1,36 @@
+{
+  "id": "kartverket-hillshade",
+  "kind": "tiles",
+  "family": "environment",
+  "title": "Norway hillshade (Kartverket)",
+  "provider": "Kartverket",
+  "description": "Kartverket's hillshade of Norway's terrain, a translucent shading to lay over imagery or maps.",
+  "icon": "⛰",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["NO"],
+    "bbox": [3.7, 57.6, 32, 71.6]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://wms.geonorge.no/skwms1/wms.fjellskygge?service=WMS&request=GetMap&version=1.3.0&layers=fjellskygge&styles=&crs=EPSG:3857&bbox={bbox-epsg-3857}&width=256&height=256&format=image/png&transparent=true",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 3,
+    "maxZoom": 20,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1
+  },
+  "licence": {
+    "name": "CC BY 4.0 (Kartverket free products)",
+    "url": "https://www.kartverket.no/api-og-data/vilkar-for-bruk"
+  },
+  "attribution": {
+    "text": "© Kartverket",
+    "url": "https://www.kartverket.no/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

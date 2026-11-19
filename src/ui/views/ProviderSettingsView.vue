@@ -1,6 +1,6 @@
 <script setup>
 import { storeToRefs } from 'pinia';
-import { computed, onBeforeUnmount, onMounted, shallowRef } from 'vue';
+import { computed } from 'vue';
 import { t } from '../../i18n/index.js';
 import { vClassToggle } from '../rail/classToggle.js';
 import { vFieldValue } from '../rail/fieldValue.js';
@@ -8,6 +8,7 @@ import { vStatusText } from '../rail/statusText.js';
 import { useLocaleStore } from '../stores/locale.js';
 import { useProviderSettingsStore } from '../stores/providerSettings.js';
 import LocalePicker from './panels/LocalePicker.vue';
+import UiCloseButton from '../kit/UiCloseButton.vue';
 
 const { picker } = storeToRefs(useLocaleStore());
 // The key setup owner (src/keySetup.js) presents the chip, the dialog and its
@@ -17,23 +18,6 @@ const { view, controls } = storeToRefs(useProviderSettingsStore());
 const available = computed(() => view.value?.available !== false);
 const chip = computed(() => view.value?.chip ?? null);
 const dialog = computed(() => view.value?.dialog ?? { hidden: true, visible: false });
-
-// Cyber puts the chip in the top toolbar; every other theme keeps it first in
-// the corner row, beside the language picker.
-const cyber = shallowRef(false);
-let themeObserver = null;
-onMounted(() => {
-  const theme = document.documentElement;
-  const sync = () => {
-    cyber.value =
-      theme.dataset.uiTheme === 'cyber' &&
-      Boolean(document.getElementById('top-center-actions'));
-  };
-  themeObserver = new MutationObserver(sync);
-  themeObserver.observe(theme, { attributes: true, attributeFilter: ['data-ui-theme'] });
-  sync();
-});
-onBeforeUnmount(() => themeObserver?.disconnect());
 
 // The status line is a live region; vStatusText re-announces repeats.
 const statusText = computed(() => ({
@@ -55,21 +39,17 @@ const removeTitle = (title) =>
   <!-- Bottom-right HUD row: the POWER UP chip (while keys are missing) and
        the language picker, once the shell publishes it. -->
   <div id="corner-actions">
-    <Teleport v-if="available" :to="cyber ? '#top-center-actions' : 'body'" :disabled="!cyber">
-      <button id="key-setup-chip" type="button" :hidden="!chip || chip.hidden" aria-haspopup="dialog" aria-controls="key-setup" :title="chip?.title" :aria-label="chip?.title" @click="controls?.open()">
-        <span class="material-symbols-outlined" aria-hidden="true">bolt</span>
-        <span data-key-setup-chip-label>{{ chip ? chip.label : t('POWER UP') }}</span>
-      </button>
-    </Teleport>
+    <button v-if="available" id="key-setup-chip" type="button" :hidden="!chip || chip.hidden" aria-haspopup="dialog" aria-controls="key-setup" :title="chip?.title" :aria-label="chip?.title" @click="controls?.open()">
+      <span class="material-symbols-outlined" aria-hidden="true">bolt</span>
+      <span data-key-setup-chip-label>{{ chip ? chip.label : t('POWER UP') }}</span>
+    </button>
     <LocalePicker v-if="picker" :key="picker.current" :current="picker.current" :on-select="picker.onSelect" :focus="picker.focus" />
   </div>
   <aside v-if="available" id="key-setup" role="dialog" aria-labelledby="key-setup-title" aria-describedby="key-setup-description" :hidden="dialog.hidden" v-class-toggle="{ visible: dialog.visible }" :data-ready="view?.ready ? 'true' : undefined" @transitionend="controls?.transitionEnd()">
     <div class="key-setup-scanline" aria-hidden="true"></div>
     <header class="key-setup-header">
       <span class="key-setup-kicker">{{ t('GROUND STATION · PROVIDER SETTINGS') }}</span>
-      <button type="button" class="key-setup-close" data-key-setup-close :aria-label="t('Close key setup')" @click="controls?.close()">
-        <span class="material-symbols-outlined" aria-hidden="true">close</span>
-      </button>
+      <UiCloseButton class="key-setup-close" glyph="icon" data-key-setup-close :label="t('Close key setup')" @click="controls?.close()" />
     </header>
     <h2 id="key-setup-title">{{ t('Power up the globe') }}</h2>
     <p id="key-setup-description">{{ t('The globe already flies keyless. Every key below switches on another real feed — paste one and it\'s saved into this app\'s local configuration, then the server restarts itself. Server-side keys stay on this machine; Google Maps and Cesium ion run in the browser and must be provider-restricted. Keys you configured elsewhere are shown but never touched.') }}</p>

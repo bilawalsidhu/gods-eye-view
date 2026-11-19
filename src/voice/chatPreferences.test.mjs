@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setLocale } from '../i18n/index.js';
 import { bindChatPreferences } from './chatPreferences.js';
 import { createTestVoiceUi } from '../testSupport/voiceUi.mjs';
 
@@ -98,4 +99,22 @@ test('editing a recalled message ends recall, and sending resets it', (t) => {
   type('', 0);
   press('ArrowUp');
   assert.equal(field.value, 'Show live flights now');
+});
+
+test('autocomplete ignores Arabic short vowels and shadda', (t) => {
+  setLocale('ar');
+  t.after(() => setLocale('en'));
+  const ui = createTestVoiceUi();
+  let draft = '';
+  const prefs = bindChatPreferences({ ui, getDraft: () => draft });
+  t.after(() => prefs.destroy());
+  const suggested = (text) => {
+    draft = text;
+    prefs.render();
+    return ui.state.chat.suggestions.flatMap((group) => group.items);
+  };
+  // The quick command is written "تتبّع", with a shadda.
+  assert.deepEqual(suggested('تتبع'), ['اعرض تتبّع الرحلات المباشر']);
+  prefs.remember('انتقل إلى طوكيو');
+  assert.deepEqual(suggested('طُوكيو'), ['انتقل إلى طوكيو']);
 });
