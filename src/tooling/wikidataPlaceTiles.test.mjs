@@ -9,6 +9,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   keepBuiltIfUnchanged,
+  keepPackBuiltIfUnchanged,
   placeTileFiles,
   tileKey,
   withoutCities,
@@ -113,4 +114,32 @@ test('a rebuild of unchanged rows keeps the earlier build stamp', () => {
   assert.equal(keepBuiltIfUnchanged(changed, earlier), changed);
   assert.equal(keepBuiltIfUnchanged(same, undefined), same);
   assert.equal(keepBuiltIfUnchanged(same, 'not json'), same);
+});
+
+test('the places index keeps its build stamp only when no tile changed', () => {
+  const rows = [
+    ['Aa', 31, -98, 2000, 'US', 'Q1'],
+    ['Bb', 41, -88, 1500, 'US', 'Q2'],
+  ];
+  const meta = (built) => ({
+    source: 's',
+    license: 'l',
+    built,
+    minPopulation: 1000,
+    maxPopulation: 15000,
+    columns: [],
+  });
+  const earlier = placeTileFiles(rows, meta('2026-01-01T00:00:00.000Z'));
+  const built = (files) => JSON.parse(files.get('index.json')).meta.built;
+  const rebuild = (newRows) =>
+    keepPackBuiltIfUnchanged(
+      placeTileFiles(newRows, meta('2026-11-18T00:00:00.000Z')),
+      earlier,
+    );
+  assert.equal(built(rebuild(rows)), '2026-01-01T00:00:00.000Z');
+  // Same row count in every tile, new population: a new stamp.
+  const changed = [['Aa', 31, -98, 2100, 'US', 'Q1'], rows[1]];
+  assert.equal(built(rebuild(changed)), '2026-11-18T00:00:00.000Z');
+  // A tile of the earlier build left out: a new stamp.
+  assert.equal(built(rebuild([rows[0]])), '2026-11-18T00:00:00.000Z');
 });

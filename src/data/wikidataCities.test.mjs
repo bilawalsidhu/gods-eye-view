@@ -115,6 +115,17 @@ test('a small place in view comes before a far bigger city of its name', async (
   const austin = { latitude: 30.27, longitude: -97.74 };
   assert.equal((await find('Paris', austin)).wikidata, 'Q-village');
   assert.ok((await find('Paris', austin)).distanceKm < 20);
+  // A bigger namesake inside a wider search: the nearer village still wins.
+  assert.equal(
+    (
+      await module.findPlace(
+        'Paris',
+        { near: austin, radiusKm: 600, includeSmallPlaces: true },
+        fetchImpl,
+      )
+    ).wikidata,
+    'Q-village',
+  );
   // Only when small places are asked for.
   assert.equal(
     (await module.findPlace('Paris', { near: austin }, fetchImpl)).wikidata,

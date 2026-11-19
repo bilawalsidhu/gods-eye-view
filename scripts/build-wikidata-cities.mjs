@@ -40,6 +40,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   keepBuiltIfUnchanged,
+  keepPackBuiltIfUnchanged,
   placeTileFiles,
   withoutCities,
   withoutNearTwins,
@@ -505,25 +506,11 @@ if (tilesMode) {
   // The new files are all written before tiles from an earlier build that
   // this one has no rows for go, so a build that stops part way never leaves
   // an index naming a removed tile.
-  // The index holds only row counts, so its build date is kept only when
-  // every tile is unchanged too and no earlier tile is left over.
-  const earlierTiles = (await readdir(outDir)).filter((name) =>
-    /^-?\d+_-?\d+\.json$/.test(name),
-  );
-  let tilesUnchanged = earlierTiles.every((name) => files.has(name));
-  for (const [name, text] of files) {
-    if (!tilesUnchanged) break;
-    if (name === 'index.json') continue;
-    tilesUnchanged = (await readIfThere(path.join(outDir, name))) === text;
-  }
-  if (tilesUnchanged)
-    files.set(
-      'index.json',
-      keepBuiltIfUnchanged(
-        files.get('index.json'),
-        await readIfThere(path.join(outDir, 'index.json')),
-      ),
-    );
+  const earlier = new Map();
+  for (const name of await readdir(outDir))
+    if (/^-?\d+_-?\d+\.json$|^index\.json$|^files\.js$/.test(name))
+      earlier.set(name, await readFile(path.join(outDir, name), 'utf8'));
+  keepPackBuiltIfUnchanged(files, earlier);
   for (const [name, text] of files)
     await writeFile(path.join(outDir, name), text);
   for (const name of await readdir(outDir))
