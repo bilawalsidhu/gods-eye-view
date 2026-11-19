@@ -96,6 +96,66 @@ test('findPlace takes a country qualifier and prefers a namesake in view', async
   );
 });
 
+test('a small place in view comes before a far bigger city of its name', async () => {
+  const module = await import(`./wikidataCities.js?small-${Date.now()}`);
+  // A village called Paris near Austin, in the 30_-100 detail tile.
+  const village = ['Paris', 30.4, -97.6, 1200, 'US', 'Q-village'];
+  const fetchImpl = async (url) => {
+    const file = url.pathname.split('/').at(-1);
+    const body =
+      file === 'cities.json'
+        ? { meta: {}, rows: PARIS }
+        : file === 'index.json'
+          ? { tiles: { '30_-100': 1 } }
+          : { rows: file === '30_-100.json' ? [village] : [] };
+    return { ok: true, json: async () => body };
+  };
+  const find = (name, near) =>
+    module.findPlace(name, { near, includeSmallPlaces: true }, fetchImpl);
+  const austin = { latitude: 30.27, longitude: -97.74 };
+  assert.equal((await find('Paris', austin)).wikidata, 'Q-village');
+  assert.ok((await find('Paris', austin)).distanceKm < 20);
+  // A bigger namesake inside a wider search: the nearer village still wins.
+  assert.equal(
+    (
+      await module.findPlace(
+        'Paris',
+        { near: austin, radiusKm: 600, includeSmallPlaces: true },
+        fetchImpl,
+      )
+    ).wikidata,
+    'Q-village',
+  );
+  // Only when small places are asked for.
+  assert.equal(
+    (await module.findPlace('Paris', { near: austin }, fetchImpl)).wikidata,
+    'Q90',
+  );
+  // A qualifier still decides.
+  assert.equal((await find('Paris, France', austin)).wikidata, 'Q90');
+  // Nowhere near the village: the largest city of the name.
+  assert.equal(
+    (await find('Paris', { latitude: 0, longitude: 0 })).wikidata,
+    'Q90',
+  );
+  assert.equal(
+    (await module.findPlace('Paris', {}, fetchImpl)).wikidata,
+    'Q90',
+  );
+  // Paris, Texas is nearer a view over it than the village is.
+  const texas = { latitude: 33.6, longitude: -95.6 };
+  assert.equal(
+    (
+      await module.findPlace(
+        'Paris',
+        { near: texas, radiusKm: 600, includeSmallPlaces: true },
+        fetchImpl,
+      )
+    ).wikidata,
+    'Q830149',
+  );
+});
+
 test('a circle that reaches a pole spans every longitude', () => {
   assert.equal(lonHalfSpan(89, 150), 180);
   assert.ok(lonHalfSpan(60, 150) < 3);
@@ -231,4 +291,51 @@ test('a tile that cannot be read leaves the other places and the cities', async 
   );
   assert.ok(near.some((place) => place.name === 'Austin'));
   assert.ok(near.some((place) => place.longitude > -95));
+});
+
+test('a lookup asked for the whole globe reads only the tiles near its centre', async () => {
+  const { placesNear, PLACE_TILE_KM } =
+    await import('./wikidataCities.js?globe');
+  const fetched = [];
+  const fetchPack = async (url) => {
+    fetched.push(url.pathname.split('/').at(-1));
+    return new Response(await readFile(url));
+  };
+  const near = await placesNear(
+    { latitude: 30.27, longitude: -97.74, radiusKm: 20000, limit: 50 },
+    fetchPack,
+  );
+  const tileReads = fetched
+    .filter((name) => /^-?\d+_-?\d+\.json$/.test(name))
+    .sort();
+  // 500 km around Austin: latitude 25.8 to 34.8, longitude -103 to -92.5.
+  assert.equal(PLACE_TILE_KM, 500);
+  assert.deepEqual(tileReads, [
+    '25_-100.json',
+    '25_-105.json',
+    '25_-95.json',
+    '30_-100.json',
+    '30_-105.json',
+    '30_-95.json',
+  ]);
+  assert.equal(near.length, 50);
+  assert.ok(near.every((place) => place.distanceKm <= PLACE_TILE_KM));
+  // Cities still count to the full radius.
+  const far = await placesNear(
+    { latitude: 30.27, longitude: -97.74, radiusKm: 20000, limit: Infinity },
+    fetchPack,
+  );
+  assert.ok(far.some((place) => place.wikidata === 'Q90'));
+  // Places from the tiles it read stop at 500 km too: Tahoka, Texas
+  // (Q982084), a town of about 2,500, is 500.6 km away.
+  assert.ok(!far.some((place) => place.wikidata === 'Q982084'));
+  assert.ok(
+    far
+      .filter((place) => place.distanceKm > PLACE_TILE_KM)
+      .every((place) => place.population >= 15000),
+  );
+  assert.equal(
+    fetched.filter((name) => /^-?\d+_-?\d+\.json$/.test(name)).length,
+    tileReads.length,
+  );
 });

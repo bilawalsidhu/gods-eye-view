@@ -966,7 +966,8 @@ the fleet set loaded at startup, so opening a card fetches no model.
 country and Wikidata id. `src/data/wikidataCities.js` reads it on the first
 lookup and answers `nearestCity` (the largest city within 12 km, else the
 nearest within 60 km), `citiesAround`, `findPlace` ("Paris, France", or the
-nearest namesake within 150 km of the view, else the largest) and
+nearest namesake within 150 km of the view, else the largest; asked to, it
+counts the smaller places of the detail tiles near the view too) and
 `countryName`. Names match without case or accents ("lodz" finds Łódź). The
 app never calls Wikidata; `scripts/build-wikidata-cities.mjs` rebuilds the
 pack and fails if well-known cities are missing or a known grouping such as
@@ -1197,7 +1198,15 @@ Cesium's credit box wraps from 1200px, as before; the phone shell, clean
 view, recording and scene playback lay the line out themselves.
 The left rail treats the centered World Timeline and voice control as
 obstacles only where they reach a laid-out panel, not the stack's
-transparent gutter.
+transparent gutter. Obstacles across the middle of the window (common in
+short windows) form one block with any obstacle that leaves no room between
+itself and them, and both rails put their panels on whichever side of that
+block has more room up to the next obstacle, above it on a tie, whatever
+order the obstacles come in (`bandBesideMidpointObstacles` in
+`src/ui/panelRailGeometry.js`); on the left rail the panels may then rise
+above the corridor's usual top to use all the room above. With no room on
+either side (a side under 8% of the window's height counts as none) the
+obstacles are read as before.
 
 Wind appears in the Weather group before Audio. The surface-weather prototype
 uses keyless NOAA GFS or ECMWF IFS forecasts on an approximately 1° display grid.
@@ -8249,7 +8258,12 @@ clears them but the browser's own site data. Setting `PHOTON_URL`
 empty turns the suggestions off along with it. Small places come from the
 bundled Wikidata packs and are never looked up online; a small place with
 the name of a city within 3 km in the same country is that city, and only
-the city is listed. At most 64 detail tiles are kept in memory, the least
+the city is listed. A place named in "villages near …" is the nearest of
+that name within 150 km of the view, small places included, so a village in
+view comes before a bigger namesake far away; with none near, the largest
+city of the name. Small places are looked for within 500 km at most, so a
+lookup asked for a wider radius reads only the detail tiles around its
+centre (the search box asks for 150 km at most). At most 64 detail tiles are kept in memory, the least
 recently used dropped first.
 
 ### Place-search providers
