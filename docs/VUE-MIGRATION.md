@@ -84,7 +84,7 @@ adapter is gone.
 `UiButton` adds `pressedClass`, Core's class on a pressed toggle (most use
 `active`); its pressed classes toggle through `classList`, so a class other
 code adds (a voice highlight) survives a press. Not every pressed toggle in
-the views is one yet: the context view, the Layer Finder,
+the views is one yet: the context view,
 the Stories screens and a few panel buttons still hand-write theirs, and
 Bhote Koshi's cinematic button and the tilt-map button have owners that
 write their state into the DOM. Core's
@@ -126,6 +126,15 @@ context view shows too). Their glyphs are `UiIcon`s with `:size="null"`,
 so entity-card.css and spot-conditions.css still size them
 (`src/ui/kit/entityCardControls.test.mjs` pins it). Ask GEV's chat bubble
 stays inline SVG, since no Material symbol the page loads draws it.
+The Layer Finder's buttons (Search, Filter, the filter menu's Status and
+Category options and the bar's two clear chips) are ghost `UiButton`s.
+Search and the options are pressed toggles; the options' pressed class is
+`active`, while Search keeps its own `active` binding, which also stays on
+while a query is typed. The Filter button opens a disclosure and carries
+`aria-expanded`, not `aria-pressed`. Every glyph its own template draws is
+a `UiIcon` with `:size="null"`, so `layer-finder.css` still sizes them
+(`src/ui/kit/layerFinderControls.test.mjs` pins it); the search field's
+magnifier is `UiSearchField`'s own span.
 `UiSelect` renders the bare native select (Core's labels sit outside it or
 come as an `aria-label`) with `v-model`, `options` and `disabled`;
 options that carry their own attributes come through the slot, a caller's
