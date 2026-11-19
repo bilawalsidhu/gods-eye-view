@@ -16,6 +16,8 @@ import { useGlobeActionsStore } from '../../stores/globeActions.js';
 import { useLocationStore } from '../../stores/location.js';
 import { useOmnibarStore } from '../../stores/omnibar.js';
 import { useVoiceStore } from '../../stores/voice.js';
+import UiButton from '../../kit/UiButton.vue';
+import UiIcon from '../../kit/UiIcon.vue';
 
 // One field for places, layers and questions. Places run through the location
 // controls, layers through the shell's omnibar actions, and anything else can
@@ -1028,7 +1030,7 @@ watch(
   <section id="gev-omnibar" :class="{ 'has-results': showResults }" :aria-label="t('Search')">
     <div class="omnibar-field">
       <span class="omnibar-edge" aria-hidden="true"></span>
-      <span class="material-symbols-outlined omnibar-search-icon" aria-hidden="true">search</span>
+      <UiIcon class="omnibar-search-icon" name="search" :size="null" />
       <input
         ref="input"
         id="gev-omnibar-input"
@@ -1055,9 +1057,9 @@ watch(
         @blur="focused = false"
       />
       <kbd class="omnibar-kbd" aria-hidden="true">{{ shortcut }}</kbd>
-      <button type="button" class="omnibar-mic" :class="{ active: voiceOn }" :disabled="!voice.controls" :aria-pressed="String(voiceOn)" :aria-label="t('Talk to GEV')" :title="t('Talk to GEV')" @click="onMic(true)">
+      <UiButton class="omnibar-mic" :pressed="voiceOn" pressed-class="active" :disabled="!voice.controls" :label="t('Talk to GEV')" @click="onMic(true)">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>
-      </button>
+      </UiButton>
     </div>
     <div v-show="showResults" ref="results" class="omnibar-results" :class="{ 'has-feedback': showFeedback }">
       <p id="omnibar-error" v-show="showFeedback" role="alert">{{ feedback }}</p>
@@ -1065,11 +1067,10 @@ watch(
       <li v-if="strip" class="omnibar-strip" role="group" :aria-label="strip.title">
         <span class="omnibar-strip__title" aria-hidden="true">{{ strip.title }}</span>
         <div ref="stripChips" class="omnibar-strip__chips" role="presentation" @wheel="onStripWheel">
-          <button
+          <UiButton
             v-for="(chip, index) in strip.chips"
             :id="`gev-omnibar-chip-${index}`"
             :key="chip.key"
-            type="button"
             tabindex="-1"
             class="omnibar-strip__chip"
             :class="{ active: chip.pressed, focused: inStrip && index === chipIndex }"
@@ -1079,8 +1080,8 @@ watch(
             @mousedown.prevent
             @click="chooseChip(chip)"
           >
-            <span class="material-symbols-outlined" aria-hidden="true">{{ chip.icon }}</span>{{ chip.name }}
-          </button>
+            <UiIcon :name="chip.icon" :size="null" />{{ chip.name }}
+          </UiButton>
         </div>
       </li>
       <li
@@ -1095,7 +1096,7 @@ watch(
         @click="choose(item)"
         @mousemove="inStrip = false"
       >
-        <span v-if="item.icon" class="material-symbols-outlined omnibar-item-icon" aria-hidden="true">{{ item.icon }}</span>
+        <UiIcon v-if="item.icon" class="omnibar-item-icon" :name="item.icon" :size="null" />
         <svg v-else class="omnibar-item-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z" /></svg>
         <span class="omnibar-item-label">{{ item.label }}</span>
         <small>{{ item.hint }}</small>
