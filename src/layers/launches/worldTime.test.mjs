@@ -42,6 +42,8 @@ function scene(t) {
       pose: () => ({ position: { x: 2e7, y: 0, z: 0 } }),
       on: () => () => {},
       flyTo: (...args) => flights.push(args),
+      lookAt: noop,
+      release: noop,
     },
   });
   t.after(unbind);
@@ -71,6 +73,7 @@ function scene(t) {
   };
   parts.selection = createSelection({ state, services, parts });
   const rendering = createRendering({ state, services, parts });
+  parts.rendering = rendering;
   rendering.attach(viewer);
   rendering.showMissions(true);
   rendering.addLaunchEntity(launch, null);
