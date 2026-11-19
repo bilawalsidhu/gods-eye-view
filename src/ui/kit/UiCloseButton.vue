@@ -11,8 +11,8 @@ import UiIcon from './UiIcon.vue';
 // Core's common look, a bare glyph: no padding, border or background of its
 // own, and a pointer. Its rule selects one class and loads before the
 // feature stylesheets, so a feature rule still sets the size, colour, hover
-// and any surface. `bare` leaves the kit look off, for a button whose skin
-// keeps the browser's own padding.
+// and any surface. `bare` leaves the kit look off, for a button whose own
+// skin sets its padding and border.
 const props = defineProps({
   /** The accessible name (aria-label). */
   label: { type: String, required: true },

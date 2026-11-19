@@ -53,7 +53,7 @@ never copied:
 | `UiButton` `variant="action"` | the action surface (`gev-action-button`); `tone="danger"` hovers red, `size="compact"` is the shot-row footprint (on this variant only) | `src/ui/styles/action-button.css` |
 | `UiButton` `variant="primary"` | the action surface with a group's main-action accent | `src/ui/styles/action-button.css` |
 | `UiButton` `variant="icon"` | the 22px square glyph button of a panel's collapse toggle | `src/ui/styles/controls.css` |
-| `UiCloseButton` | a close, dismiss or clear button: a bare glyph (× with `glyph="times"`, the Material `close` symbol with `glyph="icon"`) with no padding, border or background of its own and a pointer; the site's feature class sets size, colour, hover and any surface, and `bare` leaves the look off for a skin that keeps the browser's padding | `src/ui/styles/close-button.css` |
+| `UiCloseButton` | a close, dismiss or clear button: a bare glyph (× with `glyph="times"`, the Material `close` symbol with `glyph="icon"`) with no padding, border or background of its own and a pointer; the site's feature class sets size, colour, hover and any surface, and `bare` leaves the look off for a skin that sets its own padding and border | `src/ui/styles/close-button.css` |
 | `UiSearchField` | a search field: the Material `search` glyph and a search input in a flex row, the input bare (no border or background, free to shrink); the site's feature classes set the frame's size, surface and focus ring and the input's type and outline, and the browser's own cancel button is left to each skin | `src/ui/styles/search-field.css` |
 | `UiChip` | the read-only chip (a pill of uppercase mono text); `selected` takes the accent | `src/ui/styles/chip.css` |
 | `UiEmpty` | the one-line empty state (dim mono text), its hint on a line below | `src/ui/styles/empty-state.css` |
@@ -106,7 +106,7 @@ no tip unless the site passes a `title`; attributes and classes pass through,
 so each site keeps its id, feature class and look. Every close, dismiss and
 clear button in the views is one (`src/ui/kit/closeButtons.test.mjs` pins
 it); Street Level's and the space mission's keep `bare`, since their skins
-keep the browser's padding. The close buttons built in script (credits, the
+set their own padding and border. The close buttons built in script (credits, the
 Quebec CCTV overlay, the guide) are not converted yet.
 `UiSearchField` takes `v-model`, a required `label` (the input's
 accessible name), `placeholder` and `tag` (`div`, given `role="search"` by
