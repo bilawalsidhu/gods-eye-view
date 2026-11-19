@@ -108,8 +108,9 @@ no tip unless the site passes a `title`; attributes and classes pass through,
 so each site keeps its id, feature class and look. Every close, dismiss and
 clear button in the views is one (`src/ui/kit/closeButtons.test.mjs` pins
 it); Street Level's and the space mission's keep `bare`, since their skins
-keep the browser's padding. The close buttons built in script (credits, the
-Quebec CCTV overlay, the guide) are not converted yet.
+keep the browser's padding, and so does the credits list's. The close
+buttons built in script (the Quebec CCTV overlay, the guide) are not
+converted yet.
 `UiSearchField` takes `v-model`, a required `label` (the input's
 accessible name), `placeholder` and `tag` (`div`, given `role="search"` by
 the site, or `label`); attributes and classes go to the frame, and
@@ -176,6 +177,12 @@ page declares no dark `color-scheme`. Selects and number fields are
 `.gev-field`, which draws its own chevron in place of the platform's arrow
 and keeps native spinners dark; ranges are `.gev-quantitative-slider`, with
 a feature supplying only its accent.
+
+`t()` is not reactive. Words a view passes to a kit component as a prop
+(`UiCloseButton`'s `label`) follow a locale change on the view's next
+render, but words in a kit component's slot do not: the compiled slot does
+not render the child again. A view whose words must follow the locale at
+once passes the locale itself as a prop or key, as the credits line does.
 
 ## Phases
 
@@ -368,7 +375,14 @@ a feature supplying only its accent.
    choices, DISMISS and "Don't show this again" call the launcher's
    controls; a refused save hands the tick back to the view to revert. The
    launcher still reads the rendered card for its hit test, keyboard trap,
-   focus and overflow measurement), then
+   focus and overflow measurement), the attribution line (for a renderer
+   without its own credit display, `mountCreditsView()` renders
+   `CreditsView` synchronously, as the weather readout is, and the view
+   teleports the line and its "Data attribution" list to the end of the
+   body, where the page's rules select them; the owner keeps the credits
+   shown, the list's open state and its focus, and words the view again
+   when the locale changes; the list's close button is a bare
+   `UiCloseButton`), then
    Cockpit (in progress: `CockpitBriefing` renders the briefing card's
    pages, cycle toggle, regional news and local conditions, and
    `CockpitContext` the Contact card's scope, navigation, counts, nearest
