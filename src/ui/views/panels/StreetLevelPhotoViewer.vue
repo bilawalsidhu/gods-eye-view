@@ -9,7 +9,8 @@ import { useStreetLevelPhotoStore } from '../../stores/streetLevelPhoto.js';
 // which photo shows and how, its loading, the panorama it draws, the keys,
 // drag and zoom. This view draws what it presents, forwards the events and
 // hands each element back: the canvas it draws on, the frame and picture
-// it measures, the root and buttons it keeps focus with.
+// it measures, the root and buttons it keeps focus with. Each mount and each
+// canvas has its own key, so a viewer never gets another one's elements.
 const { photo } = storeToRefs(useStreetLevelPhotoStore());
 
 /** Hand `name`'s element back to the viewer that presented it. */
@@ -30,6 +31,7 @@ const refs = {
 <template>
   <Teleport v-if="photo" :to="photo.host"
     ><div
+      :key="photo.mountKey"
       :ref="refs.root"
       class="sl-photo-viewer"
       :data-provider="photo.providerId"

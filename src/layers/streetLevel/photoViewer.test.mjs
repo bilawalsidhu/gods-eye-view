@@ -595,21 +595,30 @@ test('a panorama reopened after a lost context waits for the view’s fresh canv
       };
     },
   });
-  // A view that draws a replacement canvas a while after it is asked.
+  // A view that draws on a microtask, as Vue does, handing its canvas back
+  // each time, but draws a replacement canvas only a while after it is
+  // asked.
   let shown = null;
+  let canvas = { name: 'canvas', clientWidth: 400 };
   let late = null;
   viewer.subscribeView((view) => {
-    if (view && !shown) {
-      for (const name of ['root', 'picture', 'prev', 'next'])
-        view.actions.attach(name, { name, clientWidth: 400 });
-      view.actions.attach('canvas', { name: 'canvas 0', clientWidth: 400 });
-    } else if (view && view.canvasKey !== shown.canvasKey)
-      late = () =>
-        view.actions.attach('canvas', {
-          name: `canvas ${view.canvasKey}`,
-          clientWidth: 400,
-        });
+    const first = view && !shown;
+    const replaced = view && shown && view.canvasKey !== shown.canvasKey;
     shown = view;
+    if (!view) return;
+    queueMicrotask(() => {
+      if (first)
+        for (const name of ['root', 'picture', 'prev', 'next'])
+          view.actions.attach(name, { name, clientWidth: 400 });
+      if (replaced) {
+        canvas = null;
+        late = () => {
+          canvas = { name: 'canvas again', clientWidth: 400 };
+          shown.actions.attach('canvas', canvas);
+        };
+      }
+      if (canvas) view.actions.attach('canvas', canvas);
+    });
   });
   await viewer.mount({});
   await viewer.open('a');
@@ -623,7 +632,7 @@ test('a panorama reopened after a lost context waits for the view’s fresh canv
   await opening;
   assert.deepEqual(
     canvases.map((canvas) => canvas.name),
-    ['canvas 0', 'canvas 1'],
+    ['canvas', 'canvas again'],
   );
   assert.equal(shown.kind, 'pano', 'not the front view');
 });

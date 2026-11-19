@@ -76,10 +76,20 @@ test('the step buttons are not pressed toggles', () => {
 
 test('the photo viewer is drawn by its view, and its layer needs no Vue', () => {
   const source = read(VIEWER);
-  assert.doesNotMatch(
-    source,
-    /createElement|innerHTML|insertAdjacentHTML|\.append\(|\.classList|\.dataset|from 'vue'|\.vue'/,
-  );
+  // No element made, inserted, moved, removed or written: the view does
+  // all of that. (An Image the loader downloads with is not on the page.)
+  for (const write of [
+    /createElement/,
+    /\b(?:inner|outer)HTML\b/,
+    /insertAdjacent(?:HTML|Element|Text)/,
+    /\.(?:append|prepend|appendChild|insertBefore|replaceWith|replaceChildren|before|after)\(/,
+    /\.remove\(\)/,
+    /\.(?:set|remove|toggle)Attribute(?:NS)?\(/,
+    /\.(?:classList|className|dataset|style)\b/,
+    /\.(?:hidden|disabled|textContent|innerText|tabIndex|title|alt)\s*=[^=]/,
+    /from 'vue'|\.vue'/,
+  ])
+    assert.doesNotMatch(source, write);
   const markup = template(VIEW);
   const opening = (name, attribute) =>
     new RegExp(String.raw`<${name}\b${ATTRS}\s${attribute}${ATTRS}>`);

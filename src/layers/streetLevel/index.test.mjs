@@ -2177,7 +2177,7 @@ test('proceed() is asked after the lookup: false loads nothing and clears the sp
   );
 });
 
-test('subscribePhotoViewer hands on the photo viewer a provider presents, the latest mount’s while two overlap', async (t) => {
+test('subscribePhotoViewer hands on the photo viewer a provider presents, the later mount’s while two overlap', async (t) => {
   const presenting = (id, pickPrefix) => {
     const provider = fakeProvider({ id, pickPrefix });
     const create = provider.create;
@@ -2202,8 +2202,9 @@ test('subscribePhotoViewer hands on the photo viewer a provider presents, the la
   const shown = [];
   const unsubscribe = layer.subscribePhotoViewer((view) => shown.push(view));
   assert.deepEqual(shown, [null], 'the current one first');
-  const viewA = { host: 'a' };
-  const viewB = { host: 'b' };
+  const supersede = () => {};
+  const viewA = { host: 'a', mountKey: 1, actions: { supersede } };
+  const viewB = { host: 'b', mountKey: 2, actions: { supersede } };
   a.present(viewA);
   b.present(viewB);
   a.present(null);

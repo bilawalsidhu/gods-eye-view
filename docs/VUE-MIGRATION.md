@@ -406,8 +406,11 @@ slot whenever its view is drawn.
    the portable `./layers/street-level` entries need no Vue; the viewer
    keeps every decision, the photo loading, keys, drag and zoom, and draws
    its panorama on the canvas the view hands back, a fresh one after a lost
-   WebGL context; with no view subscribed, as when the layer runs without
-   the application shell, a KartaView or Panoramax photo cannot mount),
+   WebGL context; each mount and canvas is keyed, so no viewer reuses
+   another's elements, and of two viewers mounting at once only the later
+   is drawn while the earlier one's mount closes; with no view
+   subscribed, as when the layer runs without the application shell, a
+   KartaView or Panoramax photo cannot mount),
    CCTV (done: `CctvPanel` renders
    the whole panel from the `gev-cctv` store, including the camera picker,
    the inline pose editor, the frame preview, source badge and typed

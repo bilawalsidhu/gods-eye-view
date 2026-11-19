@@ -14,7 +14,11 @@ import {
 } from './policy.js';
 import { validateProviders } from '../../registry.js';
 import { tileBounds } from '../../tileMath.js';
-import { fakeHost, until } from '../../../../testSupport/kartaViewFakes.mjs';
+import {
+  drawn,
+  fakeHost,
+  until,
+} from '../../../../testSupport/kartaViewFakes.mjs';
 import {
   bindStreetViewer,
   coverageViewer,
@@ -994,6 +998,8 @@ test('after a GPU reset the viewer draws the same picture itself, leaving the co
   const kind = () => host.children[0].dataset.kind;
   assert.equal(kind(), 'pano');
   canvas().fire('webglcontextlost');
+  await drawn();
+  assert.equal(kind(), '', 'cleared while it is drawn again');
   assert.ok(await until(() => kind() === 'pano'), 'drawn again');
   assert.deepEqual(poses, ['p-0', 'p-0']);
   assert.deepEqual(actions.opened, [], 'not through the core');

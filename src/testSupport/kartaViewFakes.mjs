@@ -72,16 +72,20 @@ export function fakeHost(viewer = null) {
 
 /**
  * Draw a photo viewer's presentations with fake elements, as
- * StreetLevelPhotoViewer does: the root in the host it names, holding the
- * picture, the panorama canvas and the ‹ › buttons, each handed back; a
- * value is written only when the presentation changes it (as Vue patches),
- * and the elements' events reach the viewer's actions. A new canvas key
- * puts a fresh canvas in the old one's place.
+ * StreetLevelPhotoViewer does through Vue: changes made in one tick are
+ * drawn once, on a microtask, with their final value; the root (keyed by
+ * the mount) holds the picture, the panorama canvas (keyed by its canvas
+ * key) and the ‹ › buttons, kept while their keys are, and every element
+ * is handed back on each draw. A value is written only when the drawn
+ * presentation changes it, and the elements' events reach the viewer's
+ * actions.
  * @returns {() => void} Stop drawing.
  */
 export function drawPhotoViewer(viewer) {
   let parts = null;
   let last = null;
+  let pending = null;
+  let queued = false;
   const on = (element, type, name) =>
     element.addEventListener(type, (event) => last?.actions[name](event));
   const canvasFor = () => {
@@ -111,58 +115,61 @@ export function drawPhotoViewer(viewer) {
     view.host.append(root);
     return { root, picture, canvas, prev, next };
   };
-  const changed = (view, key) => !last || last[key] !== view[key];
-  return viewer.subscribeView((view) => {
+  const draw = (view) => {
     if (!view) {
       parts?.root.remove();
       parts = last = null;
       return;
     }
-    const fresh = !parts || last.host !== view.host;
-    if (fresh) {
+    if (!parts || last.mountKey !== view.mountKey) {
       parts?.root.remove();
       parts = build(view);
       last = null;
+    } else if (last.host !== view.host) {
+      parts.root.remove();
+      view.host.append(parts.root);
     }
-    const { root, picture, prev, next } = parts;
-    if (!fresh && changed(view, 'canvasKey')) {
+    const changed = (key) => !last || last[key] !== view[key];
+    let canvasFresh = !last;
+    if (last && changed('canvasKey')) {
       const canvas = canvasFor();
       parts.canvas.replaceWith(canvas);
       parts.canvas = canvas;
-      parts.canvasFresh = true;
+      canvasFresh = true;
     }
-    const { canvas } = parts;
-    if (changed(view, 'providerId')) root.dataset.provider = view.providerId;
-    if (changed(view, 'label')) root.attributes['aria-label'] = view.label;
-    if (changed(view, 'kind') && view.kind !== undefined)
+    const { root, picture, canvas, prev, next } = parts;
+    if (changed('providerId')) root.dataset.provider = view.providerId;
+    if (changed('label')) root.attributes['aria-label'] = view.label;
+    if (changed('kind') && view.kind !== undefined)
       root.dataset.kind = view.kind;
-    if (changed(view, 'alt')) picture.alt = view.alt;
-    if (changed(view, 'src')) {
+    if (changed('alt')) picture.alt = view.alt;
+    if (changed('src')) {
       if (view.src) picture.src = view.src;
       else picture.removeAttribute('src');
     }
-    if (changed(view, 'fit')) picture.style.objectFit = view.fit;
-    if (changed(view, 'kind') || parts.canvasFresh) {
-      picture.hidden = view.kind !== 'flat';
-      canvas.hidden = view.kind !== 'pano';
-    }
-    if (changed(view, 'dragging') || parts.canvasFresh) {
+    if (changed('fit')) picture.style.objectFit = view.fit;
+    if (changed('kind')) picture.hidden = view.kind !== 'flat';
+    if (changed('kind') || canvasFresh) canvas.hidden = view.kind !== 'pano';
+    if (changed('dragging') || canvasFresh) {
       if (view.dragging) canvas.classList.add('sl-photo-dragging');
       else canvas.classList.remove('sl-photo-dragging');
     }
-    if (changed(view, 'prevLabel'))
-      prev.attributes['aria-label'] = view.prevLabel;
-    if (changed(view, 'nextLabel'))
-      next.attributes['aria-label'] = view.nextLabel;
-    if (changed(view, 'prevDisabled')) prev.disabled = view.prevDisabled;
-    if (changed(view, 'nextDisabled')) next.disabled = view.nextDisabled;
-    const handBack = fresh || parts.canvasFresh;
-    parts.canvasFresh = false;
+    if (changed('prevLabel')) prev.attributes['aria-label'] = view.prevLabel;
+    if (changed('nextLabel')) next.attributes['aria-label'] = view.nextLabel;
+    if (changed('prevDisabled')) prev.disabled = view.prevDisabled;
+    if (changed('nextDisabled')) next.disabled = view.nextDisabled;
     last = view;
-    if (fresh)
-      for (const name of ['root', 'picture', 'canvas', 'prev', 'next'])
-        view.actions.attach(name, parts[name]);
-    else if (handBack) view.actions.attach('canvas', canvas);
+    for (const name of ['root', 'picture', 'canvas', 'prev', 'next'])
+      view.actions.attach(name, parts[name]);
+  };
+  return viewer.subscribeView((view) => {
+    pending = view;
+    if (queued) return;
+    queued = true;
+    queueMicrotask(() => {
+      queued = false;
+      draw(pending);
+    });
   });
 }
 
@@ -178,3 +185,6 @@ export async function until(condition, { ticks = 200 } = {}) {
   }
   return Boolean(await condition());
 }
+
+/** Let a photo viewer's view draw what was presented in this tick. */
+export const drawn = () => new Promise((resolve) => queueMicrotask(resolve));

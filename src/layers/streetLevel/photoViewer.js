@@ -36,6 +36,14 @@ function tooManyPixels(width, height) {
   );
 }
 
+/**
+ * Keys for each mount's and each canvas's elements, never reused by any
+ * viewer: a view that sees one viewer unmount and another mount in the same
+ * tick still draws them fresh elements (a destroyed renderer leaves its
+ * canvas's context lost).
+ */
+let viewKeys = 0;
+
 /** Panorama texture widths: enough for a docked viewer, and for an expanded one. */
 const PANO_MID_SIZE = Object.freeze([2048, 1024]);
 export const PANO_FULL_SIZE = Object.freeze([4096, 2048]);
@@ -215,14 +223,18 @@ export function panoSizeFor(canvasPixels, fovDeg) {
  *
  * The adapter draws nothing itself. It presents the viewer through
  * `subscribeView()` (the street-level layer's `subscribePhotoViewer()`): a
- * fresh `{host, providerId, label, alt, kind, src, fit, canvasKey, dragging,
- * prevLabel, prevDisabled, nextLabel, nextDisabled, actions}` on each change,
+ * fresh `{host, mountKey, providerId, label, alt, kind, src, fit, canvasKey,
+ * dragging, prevLabel, prevDisabled, nextLabel, nextDisabled, actions}` on
+ * each change,
  * or null while unmounted. A view draws it into `host` (the application's is
  * `StreetLevelPhotoViewer`), forwards its events to `actions` and hands each
  * element back through `actions.attach(name, element)`: the panorama canvas
  * to draw on, the frame and picture to measure, the root and buttons to
- * keep focus. A new `canvasKey` asks for a fresh canvas (a lost WebGL
- * context). Mounting with no view subscribed fails.
+ * keep focus. Each mount has its own `mountKey`, and a new `canvasKey` asks
+ * for a fresh canvas (a lost WebGL context): neither is ever reused.
+ * `actions.supersede()` tells a viewer another one is drawn in its place:
+ * it unmounts, and a mount still waiting to be drawn fails as closed.
+ * Mounting with no view subscribed fails.
  *
  * Photos are normalized by the provider: `{id, sequenceId, lon, lat,
  * heading, isPano, capturedAt}` plus whatever its `sources` read.
@@ -269,7 +281,7 @@ export function createPhotoViewer({
   /** What the view draws; null while unmounted. */
   let presented = null;
   const viewListeners = new Set();
-  /** Waiting for the view's root (a mount) or a fresh canvas (an open). */
+  /** Waiting for the view's root (a mount), or its canvas: a fresh one, or the next draw. */
   const rootWaiters = new Set();
   const canvasWaiters = new Set();
   let renderer = null;
@@ -393,6 +405,15 @@ export function createPhotoViewer({
     });
   }
 
+  /** The view's next draw (it hands the canvas back each time), or none coming. */
+  function nextDraw(signal) {
+    if (!presented || signal?.aborted) return Promise.resolve();
+    return new Promise((resolve) => {
+      canvasWaiters.add(resolve);
+      signal?.addEventListener?.('abort', resolve, { once: true });
+    });
+  }
+
   function syncButtons() {
     const enabled = Boolean(photo?.sequenceId) && showing !== null;
     present({ prevDisabled: !enabled, nextDisabled: !enabled });
@@ -461,7 +482,7 @@ export function createPhotoViewer({
     // A lost canvas hands back its lost context: the view draws a new
     // element in its place and hands it back.
     canvas = null;
-    present({ canvasKey: presented.canvasKey + 1 });
+    present({ canvasKey: ++viewKeys });
     // Show the photo again through the core, unless a newer one is opening.
     if (showing === 'pano' && photo && openingId === null) {
       const again = photo.id;
@@ -654,6 +675,7 @@ export function createPhotoViewer({
       pointerup: current(onPointerUp),
       wheel: current(onWheel),
       contextLost: current(onContextLost),
+      supersede: current(() => adapter.unmount()),
       step: current((delta, event) => {
         event?.stopPropagation?.();
         stepBy(delta);
@@ -661,6 +683,7 @@ export function createPhotoViewer({
     };
     presented = {
       host,
+      mountKey: ++viewKeys,
       providerId,
       label: t(
         '{name} photo. ← and → step along the sequence. On a 360° photo, drag or use Shift+← →, ↑ ↓ to look around, and + − to zoom',
@@ -670,7 +693,7 @@ export function createPhotoViewer({
       kind: undefined,
       src: null,
       fit: renderMode === 'fill' ? 'cover' : 'contain',
-      canvasKey: 0,
+      canvasKey: ++viewKeys,
       dragging: false,
       prevLabel: t('Previous photo in this sequence (←)'),
       prevDisabled: true,
@@ -841,8 +864,15 @@ export function createPhotoViewer({
     else if (!keepView || showing !== 'pano')
       renderer.setView({ yaw: 0, pitch: 0, fov: PANO_FOV_DEFAULT_DEG });
     photo = target;
-    // Shown first: a hidden canvas measures 0 and would be sized 1×1.
+    // Shown first: a hidden canvas measures 0 and would be sized 1×1. The
+    // view draws it shown on a microtask, and hands the canvas back then.
     show('pano');
+    await nextDraw(signal);
+    if (seq !== openSeq || !renderer) {
+      image.close?.();
+      if (seq !== openSeq) return false;
+      throw new Error(LOAD_FAILED);
+    }
     renderer.setImage(image);
     panoWidth = first.width || 0;
     // A sharper version of the photo before was dropped by `open`; one of
@@ -911,6 +941,8 @@ export function createPhotoViewer({
       const drawn = new Promise((resolve) => rootWaiters.add(resolve));
       build(host);
       if (!root) await drawn;
+      // Unmounted or superseded before the view drew it.
+      if (!root) throw new Error('Street-level viewer was closed');
     },
 
     /** Resolves once the photo is on screen and its pose was emitted. */

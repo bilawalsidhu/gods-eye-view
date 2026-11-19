@@ -1148,6 +1148,8 @@
   "src/layers/streetLevel/providers/panoramax/decode.js",
   "src/layers/streetLevel/providers/panoramax/viewer.js",
   "src/layers/streetLevel/photoViewer.js",
+  "src/layers/streetLevel/photoViewers.js",
+  "src/layers/streetLevel/photoViewers.test.mjs",
   "src/layers/streetLevel/limiter.js",
   "src/layers/streetLevel/imageSize.js",
   "src/layers/streetLevel/tileCache.js",

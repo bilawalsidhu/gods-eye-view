@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { createApp, nextTick } from 'vue';
 import { createPinia } from 'pinia';
 import { createPhotoViewer } from '../../../layers/streetLevel/photoViewer.js';
+import { subscribePhotoViewers } from '../../../layers/streetLevel/photoViewers.js';
 import { useStreetLevelPhotoStore } from '../../stores/streetLevelPhoto.js';
 import StreetLevelPhotoViewer from './StreetLevelPhotoViewer.vue';
 
@@ -24,8 +25,11 @@ const SOURCES = {
   describe: () => ({ externalUrl: 'https://example.org' }),
 };
 
-/** The view in an app, a viewer published to its store, and a panel host. */
-function mount(t, options = {}) {
+/**
+ * The view in an app, a viewer per provider published to its store as the
+ * street-level layer does, and a panel host.
+ */
+function mount(t, options = {}, providerIds = ['panoramax']) {
   document.body.replaceChildren();
   const wrap = document.body.appendChild(document.createElement('div'));
   wrap.className = 'sl-viewer-wrap';
@@ -37,9 +41,10 @@ function mount(t, options = {}) {
   const store = useStreetLevelPhotoStore(pinia);
   const renderers = [];
   const stepped = [];
-  const viewer = createPhotoViewer({
-    providerId: 'panoramax',
-    name: 'Panoramax',
+  const create = (providerId) =>
+    createPhotoViewer({
+    providerId,
+    name: providerId === 'panoramax' ? 'Panoramax' : 'KartaView',
     sources: SOURCES,
     getPhoto: async (id) => PHOTOS[id],
     // f, then g: the whole sequence.
@@ -63,13 +68,16 @@ function mount(t, options = {}) {
     },
     ...options,
   });
-  const unsubscribe = viewer.subscribeView((view) => store.publish(view));
+  const viewers = providerIds.map(create);
+  const unsubscribe = subscribePhotoViewers(viewers, (view) =>
+    store.publish(view),
+  );
   t.after(() => {
-    viewer.unmount();
+    for (const viewer of viewers) viewer.unmount();
     unsubscribe();
     app.unmount();
   });
-  return { viewer, host, wrap, renderers, stepped };
+  return { viewer: viewers[0], viewers, host, wrap, renderers, stepped };
 }
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -245,4 +253,52 @@ test('without a view, the viewer cannot mount', async () => {
     viewer.mount(document.createElement('div')),
     /no view to draw it/,
   );
+});
+
+test('a viewer mounted in the tick another unmounts gets elements of its own', async (t) => {
+  const { viewers, host, renderers } = mount(t, {}, ['kartaview', 'panoramax']);
+  const [kartaView, panoramax] = viewers;
+  await kartaView.mount(host);
+  await kartaView.open('p');
+  const root = host.querySelector('.sl-photo-viewer');
+  const canvas = root.children[1];
+  assert.ok(renderers[0].canvas === canvas);
+  // The core switches source: one unmounts and the other mounts at once.
+  kartaView.unmount();
+  const mounting = panoramax.mount(host);
+  await mounting;
+  await panoramax.open('p');
+  const fresh = host.querySelector('.sl-photo-viewer');
+  assert.equal(host.children.length, 1);
+  assert.ok(fresh !== root, 'a root of its own');
+  assert.equal(fresh.dataset.provider, 'panoramax');
+  assert.ok(fresh.children[1] !== canvas, 'not the destroyed renderer’s canvas');
+  assert.ok(renderers[1].canvas === fresh.children[1]);
+  assert.equal(fresh.dataset.kind, 'pano', 'not the front view');
+});
+
+test('a mount overtaken before it is drawn closes, and never shows later', async (t) => {
+  const { viewers, host } = mount(t, {}, ['kartaview', 'panoramax']);
+  const [kartaView, panoramax] = viewers;
+  // KartaView starts mounting; Panoramax mounts before the view draws it.
+  const overtaken = kartaView.mount(host);
+  const current = panoramax.mount(host);
+  // It settles, rather than wait for a draw that never comes.
+  const outcome = await Promise.race([
+    overtaken.then(
+      () => 'mounted',
+      (error) => error.message,
+    ),
+    new Promise((resolve) => setTimeout(() => resolve('still pending'), 100)),
+  ]);
+  assert.match(outcome, /viewer was closed/);
+  await current;
+  await nextTick();
+  assert.equal(host.children.length, 1);
+  assert.equal(host.children[0].dataset.provider, 'panoramax');
+  await assert.rejects(kartaView.open('f'), /not mounted/);
+  // Once Panoramax goes, nothing is left in the host.
+  panoramax.unmount();
+  await nextTick();
+  assert.equal(host.children.length, 0);
 });

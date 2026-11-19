@@ -13,7 +13,11 @@ import {
   TOO_HIGH_HINT,
 } from './policy.js';
 import { validateProviders } from '../../registry.js';
-import { fakeHost, until } from '../../../../testSupport/kartaViewFakes.mjs';
+import {
+  drawn,
+  fakeHost,
+  until,
+} from '../../../../testSupport/kartaViewFakes.mjs';
 import {
   bindStreetViewer,
   coverageViewer,
@@ -978,6 +982,7 @@ test('after a GPU reset the photo is drawn again by the viewer, not through the 
   const canvas = () => host.children[0].children[1];
   const kind = () => host.children[0].dataset.kind;
   canvas().fire('webglcontextlost');
+  await drawn();
   assert.equal(kind(), '', 'cleared while it is drawn again');
   assert.ok(await until(() => kind() === 'pano'), 'drawn again');
   assert.ok(poses.length >= 2);
