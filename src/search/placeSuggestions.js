@@ -67,6 +67,13 @@ export function onlyNumbersLookPrivate(text) {
   );
 }
 
+/** How a typed request starts, unlike a recovery phrase's first word. */
+const REQUEST_START =
+  /^(?:show|hide|turn|switch|find|search|go|fly|take|zoom|open|close|play|what|where|when|which|who|how|why|list|display|enable|disable|remove|clear|follow|track)\b/;
+
+/** The most words a line sent for place suggestions may have. */
+const SUGGEST_MAX_WORDS = 8;
+
 /**
  * Words that say a number is an account, a card, a phone or a secret, in the
  * interface's languages where they differ ("Karte", "Telefon", "tarjeta").
@@ -85,7 +92,8 @@ function foldLine(text) {
     .normalize('NFKC')
     .replace(/\p{Cf}/gu, '')
     .replace(/[\u2018\u2019]/g, "'")
-    .replace(/(?![0-9])\p{Nd}/gu, '0');
+    .replace(/(?![0-9])\p{Nd}/gu, '0')
+    .replace(/\s+/g, ' ');
 }
 
 /** A US ZIP+4 after a state's code or name, as an address writes it. */
@@ -122,21 +130,45 @@ function privacyReason(text) {
     return 'other';
   // An email written around a filter: "john(at)gmail.com",
   // "john[at]gmail[dot]com", "john at gmail dot com".
+  // Also "john at gmail.com" and a "(dot)" or "[dot]" in any of them.
   if (
     /[\p{L}\p{N}._%+-]\s*[([{<]\s*at\s*[)\]}>]\s*[\p{L}\p{N}-]/iu.test(line) ||
-    /\b\S+\s+at\s+\S+\s+dot\s+\p{L}{2,6}\b/iu.test(line)
+    /\b\S+\s+at\s+\S+\s+(?:dot|[([{<]\s*dot\s*[)\]}>])\s+\p{L}{2,24}\b/iu.test(
+      line,
+    ) ||
+    /\b\S+\s+at\s+[\p{L}\p{N}-]+\s*[([{<]\s*dot\s*[)\]}>]\s*\p{L}{2,24}\b/iu.test(
+      line,
+    ) ||
+    /\b[\p{L}\p{N}._%+-]+\s+at\s+[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\.(?:com|net|org|edu|gov|mil|io|co|me|info|biz|app|dev|ai|[a-z]{2})\b/iu.test(
+      line,
+    )
   )
     return 'other';
   // An IP address ("10.0.0.1").
   if (/(?<![\d.])\d{1,3}(?:\.\d{1,3}){3}(?![\d.])/.test(line)) return 'other';
-  // A wallet's recovery phrase: 12, 15, 18, 21 or 24 different words, all
-  // of three to eight letters in lower case ("abandon ability able …"). A
-  // request that long nearly always has a short word ("to", "in", "me").
+  // An IPv6 address ("::1", "fe80::1%eth0", "2001:db8:0:0:0:0:2:1"): hex
+  // groups with "::", or five colons or more (a time has two).
+  if (
+    line.split(' ').some((token) => {
+      const bare = token.replace(/^[[(]+|[\]),.;]+$/g, '').replace(/%\w+$/, '');
+      const colons = (bare.match(/:/g) || []).length;
+      return (
+        /^[0-9a-f:.]+$/i.test(bare) &&
+        colons >= 2 &&
+        (bare.includes('::') || colons >= 5)
+      );
+    })
+  )
+    return 'other';
+  // A wallet's recovery phrase: 12, 15, 18, 21 or 24 words, all of three
+  // to eight letters in lower case ("abandon ability able …"), unless it
+  // starts as a request does ("show flights over texas …"). A line that
+  // long is never sent for suggestions anyway (see SUGGEST_MAX_WORDS).
   const words = line.trim().split(/\s+/);
   if (
     [12, 15, 18, 21, 24].includes(words.length) &&
-    new Set(words).size === words.length &&
-    words.every((word) => /^[a-z]{3,8}$/.test(word))
+    words.every((word) => /^[a-z]{3,8}$/.test(word)) &&
+    !REQUEST_START.test(line)
   )
     return 'other';
   // A passphrase run together ("correcthorsebatterystaple"): a line that
@@ -190,7 +222,7 @@ function privacyReason(text) {
           .replace(US_ZIP4, ' x ')
           .replace(/\b\d{5}-\d{3}\b/g, ' x ')
           .replace(
-            /〒\s?\d{3}-\d{4}|\b\d{3}-\d{4}(?=\s*[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}])|(?<=\p{L}{3,},?\s)\d{3}-\d{4}(?=\s*$|,)/gu,
+            /〒\s?\d{3}-\d{4}|\b\d{3}-\d{4}(?=\s*[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}])|(?<=[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]\s*)\d{3}-\d{4}\b/gu,
             ' x ',
           )
           .replace(/#/g, ' x ')
@@ -221,7 +253,12 @@ function privacyReason(text) {
     /\b(?:token|secret|api[ _-]?key|key|pass)\s*[:=]\s*\S/i.test(line) ||
     // A number on a document or account after its label: "license ABC1234",
     // "passport X1234567", "plate 7ABC123", "member no. 12345".
-    /\b(?:licen[cs]e|plate|passport|member(?:ship)?|account|acct|policy|ticket|booking|confirmation|ref(?:erence)?)(?:\s+(?:no\.?|number|#|is))*\s*[:=#]?\s+(?=[a-z0-9-]*\d)(?=[a-z0-9-]*[a-z])[a-z0-9-]{4,}/i.test(
+    /\b(?:licen[cs]e|plate|passport|member(?:ship)?|account|acct|policy|ticket|booking|confirmation|ref(?:erence)?)(?:\s+(?:no\.?|number|#|is))*\s*[:=#]?\s+(?=[a-z0-9-]*\d)[a-z0-9-]{4,}/i.test(
+      line,
+    ) ||
+    // An identity number after "ID" in capitals ("ID AB123"); "Id" and
+    // "id" are words.
+    /\bID(?:\s+(?:no\.?|number|#|is))*\s*[:=#]?\s+(?=[A-Za-z0-9-]*\d)[A-Za-z0-9-]{4,}/.test(
       line,
     ) ||
     /\b(?:my secret is|passphrase|mnemonic|seed phrase|recovery phrase)\b\s*[:=]?\s*\S/i.test(
@@ -261,9 +298,20 @@ function privacyReason(text) {
 
 /** A value after "bearer" that is not a capitalised name ("Bearer Island"). */
 function bearerToken(line) {
-  const match = /\bbearer\b\s*[:=#]?\s*(\S+)/i.exec(line);
-  return Boolean(match) && !/^\p{Lu}\p{Ll}+$/u.test(match[1]);
+  for (const match of line.matchAll(/\bbearer\b\s*[:=#]?\s*(\S+)/gi)) {
+    const value = match[1].replace(/[,.;:!?)]+$/, '');
+    // A name: capitalised and short ("Bearer Island, Canada"), or a word
+    // a place's name is made of ("bearer island").
+    if (/^\p{Lu}\p{Ll}{1,11}$/u.test(value) || PLACE_WORDS.test(value))
+      continue;
+    return true;
+  }
+  return false;
 }
+
+/** Words a place's name is made of, after a label word ("bearer island"). */
+const PLACE_WORDS =
+  /^(?:island|islands|isle|lake|creek|river|point|bay|mountain|mount|hill|hills|valley|station|road|street|lane|avenue|park|beach|falls|springs?|county|city|town|village)$/i;
 
 /**
  * A code after a label that can only be a code, without a colon ("PIN
@@ -275,11 +323,30 @@ function codeAfterLabel(line) {
   // Labels that only ever name a code take one in lower case too ("otp
   // abcdef", "cvv abc", "verification code abcdef"); a capitalised word
   // after them is a name ("OTP Bank", "MFA Boston").
+  // After a label in lower case, any value is a code ("verification code
+  // Abc"); after one written as a name, only a value that is not one.
   const coded =
-    /\b(?:otp|2fa|mfa|cvv|cvc|(?:verification|one-time|security|auth|login) code)(?:\s+is)?\s+([a-z0-9][a-z0-9-]{2,})\s*[.!]?\s*$/i.exec(
+    /\b((?:otp|2fa|mfa|cvv|cvc|(?:verification|one-time|security|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{2,})(?:\s+(?:thanks|thank you|thx|please|pls|ok))?\s*[.!]?\s*$/i.exec(
       line,
     );
-  if (coded && !/^\p{Lu}(?:\p{Ll}+|\p{Lu}+)$/u.test(coded[1])) return true;
+  if (coded) {
+    const [, label, value] = coded;
+    const labelIsName = /\p{Lu}/u.test(label);
+    if (!labelIsName) return true;
+    if (!/^\p{Lu}(?:\p{Ll}+|\p{Lu}+)$/u.test(value)) return true;
+  }
+  // A value in mixed case that is no name ("PIN aBcD", "gate code aBcD").
+  const mixed =
+    /\b(?:pin|(?:door|access|gate|alarm|entry) code)(?:\s+is)?\s+([a-z0-9-]{4,})\s*[.!]?\s*$/i.exec(
+      line,
+    );
+  if (
+    mixed &&
+    /\p{Ll}/u.test(mixed[1]) &&
+    /\p{Lu}/u.test(mixed[1]) &&
+    !/^\p{Lu}\p{Ll}+$/u.test(mixed[1])
+  )
+    return true;
   const match =
     /\b((?:pin|cvv|cvc|otp|2fa|mfa|(?:door|access|gate|alarm|entry|security|verification|one-time|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{3,})\s*[.!]?\s*$/i.exec(
       line,
@@ -394,7 +461,14 @@ export function createPlaceSuggester({
       const text = String(query ?? '')
         .trim()
         .slice(0, MAX_QUERY_CHARS);
-      if (!enabled || text.length < minPlaceChars(text) || mayBePrivate(text))
+      // A line longer than a place's name is never sent: a pasted sentence
+      // or phrase is no place, and may be private in ways not read here.
+      if (
+        !enabled ||
+        text.length < minPlaceChars(text) ||
+        text.split(/\s+/).length > SUGGEST_MAX_WORDS ||
+        mayBePrivate(text)
+      )
         return [];
       const language = (globalThis.document?.documentElement?.lang || 'en')
         .slice(0, 2)

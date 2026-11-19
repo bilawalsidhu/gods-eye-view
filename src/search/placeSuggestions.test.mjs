@@ -460,7 +460,13 @@ test('places that only looked private are looked up', () => {
     'Akiak',
     'Bearer Island',
     'SSN Station',
-    'Shibuya 150-0002',
+    'Bearer Island, Canada',
+    'bearer island',
+    'Washington DC  20500-0003',
+    '東京都千代田区100-0001',
+    'Security Code Plaza',
+    'Idaho Falls',
+    'meet at 12:30:45',
     'Llanfairpwllgwyngyllgogerychwyrndrobwllllantysiliogogogoch',
     'OTP Bank',
     // A long request is not a recovery phrase.
@@ -510,4 +516,48 @@ test('a house is named by its number and street in the order its country writes 
     (await service.suggest('Mittenwald Au')).map((place) => place.name),
     ['Mittenwald Au 3', 'Mittenwald Au 5'],
   );
+});
+
+test('codes, phones, tokens, emails and addresses in further shapes stay private', () => {
+  for (const line of [
+    // A phone's three and four digits after a name, as a postcode can't be
+    // told from it ("Shibuya 150-0002" is refused for that).
+    'Alice 555-0100',
+    'Shibuya 150-0002',
+    `${Array(23).fill('abandon').join(' ')} art`,
+    'Bearer Abcdefghijklmnopqrstuvwxyz',
+    'Bearer Island bearer abcdef',
+    'verification code Abc',
+    'verification code ABC',
+    'verification code abc thanks',
+    'PIN aBcD',
+    'gate code aBcD',
+    'john at gmail.com',
+    'john at gmail (dot) com',
+    'john at gmail [dot] com',
+    'john at gmail dot technology',
+    'passport number 123456',
+    'passport no. 123456',
+    'ID AB123',
+    '::1',
+    'fe80::1',
+    '2001:db8:0:0:0:0:2:1',
+  ])
+    assert.equal(mayBePrivate(line), true, line);
+});
+
+test('a line longer than a place name is never sent for suggestions', async () => {
+  let sent = 0;
+  const service = createPlaceSuggester({
+    endpoint: 'https://fixture.test/api/',
+    fetchImpl: async () => {
+      sent++;
+      return Response.json({ features: [] });
+    },
+  });
+  assert.deepEqual(
+    await service.suggest('one two three four five six seven eight nine'),
+    [],
+  );
+  assert.equal(sent, 0);
 });

@@ -8029,7 +8029,8 @@ and errors, keeping the separate Location draft intact.
 While typing, a short line (six words or fewer, no `?`, not a command,
 coordinates, a hex code, a callsign such as UAL2110 or N123AB, and nothing
 that may be private) is sent to
-Photon for place suggestions: at most one request every 500 ms per tab,
+Photon for place suggestions (the suggester itself never sends a line of
+more than eight words): at most one request every 500 ms per tab,
 and none for a minute after a refusal. Photon is the keyless geocoder the
 place search already uses; a submitted search is not part of this spacing.
 A line that may be one name ("Satellite Beach") is looked up whole. While
@@ -8044,10 +8045,13 @@ any line with: an "@" with something right on both sides, ending a word,
 starting a lowercase handle ("@jdoe"), or spaced before a domain ("john @
 gmail.com") (an email address or a handle, also while it is typed; spaced, as in "Nanjampeta @
 Chandambylu", it is part of a name); an email spelled around a filter
-("john(at)gmail.com", "john[at]gmail[dot]com", "john at gmail dot de"); an
-IP address ("10.0.0.1"); a wallet's recovery phrase (12, 15, 18, 21 or 24
-different lower-case words of three to eight letters); a line that is one
-lower-case word of twenty letters or more (a passphrase run together); seven digits or more with nothing but spaces,
+("john(at)gmail.com", "john[at]gmail[dot]com", "john at gmail dot de",
+"john at gmail.com", "john at gmail (dot) com"); an IP address
+("10.0.0.1", "::1", "fe80::1"); a wallet's recovery phrase (12, 15, 18, 21
+or 24 lower-case words of three to eight letters, not starting as a request
+does); a line that is one lower-case word of twenty letters or more (a
+passphrase run together; one written with a capital, or spaced into words,
+cannot be told from a name and is not caught); seven digits or more with nothing but spaces,
 punctuation, symbols or format characters between them (a phone, card,
 SSN or account number or its start: "+1 415 555", "4111 1111", "123 45
 6789", "123456789", "4111.1111.1111.1111", "123–45–6789"; a street address's house number
@@ -8056,22 +8060,28 @@ a polite word such as "thanks" after the digits is not a city): five digits, or 
 the city "00-950", "111 21", "125009", "1100-053", or four digits after a
 comma ("Straße 120, 1070 Wien"); and so are a US ZIP+4 after a state's
 code or name ("Alice 12345-6789" and "Jo 12345-6789" stay private),
-a Brazilian CEP, a Japanese postcode after "〒", before the address or
-after a place's name ("Shibuya 150-0002"), and
+a Brazilian CEP, a Japanese postcode after "〒" or next to the address in
+Japanese script ("東京都千代田区100-0001"; after a Latin name, as in
+"Shibuya 150-0002", it reads as a phone number), and
 digits on either side of "#", so "Hauptstrasse 12 10115 Berlin", "DC
 20500-0003", "〒100-0001 東京都千代田区" and "Calle 100 # 19-61" are places,
 while a seven-digit postcode alone such as "Tel Aviv 6100000" still reads
 as private); a phone number written with dots; two letters, two
 digits and ten more letters or digits (an IBAN's shape); "password",
 "passcode", "passwd", "pw" or "pwd" followed by anything, "bearer"
-followed by anything but a capitalised name ("Bearer Island" is a place),
+followed by anything but a short capitalised name or a place word such as
+island or lake ("Bearer Island", "bearer island" are places),
 "ssn" followed by a digit ("SSN Station" is a place), "token", "secret",
 "api key", "key" or "pass" followed by ":" or "=", a licence, plate,
 passport, membership, account, policy, ticket, booking, confirmation or
-reference number with letters and digits after its label ("license
-ABC1234"), "otp", "2fa", "mfa", "cvv", "cvc" or a verification, one-time,
-security, auth or login code followed by a code in any case that is not a
-capitalised name ("otp abcdef"; "OTP Bank" is a place), a
+reference number with a digit after its label ("license ABC1234",
+"passport no. 123456"), "ID" in capitals followed by a number ("ID
+AB123"), "otp", "2fa", "mfa", "cvv", "cvc" or a verification, one-time,
+security, auth or login code followed by a code (any value after a label
+in lower case, "verification code Abc", also before "thanks"; after a label
+written as a name, any value that is not one: "OTP Bank" and "Security
+Code Plaza" are places), a "pin" or door, access, gate, alarm or entry
+code followed by a value in mixed case ("PIN aBcD"), a
 door, access, gate, alarm, entry or security code followed by a digit, "api
 key", "access token" or "secret key" followed by a word of six characters
 or more, the word for "password" in the interface's languages
