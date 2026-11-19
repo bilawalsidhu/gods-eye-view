@@ -302,10 +302,11 @@ export function normalizeLine(text, { isRequest = isPlainRequest } = {}) {
   const read = polite !== line && polite && isRequest(polite) ? polite : line;
   // "remove flights from the map", "clear everything except ships from the
   // map": the map is where every layer is taken from. Not the verb's own
-  // "off" ("turn off the screen" is no layer switch), and not after "show"
-  // ("show me the view from the map" is a question).
+  // "off" ("turn off the screen" is no layer switch), not after "show"
+  // ("show me the view from the map" is a question), and after "clear"
+  // only for the whole map.
   return read.replace(
-    /^((?:turn|switch) off|hide|remove|disable|clear)\s+(\S.*?)\s+(?:from|off) (?:the )?(?:map|globe|screen|view)$/i,
+    /^((?:turn|switch) off|hide|remove|disable|clear(?= (?:everything|all|every)\b))\s+(\S.*?)\s+(?:from|off) (?:the )?(?:map|globe|screen|view)$/i,
     '$1 $2',
   );
 }
