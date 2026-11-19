@@ -1710,3 +1710,24 @@ test('scope opacity is field 30; a link made before it opens at full opacity', (
     100,
   );
 });
+
+test('India provider and pollutant survive compact links without changing default link bytes', () => {
+  const defaults = createDefaultLayerState();
+  const initial = encodeShareView({ layerState: defaults });
+  assert.deepEqual(defaults.options['air-quality'], {
+    provider: 'eccc',
+    pollutant: 'PM2.5',
+  });
+  const layerState = createDefaultLayerState();
+  layerState.enabledLayerIds = ['air-quality'];
+  layerState.options['air-quality'] = { provider: 'cpcb', pollutant: 'NO2' };
+  const encoded = assertRoundTrip({ layerState });
+  assert.deepEqual(
+    decodeOk(encoded).state.layerState.options['air-quality'],
+    layerState.options['air-quality'],
+  );
+  assert.equal(
+    encodeShareView({ layerState: createDefaultLayerState() }),
+    initial,
+  );
+});

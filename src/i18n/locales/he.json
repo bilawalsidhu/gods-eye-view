@@ -4421,5 +4421,17 @@
   "Bilawal on YouTube": "בילוואל ב־YouTube",
   "The studio behind GEV": "הסטודיו שמאחורי GEV",
   "Open source. Self-host, fork, add a layer.": "קוד פתוח. אירוח עצמאי, יצירת עותק והוספת שכבה.",
-  "ENTER GOD MODE": "כניסה למצב אלוהים"
+  "ENTER GOD MODE": "כניסה למצב אלוהים",
+  "Indian air-quality station observations": "תצפיות מתחנות איכות אוויר בהודו",
+  "India · CPCB via OGD": "הודו · CPCB דרך OGD",
+  "Reported pollutant average · not an overall AQI": "ממוצע מזהם מדווח · אינו מדד AQI כולל",
+  "Canada": "קנדה",
+  "India": "הודו",
+  "Manage connection": "ניהול החיבור",
+  "Source updated: {time}": "המקור עודכן: {time}",
+  "Showing cached observations": "מוצגות תצפיות מהמטמון",
+  "India air quality requires a data.gov.in API key": "איכות האוויר בהודו דורשת מפתח API של data.gov.in",
+  "India air quality is unavailable": "איכות האוויר בהודו אינה זמינה",
+  "Malformed India air-quality response": "תגובה לא תקינה של איכות האוויר בהודו",
+  "Connect India air quality with your data.gov.in key. It stays on this machine. Saving restarts the server.": "חברו את איכות האוויר בהודו באמצעות המפתח שלכם ל-data.gov.in. הוא נשאר במחשב זה. השמירה מפעילה מחדש את השרת."
 }

@@ -262,6 +262,7 @@ export async function initKeySetup({
   const state = {
     available: null,
     ready: false,
+    contextual: false,
     chip: null,
     dialog: { hidden: true, visible: false },
     rows: [],
@@ -301,6 +302,7 @@ export async function initKeySetup({
   let status = null;
   let busy = false;
   let open = false;
+  let providerId = null;
 
   const render = (nextStatus) => {
     if (disposed) return;
@@ -313,7 +315,10 @@ export async function initKeySetup({
       title: t('Project keys: {status}', { status: label }),
       hidden: status.setCount >= status.total,
     };
-    state.rows = (status.keys || []).map(presentRow);
+    state.contextual = Boolean(providerId);
+    state.rows = (status.keys || [])
+      .filter((key) => (providerId ? key.id === providerId : !key.contextual))
+      .map(presentRow);
     state.auth = { ...state.auth, mode: readStoredCloudVoiceAuthMode() };
     publish();
   };
@@ -335,8 +340,22 @@ export async function initKeySetup({
     onEscape: () => close(),
   });
 
-  const openDialog = () => {
+  const openDialog = (requestedProvider = null) => {
     if (disposed || open || !state.ready) return;
+    const nextProvider =
+      typeof requestedProvider === 'string' ? requestedProvider : null;
+    if (
+      nextProvider &&
+      !status.keys?.some((key) => key.id === nextProvider && key.contextual)
+    )
+      return;
+    if (providerId !== nextProvider) {
+      for (const envVar of Object.keys(fields)) delete fields[envVar];
+      state.generation += 1;
+    }
+    providerId = nextProvider;
+    state.status = null;
+    render(status);
     open = true;
     keyboard.activate();
     state.dialog = { hidden: false, visible: false };

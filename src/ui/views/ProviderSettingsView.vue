@@ -23,7 +23,7 @@ const dialog = computed(() => view.value?.dialog ?? { hidden: true, visible: fal
 const statusText = computed(() => ({
   text:
     view.value?.status ??
-    t('The Google Maps key buys the photorealistic planet — everything else stacks on top.'),
+    (view.value?.contextual ? '' : t('The Google Maps key buys the photorealistic planet — everything else stacks on top.')),
   seq: view.value?.statusSeq ?? 0,
 }));
 const removeTitle = (title) =>
@@ -51,8 +51,8 @@ const removeTitle = (title) =>
       <span class="key-setup-kicker">{{ t('GROUND STATION · PROVIDER SETTINGS') }}</span>
       <UiCloseButton class="key-setup-close" glyph="icon" data-key-setup-close :label="t('Close key setup')" @click="controls?.close()" />
     </header>
-    <h2 id="key-setup-title">{{ t('Power up the globe') }}</h2>
-    <p id="key-setup-description">{{ t('The globe already flies keyless. Every key below switches on another real feed — paste one and it\'s saved into this app\'s local configuration, then the server restarts itself. Server-side keys stay on this machine; Google Maps and Cesium ion run in the browser and must be provider-restricted. Keys you configured elsewhere are shown but never touched.') }}</p>
+    <h2 id="key-setup-title">{{ view?.contextual ? t('Manage connection') : t('Power up the globe') }}</h2>
+    <p id="key-setup-description">{{ view?.contextual ? t('Connect India air quality with your data.gov.in key. It stays on this machine. Saving restarts the server.') : t('The globe already flies keyless. Every key below switches on another real feed — paste one and it\'s saved into this app\'s local configuration, then the server restarts itself. Server-side keys stay on this machine; Google Maps and Cesium ion run in the browser and must be provider-restricted. Keys you configured elsewhere are shown but never touched.') }}</p>
     <div class="key-setup-rows ui-scroll" data-key-setup-rows>
       <section v-for="key in view?.rows ?? []" :key="`${key.id}:${view.generation}`" class="key-setup-row" :data-key-id="key.id" :data-set="String(key.set)" :data-managed="key.managed || undefined">
         <div class="key-setup-row-head">

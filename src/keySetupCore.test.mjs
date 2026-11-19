@@ -64,7 +64,7 @@ test('the status payload reports presence without any credential material', () =
     // Secret missing: the OpenSky pair must read as NOT set.
   };
   const status = keySetupStatus(env);
-  assert.equal(status.total, KEY_SETUP_KEYS.filter((key) => !key.hidden).length);
+  assert.equal(status.total, KEY_SETUP_KEYS.filter((key) => !key.hidden && !key.contextual).length);
   const google = status.keys.find((key) => key.id === 'google-maps');
   assert.equal(google.set, true);
   const opensky = status.keys.find((key) => key.id === 'opensky');
@@ -392,4 +392,16 @@ test('key guidance can offer another source that works with a key already set', 
     'Light STREET VIEW to use your Google Maps key',
   );
   assert.equal(keySetupWithAlternatives('Needs X', []), 'Needs X');
+});
+
+
+test('India connection is available without changing the general key count', () => {
+  const empty = keySetupStatus({});
+  const configured = keySetupStatus({ DATA_GOV_IN_API_KEY: 'private-test-value' });
+  assert.equal(configured.total, empty.total);
+  assert.equal(configured.setCount, empty.setCount);
+  const india = configured.keys.find((key) => key.id === 'data-gov-in');
+  assert.equal(india.contextual, true);
+  assert.equal(india.set, true);
+  assert.ok(!JSON.stringify(configured).includes('private-test-value'));
 });

@@ -4209,5 +4209,17 @@
   "Select a map item to see its details.": "選擇地圖上的項目以查看詳情。",
   "Bilawal on {site}": "Bilawal 的 {site} 主頁",
   "Bilawal's website": "Bilawal 的網站",
-  "BACK": "返回"
+  "BACK": "返回",
+  "Indian air-quality station observations": "印度空氣質量監測站觀測數據",
+  "India · CPCB via OGD": "印度 · 通過 OGD 獲取 CPCB 數據",
+  "Reported pollutant average · not an overall AQI": "報告的汙染物平均值 · 非綜合空氣質量指數",
+  "Canada": "加拿大",
+  "India": "印度",
+  "Manage connection": "管理連接",
+  "Source updated: {time}": "數據源更新時間：{time}",
+  "Showing cached observations": "正在顯示緩存的觀測數據",
+  "India air quality requires a data.gov.in API key": "印度空氣質量需要 data.gov.in API 密鑰",
+  "India air quality is unavailable": "印度空氣質量暫不可用",
+  "Malformed India air-quality response": "印度空氣質量響應格式錯誤",
+  "Connect India air quality with your data.gov.in key. It stays on this machine. Saving restarts the server.": "使用您的 data.gov.in 密鑰連接印度空氣質量數據。密鑰保留在本機上。保存將重啟服務器。"
 }

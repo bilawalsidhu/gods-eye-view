@@ -299,6 +299,27 @@ function satelliteFilterOption() {
 }
 
 const OPTION_GROUPS = Object.freeze({
+  'air-quality': Object.freeze([
+    enumOption('provider', 'p', 'eccc', ['eccc', 'cpcb'], {
+      eccc: 'e',
+      cpcb: 'i',
+    }),
+    enumOption(
+      'pollutant',
+      'q',
+      'PM2.5',
+      ['PM2.5', 'PM10', 'NO2', 'SO2', 'CO', 'OZONE', 'NH3'],
+      {
+        'PM2.5': 'f',
+        PM10: 'c',
+        NO2: 'n',
+        SO2: 's',
+        CO: 'm',
+        OZONE: 'o',
+        NH3: 'a',
+      },
+    ),
+  ]),
   // Active Fires intensity filter (HAL-676). `minFrp` is whole megawatts on
   // the codec side; the panel's log slider rounds to it. Both default to
   // "show everything": many of the strongest fires are rated low confidence.
@@ -620,7 +641,8 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({
     id: 'air-quality',
     token: '4',
-    disposition: 'enabled-only',
+    disposition: 'enabled+options',
+    optionOwner: 'air-quality',
   }),
   Object.freeze({
     id: 'ais-live-vessels',

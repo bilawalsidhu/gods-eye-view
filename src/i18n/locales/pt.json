@@ -4421,5 +4421,17 @@
   "Select a map item to see its details.": "Selecione um item do mapa para ver seus detalhes.",
   "Bilawal on {site}": "Bilawal no {site}",
   "Bilawal's website": "Site de Bilawal",
-  "BACK": "VOLTAR"
+  "BACK": "VOLTAR",
+  "Indian air-quality station observations": "Observações das estações de qualidade do ar da Índia",
+  "India · CPCB via OGD": "Índia · CPCB via OGD",
+  "Reported pollutant average · not an overall AQI": "Média informada do poluente · não é um IQA geral",
+  "Canada": "Canadá",
+  "India": "Índia",
+  "Manage connection": "Gerenciar conexão",
+  "Source updated: {time}": "Fonte atualizada: {time}",
+  "Showing cached observations": "Exibindo observações em cache",
+  "India air quality requires a data.gov.in API key": "A qualidade do ar da Índia requer uma chave de API do data.gov.in",
+  "India air quality is unavailable": "A qualidade do ar da Índia está indisponível",
+  "Malformed India air-quality response": "Resposta de qualidade do ar da Índia malformada",
+  "Connect India air quality with your data.gov.in key. It stays on this machine. Saving restarts the server.": "Conecte a qualidade do ar da Índia com sua chave do data.gov.in. Ela permanece neste dispositivo. Salvar reinicia o servidor."
 }
