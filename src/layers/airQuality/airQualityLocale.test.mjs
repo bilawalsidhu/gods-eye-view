@@ -7,6 +7,7 @@ import { layerNameForId, localizeLayerName } from '../../ui/layerNames.js';
 import { LayerPanel } from '../../ui/layerPanel.js';
 import { translateFeedError } from '../../ui/statusText.js';
 import { createAirQualityLayer } from './index.js';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
 function inLocale(locale, run) {
   setLocale(locale);
@@ -22,7 +23,8 @@ function harness(source) {
     source,
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
-  const viewer = { dataSources: { add() {}, remove() {} } };
+  const viewer = {};
+  bindFakeDraw(viewer);
   layer.init(viewer);
   layer.enable(viewer);
   return layer;

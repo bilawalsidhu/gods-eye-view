@@ -1,0 +1,56 @@
+{
+  "id": "gdacs-disaster-alerts",
+  "kind": "dataset",
+  "family": "events",
+  "title": "Disaster alerts (GDACS)",
+  "provider": "GDACS",
+  "description": "Current earthquakes, tropical cyclones, floods, volcanoes, droughts and wildfires with UN–EC GDACS alert levels.",
+  "icon": "⚑",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "global": true
+  },
+  "source": {
+    "format": "geojson",
+    "url": "https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH",
+    "query": {
+      "eventlist": "EQ;TC;FL;VO;DR;WF"
+    },
+    "fetch": "browser-direct",
+    "cacheSeconds": 900,
+    "maxBytes": 8388608,
+    "maxFeatures": 2000
+  },
+  "display": {
+    "color": "#a0aec0",
+    "label": "name",
+    "fields": ["alertlevel", "country"],
+    "rank": {
+      "field": "fromdate",
+      "order": "desc"
+    },
+    "colorBy": {
+      "field": "alertlevel",
+      "colors": {
+        "Red": "#d03b3b",
+        "Orange": "#ec835a",
+        "Green": "#0ca30c"
+      },
+      "labels": {
+        "Red": "Red alert",
+        "Orange": "Orange alert",
+        "Green": "Green alert"
+      }
+    }
+  },
+  "licence": {
+    "name": "GDACS terms of use (free, attribution required)",
+    "url": "https://www.gdacs.org/About/termofuse.aspx"
+  },
+  "attribution": {
+    "text": "GDACS — Global Disaster Alert and Coordination System (UN, European Commission)",
+    "url": "https://www.gdacs.org/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-22"
+}

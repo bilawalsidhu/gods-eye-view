@@ -1,0 +1,47 @@
+{
+  "id": "dc-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "District of Columbia Statewide Imagery (2025)",
+  "provider": "DC GIS (OCTO)",
+  "description": "Aerial orthophotos: Statewide coverage of District of Columbia.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-77.1224, 38.7855, -76.9007, 39.0018]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://imagery.dcgis.dc.gov/dcgis/rest/services/Ortho/Ortho_2025/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "3 in",
+    "resolutionM": 0.0762,
+    "trueOrtho": false,
+    "vintage": "2025–present",
+    "updateCycle": "Annual",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Open data — DC public domain terms",
+    "url": "https://opendata.dc.gov/pages/terms-of-use"
+  },
+  "attribution": {
+    "text": "Office of the Chief Technology Officer",
+    "url": "https://opendata.dc.gov/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

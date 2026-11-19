@@ -10,6 +10,7 @@ import {
   nextSheet,
   sheetForPanelId,
 } from './mobileShell.js';
+import { withEntityRecord } from '../data/entityRecords.js';
 
 function element(tag, document) {
   const node = new EventTarget();
@@ -623,7 +624,7 @@ test('the phone shell keeps the required attribution visible', () => {
   );
   const openDock = rule('body.mobile-shell[data-mobile-sheet] #command-dock');
   const railSheet = rule(
-    "body.mobile-shell[data-mobile-sheet='more'] #right-context-rail",
+    "body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack",
   );
   assert.ok(z(sheetCredit) > z(openDock));
   assert.ok(z(sheetCredit) > z(railSheet));
@@ -824,7 +825,7 @@ test('the tab-open callback reports only a successful manual opening', () => {
 test('manual Context opens the existing transaction without disabling the tracked aircraft', async () => {
   const calls = [];
   const tracked = { layerId: 'flights', icao24: 'abc123', callsign: 'EJA225' };
-  const viewer = { trackedEntity: { gevTrackedId: 'flights:abc123' } };
+  const viewer = { trackedEntity: withEntityRecord({}, { trackedId: 'flights:abc123' }) };
   const entity = viewer.trackedEntity;
   const enabled = new Set(['flights', 'weather']);
   const controls = new ContextControls({
@@ -902,12 +903,11 @@ test('manual Context opens the existing transaction without disabling the tracke
   }
 });
 
-test('manual Context respects Space Missions, busy transitions, missing tracks and disposal', async () => {
+test('manual Context respects an active mode, busy transitions, missing tracks and disposal', async () => {
   for (const state of [
-    { mode: 'space-missions' },
     { mode: 'flights' },
     { changing: true },
-    { entering: 'space-missions' },
+    { entering: 'flights' },
     { noTrack: true },
     { disposed: true },
     { sheet: 'layers' },

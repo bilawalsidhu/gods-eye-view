@@ -1,13 +1,28 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { FlightRecords } from './records.js';
 
-function records() {
+const FLEET = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../../public/models/fleet',
+);
+const fleetSet = {
+  catalog: JSON.parse(
+    fs.readFileSync(path.join(FLEET, 'catalog.json'), 'utf8'),
+  ),
+  types: JSON.parse(fs.readFileSync(path.join(FLEET, 'types.json'), 'utf8')),
+};
+
+function records(fleetModels = () => null) {
   return new FlightRecords({
     geoidHeight: () => 40,
     cachedGroundFloor: () => null,
     floorAltitudeM: (altitude) => altitude,
     approxDistanceKm: () => 0,
+    fleetModels,
   });
 }
 const view = () => ({
@@ -259,4 +274,279 @@ test('a repeated fix time marks the contact as not updated; removal is unchanged
   store.receive(observation({ positionTimeMs: fixMs + 10_000 }), view());
   store.forget('abc123');
   assert.equal(store.fixRepeated.has('abc123'), false);
+});
+
+test('a ground vehicle or station with no altitude stands on the ground; an aircraft does not', () => {
+  const store = records(() => fleetSet);
+  const noAltitude = { baroAltitudeM: null, ellipsoidAltitudeM: null };
+  const vehicle = store.receive(
+    observation({
+      id: 'v1',
+      typeCode: 'ZVEH',
+      speedMps: 8,
+      callsign: 'FIRE 2',
+      ...noAltitude,
+    }),
+    view(),
+  ).meta;
+  assert.equal(vehicle.onGround, true);
+  assert.equal(vehicle.typeCode, 'ZVEH');
+  assert.equal(vehicle.altitude, 0);
+  const mast = store.receive(
+    observation({ id: 'm1', typeCode: 'GRND', callsign: 'RX5', ...noAltitude }),
+    view(),
+  ).meta;
+  assert.equal(mast.onGround, true);
+  assert.equal(mast.typeCode, 'GRND');
+  // An airliner with no altitude keeps the airborne default, and its feed
+  // type from the first fix.
+  const plane = store.receive(
+    observation({ id: 'p1', typeCode: 'A320', ...noAltitude }),
+    view(),
+  ).meta;
+  assert.equal(plane.onGround, false);
+  assert.equal(plane.altitude, 10000);
+  assert.equal(plane.typeCode, 'A320');
+  // An "airport vehicle" reported airborne is no vehicle (a drone, a test
+  // transponder): it is placed by its altitude and classed as an aircraft.
+  const reported = store.receive(
+    observation({ id: 'v2', typeCode: 'ZVEH', baroAltitudeM: 762 }),
+    view(),
+  ).meta;
+  assert.equal(reported.onGround, false);
+  assert.equal(reported.typeCode, null);
+  assert.notEqual(reported.klass, 'vehicle');
+  // Nor is one on the ground faster than a vehicle drives.
+  const fast = store.receive(
+    observation({
+      id: 'v4',
+      typeCode: 'ZVEH',
+      onGround: true,
+      speedMps: 77,
+      ...noAltitude,
+    }),
+    view(),
+  ).meta;
+  assert.notEqual(fast.klass, 'vehicle');
+  // A ground station stands on the ground whatever height it reports.
+  const high = store.receive(
+    observation({ id: 'm2', typeCode: 'GRND', baroAltitudeM: 11880 }),
+    view(),
+  ).meta;
+  assert.equal(high.onGround, true);
+  assert.equal(high.klass, 'station');
+  assert.equal(high.altitude, 0);
+  assert.ok(
+    !(high.renderAltitudeM > 1000),
+    `drawn at ${high.renderAltitudeM} m`,
+  );
+  // Before the model set loads, the feed's ground types already count: an
+  // airport vehicle is never drawn as an aircraft first.
+  const early = records();
+  const unloaded = early.receive(
+    observation({ id: 'v3', typeCode: 'ZVEH', speedMps: 8, ...noAltitude }),
+    view(),
+  ).meta;
+  assert.equal(unloaded.onGround, true);
+  assert.equal(unloaded.typeCode, 'ZVEH');
+  const earlyPlane = early.receive(
+    observation({ id: 'p2', typeCode: 'A320', ...noAltitude }),
+    view(),
+  ).meta;
+  assert.equal(earlyPlane.onGround, false);
+  assert.equal(earlyPlane.typeCode, 'A320');
+});
+
+test('airport vehicles and ground stations take their class from the first fix', () => {
+  // Before the model set loads, and after.
+  for (const store of [records(), records(() => fleetSet)]) {
+    const klass = (fields) =>
+      store.receive(observation({ callsign: '', ...fields }), view()).meta
+        .klass;
+    // An airport vehicle reports itself on the ground, at a vehicle's speed.
+    const driving = { onGround: true, speedMps: 8 };
+    assert.equal(klass({ id: 'v1', typeCode: 'ZVEH', ...driving }), 'vehicle');
+    assert.equal(
+      klass({ id: 'v2', typeCode: 'ZVEH', callsign: 'FIRE 2', ...driving }),
+      'vehicle',
+    );
+    assert.equal(klass({ id: 'v3', category: 'C1' }), 'vehicle');
+    assert.equal(klass({ id: 'v4', category: 'C2' }), 'vehicle');
+    assert.equal(klass({ id: 'm1', typeCode: 'GRND' }), 'station');
+    assert.equal(klass({ id: 'm2', category: 'C4' }), 'station');
+    // An aircraft's feed type outranks its emitter category.
+    assert.equal(
+      klass({ id: 'p1', typeCode: 'A320', category: 'A7' }),
+      'airliner',
+    );
+  }
+});
+
+test("an aircraft's feed type classes it from the first fix, until a lookup answers", () => {
+  for (const store of [records(), records(() => fleetSet)]) {
+    // A helicopter whose feed names its type, with an airliner-like category.
+    const first = store.receive(
+      observation({
+        id: 'h1',
+        callsign: 'NHC47',
+        typeCode: 'ec45',
+        category: 'A3',
+      }),
+      view(),
+    ).meta;
+    assert.equal(first.typeCode, 'EC45');
+    assert.equal(first.klass, 'helicopter');
+    assert.equal(first.typeLookedUp, false);
+    // A later row without the type keeps it.
+    const quiet = store.receive(
+      observation({ id: 'h1', callsign: 'NHC47', category: 'A3' }),
+      view(),
+    ).meta;
+    assert.equal(quiet.klass, 'helicopter');
+    assert.equal(quiet.typeCode, 'EC45');
+    // A looked-up type outranks the feed's on every later poll and reset.
+    quiet.typeCode = 'EC35';
+    quiet.typeLookedUp = true;
+    quiet.typeName = 'Airbus Helicopters H135';
+    const after = store.receive(
+      observation({ id: 'h1', callsign: 'NHC47', typeCode: 'B738' }),
+      view(),
+    ).meta;
+    assert.equal(after.typeCode, 'EC35');
+    assert.equal(after.typeName, 'Airbus Helicopters H135');
+    assert.equal(after.klass, 'helicopter');
+    store.reset();
+    const again = store.receive(
+      observation({ id: 'h1', callsign: 'NHC47', typeCode: 'B738' }),
+      view(),
+    ).meta;
+    assert.equal(again.typeCode, 'EC35');
+    // No type anywhere: the emitter category classes it.
+    const bare = store.receive(
+      observation({ id: 'h2', category: 'A7' }),
+      view(),
+    ).meta;
+    assert.equal(bare.typeCode, null);
+    assert.equal(bare.klass, 'helicopter');
+  }
+});
+
+test('a surface emitter category stands on the ground, before and after the model set loads', () => {
+  const noAltitude = { baroAltitudeM: null, ellipsoidAltitudeM: null };
+  for (const store of [records(), records(() => fleetSet)]) {
+    for (const [id, category] of [
+      ['c1', 'C1'],
+      ['c2', 'C2'],
+      ['c3', 'C3'],
+      ['c5', 'C5'],
+      ['o16', 16],
+      ['o20', 20],
+    ]) {
+      const meta = store.receive(
+        observation({ id, category, callsign: '', ...noAltitude }),
+        view(),
+      ).meta;
+      assert.equal(meta.onGround, true, `${id} stands on the ground`);
+      assert.equal(meta.altitude, 0, id);
+    }
+    // An aircraft category with no altitude keeps the airborne default.
+    const plane = store.receive(
+      observation({ id: 'a3', category: 'A3', ...noAltitude }),
+      view(),
+    ).meta;
+    assert.equal(plane.onGround, false);
+    // A feed's aircraft type on a surface category does not make it an aircraft.
+    const odd = store.receive(
+      observation({
+        id: 'c9',
+        category: 'C1',
+        typeCode: 'A320',
+        ...noAltitude,
+      }),
+      view(),
+    ).meta;
+    assert.equal(odd.klass, 'vehicle');
+    assert.equal(odd.onGround, true);
+  }
+});
+
+test('a contact reported with no course faces the way its newer fixes went', () => {
+  const store = records();
+  const T = 1700000000000;
+  const taxi = (latitude, seconds, fields = {}) =>
+    store.receive(
+      observation({
+        latitude,
+        longitude: -97.6588,
+        courseDeg: null,
+        onGround: true,
+        speedMps: 8,
+        positionTimeMs: T + seconds * 1000,
+        ...fields,
+      }),
+      view(),
+    );
+  const course = () => store.data.get('abc123').true_track;
+  taxi(30.1908, 0);
+  assert.equal(course(), 0, 'nothing known yet');
+  // Fixes a second apart, 8 m each: they add up until 30 m are covered.
+  taxi(30.19073, 1);
+  taxi(30.19066, 2);
+  assert.equal(course(), 0, 'under 30 m: still nothing');
+  taxi(30.19059, 3);
+  taxi(30.19052, 4);
+  assert.ok(Math.abs(course() - 180) < 0.1, 'southbound');
+  // An older fix from another feed, behind it: never turns it around.
+  taxi(30.1912, 2);
+  assert.ok(Math.abs(course() - 180) < 0.1, 'an older fix gives no course');
+  taxi(30.1901, 8);
+  assert.ok(Math.abs(course() - 180) < 0.1);
+  // Standing (reported under 2 m/s) with 40 m of position noise: kept.
+  taxi(30.18974, 12, { speedMps: 0.5, longitude: -97.6584 });
+  assert.ok(
+    Math.abs(course() - 180) < 0.1,
+    'a standing contact keeps its course',
+  );
+  // A reported course always wins.
+  taxi(30.189, 16, { courseDeg: 175 });
+  assert.equal(course(), 175);
+  // A reset forgets where it was: it starts again from north.
+  store.reset();
+  taxi(30.188, 20);
+  assert.equal(course(), 0);
+});
+
+test('a low contact near the view carries the ground under it; others carry none', () => {
+  const store = new FlightRecords({
+    geoidHeight: () => 40,
+    cachedGroundFloor: () => 1656,
+    floorAltitudeM: (altitude, ground) =>
+      Math.max(altitude, ground ?? -Infinity),
+    fleetModels: () => null,
+  });
+  const denver = { latitude: 39.85, longitude: -104.67 };
+  const near = { ...view(), viewerLatDeg: 39.8, viewerLonDeg: -104.7 };
+  // Landing at Denver: 1,900 m above the ellipsoid over 1,656 m ground.
+  const landing = store.receive(
+    observation({ id: 'l1', ...denver, ellipsoidAltitudeM: 1900 }),
+    near,
+  ).meta;
+  assert.equal(landing.groundM, 1656);
+  // At cruise the ground is not read.
+  const cruise = store.receive(
+    observation({
+      id: 'c1',
+      ...denver,
+      ellipsoidAltitudeM: 11000,
+      baroAltitudeM: 11000,
+    }),
+    near,
+  ).meta;
+  assert.equal(cruise.groundM, null);
+  // Nor without a view to be near.
+  const away = store.receive(
+    observation({ id: 'a1', ...denver, ellipsoidAltitudeM: 1900 }),
+    view(),
+  ).meta;
+  assert.equal(away.groundM, null);
 });

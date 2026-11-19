@@ -6,7 +6,19 @@ import { createApp, nextTick } from 'vue';
 import { createPinia } from 'pinia';
 import { useScreenAnnotationsStore } from '../ui/stores/screenAnnotations.js';
 import ScreenAnnotations from '../ui/views/panels/ScreenAnnotations.vue';
-import { createScreenAnnotationRenderer } from './screenAnnotationRenderer.js';
+import { createScreenAnnotationRenderer as createRenderer } from './screenAnnotationRenderer.js';
+import { bindFakeCesiumScene } from '../testSupport/fakeCesiumScene.mjs';
+import { rendererOf } from '../render/rendererOf.js';
+
+/**
+ * The renderer over a viewer double with the camera, query and frame ports
+ * bound over it (once per double), and the scene's canvas as the viewer's.
+ */
+function createScreenAnnotationRenderer(viewer, options) {
+  if (!rendererOf(viewer)) bindFakeCesiumScene(viewer);
+  viewer.canvas ??= viewer.scene?.canvas;
+  return createRenderer(viewer, options);
+}
 
 // happy-dom does not lay out SVG; every element measures as a 40 x 16 box.
 for (const type of [globalThis.SVGElement, globalThis.SVGGraphicsElement]) {
@@ -53,7 +65,7 @@ function sceneFor(camera, extra = {}) {
   return {
     camera,
     canvas: { clientWidth: 800, clientHeight: 600, width: 800, height: 600 },
-    clampToHeightSupported: false,
+    sampleHeightSupported: false,
     postRender: { addEventListener() {}, removeEventListener() {} },
     ...extra,
   };
@@ -180,14 +192,13 @@ test('outline upgrade preserves the existing SVG group identity', async (t) => {
   const sampledAnchors = [];
   const scene = sceneFor(camera, {
     canvas: { clientWidth: 1280, clientHeight: 720, width: 1280, height: 720 },
-    clampToHeightSupported: true,
-    clampToHeight(world) {
-      const cartographic = Cesium.Cartographic.fromCartesian(world);
+    sampleHeightSupported: true,
+    sampleHeight(cartographic) {
       sampledAnchors.push([
         Number(Cesium.Math.toDegrees(cartographic.longitude).toFixed(4)),
         Number(Cesium.Math.toDegrees(cartographic.latitude).toFixed(4)),
       ]);
-      return world;
+      return 0;
     },
   });
   const renderer = createScreenAnnotationRenderer(
@@ -223,7 +234,7 @@ test('outline upgrade preserves the existing SVG group identity', async (t) => {
   assert.ok(after === before, 'the rendered group is mutated, not replaced');
   assert.deepEqual(sampledAnchors.at(-1), [-97.5, 31.2], 'the existing group projects from the re-seated anchor');
   assert.equal(groups().length, 1);
-  assert.equal(after.querySelector('.gev-anno-ring'), null, 'reticle rings are removed in place');
+  assert.equal(after.querySelector('.gev-anno-ring') === null, true, 'reticle rings are removed in place');
   assert.ok(after.querySelector('.gev-anno-callout') === callout, 'the original callout remains in the group');
   assert.ok(after.querySelector('.gev-anno-dot') === dot, 'the anchor dot remains in the group');
   assert.ok(svg());
@@ -337,7 +348,7 @@ test('a removed mark fades out, then leaves the board', async (t) => {
   assert.equal(group.isConnected, false);
   renderer.destroy();
   await settle();
-  assert.equal(document.querySelector('.gev-screen-whiteboard'), null);
+  assert.equal(document.querySelector('.gev-screen-whiteboard') === null, true);
 });
 
 // ── Partial-add unwind (review round 2) ───────────────────────────────────────
@@ -593,6 +604,7 @@ test('hidden and back-facing annotations do not sample; visible unresolved heigh
   const camera = {
     positionWC: Cesium.Cartesian3.fromDegrees(0, 0, 100000),
     directionWC: new Cesium.Cartesian3(-1, 0, 0),
+    upWC: new Cesium.Cartesian3(0, 0, 1),
     positionCartographic: { height: 100000 },
     moveEnd: new Cesium.Event(),
   };
@@ -602,8 +614,8 @@ test('hidden and back-facing annotations do not sample; visible unresolved heigh
     camera,
     canvas: { width: 800, height: 600 },
     postRender,
-    clampToHeightSupported: true,
-    clampToHeight() {
+    sampleHeightSupported: true,
+    sampleHeight() {
       samples++;
     },
     requestRender() {},
@@ -637,15 +649,12 @@ test('hidden and back-facing annotations do not sample; visible unresolved heigh
   renderer.update(mark('near-side', 0));
   postRender.raiseEvent();
   assert.equal(samples, 11, 'behind-camera anchors do not sample');
-  camera.directionWC = new Cesium.Cartesian3(-1, 0, 0);
-  camera.frustum = {
-    computeCullingVolume: () => ({
-      computeVisibility: () => Cesium.Intersect.OUTSIDE,
-    }),
-  };
+  // Turned 45 degrees east: the anchor is in front and above the horizon,
+  // but outside the 60-degree frustum plus the 9.5 km height-bound radius.
+  camera.directionWC = new Cesium.Cartesian3(-Math.SQRT1_2, Math.SQRT1_2, 0);
   postRender.raiseEvent();
   assert.equal(samples, 11, 'outside-frustum anchors do not sample');
-  camera.frustum = null;
+  camera.directionWC = new Cesium.Cartesian3(-1, 0, 0);
   const before = samples;
   renderer.add({
     id: 'large-area',
@@ -665,7 +674,10 @@ test('hidden and back-facing annotations do not sample; visible unresolved heigh
 });
 
 function sampledLon(world) {
-  const carto = Cesium.Cartographic.fromCartesian(world);
+  return cartographicLon(Cesium.Cartographic.fromCartesian(world));
+}
+
+function cartographicLon(carto) {
   return Number(Cesium.Math.toDegrees(carto.longitude).toFixed(5));
 }
 
@@ -686,11 +698,23 @@ function samplingBoard(t) {
   return useScreenAnnotationsStore(createPinia());
 }
 
+/**
+ * The renderer over `scene`, its camera port's pose taking the double
+ * camera's own `upWC` where it has one (the fake scene's pose is +Y up), so
+ * the frustum the renderer culls with is the double's.
+ */
 function samplingRenderer(store, scene) {
-  return createScreenAnnotationRenderer(
-    { scene, camera: scene.camera, trackedEntity: null },
-    { store, activeTrackedReadoutId: () => null },
-  );
+  const viewer = { scene, camera: scene.camera, trackedEntity: null };
+  const { camera } = bindFakeCesiumScene(viewer);
+  const pose = camera.pose;
+  camera.pose = () => {
+    const up = scene.camera.upWC;
+    return up ? { ...pose(), up: { x: up.x, y: up.y, z: up.z } } : pose();
+  };
+  return createScreenAnnotationRenderer(viewer, {
+    store,
+    activeTrackedReadoutId: () => null,
+  });
 }
 
 function squareFrustum() {
@@ -721,10 +745,10 @@ test('an arrow with one endpoint outside a real frustum keeps its visible connec
     camera,
     canvas: { width: 800, height: 800 },
     postRender,
-    clampToHeightSupported: true,
-    clampToHeight(world) {
-      sampled.push(sampledLon(world));
-      return world;
+    sampleHeightSupported: true,
+    sampleHeight(cartographic) {
+      sampled.push(cartographicLon(cartographic));
+      return 0;
     },
   };
   // The 0.2-degree endpoint (~22 km east) is well beyond the side plane plus
@@ -807,11 +831,9 @@ test('an arrow whose unsampled far end is past the 0 m horizon keeps its connect
     camera,
     canvas: { width: W, height: H },
     postRender,
-    clampToHeightSupported: true,
-    clampToHeight(world) {
-      const c = Cesium.Cartographic.fromCartesian(world);
-      const h = surface[Number(Cesium.Math.toDegrees(c.longitude).toFixed(5))];
-      return h === undefined ? undefined : Cesium.Cartesian3.fromRadians(c.longitude, c.latitude, h);
+    sampleHeightSupported: true,
+    sampleHeight(cartographic) {
+      return surface[cartographicLon(cartographic)];
     },
   };
 
@@ -830,10 +852,7 @@ test('an arrow whose unsampled far end is past the 0 m horizon keeps its connect
   assert.ok(farWin.x > -W && farWin.x < 0, 'far end off-screen left, inside [-w, 2w]');
 
   const store = useScreenAnnotationsStore(createPinia());
-  const renderer = createScreenAnnotationRenderer(
-    { scene, camera, trackedEntity: null },
-    { store, activeTrackedReadoutId: () => null },
-  );
+  const renderer = samplingRenderer(store, scene);
   t.after(() => renderer.destroy());
   renderer.add({
     id: 'long-arrow',
@@ -868,10 +887,10 @@ test('a low-angle cached roof stays visible when range endpoints fail different 
     camera,
     canvas: { width: 800, height: 800 },
     postRender,
-    clampToHeightSupported: true,
-    clampToHeight() {
+    sampleHeightSupported: true,
+    sampleHeight() {
       samples++;
-      return Cesium.Cartesian3.fromDegrees(roofLon, 0, 20);
+      return 20;
     },
   };
   // Sanity: height 0 is beyond the horizon and 9000 m is behind the camera,
@@ -915,11 +934,11 @@ test('height retries beyond the first budget are served under sparse passes', (t
     camera,
     canvas: { width: 800, height: 600 },
     postRender,
-    clampToHeightSupported: true,
-    clampToHeight(world) {
-      const lon = sampledLon(world);
+    sampleHeightSupported: true,
+    sampleHeight(cartographic) {
+      const lon = cartographicLon(cartographic);
       pass.push(lon);
-      return tilesReady && lon === last ? Cesium.Cartesian3.fromDegrees(lon, 0, 12) : undefined;
+      return tilesReady && lon === last ? 12 : undefined;
     },
   };
   const renderer = samplingRenderer(store, scene);

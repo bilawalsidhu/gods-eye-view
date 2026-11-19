@@ -129,15 +129,14 @@
   color: rgba(54, 220, 255, 0.86);
 }
 
+/* A UiCloseButton (close-button.css). */
 .key-setup-close {
   display: grid;
   place-items: center;
   padding: 0.15rem;
   color: rgba(171, 210, 220, 0.6);
-  background: none;
   border: 1px solid transparent;
   border-radius: 0.3rem;
-  cursor: pointer;
   transition:
     color var(--transition-fast),
     border-color var(--transition-fast);

@@ -6,10 +6,43 @@ import {
   releasePointer,
   isPointerFree,
 } from '../../data/inputOwnership.js';
-import { isOwnedByOtherLayer } from '../../data/pickRegistry.js';
+import {
+  isOwnedByOtherLayer,
+  setClickCardHitTest,
+} from '../../data/pickRegistry.js';
+import { fakeInput } from '../../input/testDoubles.mjs';
+import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
+
+/** Record each click subscription the layer makes, as the old handler fakes did. */
+function recordHandlers(viewer, handlers) {
+  const fake = fakeInput(viewer);
+  const subscribe = fake.input.onClick;
+  fake.input.onClick = (fn) => {
+    const handler = {
+      destroyed: false,
+      // A live subscription hears clicks through the dispatcher; a removed
+      // one is called directly, as a queued callback would be.
+      click: (click) =>
+        handler.destroyed
+          ? fn({
+              screenPosition: click.position,
+              get pick() {
+                return viewer.scene.pick(click.position);
+              },
+            })
+          : fake.click(click.position),
+    };
+    handlers.push(handler);
+    const off = subscribe(fn);
+    return () => {
+      handler.destroyed = true;
+      off();
+    };
+  };
+}
 import * as contextStore from '../../data/contextStore.js';
 import { createGevActionRunner } from '../../voice/gevActions.js';
-import * as Cesium from 'cesium';
+import { fromRadians } from '../../geo/ellipsoid.js';
 
 const time = '2026-09-16T03:00:00.000Z';
 const storm = (id = 'ep152026') => ({
@@ -47,10 +80,18 @@ const deferred = () => {
   return { promise, resolve };
 };
 
-test('map selection yields to pointer owners and owns only its enabled handler', async () => {
+test('map selection yields to pointer owners and owns only its enabled handler', async (t) => {
   const handlers = [],
-    pickedEntity = {},
-    foreignEntity = {};
+    // A pick of an item in one of the layer's draw sets, and one of another
+    // layer's set: the dispatcher hands each to pickStorm as a draw hit.
+    pickedEntity = {
+      set: 'weather-cyclones:1:points',
+      id: 'cyclone:ep162026:center',
+    },
+    foreignEntity = {
+      set: 'other-layer:points',
+      id: 'cyclone:ep162026:center',
+    };
   let picked = { id: pickedEntity },
     overlayHit = null,
     overlayTests = 0,
@@ -61,42 +102,28 @@ test('map selection yields to pointer owners and owns only its enabled handler',
     setSelection() {},
     clear() {},
     destroy() {},
-    pickStorm: (value) => (value?.id === pickedEntity ? 'ep162026' : null),
+    pickStorm: (hit) =>
+      hit?.set === pickedEntity.set && hit.id === pickedEntity.id
+        ? 'ep162026'
+        : null,
     ownsPickId: (id) => id === 'cyclone:ep162026:center',
     getDiagnostics: () => ({}),
   };
-  const cesium = {
-    ScreenSpaceEventType: { LEFT_CLICK: 'left' },
-    ScreenSpaceEventHandler: class {
-      constructor(canvas) {
-        assert.ok(canvas);
-        handlers.push(this);
-        this.destroyed = false;
-      }
-      setInputAction(callback, type) {
-        assert.equal(type, 'left');
-        this.click = callback;
-      }
-      destroy() {
-        this.destroyed = true;
-      }
-      isDestroyed() {
-        return this.destroyed;
-      }
-    },
-  };
   const layer = createCyclonesLayer({
     feed: { getSnapshot: async () => snapshot([storm(), storm('ep162026')]) },
-    cesium,
     createRendering: () => rendering,
-    hitTestOverlay: () => {
-      overlayTests++;
-      return overlayHit;
-    },
   });
+  setClickCardHitTest(() => {
+    overlayTests++;
+    return overlayHit;
+  });
+  t.after(() => setClickCardHitTest(null));
   const canvas = new EventTarget();
   canvas.getBoundingClientRect = () => ({ left: 100, top: 200 });
   const viewer = {
+    get canvas() {
+      return this.scene?.canvas;
+    },
     scene: {
       canvas,
       pick() {
@@ -111,6 +138,8 @@ test('map selection yields to pointer owners and owns only its enabled handler',
       },
     },
   };
+  bindFakeCesiumCamera(viewer);
+  recordHandlers(viewer, handlers);
   layer.init(viewer);
   layer.setRowControlsListener(() => notices++);
   assert.equal(handlers.length, 0, 'disabled module installs no handler');
@@ -155,41 +184,15 @@ test('map selection yields to pointer owners and owns only its enabled handler',
     'foreground AIS card wins before scene picking',
   );
   assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
-  // A native capture runs before an earlier sibling handler clears hit rects.
-  const up = new Event('pointerup');
-  Object.assign(up, { clientX: 110, clientY: 220 });
-  canvas.dispatchEvent(up);
-  overlayHit = null;
+  // Any other layer's card on top takes the click, not only a vessel's.
+  overlayHit = { sourceId: 'cctv', entryId: 'camera:1' };
   handlers[0].click(click);
   assert.equal(
     layer.getDiagnostics().selectedId,
     'ep152026',
-    'captured AIS hit survives synchronous sibling overlay rebuild',
+    'a camera card over the storm keeps the click',
   );
-  // A captured background hit remains background even if a sibling adds a card.
-  canvas.dispatchEvent(up);
-  overlayHit = { sourceId: 'ais-live-vessels', entryId: 'vessel:123' };
-  handlers[0].click(click);
-  assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
-  layer.setParams({ stormId: 'ep152026' });
-  // A new gesture clears an unconsumed release snapshot.
-  canvas.dispatchEvent(up);
-  canvas.dispatchEvent(new Event('pointerdown'));
   overlayHit = null;
-  handlers[0].click(click);
-  assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
-  layer.setParams({ stormId: 'ep152026' });
-  overlayHit = { sourceId: 'ais-live-vessels', entryId: 'vessel:123' };
-  canvas.dispatchEvent(up);
-  overlayHit = null;
-  handlers[0].click({ position: { x: 15, y: 25 } });
-  assert.equal(
-    layer.getDiagnostics().selectedId,
-    'ep162026',
-    'a different click cannot reuse the captured card',
-  );
-  layer.setParams({ stormId: 'ep152026' });
-  overlayHit = { sourceId: 'cctv', entryId: 'camera:1' };
   const before = notices;
   handlers[0].click(click);
   assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
@@ -239,13 +242,12 @@ test('map selection yields to pointer owners and owns only its enabled handler',
   assert.equal(layer.getDiagnostics().selectionActive, false);
   const afterDisable = picks;
   const afterDisableOverlay = overlayTests;
-  canvas.dispatchEvent(up);
+  handlers[0].click(click);
   assert.equal(
     overlayTests,
     afterDisableOverlay,
-    'disable removes native capture listeners',
+    'a disabled layer reads no card',
   );
-  handlers[0].click(click);
   assert.equal(picks, afterDisable, 'queued disabled callback is inert');
   layer.enable();
   await layer.update();
@@ -264,25 +266,13 @@ test('map selection yields to pointer owners and owns only its enabled handler',
   );
   assert.equal(handlers[1].destroyed, true);
 });
-test('a click on a storm card or lead-hour label selects that storm without picking', async () => {
+test('a click on a storm card or lead-hour label selects that storm without picking', async (t) => {
   const handlers = [];
   let picks = 0,
     overlayHit = null,
     hostArgument;
   const layer = createCyclonesLayer({
     feed: { getSnapshot: async () => snapshot([storm(), storm('ep162026')]) },
-    cesium: {
-      ScreenSpaceEventType: { LEFT_CLICK: 'left' },
-      ScreenSpaceEventHandler: class {
-        constructor() {
-          handlers.push(this);
-        }
-        setInputAction(callback) {
-          this.click = callback;
-        }
-        destroy() {}
-      },
-    },
     overlayHost: 'host',
     createRendering: ({ overlayHost }) => {
       hostArgument = overlayHost;
@@ -296,11 +286,15 @@ test('a click on a storm card or lead-hour label selects that storm without pick
         getDiagnostics: () => ({}),
       };
     },
-    hitTestOverlay: () => overlayHit,
   });
+  setClickCardHitTest(() => overlayHit);
+  t.after(() => setClickCardHitTest(null));
   const canvas = new EventTarget();
   canvas.getBoundingClientRect = () => ({ left: 0, top: 0 });
-  layer.init({
+  const viewer = {
+    get canvas() {
+      return this.scene?.canvas;
+    },
     scene: {
       canvas,
       pick() {
@@ -308,7 +302,9 @@ test('a click on a storm card or lead-hour label selects that storm without pick
         return { content: {} };
       },
     },
-  });
+  };
+  recordHandlers(viewer, handlers);
+  layer.init(viewer);
   assert.equal(hostArgument, 'host', 'the overlay host reaches the renderer');
   layer.enable();
   await layer.update();
@@ -325,15 +321,11 @@ test('a click on a storm card or lead-hour label selects that storm without pick
   overlayHit = { sourceId: 'weather-cyclones', entryId: 'storm:al019999' };
   handlers[0].click(click);
   assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
-  // The native release snapshot carries the card identity too.
-  const up = new Event('pointerup');
-  Object.assign(up, { clientX: 10, clientY: 20 });
   overlayHit = { sourceId: 'weather-cyclones', entryId: 'storm:ep162026' };
-  canvas.dispatchEvent(up);
-  overlayHit = null;
   handlers[0].click(click);
   assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
   assert.equal(picks, 0, 'card clicks never fall through to the scene');
+  overlayHit = null;
   handlers[0].click(click);
   assert.equal(picks, 1);
   assert.equal(layer.getDiagnostics().selectedId, null, 'empty map clears');
@@ -357,7 +349,10 @@ function harness(
     setSelection(id) {
       selection = id;
     },
-    getFocusSphere: () => ({ radius: 500000 }),
+    getFocusSphere: () => ({
+      center: { x: 6378137, y: 0, z: 0 },
+      radius: 500000,
+    }),
     clear() {
       cleared++;
     },
@@ -382,6 +377,7 @@ function harness(
         navigation.push({ sphere, options }),
     },
   };
+  bindFakeCesiumCamera(viewer);
   layer.init(viewer);
   layer.attachShellServices({
     runNavigation: (fn) => {
@@ -432,19 +428,29 @@ async function withSharedContext(t, body) {
   );
   // The voice runner bounds its basemap wait with the window timers.
   Object.assign(host, { setTimeout, clearTimeout });
-  const position = Cesium.Cartesian3.fromDegrees(-125.8, 15.5, 5_000_000);
-  const runner = createGevActionRunner({
-    viewer: {
-      clock: { onTick: { addEventListener: () => () => {} } },
-      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-      camera: {
-        moveEnd: { addEventListener() {} },
-        positionWC: position,
-        positionCartographic: Cesium.Cartographic.fromCartesian(position),
-        heading: 0,
-        pitch: 0,
-      },
+  const cartographic = {
+    longitude: (-125.8 * Math.PI) / 180,
+    latitude: (15.5 * Math.PI) / 180,
+    height: 5_000_000,
+  };
+  const position = fromRadians(
+    cartographic.longitude,
+    cartographic.latitude,
+    cartographic.height,
+  );
+  const viewer = bindFakeCesiumCamera({
+    clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: {
+      moveEnd: { addEventListener() {} },
+      positionWC: position,
+      positionCartographic: cartographic,
+      heading: 0,
+      pitch: 0,
     },
+  });
+  const runner = createGevActionRunner({
+    viewer,
     styleManager: {},
     dataManager: {
       layers: new Map(),
@@ -787,6 +793,59 @@ test('classification display expands known codes without altering the source or 
       assert.ok(controls.list.items[0].text.includes(` · ${label} · `));
       assert.equal(record.classification, code);
       assert.equal(h.applied[0].storms[0].classification, code);
+    } finally {
+      h.layer.destroy();
+    }
+  }
+});
+// Quantities join number and unit with a no-break space.
+const plain = (text) => text?.replace(/\u00a0/g, ' ') ?? null;
+test('an advisory without pressure, movement or link leaves those values out', async () => {
+  const record = {
+    ...storm(),
+    windKt: 85,
+    pressureHpa: null,
+    movement: { directionDegrees: null, speedKt: null },
+    advisoryUrl: null,
+  };
+  const h = harness({ getSnapshot: async () => snapshot([record]) });
+  try {
+    h.layer.enable();
+    await h.layer.update();
+    const { summary, info } = h.layer.getRowControls();
+    const intensity = summary.lines.find((line) => line.id === 'intensity');
+    assert.equal(plain(intensity.text), 'Maximum sustained wind: 85 kt');
+    assert.deepEqual(
+      summary.lines.map((line) => line.id),
+      ['position', 'intensity', 'geometry'],
+    );
+    assert.deepEqual(summary.actions, [], 'no advisory link to open');
+    assert.ok(plain(info).includes('Maximum sustained wind: 85 kt\n'));
+    for (const text of [info, ...summary.lines.map((line) => line.text)])
+      assert.doesNotMatch(text, /Unavailable|Pressure/);
+  } finally {
+    h.layer.destroy();
+  }
+});
+test('an advisory with only one of wind and pressure shows that one alone', async () => {
+  for (const [values, expected] of [
+    [{ windKt: null, pressureHpa: 990 }, 'Pressure: 990 hPa'],
+    [
+      { windKt: 60, pressureHpa: 990 },
+      'Maximum sustained wind: 60 kt · Pressure: 990 hPa',
+    ],
+    [{ windKt: null, pressureHpa: null }, null],
+  ]) {
+    const h = harness({
+      getSnapshot: async () => snapshot([{ ...storm(), ...values }]),
+    });
+    try {
+      h.layer.enable();
+      await h.layer.update();
+      const { summary, info } = h.layer.getRowControls();
+      const intensity = summary.lines.find((line) => line.id === 'intensity');
+      assert.equal(plain(intensity?.text), expected);
+      assert.doesNotMatch(info, /Unavailable|\n\n/);
     } finally {
       h.layer.destroy();
     }

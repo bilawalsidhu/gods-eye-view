@@ -28,7 +28,8 @@ body.cockpit-mode #world-timeline {
 #world-timeline {
   direction: ltr;
   position: fixed;
-  bottom: 2vh;
+  /* The dock's floor (command-dock.css); the dock rises above the bar. */
+  bottom: 74px;
   left: 50%;
   z-index: 146;
   display: flex;
@@ -135,7 +136,7 @@ body.cockpit-mode #world-timeline {
   }
 }
 
-/* The track: ticks for each launch or frame, the elapsed fill, and a native
+/* The track: ticks for each launch or strong earthquake, the elapsed fill, and a native
    range input on top for dragging and the keyboard. */
 #world-timeline .world-timeline-track {
   position: relative;
@@ -191,6 +192,31 @@ body.cockpit-mode #world-timeline {
   border-radius: 1px;
   background: rgba(0, 212, 255, 0.75);
   transform: translateY(-50%);
+  pointer-events: none;
+}
+
+/* A tick's label, shown over the time's bubble while the pointer is on the
+   tick (or the handle rests on its mark). It slides across itself as the
+   bubble does, so it stays within the track, and is never wider than the
+   track: a long label ends in an ellipsis. */
+#world-timeline .world-timeline-mark-label {
+  position: absolute;
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  bottom: calc(100% + 30px);
+  left: calc(100% * var(--at));
+  z-index: 1;
+  padding: 2px 8px;
+  border: 1px solid rgba(0, 212, 255, 0.4);
+  border-radius: 6px;
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre;
+  transform: translateX(calc(var(--at) * -100%));
   pointer-events: none;
 }
 
@@ -284,6 +310,12 @@ body.cockpit-mode #world-timeline {
   outline-offset: 2px;
 }
 
+@media (max-width: 1199px) {
+  #world-timeline {
+    bottom: 2vh;
+  }
+}
+
 @media (max-width: 720px) {
   #world-timeline {
     bottom: 8px;
@@ -322,4 +354,3 @@ body.mobile-shell #world-timeline .world-timeline-speed {
   order: 2;
   height: 32px;
 }
-

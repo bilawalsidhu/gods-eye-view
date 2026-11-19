@@ -1,8 +1,12 @@
-import * as Cesium from 'cesium';
+import { isFollowing } from './data/followed.js';
+import { geodeticSurfaceNormal, rayEllipsoid } from './geo/ellipsoid.js';
+import { rotate } from './geo/frames.js';
+import { clamp, dot, normalize, toRadians } from './geo/vector.js';
+import { findCamera } from './render/rendererOf.js';
 
-// Cesium's free look (Shift+drag) turns the camera in place. Near the ground
-// that surveys a city; from orbit a few drags turn the whole planet out of
-// frame and leave only stars.
+// The camera's free look (Shift+drag) turns the camera in place. Near the
+// ground that surveys a city; from orbit a few drags turn the whole planet out
+// of frame and leave only stars.
 export const FREE_LOOK_MAX_HEIGHT_METERS = 1_000_000;
 
 // A voice turn from orbit stops when about this share of the frame still shows
@@ -10,14 +14,13 @@ export const FREE_LOOK_MAX_HEIGHT_METERS = 1_000_000;
 export const MIN_GLOBE_FRAME_SHARE = 0.1;
 
 /**
- * A free globe camera: the viewer is in 3D, follows no tracked entity, and its
- * camera is not locked to a reference frame.
+ * A free globe camera: the viewer follows nothing, and its camera is not
+ * locked to a reference frame.
  */
 export function isFreeGlobeCamera(viewer) {
+  const camera = findCamera(viewer);
   return (
-    viewer.scene.mode === Cesium.SceneMode.SCENE3D &&
-    !viewer.trackedEntity &&
-    Cesium.Matrix4.equals(viewer.camera.transform, Cesium.Matrix4.IDENTITY)
+    Boolean(camera) && !isFollowing(viewer) && camera.pose().frameIsIdentity
   );
 }
 
@@ -29,24 +32,27 @@ const GRID_NOISE_CELLS = 2;
 // Whatever the baseline, a voice turn never takes the planet below this share
 // of the frame; a view that already shows less may only keep what it has.
 const LOOK_ABSOLUTE_FLOOR_SHARE = 0.01;
-const sampleRay = new Cesium.Ray();
-const sampleOffset = new Cesium.Cartesian3();
+
+const sampleRay = { origin: null, direction: { x: 0, y: 0, z: 0 } };
 
 /**
  * Cast a 32×18 grid of view rays, one through the centre of each cell, at the
  * WGS84 ellipsoid. With `keyholeRadius` (a radius around the frame centre, in
  * units of half the frame height) only the cells inside that circle count: the
  * scope mask hides the rest. Returns the surface hits and the cells counted, or
- * null for a frustum other than a perspective one.
+ * null for a pose with no perspective view to sample.
+ * @param {import('./render/contract/camera').CameraPose} pose
  */
-function sampleFrame(camera, keyholeRadius) {
-  const frustum = camera.frustum;
-  if (!(frustum instanceof Cesium.PerspectiveFrustum)) return null;
-  const aspect = frustum.aspectRatio;
-  const tanY = Math.tan(frustum.fovy / 2);
+function sampleFrame(pose, keyholeRadius) {
+  if (!Number.isFinite(pose?.fovy) || !Number.isFinite(pose.aspectRatio))
+    return null;
+  const aspect = pose.aspectRatio;
+  const tanY = Math.tan(pose.fovy / 2);
   const tanX = tanY * aspect;
   const keyholeSquared = keyholeRadius > 0 ? keyholeRadius * keyholeRadius : 0;
-  Cesium.Cartesian3.clone(camera.positionWC, sampleRay.origin);
+  const { direction, right, up } = pose;
+  sampleRay.origin = pose.position;
+  const ray = sampleRay.direction;
   let hits = 0;
   let cells = 0;
   for (let row = 0; row < GRID_ROWS; row += 1) {
@@ -59,31 +65,16 @@ function sampleFrame(camera, keyholeRadius) {
       )
         continue;
       cells += 1;
-      Cesium.Cartesian3.multiplyByScalar(
-        camera.rightWC,
-        columnX * tanX,
-        sampleOffset,
-      );
-      Cesium.Cartesian3.add(
-        camera.directionWC,
-        sampleOffset,
-        sampleRay.direction,
-      );
-      Cesium.Cartesian3.multiplyByScalar(
-        camera.upWC,
-        rowY * tanY,
-        sampleOffset,
-      );
-      Cesium.Cartesian3.add(
-        sampleRay.direction,
-        sampleOffset,
-        sampleRay.direction,
-      );
-      Cesium.Cartesian3.normalize(sampleRay.direction, sampleRay.direction);
-      if (
-        Cesium.IntersectionTests.rayEllipsoid(sampleRay, Cesium.Ellipsoid.WGS84)
-      )
-        hits += 1;
+      const x = columnX * tanX;
+      const y = rowY * tanY;
+      ray.x = direction.x + right.x * x + up.x * y;
+      ray.y = direction.y + right.y * x + up.y * y;
+      ray.z = direction.z + right.z * x + up.z * y;
+      const length = Math.hypot(ray.x, ray.y, ray.z);
+      ray.x /= length;
+      ray.y /= length;
+      ray.z /= length;
+      if (rayEllipsoid(sampleRay)) hits += 1;
     }
   }
   return { hits, cells };
@@ -93,27 +84,62 @@ function sampleFrame(camera, keyholeRadius) {
  * Share of the frame, from 0 to 1, that shows the planet's surface: the
  * fraction of a 32×18 grid of view rays, one through the centre of each cell,
  * that hit the WGS84 ellipsoid. With `keyholeRadius` (see `sampleFrame`) it is
- * the share of the visible circle instead. A frustum other than a perspective
- * one counts as fully covered.
+ * the share of the visible circle instead. A pose with no perspective view
+ * counts as fully covered.
+ * @param {import('./render/contract/camera').CameraPose} pose
  */
-export function globeFrameShare(camera, { keyholeRadius = 0 } = {}) {
-  const sample = sampleFrame(camera, keyholeRadius);
+export function globeFrameShare(pose, { keyholeRadius = 0 } = {}) {
+  const sample = sampleFrame(pose, keyholeRadius);
   if (!sample || sample.cells === 0) return 1;
   return sample.hits / sample.cells;
 }
 
-/** True when none of the planet's surface is in `camera`'s visible frame. */
-export function globeOutOfFrame(camera, options) {
-  return globeFrameShare(camera, options) === 0;
+/** True when none of the planet's surface is in `pose`'s visible frame. */
+export function globeOutOfFrame(pose, options) {
+  return globeFrameShare(pose, options) === 0;
 }
 
-const lookProbes = new WeakMap();
-const LOOK_EDGE_TOLERANCE = Cesium.Math.toRadians(0.05);
+/**
+ * `pose` after an in-place look (`'up'`, `'down'`, `'left'` or `'right'`) by
+ * `angle` radians, as the camera port's `look` turns it: up and down about
+ * the view's right axis, left and right about its up axis. The eye stays.
+ * @param {import('./render/contract/camera').CameraPose} pose
+ * @returns {import('./render/contract/camera').CameraPose} With `direction`,
+ *   `up`, `right` and `pitch` turned; the other angles are not recomputed.
+ */
+export function lookedPose(pose, look, angle) {
+  const vertical = look === 'up' || look === 'down';
+  const axis = vertical ? pose.right : pose.up;
+  const turn = look === 'up' || look === 'left' ? angle : -angle;
+  const direction = normalize(rotate(pose.direction, axis, turn));
+  const next = {
+    ...pose,
+    direction,
+    ...(vertical
+      ? { up: normalize(rotate(pose.up, axis, turn)) }
+      : { right: normalize(rotate(pose.right, axis, turn)) }),
+  };
+  next.pitch = posePitch(next);
+  return next;
+}
 
 /**
- * How much of one in-place look step (`lookUp`, `lookDown`, `lookLeft` or
- * `lookRight` by a non-negative `angle` in radians) keeps the planet in frame
- * from orbit. Above the free-look height the step may not leave less than
+ * The pitch of a world-frame pose: its direction's angle above the local
+ * horizontal at the eye (negative looking down).
+ * @param {import('./render/contract/camera').CameraPose} pose
+ */
+export function posePitch(pose) {
+  return Math.asin(
+    clamp(dot(pose.direction, geodeticSurfaceNormal(pose.position)), -1, 1),
+  );
+}
+
+const LOOK_EDGE_TOLERANCE = toRadians(0.05);
+
+/**
+ * How much of one in-place look step (`'up'`, `'down'`, `'left'` or `'right'`
+ * by a non-negative `angle` in radians) keeps the planet in frame from orbit.
+ * Above the free-look height the step may not leave less than
  * `MIN_GLOBE_FRAME_SHARE` of the visible frame on the planet, or less than
  * `startShare` when that is lower, give or take two grid cells of sampling
  * noise. However the baseline was taken, it never leaves less than 1% of the
@@ -126,20 +152,18 @@ const LOOK_EDGE_TOLERANCE = Cesium.Math.toRadians(0.05);
  * With nothing on screen the limit is nothing either, so the step is left to
  * the move-end recovery. Returns `angle` when the whole step fits, otherwise a
  * smaller angle that fits, found by bisection to within 0.05°, so a stopped
- * motion rests at the limit. Steps are tried on a copy; `camera` is not moved.
+ * motion rests at the limit. Steps are tried on the pose; no camera is moved.
+ * @param {import('./render/contract/camera').CameraPose} pose
  */
 export function lookAngleWithinFrame(
-  camera,
+  pose,
   look,
   angle,
   { startShare, keyholeRadius = 0 } = {},
 ) {
-  if (
-    !(angle > 0) ||
-    !(camera.positionCartographic?.height > FREE_LOOK_MAX_HEIGHT_METERS)
-  )
+  if (!(angle > 0) || !(pose?.height > FREE_LOOK_MAX_HEIGHT_METERS))
     return angle;
-  const sample = sampleFrame(camera, keyholeRadius);
+  const sample = sampleFrame(pose, keyholeRadius);
   if (!sample || sample.cells === 0) return angle;
   const share = sample.hits / sample.cells;
   const baseline = startShare ?? share;
@@ -154,14 +178,11 @@ export function lookAngleWithinFrame(
       Math.min(LOOK_ABSOLUTE_FLOOR_SHARE, baseline),
     ),
   );
-  const fits = (step) => {
-    const probe = Cesium.Camera.clone(camera, lookProbes.get(camera));
-    lookProbes.set(camera, probe);
-    probe[look](step);
-    // Shares are whole grid cells; the epsilon keeps rounding in `floor` from
-    // costing a cell.
-    return globeFrameShare(probe, { keyholeRadius }) >= floor - 1e-9;
-  };
+  // Shares are whole grid cells; the epsilon keeps rounding in `floor` from
+  // costing a cell.
+  const fits = (step) =>
+    globeFrameShare(lookedPose(pose, look, step), { keyholeRadius }) >=
+    floor - 1e-9;
   if (fits(angle)) return angle;
   let inside = 0;
   let outside = angle;
@@ -174,6 +195,6 @@ export function lookAngleWithinFrame(
 }
 
 /** True when an in-place look step of `angle` would lose part of its turn. */
-export function lookStepLosesGlobe(camera, look, angle, options) {
-  return lookAngleWithinFrame(camera, look, angle, options) < angle;
+export function lookStepLosesGlobe(pose, look, angle, options) {
+  return lookAngleWithinFrame(pose, look, angle, options) < angle;
 }

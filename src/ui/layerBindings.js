@@ -1,3 +1,4 @@
+import { onFollowChanged } from '../data/followed.js';
 import { isExplicitLayerStateOrigin } from '../data/layerState.js';
 import {
   registerCctvFocusRequestListener,
@@ -49,6 +50,9 @@ export class LayerBindings {
   get _contextControls() {
     return this.readControls()._contextControls;
   }
+  get _spaceMissionsControls() {
+    return this.readControls()._spaceMissionsControls;
+  }
   get _cctvControls() {
     return this.readControls()._cctvControls;
   }
@@ -80,11 +84,13 @@ export class LayerBindings {
       window,
       this._worldRequestFocusHandler,
     );
-    this._navigationOwnerChangedRemover =
-      this.viewer.trackedEntityChanged.addEventListener((entity) => {
-        if (entity && !this._disposed)
+    this._navigationOwnerChangedRemover = onFollowChanged(
+      this.viewer,
+      (followed) => {
+        if (followed && !this._disposed)
           this._stampNavigation({ cancelPendingSelection: false });
-      });
+      },
+    );
     // Vessel/installation focus flies without ever assigning a tracked entity,
     // so it cannot reach the listener above. It announces instead.
     this._removeNavigationAuthorityListener =
@@ -116,7 +122,6 @@ export class LayerBindings {
         this.runImmediateNavigation('route', navigate),
       floorFn: (lat, lon) => this.services.cachedGroundFloor(lat, lon),
       warmFn: (cells) => this.services.warmGroundFloor(cells),
-      showToast: (message) => this._showToast(message),
     });
   }
 
@@ -155,6 +160,15 @@ export class LayerBindings {
           this.runImmediateNavigation('news', navigate),
       });
       this._weatherShellModules.push(news);
+    }
+    // Bike share flies into a covered city from its marker the same way.
+    const bikeshare = this._dataManager?.layers?.get('bikeshare')?.module;
+    if (typeof bikeshare?.attachShellServices === 'function') {
+      bikeshare.attachShellServices({
+        runNavigation: (navigate) =>
+          this.runImmediateNavigation('bike share', navigate),
+      });
+      this._weatherShellModules.push(bikeshare);
     }
   }
 
@@ -243,6 +257,7 @@ export class LayerBindings {
       this._dataManagerUnsubscribe = null;
     }
     this._contextControls.connect(this._dataManager);
+    this._spaceMissionsControls?.connect(this._dataManager);
     if (typeof this._dataManager?.subscribe === 'function') {
       this._dataManagerUnsubscribe = this._dataManager.subscribe((change) => {
         this._feedback._loadingFeedbackEvent = change;
@@ -308,6 +323,7 @@ export class LayerBindings {
     this._directionsShellModule?.attachShellServices?.(null);
     this._directionsShellModule = null;
     this._dataManager = null;
+    this._spaceMissionsControls?.connect(null);
     this._connectWeatherCamera();
   }
 }

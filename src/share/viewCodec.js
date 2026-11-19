@@ -114,6 +114,9 @@ export const SHARE_VIEW_ENUMS = Object.freeze({
     'esri-imagery',
     'osm',
   ]),
+  // Removed layouts keep their index so old links decode: Operator opens in
+  // Tactical. Cyber means Tactical with the Sonar style on; the app still
+  // writes it for that state.
   hudVariant: Object.freeze(['tactical', 'operator', 'minimal', 'cyber']),
   detectionMode: Object.freeze(['OFF', 'SPARSE', 'BALANCED', 'DENSE']),
   detectionAllocation: Object.freeze(['ELASTIC', 'WEIGHTED']),
@@ -188,6 +191,13 @@ export const SHARE_VIEW_PANELS = freezeAll([
     pinnable: false,
     collapsed: false,
   },
+  {
+    number: 11,
+    id: 'space-missions-panel',
+    token: 'n',
+    pinnable: false,
+    collapsed: true,
+  },
 ]);
 const PANEL_BY_NUMBER = new Map(SHARE_VIEW_PANELS.map((p) => [p.number, p]));
 const PANEL_BY_ID = new Map(SHARE_VIEW_PANELS.map((p) => [p.id, p]));
@@ -245,6 +255,9 @@ export const SHARE_VIEW_FLAGS = freezeAll([
   { bit: 2, key: 'hudVisible', default: BY_STYLE },
   { bit: 3, key: 'celestialRing', default: BY_STYLE },
   { bit: 4, key: 'scopeEnabled', default: true },
+  // Sonar on beside a HUD layout whose code cannot say so (Minimal). Tactical
+  // with Sonar stays the `cyber` layout code alone.
+  { bit: 5, key: 'hudSonar', default: false },
 ]);
 
 /**
@@ -304,6 +317,13 @@ export const SHARE_VIEW_LAYER_OPTION_ABSENT = Object.freeze({
     sinceDays: 0,
   }),
   radio: Object.freeze({ filter: 'all', volume: 0.8 }),
+  rail: Object.freeze({
+    transit: true,
+    local: true,
+    regional: true,
+    national: true,
+    international: true,
+  }),
   'wildlife-sightings': Object.freeze({ confirmed: false, taxa: 'all' }),
 });
 
@@ -383,6 +403,10 @@ export const SHARE_VIEW_FIELDS = freezeAll([
   { number: 26, key: 'scopeTerminusPct', type: 'uint', default: null },
   { number: 27, key: 'styleParams', type: 'bytes', default: BY_STYLE },
   { number: 28, key: 'worldTime', type: 'epoch', default: null },
+  // Data Library entries switched on, as their two-character ledger tokens
+  // concatenated (src/library/ledger.json). Absent means none.
+  { number: 29, key: 'library', type: 'bytes', default: null },
+  { number: 30, key: 'scopeOpacityPct', type: 'uint', default: 100 },
 ]);
 const FIELD_BY_KEY = new Map(SHARE_VIEW_FIELDS.map((f) => [f.key, f]));
 const fieldNumber = (key) => FIELD_BY_KEY.get(key).number;
@@ -442,6 +466,33 @@ export function createDefaultShareViewState(requested = 'normal') {
 /* ------------------------------------------------------------------ */
 /* Normalization: the one canonical state both directions agree on.    */
 /* ------------------------------------------------------------------ */
+
+/** The most Data Library tokens a share carries (the library's own cap). */
+export const SHARE_LIBRARY_MAX_TOKENS = 64;
+const LIBRARY_TOKEN = /^[0-9a-z]{2}$/;
+
+/**
+ * Data Library share tokens from a `lib=` value (`ab.cd`) or a token list:
+ * unique, two base-36 characters each, at most SHARE_LIBRARY_MAX_TOKENS.
+ * Malformed tokens are skipped. Null or undefined stays null (no field).
+ * @param {string|string[]|null|undefined} value
+ * @returns {string[]|null}
+ */
+export function normalizeLibraryTokens(value) {
+  if (value === null || value === undefined) return null;
+  const list = Array.isArray(value)
+    ? value
+    : typeof value === 'string' && value.length <= 3 * SHARE_LIBRARY_MAX_TOKENS
+      ? value.split('.')
+      : [];
+  const tokens = [];
+  for (const token of list) {
+    if (typeof token !== 'string' || !LIBRARY_TOKEN.test(token)) continue;
+    if (!tokens.includes(token)) tokens.push(token);
+    if (tokens.length === SHARE_LIBRARY_MAX_TOKENS) break;
+  }
+  return tokens;
+}
 
 const finite = (value) =>
   typeof value === 'number'
@@ -743,6 +794,12 @@ export function normalizeShareViewState(input = {}) {
   state.scopeFeatherPct = finite(source.scopeFeatherPct)
     ? clampScopeFeatherPct(Number(source.scopeFeatherPct))
     : d.scopeFeatherPct;
+  state.scopeOpacityPct = intOr(
+    source.scopeOpacityPct,
+    d.scopeOpacityPct,
+    0,
+    100,
+  );
   state.scopeTerminusPct = intOr(
     source.scopeTerminusPct,
     null,
@@ -754,6 +811,7 @@ export function normalizeShareViewState(input = {}) {
     ? normalizeLayerState(source.layerState)
     : null;
   state.panelState = normalizePanelState(source.panelState);
+  state.library = normalizeLibraryTokens(source.library);
   state.sharedAtMs = epochMsOr(source.sharedAtMs);
   state.worldTime = isWorldTime(source.worldTime)
     ? Math.floor(source.worldTime / 1000) * 1000
@@ -1022,6 +1080,10 @@ export function encodeShareView(input) {
         break; // written together with layerState
       case 'panelState':
         if (state.panelState) encodePanels(writer, state.panelState);
+        break;
+      case 'library':
+        if (state.library?.length)
+          writer.textField(field.number, state.library.join(''));
         break;
       case 'thing':
         if (thing) encodeThing(writer, thing, state);
@@ -1431,6 +1493,13 @@ export function decodeShareView(code, { nowMs = Date.now() } = {}) {
       unknown.code('layer-option', 'without-layers');
     if (get('panelState'))
       raw.panelState = decodePanels(get('panelState').len, unknown);
+    if (get('library')) {
+      const text = asciiText(get('library').len.rest());
+      const tokens = text.match(/.{1,2}/g) || [];
+      for (const token of tokens)
+        if (!LIBRARY_TOKEN.test(token)) unknown.code('library', token);
+      raw.library = normalizeLibraryTokens(tokens);
+    }
     if (get('styleParams') && !retiredStyle)
       raw.styleParams = decodeStyleParams(
         get('styleParams').len,

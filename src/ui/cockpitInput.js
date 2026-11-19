@@ -1,7 +1,11 @@
 /** Route Cockpit keys while preserving the active disclosure and form-control owner. */
-import * as Cesium from 'cesium';
+import { followedOf } from '../data/followed.js';
+import { fromDegrees } from '../geo/ellipsoid.js';
 import { lookKeyStep } from '../cockpitLook.js';
 import { isPointerFree } from '../data/inputOwnership.js';
+import { inputFor } from '../input/dispatcher.js';
+import { findInput, findQuery } from '../render/rendererOf.js';
+import { trackedPositionNow } from './cockpitCamera.js';
 
 /** How far from the followed track a double-click may land, CSS pixels. */
 export const SUBJECT_DOUBLE_CLICK_RADIUS_PX = 32;
@@ -32,15 +36,13 @@ export const DOUBLE_CLICK_MEMORY_MS = 700;
 
 /** Where the track `kind` would ride is drawn now, as a world position. */
 function subjectWorldPosition(kind) {
-  if (kind === 'aircraft') {
-    return (
-      this.viewer.trackedEntity?.position?.getValue?.(
-        this.viewer.clock?.currentTime,
-      ) ?? null
-    );
-  }
+  if (kind === 'aircraft')
+    return trackedPositionNow(this.viewer, followedOf(this.viewer));
   if (kind === 'satellite')
     return this.services.satellitesLayer?.getCockpitPosition?.() ?? null;
+  // An application's subject has no position before its view is entered:
+  // the selected vessel's sprite must not stand in for it.
+  if (kind !== 'vessel') return null;
   const info = this.readVesselInfo();
   if (!Number.isFinite(info?.latitude) || !Number.isFinite(info?.longitude))
     return null;
@@ -51,19 +53,15 @@ function subjectWorldPosition(kind) {
     : Number.isFinite(info.seaSurfaceHeightM)
       ? info.seaSurfaceHeightM
       : 0;
-  return Cesium.Cartesian3.fromDegrees(info.longitude, info.latitude, heightM);
+  return fromDegrees(info.longitude, info.latitude, heightM);
 }
 
 /** The followed track's canvas position now, or null off screen. */
 function subjectCanvasPosition() {
   const kind = this.resolveEntryKind();
   const world = kind ? subjectWorldPosition.call(this, kind) : null;
-  const scene = this.viewer.scene;
-  if (!world || typeof scene?.cartesianToCanvasCoordinates !== 'function')
-    return null;
-  return (
-    scene.cartesianToCanvasCoordinates(world, new Cesium.Cartesian2()) ?? null
-  );
+  if (!world) return null;
+  return findQuery(this.viewer)?.project(world) ?? null;
 }
 
 /**
@@ -120,34 +118,101 @@ export function onSceneDoubleClick(position, nowMs = performance.now()) {
   return true;
 }
 
+/** Hold the renderer's own double-click follow off; returns the release. */
+const holdStockFollow = (viewer) =>
+  findInput(viewer)?.behaviours?.dblclickFollow?.suppress?.() ?? null;
+
 /**
- * Take the scene's double-click through the Cockpit first. Cesium's Viewer
- * installs its own (pickAndTrackObject), which untracks whenever the pick is
- * not an Entity: on a followed aircraft's model, a primitive, it would drop
- * the very track the double-click means to ride. A double-click on the
- * followed track is the Cockpit's, as is one on a mapped ground point in
- * orbit (a focus); any other goes on to Cesium's.
- * @returns {() => void} Puts Cesium's handler back, unless another owner
- *   (the draw tool borrows it) has replaced ours since.
+ * How long a press on the followed track keeps the stock follow off, and
+ * how soon after a press the next one may end a double-click with it.
+ */
+const SUBJECT_PRESS_HOLD_MS = 700;
+
+/** How far apart, CSS pixels, two presses of one double-click may land. */
+const DOUBLE_CLICK_SLOP_PX = 8;
+
+/**
+ * Take the scene's double-click on the followed track for the Cockpit. The
+ * renderer's own double-click follow lets go of whatever is followed when
+ * the double-click does not land on something it can follow itself: on a
+ * followed aircraft's model it would drop the very track the double-click
+ * means to ride. It runs before any subscriber and cannot be refused from
+ * one, so a press on the followed track holds it off for that press
+ * (`behaviours.dblclickFollow`, a hold a `down` subscriber takes covers its
+ * press), and the double-click it ends in enters. A double-click anywhere
+ * else is the renderer's, as before. The renderer decides a double-click's
+ * stock follow from its second press, as the hold stood when that press
+ * went down, so a press that cannot end a double-click on the track (no
+ * press on the track came just before it, at about the same spot) gives
+ * its hold back at its release: a second press off the track then finds
+ * the follow free. In orbit a press on a mapped ground point holds it
+ * off the same way, and the double-click it ends in is a focus. `this.holdStockFollow`, when set, takes
+ * the hold in place of the renderer's input port (tests).
+ * @returns {() => void} Stops listening and lets any hold go.
  */
 export function routeSceneDoubleClick() {
-  const handler = this.viewer.screenSpaceEventHandler;
-  if (typeof handler?.setInputAction !== 'function') return () => {};
-  const type = Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK;
-  const stock = handler.getInputAction?.(type) ?? null;
-  const routed = (event) => {
-    if (this.onSceneDoubleClick(event?.position)) return;
+  let input;
+  try {
+    input = inputFor(this.viewer);
+  } catch {
+    // A viewer with no input to take (headless tools, partial stubs) has no
+    // double-click to route.
+    return () => {};
+  }
+  let release = null;
+  let timer = null;
+  // The last left press (when, where, and whether it was on the track),
+  // and whether the held press could end a double-click on the track.
+  let last = null;
+  let endsDouble = false;
+  const drop = () => {
+    globalThis.clearTimeout(timer);
+    timer = null;
+    release?.();
+    release = null;
+  };
+  // Ambient `down`/`up` are the unmodified left button's, while the
+  // pointer is free.
+  const offDown = input.onPointer('down', ({ position }) => {
+    drop();
+    const at = Date.now();
+    const onSubject =
+      !this.destroyed &&
+      isPointerFree() &&
+      (this.active
+        ? Boolean(this.orbitalSiteUnder?.(position))
+        : doubleClickHitsSubject(position, subjectCanvasPosition.call(this)));
+    endsDouble =
+      !!last?.onSubject &&
+      at - last.at <= SUBJECT_PRESS_HOLD_MS &&
+      Math.hypot(position?.x - last.x, position?.y - last.y) <=
+        DOUBLE_CLICK_SLOP_PX;
+    last = { at, x: position?.x, y: position?.y, onSubject };
+    if (!onSubject) return;
+    release = this.holdStockFollow
+      ? this.holdStockFollow()
+      : holdStockFollow(this.viewer);
+    // A press that ends in no double-click gives the follow back by itself.
+    timer = globalThis.setTimeout(drop, SUBJECT_PRESS_HOLD_MS);
+  });
+  const offUp = input.onPointer('up', () => {
+    if (!endsDouble) drop();
+  });
+  const offDouble = input.onPointer('dblclick', ({ position }) => {
     // In orbit, a double-click on a mapped ground point is a focus, never a
     // retarget that would end the view.
-    if (this.onOrbitalDoubleClick?.(event?.position)) return;
-    stock?.(event);
-  };
-  handler.setInputAction(routed, type);
+    if (!this.onSceneDoubleClick(position))
+      this.onOrbitalDoubleClick?.(position);
+    // The hold covers the whole double-click: it is given back once the
+    // dispatch is over.
+
+    queueMicrotask(drop);
+  });
   return () => {
-    if (handler.isDestroyed?.() || handler.getInputAction?.(type) !== routed)
-      return;
-    if (stock) handler.setInputAction(stock, type);
-    else handler.removeInputAction(type);
+    offDown();
+    offUp();
+    offDouble();
+    drop();
   };
 }
 
@@ -189,7 +254,7 @@ const LOOK_KEY_OWNERS = [
  * @returns {boolean} True when the key was taken.
  */
 function handleLookKey(event) {
-  if (!this.active || this.subjectKind !== 'vessel') return false;
+  if (!this.looksAround) return false;
   if (event.metaKey || event.ctrlKey || event.altKey) return false;
   const step = lookKeyStep(event.key, event.shiftKey);
   const reset = !event.repeat && (event.key === 'Home' || event.key === '0');
@@ -245,6 +310,9 @@ export function onKeyDown(event) {
     if (event.target?.closest?.('.cesium-credit-lightbox')) return;
     // An open Display or Radio popover takes Escape itself.
     if (this.isUtilityDisclosureOpen?.()) return;
+    // So do the Data Layers search field and filter menu.
+    if (event.target?.closest?.('.layer-finder__field, .layer-finder__menu'))
+      return;
     if (this.context?.contains(event.target) && !this.contextCollapsed) {
       event.preventDefault();
       event.stopImmediatePropagation();

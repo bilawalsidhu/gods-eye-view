@@ -94,18 +94,17 @@
   color: #ffc46b;
 }
 
+/* A UiCloseButton (close-button.css). */
 .gev-voice-card-dismiss {
   margin-inline-start: auto;
   width: 1.1rem;
   height: 1.1rem;
-  padding: 0;
   color: var(--text-secondary);
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(54, 220, 255, 0.24);
   border-radius: 0.2rem;
   font-size: 0.72rem;
   line-height: 1;
-  cursor: pointer;
   transition:
     color var(--transition-fast),
     border-color var(--transition-fast);
@@ -240,11 +239,14 @@
   gap: 0.25rem;
 }
 
+/* A UiChip in the card's own type: the card's line height and weight, not
+   the shared chip's (chip.css). */
 .gev-voice-card-chip {
   padding: 0.08rem 0.3rem;
   color: var(--text-secondary);
   border: 1px solid rgba(54, 220, 255, 0.3);
   border-radius: 0.18rem;
+  font: inherit;
   font-family: var(--font-mono);
   font-size: 0.44rem;
   letter-spacing: 0.06rem;
@@ -418,12 +420,7 @@ body.recording-mode .gev-pointer-reticle {
   text-align: start;
   transform: translateX(-50%);
 }
-:root[data-ui-theme='cyber'] #gev-voice-control .gev-voice-panel {
-  background-color: var(--cyber-panel-surface);
-  background-image: var(--cyber-panel-surface-detail);
-  border-color: var(--glass-border);
-  box-shadow: var(--cyber-panel-shadow);
-}
+
 #gev-voice-control .gev-voice-panel[hidden],
 #gev-voice-control .gev-voice-panel [hidden] {
   display: none;

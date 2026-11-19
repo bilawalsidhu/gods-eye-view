@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { followedOf } from '../data/followed.js';
 import { getOverlayPaintRect } from '../overlays/worldOverlay.js';
 import {
   getActiveTrackedReadoutId,
@@ -8,6 +8,16 @@ import { t } from '../i18n/index.js';
 import { nextTick } from 'vue';
 import { useScreenAnnotationsStore } from '../ui/stores/screenAnnotations.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
+import { heightsOf } from '../queries/heights.js';
+import { fromDegrees, fromDegreesInto, toLonLatH } from '../geo/ellipsoid.js';
+import { frustumPlanes, sphereOutside } from '../geo/frustum.js';
+import { distance } from '../geo/vector.js';
+import {
+  canvasOf as sceneCanvasOf,
+  findCamera,
+  findFrame,
+  findQuery,
+} from '../render/rendererOf.js';
 
 /** A label whose detailed outline could not be resolved. */
 function outlineUnavailableLabel(label) {
@@ -78,11 +88,13 @@ export function createScreenAnnotationRenderer(
   const arrowMarkers = new Map();
   let viewBox = null;
 
-  const scene = viewer.scene;
-  const occluder = new Cesium.EllipsoidalOccluder(
-    Cesium.Ellipsoid.WGS84,
-    scene.camera.positionWC,
-  );
+  // The eye this frame is projected from (the camera port's pose), and the
+  // query port and canvas it is projected through, read once per pass.
+  let pose = null;
+  let passQuery = null;
+  let passCanvas = null;
+  // The renderer's canvas; a viewer with no renderer bound, its own.
+  const canvasOf = () => sceneCanvasOf(viewer);
   const records = new Map(); // anno.id -> { key, anno, group, parts }
   const leaving = new Map(); // key -> a removed mark's record while it fades out
   const byKey = new Map(); // key -> record, live or fading
@@ -91,8 +103,6 @@ export function createScreenAnnotationRenderer(
   let published = '';
   // Only the renderer whose board the store shows may change or remove it.
   const shown = () => store.board?.owner === owner;
-  const scratch = new Cesium.Cartesian2();
-  const scratchDir = new Cesium.Cartesian3();
   // Per-point ground height cache. Marks must sit on the real surface, not at
   // sea level — otherwise in elevated cities (Austin ~150 m) they project
   // underground and parallax sinks them at oblique angles. Sampled once the
@@ -103,10 +113,11 @@ export function createScreenAnnotationRenderer(
   // Accepted surface-height range; samples outside it are treated as misses.
   const MIN_SURFACE_HEIGHT = -430;
   const MAX_SURFACE_HEIGHT = 9000;
-  const HEIGHT_SAMPLE_BUDGET = 32; // clampToHeight calls per projection pass
+  const HEIGHT_SAMPLE_BUDGET = 32; // clampNow calls per projection pass
   const HEIGHT_RETRY_MS = 1000; // minimum interval between misses per anchor
-  let cullingVolume = null;
-  const heightBounds = new Cesium.BoundingSphere(new Cesium.Cartesian3(), 9500);
+  let cullingPlanes = null; // the pass's view frustum (`frustumPlanes`)
+  const HEIGHT_BOUNDS_RADIUS = 9500; // m about the 0 m point: every accepted height
+  const heightBoundsCenter = { x: 0, y: 0, z: 0 };
   // Fair sampling: keys refused by an exhausted budget queue in arrival order,
   // and each pass reserves budget for the oldest queued keys first, so a fixed
   // iteration order cannot starve anchors beyond the first budget's worth.
@@ -135,7 +146,7 @@ export function createScreenAnnotationRenderer(
   // Re-project every annotation each rendered frame so marks stay glued to the
   // world. postRender runs after the camera/tiles update, so positions are exact.
   const onPostRender = () => projectAll();
-  scene.postRender.addEventListener(onPostRender);
+  const removePostRender = findFrame(viewer)?.on('postRender', onPostRender);
 
   function color(anno) {
     return PALETTE[anno.color] || PALETTE.primary;
@@ -178,15 +189,12 @@ export function createScreenAnnotationRenderer(
       return cached?.h || 0;
     }
     try {
-      if (
-        scene.clampToHeightSupported &&
-        typeof scene.clampToHeight === 'function'
-      ) {
-        const c = scene.clampToHeight(
-          Cesium.Cartesian3.fromDegrees(lon, lat, 0),
-        );
+      const heights = heightsOf(viewer);
+      if (heights.supported().clamp) {
+        // A miss is tiles not ready.
+        const c = heights.clampNow(fromDegrees(lon, lat, 0));
         if (c) {
-          const h = Cesium.Cartographic.fromCartesian(c).height;
+          const h = toLonLatH(c)?.height;
           if (
             Number.isFinite(h) &&
             h > MIN_SURFACE_HEIGHT &&
@@ -324,7 +332,7 @@ export function createScreenAnnotationRenderer(
     }
 
     // Record the mark BEFORE it reaches the board, then unwind on any throw
-    // from here down (projectAll reaches into Cesium and can fail on a lost
+    // from here down (projectAll reaches into the renderer and can fail on a lost
     // context). Previously a throw past the insert left an ORPHANED mark: the
     // engine's rollback only deletes its own map entry, so the next annotate
     // of the same geometry stacked a fresh mark on top of the corpse.
@@ -424,37 +432,36 @@ export function createScreenAnnotationRenderer(
       // projects (at its cached or zero height, without the horizon test)
       // so a partly visible arrow, route or ring keeps its on-screen
       // connector and label.
-      Cesium.Cartesian3.fromDegrees(
-        lon,
-        lat,
-        0,
-        undefined,
-        heightBounds.center,
-      );
+      fromDegreesInto(lon, lat, 0, heightBoundsCenter);
       const inFrustum =
-        cullingVolume?.computeVisibility(heightBounds) !==
-        Cesium.Intersect.OUTSIDE;
+        !cullingPlanes ||
+        !sphereOutside(cullingPlanes, heightBoundsCenter, HEIGHT_BOUNDS_RADIUS);
       height = groundHeight(lon, lat, key, cached, inFrustum);
       horizonTest = inFrustum;
     }
-    const world = Cesium.Cartesian3.fromDegrees(lon, lat, height);
+    const world = fromDegrees(lon, lat, height);
+    if (!pose) return null;
     // Reject points behind the camera (they produce wrapped/extreme coords).
-    Cesium.Cartesian3.subtract(world, scene.camera.positionWC, scratchDir);
-    if (Cesium.Cartesian3.dot(scratchDir, scene.camera.directionWC) <= 0)
+    const eye = pose.position;
+    const look = pose.direction;
+    if (
+      (world.x - eye.x) * look.x +
+        (world.y - eye.y) * look.y +
+        (world.z - eye.z) * look.z <=
+      0
+    )
       return null;
     // Reject points beyond the globe horizon. An unsampled stand-in height
     // outside the frustum cannot decide it: the range test above found no
     // proof that the real height is hidden.
-    if (horizonTest && !occluder.isPointVisible(world)) return null;
-    const win = Cesium.SceneTransforms.worldToWindowCoordinates(
-      scene,
-      world,
-      scratch,
-    );
+    const query = passQuery;
+    if (!query || (horizonTest && query.isOccluded(world))) return null;
+    const win = query.project(world);
     if (!win || !Number.isFinite(win.x) || !Number.isFinite(win.y)) return null;
     // Reject absurd off-screen projections (anchor not in view).
-    const w = scene.canvas.clientWidth || scene.canvas.width;
-    const h = scene.canvas.clientHeight || scene.canvas.height;
+    const canvas = passCanvas;
+    const w = canvas.clientWidth || canvas.width;
+    const h = canvas.clientHeight || canvas.height;
     if (
       !allowOffscreen &&
       (win.x < -w || win.x > 2 * w || win.y < -h || win.y > 2 * h)
@@ -467,15 +474,20 @@ export function createScreenAnnotationRenderer(
   // region (behind the camera plane; the occluder's cone beyond the horizon
   // plane) is convex. So when both height-range endpoints fail the SAME test,
   // every intermediate height fails it too. Mixed failures prove nothing.
+  // With no pose (no eye to test from) nothing is proven hidden.
   function heightRangeHidden(lon, lat) {
-    const low = Cesium.Cartesian3.fromDegrees(lon, lat, MIN_SURFACE_HEIGHT);
-    const high = Cesium.Cartesian3.fromDegrees(lon, lat, MAX_SURFACE_HEIGHT);
-    const behind = (point) => {
-      Cesium.Cartesian3.subtract(point, scene.camera.positionWC, scratchDir);
-      return Cesium.Cartesian3.dot(scratchDir, scene.camera.directionWC) <= 0;
-    };
+    if (!pose) return false;
+    const low = fromDegrees(lon, lat, MIN_SURFACE_HEIGHT);
+    const high = fromDegrees(lon, lat, MAX_SURFACE_HEIGHT);
+    const eye = pose.position;
+    const look = pose.direction;
+    const behind = (point) =>
+      (point.x - eye.x) * look.x +
+        (point.y - eye.y) * look.y +
+        (point.z - eye.z) * look.z <=
+      0;
     if (behind(low) && behind(high)) return true;
-    return !occluder.isPointVisible(low) && !occluder.isPointVisible(high);
+    return Boolean(passQuery?.isOccluded(low) && passQuery.isOccluded(high));
   }
 
   // Tracked-entity z-order: the tracked aircraft is a Cesium billboard in the
@@ -486,9 +498,13 @@ export function createScreenAnnotationRenderer(
   // from the host's ACTUAL painted rectangle after final layout; the billboard extent
   // is unioned for aircraft/satellites that also own a native tracked graphic.
   const TRACKED_BBOX_MARGIN = 8; // px buffer added around the footprint
-  const TRACKED_FADE_EASE = 0.22; // per-frame ease toward hidden(0) / visible(1)
+  // Ease toward hidden(0) / visible(1): this share of the gap closes in one
+  // 60 Hz frame (about 200 ms to settle), scaled by elapsed time so the fade
+  // takes as long at any refresh rate.
+  const TRACKED_FADE_EASE = 0.22;
+  const TRACKED_FADE_FRAME_MS = 1000 / 60;
+  let trackedFadeAtMs = -Infinity;
   const TRACKED_HYSTERESIS_PX = 18; // dead-band so the overlap test can't flip-flop
-  const _scratchTrackedWin = new Cesium.Cartesian2();
 
   // Evaluate a NearFarScalar (billboard scaleByDistance) at a camera distance.
   function nearFarValue(nfs, dist) {
@@ -509,32 +525,23 @@ export function createScreenAnnotationRenderer(
     let top = painted?.y;
     let bottom = painted ? painted.y + painted.h : undefined;
 
-    const ent = viewer.trackedEntity;
-    const now = Cesium.JulianDate.now();
+    const followed = followedOf(viewer);
+    const displayPosition = followed?.displayPosition;
     const world =
-      typeof ent?.gevDisplayPosition === 'function'
-        ? ent.gevDisplayPosition()
-        : null;
-    const win = world
-      ? Cesium.SceneTransforms.worldToWindowCoordinates(
-          scene,
-          world,
-          _scratchTrackedWin,
-        )
-      : null;
+      typeof displayPosition === 'function' ? displayPosition() : null;
+    const win = world ? (passQuery?.project(world) ?? null) : null;
 
-    // Billboard box — centered on the anchor, magnified by scaleByDistance.
-    const bb = ent?.billboard;
-    if (bb && win && Number.isFinite(win.x) && Number.isFinite(win.y)) {
-      const baseW = bb.width?.getValue?.(now) ?? 28;
-      const baseH = bb.height?.getValue?.(now) ?? 28;
+    // Billboard box — centered on the anchor, magnified by scaleByDistance, from
+    // the size the tracking layer recorded for its sprite.
+    const sprite = followed?.sprite;
+    if (sprite && win && Number.isFinite(win.x) && Number.isFinite(win.y)) {
+      const baseW = sprite.width ?? 28;
+      const baseH = sprite.height ?? 28;
       let scale = 1;
-      const sbd = bb.scaleByDistance?.getValue?.(now);
-      if (sbd)
-        scale = nearFarValue(
-          sbd,
-          Cesium.Cartesian3.distance(scene.camera.positionWC, world),
-        );
+      const sbd = sprite.scaleByDistance;
+      // No eye to measure from: the sprite's own size.
+      if (sbd && pose)
+        scale = nearFarValue(sbd, distance(pose.position, world));
       const hw = (baseW * scale) / 2;
       const hh = (baseH * scale) / 2;
       const bbLeft = win.x - hw;
@@ -570,21 +577,25 @@ export function createScreenAnnotationRenderer(
     }
     heightBudget = HEIGHT_SAMPLE_BUDGET - heightReserved.size;
     heightRefused = new Set();
-    cullingVolume =
-      scene.camera.frustum?.computeCullingVolume?.(
-        scene.camera.positionWC,
-        scene.camera.directionWC,
-        scene.camera.upWC,
-      ) || null;
     projGen += 1; // new frame: entries touched below are "hot" and survive trimming
+    pose = findCamera(viewer)?.pose() ?? null;
+    // A pose with no perspective frustum culls nothing.
+    cullingPlanes =
+      Number.isFinite(pose?.fovy) &&
+      Number.isFinite(pose.aspectRatio) &&
+      Number.isFinite(pose.near)
+        ? frustumPlanes(pose)
+        : null;
+    passQuery = findQuery(viewer);
+    passCanvas = canvasOf();
     const trackedRect = trackedEntityRect();
-    occluder.cameraPosition = scene.camera.positionWC;
-    const h = scene.canvas.clientHeight || scene.canvas.height;
-    const w = scene.canvas.clientWidth || scene.canvas.width;
+    const canvas = passCanvas;
+    const h = canvas.clientHeight || canvas.height;
+    const w = canvas.clientWidth || canvas.width;
     viewBox = `0 0 ${w} ${h}`;
     // Shrink point-marker geometry as the camera pulls back (declutter the blob).
     const mScale = markScale(
-      viewer.camera.positionCartographic?.height ?? 1000,
+      Number.isFinite(pose?.height) ? pose.height : 1000,
     );
 
     for (const rec of records.values()) {
@@ -785,6 +796,14 @@ export function createScreenAnnotationRenderer(
   // safe and not jarring.
   function fadeTracked(trackedRect) {
     if (!shown()) return;
+    const nowMs = performance.now();
+    // A gap longer than a slow frame means the fade was not running (nothing
+    // followed): it starts again as from one 60 Hz frame.
+    const gapMs = nowMs - trackedFadeAtMs;
+    const stepMs = gapMs >= 0 && gapMs <= 100 ? gapMs : TRACKED_FADE_FRAME_MS;
+    trackedFadeAtMs = nowMs;
+    const ease =
+      1 - Math.pow(1 - TRACKED_FADE_EASE, stepMs / TRACKED_FADE_FRAME_MS);
     let changed = false;
     for (const rec of records.values()) {
       const { anno, group } = rec;
@@ -813,10 +832,10 @@ export function createScreenAnnotationRenderer(
         }
       }
       const target = overlapping ? 0 : 1;
-      const next = cur + (target - cur) * TRACKED_FADE_EASE;
+      const next = cur + (target - cur) * ease;
       rec._trackedFade = Math.abs(next - target) < 0.02 ? target : next;
       // The base alpha applies unless faded. (The CSS `transition: opacity` was
-      // removed from .gev-anno so this per-frame JS ease is the ONLY easing —
+      // removed from .gev-anno so this JS ease is the ONLY easing —
       // previously the two fought and produced an opacity oscillation.)
       const opacity = String(
         (anno.alpha ?? 1) * (rec._trackedFade !== 1 ? rec._trackedFade : 1),
@@ -929,7 +948,7 @@ export function createScreenAnnotationRenderer(
 
   function destroy() {
     try {
-      scene.postRender.removeEventListener(onPostRender);
+      removePostRender?.();
     } catch {
       /* torn down */
     }

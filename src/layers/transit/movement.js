@@ -11,9 +11,14 @@ import {
 } from '../../data/contactPlayback.js';
 const MODE_MAX_SPEED_MPS = Object.freeze({
   bus: 36, // ~130 km/h — a coach on a motorway
+  trolleybus: 28, // ~100 km/h — wired to the street
   tram: 28, // ~100 km/h — interurban light rail
+  cable_tram: 12, // ~43 km/h — the cable runs at a walking-pace multiple
   subway: 42, // ~150 km/h
+  monorail: 42, // ~150 km/h
   rail: 111, // ~400 km/h — high-speed services exist on some feeds
+  funicular: 16, // ~58 km/h — the fastest lines
+  aerial_lift: 15, // ~54 km/h — the fastest gondolas and trams
   ferry: 25, // ~90 km/h — fast catamarans
   unknown: 56, // ~200 km/h
 });
@@ -181,13 +186,57 @@ export function recordFix(entry, fix, observation = {}) {
     );
     entry.currentEpoch = latest.epoch;
     if (context) entry.track.epochs.set(latest.epoch, context);
+    entry.placement?.observe(entry.key, {
+      timeMs: fix.t,
+      lat: fix.lat,
+      lon: fix.lon,
+      altitudeM: NaN,
+      speedMps: NaN,
+      courseDeg: Number.isFinite(fix.bearingDeg) ? fix.bearingDeg : NaN,
+      headingDeg: NaN,
+      feedId: entry.feedId,
+    });
   }
   return result;
 }
+/**
+ * How often a vehicle a host-supplied placement holds still is asked again
+ * whether it moves, so it resumes without the frame loop running for it.
+ */
+export const PLACED_WAKE_MS = 1000;
+
+/**
+ * Advance a vehicle's playback to now. With a host-supplied placement
+ * (`entry.placement`, ../../data/placementProvider.js) that places it, it is
+ * drawn there, its course and speed the placement's (`entry.placed`); the
+ * playback's own phase, motion and segment stand. `entry.placedMoving` says
+ * whether the placed position changed since the placement was last asked at
+ * an earlier time (true for its first answer, so one more frame can tell).
+ */
 export function updatePlayback(entry, wallNowMs, monoNowMs) {
   entry.clocks.wallNowMs = wallNowMs;
   entry.clocks.monoNowMs = monoNowMs;
   advance(entry.track, entry.clocks, entry.sample);
+  const placed = entry.placement?.place(entry.key, wallNowMs) ?? null;
+  const wasPlaced = entry.placed === true;
+  entry.placed = placed !== null;
+  if (!placed) entry.placedMoving = false;
+  else if (!wasPlaced) entry.placedMoving = true;
+  else if (wallNowMs !== entry.placedAtWallMs)
+    entry.placedMoving =
+      placed.lat !== entry.placedLat || placed.lon !== entry.placedLon;
+  if (placed) {
+    entry.placedLat = placed.lat;
+    entry.placedLon = placed.lon;
+    entry.placedAtWallMs = wallNowMs;
+    const sample = entry.sample;
+    sample.lat = placed.lat;
+    sample.lon = placed.lon;
+    if (Number.isFinite(placed.courseDeg))
+      sample.segmentCourseDeg = placed.courseDeg;
+    if (Number.isFinite(placed.speedMps))
+      sample.segmentSpeedMps = placed.speedMps;
+  }
   entry.resets = entry.track.resets;
   const segment = entry.segment;
   readFix(
@@ -211,6 +260,16 @@ export function syncPlayback(entry, wallNowMs, monoNowMs = performance.now()) {
     entry.track.resetReason = reason;
   }
   updatePlayback(entry, wallNowMs, monoNowMs);
+}
+/**
+ * Whether a vehicle's drawn position changes on its own: a vehicle a
+ * host-supplied placement draws moves while that placement's position
+ * changes; any other while its playback glides along a segment.
+ */
+export function playbackMoving(entry) {
+  if (entry.placed === true) return entry.placedMoving === true;
+  const sample = entry.sample;
+  return sample?.phase === 'playing' && sample.segmentSpeedMps > 0;
 }
 export function playbackPosition(entry) {
   if (!entry?.track) return null;

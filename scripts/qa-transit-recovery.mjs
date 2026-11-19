@@ -182,7 +182,8 @@ try {
     });
     parts.rendering.sampleIdle(entry);
     parts.rendering.schedulePlayback(entry);
-    const V = entry.marker.position.constructor;
+    // Marker positions are plain records; the camera's eye is a Cartesian3.
+    const V = scene.camera.positionWC.constructor;
     const points = entry.trailSegments
       .filter((s) => s.toT <= entry.sample.displayT)
       .flatMap((s) => s.positions);

@@ -129,6 +129,7 @@ prints anything; never fix that by renaming or deleting PR A's published token.
 The highest-leverage places to jump in:
 
 - **🌆 Add a CCTV source pack.** Austin is the reference camera source. Follow the [CCTV integration workflow](docs/CCTV_INTEGRATION.md) for source review, provider registration, proxy security, tests, and attribution. The proxy only fetches server-registered URLs — never client-supplied ones; see [SECURITY.md](SECURITY.md).
+- **📚 Add a Data Library entry.** A regional or niche source that is not a core layer belongs in the Data Library: one JSON manifest pointing at a live API, provider-hosted file or tile endpoint, with its licence and attribution, and no JavaScript. See [docs/DATA-LIBRARY.md](docs/DATA-LIBRARY.md). Library entries use their own share-token ledger, not the layer tokens below.
 - **🛰️ Add or improve a data layer.** Layer factories live in `src/layers/<family>/`, with source, record, controller and renderer owners implementing the layer interface (`init/enable/disable/update/destroy/getStats`, optional `getDetectableObjects`/`getStats`). Use an existing layer as a template, and see [Adding a new layer](#adding-a-new-layer) for what the PR needs.
 - **🎙️ Extend voice control.** Voice arguments are defined in `src/voice/actionSchemas.js`, with server-side descriptions in `server/providers/openai/tools.js` and client-side execution in `src/voice/gevActions.js`. Keep the tool surface tight and the responses honest (confirm only what actually happened).
 - **🎨 Add a visual style.** Styles are GLSL post-process shaders in `src/styles/`.
@@ -138,6 +139,7 @@ The highest-leverage places to jump in:
 
 - **Vue 3 + Pinia for the interface,** [CesiumJS](https://cesium.com/platform/cesiumjs/) for the globe and [Vite](https://vitejs.dev/) to build. See [Building UI](#building-ui).
 - **Assembly lives in `src/app/`; standalone defaults live in `src/standalone/`.** UI controllers live in `src/ui/`, layer factories in `src/layers/`, portable sources in `src/sources/`, and application operations in `src/services/`. Existing `src/data/<layer>.js` entries retain compatibility; new code belongs with its focused owner.
+- **Reach the renderer through its contract** ([docs/RENDERER-CONTRACT.md](docs/RENDERER-CONTRACT.md#moving-code-onto-the-contract)): `findDraw`, `findCamera` and the other ports in `src/render/rendererOf.js`, not Cesium or the viewer's `scene`, `camera` or `entities`. Two ratchet tests hold this: only files on `src/render/cesiumAllowList.json` may import Cesium, and `src/render/viewerAccessAllowList.json` caps the viewer accesses each other file still makes. Neither list may grow; when you port code off them, shrink them (`node scripts/viewer-access-baseline.mjs` lowers the second).
 - Sources acquire records; renderers own Cesium resources. Import `gods-eye-view/layers/<family>/source` when only a source factory is needed. Common voice controls consume the session interface; protocol adapters own connection details.
 - **Secrets stay server-side.** Anything needing a private key goes through a local proxy under `server/providers/`. The browser only ever sees the Google Maps key (which you restrict) and ephemeral tokens.
 - `docs/CURRENT-STATE.md` is the authoritative runtime reference — read it first.
@@ -228,7 +230,7 @@ ownership and adoption process.
 1. Branch off `main`.
 2. Keep `npm run build`, `npm test`, and `npm run test:track` green and avoid new console errors, plus the [feature gate](#feature-regression-gates) for the area you touched.
 3. If you change runtime behavior, update `docs/CURRENT-STATE.md` in the same PR, and add your changelog entry as `changelog.d/<pr-number>-<slug>.md` instead of editing `CHANGELOG.md` — see [changelog.d/README.md](changelog.d/README.md). Distinct filenames don't conflict; a release assembles the directory into `CHANGELOG.md`. A documentation claim that needs a regression test should assert against `docs/CURRENT-STATE.md` or `README.md`, which a PR still edits directly.
-4. If you add or change a data source, update [DATA_SOURCES.md](DATA_SOURCES.md) with its license and attribution. **Don't add data you don't have the right to redistribute** — fetch it at runtime instead.
+4. If you add or change a data source, update [DATA_SOURCES.md](DATA_SOURCES.md) with its license and attribution (for a Data Library entry, `npm run library:docs` writes its row). **Don't add data you don't have the right to redistribute** — fetch it at runtime instead.
 5. Describe what you changed and how you verified it (screenshots welcome for anything visual).
 6. If you add a new layer, fill in the new-layer section of the PR template. See [Adding a new layer](#adding-a-new-layer).
 
