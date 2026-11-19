@@ -8049,11 +8049,8 @@ gmail.com") (an email address or a handle, also while it is typed; spaced, as in
 Chandambylu", it is part of a name); an email spelled around a filter
 ("john(at)gmail.com", "john[at]gmail[dot]com", "john at gmail dot de",
 "john at gmail.com", "john at gmail (dot) com"); an IP address
-("10.0.0.1", "::1", "fe80::1"); a wallet's recovery phrase (12, 15, 18, 21
-or 24 lower-case words of three to eight letters, not starting as a request
-does); a line that is one lower-case word of twenty letters or more (a
-passphrase run together; one written with a capital, or spaced into words,
-cannot be told from a name and is not caught); seven digits or more with nothing but spaces,
+("10.0.0.1", "::1", "fe80::1", "https://[::1]/"); a wallet's recovery
+phrase (see below); seven digits or more with nothing but spaces,
 punctuation, symbols or format characters between them (a phone, card,
 SSN or account number or its start: "+1 415 555", "4111 1111", "123 45
 6789", "123456789", "4111.1111.1111.1111", "123–45–6789"; a street address's house number
@@ -8127,8 +8124,11 @@ spaced UK National Insurance number and "my id is …" are private too.
 "Boise ID 83702" names Idaho. Some private text is not caught: a
 passphrase run together as one word (a long place name is one word too),
 a lower-case word after "otp", "2fa" or "mfa" ("mfa boston" is a name;
-"otp ABCDEF" is caught) and a code of letters after "pin" or "gate code".
-A Japanese postcode after a Latin name is refused ("Shibuya 150-0002"). Text that parses as coordinates or a
+"otp ABCDEF" is caught) and a code of lower-case letters after "pin" or
+"gate code" ("PIN ABCD" is caught).
+A Japanese postcode after a Latin name is refused ("Shibuya 150-0002"), and
+so is a name in capitals after a code's label ("MFA BOSTON", which cannot
+be told from "OTP ABCDEF"). Text that parses as coordinates or a
 grid reference is not private. A place's name is six words at most, or ten
 when it has a number in it (an address: "1600 Pennsylvania Ave NW
 Washington DC 20500"). The places picked from the Omnibar's rows and chips that carry a position

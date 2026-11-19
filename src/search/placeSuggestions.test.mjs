@@ -396,7 +396,6 @@ test('streets named for keys, tokens and codes, and ZIP+4 after a state, are pla
     'GATE CODE LANE',
     'SECURITY CODE PLAZA',
     'OTP Bank',
-    'MFA BOSTON',
     'Auth Code ABCD Street',
     'California 90210-1234',
     'Austin Texas 78701-1234',
@@ -404,7 +403,10 @@ test('streets named for keys, tokens and codes, and ZIP+4 after a state, are pla
     '12, 10115 Berlin',
   ])
     assert.equal(mayBePrivate(line), false, line);
+  // All in capitals, a name cannot be told from a code: "MFA BOSTON" is
+  // kept back with "OTP ABCDEF".
   for (const line of [
+    'MFA BOSTON',
     'gate code: abcd',
     'PIN A7B2',
     'PIN is A7B2',
@@ -462,6 +464,22 @@ test('spelled-out emails, addresses, phrases, codes and short phone numbers stay
     'john at gmail punto com',
     'john.doe at example period com',
     'j o h n @ g m a i l . c o m',
+    'ssn is 123456',
+    'ssn: xxx-xx-1234',
+    'Bearer: island',
+    'Bearer=lake',
+    'OTP ABCDEF',
+    'CVV ABC',
+    'Verification code ABC',
+    'PIN ABCD',
+    'passport:123456',
+    'ID:12345',
+    'abandon please abandon abandon abandon abandon abandon abandon abandon abandon abandon abstract',
+    'find abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon',
+    'lockbox number 4821',
+    'lockbox is 4821',
+    'ab 12 34 56 c',
+    'https://[::1]/',
     'ssn 123',
     'Jo 12345-6789',
     'Joe 1234 12345 thanks',
@@ -495,6 +513,11 @@ test('places that only looked private are looked up', () => {
     'zip code 90210',
     'area code 415',
     'Settipalle @ K.Bandarlapalle',
+    'boise ID 83702',
+    "Coeur d'Alene ID 83814",
+    'meet at West Point tomorrow',
+    'OTP Bank',
+    'GATE CODE LANE',
     // Questions for the assistant, however many short words they have.
     'can you tell where the most flights are going over texas today',
     'are there any storms near florida right now that might cause delays',
