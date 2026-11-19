@@ -244,6 +244,9 @@ const _customPaintFrame = {
   cameraHeight: Number.NaN,
   occluder: null,
   keyhole: null,
+  // Anchored custom glyphs yield to the same below-host chrome as entries.
+  overlapsHardUi: (rect) =>
+    overlayRectIntersectsAnyHard(rect, _uiOcclusionRects),
   uiRects: _uiOcclusionRects,
   uiRectCount: 0,
   layoutRevision: 0,

@@ -8,7 +8,9 @@ import UiCloseButton from '../../kit/UiCloseButton.vue';
 // with the `view` it computes for each step and keeps the parts the template
 // never binds: the guide's `visible` class, the callout's entrance replay
 // (its `swap` class), place and side, the ring's and the extra rings' boxes,
-// and focus. It finds those elements in the rendered tree itself.
+// and focus. It finds those elements in the rendered tree itself. The extra
+// rings, one per further target of a step, follow the callout; `view.subRings`
+// says how many are drawn.
 defineProps({
   to: { type: Object, required: true },
   view: { type: Object, required: true },
@@ -20,6 +22,11 @@ defineProps({
 
 /** A progress segment's attributes: no class at all for one still to come. */
 const dot = (name) => (name ? { class: name } : {});
+// The buttons' words are the slot of a UiButton, which renders inside the
+// button: a step that changes only a label would reach it a tick after the
+// owner paints. A slot given under a condition (`redrawWithView`, always
+// true) is redrawn whenever this view is, so it keeps up.
+const redrawWithView = true;
 </script>
 
 <!-- Only line breaks inside tags: the markup has no whitespace between elements. -->
@@ -60,23 +67,27 @@ const dot = (name) => (name ? { class: name } : {});
               class="gev-guide-skip"
               :hidden="view.skipHidden"
               @click="onSkip()"
-              >{{ view.skipLabel }}</UiButton
+              ><template v-if="redrawWithView" #default>{{ view.skipLabel }}</template></UiButton
             ><UiButton
               class="gev-guide-offer"
               :hidden="view.offerHidden"
               @click="onOffer()"
-              >{{ view.offerLabel }}</UiButton
+              ><template v-if="redrawWithView" #default>{{ view.offerLabel }}</template></UiButton
             ><UiButton
               class="gev-guide-next"
               :class="{ quiet: view.nextQuiet }"
               :hidden="view.nextHidden"
               @click="onNext()"
-              >{{ view.nextLabel }}</UiButton
+              ><template v-if="redrawWithView" #default>{{ view.nextLabel }}</template></UiButton
             ></span
           ></div
         ><p class="gev-guide-status" role="status" aria-live="polite">{{
           view.status
         }}</p></div
+      ><div
+        v-for="i in view.subRings"
+        :key="i"
+        class="gev-guide-ring gev-guide-ring--sub"></div
       ></div
     ></Teleport
 ></template>
