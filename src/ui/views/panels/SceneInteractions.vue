@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { t } from '../../../i18n/index.js';
 import { useSceneInteractionsStore } from '../../stores/sceneInteractions.js';
+import UiButton from '../../kit/UiButton.vue';
 
 // The active shot's Scene actions panel, inside the viewer's container, as
 // the scene interactions owner (src/scenes/interactions.js) presents it.
@@ -45,6 +46,6 @@ const outline = (id) => ({
 
 <template>
   <Teleport v-if="panel" :to="panel.container">
-    <section :key="panel.id" data-director-interactions="" :aria-label="t('Scene actions')" :style="panelStyle"><strong>{{ t('Scene actions') }}</strong><p role="status">{{ panel.status }}</p><button v-for="item in panel.items" :key="item.id" type="button" :data-director-action="item.id" :disabled="panel.busy" :aria-pressed="String(panel.selected === item.id)" :style="outline(item.id)" :onClick="onClick(panel.owner, item.id)">{{ item.label }}</button><div data-director-action-card=""><template v-if="panel.card"><p>{{ panel.card.text }}</p><a v-if="panel.card.url" :href="panel.card.url" target="_blank" rel="noopener noreferrer" style="color: #6eeaff">{{ t('Source') }}</a></template></div></section>
+    <section :key="panel.id" data-director-interactions="" :aria-label="t('Scene actions')" :style="panelStyle"><strong>{{ t('Scene actions') }}</strong><p role="status">{{ panel.status }}</p><UiButton v-for="item in panel.items" :key="item.id" :data-director-action="item.id" :disabled="panel.busy" :pressed="panel.selected === item.id" :style="outline(item.id)" :onClick="onClick(panel.owner, item.id)">{{ item.label }}</UiButton><div data-director-action-card=""><template v-if="panel.card"><p>{{ panel.card.text }}</p><a v-if="panel.card.url" :href="panel.card.url" target="_blank" rel="noopener noreferrer" style="color: #6eeaff">{{ t('Source') }}</a></template></div></section>
   </Teleport>
 </template>

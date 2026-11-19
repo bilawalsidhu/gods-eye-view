@@ -2,6 +2,7 @@
 import { onBeforeUnmount } from 'vue';
 import { t } from '../../i18n/index.js';
 import { formatScaleRange } from '../unitLabels.js';
+import UiButton from '../kit/UiButton.vue';
 import UiCloseButton from '../kit/UiCloseButton.vue';
 import RailCardSetting from './RailCardSetting.vue';
 import RailChips from './RailChips.vue';
@@ -166,28 +167,23 @@ function legendView(legend) {
             :title="action.title || undefined"
             @click="dispatch(action, block)"
             >{{ action.label }}</a
-          ><button
+          ><UiButton
             v-else
-            :class="[
-              'data-toggle-chip',
-              { active: action.pressed, 'is-reserved': action.reserved },
-            ]"
-            type="button"
+            :class="['data-toggle-chip', { 'is-reserved': action.reserved }]"
             :data-action-id="action.id"
             :title="action.title || undefined"
             :disabled="Boolean(action.disabled)"
-            :aria-pressed="
-              action.pressed === undefined
-                ? undefined
-                : String(Boolean(action.pressed))
+            :pressed="
+              action.pressed === undefined ? undefined : Boolean(action.pressed)
             "
+            pressed-class="active"
             :aria-hidden="
               action.reserved === undefined
                 ? undefined
                 : String(Boolean(action.reserved))
             "
             @click="dispatch(action, block)"
-            >{{ action.label }}</button
+            >{{ action.label }}</UiButton
           ><span class="rail-card-action-hint" :hidden="!action.hint">{{
             action.hint || ''
           }}</span></template
