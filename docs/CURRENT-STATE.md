@@ -2007,7 +2007,8 @@ calibrating a camera bypasses visibility and the usual refresh interval, but
 still waits for an in-flight request and the provider's minimum interval.
 The panel's still and live video run only while the tab is visible and the
 panel is open (on phones, the Cameras sheet). The still also loads while
-Context shows the camera's card (on phones, the Context sheet).
+Context shows the camera's card (on phones, the Context sheet) or its bigger
+view is open.
 
 Traffic owns its rendered-surface observer only while enabled, removes it on disable/destroy, and rebuilds no cached heights on frames where the surface identity is unchanged. Its dots and heat-lines are two renderer draw sets, it animates on the frame port's preRender, and it follows the camera through the camera port at its own 5% threshold rather than the shared `percentageChanged` ledger. The surface identity is the globe port's `surfaceVersion()` and tile readiness its `isSettled('surface')`, so the layer no longer reaches Cesium. Heat-lines are always asked for draped: where the Cesium renderer cannot drape (no depth textures) its draw port draws them (and every other draped line) over the surface, in their colour where the surface hides them and hidden past the horizon, recolouring a line in place when only its colour changes, rather than the layer dropping them.
 

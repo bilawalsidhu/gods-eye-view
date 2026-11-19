@@ -39,7 +39,12 @@ function fixture(t, { card = true } = {}) {
     preview = createApp(CctvPreview, { cameraId: 'a' }).use(pinia);
     preview.mount(cardHost);
   }
+  function unmountCard() {
+    preview?.unmount();
+    preview = null;
+  }
   if (card) mountCard();
+  const store = useCctvStore(pinia);
   const controls = new CctvControls({
     elements: {
       _cctvPanel: document.getElementById('cctv-panel'),
@@ -52,7 +57,7 @@ function fixture(t, { card = true } = {}) {
       setPanelCollapsed() {},
       syncViewport() {},
     },
-    store: useCctvStore(pinia),
+    store,
   });
   t.after(() => {
     controls.destroy();
@@ -63,6 +68,8 @@ function fixture(t, { card = true } = {}) {
     controls,
     cardHost,
     mountCard,
+    unmountCard,
+    store,
     panelEl: document.getElementById('cctv-panel'),
   };
 }
@@ -121,10 +128,12 @@ test('phone: a camera picked with the Context sheet open gets its still', async 
   controls._renderCctvState(stillState('a2.jpg'));
   await settle();
   await nextTick();
-  assert.ok(
-    requests.length >= 1,
+  assert.equal(
+    requests.length,
+    1,
     'the Context card on the Context sheet requests the still',
   );
+  assert.equal(requests[0].src, 'a1.jpg');
   requests.at(-1).onload();
   await settle();
   await nextTick();
@@ -152,6 +161,48 @@ test('phone: the card on a closed Context sheet waits', async (t) => {
   assert.equal(requests[0].src, 'a1.jpg');
 });
 
+test('phone: the bigger view keeps refreshing after the layout turns phone, and stops once closed', async (t) => {
+  const requests = mockImages(t);
+  t.after(() => {
+    document.body.classList.remove('mobile-shell');
+    document.body.removeAttribute('data-mobile-sheet');
+  });
+  const { controls, cardHost, panelEl } = fixture(t);
+  panelEl.classList.add('collapsed');
+  controls._renderCctvState(stillState('a1.jpg'));
+  assert.equal(requests.length, 1);
+  requests[0].onload();
+  await settle();
+  await nextTick();
+  cardHost.querySelector('.cctv-preview__expand').click();
+  await settle();
+  await nextTick();
+  const popup = document.body.querySelector('.cctv-popup');
+  assert.ok(popup);
+  assert.equal(popup.querySelector('img').getAttribute('src'), 'a1.jpg');
+
+  document.body.classList.add('mobile-shell');
+  await settle();
+  controls._renderCctvState(stillState('a2.jpg'));
+  await settle();
+  await nextTick();
+  assert.ok(document.body.contains(popup));
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].src, 'a2.jpg');
+  requests[1].onload();
+  await settle();
+  await nextTick();
+  assert.equal(popup.querySelector('img').getAttribute('src'), 'a2.jpg');
+
+  popup.querySelector('.cctv-popup__close').click();
+  await settle();
+  await nextTick();
+  assert.equal(document.body.querySelector('.cctv-popup'), null);
+  controls._renderCctvState(stillState('a3.jpg'));
+  await settle();
+  assert.equal(requests.length, 2);
+});
+
 test('desktop: a card that mounts asks for the still', async (t) => {
   const requests = mockImages(t);
   const { controls, panelEl, mountCard } = fixture(t, { card: false });
@@ -164,4 +215,67 @@ test('desktop: a card that mounts asks for the still', async (t) => {
   await nextTick();
   assert.equal(requests.length, 1);
   assert.equal(requests[0].src, 'a1.jpg');
+});
+
+test('desktop: a card that unmounts stops the still, and a remount resumes it', async (t) => {
+  const requests = mockImages(t);
+  const { controls, panelEl, mountCard, unmountCard, store } = fixture(t);
+  panelEl.classList.add('collapsed');
+  controls._renderCctvState(stillState('a1.jpg'));
+  assert.equal(requests.length, 1);
+  requests[0].onload();
+  await settle();
+  await nextTick();
+
+  unmountCard();
+  await settle();
+  await nextTick();
+  assert.equal(store.previewCards, 0);
+  controls._renderCctvState(stillState('a2.jpg'));
+  await settle();
+  assert.equal(requests.length, 1);
+
+  mountCard();
+  await settle();
+  await nextTick();
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].src, 'a2.jpg');
+});
+
+test('desktop: the bigger view is released when the card unmounts, also in the tick it closes', async (t) => {
+  const requests = mockImages(t);
+  const { controls, cardHost, panelEl, mountCard, unmountCard, store } =
+    fixture(t);
+  panelEl.classList.add('collapsed');
+  controls._renderCctvState(stillState('a1.jpg'));
+  requests[0].onload();
+  await settle();
+  await nextTick();
+  const openPopup = async () => {
+    cardHost.querySelector('.cctv-preview__expand').click();
+    await nextTick();
+    assert.equal(store.previewPopups, 1);
+  };
+
+  await openPopup();
+  unmountCard();
+  await nextTick();
+  assert.equal(document.body.querySelector('.cctv-popup'), null);
+  assert.equal(store.previewPopups, 0);
+
+  mountCard();
+  await nextTick();
+  await openPopup();
+  // Closed and unmounted before the watcher runs, as when one Escape closes
+  // the phone's Context sheet and the popup.
+  document.body.querySelector('.cctv-popup__close').click();
+  unmountCard();
+  await settle();
+  await nextTick();
+  assert.equal(store.previewPopups, 0);
+  assert.equal(store.previewCards, 0);
+  const before = requests.length;
+  controls._renderCctvState(stillState('a3.jpg'));
+  await settle();
+  assert.equal(requests.length, before);
 });

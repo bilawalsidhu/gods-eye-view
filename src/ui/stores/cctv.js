@@ -22,6 +22,8 @@ export const useCctvStore = defineStore('gev-cctv', () => {
   const frame = shallowRef(null);
   /** Number of camera cards outside the panel showing its preview, including Context's card. */
   const previewCards = shallowRef(0);
+  /** Number of open bigger views of a camera card (popups over the map). */
+  const previewPopups = shallowRef(0);
   /** Whether the live video surface replaces the still frame. */
   const live = shallowRef(false);
   /** `{label, state}` for the source badge; null until first synced. */
@@ -56,6 +58,11 @@ export const useCctvStore = defineStore('gev-cctv', () => {
     previewCards.value = Math.max(0, previewCards.value + (shown ? 1 : -1));
   }
 
+  /** @param {boolean} shown */
+  function showPreviewPopup(shown) {
+    previewPopups.value = Math.max(0, previewPopups.value + (shown ? 1 : -1));
+  }
+
   /** @param {boolean} on */
   function setLive(on) {
     live.value = Boolean(on);
@@ -81,6 +88,7 @@ export const useCctvStore = defineStore('gev-cctv', () => {
     calEdit,
     frame,
     previewCards,
+    previewPopups,
     live,
     sourceBadge,
     summary,
@@ -89,6 +97,7 @@ export const useCctvStore = defineStore('gev-cctv', () => {
     setCalEdit,
     setFrame,
     showPreviewCard,
+    showPreviewPopup,
     setLive,
     setSourceBadge,
     setSummary,

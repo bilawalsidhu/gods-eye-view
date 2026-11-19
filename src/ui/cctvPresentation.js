@@ -298,6 +298,8 @@ export function _renderCctvState(state) {
     tabShown &&
     this.store.previewCards > 0 &&
     (!phone || sheet === CONTEXT_SHEET);
+  // Its bigger view is a popup over the map, shown on any phone sheet.
+  const popupShown = tabShown && this.store.previewPopups > 0;
   if (this._cctvVideo) {
     const visible = liveIntent && panelShown;
     if (!visible || this._cctvVideoCameraId !== activeId) {
@@ -324,7 +326,7 @@ export function _renderCctvState(state) {
     // immediate so navigation never waits on the prior camera's request.
     if (
       nextSrc &&
-      (panelShown || cardShown) &&
+      (panelShown || cardShown || popupShown) &&
       (cameraChanged || (!frameLoading && this._frame.currentSrc !== nextSrc))
     ) {
       this._queueCctvFrame(nextSrc, nextCameraId, cameraChanged);
