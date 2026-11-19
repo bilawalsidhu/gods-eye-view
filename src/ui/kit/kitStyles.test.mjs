@@ -138,6 +138,17 @@ test('UiChip, UiEmpty, UiBadge and UiSegmented wear Core’s skins', () => {
   shares('.ui-segmented__item:disabled', '.gev-segment:disabled');
 });
 
+test('UiCloseButton wears the bare glyph look the guide’s close shares', () => {
+  const rule = shares('.ui-close-button', '.gev-guide-close');
+  for (const declaration of [
+    /padding:\s*0;/,
+    /border:\s*0;/,
+    /background:\s*none;/,
+    /cursor:\s*pointer;/,
+  ])
+    assert.match(rule.body, declaration);
+});
+
 test('the kit’s skins load before the feature stylesheets that restyle them', () => {
   const at = (selector) => css.indexOf(selector);
   for (const [kit, feature] of [
@@ -146,6 +157,17 @@ test('the kit’s skins load before the feature stylesheets that restyle them', 
     ['.ui-empty,', '.recent-imagery-readout .ri-strip-empty {'],
     ['.ui-empty,', '#space-mission-panel-host .space-mission-roster-empty {'],
     ['.ui-button--icon,', '#command-dock .panel-collapse-btn'],
+    ['.ui-close-button,', '.data-toggle-chip {'],
+    ['.ui-close-button,', '.geo-import-action {'],
+    ['.ui-close-button,', '.panel-surface-control {'],
+    ['.ui-close-button,', '.gev-voice-card-dismiss {'],
+    ['.ui-close-button,', '.bhote-event-icon-btn {'],
+    ['.ui-close-button,', '.entity-card__close {'],
+    ['.ui-close-button,', '.context-search__clear {'],
+    ['.ui-close-button,', '.key-setup-close {'],
+    ['.ui-close-button,', '.cctv-popup__close {'],
+    ['.ui-close-button,', '.view-context__live-off {'],
+    ['.ui-close-button,', '.gev-guide-close {'],
   ]) {
     assert.ok(
       at(kit) >= 0 && at(feature) > at(kit),

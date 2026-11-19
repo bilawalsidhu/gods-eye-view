@@ -5,6 +5,7 @@ import { t } from '../../../i18n/index.js';
 import UiSlider from '../../kit/UiSlider.js';
 import { useSpaceMissionsStore } from '../../stores/spaceMissions.js';
 import UiButton from '../../kit/UiButton.vue';
+import UiCloseButton from '../../kit/UiCloseButton.vue';
 
 // The selected space mission. The launches layer presents it
 // and hides the panel while none is selected; the roster beside it hides
@@ -27,7 +28,7 @@ watch(
 
 <template>
   <aside id="space-mission-panel" ref="root" class="context-space-mission-detail" :aria-label="t('Selected Space Mission')" :hidden="!m">
-    <div class="space-mission-view-header"><span>{{ t('SELECTED SPACE MISSION') }}</span><button type="button" data-mission-close :title="t('Show all missions')" :aria-label="t('Deselect mission')" @click="layer?.deselectMission()">×</button></div>
+    <div class="space-mission-view-header"><span>{{ t('SELECTED SPACE MISSION') }}</span><UiCloseButton data-mission-close bare :title="t('Show all missions')" :label="t('Deselect mission')" @click="layer?.deselectMission()" /></div>
     <div class="space-mission-detail">
       <strong data-mission-title>{{ m ? m.title : t('MISSION') }}</strong>
       <span data-mission-field data-mission-provider :hidden="m && !m.provider">{{ m?.provider }}</span>

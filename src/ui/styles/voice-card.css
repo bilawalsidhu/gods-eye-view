@@ -94,18 +94,17 @@
   color: #ffc46b;
 }
 
+/* A UiCloseButton (close-button.css). */
 .gev-voice-card-dismiss {
   margin-inline-start: auto;
   width: 1.1rem;
   height: 1.1rem;
-  padding: 0;
   color: var(--text-secondary);
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(54, 220, 255, 0.24);
   border-radius: 0.2rem;
   font-size: 0.72rem;
   line-height: 1;
-  cursor: pointer;
   transition:
     color var(--transition-fast),
     border-color var(--transition-fast);

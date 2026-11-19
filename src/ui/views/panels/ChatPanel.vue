@@ -5,6 +5,7 @@ import { t } from '../../../i18n/index.js';
 import { useVoiceStore } from '../../stores/voice.js';
 import { ASSISTANT_NAME } from '../../../voice/control.js';
 import PanelLayoutButtons from './PanelLayoutButtons.vue';
+import UiCloseButton from '../../kit/UiCloseButton.vue';
 
 // The typed chat in the command dock, as its owner (src/voice/chatControl.js)
 // writes the voice control presenter. Messages arrive apart from the view, so
@@ -68,7 +69,7 @@ const quickPrompts = () => [t('Fly to Tokyo'), t('Show live flights')];
       <div id="gev-chat-header-actions">
         <PanelLayoutButtons :docked="props.view.layout.docked" :minimized="props.view.chat.minimized" @dock="emit('layout-dock')" @minimize="emit('chat-minimize')" />
         <button v-if="props.view.panel" id="gev-voice-settings-button" class="gev-voice-settings-button" type="button" :aria-label="t('Settings')" :title="t('Settings')" aria-controls="gev-voice-panel" :aria-expanded="String(props.view.voicePanel.settingsExpanded)" @click="emit('settings-button')"><span class="material-symbols-outlined gev-voice-settings-icon" aria-hidden="true">settings</span></button>
-        <button id="gev-chat-close" type="button" :aria-label="t('Close chat')" @click="emit('chat-close')">×</button>
+        <UiCloseButton id="gev-chat-close" :label="t('Close chat')" @click="emit('chat-close')" />
       </div>
     </header>
     <div id="gev-chat-messages" ref="list" role="log" :aria-label="t('Conversation')" aria-live="polite" :aria-busy="props.view.chat.busy || props.view.chat.revealing ? 'true' : undefined" @scroll.passive="onListScroll">
