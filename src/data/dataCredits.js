@@ -542,6 +542,10 @@ export const DATA_CREDITS = [
     html: 'Cyclone advisories: <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener">NOAA/NWS NHC / CPHC</a> · Atlantic and eastern/central North Pacific. Forecast center uncertainty, not storm size.',
   },
   {
+    key: 'weather-turbulence',
+    html: 'Turbulence: <a href="https://aviationweather.gov/" target="_blank" rel="noopener">NOAA/NWS Aviation Weather Center</a> · G-AIRMETs (US), SIGMETs and pilot reports. Informational only, not for flight planning.',
+  },
+  {
     key: 'weather-lightning',
     html: 'Lightning density: NOAA/NWS nowCOAST · derived from Vaisala NLDN/GLD360. <a href="https://ocean.weather.gov/lightning/lightning_pdd.php" target="_blank" rel="noopener">Public derived density product</a>, not raw detections.',
   },

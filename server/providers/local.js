@@ -35,6 +35,7 @@ import { newsProxy } from './news.js';
 import { inaturalistProxy } from './inaturalist/observations.js';
 import { acartiaProxy } from './acartia.js';
 import { cycloneProxy } from './cyclones.js';
+import { turbulenceProxy } from './turbulence.js';
 import { windProxy } from './wind.js';
 import { libraryProxy } from './library.js';
 
@@ -83,6 +84,7 @@ function localProviderPlugins({
     windProxy(),
     weatherProxy(),
     cycloneProxy(),
+    turbulenceProxy(),
     mapillaryProxy(),
     firePerimetersProxy(),
     gnssIntegrityProxy(),

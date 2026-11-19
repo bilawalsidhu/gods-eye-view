@@ -451,6 +451,55 @@ provider registration rejects compositions that cannot fit rather than truncatin
 identities. A malformed or duplicate entry invalidates the complete custom-switch
 field. Existing whole-link size limits still apply.
 
+## Turbulence — NOAA Aviation Weather Center
+
+The Weather group includes **Turbulence** (`weather-turbulence`, share-link
+token `03`), off by default. `/api/turbulence` takes no parameters: it asks the
+keyless NOAA Aviation Weather Center Data API for the five G-AIRMET forecast
+hours (`product=tango`, `fore` 0 to 12, keeping only TURB-HI and TURB-LO), the
+current SIGMETs (keeping only turbulence and mountain wave) and three hours of
+pilot reports of light or stronger turbulence: seven requests one after
+another, at most once every ten minutes for every viewer together. Each feed is
+cached on its own. A failed feed serves its last records as stale for up to six
+hours, with expired SIGMETs and reports older than three hours dropped, and the
+others are unaffected, so the snapshot says `stale` or `partial`; with nothing
+left it says `unavailable` and the layer draws no turbulence. Records are
+normalized server-side (`src/layers/turbulence/records.js`): G-AIRMET base and
+top in hundreds of feet (`SFC` is the surface), SIGMET base and top in feet (a
+missing top is drawn to FL600 and labelled "Top unknown"), pilot-report flight
+levels in hundreds of feet, and intensity ranges such as `LGT-MOD` read at
+their upper end.
+
+Forecast areas and warnings are translucent volumes from their floor to their
+top, coloured by severity (light, moderate, severe, extreme); floors at the
+surface are buried 300 m below the ellipsoid so they never hover over coastal
+3D tiles. Pilot reports are points at their flight level. While on, the layer
+holds the world clock and offers the timeline the span of the forecast
+snapshots and the three hours of reports before now. At any time it draws the
+G-AIRMET snapshot nearest that time within half the snapshot spacing (a tie
+goes to the later snapshot), the SIGMETs in force and the reports from the
+three hours before it. Each forecast hour is its own draw set, built once per
+refresh, so scrubbing only switches which one shows. The volumes take no part
+in picks, so aircraft, satellites and other layers' cards inside them still
+open; a click on empty map inside a volume selects it (the most severe at that
+spot, warnings first), and a click on a report selects the report. The card
+gives the product and severity, the altitude band, the valid time or period
+(or the report time and aircraft type), the region and the raw text, and ends
+"Informational only · not for flight planning". The Weather panel card shows
+the forecast valid and issue times, counts, the reporting window, the same
+notice, a categorical severity legend and three chip groups: severity,
+altitude (below FL180, FL180 and above) and sources. The filters are local and
+are not written to share links. A volume is hidden while the camera is inside
+it, its faces being culled from inside, for example in the cockpit at cruise
+altitude.
+
+Coverage: G-AIRMET forecasts cover the contiguous United States only; SIGMETs
+are worldwide where issued; pilot reports come mostly from the United States
+and the North Atlantic. This is not the gridded WAFS turbulence forecast, which
+needs an aviation account. Voice is off for this layer for now
+(`VOICE_OFF_LAYERS`: the Realtime prompt has no room), so neither voice nor the
+analyst can toggle or query it. See the live-layers table below.
+
 ## Data Library — October 21, 2026
 
 DATA LAYERS keeps its curated core layers; everything else lives in the Data
@@ -6046,6 +6095,7 @@ its criteria cannot be silently ignored.
 | Ski Pistes ⛷ (`ski-pistes`)          | OpenSnowMap piste raster tiles (keyless; CC BY-SA tiles, OSM data ODbL; no bulk download)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `src/data/osmOverlays.js`                                                                                                                                 | — (browser-direct tiles)                                                                                                     | on view (Cesium tile requests; no polling)                                                                                  |
 | Fire Perimeters 🔥                   | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links                                                                                                                                                                                                                                                                                                                                                                                                                        | `src/layers/perimeters/` via `src/app/layers/perimeters.js`                                                                                               | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*`                                                                    | 5 min (server caches: catalog 1 h; publication 30 min)                                                                      |
 | Prohibited & Restricted Airspace 🚫  | FAA Special Use Airspace prohibited (P) and restricted (R) zones (keyless FeatureServer, simplified geometry)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `src/layers/droneAirspace/` via `src/app/layers/droneAirspace.js`                                                                                         | `/api/drone-airspace`                                                                                                        | 1 h (server cache 1 h; stale-on-error)                                                                                      |
+| Turbulence ≋ (`weather-turbulence`)  | NOAA AWC G-AIRMET turbulence forecasts (US, five snapshots 3 h apart), SIGMETs for turbulence and mountain waves (worldwide) and pilot reports of light or stronger turbulence (last 3 h); keyless                                                                                                                                                                                                                                                                                                                                                                                                         | `src/layers/turbulence/` via `src/app/layers/turbulence.js`                                                                                               | `/api/turbulence`                                                                                                            | 10 min (server cache 10 min per feed; stale-on-error up to 6 h)                                                             |
 | Shipwrecks ⚓ (`shipwrecks`)         | EMODnet Human Activities heritage shipwrecks (European waters, keyless WFS, CC BY 4.0) and Wikidata (notable wrecks worldwide, keyless, CC0)                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `src/layers/shipwrecks/` via `src/app/layers/shipwrecks.js`                                                                                               | `/api/shipwrecks`                                                                                                            | 6 h page check; server refresh once a day (stale-on-error up to 7 days)                                                     |
 | News ◆ (`news`)                      | The last 24 h of reports in two sections, Conflicts and Local, with hotspots, outlines and disputed areas: from a news server (`GEV_NEWS_ORIGIN`), else Core's own reading of GDELT 2.0 events (no key), Liveuamap (`LIVEUAMAP_API_KEY`) and World News API (`WORLDNEWSAPI_KEY`)                                                                                                                                                                                                                                                                                                                           | `src/layers/news/` via `src/app/layers/news.js`; panel `src/ui/newsPanel.js`, `src/ui/news/`; server `server/providers/news.js`, `server/providers/news/` | `/api/news/hotspots`, `/api/news/feed`, `/api/news/outline` (forwarded to `GEV_NEWS_ORIGIN` when set, else answered by Core) | 2 min map refresh; Local re-read when the camera settles 0.8 s in a new half-degree cell below 3,000 km                     |
 | Wildlife Sightings 🦉                | iNaturalist wildlife observed within 48 h (whales 7 d), per view; Acartia Salish Sea marine mammal coverage (keyless)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `src/layers/wildlifeSightings/` via `src/app/layers/wildlifeSightings.js`                                                                                 | `/api/inaturalist/observations`, `/api/inaturalist/grid`, `/api/acartia/sightings`                                           | camera moveEnd (600 ms debounce; enable settles 300 ms) + 5 min (observations 5 / 10 min; tiles 15 min; stale ≤ 1 h / 24 h) |

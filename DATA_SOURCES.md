@@ -20,6 +20,7 @@ How to read this:
 | **NOAA nowCOAST observed weather** (`nowcoast.noaa.gov/geoserver/observations/{weather_radar,satellite}/ows`, WMS 1.1.1) | Rain radar (MRMS base reflectivity, contiguous US, about 4-minute updates) and Satellite clouds (GOES-19/18 Band 14 regional infrared, about 5-minute updates; global infrared mosaic, hourly). Keyless; layer metadata refreshed every 2 minutes, exact-time images cached for up to 24 hours | [NOAA disclaimer](https://oceanservice.noaa.gov/disclaimer.html) | "NOAA nowCOAST · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners" |
 | **NOAA nowCOAST lightning density** (`nowcoast.noaa.gov/geoserver/observations/lightning_detection/ows`) | Lightning density: 15-minute accumulated strike density on an approximately 8 km grid, Americas and Pacific. Keyless; layer metadata refreshed every 10 minutes, exact-time images cached for up to 24 hours | NOAA Level-5 derived product from Vaisala NLDN/GLD360; the [product description](https://ocean.weather.gov/lightning/lightning_pdd.php) permits public distribution of this density product, not of raw Vaisala detections | "NOAA/NWS nowCOAST; derived from Vaisala NLDN/GLD360" |
 | **NOAA NHC / CPHC advisories** (`www.nhc.noaa.gov/CurrentStorms.json` + the `mapservices.weather.noaa.gov` tropical weather summary MapServer) | Cyclone advisories: storm positions, forecast tracks, points and cones for the Atlantic and eastern/central North Pacific. Keyless through `/api/cyclones`; cached for 5 minutes | [NWS public-data terms](https://www.weather.gov/disclaimer); no endorsement implied | "NOAA/NWS NHC / CPHC" |
+| **NOAA Aviation Weather Center Data API** (`aviationweather.gov/api/data/{gairmet,sigmet,pirep}`) | Turbulence: G-AIRMET turbulence forecast areas (contiguous US, five snapshots 3 h apart), SIGMETs for turbulence and mountain waves (worldwide) and pilot reports of light or stronger turbulence (last 3 h). Keyless through `/api/turbulence`; seven requests at most every 10 minutes, cached per feed | [NWS public-data terms](https://www.weather.gov/disclaimer) (U.S. public domain); no endorsement implied | "NOAA/NWS Aviation Weather Center" |
 | **Mapillary** (vector tiles, Graph API, MapillaryJS) | Street Level: coverage lines, image cones and the embedded viewer. Coverage tiles kept in server memory for 24 h | Imagery [CC BY-SA 4.0](https://www.mapillary.com/terms); API under the Mapillary terms with a client token | "© Mapillary contributors, CC BY-SA 4.0", shown on the globe while the provider is on |
 | **Google Street View** (Maps JavaScript API) | Street Level, on the Google 3D map only (Google's terms): Google's panorama viewer and nearest-panorama lookups; panorama dates and addresses kept for the session only | Google Maps Platform ToS (your own key + billing; every panorama load is billed) | "Street View imagery © Google" on the globe while the provider is on, and Google's logo and terms in the viewer |
 | **KartaView** (`api.kartaview.org` coverage tiles and photo API, `cdn.kartaview.org` image proxy, `storage*.openstreetcam.org` photos) | Street Level: coverage lines (z13–14 JSON tiles; with the imagery filter on, KartaView's filtered PNG tiles as a mask), nearest-photo lookups, the photo's sequence and the photo itself, fetched by the browser. Keyless; nothing cached beyond the session | Imagery [CC BY-SA 4.0](https://kartaview.org/terms) (KartaView terms §4); the public API needs no token | "© KartaView contributors, CC BY-SA 4.0", shown on the globe while the provider is on |
@@ -693,6 +694,24 @@ This implementation is original; those contributions have not been merged here.
 - **Delivery:** keyless same-origin `/api/cyclones`, five-minute singleflight cache,
   fixed upstream endpoints, bounded bodies/geometry/deadline, explicit unavailable/stale states.
   Direct status fetching is unsuitable in browsers because NHC does not advertise CORS.
+
+### Weather: Turbulence (NOAA AWC)
+
+- **Sources:** the [NOAA Aviation Weather Center Data API](https://aviationweather.gov/data/api/):
+  `/api/data/gairmet` (`product=tango`, `fore` 0, 3, 6, 9 and 12), `/api/data/sigmet` and
+  `/api/data/pirep` (worldwide box, `age=3`, `inten=lgt`), all GeoJSON.
+- **Rights/credit:** NOAA/NWS Aviation Weather Center; U.S. government work,
+  [NWS public-data terms](https://www.weather.gov/disclaimer). Fetched at runtime; nothing is
+  bundled except trimmed test fixtures, and no NOAA endorsement is implied.
+- **Coverage/meaning:** G-AIRMET turbulence (TURB-HI, TURB-LO) covers the contiguous United States
+  only, each snapshot valid at one time; SIGMETs (turbulence and mountain wave) are worldwide where
+  issued and valid over a period; pilot reports come mostly from the United States and the North
+  Atlantic. Not the gridded WAFS turbulence forecast, which needs an aviation account.
+  Informational only, not for flight planning.
+- **Delivery:** keyless same-origin `/api/turbulence`, seven fixed upstream requests one after
+  another at most every 10 minutes (the API allows 100 a minute), bounded bodies, coordinate and
+  vertex budgets, per-feed stale fallback for up to 6 hours, explicit partial/stale/unavailable
+  states. The API sends no CORS headers, so browsers cannot fetch it directly.
 
 ### Weather: observed lightning density
 
