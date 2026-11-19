@@ -154,12 +154,12 @@ const SWITCH =
   /^(turn on|switch on|enable|show|display|add|turn off|switch off|disable|hide|remove|toggle)(?:\s+(.*))?$/;
 const SWITCH_OFF = /^(turn off|switch off|disable|hide|remove)\b/;
 /**
- * A word for a kind of place written after the name it ends ("Fire
- * Island", "Ship Bottom", "Radio City"), not one written before it ("Lake
- * Tahoe", "Mount Fuji", "Tower Bridge", "Park City").
+ * A word for a kind of place, alone: after a keyword it ends a name ("Fire
+ * Island", "Ship Bottom", "Radio City"), and is no place to go to by itself.
+ * Followed by more words it may begin one ("City Hall", "Peak District").
  */
 const NAME_TAIL =
-  /^(?:islands?|isle|city|hall|bottom|beach|station|street|road|hills?|valley|falls|springs?|creek|county|town|village|harbou?r|cove|canyon|center|centre|square|bridge|ridge|peak)\b(?!\s+of\b)/i;
+  /^(?:islands?|isle|city|hall|bottom|beach|station|street|road|hills?|valley|falls|springs?|creek|county|town|village|harbou?r|cove|canyon|center|centre|square|bridge|ridge|peak)$/i;
 
 /**
  * A layer that shows itself through another, which must stay on with it:
@@ -958,11 +958,12 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
     if (!kept.length) return null;
     if (!kept.every(named)) return [ask];
     const keptIds = new Set(kept.map((layer) => layer.id));
-    // Keeping either of a pair keeps both: switching one off would take the
-    // other with it ("except space missions", "except satellites").
+    // Keeping either of a pair keeps both while the first is on: switching
+    // one off would take the other with it ("except space missions",
+    // "except satellites").
     for (const [layer, through] of SHOWN_THROUGH) {
       const on = all().find((entry) => entry.id === layer)?.enabled;
-      if (keptIds.has(layer) || (on && through.some((id) => keptIds.has(id))))
+      if (on && (keptIds.has(layer) || through.some((id) => keptIds.has(id))))
         for (const id of [layer, ...through]) keptIds.add(id);
     }
     const steps = all()
@@ -1001,8 +1002,6 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
    * ("Show Low, AZ").
    */
   function switchRows(line, ask) {
-    const excepted = exceptRows(line, ask);
-    if (excepted) return excepted;
     // "remove flights from the map": the map is where every layer is. Not
     // the verb's own "off" ("turn off the screen" is no layer switch).
     const bare = line.replace(
@@ -1010,6 +1009,8 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
       '',
     );
     if (bare !== line && SWITCH.test(bare.toLowerCase())) line = bare;
+    const excepted = exceptRows(line, ask);
+    if (excepted) return excepted;
     const switching = line.toLowerCase().match(SWITCH);
     if (
       !switching ||
@@ -1358,11 +1359,11 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
     // without a verb may be part of the place's name, so the whole line as a
     // place comes first and the plan second. After "go to …" with a request
     // peeled off, the place is the one read ("go to London with flights").
-    // A keyword ahead of the rest of a name ("Fire Island", "Ship Bottom",
-    // "Radio City Music Hall") begins that name when what is left starts
-    // with a word for a kind of place: a fragment, not a place, so no plan
-    // goes there. "earthquakes japan", "tokyo traffic" and "Thermal,
-    // California" (a comma parts them) keep their plans.
+    // A keyword ahead of the rest of a name ("Fire Island", "Ship Bottom")
+    // begins that name when what is left is only a word for a kind of
+    // place: a fragment, not a place, so no plan goes there. "earthquakes
+    // japan", "traffic city hall", "tokyo traffic" and "Thermal, California"
+    // (a comma parts them) keep their plans.
     const lower = text.toLowerCase();
     const fragment =
       ambiguous &&

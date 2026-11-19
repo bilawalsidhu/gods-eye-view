@@ -744,11 +744,7 @@ test('a grid reference after "near" is the place', () => {
 
 test('a keyword that begins a name offers no plan to the rest of it', () => {
   const omnibar = createOmnibar({ layers: layers() });
-  for (const text of [
-    'Radio City Music Hall',
-    'Traffic Island',
-    'radio island',
-  ]) {
+  for (const text of ['Radio City', 'Traffic Island', 'radio island']) {
     const { rows } = omnibar.rows(text, { places: [] });
     assert.equal(rows[0].kind, 'place', text);
     assert.ok(!rows.some((row) => row.kind === 'plan'), text);
@@ -759,7 +755,15 @@ test('a keyword that begins a name offers no plan to the rest of it', () => {
   }
   // A keyword after the place, or before a place that is no name's
   // fragment, still offers its plan.
-  for (const text of ['tokyo traffic', 'earthquakes japan', 'radio London']) {
+  for (const text of [
+    'tokyo traffic',
+    'earthquakes japan',
+    'radio London',
+    'traffic city hall',
+    'traffic county cork',
+    'earthquakes valley forge',
+    'traffic road to hana',
+  ]) {
     const { rows } = omnibar.rows(text, { places: [] });
     assert.ok(
       rows.some((row) => row.kind === 'plan'),
@@ -785,6 +789,28 @@ test('"except" keeps a layer and the one it shows through together', () => {
       ['layer(flights,off)'],
       text,
     );
+});
+
+test('"except" leaves Satellites to switch off with Space Missions off', () => {
+  const omnibar = createOmnibar({
+    layers: [
+      { id: 'flights', name: 'Live Flights', enabled: true },
+      { id: 'satellites', name: 'Satellites', enabled: true },
+      { id: 'rocket-launches', name: 'Space Missions', enabled: false },
+    ],
+  });
+  assert.deepEqual(
+    omnibar
+      .rows('hide everything except space missions', { places: [] })
+      .rows[0].steps.map(stepOutcome),
+    ['layer(flights,off)', 'layer(satellites,off)'],
+  );
+  assert.deepEqual(
+    omnibar
+      .rows('hide everything except flights from the map', { places: [] })
+      .rows[0].steps.map(stepOutcome),
+    ['layer(satellites,off)'],
+  );
 });
 
 test('"turn off the screen" is no layer switch and no place', () => {
