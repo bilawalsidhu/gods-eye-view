@@ -378,14 +378,22 @@ test('a pose with no perspective field of view is projected by the renderer', ()
 });
 
 test('focus release restores video hue and alpha after the style throttle', () => {
+  const viewer = {};
+  const camera = fakeCameraPort({
+    pose: { position: { x: 6378137 + 1000, y: 0, z: 0 } },
+  });
+  const { unbind } = bindFakeDraw(viewer, {
+    camera: camera.port,
+    query: { project: () => ({ x: 10, y: 20 }) },
+  });
   let target = {};
   const records = ['mp4', 'webm'].map((feedType) => ({
     camera: { id: feedType, feedType },
-    billboard: { show: true, color: LIVE_CAMERA_COLOR },
+    position: { x: 6378137, y: 0, z: 0 },
   }));
   const state = {
     _enabled: true,
-    _viewer: { scene: {}, camera: {} },
+    _viewer: viewer,
     _records: records,
     _activeCameraId: null,
     _activeFocusStyleCount: 0,
@@ -402,30 +410,43 @@ test('focus release restores video hue and alpha after the style throttle', () =
     }),
     focusAlphaNeedsWrite: (before, after) => before !== after,
   };
-  const { refreshCctvFocusStyles } = createRendering({
-    state,
-    services: { focus },
-    parts: { model: { isVideoFeedType } },
-    source: {},
-  });
+  const { createCameraIcons, addCameraIcon, refreshCctvFocusStyles } =
+    createRendering({
+      state,
+      services: { focus },
+      parts: {
+        model: {
+          isVideoFeedCamera: (camera) => isVideoFeedType(camera.feedType),
+        },
+      },
+      source: {},
+    });
+  try {
+    createCameraIcons(viewer);
+    for (const record of records) addCameraIcon(record);
+    const icons = state._icons;
 
-  refreshCctvFocusStyles(1000);
-  for (const record of records) {
-    assertFadedFrom(
-      record.billboard.color,
-      LIVE_CAMERA_COLOR,
-      record.camera.id,
-    );
+    refreshCctvFocusStyles(1000);
+    for (const record of records) {
+      assertKeepsColor(
+        icons,
+        record.camera.id,
+        LIVE_CAMERA_COLOR,
+        record.camera.id,
+      );
+    }
+    target = null;
+    refreshCctvFocusStyles(1050);
+    for (const record of records) {
+      assert.equal(icons.focus(record.camera.id), FOCUS_FACTOR, 'throttled');
+    }
+    refreshCctvFocusStyles(1100);
+    for (const record of records) {
+      assert.deepEqual(icons.item(record.camera.id).color, LIVE_CAMERA_COLOR);
+      assert.equal(icons.focus(record.camera.id), 1);
+    }
+    assert.equal(state._activeFocusStyleCount, 0);
+  } finally {
+    unbind();
   }
-  const dimmed = records.map((record) => record.billboard.color);
-  target = null;
-  refreshCctvFocusStyles(1050);
-  for (let i = 0; i < records.length; i += 1) {
-    assert.equal(records[i].billboard.color, dimmed[i]);
-  }
-  refreshCctvFocusStyles(1100);
-  for (const record of records) {
-    assert.deepEqual(record.billboard.color, LIVE_CAMERA_COLOR);
-  }
-  assert.equal(state._activeFocusStyleCount, 0);
 });

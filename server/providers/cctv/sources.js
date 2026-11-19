@@ -562,6 +562,22 @@ export function _resetOntarioKeyWarningForTest() {
 }
 
 /**
+ * What failed in an Ontario download, without upstream text: the error class,
+ * plus the system code (`ENOTFOUND`) or a refused redirect when there is one.
+ * @param {unknown} error
+ * @returns {string}
+ */
+function ontarioFailureKind(error) {
+  const name = /^[A-Za-z]{1,40}$/.test(error?.name) ? error.name : 'Error';
+  if (error?.cause?.message === 'unexpected redirect')
+    return `${name}, redirect refused`;
+  const code = error?.cause?.code;
+  return typeof code === 'string' && /^[A-Z][A-Z0-9_]{1,40}$/.test(code)
+    ? `${name} ${code}`
+    : name;
+}
+
+/**
  * Fetch Ontario 511 CCTV cameras. The camera list comes from the 511 API,
  * which now requires a free developer key (511on.ca/developers/doc, "Requires a
  * developer key"; unkeyed calls answer 400 "Invalid Key"), read from
@@ -659,7 +675,7 @@ export async function loadOntarioSourcesFromOpenData(
         url: view.url,
         snapshotUrl: view.url,
         sourceKind: 'ontario-511-open-data',
-        license: 'Open Government Licence - Ontario',
+        license: 'Open Government Licence – Ontario',
       });
     }
 
@@ -677,11 +693,11 @@ export async function loadOntarioSourcesFromOpenData(
       `[CCTV] Loaded Ontario 511 camera sources: ${unique.length} enabled (using nearest ${prioritized.length})`,
     );
     return prioritized;
-  } catch {
-    // Transport and JSON errors may reflect the credential-bearing request.
-    // Do not log upstream exception text, response bodies or URLs.
+  } catch (error) {
+    // Transport and JSON errors may reflect the credential-bearing request,
+    // so only the error class and a system code are logged, never the text.
     console.warn(
-      '[CCTV] Ontario 511 camera download error (network or invalid response)',
+      `[CCTV] Ontario 511 camera download error (${ontarioFailureKind(error)})`,
     );
     return [];
   }
@@ -1280,49 +1296,46 @@ export function parseTarkteeDatexImages(xml) {
  * @returns {Promise<Array<object>>} Normalized camera source objects.
  */
 export async function loadTarkteeSourcesFromDatex() {
-  // Own both transports before either can reject. A response that arrives
-  // after cleanup must also be discarded instead of escaping Promise.all.
-  const abort = new AbortController();
+  // One deadline for both feeds. Whichever read fails first aborts the other,
+  // so a stalled sibling is not waited on until the deadline.
+  const sibling = new AbortController();
   const signal = AbortSignal.any([
-    abort.signal,
+    sibling.signal,
     AbortSignal.timeout(TARKTEE_FETCH_TIMEOUT_MS),
   ]);
-  const responses = [];
-  const discardBoth = async () => {
-    abort.abort();
-    await Promise.allSettled(
-      responses.map((response) => response.body?.cancel()),
-    );
-    return [];
-  };
-  const fetchXml = async (url) => {
-    const response = await fetch(url, {
-      headers: { Accept: 'application/xml,text/xml,*/*' },
-      redirect: 'manual',
-      signal,
-    });
-    if (signal.aborted) {
-      await Promise.allSettled([response.body?.cancel()]);
+  const readXml = async (url, feed) => {
+    let response;
+    try {
+      response = await fetch(url, {
+        headers: { Accept: 'application/xml,text/xml,*/*' },
+        redirect: 'manual',
+        signal,
+      });
       signal.throwIfAborted();
-    }
-    responses.push(response);
-    if (!response.ok) {
-      throw new Error(
-        response.status >= 300 && response.status < 400
-          ? 'catalog redirected; redirects are not followed'
-          : `catalog HTTP ${response.status}`,
+      if (!response.ok) {
+        throw new Error(
+          response.status >= 300 && response.status < 400
+            ? `${feed} catalog redirected; redirects are not followed`
+            : `${feed} download failed: ${response.status}`,
+        );
+      }
+      return await readResponseTextCapped(
+        response,
+        TARKTEE_MAX_CATALOG_BYTES,
+        signal,
       );
+    } catch (error) {
+      // The join needs both feeds: stop the other one now, and release this
+      // body, including a response that arrived after the other failed.
+      sibling.abort();
+      await response?.body?.cancel().catch(() => {});
+      throw error;
     }
-    return response;
   };
   try {
-    const [locResp, imgResp] = await Promise.all([
-      fetchXml(TARKTEE_LOCATIONS_URL),
-      fetchXml(TARKTEE_IMAGES_URL),
-    ]);
     const [locXml, imgXml] = await Promise.all([
-      readResponseTextCapped(locResp, TARKTEE_MAX_CATALOG_BYTES, signal),
-      readResponseTextCapped(imgResp, TARKTEE_MAX_CATALOG_BYTES, signal),
+      readXml(TARKTEE_LOCATIONS_URL, 'locations'),
+      readXml(TARKTEE_IMAGES_URL, 'images'),
     ]);
     const locations = parseTarkteeDatexLocations(locXml);
     const images = parseTarkteeDatexImages(imgXml);
@@ -1384,7 +1397,6 @@ export async function loadTarkteeSourcesFromDatex() {
     );
     return prioritized;
   } catch (error) {
-    await discardBoth();
     console.warn(
       '[CCTV] Tarktee DATEX download error:',
       error?.message || error,
