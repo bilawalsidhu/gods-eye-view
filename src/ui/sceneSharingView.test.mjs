@@ -178,9 +178,12 @@ test('Cancel and Escape close through the owner; dispose removes the dialog', as
   $('dialog').dispatchEvent(cancel);
   assert.equal(cancel.defaultPrevented, true);
   assert.equal(closes, 2);
+  const root = $('dialog');
+  assert.equal(root.open, true, 'Escape leaves closing to the owner');
   dialog.dispose();
   await nextTick();
   assert.equal($('dialog'), null);
+  assert.equal(root.open, false, 'the removed dialog is closed');
   assert.equal(store.controls, null);
 });
 

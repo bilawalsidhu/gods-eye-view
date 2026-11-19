@@ -1,20 +1,16 @@
 <script setup>
 import { storeToRefs } from 'pinia';
-import { computed, onBeforeUnmount, onMounted, shallowRef, useTemplateRef } from 'vue';
+import { computed, shallowRef } from 'vue';
 import { t, tn } from '../../../i18n/index.js';
+import UiDialog from '../../kit/UiDialog.vue';
 import { vStatusText } from '../../rail/statusText.js';
 import { useSceneSharingStore } from '../../stores/sceneSharing.js';
 
 // One open scene sharing dialog, as src/ui/sceneSharing.js presents it. The
-// parent keys this by dialog, so each one opens as a fresh modal.
+// parent keys this by dialog, so each one opens as a fresh modal: UiDialog
+// opens it on mount and closes it on unmount.
 const props = defineProps({ view: { type: Object, required: true } });
 const { controls } = storeToRefs(useSceneSharingStore());
-
-const root = useTemplateRef('root');
-onMounted(() => root.value?.showModal?.());
-onBeforeUnmount(() => {
-  if (root.value?.open) root.value.close();
-});
 
 const bodyItems = computed(() => props.view.items.filter((item) => item.place === 'body'));
 const footerItems = computed(() => props.view.items.filter((item) => item.place === 'footer'));
@@ -46,7 +42,7 @@ const chooserStyle = (focused) => ({ padding: '3px 9px', border: '1px solid #397
 </script>
 
 <template>
-  <dialog ref="root" data-director-dialog class="director-sharing-dialog" :aria-label="view.title" :style="dialogStyle" @cancel.prevent="controls?.cancel()">
+  <UiDialog open data-director-dialog class="director-sharing-dialog" :aria-label="view.title" :style="dialogStyle" @dismiss="controls?.cancel()">
     <h2 style="margin-bottom: 12px">{{ view.title }}</h2>
     <div>
       <template v-for="item in bodyItems" :key="item.id">
@@ -60,5 +56,5 @@ const chooserStyle = (focused) => ({ padding: '3px 9px', border: '1px solid #397
     <div>
       <button v-for="item in footerItems" :key="item.id" type="button" :style="buttonStyle" :disabled="item.disabled" :autofocus="item.autofocus || undefined" v-bind="item.hook ? { [item.hook]: '' } : {}" @click="controls?.click(item.id)">{{ item.label }}</button>
     </div>
-  </dialog>
+  </UiDialog>
 </template>
