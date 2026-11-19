@@ -8116,10 +8116,11 @@ A nine-digit number or a short phone number written with no such word
 still gets the row: only picking it sends anything. One-time and verification codes,
 OTP, 2FA, MFA, CVV and CVC values, "card ending" digits, passphrases,
 recovery or seed phrases (twelve words in a row on the BIP39 English list
-in `src/search/bip39Words.js`, also with commas, numbered or after "my seed
-is", so a long question or request still goes to Ask GEV; twelve with four
-words for places or things on a map, such as "park", "beach" or "airport",
-are a list of places), "my secret is …", an email spelled
+in `src/search/bip39Words.js`, also with commas, numbered, quoted, joined by
+dashes or slashes, or after "my seed is", so a long question or request
+still goes to Ask GEV; twelve with four words for places or for asking about
+them, such as "park", "airport", "near" or "today", are a list or a request,
+which lets about one phrase in a hundred through), "my secret is …", an email spelled
 out ("john at example dot com", "punto com", or letter by letter), a door,
 alarm or lockbox number ("code 4821"; "zip code 90210" and "area code 415"
 are places), "Authorization: Bearer …", a code in a link (`?code=…`), a

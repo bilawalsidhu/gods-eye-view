@@ -471,6 +471,10 @@ test('spelled-out emails, addresses, phrases, codes and short phone numbers stay
     'verification code ABCDEF thanks a lot',
     'otp ABCDEF cheers',
     'otp ab12cd - thanks',
+    'gate code aBcD – thanks',
+    '"abandon ability able about above absent absorb abstract absurd abuse access accident"',
+    'abandon-ability-able-about-above-absent-absorb-abstract-absurd-abuse-access-accident',
+    '#1 abandon #2 ability #3 able #4 about #5 above #6 absent #7 absorb #8 abstract #9 absurd #10 abuse #11 access #12 accident',
     '(1) abandon (2) ability (3) able (4) about (5) above (6) absent (7) absorb (8) abstract (9) absurd (10) abuse (11) access (12) accident',
     'gate code aBcD - thanks',
     'abandon ability able about above absent absorb abstract absurd abuse access accident.',
@@ -547,6 +551,7 @@ test('places that only looked private are looked up', () => {
     '1. beach 2. park 3. museum 4. zoo 5. bridge 6. tower 7. market 8. castle 9. island 10. lake 11. river 12. canyon',
     'show only bus, train, car, truck, ship, boat traffic over city bridge today',
     'museum, gallery, library, palace, square, alley, canal, garden, hill, cave, farm, field',
+    'find any good cheap fresh food open now near this area today',
     // Questions for the assistant, however many short words they have.
     'can you tell where the most flights are going over texas today',
     'are there any storms near florida right now that might cause delays',

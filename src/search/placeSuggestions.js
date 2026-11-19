@@ -16,8 +16,9 @@ export const isCjk = (text) => CJK.test(String(text || ''));
 export const minPlaceChars = (text) => (isCjk(text) ? 2 : 3);
 
 /**
- * Words on the BIP39 list that name places and things on a map, for telling
- * a list of places from a recovery phrase.
+ * Words on the BIP39 list that name places and things on a map, or that a
+ * request about one is made of, for telling a list of places or a request
+ * from a recovery phrase.
  */
 const MAP_WORDS = new Set(
   (
@@ -30,7 +31,12 @@ const MAP_WORDS = new Set(
     'pool rail rain ranch region ridge river road rocket route school sea ' +
     'ship shop ski snow soccer south space square stadium street subway sun ' +
     'swamp taxi tennis tornado tower town traffic train truck tunnel valley ' +
-    'van vessel village volcano wagon weather west wine zoo'
+    'van vessel village volcano wagon weather west wine zoo ' +
+    // Words a request about a map is made of.
+    'any area around best cheap city close day dinner early find food ' +
+    'fresh good hour live local lunch main minute morning near night now ' +
+    'old open spot that there this time today tomorrow travel trip view ' +
+    'visit walk weekend what when where world'
   ).split(' '),
 );
 
@@ -212,18 +218,21 @@ function privacyReason(text) {
   // a row on the BIP39 list ("can you tell where the most …" is a
   // question). Too long to be sent for suggestions anyway, it is kept from
   // the assistant too.
-  // Written with commas, numbered ("1. abandon 2. ability") or after a few
-  // words ("my seed is …"): twelve of the list's words in a row. The list
-  // has many words for places and things on a map, and a phrase is drawn at
-  // random from all of it: twelve with four of those ("coffee, bar, hotel,
-  // museum, park …") are a list of places, which a phrase is about once in
-  // three hundred.
+  // Written with commas, numbered ("1. abandon 2. ability"), joined by
+  // dashes or slashes, or after a few words ("my seed is …"): twelve of
+  // the list's words in a row. The list has many words for places and for
+  // asking about them, and a phrase is drawn at random from all of it:
+  // twelve with four of those ("coffee, bar, hotel, museum, park …", "find
+  // good food open now near this area") are a list or a request, which a
+  // phrase is about once in a hundred.
   const recent = [];
-  for (const token of line.toLowerCase().split(/[\s,;]+/)) {
+  for (const token of line.toLowerCase().split(/[\s,;|/.\-\u2013\u2014]+/)) {
+    // Numbered ("1.", "(1)", "1:", "#1", "[1]") or quoted words; "and"
+    // before the last word joins it.
     const word = token
-      .replace(/^\(?\d+[.)]?/, '')
+      .replace(/^["'([#]*\d*[)\]:]?["'(]*/, '')
       .replace(/(?<=[a-z])[^a-z]+$/, '');
-    if (!word && token) continue;
+    if (!word || word === 'and') continue;
     if (!isBip39Word(word)) {
       recent.length = 0;
       continue;
@@ -414,7 +423,7 @@ function codeAfterLabel(line) {
   // After a label in lower case, any value is a code ("verification code
   // Abc"); after one written as a name, only a value that is not one.
   const coded =
-    /\b((?:otp|2fa|mfa|cvv|cvc|(?:verification|one-time|security|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{2,63})(?:(?:\s*[,;]\s*|\s+-+\s+|\s+)(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.!?]*$/i.exec(
+    /\b((?:otp|2fa|mfa|cvv|cvc|(?:verification|one-time|security|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{2,63})(?:(?:\s*[,;]\s*|\s+[-–—]+\s+|\s+)(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.!?]*$/i.exec(
       line,
     );
   if (coded) {
@@ -441,7 +450,7 @@ function codeAfterLabel(line) {
   }
   // A value in mixed case that is no name ("PIN aBcD", "gate code aBcD").
   const mixed =
-    /\b(?:pin|(?:door|access|gate|alarm|entry) code)(?:\s+is)?\s+([a-z0-9-]{4,64})(?:(?:\s*[,;]\s*|\s+-+\s+|\s+)(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.!?]*$/i.exec(
+    /\b(?:pin|(?:door|access|gate|alarm|entry) code)(?:\s+is)?\s+([a-z0-9-]{4,64})(?:(?:\s*[,;]\s*|\s+[-–—]+\s+|\s+)(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.!?]*$/i.exec(
       line,
     );
   if (
@@ -452,7 +461,7 @@ function codeAfterLabel(line) {
   )
     return true;
   const match =
-    /\b((?:pin|cvv|cvc|otp|2fa|mfa|(?:door|access|gate|alarm|entry|security|verification|one-time|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{3,63})(?:(?:\s*[,;]\s*|\s+-+\s+|\s+)(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.!?]*$/i.exec(
+    /\b((?:pin|cvv|cvc|otp|2fa|mfa|(?:door|access|gate|alarm|entry|security|verification|one-time|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{3,63})(?:(?:\s*[,;]\s*|\s+[-–—]+\s+|\s+)(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.!?]*$/i.exec(
       line,
     );
   if (!match) return false;
