@@ -217,6 +217,14 @@ const TILE_DEG = 5;
  * far more than one lookup touches, and bounds what a long session keeps.
  */
 const MAX_TILES = 64;
+/**
+ * How far out small places are looked for, in km. 500 km is under the 556 km
+ * that 5 degrees of latitude span, so the search box reaches at most one tile
+ * past the point's own on each side: 3 rows, and 3 columns at the equator
+ * (more toward the poles, where tiles narrow). A wider view, out to the whole
+ * globe, still reads only those tiles; cities count to its full radius.
+ */
+export const PLACE_TILE_KM = 500;
 const NAMED = /\p{L}/u;
 const tiles = new Map();
 let loadTileIndex;
@@ -248,9 +256,11 @@ async function readPlaceTiles(latitude, longitude, radiusKm, fetchImpl) {
     readPlacePack(INDEX_URL(), fetchImpl),
   );
   const index = await loadTileIndex();
-  const keys = tileKeysAround(latitude, longitude, radiusKm).filter(
-    (key) => index.tiles[key],
-  );
+  const keys = tileKeysAround(
+    latitude,
+    longitude,
+    Math.min(radiusKm, PLACE_TILE_KM),
+  ).filter((key) => index.tiles[key]);
   // A tile that cannot be read is left out: the places of the others,
   // and the cities, are still the answer.
   const settled = await Promise.allSettled(
@@ -281,7 +291,10 @@ async function readPlacePack(url, fetchImpl) {
   return response.json();
 }
 
-/** Named cities and smaller places around one point, nearest first. */
+/**
+ * Named cities and smaller places around one point, nearest first. Smaller
+ * places are looked for within PLACE_TILE_KM only.
+ */
 export async function placesNear(
   { latitude, longitude, radiusKm = 10, limit = 6 },
   fetchImpl = (...args) => globalThis.fetch(...args),

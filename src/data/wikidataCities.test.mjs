@@ -281,3 +281,42 @@ test('a tile that cannot be read leaves the other places and the cities', async 
   assert.ok(near.some((place) => place.name === 'Austin'));
   assert.ok(near.some((place) => place.longitude > -95));
 });
+
+test('a view of the whole globe reads only the tiles near its centre', async () => {
+  const { placesNear, PLACE_TILE_KM } =
+    await import('./wikidataCities.js?globe');
+  const fetched = [];
+  const fetchPack = async (url) => {
+    fetched.push(url.pathname.split('/').at(-1));
+    return new Response(await readFile(url));
+  };
+  const near = await placesNear(
+    { latitude: 30.27, longitude: -97.74, radiusKm: 20000, limit: 50 },
+    fetchPack,
+  );
+  const tileReads = fetched
+    .filter((name) => /^-?\d+_-?\d+\.json$/.test(name))
+    .sort();
+  // 500 km around Austin: latitude 25.8 to 34.8, longitude -103 to -92.5.
+  assert.equal(PLACE_TILE_KM, 500);
+  assert.deepEqual(tileReads, [
+    '25_-100.json',
+    '25_-105.json',
+    '25_-95.json',
+    '30_-100.json',
+    '30_-105.json',
+    '30_-95.json',
+  ]);
+  assert.equal(near.length, 50);
+  assert.ok(near.every((place) => place.distanceKm <= PLACE_TILE_KM));
+  // Cities still count to the full radius.
+  const far = await placesNear(
+    { latitude: 30.27, longitude: -97.74, radiusKm: 20000, limit: Infinity },
+    fetchPack,
+  );
+  assert.ok(far.some((place) => place.wikidata === 'Q90'));
+  assert.equal(
+    fetched.filter((name) => /^-?\d+_-?\d+\.json$/.test(name)).length,
+    tileReads.length,
+  );
+});
