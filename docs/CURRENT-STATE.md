@@ -185,13 +185,6 @@ The browser continues to split larger workloads into sequential 64-point request
 
 Traffic holds continuous rendering only while enabled with shown animated dots, a pulsing jam heat-line, or road lines whose geometry is still building (replaced lines stay drawn until their successors are ready, so a rebuild never blinks; one set builds at a time, and of the rebuilds asked for meanwhile only the newest runs, when that build finishes; turning lines off removes them at once); hidden dots (`dots` off) and settled flow lines hold nothing. Empty and high-altitude views release the hold. A failed load leaves no hold only when no animated content is retained: if an earlier load succeeded, ingestion keeps its animated points and the hold stays. Population admission reacquires the hold and resets animation time. Clear, disable, and destroy also release it. Retained fading dots keep animation alive until they are removed. When the last point leaves mid height correction, the correction is settled at once, before the hold is released, so it cannot keep the layer reporting loading.
 
-CCTV live-media requests are same-site gated before catalog or media work, including
-HLS renewal, segment reads and DELETE cleanup. HLS leases belong to their socket
-peer (IPv4-mapped IPv6 is normalized), with eight leases per peer across the two
-global sessions. Peers behind the same NAT share that budget; this is resource
-admission, not authentication. Native same-origin video and range requests remain
-supported.
-
 Shared distance checks use `src/geoDistance.js` with `{ lat, lon }` points and
 the IUGG mean spherical Earth radius, 6371.0088 km. `greatCircleKm` is
 canonical; `greatCircleMeters` is its exact metre conversion. Missing,

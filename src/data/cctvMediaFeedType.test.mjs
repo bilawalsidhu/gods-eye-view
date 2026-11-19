@@ -155,9 +155,9 @@ function mount(t, respond) {
   });
   assert.ok(handler, 'the CCTV provider must mount a middleware');
 
-  const call = async (path, headers = {}) => {
+  const call = async (path, headers = {}, method = 'GET') => {
     const { res, done } = recordingResponse();
-    await handler({ url: path, headers, method: 'GET', on() {} }, res);
+    await handler({ url: path, headers, method, on() {} }, res);
     await done;
     return res;
   };
@@ -401,24 +401,35 @@ test('every CCTV route refuses cross-site requests and admits the app itself', a
     }),
   );
   const host = 'localhost:5173';
-  const paths = [
-    '/sources',
-    '/health',
-    `/stream/${STILL.id}`,
-    `/frame/${STILL.id}`,
-    `/media/${VIDEO.id}`,
+  const lease = '00000000-0000-4000-8000-000000000000';
+  const routes = [
+    ['GET', '/sources'],
+    ['GET', '/health'],
+    ['GET', `/stream/${STILL.id}`],
+    ['GET', `/frame/${STILL.id}`],
+    ['GET', `/media/${VIDEO.id}`],
+    ['GET', `/media/${VIDEO.id}/seg_0.ts?lease=${lease}`],
+    ['DELETE', `/media/${VIDEO.id}?lease=${lease}`],
   ];
+  // A catalog refresh would fetch the live packs: a refused request must not
+  // start one.
+  process.env.CCTV_FORCE_AUSTIN = '1';
   for (const headers of [
     { host, 'sec-fetch-site': 'cross-site' },
     { host, 'sec-fetch-site': 'same-site' },
     { host, origin: 'https://elsewhere.example' },
     { host, origin: 'null' },
   ])
-    for (const path of paths) {
-      const res = await app.call(path, headers);
-      assert.equal(res.statusCode, 403, `${path} ${JSON.stringify(headers)}`);
+    for (const [method, path] of routes) {
+      const res = await app.call(path, headers, method);
+      assert.equal(
+        res.statusCode,
+        403,
+        `${method} ${path} ${JSON.stringify(headers)}`,
+      );
     }
   assert.deepEqual(app.requests, [], 'a refused request reached an upstream');
+  process.env.CCTV_FORCE_AUSTIN = '0';
   for (const headers of [
     { host, 'sec-fetch-site': 'same-origin' },
     { host, origin: `http://${host}` },
@@ -527,47 +538,4 @@ test('a forwarded same-origin request reaches every CCTV route but not the Stree
   assert.equal(direct.headers['X-CCTV-Source'], 'streetview');
   assert.equal(direct.body, 'street-view');
   assert.equal(streetViewCalls(), 1);
-});
-
-test('cross-site media creation, segment reads and release fail before any catalog or media fetch', async (t) => {
-  let handler;
-  const originalFetch = globalThis.fetch;
-  let calls = 0;
-  globalThis.fetch = async () => {
-    calls++;
-    throw new Error('must not fetch');
-  };
-  t.after(() => {
-    globalThis.fetch = originalFetch;
-  });
-  cctvProxy().configureServer({
-    middlewares: {
-      use: (_path, fn) => {
-        handler = fn;
-      },
-    },
-  });
-  for (const headers of [
-    { origin: 'https://foreign.example' },
-    { origin: 'null' },
-    { 'sec-fetch-site': 'cross-site' },
-    { 'sec-fetch-site': 'same-site' },
-  ]) {
-    for (const [method, url] of [
-      ['GET', '/media/camera?lease=test'],
-      ['DELETE', '/media/camera?lease=test'],
-      ['GET', '/media/camera/seg_0.ts?lease=test'],
-    ]) {
-      const { res } = recordingResponse();
-      res.setHeader = (name, value) => {
-        res.headers[name] = value;
-      };
-      await handler(
-        { method, url, headers: { host: 'localhost:4173', ...headers } },
-        res,
-      );
-      assert.equal(res.statusCode, 403);
-    }
-  }
-  assert.equal(calls, 0);
 });

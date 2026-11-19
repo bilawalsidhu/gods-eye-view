@@ -264,10 +264,6 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         // keyless gate keeps the routes reachable behind a reverse proxy; the
         // key-bearing Street View fallback below has its own check.
         if (admitSameSiteKeyless(req, res)) return;
-        const clientId = String(req.socket?.remoteAddress || 'unknown').replace(
-          /^::ffff:/,
-          '',
-        );
         const sources = await getCctvSources();
         const sourceById = new Map(
           sources.map((source) => [source.id, source]),
@@ -379,7 +375,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             return;
           }
           if (req.method === 'DELETE') {
-            if (leaseId) puller.release(cameraId, leaseId, clientId);
+            if (leaseId) puller.release(cameraId, leaseId);
             res.writeHead(204);
             res.end();
             return;
@@ -409,7 +405,6 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
                 url.searchParams.get('session'),
                 Number(match[3]),
                 leaseId,
-                clientId,
               );
               res.writeHead(body ? 200 : 404, {
                 'Content-Type': 'video/mp2t',
@@ -421,15 +416,10 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             const downstream = watchDownstreamClose(res);
             let entry;
             const cancelPending = () => {
-              if (entry) puller.release(cameraId, leaseId, clientId);
+              if (entry) puller.release(cameraId, leaseId);
             };
             try {
-              entry = await puller.ensure(
-                cameraId,
-                mediaUrl,
-                leaseId,
-                clientId,
-              );
+              entry = await puller.ensure(cameraId, mediaUrl, leaseId);
               if (downstream.closed) {
                 cancelPending();
                 return;
@@ -443,7 +433,6 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
                 entry,
                 cameraId,
                 leaseId,
-                clientId,
               );
               if (downstream.closed) return;
               if (!playlist) throw new Error('Stream unavailable');
