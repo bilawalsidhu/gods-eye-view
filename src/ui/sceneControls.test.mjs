@@ -49,6 +49,8 @@ function fixture() {
     import: byId('scene-import-btn'),
     file: byId('scene-import-file'),
     download: byId('scene-download-btn'),
+    stories: byId('scene-stories-btn'),
+    thumb: byId('scene-thumb-btn'),
     status: byId('scene-status'),
     progress: byId('scene-progress-fill'),
     runtime: byId('scene-runtime'),
@@ -83,6 +85,9 @@ function fixture() {
       'renameShot',
       'create',
       'deleteScene',
+      'stories',
+      'thumb',
+      'tag',
       'capture',
       'update',
       'start',
@@ -93,6 +98,7 @@ function fixture() {
       'download',
       'load',
       'deleteShot',
+      'moveShot',
     ].map((name) => [
       name,
       (...args) => {
@@ -110,6 +116,8 @@ function fixture() {
     document,
     /** The first shot row's label, once the view has rendered. */
     label: () => elements.shots.children[0]?.children[0].children[0],
+    /** The Stories tag chips, in STORY_TAGS order. */
+    chips: () => [...document.querySelectorAll('.scene-tag-chip')],
     restore() {
       owner.destroy();
       view.unmount();
@@ -184,13 +192,23 @@ test('Authoring disables idle actions that would do nothing', async () => {
     assert.equal(f.elements.capture.disabled, false);
     assert.equal(f.elements.panel.classList.contains('has-shots'), false);
 
-    f.state.scenes = [];
+    // With no scene selected, PLAY and NEXT have nothing to run even when
+    // another scene has shots; CAPTURE SHOT starts a scene.
+    f.state.scenes.push({ id: 'scene-b', title: 'B', shots: [{ id: 'b1' }] });
     f.state.selectedSceneId = null;
+    f.state.selectedShotId = null;
     f.owner.setButtons(false);
     await nextTick();
     assert.equal(f.elements.delete.disabled, true);
-    assert.equal(f.elements.capture.disabled, true);
+    assert.equal(f.elements.capture.disabled, false);
     assert.equal(f.elements.new.disabled, false);
+    assert.equal(f.elements.start.disabled, true);
+    assert.equal(f.elements.next.disabled, true);
+    assert.equal(f.elements.update.disabled, true);
+    assert.equal(f.elements.stories.disabled, true);
+    assert.equal(f.elements.thumb.disabled, true);
+    assert.ok(f.chips().every((chip) => chip.disabled));
+    assert.equal(f.elements.export.disabled, false);
   } finally {
     f.restore();
   }
@@ -202,22 +220,30 @@ test('Scene controls dispatch panel and shot-row actions, and rows outlive repub
     await nextTick();
     const row = f.elements.shots.children[0];
     const label = f.label();
-    const load = row.children[0].children[1].children[0];
+    const [up, down, del] = row.children[0].children[1].children;
     f.elements.capture.click();
     f.elements.start.click();
+    // A click on the row goes to the shot: selected and loaded.
     label.click();
     label.dispatchEvent(new Event('dblclick'));
     await nextTick();
     label.children[0].value = 'Renamed';
+    // A click in the name being typed goes nowhere.
+    label.children[0].click();
     label.children[0].dispatchEvent(new Event('blur'));
-    load.click();
     assert.deepEqual(f.calls, [
       ['capture'],
       ['start', 'scene-a'],
       ['selectShot', 'shot-a'],
-      ['renameShot', 'scene-a', 'shot-a', 'Renamed'],
       ['load', 'scene-a', 'shot-a'],
+      ['renameShot', 'scene-a', 'shot-a', 'Renamed'],
     ]);
+    // A lone shot has nowhere to move; the buttons never load it.
+    assert.equal(up.disabled, true);
+    assert.equal(down.disabled, true);
+    window.confirm = () => false;
+    del.click();
+    assert.equal(f.calls.length, 5);
     f.owner.renderShotList();
     await nextTick();
     assertSameNode(f.elements.shots.children[0], row);
@@ -229,10 +255,75 @@ test('Scene controls dispatch panel and shot-row actions, and rows outlive repub
     f.owner.destroy();
     await nextTick();
     f.label().click();
-    assert.deepEqual(f.calls.at(-1), ['selectShot', 'shot-a']);
+    assert.deepEqual(f.calls.slice(-2), [
+      ['selectShot', 'shot-a'],
+      ['load', 'scene-a', 'shot-a'],
+    ]);
     newer.destroy();
     await nextTick();
     assert.equal(f.elements.shots.children.length, 0);
+  } finally {
+    f.restore();
+  }
+});
+
+test('a shot row goes to its shot from the keyboard, and its up and down buttons swap it with a neighbour', async () => {
+  const f = fixture();
+  try {
+    f.state.scenes[0].shots.push(
+      { id: 'shot-b', title: 'Shot B', durationSec: 4, holdSec: 0 },
+      { id: 'shot-c', title: 'Shot C', durationSec: 4, holdSec: 0 },
+    );
+    f.owner.renderShotList();
+    await nextTick();
+    const rows = () => [...f.elements.shots.children];
+    const buttons = (index) => rows()[index].querySelectorAll('button');
+    const label = (index) => rows()[index].querySelector('.scene-shot-label');
+
+    // The title is the row's keyboard control, described by its summary.
+    const second = label(1);
+    assert.equal(second.getAttribute('role'), 'button');
+    assert.equal(second.getAttribute('tabindex'), '0');
+    const meta = document.getElementById(
+      second.getAttribute('aria-describedby'),
+    );
+    assert.ok(meta.classList.contains('scene-shot-meta'));
+    for (const key of ['Enter', ' '])
+      second.dispatchEvent(
+        Object.assign(new Event('keydown', { bubbles: true }), { key }),
+      );
+    second.dispatchEvent(
+      Object.assign(new Event('keydown', { bubbles: true }), { key: 'a' }),
+    );
+    assert.deepEqual(f.calls, [
+      ['selectShot', 'shot-b'],
+      ['load', 'scene-a', 'shot-b'],
+      ['selectShot', 'shot-b'],
+      ['load', 'scene-a', 'shot-b'],
+    ]);
+
+    // Up and down, labelled, disabled at the ends; neither loads the shot.
+    f.calls.length = 0;
+    const [firstUp, firstDown] = buttons(0);
+    assert.equal(firstUp.getAttribute('aria-label'), 'Move up');
+    assert.equal(firstDown.getAttribute('aria-label'), 'Move down');
+    assert.equal(firstUp.disabled, true);
+    assert.equal(firstDown.disabled, false);
+    assert.equal(buttons(2)[1].disabled, true);
+    assert.equal(buttons(2)[0].disabled, false);
+    buttons(1)[0].click();
+    buttons(1)[1].click();
+    assert.deepEqual(f.calls, [
+      ['moveShot', 'scene-a', 'shot-b', 0],
+      ['moveShot', 'scene-a', 'shot-b', 2],
+    ]);
+
+    // Not while the scene plays.
+    f.state.running = true;
+    f.owner.setButtons(true);
+    await nextTick();
+    assert.ok(rows().every((_, index) => buttons(index)[0].disabled));
+    assert.ok(rows().every((_, index) => buttons(index)[1].disabled));
   } finally {
     f.restore();
   }
@@ -415,6 +506,64 @@ test('the real director preserves a selected shot label for the following double
   }
 });
 
+test('the real director shows the scene it selects and saves it to Stories', async () => {
+  const f = fixture();
+  const previousStorage = globalThis.localStorage;
+  let saved = null;
+  let director;
+  try {
+    f.owner.destroy();
+    f.state.scenes.push({ id: 'scene-b', title: 'Scene B', shots: [] });
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      writable: true,
+      value: {
+        getItem: () => JSON.stringify({ version: 3, scenes: f.state.scenes }),
+        setItem: (_key, value) => {
+          saved = JSON.parse(value);
+        },
+      },
+    });
+    director = new SceneDirector({ camera: { cancelFlight() {} } }, {}, {});
+    await nextTick();
+    // The first scene is selected on load, as before Stories.
+    assert.equal(f.elements.select.value, 'scene-a');
+    assert.equal(
+      f.elements.shots.querySelectorAll('.scene-shot-row').length,
+      1,
+    );
+    assert.equal(f.elements.stories.textContent, 'SAVE TO STORIES');
+    f.elements.stories.click();
+    await nextTick();
+    assert.equal(saved.scenes[0].stories, true);
+    assert.equal(f.elements.status.textContent, 'Saved to Stories');
+    assert.equal(f.elements.stories.textContent, 'REMOVE FROM STORIES');
+
+    // Stories' "Open in GEV" selects programmatically; the select follows.
+    assert.equal(director.selectShot('scene-b'), true);
+    await nextTick();
+    assert.equal(f.elements.select.value, 'scene-b');
+    assert.equal(f.elements.stories.textContent, 'SAVE TO STORIES');
+    assert.equal(f.elements.stories.disabled, true);
+
+    director.selectShot('scene-a');
+    await nextTick();
+    f.elements.stories.click();
+    await nextTick();
+    assert.equal(Object.hasOwn(saved.scenes[0], 'stories'), false);
+    assert.equal(f.elements.status.textContent, 'Removed from Stories');
+    assert.equal(f.elements.stories.textContent, 'SAVE TO STORIES');
+  } finally {
+    await director?.destroy();
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      writable: true,
+      value: previousStorage,
+    });
+    f.restore();
+  }
+});
+
 test('inline shot names save on Enter, cancel on Escape, and reject blank names', async () => {
   const f = fixture();
   const key = (name) => new KeyboardEvent('keydown', { key: name });
@@ -516,6 +665,47 @@ test('an option render restores the published scene after a local pick', async (
   }
 });
 
+test('SAVE TO STORIES follows the scene flag and needs a shot', async () => {
+  const f = fixture();
+  try {
+    f.owner.destroy();
+    const channel = createStateChannel(() => f.state);
+    const owner = new SceneControls({
+      read: () => f.state,
+      actions: f.actions,
+      subscribe: (listener) => channel.subscribe(listener),
+    });
+    await nextTick();
+    assert.equal(f.elements.stories.textContent, 'SAVE TO STORIES');
+    assert.equal(f.elements.stories.disabled, false);
+    f.elements.stories.click();
+    assert.deepEqual(f.calls, [['stories']]);
+
+    f.state.scenes[0].stories = true;
+    channel.publish({ type: 'stories-changed' });
+    await nextTick();
+    assert.equal(f.elements.stories.textContent, 'REMOVE FROM STORIES');
+    assert.equal(useSceneStore(applicationPinia()).panel.inStories, true);
+
+    delete f.state.scenes[0].stories;
+    f.state.scenes[0].shots = [];
+    channel.publish({ type: 'shot-deleted' });
+    await nextTick();
+    assert.equal(f.elements.stories.textContent, 'SAVE TO STORIES');
+    assert.equal(f.elements.stories.disabled, true);
+
+    f.state.scenes[0].shots = [{ id: 'shot-a' }];
+    f.state.running = true;
+    channel.publish({ type: 'buttons-changed' });
+    await nextTick();
+    assert.equal(f.elements.stories.disabled, true, 'off while playing');
+    owner.destroy();
+    channel.destroy();
+  } finally {
+    f.restore();
+  }
+});
+
 test('Scene controls consume current state, preserve rows on progress, and unsubscribe on destruction', async () => {
   const f = fixture();
   try {
@@ -601,7 +791,8 @@ test('Authoring refreshes idle buttons from published changes', async () => {
     channel.publish({ type: 'scene-deleted' });
     await nextTick();
     assert.equal(disabled('delete'), true);
-    assert.equal(disabled('capture'), true);
+    assert.equal(disabled('capture'), false);
+    assert.equal(disabled('thumb'), true);
     assert.equal(disabled('new'), false);
 
     f.state.scenes = [{ id: 'scene-b', title: 'B', shots: [{ id: 's' }] }];
@@ -663,6 +854,215 @@ test('IMPORT clears its chooser only once the import settles, and is inert witho
     f.elements.import.click();
     assert.equal(opened, 1, 'no chooser once the owner is gone');
   } finally {
+    f.restore();
+  }
+});
+
+test('CAPTURE SHOT with no scene asks for a name, creates the scene, then captures', async () => {
+  const f = fixture();
+  try {
+    f.state.selectedSceneId = null;
+    f.state.selectedShotId = null;
+    f.owner.renderSceneSelect();
+    f.owner.setButtons(false);
+    await nextTick();
+    let asked = 0;
+    window.prompt = () => (asked++ ? null : 'Harbour');
+    f.elements.capture.click();
+    assert.deepEqual(f.calls, [['create', 'Harbour'], ['capture']]);
+    // Cancelling the name captures nothing.
+    f.elements.capture.click();
+    assert.equal(asked, 2);
+    assert.equal(f.calls.length, 2);
+    // With a scene, CAPTURE SHOT captures straight away.
+    f.state.selectedSceneId = 'scene-a';
+    f.elements.capture.click();
+    assert.deepEqual(f.calls.at(-1), ['capture']);
+    assert.equal(asked, 2);
+  } finally {
+    f.restore();
+  }
+});
+
+test('Stories tag chips and THUMBNAIL follow the current scene', async () => {
+  const f = fixture();
+  try {
+    await nextTick();
+    const chips = f.chips();
+    assert.deepEqual(
+      chips.map((chip) => chip.textContent),
+      [
+        'Floods',
+        'Wildfires',
+        'Storms',
+        'Earthquakes',
+        'Flights',
+        'Maritime',
+        'Space',
+        'Conflict',
+        'Infrastructure',
+        'Climate',
+      ],
+    );
+    assert.ok(
+      chips.every((chip) => chip.getAttribute('aria-pressed') === 'false'),
+    );
+    assert.ok(chips.every((chip) => !chip.disabled));
+    assert.equal(f.elements.thumb.disabled, false);
+    assert.equal(document.getElementById('scene-thumb-preview'), null);
+
+    chips[2].click();
+    f.elements.thumb.click();
+    assert.deepEqual(f.calls, [['tag', 'Storms'], ['thumb']]);
+
+    // The owner publishes fresh scene copies, as the director's read() does.
+    f.state.scenes[0] = {
+      ...f.state.scenes[0],
+      storyTags: ['Storms'],
+      storyThumb: 'data:image/jpeg;base64,AAAA',
+    };
+    f.owner.renderSceneSelect();
+    await nextTick();
+    assert.equal(f.chips()[2].getAttribute('aria-pressed'), 'true');
+    assert.equal(f.chips()[2].classList.contains('active'), true);
+    const preview = document.getElementById('scene-thumb-preview');
+    assert.equal(preview.getAttribute('src'), 'data:image/jpeg;base64,AAAA');
+
+    // At five tags, only the chips already on stay available.
+    f.state.scenes[0] = {
+      ...f.state.scenes[0],
+      storyTags: ['Floods', 'Wildfires', 'Storms', 'Earthquakes', 'Flights'],
+    };
+    f.owner.renderSceneSelect();
+    await nextTick();
+    assert.deepEqual(
+      f.chips().map((chip) => chip.disabled),
+      [false, false, false, false, false, true, true, true, true, true],
+    );
+
+    // A run turns them off with the other authoring actions.
+    f.owner.setButtons(true);
+    await nextTick();
+    assert.equal(f.elements.thumb.disabled, true);
+    assert.ok(f.chips().every((chip) => chip.disabled));
+  } finally {
+    f.restore();
+  }
+});
+
+test('after a reload, authoring picks any scene, and PLAY and NEXT work', async () => {
+  const f = fixture();
+  const previousStorage = globalThis.localStorage;
+  let saved = null;
+  let director;
+  try {
+    f.owner.destroy();
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      writable: true,
+      value: {
+        getItem: () =>
+          JSON.stringify({
+            version: 3,
+            scenes: [
+              ...f.state.scenes,
+              { id: 'empty-draft', title: 'Empty draft', shots: [] },
+              {
+                id: 'scene-c',
+                title: 'Scene C',
+                shots: [{ id: 'shot-c', title: 'Shot C' }],
+              },
+            ],
+          }),
+        setItem: (_key, value) => {
+          saved = JSON.parse(value);
+        },
+      },
+    });
+    director = new SceneDirector(
+      { camera: { cancelFlight() {} } },
+      {
+        getCameraState: () => ({
+          lat: 1,
+          lon: 2,
+          alt: 3000,
+          heading: 0,
+          pitch: -40,
+          roll: 0,
+        }),
+        getVisualState: () => ({ style: 'normal' }),
+      },
+      { getAll: () => [], getLayerParams: () => null },
+    );
+    const runs = [];
+    director.startScene = (id) => runs.push(['start', id]);
+    director.runNextScene = () => runs.push(['next']);
+    await nextTick();
+    // The first scene and its first shot are selected, as before a reload.
+    assert.deepEqual(director.selection(), {
+      sceneId: 'scene-a',
+      shotId: 'shot-a',
+    });
+    assert.equal(f.elements.start.disabled, false);
+    assert.equal(f.elements.next.disabled, false);
+    f.elements.start.click();
+    f.elements.next.click();
+    assert.deepEqual(runs, [['start', 'scene-a'], ['next']]);
+
+    // The select lists every scene, with shots or not.
+    assert.deepEqual(
+      [...f.elements.select.options].map(({ value }) => value),
+      ['scene-a', 'empty-draft', 'scene-c'],
+    );
+    f.elements.select.value = 'scene-c';
+    f.elements.select.dispatchEvent(new Event('change'));
+    await nextTick();
+    assert.deepEqual(director.selection(), {
+      sceneId: 'scene-c',
+      shotId: 'shot-c',
+    });
+
+    f.elements.select.value = 'empty-draft';
+    f.elements.select.dispatchEvent(new Event('change'));
+    await nextTick();
+    assert.equal(director.selection().sceneId, 'empty-draft');
+    assert.equal(
+      director.draftScenes().some(({ id }) => id === 'empty-draft'),
+      false,
+    );
+    // CAPTURE SHOT adds to the picked scene without asking for a name.
+    window.prompt = () => {
+      throw new Error('no name is asked for');
+    };
+    f.elements.capture.click();
+    await nextTick();
+    const draft = saved.scenes.find(({ id }) => id === 'empty-draft');
+    assert.equal(draft.shots.length, 1);
+    assert.equal(f.elements.thumb.disabled, false);
+    f.chips()[0].click();
+    await nextTick();
+    assert.deepEqual(
+      saved.scenes.find(({ id }) => id === 'empty-draft').storyTags,
+      ['Floods'],
+    );
+
+    // Deleting it selects the first scene again.
+    window.confirm = () => true;
+    f.elements.delete.click();
+    await nextTick();
+    assert.equal(
+      saved.scenes.some(({ id }) => id === 'empty-draft'),
+      false,
+    );
+    assert.equal(f.elements.select.value, 'scene-a');
+    assert.equal(director.selection().sceneId, 'scene-a');
+  } finally {
+    await director?.destroy();
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      writable: true,
+      value: previousStorage,
+    });
     f.restore();
   }
 });

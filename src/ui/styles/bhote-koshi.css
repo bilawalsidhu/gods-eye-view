@@ -361,18 +361,17 @@ html:not([lang='en']) .bhote-embedded-callout footer a {
   color: var(--text-primary);
 }
 
+/* A UiCloseButton (close-button.css). */
 .bhote-event-icon-btn {
   flex: 0 0 30px;
   width: 30px;
   height: 30px;
-  padding: 0;
   border: 1px solid rgba(151, 211, 224, 0.26);
   border-radius: 4px;
   color: var(--text-primary);
   background: var(--accent-dim);
   font: inherit;
   font-size: 18px;
-  cursor: pointer;
 }
 
 .bhote-event-status-row {

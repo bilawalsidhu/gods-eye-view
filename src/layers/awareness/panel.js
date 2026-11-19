@@ -2,13 +2,9 @@ import {
   formatAwarenessLabel,
   AWARENESS_RADIUS_M,
 } from '../../data/militaryAwarenessEngine.js';
-import {
-  formatNumber,
-  onLocaleChange,
-  t,
-  translateKnown,
-} from '../../i18n/index.js';
+import { formatNumber, onLocaleChange, t } from '../../i18n/index.js';
 import { sourceStatusLabel } from '../../ui/layerNames.js';
+import { translateStatusMessage } from '../../ui/statusText.js';
 import { formatQuantity } from '../../ui/unitLabels.js';
 import { AWARENESS_PAGE_SIZE, AWARENESS_PAGE_ROTATE_MS } from './policy.js';
 import { distanceParts } from '../../data/distanceFormat.js';
@@ -45,7 +41,7 @@ export function presentAwarenessDistance(meters) {
 function presentAwarenessReason(summary = {}) {
   return summary.reasonTemplate
     ? t(summary.reasonTemplate, summary.reasonValues)
-    : translateKnown(summary.reason || '');
+    : translateStatusMessage(summary.reason || '');
 }
 
 /**
@@ -222,9 +218,14 @@ export function createPanel({ state: layerState, parts }) {
     ensurePanel();
     layerState.panelRenders += 1;
     const { subject, cohorts } = layerState.results;
+    const windowLabel = t('{distance} FLIGHT / VESSEL WINDOW', {
+      distance: presentAwarenessDistance(AWARENESS_RADIUS_M),
+    });
     publish({
       kind: 'results',
-      subject: `${subject.label} · ${t('{distance} FLIGHT / VESSEL WINDOW', { distance: presentAwarenessDistance(AWARENESS_RADIUS_M) })}`,
+      subject: `${subject.label} · ${windowLabel}`,
+      subjectIdentity: { layerId: subject.layerId, id: subject.id },
+      subjectLabel: subject.label,
       subjectNames: presentNames(subject.memberNames),
       photo: presentPhoto(subject),
       navigation: presentNavigation(),

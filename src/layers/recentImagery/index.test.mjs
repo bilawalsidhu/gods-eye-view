@@ -1,13 +1,14 @@
 import test from 'node:test';
+import * as Cesium from 'cesium';
 import assert from 'node:assert/strict';
 import { until } from '../../testSupport/kartaViewFakes.mjs';
 import { createRecentImagerySource } from './source.js';
 import { createThumbnailLoader } from './thumbnails.js';
-import { createRecentImageryRenderer } from './rendering.js';
 import { nonCrossingBoxes } from './model.js';
 import { NO_IMAGERY_HOST } from '../../maps/imageryHost.js';
 import { acquireImageryComparison } from '../../maps/imageryComparison.js';
 import { MapSourceController } from '../../maps/controller.js';
+import '../../render/cesium/mapEngine.js';
 import { createDefaultMapSources } from '../../maps/defaultSources.js';
 import { resetPointerOwnership } from '../../data/inputOwnership.js';
 import { initImageryBoxTool } from '../../ui/imageryBoxTool.js';
@@ -18,20 +19,26 @@ import {
   createRecentImageryLayer,
 } from './index.js';
 import {
+  createImageryBoxPreview,
+  createRecentImageryRenderer,
+} from './rendering.js';
+import { fakeGlobePort } from '../../testSupport/fakeGlobePort.mjs';
+import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
+import {
   BOX,
   CANDIDATES,
   FIJI_BOX,
   boxToolFakes,
   candidate,
   fakeCatalog,
-  fakeCesium,
-  fakeCollection,
   fakeController,
   fakeRenderer,
   fakeThumbnails,
   manualTimers,
   settle,
 } from './testDoubles.mjs';
+import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
+import { fakeSceneQuery } from '../../testSupport/fakeCesiumScene.mjs';
 
 const NOW = new Date('2026-09-21T15:00:00Z');
 const LINK_BOX = {
@@ -120,6 +127,8 @@ function fixture({
   hostKind = 'globe',
   controller = fakeController(),
   viirs = true,
+  globeOf,
+  ports = () => ({}),
 } = {}) {
   const renderer = fakeRenderer();
   const thumbnails = fakeThumbnails();
@@ -135,12 +144,14 @@ function fixture({
       collection: collections[hostState.kind],
       kind: hostState.kind,
     }),
+    ...(globeOf && { globeOf }),
     now: () => NOW,
     setTimeoutImpl: timers.setTimeoutImpl,
     clearTimeoutImpl: timers.clearTimeoutImpl,
   });
   if (viirs) layer.setSources({ viirs: true });
   const viewer = { camera: {} };
+  bindFakeCesiumCamera(viewer, ports(viewer));
   const reasons = [];
   layer.subscribe((snapshot, reason) => reasons.push(reason));
   layer.init(viewer);
@@ -834,6 +845,32 @@ test('without a host the drapes hide and say so; the stats poll rebinds when no 
   assert.equal(f.owned().a.kind, 'tileset');
 });
 
+test("the renderer is bound with the viewer's globe port, and the attached tileset while that is the host", async () => {
+  const globe = { name: 'globe port' };
+  const asked = [];
+  const f = fixture({
+    globeOf: (viewer) => {
+      asked.push(viewer);
+      return globe;
+    },
+  });
+  await f.ready();
+  const last = () => f.renderer.hosts.at(-1);
+  assert.equal(last().globe, globe);
+  assert.equal(last().tileset, null, 'a globe host carries no tileset');
+  assert.ok(asked.every((viewer) => viewer === f.viewer));
+  const tileset = { name: 'photoreal' };
+  f.hostState.kind = 'tileset';
+  f.layer.attachTileset(tileset);
+  assert.equal(last().kind, 'tileset');
+  assert.equal(last().globe, globe);
+  assert.equal(last().tileset, tileset);
+  f.hostState.kind = 'none';
+  f.layer.getStats();
+  assert.equal(last().globe, null, 'no host, no port');
+  f.layer.destroy();
+});
+
 test('a controller subscription moves the drape to the new host on every settled switch', async () => {
   const listeners = new Set();
   const controller = {
@@ -972,8 +1009,11 @@ test('USE VIEW takes the camera rectangle and refuses a view over the cap instea
 });
 
 test('ZOOM IN: an oversized box or view flies top-down to its centre at the height whose view is 400 km wide', () => {
-  const f = fixture();
+  // The renderer's query port picks the ellipsoid through the camera's own.
+  const f = fixture({ ports: (viewer) => ({ query: fakeSceneQuery(viewer) }) });
   const flights = [];
+  const landing = (i) =>
+    Cesium.Ellipsoid.WGS84.cartesianToCartographic(flights[i].destination);
   const deg = (rad) => (rad * 180) / Math.PI;
   const rad = (value) => (value * Math.PI) / 180;
   // A 1000 × 500 canvas with a 60° horizontal FOV.
@@ -981,20 +1021,25 @@ test('ZOOM IN: an oversized box or view flies top-down to its centre at the heig
   const expected = 400_000 / (2 * Math.tan(Math.PI / 6));
   let centreHit = null;
   Object.assign(f.viewer, {
-    scene: {
-      canvas: { clientWidth: 1000, clientHeight: 500 },
-      ellipsoid: {
-        cartographicToCartesian: (c) => ({ ...c, cartesian: true }),
-        cartesianToCartographic: (c) => c && { ...c },
-      },
-    },
+    canvas: { clientWidth: 1000, clientHeight: 500 },
   });
   Object.assign(f.viewer.camera, {
     frustum: { fovy },
     flyTo: (options) => flights.push(options),
     pickEllipsoid: (position) => {
-      assert.deepEqual(position, { x: 500, y: 250 }, 'the canvas centre');
-      return centreHit;
+      assert.deepEqual(
+        [position.x, position.y],
+        [500, 250],
+        'the canvas centre',
+      );
+      return (
+        centreHit &&
+        Cesium.Cartesian3.fromRadians(
+          centreHit.longitude,
+          centreHit.latitude,
+          centreHit.height,
+        )
+      );
     },
   });
   f.layer.enable();
@@ -1007,9 +1052,9 @@ test('ZOOM IN: an oversized box or view flies top-down to its centre at the heig
   assert.ok(Math.abs(height - expected) < 1e-6, String(height));
   assert.equal(flights.length, 1);
   const [flight] = flights;
-  assert.ok(Math.abs(deg(flight.destination.longitude) - 10) < 1e-9);
-  assert.ok(Math.abs(deg(flight.destination.latitude) - 10) < 1e-9);
-  assert.equal(flight.destination.height, height);
+  assert.ok(Math.abs(deg(landing(0).longitude) - 10) < 1e-9);
+  assert.ok(Math.abs(deg(landing(0).latitude) - 10) < 1e-9);
+  assert.ok(Math.abs(landing(0).height - height) < 1e-6);
   assert.deepEqual(flight.orientation, {
     heading: 0,
     pitch: -Math.PI / 2,
@@ -1027,14 +1072,14 @@ test('ZOOM IN: an oversized box or view flies top-down to its centre at the heig
   assert.equal(f.layer.useCurrentView(), false);
   assert.equal(f.snap().zoomToFit, true);
   f.layer.zoomToFit();
-  assert.ok(Math.abs(deg(flights[1].destination.longitude) + 97) < 1e-9);
-  assert.ok(Math.abs(deg(flights[1].destination.latitude) - 31) < 1e-9);
+  assert.ok(Math.abs(deg(landing(1).longitude) + 97) < 1e-9);
+  assert.ok(Math.abs(deg(landing(1).latitude) - 31) < 1e-9);
   // Sky at the centre: the view rectangle's centre instead.
   centreHit = null;
   f.layer.useCurrentView();
   f.layer.zoomToFit();
-  assert.ok(Math.abs(deg(flights[2].destination.longitude) + 98) < 1e-9);
-  assert.ok(Math.abs(deg(flights[2].destination.latitude) - 30) < 1e-9);
+  assert.ok(Math.abs(deg(landing(2).longitude) + 98) < 1e-9);
+  assert.ok(Math.abs(deg(landing(2).latitude) - 30) < 1e-9);
   // The box tool's own oversized drag carries its box.
   f.layer.reportBoxRefusal('Box is 2,226 km wide · limit 1,000 km', {
     west: 0,
@@ -1069,6 +1114,10 @@ test('alpha, split and visible range notify without re-rendering the row', async
   f.layer.setSplit(0.25);
   f.layer.setVisibleRange(1, 3);
   assert.equal(f.thumbnails.calls.at(-1)[2].firstVisible, 1);
+  assert.ok(
+    f.thumbnails.retained.at(-1).includes(f.snap().focus.key),
+    'the current focus remains in the retained refinement intent',
+  );
   assert.equal(rowRenders, rows);
   assert.deepEqual(f.reasons.slice(-2), ['alpha', 'split']);
   f.layer.setAlpha('bad');
@@ -1156,6 +1205,48 @@ const dailyViirs = () =>
       new Date(Date.UTC(2026, 8, 21 - back)).toISOString().slice(0, 10),
     ),
   );
+
+test('empty auto VIIRS re-requests a cancelled successor', async () => {
+  const f = fixture();
+  const days = dailyViirs();
+  const newest = days[0].key;
+  const next = days[1].key;
+  f.layer.setSources({ hls: false });
+  await f.ready(days);
+
+  assert.equal(f.diag().following, newest);
+  assert.ok(
+    f.thumbnails.retained.at(-1).includes(next),
+    'the next day was originally scheduled',
+  );
+
+  // Move the visible window away before either day answers: retention
+  // cancels the next day's probe but keeps the currently followed day.
+  f.layer.setVisibleRange(25, 29);
+  assert.equal(
+    f.thumbnails.retained.at(-1).includes(next),
+    false,
+    'the next day is no longer retained',
+  );
+  const before = f.thumbnails.requests.filter(([key]) => key === next).length;
+
+  f.thumbnails.probe(newest, 'empty');
+  assert.equal(f.diag().following, next);
+  assert.equal(f.snap().preview.pending, next);
+  assert.ok(
+    f.thumbnails.retained.at(-1).includes(next),
+    'the new follow day is retained without scrolling again',
+  );
+  assert.equal(
+    f.thumbnails.requests.filter(([key]) => key === next).length,
+    before + 1,
+    'the cancelled successor is requested again',
+  );
+
+  f.thumbnails.probe(next, 'present');
+  assert.equal(f.snap().preview.key, next);
+  assert.deepEqual(f.drapes(), { a: `${next}|none`, b: null });
+});
 
 test('restored pins outside the visible strip window are probed and swipe once present', async () => {
   const f = fixture();
@@ -1373,7 +1464,8 @@ test('with SELECT BOX armed, Escape clears the preview first and the next Escape
   const cancels = [];
   const tool = initImageryBoxTool({
     viewer: fakes.viewer,
-    cesium: fakes.cesium,
+    createPreview: (viewer, dragBox) =>
+      createImageryBoxPreview(viewer, dragBox, { draw: fakeDrawPort() }),
     pickWorld: fakes.pickWorld,
     documentRef: fakes.documentRef,
     onBox: (box) => f.layer.setBox(box),
@@ -1462,14 +1554,15 @@ function realLayer({
     revokeObjectUrl: () => {},
     maxDecoded,
   });
-  const globe = fakeCollection();
+  const globe = fakeGlobePort();
   const layer = createRecentImageryLayer({
     catalog: {
       searchHls: async () => ({ candidates, truncated: false, errors: [] }),
     },
-    renderer: createRecentImageryRenderer({ cesium: fakeCesium() }),
+    renderer: createRecentImageryRenderer(),
     thumbnails: loader,
-    host: () => ({ collection: globe, kind: 'globe' }),
+    host: () => ({ collection: globe.imagery, kind: 'globe' }),
+    globeOf: () => globe,
     now: () => new Date('2026-11-13T15:00:00Z'),
   });
   layer.init({ camera: {} });
@@ -1497,7 +1590,7 @@ test('a VIIRS dateline day with data on one side drapes only that side through t
   );
   assert.deepEqual(sides, ['east', 'west']);
   assert.deepEqual(
-    globe.layers.map((layer) => layer.provider.options.rectangle),
+    globe.layers.map((layer) => layer.spec.rectangle),
     [nonCrossingBoxes(FIJI_BOX)[1]],
   );
   assert.equal(loader.get(day.key).status, 'present');
@@ -1531,21 +1624,6 @@ test('a dateline day both halves confirm empty never drapes and leaves the strip
   layer.destroy();
 });
 
-function counting(collection) {
-  const counts = { add: 0, remove: 0 };
-  const add = collection.addImageryProvider.bind(collection);
-  const remove = collection.remove.bind(collection);
-  collection.addImageryProvider = (provider) => {
-    counts.add += 1;
-    return add(provider);
-  };
-  collection.remove = (layer, destroy) => {
-    counts.remove += 1;
-    return remove(layer, destroy);
-  };
-  return counts;
-}
-
 for (const [label, box] of [
   ['a plain box', { west: -98, south: 30, east: -97, north: 31 }],
   ['a dateline box', FIJI_BOX],
@@ -1564,7 +1642,6 @@ for (const [label, box] of [
         return snapshotAnswer(true);
       },
     });
-    const counts = counting(globe);
     layer.enable();
     layer.setBox(box);
     assert.equal(
@@ -1573,7 +1650,8 @@ for (const [label, box] of [
       }),
       true,
     );
-    const before = { ...counts, layers: [...globe.layers] };
+    const before = [...globe.layers];
+    const added = globe.added.length;
     release();
     assert.equal(
       await until(() => loader.get(day.key).status === 'present', {
@@ -1581,9 +1659,8 @@ for (const [label, box] of [
       }),
       true,
     );
-    assert.equal(counts.add, before.add);
-    assert.equal(counts.remove, before.remove);
-    assert.ok(globe.layers.every((layer) => before.layers.includes(layer)));
+    assert.equal(globe.added.length, added);
+    assert.deepEqual(globe.layers, before);
     layer.destroy();
   });
 }
@@ -1636,7 +1713,7 @@ test('a re-probe of a present VIIRS dateline day keeps a half that failed this t
   assert.equal(loader.get(day1.key).availableBoxes.length, 2);
   const [west, east] = nonCrossingBoxes(FIJI_BOX);
   assert.deepEqual(
-    globe.layers.map((layer) => layer.provider.options.rectangle),
+    globe.layers.map((layer) => layer.spec.rectangle),
     [west, east],
     'a half that failed on the re-probe stays draped',
   );

@@ -46,6 +46,7 @@ export class LocationControls {
       onCity,
       onPoi,
       onSearch,
+      onSearchEdit,
       onReset,
       publish,
       doc,
@@ -74,6 +75,7 @@ export class LocationControls {
       poi: t('Landmark: --'),
     };
     this.searchError = null;
+    this.searchOrigin = 'dock';
     // The search field: whether it is open, and whether a lookup runs.
     this.searchExpanded = Boolean(searchExpanded);
     this.searching = false;
@@ -96,12 +98,16 @@ export class LocationControls {
         onPoi(cityId, index);
     });
     this.bind(elements.search, 'keydown', (event) => {
-      if (event.key === 'Enter') void onSearch(elements.search.value);
+      if (event.key === 'Enter')
+        void this.search(elements.search.value, { origin: 'dock' });
     });
     // Typing corrects a failed query; closing the field (which empties it) drops its error.
-    this.bind(elements.search, 'input', () => onSearchEdit?.());
+    this.bind(elements.search, 'input', () => {
+      if (this.searchOrigin === 'dock') onSearchEdit?.();
+    });
     this.bind(elements.search, 'blur', () => {
-      if (!elements.search.value) onSearchEdit?.();
+      if (this.searchOrigin === 'dock' && !elements.search.value)
+        onSearchEdit?.();
     });
     this.present();
   }
@@ -138,8 +144,28 @@ export class LocationControls {
       searchError: this.searchError,
       searchExpanded: this.searchExpanded,
       searching: this.searching,
+      searchOrigin: this.searchOrigin,
       orbit: this.orbit && { ...this.orbit },
     };
+  }
+  /** Search through the same lifecycle as the location field. */
+  search(query, { origin = 'omnibar' } = {}) {
+    if (this.destroyed || !String(query || '').trim()) return false;
+    this._requestedSearchOrigin = origin;
+    // Beginning navigation synchronously settles the previous lookup. That
+    // handoff must not clear or blur the draft just submitted by either field.
+    this._startingSearch = true;
+    try {
+      return this.onSearch(query);
+    } finally {
+      this._startingSearch = false;
+      this._requestedSearchOrigin = null;
+    }
+  }
+  /** Editing an external query clears its prior lookup error. */
+  editSearch() {
+    if (!this.destroyed && this.searchOrigin === 'omnibar')
+      this.onSearchEdit?.();
   }
   /** A city pill was clicked. */
   chooseCity(id) {
@@ -233,6 +259,8 @@ export class LocationControls {
   /** Mark the search field while a lookup runs. */
   setSearching(active) {
     if (this.destroyed) return;
+    if (active && this._requestedSearchOrigin)
+      this.searchOrigin = this._requestedSearchOrigin;
     this.searching = Boolean(active);
     this.present();
   }
@@ -243,6 +271,10 @@ export class LocationControls {
   settleSearch({ keepQuery = false } = {}) {
     if (this.destroyed) return;
     this.searching = false;
+    if (this._startingSearch || this.searchOrigin === 'omnibar') {
+      this.present();
+      return;
+    }
     if (!keepQuery) {
       this.closeSearch();
       return;

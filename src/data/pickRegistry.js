@@ -1,6 +1,6 @@
 /**
- * Shared pick-ownership registry for layers that install their own
- * ScreenSpaceEventHandler click handlers.
+ * Shared pick-ownership registry for the layers that read globe clicks
+ * (src/input/dispatcher.js).
  *
  * Problem solved: each entity layer (commercial flights, military flights)
  * receives every LEFT_CLICK. When the user clicks a military aircraft while
@@ -11,36 +11,34 @@
  * that belong to someone else and leave them alone.
  */
 
-import { isSurfacePick } from './scenePick.js';
+/**
+ * A click's hits are the renderer contract's `Hit` (src/render/contract/
+ * query.d.ts), plus, for something drawn outside the draw port, a `Hit`
+ * with no set (`set: ''`, `id` null when it has none) named by the renderer
+ * adapter
+ * (`nativeClickOf`, src/render/rendererOf.js). The raw forms of these
+ * rules, for code that still holds a Cesium pick, are the adapter's
+ * (src/render/cesium/nativeClick.js).
+ */
+
+/** Whether a hit is the map itself, or nothing. */
+const isSurface = (hit) => !hit || hit.surface === true;
 
 /** @type {Map<string, (pickedId: string) => boolean>} layerId -> ownership predicate */
 const _owners = new Map();
 
 /**
- * Resolves a scene.pick() result to a String pick id for the ownership scan.
+ * A hit's canonical pick id, for the ownership scan: its item's id. Layers'
+ * ids differ (strings, satellites' NORAD catalog numbers as strings), but a
+ * draw-set item's id is always a string.
  *
- * Layers use heterogeneous pick ids: flights/military/bikeshare/CCTV use
- * strings, satellites use numeric NORAD catalog ids, live AIS vessels attach
- * the vessel record OBJECT (identity = its `id`), and entity picks surface
- * the Cesium Entity (identity = its string `id`). Everything is coerced to a
- * String so predicates match against one canonical form.
- *
- * @param {object|null|undefined} picked - Result of `scene.pick()`.
- * @returns {string|null} Canonical pick id, or null when the pick carries none.
+ * @param {import('../render/contract/query').Hit|null|undefined} hit
+ * @returns {string|null} Its id (an empty one is still an id); null for the
+ *   map, nothing, or something with no id.
  */
-export function resolvePickId(picked) {
-  if (!picked) return null;
-  const unwrap = (id) => {
-    if (id === null || id === undefined) return undefined;
-    if (typeof id === 'object') {
-      // AIS vessel record or Cesium Entity: both are keyed by their `.id`.
-      if (typeof id.id === 'string' || typeof id.id === 'number') return id.id;
-      return undefined;
-    }
-    return id;
-  };
-  let id = unwrap(picked.id);
-  if (id === undefined) id = unwrap(picked.primitive?.id);
+export function resolvePickId(hit) {
+  if (isSurface(hit)) return null;
+  const id = hit.id;
   return typeof id === 'string' || typeof id === 'number' ? String(id) : null;
 }
 
@@ -104,32 +102,102 @@ export function isOwnedByOtherLayer(layerId, pickedId) {
 /**
  * Resolve a moving-contact click without letting map tiles hide a nearby touch
  * target. Exact picks always win; only a coarse primary pointer may expand a
- * surface miss. Every consumer uses the same ordered, bounded scene hits, so sibling layers
- * do not each choose their own contact under one tap.
- * Unowned non-surface objects remain barriers, not permission to pick through.
+ * surface miss. Every consumer uses the same ordered, bounded hits, so sibling
+ * layers do not each choose their own contact under one tap.
+ * Unowned items remain barriers, not permission to pick through.
  *
- * @param {object} scene Cesium scene with pick and optional drillPick.
+ * @param {import('../render/contract/query').QueryPort} query
  * @param {{x: number, y: number}} position Screen position in CSS pixels.
- * @returns {object|null|undefined} Original pick or the first registered touch hit.
+ * @param {{picked?: import('../render/contract/query').Hit|null, drill?: (limit: number, width: number, height: number) => import('../render/contract/query').Hit[]}} [options]
+ *   The click's own passes when the caller has them, so a click is picked
+ *   once: `picked` is `query.pick(position)` (a miss is passed as `null`
+ *   too, so the key's presence counts), `drill` a shared `query.drillPick`.
+ * @returns {import('../render/contract/query').Hit|null} The pick, or the
+ *   first registered touch hit.
  */
-export function pickContact(scene, position) {
-  const picked = scene.pick(position);
+export function pickContact(query, position, options = {}) {
+  const picked =
+    'picked' in options
+      ? options.picked
+      : (query.pick(position.x, position.y) ?? null);
   if (
     !globalThis.matchMedia?.('(pointer: coarse)').matches ||
     findPickOwner(resolvePickId(picked)) ||
-    !isSurfacePick(picked) ||
-    typeof scene.drillPick !== 'function'
+    !isSurface(picked)
   )
     return picked;
   let hits;
   try {
-    hits = scene.drillPick(position, 8, 14, 14) || [];
+    hits =
+      (options.drill
+        ? options.drill(8, 14, 14)
+        : query.drillPick(position.x, position.y, {
+            width: 14,
+            height: 14,
+            limit: 8,
+          })) || [];
   } catch {
     return picked;
   }
   for (const hit of hits.slice(0, 8)) {
     if (findPickOwner(resolvePickId(hit))) return hit;
-    if (!isSurfacePick(hit)) break;
+    if (!isSurface(hit)) break;
   }
   return picked;
+}
+
+/**
+ * The world overlay's hit test: the topmost interactive card or label painted
+ * at CSS-pixel coordinates, or null. Set by the overlay host while it runs.
+ * @type {((x: number, y: number) => {sourceId: string, entryId: string}|null)|null}
+ */
+let _overlayHitTest = null;
+/** @type {WeakMap<object, {sourceId: string, entryId: string}|null>} */
+const clickCards = new WeakMap();
+
+/**
+ * Sets (or with null, clears) the hit test that names the card or label
+ * painted at a click. The world-overlay host sets it while it runs.
+ * @param {((x: number, y: number) => object|null)|null} hitTest
+ * @returns {void}
+ */
+export function setClickCardHitTest(hitTest) {
+  _overlayHitTest = typeof hitTest === 'function' ? hitTest : null;
+}
+
+/**
+ * The topmost interactive card or label painted at a click, read once per
+ * click so every handler of it sees the same one whatever ran first.
+ * @param {{screenPosition?: {x: number, y: number}}|null|undefined} click
+ * @returns {{sourceId: string, entryId: string}|null}
+ */
+export function clickCard(click) {
+  if (!click || typeof click !== 'object') return null;
+  if (clickCards.has(click)) return clickCards.get(click);
+  const at = click.screenPosition;
+  let card = null;
+  try {
+    card = _overlayHitTest?.(at?.x, at?.y) ?? null;
+  } catch {
+    // a broken hit test must never break click handling
+  }
+  clickCards.set(click, card);
+  return card;
+}
+
+/**
+ * True when another layer's card or label is painted on top at a click. The
+ * card on top takes the click: a scene item under it does not act, and is
+ * not empty space either, so the layer leaves its selection alone.
+ * @param {object} click The shared dispatcher event.
+ * @param {Iterable<string>} [ownSourceIds] The asking layer's overlay
+ *   sources: its own card on top is its click.
+ * @returns {boolean}
+ */
+export function isUnderOtherCard(click, ownSourceIds = []) {
+  const card = clickCard(click);
+  if (!card) return false;
+  for (const sourceId of ownSourceIds)
+    if (card.sourceId === sourceId) return false;
+  return true;
 }

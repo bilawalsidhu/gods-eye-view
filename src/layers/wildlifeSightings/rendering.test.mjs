@@ -1,13 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
 import { createRendering } from './rendering.js';
 import { nearFarScalarValueAtDistance } from '../../data/focusDeemphasis.js';
 import { wildlifeGridCellId } from './gridViewport.js';
-import {
-  WILDLIFE_GROUND_READY_MAX_CHECKS,
-  WILDLIFE_SCALE_BY_DISTANCE,
-} from './policy.js';
+import { bindWildlifeViewer } from '../../testSupport/wildlifeViewer.mjs';
+import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
+import { WILDLIFE_SCALE_BY_DISTANCE } from './policy.js';
 
 const NOW = Date.parse('2026-11-04T18:00:00Z');
 const base = {
@@ -40,104 +38,95 @@ function event() {
 }
 
 function harness(rows = [base], extra = {}) {
+  // Counts read after the badges' batched writes reach their set.
+  const tally = { created: 0, removed: 0, cleared: 0, writes: [] };
+  const flushed = (key) => () => {
+    state.points?.flush();
+    return tally[key];
+  };
   const counts = {
     collections: 0,
-    created: 0,
-    removed: 0,
-    cleared: 0,
-    writes: [],
+    get created() {
+      return flushed('created')();
+    },
+    get removed() {
+      return flushed('removed')();
+    },
+    get cleared() {
+      return flushed('cleared')();
+    },
+    get writes() {
+      return flushed('writes')();
+    },
   };
-  const tracked = new Set([
-    'position',
-    'image',
-    'color',
-    'scale',
-    'show',
-    'width',
-    'height',
-    'scaleByDistance',
-  ]);
-  class BillboardCollection extends Cesium.BillboardCollection {
-    constructor() {
-      super();
-      counts.collections += 1;
-    }
-    add(options) {
-      counts.created += 1;
-      const point = super.add(options);
-      return new Proxy(point, {
-        get: (target, key) => Reflect.get(target, key, target),
-        set(target, key, value) {
-          if (tracked.has(key)) counts.writes.push(key);
-          return Reflect.set(target, key, value, target);
-        },
-      });
-    }
-    remove(point) {
-      counts.removed += 1;
-      return super.remove(point);
-    }
-    removeAll() {
-      counts.cleared += 1;
-      return super.removeAll();
-    }
-  }
-  class GroundBatch {
-    constructor(options) {
-      Object.assign(this, options);
-      this.ready = false;
-    }
-    destroy() {
-      this.destroyed = true;
-    }
-    isDestroyed() {
-      return this.destroyed === true;
-    }
-  }
-  function primitives() {
-    const values = [];
-    return {
-      values,
-      get length() {
-        return values.length;
-      },
-      get: (i) => values[i],
-      add(primitive) {
-        values.push(primitive);
-        return primitive;
-      },
-      remove(primitive) {
-        const i = values.indexOf(primitive);
-        if (i < 0) return false;
-        values.splice(i, 1);
-        primitive.destroy();
-        return true;
-      },
-    };
-  }
+  // What a badge's item changes, by the billboard property names it had.
+  const tracked = {
+    pos: 'position',
+    image: 'image',
+    color: 'color',
+    scale: 'scale',
+    show: 'show',
+    size: 'width',
+    scaleByDistance: 'scaleByDistance',
+  };
   const postRender = event();
   const terrain = event();
   const tileProgress = event();
   const scene = {
-    primitives: primitives(),
-    groundPrimitives: primitives(),
     postRender,
-    terrainProviderChanged: terrain,
     globe: {
       terrainProviderChanged: terrain,
       tileLoadProgressEvent: tileProgress,
     },
   };
+  const viewer = {
+    scene,
+    camera: { positionWC: {}, positionCartographic: { height: 0 } },
+  };
+  const ports = bindWildlifeViewer(viewer);
+  // Count the badges set's item writes as billboard writes were counted.
+  const icons = ports.draw.icons;
+  ports.draw.icons = (spec) => {
+    const set = icons(spec);
+    if (!spec.id.endsWith(':badges')) return set;
+    counts.collections += 1;
+    const record = ports.draw.sets.get(spec.id);
+    const upsert = set.upsert;
+    set.upsert = (items) => {
+      for (const item of items) {
+        const old = record.items.get(item.id);
+        if (!old) {
+          tally.created += 1;
+          continue;
+        }
+        for (const [key, name] of Object.entries(tracked))
+          if (JSON.stringify(old[key]) !== JSON.stringify(item[key]))
+            tally.writes.push(name);
+      }
+      upsert(items);
+    };
+    const remove = set.remove;
+    set.remove = (ids) => {
+      tally.removed += ids.length;
+      remove(ids);
+    };
+    const clear = set.clear;
+    set.clear = () => {
+      tally.cleared += 1;
+      clear();
+    };
+    return set;
+  };
   const state = {
     enabled: true,
-    viewer: { scene, camera: { positionWC: {} } },
+    viewer,
     rows: new Map(rows.map((row) => [row.stableId, row])),
     renderedRows: [],
     rowById: new Map(),
     pointById: new Map(),
     positions: new Map(),
     cells: [],
-    staging: null,
+    cellSets: null,
     taxa: 'all',
     selectedId: null,
     query: { visibleBoxes: [{ south: -90, west: -180, north: 90, east: 180 }] },
@@ -145,23 +134,13 @@ function harness(rows = [base], extra = {}) {
   };
   const renders = [];
   let visible = true;
-  const registration = new Set();
   const rendering = createRendering({
     state,
     services: {
       now: () => NOW,
-      cesium: {
-        ...Cesium,
-        BillboardCollection,
-        GroundPrimitive: GroundBatch,
-        GroundPolylinePrimitive: GroundBatch,
-      },
       occluderFactory: () => ({ isPointVisible: () => visible }),
       render: { governorRequestRender: (reason) => renders.push(reason) },
-      sprites: {
-        registerSpriteCollection: (_id, value) => registration.add(value),
-        unregisterSpriteCollection: (_id, value) => registration.delete(value),
-      },
+      sprites: { spriteDrawOrder: () => -9 },
       ...extra,
     },
     parts: {
@@ -180,13 +159,14 @@ function harness(rows = [base], extra = {}) {
   return {
     state,
     scene,
+    ports,
+    sets: () => ports.sets(),
     rendering,
     counts,
     renders,
     postRender,
     terrain,
     tileProgress,
-    registration,
     visible(value) {
       visible = value;
     },
@@ -196,7 +176,7 @@ function harness(rows = [base], extra = {}) {
   };
 }
 
-test('real Cesium billboard values update in place, and unchanged refreshes write nothing', () => {
+test('badge values update in place, and unchanged refreshes write nothing', () => {
   const second = { ...base, stableId: 'synthetic:2', lon: -120 };
   const h = harness([base, second]);
   h.rendering.rebuild();
@@ -204,12 +184,15 @@ test('real Cesium billboard values update in place, and unchanged refreshes writ
   const incumbent = h.state.pointById.get(base.stableId);
   assert.equal(h.counts.collections, 1);
   assert.equal(h.counts.created, 2);
-  assert.equal(incumbent.width * incumbent.scaleByDistance.farValue, 12);
-  assert.deepEqual(
-    incumbent.scaleByDistance,
-    new Cesium.NearFarScalar(...WILDLIFE_SCALE_BY_DISTANCE),
-  );
-  assert.equal(incumbent.color.alpha, 1);
+  assert.equal(incumbent.size[0] * incumbent.scaleByDistance.farValue, 12);
+  const [near, nearValue, far, farValue] = WILDLIFE_SCALE_BY_DISTANCE;
+  assert.deepEqual(incumbent.scaleByDistance, {
+    near,
+    nearValue,
+    far,
+    farValue,
+  });
+  assert.equal(incumbent.color[3], 1);
   h.counts.writes.length = 0;
   h.renders.length = 0;
   h.rows([{ ...second }, { ...base }]);
@@ -231,8 +214,8 @@ test('real Cesium billboard values update in place, and unchanged refreshes writ
   assert.equal(h.counts.removed, 1);
   assert.equal(h.counts.cleared, 0);
   h.rendering.destroy();
-  assert.equal(h.registration.size, 0);
-  assert.equal(h.scene.primitives.length, 0);
+  assert.deepEqual(Object.values(h.sets()).filter(Boolean), []);
+  assert.equal(h.ports.progressListeners(), 0);
   assert.equal(h.state.pointById.size, 0);
   assert.equal(h.terrain.size, 0);
   assert.equal(h.tileProgress.size, 0);
@@ -267,7 +250,7 @@ test('badge pixels stay between 12 and 22 at near, mid and far heights, includin
       0, 1000, 9000, 120_000, 400_000, 1_500_000, 8_000_000, 10_000_000,
     ]) {
       const pixels =
-        wildlife.width *
+        wildlife.size[0] *
         wildlife.scale *
         nearFarScalarValueAtDistance(wildlife.scaleByDistance, heightM);
       assert.ok(
@@ -278,7 +261,7 @@ test('badge pixels stay between 12 and 22 at near, mid and far heights, includin
   }
   assert.deepEqual(
     wildlife.color,
-    Cesium.Color.WHITE,
+    [1, 1, 1, 1],
     'keep the baked white glyph white',
   );
   h.rendering.destroy();
@@ -293,9 +276,7 @@ test('adjacent 28px bucket edges never overlap badges or erase sighting counts',
   }));
   const h = harness(rows, {
     project: (_scene, anchor) => {
-      const lon = Cesium.Math.toDegrees(
-        Cesium.Cartographic.fromCartesian(anchor).longitude,
-      );
+      const lon = toLonLatH(anchor).lon;
       return {
         x: rows.find((row) => Math.abs(row.lon - lon) < 1e-7).x,
         y: 100,
@@ -366,17 +347,12 @@ test('sampled fallback buckets allocate only representatives at every height, wi
     );
     const h = harness(rows, {
       project: (_scene, anchor) => {
-        const lon = Cesium.Math.toDegrees(
-          Cesium.Cartographic.fromCartesian(anchor).longitude,
-        );
+        const lon = toLonLatH(anchor).lon;
         return screens.get(lon.toFixed(6));
       },
     });
-    h.state.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
-      base.lon,
-      base.lat,
-      heightM,
-    );
+    h.state.viewer.camera.positionWC = fromDegrees(base.lon, base.lat, heightM);
+    h.state.viewer.camera.positionCartographic = { height: heightM };
     h.rendering.rebuild();
     assert.equal(
       h.state.pointById.size,
@@ -415,11 +391,12 @@ test('UTFGrid creates a dedicated unpickable glow and observations alone create 
     cellCount,
   }));
   h.rendering.rebuild();
-  const glow = h.rendering.density.collection;
+  h.rendering.density.flush();
+  const glow = h.sets().glow;
   assert.ok(glow);
-  assert.equal(glow.allowPicking, false);
-  assert.equal(glow.length, 3);
-  assert.equal(h.scene.primitives.length, 2);
+  assert.equal(glow.spec.pickable, false);
+  assert.equal(glow.items.size, 3);
+  assert.ok(h.sets().badges);
   assert.deepEqual([...h.state.pointById.keys()], [base.stableId]);
   assert.deepEqual(h.state.renderedRows, [base]);
   assert.equal(h.state.sightingCount, 53);
@@ -428,14 +405,14 @@ test('UTFGrid creates a dedicated unpickable glow and observations alone create 
   h.state.gridCells = [...h.state.gridCells].reverse();
   h.counts.writes.length = 0;
   assert.equal(h.rendering.rebuild(), false);
-  assert.equal(h.rendering.density.collection, glow);
+  assert.equal(h.sets().glow, glow);
   assert.deepEqual(h.counts.writes, []);
   h.rendering.clear();
-  assert.equal(glow.isDestroyed(), true);
-  assert.equal(h.scene.primitives.length, 1);
+  assert.equal(glow.disposed, true);
+  assert.ok(h.sets().badges);
   assert.equal(h.state.points.length, 0);
   h.rendering.destroy();
-  assert.equal(h.scene.primitives.length, 0);
+  assert.equal(h.sets().badges, undefined);
 });
 
 test('tile arrival or loss cannot replace a real observation with a grid badge', () => {
@@ -452,14 +429,16 @@ test('tile arrival or loss cannot replace a real observation with a grid badge',
     },
   ];
   h.rendering.rebuild();
-  const glow = h.rendering.density.collection;
+  h.rendering.density.flush();
+  const glow = h.sets().glow;
+  assert.ok(glow);
   assert.equal(h.state.sightingCount, 10_000);
   assert.equal(h.state.pointById.get(base.stableId), badge);
   h.state.gridAvailable = false;
   h.rendering.rebuild();
   assert.equal(h.state.pointById.get(base.stableId), badge);
   assert.equal(h.state.sightingCount, 1);
-  assert.equal(glow.isDestroyed(), true);
+  assert.equal(glow.disposed, true);
   h.rendering.destroy();
 });
 
@@ -481,7 +460,7 @@ test('a selected observation remains rendered outside the viewport and observati
   h.rendering.destroy();
 });
 
-test('privacy ground staging has a bounded readiness listener and complete teardown', () => {
+test('privacy cells draw as ground fills and outlines with no frame listener, and teardown disposes them', () => {
   const h = harness([
     {
       ...base,
@@ -490,14 +469,15 @@ test('privacy ground staging has a bounded readiness listener and complete teard
     },
   ]);
   h.rendering.rebuild();
-  assert.equal(h.postRender.size, 1);
-  assert.equal(h.scene.groundPrimitives.length, 2);
-  for (let i = 0; i < WILDLIFE_GROUND_READY_MAX_CHECKS; i++)
-    h.postRender.emit();
+  const { cells, outlines } = h.sets();
+  assert.equal(cells.items.size, 1);
+  assert.equal(outlines.items.size, 1);
+  assert.equal(cells.spec.clampTo, 'both');
+  assert.equal(outlines.spec.clampTo, 'both');
   assert.equal(h.postRender.size, 0);
-  assert.equal(h.state.staging, null);
-  assert.equal(h.scene.groundPrimitives.length, 0);
   h.rendering.destroy();
+  assert.equal(cells.disposed, true);
+  assert.equal(outlines.disposed, true);
   assert.equal(h.postRender.size, 0);
 });
 

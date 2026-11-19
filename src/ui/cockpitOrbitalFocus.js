@@ -8,7 +8,10 @@
  * (src/ui/cockpitOrbitalView.js); its state lives on the orbital session, so
  * it ends with the session.
  */
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../geo/ellipsoid.js';
+import { inputFor } from '../input/dispatcher.js';
+import { isUnderOtherCard } from '../data/pickRegistry.js';
+import { findQuery } from '../render/rendererOf.js';
 import { clampOrbitalLook, easeLook } from '../cockpitLook.js';
 import { ORBITAL_EARTH_RADIUS_M } from '../cockpitOrbital.js';
 import {
@@ -113,11 +116,11 @@ function sitePosition(site) {
     : null;
 }
 
-/** The mapped site a canvas position shows, through the layer's pick ids. */
+/** The mapped site a canvas position shows, through the layer's picks. */
 function siteAt(controller, position) {
   let picked = null;
   try {
-    picked = controller.viewer.scene?.pick?.(position) ?? null;
+    picked = findQuery(controller.viewer)?.pick(position.x, position.y) ?? null;
   } catch {
     picked = null;
   }
@@ -216,9 +219,24 @@ export function toggleOrbitalFocus(key) {
 }
 
 /**
+ * Whether a press at `position` lands on a mapped ground point in orbit:
+ * the double-click it may begin is a focus, so the renderer's own
+ * double-click follow is held off for it.
+ * @param {{x: number, y: number}|null|undefined} position Canvas position.
+ * @returns {boolean}
+ */
+export function orbitalSiteUnder(position) {
+  if (!inOrbit(this) || !isPointerFree()) return false;
+  if (!Number.isFinite(position?.x) || !Number.isFinite(position?.y))
+    return false;
+  return Boolean(siteAt(this, position));
+}
+
+/**
  * A double-click on the orbital picture. On a mapped ground point it keeps
- * or starts the focus on it (as a single click does) and is taken: Cesium's
- * own double-click would track that point, which ends the view. Any other
+ * or starts the focus on it (as a single click does) and is taken: the
+ * renderer's own double-click would follow that point, which ends the view
+ * (its press held that follow off, `orbitalSiteUnder`). Any other
  * double-click, one a tool owns, and every one outside orbit go on.
  * @param {{x: number, y: number}|null|undefined} position Canvas position.
  * @returns {boolean} True when it landed on a ground point and was taken.
@@ -257,27 +275,24 @@ export function onOrbitalClick(position) {
 }
 
 /**
- * Take the scene's single click through the orbital focus first, then hand
- * it on to Cesium's own (it picks into `selectedEntity`), as before.
- * @returns {() => void} Puts Cesium's handler back, unless another owner
- *   (the draw tool borrows it) has replaced ours since.
+ * Take the scene's single click through the orbital focus, alongside the
+ * other click subscribers and the renderer's own select, as before.
+ * @returns {() => void} Stops listening.
  */
 export function routeSceneClick() {
-  const handler = this.viewer.screenSpaceEventHandler;
-  if (typeof handler?.setInputAction !== 'function') return () => {};
-  const type = Cesium.ScreenSpaceEventType.LEFT_CLICK;
-  const stock = handler.getInputAction?.(type) ?? null;
-  const routed = (event) => {
+  let input;
+  try {
+    input = inputFor(this.viewer);
+  } catch {
+    // A viewer with no input (headless tools, partial stubs) has no clicks.
+    return () => {};
+  }
+  return input.onClick((event) => {
+    // Another layer's card or label painted on top takes the click: the site
+    // under it does not focus, and the click does not end a held focus.
+    if (isUnderOtherCard(event)) return;
     this.onOrbitalClick(event?.position);
-    stock?.(event);
-  };
-  handler.setInputAction(routed, type);
-  return () => {
-    if (handler.isDestroyed?.() || handler.getInputAction?.(type) !== routed)
-      return;
-    if (stock) handler.setInputAction(stock, type);
-    else handler.removeInputAction(type);
-  };
+  });
 }
 
 /**
@@ -408,7 +423,7 @@ export function orbitalSitesInReach(info) {
   let sites = [];
   try {
     sites = layer.getNearby(
-      Cesium.Cartesian3.fromDegrees(info.longitude, info.latitude, 0),
+      fromDegrees(info.longitude, info.latitude, 0),
       rangeM,
       SITE_QUERY_MAX,
     );

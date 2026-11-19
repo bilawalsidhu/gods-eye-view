@@ -1,14 +1,22 @@
 /** Coordinate Cockpit lifecycle through supplied aircraft, terrain, rendering and briefing operations. */
+import { onFollowChanged } from '../data/followed.js';
+import { canvasOf, frameOf } from '../render/rendererOf.js';
 import {
   readAircraftInfo,
   readSatelliteInfo,
   readVesselInfo,
+  readSubjectCandidate,
   readSubjectLayerId,
+  subjectContext,
+  subjectInfo,
+  entryCandidates,
+  resolveEntry,
   resolveEntryKind,
   dispatchCockpitModeChanged,
   toggleTrackedTr3b,
   syncTr3bToggle,
   syncEntry,
+  refreshSubjectWords,
   publishPresenceView,
   navigateContext,
   _adoptTrackedEntity,
@@ -30,6 +38,7 @@ import {
 import {
   onOrbitalClick,
   onOrbitalDoubleClick,
+  orbitalSiteUnder,
   routeSceneClick,
   toggleOrbitalFocus,
 } from './cockpitOrbitalFocus.js';
@@ -100,7 +109,7 @@ import {
 import { DEFAULT_RADAR_RANGE_NM, nextRadarRange } from '../cockpitRadar.js';
 import { VESSEL_BRIDGE_PITCH_DEG } from '../cockpitSubjects.js';
 import { stepLook } from '../cockpitLook.js';
-import * as Cesium from 'cesium';
+import { createCockpitSubjectCaller } from '../cockpitSubjectProviders.js';
 
 /** Whether the user asked for reduced motion: look turns then jump. */
 function prefersReducedMotion() {
@@ -120,6 +129,8 @@ export class CockpitViewController {
       isEntryAllowed = null,
       isBridgeEntryAllowed = null,
       isOrbitEntryAllowed = null,
+      subjectProviders = [],
+      isSubjectEntryAllowed = null,
       isUtilityDisclosureOpen = null,
       onEntered = null,
       onExited = null,
@@ -128,16 +139,37 @@ export class CockpitViewController {
       publish = {},
     } = {},
   ) {
+    // Before anything subscribes: a viewer with no frame port throws here.
+    const frame = frameOf(viewer);
     this.viewer = viewer;
     this.services = services;
     this.destroyed = false;
     this.disposed = false;
     this.active = false;
+    /** Gives camera input back; held from enter to exit. */
+    this.releaseCameraInput = null;
     /**
-     * 'aircraft', 'vessel' or 'satellite' while active; which subject the
-     * camera rides.
+     * 'aircraft', 'vessel', 'satellite' or a provider's kind while active;
+     * which subject the camera rides.
      */
     this.subjectKind = null;
+    /**
+     * The application's subject providers (cockpitSubjectProviders.js),
+     * checked by the coordinator; the one ridden while active, else null.
+     */
+    this.subjectProviders = Array.isArray(subjectProviders)
+      ? subjectProviders
+      : [];
+    this.subjectProvider = null;
+    /** The ridden provider subject's last frame and normalized HUD view. */
+    this.lastSubjectFrame = null;
+    this.subjectHud = null;
+    /** The Live Signals rows the provider's HUD view pushed. */
+    this.subjectSignalKeys = new Set();
+    /** Provider methods run through one guard: a throw warns once. */
+    this.callSubject = createCockpitSubjectCaller();
+    /** The look's rest pitch for a provider's view; null on a bridge. */
+    this.lookRestPitchDeg = null;
     /**
      * The vessel subject's id or the satellite's NORAD id; aircraft are
      * identified by trackedEntity.
@@ -149,6 +181,8 @@ export class CockpitViewController {
      */
     this.orbital = null;
     this.trackedEntity = null;
+    /** What the camera followed before Cockpit took it, to follow again. */
+    this.trackedFollow = null;
     this.trackedEntityWasShown = true;
     this.heading = null;
     this.lastFrameMs = 0;
@@ -160,6 +194,12 @@ export class CockpitViewController {
     this.surfaceWaitStartedMs = 0;
     this.surfaceAcquiring = false;
     this.surfaceFallback = false;
+    /** The height an application subject's eye last stood at (m). */
+    this.subjectHeightM = null;
+    /** Whether `subjectHeightM` is still the one its entry frame gave. */
+    this.subjectHeightFromEntry = false;
+    /** The ground clamp's eased lift under that subject's eye (m). */
+    this.subjectLiftM = null;
     /**
      * Where the bridge view is turned to (`lookTarget`) and where the camera
      * looks on its way there (`lookView`): yaw off the bow, starboard
@@ -202,6 +242,11 @@ export class CockpitViewController {
     this.isOrbitEntryAllowed =
       typeof isOrbitEntryAllowed === 'function'
         ? isOrbitEntryAllowed
+        : () => false;
+    // Nor a provider's subject without a gate for it.
+    this.isSubjectEntryAllowed =
+      typeof isSubjectEntryAllowed === 'function'
+        ? isSubjectEntryAllowed
         : () => false;
     this.isUtilityDisclosureOpen =
       typeof isUtilityDisclosureOpen === 'function'
@@ -246,7 +291,14 @@ export class CockpitViewController {
       entryAvailable: false,
       // Which subject the entry button would enter, and the active subject.
       entryKind: null,
+      // A provider's entry face, `{icon, label}`; null for the built-ins.
+      entryFace: null,
       subjectKind: null,
+      // While a provider's subject is ridden: its HUD and exit labels, and
+      // `{aheadLabel}` when it looks around.
+      subjectGeneric: false,
+      subjectLabels: null,
+      subjectLook: null,
       tr3b: null,
       context: false,
       // The Contact and briefing cards' collapse, which their toggles show.
@@ -269,28 +321,17 @@ export class CockpitViewController {
     this.regionalBriefSubjectId = null;
     this.contextLayoutFrame = null;
     this.contextLayoutStamp = null;
-    this.scratchTarget = new Cesium.Cartesian3();
-    this.cockpitAnchor = new Cesium.Cartesian3();
+    /** Where the Cockpit eye is carried from, as ECEF; see cockpitCamera.js. */
+    this.cockpitAnchor = null;
     this.cockpitAnchorValid = false;
-    this.scratchCamera = new Cesium.Cartesian3();
-    this.scratchAdvance = new Cesium.Cartesian3();
-    this.scratchCorrection = new Cesium.Cartesian3();
-    this.scratchForward = new Cesium.Cartesian3();
-    this.scratchHorizontal = new Cesium.Cartesian3();
-    this.scratchUp = new Cesium.Cartesian3();
-    this.scratchLocal = new Cesium.Cartesian3();
-    this.scratchEnu = new Cesium.Matrix4();
-    this.scratchAnchorCartographic = new Cesium.Cartographic();
-    this.scratchCameraCartographic = new Cesium.Cartographic();
-    this.scratchTargetCartographic = new Cesium.Cartographic();
     this._listenerRemovers = [onLocaleChange(() => this.relocalize())];
 
     // Camera mutations belong before scene update/culling. Changing the camera
     // from preRender makes 3D Tiles discover a new view after traversal and can
     // create a self-sustaining refinement loop under a moving cockpit camera.
     this._listenerRemovers.push(
-      viewer.scene.preUpdate.addEventListener(() => this.update()),
-      viewer.trackedEntityChanged.addEventListener(() => {
+      frame.on('preUpdate', () => this.update()),
+      onFollowChanged(viewer, () => {
         if (this.active) this._adoptTrackedEntity(performance.now());
         else this.syncEntry();
       }),
@@ -298,7 +339,7 @@ export class CockpitViewController {
     this._listen(this.entry, 'click', () => this.enter());
     // Double-clicking the followed track is a third way in.
     this._listen(
-      viewer.scene?.canvas,
+      canvasOf(viewer),
       'pointerdown',
       () => this.onScenePointerDown(),
       true,
@@ -309,7 +350,7 @@ export class CockpitViewController {
     // In orbit the wheel steps the optical zoom (Cesium's own wheel zoom is
     // off while the Cockpit holds the camera).
     this._listen(
-      viewer.scene?.canvas,
+      canvasOf(viewer),
       'wheel',
       (event) => this.onOrbitalWheel(event),
       { passive: false },
@@ -456,6 +497,9 @@ export class CockpitViewController {
   onOrbitalDoubleClick(position) {
     return onOrbitalDoubleClick.call(this, position);
   }
+  orbitalSiteUnder(position) {
+    return orbitalSiteUnder.call(this, position);
+  }
   /**
    * A site's orbital Live Signals row: focus that site, switch to it, or end
    * the focus held on it.
@@ -508,6 +552,21 @@ export class CockpitViewController {
     if (reset && hadFocus) this.mapViewButton?.focus({ preventScroll: true });
     return reset;
   }
+  readSubjectCandidate(provider) {
+    return readSubjectCandidate.call(this, provider);
+  }
+  subjectContext() {
+    return subjectContext.call(this);
+  }
+  subjectInfo(frame) {
+    return subjectInfo.call(this, frame);
+  }
+  entryCandidates(nowMs) {
+    return entryCandidates.call(this, nowMs);
+  }
+  resolveEntry(nowMs) {
+    return resolveEntry.call(this, nowMs);
+  }
   readSubjectLayerId() {
     return readSubjectLayerId.call(this);
   }
@@ -528,6 +587,9 @@ export class CockpitViewController {
   }
   syncEntry() {
     return syncEntry.call(this);
+  }
+  refreshSubjectWords() {
+    return refreshSubjectWords.call(this);
   }
   navigateContext(direction, options) {
     return navigateContext.call(this, direction, options);
@@ -568,6 +630,19 @@ export class CockpitViewController {
   presentLook() {
     return presentLook.call(this);
   }
+  /** Whether the active view looks around: a bridge, or a provider's with `look`. */
+  get looksAround() {
+    return (
+      this.active &&
+      (this.subjectKind === 'vessel' || Boolean(this.subjectProvider?.look))
+    );
+  }
+  /** Where the look rests: the bridge's pitch, or the provider's. */
+  get lookRestPitch() {
+    return Number.isFinite(this.lookRestPitchDeg)
+      ? this.lookRestPitchDeg
+      : VESSEL_BRIDGE_PITCH_DEG;
+  }
   /**
    * Turn the bridge view one arrow step (see `lookKeyStep`). The camera
    * eases there unless the user prefers reduced motion.
@@ -575,7 +650,7 @@ export class CockpitViewController {
    * @returns {boolean} True when a bridge view was turned.
    */
   turnLook(step) {
-    if (!this.active || this.subjectKind !== 'vessel' || !step) return false;
+    if (!this.looksAround || !step) return false;
     this.lookTarget = stepLook(this.lookTarget, step);
     if (prefersReducedMotion()) this.lookView = { ...this.lookTarget };
     this.presentLook();
@@ -588,7 +663,7 @@ export class CockpitViewController {
    *   as entry and exit do.
    */
   resetLook({ immediate = false } = {}) {
-    this.lookTarget = { yawDeg: 0, pitchDeg: VESSEL_BRIDGE_PITCH_DEG };
+    this.lookTarget = { yawDeg: 0, pitchDeg: this.lookRestPitch };
     if (immediate || prefersReducedMotion())
       this.lookView = { ...this.lookTarget };
     this.lookLastMs = performance.now();
@@ -601,7 +676,7 @@ export class CockpitViewController {
    * @returns {boolean} True on a bridge.
    */
   lookAhead() {
-    if (!this.active || this.subjectKind !== 'vessel') return false;
+    if (!this.looksAround) return false;
     const button = document.getElementById('cockpit-look-ahead');
     const hadFocus = !!button && button.contains(document.activeElement);
     this.resetLook();
@@ -662,8 +737,16 @@ export class CockpitViewController {
   publishCockpitSignals() {
     return publishCockpitSignals.call(this);
   }
-  pushCockpitSignal(key, tone, title, detail, target) {
-    return pushCockpitSignal.call(this, key, tone, title, detail, target);
+  pushCockpitSignal(key, tone, title, detail, target, options) {
+    return pushCockpitSignal.call(
+      this,
+      key,
+      tone,
+      title,
+      detail,
+      target,
+      options,
+    );
   }
   dropCockpitSignal(key) {
     return dropCockpitSignal.call(this, key);
@@ -718,6 +801,9 @@ export class CockpitViewController {
     this.relocalizeBrief();
     this.publishVision(createVisionState(this.visionMode));
     this.routeSignature = null;
+    // A provider's words, ridden or on the entry, follow the language.
+    this.refreshSubjectWords();
+    if (!this.active) this.syncEntry();
     if (this.active && this.lastSubjectInfo) {
       this.rewordingSignals = true;
       try {

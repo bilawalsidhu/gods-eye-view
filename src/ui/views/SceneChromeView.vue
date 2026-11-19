@@ -18,8 +18,13 @@ import ScreenAnnotations from './panels/ScreenAnnotations.vue';
 import AwarenessDirection from './panels/AwarenessDirection.vue';
 import UiButton from '../kit/UiButton.vue';
 import GlobeActions from './panels/GlobeActions.vue';
+import { useGlobeActionsStore } from '../stores/globeActions.js';
+import Omnibar from './panels/Omnibar.vue';
+import RenderFailure from './panels/RenderFailure.vue';
 import WorldTimeline from './panels/WorldTimeline.vue';
 
+// The title's logo goes back to live at the start view, as the shell answers it.
+const globeActions = useGlobeActionsStore();
 // The ACTIVE STYLE corner shows the style VisualSettings publishes.
 const { style } = storeToRefs(useDisplayStore());
 // The status chips, toast and FPS readout show what ShellFeedback,
@@ -61,6 +66,7 @@ const vToastText = {
 
 <template>
   <div id="cesiumContainer"></div>
+  <RenderFailure />
   <div id="world-overlay-root" aria-hidden="true">
     <canvas id="world-overlay-canvas"></canvas>
   </div>
@@ -72,7 +78,7 @@ const vToastText = {
   <!-- Title -->
   <div id="title-bar">
     <div class="title-glow"></div>
-    <h1><span class="title-logo brand-logo" data-logo-gaze data-logo-src="/logo.svg" aria-hidden="true"><img src="/logo.svg" alt="" /></span> <span translate="no">GOD'S EYE <span class="title-accent">VIEW</span></span></h1>
+    <h1 aria-labelledby="title-wordmark"><button type="button" class="title-logo brand-logo" data-logo-gaze data-logo-src="/logo.svg" :aria-label="t('Back to live at the starting view')" :title="t('Back to live at the starting view')" @click="globeActions.act('home')"><img src="/logo.svg" alt="" /></button> <span id="title-wordmark" translate="no">GOD'S EYE <span class="title-accent">VIEW</span></span></h1>
     <p class="subtitle scene-text-holdout">{{ t('NO PLACE LEFT BEHIND') }}</p>
     <div v-if="fps" class="frame-rate-readout scene-text-holdout" :hidden="!fps.visible" :title="t('Rendered globe frames per second · toggle with `')">{{ fps.text }}</div>
   </div>
@@ -85,6 +91,7 @@ const vToastText = {
 
   <!-- Top-center camera and share actions -->
   <GlobeActions />
+  <Omnibar />
   <div id="global-loading-status" role="status" aria-live="polite" aria-atomic="true" :hidden="loading ? loading.hidden : true" :data-state="loading?.state ?? undefined">
     <SplitFlapText id="global-loading-label" :text="loading ? loading.label : t('LOADING LIVE DATA')" :stopped="!!loading?.stopped" />
     <span id="global-loading-detail">{{ loading ? loading.detail : '' }}</span>

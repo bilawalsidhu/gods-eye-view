@@ -139,6 +139,30 @@ test('Browse opens a modal on the search field, packs last; Escape returns to Br
   assert.equal(document.activeElement, $('#data-library-browse'));
 });
 
+test('a backdrop click and a close the browser made itself return to Browse', async (t_) => {
+  const { owner } = mount(t_);
+  owner.open();
+  await settle();
+  $('#data-library .data-library-intro').click();
+  await settle();
+  assert.equal($('#data-library').open, true, 'a click inside keeps it open');
+  $('#data-library').click();
+  await settle();
+  assert.equal($('#data-library').open, false);
+  assert.equal(document.activeElement, $('#data-library-browse'));
+  owner.open();
+  await settle();
+  assert.equal(document.activeElement, $('#data-library input[type="search"]'));
+  // An Escape the page may not cancel: the browser closes it first.
+  $('#data-library').close();
+  await settle();
+  assert.equal($('#data-library').open, false);
+  assert.equal(document.activeElement, $('#data-library-browse'));
+  owner.open();
+  await settle();
+  assert.equal($('#data-library').open, true, 'the owner closed it too');
+});
+
 test('filters narrow the list as the viewer types and picks', async (t_) => {
   const { owner } = mount(t_);
   owner.open();
@@ -161,6 +185,20 @@ test('filters narrow the list as the viewer types and picks', async (t_) => {
   theme.dispatchEvent(new Event('change'));
   await settle();
   assert.deepEqual(shownIds(), ['nasa-eonet-events']);
+});
+
+test('the shown count agrees with its number (he)', async (t_) => {
+  const { owner } = mount(t_);
+  setLocale('he');
+  owner.open();
+  await settle();
+  const status = () => $('.data-library-status').textContent.trim();
+  assert.match(status(), /^מוצגים\s+\S*3\S*\s+מתוך/);
+  const search = $('#data-library input[type="search"]');
+  search.value = 'eonet';
+  search.dispatchEvent(new Event('input'));
+  await settle();
+  assert.match(status(), /^מוצג\s+\S*1\S*\s+מתוך/);
 });
 
 test('Add becomes Remove on the same focused button; Zoom closes first', async (t_) => {

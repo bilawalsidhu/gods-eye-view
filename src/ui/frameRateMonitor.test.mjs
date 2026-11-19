@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFrameRateMonitor } from './frameRateMonitor.js';
+import { bindRenderer } from '../render/rendererOf.js';
+import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';
 
 function fixture(t) {
   const keys = new Set();
@@ -27,6 +29,7 @@ function fixture(t) {
       },
     },
   };
+  bindRenderer(viewer, { frame: fakeSceneFrame(viewer) });
   const monitor = createFrameRateMonitor({ viewer, documentRef, store });
   t.after(() => monitor.destroy());
   return {
@@ -133,6 +136,7 @@ test("destroying an earlier monitor leaves a newer one's readout", () => {
   const viewer = {
     scene: { postRender: { addEventListener: () => () => {} } },
   };
+  bindRenderer(viewer, { frame: fakeSceneFrame(viewer) });
   const first = createFrameRateMonitor({ viewer, documentRef, store });
   const second = createFrameRateMonitor({ viewer, documentRef, store });
   const shown = store.fps;

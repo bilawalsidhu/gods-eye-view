@@ -22,8 +22,6 @@ function panel(id, { collapsed = true, hidden = false, title = '' } = {}) {
   element.className = collapsed
     ? 'panel-collapsible collapsed'
     : 'panel-collapsible';
-  // Data Layers shows only while `active` (the `f` shortcut toggles it).
-  if (id === 'data-panel') element.classList.add('active');
   element.hidden = hidden;
   if (title) element.innerHTML = `<span class="panel-title">${title}</span>`;
   return element;
@@ -132,8 +130,8 @@ test('the rails follow disclosure and availability changes', async () => {
     ['global-context-panel', 'false'],
     ['host-panel', 'false'],
   ]);
-  // `f` hides Data Layers outright, so the rail stops offering it.
-  document.getElementById('data-panel').classList.remove('active');
+  // A hidden panel leaves its rail.
+  document.getElementById('data-panel').hidden = true;
   await new Promise((resolve) => setTimeout(resolve, 0));
   await nextTick();
   assert.deepEqual(railItems(left), [['scene-panel', 'true']]);

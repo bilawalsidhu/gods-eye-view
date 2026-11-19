@@ -11,16 +11,20 @@ import {
   initImageryBoxTool,
 } from './imageryBoxTool.js';
 import { boxToolFakes } from '../layers/recentImagery/testDoubles.mjs';
+import { createImageryBoxPreview } from '../layers/recentImagery/rendering.js';
+import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
 
 function fixture(options = {}) {
   resetPointerOwnership();
   const fakes = boxToolFakes();
+  const draw = fakeDrawPort();
   const boxes = [];
   const cancels = [];
   const actives = [];
   const tool = initImageryBoxTool({
     viewer: fakes.viewer,
-    cesium: fakes.cesium,
+    createPreview: (viewer, dragBox) =>
+      createImageryBoxPreview(viewer, dragBox, { draw }),
     pickWorld: fakes.pickWorld,
     documentRef: fakes.documentRef,
     onBox: (box) => boxes.push(box),
@@ -29,12 +33,35 @@ function fixture(options = {}) {
     ...options,
   });
   const camera = fakes.viewer.scene.screenSpaceCameraController;
+  // The stock action as it runs now: the input port holds them, so it is
+  // the original while not suppressed, and none while it is.
   const stockAction = (type) =>
-    fakes.viewer.screenSpaceEventHandler.getInputAction(fakes.types[type]);
+    fakes.stockEnabled(type === 'LEFT_CLICK' ? 'select' : 'dblclickFollow')
+      ? type === 'LEFT_CLICK'
+        ? fakes.originalClick
+        : fakes.originalDouble
+      : undefined;
+  // The preview's fill or outline set, while it is live.
+  const previewSet = (part) =>
+    [...draw.sets.values()].find(
+      (r) =>
+        !r.disposed &&
+        r.spec.id.startsWith('recent-imagery-box:') &&
+        r.spec.id.endsWith(`:${part}`),
+    );
+  // Whether the box shows: its fill and its outline, drawn and shown.
   const preview = () =>
-    fakes.viewer.dataSources.sources[0]?.entities.values.every((e) => e.show);
+    ['fill', 'outline'].every((part) => {
+      const set = previewSet(part);
+      return (
+        Boolean(set?.items.size) &&
+        [...set.items.values()].every((item) => item.show !== false)
+      );
+    });
   return {
     ...fakes,
+    draw,
+    previewSet,
     tool,
     boxes,
     cancels,
@@ -55,8 +82,16 @@ test('a session claims the pointer, borrows the stock clicks, freezes the camera
   assert.equal(f.camera.enableInputs, true, 'not frozen before the press');
   f.fire('LEFT_DOWN', { position: { x: 250, y: 125 } });
   assert.equal(f.camera.enableInputs, false);
-  assert.equal(f.preview(), true);
+  assert.equal(f.preview(), false, 'a press alone has no box to draw');
   f.fire('MOUSE_MOVE', { endPosition: { x: 500, y: 250 } });
+  assert.equal(f.preview(), true, 'the box shows as it is dragged');
+  const rect = () => f.previewSet('fill').items.get('box').geometry.rect;
+  assert.deepEqual(
+    Object.values(rect()).map((v) => Math.round(v * 1e6) / 1e6),
+    [-97.85, 30.3, -97.8, 30.35],
+  );
+  assert.equal(f.previewSet('outline').items.get('edge').style.kind, 'dash');
+  assert.equal(f.previewSet('outline').items.get('edge').mode, 'draped');
   f.fire('MOUSE_MOVE', { endPosition: { x: 500, y: 10 } }); // sky: ignored
   f.fire('LEFT_UP', { position: { x: 500, y: 250 } });
   assert.equal(f.boxes.length, 1);
@@ -74,7 +109,7 @@ test('a session claims the pointer, borrows the stock clicks, freezes the camera
   assert.equal(f.preview(), false);
   assert.equal(f.documentRef.classes.has('gev-imagery-box'), false);
   assert.equal(f.documentRef.listeners.length, 0);
-  assert.equal(f.handler(), null);
+  assert.equal(f.bound(), false);
   assert.deepEqual(f.actives, [true, false]);
   await f.tool.destroy();
 });
@@ -125,17 +160,36 @@ test('an Escape interceptor that claims the key leaves the tool armed; the next 
   await f.tool.destroy();
 });
 
-test('a held pointer refuses the session and nothing is borrowed', async () => {
+test('a session takes the pointer from another tool, which is told', async () => {
   const f = fixture();
-  const lease = claimPointer('draw');
-  assert.equal(f.tool.start(), false);
-  assert.deepEqual(f.cancels, [
-    ['pointer-busy', 'draw is using the pointer — close it first'],
-  ]);
-  assert.equal(f.stockAction('LEFT_CLICK'), f.originalClick);
-  assert.equal(f.handler(), null);
-  releasePointer(lease);
+  let lost = 0;
+  claimPointer('draw', { onLost: () => (lost += 1) });
   assert.equal(f.tool.start(), true);
+  assert.equal(pointerOwner(), IMAGERY_BOX_POINTER_OWNER);
+  assert.equal(lost, 1);
+  assert.deepEqual(f.cancels, []);
+  await f.tool.destroy();
+});
+
+test('a newer tool taking the pointer mid-drag cancels the session and returns everything', async () => {
+  const f = fixture();
+  f.tool.start();
+  f.fire('LEFT_DOWN', { position: { x: 250, y: 125 } });
+  f.fire('MOUSE_MOVE', { endPosition: { x: 500, y: 250 } });
+  assert.equal(f.camera.enableInputs, false);
+  const lease = claimPointer('draw');
+  assert.equal(f.tool.isActive(), false);
+  assert.deepEqual(f.cancels, [['cancel', undefined]], 'as if cancelled');
+  assert.deepEqual(f.actives, [true, false]);
+  assert.equal(f.camera.enableInputs, true, 'the camera is back');
+  assert.equal(f.preview(), false, 'no box is left on the globe');
+  assert.equal(f.stockAction('LEFT_CLICK'), f.originalClick);
+  assert.equal(f.bound(), false);
+  assert.equal(f.documentRef.classes.has('gev-imagery-box'), false);
+  assert.equal(pointerOwner(), 'draw', 'the newer tool keeps it');
+  f.fire('LEFT_UP', { position: { x: 500, y: 250 } });
+  assert.deepEqual(f.boxes, [], 'the drag it ended hands over no box');
+  releasePointer(lease);
   await f.tool.destroy();
 });
 
@@ -143,11 +197,14 @@ test('destroy mid-drag restores the camera, releases the claim and detaches the 
   const f = fixture();
   f.tool.start();
   f.fire('LEFT_DOWN', { position: { x: 250, y: 125 } });
-  assert.equal(f.viewer.dataSources.sources.length, 1);
-  await f.tool.destroy();
+  assert.ok(f.previewSet('fill') && f.previewSet('outline'));
+  const destroying = f.tool.destroy();
+  assert.equal(f.tool.destroy(), destroying);
+  await destroying;
   assert.equal(f.camera.enableInputs, true);
   assert.equal(pointerOwner(), null);
-  assert.equal(f.viewer.dataSources.sources.length, 0);
+  assert.equal(f.previewSet('fill'), undefined, 'the preview is gone');
+  assert.equal(f.previewSet('outline'), undefined);
   assert.equal(f.stockAction('LEFT_CLICK'), f.originalClick);
   assert.equal(f.tool.start(), false);
   assert.equal(initImageryBoxTool({ viewer: null, onBox() {} }), null);
