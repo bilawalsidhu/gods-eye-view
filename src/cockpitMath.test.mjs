@@ -387,6 +387,24 @@ test('HUD rail layout counts obstacles beside those across the midpoint', () => 
   // them against 70 above, and with a taller one only 60, so above.
   assert.deepEqual(band([[120, 260], [380, 420]]), [270, 370]);
   assert.deepEqual(band([[120, 260], [340, 420]]), [40, 110]);
+  // Neighbours exactly two gaps away leave no room between: one block, 100
+  // to 400, and a tie (50px a side) goes above.
+  assert.deepEqual(band([[100, 180], [200, 300], [320, 400]]), [40, 90]);
+});
+
+test('HUD rail layout keeps a band beside a midpoint obstacle inside its own edges', () => {
+  const layout = resolveHudRailLayout({
+    viewportHeight: 480,
+    panelHeight: 80,
+    laneLeft: 20,
+    laneRight: 340,
+    baseTop: 350,
+    baseBottom: 460,
+    gap: 10,
+    obstacles: [{ left: 0, right: 400, top: 100, bottom: 260 }],
+  });
+  assert.equal(layout.safeTop, 350);
+  assert.equal(layout.safeBottom, 460);
 });
 
 test('HUD rail layout can anchor controls to the start of the safe corridor', () => {

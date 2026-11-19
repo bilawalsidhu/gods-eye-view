@@ -283,7 +283,7 @@ test('the left corridor counts cards beside those across the midpoint', () => {
   f.options.obstacles = [element('card', { top: 300, height: 120 })];
   f.run();
   assert(Number(f.stack.dataset.safeBottomPct) * 7 <= 300);
-  assert(Number(f.stack.dataset.safeTopPct) * 7 < 0.26 * 700);
+  assert(Number(f.stack.dataset.safeTopPct) * 7 <= 30);
   // No room on either side: the card is read as before.
   f.options.windowRef.innerHeight = 480;
   f.options.obstacles = [element('card', { top: 0, height: 480 })];

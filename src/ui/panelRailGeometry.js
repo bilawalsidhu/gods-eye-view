@@ -106,7 +106,7 @@ export function bandBesideMidpointObstacles({
     grown = false;
     for (const rect of obstacles) {
       const touches =
-        rect.top < blockBottom + 2 * gap && rect.bottom > blockTop - 2 * gap;
+        rect.top <= blockBottom + 2 * gap && rect.bottom >= blockTop - 2 * gap;
       if (touches && (rect.top < blockTop || rect.bottom > blockBottom)) {
         blockTop = Math.min(blockTop, rect.top);
         blockBottom = Math.max(blockBottom, rect.bottom);
@@ -122,8 +122,16 @@ export function bandBesideMidpointObstacles({
     else if (rect.top >= blockBottom)
       belowBottom = Math.min(belowBottom, rect.top - gap);
   }
-  const above = { side: 'above', top: aboveTop, bottom: blockTop - gap };
-  const below = { side: 'below', top: blockBottom + gap, bottom: belowBottom };
+  const above = {
+    side: 'above',
+    top: aboveTop,
+    bottom: Math.min(bottom, blockTop - gap),
+  };
+  const below = {
+    side: 'below',
+    top: Math.max(top, blockBottom + gap),
+    bottom: belowBottom,
+  };
   const roomAbove = above.bottom - above.top;
   const roomBelow = below.bottom - below.top;
   if (roomBelow > roomAbove && roomBelow > 0) return below;
