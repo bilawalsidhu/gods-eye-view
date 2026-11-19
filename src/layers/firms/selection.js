@@ -13,7 +13,7 @@ export function createSelection({
   config,
   feed,
 }) {
-  const { resolvePickId, isOwnedByOtherLayer } = services.picking;
+  const { resolvePickId, isOwnedByOtherLayer, clickCard } = services.picking;
   const { requestWorldFocus } = services.focus;
   const {
     selectEntityContext,
@@ -21,7 +21,7 @@ export function createSelection({
     getContextStore,
     registerEntityContext,
   } = services.context;
-  const { id, name, overlayHost } = config;
+  const { id, name } = config;
 
   /**
    * Install the LEFT_CLICK handler for fire selection (enable-time only,
@@ -34,10 +34,19 @@ export function createSelection({
     if (layerState._clickSubscription || !layerState._viewer) return;
     const input = inputFor(layerState._viewer);
     layerState._clickSubscription = input.onClick((event) => {
-      const picked = event.topHit;
-      const pickedId = picked ? resolvePickId(picked) : null;
-      // A pick that belongs to a sibling layer (e.g. an aircraft) is not
-      // "empty space" — leave the selection alone and let that layer handle it.
+      // The card or label painted on top takes the click, read once per
+      // click so every layer agrees: ours acts whatever is drawn under it;
+      // another layer's is that layer's click.
+      const top = clickCard?.(event) ?? null;
+      if (top) {
+        if (top.sourceId !== FIRMS_OVERLAY_SOURCE_ID) return;
+        const carded = layerState._fireByCardId.get(top.entryId);
+        if (carded) selectAndFocusFire(carded);
+        return;
+      }
+      const pickedId = resolvePickId(event.topHit ?? null);
+      // A pick that belongs to a sibling layer (an aircraft, a flight trail)
+      // is not "empty space": leave the selection alone.
       const otherLayer = Boolean(pickedId && isOwnedByOtherLayer(id, pickedId));
       // The stand-in is asked where markers are picked: the click corrected
       // for the sensor style (`event.position`), and only when no sibling
@@ -52,18 +61,6 @@ export function createSelection({
         return;
       }
       if (otherLayer) return;
-      const cardHit = overlayHost.hitTest?.(
-        event.screenPosition?.x,
-        event.screenPosition?.y,
-        {
-          sourceId: FIRMS_OVERLAY_SOURCE_ID,
-        },
-      );
-      if (cardHit) {
-        const carded = layerState._fireByCardId.get(cardHit.entryId);
-        if (carded) selectAndFocusFire(carded);
-        return;
-      }
       clearFireSelection();
     });
   }

@@ -1637,19 +1637,48 @@ async function main() {
     // The fixture planes repeat one position, so the icon holds and draws no
     // head. Fly the tracked one east for this check; the display runs 30 s
     // behind, so give it time to reach the moving reports.
-    await evalPage((icao) => {
+    await evalPage(async (icao) => {
+      const { rendererOf } = await import(`${window.__gevQaSourceBase || '/src'}/render/rendererOf.js`);
+      const app = window.__godsEyeView;
+      const fl = app.dataManager.layers.get('flights').module;
+      // Observe this selection's actual draw-port submissions: trails no
+      // longer live in viewer.entities. Disabling destroys the reused trail
+      // set, so this selection creates one the probe can identify.
+      await app.dataManager.setEnabled('flights', false);
+      const draw = rendererOf(app.viewer).draw;
+      const createLines = draw.lines;
+      let head = null;
+      let trail = null;
+      draw.lines = function (spec) {
+        const set = createLines.call(this, spec);
+        if (!spec.id.startsWith('trail:')) return set;
+        draw.lines = createLines;
+        trail = set;
+        const upsert = set.upsert;
+        set.upsert = function (items) {
+          const result = upsert.call(this, items);
+          for (const item of items)
+            if (/^gev-trail:\d+:head$/.test(item.id)) head = item;
+          return result;
+        };
+        const clear = set.clear;
+        set.clear = function () { head = null; return clear.call(this); };
+        const dispose = set.dispose;
+        set.dispose = function () { head = null; trail = null; return dispose.call(this); };
+        return set;
+      };
+      window.__qaTrailHead = () => trail?.show && head?.show !== false ? head?.positions : null;
+      window.__qaRestoreTrailProbe = () => { draw.lines = createLines; };
+      await app.dataManager.setEnabled('flights', true);
+      if (!fl.trackById(icao)) throw new Error('trail fixture could not reselect its aircraft');
       const f = window.__SYNTH.flights.find((p) => p.icao === icao);
       f.moveFromMs = Date.now();
     }, trackedIcao);
     await sleep(55_000);
     const headSamples = await sampleFrames(page, 40, (icao) => {
-      const viewer = window.__godsEyeView.viewer;
       const fl = window.__godsEyeView.dataManager.layers.get('flights').module;
-      const ent = viewer.trackedEntity;
-      const time = viewer.clock.currentTime;
-      const head = viewer.entities.values.find((e) => String(e.id).startsWith('gev-trail:fl-head-'));
-      const line = head?.polyline?.positions?.getValue(time);
-      const drawn = ent?.position?.getValue(time);
+      const line = window.__qaTrailHead();
+      const drawn = window.__qaFollowed()?.position?.();
       if (!line?.length || !drawn) return null;
       const end = line[line.length - 1];
       const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
@@ -1695,10 +1724,8 @@ async function main() {
     for (let i = 0; i < 8; i++) {
       await sleep(600);
       betweenFrames.push(await evalPage((icao) => {
-        const viewer = window.__godsEyeView.viewer;
-        const head = viewer.entities.values.find((e) => String(e.id).startsWith('gev-trail:fl-head-'));
-        const line = head?.polyline?.positions?.getValue(viewer.clock.currentTime);
-        const drawn = viewer.trackedEntity?.position?.getValue(viewer.clock.currentTime);
+        const line = window.__qaTrailHead();
+        const drawn = window.__qaFollowed()?.position?.();
         if (!line?.length || !drawn) return null;
         const end = line[line.length - 1];
         return Math.hypot(end.x - drawn.x, end.y - drawn.y, end.z - drawn.z);
@@ -1712,10 +1739,11 @@ async function main() {
       f.lon += (f.vel * (Date.now() - f.moveFromMs)) / 1000
         / (111320 * Math.cos((f.lat * Math.PI) / 180));
       delete f.moveFromMs;
+      window.__qaRestoreTrailProbe();
     }, trackedIcao);
     const headUsable = headSamples.values.filter((v) => v != null);
     if (headUsable.length < 10) {
-      skip('trail head: ends at the drawn icon on every frame',
+      record('trail head: ends at the drawn icon on every frame', false,
         `only ${headUsable.length} frames with a drawn head (timedOut=${headSamples.timedOut})`);
     } else {
       const worst = Math.max(...headUsable.map((v) => v.end));
@@ -3681,6 +3709,9 @@ async function main() {
         } while (Date.now() < fleetClampDeadline
           && (!Number.isFinite(fleetH) || fleetH < seeded + 1));
         if (!fl.trackById('aaa097')) return { error: 'trackById(aaa097) failed' };
+        // The tracked contact obeys the same 3D toggle as the fleet. Arm it
+        // before testing the cold-ground gate and the warm model handoff.
+        fl.setParams({ models3d: true });
         await window.__dfSettle(1500);
         // Read the tracked entity's rendered height plus the floor under it and
         // the sensor value the data APIs report, at whatever regime the camera
@@ -3770,6 +3801,7 @@ async function main() {
         };
         const trackedEntity = window.__qaFollowed();
         const trackedModel = findOwnModel();
+        if (!trackedModel) return { error: 'tracked model absent before exit' };
         const achievedOut = await window.__dfZoomAbove(window.__dfRegime.exit + 5000);
         const zoomedOut = await window.__dfObserveTrackedExit({
           scene: v.scene, trackedEntity, trackedModel, getTrackedModel: findOwnModel,
@@ -3908,10 +3940,8 @@ async function main() {
       // the tracked billboard becomes the visual again. Gating the clamp on
       // model EXISTENCE put the burial straight back in exactly that state.
       //
-      // This scenario also pins the toggle contract itself. The DISPLAY-rail
-      // "3D" toggle stays OFF for the whole block on purpose: it governs the
-      // FLEET's draw-call budget only, and the tracked contact must still take
-      // its model on zoom without the operator arming anything.
+      // The tracked contact obeys the shared 3D toggle. Keep it enabled
+      // while zoom alone hands the visual between model and billboard.
       const dfRetained = await evalPage(async () => {
         const v = window.__godsEyeView.viewer;
         const Cesium = await import('/node_modules/cesium/Build/Cesium/index.js');
@@ -3924,13 +3954,13 @@ async function main() {
         // and there would otherwise hand an open skin to the seeded scenarios
         // that follow; closing an already-closed skin is inert.
         try {
-        // Toggle OFF throughout — the tracked model must not need it.
-        fl.setParams({ models3d: false });
-        const toggleOff = fl.getParams().models3d === false;
+        // Arm the shared toggle so the zoom regime can retain a hidden model.
+        fl.setParams({ models3d: true });
+        const toggleOn = fl.getParams().models3d === true;
         if (!fl.trackById('aaa097')) return { error: 'trackById(aaa097) failed' };
         await window.__dfSettle(600);
         // Below the ENTER ceiling (trackById re-frames to the close follow
-        // range): the tracked model arrives on zoom alone, toggle still off.
+        // range): the tracked model arrives on zoom alone, 3D enabled.
         const belowH = await window.__dfZoomBelow(window.__dfRegime.enter - 20000);
         const withModel = await window.__dfAwaitTrackedModel('aaa097', 20000);
         // Same split as the regime scenario: a browser with no usable GLB
@@ -3980,7 +4010,7 @@ async function main() {
         const ent2 = window.__qaFollowed()?.position?.();
         const c2 = ent2 ? window.__dfCarto(ent2) : null;
         const out = {
-          toggleOff,
+          toggleOn,
           enter: window.__dfRegime.enter,
           exit: window.__dfRegime.exit,
           belowH,
@@ -4015,23 +4045,19 @@ async function main() {
         record('display-floor/T7: while the tracked MODEL is the visual, the clamp stands aside',
           !dfRetained.error && dfRetained.modelsRenderingBelow > 0,
           dfRetained.error
-            || `${dfRetained.modelsRenderingBelow} aaa097 model(s) rendering at ${(dfRetained.belowH / 1000).toFixed(0)} km with the 3D toggle OFF; entity at ${Number(dfRetained.withModelH).toFixed(1)} m (ground-snap owns it)`);
+            || `${dfRetained.modelsRenderingBelow} aaa097 model(s) rendering at ${(dfRetained.belowH / 1000).toFixed(0)} km with the 3D toggle ON; entity at ${Number(dfRetained.withModelH).toFixed(1)} m (ground-snap owns it)`);
 
-        // The toggle contract after auto-3D (2026-08-20): the DISPLAY-rail "3D"
-        // switch owns the FLEET only. The tracked contact's model is default-on
-        // and decided purely by camera distance, so with the toggle OFF it is
-        // SHOWN below the enter ceiling and handed back above the exit ceiling —
-        // and handed back by HIDING, not destroying, which is the retained state
-        // the floor pin below depends on.
-        record('display-floor/regime: the 3D toggle governs the FLEET only — the tracked model follows the zoom',
-          !dfRetained.error && dfRetained.toggleOff === true
+        // With 3D enabled, zooming out hides rather than destroys the
+        // tracked model: the retained state the floor check depends on.
+        record('display-floor/regime: with 3D enabled the tracked model follows the zoom',
+          !dfRetained.error && dfRetained.toggleOn === true
             && dfRetained.modelsRenderingBelow > 0
             && dfRetained.belowH < dfRetained.enter
             && dfRetained.shownModelsAbove === 0
             && dfRetained.hiddenModelsAbove > 0
             && dfRetained.aboveH > dfRetained.exit,
           dfRetained.error
-            || `toggle OFF throughout: at ${(dfRetained.belowH / 1000).toFixed(0)} km (< ${(dfRetained.enter / 1000).toFixed(0)} km enter) ${dfRetained.modelsRenderingBelow} aaa097 model(s) rendering; at ${(dfRetained.aboveH / 1000).toFixed(0)} km (> ${(dfRetained.exit / 1000).toFixed(1)} km exit) ${dfRetained.shownModelsAbove} shown / ${dfRetained.hiddenModelsAbove} retained-hidden`);
+            || `toggle ON throughout: at ${(dfRetained.belowH / 1000).toFixed(0)} km (< ${(dfRetained.enter / 1000).toFixed(0)} km enter) ${dfRetained.modelsRenderingBelow} aaa097 model(s) rendering; at ${(dfRetained.aboveH / 1000).toFixed(0)} km (> ${(dfRetained.exit / 1000).toFixed(1)} km exit) ${dfRetained.shownModelsAbove} shown / ${dfRetained.hiddenModelsAbove} retained-hidden`);
 
         record('display-floor: a retained-but-hidden tracked model does NOT suppress the floor',
           Number.isFinite(dfRetained.afterSeedH)

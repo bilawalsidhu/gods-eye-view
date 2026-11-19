@@ -2062,6 +2062,51 @@ feed's place, cut to 40 characters (`earthquakeMarkLabel` in
 `src/layers/earthquakes/model.js`: `M6.4 · 113 km SSE of Lata, Solomon
 Islands`, or `M6.4` with no place).
 
+Clicking a quake's disc selects it; clicking its magnitude label (what a far
+view can hit) also flies the camera there through the world-focus request
+(`earthquake` framing in `src/worldFocus.js`). The selected quake shows a card
+(`describeEarthquake`): magnitude and USGS class (`M5.5 · Moderate`), a
+six-step class meter with the depth band, place (cut to 48 characters; the
+card's accessible name carries all of it), UTC time and source; with a USGS
+event id the card opens that event's page, and without one a click or its
+keyboard action flies to the quake. The selection is also the
+shared context selection, so "what's selected" answers with it. Its disc is
+painted with a gradient fading to the outer circle and wavy contour lines
+(shaped by the quake's id, never crossing) under the labels, drawn at the
+ground height the disc is draped on (read again, at most twice a second, while
+they paint, as the ground loads under a label's fly-to). A label's
+fly-to frames the whole disc, scaling its range from the disc's radius above
+the M6 framing. The package takes clicks, picking, context, focus, the ground
+height, the opener, the painter and the translator by injection
+(`src/app/layers/earthquakes.js`); without input and picking it draws and takes
+no clicks, and its labels stay non-interactive.
+A press that travels past the tracking click limit is a drag, not a pick: the
+quake handler ignores it, and opening the source or clearing the selection
+also needs a short press (`src/data/trackingClickGesture.js`).
+Quake discs are deliberately not registered in the pick-ownership registry,
+like drone airspace and fire perimeters: sibling layers read a disc as empty
+space, so their near-miss taps and deselection work over a quake as before,
+and a disc yields to another layer's registered pick (an aircraft) under it.
+The card or label painted on top takes the click. The world-overlay host hands
+its hit test to the pick registry (`setClickCardHitTest`), and every click
+handler reads the topmost interactive card or label at the click through
+`clickCard(click)`, once per click, so all of them agree in any listener order
+(`src/data/pickRegistry.js`). A layer whose own card or label is on top acts
+on it, whatever is drawn under it: an aircraft, a vessel, a fire, a camera, a
+trail, a route. A layer under another layer's card or label
+(`isUnderOtherCard`) does nothing: it neither acts on its item there nor
+treats the click as empty space, so a tracked aircraft stays tracked and a
+selection stays selected. Context (`src/ui/entityContextBridge.js`) names
+nothing under a card. With no card on top, the scene rules are unchanged.
+World-overlay hit rectangles are what is painted on screen until the next
+paint: an overlay change (a click subscriber publishing its selection card)
+no longer clears them mid-click, and a paint that draws nothing clears them
+(`src/overlays/worldOverlay.js`). A click on the map under another layer's
+card opens no Street Level ground image. The Bhote Koshi trigger-record
+callout (`src/data/bhoteKoshiLocator.js`) opens its source on a click, as its
+keyboard action does, and ignores a drag; its evidence cards act only when
+they are the card on top.
+
 Air quality (`./layers/air-quality`) draws its station discs as one renderer
 draw set of ground-clamped fills and reads the view through the camera port; it
 no longer reaches Cesium, so a caller handing it a Cesium viewer,
@@ -8799,6 +8844,16 @@ on it.
   per frame, it holds NO continuous-render hold — the governor stays idle with
   earthquakes on, and the manager's `layer-tick` / `layer-visibility` requests
   carry new data to the screen. Pinned in `src/data/earthquakes.test.mjs`.
+  The one animation is the selected quake's contour lines
+  (`src/app/layers/earthquakeRipples.js`), painted on the world overlay, not
+  the ground set: they ask for frames for `RIPPLE_ACTIVE_CYCLES` (3) runs out
+  to the disc's edge after a selection (about 14 s), only while the disc is on
+  screen, then rest as still contours and ask for none. A parked camera with a
+  quake selected therefore returns to idle. A feed refresh updates the
+  selected quake in place: it neither runs the contours again nor takes back
+  a shared selection made since; only a click or a label's activation does.
+  Selecting fades that one disc's flat fill once (an `upsert`, not per frame)
+  under the painted gradient.
 - **Geocode framing has an off-centre sanity gate.** A viewport that is both
   bigger than any city (>300 km diagonal) and not centred on its own geocoded
   location (anchor >15% of the diagonal from the centroid) is replaced by a

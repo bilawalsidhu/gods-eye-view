@@ -219,7 +219,6 @@ export class StyleManager extends ShellFacade {
       pinia: applicationPinia(),
       pickWorld: services.pickWorldFromScreen,
       regionalBrief: services.fetchRegionalBrief,
-      overlayHit: services.hitTestWorldOverlay,
     });
     this.mapStackController = mapStackController;
     this.placeSearch = placeSearch;

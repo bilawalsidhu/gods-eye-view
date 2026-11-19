@@ -672,3 +672,58 @@ test('narrowing to a window the loaded data covers clears a failed wider reload'
   assert.equal(layer.getStats().error, null);
   assert.equal(layer.getStats().count, 1);
 });
+
+test('a covered selected card yields while genuine GhostMaps markers still select', async (t) => {
+  const cards = [];
+  const opened = [];
+  let painted = [];
+  const { layer, viewer, click } = fixture(t, {
+    reports: [
+      {
+        name: 'First',
+        description: '<a href="https://example.com/first">Source</a>',
+      },
+      {
+        name: 'Second',
+        description: '<a href="https://example.com/second">Source</a>',
+      },
+    ],
+    controls: {
+      overlayHost: {
+        setEntries: (_id, entries) => cards.push(entries),
+        hitTest: (_x, _y, { sourceId } = {}) =>
+          painted.find((hit) => !sourceId || hit.sourceId === sourceId) ?? null,
+      },
+      picking: {
+        resolvePickId: (picked) => picked,
+        // The card on top at a click, as the registry answers from the host.
+        clickCard: () => painted[0] ?? null,
+      },
+      openExternal: (url) => opened.push(url),
+    },
+  });
+  await layer.update(viewer);
+  click('ghostmaps:cip:0:0');
+  const first = cards.at(-1)[0];
+  const foreign = {
+    sourceId: 'earthquake-card',
+    entryId: 'earthquake-card:ak1',
+  };
+  painted = [foreign, { sourceId: 's2-ghostmaps', entryId: first.id }];
+  click(null);
+  assert.deepEqual(opened, []);
+  assert.equal(cards.at(-1)[0].id, first.id);
+  // A marker under another layer's card is that card's click too.
+  click('ghostmaps:cip:1:0');
+  assert.equal(cards.at(-1)[0].id, first.id, 'a covered marker yields');
+  painted = [];
+  click('ghostmaps:cip:1:0');
+  const second = cards.at(-1)[0];
+  assert.notEqual(second.id, first.id, 'a bare marker selects');
+  painted = [{ sourceId: 's2-ghostmaps', entryId: second.id }];
+  click(null);
+  assert.deepEqual(opened, ['https://example.com/second']);
+  painted = [];
+  click(null);
+  assert.deepEqual(cards.at(-1), [], 'bare map still clears the selection');
+});

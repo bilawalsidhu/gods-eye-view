@@ -1,5 +1,6 @@
 import { isFollowing } from '../../data/followed.js';
 import { inputFor } from '../../input/dispatcher.js';
+import { isUnderOtherCard } from '../../data/pickRegistry.js';
 import { distance, fromDegrees, toLonLatH } from '../../geo/index.js';
 import {
   LAYER_ID,
@@ -581,6 +582,9 @@ export function createAlprPresentation({ state, services, source }) {
     if (state.clickSubscription) return;
     state.clickSubscription = inputFor(viewer).onClick((event) => {
       if (!state.enabled) return;
+      // Another layer's card or label painted on top takes the click: the item
+      // under it does not act, and the click is not empty space either.
+      if (isUnderOtherCard(event)) return;
       // The painted overlay answers first; the scene is picked only if not.
       const hit = event.drawHit;
       const id =

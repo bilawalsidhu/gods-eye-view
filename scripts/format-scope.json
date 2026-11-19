@@ -441,6 +441,12 @@
   "src/layers/earthquakes/model.js",
   "src/layers/earthquakes/source.js",
   "src/layers/earthquakes/ownership.test.mjs",
+  "src/layers/earthquakes/selection.test.mjs",
+  "src/layers/submarineCables/interaction.test.mjs",
+  "src/ui/entityContextBridge.test.mjs",
+  "src/layers/launches/clickYield.test.mjs",
+  "src/app/layers/earthquakeRipples.js",
+  "src/app/layers/earthquakeRipples.test.mjs",
   "src/layers/perimeters/index.js",
   "src/layers/perimeters/records.js",
   "src/layers/perimeters/source.js",
@@ -1599,5 +1605,8 @@
   "src/ui/omnibarRows.test.mjs",
   "src/ui/styles/omnibar-dock.css",
   "src/ui/styles/guide.css",
-  "src/ui/commandDock.test.mjs"
+  "src/ui/commandDock.test.mjs",
+  "src/layers/bikeshare/selection.test.mjs",
+  "src/layers/satellites/interaction.test.mjs",
+  "src/layers/alpr/presentation.test.mjs"
 ]

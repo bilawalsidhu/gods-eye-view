@@ -218,13 +218,18 @@ export function createFirePerimetersLayer({
     _clickSubscription = inputFor(_viewer).onClick((event) => {
       // A click on the incident card itself opens its InciWeb page (when the
       // incident has one) and never disturbs the selection.
-      const cardHit = overlayHost.hitTest?.(
-        event.screenPosition?.x,
-        event.screenPosition?.y,
-        { sourceId: PERIMETER_OVERLAY_SOURCE_ID },
-      );
-      if (cardHit && cardHit.entryId === _selectedCardId) {
-        if (_selectedLink && openExternal) openExternal(_selectedLink);
+      // The card or label painted on top takes the click, read once per
+      // click so every layer agrees: this area's shapes are background to
+      // another layer's card or label painted over them.
+      const cardHit = picking.clickCard?.(event) ?? null;
+      if (cardHit) {
+        if (
+          cardHit.sourceId === PERIMETER_OVERLAY_SOURCE_ID &&
+          cardHit.entryId === _selectedCardId &&
+          _selectedLink &&
+          openExternal
+        )
+          openExternal(_selectedLink);
         return;
       }
       const picked = event.topHit;

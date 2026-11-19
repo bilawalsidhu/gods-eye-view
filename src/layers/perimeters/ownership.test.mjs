@@ -58,6 +58,9 @@ function harness(
         String(pickedId).startsWith('other-layer:'),
       registerPickOwner: (layerId, predicate) => owners.set(layerId, predicate),
       unregisterPickOwner: (layerId) => owners.delete(layerId),
+      // The card on top at a click, as the registry answers from the host.
+      clickCard: (click) =>
+        cardHit(click.screenPosition?.x, click.screenPosition?.y, {}),
     },
     inciwebSource: inciwebIndex
       ? { getIndex: async () => inciwebIndex }
@@ -243,6 +246,43 @@ test('clicking a perimeter publishes its incident card; empty space clears it', 
   assert.equal(h.overlay.entries.get('fire-perimeters')?.length ?? 0, 0);
 });
 
+// Another layer's card or label painted over the area (a quake's card or
+// magnitude label) is that layer's click: the area under it stands aside.
+test("another layer's overlay on top keeps a click off the area", async () => {
+  let pickResult = null;
+  let foreignOnTop = false;
+  const h = harness(
+    { getSnapshot: async () => [row] },
+    {
+      pick: () => pickResult,
+      // Unfiltered: the topmost entry of any source.
+      cardHit: (_x, _y, options) =>
+        foreignOnTop && !options?.sourceId
+          ? { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' }
+          : null,
+    },
+  );
+  await h.layer.update(h.viewer);
+  pickResult = perimeterPick('fire-perimeter:2026-NMGNF-000123:0');
+  foreignOnTop = true;
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(h.overlay.entries.get('fire-perimeters')?.length ?? 0, 0);
+  // With nothing painted over it, the same click selects the area.
+  foreignOnTop = false;
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(
+    h.overlay.entries.get('fire-perimeters')[0].id,
+    'fire-perimeter-card:2026-NMGNF-000123',
+  );
+  // An overlay on top never clears an existing selection either.
+  foreignOnTop = true;
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(
+    h.overlay.entries.get('fire-perimeters')[0].id,
+    'fire-perimeter-card:2026-NMGNF-000123',
+  );
+});
+
 test('disable removes the click handler, pick ownership, and any card', async () => {
   const h = harness(
     { getSnapshot: async () => [row] },
@@ -279,12 +319,16 @@ test('a matched incident card carries the InciWeb line and click-through', async
     },
   ];
   let cardHitResult = null;
+  let foreignOnTop = false;
   const h = harness(
     { getSnapshot: async () => [{ ...row, name: 'Fixture' }] },
     {
       pick: () => null,
       inciwebIndex,
-      cardHit: () => cardHitResult,
+      cardHit: (_x, _y, options) =>
+        foreignOnTop && !options?.sourceId
+          ? { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' }
+          : cardHitResult,
     },
   );
   await h.layer.update(h.viewer);
@@ -299,9 +343,15 @@ test('a matched incident card carries the InciWeb line and click-through', async
   const entries = h.overlay.entries.get('fire-perimeters');
   assert.equal(entries[0].details.at(-1), 'InciWeb ↗ · click card to open');
 
-  // Clicking the card itself opens the InciWeb page.
-  cardHitResult = { entryId: entries[0].id };
+  // A selected card covered by a quake card cannot open its hidden link.
+  cardHitResult = { sourceId: 'fire-perimeters', entryId: entries[0].id };
   h.viewer.scene.pick = () => null;
+  foreignOnTop = true;
+  h.clicks.handler({ position: { x: 12, y: 12 } });
+  assert.deepEqual(h.opened, []);
+  assert.equal(h.overlay.entries.get('fire-perimeters')[0].id, entries[0].id);
+  // Removing the foreground card makes the incident card actionable again.
+  foreignOnTop = false;
   h.clicks.handler({ position: { x: 12, y: 12 } });
   assert.deepEqual(h.opened, ['https://inciweb.wildfire.gov/node/329300']);
   assert.equal(
@@ -328,7 +378,7 @@ test('an unmatched incident renders no InciWeb line and card clicks stay inert',
     entries[0].details.some((line) => line.includes('InciWeb')),
     false,
   );
-  cardHitResult = { entryId: entries[0].id };
+  cardHitResult = { sourceId: 'fire-perimeters', entryId: entries[0].id };
   h.viewer.scene.pick = () => null;
   h.clicks.handler({ position: { x: 12, y: 12 } });
   assert.deepEqual(h.opened, []);

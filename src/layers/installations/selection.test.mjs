@@ -7,6 +7,7 @@ import { createRendering } from './rendering.js';
 import { createNamedMarkers, namedPointId } from './namedMarkers.js';
 import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';
 import { fakeInput } from '../../input/testDoubles.mjs';
+import { setClickCardHitTest } from '../../data/pickRegistry.js';
 
 function harness(t) {
   const previousWindow = globalThis.window;
@@ -184,6 +185,30 @@ test('a click on a named marker point selects its site; again releases it', (t) 
   // Another set's item with the same meta is not this layer's point.
   h.click({ id: { set: 'other:1', id: item.id, meta: item.meta } });
   h.assertSelected(false);
+});
+
+// The card or label painted on top takes the click: a site under another
+// layer's card neither selects nor releases.
+test("another layer's card over a site keeps the click", (t) => {
+  const h = harness(t);
+  let top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  setClickCardHitTest(() => top);
+  t.after(() => setClickCardHitTest(null));
+  const setId = h.parts.namedMarkers.setId;
+  const item = h.draw.set(setId).items.get(namedPointId('base'));
+  const pointPick = { id: { set: setId, id: item.id, meta: item.meta } };
+  h.click(pointPick);
+  h.assertSelected(true);
+  h.click(undefined);
+  h.assertSelected(true);
+  h.state.selectedId = null;
+  context.clearSelectedEntityContextForLayer('military-installations');
+  h.parts.rendering.renderRecords();
+  h.click(pointPick);
+  h.assertSelected(false);
+  top = null;
+  h.click(pointPick);
+  h.assertSelected(true);
 });
 
 test('a click on a site dot or its outline selects the site; another set does not', (t) => {

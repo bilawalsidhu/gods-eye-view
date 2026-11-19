@@ -15,7 +15,11 @@ import {
 } from './index.js';
 import { createLocalAdsbModels } from './models.js';
 import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
-import { resolvePickId } from '../../data/pickRegistry.js';
+import {
+  isUnderOtherCard,
+  resolvePickId,
+  setClickCardHitTest,
+} from '../../data/pickRegistry.js';
 import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
 import { hexColor } from '../../render/color.js';
@@ -1211,6 +1215,41 @@ test('clicking the selected aircraft keeps it selected and republishes its card'
   harness.click();
   assert.deepEqual(calls.selected, ['local-adsb:abc123', 'local-adsb:abc123']);
   assert.deepEqual(calls.cleared, []);
+});
+
+// The card or label painted on top takes the click: a local aircraft under
+// another layer's card is neither selected nor released.
+test("another layer's card over a local aircraft keeps the click", async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const harness = clickHarness();
+  let top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  setClickCardHitTest(() => top);
+  t.after(() => setClickCardHitTest(null));
+  const { layer, calls, draw } = await enabledLayer(receiver, clock, null, {
+    viewer: harness.viewer,
+    services: {
+      picking: {
+        registerPickOwner() {},
+        unregisterPickOwner() {},
+        resolvePickId,
+        isUnderOtherCard,
+      },
+    },
+  });
+  t.after(() => layer.destroy());
+  receiver.set({ aircraft: [record()] });
+  await layer.update();
+  harness.scene.pickResult = iconPick(draw, 'local-adsb:abc123');
+  harness.click();
+  assert.deepEqual(calls.selected, [], 'covered: not selected');
+  top = null;
+  harness.click();
+  assert.deepEqual(calls.selected, ['local-adsb:abc123']);
+  top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  harness.scene.pickResult = null;
+  harness.click();
+  assert.deepEqual(calls.cleared, [], 'covered: the selection stays');
 });
 
 test('a click on a local aircraft under an unowned or trail pick still selects it', async (t) => {
