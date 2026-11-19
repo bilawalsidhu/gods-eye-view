@@ -10,6 +10,7 @@
  */
 import { fromDegrees } from '../geo/ellipsoid.js';
 import { inputFor } from '../input/dispatcher.js';
+import { isUnderOtherCard } from '../data/pickRegistry.js';
 import { findQuery } from '../render/rendererOf.js';
 import { clampOrbitalLook, easeLook } from '../cockpitLook.js';
 import { ORBITAL_EARTH_RADIUS_M } from '../cockpitOrbital.js';
@@ -256,16 +257,13 @@ export function onOrbitalDoubleClick(position) {
  * focuses it; any other click ends a focus. A click a tool owns (drawing)
  * is left alone, as is every click outside orbit.
  * @param {{x: number, y: number}|null|undefined} position Canvas position.
- * @param {{overlay?: boolean}} [options] `overlay`: a label painted over the
- *   map took the click, so it is on no site and only ends a focus.
  * @returns {boolean} True when the click focused a point.
  */
-export function onOrbitalClick(position, { overlay = false } = {}) {
+export function onOrbitalClick(position) {
   if (!inOrbit(this) || !isPointerFree()) return false;
   if (!Number.isFinite(position?.x) || !Number.isFinite(position?.y))
     return false;
-  // A click a label painted over the map took is on no site.
-  const site = overlay ? null : siteAt(this, position);
+  const site = siteAt(this, position);
   const state = this.orbital;
   if (site) {
     if (state.focus?.key === String(site.id)) return true;
@@ -289,9 +287,12 @@ export function routeSceneClick() {
     // A viewer with no input (headless tools, partial stubs) has no clicks.
     return () => {};
   }
-  return input.onClick((event) =>
-    this.onOrbitalClick(event?.position, { overlay: event?.overlay === true }),
-  );
+  return input.onClick((event) => {
+    // Another layer's card or label painted on top takes the click: the site
+    // under it does not focus, and the click does not end a held focus.
+    if (isUnderOtherCard(event)) return;
+    this.onOrbitalClick(event?.position);
+  });
 }
 
 /**

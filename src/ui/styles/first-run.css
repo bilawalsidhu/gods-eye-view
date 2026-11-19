@@ -2,35 +2,38 @@
    Compact and non-modal: it gives a new visitor a meaningful starting
    choice without blocking manual map interaction or spending API quota. */
 #first-run-launcher {
+  --first-run-step-offset: 1.5rem;
   position: fixed;
   z-index: 175;
-  top: 50%;
+  /* Spans the HUD's deco band: its top meets the HUD's top readouts
+     (`top: max(14vh, 136px)` on the tactical HUD) and its bottom meets the
+     bottom readouts. The sections scroll inside, so the heading, the
+     checkbox, the main action and the status line stay reachable. */
+  top: max(14vh, 136px);
+  bottom: auto;
+  max-height: calc(100vh - 4rem);
+  max-height: calc(100dvh - 4rem);
   left: 50%;
-  width: min(34rem, calc(100vw - 2rem));
-  /* Five tiles do not fit a short landscape phone (667 x 390), where the card
-     would otherwise render past BOTH ends of the viewport. Cap it to the
-     viewport and let the mission list scroll inside — the heading, the checkbox
-     and the status line must stay reachable at every height. */
-  max-height: calc(100vh - 1.5rem);
-  max-height: calc(100dvh - 1.5rem);
+  width: min(54vw, 52rem);
+  min-width: min(40rem, calc(100vw - 2rem));
   display: flex;
   flex-direction: column;
-  padding: 1.15rem;
+  padding: 1.35rem 1.5rem 1.1rem;
   overflow: hidden;
   color: var(--text-primary);
-  background:
-    linear-gradient(145deg, rgba(10, 27, 37, 0.97), rgba(7, 13, 22, 0.95)),
-    rgba(7, 17, 25, 0.96);
-  border: 1px solid rgba(54, 220, 255, 0.42);
-  border-radius: 0.65rem;
+  /* The same frosted glass as the side panels, so the card reads as part of
+     the shell rather than a separate dialog. */
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
   box-shadow:
-    0 1.4rem 4.5rem rgba(0, 0, 0, 0.72),
-    0 0 2.5rem rgba(0, 212, 255, 0.09),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.025);
-  backdrop-filter: blur(28px) saturate(1.25);
-  -webkit-backdrop-filter: blur(28px) saturate(1.25);
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
   opacity: 0;
-  transform: translate(-50%, calc(-50% + 0.8rem)) scale(0.985);
+  transform: translate(-50%, 0.8rem) scale(0.985);
   transition:
     opacity 220ms ease,
     transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -49,8 +52,25 @@
 
 #first-run-launcher.visible {
   opacity: 1;
-  transform: translate(-50%, -50%) scale(1);
+  transform: translate(-50%, 0) scale(1);
   pointer-events: auto;
+}
+
+/* A light tint over the globe behind the card, with no blur, so the globe
+   stays sharp. Decorative and click-through: the card stays non-modal, so
+   the map underneath still works. */
+.first-run-backdrop {
+  position: fixed;
+  z-index: 174;
+  inset: 0;
+  background: rgba(3, 8, 14, 0.28);
+  opacity: 0;
+  transition: opacity 220ms ease;
+  pointer-events: none;
+}
+
+.first-run-backdrop.visible {
+  opacity: 1;
 }
 
 .first-run-scanline {
@@ -60,10 +80,10 @@
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(54, 220, 255, 0.8),
+    rgba(48, 194, 224, 0.8),
     transparent
   );
-  box-shadow: 0 0 1rem rgba(54, 220, 255, 0.45);
+  box-shadow: 0 0 1rem rgba(48, 194, 224, 0.45);
   pointer-events: none;
 }
 
@@ -81,7 +101,7 @@
 }
 
 .first-run-kicker {
-  color: rgba(54, 220, 255, 0.86);
+  color: rgba(48, 194, 224, 0.86);
 }
 
 #first-run-launcher h2 {
@@ -102,8 +122,9 @@
 
 .first-run-choices {
   display: grid;
-  gap: 0.42rem;
-  margin-top: 1rem;
+  gap: 1rem;
+  margin-top: 1.1rem;
+  padding-inline-end: 0.2rem;
   /* The one part of the card allowed to scroll when the viewport is too short.
      min-height:0 is what actually lets this flex child shrink below its content. */
   min-height: 0;
@@ -115,94 +136,1405 @@
   scrollbar-gutter: stable;
 }
 
-.first-run-choices button {
+.first-run-section {
   display: grid;
-  grid-template-columns: 1.7rem 1fr 1.3rem;
+  gap: 0.5rem;
+}
+
+/* A numbered rule: label, then a hairline to the edge. */
+.first-run-section-title {
+  display: flex;
   align-items: center;
-  gap: 0.7rem;
-  width: 100%;
-  min-height: 3.55rem;
-  padding: 0.6rem 0.7rem;
+  gap: 0.6rem;
+  margin: 0;
+  color: rgba(171, 210, 220, 0.6);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 500;
+  letter-spacing: 0.14rem;
+  text-transform: uppercase;
+}
+
+.first-run-section-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(100, 200, 220, 0.16);
+}
+
+.first-run-tag {
+  padding: 0.08rem 0.4rem;
+  color: rgba(48, 194, 224, 0.86);
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  font-weight: 500;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+  border: 1px solid rgba(48, 194, 224, 0.38);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.first-run-tag--soon {
+  color: rgba(199, 225, 231, 0.55);
+  border-color: rgba(199, 225, 231, 0.22);
+}
+
+/* Shared tile surface: modes, tiers, missions and link cards. */
+.first-run-mode,
+.first-run-missions button,
+.first-run-link-card {
   color: rgba(225, 244, 248, 0.92);
-  text-align: start;
   background: rgba(29, 69, 81, 0.18);
   border: 1px solid rgba(100, 200, 220, 0.18);
-  border-radius: 0.42rem;
+  border-radius: 0.5rem;
+}
+
+/* ── 1 · Mode ── */
+.first-run-modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.first-run-mode {
+  position: relative;
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  gap: 0.85rem;
+  padding: 0.7rem 2.2rem 0.7rem 0.7rem;
+}
+
+.first-run-mode[data-first-run-mode='god'] {
+  background: rgba(25, 151, 178, 0.14);
+  border-color: rgba(48, 194, 224, 0.62);
+  box-shadow: 0 0 1.4rem rgba(0, 212, 255, 0.08);
+}
+
+.first-run-mode[data-first-run-mode='analyst'] {
+  opacity: 0.55;
+}
+
+.first-run-radio {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.7rem;
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 1px solid rgba(199, 225, 231, 0.45);
+  border-radius: 50%;
+}
+
+.first-run-mode[data-first-run-mode='god'] .first-run-radio {
+  border-color: #30c2e0;
+  box-shadow: inset 0 0 0 0.2rem rgba(7, 17, 25, 0.96);
+  background: #30c2e0;
+}
+
+.first-run-mode-body,
+.first-run-link-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.first-run-mode-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+.first-run-mode-title strong,
+.first-run-link-body strong,
+.first-run-missions strong {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04rem;
+}
+
+.first-run-mode-copy {
+  margin: 0;
+  color: rgba(215, 231, 235, 0.66);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.first-run-mode-points {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.8rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: rgba(199, 225, 231, 0.6);
+  font-size: 0.6rem;
+}
+
+.first-run-mode-points li::before {
+  content: '\2022\00a0';
+  color: rgba(48, 194, 224, 0.7);
+}
+
+/* Drawn previews, so the card needs no image assets. */
+.first-run-preview {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 5rem;
+  overflow: hidden;
+  border: 1px solid rgba(100, 200, 220, 0.16);
+  border-radius: 0.35rem;
+}
+
+.first-run-preview--god {
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(48, 194, 224, 0.05) 0 1px,
+      transparent 1px 7px
+    ),
+    #050d14;
+}
+
+.first-run-preview--god i {
+  width: 3.4rem;
+  height: 3.4rem;
+  border: 1px solid rgba(48, 194, 224, 0.75);
+  border-radius: 50%;
+}
+
+.first-run-preview--analyst {
+  background:
+    linear-gradient(rgba(199, 225, 231, 0.08), rgba(199, 225, 231, 0.08)) 0.6rem
+      0.7rem / 55% 0.3rem no-repeat,
+    linear-gradient(rgba(199, 225, 231, 0.06), rgba(199, 225, 231, 0.06)) 0.6rem
+      1.3rem / 40% 0.3rem no-repeat,
+    #0b141c;
+}
+
+.first-run-preview--analyst i {
+  position: absolute;
+  inset: auto 0.6rem 0.6rem;
+  height: 1.8rem;
+  background: linear-gradient(
+    90deg,
+    rgba(199, 225, 231, 0.12) 0 18%,
+    transparent 18% 22%,
+    rgba(199, 225, 231, 0.2) 22% 48%,
+    transparent 48% 52%,
+    rgba(199, 225, 231, 0.1) 52% 100%
+  );
+  border-radius: 0.2rem;
+}
+
+.first-run-preview--stories {
+  width: 4.2rem;
+  min-height: 4.2rem;
+  color: rgba(48, 194, 224, 0.8);
+  background:
+    radial-gradient(
+      circle at 30% 20%,
+      rgba(48, 194, 224, 0.18),
+      transparent 60%
+    ),
+    #071520;
+}
+
+/* ── 2 · Performance (a preview: no setting yet) ── */
+
+.first-run-missions small,
+.first-run-link-body small {
+  color: rgba(198, 220, 226, 0.55);
+  font-size: 0.62rem;
+}
+
+/* ── Start with: where ENTER GOD MODE begins ── */
+.first-run-missions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.first-run-missions button {
+  display: grid;
+  grid-template-columns: 1.1rem 1fr;
+  align-items: start;
+  gap: 0.45rem;
+  width: 100%;
+  min-height: 0;
+  padding: 0.45rem 0.55rem;
+  text-align: start;
   cursor: pointer;
   transition:
     background var(--transition-fast),
-    border-color var(--transition-fast),
-    transform var(--transition-fast);
+    border-color var(--transition-fast);
 }
 
-.first-run-choices button:hover,
-.first-run-choices button:focus-visible {
+.first-run-missions button > span:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.first-run-missions strong {
+  font-size: 0.6rem;
+  letter-spacing: 0.07rem;
+}
+
+.first-run-missions small {
+  font-size: 0.56rem;
+  line-height: 1.3;
+}
+
+.first-run-missions button > .material-symbols-outlined:first-child {
+  color: rgba(85, 223, 245, 0.75);
+  font-size: 1rem;
+}
+
+/* The selected start: what ENTER GOD MODE will run. */
+.first-run-missions button[aria-pressed='true'] {
+  background: rgba(25, 151, 178, 0.18);
+  border-color: rgba(48, 194, 224, 0.75);
+  box-shadow: inset 0 0 0 1px rgba(48, 194, 224, 0.35);
+}
+
+.first-run-missions
+  button[aria-pressed='true']
+  > .material-symbols-outlined:first-child {
+  color: #4bc4d8;
+}
+
+.first-run-missions button:hover,
+.first-run-missions button:focus-visible,
+a.first-run-link-card:hover,
+a.first-run-link-card:focus-visible {
   background: rgba(25, 151, 178, 0.16);
-  border-color: rgba(54, 220, 255, 0.62);
+  border-color: rgba(48, 194, 224, 0.62);
   outline: none;
-  transform: translateX(2px);
 }
 
 /* aria-disabled, not :disabled — the JS keeps the buttons focusable while a
    mission runs so the keyboard is never dumped out of the launcher mid-flight. */
-.first-run-choices button[aria-disabled='true'] {
+.first-run-missions button[aria-disabled='true'],
+.first-run-enter[aria-disabled='true'] {
   cursor: wait;
   opacity: 0.48;
-  transform: none;
   pointer-events: none;
 }
 
-.first-run-choices button > .material-symbols-outlined:first-child {
+/* ── Link cards: Stories, source, more ── */
+.first-run-link-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.7rem;
+  text-decoration: none;
+}
+
+.first-run-link-body {
+  flex: 1;
+}
+
+.first-run-stories {
+  padding: 0.7rem;
+  background:
+    repeating-linear-gradient(
+      135deg,
+      rgba(48, 194, 224, 0.035) 0 0.5rem,
+      transparent 0.5rem 1rem
+    ),
+    rgba(29, 69, 81, 0.18);
+  border-color: rgba(48, 194, 224, 0.34);
+}
+
+.first-run-link-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.first-run-link-card--quiet {
+  border-style: dashed;
+  background: rgba(255, 255, 255, 0.02);
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.first-run-link-badge {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  color: rgba(48, 194, 224, 0.85);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  border: 1px solid rgba(100, 200, 220, 0.25);
+  border-radius: 0.35rem;
+}
+
+.first-run-link-badge.material-symbols-outlined {
+  font-size: 1.05rem;
+}
+
+.first-run-link-button {
+  flex: none;
+  padding: 0.42rem 0.7rem;
+  color: rgba(225, 244, 248, 0.92);
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.1rem;
+  text-decoration: none;
+  white-space: nowrap;
+  border: 1px solid rgba(48, 194, 224, 0.5);
+  border-radius: 0.35rem;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.first-run-link-button:not([aria-disabled='true']):hover,
+.first-run-link-button:focus-visible {
+  background: rgba(25, 151, 178, 0.2);
+  border-color: #30c2e0;
+  outline: none;
+}
+
+.first-run-link-button[aria-disabled='true'] {
+  color: rgba(199, 225, 231, 0.5);
+  border-color: rgba(199, 225, 231, 0.2);
+  cursor: default;
+}
+
+/* ── The main action ── */
+.first-run-enter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.62rem 1rem;
+  color: #031018;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.12rem;
+  text-transform: none;
+  background: #30c2e0;
+  border: 1px solid #30c2e0;
+  border-radius: 0.4rem;
+  box-shadow: 0 0 1.4rem rgba(48, 194, 224, 0.25);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.first-run-enter .material-symbols-outlined {
+  font-size: 1rem;
+}
+
+.first-run-enter:hover,
+.first-run-enter:focus-visible {
+  background: #6bcde0;
+  box-shadow: 0 0 1.8rem rgba(48, 194, 224, 0.45);
+  outline: 2px solid rgba(48, 194, 224, 0.5);
+  outline-offset: 2px;
+}
+
+/* ── Compact rows: everything below the mode choice stays short, so the card
+   fits its band without scrolling. ── */
+
+/* Start with: chips. The description stays in the accessible name. */
+.first-run-missions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.first-run-missions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: auto;
+  padding: 0.32rem 0.75rem 0.32rem 0.55rem;
+  border-radius: 999px;
+}
+
+.first-run-missions button > span:nth-child(2) {
+  display: inline;
+}
+
+.first-run-missions small {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.first-run-missions strong {
+  font-size: 0.58rem;
+  white-space: nowrap;
+}
+
+.first-run-missions button > .material-symbols-outlined:first-child {
+  font-size: 0.95rem;
+}
+
+/* Tiers: one line each. */
+
+/* Link cards: one line of copy, smaller badges. */
+.first-run-section {
+  gap: 0.4rem;
+}
+
+.first-run-choices {
+  gap: 0.75rem;
+}
+
+.first-run-link-card,
+.first-run-stories {
+  gap: 0.6rem;
+  padding: 0.42rem 0.6rem;
+}
+
+.first-run-link-body {
+  gap: 0.1rem;
+}
+
+.first-run-link-body strong,
+.first-run-link-body .first-run-mode-title strong {
+  font-size: 0.7rem;
+}
+
+.first-run-link-body .first-run-mode-copy,
+.first-run-link-body small {
+  overflow: hidden;
+  font-size: 0.6rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.first-run-link-badge {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+.first-run-preview--stories {
+  width: 2.6rem;
+  min-height: 2.6rem;
+}
+
+.first-run-link-button {
+  padding: 0.3rem 0.6rem;
+}
+
+/* More from Halfpixel: one-line link chips. */
+.first-run-link-card--quiet {
+  padding: 0.28rem 0.6rem 0.28rem 0.4rem;
+  border-radius: 999px;
+}
+
+.first-run-link-card--quiet small {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.first-run-link-card--quiet .first-run-link-badge {
+  width: 1.3rem;
+  height: 1.3rem;
+  font-size: 0.5rem;
+  border-radius: 50%;
+}
+
+.first-run-link-card--quiet .first-run-link-body strong {
+  font-size: 0.64rem;
+}
+
+/* Tighter rhythm between sections and in the heading. */
+.first-run-choices {
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.first-run-section {
+  gap: 0.32rem;
+}
+
+.first-run-preview--stories {
+  width: 2.1rem;
+  min-height: 2.1rem;
+}
+
+.first-run-stories .first-run-preview--stories .material-symbols-outlined {
+  font-size: 1.1rem;
+}
+
+#first-run-launcher h2 {
+  margin-top: 0.35rem;
+  font-size: clamp(1.15rem, 2vw, 1.5rem);
+}
+
+#first-run-description {
+  margin-top: 0.2rem;
+  max-width: 40rem;
+}
+
+/* Final trims so the band fits on a 900px-tall window. */
+.first-run-link-card,
+.first-run-stories {
+  padding-block: 0.32rem;
+}
+
+.first-run-link-badge {
+  width: 1.45rem;
+  height: 1.45rem;
+}
+
+.first-run-preview--stories {
+  width: 1.9rem;
+  min-height: 1.9rem;
+}
+
+/* More from Halfpixel: a wrapping row of link chips. */
+.first-run-link-row--chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.first-run-link-row--chips .first-run-link-card {
+  flex: 0 0 auto;
+}
+
+/* The sections take the card's spare height, so the footer sits on its
+   bottom edge. */
+.first-run-choices {
+  flex: 1 1 auto;
+}
+
+/* Start with: taller chips. */
+.first-run-missions button {
+  gap: 0.5rem;
+  padding: 0.55rem 1rem 0.55rem 0.75rem;
+}
+
+.first-run-missions strong {
+  font-size: 0.64rem;
+}
+
+.first-run-missions button > .material-symbols-outlined:first-child {
+  font-size: 1.1rem;
+}
+
+/* A near-square card: as wide as the HUD band is tall, but never so narrow
+   that the start chips wrap. Sections may shrink below their content, so
+   long copy truncates instead of clipping. */
+.first-run-choices,
+.first-run-section {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+#first-run-launcher {
+  width: min(
+    52rem,
+    calc(100vw - 2rem),
+    max(44rem, calc(100vh - max(14vh, 136px) - max(13.5vh, 7.5rem)))
+  );
+  min-width: 0;
+}
+
+.first-run-preview--god i {
+  display: grid;
+  place-items: center;
+}
+
+.first-run-globe {
+  width: 82%;
+  height: 82%;
+  color: rgba(48, 194, 224, 0.55);
+}
+
+/* The globe's meridians are full circles squeezed sideways; a squeeze that
+   cycles reads as the globe turning. Still until God mode is selected. */
+.first-run-meridians ellipse {
+  transform: scaleX(var(--m));
+  transform-box: fill-box;
+  transform-origin: center;
+  vector-effect: non-scaling-stroke;
+}
+
+.first-run-mode[data-first-run-mode='god'] .first-run-meridians ellipse {
+  animation: first-run-globe-turn 6s linear infinite;
+}
+
+.first-run-mode[data-first-run-mode='god']
+  .first-run-meridians
+  ellipse:nth-child(2) {
+  animation-delay: -1.5s;
+}
+
+.first-run-mode[data-first-run-mode='god']
+  .first-run-meridians
+  ellipse:nth-child(3) {
+  animation-delay: -3s;
+}
+
+.first-run-mode[data-first-run-mode='god']
+  .first-run-meridians
+  ellipse:nth-child(4) {
+  animation-delay: -4.5s;
+}
+
+/* One meridian's width over half a turn: |cos| sampled. */
+@keyframes first-run-globe-turn {
+  0% {
+    transform: scaleX(1);
+  }
+  12.5% {
+    transform: scaleX(0.92);
+  }
+  25% {
+    transform: scaleX(0.71);
+  }
+  37.5% {
+    transform: scaleX(0.38);
+  }
+  50% {
+    transform: scaleX(0);
+  }
+  62.5% {
+    transform: scaleX(0.38);
+  }
+  75% {
+    transform: scaleX(0.71);
+  }
+  87.5% {
+    transform: scaleX(0.92);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .first-run-mode[data-first-run-mode='god'] .first-run-meridians ellipse {
+    animation: none;
+  }
+}
+
+/* HUD callouts over the God preview: brackets, an orbit, and two target
+   blips whose leader lines draw out to a label stub, taking turns. They play
+   only while God mode is selected. */
+.first-run-callouts {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: rgba(48, 194, 224, 0.6);
+  pointer-events: none;
+}
+
+.first-run-brackets {
+  opacity: 0.45;
+}
+
+.first-run-orbit {
+  opacity: 0.35;
+  stroke-dasharray: 2 5;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.first-run-blip {
+  fill: currentColor;
+  stroke: none;
+}
+
+.first-run-ping {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.first-run-leader {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.first-run-label {
+  opacity: 0;
+  stroke-width: 1.4;
+}
+
+.first-run-callout {
+  opacity: 0;
+}
+
+.first-run-mode[data-first-run-mode='god'] .first-run-orbit {
+  animation: first-run-orbit-turn 24s linear infinite;
+}
+
+.first-run-mode[data-first-run-mode='god'] .first-run-callout {
+  animation: first-run-callout-show 6s ease-in-out infinite;
+}
+
+.first-run-mode[data-first-run-mode='god']
+  .first-run-callout
+  .first-run-leader {
+  animation: first-run-leader-draw 6s ease-out infinite;
+}
+
+.first-run-mode[data-first-run-mode='god'] .first-run-callout .first-run-label {
+  animation: first-run-label-show 6s ease-out infinite;
+}
+
+.first-run-mode[data-first-run-mode='god'] .first-run-callout .first-run-ping {
+  animation: first-run-ping 6s ease-out infinite;
+}
+
+.first-run-mode[data-first-run-mode='god'] .first-run-callout--b,
+.first-run-mode[data-first-run-mode='god'] .first-run-callout--b * {
+  animation-delay: -3s;
+}
+
+@keyframes first-run-orbit-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes first-run-callout-show {
+  0%,
+  45%,
+  100% {
+    opacity: 0;
+  }
+  5%,
+  40% {
+    opacity: 1;
+  }
+}
+
+@keyframes first-run-leader-draw {
+  0%,
+  5% {
+    stroke-dashoffset: 1;
+  }
+  18%,
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes first-run-label-show {
+  0%,
+  18% {
+    opacity: 0;
+  }
+  24%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes first-run-ping {
+  0%,
+  5% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  25%,
+  100% {
+    opacity: 0;
+    transform: scale(4);
+  }
+}
+
+/* Reduced motion: the callouts stand still, fully drawn. The parts are
+   named as specifically as their animation rules above, or those would win. */
+@media (prefers-reduced-motion: reduce) {
+  .first-run-mode[data-first-run-mode='god'] .first-run-orbit,
+  .first-run-mode[data-first-run-mode='god'] .first-run-callout,
+  .first-run-mode[data-first-run-mode='god'] .first-run-callout *,
+  .first-run-mode[data-first-run-mode='god']
+    .first-run-callout
+    :is(.first-run-leader, .first-run-label, .first-run-ping) {
+    animation: none;
+  }
+  .first-run-mode[data-first-run-mode='god']
+    .first-run-callout
+    .first-run-ping {
+    opacity: 0;
+  }
+  .first-run-mode[data-first-run-mode='god'] .first-run-callout,
+  .first-run-mode[data-first-run-mode='god'] .first-run-label {
+    opacity: 1;
+  }
+  .first-run-mode[data-first-run-mode='god'] .first-run-leader {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Callout tooltips: on hover or keyboard focus a leader line grows up from
+   the control, then a HUD label opens out of it. The text describes a chip
+   that shows only its name; it is visual only (see ::after), so the chip's
+   accessible name stays its visible name. */
+#first-run-launcher [data-callout] {
+  position: relative;
+}
+
+#first-run-launcher [data-callout]::before,
+#first-run-launcher [data-callout]::after {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+}
+
+#first-run-launcher [data-callout]::before {
+  content: '';
+  bottom: 100%;
+  inset-inline-start: 1.1rem;
+  width: 1px;
+  height: 0.7rem;
+  background: rgba(48, 194, 224, 0.8);
+  transform: scaleY(0);
+  transform-origin: bottom;
+  transition: transform 140ms ease-out;
+}
+
+#first-run-launcher [data-callout]::after {
+  /* Visual only: the empty alternative keeps the callout out of the link's
+     accessible name. Browsers without alt text for generated content drop the
+     second declaration and fall back to the first. */
+  content: attr(data-callout);
+  content: attr(data-callout) / '';
+  bottom: calc(100% + 0.7rem);
+  inset-inline-start: 0.5rem;
+  padding: 0.28rem 0.5rem;
+  color: rgba(225, 244, 248, 0.95);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 400;
+  letter-spacing: 0.04rem;
+  text-transform: none;
+  /* Long descriptions wrap rather than run past the card on a narrow window. */
+  width: max-content;
+  max-width: min(15rem, var(--first-run-callout-max, 15rem));
+  box-sizing: border-box;
+  white-space: normal;
+  background: rgba(5, 14, 20, 0.94);
+  border: 1px solid rgba(48, 194, 224, 0.5);
+  border-radius: 3px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  clip-path: inset(0 100% 0 0);
+  transition:
+    clip-path 200ms 120ms ease-out,
+    opacity 80ms 120ms linear;
+}
+
+#first-run-launcher [data-callout]:hover::before,
+#first-run-launcher [data-callout]:focus-visible::before {
+  transform: scaleY(1);
+}
+
+/* A chip near the far edge opens its callout toward the card instead, so the
+   label is not cut off by the scrolling list (WelcomeView sets the flag). */
+#first-run-launcher [data-callout][data-callout-align='end']::before {
+  inset-inline-start: auto;
+  inset-inline-end: 1.1rem;
+}
+
+#first-run-launcher [data-callout][data-callout-align='end']::after {
+  inset-inline-start: auto;
+  inset-inline-end: 0.5rem;
+}
+
+#first-run-launcher [data-callout]:hover::after,
+#first-run-launcher [data-callout]:focus-visible::after {
+  opacity: 1;
+  clip-path: inset(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #first-run-launcher [data-callout]::before,
+  #first-run-launcher [data-callout]::after {
+    transition: none;
+  }
+}
+
+/* No hover on touch screens: the callouts would only flash on tap. */
+@media (hover: none) {
+  #first-run-launcher [data-callout]::before,
+  #first-run-launcher [data-callout]::after {
+    display: none;
+  }
+}
+
+/* Selection reads in orange: the chosen mode and the chosen start. */
+.first-run-mode[data-first-run-mode='god'],
+.first-run-missions button[aria-pressed='true'] {
+  border-color: rgba(255, 159, 67, 0.85);
+  box-shadow: inset 0 0 0 1px rgba(255, 159, 67, 0.3);
+}
+
+.first-run-mode[data-first-run-mode='god'] .first-run-radio {
+  border-color: #ff9f43;
+  background: #ff9f43;
+}
+
+/* A mini timeline under the globe: the playhead sweeps the track and the
+   played part lights up behind it. Paused partway while not selected. */
+.first-run-time-track,
+.first-run-time-ticks {
+  opacity: 0.35;
+}
+
+.first-run-time-played {
+  stroke-width: 1.4;
+  transform: scaleX(0.4);
+  transform-box: fill-box;
+  transform-origin: left center;
+}
+
+.first-run-time-head {
+  transform: translateX(27.2px);
+}
+
+.first-run-time-head path {
+  fill: currentColor;
+  stroke: none;
+}
+
+.first-run-mode[data-first-run-mode='god'] .first-run-time-played {
+  animation: first-run-time-played 8s linear infinite;
+}
+
+.first-run-mode[data-first-run-mode='god'] .first-run-time-head {
+  animation: first-run-time-head 8s linear infinite;
+}
+
+@keyframes first-run-time-played {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes first-run-time-head {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(68px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .first-run-mode[data-first-run-mode='god'] .first-run-time-played,
+  .first-run-mode[data-first-run-mode='god'] .first-run-time-head {
+    animation: none;
+  }
+}
+
+/* The accent rests dimmed and lights up to full cyan on hover or focus. */
+.first-run-missions button:hover,
+.first-run-missions button:focus-visible,
+a.first-run-link-card:hover,
+a.first-run-link-card:focus-visible {
+  border-color: rgba(54, 220, 255, 0.62);
+}
+
+.first-run-missions button:hover > .material-symbols-outlined:first-child,
+.first-run-missions
+  button:focus-visible
+  > .material-symbols-outlined:first-child,
+a.first-run-link-card:hover .first-run-link-badge,
+a.first-run-link-card:focus-visible .first-run-link-badge {
   color: #55dff5;
+}
+
+.first-run-link-button:not([aria-disabled='true']):hover,
+.first-run-link-button:focus-visible {
+  color: #e1f4f8;
+  border-color: #36dcff;
+}
+
+.first-run-enter:hover,
+.first-run-enter:focus-visible {
+  background: #36dcff;
+  border-color: #36dcff;
+  box-shadow: 0 0 1.4rem rgba(54, 220, 255, 0.35);
+  outline-color: rgba(54, 220, 255, 0.5);
+}
+
+#first-run-launcher [data-callout]:hover::before,
+#first-run-launcher [data-callout]:focus-visible::before {
+  background: rgba(54, 220, 255, 0.85);
+}
+
+#first-run-launcher [data-callout]:hover::after,
+#first-run-launcher [data-callout]:focus-visible::after {
+  border-color: rgba(54, 220, 255, 0.55);
+}
+
+/* A selected chip keeps its orange border on hover. */
+.first-run-missions button[aria-pressed='true']:hover,
+.first-run-missions button[aria-pressed='true']:focus-visible {
+  border-color: rgba(255, 159, 67, 0.85);
+}
+
+/* ── Steps ── */
+.first-run-header {
+  position: relative;
+}
+
+.first-run-dots {
+  position: absolute;
+  left: 50%;
+  display: flex;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  transform: translateX(-50%);
+}
+
+/* The dots sit centred over the row, outside its flow, so the kicker and
+   Skip each keep to their own half: a long locale wraps instead of running
+   under the dots. (At 620px and below the dots join the flow.) */
+@media (min-width: 621px) {
+  .first-run-kicker,
+  .first-run-dismiss {
+    max-width: calc(50% - 2.4rem);
+  }
+}
+
+.first-run-dots li {
+  width: 0.45rem;
+  height: 0.45rem;
+  background: rgba(199, 225, 231, 0.18);
+  border-radius: 999px;
+  transition:
+    width 220ms ease,
+    background 220ms ease;
+}
+
+.first-run-dots li.done {
+  background: rgba(48, 194, 224, 0.45);
+}
+
+.first-run-dots li.on {
+  width: 1.4rem;
+  background: #30c2e0;
+}
+
+.first-run-step {
+  display: grid;
+  gap: 0.9rem;
+  align-content: start;
+}
+
+/* Steps slide sideways: forward to the left, back to the right. */
+.first-run-step-forward-enter-active,
+.first-run-step-forward-leave-active,
+.first-run-step-back-enter-active,
+.first-run-step-back-leave-active {
+  transition:
+    opacity 180ms ease,
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.first-run-step-forward-enter-from,
+.first-run-step-back-leave-to {
+  opacity: 0;
+  transform: translateX(var(--first-run-step-offset));
+}
+
+.first-run-step-forward-leave-to,
+.first-run-step-back-enter-from {
+  opacity: 0;
+  transform: translateX(calc(-1 * var(--first-run-step-offset)));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .first-run-step-forward-enter-from,
+  .first-run-step-forward-leave-to,
+  .first-run-step-back-enter-from,
+  .first-run-step-back-leave-to {
+    transform: none;
+  }
+}
+
+/* Step 1: the mode tiles get the room the other sections used to take. */
+.first-run-step .first-run-modes .first-run-mode {
+  grid-template-columns: 9.5rem 1fr;
+  padding-block: 0.9rem;
+}
+
+.first-run-step .first-run-preview--god,
+.first-run-step .first-run-preview--analyst {
+  min-height: 9rem;
+}
+
+.first-run-step .first-run-mode-copy {
+  font-size: 0.74rem;
+}
+
+/* Step 2: the start options as tiles, descriptions shown. */
+.first-run-missions--tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.first-run-missions--tiles button {
+  display: grid;
+  grid-template-columns: 1.6rem 1fr;
+  align-items: start;
+  gap: 0.7rem;
+  padding: 0.9rem 1rem;
+  border-radius: 0.5rem;
+}
+
+.first-run-missions--tiles button:last-child:nth-child(odd) {
+  /* An odd last tile takes the whole row, so three tiles read as a balanced
+     pair plus the default, not as a gap. One column on a phone already. */
+  grid-column: 1 / -1;
+}
+
+.first-run-missions--tiles button > span:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.first-run-missions--tiles strong {
+  font-size: 0.72rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.first-run-missions--tiles small {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip-path: none;
+  white-space: normal;
+  font-size: 0.66rem;
+  line-height: 1.4;
+}
+
+.first-run-missions--tiles button > .material-symbols-outlined:first-child {
   font-size: 1.35rem;
 }
 
-.first-run-choices button > span:nth-child(2) {
+/* Step 3: three tips, each with a small looping sketch. */
+.first-run-tips {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.first-run-tip {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.35rem;
+  padding: 0.85rem;
+  background: rgba(29, 69, 81, 0.18);
+  border: 1px solid rgba(100, 200, 220, 0.18);
+  border-radius: 0.5rem;
 }
 
-.first-run-choices strong {
+.first-run-tip strong {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.08rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.05rem;
 }
 
-.first-run-choices small {
-  color: rgba(198, 220, 226, 0.55);
-  font-size: 0.66rem;
+.first-run-tip small {
+  color: rgba(198, 220, 226, 0.6);
+  font-size: 0.64rem;
+  line-height: 1.4;
 }
 
-.first-run-arrow {
-  color: rgba(54, 220, 255, 0.4);
-  font-size: 1rem;
-  transition:
-    transform var(--transition-fast),
-    color var(--transition-fast);
+.first-run-tip-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 3.2rem;
+  margin-bottom: 0.2rem;
+  color: rgba(48, 194, 224, 0.85);
+  background: #050d14;
+  border: 1px solid rgba(100, 200, 220, 0.14);
+  border-radius: 0.35rem;
 }
 
-.first-run-choices button:hover .first-run-arrow,
-.first-run-choices button:focus-visible .first-run-arrow {
-  color: rgba(54, 220, 255, 0.9);
-  transform: translateX(2px);
+.first-run-tip-art .material-symbols-outlined {
+  font-size: 1.4rem;
 }
 
-/* Ordered after the shared button rule rather than shouting !important at it. */
-.first-run-choices button.first-run-explore {
-  background: rgba(255, 255, 255, 0.025);
+/* Search: a caret blinks after the glass. */
+.first-run-tip-caret {
+  position: absolute;
+  left: calc(50% + 1rem);
+  width: 1px;
+  height: 0.9rem;
+  background: currentColor;
+  animation: first-run-caret 1s steps(1) infinite;
+}
+
+/* Layers: a dot switches on and off beside the stack. */
+.first-run-tip-dot {
+  position: absolute;
+  left: calc(50% + 1rem);
+  top: calc(50% - 0.6rem);
+  width: 0.4rem;
+  height: 0.4rem;
+  background: #ff9f43;
+  border-radius: 50%;
+  animation: first-run-dot 2.4s ease-in-out infinite;
+}
+
+/* Click: a ring ripples out from the target. */
+.first-run-tip-ring {
+  position: absolute;
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  animation: first-run-ring 1.8s ease-out infinite;
+}
+
+@keyframes first-run-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes first-run-dot {
+  0%,
+  40% {
+    opacity: 0.15;
+    transform: scale(0.7);
+  }
+  50%,
+  90% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes first-run-ring {
+  from {
+    opacity: 0.9;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 0;
+    transform: scale(2.4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .first-run-tip-caret,
+  .first-run-tip-dot,
+  .first-run-tip-ring {
+    animation: none;
+  }
+}
+
+/* Footer: Back sits before the main action. */
+.first-run-back {
+  padding: 0.5rem 0.9rem;
+  color: rgba(199, 225, 231, 0.75);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.12rem;
+  background: none;
+  border: 1px solid rgba(199, 225, 231, 0.2);
+  border-radius: 0.4rem;
+  cursor: pointer;
+}
+
+.first-run-back:hover,
+.first-run-back:focus-visible {
+  color: #e1f4f8;
+  border-color: rgba(54, 220, 255, 0.6);
+}
+
+/* Each step is short, so the card fits its content: its top stays on the
+   HUD band, and it may grow at most to the band's bottom. */
+#first-run-launcher {
+  bottom: auto;
+  max-height: calc(100vh - max(14vh, 136px) - max(13.5vh, 7.5rem));
+  max-height: calc(100dvh - max(14vh, 136px) - max(13.5vh, 7.5rem));
+}
+
+.first-run-choices {
+  flex: 0 1 auto;
+}
+
+.first-run-step .first-run-modes .first-run-mode {
+  grid-template-columns: 8rem 1fr;
+}
+
+.first-run-mode-title {
+  flex-wrap: wrap;
+  row-gap: 0.25rem;
+}
+
+/* One footer row: checkbox, status line, main action. */
+.first-run-footer .first-run-note {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 0.56rem;
+  line-height: 1.35;
+  text-align: center;
+  text-transform: none;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.first-run-footer .first-run-enter {
+  padding: 0.5rem 0.9rem;
 }
 
 .first-run-footer {
-  margin-top: 0.85rem;
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid rgba(100, 200, 220, 0.14);
   font-size: 0.48rem;
   letter-spacing: 0.055rem;
 }
 
 .first-run-dismiss {
   position: relative;
-  padding: 0 0 0 0.75rem;
+  padding: 0;
+  padding-inline-start: 0.75rem;
   border: 0;
   background: none;
   color: inherit;
@@ -212,7 +1544,7 @@
   cursor: pointer;
 }
 
-/* A 44px touch target drawn outside the layout, so the footer row keeps the
+/* A 44px touch target drawn outside the layout, so the header row keeps the
    height of its one line of text; a 44px button box would nearly treble it. */
 .first-run-dismiss::before {
   content: '';
@@ -226,7 +1558,7 @@
 
 .first-run-dismiss:hover,
 .first-run-dismiss:focus-visible {
-  color: rgba(54, 220, 255, 0.86);
+  color: rgba(48, 194, 224, 0.86);
 }
 
 .first-run-dismiss-touch {
@@ -258,7 +1590,7 @@
   width: 0.82rem;
   height: 0.82rem;
   margin: 0;
-  accent-color: #36dcff;
+  accent-color: #30c2e0;
   cursor: pointer;
 }
 
@@ -270,7 +1602,7 @@
    and reserves its height — otherwise the card resizes as it speaks. */
 .first-run-note {
   min-height: 1.1rem;
-  margin-top: 0.5rem;
+  margin-top: 0.35rem;
   color: rgba(199, 225, 231, 0.62);
   font-family: var(--font-mono);
   font-size: 0.62rem;
@@ -278,7 +1610,7 @@
 }
 
 #first-run-launcher[data-state='loading'] .first-run-note {
-  color: rgba(54, 220, 255, 0.85);
+  color: rgba(48, 194, 224, 0.85);
 }
 
 /* Every surface that claims the screen hides the launcher. This list is the CSS
@@ -293,10 +1625,22 @@ body.scene-playback-mode #first-run-launcher {
   display: none;
 }
 
+body.ui-clean-view .first-run-backdrop,
+body.recording-mode .first-run-backdrop,
+body.cockpit-mode .first-run-backdrop,
+body.scene-playback-mode .first-run-backdrop {
+  display: none;
+}
+
 @media (max-width: 620px) {
   #first-run-launcher {
     top: auto;
     bottom: 5.8rem;
+    width: calc(100vw - 2rem);
+    min-width: 0;
+    /* Sits above the dock, so it may only use the height above it. */
+    max-height: calc(100vh - 6.55rem);
+    max-height: calc(100dvh - 6.55rem);
     padding: 0.9rem;
     transform: translate(-50%, 0.8rem) scale(0.985);
   }
@@ -304,9 +1648,9 @@ body.scene-playback-mode #first-run-launcher {
   #first-run-launcher.visible {
     transform: translate(-50%, 0) scale(1);
   }
-  /* Five tiles have to clear the dock on a 375 x 812 phone, so the rows
-     tighten. The dismiss button stays: it is the only way to close the card
-     without choosing a mission on a phone, which has no ESC key. */
+  /* The card has to clear the dock on a 375 x 812 phone, so the sections
+     stack into one column and scroll. The dismiss button stays: it is the only
+     way to close the card without choosing on a phone, which has no ESC key. */
   #first-run-launcher h2 {
     margin-top: 0.45rem;
   }
@@ -317,23 +1661,58 @@ body.scene-playback-mode #first-run-launcher {
   .first-run-choices {
     margin-top: 0.75rem;
   }
-  .first-run-choices button {
-    min-height: 3rem;
-    padding: 0.45rem 0.6rem;
+  .first-run-modes,
+  .first-run-link-row {
+    grid-template-columns: minmax(0, 1fr);
   }
-  .first-run-choices small {
-    font-size: 0.62rem;
+  .first-run-missions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* A phone has no room for drawn previews: the choices that work come
+     first. */
+  .first-run-mode {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .first-run-preview {
+    display: none;
+  }
+  .first-run-footer {
+    flex-wrap: wrap;
+  }
+  .first-run-enter {
+    flex: 1 0 100%;
+    justify-content: center;
+    white-space: nowrap;
+  }
+  /* A status line (a mission that could not open) takes its own row above
+     the buttons instead of a sliver beside the checkbox and BACK. */
+  .first-run-footer .first-run-note:not(:empty) {
+    flex: 1 0 100%;
+    order: -1;
   }
 }
 
 /* Short viewports — landscape phones, small laptop windows. The chrome tightens
-   so the mission list keeps a usable share of the height. The intro line STAYS:
-   it is the only copy that says what this thing is, and with four tiles it
-   fits. (It was dropped here while there were five; the tile that went is
-   exactly why it can come back.) */
+   so the sections keep a usable share of the height. The intro line STAYS: it
+   is the only copy that says what this thing is. */
 @media (max-height: 620px) {
+  /* The height cap and bottom edge come from the shell rules at the end of
+     this file; the tighter padding (and the mobile shell's top) stay here. */
   #first-run-launcher {
+    top: 0.75rem;
     padding: 0.75rem 0.85rem;
+  }
+  /* As on a phone: no drawn previews, so the choices that work stay within
+     reach. */
+  .first-run-mode {
+    grid-template-columns: minmax(0, 1fr);
+    padding-block: 0.5rem;
+  }
+  .first-run-mode-points {
+    display: none;
+  }
+  .first-run-preview {
+    display: none;
   }
   #first-run-launcher h2 {
     margin-top: 0.3rem;
@@ -346,16 +1725,10 @@ body.scene-playback-mode #first-run-launcher {
   }
   .first-run-choices {
     margin-top: 0.55rem;
+    gap: 0.7rem;
   }
-  .first-run-choices button {
-    min-height: 2.7rem;
-    padding: 0.36rem 0.6rem;
-  }
-  .first-run-choices strong {
-    font-size: 0.68rem;
-  }
-  .first-run-choices small {
-    font-size: 0.6rem;
+  .first-run-missions button {
+    padding: 0.36rem 0.5rem;
   }
   .first-run-footer {
     margin-top: 0.5rem;
@@ -404,12 +1777,103 @@ body.scene-playback-mode #first-run-launcher {
 
 @media (prefers-reduced-motion: reduce) {
   #first-run-launcher,
-  .first-run-choices button,
-  .first-run-arrow {
+  .first-run-backdrop,
+  .first-run-back,
+  .first-run-missions button,
+  .first-run-link-card,
+  .first-run-link-button,
+  .first-run-enter {
     transition: none;
   }
   /* Scrolling a tile into view must not animate either. */
   .first-run-choices {
     scroll-behavior: auto;
   }
+}
+
+/* Centred on the screen, top to bottom as well as side to side, at its own
+   height (capped so its sections still scroll on short screens). */
+body:not(.mobile-shell) #first-run-launcher {
+  top: 50%;
+  bottom: auto;
+  max-height: calc(100vh - 4rem);
+  max-height: calc(100dvh - 4rem);
+  transform: translate(-50%, calc(-50% + 0.8rem)) scale(0.985);
+}
+
+body:not(.mobile-shell) #first-run-launcher.visible {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+@media (max-width: 620px) {
+  .first-run-dots {
+    position: static;
+    transform: none;
+  }
+  .first-run-tips,
+  .first-run-missions--tiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .first-run-step .first-run-modes .first-run-mode {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-height: 620px) {
+  .first-run-step .first-run-modes .first-run-mode {
+    grid-template-columns: minmax(0, 1fr);
+    padding-block: 0.5rem;
+  }
+  .first-run-missions--tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  body.mobile-shell #first-run-launcher {
+    bottom: 5.8rem;
+    max-height: calc(100vh - 6.55rem);
+    max-height: calc(100dvh - 6.55rem);
+  }
+}
+.first-run-back[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: wait;
+}
+@media (prefers-reduced-motion: reduce) {
+  .first-run-dots li {
+    transition: none;
+  }
+}
+[dir='rtl'] #first-run-launcher {
+  --first-run-step-offset: -1.5rem;
+}
+[dir='rtl'] .first-run-enter .material-symbols-outlined {
+  transform: scaleX(-1);
+}
+[dir='rtl'] #first-run-launcher [data-callout]::after {
+  clip-path: inset(0 0 0 100%);
+}
+
+[dir='rtl'] #first-run-launcher [data-callout]:hover::after,
+[dir='rtl'] #first-run-launcher [data-callout]:focus-visible::after {
+  clip-path: inset(0);
+}
+
+.first-run-step-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+/* The Stories announcement waits behind onboarding without consuming its
+   unseen state: from startup while the card is pending, through its reveal,
+   until it is removed (not shown this session, or dismissed). It also stays
+   hidden while BROWSE STORIES is loading Stories. */
+body:has(#first-run-launcher) #gev-stories #hPop,
+body.first-run-opening-stories #gev-stories #hPop {
+  visibility: hidden;
+  pointer-events: none;
 }

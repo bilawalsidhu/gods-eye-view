@@ -1936,6 +1936,25 @@ test('paint rectangles publish from a pool and topmost interactive lookup wins',
   env.cleanup();
 });
 
+test('hit rectangles stay what is painted until the next paint, through a republish in the same click', () => {
+  const env = installMockEnvironment();
+  initWorldOverlay(env.viewer);
+  setOverlayEntries('cards', [selectedEntry('card', { interactive: true })]);
+  env.postRender.raise();
+  assert.equal(hitTestWorldOverlay(200, 120)?.entryId, 'card');
+  // An earlier click subscriber publishes its own selection card: later
+  // subscribers in the same click still see what the user clicked on.
+  setOverlayEntries('other', [selectedEntry('elsewhere', { interactive: true })]);
+  clearOverlaySource('cards');
+  assert.equal(hitTestWorldOverlay(200, 120)?.entryId, 'card');
+  assert.equal(hitTestWorldOverlay(200, 120, { sourceId: 'cards' })?.entryId, 'card');
+  // The next paint shows the change, and the hit test follows it.
+  env.postRender.raise();
+  assert.equal(hitTestWorldOverlay(200, 120, { sourceId: 'cards' }), null);
+  assert.equal(hitTestWorldOverlay(200, 120)?.entryId, 'elsewhere');
+  env.cleanup();
+});
+
 test('CCTV stable frame slots gate ambient chrome and wire the exact host hit rectangle', () => {
   const env = installMockEnvironment({ width: 500, height: 400, dpr: 1 });
   initWorldOverlay(env.viewer);

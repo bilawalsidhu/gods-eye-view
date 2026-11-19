@@ -1,5 +1,6 @@
 import { t } from '../../i18n/index.js';
 import { inputFor } from '../../input/dispatcher.js';
+import { isUnderOtherCard } from '../../data/pickRegistry.js';
 import {
   BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
   BIKESHARE_SELECTED_OVERLAY_SOURCE_OPTIONS,
@@ -179,6 +180,9 @@ export function createSelection({
     if (layerState._clickSubscription) return;
 
     layerState._clickSubscription = inputFor(viewer).onClick((event) => {
+      // Another layer's card or label painted on top takes the click: the item
+      // under it does not act, and the click is not empty space either.
+      if (isUnderOtherCard(event)) return;
       const hit = event.drawHit;
 
       if (hit) {

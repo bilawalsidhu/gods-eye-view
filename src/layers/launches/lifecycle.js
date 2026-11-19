@@ -255,7 +255,14 @@ export function createLifecycle({
         return focusLaunch(markerLaunchId(hit));
       });
       const unsubscribeClick = input.onClick((event) => {
-        if (!missionsShown() || overlayClicks.has(event)) return;
+        // Another layer's card or label on top is that layer's click, read
+        // once per click as every layer reads it.
+        if (
+          !missionsShown() ||
+          overlayClicks.has(event) ||
+          services.picking?.clickCard?.(event)
+        )
+          return;
         focusLaunch(
           parts.rendering.launchIdFromPicks(
             parts.rendering.missionHitsAt(event.position, 12),

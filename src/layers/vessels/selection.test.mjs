@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
+import { clickCard } from '../../data/pickRegistry.js';
 import { fakeInputUnderLabel } from '../../input/testDoubles.mjs';
 import { createSelection } from './selection.js';
 
@@ -17,12 +18,18 @@ function recorder(calls) {
   );
 }
 
-/** The vessel selection over a viewer whose clicks a label may take. */
+/** The vessel selection over a viewer whose clicks a Space Missions label
+ *  may take, with the vessel's card under every click. */
 function selectionHarness(t) {
   const viewer = { scene: { canvas: {}, pick: () => null } };
-  const fake = fakeInputUnderLabel(viewer);
-  t.after(() => fake.destroy());
   const vessel = { id: 'v1', name: 'NORTHERN STAR', lat: 0, lon: 0 };
+  const fake = fakeInputUnderLabel(viewer, {
+    beneath: () => ({
+      sourceId: VESSEL_OVERLAY_SOURCE_ID,
+      entryId: `vessel:${vessel.id}`,
+    }),
+  });
+  t.after(() => fake.destroy());
   const focused = [];
   const calls = [];
   const state = {
@@ -32,20 +39,11 @@ function selectionHarness(t) {
     selectedRecord: null,
     interactionKeyTarget: new EventTarget(),
   };
-  const vesselState = {
-    state,
-    // The vessel's card lies under the click.
-    _vesselOverlayHost: {
-      hitTest: (_x, _y, { sourceId } = {}) =>
-        sourceId === VESSEL_OVERLAY_SOURCE_ID
-          ? { sourceId, entryId: `vessel:${vessel.id}` }
-          : null,
-    },
-  };
+  const vesselState = { state };
   const selection = createSelection({
     vesselState,
     services: {
-      picking: { isOwnedByOtherLayer: () => false },
+      picking: { isOwnedByOtherLayer: () => false, clickCard },
       worldFocus: { requestWorldFocus: (request) => focused.push(request.id) },
       context: recorder(calls),
     },
@@ -68,7 +66,7 @@ function selectionHarness(t) {
   return { fake, state, vessel, focused };
 }
 
-test("a click a label painted over a vessel's card takes never selects or focuses the vessel", (t) => {
+test("a click on a mission label over a vessel's card never selects or focuses the vessel", (t) => {
   const h = selectionHarness(t);
   h.fake.label.over = true;
   h.fake.click();
@@ -76,14 +74,15 @@ test("a click a label painted over a vessel's card takes never selects or focuse
   assert.deepEqual(h.focused, [], 'the camera is not sent to the vessel');
 });
 
-test('a click a label painted over the map takes lets go of the selected vessel', (t) => {
+test('a click on a mission label keeps the selected vessel', (t) => {
   const h = selectionHarness(t);
   // Off the label, a click on the card selects and focuses its vessel.
   h.fake.click();
   assert.equal(h.state.selectedRecord, h.vessel);
   assert.deepEqual(h.focused, ['v1']);
+  // The label on top is its own click: the vessel stays selected.
   h.fake.label.over = true;
   h.fake.click();
-  assert.equal(h.state.selectedRecord, null);
+  assert.equal(h.state.selectedRecord, h.vessel);
   assert.deepEqual(h.focused, ['v1']);
 });

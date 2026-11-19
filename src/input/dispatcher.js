@@ -185,8 +185,9 @@ function topHitOf(hit, foreign) {
  * @property {boolean} overlay Whether a painted overlay target took the
  *   click ({@link InputDispatcher.onOverlayClick}). Its hits then name only
  *   that target: something drawn outside the draw port, with no id. A
- *   subscriber with its own hit test (painted cards, a pick of its own)
- *   skips it then: what lies under the target is not clicked.
+ *   target the world overlay paints (a Space Missions label) is also the
+ *   card on top for every handler (`clickCard` in src/data/pickRegistry.js),
+ *   so nothing under it acts.
  * @property {(width: number, height: number) => unknown} pickWindow
  *   `native.pickWindow`, the same.
  */

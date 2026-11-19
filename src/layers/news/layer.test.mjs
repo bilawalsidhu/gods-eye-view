@@ -5,8 +5,19 @@ import { fromDegrees } from '../../geo/ellipsoid.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
 import { NEWS_KEY_PROVIDERS, createNewsLayer } from './index.js';
+import {
+  findPickOwner,
+  registerPickOwner,
+  setClickCardHitTest,
+  unregisterPickOwner,
+} from '../../data/pickRegistry.js';
+// Registers the shared `gev-trail:` no-op owner, as the app does.
+import '../../data/trailRenderer.js';
 import { getSelectedEntityContext } from '../../data/contextStore.js';
-import { fakeInputUnderLabel } from '../../input/testDoubles.mjs';
+import {
+  MISSION_LABEL,
+  fakeInputUnderLabel,
+} from '../../input/testDoubles.mjs';
 import { NEWS_OVERLAY_SOURCE_ID } from './model.js';
 
 const NOW = Date.parse('2026-10-28T10:00:00Z');
@@ -141,18 +152,22 @@ function fixture(
     for (const fn of [...clickHandlers])
       fn({ screenPosition: { x: 10, y: 10 }, topHit });
   };
-  // Or the scene's own dispatcher, with a label that may be painted over
-  // the map (`fake.label.over`).
+  // Or the scene's own dispatcher, with a Space Missions label that may be
+  // painted over the map (`fake.label.over`).
   let fake = null;
   if (underLabel) {
     viewer.scene = { canvas: {}, pick: () => null };
     fake = fakeInputUnderLabel(viewer);
   }
+  // The card on top at a click, as the host answers the pick registry: a
+  // mission label painted over the map comes first.
+  setClickCardHitTest((x, y) =>
+    fake?.label.over ? MISSION_LABEL : hitTestOverlay(x, y),
+  );
   const layer = createNewsLayer({
     source,
     overlayHost,
     inputFor: () => fake?.input ?? input,
-    hitTestOverlay,
     now,
     matchMedia: () => ({ matches: reduced }),
     getViewCentre: () => centre(),
@@ -170,6 +185,7 @@ function fixture(
   t.after(() => {
     layer.destroy();
     fake?.destroy();
+    setClickCardHitTest(null);
     unbind();
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;
@@ -1298,15 +1314,18 @@ test('a click on a marker selects its report, on a beacon chooses its hotspot, o
   assert.equal(clickHandlers.size, 0);
 });
 
-test("a click a label painted over a report's card takes never opens the card, and lets go of the report", async (t) => {
+test("a click on a mission label over a report's card never opens the card, and keeps the report", async (t) => {
   let activated = 0;
   const { layer, fake } = fixture(t, {
     height: 500_000,
     underLabel: true,
     // A report's card lies under every click.
-    hitTestOverlay: (_x, _y, { sourceId }) =>
-      sourceId === NEWS_OVERLAY_SOURCE_ID
-        ? { entry: { activate: () => activated++ } }
+    hitTestOverlay: (_x, _y, { sourceId } = {}) =>
+      !sourceId || sourceId === NEWS_OVERLAY_SOURCE_ID
+        ? {
+            sourceId: NEWS_OVERLAY_SOURCE_ID,
+            entry: { activate: () => activated++ },
+          }
         : null,
   });
   layer.enable();
@@ -1318,12 +1337,80 @@ test("a click a label painted over a report's card takes never opens the card, a
   fake.label.over = true;
   fake.click();
   assert.equal(activated, 0, 'the card beneath the label is not opened');
-  assert.equal(layer.getRowControls().feed.selected, null);
+  assert.equal(
+    layer.getRowControls().feed.selected.id,
+    'major',
+    'the label on top is its own click: the report stays selected',
+  );
 
   // Off the label, the same click opens the card.
   fake.label.over = false;
   fake.click();
   assert.equal(activated, 1);
+});
+
+test('a covered news card and pin yield; the top news card acts over a trail or a vessel', async (t) => {
+  let hits = [];
+  const { layer, items, entries, click, flights } = fixture(t, {
+    height: 500_000,
+    hitTestOverlay: (_x, _y, { sourceId } = {}) =>
+      hits.find((hit) => !sourceId || hit.sourceId === sourceId) || null,
+  });
+  layer.enable();
+  await layer.update();
+  await flush();
+  const marker = [...items('points'), ...items('icons')].find((item) =>
+    String(item.id).startsWith('news:report:major~'),
+  );
+  click({ set: 'news:1:points', id: marker.id, surface: false });
+  const card = entries.flat().find((entry) => entry.activate);
+  assert.ok(card, 'an actionable news card was published');
+  let activations = 0;
+  const activate = card.activate;
+  card.activate = () => {
+    activations++;
+    return activate();
+  };
+  hits = [
+    { sourceId: 'earthquakes', entryId: 'quake:cover' },
+    { sourceId: 'news', entry: card },
+  ];
+  const before = layer.getRowControls().feed;
+  const flightCount = flights.length;
+  click(null);
+  assert.equal(activations, 0, 'a covered news card does not activate');
+  assert.equal(layer.getRowControls().feed.selected.id, 'major');
+  assert.deepEqual(layer.getRowControls().feed.filters, before.filters);
+  assert.equal(flights.length, flightCount);
+  // A news pin under another layer's card is that card's click too.
+  layer.setParams({ clear: true });
+  click({ set: 'news:1:points', id: marker.id, surface: false });
+  assert.equal(layer.getRowControls().feed.selected, null, 'covered pin');
+  hits = [];
+  click({ set: 'news:1:points', id: marker.id, surface: false });
+  assert.equal(layer.getRowControls().feed.selected.id, 'major');
+  hits = [{ sourceId: 'news', entry: card }];
+  click(null);
+  assert.equal(activations, 1, 'the unobscured news card acts once');
+  // A flight trail is registered so every layer reads a click on it as a
+  // no-op (src/data/trailRenderer.js). Under the top news card it must not
+  // make the card dead.
+  assert.equal(findPickOwner('gev-trail:fl-a1b2c3:head'), 'trails');
+  click({
+    set: 'trail:1:lines',
+    id: 'gev-trail:fl-a1b2c3:head',
+    surface: false,
+  });
+  assert.equal(activations, 2, 'the news card acts over a flight trail');
+  // Over a vessel (a layer that acts on its pick) the card on top acts too;
+  // the vessel layer stands aside under it, so one click does one thing.
+  registerPickOwner('test-vessels', (id) => id === '353136000');
+  try {
+    click({ set: 'vessels:1', id: '353136000', surface: false });
+    assert.equal(activations, 3, 'the news card acts over a vessel');
+  } finally {
+    unregisterPickOwner('test-vessels');
+  }
 });
 
 test('zoomed out, a hotspot is one beacon; off, nothing draws; destroyed, the sets go', async (t) => {

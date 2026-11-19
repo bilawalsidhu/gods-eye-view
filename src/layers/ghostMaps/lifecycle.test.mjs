@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setLocale } from '../../i18n/index.js';
-import { createGhostMapsLayer } from './index.js';
+import { createGhostMapsLayer, GHOSTMAPS_OVERLAY_SOURCE_ID } from './index.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import { inputFor } from '../../input/dispatcher.js';
+import { MISSION_LABEL } from '../../input/testDoubles.mjs';
+import { clickCard, setClickCardHitTest } from '../../data/pickRegistry.js';
 import { GHOSTMAPS_PRODUCTS, GHOSTMAPS_LATEST_DROP } from './catalog.js';
 
 function element(localName, children = [], value = '', attributes = {}) {
@@ -674,10 +676,21 @@ test('narrowing to a window the loaded data covers clears a failed wider reload'
   assert.equal(layer.getStats().count, 1);
 });
 
-test("a click a label painted over the open card takes never opens the card's link, and closes the card", async (t) => {
+test("a click on a mission label over the open card never opens the card's link, and keeps the card open", async (t) => {
   const cards = [];
   const opened = [];
   let cardUnder = null;
+  // A Space Missions label painted over the map: while it is over, it takes
+  // each click and is the card on top; under it may lie our open card.
+  let labelOver = false;
+  setClickCardHitTest(() =>
+    labelOver
+      ? MISSION_LABEL
+      : cardUnder
+        ? { sourceId: GHOSTMAPS_OVERLAY_SOURCE_ID, entryId: cardUnder }
+        : null,
+  );
+  t.after(() => setClickCardHitTest(null));
   const { layer, viewer, click } = fixture(t, {
     now: () => Date.UTC(2026, 10, 3, 12),
     reports: [
@@ -689,33 +702,82 @@ test("a click a label painted over the open card takes never opens the card's li
       },
     ],
     controls: {
-      overlayHost: {
-        setEntries: (_id, entries) => cards.push(entries),
-        hitTest: () => (cardUnder ? { entryId: cardUnder } : null),
-      },
-      picking: { resolvePickId: (picked) => picked?.id ?? null },
+      overlayHost: { setEntries: (_id, entries) => cards.push(entries) },
+      picking: { resolvePickId: (picked) => picked?.id ?? null, clickCard },
       openExternal: (url) => opened.push(url),
     },
   });
-  // A label painted over the map, as a Space Missions label is: while it is
-  // over, it takes each click.
-  let labelOver = false;
   inputFor(viewer).onOverlayClick(() => labelOver);
   await layer.update(viewer);
   click('ghostmaps:cip:0:0');
   const [card] = cards.at(-1);
   assert.equal(card.interactive, true);
 
-  // The open card lies under the label: the click opens nothing.
+  // The open card lies under the label: the click opens nothing, and the
+  // label on top is its own click, so the card stays open.
   cardUnder = card.id;
   labelOver = true;
   click(null);
   assert.deepEqual(opened, [], 'the link beneath the label is not opened');
-  assert.deepEqual(cards.at(-1), [], 'the card is closed');
+  assert.equal(cards.at(-1)[0]?.id, card.id, 'the card stays open');
 
   // Off the label, a click on the open card opens its link.
   labelOver = false;
-  click('ghostmaps:cip:0:0');
   click(null);
   assert.deepEqual(opened, ['https://example.com/report']);
+});
+
+test('a covered selected card yields while genuine GhostMaps markers still select', async (t) => {
+  const cards = [];
+  const opened = [];
+  let painted = [];
+  const { layer, viewer, click } = fixture(t, {
+    reports: [
+      {
+        name: 'First',
+        description: '<a href="https://example.com/first">Source</a>',
+      },
+      {
+        name: 'Second',
+        description: '<a href="https://example.com/second">Source</a>',
+      },
+    ],
+    controls: {
+      overlayHost: {
+        setEntries: (_id, entries) => cards.push(entries),
+        hitTest: (_x, _y, { sourceId } = {}) =>
+          painted.find((hit) => !sourceId || hit.sourceId === sourceId) ?? null,
+      },
+      picking: {
+        resolvePickId: (picked) => picked,
+        // The card on top at a click, as the registry answers from the host.
+        clickCard: () => painted[0] ?? null,
+      },
+      openExternal: (url) => opened.push(url),
+    },
+  });
+  await layer.update(viewer);
+  click('ghostmaps:cip:0:0');
+  const first = cards.at(-1)[0];
+  const foreign = {
+    sourceId: 'earthquake-card',
+    entryId: 'earthquake-card:ak1',
+  };
+  painted = [foreign, { sourceId: 's2-ghostmaps', entryId: first.id }];
+  click(null);
+  assert.deepEqual(opened, []);
+  assert.equal(cards.at(-1)[0].id, first.id);
+  // A marker under another layer's card is that card's click too.
+  click('ghostmaps:cip:1:0');
+  assert.equal(cards.at(-1)[0].id, first.id, 'a covered marker yields');
+  painted = [];
+  click('ghostmaps:cip:1:0');
+  const second = cards.at(-1)[0];
+  assert.notEqual(second.id, first.id, 'a bare marker selects');
+  painted = [{ sourceId: 's2-ghostmaps', entryId: second.id }];
+  click(null);
+  assert.deepEqual(opened, ['https://example.com/second']);
+  painted = [];
+  click(null);
+  assert.deepEqual(cards.at(-1), [], 'bare map still clears the selection');
 });

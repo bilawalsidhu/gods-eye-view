@@ -98,6 +98,14 @@ export function createFirmsState({ services, config }) {
 
   layerState._selectedFire = null;
 
+  /**
+   * What an application draws in place of the markers (`setMarkerStandIn`):
+   * while set, the glows, heatmap and ambient cards are hidden and clicks
+   * resolve through its `hitTest`.
+   */
+
+  layerState._standIn = null;
+
   /** Priority-ordered label candidates from the last rebuild (detections or cells). */
 
   layerState._labelCandidates = [];

@@ -44,6 +44,7 @@ import {
   uninstallRenderGovernor,
 } from '../../renderGovernor.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
+import { setClickCardHitTest } from '../../data/pickRegistry.js';
 import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
 import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
 import { bindRenderer, rendererOf } from '../../render/rendererOf.js';
@@ -3743,6 +3744,30 @@ test('click handler selects a migrated scripted billboard and prepares its drape
   assert.ok(entry.trailSegments.length > 0);
   app.run(1000, 16);
   assert.equal(entry.marker.show, true);
+});
+
+// The card or label painted on top takes the click: a vehicle under another
+// layer's card is neither selected nor released.
+test("another layer's card over a vehicle keeps the click", async (t) => {
+  const app = harness(t, { floorAt: () => undefined });
+  let top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  setClickCardHitTest(() => top);
+  t.after(() => setClickCardHitTest(null));
+  app.layer.enable(app.viewer);
+  app.layer._loadTransitFleetForTest(4, BOSTON, 70);
+  const [first, second] = app.vehicles();
+  app.viewer.scene.pick = () => app.pickOf(first);
+  app.input.click(new Cesium.Cartesian2(500, 400));
+  assert.equal(app.state()._selectedKey, null, 'covered: not selected');
+  top = null;
+  app.input.click(new Cesium.Cartesian2(500, 400));
+  assert.equal(app.state()._selectedKey, first.key);
+  top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  app.viewer.scene.pick = () => app.pickOf(second);
+  app.input.click(new Cesium.Cartesian2(500, 400));
+  app.viewer.scene.pick = () => undefined;
+  app.input.click(new Cesium.Cartesian2(500, 400));
+  assert.equal(app.state()._selectedKey, first.key, 'covered: kept');
 });
 
 test('intercepted scripted reports resolve their explicit floor and wake without a preRender bootstrap', async (t) => {

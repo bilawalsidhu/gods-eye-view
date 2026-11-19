@@ -1574,8 +1574,12 @@ export function createStubRenderer(options = {}) {
     if (capabilities.has('imageryFrames')) {
       let source = null;
       let clockKind = 'scene';
-      /** The time the source shows for `ms`: the nearest frame, or within the videos. */
+      /** The time the source shows for `ms`: the nearest frame, within the videos, or a decoded source's slot. */
       const shownTime = (ms) => {
+        if (source?.kind === 'decoded') {
+          const slot = Number.isFinite(ms) ? source.slotAt(ms) : null;
+          return Number.isFinite(slot) ? slot : null;
+        }
         if (source?.kind === 'video') {
           let best = null;
           let bestOff = Infinity;
@@ -1609,10 +1613,22 @@ export function createStubRenderer(options = {}) {
         deliver(listeners.frameReady, drawnTime);
       });
       layer.setFrames = (next, opts = {}) => {
+        if (next.kind === 'decoded' && !capabilities.has('imageryDecoded'))
+          throw new TypeError('decoded imagery needs imageryDecoded');
+        if (
+          next.kind === 'decoded' &&
+          (typeof next.slotAt !== 'function' || typeof next.tile !== 'function')
+        )
+          throw new TypeError('a decoded source needs slotAt and tile');
         source =
-          next.kind === 'video'
-            ? { kind: 'video', segments: next.segments.map((s) => ({ ...s })) }
-            : { kind: 'frames', frames: next.frames.slice() };
+          next.kind === 'decoded'
+            ? next
+            : next.kind === 'video'
+              ? {
+                  kind: 'video',
+                  segments: next.segments.map((s) => ({ ...s })),
+                }
+              : { kind: 'frames', frames: next.frames.slice() };
         wanted = null;
         drawnTime = null;
         clockKind = opts.clock ?? 'scene';

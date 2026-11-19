@@ -1,15 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FIRMS_OVERLAY_SOURCE_ID } from '../../data/firmsLabels.js';
-import { resolvePickId } from '../../data/pickRegistry.js';
+import { clickCard, resolvePickId } from '../../data/pickRegistry.js';
 import { fakeInputUnderLabel } from '../../input/testDoubles.mjs';
 import { createSelection } from './selection.js';
 
-/** The fire selection over a viewer whose clicks a label may take, with a
- *  fire's card under every click. */
+/** The fire selection over a viewer whose clicks a Space Missions label may
+ *  take, with a fire's card under every click. */
 function selectionHarness(t) {
   const viewer = { scene: { canvas: {}, pick: () => null } };
-  const fake = fakeInputUnderLabel(viewer);
+  const fake = fakeInputUnderLabel(viewer, {
+    beneath: () => ({
+      sourceId: FIRMS_OVERLAY_SOURCE_ID,
+      entryId: 'firms-card:1',
+    }),
+  });
   t.after(() => fake.destroy());
   const fire = { lat: 1, lon: 2, acqMs: 3, frp: 40, satellite: 'N' };
   const focused = [];
@@ -25,7 +30,7 @@ function selectionHarness(t) {
   const selection = createSelection({
     layerState,
     services: {
-      picking: { resolvePickId, isOwnedByOtherLayer: () => false },
+      picking: { resolvePickId, isOwnedByOtherLayer: () => false, clickCard },
       focus: { requestWorldFocus: (request) => focused.push(request.kind) },
       context: {
         selectEntityContext() {},
@@ -45,12 +50,6 @@ function selectionHarness(t) {
     config: {
       id: 'firms',
       name: 'Fires',
-      overlayHost: {
-        hitTest: (_x, _y, { sourceId }) =>
-          sourceId === FIRMS_OVERLAY_SOURCE_ID
-            ? { entryId: 'firms-card:1' }
-            : null,
-      },
     },
   });
   selection.installClickHandler();
@@ -58,7 +57,7 @@ function selectionHarness(t) {
   return { fake, layerState, fire, focused, cleared };
 }
 
-test("a click a label painted over a fire's card takes never selects or focuses the fire", (t) => {
+test("a click on a mission label over a fire's card never selects or focuses the fire", (t) => {
   const h = selectionHarness(t);
   h.fake.label.over = true;
   h.fake.click();
@@ -66,15 +65,16 @@ test("a click a label painted over a fire's card takes never selects or focuses 
   assert.deepEqual(h.focused, [], 'the camera is not sent to the fire');
 });
 
-test('a click a label painted over the map takes lets go of the selected fire', (t) => {
+test('a click on a mission label keeps the selected fire', (t) => {
   const h = selectionHarness(t);
   // Off the label, a click on the card selects and focuses its fire.
   h.fake.click();
   assert.equal(h.layerState._selectedFire, h.fire);
   assert.deepEqual(h.focused, ['fire']);
+  // The label on top is its own click: the fire stays selected.
   h.fake.label.over = true;
   h.fake.click();
-  assert.equal(h.layerState._selectedFire, null);
-  assert.deepEqual(h.cleared, ['firms']);
+  assert.equal(h.layerState._selectedFire, h.fire);
+  assert.deepEqual(h.cleared, []);
   assert.deepEqual(h.focused, ['fire']);
 });
