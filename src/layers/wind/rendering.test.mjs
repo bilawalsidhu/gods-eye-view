@@ -1290,11 +1290,12 @@ test('opacity dims the canvas fallback and a re-attached canvas', () => {
   assert.equal(h.canvas.style.opacity, '0.3');
   h.rendering.setOpacity(1);
   assert.equal(h.canvas.style.opacity, '');
-  h.rendering.destroy();
-  // A canvas made again starts at the slider's value.
-  h.rendering.attach();
-  assert.equal(h.container.node.style.opacity, '');
   h.rendering.setOpacity(0.3);
-  assert.equal(h.container.node.style.opacity, '0.3');
+  h.rendering.destroy();
+  // appendChild records the newly created canvas as container.node.
+  h.rendering.attach();
+  const reattachedCanvas = h.container.node;
+  assert.notEqual(reattachedCanvas, h.canvas);
+  assert.equal(reattachedCanvas.style.opacity, '0.3');
   h.rendering.destroy();
 });
