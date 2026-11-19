@@ -126,6 +126,8 @@ test('a snapshot returns the frame as an image with its credit', async () => {
 
 test('mounted camera fallback provenance survives the source and MCP image result', async (t) => {
   const { cctvProxy } = await import('../../../server/providers/cctv.js');
+  const { createStreetViewAdmission } =
+    await import('../../../server/providers/cctv/streetViewGuard.js');
   const { createCctvSource } = await import('../../layers/cctv/source.js');
   const camera = {
     id: 'fixture-camera',
@@ -175,7 +177,12 @@ test('mounted camera fallback provenance survives the source and MCP image resul
     return new Response(PNG, { headers: { 'Content-Type': 'image/png' } });
   });
   let middleware;
-  cctvProxy().configureServer({
+  cctvProxy({
+    streetViewAdmission: createStreetViewAdmission({
+      successCooldownMs: 0,
+      failureCooldownMs: 0,
+    }),
+  }).configureServer({
     middlewares: {
       use(route, handler) {
         assert.equal(route, '/api/cctv');
