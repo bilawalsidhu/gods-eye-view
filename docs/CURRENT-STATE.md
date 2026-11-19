@@ -1999,12 +1999,14 @@ callout resolution. The count covers the whole cell up to the horizon, including
 its off-screen cameras. Overlapping markers merge and add their counts. A lone
 camera whose icon would touch a marker joins the nearest one, unless the HUD
 hides the merged marker. In that case the lone camera keeps its icon and the
-count stays where it was before the merge. The active camera keeps its own icon
-beside any marker that would cover it and stays out of the count. A click on a
-marker zooms in on its group, at least halving the distance each time. If halving
-would leave the group wider than the frame, the view zooms in on the group's
-ground cell nearest the eye. The cockpit or a tracked object holds the view
-in place. Ambient cards and coverage attach only to
+count stays where it was before the merge. If the marker there would still cover
+the icon, the camera stays in its count when the label fits. The active camera
+keeps its own icon beside any marker that would cover it and stays out of the
+count. A click on a marker zooms in on its group, at least halving the distance
+each time. If halving would leave the group wider or taller than the frame, the
+view zooms in on the nearest of the group's ground cells with two or more
+cameras. The cockpit or a tracked object holds the view in place. Ambient cards
+and coverage attach only to
 cameras drawn as icons. On a globe map a marker stands on the drawn terrain. A
 camera the height batch never answered for takes the drawn terrain as its ground
 once it is near the screen. It reads that height again from much closer, once

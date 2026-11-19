@@ -11,7 +11,12 @@ export function createSelection({
   source,
 }) {
   const { CCTV_ACTIVATION_RESULT } = services.activation;
-  const { resolvePickId, findPickOwner, isUnderOtherCard } = services.picking;
+  const {
+    resolvePickId,
+    findPickOwner,
+    isOwnedByOtherLayer,
+    isUnderOtherCard,
+  } = services.picking;
   const OWN_CARD_SOURCES = [CCTV_OVERLAY_SOURCE_ID, CCTV_COUNT_CARD_SOURCE_ID];
 
   /**
@@ -39,7 +44,12 @@ export function createSelection({
     const top = event.topHit;
     if (!top) return false;
     const drawHit = event.drawHit;
-    if (drawHit) return !parts.rendering.extractPickedCameraId(drawHit);
+    if (drawHit) {
+      // Unowned fills, such as earthquake discs, let the count take the click.
+      if (parts.rendering.extractPickedCameraId(drawHit)) return false;
+      const id = resolvePickId(drawHit);
+      return id !== null && Boolean(isOwnedByOtherLayer?.('cctv', id));
+    }
     const id = resolvePickId(top);
     return id !== null && findPickOwner?.(id) !== 'cctv';
   }

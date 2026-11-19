@@ -145,6 +145,30 @@ test('a count stays visible when a lone camera would move it under the HUD', asy
   m.dispose();
 });
 
+test('a restored count includes the lone camera it still covers at the HUD edge', async () => {
+  const cells = [cellAt('a', 200, 2), cellAt('b', 206, 1)];
+  const hud = { overlapsHardUi: (rect) => rect.x + rect.w > 221 };
+  const scratch = {};
+  const update = () =>
+    m.update(cells, (p) => Object.assign(scratch, project(p)));
+  const m = counts(update);
+  update();
+  assert.equal(Math.round(paint()[0].x), 202);
+
+  paint(hud);
+  await Promise.resolve();
+  const [marker] = paint(hud);
+  assert.equal(marker?.text, '3');
+  assert.equal(Math.round(marker.x), 200);
+  assert.equal(cells[1].absorbed, true);
+  assert.ok(m.pickedCell({ x: 206, y: 300 }).parts.includes(cells[1]));
+
+  paint();
+  await Promise.resolve();
+  assert.equal(Math.round(paint()[0].x), 202);
+  m.dispose();
+});
+
 test('counts fade with the Scope keyhole like the callouts', () => {
   const m = counts(undefined, (_x, _y, keyhole) => keyhole.alpha);
   m.update([cellAt('a', 400, 2)], project);

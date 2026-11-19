@@ -131,6 +131,7 @@ test("a count click yields to a card above it and to another layer's object, not
     () => clicks++,
   );
   picking.registerPickOwner('cctv', (id) => id.startsWith('cam-'));
+  picking.registerPickOwner('flights', (id) => id === 'abc' || id === 'cam-2');
   try {
     for (const [x, topHit, expected] of [
       [14, null, [0, 1]],
@@ -149,6 +150,7 @@ test("a count click yields to a card above it and to another layer's object, not
     }
   } finally {
     picking.unregisterPickOwner('cctv');
+    picking.unregisterPickOwner('flights');
   }
 });
 
@@ -181,6 +183,7 @@ test('a count click is the card on top for every layer, unless the count yields'
     gesture: { travelPx: 0, durationMs },
   });
   picking.registerClickClaim('cctv', selection.countClickCard);
+  picking.registerPickOwner('flights', (id) => id === 'abc');
   try {
     const aircraftFirst = event();
     assert.equal(picking.isUnderOtherCard(aircraftFirst), true);
@@ -209,5 +212,6 @@ test('a count click is the card on top for every layer, unless the count yields'
     }
   } finally {
     picking.unregisterClickClaim('cctv');
+    picking.unregisterPickOwner('flights');
   }
 });

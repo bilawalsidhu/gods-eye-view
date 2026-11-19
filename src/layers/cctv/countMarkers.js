@@ -152,6 +152,36 @@ export function createCountMarkers(
     };
   }
 
+  /** Keep covered icons in the restored count if its new label clears the HUD. */
+  function retainCoveredCameras(group, core, project) {
+    const anchor = cellCenter(core);
+    const at = project(anchor);
+    if (!at) return core;
+    const { x, y } = at; // The projector reuses its result.
+    const size = sizeFor(core.count);
+    const halfSegment = (size.width - size.height) / 2;
+    const covered = group.lone.filter((lone) => {
+      const p = project(cellCenter(lone));
+      if (!p) return false;
+      // The pill outline that merging measures, without its gap.
+      const dx = Math.max(
+        0,
+        Math.abs(p.x + (lone.offsetPx ?? 0) - x) - halfSegment,
+      );
+      const reach = (size.height + (lone.iconPx ?? CAMERA_ICON_PX)) / 2;
+      return dx * dx + (p.y - y) ** 2 < reach * reach;
+    });
+    if (!covered.length) return core;
+    const { width, height } = sizeFor(core.count + covered.length);
+    if (hardUi({ x: x - width / 2, y: y - height / 2, w: width, h: height }))
+      return core;
+    const held = withoutLoneCameras(group, covered);
+    held.anchor = anchor;
+    held.groundM = core.groundM;
+    for (const lone of covered) lone.absorbed = true;
+    return held;
+  }
+
   /**
    * Reuse marker slots in ground-key order, and invalidate only changed frames.
    * `groundHeight(lon, lat)` gives the drawn terrain in metres, or a non-finite
@@ -216,9 +246,9 @@ export function createCountMarkers(
           for (const lone of cell.lone) lone.absorbed = false;
           const core = withoutLoneCameras(cell);
           if (core) {
-            core.releasedAt = rect;
             ground([core]);
-            cell = core;
+            cell = retainCoveredCameras(cell, core, project);
+            cell.releasedAt = rect;
           }
         }
       }
@@ -231,9 +261,12 @@ export function createCountMarkers(
         last.latSum !== cell.latSum ||
         last.lonSum !== cell.lonSum ||
         last.heightSum !== cell.heightSum ||
-        last.groundM !== cell.groundM
+        last.groundM !== cell.groundM ||
+        last.anchor?.x !== cell.anchor?.x ||
+        last.anchor?.y !== cell.anchor?.y ||
+        last.anchor?.z !== cell.anchor?.z
       ) {
-        marker.pos = cellCenter(cell);
+        marker.pos = cell.anchor ?? cellCenter(cell);
         marker.cullPos = liftedForHorizon(marker.pos);
         marker.hudHidden = undefined;
         changed = true;
@@ -303,10 +336,9 @@ export function createCountMarkers(
         const previous = marker.hudHidden;
         if (previous !== hidden) {
           marker.hudHidden = hidden;
-          // The active icon steps aside only for visible counts.
+          // The active icon steps aside only for visible counts beside it.
           refresh ||=
-            hidden ||
-            previous !== undefined ||
+            ((hidden || previous !== undefined) && marker.besideActive) ||
             marker.cell.lone?.some((cell) => cell.absorbed === hidden);
         }
         if (hidden) continue;

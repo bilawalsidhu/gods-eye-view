@@ -1,7 +1,12 @@
 import { distance } from '../../geo/vector.js';
+import { toLonLatH } from '../../geo/ellipsoid.js';
 import { rangeForBoundingSphere } from '../../data/cameraFraming.js';
 import { isFollowing } from '../../data/followed.js';
-import { cellBounds, cellCenter } from '../../data/cctvCellCounts.js';
+import {
+  cellBounds,
+  cellCenter,
+  cellHalfExtents,
+} from '../../data/cctvCellCounts.js';
 import { CCTV_FOCUS_RESULT, VIEW_CELL_PX, VIEW_MIN_CELL_M } from './policy.js';
 import { cameraOf, canvasOf } from '../../render/rendererOf.js';
 
@@ -131,11 +136,12 @@ export function createNavigation({
     return CCTV_FOCUS_RESULT.FOCUSED;
   }
 
-  /** The ground cell of a group nearest the eye, or the group itself if unmerged. */
+  /** The nearest ground cell with two or more cameras, or the group itself if unmerged. */
   function nearestPart(cell, eye) {
     let nearest = cell;
     let best = Infinity;
     for (const part of cell.parts ?? []) {
+      if (part.count < 2) continue;
       const d = distance(eye, cellCenter(part));
       if (d < best) {
         best = d;
@@ -157,19 +163,33 @@ export function createNavigation({
     // Half the range where cells stop grouping, so even coincident mounts split.
     const closeRange =
       (VIEW_MIN_CELL_M * height) / (4 * VIEW_CELL_PX * tanHalfY);
-    const fitRange = (bounds) =>
-      Math.max(closeRange, rangeForBoundingSphere(viewer, bounds.radius));
+    const tanHalfX = tanHalfY * (pose.aspectRatio || 1);
+    // Range where a cell's ground extent, times `pad`, fits the frame at the
+    // depth of its highest mount above the bounds centre.
+    const extentRange = (target, bounds, pad = 1) => {
+      const { halfWidthM, halfHeightM } = cellHalfExtents(target);
+      const rise = Math.max(0, target.high - toLonLatH(bounds.center).height);
+      return (
+        rise + pad * Math.max(halfWidthM / tanHalfX, halfHeightM / tanHalfY)
+      );
+    };
+    // The sphere fit spans the wider side, so a very wide window also needs the extent.
+    const fitRange = (target, bounds) =>
+      Math.max(
+        closeRange,
+        rangeForBoundingSphere(viewer, bounds.radius),
+        extentRange(target, bounds, 1.2),
+      );
     // Approach long groups in halves so every click gets closer.
     const halfway = (bounds) =>
       pose.position ? distance(pose.position, bounds.center) / 2 : Infinity;
     let bounds = cellBounds(cell);
-    const fit = fitRange(bounds);
-    let range = Math.min(halfway(bounds), fit);
-    // If the group exceeds the narrower side of the frame, approach its nearest part.
-    const tanHalf = tanHalfY * Math.min(1, pose.aspectRatio || 1);
-    if (range < fit && range * tanHalf < bounds.radius) {
-      bounds = cellBounds(nearestPart(cell, pose.position));
-      range = Math.min(halfway(bounds), fitRange(bounds));
+    let range = Math.min(halfway(bounds), fitRange(cell, bounds));
+    // If the group overflows the frame at that range, approach its nearest counted cell.
+    if (range < extentRange(cell, bounds)) {
+      const part = nearestPart(cell, pose.position);
+      bounds = cellBounds(part);
+      range = Math.min(halfway(bounds), fitRange(part, bounds));
     }
     camera.flyToBounds(bounds, {
       offset: { heading: 0, pitch: -Math.PI / 2, range },

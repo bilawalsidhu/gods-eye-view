@@ -70,6 +70,16 @@ export function cellCenter(cell) {
   );
 }
 
+/** Half the east-west and north-south ground extent of a cell's mounts, in metres. */
+export function cellHalfExtents(cell) {
+  // The parallel nearest the equator bounds the width of every row.
+  const parallel = (Math.max(0, cell.south, -cell.north) * Math.PI) / 180;
+  return {
+    halfWidthM: 0.5 * (cell.east - cell.west) * 111_320 * Math.cos(parallel),
+    halfHeightM: 0.5 * (cell.north - cell.south) * 111_320,
+  };
+}
+
 /** A padded sphere over the rectangle and every mount, centred at groundM
  * when set, otherwise at the mid mount height. */
 export function cellBounds(cell) {
@@ -78,14 +88,8 @@ export function cellBounds(cell) {
   const height = Number.isFinite(cell.groundM)
     ? cell.groundM
     : (cell.high + cell.low) / 2;
-  // The parallel nearest the equator bounds the width of every row.
-  const parallel = (Math.max(0, cell.south, -cell.north) * Math.PI) / 180;
-  const halfWidth =
-    0.5 *
-    Math.hypot(
-      (cell.east - cell.west) * 111_320 * Math.cos(parallel),
-      (cell.north - cell.south) * 111_320,
-    );
+  const { halfWidthM, halfHeightM } = cellHalfExtents(cell);
+  const halfWidth = Math.hypot(halfWidthM, halfHeightM);
   const vertical = Math.max(cell.high - height, height - cell.low);
   const radius = 1.2 * Math.hypot(halfWidth, vertical);
   return { center: fromDegrees(lon, lat, height), radius: Math.max(1, radius) };
@@ -222,12 +226,13 @@ export function mergeCountCells(cells, project, sizeFor, gap) {
   return groups;
 }
 
-/** Rebuild a group's count under its original key, excluding lone cameras. */
-export function withoutLoneCameras(group) {
+/** Rebuild a group's count under its original key, keeping only the lone cameras in `keep`. */
+export function withoutLoneCameras(group, keep = []) {
   const counts = (group.parts ?? []).filter((cell) => cell.count > 1);
   if (!counts.length) return null;
   const core = createCameraCell(group.key);
-  core.parts = counts;
-  for (const cell of counts) addCell(core, cell);
+  core.parts = [...counts, ...keep];
+  if (keep.length) core.lone = [...keep];
+  for (const cell of core.parts) addCell(core, cell);
   return core;
 }

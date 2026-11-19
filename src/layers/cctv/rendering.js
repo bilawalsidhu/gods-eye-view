@@ -154,7 +154,7 @@ export function createRendering({
     layerState._counts = createCountMarkers(
       services.overlays?.registerWorldOverlayPaintLane,
       `cctv:${iconSets}:counts`,
-      refreshHorizonCulling,
+      refreshViewFromCounts,
       services.overlays?.keyholeAlpha,
     );
     return set.id;
@@ -354,6 +354,11 @@ export function createRendering({
     }
     if (writes > iconWrites) counts.requestPaint();
     return { writes, transitioning, activeCount, ran: true };
+  }
+
+  /** During camera motion the timer and settle pass refresh the counts. */
+  function refreshViewFromCounts() {
+    if (!layerState._cameraMoving) refreshHorizonCulling();
   }
 
   /**
@@ -691,9 +696,10 @@ export function createRendering({
 
   /** Only counts visible outside the HUD push the active icon aside. */
   function clearActiveOfCounts(project, pose, metresPerPixelPerMetre, pass) {
+    const markers = layerState._counts?.markers;
+    for (const marker of markers ?? []) marker.besideActive = false;
     if (!layerState._activeCameraId) return;
     const record = layerState._recordById.get(layerState._activeCameraId);
-    const markers = layerState._counts?.markers;
     if (
       record?.viewPass !== pass ||
       !markers?.length ||
@@ -710,13 +716,14 @@ export function createRendering({
       (CAMERA_ICON_PX * 1.25 * iconScaleAt(distance(p, pose.position))) / 2;
     const spans = [];
     for (const marker of markers) {
-      if (marker.hudHidden) continue;
       const at = project(marker.pos);
       if (
         !at ||
         Math.abs(y - at.y) >= marker.height / 2 + half + COUNT_MERGE_GAP_PX
       )
         continue;
+      marker.besideActive = true;
+      if (marker.hudHidden) continue;
       const reach = marker.width / 2 + half + COUNT_MERGE_GAP_PX;
       spans.push([at.x - reach, at.x + reach]);
     }
