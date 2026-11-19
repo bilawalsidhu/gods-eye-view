@@ -286,6 +286,10 @@ export function createPresentation({
         hoverId: layerState._hoverCardId,
       },
       activeCameraId: activeId,
+      // The camera CCTV opened on, following the view until someone picks one.
+      activeCameraProvisional: Boolean(
+        activeId && layerState._openingCameraProvisional,
+      ),
       activeCameraReselection: layerState._activeCameraReselection,
       activeCamera: active ? getPublicCameraState(active, activeId) : null,
       cameraIndex: cameraIndex(),

@@ -52,3 +52,16 @@ test('same-camera selection notifies browser-overlay feeds so playback can retry
   assert.equal(fixture.state._activeCameraReselection, 1);
   assert.equal(fixture.notifications(), 1);
 });
+
+test('same-camera selection ends the opening pick and tells the panel once', () => {
+  const fixture = makeSelection('tripcheck-odot');
+  fixture.state._openingCameraProvisional = true;
+
+  assert.equal(
+    fixture.selection.setActiveCamera('same-camera'),
+    CCTV_ACTIVATION_RESULT.UNCHANGED,
+  );
+  assert.equal(fixture.state._openingCameraProvisional, false);
+  assert.equal(fixture.state._activeCameraReselection, 0);
+  assert.equal(fixture.notifications(), 1);
+});

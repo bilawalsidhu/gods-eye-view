@@ -11,6 +11,7 @@ import cctvLayer, {
   _setCctvOverlayHostForTest,
   reopenNearestCamera,
 } from './cctv.js';
+import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 
 const BASE = {
   headingDeg: 41,
@@ -39,19 +40,9 @@ function record(id, lat, lon) {
 }
 
 function viewerAt(lat, lon) {
-  return {
-    entities: new Cesium.EntityCollection(),
+  const viewer = {
     isDestroyed: () => false,
-    trackedEntity: null,
-    camera: {
-      positionWC: Cesium.Cartesian3.fromDegrees(lon, lat, 300),
-      positionCartographic: Cesium.Cartographic.fromDegrees(lon, lat, 300),
-      heading: 0.4,
-      pitch: -0.7,
-      roll: 0,
-      transform: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
-      flyToBoundingSphere() {},
-    },
+    eye: { lat, lon, height: 300 },
     scene: {
       canvas: { clientWidth: 1200, clientHeight: 800 },
       cartesianToCanvasCoordinates: () => undefined,
@@ -59,14 +50,20 @@ function viewerAt(lat, lon) {
       requestRender() {},
     },
   };
+  // The layer reads the eye and flies through the renderer's camera port.
+  viewer.draw = bindFakeDraw(viewer, {
+    camera: {
+      pose: () => ({ ...viewer.eye }),
+      on: () => () => {},
+      followed: null,
+      flyToBounds() {},
+    },
+  }).draw;
+  return viewer;
 }
 
 function moveViewer(viewer, lat, lon) {
-  viewer.camera.positionCartographic = Cesium.Cartographic.fromDegrees(
-    lon,
-    lat,
-    300,
-  );
+  viewer.eye = { lat, lon, height: 300 };
 }
 
 function withReopenedLayer(fn) {
@@ -98,6 +95,7 @@ function withReopenedLayer(fn) {
     moveViewer(viewer, 51.5131, -0.1291);
     assert.equal(reopenNearestCamera(), true);
     assert.equal(cctvLayer.getUIState().activeCameraId, 'b-cambridge');
+    assert.equal(cctvLayer.getUIState().activeCameraProvisional, true);
     fn(viewer);
   } finally {
     globalThis.document = originalDocument;
@@ -114,11 +112,16 @@ for (const [name, pick] of [
     'setParams({ selectedCameraId })',
     () => cctvLayer.setParams({ selectedCameraId: 'b-cambridge' }),
   ],
+  [
+    'focusNearestToPoint',
+    () => cctvLayer.focusNearestToPoint(51.513, -0.129, { focus: false }),
+  ],
 ]) {
   test(`an explicit ${name} pick of the re-opened camera ends the opening pick`, () => {
     withReopenedLayer((viewer) => {
       pick();
       assert.equal(cctvLayer.getUIState().activeCameraId, 'b-cambridge');
+      assert.equal(cctvLayer.getUIState().activeCameraProvisional, false);
       // A later settled move (a pan, or the landing of the pick's own flight)
       // leaves the explicit choice alone.
       moveViewer(viewer, 51.5081, -0.1281);

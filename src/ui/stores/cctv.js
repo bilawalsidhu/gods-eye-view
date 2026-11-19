@@ -25,8 +25,9 @@ export const useCctvStore = defineStore('gev-cctv', () => {
   /** `{label, state}` for the source badge; null until first synced. */
   const sourceBadge = shallowRef(null);
   /**
-   * The camera picker: `{options: [{value, label}], note, disabled,
-   * selection: {value}|{index}|null}`; null until first rendered.
+   * The camera picker: `{options: [{value, label}], note, opening, disabled,
+   * selection: {value}|{index}|null}`; null until first rendered. `opening`
+   * labels the opening camera's hidden first option, or is empty.
    */
   const picker = shallowRef(null);
   /** The scene summary as typed so far; null until the first one. */

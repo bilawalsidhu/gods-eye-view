@@ -49,10 +49,13 @@ export function createSelection({
    * Sets the active camera by ID, initializes its projection runtime, refreshes
    * its frame, and updates styles.
    * @param {string} cameraId - ID of the camera to activate.
+   * @param {Object} [options]
+   * @param {boolean} [options.opening=false] - The opening camera following
+   *   the view, not someone's pick: settled moves may still replace it.
    * @returns {'activated'|'unchanged'|'not-found'} Discriminated activation result.
    */
 
-  function setActiveCamera(cameraId) {
+  function setActiveCamera(cameraId, { opening = false } = {}) {
     if (!cameraId || !layerState._recordById.has(cameraId))
       return CCTV_ACTIVATION_RESULT.NOT_FOUND;
     const record = layerState._recordById.get(cameraId);
@@ -71,19 +74,22 @@ export function createSelection({
       )
     ) {
       // Picking the camera a settled move re-opened is still a choice: later
-      // settled moves must leave it alone.
-      layerState._openingCameraProvisional = false;
+      // settled moves must leave it alone, and the picker learns it.
+      const endsOpening = layerState._openingCameraProvisional && !opening;
+      if (endsOpening) layerState._openingCameraProvisional = false;
       // Browser-only feeds have a separate player; a reselect retries it
       // without re-running activation or touching the projection geometry.
       if (parts.model.isBrowserOverlayCamera(record.camera)) {
         layerState._activeCameraReselection += 1;
+        parts.presentation.notifyListeners();
+      } else if (endsOpening) {
         parts.presentation.notifyListeners();
       }
       return CCTV_ACTIVATION_RESULT.UNCHANGED;
     }
     layerState._activeCameraId = cameraId;
     layerState._autoHopSuspended = false;
-    layerState._openingCameraProvisional = false;
+    layerState._openingCameraProvisional = opening;
     // A real activation creates projection work — wake the self-stopping loop.
     parts.projection.startProjectionLoop();
     if (previousActiveRecord && previousActiveRecord !== record) {

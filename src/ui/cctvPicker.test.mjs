@@ -226,3 +226,27 @@ test('an active id without its camera record leaves the pick alone', async (t) =
   });
   assert.equal(select.value, 'b');
 });
+
+test('the opening camera shows in a hidden first option', async (t) => {
+  const { select, render, values } = fixture(t);
+  const [a, b] = [camera('a'), camera('b')];
+  const state = {
+    enabled: true,
+    count: 2,
+    cameraIndex: [b, a],
+    activeCameraId: 'b',
+    activeCamera: b,
+  };
+  await render({ ...state, activeCameraProvisional: true });
+  assert.deepEqual(values(), ['', 'b', 'a']);
+  assert.equal(select.selectedIndex, 0);
+  const opening = select.options[0];
+  assert.equal(opening.textContent, 'Austin · Cam b');
+  assert.equal(opening.hidden, true);
+  assert.equal(opening.disabled, true);
+  assert.equal(opening.dataset.cctvOpening, '');
+
+  await render(state);
+  assert.deepEqual(values(), ['b', 'a'], 'a picked camera has no hidden option');
+  assert.equal(select.value, 'b');
+});
