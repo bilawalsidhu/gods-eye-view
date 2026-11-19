@@ -108,7 +108,7 @@ export function createIngestion({
 
   async function captureSatelliteDependency() {
     const manager = layerState._dataManager;
-    if (!manager || layerState._satelliteStateBeforeMission) return;
+    if (!manager) return;
     const token = layerState._lifecycleToken;
     // Let a pending Satellites action finish before reserving dependency ON.
     // A successful explicit OFF can cancel this mission entry while we wait.
@@ -127,12 +127,16 @@ export function createIngestion({
         !manager.isEffectivelyEnabled('rocket-launches'))
     )
       return;
-    layerState._satelliteStateBeforeMission = {
-      enabled: manager.isEnabled('satellites'),
-      params: parts.policyHelpers.satelliteParamsAfterSpaceMissions(
-        manager.getLayerParams('satellites'),
-      ),
-    };
+    // A saved state kept by a restore that could not finish (Satellites was
+    // busy) is still the one from before the mission: keep it, and switch
+    // Satellites on for the mission again.
+    if (!layerState._satelliteStateBeforeMission)
+      layerState._satelliteStateBeforeMission = {
+        enabled: manager.isEnabled('satellites'),
+        params: parts.policyHelpers.satelliteParamsAfterSpaceMissions(
+          manager.getLayerParams('satellites'),
+        ),
+      };
     manager.setLayerParams(
       'satellites',
       parts.policyHelpers.satelliteParamsForSpaceMissions(
