@@ -1,5 +1,5 @@
 const CHUNK = 5000;
-const COLUMNS = 'ts, id, layer, lat, lon, alt, heading, speed';
+const COLUMNS = 'ts, id, layer, lat, lon, alt, heading, speed, source';
 
 /**
  * PostgreSQL history store with the same methods as the SQLite one, every call
@@ -65,6 +65,21 @@ export function createPgStore(url, { loadPg = () => import('pg') } = {}) {
         ts BIGINT NOT NULL, layer TEXT NOT NULL, state TEXT NOT NULL,
         detail TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS feed_events_layer_ts ON feed_events(layer, ts);`);
+    // Where each point came from; empty for rows written before this existed.
+    await pool.query(
+      'ALTER TABLE positions ADD COLUMN IF NOT EXISTS source TEXT',
+    );
+    // One row per contact per second, so writing a point twice changes nothing.
+    // Older tables may hold repeats: remove them once, before the index exists.
+    const unique = await pool.query(
+      "SELECT 1 FROM pg_indexes WHERE indexname = 'positions_unique'",
+    );
+    if (!unique.rowCount) {
+      await pool.query(`
+        DELETE FROM positions a USING positions b
+        WHERE a.ctid > b.ctid AND a.layer = b.layer AND a.id = b.id AND a.ts = b.ts;
+        CREATE UNIQUE INDEX IF NOT EXISTS positions_unique ON positions(layer, id, ts);`);
+    }
     try {
       await pool.query('CREATE EXTENSION IF NOT EXISTS postgis');
       await pool.query(`ALTER TABLE positions ADD COLUMN IF NOT EXISTS geom
@@ -120,12 +135,12 @@ export function createPgStore(url, { loadPg = () => import('pg') } = {}) {
     };
   }
 
-  async function insertColumns(table, names, types, items) {
+  async function insertColumns(table, names, types, items, tail = '') {
     for (let i = 0; i < items.length; i += CHUNK) {
       const part = items.slice(i, i + CHUNK);
       await query(
         `INSERT INTO ${table}(${names.join(', ')})
-         SELECT * FROM unnest(${types.map((t, n) => `$${n + 1}::${t}[]`).join(', ')})`,
+         SELECT * FROM unnest(${types.map((t, n) => `$${n + 1}::${t}[]`).join(', ')}) ${tail}`,
         names.map((name) => part.map((item) => item[name] ?? null)),
       );
     }
@@ -135,7 +150,17 @@ export function createPgStore(url, { loadPg = () => import('pg') } = {}) {
     insertMany: (points) =>
       insertColumns(
         'positions',
-        ['ts', 'id', 'layer', 'lat', 'lon', 'alt', 'heading', 'speed'],
+        [
+          'ts',
+          'id',
+          'layer',
+          'lat',
+          'lon',
+          'alt',
+          'heading',
+          'speed',
+          'source',
+        ],
         [
           'bigint',
           'text',
@@ -145,8 +170,10 @@ export function createPgStore(url, { loadPg = () => import('pg') } = {}) {
           'float8',
           'float8',
           'float8',
+          'text',
         ],
         points,
+        'ON CONFLICT (layer, id, ts) DO NOTHING',
       ),
     async upsertContacts(contacts) {
       for (let i = 0; i < contacts.length; i += CHUNK) {
@@ -222,15 +249,19 @@ export function createPgStore(url, { loadPg = () => import('pg') } = {}) {
         `SELECT ${COLUMNS} FROM positions WHERE id = $1 AND ts BETWEEN $2 AND $3 ORDER BY ts`,
         [id, from, to],
       ),
-    async window({ from, to, bbox, layers, limit = 200000 }) {
+    async window({ from, to, bbox, layers, after, limit = 200000 }) {
       await ready;
       const f = filters();
       f.where.push(`ts BETWEEN ${f.add(from)} AND ${f.add(to)}`);
+      if (after)
+        f.where.push(
+          `(layer, id, ts) > (${f.add(after.layer)}, ${f.add(after.id)}, ${f.add(after.ts)})`,
+        );
       f.bbox(bbox, postgis);
       f.layers(layers);
       return rows(
         `SELECT ${COLUMNS} FROM positions WHERE ${f.where.join(' AND ')}
-         ORDER BY id, ts LIMIT ${f.add(limit)}`,
+         ORDER BY layer, id, ts LIMIT ${f.add(limit)}`,
         f.args,
       );
     },

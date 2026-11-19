@@ -2,6 +2,7 @@ import { createEmergencyWatcher } from './alerts.js';
 import { cleanFence, createFenceTracker } from './fences.js';
 import { createThinner } from './thin.js';
 import { openHistoryStore } from './store.js';
+import { withSource } from './sources.js';
 
 const FLUSH_MS = 5000;
 const PURGE_MS = 60 * 60 * 1000;
@@ -220,8 +221,9 @@ export function createRecorder({
       if (patch.layers !== undefined) wanted = new Set(patch.layers);
     },
     /** Accepts one point: { id, layer, lat, lon, alt, heading, speed, ts }. */
-    ingest(point) {
-      if (wanted && !wanted.has(point.layer)) return;
+    ingest(input) {
+      if (wanted && !wanted.has(input.layer)) return;
+      const point = withSource(input);
       if (point.name) noteName(point);
       const alert = emergencies(point);
       if (alert) alertBuffer.push(alert);

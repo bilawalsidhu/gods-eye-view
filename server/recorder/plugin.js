@@ -26,6 +26,7 @@ import {
 import { exportPoints, summarizeTrack } from './exporters.js';
 import { createPgStore } from './pgStore.js';
 import { createFeedMonitor } from './feeds.js';
+import { capWindow, decodeCursor } from './windowCap.js';
 import { createN2yoClient, refreshFromN2yo } from './n2yo.js';
 import {
   checkFolder,
@@ -722,17 +723,21 @@ export function recorderPlugin(env = process.env) {
           });
         }
         if (url.pathname === '/window') {
-          const points = await recorder.store.window({
+          // Ask for one row more than we return: the extra row proves there
+          // was more, so a result of exactly WINDOW_LIMIT is not called cut.
+          const token = q.get('cursor');
+          const after = token ? decodeCursor(token) : null;
+          if (token && !after)
+            return sendJson(res, 400, { error: 'Bad cursor' });
+          const rows = await recorder.store.window({
             from,
             to,
             bbox,
             layers,
+            after,
+            limit: WINDOW_LIMIT + 1,
           });
-          // The store stops at its row limit; say so rather than look complete.
-          return sendJson(res, 200, {
-            points,
-            truncated: points.length >= WINDOW_LIMIT,
-          });
+          return sendJson(res, 200, capWindow(rows, WINDOW_LIMIT));
         }
         if (url.pathname === '/at')
           return sendJson(res, 200, {

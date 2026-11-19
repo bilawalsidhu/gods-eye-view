@@ -374,7 +374,15 @@ export function createReplayController({
           'bbox',
           [region.west, region.south, region.east, region.north].join(','),
         );
-      const { points } = await getJson(`/api/history/window?${query}`);
+      // A long window arrives in pages; follow the cursor, up to a cap so a
+      // huge recording cannot exhaust memory.
+      const points = [];
+      for (let page = 0; page < 5; page++) {
+        const got = await getJson(`/api/history/window?${query}`);
+        points.push(...got.points);
+        if (!got.nextCursor) break;
+        query.set('cursor', got.nextCursor);
+      }
       if (destroyed) return;
       if (!active) {
         await setLive(true);

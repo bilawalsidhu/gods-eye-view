@@ -2,7 +2,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-const COLUMNS = 'ts, id, layer, lat, lon, alt, heading, speed';
+const COLUMNS = 'ts, id, layer, lat, lon, alt, heading, speed, source';
 
 /** Adds an area test; a box with west above east crosses the antimeridian. */
 function addBox(where, args, bbox) {
@@ -61,8 +61,30 @@ export function openHistoryStore(file, { createFolder = true } = {}) {
       ts INTEGER NOT NULL, layer TEXT NOT NULL, state TEXT NOT NULL,
       detail TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS feed_events_layer_ts ON feed_events(layer, ts);`);
+  // Files from before the source column get it added (empty for old rows).
+  if (
+    !db
+      .prepare(
+        "SELECT 1 FROM pragma_table_info('positions') WHERE name = 'source'",
+      )
+      .get()
+  )
+    db.exec('ALTER TABLE positions ADD COLUMN source TEXT');
+  // One row per contact per second: writing the same point twice (a retry, a
+  // restored backup merged back in) must change nothing. Older files may hold
+  // repeats, so the first time the index is built they are removed, keeping the
+  // earliest-written row of each.
+  const hasUnique = db
+    .prepare("SELECT 1 FROM sqlite_master WHERE name = 'positions_unique'")
+    .get();
+  if (!hasUnique) {
+    db.exec(`
+      DELETE FROM positions WHERE rowid NOT IN
+        (SELECT MIN(rowid) FROM positions GROUP BY layer, id, ts);
+      CREATE UNIQUE INDEX positions_unique ON positions(layer, id, ts);`);
+  }
   const insert = db.prepare(
-    `INSERT INTO positions(${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT OR IGNORE INTO positions(${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
 
   return {
@@ -79,6 +101,7 @@ export function openHistoryStore(file, { createFolder = true } = {}) {
             p.alt,
             p.heading,
             p.speed,
+            p.source ?? null,
           );
         db.exec('COMMIT');
       } catch (error) {
@@ -182,9 +205,14 @@ export function openHistoryStore(file, { createFolder = true } = {}) {
         )
         .all(id, from, to);
     },
-    window({ from, to, bbox, layers, limit = 200000 }) {
+    /** Ordered by (layer, id, ts), the unique key, so `after` can resume exactly. */
+    window({ from, to, bbox, layers, after, limit = 200000 }) {
       const where = ['ts BETWEEN ? AND ?'];
       const args = [from, to];
+      if (after) {
+        where.push('(layer, id, ts) > (?, ?, ?)');
+        args.push(after.layer, after.id, after.ts);
+      }
       addBox(where, args, bbox);
       if (layers?.length) {
         where.push(`layer IN (${layers.map(() => '?').join(',')})`);
@@ -192,7 +220,7 @@ export function openHistoryStore(file, { createFolder = true } = {}) {
       }
       return db
         .prepare(
-          `SELECT ${COLUMNS} FROM positions WHERE ${where.join(' AND ')} ORDER BY id, ts LIMIT ?`,
+          `SELECT ${COLUMNS} FROM positions WHERE ${where.join(' AND ')} ORDER BY layer, id, ts LIMIT ?`,
         )
         .all(...args, limit);
     },
