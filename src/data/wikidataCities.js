@@ -217,6 +217,15 @@ const TILE_DEG = 5;
  * far more than one lookup touches, and bounds what a long session keeps.
  */
 const MAX_TILES = 64;
+/**
+ * How far out small places are looked for, in km. 500 km is under the 556 km
+ * that 5 degrees of latitude span, so a lookup's tile box reaches at most one
+ * tile past the point's own on each side: 3 rows, and 3 columns at the
+ * equator (more toward the poles, where tiles narrow). A lookup asked for a
+ * wider radius, up to the whole globe, still reads only those tiles; cities
+ * count to its full radius.
+ */
+export const PLACE_TILE_KM = 500;
 const NAMED = /\p{L}/u;
 const tiles = new Map();
 let loadTileIndex;
@@ -248,9 +257,11 @@ async function readPlaceTiles(latitude, longitude, radiusKm, fetchImpl) {
     readPlacePack(INDEX_URL(), fetchImpl),
   );
   const index = await loadTileIndex();
-  const keys = tileKeysAround(latitude, longitude, radiusKm).filter(
-    (key) => index.tiles[key],
-  );
+  const keys = tileKeysAround(
+    latitude,
+    longitude,
+    Math.min(radiusKm, PLACE_TILE_KM),
+  ).filter((key) => index.tiles[key]);
   // A tile that cannot be read is left out: the places of the others,
   // and the cities, are still the answer.
   const settled = await Promise.allSettled(
@@ -281,7 +292,10 @@ async function readPlacePack(url, fetchImpl) {
   return response.json();
 }
 
-/** Named cities and smaller places around one point, nearest first. */
+/**
+ * Named cities and smaller places around one point, nearest first. Smaller
+ * places are looked for within PLACE_TILE_KM only.
+ */
 export async function placesNear(
   { latitude, longitude, radiusKm = 10, limit = 6 },
   fetchImpl = (...args) => globalThis.fetch(...args),
@@ -325,7 +339,14 @@ export async function placesNear(
   const found = [
     ...cities.filter((city) => city.distanceKm <= radius),
     ...detail
-      .flatMap((source) => citiesWithin(source, latitude, longitude, radius))
+      .flatMap((source) =>
+        citiesWithin(
+          source,
+          latitude,
+          longitude,
+          Math.min(radius, PLACE_TILE_KM),
+        ),
+      )
       .filter((place) => !twinOfCity(place)),
   ];
   const seen = new Set();
@@ -339,12 +360,13 @@ export async function placesNear(
 const TWIN_KM = 3;
 
 /**
- * The city with this name, or null. A qualifier after a comma that names a
- * country ("Paris, France", "Paris, US") keeps only cities there, and finds
+ * The place with this name, or null. A qualifier after a comma that names a
+ * country ("Paris, France", "Paris, US") keeps only places there, and finds
  * nothing when none is; one that names no country ("Paris, Texas") is
- * ignored. A city of that name within `radiusKm` of `near` (the view) wins,
- * the nearest first, else the largest city of that name anywhere. Omnibar
- * can also ask for a smaller place nearby when the cities pack has no match.
+ * ignored. A place of that name within `radiusKm` of `near` (the view) wins,
+ * the nearest first, else the largest city of that name anywhere. With
+ * `includeSmallPlaces`, the smaller places of the detail tiles near the view
+ * count too: a village in view comes before a far bigger city of its name.
  */
 export async function findPlace(
   name,
@@ -360,20 +382,6 @@ export async function findPlace(
   const cities = (names.get(wanted) || []).filter(
     (row) => !country || row[4] === country,
   );
-  if (!cities.length) {
-    if (!includeSmallPlaces || !near) return null;
-    const nearby = await placesNear(
-      { ...near, radiusKm, limit: Infinity },
-      fetchImpl,
-    );
-    return (
-      nearby.find(
-        (place) =>
-          foldName(place.name) === wanted &&
-          (!country || place.country === country),
-      ) ?? null
-    );
-  }
   if (Number.isFinite(near?.latitude) && Number.isFinite(near?.longitude)) {
     let best = null;
     for (const row of cities) {
@@ -381,7 +389,24 @@ export async function findPlace(
       if (km <= radiusKm && (!best || km < best.distanceKm))
         best = toCity(row, km);
     }
+    if (includeSmallPlaces) {
+      const nearby = await placesNear(
+        {
+          latitude: near.latitude,
+          longitude: near.longitude,
+          radiusKm,
+          limit: Infinity,
+        },
+        fetchImpl,
+      );
+      const small = nearby.find(
+        (place) =>
+          foldName(place.name) === wanted &&
+          (!country || place.country === country),
+      );
+      if (small && (!best || small.distanceKm < best.distanceKm)) best = small;
+    }
     if (best) return best;
   }
-  return toCity(cities[0], 0);
+  return cities.length ? toCity(cities[0], 0) : null;
 }

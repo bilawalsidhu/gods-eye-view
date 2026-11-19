@@ -39,6 +39,8 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  keepBuiltIfUnchanged,
+  keepPackBuiltIfUnchanged,
   placeTileFiles,
   withoutCities,
   withoutNearTwins,
@@ -68,6 +70,8 @@ const outDir = path.join(
     : 'src/data/local_data/wikidata_cities',
 );
 
+/** A file's text, or undefined when there is none yet. */
+const readIfThere = (file) => readFile(file, 'utf8').catch(() => undefined);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const qid = (uri) => uri.slice(uri.lastIndexOf('/') + 1);
 
@@ -499,17 +503,30 @@ if (tilesMode) {
     count: tileRows.length,
     maxPopulation,
   });
-  // Tiles from an earlier build that this one has no rows for go.
+  // The new files are all written before tiles from an earlier build that
+  // this one has no rows for go, so a build that stops part way never leaves
+  // an index naming a removed tile.
+  const earlier = new Map();
+  for (const name of await readdir(outDir))
+    if (/^-?\d+_-?\d+\.json$|^index\.json$|^files\.js$/.test(name))
+      earlier.set(name, await readFile(path.join(outDir, name), 'utf8'));
+  keepPackBuiltIfUnchanged(files, earlier);
+  for (const [name, text] of files)
+    await writeFile(path.join(outDir, name), text);
   for (const name of await readdir(outDir))
     if (/^-?\d+_-?\d+\.json$/.test(name) && !files.has(name))
       await rm(path.join(outDir, name));
-  for (const [name, text] of files)
-    await writeFile(path.join(outDir, name), text);
   console.log(
     `Wrote ${tileRows.length} places in ${files.size - 2} tiles to ${path.relative(root, outDir)}`,
   );
   process.exit(0);
 }
 const file = path.join(outDir, 'cities.json');
-await writeFile(file, `${JSON.stringify({ meta, rows })}\n`);
+await writeFile(
+  file,
+  keepBuiltIfUnchanged(
+    `${JSON.stringify({ meta, rows })}\n`,
+    await readIfThere(file),
+  ),
+);
 console.log(`Wrote ${rows.length} places to ${path.relative(root, file)}`);

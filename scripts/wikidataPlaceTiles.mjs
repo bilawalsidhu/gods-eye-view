@@ -89,6 +89,51 @@ export function placeTileFiles(rows, meta) {
   return files;
 }
 
+/**
+ * A pack file's new text, keeping the earlier build's `meta.built` when
+ * nothing else in the file changed, so rebuilding unchanged data leaves the
+ * file as it was. A file that does not hold all of its pack's data (the
+ * places index) is passed through this only when the rest of the pack is
+ * unchanged too.
+ * @param {string} text The new file, JSON with a `meta.built` stamp.
+ * @param {string | undefined} earlier The file as it is now, if there is one.
+ */
+export function keepBuiltIfUnchanged(text, earlier) {
+  if (!earlier) return text;
+  let before;
+  try {
+    before = JSON.parse(earlier);
+  } catch {
+    return text;
+  }
+  const after = JSON.parse(text);
+  if (typeof before?.meta?.built !== 'string' || !after.meta) return text;
+  const unstamped = (value) =>
+    JSON.stringify({ ...value, meta: { ...value.meta, built: null } });
+  if (unstamped(before) !== unstamped(after)) return text;
+  return `${JSON.stringify({ ...after, meta: { ...after.meta, built: before.meta.built } })}\n`;
+}
+
+/**
+ * Keeps the earlier build's `meta.built` in the places pack's index when the
+ * rebuild changed nothing: every tile and `files.js` the same text, no tile
+ * of the earlier build left out, and nothing else in the index changed. The
+ * index holds only row counts, so it alone cannot tell.
+ * @param {Map<string, string>} files The new pack, as placeTileFiles gives it; its index is replaced in place.
+ * @param {Map<string, string>} earlier The pack's files on disk now, by name.
+ */
+export function keepPackBuiltIfUnchanged(files, earlier) {
+  for (const name of earlier.keys())
+    if (name !== 'index.json' && !files.has(name)) return files;
+  for (const [name, text] of files)
+    if (name !== 'index.json' && earlier.get(name) !== text) return files;
+  files.set(
+    'index.json',
+    keepBuiltIfUnchanged(files.get('index.json'), earlier.get('index.json')),
+  );
+  return files;
+}
+
 const kmBetween = (a, b) =>
   greatCircleKm({ lat: a[1], lon: a[2] }, { lat: b[1], lon: b[2] });
 
