@@ -77,11 +77,15 @@ export function createSelection({
 
   function selectAndFocusFire(fire) {
     selectFire(fire);
+    // A stand-in that draws the fire larger than a marker says how far the
+    // camera stands from it (`setMarkerStandIn`).
+    const rangeM = layerState._standIn?.focusRangeM?.(fire);
     requestWorldFocus({
       kind: 'fire',
       id: fireDetectionKey(fire),
       label: t('FIRE'),
       position: components.model.firePosition(fire),
+      ...(Number.isFinite(rangeM) && rangeM > 0 ? { rangeM } : {}),
     });
   }
 

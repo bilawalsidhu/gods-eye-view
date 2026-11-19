@@ -698,6 +698,7 @@ test('a click on a fire an application draws in place of the markers selects it 
       fireDetectionKey(fire),
       'the stand-in decides, not the hidden glow under the click',
     );
+    assert.equal('rangeM' in h.requests[0], false, 'the usual fire framing');
     assert.equal(h.layer.getSelectedInfo().id, fireDetectionKey(fire));
     assert.equal(getSelectedEntityContext().label, 'Fire · FRP 1520 MW');
     assert.deepEqual(
@@ -711,6 +712,32 @@ test('a click on a fire an application draws in place of the markers selects it 
     h.click();
     assert.equal(h.requests.length, 1, 'no camera move');
     assert.equal(h.layer.getSelectedInfo(), null, 'the selection is cleared');
+  } finally {
+    h.cleanup();
+  }
+});
+
+test('a stand-in that draws a fire larger says how far the camera stands from it', () => {
+  const fire = makeFire();
+  const asked = [];
+  let range = 24_000;
+  const h = harness({ fires: [fire] });
+  try {
+    h.layer.setMarkerStandIn({
+      hitTest: () => ({ ...fire }),
+      focusRangeM: (record) => {
+        asked.push(fireDetectionKey(record));
+        return range;
+      },
+    });
+    h.click();
+    assert.deepEqual(asked, [fireDetectionKey(fire)]);
+    assert.equal(h.requests.at(-1).rangeM, 24_000);
+    // No range for this fire: the usual fire framing.
+    range = null;
+    h.click();
+    assert.equal(h.requests.length, 2);
+    assert.equal('rangeM' in h.requests.at(-1), false);
   } finally {
     h.cleanup();
   }

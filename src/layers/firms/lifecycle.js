@@ -78,8 +78,11 @@ export function createLifecycle({
      * answers a detection record from the same source, or null) selects it
      * and moves the camera to it as a click on its marker does, the selected
      * fire's card shows, and a click on empty space clears the selection.
+     * Its optional `focusRangeM(record)` gives how far, in metres, the camera
+     * stands from a fire it draws when moving to it, for fires drawn larger
+     * than a marker; without one, or for null, the usual fire framing holds.
      * `null` brings the markers back. The selection is kept either way.
-     * @param {?{hitTest: (screenPosition: {x: number, y: number}) => ?Object}} standIn
+     * @param {?{hitTest: (screenPosition: {x: number, y: number}) => ?Object, focusRangeM?: (record: Object) => ?number}} standIn
      */
     setMarkerStandIn(standIn) {
       layerState._standIn =

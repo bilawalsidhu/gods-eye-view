@@ -206,6 +206,25 @@ test('fires frame wider than vessels — a fire is read by its surroundings', ()
   );
 });
 
+test("a target's own range stands the camera off that far, past the framed radius", () => {
+  const range = (rangeM) => {
+    const camera = stubCamera();
+    flyToWorldTarget(bindFakeCesiumCamera({ camera }), {
+      kind: 'fire',
+      id: 'fire-1',
+      position: POSITION,
+      rangeM,
+    });
+    const { sphere, options } = camera.calls.flights[0];
+    assert.equal(sphere.radius, WORLD_FOCUS_FRAMING.fire.radiusM);
+    return options.offset.range;
+  };
+  assert.equal(range(24_000), 24_000);
+  // Inside the framed sphere, or not a number: the kind's own range.
+  for (const value of [WORLD_FOCUS_FRAMING.fire.radiusM, 0, -5, NaN, '9000'])
+    assert.equal(range(value), WORLD_FOCUS_FRAMING.fire.rangeM);
+});
+
 test('every framing is a real oblique standoff, not a nadir or an inside-out sphere', () => {
   const kinds = Object.keys(WORLD_FOCUS_FRAMING);
   assert.deepEqual(kinds.sort(), [
