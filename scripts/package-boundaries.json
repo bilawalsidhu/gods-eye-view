@@ -5488,6 +5488,8 @@
       "src/render/cesium/viewers.js",
       "src/ui/creditLineHeight.js",
       "src/ui/creditsView.js",
+      "src/ui/credits/CreditsView.vue",
+      "src/ui/credits/CreditItem.vue",
       "src/data/planespottersPhoto.js",
       "src/maps/keylessTerrain.js",
       "src/render/cesium/vectorBase.js",
