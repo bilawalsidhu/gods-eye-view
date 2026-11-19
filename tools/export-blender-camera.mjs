@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /** Offline scene-to-USD camera CLI. Reads JSON only; never loads .env or a viewer. */
-import { open, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { open, unlink } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 import {
   parseSceneDocument,
@@ -10,7 +11,12 @@ import { exportCameraUsda } from '../src/tooling/blenderCamera.js';
 
 /** Read a regular file through one descriptor, at most one byte past the scene limit. */
 async function readSceneText(path) {
-  const file = await open(path, 'r');
+  // Non-blocking, so a FIFO without a writer reaches the isFile check instead
+  // of hanging in open(). Windows has no O_NONBLOCK.
+  const file = await open(
+    path,
+    constants.O_RDONLY | (constants.O_NONBLOCK ?? 0),
+  );
   try {
     if (!(await file.stat()).isFile())
       throw new Error('input must be a regular file');
@@ -22,12 +28,12 @@ async function readSceneText(path) {
         length,
         buffer.length - length,
       );
-      if (!bytesRead) break;
+      // Decode at EOF, dropping a UTF-8 BOM as Director's File.text() does.
+      if (!bytesRead)
+        return new TextDecoder().decode(buffer.subarray(0, length));
       length += bytesRead;
     }
-    if (length > SCENE_DOCUMENT_LIMITS.bytes)
-      throw new Error('Scene exceeds 5 MiB');
-    return buffer.toString('utf8', 0, length);
+    throw new Error('Scene exceeds 5 MiB');
   } finally {
     await file.close();
   }
@@ -91,12 +97,26 @@ try {
       horizontalFovDegrees: Number(values['horizontal-fov-deg']),
       sensorWidthMm: Number(values['sensor-width-mm']),
     });
-    await writeFile(values.output, usda, { flag: 'wx' });
+    const file = await open(values.output, 'wx', 0o600);
+    try {
+      await file.writeFile(usda);
+      await file.close();
+    } catch (error) {
+      // Remove the partial stage this run created, so a retry can succeed.
+      await file.close().catch(() => {});
+      await unlink(values.output);
+      throw error;
+    }
     console.log(
       `CAMERA_EXPORT_OK: ${samples.shots.length} shots, ${samples.frames.length} frames`,
     );
   }
 } catch (error) {
-  console.error(`Camera export failed: ${error.message}`);
+  // Field names and IDs come from the document: escape terminal control bytes.
+  const message = String(error.message).replace(
+    /[\x00-\x1f\x7f-\x9f]/g,
+    (char) => `\\x${char.charCodeAt(0).toString(16).padStart(2, '0')}`,
+  );
+  console.error(`Camera export failed: ${message}`);
   process.exitCode = 1;
 }

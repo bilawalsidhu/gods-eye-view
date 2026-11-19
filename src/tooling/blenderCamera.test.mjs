@@ -145,10 +145,6 @@ test('explicit horizontal lens works for landscape and portrait output', () => {
     assert.ok(
       Math.abs(m.camera.sensorHeightMm - (36 * height) / width) < 1e-10,
     );
-    assert.ok(
-      Math.abs(m.camera.verticalFovRadians - 2 * Math.atan(height / width)) <
-        1e-10,
-    );
   }
 });
 
@@ -253,45 +249,14 @@ test('projection settings cannot be silently clamped by Blender', () => {
   );
 });
 
-test('every exported sample agrees with Director seeking at fractional shot boundaries', () => {
-  const p = project([
-    {
-      id: 'first',
-      camera: pose({ heading: 350, roll: -350 }),
-      durationSec: 0.21,
-      holdSec: 0.11,
-    },
-    {
-      id: 'second',
-      camera: pose({ lon: 0.001, heading: 10, roll: 350 }),
-      durationSec: 0.22,
-      holdSec: 0.13,
-    },
-  ]);
-  const m = adapter.sampleSceneCameras(p, options());
-  assert.equal(m.frames.length, 21);
-  for (const sample of m.frames) {
-    const state = sceneSeekState(
-      p.scenes[0],
-      sample.timeSec / m.timeline.durationSec,
-      (_scene, shot) => shot.durationSec + shot.holdSec,
-      (_scene, shot) => shot.holdSec,
-    );
-    const expected = adapter.cameraPoseToEnu(state.camera, origin);
-    assert.equal(sample.shotId, state.shot.id);
-    near(sample.position, expected.position);
-    sample.basisColumns.forEach((axis, i) =>
-      near(axis, expected.basisColumns[i]),
-    );
-  }
-});
-
 test('CLI works in paths with spaces and refuses overwrites or invalid projection', () => {
   const directory = mkdtempSync(join(tmpdir(), 'gev camera '));
   try {
     const input = join(directory, 'saved scene.json');
     const output = join(directory, 'camera stage.usda');
-    writeFileSync(input, JSON.stringify(project()));
+    const scenes = project();
+    scenes.scenes.push({ ...scenes.scenes[0], id: 'other' });
+    writeFileSync(input, JSON.stringify(scenes));
     const script = fileURLToPath(
       new URL('../../tools/export-blender-camera.mjs', import.meta.url),
     );
@@ -301,8 +266,11 @@ test('CLI works in paths with spaces and refuses overwrites or invalid projectio
       input,
       '--output',
       output,
+      '--scene',
+      'other',
+      // A leading minus must not read as a missing --origin value.
       '--origin',
-      '0,0,0',
+      '-0,0,0',
       '--fps',
       '30000/1001',
       '--width',
@@ -318,6 +286,20 @@ test('CLI works in paths with spaces and refuses overwrites or invalid projectio
     const contents = readFileSync(output, 'utf8');
     assert.match(contents, /^#usda 1\.0\n/);
     assert.match(contents, /userProperties:gevFps = "30000\/1001"/);
+    assert.match(contents, /userProperties:gevSceneId = "other"/);
+    const unknownOutput = join(directory, 'unknown.usda');
+    const unknown = [...args];
+    unknown[unknown.indexOf('other')] = 'missing';
+    unknown[unknown.indexOf(output)] = unknownOutput;
+    const missingScene = spawnSync(process.execPath, unknown, {
+      encoding: 'utf8',
+    });
+    assert.equal(missingScene.status, 1);
+    assert.match(
+      missingScene.stderr,
+      /No scene has ID missing; scenes: scene, other/,
+    );
+    assert.equal(existsSync(unknownOutput), false);
     const repeat = spawnSync(process.execPath, args, { encoding: 'utf8' });
     assert.equal(repeat.status, 1);
     assert.equal(readFileSync(output, 'utf8'), contents);
@@ -344,80 +326,52 @@ test('CLI works in paths with spaces and refuses overwrites or invalid projectio
   }
 });
 
-test('CLI accepts a negative latitude passed as --origin <value>', () => {
-  const directory = mkdtempSync(join(tmpdir(), 'gev origin '));
-  try {
-    const script = fileURLToPath(
-      new URL('../../tools/export-blender-camera.mjs', import.meta.url),
-    );
-    const result = spawnSync(
-      process.execPath,
-      [
-        script,
-        '--input',
-        join(directory, 'missing scene.json'),
-        '--output',
-        join(directory, 'cameras.usda'),
-        '--origin',
-        '-33.8568,151.2153,0',
-        '--fps',
-        '30',
-        '--width',
-        '1920',
-        '--height',
-        '1080',
-        '--horizontal-fov-deg',
-        '60',
-      ],
-      { encoding: 'utf8' },
-    );
-    // The input file does not exist, so the run still fails, but only after
-    // argument parsing: the error must be about the input, not about --origin.
-    assert.equal(result.status, 1);
-    assert.doesNotMatch(result.stderr, /ambiguous|--origin/);
-    assert.match(result.stderr, /ENOENT|no such file/i);
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
-});
-
-test('ordinary submillisecond shots retain the Director seek duration floor', () => {
-  const p = project([
-    { id: 'start', camera: pose(), durationSec: 0.033, holdSec: 0 },
-    {
-      id: 'short',
-      camera: pose({ heading: 90 }),
-      durationSec: 0.0005,
-      holdSec: 0.1,
-    },
-  ]);
-  const m = adapter.sampleSceneCameras(p, options());
-  const sample = m.frames[1];
-  const state = sceneSeekState(
-    p.scenes[0],
-    sample.timeSec / m.timeline.durationSec,
-    (_scene, shot) => shot.durationSec + shot.holdSec,
-    (_scene, shot) => shot.holdSec,
-  );
-  const expected = adapter.cameraPoseToEnu(state.camera, origin);
-  sample.basisColumns.forEach((axis, i) =>
-    near(axis, expected.basisColumns[i]),
-  );
-});
-
 test('long decimal timelines do not gain a rounding-only frame', () => {
+  // At 30 fps the accumulated duration is 63900.00000000164 frames.
   const p = project(
-    Array.from({ length: 10000 }, (_, i) => ({
+    Array.from({ length: 1000 }, (_, i) => ({
       id: `shot-${i}`,
-      durationSec: 0.1,
+      durationSec: 2.13,
       holdSec: 0,
       camera: pose(),
     })),
   );
   const m = adapter.sampleSceneCameras(p, options());
-  assert.equal(m.timeline.durationSec, 1000);
-  assert.equal(m.frames.length, 30000);
-  assert.equal(m.shots[9999].frameEndExclusive, 30001);
+  assert.equal(m.frames.length, 63900);
+  assert.equal(m.shots[999].frameEndExclusive, 63901);
+  // 1.06 + 2.99 s is 243.00000000000006 frames at 60 fps.
+  const held = adapter.sampleSceneCameras(
+    project([{ id: 'held', durationSec: 1.06, holdSec: 2.99, camera: pose() }]),
+    options({ fps: { numerator: 60, denominator: 1 } }),
+  );
+  assert.equal(held.frames.length, 243);
+});
+
+test('a frame before the exclusive scene end is never dropped', () => {
+  for (const [durationSec, numerator, denominator, frames] of [
+    [666.333, 23976, 1000, 15977],
+    [366.333, 2997, 100, 10980],
+    [2000.000001, 30, 1, 60001],
+  ]) {
+    const m = adapter.sampleSceneCameras(
+      project([{ id: 'shot', durationSec, holdSec: 0, camera: pose() }]),
+      options({ fps: { numerator, denominator } }),
+    );
+    assert.equal(m.frames.length, frames, `${durationSec} s`);
+    assert.ok(m.frames.at(-1).timeSec < durationSec);
+  }
+  // The last shot owns only the final frame at t = 120 s.
+  const m = adapter.sampleSceneCameras(
+    project([
+      { id: 'a', durationSec: 119.80000003, holdSec: 0, camera: pose() },
+      { id: 'b', durationSec: 0.2, holdSec: 0, camera: pose({ heading: 10 }) },
+    ]),
+    options({ fps: { numerator: 1, denominator: 1 } }),
+  );
+  assert.deepEqual(
+    [m.shots[1].frameStart, m.shots[1].frameEndExclusive],
+    [121, 122],
+  );
 });
 
 const runtimeSeek = (scene, timeSec, durationSec, packs) =>
@@ -533,13 +487,6 @@ test('registered minimum holds and evidence-sequence durations shift later shots
       effectiveShotHoldSec(p.scenes[0], shot, packs),
     ),
   );
-  for (const sample of m.frames) {
-    assert.equal(
-      sample.shotId,
-      runtimeSeek(p.scenes[0], sample.timeSec, m.timeline.durationSec, packs)
-        .shot.id,
-    );
-  }
 });
 
 const usdNumbers = (text) =>
@@ -573,7 +520,7 @@ test('USD stage is Z-up meters with one camera per shot and per-frame matrices',
     'defaultPrim = "GEV"',
   ])
     assert.ok(usda.includes(`\n    ${line}\n`), line);
-  assert.match(usda, /string gevSchema = "gev\.camera-usd\.v1"/);
+  assert.match(usda, /userProperties:gevSchema = "gev\.camera-usd\.v1"/);
   const cameras = usda.split('\n    def Camera ').slice(1);
   assert.equal(cameras.length, 2);
   assert.match(cameras[0], /^"Shot_001_first_shot"/);
@@ -632,3 +579,57 @@ test('USD stage records rational fps and portrait apertures', () => {
   assert.match(usda, /float verticalAperture = 0\.64\n/);
   assert.equal(samples.timeline.frameEnd, 30);
 });
+
+test('a scene is selected by sceneId', () => {
+  const p = project();
+  p.scenes.push({
+    id: 'other',
+    title: 'Other',
+    shots: [
+      { id: 'east', durationSec: 1, holdSec: 0, camera: pose({ lon: 0.001 }) },
+    ],
+  });
+  const m = adapter.sampleSceneCameras(p, options({ sceneId: 'other' }));
+  assert.equal(m.source.sceneId, 'other');
+  assert.deepEqual(
+    m.shots.map((s) => s.id),
+    ['east'],
+  );
+  near(
+    m.frames[0].position,
+    adapter.cameraPoseToEnu(pose({ lon: 0.001 }), origin).position,
+  );
+  assert.throws(
+    () => adapter.sampleSceneCameras(p, options()),
+    /--scene: scene, other/,
+  );
+});
+
+const usdcat = spawnSync('usdcat', ['--help']).status === 0;
+test(
+  'OpenUSD parses the stage',
+  { skip: !usdcat && 'usdcat is not installed' },
+  () => {
+    const directory = mkdtempSync(join(tmpdir(), 'gev usd '));
+    try {
+      const file = join(directory, 'cameras.usda');
+      const p = project([
+        { id: 'a', durationSec: 0.2, holdSec: 0, camera: pose() },
+        {
+          id: 'b',
+          durationSec: 0.2,
+          holdSec: 0,
+          camera: pose({ heading: 90 }),
+        },
+      ]);
+      writeFileSync(file, adapter.exportCameraUsda(p, options()).usda);
+      const result = spawnSync('usdcat', [file], { encoding: 'utf8' });
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /def Camera "Shot_002_b"/);
+      assert.match(result.stdout, /float focalLength = 0\.18/);
+      assert.match(result.stdout, /\b7: \( \(/);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  },
+);

@@ -153,8 +153,8 @@ export function effectiveShotHoldSec(
   );
 }
 
-/** Copy a shot's layer states with registered runtime controls, without mutating saved parameters. */
-export function runtimeLayerStatesForShot(shot, packs) {
+/** Resolve a shot's effective hold and flight-plus-hold seconds without mutating saved layer parameters. */
+export function shotRuntimeTiming(scene, shot, packs) {
   const states = deepClone(shot?.layers || {});
   const sourceRecipe = packs.recipeForShot(shot);
   for (const state of Object.values(states)) {
@@ -168,18 +168,14 @@ export function runtimeLayerStatesForShot(shot, packs) {
       };
     }
   }
-  return states;
+  const holdSec = effectiveShotHoldSec(scene, shot, packs, states);
+  return {
+    holdSec,
+    durationSec: (shot?.durationSec || DEFAULT_SHOT_DURATION_SEC) + holdSec,
+  };
 }
 
 /** Estimate flight plus effective hold without mutating saved layer parameters. */
 export function shotRuntimeDurationSec(scene, shot, packs) {
-  return (
-    (shot?.durationSec || DEFAULT_SHOT_DURATION_SEC) +
-    effectiveShotHoldSec(
-      scene,
-      shot,
-      packs,
-      runtimeLayerStatesForShot(shot, packs),
-    )
-  );
+  return shotRuntimeTiming(scene, shot, packs).durationSec;
 }
