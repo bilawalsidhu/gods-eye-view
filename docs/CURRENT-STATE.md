@@ -822,7 +822,8 @@ UTILITIES is its own left-side panel, between Data Layers and Scenes, with
 its own rail item (`handyman`). It is a `RailPanel` (`#utilities-panel`) in
 `src/ui/views/LayerPanelsView.vue` and holds the Directions layer row, which
 `LayerPanel` renders into `#utilities-toggles` instead of the Data Layers
-list, then Draw (`DrawControls.vue`) and Import (`GeoImport.vue`), which left
+list, then Draw (`DrawControls.vue`), Hands (`HandControls.vue`) and Import
+(`GeoImport.vue`); Draw and Import left
 DISPLAY with their ids unchanged. Without `#utilities-toggles` (a host that
 omits the panel) Directions stays in Data Layers under its Utilities heading.
 Radio, formerly the other row under that heading, stays in Data Layers under
@@ -835,6 +836,53 @@ closes it). Voice `show_data_layers_menu` for Directions opens Utilities, the
 panel that holds its row, and `set_panel_open` reaches it as
 `utilities-panel` or by "utilities", "draw", "drawing" or "import". On a phone
 it sits collapsed in the Layers sheet under Data Layers.
+
+## Hands — webcam gesture control — November 19, 2026
+
+UTILITIES ▸ Hands (`#hand-control-toggle`, `HandControls.vue`) turns on the
+webcam and steers the camera with hand gestures. MediaPipe Hand Landmarker
+(`@mediapipe/tasks-vision`, pinned) runs in the browser; its WASM and the
+model (`public/models/mediapipe/hand_landmarker.task`, Apache 2.0) are served
+by the app, loaded only when the toggle is first turned on, and no frame
+leaves the machine. Turning it off, closing its panel or hiding the tab stops
+the camera stream and closes the model. The panel opens at the top right with
+its gesture list folded, shows the mirrored preview with the hand points
+(coloured by the pose read), a status line, a sensitivity slider, Calibrate
+hand / Default thresholds and a Left-handed switch.
+
+`src/handControl/gestures.js` is the pure part (no DOM, renderer or MediaPipe;
+`gestures.test.mjs`): poses from the 21 landmarks, One Euro smoothing,
+hysteresis and hold-to-fire latches with a progress ring. `cameraDriver.js`
+applies the intents through the camera port (`cameraOf`), `findQuery` for the
+ground under the screen centre and `moveCamera` for orbit and globe spin, so
+it never touches Cesium. `tracker.js` owns `getUserMedia` and the landmarker;
+`panel.js` the panel, publishing `{active}` to the display store and
+answering `toggleHands`.
+
+| Gesture | Effect |
+| --- | --- |
+| Pinch (thumb + index) with the right hand | Drag the map; nearer/farther zooms, turning the wrist rotates |
+| Pinch with the left hand, up/down or forward/back | Tilt, like the mouse wheel button |
+| Pinch with both hands | Spread to zoom, both up/down to tilt, turn the line between them to rotate; when one lets go nothing moves until both do |
+| Let go of a moving one-hand drag | The map coasts to a stop |
+| Fist | Stops everything: drags, pilot flight, orbit, globe spin, throws, voice camera motions and flights |
+| 👉 pilot (index + thumb out) held 0.4 s | Flies straight and slowly at the current height; leaning the index turns, bringing the hand nearer speeds up; it keeps flying until a fist, a pinch, the mouse or another camera command |
+| 👍 thumb sideways held 0.5 s | Slow orbit about the centre toward the thumb (`move_camera` orbit) |
+| ☝️ index only | Reticle on the map; a quick pinch from it (under 0.3 s) clicks there (a synthetic pointer click on the canvas), a held one is a normal grab — on the before/after imagery split line it drags the line |
+| ✌️ held still 0.7 s / swiped | Drops an amber pin at the centre (annotations) / loads the next or previous shot of the selected scene |
+| Open hand swiped left/right | Previous/next view of a 30-view history kept by hand control; above 2,500 km it spins the globe |
+| Both hands open and still 1 s | North up about the centre |
+| 🤌 all fingertips together 0.6 s | Flies to the start view |
+| 👉👉 a frame with both hands 0.6 s | Downloads a PNG of the next drawn frame |
+| 🤙 held 0.5 s | Microphone toggle: the same claim and release as holding Space (`voice/gestureTalk.js`, `RealtimeInput.claimPushToTalk`/`toggleGestureTalk`); an open-mic session is left alone |
+
+A pinch only counts when the thumb is seen touching the index (MediaPipe's
+depth rejects a thumb tucked behind it) and lets go at the slightest gap.
+Left and right come from MediaPipe's handedness, corrected from where two
+hands appear. While the camera follows a target the gestures do not move it.
+Calibration measures a pinch, an open hand and a fist for about 3 s each and
+stores the thresholds in `localStorage` (`gev-hand-tuning`), as are the
+sensitivity and the left-handed switch.
 
 ## The Visual panel — November 14, 2026
 

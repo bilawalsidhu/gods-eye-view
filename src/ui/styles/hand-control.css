@@ -1,0 +1,165 @@
+/* Hand control (src/handControl/panel.js): mirrored webcam preview with the
+   detected hand points, bottom-left, above the map. */
+.gev-hands {
+  position: fixed;
+  left: 16px;
+  bottom: 110px;
+  /* Above the DATA LAYERS rail (z 100–110), which it would otherwise hide behind. */
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(240px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  color: var(--text-primary);
+  font: 12px/1.4 var(--font-sans);
+}
+.gev-hands[hidden] {
+  display: none !important;
+}
+.gev-hands__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.gev-hands__header .material-symbols-outlined {
+  font-size: 18px;
+  color: var(--accent);
+}
+.gev-hands__title {
+  flex: 1;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.gev-hands__mic {
+  color: var(--text-secondary, #9aa) !important;
+}
+.gev-hands__mic.is-on {
+  color: #ff5a5a !important;
+  animation: gev-hands-pulse 1.2s ease-in-out infinite;
+}
+@keyframes gev-hands-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+.gev-hands__close {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.gev-hands__close:hover,
+.gev-hands__close:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+}
+.gev-hands__stage {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #000;
+}
+.gev-hands__video,
+.gev-hands__overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* Mirror the picture; the overlay is drawn already mirrored. */
+.gev-hands__video {
+  transform: scaleX(-1);
+  opacity: 0.75;
+}
+.gev-hands__status {
+  min-height: 1.4em;
+  font-weight: 600;
+  color: var(--accent);
+}
+.gev-hands__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gev-hands__slider {
+  flex: 1;
+}
+.gev-hands__help {
+  color: var(--text-secondary, #9aa);
+  font-size: 11px;
+}
+.gev-hands__diag {
+  margin-top: 4px;
+  font: 10px/1.3 var(--font-mono, monospace);
+  opacity: 0.8;
+}
+.gev-hands__help summary {
+  cursor: pointer;
+  color: var(--text-primary);
+}
+@media (prefers-reduced-motion: reduce) {
+  .gev-hands__mic.is-on {
+    animation: none;
+  }
+}
+.gev-hands__btn {
+  flex: 1;
+  padding: 4px 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.gev-hands__btn:hover,
+.gev-hands__btn:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+}
+/* ☝️ pointer reticle over the map. */
+.gev-hands-reticle {
+  position: fixed;
+  z-index: 119;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 2px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.gev-hands-reticle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  background: #fff;
+}
+.gev-hands-reticle[hidden] {
+  display: none;
+}

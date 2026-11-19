@@ -15,6 +15,10 @@ import {
 } from './realtimeInputPolicy.js';
 import { VOICE_VISUALIZER_BARS } from './control.js';
 import { shouldPauseRadioForVoice } from './realtimeProtocol.js';
+import {
+  registerGestureTalkInput,
+  unregisterGestureTalkInput,
+} from './gestureTalk.js';
 
 /** Own physical push-to-talk gestures, microphone controls and audio meters. */
 export class RealtimeInput {
@@ -55,6 +59,7 @@ export class RealtimeInput {
   /** Registers delayed hold-Space push-to-talk while preserving short control taps. */
   bindPushToTalkShortcut() {
     if (this.shortcutKeyDownHandler) return;
+    registerGestureTalkInput(this);
     this.shortcutKeyDownHandler = (event) => {
       // Space types in chat; it never talks while chat is open, nor while
       // Stories owns the keyboard (body.stories-mode).
@@ -118,27 +123,7 @@ export class RealtimeInput {
         ) {
           this.pushToTalkHoldControl.blur();
         }
-        // Read Radio's claim before pausing it: pausing can change the very
-        // handoff state that decides whether voice may interrupt.
-        const mayInterrupt = this.mayClaimSpeaker?.() ?? true;
-        this.pauseRadioForVoice();
-        this.pushToTalkKeyHeld = true;
-        if (this.isActive()) {
-          // A claimed hold is an explicit request to speak: cut the assistant
-          // off if it is talking. Short taps never reach this point.
-          if (mayInterrupt) this.bargeIn?.();
-          this.beginPointerTurn?.('keydown');
-          this.ui.update('root', { pushToTalk: 'held' });
-          this.setMicrophoneEnabled(true);
-          if (this.status === 'listening')
-            this.setStatus('listening', msg('Release Space to send'));
-        } else {
-          this.start({ pushToTalk: true });
-          // start() performs a controlled stop() before connecting. Restore the
-          // marker it clears so the UI reflects this still-held gesture.
-          if (this.pushToTalkKeyHeld)
-            this.ui.update('root', { pushToTalk: 'held' });
-        }
+        this.claimPushToTalk();
       }, PUSH_TO_TALK_HOLD_DELAY_MS);
     };
     this.shortcutKeyUpHandler = (event) => {
@@ -177,6 +162,53 @@ export class RealtimeInput {
       'visibilitychange',
       this.shortcutVisibilityHandler,
     );
+  }
+
+  /**
+   * Opens the microphone for a claimed push-to-talk gesture: a Space hold that
+   * crossed the delay, or the hand-gesture toggle (src/handControl).
+   * @param {string} [hint] Status line while listening.
+   * @returns {void}
+   */
+  claimPushToTalk(hint = msg('Release Space to send')) {
+    // Read Radio's claim before pausing it: pausing can change the very
+    // handoff state that decides whether voice may interrupt.
+    const mayInterrupt = this.mayClaimSpeaker?.() ?? true;
+    this.pauseRadioForVoice();
+    this.pushToTalkKeyHeld = true;
+    if (this.isActive()) {
+      // A claimed hold is an explicit request to speak: cut the assistant
+      // off if it is talking. Short taps never reach this point.
+      if (mayInterrupt) this.bargeIn?.();
+      this.beginPointerTurn?.('keydown');
+      this.ui.update('root', { pushToTalk: 'held' });
+      this.setMicrophoneEnabled(true);
+      if (this.status === 'listening') this.setStatus('listening', hint);
+    } else {
+      this.start({ pushToTalk: true });
+      // start() performs a controlled stop() before connecting. Restore the
+      // marker it clears so the UI reflects this still-held gesture.
+      if (this.pushToTalkKeyHeld)
+        this.ui.update('root', { pushToTalk: 'held' });
+    }
+  }
+
+  /**
+   * Hand-gesture microphone toggle: the same claim and release as holding
+   * Space, latched between two gestures.
+   * @returns {'listening'|'sent'|'open-mic'} What the toggle did.
+   */
+  toggleGestureTalk() {
+    if (this.pushToTalkKeyHeld) {
+      this.releasePushToTalkKey();
+      return 'sent';
+    }
+    // A click-started session is open-mic: the gesture does not mute it.
+    if (this.isActive() && !this.pushToTalkMode) return 'open-mic';
+    this.cancelPushToTalkHold();
+    this.holdPointer?.();
+    this.claimPushToTalk(msg('Show 🤙 again to send'));
+    return 'listening';
   }
 
   /** Cancels an unclaimed Space hold before it starts voice. */
@@ -404,6 +436,7 @@ export class RealtimeInput {
   }
 
   detachBindings() {
+    unregisterGestureTalkInput(this);
     if (this.shortcutKeyDownHandler)
       document.removeEventListener(
         'keydown',
