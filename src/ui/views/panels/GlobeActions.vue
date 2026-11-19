@@ -4,6 +4,8 @@ import { computed } from 'vue';
 import { t } from '../../../i18n/index.js';
 import { useGlobeActionsStore } from '../../stores/globeActions.js';
 import GlobeCompass from './GlobeCompass.vue';
+import UiButton from '../../kit/UiButton.vue';
+import UiIcon from '../../kit/UiIcon.vue';
 
 // The top-center camera and share actions. The shell answers the buttons
 // through the store and publishes a clear under way, which keeps the button
@@ -24,9 +26,9 @@ const tilted = computed(() => Boolean(camera.value?.tilted));
   <button id="share-btn" type="button" :aria-label="t('Copy share link')" :title="t('Copy share link')" @click="act('share')">
     <span class="share-icon" aria-hidden="true">&#x1F517;</span>
   </button>
-  <button id="tilt-map-view" type="button" :aria-label="tilted ? t('Return map to straight-down view') : t('Tilt map to oblique view')" :aria-pressed="String(tilted)" :title="t('Toggle straight-down and tilted map views')" @click="act('tilt')">
-    <span class="material-symbols-outlined" aria-hidden="true">view_in_ar</span>
-  </button>
+  <UiButton id="tilt-map-view" :aria-label="tilted ? t('Return map to straight-down view') : t('Tilt map to oblique view')" :pressed="tilted" :title="t('Toggle straight-down and tilted map views')" @click="act('tilt')">
+    <UiIcon name="view_in_ar" :size="null" />
+  </UiButton>
   <GlobeCompass @click="act('northUp')" />
   <button id="reset-globe-view" type="button" :aria-label="resetBusy ? t('Resetting to full globe view') : t('Reset to full globe view')" :title="t('Reset camera and return to full globe view')" @click="act('reset')">
     <span class="material-symbols-outlined" aria-hidden="true">public</span>

@@ -37,9 +37,12 @@ one-panel rule too. Share links continue to record which panels are open.
 ## Component kit
 
 `src/ui/kit/` holds the generic components: `UiRail`, `UiTooltip`, `UiIcon`,
-`UiButton`, `UiCloseButton`, `UiPanel`, `UiSegmented`, `UiSlider`, `UiChip`,
-`UiSelect`, `UiSearchField`, `UiCheckbox`, `UiDialog`, `UiBadge` and `UiEmpty` so far, with more
-joining as the controls they serve are converted. One component
+`UiButton`, `UiCloseButton`, `UiPanel`, `UiPanelToggle` (a panel's collapse
+button, which `UiPanel` and `PanelCollapseButton` draw), `UiPanelEdge` (a
+panel header's edge switch), `UiSegmented`, `UiSlider`, `UiChip`,
+`UiSelect`, `UiSearchField`, `UiCheckbox`, `UiDialog`, `UiBadge` and
+`UiEmpty` so far, with more joining as the controls they serve are
+converted. One component
 serves every use of a control, with props for the differences (`UiPanel`'s
 `sideways`, `glow`, `scroll`), rather than a copy per panel. The components
 are styled by the existing stylesheet and custom properties, and they contain
@@ -83,14 +86,20 @@ segmented group in Core is a `UiSegmented`; the old `segmentedControl.js`
 adapter is gone.
 `UiButton` adds `pressedClass`, Core's class on a pressed toggle (most use
 `active`); its pressed classes toggle through `classList`, so a class other
-code adds (a voice highlight) survives a press. Not every pressed toggle in
-the views is one yet: the context view and a few panel buttons still
-hand-write theirs, and
-Bhote Koshi's cinematic button and the tilt-map button have owners that
-write their state into the DOM. Core's
-pressable chips and pills (rail card chips, map sources, cities and places)
-are `UiButton`s too; `UiChip` is a non-interactive label chip, used by
-the voice card.
+code adds (a voice highlight) survives a press. Every pressed toggle (a
+control with `aria-pressed`) in the views is a `UiButton` with `pressed`
+except two that keep their own `aria-pressed`: Bhote Koshi's cinematic
+button, whose state the event layer writes into the attributes its panel
+renders, and Explore's story cards, which are `role="button"` elements,
+not buttons (`src/ui/kit/viewControls.test.mjs` pins it). Where the
+converted buttons draw Material symbols (the tilt-map button, the Context
+header's search and expand, the imported files' row actions and the rail
+chips' icons), the glyphs are `UiIcon`s with `:size="null"`, so the site
+rules still size them. Core's pressable chips and pills (the rail cards'
+chips and action chips, Recent Imagery's day chips, SWAP and ZOOM IN, map
+sources, cities and places) are `UiButton`s too; the view context's place
+and layer chips and the key setup chip are still plain buttons. `UiChip`
+is a non-interactive label chip, used by the voice card.
 The welcome card's buttons (SKIP, the three start tiles, BROWSE STORIES,
 BACK and the main NEXT / ENTER GOD MODE action) are ghost `UiButton`s:
 the start tiles are pressed toggles, and all but SKIP keep `aria-disabled`
@@ -106,11 +115,13 @@ Story screen's Context button and the timeline's Expand map are pressed
 toggles, with no pressed class since their skins read `aria-pressed`;
 Explore's story cards are `role="button"` elements and keep their own
 `aria-pressed`. Their glyphs are inline SVG drawn for Stories, which no
-Material symbol the page loads draws the same, so they stay SVG; the two
-search fields keep their own markup, since `UiSearchField`'s Material
-magnifier would replace their SVG one, and their clear buttons, which draw
-an SVG cross, are ghost `UiButton`s rather than `UiCloseButton`s
-(`src/ui/kit/storiesControls.test.mjs` pins it).
+Material symbol the page loads draws the same, so they stay SVG; the three
+search fields (Explore's two and the Story context sheet's story search, a
+combobox) keep their own markup, since `UiSearchField`'s Material
+magnifier would replace their SVG one, and Explore's two clear buttons,
+which draw an SVG cross, are ghost `UiButton`s rather than
+`UiCloseButton`s (`src/ui/kit/storiesControls.test.mjs` pins it).
+Explore's sort is a `UiSelect`.
 The Omnibar's mic (a pressed toggle with `active`) and its suggestion
 strip's chips (options, so `aria-current` rather than `pressed`) are
 ghost `UiButton`s, and its search, row and chip glyphs are `UiIcon`s with
@@ -153,7 +164,12 @@ options that carry their own attributes come through the slot, a caller's
 `@change` still reaches the select, and `hold` works as in `UiSlider`.
 Without `hold`, a select takes its model back after its own change renders,
 so a pick its owner refuses goes back; an owner that answers later (the SDR
-gain) takes `hold`. Every select in the views is a `UiSelect`.
+gain) takes `hold`. A layer row's range ends are repainted on a later frame
+and may come back reordered (a start picked after the end swaps them), so
+they take a plain `value` instead of a model: a pick stays until the owner
+publishes a different value, which shows at once, focused or not
+(`src/ui/layerPanel/rowRange.test.mjs`). Every select in the views is a
+`UiSelect` (`src/ui/kit/viewControls.test.mjs` pins it).
 `UiBadge` takes a `tone` and carries Core's `gev-status-badge`; its
 density variants and colours stay caller classes, and it renders the CCTV
 source and calibration badges and the rail card badges. `UiEmpty` takes
@@ -165,13 +181,16 @@ empty rows stay a paragraph and table cells.
 no tip unless the site passes a `title`; attributes and classes pass through,
 so each site keeps its id, feature class and look. Every close, dismiss and
 clear button in the views that draws a cross is one
-(`src/ui/kit/closeButtons.test.mjs` pins it) except Story Explore's two
-search clears, whose SVG cross is neither of its glyphs; the Story context
+(`src/ui/kit/closeButtons.test.mjs` and `viewControls.test.mjs` pin it,
+for a bare × or one in a span) except Story Explore's two search clears,
+whose SVG cross is neither of its glyphs, and an imported file's
+Remove, one of the row's icon `UiButton`s (show or hide, fly to, remove)
+that draw the icon the file import names for each. The Story context
 sheet's Close is a text button, a plain `UiButton`. Street Level's and the
-space mission's keep `bare`, since their skins set their own padding and
-border, and so does the credits list's. The
-Quebec CCTV overlay's close is one too, and so is the Omnibar guide's,
-which keeps its feature class and tip.
+space mission's (its deselect and the replay's Cancel) keep `bare`, since
+their skins set their own padding and border, and so does the credits
+list's. The Quebec CCTV overlay's close is one too, and so is the Omnibar
+guide's, which keeps its feature class and tip.
 `UiSearchField` takes `v-model`, a required `label` (the input's
 accessible name), `placeholder` and `tag` (`div`, given `role="search"` by
 the site, or `label`); attributes and classes go to the frame, and
@@ -215,7 +234,8 @@ classes, styles and listeners go to the dialog, and `element` is exposed.
 The Data Library and the scene sharing dialogs are `UiDialog`s
 (`src/ui/kit/dialogs.test.mjs` pins it); the panels drawn as
 `role="dialog"` (key setup, the welcome launcher, the CCTV popup, Story
-Explore's filter, the credits) and the render failure's `alertdialog` are
+Explore's filter, the credits, the Omnibar guide's callout) and the render
+failure's `alertdialog` are
 other controls. The two dialogs share no declarations, so it has no kit
 rules.
 `UiSlider` keeps the native range input rather than drawing a
@@ -227,9 +247,12 @@ are, without Core's slider surface). A caller's own input, change and blur
 handlers still reach the input, and a null model leaves it as it is. It is
 a functional render-function component, so the portable `./ui/input` rows
 use it without a component compiler. Every range in the views is a
-`UiSlider` except the radio tuner's: its owner moves the handle back to the
+`UiSlider` except two. The radio tuner's owner moves the handle back to the
 selected station on a drag's first input without changing the slot, which
-a functional component would not render again.
+a functional component would not render again. The world timeline's
+scrubber is a bare range inside its own gesture track: its `step="any"`
+bounds follow the zoomed view, and a pinch puts the input back on the
+handle itself.
 
 Controls share one skin, so every panel reads the same. Every scrolling
 surface carries the kit's `.ui-scroll`, which draws the thin
@@ -500,14 +523,15 @@ once passes the locale itself as a prop or key, as the credits line does.
    records surface by surface; [Building UI](../CONTRIBUTING.md#building-ui)
    now requires the pattern for new UI. The page-level markup tests read
    `renderApplicationHtml()`, the real views rendered on the server, and new
-   tests mount components; two tests still read a `.vue` file's source
-   (`panelStorageDocs`, `geoFileImport`). The views translate with `t()`
-   while rendering, and vue-i18n holds the locale they read; the attribute
-   translation pass is left for static page markup (the loading screen and a
-   host's own markup). An explicit API for hosts to register panels and rail items is
-   deferred until a host adds one: no host does today (the hosted
-   application's account interface is its own markup), and the first such
-   panel, the hosted timeline, will shape it.
+   tests mount components. Many tests still read `.vue` sources: the kit's
+   control scans in `src/ui/kit/` (`viewControls`, `closeButtons`,
+   `checkboxes`, `dialogs` and the per-surface ones) and markup checks such
+   as `contextTabKeyboard`, `geoFileImport` and `panelStorageDocs`. The
+   views translate with `t()` while rendering, and vue-i18n holds the
+   locale they read; the attribute translation pass is left for static page
+   markup (the loading screen and a host's own markup). An explicit API for
+   hosts to register panels and rail items is deferred until a host needs
+   one.
 
 ## Verification
 

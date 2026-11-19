@@ -6,6 +6,7 @@ import { useVoiceStore } from '../../stores/voice.js';
 import { ASSISTANT_NAME } from '../../../voice/control.js';
 import PanelLayoutButtons from './PanelLayoutButtons.vue';
 import UiCloseButton from '../../kit/UiCloseButton.vue';
+import UiSelect from '../../kit/UiSelect.js';
 
 // The typed chat in the command dock, as its owner (src/voice/chatControl.js)
 // writes the voice control presenter. Messages arrive apart from the view, so
@@ -15,7 +16,6 @@ const store = useVoiceStore();
 const { controls, chat: messages } = storeToRefs(store);
 const emit = (name, ...args) => controls.value?.emit(name, ...args);
 const list = ref(null);
-const layerSelect = ref(null);
 const layerChoice = ref('');
 
 // The input holds what the person types until its owner writes it (history
@@ -55,7 +55,6 @@ watch(messages, (next, previous) => {
 function attachLayer() {
   const value = layerChoice.value;
   layerChoice.value = '';
-  if (layerSelect.value) layerSelect.value.value = '';
   if (value) emit('chat-layer', value);
 }
 
@@ -92,10 +91,10 @@ const quickPrompts = () => [t('Fly to Tokyo'), t('Show live flights')];
     <div id="gev-chat-attach-menu" :hidden="!props.view.chat.attachMenuOpen" @keydown="emit('chat-attach-keydown', $event)">
       <label for="gev-chat-layer">{{ t('Attach a map layer') }}</label>
       <div id="gev-chat-layer-row">
-        <select id="gev-chat-layer" ref="layerSelect" :disabled="props.view.chat.locked" @change="layerChoice = $event.target.value" @keydown.enter.prevent="attachLayer()">
+        <UiSelect id="gev-chat-layer" v-model="layerChoice" :disabled="props.view.chat.locked" @keydown.enter.prevent="attachLayer()">
           <option value="">{{ t('Choose a layer…') }}</option>
           <option v-for="layer in props.view.chat.layers" :key="layer.value" :value="layer.value">{{ layer.label }}</option>
-        </select>
+        </UiSelect>
         <button id="gev-chat-layer-attach" type="button" :disabled="props.view.chat.locked || !layerChoice" @click="attachLayer()">{{ t('Attach layer') }}</button>
       </div>
       <button id="gev-chat-file-button" type="button" :disabled="props.view.chat.locked" @click="emit('chat-file-button')">{{ t('Attach a file') }}</button>

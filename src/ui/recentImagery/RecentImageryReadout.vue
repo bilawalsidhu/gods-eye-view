@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { t } from '../../i18n/index.js';
+import UiButton from '../kit/UiButton.vue';
 import UiCloseButton from '../kit/UiCloseButton.vue';
 import UiSegmented from '../kit/UiSegmented.vue';
 import RailCardBlocks from '../rail/RailCardBlocks.vue';
@@ -51,17 +52,16 @@ const modeOptions = computed(() =>
         aria-live="polite"
         :title="view.notice.text"
         >{{ view.notice.text }}</span
-      ><button
+      ><UiButton
         id="ri-zoom-in"
         :class="[
           'data-toggle-chip ri-zoom-in',
           { 'is-reserved': !view.notice.fit },
         ]"
-        type="button"
         :title="t('Fly in until the view fits the 1,000 km limit')"
         :disabled="!view.notice.fit"
         :aria-hidden="String(!view.notice.fit)"
-        >{{ t('ZOOM IN') }}</button
+        >{{ t('ZOOM IN') }}</UiButton
       ></div
     ><div
       id="ri-strip"
@@ -131,21 +131,18 @@ const modeOptions = computed(() =>
         max="100"
         step="1"
         :aria-label="t('Imagery opacity')"
-        :disabled="!view.opacityEnabled" /><button
+        :disabled="!view.opacityEnabled" /><UiButton
         id="ri-swap"
         :class="[
           'data-toggle-chip ri-swap',
-          {
-            'is-reserved': !view.swap.live,
-            active: view.swap.pressed,
-          },
+          { 'is-reserved': !view.swap.live },
         ]"
-        type="button"
         :title="t('Trade the two sides of the divider')"
         :disabled="!view.swap.live"
         :aria-hidden="String(!view.swap.live)"
-        :aria-pressed="String(view.swap.pressed)"
-        >{{ t('SWAP') }}</button
+        :pressed="Boolean(view.swap.pressed)"
+        pressed-class="active"
+        >{{ t('SWAP') }}</UiButton
       ><div class="ri-exports"
         ><RailCardBlocks
           :blocks="view.exports"
