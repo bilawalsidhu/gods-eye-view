@@ -19,6 +19,7 @@ import AwarenessDirection from './panels/AwarenessDirection.vue';
 import UiButton from '../kit/UiButton.vue';
 import GlobeActions from './panels/GlobeActions.vue';
 import { useGlobeActionsStore } from '../stores/globeActions.js';
+import Omnibar from './panels/Omnibar.vue';
 import RenderFailure from './panels/RenderFailure.vue';
 import WorldTimeline from './panels/WorldTimeline.vue';
 
@@ -90,6 +91,7 @@ const vToastText = {
 
   <!-- Top-center camera and share actions -->
   <GlobeActions />
+  <Omnibar />
   <div id="global-loading-status" role="status" aria-live="polite" aria-atomic="true" :hidden="loading ? loading.hidden : true" :data-state="loading?.state ?? undefined">
     <SplitFlapText id="global-loading-label" :text="loading ? loading.label : t('LOADING LIVE DATA')" :stopped="!!loading?.stopped" />
     <span id="global-loading-detail">{{ loading ? loading.detail : '' }}</span>

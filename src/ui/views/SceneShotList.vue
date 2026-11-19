@@ -161,7 +161,7 @@ function onRenameKey(shot, event) {
                 ><UiIcon name="arrow_downward" :size="12"
               /></UiButton>
               <UiButton
-                tone="alert"
+                tone="danger"
                 class="gev-action-button gev-action-button--danger gev-action-button--compact scene-shot-btn scene-shot-danger"
                 @click="act('remove', shot)"
                 >{{ t('DEL') }}</UiButton

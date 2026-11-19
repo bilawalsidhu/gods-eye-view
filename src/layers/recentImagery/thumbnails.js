@@ -166,6 +166,19 @@ export function createThumbnailLoader({
       const existing = entries.get(key);
       if (existing) {
         touch(existing);
+        if (existing.loading && existing.controller?.signal.aborted) {
+          // Wanted again before the abort settles: a fresh entry, so the old
+          // run cannot discard it.
+          const renewed = {
+            ...existing,
+            priority,
+            loading: false,
+            controller: null,
+          };
+          entries.set(key, renewed);
+          enqueue(renewed);
+          return;
+        }
         if (existing.loading) return;
         if (existing.status === 'unknown') {
           existing.priority = priority;
@@ -210,9 +223,31 @@ export function createThumbnailLoader({
         candidates.length,
         extra,
       );
-      order.forEach((index, priority) => {
+      return order.map((index, priority) => {
         this.request(candidates[index], box, priority);
+        return candidates[index].key;
       });
+    },
+
+    /**
+     * Cancel queued and in-flight work for every key not in `keys`. Settled
+     * entries stay under the LRU; a cancelled re-fetch of a present day keeps
+     * its status.
+     * @param {Iterable<string>} keys
+     */
+    retain(keys) {
+      const wanted = new Set(keys);
+      for (let index = queue.length - 1; index >= 0; index -= 1) {
+        const entry = queue[index];
+        if (wanted.has(entry.key)) continue;
+        queue.splice(index, 1);
+        if (entry.status === 'unknown') entries.delete(entry.key);
+      }
+      for (const entry of [...entries.values()]) {
+        if (!entry.loading || wanted.has(entry.key)) continue;
+        entry.controller?.abort();
+        if (entry.status === 'unknown') entries.delete(entry.key);
+      }
     },
 
     /**

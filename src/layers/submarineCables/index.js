@@ -8,6 +8,7 @@ import { inputFor as defaultInputFor } from '../../input/dispatcher.js';
 export function createSubmarineCableLayer({
   source,
   overlayHost,
+  picking = null,
   inputFor = defaultInputFor,
   mapStackEventTarget = null,
   sweepClock = defaultSweepClock,
@@ -23,6 +24,7 @@ export function createSubmarineCableLayer({
     parts,
     source,
     inputFor,
+    picking,
     mapStackEventTarget,
   };
   parts.rendering = createRendering(context);

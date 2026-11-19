@@ -117,6 +117,7 @@ export const CESIUM_CHECKS = new Set([
   'frame.time',
   'globe.base.vector',
   'globe.imagery',
+  'globe.imagery.decoded',
   'globe.imagery.frames',
   'globe.imagery.video',
   'globe.sky',

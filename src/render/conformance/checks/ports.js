@@ -5426,6 +5426,125 @@ export function portChecks() {
       { capability: 'imageryFrames', bareSky: true },
     ),
     check(
+      'globe.imagery.decoded',
+      'decoded imagery draws the images its source hands over for the slot shown',
+      async (h, r) => {
+        await overAustin(h, r, 200000);
+        const t0 = r.frame.time();
+        const slots = [t0, t0 + 60000, t0 + 120000];
+        const colours = ['#ff0000', '#0000ff', '#00ff00'];
+        const pixels = h.pixels !== false;
+        /** A solid tile of a slot's colour, or a canvas where none is made. */
+        const imageOf = async (slot) => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 16;
+          canvas.height = 16;
+          const g = canvas.getContext('2d');
+          g.fillStyle = colours[slots.indexOf(slot)];
+          g.fillRect(0, 0, 16, 16);
+          return createImageBitmap(canvas);
+        };
+        const asked = [];
+        const source = {
+          kind: 'decoded',
+          slotAt: (ms) => {
+            if (ms < t0 - 30000) return null;
+            let best = slots[0];
+            for (const slot of slots)
+              if (Math.abs(slot - ms) < Math.abs(best - ms)) best = slot;
+            return best;
+          },
+          prefetch: (ms) => slots.filter((slot) => slot > ms),
+          async tile({ tile, slot, signal, urgency }) {
+            asked.push({ slot, urgency });
+            signal.throwIfAborted();
+            // The first ask of each slot is put off: the renderer asks again.
+            if (asked.filter((a) => a.slot === slot).length === 1)
+              return { defer: true };
+            if (tile.level > 0) return { missing: true };
+            return { image: await imageOf(slot) };
+          },
+        };
+        const layer = r.globe.imagery.add({
+          kind: 'single-image',
+          url: PIXEL_PNG,
+          rectangle: {
+            west: AUSTIN.lon - 2,
+            south: AUSTIN.lat - 2,
+            east: AUSTIN.lon + 2,
+            north: AUSTIN.lat + 2,
+          },
+        });
+        const ready = [];
+        layer.on('frameReady', (time) => ready.push(time));
+        const wait = (ms) => new Promise((done) => setTimeout(done, ms));
+        const shows = async (ms, slot, colour, what) => {
+          const before = ready.length;
+          layer.setFrameTime(ms);
+          for (let i = 0; i < 500 && ready.length === before; i++) {
+            await drawn(h, r, 1);
+            await wait(10);
+          }
+          equal(ready.at(-1), slot, `${what}: its slot is ready`);
+          if (!pixels) return;
+          r.frame.renderNow();
+          const s = r.query.project(h.toEcef({ ...AUSTIN, height: 0 }));
+          const image = r.readPixels({
+            crop: {
+              x: Math.round(s.x),
+              y: Math.round(s.y),
+              width: 1,
+              height: 1,
+            },
+          });
+          const [red, green, blue] = image.data;
+          ok(colour(red, green, blue), `${what}: (${red}, ${green}, ${blue})`);
+        };
+        try {
+          throws(
+            () => layer.setFrames({ kind: 'decoded', slotAt: () => null }),
+            'a decoded source with no tile',
+          );
+          layer.setFrames(source, { clock: 'own', prefetch: 1 });
+          await shows(
+            t0 + 10000,
+            t0,
+            (rr, g, b) => rr > 180 && g < 70 && b < 70,
+            'the first slot',
+          );
+          if (pixels) {
+            ok(
+              asked.some((a) => a.slot === t0 && a.urgency === 'shown'),
+              'the slot shown is asked for as shown',
+            );
+            ok(
+              asked.some(
+                (a) => a.slot === t0 + 60000 && a.urgency === 'prefetch',
+              ),
+              'the next slot is asked for ahead, as a prefetch',
+            );
+            ok(
+              !asked.some((a) => a.slot === t0 + 120000),
+              'no more slots are held ahead than prefetch allows',
+            );
+          }
+          await shows(
+            t0 + 65000,
+            t0 + 60000,
+            (rr, g, b) => b > 180 && rr < 70 && g < 70,
+            'the second slot',
+          );
+          ready.length = 0;
+          layer.setFrameTime(t0 - 60000);
+          for (let i = 0; i < 20; i++) await drawn(h, r, 1);
+          deepEqual(ready, [], 'a time with no slot announces nothing');
+        } finally {
+          layer.remove();
+        }
+      },
+      { capability: ['imageryFrames', 'imageryDecoded'], bareSky: true },
+    ),
+    check(
       'globe.withoutImageHooks',
       'without imageHooks, a spec with main-thread tile hooks throws',
       async (h) => {

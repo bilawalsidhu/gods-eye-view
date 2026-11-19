@@ -1980,16 +1980,19 @@ try {
   await wait(12_000);
   check('leaving Contacts restores Transit', await isOn());
 
-  // SPACE MISSIONS
-  await page.evaluate(() =>
-    window.__godsEyeView.dataManager.setEnabled('transit', false, {
-      origin: 'user',
-    }),
-  );
-  await wait(2_000);
-  await page.click('#global-context-missions-btn');
+  // SPACE MISSIONS: an ordinary layer. It neither refuses nor puts away
+  // Transit, so a Transit switched on while it runs stays on after it ends.
+  const setMissions = (enabled) =>
+    page.evaluate(
+      (on) =>
+        window.__godsEyeView.dataManager.setEnabled('rocket-launches', on, {
+          origin: 'user',
+        }),
+      enabled,
+    );
+  await setMissions(true);
   await wait(20_000);
-  const blocked = await page.evaluate(async () => {
+  const beside = await page.evaluate(async () => {
     const settled = await window.__godsEyeView.dataManager.setEnabled(
       'transit',
       true,
@@ -2001,16 +2004,13 @@ try {
     };
   });
   check(
-    'Space Missions refuses to enable Transit while it isolates replay data',
-    blocked.enabled === false,
-    JSON.stringify(blocked),
+    'Transit can be switched on while Space Missions runs',
+    beside.settled !== false && beside.enabled === true,
+    JSON.stringify(beside),
   );
-  await page.click('#global-context-missions-btn');
+  await setMissions(false);
   await wait(12_000);
-  check(
-    'leaving Space Missions leaves Transit off, as it was on entry',
-    (await isOn()) === false,
-  );
+  check('switching Space Missions off leaves Transit on', await isOn());
 
   check(
     'no uncaught page errors',

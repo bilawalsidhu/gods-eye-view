@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { t } from '../../../i18n/index.js';
 import { useStoriesStore } from '../../stores/stories.js';
+import UiButton from '../../kit/UiButton.vue';
 
 /**
  * The right rail over the story map (prototype `.ov-rail`): Open in GEV (it
@@ -25,10 +26,9 @@ async function share() {
 <template>
   <div id="ovRail" class="ov ov-rail">
     <!-- The scene opens in GEV's Scenes panel. -->
-    <button
+    <UiButton
       id="railGev"
       class="rail-btn rail-gev"
-      type="button"
       :aria-label="t('Open this moment in GEV')"
       @click="store.controller.openInGev()"
     >
@@ -36,18 +36,17 @@ async function share() {
         ><svg class="eye" viewBox="0 0 775 520" aria-hidden="true">
           <use href="#gevLogo" /></svg></span
       >{{ t('Open') }}
-    </button>
-    <button
+    </UiButton>
+    <UiButton
       v-if="!localOnly"
       id="railShare"
       class="rail-btn"
-      type="button"
       :aria-label="t('Share this story')"
       @click="share"
     >
       <span class="ic"
         ><span class="share-icon" aria-hidden="true">&#x1F517;</span></span
       >{{ t('Share') }}
-    </button>
+    </UiButton>
   </div>
 </template>
