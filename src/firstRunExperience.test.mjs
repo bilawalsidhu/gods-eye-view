@@ -537,20 +537,13 @@ test('the launcher yields on engage and waits when a surface is already up', () 
 // ── Per-mission behavior ─────────────────────────────────────────────────────
 
 function missionSpy({
-  contextOk = true,
   layerResult = () => true,
   globe = async () => ({ ok: true }),
 } = {}) {
-  const calls = { contextModes: [], layerIds: [], globeFlights: 0 };
+  const calls = { layerIds: [], globeFlights: 0 };
   return {
     calls,
     deps: {
-      setContextMode: async (mode) => {
-        calls.contextModes.push(mode);
-        return contextOk
-          ? { ok: true, mode }
-          : { ok: false, failedLayerIds: ['rocket-launches'] };
-      },
       setLayerEnabled: async (layerId) => {
         calls.layerIds.push(layerId);
         return layerResult(layerId);
@@ -563,14 +556,14 @@ function missionSpy({
   };
 }
 
-test('the menu is the four owner-ordered missions', () => {
+test('the menu is the three owner-ordered missions', () => {
   // INFRASTRUCTURE was removed after the owner playtested it: enabling all
   // three bundled layers at once put ~5,700 entities on a full-earth view and
   // tanked the frame rate. The layers stay reachable by hand and by voice; what
   // went is the one-click globe-scale dump. Restoring the tile needs the
-  // globe-LOD declutter first.
+  // globe-LOD declutter first. Live Contacts was dropped from the product, so
+  // it is not offered as a starting mission either.
   assert.deepEqual(Object.keys(FIRST_RUN_MISSIONS), [
-    'contacts',
     'space-missions',
     'environmental',
     'explore',
@@ -580,21 +573,24 @@ test('the menu is the four owner-ordered missions', () => {
     undefined,
     'the infrastructure mission must be gone, not dormant',
   );
+  assert.equal(
+    FIRST_RUN_MISSIONS.contacts,
+    undefined,
+    'the contacts mission must be gone, not dormant',
+  );
 });
 
-test('Live Contacts and Space Missions go through the one setContextMode facade', async () => {
-  for (const [choice, mode] of [
-    ['contacts', 'contacts'],
-    ['space-missions', 'space-missions'],
-  ]) {
-    const spy = missionSpy();
-    const outcome = await runFirstRunChoice(choice, spy.deps);
-    assert.equal(outcome.ok, true);
-    assert.deepEqual(spy.calls.contextModes, [mode]);
-    // A Context mission owns no layers and no camera of its own — the facade does.
-    assert.deepEqual(spy.calls.layerIds, []);
-    assert.equal(spy.calls.globeFlights, 0);
-  }
+test('Space Missions switches on its layer like a row click, without a flight', async () => {
+  const spy = missionSpy();
+  const outcome = await runFirstRunChoice('space-missions', spy.deps);
+  assert.equal(outcome.ok, true);
+  assert.deepEqual(spy.calls.layerIds, ['rocket-launches']);
+  assert.equal(spy.calls.globeFlights, 0, 'the layer frames the globe itself');
+
+  const refused = missionSpy({ layerResult: () => false });
+  const failed = await runFirstRunChoice('space-missions', refused.deps);
+  assert.equal(failed.ok, false);
+  assert.deepEqual(failed.failedLayerIds, ['rocket-launches']);
 });
 
 test('Environmental enables BOTH its feeds and pulls out to the globe', async () => {
@@ -667,24 +663,9 @@ test('a refused layer fails the mission by name, and a stalled flight never does
 test('Explore manually touches nothing at all, and an unknown choice is inert', async () => {
   const spy = missionSpy();
   assert.equal((await runFirstRunChoice('explore', spy.deps)).ok, true);
-  assert.deepEqual(spy.calls, {
-    contextModes: [],
-    layerIds: [],
-    globeFlights: 0,
-  });
+  assert.deepEqual(spy.calls, { layerIds: [], globeFlights: 0 });
   assert.equal((await runFirstRunChoice('nope', spy.deps)).ok, false);
-  assert.deepEqual(spy.calls, {
-    contextModes: [],
-    layerIds: [],
-    globeFlights: 0,
-  });
-});
-
-test('a failed Context mission reports the layers the facade named', async () => {
-  const spy = missionSpy({ contextOk: false });
-  const outcome = await runFirstRunChoice('space-missions', spy.deps);
-  assert.equal(outcome.ok, false);
-  assert.deepEqual(outcome.result.failedLayerIds, ['rocket-launches']);
+  assert.deepEqual(spy.calls, { layerIds: [], globeFlights: 0 });
 });
 
 test('the fires/quakes tile name is switchable from one constant', () => {
@@ -735,22 +716,10 @@ test('no mission writes a preference the visitor did not choose by picking it', 
     );
   }
 
-  // The only durable panel write is the Context reveal, and only on the Context
-  // missions — the globe missions open no panel at all.
-  const panelWrites = code.match(/setPanelCollapsed/g) || [];
-  assert.equal(
-    panelWrites.length,
-    1,
-    'exactly one panel reveal, on the Context path',
-  );
-  const contextPath = code.slice(
-    code.indexOf('setContextMode: async (mode)'),
-    code.indexOf('setLayerEnabled:'),
-  );
-  assert.match(
-    contextPath,
-    /result\?\.ok[\s\S]*?setPanelCollapsed\?\.\('global-context-panel', false, \{\s*explicit: true,?\s*\}\)/,
-  );
+  // No mission writes panel chrome: the globe missions open no panel at all,
+  // and Space Missions' panel opens the way its layer row's switch opens it.
+  assert.doesNotMatch(code, /setPanelCollapsed/);
+  assert.doesNotMatch(code, /setContextMode/);
 });
 
 test('the decision table is written down where the next editor will read it', () => {
@@ -787,55 +756,21 @@ test('markup, startup ordering and accessibility remain pinned', async () => {
     html,
     /id="first-run-launcher" role="dialog"[^>]*aria-labelledby="first-run-title"[^>]*hidden/,
   );
-  assert.equal((html.match(/data-first-run-choice=/g) || []).length, 4);
+  assert.equal((html.match(/data-first-run-choice=/g) || []).length, 0);
+  assert.match(html, /data-first-run-next/);
+  assert.ok(
+    html.includes(
+      '<p id="first-run-description">It feels like a forbidden cockpit—then you realize the sources are public and the data is real.</p>',
+    ),
+    'the maintainer-authored first-run line stays verbatim',
+  );
   assert.match(
     html,
     /data-first-run-status[^>]*role="status"[^>]*aria-live="polite"/,
   );
-  assert.match(html, /<input type="checkbox" data-first-run-suppress\s*\/?>/);
-  assert.match(html, /<strong data-first-run-environmental-title>/);
-  // Subcopy must name BOTH feeds the tile turns on — a tile that promised only
-  // half of what it does is the defect this replaced. Only the VISIBLE <small>
-  // text counts; the comment beside it naturally says the words too.
-  const envTile = html.slice(
-    html.indexOf('data-first-run-choice="environmental"'),
-  );
-  const visible = envTile.slice(
-    envTile.indexOf('<small>'),
-    envTile.indexOf('</small>'),
-  );
-  assert.match(visible, /earthquakes/i);
   assert.match(
-    visible,
-    /fires?/i,
-    'the tile must promise the fires it enables',
-  );
-
-  // The card's one persuasive line is OWNER-AUTHORED and pinned verbatim,
-  // unspaced em dash included. This is copy, not prose to be improved in a
-  // passing edit — changing it needs the owner, not a nicer-sounding rewrite.
-  assert.ok(
-    html.includes(
-      '<p id="first-run-description">It feels like a forbidden cockpit' +
-        '—then you realize the sources are public and the data is real.</p>',
-    ),
-    'the owner-authored first-run line must ship exactly as written',
-  );
-
-  // Menu order is the owner's, read straight off the markup.
-  const order = [...html.matchAll(/data-first-run-choice="([a-z-]+)"/g)].map(
-    (match) => match[1],
-  );
-  assert.deepEqual(order, [
-    'contacts',
-    'space-missions',
-    'environmental',
-    'explore',
-  ]);
-  assert.doesNotMatch(
     html,
-    /data-first-run-choice="infrastructure"/,
-    'the removed tile must leave no markup behind',
+    /<input type="checkbox" class="ui-checkbox__input" data-first-run-suppress\s*\/?>/,
   );
 
   assert.match(startup, /styleManager\.initialRestorePromise/);
@@ -891,37 +826,153 @@ test('markup, startup ordering and accessibility remain pinned', async () => {
   assert.match(choicesBlock, /overflow-y: auto;/);
 });
 
+test('the header text keeps clear of the centred step dots', () => {
+  const css = fs.readFileSync(
+    new URL('./ui/styles/first-run.css', import.meta.url),
+    'utf8',
+  );
+  // Above 620px the dots are absolutely centred over the header row, so the
+  // kicker and Skip must stop short of them; long locales then wrap.
+  assert.match(css, /\.first-run-dots \{\s*position: absolute;\s*left: 50%;/);
+  assert.match(
+    css,
+    /@media \(min-width: 621px\) \{\s*\.first-run-kicker,\s*\.first-run-dismiss \{\s*max-width: calc\(50% - 2\.4rem\);\s*\}\s*\}/,
+  );
+  assert.match(
+    css,
+    /@media \(max-width: 620px\) \{\s*\.first-run-dots \{\s*position: static;/,
+  );
+});
+
+test('reduced motion stops every first-run animation, however specific', () => {
+  const css = fs.readFileSync(
+    new URL('./ui/styles/first-run.css', import.meta.url),
+    'utf8',
+  );
+  // Every rule that starts an infinite animation must be matched by a
+  // reduced-motion rule at least as specific, or the animation keeps running.
+  const reduced = [
+    ...css.matchAll(
+      /@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/g,
+    ),
+  ]
+    .map((m) => m[1])
+    .join('\n');
+  const squash = (selector) => selector.replace(/\s+/g, ' ').trim();
+  const reducedSelectors = new Set(
+    [...reduced.matchAll(/([^{}]+)\{[^}]*animation: none/g)].flatMap((m) =>
+      m[1].split(/,(?![^(]*\))/).map(squash),
+    ),
+  );
+  const animated = [
+    ...css.matchAll(/([^{}@]+)\{[^}]*animation: [^;]*infinite/g),
+  ]
+    .flatMap((m) => m[1].split(/,(?![^(]*\))/).map(squash))
+    .filter((selector) => !selector.startsWith('/*'));
+  assert.ok(animated.length > 5, 'found the animated rules');
+  const covered = (selector) => {
+    if (reducedSelectors.has(selector)) return true;
+    // An :is() group in the reduced block covers each of its members.
+    return [...reducedSelectors].some((reducedSelector) => {
+      const group = reducedSelector.match(/^(.*) :is\(([^)]*)\)$/);
+      return (
+        group &&
+        group[2]
+          .split(',')
+          .map((part) => `${group[1]} ${part.trim()}`)
+          .includes(selector)
+      );
+    });
+  };
+  const missing = animated.filter((selector) => !covered(selector));
+  assert.deepEqual(missing, [], 'animations reduced motion leaves running');
+});
+
+test('the welcome backdrop tints the globe without blurring it', () => {
+  const css = fs.readFileSync(
+    new URL('./ui/styles/first-run.css', import.meta.url),
+    'utf8',
+  );
+  const backdrop = css.match(/\.first-run-backdrop \{([^}]*)\}/)?.[1] || '';
+  assert.match(backdrop, /background: rgba\(3, 8, 14, 0\.28\);/);
+  assert.match(backdrop, /pointer-events: none;/, 'click-through');
+  assert.doesNotMatch(backdrop, /backdrop-filter/);
+});
+
+test('every outbound first-run link opens without opener or referrer', () => {
+  const view = fs.readFileSync(
+    new URL('./ui/views/WelcomeView.vue', import.meta.url),
+    'utf8',
+  );
+  const links = view.match(/<a [^>]*target="_blank"[^>]*>/g) || [];
+  assert.ok(links.length >= 7, 'the source and Halfpixel chips are outbound');
+  for (const link of links) {
+    assert.match(link, /rel="noopener noreferrer"/, link);
+  }
+});
+
+test('the Stories announcement waits behind the welcome card', () => {
+  const css = fs.readFileSync(
+    new URL('./ui/styles/first-run.css', import.meta.url),
+    'utf8',
+  );
+  // Hidden, not consumed: the popup keeps its unseen state and appears once
+  // the card is dismissed.
+  assert.match(
+    css,
+    /body:has\(#first-run-launcher\) #gev-stories #hPop,\s*body\.first-run-opening-stories #gev-stories #hPop \{\s*visibility: hidden;\s*pointer-events: none;\s*\}/,
+  );
+  // The selector only works while Stories still renders the popup as #hPop
+  // inside #gev-stories.
+  const stories = fs.readFileSync(
+    new URL('./ui/views/StoriesView.vue', import.meta.url),
+    'utf8',
+  );
+  const root = stories.indexOf('<div id="gev-stories"');
+  const popup = stories.indexOf('id="hPop"');
+  assert.ok(root >= 0, 'StoriesView renders #gev-stories');
+  assert.ok(popup > root, 'StoriesView renders #hPop inside #gev-stories');
+});
+
 test('the card closes without a keyboard: the ESC hint is a button, kept on phones', async () => {
   const html = await renderApplicationHtml(
     fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8'),
   );
   // The whole stylesheet, so a hide rule added in any other file is caught too.
   const css = readStylesheet(new URL('../style.css', import.meta.url));
-  const footer = html.slice(
-    html.indexOf('class="first-run-footer"'),
-    html.indexOf('data-first-run-status'),
+  const header = html.slice(
+    html.indexOf('class="first-run-header"'),
+    html.indexOf('id="first-run-title"'),
   );
   assert.match(
-    footer,
+    header,
     /<button type="button" class="first-run-dismiss" data-first-run-dismiss>/,
   );
-  assert.match(footer, />ESC to dismiss</);
-  assert.match(footer, />DISMISS</);
+  assert.match(header, />SKIP · ESC</);
+  assert.match(header, />SKIP</);
   // It closes the way ESC does, through the one dismiss path, so the session
   // flag and focus handling are the same: firstRunLauncherView.test.mjs.
   // Phones used to hide the hint, leaving no way out but picking a mission.
-  assert.doesNotMatch(css, /first-run-footer > span:last-child/);
   assert.doesNotMatch(css, /\.first-run-dismiss\s*\{[^}]*display:\s*none/);
-  // A 44px touch target that does not add to the footer row's height.
+  // A 44px touch target that does not add to the header row's height.
   assert.match(
     css,
     /\.first-run-dismiss::before \{[^}]*position: absolute;[^}]*height: 44px;/,
   );
   assert.doesNotMatch(css, /\.first-run-dismiss \{[^}]*min-height/);
-  // Touch screens read DISMISS rather than a key they do not have.
+  // Touch screens read SKIP rather than a key they do not have.
   assert.match(
     css,
     /@media \(hover: none\) and \(pointer: coarse\) \{\s*\.first-run-dismiss-key \{\s*display: none;/,
+  );
+});
+
+test('a short landscape phone keeps the card inside the viewport', () => {
+  const css = readStylesheet(new URL('../style.css', import.meta.url));
+  // Above the tab bar, never taller than the space left between it and the top.
+  assert.match(
+    css,
+    /body\.mobile-shell #first-run-launcher \{[^}]*bottom: 5\.8rem;[^}]*max-height: calc\(100dvh - 6\.55rem\);/,
   );
 });
 
@@ -934,7 +985,8 @@ test('the launcher keeps focus, restores it, and never disables the focused butt
   // drops the keyboard to <body> and strands the visitor outside the launcher
   // (firstRunLauncherView.test.mjs renders it).
   assert.doesNotMatch(module, /\.disabled = /);
-  // Tab is confined to the launcher, and ESC always releases it.
+  // Tab cycles inside the launcher once focus is in it, and ESC always
+  // releases it.
   const keyboard = fs.readFileSync(
     new URL('./ui/surfaceKeyboard.js', import.meta.url),
     'utf8',
@@ -998,9 +1050,9 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   );
   const hudLayout = legacyTools.find((tool) => tool.name === 'set_hud')
     .parameters.properties.layout;
-  assert.deepEqual(hudLayout.enum, ['tactical', 'minimal', 'cyber']);
-  // Cyber deliberately adds one layout and Operator was retired; first-run
-  // missions still change no tools.
+  assert.deepEqual(hudLayout.enum, ['tactical', 'minimal']);
+  // Operator and then Cyber were retired; first-run missions still change
+  // no tools.
   hudLayout.enum = ['tactical', 'operator', 'minimal'];
   const cameraMotion = legacyTools.find((tool) => tool.name === 'move_camera')
     .parameters.properties.motion;
@@ -1033,6 +1085,11 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   delete camera.pitchDeg;
   camera.direction.description =
     'Required for pan/tilt/rotate; orbit/rotate_globe default right.';
+  // The Space Missions panel is a later, separate set_panel_open target.
+  const panels = legacyTools.find((tool) => tool.name === 'set_panel_open')
+    .parameters.properties.panelId;
+  assert.ok(panels.enum.includes('space-missions-panel'));
+  panels.enum = panels.enum.filter((id) => id !== 'space-missions-panel');
   const block = JSON.stringify(legacyTools);
   // Re-derived for the voice layer manifest (generated layer enums, alias and
   // field hints), point-and-ask's pointer/referent arguments and the prompt

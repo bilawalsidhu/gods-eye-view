@@ -231,9 +231,6 @@ async function boot(page, url) {
   await page.waitForFunction(() => Boolean(window.__godsEyeView?.dataManager), {
     timeout: 150_000,
   });
-  await page.evaluate(() =>
-    document.querySelector('.first-run-explore')?.click(),
-  );
   await page.keyboard.press('Escape');
   await page.evaluate(() => {
     for (const el of document.querySelectorAll(

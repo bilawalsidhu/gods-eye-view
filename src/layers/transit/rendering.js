@@ -43,6 +43,7 @@ import {
   transitModelSpec,
 } from '../../data/fleetModels.js';
 import { createFleetModelLayer } from '../../data/fleetModelInstances.js';
+import { groundVehiclePartState } from '../../data/modelPartDrivers.js';
 
 /** Layers built so far, so each one's draw sets have ids of their own. */
 let instances = 0;
@@ -944,6 +945,25 @@ export function createRendering({ state, services, parts }) {
       display: fleet.display,
       policy: fleet.policy,
       resolveAsset: fleet.resolveAsset,
+      partState: vehiclePartState,
+    });
+  }
+
+  /**
+   * Wheels rolling at the speed it is drawn moving at (else its reported
+   * one), doors open while it stands at a stop.
+   */
+  function vehiclePartState(item, table) {
+    const entry = item.entry;
+    const drawn = entry?.sample?.segmentSpeedMps;
+    const reported = entry?.record?.speedMps;
+    return groundVehiclePartState(table, {
+      speedMps: Number.isFinite(drawn)
+        ? drawn
+        : Number.isFinite(reported)
+          ? reported
+          : null,
+      atStop: entry?.record?.status === 'STOPPED_AT',
     });
   }
 
@@ -1134,13 +1154,18 @@ export function createRendering({ state, services, parts }) {
       visibility.noSample = noSample;
       const wasShown = entry.marker.show;
       const wasVisible = state._visible.has(entry);
+      // Just let go of a hold (cockpitSubject.js): it played on, so keep
+      // its clock.
+      const playedOn = entry.releasedFromHold === true;
+      entry.releasedFromHold = false;
       if (visible) state._visible.add(entry);
       else state._visible.delete(entry);
       // Turned afresh once back in view: the camera may have moved while it
       // was out, after the pass that would have turned it.
       if (visible && !wasVisible) entry.rotationCourse = undefined;
       if (visible && entry.track?.count) {
-        if (!wasVisible && !entry.qaFixture) syncPlayback(entry, now);
+        if (!wasVisible && !playedOn && !entry.qaFixture)
+          syncPlayback(entry, now);
         // Re-entry can advance into an unprepared corridor; loaded tiles can
         // also resolve a cold path without a poll or a render-loop wakeup.
         if (!wasVisible || entry.surfaceReady === false || entry.heightPending)

@@ -145,6 +145,7 @@ export function createQueries({
       derivedSpeedMps: flightState._drSpeedMps,
       derivedTrackDeg: flightState._drCourseDeg,
       reportedSpeedMps: info?.velocity,
+      derivedFromPlacement: flightState._drSpeedPlaced === true,
       reportedTrackDeg: info?.true_track,
     });
     const carto = toLonLatH(basePos);
@@ -345,11 +346,11 @@ export function createQueries({
 
     /**
      * Live layer params.
-     * `models3d` toggles 3D glTF model rendering for the FLEET (altitude-gated): when on,
-     * surrounding aircraft become 3D models once the camera is zoomed in past MODEL_ALT_CEIL_M.
+     * `models3d` toggles 3D glTF model rendering for the FLEET: when on, aircraft within
+     * MODEL_ADD_M (3 km) of the camera become 3D models, drawn at their true size.
      * The TRACKED contact follows the same rule (`_trackedModelRegimeActive`), so selecting
      * a contact never turns its icon into a model or its model into an icon.
-     * `models3dMode` is 'proximity' (nearest MODEL_MAX in view) or 'all' (every in-view plane).
+     * `models3dMode` is 'proximity' (cap MODEL_MAX) or 'all' (cap MODEL_MAX_ALL); both use the 3 km radius.
      * @param {{models3d?: boolean, models3dMode?: 'proximity'|'all', selectedFlightsTrackingId?: string|null}} params
      */
     setParams(params = {}, { origin = 'programmatic' } = {}) {

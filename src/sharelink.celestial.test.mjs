@@ -158,6 +158,37 @@ test('share-link serialization emits the current celestial state', () => {
   assert.equal(new URLSearchParams(window.location.hash.slice(1)).get('cr'), '1');
 });
 
+test('Sonar beside the HUD layout rides as hs only when on, and through the compact link', async () => {
+  // Links made before `hs` name no Sonar.
+  assert.equal(makeManager('#v=2&lat=10&lon=20&hud=minimal').parseInitialHash().hudSonar, false);
+  assert.equal(makeManager('#v=2&lat=10&lon=20&hud=minimal&hs=1').parseInitialHash().hudSonar, true);
+
+  const manager = makeManager();
+  manager.onToggleChange(false, false, { hudVariant: 'minimal', hudSonar: false });
+  assert.equal(manager._buildHashParams().has('hs'), false, 'off writes nothing');
+  assert.equal(sharedState(manager.buildLink()).hudSonar, false);
+  manager.onToggleChange(false, false, { hudVariant: 'minimal', hudSonar: true });
+  assert.equal(manager._buildHashParams().get('hs'), '1');
+  const shared = sharedState(manager.buildLink());
+  assert.equal(shared.hudVariant, 'minimal');
+  assert.equal(shared.hudSonar, true);
+  // Tactical with Sonar is written as the Cyber layout code alone.
+  manager.onToggleChange(false, false, { hudVariant: 'cyber', hudSonar: false });
+  assert.equal(manager._buildHashParams().get('hud'), 'cyber');
+  assert.equal(manager._buildHashParams().has('hs'), false);
+  assert.equal(sharedState(manager.buildLink()).hudVariant, 'cyber');
+  clearTimeout(manager._debounceTimer);
+
+  // The restore hands it to the visual settings beside the layout.
+  const opened = makeManager('#v=2&lat=40&lon=-74&hud=minimal&hs=1');
+  let restored = null;
+  opened._onRestore = (state) => { restored = state; };
+  opened._isNavigationCurrent = () => false;
+  await opened.applyState(opened.parseInitialHash(), { navigationToken: 1 });
+  assert.equal(restored.hudVariant, 'minimal');
+  assert.equal(restored.hudSonar, true);
+});
+
 test('generated links are v2 and include deterministic layers, options, style params, and panels', () => {
   const manager = makeManager();
   const layers = createDefaultLayerState();
@@ -243,6 +274,24 @@ test('a collapsed Street Level panel survives the share-link round trip', () => 
   assert.deepEqual(restored.panelState, { specs: [
     { id: 'cctv-panel', collapsed: false, pinned: null },
     { id: 'street-level-panel', collapsed: true, pinned: null },
+  ] });
+});
+
+test('an open Space Missions panel survives the share-link round trip', () => {
+  const manager = makeManager();
+  manager.setPanelStateProvider(() => ({ specs: [
+    { id: 'global-context-panel', collapsed: true },
+    { id: 'space-missions-panel', collapsed: false },
+  ] }));
+  clearTimeout(manager._debounceTimer);
+  manager._updateHash();
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  assert.equal(params.get('ui'), 'g.c.1_n.c.0');
+  const restored = makeManager(`#v=2&lat=10&lon=20&ui=${params.get('ui')}`)
+    .parseInitialHash();
+  assert.deepEqual(restored.panelState, { specs: [
+    { id: 'global-context-panel', collapsed: true, pinned: null },
+    { id: 'space-missions-panel', collapsed: false, pinned: null },
   ] });
 });
 
@@ -542,6 +591,7 @@ test('every explicit visual UI gesture claims restore authority before it mutate
   const gestureRoutes = [
     ['toggleHud: () => {', 'toggleOrbit: () =>', 'this.hud.toggle()', 'HUD hotkey'],
     ['cycleDetection: () => {', 'toggleCctv: () =>', 'cycleDetectionMode()', 'detection hotkey'],
+    ['toggleSonar:', 'setSonarRings:', 'this._setCyberSonarEnabled(', 'Sonar toggle'],
     ['toggleBloom:', 'setBloomIntensity:', 'this._setBloomEnabled(', 'toggleBloom control'],
     ['setBloomIntensity:', 'toggleSharpen:', 'this._setBloomIntensity(', 'setBloomIntensity control'],
     ['toggleSharpen:', 'setScopeEnabled:', 'this._setSharpenEnabled(', 'toggleSharpen control'],
@@ -595,17 +645,11 @@ test('explicit Context transitions claim the visual restore lane before transiti
 
   assert.match(uiSource, /claimVisualAuthority: \(\) =>\s*this\.shareLinkManager\?\.claimRestoreLane\?\.\('visual'\)/);
   const contextPanel = _initGlobalContextPanel.toString();
-  for (const [start, end, label] of [
-    ["this.listen(this._globalContextFlightsBtn, 'click'", "this.listen(this._globalContextMissionsBtn, 'click'", 'Contacts tab'],
-    ["this.listen(this._globalContextMissionsBtn, 'click'", 'CONTEXT_PANEL_END', 'Space Missions tab'],
-  ]) {
-    const startIndex = contextPanel.indexOf(start);
-    const endIndex = end === 'CONTEXT_PANEL_END'
-      ? contextPanel.length
-      : contextPanel.indexOf(end, startIndex + start.length);
-    assert.ok(startIndex >= 0 && endIndex > startIndex, `${label} route is missing`);
-    assertContextClaimsBefore(contextPanel.slice(startIndex, endIndex), 'this._selectContextMode(', label);
-  }
+  const contacts = contextPanel.slice(
+    contextPanel.indexOf("this.listen(this._globalContextFlightsBtn, 'click'"),
+    contextPanel.indexOf("this.listen(this._installationsSearchBtn, 'click'"),
+  );
+  assertContextClaimsBefore(contacts, 'this._selectContextMode(', 'Contacts tab');
 
   // The voice/tool facade validates the mode first, then transitions.
   const facade = setContextMode.toString();

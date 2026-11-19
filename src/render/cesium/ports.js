@@ -49,6 +49,8 @@ const GLOBE_CAPABILITIES = [
   'imageHooks',
   // Timed imagery: a layer a frame, prefetched unseen (`imagery.js`).
   'imageryFrames',
+  // Timed imagery handed over as finished images (`imageryFrames.js`).
+  'imageryDecoded',
   'surfaceIdentity',
   'surfaceShading',
   // A MapLibre style's vector tiles, painted as imagery (`vectorBase.js`).
@@ -70,6 +72,8 @@ const GLOBE_CAPABILITIES = [
 export function cesiumCapabilities(scene, only) {
   const all = [
     'models',
+    // Moving parts posed in a custom shader per posed model (`drawModels.js`).
+    'modelParts',
     // Cesium scatters drawn models through the atmosphere wherever the
     // scene draws fog (its models' atmosphere stage).
     'modelAtmosphere',

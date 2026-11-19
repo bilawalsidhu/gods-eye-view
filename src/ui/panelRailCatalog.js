@@ -31,6 +31,10 @@ export const PANEL_RAIL_ITEMS = Object.freeze({
   },
   'street-level-panel': { icon: 'streetview', label: msg('STREET LEVEL') },
   'global-context-panel': { icon: 'radar', label: msg('CONTEXT') },
+  'space-missions-panel': {
+    icon: 'rocket_launch',
+    label: msg('Space Missions'),
+  },
 });
 
 /**

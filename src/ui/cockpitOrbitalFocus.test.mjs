@@ -31,6 +31,7 @@ import CockpitView from './views/CockpitView.vue';
 import ContextView from './views/ContextView.vue';
 import IntelHudView from './views/IntelHudView.vue';
 import { claimPointer, releasePointer } from '../data/inputOwnership.js';
+import { setClickCardHitTest } from '../data/pickRegistry.js';
 import { ORBITAL_FOCUS_EASE_TAU_MS } from '../cockpitOrbitalFocus.js';
 import { ORBITAL_HOP_MS } from '../cockpitOrbitalSatellites.js';
 
@@ -646,6 +647,23 @@ test('a click a tool owns is left alone', async (t) => {
   t.after(() => releasePointer(again));
   scene.click(EMPTY_GROUND);
   assert.equal(scene.cockpit.orbital.focus.key, SITES.alpha.id, 'kept while drawing');
+});
+
+// The card or label painted on top takes the click: a site under another
+// layer's card does not focus, and a click there does not end a held focus.
+test('another layer\'s card over the orbital view keeps the click', async (t) => {
+  const scene = await inOrbit(t);
+  let top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  setClickCardHitTest(() => top);
+  t.after(() => setClickCardHitTest(null));
+  scene.click(SITES.alpha.at);
+  assert.equal(scene.cockpit.orbital.focus ?? null, null, 'covered: no focus');
+  top = null;
+  scene.click(SITES.alpha.at);
+  assert.equal(scene.cockpit.orbital.focus.key, SITES.alpha.id);
+  top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  scene.click(EMPTY_GROUND);
+  assert.equal(scene.cockpit.orbital.focus.key, SITES.alpha.id, 'covered: kept');
 });
 
 test('a double-click on a site focuses it and keeps the orbital view', async (t) => {

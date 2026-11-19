@@ -903,12 +903,11 @@ test('manual Context opens the existing transaction without disabling the tracke
   }
 });
 
-test('manual Context respects Space Missions, busy transitions, missing tracks and disposal', async () => {
+test('manual Context respects an active mode, busy transitions, missing tracks and disposal', async () => {
   for (const state of [
-    { mode: 'space-missions' },
     { mode: 'flights' },
     { changing: true },
-    { entering: 'space-missions' },
+    { entering: 'flights' },
     { noTrack: true },
     { disposed: true },
     { sheet: 'layers' },

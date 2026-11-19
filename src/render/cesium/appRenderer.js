@@ -218,6 +218,8 @@ export function createCesiumRendererPlugin({
         // Whether an entity is one of the viewer's own (Cockpit asks whether
         // the aircraft it flies still draws).
         viewerDrawsEntity: (entity) => viewer.entities.contains(entity),
+        // An application drawing with Cesium itself beside the contract.
+        engine: Object.freeze({ kind: 'cesium', viewer }),
         // QA scripts drive and read the viewer itself.
         qaHandles: {
           viewer,

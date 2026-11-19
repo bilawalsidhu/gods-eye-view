@@ -76,7 +76,10 @@ export function createCards({
     const height = canvas.clientHeight;
     let ambientCount = 0;
 
-    for (const candidate of layerState._labelCandidates) {
+    // An application drawing the detections in place of the markers draws
+    // them unlabelled: only the selected fire's card shows then.
+    const candidates = layerState._standIn ? [] : layerState._labelCandidates;
+    for (const candidate of candidates) {
       if (ambientCount >= MAX_AMBIENT_LABELS) break;
       if (candidate.fire && candidate.fire === layerState._selectedFire)
         continue;

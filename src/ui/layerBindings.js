@@ -50,6 +50,9 @@ export class LayerBindings {
   get _contextControls() {
     return this.readControls()._contextControls;
   }
+  get _spaceMissionsControls() {
+    return this.readControls()._spaceMissionsControls;
+  }
   get _cctvControls() {
     return this.readControls()._cctvControls;
   }
@@ -158,6 +161,15 @@ export class LayerBindings {
       });
       this._weatherShellModules.push(news);
     }
+    // Bike share flies into a covered city from its marker the same way.
+    const bikeshare = this._dataManager?.layers?.get('bikeshare')?.module;
+    if (typeof bikeshare?.attachShellServices === 'function') {
+      bikeshare.attachShellServices({
+        runNavigation: (navigate) =>
+          this.runImmediateNavigation('bike share', navigate),
+      });
+      this._weatherShellModules.push(bikeshare);
+    }
   }
 
   _persistAwarenessSelection(event, cleared = false) {
@@ -245,6 +257,7 @@ export class LayerBindings {
       this._dataManagerUnsubscribe = null;
     }
     this._contextControls.connect(this._dataManager);
+    this._spaceMissionsControls?.connect(this._dataManager);
     if (typeof this._dataManager?.subscribe === 'function') {
       this._dataManagerUnsubscribe = this._dataManager.subscribe((change) => {
         this._feedback._loadingFeedbackEvent = change;
@@ -310,6 +323,7 @@ export class LayerBindings {
     this._directionsShellModule?.attachShellServices?.(null);
     this._directionsShellModule = null;
     this._dataManager = null;
+    this._spaceMissionsControls?.connect(null);
     this._connectWeatherCamera();
   }
 }
