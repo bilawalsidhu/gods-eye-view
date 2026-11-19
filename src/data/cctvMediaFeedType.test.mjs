@@ -111,6 +111,7 @@ function mount(t, respond) {
     austin: process.env.CCTV_FORCE_AUSTIN,
     serverKey: process.env.GOOGLE_MAPS_SERVER_API_KEY,
     browserKey: process.env.GOOGLE_MAPS_API_KEY,
+    rateLimit: process.env.GEV_RATELIMIT_GOOGLE_PER_MIN,
   };
   process.env.CCTV_SOURCES_JSON = JSON.stringify([
     STILL,
@@ -125,6 +126,8 @@ function mount(t, respond) {
   // than a network call this file does not model.
   delete process.env.GOOGLE_MAPS_SERVER_API_KEY;
   delete process.env.GOOGLE_MAPS_API_KEY;
+  // The default Google budget, whatever the shell sets.
+  delete process.env.GEV_RATELIMIT_GOOGLE_PER_MIN;
   const nativeFetch = globalThis.fetch;
   const requests = [];
   globalThis.fetch = async (url, init = {}) => {
@@ -139,6 +142,7 @@ function mount(t, respond) {
       ['CCTV_FORCE_AUSTIN', before.austin],
       ['GOOGLE_MAPS_SERVER_API_KEY', before.serverKey],
       ['GOOGLE_MAPS_API_KEY', before.browserKey],
+      ['GEV_RATELIMIT_GOOGLE_PER_MIN', before.rateLimit],
     ]) {
       if (value === undefined) delete process.env[name];
       else process.env[name] = value;
@@ -155,9 +159,9 @@ function mount(t, respond) {
   });
   assert.ok(handler, 'the CCTV provider must mount a middleware');
 
-  const call = async (path, headers = {}) => {
+  const call = async (path, headers = {}, socket) => {
     const { res, done } = recordingResponse();
-    await handler({ url: path, headers, method: 'GET', on() {} }, res);
+    await handler({ url: path, headers, method: 'GET', on() {}, socket }, res);
     await done;
     return res;
   };
@@ -554,4 +558,44 @@ test('the Street View fallback frames catalog cameras only, from the catalog pos
   assert.equal(steered.headers['X-CCTV-Source'], 'streetview');
   const location = new URL(streetView()[0].url).searchParams.get('location');
   assert.equal(location, `${STILL.lat},${STILL.lon}`);
+  assert.equal(new URL(streetView()[0].url).searchParams.get('heading'), '90');
+});
+
+test('the Street View fallback spends a per-IP Google budget, and only with a key', async (t) => {
+  const app = mount(t, ({ url }) =>
+    url.startsWith('https://maps.googleapis.com/')
+      ? trackedUpstream({
+          headers: { 'content-type': 'image/jpeg' },
+          body: 'street-view',
+        }).response
+      : upstreamResponse({ status: 503 }),
+  );
+  // Read when the first keyed fallback builds the limiter, so after mount().
+  process.env.GEV_RATELIMIT_GOOGLE_PER_MIN = '2';
+  const streetViewCalls = () =>
+    app.requests.filter(({ url }) =>
+      url.startsWith('https://maps.googleapis.com/'),
+    ).length;
+  const first = { remoteAddress: '203.0.113.7' };
+  const frameSource = async (socket) =>
+    (await app.call(`/frame/${STILL.id}`, {}, socket)).headers['X-CCTV-Source'];
+
+  // Without a key nothing is spent.
+  for (let i = 0; i < 3; i++)
+    assert.equal(await frameSource(first), 'synthetic');
+  assert.equal(streetViewCalls(), 0);
+
+  process.env.GOOGLE_MAPS_SERVER_API_KEY = 'fixture-key';
+  assert.deepEqual(
+    [await frameSource(first), await frameSource(first), await frameSource(first)],
+    ['streetview', 'streetview', 'synthetic'],
+  );
+  assert.equal(streetViewCalls(), 2, 'no Google call over the budget');
+
+  // Another address has a budget of its own.
+  assert.equal(
+    await frameSource({ remoteAddress: '203.0.113.8' }),
+    'streetview',
+  );
+  assert.equal(streetViewCalls(), 3);
 });

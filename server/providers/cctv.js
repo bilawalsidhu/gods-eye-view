@@ -21,19 +21,6 @@ import { createHlsPuller } from './cctv/stream.js';
 import { googleServerApiKey } from './places/google-key.js';
 import { clientKey, makeCostRateLimiter } from './common/rate-limit.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
-let _streetViewRateLimiter;
-/**
- * Per-IP budget for the Street View fallback, on the same setting as the
- * other Google routes (GEV_RATELIMIT_GOOGLE_PER_MIN; 0 disables it).
- */
-function streetViewRateLimiter() {
-  if (_streetViewRateLimiter === undefined)
-    _streetViewRateLimiter = makeCostRateLimiter(
-      process.env.GEV_RATELIMIT_GOOGLE_PER_MIN,
-      120,
-    );
-  return _streetViewRateLimiter;
-}
 
 /**
  * Vite plugin: CCTV camera proxy with source registry, frame/media serving,
@@ -94,6 +81,22 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
       sourceKind:
         source?.sourceKind || (source?.url ? 'configured' : 'fallback'),
     };
+  };
+
+  /**
+   * Per-IP budget for the Street View fallback, one per proxy, on the same
+   * setting as the other Google routes (GEV_RATELIMIT_GOOGLE_PER_MIN; 0
+   * disables it). Built on first use, after the standalone env has loaded.
+   * undefined = not built yet; null = the explicit 0 opt-out.
+   */
+  let streetViewBudget;
+  const streetViewRateLimiter = () => {
+    if (streetViewBudget === undefined)
+      streetViewBudget = makeCostRateLimiter(
+        process.env.GEV_RATELIMIT_GOOGLE_PER_MIN,
+        120,
+      );
+    return streetViewBudget;
   };
 
   /**
@@ -524,6 +527,13 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         const source = sourceById.get(cameraId);
         const label = url.searchParams.get('label') || source?.name || cameraId;
         const city = url.searchParams.get('city') || source?.city || '';
+        // The view follows the pose the browser draws (calibration included);
+        // the position never comes from the query (see the Street View fallback).
+        const heading = Number(
+          url.searchParams.get('heading') || source?.headingDeg,
+        );
+        const fov = Number(url.searchParams.get('fov') || source?.fovDeg);
+        const pitch = Number(url.searchParams.get('pitch') || source?.pitchDeg);
 
         // Only use server-registered upstream URLs — never accept client-supplied URLs
         // (prevents SSRF via ?upstream= query parameter)
@@ -557,8 +567,9 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         // request (whose client this server cannot see) gets the placeholder,
         // as if no key were configured. Any forwarding header counts, even an
         // empty one.
-        // It is also only for catalog cameras, framed from the catalog (never
-        // a spot the query names), within the per-IP Google budget.
+        // It is also only for catalog cameras, at the catalog position (never a
+        // spot the query names; the query sets only the view), within the per-IP
+        // Google budget.
         const forwarded = PROXY_SIGNALS.some(
           (name) => req.headers?.[name] !== undefined,
         );
@@ -571,11 +582,11 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           (googleBudget && !googleBudget(clientKey(req)))
             ? null
             : await streetViewFallback({
-                lat: Number(source.lat),
-                lon: Number(source.lon),
-                heading: Number(source.headingDeg),
-                fov: Number(source.fovDeg),
-                pitch: Number(source.pitchDeg ?? -10),
+                lat: source.lat,
+                lon: source.lon,
+                heading,
+                fov,
+                pitch,
               });
         if (sv?.ok) {
           setHealth(cameraId, {

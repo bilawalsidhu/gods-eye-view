@@ -1277,9 +1277,14 @@ redirects on those hosts, are pinned by parsed URL to the agency's image
 directory. Every `/api/cctv` route refuses cross-site browser requests but
 accepts forwarding headers, so cameras work behind a reverse proxy; a forwarded
 request skips the key-bearing Street View fallback and gets the placeholder. The
-Street View fallback serves only catalog cameras, at the catalog position,
-heading, field of view and pitch, never coordinates a request supplies, and it
-shares the per-client Google budget (`GEV_RATELIMIT_GOOGLE_PER_MIN`, default 120).
+Street View fallback serves only catalog cameras, always at the catalog
+position; coordinates a request supplies are ignored. Heading, field of view
+and pitch come from the request, the pose the browser draws with calibration
+included, and fall back to the catalog pose. A camera the server does not list,
+such as a bundled seed camera the browser shows when the server catalog is
+empty, gets the placeholder. The fallback has its own per-client limit on the
+Google setting (`GEV_RATELIMIT_GOOGLE_PER_MIN`, default 120, `0` disables it);
+a request over it gets the placeholder.
 
 The CCTV layer draws only the cameras on or near the screen. Zoomed out, it
 keeps one camera per ground cell sized to the view, preferring a healthy feed,
