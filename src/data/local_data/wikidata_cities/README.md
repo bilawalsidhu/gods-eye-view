@@ -36,6 +36,7 @@ places without an English label.
 The build runs one query at a time with pauses and honours the service's
 Retry-After; it takes about ten minutes. It fails if a short list of
 well-known cities is missing from the result, or a known grouping gets in.
+`meta.built` keeps its earlier date when the rows are unchanged.
 
 **Limits:** populations are whatever Wikidata states and differ in date and
 definition between places (city proper, municipality, urban district). Some

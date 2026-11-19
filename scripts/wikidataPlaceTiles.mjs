@@ -89,6 +89,29 @@ export function placeTileFiles(rows, meta) {
   return files;
 }
 
+/**
+ * A pack file's new text, keeping the earlier build's `meta.built` when
+ * nothing else in the file changed, so rebuilding unchanged data leaves the
+ * file as it was.
+ * @param {string} text The new file, JSON with a `meta.built` stamp.
+ * @param {string | undefined} earlier The file as it is now, if there is one.
+ */
+export function keepBuiltIfUnchanged(text, earlier) {
+  if (!earlier) return text;
+  let before;
+  try {
+    before = JSON.parse(earlier);
+  } catch {
+    return text;
+  }
+  const after = JSON.parse(text);
+  if (typeof before?.meta?.built !== 'string' || !after.meta) return text;
+  const unstamped = (value) =>
+    JSON.stringify({ ...value, meta: { ...value.meta, built: null } });
+  if (unstamped(before) !== unstamped(after)) return text;
+  return `${JSON.stringify({ ...after, meta: { ...after.meta, built: before.meta.built } })}\n`;
+}
+
 const kmBetween = (a, b) =>
   greatCircleKm({ lat: a[1], lon: a[2] }, { lat: b[1], lon: b[2] });
 

@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
+  keepBuiltIfUnchanged,
   placeTileFiles,
   tileKey,
   withoutCities,
@@ -102,4 +103,14 @@ test('twins are found where longitude cells narrow, and across 180°', () => {
     withoutNearTwins(rows).map((row) => row[5]),
     ['Q1', 'Q3'],
   );
+});
+
+test('a rebuild of unchanged rows keeps the earlier build stamp', () => {
+  const earlier = `${JSON.stringify({ meta: { built: '2026-01-01T00:00:00.000Z', count: 2 }, rows: [1, 2] })}\n`;
+  const same = `${JSON.stringify({ meta: { built: '2026-11-18T00:00:00.000Z', count: 2 }, rows: [1, 2] })}\n`;
+  const changed = `${JSON.stringify({ meta: { built: '2026-11-18T00:00:00.000Z', count: 3 }, rows: [1, 2, 3] })}\n`;
+  assert.equal(keepBuiltIfUnchanged(same, earlier), earlier);
+  assert.equal(keepBuiltIfUnchanged(changed, earlier), changed);
+  assert.equal(keepBuiltIfUnchanged(same, undefined), same);
+  assert.equal(keepBuiltIfUnchanged(same, 'not json'), same);
 });
