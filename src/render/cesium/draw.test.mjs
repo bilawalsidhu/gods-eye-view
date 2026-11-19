@@ -4452,19 +4452,28 @@ test('an aircraft layer draws its contacts as one GPU icon set moving on the del
     }
     assert.equal(host._recedeParams().scaleFloor, 0.45);
 
-    // Drawn where the layer reads it, between its two fixes.
-    const t = Date.now() - delayMs;
-    const tau = set.seconds(julianAt(t));
-    const drawn = set.position(row, tau);
-    const read = icons._iconPosition('abc123');
-    assert.ok(Cesium.Cartesian3.distance(drawn, read) < 0.5, 'same place');
-    const lon = Cesium.Math.toDegrees(
-      Cesium.Cartographic.fromCartesian(drawn).longitude,
-    );
-    assert.ok(lon > -97 && lon < -96.9, 'interpolating the fixes');
-    assert.ok(
-      Math.abs(set.course(row, tau) - icons._iconCourse('abc123')) < 0.01,
-    );
+    // Drawn where the layer reads it, between its two fixes. The clock
+    // holds still while both are read: the contact covers half a metre in
+    // about a millisecond, so two readings of a moving clock may not agree.
+    const realNow = Date.now;
+    const frozen = realNow();
+    Date.now = () => frozen;
+    try {
+      const t = frozen - delayMs;
+      const tau = set.seconds(julianAt(t));
+      const drawn = set.position(row, tau);
+      const read = icons._iconPosition('abc123');
+      assert.ok(Cesium.Cartesian3.distance(drawn, read) < 0.5, 'same place');
+      const lon = Cesium.Math.toDegrees(
+        Cesium.Cartographic.fromCartesian(drawn).longitude,
+      );
+      assert.ok(lon > -97 && lon < -96.9, 'interpolating the fixes');
+      assert.ok(
+        Math.abs(set.course(row, tau) - icons._iconCourse('abc123')) < 0.01,
+      );
+    } finally {
+      Date.now = realNow;
+    }
     assert.equal(state._icons.expires('abc123'), now - 20_000);
     assert.deepEqual(
       drawHitOf(host._pickObject('abc123', null, { show: true })),

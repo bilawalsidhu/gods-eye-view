@@ -1565,6 +1565,8 @@
   "dev/stub-app/main.js",
   "scripts/qa-stub-boot.mjs",
   "src/ui/creditsView.js",
+  "src/ui/creditLineHeight.js",
+  "src/ui/creditLineHeight.test.mjs",
   "src/ui/creditsView.test.mjs",
   "src/cockpitSubjectProviders.js",
   "src/cockpitSubjectProviders.test.mjs",
