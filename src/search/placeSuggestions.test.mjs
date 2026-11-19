@@ -462,6 +462,18 @@ test('spelled-out emails, addresses, phrases, codes and short phone numbers stay
     'the code to my door is 4821',
     'AB 12 34 56 C',
     'my id is AB12345',
+    'ssn ending 1234',
+    'ssn last four 1234',
+    'SSN ends in 6789',
+    'otp ABCDEF, thanks',
+    'pin AbCd, thanks',
+    'otp ABCDEF thanks!!',
+    'verification code ABCDEF thanks a lot',
+    'otp ABCDEF cheers',
+    'abandon ability able about above absent absorb abstract absurd abuse access accident.',
+    'abandon, ability, able, about, above, absent, absorb, abstract, absurd, abuse, access, accident',
+    '1. abandon 2. ability 3. able 4. about 5. above 6. absent 7. absorb 8. abstract 9. absurd 10. abuse 11. access 12. accident',
+    'my seed is abandon ability able about above absent absorb abstract absurd abuse access accident',
     'My ID 12345',
     'john at gmail .com',
     'john at gmail punto com',
@@ -627,4 +639,12 @@ test('a line longer than a place name is never sent for suggestions', async () =
   assert.equal(sent, 1);
   await service.suggest('1 2 3 4 5 6 7 8 9 10 11');
   assert.equal(sent, 1);
+});
+
+test('a long line is read quickly', () => {
+  for (const unit of ['a-', 'a.', '1-', 'a ', '//[a:']) {
+    const started = performance.now();
+    mayBePrivate(unit.repeat(10000));
+    assert.ok(performance.now() - started < 1000, unit);
+  }
 });

@@ -154,13 +154,13 @@ function privacyReason(text) {
     return 'other';
   if (
     /[\p{L}\p{N}._%+-]\s*[([{<]\s*at\s*[)\]}>]\s*[\p{L}\p{N}-]/iu.test(line) ||
-    /\b\S+\s+at\s+\S+\s+(?:dot|punto|ponto|period|punkt|[([{<]\s*dot\s*[)\]}>])\s+\p{L}{2,24}\b/iu.test(
+    /(?<!\S)\S{1,64}\s+at\s+\S+\s+(?:dot|punto|ponto|period|punkt|[([{<]\s*dot\s*[)\]}>])\s+\p{L}{2,24}\b/iu.test(
       line,
     ) ||
-    /\b\S+\s+at\s+[\p{L}\p{N}-]+\s*[([{<]\s*dot\s*[)\]}>]\s*\p{L}{2,24}\b/iu.test(
+    /(?<!\S)\S{1,64}\s+at\s+[\p{L}\p{N}-]+\s*[([{<]\s*dot\s*[)\]}>]\s*\p{L}{2,24}\b/iu.test(
       line,
     ) ||
-    /\b[\p{L}\p{N}._%+-]+\s+at\s+[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\s*\.\s*(?:com|net|org|edu|gov|mil|io|co|me|info|biz|app|dev|ai|[a-z]{2})\b/iu.test(
+    /(?<![\p{L}\p{N}._%+-])[\p{L}\p{N}._%+-]{1,64}\s+at\s+[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\s*\.\s*(?:com|net|org|edu|gov|mil|io|co|me|info|biz|app|dev|ai|[a-z]{2})\b/iu.test(
       line,
     )
   )
@@ -187,13 +187,19 @@ function privacyReason(text) {
     })
   )
     return 'other';
-  // A wallet's recovery phrase, whole or nearly ("abandon ability able
-  // …"): twelve to twenty-four words, every one on the BIP39 list ("can you
-  // tell where the most …" is a question). Too long to be sent for
-  // suggestions anyway, it is kept from the assistant too.
-  const words = line.trim().toLowerCase().split(/\s+/);
-  if (words.length >= 12 && words.length <= 24 && words.every(isBip39Word))
-    return 'other';
+  // A wallet's recovery phrase ("abandon ability able …"): twelve words in
+  // a row on the BIP39 list ("can you tell where the most …" is a
+  // question). Too long to be sent for suggestions anyway, it is kept from
+  // the assistant too.
+  // Written with commas, numbered ("1. abandon 2. ability") or after a few
+  // words ("my seed is …"): twelve of the list's words in a row.
+  let run = 0;
+  for (const token of line.toLowerCase().split(/[\s,;]+/)) {
+    const word = token.replace(/^\d+[.)]?/, '').replace(/[^a-z]+$/, '');
+    if (!word && token) continue;
+    run = isBip39Word(word) ? run + 1 : 0;
+    if (run >= 12) return 'other';
+  }
   // Coordinates and grid references are a spot, not a number to keep: only
   // text the place search itself reads as coordinates, as typed ("١٢٣٤,
   // ٥٦٧٨" folded would read as a spot, but is not one).
@@ -256,7 +262,7 @@ function privacyReason(text) {
     // but a capitalised name is a token, and a social security number has
     // digits.
     bearerToken(line) ||
-    /\bssn\b(?:\s+(?:is|no\.?|number|#))*\s*[:=#]?\s*(?:\d|[x*]{2})/i.test(
+    /\bssn\b(?:\s+(?:is|are|no\.?|number|#|ending|ends?|in|with|last|four|4|digits))*\s*[:=#]?\s*(?:\d|[x*]{2})/i.test(
       line,
     ) ||
     // The word for "password" in the interface's languages.
@@ -284,7 +290,9 @@ function privacyReason(text) {
       line,
     ) ||
     // An email spelled out to slip past a filter: "john at example dot com".
-    /\b\S+\s+at\s+\S+\s+dot\s+(?:com|net|org|edu|gov|io|co)\b/i.test(line) ||
+    /(?<!\S)\S{1,64}\s+at\s+\S+\s+dot\s+(?:com|net|org|edu|gov|io|co)\b/i.test(
+      line,
+    ) ||
     /\b(?:pin|otp|2fa|mfa|cvv|cvc|(?:door|access|gate|alarm|entry|security|verification|one-time|auth|login) code|card ending(?: in)?)(?:\s+(?:code|number|is|no\.?))*\s*[:=#]?\s*\d/i.test(
       line,
     ) ||
@@ -371,7 +379,7 @@ function codeAfterLabel(line) {
   // After a label in lower case, any value is a code ("verification code
   // Abc"); after one written as a name, only a value that is not one.
   const coded =
-    /\b((?:otp|2fa|mfa|cvv|cvc|(?:verification|one-time|security|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{2,})(?:\s+(?:thanks|thank you|thx|please|pls|ok|now))?\s*[.!]?\s*$/i.exec(
+    /\b((?:otp|2fa|mfa|cvv|cvc|(?:verification|one-time|security|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{2,})(?:[\s,;-]+(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.!?]*$/i.exec(
       line,
     );
   if (coded) {
@@ -398,7 +406,7 @@ function codeAfterLabel(line) {
   }
   // A value in mixed case that is no name ("PIN aBcD", "gate code aBcD").
   const mixed =
-    /\b(?:pin|(?:door|access|gate|alarm|entry) code)(?:\s+is)?\s+([a-z0-9-]{4,})(?:\s+(?:thanks|thank you|thx|please|pls|ok|now))?\s*[.!]?\s*$/i.exec(
+    /\b(?:pin|(?:door|access|gate|alarm|entry) code)(?:\s+is)?\s+([a-z0-9-]{4,})(?:[\s,;-]+(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.!?]*$/i.exec(
       line,
     );
   if (
@@ -409,7 +417,7 @@ function codeAfterLabel(line) {
   )
     return true;
   const match =
-    /\b((?:pin|cvv|cvc|otp|2fa|mfa|(?:door|access|gate|alarm|entry|security|verification|one-time|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{3,})(?:\s+(?:thanks|thank you|thx|please|pls|ok|now))?\s*[.!]?\s*$/i.exec(
+    /\b((?:pin|cvv|cvc|otp|2fa|mfa|(?:door|access|gate|alarm|entry|security|verification|one-time|auth|login) code)(?:\s+is)?)\s+([a-z0-9][a-z0-9-]{3,})(?:[\s,;-]+(?:thanks|thank you|thx|ty|cheers|please|pls|ok|now)(?:\s+(?:a lot|so much|very much|again))?)?[\s.!?]*$/i.exec(
       line,
     );
   if (!match) return false;

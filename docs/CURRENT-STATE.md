@@ -8070,14 +8070,15 @@ digits and ten more letters or digits (an IBAN's shape); "password",
 "passcode", "passwd", "pw" or "pwd" followed by anything, "bearer"
 followed by anything but a short capitalised name or a place word such as
 island or lake ("Bearer Island", "bearer island" are places),
-"ssn" followed by a digit ("SSN Station" is a place), "token", "secret",
+"ssn" followed by a digit, also after "ending", "ends in" or "last four"
+("SSN Station" is a place), "token", "secret",
 "api key", "key" or "pass" followed by ":" or "=", a licence, plate,
 passport, membership, account, policy, ticket, booking, confirmation or
 reference number with a digit after its label ("license ABC1234",
 "passport no. 123456"), "ID" in capitals followed by a number ("ID
 AB123"), "otp", "2fa", "mfa", "cvv", "cvc" or a verification, one-time,
 security, auth or login code followed by a code (any value after a label
-in lower case, "verification code Abc", also before "thanks"; after a label
+in lower case, "verification code Abc", also before "thanks", ", thanks", "cheers" or "thanks a lot"; after a label
 written as a name, any value that is not one: "OTP Bank" and "Security
 Code Plaza" are places), a "pin" or door, access, gate, alarm or entry
 code followed by a value in mixed case ("PIN aBcD"), a
@@ -8114,9 +8115,9 @@ Street", "Hauptstraße 12".
 A nine-digit number or a short phone number written with no such word
 still gets the row: only picking it sends anything. One-time and verification codes,
 OTP, 2FA, MFA, CVV and CVC values, "card ending" digits, passphrases,
-recovery or seed phrases (twelve to twenty-four words, every one on the
-BIP39 English list in `src/search/bip39Words.js`, so a long question or
-request still goes to Ask GEV), "my secret is …", an email spelled
+recovery or seed phrases (twelve words in a row on the BIP39 English list
+in `src/search/bip39Words.js`, also with commas, numbered or after "my seed
+is", so a long question or request still goes to Ask GEV), "my secret is …", an email spelled
 out ("john at example dot com", "punto com", or letter by letter), a door,
 alarm or lockbox number ("code 4821"; "zip code 90210" and "area code 415"
 are places), "Authorization: Bearer …", a code in a link (`?code=…`), a
