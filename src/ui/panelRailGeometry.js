@@ -1,9 +1,9 @@
 /**
  * Resolve a vertically centered panel slot inside a HUD rail while respecting
  * live rectangles that intersect that rail. A rectangle above the viewport
- * center lowers the top, one below it raises the bottom, and one across the
- * center puts the band on whichever side of it has more room, or leaves the
- * band as it is when neither side has any.
+ * center lowers the top and one below it raises the bottom. Rectangles across
+ * the center put the band beside them (bandBesideMidpointObstacles); with no
+ * room on either side they are left out, as before.
  */
 export function resolveHudRailLayout({
   viewportHeight,
@@ -32,10 +32,7 @@ export function resolveHudRailLayout({
   const midpoint = viewportHeight * 0.5;
   let safeTop = Math.max(0, baseTop);
   let safeBottom = Math.min(viewportHeight, baseBottom);
-  // Every obstacle across the midpoint covers it, so together they cover one
-  // span: from the highest top to the lowest bottom.
-  let spanTop = Infinity;
-  let spanBottom = -Infinity;
+  const inLane = [];
 
   for (const rect of obstacles) {
     if (
@@ -48,22 +45,19 @@ export function resolveHudRailLayout({
       rect.bottom <= rect.top
     )
       continue;
+    inLane.push(rect);
     if (rect.bottom <= midpoint) safeTop = Math.max(safeTop, rect.bottom + gap);
     else if (rect.top >= midpoint)
       safeBottom = Math.min(safeBottom, rect.top - gap);
-    else {
-      spanTop = Math.min(spanTop, rect.top);
-      spanBottom = Math.max(spanBottom, rect.bottom);
-    }
   }
-  // The band goes on whichever side of that span leaves more room, above it
-  // on a tie. With no room on either side the band stays as it is.
-  if (spanBottom > spanTop) {
-    const roomAbove = spanTop - gap - safeTop;
-    const roomBelow = safeBottom - (spanBottom + gap);
-    if (roomBelow > roomAbove && roomBelow > 0) safeTop = spanBottom + gap;
-    else if (roomAbove > 0) safeBottom = spanTop - gap;
-  }
+  const beside = bandBesideMidpointObstacles({
+    midpoint,
+    top: Math.max(0, baseTop),
+    bottom: Math.min(viewportHeight, baseBottom),
+    obstacles: inLane,
+    gap,
+  });
+  if (beside) ({ top: safeTop, bottom: safeBottom } = beside);
 
   safeBottom = Math.max(safeTop, safeBottom);
   const availableHeight = Math.max(0, safeBottom - safeTop);
@@ -78,6 +72,62 @@ export function resolveHudRailLayout({
     safeBottom,
     constrained: panelHeight > availableHeight,
   };
+}
+
+/**
+ * Where a rail's band goes when obstacles cross the viewport midpoint, as in
+ * short windows. Those obstacles, and any other that leaves no band between
+ * itself and them, form one block; the band takes whichever side of the block
+ * has more room between it and the next obstacle or the band's own edge,
+ * above on a tie.
+ * @param {object} input
+ * @param {number} input.midpoint The viewport's vertical midpoint.
+ * @param {number} input.top The band's highest top.
+ * @param {number} input.bottom The band's lowest bottom.
+ * @param {Array<{top: number, bottom: number}>} input.obstacles Rectangles that reach the rail.
+ * @param {number} input.gap Space kept between the band and an obstacle.
+ * @returns {{side: 'above' | 'below', top: number, bottom: number} | null}
+ *   Null when nothing crosses the midpoint or neither side has room.
+ */
+export function bandBesideMidpointObstacles({
+  midpoint,
+  top,
+  bottom,
+  obstacles,
+  gap,
+}) {
+  const crossing = obstacles.filter(
+    (rect) => rect.top < midpoint && rect.bottom > midpoint,
+  );
+  if (!crossing.length) return null;
+  let blockTop = Math.min(...crossing.map((rect) => rect.top));
+  let blockBottom = Math.max(...crossing.map((rect) => rect.bottom));
+  for (let grown = true; grown;) {
+    grown = false;
+    for (const rect of obstacles) {
+      const touches =
+        rect.top < blockBottom + 2 * gap && rect.bottom > blockTop - 2 * gap;
+      if (touches && (rect.top < blockTop || rect.bottom > blockBottom)) {
+        blockTop = Math.min(blockTop, rect.top);
+        blockBottom = Math.max(blockBottom, rect.bottom);
+        grown = true;
+      }
+    }
+  }
+  let aboveTop = top;
+  let belowBottom = bottom;
+  for (const rect of obstacles) {
+    if (rect.bottom <= blockTop)
+      aboveTop = Math.max(aboveTop, rect.bottom + gap);
+    else if (rect.top >= blockBottom)
+      belowBottom = Math.min(belowBottom, rect.top - gap);
+  }
+  const above = { side: 'above', top: aboveTop, bottom: blockTop - gap };
+  const below = { side: 'below', top: blockBottom + gap, bottom: belowBottom };
+  const roomAbove = above.bottom - above.top;
+  const roomBelow = below.bottom - below.top;
+  if (roomBelow > roomAbove && roomBelow > 0) return below;
+  return roomAbove > 0 ? above : null;
 }
 
 /**

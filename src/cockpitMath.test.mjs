@@ -358,6 +358,37 @@ test('HUD rail layout reads several obstacles across the midpoint the same in an
   }
 });
 
+test('HUD rail layout counts obstacles beside those across the midpoint', () => {
+  const band = (obstacles) => {
+    const layout = resolveHudRailLayout({
+      viewportHeight: 480,
+      panelHeight: 120,
+      laneLeft: 20,
+      laneRight: 340,
+      baseTop: 40,
+      baseBottom: 460,
+      gap: 10,
+      obstacles: obstacles.map(([top, bottom]) => ({
+        left: 0,
+        right: 400,
+        top,
+        bottom,
+      })),
+    });
+    return [layout.safeTop, layout.safeBottom];
+  };
+  // One inside the span below the midpoint: 150px below the span, 50 above.
+  assert.deepEqual(band([[100, 300], [250, 280]]), [310, 460]);
+  // One touching the midpoint from below: 190px below, 100 above.
+  assert.deepEqual(band([[150, 260], [240, 250]]), [270, 460]);
+  // One inside the span above the midpoint: 150px above, 50 below.
+  assert.deepEqual(band([[200, 400], [210, 230]]), [40, 190]);
+  // A lower obstacle past the span limits the room below it: 100px between
+  // them against 70 above, and with a taller one only 60, so above.
+  assert.deepEqual(band([[120, 260], [380, 420]]), [270, 370]);
+  assert.deepEqual(band([[120, 260], [340, 420]]), [40, 110]);
+});
+
 test('HUD rail layout can anchor controls to the start of the safe corridor', () => {
   const layout = resolveHudRailLayout({
     viewportHeight: 1000,

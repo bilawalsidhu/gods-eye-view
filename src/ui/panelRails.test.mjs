@@ -258,6 +258,26 @@ test('several cards across the midpoint give the left corridor the same room in 
   assert(Number(first[1]) * 4.8 <= 100);
 });
 
+test('the left corridor counts cards beside those across the midpoint', () => {
+  const f = fixture('left');
+  f.options.windowRef.innerHeight = 480;
+  // A card inside the span below the midpoint: more room below both.
+  f.options.obstacles = [
+    element('card', { top: 100, height: 200 }),
+    element('card', { top: 250, height: 30 }),
+  ];
+  f.run();
+  assert(Number(f.stack.dataset.safeTopPct) * 4.8 >= 300);
+  // No room on either side: the cards are read as before, and the corridor
+  // never runs down through the lower one.
+  f.options.obstacles = [
+    element('card', { top: 50, height: 150 }),
+    element('card', { top: 150, height: 320 }),
+  ];
+  f.run();
+  assert(Number(f.stack.dataset.safeBottomPct) * 4.8 <= 210);
+});
+
 test('a centered timeline only shortens the corridor when it reaches a laid-out panel', () => {
   const f = fixture('left');
   f.stack.rect.width = 360;

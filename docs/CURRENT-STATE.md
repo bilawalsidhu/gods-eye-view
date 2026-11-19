@@ -1198,10 +1198,12 @@ view, recording and scene playback lay the line out themselves.
 The left rail treats the centered World Timeline and voice control as
 obstacles only where they reach a laid-out panel, not the stack's
 transparent gutter. Obstacles across the middle of the window (common in
-short windows) are taken together, from the highest top to the lowest
-bottom, and both rails put their panels on whichever side of that span has
-more room, above it on a tie, whatever order the obstacles come in. With no
-room on either side the panels keep their place, as before.
+short windows) form one block with any obstacle that leaves no room between
+itself and them, and both rails put their panels on whichever side of that
+block has more room up to the next obstacle, above it on a tie, whatever
+order the obstacles come in (`bandBesideMidpointObstacles` in
+`src/ui/panelRailGeometry.js`). With no room on either side the obstacles
+are read as before.
 
 Wind appears in the Weather group before Audio. The surface-weather prototype
 uses keyless NOAA GFS or ECMWF IFS forecasts on an approximately 1° display grid.
