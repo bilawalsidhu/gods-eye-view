@@ -154,7 +154,11 @@ export class LayerOpacity {
     } catch {
       console.warn('[Opacity] setOpacity error');
     }
-    this._requestRender();
+    try {
+      this._requestRender();
+    } catch {
+      console.warn('[Opacity] render request failed');
+    }
   }
 
   // The address is a convenience; a slow drag or a browser that limits
