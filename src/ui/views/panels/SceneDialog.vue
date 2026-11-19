@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { computed, shallowRef } from 'vue';
 import { t, tn } from '../../../i18n/index.js';
+import UiButton from '../../kit/UiButton.vue';
 import UiDialog from '../../kit/UiDialog.vue';
 import { vStatusText } from '../../rail/statusText.js';
 import { useSceneSharingStore } from '../../stores/sceneSharing.js';
@@ -47,14 +48,14 @@ const chooserStyle = (focused) => ({ padding: '3px 9px', border: '1px solid #397
     <div>
       <template v-for="item in bodyItems" :key="item.id">
         <p v-if="item.kind === 'text'" style="margin: 8px 0">{{ item.value }}</p>
-        <button v-else-if="item.kind === 'button'" type="button" :style="buttonStyle" :disabled="item.disabled" v-bind="item.hook ? { [item.hook]: '' } : {}" @click="controls?.click(item.id)">{{ item.label }}</button>
+        <UiButton v-else-if="item.kind === 'button'" :style="buttonStyle" :disabled="item.disabled" v-bind="item.hook ? { [item.hook]: '' } : {}" @click="controls?.click(item.id)">{{ item.label }}</UiButton>
         <label v-else-if="item.type === 'file'" :style="{ display: 'block', position: 'relative' }">{{ item.label }}<input type="file" :aria-label="item.label" :multiple="item.multiple" :webkitdirectory="item.directory || undefined" :style="fileInputStyle" @change="onFiles(item, $event)" @focus="focusedFile = item.id" @blur="focusedFile = null" /><span aria-hidden="true" :style="fileRowStyle"><span :style="chooserStyle(focusedFile === item.id)">{{ t('Choose files') }}</span><span>{{ chosenText(item) }}</span></span></label>
         <label v-else style="display: block">{{ item.label }}<textarea v-if="item.multiline" rows="9" dir="ltr" spellcheck="false" :aria-label="item.label" :style="fieldStyle(true)" :value="item.value" @input="controls?.setValue(item.id, $event.target.value)"></textarea><input v-else :type="item.type" :aria-label="item.label" :style="fieldStyle(false)" :value="item.value" @input="controls?.setValue(item.id, $event.target.value)" /></label>
       </template>
     </div>
     <p role="status" v-status-text="statusText"></p>
     <div>
-      <button v-for="item in footerItems" :key="item.id" type="button" :style="buttonStyle" :disabled="item.disabled" :autofocus="item.autofocus || undefined" v-bind="item.hook ? { [item.hook]: '' } : {}" @click="controls?.click(item.id)">{{ item.label }}</button>
+      <UiButton v-for="item in footerItems" :key="item.id" :style="buttonStyle" :disabled="item.disabled" :autofocus="item.autofocus || undefined" v-bind="item.hook ? { [item.hook]: '' } : {}" @click="controls?.click(item.id)">{{ item.label }}</UiButton>
     </div>
   </UiDialog>
 </template>

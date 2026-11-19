@@ -369,11 +369,11 @@ test('Cockpit owns a focused shared Display portal and compact Radio controls', 
   assert.doesNotMatch(html, /data-cockpit-display-slot="presets"/);
   assert.match(
     html,
-    /id="clear-selected-layers"[^>]*aria-label="Clear selected data layers"/,
+    /<button\b(?=[^>]*\bid="clear-selected-layers")[^>]*aria-label="Clear selected data layers"/,
   );
   assert.match(
     html,
-    /id="reset-globe-view"[^>]*aria-label="Reset to full globe view"/,
+    /<button\b(?=[^>]*\bid="reset-globe-view")[^>]*aria-label="Reset to full globe view"/,
   );
   assert.match(
     css,
