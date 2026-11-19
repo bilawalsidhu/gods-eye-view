@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import test, { mock } from 'node:test';
 import {
+  MissingTile,
   createTileVideos,
+  decodedHeld,
+  decodedProvider,
+  decodedShownAt,
   framesOf,
   heldFrames,
   layerDrawn,
@@ -335,4 +339,99 @@ test('a video’s length is learnt with a longer wait, and a failed one is not l
     mock.timers.reset();
     restore();
   }
+});
+
+/** A decoded source over slots 0, 100, 200, with what its tiles answer. */
+function decodedSource(answers = () => ({ missing: true })) {
+  const asked = [];
+  return {
+    asked,
+    kind: 'decoded',
+    slotAt: (ms) => (ms < 0 ? null : Math.min(200, Math.round(ms / 100) * 100)),
+    prefetch: (ms) => [Math.round(ms / 100) * 100, 300, NaN, 300, 400, 500],
+    tile: async (request) => {
+      asked.push(request);
+      return answers(request);
+    },
+  };
+}
+
+test('a decoded source shows the slot its clock names and holds the next it prefetches', () => {
+  const source = decodedSource();
+  assert.equal(framesOf(source).length, 0, 'no list to step through');
+  const at = decodedShownAt(source, 140);
+  assert.deepEqual(at, { nearest: 100, shown: [{ index: 100, weight: 1 }] });
+  assert.equal(decodedShownAt(source, -5), null, 'no slot: nothing shown');
+  assert.equal(decodedShownAt(source, NaN), null);
+  assert.deepEqual(decodedHeld(source, at, 2, 140), [100, 300, 400]);
+  assert.deepEqual(decodedHeld(source, at, 0, 140), [100]);
+  assert.deepEqual(
+    decodedHeld({ slotAt: () => 0 }, at, 3, 140),
+    [100],
+    'a source with no prefetch holds the shown slot only',
+  );
+});
+
+test("a decoded slot's tiles are the source's images, asked again when deferred", async () => {
+  const image = { width: 256, height: 256 };
+  let defers = 1;
+  const source = decodedSource(({ tile }) => {
+    if (tile.level === 9) return { missing: true };
+    if (defers-- > 0) return { defer: true };
+    return { image };
+  });
+  let frames = 0;
+  let shown = true;
+  const signals = new Set();
+  const provider = decodedProvider(
+    { kind: 'xyz', url: '', maxLevel: 10, tiling: 'webmercator' },
+    100,
+    source,
+    {
+      laterFrame: async () => {
+        frames += 1;
+      },
+      signals,
+      urgency: () => (shown ? 'shown' : 'prefetch'),
+    },
+  );
+  assert.ok(provider.tilingScheme instanceof Cesium.WebMercatorTilingScheme);
+  assert.equal(provider.maximumLevel, 10);
+  assert.equal(provider.hasAlphaChannel, true);
+  assert.equal(await provider.requestImage(1, 2, 3), image);
+  assert.equal(frames, 1, 'the deferred tile waited a frame');
+  assert.deepEqual(
+    source.asked.map((r) => [r.tile, r.slot, r.urgency]),
+    [
+      [{ x: 1, y: 2, level: 3 }, 100, 'shown'],
+      [{ x: 1, y: 2, level: 3 }, 100, 'shown'],
+    ],
+  );
+  shown = false;
+  await assert.rejects(provider.requestImage(0, 0, 9), MissingTile);
+  assert.equal(source.asked.at(-1).urgency, 'prefetch');
+  assert.equal(signals.size, 0, 'no tile left waiting');
+});
+
+test('a decoded tile answered after its slot was let go is closed, not drawn', async () => {
+  let release;
+  const closed = [];
+  const image = { close: () => closed.push('image') };
+  const source = decodedSource(
+    () => new Promise((resolve) => (release = () => resolve({ image }))),
+  );
+  const signals = new Set();
+  const provider = decodedProvider({ kind: 'single-image' }, 0, source, {
+    laterFrame: async () => {},
+    signals,
+    urgency: () => 'shown',
+  });
+  assert.equal(provider.maximumLevel, 0, 'one image over the rectangle');
+  const pending = provider.requestImage(0, 0, 0);
+  await Promise.resolve();
+  assert.ok(source.asked[0].signal instanceof AbortSignal);
+  for (const controller of signals) controller.abort();
+  release();
+  await assert.rejects(pending);
+  assert.deepEqual(closed, ['image']);
 });

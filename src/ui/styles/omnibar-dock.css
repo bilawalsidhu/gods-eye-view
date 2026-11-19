@@ -5,8 +5,13 @@ body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
     :has(#gev-omnibar):has(#command-dock > #gev-voice-control)
   ) {
   --omnibar-dock-width: clamp(400px, 32vw, 460px);
-  --omnibar-dock-bottom: 74px;
-  --omnibar-coordinates-bottom: 4.25rem;
+  /* Clear of the attribution line under it, however many lines it wraps
+     onto (--credit-line-height, src/ui/creditLineHeight.js). */
+  --omnibar-credits-clear: calc(1rem + var(--credit-line-height, 28px) + 6px);
+  /* The dock, and the World Timeline and narrow corners placed from it,
+     rise over a line wrapped taller than its usual one or two lines. */
+  --omnibar-dock-bottom: max(74px, calc(var(--omnibar-credits-clear) + 2px));
+  --omnibar-coordinates-bottom: max(4.25rem, var(--omnibar-credits-clear));
   --world-timeline-lift: 0px;
 
   #intel-hud:is([data-variant='tactical'], [data-variant='minimal'])
@@ -320,24 +325,61 @@ body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
     display: none;
   }
 
-  /* Align the plain credits with Power Up. */
+  /* Align the plain credits with Power Up. The line wraps at every width
+     rather than running under the corner row (Power Up and the language
+     picker), whose side it stays clear of. */
   :is(#cesium-credits, #gev-credits),
   &:has(#intel-hud[data-variant='minimal'].active)
     :is(#cesium-credits, #gev-credits) {
     bottom: 1rem;
+  }
+  #gev-credits {
+    width: max-content !important;
+    max-width: calc(100vw - 1.5rem - 26rem);
+    white-space: normal;
+  }
+  /* Right to left the corner row is at the bottom left, so the line takes
+     the bottom right at every width. Expanded Context places it itself. */
+  &:where(html[dir='rtl'] *):not(.context-docked) {
+    :is(#cesium-credits, #gev-credits),
+    &:has(#intel-hud[data-variant='minimal'].active)
+      :is(#cesium-credits, #gev-credits) {
+      right: 1.5rem;
+      left: auto;
+      text-align: right;
+    }
   }
   /* 8px above the bottom-right corner row (Power Up and the language picker:
      32px tall, 14px up), as outside the Omnibar layout. */
   #intel-hud[data-variant='tactical'] .hud-bottom-right {
     bottom: 3.375rem;
   }
-  /* Right to left the attribution row takes the bottom right: the readout
-     clears two lines of it (rail-split.css). */
-  @media (min-width: 1200px) {
-    &:where(html[dir='rtl'] *)
+  /* Right to left the attribution line is under the readout, which clears
+     it however many lines it wraps onto. */
+  &:where(html[dir='rtl'] *):not(.context-docked)
+    #intel-hud[data-variant='tactical']
+    .hud-bottom-right {
+    bottom: max(3.375rem, var(--omnibar-credits-clear));
+  }
+  /* Narrower than the two corners and the dock between them, the corners
+     rise above the dock. */
+  @media (max-width: 1119px) {
+    --omnibar-coordinates-bottom: max(
+      calc(var(--omnibar-dock-bottom) + 56px + 10px),
+      var(--omnibar-credits-clear)
+    );
+    /* And above the World Timeline (42px tall) over the dock. */
+    &:has(#world-timeline) {
+      --omnibar-coordinates-bottom: max(
+        calc(var(--omnibar-dock-bottom) + 66px + 42px + 10px),
+        var(--omnibar-credits-clear)
+      );
+    }
+    #intel-hud[data-variant='tactical'] .hud-bottom-right,
+    &:where(html[dir='rtl'] *):not(.context-docked)
       #intel-hud[data-variant='tactical']
       .hud-bottom-right {
-      bottom: calc(3.375rem + 1.5rem);
+      bottom: var(--omnibar-coordinates-bottom);
     }
   }
   #intel-hud:is([data-variant='tactical'], [data-variant='minimal'])

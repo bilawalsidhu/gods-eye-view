@@ -2114,6 +2114,7 @@ test('Debris-Dammed Lake card opens its source and is armed for approved local v
   };
   const viewer = eventViewer();
   let activeCard = null;
+  let coveredBy = null;
   const layer = createBhoteKoshiEventLayer({
     eventLoader: async () => event,
     imagerySpecFactory: async (url) => ({ url }),
@@ -2131,9 +2132,11 @@ test('Debris-Dammed Lake card opens its source and is armed for approved local v
       },
       setVisible() {},
       clearSource() {},
+      // As the host does: unfiltered, the topmost entry.
       hitTest(_x, _y, options) {
+        if (coveredBy && !options?.sourceId) return coveredBy;
         if (!activeCard || options?.filter?.(activeCard) === false) return null;
-        return { entry: activeCard };
+        return { sourceId: 'bhote-koshi-witnesses', entry: activeCard };
       },
     },
     renderHost: { request() {}, hold() {}, release() {} },
@@ -2160,6 +2163,11 @@ test('Debris-Dammed Lake card opens its source and is armed for approved local v
     } finally {
       releasePointer(lease);
     }
+    // Another layer's card painted over the evidence card takes the click.
+    coveredBy = { sourceId: 'earthquake-card', entryId: 'earthquake-card:q' };
+    viewer._test.canvas.dispatch('click', { offsetX: 640, offsetY: 420 });
+    assert.equal(opened.length, 0, 'a covered evidence card does not open');
+    coveredBy = null;
     viewer._test.canvas.dispatch('click', { offsetX: 640, offsetY: 420 });
     assert.deepEqual(opened, [[
       event.evidenceSpine[1].media.sourceUrl,

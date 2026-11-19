@@ -18,6 +18,8 @@ import { rendererOf } from '../render/rendererOf.js';
 import { fakeScenePicks } from '../testSupport/fakeCesiumScene.mjs';
 import { provideStyleStageAlias } from '../styles/styleStages.js';
 import { inputFor } from './dispatcher.js';
+import { setClickCardHitTest } from '../data/pickRegistry.js';
+import { ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID } from '../layers/launches/policy.js';
 
 /** Cesium's own event types, the ones the input port binds. */
 export const FAKE_EVENT_TYPES = Cesium.ScreenSpaceEventType;
@@ -138,5 +140,42 @@ export function fakeInput(viewer, { now } = {}) {
     /** Whether the viewer's stock `select` or `dblclickFollow` runs now. */
     stockEnabled: (name) => input.stockEnabled(name),
     destroy: () => input.destroy(),
+  };
+}
+
+/** The Space Missions label {@link fakeInputUnderLabel} paints: an
+ *  interactive entry of the missions' world-overlay source. */
+export const MISSION_LABEL = Object.freeze({
+  sourceId: ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID,
+  entryId: 'launch:L1',
+});
+
+/**
+ * `fakeInput` with a Space Missions label painted over the map: while
+ * `label.over` is true the label takes each click, so every click subscriber
+ * hears it as an overlay click (`event.overlay`) and the geometry beneath it
+ * is not picked, and the pick registry names it as the card on top
+ * (`clickCard`), as the world-overlay host's hit test names an interactive
+ * mission label. `destroy` also clears that hit test.
+ * @param {object} viewer
+ * @param {{now?: () => number, beneath?: () => ({sourceId: string, entryId: string}|null)}} [options]
+ *   `beneath`: the card painted under the label, on top when the label is
+ *   not over the click.
+ */
+export function fakeInputUnderLabel(
+  viewer,
+  { beneath = () => null, ...options } = {},
+) {
+  const fake = fakeInput(viewer, options);
+  const label = { over: false };
+  fake.input.onOverlayClick(() => label.over);
+  setClickCardHitTest(() => (label.over ? MISSION_LABEL : beneath()));
+  return {
+    ...fake,
+    label,
+    destroy() {
+      setClickCardHitTest(null);
+      fake.destroy();
+    },
   };
 }

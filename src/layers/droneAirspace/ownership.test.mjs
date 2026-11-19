@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createDroneAirspaceLayer } from './index.js';
 import { layerFeedState } from '../../data/feedState.js';
-import { fakeInput } from '../../input/testDoubles.mjs';
+import { clickCard } from '../../data/pickRegistry.js';
+import { fakeInputUnderLabel } from '../../input/testDoubles.mjs';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
 // The fills set of the layer the last harness made: zone picks name it.
@@ -19,11 +20,12 @@ function harness(source, { pick = () => null, cardHit = () => null } = {}) {
   const owners = new Map();
   const viewer = { scene: { pick } };
   const { draw } = bindFakeDraw(viewer);
-  const input = fakeInput(viewer);
+  const input = fakeInputUnderLabel(viewer);
   const clicks = {
     handler: (click) => input.click(click.position),
+    // Only the label's own overlay handler is left.
     get destroyed() {
-      return input.input.subscriberCount() === 0 ? 1 : 0;
+      return input.input.subscriberCount() === 1 ? 1 : 0;
     },
   };
   const layer = createDroneAirspaceLayer({
@@ -47,6 +49,11 @@ function harness(source, { pick = () => null, cardHit = () => null } = {}) {
         String(pickedId).startsWith('other-layer:'),
       registerPickOwner: (layerId, predicate) => owners.set(layerId, predicate),
       unregisterPickOwner: (layerId) => owners.delete(layerId),
+      // The card on top at a click, as the registry answers from the host.
+      // A mission label painted over everything comes first.
+      clickCard: (click) =>
+        clickCard(click) ??
+        cardHit(click.screenPosition?.x, click.screenPosition?.y, {}),
     },
   });
   layer.init(viewer);
@@ -61,6 +68,8 @@ function harness(source, { pick = () => null, cardHit = () => null } = {}) {
     overlay,
     clicks,
     owners,
+    /** A label painted over the map: while `over`, it takes each click. */
+    label: input.label,
   };
 }
 
@@ -141,6 +150,86 @@ test('clicking a zone publishes its card; empty space clears it', async () => {
   pickResult = null;
   h.clicks.handler({ position: { x: 10, y: 10 } });
   assert.equal(h.overlay.entries.get('drone-airspace')?.length ?? 0, 0);
+});
+
+test('a click on a mission label over the open zone card keeps it open and takes no zone beneath', async () => {
+  let pickResult = null;
+  let cardHitResult = null;
+  const h = harness(
+    { getSnapshot: async () => [row] },
+    { pick: () => pickResult, cardHit: () => cardHitResult },
+  );
+  await h.layer.update(h.viewer);
+  pickResult = zonePick('drone-airspace:310:0');
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  const [card] = h.overlay.entries.get('drone-airspace');
+
+  // The open card and its zone lie under the label: the label on top is
+  // its own click, so the card stays open.
+  cardHitResult = { sourceId: 'drone-airspace', entryId: card.id };
+  h.label.over = true;
+  h.clicks.handler({ position: { x: 12, y: 12 } });
+  assert.equal(h.overlay.entries.get('drone-airspace')?.[0]?.id, card.id);
+  pickResult = null;
+  cardHitResult = null;
+  h.clicks.handler({ position: { x: 12, y: 12 } });
+  assert.equal(
+    h.overlay.entries.get('drone-airspace')?.[0]?.id,
+    card.id,
+    'a label over bare map is not empty space either',
+  );
+
+  // Off the label, the same click on bare map closes the card.
+  h.label.over = false;
+  h.clicks.handler({ position: { x: 12, y: 12 } });
+  assert.equal(h.overlay.entries.get('drone-airspace')?.length ?? 0, 0);
+  h.layer.destroy();
+});
+
+// Another layer's card or label painted over the area (a quake's card or
+// magnitude label) is that layer's click: the area under it stands aside.
+test("another layer's overlay on top keeps a click off the area", async () => {
+  let pickResult = null;
+  let foreignOnTop = false;
+  const h = harness(
+    { getSnapshot: async () => [row] },
+    {
+      pick: () => pickResult,
+      // Unfiltered: the topmost entry of any source.
+      // As the host does: drone-airspace cards are not interactive, so only
+      // another layer's card painted on top is ever hit.
+      cardHit: (_x, _y, options) =>
+        foreignOnTop && !options?.sourceId
+          ? { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' }
+          : null,
+    },
+  );
+  await h.layer.update(h.viewer);
+  pickResult = zonePick('drone-airspace:310:0');
+  foreignOnTop = true;
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(h.overlay.entries.get('drone-airspace')?.length ?? 0, 0);
+  // With nothing painted over it, the same click selects the area.
+  foreignOnTop = false;
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(
+    h.overlay.entries.get('drone-airspace')[0].id,
+    'drone-airspace-card:310',
+  );
+  // An overlay on top covers the selected area's card.
+  foreignOnTop = true;
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(
+    h.overlay.entries.get('drone-airspace')[0].id,
+    'drone-airspace-card:310',
+  );
+  pickResult = null;
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(
+    h.overlay.entries.get('drone-airspace')[0].id,
+    'drone-airspace-card:310',
+    'the foreground overlay preserves selection over bare map too',
+  );
 });
 
 test('late refresh cannot publish after disable or destroy', async () => {

@@ -1136,8 +1136,12 @@ opt-in visual style over Tactical or Minimal: Display > HUD > Sonar is OFF by
 default, and ON reveals the Rings, Range, Power, Opacity and Sector sliders.
 Share links, scenes and saved views that name Cyber keep its enum code and
 open in Tactical with Sonar on. Links and scene shots record Tactical with
-Sonar on under that same code, and a restored state that names another layout
-turns Sonar off; Minimal has no such code, so its Sonar is not carried.
+Sonar on under that same code, so older builds still read it. Minimal with
+Sonar on is recorded as Minimal plus an explicit Sonar mark: flag bit 5
+(`hudSonar`) of a compact link, `hs=1` in the long form, and `hud.sonar: true`
+in a scene shot. A restored state turns Sonar on when it names Cyber or carries
+that mark, and off otherwise, so a link or shot made before the mark restores
+as it always did.
 An explicit Sonar toggle or validated voice setting takes visual restore
 authority, so a delayed share-link restore cannot undo the newer choice.
 Choosing Reset Visual keeps the HUD layout and the Sonar setting.
@@ -1181,12 +1185,19 @@ corners, so it keeps to the bottom edge, the attribution row sits above it and
 the coordinates clear the row's logo line. In the desktop Omnibar layout the
 Omnibar's own rules (`src/ui/styles/omnibar-dock.css`) place the dock, the
 World Timeline, the credits and the coordinates; its Tactical bottom-right
-readout also keeps 8px above the Power Up row. The left rail treats the
-centered World Timeline and voice control as obstacles only where they reach a
-laid-out panel, not the stack's transparent gutter. Known limit, unchanged
-from main: below 1200px with the World Timeline showing, the Tactical
-bottom-right readout does not rise with the bar and can touch the dock, and a
-credit line longer than the screen does not wrap.
+readout also keeps 8px above the Power Up row. There the credit line wraps at
+every width, right to left it takes the bottom right at every width, and
+`src/ui/creditLineHeight.js` keeps its height in `--credit-line-height`: the
+coordinates (and, right to left, the Tactical readout) stay 6px above it
+however many lines it wraps onto, and the dock and World Timeline rise when
+it is taller than their usual clearance. Narrower than 1120px the dock leaves
+no room between the corners, so the coordinates and the readout sit above
+the dock, and above the World Timeline while it shows. Outside that layout
+Cesium's credit box wraps from 1200px, as before; the phone shell, clean
+view, recording and scene playback lay the line out themselves.
+The left rail treats the centered World Timeline and voice control as
+obstacles only where they reach a laid-out panel, not the stack's
+transparent gutter.
 
 Wind appears in the Weather group before Audio. The surface-weather prototype
 uses keyless NOAA GFS or ECMWF IFS forecasts on an approximately 1° display grid.
@@ -2061,6 +2072,51 @@ quake. Each mark is labelled with the magnitude as the map shows it and the
 feed's place, cut to 40 characters (`earthquakeMarkLabel` in
 `src/layers/earthquakes/model.js`: `M6.4 · 113 km SSE of Lata, Solomon
 Islands`, or `M6.4` with no place).
+
+Clicking a quake's disc selects it; clicking its magnitude label (what a far
+view can hit) also flies the camera there through the world-focus request
+(`earthquake` framing in `src/worldFocus.js`). The selected quake shows a card
+(`describeEarthquake`): magnitude and USGS class (`M5.5 · Moderate`), a
+six-step class meter with the depth band, place (cut to 48 characters; the
+card's accessible name carries all of it), UTC time and source; with a USGS
+event id the card opens that event's page, and without one a click or its
+keyboard action flies to the quake. The selection is also the
+shared context selection, so "what's selected" answers with it. Its disc is
+painted with a gradient fading to the outer circle and wavy contour lines
+(shaped by the quake's id, never crossing) under the labels, drawn at the
+ground height the disc is draped on (read again, at most twice a second, while
+they paint, as the ground loads under a label's fly-to). A label's
+fly-to frames the whole disc, scaling its range from the disc's radius above
+the M6 framing. The package takes clicks, picking, context, focus, the ground
+height, the opener, the painter and the translator by injection
+(`src/app/layers/earthquakes.js`); without input and picking it draws and takes
+no clicks, and its labels stay non-interactive.
+A press that travels past the tracking click limit is a drag, not a pick: the
+quake handler ignores it, and opening the source or clearing the selection
+also needs a short press (`src/data/trackingClickGesture.js`).
+Quake discs are deliberately not registered in the pick-ownership registry,
+like drone airspace and fire perimeters: sibling layers read a disc as empty
+space, so their near-miss taps and deselection work over a quake as before,
+and a disc yields to another layer's registered pick (an aircraft) under it.
+The card or label painted on top takes the click. The world-overlay host hands
+its hit test to the pick registry (`setClickCardHitTest`), and every click
+handler reads the topmost interactive card or label at the click through
+`clickCard(click)`, once per click, so all of them agree in any listener order
+(`src/data/pickRegistry.js`). A layer whose own card or label is on top acts
+on it, whatever is drawn under it: an aircraft, a vessel, a fire, a camera, a
+trail, a route. A layer under another layer's card or label
+(`isUnderOtherCard`) does nothing: it neither acts on its item there nor
+treats the click as empty space, so a tracked aircraft stays tracked and a
+selection stays selected. Context (`src/ui/entityContextBridge.js`) names
+nothing under a card. With no card on top, the scene rules are unchanged.
+World-overlay hit rectangles are what is painted on screen until the next
+paint: an overlay change (a click subscriber publishing its selection card)
+no longer clears them mid-click, and a paint that draws nothing clears them
+(`src/overlays/worldOverlay.js`). A click on the map under another layer's
+card opens no Street Level ground image. The Bhote Koshi trigger-record
+callout (`src/data/bhoteKoshiLocator.js`) opens its source on a click, as its
+keyboard action does, and ignores a drag; its evidence cards act only when
+they are the card on top.
 
 Air quality (`./layers/air-quality`) draws its station discs as one renderer
 draw set of ground-clamped fills and reads the view through the camera port; it
@@ -3392,6 +3448,9 @@ state or inert ancestry; ordinary visible enabled controls retain their order.
 focus shared by the first-run launcher and Provider Settings. Each caller
 activates it while open and deactivates it on dismissal; destruction releases
 keyboard ownership without moving focus. Reopening captures the current opener.
+Tab from a control outside the surface moves into it unless the caller passes
+`claimOutsideFocus: false`, as the first-run launcher does; focus on the page
+body still moves in.
 The launcher retains its hit-test/exclusive-surface arbitration and dismissal
 preferences. Provider Settings retains its existing visibility and save policy.
 Initial focus, transitions and DOM content remain with each screen. This
@@ -4106,10 +4165,34 @@ which embeds the MAP_KEY.
   points to restrictions, quota, or connectivity. These hints do not expose keys.
 
 > **2026-08-23 — first-run mission launcher** (`src/firstRunExperience.js`,
-> `#first-run-launcher`, styles at the tail of `style.css`). After startup
-> settles, a fresh session gets one card offering **Live Contacts · Space
-> Missions · Environmental · Explore manually**. No layer and no optional API
-> call happens until a tile is clicked. The right-hand DISPLAY rail
+> `#first-run-launcher`, styles in `src/ui/styles/first-run.css`). After startup
+> settles, a fresh session gets three steps: mode introduction, a starting
+> mission, then quick tips and links. God mode is available; Analyst is
+> marked coming soon. **Space Missions · Environmental · Explore
+> manually** are the starting choices, with Explore selected by default; Live
+> Contacts is no longer offered as a starting mission (its Context tab is
+> unchanged). The footer status line stays empty until a mission reports
+> progress or an error; the old voice tip is gone. While the card is up, a
+> click-through backdrop tints the globe behind it (`.first-run-backdrop`, a
+> 28% dark tint with no blur); it never takes input, so the card stays
+> non-modal. The last step links out to the GitHub repository and
+> its author's channels (YouTube, X, Instagram, LinkedIn, bilawal.ai) and
+> halfpixel.ai; each opens in a new tab with `rel="noopener noreferrer"`, and
+> the addresses live in `FIRST_RUN_LINKS` (`src/firstRunCopy.js`). The GEV
+> Stories card's BROWSE STORIES button closes the card (a session dismissal,
+> like Skip) and opens the in-app Stories Explore view, keeping the Stories
+> announcement hidden while Stories loads. Next and Back preserve that selection without starting
+> a mission. Only **Enter God mode** runs it; Back is inert while it is loading.
+> Step changes focus the main action, announce the new heading separately from
+> mission progress, and refresh the scrolling affordance after the transition. Repeated Enter keys,
+> double-clicks and activation during a step transition cannot launch a mission; a quick second
+> click on Next still moves to the next step. Tab cycles inside the card, and moves into it from
+> the page only when focus has nowhere else to be: Tab from the search bar or another control
+> follows the page's order.
+> No layer and no optional API call happens until the final action is clicked.
+> The Stories announcement waits, from startup until onboarding closes, without
+> marking it seen.
+> The right-hand DISPLAY rail
 > (`pp-toggles`) now starts **collapsed** on a first run rather than expanded —
 > a stored collapse state still wins, as before.
 >
@@ -4157,26 +4240,28 @@ which embeds the MAP_KEY.
 > `localStorage['gev:first-run-mission:v1'] === 'suppressed'`, written **only**
 > by the "Don't show this again" checkbox → the per-session
 > `sessionStorage['gev:first-run-mission-session:v1'] === 'dismissed'`, written
-> by **every** close path (mission, Explore, ESC, the footer dismiss button). So
+> by **every** close path (a mission or Explore from ENTER GOD MODE, ESC, the
+> header Skip button, BROWSE STORIES). So
 > it returns each fresh browser session until the visitor ticks the box; clearing
 > storage un-ticks it, which is accepted. Both stores fail open — an unreadable
 > store still shows the launcher rather than silently swallowing first launch.
 >
-> **The footer dismiss button is the keyboardless ESC.** Phones and tablets have
-> no ESC key, so the footer hint is a `data-first-run-dismiss` button that calls
+> **The header Skip button is the keyboardless ESC.** Phones and tablets have
+> no ESC key, so the header action is a `data-first-run-dismiss` button that calls
 > the same `dismiss()` as ESC. It stays visible at every width (phones used to
-> hide it, leaving a mission as the only way out) and reads DISMISS on a
-> `(hover: none) and (pointer: coarse)` screen, "ESC to dismiss" otherwise. Its
-> 44px touch target is a `::before` outside the layout, so the footer row keeps
+> hide it, leaving a mission as the only way out) and reads SKIP on a
+> `(hover: none) and (pointer: coarse)` screen, "SKIP · ESC" otherwise. Its
+> 44px touch target is a `::before` outside the layout, so the header row keeps
 > its one-line height.
 >
 > **What a mission may persist (do not "simplify" this).** Layer enablement is
 > durable in this app (`gev:layer-state:v2`, written by
 > `LayerStateCoordinator._commitExplicit` only for origin `user`/`voice`/`tool`).
 > A mission enables **its own** layers at `origin: 'user'` — durable, exactly as
-> clicking those rows is, because picking the mission _is_ that choice. The two
-> Context missions also expand the Context panel, as the visible tabs do; the
-> globe missions open no panel. Everything else is off limits: detection
+> clicking those rows is, because picking the mission _is_ that choice. Space
+> Missions switches on its layer, which opens its own Space Missions panel; no
+> mission enters a Context mode or opens the Context panel, and the globe
+> missions open no panel. Everything else is off limits: detection
 > mode/density, `gev:detection-allocation:v1`, 3D models, feather, and above all
 > `_detectionUserOverridden` — setting that flag means "the operator hand-edited
 > detection" and would silently disable the CRT/NVG/FLIR auto-preset contract for
@@ -5592,7 +5677,13 @@ activeCameraCardEnabled: true })` may publish it through the retained
 >   switching Space Missions off restores the pre-mission Satellite enabled
 >   state and presentation parameters, except that an explicit Satellites action
 >   taken while it ran is kept. Restored parameters never re-show primitives
->   while the Satellite layer is disabled.
+>   while the Satellite layer is disabled. When Satellites is still busy after
+>   the 30 s limit, the restore changes nothing and keeps the saved state, so
+>   switching Space Missions off again finishes it; after an explicit
+>   Satellites on/off action, which keeps its visibility, the parameters are
+>   restored all the same and the saved state is let go. While Space Missions goes
+>   off, its panel's roster and controls select, focus, preview and replay
+>   nothing, so no camera move starts that nothing would end.
 > - **Flights 3D/cockpit hardening:** the destination-direction cue is an
 >   inline SVG rather than a remotely loaded Material Icons ligature, so a
 >   blocked or late font can no longer expand the literal word `navigation`
@@ -7334,7 +7425,7 @@ silently demoting every later lookup for the session.
 - Context is set for reading in every theme: mode, standby and action labels are 10 px, and the panel draws no glow halo. The two modes form one segmented control, the standby guidance is plain left-aligned text rather than a dashed placeholder, and the panel's section titles share the side panels' dock-label colour.
 - The expanded desktop header omits the redundant `ON` label; the active mode button carries state. Expanded Contact results also omit the duplicate `GLOBAL CONTEXT` / `CONTEXT ONLY` status row and begin with the selected subject and its 250 km scope. Global Context does not fabricate a selected-entity model preview: the provisional hand-authored aircraft wireframe was removed because it was not geometry extracted from the selected entity's actual asset.
 - Dependency ownership is reversible: disabling Global Context releases only dependencies it enabled, while user-enabled layers remain on. This also removes the Military-layer suppression handoff when Global Context owned Military, allowing an already-enabled civilian Flights layer to resume its normal mixed rendering. If OpenSky is unavailable and has no last-good cache, Flights requests a capped 250 nm adsb.lol point snapshot around the current view anchor and labels that provenance explicitly; it never relabels military-feed rows as civilian data. If both inputs fail, Flights remains `UNKNOWN`.
-- Space Missions is an ordinary layer, not a Context mode. It neither isolates the globe nor refuses other layers, opens no Context session, and runs beside Contacts. Turning it on enables its Satellites dependency in the temporary dense/hidden mode and turning it off restores Satellites' exact prior visibility and parameters; an explicit Satellites action taken while it runs (by the person or by voice) is kept through that restore, and such a Satellites OFF asked for after the newest Space Missions ON ends Space Missions (request order, not settle order, decides; `src/layers/launches/satelliteIntents.js`). A scene, story, preset or other programmatic Satellites change does neither (owner decision). Contacts leaves Satellites as it is. The first mission-index load is part of the enable: an HTTP error, timeout, network failure or malformed payload before any index has loaded fails the enable, the camera returns to its pre-entry view unless navigation took it, and a toast says the mission index could not load. A valid empty index still enables, and a refresh failure after an index loaded keeps its records. Turning the layer on by hand, choosing it at first run, asking for it by voice (`set_context_mode` still accepts `space-missions` and switches the layer), or picking a mission on the globe opens the Space Missions panel; on desktop, opening it closes Context and the other right-rail panels, and opening Context closes it. Voice `set_panel_open` refuses to open the panel while the layer is off and says to turn Space Missions on first.
+- Space Missions is an ordinary layer, not a Context mode. It neither isolates the globe nor refuses other layers, opens no Context session, and runs beside Contacts. Turning it on enables its Satellites dependency in the temporary dense/hidden mode and turning it off restores Satellites' exact prior visibility and parameters; an explicit Satellites action taken while it runs (by the person or by voice), a visibility switch or a changed setting (also a place search that stops tracking a satellite), is kept through that restore (also while a restore that found Satellites busy keeps the saved state, for the next Space Missions start, which switches Satellites on again), and such a Satellites OFF asked for after the newest Space Missions ON ends Space Missions (request order, not settle order, decides; `src/layers/launches/satelliteIntents.js`). A scene, story, preset or other programmatic Satellites change does neither (owner decision). Contacts leaves Satellites as it is. The first mission-index load is part of the enable: an HTTP error, timeout, network failure or malformed payload before any index has loaded fails the enable, the camera returns to its pre-entry view unless navigation took it, and a toast says the mission index could not load. A valid empty index still enables, and a refresh failure after an index loaded keeps its records. Turning the layer on by hand, choosing it at first run, asking for it by voice (`set_context_mode` still accepts `space-missions` and switches the layer), or picking a mission on the globe opens the Space Missions panel; on desktop, opening it closes Context and the other right-rail panels, and opening Context closes it. Voice `set_panel_open` refuses to open the panel while the layer is off and says to turn Space Missions on first.
 - Enabled Data Layer controls report normalized feed health on the button (`LOADING`, `DEGRADED`, `STALE`, `FALLBACK`, or `UNAVAILABLE`) while the metadata line retains the source and reason. A partial CelesTrak group failure keeps the usable catalog and reports `DEGRADED`; a total outage keeps last-good catalog data visible but reports `UNAVAILABLE`.
 - On activation it focuses the nearest currently observed aircraft across the civilian and military feeds, with military winning an exact distance tie; if none are available, it focuses an observed AIS vessel. The aircraft search is deliberately uncapped and one refresh-tick retry handles initially empty feeds. This is an attention-priority navigation shortcut, not a high-risk, affiliation, or threat classification.
 - A selected aircraft, AIS vessel, or mapped installation gets a 250 km **context window** with nearby cohort counts, nearest examples, source labels, and stale/unavailable reasons. It emits `NEARBY` or `UNKNOWN`; no detection, engagement, affiliation, or sensor-activity conclusion is calculated.
@@ -7491,7 +7582,7 @@ silently demoting every later lookup for the session.
   protected-card path. Disable tears the tier down completely.
   Coverage/viewshed semantics unchanged.
 - **Satellites**: every point moves every frame. Each satellite's SGP4 sample (position, velocity, gravity and its rate of change; `src/layers/satellites/motion.js`) is reckoned forward or back to the world time and turned into the Earth-fixed frame, so points glide at any play speed instead of stepping once a second. Core satellites take a fresh sample every second, or as soon as the world time is 30 s from their sample (fast play, a seek), which keeps every point within about 10 m of SGP4; Starlink extras are sampled round-robin, more per frame the faster time plays, and a point more than two minutes from its sample waits for the next one. Hidden points are not moved until shown. Orbit rings rotate about Earth's Z by ΔGMST every ~1s (exact inertial→ECEF compensation; no SGP4 re-runs); the tracked satellite propagates per frame with one shared epoch for dot/label/camera. Verified: ISS holds <1km perpendicular to its ring while tracked. Pass prediction (`src/data/satellitePass.js`; `getNextSatellitePass`, `getNextIssPass`) scans at 20s, bisects rise/set to ~0.2s, fits the peak with a parabola, and marks a pass visible when the satellite is outside a cylindrical Earth shadow while the observer's Sun is at or below −6°. `next_iss_pass` preserves its geometric-pass ordering and appends visibility metadata. General `next_satellite_pass` accepts a loaded NORAD ID or unambiguous name, searches 24 hours and optionally requires estimated visibility. These estimates do not account for weather or satellite brightness.
-- **Space Missions (30d)**: recent launches render as bounded shared-host, horizon-occluded mission markers using Launch Library 2 v2.3 detailed records. Enabling the layer reveals its own right-rail button and roster and enables the required satellite layer; it does not touch Context. Before applying its temporary dense/hidden Satellite mode, Space Missions snapshots the complete standalone Satellite parameter set and exact enabled-layer set. Disabling Space Missions from Data Layers hides its rail button and panel and restores those parameters and the exact prior enabled state, so a Satellite layer that was already on stays on while a mode-owned dependency returns off; enabling Satellites by itself remains independent. An explicit user or voice Satellites OFF requested after Space Missions ON exits Space Missions, including after returning from Stories; scene, story, preset and other programmatic Satellites changes do not. The controls under the Space Missions row cycle through available launches. Selecting a mission isolates its launch-to-orbit transfer and dashed satellite orbit, fills the Space Missions panel with details, navigation, and replay controls, and animates a small phase-colored marker along the exact displayed Cartesian samples. Marker hit testing drill-picks through photorealistic tiles so the depth-test-free tactical dot remains reliably selectable. Clicking the launch name on the globe selects and focuses the same mission as its dot. The selected pad is the camera's zoom pivot: the overview remains centered on its launch site, wheel zoom approaches that site instead of drifting elsewhere, and camera pitch progressively changes from global nadir to an oblique close 3D view. Its protected shared-host callout remains visible and expands to include both mission and launch-site names. `FOCUS` flies directly to a 12 km oblique frame around the selected launch site and retains the same anchored zoom/orbit behavior. `REPLAY ASCENT` resets the selected marker at the pad, frames it from an oblique third-person angle, and follows it through the mission-specific compressed ascent directly into one orbital lap at the default `1×` rate. A live `0.25×`–`4×` slider changes ascent and orbit playback speed; adjusting it mid-replay preserves the current path position and historical mission timestamp. Re-entry/recovery cannot be inserted into replay. At orbit insertion the camera smoothly pulls back over the first fifth of the orbital replay and pitches to a globe-scale nadir view while continuing to target the moving replay point. Replay Cancel, mission navigation, deselection, layer disable, and data refresh all release camera ownership. Reconstructed paths are one continuous 128-sample geodetic curve: horizontal departure begins near zero while altitude rises quickly, then the climb progressively bends toward insertion without the former hard 120 km corner. Unmatched orbit fallbacks are smooth planar inclined rings rather than longitude/latitude ground-track curves. The panel lists disclosed payload names, types, operators/manufacturers, mass, multiplicity, and destination when supplied; an empty LL2 payload collection is shown as `CLASSIFIED / MULTI-PAYLOAD`. Launcher, spacecraft, and recoverable payload stages appear in a compact stage table with serial/flight/reuse details, recovery outcome/type, destination, and final coordinates when those records exist; an empty recovery collection omits the section. Stage recoveries with confirmed coordinates use those coordinates; return-to-launch-site records use the pad; downrange-only records receive an explicitly labeled estimated endpoint along the ascent azimuth. Available endpoints render as static 2 px dashed descent/recovery paths with a fixed final-position dot and an estimated atmospheric-interface segment when applicable. The ascent is geodetically densified above the ellipsoid toward the orbit's nearest insertion point, then rendered with `ArcType.NONE`, so it neither cuts through Earth nor separates from the marker. Because LL2 does not normally supply continuous ascent telemetry, pad-to-insertion paths without upstream trajectory samples are labeled `RECONSTRUCTED ESTIMATE` / `ASCENT ESTIMATE`; only supplied trajectory samples receive the replay wording. Selected-orbit framing fits the complete ring, rear-side linework uses normal scene depth occlusion, and current distance, speed, and callout data come only from a launch-year-validated satellite match. Both the loaded-catalog and active-TLE lookups read the launch year from the TLE international designator through one parser (`src/sources/tle.js`); a blank or malformed designator is an unknown year, which skips the year check rather than rejecting the match. Speed is the magnitude of the SGP4 inertial velocity vector at the same propagation epoch as position, displayed in km/s with km/h available as hover detail. Unavailable operator, site, launch-time, orbit, current-altitude, and speed values omit their detail rows instead of reserving panel space with placeholders. Newly launched payloads absent from the core operational groups use CelesTrak's cached active TLE feed as a lookup-only fallback; weak constellation-name matches are rejected. The replay callout maps compressed animation progress onto Launch Library's mission-relative timeline, showing the historical UTC date/time at the marker's current path position; unavailable timelines remain explicit. Matched live satellite positions propagate at one-second cadence and use a distinct green dot/callout with the current UTC date/time.
+- **Space Missions (30d)**: recent launches render as bounded shared-host, horizon-occluded mission markers using Launch Library 2 v2.3 detailed records. Enabling the layer reveals its own right-rail button and roster and enables the required satellite layer; it does not touch Context. Before applying its temporary dense/hidden Satellite mode, Space Missions snapshots the complete standalone Satellite parameter set and exact enabled-layer set. Disabling Space Missions from Data Layers hides its rail button and panel and restores those parameters and the exact prior enabled state, so a Satellite layer that was already on stays on while a mode-owned dependency returns off; enabling Satellites by itself remains independent. An explicit user or voice Satellites OFF requested after Space Missions ON exits Space Missions, including after returning from Stories; scene, story, preset and other programmatic Satellites changes do not. The controls under the Space Missions row cycle through available launches. Selecting a mission isolates its launch-to-orbit transfer and dashed satellite orbit, fills the Space Missions panel with details, navigation, and replay controls, and animates a small phase-colored marker along the exact displayed Cartesian samples. Marker hit testing drill-picks through photorealistic tiles so the depth-test-free tactical dot remains reliably selectable. Clicking the launch name on the globe selects and focuses the same mission as its dot (in the cockpit, which holds the camera, a mission chosen by its name, its dot or the layer row's arrows is selected without flying to it, also once its orbit arrives); what is drawn beneath the name is not picked, and the other layers still hear the click as one on the name. The name is an interactive world-overlay label, so it is the card on top for every click handler (`clickCard`, `isUnderOtherCard` in `src/data/pickRegistry.js`): no other layer selects, turns on, focuses or opens the link of a contact, card or camera that lies under the name, and their selections stay. The selected pad is the camera's zoom pivot: the overview remains centered on its launch site, wheel zoom approaches that site instead of drifting elsewhere, and camera pitch progressively changes from global nadir to an oblique close 3D view. Its protected shared-host callout remains visible and expands to include both mission and launch-site names. `FOCUS` flies directly to a 12 km oblique frame around the selected launch site and retains the same anchored zoom/orbit behavior. `REPLAY ASCENT` resets the selected marker at the pad, frames it from an oblique third-person angle, and follows it through the mission-specific compressed ascent directly into one orbital lap at the default `1×` rate. A live `0.25×`–`4×` slider changes ascent and orbit playback speed; adjusting it mid-replay preserves the current path position and historical mission timestamp. Re-entry/recovery cannot be inserted into replay. At orbit insertion the camera smoothly pulls back over the first fifth of the orbital replay and pitches to a globe-scale nadir view while continuing to target the moving replay point. Replay Cancel, mission navigation, deselection, layer disable, and data refresh all release camera ownership. Reconstructed paths are one continuous 128-sample geodetic curve: horizontal departure begins near zero while altitude rises quickly, then the climb progressively bends toward insertion without the former hard 120 km corner. Unmatched orbit fallbacks are smooth planar inclined rings rather than longitude/latitude ground-track curves. The panel lists disclosed payload names, types, operators/manufacturers, mass, multiplicity, and destination when supplied; an empty LL2 payload collection is shown as `CLASSIFIED / MULTI-PAYLOAD`. Launcher, spacecraft, and recoverable payload stages appear in a compact stage table with serial/flight/reuse details, recovery outcome/type, destination, and final coordinates when those records exist; an empty recovery collection omits the section. Stage recoveries with confirmed coordinates use those coordinates; return-to-launch-site records use the pad; downrange-only records receive an explicitly labeled estimated endpoint along the ascent azimuth. Available endpoints render as static 2 px dashed descent/recovery paths with a fixed final-position dot and an estimated atmospheric-interface segment when applicable. The ascent is geodetically densified above the ellipsoid toward the orbit's nearest insertion point, then rendered with `ArcType.NONE`, so it neither cuts through Earth nor separates from the marker. Because LL2 does not normally supply continuous ascent telemetry, pad-to-insertion paths without upstream trajectory samples are labeled `RECONSTRUCTED ESTIMATE` / `ASCENT ESTIMATE`; only supplied trajectory samples receive the replay wording. Selected-orbit framing fits the complete ring, rear-side linework uses normal scene depth occlusion, and current distance, speed, and callout data come only from a launch-year-validated satellite match. Both the loaded-catalog and active-TLE lookups read the launch year from the TLE international designator through one parser (`src/sources/tle.js`); a blank or malformed designator is an unknown year, which skips the year check rather than rejecting the match. Speed is the magnitude of the SGP4 inertial velocity vector at the same propagation epoch as position, displayed in km/s with km/h available as hover detail. Unavailable operator, site, launch-time, orbit, current-altitude, and speed values omit their detail rows instead of reserving panel space with placeholders. Newly launched payloads absent from the core operational groups use CelesTrak's cached active TLE feed as a lookup-only fallback; weak constellation-name matches are rejected. The replay callout maps compressed animation progress onto Launch Library's mission-relative timeline, showing the historical UTC date/time at the marker's current path position; unavailable timelines remain explicit. Matched live satellite positions propagate at one-second cadence and use a distinct green dot/callout with the current UTC date/time.
   When no mission is selected, the Space Missions panel presents a scrollable newest-first roster of every launch in the rolling window, including the smaller 5 px operator-colored marker, provider, and launch date. Hovering or keyboard-focusing a row shows four compact cyan corner brackets on both that roster row and its corresponding globe dot, rotates the globe at the current zoom to center it, and gives its label declutter priority without selecting it; the globe label remains unbracketed. Selecting a roster row invokes the same mission isolation and full-orbit framing as clicking its globe marker. The replay vehicle is one screen-space SVG/CSS HUD overlay rather than separate Cesium billboard, label, and reticle graphics. It is hidden during ordinary Focus and manual close views, where the standard selected launch-site label remains visible, and exists only while ascent replay is active. Its fixed pixel scale is shared by ascent and insertion, so camera range never resizes the rocket on screen before the phase boundary. Generic Launch Library pad names are reduced to their identifying suffix, and replay timestamps use a cyan state title over unprefixed white UTC date/time values. `REPLAY ASCENT` holds the unframed cyan/white rocket at the pad for a real-time `T−10` countdown, transitions through `LIFTOFF`, and attaches six tapered cyan/white ellipse waves directly below it from liftoff through insertion to convey thrust without adding scene geometry. While replay is active, the single start button is replaced by compact Play, Pause, and Cancel icon controls. Pause freezes countdown or mission time, vehicle/stage positions, camera target, labels, and thrust-wave animation; Play resumes from that exact frame, and Cancel releases replay camera ownership. The rocket and thrust group rotates from the path's live screen-space tangent, so its nose follows the visible ascent curve while the adjacent text remains upright. The camera begins as a close oblique launch chase, then smoothly widens between roughly 120 and 420 km vehicle altitude into a higher oblique context view that keeps the moving rocket targeted while exposing the ascent bend and orbit connection. At insertion the rocket/thrust glyph is replaced by the fixed-size cyan orbit dot, which the camera follows through the existing globe-scale orbit pullback. The chase camera limits per-frame yaw changes across heading wraps so it cannot abruptly cross in front of the vehicle and make ascent read in reverse; the replay-speed slider affects mission playback but not countdown duration.
   Mission world text has no native `LabelGraphics`: overview launch markers publish at most 48 ambient candidates for a 24-winner budget, while selecting a mission clears that overview source and publishes its launch-site callout, stage re-entry annotations, live/estimated payload-position readout, and orbit annotation as protected selected-lane entries. The source retains the exact former strings and colors. Static anchors reuse the Cartesian values used to build their mission geometry; the moving payload entry reads the layer's per-frame live-position cache; catalog-backed orbit annotation positions are cached in the same one-second matrix update that realigns the orbit primitive. Keyhole edge fade, horizon culling, final collision placement, and UI exclusion are owned by the shared host. Deselect restores the bounded overview, and refresh, disable, and destroy replace or clear both mission sources.
   A selected mission renders its orbit as four repeating tactical sectors, each containing one prominent cyan dot followed by one hundred thin translucent dashes. The bright dots act as orbit anchors while the subdued dash field remains depth-tested against the globe and is shown only for the selected mission.
@@ -8817,6 +8908,16 @@ on it.
   per frame, it holds NO continuous-render hold — the governor stays idle with
   earthquakes on, and the manager's `layer-tick` / `layer-visibility` requests
   carry new data to the screen. Pinned in `src/data/earthquakes.test.mjs`.
+  The one animation is the selected quake's contour lines
+  (`src/app/layers/earthquakeRipples.js`), painted on the world overlay, not
+  the ground set: they ask for frames for `RIPPLE_ACTIVE_CYCLES` (3) runs out
+  to the disc's edge after a selection (about 14 s), only while the disc is on
+  screen, then rest as still contours and ask for none. A parked camera with a
+  quake selected therefore returns to idle. A feed refresh updates the
+  selected quake in place: it neither runs the contours again nor takes back
+  a shared selection made since; only a click or a label's activation does.
+  Selecting fades that one disc's flat fill once (an `upsert`, not per frame)
+  under the painted gradient.
 - **Geocode framing has an off-centre sanity gate.** A viewport that is both
   bigger than any city (>300 km diagonal) and not centred on its own geocoded
   location (anchor >15% of the diagonal from the centroid) is replaced by a

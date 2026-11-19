@@ -125,15 +125,9 @@ html[dir='rtl'] #command-dock :is(#location-bar, #control-panel) .dock-pin-btn {
 }
 
 /* The right rail sits on the left: its expand/collapse arrows point the
-   other way, and the start window's "go" arrows point along the reading
-   direction. */
-html[dir='rtl'] #right-context-rail .panel-collapse-btn,
-html[dir='rtl'] .first-run-arrow {
+   other way. (The first-run card flips its own arrow in first-run.css.) */
+html[dir='rtl'] #right-context-rail .panel-collapse-btn {
   transform: scaleX(-1);
-}
-html[dir='rtl'] .first-run-choices button:hover .first-run-arrow,
-html[dir='rtl'] .first-run-choices button:focus-visible .first-run-arrow {
-  transform: translateX(-2px) scaleX(-1);
 }
 
 /* The cockpit is an aircraft panel, not page chrome: its windows keep their

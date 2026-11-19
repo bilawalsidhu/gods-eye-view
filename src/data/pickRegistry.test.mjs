@@ -17,6 +17,9 @@ import {
   isOwnedByOtherLayer,
   resolvePickId,
   pickContact,
+  clickCard,
+  isUnderOtherCard,
+  setClickCardHitTest,
 } from './pickRegistry.js';
 
 // ---------------------------------------------------------------------------
@@ -196,4 +199,41 @@ test('touch picking tolerates a failing drill and preserves empty sky', (t) => {
     () => [],
   ])
     assert.equal(pickContact(query(null, drillPick), { x: 1, y: 1 }), null);
+});
+
+test("the card on top is read once per click, and only another layer's card counts", () => {
+  let top = { sourceId: 'quake-card', entryId: 'q1' };
+  let reads = 0;
+  setClickCardHitTest((x, y) => {
+    reads++;
+    assert.deepEqual([x, y], [4, 5]);
+    return top;
+  });
+  try {
+    const click = { screenPosition: { x: 4, y: 5 } };
+    assert.equal(isUnderOtherCard(click, ['vessel-card']), true);
+    assert.equal(isUnderOtherCard(click, ['quake-card']), false, 'own card');
+    // A card published later in the same click does not change it.
+    top = { sourceId: 'vessel-card', entryId: 'v1' };
+    assert.equal(clickCard(click).sourceId, 'quake-card');
+    assert.equal(reads, 1);
+    assert.equal(isUnderOtherCard({ screenPosition: { x: 4, y: 5 } }), true);
+    top = null;
+    assert.equal(isUnderOtherCard({ screenPosition: { x: 4, y: 5 } }), false);
+  } finally {
+    setClickCardHitTest(null);
+  }
+  assert.equal(
+    isUnderOtherCard({ screenPosition: { x: 4, y: 5 } }),
+    false,
+    'no host',
+  );
+  setClickCardHitTest(() => {
+    throw new Error('broken');
+  });
+  try {
+    assert.equal(clickCard({ screenPosition: { x: 1, y: 1 } }), null);
+  } finally {
+    setClickCardHitTest(null);
+  }
 });

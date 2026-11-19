@@ -255,6 +255,9 @@ export const SHARE_VIEW_FLAGS = freezeAll([
   { bit: 2, key: 'hudVisible', default: BY_STYLE },
   { bit: 3, key: 'celestialRing', default: BY_STYLE },
   { bit: 4, key: 'scopeEnabled', default: true },
+  // Sonar on beside a HUD layout whose code cannot say so (Minimal). Tactical
+  // with Sonar stays the `cyber` layout code alone.
+  { bit: 5, key: 'hudSonar', default: false },
 ]);
 
 /**

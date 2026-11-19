@@ -28,6 +28,8 @@ import {
   createApplicationDirectionsLayer,
 } from './directions.js';
 import { GROUND_FLOOR_LIFT_M } from './groundFloor.js';
+import { isOwnedByOtherLayer, setClickCardHitTest } from './pickRegistry.js';
+import { fakeInput } from '../input/testDoubles.mjs';
 import { instructionFor } from './routeSteps.js';
 import { setLocale } from '../i18n/index.js';
 import {
@@ -464,6 +466,65 @@ function ownershipFixture(t) {
     resetPointerOwnership();
   });
 }
+
+// Directions owns its route, markers and steps while enabled: none of them
+// is empty space to other layers.
+test('enabled, directions owns its picks', (t) => {
+  ownershipFixture(t);
+  const viewer = {
+    scene: {
+      pick: () => null,
+      canvas: { clientWidth: 100, clientHeight: 100 },
+    },
+  };
+  const input = fakeInput(viewer);
+  t.after(() => input.destroy());
+  directionsLayer.enable(viewer);
+  try {
+    for (const id of [
+      'directions:route',
+      'directions:marker:a',
+      'directions:step:3',
+    ])
+      assert.equal(isOwnedByOtherLayer('earthquakes', id), true, id);
+  } finally {
+    directionsLayer.disable(viewer);
+  }
+  assert.equal(isOwnedByOtherLayer('earthquakes', 'directions:route'), false);
+});
+
+// The card or label painted on top takes the click: directions does not even
+// pick under another layer's card, so no step is selected or cleared there.
+test("another layer's card over directions keeps the click", (t) => {
+  ownershipFixture(t);
+  let picks = 0;
+  const viewer = {
+    scene: {
+      pick: () => {
+        picks++;
+        return null;
+      },
+      canvas: { clientWidth: 100, clientHeight: 100 },
+    },
+  };
+  const input = fakeInput(viewer);
+  let top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  setClickCardHitTest(() => top);
+  t.after(() => {
+    setClickCardHitTest(null);
+    input.destroy();
+  });
+  directionsLayer.enable(viewer);
+  try {
+    input.tap({ x: 10, y: 10 });
+    assert.equal(picks, 0, 'covered: the scene under the card is not picked');
+    top = null;
+    input.tap({ x: 10, y: 10 });
+    assert.ok(picks > 0, 'open map: the click reaches the scene');
+  } finally {
+    directionsLayer.disable(viewer);
+  }
+});
 
 test('placing an endpoint takes the pointer, and every exit path gives it back', (t) => {
   ownershipFixture(t);
