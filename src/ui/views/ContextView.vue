@@ -17,6 +17,7 @@ import ViewContext from './panels/ViewContext.vue';
 import SpaceMissionsPanel from './panels/SpaceMissionsPanel.vue';
 import RadioPanel from './panels/RadioPanel.vue';
 import UiButton from '../kit/UiButton.vue';
+import UiIcon from '../kit/UiIcon.vue';
 import UiSearchField from '../kit/UiSearchField.vue';
 import { cockpitEntryFace } from '../cockpitPresentation.js';
 import { LAYER_TABS, TAB_AFFECTS, activeTab, availableTabs, contextReady, enabledLayerIds, setEnabledLayers, tabTarget } from '../contextLayerTabs.js';
@@ -182,12 +183,12 @@ watch(
     </RailPanel>
     <RailPanel id="global-context-panel" start-collapsed v-class-toggle="{ ...(ctx && { 'context-enabled': ctx.enabled }) }" :data-context-mode="ctx?.mode" :data-context-tab="activeTab" :title="t('CONTEXT')" sideways scroll rail-scroller>
         <template #actions>
-          <button type="button" class="context-dock-btn" :aria-pressed="String(contextSearchOpen)" :aria-label="contextSearchOpen ? t('Close Context search') : t('Search in Context')" :title="contextSearchOpen ? t('Close search') : t('Search in Context')" @click="toggleSearch">
-            <span class="material-symbols-outlined" aria-hidden="true">search</span>
-          </button>
-          <button type="button" class="context-dock-btn" :aria-pressed="String(docked)" :aria-label="docked ? t('Shrink Context back to a panel') : t('Expand Context to a full-height column')" :title="docked ? t('Shrink') : t('Expand')" @click="setDocked(!docked)">
-            <span class="material-symbols-outlined" aria-hidden="true">{{ docked ? 'close_fullscreen' : 'open_in_full' }}</span>
-          </button>
+          <UiButton class="context-dock-btn" :pressed="Boolean(contextSearchOpen)" :aria-label="contextSearchOpen ? t('Close Context search') : t('Search in Context')" :title="contextSearchOpen ? t('Close search') : t('Search in Context')" @click="toggleSearch">
+            <UiIcon name="search" :size="null" />
+          </UiButton>
+          <UiButton class="context-dock-btn" :pressed="docked" :aria-label="docked ? t('Shrink Context back to a panel') : t('Expand Context to a full-height column')" :title="docked ? t('Shrink') : t('Expand')" @click="setDocked(!docked)">
+            <UiIcon :name="docked ? 'close_fullscreen' : 'open_in_full'" :size="null" />
+          </UiButton>
         </template>
         <div class="cyber-panel-body ui-scroll" data-rail-scroller>
         <UiSearchField v-if="contextSearchOpen" ref="searchInput" v-model="contextSearchText" class="context-search" role="search" input-class="context-search__input" :label="searchHint" :placeholder="searchHint" autocomplete="off" spellcheck="false" :clear-label="t('Clear search')" clear-class="context-search__clear" @escape="closeContextSearch" />

@@ -23,6 +23,7 @@ import {
 import StoriesHeader from './StoriesHeader.vue';
 import UiButton from '../../kit/UiButton.vue';
 import UiCheckbox from '../../kit/UiCheckbox.vue';
+import UiSelect from '../../kit/UiSelect.js';
 
 /**
  * Explore (prototype `.scr-explore`): the feed beside GEV's Cesium globe,
@@ -446,11 +447,11 @@ defineExpose({
             >
             <div class="fh-tools">
               <label class="sr" for="exSort">{{ t('Sort stories') }}</label>
-              <select id="exSort" v-model="sort" class="fh-sort">
+              <UiSelect id="exSort" v-model="sort" class="fh-sort">
                 <option value="new">{{ t('Newest') }}</option>
                 <option value="long">{{ t('Longest') }}</option>
                 <option value="az">{{ t('A–Z') }}</option>
-              </select>
+              </UiSelect>
               <UiButton
                 id="exFilterBtn"
                 ref="filterBtn"
