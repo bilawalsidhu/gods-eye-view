@@ -140,7 +140,7 @@ test('Context async action buttons remain focused while busy', () => {
     'utf8',
   );
   const clearButton = globeActions.match(
-    /<button id="clear-selected-layers"[^>]*>/,
+    /<UiButton id="clear-selected-layers"[^>]*>/,
   )?.[0];
   assert.ok(clearButton, 'Clear selected layers button is missing');
   assert.doesNotMatch(clearButton, /disabled(?!=")|:disabled=/);

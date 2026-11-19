@@ -3,6 +3,8 @@ import { storeToRefs } from 'pinia';
 import { computed } from 'vue';
 import { t } from '../../../i18n/index.js';
 import { useGlobeActionsStore } from '../../stores/globeActions.js';
+import UiButton from '../../kit/UiButton.vue';
+import UiIcon from '../../kit/UiIcon.vue';
 
 // The north-up button: its needle and label follow the published heading,
 // which changes on every frame a rotating camera draws. Before the camera
@@ -20,8 +22,8 @@ const label = computed(() =>
 </script>
 
 <template>
-<button id="north-up-view" type="button" :aria-label="label" :data-north-up="heading == null ? undefined : String(heading === 0)" :style="heading == null ? undefined : { '--camera-heading': `${heading}deg` }" :title="t('Reset map bearing to north')" @click="$emit('click')">
+<UiButton id="north-up-view" :aria-label="label" :data-north-up="heading == null ? undefined : String(heading === 0)" :style="heading == null ? undefined : { '--camera-heading': `${heading}deg` }" :title="t('Reset map bearing to north')" @click="$emit('click')">
   <span class="camera-compass-n" aria-hidden="true">N</span>
-  <span class="camera-compass-needle material-symbols-outlined" aria-hidden="true">navigation</span>
-</button>
+  <UiIcon class="camera-compass-needle" name="navigation" :size="null" />
+</UiButton>
 </template>
