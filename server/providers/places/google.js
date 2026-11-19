@@ -116,8 +116,9 @@ export function googlePlacesContextProxy({
       // Gate first, like the OpenAI routes: a cross-site caller learns nothing
       // about this endpoint's method surface.
       if (admitSameSite(req, res)) return;
-      // Nothing but a confirmed answer is kept: a refusal (bad key, API not
-      // enabled, quota) would be replayed for five minutes after the key is fixed.
+      // Default to no-store. The browser caches only the 200 answer below.
+      // A cached refusal (bad key, API off, quota) would outlive the key fix
+      // by five minutes.
       res.setHeader('Cache-Control', 'no-store');
       if (req.method !== 'GET') {
         res.statusCode = 405;
@@ -200,17 +201,8 @@ export function googlePlacesContextProxy({
         );
         const data = await response.json().catch(() => null);
         // A 200 we could not read is an upstream failure, not an empty answer.
-        if (response.ok && !data) {
-          res.statusCode = 502;
-          res.setHeader('Content-Type', 'application/json; charset=utf-8');
-          res.end(
-            JSON.stringify({
-              error: 'Google Places request failed',
-              places: [],
-            }),
-          );
-          return;
-        }
+        if (response.ok && !data)
+          throw new Error('Google Places request failed');
         const places = projectNearbyPlaces(data || {}, latitude, longitude);
 
         res.statusCode = response.ok ? 200 : response.status;
@@ -238,9 +230,8 @@ export function googlePlacesContextProxy({
 
     // Text Search: resolve a named landmark/POI to a real coordinate, biased to
     // the view. Geocoding scatters obscure monument/POI names across the city;
-    // a view-biased Text Search lands on the actual feature. Same key, field
-    // mask, throttle, cache rule, and `places: []` error contract as
-    // nearby-places above.
+    // a view-biased Text Search lands on the actual feature. Same key, throttle,
+    // cache rule, and `places: []` error contract as nearby-places above.
     middlewares.use('/api/google/text-search', async (req, res) => {
       // Paid like nearby-places, so gated the same way, first.
       if (admitSameSite(req, res)) return;
@@ -333,18 +324,8 @@ export function googlePlacesContextProxy({
           },
         );
         const data = await response.json().catch(() => null);
-        // A 200 we could not read is an upstream failure, not an empty answer.
-        if (response.ok && !data) {
-          res.statusCode = 502;
-          res.setHeader('Content-Type', 'application/json; charset=utf-8');
-          res.end(
-            JSON.stringify({
-              error: 'Google Places request failed',
-              places: [],
-            }),
-          );
-          return;
-        }
+        if (response.ok && !data)
+          throw new Error('Google Places request failed');
         const places = projectTextSearchPlaces(data || {}, latitude, longitude);
 
         res.statusCode = response.ok ? 200 : response.status;
@@ -395,7 +376,6 @@ export function googlePlacesContextProxy({
         // Gate first, like the Places routes above: a cross-site caller learns
         // nothing about this endpoint's method surface.
         if (admitSameSite(req, res)) return;
-        // As in the Places routes, only the confirmed answer below is kept.
         res.setHeader('Cache-Control', 'no-store');
         if (req.method !== 'GET') {
           refuse(405, 'Method not allowed');

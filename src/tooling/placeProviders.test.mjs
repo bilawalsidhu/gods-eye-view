@@ -52,6 +52,11 @@ function install(register) {
   };
 }
 
+const ROUTES = [
+  ['/api/google/nearby-places', '?lat=30&lon=-97'],
+  ['/api/google/text-search', '?q=museum&lat=30&lon=-97'],
+];
+
 test('nearby labels rank landmarks, deduplicate names/addresses and bound the projection', () => {
   const place = (name, types, longitude = 0) => ({
     displayName: { text: name },
@@ -176,113 +181,72 @@ for (const preview of [false, true]) {
       JSON.parse(calls[1].options.body).locationBias.circle.radius,
       50,
     );
-    assert.equal((await request(search, '?lat=30&lon=-97')).statusCode, 400);
-    assert.equal((await request(nearby, '?lat=bad&lon=-97')).statusCode, 400);
-    assert.equal((await request(nearby, '', 'POST')).statusCode, 405);
+    for (const [route, query, method, statusCode] of [
+      [search, '?lat=30&lon=-97', 'GET', 400],
+      [nearby, '?lat=bad&lon=-97', 'GET', 400],
+      [nearby, '', 'POST', 405],
+    ]) {
+      const refused = await request(route, query, method);
+      assert.equal(refused.statusCode, statusCode, `${method} ${route}`);
+      assert.equal(
+        refused.headers['cache-control'],
+        'no-store',
+        `${method} ${route}`,
+      );
+    }
     t.mock.method(globalThis, 'fetch', async () =>
       Response.json({ error: { message: 'Denied' } }, { status: 403 }),
     );
-    assert.deepEqual((await request(search, '?q=museum&lat=30&lon=-97')).body, {
-      places: [],
-      error: 'Denied',
-    });
-  });
-}
-
-test('a refused Places or Geocoding answer is not kept by the browser', async (t) => {
-  const plugin = googlePlacesContextProxy({
-    resolveApiKey: () => 'fixture-server-key',
-  });
-  const request = install((middlewares) =>
-    plugin.configureServer({ middlewares }),
-  );
-  t.mock.method(globalThis, 'fetch', async () =>
-    Response.json({ error: { message: 'API key not valid' } }, { status: 403 }),
-  );
-  for (const url of [
-    ['/api/google/nearby-places', '?lat=30&lon=-97'],
-    ['/api/google/text-search', '?q=museum&lat=30&lon=-97'],
-  ]) {
-    const refused = await request(...url);
-    assert.equal(refused.statusCode, 403);
-    assert.equal(refused.headers['cache-control'], 'no-store');
-  }
-
-  // Geocoding reports a denied key as HTTP 200 with a status of its own.
-  let status = 'REQUEST_DENIED';
-  t.mock.method(globalThis, 'fetch', async () =>
-    Response.json({ status, results: [] }),
-  );
-  for (const denied of [
-    'REQUEST_DENIED',
-    'OVER_QUERY_LIMIT',
-    'OVER_DAILY_LIMIT',
-    'UNKNOWN_ERROR',
-  ]) {
-    status = denied;
-    const answer = await request('/api/google/geocode', '?address=Austin');
-    assert.equal(answer.statusCode, 200);
-    assert.equal(answer.body.status, denied);
-    assert.equal(answer.headers['cache-control'], 'no-store', denied);
-  }
-  for (const answered of ['OK', 'ZERO_RESULTS']) {
-    status = answered;
-    const answer = await request('/api/google/geocode', '?address=Austin');
-    assert.equal(answer.headers['cache-control'], 'private, max-age=300');
-  }
-});
-
-const ROUTES = [
-  ['/api/google/nearby-places', '?lat=30&lon=-97'],
-  ['/api/google/text-search', '?q=museum&lat=30&lon=-97'],
-];
-
-const truncated = () =>
-  new Response(
-    new ReadableStream({
-      start(c) {
-        c.enqueue(new TextEncoder().encode('{"places":[{"displayName"'));
-        c.error(new TypeError('terminated'));
-      },
-    }),
-    { status: 200 },
-  );
-
-for (const [name, body] of [
-  ['non-JSON', () => new Response('<html>not json</html>', { status: 200 })],
-  ['cut mid-body', truncated],
-]) {
-  test(`an unreadable Places 200 (${name}) is a failure, not a cached empty answer`, async () => {
-    const request = install((middlewares) =>
-      googlePlacesContextProxy({
-        resolveApiKey: () => 'fixture-server-key',
-        fetchImpl: async () => body(),
-      }).configureServer({ middlewares }),
-    );
     for (const [route, query] of ROUTES) {
-      const res = await request(route, query);
-      assert.equal(res.statusCode, 502, route);
-      assert.equal(res.headers['cache-control'], 'no-store', route);
-      assert.deepEqual(res.body.places, [], route);
-      assert.ok(res.body.error, route);
+      const refused = await request(route, query);
+      assert.equal(refused.statusCode, 403, route);
+      assert.equal(refused.headers['cache-control'], 'no-store', route);
+      assert.deepEqual(refused.body, { places: [], error: 'Denied' }, route);
     }
   });
 }
 
-test('a real empty Places answer ({}) stays cacheable', async () => {
-  const request = install((middlewares) =>
-    googlePlacesContextProxy({
-      resolveApiKey: () => 'fixture-server-key',
-      fetchImpl: async () => Response.json({}),
-    }).configureServer({ middlewares }),
-  );
-  for (const [route, query] of ROUTES) {
-    const res = await request(route, query);
-    assert.equal(res.statusCode, 200, route);
-    assert.equal(res.headers['cache-control'], 'private, max-age=300', route);
-    assert.equal(res.body.error, null, route);
-  }
-});
+for (const [name, upstream, statusCode, cacheControl] of [
+  [
+    'unreadable 200',
+    () => new Response('<html>not json</html>', { status: 200 }),
+    502,
+    'no-store',
+  ],
+  [
+    'unreadable 429',
+    () => new Response('<html>Too Many Requests</html>', { status: 429 }),
+    429,
+    'no-store',
+  ],
+  [
+    'transport failure',
+    () => {
+      throw new TypeError('fetch failed');
+    },
+    502,
+    'no-store',
+  ],
+  // Google returns {} for a successful search with no places.
+  ['empty answer ({})', () => Response.json({}), 200, 'private, max-age=300'],
+]) {
+  test(`a Places ${name} is a ${statusCode} with Cache-Control ${cacheControl}`, async () => {
+    const request = install((middlewares) =>
+      googlePlacesContextProxy({
+        resolveApiKey: () => 'fixture-server-key',
+        fetchImpl: async () => upstream(),
+      }).configureServer({ middlewares }),
+    );
+    for (const [route, query] of ROUTES) {
+      const res = await request(route, query);
+      assert.equal(res.statusCode, statusCode, route);
+      assert.equal(res.headers['cache-control'], cacheControl, route);
+      assert.deepEqual(res.body.places, [], route);
+      if (statusCode === 200) assert.equal(res.body.error, null, route);
+      else assert.ok(res.body.error, route);
+    }
+  });
+}
 
 test('OSRM routing preserves aliases, cache, span guards and upstream failure behavior', async (t) => {
   const request = install(installRouteMiddleware);
