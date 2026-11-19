@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { formatNumber, t, tn } from '../../../i18n/index.js';
 import { useCockpitStore } from '../../stores/cockpit.js';
+import UiButton from '../../kit/UiButton.vue';
 
 // The bridge radar: a heading-up scope of nearby AIS vessels, with a line
 // where the bridge view looks when it is turned off the bow. The Cockpit
@@ -158,7 +159,7 @@ const rangeAction = computed(() =>
       </template>
     </div>
     <div class="cockpit-radar-readout">
-      <button id="cockpit-radar-range" type="button" class="cockpit-radar-range" :aria-label="rangeAction" :title="rangeAction">{{ rangeLabel }}</button>
+      <UiButton id="cockpit-radar-range" class="cockpit-radar-range" :aria-label="rangeAction" :title="rangeAction">{{ rangeLabel }}</UiButton>
       <span class="cockpit-radar-rings">{{ ringLabel }}</span>
       <span class="cockpit-radar-count">{{ countLabel }}</span>
     </div>

@@ -100,6 +100,14 @@ chips and action chips, Recent Imagery's day chips, SWAP and ZOOM IN, map
 sources, cities and places, the view context's place and layer chips and
 the key setup chip) are `UiButton`s too. `UiChip` is a non-interactive
 label chip, used by the voice card.
+header's search and expand, Draw, Import, the imported files' and drawn
+shapes' row actions and the rail chips' icons), the glyphs are `UiIcon`s
+with `:size="null"`, so the site rules still size them. Core's pressable
+chips and pills (the rail cards' chips and action chips, Recent Imagery's
+day chips, SWAP and ZOOM IN, map sources, cities and places, and the view
+context's place and layer chips) are `UiButton`s too; the key setup chip
+is still a plain button. `UiChip`
+is a non-interactive label chip, used by the voice card.
 The welcome card's buttons (SKIP, the three start tiles, BROWSE STORIES,
 BACK and the main NEXT / ENTER GOD MODE action) are ghost `UiButton`s:
 the start tiles are pressed toggles, and all but SKIP keep `aria-disabled`
@@ -122,6 +130,23 @@ magnifier would replace their SVG one, and Explore's two clear buttons,
 which draw an SVG cross, are ghost `UiButton`s rather than
 `UiCloseButton`s (`src/ui/kit/storiesControls.test.mjs` pins it).
 Explore's sort is a `UiSelect`.
+Every button in the Cockpit HUD (`CockpitView` and its panels: the vision
+selector, Look ahead, the view switcher's Reset and Exit, the utility
+strip's launchers, collapse buttons, Radio transport and desktop rail, the
+briefing card's paging, Auto, collapse and page tabs, the Contact card's
+navigation, collapse and Weather, a signal row's target, the orbital
+view's TLE, Nadir, zoom and Sensor, and the bridge radar's range) is a
+ghost `UiButton` that keeps its id and classes, so the Cockpit
+controller's listeners and the cockpit stylesheets still find it. Radio's
+Enable (with `active`), Auto and Weather are pressed toggles; the
+disclosures keep `aria-expanded` and the page tabs `aria-current`. Its
+glyphs (the rim pointers, the reticle, the heading caret, the chevrons and
+panel glyphs, the contact and route arrows) are `UiIcon`s with
+`:size="null"`; the heading caret's rule reads
+`.cockpit-compass .cockpit-heading-caret`, so it still outranks the kit's
+`.ui-icon`, which loads after cockpit.css
+(`src/ui/kit/cockpitControls.test.mjs` pins it). The −, ◀ ▶ and + glyphs
+are text characters and stay text, and the Radio volume is a `UiSlider`.
 The Omnibar's mic (a pressed toggle with `active`) and its suggestion
 strip's chips (options, so `aria-current` rather than `pressed`) are
 ghost `UiButton`s, and its search, row and chip glyphs are `UiIcon`s with
@@ -190,6 +215,52 @@ what they will do or have done. The chip's bolt is a `UiIcon` with
 frequency stays a native number field, which the kit has no control for,
 and the replay's pause, the roster's chevron and the compass arrows are
 text characters, not Material symbols.
+Utilities' Draw and Import are on the kit. Draw (a pressed toggle with
+`active`), Clear and Import are ghost `UiButton`s, their glyphs `UiIcon`s
+with `pp-icon` and `:size="null"`. Draw's five colour swatches, in the
+toolbar and in a drawn shape's row, are ghost `UiButton`s with
+`role="radio"`: they say they are chosen with `aria-checked` and their own
+`active` class, never `aria-pressed`. A drawn shape's row (its swatch,
+show/hide, the application's row actions and fly to, beside its remove
+`UiCloseButton`) is on the kit too, its glyphs `UiIcon`s with
+`:size="null"`, so `controls.css` still sizes them; show/hide says what it
+does in its name (Show …, Hide …) rather than being pressed. The Street
+Level panel's controls already were kit controls; its EXPAND ⤢ ⤡ and its
+errors' ⚠ are text characters and stay text
+(`src/ui/kit/drawControls.test.mjs` pins it).
+The AI chat panel's and the voice control's buttons are ghost
+`UiButton`s: the chat's Settings, quick prompts, attachment removes,
+Attach layer, Attach a file, Expand conversation, command suggestions,
+Expand chat, Add attachment and Send (a submit button that turns into
+Stop reply), and the voice control's Open AI chat, Back to chat, Back to
+voice, its Preview and Settings tabs and the error tray's DISMISS, beside
+the tier button, the mic and the dock and minimize buttons, which already
+were. The tier button and dock are pressed toggles; the mic is one only
+while its owner has a state for it; the tabs keep `role="tab"` and
+`aria-selected`. DISMISS is a text button, not a cross, so it is not a
+`UiCloseButton`. The Settings and tab glyphs are `UiIcon`s with
+`:size="null"`, so voice-cost.css and voice-card.css still size them
+(`src/ui/kit/chatVoiceControls.test.mjs` pins it). The chat bubble,
+globe, attach, send and stop, expand and Back glyphs stay inline SVG,
+since no Material symbol the page loads draws them the same, and the
+message box, file picker and inactivity minutes stay native fields, which
+the kit has none of. The voice modules build no controls in script.
+The small surfaces' buttons are ghost `UiButton`s: the locale picker's
+button, the phone tab bar's tabs, the globe actions' Clear, Share, Reset
+and north-up compass, the imagery divider's handle, the scene sharing
+dialog's buttons, the layer group index's ticks, the title logo, Exit
+clean view, the HUD's cockpit entry, a News card's face, a rail card's
+header, a layer row's toggle, the credits line's Data attribution and the
+camera calibration chips. None is a pressed toggle; the disclosures keep
+`aria-expanded`. Their Material glyphs (the tabs', the globe actions', the
+compass needle, the cockpit entry's and the celestial ring's sun and moon)
+are `UiIcon`s with `:size="null"`, so the site rules still size them. The
+locale picker's globe, caret and check and a News card's category icon stay
+inline SVG. The Omnibar guide draws the extra rings of a step with several
+targets in its template, as many as `view.subRings` says, rather than
+building them in script; the Omnibar's one other `material-symbols-outlined`
+is a stylesheet selector, and the layer disclosure only names a button in a
+comment (`src/ui/kit/smallSurfacesControls.test.mjs` pins it).
 `UiSelect` renders the bare native select (Core's labels sit outside it or
 come as an `aria-label`) with `v-model`, `options` and `disabled`;
 options that carry their own attributes come through the slot, a caller's
@@ -295,11 +366,17 @@ page declares no dark `color-scheme`. Selects and number fields are
 and keeps native spinners dark; ranges are `.gev-quantitative-slider`, with
 a feature supplying only its accent.
 
-`t()` is not reactive. Words a view passes to a kit component as a prop
-(`UiCloseButton`'s `label`) follow a locale change on the view's next
-render, but words in a kit component's slot do not: the compiled slot does
-not render the child again. A view whose words must follow the locale at
-once passes the locale itself as a prop or key, as the credits line does.
+`t()` is reactive only while the locale is bound to a ref (the app binds
+it to vue-i18n's). Words a view passes to a kit component as a prop
+(`UiCloseButton`'s `label`) follow the view's render at once. Words and
+props read in a kit component's slot follow a tick later, in the child's
+own update, and never when the locale is unbound; a slot that reads a
+`v-for` variable is already redrawn with its view. A view whose owner
+patches synchronously and reads the result at once (a News card, a rail
+card, the credits line, the Omnibar guide's buttons) gives such a slot
+under a named condition that is always true
+(`<template v-if="redrawWithView" #default>`): Vue redraws a conditional
+slot whenever its view is drawn.
 
 ## Phases
 

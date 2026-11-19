@@ -53,7 +53,7 @@ test('the divider renders on the body with its labels and slider', async (t) => 
   assert.equal(after.title, 'After');
   assert.equal(handle.tagName, 'BUTTON');
   assert.equal(handle.type, 'button');
-  assert.equal(handle.className, 'split-handle');
+  assert.ok(handle.classList.contains('split-handle'));
   assert.equal(handle.textContent, '↔');
   assert.equal(handle.getAttribute('role'), 'slider');
   assert.equal(handle.getAttribute('aria-label'), 'Divider');
