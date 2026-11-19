@@ -315,6 +315,14 @@ test('a lookup asked for the whole globe reads only the tiles near its centre', 
     fetchPack,
   );
   assert.ok(far.some((place) => place.wikidata === 'Q90'));
+  // Places from the tiles it read stop at 500 km too: Tahoka, Texas
+  // (Q982084), a town of about 2,500, is 500.6 km away.
+  assert.ok(!far.some((place) => place.wikidata === 'Q982084'));
+  assert.ok(
+    far
+      .filter((place) => place.distanceKm > PLACE_TILE_KM)
+      .every((place) => place.population >= 15000),
+  );
   assert.equal(
     fetched.filter((name) => /^-?\d+_-?\d+\.json$/.test(name)).length,
     tileReads.length,

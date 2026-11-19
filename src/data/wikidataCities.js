@@ -339,7 +339,14 @@ export async function placesNear(
   const found = [
     ...cities.filter((city) => city.distanceKm <= radius),
     ...detail
-      .flatMap((source) => citiesWithin(source, latitude, longitude, radius))
+      .flatMap((source) =>
+        citiesWithin(
+          source,
+          latitude,
+          longitude,
+          Math.min(radius, PLACE_TILE_KM),
+        ),
+      )
       .filter((place) => !twinOfCity(place)),
   ];
   const seen = new Set();
