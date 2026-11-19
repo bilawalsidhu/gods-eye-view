@@ -8026,11 +8026,13 @@ while the tab is hidden.
 A place search on its own runs through Location and shares its cancellation
 and errors, keeping the separate Location draft intact.
 
-While typing, a short line (six words or fewer, no `?`, not a command,
+While typing, a short line (six words or fewer, ten with a number in it
+as an address has, no `?`, not a command,
 coordinates, a hex code, a callsign such as UAL2110 or N123AB, and nothing
 that may be private) is sent to
 Photon for place suggestions (the suggester itself never sends a line of
-more than eight words): at most one request every 500 ms per tab,
+more than eight words, or ten with a number): at most one request every
+500 ms per tab,
 and none for a minute after a refusal. Photon is the keyless geocoder the
 place search already uses; a submitted search is not part of this spacing.
 A line that may be one name ("Satellite Beach") is looked up whole. While
@@ -8087,7 +8089,8 @@ key", "access token" or "secret key" followed by a word of six characters
 or more, the word for "password" in the interface's languages
 (contraseña, Passwort, mot de passe, пароль…) followed by anything, or "pin"
 (also "pin code", "pin number", "pin is") followed by a digit; a word
-starting `sk_`, `sk-`, `rk_`, `pk_live`, `ghp_` or a Slack token's `xoxb-` and the like (any case) or
+starting `sk_`, `sk-`, `rk_`, `pk_live`, `ghp_`, `github_pat_`, `glpat-`, `hf_`, a SendGrid
+`SG.` key or a Slack token's `xoxb-` and the like (any case) or
 `AIza` or `eyJ`, or an AWS key id (`AKIA` and twelve capitals or digits
 more; "Akiak" is a place); or a word that may be a password or key, with letters and digits mixed
 within one run (a number beside a word, as in "Yanino-1", "2-chōme" or
@@ -8109,13 +8112,23 @@ to search it as a place on purpose ("Search … as a place anyway"), which
 runs the ordinary place search and its online services only when picked; a
 bare number, an email or handle, a password, key, code or IBAN gets none.
 A suggested house is named by its number and its street (or, without a
-street, its locality) in the order its country writes them: "10 Downing
+street, its locality, district or city) in the order its country writes them: "10 Downing
 Street", "Hauptstraße 12".
 A nine-digit number or a short phone number written with no such word
 still gets the row: only picking it sends anything. One-time and verification codes,
 OTP, 2FA, MFA, CVV and CVC values, "card ending" digits, passphrases,
-recovery or seed phrases, "my secret is …" and an email spelled out ("john
-at example dot com") are private too. Text that parses as coordinates or a
+recovery or seed phrases (twelve to twenty-four short words with none of
+the common words a phrase list lacks, such as "the", "and" or "are", so a
+long question still goes to Ask GEV), "my secret is …", an email spelled
+out ("john at example dot com", "punto com", or letter by letter), a door,
+alarm or lockbox number ("code 4821"; "zip code 90210" and "area code 415"
+are places), "Authorization: Bearer …", a code in a link (`?code=…`), a
+spaced UK National Insurance number and "my id is …" are private too.
+"Boise ID 83702" names Idaho. Some private text is not caught: a
+passphrase run together as one word (a long place name is one word too),
+a lower-case word after "otp", "2fa" or "mfa" ("mfa boston" is a name;
+"otp ABCDEF" is caught) and a code of letters after "pin" or "gate code".
+A Japanese postcode after a Latin name is refused ("Shibuya 150-0002"). Text that parses as coordinates or a
 grid reference is not private. A place's name is six words at most, or ten
 when it has a number in it (an address: "1600 Pennsylvania Ave NW
 Washington DC 20500"). The places picked from the Omnibar's rows and chips that carry a position

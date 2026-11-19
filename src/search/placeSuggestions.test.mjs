@@ -437,14 +437,31 @@ test('spelled-out emails, addresses, phrases, codes and short phone numbers stay
     'john at gmail dot de',
     '10.0.0.1',
     'abandon ability able about above absent absorb abstract absurd abuse access accident',
-    'correcthorsebatterystaple',
+    'Abandon ability able about above absent absorb abstract absurd abuse access accident acid',
     'license ABC1234',
     'passport X1234567',
     'plate 7ABC123',
-    'otp abcdef',
+    'otp ABCDEF',
     'verification code abcdef',
     'cvv abc',
     'Bearer abcdef',
+    'Bearer Abcdefgh',
+    'Authorization: Bearer Xyz',
+    'glpat-abcdef123456',
+    'hf_abcdefghijk',
+    'SG.abcdefghij.klmnopqrstuv',
+    'https://x.com/?code=abcdef',
+    'code 4821',
+    'garage code 4821',
+    'lockbox 4821',
+    'the code to my door is 4821',
+    'AB 12 34 56 C',
+    'my id is AB12345',
+    'My ID 12345',
+    'john at gmail .com',
+    'john at gmail punto com',
+    'john.doe at example period com',
+    'j o h n @ g m a i l . c o m',
     'ssn 123',
     'Jo 12345-6789',
     'Joe 1234 12345 thanks',
@@ -468,6 +485,19 @@ test('places that only looked private are looked up', () => {
     'Idaho Falls',
     'meet at 12:30:45',
     'Llanfairpwllgwyngyllgogerychwyrndrobwllllantysiliogogogoch',
+    'llanfairpwllgwyngyll',
+    'Boise ID 83702',
+    'Boise, ID 83702',
+    'Hayden ID 83835-1234',
+    'mfa boston',
+    'otp bank',
+    'security code plaza',
+    'zip code 90210',
+    'area code 415',
+    'Settipalle @ K.Bandarlapalle',
+    // Questions for the assistant, however many short words they have.
+    'can you tell where the most flights are going over texas today',
+    'are there any storms near florida right now that might cause delays',
     'OTP Bank',
     // A long request is not a recovery phrase.
     'show flights over texas near austin with altitude above thirty thousand feet please',
@@ -560,4 +590,9 @@ test('a line longer than a place name is never sent for suggestions', async () =
     [],
   );
   assert.equal(sent, 0);
+  // An address has more words: as many as the Omnibar reads as a place.
+  await service.suggest('350 Fifth Avenue, New York, NY 10118, United States');
+  assert.equal(sent, 1);
+  await service.suggest('1 2 3 4 5 6 7 8 9 10 11');
+  assert.equal(sent, 1);
 });
