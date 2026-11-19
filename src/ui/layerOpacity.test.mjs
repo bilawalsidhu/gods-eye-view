@@ -179,6 +179,25 @@ test('a browser that refuses the address write costs the slider nothing', async 
   assert.deepEqual(warned, ['[Opacity] address update failed']);
 });
 
+test('render callback errors do not expose untrusted values or interrupt the change', () => {
+  const secret = 'synthetic-render-secret-ABC123';
+  const { opacity } = fixture();
+  opacity._requestRender = () => {
+    throw new Error(secret);
+  };
+  const warned = [];
+  const warn = console.warn;
+  console.warn = (...args) => warned.push(args);
+  try {
+    assert.equal(opacity.set('wind', 0.5), true);
+    assert.equal(opacity.get('wind'), 0.5);
+  } finally {
+    opacity.destroy();
+    console.warn = warn;
+  }
+  assert.deepEqual(warned, [['[Opacity] render request failed']]);
+});
+
 test('exception diagnostics do not expose untrusted values', async () => {
   const secret = 'synthetic-secret-ABC123';
   const { opacity, manager, history } = fixture();
