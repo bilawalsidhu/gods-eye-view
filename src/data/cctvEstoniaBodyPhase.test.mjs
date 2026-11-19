@@ -37,13 +37,26 @@ function routeFetchTo(t, port) {
   });
 }
 
-const slowHeaders = (req, res) => {
-  const timer = setTimeout(() => {
-    res.writeHead(200, { 'content-type': 'application/xml' });
-    res.end('<d2LogicalModel/>');
-  }, SIBLING_HEADER_DELAY_MS);
-  res.on('close', () => clearTimeout(timer));
-};
+/** The sibling answers late and reports whether it was cut off before headers. */
+function slowSibling() {
+  const arrived = Promise.withResolvers();
+  const closed = Promise.withResolvers();
+  return {
+    arrived: arrived.promise,
+    closed: closed.promise,
+    handler(req, res) {
+      arrived.resolve();
+      const timer = setTimeout(() => {
+        res.writeHead(200, { 'content-type': 'application/xml' });
+        res.end('<d2LogicalModel/>');
+      }, SIBLING_HEADER_DELAY_MS);
+      res.on('close', () => {
+        clearTimeout(timer);
+        closed.resolve({ beforeHeaders: !res.headersSent });
+      });
+    },
+  };
+}
 
 const failingBodies = {
   'declares a body over the byte cap': (req, res) => {
@@ -68,9 +81,11 @@ for (const [label, failingFeed] of Object.entries(failingBodies)) {
     test(`Tarktee aborts ${pending} pending headers when ${failing} ${label}`, { timeout: 10_000 }, async (t) => {
       t.mock.method(console, 'log', () => {});
       t.mock.method(console, 'warn', () => {});
+      const sibling = slowSibling();
       const server = await startServer({
-        [failing]: failingFeed,
-        [pending]: slowHeaders,
+        [failing]: (req, res) =>
+          sibling.arrived.then(() => failingFeed(req, res)),
+        [pending]: sibling.handler,
       });
       t.after(() => {
         server.closeAllConnections();
@@ -86,6 +101,11 @@ for (const [label, failingFeed] of Object.entries(failingBodies)) {
       assert.ok(
         elapsed < FAIL_FAST_MS,
         `loader waited ${elapsed} ms for the sibling's headers instead of aborting it`,
+      );
+      assert.deepEqual(
+        await sibling.closed,
+        { beforeHeaders: true },
+        `${pending} was not aborted`,
       );
     });
   }
