@@ -85,7 +85,8 @@ export function routeWorldFocusRequest(event, runExplicitFocus, fly) {
  * `keepView` (a click on it) keeps the camera's distance and angle: the eye
  * moves, on a straight path, to where it sees the target in the centre with
  * the view it has now (`keptViewFrom`). Any other is framed by its kind
- * (`WORLD_FOCUS_FRAMING`).
+ * (`WORLD_FOCUS_FRAMING`); a target's own `rangeM`, past the framed radius,
+ * stands the camera off that far instead (a target larger than its kind).
  */
 export function flyToWorldTarget(viewer, target = {}) {
   const camera = findCamera(viewer);
@@ -118,7 +119,10 @@ export function flyToWorldTarget(viewer, target = {}) {
       offset: {
         heading,
         pitch: toRadians(framing.pitchDeg),
-        range: framing.rangeM,
+        range:
+          Number.isFinite(target.rangeM) && target.rangeM > framing.radiusM
+            ? target.rangeM
+            : framing.rangeM,
       },
       durationS: duration,
       easing: 'cubicInOut',
