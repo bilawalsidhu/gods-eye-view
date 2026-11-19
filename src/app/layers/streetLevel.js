@@ -6,7 +6,6 @@ import { createPanoramaxProvider } from '../../layers/streetLevel/providers/pano
 import * as picking from '../../data/pickRegistry.js';
 import * as scenePick from '../../data/scenePick.js';
 import * as render from '../../renderGovernor.js';
-import { hitTestWorldOverlay } from '../../overlays/worldOverlay.js';
 
 /** The browser Maps key the scene was started with (src/app/scene.js). */
 const googleApiKey = () => globalThis.window?.__GOOGLE_MAPS_API_KEY__ || null;
@@ -36,7 +35,6 @@ export function createApplicationStreetLevel({
 }) {
   return createStreetLevelLayer({
     providers,
-    // Hit-testing lets a card painted over a near miss keep its click.
-    services: { picking, scenePick, render, overlayHit: hitTestWorldOverlay },
+    services: { picking, scenePick, render },
   });
 }

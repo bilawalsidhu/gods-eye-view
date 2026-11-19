@@ -63,73 +63,48 @@ test('a direct hit needs no drill, and another layer’s contact keeps its click
   assert.equal(pickedRadioStationAt(other), null);
 });
 
-// A station found only through radio's wider window, not as the tap's own
-// pick or its touch contact, sits under another layer's card or label: that
-// layer acts and never sees this window, so radio leaves the click.
-test('a window-only station yields to a card painted over it', () => {
+// Another layer's card or label painted on top takes the click: no station
+// under it acts, whether radio found it through its window, as the tap's touch
+// contact or as the exact pick. Radio's own card on top is radio's click.
+test("a station under another layer's card does not act", () => {
   let top = null;
   const radio = createInteraction({
-    state: { _stationById: new Map([['kexp', {}]]) },
+    state: {
+      _stationById: new Map([
+        ['kexp', {}],
+        ['kuow', {}],
+      ]),
+    },
     services: {
       picking: {
         resolvePickId: (picked) => picked?.id ?? null,
         isOwnedByOtherLayer: () => false,
+        // The card on top at a click, as the registry answers from the host.
+        isUnderOtherCard: (_click, own = []) =>
+          Boolean(top) && !own.includes(top.sourceId),
         registerPickOwner() {},
         unregisterPickOwner() {},
       },
-      overlays: {
-        setOverlaySourceVisible() {},
-        hitTestWorldOverlay: () => top,
-      },
+      overlays: { setOverlaySourceVisible() {} },
     },
     parts: { rendering: { radioStationIdFromPick } },
   });
   const station = hit('radio:kexp');
-  const near = (contact = null) => ({
-    ...clickEvent({ windowHits: [station] }),
+  const tap = (contact = null, pick = null) => ({
+    ...clickEvent({ pick, windowHits: [station] }),
     hit: contact,
     screenPosition: { x: 5, y: 5 },
   });
-  assert.equal(radio.pickedRadioStationAt(near()), 'kexp', 'open map');
+  assert.equal(radio.pickedRadioStationAt(tap()), 'kexp', 'open map');
   top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
-  assert.equal(radio.pickedRadioStationAt(near()), null, 'under a quake card');
+  assert.equal(radio.pickedRadioStationAt(tap()), null, 'window only');
+  assert.equal(radio.pickedRadioStationAt(tap(station)), null, 'contact');
   assert.equal(
-    radio.pickedRadioStationAt(near(station)),
-    'kexp',
-    'the touch contact: the card yielded to the station',
+    radio.pickedRadioStationAt(tap(hit('radio:kuow'))),
+    null,
+    'another contact station',
   );
+  assert.equal(radio.pickedRadioStationAt(tap(null, station)), null, 'exact');
   top = { sourceId: 'radio', entryId: 'radio:kexp' };
-  assert.equal(radio.pickedRadioStationAt(near()), 'kexp', 'our own card');
-});
-
-// Under another layer's card, radio's window can name a different station
-// from the tap's touch contact. The card yields to that contact, a station of
-// ours, so radio acts on it instead of leaving the click dead.
-test('under a card, the touch contact station is ours even when the window names another', () => {
-  const radio = createInteraction({
-    state: { _stationById: new Map([['kexp', {}], ['kuow', {}]]) },
-    services: {
-      picking: {
-        resolvePickId: (picked) => picked?.id ?? null,
-        isOwnedByOtherLayer: () => false,
-        registerPickOwner() {},
-        unregisterPickOwner() {},
-      },
-      overlays: {
-        setOverlaySourceVisible() {},
-        hitTestWorldOverlay: () => ({
-          sourceId: 'earthquake-card',
-          entryId: 'earthquake-card:ak1',
-        }),
-      },
-    },
-    parts: { rendering: { radioStationIdFromPick } },
-  });
-  const tap = (contact) => ({
-    ...clickEvent({ windowHits: [hit('radio:kexp')] }),
-    hit: contact,
-    screenPosition: { x: 5, y: 5 },
-  });
-  assert.equal(radio.pickedRadioStationAt(tap(hit('radio:kuow'))), 'kuow');
-  assert.equal(radio.pickedRadioStationAt(tap(null)), null, 'no contact');
+  assert.equal(radio.pickedRadioStationAt(tap()), 'kexp', 'our own card');
 });

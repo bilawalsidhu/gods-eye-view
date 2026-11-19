@@ -10,8 +10,7 @@ export function createSelection({
   options,
 }) {
   const { state } = vesselState;
-  const { isOwnedByOtherLayer, isActedOnByOtherLayer, resolvePickId } =
-    services.picking;
+  const { isOwnedByOtherLayer } = services.picking;
   const { requestWorldFocus } = services.worldFocus;
   const {
     selectEntityContext,
@@ -31,8 +30,23 @@ export function createSelection({
       // The bridge view owns the selection: a click on open water must not
       // deselect the vessel the camera is riding.
       if (state.cockpitSubjectId) return;
+      // The card or label painted on top takes the click, read once per
+      // click so every layer agrees: a card of ours acts whatever is drawn
+      // under it; another layer's is that layer's click.
+      const top = services.picking.clickCard?.(event) ?? null;
+      if (top) {
+        if (top.sourceId !== VESSEL_OVERLAY_SOURCE_ID) return;
+        const id = String(top.entryId || '').startsWith('vessel:')
+          ? top.entryId.slice('vessel:'.length)
+          : null;
+        const carded = id ? state.records.byId.get(id) || null : null;
+        // A stale card id is not empty terrain and must not clear a newer
+        // selection. The next paint will evict its hit rectangle.
+        if (carded) selectAndFocusVessel(carded);
+        return;
+      }
       const pickedId = event.id;
-      let record = pickedId ? state.records.byId.get(pickedId) : null;
+      const record = pickedId ? state.records.byId.get(pickedId) : null;
       // A vessel icon's pick is an item of the layer's icon set, whose id is
       // its row id: the record's id, or an unkeyed row's. Removing a row
       // removes its item, so an evicted vessel cannot be picked at all; a
@@ -45,76 +59,18 @@ export function createSelection({
 
       // An own-layer row without a live map key is a strict no-op (FB-1
       // residual). Trails carry no layer identity and hug their contacts, so any
-      // `gev-trail:*` pick is also a no-op. Every other non-vessel pick — sibling
-      // unowned scene picks dismiss the current vessel inspection.
+      // `gev-trail:*` pick is also a no-op. A pick a sibling layer owns (an
+      // aircraft, a route, a cyclone) is that layer's: preserve the current
+      // vessel selection and do not compete with its camera command. Every
+      // other non-vessel pick dismisses the current vessel inspection.
       if (ownRecordPick && (!pickedId || !record)) return;
-      /** Whether this layer's own card is painted under the click. */
-      const ownCardUnder = () =>
-        vesselState._vesselOverlayHost.hitTest?.(
-          event.screenPosition?.x,
-          event.screenPosition?.y,
-        )?.sourceId === VESSEL_OVERLAY_SOURCE_ID;
-      // A passive owner's pick (a trail, a directions route) acts for nobody:
-      // a card of ours painted over it keeps the click; otherwise a no-op.
-      const passivePick =
-        Boolean(pickedId) &&
-        !record &&
-        (String(pickedId).startsWith('gev-trail:') ||
-          (Boolean(isActedOnByOtherLayer) &&
-            isOwnedByOtherLayer('ais-live-vessels', pickedId) &&
-            !isActedOnByOtherLayer('ais-live-vessels', pickedId, {
-              click: event,
-            })));
-      if (passivePick && !ownCardUnder()) return;
-
-      // A sibling layer already owns this click. Preserve the current vessel
-      // selection and do not compete with its camera command.
-      const siblingOwned =
-        !passivePick &&
-        pickedId &&
-        isOwnedByOtherLayer('ais-live-vessels', pickedId);
-      // Cyclone geometry is ambient context behind painted cards. Its handler
-      // yields to the same foreground AIS hit. Keep moving-contact precedence
-      // unchanged: those handlers may issue their own camera command.
-      const cycloneBackground =
-        siblingOwned && !isOwnedByOtherLayer('weather-cyclones', pickedId);
-      if (siblingOwned && !cycloneBackground) {
-        // A coarse tap's nearby contact (not the exact pick) whose layer acts
-        // only on exact hits (a fire, a camera) does not take a tap on this
-        // layer's own card: that card keeps it.
-        const nearMissOfExactOnly =
-          isActedOnByOtherLayer &&
-          resolvePickId?.(event.topHit ?? null) !== pickedId &&
-          !isActedOnByOtherLayer('ais-live-vessels', pickedId, {
-            expanded: true,
-            click: event,
-          });
-        if (!nearMissOfExactOnly || !ownCardUnder()) return;
-      }
-
-      // Cards are painted on a pointer-events:none canvas, so the scene pick is
-      // usually terrain behind the card. Resolve against the host's current
-      // actionable hit rectangles before treating the click as empty space.
-      const cardHit = !record
-        ? vesselState._vesselOverlayHost.hitTest?.(
-            event.screenPosition?.x,
-            event.screenPosition?.y,
-          )
-        : null;
       if (
-        (cardHit && cardHit.sourceId !== VESSEL_OVERLAY_SOURCE_ID) ||
-        (cycloneBackground && !cardHit)
+        !record &&
+        pickedId &&
+        (String(pickedId).startsWith('gev-trail:') ||
+          isOwnedByOtherLayer('ais-live-vessels', pickedId))
       )
         return;
-      if (!record && cardHit) {
-        const id = String(cardHit.entryId || '').startsWith('vessel:')
-          ? cardHit.entryId.slice('vessel:'.length)
-          : null;
-        record = id ? state.records.byId.get(id) || null : null;
-        // A stale card id is not empty terrain and must not clear a newer
-        // selection. The next paint will evict its hit rectangle.
-        if (!record) return;
-      }
 
       if (record) {
         // A valid sprite or card click always transfers the camera exactly once,

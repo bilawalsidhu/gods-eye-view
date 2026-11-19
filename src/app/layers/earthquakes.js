@@ -1,6 +1,5 @@
 import { createEarthquakesLayer } from '../../layers/earthquakes/index.js';
 import { overlayHost } from './overlayHost.js';
-import { hitTestWorldOverlay } from '../../overlays/worldOverlay.js';
 import { inputFor } from '../../input/dispatcher.js';
 import * as picking from '../../data/pickRegistry.js';
 import * as context from '../../data/contextStore.js';
@@ -33,7 +32,7 @@ export const earthquakeCardText = Object.freeze({
  */
 export function createApplicationEarthquakes(options) {
   return createEarthquakesLayer({
-    overlayHost: { ...overlayHost, hitTest: hitTestWorldOverlay },
+    overlayHost,
     input: (viewer) => inputFor(viewer),
     picking,
     context,

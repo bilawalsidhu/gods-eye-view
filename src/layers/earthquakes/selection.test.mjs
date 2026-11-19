@@ -83,6 +83,8 @@ function harness(
       return hit && entry?.interactive === true ? hit : null;
     },
   };
+  // The card on top at a click, as the host answers the pick registry.
+  picking.setClickCardHitTest((x, y) => overlayHost.hitTest(x, y));
   const layer = createEarthquakesLayer({
     source: { getSnapshot: async () => snapshot },
     overlayHost,
@@ -128,13 +130,14 @@ function harness(
       snapshot = next;
     },
     /** Click a quake's disc (by stable id), something else, or the map. */
-    click(hit, resolvedHit = hit) {
+    click(hit, resolvedHit = hit, gesture = { travelPx: 0, durationMs: 0 }) {
       for (const { callback } of live())
         callback({
           screenPosition: { x: 10, y: 10 },
           topHit: hit,
           hit: resolvedHit,
           drawHit: hit && !hit.surface ? hit : null,
+          gesture,
         });
     },
     clickDisc(id) {
@@ -276,17 +279,12 @@ test('a refresh keeps the selected quake while it is in the feed', async () => {
   h.layer.destroy();
 });
 
-test('disable removes the click handler, card background and the card', async () => {
+test('disable removes the click handler and the card', async () => {
   const h = harness([quake('ak1')]);
   h.layer.enable(h.viewer);
   await h.layer.update(h.viewer);
   h.clickDisc('ak1');
-  // A drawn disc is background to a card painted over it (a CCTV card).
-  const disc = { set: h.discs().spec.id, id: 'earthquake:ak1' };
-  assert.equal(picking.isCardBackground(disc), true);
-  assert.equal(picking.isCardBackground({ ...disc, set: 'other:1' }), false);
   h.layer.disable(h.viewer);
-  assert.equal(picking.isCardBackground(disc), false);
   assert.deepEqual(h.lastCard(), []);
   assert.equal(
     h.handlers.every((handler) => handler.destroyed),
@@ -673,7 +671,8 @@ test('a feed refresh neither retakes the selection nor restarts the contours', a
   h.layer.destroy();
 });
 
-test("another layer's object over a magnitude label takes the click", async () => {
+// The label painted on top takes the click: the object drawn under it does not.
+test("a magnitude label takes the click over another layer's object", async () => {
   const h = harness([quake('ak1')]);
   h.layer.enable(h.viewer);
   await h.layer.update(h.viewer);
@@ -684,12 +683,11 @@ test("another layer's object over a magnitude label takes the click", async () =
       set: 'flights:1',
       id: 'plane-9',
     });
-    assert.equal(h.cards.length, 0, 'the quake is not selected');
-    assert.equal(h.focused.length, 0, 'and the camera stays');
-    // The label alone still selects and flies.
-    h.clickLabel('ak1');
-    assert.equal(h.lastCard()[0].id, 'earthquake-card:ak1');
-    assert.equal(h.focused.length, 1);
+    assert.equal(h.lastCard()[0].id, 'earthquake-card:ak1', 'selected');
+    assert.equal(h.focused.length, 1, 'and the camera flies');
+    // The plane alone, with no label over it, is not empty space.
+    h.click({ set: 'flights:1', id: 'plane-9' });
+    assert.equal(h.lastCard()[0].id, 'earthquake-card:ak1', 'kept');
   } finally {
     picking.unregisterPickOwner('test-plane');
     h.layer.destroy();
@@ -709,21 +707,19 @@ test('a touch-expanded quake hit selects its disc without flying', async () => {
   }
 });
 
-test('a touch-expanded sibling hit takes precedence over a quake label', async () => {
+test('a quake label takes the click over a touch-expanded sibling hit', async () => {
   const h = harness([quake('ak1'), quake('ak2')]);
   try {
     h.layer.enable(h.viewer);
     await h.layer.update(h.viewer);
     h.clickDisc('ak1');
-    picking.registerPickOwner('test-plane', (id) => id === 'plane-9', {
-      expanded: true,
-    });
+    picking.registerPickOwner('test-plane', (id) => id === 'plane-9');
     h.clickOverlayWith(EARTHQUAKE_OVERLAY_SOURCE_ID, 'ak2', null, {
       set: 'flights:1',
       id: 'plane-9',
     });
-    assert.equal(h.lastCard()[0].id, 'earthquake-card:ak1');
-    assert.equal(h.focused.length, 0);
+    assert.equal(h.lastCard()[0].id, 'earthquake-card:ak2');
+    assert.equal(h.focused.length, 1);
   } finally {
     picking.unregisterPickOwner('test-plane');
     h.layer.destroy();
@@ -751,7 +747,7 @@ test("another layer's card over a quake disc takes the click, and the disc yield
 });
 
 for (const coarse of [false, true]) {
-  test(`a quake card yields while an aircraft starts tracking (${coarse ? 'coarse' : 'exact'} hit)`, async (t) => {
+  test(`a quake card takes the click over an aircraft, which does not track (${coarse ? 'coarse' : 'exact'} hit)`, async (t) => {
     const previous = globalThis.matchMedia;
     globalThis.matchMedia = () => ({ matches: coarse });
     t.after(() => {
@@ -771,9 +767,10 @@ for (const coarse of [false, true]) {
           drillPick: () => (nearby ? [{ id: nearby }] : []),
         };
         input = fakeInput(viewer);
-        // The aircraft layer runs first and changes its passive predicate
-        // synchronously after reading the dispatched hit.
+        // The aircraft layer runs first; like every layer, it leaves a
+        // click under another layer's card to that card.
         input.input.onClick((event) => {
+          if (picking.isUnderOtherCard(event)) return;
           const id = event.hit?.id;
           if (id !== plane.id || tracked === id) return;
           tracked = id;
@@ -782,10 +779,7 @@ for (const coarse of [false, true]) {
         return input.input;
       },
     });
-    picking.registerPickOwner('test-plane', (id) => id === plane.id, {
-      expanded: true,
-      passive: (id) => id === tracked,
-    });
+    picking.registerPickOwner('test-plane', (id) => id === plane.id);
     t.after(() => {
       picking.unregisterPickOwner('test-plane');
       h.layer.destroy();
@@ -804,15 +798,18 @@ for (const coarse of [false, true]) {
     nearby = coarse ? plane : null;
 
     input.click();
-    assert.equal(tracks, 1, 'the aircraft starts tracking');
-    assert.deepEqual(h.opened, [], 'the quake card yields for the whole click');
-    assert.equal(h.lastCard()[0].id, card.id, 'the card stays');
-
-    input.click();
-    assert.equal(tracks, 1, 'already tracking the aircraft');
+    assert.equal(tracks, 0, 'the aircraft under the card does not track');
     assert.deepEqual(h.opened, [
       'https://earthquake.usgs.gov/earthquakes/eventpage/ak1',
     ]);
+    assert.equal(h.lastCard()[0].id, card.id, 'the card stays');
+
+    // Without the card the aircraft takes it, and the quake stays selected.
+    h.overlayHits.clear();
+    input.click();
+    assert.equal(tracks, 1, 'the bare aircraft tracks');
+    assert.equal(h.opened.length, 1);
+    assert.equal(h.lastCard()[0].id, card.id);
   });
 }
 
@@ -853,6 +850,7 @@ for (const kind of ['card', 'label']) {
         paint();
         input.click();
       };
+      picking.setClickCardHitTest((x, y) => host.hitTest(x, y));
       const q = createEarthquakesLayer({
         source: { getSnapshot: async () => [quake('ak1')] },
         overlayHost: host,
@@ -983,15 +981,12 @@ test('quake card and label work over pickable items no layer acts on', async () 
   }
 });
 
-// Flight trails and a directions route line are registered owners that act
-// on no click. Under the quake card or a magnitude label they must not make
-// the click dead; a layer that acts (an aircraft) still takes it.
-test('quake card and label act over a flight trail and a directions route', async () => {
+// The quake card or a magnitude label on top takes the click over whatever is
+// drawn under it: a flight trail, a route, a route step or an aircraft.
+test('quake card and label act over trails, routes, steps and aircraft', async () => {
   const h = harness([quake('ak1'), quake('ak2', { mag: 4 })]);
-  picking.registerPickOwner(
-    'test-directions',
-    (id) => String(id).startsWith('directions:'),
-    { passive: (id) => !id.startsWith('directions:step:') },
+  picking.registerPickOwner('test-directions', (id) =>
+    String(id).startsWith('directions:'),
   );
   picking.registerPickOwner('test-plane', (id) => id === 'plane-9');
   try {
@@ -1006,19 +1001,19 @@ test('quake card and label act over a flight trail and a directions route', asyn
     assert.equal(h.opened.length, 2, 'the card opens USGS over both');
     h.clickOverlayWith(EARTHQUAKE_OVERLAY_SOURCE_ID, 'ak2', trail);
     assert.equal(h.focused.at(-1)?.id, 'earthquake:ak2', 'the label flies');
-    // A route step acts for directions: it takes the click.
-    const focusedBefore = h.focused.length;
+    // A route step under the label: the label still takes it.
     h.clickOverlayWith(EARTHQUAKE_OVERLAY_SOURCE_ID, 'ak1', {
       set: 'directions:1:steps',
       id: 'directions:step:2',
     });
-    assert.equal(h.focused.length, focusedBefore, 'a step takes the click');
-    // So does an aircraft under the card.
+    assert.equal(h.focused.at(-1)?.id, 'earthquake:ak1', 'over a step');
+    // So does the card over an aircraft.
+    h.clickOverlayWith(EARTHQUAKE_OVERLAY_SOURCE_ID, 'ak2', null);
     h.clickOverlayWith(EARTHQUAKE_CARD_SOURCE_ID, 'earthquake-card:ak2', {
       set: 'flights:1',
       id: 'plane-9',
     });
-    assert.equal(h.opened.length, 2);
+    assert.equal(h.opened.length, 3, 'over an aircraft');
     // A plain click on a trail is still not empty space: the card stays.
     h.click(trail);
     assert.equal(h.lastCard()[0].id, 'earthquake-card:ak2');
@@ -1029,7 +1024,7 @@ test('quake card and label act over a flight trail and a directions route', asyn
   }
 });
 
-test('coarse FIRMS near-misses leave quake overlays actionable; exact fire hits act once', async (t) => {
+test('quake overlays take the click over a nearby or exact fire; a bare fire acts once', async (t) => {
   const previous = globalThis.matchMedia;
   globalThis.matchMedia = () => ({ matches: true });
   t.after(() => {
@@ -1094,8 +1089,12 @@ test('coarse FIRMS near-misses leave quake overlays actionable; exact fire hits 
     assert.equal(fireFocus.length, 0);
     sceneHit = fireHit;
     input.click();
-    assert.equal(fireFocus.length, 1, 'exact fire hit acts');
-    assert.equal(h.opened.length, 1, 'card yields to the exact fire');
+    assert.equal(fireFocus.length, 0, 'an exact fire under the card does not');
+    assert.equal(h.opened.length, 2, 'the card on top acts');
+    h.overlayHits.clear();
+    input.click();
+    assert.equal(fireFocus.length, 1, 'the bare fire acts');
+    assert.equal(h.opened.length, 2);
   } finally {
     selection.removeClickHandler();
     picking.unregisterPickOwner('firms');
@@ -1104,9 +1103,9 @@ test('coarse FIRMS near-misses leave quake overlays actionable; exact fire hits 
   }
 });
 
-// A tap that drifts more than the tracking click travel is ignored by the
-// aircraft layers, so a quake card painted beside an aircraft keeps it.
-test('a quake card keeps a dragged tap beside an aircraft that declines it', async (t) => {
+// A tap that drifts more than the tracking click travel is a drag: the quake
+// card ignores it, as the aircraft layers do.
+test('a quake card takes a still tap beside an aircraft but not a dragged one', async (t) => {
   const previous = globalThis.matchMedia;
   globalThis.matchMedia = () => ({ matches: true });
   t.after(() => {
@@ -1127,10 +1126,7 @@ test('a quake card keeps a dragged tap beside an aircraft that declines it', asy
       return input.input;
     },
   });
-  picking.registerPickOwner('test-plane', (id) => id === plane.id, {
-    expanded: true,
-    declinesClick: (click) => (click?.gesture?.travelPx ?? 0) > 6,
-  });
+  picking.registerPickOwner('test-plane', (id) => id === plane.id);
   t.after(() => {
     picking.unregisterPickOwner('test-plane');
     h.layer.destroy();
@@ -1147,15 +1143,57 @@ test('a quake card keeps a dragged tap beside an aircraft that declines it', asy
   });
   sceneHit = null;
   nearby = plane;
-  // A still tap: the aircraft acts on its contact, so the card yields.
+  // A still tap: the card on top takes it over the aircraft's contact.
   input.tap({ x: 10, y: 10 });
-  assert.deepEqual(h.opened, []);
+  assert.equal(h.opened.length, 1);
   // A tap that drifts 10 px: the aircraft ignores it, so the card opens.
   input.down({ x: 10, y: 10 });
   input.move({ x: 20, y: 10 }, { x: 10, y: 10 });
   input.up({ x: 20, y: 10 });
   input.click({ x: 20, y: 10 });
-  assert.equal(h.opened.length, 1, 'the card keeps the dragged tap');
+  assert.equal(h.opened.length, 1, 'a drag opens nothing');
+});
+
+// A pan that ends near where it began still raises a click: it must not
+// select a quake, fly to one, open its source or clear the selection.
+test('a drag that ends on a quake does nothing; a long press selects but neither opens nor clears', async () => {
+  const drag = { travelPx: 12, durationMs: 120 };
+  const hold = { travelPx: 0, durationMs: 900 };
+  const h = harness([quake('ak1'), quake('ak2')]);
+  h.layer.enable(h.viewer);
+  await h.layer.update(h.viewer);
+  const disc = (id) => ({ set: h.discs().spec.id, id: `earthquake:${id}` });
+  h.click(disc('ak1'), disc('ak1'), drag);
+  assert.equal(h.cards.length, 0, 'a drag over a disc selects nothing');
+  h.overlayHits.set(EARTHQUAKE_OVERLAY_SOURCE_ID, {
+    sourceId: EARTHQUAKE_OVERLAY_SOURCE_ID,
+    entryId: 'ak2',
+  });
+  h.click(null, null, drag);
+  h.overlayHits.clear();
+  assert.equal(h.focused.length, 0, 'a drag over a label does not fly');
+  h.click(disc('ak1'), disc('ak1'), hold);
+  const card = h.lastCard()[0];
+  assert.ok(card, 'a long press on a disc selects it');
+  h.overlayHits.set(EARTHQUAKE_CARD_SOURCE_ID, {
+    sourceId: EARTHQUAKE_CARD_SOURCE_ID,
+    entryId: card.id,
+  });
+  h.click(null, null, hold);
+  h.overlayHits.clear();
+  assert.deepEqual(h.opened, [], 'a long press does not open the source');
+  const cardsBefore = h.cards.length;
+  h.click(null, null, drag);
+  h.click(null, null, hold);
+  assert.equal(
+    h.cards.length,
+    cardsBefore,
+    'a drag or hold on the map keeps it',
+  );
+  assert.ok(h.lastCard().length, 'still selected');
+  h.click(null);
+  assert.deepEqual(h.lastCard(), [], 'a clean click on the map clears it');
+  h.layer.destroy();
 });
 
 // A refresh that no longer carries the selected quake evicts it, as other

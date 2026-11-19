@@ -47,6 +47,8 @@ function harness({ snapshots, now = () => 1, cardHit = () => null } = {}) {
   const { draw } = bindFakeDraw(viewer);
   const queue = [...(snapshots || [])];
   const requests = [];
+  // The card on top at a click, as the host answers the pick registry.
+  picking.setClickCardHitTest((x, y) => cardHit(x, y));
   const layer = createShipwrecksLayer({
     source: {
       getSnapshot({ signal }) {
@@ -394,7 +396,7 @@ test('the page deadline subtracts the newest available source age from the limit
   assert.equal(snapshotDeadline({ sources: both }, 0), 7 * DAY, 'defaults');
 });
 
-test('a covered selected card yields while genuine wreck markers still select', async () => {
+test('a covered selected card and covered markers yield; bare markers select', async () => {
   let painted = [];
   const h = harness({
     snapshots: [
@@ -421,7 +423,11 @@ test('a covered selected card yields while genuine wreck markers still select', 
     click();
     assert.deepEqual(h.opened, []);
     assert.equal(h.lastCard()[0].id, first.id);
+    // A marker under another layer's card is that card's click too.
     h.pick('b');
+    click();
+    assert.equal(h.lastCard()[0].id, first.id, 'a covered marker yields');
+    painted = [];
     click();
     assert.equal(h.lastCard()[0].id, 'shipwreck-card:b');
     painted = [{ sourceId: 'shipwrecks', entryId: 'shipwreck-card:b' }];

@@ -15,6 +15,7 @@ export function createInteraction({
   const {
     resolvePickId,
     isOwnedByOtherLayer,
+    isUnderOtherCard,
     registerPickOwner,
     unregisterPickOwner,
   } = services.picking;
@@ -29,6 +30,9 @@ export function createInteraction({
    */
   function pickedRadioStationAt(event) {
     if (!event) return null;
+    // Another layer's card or label painted on top is that layer's click,
+    // read once per click so every layer agrees: no station under it acts.
+    if (isUnderOtherCard?.(event, [RADIO_OVERLAY_SOURCE_ID])) return null;
 
     const stationFromPick = (picked) => {
       const stationId = parts.rendering.radioStationIdFromPick(picked);
@@ -48,26 +52,9 @@ export function createInteraction({
       RADIO_PICK_WINDOW_PX,
     )) {
       const stationId = stationFromPick(picked);
-      if (!stationId) continue;
-      // Found only through our wider window, not as the tap's touch contact:
-      // another layer's card or label painted here is that layer's click,
-      // since its handler never sees this window. A station of ours that is
-      // the contact is still ours: that card yields to it.
-      const contactStationId = stationFromPick(event.hit);
-      if (contactStationId !== stationId && foreignCardAt(event))
-        return contactStationId;
-      return stationId;
+      if (stationId) return stationId;
     }
     return null;
-  }
-
-  /** Whether another layer's world-overlay card or label is under a click. */
-  function foreignCardAt(event) {
-    const top = services.overlays?.hitTestWorldOverlay?.(
-      event.screenPosition?.x,
-      event.screenPosition?.y,
-    );
-    return Boolean(top) && top.sourceId !== RADIO_OVERLAY_SOURCE_ID;
   }
 
   function radioPresentationAllowed() {
@@ -97,9 +84,7 @@ export function createInteraction({
 
   function installInteraction() {
     if (!layerState._viewer || layerState._clickSubscription) return;
-    registerPickOwner('radio', (id) => id.startsWith(RADIO_PREFIX), {
-      expanded: true,
-    });
+    registerPickOwner('radio', (id) => id.startsWith(RADIO_PREFIX));
     const viewer = layerState._viewer;
     layerState._clickSubscription = inputFor(viewer).onClick((event) => {
       if (!radioPresentationAllowed()) return;

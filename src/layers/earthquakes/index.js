@@ -2,6 +2,10 @@ import { fromDegrees } from '../../geo/ellipsoid.js';
 import { drawOf } from '../../render/rendererOf.js';
 import { worldClock } from '../../time/worldClock.js';
 import {
+  isTrackingClickGesture,
+  isTrackingSelectionGesture,
+} from '../../data/trackingClickGesture.js';
+import {
   EARTHQUAKE_OVERLAY_SOURCE_ID,
   EARTHQUAKE_OVERLAY_COHORT_LIMIT,
   EARTHQUAKE_OVERLAY_COLLISION_CAPACITY,
@@ -58,15 +62,13 @@ let instances = 0;
  * without `input` and `picking` the discs are drawn but take no clicks.
  * @param {object} options
  * @param {object} options.source Snapshot source.
- * @param {object} options.overlayHost World-overlay host (`hitTest` lets
- *   the card be clicked).
+ * @param {object} options.overlayHost World-overlay host.
  * @param {(viewer: object) => {onClick: Function}} [options.input] The
  *   viewer's click dispatcher.
  * @param {{resolvePickId: Function, isOwnedByOtherLayer: Function,
- *   isActedOnByOtherLayer?: Function, registerCardBackground?: Function,
- *   unregisterCardBackground?: Function}} [options.picking] The pick
- *   registry; with the card-background pair, a card painted over a disc
- *   (a CCTV card) may act on the click.
+ *   clickCard?: Function}} [options.picking] The pick
+ *   registry; `clickCard` names the card or label painted on top of a
+ *   click, which takes it (the quake card and labels need it to act).
  * @param {{registerEntityContext: Function, selectEntityContext: Function,
  *   clearSelectedEntityContextForLayer: Function,
  *   getContextStore: Function}} [options.context] Shared selection store.
@@ -351,63 +353,39 @@ export function createEarthquakesLayer({
       clicks = null;
     }
     if (!clicks) return;
-    // Our discs stand aside for another layer's card painted over them
-    // (below), so that card's layer may act on the click; without a
-    // hit-test they cannot.
-    if (overlayHost?.hitTest)
-      picking.registerCardBackground?.(
-        EARTHQUAKES_LAYER_ID,
-        (hit) => pickedEvent(hit) !== null,
-      );
     _clickHandler = clicks.onClick((click) => {
       if (!_enabled || (pointer && !pointer.isPointerFree())) return;
-      const at = click.screenPosition;
-      // Another layer's card or label painted on top (a fire's card over a
-      // quake disc) is that layer's click: the disc under it is background.
-      const topEntry = overlayHost.hitTest?.(at?.x, at?.y);
-      if (
-        topEntry &&
-        topEntry.sourceId !== EARTHQUAKE_CARD_SOURCE_ID &&
-        topEntry.sourceId !== EARTHQUAKE_OVERLAY_SOURCE_ID
-      )
-        return;
-      // Another layer's pick that it acts on (an aircraft, a camera) is not
-      // this layer's, even under this layer's card or a magnitude label:
-      // that layer takes the click, and this card stays. A passive owner's
-      // pick (a flight trail, a directions route) acts for nobody, so the
-      // card or label over it keeps the click.
-      const hit = click.hit;
-      const pickId = picking.resolvePickId(hit);
-      const actedOn =
-        picking.isActedOnByOtherLayer ?? picking.isOwnedByOtherLayer;
-      // Exact-only handlers cannot act on a nearby touch hit. Compare ids,
-      // since the dispatcher may expose distinct objects for the same pick.
-      const expanded =
-        'topHit' in click && picking.resolvePickId(click.topHit) !== pickId;
-      if (pickId && actedOn(EARTHQUAKES_LAYER_ID, pickId, { expanded, click }))
-        return;
-      const cardHit = overlayHost.hitTest?.(at?.x, at?.y, {
-        sourceId: EARTHQUAKE_CARD_SOURCE_ID,
-      });
-      if (cardHit && cardHit.entryId === _selectedCardId) {
+      // A pan that ends near where it began still raises a click. As for the
+      // tracking layers and Context, a press that travelled is a drag, not a
+      // pick; opening the source and clearing also need a short press.
+      if (!isTrackingSelectionGesture(click.gesture)) return;
+      const clean = isTrackingClickGesture(click.gesture);
+      // The card or label painted on top takes the click, read once per
+      // click so every layer agrees: another layer's is that layer's click
+      // (the disc under it is background), and ours acts whatever is drawn
+      // under it.
+      const top = picking.clickCard?.(click) ?? null;
+      if (top?.sourceId === EARTHQUAKE_CARD_SOURCE_ID) {
         // The card's action, as its keyboard action: open the source, or
         // with none, fly to the quake.
-        if (_selectedLink) openExternal(_selectedLink);
-        else if (focus?.requestWorldFocus && _selectedId)
+        if (top.entryId !== _selectedCardId) return;
+        if (_selectedLink) {
+          if (clean) openExternal(_selectedLink);
+        } else if (focus?.requestWorldFocus && _selectedId)
           selectAndFocus(_selectedId);
         return;
       }
       // A magnitude label is what a far view (the whole globe) can click:
       // it selects the quake and flies to it.
-      const labelHit = overlayHost.hitTest?.(at?.x, at?.y, {
-        sourceId: EARTHQUAKE_OVERLAY_SOURCE_ID,
-      });
-      if (labelHit && _eventById.has(labelHit.entryId)) {
-        selectAndFocus(labelHit.entryId);
+      if (top?.sourceId === EARTHQUAKE_OVERLAY_SOURCE_ID) {
+        if (_eventById.has(top.entryId)) selectAndFocus(top.entryId);
         return;
       }
-      // A passive owner's pick with nothing of ours over it is still not
-      // empty space: leave the selection alone, as every layer does.
+      if (top) return;
+      // Another layer's pick (an aircraft, a camera, a flight trail) is not
+      // empty space and not this layer's: leave the selection alone.
+      const hit = click.hit;
+      const pickId = picking.resolvePickId(hit);
       if (pickId && picking.isOwnedByOtherLayer(EARTHQUAKES_LAYER_ID, pickId))
         return;
       const event = pickedEvent(hit);
@@ -416,7 +394,7 @@ export function createEarthquakesLayer({
         publishCard({ user: true });
         return;
       }
-      clearSelection();
+      if (clean) clearSelection();
     });
   }
 
@@ -443,7 +421,6 @@ export function createEarthquakesLayer({
   function removeClickHandler() {
     _clickHandler?.();
     _clickHandler = null;
-    picking?.unregisterCardBackground?.(EARTHQUAKES_LAYER_ID);
   }
 
   const layer = {

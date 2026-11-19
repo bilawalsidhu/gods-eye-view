@@ -1,10 +1,9 @@
 import {
   clearOverlaySource,
-  hitTestWorldOverlay,
   setOverlayEntries,
 } from '../overlays/worldOverlay.js';
 import { inputFor } from '../input/dispatcher.js';
-import { isActedOnByOtherLayer, resolvePickId } from './pickRegistry.js';
+import { clickCard } from './pickRegistry.js';
 import { isTrackingSelectionGesture } from './trackingClickGesture.js';
 import { governorRequestRender } from '../renderGovernor.js';
 import { drawOf, findCamera } from '../render/rendererOf.js';
@@ -284,7 +283,6 @@ export function createBhoteKoshiLocatorLayer({
   scheduleDelay = (callback, delayMs) => setTimeout(callback, delayMs),
   cancelDelay = (handle) => clearTimeout(handle),
   input = inputFor,
-  hitTest = hitTestWorldOverlay,
 } = {}) {
   let _viewer = null;
   // The globe click that opens an actionable callout of ours on top.
@@ -1153,9 +1151,8 @@ export function createBhoteKoshiLocatorLayer({
   /**
    * An actionable callout of ours (the trigger record's) is a card painted
    * over the globe: a click on it opens its source, as its keyboard action
-   * does. Like the other cards, it leaves a drag alone and yields to a layer
-   * that acts on what is under it (an aircraft, a vessel): its exact pick, or
-   * a coarse tap's touch contact whose layer acts on nearby contacts.
+   * does. Like the other cards, it leaves a drag alone and, on top, takes the
+   * click over whatever is drawn under it.
    */
   function installCalloutClick(viewer) {
     if (_removeClick) return;
@@ -1168,26 +1165,9 @@ export function createBhoteKoshiLocatorLayer({
     _removeClick =
       clicks?.onClick?.((event) => {
         if (!_enabled || !isTrackingSelectionGesture(event.gesture)) return;
-        const top = hitTest?.(event.screenPosition?.x, event.screenPosition?.y);
+        // The card painted on top, read once per click so every layer agrees.
+        const top = clickCard(event);
         if (top?.sourceId !== BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID) return;
-        const exactId = resolvePickId(event.topHit ?? null);
-        if (
-          exactId &&
-          isActedOnByOtherLayer(BHOTE_KOSHI_LOCATOR_LAYER_ID, exactId, {
-            click: event,
-          })
-        )
-          return;
-        const contactId = resolvePickId(event.hit ?? null);
-        if (
-          contactId &&
-          contactId !== exactId &&
-          isActedOnByOtherLayer(BHOTE_KOSHI_LOCATOR_LAYER_ID, contactId, {
-            expanded: true,
-            click: event,
-          })
-        )
-          return;
         if (typeof top.entry?.activate === 'function') top.entry.activate();
       }) ?? null;
   }

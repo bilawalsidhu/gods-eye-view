@@ -15,13 +15,11 @@ import {
   registerPickOwner,
   unregisterPickOwner,
   isOwnedByOtherLayer,
-  isActedOnByOtherLayer,
   resolvePickId,
   pickContact,
-  findPickOwner,
-  registerCardBackground,
-  unregisterCardBackground,
-  isCardBackground,
+  clickCard,
+  isUnderOtherCard,
+  setClickCardHitTest,
 } from './pickRegistry.js';
 
 // ---------------------------------------------------------------------------
@@ -54,11 +52,8 @@ test('resolvePickId: the map and nothing → null', () => {
 // ---------------------------------------------------------------------------
 
 test('ownership: sibling layers recognize each other via String-coerced ids', () => {
-  const points = new Map([
-    [25544, {}],
-    [43013, {}],
-  ]); // satellites: numeric keys
-  const vessels = new Map([['367123450', {}]]); // AIS: string id keys
+  const points = new Map([[25544, {}], [43013, {}]]); // satellites: numeric keys
+  const vessels = new Map([['367123450', {}]]);        // AIS: string id keys
   registerPickOwner('satellites', (pickedId) => {
     const norad = Number(pickedId);
     return Number.isFinite(norad) && points.has(norad);
@@ -66,15 +61,9 @@ test('ownership: sibling layers recognize each other via String-coerced ids', ()
   registerPickOwner('ais-live-vessels', (pickedId) => vessels.has(pickedId));
   try {
     // Flights asking about a satellite pick (raw numeric id → String upstream)
-    assert.equal(
-      isOwnedByOtherLayer('flights', resolvePickId(item('sat:1', '25544'))),
-      true,
-    );
+    assert.equal(isOwnedByOtherLayer('flights', resolvePickId(item('sat:1', '25544'))), true);
     // Flights asking about a vessel pick (an icon row id: the vessel's id)
-    assert.equal(
-      isOwnedByOtherLayer('flights', resolvePickId(item('ais:1', '367123450'))),
-      true,
-    );
+    assert.equal(isOwnedByOtherLayer('flights', resolvePickId(item('ais:1', '367123450'))), true);
     // A layer never owns its own pick via the sibling scan
     assert.equal(isOwnedByOtherLayer('satellites', '25544'), false);
     // Unknown ids belong to nobody
@@ -87,9 +76,7 @@ test('ownership: sibling layers recognize each other via String-coerced ids', ()
 });
 
 test('ownership: a throwing predicate never breaks click handling', () => {
-  registerPickOwner('broken', () => {
-    throw new Error('boom');
-  });
+  registerPickOwner('broken', () => { throw new Error('boom'); });
   registerPickOwner('cctv', (pickedId) => pickedId === 'atx-cam-3');
   try {
     assert.equal(isOwnedByOtherLayer('flights', 'atx-cam-3'), true);
@@ -137,83 +124,6 @@ function query(picked, drillPick = () => assert.fail('must not drill')) {
   };
 }
 
-test('ownership: passive owners still own their picks but act on none of them', () => {
-  registerPickOwner('test-trails', (id) => id.startsWith('trail:'), {
-    passive: true,
-  });
-  registerPickOwner('test-route', (id) => id.startsWith('route:'), {
-    passive: (id) => !id.startsWith('route:step:'),
-  });
-  registerPickOwner('test-plane', (id) => id === 'plane:1');
-  registerPickOwner('test-broken', () => {
-    throw new Error('broken');
-  });
-  try {
-    assert.equal(
-      isOwnedByOtherLayer('cards', 'trail:9'),
-      true,
-      'not empty space',
-    );
-    assert.equal(isActedOnByOtherLayer('cards', 'trail:9'), false);
-    assert.equal(isActedOnByOtherLayer('cards', 'route:line'), false);
-    assert.equal(isActedOnByOtherLayer('cards', 'route:step:3'), true);
-    assert.equal(isActedOnByOtherLayer('cards', 'plane:1'), true);
-    assert.equal(
-      isActedOnByOtherLayer('cards', 'plane:1', { expanded: true }),
-      false,
-    );
-    registerPickOwner('test-plane', (id) => id === 'plane:1', {
-      expanded: true,
-    });
-    assert.equal(
-      isActedOnByOtherLayer('cards', 'plane:1', { expanded: true }),
-      true,
-    );
-    registerPickOwner('test-plane', (id) => id === 'plane:1', {
-      expanded: true,
-      passive: true,
-    });
-    assert.equal(
-      isActedOnByOtherLayer('cards', 'plane:1', { expanded: true }),
-      false,
-    );
-    registerPickOwner('test-plane', (id) => id === 'plane:1');
-    assert.equal(
-      isActedOnByOtherLayer('cards', 'plane:1', { expanded: true }),
-      false,
-    );
-    registerPickOwner('test-plane', (id) => id === 'plane:1', {
-      expanded: true,
-    });
-    unregisterPickOwner('test-plane');
-    registerPickOwner('test-plane', (id) => id === 'plane:1');
-    assert.equal(
-      isActedOnByOtherLayer('cards', 'plane:1', { expanded: true }),
-      false,
-    );
-
-    assert.equal(
-      isActedOnByOtherLayer('test-plane', 'plane:1'),
-      false,
-      'never the asker',
-    );
-    assert.equal(isActedOnByOtherLayer('cards', null), false);
-    // Registering again without the option makes the owner act.
-    registerPickOwner('test-trails', (id) => id.startsWith('trail:'));
-    assert.equal(isActedOnByOtherLayer('cards', 'trail:9'), true);
-    // Unregistering drops the option with the predicate.
-    registerPickOwner('test-trails', (id) => id.startsWith('trail:'), {
-      passive: true,
-    });
-    unregisterPickOwner('test-trails');
-    registerPickOwner('test-trails', (id) => id.startsWith('trail:'));
-    assert.equal(isActedOnByOtherLayer('cards', 'trail:9'), true);
-  } finally {
-    for (const id of ['test-trails', 'test-route', 'test-plane', 'test-broken'])
-      unregisterPickOwner(id);
-  }
-});
-
 test('touch contact pick expands only a surface miss, bounded to 8 hits in 14 CSS pixels', (t) => {
   primaryPointer(t, true);
   contactOwners(t);
@@ -234,14 +144,10 @@ test("touch contact pick uses the click's own pick and drill", (t) => {
   contactOwners(t);
   const contact = item('flights:1', 'civil');
   const asked = [];
-  const found = pickContact(
-    query(null),
-    { x: 1, y: 1 },
-    {
-      picked: null,
-      drill: (...args) => (asked.push(args), [contact]),
-    },
-  );
+  const found = pickContact(query(null), { x: 1, y: 1 }, {
+    picked: null,
+    drill: (...args) => (asked.push(args), [contact]),
+  });
   assert.equal(found, contact);
   assert.deepEqual(asked, [[8, 14, 14]]);
 });
@@ -274,13 +180,7 @@ test('touch expansion stops at an unowned item and respects the drill bound', (t
     [...Array(8).fill(item('notes:1', 'x')), item('flights:1', 'civil')],
     [],
   ])
-    assert.equal(
-      pickContact(
-        query(SURFACE, () => hits),
-        { x: 1, y: 1 },
-      ),
-      SURFACE,
-    );
+    assert.equal(pickContact(query(SURFACE, () => hits), { x: 1, y: 1 }), SURFACE);
 });
 
 test('fine primary pointers keep the exact mouse pick without a drill', (t) => {
@@ -301,22 +201,39 @@ test('touch picking tolerates a failing drill and preserves empty sky', (t) => {
     assert.equal(pickContact(query(null, drillPick), { x: 1, y: 1 }), null);
 });
 
-test('card backgrounds: a registered shape, never the map, and safe to break', () => {
-  const shape = { set: 'zones:1:fills', id: 'zone:1', surface: false };
-  assert.equal(isCardBackground(shape), false);
-  registerCardBackground('test-zones', (hit) => hit.set === shape.set);
-  registerCardBackground('test-broken', () => {
-    throw new Error('broken predicate');
+test("the card on top is read once per click, and only another layer's card counts", () => {
+  let top = { sourceId: 'quake-card', entryId: 'q1' };
+  let reads = 0;
+  setClickCardHitTest((x, y) => {
+    reads++;
+    assert.deepEqual([x, y], [4, 5]);
+    return top;
   });
   try {
-    assert.equal(isCardBackground(shape), true);
-    assert.equal(isCardBackground({ ...shape, set: 'other:1' }), false);
-    assert.equal(isCardBackground({ surface: true }), false);
-    assert.equal(isCardBackground(null), false);
-    assert.equal(findPickOwner(shape.id), null, 'not an owner');
+    const click = { screenPosition: { x: 4, y: 5 } };
+    assert.equal(isUnderOtherCard(click, ['vessel-card']), true);
+    assert.equal(isUnderOtherCard(click, ['quake-card']), false, 'own card');
+    // A card published later in the same click does not change it.
+    top = { sourceId: 'vessel-card', entryId: 'v1' };
+    assert.equal(clickCard(click).sourceId, 'quake-card');
+    assert.equal(reads, 1);
+    assert.equal(isUnderOtherCard({ screenPosition: { x: 4, y: 5 } }), true);
+    top = null;
+    assert.equal(isUnderOtherCard({ screenPosition: { x: 4, y: 5 } }), false);
   } finally {
-    unregisterCardBackground('test-zones');
-    unregisterCardBackground('test-broken');
+    setClickCardHitTest(null);
   }
-  assert.equal(isCardBackground(shape), false);
+  assert.equal(
+    isUnderOtherCard({ screenPosition: { x: 4, y: 5 } }),
+    false,
+    'no host',
+  );
+  setClickCardHitTest(() => {
+    throw new Error('broken');
+  });
+  try {
+    assert.equal(clickCard({ screenPosition: { x: 1, y: 1 } }), null);
+  } finally {
+    setClickCardHitTest(null);
+  }
 });

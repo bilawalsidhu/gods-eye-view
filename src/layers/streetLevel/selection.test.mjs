@@ -48,11 +48,13 @@ function harness({
       ...sceneExtras,
     },
   };
+  // The card on top at a click, as the host answers the pick registry.
+  pickRegistry.setClickCardHitTest(services.overlayHit ?? null);
   const state = {
     viewer,
     enabled: true,
     clickSubscription: null,
-    services: { picking: null, input: null, ...services },
+    services: { picking: pickRegistry, input: null, ...services },
     providers: new Map([
       [
         'mapillary',
@@ -106,6 +108,7 @@ function harness({
       return event;
     },
     restore() {
+      pickRegistry.setClickCardHitTest(null);
       selection.uninstall();
       globalThis.document = saved;
     },
@@ -315,26 +318,48 @@ test('an item found only in our window yields to a card painted over it', () => 
   }
 });
 
-// A coarse tap's touch contact reaches farther than this window. A quake card
-// or label over that contact yields to it, so Street Level takes it here.
-test('a coarse touch contact beyond our window is ours to open', (t) => {
+// The map itself under another layer's card or label is that card's click:
+// a ground click there must not also open the nearest street image.
+test("a click on the map under another layer's card opens no ground image", () => {
+  let top = null;
+  const h = harness({ services: { overlayHit: () => top } });
+  try {
+    h.click();
+    assert.equal(
+      h.groundClicks.length,
+      1,
+      'open map: the ground handler decides',
+    );
+    top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+    h.click();
+    assert.equal(h.groundClicks.length, 1, 'under a card: the card keeps it');
+    assert.deepEqual(h.opened, []);
+  } finally {
+    h.restore();
+  }
+});
+
+// A coarse tap's touch contact reaches farther than this window: on open map
+// Street Level takes it; under another layer's card the card does.
+test('a coarse touch contact beyond our window is ours to open, unless a card is on top', (t) => {
   const previous = globalThis.matchMedia;
   globalThis.matchMedia = () => ({ matches: true });
   t.after(() => {
     if (previous) globalThis.matchMedia = previous;
     else delete globalThis.matchMedia;
   });
+  let top = { sourceId: 'earthquake-card', entryId: 'q' };
   const h = harness({
-    services: {
-      picking: pickRegistry,
-      overlayHit: () => ({ sourceId: 'earthquake-card', entryId: 'q' }),
-    },
+    services: { picking: pickRegistry, overlayHit: () => top },
     sceneExtras: {
       pick: () => null,
       drillPick: () => [{ id: 'mly:img:contact' }],
     },
   });
   try {
+    h.click();
+    assert.deepEqual(h.opened, [], 'under a card: the card keeps it');
+    top = null;
     h.click();
     assert.deepEqual(h.opened, ['contact']);
     assert.equal(h.groundClicks.length, 0);
@@ -343,22 +368,27 @@ test('a coarse touch contact beyond our window is ours to open', (t) => {
   }
 });
 
-// The exact hit or the touch contact is ours under a card too: a quake card
-// or label yields to a Street Level owner's pick, so yielding back would
-// leave the click dead. Line parts compare by the sequence they pick as.
-test('an exact or contact hit on our line part acts under a card', (t) => {
+// The exact hit or the touch contact on our line part under another layer's
+// card is that card's click; on open map it selects the sequence its part
+// picks as.
+test('an exact or contact hit on our line part acts only with no card on top', (t) => {
   const part = {
     set: 'street-level:mapillary-coverage:1',
     id: 'mly:seq:abc#2',
     meta: { pick: 'mly:seq:abc' },
   };
-  const card = () => ({ sourceId: 'earthquake-card', entryId: 'q' });
+  let top = { sourceId: 'earthquake-card', entryId: 'q' };
+  const card = () => top;
   const exact = harness({ services: { overlayHit: card } });
   try {
     exact.scene.under = part;
     exact.click();
+    assert.deepEqual(exact.sequences.selects, [], 'under a card');
+    top = null;
+    exact.click();
     assert.deepEqual(exact.sequences.selects, ['abc'], 'mouse, exact part');
   } finally {
+    top = { sourceId: 'earthquake-card', entryId: 'q' };
     exact.restore();
   }
   const previous = globalThis.matchMedia;
@@ -376,6 +406,9 @@ test('an exact or contact hit on our line part acts under a card', (t) => {
   });
   try {
     contact.click();
+    assert.deepEqual(contact.sequences.selects, [], 'coarse, under a card');
+    top = null;
+    contact.click();
     assert.deepEqual(contact.sequences.selects, ['abc'], 'coarse contact');
   } finally {
     contact.restore();
@@ -383,7 +416,7 @@ test('an exact or contact hit on our line part acts under a card', (t) => {
 });
 
 // Our window catching another layer's item says nothing about our own touch
-// contact beyond it: that contact is still ours under a card.
+// contact beyond it: that contact is still ours.
 test('a contact of ours acts even when our window finds another item', (t) => {
   const previous = globalThis.matchMedia;
   globalThis.matchMedia = () => ({ matches: true });
@@ -392,10 +425,7 @@ test('a contact of ours acts even when our window finds another item', (t) => {
     else delete globalThis.matchMedia;
   });
   const h = harness({
-    services: {
-      picking: pickRegistry,
-      overlayHit: () => ({ sourceId: 'earthquake-card', entryId: 'q' }),
-    },
+    services: { picking: pickRegistry },
     sceneExtras: {
       pick: (_position, width = 3) =>
         width >= 9 ? { id: { set: 'flights:1', id: 'flight:9' } } : null,
@@ -410,36 +440,18 @@ test('a contact of ours acts even when our window finds another item', (t) => {
   }
 });
 
-// The core's position marker is ours but selects nothing, so it is a passive
-// pick: a card painted over it keeps the tap. Our images and lines act.
-test('the position marker is a passive pick; our items act', () => {
-  const h = harness({ services: { picking: pickRegistry } });
-  try {
-    const acted = (id) =>
-      pickRegistry.isActedOnByOtherLayer('test-card', id, { expanded: true });
-    assert.equal(pickRegistry.findPickOwner('sl:pos'), 'street-level');
-    assert.equal(acted('sl:pos'), false, 'the marker acts for nobody');
-    assert.equal(acted('mly:img:abc'), true, 'an image opens');
-  } finally {
-    h.restore();
-  }
-});
-
-// Under another layer's card, our window can name a different item from the
-// tap's touch contact. The card yields to that contact, an item of ours, so
-// Street Level opens it instead of leaving the click dead.
-test('under a card, the touch contact item is ours even when the window names another', (t) => {
+// Under another layer's card nothing of ours opens, whatever our window or the
+// tap's touch contact names; on open map our window's item opens.
+test('under a card, neither our window item nor our touch contact opens', (t) => {
   const previous = globalThis.matchMedia;
   globalThis.matchMedia = () => ({ matches: true });
   t.after(() => {
     if (previous) globalThis.matchMedia = previous;
     else delete globalThis.matchMedia;
   });
+  let top = { sourceId: 'earthquake-card', entryId: 'q' };
   const h = harness({
-    services: {
-      picking: pickRegistry,
-      overlayHit: () => ({ sourceId: 'earthquake-card', entryId: 'q' }),
-    },
+    services: { picking: pickRegistry, overlayHit: () => top },
     sceneExtras: {
       pick: (_position, width = 3) =>
         width >= 9 ? { id: 'mly:img:window' } : null,
@@ -448,8 +460,11 @@ test('under a card, the touch contact item is ours even when the window names an
   });
   try {
     h.click();
-    assert.deepEqual(h.opened, ['contact']);
+    assert.deepEqual(h.opened, []);
     assert.equal(h.groundClicks.length, 0);
+    top = null;
+    h.click();
+    assert.deepEqual(h.opened, ['window']);
   } finally {
     h.restore();
   }

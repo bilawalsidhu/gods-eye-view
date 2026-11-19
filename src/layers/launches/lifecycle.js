@@ -4,8 +4,6 @@ import { canvasOf, findCamera, findFrame } from '../../render/rendererOf.js';
 import { worldClock } from '../../time/worldClock.js';
 
 const HOVER_PICK_INTERVAL_MS = 120;
-/** Our id in the pick registry's card backgrounds. */
-const CARD_BACKGROUND_ID = 'rocket-launches';
 
 /**
  * Bound hover picking independently of precise click selection. A move inside
@@ -206,29 +204,12 @@ export function createLifecycle({
       layerState._orbitMatches = 0;
       parts.overlays.clearMissionOverlaySources();
       const input = inputFor(viewer);
-      // Our mission items stand aside for a card painted over them (below),
-      // so that card's layer may act on the click; without a hit-test they
-      // cannot.
-      if (services.overlays?.hitTestWorldOverlay)
-        services.picking?.registerCardBackground?.(
-          CARD_BACKGROUND_ID,
-          (hit) =>
-            layerState._enabled &&
-            parts.rendering.missionsShown() &&
-            parts.rendering.launchIdFromPicks([hit]) !== null,
-        );
       const unsubscribeClick = input.onClick((event) => {
         if (!layerState._enabled || !parts.rendering.missionsShown()) return;
         // Mission overlays are not interactive, so any overlay entry hit
         // here is another layer's card or label painted over the click: that
         // layer's click, not a mission's.
-        if (
-          services.overlays?.hitTestWorldOverlay?.(
-            event.screenPosition?.x,
-            event.screenPosition?.y,
-          )
-        )
-          return;
+        if (services.picking?.clickCard?.(event)) return;
         // The click's pick position (CSS px), as the click picked it.
         const launchId = parts.rendering.launchIdFromPicks(
           parts.rendering.missionHitsAt(event.position, 12),
@@ -248,7 +229,6 @@ export function createLifecycle({
       layerState._inputSubscription = () => {
         unsubscribeClick();
         unsubscribeHover();
-        services.picking?.unregisterCardBackground?.(CARD_BACKGROUND_ID);
       };
       // Apply horizon visibility before the renderer draws and picks.
       // A postRender write is one frame late and can remain visibly stale when

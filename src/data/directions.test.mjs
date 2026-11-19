@@ -28,7 +28,7 @@ import {
   createApplicationDirectionsLayer,
 } from './directions.js';
 import { GROUND_FLOOR_LIFT_M } from './groundFloor.js';
-import { isActedOnByOtherLayer, isOwnedByOtherLayer } from './pickRegistry.js';
+import { isOwnedByOtherLayer, setClickCardHitTest } from './pickRegistry.js';
 import { fakeInput } from '../input/testDoubles.mjs';
 import { instructionFor } from './routeSteps.js';
 import { setLocale } from '../i18n/index.js';
@@ -467,10 +467,9 @@ function ownershipFixture(t) {
   });
 }
 
-// Directions acts only on its maneuver steps. The route line and the A/B
-// markers are passive picks: still not empty space to other layers, but a
-// card painted over them (a quake card) keeps its click.
-test('enabled, directions owns its picks and acts only on its steps', (t) => {
+// Directions owns its route, markers and steps while enabled: none of them
+// is empty space to other layers.
+test('enabled, directions owns its picks', (t) => {
   ownershipFixture(t);
   const viewer = {
     scene: {
@@ -488,22 +487,43 @@ test('enabled, directions owns its picks and acts only on its steps', (t) => {
       'directions:step:3',
     ])
       assert.equal(isOwnedByOtherLayer('earthquakes', id), true, id);
-    assert.equal(
-      isActedOnByOtherLayer('earthquakes', 'directions:route'),
-      false,
-    );
-    assert.equal(
-      isActedOnByOtherLayer('earthquakes', 'directions:marker:a'),
-      false,
-    );
-    assert.equal(
-      isActedOnByOtherLayer('earthquakes', 'directions:step:3'),
-      true,
-    );
   } finally {
     directionsLayer.disable(viewer);
   }
   assert.equal(isOwnedByOtherLayer('earthquakes', 'directions:route'), false);
+});
+
+// The card or label painted on top takes the click: directions does not even
+// pick under another layer's card, so no step is selected or cleared there.
+test("another layer's card over directions keeps the click", (t) => {
+  ownershipFixture(t);
+  let picks = 0;
+  const viewer = {
+    scene: {
+      pick: () => {
+        picks++;
+        return null;
+      },
+      canvas: { clientWidth: 100, clientHeight: 100 },
+    },
+  };
+  const input = fakeInput(viewer);
+  let top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  setClickCardHitTest(() => top);
+  t.after(() => {
+    setClickCardHitTest(null);
+    input.destroy();
+  });
+  directionsLayer.enable(viewer);
+  try {
+    input.tap({ x: 10, y: 10 });
+    assert.equal(picks, 0, 'covered: the scene under the card is not picked');
+    top = null;
+    input.tap({ x: 10, y: 10 });
+    assert.ok(picks > 0, 'open map: the click reaches the scene');
+  } finally {
+    directionsLayer.disable(viewer);
+  }
 });
 
 test('placing an endpoint takes the pointer, and every exit path gives it back', (t) => {

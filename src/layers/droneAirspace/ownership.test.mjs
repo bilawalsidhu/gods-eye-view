@@ -17,7 +17,6 @@ const liveSet = (draw, suffix) =>
 function harness(source, { pick = () => null, cardHit = () => null } = {}) {
   const overlay = { entries: new Map(), visible: null };
   const owners = new Map();
-  const backgrounds = new Map();
   const viewer = { scene: { pick } };
   const { draw } = bindFakeDraw(viewer);
   const input = fakeInput(viewer);
@@ -48,9 +47,9 @@ function harness(source, { pick = () => null, cardHit = () => null } = {}) {
         String(pickedId).startsWith('other-layer:'),
       registerPickOwner: (layerId, predicate) => owners.set(layerId, predicate),
       unregisterPickOwner: (layerId) => owners.delete(layerId),
-      registerCardBackground: (layerId, predicate) =>
-        backgrounds.set(layerId, predicate),
-      unregisterCardBackground: (layerId) => backgrounds.delete(layerId),
+      // The card on top at a click, as the registry answers from the host.
+      clickCard: (click) =>
+        cardHit(click.screenPosition?.x, click.screenPosition?.y, {}),
     },
   });
   layer.init(viewer);
@@ -65,7 +64,6 @@ function harness(source, { pick = () => null, cardHit = () => null } = {}) {
     overlay,
     clicks,
     owners,
-    backgrounds,
   };
 }
 
@@ -283,22 +281,4 @@ test('a boundary change alone redraws the zone; identical geometry does not', as
   assert.notEqual(redrawn, first, 'moved boundary must redraw');
   assert.notDeepEqual(redrawn.positions, first.positions);
   assert.ok(h.layer.getAnalystRecords()[0].lon > -76.6);
-});
-
-// A card painted over the area may act there (a live CCTV card): the layer
-// names its own drawn shapes, and only while it takes clicks.
-test('enabled, the zone shapes register as card background', async () => {
-  const h = harness({ getSnapshot: async () => [row] });
-  await h.layer.update(h.viewer);
-  const isBackground = h.backgrounds.get('drone-airspace');
-  const own = {
-    set: h.fills().spec.id,
-    id: 'drone-airspace:310:0',
-    surface: false,
-  };
-  assert.equal(isBackground(own), true);
-  assert.equal(isBackground({ ...own, set: 'other:1:fills' }), false);
-  assert.equal(isBackground({ ...own, id: 'other-layer:x' }), false);
-  h.layer.disable(h.viewer);
-  assert.equal(h.backgrounds.has('drone-airspace'), false);
 });

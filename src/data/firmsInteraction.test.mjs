@@ -11,7 +11,12 @@ import {
   buildCellCard,
 } from './firmsHeatmap.js';
 import { fireDetectionKey } from './firmsLabels.js';
-import { registerPickOwner, unregisterPickOwner } from './pickRegistry.js';
+import {
+  isUnderOtherCard,
+  registerPickOwner,
+  setClickCardHitTest,
+  unregisterPickOwner,
+} from './pickRegistry.js';
 import { getSelectedEntityContext } from './contextStore.js';
 import { setLocale } from '../i18n/index.js';
 import { shownEntityLabel } from '../voice/speech.js';
@@ -80,21 +85,24 @@ function harness({
   };
 
   const published = [];
+  const overlayHost = {
+    setEntries: (sourceId, entries) => published.push(...entries),
+    setVisible() {},
+    clearSource() {},
+    hitTest: (_x, _y, { sourceId } = {}) =>
+      !sourceId && topCard
+        ? topCard
+        : cardHit
+          ? { sourceId: 'firms', entryId: cardHit }
+          : null,
+  };
+  // The card on top at a click, as the host answers the pick registry.
+  setClickCardHitTest((x, y) => overlayHost.hitTest(x, y));
   const layer = createFirmsHeatmapLayer({
     ...(feed ? { feed } : {}),
     id: 'firms-test',
     name: 'Fires',
-    overlayHost: {
-      setEntries: (sourceId, entries) => published.push(...entries),
-      setVisible() {},
-      clearSource() {},
-      hitTest: (_x, _y, { sourceId } = {}) =>
-        !sourceId && topCard
-          ? topCard
-          : cardHit
-            ? { sourceId: 'firms', entryId: cardHit }
-            : null,
-    },
+    overlayHost,
   });
 
   const draw = fakeDrawPort();
@@ -171,6 +179,7 @@ function harness({
       picked = next;
     },
     cleanup() {
+      setClickCardHitTest(null);
       Cesium.SceneTransforms.worldToWindowCoordinates = priorProjection;
       if (hadWindow) globalThis.window = priorWindow;
       else delete globalThis.window;
@@ -331,6 +340,10 @@ test('clicking a fire sprite selects it and requests the camera transfer', () =>
     topCard: { sourceId: 'earthquakes', entryId: 'quake:cover' },
   });
   try {
+    // Under another layer's card the sprite is that card's click.
+    h.click();
+    assert.equal(h.requests.length, 0, 'covered: the card takes it');
+    h.cover(null);
     h.click();
     assert.equal(h.requests.length, 1);
     assert.equal(h.requests[0].kind, 'fire');
@@ -435,9 +448,9 @@ test('a click on neither sprite nor card clears without moving the camera', () =
   }
 });
 
-// Sibling layers surface heterogeneous pick shapes. Reading `picked.id`
-// directly recognized only bare strings, so an AIS sprite (or satellite, or
-// entity) under a fire card let BOTH layers issue a camera command.
+// Sibling layers surface heterogeneous pick shapes. Whatever is drawn under
+// it, the fire card painted on top takes the click (those layers stand aside
+// under another layer's card, so one click does one thing).
 const SIBLING_PICKS = [
   ['flights', 'a1b2c3', { id: 'a1b2c3' }],
   ['flights', 'a1b2c3', { primitive: { id: 'a1b2c3' } }],
@@ -447,7 +460,7 @@ const SIBLING_PICKS = [
 ];
 
 for (const [layerId, ownedId, picked] of SIBLING_PICKS) {
-  test(`a ${layerId} pick shaped ${JSON.stringify(picked)} wins over a card hit`, () => {
+  test(`a fire card wins over a ${layerId} pick shaped ${JSON.stringify(picked)}`, () => {
     const fire = makeFire();
     registerPickOwner(layerId, (pickedId) => pickedId === ownedId);
     const h = harness({
@@ -457,11 +470,7 @@ for (const [layerId, ownedId, picked] of SIBLING_PICKS) {
     });
     try {
       h.click();
-      assert.equal(
-        h.requests.length,
-        0,
-        `the ${layerId} layer is already acting on this click`,
-      );
+      assert.equal(h.requests.length, 1, 'the card on top acts');
     } finally {
       h.cleanup();
       unregisterPickOwner(layerId);
@@ -474,9 +483,7 @@ for (const [layerId, ownedId, picked] of SIBLING_PICKS) {
 // still not empty space, so the selection stays.
 test('a fire card acts over a passive pick; the bare pick leaves the selection', () => {
   const fire = makeFire();
-  registerPickOwner('test-route', (pickedId) => pickedId === 'route:line', {
-    passive: true,
-  });
+  registerPickOwner('test-route', (pickedId) => pickedId === 'route:line');
   const carded = harness({
     fires: [fire],
     picked: { id: 'route:line' },
@@ -505,9 +512,8 @@ test('a fire card acts over a passive pick; the bare pick leaves the selection',
 });
 
 // A coarse tap on a fire card finds an aircraft nearby through the shared
-// touch contact. The flights layer acts on that contact, so the card yields:
-// one action, not two.
-test('a fire card yields to a touch contact its layer acts on', (t) => {
+// touch contact. The card on top takes it; the aircraft layer stands aside.
+test('a fire card takes a tap over a touch contact its layer acts on', (t) => {
   const previous = globalThis.matchMedia;
   globalThis.matchMedia = () => ({ matches: true });
   t.after(() => {
@@ -515,9 +521,7 @@ test('a fire card yields to a touch contact its layer acts on', (t) => {
     else delete globalThis.matchMedia;
   });
   const fire = makeFire();
-  registerPickOwner('test-planes', (pickedId) => pickedId === 'plane:1', {
-    expanded: true,
-  });
+  registerPickOwner('test-planes', (pickedId) => pickedId === 'plane:1');
   t.after(() => unregisterPickOwner('test-planes'));
   const h = harness({
     fires: [fire],
@@ -526,8 +530,8 @@ test('a fire card yields to a touch contact its layer acts on', (t) => {
   });
   try {
     h.click();
-    assert.equal(h.requests.length, 0, 'the aircraft takes the tap');
-    assert.equal(h.layer.getSelectedInfo(), null);
+    assert.equal(h.requests.length, 1, 'the card takes the tap');
+    assert.ok(h.layer.getSelectedInfo());
   } finally {
     h.cleanup();
   }
@@ -544,9 +548,7 @@ test('a fire card keeps a tap whose contact does not act; bare taps still clear'
   });
   const fire = makeFire();
   registerPickOwner('test-cameras', (pickedId) => pickedId === 'cam:1');
-  registerPickOwner('test-planes', (pickedId) => pickedId === 'plane:1', {
-    expanded: true,
-  });
+  registerPickOwner('test-planes', (pickedId) => pickedId === 'plane:1');
   t.after(() => {
     unregisterPickOwner('test-cameras');
     unregisterPickOwner('test-planes');
@@ -579,30 +581,27 @@ test('a fire card keeps a tap whose contact does not act; bare taps still clear'
   }
 });
 
-// The aircraft layer runs first and starts tracking the plane it was clicked
-// on, which makes that plane passive. The fire card painted over it reads
-// the owners that acted when the click resolved, so it still yields.
-test('a fire card yields to an aircraft that starts tracking in the same click', (t) => {
+// The aircraft layer runs first. Under the fire card painted over its plane
+// it stands aside, so the card takes the click: one action, in either order.
+test('a fire card over an aircraft takes the click; the aircraft does not track', (t) => {
   const fire = makeFire();
   let tracked = null;
-  registerPickOwner('test-planes', (pickedId) => pickedId === 'plane:9', {
-    expanded: true,
-    passive: (pickedId) => pickedId === tracked,
-  });
+  registerPickOwner('test-planes', (pickedId) => pickedId === 'plane:9');
   t.after(() => unregisterPickOwner('test-planes'));
   const h = harness({
     fires: [fire],
     picked: { id: 'plane:9' },
     cardHit: `fire:${fireDetectionKey(fire)}`,
     firstClick: (event) => {
+      if (isUnderOtherCard(event)) return;
       if (event.hit?.id === 'plane:9') tracked = 'plane:9';
     },
   });
   try {
     h.click();
-    assert.equal(tracked, 'plane:9', 'the aircraft starts tracking');
-    assert.equal(h.requests.length, 0, 'the fire card yields');
-    assert.equal(h.layer.getSelectedInfo(), null);
+    assert.equal(tracked, null, 'the aircraft does not track');
+    assert.equal(h.requests.length, 1, 'the fire card acts');
+    assert.ok(h.layer.getSelectedInfo());
   } finally {
     h.cleanup();
   }

@@ -192,10 +192,8 @@ export function createLifecycle({
           });
       }
       // Pick-ownership (H2): a vessel icon's pick id is its row id, the record's id.
-      registerPickOwner(
-        'ais-live-vessels',
-        (pickedId) => state.records.byId.has(pickedId),
-        { expanded: true },
+      registerPickOwner('ais-live-vessels', (pickedId) =>
+        state.records.byId.has(pickedId),
       );
       // Vessels are asked for by view, so ask again when the view moves away.
       removeViewListener();

@@ -11,7 +11,11 @@ import {
 import { BHOTE_KOSHI_FLOOD_PATH } from './bhoteKoshiFloodPath.js';
 import * as Cesium from 'cesium';
 import { setLocale } from '../i18n/index.js';
-import { registerPickOwner, unregisterPickOwner } from './pickRegistry.js';
+import {
+  registerPickOwner,
+  setClickCardHitTest,
+  unregisterPickOwner,
+} from './pickRegistry.js';
 import { SceneDirector } from '../scenes/director.js';
 import { createPlaybackClock } from '../director/clock.js';
 import { createDefaultScenePacks } from '../scenes/packs/defaults.js';
@@ -1071,8 +1075,9 @@ test('a click on the locator callout runs its action', async () => {
         };
       },
     }),
-    hitTest: () => top,
   });
+  // The card on top at a click, as the host answers the pick registry.
+  setClickCardHitTest(() => top);
   await layer.init(viewer);
   await layer.enable(viewer);
   const click = (extra = {}) =>
@@ -1103,34 +1108,19 @@ test('a click on the locator callout runs its action', async () => {
   };
   click({ gesture: { travelPx: 30, durationMs: 80 } });
   assert.deepEqual(activated, ['trigger'], 'a drag does not open it');
-  // An aircraft under it is that layer's click, exact or a touch contact.
-  registerPickOwner('test-planes', (id) => id === 'plane:1', {
-    expanded: true,
-  });
+  // On top, it takes the click over an aircraft or a camera under it, exact
+  // or a touch contact: those layers stand aside under a card.
+  registerPickOwner('test-planes', (id) => id === 'plane:1');
   try {
     const plane = { set: 'planes:1', id: 'plane:1' };
+    const cam = { set: 'cams:1', id: 'cam:1' };
     click({ topHit: plane, hit: plane });
     click({ topHit: null, hit: plane });
-    assert.deepEqual(activated, ['trigger'], 'the aircraft takes it');
+    click({ topHit: cam, hit: cam });
+    assert.equal(activated.length, 4, 'the callout on top acts each time');
   } finally {
     unregisterPickOwner('test-planes');
-  }
-  // A layer that acts only on exact hits does not take a touch contact, and
-  // one that ignores this click (a long press on a camera) takes nothing: the
-  // callout keeps both.
-  registerPickOwner('test-cameras', (id) => id === 'cam:1', {
-    declinesClick: (event) => (event?.gesture?.durationMs ?? 0) > 400,
-  });
-  try {
-    const cam = { set: 'cams:1', id: 'cam:1' };
-    click({ topHit: null, hit: cam });
-    assert.equal(activated.length, 2, 'a near miss of an exact-only camera');
-    click({ topHit: cam, hit: cam, gesture: { travelPx: 0, durationMs: 900 } });
-    assert.equal(activated.length, 3, 'a long press the camera ignores');
-    click({ topHit: cam, hit: cam });
-    assert.equal(activated.length, 3, 'a clean click on the camera is its own');
-  } finally {
-    unregisterPickOwner('test-cameras');
+    setClickCardHitTest(null);
   }
   await layer.disable();
   assert.equal(onClick, null, 'disable removes the click handler');

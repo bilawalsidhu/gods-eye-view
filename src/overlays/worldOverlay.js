@@ -1,4 +1,5 @@
 import { WORLD_OVERLAY_OCCLUDER_SELECTORS } from './worldOverlayChrome.js';
+import { setClickCardHitTest } from '../data/pickRegistry.js';
 export { WORLD_OVERLAY_OCCLUDER_SELECTORS } from './worldOverlayChrome.js';
 import {
   createCyberSonarSampler,
@@ -2869,6 +2870,8 @@ export function initWorldOverlay(viewer) {
   };
   window.addEventListener('gev:cockpit-mode-changed', _cockpitModeHandler);
   _removePostRender = frame.on('postRender', () => drawWorldOverlay());
+  // Click handlers read the card painted on top through the pick registry.
+  setClickCardHitTest(hitTestWorldOverlay);
   _removeMoveEnd = camera.on('moveEnd', () => invalidateHost());
   installUiOccluderObservers();
   // The backing store and the occluder inventory are both deferred to the
@@ -2954,6 +2957,7 @@ export function destroyWorldOverlay() {
   _paintCount = 0;
   _paintRectCount = 0;
   _hitRectCount = 0;
+  setClickCardHitTest(null);
   _uiOcclusionRects.length = 0;
   _uiOcclusionRectPool.length = 0;
   _destroyed = hadHost || _destroyed;

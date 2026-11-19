@@ -2959,11 +2959,12 @@ export function createBhoteKoshiEventLayer({
       : Number.isFinite(clientY) && bounds
         ? clientY - bounds.top
         : Number.NaN;
-    const hit = overlayHost.hitTest?.(x, y, {
-      sourceId: BHOTE_KOSHI_OVERLAY_SOURCE_ID,
-      filter: (entry) => String(entry?.id || '').startsWith('evidence-card-'),
-    });
-    if (typeof hit?.entry?.activate !== 'function') return;
+    // Only the card painted on top acts: an evidence card covered by
+    // another layer's card or label leaves the click to that card.
+    const hit = overlayHost.hitTest?.(x, y);
+    if (hit?.sourceId !== BHOTE_KOSHI_OVERLAY_SOURCE_ID) return;
+    if (!String(hit.entry?.id || '').startsWith('evidence-card-')) return;
+    if (typeof hit.entry.activate !== 'function') return;
     hit.entry.activate();
   }
 

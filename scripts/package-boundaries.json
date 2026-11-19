@@ -2544,7 +2544,8 @@
       "src/layers/earthquakes/model.js",
       "src/layers/earthquakes/source.js",
       "src/layers/earthquakes/records.js",
-      "src/time/worldClock.js"
+      "src/time/worldClock.js",
+      "src/data/trackingClickGesture.js"
     ],
     "external": ["cesium"]
   },

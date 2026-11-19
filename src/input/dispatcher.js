@@ -51,7 +51,6 @@ import {
 import {
   findPickOwner,
   pickContact,
-  rememberClickPickActions,
   resolvePickId,
 } from '../data/pickRegistry.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
@@ -457,9 +456,7 @@ function createClickEvent(viewer, queryOf, at, gesture) {
         // The adapter's own pick of this click is the renderer's pass, held
         // now: read later, it would be another, of a scene drawn since.
         void native()?.native.pick;
-        const top = topHitOf(hit, () => native()?.foreign() ?? null);
-        rememberClickPickActions(this, top);
-        return top;
+        return topHitOf(hit, () => native()?.foreign() ?? null);
       });
     },
     get drawHit() {
@@ -470,7 +467,7 @@ function createClickEvent(viewer, queryOf, at, gesture) {
       return once('hit', () => {
         const q = query();
         if (!q) return this.topHit;
-        const hit = pickContact(q, position, {
+        return pickContact(q, position, {
           picked: this.topHit,
           // Everything drawn there, as the adapter sees it, so a contact
           // search stops at what is drawn over a contact outside the draw
@@ -483,8 +480,6 @@ function createClickEvent(viewer, queryOf, at, gesture) {
               : this.drill(limit, width, height);
           },
         });
-        rememberClickPickActions(this, hit);
-        return hit;
       });
     },
     get id() {

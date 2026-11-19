@@ -1584,6 +1584,9 @@ export function createDirectionsLayer({ services, source }) {
     // yields the moment a tool (this one included) owns the click.
     const offSelect = input.onClick((event) => {
       if (!_enabled) return;
+      // Another layer's card or label painted on top takes the click: the item
+      // under it does not act, and the click is not empty space either.
+      if (services.picking?.isUnderOtherCard?.(event)) return;
       let hit = null;
       try {
         hit = event.drawHit;
@@ -1672,13 +1675,10 @@ export function createDirectionsLayer({ services, source }) {
       _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, true);
       _overlayHost.setVisible(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID, true);
       _installClickHandler(viewer);
-      // Only the maneuver steps act on a click; the route line and the A/B
-      // markers are passive, so a card painted over them keeps its click.
       services.picking.registerPickOwner(
         'directions',
         (pickedId) =>
           typeof pickedId === 'string' && pickedId.startsWith('directions:'),
-        { passive: (pickedId) => !pickedId.startsWith('directions:step:') },
       );
       syncRenderHold();
     },

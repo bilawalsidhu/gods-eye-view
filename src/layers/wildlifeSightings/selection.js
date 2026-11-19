@@ -482,12 +482,13 @@ export function createSelection({ state, services, parts }) {
     state.clickHandler = input.onClick((click) => {
       if (!state.enabled || services.pointer?.isPointerFree?.() === false)
         return;
-      const at = click.screenPosition;
-      // The topmost painted entry decides: our own card or label acts; one
-      // covered by another layer's card does not.
-      const hit = overlay?.hitTest?.(at?.x, at?.y);
-      if (hit && sourceIds.includes(hit.sourceId)) {
-        hit.entry?.activate?.();
+      // The card or label painted on top takes the click, read once per
+      // click so every layer agrees: ours acts whatever is drawn under it;
+      // another layer's is that layer's click, so the sightings under it do
+      // not act and the selection stays.
+      const hit = services.picking?.clickCard?.(click) ?? null;
+      if (hit) {
+        if (sourceIds.includes(hit.sourceId)) hit.entry?.activate?.();
         return;
       }
       // A sighting icon's item id is its pick id, `wildlife:<stableId>`.
@@ -509,8 +510,6 @@ export function createSelection({ state, services, parts }) {
         services.picking?.isOwnedByOtherLayer?.('wildlife-sightings', id)
       )
         return;
-      // Another layer's card on top is that layer's click, not empty map.
-      if (hit) return;
       clearAndRebuild();
     });
   }

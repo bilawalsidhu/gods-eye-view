@@ -1020,7 +1020,7 @@ test('CCTV repeated in-world clicks dispatch focus only for the one real activat
   );
   assert.match(
     componentFunctionSource(cctvLayer.init),
-    /_cctvOverlayHost\.hitTest/,
+    /clickCard\?\.\(event\)/,
   );
   assert.match(
     componentFunctionSource(cctvLayer.init),
@@ -1028,7 +1028,7 @@ test('CCTV repeated in-world clicks dispatch focus only for the one real activat
   );
   assert.match(
     componentFunctionSource(cctvLayer.init),
-    /activateCctvCameraFromWorldClick\(cardId, setActiveCamera\)/,
+    /activateCctvCameraFromWorldClick\(\s*top\.entryId,/,
   );
 });
 

@@ -1,4 +1,3 @@
-import { isTrackingSelectionGesture } from '../../data/trackingClickGesture.js';
 import { findCamera, findFrame } from '../../render/rendererOf.js';
 import { loadFleetModelSet } from '../../data/fleetModels.js';
 import { forgetPlacedAircraft } from '../flights/placed.js';
@@ -116,19 +115,6 @@ export function createLifecycle({
       registerPickOwner(
         'military',
         (pickedId) => flightState._icons?.has(pickedId) === true,
-        {
-          expanded: true,
-          // A click on the aircraft already tracked is ignored: for that one
-          // plane the layer acts on nothing, so a card over it keeps the tap.
-          passive: (pickedId) =>
-            Boolean(flightState._trackedIcao) &&
-            pickedId === flightState._trackedIcao,
-          // The click handler ignores a dragged tap and any tap in cockpit
-          // mode, so a card over the aircraft keeps that tap.
-          declinesClick: (click) =>
-            !isTrackingSelectionGesture(click?.gesture) ||
-            Boolean(document.body?.classList.contains('cockpit-mode')),
-        },
       );
       // The flights layer suppresses its military duplicates while we render them
       setMilitaryLayerActive(true);

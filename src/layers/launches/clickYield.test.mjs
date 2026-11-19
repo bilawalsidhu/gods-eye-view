@@ -28,8 +28,8 @@ test('a card painted over a launch marker keeps its click; with none the mission
     state,
     services: {
       render: { holdContinuousRender() {}, releaseContinuousRender() {} },
-      overlays: { hitTestWorldOverlay: () => top },
-      picking,
+      // The card on top at a click, as the registry answers from the host.
+      picking: { ...picking, clickCard: () => top },
     },
     parts: {
       panel: stubs(),
@@ -61,15 +61,6 @@ test('a card painted over a launch marker keeps its click; with none the mission
       ['L1'],
       'with no card on top, the mission selects',
     );
-    // So a card on top (a live CCTV card) may act over the mission instead.
-    const mission = { set: 'launches:1:markers', id: 'mission:L1' };
-    assert.equal(picking.isCardBackground(mission), true);
-    assert.equal(picking.isCardBackground({ ...mission, id: 'x' }), false);
-    state._enabled = false;
-    assert.equal(picking.isCardBackground(mission), false);
-    state._inputSubscription();
-    state._enabled = true;
-    assert.equal(picking.isCardBackground(mission), false);
   } finally {
     state._inputSubscription?.();
     input.destroy();

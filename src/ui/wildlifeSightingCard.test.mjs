@@ -140,6 +140,8 @@ function fixture(
         },
       }),
       focus: { requestWorldFocus: (value) => flights.push(value) },
+      // The card on top at a click, as the registry answers from the host.
+      picking: { clickCard: () => hit },
     },
     parts: {
       rendering: { refreshSelection() {}, requestRender() {} },

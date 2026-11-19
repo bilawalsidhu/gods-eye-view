@@ -23,29 +23,22 @@ export function createSelection({ state, parts }) {
   /** The id carries a provider's prefix: that provider handles the pick. */
   function onClick(event) {
     if (!state.viewer || !state.enabled) return;
+    // Another layer's card or label painted on top takes the click, read once
+    // per click so every layer agrees: no image, sequence or ground under it
+    // opens. Street Level paints no cards of its own.
+    if (picking?.isUnderOtherCard?.(event)) return;
     const hit = event.windowHit(CLICK_PICK_WINDOW_PX, CLICK_PICK_WINDOW_PX);
     const windowId = pickIdOf(hit);
     // A coarse tap's touch contact (event.hit) reaches farther than this
-    // window; a card or label over it yields to our item there, so it is ours.
+    // window: an item of ours there is still ours.
     const contact = event.hit;
     const contactId =
       contact && !contact.surface
         ? pickIdOf({ drawHit: contact.set ? contact : null, id: event.id })
         : null;
-    let route = parts.router.resolve(windowId);
-    // Found only through our window, not as the contact (which is the exact
-    // hit whenever there is one): another layer's card or label painted here
-    // is that layer's click, since its handler never sees this window.
-    // An item of ours that is the contact is still ours: that card yields
-    // to it.
-    if (route && windowId !== contactId) {
-      const at = event.screenPosition;
-      if (state.services.overlayHit?.(at?.x, at?.y)) {
-        route = contactId ? parts.router.resolve(contactId) : null;
-        if (!route) return;
-      }
-    }
-    if (!route && contactId) route = parts.router.resolve(contactId);
+    const route =
+      parts.router.resolve(windowId) ??
+      (contactId ? parts.router.resolve(contactId) : null);
     // Not ours: the ground handler decides whether it is the map itself.
     if (!route) {
       parts.openAtGround?.({ surface: hit.surface, ground: groundOf(event) });
@@ -92,12 +85,7 @@ export function createSelection({ state, parts }) {
     if (state.clickSubscription) return;
     state.clickSubscription = inputFor(viewer).onClick(onClick);
     document.addEventListener('keydown', onKeyDown);
-    picking?.registerPickOwner?.(STREET_LEVEL_LAYER_ID, parts.router.ownsPick, {
-      expanded: true,
-      // The core's position marker is ours but selects nothing: a card over
-      // it keeps the tap.
-      passive: (id) => !parts.router.resolve(id)?.instance,
-    });
+    picking?.registerPickOwner?.(STREET_LEVEL_LAYER_ID, parts.router.ownsPick);
   }
 
   function uninstall() {

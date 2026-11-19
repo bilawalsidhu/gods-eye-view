@@ -24,7 +24,6 @@ export function createSubmarineCableLayer({
     parts,
     source,
     inputFor,
-    overlayHost,
     picking,
     mapStackEventTarget,
   };

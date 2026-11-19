@@ -27,7 +27,6 @@ function harness(
 ) {
   const overlay = { entries: new Map(), visible: null };
   const owners = new Map();
-  const backgrounds = new Map();
   const opened = [];
   const viewer = { scene: { pick } };
   const { draw } = bindFakeDraw(viewer);
@@ -59,9 +58,9 @@ function harness(
         String(pickedId).startsWith('other-layer:'),
       registerPickOwner: (layerId, predicate) => owners.set(layerId, predicate),
       unregisterPickOwner: (layerId) => owners.delete(layerId),
-      registerCardBackground: (layerId, predicate) =>
-        backgrounds.set(layerId, predicate),
-      unregisterCardBackground: (layerId) => backgrounds.delete(layerId),
+      // The card on top at a click, as the registry answers from the host.
+      clickCard: (click) =>
+        cardHit(click.screenPosition?.x, click.screenPosition?.y, {}),
     },
     inciwebSource: inciwebIndex
       ? { getIndex: async () => inciwebIndex }
@@ -81,7 +80,6 @@ function harness(
     overlay,
     clicks,
     owners,
-    backgrounds,
     opened,
   };
 }
@@ -693,22 +691,4 @@ test('a failed refresh after a stale snapshot reads as the failure, not stale', 
   await h.layer.update(h.viewer);
   assert.equal(h.layer.getStats().stale, false);
   assert.equal(h.layer.getStats().error, 'WFIGS HTTP 502');
-});
-
-// A card painted over the area may act there (a live CCTV card): the layer
-// names its own drawn shapes, and only while it takes clicks.
-test('enabled, the perimeter shapes register as card background', async () => {
-  const h = harness({ getSnapshot: async () => [row] });
-  await h.layer.update(h.viewer);
-  const isBackground = h.backgrounds.get('fire-perimeters');
-  const own = {
-    set: h.fills().spec.id,
-    id: 'fire-perimeter:2026-NMGNF-000123:0',
-    surface: false,
-  };
-  assert.equal(isBackground(own), true);
-  assert.equal(isBackground({ ...own, set: 'other:1:fills' }), false);
-  assert.equal(isBackground({ ...own, id: 'other-layer:x' }), false);
-  h.layer.disable(h.viewer);
-  assert.equal(h.backgrounds.has('fire-perimeters'), false);
 });

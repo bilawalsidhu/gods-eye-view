@@ -439,7 +439,6 @@
   "src/layers/earthquakes/ownership.test.mjs",
   "src/layers/earthquakes/selection.test.mjs",
   "src/layers/submarineCables/interaction.test.mjs",
-  "src/data/pickOwnerExpanded.test.mjs",
   "src/ui/entityContextBridge.test.mjs",
   "src/layers/launches/clickYield.test.mjs",
   "src/app/layers/earthquakeRipples.js",
@@ -1588,5 +1587,8 @@
   "src/ui/layerFinder.test.mjs",
   "src/data/wikidataCities.js",
   "src/data/wikidataCities.test.mjs",
-  "scripts/build-wikidata-cities.mjs"
+  "scripts/build-wikidata-cities.mjs",
+  "src/layers/bikeshare/selection.test.mjs",
+  "src/layers/satellites/interaction.test.mjs",
+  "src/layers/alpr/presentation.test.mjs"
 ]

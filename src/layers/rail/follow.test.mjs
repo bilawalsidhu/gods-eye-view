@@ -10,6 +10,7 @@ import {
   SELECTION_FOLLOW_TRANSITION_S,
 } from '../../data/trackedCamera.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
+import { setClickCardHitTest } from '../../data/pickRegistry.js';
 import { distance } from '../../geo/vector.js';
 import {
   ACTIVATION_EXIT_ALTITUDE_M,
@@ -201,6 +202,25 @@ test('a click on a train selects it; a click on the map lets it go', async (t) =
   assert.equal(app.camera.followed, null);
   app.click({ set: 'fleet-models', id: 'm1', meta: key, surface: false });
   assert.equal(app.state()._selectedKey, key);
+});
+
+// The card or label painted on top takes the click: a train under another
+// layer's card is neither selected nor let go.
+test("another layer's card over a train keeps the click", async (t) => {
+  const app = harness(t);
+  const key = await bringToMotion(app, 'mbta-rail', 'T1', BOSTON);
+  const icons = app.drawn('icons');
+  let top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  setClickCardHitTest(() => top);
+  t.after(() => setClickCardHitTest(null));
+  app.click({ set: icons.spec.id, id: key, surface: false });
+  assert.equal(app.state()._selectedKey ?? null, null, 'covered: not selected');
+  top = null;
+  app.click({ set: icons.spec.id, id: key, surface: false });
+  assert.equal(app.state()._selectedKey, key);
+  top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  app.click(null);
+  assert.equal(app.state()._selectedKey, key, 'covered: kept');
 });
 
 test('a parked train, or one known from a single report, is flown to once', async (t) => {

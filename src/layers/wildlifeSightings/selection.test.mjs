@@ -43,20 +43,17 @@ function fixture(sighting = row, extraServices = {}) {
     },
   };
   bindWildlifeViewer(state.viewer);
+  const overlayHost = {
+    setEntries: (id, value) => entries.set(id, value),
+    clearSource: (id) => entries.delete(id),
+    setVisible() {},
+    hitTest: (_x, _y, { sourceId } = {}) =>
+      sourceId ? (hit?.sourceId === sourceId ? hit : null) : coveringHit || hit,
+  };
   const selection = createSelection({
     state,
     services: {
-      overlayHost: {
-        setEntries: (id, value) => entries.set(id, value),
-        clearSource: (id) => entries.delete(id),
-        setVisible() {},
-        hitTest: (_x, _y, { sourceId } = {}) =>
-          sourceId
-            ? hit?.sourceId === sourceId
-              ? hit
-              : null
-            : coveringHit || hit,
-      },
+      overlayHost,
       now: () => row.observedAt + 60_000,
       project: (_scene, anchor) => {
         projections++;
@@ -71,6 +68,12 @@ function fixture(sighting = row, extraServices = {}) {
       }),
       eventTarget: new EventTarget(),
       ...extraServices,
+      // The card on top at a click, as the registry answers from the host.
+      picking: {
+        clickCard: (c) =>
+          overlayHost.hitTest(c.screenPosition?.x, c.screenPosition?.y),
+        ...extraServices.picking,
+      },
     },
     parts: {
       rendering: {
@@ -187,7 +190,7 @@ test('selected photo and name cards use the selected lane, select on click and n
   }
 });
 
-test('a covered sighting label yields; the top label acts over trails and other scene items', () => {
+test('a covered sighting label and icon yield; the top label acts over trails and other scene items', () => {
   const f = fixture(row, {
     // Registered owners, as the app has them: an aircraft, and the flight
     // trails every layer reads as a no-op (src/data/trailRenderer.js).
@@ -205,15 +208,16 @@ test('a covered sighting label yields; the top label acts over trails and other 
   f.click(null);
   assert.equal(f.flights.length, 1);
   assert.equal(f.state.selectedRow, row);
+  // A sighting icon under another layer's card is that card's click too.
   f.click();
-  assert.equal(f.flights.length, 2, 'an actual sighting remains selectable');
+  assert.equal(f.flights.length, 1, 'a covered sighting does not act');
   f.cover(null);
   // The top label acts over a flight trail: never a dead click.
   f.click('gev-trail:fl-a1b2c3:head');
-  assert.equal(f.flights.length, 3, 'the label acts over a flight trail');
-  // And over another layer's scene item, as on main.
+  assert.equal(f.flights.length, 2, 'the label acts over a flight trail');
+  // And over another layer's scene item.
   f.click('other:aircraft');
-  assert.equal(f.flights.length, 4, 'the top label acts');
+  assert.equal(f.flights.length, 3, 'the top label acts');
   assert.equal(f.state.selectedRow, row);
   f.selection.remove();
 });

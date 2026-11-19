@@ -5,7 +5,12 @@ import { fromDegrees } from '../../geo/ellipsoid.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
 import { NEWS_KEY_PROVIDERS, createNewsLayer } from './index.js';
-import { findPickOwner } from '../../data/pickRegistry.js';
+import {
+  findPickOwner,
+  registerPickOwner,
+  setClickCardHitTest,
+  unregisterPickOwner,
+} from '../../data/pickRegistry.js';
 // Registers the shared `gev-trail:` no-op owner, as the app does.
 import '../../data/trailRenderer.js';
 import { getSelectedEntityContext } from '../../data/contextStore.js';
@@ -141,11 +146,12 @@ function fixture(
     for (const fn of [...clickHandlers])
       fn({ screenPosition: { x: 10, y: 10 }, topHit });
   };
+  // The card on top at a click, as the host answers the pick registry.
+  setClickCardHitTest((x, y) => hitTestOverlay(x, y));
   const layer = createNewsLayer({
     source,
     overlayHost,
     inputFor: () => input,
-    hitTestOverlay,
     now,
     matchMedia: () => ({ matches: reduced }),
     getViewCentre: () => centre(),
@@ -162,6 +168,7 @@ function fixture(
   layer.attachShellServices({ runNavigation: (navigate) => navigate() });
   t.after(() => {
     layer.destroy();
+    setClickCardHitTest(null);
     unbind();
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;
@@ -1289,7 +1296,7 @@ test('a click on a marker selects its report, on a beacon chooses its hotspot, o
   assert.equal(clickHandlers.size, 0);
 });
 
-test('a covered news card yields; the top news card acts over a flight trail', async (t) => {
+test('a covered news card and pin yield; the top news card acts over a trail or a vessel', async (t) => {
   let hits = [];
   const { layer, items, entries, click, flights } = fixture(t, {
     height: 500_000,
@@ -1322,10 +1329,14 @@ test('a covered news card yields; the top news card acts over a flight trail', a
   assert.equal(layer.getRowControls().feed.selected.id, 'major');
   assert.deepEqual(layer.getRowControls().feed.filters, before.filters);
   assert.equal(flights.length, flightCount);
+  // A news pin under another layer's card is that card's click too.
   layer.setParams({ clear: true });
   click({ set: 'news:1:points', id: marker.id, surface: false });
+  assert.equal(layer.getRowControls().feed.selected, null, 'covered pin');
+  hits = [];
+  click({ set: 'news:1:points', id: marker.id, surface: false });
   assert.equal(layer.getRowControls().feed.selected.id, 'major');
-  hits.shift();
+  hits = [{ sourceId: 'news', entry: card }];
   click(null);
   assert.equal(activations, 1, 'the unobscured news card acts once');
   // A flight trail is registered so every layer reads a click on it as a
@@ -1338,6 +1349,15 @@ test('a covered news card yields; the top news card acts over a flight trail', a
     surface: false,
   });
   assert.equal(activations, 2, 'the news card acts over a flight trail');
+  // Over a vessel (a layer that acts on its pick) the card on top acts too;
+  // the vessel layer stands aside under it, so one click does one thing.
+  registerPickOwner('test-vessels', (id) => id === '353136000');
+  try {
+    click({ set: 'vessels:1', id: '353136000', surface: false });
+    assert.equal(activations, 3, 'the news card acts over a vessel');
+  } finally {
+    unregisterPickOwner('test-vessels');
+  }
 });
 
 test('zoomed out, a hotspot is one beacon; off, nothing draws; destroyed, the sets go', async (t) => {

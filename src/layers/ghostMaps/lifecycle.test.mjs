@@ -664,7 +664,11 @@ test('a covered selected card yields while genuine GhostMaps markers still selec
         hitTest: (_x, _y, { sourceId } = {}) =>
           painted.find((hit) => !sourceId || hit.sourceId === sourceId) ?? null,
       },
-      picking: { resolvePickId: (picked) => picked },
+      picking: {
+        resolvePickId: (picked) => picked,
+        // The card on top at a click, as the registry answers from the host.
+        clickCard: () => painted[0] ?? null,
+      },
       openExternal: (url) => opened.push(url),
     },
   });
@@ -679,13 +683,13 @@ test('a covered selected card yields while genuine GhostMaps markers still selec
   click(null);
   assert.deepEqual(opened, []);
   assert.equal(cards.at(-1)[0].id, first.id);
+  // A marker under another layer's card is that card's click too.
+  click('ghostmaps:cip:1:0');
+  assert.equal(cards.at(-1)[0].id, first.id, 'a covered marker yields');
+  painted = [];
   click('ghostmaps:cip:1:0');
   const second = cards.at(-1)[0];
-  assert.notEqual(
-    second.id,
-    first.id,
-    'an actual marker still selects beneath the foreign card',
-  );
+  assert.notEqual(second.id, first.id, 'a bare marker selects');
   painted = [{ sourceId: 's2-ghostmaps', entryId: second.id }];
   click(null);
   assert.deepEqual(opened, ['https://example.com/second']);

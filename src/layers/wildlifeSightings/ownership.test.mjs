@@ -221,6 +221,8 @@ function harness(
       unregisterPickOwner: (id) => owners.delete(id),
       resolvePickId: (pick) => pick?.id ?? pick?.primitive?.id,
       isOwnedByOtherLayer: (_layerId, id) => id?.startsWith('other:'),
+      // The card on top at a click, as the registry answers from the host.
+      clickCard: () => cardHit,
     },
     sprites: { spriteDrawOrder: () => -9 },
     render: { governorRequestRender: (reason) => renders.push(reason) },

@@ -77,7 +77,7 @@ test('the view listeners follow the camera port and let go on teardown', () => {
   assert.equal(state._viewListenerCamera, null);
 });
 
-test('world clicks respect the painted top card and registered card backgrounds', async (t) => {
+test('the card painted on top takes world clicks, whatever is drawn under it', async (t) => {
   const noop = () => {};
   const { viewer } = viewerWithCamera();
   let picked = null;
@@ -88,10 +88,11 @@ test('world clicks respect the painted top card and registered card backgrounds'
   };
   let drilled = [];
   const input = fakeInput(viewer);
-  // An aircraft layer that runs before ours and starts tracking the plane
-  // it was clicked on, which makes that plane passive mid-click.
+  // An aircraft layer that runs before ours and tracks the plane it was
+  // clicked on, standing aside under another layer's card.
   let tracked = null;
   input.input.onClick((event) => {
+    if (picking.isUnderOtherCard(event)) return;
     if (event.hit?.id === 'plane:9') tracked = 'plane:9';
   });
   const ownCard = { sourceId: CCTV_OVERLAY_SOURCE_ID, entryId: 'cam-1' };
@@ -101,6 +102,8 @@ test('world clicks respect the painted top card and registered card backgrounds'
   };
   let painted = [];
   const actions = [];
+  // The card on top at a click, as the host answers the pick registry.
+  picking.setClickCardHitTest(() => painted[0] ?? null);
   const state = {
     _cctvOverlayHost: {
       hitTest: (_x, _y, options = {}) =>
@@ -148,12 +151,12 @@ test('world clicks respect the painted top card and registered card backgrounds'
     state._clickSubscription?.();
     lifecycle.detachViewListeners();
     input.destroy();
+    picking.setClickCardHitTest(null);
     picking.unregisterPickOwner('area-control');
     picking.unregisterPickOwner('test-trails');
     picking.unregisterPickOwner('test-planes');
     picking.unregisterPickOwner('test-tracking');
     picking.unregisterPickOwner('test-exact');
-    picking.unregisterCardBackground('area-fixture');
   });
   await lifecycle.methods.init(viewer);
   state._enabled = true;
@@ -184,36 +187,32 @@ test('world clicks respect the painted top card and registered card backgrounds'
     surface: false,
   };
   const backgrounds = [drone, perimeter, quake, cable, launch];
-  // Each of those layers registers its own shapes this way (their tests
-  // check the real predicates); CCTV only asks the registry.
-  picking.registerCardBackground('area-fixture', (hit) =>
-    backgrounds.some((b) => b.set === hit.set && b.id === hit.id),
-  );
   for (const area of backgrounds) {
     click(area, [ownCard], ['cam-1']);
     click(area, [], []);
     click(area, [foreignCard, ownCard], []);
   }
+  // The live top card acts over anything drawn under it; with no card an
+  // identified object is not empty map.
   for (const hit of [
     { set: 'flights:1', id: 'aircraft', surface: false },
     { set: '', id: 'unregistered-local-entity', surface: false },
-    { set: '', id: '', surface: false },
     { ...drone, set: 'unrelated:1:fills' },
     { ...drone, id: 'unregistered-local-entity' },
-  ])
-    click(hit, [ownCard], []);
-  // A passive owner's pick (a trail, a route) acts for nobody: the live top
-  // card keeps the click, and with no card the pick is not empty map.
+  ]) {
+    click(hit, [ownCard], ['cam-1']);
+    click(hit, [], []);
+  }
+  // A trail under the live top card: the card keeps the click, and with no
+  // card the owned pick is not empty map.
   const trail = { set: 'trails:1', id: 'gev-trail:fl-1:head', surface: false };
-  picking.registerPickOwner('test-trails', (id) => id === trail.id, {
-    passive: true,
-  });
+  picking.registerPickOwner('test-trails', (id) => id === trail.id);
   click(trail, [ownCard], ['cam-1']);
   click(trail, [], []);
   click(trail, [foreignCard, ownCard], []);
   picking.unregisterPickOwner('test-trails');
   // A coarse tap whose touch contact is an aircraft (a layer that acts on
-  // nearby contacts) is the aircraft's, even under a live CCTV card.
+  // nearby contacts) under a live CCTV card is the card's.
   const previousMatch = globalThis.matchMedia;
   const restoreMatch = () => {
     if (previousMatch) globalThis.matchMedia = previousMatch;
@@ -223,11 +222,9 @@ test('world clicks respect the painted top card and registered card backgrounds'
   // failing assertion cannot leave the coarse pointer for later tests.
   t.after(restoreMatch);
   globalThis.matchMedia = () => ({ matches: true });
-  picking.registerPickOwner('test-planes', (id) => id === 'plane:1', {
-    expanded: true,
-  });
+  picking.registerPickOwner('test-planes', (id) => id === 'plane:1');
   drilled = ['plane:1'];
-  click(null, [ownCard], []);
+  click(null, [ownCard], ['cam-1']);
   // With no card, the bare tap near the aircraft still deselects.
   click(null, [], ['clear']);
   // A contact whose layer acts only on exact hits leaves the card its tap.
@@ -239,49 +236,29 @@ test('world clicks respect the painted top card and registered card backgrounds'
   click(null, [ownCard], ['cam-1']);
   picking.unregisterPickOwner('test-planes');
   restoreMatch();
-  // The live card reads the owners that acted when the click resolved, so it
-  // yields to the aircraft even though tracking made it passive meanwhile.
-  picking.registerPickOwner('test-tracking', (id) => id === 'plane:9', {
-    expanded: true,
-    passive: (id) => id === tracked,
-  });
-  click({ set: 'flights:1', id: 'plane:9', surface: false }, [ownCard], []);
-  assert.equal(tracked, 'plane:9', 'the aircraft started tracking');
+  // The live card over an aircraft takes the click; the aircraft layer,
+  // run first, stands aside and does not track.
+  picking.registerPickOwner('test-tracking', (id) => id === 'plane:9');
+  click(
+    { set: 'flights:1', id: 'plane:9', surface: false },
+    [ownCard],
+    ['cam-1'],
+  );
+  assert.equal(tracked, null, 'the aircraft did not track');
   picking.unregisterPickOwner('test-tracking');
   picking.registerPickOwner('area-control', (id) => id === drone.id);
-  click(drone, [ownCard], []);
+  click(drone, [ownCard], ['cam-1']);
   picking.unregisterPickOwner('area-control');
   click(null, [foreignCard, ownCard], []);
   click(null, [ownCard], ['cam-1']);
   click(null, [], ['clear']);
   click(drone, [{ ...ownCard, entryId: 'stale-camera' }], []);
-  click(
-    { set: 'cctv:fixture', id: 'cam-1' },
-    [foreignCard, ownCard],
-    ['cam-1'],
-  );
-  // CCTV takes only clean clicks, so for a long press or a drag its cameras
-  // act for nobody: a card painted over one keeps that tap.
-  // Enable's own work is beside the point here: only its registration.
-  Object.assign(parts.cards, {
-    refreshAmbientCards: noop,
-    startCardFrameLoop: noop,
-  });
-  parts.frames = { refreshProjectionImage: noop };
-  Object.assign(parts.geometryQueue, { startGeometryLoadQueue: noop });
-  parts.navigation = { openingCameraId: () => 'cam-1' };
-  Object.assign(parts.projection, {
-    ensureProjectionRuntime: noop,
-    startProjectionLoop: noop,
-  });
-  state._cctvOverlayHost.setVisible ??= noop;
-  lifecycle.methods.enable();
-  t.after(() => picking.unregisterPickOwner('cctv'));
-  const acted = (gesture) =>
-    picking.isActedOnByOtherLayer('earthquakes', 'cam-1', {
-      click: { gesture },
-    });
-  assert.equal(acted({ travelPx: 0, durationMs: 80 }), true, 'a clean click');
-  assert.equal(acted({ travelPx: 0, durationMs: 900 }), false, 'a long press');
-  assert.equal(acted({ travelPx: 20, durationMs: 80 }), false, 'a drag');
+  // A card of ours that is going away is still not the scene under it: no
+  // camera beneath it activates, and nothing clears.
+  const staleCard = { ...ownCard, entryId: 'stale-camera' };
+  click({ set: 'cctv:fixture', id: 'cam-1' }, [staleCard], []);
+  click(null, [staleCard], []);
+  // A camera icon under another layer's card is that card's click.
+  click({ set: 'cctv:fixture', id: 'cam-1' }, [foreignCard, ownCard], []);
+  click({ set: 'cctv:fixture', id: 'cam-1' }, [], ['cam-1']);
 });

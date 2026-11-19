@@ -25,6 +25,8 @@ function harness({ overlayTop = null } = {}) {
       },
     }),
     overlayHost: { hitTest: () => top },
+    // The card on top at a click, as the registry answers from the host.
+    picking: { clickCard: () => top },
   });
   interaction.beginInteraction({});
   return {
@@ -56,34 +58,4 @@ test('a card painted over a cable keeps its click; with none the cable reads the
     1,
     'with no card on top, the cable reads its pick',
   );
-});
-
-// So a card on top (a live CCTV card) may act over the cable instead.
-test('while it takes clicks, a drawn cable registers as card background', () => {
-  const state = { _enabled: true, _clickSubscription: null };
-  const interaction = createInteraction({
-    state,
-    parts: {
-      rendering: {
-        pickInfo: (hit) =>
-          hit?.set === 'cables:1' ? { reference: { lon: 1, lat: 2 } } : null,
-      },
-    },
-    inputFor: () => ({ onClick: () => () => {} }),
-    overlayHost: { hitTest: () => null },
-    picking,
-  });
-  interaction.beginInteraction({});
-  const cable = { set: 'cables:1', id: 'cable:0' };
-  try {
-    assert.equal(picking.isCardBackground(cable), true);
-    assert.equal(picking.isCardBackground({ set: 'other:1', id: 'x' }), false);
-    state._enabled = false;
-    assert.equal(picking.isCardBackground(cable), false);
-    state._enabled = true;
-    state._clickSubscription();
-    assert.equal(picking.isCardBackground(cable), false);
-  } finally {
-    state._clickSubscription?.();
-  }
 });

@@ -129,23 +129,12 @@ export function createDroneAirspaceLayer({
     // so claiming these large ground polygons would make FIRMS/vessel/CCTV
     // cards inert anywhere over a zone. Unowned, our picks read as
     // "empty space" to siblings — the same contract as fire perimeters.
-    // Our shapes stand aside for a card painted over them (below), so that
-    // card's layer may act on the click; without a hit-test they cannot.
-    if (overlayHost?.hitTest)
-      picking?.registerCardBackground?.(
-        layer.id,
-        (hit) => pickedZoneId(hit) !== null,
-      );
     _clickSubscription = inputFor(_viewer).onClick((event) => {
-      const cardHit = overlayHost.hitTest?.(
-        event.screenPosition?.x,
-        event.screenPosition?.y,
-      );
-      // Only the top painted card owns the click; this area's shapes are
-      // background when another layer has painted a card or label over them.
-      if (cardHit && cardHit.sourceId !== DRONE_AIRSPACE_OVERLAY_SOURCE_ID)
-        return;
-      if (cardHit && cardHit.entryId === _selectedCardId) return;
+      // The card or label painted on top takes the click, read once per
+      // click so every layer agrees: this area's shapes are background to
+      // another layer's card or label painted over them, and a click on our
+      // own card leaves the selection as it is.
+      if (picking.clickCard?.(event)) return;
       const picked = event.topHit;
       const zoneId = picked ? pickedZoneId(event.drawHit) : null;
       if (zoneId) {
@@ -167,7 +156,6 @@ export function createDroneAirspaceLayer({
   function removeClickHandler() {
     _clickSubscription?.();
     _clickSubscription = null;
-    picking?.unregisterCardBackground?.(layer.id);
   }
 
   function clearSelection() {

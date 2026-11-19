@@ -36,12 +36,8 @@ import { registerPickOwner } from './pickRegistry.js';
 // plane being tracked. Claiming the 'gev-trail:' id namespace makes
 // isOwnedByOtherLayer() true for every layer — clicking a trail is a no-op
 // everywhere. Registered once at module load; the predicate is pure.
-// Passive: no layer acts on a trail click, so a card painted over a trail
-// still takes its click (isActedOnByOtherLayer).
-registerPickOwner(
-  'trails',
-  (pickedId) => String(pickedId).startsWith('gev-trail:'),
-  { passive: true },
+registerPickOwner('trails', (pickedId) =>
+  String(pickedId).startsWith('gev-trail:'),
 );
 
 /** @type {number} Uniquifier for trail set and line ids. */

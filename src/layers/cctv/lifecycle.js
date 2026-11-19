@@ -5,7 +5,6 @@ import { viewshedColors, cameraHue } from '../../data/cctvViewshed.js';
 import { CCTV_OVERLAY_SOURCE_ID } from '../../data/cctvCards.js';
 import { GIZMO_ID_PREFIX } from '../../data/cctvGizmo.js';
 import { inputFor } from '../../input/dispatcher.js';
-import { isTrackingClickGesture } from '../../data/trackingClickGesture.js';
 import {
   GROUND_PRIOR_INIT_WAIT_MS,
   CALIBRATION_RANGE_FLOOR_M,
@@ -24,14 +23,8 @@ export function createLifecycle({
   source,
 }) {
   const { activateCctvCameraFromWorldClick } = services.activation;
-  const {
-    resolvePickId,
-    registerPickOwner,
-    unregisterPickOwner,
-    isOwnedByOtherLayer,
-    isActedOnByOtherLayer,
-    isCardBackground,
-  } = services.picking;
+  const { resolvePickId, registerPickOwner, unregisterPickOwner, clickCard } =
+    services.picking;
   const { onFocusTargetAppear } = services.focus;
   const { releaseContinuousRender } = services.render;
 
@@ -398,6 +391,20 @@ export function createLifecycle({
         (event) => {
           if (!layerState._enabled) return;
           const picked = event.topHit;
+          // The card or label painted on top takes the click, read once per
+          // click so every layer agrees: a live card of ours acts whatever
+          // is drawn under it; another layer's is that layer's click.
+          const top = clickCard?.(event) ?? null;
+          if (top && top.sourceId !== CCTV_OVERLAY_SOURCE_ID) return;
+          if (top) {
+            // A card of ours that is going away is still not the scene.
+            if (layerState._recordById.has(top.entryId))
+              activateCctvCameraFromWorldClick(
+                top.entryId,
+                parts.selection.setActiveCamera,
+              );
+            return;
+          }
           const cameraId = parts.selection.extractPickedCameraId(
             event.drawHit ?? null,
           );
@@ -408,60 +415,11 @@ export function createLifecycle({
             );
             return;
           }
-          // Cards use the last-painted top hit, never an obscured card from
-          // our own source. Actual camera icons above keep their normal route.
-          const cardHit = layerState._cctvOverlayHost.hitTest(
-            event.screenPosition.x,
-            event.screenPosition.y,
-            {},
-          );
-          const cardId =
-            cardHit?.sourceId === CCTV_OVERLAY_SOURCE_ID &&
-            layerState._recordById.has(cardHit.entryId)
-              ? cardHit.entryId
-              : null;
-          const pickedId = resolvePickId(picked);
-          const hit = event.drawHit;
-          // A live top CCTV card acts over shapes whose layers stand aside
-          // for a painted card (drone zones, fire perimeters, quake discs,
-          // cables, launch markers), as each registers them. Unknown
-          // identified objects and registered owners remain barriers.
-          const cardBackground =
-            cardId &&
-            typeof pickedId === 'string' &&
-            !isOwnedByOtherLayer?.('cctv', pickedId) &&
-            Boolean(isCardBackground?.(hit));
-          // A passive owner's pick (a flight trail, a directions route) acts
-          // for nobody, so a live top CCTV card over it keeps the click.
-          const passiveUnderCard =
-            cardId &&
-            typeof pickedId === 'string' &&
-            Boolean(isActedOnByOtherLayer) &&
-            isOwnedByOtherLayer?.('cctv', pickedId) &&
-            !isActedOnByOtherLayer('cctv', pickedId, { click: event });
-          if (pickedId !== null && !cardBackground && !passiveUnderCard) return;
-          // A coarse tap's touch contact (not the exact pick) that its layer
-          // acts on (an aircraft, a vessel, a radio station) is that layer's
-          // click, even under a card of ours.
-          const contactId = resolvePickId(event.hit ?? null);
-          if (
-            cardId &&
-            contactId &&
-            contactId !== pickedId &&
-            isActedOnByOtherLayer?.('cctv', contactId, {
-              expanded: true,
-              click: event,
-            })
-          )
-            return;
-          if (cardHit && cardHit.sourceId !== CCTV_OVERLAY_SOURCE_ID) return;
-          if (cardId) {
-            activateCctvCameraFromWorldClick(
-              cardId,
-              parts.selection.setActiveCamera,
-            );
-            return;
-          }
+          // Any identified scene object owns this click even if its layer
+          // does not register a shared pick predicate. This keeps selectable
+          // siblings ahead of the CCTV selection while ID-less globe, terrain
+          // and tile surfaces remain eligible for empty-space deselection.
+          if (resolvePickId(picked) !== null) return;
           if (
             parts.selection.cctvEmptyClickDeselects(picked, {
               activeCameraId: layerState._activeCameraId,
@@ -510,26 +468,19 @@ export function createLifecycle({
       layerState._lastUpdate = Date.now();
       // Pick-ownership (H2): camera icons use the camera id directly;
       // coverage polyline entities use `cctv-<cameraId>-<role>` entity ids.
-      registerPickOwner(
-        'cctv',
-        (pickedId) => {
-          if (layerState._recordById.has(pickedId)) return true;
-          if (
-            typeof pickedId === 'string' &&
-            pickedId.startsWith(GIZMO_ID_PREFIX)
-          )
-            return true;
-          const coverage =
-            /^cctv-(.+)-(?:ray-tl|ray-tr|ray-br|ray-bl|cap|plane|plane-label)$/.exec(
-              pickedId,
-            );
-          return Boolean(coverage && layerState._recordById.has(coverage[1]));
-        },
-        // The world click handler takes only clean clicks (see
-        // `bindCctvWorldClickGesture`), so a card over a camera keeps any
-        // other tap.
-        { declinesClick: (click) => !isTrackingClickGesture(click?.gesture) },
-      );
+      registerPickOwner('cctv', (pickedId) => {
+        if (layerState._recordById.has(pickedId)) return true;
+        if (
+          typeof pickedId === 'string' &&
+          pickedId.startsWith(GIZMO_ID_PREFIX)
+        )
+          return true;
+        const coverage =
+          /^cctv-(.+)-(?:ray-tl|ray-tr|ray-br|ray-bl|cap|plane|plane-label)$/.exec(
+            pickedId,
+          );
+        return Boolean(coverage && layerState._recordById.has(coverage[1]));
+      });
       if (!layerState._activeCameraId && layerState._records.length) {
         layerState._activeCameraId = parts.navigation.openingCameraId();
         layerState._autoHopSuspended = false;
