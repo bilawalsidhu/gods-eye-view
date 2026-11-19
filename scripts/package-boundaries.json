@@ -244,6 +244,7 @@
       "src/ui/kit/UiCloseButton.vue",
       "src/ui/kit/UiSearchField.vue",
       "src/ui/kit/UiCheckbox.vue",
+      "src/ui/kit/UiDialog.vue",
       "src/ui/stores/globeActions.js",
       "src/ui/views/panels/GlobeActions.vue",
       "src/ui/views/panels/RenderFailure.vue",

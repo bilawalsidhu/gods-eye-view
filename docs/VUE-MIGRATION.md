@@ -38,7 +38,7 @@ one-panel rule too. Share links continue to record which panels are open.
 
 `src/ui/kit/` holds the generic components: `UiRail`, `UiTooltip`, `UiIcon`,
 `UiButton`, `UiCloseButton`, `UiPanel`, `UiSegmented`, `UiSlider`, `UiChip`,
-`UiSelect`, `UiSearchField`, `UiCheckbox`, `UiBadge` and `UiEmpty` so far, with more
+`UiSelect`, `UiSearchField`, `UiCheckbox`, `UiDialog`, `UiBadge` and `UiEmpty` so far, with more
 joining as the controls they serve are converted. One component
 serves every use of a control, with props for the differences (`UiPanel`'s
 `sideways`, `glow`, `scroll`), rather than a copy per panel. The components
@@ -56,6 +56,7 @@ never copied:
 | `UiCloseButton` | a close, dismiss or clear button: a bare glyph (× with `glyph="times"`, the Material `close` symbol with `glyph="icon"`) with no padding, border or background of its own and a pointer; the site's feature class sets size, colour, hover and any surface, and `bare` leaves the look off for a skin that sets its own padding and border | `src/ui/styles/close-button.css` |
 | `UiSearchField` | a search field: the Material `search` glyph and a search input in a flex row, the input bare (no border or background, free to shrink); the site's feature classes set the frame's size, surface and focus ring and the input's type and outline, and the browser's own cancel button is left to each skin | `src/ui/styles/search-field.css` |
 | `UiCheckbox` | a checkbox: a label wrapping a native box and its words in a centred flex row; the box keeps each site's size, margin and accent colour, and the site's feature class sets the row's gap, direction and colour | `src/ui/styles/checkbox.css` |
+| `UiDialog` | none: a native modal `<dialog>`; the site's feature class or inline style draws it | — |
 | `UiChip` | the read-only chip (a pill of uppercase mono text); `selected` takes the accent | `src/ui/styles/chip.css` |
 | `UiEmpty` | the one-line empty state (dim mono text), its hint on a line below | `src/ui/styles/empty-state.css` |
 | `UiBadge` | the read-only badge (`gev-status-badge`) | `src/ui/styles/status-badge.css` |
@@ -136,6 +137,24 @@ preferences, the Data Library's filter and the welcome card's box are
 `UiCheckbox`es (`src/ui/kit/checkboxes.test.mjs` pins it); Story Explore's
 filters are not converted yet. Its kit rule holds the centred row the
 checkbox-only labels drew, moved rather than copied.
+`UiDialog` is a native `<dialog>` its owner opens and closes with `open`:
+true opens it with `showModal()` (on mount, for one mounted open), false
+closes it, and unmounting closes it. Each change is applied once the content
+has rendered and then emitted as `opened` or `closed`, so the Data Library
+focuses its search field on open and returns focus to Browse on close.
+Escape's `cancel` is prevented and emitted as `dismiss`, so the owner
+decides; `backdropDismiss` makes a click on the dialog itself, outside its
+content, a `dismiss` too. When the browser closes the dialog on its own
+while `open` is still true (an Escape the page may not cancel),
+`browserClose` tells the owner; closing on unmount reports nothing. A DOM
+without `showModal()` leaves it closed rather than failing. Attributes,
+classes, styles and listeners go to the dialog, and `element` is exposed.
+The Data Library and the scene sharing dialogs are `UiDialog`s
+(`src/ui/kit/dialogs.test.mjs` pins it); the panels drawn as
+`role="dialog"` (key setup, the welcome launcher, the CCTV popup, Story
+Explore's filter, the credits) and the render failure's `alertdialog` are
+other controls. The two dialogs share no declarations, so it has no kit
+rules.
 `UiSlider` keeps the native range input rather than drawing a
 `role="slider"` track, so Core's keyboard, form behaviour and styling stay;
 it takes `v-model`, `min`, `max`, `step` and `disabled`, emits a
