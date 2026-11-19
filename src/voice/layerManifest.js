@@ -282,7 +282,11 @@ const layers = [
     context: false,
     query: {
       fields: {
-        value: ['n', 'AQHI'],
+        value: ['n'],
+        units: ['t'],
+        parameter: ['t'],
+        averagingMinutes: ['n', 'min'],
+        kind: ['t'],
         band: ['t'],
         scale: ['t'],
         provider: ['t'],

@@ -1,4 +1,7 @@
 import path from 'node:path';
+
+import { openAqProxy } from './openAq.js';
+import { southAfricaAirQualityProxy } from './southAfricaAirQuality.js';
 import { openSkyProxy } from './aircraft/opensky.js';
 import { celestrakProxy, rocketLaunchesProxy } from './space.js';
 import { tomtomProxy } from './traffic.js';
@@ -83,6 +86,8 @@ function localProviderPlugins({
     windProxy(),
     weatherProxy(),
     cycloneProxy(),
+    southAfricaAirQualityProxy(),
+    openAqProxy(),
     mapillaryProxy(),
     firePerimetersProxy(),
     gnssIntegrityProxy(),

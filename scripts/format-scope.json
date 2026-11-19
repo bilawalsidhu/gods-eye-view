@@ -1639,5 +1639,19 @@
   "src/layers/firms/selection.test.mjs",
   "src/layers/vessels/selection.test.mjs",
   "src/layers/bikeshare/selection.test.mjs",
-  "src/layers/satellites/interaction.test.mjs"
+  "src/layers/satellites/interaction.test.mjs",
+  "src/layers/airQuality/airQualityLocale.test.mjs",
+  "src/layers/airQuality/providers.js",
+  "src/layers/airQuality/southAfrica.js",
+  "src/layers/airQuality/southAfrica.test.mjs",
+  "server/providers/southAfricaAirQuality.js",
+  "server/providers/southAfricaAirQuality.test.mjs",
+  "scripts/qa-south-africa-air-quality.mjs",
+  "src/layers/airQuality/openAq.test.mjs",
+  "server/providers/openAq.test.mjs",
+  "scripts/qa-openaq.mjs",
+  "src/layers/airQuality/interpretation.js",
+  "src/layers/airQuality/interpretation.test.mjs",
+  "server/providers/openAqBudget.test.mjs",
+  "src/testSupport/airQualityViewer.mjs"
 ]

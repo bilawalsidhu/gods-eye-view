@@ -42,6 +42,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // omit top-level anyOf (OpenAI rejects it). Contacts list routing preserves
     // requested radius and center authority in descriptions only.
     // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
+    // Air quality adds source units, pollutant, averaging period and observation kind; value is no longer universally AQHI.
     // Air quality (ECCC AQHI) extends the manifest.
     // Globe rotation adds one motion; visual keyhole fit and explicit
     // reset guidance/defaults update only move_camera and mode descriptions.
@@ -63,7 +64,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // The Cyber HUD layout leaves set_hud's layout enum (its sonar is a
     // visual style; set_cyber_sonar is excluded above).
     // The Space Missions panel adds one panel target.
-    '09abe70ef3a1fc4320e25cff997dd3b04db7e78ff31b8530e17bbbbb8156b4c6',
+    'a246c78c5a6c7b7684a15b4d57b412011c5b726e454079363ff3dcac1c4152a7',
   );
 });
 

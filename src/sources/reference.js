@@ -1,5 +1,5 @@
 import { createUsgsEarthquakeSource } from '../layers/earthquakes/source.js';
-import { createEcccAirQualitySource } from '../layers/airQuality/source.js';
+import { createAirQualitySource } from '../layers/airQuality/providers.js';
 import { createWfigsPerimeterSource } from '../layers/perimeters/source.js';
 import { createDroneAirspaceSource } from '../layers/droneAirspace/source.js';
 import { createBundledCableSource } from '../layers/submarineCables/bundledSource.js';
@@ -10,7 +10,7 @@ import { createWildlifeSightingsSource } from '../layers/wildlifeSightings/sourc
 export function createReferenceSources() {
   return {
     earthquakes: createUsgsEarthquakeSource(),
-    'air-quality': createEcccAirQualitySource(),
+    'air-quality': createAirQualitySource(),
     'fire-perimeters': createWfigsPerimeterSource(),
     'drone-airspace': createDroneAirspaceSource(),
     'wildlife-sightings': createWildlifeSightingsSource(),

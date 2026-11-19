@@ -54,17 +54,18 @@ test('a layer requires both a snapshot source and an overlay host', () => {
   );
 });
 
-test('initialization is single-use and owns exactly one draw set', () => {
+test('initialization is single-use and owns separate shape and point draw sets', () => {
   const { layer, viewer, draw, markers } = harness(staticSource([]));
   const owned = markers();
   assert.equal(owned.kind, 'shapes');
   assert.equal(
     [...draw.sets.values()].filter((set) => !set.disposed).length,
-    1,
+    2,
   );
   assert.throws(() => layer.init(viewer), /already initialized/);
   layer.destroy(viewer);
   assert.equal(owned.disposed, true);
+  assert.ok([...draw.sets.values()].every((set) => set.disposed));
 });
 
 test('stations are ground discs in their band colour, shown only while enabled', async () => {
@@ -107,6 +108,7 @@ test('the readout lists only readings inside the camera port view rectangle', as
     ]),
     {
       camera: {
+        on: () => () => {},
         viewRectangle: () => ({ west: -90, south: 40, east: -70, north: 50 }),
       },
     },
@@ -188,7 +190,11 @@ test('a superseded refresh does not clobber the newer one', async () => {
   const first = layer.update();
   const second = layer.update();
   const [firstResult, secondResult] = await Promise.all([first, second]);
-  assert.equal(firstResult, false, 'the superseded call reports no update');
+  assert.equal(
+    firstResult,
+    true,
+    'supersession is not a failed lifecycle enable; the newer request owns data',
+  );
   assert.equal(secondResult, true);
   assert.equal(layer.getAnalystRecords()[0].name, 'call-2');
 });
@@ -321,4 +327,88 @@ test('a failed refresh over good readings reports degraded, not nominal', async 
     'degraded',
     'showing old data after a failure is degraded',
   );
+});
+
+test('injected observations use point markers and dispose both render sets', async () => {
+  const row = reading('sample', 12, {
+    provider: 'custom',
+    scale: 'PM2.5',
+    assessment: { label: 'Good' },
+  });
+  const { layer, draw } = harness({
+    definitions: [
+      {
+        id: 'custom',
+        observation: true,
+        parameters: ['PM2.5'],
+        network: 'Test network',
+      },
+    ],
+    getSnapshot: async () => [row],
+  });
+  await layer.update();
+  const points = [...draw.sets.values()].find((set) => set.kind === 'points');
+  const shapes = [...draw.sets.values()].find((set) => set.kind === 'shapes');
+  assert.equal(shapes.items.size, 0);
+  const point = points.items.get(`air-quality:${row.id}`);
+  assert.deepEqual(point.pos, { lon: row.lon, lat: row.lat, height: 0 });
+  assert.equal(point.color, row.color);
+  assert.equal(point.height, 'clampGround');
+  assert.equal(point.meta.assessment.label, 'Good');
+  assert.equal(points.show, true);
+  layer.disable();
+  assert.equal(points.show, false);
+  layer.destroy();
+  assert.ok([...draw.sets.values()].every((set) => set.disposed));
+});
+
+test('viewport discovery takes degree bounds and map focus from renderer ports', async () => {
+  const { fromDegrees } = await import('../../geo/ellipsoid.js');
+  const requests = [];
+  const picks = [];
+  let removed = false;
+  const viewer = { canvas: { clientWidth: 800, clientHeight: 600 } };
+  bindFakeDraw(viewer, {
+    camera: {
+      viewRectangle: () => ({ west: 170, south: -20, east: -170, north: 20 }),
+      on(event) {
+        assert.equal(event, 'moveEnd');
+        return () => {
+          removed = true;
+        };
+      },
+    },
+    query: {
+      pickEllipsoid(x, y) {
+        picks.push([x, y]);
+        return fromDegrees(178, -5);
+      },
+      isOccluded: () => false,
+    },
+  });
+  const layer = createAirQualityLayer({
+    source: {
+      definitions: [
+        {
+          id: 'custom',
+          observation: true,
+          viewDriven: true,
+          parameters: ['PM2.5'],
+          network: 'Test',
+        },
+      ],
+      getSnapshot: async (request) => {
+        requests.push(request);
+        return [];
+      },
+    },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+  });
+  layer.init(viewer);
+  layer.enable();
+  await layer.update();
+  assert.deepEqual(requests[0].view, [170, -20, -170, 20, 178, -5]);
+  assert.deepEqual(picks[0], [400, 300]);
+  layer.destroy();
+  assert.equal(removed, true);
 });

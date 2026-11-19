@@ -1,14 +1,19 @@
-import { fromDegrees } from '../../geo/ellipsoid.js';
+import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
 import { cssColor } from '../../render/color.js';
-import { drawOf, findCamera } from '../../render/rendererOf.js';
+import {
+  drawOf,
+  findCamera,
+  findQuery,
+  rendererOf,
+} from '../../render/rendererOf.js';
+import { keyRequirementText } from '../../ui/keyGuidance.js';
+import { ECCC_DEFINITION } from './providers.js';
 import { msg, t, tn } from '../../i18n/index.js';
 import { translateFeedError } from '../../ui/statusText.js';
 import {
-  AIR_QUALITY_BANDS,
   AIR_QUALITY_OVERLAY_SOURCE_ID,
   AIR_QUALITY_OVERLAY_COHORT_LIMIT,
   AIR_QUALITY_OVERLAY_COLLISION_CAPACITY,
-  AIR_QUALITY_PROVIDERS,
   createAirQualityOverlayEntry,
   mapAnalystRecord,
   newestObservation,
@@ -18,6 +23,7 @@ import {
 } from './model.js';
 export * from './model.js';
 export { createEcccAirQualitySource } from './source.js';
+export { createAirQualitySource } from './providers.js';
 
 /** Station markers are a point reading, not an extent. */
 const STATION_MARKER_RADIUS_M = 6_000;
@@ -41,25 +47,87 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
   let _viewer = null;
   let _request = null;
   let _markers = null;
+  let _points = null;
   let _readings = [];
   let _count = 0;
   let _lastUpdate = null;
   let _lastError = null;
   let _enabled = false;
   let rowControlsListener = null;
+  const definitions = source.definitions ?? [ECCC_DEFINITION];
+  const providers = new Map(definitions.map((entry) => [entry.id, entry]));
+  let providerId = definitions[0].id;
+  const definition = () => providers.get(providerId);
+  const observation = () => definition().observation === true;
+  let parameter = definitions[0].parameters[0] || 'PM2.5';
+  let coverage = null;
+  let overlayEntries = [];
+  let removeMoveEnd = null;
+  let moveTimer = null;
+  let retryTimer = null;
+  let retryAt = null;
+  let loading = false;
+  let requestedView = null;
 
   const notify = () => rowControlsListener?.();
+  const cancelRetry = () => {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+    retryAt = null;
+  };
+  const scheduleRetry = (at) => {
+    cancelRetry();
+    if (!definition().viewDriven || !_enabled || !Number.isFinite(at)) return;
+    retryAt = Math.min(
+      Date.now() + 24 * 3600_000,
+      Math.max(Date.now() + 1000, at),
+    );
+    retryTimer = setTimeout(
+      () => {
+        retryTimer = null;
+        void layer.update();
+      },
+      retryAt - Date.now() + 100,
+    );
+  };
 
   /** The camera's lon/lat rectangle in degrees, or null when unresolvable. */
   const viewRectangle = () =>
     _viewer ? (findCamera(_viewer)?.viewRectangle() ?? null) : null;
 
+  const currentView = () => {
+    const rect = viewRectangle();
+    if (!rect) return null;
+    const width = (rect.east - rect.west + 360) % 360 || 360;
+    const lon = ((rect.west + width / 2 + 540) % 360) - 180;
+    const canvas = rendererOf(_viewer)?.canvas;
+    const focus =
+      canvas &&
+      findQuery(_viewer)?.pickEllipsoid(
+        canvas.clientWidth / 2,
+        canvas.clientHeight / 2,
+      );
+    const center = focus ? toLonLatH(focus) : null;
+    const values = [
+      rect.west,
+      rect.south,
+      rect.east,
+      rect.north,
+      center ? center.lon : lon,
+      center ? center.lat : (rect.south + rect.north) / 2,
+    ];
+    const rounded = values.map((v) => Number(v.toFixed(4)));
+    return rounded[0] === rounded[2] || rounded[1] >= rounded[3]
+      ? values
+      : rounded;
+  };
+
   const layer = {
     id: 'air-quality',
     name: 'Air quality',
     icon: '◍',
-    source: 'ECCC MSC GeoMet',
-    updateInterval: 1_200_000,
+    source: definition().sourceLabel || definition().network,
+    updateInterval: 60_000,
 
     init(viewer) {
       if (_viewer) throw new Error('Air quality layer is already initialized');
@@ -67,7 +135,33 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
         id: `${AIR_QUALITY_MARKER_SET_ID}:${++instances}`,
         show: false,
       });
+      _points = drawOf(viewer).points({
+        id: `${AIR_QUALITY_MARKER_SET_ID}:points:${instances}`,
+        show: false,
+      });
       _viewer = viewer;
+      removeMoveEnd = findCamera(viewer)?.on('moveEnd', () => {
+        if (_enabled) {
+          this._publishOverlays();
+          if (
+            definition().viewDriven &&
+            JSON.stringify(currentView()) !== requestedView
+          ) {
+            _request?.abort();
+            _request = null;
+            loading = true;
+            coverage = null;
+            _lastError = null;
+            cancelRetry();
+            clearTimeout(moveTimer);
+            moveTimer = setTimeout(() => {
+              moveTimer = null;
+              void this.update();
+            }, 400);
+          }
+          notify();
+        }
+      });
       _readings = [];
       _count = 0;
       _lastUpdate = null;
@@ -79,6 +173,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
     enable() {
       _enabled = true;
       if (_markers) _markers.show = true;
+      if (_points) _points.show = true;
       overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, true);
       notify();
     },
@@ -87,11 +182,50 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       // Abort in flight: a response arriving after disable must not redraw.
       _request?.abort();
       _request = null;
+      cancelRetry();
+      clearTimeout(moveTimer);
+      moveTimer = null;
+      loading = false;
       _enabled = false;
       if (_markers) _markers.show = false;
+      if (_points) _points.show = false;
       overlayHost.clearSource(AIR_QUALITY_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, false);
       notify();
+    },
+
+    getParams() {
+      return { provider: providerId, parameter };
+    },
+
+    setParams(params = {}) {
+      if (params.provider && !providers.has(params.provider)) return false;
+      const nextProvider = params.provider || providerId;
+      const supported = providers.get(nextProvider).parameters;
+      const nextParameter = supported.includes(params.parameter)
+        ? params.parameter
+        : supported.includes(parameter) || !supported.length
+          ? parameter
+          : supported[0];
+      if (nextProvider === providerId && nextParameter === parameter) return;
+      _request?.abort();
+      _request = null;
+      cancelRetry();
+      clearTimeout(moveTimer);
+      moveTimer = null;
+      loading = false;
+      requestedView = null;
+      providerId = nextProvider;
+      parameter = nextParameter;
+      this.source = definition().sourceLabel || definition().network;
+      _readings = [];
+      _count = 0;
+      _lastUpdate = null;
+      _lastError = null;
+      coverage = null;
+      this._render();
+      notify();
+      if (_enabled) void this.update();
     },
 
     async update() {
@@ -99,13 +233,36 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       _request?.abort();
       const request = new AbortController();
       _request = request;
+      cancelRetry();
+      clearTimeout(moveTimer);
+      moveTimer = null;
+      const view = definition().viewDriven ? currentView() : null;
+      requestedView = JSON.stringify(view);
+      loading = true;
+      _lastError = null;
+      notify();
+      // A camera that is still restoring its share-link position has no useful
+      // viewport yet. Never turn that transient state into a global API sweep.
+      if (definition().viewDriven && !view) {
+        _request = null;
+        return true;
+      }
       try {
-        const readings = await source.getSnapshot({ signal: request.signal });
+        const readings = await source.getSnapshot({
+          signal: request.signal,
+          provider: providerId,
+          parameter,
+          ...(view ? { view } : {}),
+        });
         // A superseded or aborted request must not touch the scene, and neither
         // must one that lands after the layer was switched off.
         if (request.signal.aborted || _request !== request || !_enabled)
-          return false;
+          // A newer view owns acquisition. This is not a failed layer enable:
+          // the lifecycle manager must keep the layer and its refresh loop on.
+          return _enabled;
         _readings = readings;
+        coverage = source.getCoverage?.() ?? null;
+        scheduleRetry(coverage?.retryAt);
         this._render();
         _count = _readings.length;
         _lastUpdate = Date.now();
@@ -113,13 +270,23 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
         notify();
         return true;
       } catch (error) {
-        if (request.signal.aborted || _request !== request) return false;
-        _lastError = error?.message || msg('Air quality request failed');
+        if (request.signal.aborted || _request !== request) return _enabled;
+        _lastError =
+          (error?.code === 'no_key'
+            ? keyRequirementText(definition().requiresKeyId)
+            : '') ||
+          error?.message ||
+          msg('Air quality request failed');
+        scheduleRetry(error?.retryAt);
         console.warn('[Data:AirQuality] Refresh failed:', _lastError);
         notify();
-        return false;
+        return retryAt !== null;
       } finally {
-        if (_request === request) _request = null;
+        if (_request === request) {
+          _request = null;
+          loading = false;
+          notify();
+        }
       }
     },
 
@@ -127,53 +294,83 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
     _render() {
       if (!_markers) return;
       const markers = [];
-      const overlayEntries = [];
+      const points = [];
+      overlayEntries = [];
       for (const reading of _readings) {
         const position = fromDegrees(reading.lon, reading.lat);
         // A filled disc on the ground with static axes, as in the earthquake
         // layer: a per-frame axis re-tessellates clamped ground geometry
         // every frame. No outline: clamped to the ground, the default
         // renderer never drew one.
-        markers.push({
-          id: `air-quality:${reading.id}`,
-          geometry: {
-            kind: 'ellipse',
-            center: { lon: reading.lon, lat: reading.lat },
-            semiMajor: STATION_MARKER_RADIUS_M,
-            semiMinor: STATION_MARKER_RADIUS_M,
-          },
-          fill: withAlpha(reading.color, 0.35),
-          height: 'clampGround',
-          clampTo: 'both',
-          meta: {
-            provider: reading.provider,
-            scale: reading.scale,
-            value: reading.value,
-            band: reading.band,
-            name: reading.name,
-            zone: reading.zone,
-            risk: reading.risk,
-            observedMs: reading.observedMs,
-            note: reading.note,
-            lat: reading.lat,
-            lon: reading.lon,
-          },
-        });
+        const meta = { ...reading };
+        if (observation()) {
+          points.push({
+            id: `air-quality:${reading.id}`,
+            pos: { lon: reading.lon, lat: reading.lat, height: 0 },
+            pixelSize: 8,
+            color: reading.color,
+            outlineColor: '#000000',
+            outlineWidth: 1,
+            height: 'clampGround',
+            meta,
+          });
+        } else
+          markers.push({
+            id: `air-quality:${reading.id}`,
+            geometry: {
+              kind: 'ellipse',
+              center: { lon: reading.lon, lat: reading.lat },
+              semiMajor: STATION_MARKER_RADIUS_M,
+              semiMinor: STATION_MARKER_RADIUS_M,
+            },
+            fill: withAlpha(reading.color, 0.35),
+            height: 'clampGround',
+            clampTo: 'both',
+            meta: {
+              provider: reading.provider,
+              scale: reading.scale,
+              value: reading.value,
+              band: reading.band,
+              name: reading.name,
+              zone: reading.zone,
+              risk: reading.risk,
+              observedMs: reading.observedMs,
+              note: reading.note,
+              lat: reading.lat,
+              lon: reading.lon,
+            },
+          });
         overlayEntries.push(
           createAirQualityOverlayEntry({
             id: reading.id,
             position,
-            title: `${reading.name} ${reading.label}`,
+            title: `${reading.name} ${reading.label}${reading.assessment?.label || reading.rating ? ` · ${bandLabel(reading.assessment?.label || reading.rating.label, definition().bandContext)}` : ''}`,
             accent: reading.color,
-            value: reading.value,
+            value: observation() ? 0 : reading.value,
           }),
         );
       }
       _markers.set(markers);
+      _points.set(points);
+      this._publishOverlays();
+    },
+
+    _publishOverlays() {
+      const visibleIds = observation()
+        ? new Set(
+            readingsInView(_readings, viewRectangle(), _readings.length).map(
+              (row) => row.id,
+            ),
+          )
+        : null;
       if (_enabled) {
         overlayHost.setEntries(
           AIR_QUALITY_OVERLAY_SOURCE_ID,
-          selectAirQualityOverlayCohort(overlayEntries),
+          selectAirQualityOverlayCohort(
+            observation()
+              ? overlayEntries.filter((entry) => visibleIds.has(entry.id))
+              : overlayEntries,
+          ),
           {
             cohortLimit: AIR_QUALITY_OVERLAY_COHORT_LIMIT,
             collisionCapacity: AIR_QUALITY_OVERLAY_COLLISION_CAPACITY,
@@ -186,12 +383,21 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
     destroy() {
       _request?.abort();
       _request = null;
+      cancelRetry();
+      clearTimeout(moveTimer);
+      moveTimer = null;
+      loading = false;
       _enabled = false;
       overlayHost.clearSource(AIR_QUALITY_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, false);
       _markers?.dispose();
       _markers = null;
+      _points?.dispose();
+      _points = null;
+      removeMoveEnd?.();
+      removeMoveEnd = null;
       _viewer = null;
+      overlayEntries = [];
       _readings = [];
       _count = 0;
       _lastUpdate = null;
@@ -207,8 +413,72 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
      * the rest. Coverage is stated plainly because this layer is not global.
      */
     getRowControls() {
-      const provider = AIR_QUALITY_PROVIDERS.eccc;
-      const inView = readingsInView(_readings, viewRectangle(), READOUT_LIMIT);
+      const isObservation = observation();
+      const provider = {
+        ...definition(),
+        scale: isObservation ? parameter : definition().scale,
+      };
+      const rectangle = viewRectangle();
+      const query = findQuery(_viewer);
+      const visible = readingsInView(
+        _readings,
+        rectangle,
+        _readings.length,
+      ).filter(
+        (reading) =>
+          !query?.isOccluded?.(fromDegrees(reading.lon, reading.lat)),
+      );
+      const inView = (
+        isObservation
+          ? visible.sort(
+              (a, b) =>
+                (b.assessment?.severity ?? b.rating?.score ?? -1) -
+                  (a.assessment?.severity ?? a.rating?.score ?? -1) ||
+                a.name.localeCompare(b.name),
+            )
+          : visible
+      ).slice(0, READOUT_LIMIT);
+      const worst = inView.find((row) => row.assessment?.label || row.rating);
+      const category = worst?.assessment?.label || worst?.rating?.label;
+      const assessment = worst?.assessment;
+      const assessmentLines =
+        !loading && !_lastError && !coverage?.stale && worst
+          ? [
+              {
+                id: 'health-summary',
+                text: t(
+                  'Highest {pollutant} category in view: {category} · {station}',
+                  {
+                    pollutant: parameter,
+                    category: bandLabel(category, provider.bandContext),
+                    station: worst.name,
+                  },
+                ),
+              },
+              ...(assessment?.general
+                ? [
+                    {
+                      id: 'general-guidance',
+                      text: t('Most people: {advice}', {
+                        advice: t(assessment.general),
+                      }),
+                    },
+                    {
+                      id: 'sensitive-guidance',
+                      text: t('Heart or breathing conditions: {advice}', {
+                        advice: t(assessment.sensitive),
+                      }),
+                    },
+                    {
+                      id: 'assessment-scope',
+                      text: t(
+                        'At the observation time, for this pollutant only. Other pollutants and unmonitored areas may differ.',
+                      ),
+                    },
+                  ]
+                : []),
+            ]
+          : [];
       const newest = _readings.reduce(
         (max, reading) => Math.max(max, reading.observedMs || 0),
         0,
@@ -223,31 +493,191 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
           coverage: t(provider.coverage),
           validTime: newest ? new Date(newest).toISOString() : undefined,
           detail: `${provider.network} · ${provider.scale}`,
-          status: _lastError
-            ? translateFeedError(_lastError)
-            : _count === 0
-              ? _lastUpdate === null
-                ? t('No readings available')
-                : t('No current readings')
-              : tn(
-                  _count,
-                  '{count} station reporting',
-                  '{count} stations reporting',
-                ),
+          status: loading
+            ? t('Loading observations for this view…')
+            : _lastError
+              ? translateFeedError(_lastError)
+              : coverage?.failureStatus === 429
+                ? t(
+                    'Provider request budget reached. Cached data will refresh later.',
+                  )
+                : coverage?.stale
+                  ? t('Air quality provider unavailable')
+                  : category
+                    ? `${parameter} · ${bandLabel(category, provider.bandContext)}`
+                    : coverage?.partial
+                      ? t('Partial coverage · discovery continues')
+                      : _count === 0
+                        ? _lastUpdate === null
+                          ? t('No readings available')
+                          : t('No current readings')
+                        : tn(
+                            _count,
+                            '{count} station reporting',
+                            '{count} stations reporting',
+                          ),
           units: provider.scale,
+          overview: assessmentLines,
+          settings: [
+            {
+              id: 'provider',
+              label: t('Network'),
+              chips: definitions.map((entry) => ({
+                id: entry.id,
+                label: t(entry.title),
+                active: entry.id === providerId,
+                params: { provider: entry.id },
+              })),
+            },
+            ...(isObservation
+              ? [
+                  {
+                    id: 'pollutant',
+                    label: t('Pollutant'),
+                    chips: provider.parameters.map((id) => ({
+                      id,
+                      label: id,
+                      active: parameter === id,
+                      params: { parameter: id },
+                    })),
+                  },
+                ]
+              : []),
+          ],
+          ...(isObservation
+            ? {
+                lines: [
+                  {
+                    id: 'coverage',
+                    text: t(provider.coverageNote || provider.coverage),
+                  },
+                  {
+                    id: 'counts',
+                    text: t(
+                      '{catalog} catalog stations · {reporting} reporting · {visible} in view',
+                      {
+                        catalog: coverage?.stations?.length ?? 0,
+                        reporting: _count,
+                        visible: visible.length,
+                      },
+                    ),
+                  },
+                  {
+                    id: 'interpretation',
+                    text: loading
+                      ? t('Loading observations for this view…')
+                      : visible.length
+                        ? t(
+                            provider.getLegend &&
+                              !provider.getLegend(parameter).length
+                              ? parameter === 'CO2'
+                                ? msg(
+                                    'CO₂ concentration is not an emissions rate and has no category on this scale.',
+                                  )
+                                : msg(
+                                    'This pollutant has no category on the EEA hourly scale.',
+                                  )
+                              : provider.interpretation || '',
+                          )
+                        : _lastError || coverage?.stale
+                          ? t('Observations unavailable; retrying on refresh.')
+                          : coverage?.partial
+                            ? t(
+                                'Discovery is incomplete; empty areas do not yet mean no data.',
+                              )
+                            : t(
+                                'No current observations for this pollutant in the map view.',
+                              ),
+                  },
+                  ...(Number.isFinite(coverage?.checked)
+                    ? [
+                        {
+                          id: 'progress',
+                          text: t(
+                            '{checked} stations with observations · {eligible} recent catalog stations · {countries} countries reporting',
+                            {
+                              checked: coverage.checked,
+                              eligible: coverage.eligible,
+                              countries: coverage.countriesReporting || 0,
+                            },
+                          ),
+                        },
+                      ]
+                    : []),
+                  ...(retryAt
+                    ? [
+                        {
+                          id: 'retry',
+                          text: t(
+                            'Next automatic update at {time}. Cached observations remain visible.',
+                            {
+                              time: new Date(retryAt).toLocaleTimeString(),
+                            },
+                          ),
+                        },
+                      ]
+                    : []),
+                  ...(coverage?.partial
+                    ? [
+                        {
+                          id: 'partial',
+                          text: t(
+                            'Coverage is loading progressively within the provider request budget.',
+                          ),
+                        },
+                      ]
+                    : []),
+                  ...(coverage?.stale
+                    ? [
+                        {
+                          id: 'cached',
+                          text: t(
+                            'Cached observations; provider refresh failed.',
+                          ),
+                        },
+                      ]
+                    : []),
+                ],
+              }
+            : {}),
         },
-        legend: AIR_QUALITY_BANDS.map((band) => ({
+        legend: (provider.getLegend
+          ? [
+              ...provider.getLegend(parameter),
+              { color: '#8cb4ce', label: msg('Not rated') },
+            ]
+          : (provider.legend ?? [])
+        ).map((band) => ({
           color: band.color,
-          label: t(band.label),
+          label: `${bandLabel(band.label, provider.bandContext)}${band.range ? ` ${band.range}` : ''}`,
         })),
         legendCategorical: true,
         list: {
-          ariaLabel: t('Highest air-quality readings in view'),
+          ariaLabel: isObservation
+            ? t('Observations in view')
+            : t('Highest air-quality readings in view'),
           items: inView.map((reading, index) => ({
             id: reading.id,
             ordinal: index + 1,
             lead: `${reading.scale} ${reading.label}`,
-            text: `${reading.name} · ${t(reading.risk)}`,
+            ...(isObservation
+              ? {
+                  badge: reading.rating
+                    ? `${bandLabel(reading.rating.label, provider.bandContext)} · ${reading.rating.score}/10`
+                    : reading.assessment?.label
+                      ? bandLabel(
+                          reading.assessment.label,
+                          provider.bandContext,
+                        )
+                      : reading.assessment
+                        ? t('Not rated')
+                        : t('Index unavailable'),
+                  badgeColor: reading.color,
+                }
+              : {}),
+            text: isObservation
+              ? `${reading.name} · ${reading.zone} · ${reading.owner || provider.network} · ${t(reading.averagingMinutes === 60 ? msg('Hourly average') : msg('Source averaging period unspecified'))} · ${new Date(reading.observedMs).toISOString()} · ${reading.assessment?.label ? `${t('Calculated comparison')} · ${t(reading.assessment.method)} · ${reading.assessment.range}` : reading.assessment?.reason ? t(reading.assessment.reason) : reading.rating ? t(provider.indexLabel || 'Index unavailable') : t('Index unavailable')} · ${Date.now() - reading.observedMs > 2 * 3600_000 ? `${t('Older observation')} · ` : ''}${t('Provisional data')} · ${reading.network || provider.network} · ${(reading.licenses || []).map((item) => item.attribution || item.name).join(', ')}`
+              : `${reading.name} · ${t(reading.risk)}`,
             accent: reading.color,
           })),
         },
@@ -280,13 +710,68 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       // than being narrated as live by the HUD and voice provenance envelope.
       return {
         count: _count,
+        source: this.source,
         lastUpdate: _lastUpdate,
         error: _lastError,
         observedAt: newestObservation(_readings),
         // Only a completed refresh can be stale; before one there is no feed.
-        stale: _lastUpdate !== null && readingsAreStale(_readings),
+        stale:
+          _lastUpdate !== null &&
+          (coverage?.stale === true || readingsAreStale(_readings)),
       };
     },
   };
   return layer;
+}
+
+// Provider category labels are translated at presentation time.
+msg('Good');
+msg('Moderate');
+msg('Unhealthy');
+msg('Very Unhealthy');
+msg('Hazardous');
+
+/** Translate each scale in its own grammatical context, only when rendered. */
+function bandLabel(label, context) {
+  if (context === 'air quality risk') {
+    switch (label) {
+      case 'Low':
+        return t('Low', { context: 'air quality risk' });
+      case 'Moderate':
+        return t('Moderate', { context: 'air quality risk' });
+      case 'High':
+        return t('High', { context: 'air quality risk' });
+      case 'Very High':
+        return t('Very High', { context: 'air quality risk' });
+    }
+  } else if (context === 'EEA hourly quality') {
+    switch (label) {
+      case 'Good':
+        return t('Good', { context: 'EEA hourly quality' });
+      case 'Fair':
+        return t('Fair', { context: 'EEA hourly quality' });
+      case 'Moderate':
+        return t('Moderate', { context: 'EEA hourly quality' });
+      case 'Poor':
+        return t('Poor', { context: 'EEA hourly quality' });
+      case 'Very poor':
+        return t('Very poor', { context: 'EEA hourly quality' });
+      case 'Extremely poor':
+        return t('Extremely poor', { context: 'EEA hourly quality' });
+    }
+  } else if (context === 'SAAQIS category') {
+    switch (label) {
+      case 'Good':
+        return t('Good', { context: 'SAAQIS category' });
+      case 'Moderate':
+        return t('Moderate', { context: 'SAAQIS category' });
+      case 'Unhealthy':
+        return t('Unhealthy', { context: 'SAAQIS category' });
+      case 'Very Unhealthy':
+        return t('Very Unhealthy', { context: 'SAAQIS category' });
+      case 'Hazardous':
+        return t('Hazardous', { context: 'SAAQIS category' });
+    }
+  }
+  return t(label);
 }
