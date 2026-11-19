@@ -160,9 +160,14 @@ export function createPresentation({
     const camera = record.camera;
     const health = layerState._healthById.get(camera.id) || null;
     const isActive = camera.id === resolvedActiveId;
-    const refreshMs = isActive
+    const defaultRefreshMs = isActive
       ? ACTIVE_FRAME_REFRESH_MS
       : IDLE_FRAME_REFRESH_MS;
+    const sourceRefreshMs = Number(camera.frameRefreshMs);
+    const refreshMs =
+      Number.isFinite(sourceRefreshMs) && sourceRefreshMs > 0
+        ? Math.max(defaultRefreshMs, sourceRefreshMs)
+        : defaultRefreshMs;
     return {
       id: camera.id,
       name: camera.name,
@@ -192,13 +197,18 @@ export function createPresentation({
       mountHeightM: camera.mountHeightM,
       active: isActive,
       feedType: camera.feedType,
+      sourceUrl: camera.sourceUrl || '',
+      browserMediaUrl: camera.browserMediaUrl || '',
+      accuracyM: Number.isFinite(camera.accuracyM) ? camera.accuracyM : null,
+      positionSource: camera.positionSource || '',
       isVideo:
-        parts.model.isVideoFeedType(camera.feedType) &&
+        parts.model.isVideoFeedCamera(camera) &&
         record.projection?.mode !== 'image',
-      sourceKind:
-        health?.sourceKind ||
-        camera.sourceKind ||
-        (camera.feedConfigured ? 'configured' : 'seed'),
+      sourceKind: camera.sourceKind?.startsWith('quebec-')
+        ? camera.sourceKind
+        : health?.sourceKind ||
+          camera.sourceKind ||
+          (camera.feedConfigured ? 'configured' : 'seed'),
       sourceStatus: health?.status || 'unknown',
       sourceMessage: health?.message || '',
       sourceLabel: health?.label || camera.provider || '',
@@ -276,6 +286,7 @@ export function createPresentation({
         hoverId: layerState._hoverCardId,
       },
       activeCameraId: activeId,
+      activeCameraReselection: layerState._activeCameraReselection,
       activeCamera: active ? getPublicCameraState(active, activeId) : null,
       cameraIndex: cameraIndex(),
       summary: buildSummaryText(),

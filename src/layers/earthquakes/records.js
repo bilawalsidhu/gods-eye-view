@@ -28,10 +28,15 @@ export function normalizeEarthquakeSnapshot(geojson) {
       return null;
     // A missing magnitude cannot establish that this event meets M2.5+.
     if (mag == null || mag < 2.5) continue;
-    const stableId =
-      feature.id == null || feature.id === ''
-        ? `event-${index + 1}`
-        : String(feature.id);
+    // An id-less event is named by what it is (time, position, depth and
+    // magnitude), not by its row, so a refresh that inserts a row keeps the
+    // selection on the same quake; a revision to any of those names a new
+    // one. Two id-less events that match exactly fall back to the row.
+    const idless = feature.id == null || feature.id === '';
+    let stableId = idless
+      ? `event-${[properties.time ?? 'na', lon, lat, depthKm ?? 'na', mag].join(':')}`
+      : String(feature.id);
+    if (idless && ids.has(stableId)) stableId = `${stableId}:${index + 1}`;
     if (ids.has(stableId)) return null;
     ids.add(stableId);
     rows.push({

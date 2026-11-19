@@ -47,23 +47,58 @@ const CONTROLLED_ACCESS_FLOW = new Set(['Motorway', 'International road']);
 const CONTROLLED_ACCESS_OSM = new Set(['motorway', 'trunk']);
 
 /**
+ * Validate a host's road-source list (`createTrafficSource({ roadModes })`):
+ * a non-empty subset of TRAFFIC_ROAD_MODES, kept in canonical order.
+ * @param {*} value - Candidate list; undefined means every mode.
+ * @returns {ReadonlyArray<'tomtom'|'osm'|'hybrid'>}
+ */
+export function normalizeRoadModes(value) {
+  if (value === undefined) return TRAFFIC_ROAD_MODES;
+  const modes = Array.isArray(value)
+    ? TRAFFIC_ROAD_MODES.filter((mode) => value.includes(mode))
+    : [];
+  if (!modes.length || modes.length !== value.length)
+    throw new TypeError(
+      `Traffic road modes must be a non-empty subset of ${TRAFFIC_ROAD_MODES.join(', ')}`,
+    );
+  return Object.freeze(modes);
+}
+
+/**
+ * Whether a host's modes allow simulated roads. Without OpenStreetMap the
+ * layer never simulates: keyless, it draws no roads and says why.
+ * @param {ReadonlyArray<string>} [modes]
+ * @returns {boolean}
+ */
+export function roadModesSimulate(modes = TRAFFIC_ROAD_MODES) {
+  return modes.includes('osm');
+}
+
+/**
  * Validate an explicit choice.
  * @param {*} value - Candidate mode.
+ * @param {ReadonlyArray<string>} [modes] - The host's offered modes.
  * @returns {'tomtom'|'osm'|'hybrid'|null} Null means "use the default".
  */
-export function normalizeRoadMode(value) {
-  return TRAFFIC_ROAD_MODES.includes(value) ? value : null;
+export function normalizeRoadMode(value, modes = TRAFFIC_ROAD_MODES) {
+  return modes.includes(value) ? value : null;
 }
 
 /**
  * Resolve the mode actually drawn. Without a TomTom key every choice draws
- * OpenStreetMap roads; with one, an explicit choice wins over Hybrid.
+ * OpenStreetMap roads when the host offers them; with one, an explicit
+ * choice wins over Hybrid. A host that offers no OpenStreetMap mode keeps
+ * its TomTom choice keyless (nothing is drawn; the status names the reason),
+ * and a host without Hybrid defaults to its first offered mode.
  * @param {*} value - Requested mode (null for the default).
  * @param {boolean} hasKey - The server reported a TomTom key.
+ * @param {ReadonlyArray<string>} [modes] - The host's offered modes.
  * @returns {'tomtom'|'osm'|'hybrid'}
  */
-export function resolveRoadMode(value, hasKey) {
-  return hasKey ? normalizeRoadMode(value) || 'hybrid' : 'osm';
+export function resolveRoadMode(value, hasKey, modes = TRAFFIC_ROAD_MODES) {
+  const chosen = normalizeRoadMode(value, modes);
+  if (!hasKey && roadModesSimulate(modes)) return 'osm';
+  return chosen || (modes.includes('hybrid') ? 'hybrid' : modes[0]);
 }
 
 const FLOW_ROAD_TYPES = Object.freeze({

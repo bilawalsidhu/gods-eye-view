@@ -1,142 +1,139 @@
-import * as Cesium from 'cesium';
 import { isPickedWorldPosition } from '../data/scenePick.js';
 import { t } from '../i18n/index.js';
+import {
+  followedOf,
+  followedPosition,
+  isFollowing,
+  onFollowChanged,
+} from '../data/followed.js';
+import {
+  clamp,
+  eastNorthUp,
+  inverseFramePoint,
+  magnitude,
+  negativePiToPi,
+  toDegrees,
+  toRadians,
+  TWO_PI,
+  zeroToTwoPi,
+} from '../geo/index.js';
+import {
+  canvasOf,
+  findCamera,
+  findFrame,
+  findQuery,
+} from '../render/rendererOf.js';
+import { placeFollowEye } from './shareFollow.js';
 
 function trackedTarget(viewer) {
-  const entity = viewer.trackedEntity;
-  // Read the visual's sample first; sampling a flight CallbackProperty twice
-  // can advance dead reckoning ahead of the displayed aircraft.
-  return (
-    entity?.gevDisplayPosition?.() ||
-    entity?.position?.getValue(viewer.clock?.currentTime)
-  );
+  // The visual's sample first: sampling a flight CallbackProperty twice can
+  // advance dead reckoning ahead of the displayed aircraft.
+  return followedPosition(viewer, followedOf(viewer));
 }
 
-export const OBLIQUE_PITCH = Cesium.Math.toRadians(-35);
-export const STRAIGHT_DOWN_PITCH = Cesium.Math.toRadians(-89);
-const OBLIQUE_THRESHOLD = Cesium.Math.toRadians(-60);
+export const OBLIQUE_PITCH = toRadians(-35);
+export const STRAIGHT_DOWN_PITCH = toRadians(-89);
+const OBLIQUE_THRESHOLD = toRadians(-60);
+const EPSILON10 = 1e-10;
 
 function normalizedHeading(heading) {
-  const wrapped = Cesium.Math.zeroToTwoPi(
-    Number.isFinite(heading) ? heading : 0,
-  );
-  return Math.abs(wrapped - Cesium.Math.TWO_PI) < Cesium.Math.EPSILON10
-    ? 0
-    : wrapped;
+  const wrapped = zeroToTwoPi(Number.isFinite(heading) ? heading : 0);
+  return Math.abs(wrapped - TWO_PI) < EPSILON10 ? 0 : wrapped;
+}
+
+/** The camera port's pose, or null when there is none to read. */
+function poseOf(camera) {
+  try {
+    return camera?.pose() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Cubic ease in and out, 0..1 to 0..1. */
+function cubicInOut(k) {
+  if (k < 0.5) return 4 * k * k * k;
+  const f = 2 * k - 2;
+  return 0.5 * f * f * f + 1;
 }
 
 /** Return the world position under the center of the canvas, when available. */
 export function pickViewTarget(viewer) {
-  const scene = viewer?.scene;
-  const camera = viewer?.camera;
-  const canvas = scene?.canvas;
-  if (!scene || !camera || !canvas) return null;
+  const query = findQuery(viewer);
+  const canvas = canvasOf(viewer);
+  if (!query || !canvas) return null;
   const width = canvas.clientWidth || canvas.width || 0;
   const height = canvas.clientHeight || canvas.height || 0;
   if (!width || !height) return null;
-  const center = new Cesium.Cartesian2(width / 2, height / 2);
-  let target = null;
-
-  if (scene.pickPositionSupported && typeof scene.pickPosition === 'function') {
+  const x = width / 2;
+  const y = height / 2;
+  const attempt = (pick) => {
     try {
-      target = scene.pickPosition(center);
+      return pick();
     } catch {
-      target = null;
+      return null;
     }
-  }
-  // Terrain before the ellipsoid: globe.pick intersects the rendered surface,
-  // so over keyless elevated terrain it returns the ground the operator is
-  // looking at. pickEllipsoid answers with sea level, which on a plateau sits
-  // far below the view and would swing the camera on every tilt.
-  if (
-    !isPickedWorldPosition(target) &&
-    typeof camera.getPickRay === 'function'
-  ) {
-    try {
-      target = scene.globe?.pick(camera.getPickRay(center), scene) || null;
-    } catch {
-      target = null;
-    }
-  }
-  if (
-    !isPickedWorldPosition(target) &&
-    typeof camera.pickEllipsoid === 'function'
-  ) {
-    try {
-      target = camera.pickEllipsoid(center, Cesium.Ellipsoid.WGS84);
-    } catch {
-      target = null;
-    }
-  }
+  };
+  // Depth first: what is drawn under the centre, tiles included.
+  let target = attempt(() => query.pickPosition(x, y));
+  // Terrain before the ellipsoid: the globe pick intersects the rendered
+  // surface, so over keyless elevated terrain it returns the ground the
+  // operator is looking at. The ellipsoid answers with sea level, which on a
+  // plateau sits far below the view and would swing the camera on every tilt.
+  if (!isPickedWorldPosition(target))
+    target = attempt(() => query.pickGlobe(query.pickRay(x, y)));
+  if (!isPickedWorldPosition(target))
+    target = attempt(() => query.pickEllipsoid(x, y));
   return isPickedWorldPosition(target) ? target : null;
 }
 
 /** Describe the camera as an orbit around the current viewport center. */
 export function readCameraTargetFrame(viewer) {
-  const camera = viewer?.camera;
-  const target = viewer?.trackedEntity
+  const pose = poseOf(findCamera(viewer));
+  const target = isFollowing(viewer)
     ? trackedTarget(viewer)
     : pickViewTarget(viewer);
-  if (!camera || !target || !isPickedWorldPosition(camera.positionWC))
-    return null;
+  if (!pose || !target || !isPickedWorldPosition(pose.position)) return null;
 
-  const transform = Cesium.Transforms.eastNorthUpToFixedFrame(target);
-  const inverse = Cesium.Matrix4.inverseTransformation(
-    transform,
-    new Cesium.Matrix4(),
-  );
-  const localOffset = Cesium.Matrix4.multiplyByPoint(
-    inverse,
-    camera.positionWC,
-    new Cesium.Cartesian3(),
-  );
-  const range = Cesium.Cartesian3.magnitude(localOffset);
+  const localOffset = inverseFramePoint(eastNorthUp(target), pose.position);
+  const range = magnitude(localOffset);
   if (!Number.isFinite(range) || range < 1) return null;
 
-  const pitch = -Math.asin(Cesium.Math.clamp(localOffset.z / range, -1, 1));
-  // Cesium places a lookAt camera at range * (-sin h cos p, -cos h cos p,
-  // -sin p) in the target's east-north-up frame, so recovering h means
-  // negating BOTH horizontal components. Negating only the north one reads
-  // every heading as its mirror image (30 deg comes back as 330), which would
-  // make north-up rotate the wrong way from three quarters of the compass.
+  const pitch = -Math.asin(clamp(localOffset.z / range, -1, 1));
+  // A lookAt camera sits at range * (-sin h cos p, -cos h cos p, -sin p) in
+  // the target's east-north-up frame, so recovering h means negating BOTH
+  // horizontal components. Negating only the north one reads every heading
+  // as its mirror image (30 deg comes back as 330), which would make north-up
+  // rotate the wrong way from three quarters of the compass.
   const targetHeading = Math.atan2(-localOffset.x, -localOffset.y);
   const heading = normalizedHeading(
-    pitch < Cesium.Math.toRadians(-88.5) ? camera.heading : targetHeading,
+    pitch < toRadians(-88.5) ? pose.heading : targetHeading,
   );
   return { target, range, heading, pitch };
 }
 
-/** Apply an orbit frame, then return the camera to Cesium's fixed-world frame. */
+/** Apply an orbit frame, then return the camera to the world frame. */
 function setCameraTargetFrame(viewer, frame) {
-  const camera = viewer?.camera;
+  const camera = findCamera(viewer);
   if (!camera || !frame?.target || !Number.isFinite(frame.range)) return false;
+  const offset = {
+    heading: normalizedHeading(frame.heading),
+    pitch: frame.pitch,
+    range: frame.range,
+  };
   try {
-    const trackedTransform = viewer.trackedEntity
-      ? Cesium.Matrix4.clone(camera.transform)
-      : null;
-    camera.lookAt(
-      frame.target,
-      new Cesium.HeadingPitchRange(
-        normalizedHeading(frame.heading),
-        frame.pitch,
-        frame.range,
-      ),
-    );
-    if (trackedTransform) {
-      // Preserve EntityView's reference frame (including satellite frames).
-      // Its next update carries this new local offset along with the target.
-      camera.lookAtTransform(trackedTransform);
-      viewer.scene?.requestRender?.();
-      return true;
-    }
-    const destination = Cesium.Cartesian3.clone(camera.positionWC);
-    const direction = Cesium.Cartesian3.clone(camera.directionWC);
-    const up = Cesium.Cartesian3.clone(camera.upWC);
-    camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
-    if (destination && direction && up) {
-      camera.setView({ destination, orientation: { direction, up } });
-    }
-    viewer.scene?.requestRender?.();
+    // Following keeps the follow's own frame (satellite frames included):
+    // its next update carries the new offset along with the target.
+    if (isFollowing(viewer))
+      return placeFollowEye(viewer, frame.target, offset);
+    camera.lookAt(frame.target, offset);
+    const pose = camera.pose();
+    camera.release();
+    if (pose?.position && pose.direction && pose.up)
+      camera.setView({
+        destination: pose.position,
+        orientation: { direction: pose.direction, up: pose.up },
+      });
     return true;
   } catch {
     return false;
@@ -179,8 +176,8 @@ export function resetCameraNorth(viewer) {
   return setCameraTargetFrame(viewer, { ...frame, heading: 0 });
 }
 
-function headingDegrees(camera) {
-  return Cesium.Math.toDegrees(normalizedHeading(camera?.heading));
+function headingDegrees(viewer) {
+  return toDegrees(normalizedHeading(poseOf(findCamera(viewer))?.heading));
 }
 
 /** Ease an orbit without handing off the entity that owns the follow camera. */
@@ -197,29 +194,28 @@ export function createCameraOrientationAnimator(
   };
   function animate(frame, destination) {
     cancel();
-    if (!viewer.scene?.preUpdate?.addEventListener || duration <= 0)
+    const frames = findFrame(viewer);
+    if (!frames || duration <= 0)
       return setCameraTargetFrame(viewer, { ...frame, ...destination });
-    const entity = viewer.trackedEntity;
+    const followed = followedOf(viewer);
     pending = destination;
     const start = now();
-    const headingDelta = Cesium.Math.negativePiToPi(
-      destination.heading - frame.heading,
-    );
-    remove = viewer.scene.preUpdate.addEventListener(() => {
-      if (viewer.isDestroyed?.() || viewer.trackedEntity !== entity) {
+    const headingDelta = negativePiToPi(destination.heading - frame.heading);
+    remove = frames.on('preUpdate', () => {
+      if (viewer.isDestroyed?.() || followedOf(viewer) !== followed) {
         cancel();
         return;
       }
-      const progress = Cesium.Math.clamp((now() - start) / duration, 0, 1);
-      const eased = Cesium.EasingFunction.CUBIC_IN_OUT(progress);
-      const target = entity ? trackedTarget(viewer) : frame.target;
+      const progress = clamp((now() - start) / duration, 0, 1);
+      const eased = cubicInOut(progress);
+      const target = followed ? trackedTarget(viewer) : frame.target;
       if (
         !isPickedWorldPosition(target) ||
         !setCameraTargetFrame(viewer, {
           ...frame,
           target,
           heading: frame.heading + headingDelta * eased,
-          pitch: Cesium.Math.lerp(frame.pitch, destination.pitch, eased),
+          pitch: (1 - eased) * frame.pitch + eased * destination.pitch,
         })
       ) {
         cancel();
@@ -227,7 +223,7 @@ export function createCameraOrientationAnimator(
       }
       if (progress === 1) cancel();
     });
-    viewer.scene.requestRender?.();
+    frames.requestRender('camera-orientation');
     return true;
   }
   return {
@@ -280,7 +276,7 @@ export function bindCameraOrientationControls({
     if (destroyed) return;
     const next = {
       tilted,
-      heading: Math.round(headingDegrees(viewer?.camera)) % 360,
+      heading: Math.round(headingDegrees(viewer)) % 360,
     };
     publish?.(next);
   }
@@ -326,20 +322,19 @@ export function bindCameraOrientationControls({
     sync();
   }
 
-  const subscribe = (event, handler) => {
-    const remove = event?.addEventListener?.(handler);
+  const subscribe = (remove) => {
     if (typeof remove === 'function') removers.push(remove);
   };
-  // The needle follows every frame the scene draws. `camera.changed` is NOT
-  // enough: it only fires past `camera.percentageChanged`, so a rotation of a
-  // few degrees leaves the needle pointing at the old bearing.
-  subscribe(viewer?.scene?.preRender, sync);
+  // The needle follows every frame the scene draws. The camera's `changed`
+  // is NOT enough: it only fires past its threshold, so a rotation of a few
+  // degrees leaves the needle pointing at the old bearing.
+  subscribe(findFrame(viewer)?.on('preRender', sync));
   // The exact tilt state is refreshed once per gesture, not once per frame —
   // moveEnd fires when the camera stops, which is where the pick is affordable.
-  subscribe(viewer?.camera?.moveEnd, refreshTilt);
-  subscribe(viewer?.trackedEntityChanged, animator.cancel);
+  subscribe(findCamera(viewer)?.on('moveEnd', refreshTilt));
+  if (viewer) removers.push(onFollowChanged(viewer, animator.cancel));
   for (const type of ['pointerdown', 'wheel']) {
-    const canvas = viewer?.scene?.canvas;
+    const canvas = canvasOf(viewer);
     canvas?.addEventListener?.(type, animator.cancel, { passive: true });
     removers.push(() => canvas?.removeEventListener?.(type, animator.cancel));
   }

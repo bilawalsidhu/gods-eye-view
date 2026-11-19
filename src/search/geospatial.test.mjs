@@ -209,7 +209,11 @@ test('routing middleware uses configured OSRM servers while retaining request bo
   const request = async (query) => {
     let payload;
     await handler(
-      { url: `/?${query}`, socket: { remoteAddress: '127.0.0.1' } },
+      {
+        url: `/?${query}`,
+        method: 'GET',
+        socket: { remoteAddress: '127.0.0.1' },
+      },
       {
         writeHead() {},
         end(body) {

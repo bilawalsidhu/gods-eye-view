@@ -2,10 +2,13 @@
 // near the screen show, a zoomed-out view keeps one camera per world-anchored
 // cell, and the layer's UI state never rebuilds every camera for a listener
 // that does not read the list.
-import { test } from 'node:test';
+import { afterEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+import { bindRenderer } from '../render/rendererOf.js';
+import { fakeCameraPort } from '../testSupport/fakeCameraPort.mjs';
 import cctvLayer, {
+  _cctvIconsForTest,
   _setCctvCoverageStateForTest,
   _viewRecordIdsForTest,
   refreshHorizonCulling,
@@ -14,18 +17,10 @@ import cctvLayer, {
 const WIDTH = 800;
 const HEIGHT = 600;
 
-/**
- * Records at the given [lon, lat] degrees near the origin, each drawn at the
- * screen point `screenAt` gives it (default: the middle of the screen).
- */
-function recordsAt(
-  lonLats,
-  screenAt = () => ({ x: WIDTH / 2, y: HEIGHT / 2 }),
-) {
-  const screenByPosition = new Map();
+/** Records at the given [lon, lat] degrees near the origin. */
+function recordsAt(lonLats) {
   const records = lonLats.map(([lon, lat], index) => {
     const position = Cesium.Cartesian3.fromDegrees(lon, lat, 10);
-    screenByPosition.set(position, screenAt(index));
     return {
       camera: {
         id: `cam-${index}`,
@@ -39,36 +34,62 @@ function recordsAt(
         rangeM: 145,
         mountHeightM: 8,
       },
-      position,
-      billboard: { position, show: true },
+      position: { x: position.x, y: position.y, z: position.z },
       coverageEntities: [],
       projection: null,
     };
   });
-  return { records, screenByPosition };
+  return { records };
 }
 
-function viewerAt(heightM, screenByPosition, shiftX = 0) {
-  return {
-    isDestroyed: () => false,
-    camera: {
-      positionWC: Cesium.Cartesian3.fromDegrees(0, 0, heightM),
-      positionCartographic: { latitude: 0, longitude: 0, height: heightM },
-      frustum: { fovy: Math.PI / 3 },
+/**
+ * A viewer looking straight down from `heightM` over `lonDeg` on the
+ * equator, north up, through a camera port: the view pass projects the
+ * cameras from its pose.
+ */
+function viewerAt(heightM, lonDeg = 0) {
+  const eye = Cesium.Cartesian3.fromDegrees(lonDeg, 0, heightM);
+  const down = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.negate(eye, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3(),
+  );
+  const north = { x: 0, y: 0, z: 1 };
+  const right = Cesium.Cartesian3.cross(down, north, new Cesium.Cartesian3());
+  const { port } = fakeCameraPort({
+    pose: {
+      lon: lonDeg,
+      lat: 0,
+      height: heightM,
+      position: { x: eye.x, y: eye.y, z: eye.z },
+      direction: { x: down.x, y: down.y, z: down.z },
+      up: north,
+      right: { x: right.x, y: right.y, z: right.z },
+      fovy: Math.PI / 3,
+      aspectRatio: WIDTH / HEIGHT,
+      near: 0.1,
+      far: 5e8,
     },
-    scene: {
+  });
+  const viewer = {};
+  bindings.push(
+    bindRenderer(viewer, {
+      camera: port,
       canvas: { clientWidth: WIDTH, clientHeight: HEIGHT },
-      cartesianToCanvasCoordinates: (position) => {
-        const screen = screenByPosition.get(position);
-        return screen && { x: screen.x + shiftX, y: screen.y };
-      },
-    },
-  };
+    }),
+  );
+  return viewer;
 }
+
+/** The renderers bound for the running test, let go when it ends. */
+const bindings = [];
+afterEach(() => {
+  for (const unbind of bindings.splice(0)) unbind();
+});
 
 function shownIds(records) {
+  const icons = _cctvIconsForTest();
   return records
-    .filter((record) => record.billboard.show)
+    .filter((record) => icons.item(record.camera.id)?.show === true)
     .map((record) => record.camera.id)
     .sort();
 }
@@ -82,9 +103,9 @@ const CLUSTER = [
 ];
 
 test('zoomed out, cameras sharing a ground cell show one icon', () => {
-  const { records, screenByPosition } = recordsAt(CLUSTER);
+  const { records } = recordsAt(CLUSTER);
   _setCctvCoverageStateForTest({
-    viewer: viewerAt(20_000, screenByPosition),
+    viewer: viewerAt(20_000),
     records,
   });
   assert.equal(
@@ -99,34 +120,34 @@ test('zoomed out, cameras sharing a ground cell show one icon', () => {
 });
 
 test('a pan keeps the same winners, and an unchanged view keeps its list', () => {
-  const { records, screenByPosition } = recordsAt(CLUSTER, (index) => ({
-    x: 100 + index * 7,
-    y: 300,
-  }));
+  const { records } = recordsAt(CLUSTER);
   _setCctvCoverageStateForTest({
-    viewer: viewerAt(20_000, screenByPosition),
+    viewer: viewerAt(20_000),
     records,
   });
   refreshHorizonCulling();
   const before = shownIds(records);
   const list = _viewRecordIdsForTest();
-  for (const shiftX of [3, 11, 20, 37]) {
+  // A pan of a few to some 40 px (a pixel is about 30 m from 20 km up).
+  for (const shiftM of [90, 330, 600, 1110]) {
     _setCctvCoverageStateForTest({
-      viewer: viewerAt(20_000, screenByPosition, shiftX),
+      viewer: viewerAt(20_000, shiftM / 111_320),
       records,
     });
     refreshHorizonCulling();
-    assert.deepEqual(shownIds(records), before, `pan by ${shiftX} px`);
+    assert.deepEqual(shownIds(records), before, `pan by ${shiftM} m`);
   }
+  _setCctvCoverageStateForTest({ viewer: viewerAt(20_000), records });
+  refreshHorizonCulling();
   assert.equal(refreshHorizonCulling(), false, 'the same view changes nothing');
   assert.deepEqual(_viewRecordIdsForTest(), list);
 });
 
 test('a small zoom within one cell size keeps the same winners', () => {
-  const { records, screenByPosition } = recordsAt(CLUSTER);
+  const { records } = recordsAt(CLUSTER);
   const shownAt = (heightM) => {
     _setCctvCoverageStateForTest({
-      viewer: viewerAt(heightM, screenByPosition),
+      viewer: viewerAt(heightM),
       records,
     });
     refreshHorizonCulling();
@@ -138,11 +159,11 @@ test('a small zoom within one cell size keeps the same winners', () => {
 });
 
 test('a healthy camera wins its cell over an unknown one', () => {
-  const { records, screenByPosition } = recordsAt(CLUSTER.slice(0, 2));
+  const { records } = recordsAt(CLUSTER.slice(0, 2));
   // Whichever camera the id order would pick, the healthy one must win.
   for (const id of ['cam-0', 'cam-1']) {
     _setCctvCoverageStateForTest({
-      viewer: viewerAt(20_000, screenByPosition),
+      viewer: viewerAt(20_000),
       records,
       healthById: new Map([[id, { status: 'ok' }]]),
     });
@@ -152,30 +173,31 @@ test('a healthy camera wins its cell over an unknown one', () => {
 });
 
 test('the active camera always shows, even in a crowded cell', () => {
-  const { records, screenByPosition } = recordsAt(CLUSTER.slice(0, 3));
+  const { records } = recordsAt(CLUSTER.slice(0, 3));
   for (const active of records) {
     _setCctvCoverageStateForTest({
-      viewer: viewerAt(20_000, screenByPosition),
+      viewer: viewerAt(20_000),
       records,
       activeCameraId: active.camera.id,
     });
     refreshHorizonCulling();
-    assert.ok(active.billboard.show, `${active.camera.id} shows while active`);
+    const icons = _cctvIconsForTest();
+    assert.ok(
+      icons.item(active.camera.id).show,
+      `${active.camera.id} shows while active`,
+    );
   }
 });
 
 test('close up, every camera near the screen shows and far-off ones hide', () => {
-  const { records, screenByPosition } = recordsAt(
-    [
-      [0, 0],
-      [0.0001, 0],
-      [0.0002, 0],
-    ],
-    (index) =>
-      index === 2 ? { x: WIDTH * 3, y: HEIGHT / 2 } : { x: 100, y: 100 },
-  );
+  // From 300 m up the screen spans some 460 m: the third camera is 1.1 km off.
+  const { records } = recordsAt([
+    [0, 0],
+    [0.0001, 0],
+    [0.01, 0],
+  ]);
   _setCctvCoverageStateForTest({
-    viewer: viewerAt(300, screenByPosition),
+    viewer: viewerAt(300),
     records,
   });
   refreshHorizonCulling();
@@ -183,9 +205,9 @@ test('close up, every camera near the screen shows and far-off ones hide', () =>
 });
 
 test('a disabled layer skips the view pass', () => {
-  const { records, screenByPosition } = recordsAt(CLUSTER);
+  const { records } = recordsAt(CLUSTER);
   _setCctvCoverageStateForTest({
-    viewer: viewerAt(20_000, screenByPosition),
+    viewer: viewerAt(20_000),
     records,
     enabled: false,
   });
@@ -194,9 +216,9 @@ test('a disabled layer skips the view pass', () => {
 });
 
 test('UI state builds the full camera list only when it is read', () => {
-  const { records, screenByPosition } = recordsAt(CLUSTER.slice(0, 2));
+  const { records } = recordsAt(CLUSTER.slice(0, 2));
   _setCctvCoverageStateForTest({
-    viewer: viewerAt(300, screenByPosition),
+    viewer: viewerAt(300),
     records,
   });
   refreshHorizonCulling();
@@ -227,16 +249,13 @@ test('UI state builds the full camera list only when it is read', () => {
 });
 
 test('the camera picker lists the view, with the active camera first', () => {
-  const { records, screenByPosition } = recordsAt(
-    [
-      [0, 0],
-      [0.0001, 0],
-      [0.0002, 0],
-    ],
-    (index) => (index === 1 ? { x: WIDTH * 3, y: 0 } : { x: 100, y: 100 }),
-  );
+  const { records } = recordsAt([
+    [0, 0],
+    [0.01, 0],
+    [0.0002, 0],
+  ]);
   _setCctvCoverageStateForTest({
-    viewer: viewerAt(300, screenByPosition),
+    viewer: viewerAt(300),
     records,
     activeCameraId: 'cam-1',
   });

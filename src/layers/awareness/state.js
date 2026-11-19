@@ -1,19 +1,5 @@
-import * as Cesium from 'cesium';
-
 export function createState({ services }) {
   const state = {};
-
-  state.DIRECTION_SCRATCH = Array.from(
-    { length: 3 },
-    () => new Cesium.Cartesian3(),
-  );
-
-  state.SUBJECT_CARTOGRAPHIC_SCRATCH = new Cesium.Cartographic();
-
-  state.TARGET_CARTOGRAPHIC_SCRATCH = Array.from(
-    { length: 3 },
-    () => new Cesium.Cartographic(),
-  );
 
   Object.assign(state, {
     viewer: null,
@@ -26,7 +12,11 @@ export function createState({ services }) {
     // layers activate only after Contacts is explicitly selected.
     passive: true,
     ownedDependencies: new Set(),
+    /** Stops following the manager's adoptions (see watchAdoptions). */
+    unwatchAdoptions: null,
     subject: null,
+    /** The tracked flight's photo with the subject it belongs to, or null. */
+    subjectPhoto: null,
     results: null,
     visual: null,
     /** Whether layer views replace the panel's initial markup yet. */

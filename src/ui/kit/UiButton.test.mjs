@@ -100,3 +100,50 @@ test('server-rendered markup carries the pressed classes', async () => {
   assert.match(html, /<button[^>]*class="[^"]*\bactive\b[^"]*"/);
   assert.match(html, /aria-pressed="true"/);
 });
+
+const LOOKS = [
+  'ui-button--action',
+  'ui-button--primary',
+  'ui-button--icon',
+  'ui-button--compact',
+];
+
+test('a ghost button, the default, carries no look of the kit’s', () => {
+  const wrapper = mountButton({}, { class: 'pp-toggle-btn' });
+  const classes = wrapper.get('button').classes();
+  assert.ok(classes.includes('ui-button--ghost'));
+  for (const look of LOOKS) assert.equal(classes.includes(look), false, look);
+  wrapper.unmount();
+});
+
+test('the variant, tone and size render their kit classes', async () => {
+  const wrapper = mountButton({ variant: 'action', tone: 'danger' });
+  const button = wrapper.get('button');
+  assert.ok(button.classes().includes('ui-button--action'));
+  assert.ok(button.classes().includes('ui-button--danger'));
+  assert.equal(button.classes().includes('ui-button--compact'), false);
+  await wrapper.setProps({ size: 'compact' });
+  assert.ok(button.classes().includes('ui-button--compact'));
+  for (const variant of ['primary', 'icon']) {
+    await wrapper.setProps({ variant });
+    assert.ok(button.classes().includes(`ui-button--${variant}`));
+    assert.equal(button.classes().includes('ui-button--action'), false);
+  }
+  wrapper.unmount();
+});
+
+test('a styled variant still presses', async () => {
+  const wrapper = mountButton({
+    variant: 'action',
+    pressed: false,
+    pressedClass: 'active',
+  });
+  const button = wrapper.get('button');
+  assert.equal(button.attributes('aria-pressed'), 'false');
+  await wrapper.setProps({ pressed: true });
+  assert.equal(button.attributes('aria-pressed'), 'true');
+  assert.ok(button.classes().includes('ui-button--pressed'));
+  assert.ok(button.classes().includes('ui-button--action'));
+  assert.ok(button.classes().includes('active'));
+  wrapper.unmount();
+});
