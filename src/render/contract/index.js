@@ -19,6 +19,7 @@ export const CAPABILITIES = Object.freeze([
   'finestHeights',
   'terrain',
   'modelAtmosphere',
+  'modelNodes',
   'weather',
   'imageryOnTiles',
   'splitSwipe',

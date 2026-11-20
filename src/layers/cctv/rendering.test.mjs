@@ -1,7 +1,7 @@
 // src/layers/cctv/rendering.test.mjs
 // Icon colors under focus de-emphasis (#1200): the focus pass fades each icon
 // from the same base color the coverage refresh assigns, so a video-feed camera
-// stays violet while it dims instead of falling back to the idle cyan.
+// stays violet while it dims instead of falling back to the idle green.
 // Teardown lets go of the icon set of the viewer that drew it.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -114,29 +114,80 @@ test('focus de-emphasis fades each icon from its own color', () => {
   }
 });
 
+test('focus uses the painted half-width and half-height of each count', () => {
+  const markers = [
+    { width: 40, height: 40 },
+    { width: 72, height: 58 },
+  ];
+  const sizes = [];
+  const rendering = createRendering({
+    state: { _counts: { markers } },
+    services: {
+      focus: {
+        focusPassIsNeeded: () => true,
+        advanceSpriteFocus(_owner, { spriteHalfWidthPx, spriteHalfHeightPx }) {
+          sizes.push([spriteHalfWidthPx, spriteHalfHeightPx]);
+          return { factor: 1 };
+        },
+        focusAlphaNeedsWrite: () => false,
+      },
+    },
+  });
+  rendering.applyCctvFocusDeemphasis({});
+  assert.deepEqual(sizes, [
+    [20, 20],
+    [36, 29],
+  ]);
+});
+
 test('the icons go with the viewer that drew them, whichever tears down', () => {
   const first = {};
   const second = {};
   const one = bindFakeDraw(first);
   const two = bindFakeDraw(second);
   const state = { _viewer: first };
+  const lanes = [];
+  const overlays = {
+    registerWorldOverlayPaintLane(name, paint, options) {
+      const lane = {
+        name,
+        paint,
+        options,
+        setActive() {},
+        unregister() {
+          this.disposed = true;
+        },
+      };
+      lanes.push(lane);
+      return lane;
+    },
+  };
   const { createCameraIcons, destroyCameraIcons } = createRendering({
     state,
-    services: { focus: {} },
+    services: { focus: {}, overlays },
     parts: {},
     source: {},
   });
   try {
     const old = createCameraIcons(first);
+    assert.equal(one.draw.sets.size, 1);
+    assert.equal(lanes[0].name, 'ambient-label');
+    assert.equal(lanes[0].options.target, 'shared');
+    assert.equal(lanes[0].options.active, false);
     state._viewer = second;
     const current = createCameraIcons(second);
     assert.notEqual(old, current);
     assert.equal(one.draw.sets.get(old).disposed, true, 'a re-init lets go');
     assert.equal(two.draw.sets.get(current).disposed, false);
+    assert.equal(lanes[0].disposed, true);
+    lanes[0].paint({});
 
     destroyCameraIcons();
     assert.equal(two.draw.sets.get(current).disposed, true);
     assert.equal(state._icons, null);
+    assert.equal(lanes[1].disposed, true);
+    lanes[1].paint({});
+    assert.equal(state._counts, null);
   } finally {
     one.unbind();
     two.unbind();
@@ -372,6 +423,112 @@ test('a pose with no perspective field of view is projected by the renderer', ()
     assert.deepEqual(asked.sort(), [0, 1000]);
     assert.equal(set.items.get('on').show, true);
     assert.equal(set.items.get('off').show, false);
+  } finally {
+    unbind();
+  }
+});
+
+test('focus release restores video hue and alpha after the style throttle', () => {
+  const viewer = {};
+  const camera = fakeCameraPort({
+    pose: { position: { x: 6378137 + 1000, y: 0, z: 0 } },
+  });
+  const { unbind } = bindFakeDraw(viewer, {
+    camera: camera.port,
+    query: { project: () => ({ x: 10, y: 20 }) },
+  });
+  let target = {};
+  const records = ['mp4', 'webm'].map((feedType) => ({
+    camera: { id: feedType, feedType },
+    position: { x: 6378137, y: 0, z: 0 },
+  }));
+  const state = {
+    _enabled: true,
+    _viewer: viewer,
+    _records: records,
+    _activeCameraId: null,
+    _activeFocusStyleCount: 0,
+    _lastFocusStyleAt: -Infinity,
+  };
+  const focus = {
+    focusNowMs: (nowMs) => nowMs,
+    getFocusTarget: () => target,
+    focusPassIsNeeded: (value, count) => !!value || count > 0,
+    advanceSpriteFocus: () => ({
+      factor: target ? FOCUS_FACTOR : 1,
+      active: !!target,
+      transitioning: false,
+    }),
+    focusAlphaNeedsWrite: (before, after) => before !== after,
+  };
+  const { createCameraIcons, addCameraIcon, refreshCctvFocusStyles } =
+    createRendering({
+      state,
+      services: { focus },
+      parts: {
+        model: {
+          isVideoFeedCamera: (camera) => isVideoFeedType(camera.feedType),
+        },
+      },
+      source: {},
+    });
+  try {
+    createCameraIcons(viewer);
+    for (const record of records) addCameraIcon(record);
+    const icons = state._icons;
+
+    refreshCctvFocusStyles(1000);
+    for (const record of records) {
+      assertKeepsColor(
+        icons,
+        record.camera.id,
+        LIVE_CAMERA_COLOR,
+        record.camera.id,
+      );
+    }
+    target = null;
+    refreshCctvFocusStyles(1050);
+    for (const record of records) {
+      assert.equal(icons.focus(record.camera.id), FOCUS_FACTOR, 'throttled');
+    }
+    refreshCctvFocusStyles(1100);
+    for (const record of records) {
+      assert.deepEqual(icons.item(record.camera.id).color, LIVE_CAMERA_COLOR);
+      assert.equal(icons.focus(record.camera.id), 1);
+    }
+    assert.equal(state._activeFocusStyleCount, 0);
+  } finally {
+    unbind();
+  }
+});
+
+test('hover picks the underlying camera only outside a painted count', () => {
+  const viewer = {};
+  const icon = { set: 'icons', id: 'camera' };
+  let picks = 0;
+  const unbind = bindRenderer(viewer, {
+    query: {
+      pick() {
+        picks++;
+        return icon;
+      },
+    },
+  });
+  try {
+    const state = {
+      _viewer: viewer,
+      _counts: { pickedCell: ({ x }) => (x <= 17 ? {} : null) },
+      _icons: { setId: icon.set, has: () => true },
+      _recordById: new Map([[icon.id, {}]]),
+    };
+    const rendering = createRendering({
+      state,
+      services: { focus: {} },
+      parts: {},
+    });
+    assert.equal(rendering.pickCameraIdAt({ x: 17, y: 0 }), null);
+    assert.equal(picks, 0);
+    assert.equal(rendering.pickCameraIdAt({ x: 18, y: 0 }), icon.id);
   } finally {
     unbind();
   }

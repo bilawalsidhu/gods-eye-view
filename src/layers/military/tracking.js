@@ -365,7 +365,9 @@ export function createTracking({
       parts.queries._toCleanText(info?.registration) || t('Reg unknown');
     const operator =
       parts.queries._toCleanText(info?.operator) || t('Operator unknown');
-    const altitude = parts.queries._formatAltitude(info?.altitudeFt);
+    const altitude = info?.onGround
+      ? t('On the ground')
+      : parts.queries._formatAltitude(info?.altitudeFt);
     const speedKt = info?.speedMps ? Math.round(info.speedMps * 1.944) : null;
     const tail = speedKt ? `${altitude} · ${speedKt} kt` : altitude;
     return [
@@ -1124,7 +1126,11 @@ export function createTracking({
     // renderer's default follow distance is far too tight. It gets a calibrated
     // viewFrom — behind + above, distance scaled to altitude — for a readable
     // initial frame with surrounding context. (ENU: east=+X, north=+Y, up=+Z.)
-    const altM = info?.altitudeFt ? info.altitudeFt * 0.3048 : 1500;
+    const altM = info?.onGround
+      ? 0
+      : info?.altitudeFt
+        ? info.altitudeFt * 0.3048
+        : 1500;
     const followRange = Math.min(Math.max(altM * 1.1 + 2500, 3000), 30000);
     const viewFrom = vec(0, -followRange * 0.8, followRange * 0.55);
 

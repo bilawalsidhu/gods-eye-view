@@ -2176,3 +2176,41 @@ test('proceed() is asked after the lookup: false loads nothing and clears the sp
     true,
   );
 });
+
+test('subscribePhotoViewer hands on the photo viewer a provider presents, the later mount’s while two overlap', async (t) => {
+  const presenting = (id, pickPrefix) => {
+    const provider = fakeProvider({ id, pickPrefix });
+    const create = provider.create;
+    const listeners = new Set();
+    provider.present = (view) => {
+      for (const listener of [...listeners]) listener(view);
+    };
+    provider.create = (context) => {
+      const instance = create(context);
+      instance.viewer.subscribeView = (listener) => {
+        listeners.add(listener);
+        listener(null);
+        return () => listeners.delete(listener);
+      };
+      return instance;
+    };
+    return provider;
+  };
+  const a = presenting('mapillary', 'mly:');
+  const b = presenting('other', 'oth:');
+  const { layer } = await enabledLayer(t, [a, b]);
+  const shown = [];
+  const unsubscribe = layer.subscribePhotoViewer((view) => shown.push(view));
+  assert.deepEqual(shown, [null], 'the current one first');
+  const supersede = () => {};
+  const viewA = { host: 'a', mountKey: 1, actions: { supersede } };
+  const viewB = { host: 'b', mountKey: 2, actions: { supersede } };
+  a.present(viewA);
+  b.present(viewB);
+  a.present(null);
+  b.present(null);
+  assert.deepEqual(shown, [null, viewA, viewB, null]);
+  unsubscribe();
+  a.present(viewA);
+  assert.equal(shown.length, 4, 'unsubscribed');
+});
