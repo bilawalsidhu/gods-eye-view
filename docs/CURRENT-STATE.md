@@ -10,6 +10,20 @@ or an older position from another feed) and one reported slower than 2 m/s
 give no course and keep the last; an aircraft with no course at all faces
 north.
 
+A selected vessel, aircraft or military aircraft can be found again from its
+Context card. While it is off screen, behind the globe or out of its layer's
+feed (the clock jumped to a time the feed lacks it, or the view moved away
+from it), the card's header shows Find it (`store.locate()`,
+`src/ui/stores/entityCard.js`). One still in its feed is flown to (an
+aircraft followed). One out of its feed is looked up at the layer's time on
+its own track (`locate` on the vessels, flights and military layers, through
+`locateOnTrack` in `src/data/locate.js`): the newest point at or before the
+world clock's time while the layer follows the clock, else the newest. The card
+moves to it and says how old that reading is, and the camera flies there. Once
+the feed has it again, its layer selects it again (an aircraft is followed).
+With no point at or before the time, the card says there is no reading then and
+the camera stays. A followed item is never counted as off screen.
+
 While anything moves (a layer in motion, the camera, a followed contact), the
 globe draws at the display's own refresh rate; there is no fixed 60 FPS cap.
 The render governor (`src/renderGovernor.js`) caps a parked scene at
