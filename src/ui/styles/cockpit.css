@@ -78,7 +78,7 @@
   --cockpit-side-panel-width: min(340px, 28vw);
   /* HUD bottom offset + tallest scaled telemetry block + 20px clear border. */
   --cockpit-bottom-rail-safe: calc(clamp(84px, 11vh, 118px) + 100px);
-  /* The phone Display/Radio row shares the visor inset with the roll scale. */
+  /* The phone Display/Radio row shares the visor inset with the roll arc. */
   --cockpit-visor-top: clamp(62px, 9vh, 90px);
   position: fixed;
   inset: 0;
@@ -2026,6 +2026,11 @@ body.cockpit-mode
   ) {
   display: none !important;
 }
+/* The first-visit Stories announcement waits, unread, until Cockpit closes:
+   on a phone it would cover the Display/Radio row. */
+body.cockpit-mode #gev-stories #hPop {
+  display: none;
+}
 body.cockpit-mode #left-panel-stack {
   z-index: 147;
   display: flex;
@@ -2118,21 +2123,35 @@ body.cockpit-mode #intel-hud .hud-right-edge {
   body.cockpit-mode #right-context-rail {
     display: none !important;
   }
-  /* Place the row just below the roll arc (visor inset + 2px + 96px).
-     On shorter screens, leave 8px between the 42px row and the reticle
-     (46% - 18px), keeping the row below the vision controls at 72px. */
   body.cockpit-mode .cockpit-utility-controls {
-    top: clamp(72px, calc(46% - 68px), calc(var(--cockpit-visor-top) + 108px));
+    top: auto;
     right: 12px;
-    left: 12px;
-    justify-content: center;
-    pointer-events: none;
-  }
-  body.cockpit-mode .cockpit-utility-controls {
+    bottom: 152px;
     flex-direction: row;
+    max-width: calc(100vw - 24px);
   }
-  body.cockpit-mode .cockpit-utility-control {
-    pointer-events: auto;
+  /* Phone flight and bridge views: one row centred on the Reset/Exit axis,
+     10px below the roll arc (.cockpit-roll-arc: 2px + 96px into the visor).
+     Shorter screens reserve 36px around the 46% centre of .cockpit-reticle
+     (about 25px tall on phones), plus an 8px gap below the 42px row.
+     The row stops at 72px, below the vision controls. Windows under 240px
+     tall, and narrow ones under 450px tall, keep the right-aligned row above
+     Reset/Exit, clear of Reset, LOOK AHEAD and the Stories button, as do
+     satellite and provider views. */
+  @media (min-width: 390px) and (min-height: 240px), (min-height: 450px) {
+    body.cockpit-mode.mobile-shell
+      #cockpit-hud:not([data-generic]):not([data-subject='satellite'])
+      .cockpit-utility-controls {
+      top: clamp(
+        72px,
+        calc(46% - 68px),
+        calc(var(--cockpit-visor-top) + 108px)
+      );
+      bottom: auto;
+      left: 12px;
+      width: max-content;
+      margin-inline: auto;
+    }
   }
   body.cockpit-mode .cockpit-utility-launcher {
     width: min(150px, calc((100vw - 31px) / 2));

@@ -1142,14 +1142,16 @@ test('mobile Cockpit prioritizes flight instruments and collision-safe controls'
   assert.match(mobileCockpit[1], /body\.cockpit-mode \.cockpit-signal-window/);
   assert.match(
     mobileCockpit[1],
-    /body\.cockpit-mode \.cockpit-utility-controls \{[^}]*?top:\s*clamp\(\s*72px,\s*calc\(46% - 68px\),\s*calc\(var\(--cockpit-visor-top\) \+ 108px\)\s*\);[^}]*?left:\s*12px;[^}]*?justify-content:\s*center;[^}]*?pointer-events:\s*none;/,
+    /body\.cockpit-mode \.cockpit-utility-controls[\s\S]*?bottom:\s*152px;/,
   );
   assert.match(
     mobileCockpit[1],
-    /body\.cockpit-mode \.cockpit-utility-control \{\s*pointer-events:\s*auto;\s*\}/,
+    /body\.cockpit-mode\.mobile-shell[^{]*?\.cockpit-utility-controls \{[^}]*?top:[^;]*?var\(--cockpit-visor-top\)/,
   );
-  assert.doesNotMatch(mobileCockpit[1], /bottom:\s*152px;/);
-  assert.match(css, /--cockpit-visor-top:\s*clamp\(62px, 9vh, 90px\);/);
+  assert.match(
+    mobileCockpit[1],
+    /@media \(min-width: 390px\) and \(min-height: 240px\),\s*\(min-height: 450px\) \{\s*body\.cockpit-mode\.mobile-shell/,
+  );
   assert.match(css, /\.cockpit-visor-shell \{[^}]*?inset:\s*var\(--cockpit-visor-top\)/);
   assert.match(
     mobileCockpit[1],
@@ -1166,6 +1168,15 @@ test('mobile Cockpit prioritizes flight instruments and collision-safe controls'
   assert.match(
     mobileCockpit[1],
     /body\.cockpit-mode #view-switcher button \{[\s\S]*?padding-inline:\s*9px;/,
+  );
+});
+
+test('the unread Stories announcement waits until Cockpit closes', () => {
+  assert.match(css, /body\.cockpit-mode #gev-stories #hPop \{\s*display:\s*none;\s*\}/);
+  const storiesView = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'views', 'StoriesView.vue'), 'utf8');
+  assert.match(
+    storiesView,
+    /async function openExplore\(\) \{[^}]*?if \(await store\.controller\.open\(\)\) markPopSeen\(\);/,
   );
 });
 

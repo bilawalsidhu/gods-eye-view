@@ -5104,15 +5104,20 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   stacking. Narrow mobile Cockpit
 >   viewports suppress the legacy layer stack, peripheral HUD, and secondary
 >   Context/briefing panes so the flight instruments and primary controls remain
->   unobstructed. There the collapsed Display and Radio launchers form one row
->   centred on the Reset/Exit axis, between the roll scale and the reticle,
->   clear of the destination cue and flight readouts. On short landscape
->   screens it stays on screen below the vision controls.
->   `scripts/qa-cockpit-utility.mjs` checks the row's centring, clearance and
->   tap targets at 390×844, 360×740, 740×360 and 667×240. Outside Cockpit,
->   Radio starts collapsed while off and lives only in its section inside
->   Context; the detailed panel's normal accordion control owns its disclosure
->   and its Enable/Disable action owns power.
+>   unobstructed. In the phone layout (720 px wide and below) the flight and
+>   bridge views put the collapsed Display and Radio launchers in one row
+>   centred on the Reset/Exit axis, above the reticle and clear of the
+>   destination cue: below the roll arc in portrait, over the arc's lower tick
+>   ends in landscape. On short landscape screens the row stays
+>   on screen and tappable below the vision controls but may cover the top of
+>   the speed and altitude readouts. Windows under 240 px tall, and those under
+>   390 px wide and 450 px tall, keep the row above Reset/Exit at the right.
+>   Satellite and provider views keep the row
+>   above Reset/Exit at the right, where their own layouts expect it. The
+>   first-visit Stories announcement waits, unread, until Cockpit closes.
+>   Outside Cockpit, Radio starts collapsed while off and lives only in its
+>   section inside Context; the detailed panel's normal accordion control
+>   owns its disclosure and its Enable/Disable action owns power.
 >   Radio volume in the full and Cockpit surfaces, plus Space Mission
 >   replay speed, use Display / Sharpen's muted 3px rail, circular cyan thumb,
 >   glow, and mono value treatment. Their larger transparent hit areas, keyboard

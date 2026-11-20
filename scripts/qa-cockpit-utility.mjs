@@ -2050,13 +2050,50 @@ try {
     JSON.stringify(narrowViewActions),
   );
 
-  // Short screens have no free band between instruments. The launchers still
-  // need to stay on screen, accept taps and clear the vision controls.
+  // A fresh profile has not seen the Stories announcement: Cockpit keeps
+  // it unread and off the phone row until it closes.
+  const storiesPopupDisplay = () => {
+    const popup = document.getElementById('hPop');
+    return popup ? getComputedStyle(popup).display : null;
+  };
+  const storiesPopupInCockpit = await page.evaluate(storiesPopupDisplay);
+  check('the unread Stories announcement waits while Cockpit is open',
+    storiesPopupInCockpit === 'none', String(storiesPopupInCockpit));
+
+  // Windows too short for the centred row keep it above Reset/Exit.
+  for (const [width, height] of [[360, 370], [320, 360], [568, 188], [667, 190]]) {
+    await page.setViewport({ width, height, deviceScaleFactor: 1 });
+    const glyphHits = await page.evaluate(async () => {
+      const manager = window.__godsEyeView.styleManager;
+      manager._setCockpitDisclosure('display', false);
+      manager._setCockpitDisclosure('radio', false);
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+      return [...document.querySelectorAll(
+        '#cockpit-utility-controls .cockpit-utility-glyph',
+      )].map((glyph) => {
+        const box = glyph.getBoundingClientRect();
+        const target = document.elementFromPoint(
+          box.left + box.width / 2,
+          box.top + box.height / 2,
+        );
+        return target && glyph.contains(target) ? 'ok' : target?.closest('[id]')?.id || null;
+      });
+    });
+    check(
+      `${width}×${height} Cockpit Display/Radio glyph centres reach their own launchers`,
+      glyphHits.length === 2 && glyphHits.every((hit) => hit === 'ok'),
+      JSON.stringify(glyphHits),
+    );
+  }
+
+  // The phone row's place in each room: centred on Reset/Exit, on screen,
+  // tappable, and clear of what that room has space to clear.
   for (const [width, height, room] of [
-    [390, 844, 'portrait'],
     [360, 740, 'portrait'],
-    [740, 360, 'landscape'],
+    [720, 360, 'landscape'],
     [667, 240, 'short'],
+    [390, 844, 'portrait'],
   ]) {
     await page.setViewport({ width, height, deviceScaleFactor: 1 });
     const phoneRow = await page.evaluate(async () => {
@@ -2069,52 +2106,76 @@ try {
       const rect = (element) => element?.getBoundingClientRect().toJSON() || null;
       const hud = (selector) => document.querySelector(`#cockpit-hud ${selector}`);
       const route = document.getElementById('cockpit-route-direction');
-      const routeShown = Boolean(route && !route.hidden);
-      const controls = [...document.querySelectorAll(
-        '#cockpit-utility-controls .cockpit-utility-control',
-      )];
-      return {
-        launchers: controls.map(rect),
-        hits: controls.map((control) => {
-          const glyph = control.querySelector('.cockpit-utility-glyph');
-          const box = glyph?.getBoundingClientRect();
-          const target = box && document.elementFromPoint(
-            box.left + box.width / 2,
-            box.top + box.height / 2,
-          );
-          return Boolean(target && glyph.contains(target));
-        }),
-        speed: rect(hud('.cockpit-speed')),
-        altitude: rect(hud('.cockpit-altitude')),
-        route: routeShown ? rect(route) : null,
-        chevron: routeShown ? rect(route.querySelector('.cockpit-route-chevron')) : null,
-        reticle: rect(hud('.cockpit-reticle')),
-        rollArc: rect(hud('.cockpit-roll-arc')),
-        vision: rect(hud('.cockpit-vision-controls')),
-        switcher: rect(document.getElementById('view-switcher')),
-        viewport: { width: innerWidth, height: innerHeight },
-      };
+      // A live flight may have no route, which hides the DEST cue. Show it while
+      // measuring so the clearance check always has a cue to clear.
+      const wasHidden = route.hidden;
+      try {
+        route.hidden = false;
+        const controls = [...document.querySelectorAll(
+          '#cockpit-utility-controls .cockpit-utility-control',
+        )];
+        const launchers = controls.map(rect);
+        const rowLeft = Math.min(...launchers.map((launcher) => launcher.left));
+        const rowRight = Math.max(...launchers.map((launcher) => launcher.right));
+        // Taps beside the row reach what is under it.
+        const besideHits = [];
+        if (launchers.length) {
+          const middle = launchers[0].top + launchers[0].height / 2;
+          for (const x of [rowLeft - 8, rowRight + 8]) {
+            const target = document.elementFromPoint(x, middle);
+            besideHits.push(Boolean(target?.closest('#cockpit-utility-controls')));
+          }
+        }
+        return {
+          launchers,
+          rowLeft,
+          rowRight,
+          besideHits,
+          hits: controls.map((control) => {
+            const glyph = control.querySelector('.cockpit-utility-glyph');
+            const box = glyph?.getBoundingClientRect();
+            const target = box && document.elementFromPoint(
+              box.left + box.width / 2,
+              box.top + box.height / 2,
+            );
+            return Boolean(target && glyph.contains(target));
+          }),
+          speed: rect(hud('.cockpit-speed')),
+          altitude: rect(hud('.cockpit-altitude')),
+          route: rect(route),
+          chevron: rect(route.querySelector('.cockpit-route-chevron')),
+          reticle: rect(hud('.cockpit-reticle')),
+          rollArc: rect(hud('.cockpit-roll-arc')),
+          vision: rect(hud('.cockpit-vision-controls')),
+          switcher: rect(document.getElementById('view-switcher')),
+          viewport: { width: innerWidth, height: innerHeight },
+        };
+      } finally {
+        route.hidden = wasHidden;
+      }
     });
     const obstacles = {
       portrait: ['speed', 'altitude', 'route', 'chevron', 'reticle', 'rollArc', 'vision'],
+      // The row covers the roll arc's lower tick ends; ticks and labels stay readable.
       landscape: ['speed', 'altitude', 'route', 'chevron', 'reticle', 'vision'],
+      // No free band between the instruments: only the vision controls.
       short: ['vision'],
     }[room];
     const overlaps = (a, b) => Boolean(a && b)
       && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-    const rowLeft = Math.min(...phoneRow.launchers.map((launcher) => launcher.left));
-    const rowRight = Math.max(...phoneRow.launchers.map((launcher) => launcher.right));
-    const switcherCentre = phoneRow.switcher
-      ? (phoneRow.switcher.left + phoneRow.switcher.right) / 2
-      : NaN;
+    const { rowLeft, rowRight } = phoneRow;
+    const switcherCentre = (phoneRow.switcher?.left + phoneRow.switcher?.right) / 2;
+    const [first, second] = phoneRow.launchers;
     check(
-      `${width}×${height} Cockpit Display/Radio row is centred, on screen, tappable and clear of ${obstacles.join(', ')}`,
+      `${width}×${height} Cockpit Display/Radio row is centred in one line, on screen, tappable and clear of ${obstacles.join(', ')}`,
       phoneRow.launchers.length === 2
         && phoneRow.launchers.every((launcher) => launcher.width > 0)
         && phoneRow.speed?.width > 0
         && phoneRow.altitude?.width > 0
-        && phoneRow.hits.length === 2
+        && (room === 'short' || (phoneRow.route?.width > 0 && phoneRow.chevron?.width > 0))
         && phoneRow.hits.every(Boolean)
+        && phoneRow.besideHits.every((inside) => !inside)
+        && Math.abs((first?.top + first?.bottom) / 2 - (second?.top + second?.bottom) / 2) <= 1
         && phoneRow.launchers.every((launcher) => obstacles.every(
           (name) => !overlaps(launcher, phoneRow[name]),
         ))
@@ -2127,7 +2188,12 @@ try {
       JSON.stringify(phoneRow),
     );
   }
-  await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+
+  // A Stories tap that Cockpit refuses leaves the announcement unread.
+  await page.evaluate(() => document.getElementById('hStories').click());
+  await page.waitForFunction(
+    () => document.querySelector('#toast.visible')?.textContent === 'Exit cockpit to open Stories',
+  );
 
   const resetResult = await page.evaluate(() => {
     // Both the UI and compatibility facade delegate to this navigation owner.
@@ -2200,6 +2266,9 @@ try {
       && resetState.visionRestored,
     JSON.stringify(resetState),
   );
+  const storiesPopupAfterReset = await page.evaluate(storiesPopupDisplay);
+  check('the Stories announcement returns once Cockpit closes',
+    storiesPopupAfterReset !== null && storiesPopupAfterReset !== 'none', String(storiesPopupAfterReset));
   check('runtime console remains clean', consoleErrors.length === 0 && localHttpErrors.length === 0,
     [...localHttpErrors, ...consoleErrors].slice(0, 6).join(' | '));
 } finally {
