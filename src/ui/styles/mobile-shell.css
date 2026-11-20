@@ -230,7 +230,10 @@ body.mobile-shell[data-mobile-sheet='context']
   > #solunar-panel:not([hidden]):not(.collapsed) {
   display: flex;
   flex-direction: column;
+  flex: 0 0 auto;
+  height: min(65vh, 600px);
   min-height: 0;
+  max-height: min(65vh, 600px);
 }
 
 /* ── Dock: voice floats above the tab bar; search and presets are sheets ─ */

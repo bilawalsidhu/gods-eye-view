@@ -7,33 +7,32 @@
  * The card owner (src/solunar/panel.js) publishes the week to the store the
  * view renders; the shell only owns the map interaction and the marker.
  */
-import * as Cesium from 'cesium';
-import { pickGroundPosition } from '../data/scenePick.js';
+import { pickGroundPosition } from '../input/dispatcher.js';
+import { toLonLatH } from '../geo/ellipsoid.js';
+import { canvasOf, findCamera, findDraw } from '../render/rendererOf.js';
 import { createSolunarPanel } from './panel.js';
 import { addDays, localDateOf, localDayStartMs } from './zone.js';
 
 export const SOLUNAR_ID = 'solunar-panel';
 export const SPOT_MARKER_ID = 'gev-solunar-spot';
+
 /** A press that moves farther than this, or lasts longer, is a drag. */
 const CLICK_SLOP_PX = 5;
 const CLICK_MAX_MS = 600;
 
-const RAD = 180 / Math.PI;
-
 /** Lat/lon (deg) under a canvas pixel, or null (sky, off the globe). */
 export function pickSpot(viewer, x, y) {
-  const ellipsoid = viewer?.scene?.globe?.ellipsoid;
   // the surface under the cursor (terrain, tiles), else the ellipsoid
   const cartesian = pickGroundPosition(viewer, { x, y });
-  if (!cartesian || !ellipsoid) return null;
-  const c = ellipsoid.cartesianToCartographic(cartesian);
+  if (!cartesian) return null;
+  const c = toLonLatH(cartesian);
   if (!c) return null;
-  return { latDeg: c.latitude * RAD, lonDeg: c.longitude * RAD, cartesian };
+  return { latDeg: c.lat, lonDeg: c.lon, cartesian };
 }
 
 /** The spot under the middle of the map; the camera position as a fallback. */
 export function mapCenterSpot(viewer) {
-  const canvas = viewer?.scene?.canvas;
+  const canvas = canvasOf(viewer);
   if (canvas) {
     const hit = pickSpot(
       viewer,
@@ -42,10 +41,8 @@ export function mapCenterSpot(viewer) {
     );
     if (hit) return hit;
   }
-  const c = viewer?.camera?.positionCartographic;
-  return c
-    ? { latDeg: c.latitude * RAD, lonDeg: c.longitude * RAD, cartesian: null }
-    : null;
+  const c = findCamera(viewer)?.pose();
+  return c ? { latDeg: c.lat, lonDeg: c.lon, cartesian: null } : null;
 }
 
 /**
@@ -76,27 +73,27 @@ export function mountSolunarForShell(
   root.dataset.solunarMounted = '1';
 
   const isOpen = () => !root.classList.contains('collapsed');
-  let marker = null;
+  const marker = findDraw(viewer)?.points({ id: SPOT_MARKER_ID });
   const clearMarker = () => {
-    if (marker) viewer.entities.remove(marker);
-    marker = null;
-    viewer.scene?.requestRender?.(); // the app idles between frames
+    marker?.clear();
+    root.dataset.solunarMarker = '0';
   };
   const showMarker = (cartesian) => {
     clearMarker();
     if (!cartesian) return;
-    marker = viewer.entities.add({
-      id: SPOT_MARKER_ID,
-      position: cartesian,
-      point: {
+    marker?.upsert([
+      {
+        id: SPOT_MARKER_ID,
+        pos: cartesian,
+        pickable: false,
         pixelSize: 11,
-        color: Cesium.Color.GOLD,
-        outlineColor: Cesium.Color.BLACK,
+        color: '#FFD700',
+        outlineColor: '#000000',
         outlineWidth: 2,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        disableDepthTest: Number.POSITIVE_INFINITY,
       },
-    });
-    viewer.scene?.requestRender?.();
+    ]);
+    root.dataset.solunarMarker = marker?.size() ? '1' : '0';
   };
   let lastCartesian = null;
   const useSpot = (spot, source) => {
@@ -162,7 +159,7 @@ export function mountSolunarForShell(
   observer?.observe(root, { attributes: true, attributeFilter: ['class'] });
 
   // A click (not a drag) on the map while the card is open picks the spot.
-  const canvas = viewer.scene?.canvas;
+  const canvas = canvasOf(viewer);
   let down = null;
   const onDown = (e) => {
     down =
@@ -195,6 +192,8 @@ export function mountSolunarForShell(
       canvas?.removeEventListener('pointerdown', onDown);
       canvas?.removeEventListener('pointerup', onUp);
       clearMarker();
+      marker?.dispose();
+      delete root.dataset.solunarMarker;
       stopMidnightTimer();
       panel.destroy();
       delete root.dataset.solunarMounted;

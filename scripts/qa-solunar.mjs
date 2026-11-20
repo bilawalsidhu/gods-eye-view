@@ -127,6 +127,9 @@ async function run(label, viewport, { touch = false } = {}) {
       visible: true,
       timeout: 30000,
     });
+    await page.$eval('#solunar-panel', (panel) =>
+      panel.scrollIntoView({ block: 'center' }),
+    );
     await page.click('#solunar-panel .panel-collapse-btn');
   } else {
     await page.click('[data-rail-item="solunar-panel"]');
@@ -136,6 +139,11 @@ async function run(label, viewport, { touch = false } = {}) {
     visible: true,
     timeout: 30000,
   });
+  if (mobile) {
+    await page.$eval('#solunar-panel', (panel) =>
+      panel.scrollIntoView({ block: 'end' }),
+    );
+  }
   const opened = await page.evaluate(() => {
     const body = document.getElementById('gev-solunar-body');
     const card = document.getElementById('solunar-panel');
@@ -156,9 +164,7 @@ async function run(label, viewport, { touch = false } = {}) {
       spot,
       days,
       rule: body.querySelector('.gev-sl-rule')?.textContent ?? '',
-      dot: Boolean(
-        window.__godsEyeView.viewer.entities.getById('gev-solunar-spot'),
-      ),
+      dot: card.dataset.solunarMarker === '1',
       overflow: document.documentElement.scrollWidth > innerWidth,
       inView: (() => {
         const r = body.querySelector('.gev-sl-day')?.getBoundingClientRect();
@@ -198,7 +204,7 @@ async function run(label, viewport, { touch = false } = {}) {
     /new or full moon within 1 day = 2 points/.test(opened.rule) &&
       /at least 1 and at most 4/.test(opened.rule),
   );
-  check(`${label}: a dot marks the spot on the map`, opened.dot);
+  check(`${label}: the spot marker is in the draw set`, opened.dot);
   check(`${label}: no horizontal overflow`, !opened.overflow);
   await page.screenshot({ path: path.join(outDir, `${label}-open.png`) });
   if (mobile) {

@@ -1518,7 +1518,12 @@
     "12 h",
     "24 h",
     "SOLUNAR",
-    "Solunar"
+    "Solunar",
+    "view band|GLOBAL",
+    "fire behavior|Minimal",
+    "feed status|live",
+    "DSP {count} blocks",
+    "{range} NM"
   ],
   "uk": [
     "1900–1945",
@@ -1843,6 +1848,7 @@
     "{n} hPa",
     "{kind} {name}",
     "3D",
-    "KT"
+    "KT",
+    "{range} NM"
   ]
 }

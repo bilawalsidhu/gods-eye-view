@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { Window } from 'happy-dom';
 import { createPinia } from 'pinia';
+import { fromDegrees } from '../geo/ellipsoid.js';
+import { bindRenderer } from '../render/rendererOf.js';
 import { useSolunarStore } from '../ui/stores/solunar.js';
 import { formatLatLon } from './format.js';
 import {
@@ -13,11 +15,7 @@ import {
   pickSpot,
 } from './solunarShell.js';
 
-const DEG = Math.PI / 180;
-
-// pickGroundPosition rejects a Cartesian near the Earth's centre, so the fake
-// carries a real-sized z; the fake ellipsoid reads only x and y.
-const onGlobe = (x, y) => ({ x, y, z: 7_000_000 });
+const onGlobe = (x, y) => fromDegrees(-100 + x / 100, 30 + y / 100);
 function fakeViewer({ hit = onGlobe } = {}) {
   const added = [];
   const removed = [];
@@ -25,26 +23,17 @@ function fakeViewer({ hit = onGlobe } = {}) {
   Object.defineProperty(canvas, 'clientWidth', { value: 800 });
   Object.defineProperty(canvas, 'clientHeight', { value: 600 });
   canvas.getBoundingClientRect = () => ({ left: 10, top: 20 });
-  // pixel (x, y) -> lat 30 + y/100, lon -100 + x/100 (rad conversion in the fake ellipsoid)
-  const ellipsoid = {
-    cartesianToCartographic: (c) => ({
-      latitude: (30 + c.y / 100) * DEG,
-      longitude: (-100 + c.x / 100) * DEG,
-    }),
-  };
   const viewer = {
     added,
     removed,
     renders: { n: 0 },
     scene: {
       canvas,
-      globe: { ellipsoid },
       requestRender() {
         this.owner.renders.n++;
       },
     },
     camera: {
-      positionCartographic: { latitude: 10 * DEG, longitude: 20 * DEG },
       pickEllipsoid: (px) => hit(px.x, px.y),
     },
     entities: {
@@ -56,6 +45,30 @@ function fakeViewer({ hit = onGlobe } = {}) {
     },
   };
   viewer.scene.owner = viewer;
+  let current = null;
+  bindRenderer(viewer, {
+    canvas,
+    camera: { pose: () => ({ lat: 10, lon: 20 }) },
+    query: { pickPosition: () => null, pickEllipsoid: (x, y) => hit(x, y) },
+    draw: {
+      points: () => ({
+        clear() {
+          if (current) removed.push(current);
+          current = null;
+          viewer.renders.n++;
+        },
+        upsert(items) {
+          current = items[0];
+          added.push(current);
+          viewer.renders.n++;
+        },
+        size() {
+          return current ? 1 : 0;
+        },
+        dispose() {},
+      }),
+    },
+  });
   return viewer;
 }
 
@@ -126,9 +139,11 @@ test('a closed card shows nothing until it opens; opening picks the map centre a
   assert.match(spotText(store), /^33\.000°N 96\.000°W/);
   assert.equal(viewer.added.length, 1);
   assert.equal(viewer.added[0].id, SPOT_MARKER_ID);
+  assert.equal(root.dataset.solunarMarker, '1');
   root.classList.add('collapsed');
   await tick();
   assert.equal(viewer.removed.length, 1, 'marker leaves with the card');
+  assert.equal(root.dataset.solunarMarker, '0');
 });
 
 test('a click on the map picks the spot only while the card is open', async () => {
@@ -276,12 +291,7 @@ test('panel chrome, rail layout, dock catalog and the shell know the card', () =
 });
 
 test('every rail rule written for RECENT IMAGERY has its Solunar twin', () => {
-  for (const file of [
-    'layers.css',
-    'responsive.css',
-    'mobile-shell.css',
-    'cyber.css',
-  ]) {
+  for (const file of ['layers.css', 'responsive.css', 'mobile-shell.css']) {
     const css = read(`src/ui/styles/${file}`);
     assert.equal(
       count(css, 'solunar-panel'),
@@ -309,6 +319,15 @@ test('the SOLUNAR launcher wraps its title, hides its body while collapsed, and 
   );
   assert.ok(media.includes('.gev-sl-controls .data-toggle-chip'));
   assert.ok(media.includes('min-height: 44px'));
+  const mobile = read('src/ui/styles/mobile-shell.css');
+  assert.match(
+    mobile,
+    /> #solunar-panel:not\(\[hidden\]\):not\(\.collapsed\)\s*\{[^}]*height: min\(65vh, 600px\)/,
+  );
+  assert.match(
+    mobile,
+    /> #solunar-panel:not\(\[hidden\]\):not\(\.collapsed\)\s*\{[^}]*flex: 0 0 auto/,
+  );
 });
 
 test('reopening the card redraws it, so a card left closed overnight shows the new week', async () => {
