@@ -2025,7 +2025,13 @@ and follows redirects only on the camera's origin. Catalog image URLs, and
 redirects on those hosts, are pinned by parsed URL to the agency's image
 directory. Every `/api/cctv` route refuses cross-site browser requests but
 accepts forwarding headers, so cameras work behind a reverse proxy; a forwarded
-request skips the key-bearing Street View fallback and gets the placeholder.
+request skips the key-bearing Street View fallback and gets the placeholder. The
+fallback answers only for cameras the server lists, at their catalog position,
+so position calibration never reaches it. Heading, field of view (clamped to
+20–120°) and pitch (clamped to −40–20°) come from the request, else from the
+catalog pose. A bundled seed camera, shown when the server catalog is empty,
+gets the placeholder. The fallback counts in its own per-IP Google window (see
+the cost-bearing proxies below).
 
 The CCTV layer draws only the cameras on or near the screen. Zoomed out, a
 ground cell with two or more cameras shows one marker at their mean position. A
@@ -3592,6 +3598,9 @@ unaffected. `GEV_RATELIMIT_OPENAI_PER_MIN` and `GEV_RATELIMIT_GOOGLE_PER_MIN` ov
 those; exactly `0` disables the limiter, while a value that cannot be read as a
 number falls back to the default rather than to unlimited. Over-limit requests
 receive a sanitized `429` with `Retry-After: 5` and never reach the provider.
+The CCTV Street View fallback counts in a separate window with the Google cap.
+An IPv6 /64 counts as one client. Over the cap, a frame gets the placeholder
+image instead of a `429`.
 Typed chat (`/api/openai/chat`, `/api/gemini/chat`) counts in its own window,
 set by `GEV_RATELIMIT_OPENAI_CHAT_PER_MIN` and `GEV_RATELIMIT_GEMINI_CHAT_PER_MIN`.
 Left unset, each takes its provider's resolved cap — `GEV_RATELIMIT_OPENAI_PER_MIN`
@@ -5175,9 +5184,20 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   stacking. Narrow mobile Cockpit
 >   viewports suppress the legacy layer stack, peripheral HUD, and secondary
 >   Context/briefing panes so the flight instruments and primary controls remain
->   unobstructed. Outside Cockpit, Radio starts collapsed while off and lives
->   only in its section inside Context; the detailed panel's normal accordion
->   control owns its disclosure and its Enable/Disable action owns power.
+>   unobstructed. In the phone layout (720 px wide and below) the flight and
+>   bridge views put the collapsed Display and Radio launchers in one row
+>   centred on the Reset/Exit axis, above the reticle and clear of the
+>   destination cue: below the roll arc in portrait, over the arc's lower tick
+>   ends in landscape. On short landscape screens the row stays
+>   on screen and tappable below the vision controls but may cover the top of
+>   the speed and altitude readouts. Windows under 240 px tall, and those under
+>   390 px wide and 450 px tall, keep the row above Reset/Exit at the right.
+>   Satellite and provider views keep the row
+>   above Reset/Exit at the right, where their own layouts expect it. The
+>   first-visit Stories announcement waits, unread, until Cockpit closes.
+>   Outside Cockpit, Radio starts collapsed while off and lives only in its
+>   section inside Context; the detailed panel's normal accordion control
+>   owns its disclosure and its Enable/Disable action owns power.
 >   Radio volume in the full and Cockpit surfaces, plus Space Mission
 >   replay speed, use Display / Sharpen's muted 3px rail, circular cyan thumb,
 >   glow, and mono value treatment. Their larger transparent hit areas, keyboard
