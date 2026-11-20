@@ -4425,5 +4425,17 @@
   "Finding it…": "A procurar…",
   "No reading at this time": "Sem leitura nesta hora",
   "Last reading · {age}": "Última leitura · {age}",
-  "Find it": "Encontrar"
+  "Find it": "Encontrar",
+  "WPI pagination limit reached — showing partial data": "Limite de paginação do WPI atingido — dados parciais",
+  "World Port Index unavailable": "World Port Index indisponível",
+  "Facility": "Instalação",
+  "Country filter": "Filtro por país",
+  "All countries": "Todos os países",
+  "NGA reference data only. A listed port is not evidence it is operational. Facility filters include affirmative values only. Country and facility filters remain session-local.": "Apenas dados de referência da NGA. Um porto listado não é prova de que esteja operacional. Os filtros de instalação incluem apenas valores afirmativos. Os filtros de país e de instalação permanecem locais à sessão.",
+  "Container": "Contêineres",
+  "Solid bulk": "Granéis sólidos",
+  "Oil terminal": "Terminal petrolífero",
+  "LNG terminal": "Terminal de GNL",
+  "Reference: NGA World Port Index / DOE NETL mirror": "Referência: NGA World Port Index / espelho DOE NETL",
+  "Ports & terminals": "Portos e terminais"
 }

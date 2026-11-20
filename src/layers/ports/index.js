@@ -1,4 +1,4 @@
-import { formatNumber, t } from '../../i18n/index.js';
+import { formatNumber, t, translateKnown } from '../../i18n/index.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { drawOf, findFrame } from '../../render/rendererOf.js';
 import { inputFor } from '../../input/dispatcher.js';
@@ -104,7 +104,7 @@ export function createPortsLayer({
           id: `ports-card:${port.wpiNumber}`,
           title: port.name,
           details: [
-            ...portProfileLines(port),
+            ...portProfileLines(port).map(translateKnown),
             `NGA publication date: Unavailable`,
             `Mirror last edit: ${formatDay(snapshot?.mirrorLastEditAt)}`,
             `Retrieved: ${formatDay(snapshot?.retrievedAt)}`,
@@ -260,7 +260,7 @@ export function createPortsLayer({
           result.version === snapshot?.version && pins.length > 0;
         snapshot = result;
         lastError = result.partial
-          ? 'WPI pagination limit reached — showing partial data'
+          ? t('WPI pagination limit reached — showing partial data')
           : null;
         if (!unchanged) rebuild(result.records);
         notify();
@@ -268,7 +268,7 @@ export function createPortsLayer({
       } catch (error) {
         if (!enabled || request.signal.aborted || pending !== request)
           return false;
-        lastError = error?.message || 'World Port Index unavailable';
+        lastError = error?.message || t('World Port Index unavailable');
         if (snapshot) {
           if (now() - snapshot.retrievedAt > MAX_STALE_MS) {
             snapshot = null;
