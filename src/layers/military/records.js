@@ -70,19 +70,25 @@ export class MilitaryFlightRecords {
     this.missingPolls.delete(icao24);
     const prevMeta = this.data.get(icao24);
     // adsb.lol/readsb reports GROUND traffic as alt_baro === "ground" (no
-    // separate boolean). Grounded planes fall back to their last known
-    // altitude (field elevation is unknowable here), else 0 m — never the
-    // 3 km airborne default (a parked plane must not float).
+    // separate boolean). Grounded planes fall back to an altitude they
+    // reported while on the ground (field elevation is unknowable here),
+    // else 0 m — never the 3 km airborne default, and never the last
+    // AIRBORNE altitude: `altitudeFt` is sticky across the landing, so it
+    // still holds the approach height, and the icon would hang there while
+    // the ground-snapped model sits on the field (a parked plane must not
+    // float). `groundAltitudeM` is that ground-only altitude: set by a
+    // grounded report that carries one, held while grounded, dropped on
+    // takeoff.
     const onGround = aircraft.onGround;
     const altitudeFt =
       aircraft.baroAltitudeM == null ? null : aircraft.baroAltitudeM / 0.3048;
+    const groundAltitudeM = onGround
+      ? (aircraft.baroAltitudeM ??
+        (prevMeta?.onGround === true ? prevMeta.groundAltitudeM : null) ??
+        null)
+      : null;
     const altitudeM =
-      aircraft.baroAltitudeM ??
-      (onGround
-        ? Number.isFinite(prevMeta?.altitudeFt)
-          ? prevMeta.altitudeFt * 0.3048
-          : 0
-        : 3048);
+      aircraft.baroAltitudeM ?? (onGround ? (groundAltitudeM ?? 0) : 3048);
     const verticalRateMps = aircraft.verticalRateMps;
     const callsign = aircraft.callsign;
     const type = aircraft.typeCode;
@@ -198,6 +204,7 @@ export class MilitaryFlightRecords {
       registration: stickyText(registration, prevMeta?.registration),
       operator: stickyText(operator, prevMeta?.operator),
       altitudeFt: stickyNumber(altitudeFt, prevMeta?.altitudeFt, null),
+      groundAltitudeM,
       // geoAltitudeM/renderAltitudeM are ADDITIVE fields alongside the
       // untouched aviation `altitudeFt` — never rename/replace it (labels,
       // the FL readout, and the landed-fast-cull heuristic all still read

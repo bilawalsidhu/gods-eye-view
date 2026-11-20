@@ -10,6 +10,20 @@ or an older position from another feed) and one reported slower than 2 m/s
 give no course and keep the last; an aircraft with no course at all faces
 north.
 
+A selected vessel, aircraft or military aircraft can be found again from its
+Context card. While it is off screen, behind the globe or out of its layer's
+feed (the clock jumped to a time the feed lacks it, or the view moved away
+from it), the card's header shows Find it (`store.locate()`,
+`src/ui/stores/entityCard.js`). One still in its feed is flown to (an
+aircraft followed). One out of its feed is looked up at the layer's time on
+its own track (`locate` on the vessels, flights and military layers, through
+`locateOnTrack` in `src/data/locate.js`): the newest point at or before the
+world clock's time while the layer follows the clock, else the newest. The card
+moves to it and says how old that reading is, and the camera flies there. Once
+the feed has it again, its layer selects it again (an aircraft is followed).
+With no point at or before the time, the card says there is no reading then and
+the camera stays. A followed item is never counted as off screen.
+
 While anything moves (a layer in motion, the camera, a followed contact), the
 globe draws at the display's own refresh rate; there is no fixed 60 FPS cap.
 The render governor (`src/renderGovernor.js`) caps a parked scene at
@@ -1201,9 +1215,11 @@ every width, right to left it takes the bottom right at every width, and
 `src/ui/creditLineHeight.js` keeps its height in `--credit-line-height`: the
 coordinates (and, right to left, the Tactical readout) stay 6px above it
 however many lines it wraps onto, and the dock and World Timeline rise when
-it is taller than their usual clearance. Narrower than 1120px the dock leaves
-no room between the corners, so the coordinates and the readout sit above
-the dock, and above the World Timeline while it shows. Outside that layout
+it is taller than their usual clearance. The World Timeline takes the dock's
+floor and the dock (with the Omnibar's field) sits above it, rising by the
+bar's height while it shows, as the plain dock does. Narrower than 1120px the
+dock leaves no room between the corners, so the coordinates and the readout
+sit above the dock. Outside that layout
 Cesium's credit box wraps from 1200px, as before; the phone shell, clean
 view, recording and scene playback lay the line out themselves.
 The left rail treats the centered World Timeline and voice control as
@@ -6354,8 +6370,9 @@ viewer host and hands back the canvas the panorama is drawn on (a fresh one
 after a lost context). Each mount and each canvas has a key of its own, so
 a viewer never draws on another one's elements, and of two viewers
 mounting at once only the later one is drawn (`photoViewers.js`): the
-earlier one's mount closes. Without a subscribed view these photos cannot
-open.
+earlier one's mount closes. A view may draw at once or later; what it
+reads (`mountKey`, `actions.supersede()`) is `ViewerAdapter.subscribeView`
+in `registry.js`. Without a subscribed view these photos cannot open.
 
 Panoramax (`providers/panoramax/`) is keyless and browser-side: the
 meta-catalogue `api.panoramax.xyz` (CORS open) federates every instance, and
@@ -8867,6 +8884,9 @@ remembers" are different promises:
   a link restores what its hash carries, and a bare URL starts with the default
   layers and options (`src/ui/shareRestoration.js` passes
   `allowLocalState: false`), so clearing the address always resets the view.
+  A host may name the layers a bare URL starts with (`startLayers` on
+  `createApplicationControls`, e.g. `['flights', 'satellites']`); they are
+  restored passively, never written to storage, and a link's own layers win.
 - **Detection mode/density and scope feather have NO storage key at all.** Their
   only durable carrier is the URL hash (`dm`/`dd`, `scf`), written on a 500 ms
   debounce. A same-URL reload therefore keeps them only if that debounce already

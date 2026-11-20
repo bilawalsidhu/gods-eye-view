@@ -103,6 +103,7 @@ export class LayerStateCoordinator {
     shareLayerState = null,
     allowLocalState = true,
     shareCreatedAtMs = null,
+    startLayerIds = [],
   } = {}) {
     if (this._destroyed)
       throw new Error('Layer-state coordinator is destroyed');
@@ -125,7 +126,13 @@ export class LayerStateCoordinator {
         selected = this._normalize(stored);
         this._source = 'local';
       }
-    } else {
+    }
+    if (!selected && startLayerIds.length) {
+      // The layers the application starts with when nothing names any:
+      // restored passively, so they are never written as the user's choice.
+      selected = this._normalize({ enabledLayerIds: startLayerIds });
+      this._source = 'start';
+    } else if (!selected && !allowLocalState) {
       // A valid historical camera/style share with no v2 layer payload keeps
       // the exact legacy default-layer behavior. It must not inherit an
       // unrelated recipient's saved local layer preferences.
