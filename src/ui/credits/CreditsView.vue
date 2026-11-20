@@ -1,5 +1,6 @@
 <script setup>
 import { t } from '../../i18n/index.js';
+import UiButton from '../kit/UiButton.vue';
 import UiCloseButton from '../kit/UiCloseButton.vue';
 import CreditItem from './CreditItem.vue';
 
@@ -33,6 +34,12 @@ const props = defineProps({
 const SEPARATOR = ' · ';
 /** A credit's key: the same text and link are one credit. */
 const key = (credit) => `${credit.text}\u0000${credit.href ?? ''}`;
+// The list button's words are the slot of a UiButton, which renders inside
+// the button: a locale that is not bound to a ref changes nothing the button
+// reads, and the owner patches synchronously and reads the result at once. A
+// slot given under a condition (`redrawWithView`, always true) is redrawn
+// whenever this view is, so the words follow a new locale with the rest.
+const redrawWithView = true;
 /** Keep `name`'s element for the owner. */
 const keep = (name) => (element) => {
   props.elements[name] = element?.$el ?? element;
@@ -46,16 +53,17 @@ const keep = (name) => (element) => {
         ><template v-for="(credit, i) in props.inline" :key="key(credit)"
           >{{ i ? SEPARATOR : '' }}<CreditItem :credit="credit" /></template
         >{{ props.inline.length && props.listed.length ? SEPARATOR : '' }}</span
-      ><button
+      ><UiButton
         :ref="keep('expand')"
-        type="button"
         class="gev-credits-expand"
         aria-haspopup="dialog"
         :aria-controls="props.panelId"
         :aria-expanded="String(props.open)"
         :hidden="props.listed.length === 0"
         @click="props.onExpand()"
-        >{{ t('Data attribution') }}</button
+        ><template v-if="redrawWithView" #default>{{
+          t('Data attribution')
+        }}</template></UiButton
       ></div
     ><div
       :id="props.panelId"

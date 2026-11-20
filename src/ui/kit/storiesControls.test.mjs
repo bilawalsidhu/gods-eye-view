@@ -3,11 +3,12 @@
 // `<input type="checkbox">`. Their glyphs are inline SVG drawn for Stories
 // (play, pause, back, filter, search, clear, expand, the GEV eye); no
 // Material symbol the page loads draws any of them the same, so they stay
-// SVG, and no view hand-writes a Material Symbols span. The two search
-// fields keep their own markup rather than UiSearchField, whose Material
-// magnifier would replace their SVG one, and their clear buttons stay ghost
-// UiButtons with an SVG cross rather than UiCloseButtons, whose glyph is ×
-// or the Material `close` symbol.
+// SVG, and no view hand-writes a Material Symbols span. The three search
+// fields (Explore's two and the Story context sheet's) keep their own markup
+// rather than UiSearchField, whose Material magnifier would replace their
+// SVG one, and Explore's two clear buttons stay ghost UiButtons with an SVG
+// cross rather than UiCloseButtons, whose glyph is × or the Material `close`
+// symbol.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

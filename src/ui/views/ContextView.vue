@@ -17,6 +17,7 @@ import ViewContext from './panels/ViewContext.vue';
 import SpaceMissionsPanel from './panels/SpaceMissionsPanel.vue';
 import RadioPanel from './panels/RadioPanel.vue';
 import UiButton from '../kit/UiButton.vue';
+import UiIcon from '../kit/UiIcon.vue';
 import UiSearchField from '../kit/UiSearchField.vue';
 import { cockpitEntryFace } from '../cockpitPresentation.js';
 import { LAYER_TABS, TAB_AFFECTS, activeTab, availableTabs, contextReady, enabledLayerIds, setEnabledLayers, tabTarget } from '../contextLayerTabs.js';
@@ -182,27 +183,27 @@ watch(
     </RailPanel>
     <RailPanel id="global-context-panel" start-collapsed v-class-toggle="{ ...(ctx && { 'context-enabled': ctx.enabled }) }" :data-context-mode="ctx?.mode" :data-context-tab="activeTab" :title="t('CONTEXT')" sideways scroll rail-scroller>
         <template #actions>
-          <button type="button" class="context-dock-btn" :aria-pressed="String(contextSearchOpen)" :aria-label="contextSearchOpen ? t('Close Context search') : t('Search in Context')" :title="contextSearchOpen ? t('Close search') : t('Search in Context')" @click="toggleSearch">
-            <span class="material-symbols-outlined" aria-hidden="true">search</span>
-          </button>
-          <button type="button" class="context-dock-btn" :aria-pressed="String(docked)" :aria-label="docked ? t('Shrink Context back to a panel') : t('Expand Context to a full-height column')" :title="docked ? t('Shrink') : t('Expand')" @click="setDocked(!docked)">
-            <span class="material-symbols-outlined" aria-hidden="true">{{ docked ? 'close_fullscreen' : 'open_in_full' }}</span>
-          </button>
+          <UiButton class="context-dock-btn" :pressed="Boolean(contextSearchOpen)" :aria-label="contextSearchOpen ? t('Close Context search') : t('Search in Context')" :title="contextSearchOpen ? t('Close search') : t('Search in Context')" @click="toggleSearch">
+            <UiIcon name="search" :size="null" />
+          </UiButton>
+          <UiButton class="context-dock-btn" :pressed="docked" :aria-label="docked ? t('Shrink Context back to a panel') : t('Expand Context to a full-height column')" :title="docked ? t('Shrink') : t('Expand')" @click="setDocked(!docked)">
+            <UiIcon :name="docked ? 'close_fullscreen' : 'open_in_full'" :size="null" />
+          </UiButton>
         </template>
         <div class="cyber-panel-body ui-scroll" data-rail-scroller>
         <UiSearchField v-if="contextSearchOpen" ref="searchInput" v-model="contextSearchText" class="context-search" role="search" input-class="context-search__input" :label="searchHint" :placeholder="searchHint" autocomplete="off" spellcheck="false" :clear-label="t('Clear search')" clear-class="context-search__clear" @escape="closeContextSearch" />
         <div v-if="availableTabs.length" class="context-tabs" role="tablist" :aria-label="t('Context tabs')">
-          <button id="context-tab-btn-view" type="button" role="tab" class="context-tabs__tab" :class="{ active: activeTab === 'view' }" :aria-selected="String(activeTab === 'view')" aria-controls="context-tab-view" :tabindex="activeTab === 'view' ? 0 : -1" @click="activeTab = 'view'" @keydown.left.prevent="switchTab" @keydown.right.prevent="switchTab">
-            <span class="material-symbols-outlined" aria-hidden="true">visibility</span><span class="context-tabs__label">{{ t('Inspector') }}</span>
-          </button>
-          <button id="context-tab-btn-props" type="button" role="tab" class="context-tabs__tab" :class="{ active: activeTab === 'props' }" :aria-selected="String(activeTab === 'props')" aria-controls="context-tab-props" :tabindex="activeTab === 'props' ? 0 : -1" @click="activeTab = 'props'" @keydown.left.prevent="switchTab" @keydown.right.prevent="switchTab">
-            <span class="material-symbols-outlined" aria-hidden="true">tune</span><span class="context-tabs__label">{{ t('Properties') }}</span>
-          </button>
+          <UiButton id="context-tab-btn-view" role="tab" class="context-tabs__tab" :class="{ active: activeTab === 'view' }" :aria-selected="String(activeTab === 'view')" aria-controls="context-tab-view" :tabindex="activeTab === 'view' ? 0 : -1" @click="activeTab = 'view'" @keydown.left.prevent="switchTab" @keydown.right.prevent="switchTab">
+            <UiIcon name="visibility" :size="null" /><span class="context-tabs__label">{{ t('Inspector') }}</span>
+          </UiButton>
+          <UiButton id="context-tab-btn-props" role="tab" class="context-tabs__tab" :class="{ active: activeTab === 'props' }" :aria-selected="String(activeTab === 'props')" aria-controls="context-tab-props" :tabindex="activeTab === 'props' ? 0 : -1" @click="activeTab = 'props'" @keydown.left.prevent="switchTab" @keydown.right.prevent="switchTab">
+            <UiIcon name="tune" :size="null" /><span class="context-tabs__label">{{ t('Properties') }}</span>
+          </UiButton>
         </div>
         <!-- Properties: settings of the layers that are on, one section each. -->
         <div id="context-tab-props" class="context-props" :hidden="activeTab !== 'props'" role="tabpanel" aria-labelledby="context-tab-btn-props">
           <section v-for="tab in LAYER_TABS" v-show="isShown(tab.id)" :key="tab.id" class="context-props__section">
-            <h4 class="context-props__heading"><span class="material-symbols-outlined" aria-hidden="true">{{ tab.icon }}</span>{{ t(tab.label) }}</h4>
+            <h4 class="context-props__heading"><UiIcon :name="tab.icon" :size="null" />{{ t(tab.label) }}</h4>
             <ul v-if="affects(tab.id).length" class="context-props__layers">
               <li v-for="layer in affects(tab.id)" :key="layer.id"><i :style="{ background: layer.color }" aria-hidden="true"></i>{{ layer.name }}</li>
             </ul>
@@ -211,10 +212,10 @@ watch(
         </div>
         <RadioPanel />
         <div class="global-context-modes" role="tablist" :aria-label="t('Context mode')">
-          <button id="global-context-flights-btn" class="context-mode-button" v-class-toggle="{ active: ctx?.flightsActive }" type="button" role="tab" tabindex="0" :aria-selected="String(ctx?.flightsActive ?? false)" :aria-disabled="ctx && String(ctx.busy)" :aria-busy="ctx && String(ctx.busy)" aria-controls="context-flights-view" :aria-label="t('CONTACTS')" :title="t('Cycles the nearest contacts of whatever type you select — planes, vessels, installations. Satellites track independently.')">
-            <span class="material-symbols-outlined" aria-hidden="true">radar</span>
+          <UiButton id="global-context-flights-btn" class="context-mode-button" v-class-toggle="{ active: ctx?.flightsActive }" role="tab" tabindex="0" :aria-selected="String(ctx?.flightsActive ?? false)" :aria-disabled="ctx && String(ctx.busy)" :aria-busy="ctx && String(ctx.busy)" aria-controls="context-flights-view" :aria-label="t('CONTACTS')" :title="t('Cycles the nearest contacts of whatever type you select — planes, vessels, installations. Satellites track independently.')">
+            <UiIcon name="radar" :size="null" />
             <span>{{ t('CONTACTS') }}</span>
-          </button>
+          </UiButton>
         </div>
         <div id="context-mode-standby" class="context-mode-standby" :hidden="ctx?.enabled">
           <strong>{{ t('SELECT CONTEXT') }}</strong>
@@ -222,11 +223,11 @@ watch(
         </div>
         <section id="context-flights-view" class="context-mode-view" role="tabpanel" aria-labelledby="global-context-flights-btn" :hidden="!ctx?.flightsActive">
           <div class="global-context-actions" :aria-label="t('Contact Context actions')">
-            <button id="cockpit-entry" type="button" :hidden="!cockpit?.entryAvailable">
-              <span class="material-symbols-outlined" aria-hidden="true">{{ entry.icon }}</span>
+            <UiButton id="cockpit-entry" :hidden="!cockpit?.entryAvailable">
+              <UiIcon :name="entry.icon" :size="null" />
               <span>{{ entry.label }}</span>
-            </button>
-            <button id="installations-search-btn" class="panel-layer-toggle" type="button" :aria-disabled="ctx && String(ctx.installationsBusy)" :aria-busy="ctx && String(ctx.installationsBusy)">{{ t('SEARCH NEARBY SITES') }}</button>
+            </UiButton>
+            <UiButton id="installations-search-btn" class="panel-layer-toggle" :aria-disabled="ctx && String(ctx.installationsBusy)" :aria-busy="ctx && String(ctx.installationsBusy)">{{ t('SEARCH NEARBY SITES') }}</UiButton>
             <UiButton id="tr3b-toggle" class="tr3b-toggle" :pressed="!!cockpit?.tr3b?.converted" :hidden="!cockpit?.tr3b" :aria-label="t('Reclassify tracked contact as TR-3B')" :title="cockpit?.tr3b?.converted ? t('Restore real aircraft') : t('Reclassify as TR-3B')">🛸</UiButton>
           </div>
           <AwarenessPanel v-if="!contactsMatchCard" />

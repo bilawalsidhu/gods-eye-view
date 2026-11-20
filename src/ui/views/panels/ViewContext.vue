@@ -10,7 +10,9 @@ import { shownLayerName } from '../../layerNames.js';
 import { entityKind } from '../../../data/entityContext.js';
 import SpotConditions from './SpotConditions.vue';
 import SunDial from './SunDial.vue';
+import UiButton from '../../kit/UiButton.vue';
 import UiCloseButton from '../../kit/UiCloseButton.vue';
+import UiIcon from '../../kit/UiIcon.vue';
 import AltitudeGraph from './AltitudeGraph.vue';
 
 // What the Context panel shows while nothing is picked: where the camera is
@@ -284,7 +286,7 @@ const distance = (km) =>
     <h3 v-if="globeView" class="view-context__title">{{ t('Globe view') }}</h3>
     <template v-else>
     <header class="view-context__head">
-      <span class="material-symbols-outlined view-context__icon" aria-hidden="true">visibility</span>
+      <UiIcon class="view-context__icon" name="visibility" :size="null" />
       <div class="view-context__kind">
         <span>{{ t('In view') }}</span>
         <span class="view-context__sub">{{ t('Nothing selected') }}</span>
@@ -298,11 +300,18 @@ const distance = (km) =>
     <div v-if="globeView && worldTiles.length" class="view-context__world">
       <h4>{{ t('Worldwide now') }}</h4>
       <div class="view-context__world-grid">
-        <component :is="tile.on ? 'div' : 'button'" v-for="tile in worldTiles" :key="tile.id" :type="tile.on ? undefined : 'button'" class="view-context__world-tile" :class="{ 'is-off': !tile.on }" :title="tile.on ? undefined : t('Turn on {name}', { name: tile.name })" @click="tile.on ? undefined : turnOn(tile)">
-          <span class="material-symbols-outlined" aria-hidden="true">{{ tile.icon }}</span>
-          <strong>{{ tile.on ? (tile.count === null ? '…' : formatNumber(tile.count)) : t('Off') }}</strong>
-          <span>{{ tile.name }}</span>
-        </component>
+        <template v-for="tile in worldTiles" :key="tile.id">
+          <div v-if="tile.on" class="view-context__world-tile">
+            <UiIcon :name="tile.icon" :size="null" />
+            <strong>{{ tile.count === null ? '…' : formatNumber(tile.count) }}</strong>
+            <span>{{ tile.name }}</span>
+          </div>
+          <UiButton v-else class="view-context__world-tile is-off" :title="t('Turn on {name}', { name: tile.name })" @click="turnOn(tile)">
+            <UiIcon :name="tile.icon" :size="null" />
+            <strong>{{ t('Off') }}</strong>
+            <span>{{ tile.name }}</span>
+          </UiButton>
+        </template>
       </div>
     </div>
 
@@ -356,24 +365,28 @@ const distance = (km) =>
         <p class="view-context__total">{{ totalLine }}</p>
         <div v-for="group in groups" :key="group.layerId" class="view-context__group">
           <h4>
-            <span class="material-symbols-outlined" aria-hidden="true">{{ group.icon }}</span>
+            <UiIcon :name="group.icon" :size="null" />
             <span>{{ shownLayerName(group.layerName, group.layerId) }}</span>
             <span class="view-context__count">{{ group.count }}</span>
           </h4>
           <ul>
             <li v-for="item in group.items" :key="item.key">
-              <button type="button" @click="store.select(item.identity, { fly: true })">
-                <span
+              <UiButton @click="store.select(item.identity, { fly: true })">
+                <!-- A motion glyph is an image with its own name, not decoration. -->
+                <UiIcon
                   v-if="motionOf(item)"
-                  class="material-symbols-outlined view-context__row-motion"
+                  class="view-context__row-motion"
+                  :name="motionOf(item).icon"
+                  :size="null"
                   :data-motion="item.identity.record.motion"
                   :title="motionOf(item).label()"
                   role="img"
                   :aria-label="motionOf(item).label()"
-                >{{ motionOf(item).icon }}</span>
+                  :aria-hidden="null"
+                />
                 <span class="view-context__row-title">{{ item.title }}</span>
                 <span class="view-context__row-meta">{{ distance(item.distanceKm) }}</span>
-              </button>
+              </UiButton>
             </li>
           </ul>
         </div>
@@ -387,7 +400,7 @@ const distance = (km) =>
     <div v-if="shownTowns.length" class="view-context__towns">
       <h4>{{ t('Places in view') }}</h4>
       <div class="view-context__chips">
-        <button v-for="town in shownTowns" :key="town.name" type="button" @click="goToTown(town)">{{ town.name }}</button>
+        <UiButton v-for="town in shownTowns" :key="town.name" @click="goToTown(town)">{{ town.name }}</UiButton>
       </div>
     </div>
 
@@ -396,16 +409,16 @@ const distance = (km) =>
     <div v-if="offLayers.length && !globeView" class="view-context__towns">
       <h4>{{ t('Show here') }}</h4>
       <div class="view-context__chips">
-        <button v-for="layer in offLayers" :key="layer.id" type="button" class="view-context__chip--layer" @click="turnOn(layer)">
-          <span class="material-symbols-outlined" aria-hidden="true">add</span>{{ layer.name }}
-        </button>
+        <UiButton v-for="layer in offLayers" :key="layer.id" class="view-context__chip--layer" @click="turnOn(layer)">
+          <UiIcon name="add" :size="null" />{{ layer.name }}
+        </UiButton>
       </div>
     </div>
 
     <div class="view-context__actions">
-      <button type="button" class="entity-card__action entity-card__action--ask" @click="store.askAboutView(groups)">
+      <UiButton class="entity-card__action entity-card__action--ask" @click="store.askAboutView(groups)">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z" /></svg>{{ t("Ask GEV what's here") }}
-      </button>
+      </UiButton>
     </div>
   </section>
 </template>

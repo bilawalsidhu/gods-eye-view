@@ -101,6 +101,7 @@ function eventPanel() {
       get textContent() { return record().textContent; },
       get hidden() { return record().hidden; },
       get disabled() { return record().disabled; },
+      get pressed() { return record().pressed; },
       get value() { return typed ?? record().value; },
       set value(value) { typed = value; },
       getAttribute: (name) => record().attributes[name] ?? null,
@@ -2711,6 +2712,8 @@ test('Bhote Koshi replay restores cinematic ownership unless the operator releas
     play.dispatch('click');
     assert.equal(layer.getCinematicState().active, true);
     assert.equal(layer.getPlaybackState().progress, 0);
+    const cinematicControl = panel.querySelector('[data-action="cinematic"]');
+    assert.equal(cinematicControl.pressed, true, 'the cinematic button is pressed while it owns the camera');
     assert.equal(layer.getPlaybackState().playing, true);
     assert.equal(
       body.children.some((element) => element.id === 'bhote-koshi-story-strap'),
@@ -2720,6 +2723,7 @@ test('Bhote Koshi replay restores cinematic ownership unless the operator releas
     panel.querySelector('[data-action="cinematic"]').dispatch('click');
     assert.equal(layer.getCinematicState().active, false);
     assert.equal(viewer._test.cameraTransforms.length, 2);
+    assert.equal(cinematicControl.pressed, false, 'releasing the camera unpresses the button');
     animationCallbacks[1](91001);
     assert.equal(play.textContent, '↺ REPLAY');
     const cameraLookCount = viewer._test.cameraLooks.length;

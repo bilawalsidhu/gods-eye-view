@@ -26,7 +26,7 @@ const props = defineProps({
   withContacts: Boolean,
 });
 const store = useEntityCardStore();
-const { card, lost, tick } = storeToRefs(store);
+const { card, lost, tick, away, finding, located } = storeToRefs(store);
 // Cameras carry only an id; the CCTV panel's store knows the picked one's name.
 const { frame: cctvFrame } = storeToRefs(useCctvStore());
 const shownTitle = computed(() => {
@@ -56,6 +56,15 @@ const status = computed(() => {
   void tick.value;
   const current = card.value;
   if (!current) return null;
+  if (finding.value === 'finding') return { tone: 'aged', text: t('Finding it…') };
+  if (finding.value === 'none') return { tone: 'lost', text: t('No reading at this time') };
+  if (lost.value && located.value)
+    return {
+      tone: 'aged',
+      text: t('Last reading · {age}', {
+        age: ago(Math.max(0, located.value.atMs - located.value.observedAtMs)),
+      }),
+    };
   if (lost.value) return { tone: 'lost', text: t('Out of feed · last reading') };
   if (current.observedAgeMs !== null)
     return {
@@ -399,6 +408,7 @@ watch(
           <h3 class="entity-card__title">{{ shownTitle }}</h3>
           <span v-if="subtitle" class="entity-card__subtitle">{{ subtitle }}</span>
         </div>
+        <UiButton v-if="away && card.moving" class="entity-card__find" data-entity-find :label="t('Find it')" :title="t('Find it')" :disabled="finding === 'finding'" @click="store.locate()"><UiIcon name="my_location" :size="null" /></UiButton>
         <UiCloseButton class="entity-card__close" glyph="icon" :label="t('Close card')" :title="t('Close card')" @click="store.clear()" />
       </header>
 
