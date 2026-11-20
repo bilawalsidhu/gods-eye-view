@@ -397,9 +397,8 @@ test('a probe that narrows or widens a dateline drape keeps the layer of the unc
   const globe = fakeGlobePort();
   renderer.rebind({ collection: {}, kind: 'globe', globe });
   const [west, east] = nonCrossingBoxes(FIJI_BOX);
-  const keyOf = (box) => [box.west, box.south, box.east, box.north].join(',');
   const layerFor = (box) =>
-    globe.layers.find((layer) => keyOf(layer.spec.rectangle) === keyOf(box));
+    globe.layers.find((layer) => boxKey(layer.spec.rectangle) === boxKey(box));
 
   // An HLS day drapes both halves before its probe answers.
   renderer.showSlot('a', S30, FIJI_BOX, { alpha: 0.4, splitDirection: 'left' });

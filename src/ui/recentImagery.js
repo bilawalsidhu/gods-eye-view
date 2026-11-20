@@ -139,13 +139,15 @@ function coverageText(coverage) {
 /** A confirmed-empty side means partial coverage. An unanswered side leaves coverage unknown. */
 function shownCoverage(candidate, box) {
   const { status, availableBoxes, emptyBoxes } = candidate.thumbnail ?? {};
+  const halves = nonCrossingBoxes(box).length;
+  if (emptyBoxes?.length && emptyBoxes.length < halves) return 'partial';
   if (
     status !== 'present' ||
     !Array.isArray(availableBoxes) ||
-    availableBoxes.length >= nonCrossingBoxes(box).length
+    availableBoxes.length >= halves
   )
     return candidate.coverage;
-  return emptyBoxes?.length ? 'partial' : 'unknown';
+  return 'unknown';
 }
 
 function cloudText(candidate) {

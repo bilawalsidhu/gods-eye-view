@@ -20,16 +20,14 @@ const EMPTY = Object.freeze({
   loading: false,
 });
 
-/** On a re-probe, keep earlier halves of one answer (present or empty) unless the new probe answered them the other way. */
+/** Keep earlier halves of one answer (present or empty) unless the new probe answered them. */
 function keepProvenHalves(previous, next, opposite) {
-  if (
-    !Array.isArray(previous) ||
-    !Array.isArray(next) ||
-    !Array.isArray(opposite)
-  )
-    return next;
+  if (!Array.isArray(next) || !Array.isArray(opposite)) return previous;
   const drop = new Set([...next, ...opposite].map(boxKey));
-  return [...next, ...previous.filter((half) => !drop.has(boxKey(half)))];
+  return [
+    ...next,
+    ...(previous ?? []).filter((half) => !drop.has(boxKey(half))),
+  ];
 }
 
 /**
@@ -113,12 +111,13 @@ export function createThumbnailLoader({
         size,
         signal: controller.signal,
       });
+      // Each half's explicit answer counts even when the shown response fails.
+      availableBoxes = response?.presentBoxes ?? null;
+      emptyBoxes = response?.emptyBoxes ?? null;
       if (controller.signal.aborted) {
         cancelled = true;
       } else if (response?.ok) {
         const present = dataPresent(response);
-        availableBoxes = response.presentBoxes ?? null;
-        emptyBoxes = response.emptyBoxes ?? null;
         acquisitionTime = response.headers?.get?.('Acquisition-Time') || null;
         if (present === 'false') {
           status = 'empty';
@@ -146,21 +145,21 @@ export function createThumbnailLoader({
       pump();
       return;
     }
+    // Each half keeps its latest explicit answer.
+    entry.availableBoxes = keepProvenHalves(
+      entry.availableBoxes,
+      availableBoxes,
+      emptyBoxes,
+    );
+    entry.emptyBoxes = keepProvenHalves(
+      entry.emptyBoxes,
+      emptyBoxes,
+      availableBoxes,
+    );
     // A failed re-fetch of an evicted image keeps what the day proved.
     if (status !== 'error' || entry.status !== 'present') {
-      if (status === 'present' && entry.status === 'present') {
-        const fresh = availableBoxes;
-        availableBoxes = keepProvenHalves(
-          entry.availableBoxes,
-          fresh,
-          emptyBoxes,
-        );
-        emptyBoxes = keepProvenHalves(entry.emptyBoxes, emptyBoxes, fresh);
-      }
       entry.status = status;
       entry.acquisitionTime = acquisitionTime;
-      entry.availableBoxes = availableBoxes;
-      entry.emptyBoxes = emptyBoxes;
     }
     entry.objectUrl = objectUrl;
     touch(entry);

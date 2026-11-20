@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { until } from '../../testSupport/kartaViewFakes.mjs';
 import { createRecentImagerySource } from './source.js';
 import { createThumbnailLoader } from './thumbnails.js';
-import { nonCrossingBoxes } from './model.js';
+import { boxKey, nonCrossingBoxes } from './model.js';
 import { NO_IMAGERY_HOST } from '../../maps/imageryHost.js';
 import { acquireImageryComparison } from '../../maps/imageryComparison.js';
 import { MapSourceController } from '../../maps/controller.js';
@@ -1614,8 +1614,12 @@ const sideOf = (url) =>
   Number(new URL(url).searchParams.get('BBOX').split(',')[1]) > 0
     ? 'west'
     : 'east';
-const snapshotAnswer = (present) =>
-  new Response('img', { headers: { 'Data-Present': String(present) } });
+/** A snapshot response; `present: null` sends no Data-Present header. */
+const snapshotAnswer = (present, status = 200) =>
+  new Response('img', {
+    status,
+    headers: present === null ? {} : { 'Data-Present': String(present) },
+  });
 
 function realLayer({
   fetchImpl,
@@ -1793,6 +1797,186 @@ test('a re-probe of a present VIIRS dateline day keeps a half that failed this t
     globe.layers.map((layer) => layer.spec.rectangle),
     [west, east],
     'a half that failed on the re-probe stays draped',
+  );
+  layer.destroy();
+});
+
+test('a re-probe of a present HLS dateline day keeps a half confirmed empty when that half fails this time', async () => {
+  const day1 = candidate('S30', '2026-11-10');
+  const day2 = candidate('S30', '2026-11-11');
+  let eastCalls = 0;
+  let releaseDay2;
+  const gate = new Promise((r) => (releaseDay2 = r));
+  const { layer, loader, globe } = realLayer({
+    candidates: [day2, day1],
+    maxDecoded: 1,
+    halfDeadlineMs: 5000,
+    fetchImpl: async (url) => {
+      if (new URL(url).searchParams.get('TIME') === day2.day) {
+        await gate;
+        return snapshotAnswer(true);
+      }
+      if (sideOf(url) === 'east') {
+        eastCalls += 1;
+        if (eastCalls === 1) return snapshotAnswer(false);
+        throw new TypeError('Failed to fetch');
+      }
+      return snapshotAnswer(true);
+    },
+  });
+  layer.enable();
+  layer.setBox(FIJI_BOX);
+  assert.equal(
+    await until(() => loader.get(day1.key).status === 'present', {
+      ticks: 2000,
+    }),
+    true,
+  );
+  const [west] = nonCrossingBoxes(FIJI_BOX);
+  assert.deepEqual(loader.get(day1.key).availableBoxes, [west]);
+  assert.equal(loader.get(day1.key).emptyBoxes.length, 1);
+  releaseDay2();
+  assert.equal(
+    await until(() => loader.get(day2.key).status === 'present', {
+      ticks: 2000,
+    }),
+    true,
+  );
+  assert.equal(loader.get(day1.key).objectUrl, null);
+  layer.setAssignment('a', day1.key);
+  assert.equal(
+    await until(() => eastCalls === 2 && !loader.get(day1.key).loading, {
+      ticks: 2000,
+    }),
+    true,
+  );
+  await until(() => false, { ticks: 50 });
+  const entry = loader.get(day1.key);
+  assert.deepEqual(
+    {
+      available: entry.availableBoxes.length,
+      empty: entry.emptyBoxes.length,
+      layers: globe.layers.length,
+    },
+    { available: 1, empty: 1, layers: 1 },
+  );
+  layer.destroy();
+});
+
+test('a shown HLS day on a plain box stays draped after a probe without Data-Present', async () => {
+  const day = candidate('S30', '2026-11-10');
+  let release;
+  const gate = new Promise((r) => (release = r));
+  const { layer, loader, globe } = realLayer({
+    candidates: [day],
+    halfDeadlineMs: 5000,
+    fetchImpl: async () => {
+      await gate;
+      return snapshotAnswer(null);
+    },
+  });
+  layer.enable();
+  layer.setBox({ west: -98, south: 30, east: -97, north: 31 });
+  assert.equal(
+    await until(() => globe.layers.length === 1, { ticks: 2000 }),
+    true,
+  );
+  release();
+  assert.equal(
+    await until(() => loader.get(day.key).status === 'error', { ticks: 2000 }),
+    true,
+  );
+  await until(() => false, { ticks: 50 });
+  assert.equal(globe.layers.length, 1);
+  layer.destroy();
+});
+
+test('an HLS dateline day leaves out a half confirmed empty when the other half fails', async () => {
+  const day = candidate('S30', '2026-11-10');
+  const { layer, loader, globe } = realLayer({
+    candidates: [day],
+    halfDeadlineMs: 5000,
+    fetchImpl: async (url) =>
+      sideOf(url) === 'west'
+        ? snapshotAnswer(false)
+        : snapshotAnswer(null, 503),
+  });
+  layer.enable();
+  layer.setBox(FIJI_BOX);
+  assert.equal(
+    await until(() => loader.get(day.key)?.status === 'error', { ticks: 2000 }),
+    true,
+  );
+  layer.setAssignment('a', day.key);
+  await until(() => false, { ticks: 50 });
+  const entry = loader.get(day.key);
+  const [west] = nonCrossingBoxes(FIJI_BOX);
+  assert.deepEqual(
+    {
+      empty: (entry.emptyBoxes ?? []).map(boxKey),
+      layers: globe.layers.length,
+    },
+    { empty: [boxKey(west)], layers: 1 },
+  );
+  layer.destroy();
+});
+
+test('a re-probe of a present HLS dateline day takes a fresh empty half when the shown half has no Data-Present', async () => {
+  const day1 = candidate('S30', '2026-11-10');
+  const day2 = candidate('S30', '2026-11-11');
+  let round = 0;
+  let releaseDay2;
+  const gate = new Promise((r) => (releaseDay2 = r));
+  const { layer, loader, globe } = realLayer({
+    candidates: [day2, day1],
+    maxDecoded: 1,
+    halfDeadlineMs: 5000,
+    fetchImpl: async (url) => {
+      if (new URL(url).searchParams.get('TIME') === day2.day) {
+        await gate;
+        return snapshotAnswer(true);
+      }
+      if (round === 0)
+        return sideOf(url) === 'west'
+          ? snapshotAnswer(true)
+          : snapshotAnswer(null);
+      return sideOf(url) === 'west'
+        ? snapshotAnswer(null)
+        : snapshotAnswer(false);
+    },
+  });
+  layer.enable();
+  layer.setBox(FIJI_BOX);
+  assert.equal(
+    await until(() => loader.get(day1.key)?.status === 'present', {
+      ticks: 2000,
+    }),
+    true,
+  );
+  round = 1;
+  releaseDay2();
+  assert.equal(
+    await until(
+      () =>
+        loader.get(day2.key)?.status === 'present' &&
+        loader.get(day1.key).objectUrl === null,
+      { ticks: 2000 },
+    ),
+    true,
+  );
+  layer.setAssignment('a', day1.key);
+  await until(() => false, { ticks: 50 });
+  await until(() => !loader.get(day1.key).loading, { ticks: 2000 });
+  await until(() => false, { ticks: 50 });
+  const entry = loader.get(day1.key);
+  const [, east] = nonCrossingBoxes(FIJI_BOX);
+  assert.deepEqual(
+    {
+      status: entry.status,
+      empty: (entry.emptyBoxes ?? []).map(boxKey),
+      layers: globe.layers.length,
+    },
+    { status: 'present', empty: [boxKey(east)], layers: 1 },
   );
   layer.destroy();
 });
