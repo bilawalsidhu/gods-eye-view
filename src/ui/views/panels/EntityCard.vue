@@ -10,6 +10,9 @@ import AltitudeGraph from './AltitudeGraph.vue';
 import { contextNeedle, contextSearchText, matchesContextSearch } from '../../contextSearch.js';
 import RouteGlobe from './RouteGlobe.vue';
 import CctvPreview from './CctvPreview.vue';
+import UiButton from '../../kit/UiButton.vue';
+import UiCloseButton from '../../kit/UiCloseButton.vue';
+import UiIcon from '../../kit/UiIcon.vue';
 import { useCctvStore } from '../../stores/cctv.js';
 import SpotConditions from './SpotConditions.vue';
 import { shownLayerName } from '../../layerNames.js';
@@ -23,7 +26,7 @@ const props = defineProps({
   withContacts: Boolean,
 });
 const store = useEntityCardStore();
-const { card, lost, tick } = storeToRefs(store);
+const { card, lost, tick, away, finding, located } = storeToRefs(store);
 // Cameras carry only an id; the CCTV panel's store knows the picked one's name.
 const { frame: cctvFrame } = storeToRefs(useCctvStore());
 const shownTitle = computed(() => {
@@ -53,6 +56,15 @@ const status = computed(() => {
   void tick.value;
   const current = card.value;
   if (!current) return null;
+  if (finding.value === 'finding') return { tone: 'aged', text: t('Finding it…') };
+  if (finding.value === 'none') return { tone: 'lost', text: t('No reading at this time') };
+  if (lost.value && located.value)
+    return {
+      tone: 'aged',
+      text: t('Last reading · {age}', {
+        age: ago(Math.max(0, located.value.atMs - located.value.observedAtMs)),
+      }),
+    };
   if (lost.value) return { tone: 'lost', text: t('Out of feed · last reading') };
   if (current.observedAgeMs !== null)
     return {
@@ -364,10 +376,10 @@ watch(
           <AircraftModelHero v-if="modelKnown" :key="card.key" class="entity-hero__layer" :class="{ 'is-shown': activeFlightPreview === 'model' }" :active="activeFlightPreview === 'model'" :aircraft="card.aircraftModel" :heading="card.heading || 0" :callouts="callouts" @failed="modelFailed = true" @cycle="showOtherView" />
           <FlightCockpitView v-if="cockpitMade && cockpitKnown" :key="`cockpit-${card.key}`" class="entity-hero__layer" :class="{ 'is-shown': activeFlightPreview === 'cockpit' }" :active="activeFlightPreview === 'cockpit'" :lat="card.lat" :lon="card.lon" :altitude-m="card.altitudeM" :heading="card.heading" :speed-mps="card.speedMps" @failed="onCockpitFailed" />
           <div v-if="cockpitKnown || (routeKnown && modelKnown) || (photoAvailable && (routeKnown || modelKnown))" class="entity-card__preview-switch" role="group" :aria-label="t('Preview')">
-            <button v-if="photoAvailable" type="button" :class="{ active: activeFlightPreview === 'photo' }" :aria-pressed="String(activeFlightPreview === 'photo')" :aria-label="t('Photos')" :title="t('Photos')" @click="choosePreview('photo')"><span class="material-symbols-outlined" aria-hidden="true">photo_camera</span></button>
-            <button v-if="routeKnown" type="button" :class="{ active: activeFlightPreview === 'route' }" :aria-pressed="String(activeFlightPreview === 'route')" :aria-label="t('Route')" :title="t('Route')" @click="choosePreview('route')"><span class="material-symbols-outlined" aria-hidden="true">timeline</span></button>
-            <button v-if="modelKnown" type="button" :class="{ active: activeFlightPreview === 'model' }" :aria-pressed="String(activeFlightPreview === 'model')" :title="t('3D model')" @click="choosePreview('model')">{{ t('3D') }}</button>
-            <button v-if="cockpitKnown" type="button" :class="{ active: activeFlightPreview === 'cockpit' }" :aria-pressed="String(activeFlightPreview === 'cockpit')" :aria-label="t('Cockpit view')" :title="t('Cockpit view')" @click="choosePreview('cockpit')"><span class="material-symbols-outlined" aria-hidden="true">visibility</span></button>
+            <UiButton v-if="photoAvailable" :pressed="activeFlightPreview === 'photo'" pressed-class="active" :label="t('Photos')" @click="choosePreview('photo')"><UiIcon name="photo_camera" :size="null" /></UiButton>
+            <UiButton v-if="routeKnown" :pressed="activeFlightPreview === 'route'" pressed-class="active" :label="t('Route')" @click="choosePreview('route')"><UiIcon name="timeline" :size="null" /></UiButton>
+            <UiButton v-if="modelKnown" :pressed="activeFlightPreview === 'model'" pressed-class="active" :title="t('3D model')" @click="choosePreview('model')">{{ t('3D') }}</UiButton>
+            <UiButton v-if="cockpitKnown" :pressed="activeFlightPreview === 'cockpit'" pressed-class="active" :label="t('Cockpit view')" @click="choosePreview('cockpit')"><UiIcon name="visibility" :size="null" /></UiButton>
           </div>
         </template>
         <a v-else-if="heroKind === 'photo'" :key="photo.src" class="entity-hero__layer entity-hero__photo is-shown" :href="photo.link || undefined" target="_blank" rel="noopener">
@@ -378,7 +390,7 @@ watch(
         <CctvPreview v-else-if="heroKind === 'camera'" :camera-id="card.identity?.id || ''" />
         <!-- No imagery for it yet: its icon, with its headline figures beside it. -->
         <div v-else class="entity-hero__placeholder" :class="{ 'entity-hero__placeholder--bare': props.withContacts || !tiles.length }">
-          <span class="material-symbols-outlined entity-hero__glyph" aria-hidden="true">{{ card.icon }}</span>
+          <UiIcon class="entity-hero__glyph" :name="card.icon" :size="null" />
           <div v-if="!props.withContacts && tiles.length" class="entity-hero__figures">
             <div v-for="fact in tiles" :key="fact.field" class="entity-hero__figure">
               <strong>{{ factFigure(fact).number }}<small v-if="factFigure(fact).unit">{{ factFigure(fact).unit }}</small></strong>
@@ -390,15 +402,14 @@ watch(
       </div>
 
       <header class="entity-card__head">
-        <span class="material-symbols-outlined entity-card__icon" aria-hidden="true">{{ card.icon }}</span>
+        <UiIcon class="entity-card__icon" :name="card.icon" :size="null" />
         <div class="entity-card__name">
           <span class="entity-card__kind">{{ kindLine }}</span>
           <h3 class="entity-card__title">{{ shownTitle }}</h3>
           <span v-if="subtitle" class="entity-card__subtitle">{{ subtitle }}</span>
         </div>
-        <button type="button" class="entity-card__close" :aria-label="t('Close card')" :title="t('Close card')" @click="store.clear()">
-          <span class="material-symbols-outlined" aria-hidden="true">close</span>
-        </button>
+        <UiButton v-if="away && card.moving" class="entity-card__find" data-entity-find :label="t('Find it')" :title="t('Find it')" :disabled="finding === 'finding'" @click="store.locate()"><UiIcon name="my_location" :size="null" /></UiButton>
+        <UiCloseButton class="entity-card__close" glyph="icon" :label="t('Close card')" :title="t('Close card')" @click="store.clear()" />
       </header>
 
       <div class="entity-card__meta">
@@ -407,14 +418,14 @@ watch(
       </div>
 
       <div v-if="card.warnings?.length" class="entity-card__warning" role="alert">
-        <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+        <UiIcon name="warning" :size="null" />
         <span>{{ card.warnings.map((warning, index) => sayWords(card.warningWords?.[index], warning)).join(' · ') }}</span>
       </div>
 
       <div v-if="card.route" class="entity-card__route" :class="{ 'entity-card__route--unverified': !card.route.verified, 'entity-card__route--progress': routeProgress }">
         <strong>{{ card.route.from }}</strong>
         <span class="entity-card__route-line" :style="routeProgress ? { '--route-share': `${(routeProgress.share * 100).toFixed(1)}%` } : null" aria-hidden="true">
-          <span class="material-symbols-outlined">flight</span>
+          <UiIcon name="flight" :size="null" />
         </span>
         <strong>{{ card.route.to }}</strong>
       </div>
@@ -436,7 +447,7 @@ watch(
         class="entity-card__route-note"
         :title="t('The scheduled route for this flight number does not match where the plane is; it may be another leg of the same flight.')"
       >
-        <span class="material-symbols-outlined" aria-hidden="true">warning</span>{{ t('Scheduled · unverified: does not match where the plane is') }}
+        <UiIcon name="warning" :size="null" />{{ t('Scheduled · unverified: does not match where the plane is') }}
       </p>
 
       <div v-if="!props.withContacts && tiles.length && heroKind !== 'none' && !contextNeedle" class="entity-card__tiles" :style="{ gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))` }">
@@ -463,20 +474,21 @@ watch(
 
       <div class="entity-card__actions">
         <!-- On an aircraft or a satellite, Cockpit leads: it is the action people come for. -->
-        <button v-if="store.canCockpit()" type="button" class="entity-card__action entity-card__action--primary" data-entity-cockpit-entry @click="store.cockpit()">
-          <span class="material-symbols-outlined" aria-hidden="true">{{ card.layerId === 'satellites' ? 'satellite_alt' : 'flight' }}</span>{{ card.layerId === 'satellites' ? t('Enter orbital view') : t('Enter Cockpit') }}
-        </button>
+        <UiButton v-if="store.canCockpit()" class="entity-card__action entity-card__action--primary" data-entity-cockpit-entry @click="store.cockpit()">
+          <UiIcon :name="card.layerId === 'satellites' ? 'satellite_alt' : 'flight'" :size="null" />{{ card.layerId === 'satellites' ? t('Enter orbital view') : t('Enter Cockpit') }}
+        </UiButton>
         <div class="entity-card__action-row">
-          <button type="button" class="entity-card__action" @click="store.flyTo()">
-            <span class="material-symbols-outlined" aria-hidden="true">my_location</span>{{ t('Fly to') }}
-          </button>
-          <button v-if="store.canFollow()" type="button" class="entity-card__action" :class="{ 'entity-card__action--on': store.isFollowing() }" :aria-pressed="String(store.isFollowing())" @click="store.follow()">
-            <span class="material-symbols-outlined" aria-hidden="true">navigation</span>{{ store.isFollowing() ? t('Following') : t('Follow') }}
-          </button>
+          <UiButton class="entity-card__action" @click="store.flyTo()">
+            <UiIcon name="my_location" :size="null" />{{ t('Fly to') }}
+          </UiButton>
+          <UiButton v-if="store.canFollow()" class="entity-card__action" :pressed="Boolean(store.isFollowing())" pressed-class="entity-card__action--on" @click="store.follow()">
+            <UiIcon name="navigation" :size="null" />{{ store.isFollowing() ? t('Following') : t('Follow') }}
+          </UiButton>
         </div>
-        <button type="button" class="entity-card__action entity-card__action--ask" @click="store.ask()">
+        <!-- The chat bubble is no Material symbol the page loads, so it stays drawn. -->
+        <UiButton class="entity-card__action entity-card__action--ask" @click="store.ask()">
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z" /></svg>{{ t('Ask GEV about {name}', { name: shownTitle }) }}
-        </button>
+        </UiButton>
       </div>
 
       <slot />

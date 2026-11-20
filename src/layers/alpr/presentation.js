@@ -1,5 +1,6 @@
 import { isFollowing } from '../../data/followed.js';
 import { inputFor } from '../../input/dispatcher.js';
+import { isUnderOtherCard } from '../../data/pickRegistry.js';
 import { distance, fromDegrees, toLonLatH } from '../../geo/index.js';
 import {
   LAYER_ID,
@@ -15,6 +16,8 @@ import { boxContains } from './model.js';
 import { msg } from '../../i18n/index.js';
 import { createAlprFloorResolver } from './floors.js';
 import { createAlprOverlay } from './overlay.js';
+import { lookupAlprModelSpec } from './modelSpecs.js';
+import { specSummary } from '../cctv/modelSpecs.js';
 import {
   alprDisplayId,
   alprLabelDetails,
@@ -457,6 +460,10 @@ export function createAlprPresentation({ state, services, source }) {
         properties: {
           operator: record.operator,
           manufacturer: record.manufacturer,
+          spec:
+            specSummary(
+              lookupAlprModelSpec(record.model, record.manufacturer),
+            ) || null,
           cameraType: record.cameraType,
           zone: record.zone,
           directionDeg: record.directionDeg,
@@ -581,6 +588,9 @@ export function createAlprPresentation({ state, services, source }) {
     if (state.clickSubscription) return;
     state.clickSubscription = inputFor(viewer).onClick((event) => {
       if (!state.enabled) return;
+      // Another layer's card or label painted on top takes the click: the item
+      // under it does not act, and the click is not empty space either.
+      if (isUnderOtherCard(event)) return;
       // The painted overlay answers first; the scene is picked only if not.
       const hit = event.drawHit;
       const id =

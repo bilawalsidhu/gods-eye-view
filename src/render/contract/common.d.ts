@@ -157,6 +157,8 @@ export type Capability =
   | 'terrain'
   /** Atmosphere scattering applied to drawn models. */
   | 'modelAtmosphere'
+  /** A model item's `nodes` pose the model's named glTF nodes. */
+  | 'modelNodes'
   /** Clouds, fog, haze, rain and snow around the view (`globe.weather`). */
   | 'weather'
   /** Imagery draped onto 3D tiles as well as the globe. */
@@ -165,6 +167,8 @@ export type Capability =
   | 'splitSwipe'
   /** Timed imagery frames with hidden prefetch. */
   | 'imageryFrames'
+  /** Timed imagery the application hands over as finished tile images (`decoded`). */
+  | 'imageryDecoded'
   /** Wind-relief and similar shading of the globe surface. */
   | 'surfaceShading'
   /** A version of what surface heights answer against (`globe.surfaceVersion`). */
@@ -191,6 +195,8 @@ export type Capability =
   | 'motionSegments'
   /** glTF models. */
   | 'models'
+  /** Moving parts of glTF models posed as an item's `parts` says. */
+  | 'modelParts'
   /** Image, video and canvas planes. */
   | 'quads'
   /** Custom meshes in a local east-north-up frame. */

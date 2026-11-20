@@ -1514,9 +1514,14 @@ test('a placement is only ever kept under chrome that composites ABOVE the host'
   const paintedUnder = (occluders) => {
     const env = installMockEnvironment({ width: 400, height: 300, dpr: 1, occluders });
     initWorldOverlay(env.viewer);
+    let hardUi;
+    registerWorldOverlayPaintLane('ambient-label', (frame) => {
+      hardUi = frame.overlapsHardUi({ x: 180, y: 130, w: 40, h: 40 });
+    }, { id: 'anchored-label', active: true });
     setOverlayEntries('ambient', [selectedEntry('CONTACT')]);
     env.postRender.raise();
     const { paintedCount } = getWorldOverlayDiagnostics();
+    assert.equal(hardUi, paintedCount === 0);
     env.cleanup();
     return paintedCount;
   };
@@ -1933,6 +1938,25 @@ test('paint rectangles publish from a pool and topmost interactive lookup wins',
   assert.equal(hit.entryId, 'over', 'hit test walks painted entries from last to first');
   assert.equal(hit.sourceId, 'hits');
   assert.equal(getWorldOverlayDiagnostics().hitRectCount, 2);
+  env.cleanup();
+});
+
+test('hit rectangles stay what is painted until the next paint, through a republish in the same click', () => {
+  const env = installMockEnvironment();
+  initWorldOverlay(env.viewer);
+  setOverlayEntries('cards', [selectedEntry('card', { interactive: true })]);
+  env.postRender.raise();
+  assert.equal(hitTestWorldOverlay(200, 120)?.entryId, 'card');
+  // An earlier click subscriber publishes its own selection card: later
+  // subscribers in the same click still see what the user clicked on.
+  setOverlayEntries('other', [selectedEntry('elsewhere', { interactive: true })]);
+  clearOverlaySource('cards');
+  assert.equal(hitTestWorldOverlay(200, 120)?.entryId, 'card');
+  assert.equal(hitTestWorldOverlay(200, 120, { sourceId: 'cards' })?.entryId, 'card');
+  // The next paint shows the change, and the hit test follows it.
+  env.postRender.raise();
+  assert.equal(hitTestWorldOverlay(200, 120, { sourceId: 'cards' }), null);
+  assert.equal(hitTestWorldOverlay(200, 120)?.entryId, 'elsewhere');
   env.cleanup();
 });
 

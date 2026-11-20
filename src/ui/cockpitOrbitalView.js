@@ -1,5 +1,6 @@
 /** The orbital (satellite) view of the Cockpit controller: camera, zoom, look and HUD. */
 import { isFollowing } from '../data/followed.js';
+import { clone } from '../geo/vector.js';
 import { cameraOf, canvasOf, findGlobe } from '../render/rendererOf.js';
 import { formatNumber, msg, t } from '../i18n/index.js';
 import {
@@ -34,6 +35,10 @@ import {
 import { cockpitUiUpdateDue } from '../cockpitMath.js';
 import { createPlaceTracker, nearPlaceRadiusKm } from '../data/placeBelow.js';
 import { isPointerFree } from '../data/inputOwnership.js';
+import {
+  issNextMountView,
+  issPreviousMountView,
+} from '../layers/satellites/issMounts.js';
 import { zoomableSwathKm } from '../layers/satellites/sensors.js';
 import {
   easeOrbitalLook,
@@ -41,7 +46,10 @@ import {
   releaseOrbitalFocus,
   updateOrbitalFocus,
 } from './cockpitOrbitalFocus.js';
-import { orbitalEyePosition } from './cockpitOrbitalSatellites.js';
+import {
+  orbitalEyePosition,
+  switchOrbitalSatellite,
+} from './cockpitOrbitalSatellites.js';
 import {
   COCKPIT_CONTEXT_UPDATE_MS,
   COCKPIT_HUD_UPDATE_MS,
@@ -84,6 +92,15 @@ export function beginOrbital() {
     // A zoom step in flight: the magnification it started from and when.
     transition: null,
     previousUp: null,
+    // The station's view shown (its key and name) and the views on offer;
+    // null and none for any other satellite. The key is kept while the
+    // model is away, so the same view comes back with it.
+    mountKey: null,
+    mount: null,
+    mountViews: [],
+    // A view of a module with no catalog entry (the Cupola) carries the
+    // card shown in place of the entry it rides; null otherwise.
+    mountCard: null,
     altitudeM: null,
     verticalFov: null,
     lastBriefMs: 0,
@@ -270,8 +287,49 @@ export function updateOrbital(nowMs) {
   );
   if (!position) return;
   const state = this.orbital;
+  // The station is ridden from a point on its 3D model, looking along it,
+  // in place of the straight-down picture (the satellites layer says where).
+  const mount =
+    this.services.satellitesLayer?.getCockpitMount?.(state.mountKey) ?? null;
+  if (mount?.key) state.mountKey = mount.key;
+  state.mountViews = mount?.views ?? [];
+  state.mountCard = mount?.card ?? null;
+  // Each view belongs to an entry of its own (Nauka, the ISS, Poisk, the
+  // docked vehicle). The Cockpit rides that entry, so the readout, the TLE
+  // and the signals describe the module the view is from, not the one first
+  // selected. The switch lands on the next frame; one that fails is not
+  // retried until the view changes.
+  if (
+    mount?.noradId !== null &&
+    mount?.noradId !== undefined &&
+    String(mount.noradId) !== String(this.subjectId) &&
+    state.mountSwitchFailed !== mount.key
+  ) {
+    if (switchOrbitalSatellite.call(this, mount.noradId)) return;
+    state.mountSwitchFailed = mount.key;
+  }
+  // The model can load after entry, and the picture then changes under the
+  // TRACK ACQUIRED line that named it: say which it is now.
+  const riding = mount !== null;
+  const changed = state.riding !== undefined && state.riding !== riding;
+  state.riding = riding;
+  if (changed) {
+    this.signalItems = (this.signalItems ?? []).filter(
+      (item) => item.key !== 'track',
+    );
+    this.signalSignatures?.delete('track');
+    this.pushCockpitSignal(
+      'track',
+      'track',
+      t('TRACK ACQUIRED'),
+      this.orbitalViewSignal(info),
+    );
+  }
+  state.mount = mount ? mount.label || '' : null;
   // On the satellite, or on the way to it after Previous/Next.
-  const eye = orbitalEyePosition(state, position, nowMs);
+  const eye = mount
+    ? clone(mount.position)
+    : orbitalEyePosition(state, position, nowMs);
   // Track-up: the ground track at the top, so the picture scrolls along it.
   // A geostationary satellite has no track and stays north-up.
   const nadir = nadirOrientation(eye, {
@@ -291,15 +349,28 @@ export function updateOrbital(nowMs) {
     this.lastSubjectInfo = info;
     goToZoom.call(this, maxZoom);
   }
-  // A ground focus aims the look itself (src/ui/cockpitOrbitalFocus.js).
-  if (!updateOrbitalFocus.call(this, state, nadir, eye, nowMs))
+  // A ground focus aims the look itself (src/ui/cockpitOrbitalFocus.js),
+  // in the frame the arrows turn: from a station view, its own, from its
+  // camera point on the station. The same ±45° reach holds about it.
+  if (
+    !updateOrbitalFocus.call(
+      this,
+      state,
+      mount ?? nadir,
+      eye,
+      nowMs,
+      mount ? nadir : null,
+    )
+  )
     state.lookView = easeOrbitalLook(
       state,
       nowMs - (state.lookLastMs || nowMs),
       { immediate: prefersReducedMotion() },
     );
   state.lookLastMs = nowMs;
-  const view = offNadirOrientation(nadir, {
+  // The arrows tilt the view about its own frame: the nadir one, or the
+  // mount's.
+  const view = offNadirOrientation(mount ?? nadir, {
     northDeg: state.lookView.pitchDeg,
     eastDeg: state.lookView.yawDeg,
   });
@@ -470,9 +541,19 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
       northDeg: state.lookView?.pitchDeg ?? 0,
       eastDeg: state.lookView?.yawDeg ?? 0,
     });
+  // Riding the station from a mount on its model: the view's name, and no
+  // ground readings, which describe the nadir picture.
+  const mount = state.mount ?? null;
+  // A module with no catalog entry of its own shows its own card: its name,
+  // what it is and a few facts, in place of the entry's identity and TLE.
+  const card = mount !== null ? (state.mountCard ?? null) : null;
   this.publishOrbital({
-    name: info.name,
-    classLabel: info.classLabel || '',
+    name: card ? card.name : info.name,
+    mount,
+    facts: card ? card.facts.map((fact) => t(fact)) : null,
+    // How many views the station offers: the arrows show with two or more.
+    mountViews: mount === null ? 0 : (state.mountViews?.length ?? 0),
+    classLabel: card ? t(card.classLabel) : info.classLabel || '',
     altitudeM: info.altitudeM,
     velocityMps: Number.isFinite(info.velocityMps) ? info.velocityMps : null,
     latitude: info.latitude,
@@ -480,12 +561,12 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
     zoom: state.zoom,
     zoomSteps: ORBITAL_ZOOM_LADDER.filter((step) => step <= maxZoom),
     maxZoom,
-    footprintKm: offset ? null : footprintKm,
+    footprintKm: offset || mount !== null ? null : footprintKm,
     // The imaging sensor's swath, drawn to scale; null without one. The
     // SENSOR step's zoom is null when the swath lies outside 1x..maxZoom.
     // Looking past the limb there is no ground for it to cover: no sensor.
     sensor:
-      swathKm === null || !seesEarth
+      swathKm === null || !seesEarth || mount !== null
         ? null
         : {
             label: info.sensor?.label ?? null,
@@ -503,18 +584,22 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
     transition: { ...transition },
     look: {
       offset,
-      readout: focus
-        ? wordFocusOffNadir(focus)
-        : offset
-          ? wordOffNadir(state.lookTarget, { trackUp })
-          : '',
+      // From a mount the tilt is about the mount's frame, not the nadir.
+      readout:
+        mount !== null
+          ? ''
+          : focus
+            ? wordFocusOffNadir(focus)
+            : offset
+              ? wordOffNadir(state.lookTarget, { trackUp })
+              : '',
       // The mapped point the view is held on, or null.
       focus: focus ? { key: focus.key, label: focus.label } : null,
       // Off nadir, the ground width at the view's centre, approximated from
       // the nadir footprint (`offNadirSwathScale`); 1 and null at nadir.
       swathScale,
       swathKm:
-        offset && seesEarth && Number.isFinite(footprintKm)
+        mount === null && offset && seesEarth && Number.isFinite(footprintKm)
           ? footprintKm * swathScale
           : null,
     },
@@ -523,21 +608,43 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
     trackUp,
     northDeg: trackUp ? (360 - info.groundTrackDeg) % 360 : 0,
     place: state.place,
-    noradId: info.noradId ?? null,
-    cosparId: info.cosparId ?? null,
-    tle: info.tle ?? null,
+    noradId: card ? null : (info.noradId ?? null),
+    cosparId: card ? null : (info.cosparId ?? null),
+    tle: card ? null : (info.tle ?? null),
     // Read on the HUD's cadence, so the age stays current without a timer.
     // The gap between the TLE's epoch and the time the satellite is shown
     // at (the world clock's), either side: SGP4 drifts both ways.
-    tleAgeMs: Number.isFinite(info.tle?.epochMs)
-      ? Math.abs(
-          (Number.isFinite(info.atMs) ? info.atMs : Date.now()) -
-            info.tle.epochMs,
-        )
-      : null,
-    owner: info.owner ?? null,
-    operator: info.operator ?? null,
+    tleAgeMs:
+      !card && Number.isFinite(info.tle?.epochMs)
+        ? Math.abs(
+            (Number.isFinite(info.atMs) ? info.atMs : Date.now()) -
+              info.tle.epochMs,
+          )
+        : null,
+    owner: card ? null : (info.owner ?? null),
+    operator: card ? t(card.operator) : (info.operator ?? null),
   });
+}
+
+/**
+ * The TRACK ACQUIRED line for a satellite subject: which picture it gets.
+ * The station is ridden from a mount on its 3D model (once that is loaded);
+ * every other satellite looks straight down.
+ * @param {object} info Satellite subject.
+ * @returns {string}
+ */
+export function orbitalViewSignal(info) {
+  // A running session knows; on entry, before its first frame, the layer does.
+  const riding =
+    this.orbital?.riding ??
+    Boolean(
+      this.services.satellitesLayer?.getCockpitMount?.(
+        this.orbital?.mountKey ?? null,
+      ),
+    );
+  return riding
+    ? t('{label} · STATION VIEW', { label: info.name })
+    : t('{label} · NADIR VIEW', { label: info.name });
 }
 
 /**
@@ -554,6 +661,38 @@ export function updateOrbitalHud(info, nowMs = performance.now()) {
   trackPlace.call(this, info, nowMs);
   publishOrbitalView.call(this, info);
   updateOrbitalContext.call(this, info, nowMs, true);
+}
+
+/**
+ * The station view's arrows: move to its next view (from Nauka, from Zarya,
+ * from Poisk, from the Cupola, from Kibo, from a docked vehicle) or the one
+ * before, wrapping round, looking the way that view looks.
+ * @param {number} [direction] 1 for the next view, -1 for the one before.
+ * @returns {boolean} True when the view changed.
+ */
+export function stepOrbitalMount(direction = 1) {
+  if (!this.active || this.subjectKind !== 'satellite' || !this.orbital)
+    return false;
+  const state = this.orbital;
+  const step = direction < 0 ? issPreviousMountView : issNextMountView;
+  const next =
+    state.mount === null ? null : step(state.mountViews, state.mountKey);
+  if (!next) return false;
+  state.mountKey = next.key;
+  state.mount = next.label || '';
+  state.mountCard = next.card ?? null;
+  state.mountSwitchFailed = null;
+  // A ground focus was aimed from the old view: it ends with it.
+  if (state.focus) {
+    state.focus = null;
+    state.focusReleasing = false;
+    this.refreshOrbitalSignals?.();
+  }
+  // Each view has its own way of looking: the look goes back to it.
+  state.lookTarget = { ...NADIR_LOOK };
+  state.lookView = { ...NADIR_LOOK };
+  presentNow.call(this);
+  return true;
 }
 
 /** Re-apply the field of view and publish after a zoom or look change. */

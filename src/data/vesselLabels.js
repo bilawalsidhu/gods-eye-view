@@ -5,7 +5,11 @@
  */
 
 import { t, msg } from '../i18n/index.js';
-import { normalizeVesselType } from './vesselTypes.js';
+import {
+  normalizeVesselType,
+  vesselKind,
+  VESSEL_KIND_STYLES,
+} from './vesselTypes.js';
 
 export { normalizeVesselType };
 
@@ -22,32 +26,7 @@ export const VESSEL_CARD_FADE_DISTANCE_M = 5_000_000;
 export const VESSEL_CARD_FADE_START_RATIO = 0.7;
 
 /**
- * AIS type family → chevron hue + card accent. Single source of truth for
- * vessel type colors so billboard chevrons and host cards cannot drift apart.
- */
-const TYPE_STYLES = [
-  { pattern: /tanker/i, css: '#ffb347', accent: '255, 179, 71' },
-  {
-    pattern: /cargo|container|bulk|carrier/i,
-    css: '#39d5ff',
-    accent: '57, 213, 255',
-  },
-  {
-    pattern: /passenger|ferry|cruise/i,
-    css: '#ff7adf',
-    accent: '255, 122, 223',
-  },
-  { pattern: /fishing/i, css: '#7cff9b', accent: '124, 255, 155' },
-  {
-    pattern: /tug|tow|pilot|supply|service/i,
-    css: '#f7f0a3',
-    accent: '247, 240, 163',
-  },
-];
-const DEFAULT_STYLE = { css: '#39d5ff', accent: '57, 213, 255' };
-
-/**
- * An aid to navigation's disc and card accent: a bone white apart from every
+ * An aid to navigation's buoy and card accent: a bone white apart from every
  * ship type's colour.
  */
 export const AID_TO_NAVIGATION_STYLE = Object.freeze({
@@ -55,8 +34,8 @@ export const AID_TO_NAVIGATION_STYLE = Object.freeze({
   accent: '217, 210, 192',
 });
 
-// Card text for the type tokens above. The tokens stay English: TYPE_STYLES
-// and tests match on them.
+// Card text for the type tokens above. The tokens stay English: the vessel
+// kinds (`vesselKind`) and tests match on them.
 const TYPE_DISPLAY_KEYS = Object.freeze({
   FISHING: msg('FISHING'),
   TOWING: msg('TOWING'),
@@ -91,19 +70,18 @@ export function displayVesselType(type) {
   return key ? t(key) : normalized;
 }
 
-/** AIS ship type → CSS hex hue for the billboard chevron. */
+/**
+ * AIS ship type → CSS hex colour its sprite is tinted with. The sprite and
+ * the card take it from the vessel's kind (`vesselKind`), so they cannot
+ * drift apart.
+ */
 export function vesselTypeCss(type) {
-  return styleForType(type).css;
+  return VESSEL_KIND_STYLES[vesselKind(type)].css;
 }
 
 /** AIS ship type → "r, g, b" accent string for the host card. */
 export function accentForVesselType(type) {
-  return styleForType(type).accent;
-}
-
-function styleForType(type) {
-  const text = normalizeVesselType(type);
-  return TYPE_STYLES.find((entry) => entry.pattern.test(text)) || DEFAULT_STYLE;
+  return VESSEL_KIND_STYLES[vesselKind(type)].accent;
 }
 
 /**

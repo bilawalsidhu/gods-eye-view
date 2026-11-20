@@ -150,7 +150,8 @@ Google credentials are resolved on each request; the default uses the existing
 server-key precedence, and callers may supply `resolveApiKey`.
 
 `gods-eye-view/sources/places` exports portable response projections for Google
-place results and OSRM route results/profile aliases. These functions own no
+place results and OSRM route results/profile aliases, and the turn-by-turn
+steps (`normalizeOsrmSteps`) Core's `/api/route` serves with `steps=1`. These functions own no
 credentials, requests, caches, environment loading, or rendering. Callers retain
 input validation and upstream-response acceptance. The boundary check builds
 this entry independently and rejects Node imports.
@@ -780,8 +781,7 @@ palettes use `--gev-field-background`, `--gev-field-border-color`,
 `--gev-field-color` and `--gev-field-disabled-opacity`. Radio retains its own
 compact density and arrow space. CCTV owns calibration editor width in
 `cctv.css`; the shared inline density does not impose a feature-specific width.
-Cyber supplies a shared-field palette explicitly and keeps its legacy native
-field rules separate, so Radio's palette remains an intentional exception.
+Radio's palette remains an intentional exception.
 
 ### Read-only status badges
 

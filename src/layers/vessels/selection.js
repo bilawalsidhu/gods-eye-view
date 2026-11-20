@@ -30,8 +30,23 @@ export function createSelection({
       // The bridge view owns the selection: a click on open water must not
       // deselect the vessel the camera is riding.
       if (state.cockpitSubjectId) return;
+      // The card or label painted on top takes the click, read once per
+      // click so every layer agrees: a card of ours acts whatever is drawn
+      // under it; another layer's is that layer's click.
+      const top = services.picking.clickCard?.(event) ?? null;
+      if (top) {
+        if (top.sourceId !== VESSEL_OVERLAY_SOURCE_ID) return;
+        const id = String(top.entryId || '').startsWith('vessel:')
+          ? top.entryId.slice('vessel:'.length)
+          : null;
+        const carded = id ? state.records.byId.get(id) || null : null;
+        // A stale card id is not empty terrain and must not clear a newer
+        // selection. The next paint will evict its hit rectangle.
+        if (carded) selectAndFocusVessel(carded);
+        return;
+      }
       const pickedId = event.id;
-      let record = pickedId ? state.records.byId.get(pickedId) : null;
+      const record = pickedId ? state.records.byId.get(pickedId) : null;
       // A vessel icon's pick is an item of the layer's icon set, whose id is
       // its row id: the record's id, or an unkeyed row's. Removing a row
       // removes its item, so an evicted vessel cannot be picked at all; a
@@ -44,48 +59,18 @@ export function createSelection({
 
       // An own-layer row without a live map key is a strict no-op (FB-1
       // residual). Trails carry no layer identity and hug their contacts, so any
-      // `gev-trail:*` pick is also a no-op. Every other non-vessel pick — sibling
-      // unowned scene picks dismiss the current vessel inspection.
+      // `gev-trail:*` pick is also a no-op. A pick a sibling layer owns (an
+      // aircraft, a route, a cyclone) is that layer's: preserve the current
+      // vessel selection and do not compete with its camera command. Every
+      // other non-vessel pick dismisses the current vessel inspection.
       if (ownRecordPick && (!pickedId || !record)) return;
-      if (pickedId && !record && String(pickedId).startsWith('gev-trail:'))
+      if (
+        !record &&
+        pickedId &&
+        (String(pickedId).startsWith('gev-trail:') ||
+          isOwnedByOtherLayer('ais-live-vessels', pickedId))
+      )
         return;
-
-      // A sibling layer already owns this click. Preserve the current vessel
-      // selection and do not compete with its camera command.
-      const siblingOwned =
-        pickedId && isOwnedByOtherLayer('ais-live-vessels', pickedId);
-      // Cyclone geometry is ambient context behind painted cards. Its handler
-      // yields to the same foreground AIS hit. Keep moving-contact precedence
-      // unchanged: those handlers may issue their own camera command.
-      const cycloneBackground =
-        siblingOwned && !isOwnedByOtherLayer('weather-cyclones', pickedId);
-      if (siblingOwned && !cycloneBackground) return;
-
-      // Cards are painted on a pointer-events:none canvas, so the scene pick is
-      // usually terrain behind the card. Resolve against the host's current
-      // actionable hit rectangles before treating the click as empty space.
-      const cardHit = !record
-        ? vesselState._vesselOverlayHost.hitTest?.(
-            event.screenPosition?.x,
-            event.screenPosition?.y,
-            {
-              ...(cycloneBackground
-                ? {}
-                : { sourceId: VESSEL_OVERLAY_SOURCE_ID }),
-            },
-          )
-        : null;
-      if (cycloneBackground && cardHit?.sourceId !== VESSEL_OVERLAY_SOURCE_ID)
-        return;
-      if (!record && cardHit) {
-        const id = String(cardHit.entryId || '').startsWith('vessel:')
-          ? cardHit.entryId.slice('vessel:'.length)
-          : null;
-        record = id ? state.records.byId.get(id) || null : null;
-        // A stale card id is not empty terrain and must not clear a newer
-        // selection. The next paint will evict its hit rectangle.
-        if (!record) return;
-      }
 
       if (record) {
         // A valid sprite or card click always transfers the camera exactly once,

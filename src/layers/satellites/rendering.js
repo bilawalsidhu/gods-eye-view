@@ -34,12 +34,11 @@ const POINT_SCALE_BY_DISTANCE = Object.freeze({
 });
 
 /**
- * The tracked satellite's dot: 14 px yellow with a white outline, drawn
- * over everything.
+ * The tracked satellite's dot: 14 px in the satellite's own colour with a
+ * white outline, drawn over everything. Tracking never recolours it.
  */
 const TRACKED_DOT = Object.freeze({
   pixelSize: 14,
-  color: Object.freeze([1, 1, 0, 1]),
   outlineColor: Object.freeze([1, 1, 1, 1]),
   outlineWidth: 2,
   disableDepthTest: Number.POSITIVE_INFINITY,
@@ -54,6 +53,13 @@ const RING_BEHIND_ALPHA = 0.35;
 
 /** An RGBA colour with another alpha. */
 const withAlpha = (color, alpha) => [color[0], color[1], color[2], alpha];
+
+/** Whether two display ranges are the same: both none, or the same bounds. */
+const sameRange = (a, b) =>
+  a && b ? a[0] === b[0] && a[1] === b[1] : !a && !b;
+
+/** A display range as the item's own copy, or undefined for none. */
+const rangeOf = (range) => (range ? [range[0], range[1]] : undefined);
 
 /** Layer instances so far: set ids unique to each. */
 let instances = 0;
@@ -207,7 +213,7 @@ export function createRendering({
 
   function _setOrbitPathShown(noradId, show) {
     const path = layerState._orbitPaths.get(noradId);
-    if (!path) return;
+    if (!path || path.item.show === show) return;
     path.item.show = show;
     sets?.rings.upsert([path.item]);
   }
@@ -257,6 +263,46 @@ export function createRendering({
     if (!trackedDot || trackedDot.item.show === show) return;
     trackedDot.item.show = show;
     if (trackedDot.drawn) sets?.tracked.upsert([trackedDot.item]);
+  }
+
+  /**
+   * Draw one satellite's dot only at eye distances in `range` (`[near, far)`,
+   * metres), or at every distance for null, apart from whether it is shown:
+   * a station's model stands in for its dot, and for the dots of the objects
+   * docked to it, within the model's range (stationModel.js). A dot added
+   * again (a catalog rebuild) arrives with no range.
+   * @param {number} noradId
+   * @param {readonly [number, number]|null} range
+   * @returns {boolean} Whether the satellite has a dot.
+   */
+  function _setPointDisplayRange(noradId, range) {
+    const point = layerState._points.get(noradId);
+    if (!point) return false;
+    if (sameRange(point.displayRange, range)) return true;
+    point.displayRange = rangeOf(range);
+    _markDirty(noradId);
+    return true;
+  }
+
+  /** The eye distances a dot is drawn at, or null for every distance. */
+  function _pointDisplayRange(noradId) {
+    return layerState._points.get(noradId)?.displayRange ?? null;
+  }
+
+  /**
+   * The tracked satellite's dot likewise; a dot drawn is redrawn at once. A
+   * new tracked dot (tracking another satellite) arrives with no range.
+   * @param {readonly [number, number]|null} range
+   */
+  function _setTrackedDotDisplayRange(range) {
+    if (!trackedDot || sameRange(trackedDot.item.displayRange, range)) return;
+    trackedDot.item.displayRange = rangeOf(range);
+    if (trackedDot.drawn) sets?.tracked.upsert([trackedDot.item]);
+  }
+
+  /** The eye distances the tracked dot is drawn at, or null for every distance. */
+  function _trackedDotDisplayRange() {
+    return trackedDot?.item.displayRange ?? null;
   }
 
   /** Remove every orbit ring. */
@@ -386,12 +432,13 @@ export function createRendering({
   /**
    * Draw the tracked satellite's dot and make the carrier the follow target
    * and the tracked card read (its entity record holds the card).
-   * @param {{position: () => object, viewFrom: {x: number, y: number,
-   *   z: number}}} options `position` is read as the follow camera reads
-   *   it, once each frame before the tick moves the sample on.
+   * @param {{position: () => object, color: number[], viewFrom: {x: number,
+   *   y: number, z: number}}} options `position` is read as the follow
+   *   camera reads it, once each frame before the tick moves the sample on;
+   *   `color` is the satellite's own dot colour.
    * @returns {object} The carrier.
    */
-  function _addTrackedEntity({ position }) {
+  function _addTrackedEntity({ position, color }) {
     const noradId = layerState._trackedNorad;
     const carrier = { noradId };
     trackedDot = {
@@ -400,6 +447,7 @@ export function createRendering({
         id: String(noradId),
         pos: { x: 0, y: 0, z: 0 },
         ...TRACKED_DOT,
+        color,
         meta: { noradId },
       },
       drawn: false,
@@ -665,6 +713,11 @@ export function createRendering({
   function _tickAfterFrame() {
     const now = focusNowMs(Date.now());
 
+    // The stations as 3D models up close. First, before the tracked sample
+    // below is refreshed: the follow camera and the tracked dot were placed
+    // this frame from the sample still cached, and a model must sit on it too.
+    for (const model of parts.stationModels ?? []) model._updateStationModel();
+
     const interval = layerState._trackedNorad ? 200 : POSITION_UPDATE_MS;
     // Space Missions keeps this layer enabled for TLE lookup while deliberately
     // hiding its standalone fleet. Do not rebuild hidden point buffers on the
@@ -698,6 +751,9 @@ export function createRendering({
     // While the Cockpit rides the tracked satellite, keep its marks hidden.
     if (layerState._cockpitSubjectNorad !== null)
       parts.cockpit?._syncCockpitSubjectVisuals();
+
+    // NASA's live video beside the card while the ISS is selected.
+    parts.stationPanel?._syncStationPanel();
 
     _updatePointFocus(now);
 
@@ -860,6 +916,10 @@ export function createRendering({
     _setPointStyle,
     _pointShown,
     _setTrackedDotShown,
+    _setPointDisplayRange,
+    _pointDisplayRange,
+    _setTrackedDotDisplayRange,
+    _trackedDotDisplayRange,
     _clearOrbitPaths,
     _addPoint,
     _movePoint,

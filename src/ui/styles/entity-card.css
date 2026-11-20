@@ -83,18 +83,15 @@
   color: #ff9f43;
 }
 
+/* A UiCloseButton: close-button.css draws no padding, border or background. */
 .entity-card__close {
   display: grid;
   flex: none;
   place-items: center;
   width: 1.5rem;
   height: 1.5rem;
-  padding: 0;
   color: rgba(199, 214, 222, 0.6);
-  background: none;
-  border: 0;
   border-radius: 6px;
-  cursor: pointer;
 }
 
 .entity-card__close:hover,
@@ -105,6 +102,33 @@
 
 .entity-card__close .material-symbols-outlined {
   font-size: 1rem;
+}
+
+/* Find it: shown while the selected item is off screen or out of its feed. */
+.entity-card__find {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  color: #36dcff;
+  background: rgba(29, 69, 81, 0.35);
+  border: 1px solid rgba(48, 194, 224, 0.55);
+  border-radius: 7px;
+}
+
+.entity-card__find:hover,
+.entity-card__find:focus-visible {
+  color: #fff;
+  background: rgba(48, 194, 224, 0.3);
+}
+
+.entity-card__find:disabled {
+  opacity: 0.55;
+}
+
+.entity-card__find .material-symbols-outlined {
+  font-size: 1.1rem;
 }
 
 .entity-card__title {
@@ -1119,18 +1143,16 @@
   color: #ff5c6c;
 }
 
+/* A UiCloseButton (close-button.css). */
 .view-context__live-off {
   display: grid;
   flex: none;
   place-items: center;
   width: 22px;
   height: 22px;
-  padding: 0;
   color: rgba(199, 214, 222, 0.5);
-  background: none;
   border: 1px solid transparent;
   border-radius: 6px;
-  cursor: pointer;
 }
 
 .view-context__live-off .material-symbols-outlined {
@@ -1314,18 +1336,16 @@
   border-radius: 999px;
 }
 
+/* A UiCloseButton (close-button.css). */
 .cctv-popup__close {
   display: grid;
   place-items: center;
   width: 28px;
   height: 28px;
   margin-inline-start: auto;
-  padding: 0;
   color: rgba(236, 244, 248, 0.8);
-  background: none;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
-  cursor: pointer;
 }
 
 .cctv-popup__close:hover {
@@ -2187,7 +2207,11 @@
   border-radius: 3px;
 }
 
-.entity-hero:is([data-hero='flight'], [data-hero='satellite'], [data-hero='photo']) {
+.entity-hero:is(
+  [data-hero='flight'],
+  [data-hero='satellite'],
+  [data-hero='photo']
+) {
   height: 168px;
   background: radial-gradient(
     ellipse 55% 60% at 50% 55%,

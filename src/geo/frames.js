@@ -144,3 +144,32 @@ export function followOffsetFitting(sphere, at, view = {}) {
     2 - 1 / Math.max(1, Math.hypot(at.x, at.y, at.z) / WGS84.radii.x);
   return offsetFromHeadingPitchRange(0, (-Math.PI / 4) * factor, range);
 }
+
+/**
+ * The heading, pitch and roll that turn the east-north-up frame at `origin`
+ * onto `axes`: three unit vectors in the Earth-fixed frame that are a
+ * body's own x, y and z axes there (a right-handed set). The inverse of the
+ * renderer's placing of a model by `{heading, pitch, roll}` at a position
+ * (Cesium's `headingPitchRollToFixedFrame`): heading turns about down,
+ * pitch about the turned east axis, roll about the body's own x. Radians.
+ * @param {{x: number, y: number, z: number}} origin
+ * @param {{x: {x: number, y: number, z: number},
+ *   y: {x: number, y: number, z: number},
+ *   z: {x: number, y: number, z: number}}} axes
+ * @returns {{heading: number, pitch: number, roll: number}}
+ */
+export function headingPitchRollOfAxes(origin, axes) {
+  const enu = eastNorthUp(origin);
+  // M = ENUᵀ · [x y z]: the body's axes on the local east, north, up.
+  const m00 = dot(enu.x, axes.x);
+  const m10 = dot(enu.y, axes.x);
+  const m20 = dot(enu.z, axes.x);
+  const m21 = dot(enu.z, axes.y);
+  const m22 = dot(enu.z, axes.z);
+  // M = Rz(-heading) · Ry(-pitch) · Rx(roll).
+  return {
+    heading: -Math.atan2(m10, m00),
+    pitch: Math.asin(Math.max(-1, Math.min(1, m20))),
+    roll: Math.atan2(m21, m22),
+  };
+}

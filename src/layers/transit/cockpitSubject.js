@@ -83,13 +83,16 @@ export function createTransitCockpitSubject({ state, parts, services }) {
    * lift: the drawn marker's height while the frame pass places it (in view,
    * or held), which near the ground follows the terrain between reports;
    * else its segment's two reports' floors at the playback fraction. Null
-   * while either floor is unknown, as on cold terrain, so a view waits for
-   * the surface. Not `entry.heightM`, the floor at the newest report, which
-   * playback has not reached yet.
+   * while either of those two floors is unknown, as on cold terrain, so a
+   * view waits for the surface. Not `entry.heightM`, the floor at the newest
+   * report, which playback has not reached yet.
    */
   function drawnFloorOf(entry) {
     const segment = entry.segment;
     if (!segment || entry.heightPending) return null;
+    const from = segment.from?.h;
+    const to = segment.to?.h;
+    if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
     const placed =
       entry.surfaceReady === true &&
       entry.hasRendered &&
@@ -99,9 +102,6 @@ export function createTransitCockpitSubject({ state, parts, services }) {
       const drawn = toCartographicRadians(entry.marker.position);
       if (drawn) return drawn.height - liftM;
     }
-    const from = segment.from?.h;
-    const to = segment.to?.h;
-    if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
     const f = Number.isFinite(segment.fraction)
       ? Math.max(0, Math.min(1, segment.fraction))
       : 1;
@@ -173,14 +173,30 @@ export function createTransitCockpitSubject({ state, parts, services }) {
     return snapshot;
   }
 
-  /** Show or hide a vehicle's sprite and trail for the hold. */
+  /**
+   * Place a vehicle and show or hide its sprite and trail for the hold now:
+   * the icon set draws a marker as it was last pushed, not as it is.
+   */
   function repaint(entry) {
     if (!entry?.marker) return;
-    if (entry.key === state._cockpitSubjectKey) entry.marker.show = false;
-    else parts.rendering.placeSample(entry);
+    parts.rendering.placeSample(entry);
+    parts.rendering.flushMarkers();
     parts.rendering.schedulePlayback(entry);
     parts.trails.update();
     state._detectRevision += 1;
+  }
+
+  /**
+   * A vehicle let go of is out of play until a sweep finds it in view. It
+   * played on while held, so the next sweep keeps its clock if it finds it in
+   * view (rendering.js).
+   */
+  function release(entry) {
+    if (!entry) return;
+    state._visible.delete(entry);
+    entry.releasedFromHold = true;
+    parts.rendering.requestVisibility();
+    repaint(entry);
   }
 
   const methods = {
@@ -202,13 +218,7 @@ export function createTransitCockpitSubject({ state, parts, services }) {
       const previous = state._vehicles.get(state._cockpitSubjectKey);
       if (key === null || key === undefined) {
         state._cockpitSubjectKey = null;
-        // The hold kept it in play out of view: it leaves until the next
-        // visibility sweep finds it in view again.
-        if (previous) {
-          state._visible.delete(previous);
-          parts.rendering.requestVisibility();
-        }
-        repaint(previous);
+        release(previous);
         parts.selection.refreshSelectedCard(true);
         return true;
       }
@@ -217,7 +227,7 @@ export function createTransitCockpitSubject({ state, parts, services }) {
       if (state._selectedKey !== key) parts.selection.selectVehicle(key);
       state._cockpitSubjectKey = key;
       state._visible.add(entry);
-      if (previous && previous !== entry) repaint(previous);
+      if (previous !== entry) release(previous);
       repaint(entry);
       parts.selection.refreshSelectedCard(true);
       return true;

@@ -63,6 +63,16 @@ export function filtersOf(provider) {
  * @property {(mode: 'letterbox'|'fill') => void} [setRenderMode]
  * @property {() => boolean} [supportsRenderModes]   False while the image has no frame to fit (a panorama): FIT / FILL hide.
  * @property {(listener: (pose: StreetPose) => void) => () => void} onPose
+ * @property {(listener: (view: ?object) => void) => () => void} [subscribeView]
+ *   An adapter that draws nothing itself presents its viewer here, for the
+ *   layer's `subscribePhotoViewer()` (see photoViewer.js): its current
+ *   presentation at once, then each new one, null while unmounted. One view
+ *   draws one viewer (photoViewers.js picks it), reading two fields:
+ *   `mountKey`, a number larger for each later mount (the later mount is
+ *   drawn; a presentation without one counts as mounted when it began
+ *   presenting), and `actions.supersede()`, called on a mount that is not
+ *   drawn because a later one is (it should unmount, failing a mount still
+ *   waiting to be drawn; an adapter without it is simply not drawn).
  *
  * @typedef {object} StreetPose
  * @property {string} providerId

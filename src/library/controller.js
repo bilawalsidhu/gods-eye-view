@@ -25,6 +25,10 @@ import {
 } from './layers.js';
 import { isExplicitLayerStateOrigin } from '../data/layerState.js';
 
+/** A required catalog that did not answer is asked again after this, doubling. */
+const CATALOG_RETRY_MS = 30_000;
+const CATALOG_RETRY_MAX_MS = 10 * 60_000;
+
 function safeLocalStorage() {
   try {
     return globalThis.localStorage ?? null;
@@ -44,6 +48,14 @@ function safeLocalStorage() {
  * @param {(reason: string) => void} [options.requestRender]
  * @param {(extent: object) => boolean} [options.zoomTo] Fly to an extent
  *   through the shell's navigation authority; false when refused.
+ * @param {Function} [options.fetchTile] A tiles entry's tile fetch in place
+ *   of the renderer's (`createLibrarySource`).
+ * @param {Function} [options.fetchData] A proxied dataset's fetch
+ *   (`createLibrarySource`).
+ * @param {boolean} [options.requireCatalog] Offer only what the server's
+ *   catalog names, nothing while it does not answer; it is asked again later.
+ * @param {typeof fetch} [options.fetchImpl] Asks the library server (its
+ *   catalog) in place of the page's fetch (`createLibrarySource`).
  */
 export function createDataLibrary({
   entries = LIBRARY_ENTRIES,
@@ -57,7 +69,21 @@ export function createDataLibrary({
   requestRender = () => {},
   zoomTo = null,
   storage = safeLocalStorage(),
-  source = createLibrarySource({ entries }),
+  fetchTile = null,
+  fetchData = null,
+  requireCatalog = false,
+  fetchImpl = undefined,
+  source = createLibrarySource({
+    entries,
+    storage,
+    fetchImpl,
+    fetchTile,
+    fetchData,
+    requireCatalog,
+  }),
+  retryMs = CATALOG_RETRY_MS,
+  setTimer = (run, ms) => setTimeout(run, ms),
+  clearTimer = (timer) => clearTimeout(timer),
 }) {
   if (!dataManager?.registerLibraryLayer)
     throw new TypeError('A sealed layer manager is required');
@@ -80,6 +106,8 @@ export function createDataLibrary({
   let destroyed = false;
   const listeners = new Set();
   const pending = new Map();
+  let retryTimer = null;
+  let retryDelay = retryMs;
 
   const notify = () => {
     for (const listener of [...listeners]) {
@@ -315,6 +343,7 @@ export function createDataLibrary({
     if (destroyed) return;
     availability = answer.availability;
     serverPresent = answer.server;
+    if (answer.retry) scheduleRetry(signal);
     const stored = readStoredLibrarySelection(storage, switchable);
     savedOn = stored.on;
     // A share opened in this tab while availability loaded wins over the
@@ -340,6 +369,37 @@ export function createDataLibrary({
       if (entry && addable(id)) register(entry);
     }
     applySelection(next, linked ? 'share-restore' : 'local-restore');
+  }
+
+  /**
+   * Ask a required catalog again until it answers, then restore what the
+   * library holds as start-up would have.
+   */
+  function scheduleRetry(signal) {
+    if (destroyed || retryTimer !== null || signal?.aborted) return;
+    retryTimer = setTimer(async () => {
+      retryTimer = null;
+      let answer;
+      try {
+        answer = await source.getAvailability({ signal });
+      } catch {
+        return;
+      }
+      if (destroyed) return;
+      availability = answer.availability;
+      serverPresent = answer.server;
+      if (answer.retry) {
+        retryDelay = Math.min(retryDelay * 2, CATALOG_RETRY_MAX_MS);
+        scheduleRetry(signal);
+        notify();
+        return;
+      }
+      for (const id of selection.added) {
+        const entry = byId.get(id);
+        if (entry && addable(id)) register(entry);
+      }
+      applySelection(selection, 'local-restore');
+    }, retryDelay);
   }
 
   /**
@@ -460,7 +520,13 @@ export function createDataLibrary({
    * @returns {Array<{ entry: object, available: boolean, reason: string|null, added: boolean, on: boolean, busy: boolean }>}
    */
   function list() {
-    return entries.map((entry) => {
+    // A required catalog shows nothing until it answers, and an entry this
+    // instance's server does not list is not shown at all.
+    if (source.requireCatalog && !loaded) return [];
+    const shown = entries.filter(
+      (entry) => availability.get(entry.id)?.listed !== false,
+    );
+    return shown.map((entry) => {
       const state = availability.get(entry.id) || {
         available: false,
         reason: started ? 'server-unavailable' : null,
@@ -538,6 +604,8 @@ export function createDataLibrary({
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      if (retryTimer !== null) clearTimer(retryTimer);
+      retryTimer = null;
       unsubscribeManager?.();
       shareLink?.setLibraryParamsEncoder?.(null);
       shareLink?.setLibraryShareListener?.(null);

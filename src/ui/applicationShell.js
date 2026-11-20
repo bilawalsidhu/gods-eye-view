@@ -1,6 +1,6 @@
 import { followedOf } from '../data/followed.js';
 import { readEntityRecord } from '../data/entityRecords.js';
-import { nextTick } from 'vue';
+import { nextTick, watch } from 'vue';
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
 import { ShellFacade } from './shellFacade.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
@@ -25,12 +25,13 @@ import { CctvControls } from './cctv.js';
 import { StreetLevelControls } from './streetLevelControls.js';
 import { createWildlifeSightingCard } from './wildlifeSightingCard.js';
 import { RadioControls } from './radio.js';
+import { LiveControls } from './liveControls.js';
 import { LocalSdrControls } from './localSdrControls.js';
 import { LocationNavigation } from './locationNavigation.js';
 import { bindCameraOrientationControls } from './cameraOrientationControls.js';
 import { createMapSourceControls } from './mapSource.js';
 import { STYLES } from './effects.js';
-import { isHudLayout } from '../hudLayouts.js';
+import { isHudLayout, isLegacySonarHudLayout } from '../hudLayouts.js';
 import {
   getCyberSonarControlState,
   setCyberSonarControls,
@@ -62,7 +63,12 @@ import { applyLocaleChoice } from './localePicker.js';
 import { PanelNavigation } from './panelNavigation.js';
 import { applicationPinia, createUiRuntime } from './vueRuntime.js';
 import { useContextStore } from './stores/context.js';
+import { useLiveStore } from './stores/live.js';
+import { useStationStore } from './stores/station.js';
+import { useSpaceMissionsStore } from './stores/spaceMissions.js';
+import { SpaceMissionsControls } from './spaceMissionsControls.js';
 import { useMissionReplayStore } from './stores/missionReplay.js';
+import { useStreetLevelPhotoStore } from './stores/streetLevelPhoto.js';
 import { useCelestialRingStore } from './stores/celestialRing.js';
 import { icrfToFixedAxes } from '../sky/icrf.js';
 import { useWorldOverlayActionsStore } from './stores/worldOverlayActions.js';
@@ -78,6 +84,12 @@ import { useCockpitStore } from './stores/cockpit.js';
 import { useGlobeActionsStore } from './stores/globeActions.js';
 import { useRecordingStore } from './stores/recording.js';
 import { onPlacePacksLoadingChange } from '../data/placeBelow.js';
+import {
+  hideOsmCredit,
+  registerDynamicCredit,
+  showOsmCredit,
+  WIKIDATA_PLACES_CREDIT,
+} from '../data/dataCredits.js';
 import { withPlacePacks } from './placePacksLoading.js';
 import { preloadOwnerFlags } from './ownerFlag.js';
 
@@ -106,6 +118,11 @@ export class StyleManager extends ShellFacade {
    * @param {object} [options]
    * @param {boolean} [options.localePicker=true] - false removes the language
    *   picker, for a host that offers its own language choice.
+   * @param {{lon: number, lat: number, height: number, heading?: number,
+   *   pitch?: number}|null} [options.homeView] - where the title's logo goes
+   *   back to (degrees): the view the app started from.
+   * @param {string[]} [options.startLayers] - the layers a bare address (one
+   *   that carries no link) starts with; none by default.
    */
   constructor(
     viewer,
@@ -116,6 +133,8 @@ export class StyleManager extends ShellFacade {
       requestServices,
       initialShareCode = null,
       localePicker = true,
+      homeView = null,
+      startLayers = [],
     } = {},
   ) {
     super();
@@ -178,6 +197,14 @@ export class StyleManager extends ShellFacade {
       layers: () => this._dataManager?.getAll?.() || [],
       setLayer: (id, enabled) =>
         this._dataManager?.setEnabled(id, enabled, { origin: 'user' }),
+      // The Omnibar shows names from the bundled Wikidata packs.
+      creditPlaces: () =>
+        registerDynamicCredit(this.viewer, WIKIDATA_PLACES_CREDIT),
+      // Photon's suggestions are OpenStreetMap data: credited while shown.
+      creditSuggestions: (shown) =>
+        shown
+          ? showOsmCredit(this.viewer, 'omnibar')
+          : hideOsmCredit(this.viewer, 'omnibar'),
     });
     // Scrolling at a screen edge steps through that side's rail panels.
     this._removeRailEdgeScroll = installRailEdgeScroll();
@@ -199,7 +226,6 @@ export class StyleManager extends ShellFacade {
       pinia: applicationPinia(),
       pickWorld: services.pickWorldFromScreen,
       regionalBrief: services.fetchRegionalBrief,
-      overlayHit: services.hitTestWorldOverlay,
     });
     this.mapStackController = mapStackController;
     this.placeSearch = placeSearch;
@@ -237,6 +263,7 @@ export class StyleManager extends ShellFacade {
       updateFeedback: () => this._updateGlobalLoadingFeedback(),
       applyFollowOffset: (followed, offset) =>
         applyShareFollowOffset(viewer, followed, offset),
+      startLayers,
     });
 
     this._visualSettings = new VisualSettings({
@@ -308,6 +335,7 @@ export class StyleManager extends ShellFacade {
       readControls: () => ({
         hud: this.hud,
         _contextControls: this._contextControls,
+        _spaceMissionsControls: this._spaceMissionsControls,
         _cctvControls: this._cctvControls,
         _radioControls: this._radioControls,
         _streetLevelControls: this._streetLevelControls,
@@ -341,6 +369,7 @@ export class StyleManager extends ShellFacade {
     this._locationNavigation = new LocationNavigation({
       viewer,
       placeSearch,
+      homeView,
       navigation: this._navigation,
       readCockpit: () => this.cockpitView,
       services: {
@@ -616,6 +645,7 @@ export class StyleManager extends ShellFacade {
         _toggleOrbit: (...args) => this._toggleOrbit(...args),
         toggleCleanView: (...args) => this.toggleCleanView(...args),
         _toggleCctvEnabled: (...args) => this._toggleCctvEnabled(...args),
+        _togglePanel: (panelId) => this._panelChrome._togglePanel(panelId),
         _setBloomEnabled: (...args) => this._setBloomEnabled(...args),
         _setBloomIntensity: (...args) => this._setBloomIntensity(...args),
         _setSharpenEnabled: (...args) => this._setSharpenEnabled(...args),
@@ -670,6 +700,7 @@ export class StyleManager extends ShellFacade {
     this._initStreetLevelPanel();
     this._initWildlifeSightingCard();
     this._initGlobalContextPanel();
+    this._initSpaceMissionsPanel();
     this._initLocationBar();
     this._initMobileShell();
     this._initShareButton();
@@ -1010,13 +1041,12 @@ export class StyleManager extends ShellFacade {
       radioLayer,
       militaryInstallationsLayer,
       militaryAwarenessLayer,
-      rocketLaunchesLayer,
+      satellitesLayer,
     } = this.services;
     const contextStore = useContextStore(applicationPinia());
     this._contextControls = new ContextControls({
       elements: {
         _globalContextFlightsBtn: this._globalContextFlightsBtn,
-        _globalContextMissionsBtn: this._globalContextMissionsBtn,
         _installationsSearchBtn: this._installationsSearchBtn,
       },
       installations: militaryInstallationsLayer,
@@ -1052,13 +1082,57 @@ export class StyleManager extends ShellFacade {
       militaryAwarenessLayer?.subscribeDirectionOverlay?.((view) =>
         awarenessDirectionStore.publish(view),
       );
-    // The Space Missions layer publishes its roster and selected mission.
-    contextStore.connectMissions(rocketLaunchesLayer);
-    this._missionsPanelUnsubscribe?.();
-    contextStore.publishMissions(null);
-    this._missionsPanelUnsubscribe = rocketLaunchesLayer?.subscribePanel?.(
-      (view) => contextStore.publishMissions(view),
+    // The STATION section: the selected space station's moving parts, as
+    // the satellites layer presents them; its controls reach the layer.
+    const stationStore = useStationStore(applicationPinia());
+    this._stationPanelUnsubscribe?.();
+    if (this._stationOwner) stationStore.detach(this._stationOwner);
+    this._stationOwner = null;
+    stationStore.publish(null);
+    if (satellitesLayer?.getStationActions)
+      this._stationOwner = stationStore.connect(
+        satellitesLayer.getStationActions(),
+      );
+    this._stationPanelUnsubscribe = satellitesLayer?.subscribeStationPanel?.(
+      (view) => stationStore.publish(view),
     );
+    // The LIVE section: streams attached to whatever the tracking layers
+    // select, in the platform's own player, loaded only once Play is pressed.
+    this._liveControls?.destroy();
+    const liveStore = useLiveStore(applicationPinia());
+    this._liveControls = new LiveControls({
+      store: liveStore,
+      actions: {
+        getLayer: (layerId) =>
+          this._dataManager?.layers?.get(layerId)?.module ?? null,
+        scheduleLayout: () => this._scheduleRightPanelLayout(),
+      },
+    });
+    // The Cockpit briefing offers its LIVE page while a stream is on offer.
+    this._liveOfferedUnwatch?.();
+    this._liveOfferedUnwatch = watch(
+      () => liveStore.view !== null,
+      (offered) => this.cockpitView?.setBriefLiveOffered?.(offered),
+      { immediate: true },
+    );
+  }
+
+  _initSpaceMissionsPanel() {
+    const { rocketLaunchesLayer } = this.services;
+    // The Space Missions layer publishes its roster and selected mission.
+    this._spaceMissionsControls?.destroy();
+    this._spaceMissionsControls = new SpaceMissionsControls({
+      layer: rocketLaunchesLayer,
+      store: useSpaceMissionsStore(applicationPinia()),
+      actions: {
+        setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
+        isCockpitActive: () => Boolean(this.cockpitView?.active),
+        // After the panel has rendered as shown: the phone shell will not
+        // open the Missions sheet over a hidden panel.
+        revealPanel: () =>
+          nextTick(() => this.revealPanel('space-missions-panel')),
+      },
+    });
     // And its replay vehicle overlay, which the scene chrome renders.
     const missionReplayStore = useMissionReplayStore(applicationPinia());
     this._missionReplayUnsubscribe?.();
@@ -1171,7 +1245,18 @@ export class StyleManager extends ShellFacade {
     const { streetLevelLayer } = this.services;
     this._streetLevelControls?.destroy();
     this._streetLevelControls = null;
+    // The photo viewer (KartaView, Panoramax), which the layer panels draw
+    // into the viewer host. A viewer left by an earlier shell must
+    // not outlive its layer.
+    const streetLevelPhotoStore = useStreetLevelPhotoStore(applicationPinia());
+    this._streetLevelPhotoUnsubscribe?.();
+    this._streetLevelPhotoUnsubscribe = null;
+    streetLevelPhotoStore.publish(null);
     if (!this._streetLevelPanel || !streetLevelLayer) return;
+    this._streetLevelPhotoUnsubscribe =
+      streetLevelLayer.subscribePhotoViewer?.((view) =>
+        streetLevelPhotoStore.publish(view),
+      ) ?? null;
     // Photo framing yields to newer navigation and releases tracking like
     // any deferred flight.
     streetLevelLayer.attachNavigation?.({
@@ -1371,17 +1456,18 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
-   * Switches the HUD layout variant.
+   * Switches the HUD layout variant. The removed Cyber layout is accepted
+   * as an alias: it opens Tactical with the Sonar style on.
    * @param {'tactical'|'minimal'|'cyber'} variantName - Layout variant.
    * @returns {{ok: boolean, layout?: string, visible?: boolean, error?: string}}
    */
   setHudLayout(variantName) {
     const variant = String(variantName ?? '').toLowerCase();
-    if (!isHudLayout(variant)) {
+    if (!isHudLayout(variant) && !isLegacySonarHudLayout(variant)) {
       return { ok: false, error: `Unknown HUD layout: ${variantName}` };
     }
     this.shareLinkManager?.claimRestoreLane?.('visual');
-    this._setHudVariant(variant, { applyVisualDefaults: true });
+    this._setHudVariant(variant);
     return {
       ok: true,
       layout: this.hud.getVariant(),
@@ -1500,7 +1586,7 @@ export class StyleManager extends ShellFacade {
     };
   }
 
-  /** Apply Cyber-only sonar settings through the shared visual controls. */
+  /** Apply sonar visual-style settings through the shared visual controls. */
   setCyberSonar(settings) {
     return setCyberSonarControls(this, settings);
   }
@@ -1636,8 +1722,6 @@ export class StyleManager extends ShellFacade {
    * @param {string} styleName - Target style ('normal'|'retro'|'surveillance'|'thermal'|'anime'|'noir').
    * @param {object} [options]
    * @param {boolean} [options.applyPreset=true] - Whether to apply STYLE_PRESET_DEFAULTS for the new style.
-   * @param {boolean} [options.userInitiated=false] - Whether a direct user preset choice owns the Cyber exit style.
-   * @param {boolean} [options.preserveCyberRestore=false] - Whether an automatic style update keeps the Cyber entry snapshot.
    * @returns {void}
    */
   setStyle(
@@ -1717,7 +1801,12 @@ export class StyleManager extends ShellFacade {
     const store = useGlobeActionsStore(applicationPinia());
     if (this._resetToken) store.detach(this._resetToken);
     this._resetToken = controls
-      ? store.connect({ reset: () => controls.reset() })
+      ? store.connect({
+          reset: () => controls.reset(),
+          home: () => {
+            if (!this._disposed) void this.returnToStart();
+          },
+        })
       : null;
     // A reset under way as the controls are replaced stays on the buttons.
     if (this._resetToken && this._globeResetting != null)
@@ -1926,22 +2015,31 @@ export class StyleManager extends ShellFacade {
     this.services?.streetLevelLayer?.attachNavigation?.(null);
     this._streetLevelControls?.destroy();
     this._radioControls?.destroy();
+    this._liveControls?.destroy();
+    this._liveOfferedUnwatch?.();
+    this._liveOfferedUnwatch = null;
+    this._stationPanelUnsubscribe?.();
+    this._stationPanelUnsubscribe = null;
+    if (this._stationOwner)
+      useStationStore(applicationPinia()).detach(this._stationOwner);
+    this._stationOwner = null;
     this._localSdrControls?.destroy();
     this._awarenessPanelUnsubscribe?.();
     this._awarenessPanelUnsubscribe = null;
     this._awarenessDirectionUnsubscribe?.();
     this._awarenessDirectionUnsubscribe = null;
     useAwarenessDirectionStore(applicationPinia()).publish(null);
-    this._missionsPanelUnsubscribe?.();
-    this._missionsPanelUnsubscribe = null;
+    this._spaceMissionsControls?.destroy();
+    this._spaceMissionsControls = null;
     this._missionReplayUnsubscribe?.();
     this._missionReplayUnsubscribe = null;
+    this._streetLevelPhotoUnsubscribe?.();
+    this._streetLevelPhotoUnsubscribe = null;
     useMissionReplayStore(applicationPinia()).publish(null);
+    useStreetLevelPhotoStore(applicationPinia()).publish(null);
     const contextStore = useContextStore(applicationPinia());
     contextStore.connectAwareness(null);
     contextStore.publishAwareness(null);
-    contextStore.connectMissions(null);
-    contextStore.publishMissions(null);
     this._cockpitCoordinator.stop();
     this._visualSettings.stop();
     this.shareLinkManager?.destroy();

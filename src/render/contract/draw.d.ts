@@ -445,11 +445,79 @@ export interface ModelItem extends Placed {
    */
   clip?: 'belowOrigin';
   /**
+   * Transforms of the model's named glTF nodes (an articulated model's
+   * joints): each a column-major 4×4 matrix in the node's parent frame that
+   * replaces the node's own transform. A node whose name leaves the map goes
+   * back to its authored pose; names the model lacks are ignored. Applied
+   * once the model is ready, on a renderer with the `modelNodes`
+   * capability; elsewhere the model draws as authored. Can change live.
+   */
+  nodes?: Readonly<Record<string, ArrayLike<number>>>;
+  /**
    * Emphasis for a focused model, 0..1, 1 = none: the tint's alpha is
    * multiplied by it (in a set that recedes, as `RecedeSpec` says). Can
    * change live.
    */
   focus?: number;
+  /**
+   * `modelParts`: how the model's moving parts are posed. Applies to a
+   * model whose mesh carries a `_PART` vertex attribute (each vertex's part
+   * index) and whose root node's glTF `extras.parts` is its part table;
+   * ignored for any other. Omitted, or without the capability, the model is
+   * drawn whole, at rest, as its file draws it. Can change live, without
+   * loading the model again.
+   */
+  parts?: ModelPartState;
+}
+
+/**
+ * A model's part state (`ModelItem.parts`), each member by part name; a
+ * part not named is at rest, and a name the model's part table lacks is
+ * ignored. The maths is `render/modelParts`'s `partMatrices`: about each
+ * part's pivot, its deploy fraction first, then its spin, then its pose,
+ * then its parent part's whole motion.
+ */
+export interface ModelPartState {
+  /**
+   * Degrees a second about the part's axis, which the renderer advances
+   * itself on its own clock each frame: a turning rotor costs the
+   * application no write per frame. A change of rate goes on from the angle
+   * reached, without a jump; a part that stops spinning stays where it is.
+   */
+  spin?: Record<string, number>;
+  /**
+   * 0 (stowed, the table's first limit) to 1 (deployed, its second): a
+   * hinge or deploy part turned, a slide or separable part moved along its
+   * axis, that far between its limits. Clamped to 0..1.
+   */
+  deploy?: Record<string, number>;
+  /** Each part's pose, on top of its spin and deploy fraction. */
+  poses?: Record<string, PartPose>;
+}
+
+/**
+ * One part's pose about its pivot, in the model's own frame (in its glTF:
+ * forward −X, up +Y, right −Z). A hinge or deploy part's turn about its
+ * axis stays within its limits, as does a slide part's travel; the rest of
+ * every part's motion is free. A number that is not finite counts as 0.
+ */
+export interface PartPose {
+  /** Metres along the model's right, forward and up. */
+  offsetM?: [right: number, forward: number, up: number];
+  /** Degrees clockwise seen from above, as a heading. Applied first. */
+  yawDeg?: number;
+  /** Degrees nose up. Applied after the yaw. */
+  pitchDeg?: number;
+  /** Degrees clockwise looking forward. Applied last. */
+  rollDeg?: number;
+  /** Not drawn, nor any part riding it. */
+  hidden?: boolean;
+  /**
+   * Drawn in a highlight colour: `true` for the renderer's own, or a
+   * colour. Anything else, or a colour the renderer cannot read, draws no
+   * highlight. Not inherited by the parts riding it.
+   */
+  highlight?: boolean | Color;
 }
 
 /** A plane showing an image, a video or a canvas. */
@@ -525,6 +593,8 @@ export type FieldSpec =
        */
       detail?: { image: ImageRef; rectangle: GeoRect } | null;
       alpha?: number;
+      /** What the raster shows, as imagery's `shows`. */
+      shows?: string;
     };
 
 export interface FieldHandle extends Handle {

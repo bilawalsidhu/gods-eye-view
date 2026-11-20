@@ -72,7 +72,11 @@ function settings(store) {
 
 test('before VisualSettings renders, the panel shows its initial markup', (t) => {
   const { $ } = fixture(t);
-  assert.equal($('bloom-toggle').className, 'pp-toggle-btn');
+  // Beside the kit's ui-* classes, the toggle carries only its own.
+  assert.deepEqual(
+    [...$('bloom-toggle').classList].filter((name) => !name.startsWith('ui-')),
+    ['pp-toggle-btn'],
+  );
   assert.equal($('bloom-slider-row').className, 'pp-slider-row');
   assert.equal($('bloom-intensity-slider').value, '0');
   assert.equal($('bloom-intensity-value').textContent, '0%');
@@ -238,20 +242,29 @@ test('the HUD and Sonar controls render what VisualSettings shows', async (t) =>
     getVariant: () => variant,
   });
   owner._scheduleAdaptivePanelLayout = () => {};
-  assert.equal($('cyber-sonar-toggle').textContent, 'ON');
-  assert.equal($('cyber-sonar-toggle').getAttribute('aria-pressed'), 'true');
+  // Sonar is opt-in: OFF until the viewer turns it on.
+  assert.equal($('cyber-sonar-toggle').textContent, 'OFF');
+  assert.equal($('cyber-sonar-toggle').getAttribute('aria-pressed'), 'false');
+  assert.equal(
+    [...$('hud-layout-select').options].map((option) => option.value).join(),
+    'tactical,minimal',
+  );
 
   owner._syncHudControls();
   await nextTick();
   assert.equal($('hud-toggle').classList.contains('active'), true);
   assert.equal($('hud-layout-row').classList.contains('visible'), true);
   assert.equal($('hud-layout-select').value, 'minimal');
+  // The toggle shows with the HUD; its sliders wait for Sonar ON.
+  assert.equal($('cyber-sonar-row').classList.contains('visible'), true);
+  assert.equal($('cyber-sonar-rings-row').classList.contains('visible'), false);
 
   visible = false;
   owner._updateHudButtonState();
   await nextTick();
   assert.equal($('hud-toggle').classList.contains('active'), false);
   assert.equal($('hud-layout-row').classList.contains('visible'), false);
+  assert.equal($('cyber-sonar-row').classList.contains('visible'), false);
 
   owner._sonarShown = {
     enabled: false,
@@ -272,6 +285,19 @@ test('the HUD and Sonar controls render what VisualSettings shows', async (t) =>
   assert.equal($('cyber-sonar-range-value').textContent, '90%');
   assert.equal($('cyber-sonar-sector').value, '30');
   assert.equal($('cyber-sonar-sector-value').textContent, '30°');
+
+  visible = true;
+  owner._updateHudButtonState();
+  owner._sonarShown = { ...owner._sonarShown, enabled: true };
+  owner._publishDisplay();
+  await nextTick();
+  assert.equal(toggle.textContent, 'ON');
+  for (const name of ['rings', 'range', 'intensity', 'opacity', 'sector'])
+    assert.equal(
+      $(`cyber-sonar-${name}-row`).classList.contains('visible'),
+      true,
+      name,
+    );
 });
 
 test('Scope and Celestial render what VisualSettings shows', async (t) => {
@@ -531,7 +557,7 @@ test('the imported files render what the file import publishes and keep focus', 
   assert.equal(name.textContent, '<b>a</b>.geojson');
   assert.equal(name.children.length, 0, 'the name is text');
   assert.match(name.title, /GEOJSON, 2 map objects$/);
-  assert.equal(toggle.className, 'geo-import-action');
+  assert.ok(toggle.classList.contains('geo-import-action'));
   assert.equal(toggle.getAttribute('type'), 'button');
   assert.equal(toggle.getAttribute('aria-pressed'), 'true');
   assert.equal(toggle.getAttribute('aria-label'), 'Hide <b>a</b>.geojson');
