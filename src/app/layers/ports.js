@@ -14,6 +14,7 @@ export function createApplicationPorts(options) {
     },
     picking,
     pointer: { isPointerFree },
+    openExternal: (url) => window.open(url, '_blank', 'noopener,noreferrer'),
     ...options,
   });
 }
