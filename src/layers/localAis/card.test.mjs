@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { setLocale } from '../../i18n/index.js';
+import { setLocale, t } from '../../i18n/index.js';
 import {
   LOCAL_AIS_BEACON_COLOR,
   LOCAL_AIS_COLOR,
@@ -153,3 +153,66 @@ for (const locale of ['de', 'ja', 'ar']) {
     }
   });
 }
+
+// The Context card names a beacon through facts: the
+// label, the three kinds and the caveat must follow the UI language too.
+const BEACON_FACT_TEXT = [
+  'Beacon type',
+  'Note',
+  'AIS-SART beacon',
+  'Man-overboard (MOB) beacon',
+  'EPIRB beacon',
+  'Heard by your receiver. Test transmissions are common, this is not a verified emergency, and whether it is active or a test is unknown.',
+];
+for (const locale of [
+  'ar',
+  'de',
+  'es',
+  'fr',
+  'he',
+  'it',
+  'ja',
+  'pt',
+  'ru',
+  'sv',
+  'uk',
+  'zh-CN',
+  'zh-Hant',
+]) {
+  test(`${locale}: the beacon fact label, kinds and caveat are translated`, () => {
+    setLocale(locale);
+    try {
+      for (const english of BEACON_FACT_TEXT)
+        assert.notEqual(t(english), english, `${locale}: ${english}`);
+    } finally {
+      setLocale('en');
+    }
+  });
+}
+
+test('es, fr and ru beacon titles start with a capital letter; ar does not call a beacon a lighthouse', () => {
+  const titles = [
+    'AIS-SART beacon',
+    'Man-overboard (MOB) beacon',
+    'EPIRB beacon',
+  ];
+  try {
+    for (const locale of ['es', 'fr', 'ru']) {
+      setLocale(locale);
+      for (const english of titles) {
+        const shown = t(english);
+        assert.equal(shown[0], shown[0].toUpperCase(), `${locale}: ${shown}`);
+        assert.notEqual(
+          shown[0],
+          shown[0].toLowerCase(),
+          `${locale}: ${shown}`,
+        );
+      }
+    }
+    setLocale('ar');
+    for (const english of [...titles, 'beacon', 'AIS distress beacon'])
+      assert.doesNotMatch(t(english), /منار/, english);
+  } finally {
+    setLocale('en');
+  }
+});

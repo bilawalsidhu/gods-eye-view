@@ -4664,10 +4664,10 @@
     "other": "потоки {names} отклонены"
   },
   "Validated": "Проверено",
-  "AIS-SART beacon": "маяк AIS-SART",
-  "Man-overboard (MOB) beacon": "маяк «человек за бортом» (MOB)",
-  "EPIRB beacon": "маяк EPIRB",
-  "AIS distress beacon": "аварийный маяк AIS",
+  "AIS-SART beacon": "Маяк AIS-SART",
+  "Man-overboard (MOB) beacon": "Маяк «человек за бортом» (MOB)",
+  "EPIRB beacon": "Маяк EPIRB",
+  "AIS distress beacon": "Аварийный маяк AIS",
   "Distress or test beacon heard by your receiver": "Аварийный или тестовый маяк, принятый вашим приёмником",
   "Test transmissions are common. This is not a verified emergency.": "Тестовые передачи — обычное дело. Это не подтверждённое бедствие.",
   "Active or test status: unknown": "Статус (активен или тест): неизвестен",
@@ -4677,5 +4677,8 @@
     "many": "слышно маяков: {count}",
     "other": "слышно маяков: {count}"
   },
-  "beacon": "маяк"
+  "beacon": "маяк",
+  "Beacon type": "Тип маяка",
+  "Note": "Примечание",
+  "Heard by your receiver. Test transmissions are common, this is not a verified emergency, and whether it is active or a test is unknown.": "Принято вашим приёмником. Тестовые передачи — обычное дело, это не подтверждённое бедствие, и неизвестно, активен маяк или это тест."
 }

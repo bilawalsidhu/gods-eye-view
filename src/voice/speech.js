@@ -62,6 +62,9 @@ export function analystNounFor(layerKeys) {
     return 'aircraft';
   if (keys.length !== 1) return 'results';
   const key = keys[0];
+  // Local AIS holds distress and test beacons as well as vessels: a count of
+  // it is never a count of ships.
+  if (key === 'local-ais') return 'results';
   return LAYER_NOUNS[key] || voiceLayer(key)?.aliases?.[0] || 'results';
 }
 

@@ -4556,10 +4556,10 @@
     "other": "fuentes {names} rechazadas"
   },
   "Validated": "Validada",
-  "AIS-SART beacon": "baliza AIS-SART",
-  "Man-overboard (MOB) beacon": "baliza de hombre al agua (MOB)",
-  "EPIRB beacon": "baliza EPIRB",
-  "AIS distress beacon": "baliza de socorro AIS",
+  "AIS-SART beacon": "Baliza AIS-SART",
+  "Man-overboard (MOB) beacon": "Baliza de hombre al agua (MOB)",
+  "EPIRB beacon": "Baliza EPIRB",
+  "AIS distress beacon": "Baliza de socorro AIS",
   "Distress or test beacon heard by your receiver": "Baliza de socorro o de prueba captada por tu receptor",
   "Test transmissions are common. This is not a verified emergency.": "Las transmisiones de prueba son habituales. No es una emergencia confirmada.",
   "Active or test status: unknown": "Estado (activa o de prueba): desconocido",
@@ -4568,5 +4568,8 @@
     "many": "{count} de balizas captadas",
     "other": "{count} balizas captadas"
   },
-  "beacon": "baliza"
+  "beacon": "baliza",
+  "Beacon type": "Tipo de baliza",
+  "Note": "Nota",
+  "Heard by your receiver. Test transmissions are common, this is not a verified emergency, and whether it is active or a test is unknown.": "Captada por tu receptor. Las transmisiones de prueba son habituales, no es una emergencia confirmada y se desconoce si está activa o es una prueba."
 }

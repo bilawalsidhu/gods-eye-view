@@ -4350,5 +4350,8 @@
   "{count} beacons heard": {
     "other": "受信 {count}個のビーコン"
   },
-  "beacon": "ビーコン"
+  "beacon": "ビーコン",
+  "Beacon type": "ビーコンの種類",
+  "Note": "注記",
+  "Heard by your receiver. Test transmissions are common, this is not a verified emergency, and whether it is active or a test is unknown.": "受信機で受信しました。テスト送信はよくあり、確認済みの緊急事態ではなく、作動中かテストかは不明です。"
 }

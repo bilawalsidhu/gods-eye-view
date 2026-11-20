@@ -4568,5 +4568,8 @@
     "two": "{count} משואות נקלטו",
     "other": "{count} משואות נקלטו"
   },
-  "beacon": "משואה"
+  "beacon": "משואה",
+  "Beacon type": "סוג המשואה",
+  "Note": "הערה",
+  "Heard by your receiver. Test transmissions are common, this is not a verified emergency, and whether it is active or a test is unknown.": "נקלטה במקלט שלך. שידורי בדיקה נפוצים, זה אינו מצב חירום מאומת, ולא ידוע אם המשואה פעילה או בבדיקה."
 }

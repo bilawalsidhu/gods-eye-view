@@ -4459,5 +4459,8 @@
     "one": "{count} Bake empfangen",
     "other": "{count} Baken empfangen"
   },
-  "beacon": "Bake"
+  "beacon": "Bake",
+  "Beacon type": "Bakentyp",
+  "Note": "Hinweis",
+  "Heard by your receiver. Test transmissions are common, this is not a verified emergency, and whether it is active or a test is unknown.": "Vom eigenen Empfänger empfangen. Testsendungen sind häufig, das ist kein bestätigter Notfall, und ob die Bake aktiv ist oder testet, ist unbekannt."
 }

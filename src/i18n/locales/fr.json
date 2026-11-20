@@ -4556,10 +4556,10 @@
     "other": "flux {names} rejetés"
   },
   "Validated": "Validée",
-  "AIS-SART beacon": "balise AIS-SART",
-  "Man-overboard (MOB) beacon": "balise d’homme à la mer (MOB)",
-  "EPIRB beacon": "balise EPIRB",
-  "AIS distress beacon": "balise de détresse AIS",
+  "AIS-SART beacon": "Balise AIS-SART",
+  "Man-overboard (MOB) beacon": "Balise d’homme à la mer (MOB)",
+  "EPIRB beacon": "Balise EPIRB",
+  "AIS distress beacon": "Balise de détresse AIS",
   "Distress or test beacon heard by your receiver": "Balise de détresse ou d’essai captée par votre récepteur",
   "Test transmissions are common. This is not a verified emergency.": "Les émissions d’essai sont courantes. Ce n’est pas une urgence confirmée.",
   "Active or test status: unknown": "État (active ou essai) : inconnu",
@@ -4568,5 +4568,8 @@
     "many": "{count} de balises captées",
     "other": "{count} balises captées"
   },
-  "beacon": "balise"
+  "beacon": "balise",
+  "Beacon type": "Type de balise",
+  "Note": "Remarque",
+  "Heard by your receiver. Test transmissions are common, this is not a verified emergency, and whether it is active or a test is unknown.": "Captée par votre récepteur. Les émissions d’essai sont courantes, ce n’est pas une urgence confirmée et l’on ignore si la balise est active ou en essai."
 }

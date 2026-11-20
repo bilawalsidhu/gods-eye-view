@@ -4350,5 +4350,8 @@
   "{count} beacons heard": {
     "other": "已接收 {count} 个信标的信号"
   },
-  "beacon": "信标"
+  "beacon": "信标",
+  "Beacon type": "信标类型",
+  "Note": "注意",
+  "Heard by your receiver. Test transmissions are common, this is not a verified emergency, and whether it is active or a test is unknown.": "由你的接收机接收。测试发射很常见，这不是已确认的紧急情况，也不清楚它是在工作还是在测试。"
 }

@@ -4459,5 +4459,8 @@
     "one": "{count} sändare hörd",
     "other": "{count} sändare hörda"
   },
-  "beacon": "nödsändare"
+  "beacon": "nödsändare",
+  "Beacon type": "Typ av sändare",
+  "Note": "Observera",
+  "Heard by your receiver. Test transmissions are common, this is not a verified emergency, and whether it is active or a test is unknown.": "Hörd av den egna mottagaren. Testsändningar är vanliga, det är inte en bekräftad nödsituation och det är okänt om den är aktiv eller ett test."
 }

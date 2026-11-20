@@ -4880,20 +4880,23 @@
     "other": "المصادر {names} مرفوضة"
   },
   "Validated": "تم التحقق",
-  "AIS-SART beacon": "منارة AIS-SART",
-  "Man-overboard (MOB) beacon": "منارة الرجل في البحر (MOB)",
-  "EPIRB beacon": "منارة EPIRB",
-  "AIS distress beacon": "منارة استغاثة AIS",
-  "Distress or test beacon heard by your receiver": "منارة استغاثة أو اختبار التقطها جهاز الاستقبال لديك",
+  "AIS-SART beacon": "مرسل AIS-SART",
+  "Man-overboard (MOB) beacon": "مرسل الرجل في البحر (MOB)",
+  "EPIRB beacon": "مرسل EPIRB",
+  "AIS distress beacon": "مرسل استغاثة AIS",
+  "Distress or test beacon heard by your receiver": "مرسل استغاثة أو اختبار التقطه جهاز الاستقبال لديك",
   "Test transmissions are common. This is not a verified emergency.": "عمليات الإرسال التجريبية شائعة. هذا ليس طارئًا مؤكدًا.",
   "Active or test status: unknown": "الحالة (نشطة أو اختبار): غير معروفة",
   "{count} beacons heard": {
-    "zero": "المنارات الملتقطة: {count}",
-    "one": "المنارات الملتقطة: {count}",
-    "two": "المنارات الملتقطة: {count}",
-    "few": "المنارات الملتقطة: {count}",
-    "many": "المنارات الملتقطة: {count}",
-    "other": "المنارات الملتقطة: {count}"
+    "zero": "المرسلات الملتقطة: {count}",
+    "one": "المرسلات الملتقطة: {count}",
+    "two": "المرسلات الملتقطة: {count}",
+    "few": "المرسلات الملتقطة: {count}",
+    "many": "المرسلات الملتقطة: {count}",
+    "other": "المرسلات الملتقطة: {count}"
   },
-  "beacon": "منارة"
+  "beacon": "مرسل استغاثة",
+  "Beacon type": "نوع المرسل",
+  "Note": "ملاحظة",
+  "Heard by your receiver. Test transmissions are common, this is not a verified emergency, and whether it is active or a test is unknown.": "التقطه جهاز الاستقبال لديك. عمليات الإرسال التجريبية شائعة، وهذا ليس طارئًا مؤكدًا، وليس معروفًا إن كان نشطًا أم اختبارًا."
 }

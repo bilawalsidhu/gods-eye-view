@@ -1,4 +1,5 @@
 import { isFollowing, stopFollowing } from '../data/followed.js';
+import { positionWithheld } from '../data/positionTrust.js';
 import { interruptGlobeRotation } from '../cameraVerbs.js';
 import { normalizeDisplayText } from '../data/displayText.js';
 import {
@@ -1327,10 +1328,18 @@ export function createGevActionRunner({
       if (args.entity?.layerId && args.entity?.id) {
         const located = locateLayerEntity(dataManager, args.entity);
         if (!located) {
+          // A withheld position is not a missing item: say which.
+          const withheld = positionWithheld(
+            dataManager,
+            args.entity.layerId,
+            args.entity.id,
+          );
           return {
             ok: false,
             action: 'fly_to_location',
-            error: `${args.entity.label || args.entity.id} is no longer loaded`,
+            error: withheld
+              ? `${args.entity.label || args.entity.id}: position withheld, not validated or approximate`
+              : `${args.entity.label || args.entity.id} is no longer loaded`,
           };
         }
         const { entity: _entity, ...rest } = args;
@@ -4813,24 +4822,32 @@ async function getTargetContext(
   // Number(null) is 0: a coordinate-less referent must not become (0, 0).
   const coordinate = (value) =>
     value === null || value === undefined || value === '' ? NaN : Number(value);
-  let lat = coordinate(target.lat);
-  let lon = coordinate(target.lon);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+  // Default-deny: a vessel whose fix is not validated and exact is named but
+  // never positioned, so a model-supplied or pointer coordinate is ignored.
+  const withheld = positionWithheld(dataManager, target.layerId, target.id);
+  let lat = withheld ? NaN : coordinate(target.lat);
+  let lon = withheld ? NaN : coordinate(target.lon);
+  if (!withheld && (!Number.isFinite(lat) || !Number.isFinite(lon))) {
     const located = locateLayerEntity(dataManager, target);
     lat = located?.lat ?? NaN;
     lon = located?.lon ?? NaN;
   }
   const hasPosition = Number.isFinite(lat) && Number.isFinite(lon);
+  // A withheld fix gives no place, and the view centre is no substitute: with
+  // the marker at the centre, the depth pick under it and the viewport samples
+  // are the marker's own position, so the scene context drops them
+  // (`withholdView` below).
   const viewTarget = hasPosition
     ? { longitude: toRadians(lon), latitude: toRadians(lat), height: 0 }
     : getViewTargetCartographic(viewer);
-  const selected = describeTargetEntity(dataManager, target);
+  const selected = withheld ? null : describeTargetEntity(dataManager, target);
   const scene = await getSceneContext(
     viewer,
     styleManager,
     dataManager,
     viewTarget,
     service,
+    { withholdView: withheld },
   );
   if (selected) {
     return {
@@ -4846,7 +4863,9 @@ async function getTargetContext(
     ? visibleEntityContexts(viewer, dataManager, {
         layerId: normalizeLayerId(args.layerId || args.layer),
         limit: Math.round(clampNumber(args.limit, 1, 12, 5)),
-        target: viewTarget,
+        // For a withheld target the view-centre point is not used as the scan
+        // target; the pointer-scope list is still ordered from the screen centre.
+        target: withheld ? null : viewTarget,
       })
     : [];
   return {
@@ -4855,6 +4874,9 @@ async function getTargetContext(
     scope: 'pointer',
     scene,
     selected: null,
+    ...(withheld
+      ? { pointedAt: { layerId: target.layerId, id: String(target.id) } }
+      : {}),
     ...(hasPosition
       ? {
           pointer: {
@@ -5237,9 +5259,12 @@ async function getSceneContext(
   dataManager,
   viewTarget = null,
   service = defaultGeospatial,
+  { withholdView = false } = {},
 ) {
   const cartographic = cameraOf(viewer).pose();
-  const basemap = await getBasemapContext(viewer, viewTarget, service);
+  const basemap = await getBasemapContext(viewer, viewTarget, service, {
+    withholdView,
+  });
   const enabledLayers = dataManager
     .getAll()
     .filter((layer) => layer.enabled)
@@ -5250,11 +5275,15 @@ async function getSceneContext(
       source: layer.source,
     }));
   return {
-    camera: {
-      latitude: Number(cartographic.lat.toFixed(6)),
-      longitude: Number(cartographic.lon.toFixed(6)),
-      heightM: Math.round(cartographic.height),
-    },
+    // With a withheld fix the camera, often centred on the marker, gives no
+    // position either: only its height is sent.
+    camera: withholdView
+      ? { heightM: Math.round(cartographic.height) }
+      : {
+          latitude: Number(cartographic.lat.toFixed(6)),
+          longitude: Number(cartographic.lon.toFixed(6)),
+          heightM: Math.round(cartographic.height),
+        },
     basemap,
     style: styleManager.activeStyle || 'normal',
     enabledLayers,
@@ -5265,7 +5294,20 @@ async function getBasemapContext(
   viewer,
   viewTarget = null,
   service = defaultGeospatial,
+  { withholdView = false } = {},
 ) {
+  // A withheld fix may be drawn at the view centre, and the viewport samples
+  // include the centre: no view point, sample or place is sent for it.
+  if (withholdView)
+    return {
+      source: 'Google Photorealistic 3D Tiles / Cesium basemap',
+      hasGoogle3DTiles: Boolean(window.__godsEyeView?.tileset),
+      viewScale: classifyViewScale(cameraOf(viewer).pose().height),
+      viewportSamples: [],
+      viewportPlaces: null,
+      target: null,
+      place: null,
+    };
   const { reverseGeocodeCache, nearbyPlacesCache } = cachesFor(service);
   const target = viewTarget;
   const samples = sampleViewportCartographics(viewer);

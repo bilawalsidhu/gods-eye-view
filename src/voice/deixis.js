@@ -33,6 +33,20 @@ const DEFAULT_POINTER_RADIUS_KM = 50;
 const NO_POINTER =
   'Nothing is under the pointer. Ask the user to point at it or name it.';
 
+// A pointed item whose position the picker withheld (a Local AIS fix that is
+// not validated or is approximate). Saying "nothing is under the pointer"
+// would be false and would send the model to look for a pixel. Only the
+// picker's own withheld flag says this: an item that merely has no position
+// (an aircraft picked against the sky) still reads as nothing under the
+// pointer.
+const POSITION_WITHHELD =
+  'Position withheld: the item under the pointer is not validated or is approximate, so it has no place to use. Do not look for it another way.';
+
+/** The error for a pointer target that cannot give a position. */
+function noPosition(target) {
+  return target?.withheld === true ? POSITION_WITHHELD : NO_POINTER;
+}
+
 function isPointer(value) {
   return (
     typeof value === 'string' && value.trim().toLowerCase() === POINTER_SENTINEL
@@ -197,7 +211,7 @@ function resolveAnalyst(args, { pointer }) {
   if (!scope || String(scope.kind || '').toLowerCase() !== POINTER_SENTINEL)
     return null;
   const target = pointerTarget(pointer);
-  if (!target || !hasPosition(target)) return { error: NO_POINTER };
+  if (!target || !hasPosition(target)) return { error: noPosition(target) };
   const asked = finiteOrNull(scope.km);
   const km =
     asked > 0
@@ -232,7 +246,7 @@ function resolveAnnotate(args, { pointer }) {
   );
   if (!mentions) return null;
   const target = pointerTarget(pointer);
-  if (!target || !hasPosition(target)) return { error: NO_POINTER };
+  if (!target || !hasPosition(target)) return { error: noPosition(target) };
   const annotations = list.map((spec) => {
     if (!spec || typeof spec !== 'object') return spec;
     let next = spec;
@@ -272,7 +286,7 @@ function resolveAnnotate(args, { pointer }) {
 function resolveImagery(args, { pointer }) {
   if (!isPointer(args.area)) return null;
   const target = pointerTarget(pointer);
-  if (!target || !hasPosition(target)) return { error: NO_POINTER };
+  if (!target || !hasPosition(target)) return { error: noPosition(target) };
   return {
     args: {
       ...withoutKeys(args, ['area']),

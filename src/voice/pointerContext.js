@@ -112,6 +112,9 @@ export function buildPointerSnapshot({
         id: String(pick.entity.id ?? ''),
         label: pointerLabel(pick.entity.label || pick.entity.id),
         kind: String(pick.entity.kind || 'feature'),
+        // Only set for a thing whose position is withheld, so the tools can
+        // say why it has no place.
+        ...(pick.entity.withheld === true ? { withheld: true } : {}),
       }
     : null;
   const entityLat = finite(pick?.entity?.lat);

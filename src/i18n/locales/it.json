@@ -4556,17 +4556,20 @@
     "other": "feed {names} rifiutati"
   },
   "Validated": "Convalidata",
-  "AIS-SART beacon": "radiofaro AIS-SART",
-  "Man-overboard (MOB) beacon": "radiofaro uomo in mare (MOB)",
-  "EPIRB beacon": "radiofaro EPIRB",
-  "AIS distress beacon": "radiofaro di emergenza AIS",
-  "Distress or test beacon heard by your receiver": "Radiofaro di emergenza o di prova ricevuto dal tuo ricevitore",
+  "AIS-SART beacon": "Radioboa AIS-SART",
+  "Man-overboard (MOB) beacon": "Radioboa uomo in mare (MOB)",
+  "EPIRB beacon": "Radioboa EPIRB",
+  "AIS distress beacon": "Radioboa di emergenza AIS",
+  "Distress or test beacon heard by your receiver": "Radioboa di emergenza o di prova ricevuta dal tuo ricevitore",
   "Test transmissions are common. This is not a verified emergency.": "Le trasmissioni di prova sono comuni. Non è un’emergenza verificata.",
   "Active or test status: unknown": "Stato (attivo o di prova): sconosciuto",
   "{count} beacons heard": {
-    "one": "{count} radiofaro ricevuto",
-    "many": "{count} di radiofari ricevuti",
-    "other": "{count} radiofari ricevuti"
+    "one": "{count} radioboa ricevuta",
+    "many": "{count} di radioboe ricevute",
+    "other": "{count} radioboe ricevute"
   },
-  "beacon": "radiofaro"
+  "beacon": "radioboa",
+  "Beacon type": "Tipo di radioboa",
+  "Note": "Nota",
+  "Heard by your receiver. Test transmissions are common, this is not a verified emergency, and whether it is active or a test is unknown.": "Ricevuto dal tuo ricevitore. Le trasmissioni di prova sono frequenti, non è un’emergenza confermata e non si sa se sia attivo o in prova."
 }
