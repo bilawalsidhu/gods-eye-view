@@ -1577,6 +1577,10 @@ seek and keeps the last settled position. Undeclared operator layers remain
 untouched, and the shot is not rebuilt.
 See [camera directions](DIRECTOR-CAMERA.md).
 
+An opt-in offline [Blender camera bridge](BLENDER-CAMERAS.md) exports a saved
+Director scene as a camera-only USD stage (`.usda`) with Director seek
+interpolation and runtime shot timing; format, units and limits are in that guide.
+
 Realtime voice composes separate connection, response/tool, Radio handoff, input
 and audio-meter, cost, viewport-context and diagnostic owners. The existing
 controller exports and session/backend contracts remain available. Tool protocol,
