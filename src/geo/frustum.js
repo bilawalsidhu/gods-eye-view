@@ -48,6 +48,26 @@ export function frustumPlanes(pose) {
 }
 
 /**
+ * `frustumPlanes(pose)`, or null when the pose does not describe a
+ * perspective frustum: no position, direction or up, or no finite `fovy`,
+ * `aspectRatio` or `near` (an orthographic camera, no camera).
+ * @param {object|null|undefined} pose
+ * @returns {ReturnType<typeof frustumPlanes>|null}
+ */
+export function viewPlanes(pose) {
+  if (
+    !pose?.position ||
+    !pose.direction ||
+    !pose.up ||
+    !Number.isFinite(pose.fovy) ||
+    !Number.isFinite(pose.aspectRatio) ||
+    !Number.isFinite(pose.near)
+  )
+    return null;
+  return frustumPlanes(pose);
+}
+
+/**
  * Whether a sphere is wholly outside `planes` (from `frustumPlanes`), as
  * the default renderer's `CullingVolume.computeVisibility` reports
  * `Intersect.OUTSIDE`.
