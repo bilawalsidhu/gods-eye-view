@@ -1176,6 +1176,33 @@ test('an automatic overview that probes empty hands over to the next ranked day'
   assert.deepEqual(f.drapes(), { a: `${V15}|none`, b: null });
 });
 
+test('with empty days shown, focus leaves an empty automatic overview with the hand-over and its successor drapes', async () => {
+  const f = fixture();
+  f.layer.setSources({ hls: false });
+  f.layer.setShowUnavailable(true);
+  await f.ready();
+  assert.equal(f.diag().following, V21, 'today is followed');
+  f.thumbnails.probe(V21, 'empty');
+  assert.equal(f.diag().following, V15, 'yesterday takes over');
+  assert.equal(f.snap().focus.key, V15, 'focus goes with it');
+  f.thumbnails.probe(V15, 'present');
+  assert.equal(f.snap().preview.key, V15);
+  assert.equal(f.snap().preview.pending, null);
+  assert.deepEqual(f.drapes(), { a: `${V15}|none`, b: null });
+});
+
+test('focus on an empty automatic day moves to the next ranked day, not the nearest card, and it drapes once present', async () => {
+  const f = fixture();
+  await f.ready([CANDIDATES[0], CANDIDATES[1], CANDIDATES[3]]);
+  assert.equal(f.snap().preview.key, S18);
+  f.thumbnails.probe(S18, 'empty');
+  assert.equal(f.diag().following, V21, 'the newest overview takes over');
+  assert.equal(f.snap().focus.key, V21, 'not the older neighbour V15');
+  f.thumbnails.probe(V21, 'present');
+  assert.equal(f.snap().preview.key, V21);
+  assert.deepEqual(f.drapes(), { a: `${V21}|none`, b: null });
+});
+
 test('a pinned day still being probed drapes once the probe says present', async () => {
   const f = fixture();
   f.layer.setParams({ ...LINK_BOX, a: V21, mode: 0 });
@@ -1237,6 +1264,56 @@ test('empty auto VIIRS re-requests a cancelled successor', async () => {
   f.thumbnails.probe(next, 'present');
   assert.equal(f.snap().preview.key, next);
   assert.deepEqual(f.drapes(), { a: `${next}|none`, b: null });
+});
+
+test('with empty days shown, an off-screen successor is probed once the visible days return empty', async () => {
+  const f = fixture();
+  const days = dailyViirs();
+  f.layer.setSources({ hls: false });
+  f.layer.setShowUnavailable(true);
+  f.layer.setVisibleRange(0, 5);
+  await f.ready(days);
+  const offscreen = days.findIndex(
+    ({ key }) => !f.thumbnails.requested.includes(key),
+  );
+  assert.ok(offscreen > 5, 'the first unrequested day is off-screen');
+  for (const { key } of days.slice(0, offscreen)) {
+    assert.equal(f.diag().following, key);
+    f.thumbnails.probe(key, 'empty');
+  }
+  const successor = days[offscreen].key;
+  assert.equal(f.diag().following, successor);
+  assert.equal(f.snap().focus.key, successor);
+  assert.deepEqual(f.thumbnails.requests.at(-1), [successor, 0]);
+  assert.ok(f.thumbnails.retained.at(-1).includes(successor));
+  f.thumbnails.probe(successor, 'present');
+  assert.equal(f.snap().preview.key, successor);
+  assert.deepEqual(f.drapes(), { a: `${successor}|none`, b: null });
+});
+
+test('a pick still being probed or debounced survives a late empty result for the automatic preview', async () => {
+  const f = fixture();
+  await f.ready([CANDIDATES[0], CANDIDATES[1], CANDIDATES[3]]);
+  assert.equal(f.snap().preview.key, S18);
+  assert.equal(f.layer.preview(V15), false);
+  assert.equal(f.diag().following, V15);
+  f.thumbnails.probe(S18, 'empty');
+  assert.equal(f.diag().following, V15, 'the pick is kept');
+  assert.equal(f.snap().focus.key, V15);
+  f.thumbnails.probe(V21, 'present');
+  f.thumbnails.probe(V15, 'present');
+  assert.equal(f.snap().preview.key, V15);
+  assert.deepEqual(f.drapes(), { a: `${V15}|none`, b: null });
+  // An arrow-key pick waiting out the debounce is kept too.
+  const g = fixture();
+  await g.ready();
+  g.thumbnails.setStatus(V15, 'present');
+  g.layer.focus(3);
+  assert.equal(g.diag().pending, V15);
+  g.thumbnails.probe(S18, 'empty');
+  assert.equal(g.owned().a, null, 'no other day drapes meanwhile');
+  g.timers.flush();
+  assert.equal(g.snap().preview.key, V15);
 });
 
 test('restored pins outside the visible strip window are probed and swipe once present', async () => {
@@ -1485,4 +1562,156 @@ test('a voice search cancelled mid-flight says so instead of looking empty', asy
   f.layer.cancelPendingSearch();
   assert.equal(f.snap().searching, false);
   assert.equal(f.snap().notice, 'Search cancelled');
+});
+
+test('a pick that probes empty after the automatic day lets the next ranked day drape', async () => {
+  for (const order of [
+    [S18, V15],
+    [V15, S18],
+  ]) {
+    const f = fixture();
+    await f.ready();
+    f.thumbnails.probe(L16, 'present');
+    assert.equal(f.snap().preview.key, S18);
+    f.layer.preview(V15);
+    assert.equal(f.diag().following, V15);
+    for (const key of order) f.thumbnails.probe(key, 'empty');
+    assert.equal(f.snap().preview.key, L16, `order ${order.join(' then ')}`);
+    assert.equal(f.owned().a?.key, L16, `order ${order.join(' then ')}`);
+  }
+  // A catalog day can also probe empty during the arrow-key debounce.
+  const f = fixture();
+  await f.ready();
+  f.thumbnails.probe(V21, 'present');
+  f.layer.focus(2);
+  assert.equal(f.diag().pending, L16);
+  f.thumbnails.probe(S18, 'empty');
+  f.thumbnails.probe(L16, 'empty');
+  assert.equal(f.owned().a, null);
+  f.timers.flush();
+  assert.equal(f.owned().a?.key, V21);
+  assert.equal(f.snap().focus.key, V21);
+});
+
+test('a deferred hand-over goes ahead once the pick fails or its source turns off', async () => {
+  const f = fixture();
+  await f.ready();
+  f.thumbnails.probe(L16, 'present');
+  f.layer.preview(V15);
+  f.thumbnails.probe(S18, 'empty');
+  assert.equal(f.owned().a, null, 'the pick keeps the slot while it is probed');
+  f.thumbnails.probe(V15, 'error');
+  assert.equal(f.diag().following, null);
+  assert.equal(f.owned().a?.key, L16);
+  assert.equal(f.snap().focus.key, L16, 'focus leaves the failed pick');
+  const g = fixture();
+  await g.ready();
+  g.thumbnails.probe(L16, 'present');
+  g.layer.preview(V15);
+  g.thumbnails.probe(S18, 'empty');
+  g.layer.setSources({ viirs: false });
+  assert.equal(g.diag().following, null);
+  assert.equal(g.owned().a?.key, L16);
+});
+
+test('turning off the source of a followed pick does not block the hand-over', async () => {
+  const f = fixture();
+  await f.ready();
+  f.thumbnails.probe(L16, 'present');
+  f.layer.preview(V15);
+  assert.equal(f.diag().following, V15);
+  f.layer.setSources({ viirs: false });
+  f.thumbnails.probe(S18, 'empty');
+  assert.notEqual(
+    f.diag().following,
+    V15,
+    'a pick whose source is off is no longer followed',
+  );
+  assert.equal(f.owned().a?.key, L16);
+});
+
+// The fake loader's 'error' status stands for the real loader's terminal error (never re-fetched).
+test('a pick whose probe failed does not block the hand-over', async () => {
+  const f = fixture();
+  await f.ready();
+  f.thumbnails.probe(L16, 'present');
+  f.layer.preview(V15);
+  f.thumbnails.probe(V15, 'error');
+  f.thumbnails.probe(S18, 'empty');
+  assert.equal(f.owned().a?.key, L16);
+});
+
+test('a pick dropped for an empty card lets a deferred hand-over go ahead at once', async () => {
+  const f = fixture();
+  await f.ready();
+  f.layer.setShowUnavailable(true);
+  f.thumbnails.probe(V21, 'empty');
+  f.layer.preview(V15);
+  f.thumbnails.probe(S18, 'empty');
+  assert.equal(f.owned().a, null, 'the pick keeps the slot while it is probed');
+  assert.equal(f.layer.preview(V21), false);
+  assert.equal(f.owned().a?.key, L16, 'a click on an empty card');
+  const g = fixture();
+  await g.ready();
+  g.layer.setShowUnavailable(true);
+  g.thumbnails.probe(V21, 'empty');
+  g.layer.preview(V15);
+  g.thumbnails.probe(S18, 'empty');
+  g.layer.focus(0);
+  assert.equal(g.owned().a?.key, L16, 'an arrow key onto an empty card');
+  assert.equal(g.snap().focus.key, V21, 'focus stays where the user put it');
+  assert.equal(g.diag().following, null, 'an empty day is not followed');
+});
+
+test('an arrow-key pick waiting out the debounce keeps Esri through an empty automatic result', async () => {
+  const controller = leasingController();
+  const f = fixture({ controller });
+  await f.ready();
+  await settleTimes();
+  assert.equal(controller.getActiveId(), 'esri-imagery');
+  f.thumbnails.probe(L16, 'present');
+  f.thumbnails.probe(V15, 'present');
+  const before = controller.calls.length;
+  f.layer.focus(3);
+  f.thumbnails.probe(S18, 'empty');
+  await settleTimes(8);
+  assert.equal(f.owned().a, null, 'no other day drapes meanwhile');
+  assert.equal(
+    controller.getActiveId(),
+    'esri-imagery',
+    'Esri held during the debounce',
+  );
+  f.timers.flush();
+  await settleTimes(8);
+  assert.equal(f.owned().a?.key, V15);
+  assert.deepEqual(controller.calls.slice(before), [], 'no stack switches');
+});
+
+test('Escape ends a deferred hand-over, and a followed pick keeps Esri through it', async () => {
+  const escapeController = leasingController();
+  const f = fixture({ controller: escapeController });
+  await f.ready();
+  await settleTimes();
+  f.thumbnails.probe(L16, 'present');
+  f.layer.preview(V15);
+  f.thumbnails.probe(S18, 'empty');
+  f.layer.clearPreview();
+  await settleTimes(8);
+  assert.equal(escapeController.getActiveId(), 'photoreal');
+  f.thumbnails.probe(V21, 'present');
+  assert.equal(f.owned().a, null, 'nothing drapes after Escape');
+  const controller = leasingController();
+  const g = fixture({ controller });
+  await g.ready();
+  await settleTimes();
+  g.thumbnails.probe(L16, 'present');
+  const before = controller.calls.length;
+  g.layer.preview(V15);
+  g.thumbnails.probe(S18, 'empty');
+  await settleTimes(8);
+  assert.equal(controller.getActiveId(), 'esri-imagery');
+  g.thumbnails.probe(V15, 'empty');
+  await settleTimes(8);
+  assert.equal(g.owned().a?.key, L16);
+  assert.deepEqual(controller.calls.slice(before), [], 'no stack switches');
 });
